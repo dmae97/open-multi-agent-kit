@@ -74,6 +74,7 @@ export interface InteractiveModeContext {
 	lastEscapeTime: number;
 	lastVoiceInterruptAt: number;
 	voiceAutoModeEnabled: boolean;
+	shutdownRequested: boolean;
 	voiceProgressTimer: ReturnType<typeof setTimeout> | undefined;
 	voiceProgressSpoken: boolean;
 	voiceProgressLastLength: number;
@@ -83,11 +84,13 @@ export interface InteractiveModeContext {
 	lastStatusSpacer: Spacer | undefined;
 	lastStatusText: Text | undefined;
 	fileSlashCommands: Set<string>;
+	skillCommands: Map<string, string>;
 	todoItems: TodoItem[];
 
 	// Lifecycle
 	init(): Promise<void>;
 	shutdown(): Promise<void>;
+	checkShutdownRequested(): Promise<void>;
 
 	// Extension UI integration
 	setToolUIContext(uiContext: ExtensionUIContext, hasUI: boolean): void;

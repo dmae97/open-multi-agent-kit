@@ -1,5 +1,5 @@
 export { type AskToolDetails, askTool, createAskTool } from "./ask";
-export { type BashOperations, type BashToolDetails, createBashTool } from "./bash";
+export { type BashOperations, type BashToolDetails, type BashToolOptions, createBashTool } from "./bash";
 export { type CalculatorToolDetails, createCalculatorTool } from "./calculator";
 export { createCompleteTool } from "./complete";
 export { createEditTool, type EditToolDetails } from "./edit";

@@ -17,7 +17,7 @@
  * MIT License - Copyright (c) 2025 opentui
  */
 
-import { EventEmitter } from "node:events";
+import { EventEmitter } from "events";
 
 const ESC = "\x1b";
 const BRACKETED_PASTE_START = "\x1b[200~";

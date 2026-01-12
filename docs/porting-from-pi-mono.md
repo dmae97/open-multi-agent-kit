@@ -5,12 +5,12 @@ Use it for any merge: single file, feature branch, or full release sync.
 
 ## Last Sync Point
 
-**Commit:** `f1b64b9d`
+**Commit:** `6730b4fa`
 **Date:** January 2026
 
 When starting a new sync, generate patches from this commit forward:
 ```bash
-git format-patch f1b64b9d..HEAD --stdout > changes.patch
+git format-patch 6730b4fa..HEAD --stdout > changes.patch
 ```
 
 ## 0) Define the scope

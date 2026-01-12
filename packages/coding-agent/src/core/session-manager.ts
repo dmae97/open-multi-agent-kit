@@ -164,6 +164,8 @@ export interface SessionContext {
 export interface SessionInfo {
 	path: string;
 	id: string;
+	/** Working directory where the session was started. Empty string for old sessions. */
+	cwd: string;
 	title?: string;
 	created: Date;
 	modified: Date;
@@ -1707,7 +1709,7 @@ export class SessionManager {
 					if (lines.length === 0) continue;
 
 					// Check first line for valid session header
-					let header: { type: string; id: string; title?: string; timestamp: string } | null = null;
+					let header: { type: string; id: string; cwd?: string; title?: string; timestamp: string } | null = null;
 					try {
 						const first = JSON.parse(lines[0]);
 						if (first.type === "session" && first.id) {
@@ -1753,6 +1755,7 @@ export class SessionManager {
 					sessions.push({
 						path: file,
 						id: header.id,
+						cwd: typeof header.cwd === "string" ? header.cwd : "",
 						title: header.title,
 						created: new Date(header.timestamp),
 						modified: stats.mtime,

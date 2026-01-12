@@ -189,6 +189,14 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 			// Component factories are not supported in RPC mode - would need TUI access
 		},
 
+		setFooter(_factory: unknown): void {
+			// Custom footer not supported in RPC mode - requires TUI access
+		},
+
+		setHeader(_factory: unknown): void {
+			// Custom header not supported in RPC mode - requires TUI access
+		},
+
 		setTitle(title: string): void {
 			// Fire and forget - host can implement terminal title control
 			output({
@@ -257,9 +265,9 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 			return { success: false, error: "Theme switching not supported in RPC mode" };
 		},
 
-		setFooter() {},
-		setHeader() {},
-		setEditorComponent() {},
+		setEditorComponent(): void {
+			// Custom editor components not supported in RPC mode
+		},
 	});
 
 	// Set up extensions with RPC-based UI context

@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+- Add `/skill:name` slash commands for quick skill access (toggle via `skills.enableSkillCommands` setting)
+- Add `cwd` to SessionInfo for session list display
+- Add custom summarization instructions option in tree selector
+- Add Alt+Up (dequeue) to restore all queued messages at once
+- Add `shutdownRequested` and `checkShutdownRequested()` for extension-initiated shutdown
+
+### Fixed
+- Component `invalidate()` now properly rebuilds content on theme changes
+- Force full re-render after returning from external editor
+
 ## [4.5.0] - 2026-01-12
 
 ## [4.4.9] - 2026-01-12

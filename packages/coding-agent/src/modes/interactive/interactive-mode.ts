@@ -109,6 +109,8 @@ export class InteractiveMode implements InteractiveModeContext {
 	public lastEscapeTime = 0;
 	public lastVoiceInterruptAt = 0;
 	public voiceAutoModeEnabled = false;
+	public shutdownRequested = false;
+	private isShuttingDown = false;
 	public voiceProgressTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 	public voiceProgressSpoken = false;
 	public voiceProgressLastLength = 0;
@@ -118,6 +120,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	public lastStatusSpacer: Spacer | undefined = undefined;
 	public lastStatusText: Text | undefined = undefined;
 	public fileSlashCommands: Set<string> = new Set();
+	public skillCommands: Map<string, string> = new Map();
 
 	private pendingSlashCommands: SlashCommand[] = [];
 	private cleanupUnsubscribe?: () => void;
@@ -231,8 +234,18 @@ export class InteractiveMode implements InteractiveModeContext {
 			description: `${loaded.command.description} (${loaded.source})`,
 		}));
 
+		// Build skill commands from session.skills (if enabled)
+		const skillCommandList: SlashCommand[] = [];
+		if (this.settingsManager.getEnableSkillCommands?.()) {
+			for (const skill of this.session.skills) {
+				const commandName = `skill:${skill.name}`;
+				this.skillCommands.set(commandName, skill.filePath);
+				skillCommandList.push({ name: commandName, description: skill.description });
+			}
+		}
+
 		// Store pending commands for init() where file commands are loaded async
-		this.pendingSlashCommands = [...slashCommands, ...hookCommands, ...customCommands];
+		this.pendingSlashCommands = [...slashCommands, ...hookCommands, ...customCommands, ...skillCommandList];
 
 		this.uiHelpers = new UiHelpers(this);
 		this.voiceManager = new VoiceManager(this);
@@ -486,6 +499,9 @@ export class InteractiveMode implements InteractiveModeContext {
 	}
 
 	async shutdown(): Promise<void> {
+		if (this.isShuttingDown) return;
+		this.isShuttingDown = true;
+
 		this.voiceAutoModeEnabled = false;
 		await this.voiceSupervisor.stop();
 
@@ -497,6 +513,11 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		this.stop();
 		process.exit(0);
+	}
+
+	async checkShutdownRequested(): Promise<void> {
+		if (!this.shutdownRequested) return;
+		await this.shutdown();
 	}
 
 	// Extension UI integration

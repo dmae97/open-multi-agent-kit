@@ -23,6 +23,8 @@ export { Text } from "./components/text";
 export { TruncatedText } from "./components/truncated-text";
 // Editor component interface (for custom editors)
 export type { EditorComponent } from "./editor-component";
+// Fuzzy matching
+export { type FuzzyMatch, fuzzyFilter, fuzzyMatch } from "./fuzzy";
 // Keybindings
 export {
 	DEFAULT_EDITOR_KEYBINDINGS,

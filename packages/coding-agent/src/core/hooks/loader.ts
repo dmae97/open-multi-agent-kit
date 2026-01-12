@@ -25,7 +25,7 @@ type HandlerFn = (...args: unknown[]) => Promise<unknown>;
  */
 export type SendMessageHandler = <T = unknown>(
 	message: Pick<HookMessage<T>, "customType" | "content" | "display" | "details">,
-	triggerTurn?: boolean,
+	options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" },
 ) => void;
 
 /**
@@ -129,11 +129,14 @@ function createHookAPI(
 			}
 			handlers.get(event)!.push(handler);
 		},
-		sendMessage<T = unknown>(message: HookMessage<T>, triggerTurn?: boolean): void {
+		sendMessage<T = unknown>(
+			message: HookMessage<T>,
+			options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" },
+		): void {
 			if (!sendMessageHandler) {
 				throw new Error("sendMessage handler not initialized");
 			}
-			sendMessageHandler(message, triggerTurn);
+			sendMessageHandler(message, options);
 		},
 		appendEntry<T = unknown>(customType: string, data?: T): void {
 			if (!appendEntryHandler) {

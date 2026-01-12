@@ -476,6 +476,17 @@ export class CommandController {
 		await this.executeCompaction(customInstructions, false);
 	}
 
+	async handleSkillCommand(skillPath: string, args: string): Promise<void> {
+		try {
+			const content = fs.readFileSync(skillPath, "utf-8");
+			const body = content.replace(/^---\n[\s\S]*?\n---\n/, "").trim();
+			const message = args ? `${body}\n\n---\n\nUser: ${args}` : body;
+			await this.ctx.session.prompt(message);
+		} catch (err) {
+			this.ctx.showError(`Failed to load skill: ${err instanceof Error ? err.message : String(err)}`);
+		}
+	}
+
 	async executeCompaction(customInstructions?: string, isAuto = false): Promise<void> {
 		if (this.ctx.loadingAnimation) {
 			this.ctx.loadingAnimation.stop();

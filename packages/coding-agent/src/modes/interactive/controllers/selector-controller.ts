@@ -352,16 +352,41 @@ export class SelectorController {
 						return;
 					}
 
-					// Ask about summarization (or skip if disabled in settings)
+					// Ask about summarization
 					done(); // Close selector first
 
+					// Loop until user makes a complete choice or cancels to tree
+					let wantsSummary = false;
+					let customInstructions: string | undefined;
+
 					const branchSummariesEnabled = this.ctx.settingsManager.getBranchSummaryEnabled();
-					const wantsSummary = branchSummariesEnabled
-						? await this.ctx.showHookConfirm(
-								"Summarize branch?",
-								"Create a summary of the branch you're leaving?",
-							)
-						: false;
+
+					while (branchSummariesEnabled) {
+						const summaryChoice = await this.ctx.showHookSelector("Summarize branch?", [
+							"No summary",
+							"Summarize",
+							"Summarize with custom prompt",
+						]);
+
+						if (summaryChoice === undefined) {
+							// User pressed escape - re-show tree selector
+							this.showTreeSelector();
+							return;
+						}
+
+						wantsSummary = summaryChoice !== "No summary";
+
+						if (summaryChoice === "Summarize with custom prompt") {
+							customInstructions = await this.ctx.showHookEditor("Custom summarization instructions");
+							if (customInstructions === undefined) {
+								// User cancelled - loop back to summary selector
+								continue;
+							}
+						}
+
+						// User made a complete choice
+						break;
+					}
 
 					// Set up escape handler and loader if summarizing
 					let summaryLoader: Loader | undefined;
@@ -384,7 +409,10 @@ export class SelectorController {
 					}
 
 					try {
-						const result = await this.ctx.session.navigateTree(entryId, { summarize: wantsSummary });
+						const result = await this.ctx.session.navigateTree(entryId, {
+							summarize: wantsSummary,
+							customInstructions,
+						});
 
 						if (result.aborted) {
 							// Summarization aborted - re-show tree selector

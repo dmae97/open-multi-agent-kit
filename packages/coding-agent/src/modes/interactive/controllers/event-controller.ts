@@ -150,6 +150,15 @@ export class EventController {
 				if (event.message.role === "user") break;
 				if (this.ctx.streamingComponent && event.message.role === "assistant") {
 					this.ctx.streamingMessage = event.message;
+					let errorMessage: string | undefined;
+					if (this.ctx.streamingMessage.stopReason === "aborted" && !this.ctx.session.isTtsrAbortPending) {
+						const retryAttempt = this.ctx.session.retryAttempt;
+						errorMessage =
+							retryAttempt > 0
+								? `Aborted after ${retryAttempt} retry attempt${retryAttempt > 1 ? "s" : ""}`
+								: "Operation aborted";
+						this.ctx.streamingMessage.errorMessage = errorMessage;
+					}
 					if (this.ctx.session.isTtsrAbortPending && this.ctx.streamingMessage.stopReason === "aborted") {
 						const msgWithoutAbort = { ...this.ctx.streamingMessage, stopReason: "stop" as const };
 						this.ctx.streamingComponent.updateContent(msgWithoutAbort);
@@ -162,14 +171,7 @@ export class EventController {
 						this.ctx.streamingMessage.stopReason === "error"
 					) {
 						if (!this.ctx.session.isTtsrAbortPending) {
-							let errorMessage: string;
-							if (this.ctx.streamingMessage.stopReason === "aborted") {
-								const retryAttempt = this.ctx.session.retryAttempt;
-								errorMessage =
-									retryAttempt > 0
-										? `Aborted after ${retryAttempt} retry attempt${retryAttempt > 1 ? "s" : ""}`
-										: "Operation aborted";
-							} else {
+							if (!errorMessage) {
 								errorMessage = this.ctx.streamingMessage.errorMessage || "Error";
 							}
 							for (const [toolCallId, component] of this.ctx.pendingTools.entries()) {

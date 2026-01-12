@@ -26,6 +26,7 @@ export interface RetrySettings {
 
 export interface SkillsSettings {
 	enabled?: boolean; // default: true
+	enableSkillCommands?: boolean; // default: true - register skills as /skill:name commands
 	enableCodexUser?: boolean; // default: true
 	enableClaudeUser?: boolean; // default: true
 	enableClaudeProject?: boolean; // default: true
@@ -821,6 +822,7 @@ export class SettingsManager {
 	getSkillsSettings(): Required<SkillsSettings> {
 		return {
 			enabled: this.settings.skills?.enabled ?? true,
+			enableSkillCommands: this.settings.skills?.enableSkillCommands ?? true,
 			enableCodexUser: this.settings.skills?.enableCodexUser ?? true,
 			enableClaudeUser: this.settings.skills?.enableClaudeUser ?? true,
 			enableClaudeProject: this.settings.skills?.enableClaudeProject ?? true,
@@ -830,6 +832,10 @@ export class SettingsManager {
 			ignoredSkills: [...(this.settings.skills?.ignoredSkills ?? [])],
 			includeSkills: [...(this.settings.skills?.includeSkills ?? [])],
 		};
+	}
+
+	getEnableSkillCommands(): boolean {
+		return this.settings.skills?.enableSkillCommands ?? true;
 	}
 
 	getCommandsSettings(): Required<CommandsSettings> {

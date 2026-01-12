@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+- Add fuzzy matching module (`fuzzyMatch`, `fuzzyFilter`) for command autocomplete
+- Add `getExpandedText()` to editor for expanding paste markers
+- Add backslash+enter newline fallback for terminals without Kitty protocol
+
+### Fixed
+- Remove Kitty protocol query timeout that caused shift+enter delays
+- Add bracketed paste check to prevent false key release/repeat detection
+- Rendering optimizations: only re-render changed lines
+- Refactor input component to use keybindings manager
+
 ## [4.5.0] - 2026-01-12
 
 ## [4.4.9] - 2026-01-12

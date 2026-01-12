@@ -24,14 +24,7 @@ export class InputController {
 	setupKeyHandlers(): void {
 		this.ctx.editor.onEscape = () => {
 			if (this.ctx.loadingAnimation) {
-				// Abort and restore queued messages to editor
-				const queuedMessages = this.ctx.session.clearQueue();
-				const queuedText = [...queuedMessages.steering, ...queuedMessages.followUp].join("\n\n");
-				const currentText = this.ctx.editor.getText();
-				const combinedText = [queuedText, currentText].filter((t) => t.trim()).join("\n\n");
-				this.ctx.editor.setText(combinedText);
-				this.ctx.updatePendingMessagesDisplay();
-				this.ctx.agent.abort();
+				this.restoreQueuedMessagesToEditor({ abort: true });
 			} else if (this.ctx.session.isBashRunning) {
 				this.ctx.session.abortBash();
 			} else if (this.ctx.isBashMode) {
@@ -241,6 +234,27 @@ export class InputController {
 				return;
 			}
 
+			// Handle skill commands (/skill:name [args])
+			if (text.startsWith("/skill:")) {
+				const spaceIndex = text.indexOf(" ");
+				const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
+				const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1).trim();
+				const skillPath = this.ctx.skillCommands?.get(commandName);
+				if (skillPath) {
+					this.ctx.editor.addToHistory(text);
+					this.ctx.editor.setText("");
+					try {
+						const content = fs.readFileSync(skillPath, "utf-8");
+						const body = content.replace(/^---\n[\s\S]*?\n---\n/, "").trim();
+						const message = args ? `${body}\n\n---\n\nUser: ${args}` : body;
+						await this.ctx.session.prompt(message);
+					} catch (err) {
+						this.ctx.showError(`Failed to load skill: ${err instanceof Error ? err.message : String(err)}`);
+					}
+					return;
+				}
+			}
+
 			// Handle bash command (! for normal, !! for excluded from context)
 			if (text.startsWith("!")) {
 				const isExcluded = text.startsWith("!!");
@@ -341,15 +355,33 @@ export class InputController {
 	}
 
 	handleDequeue(): void {
-		const message = this.ctx.session.popLastQueuedMessage();
-		if (!message) return;
+		const restored = this.restoreQueuedMessagesToEditor();
+		if (restored === 0) {
+			this.ctx.showStatus("No queued messages to restore");
+		} else {
+			this.ctx.showStatus(`Restored ${restored} queued message${restored > 1 ? "s" : ""} to editor`);
+		}
+	}
 
-		// Prepend to existing editor text (if any)
-		const currentText = this.ctx.editor.getText();
-		const newText = currentText ? `${message}\n\n${currentText}` : message;
-		this.ctx.editor.setText(newText);
+	restoreQueuedMessagesToEditor(options?: { abort?: boolean; currentText?: string }): number {
+		const { steering, followUp } = this.ctx.session.clearQueue();
+		const allQueued = [...steering, ...followUp];
+		if (allQueued.length === 0) {
+			this.ctx.updatePendingMessagesDisplay();
+			if (options?.abort) {
+				this.ctx.agent.abort();
+			}
+			return 0;
+		}
+		const queuedText = allQueued.join("\n\n");
+		const currentText = options?.currentText ?? this.ctx.editor.getText();
+		const combinedText = [queuedText, currentText].filter((t) => t.trim()).join("\n\n");
+		this.ctx.editor.setText(combinedText);
 		this.ctx.updatePendingMessagesDisplay();
-		this.ctx.ui.requestRender();
+		if (options?.abort) {
+			this.ctx.agent.abort();
+		}
+		return allQueued.length;
 	}
 
 	handleBackgroundCommand(): void {

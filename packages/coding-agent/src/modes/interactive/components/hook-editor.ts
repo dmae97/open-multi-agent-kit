@@ -113,7 +113,7 @@ export class HookEditorComponent extends Container {
 				// Ignore cleanup errors
 			}
 			this.tui.start();
-			this.tui.requestRender();
+			this.tui.requestRender(true);
 		}
 	}
 }

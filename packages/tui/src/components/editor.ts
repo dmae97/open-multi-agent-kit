@@ -278,6 +278,7 @@ export class Editor implements Component {
 	// Bracketed paste mode buffering
 	private pasteBuffer: string = "";
 	private isInPaste: boolean = false;
+	private pendingShiftEnter: boolean = false;
 
 	// Prompt history for up/down navigation
 	private history: string[] = [];
@@ -572,6 +573,21 @@ export class Editor implements Component {
 		}
 
 		// Handle special key combinations first
+
+		if (this.pendingShiftEnter) {
+			if (data === "\r") {
+				this.pendingShiftEnter = false;
+				this.addNewLine();
+				return;
+			}
+			this.pendingShiftEnter = false;
+			this.insertCharacter("\\");
+		}
+
+		if (data === "\\") {
+			this.pendingShiftEnter = true;
+			return;
+		}
 
 		// Ctrl+C - Exit (let parent handle this)
 		if (isCtrlC(data)) {
@@ -902,6 +918,19 @@ export class Editor implements Component {
 
 	getText(): string {
 		return this.state.lines.join("\n");
+	}
+
+	/**
+	 * Get text with paste markers expanded to their actual content.
+	 * Use this when you need the full content (e.g., for external editor).
+	 */
+	getExpandedText(): string {
+		let result = this.state.lines.join("\n");
+		for (const [pasteId, pasteContent] of this.pastes) {
+			const markerRegex = new RegExp(`\\[paste #${pasteId}( (\\+\\d+ lines|\\d+ chars))?\\]`, "g");
+			result = result.replace(markerRegex, pasteContent);
+		}
+		return result;
 	}
 
 	getLines(): string[] {
