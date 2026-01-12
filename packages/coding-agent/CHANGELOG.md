@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [4.8.3] - 2026-01-12
+
 ### Changed
 
 - Replace sharp with wasm-vips for cross-platform image processing without native dependencies
