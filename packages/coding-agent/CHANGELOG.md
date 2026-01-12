@@ -7,6 +7,7 @@
 
 ### Fixed
 - Subagent model resolution now respects explicit provider prefix (e.g., `zai/glm-4.7` no longer matches `cerebras/zai-glm-4.7`)
+- Auto-compaction now skips to next model candidate when retry delay exceeds 30 seconds
 
 ## [4.6.0] - 2026-01-12
 

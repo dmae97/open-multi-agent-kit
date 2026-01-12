@@ -1862,6 +1862,24 @@ export class AgentSession {
 
 							const baseDelayMs = retrySettings.baseDelayMs * 2 ** attempt;
 							const delayMs = retryAfterMs !== undefined ? Math.max(baseDelayMs, retryAfterMs) : baseDelayMs;
+
+							// If retry delay is too long (>30s), try next candidate instead of waiting
+							const maxAcceptableDelayMs = 30_000;
+							if (delayMs > maxAcceptableDelayMs) {
+								const hasMoreCandidates = candidates.indexOf(candidate) < candidates.length - 1;
+								if (hasMoreCandidates) {
+									logger.warn("Auto-compaction retry delay too long, trying next model", {
+										delayMs,
+										retryAfterMs,
+										error: message,
+										model: `${candidate.provider}/${candidate.id}`,
+									});
+									lastError = error;
+									break; // Exit retry loop, continue to next candidate
+								}
+								// No more candidates - we have to wait
+							}
+
 							attempt++;
 							logger.warn("Auto-compaction failed, retrying", {
 								attempt,
@@ -1869,6 +1887,7 @@ export class AgentSession {
 								delayMs,
 								retryAfterMs,
 								error: message,
+								model: `${candidate.provider}/${candidate.id}`,
 							});
 							await new Promise((resolve) => setTimeout(resolve, delayMs));
 						}
