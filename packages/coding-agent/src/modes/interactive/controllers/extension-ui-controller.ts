@@ -141,6 +141,7 @@ export class ExtensionUiController {
 				this.ctx.chatContainer.addChild(
 					new Text(`${theme.fg("accent", `${theme.status.success} New session started`)}`, 1, 1),
 				);
+				await this.ctx.reloadTodos();
 				this.ctx.ui.requestRender();
 
 				return { cancelled: false };
@@ -154,6 +155,7 @@ export class ExtensionUiController {
 				// Update UI
 				this.ctx.chatContainer.clear();
 				this.ctx.renderInitialMessages();
+				await this.ctx.reloadTodos();
 				this.ctx.editor.setText(result.selectedText);
 				this.ctx.showStatus("Branched to new session");
 
@@ -168,6 +170,7 @@ export class ExtensionUiController {
 				// Update UI
 				this.ctx.chatContainer.clear();
 				this.ctx.renderInitialMessages();
+				await this.ctx.reloadTodos();
 				if (result.editorText) {
 					this.ctx.editor.setText(result.editorText);
 				}
@@ -289,6 +292,7 @@ export class ExtensionUiController {
 				this.ctx.chatContainer.addChild(
 					new Text(`${theme.fg("accent", `${theme.status.success} New session started`)}`, 1, 1),
 				);
+				await this.ctx.reloadTodos();
 				this.ctx.ui.requestRender();
 
 				return { cancelled: false };
@@ -305,6 +309,7 @@ export class ExtensionUiController {
 				// Update UI
 				this.ctx.chatContainer.clear();
 				this.ctx.renderInitialMessages();
+				await this.ctx.reloadTodos();
 				this.ctx.editor.setText(result.selectedText);
 				this.ctx.showStatus("Branched to new session");
 
@@ -322,6 +327,7 @@ export class ExtensionUiController {
 				// Update UI
 				this.ctx.chatContainer.clear();
 				this.ctx.renderInitialMessages();
+				await this.ctx.reloadTodos();
 				if (result.editorText) {
 					this.ctx.editor.setText(result.editorText);
 				}

@@ -428,6 +428,7 @@ export class SelectorController {
 						// Update UI
 						this.ctx.chatContainer.clear();
 						this.ctx.renderInitialMessages();
+						await this.ctx.reloadTodos();
 						if (result.editorText) {
 							this.ctx.editor.setText(result.editorText);
 						}
@@ -500,6 +501,7 @@ export class SelectorController {
 		// Clear and re-render the chat
 		this.ctx.chatContainer.clear();
 		this.ctx.renderInitialMessages();
+		await this.ctx.reloadTodos();
 		this.ctx.showStatus("Resumed session");
 	}
 

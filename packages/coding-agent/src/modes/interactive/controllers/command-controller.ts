@@ -376,6 +376,7 @@ export class CommandController {
 		this.ctx.chatContainer.addChild(
 			new Text(`${theme.fg("accent", `${theme.status.success} New session started`)}`, 1, 1),
 		);
+		await this.ctx.reloadTodos();
 		this.ctx.ui.requestRender();
 	}
 

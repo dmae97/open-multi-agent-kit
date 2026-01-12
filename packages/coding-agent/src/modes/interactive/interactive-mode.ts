@@ -757,6 +757,11 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.ui.requestRender();
 	}
 
+	async reloadTodos(): Promise<void> {
+		await this.loadTodoList();
+		this.ui.requestRender();
+	}
+
 	openExternalEditor(): void {
 		this.inputController.openExternalEditor();
 	}

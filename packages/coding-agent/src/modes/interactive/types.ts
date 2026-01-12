@@ -124,6 +124,7 @@ export interface InteractiveModeContext {
 	updateEditorBorderColor(): void;
 	rebuildChatFromMessages(): void;
 	setTodos(todos: TodoItem[]): void;
+	reloadTodos(): Promise<void>;
 	toggleTodoExpansion(): void;
 
 	// Command handling
