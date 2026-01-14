@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [5.2.0] - 2026-01-14
+
 ### Added
 
 - Added `withLines` parameter to read tool for optional line number output (default: true, cat -n format)

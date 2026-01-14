@@ -69,7 +69,7 @@ describe("Coding Agent Tools", () => {
 			const content = "Hello, world!\nLine 2\nLine 3";
 			writeFileSync(testFile, content);
 
-			const result = await readTool.execute("test-call-1", { path: testFile });
+			const result = await readTool.execute("test-call-1", { path: testFile, lines: false });
 
 			expect(getTextOutput(result)).toBe(content);
 			// No truncation message since file fits within limits
