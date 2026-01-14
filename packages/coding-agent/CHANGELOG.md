@@ -2,9 +2,18 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Updated light theme colors for WCAG AA compliance (4.5:1 contrast against white background)
+- Changed dequeue hint text from "restore" to "edit all queued messages"
+
 ### Fixed
 
+- Fixed session selector staying open when current folder has no sessions (shows hint to press Tab)
+- Fixed print mode JSON output to emit session header at start
 - Fixed "database is locked" SQLite errors when running subagents by serializing settings to workers instead of opening the database
+- Fixed `/new` command to create a new session file (previously reused the same file when `--session` was specified)
+- Fixed session selector page up/down navigation
 
 ## [5.0.1] - 2026-01-12
 ### Changed

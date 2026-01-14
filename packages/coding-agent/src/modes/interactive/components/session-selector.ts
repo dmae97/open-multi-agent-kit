@@ -7,6 +7,8 @@ import {
 	isCtrlC,
 	isEnter,
 	isEscape,
+	isPageDown,
+	isPageUp,
 	Spacer,
 	Text,
 	truncateToWidth,
@@ -25,14 +27,16 @@ class SessionList implements Component {
 	private filteredSessions: SessionInfo[] = [];
 	private selectedIndex: number = 0;
 	private searchInput: Input;
+	private showCwd = false;
 	public onSelect?: (sessionPath: string) => void;
 	public onCancel?: () => void;
 	public onExit: () => void = () => {};
 	private maxVisible: number = 5; // Max sessions visible (each session is 3 lines: msg + metadata + blank)
 
-	constructor(sessions: SessionInfo[]) {
+	constructor(sessions: SessionInfo[], showCwd = false) {
 		this.allSessions = sessions;
 		this.filteredSessions = sessions;
+		this.showCwd = showCwd;
 		this.searchInput = new Input();
 
 		// Handle Enter in search input - select current item
@@ -67,7 +71,13 @@ class SessionList implements Component {
 		lines.push(""); // Blank line after search
 
 		if (this.filteredSessions.length === 0) {
-			lines.push(theme.fg("muted", "  No sessions found"));
+			if (this.showCwd) {
+				// "All" scope - no sessions anywhere that match filter
+				lines.push(theme.fg("muted", "  No sessions found"));
+			} else {
+				// "Current folder" scope - hint to try "all"
+				lines.push(theme.fg("muted", "  No sessions in current folder. Press Tab to view all."));
+			}
 			return lines;
 		}
 
@@ -154,6 +164,14 @@ class SessionList implements Component {
 		else if (isArrowDown(keyData)) {
 			this.selectedIndex = Math.min(this.filteredSessions.length - 1, this.selectedIndex + 1);
 		}
+		// Page up - jump up by maxVisible items
+		else if (isPageUp(keyData)) {
+			this.selectedIndex = Math.max(0, this.selectedIndex - this.maxVisible);
+		}
+		// Page down - jump down by maxVisible items
+		else if (isPageDown(keyData)) {
+			this.selectedIndex = Math.min(this.filteredSessions.length - 1, this.selectedIndex + this.maxVisible);
+		}
 		// Enter
 		else if (isEnter(keyData)) {
 			const selected = this.filteredSessions[this.selectedIndex];
@@ -211,11 +229,6 @@ export class SessionSelectorComponent extends Container {
 		// Add bottom border
 		this.addChild(new Spacer(1));
 		this.addChild(new DynamicBorder());
-
-		// Auto-cancel if no sessions
-		if (sessions.length === 0) {
-			setTimeout(() => onCancel(), 100);
-		}
 	}
 
 	getSessionList(): SessionList {

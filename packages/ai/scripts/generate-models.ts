@@ -364,6 +364,76 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
             }
         }
         
+        // Process Amazon Bedrock models
+        if (data["amazon-bedrock"]?.models) {
+            for (const [modelId, model] of Object.entries(data["amazon-bedrock"].models)) {
+                const m = model as ModelsDevModel;
+                if (m.tool_call !== true) continue;
+                
+                // Bedrock model IDs need us. prefix for cross-region inference
+                let id = modelId;
+                if (!id.startsWith("us.") && !id.startsWith("eu.")) {
+                    id = "us." + id;
+                }
+                
+                const bedrockModel = {
+                    id,
+                    name: m.name || id,
+                    api: "bedrock-converse-stream" as const,
+                    provider: "amazon-bedrock" as const,
+                    baseUrl: "https://bedrock-runtime.us-east-1.amazonaws.com",
+                    reasoning: m.reasoning === true,
+                    input: (m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"]) as ("text" | "image")[],
+                    cost: {
+                        input: m.cost?.input || 0,
+                        output: m.cost?.output || 0,
+                        cacheRead: m.cost?.cache_read || 0,
+                        cacheWrite: m.cost?.cache_write || 0,
+                    },
+                    contextWindow: m.limit?.context || 4096,
+                    maxTokens: m.limit?.output || 4096,
+                };
+                models.push(bedrockModel);
+                
+                // Add EU cross-region inference variants for Claude models
+                if (modelId.startsWith("anthropic.claude-haiku-4-5") ||
+                    modelId.startsWith("anthropic.claude-sonnet-4-5") ||
+                    modelId.startsWith("anthropic.claude-opus-4-5")) {
+                    models.push({
+                        ...bedrockModel,
+                        id: "eu." + modelId,
+                        name: (m.name || modelId) + " (EU)",
+                    });
+                }
+            }
+        }
+        
+        // Process MiniMax models
+        if (data.minimax?.models) {
+            for (const [modelId, model] of Object.entries(data.minimax.models)) {
+                const m = model as ModelsDevModel;
+                if (m.tool_call !== true) continue;
+                
+                models.push({
+                    id: modelId,
+                    name: m.name || modelId,
+                    api: "openai-completions",
+                    provider: "minimax",
+                    baseUrl: "https://api.minimax.chat/v1",
+                    reasoning: m.reasoning === true,
+                    input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+                    cost: {
+                        input: m.cost?.input || 0,
+                        output: m.cost?.output || 0,
+                        cacheRead: m.cost?.cache_read || 0,
+                        cacheWrite: m.cost?.cache_write || 0,
+                    },
+                    contextWindow: m.limit?.context || 4096,
+                    maxTokens: m.limit?.output || 4096,
+                });
+            }
+        }
+        
         // Process GitHub Copilot models
         if (data["github-copilot"]?.models) {
             for (const [modelId, model] of Object.entries(data["github-copilot"].models)) {

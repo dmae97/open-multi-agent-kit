@@ -29,7 +29,7 @@ import { AssistantMessageEventStream } from "../utils/event-stream";
 import { parseStreamingJson } from "../utils/json-parse";
 import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode";
-import { transformMessages } from "./transorm-messages";
+import { transformMessages } from "./transform-messages";
 
 /** Fast deterministic hash to shorten long strings */
 function shortHash(str: string): string {
@@ -49,6 +49,7 @@ function shortHash(str: string): string {
 export interface OpenAIResponsesOptions extends StreamOptions {
 	reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
 	reasoningSummary?: "auto" | "detailed" | "concise" | null;
+	serviceTier?: ResponseCreateParamsStreaming["service_tier"];
 }
 
 /**
@@ -86,7 +87,10 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 			const apiKey = options?.apiKey || getEnvApiKey(model.provider) || "";
 			const client = createClient(model, context, apiKey);
 			const params = buildParams(model, context, options);
-			const openaiStream = await client.responses.create(params, { signal: options?.signal });
+			const openaiStream = await client.responses.create(
+				params,
+				options?.signal ? { signal: options.signal } : undefined,
+			);
 			stream.push({ type: "start", partial: output });
 
 			let currentItem: ResponseReasoningItem | ResponseOutputMessage | ResponseFunctionToolCall | null = null;
@@ -364,6 +368,7 @@ function buildParams(model: Model<"openai-responses">, context: Context, options
 		model: model.id,
 		input: messages,
 		stream: true,
+		prompt_cache_key: options?.sessionId,
 	};
 
 	if (options?.maxTokens) {
@@ -372,6 +377,10 @@ function buildParams(model: Model<"openai-responses">, context: Context, options
 
 	if (options?.temperature !== undefined) {
 		params.temperature = options?.temperature;
+	}
+
+	if (options?.serviceTier !== undefined) {
+		params.service_tier = options.serviceTier;
 	}
 
 	if (context.tools) {

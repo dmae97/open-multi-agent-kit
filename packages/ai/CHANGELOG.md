@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added Amazon Bedrock provider with `bedrock-converse-stream` API for Claude models via AWS
+- Added MiniMax provider with OpenAI-compatible API
+- Added EU cross-region inference model variants for Claude models on Bedrock
+
+### Fixed
+
+- Fixed Gemini CLI provider retries with proper error handling, retry delays from headers, and empty stream retry logic
+- Fixed numbered list items showing "1." for all items when code blocks break list continuity (via `start` property)
+
 ## [5.0.1] - 2026-01-12
 
 ## [5.0.0] - 2026-01-12

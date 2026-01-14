@@ -8,7 +8,6 @@ import {
 	getGitHubCopilotBaseUrl,
 	getModels,
 	getProviders,
-	type KnownProvider,
 	type Model,
 	normalizeDomain,
 } from "@oh-my-pi/pi-ai";
@@ -250,7 +249,7 @@ export class ModelRegistry {
 		return getProviders()
 			.filter((provider) => !replacedProviders.has(provider))
 			.flatMap((provider) => {
-				const models = getModels(provider as KnownProvider) as Model<Api>[];
+				const models = getModels(provider as any) as Model<Api>[];
 				const override = overrides.get(provider);
 				if (!override) return models;
 

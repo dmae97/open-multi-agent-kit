@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `pageUp` and `pageDown` key support with `selectPageUp`/`selectPageDown` editor actions
+- Added `isPageUp()` and `isPageDown()` helper functions
+- Added `SizeValue` type for CSS-like overlay sizing (absolute or percentage strings like `"50%"`)
+- Added `OverlayHandle` interface with `hide()`, `setHidden()`, `isHidden()` methods for overlay visibility control
+- Added `visible` callback to `OverlayOptions` for dynamic visibility based on terminal dimensions
+- Added `pad` parameter to `truncateToWidth()` for padding result with spaces to exact width
+
+### Changed
+
+- Changed `OverlayOptions` to use `SizeValue` type for `width`, `maxHeight`, `row`, and `col` properties
+- Changed `showOverlay()` to return `OverlayHandle` for controlling overlay visibility
+- Removed `widthPercent`, `maxHeightPercent`, `rowPercent`, `colPercent` from `OverlayOptions` (use percentage strings instead)
+
+### Fixed
+
+- Fixed numbered list items showing "1." for all items when code blocks break list continuity
+- Fixed width overflow protection in overlay compositing to prevent TUI crashes
+
 ## [5.0.1] - 2026-01-12
 
 ## [5.0.0] - 2026-01-12

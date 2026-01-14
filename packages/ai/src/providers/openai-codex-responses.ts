@@ -39,7 +39,7 @@ import { getCodexInstructions } from "./openai-codex/prompts/codex";
 import { buildCodexSystemPrompt } from "./openai-codex/prompts/system-prompt";
 import { type CodexRequestOptions, type RequestBody, transformRequestBody } from "./openai-codex/request-transformer";
 import { parseCodexError, parseCodexSseStream } from "./openai-codex/response-handler";
-import { transformMessages } from "./transorm-messages";
+import { transformMessages } from "./transform-messages";
 
 export interface OpenAICodexResponsesOptions extends StreamOptions {
 	reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh";

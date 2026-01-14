@@ -340,6 +340,8 @@ export class UiHelpers {
 				const queuedText = theme.fg("dim", `${entry.label}: ${entry.message}`);
 				this.ctx.pendingMessagesContainer.addChild(new TruncatedText(queuedText, 1, 0));
 			}
+			const hintText = theme.fg("dim", `${theme.tree.hook} Alt+Up to edit`);
+			this.ctx.pendingMessagesContainer.addChild(new TruncatedText(hintText, 1, 0));
 		}
 	}
 

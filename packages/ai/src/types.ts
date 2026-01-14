@@ -1,3 +1,4 @@
+import type { BedrockOptions } from "./providers/amazon-bedrock";
 import type { AnthropicOptions } from "./providers/anthropic";
 import type { CursorOptions } from "./providers/cursor";
 import type {
@@ -32,6 +33,7 @@ export type Api =
 	| "openai-responses"
 	| "openai-codex-responses"
 	| "anthropic-messages"
+	| "bedrock-converse-stream"
 	| "google-generative-ai"
 	| "google-gemini-cli"
 	| "google-vertex"
@@ -39,6 +41,7 @@ export type Api =
 
 export interface ApiOptionsMap {
 	"anthropic-messages": AnthropicOptions;
+	"bedrock-converse-stream": BedrockOptions;
 	"openai-completions": OpenAICompletionsOptions;
 	"openai-responses": OpenAIResponsesOptions;
 	"openai-codex-responses": OpenAICodexResponsesOptions;
@@ -61,6 +64,7 @@ const _exhaustive: _CheckExhaustive = true;
 export type OptionsForApi<TApi extends Api> = ApiOptionsMap[TApi];
 
 export type KnownProvider =
+	| "amazon-bedrock"
 	| "anthropic"
 	| "google"
 	| "google-gemini-cli"
@@ -74,8 +78,10 @@ export type KnownProvider =
 	| "groq"
 	| "cerebras"
 	| "openrouter"
+	| "vercel-ai-gateway"
 	| "zai"
 	| "mistral"
+	| "minimax"
 	| "opencode";
 export type Provider = KnownProvider | string;
 
@@ -269,6 +275,8 @@ export interface OpenAICompat {
 	requiresThinkingAsText?: boolean;
 	/** Whether tool call IDs must be normalized to Mistral format (exactly 9 alphanumeric chars). Default: auto-detected from URL. */
 	requiresMistralToolIds?: boolean;
+	/** Format for reasoning/thinking parameter. "openai" uses reasoning_effort, "zai" uses thinking: { type: "enabled" }. Default: "openai". */
+	thinkingFormat?: "openai" | "zai";
 }
 
 // Model interface for the unified model system

@@ -71,6 +71,8 @@ export {
 	isKeyRelease,
 	isKeyRepeat,
 	isKittyProtocolActive,
+	isPageDown,
+	isPageUp,
 	isShiftBackspace,
 	isShiftCtrlD,
 	isShiftCtrlO,
@@ -115,6 +117,6 @@ export {
 	setCellDimensions,
 	type TerminalCapabilities,
 } from "./terminal-image";
-export { type Component, Container, TUI } from "./tui";
+export { type Component, Container, type OverlayHandle, type SizeValue, TUI } from "./tui";
 // Utilities
 export { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "./utils";

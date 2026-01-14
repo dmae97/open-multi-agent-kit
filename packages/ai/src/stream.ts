@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { supportsXhigh } from "./models";
+import { type BedrockOptions, streamBedrock } from "./providers/amazon-bedrock";
 import { type AnthropicOptions, streamAnthropic } from "./providers/anthropic";
 import { type CursorOptions, streamCursor } from "./providers/cursor";
 import { type GoogleOptions, streamGoogle } from "./providers/google";
@@ -73,6 +74,20 @@ export function getEnvApiKey(provider: any): string | undefined {
 		}
 	}
 
+	if (provider === "amazon-bedrock") {
+		// Amazon Bedrock supports multiple credential sources:
+		// 1. AWS_PROFILE - named profile from ~/.aws/credentials
+		// 2. AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY - standard IAM keys
+		// 3. AWS_BEARER_TOKEN_BEDROCK - Bedrock API keys (bearer token)
+		if (
+			process.env.AWS_PROFILE ||
+			(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) ||
+			process.env.AWS_BEARER_TOKEN_BEDROCK
+		) {
+			return "<authenticated>";
+		}
+	}
+
 	const envMap: Record<string, string> = {
 		openai: "OPENAI_API_KEY",
 		google: "GEMINI_API_KEY",
@@ -80,8 +95,10 @@ export function getEnvApiKey(provider: any): string | undefined {
 		cerebras: "CEREBRAS_API_KEY",
 		xai: "XAI_API_KEY",
 		openrouter: "OPENROUTER_API_KEY",
+		"vercel-ai-gateway": "AI_GATEWAY_API_KEY",
 		zai: "ZAI_API_KEY",
 		mistral: "MISTRAL_API_KEY",
+		minimax: "MINIMAX_API_KEY",
 		opencode: "OPENCODE_API_KEY",
 		cursor: "CURSOR_ACCESS_TOKEN",
 	};
@@ -98,6 +115,9 @@ export function stream<TApi extends Api>(
 	// Vertex AI uses Application Default Credentials, not API keys
 	if (model.api === "google-vertex") {
 		return streamGoogleVertex(model as Model<"google-vertex">, context, options as GoogleVertexOptions);
+	} else if (model.api === "bedrock-converse-stream") {
+		// Bedrock doesn't have any API keys instead it sources credentials from standard AWS env variables or from given AWS profile.
+		return streamBedrock(model as Model<"bedrock-converse-stream">, context, (options || {}) as BedrockOptions);
 	}
 
 	const apiKey = options?.apiKey || getEnvApiKey(model.provider);
@@ -157,6 +177,10 @@ export function streamSimple<TApi extends Api>(
 ): AssistantMessageEventStream {
 	// Vertex AI uses Application Default Credentials, not API keys
 	if (model.api === "google-vertex") {
+		const providerOptions = mapOptionsForApi(model, options, undefined);
+		return stream(model, context, providerOptions);
+	} else if (model.api === "bedrock-converse-stream") {
+		// Bedrock doesn't have any API keys instead it sources credentials from standard AWS env variables or from given AWS profile.
 		const providerOptions = mapOptionsForApi(model, options, undefined);
 		return stream(model, context, providerOptions);
 	}
@@ -257,6 +281,13 @@ function mapOptionsForApi<TApi extends Api>(
 				} satisfies AnthropicOptions;
 			}
 		}
+
+		case "bedrock-converse-stream":
+			return {
+				...base,
+				reasoning: options?.reasoning,
+				thinkingBudgets: options?.thinkingBudgets,
+			} satisfies BedrockOptions;
 
 		case "openai-completions":
 			return {

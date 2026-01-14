@@ -5,7 +5,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { isKeyRelease, isShiftCtrlD } from "./keys";
+import { isKeyRelease, matchesKey } from "./keys";
 import type { Terminal } from "./terminal";
 import { getCapabilities, setCellDimensions } from "./terminal-image";
 import { extractSegments, sliceByColumn, sliceWithWidth, visibleWidth } from "./utils";
@@ -45,6 +45,97 @@ export interface Component {
 }
 
 export { visibleWidth };
+
+/**
+ * Anchor position for overlays
+ */
+export type OverlayAnchor =
+	| "center"
+	| "top-left"
+	| "top-right"
+	| "bottom-left"
+	| "bottom-right"
+	| "top-center"
+	| "bottom-center"
+	| "left-center"
+	| "right-center";
+
+/**
+ * Margin configuration for overlays
+ */
+export interface OverlayMargin {
+	top?: number;
+	right?: number;
+	bottom?: number;
+	left?: number;
+}
+
+/** Value that can be absolute (number) or percentage (string like "50%") */
+export type SizeValue = number | `${number}%`;
+
+/** Parse a SizeValue into absolute value given a reference size */
+function parseSizeValue(value: SizeValue | undefined, referenceSize: number): number | undefined {
+	if (value === undefined) return undefined;
+	if (typeof value === "number") return value;
+	// Parse percentage string like "50%"
+	const match = value.match(/^(\d+(?:\.\d+)?)%$/);
+	if (match) {
+		return Math.floor((referenceSize * parseFloat(match[1])) / 100);
+	}
+	return undefined;
+}
+
+/**
+ * Options for overlay positioning and sizing.
+ * Values can be absolute numbers or percentage strings (e.g., "50%").
+ */
+export interface OverlayOptions {
+	// === Sizing ===
+	/** Width in columns, or percentage of terminal width (e.g., "50%") */
+	width?: SizeValue;
+	/** Minimum width in columns */
+	minWidth?: number;
+	/** Maximum height in rows, or percentage of terminal height (e.g., "50%") */
+	maxHeight?: SizeValue;
+
+	// === Positioning - anchor-based ===
+	/** Anchor point for positioning (default: 'center') */
+	anchor?: OverlayAnchor;
+	/** Horizontal offset from anchor position (positive = right) */
+	offsetX?: number;
+	/** Vertical offset from anchor position (positive = down) */
+	offsetY?: number;
+
+	// === Positioning - percentage or absolute ===
+	/** Row position: absolute number, or percentage (e.g., "25%" = 25% from top) */
+	row?: SizeValue;
+	/** Column position: absolute number, or percentage (e.g., "50%" = centered horizontally) */
+	col?: SizeValue;
+
+	// === Margin from terminal edges ===
+	/** Margin from terminal edges. Number applies to all sides. */
+	margin?: OverlayMargin | number;
+
+	// === Visibility ===
+	/**
+	 * Control overlay visibility based on terminal dimensions.
+	 * If provided, overlay is only rendered when this returns true.
+	 * Called each render cycle with current terminal dimensions.
+	 */
+	visible?: (termWidth: number, termHeight: number) => boolean;
+}
+
+/**
+ * Handle returned by showOverlay for controlling the overlay
+ */
+export interface OverlayHandle {
+	/** Permanently remove the overlay (cannot be shown again) */
+	hide(): void;
+	/** Temporarily hide or show the overlay */
+	setHidden(hidden: boolean): void;
+	/** Check if overlay is temporarily hidden */
+	isHidden(): boolean;
+}
 
 /**
  * Container - a component that contains other components
@@ -111,10 +202,13 @@ export class TUI extends Container {
 	private previousCursor: { row: number; col: number } | null = null;
 	private inputBuffer = ""; // Buffer for parsing terminal responses
 	private cellSizeQueryPending = false;
+
+	// Overlay stack for modal components rendered on top of base content
 	private overlayStack: {
 		component: Component;
-		options?: { row?: number; col?: number; width?: number };
+		options?: OverlayOptions;
 		preFocus: Component | null;
+		hidden: boolean;
 	}[] = [];
 	private inputQueue: string[] = []; // Queue input during cell size query to avoid interleaving
 
@@ -127,25 +221,90 @@ export class TUI extends Container {
 		this.focusedComponent = component;
 	}
 
-	/** Show an overlay component centered (or at specified position). */
-	showOverlay(component: Component, options?: { row?: number; col?: number; width?: number }): void {
-		this.overlayStack.push({ component, options, preFocus: this.focusedComponent });
-		this.setFocus(component);
+	/**
+	 * Show an overlay component with configurable positioning and sizing.
+	 * Returns a handle to control the overlay's visibility.
+	 */
+	showOverlay(component: Component, options?: OverlayOptions): OverlayHandle {
+		const entry = { component, options, preFocus: this.focusedComponent, hidden: false };
+		this.overlayStack.push(entry);
+		// Only focus if overlay is actually visible
+		if (this.isOverlayVisible(entry)) {
+			this.setFocus(component);
+		}
 		this.terminal.hideCursor();
 		this.requestRender();
+
+		// Return handle for controlling this overlay
+		return {
+			hide: () => {
+				const index = this.overlayStack.indexOf(entry);
+				if (index !== -1) {
+					this.overlayStack.splice(index, 1);
+					// Restore focus if this overlay had focus
+					if (this.focusedComponent === component) {
+						const topVisible = this.getTopmostVisibleOverlay();
+						this.setFocus(topVisible?.component ?? entry.preFocus);
+					}
+					if (this.overlayStack.length === 0) this.terminal.hideCursor();
+					this.requestRender();
+				}
+			},
+			setHidden: (hidden: boolean) => {
+				if (entry.hidden === hidden) return;
+				entry.hidden = hidden;
+				// Update focus when hiding/showing
+				if (hidden) {
+					// If this overlay had focus, move focus to next visible or preFocus
+					if (this.focusedComponent === component) {
+						const topVisible = this.getTopmostVisibleOverlay();
+						this.setFocus(topVisible?.component ?? entry.preFocus);
+					}
+				} else {
+					// Restore focus to this overlay when showing (if it's actually visible)
+					if (this.isOverlayVisible(entry)) {
+						this.setFocus(component);
+					}
+				}
+				this.requestRender();
+			},
+			isHidden: () => entry.hidden,
+		};
 	}
 
 	/** Hide the topmost overlay and restore previous focus. */
 	hideOverlay(): void {
 		const overlay = this.overlayStack.pop();
 		if (!overlay) return;
-		this.setFocus(overlay.preFocus);
+		// Find topmost visible overlay, or fall back to preFocus
+		const topVisible = this.getTopmostVisibleOverlay();
+		this.setFocus(topVisible?.component ?? overlay.preFocus);
 		if (this.overlayStack.length === 0) this.terminal.hideCursor();
 		this.requestRender();
 	}
 
+	/** Check if there are any visible overlays */
 	hasOverlay(): boolean {
-		return this.overlayStack.length > 0;
+		return this.overlayStack.some((o) => this.isOverlayVisible(o));
+	}
+
+	/** Check if an overlay entry is currently visible */
+	private isOverlayVisible(entry: (typeof this.overlayStack)[number]): boolean {
+		if (entry.hidden) return false;
+		if (entry.options?.visible) {
+			return entry.options.visible(this.terminal.columns, this.terminal.rows);
+		}
+		return true;
+	}
+
+	/** Find the topmost visible overlay, if any */
+	private getTopmostVisibleOverlay(): (typeof this.overlayStack)[number] | undefined {
+		for (let i = this.overlayStack.length - 1; i >= 0; i--) {
+			if (this.isOverlayVisible(this.overlayStack[i])) {
+				return this.overlayStack[i];
+			}
+		}
+		return undefined;
 	}
 
 	override invalidate(): void {
@@ -271,9 +430,23 @@ export class TUI extends Container {
 
 	private processInput(data: string): void {
 		// Global debug key handler (Shift+Ctrl+D)
-		if (isShiftCtrlD(data) && this.onDebug) {
+		if (matchesKey(data, "shift+ctrl+d") && this.onDebug) {
 			this.onDebug();
 			return;
+		}
+
+		// If focused component is an overlay, verify it's still visible
+		// (visibility can change due to terminal resize or visible() callback)
+		const focusedOverlay = this.overlayStack.find((o) => o.component === this.focusedComponent);
+		if (focusedOverlay && !this.isOverlayVisible(focusedOverlay)) {
+			// Focused overlay is no longer visible, redirect to topmost visible overlay
+			const topVisible = this.getTopmostVisibleOverlay();
+			if (topVisible) {
+				this.setFocus(topVisible.component);
+			} else {
+				// No visible overlays, restore to preFocus
+				this.setFocus(focusedOverlay.preFocus);
+			}
 		}
 
 		// Pass input to focused component (including Ctrl+C)
@@ -334,30 +507,214 @@ export class TUI extends Container {
 		return line.includes("\x1b_G") || line.includes("\x1b]1337;File=");
 	}
 
+	/**
+	 * Resolve overlay layout from options.
+	 * Returns { width, row, col, maxHeight } for rendering.
+	 */
+	private resolveOverlayLayout(
+		options: OverlayOptions | undefined,
+		overlayHeight: number,
+		termWidth: number,
+		termHeight: number,
+	): { width: number; row: number; col: number; maxHeight: number | undefined } {
+		const opt = options ?? {};
+
+		// Parse margin (clamp to non-negative)
+		const margin =
+			typeof opt.margin === "number"
+				? { top: opt.margin, right: opt.margin, bottom: opt.margin, left: opt.margin }
+				: (opt.margin ?? {});
+		const marginTop = Math.max(0, margin.top ?? 0);
+		const marginRight = Math.max(0, margin.right ?? 0);
+		const marginBottom = Math.max(0, margin.bottom ?? 0);
+		const marginLeft = Math.max(0, margin.left ?? 0);
+
+		// Available space after margins
+		const availWidth = Math.max(1, termWidth - marginLeft - marginRight);
+		const availHeight = Math.max(1, termHeight - marginTop - marginBottom);
+
+		// === Resolve width ===
+		let width = parseSizeValue(opt.width, termWidth) ?? Math.min(80, availWidth);
+		// Apply minWidth
+		if (opt.minWidth !== undefined) {
+			width = Math.max(width, opt.minWidth);
+		}
+		// Clamp to available space
+		width = Math.max(1, Math.min(width, availWidth));
+
+		// === Resolve maxHeight ===
+		let maxHeight = parseSizeValue(opt.maxHeight, termHeight);
+		// Clamp to available space
+		if (maxHeight !== undefined) {
+			maxHeight = Math.max(1, Math.min(maxHeight, availHeight));
+		}
+
+		// Effective overlay height (may be clamped by maxHeight)
+		const effectiveHeight = maxHeight !== undefined ? Math.min(overlayHeight, maxHeight) : overlayHeight;
+
+		// === Resolve position ===
+		let row: number;
+		let col: number;
+
+		if (opt.row !== undefined) {
+			if (typeof opt.row === "string") {
+				// Percentage: 0% = top, 100% = bottom (overlay stays within bounds)
+				const match = opt.row.match(/^(\d+(?:\.\d+)?)%$/);
+				if (match) {
+					const maxRow = Math.max(0, availHeight - effectiveHeight);
+					const percent = parseFloat(match[1]) / 100;
+					row = marginTop + Math.floor(maxRow * percent);
+				} else {
+					// Invalid format, fall back to center
+					row = this.resolveAnchorRow("center", effectiveHeight, availHeight, marginTop);
+				}
+			} else {
+				// Absolute row position
+				row = opt.row;
+			}
+		} else {
+			// Anchor-based (default: center)
+			const anchor = opt.anchor ?? "center";
+			row = this.resolveAnchorRow(anchor, effectiveHeight, availHeight, marginTop);
+		}
+
+		if (opt.col !== undefined) {
+			if (typeof opt.col === "string") {
+				// Percentage: 0% = left, 100% = right (overlay stays within bounds)
+				const match = opt.col.match(/^(\d+(?:\.\d+)?)%$/);
+				if (match) {
+					const maxCol = Math.max(0, availWidth - width);
+					const percent = parseFloat(match[1]) / 100;
+					col = marginLeft + Math.floor(maxCol * percent);
+				} else {
+					// Invalid format, fall back to center
+					col = this.resolveAnchorCol("center", width, availWidth, marginLeft);
+				}
+			} else {
+				// Absolute column position
+				col = opt.col;
+			}
+		} else {
+			// Anchor-based (default: center)
+			const anchor = opt.anchor ?? "center";
+			col = this.resolveAnchorCol(anchor, width, availWidth, marginLeft);
+		}
+
+		// Apply offsets
+		if (opt.offsetY !== undefined) row += opt.offsetY;
+		if (opt.offsetX !== undefined) col += opt.offsetX;
+
+		// Clamp to terminal bounds (respecting margins)
+		row = Math.max(marginTop, Math.min(row, termHeight - marginBottom - effectiveHeight));
+		col = Math.max(marginLeft, Math.min(col, termWidth - marginRight - width));
+
+		return { width, row, col, maxHeight };
+	}
+
+	private resolveAnchorRow(anchor: OverlayAnchor, height: number, availHeight: number, marginTop: number): number {
+		switch (anchor) {
+			case "top-left":
+			case "top-center":
+			case "top-right":
+				return marginTop;
+			case "bottom-left":
+			case "bottom-center":
+			case "bottom-right":
+				return marginTop + availHeight - height;
+			case "left-center":
+			case "center":
+			case "right-center":
+				return marginTop + Math.floor((availHeight - height) / 2);
+		}
+	}
+
+	private resolveAnchorCol(anchor: OverlayAnchor, width: number, availWidth: number, marginLeft: number): number {
+		switch (anchor) {
+			case "top-left":
+			case "left-center":
+			case "bottom-left":
+				return marginLeft;
+			case "top-right":
+			case "right-center":
+			case "bottom-right":
+				return marginLeft + availWidth - width;
+			case "top-center":
+			case "center":
+			case "bottom-center":
+				return marginLeft + Math.floor((availWidth - width) / 2);
+		}
+	}
+
 	/** Composite all overlays into content lines (in stack order, later = on top). */
 	private compositeOverlays(lines: string[], termWidth: number, termHeight: number): string[] {
 		if (this.overlayStack.length === 0) return lines;
 		const result = [...lines];
+
+		// Pre-render all visible overlays and calculate positions
+		const rendered: { overlayLines: string[]; row: number; col: number; w: number }[] = [];
+		let minLinesNeeded = result.length;
+
+		for (const entry of this.overlayStack) {
+			// Skip invisible overlays (hidden or visible() returns false)
+			if (!this.isOverlayVisible(entry)) continue;
+
+			const { component, options } = entry;
+
+			// Get layout with height=0 first to determine width and maxHeight
+			// (width and maxHeight don't depend on overlay height)
+			const { width, maxHeight } = this.resolveOverlayLayout(options, 0, termWidth, termHeight);
+
+			// Render component at calculated width
+			let overlayLines = component.render(width);
+
+			// Apply maxHeight if specified
+			if (maxHeight !== undefined && overlayLines.length > maxHeight) {
+				overlayLines = overlayLines.slice(0, maxHeight);
+			}
+
+			// Get final row/col with actual overlay height
+			const { row, col } = this.resolveOverlayLayout(options, overlayLines.length, termWidth, termHeight);
+
+			rendered.push({ overlayLines, row, col, w: width });
+			minLinesNeeded = Math.max(minLinesNeeded, row + overlayLines.length);
+		}
+
+		// Extend result with empty lines if content is too short for overlay placement
+		while (result.length < minLinesNeeded) {
+			result.push("");
+		}
+
 		const viewportStart = Math.max(0, result.length - termHeight);
 
-		for (const { component, options } of this.overlayStack) {
-			const w =
-				options?.width !== undefined
-					? Math.max(1, Math.min(options.width, termWidth - 4))
-					: Math.max(1, Math.min(80, termWidth - 4));
-			const overlayLines = component.render(w);
-			const h = overlayLines.length;
+		// Track which lines were modified for final verification
+		const modifiedLines = new Set<number>();
 
-			const row = Math.max(0, Math.min(options?.row ?? Math.floor((termHeight - h) / 2), termHeight - h));
-			const col = Math.max(0, Math.min(options?.col ?? Math.floor((termWidth - w) / 2), termWidth - w));
-
-			for (let i = 0; i < h; i++) {
+		// Composite each overlay
+		for (const { overlayLines, row, col, w } of rendered) {
+			for (let i = 0; i < overlayLines.length; i++) {
 				const idx = viewportStart + row + i;
 				if (idx >= 0 && idx < result.length) {
-					result[idx] = this.compositeLineAt(result[idx], overlayLines[i], col, w, termWidth);
+					// Defensive: truncate overlay line to declared width before compositing
+					// (components should already respect width, but this ensures it)
+					const truncatedOverlayLine =
+						visibleWidth(overlayLines[i]) > w ? sliceByColumn(overlayLines[i], 0, w, true) : overlayLines[i];
+					result[idx] = this.compositeLineAt(result[idx], truncatedOverlayLine, col, w, termWidth);
+					modifiedLines.add(idx);
 				}
 			}
 		}
+
+		// Final verification: ensure no composited line exceeds terminal width
+		// This is a belt-and-suspenders safeguard - compositeLineAt should already
+		// guarantee this, but we verify here to prevent crashes from any edge cases
+		// Only check lines that were actually modified (optimization)
+		for (const idx of modifiedLines) {
+			const lineWidth = visibleWidth(result[idx]);
+			if (lineWidth > termWidth) {
+				result[idx] = sliceByColumn(result[idx], 0, termWidth, true);
+			}
+		}
+
 		return result;
 	}
 
@@ -382,8 +739,8 @@ export class TUI extends Container {
 		const afterStart = startCol + overlayWidth;
 		const base = extractSegments(baseLine, startCol, afterStart, totalWidth - afterStart, true);
 
-		// Extract overlay with width tracking
-		const overlay = sliceWithWidth(overlayLine, 0, overlayWidth);
+		// Extract overlay with width tracking (strict=true to exclude wide chars at boundary)
+		const overlay = sliceWithWidth(overlayLine, 0, overlayWidth, true);
 
 		// Pad segments to target widths
 		const beforePad = Math.max(0, startCol - base.beforeWidth);
@@ -393,7 +750,7 @@ export class TUI extends Container {
 		const afterTarget = Math.max(0, totalWidth - actualBeforeWidth - actualOverlayWidth);
 		const afterPad = Math.max(0, afterTarget - base.afterWidth);
 
-		// Compose result - widths are tracked so no final visibleWidth check needed
+		// Compose result
 		const r = TUI.SEGMENT_RESET;
 		const result =
 			base.before +
@@ -405,9 +762,18 @@ export class TUI extends Container {
 			base.after +
 			" ".repeat(afterPad);
 
-		// Only truncate if wide char at after boundary caused overflow (rare)
-		const resultWidth = actualBeforeWidth + actualOverlayWidth + Math.max(afterTarget, base.afterWidth);
-		return resultWidth <= totalWidth ? result : sliceByColumn(result, 0, totalWidth, true);
+		// CRITICAL: Always verify and truncate to terminal width.
+		// This is the final safeguard against width overflow which would crash the TUI.
+		// Width tracking can drift from actual visible width due to:
+		// - Complex ANSI/OSC sequences (hyperlinks, colors)
+		// - Wide characters at segment boundaries
+		// - Edge cases in segment extraction
+		const resultWidth = visibleWidth(result);
+		if (resultWidth <= totalWidth) {
+			return result;
+		}
+		// Truncate with strict=true to ensure we don't exceed totalWidth
+		return sliceByColumn(result, 0, totalWidth, true);
 	}
 
 	private doRender(): void {

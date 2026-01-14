@@ -27,7 +27,7 @@ import { parseStreamingJson } from "../utils/json-parse";
 import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 
-import { transformMessages } from "./transorm-messages";
+import { transformMessages } from "./transform-messages";
 
 // Stealth mode: Mimic Claude Code headers while avoiding tool name collisions.
 export const claudeCodeVersion = "2.1.2";

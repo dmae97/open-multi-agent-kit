@@ -11,6 +11,7 @@ import type { ModelRegistry } from "./model-registry";
 
 /** Default model IDs for each known provider */
 export const defaultModelPerProvider: Record<KnownProvider, string> = {
+	"amazon-bedrock": "us.anthropic.claude-sonnet-4-5-20250514-v1:0",
 	anthropic: "claude-sonnet-4-5",
 	openai: "gpt-5.1-codex",
 	"openai-codex": "codex-max",
@@ -21,11 +22,13 @@ export const defaultModelPerProvider: Record<KnownProvider, string> = {
 	"github-copilot": "gpt-4o",
 	cursor: "claude-sonnet-4-5",
 	openrouter: "openai/gpt-5.1-codex",
+	"vercel-ai-gateway": "claude-sonnet-4-5",
 	xai: "grok-4-fast-non-reasoning",
 	groq: "openai/gpt-oss-120b",
 	cerebras: "zai-glm-4.6",
 	zai: "glm-4.6",
 	mistral: "devstral-medium-latest",
+	minimax: "MiniMax-M2",
 	opencode: "claude-opus-4-5",
 };
 

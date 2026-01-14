@@ -260,9 +260,11 @@ export {
 } from "./modes/interactive/components/index";
 // Theme utilities for custom tools
 export {
+	getLanguageFromPath,
 	getMarkdownTheme,
 	getSelectListTheme,
 	getSettingsListTheme,
+	highlightCode,
 	initTheme,
 	Theme,
 	type ThemeColor,
