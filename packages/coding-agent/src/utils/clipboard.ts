@@ -151,19 +151,29 @@ export async function readImageFromClipboard(): Promise<ClipboardImage | null> {
 	return null;
 }
 
+type ClipboardReadResult =
+	| { status: "found"; image: ClipboardImage }
+	| { status: "empty" } // Tools ran successfully, no image in clipboard
+	| { status: "unavailable" }; // Tools not found or failed to run
+
 async function readImageLinux(timeout: number): Promise<ClipboardImage | null> {
 	const wayland = isWaylandSession();
 	if (wayland) {
-		const image = await readImageWayland(timeout);
-		if (image) return image;
+		const result = await readImageWayland(timeout);
+		if (result.status === "found") return result.image;
+		if (result.status === "empty") return null; // Don't fall back to X11 if Wayland worked
 	}
 
-	return await readImageX11(timeout);
+	const result = await readImageX11(timeout);
+	return result.status === "found" ? result.image : null;
 }
 
-async function readImageWayland(timeout: number): Promise<ClipboardImage | null> {
-	const types = await spawnAndRead(["wl-paste", "--list-types"], timeout);
-	if (!types) return null;
+async function readImageWayland(timeout: number): Promise<ClipboardReadResult> {
+	const wlPastePath = Bun.which("wl-paste");
+	if (!wlPastePath) return { status: "unavailable" };
+
+	const types = await spawnAndRead([wlPastePath, "--list-types"], timeout);
+	if (!types) return { status: "unavailable" }; // Command failed
 
 	const typeList = types
 		.toString("utf-8")
@@ -172,43 +182,46 @@ async function readImageWayland(timeout: number): Promise<ClipboardImage | null>
 		.filter(Boolean);
 
 	const selectedType = selectPreferredImageMimeType(typeList);
-	if (!selectedType) return null;
+	if (!selectedType) return { status: "empty" }; // No image types available
 
-	const imageData = await spawnAndRead(["wl-paste", "--type", selectedType, "--no-newline"], timeout);
-	if (!imageData || imageData.length === 0) return null;
+	const imageData = await spawnAndRead([wlPastePath, "--type", selectedType, "--no-newline"], timeout);
+	if (!imageData || imageData.length === 0) return { status: "empty" };
 
 	return {
-		data: imageData.toString("base64"),
-		mimeType: baseMimeType(selectedType),
+		status: "found",
+		image: {
+			data: imageData.toString("base64"),
+			mimeType: baseMimeType(selectedType),
+		},
 	};
 }
 
-async function readImageX11(timeout: number): Promise<ClipboardImage | null> {
-	const targets = await spawnAndRead(["xclip", "-selection", "clipboard", "-t", "TARGETS", "-o"], timeout);
+async function readImageX11(timeout: number): Promise<ClipboardReadResult> {
+	const xclipPath = Bun.which("xclip");
+	if (!xclipPath) return { status: "unavailable" };
 
-	let candidateTypes: string[] = [];
-	if (targets) {
-		candidateTypes = targets
-			.toString("utf-8")
-			.split(/\r?\n/)
-			.map((t) => t.trim())
-			.filter(Boolean);
-	}
+	const targets = await spawnAndRead([xclipPath, "-selection", "clipboard", "-t", "TARGETS", "-o"], timeout);
+	if (!targets) return { status: "unavailable" }; // xclip failed (no X server?)
 
-	const preferred = candidateTypes.length > 0 ? selectPreferredImageMimeType(candidateTypes) : null;
-	const tryTypes = preferred ? [preferred, ...PREFERRED_IMAGE_MIME_TYPES] : [...PREFERRED_IMAGE_MIME_TYPES];
+	const candidateTypes = targets
+		.toString("utf-8")
+		.split(/\r?\n/)
+		.map((t) => t.trim())
+		.filter(Boolean);
 
-	for (const mimeType of tryTypes) {
-		const imageData = await spawnAndRead(["xclip", "-selection", "clipboard", "-t", mimeType, "-o"], timeout);
-		if (imageData && imageData.length > 0) {
-			return {
-				data: imageData.toString("base64"),
-				mimeType: baseMimeType(mimeType),
-			};
-		}
-	}
+	const selectedType = selectPreferredImageMimeType(candidateTypes);
+	if (!selectedType) return { status: "empty" }; // Clipboard has no image types
 
-	return null;
+	const imageData = await spawnAndRead([xclipPath, "-selection", "clipboard", "-t", selectedType, "-o"], timeout);
+	if (!imageData || imageData.length === 0) return { status: "empty" };
+
+	return {
+		status: "found",
+		image: {
+			data: imageData.toString("base64"),
+			mimeType: baseMimeType(selectedType),
+		},
+	};
 }
 
 async function readImageMacOS(timeout: number): Promise<ClipboardImage | null> {

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed clipboard image paste getting stuck on Wayland when no image is present (was falling back to X11 and timing out)
+
 ## [5.1.0] - 2026-01-14
 
 ### Changed
