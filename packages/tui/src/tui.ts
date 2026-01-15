@@ -198,6 +198,7 @@ export class TUI extends Container {
 	/** Global callback for debug key (Shift+Ctrl+D). Called before input is forwarded to focused component. */
 	public onDebug?: () => void;
 	private renderRequested = false;
+	private rendering = false;
 	private cursorRow = 0; // Track where cursor is (0-indexed, relative to our first line)
 	private previousCursor: { row: number; col: number } | null = null;
 	private inputBuffer = ""; // Buffer for parsing terminal responses
@@ -777,6 +778,18 @@ export class TUI extends Container {
 	}
 
 	private doRender(): void {
+		// Guard against re-entrant renders (can happen on Windows when Bun.spawnSync
+		// yields to the event loop during a sync subprocess call)
+		if (this.rendering) return;
+		this.rendering = true;
+		try {
+			this.doRenderImpl();
+		} finally {
+			this.rendering = false;
+		}
+	}
+
+	private doRenderImpl(): void {
 		// Capture terminal dimensions at start to ensure consistency throughout render
 		const width = this.terminal.columns;
 		const height = this.terminal.rows;

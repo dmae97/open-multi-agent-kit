@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed
+
+- Fixed rendering issues on Windows by preventing re-entrant renders
 
 ## [5.3.0] - 2026-01-15
 
