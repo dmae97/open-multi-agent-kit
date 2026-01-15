@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [5.3.0] - 2026-01-15
 ### Changed
 
 - Replaced detailed Codex system instructions with simplified pi assistant instructions
