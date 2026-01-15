@@ -519,6 +519,20 @@ async function renderUrl(
 		throw new Error("Operation aborted");
 	}
 
+	// Handle internal protocol URLs (e.g., pi-internal://) - return empty
+	if (url.startsWith("pi-internal://")) {
+		return {
+			url,
+			finalUrl: url,
+			contentType: "text/plain",
+			method: "internal",
+			content: "",
+			fetchedAt,
+			truncated: false,
+			notes: ["Internal protocol URL - no external content"],
+		};
+	}
+
 	// Step 0: Normalize URL (ensure scheme for special handlers)
 	url = normalizeUrl(url);
 	const origin = getOrigin(url);

@@ -227,6 +227,24 @@ export function severityToIcon(severity?: DiagnosticSeverity): string {
 }
 
 /**
+ * Strip noise from diagnostic messages (clippy URLs, override hints).
+ */
+function stripDiagnosticNoise(message: string): string {
+	return message
+		.split("\n")
+		.filter((line) => {
+			const trimmed = line.trim();
+			// Skip "for further information visit <url>" lines
+			if (trimmed.startsWith("for further information visit")) return false;
+			// Skip bare URLs
+			if (/^https?:\/\//.test(trimmed)) return false;
+			return true;
+		})
+		.join("\n")
+		.trim();
+}
+
+/**
  * Format a diagnostic as a human-readable string.
  */
 export function formatDiagnostic(diagnostic: Diagnostic, filePath: string): string {
@@ -235,8 +253,9 @@ export function formatDiagnostic(diagnostic: Diagnostic, filePath: string): stri
 	const col = diagnostic.range.start.character + 1;
 	const source = diagnostic.source ? `[${diagnostic.source}] ` : "";
 	const code = diagnostic.code ? ` (${diagnostic.code})` : "";
+	const message = stripDiagnosticNoise(diagnostic.message);
 
-	return `${filePath}:${line}:${col} [${severity}] ${source}${diagnostic.message}${code}`;
+	return `${filePath}:${line}:${col} [${severity}] ${source}${message}${code}`;
 }
 
 /**
