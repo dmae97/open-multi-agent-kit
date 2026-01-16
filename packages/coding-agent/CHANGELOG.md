@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Updated model resolution to accept pre-serialized settings for better performance
+- Improved system prompt guidance for position-addressed vs content-addressed file edits
+- Enhanced edit tool documentation with clear use cases for bash alternatives
 
 ## [5.4.0] - 2026-01-15
 

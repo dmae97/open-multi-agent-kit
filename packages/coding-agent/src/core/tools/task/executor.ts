@@ -269,8 +269,11 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		}
 	}
 
+	const serializedSettings = options.settingsManager?.serialize();
+	const availableModels = options.modelRegistry?.getAvailable().map((model) => `${model.provider}/${model.id}`);
+
 	// Resolve and add model
-	const resolvedModel = await resolveModelPattern(modelOverride || agent.model);
+	const resolvedModel = await resolveModelPattern(modelOverride || agent.model, availableModels, serializedSettings);
 	const sessionFile = subtaskSessionFile ?? options.sessionFile ?? null;
 	const spawnsEnv = agent.spawns === undefined ? "" : agent.spawns === "*" ? "*" : agent.spawns.join(",");
 
@@ -601,7 +604,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			enableLsp,
 			serializedAuth: options.authStorage?.serialize(),
 			serializedModels: options.modelRegistry?.serialize(),
-			serializedSettings: options.settingsManager?.serialize(),
+			serializedSettings,
 			mcpTools: options.mcpManager ? extractMCPToolMetadata(options.mcpManager) : undefined,
 		},
 	};

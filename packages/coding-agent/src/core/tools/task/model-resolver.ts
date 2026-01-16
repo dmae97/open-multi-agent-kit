@@ -11,8 +11,9 @@
  *   - "omp/slow" or "pi/slow" → configured slow model from settings
  */
 
-import { type Settings, settingsCapability } from "../../../capability/settings";
+import { type Settings as SettingsFile, settingsCapability } from "../../../capability/settings";
 import { loadCapability } from "../../../discovery";
+import type { Settings as SettingsData } from "../../settings-manager";
 import { resolveOmpCommand } from "./omp-command";
 
 /** Cache for available models (provider/modelId format) */
@@ -80,7 +81,7 @@ export function clearModelCache(): void {
  * Load model roles from settings files using capability API.
  */
 async function loadModelRoles(): Promise<Record<string, string>> {
-	const result = await loadCapability<Settings>(settingsCapability.id, { cwd: process.cwd() });
+	const result = await loadCapability<SettingsFile>(settingsCapability.id, { cwd: process.cwd() });
 
 	// Merge all settings, prioritizing first (highest priority)
 	let modelRoles: Record<string, string> = {};
@@ -99,8 +100,12 @@ async function loadModelRoles(): Promise<Record<string, string>> {
  * Looks up the role in settings.modelRoles and returns the configured model.
  * Returns undefined if the role isn't configured.
  */
-async function resolveOmpAlias(role: string, availableModels: string[]): Promise<string | undefined> {
-	const roles = await loadModelRoles();
+async function resolveOmpAlias(
+	role: string,
+	availableModels: string[],
+	settings?: SettingsData,
+): Promise<string | undefined> {
+	const roles = settings?.modelRoles ?? (await loadModelRoles());
 
 	// Look up role in settings (case-insensitive)
 	const configured = roles[role] || roles[role.toLowerCase()];
@@ -135,10 +140,12 @@ function getProvider(fullModel: string): string | undefined {
  *
  * @param pattern - Model pattern to resolve
  * @param availableModels - Optional pre-fetched list of available models (in provider/modelId format)
+ * @param settings - Optional settings for role alias resolution (pi/..., omp/...)
  */
 export async function resolveModelPattern(
 	pattern: string | undefined,
 	availableModels?: string[],
+	settings?: SettingsData,
 ): Promise<string | undefined> {
 	if (!pattern || pattern === "default") {
 		return undefined;
@@ -161,7 +168,7 @@ export async function resolveModelPattern(
 		const lower = p.toLowerCase();
 		if (lower.startsWith("omp/") || lower.startsWith("pi/")) {
 			const role = lower.startsWith("omp/") ? p.slice(4) : p.slice(3);
-			const resolved = await resolveOmpAlias(role, models);
+			const resolved = await resolveOmpAlias(role, models, settings);
 			if (resolved) return resolved;
 			continue; // Role not configured, try next pattern
 		}

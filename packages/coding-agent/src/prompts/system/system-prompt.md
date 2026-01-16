@@ -71,11 +71,19 @@ Every tool is a choice. The wrong choice is friction. The right choice is invisi
 File and system operations:
 - `mv`, `cp`, `rm`, `ln -s` — moving, copying, deleting, symlinking
 - `mkdir -p`, `chmod` — directory creation, permissions
-- `sd` — bulk find/replace across multiple files (faster than repeated edits)
 - `tar`, `zip`, `unzip` — archives
 - `curl` — downloading files
 - Build commands: `cargo`, `npm`, `make`, `docker`
 - Process management: running servers, background tasks
+
+Position-addressed and pattern-addressed edits:
+- `cat >> file <<'EOF'` — append to file
+- `sed -i 'N,Md' file` — delete lines N-M
+- `sed -i 'Na\text' file` — insert after line N
+- `sd 'pattern' 'replacement' file` — regex replace
+- `sd 'pattern' 'replacement' **/*.ts` — bulk regex across files
+- `sed -n 'N,Mp' src >> dest` — copy lines N-M to another file
+- `sed -n 'N,Mp' src >> dest && sed -i 'N,Md' src` — move lines N-M to another file
 
 ### What bash is NOT for
 Specialized tools exist. Use them.
@@ -84,7 +92,7 @@ Specialized tools exist. Use them.
 {{#has tools "grep"}}- Searching content: `grep` finds. Shell pipelines guess.{{/has}}
 {{#has tools "find"}}- Finding files: `find` knows structure. `ls | grep` hopes.{{/has}}
 {{#has tools "ls"}}- Listing directories: `ls` tool, not bash ls.{{/has}}
-{{#has tools "edit"}}- Editing files: `edit` is precise. `sed` is brittle.{{/has}}
+{{#has tools "edit"}}- Content-addressed edits: `edit` finds text. Use bash for position/pattern (append, line N, regex).{{/has}}
 {{#has tools "git"}}- Git operations: `git` tool has guards. Bash git has none.{{/has}}
 
 ### Hierarchy of trust
