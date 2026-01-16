@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [5.4.2] - 2026-01-16
 ### Changed
 
 - Updated model resolution to accept pre-serialized settings for better performance
