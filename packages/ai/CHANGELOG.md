@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [5.7.67] - 2026-01-18
 ### Fixed
 
 - Added error handling for unknown OAuth providers

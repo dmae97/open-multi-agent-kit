@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [5.7.67] - 2026-01-18
 ### Changed
 
 - Replaced external photon-node dependency with vendored WebAssembly implementation
