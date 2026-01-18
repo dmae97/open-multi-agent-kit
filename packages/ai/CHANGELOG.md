@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Updated User-Agent header from 'opencode' to 'pi' for OpenAI Codex requests
+- Simplified Codex system prompt instructions
+- Removed bridge text override from Codex system prompt builder
 
 ## [5.4.2] - 2026-01-16
 

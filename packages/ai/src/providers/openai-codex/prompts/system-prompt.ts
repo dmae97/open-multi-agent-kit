@@ -5,15 +5,10 @@ export interface CodexSystemPrompt {
 
 export function buildCodexSystemPrompt(args: {
 	codexInstructions: string;
-	bridgeText: string;
 	userSystemPrompt?: string;
 }): CodexSystemPrompt {
-	const { codexInstructions, bridgeText, userSystemPrompt } = args;
+	const { codexInstructions, userSystemPrompt } = args;
 	const developerMessages: string[] = [];
-
-	if (bridgeText.trim().length > 0) {
-		developerMessages.push(bridgeText.trim());
-	}
 
 	if (userSystemPrompt && userSystemPrompt.trim().length > 0) {
 		developerMessages.push(userSystemPrompt.trim());

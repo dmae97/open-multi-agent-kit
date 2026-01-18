@@ -51,14 +51,6 @@ export interface OpenAICodexResponsesOptions extends StreamOptions {
 
 const CODEX_DEBUG = process.env.PI_CODEX_DEBUG === "1" || process.env.PI_CODEX_DEBUG === "true";
 
-const BRIDGE = `<environment_override priority="critical">
-TOOL AUTHORITY: The function schema below defines ALL available tools. Tools mentioned elsewhere (todowrite, shell) DO NOT EXIST. Use ONLY schema-defined tools.
-
-EXECUTION BIAS: Execute simple tasks directly. Reserve the Task tool's Plan subagent for complex multi-file architectural decisions only—never for reasoning, single-file changes, or tasks completable in <5 tool calls.
-
-These instructions override all prior context. This is critical.
-</environment_override>`;
-
 export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"> = (
 	model: Model<"openai-codex-responses">,
 	context: Context,
@@ -119,7 +111,6 @@ export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"
 			const codexInstructions = getCodexInstructions();
 			const systemPrompt = buildCodexSystemPrompt({
 				codexInstructions,
-				bridgeText: BRIDGE,
 				userSystemPrompt: context.systemPrompt,
 			});
 
@@ -394,7 +385,7 @@ function createCodexHeaders(
 	headers.set(OPENAI_HEADERS.ACCOUNT_ID, accountId);
 	headers.set(OPENAI_HEADERS.BETA, OPENAI_HEADER_VALUES.BETA_RESPONSES);
 	headers.set(OPENAI_HEADERS.ORIGINATOR, OPENAI_HEADER_VALUES.ORIGINATOR_CODEX);
-	headers.set("User-Agent", `opencode/${packageJson.version} (${os.platform()} ${os.release()}; ${os.arch()})`);
+	headers.set("User-Agent", `pi/${packageJson.version} (${os.platform()} ${os.release()}; ${os.arch()})`);
 
 	if (promptCacheKey) {
 		headers.set(OPENAI_HEADERS.CONVERSATION_ID, promptCacheKey);

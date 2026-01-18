@@ -32,9 +32,13 @@ Agents with "Output: structured" have a fixed schema enforced via frontmatter; y
 
 - Always include a short description of the task in the task parameter
 - **Plan-then-execute**: Put shared constraints in `context`, keep each task focused, specify acceptance criteria; use `output` when you need structured output
+- **Ask open-ended questions**: For exploration tasks, frame prompts to elicit factual discovery, not confirmation. Avoid yes/no questions that are easy to hallucinate.
+  - Bad: "Is there rate limiting?" or "Does the API validate tokens?" → Binary answers invite hallucination
+  - Good: "Find and describe how rate limiting is implemented" or "How does the API handle token validation?" → Forces investigation and factual reporting
+  - The subagent should report *what exists*, then YOU verify if it meets requirements
 - **Minimize tool chatter**: Avoid repeating large context; use Output tool with output ids for full logs
 - **Structured completion**: If `output` is provided, subagents must call `complete` to finish
-- **Parallelize**: Launch multiple agents concurrently whenever possible
+- **Parallelize**: Launch multiple agents whenever possible. You MUST use a single Task call with multiple entries in the `tasks` array to do this.
 - **Isolate file scopes**: Assign each task distinct files or directories so agents don't conflict
 - **Results are intermediate data**: Agent findings provide context for YOU to perform actual work. Do not treat agent reports as "task complete" signals.
 - **Stateless invocations**: Subagents have zero memory of your conversation. Pass ALL relevant context: requirements discussed, decisions made, schemas agreed upon, file paths mentioned. If you reference something from earlier discussion without including it, the subagent will fail.
