@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [5.6.7] - 2026-01-18
+
 ### Added
 
 - Added Python shared gateway setting to enable resource-efficient kernel reuse across sessions

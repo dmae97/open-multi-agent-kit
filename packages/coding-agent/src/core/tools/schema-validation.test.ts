@@ -378,6 +378,7 @@ describe("tool schema validation (post-sanitization)", () => {
 			"lsp",
 			"notebook",
 			"output",
+			"python",
 			"read",
 			"task",
 			"todo_write",

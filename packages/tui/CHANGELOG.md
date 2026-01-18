@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [5.6.7] - 2026-01-18
+
 ### Added
 
 - Added configurable editor padding via `editorPaddingX` theme option

@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [5.6.7] - 2026-01-18
 ### Fixed
 
 - Added proper tool result messages for tool calls that are aborted or error out

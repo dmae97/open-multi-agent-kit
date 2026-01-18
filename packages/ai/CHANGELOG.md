@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [5.6.7] - 2026-01-18
 ### Added
 
 - Added automatic retry logic for OpenAI Codex responses with configurable delay and max retries
