@@ -1,9 +1,14 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added file locking mechanism for shared Python gateway to prevent race conditions
+- Added Python gateway status monitoring with URL, PID, client count, and uptime information
+- Added comprehensive Git helpers to Python prelude including status, diff, log, show, branch, and file operations
+- Added line-based operations to Python prelude including line extraction, deletion, insertion, and pattern matching
+- Added automatic categorization system for Python prelude functions with discoverable documentation
+- Added enhanced `/status` command display showing Python gateway, LSP servers, and MCP server connections
 - Added shared Python gateway coordinator for resource-efficient kernel management across sessions
 - Added Python shared gateway setting with session-scoped kernel reuse and fallback behavior
 - Added automatic idle shutdown for shared Python gateway after 30 seconds of inactivity
@@ -30,6 +35,10 @@
 
 ### Changed
 
+- Improved shared Python gateway coordination with environment validation and stale process cleanup
+- Updated Python prelude to rename `bash()` function to `sh()` for consistency
+- Changed default Python tool mode from "ipy-only" to "both" to enable both IPython and shell execution
+- Enhanced Python gateway metadata tracking to include Python path and virtual environment information
 - Improved Python kernel startup to use shared gateway by default for better resource utilization
 - Updated Python tool to support proxy execution mode for worker processes
 - Enhanced Python kernel availability checking with faster validation
@@ -47,6 +56,8 @@
 
 ### Fixed
 
+- Fixed signal event listener handling in worker processes to prevent crashes when signal is not an EventTarget
+- Fixed Python tool proxy execution in worker processes to use proper tool creation pattern
 - Fixed Python tool session requirement when using proxy executor in worker processes
 - Fixed WebSocket message handling to support both binary and JSON message formats
 - Fixed Python gateway process cleanup and reference counting for shared instances

@@ -38,7 +38,7 @@ describe.skipIf(!shouldRun)("PYTHON_PRELUDE integration", () => {
 			"tail",
 			"replace",
 			"run",
-			"bash",
+			"sh",
 		];
 
 		const session = {

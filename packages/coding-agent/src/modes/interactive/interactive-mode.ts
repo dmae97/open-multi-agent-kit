@@ -128,8 +128,9 @@ export class InteractiveMode implements InteractiveModeContext {
 	private cleanupUnsubscribe?: () => void;
 	private readonly version: string;
 	private readonly changelogMarkdown: string | undefined;
-	private readonly lspServers: Array<{ name: string; status: "ready" | "error"; fileTypes: string[] }> | undefined =
+	public readonly lspServers: Array<{ name: string; status: "ready" | "error"; fileTypes: string[] }> | undefined =
 		undefined;
+	public mcpManager?: import("../../core/mcp/index").MCPManager;
 	private readonly toolUiContextSetter: (uiContext: ExtensionUIContext, hasUI: boolean) => void;
 
 	private readonly commandController: CommandController;
@@ -146,6 +147,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		changelogMarkdown: string | undefined = undefined,
 		setToolUIContext: (uiContext: ExtensionUIContext, hasUI: boolean) => void = () => {},
 		lspServers: Array<{ name: string; status: "ready" | "error"; fileTypes: string[] }> | undefined = undefined,
+		mcpManager?: import("../../core/mcp/index").MCPManager,
 	) {
 		this.session = session;
 		this.sessionManager = session.sessionManager;
@@ -156,6 +158,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.changelogMarkdown = changelogMarkdown;
 		this.toolUiContextSetter = setToolUIContext;
 		this.lspServers = lspServers;
+		this.mcpManager = mcpManager;
 
 		this.ui = new TUI(new ProcessTerminal(), this.settingsManager.getShowHardwareCursor());
 		this.chatContainer = new Container();

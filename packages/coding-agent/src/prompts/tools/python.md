@@ -22,6 +22,17 @@ The distinction: Read/Grep/Find gather info for *your* decisions. Python execute
 - File operations → prelude helpers, not mv/cp/rm commands
 - Conditionals → Python if/else, not bash [[ ]]
 
+**Shell commands:** Use `sh()` or `run()`, never raw `subprocess`:
+```python
+# Good
+sh("bun run check")
+run("cargo build --release")
+
+# Bad - never use subprocess directly
+import subprocess
+subprocess.run(["bun", "run", "check"], ...)
+```
+
 ## Prelude helpers
 
 All helpers auto-print results and return values for chaining.

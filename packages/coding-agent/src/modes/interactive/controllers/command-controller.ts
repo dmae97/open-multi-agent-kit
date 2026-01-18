@@ -7,6 +7,7 @@ import { getDebugLogPath } from "../../../config";
 import { loadCustomShare } from "../../../core/custom-share";
 import type { CompactOptions } from "../../../core/extensions/types";
 import { createCompactionSummaryMessage } from "../../../core/messages";
+import { getGatewayStatus } from "../../../core/python-gateway-coordinator";
 import type { TruncationResult } from "../../../core/tools/truncate";
 import { getChangelogPath, parseChangelog } from "../../../utils/changelog";
 import { copyToClipboard } from "../../../utils/clipboard";
@@ -276,7 +277,47 @@ export class CommandController {
 
 		if (stats.cost > 0) {
 			info += `\n${theme.bold("Cost")}\n`;
-			info += `${theme.fg("dim", "Total:")} ${stats.cost.toFixed(4)}`;
+			info += `${theme.fg("dim", "Total:")} ${stats.cost.toFixed(4)}\n`;
+		}
+
+		const gateway = getGatewayStatus();
+		info += `\n${theme.bold("Python Gateway")}\n`;
+		if (gateway.active) {
+			const mode = gateway.shared ? "Shared" : "Local";
+			info += `${theme.fg("dim", "Status:")} ${theme.fg("success", `Active (${mode})`)}\n`;
+			info += `${theme.fg("dim", "URL:")} ${gateway.url}\n`;
+			info += `${theme.fg("dim", "PID:")} ${gateway.pid}\n`;
+			info += `${theme.fg("dim", "Clients:")} ${gateway.refCount}\n`;
+			if (gateway.uptime !== null) {
+				const uptimeSec = Math.floor(gateway.uptime / 1000);
+				const mins = Math.floor(uptimeSec / 60);
+				const secs = uptimeSec % 60;
+				info += `${theme.fg("dim", "Uptime:")} ${mins}m ${secs}s\n`;
+			}
+		} else {
+			info += `${theme.fg("dim", "Status:")} ${theme.fg("dim", "Inactive")}\n`;
+		}
+
+		if (this.ctx.lspServers && this.ctx.lspServers.length > 0) {
+			info += `\n${theme.bold("LSP Servers")}\n`;
+			for (const server of this.ctx.lspServers) {
+				const statusColor = server.status === "ready" ? "success" : "error";
+				info += `${theme.fg("dim", `${server.name}:`)} ${theme.fg(statusColor, server.status)} ${theme.fg("dim", `(${server.fileTypes.join(", ")})`)}\n`;
+			}
+		}
+
+		if (this.ctx.mcpManager) {
+			const mcpServers = this.ctx.mcpManager.getConnectedServers();
+			info += `\n${theme.bold("MCP Servers")}\n`;
+			if (mcpServers.length === 0) {
+				info += `${theme.fg("dim", "None connected")}\n`;
+			} else {
+				for (const name of mcpServers) {
+					const conn = this.ctx.mcpManager.getConnection(name);
+					const toolCount = conn?.tools?.length ?? 0;
+					info += `${theme.fg("dim", `${name}:`)} ${theme.fg("success", "connected")} ${theme.fg("dim", `(${toolCount} tools)`)}\n`;
+				}
+			}
 		}
 
 		this.ctx.chatContainer.addChild(new Spacer(1));

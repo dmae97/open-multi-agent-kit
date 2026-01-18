@@ -41,3 +41,5 @@ out.html
 packages/ai/test/.temp-images/
 
 changes/
+
+__pycache__/

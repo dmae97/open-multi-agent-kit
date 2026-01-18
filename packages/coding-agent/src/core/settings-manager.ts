@@ -317,7 +317,7 @@ const DEFAULT_SETTINGS: Settings = {
 	git: { enabled: false },
 	mcp: { enableProjectConfig: true },
 	lsp: { formatOnWrite: false, diagnosticsOnWrite: true, diagnosticsOnEdit: false },
-	python: { toolMode: "ipy-only", kernelMode: "session", sharedGateway: true },
+	python: { toolMode: "both", kernelMode: "session", sharedGateway: true },
 	edit: { fuzzyMatch: true },
 	ttsr: { enabled: true, contextMode: "discard", repeatMode: "once", repeatGap: 10 },
 	voice: {
@@ -406,7 +406,7 @@ function normalizePythonSettings(settings: PythonSettings | undefined): PythonSe
 		toolMode:
 			toolMode === "ipy-only" || toolMode === "bash-only" || toolMode === "both"
 				? toolMode
-				: (DEFAULT_SETTINGS.python?.toolMode ?? "ipy-only"),
+				: (DEFAULT_SETTINGS.python?.toolMode ?? "both"),
 		kernelMode:
 			kernelMode === "session" || kernelMode === "per-call"
 				? kernelMode
@@ -1163,7 +1163,7 @@ export class SettingsManager {
 	}
 
 	getPythonToolMode(): PythonToolMode {
-		return this.settings.python?.toolMode ?? "ipy-only";
+		return this.settings.python?.toolMode ?? "both";
 	}
 
 	async setPythonToolMode(mode: PythonToolMode): Promise<void> {

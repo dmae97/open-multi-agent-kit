@@ -82,10 +82,11 @@ async function runInteractiveMode(
 	initialMessages: string[],
 	setExtensionUIContext: (uiContext: ExtensionUIContext, hasUI: boolean) => void,
 	lspServers: Array<{ name: string; status: "ready" | "error"; fileTypes: string[] }> | undefined,
+	mcpManager: import("./core/mcp/index").MCPManager | undefined,
 	initialMessage?: string,
 	initialImages?: ImageContent[],
 ): Promise<void> {
-	const mode = new InteractiveMode(session, version, changelogMarkdown, setExtensionUIContext, lspServers);
+	const mode = new InteractiveMode(session, version, changelogMarkdown, setExtensionUIContext, lspServers, mcpManager);
 
 	await mode.init();
 
@@ -636,7 +637,8 @@ export async function main(args: string[]) {
 	}
 
 	time("buildSessionOptions");
-	const { session, setToolUIContext, modelFallbackMessage, lspServers } = await createAgentSession(sessionOptions);
+	const { session, setToolUIContext, modelFallbackMessage, lspServers, mcpManager } =
+		await createAgentSession(sessionOptions);
 	time("createAgentSession");
 
 	// Re-parse CLI args with extension flags and apply values
@@ -706,6 +708,7 @@ export async function main(args: string[]) {
 			parsed.messages,
 			setToolUIContext,
 			lspServers,
+			mcpManager,
 			initialMessage,
 			initialImages,
 		);

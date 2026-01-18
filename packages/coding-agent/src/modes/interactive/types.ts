@@ -6,6 +6,7 @@ import type { ExtensionUIContext } from "../../core/extensions/index";
 import type { CompactOptions } from "../../core/extensions/types";
 import type { HistoryStorage } from "../../core/history-storage";
 import type { KeybindingsManager } from "../../core/keybindings";
+import type { MCPManager } from "../../core/mcp/index";
 import type { SessionContext, SessionManager } from "../../core/session-manager";
 import type { SettingsManager } from "../../core/settings-manager";
 import type { VoiceSupervisor } from "../../core/voice-supervisor";
@@ -50,6 +51,8 @@ export interface InteractiveModeContext {
 	agent: AgentSession["agent"];
 	voiceSupervisor: VoiceSupervisor;
 	historyStorage?: HistoryStorage;
+	mcpManager?: MCPManager;
+	lspServers?: Array<{ name: string; status: "ready" | "error"; fileTypes: string[] }>;
 
 	// State
 	isInitialized: boolean;
