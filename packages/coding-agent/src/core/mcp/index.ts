@@ -27,12 +27,7 @@ export type { MCPDiscoverOptions, MCPLoadResult } from "./manager";
 export { createMCPManager, MCPManager } from "./manager";
 // Tool bridge
 export type { MCPToolDetails } from "./tool-bridge";
-export {
-	createMCPToolName,
-	DeferredMCPTool,
-	MCPTool,
-	parseMCPToolName,
-} from "./tool-bridge";
+export { createMCPToolName, DeferredMCPTool, MCPTool, parseMCPToolName } from "./tool-bridge";
 // Tool cache
 export { MCPToolCache } from "./tool-cache";
 // Transports

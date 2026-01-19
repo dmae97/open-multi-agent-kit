@@ -165,7 +165,7 @@ export interface AgentState {
 	error?: string;
 }
 
-export interface AgentToolResult<T, TNormative extends TSchema = TSchema> {
+export interface AgentToolResult<T, TNormative extends TSchema = any> {
 	// Content blocks supporting text and images
 	content: (TextContent | ImageContent)[];
 	// Details to be displayed in a UI or logged
@@ -175,7 +175,9 @@ export interface AgentToolResult<T, TNormative extends TSchema = TSchema> {
 }
 
 // Callback for streaming tool execution updates
-export type AgentToolUpdateCallback<T = any, TNormative extends TSchema = TSchema> = (partialResult: AgentToolResult<T, TNormative>) => void;
+export type AgentToolUpdateCallback<T = any, TNormative extends TSchema = any> = (
+	partialResult: AgentToolResult<T, TNormative>,
+) => void;
 
 /** Options passed to renderResult */
 export interface RenderResultOptions {
@@ -214,7 +216,11 @@ export interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any
 	renderCall?: (args: Static<TParameters>, theme: TTheme) => unknown;
 
 	/** Optional custom rendering for tool result display (returns UI component) */
-	renderResult?: (result: AgentToolResult<TDetails, TParameters>, options: RenderResultOptions, theme: TTheme) => unknown;
+	renderResult?: (
+		result: AgentToolResult<TDetails, TParameters>,
+		options: RenderResultOptions,
+		theme: TTheme,
+	) => unknown;
 }
 
 // AgentContext is like Context but uses AgentTool

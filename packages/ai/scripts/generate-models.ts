@@ -189,8 +189,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 					continue;
 				}
 
-				if (id.startsWith("amazon.titan-text-express") ||
-				    id.startsWith("mistral.mistral-7b-instruct-v0")) {
+				if (id.startsWith("amazon.titan-text-express") || id.startsWith("mistral.mistral-7b-instruct-v0")) {
 					// These models doesn't support system messages
 					continue;
 				}
@@ -201,28 +200,32 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 				// TODO: Remove Claude models once https://github.com/anomalyco/models.dev/pull/607 is merged, and follow-up with other models.
 
 				// Models with global cross-region inference profiles
-				if (id.startsWith("anthropic.claude-haiku-4-5") ||
-						id.startsWith("anthropic.claude-sonnet-4") ||
-						id.startsWith("anthropic.claude-opus-4-5") ||
-						id.startsWith("amazon.nova-2-lite") ||
-						id.startsWith("cohere.embed-v4") ||
-						id.startsWith("twelvelabs.pegasus-1-2")) {
-						id = "global." + id;
+				if (
+					id.startsWith("anthropic.claude-haiku-4-5") ||
+					id.startsWith("anthropic.claude-sonnet-4") ||
+					id.startsWith("anthropic.claude-opus-4-5") ||
+					id.startsWith("amazon.nova-2-lite") ||
+					id.startsWith("cohere.embed-v4") ||
+					id.startsWith("twelvelabs.pegasus-1-2")
+				) {
+					id = "global." + id;
 				}
 
 				// Models with US cross-region inference profiles
-				if (id.startsWith("amazon.nova-lite") ||
-						id.startsWith("amazon.nova-micro") ||
-						id.startsWith("amazon.nova-premier") ||
-						id.startsWith("amazon.nova-pro") ||
-						id.startsWith("anthropic.claude-3-7-sonnet") ||
-						id.startsWith("anthropic.claude-opus-4-1") ||
-						id.startsWith("anthropic.claude-opus-4-20250514") ||
-						id.startsWith("deepseek.r1") ||
-						id.startsWith("meta.llama3-2") ||
-						id.startsWith("meta.llama3-3") ||
-						id.startsWith("meta.llama4")) {
-						id = "us." + id;
+				if (
+					id.startsWith("amazon.nova-lite") ||
+					id.startsWith("amazon.nova-micro") ||
+					id.startsWith("amazon.nova-premier") ||
+					id.startsWith("amazon.nova-pro") ||
+					id.startsWith("anthropic.claude-3-7-sonnet") ||
+					id.startsWith("anthropic.claude-opus-4-1") ||
+					id.startsWith("anthropic.claude-opus-4-20250514") ||
+					id.startsWith("deepseek.r1") ||
+					id.startsWith("meta.llama3-2") ||
+					id.startsWith("meta.llama3-3") ||
+					id.startsWith("meta.llama4")
+				) {
+					id = "us." + id;
 				}
 
 				const bedrockModel = {
@@ -245,9 +248,11 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 				models.push(bedrockModel);
 
 				// Add EU cross-region inference variants for Claude models
-				if (modelId.startsWith("anthropic.claude-haiku-4-5") ||
-						modelId.startsWith("anthropic.claude-sonnet-4-5") ||
-						modelId.startsWith("anthropic.claude-opus-4-5")) {
+				if (
+					modelId.startsWith("anthropic.claude-haiku-4-5") ||
+					modelId.startsWith("anthropic.claude-sonnet-4-5") ||
+					modelId.startsWith("anthropic.claude-opus-4-5")
+				) {
 					models.push({
 						...bedrockModel,
 						id: "eu." + modelId,
@@ -418,28 +423,28 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 			for (const [modelId, model] of Object.entries(data.zai.models)) {
 				const m = model as ModelsDevModel;
 				if (m.tool_call !== true) continue;
-				const supportsImage = m.modalities?.input?.includes("image")
+				const supportsImage = m.modalities?.input?.includes("image");
 
 				models.push({
-				id: modelId,
-				name: m.name || modelId,
-				api: "openai-completions",
-				provider: "zai",
-				baseUrl: "https://api.z.ai/api/coding/paas/v4",
-				reasoning: m.reasoning === true,
-				input: supportsImage ? ["text", "image"] : ["text"],
-				cost: {
-					input: m.cost?.input || 0,
-					output: m.cost?.output || 0,
-					cacheRead: m.cost?.cache_read || 0,
-					cacheWrite: m.cost?.cache_write || 0,
-				},
-				compat: {
-					supportsDeveloperRole: false,
-					thinkingFormat: "zai",
-				},
-				contextWindow: m.limit?.context || 4096,
-				maxTokens: m.limit?.output || 4096,
+					id: modelId,
+					name: m.name || modelId,
+					api: "openai-completions",
+					provider: "zai",
+					baseUrl: "https://api.z.ai/api/coding/paas/v4",
+					reasoning: m.reasoning === true,
+					input: supportsImage ? ["text", "image"] : ["text"],
+					cost: {
+						input: m.cost?.input || 0,
+						output: m.cost?.output || 0,
+						cacheRead: m.cost?.cache_read || 0,
+						cacheWrite: m.cost?.cache_write || 0,
+					},
+					compat: {
+						supportsDeveloperRole: false,
+						thinkingFormat: "zai",
+					},
+					contextWindow: m.limit?.context || 4096,
+					maxTokens: m.limit?.output || 4096,
 				});
 			}
 		}
@@ -549,13 +554,15 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 					maxTokens: m.limit?.output || 8192,
 					headers: { ...COPILOT_STATIC_HEADERS },
 					// compat only applies to openai-completions
-					...(needsResponsesApi ? {} : {
-						compat: {
-							supportsStore: false,
-							supportsDeveloperRole: false,
-							supportsReasoningEffort: false,
-						},
-					}),
+					...(needsResponsesApi
+						? {}
+						: {
+								compat: {
+									supportsStore: false,
+									supportsDeveloperRole: false,
+									supportsReasoningEffort: false,
+								},
+							}),
 				};
 
 				models.push(copilotModel);
@@ -618,14 +625,14 @@ async function generateModels() {
 
 	// Fix incorrect cache pricing for Claude Opus 4.5 from models.dev
 	// models.dev has 3x the correct pricing (1.5/18.75 instead of 0.5/6.25)
-	const opus45 = allModels.find(m => m.provider === "anthropic" && m.id === "claude-opus-4-5");
+	const opus45 = allModels.find((m) => m.provider === "anthropic" && m.id === "claude-opus-4-5");
 	if (opus45) {
 		opus45.cost.cacheRead = 0.5;
 		opus45.cost.cacheWrite = 6.25;
 	}
 
 	// Add missing gpt models
-	if (!allModels.some(m => m.provider === "openai" && m.id === "gpt-5-chat-latest")) {
+	if (!allModels.some((m) => m.provider === "openai" && m.id === "gpt-5-chat-latest")) {
 		allModels.push({
 			id: "gpt-5-chat-latest",
 			name: "GPT-5 Chat Latest",
@@ -645,7 +652,7 @@ async function generateModels() {
 		});
 	}
 
-	if (!allModels.some(m => m.provider === "openai" && m.id === "gpt-5.1-codex")) {
+	if (!allModels.some((m) => m.provider === "openai" && m.id === "gpt-5.1-codex")) {
 		allModels.push({
 			id: "gpt-5.1-codex",
 			name: "GPT-5.1 Codex",
@@ -665,7 +672,7 @@ async function generateModels() {
 		});
 	}
 
-	if (!allModels.some(m => m.provider === "openai" && m.id === "gpt-5.1-codex-max")) {
+	if (!allModels.some((m) => m.provider === "openai" && m.id === "gpt-5.1-codex-max")) {
 		allModels.push({
 			id: "gpt-5.1-codex-max",
 			name: "GPT-5.1 Codex Max",
@@ -756,7 +763,7 @@ async function generateModels() {
 	allModels.push(...codexModels);
 
 	// Add missing Grok models
-	if (!allModels.some(m => m.provider === "xai" && m.id === "grok-code-fast-1")) {
+	if (!allModels.some((m) => m.provider === "xai" && m.id === "grok-code-fast-1")) {
 		allModels.push({
 			id: "grok-code-fast-1",
 			name: "Grok Code Fast 1",
@@ -777,7 +784,7 @@ async function generateModels() {
 	}
 
 	// Add missing OpenRouter model
-	if (!allModels.some(m => m.provider === "openrouter" && m.id === "openrouter/auto")) {
+	if (!allModels.some((m) => m.provider === "openrouter" && m.id === "openrouter/auto")) {
 		allModels.push({
 			id: "openrouter/auto",
 			name: "OpenRouter: Auto Router",
@@ -789,10 +796,10 @@ async function generateModels() {
 			cost: {
 				// we dont know about the costs because OpenRouter auto routes to different models
 				// and then charges you for the underlying used model
-				input:0,
-				output:0,
-				cacheRead:0,
-				cacheWrite:0,
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
 			},
 			contextWindow: 2000000,
 			maxTokens: 30000,
@@ -1092,174 +1099,174 @@ async function generateModels() {
 			cost: { input: 0.0375, output: 0.15, cacheRead: 0.01, cacheWrite: 0 },
 			contextWindow: 1000000,
 			maxTokens: 8192,
-        },
-    ];
-    allModels.push(...vertexModels);
+		},
+	];
+	allModels.push(...vertexModels);
 
-    // Cursor Agent models (subscription-based, costs are 0)
-    // Model IDs fetched from GetUsableModels RPC
-    const CURSOR_BASE_URL = "https://api2.cursor.sh";
-    const cursorModels: Model<"cursor-agent">[] = [
-        {
-            id: "default",
-            name: "Auto (Cursor)",
-            api: "cursor-agent",
-            provider: "cursor",
-            baseUrl: CURSOR_BASE_URL,
-            reasoning: false,
-            input: ["text", "image"],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 200000,
-            maxTokens: 64000,
-        },
-        {
-            id: "claude-4.5-sonnet",
-            name: "Claude 4.5 Sonnet (Cursor)",
-            api: "cursor-agent",
-            provider: "cursor",
-            baseUrl: CURSOR_BASE_URL,
-            reasoning: false,
-            input: ["text", "image"],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 200000,
-            maxTokens: 64000,
-        },
-        {
-            id: "claude-4.5-sonnet-thinking",
-            name: "Claude 4.5 Sonnet Thinking (Cursor)",
-            api: "cursor-agent",
-            provider: "cursor",
-            baseUrl: CURSOR_BASE_URL,
-            reasoning: true,
-            input: ["text", "image"],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 200000,
-            maxTokens: 64000,
-        },
-        {
-            id: "claude-4.5-opus-high",
-            name: "Claude 4.5 Opus (Cursor)",
-            api: "cursor-agent",
-            provider: "cursor",
-            baseUrl: CURSOR_BASE_URL,
-            reasoning: false,
-            input: ["text", "image"],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 200000,
-            maxTokens: 64000,
-        },
-        {
-            id: "claude-4.5-opus-high-thinking",
-            name: "Claude 4.5 Opus Thinking (Cursor)",
-            api: "cursor-agent",
-            provider: "cursor",
-            baseUrl: CURSOR_BASE_URL,
-            reasoning: true,
-            input: ["text", "image"],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 200000,
-            maxTokens: 64000,
-        },
-        {
-            id: "gpt-5.1-codex-max",
-            name: "GPT-5.1 Codex Max (Cursor)",
-            api: "cursor-agent",
-            provider: "cursor",
-            baseUrl: CURSOR_BASE_URL,
-            reasoning: true,
-            input: ["text", "image"],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 400000,
-            maxTokens: 128000,
-        },
-        {
-            id: "gpt-5.1-codex-max-high",
-            name: "GPT-5.1 Codex Max High (Cursor)",
-            api: "cursor-agent",
-            provider: "cursor",
-            baseUrl: CURSOR_BASE_URL,
-            reasoning: true,
-            input: ["text", "image"],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 400000,
-            maxTokens: 128000,
-        },
-        {
-            id: "gpt-5.2",
-            name: "GPT-5.2 (Cursor)",
-            api: "cursor-agent",
-            provider: "cursor",
-            baseUrl: CURSOR_BASE_URL,
-            reasoning: true,
-            input: ["text", "image"],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 400000,
-            maxTokens: 128000,
-        },
-        {
-            id: "gpt-5.2-high",
-            name: "GPT-5.2 High (Cursor)",
-            api: "cursor-agent",
-            provider: "cursor",
-            baseUrl: CURSOR_BASE_URL,
-            reasoning: true,
-            input: ["text", "image"],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 400000,
-            maxTokens: 128000,
-        },
-        {
-            id: "gemini-3-pro",
-            name: "Gemini 3 Pro (Cursor)",
-            api: "cursor-agent",
-            provider: "cursor",
-            baseUrl: CURSOR_BASE_URL,
-            reasoning: true,
-            input: ["text", "image"],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 1048576,
-            maxTokens: 65535,
-        },
-        {
-            id: "gemini-3-flash",
-            name: "Gemini 3 Flash (Cursor)",
-            api: "cursor-agent",
-            provider: "cursor",
-            baseUrl: CURSOR_BASE_URL,
-            reasoning: true,
-            input: ["text", "image"],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 1048576,
-            maxTokens: 65535,
-        },
-        {
-            id: "grok-code-fast-1",
-            name: "Grok (Cursor)",
-            api: "cursor-agent",
-            provider: "cursor",
-            baseUrl: CURSOR_BASE_URL,
-            reasoning: false,
-            input: ["text"],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 32768,
-            maxTokens: 8192,
-        },
-        {
-            id: "composer-1",
-            name: "Composer 1 (Cursor)",
-            api: "cursor-agent",
-            provider: "cursor",
-            baseUrl: CURSOR_BASE_URL,
-            reasoning: false,
-            input: ["text"],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 200000,
-            maxTokens: 64000,
-        },
-    ];
-    allModels.push(...cursorModels);
+	// Cursor Agent models (subscription-based, costs are 0)
+	// Model IDs fetched from GetUsableModels RPC
+	const CURSOR_BASE_URL = "https://api2.cursor.sh";
+	const cursorModels: Model<"cursor-agent">[] = [
+		{
+			id: "default",
+			name: "Auto (Cursor)",
+			api: "cursor-agent",
+			provider: "cursor",
+			baseUrl: CURSOR_BASE_URL,
+			reasoning: false,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 200000,
+			maxTokens: 64000,
+		},
+		{
+			id: "claude-4.5-sonnet",
+			name: "Claude 4.5 Sonnet (Cursor)",
+			api: "cursor-agent",
+			provider: "cursor",
+			baseUrl: CURSOR_BASE_URL,
+			reasoning: false,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 200000,
+			maxTokens: 64000,
+		},
+		{
+			id: "claude-4.5-sonnet-thinking",
+			name: "Claude 4.5 Sonnet Thinking (Cursor)",
+			api: "cursor-agent",
+			provider: "cursor",
+			baseUrl: CURSOR_BASE_URL,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 200000,
+			maxTokens: 64000,
+		},
+		{
+			id: "claude-4.5-opus-high",
+			name: "Claude 4.5 Opus (Cursor)",
+			api: "cursor-agent",
+			provider: "cursor",
+			baseUrl: CURSOR_BASE_URL,
+			reasoning: false,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 200000,
+			maxTokens: 64000,
+		},
+		{
+			id: "claude-4.5-opus-high-thinking",
+			name: "Claude 4.5 Opus Thinking (Cursor)",
+			api: "cursor-agent",
+			provider: "cursor",
+			baseUrl: CURSOR_BASE_URL,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 200000,
+			maxTokens: 64000,
+		},
+		{
+			id: "gpt-5.1-codex-max",
+			name: "GPT-5.1 Codex Max (Cursor)",
+			api: "cursor-agent",
+			provider: "cursor",
+			baseUrl: CURSOR_BASE_URL,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 400000,
+			maxTokens: 128000,
+		},
+		{
+			id: "gpt-5.1-codex-max-high",
+			name: "GPT-5.1 Codex Max High (Cursor)",
+			api: "cursor-agent",
+			provider: "cursor",
+			baseUrl: CURSOR_BASE_URL,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 400000,
+			maxTokens: 128000,
+		},
+		{
+			id: "gpt-5.2",
+			name: "GPT-5.2 (Cursor)",
+			api: "cursor-agent",
+			provider: "cursor",
+			baseUrl: CURSOR_BASE_URL,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 400000,
+			maxTokens: 128000,
+		},
+		{
+			id: "gpt-5.2-high",
+			name: "GPT-5.2 High (Cursor)",
+			api: "cursor-agent",
+			provider: "cursor",
+			baseUrl: CURSOR_BASE_URL,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 400000,
+			maxTokens: 128000,
+		},
+		{
+			id: "gemini-3-pro",
+			name: "Gemini 3 Pro (Cursor)",
+			api: "cursor-agent",
+			provider: "cursor",
+			baseUrl: CURSOR_BASE_URL,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 1048576,
+			maxTokens: 65535,
+		},
+		{
+			id: "gemini-3-flash",
+			name: "Gemini 3 Flash (Cursor)",
+			api: "cursor-agent",
+			provider: "cursor",
+			baseUrl: CURSOR_BASE_URL,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 1048576,
+			maxTokens: 65535,
+		},
+		{
+			id: "grok-code-fast-1",
+			name: "Grok (Cursor)",
+			api: "cursor-agent",
+			provider: "cursor",
+			baseUrl: CURSOR_BASE_URL,
+			reasoning: false,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 32768,
+			maxTokens: 8192,
+		},
+		{
+			id: "composer-1",
+			name: "Composer 1 (Cursor)",
+			api: "cursor-agent",
+			provider: "cursor",
+			baseUrl: CURSOR_BASE_URL,
+			reasoning: false,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 200000,
+			maxTokens: 64000,
+		},
+	];
+	allModels.push(...cursorModels);
 
-    // Group by provider and deduplicate by model ID
+	// Group by provider and deduplicate by model ID
 	const providers: Record<string, Record<string, Model<any>>> = {};
 	for (const model of allModels) {
 		if (!providers[model.provider]) {
@@ -1273,7 +1280,7 @@ async function generateModels() {
 	}
 
 	// Generate TypeScript file
-    let output = `// This file is auto-generated by scripts/generate-models.ts
+	let output = `// This file is auto-generated by scripts/generate-models.ts
 // Do not edit manually - run 'bun run generate-models' to update
 
 import type { Model } from "./types";
@@ -1298,37 +1305,37 @@ export const MODELS = {
 			if (model.baseUrl) {
 				output += `\t\t\tbaseUrl: "${model.baseUrl}",\n`;
 			}
-            if (model.headers) {
-                output += `\t\t\theaders: ${JSON.stringify(model.headers)},\n`;
-            }
-            if (model.compat) {
-                output += `\t\t\tcompat: ${JSON.stringify(model.compat)},\n`;
-            }
-            output += `\t\t\treasoning: ${model.reasoning},\n`;
-            output += `\t\t\tinput: [${model.input.map(i => `"${i}"`).join(", ")}],\n`;
-            output += `\t\t\tcost: {\n`;
-            output += `\t\t\t\tinput: ${model.cost.input},\n`;
-            output += `\t\t\t\toutput: ${model.cost.output},\n`;
-            output += `\t\t\t\tcacheRead: ${model.cost.cacheRead},\n`;
-            output += `\t\t\t\tcacheWrite: ${model.cost.cacheWrite},\n`;
-            output += `\t\t\t},\n`;
-            output += `\t\t\tcontextWindow: ${model.contextWindow},\n`;
-            output += `\t\t\tmaxTokens: ${model.maxTokens},\n`;
-            output += `\t\t} satisfies Model<"${model.api}">,\n`;
-        }
+			if (model.headers) {
+				output += `\t\t\theaders: ${JSON.stringify(model.headers)},\n`;
+			}
+			if (model.compat) {
+				output += `\t\t\tcompat: ${JSON.stringify(model.compat)},\n`;
+			}
+			output += `\t\t\treasoning: ${model.reasoning},\n`;
+			output += `\t\t\tinput: [${model.input.map((i) => `"${i}"`).join(", ")}],\n`;
+			output += `\t\t\tcost: {\n`;
+			output += `\t\t\t\tinput: ${model.cost.input},\n`;
+			output += `\t\t\t\toutput: ${model.cost.output},\n`;
+			output += `\t\t\t\tcacheRead: ${model.cost.cacheRead},\n`;
+			output += `\t\t\t\tcacheWrite: ${model.cost.cacheWrite},\n`;
+			output += `\t\t\t},\n`;
+			output += `\t\t\tcontextWindow: ${model.contextWindow},\n`;
+			output += `\t\t\tmaxTokens: ${model.maxTokens},\n`;
+			output += `\t\t} satisfies Model<"${model.api}">,\n`;
+		}
 
-        output += `\t},\n`;
-    }
+		output += `\t},\n`;
+	}
 
-    output += `} as const;\n`;
+	output += `} as const;\n`;
 
-    // Write file
-    await Bun.write(join(packageRoot, "src/models.generated.ts"), output);
-    console.log("Generated src/models.generated.ts");
+	// Write file
+	await Bun.write(join(packageRoot, "src/models.generated.ts"), output);
+	console.log("Generated src/models.generated.ts");
 
 	// Print statistics
 	const totalModels = allModels.length;
-	const reasoningModels = allModels.filter(m => m.reasoning).length;
+	const reasoningModels = allModels.filter((m) => m.reasoning).length;
 
 	console.log(`\nModel Statistics:`);
 	console.log(`  Total tool-capable models: ${totalModels}`);

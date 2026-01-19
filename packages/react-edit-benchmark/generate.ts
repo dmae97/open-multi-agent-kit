@@ -449,11 +449,9 @@ function buildPrompt(
 
 	// nightmare
 	if (isStructural) {
-		return [
-			header,
-			"There is a structural bug in this file.",
-			"Track it down and fix it with a minimal edit.",
-		].join("\n\n");
+		return [header, "There is a structural bug in this file.", "Track it down and fix it with a minimal edit."].join(
+			"\n\n",
+		);
 	}
 	if (isMultiEdit) {
 		return [
@@ -495,7 +493,7 @@ async function generateCase(
 	}
 	if (applicable.length === 0) return null;
 
-	const targetMinScore = minScore ?? ({ easy: 0, medium: 2, hard: 5, nightmare: 8 }[difficulty] ?? 0);
+	const targetMinScore = minScore ?? { easy: 0, medium: 2, hard: 5, nightmare: 8 }[difficulty] ?? 0;
 
 	for (let attempt = 0; attempt < attemptLimit; attempt++) {
 		const entry = applicable[Math.floor(rng() * applicable.length)];
@@ -504,7 +502,7 @@ async function generateCase(
 		if (!regionAvailable(usedLines, entry.path, info.lineNumber)) continue;
 
 		const suffix = "." + entry.path.split(".").pop();
-		if (!await isParsable(mutatedContent, suffix)) continue;
+		if (!(await isParsable(mutatedContent, suffix))) continue;
 
 		const diffScore = scoreDifficulty(entry, info.lineNumber);
 
@@ -545,9 +543,9 @@ interface TarEntry {
 
 async function writeTarball(entries: TarEntry[], outputPath: string): Promise<void> {
 	const data: Record<string, string> = {};
-		for (const entry of entries) {
+	for (const entry of entries) {
 		data[entry.name] = entry.content;
-		}
+	}
 	await Bun.Archive.write(outputPath, data, { compress: "gzip" });
 }
 
@@ -588,9 +586,10 @@ function buildCaseEntries(result: CaseResult, reactDir: string): TarEntry[] {
 			repeat_count: entry.repeatedLines.get(lineContent)?.length ?? 0,
 			similar_block_count: entry.similarBlockCount,
 			density: Math.round(entry.density * 1000) / 1000,
-			line_indent: result.info.lineNumber <= lines.length
-				? lines[result.info.lineNumber - 1].length - lines[result.info.lineNumber - 1].trimStart().length
-				: 0,
+			line_indent:
+				result.info.lineNumber <= lines.length
+					? lines[result.info.lineNumber - 1].length - lines[result.info.lineNumber - 1].trimStart().length
+					: 0,
 			containing_function: findContainingFunction(entry, result.info.lineNumber),
 		},
 	};
@@ -638,7 +637,12 @@ async function main(): Promise<number> {
 
 	let mutations = ALL_MUTATIONS;
 	if (args.categories) {
-		const categories = new Set(args.categories.split(",").map((s) => s.trim()).filter(Boolean));
+		const categories = new Set(
+			args.categories
+				.split(",")
+				.map((s) => s.trim())
+				.filter(Boolean),
+		);
 		const unknown = Array.from(categories).filter((c) => !(c in CATEGORY_MAP));
 		if (unknown.length > 0) {
 			console.error(`Unknown categories: ${unknown.join(", ")}`);

@@ -57,7 +57,6 @@ export interface FormatResult {
 	didFormat: boolean;
 }
 
-
 export async function formatContent(filePath: string, content: string): Promise<FormatResult> {
 	const parsers = parsersByExtension[extname(filePath).toLowerCase()];
 	if (!parsers) {

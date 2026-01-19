@@ -22,13 +22,12 @@ import { loadTasks, loadTasksFromDir, validateFixtures, type EditTask } from "./
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
 
 function generateReportFilename(config: BenchmarkConfig, format: "markdown" | "json"): string {
-	const modelName = config.model.replace(/[^a-zA-Z0-9-]/g, "_").split("/").pop()!;
+	const modelName = config.model
+		.split("/")
+		.pop()!
+		.replace(/[^a-zA-Z0-9-]/g, "_");
 	const variant = config.editVariant ?? "replace";
-		const timestamp = new Date()
-		.toISOString()
-		.replace(/:/g, "-")
-		.replace(/\..+$/, "")
-		.replace(/Z$/, "Z");
+	const timestamp = new Date().toISOString().replace(/:/g, "-").replace(/\..+$/, "").replace(/Z$/, "Z");
 	const ext = format === "json" ? "json" : "md";
 	return `runs/${modelName}_${variant}_${timestamp}.${ext}`;
 }
@@ -413,9 +412,8 @@ class LiveProgress {
 
 		const successRate = (this.success / n) * 100;
 		const editSuccessRate = this.totalEdits > 0 ? (this.totalEditSuccesses / this.totalEdits) * 100 : 100;
-		const avgIndent = this.indentScores.length > 0
-			? this.indentScores.reduce((a, b) => a + b, 0) / this.indentScores.length
-			: 0;
+		const avgIndent =
+			this.indentScores.length > 0 ? this.indentScores.reduce((a, b) => a + b, 0) / this.indentScores.length : 0;
 
 		console.log("");
 		console.log("Runtime Stats:");
@@ -424,7 +422,9 @@ class LiveProgress {
 		console.log(`  Avg indent score: ${avgIndent.toFixed(2)}`);
 		console.log(`  Tool calls:       read=${this.totalReads} edit=${this.totalEdits} write=${this.totalWrites}`);
 		console.log(`  Tool input chars: ${this.totalToolInputChars.toLocaleString()}`);
-		console.log(`  Avg tokens/task:  ${Math.round(this.totalInput / n)} in / ${Math.round(this.totalOutput / n)} out`);
+		console.log(
+			`  Avg tokens/task:  ${Math.round(this.totalInput / n)} in / ${Math.round(this.totalOutput / n)} out`,
+		);
 		console.log(`  Avg time/task:    ${Math.round(this.totalDuration / n)}ms`);
 	}
 

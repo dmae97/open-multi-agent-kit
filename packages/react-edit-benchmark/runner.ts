@@ -14,9 +14,7 @@ import { formatDirectory } from "./formatter";
 import { extractTaskFiles, type EditTask } from "./tasks";
 import { verifyExpectedFileSubset, verifyExpectedFiles } from "./verify";
 
-
 const TMP = await mkdtemp(join(tmpdir(), "reach-benchmark-"));
-
 
 export interface BenchmarkConfig {
 	provider: string;
@@ -134,9 +132,7 @@ async function copyFixtures(task: EditTask, destDir: string): Promise<void> {
 	} else if (task.inputDir) {
 		const entries = await readdir(task.inputDir, { withFileTypes: true });
 		await Promise.all(
-			entries.map((entry) =>
-				cp(join(task.inputDir!, entry.name), join(destDir, entry.name), { recursive: true }),
-			),
+			entries.map((entry) => cp(join(task.inputDir!, entry.name), join(destDir, entry.name), { recursive: true })),
 		);
 	} else {
 		throw new Error(`Task ${task.id} has neither tarballPath nor inputDir`);
@@ -206,7 +202,8 @@ async function runSingleTask(
 			env.OMP_EDIT_FUZZY = config.editFuzzy === "auto" ? "auto" : config.editFuzzy ? "1" : "0";
 		}
 		if (config.editFuzzyThreshold !== undefined) {
-			env.OMP_EDIT_FUZZY_THRESHOLD = config.editFuzzyThreshold === "auto" ? "auto" : String(config.editFuzzyThreshold);
+			env.OMP_EDIT_FUZZY_THRESHOLD =
+				config.editFuzzyThreshold === "auto" ? "auto" : String(config.editFuzzyThreshold);
 		}
 
 		client = new RpcClient({
@@ -214,7 +211,7 @@ async function runSingleTask(
 			cwd: workDir,
 			provider: config.provider,
 			model: config.model,
-			args: [ "--tools", "read,edit,write,ls"],
+			args: ["--tools", "read,edit,write,ls"],
 			env,
 		});
 
@@ -233,9 +230,11 @@ ${task.prompt}
 - If you see multiple similar patterns, only change the ONE that is buggy.
 - Preserve exact code structure. Do not rearrange statements or change formatting.
 
-${config.noEditRequired
-			? "Read the relevant files first, then apply the fix."
-			: "Read the relevant files first, then use the edit tool to apply the fix."}`;
+${
+	config.noEditRequired
+		? "Read the relevant files first, then apply the fix."
+		: "Read the relevant files first, then use the edit tool to apply the fix."
+}`;
 
 		await appendFile(logFile, `{"type":"prompt","message":${JSON.stringify(promptWithContext)}}\n`);
 
@@ -595,9 +594,11 @@ ${task.prompt}
 - Preserve exact code structure. Do not rearrange statements or change formatting.
 - Only modify the file(s) referenced by this request. Leave all other files unchanged.
 
-${config.noEditRequired
+${
+	config.noEditRequired
 		? "Read the relevant files first, then apply the fix."
-		: "Read the relevant files first, then use the edit tool to apply the fix."}`;
+		: "Read the relevant files first, then use the edit tool to apply the fix."
+}`;
 }
 
 async function collectPromptEvents(
@@ -670,32 +671,33 @@ function summarizeTaskRuns(task: EditTask, runs: TaskRunResult[]): TaskResult {
 	const successfulRuns = orderedRuns.filter((r) => r.success).length;
 	const successRate = n > 0 ? successfulRuns / n : 0;
 
-	const avgTokens: TokenStats = n > 0
-		? {
-			input: Math.round(orderedRuns.reduce((sum, r) => sum + r.tokens.input, 0) / n),
-			output: Math.round(orderedRuns.reduce((sum, r) => sum + r.tokens.output, 0) / n),
-			total: Math.round(orderedRuns.reduce((sum, r) => sum + r.tokens.total, 0) / n),
-		}
-		: { input: 0, output: 0, total: 0 };
+	const avgTokens: TokenStats =
+		n > 0
+			? {
+					input: Math.round(orderedRuns.reduce((sum, r) => sum + r.tokens.input, 0) / n),
+					output: Math.round(orderedRuns.reduce((sum, r) => sum + r.tokens.output, 0) / n),
+					total: Math.round(orderedRuns.reduce((sum, r) => sum + r.tokens.total, 0) / n),
+				}
+			: { input: 0, output: 0, total: 0 };
 
 	const avgDuration = n > 0 ? Math.round(orderedRuns.reduce((sum, r) => sum + r.duration, 0) / n) : 0;
 	const indentScores = orderedRuns
 		.map((run) => run.indentScore)
 		.filter((score): score is number => typeof score === "number");
-	const avgIndentScore = indentScores.length > 0
-		? indentScores.reduce((sum, score) => sum + score, 0) / indentScores.length
-		: 0;
+	const avgIndentScore =
+		indentScores.length > 0 ? indentScores.reduce((sum, score) => sum + score, 0) / indentScores.length : 0;
 
-	const avgToolCalls: ToolCallStats = n > 0
-		? {
-			read: orderedRuns.reduce((sum, r) => sum + r.toolCalls.read, 0) / n,
-			edit: orderedRuns.reduce((sum, r) => sum + r.toolCalls.edit, 0) / n,
-			write: orderedRuns.reduce((sum, r) => sum + r.toolCalls.write, 0) / n,
-			editSuccesses: orderedRuns.reduce((sum, r) => sum + r.toolCalls.editSuccesses, 0) / n,
-			editFailures: orderedRuns.reduce((sum, r) => sum + r.toolCalls.editFailures, 0) / n,
-			totalInputChars: orderedRuns.reduce((sum, r) => sum + r.toolCalls.totalInputChars, 0) / n,
-		}
-		: { read: 0, edit: 0, write: 0, editSuccesses: 0, editFailures: 0, totalInputChars: 0 };
+	const avgToolCalls: ToolCallStats =
+		n > 0
+			? {
+					read: orderedRuns.reduce((sum, r) => sum + r.toolCalls.read, 0) / n,
+					edit: orderedRuns.reduce((sum, r) => sum + r.toolCalls.edit, 0) / n,
+					write: orderedRuns.reduce((sum, r) => sum + r.toolCalls.write, 0) / n,
+					editSuccesses: orderedRuns.reduce((sum, r) => sum + r.toolCalls.editSuccesses, 0) / n,
+					editFailures: orderedRuns.reduce((sum, r) => sum + r.toolCalls.editFailures, 0) / n,
+					totalInputChars: orderedRuns.reduce((sum, r) => sum + r.toolCalls.totalInputChars, 0) / n,
+				}
+			: { read: 0, edit: 0, write: 0, editSuccesses: 0, editFailures: 0, totalInputChars: 0 };
 
 	const totalEditAttempts = orderedRuns.reduce((sum, r) => sum + r.toolCalls.edit, 0);
 	const totalEditSuccesses = orderedRuns.reduce((sum, r) => sum + r.toolCalls.editSuccesses, 0);
@@ -769,7 +771,8 @@ async function runBatch(
 			env.OMP_EDIT_FUZZY = config.editFuzzy === "auto" ? "auto" : config.editFuzzy ? "1" : "0";
 		}
 		if (config.editFuzzyThreshold !== undefined) {
-			env.OMP_EDIT_FUZZY_THRESHOLD = config.editFuzzyThreshold === "auto" ? "auto" : String(config.editFuzzyThreshold);
+			env.OMP_EDIT_FUZZY_THRESHOLD =
+				config.editFuzzyThreshold === "auto" ? "auto" : String(config.editFuzzyThreshold);
 		}
 
 		client = new RpcClient({
@@ -919,9 +922,8 @@ export async function runBenchmark(
 	const indentScores = allRuns
 		.map((run) => run.indentScore)
 		.filter((score): score is number => typeof score === "number");
-	const avgIndentScore = indentScores.length > 0
-		? indentScores.reduce((sum, score) => sum + score, 0) / indentScores.length
-		: 0;
+	const avgIndentScore =
+		indentScores.length > 0 ? indentScores.reduce((sum, score) => sum + score, 0) / indentScores.length : 0;
 
 	const totalToolCalls: ToolCallStats = {
 		read: allRuns.reduce((sum, r) => sum + r.toolCalls.read, 0),
@@ -932,9 +934,7 @@ export async function runBenchmark(
 		totalInputChars: allRuns.reduce((sum, r) => sum + r.toolCalls.totalInputChars, 0),
 	};
 
-	const editSuccessRate = totalToolCalls.edit > 0
-		? totalToolCalls.editSuccesses / totalToolCalls.edit
-		: 1;
+	const editSuccessRate = totalToolCalls.edit > 0 ? totalToolCalls.editSuccesses / totalToolCalls.edit : 1;
 
 	const summary: BenchmarkSummary = {
 		totalTasks: tasks.length,

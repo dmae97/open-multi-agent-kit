@@ -8,10 +8,10 @@
  * The mode is determined by the `edit.patchMode` setting.
  */
 
+import { mkdir } from "node:fs/promises";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { StringEnum } from "@oh-my-pi/pi-ai";
 import { Type } from "@sinclair/typebox";
-import { mkdir } from "node:fs/promises";
 import patchDescription from "../../../prompts/tools/patch.md" with { type: "text" };
 import replaceDescription from "../../../prompts/tools/replace.md" with { type: "text" };
 import { renderPromptTemplate } from "../../prompt-templates";
@@ -44,13 +44,7 @@ export { applyPatch, defaultFileSystem, previewPatch } from "./applicator";
 export { computeEditDiff, computePatchDiff, generateDiffString, generateUnifiedDiffString, replaceText } from "./diff";
 
 // Fuzzy matching
-export {
-	DEFAULT_FUZZY_THRESHOLD,
-	findContextLine,
-	findMatch as findEditMatch,
-	findMatch,
-	seekSequence
-} from "./fuzzy";
+export { DEFAULT_FUZZY_THRESHOLD, findContextLine, findMatch as findEditMatch, findMatch, seekSequence } from "./fuzzy";
 
 // Normalization
 export {
@@ -58,7 +52,7 @@ export {
 	detectLineEnding,
 	normalizeToLF,
 	restoreLineEndings,
-	stripBom
+	stripBom,
 } from "./normalize";
 
 // Parsing
@@ -70,12 +64,22 @@ export type {
 	ApplyPatchOptions,
 	ApplyPatchResult,
 	ContextLineResult,
-	DiffError, DiffHunk, DiffResult, DiffError as EditDiffError, DiffResult as EditDiffResult, FuzzyMatch as EditMatch, MatchOutcome as EditMatchOutcome, FileChange,
-	FileSystem, FuzzyMatch, MatchOutcome,
+	DiffError,
+	DiffError as EditDiffError,
+	DiffHunk,
+	DiffHunk as UpdateChunk,
+	DiffHunk as UpdateFileChunk,
+	DiffResult,
+	DiffResult as EditDiffResult,
+	FileChange,
+	FileSystem,
+	FuzzyMatch as EditMatch,
+	FuzzyMatch,
+	MatchOutcome as EditMatchOutcome,
+	MatchOutcome,
 	Operation,
 	PatchInput,
-	SequenceSearchResult, DiffHunk as UpdateChunk,
-	DiffHunk as UpdateFileChunk
+	SequenceSearchResult,
 } from "./types";
 // Types
 // Legacy aliases for backwards compatibility

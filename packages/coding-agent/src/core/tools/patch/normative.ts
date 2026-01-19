@@ -4,7 +4,7 @@
 
 import { generateUnifiedDiffString } from "./diff";
 import { normalizeToLF, stripBom } from "./normalize";
-import { PatchInput } from "./types";
+import type { PatchInput } from "./types";
 
 export interface NormativePatchOptions {
 	path: string;

@@ -27,20 +27,11 @@ export {
 	refreshGitHubCopilotToken,
 } from "./github-copilot";
 // Google Antigravity
-export {
-	loginAntigravity,
-	refreshAntigravityToken,
-} from "./google-antigravity";
+export { loginAntigravity, refreshAntigravityToken } from "./google-antigravity";
 // Google Gemini CLI
-export {
-	loginGeminiCli,
-	refreshGoogleCloudToken,
-} from "./google-gemini-cli";
+export { loginGeminiCli, refreshGoogleCloudToken } from "./google-gemini-cli";
 // OpenAI Codex (ChatGPT OAuth)
-export {
-	loginOpenAICodex,
-	refreshOpenAICodexToken,
-} from "./openai-codex";
+export { loginOpenAICodex, refreshOpenAICodexToken } from "./openai-codex";
 
 export * from "./types";
 

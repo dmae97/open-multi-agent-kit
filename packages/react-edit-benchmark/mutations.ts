@@ -283,7 +283,8 @@ class BooleanLiteralFlipMutation extends BaseMutation {
 class OptionalChainRemovalMutation extends BaseMutation {
 	name = "remove-optional-chain";
 	category = "access";
-	fixHint = "Restore the optional chaining operator (`?.`) at the ONE location where it was removed. Do not add optional chaining elsewhere.";
+	fixHint =
+		"Restore the optional chaining operator (`?.`) at the ONE location where it was removed. Do not add optional chaining elsewhere.";
 	description = "Optional chaining was removed from a property access.";
 
 	private pattern = /\?\.(?=[\w\[(])/;
@@ -315,12 +316,17 @@ class CallArgumentSwapMutation extends BaseMutation {
 
 	mutate(content: string, rng: () => number): [string, MutationInfo] {
 		const lines = content.split("\n");
-		const candidate = pickCandidate(lines, this.pattern, (m) => {
-			const callee = m.groups?.callee ?? "";
-			const a = m.groups?.a ?? "";
-			const b = m.groups?.b ?? "";
-			return `${callee}(${b}, ${a})`;
-		}, rng);
+		const candidate = pickCandidate(
+			lines,
+			this.pattern,
+			(m) => {
+				const callee = m.groups?.callee ?? "";
+				const a = m.groups?.a ?? "";
+				const b = m.groups?.b ?? "";
+				return `${callee}(${b}, ${a})`;
+			},
+			rng,
+		);
 		if (!candidate) return [content, { lineNumber: 0, originalSnippet: "", mutatedSnippet: "" }];
 		const info = applyCandidate(lines, candidate);
 		return [lines.join("\n"), info];
@@ -373,9 +379,7 @@ class RegexQuantifierSwapMutation extends BaseMutation {
 			lineCounts.set(line, (lineCounts.get(line) ?? 0) + 1);
 		}
 
-		const repeatedCandidates = candidates.filter(
-			(c) => (lineCounts.get(lines[c.lineNumber - 1]) ?? 0) > 1,
-		);
+		const repeatedCandidates = candidates.filter((c) => (lineCounts.get(lines[c.lineNumber - 1]) ?? 0) > 1);
 
 		const candidate = randomChoice(repeatedCandidates.length > 0 ? repeatedCandidates : candidates, rng);
 		const info = applyCandidate(lines, candidate);
@@ -465,11 +469,52 @@ class IdentifierMultiEditMutation extends BaseMutation {
 
 	private pattern = /\b[A-Za-z_$][\w$]*\b/g;
 	private keywords = new Set([
-		"await", "break", "case", "catch", "class", "const", "continue", "debugger", "default",
-		"delete", "do", "else", "export", "extends", "finally", "for", "function", "if", "import",
-		"in", "instanceof", "new", "return", "super", "switch", "this", "throw", "try", "typeof",
-		"var", "void", "while", "with", "yield", "let", "enum", "implements", "interface", "package",
-		"private", "protected", "public", "static", "null", "true", "false",
+		"await",
+		"break",
+		"case",
+		"catch",
+		"class",
+		"const",
+		"continue",
+		"debugger",
+		"default",
+		"delete",
+		"do",
+		"else",
+		"export",
+		"extends",
+		"finally",
+		"for",
+		"function",
+		"if",
+		"import",
+		"in",
+		"instanceof",
+		"new",
+		"return",
+		"super",
+		"switch",
+		"this",
+		"throw",
+		"try",
+		"typeof",
+		"var",
+		"void",
+		"while",
+		"with",
+		"yield",
+		"let",
+		"enum",
+		"implements",
+		"interface",
+		"package",
+		"private",
+		"protected",
+		"public",
+		"static",
+		"null",
+		"true",
+		"false",
 	]);
 
 	canApply(content: string): boolean {
@@ -497,11 +542,13 @@ class IdentifierMultiEditMutation extends BaseMutation {
 			}
 		}
 
-		let candidates = Array.from(occurrences.entries())
-			.filter(([, spans]) => new Set(spans.map((s) => s[0])).size >= 3);
+		let candidates = Array.from(occurrences.entries()).filter(
+			([, spans]) => new Set(spans.map((s) => s[0])).size >= 3,
+		);
 		if (candidates.length === 0) {
-			candidates = Array.from(occurrences.entries())
-				.filter(([, spans]) => new Set(spans.map((s) => s[0])).size >= 2);
+			candidates = Array.from(occurrences.entries()).filter(
+				([, spans]) => new Set(spans.map((s) => s[0])).size >= 2,
+			);
 		}
 		if (candidates.length === 0) return [content, { lineNumber: 0, originalSnippet: "", mutatedSnippet: "" }];
 
@@ -602,7 +649,8 @@ class SwapAdjacentLinesMutation extends BaseMutation {
 	fixHint = "Swap the two adjacent lines back to their original order.";
 	description = "Two adjacent statements are in the wrong order.";
 
-	private statementPattern = /^\s*(?:(?:const|let|var)\s+\w+\s*=|return\s+|\w+\s*(?:\.\w+)*\s*\(|\w+\s*(?:\.\w+)*\s*=)/;
+	private statementPattern =
+		/^\s*(?:(?:const|let|var)\s+\w+\s*=|return\s+|\w+\s*(?:\.\w+)*\s*\(|\w+\s*(?:\.\w+)*\s*=)/;
 
 	canApply(content: string): boolean {
 		const lines = content.split("\n");
@@ -636,18 +684,22 @@ class SwapAdjacentLinesMutation extends BaseMutation {
 
 		const i = randomChoice(candidates, rng);
 		[lines[i], lines[i + 1]] = [lines[i + 1], lines[i]];
-		return [lines.join("\n"), {
-			lineNumber: i + 1,
-			originalSnippet: `[lines ${i + 1}-${i + 2}]`,
-			mutatedSnippet: "[swapped]",
-		}];
+		return [
+			lines.join("\n"),
+			{
+				lineNumber: i + 1,
+				originalSnippet: `[lines ${i + 1}-${i + 2}]`,
+				mutatedSnippet: "[swapped]",
+			},
+		];
 	}
 }
 
 class SwapIfElseBranchesMutation extends BaseMutation {
 	name = "swap-if-else";
 	category = "structural";
-	fixHint = "Swap the if and else branch bodies back to their original positions. The condition should be negated to match.";
+	fixHint =
+		"Swap the if and else branch bodies back to their original positions. The condition should be negated to match.";
 	description = "The if and else branches are swapped (condition should be negated).";
 
 	private ifPattern = /^\s*if\s*\([^)]+\)\s*\{/;
@@ -714,18 +766,22 @@ class SwapIfElseBranchesMutation extends BaseMutation {
 			...ifBody,
 			...lines.slice(elseEnd),
 		];
-		return [newLines.join("\n"), {
-			lineNumber: ifStart + 1,
-			originalSnippet: "if/else branches",
-			mutatedSnippet: "[swapped]",
-		}];
+		return [
+			newLines.join("\n"),
+			{
+				lineNumber: ifStart + 1,
+				originalSnippet: "if/else branches",
+				mutatedSnippet: "[swapped]",
+			},
+		];
 	}
 }
 
 class RemoveEarlyReturnMutation extends BaseMutation {
 	name = "remove-early-return";
 	category = "structural";
-	fixHint = "Restore the missing guard clause (if statement with early return). Add back the exact 3-line pattern: if condition, return statement, closing brace.";
+	fixHint =
+		"Restore the missing guard clause (if statement with early return). Add back the exact 3-line pattern: if condition, return statement, closing brace.";
 	description = "A guard clause (early return) was removed.";
 
 	private guardPattern = /^(?<indent>\s*)if\s*\([^)]+\)\s*\{\s*$/;
@@ -759,18 +815,22 @@ class RemoveEarlyReturnMutation extends BaseMutation {
 		const i = randomChoice(candidates, rng);
 		const removedLines = lines.slice(i, i + 3);
 		const newLines = [...lines.slice(0, i), ...lines.slice(i + 3)];
-		return [newLines.join("\n"), {
-			lineNumber: i + 1,
-			originalSnippet: removedLines.map((l) => l.trim()).join("\n"),
-			mutatedSnippet: "[removed]",
-		}];
+		return [
+			newLines.join("\n"),
+			{
+				lineNumber: i + 1,
+				originalSnippet: removedLines.map((l) => l.trim()).join("\n"),
+				mutatedSnippet: "[removed]",
+			},
+		];
 	}
 }
 
 class SwapNamedImportsMutation extends BaseMutation {
 	name = "swap-named-imports";
 	category = "import";
-	fixHint = "Swap ONLY the two imported names that are in the wrong order. Do not reorder other imports or modify other import statements.";
+	fixHint =
+		"Swap ONLY the two imported names that are in the wrong order. Do not reorder other imports or modify other import statements.";
 	description = "Two named imports are swapped in a destructuring import.";
 
 	private importPattern = /import\s*\{(?<imports>[^}]+)\}\s*from\s*['"]/;
@@ -780,7 +840,10 @@ class SwapNamedImportsMutation extends BaseMutation {
 		let match: RegExpExecArray | null;
 		while ((match = regex.exec(content)) !== null) {
 			const imports = match.groups?.imports ?? "";
-			const parts = imports.split(",").map((p) => p.trim()).filter(Boolean);
+			const parts = imports
+				.split(",")
+				.map((p) => p.trim())
+				.filter(Boolean);
 			const simpleParts = parts.filter((p) => !p.includes(" as ") && /^\w+$/.test(p));
 			if (simpleParts.length >= 2) return true;
 		}
@@ -820,11 +883,14 @@ class SwapNamedImportsMutation extends BaseMutation {
 		const [lineNumber, start, end, original, replacement] = randomChoice(candidates, rng);
 		const line = lines[lineNumber - 1];
 		lines[lineNumber - 1] = line.slice(0, start) + replacement + line.slice(end);
-		return [lines.join("\n"), {
-			lineNumber,
-			originalSnippet: original.trim(),
-			mutatedSnippet: replacement.trim(),
-		}];
+		return [
+			lines.join("\n"),
+			{
+				lineNumber,
+				originalSnippet: original.trim(),
+				mutatedSnippet: replacement.trim(),
+			},
+		];
 	}
 }
 
@@ -856,11 +922,14 @@ class DeleteStatementMutation extends BaseMutation {
 		const i = randomChoice(candidates, rng);
 		const deleted = lines[i];
 		const newLines = [...lines.slice(0, i), ...lines.slice(i + 1)];
-		return [newLines.join("\n"), {
-			lineNumber: i + 1,
-			originalSnippet: deleted.trim(),
-			mutatedSnippet: "[deleted]",
-		}];
+		return [
+			newLines.join("\n"),
+			{
+				lineNumber: i + 1,
+				originalSnippet: deleted.trim(),
+				mutatedSnippet: "[deleted]",
+			},
+		];
 	}
 }
 
@@ -891,7 +960,12 @@ class OffByOneMutation extends BaseMutation {
 			const line = lines[lineNumber - 1];
 			if (isCommented(line, 0)) continue;
 			const lineLower = line.toLowerCase();
-			if (!lineLower.includes("for") && !lineLower.includes("while") && !lineLower.includes("if") && !line.includes("[")) {
+			if (
+				!lineLower.includes("for") &&
+				!lineLower.includes("while") &&
+				!lineLower.includes("if") &&
+				!line.includes("[")
+			) {
 				continue;
 			}
 

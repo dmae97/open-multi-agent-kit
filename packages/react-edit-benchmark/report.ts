@@ -110,7 +110,9 @@ export function generateReport(result: BenchmarkResult): string {
 	lines.push(`| Runs per task | ${runsPerTask} |`);
 	lines.push(`| Edit Variant | ${config.editVariant ?? "auto"} |`);
 	lines.push(`| Edit Fuzzy | ${config.editFuzzy === undefined ? "auto" : config.editFuzzy} |`);
-	lines.push(`| Edit Fuzzy Threshold | ${config.editFuzzyThreshold === undefined ? "auto" : config.editFuzzyThreshold} |`);
+	lines.push(
+		`| Edit Fuzzy Threshold | ${config.editFuzzyThreshold === undefined ? "auto" : config.editFuzzyThreshold} |`,
+	);
 	lines.push(`| Require Edit Tool | ${config.requireEditToolCall ? "yes" : "no"} |`);
 	lines.push(`| No-Edit Baseline | ${config.noEditRequired ? "yes" : "no"} |`);
 	lines.push("");
@@ -139,15 +141,23 @@ export function generateReport(result: BenchmarkResult): string {
 	lines.push(`| Read | ${summary.totalToolCalls.read} | ${summary.avgToolCallsPerRun.read.toFixed(1)} |`);
 	lines.push(`| Edit | ${summary.totalToolCalls.edit} | ${summary.avgToolCallsPerRun.edit.toFixed(1)} |`);
 	lines.push(`| Write | ${summary.totalToolCalls.write} | ${summary.avgToolCallsPerRun.write.toFixed(1)} |`);
-	lines.push(`| **Tool Input Chars** | ${formatNumber(summary.totalToolCalls.totalInputChars)} | ${formatNumber(Math.round(summary.avgToolCallsPerRun.totalInputChars))} |`);
+	lines.push(
+		`| **Tool Input Chars** | ${formatNumber(summary.totalToolCalls.totalInputChars)} | ${formatNumber(Math.round(summary.avgToolCallsPerRun.totalInputChars))} |`,
+	);
 	lines.push("");
 	lines.push("### Tokens & Time");
 	lines.push("");
 	lines.push("| Metric | Total | Avg/Run |");
 	lines.push("|--------|-------|---------|");
-	lines.push(`| Input Tokens | ${formatNumber(summary.totalTokens.input)} | ${formatNumber(summary.avgTokensPerRun.input)} |`);
-	lines.push(`| Output Tokens | ${formatNumber(summary.totalTokens.output)} | ${formatNumber(summary.avgTokensPerRun.output)} |`);
-	lines.push(`| Total Tokens | ${formatNumber(summary.totalTokens.total)} | ${formatNumber(summary.avgTokensPerRun.total)} |`);
+	lines.push(
+		`| Input Tokens | ${formatNumber(summary.totalTokens.input)} | ${formatNumber(summary.avgTokensPerRun.input)} |`,
+	);
+	lines.push(
+		`| Output Tokens | ${formatNumber(summary.totalTokens.output)} | ${formatNumber(summary.avgTokensPerRun.output)} |`,
+	);
+	lines.push(
+		`| Total Tokens | ${formatNumber(summary.totalTokens.total)} | ${formatNumber(summary.avgTokensPerRun.total)} |`,
+	);
 	lines.push(`| Duration | ${formatDuration(summary.totalDuration)} | ${formatDuration(summary.avgDurationPerRun)} |`);
 	lines.push(`| **Avg Indent Score** | — | **${formatScore(summary.avgIndentScore)}** |`);
 	lines.push("");
@@ -350,7 +360,10 @@ function appendCategorySummary(lines: string[], tasks: TaskResult[]): void {
 
 function appendMutationSummary(lines: string[], tasks: TaskResult[]): void {
 	const runs = tasks.flatMap((task) => task.runs);
-	const mutationStats = new Map<string, { category: string; runs: number; verified: number; editUsed: number; success: number }>();
+	const mutationStats = new Map<
+		string,
+		{ category: string; runs: number; verified: number; editUsed: number; success: number }
+	>();
 
 	for (const run of runs) {
 		const mutation = run.mutationType ?? "unknown";

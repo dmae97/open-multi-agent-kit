@@ -2,12 +2,7 @@
  * Extension system for lifecycle events and custom tools.
  */
 
-export {
-	discoverAndLoadExtensions,
-	ExtensionRuntime,
-	loadExtensionFromFactory,
-	loadExtensions,
-} from "./loader";
+export { discoverAndLoadExtensions, ExtensionRuntime, loadExtensionFromFactory, loadExtensions } from "./loader";
 export type {
 	BranchHandler,
 	ExtensionErrorListener,
