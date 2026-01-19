@@ -7,6 +7,7 @@
 
 import { mkdirSync, unlinkSync } from "node:fs";
 import { dirname } from "node:path";
+import { resolveToCwd } from "../path-utils";
 import { DEFAULT_FUZZY_THRESHOLD, findContextLine, findMatch, seekSequence } from "./fuzzy";
 import {
 	adjustIndentation,
@@ -17,7 +18,6 @@ import {
 	restoreLineEndings,
 	stripBom,
 } from "./normalize";
-import { resolveToCwd } from "../path-utils";
 import { normalizeCreateContent, parseHunks } from "./parser";
 import type { ApplyPatchOptions, ApplyPatchResult, ContextLineResult, DiffHunk, FileSystem, PatchInput } from "./types";
 import { ApplyPatchError } from "./types";
@@ -129,11 +129,11 @@ function getHunkHintIndex(hunk: DiffHunk, currentIndex: number): number | undefi
  * @returns The result from finding the final (innermost) context, or undefined if not found
  */
 function findHierarchicalContext(
-    lines: string[],
-    context: string,
-    startFrom: number,
-    lineHint: number | undefined,
-    allowFuzzy: boolean,
+	lines: string[],
+	context: string,
+	startFrom: number,
+	lineHint: number | undefined,
+	allowFuzzy: boolean,
 ): ContextLineResult {
 	// Check for newline-separated hierarchical contexts (from nested @@ anchors)
 	if (context.includes("\n")) {
@@ -149,31 +149,31 @@ function findHierarchicalContext(
 
 			const result = findContextLine(lines, part, currentStart, { allowFuzzy });
 
-   if (result.matchCount !== undefined && result.matchCount > 1) {
-       if (isLast && lineHint !== undefined) {
-           const hintStart = Math.max(0, lineHint - 1);
-           if (hintStart >= currentStart) {
-               const hintedResult = findContextLine(lines, part, hintStart, { allowFuzzy });
-               if (hintedResult.index !== undefined) {
-                   return { ...hintedResult, matchCount: 1 };
-               }
-           }
-       }
-       return { index: undefined, confidence: result.confidence, matchCount: result.matchCount };
-   }
+			if (result.matchCount !== undefined && result.matchCount > 1) {
+				if (isLast && lineHint !== undefined) {
+					const hintStart = Math.max(0, lineHint - 1);
+					if (hintStart >= currentStart) {
+						const hintedResult = findContextLine(lines, part, hintStart, { allowFuzzy });
+						if (hintedResult.index !== undefined) {
+							return { ...hintedResult, matchCount: 1 };
+						}
+					}
+				}
+				return { index: undefined, confidence: result.confidence, matchCount: result.matchCount };
+			}
 
-   if (result.index === undefined) {
-       if (isLast && lineHint !== undefined) {
-           const hintStart = Math.max(0, lineHint - 1);
-           if (hintStart >= currentStart) {
-               const hintedResult = findContextLine(lines, part, hintStart, { allowFuzzy });
-               if (hintedResult.index !== undefined) {
-                   return { ...hintedResult, matchCount: 1 };
-               }
-           }
-       }
-       return { index: undefined, confidence: result.confidence };
-   }
+			if (result.index === undefined) {
+				if (isLast && lineHint !== undefined) {
+					const hintStart = Math.max(0, lineHint - 1);
+					if (hintStart >= currentStart) {
+						const hintedResult = findContextLine(lines, part, hintStart, { allowFuzzy });
+						if (hintedResult.index !== undefined) {
+							return { ...hintedResult, matchCount: 1 };
+						}
+					}
+				}
+				return { index: undefined, confidence: result.confidence };
+			}
 
 			if (isLast) {
 				return result;
@@ -253,9 +253,7 @@ function findHierarchicalContext(
 
 		const innerResult = findContextLine(lines, inner, outerResult.index + 1, { allowFuzzy });
 		if (innerResult.index !== undefined) {
-			return innerResult.matchCount && innerResult.matchCount > 1
-				? { ...innerResult, matchCount: 1 }
-				: innerResult;
+			return innerResult.matchCount && innerResult.matchCount > 1 ? { ...innerResult, matchCount: 1 } : innerResult;
 		}
 		if (innerResult.matchCount !== undefined && innerResult.matchCount > 1) {
 			return { ...innerResult, matchCount: 1 };
@@ -276,7 +274,12 @@ function findSequenceWithHint(
 ): import("./types").SequenceSearchResult {
 	// Prefer content-based search starting from currentIndex
 	const primaryResult = seekSequence(lines, pattern, currentIndex, eof, { allowFuzzy });
-	if (primaryResult.matchCount && primaryResult.matchCount > 1 && hintIndex !== undefined && hintIndex !== currentIndex) {
+	if (
+		primaryResult.matchCount &&
+		primaryResult.matchCount > 1 &&
+		hintIndex !== undefined &&
+		hintIndex !== currentIndex
+	) {
 		const hintedResult = seekSequence(lines, pattern, hintIndex, eof, { allowFuzzy });
 		if (hintedResult.index !== undefined && (hintedResult.matchCount ?? 1) <= 1) {
 			return hintedResult;
@@ -387,10 +390,14 @@ function computeReplacements(
 
 	for (const hunk of hunks) {
 		if (hunk.oldStartLine !== undefined && hunk.oldStartLine < 1) {
-			throw new ApplyPatchError(`Line hint ${hunk.oldStartLine} is out of range for ${path} (line numbers start at 1)`);
+			throw new ApplyPatchError(
+				`Line hint ${hunk.oldStartLine} is out of range for ${path} (line numbers start at 1)`,
+			);
 		}
 		if (hunk.newStartLine !== undefined && hunk.newStartLine < 1) {
-			throw new ApplyPatchError(`Line hint ${hunk.newStartLine} is out of range for ${path} (line numbers start at 1)`);
+			throw new ApplyPatchError(
+				`Line hint ${hunk.newStartLine} is out of range for ${path} (line numbers start at 1)`,
+			);
 		}
 		const lineHint = hunk.oldStartLine;
 		if (lineHint !== undefined && hunk.changeContext === undefined && !hunk.hasContextLines) {
@@ -638,24 +645,24 @@ export async function applyPatch(input: PatchInput, options: ApplyPatchOptions):
 		allowFuzzy = true,
 	} = options;
 
- const resolvePath = (p: string): string => resolveToCwd(p, cwd);
- const absolutePath = resolvePath(input.path);
+	const resolvePath = (p: string): string => resolveToCwd(p, cwd);
+	const absolutePath = resolvePath(input.path);
 
- if (input.moveTo) {
-     const destPath = resolvePath(input.moveTo);
-     if (destPath === absolutePath) {
-         throw new ApplyPatchError("moveTo path is the same as source path");
-     }
- }
+	if (input.moveTo) {
+		const destPath = resolvePath(input.moveTo);
+		if (destPath === absolutePath) {
+			throw new ApplyPatchError("moveTo path is the same as source path");
+		}
+	}
 
 	// Handle CREATE operation
 	if (input.operation === "create") {
 		if (!input.diff) {
 			throw new ApplyPatchError("Create operation requires diff (file content)");
 		}
-  // Strip + prefixes if present (handles diffs formatted as additions)
-  const normalizedContent = normalizeCreateContent(input.diff);
-  const content = normalizedContent.endsWith("\n") ? normalizedContent : `${normalizedContent}\n`;
+		// Strip + prefixes if present (handles diffs formatted as additions)
+		const normalizedContent = normalizeCreateContent(input.diff);
+		const content = normalizedContent.endsWith("\n") ? normalizedContent : `${normalizedContent}\n`;
 
 		if (!dryRun) {
 			const parentDir = dirname(absolutePath);

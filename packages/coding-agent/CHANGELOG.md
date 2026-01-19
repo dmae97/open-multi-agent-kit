@@ -70,6 +70,7 @@
 
 ### Fixed
 
+- Fixed LSP writethrough batching to flush when delete operations complete a batch
 - Fixed patch application to prefer actual diff over cached preview when displaying results
 - Fixed line number validation to properly reject zero and negative values in patch headers
 - Fixed hierarchical context matching to correctly handle space-separated contexts with signature characters

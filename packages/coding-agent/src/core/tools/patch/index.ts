@@ -18,6 +18,7 @@ import type { ToolSession } from "../index";
 import {
 	createLspWritethrough,
 	type FileDiagnosticsResult,
+	flushLspWritethroughBatch,
 	type WritethroughCallback,
 	writethroughNoop,
 } from "../lsp/index";
@@ -273,7 +274,11 @@ export class EditTool implements AgentTool<typeof replaceEditSchema | typeof pat
 					break;
 			}
 
-			const diagnostics = fs.getDiagnostics();
+			let diagnostics = fs.getDiagnostics();
+			if (operation === "delete" && batchRequest?.flush) {
+				const flushedDiagnostics = await flushLspWritethroughBatch(batchRequest.id, this.session.cwd, signal);
+				diagnostics ??= flushedDiagnostics;
+			}
 			if (diagnostics?.messages?.length) {
 				resultText += `\n\nLSP Diagnostics (${diagnostics.summary}):\n`;
 				resultText += diagnostics.messages.map((d) => `  ${d}`).join("\n");

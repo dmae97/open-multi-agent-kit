@@ -718,6 +718,19 @@ function getOrCreateWritethroughBatch(id: string, options: Required<Writethrough
 	return batch;
 }
 
+export async function flushLspWritethroughBatch(
+	id: string,
+	cwd: string,
+	signal?: AbortSignal,
+): Promise<FileDiagnosticsResult | undefined> {
+	const state = writethroughBatches.get(id);
+	if (!state) {
+		return undefined;
+	}
+	writethroughBatches.delete(id);
+	return flushWritethroughBatch(Array.from(state.entries.values()), cwd, state.options, signal);
+}
+
 function summarizeDiagnosticMessages(messages: string[]): { summary: string; errored: boolean } {
 	const counts = { error: 0, warning: 0, info: 0, hint: 0 };
 	for (const message of messages) {
