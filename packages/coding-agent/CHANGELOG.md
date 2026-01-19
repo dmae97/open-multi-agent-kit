@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [6.1.0] - 2026-01-19
+
 ### Added
 
 - Added lspmux integration for LSP server multiplexing to reduce startup time and memory usage
