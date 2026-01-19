@@ -7,7 +7,7 @@ import type {
 	AgentToolResult,
 	AgentToolUpdateCallback,
 } from "@oh-my-pi/pi-agent-core";
-import type { CursorExecHandlers, CursorMcpCall, ToolResultMessage } from "@oh-my-pi/pi-ai";
+import type { CursorMcpCall, CursorExecHandlers as ICursorExecHandlers, ToolResultMessage } from "@oh-my-pi/pi-ai";
 import { resolveToCwd } from "../tools/path-utils";
 
 interface CursorExecBridgeOptions {
@@ -143,92 +143,99 @@ function formatMcpToolErrorMessage(toolName: string, availableTools: string[]): 
 	return `MCP tool "${toolName}" not found. Available tools: ${list}`;
 }
 
-export function createCursorExecHandlers(options: CursorExecBridgeOptions): CursorExecHandlers {
-	return {
-		read: async (args) => {
-			const toolCallId = decodeToolCallId(args.toolCallId);
-			const toolResultMessage = await executeTool(options, "read", toolCallId, { path: args.path });
-			return toolResultMessage;
-		},
-		ls: async (args) => {
-			const toolCallId = decodeToolCallId(args.toolCallId);
-			const toolResultMessage = await executeTool(options, "ls", toolCallId, { path: args.path });
-			return toolResultMessage;
-		},
-		grep: async (args) => {
-			const toolCallId = decodeToolCallId(args.toolCallId);
-			const toolResultMessage = await executeTool(options, "grep", toolCallId, {
-				pattern: args.pattern,
-				path: args.path || undefined,
-				glob: args.glob || undefined,
-				outputMode: args.outputMode || undefined,
-				context: args.context ?? args.contextBefore ?? args.contextAfter ?? undefined,
-				ignoreCase: args.caseInsensitive || undefined,
-				type: args.type || undefined,
-				headLimit: args.headLimit ?? undefined,
-				multiline: args.multiline || undefined,
-			});
-			return toolResultMessage;
-		},
-		write: async (args) => {
-			const toolCallId = decodeToolCallId(args.toolCallId);
-			const content = args.fileText ?? new TextDecoder().decode(args.fileBytes ?? new Uint8Array());
-			const toolResultMessage = await executeTool(options, "write", toolCallId, {
-				path: args.path,
-				content,
-			});
-			return toolResultMessage;
-		},
-		delete: async (args) => {
-			const toolCallId = decodeToolCallId(args.toolCallId);
-			const toolResultMessage = await executeDelete(options, args.path, toolCallId);
-			return toolResultMessage;
-		},
-		shell: async (args) => {
-			const toolCallId = decodeToolCallId(args.toolCallId);
-			const timeoutSeconds =
-				args.timeout && args.timeout > 0
-					? args.timeout > 1000
-						? Math.ceil(args.timeout / 1000)
-						: args.timeout
-					: undefined;
-			const toolResultMessage = await executeTool(options, "bash", toolCallId, {
-				command: args.command,
-				workdir: args.workingDirectory || undefined,
-				timeout: timeoutSeconds,
-			});
-			return toolResultMessage;
-		},
-		diagnostics: async (args) => {
-			const toolCallId = decodeToolCallId(args.toolCallId);
-			const toolResultMessage = await executeTool(options, "lsp", toolCallId, {
-				action: "diagnostics",
-				file: args.path,
-			});
-			return toolResultMessage;
-		},
-		mcp: async (call: CursorMcpCall) => {
-			const toolName = call.toolName || call.name;
-			const toolCallId = decodeToolCallId(call.toolCallId);
-			const tool = options.tools.get(toolName);
-			if (!tool) {
-				const availableTools = Array.from(options.tools.keys()).filter((name) => name.startsWith("mcp_"));
-				const message = formatMcpToolErrorMessage(toolName, availableTools);
-				const toolResult: ToolResultMessage = {
-					role: "toolResult",
-					toolCallId,
-					toolName,
-					content: [{ type: "text", text: message }],
-					details: {},
-					isError: true,
-					timestamp: Date.now(),
-				};
-				return toolResult;
-			}
+export class CursorExecHandlers implements ICursorExecHandlers {
+	constructor(private options: CursorExecBridgeOptions) {}
 
-			const args = Object.keys(call.args ?? {}).length > 0 ? call.args : decodeMcpArgs(call.rawArgs ?? {});
-			const toolResultMessage = await executeTool(options, toolName, toolCallId, args);
-			return toolResultMessage;
-		},
-	};
+	async read(args: Parameters<NonNullable<ICursorExecHandlers["read"]>>[0]) {
+		const toolCallId = decodeToolCallId(args.toolCallId);
+		const toolResultMessage = await executeTool(this.options, "read", toolCallId, { path: args.path });
+		return toolResultMessage;
+	}
+
+	async ls(args: Parameters<NonNullable<ICursorExecHandlers["ls"]>>[0]) {
+		const toolCallId = decodeToolCallId(args.toolCallId);
+		const toolResultMessage = await executeTool(this.options, "ls", toolCallId, { path: args.path });
+		return toolResultMessage;
+	}
+
+	async grep(args: Parameters<NonNullable<ICursorExecHandlers["grep"]>>[0]) {
+		const toolCallId = decodeToolCallId(args.toolCallId);
+		const toolResultMessage = await executeTool(this.options, "grep", toolCallId, {
+			pattern: args.pattern,
+			path: args.path || undefined,
+			glob: args.glob || undefined,
+			outputMode: args.outputMode || undefined,
+			context: args.context ?? args.contextBefore ?? args.contextAfter ?? undefined,
+			ignoreCase: args.caseInsensitive || undefined,
+			type: args.type || undefined,
+			headLimit: args.headLimit ?? undefined,
+			multiline: args.multiline || undefined,
+		});
+		return toolResultMessage;
+	}
+
+	async write(args: Parameters<NonNullable<ICursorExecHandlers["write"]>>[0]) {
+		const toolCallId = decodeToolCallId(args.toolCallId);
+		const content = args.fileText ?? new TextDecoder().decode(args.fileBytes ?? new Uint8Array());
+		const toolResultMessage = await executeTool(this.options, "write", toolCallId, {
+			path: args.path,
+			content,
+		});
+		return toolResultMessage;
+	}
+
+	async delete(args: Parameters<NonNullable<ICursorExecHandlers["delete"]>>[0]) {
+		const toolCallId = decodeToolCallId(args.toolCallId);
+		const toolResultMessage = await executeDelete(this.options, args.path, toolCallId);
+		return toolResultMessage;
+	}
+
+	async shell(args: Parameters<NonNullable<ICursorExecHandlers["shell"]>>[0]) {
+		const toolCallId = decodeToolCallId(args.toolCallId);
+		const timeoutSeconds =
+			args.timeout && args.timeout > 0
+				? args.timeout > 1000
+					? Math.ceil(args.timeout / 1000)
+					: args.timeout
+				: undefined;
+		const toolResultMessage = await executeTool(this.options, "bash", toolCallId, {
+			command: args.command,
+			workdir: args.workingDirectory || undefined,
+			timeout: timeoutSeconds,
+		});
+		return toolResultMessage;
+	}
+
+	async diagnostics(args: Parameters<NonNullable<ICursorExecHandlers["diagnostics"]>>[0]) {
+		const toolCallId = decodeToolCallId(args.toolCallId);
+		const toolResultMessage = await executeTool(this.options, "lsp", toolCallId, {
+			action: "diagnostics",
+			file: args.path,
+		});
+		return toolResultMessage;
+	}
+
+	async mcp(call: CursorMcpCall) {
+		const toolName = call.toolName || call.name;
+		const toolCallId = decodeToolCallId(call.toolCallId);
+		const tool = this.options.tools.get(toolName);
+		if (!tool) {
+			const availableTools = Array.from(this.options.tools.keys()).filter((name) => name.startsWith("mcp_"));
+			const message = formatMcpToolErrorMessage(toolName, availableTools);
+			const toolResult: ToolResultMessage = {
+				role: "toolResult",
+				toolCallId,
+				toolName,
+				content: [{ type: "text", text: message }],
+				details: {},
+				isError: true,
+				timestamp: Date.now(),
+			};
+			return toolResult;
+		}
+
+		const args = Object.keys(call.args ?? {}).length > 0 ? call.args : decodeMcpArgs(call.rawArgs ?? {});
+		const toolResultMessage = await executeTool(this.options, toolName, toolCallId, args);
+		return toolResultMessage;
+	}
 }

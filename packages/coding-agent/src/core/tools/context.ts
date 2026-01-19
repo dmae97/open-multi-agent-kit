@@ -11,31 +11,29 @@ declare module "@oh-my-pi/pi-agent-core" {
 	}
 }
 
-export interface ToolContextStore {
-	getContext(toolCall?: ToolCallContext): AgentToolContext;
-	setUIContext(uiContext: ExtensionUIContext, hasUI: boolean): void;
-	setToolNames(names: string[]): void;
-}
+export class ToolContextStore {
+	private uiContext: ExtensionUIContext | undefined;
+	private hasUI = false;
+	private toolNames: string[] = [];
 
-export function createToolContextStore(getBaseContext: () => CustomToolContext): ToolContextStore {
-	let uiContext: ExtensionUIContext | undefined;
-	let hasUI = false;
-	let toolNames: string[] = [];
+	constructor(private readonly getBaseContext: () => CustomToolContext) {}
 
-	return {
-		getContext: (toolCall) => ({
-			...getBaseContext(),
-			ui: uiContext,
-			hasUI,
-			toolNames,
+	getContext(toolCall?: ToolCallContext): AgentToolContext {
+		return {
+			...this.getBaseContext(),
+			ui: this.uiContext,
+			hasUI: this.hasUI,
+			toolNames: this.toolNames,
 			toolCall,
-		}),
-		setUIContext: (context, uiAvailable) => {
-			uiContext = context;
-			hasUI = uiAvailable;
-		},
-		setToolNames: (names) => {
-			toolNames = names;
-		},
-	};
+		};
+	}
+
+	setUIContext(uiContext: ExtensionUIContext, hasUI: boolean): void {
+		this.uiContext = uiContext;
+		this.hasUI = hasUI;
+	}
+
+	setToolNames(names: string[]): void {
+		this.toolNames = names;
+	}
 }

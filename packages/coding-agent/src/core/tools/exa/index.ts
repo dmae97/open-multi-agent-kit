@@ -48,11 +48,11 @@ export {
 	callExaTool,
 	callWebsetsTool,
 	createMCPToolFromServer,
-	createMCPWrappedTool,
 	fetchMCPToolSchema,
 	findApiKey,
 	formatSearchResults,
 	isSearchResponse,
+	MCPWrappedTool,
 } from "./mcp-client";
 export { renderExaCall, renderExaResult } from "./render";
 export { researcherTools } from "./researcher";

@@ -1,9 +1,9 @@
 import { relative, resolve, sep } from "node:path";
-import type { AgentTool, AgentToolContext } from "@oh-my-pi/pi-agent-core";
+import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent } from "@oh-my-pi/pi-ai";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text, truncateToWidth } from "@oh-my-pi/pi-tui";
-import { Type } from "@sinclair/typebox";
+import { type Static, Type } from "@sinclair/typebox";
 import { truncateToVisualLines } from "../../modes/interactive/components/visual-truncate";
 import type { Theme } from "../../modes/interactive/theme/theme";
 import pythonDescription from "../../prompts/tools/python.md" with { type: "text" };
@@ -116,160 +116,163 @@ export function getPythonToolDescription(): string {
 	return renderPromptTemplate(pythonDescription, { categories });
 }
 
-interface CreatePythonToolOptions {
+export interface PythonToolOptions {
 	proxyExecutor?: PythonProxyExecutor;
 }
 
-export function createPythonTool(
-	session: ToolSession | null,
-	options?: CreatePythonToolOptions,
-): AgentTool<typeof pythonSchema> {
-	const { proxyExecutor } = options ?? {};
+export class PythonTool implements AgentTool<typeof pythonSchema> {
+	public readonly name = "python";
+	public readonly label = "Python";
+	public readonly description: string;
+	public readonly parameters = pythonSchema;
 
-	return {
-		name: "python",
-		label: "Python",
-		description: getPythonToolDescription(),
-		parameters: pythonSchema,
-		execute: async (
-			_toolCallId: string,
-			params: PythonToolParams,
-			signal?: AbortSignal,
-			onUpdate?,
-			_ctx?: AgentToolContext,
-		) => {
-			if (proxyExecutor) {
-				return proxyExecutor(params, signal);
+	private readonly session: ToolSession | null;
+	private readonly proxyExecutor?: PythonProxyExecutor;
+
+	constructor(session: ToolSession | null, options?: PythonToolOptions) {
+		this.session = session;
+		this.proxyExecutor = options?.proxyExecutor;
+		this.description = getPythonToolDescription();
+	}
+
+	public async execute(
+		_toolCallId: string,
+		params: Static<typeof pythonSchema>,
+		signal?: AbortSignal,
+		onUpdate?: AgentToolUpdateCallback,
+		_ctx?: AgentToolContext,
+	): Promise<AgentToolResult<PythonToolDetails | undefined>> {
+		if (this.proxyExecutor) {
+			return this.proxyExecutor(params, signal);
+		}
+
+		if (!this.session) {
+			throw new Error("Python tool requires a session when not using proxy executor");
+		}
+
+		const { code, timeout, workdir, reset } = params;
+		const controller = new AbortController();
+		const onAbort = () => controller.abort();
+		signal?.addEventListener("abort", onAbort, { once: true });
+
+		try {
+			if (signal?.aborted) {
+				throw new Error("Aborted");
 			}
 
-			if (!session) {
-				throw new Error("Python tool requires a session when not using proxy executor");
-			}
-
-			const { code, timeout, workdir, reset } = params;
-			const controller = new AbortController();
-			const onAbort = () => controller.abort();
-			signal?.addEventListener("abort", onAbort, { once: true });
-
+			const commandCwd = workdir ? resolveToCwd(workdir, this.session.cwd) : this.session.cwd;
+			let cwdStat: Awaited<ReturnType<Bun.BunFile["stat"]>>;
 			try {
-				if (signal?.aborted) {
-					throw new Error("Aborted");
-				}
+				cwdStat = await Bun.file(commandCwd).stat();
+			} catch {
+				throw new Error(`Working directory does not exist: ${commandCwd}`);
+			}
+			if (!cwdStat.isDirectory()) {
+				throw new Error(`Working directory is not a directory: ${commandCwd}`);
+			}
 
-				const commandCwd = workdir ? resolveToCwd(workdir, session.cwd) : session.cwd;
-				let cwdStat: Awaited<ReturnType<Bun.BunFile["stat"]>>;
-				try {
-					cwdStat = await Bun.file(commandCwd).stat();
-				} catch {
-					throw new Error(`Working directory does not exist: ${commandCwd}`);
-				}
-				if (!cwdStat.isDirectory()) {
-					throw new Error(`Working directory is not a directory: ${commandCwd}`);
-				}
+			const maxTailBytes = DEFAULT_MAX_BYTES * 2;
+			const tailChunks: Array<{ text: string; bytes: number }> = [];
+			let tailBytes = 0;
+			const jsonOutputs: unknown[] = [];
+			const images: ImageContent[] = [];
 
-				const maxTailBytes = DEFAULT_MAX_BYTES * 2;
-				const tailChunks: Array<{ text: string; bytes: number }> = [];
-				let tailBytes = 0;
-				const jsonOutputs: unknown[] = [];
-				const images: ImageContent[] = [];
-
-				const sessionFile = session.getSessionFile?.() ?? undefined;
-				const sessionId = sessionFile ? `session:${sessionFile}:workdir:${commandCwd}` : `cwd:${commandCwd}`;
-				const executorOptions: PythonExecutorOptions = {
-					cwd: commandCwd,
-					timeout: timeout ? timeout * 1000 : undefined,
-					signal: controller.signal,
-					sessionId,
-					kernelMode: session.settings?.getPythonKernelMode?.() ?? "session",
-					useSharedGateway: session.settings?.getPythonSharedGateway?.() ?? true,
-					reset,
-					onChunk: (chunk) => {
-						const chunkBytes = Buffer.byteLength(chunk, "utf-8");
-						tailChunks.push({ text: chunk, bytes: chunkBytes });
-						tailBytes += chunkBytes;
-						while (tailBytes > maxTailBytes && tailChunks.length > 1) {
-							const removed = tailChunks.shift();
-							if (removed) {
-								tailBytes -= removed.bytes;
-							}
+			const sessionFile = this.session.getSessionFile?.() ?? undefined;
+			const sessionId = sessionFile ? `session:${sessionFile}:workdir:${commandCwd}` : `cwd:${commandCwd}`;
+			const executorOptions: PythonExecutorOptions = {
+				cwd: commandCwd,
+				timeout: timeout ? timeout * 1000 : undefined,
+				signal: controller.signal,
+				sessionId,
+				kernelMode: this.session.settings?.getPythonKernelMode?.() ?? "session",
+				useSharedGateway: this.session.settings?.getPythonSharedGateway?.() ?? true,
+				reset,
+				onChunk: (chunk) => {
+					const chunkBytes = Buffer.byteLength(chunk, "utf-8");
+					tailChunks.push({ text: chunk, bytes: chunkBytes });
+					tailBytes += chunkBytes;
+					while (tailBytes > maxTailBytes && tailChunks.length > 1) {
+						const removed = tailChunks.shift();
+						if (removed) {
+							tailBytes -= removed.bytes;
 						}
-						if (onUpdate) {
-							const tailText = tailChunks.map((entry) => entry.text).join("");
-							const truncation = truncateTail(tailText);
-							onUpdate({
-								content: [{ type: "text", text: truncation.content || "" }],
-								details: truncation.truncated ? { truncation } : undefined,
-							});
-						}
-					},
+					}
+					if (onUpdate) {
+						const tailText = tailChunks.map((entry) => entry.text).join("");
+						const truncation = truncateTail(tailText);
+						onUpdate({
+							content: [{ type: "text", text: truncation.content || "" }],
+							details: truncation.truncated ? { truncation } : undefined,
+						});
+					}
+				},
+			};
+
+			const result = await executePython(code, executorOptions);
+
+			const statusEvents: PythonStatusEvent[] = [];
+			for (const output of result.displayOutputs) {
+				if (output.type === "json") {
+					jsonOutputs.push(output.data);
+				}
+				if (output.type === "image") {
+					images.push({ type: "image", data: output.data, mimeType: output.mimeType });
+				}
+				if (output.type === "status") {
+					statusEvents.push(output.event);
+				}
+			}
+
+			if (result.cancelled) {
+				throw new Error(result.output || "Command aborted");
+			}
+
+			const truncation = truncateTail(result.output);
+			let outputText =
+				truncation.content || (jsonOutputs.length > 0 || images.length > 0 ? "(no text output)" : "(no output)");
+			let details: PythonToolDetails | undefined;
+
+			if (truncation.truncated) {
+				const fullOutputSuffix = result.fullOutputPath ? ` Full output: ${result.fullOutputPath}` : "";
+				details = {
+					truncation,
+					fullOutputPath: result.fullOutputPath,
+					jsonOutputs: jsonOutputs,
+					images,
+					statusEvents: statusEvents.length > 0 ? statusEvents : undefined,
 				};
 
-				const result = await executePython(code, executorOptions);
+				const startLine = truncation.totalLines - truncation.outputLines + 1;
+				const endLine = truncation.totalLines;
 
-				const statusEvents: PythonStatusEvent[] = [];
-				for (const output of result.displayOutputs) {
-					if (output.type === "json") {
-						jsonOutputs.push(output.data);
-					}
-					if (output.type === "image") {
-						images.push({ type: "image", data: output.data, mimeType: output.mimeType });
-					}
-					if (output.type === "status") {
-						statusEvents.push(output.event);
-					}
+				if (truncation.lastLinePartial) {
+					const lastLineSize = formatSize(Buffer.byteLength(result.output.split("\n").pop() || "", "utf-8"));
+					outputText += `\n\n[Showing last ${formatSize(truncation.outputBytes)} of line ${endLine} (line is ${lastLineSize})${fullOutputSuffix}]`;
+				} else if (truncation.truncatedBy === "lines") {
+					outputText += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines}${fullOutputSuffix}]`;
+				} else {
+					outputText += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines} (${formatSize(DEFAULT_MAX_BYTES)} limit)${fullOutputSuffix}]`;
 				}
-
-				if (result.cancelled) {
-					throw new Error(result.output || "Command aborted");
-				}
-
-				const truncation = truncateTail(result.output);
-				let outputText =
-					truncation.content || (jsonOutputs.length > 0 || images.length > 0 ? "(no text output)" : "(no output)");
-				let details: PythonToolDetails | undefined;
-
-				if (truncation.truncated) {
-					const fullOutputSuffix = result.fullOutputPath ? ` Full output: ${result.fullOutputPath}` : "";
-					details = {
-						truncation,
-						fullOutputPath: result.fullOutputPath,
-						jsonOutputs: jsonOutputs,
-						images,
-						statusEvents: statusEvents.length > 0 ? statusEvents : undefined,
-					};
-
-					const startLine = truncation.totalLines - truncation.outputLines + 1;
-					const endLine = truncation.totalLines;
-
-					if (truncation.lastLinePartial) {
-						const lastLineSize = formatSize(Buffer.byteLength(result.output.split("\n").pop() || "", "utf-8"));
-						outputText += `\n\n[Showing last ${formatSize(truncation.outputBytes)} of line ${endLine} (line is ${lastLineSize})${fullOutputSuffix}]`;
-					} else if (truncation.truncatedBy === "lines") {
-						outputText += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines}${fullOutputSuffix}]`;
-					} else {
-						outputText += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines} (${formatSize(DEFAULT_MAX_BYTES)} limit)${fullOutputSuffix}]`;
-					}
-				}
-
-				if (!details && (jsonOutputs.length > 0 || images.length > 0 || statusEvents.length > 0)) {
-					details = {
-						jsonOutputs: jsonOutputs.length > 0 ? jsonOutputs : undefined,
-						images: images.length > 0 ? images : undefined,
-						statusEvents: statusEvents.length > 0 ? statusEvents : undefined,
-					};
-				}
-
-				if (result.exitCode !== 0 && result.exitCode !== undefined) {
-					outputText += `\n\nCommand exited with code ${result.exitCode}`;
-					throw new Error(outputText);
-				}
-
-				return { content: [{ type: "text", text: outputText }], details };
-			} finally {
-				signal?.removeEventListener("abort", onAbort);
 			}
-		},
-	};
+
+			if (!details && (jsonOutputs.length > 0 || images.length > 0 || statusEvents.length > 0)) {
+				details = {
+					jsonOutputs: jsonOutputs.length > 0 ? jsonOutputs : undefined,
+					images: images.length > 0 ? images : undefined,
+					statusEvents: statusEvents.length > 0 ? statusEvents : undefined,
+				};
+			}
+
+			if (result.exitCode !== 0 && result.exitCode !== undefined) {
+				outputText += `\n\nCommand exited with code ${result.exitCode}`;
+				throw new Error(outputText);
+			}
+
+			return { content: [{ type: "text", text: outputText }], details };
+		} finally {
+			signal?.removeEventListener("abort", onAbort);
+		}
+	}
 }
 
 interface PythonRenderArgs {

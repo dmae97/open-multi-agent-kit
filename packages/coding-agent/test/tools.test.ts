@@ -3,14 +3,14 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { nanoid } from "nanoid";
-import { createBashTool } from "../src/core/tools/bash";
-import { createFindTool } from "../src/core/tools/find";
-import { createGrepTool } from "../src/core/tools/grep";
+import { BashTool } from "../src/core/tools/bash";
+import { FindTool } from "../src/core/tools/find";
+import { GrepTool } from "../src/core/tools/grep";
 import type { ToolSession } from "../src/core/tools/index";
-import { createLsTool } from "../src/core/tools/ls";
+import { LsTool } from "../src/core/tools/ls";
 import { EditTool } from "../src/core/tools/patch";
-import { createReadTool } from "../src/core/tools/read";
-import { createWriteTool } from "../src/core/tools/write";
+import { ReadTool } from "../src/core/tools/read";
+import { WriteTool } from "../src/core/tools/write";
 import * as shellModule from "../src/utils/shell";
 
 // Helper to extract text from content blocks
@@ -34,13 +34,13 @@ function createTestToolSession(cwd: string): ToolSession {
 
 describe("Coding Agent Tools", () => {
 	let testDir: string;
-	let readTool: ReturnType<typeof createReadTool>;
-	let writeTool: ReturnType<typeof createWriteTool>;
+	let readTool: ReadTool;
+	let writeTool: WriteTool;
 	let editTool: EditTool;
-	let bashTool: ReturnType<typeof createBashTool>;
-	let grepTool: ReturnType<typeof createGrepTool>;
-	let findTool: ReturnType<typeof createFindTool>;
-	let lsTool: ReturnType<typeof createLsTool>;
+	let bashTool: BashTool;
+	let grepTool: GrepTool;
+	let findTool: FindTool;
+	let lsTool: LsTool;
 
 	beforeEach(() => {
 		// Create a unique temporary directory for each test
@@ -49,13 +49,13 @@ describe("Coding Agent Tools", () => {
 
 		// Create tools for this test directory
 		const session = createTestToolSession(testDir);
-		readTool = createReadTool(session);
-		writeTool = createWriteTool(session);
+		readTool = new ReadTool(session);
+		writeTool = new WriteTool(session);
 		editTool = new EditTool(session);
-		bashTool = createBashTool(session);
-		grepTool = createGrepTool(session);
-		findTool = createFindTool(session);
-		lsTool = createLsTool(session);
+		bashTool = new BashTool(session);
+		grepTool = new GrepTool(session);
+		findTool = new FindTool(session);
+		lsTool = new LsTool(session);
 	});
 
 	afterEach(() => {
@@ -252,9 +252,9 @@ describe("Coding Agent Tools", () => {
 
 			expect(getTextOutput(result)).toContain("Successfully replaced");
 			expect(result.details).toBeDefined();
-			expect(result.details.diff).toBeDefined();
-			expect(typeof result.details.diff).toBe("string");
-			expect(result.details.diff).toContain("testing");
+			expect(result.details!.diff).toBeDefined();
+			expect(typeof result.details!.diff).toBe("string");
+			expect(result.details!.diff).toContain("testing");
 		});
 
 		it("should fail if text not found", async () => {
@@ -402,7 +402,7 @@ function b() {
 		it("should throw error when cwd does not exist", async () => {
 			const nonexistentCwd = "/this/directory/definitely/does/not/exist/12345";
 
-			const bashToolWithBadCwd = createBashTool(createTestToolSession(nonexistentCwd));
+			const bashToolWithBadCwd = new BashTool(createTestToolSession(nonexistentCwd));
 
 			await expect(bashToolWithBadCwd.execute("test-call-11", { command: "echo test" })).rejects.toThrow(
 				/Working directory does not exist/,
@@ -417,7 +417,7 @@ function b() {
 				prefix: undefined,
 			});
 
-			const bashWithBadShell = createBashTool(createTestToolSession(testDir));
+			const bashWithBadShell = new BashTool(createTestToolSession(testDir));
 
 			await expect(bashWithBadShell.execute("test-call-12", { command: "echo test" })).rejects.toThrow(/ENOENT/);
 

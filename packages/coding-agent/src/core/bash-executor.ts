@@ -9,7 +9,7 @@
 import type { Subprocess } from "bun";
 import { getShellConfig, killProcessTree } from "../utils/shell";
 import { getOrCreateSnapshot, getSnapshotSourceCommand } from "../utils/shell-snapshot";
-import { createOutputSink, pumpStream } from "./streaming-output";
+import { OutputSink, pumpStream } from "./streaming-output";
 import type { BashOperations } from "./tools/bash";
 import { DEFAULT_MAX_BYTES } from "./tools/truncate";
 import { ScopeSignal } from "./utils";
@@ -85,7 +85,7 @@ export async function executeBash(command: string, options?: BashExecutorOptions
 		killProcessTree(child.pid);
 	});
 
-	const sink = createOutputSink(DEFAULT_MAX_BYTES, DEFAULT_MAX_BYTES * 2, options?.onChunk);
+	const sink = new OutputSink(DEFAULT_MAX_BYTES, DEFAULT_MAX_BYTES * 2, options?.onChunk);
 
 	const writer = sink.getWriter();
 	try {
@@ -128,7 +128,7 @@ export async function executeBashWithOperations(
 	operations: BashOperations,
 	options?: BashExecutorOptions,
 ): Promise<BashResult> {
-	const sink = createOutputSink(DEFAULT_MAX_BYTES, DEFAULT_MAX_BYTES * 2, options?.onChunk);
+	const sink = new OutputSink(DEFAULT_MAX_BYTES, DEFAULT_MAX_BYTES * 2, options?.onChunk);
 	const writer = sink.getWriter();
 
 	// Create a ReadableStream from the callback-based operations.exec

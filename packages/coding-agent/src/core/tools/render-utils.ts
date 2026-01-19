@@ -231,66 +231,103 @@ export interface ToolUITitleOptions {
 	bold?: boolean;
 }
 
-export interface ToolUIKit {
-	theme: Theme;
-	title: (label: string, options?: ToolUITitleOptions) => string;
-	meta: (meta: string[]) => string;
-	count: (label: string, count: number) => string;
-	moreItems: (remaining: number, itemType: string) => string;
-	expandHint: (expanded: boolean, hasMore: boolean) => string;
-	scope: (scopePath?: string) => string;
-	truncationSuffix: (truncated: boolean) => string;
-	errorMessage: (message: string | undefined) => string;
-	emptyMessage: (message: string) => string;
-	badge: (label: string, color: ToolUIColor) => string;
-	statusIcon: (status: ToolUIStatus, spinnerFrame?: number) => string;
-	wrapBrackets: (text: string) => string;
-	truncate: (text: string, maxLen: number) => string;
-	previewLines: (text: string, maxLines: number, maxLineLen: number) => string[];
-	formatBytes: (bytes: number) => string;
-	formatTokens: (tokens: number) => string;
-	formatDuration: (ms: number) => string;
-	formatAge: (ageSeconds: number | null | undefined) => string;
-	formatDiagnostics: (
-		diag: { errored: boolean; summary: string; messages: string[] },
-		expanded: boolean,
-		getLangIcon: (filePath: string) => string,
-	) => string;
-	formatDiffStats: (added: number, removed: number, hunks: number) => string;
-}
-
-export function createToolUIKit(theme: Theme): ToolUIKit {
-	return {
-		theme,
-		title: (label, options) => {
-			const content = options?.bold === false ? label : theme.bold(label);
-			return theme.fg("toolTitle", content);
-		},
-		meta: (meta) => formatMeta(meta, theme),
-		count: (label, count) => formatCount(label, count),
-		moreItems: (remaining, itemType) => formatMoreItems(remaining, itemType, theme),
-		expandHint: (expanded, hasMore) => formatExpandHint(theme, expanded, hasMore),
-		scope: (scopePath) => formatScope(scopePath, theme),
-		truncationSuffix: (truncated) => formatTruncationSuffix(truncated, theme),
-		errorMessage: (message) => formatErrorMessage(message, theme),
-		emptyMessage: (message) => formatEmptyMessage(message, theme),
-		badge: (label, color) => formatBadge(label, color, theme),
-		statusIcon: (status, spinnerFrame) => formatStatusIcon(status, theme, spinnerFrame),
-		wrapBrackets: (text) => wrapBrackets(text, theme),
-		truncate: (text, maxLen) => truncate(text, maxLen, theme.format.ellipsis),
-		previewLines: (text, maxLines, maxLineLen) => getPreviewLines(text, maxLines, maxLineLen, theme.format.ellipsis),
-		formatBytes,
-		formatTokens,
-		formatDuration,
-		formatAge,
-		formatDiagnostics: (diag, expanded, getLangIcon) => formatDiagnostics(diag, expanded, theme, getLangIcon),
-		formatDiffStats: (added, removed, hunks) => formatDiffStats(added, removed, hunks, theme),
-	};
-}
-
 // =============================================================================
 // Diagnostic Formatting
 // =============================================================================
+
+export class ToolUIKit {
+	constructor(public theme: Theme) {}
+
+	title(label: string, options?: ToolUITitleOptions): string {
+		const content = options?.bold === false ? label : this.theme.bold(label);
+		return this.theme.fg("toolTitle", content);
+	}
+
+	meta(meta: string[]): string {
+		return formatMeta(meta, this.theme);
+	}
+
+	count(label: string, count: number): string {
+		return formatCount(label, count);
+	}
+
+	moreItems(remaining: number, itemType: string): string {
+		return formatMoreItems(remaining, itemType, this.theme);
+	}
+
+	expandHint(expanded: boolean, hasMore: boolean): string {
+		return formatExpandHint(this.theme, expanded, hasMore);
+	}
+
+	scope(scopePath?: string): string {
+		return formatScope(scopePath, this.theme);
+	}
+
+	truncationSuffix(truncated: boolean): string {
+		return formatTruncationSuffix(truncated, this.theme);
+	}
+
+	errorMessage(message: string | undefined): string {
+		return formatErrorMessage(message, this.theme);
+	}
+
+	emptyMessage(message: string): string {
+		return formatEmptyMessage(message, this.theme);
+	}
+
+	badge(label: string, color: ToolUIColor): string {
+		return formatBadge(label, color, this.theme);
+	}
+
+	statusIcon(status: ToolUIStatus, spinnerFrame?: number): string {
+		return formatStatusIcon(status, this.theme, spinnerFrame);
+	}
+
+	wrapBrackets(text: string): string {
+		return wrapBrackets(text, this.theme);
+	}
+
+	truncate(text: string, maxLen: number): string {
+		return truncate(text, maxLen, this.theme.format.ellipsis);
+	}
+
+	previewLines(text: string, maxLines: number, maxLineLen: number): string[] {
+		return getPreviewLines(text, maxLines, maxLineLen, this.theme.format.ellipsis);
+	}
+
+	formatBytes(bytes: number): string {
+		return formatBytes(bytes);
+	}
+
+	formatTokens(tokens: number): string {
+		return formatTokens(tokens);
+	}
+
+	formatDuration(ms: number): string {
+		return formatDuration(ms);
+	}
+
+	formatAge(ageSeconds: number | null | undefined): string {
+		return formatAge(ageSeconds);
+	}
+
+	formatDiagnostics(
+		diag: { errored: boolean; summary: string; messages: string[] },
+		expanded: boolean,
+		getLangIcon: (filePath: string) => string,
+	): string {
+		return formatDiagnostics(diag, expanded, this.theme, getLangIcon);
+	}
+
+	formatDiffStats(added: number, removed: number, hunks: number): string {
+		return formatDiffStats(added, removed, hunks, this.theme);
+	}
+}
+
+/** @deprecated Use `new ToolUIKit(theme)` instead */
+export function createToolUIKit(theme: Theme): ToolUIKit {
+	return new ToolUIKit(theme);
+}
 
 interface ParsedDiagnostic {
 	filePath: string;

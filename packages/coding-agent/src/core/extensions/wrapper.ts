@@ -9,27 +9,53 @@ import type { ExtensionRunner } from "./runner";
 import type { RegisteredTool, ToolCallEventResult, ToolResultEventResult } from "./types";
 
 /**
- * Wrap a RegisteredTool into an AgentTool.
+ * Adapts a RegisteredTool into an AgentTool.
+ */
+export class RegisteredToolAdapter implements AgentTool<any, any, any> {
+	readonly name: string;
+	readonly label: string;
+	readonly description: string;
+	readonly parameters: any;
+
+	constructor(
+		private registeredTool: RegisteredTool,
+		private runner: ExtensionRunner,
+	) {
+		const { definition } = registeredTool;
+		this.name = definition.name;
+		this.label = definition.label || "";
+		this.description = definition.description;
+		this.parameters = definition.parameters;
+	}
+
+	async execute(
+		toolCallId: string,
+		params: any,
+		signal?: AbortSignal,
+		onUpdate?: AgentToolUpdateCallback<any>,
+		_context?: AgentToolContext,
+	) {
+		return this.registeredTool.definition.execute(toolCallId, params, onUpdate, this.runner.createContext(), signal);
+	}
+
+	renderCall?(args: any, theme: any) {
+		return this.registeredTool.definition.renderCall?.(args, theme as Theme);
+	}
+
+	renderResult?(result: any, options: any, theme: any) {
+		return this.registeredTool.definition.renderResult?.(
+			result,
+			{ expanded: options.expanded, isPartial: options.isPartial, spinnerFrame: options.spinnerFrame },
+			theme as Theme,
+		);
+	}
+}
+
+/**
+ * Backward-compatible factory function wrapper.
  */
 export function wrapRegisteredTool(registeredTool: RegisteredTool, runner: ExtensionRunner): AgentTool {
-	const { definition } = registeredTool;
-	return {
-		name: definition.name,
-		label: definition.label,
-		description: definition.description,
-		parameters: definition.parameters,
-		execute: (toolCallId, params, signal, onUpdate) =>
-			definition.execute(toolCallId, params, onUpdate, runner.createContext(), signal),
-		renderCall: definition.renderCall ? (args, theme) => definition.renderCall?.(args, theme as Theme) : undefined,
-		renderResult: definition.renderResult
-			? (result, options, theme) =>
-					definition.renderResult?.(
-						result,
-						{ expanded: options.expanded, isPartial: options.isPartial, spinnerFrame: options.spinnerFrame },
-						theme as Theme,
-					)
-			: undefined,
-	};
+	return new RegisteredToolAdapter(registeredTool, runner);
 }
 
 /**
@@ -40,98 +66,121 @@ export function wrapRegisteredTools(registeredTools: RegisteredTool[], runner: E
 }
 
 /**
- * Wrap a tool with extension callbacks for interception.
+ * Wraps a tool with extension callbacks for interception.
  * - Emits tool_call event before execution (can block)
  * - Emits tool_result event after execution (can modify result)
  */
-export function wrapToolWithExtensions<T>(tool: AgentTool<any, T>, runner: ExtensionRunner): AgentTool<any, T> {
-	return {
-		...tool,
-		execute: async (
-			toolCallId: string,
-			params: Record<string, unknown>,
-			signal?: AbortSignal,
-			onUpdate?: AgentToolUpdateCallback<T>,
-			context?: AgentToolContext,
-		) => {
-			// Emit tool_call event - extensions can block execution
-			if (runner.hasHandlers("tool_call")) {
-				try {
-					const callResult = (await runner.emitToolCall({
-						type: "tool_call",
-						toolName: tool.name,
-						toolCallId,
-						input: params,
-					})) as ToolCallEventResult | undefined;
+export class ExtensionToolWrapper<T> implements AgentTool<any, T> {
+	name: string;
+	label: string;
+	description: string;
+	parameters: unknown;
+	renderCall?: AgentTool["renderCall"];
+	renderResult?: AgentTool["renderResult"];
 
-					if (callResult?.block) {
-						const reason = callResult.reason || "Tool execution was blocked by an extension";
-						throw new Error(reason);
-					}
-				} catch (err) {
-					if (err instanceof Error) {
-						throw err;
-					}
-					throw new Error(`Extension failed, blocking execution: ${String(err)}`);
-				}
-			}
+	constructor(
+		private tool: AgentTool<any, T>,
+		private runner: ExtensionRunner,
+	) {
+		this.name = tool.name;
+		this.label = tool.label ?? "";
+		this.description = tool.description;
+		this.parameters = tool.parameters;
+		this.renderCall = tool.renderCall;
+		this.renderResult = tool.renderResult;
+	}
 
-			// Execute the actual tool
-			let result: { content: any; details: T };
-			let executionError: Error | undefined;
-
+	async execute(
+		toolCallId: string,
+		params: Record<string, unknown>,
+		signal?: AbortSignal,
+		onUpdate?: AgentToolUpdateCallback<T>,
+		context?: AgentToolContext,
+	) {
+		// Emit tool_call event - extensions can block execution
+		if (this.runner.hasHandlers("tool_call")) {
 			try {
-				result = await tool.execute(toolCallId, params, signal, onUpdate, context);
-			} catch (err) {
-				executionError = err instanceof Error ? err : new Error(String(err));
-				result = {
-					content: [{ type: "text", text: executionError.message }],
-					details: undefined as T,
-				};
-			}
-
-			// Emit tool_result event - extensions can modify the result and error status
-			if (runner.hasHandlers("tool_result")) {
-				const resultResult = (await runner.emit({
-					type: "tool_result",
-					toolName: tool.name,
+				const callResult = (await this.runner.emitToolCall({
+					type: "tool_call",
+					toolName: this.tool.name,
 					toolCallId,
 					input: params,
-					content: result.content,
-					details: result.details,
-					isError: !!executionError,
-				})) as ToolResultEventResult | undefined;
+				})) as ToolCallEventResult | undefined;
 
-				if (resultResult) {
-					const modifiedContent: (TextContent | ImageContent)[] = resultResult.content ?? result.content;
-					const modifiedDetails = (resultResult.details ?? result.details) as T;
+				if (callResult?.block) {
+					const reason = callResult.reason || "Tool execution was blocked by an extension";
+					throw new Error(reason);
+				}
+			} catch (err) {
+				if (err instanceof Error) {
+					throw err;
+				}
+				throw new Error(`Extension failed, blocking execution: ${String(err)}`);
+			}
+		}
 
-					// Extension can override error status
-					if (resultResult.isError === true && !executionError) {
-						// Extension marks a successful result as error
-						const textBlocks = (modifiedContent ?? []).filter((c): c is TextContent => c.type === "text");
-						const errorText =
-							textBlocks.map((t) => t.text).join("\n") || "Tool result marked as error by extension";
-						throw new Error(errorText);
-					}
-					if (resultResult.isError === false && executionError) {
-						// Extension clears the error - return success
-						return { content: modifiedContent, details: modifiedDetails };
-					}
+		// Execute the actual tool
+		let result: { content: any; details?: T };
+		let executionError: Error | undefined;
 
-					// Error status unchanged, but content/details may be modified
-					if (executionError) {
-						throw executionError;
-					}
+		try {
+			result = await this.tool.execute(toolCallId, params, signal, onUpdate, context);
+		} catch (err) {
+			executionError = err instanceof Error ? err : new Error(String(err));
+			result = {
+				content: [{ type: "text", text: executionError.message }],
+				details: undefined as T,
+			};
+		}
+
+		// Emit tool_result event - extensions can modify the result and error status
+		if (this.runner.hasHandlers("tool_result")) {
+			const resultResult = (await this.runner.emit({
+				type: "tool_result",
+				toolName: this.tool.name,
+				toolCallId,
+				input: params,
+				content: result.content,
+				details: result.details,
+				isError: !!executionError,
+			})) as ToolResultEventResult | undefined;
+
+			if (resultResult) {
+				const modifiedContent: (TextContent | ImageContent)[] = resultResult.content ?? result.content;
+				const modifiedDetails = (resultResult.details ?? result.details) as T;
+
+				// Extension can override error status
+				if (resultResult.isError === true && !executionError) {
+					// Extension marks a successful result as error
+					const textBlocks = (modifiedContent ?? []).filter((c): c is TextContent => c.type === "text");
+					const errorText = textBlocks.map((t) => t.text).join("\n") || "Tool result marked as error by extension";
+					throw new Error(errorText);
+				}
+				if (resultResult.isError === false && executionError) {
+					// Extension clears the error - return success
 					return { content: modifiedContent, details: modifiedDetails };
 				}
-			}
 
-			// No extension modification
-			if (executionError) {
-				throw executionError;
+				// Error status unchanged, but content/details may be modified
+				if (executionError) {
+					throw executionError;
+				}
+				return { content: modifiedContent, details: modifiedDetails };
 			}
-			return result;
-		},
-	};
+		}
+
+		// No extension modification
+		if (executionError) {
+			throw executionError;
+		}
+		return result;
+	}
+}
+
+/**
+ * Wrap a tool with extension callbacks for interception.
+ * @deprecated Use `new ExtensionToolWrapper()` directly
+ */
+export function wrapToolWithExtensions<T>(tool: AgentTool<any, T>, runner: ExtensionRunner): AgentTool<any, T> {
+	return new ExtensionToolWrapper(tool, runner);
 }

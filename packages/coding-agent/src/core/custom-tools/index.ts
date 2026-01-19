@@ -2,7 +2,7 @@
  * Custom tools module.
  */
 
-export { discoverAndLoadCustomTools, loadCustomTools } from "./loader";
+export { CustomToolLoader, discoverAndLoadCustomTools, loadCustomTools } from "./loader";
 export type {
 	AgentToolResult,
 	AgentToolUpdateCallback,
@@ -19,4 +19,4 @@ export type {
 	RenderResultOptions,
 	ToolLoadError,
 } from "./types";
-export { wrapCustomTool, wrapCustomTools } from "./wrapper";
+export { CustomToolAdapter } from "./wrapper";

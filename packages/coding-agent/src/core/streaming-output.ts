@@ -42,59 +42,68 @@ export async function pumpStream(readable: ReadableStream<Uint8Array>, writer: W
 	}
 }
 
-export function createOutputSink(
-	spillThreshold: number,
-	maxBuffer: number,
-	onChunk?: (text: string) => void,
-): WritableStream<string> & {
-	dump: (annotation?: string) => { output: string; truncated: boolean; fullOutputPath?: string };
-} {
-	const chunks: Array<{ text: string; bytes: number }> = [];
-	let chunkBytes = 0;
-	let totalBytes = 0;
-	let fullOutputPath: string | undefined;
-	let fullOutputStream: OutputFileSink | undefined;
+export interface OutputSinkDump {
+	output: string;
+	truncated: boolean;
+	fullOutputPath?: string;
+}
 
-	const sink = new WritableStream<string>({
-		write(text) {
-			const bytes = Buffer.byteLength(text, "utf-8");
-			totalBytes += bytes;
+export class OutputSink {
+	private readonly stream: WritableStream<string>;
+	private readonly chunks: Array<{ text: string; bytes: number }> = [];
+	private chunkBytes = 0;
+	private totalBytes = 0;
+	private fullOutputPath: string | undefined;
+	private fullOutputStream: OutputFileSink | undefined;
 
-			if (totalBytes > spillThreshold && !fullOutputPath) {
-				fullOutputPath = join(tmpdir(), `omp-${nanoid()}.buffer`);
-				const stream = Bun.file(fullOutputPath).writer();
-				for (const chunk of chunks) {
-					stream.write(chunk.text);
+	constructor(
+		private readonly spillThreshold: number,
+		private readonly maxBuffer: number,
+		private readonly onChunk?: (text: string) => void,
+	) {
+		this.stream = new WritableStream<string>({
+			write: (text) => {
+				const bytes = Buffer.byteLength(text, "utf-8");
+				this.totalBytes += bytes;
+
+				if (this.totalBytes > this.spillThreshold && !this.fullOutputPath) {
+					this.fullOutputPath = join(tmpdir(), `omp-${nanoid()}.buffer`);
+					const stream = Bun.file(this.fullOutputPath).writer();
+					for (const chunk of this.chunks) {
+						stream.write(chunk.text);
+					}
+					this.fullOutputStream = stream;
 				}
-				fullOutputStream = stream;
-			}
-			fullOutputStream?.write(text);
+				this.fullOutputStream?.write(text);
 
-			chunks.push({ text, bytes });
-			chunkBytes += bytes;
-			while (chunkBytes > maxBuffer && chunks.length > 1) {
-				const removed = chunks.shift();
-				if (removed) {
-					chunkBytes -= removed.bytes;
+				this.chunks.push({ text, bytes });
+				this.chunkBytes += bytes;
+				while (this.chunkBytes > this.maxBuffer && this.chunks.length > 1) {
+					const removed = this.chunks.shift();
+					if (removed) {
+						this.chunkBytes -= removed.bytes;
+					}
 				}
-			}
 
-			onChunk?.(text);
-		},
-		close() {
-			fullOutputStream?.end();
-		},
-	});
+				this.onChunk?.(text);
+			},
+			close: () => {
+				this.fullOutputStream?.end();
+			},
+		});
+	}
 
-	return Object.assign(sink, {
-		dump(annotation?: string) {
-			if (annotation) {
-				const text = `\n\n${annotation}`;
-				chunks.push({ text, bytes: Buffer.byteLength(text, "utf-8") });
-			}
-			const full = chunks.map((chunk) => chunk.text).join("");
-			const { content, truncated } = truncateTail(full);
-			return { output: truncated ? content : full, truncated, fullOutputPath };
-		},
-	});
+	getWriter(): WritableStreamDefaultWriter<string> {
+		return this.stream.getWriter();
+	}
+
+	dump(annotation?: string): OutputSinkDump {
+		if (annotation) {
+			const text = `\n\n${annotation}`;
+			this.chunks.push({ text, bytes: Buffer.byteLength(text, "utf-8") });
+		}
+		const full = this.chunks.map((chunk) => chunk.text).join("");
+		const { content, truncated } = truncateTail(full);
+		return { output: truncated ? content : full, truncated, fullOutputPath: this.fullOutputPath };
+	}
 }

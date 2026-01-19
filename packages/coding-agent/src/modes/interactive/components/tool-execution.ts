@@ -203,11 +203,9 @@ export class ToolExecutionComponent extends Container {
 			if (this.editDiffArgsKey === argsKey) return;
 			this.editDiffArgsKey = argsKey;
 
-			computePatchDiff(
-				{ path, operation, moveTo, diff },
-				this.cwd,
-				{ fuzzyThreshold: this.editFuzzyThreshold },
-			).then((result) => {
+			computePatchDiff({ path, operation, moveTo, diff }, this.cwd, {
+				fuzzyThreshold: this.editFuzzyThreshold,
+			}).then((result) => {
 				if (this.editDiffArgsKey === argsKey) {
 					this.editDiffPreview = result;
 					this.updateDisplay();

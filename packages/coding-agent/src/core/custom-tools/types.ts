@@ -158,13 +158,13 @@ export type CustomToolFactory = (
 ) => CustomTool<any, any> | CustomTool<any, any>[] | Promise<CustomTool<any, any> | CustomTool<any, any>[]>;
 
 /** Loaded custom tool with metadata and wrapped AgentTool */
-export interface LoadedCustomTool {
+export interface LoadedCustomTool<TParams extends TSchema = TSchema, TDetails = any> {
 	/** Original path (as specified) */
 	path: string;
 	/** Resolved absolute path */
 	resolvedPath: string;
 	/** The original custom tool instance */
-	tool: CustomTool;
+	tool: CustomTool<TParams, TDetails>;
 	/** Source metadata (provider and level) */
 	source?: { provider: string; providerName: string; level: "user" | "project" };
 }

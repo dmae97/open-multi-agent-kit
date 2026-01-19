@@ -11,6 +11,6 @@ export {
 	type SendMessageHandler,
 } from "./loader";
 export { execCommand, HookRunner, type HookErrorListener } from "./runner";
-export { wrapToolsWithHooks, wrapToolWithHooks } from "./tool-wrapper";
+export { HookToolWrapper, wrapToolsWithHooks, wrapToolWithHooks } from "./tool-wrapper";
 export * from "./types";
 export type { UsageStatistics, ReadonlySessionManager } from "../session-manager";

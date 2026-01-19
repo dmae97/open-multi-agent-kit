@@ -1,35 +1,35 @@
-export { type AskToolDetails, askTool, createAskTool } from "./ask";
-export { type BashOperations, type BashToolDetails, type BashToolOptions, createBashTool } from "./bash";
-export { type CalculatorToolDetails, createCalculatorTool } from "./calculator";
-export { createCompleteTool } from "./complete";
+export { AskTool, type AskToolDetails } from "./ask";
+export { type BashOperations, BashTool, type BashToolDetails, type BashToolOptions } from "./bash";
+export { CalculatorTool, type CalculatorToolDetails } from "./calculator";
+export { CompleteTool } from "./complete";
 // Exa MCP tools (22 tools)
 export { exaTools } from "./exa/index";
 export type { ExaRenderDetails, ExaSearchResponse, ExaSearchResult } from "./exa/types";
-export { createFindTool, type FindOperations, type FindToolDetails, type FindToolOptions } from "./find";
+export { type FindOperations, FindTool, type FindToolDetails, type FindToolOptions } from "./find";
 export { setPreferredImageProvider } from "./gemini-image";
-export { createGitTool, type GitToolDetails, gitTool } from "./git";
-export { createGrepTool, type GrepOperations, type GrepToolDetails, type GrepToolOptions } from "./grep";
-export { createLsTool, type LsOperations, type LsToolDetails, type LsToolOptions } from "./ls";
+export { GitTool, type GitToolDetails } from "./git";
+export { type GrepOperations, GrepTool, type GrepToolDetails, type GrepToolOptions } from "./grep";
+export { type LsOperations, LsTool, type LsToolDetails, type LsToolOptions } from "./ls";
 export {
-	createLspTool,
 	type FileDiagnosticsResult,
 	type FileFormatResult,
 	getLspStatus,
 	type LspServerStatus,
+	LspTool,
 	type LspToolDetails,
 	type LspWarmupOptions,
 	type LspWarmupResult,
 	warmupLspServers,
 } from "./lsp/index";
-export { createNotebookTool, type NotebookToolDetails } from "./notebook";
-export { createOutputTool, type OutputToolDetails } from "./output";
+export { NotebookTool, type NotebookToolDetails } from "./notebook";
+export { OutputTool, type OutputToolDetails } from "./output";
 export { EditTool, type EditToolDetails } from "./patch";
-export { createPythonTool, type PythonToolDetails } from "./python";
-export { createReadTool, type ReadToolDetails } from "./read";
+export { PythonTool, type PythonToolDetails, type PythonToolOptions } from "./python";
+export { ReadTool, type ReadToolDetails } from "./read";
 export { reportFindingTool, type SubmitReviewDetails } from "./review";
-export { createSshTool, type SSHToolDetails } from "./ssh";
-export { BUNDLED_AGENTS, createTaskTool, taskTool } from "./task/index";
-export { createTodoWriteTool, type TodoItem, type TodoWriteToolDetails } from "./todo-write";
+export { loadSshTool, type SSHToolDetails, SshTool } from "./ssh";
+export { BUNDLED_AGENTS, TaskTool } from "./task/index";
+export { type TodoItem, TodoWriteTool, type TodoWriteToolDetails } from "./todo-write";
 export {
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,
@@ -40,10 +40,9 @@ export {
 	truncateLine,
 	truncateTail,
 } from "./truncate";
-export { createWebFetchTool, type WebFetchToolDetails } from "./web-fetch";
+export { WebFetchTool, type WebFetchToolDetails } from "./web-fetch";
 export {
 	companyWebSearchTools,
-	createWebSearchTool,
 	exaWebSearchTools,
 	getWebSearchTools,
 	hasExaWebSearch,
@@ -51,6 +50,7 @@ export {
 	setPreferredWebSearchProvider,
 	type WebSearchProvider,
 	type WebSearchResponse,
+	WebSearchTool,
 	type WebSearchToolsOptions,
 	webSearchCodeContextTool,
 	webSearchCompanyTool,
@@ -58,9 +58,8 @@ export {
 	webSearchCustomTool,
 	webSearchDeepTool,
 	webSearchLinkedinTool,
-	webSearchTool,
 } from "./web-search/index";
-export { createWriteTool, type WriteToolDetails } from "./write";
+export { WriteTool, type WriteToolDetails } from "./write";
 
 import type { AgentTool } from "@oh-my-pi/pi-agent-core";
 import type { EventBus } from "../event-bus";
@@ -68,27 +67,27 @@ import { logger } from "../logger";
 import { getPreludeDocs, warmPythonEnvironment } from "../python-executor";
 import { checkPythonKernelAvailability } from "../python-kernel";
 import type { BashInterceptorRule } from "../settings-manager";
-import { createAskTool } from "./ask";
-import { createBashTool } from "./bash";
-import { createCalculatorTool } from "./calculator";
-import { createCompleteTool } from "./complete";
-import { createFindTool } from "./find";
-import { createGitTool } from "./git";
-import { createGrepTool } from "./grep";
-import { createLsTool } from "./ls";
-import { createLspTool } from "./lsp/index";
-import { createNotebookTool } from "./notebook";
-import { createOutputTool } from "./output";
+import { AskTool } from "./ask";
+import { BashTool } from "./bash";
+import { CalculatorTool } from "./calculator";
+import { CompleteTool } from "./complete";
+import { FindTool } from "./find";
+import { GitTool } from "./git";
+import { GrepTool } from "./grep";
+import { LsTool } from "./ls";
+import { LspTool } from "./lsp/index";
+import { NotebookTool } from "./notebook";
+import { OutputTool } from "./output";
 import { EditTool } from "./patch";
-import { createPythonTool } from "./python";
-import { createReadTool } from "./read";
+import { PythonTool } from "./python";
+import { ReadTool } from "./read";
 import { reportFindingTool } from "./review";
-import { createSshTool } from "./ssh";
-import { createTaskTool } from "./task/index";
-import { createTodoWriteTool } from "./todo-write";
-import { createWebFetchTool } from "./web-fetch";
-import { createWebSearchTool } from "./web-search/index";
-import { createWriteTool } from "./write";
+import { loadSshTool } from "./ssh";
+import { TaskTool } from "./task/index";
+import { TodoWriteTool } from "./todo-write";
+import { WebFetchTool } from "./web-fetch";
+import { WebSearchTool } from "./web-search/index";
+import { WriteTool } from "./write";
 
 /** Tool type (AgentTool from pi-ai) */
 export type Tool = AgentTool<any, any, any>;
@@ -130,7 +129,7 @@ export interface ToolSession {
 		getLspDiagnosticsOnWrite(): boolean;
 		getLspDiagnosticsOnEdit(): boolean;
 		getEditFuzzyMatch(): boolean;
-		getEditFuzzyThreshold(): number;
+		getEditFuzzyThreshold?(): number;
 		getEditPatchMode?(): boolean;
 		getGitToolEnabled(): boolean;
 		getBashInterceptorEnabled(): boolean;
@@ -145,29 +144,29 @@ export interface ToolSession {
 type ToolFactory = (session: ToolSession) => Tool | null | Promise<Tool | null>;
 
 export const BUILTIN_TOOLS: Record<string, ToolFactory> = {
-	ask: createAskTool,
-	bash: createBashTool,
-	python: createPythonTool,
-	calc: createCalculatorTool,
-	ssh: createSshTool,
+	ask: AskTool.createIf,
+	bash: (s) => new BashTool(s),
+	python: (s) => new PythonTool(s),
+	calc: (s) => new CalculatorTool(s),
+	ssh: loadSshTool,
 	edit: (s) => new EditTool(s),
-	find: createFindTool,
-	git: createGitTool,
-	grep: createGrepTool,
-	ls: createLsTool,
-	lsp: createLspTool,
-	notebook: createNotebookTool,
-	output: createOutputTool,
-	read: createReadTool,
-	task: createTaskTool,
-	todo_write: createTodoWriteTool,
-	web_fetch: createWebFetchTool,
-	web_search: createWebSearchTool,
-	write: createWriteTool,
+	find: (s) => new FindTool(s),
+	git: GitTool.createIf,
+	grep: (s) => new GrepTool(s),
+	ls: (s) => new LsTool(s),
+	lsp: LspTool.createIf,
+	notebook: (s) => new NotebookTool(s),
+	output: (s) => new OutputTool(s),
+	read: (s) => new ReadTool(s),
+	task: TaskTool.create,
+	todo_write: (s) => new TodoWriteTool(s),
+	web_fetch: (s) => new WebFetchTool(s),
+	web_search: (s) => new WebSearchTool(s),
+	write: (s) => new WriteTool(s),
 };
 
 export const HIDDEN_TOOLS: Record<string, ToolFactory> = {
-	complete: createCompleteTool,
+	complete: (s) => new CompleteTool(s),
 	report_finding: () => reportFindingTool,
 };
 

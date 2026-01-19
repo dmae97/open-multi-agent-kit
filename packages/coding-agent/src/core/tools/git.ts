@@ -1,4 +1,4 @@
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
+import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { StringEnum } from "@oh-my-pi/pi-ai";
 import { type GitParams, gitTool as gitToolCore, type ToolResponse } from "@oh-my-pi/pi-git-tool";
 import { type Static, Type } from "@sinclair/typebox";
@@ -171,37 +171,43 @@ const gitSchema = Type.Object({
 
 export type GitToolDetails = ToolResponse<unknown>;
 
-export function createGitTool(session: ToolSession): AgentTool<typeof gitSchema, GitToolDetails> | null {
-	if (session.settings?.getGitToolEnabled() === false) {
-		return null;
+export class GitTool implements AgentTool<typeof gitSchema, GitToolDetails> {
+	public readonly name = "git";
+	public readonly label = "Git";
+	public readonly description: string;
+	public readonly parameters = gitSchema;
+
+	private readonly session: ToolSession;
+
+	constructor(session: ToolSession) {
+		this.session = session;
+		this.description = renderPromptTemplate(gitDescription);
 	}
-	return {
-		name: "git",
-		label: "Git",
-		description: renderPromptTemplate(gitDescription),
-		parameters: gitSchema,
-		execute: async (_toolCallId, params: Static<typeof gitSchema>, _signal?: AbortSignal) => {
-			if (params.operation === "commit" && !params.message) {
-				throw new Error("Git commit requires a message to avoid an interactive editor. Provide `message`.");
-			}
 
-			const result = await gitToolCore(params as GitParams, session.cwd);
-			if ("error" in result) {
-				const message = result._rendered ?? result.error;
-				return { content: [{ type: "text", text: message }], details: result };
-			}
-			if ("confirm" in result) {
-				const message = result._rendered ?? result.confirm;
-				return { content: [{ type: "text", text: message }], details: result };
-			}
-			return { content: [{ type: "text", text: result._rendered }], details: result };
-		},
-	};
+	static createIf(session: ToolSession): GitTool | null {
+		return session.settings?.getGitToolEnabled() === false ? null : new GitTool(session);
+	}
+
+	public async execute(
+		_toolCallId: string,
+		params: Static<typeof gitSchema>,
+		_signal?: AbortSignal,
+		_onUpdate?: AgentToolUpdateCallback<GitToolDetails>,
+		_context?: AgentToolContext,
+	): Promise<AgentToolResult<GitToolDetails>> {
+		if (params.operation === "commit" && !params.message) {
+			throw new Error("Git commit requires a message to avoid an interactive editor. Provide `message`.");
+		}
+
+		const result = await gitToolCore(params as GitParams, this.session.cwd);
+		if ("error" in result) {
+			const message = result._rendered ?? result.error;
+			return { content: [{ type: "text", text: message }], details: result };
+		}
+		if ("confirm" in result) {
+			const message = result._rendered ?? result.confirm;
+			return { content: [{ type: "text", text: message }], details: result };
+		}
+		return { content: [{ type: "text", text: result._rendered }], details: result };
+	}
 }
-
-export const gitTool = createGitTool({
-	cwd: process.cwd(),
-	hasUI: false,
-	getSessionFile: () => null,
-	getSessionSpawns: () => null,
-})!;

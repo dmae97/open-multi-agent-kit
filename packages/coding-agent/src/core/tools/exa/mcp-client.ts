@@ -1,14 +1,15 @@
 /**
  * Exa MCP Client
  *
- * Client for interacting with Exa MCP servers via JSON-RPC 2.0 over HTTPS.
+ * Client for interacting with Exa MCP servers.
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import type { TSchema } from "@sinclair/typebox";
-import type { CustomTool } from "../../custom-tools/types";
+import type { CustomTool, CustomToolResult } from "../../custom-tools/types";
 import { logger } from "../../logger";
+import { callMCP } from "../../mcp/json-rpc";
 import type {
 	ExaRenderDetails,
 	ExaSearchResponse,
@@ -46,63 +47,6 @@ export async function findApiKey(): Promise<string | null> {
 	}
 
 	return null;
-}
-
-/** Parse SSE response format (lines starting with "data: ") */
-function parseSSE(text: string): unknown {
-	const lines = text.split("\n");
-	for (const line of lines) {
-		if (line.startsWith("data: ")) {
-			const data = line.slice(6).trim();
-			if (data === "[DONE]") continue;
-			try {
-				return JSON.parse(data);
-			} catch {
-				// Try next line
-			}
-		}
-	}
-	// Fallback: try parsing entire response as JSON
-	try {
-		return JSON.parse(text);
-	} catch {
-		return null;
-	}
-}
-
-/** Call MCP server with JSON-RPC 2.0 */
-export async function callMCP(url: string, method: string, params?: Record<string, unknown>): Promise<unknown> {
-	const body = {
-		jsonrpc: "2.0",
-		id: Math.random().toString(36).slice(2),
-		method,
-		params: params ?? {},
-	};
-
-	const response = await fetch(url, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			Accept: "application/json, text/event-stream",
-		},
-		body: JSON.stringify(body),
-	});
-
-	if (!response.ok) {
-		const errorMsg = `MCP request failed: ${response.status} ${response.statusText}`;
-		logger.error(errorMsg, { url, method, params });
-		throw new Error(errorMsg);
-	}
-
-	const text = await response.text();
-	const result = parseSSE(text);
-
-	if (!result) {
-		logger.error("Failed to parse MCP response", { url, method, responseText: text.slice(0, 500) });
-		throw new Error("Failed to parse MCP response");
-	}
-
-	return result;
 }
 
 /** Fetch available tools from Exa MCP */
@@ -299,56 +243,67 @@ export async function fetchMCPToolSchema(
 }
 
 /**
- * Create a CustomTool dynamically from MCP tool metadata.
+ * CustomTool dynamically created from MCP tool metadata.
  *
  * This allows tools to be generated from MCP server schemas without hardcoding,
  * reducing drift when MCP servers add new parameters.
  */
-export function createMCPWrappedTool(
-	config: MCPToolWrapperConfig,
-	schema: TSchema,
-	description: string,
-): CustomTool<TSchema, ExaRenderDetails> {
-	return {
-		name: config.name,
-		label: config.label,
-		description,
-		parameters: schema,
-		async execute(_toolCallId, params, _onUpdate, _ctx, _signal) {
-			try {
-				const apiKey = await findApiKey();
-				if (!apiKey) {
-					return {
-						content: [{ type: "text" as const, text: "Error: EXA_API_KEY not found" }],
-						details: { error: "EXA_API_KEY not found", toolName: config.name },
-					};
-				}
+export class MCPWrappedTool implements CustomTool<TSchema, ExaRenderDetails> {
+	public readonly name: string;
+	public readonly label: string;
+	public readonly description: string;
+	public readonly parameters: TSchema;
 
-				const response = config.isWebsetsTool
-					? await callWebsetsTool(apiKey, config.mcpToolName, params as Record<string, unknown>)
-					: await callExaTool(config.mcpToolName, params as Record<string, unknown>, apiKey);
+	private readonly config: MCPToolWrapperConfig;
 
-				if (isSearchResponse(response)) {
-					const formatted = formatSearchResults(response);
-					return {
-						content: [{ type: "text" as const, text: formatted }],
-						details: { response, toolName: config.name },
-					};
-				}
+	constructor(config: MCPToolWrapperConfig, schema: TSchema, description: string) {
+		this.config = config;
+		this.name = config.name;
+		this.label = config.label;
+		this.description = description;
+		this.parameters = schema;
+	}
 
+	async execute(
+		_toolCallId: string,
+		params: unknown,
+		_onUpdate?: unknown,
+		_ctx?: unknown,
+		_signal?: AbortSignal,
+	): Promise<CustomToolResult<ExaRenderDetails>> {
+		try {
+			const apiKey = await findApiKey();
+			if (!apiKey) {
 				return {
-					content: [{ type: "text" as const, text: JSON.stringify(response, null, 2) }],
-					details: { raw: response, toolName: config.name },
-				};
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				return {
-					content: [{ type: "text" as const, text: `Error: ${message}` }],
-					details: { error: message, toolName: config.name },
+					content: [{ type: "text" as const, text: "Error: EXA_API_KEY not found" }],
+					details: { error: "EXA_API_KEY not found", toolName: this.config.name },
 				};
 			}
-		},
-	};
+
+			const response = this.config.isWebsetsTool
+				? await callWebsetsTool(apiKey, this.config.mcpToolName, params as Record<string, unknown>)
+				: await callExaTool(this.config.mcpToolName, params as Record<string, unknown>, apiKey);
+
+			if (isSearchResponse(response)) {
+				const formatted = formatSearchResults(response);
+				return {
+					content: [{ type: "text" as const, text: formatted }],
+					details: { response, toolName: this.config.name },
+				};
+			}
+
+			return {
+				content: [{ type: "text" as const, text: JSON.stringify(response, null, 2) }],
+				details: { raw: response, toolName: this.config.name },
+			};
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			return {
+				content: [{ type: "text" as const, text: `Error: ${message}` }],
+				details: { error: message, toolName: this.config.name },
+			};
+		}
+	}
 }
 
 /**
@@ -361,9 +316,9 @@ export async function createMCPToolFromServer(
 	config: MCPToolWrapperConfig,
 	fallbackSchema: TSchema,
 	fallbackDescription: string,
-): Promise<CustomTool<TSchema, ExaRenderDetails>> {
+): Promise<MCPWrappedTool> {
 	const mcpTool = await fetchMCPToolSchema(apiKey, config.mcpToolName, config.isWebsetsTool);
 	const schema = mcpTool?.inputSchema ?? fallbackSchema;
 	const description = mcpTool?.description ?? fallbackDescription;
-	return createMCPWrappedTool(config, schema, description);
+	return new MCPWrappedTool(config, schema, description);
 }

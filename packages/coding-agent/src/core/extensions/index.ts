@@ -2,7 +2,12 @@
  * Extension system for lifecycle events and custom tools.
  */
 
-export { createExtensionRuntime, discoverAndLoadExtensions, loadExtensionFromFactory, loadExtensions } from "./loader";
+export {
+	discoverAndLoadExtensions,
+	ExtensionRuntime,
+	loadExtensionFromFactory,
+	loadExtensions,
+} from "./loader";
 export type {
 	BranchHandler,
 	ExtensionErrorListener,
@@ -32,7 +37,6 @@ export type {
 	ExecResult,
 	Extension,
 	ExtensionActions,
-	// API
 	ExtensionAPI,
 	ExtensionCommandContext,
 	ExtensionCommandContextActions,
@@ -45,7 +49,6 @@ export type {
 	ExtensionFactory,
 	ExtensionFlag,
 	ExtensionHandler,
-	ExtensionRuntime,
 	ExtensionShortcut,
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
@@ -112,4 +115,10 @@ export {
 	isReadToolResult,
 	isWriteToolResult,
 } from "./types";
-export { wrapRegisteredTool, wrapRegisteredTools, wrapToolWithExtensions } from "./wrapper";
+export {
+	ExtensionToolWrapper,
+	RegisteredToolAdapter,
+	wrapRegisteredTool,
+	wrapRegisteredTools,
+	wrapToolWithExtensions,
+} from "./wrapper";

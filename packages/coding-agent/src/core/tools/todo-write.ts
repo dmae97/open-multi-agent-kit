@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
+import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { StringEnum } from "@oh-my-pi/pi-ai";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
@@ -48,6 +48,8 @@ export interface TodoWriteToolDetails {
 }
 
 const TODO_FILE_NAME = "todos.json";
+
+type TodoWriteParams = { todos: Array<{ id?: string; content?: string; activeForm?: string; status?: string }> };
 
 function normalizeTodoStatus(status?: string): TodoStatus {
 	switch (status) {
@@ -137,6 +139,14 @@ async function saveTodoFile(filePath: string, data: TodoFile): Promise<void> {
 	await Bun.write(filePath, JSON.stringify(data, null, 2));
 }
 
+function formatTodoSummary(todos: TodoItem[]): string {
+	if (todos.length === 0) return "Todo list cleared.";
+	const completed = todos.filter((t) => t.status === "completed").length;
+	const inProgress = todos.filter((t) => t.status === "in_progress").length;
+	const pending = todos.filter((t) => t.status === "pending").length;
+	return `Saved ${todos.length} todos (${pending} pending, ${inProgress} in progress, ${completed} completed).`;
+}
+
 function formatTodoLine(item: TodoItem, uiTheme: Theme, prefix: string): string {
 	const checkbox = uiTheme.checkbox;
 	const displayText =
@@ -151,71 +161,76 @@ function formatTodoLine(item: TodoItem, uiTheme: Theme, prefix: string): string 
 	}
 }
 
-function formatTodoSummary(todos: TodoItem[]): string {
-	if (todos.length === 0) return "Todo list cleared.";
-	const completed = todos.filter((t) => t.status === "completed").length;
-	const inProgress = todos.filter((t) => t.status === "in_progress").length;
-	const pending = todos.filter((t) => t.status === "pending").length;
-	return `Saved ${todos.length} todos (${pending} pending, ${inProgress} in progress, ${completed} completed).`;
-}
+// =============================================================================
+// Tool Class
+// =============================================================================
 
-export function createTodoWriteTool(session: ToolSession): AgentTool<typeof todoWriteSchema, TodoWriteToolDetails> {
-	return {
-		name: "todo_write",
-		label: "Todo Write",
-		description: renderPromptTemplate(todoWriteDescription),
-		parameters: todoWriteSchema,
-		execute: async (
-			_toolCallId: string,
-			params: { todos: Array<{ id?: string; content?: string; activeForm?: string; status?: string }> },
-		) => {
-			const todos = normalizeTodos(params.todos ?? []);
-			const validation = validateSequentialTodos(todos);
-			if (!validation.valid) {
-				throw new Error(validation.error ?? "Todos must be completed sequentially.");
-			}
-			const updatedAt = Date.now();
+export class TodoWriteTool implements AgentTool<typeof todoWriteSchema, TodoWriteToolDetails> {
+	public readonly name = "todo_write";
+	public readonly label = "Todo Write";
+	public readonly description: string;
+	public readonly parameters = todoWriteSchema;
 
-			const sessionFile = session.getSessionFile();
-			if (!sessionFile) {
-				return {
-					content: [{ type: "text", text: formatTodoSummary(todos) }],
-					details: { todos, updatedAt, storage: "memory" },
-				};
-			}
+	private readonly session: ToolSession;
 
-			const artifactsDir = getArtifactsDir(sessionFile);
-			if (!artifactsDir) {
-				return {
-					content: [{ type: "text", text: formatTodoSummary(todos) }],
-					details: { todos, updatedAt, storage: "memory" },
-				};
-			}
+	constructor(session: ToolSession) {
+		this.session = session;
+		this.description = renderPromptTemplate(todoWriteDescription);
+	}
 
-			ensureArtifactsDir(artifactsDir);
-			const todoPath = path.join(artifactsDir, TODO_FILE_NAME);
-			const existing = await loadTodoFile(todoPath);
-			const storedTodos = existing?.todos ?? [];
-			const merged = todos.length > 0 ? todos : [];
-			const fileData: TodoFile = { updatedAt, todos: merged };
+	public async execute(
+		_toolCallId: string,
+		params: TodoWriteParams,
+		_signal?: AbortSignal,
+		_onUpdate?: AgentToolUpdateCallback<TodoWriteToolDetails>,
+		_context?: AgentToolContext,
+	): Promise<AgentToolResult<TodoWriteToolDetails>> {
+		const todos = normalizeTodos(params.todos ?? []);
+		const validation = validateSequentialTodos(todos);
+		if (!validation.valid) {
+			throw new Error(validation.error ?? "Todos must be completed sequentially.");
+		}
+		const updatedAt = Date.now();
 
-			try {
-				mkdirSync(artifactsDir, { recursive: true });
-				await saveTodoFile(todoPath, fileData);
-			} catch (error) {
-				logger.error("Failed to write todo file", { path: todoPath, error: String(error) });
-				return {
-					content: [{ type: "text", text: "Failed to save todos." }],
-					details: { todos: storedTodos, updatedAt, storage: "session" },
-				};
-			}
-
+		const sessionFile = this.session.getSessionFile();
+		if (!sessionFile) {
 			return {
-				content: [{ type: "text", text: formatTodoSummary(merged) }],
-				details: { todos: merged, updatedAt, storage: "session" },
+				content: [{ type: "text", text: formatTodoSummary(todos) }],
+				details: { todos, updatedAt, storage: "memory" },
 			};
-		},
-	};
+		}
+
+		const artifactsDir = getArtifactsDir(sessionFile);
+		if (!artifactsDir) {
+			return {
+				content: [{ type: "text", text: formatTodoSummary(todos) }],
+				details: { todos, updatedAt, storage: "memory" },
+			};
+		}
+
+		ensureArtifactsDir(artifactsDir);
+		const todoPath = path.join(artifactsDir, TODO_FILE_NAME);
+		const existing = await loadTodoFile(todoPath);
+		const storedTodos = existing?.todos ?? [];
+		const merged = todos.length > 0 ? todos : [];
+		const fileData: TodoFile = { updatedAt, todos: merged };
+
+		try {
+			mkdirSync(artifactsDir, { recursive: true });
+			await saveTodoFile(todoPath, fileData);
+		} catch (error) {
+			logger.error("Failed to write todo file", { path: todoPath, error: String(error) });
+			return {
+				content: [{ type: "text", text: "Failed to save todos." }],
+				details: { todos: storedTodos, updatedAt, storage: "session" },
+			};
+		}
+
+		return {
+			content: [{ type: "text", text: formatTodoSummary(merged) }],
+			details: { todos: merged, updatedAt, storage: "session" },
+		};
+	}
 }
 
 // =============================================================================

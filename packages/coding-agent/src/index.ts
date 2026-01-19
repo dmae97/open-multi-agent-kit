@@ -63,7 +63,7 @@ export type {
 	LoadedCustomTool,
 	RenderResultOptions,
 } from "./core/custom-tools/index";
-export { discoverAndLoadCustomTools, loadCustomTools } from "./core/custom-tools/index";
+export { CustomToolLoader, discoverAndLoadCustomTools, loadCustomTools } from "./core/custom-tools/index";
 // Extension types and utilities
 export type {
 	AppAction,
@@ -79,7 +79,6 @@ export type {
 	ExtensionFactory,
 	ExtensionFlag,
 	ExtensionHandler,
-	ExtensionRuntime,
 	ExtensionShortcut,
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
@@ -97,9 +96,9 @@ export type {
 	UserBashEventResult,
 } from "./core/extensions/index";
 export {
-	createExtensionRuntime,
 	discoverAndLoadExtensions,
 	ExtensionRunner,
+	ExtensionRuntime,
 	isBashToolResult,
 	isEditToolResult,
 	isFindToolResult,
@@ -119,21 +118,16 @@ export { ModelRegistry } from "./core/model-registry";
 export type { PromptTemplate } from "./core/prompt-templates";
 // SDK for programmatic usage
 export {
+	// Factory
+	BashTool,
 	// Tool factories
 	BUILTIN_TOOLS,
 	type BuildSystemPromptOptions,
 	buildSystemPrompt,
 	type CreateAgentSessionOptions,
 	type CreateAgentSessionResult,
-	// Factory
 	createAgentSession,
-	createBashTool,
-	createFindTool,
-	createGrepTool,
-	createLsTool,
-	createReadTool,
 	createTools,
-	createWriteTool,
 	// Discovery
 	discoverAuthStorage,
 	discoverContextFiles,
@@ -144,8 +138,15 @@ export {
 	discoverPromptTemplates,
 	discoverSkills,
 	EditTool,
+	FindTool,
+	GrepTool,
+	LsTool,
 	loadSettings,
+	loadSshTool,
+	PythonTool,
+	ReadTool,
 	type ToolSession,
+	WriteTool,
 } from "./core/sdk";
 export {
 	type BranchSummaryEntry,
@@ -201,11 +202,11 @@ export {
 	type FindToolDetails,
 	type FindToolOptions,
 	formatSize,
+	GitTool,
 	type GitToolDetails,
 	type GrepOperations,
 	type GrepToolDetails,
 	type GrepToolOptions,
-	gitTool,
 	type LsOperations,
 	type LsToolDetails,
 	type LsToolOptions,

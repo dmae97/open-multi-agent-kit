@@ -4,7 +4,7 @@ import { YAML } from "bun";
 import { globSync } from "glob";
 import { getConfigDirPaths } from "../../../config";
 import { logger } from "../../logger";
-import { createBiomeClient } from "./clients/biome-client";
+import { BiomeClient } from "./clients/biome-client";
 import DEFAULTS from "./defaults.json" with { type: "json" };
 import type { ServerConfig } from "./types";
 
@@ -137,7 +137,7 @@ function applyRuntimeDefaults(servers: Record<string, ServerConfig>): Record<str
 	const updated: Record<string, ServerConfig> = { ...servers };
 
 	if (updated.biome) {
-		updated.biome = { ...updated.biome, createClient: createBiomeClient };
+		updated.biome = { ...updated.biome, createClient: BiomeClient.create };
 	}
 
 	if (updated.omnisharp?.args) {

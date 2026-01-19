@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added configurable fuzzy matching threshold for edit operations
@@ -13,6 +14,11 @@
 
 ### Changed
 
+- Converted tool implementations from factory functions to class-based architecture for better modularity
+- Updated tool exports to expose classes instead of factory functions
+- Refactored tool instantiation patterns across all built-in tools
+- Updated test files to use new class-based tool constructors
+- Modified SDK exports to provide tool classes for custom usage
 - Enhanced patch application with better ambiguity detection and clearer error messages
 - Improved diff truncation algorithm to preserve context around changes more intelligently
 - Updated patch mode prompts to prefer larger semantic blocks over single-line edits

@@ -9,7 +9,7 @@ import {
 	type PreludeHelper,
 	PythonKernel,
 } from "./python-kernel";
-import { createOutputSink } from "./streaming-output";
+import { OutputSink } from "./streaming-output";
 import { DEFAULT_MAX_BYTES } from "./tools/truncate";
 
 export type PythonKernelMode = "session" | "per-call";
@@ -218,7 +218,7 @@ async function executeWithKernel(
 	code: string,
 	options: PythonExecutorOptions | undefined,
 ): Promise<PythonResult> {
-	const sink = createOutputSink(DEFAULT_MAX_BYTES, DEFAULT_MAX_BYTES * 2, options?.onChunk);
+	const sink = new OutputSink(DEFAULT_MAX_BYTES, DEFAULT_MAX_BYTES * 2, options?.onChunk);
 	const writer = sink.getWriter();
 	const displayOutputs: KernelDisplayOutput[] = [];
 

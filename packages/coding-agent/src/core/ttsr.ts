@@ -21,44 +21,6 @@ interface InjectionRecord {
 	lastInjectedAt: number;
 }
 
-export interface TtsrManager {
-	/** Add a TTSR rule to be monitored */
-	addRule(rule: Rule): void;
-
-	/** Check if any uninjected TTSR matches the stream buffer. Returns matching rules. */
-	check(streamBuffer: string): Rule[];
-
-	/** Mark rules as injected (won't trigger again until conditions allow) */
-	markInjected(rules: Rule[]): void;
-
-	/** Get names of all injected rules (for persistence) */
-	getInjectedRuleNames(): string[];
-
-	/** Restore injected state from a list of rule names */
-	restoreInjected(ruleNames: string[]): void;
-
-	/** Reset stream buffer (called on new turn) */
-	resetBuffer(): void;
-
-	/** Get current stream buffer */
-	getBuffer(): string;
-
-	/** Append to stream buffer */
-	appendToBuffer(text: string): void;
-
-	/** Check if any TTSRs are registered */
-	hasRules(): boolean;
-
-	/** Increment message counter (call after each turn) */
-	incrementMessageCount(): void;
-
-	/** Get current message count */
-	getMessageCount(): number;
-
-	/** Get settings */
-	getSettings(): Required<TtsrSettings>;
-}
-
 const DEFAULT_SETTINGS: Required<TtsrSettings> = {
 	enabled: true,
 	contextMode: "discard",
@@ -66,146 +28,138 @@ const DEFAULT_SETTINGS: Required<TtsrSettings> = {
 	repeatGap: 10,
 };
 
-export function createTtsrManager(settings?: TtsrSettings): TtsrManager {
-	/** Resolved settings with defaults */
-	const resolvedSettings: Required<TtsrSettings> = {
-		...DEFAULT_SETTINGS,
-		...settings,
-	};
+export class TtsrManager {
+	private readonly settings: Required<TtsrSettings>;
+	private readonly rules = new Map<string, TtsrEntry>();
+	private readonly injectionRecords = new Map<string, InjectionRecord>();
+	private buffer = "";
+	private messageCount = 0;
 
-	/** Map of rule name -> { rule, compiled regex } */
-	const rules = new Map<string, TtsrEntry>();
-
-	/** Map of rule name -> injection record */
-	const injectionRecords = new Map<string, InjectionRecord>();
-
-	/** Current stream buffer for pattern matching */
-	let buffer = "";
-
-	/** Message counter for tracking gap between injections */
-	let messageCount = 0;
+	constructor(settings?: TtsrSettings) {
+		this.settings = { ...DEFAULT_SETTINGS, ...settings };
+	}
 
 	/** Check if a rule can be triggered based on repeat settings */
-	function canTrigger(ruleName: string): boolean {
-		const record = injectionRecords.get(ruleName);
+	private canTrigger(ruleName: string): boolean {
+		const record = this.injectionRecords.get(ruleName);
 		if (!record) {
-			// Never injected, can trigger
 			return true;
 		}
 
-		if (resolvedSettings.repeatMode === "once") {
-			// Once mode: never trigger again after first injection
+		if (this.settings.repeatMode === "once") {
 			return false;
 		}
 
-		// After-gap mode: check if enough messages have passed
-		const gap = messageCount - record.lastInjectedAt;
-		return gap >= resolvedSettings.repeatGap;
+		const gap = this.messageCount - record.lastInjectedAt;
+		return gap >= this.settings.repeatGap;
 	}
 
-	return {
-		addRule(rule: Rule): void {
-			// Only add rules that have a TTSR trigger pattern
-			if (!rule.ttsrTrigger) {
-				return;
+	/** Add a TTSR rule to be monitored */
+	addRule(rule: Rule): void {
+		if (!rule.ttsrTrigger) {
+			return;
+		}
+
+		if (this.rules.has(rule.name)) {
+			return;
+		}
+
+		try {
+			const regex = new RegExp(rule.ttsrTrigger);
+			this.rules.set(rule.name, { rule, regex });
+			logger.debug("TTSR rule registered", {
+				ruleName: rule.name,
+				pattern: rule.ttsrTrigger,
+			});
+		} catch (err) {
+			logger.warn("TTSR rule has invalid regex pattern, skipping", {
+				ruleName: rule.name,
+				pattern: rule.ttsrTrigger,
+				error: err instanceof Error ? err.message : String(err),
+			});
+		}
+	}
+
+	/** Check if any uninjected TTSR matches the stream buffer. Returns matching rules. */
+	check(streamBuffer: string): Rule[] {
+		const matches: Rule[] = [];
+
+		for (const [name, entry] of this.rules) {
+			if (!this.canTrigger(name)) {
+				continue;
 			}
 
-			// Skip if already registered
-			if (rules.has(rule.name)) {
-				return;
-			}
-
-			// Compile the regex pattern
-			try {
-				const regex = new RegExp(rule.ttsrTrigger);
-				rules.set(rule.name, { rule, regex });
-				logger.debug("TTSR rule registered", {
-					ruleName: rule.name,
-					pattern: rule.ttsrTrigger,
-				});
-			} catch (err) {
-				logger.warn("TTSR rule has invalid regex pattern, skipping", {
-					ruleName: rule.name,
-					pattern: rule.ttsrTrigger,
-					error: err instanceof Error ? err.message : String(err),
-				});
-			}
-		},
-
-		check(streamBuffer: string): Rule[] {
-			const matches: Rule[] = [];
-
-			for (const [name, entry] of rules) {
-				// Skip rules that can't trigger yet
-				if (!canTrigger(name)) {
-					continue;
-				}
-
-				// Test the buffer against the rule's pattern
-				if (entry.regex.test(streamBuffer)) {
-					matches.push(entry.rule);
-					logger.debug("TTSR pattern matched", {
-						ruleName: name,
-						pattern: entry.rule.ttsrTrigger,
-					});
-				}
-			}
-
-			return matches;
-		},
-
-		markInjected(rulesToMark: Rule[]): void {
-			for (const rule of rulesToMark) {
-				injectionRecords.set(rule.name, { lastInjectedAt: messageCount });
-				logger.debug("TTSR rule marked as injected", {
-					ruleName: rule.name,
-					messageCount,
-					repeatMode: resolvedSettings.repeatMode,
+			if (entry.regex.test(streamBuffer)) {
+				matches.push(entry.rule);
+				logger.debug("TTSR pattern matched", {
+					ruleName: name,
+					pattern: entry.rule.ttsrTrigger,
 				});
 			}
-		},
+		}
 
-		getInjectedRuleNames(): string[] {
-			return Array.from(injectionRecords.keys());
-		},
+		return matches;
+	}
 
-		restoreInjected(ruleNames: string[]): void {
-			// When restoring, we don't know the original message count, so use 0
-			// This means in "after-gap" mode, rules can trigger again after the gap
-			for (const name of ruleNames) {
-				injectionRecords.set(name, { lastInjectedAt: 0 });
-			}
-			if (ruleNames.length > 0) {
-				logger.debug("TTSR injected state restored", { ruleNames });
-			}
-		},
+	/** Mark rules as injected (won't trigger again until conditions allow) */
+	markInjected(rulesToMark: Rule[]): void {
+		for (const rule of rulesToMark) {
+			this.injectionRecords.set(rule.name, { lastInjectedAt: this.messageCount });
+			logger.debug("TTSR rule marked as injected", {
+				ruleName: rule.name,
+				messageCount: this.messageCount,
+				repeatMode: this.settings.repeatMode,
+			});
+		}
+	}
 
-		resetBuffer(): void {
-			buffer = "";
-		},
+	/** Get names of all injected rules (for persistence) */
+	getInjectedRuleNames(): string[] {
+		return Array.from(this.injectionRecords.keys());
+	}
 
-		getBuffer(): string {
-			return buffer;
-		},
+	/** Restore injected state from a list of rule names */
+	restoreInjected(ruleNames: string[]): void {
+		for (const name of ruleNames) {
+			this.injectionRecords.set(name, { lastInjectedAt: 0 });
+		}
+		if (ruleNames.length > 0) {
+			logger.debug("TTSR injected state restored", { ruleNames });
+		}
+	}
 
-		appendToBuffer(text: string): void {
-			buffer += text;
-		},
+	/** Reset stream buffer (called on new turn) */
+	resetBuffer(): void {
+		this.buffer = "";
+	}
 
-		hasRules(): boolean {
-			return rules.size > 0;
-		},
+	/** Get current stream buffer */
+	getBuffer(): string {
+		return this.buffer;
+	}
 
-		incrementMessageCount(): void {
-			messageCount++;
-		},
+	/** Append to stream buffer */
+	appendToBuffer(text: string): void {
+		this.buffer += text;
+	}
 
-		getMessageCount(): number {
-			return messageCount;
-		},
+	/** Check if any TTSRs are registered */
+	hasRules(): boolean {
+		return this.rules.size > 0;
+	}
 
-		getSettings(): Required<TtsrSettings> {
-			return resolvedSettings;
-		},
-	};
+	/** Increment message counter (call after each turn) */
+	incrementMessageCount(): void {
+		this.messageCount++;
+	}
+
+	/** Get current message count */
+	getMessageCount(): number {
+		return this.messageCount;
+	}
+
+	/** Get settings */
+	getSettings(): Required<TtsrSettings> {
+		return this.settings;
+	}
 }

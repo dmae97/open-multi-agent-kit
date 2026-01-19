@@ -13,7 +13,7 @@
  *   - Session artifacts for debugging
  */
 
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
+import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Usage } from "@oh-my-pi/pi-ai";
 import type { Theme } from "../../../modes/interactive/theme/theme";
 import taskDescriptionTemplate from "../../../prompts/tools/task.md" with { type: "text" };
@@ -105,387 +105,396 @@ async function buildDescription(cwd: string): Promise<string> {
 	});
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Tool Class
+// ═══════════════════════════════════════════════════════════════════════════
+
+type TaskParams = {
+	agent: string;
+	context?: string;
+	model?: string;
+	output?: unknown;
+	tasks: Array<{ id: string; task: string; description: string }>;
+};
+
 /**
- * Create the task tool configured for a specific session.
+ * Task tool - Delegate tasks to specialized agents.
+ *
+ * Requires async initialization to discover available agents.
+ * Use `TaskTool.create(session)` to instantiate.
  */
-export async function createTaskTool(
-	session: ToolSession,
-): Promise<AgentTool<typeof taskSchema, TaskToolDetails, Theme>> {
-	// Check for same-agent blocking (allows other agent types)
-	const blockedAgent = process.env.OMP_BLOCKED_AGENT;
+export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, Theme> {
+	public readonly name = "task";
+	public readonly label = "Task";
+	public readonly description: string;
+	public readonly parameters = taskSchema;
+	public readonly renderCall = renderCall;
+	public readonly renderResult = renderResult;
 
-	// Build description upfront
-	const description = await buildDescription(session.cwd);
+	private readonly session: ToolSession;
+	private readonly blockedAgent: string | undefined;
 
-	return {
-		name: "task",
-		label: "Task",
-		description,
-		parameters: taskSchema,
-		renderCall,
-		renderResult,
-		execute: async (_toolCallId, params, signal, onUpdate) => {
-			const startTime = Date.now();
-			const { agents, projectAgentsDir } = await discoverAgents(session.cwd);
-			const { agent: agentName, context, model, output: outputSchema } = params;
+	private constructor(session: ToolSession, description: string) {
+		this.session = session;
+		this.description = description;
+		this.blockedAgent = process.env.OMP_BLOCKED_AGENT;
+	}
 
-			const isDefaultModelAlias = (value: string | undefined): boolean => {
-				if (!value) return true;
-				const normalized = value.trim().toLowerCase();
-				return normalized === "default" || normalized === "pi/default" || normalized === "omp/default";
+	/**
+	 * Create a TaskTool instance with async agent discovery.
+	 */
+	public static async create(session: ToolSession): Promise<TaskTool> {
+		const description = await buildDescription(session.cwd);
+		return new TaskTool(session, description);
+	}
+
+	public async execute(
+		_toolCallId: string,
+		params: TaskParams,
+		signal?: AbortSignal,
+		onUpdate?: AgentToolUpdateCallback<TaskToolDetails>,
+	): Promise<AgentToolResult<TaskToolDetails>> {
+		const startTime = Date.now();
+		const { agents, projectAgentsDir } = await discoverAgents(this.session.cwd);
+		const { agent: agentName, context, model, output: outputSchema } = params;
+
+		const isDefaultModelAlias = (value: string | undefined): boolean => {
+			if (!value) return true;
+			const normalized = value.trim().toLowerCase();
+			return normalized === "default" || normalized === "pi/default" || normalized === "omp/default";
+		};
+
+		// Validate agent exists
+		const agent = getAgent(agents, agentName);
+		if (!agent) {
+			const available = agents.map((a) => a.name).join(", ") || "none";
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Unknown agent "${agentName}". Available: ${available}`,
+					},
+				],
+				details: {
+					projectAgentsDir,
+					results: [],
+					totalDurationMs: 0,
+				},
 			};
+		}
 
-			// Validate agent exists
-			const agent = getAgent(agents, agentName);
-			if (!agent) {
-				const available = agents.map((a) => a.name).join(", ") || "none";
+		const shouldInheritSessionModel = model === undefined && isDefaultModelAlias(agent.model);
+		const sessionModel = shouldInheritSessionModel ? this.session.getActiveModelString?.() : undefined;
+		const modelOverride = model ?? sessionModel ?? this.session.getModelString?.();
+		const thinkingLevelOverride = agent.thinkingLevel;
+
+		// Output schema priority: agent frontmatter > params > inherited from parent session
+		const schemaOverridden = outputSchema !== undefined && agent.output !== undefined;
+		const effectiveOutputSchema = agent.output ?? outputSchema ?? this.session.outputSchema;
+
+		// Handle empty or missing tasks
+		if (!params.tasks || params.tasks.length === 0) {
+			return {
+				content: [
+					{
+						type: "text",
+						text: `No tasks provided. Use: { agent, context, tasks: [{id, task, description}, ...] }`,
+					},
+				],
+				details: {
+					projectAgentsDir,
+					results: [],
+					totalDurationMs: 0,
+				},
+			};
+		}
+
+		// Validate task count
+		if (params.tasks.length > MAX_PARALLEL_TASKS) {
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Too many tasks (${params.tasks.length}). Max is ${MAX_PARALLEL_TASKS}.`,
+					},
+				],
+				details: {
+					projectAgentsDir,
+					results: [],
+					totalDurationMs: 0,
+				},
+			};
+		}
+
+		const tasks = params.tasks;
+		const missingTaskIndexes: number[] = [];
+		const idIndexes = new Map<string, number[]>();
+
+		for (let i = 0; i < tasks.length; i++) {
+			const id = tasks[i]?.id;
+			if (typeof id !== "string" || id.trim() === "") {
+				missingTaskIndexes.push(i);
+				continue;
+			}
+			const normalizedId = id.toLowerCase();
+			const indexes = idIndexes.get(normalizedId);
+			if (indexes) {
+				indexes.push(i);
+			} else {
+				idIndexes.set(normalizedId, [i]);
+			}
+		}
+
+		const duplicateIds: Array<{ id: string; indexes: number[] }> = [];
+		for (const [normalizedId, indexes] of idIndexes.entries()) {
+			if (indexes.length > 1) {
+				duplicateIds.push({
+					id: tasks[indexes[0]]?.id ?? normalizedId,
+					indexes,
+				});
+			}
+		}
+
+		if (missingTaskIndexes.length > 0 || duplicateIds.length > 0) {
+			const problems: string[] = [];
+			if (missingTaskIndexes.length > 0) {
+				problems.push(`Missing task ids at indexes: ${missingTaskIndexes.join(", ")}`);
+			}
+			if (duplicateIds.length > 0) {
+				const details = duplicateIds.map((entry) => `${entry.id} (indexes ${entry.indexes.join(", ")})`).join("; ");
+				problems.push(`Duplicate task ids detected (case-insensitive): ${details}`);
+			}
+			return {
+				content: [{ type: "text", text: `Invalid tasks: ${problems.join(". ")}` }],
+				details: {
+					projectAgentsDir,
+					results: [],
+					totalDurationMs: 0,
+				},
+			};
+		}
+
+		// Derive artifacts directory
+		const sessionFile = this.session.getSessionFile();
+		const artifactsDir = sessionFile ? getArtifactsDir(sessionFile) : null;
+		const tempArtifactsDir = artifactsDir ? null : createTempArtifactsDir();
+		const effectiveArtifactsDir = artifactsDir || tempArtifactsDir!;
+
+		// Initialize progress tracking
+		const progressMap = new Map<number, AgentProgress>();
+
+		// Update callback
+		const emitProgress = () => {
+			const progress = Array.from(progressMap.values()).sort((a, b) => a.index - b.index);
+			onUpdate?.({
+				content: [{ type: "text", text: `Running ${params.tasks.length} agents...` }],
+				details: {
+					projectAgentsDir,
+					results: [],
+					totalDurationMs: Date.now() - startTime,
+					progress,
+				},
+			});
+		};
+
+		try {
+			// Check self-recursion prevention
+			if (this.blockedAgent && agentName === this.blockedAgent) {
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Unknown agent "${agentName}". Available: ${available}`,
+							text: `Cannot spawn ${this.blockedAgent} agent from within itself (recursion prevention). Use a different agent type.`,
 						},
 					],
-					details: {
-						projectAgentsDir,
-						results: [],
-						totalDurationMs: 0,
-					},
-				};
-			}
-
-			const shouldInheritSessionModel = model === undefined && isDefaultModelAlias(agent.model);
-			const sessionModel = shouldInheritSessionModel ? session.getActiveModelString?.() : undefined;
-			const modelOverride = model ?? sessionModel ?? session.getModelString?.();
-			const thinkingLevelOverride = agent.thinkingLevel;
-
-			// Output schema priority: agent frontmatter > params > inherited from parent session
-			const schemaOverridden = outputSchema !== undefined && agent.output !== undefined;
-			const effectiveOutputSchema = agent.output ?? outputSchema ?? session.outputSchema;
-
-			// Handle empty or missing tasks
-			if (!params.tasks || params.tasks.length === 0) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `No tasks provided. Use: { agent, context, tasks: [{id, task, description}, ...] }`,
-						},
-					],
-					details: {
-						projectAgentsDir,
-						results: [],
-						totalDurationMs: 0,
-					},
-				};
-			}
-
-			// Validate task count
-			if (params.tasks.length > MAX_PARALLEL_TASKS) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Too many tasks (${params.tasks.length}). Max is ${MAX_PARALLEL_TASKS}.`,
-						},
-					],
-					details: {
-						projectAgentsDir,
-						results: [],
-						totalDurationMs: 0,
-					},
-				};
-			}
-
-			const tasks = params.tasks;
-			const missingTaskIndexes: number[] = [];
-			const idIndexes = new Map<string, number[]>();
-
-			for (let i = 0; i < tasks.length; i++) {
-				const id = tasks[i]?.id;
-				if (typeof id !== "string" || id.trim() === "") {
-					missingTaskIndexes.push(i);
-					continue;
-				}
-				const normalizedId = id.toLowerCase();
-				const indexes = idIndexes.get(normalizedId);
-				if (indexes) {
-					indexes.push(i);
-				} else {
-					idIndexes.set(normalizedId, [i]);
-				}
-			}
-
-			const duplicateIds: Array<{ id: string; indexes: number[] }> = [];
-			for (const [normalizedId, indexes] of idIndexes.entries()) {
-				if (indexes.length > 1) {
-					duplicateIds.push({
-						id: tasks[indexes[0]]?.id ?? normalizedId,
-						indexes,
-					});
-				}
-			}
-
-			if (missingTaskIndexes.length > 0 || duplicateIds.length > 0) {
-				const problems: string[] = [];
-				if (missingTaskIndexes.length > 0) {
-					problems.push(`Missing task ids at indexes: ${missingTaskIndexes.join(", ")}`);
-				}
-				if (duplicateIds.length > 0) {
-					const details = duplicateIds
-						.map((entry) => `${entry.id} (indexes ${entry.indexes.join(", ")})`)
-						.join("; ");
-					problems.push(`Duplicate task ids detected (case-insensitive): ${details}`);
-				}
-				return {
-					content: [{ type: "text", text: `Invalid tasks: ${problems.join(". ")}` }],
-					details: {
-						projectAgentsDir,
-						results: [],
-						totalDurationMs: 0,
-					},
-				};
-			}
-
-			// Derive artifacts directory
-			const sessionFile = session.getSessionFile();
-			const artifactsDir = sessionFile ? getArtifactsDir(sessionFile) : null;
-			const tempArtifactsDir = artifactsDir ? null : createTempArtifactsDir();
-			const effectiveArtifactsDir = artifactsDir || tempArtifactsDir!;
-
-			// Initialize progress tracking
-			const progressMap = new Map<number, AgentProgress>();
-
-			// Update callback
-			const emitProgress = () => {
-				const progress = Array.from(progressMap.values()).sort((a, b) => a.index - b.index);
-				onUpdate?.({
-					content: [{ type: "text", text: `Running ${params.tasks.length} agents...` }],
 					details: {
 						projectAgentsDir,
 						results: [],
 						totalDurationMs: Date.now() - startTime,
-						progress,
 					},
-				});
+				};
+			}
+
+			// Check spawn restrictions from parent
+			const parentSpawns = this.session.getSessionSpawns() ?? "*";
+			const allowedSpawns = parentSpawns.split(",").map((s) => s.trim());
+			const isSpawnAllowed = (): boolean => {
+				if (parentSpawns === "") return false; // Empty = deny all
+				if (parentSpawns === "*") return true; // Wildcard = allow all
+				return allowedSpawns.includes(agentName);
 			};
 
-			try {
-				// Check self-recursion prevention
-				if (blockedAgent && agentName === blockedAgent) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Cannot spawn ${blockedAgent} agent from within itself (recursion prevention). Use a different agent type.`,
-							},
-						],
-						details: {
-							projectAgentsDir,
-							results: [],
-							totalDurationMs: Date.now() - startTime,
-						},
-					};
-				}
-
-				// Check spawn restrictions from parent
-				const parentSpawns = session.getSessionSpawns() ?? "*";
-				const allowedSpawns = parentSpawns.split(",").map((s) => s.trim());
-				const isSpawnAllowed = (): boolean => {
-					if (parentSpawns === "") return false; // Empty = deny all
-					if (parentSpawns === "*") return true; // Wildcard = allow all
-					return allowedSpawns.includes(agentName);
-				};
-
-				if (!isSpawnAllowed()) {
-					const allowed = parentSpawns === "" ? "none (spawns disabled for this agent)" : parentSpawns;
-					return {
-						content: [{ type: "text", text: `Cannot spawn '${agentName}'. Allowed: ${allowed}` }],
-						details: {
-							projectAgentsDir,
-							results: [],
-							totalDurationMs: Date.now() - startTime,
-						},
-					};
-				}
-
-				// Build full prompts with context prepended
-				const tasksWithContext = tasks.map((t) => ({
-					task: context ? `${context}\n\n${t.task}` : t.task,
-					description: t.description,
-					taskId: t.id,
-				}));
-
-				// Initialize progress for all tasks
-				for (let i = 0; i < tasksWithContext.length; i++) {
-					const t = tasksWithContext[i];
-					progressMap.set(i, {
-						index: i,
-						taskId: t.taskId,
-						agent: agentName,
-						agentSource: agent.source,
-						status: "pending",
-						task: t.task,
-						recentTools: [],
-						recentOutput: [],
-						toolCount: 0,
-						tokens: 0,
-						durationMs: 0,
-						modelOverride,
-						description: t.description,
-					});
-				}
-				emitProgress();
-
-				// Execute in parallel with concurrency limit
-				const { results: partialResults, aborted } = await mapWithConcurrencyLimit(
-					tasksWithContext,
-					MAX_CONCURRENCY,
-					async (task, index) => {
-						return runSubprocess({
-							cwd: session.cwd,
-							agent,
-							task: task.task,
-							description: task.description,
-							index,
-							taskId: task.taskId,
-							context: undefined, // Already prepended above
-							modelOverride,
-							thinkingLevel: thinkingLevelOverride,
-							outputSchema: effectiveOutputSchema,
-							sessionFile,
-							persistArtifacts: !!artifactsDir,
-							artifactsDir: effectiveArtifactsDir,
-							enableLsp: false,
-							signal,
-							eventBus: undefined,
-							onProgress: (progress) => {
-								progressMap.set(index, structuredClone(progress));
-								emitProgress();
-							},
-							authStorage: session.authStorage,
-							modelRegistry: session.modelRegistry,
-							settingsManager: session.settingsManager,
-							mcpManager: session.mcpManager,
-						});
+			if (!isSpawnAllowed()) {
+				const allowed = parentSpawns === "" ? "none (spawns disabled for this agent)" : parentSpawns;
+				return {
+					content: [{ type: "text", text: `Cannot spawn '${agentName}'. Allowed: ${allowed}` }],
+					details: {
+						projectAgentsDir,
+						results: [],
+						totalDurationMs: Date.now() - startTime,
 					},
-					signal,
-				);
+				};
+			}
 
-				// Fill in skipped tasks (undefined entries from abort) with placeholder results
-				const results: SingleResult[] = partialResults.map((result, index) => {
-					if (result !== undefined) return result;
-					const task = tasksWithContext[index];
-					return {
-						index,
-						taskId: task.taskId,
-						agent: agentName,
-						agentSource: agent.source,
+			// Build full prompts with context prepended
+			const tasksWithContext = tasks.map((t) => ({
+				task: context ? `${context}\n\n${t.task}` : t.task,
+				description: t.description,
+				taskId: t.id,
+			}));
+
+			// Initialize progress for all tasks
+			for (let i = 0; i < tasksWithContext.length; i++) {
+				const t = tasksWithContext[i];
+				progressMap.set(i, {
+					index: i,
+					taskId: t.taskId,
+					agent: agentName,
+					agentSource: agent.source,
+					status: "pending",
+					task: t.task,
+					recentTools: [],
+					recentOutput: [],
+					toolCount: 0,
+					tokens: 0,
+					durationMs: 0,
+					modelOverride,
+					description: t.description,
+				});
+			}
+			emitProgress();
+
+			// Execute in parallel with concurrency limit
+			const { results: partialResults, aborted } = await mapWithConcurrencyLimit(
+				tasksWithContext,
+				MAX_CONCURRENCY,
+				async (task, index) => {
+					return runSubprocess({
+						cwd: this.session.cwd,
+						agent,
 						task: task.task,
 						description: task.description,
-						exitCode: 1,
-						output: "",
-						stderr: "Skipped (cancelled before start)",
-						truncated: false,
-						durationMs: 0,
-						tokens: 0,
+						index,
+						taskId: task.taskId,
+						context: undefined, // Already prepended above
 						modelOverride,
-						error: "Skipped",
-						aborted: true,
-					};
-				});
+						thinkingLevel: thinkingLevelOverride,
+						outputSchema: effectiveOutputSchema,
+						sessionFile,
+						persistArtifacts: !!artifactsDir,
+						artifactsDir: effectiveArtifactsDir,
+						enableLsp: false,
+						signal,
+						eventBus: undefined,
+						onProgress: (progress) => {
+							progressMap.set(index, structuredClone(progress));
+							emitProgress();
+						},
+						authStorage: this.session.authStorage,
+						modelRegistry: this.session.modelRegistry,
+						settingsManager: this.session.settingsManager,
+						mcpManager: this.session.mcpManager,
+					});
+				},
+				signal,
+			);
 
-				// Aggregate usage from executor results (already accumulated incrementally)
-				const aggregatedUsage = createUsageTotals();
-				let hasAggregatedUsage = false;
-				for (const result of results) {
-					if (result.usage) {
-						addUsageTotals(aggregatedUsage, result.usage);
-						hasAggregatedUsage = true;
-					}
-				}
-
-				// Collect output paths (artifacts already written by executor in real-time)
-				const outputPaths: string[] = [];
-				for (const result of results) {
-					if (result.artifactPaths) {
-						outputPaths.push(result.artifactPaths.outputPath);
-					}
-				}
-
-				// Build final output - match plugin format
-				const successCount = results.filter((r) => r.exitCode === 0).length;
-				const cancelledCount = results.filter((r) => r.aborted).length;
-				const totalDuration = Date.now() - startTime;
-
-				const summaries = results.map((r) => {
-					const status = r.aborted ? "cancelled" : r.exitCode === 0 ? "completed" : `failed (exit ${r.exitCode})`;
-					const output = r.output.trim() || r.stderr.trim() || "(no output)";
-					const preview = output.split("\n").slice(0, 5).join("\n");
-					const meta = r.outputMeta
-						? ` [${r.outputMeta.lineCount} lines, ${formatBytes(r.outputMeta.charCount)}]`
-						: "";
-					return `[${r.agent}] ${status}${meta} ${r.taskId}\n${preview}`;
-				});
-
-				const outputIds = results.filter((r) => !r.aborted || r.output.trim()).map((r) => r.taskId);
-				const outputHint =
-					outputIds.length > 0 ? `\n\nUse output tool for full logs: output ids ${outputIds.join(", ")}` : "";
-				const schemaNote = schemaOverridden
-					? `\n\nNote: Agent '${agentName}' has a fixed output schema; your 'output' parameter was ignored.\nRequired schema: ${JSON.stringify(agent.output)}`
-					: "";
-				const cancelledNote = aborted && cancelledCount > 0 ? ` (${cancelledCount} cancelled)` : "";
-				const summary = `${successCount}/${results.length} succeeded${cancelledNote} [${formatDuration(
-					totalDuration,
-				)}]\n\n${summaries.join("\n\n---\n\n")}${outputHint}${schemaNote}`;
-
-				// Cleanup temp directory if used
-				if (tempArtifactsDir) {
-					await cleanupTempDir(tempArtifactsDir);
-				}
-
+			// Fill in skipped tasks (undefined entries from abort) with placeholder results
+			const results: SingleResult[] = partialResults.map((result, index) => {
+				if (result !== undefined) return result;
+				const task = tasksWithContext[index];
 				return {
-					content: [{ type: "text", text: summary }],
-					details: {
-						projectAgentsDir,
-						results: results,
-						totalDurationMs: totalDuration,
-						usage: hasAggregatedUsage ? aggregatedUsage : undefined,
-						outputPaths,
-					},
+					index,
+					taskId: task.taskId,
+					agent: agentName,
+					agentSource: agent.source,
+					task: task.task,
+					description: task.description,
+					exitCode: 1,
+					output: "",
+					stderr: "Skipped (cancelled before start)",
+					truncated: false,
+					durationMs: 0,
+					tokens: 0,
+					modelOverride,
+					error: "Skipped",
+					aborted: true,
 				};
-			} catch (err) {
-				// Cleanup temp directory on error
-				if (tempArtifactsDir) {
-					await cleanupTempDir(tempArtifactsDir);
-				}
+			});
 
-				return {
-					content: [{ type: "text", text: `Task execution failed: ${err}` }],
-					details: {
-						projectAgentsDir,
-						results: [],
-						totalDurationMs: Date.now() - startTime,
-					},
-				};
+			// Aggregate usage from executor results (already accumulated incrementally)
+			const aggregatedUsage = createUsageTotals();
+			let hasAggregatedUsage = false;
+			for (const result of results) {
+				if (result.usage) {
+					addUsageTotals(aggregatedUsage, result.usage);
+					hasAggregatedUsage = true;
+				}
 			}
-		},
-	};
-}
 
-// Default task tool - returns a placeholder tool
-// Real implementations should use createTaskTool(session) to initialize the tool
-export const taskTool: AgentTool<typeof taskSchema, TaskToolDetails, Theme> = {
-	name: "task",
-	label: "Task",
-	description: "Launch a new agent to handle complex, multi-step tasks autonomously.",
-	parameters: taskSchema,
-	execute: async () => ({
-		content: [{ type: "text", text: "Task tool not properly initialized. Use createTaskTool(session) instead." }],
-		details: {
-			projectAgentsDir: null,
-			results: [],
-			totalDurationMs: 0,
-		},
-	}),
-};
+			// Collect output paths (artifacts already written by executor in real-time)
+			const outputPaths: string[] = [];
+			for (const result of results) {
+				if (result.artifactPaths) {
+					outputPaths.push(result.artifactPaths.outputPath);
+				}
+			}
+
+			// Build final output - match plugin format
+			const successCount = results.filter((r) => r.exitCode === 0).length;
+			const cancelledCount = results.filter((r) => r.aborted).length;
+			const totalDuration = Date.now() - startTime;
+
+			const summaries = results.map((r) => {
+				const status = r.aborted ? "cancelled" : r.exitCode === 0 ? "completed" : `failed (exit ${r.exitCode})`;
+				const output = r.output.trim() || r.stderr.trim() || "(no output)";
+				const preview = output.split("\n").slice(0, 5).join("\n");
+				const meta = r.outputMeta
+					? ` [${r.outputMeta.lineCount} lines, ${formatBytes(r.outputMeta.charCount)}]`
+					: "";
+				return `[${r.agent}] ${status}${meta} ${r.taskId}\n${preview}`;
+			});
+
+			const outputIds = results.filter((r) => !r.aborted || r.output.trim()).map((r) => r.taskId);
+			const outputHint =
+				outputIds.length > 0 ? `\n\nUse output tool for full logs: output ids ${outputIds.join(", ")}` : "";
+			const schemaNote = schemaOverridden
+				? `\n\nNote: Agent '${agentName}' has a fixed output schema; your 'output' parameter was ignored.\nRequired schema: ${JSON.stringify(agent.output)}`
+				: "";
+			const cancelledNote = aborted && cancelledCount > 0 ? ` (${cancelledCount} cancelled)` : "";
+			const summary = `${successCount}/${results.length} succeeded${cancelledNote} [${formatDuration(
+				totalDuration,
+			)}]\n\n${summaries.join("\n\n---\n\n")}${outputHint}${schemaNote}`;
+
+			// Cleanup temp directory if used
+			if (tempArtifactsDir) {
+				await cleanupTempDir(tempArtifactsDir);
+			}
+
+			return {
+				content: [{ type: "text", text: summary }],
+				details: {
+					projectAgentsDir,
+					results: results,
+					totalDurationMs: totalDuration,
+					usage: hasAggregatedUsage ? aggregatedUsage : undefined,
+					outputPaths,
+				},
+			};
+		} catch (err) {
+			// Cleanup temp directory on error
+			if (tempArtifactsDir) {
+				await cleanupTempDir(tempArtifactsDir);
+			}
+
+			return {
+				content: [{ type: "text", text: `Task execution failed: ${err}` }],
+				details: {
+					projectAgentsDir,
+					results: [],
+					totalDurationMs: Date.now() - startTime,
+				},
+			};
+		}
+	}
+}

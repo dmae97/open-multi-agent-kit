@@ -8,7 +8,14 @@ import { Text } from "@oh-my-pi/pi-tui";
 import { getLanguageFromPath, type Theme } from "../../../modes/interactive/theme/theme";
 import type { RenderResultOptions } from "../../custom-tools/types";
 import type { FileDiagnosticsResult } from "../lsp/index";
-import { createToolUIKit, formatExpandHint, getDiffStats, shortenPath, truncateDiffByHunk } from "../render-utils";
+import {
+	createToolUIKit,
+	formatExpandHint,
+	getDiffStats,
+	shortenPath,
+	type ToolUIKit,
+	truncateDiffByHunk,
+} from "../render-utils";
 import type { DiffError, DiffResult, Operation } from "./types";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -94,7 +101,7 @@ function renderDiffSection(
 	rawPath: string,
 	expanded: boolean,
 	uiTheme: Theme,
-	ui: ReturnType<typeof createToolUIKit>,
+	ui: ToolUIKit,
 	renderDiffFn: (t: string, o?: { filePath?: string }) => string,
 ): string {
 	let text = "";

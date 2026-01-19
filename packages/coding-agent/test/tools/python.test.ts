@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "bun:test";
 import * as pythonExecutor from "../../src/core/python-executor";
 import { createTools, type ToolSession } from "../../src/core/tools/index";
-import { createPythonTool } from "../../src/core/tools/python";
+import { PythonTool } from "../../src/core/tools/python";
 
 let previousSkipCheck: string | undefined;
 
@@ -46,7 +46,7 @@ function createSettings(toolMode: "ipy-only" | "bash-only" | "both") {
 
 describe("python tool schema", () => {
 	it("exposes expected parameters", () => {
-		const tool = createPythonTool(createSession());
+		const tool = new PythonTool(createSession());
 		const schema = tool.parameters as {
 			type: string;
 			properties: Record<string, { type: string; description?: string }>;
@@ -74,7 +74,7 @@ describe("python tool docs template", () => {
 		];
 		const spy = vi.spyOn(pythonExecutor, "getPreludeDocs").mockReturnValue(docs);
 
-		const tool = createPythonTool(createSession());
+		const tool = new PythonTool(createSession());
 
 		expect(tool.description).toContain("### File I/O");
 		expect(tool.description).toContain("read(path)");
@@ -86,7 +86,7 @@ describe("python tool docs template", () => {
 	it("renders fallback when docs are unavailable", () => {
 		const spy = vi.spyOn(pythonExecutor, "getPreludeDocs").mockReturnValue([]);
 
-		const tool = createPythonTool(createSession());
+		const tool = new PythonTool(createSession());
 
 		expect(tool.description).toContain("Documentation unavailable — Python kernel failed to start");
 

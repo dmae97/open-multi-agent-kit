@@ -4,9 +4,10 @@
  * Converts MCP tool definitions to CustomTool format for the agent.
  */
 
+import type { AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { TSchema } from "@sinclair/typebox";
 import type { SourceMeta } from "../../capability/types";
-import type { CustomTool, CustomToolResult } from "../custom-tools/types";
+import type { CustomTool, CustomToolContext, CustomToolResult } from "../custom-tools/types";
 import { callTool } from "./client";
 import type { MCPContent, MCPServerConnection, MCPToolDefinition } from "./types";
 
@@ -89,138 +90,155 @@ export function parseMCPToolName(name: string): { serverName: string; toolName: 
 }
 
 /**
- * Convert an MCP tool definition to a CustomTool.
+ * CustomTool wrapping an MCP tool with an active connection.
  */
-export function createMCPTool(
-	connection: MCPServerConnection,
-	tool: MCPToolDefinition,
-): CustomTool<TSchema, MCPToolDetails> {
-	const name = createMCPToolName(connection.name, tool.name);
-	const schema = convertSchema(tool.inputSchema);
+export class MCPTool implements CustomTool<TSchema, MCPToolDetails> {
+	public readonly name: string;
+	public readonly label: string;
+	public readonly description: string;
+	public readonly parameters: TSchema;
 
-	return {
-		name,
-		label: `${connection.name}/${tool.name}`,
-		description: tool.description ?? `MCP tool from ${connection.name}`,
-		parameters: schema,
+	/** Create MCPTool instances for all tools from an MCP server connection */
+	static fromTools(connection: MCPServerConnection, tools: MCPToolDefinition[]): MCPTool[] {
+		return tools.map((tool) => new MCPTool(connection, tool));
+	}
 
-		async execute(_toolCallId, params, _onUpdate, _ctx, _signal): Promise<CustomToolResult<MCPToolDetails>> {
-			try {
-				const result = await callTool(connection, tool.name, params as Record<string, unknown>);
+	constructor(
+		private readonly connection: MCPServerConnection,
+		private readonly tool: MCPToolDefinition,
+	) {
+		this.name = createMCPToolName(connection.name, tool.name);
+		this.label = `${connection.name}/${tool.name}`;
+		this.description = tool.description ?? `MCP tool from ${connection.name}`;
+		this.parameters = convertSchema(tool.inputSchema);
+	}
 
-				const text = formatMCPContent(result.content);
-				const details: MCPToolDetails = {
-					serverName: connection.name,
-					mcpToolName: tool.name,
-					isError: result.isError,
-					rawContent: result.content,
-					provider: connection._source?.provider,
-					providerName: connection._source?.providerName,
-				};
+	async execute(
+		_toolCallId: string,
+		params: unknown,
+		_onUpdate: AgentToolUpdateCallback<MCPToolDetails> | undefined,
+		_ctx: CustomToolContext,
+		_signal?: AbortSignal,
+	): Promise<CustomToolResult<MCPToolDetails>> {
+		try {
+			const result = await callTool(this.connection, this.tool.name, params as Record<string, unknown>);
 
-				if (result.isError) {
-					return {
-						content: [{ type: "text", text: `Error: ${text}` }],
-						details,
-					};
-				}
+			const text = formatMCPContent(result.content);
+			const details: MCPToolDetails = {
+				serverName: this.connection.name,
+				mcpToolName: this.tool.name,
+				isError: result.isError,
+				rawContent: result.content,
+				provider: this.connection._source?.provider,
+				providerName: this.connection._source?.providerName,
+			};
 
+			if (result.isError) {
 				return {
-					content: [{ type: "text", text }],
+					content: [{ type: "text", text: `Error: ${text}` }],
 					details,
 				};
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				return {
-					content: [{ type: "text", text: `MCP error: ${message}` }],
-					details: {
-						serverName: connection.name,
-						mcpToolName: tool.name,
-						isError: true,
-						provider: connection._source?.provider,
-						providerName: connection._source?.providerName,
-					},
-				};
 			}
-		},
-	};
-}
 
-export function createDeferredMCPTool(
-	serverName: string,
-	tool: MCPToolDefinition,
-	getConnection: () => Promise<MCPServerConnection>,
-	source?: SourceMeta,
-): CustomTool<TSchema, MCPToolDetails> {
-	const name = createMCPToolName(serverName, tool.name);
-	const schema = convertSchema(tool.inputSchema);
-	const fallbackProvider = source?.provider;
-	const fallbackProviderName = source?.providerName;
-
-	return {
-		name,
-		label: `${serverName}/${tool.name}`,
-		description: tool.description ?? `MCP tool from ${serverName}`,
-		parameters: schema,
-
-		async execute(_toolCallId, params, _onUpdate, _ctx, _signal): Promise<CustomToolResult<MCPToolDetails>> {
-			try {
-				const connection = await getConnection();
-				const result = await callTool(connection, tool.name, params as Record<string, unknown>);
-
-				const text = formatMCPContent(result.content);
-				const details: MCPToolDetails = {
-					serverName,
-					mcpToolName: tool.name,
-					isError: result.isError,
-					rawContent: result.content,
-					provider: connection._source?.provider ?? fallbackProvider,
-					providerName: connection._source?.providerName ?? fallbackProviderName,
-				};
-
-				if (result.isError) {
-					return {
-						content: [{ type: "text", text: `Error: ${text}` }],
-						details,
-					};
-				}
-
-				return {
-					content: [{ type: "text", text }],
-					details,
-				};
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				return {
-					content: [{ type: "text", text: `MCP error: ${message}` }],
-					details: {
-						serverName,
-						mcpToolName: tool.name,
-						isError: true,
-						provider: fallbackProvider,
-						providerName: fallbackProviderName,
-					},
-				};
-			}
-		},
-	};
-}
-
-export function createDeferredMCPTools(
-	serverName: string,
-	tools: MCPToolDefinition[],
-	getConnection: () => Promise<MCPServerConnection>,
-	source?: SourceMeta,
-): CustomTool<TSchema, MCPToolDetails>[] {
-	return tools.map((tool) => createDeferredMCPTool(serverName, tool, getConnection, source));
+			return {
+				content: [{ type: "text", text }],
+				details,
+			};
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			return {
+				content: [{ type: "text", text: `MCP error: ${message}` }],
+				details: {
+					serverName: this.connection.name,
+					mcpToolName: this.tool.name,
+					isError: true,
+					provider: this.connection._source?.provider,
+					providerName: this.connection._source?.providerName,
+				},
+			};
+		}
+	}
 }
 
 /**
- * Convert all tools from an MCP server to CustomTools.
+ * CustomTool wrapping an MCP tool with deferred connection resolution.
  */
-export function createMCPTools(
-	connection: MCPServerConnection,
-	tools: MCPToolDefinition[],
-): CustomTool<TSchema, MCPToolDetails>[] {
-	return tools.map((tool) => createMCPTool(connection, tool));
+export class DeferredMCPTool implements CustomTool<TSchema, MCPToolDetails> {
+	public readonly name: string;
+	public readonly label: string;
+	public readonly description: string;
+	public readonly parameters: TSchema;
+	private readonly fallbackProvider: string | undefined;
+	private readonly fallbackProviderName: string | undefined;
+
+	/** Create DeferredMCPTool instances for all tools from an MCP server */
+	static fromTools(
+		serverName: string,
+		tools: MCPToolDefinition[],
+		getConnection: () => Promise<MCPServerConnection>,
+		source?: SourceMeta,
+	): DeferredMCPTool[] {
+		return tools.map((tool) => new DeferredMCPTool(serverName, tool, getConnection, source));
+	}
+
+	constructor(
+		private readonly serverName: string,
+		private readonly tool: MCPToolDefinition,
+		private readonly getConnection: () => Promise<MCPServerConnection>,
+		source?: SourceMeta,
+	) {
+		this.name = createMCPToolName(serverName, tool.name);
+		this.label = `${serverName}/${tool.name}`;
+		this.description = tool.description ?? `MCP tool from ${serverName}`;
+		this.parameters = convertSchema(tool.inputSchema);
+		this.fallbackProvider = source?.provider;
+		this.fallbackProviderName = source?.providerName;
+	}
+
+	async execute(
+		_toolCallId: string,
+		params: unknown,
+		_onUpdate: AgentToolUpdateCallback<MCPToolDetails> | undefined,
+		_ctx: CustomToolContext,
+		_signal?: AbortSignal,
+	): Promise<CustomToolResult<MCPToolDetails>> {
+		try {
+			const connection = await this.getConnection();
+			const result = await callTool(connection, this.tool.name, params as Record<string, unknown>);
+
+			const text = formatMCPContent(result.content);
+			const details: MCPToolDetails = {
+				serverName: this.serverName,
+				mcpToolName: this.tool.name,
+				isError: result.isError,
+				rawContent: result.content,
+				provider: connection._source?.provider ?? this.fallbackProvider,
+				providerName: connection._source?.providerName ?? this.fallbackProviderName,
+			};
+
+			if (result.isError) {
+				return {
+					content: [{ type: "text", text: `Error: ${text}` }],
+					details,
+				};
+			}
+
+			return {
+				content: [{ type: "text", text }],
+				details,
+			};
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			return {
+				content: [{ type: "text", text: `MCP error: ${message}` }],
+				details: {
+					serverName: this.serverName,
+					mcpToolName: this.tool.name,
+					isError: true,
+					provider: this.fallbackProvider,
+					providerName: this.fallbackProviderName,
+				},
+			};
+		}
+	}
 }

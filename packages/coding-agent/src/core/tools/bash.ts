@@ -1,5 +1,5 @@
 import { relative, resolve, sep } from "node:path";
-import type { AgentTool, AgentToolContext } from "@oh-my-pi/pi-agent-core";
+import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text, truncateToWidth } from "@oh-my-pi/pi-tui";
 import { Type } from "@sinclair/typebox";
@@ -52,113 +52,122 @@ export interface BashToolOptions {
 	operations?: BashOperations;
 }
 
-export function createBashTool(session: ToolSession, options?: BashToolOptions): AgentTool<typeof bashSchema> {
-	return {
-		name: "bash",
-		label: "Bash",
-		description: renderPromptTemplate(bashDescription),
-		parameters: bashSchema,
-		execute: async (
-			_toolCallId: string,
-			{ command, timeout, workdir }: { command: string; timeout?: number; workdir?: string },
-			signal?: AbortSignal,
-			onUpdate?,
-			ctx?: AgentToolContext,
-		) => {
-			// Check interception if enabled and available tools are known
-			if (session.settings?.getBashInterceptorEnabled()) {
-				const rules = session.settings?.getBashInterceptorRules?.();
-				const interception = checkBashInterception(command, ctx?.toolNames ?? [], rules);
-				if (interception.block) {
-					throw new Error(interception.message);
+/**
+ * Bash tool implementation.
+ *
+ * Executes bash commands with optional timeout and working directory.
+ * Supports custom operations for remote execution.
+ */
+export class BashTool implements AgentTool<typeof bashSchema, BashToolDetails> {
+	public readonly name = "bash";
+	public readonly label = "Bash";
+	public readonly description: string;
+	public readonly parameters = bashSchema;
+
+	private readonly session: ToolSession;
+	private readonly options?: BashToolOptions;
+
+	constructor(session: ToolSession, options?: BashToolOptions) {
+		this.session = session;
+		this.options = options;
+		this.description = renderPromptTemplate(bashDescription);
+	}
+
+	public async execute(
+		_toolCallId: string,
+		{ command, timeout, workdir }: { command: string; timeout?: number; workdir?: string },
+		signal?: AbortSignal,
+		onUpdate?: AgentToolUpdateCallback<BashToolDetails>,
+		ctx?: AgentToolContext,
+	): Promise<AgentToolResult<BashToolDetails>> {
+		// Check interception if enabled and available tools are known
+		if (this.session.settings?.getBashInterceptorEnabled()) {
+			const rules = this.session.settings?.getBashInterceptorRules?.();
+			const interception = checkBashInterception(command, ctx?.toolNames ?? [], rules);
+			if (interception.block) {
+				throw new Error(interception.message);
+			}
+			if (this.session.settings?.getBashInterceptorSimpleLsEnabled?.() !== false) {
+				const lsInterception = checkSimpleLsInterception(command, ctx?.toolNames ?? []);
+				if (lsInterception.block) {
+					throw new Error(lsInterception.message);
 				}
-				if (session.settings?.getBashInterceptorSimpleLsEnabled?.() !== false) {
-					const lsInterception = checkSimpleLsInterception(command, ctx?.toolNames ?? []);
-					if (lsInterception.block) {
-						throw new Error(lsInterception.message);
-					}
+			}
+		}
+
+		const commandCwd = workdir ? resolveToCwd(workdir, this.session.cwd) : this.session.cwd;
+		let cwdStat: Awaited<ReturnType<Bun.BunFile["stat"]>>;
+		try {
+			cwdStat = await Bun.file(commandCwd).stat();
+		} catch {
+			throw new Error(`Working directory does not exist: ${commandCwd}`);
+		}
+		if (!cwdStat.isDirectory()) {
+			throw new Error(`Working directory is not a directory: ${commandCwd}`);
+		}
+
+		// Track output for streaming updates
+		let currentOutput = "";
+
+		const executorOptions: BashExecutorOptions = {
+			cwd: commandCwd,
+			timeout: timeout ? timeout * 1000 : undefined, // Convert to milliseconds
+			signal,
+			onChunk: (chunk) => {
+				currentOutput += chunk;
+				if (onUpdate) {
+					const truncation = truncateTail(currentOutput);
+					onUpdate({
+						content: [{ type: "text", text: truncation.content || "" }],
+						details: truncation.truncated ? { truncation, fullOutput: currentOutput } : {},
+					});
 				}
-			}
+			},
+		};
 
-			const commandCwd = workdir ? resolveToCwd(workdir, session.cwd) : session.cwd;
-			let cwdStat: Awaited<ReturnType<Bun.BunFile["stat"]>>;
-			try {
-				cwdStat = await Bun.file(commandCwd).stat();
-			} catch {
-				throw new Error(`Working directory does not exist: ${commandCwd}`);
-			}
-			if (!cwdStat.isDirectory()) {
-				throw new Error(`Working directory is not a directory: ${commandCwd}`);
-			}
+		// Use custom operations if provided, otherwise use default local executor
+		const result = this.options?.operations
+			? await executeBashWithOperations(command, commandCwd, this.options.operations, executorOptions)
+			: await executeBash(command, executorOptions);
 
-			// Track output for streaming updates
-			let currentOutput = "";
+		// Handle errors
+		if (result.cancelled) {
+			throw new Error(result.output || "Command aborted");
+		}
 
-			const executorOptions: BashExecutorOptions = {
-				cwd: commandCwd,
-				timeout: timeout ? timeout * 1000 : undefined, // Convert to milliseconds
-				signal,
-				onChunk: (chunk) => {
-					currentOutput += chunk;
-					if (onUpdate) {
-						const truncation = truncateTail(currentOutput);
-						onUpdate({
-							content: [{ type: "text", text: truncation.content || "" }],
-							details: truncation.truncated
-								? {
-										truncation,
-										fullOutput: currentOutput,
-									}
-								: undefined,
-						});
-					}
-				},
+		// Apply tail truncation for final output
+		const truncation = truncateTail(result.output);
+		let outputText = truncation.content || "(no output)";
+
+		let details: BashToolDetails | undefined;
+
+		if (truncation.truncated) {
+			details = {
+				truncation,
+				fullOutputPath: result.fullOutputPath,
+				fullOutput: currentOutput,
 			};
 
-			// Use custom operations if provided, otherwise use default local executor
-			const result = options?.operations
-				? await executeBashWithOperations(command, commandCwd, options.operations, executorOptions)
-				: await executeBash(command, executorOptions);
+			const startLine = truncation.totalLines - truncation.outputLines + 1;
+			const endLine = truncation.totalLines;
 
-			// Handle errors
-			if (result.cancelled) {
-				throw new Error(result.output || "Command aborted");
+			if (truncation.lastLinePartial) {
+				const lastLineSize = formatSize(Buffer.byteLength(result.output.split("\n").pop() || "", "utf-8"));
+				outputText += `\n\n[Showing last ${formatSize(truncation.outputBytes)} of line ${endLine} (line is ${lastLineSize}). Full output: ${result.fullOutputPath}]`;
+			} else if (truncation.truncatedBy === "lines") {
+				outputText += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines}. Full output: ${result.fullOutputPath}]`;
+			} else {
+				outputText += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines} (${formatSize(DEFAULT_MAX_BYTES)} limit). Full output: ${result.fullOutputPath}]`;
 			}
+		}
 
-			// Apply tail truncation for final output
-			const truncation = truncateTail(result.output);
-			let outputText = truncation.content || "(no output)";
+		if (result.exitCode !== 0 && result.exitCode !== undefined) {
+			outputText += `\n\nCommand exited with code ${result.exitCode}`;
+			throw new Error(outputText);
+		}
 
-			let details: BashToolDetails | undefined;
-
-			if (truncation.truncated) {
-				details = {
-					truncation,
-					fullOutputPath: result.fullOutputPath,
-					fullOutput: currentOutput,
-				};
-
-				const startLine = truncation.totalLines - truncation.outputLines + 1;
-				const endLine = truncation.totalLines;
-
-				if (truncation.lastLinePartial) {
-					const lastLineSize = formatSize(Buffer.byteLength(result.output.split("\n").pop() || "", "utf-8"));
-					outputText += `\n\n[Showing last ${formatSize(truncation.outputBytes)} of line ${endLine} (line is ${lastLineSize}). Full output: ${result.fullOutputPath}]`;
-				} else if (truncation.truncatedBy === "lines") {
-					outputText += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines}. Full output: ${result.fullOutputPath}]`;
-				} else {
-					outputText += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines} (${formatSize(DEFAULT_MAX_BYTES)} limit). Full output: ${result.fullOutputPath}]`;
-				}
-			}
-
-			if (result.exitCode !== 0 && result.exitCode !== undefined) {
-				outputText += `\n\nCommand exited with code ${result.exitCode}`;
-				throw new Error(outputText);
-			}
-
-			return { content: [{ type: "text", text: outputText }], details };
-		},
-	};
+		return { content: [{ type: "text", text: outputText }], details };
+	}
 }
 
 // =============================================================================

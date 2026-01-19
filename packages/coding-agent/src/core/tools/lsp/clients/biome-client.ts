@@ -110,6 +110,11 @@ export class BiomeClient implements LinterClient {
 	private config: ServerConfig;
 	private cwd: string;
 
+	/** Factory method for creating BiomeClient instances */
+	static create(config: ServerConfig, cwd: string): LinterClient {
+		return new BiomeClient(config, cwd);
+	}
+
 	constructor(config: ServerConfig, cwd: string) {
 		this.config = config;
 		this.cwd = cwd;
@@ -197,11 +202,4 @@ export class BiomeClient implements LinterClient {
 	dispose(): void {
 		// Nothing to dispose for CLI client
 	}
-}
-
-/**
- * Factory function to create a Biome client.
- */
-export function createBiomeClient(config: ServerConfig, cwd: string): LinterClient {
-	return new BiomeClient(config, cwd);
 }

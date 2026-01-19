@@ -12,9 +12,9 @@ import type { MCPManager } from "../../mcp/manager";
 import type { ModelRegistry } from "../../model-registry";
 import { checkPythonKernelAvailability } from "../../python-kernel";
 import type { ToolSession } from "..";
-import { createLspTool } from "../lsp/index";
+import { LspTool } from "../lsp/index";
 import type { LspParams } from "../lsp/types";
-import { createPythonTool } from "../python";
+import { PythonTool } from "../python";
 import { ensureArtifactsDir, getArtifactPaths } from "./artifacts";
 import { resolveModelPattern } from "./model-resolver";
 import { subprocessToolRegistry } from "./subprocess-tool-registry";
@@ -388,7 +388,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		settings: options.settingsManager as ToolSession["settings"],
 		settingsManager: options.settingsManager,
 	};
-	const pythonTool = pythonProxyEnabled ? createPythonTool(pythonToolSession) : null;
+	const pythonTool = pythonProxyEnabled ? new PythonTool(pythonToolSession) : null;
 	const pythonCallControllers = new Map<string, AbortController>();
 
 	const lspToolSession: ToolSession = {
@@ -400,7 +400,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		settings: options.settingsManager as ToolSession["settings"],
 		settingsManager: options.settingsManager,
 	};
-	const lspTool = lspToolRequested ? createLspTool(lspToolSession) : null;
+	const lspTool = lspToolRequested ? new LspTool(lspToolSession) : null;
 
 	// Accumulate usage incrementally from message_end events (no memory for streaming events)
 	const accumulatedUsage = {

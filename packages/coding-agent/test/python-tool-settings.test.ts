@@ -5,7 +5,7 @@ import { join } from "node:path";
 import * as pythonExecutor from "../src/core/python-executor";
 import * as pythonKernel from "../src/core/python-kernel";
 import { createTools, type ToolSession } from "../src/core/tools/index";
-import { createPythonTool } from "../src/core/tools/python";
+import { PythonTool } from "../src/core/tools/python";
 
 function createSettings(overrides?: Partial<ToolSession["settings"]>): ToolSession["settings"] {
 	return {
@@ -76,7 +76,7 @@ describe("python tool settings", () => {
 		});
 
 		const session = createSession(testDir, { getPythonKernelMode: () => "per-call" });
-		const pythonTool = createPythonTool(session);
+		const pythonTool = new PythonTool(session);
 
 		await pythonTool.execute("tool-call", { code: "print(1)" });
 

@@ -11,7 +11,7 @@ import { logger } from "../logger";
 import { connectToServer, disconnectServer, listTools } from "./client";
 import { loadAllMCPConfigs, validateServerConfig } from "./config";
 import type { MCPToolDetails } from "./tool-bridge";
-import { createDeferredMCPTools, createMCPTools } from "./tool-bridge";
+import { DeferredMCPTool, MCPTool } from "./tool-bridge";
 import type { MCPToolCache } from "./tool-cache";
 import type { MCPServerConfig, MCPServerConnection, MCPToolDefinition } from "./types";
 
@@ -188,7 +188,7 @@ export class MCPManager {
 				.then(({ connection, serverTools }) => {
 					if (this.pendingToolLoads.get(name) !== toolsPromise) return;
 					this.pendingToolLoads.delete(name);
-					const customTools = createMCPTools(connection, serverTools);
+					const customTools = MCPTool.fromTools(connection, serverTools);
 					this.replaceServerTools(name, customTools);
 					void this.toolCache?.set(name, config, serverTools);
 				})
@@ -240,7 +240,7 @@ export class MCPManager {
 					if (!value) continue;
 					const { connection, serverTools } = value;
 					connectedServers.add(name);
-					allTools.push(...createMCPTools(connection, serverTools));
+					allTools.push(...MCPTool.fromTools(connection, serverTools));
 				} else if (task.tracked.status === "rejected") {
 					const message =
 						task.tracked.reason instanceof Error ? task.tracked.reason.message : String(task.tracked.reason);
@@ -250,7 +250,7 @@ export class MCPManager {
 					const cached = cachedTools.get(name);
 					if (cached) {
 						const source = this.sources.get(name);
-						allTools.push(...createDeferredMCPTools(name, cached, () => this.waitForConnection(name), source));
+						allTools.push(...DeferredMCPTool.fromTools(name, cached, () => this.waitForConnection(name), source));
 					}
 				}
 			}
@@ -356,7 +356,7 @@ export class MCPManager {
 
 		// Reload tools
 		const serverTools = await listTools(connection);
-		const customTools = createMCPTools(connection, serverTools);
+		const customTools = MCPTool.fromTools(connection, serverTools);
 		void this.toolCache?.set(name, connection.config, serverTools);
 
 		// Replace tools from this server

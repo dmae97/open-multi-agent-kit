@@ -12,7 +12,7 @@
  * - web_search_company: Comprehensive company research
  */
 
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
+import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { StringEnum } from "@oh-my-pi/pi-ai";
 import { Type } from "@sinclair/typebox";
 import type { Theme } from "../../../modes/interactive/theme/theme";
@@ -330,16 +330,32 @@ async function executeWebSearch(
 	};
 }
 
-/** Web search tool as AgentTool (for allTools export) */
-export const webSearchTool: AgentTool<typeof webSearchSchema> = {
-	name: "web_search",
-	label: "Web Search",
-	description: renderPromptTemplate(webSearchDescription),
-	parameters: webSearchSchema,
-	execute: async (toolCallId, params) => {
-		return executeWebSearch(toolCallId, params as WebSearchParams);
-	},
-};
+/**
+ * Web search tool implementation.
+ *
+ * Supports Anthropic, Perplexity, and Exa providers with automatic fallback.
+ * Session is accepted for interface consistency but not used.
+ */
+export class WebSearchTool implements AgentTool<typeof webSearchSchema, WebSearchRenderDetails> {
+	public readonly name = "web_search";
+	public readonly label = "Web Search";
+	public readonly description: string;
+	public readonly parameters = webSearchSchema;
+
+	constructor(_session: ToolSession) {
+		this.description = renderPromptTemplate(webSearchDescription);
+	}
+
+	public async execute(
+		_toolCallId: string,
+		params: WebSearchParams,
+		_signal?: AbortSignal,
+		_onUpdate?: AgentToolUpdateCallback<WebSearchRenderDetails>,
+		_context?: AgentToolContext,
+	): Promise<AgentToolResult<WebSearchRenderDetails>> {
+		return executeWebSearch(_toolCallId, params);
+	}
+}
 
 /** Web search tool as CustomTool (for TUI rendering support) */
 export const webSearchCustomTool: CustomTool<typeof webSearchSchema, WebSearchRenderDetails> = {
@@ -366,11 +382,6 @@ export const webSearchCustomTool: CustomTool<typeof webSearchSchema, WebSearchRe
 		return renderWebSearchResult(result, options, theme);
 	},
 };
-
-/** Factory function for backward compatibility */
-export function createWebSearchTool(_session: ToolSession): AgentTool<typeof webSearchSchema> {
-	return webSearchTool;
-}
 
 // ============================================================================
 // Exa-specific tools (available when EXA_API_KEY is present)

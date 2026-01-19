@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { processFileArguments } from "../src/cli/file-processor";
 import { SettingsManager } from "../src/core/settings-manager";
 import type { ToolSession } from "../src/core/tools/index";
-import { createReadTool } from "../src/core/tools/read";
+import { ReadTool } from "../src/core/tools/read";
 
 // 1x1 red PNG image as base64 (smallest valid PNG)
 const TINY_PNG_BASE64 =
@@ -69,7 +69,7 @@ describe("blockImages setting", () => {
 			const imagePath = join(testDir, "test.png");
 			writeFileSync(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
 
-			const tool = createReadTool(createTestToolSession(testDir));
+			const tool = new ReadTool(createTestToolSession(testDir));
 			const result = await tool.execute("test-1", { path: imagePath });
 
 			// Should have text note + image content
@@ -83,7 +83,7 @@ describe("blockImages setting", () => {
 			const textPath = join(testDir, "test.txt");
 			writeFileSync(textPath, "Hello, world!");
 
-			const tool = createReadTool(createTestToolSession(testDir));
+			const tool = new ReadTool(createTestToolSession(testDir));
 			const result = await tool.execute("test-2", { path: textPath });
 
 			expect(result.content).toHaveLength(1);

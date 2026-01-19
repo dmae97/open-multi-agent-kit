@@ -17,7 +17,7 @@ import { execCommand } from "../exec";
 import type { HookUIContext } from "../hooks/types";
 import { logger } from "../logger";
 import { getAllPluginToolPaths } from "../plugins/loader";
-import type { CustomToolAPI, CustomToolFactory, CustomToolsLoadResult, LoadedCustomTool } from "./types";
+import type { CustomToolAPI, CustomToolFactory, LoadedCustomTool, ToolLoadError } from "./types";
 
 /**
  * Resolve tool path.
@@ -54,13 +54,6 @@ function createNoOpUIContext(): HookUIContext {
 			return theme;
 		},
 	};
-}
-
-/** Error with source metadata */
-interface ToolLoadError {
-	path: string;
-	error: string;
-	source?: { provider: string; providerName: string; level: "user" | "project" };
 }
 
 /**
@@ -118,64 +111,80 @@ interface ToolPathWithSource {
 }
 
 /**
+ * Loads custom tools from paths with conflict detection and error handling.
+ *
+ * Manages a shared API instance passed to all tool factories, providing access to
+ * execution context, UI, logger, and injected dependencies. The UI context can be
+ * updated after loading via setUIContext().
+ */
+export class CustomToolLoader {
+	tools: LoadedCustomTool[] = [];
+	errors: ToolLoadError[] = [];
+	private sharedApi: CustomToolAPI;
+	private seenNames: Set<string>;
+
+	constructor(cwd: string, builtInToolNames: string[]) {
+		this.sharedApi = {
+			cwd,
+			exec: (command: string, args: string[], options?: ExecOptions) =>
+				execCommand(command, args, options?.cwd ?? cwd, options),
+			ui: createNoOpUIContext(),
+			hasUI: false,
+			logger,
+			typebox,
+			pi: piCodingAgent,
+		};
+		this.seenNames = new Set<string>(builtInToolNames);
+	}
+
+	async load(pathsWithSources: ToolPathWithSource[]): Promise<void> {
+		for (const { path: toolPath, source } of pathsWithSources) {
+			const { tools: loadedTools, error } = await loadTool(toolPath, this.sharedApi.cwd, this.sharedApi, source);
+
+			if (error) {
+				this.errors.push(error);
+				continue;
+			}
+
+			if (loadedTools) {
+				for (const loadedTool of loadedTools) {
+					// Check for name conflicts
+					if (this.seenNames.has(loadedTool.tool.name)) {
+						this.errors.push({
+							path: toolPath,
+							error: `Tool name "${loadedTool.tool.name}" conflicts with existing tool`,
+							source,
+						});
+						continue;
+					}
+
+					this.seenNames.add(loadedTool.tool.name);
+					this.tools.push(loadedTool);
+				}
+			}
+		}
+	}
+
+	setUIContext(uiContext: HookUIContext, hasUI: boolean): void {
+		this.sharedApi.ui = uiContext;
+		this.sharedApi.hasUI = hasUI;
+	}
+}
+
+/**
  * Load all tools from configuration.
  * @param pathsWithSources - Array of tool paths with optional source metadata
  * @param cwd - Current working directory for resolving relative paths
  * @param builtInToolNames - Names of built-in tools to check for conflicts
  */
-export async function loadCustomTools(
-	pathsWithSources: ToolPathWithSource[],
-	cwd: string,
-	builtInToolNames: string[],
-): Promise<CustomToolsLoadResult> {
-	const tools: LoadedCustomTool[] = [];
-	const errors: ToolLoadError[] = [];
-	const seenNames = new Set<string>(builtInToolNames);
-
-	// Shared API object - all tools get the same instance
-	const sharedApi: CustomToolAPI = {
-		cwd,
-		exec: (command: string, args: string[], options?: ExecOptions) =>
-			execCommand(command, args, options?.cwd ?? cwd, options),
-		ui: createNoOpUIContext(),
-		hasUI: false,
-		logger,
-		typebox,
-		pi: piCodingAgent,
-	};
-
-	for (const { path: toolPath, source } of pathsWithSources) {
-		const { tools: loadedTools, error } = await loadTool(toolPath, cwd, sharedApi, source);
-
-		if (error) {
-			errors.push(error);
-			continue;
-		}
-
-		if (loadedTools) {
-			for (const loadedTool of loadedTools) {
-				// Check for name conflicts
-				if (seenNames.has(loadedTool.tool.name)) {
-					errors.push({
-						path: toolPath,
-						error: `Tool name "${loadedTool.tool.name}" conflicts with existing tool`,
-						source,
-					});
-					continue;
-				}
-
-				seenNames.add(loadedTool.tool.name);
-				tools.push(loadedTool);
-			}
-		}
-	}
-
+export async function loadCustomTools(pathsWithSources: ToolPathWithSource[], cwd: string, builtInToolNames: string[]) {
+	const loader = new CustomToolLoader(cwd, builtInToolNames);
+	await loader.load(pathsWithSources);
 	return {
-		tools,
-		errors,
-		setUIContext(uiContext, hasUI) {
-			sharedApi.ui = uiContext;
-			sharedApi.hasUI = hasUI;
+		tools: loader.tools,
+		errors: loader.errors,
+		setUIContext: (uiContext: HookUIContext, hasUI: boolean) => {
+			loader.setUIContext(uiContext, hasUI);
 		},
 	};
 }
@@ -190,11 +199,7 @@ export async function loadCustomTools(
  * @param cwd - Current working directory
  * @param builtInToolNames - Names of built-in tools to check for conflicts
  */
-export async function discoverAndLoadCustomTools(
-	configuredPaths: string[],
-	cwd: string,
-	builtInToolNames: string[],
-): Promise<CustomToolsLoadResult> {
+export async function discoverAndLoadCustomTools(configuredPaths: string[], cwd: string, builtInToolNames: string[]) {
 	const allPathsWithSources: ToolPathWithSource[] = [];
 	const seen = new Set<string>();
 

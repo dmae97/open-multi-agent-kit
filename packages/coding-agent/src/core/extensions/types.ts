@@ -779,8 +779,8 @@ export type ExtensionFactory = (pi: ExtensionAPI) => void | Promise<void>;
 // Loaded Extension Types
 // ============================================================================
 
-export interface RegisteredTool {
-	definition: ToolDefinition;
+export interface RegisteredTool<TParams extends TSchema = TSchema, TDetails = unknown> {
+	definition: ToolDefinition<TParams, TDetails>;
 	extensionPath: string;
 }
 
@@ -877,7 +877,7 @@ export interface Extension {
 	resolvedPath: string;
 	label?: string;
 	handlers: Map<string, HandlerFn[]>;
-	tools: Map<string, RegisteredTool>;
+	tools: Map<string, RegisteredTool<any, any>>;
 	messageRenderers: Map<string, MessageRenderer>;
 	commands: Map<string, RegisteredCommand>;
 	flags: Map<string, ExtensionFlag>;

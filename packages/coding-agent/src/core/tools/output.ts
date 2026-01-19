@@ -6,8 +6,8 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
-import { StringEnum, type TextContent } from "@oh-my-pi/pi-ai";
+import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
+import { StringEnum } from "@oh-my-pi/pi-ai";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import { Type } from "@sinclair/typebox";
@@ -232,166 +232,182 @@ function extractPreviewLines(content: string, maxLines: number): string[] {
 	return preview;
 }
 
-export function createOutputTool(session: ToolSession): AgentTool<typeof outputSchema, OutputToolDetails> {
-	return {
-		name: "output",
-		label: "Output",
-		description: renderPromptTemplate(outputDescription),
-		parameters: outputSchema,
-		execute: async (
-			_toolCallId: string,
-			params: {
-				ids: string[];
-				format?: "raw" | "json" | "stripped";
-				query?: string;
-				offset?: number;
-				limit?: number;
-			},
-		): Promise<{ content: TextContent[]; details: OutputToolDetails }> => {
-			const sessionFile = session.getSessionFile();
+type OutputParams = {
+	ids: string[];
+	format?: "raw" | "json" | "stripped";
+	query?: string;
+	offset?: number;
+	limit?: number;
+};
 
-			if (!sessionFile) {
-				return {
-					content: [{ type: "text", text: "No session - output artifacts unavailable" }],
-					details: { outputs: [], notFound: params.ids },
-				};
+/**
+ * Output tool for reading agent/task outputs by ID.
+ *
+ * Resolves IDs like "reviewer_0" to artifact paths in the current session.
+ */
+export class OutputTool implements AgentTool<typeof outputSchema, OutputToolDetails> {
+	public readonly name = "output";
+	public readonly label = "Output";
+	public readonly description: string;
+	public readonly parameters = outputSchema;
+
+	private readonly session: ToolSession;
+
+	constructor(session: ToolSession) {
+		this.session = session;
+		this.description = renderPromptTemplate(outputDescription);
+	}
+
+	public async execute(
+		_toolCallId: string,
+		params: OutputParams,
+		_signal?: AbortSignal,
+		_onUpdate?: AgentToolUpdateCallback<OutputToolDetails>,
+		_context?: AgentToolContext,
+	): Promise<AgentToolResult<OutputToolDetails>> {
+		const sessionFile = this.session.getSessionFile();
+
+		if (!sessionFile) {
+			return {
+				content: [{ type: "text", text: "No session - output artifacts unavailable" }],
+				details: { outputs: [], notFound: params.ids },
+			};
+		}
+
+		const artifactsDir = getArtifactsDir(sessionFile);
+		if (!artifactsDir || !fs.existsSync(artifactsDir)) {
+			return {
+				content: [{ type: "text", text: "No artifacts directory found" }],
+				details: { outputs: [], notFound: params.ids },
+			};
+		}
+
+		const outputs: OutputEntry[] = [];
+		const notFound: string[] = [];
+		const outputContentById = new Map<string, string>();
+		const query = params.query?.trim();
+		const wantsQuery = query !== undefined && query.length > 0;
+		const format = params.format ?? (wantsQuery ? "json" : "raw");
+
+		if (wantsQuery && (params.offset !== undefined || params.limit !== undefined)) {
+			throw new Error("query cannot be combined with offset/limit");
+		}
+
+		const queryResults: Array<{ id: string; value: unknown }> = [];
+
+		for (const id of params.ids) {
+			const outputPath = path.join(artifactsDir, `${id}.out.md`);
+
+			if (!fs.existsSync(outputPath)) {
+				notFound.push(id);
+				continue;
 			}
 
-			const artifactsDir = getArtifactsDir(sessionFile);
-			if (!artifactsDir || !fs.existsSync(artifactsDir)) {
-				return {
-					content: [{ type: "text", text: "No artifacts directory found" }],
-					details: { outputs: [], notFound: params.ids },
-				};
-			}
+			const rawContent = fs.readFileSync(outputPath, "utf-8");
+			const rawLines = rawContent.split("\n");
+			const totalLines = rawLines.length;
+			const totalChars = rawContent.length;
 
-			const outputs: OutputEntry[] = [];
-			const notFound: string[] = [];
-			const outputContentById = new Map<string, string>();
-			const query = params.query?.trim();
-			const wantsQuery = query !== undefined && query.length > 0;
-			const format = params.format ?? (wantsQuery ? "json" : "raw");
+			let selectedContent = rawContent;
+			let range: OutputRange | undefined;
 
-			if (wantsQuery && (params.offset !== undefined || params.limit !== undefined)) {
-				throw new Error("query cannot be combined with offset/limit");
-			}
-
-			const queryResults: Array<{ id: string; value: unknown }> = [];
-
-			for (const id of params.ids) {
-				const outputPath = path.join(artifactsDir, `${id}.out.md`);
-
-				if (!fs.existsSync(outputPath)) {
-					notFound.push(id);
-					continue;
+			if (wantsQuery && query) {
+				let jsonValue: unknown;
+				try {
+					jsonValue = JSON.parse(rawContent);
+				} catch (err) {
+					const message = err instanceof Error ? err.message : String(err);
+					throw new Error(`Output ${id} is not valid JSON: ${message}`);
 				}
-
-				const rawContent = fs.readFileSync(outputPath, "utf-8");
-				const rawLines = rawContent.split("\n");
-				const totalLines = rawLines.length;
-				const totalChars = rawContent.length;
-
-				let selectedContent = rawContent;
-				let range: OutputRange | undefined;
-
-				if (wantsQuery && query) {
-					let jsonValue: unknown;
-					try {
-						jsonValue = JSON.parse(rawContent);
-					} catch (err) {
-						const message = err instanceof Error ? err.message : String(err);
-						throw new Error(`Output ${id} is not valid JSON: ${message}`);
-					}
-					const value = applyQuery(jsonValue, query);
-					queryResults.push({ id, value });
-					try {
-						selectedContent = JSON.stringify(value, null, 2) ?? "null";
-					} catch {
-						selectedContent = String(value);
-					}
-				} else if (params.offset !== undefined || params.limit !== undefined) {
-					const startLine = Math.max(1, params.offset ?? 1);
-					if (startLine > totalLines) {
-						throw new Error(
-							`Offset ${params.offset ?? startLine} is beyond end of output (${totalLines} lines) for ${id}`,
-						);
-					}
-					const effectiveLimit = params.limit ?? totalLines - startLine + 1;
-					const endLine = Math.min(totalLines, startLine + effectiveLimit - 1);
-					const selectedLines = rawLines.slice(startLine - 1, endLine);
-					selectedContent = selectedLines.join("\n");
-					range = { startLine, endLine, totalLines };
+				const value = applyQuery(jsonValue, query);
+				queryResults.push({ id, value });
+				try {
+					selectedContent = JSON.stringify(value, null, 2) ?? "null";
+				} catch {
+					selectedContent = String(value);
 				}
-
-				outputContentById.set(id, selectedContent);
-				outputs.push({
-					id,
-					path: outputPath,
-					lineCount: wantsQuery ? selectedContent.split("\n").length : totalLines,
-					charCount: wantsQuery ? selectedContent.length : totalChars,
-					provenance: parseOutputProvenance(id),
-					previewLines: extractPreviewLines(selectedContent, 4),
-					range,
-					query: query,
-				});
+			} else if (params.offset !== undefined || params.limit !== undefined) {
+				const startLine = Math.max(1, params.offset ?? 1);
+				if (startLine > totalLines) {
+					throw new Error(
+						`Offset ${params.offset ?? startLine} is beyond end of output (${totalLines} lines) for ${id}`,
+					);
+				}
+				const effectiveLimit = params.limit ?? totalLines - startLine + 1;
+				const endLine = Math.min(totalLines, startLine + effectiveLimit - 1);
+				const selectedLines = rawLines.slice(startLine - 1, endLine);
+				selectedContent = selectedLines.join("\n");
+				range = { startLine, endLine, totalLines };
 			}
 
-			// Error case: some IDs not found
-			if (notFound.length > 0) {
-				const available = listAvailableOutputs(artifactsDir);
-				const errorMsg =
-					available.length > 0
-						? `Not found: ${notFound.join(", ")}\nAvailable: ${available.join(", ")}`
-						: `Not found: ${notFound.join(", ")}\nNo outputs available in current session`;
+			outputContentById.set(id, selectedContent);
+			outputs.push({
+				id,
+				path: outputPath,
+				lineCount: wantsQuery ? selectedContent.split("\n").length : totalLines,
+				charCount: wantsQuery ? selectedContent.length : totalChars,
+				provenance: parseOutputProvenance(id),
+				previewLines: extractPreviewLines(selectedContent, 4),
+				range,
+				query: query,
+			});
+		}
 
-				return {
-					content: [{ type: "text", text: errorMsg }],
-					details: { outputs, notFound, availableIds: available },
-				};
-			}
-
-			// Success: build response based on format
-			let contentText: string;
-
-			if (format === "json") {
-				const jsonData = wantsQuery
-					? queryResults
-					: outputs.map((o) => ({
-							id: o.id,
-							lineCount: o.lineCount,
-							charCount: o.charCount,
-							provenance: o.provenance,
-							previewLines: o.previewLines,
-							range: o.range,
-							content: outputContentById.get(o.id) ?? "",
-						}));
-				contentText = JSON.stringify(jsonData, null, 2);
-			} else {
-				// raw or stripped
-				const parts = outputs.map((o) => {
-					let content = outputContentById.get(o.id) ?? "";
-					if (format === "stripped") {
-						content = stripAnsi(content);
-					}
-					if (o.range && o.range.endLine < o.range.totalLines) {
-						const nextOffset = o.range.endLine + 1;
-						content += `\n\n[Showing lines ${o.range.startLine}-${o.range.endLine} of ${o.range.totalLines}. Use offset=${nextOffset} to continue]`;
-					}
-					// Add header for multiple outputs
-					if (outputs.length > 1) {
-						return `=== ${o.id} (${o.lineCount} lines, ${formatBytes(o.charCount)}) ===\n${content}`;
-					}
-					return content;
-				});
-				contentText = parts.join("\n\n");
-			}
+		// Error case: some IDs not found
+		if (notFound.length > 0) {
+			const available = listAvailableOutputs(artifactsDir);
+			const errorMsg =
+				available.length > 0
+					? `Not found: ${notFound.join(", ")}\nAvailable: ${available.join(", ")}`
+					: `Not found: ${notFound.join(", ")}\nNo outputs available in current session`;
 
 			return {
-				content: [{ type: "text", text: contentText }],
-				details: { outputs },
+				content: [{ type: "text", text: errorMsg }],
+				details: { outputs, notFound, availableIds: available },
 			};
-		},
-	};
+		}
+
+		// Success: build response based on format
+		let contentText: string;
+
+		if (format === "json") {
+			const jsonData = wantsQuery
+				? queryResults
+				: outputs.map((o) => ({
+						id: o.id,
+						lineCount: o.lineCount,
+						charCount: o.charCount,
+						provenance: o.provenance,
+						previewLines: o.previewLines,
+						range: o.range,
+						content: outputContentById.get(o.id) ?? "",
+					}));
+			contentText = JSON.stringify(jsonData, null, 2);
+		} else {
+			// raw or stripped
+			const parts = outputs.map((o) => {
+				let content = outputContentById.get(o.id) ?? "";
+				if (format === "stripped") {
+					content = stripAnsi(content);
+				}
+				if (o.range && o.range.endLine < o.range.totalLines) {
+					const nextOffset = o.range.endLine + 1;
+					content += `\n\n[Showing lines ${o.range.startLine}-${o.range.endLine} of ${o.range.totalLines}. Use offset=${nextOffset} to continue]`;
+				}
+				// Add header for multiple outputs
+				if (outputs.length > 1) {
+					return `=== ${o.id} (${o.lineCount} lines, ${formatBytes(o.charCount)}) ===\n${content}`;
+				}
+				return content;
+			});
+			contentText = parts.join("\n\n");
+		}
+
+		return {
+			content: [{ type: "text", text: contentText }],
+			details: { outputs },
+		};
+	}
 }
 
 // =============================================================================

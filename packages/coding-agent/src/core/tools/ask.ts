@@ -15,7 +15,7 @@
  *     and add "(Recommended)" at the end of the label
  */
 
-import type { AgentTool, AgentToolContext, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
+import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import { Type } from "@sinclair/typebox";
@@ -188,7 +188,7 @@ function formatQuestionResult(result: QuestionResult): string {
 }
 
 // =============================================================================
-// Tool Implementation
+// Tool Class
 // =============================================================================
 
 interface AskParams {
@@ -203,109 +203,108 @@ interface AskParams {
 	}>;
 }
 
-export function createAskTool(session: ToolSession): null | AgentTool<typeof askSchema, AskToolDetails> {
-	if (!session.hasUI) {
-		return null;
+/**
+ * Ask tool for interactive user prompting during execution.
+ *
+ * Allows gathering user preferences, clarifying instructions, and getting decisions
+ * on implementation choices as the agent works.
+ */
+export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
+	public readonly name = "ask";
+	public readonly label = "Ask";
+	public readonly description: string;
+	public readonly parameters = askSchema;
+
+	constructor(_session: ToolSession) {
+		this.description = renderPromptTemplate(askDescription);
 	}
-	return {
-		name: "ask",
-		label: "Ask",
-		description: renderPromptTemplate(askDescription),
-		parameters: askSchema,
 
-		async execute(
-			_toolCallId: string,
-			params: AskParams,
-			_signal?: AbortSignal,
-			_onUpdate?: AgentToolUpdateCallback<AskToolDetails>,
-			context?: AgentToolContext,
-		) {
-			// Headless fallback
-			if (!context?.hasUI || !context.ui) {
-				return {
-					content: [{ type: "text" as const, text: "Error: User prompt requires interactive mode" }],
-					details: {},
-				};
-			}
+	static createIf(session: ToolSession): AskTool | null {
+		return session.hasUI ? new AskTool(session) : null;
+	}
 
-			const { ui } = context;
-
-			// Multi-part questions mode
-			if (params.questions && params.questions.length > 0) {
-				const results: QuestionResult[] = [];
-
-				for (const q of params.questions) {
-					const optionLabels = q.options.map((o) => o.label);
-					const { selectedOptions, customInput } = await askSingleQuestion(
-						ui,
-						q.question,
-						optionLabels,
-						q.multi ?? false,
-					);
-
-					results.push({
-						id: q.id,
-						question: q.question,
-						options: optionLabels,
-						multi: q.multi ?? false,
-						selectedOptions,
-						customInput,
-					});
-				}
-
-				const details: AskToolDetails = { results };
-				const responseLines = results.map(formatQuestionResult);
-				const responseText = `User answers:\n${responseLines.join("\n")}`;
-
-				return { content: [{ type: "text" as const, text: responseText }], details };
-			}
-
-			// Single question mode (backwards compatible)
-			const question = params.question ?? "";
-			const options = params.options ?? [];
-			const multi = params.multi ?? false;
-			const optionLabels = options.map((o) => o.label);
-
-			if (!question || optionLabels.length === 0) {
-				return {
-					content: [{ type: "text" as const, text: "Error: question and options are required" }],
-					details: {},
-				};
-			}
-
-			const { selectedOptions, customInput } = await askSingleQuestion(ui, question, optionLabels, multi);
-
-			const details: AskToolDetails = {
-				question,
-				options: optionLabels,
-				multi,
-				selectedOptions,
-				customInput,
+	public async execute(
+		_toolCallId: string,
+		params: AskParams,
+		_signal?: AbortSignal,
+		_onUpdate?: AgentToolUpdateCallback<AskToolDetails>,
+		context?: AgentToolContext,
+	): Promise<AgentToolResult<AskToolDetails>> {
+		// Headless fallback
+		if (!context?.hasUI || !context.ui) {
+			return {
+				content: [{ type: "text" as const, text: "Error: User prompt requires interactive mode" }],
+				details: {},
 			};
+		}
 
-			let responseText: string;
-			if (customInput) {
-				responseText = `User provided custom input: ${customInput}`;
-			} else if (selectedOptions.length > 0) {
-				responseText = multi
-					? `User selected: ${selectedOptions.join(", ")}`
-					: `User selected: ${selectedOptions[0]}`;
-			} else {
-				responseText = "User cancelled the selection";
+		const { ui } = context;
+
+		// Multi-part questions mode
+		if (params.questions && params.questions.length > 0) {
+			const results: QuestionResult[] = [];
+
+			for (const q of params.questions) {
+				const optionLabels = q.options.map((o) => o.label);
+				const { selectedOptions, customInput } = await askSingleQuestion(
+					ui,
+					q.question,
+					optionLabels,
+					q.multi ?? false,
+				);
+
+				results.push({
+					id: q.id,
+					question: q.question,
+					options: optionLabels,
+					multi: q.multi ?? false,
+					selectedOptions,
+					customInput,
+				});
 			}
+
+			const details: AskToolDetails = { results };
+			const responseLines = results.map(formatQuestionResult);
+			const responseText = `User answers:\n${responseLines.join("\n")}`;
 
 			return { content: [{ type: "text" as const, text: responseText }], details };
-		},
-	};
-}
+		}
 
-/** Default ask tool - returns null when no UI */
-export const askTool = createAskTool({
-	cwd: process.cwd(),
-	hasUI: false,
-	getSessionFile: () => null,
-	getSessionSpawns: () => "*",
-});
+		// Single question mode (backwards compatible)
+		const question = params.question ?? "";
+		const options = params.options ?? [];
+		const multi = params.multi ?? false;
+		const optionLabels = options.map((o) => o.label);
+
+		if (!question || optionLabels.length === 0) {
+			return {
+				content: [{ type: "text" as const, text: "Error: question and options are required" }],
+				details: {},
+			};
+		}
+
+		const { selectedOptions, customInput } = await askSingleQuestion(ui, question, optionLabels, multi);
+
+		const details: AskToolDetails = {
+			question,
+			options: optionLabels,
+			multi,
+			selectedOptions,
+			customInput,
+		};
+
+		let responseText: string;
+		if (customInput) {
+			responseText = `User provided custom input: ${customInput}`;
+		} else if (selectedOptions.length > 0) {
+			responseText = multi ? `User selected: ${selectedOptions.join(", ")}` : `User selected: ${selectedOptions[0]}`;
+		} else {
+			responseText = "User cancelled the selection";
+		}
+
+		return { content: [{ type: "text" as const, text: responseText }], details };
+	}
+}
 
 // =============================================================================
 // TUI Renderer

@@ -1,9 +1,9 @@
 import { tmpdir } from "node:os";
 import * as path from "node:path";
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
+import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
-import { Type } from "@sinclair/typebox";
+import { type Static, Type } from "@sinclair/typebox";
 import { nanoid } from "nanoid";
 import { parse as parseHtml } from "node-html-parser";
 import { type Theme, theme } from "../../modes/interactive/theme/theme";
@@ -848,55 +848,62 @@ export interface WebFetchToolDetails {
 	notes: string[];
 }
 
-export function createWebFetchTool(_session: ToolSession): AgentTool<typeof webFetchSchema> {
-	return {
-		name: "web_fetch",
-		label: "Web Fetch",
-		description: renderPromptTemplate(webFetchDescription),
-		parameters: webFetchSchema,
-		execute: async (
-			_toolCallId: string,
-			{ url, timeout = DEFAULT_TIMEOUT, raw = false }: { url: string; timeout?: number; raw?: boolean },
-			signal?: AbortSignal,
-		) => {
-			if (signal?.aborted) {
-				throw new Error("Operation aborted");
-			}
+export class WebFetchTool implements AgentTool<typeof webFetchSchema, WebFetchToolDetails> {
+	public readonly name = "web_fetch";
+	public readonly label = "Web Fetch";
+	public readonly description: string;
+	public readonly parameters = webFetchSchema;
 
-			// Clamp timeout
-			const effectiveTimeout = Math.min(Math.max(timeout, 1), 120);
+	constructor(_session: ToolSession) {
+		this.description = renderPromptTemplate(webFetchDescription);
+	}
 
-			const result = await renderUrl(url, effectiveTimeout, raw, signal);
+	public async execute(
+		_toolCallId: string,
+		params: Static<typeof webFetchSchema>,
+		signal?: AbortSignal,
+		_onUpdate?: AgentToolUpdateCallback<WebFetchToolDetails>,
+		_context?: AgentToolContext,
+	): Promise<AgentToolResult<WebFetchToolDetails>> {
+		const { url, timeout = DEFAULT_TIMEOUT, raw = false } = params;
 
-			// Format output
-			let output = "";
-			output += `URL: ${result.finalUrl}\n`;
-			output += `Content-Type: ${result.contentType}\n`;
-			output += `Method: ${result.method}\n`;
-			if (result.truncated) {
-				output += `Warning: Output was truncated\n`;
-			}
-			if (result.notes.length > 0) {
-				output += `Notes: ${result.notes.join("; ")}\n`;
-			}
-			output += `\n---\n\n`;
-			output += result.content;
+		if (signal?.aborted) {
+			throw new Error("Operation aborted");
+		}
 
-			const details: WebFetchToolDetails = {
-				url: result.url,
-				finalUrl: result.finalUrl,
-				contentType: result.contentType,
-				method: result.method,
-				truncated: result.truncated,
-				notes: result.notes,
-			};
+		// Clamp timeout
+		const effectiveTimeout = Math.min(Math.max(timeout, 1), 120);
 
-			return {
-				content: [{ type: "text", text: output }],
-				details,
-			};
-		},
-	};
+		const result = await renderUrl(url, effectiveTimeout, raw, signal);
+
+		// Format output
+		let output = "";
+		output += `URL: ${result.finalUrl}\n`;
+		output += `Content-Type: ${result.contentType}\n`;
+		output += `Method: ${result.method}\n`;
+		if (result.truncated) {
+			output += `Warning: Output was truncated\n`;
+		}
+		if (result.notes.length > 0) {
+			output += `Notes: ${result.notes.join("; ")}\n`;
+		}
+		output += `\n---\n\n`;
+		output += result.content;
+
+		const details: WebFetchToolDetails = {
+			url: result.url,
+			finalUrl: result.finalUrl,
+			contentType: result.contentType,
+			method: result.method,
+			truncated: result.truncated,
+			notes: result.notes,
+		};
+
+		return {
+			content: [{ type: "text", text: output }],
+			details,
+		};
+	}
 }
 
 // =============================================================================

@@ -5,11 +5,11 @@
  * Different implementations can use LSP protocol, CLI tools, or other mechanisms.
  */
 
-export { BiomeClient, createBiomeClient } from "./biome-client";
-export { createLspLinterClient, LspLinterClient } from "./lsp-linter-client";
+export { BiomeClient } from "./biome-client";
+export { LspLinterClient } from "./lsp-linter-client";
 
 import type { LinterClient, ServerConfig } from "../types";
-import { createLspLinterClient } from "./lsp-linter-client";
+import { LspLinterClient } from "./lsp-linter-client";
 
 // Cache of linter clients by server name + cwd
 const clientCache = new Map<string, LinterClient>();
@@ -31,7 +31,7 @@ export function getLinterClient(serverName: string, config: ServerConfig, cwd: s
 		client = config.createClient(config, cwd);
 	} else {
 		// Default to LSP
-		client = createLspLinterClient(config, cwd);
+		client = LspLinterClient.create(config, cwd);
 	}
 
 	clientCache.set(key, client);

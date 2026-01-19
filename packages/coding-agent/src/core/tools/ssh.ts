@@ -1,4 +1,4 @@
-import type { AgentTool, AgentToolContext } from "@oh-my-pi/pi-agent-core";
+import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import { Type } from "@sinclair/typebox";
@@ -112,97 +112,116 @@ async function loadHosts(session: ToolSession): Promise<{
 	return { hostNames, hostsByName };
 }
 
-export async function createSshTool(session: ToolSession): Promise<AgentTool<typeof sshSchema> | null> {
+interface SshToolParams {
+	host: string;
+	command: string;
+	cwd?: string;
+	timeout?: number;
+}
+
+export class SshTool implements AgentTool<typeof sshSchema, SSHToolDetails> {
+	public readonly name = "ssh";
+	public readonly label = "SSH";
+	public readonly description: string;
+	public readonly parameters = sshSchema;
+
+	private readonly allowedHosts: Set<string>;
+	private readonly hostsByName: Map<string, SSHHost>;
+	private readonly hostNames: string[];
+
+	constructor(hostNames: string[], hostsByName: Map<string, SSHHost>) {
+		this.hostNames = hostNames;
+		this.hostsByName = hostsByName;
+		this.allowedHosts = new Set(hostNames);
+
+		const descriptionHosts = hostNames
+			.map((name) => hostsByName.get(name))
+			.filter((host): host is SSHHost => host !== undefined);
+
+		this.description = formatDescription(descriptionHosts);
+	}
+
+	public async execute(
+		_toolCallId: string,
+		{ host, command, cwd, timeout }: SshToolParams,
+		signal?: AbortSignal,
+		onUpdate?: AgentToolUpdateCallback<SSHToolDetails>,
+		_ctx?: AgentToolContext,
+	): Promise<AgentToolResult<SSHToolDetails>> {
+		if (!this.allowedHosts.has(host)) {
+			throw new Error(`Unknown SSH host: ${host}. Available hosts: ${this.hostNames.join(", ")}`);
+		}
+
+		const hostConfig = this.hostsByName.get(host);
+		if (!hostConfig) {
+			throw new Error(`SSH host not loaded: ${host}`);
+		}
+
+		const hostInfo = await ensureHostInfo(hostConfig);
+		const remoteCommand = buildRemoteCommand(command, cwd, hostInfo);
+		let currentOutput = "";
+
+		const result = await executeSSH(hostConfig, remoteCommand, {
+			timeout: timeout ? timeout * 1000 : undefined,
+			signal,
+			compatEnabled: hostInfo.compatEnabled,
+			onChunk: (chunk) => {
+				currentOutput += chunk;
+				if (onUpdate) {
+					const truncation = truncateTail(currentOutput);
+					onUpdate({
+						content: [{ type: "text", text: truncation.content || "" }],
+						details: {
+							truncation: truncation.truncated ? truncation : undefined,
+						},
+					});
+				}
+			},
+		});
+
+		if (result.cancelled) {
+			throw new Error(result.output || "Command aborted");
+		}
+
+		const truncation = truncateTail(result.output);
+		let outputText = truncation.content || "(no output)";
+
+		let details: SSHToolDetails | undefined;
+
+		if (truncation.truncated) {
+			details = {
+				truncation,
+				fullOutputPath: result.fullOutputPath,
+			};
+
+			const startLine = truncation.totalLines - truncation.outputLines + 1;
+			const endLine = truncation.totalLines;
+
+			if (truncation.lastLinePartial) {
+				const lastLineSize = formatSize(Buffer.byteLength(result.output.split("\n").pop() || "", "utf-8"));
+				outputText += `\n\n[Showing last ${formatSize(truncation.outputBytes)} of line ${endLine} (line is ${lastLineSize}). Full output: ${result.fullOutputPath}]`;
+			} else if (truncation.truncatedBy === "lines") {
+				outputText += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines}. Full output: ${result.fullOutputPath}]`;
+			} else {
+				outputText += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines} (${formatSize(DEFAULT_MAX_BYTES)} limit). Full output: ${result.fullOutputPath}]`;
+			}
+		}
+
+		if (result.exitCode !== 0 && result.exitCode !== undefined) {
+			outputText += `\n\nCommand exited with code ${result.exitCode}`;
+			throw new Error(outputText);
+		}
+
+		return { content: [{ type: "text", text: outputText }], details: details ?? {} };
+	}
+}
+
+export async function loadSshTool(session: ToolSession): Promise<SshTool | null> {
 	const { hostNames, hostsByName } = await loadHosts(session);
 	if (hostNames.length === 0) {
 		return null;
 	}
-
-	const allowedHosts = new Set(hostNames);
-
-	const descriptionHosts = hostNames
-		.map((name) => hostsByName.get(name))
-		.filter((host): host is SSHHost => host !== undefined);
-
-	return {
-		name: "ssh",
-		label: "SSH",
-		description: formatDescription(descriptionHosts),
-		parameters: sshSchema,
-		execute: async (
-			_toolCallId: string,
-			{ host, command, cwd, timeout }: { host: string; command: string; cwd?: string; timeout?: number },
-			signal?: AbortSignal,
-			onUpdate?,
-			_ctx?: AgentToolContext,
-		) => {
-			if (!allowedHosts.has(host)) {
-				throw new Error(`Unknown SSH host: ${host}. Available hosts: ${hostNames.join(", ")}`);
-			}
-
-			const hostConfig = hostsByName.get(host);
-			if (!hostConfig) {
-				throw new Error(`SSH host not loaded: ${host}`);
-			}
-
-			const hostInfo = await ensureHostInfo(hostConfig);
-			const remoteCommand = buildRemoteCommand(command, cwd, hostInfo);
-			let currentOutput = "";
-
-			const result = await executeSSH(hostConfig, remoteCommand, {
-				timeout: timeout ? timeout * 1000 : undefined,
-				signal,
-				compatEnabled: hostInfo.compatEnabled,
-				onChunk: (chunk) => {
-					currentOutput += chunk;
-					if (onUpdate) {
-						const truncation = truncateTail(currentOutput);
-						onUpdate({
-							content: [{ type: "text", text: truncation.content || "" }],
-							details: {
-								truncation: truncation.truncated ? truncation : undefined,
-							},
-						});
-					}
-				},
-			});
-
-			if (result.cancelled) {
-				throw new Error(result.output || "Command aborted");
-			}
-
-			const truncation = truncateTail(result.output);
-			let outputText = truncation.content || "(no output)";
-
-			let details: SSHToolDetails | undefined;
-
-			if (truncation.truncated) {
-				details = {
-					truncation,
-					fullOutputPath: result.fullOutputPath,
-				};
-
-				const startLine = truncation.totalLines - truncation.outputLines + 1;
-				const endLine = truncation.totalLines;
-
-				if (truncation.lastLinePartial) {
-					const lastLineSize = formatSize(Buffer.byteLength(result.output.split("\n").pop() || "", "utf-8"));
-					outputText += `\n\n[Showing last ${formatSize(truncation.outputBytes)} of line ${endLine} (line is ${lastLineSize}). Full output: ${result.fullOutputPath}]`;
-				} else if (truncation.truncatedBy === "lines") {
-					outputText += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines}. Full output: ${result.fullOutputPath}]`;
-				} else {
-					outputText += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines} (${formatSize(DEFAULT_MAX_BYTES)} limit). Full output: ${result.fullOutputPath}]`;
-				}
-			}
-
-			if (result.exitCode !== 0 && result.exitCode !== undefined) {
-				outputText += `\n\nCommand exited with code ${result.exitCode}`;
-				throw new Error(outputText);
-			}
-
-			return { content: [{ type: "text", text: outputText }], details };
-		},
-	};
+	return new SshTool(hostNames, hostsByName);
 }
 
 // =============================================================================

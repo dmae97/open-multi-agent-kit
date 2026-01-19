@@ -224,154 +224,152 @@ function buildReviewPrompt(mode: string, stats: DiffStats, rawDiff: string): str
 	});
 }
 
-export function createReviewCommand(api: CustomCommandAPI): CustomCommand {
-	return {
-		name: "review",
-		description: "Launch interactive code review",
+export class ReviewCommand implements CustomCommand {
+	name = "review";
+	description = "Launch interactive code review";
 
-		async execute(_args: string[], ctx: HookCommandContext): Promise<string | undefined> {
-			if (!ctx.hasUI) {
-				return "Use the Task tool to run the 'reviewer' agent to review recent code changes.";
+	constructor(private api: CustomCommandAPI) {}
+
+	async execute(_args: string[], ctx: HookCommandContext): Promise<string | undefined> {
+		if (!ctx.hasUI) {
+			return "Use the Task tool to run the 'reviewer' agent to review recent code changes.";
+		}
+
+		const mode = await ctx.ui.select("Review Mode", [
+			"1. Review against a base branch (PR Style)",
+			"2. Review uncommitted changes",
+			"3. Review a specific commit",
+			"4. Custom review instructions",
+		]);
+
+		if (!mode) return undefined;
+
+		const modeNum = parseInt(mode[0], 10);
+
+		switch (modeNum) {
+			case 1: {
+				// PR-style review against base branch
+				const branches = await getGitBranches(this.api);
+				if (branches.length === 0) {
+					ctx.ui.notify("No git branches found", "error");
+					return undefined;
+				}
+
+				const baseBranch = await ctx.ui.select("Select base branch to compare against", branches);
+				if (!baseBranch) return undefined;
+
+				const currentBranch = await getCurrentBranch(this.api);
+				const diffResult = await this.api.exec("git", ["diff", `${baseBranch}...${currentBranch}`], {
+					timeout: 30000,
+				});
+				if (diffResult.code !== 0) {
+					ctx.ui.notify(`Failed to get diff: ${diffResult.stderr}`, "error");
+					return undefined;
+				}
+
+				if (!diffResult.stdout.trim()) {
+					ctx.ui.notify(`No changes between ${baseBranch} and ${currentBranch}`, "warning");
+					return undefined;
+				}
+
+				const stats = parseDiff(diffResult.stdout);
+				if (stats.files.length === 0) {
+					ctx.ui.notify("No reviewable files (all changes filtered out)", "warning");
+					return undefined;
+				}
+
+				return buildReviewPrompt(
+					`Reviewing changes between \`${baseBranch}\` and \`${currentBranch}\` (PR-style)`,
+					stats,
+					diffResult.stdout,
+				);
 			}
 
-			const mode = await ctx.ui.select("Review Mode", [
-				"1. Review against a base branch (PR Style)",
-				"2. Review uncommitted changes",
-				"3. Review a specific commit",
-				"4. Custom review instructions",
-			]);
+			case 2: {
+				// Uncommitted changes - combine staged and unstaged
+				const status = await getGitStatus(this.api);
+				if (!status.trim()) {
+					ctx.ui.notify("No uncommitted changes found", "warning");
+					return undefined;
+				}
 
-			if (!mode) return undefined;
+				const [unstagedResult, stagedResult] = await Promise.all([
+					this.api.exec("git", ["diff"], { timeout: 30000 }),
+					this.api.exec("git", ["diff", "--cached"], { timeout: 30000 }),
+				]);
 
-			const modeNum = parseInt(mode[0], 10);
+				const combinedDiff = [unstagedResult.stdout, stagedResult.stdout].filter(Boolean).join("\n");
 
-			switch (modeNum) {
-				case 1: {
-					// PR-style review against base branch
-					const branches = await getGitBranches(api);
-					if (branches.length === 0) {
-						ctx.ui.notify("No git branches found", "error");
-						return undefined;
-					}
+				if (!combinedDiff.trim()) {
+					ctx.ui.notify("No diff content found", "warning");
+					return undefined;
+				}
 
-					const baseBranch = await ctx.ui.select("Select base branch to compare against", branches);
-					if (!baseBranch) return undefined;
+				const stats = parseDiff(combinedDiff);
+				if (stats.files.length === 0) {
+					ctx.ui.notify("No reviewable files (all changes filtered out)", "warning");
+					return undefined;
+				}
 
-					const currentBranch = await getCurrentBranch(api);
-					const diffResult = await api.exec("git", ["diff", `${baseBranch}...${currentBranch}`], {
-						timeout: 30000,
-					});
-					if (diffResult.code !== 0) {
-						ctx.ui.notify(`Failed to get diff: ${diffResult.stderr}`, "error");
-						return undefined;
-					}
+				return buildReviewPrompt("Reviewing uncommitted changes (staged + unstaged)", stats, combinedDiff);
+			}
 
-					if (!diffResult.stdout.trim()) {
-						ctx.ui.notify(`No changes between ${baseBranch} and ${currentBranch}`, "warning");
-						return undefined;
-					}
+			case 3: {
+				// Specific commit
+				const commits = await getRecentCommits(this.api, 20);
+				if (commits.length === 0) {
+					ctx.ui.notify("No commits found", "error");
+					return undefined;
+				}
 
+				const selected = await ctx.ui.select("Select commit to review", commits);
+				if (!selected) return undefined;
+
+				// Extract commit hash from selection (format: "abc1234 message")
+				const hash = selected.split(" ")[0];
+
+				// Get the commit diff (with timeout)
+				const showResult = await this.api.exec("git", ["show", "--format=", hash], { timeout: 30000 });
+				if (showResult.code !== 0) {
+					ctx.ui.notify(`Failed to get commit: ${showResult.stderr}`, "error");
+					return undefined;
+				}
+
+				if (!showResult.stdout.trim()) {
+					ctx.ui.notify("Commit has no diff content", "warning");
+					return undefined;
+				}
+
+				const stats = parseDiff(showResult.stdout);
+				if (stats.files.length === 0) {
+					ctx.ui.notify("No reviewable files in commit (all changes filtered out)", "warning");
+					return undefined;
+				}
+
+				return buildReviewPrompt(`Reviewing commit \`${hash}\``, stats, showResult.stdout);
+			}
+
+			case 4: {
+				// Custom instructions - still uses the old approach since user provides context
+				const instructions = await ctx.ui.editor("Enter custom review instructions", "Review the following:\n\n");
+				if (!instructions?.trim()) return undefined;
+
+				// For custom, we still try to get current diff for context
+				const diffResult = await this.api.exec("git", ["diff", "HEAD"], { timeout: 30000 });
+				const hasDiff = diffResult.code === 0 && diffResult.stdout.trim();
+
+				if (hasDiff) {
 					const stats = parseDiff(diffResult.stdout);
-					if (stats.files.length === 0) {
-						ctx.ui.notify("No reviewable files (all changes filtered out)", "warning");
-						return undefined;
-					}
-
-					return buildReviewPrompt(
-						`Reviewing changes between \`${baseBranch}\` and \`${currentBranch}\` (PR-style)`,
+					// Even if all files filtered, include the custom instructions
+					return `${buildReviewPrompt(
+						`Custom review: ${instructions.split("\n")[0].slice(0, 60)}...`,
 						stats,
 						diffResult.stdout,
-					);
+					)}\n\n### Additional Instructions\n\n${instructions}`;
 				}
 
-				case 2: {
-					// Uncommitted changes - combine staged and unstaged
-					const status = await getGitStatus(api);
-					if (!status.trim()) {
-						ctx.ui.notify("No uncommitted changes found", "warning");
-						return undefined;
-					}
-
-					const [unstagedResult, stagedResult] = await Promise.all([
-						api.exec("git", ["diff"], { timeout: 30000 }),
-						api.exec("git", ["diff", "--cached"], { timeout: 30000 }),
-					]);
-
-					const combinedDiff = [unstagedResult.stdout, stagedResult.stdout].filter(Boolean).join("\n");
-
-					if (!combinedDiff.trim()) {
-						ctx.ui.notify("No diff content found", "warning");
-						return undefined;
-					}
-
-					const stats = parseDiff(combinedDiff);
-					if (stats.files.length === 0) {
-						ctx.ui.notify("No reviewable files (all changes filtered out)", "warning");
-						return undefined;
-					}
-
-					return buildReviewPrompt("Reviewing uncommitted changes (staged + unstaged)", stats, combinedDiff);
-				}
-
-				case 3: {
-					// Specific commit
-					const commits = await getRecentCommits(api, 20);
-					if (commits.length === 0) {
-						ctx.ui.notify("No commits found", "error");
-						return undefined;
-					}
-
-					const selected = await ctx.ui.select("Select commit to review", commits);
-					if (!selected) return undefined;
-
-					// Extract commit hash from selection (format: "abc1234 message")
-					const hash = selected.split(" ")[0];
-
-					// Get the commit diff (with timeout)
-					const showResult = await api.exec("git", ["show", "--format=", hash], { timeout: 30000 });
-					if (showResult.code !== 0) {
-						ctx.ui.notify(`Failed to get commit: ${showResult.stderr}`, "error");
-						return undefined;
-					}
-
-					if (!showResult.stdout.trim()) {
-						ctx.ui.notify("Commit has no diff content", "warning");
-						return undefined;
-					}
-
-					const stats = parseDiff(showResult.stdout);
-					if (stats.files.length === 0) {
-						ctx.ui.notify("No reviewable files in commit (all changes filtered out)", "warning");
-						return undefined;
-					}
-
-					return buildReviewPrompt(`Reviewing commit \`${hash}\``, stats, showResult.stdout);
-				}
-
-				case 4: {
-					// Custom instructions - still uses the old approach since user provides context
-					const instructions = await ctx.ui.editor(
-						"Enter custom review instructions",
-						"Review the following:\n\n",
-					);
-					if (!instructions?.trim()) return undefined;
-
-					// For custom, we still try to get current diff for context
-					const diffResult = await api.exec("git", ["diff", "HEAD"], { timeout: 30000 });
-					const hasDiff = diffResult.code === 0 && diffResult.stdout.trim();
-
-					if (hasDiff) {
-						const stats = parseDiff(diffResult.stdout);
-						// Even if all files filtered, include the custom instructions
-						return `${buildReviewPrompt(
-							`Custom review: ${instructions.split("\n")[0].slice(0, 60)}...`,
-							stats,
-							diffResult.stdout,
-						)}\n\n### Additional Instructions\n\n${instructions}`;
-					}
-
-					// No diff available, just pass instructions
-					return `## Code Review Request
+				// No diff available, just pass instructions
+				return `## Code Review Request
 
 ### Mode
 Custom review instructions
@@ -381,13 +379,12 @@ Custom review instructions
 ${instructions}
 
 Use the Task tool with \`agent: "reviewer"\` to execute this review.`;
-				}
-
-				default:
-					return undefined;
 			}
-		},
-	};
+
+			default:
+				return undefined;
+		}
+	}
 }
 
 async function getGitBranches(api: CustomCommandAPI): Promise<string[]> {
@@ -434,4 +431,4 @@ async function getRecentCommits(api: CustomCommandAPI, count: number): Promise<s
 	}
 }
 
-export default createReviewCommand;
+export default ReviewCommand;

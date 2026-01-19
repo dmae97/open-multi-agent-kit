@@ -358,76 +358,78 @@ async function handleParallel(args: ParallelTask[], ctx: HookCommandContext): Pr
 	return [`Parallel execution complete (${args.length} agents)`, "", "Results:", ...mergeResults].join("\n");
 }
 
-export function createWorktreeCommand(_api: CustomCommandAPI): CustomCommand {
-	return {
-		name: "wt",
-		description: "Git worktree management",
-		async execute(args: string[], ctx: HookCommandContext): Promise<string | undefined> {
-			if (args.length === 0) return formatUsage();
+export class WorktreeCommand implements CustomCommand {
+	name = "wt";
+	description = "Git worktree management";
 
-			const subcommand = args[0];
-			const rest = args.slice(1);
+	// biome-ignore lint/complexity/noUselessConstructor: interface conformance - loader passes API to all commands
+	constructor(_api: CustomCommandAPI) {}
 
-			try {
-				switch (subcommand) {
-					case "new": {
-						const parsed = parseFlags(rest);
-						const branch = parsed.positionals[0];
-						if (!branch) return formatUsage();
-						const base = getFlagValue(parsed.flags, "base");
-						if (parsed.flags.get("base") === true) {
-							return "Missing value for --base";
-						}
-						return await handleNew({ branch, base });
+	async execute(args: string[], ctx: HookCommandContext): Promise<string | undefined> {
+		if (args.length === 0) return formatUsage();
+
+		const subcommand = args[0];
+		const rest = args.slice(1);
+
+		try {
+			switch (subcommand) {
+				case "new": {
+					const parsed = parseFlags(rest);
+					const branch = parsed.positionals[0];
+					if (!branch) return formatUsage();
+					const base = getFlagValue(parsed.flags, "base");
+					if (parsed.flags.get("base") === true) {
+						return "Missing value for --base";
 					}
-					case "list":
-						return await handleList(ctx);
-					case "merge": {
-						const parsed = parseFlags(rest);
-						const source = parsed.positionals[0];
-						const target = parsed.positionals[1];
-						if (!source) return formatUsage();
-						const strategyRaw = getFlagValue(parsed.flags, "strategy");
-						if (parsed.flags.get("strategy") === true) {
-							return "Missing value for --strategy";
-						}
-						const strategy = strategyRaw as CollapseStrategy | undefined;
-						const keep = getFlagBoolean(parsed.flags, "keep");
-						return await handleMerge({ source, target, strategy, keep });
-					}
-					case "rm": {
-						const parsed = parseFlags(rest);
-						const name = parsed.positionals[0];
-						if (!name) return formatUsage();
-						const force = getFlagBoolean(parsed.flags, "force");
-						return await handleRm({ name, force });
-					}
-					case "status":
-						return await handleStatus();
-					case "spawn": {
-						const parsed = parseFlags(rest);
-						const task = parsed.positionals[0];
-						if (!task) return formatUsage();
-						const scope = getFlagValue(parsed.flags, "scope");
-						if (parsed.flags.get("scope") === true) {
-							return "Missing value for --scope";
-						}
-						const name = getFlagValue(parsed.flags, "name");
-						return await handleSpawn({ task, scope, name }, ctx);
-					}
-					case "parallel": {
-						const tasks = parseParallelTasks(rest);
-						if (tasks.length === 0) return formatUsage();
-						return await handleParallel(tasks, ctx);
-					}
-					default:
-						return formatUsage();
+					return await handleNew({ branch, base });
 				}
-			} catch (err) {
-				return formatError(err);
+				case "list":
+					return await handleList(ctx);
+				case "merge": {
+					const parsed = parseFlags(rest);
+					const source = parsed.positionals[0];
+					const target = parsed.positionals[1];
+					if (!source) return formatUsage();
+					const strategyRaw = getFlagValue(parsed.flags, "strategy");
+					if (parsed.flags.get("strategy") === true) {
+						return "Missing value for --strategy";
+					}
+					const strategy = strategyRaw as CollapseStrategy | undefined;
+					const keep = getFlagBoolean(parsed.flags, "keep");
+					return await handleMerge({ source, target, strategy, keep });
+				}
+				case "rm": {
+					const parsed = parseFlags(rest);
+					const name = parsed.positionals[0];
+					if (!name) return formatUsage();
+					const force = getFlagBoolean(parsed.flags, "force");
+					return await handleRm({ name, force });
+				}
+				case "status":
+					return await handleStatus();
+				case "spawn": {
+					const parsed = parseFlags(rest);
+					const task = parsed.positionals[0];
+					if (!task) return formatUsage();
+					const scope = getFlagValue(parsed.flags, "scope");
+					if (parsed.flags.get("scope") === true) {
+						return "Missing value for --scope";
+					}
+					const name = getFlagValue(parsed.flags, "name");
+					return await handleSpawn({ task, scope, name }, ctx);
+				}
+				case "parallel": {
+					const tasks = parseParallelTasks(rest);
+					if (tasks.length === 0) return formatUsage();
+					return await handleParallel(tasks, ctx);
+				}
+				default:
+					return formatUsage();
 			}
-		},
-	};
+		} catch (err) {
+			return formatError(err);
+		}
+	}
 }
 
-export default createWorktreeCommand;
+export default WorktreeCommand;

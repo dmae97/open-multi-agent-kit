@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as pythonExecutor from "../../src/core/python-executor";
 import type { ToolSession } from "../../src/core/tools/index";
-import { createPythonTool } from "../../src/core/tools/python";
+import { PythonTool } from "../../src/core/tools/python";
 
 function createSession(cwd: string): ToolSession {
 	return {
@@ -40,7 +40,7 @@ describe("python tool execution", () => {
 			stdinRequested: false,
 		});
 
-		const tool = createPythonTool(createSession(tempDir));
+		const tool = new PythonTool(createSession(tempDir));
 		const result = await tool.execute(
 			"call-id",
 			{ code: "print('hi')", timeout: 5, workdir: tempDir, reset: true },

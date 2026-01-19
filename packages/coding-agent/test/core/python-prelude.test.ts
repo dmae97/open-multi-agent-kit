@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { resetPreludeDocsCache, warmPythonEnvironment } from "../../src/core/python-executor";
-import { createPythonTool, getPythonToolDescription } from "../../src/core/tools/python";
+import { getPythonToolDescription, PythonTool } from "../../src/core/tools/python";
 
 const resolvePythonPath = (): string | null => {
 	const venvPath = process.env.VIRTUAL_ENV;
@@ -102,7 +102,7 @@ describe.skipIf(!shouldRun)("PYTHON_PRELUDE integration", () => {
 			},
 		};
 
-		const tool = createPythonTool(session);
+		const tool = new PythonTool(session);
 		const code = `
 	helpers = ${JSON.stringify(helpers)}
 	missing = [name for name in helpers if name not in globals() or not callable(globals()[name])]

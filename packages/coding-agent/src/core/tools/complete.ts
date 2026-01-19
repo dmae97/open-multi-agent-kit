@@ -4,8 +4,9 @@
  * Subagents must call this tool to finish and return structured JSON output.
  */
 
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
+import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { StringEnum } from "@oh-my-pi/pi-ai";
+import type { Static, TObject } from "@sinclair/typebox";
 import { Type } from "@sinclair/typebox";
 import Ajv, { type ErrorObject, type ValidateFunction } from "ajv";
 import type { ToolSession } from "./index";
@@ -52,77 +53,86 @@ function formatAjvErrors(errors: ErrorObject[] | null | undefined): string {
 		.join("; ");
 }
 
-export function createCompleteTool(session: ToolSession) {
-	const schemaResult = normalizeSchema(session.outputSchema);
-	// Convert JTD to JSON Schema if needed (auto-detected)
-	const normalizedSchema =
-		schemaResult.normalized !== undefined ? jtdToJsonSchema(schemaResult.normalized) : undefined;
-	let validate: ValidateFunction | undefined;
-	let schemaError = schemaResult.error;
+export class CompleteTool implements AgentTool<TObject, CompleteDetails> {
+	public readonly name = "complete";
+	public readonly label = "Complete";
+	public readonly description =
+		"Finish the task with structured JSON output. Call exactly once at the end of the task.\n\n" +
+		"If you cannot complete the task, call with status='aborted' and an error message.";
+	public readonly parameters: TObject;
 
-	if (normalizedSchema !== undefined && !schemaError) {
-		try {
-			validate = ajv.compile(normalizedSchema as any);
-		} catch (err) {
-			schemaError = err instanceof Error ? err.message : String(err);
+	private readonly validate?: ValidateFunction;
+	private readonly schemaError?: string;
+
+	constructor(session: ToolSession) {
+		const schemaResult = normalizeSchema(session.outputSchema);
+		// Convert JTD to JSON Schema if needed (auto-detected)
+		const normalizedSchema =
+			schemaResult.normalized !== undefined ? jtdToJsonSchema(schemaResult.normalized) : undefined;
+		let schemaError = schemaResult.error;
+
+		if (normalizedSchema !== undefined && !schemaError) {
+			try {
+				this.validate = ajv.compile(normalizedSchema as any);
+			} catch (err) {
+				schemaError = err instanceof Error ? err.message : String(err);
+			}
 		}
+
+		this.schemaError = schemaError;
+
+		const schemaHint = formatSchema(normalizedSchema ?? session.outputSchema);
+
+		// Use actual schema if provided, otherwise fall back to Type.Any
+		// Merge description into the JSON schema for better tool documentation
+		const dataSchema = normalizedSchema
+			? Type.Unsafe({
+					...(normalizedSchema as object),
+					description: `Structured output matching the schema:\n${schemaHint}`,
+				})
+			: Type.Any({ description: "Structured JSON output (no schema specified)" });
+
+		this.parameters = Type.Object({
+			data: Type.Optional(dataSchema),
+			status: Type.Optional(
+				StringEnum(["success", "aborted"], {
+					description: "Use 'aborted' if the task cannot be completed, defaults to 'success'",
+				}),
+			),
+			error: Type.Optional(Type.String({ description: "Error message when status is 'aborted'" })),
+		});
 	}
 
-	const schemaHint = formatSchema(normalizedSchema ?? session.outputSchema);
+	public async execute(
+		_toolCallId: string,
+		params: Static<TObject>,
+		_signal?: AbortSignal,
+		_onUpdate?: AgentToolUpdateCallback<CompleteDetails>,
+		_context?: AgentToolContext,
+	): Promise<AgentToolResult<CompleteDetails>> {
+		const status = (params.status ?? "success") as "success" | "aborted";
 
-	// Use actual schema if provided, otherwise fall back to Type.Any
-	// Merge description into the JSON schema for better tool documentation
-	const dataSchema = normalizedSchema
-		? Type.Unsafe({
-				...(normalizedSchema as object),
-				description: `Structured output matching the schema:\n${schemaHint}`,
-			})
-		: Type.Any({ description: "Structured JSON output (no schema specified)" });
-
-	const completeParams = Type.Object({
-		data: Type.Optional(dataSchema),
-		status: Type.Optional(
-			StringEnum(["success", "aborted"], {
-				description: "Use 'aborted' if the task cannot be completed, defaults to 'success'",
-			}),
-		),
-		error: Type.Optional(Type.String({ description: "Error message when status is 'aborted'" })),
-	});
-
-	const tool: AgentTool<typeof completeParams, CompleteDetails> = {
-		name: "complete",
-		label: "Complete",
-		description:
-			"Finish the task with structured JSON output. Call exactly once at the end of the task.\n\n" +
-			"If you cannot complete the task, call with status='aborted' and an error message.",
-		parameters: completeParams,
-		execute: async (_toolCallId, params) => {
-			const status = params.status ?? "success";
-
-			// Skip validation when aborting - data is optional for aborts
-			if (status === "success") {
-				if (params.data === undefined) {
-					throw new Error("data is required when status is 'success'");
-				}
-				if (schemaError) {
-					throw new Error(`Invalid output schema: ${schemaError}`);
-				}
-				if (validate && !validate(params.data)) {
-					throw new Error(`Output does not match schema: ${formatAjvErrors(validate.errors)}`);
-				}
+		// Skip validation when aborting - data is optional for aborts
+		if (status === "success") {
+			if (params.data === undefined) {
+				throw new Error("data is required when status is 'success'");
 			}
+			if (this.schemaError) {
+				throw new Error(`Invalid output schema: ${this.schemaError}`);
+			}
+			if (this.validate && !this.validate(params.data)) {
+				throw new Error(`Output does not match schema: ${formatAjvErrors(this.validate.errors)}`);
+			}
+		}
 
-			const responseText =
-				status === "aborted" ? `Task aborted: ${params.error || "No reason provided"}` : "Completion recorded.";
+		const responseText =
+			status === "aborted" ? `Task aborted: ${params.error || "No reason provided"}` : "Completion recorded.";
 
-			return {
-				content: [{ type: "text", text: responseText }],
-				details: { data: params.data, status, error: params.error },
-			};
-		},
-	};
-
-	return tool;
+		return {
+			content: [{ type: "text", text: responseText }],
+			details: { data: params.data, status, error: params.error as string | undefined },
+		};
+	}
 }
 
 // Register subprocess tool handler for extraction + termination.

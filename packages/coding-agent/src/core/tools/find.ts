@@ -1,8 +1,9 @@
 import path from "node:path";
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
+import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { StringEnum } from "@oh-my-pi/pi-ai";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
+import type { Static } from "@sinclair/typebox";
 import { Type } from "@sinclair/typebox";
 import { getLanguageFromPath, type Theme } from "../../modes/interactive/theme/theme";
 import findDescription from "../../prompts/tools/find.md" with { type: "text" };
@@ -109,264 +110,68 @@ async function captureCommandOutput(
 	return { stdout, stderr, exitCode, aborted: scope.aborted };
 }
 
-export function createFindTool(session: ToolSession, options?: FindToolOptions): AgentTool<typeof findSchema> {
-	const customOps = options?.operations;
+export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
+	public readonly name = "find";
+	public readonly label = "Find";
+	public readonly description: string;
+	public readonly parameters = findSchema;
 
-	return {
-		name: "find",
-		label: "Find",
-		description: renderPromptTemplate(findDescription),
-		parameters: findSchema,
-		execute: async (
-			_toolCallId: string,
-			{
-				pattern,
-				path: searchDir,
-				limit,
-				hidden,
-				sortByMtime,
-				type,
-			}: {
-				pattern: string;
-				path?: string;
-				limit?: number;
-				hidden?: boolean;
-				sortByMtime?: boolean;
-				type?: "file" | "dir" | "all";
-			},
-			signal?: AbortSignal,
-		) => {
-			return untilAborted(signal, async () => {
-				const searchPath = resolveToCwd(searchDir || ".", session.cwd);
-				const scopePath = (() => {
-					const relative = path.relative(session.cwd, searchPath).replace(/\\/g, "/");
-					return relative.length === 0 ? "." : relative;
-				})();
-				const effectiveLimit = limit ?? DEFAULT_LIMIT;
-				const effectiveType = type ?? "all";
-				const includeHidden = hidden ?? true;
-				const shouldSortByMtime = sortByMtime ?? false;
+	private readonly session: ToolSession;
+	private readonly customOps?: FindOperations;
 
-				// If custom operations provided with glob, use that instead of fd
-				if (customOps?.glob) {
-					if (!(await customOps.exists(searchPath))) {
-						throw new Error(`Path not found: ${searchPath}`);
-					}
+	constructor(session: ToolSession, options?: FindToolOptions) {
+		this.session = session;
+		this.customOps = options?.operations;
+		this.description = renderPromptTemplate(findDescription);
+	}
 
-					const results = await customOps.glob(pattern, searchPath, {
-						ignore: ["**/node_modules/**", "**/.git/**"],
-						limit: effectiveLimit,
-					});
+	public async execute(
+		_toolCallId: string,
+		params: Static<typeof findSchema>,
+		signal?: AbortSignal,
+		_onUpdate?: AgentToolUpdateCallback<FindToolDetails>,
+		_context?: AgentToolContext,
+	): Promise<AgentToolResult<FindToolDetails>> {
+		const { pattern, path: searchDir, limit, hidden, sortByMtime, type } = params;
 
-					if (results.length === 0) {
-						return {
-							content: [{ type: "text", text: "No files found matching pattern" }],
-							details: { scopePath, fileCount: 0, files: [], truncated: false },
-						};
-					}
+		return untilAborted(signal, async () => {
+			const searchPath = resolveToCwd(searchDir || ".", this.session.cwd);
+			const scopePath = (() => {
+				const relative = path.relative(this.session.cwd, searchPath).replace(/\\/g, "/");
+				return relative.length === 0 ? "." : relative;
+			})();
+			const effectiveLimit = limit ?? DEFAULT_LIMIT;
+			const effectiveType = type ?? "all";
+			const includeHidden = hidden ?? true;
+			const shouldSortByMtime = sortByMtime ?? false;
 
-					// Relativize paths
-					const relativized = results.map((p) => {
-						if (p.startsWith(searchPath)) {
-							return p.slice(searchPath.length + 1);
-						}
-						return path.relative(searchPath, p);
-					});
-
-					const resultLimitReached = relativized.length >= effectiveLimit;
-					const rawOutput = relativized.join("\n");
-					const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
-
-					let resultOutput = truncation.content;
-					const details: FindToolDetails = {
-						scopePath,
-						fileCount: relativized.length,
-						files: relativized,
-						truncated: resultLimitReached || truncation.truncated,
-					};
-					const notices: string[] = [];
-
-					if (resultLimitReached) {
-						notices.push(
-							`${effectiveLimit} results limit reached. Use limit=${effectiveLimit * 2} for more, or refine pattern`,
-						);
-						details.resultLimitReached = effectiveLimit;
-					}
-
-					if (truncation.truncated) {
-						notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
-						details.truncation = truncation;
-					}
-
-					if (notices.length > 0) {
-						resultOutput += `\n\n[${notices.join(". ")}]`;
-					}
-
-					return {
-						content: [{ type: "text", text: resultOutput }],
-						details: Object.keys(details).length > 0 ? details : undefined,
-					};
+			// If custom operations provided with glob, use that instead of fd
+			if (this.customOps?.glob) {
+				if (!(await this.customOps.exists(searchPath))) {
+					throw new Error(`Path not found: ${searchPath}`);
 				}
 
-				// Default: use fd
-				const fdPath = await ensureTool("fd", true);
-				if (!fdPath) {
-					throw new Error("fd is not available and could not be downloaded");
-				}
+				const results = await this.customOps.glob(pattern, searchPath, {
+					ignore: ["**/node_modules/**", "**/.git/**"],
+					limit: effectiveLimit,
+				});
 
-				// Build fd arguments
-				// When pattern contains path separators (e.g. "reports/**"), use --full-path
-				// so fd matches against the full path, not just the filename.
-				// Also prepend **/ to anchor the pattern at any depth in the search path.
-				// Note: "**/foo.rs" is a glob construct (filename at any depth), not a path.
-				// Only patterns with real path components like "foo/bar" or "foo/**/bar" need --full-path.
-				const patternWithoutLeadingStarStar = pattern.replace(/^\*\*\//, "");
-				const hasPathSeparator =
-					patternWithoutLeadingStarStar.includes("/") || patternWithoutLeadingStarStar.includes("\\");
-				const effectivePattern = hasPathSeparator && !pattern.startsWith("**/") ? `**/${pattern}` : pattern;
-				const args: string[] = [
-					"--glob", // Use glob pattern
-					...(hasPathSeparator ? ["--full-path"] : []),
-					"--color=never", // No ANSI colors
-					"--max-results",
-					String(effectiveLimit),
-				];
-
-				if (includeHidden) {
-					args.push("--hidden");
-				}
-
-				// Add type filter
-				if (effectiveType === "file") {
-					args.push("--type", "f");
-				} else if (effectiveType === "dir") {
-					args.push("--type", "d");
-				}
-
-				// Include .gitignore files (root + nested) so fd respects them even outside git repos
-				const gitignoreFiles = new Set<string>();
-				const rootGitignore = path.join(searchPath, ".gitignore");
-				if (await Bun.file(rootGitignore).exists()) {
-					gitignoreFiles.add(rootGitignore);
-				}
-
-				try {
-					const gitignoreArgs = [
-						"--hidden",
-						"--no-ignore",
-						"--type",
-						"f",
-						"--name",
-						".gitignore",
-						"--exclude",
-						".git",
-						"--exclude",
-						"node_modules",
-						"--absolute-path",
-						searchPath,
-					];
-					const { stdout: gitignoreStdout, aborted: gitignoreAborted } = await captureCommandOutput(
-						fdPath,
-						gitignoreArgs,
-						signal,
-					);
-					if (gitignoreAborted) {
-						throw new Error("Operation aborted");
-					}
-					for (const rawLine of gitignoreStdout.split("\n")) {
-						const file = rawLine.trim();
-						if (!file) continue;
-						gitignoreFiles.add(file);
-					}
-				} catch (err) {
-					if (signal?.aborted) {
-						throw err instanceof Error ? err : new Error("Operation aborted");
-					}
-					// Ignore lookup errors
-				}
-
-				for (const gitignorePath of gitignoreFiles) {
-					args.push("--ignore-file", gitignorePath);
-				}
-
-				// Pattern and path
-				args.push(effectivePattern, searchPath);
-
-				// Run fd
-				const { stdout, stderr, exitCode, aborted } = await captureCommandOutput(fdPath, args, signal);
-
-				if (aborted) {
-					throw new Error("Operation aborted");
-				}
-
-				const output = stdout.trim();
-
-				if (exitCode !== 0) {
-					const errorMsg = stderr.trim() || `fd exited with code ${exitCode ?? -1}`;
-					// fd returns non-zero for some errors but may still have partial output
-					if (!output) {
-						throw new Error(errorMsg);
-					}
-				}
-
-				if (!output) {
+				if (results.length === 0) {
 					return {
 						content: [{ type: "text", text: "No files found matching pattern" }],
 						details: { scopePath, fileCount: 0, files: [], truncated: false },
 					};
 				}
 
-				const lines = output.split("\n");
-				const relativized: string[] = [];
-				const mtimes: number[] = [];
-
-				for (const rawLine of lines) {
-					signal?.throwIfAborted();
-					const line = rawLine.replace(/\r$/, "").trim();
-					if (!line) {
-						continue;
+				// Relativize paths
+				const relativized = results.map((p) => {
+					if (p.startsWith(searchPath)) {
+						return p.slice(searchPath.length + 1);
 					}
+					return path.relative(searchPath, p);
+				});
 
-					const hadTrailingSlash = line.endsWith("/") || line.endsWith("\\");
-					let relativePath = line;
-					if (line.startsWith(searchPath)) {
-						relativePath = line.slice(searchPath.length + 1); // +1 for the /
-					} else {
-						relativePath = path.relative(searchPath, line);
-					}
-
-					if (hadTrailingSlash && !relativePath.endsWith("/")) {
-						relativePath += "/";
-					}
-
-					// When sorting by mtime, keep files that fail to stat with mtime 0
-					if (shouldSortByMtime) {
-						try {
-							const fullPath = path.join(searchPath, relativePath);
-							const stat = await Bun.file(fullPath).stat();
-							relativized.push(relativePath);
-							mtimes.push(stat.mtimeMs);
-						} catch {
-							relativized.push(relativePath);
-							mtimes.push(0);
-						}
-					} else {
-						relativized.push(relativePath);
-					}
-				}
-
-				// Sort by mtime if requested (most recent first)
-				if (shouldSortByMtime && relativized.length > 0) {
-					const indexed = relativized.map((path, idx) => ({ path, mtime: mtimes[idx] }));
-					indexed.sort((a, b) => b.mtime - a.mtime);
-					relativized.length = 0;
-					relativized.push(...indexed.map((item) => item.path));
-				}
-
-				// Check if we hit the result limit
 				const resultLimitReached = relativized.length >= effectiveLimit;
-
-				// Apply byte truncation (no line limit since we already have result limit)
 				const rawOutput = relativized.join("\n");
 				const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
 
@@ -377,8 +182,6 @@ export function createFindTool(session: ToolSession, options?: FindToolOptions):
 					files: relativized,
 					truncated: resultLimitReached || truncation.truncated,
 				};
-
-				// Build notices
 				const notices: string[] = [];
 
 				if (resultLimitReached) {
@@ -399,11 +202,205 @@ export function createFindTool(session: ToolSession, options?: FindToolOptions):
 
 				return {
 					content: [{ type: "text", text: resultOutput }],
-					details: Object.keys(details).length > 0 ? details : undefined,
+					details,
 				};
-			});
-		},
-	};
+			}
+
+			// Default: use fd
+			const fdPath = await ensureTool("fd", true);
+			if (!fdPath) {
+				throw new Error("fd is not available and could not be downloaded");
+			}
+
+			// Build fd arguments
+			// When pattern contains path separators (e.g. "reports/**"), use --full-path
+			// so fd matches against the full path, not just the filename.
+			// Also prepend **/ to anchor the pattern at any depth in the search path.
+			// Note: "**/foo.rs" is a glob construct (filename at any depth), not a path.
+			// Only patterns with real path components like "foo/bar" or "foo/**/bar" need --full-path.
+			const patternWithoutLeadingStarStar = pattern.replace(/^\*\*\//, "");
+			const hasPathSeparator =
+				patternWithoutLeadingStarStar.includes("/") || patternWithoutLeadingStarStar.includes("\\");
+			const effectivePattern = hasPathSeparator && !pattern.startsWith("**/") ? `**/${pattern}` : pattern;
+			const args: string[] = [
+				"--glob", // Use glob pattern
+				...(hasPathSeparator ? ["--full-path"] : []),
+				"--color=never", // No ANSI colors
+				"--max-results",
+				String(effectiveLimit),
+			];
+
+			if (includeHidden) {
+				args.push("--hidden");
+			}
+
+			// Add type filter
+			if (effectiveType === "file") {
+				args.push("--type", "f");
+			} else if (effectiveType === "dir") {
+				args.push("--type", "d");
+			}
+
+			// Include .gitignore files (root + nested) so fd respects them even outside git repos
+			const gitignoreFiles = new Set<string>();
+			const rootGitignore = path.join(searchPath, ".gitignore");
+			if (await Bun.file(rootGitignore).exists()) {
+				gitignoreFiles.add(rootGitignore);
+			}
+
+			try {
+				const gitignoreArgs = [
+					"--hidden",
+					"--no-ignore",
+					"--type",
+					"f",
+					"--name",
+					".gitignore",
+					"--exclude",
+					".git",
+					"--exclude",
+					"node_modules",
+					"--absolute-path",
+					searchPath,
+				];
+				const { stdout: gitignoreStdout, aborted: gitignoreAborted } = await captureCommandOutput(
+					fdPath,
+					gitignoreArgs,
+					signal,
+				);
+				if (gitignoreAborted) {
+					throw new Error("Operation aborted");
+				}
+				for (const rawLine of gitignoreStdout.split("\n")) {
+					const file = rawLine.trim();
+					if (!file) continue;
+					gitignoreFiles.add(file);
+				}
+			} catch (err) {
+				if (signal?.aborted) {
+					throw err instanceof Error ? err : new Error("Operation aborted");
+				}
+				// Ignore lookup errors
+			}
+
+			for (const gitignorePath of gitignoreFiles) {
+				args.push("--ignore-file", gitignorePath);
+			}
+
+			// Pattern and path
+			args.push(effectivePattern, searchPath);
+
+			// Run fd
+			const { stdout, stderr, exitCode, aborted } = await captureCommandOutput(fdPath, args, signal);
+
+			if (aborted) {
+				throw new Error("Operation aborted");
+			}
+
+			const output = stdout.trim();
+
+			if (exitCode !== 0) {
+				const errorMsg = stderr.trim() || `fd exited with code ${exitCode ?? -1}`;
+				// fd returns non-zero for some errors but may still have partial output
+				if (!output) {
+					throw new Error(errorMsg);
+				}
+			}
+
+			if (!output) {
+				return {
+					content: [{ type: "text", text: "No files found matching pattern" }],
+					details: { scopePath, fileCount: 0, files: [], truncated: false },
+				};
+			}
+
+			const lines = output.split("\n");
+			const relativized: string[] = [];
+			const mtimes: number[] = [];
+
+			for (const rawLine of lines) {
+				signal?.throwIfAborted();
+				const line = rawLine.replace(/\r$/, "").trim();
+				if (!line) {
+					continue;
+				}
+
+				const hadTrailingSlash = line.endsWith("/") || line.endsWith("\\");
+				let relativePath = line;
+				if (line.startsWith(searchPath)) {
+					relativePath = line.slice(searchPath.length + 1); // +1 for the /
+				} else {
+					relativePath = path.relative(searchPath, line);
+				}
+
+				if (hadTrailingSlash && !relativePath.endsWith("/")) {
+					relativePath += "/";
+				}
+
+				// When sorting by mtime, keep files that fail to stat with mtime 0
+				if (shouldSortByMtime) {
+					try {
+						const fullPath = path.join(searchPath, relativePath);
+						const stat = await Bun.file(fullPath).stat();
+						relativized.push(relativePath);
+						mtimes.push(stat.mtimeMs);
+					} catch {
+						relativized.push(relativePath);
+						mtimes.push(0);
+					}
+				} else {
+					relativized.push(relativePath);
+				}
+			}
+
+			// Sort by mtime if requested (most recent first)
+			if (shouldSortByMtime && relativized.length > 0) {
+				const indexed = relativized.map((path, idx) => ({ path, mtime: mtimes[idx] }));
+				indexed.sort((a, b) => b.mtime - a.mtime);
+				relativized.length = 0;
+				relativized.push(...indexed.map((item) => item.path));
+			}
+
+			// Check if we hit the result limit
+			const resultLimitReached = relativized.length >= effectiveLimit;
+
+			// Apply byte truncation (no line limit since we already have result limit)
+			const rawOutput = relativized.join("\n");
+			const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
+
+			let resultOutput = truncation.content;
+			const details: FindToolDetails = {
+				scopePath,
+				fileCount: relativized.length,
+				files: relativized,
+				truncated: resultLimitReached || truncation.truncated,
+			};
+
+			// Build notices
+			const notices: string[] = [];
+
+			if (resultLimitReached) {
+				notices.push(
+					`${effectiveLimit} results limit reached. Use limit=${effectiveLimit * 2} for more, or refine pattern`,
+				);
+				details.resultLimitReached = effectiveLimit;
+			}
+
+			if (truncation.truncated) {
+				notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
+				details.truncation = truncation;
+			}
+
+			if (notices.length > 0) {
+				resultOutput += `\n\n[${notices.join(". ")}]`;
+			}
+
+			return {
+				content: [{ type: "text", text: resultOutput }],
+				details,
+			};
+		});
+	}
 }
 
 // =============================================================================

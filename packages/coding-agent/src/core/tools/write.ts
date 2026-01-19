@@ -1,4 +1,10 @@
-import type { AgentTool, AgentToolContext, ToolCallContext } from "@oh-my-pi/pi-agent-core";
+import type {
+	AgentTool,
+	AgentToolContext,
+	AgentToolResult,
+	AgentToolUpdateCallback,
+	ToolCallContext,
+} from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import { Type } from "@sinclair/typebox";
@@ -8,7 +14,12 @@ import type { RenderResultOptions } from "../custom-tools/types";
 import { renderPromptTemplate } from "../prompt-templates";
 import type { ToolSession } from "../sdk";
 import { untilAborted } from "../utils";
-import { createLspWritethrough, type FileDiagnosticsResult, writethroughNoop } from "./lsp/index";
+import {
+	createLspWritethrough,
+	type FileDiagnosticsResult,
+	type WritethroughCallback,
+	writethroughNoop,
+} from "./lsp/index";
 import { resolveToCwd } from "./path-utils";
 import { formatDiagnostics, formatExpandHint, replaceTabs, shortenPath } from "./render-utils";
 
@@ -38,51 +49,69 @@ function getLspBatchRequest(toolCall: ToolCallContext | undefined): { id: string
 	return { id: toolCall.batchId, flush: !hasLaterWrites };
 }
 
-export function createWriteTool(session: ToolSession): AgentTool<typeof writeSchema, WriteToolDetails> {
-	const enableLsp = session.enableLsp ?? true;
-	const enableFormat = enableLsp ? (session.settings?.getLspFormatOnWrite() ?? true) : false;
-	const enableDiagnostics = enableLsp ? (session.settings?.getLspDiagnosticsOnWrite() ?? true) : false;
-	const writethrough = enableLsp
-		? createLspWritethrough(session.cwd, { enableFormat, enableDiagnostics })
-		: writethroughNoop;
-	return {
-		name: "write",
-		label: "Write",
-		description: renderPromptTemplate(writeDescription),
-		parameters: writeSchema,
-		execute: async (
-			_toolCallId: string,
-			{ path, content }: { path: string; content: string },
-			signal?: AbortSignal,
-			_onUpdate?: unknown,
-			context?: AgentToolContext,
-		) => {
-			return untilAborted(signal, async () => {
-				const absolutePath = resolveToCwd(path, session.cwd);
-				const batchRequest = getLspBatchRequest(context?.toolCall);
+// ═══════════════════════════════════════════════════════════════════════════
+// Tool Class
+// ═══════════════════════════════════════════════════════════════════════════
 
-				const diagnostics = await writethrough(absolutePath, content, signal, undefined, batchRequest);
+type WriteParams = { path: string; content: string };
 
-				let resultText = `Successfully wrote ${content.length} bytes to ${path}`;
-				if (!diagnostics) {
-					return {
-						content: [{ type: "text", text: resultText }],
-						details: {},
-					};
-				}
+/**
+ * Write tool implementation.
+ *
+ * Creates or overwrites files with optional LSP formatting and diagnostics.
+ */
+export class WriteTool implements AgentTool<typeof writeSchema, WriteToolDetails> {
+	public readonly name = "write";
+	public readonly label = "Write";
+	public readonly description: string;
+	public readonly parameters = writeSchema;
 
-				const messages = diagnostics?.messages;
-				if (messages && messages.length > 0) {
-					resultText += `\n\nLSP Diagnostics (${diagnostics.summary}):\n`;
-					resultText += messages.map((d) => `  ${d}`).join("\n");
-				}
+	private readonly session: ToolSession;
+	private readonly writethrough: WritethroughCallback;
+
+	constructor(session: ToolSession) {
+		this.session = session;
+		const enableLsp = session.enableLsp ?? true;
+		const enableFormat = enableLsp ? (session.settings?.getLspFormatOnWrite() ?? true) : false;
+		const enableDiagnostics = enableLsp ? (session.settings?.getLspDiagnosticsOnWrite() ?? true) : false;
+		this.writethrough = enableLsp
+			? createLspWritethrough(session.cwd, { enableFormat, enableDiagnostics })
+			: writethroughNoop;
+		this.description = renderPromptTemplate(writeDescription);
+	}
+
+	public async execute(
+		_toolCallId: string,
+		{ path, content }: WriteParams,
+		signal?: AbortSignal,
+		_onUpdate?: AgentToolUpdateCallback<WriteToolDetails>,
+		context?: AgentToolContext,
+	): Promise<AgentToolResult<WriteToolDetails>> {
+		return untilAborted(signal, async () => {
+			const absolutePath = resolveToCwd(path, this.session.cwd);
+			const batchRequest = getLspBatchRequest(context?.toolCall);
+
+			const diagnostics = await this.writethrough(absolutePath, content, signal, undefined, batchRequest);
+
+			let resultText = `Successfully wrote ${content.length} bytes to ${path}`;
+			if (!diagnostics) {
 				return {
 					content: [{ type: "text", text: resultText }],
-					details: { diagnostics },
+					details: {},
 				};
-			});
-		},
-	};
+			}
+
+			const messages = diagnostics?.messages;
+			if (messages && messages.length > 0) {
+				resultText += `\n\nLSP Diagnostics (${diagnostics.summary}):\n`;
+				resultText += messages.map((d) => `  ${d}`).join("\n");
+			}
+			return {
+				content: [{ type: "text", text: resultText }],
+				details: { diagnostics },
+			};
+		});
+	}
 }
 
 // =============================================================================

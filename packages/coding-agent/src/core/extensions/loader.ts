@@ -4,22 +4,26 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import * as path from "node:path";
+import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
+import type { ImageContent, Model, TextContent } from "@oh-my-pi/pi-ai";
 import type { KeyId } from "@oh-my-pi/pi-tui";
+import type { TSchema } from "@sinclair/typebox";
 import * as TypeBox from "@sinclair/typebox";
 import { type ExtensionModule, extensionModuleCapability } from "../../capability/extension-module";
 import { loadCapability } from "../../discovery";
 import { expandPath, getExtensionNameFromPath } from "../../discovery/helpers";
 import * as piCodingAgent from "../../index";
-import { createEventBus, type EventBus } from "../event-bus";
+import { EventBus } from "../event-bus";
 import type { ExecOptions } from "../exec";
 import { execCommand } from "../exec";
 import { logger } from "../logger";
+import type { CustomMessage } from "../messages";
 import type {
 	Extension,
 	ExtensionAPI,
 	ExtensionContext,
 	ExtensionFactory,
-	ExtensionRuntime,
+	ExtensionRuntime as IExtensionRuntime,
 	LoadExtensionsResult,
 	MessageRenderer,
 	RegisteredCommand,
@@ -36,147 +40,183 @@ function resolvePath(extPath: string, cwd: string): string {
 
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
 
-/**
- * Create a runtime with throwing stubs for action methods.
- * Runner.initialize() replaces these with real implementations.
- */
-export function createExtensionRuntime(): ExtensionRuntime {
-	const notInitialized = () => {
-		throw new Error("Extension runtime not initialized. Action methods cannot be called during extension loading.");
-	};
-
-	return {
-		sendMessage: notInitialized,
-		sendUserMessage: notInitialized,
-		appendEntry: notInitialized,
-		setLabel: notInitialized,
-		getActiveTools: notInitialized,
-		getAllTools: notInitialized,
-		setActiveTools: notInitialized,
-		setModel: () => Promise.reject(new Error("Extension runtime not initialized")),
-		getThinkingLevel: notInitialized,
-		setThinkingLevel: notInitialized,
-		flagValues: new Map(),
-	};
+export class ExtensionRuntimeNotInitializedError extends Error {
+	constructor() {
+		super("Extension runtime not initialized. Action methods cannot be called during extension loading.");
+	}
 }
 
 /**
- * Create the ExtensionAPI for an extension.
+ * Extension runtime with throwing stubs for action methods.
+ * These are replaced with real implementations during initialization.
+ */
+export class ExtensionRuntime implements IExtensionRuntime {
+	flagValues = new Map<string, boolean | string>();
+
+	sendMessage(): void {
+		throw new ExtensionRuntimeNotInitializedError();
+	}
+
+	sendUserMessage(): void {
+		throw new ExtensionRuntimeNotInitializedError();
+	}
+
+	appendEntry(): void {
+		throw new ExtensionRuntimeNotInitializedError();
+	}
+
+	setLabel(): void {
+		throw new ExtensionRuntimeNotInitializedError();
+	}
+
+	getActiveTools(): string[] {
+		throw new ExtensionRuntimeNotInitializedError();
+	}
+
+	getAllTools(): string[] {
+		throw new ExtensionRuntimeNotInitializedError();
+	}
+
+	setActiveTools(): Promise<void> {
+		throw new ExtensionRuntimeNotInitializedError();
+	}
+
+	setModel(): Promise<boolean> {
+		throw new ExtensionRuntimeNotInitializedError();
+	}
+
+	getThinkingLevel(): ThinkingLevel {
+		throw new ExtensionRuntimeNotInitializedError();
+	}
+
+	setThinkingLevel(): void {
+		throw new ExtensionRuntimeNotInitializedError();
+	}
+}
+
+/**
+ * ExtensionAPI implementation for an extension.
  * Registration methods write to the extension object.
  * Action methods delegate to the shared runtime.
  */
-function createExtensionAPI(
-	extension: Extension,
-	runtime: ExtensionRuntime,
-	cwd: string,
-	eventBus: EventBus,
-): ExtensionAPI {
-	const api = {
-		logger,
-		typebox: TypeBox,
-		pi: piCodingAgent,
+class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
+	readonly logger = logger;
+	readonly typebox = TypeBox;
+	readonly pi = piCodingAgent;
+	readonly events: EventBus;
+	readonly flagValues = new Map<string, boolean | string>();
 
-		on(event: string, handler: HandlerFn): void {
-			const list = extension.handlers.get(event) ?? [];
-			list.push(handler);
-			extension.handlers.set(event, list);
+	constructor(
+		private extension: Extension,
+		private runtime: IExtensionRuntime,
+		private cwd: string,
+		eventBus: EventBus,
+	) {
+		this.events = eventBus;
+	}
+
+	on<F extends HandlerFn>(event: string, handler: F): void {
+		const list = this.extension.handlers.get(event) ?? [];
+		list.push(handler);
+		this.extension.handlers.set(event, list);
+	}
+
+	registerTool<TParams extends TSchema = TSchema, TDetails = unknown>(tool: ToolDefinition<TParams, TDetails>): void {
+		this.extension.tools.set(tool.name, {
+			definition: tool,
+			extensionPath: this.extension.path,
+		});
+	}
+
+	registerCommand(
+		name: string,
+		options: {
+			description?: string;
+			getArgumentCompletions?: RegisteredCommand["getArgumentCompletions"];
+			handler: RegisteredCommand["handler"];
 		},
+	): void {
+		this.extension.commands.set(name, { name, ...options });
+	}
 
-		registerTool(tool: ToolDefinition): void {
-			extension.tools.set(tool.name, {
-				definition: tool,
-				extensionPath: extension.path,
-			});
+	setLabel(label: string): void {
+		this.extension.label = label;
+	}
+
+	registerShortcut(
+		shortcut: KeyId,
+		options: {
+			description?: string;
+			handler: (ctx: ExtensionContext) => Promise<void> | void;
 		},
+	): void {
+		this.extension.shortcuts.set(shortcut, { shortcut, extensionPath: this.extension.path, ...options });
+	}
 
-		registerCommand(
-			name: string,
-			options: {
-				description?: string;
-				getArgumentCompletions?: RegisteredCommand["getArgumentCompletions"];
-				handler: RegisteredCommand["handler"];
-			},
-		): void {
-			extension.commands.set(name, { name, ...options });
-		},
+	registerFlag(
+		name: string,
+		options: { description?: string; type: "boolean" | "string"; default?: boolean | string },
+	): void {
+		this.extension.flags.set(name, { name, extensionPath: this.extension.path, ...options });
+		if (options.default !== undefined) {
+			this.runtime.flagValues.set(name, options.default);
+		}
+	}
 
-		setLabel(label: string): void {
-			extension.label = label;
-		},
+	registerMessageRenderer<T>(customType: string, renderer: MessageRenderer<T>): void {
+		this.extension.messageRenderers.set(customType, renderer as MessageRenderer);
+	}
 
-		registerShortcut(
-			shortcut: KeyId,
-			options: {
-				description?: string;
-				handler: (ctx: ExtensionContext) => Promise<void> | void;
-			},
-		): void {
-			extension.shortcuts.set(shortcut, { shortcut, extensionPath: extension.path, ...options });
-		},
+	getFlag(name: string): boolean | string | undefined {
+		if (!this.extension.flags.has(name)) return undefined;
+		return this.runtime.flagValues.get(name);
+	}
 
-		registerFlag(
-			name: string,
-			options: { description?: string; type: "boolean" | "string"; default?: boolean | string },
-		): void {
-			extension.flags.set(name, { name, extensionPath: extension.path, ...options });
-			if (options.default !== undefined) {
-				runtime.flagValues.set(name, options.default);
-			}
-		},
+	sendMessage<T = unknown>(
+		message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details">,
+		options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
+	): void {
+		this.runtime.sendMessage(message, options);
+	}
 
-		registerMessageRenderer<T>(customType: string, renderer: MessageRenderer<T>): void {
-			extension.messageRenderers.set(customType, renderer as MessageRenderer);
-		},
+	sendUserMessage(
+		content: string | (TextContent | ImageContent)[],
+		options?: { deliverAs?: "steer" | "followUp" },
+	): void {
+		this.runtime.sendUserMessage(content, options);
+	}
 
-		getFlag(name: string): boolean | string | undefined {
-			if (!extension.flags.has(name)) return undefined;
-			return runtime.flagValues.get(name);
-		},
+	appendEntry(customType: string, data?: unknown): void {
+		this.runtime.appendEntry(customType, data);
+	}
 
-		sendMessage(message, options): void {
-			runtime.sendMessage(message, options);
-		},
+	exec(command: string, args: string[], options?: ExecOptions) {
+		return execCommand(command, args, options?.cwd ?? this.cwd, options);
+	}
 
-		sendUserMessage(content, options): void {
-			runtime.sendUserMessage(content, options);
-		},
+	getActiveTools(): string[] {
+		return this.runtime.getActiveTools();
+	}
 
-		appendEntry(customType: string, data?: unknown): void {
-			runtime.appendEntry(customType, data);
-		},
+	getAllTools(): string[] {
+		return this.runtime.getAllTools();
+	}
 
-		exec(command: string, args: string[], options?: ExecOptions) {
-			return execCommand(command, args, options?.cwd ?? cwd, options);
-		},
+	setActiveTools(toolNames: string[]): Promise<void> {
+		return this.runtime.setActiveTools(toolNames);
+	}
 
-		getActiveTools(): string[] {
-			return runtime.getActiveTools();
-		},
+	setModel(model: Model<any>): Promise<boolean> {
+		return this.runtime.setModel(model);
+	}
 
-		getAllTools(): string[] {
-			return runtime.getAllTools();
-		},
+	getThinkingLevel(): ThinkingLevel {
+		return this.runtime.getThinkingLevel();
+	}
 
-		setActiveTools(toolNames: string[]): void {
-			runtime.setActiveTools(toolNames);
-		},
-
-		setModel(model) {
-			return runtime.setModel(model);
-		},
-
-		getThinkingLevel() {
-			return runtime.getThinkingLevel();
-		},
-
-		setThinkingLevel(level) {
-			runtime.setThinkingLevel(level);
-		},
-
-		events: eventBus,
-	} as ExtensionAPI;
-
-	return api;
+	setThinkingLevel(level: ThinkingLevel): void {
+		this.runtime.setThinkingLevel(level);
+	}
 }
 
 /**
@@ -199,7 +239,7 @@ async function loadExtension(
 	extensionPath: string,
 	cwd: string,
 	eventBus: EventBus,
-	runtime: ExtensionRuntime,
+	runtime: IExtensionRuntime,
 ): Promise<{ extension: Extension | null; error: string | null }> {
 	const resolvedPath = resolvePath(extensionPath, cwd);
 
@@ -215,7 +255,7 @@ async function loadExtension(
 		}
 
 		const extension = createExtension(extensionPath, resolvedPath);
-		const api = createExtensionAPI(extension, runtime, cwd, eventBus);
+		const api = new ConcreteExtensionAPI(extension, runtime, cwd, eventBus);
 		await factory(api);
 
 		return { extension, error: null };
@@ -232,11 +272,11 @@ export async function loadExtensionFromFactory(
 	factory: ExtensionFactory,
 	cwd: string,
 	eventBus: EventBus,
-	runtime: ExtensionRuntime,
+	runtime: IExtensionRuntime,
 	name = "<inline>",
 ): Promise<Extension> {
 	const extension = createExtension(name, name);
-	const api = createExtensionAPI(extension, runtime, cwd, eventBus);
+	const api = new ConcreteExtensionAPI(extension, runtime, cwd, eventBus);
 	await factory(api);
 	return extension;
 }
@@ -247,8 +287,8 @@ export async function loadExtensionFromFactory(
 export async function loadExtensions(paths: string[], cwd: string, eventBus?: EventBus): Promise<LoadExtensionsResult> {
 	const extensions: Extension[] = [];
 	const errors: Array<{ path: string; error: string }> = [];
-	const resolvedEventBus = eventBus ?? createEventBus();
-	const runtime = createExtensionRuntime();
+	const resolvedEventBus = eventBus ?? new EventBus();
+	const runtime = new ExtensionRuntime();
 
 	for (const extPath of paths) {
 		const { extension, error } = await loadExtension(extPath, cwd, resolvedEventBus, runtime);

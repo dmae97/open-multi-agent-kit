@@ -169,7 +169,7 @@ export interface AgentToolResult<T> {
 	// Content blocks supporting text and images
 	content: (TextContent | ImageContent)[];
 	// Details to be displayed in a UI or logged
-	details: T;
+	details?: T;
 }
 
 // Callback for streaming tool execution updates

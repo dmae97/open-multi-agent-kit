@@ -40,13 +40,13 @@ import { initializeWithSettings } from "../discovery";
 import { registerAsyncCleanup } from "../modes/cleanup";
 import { AgentSession } from "./agent-session";
 import { AuthStorage } from "./auth-storage";
-import { createCursorExecHandlers } from "./cursor/exec-bridge";
+import { CursorExecHandlers } from "./cursor/exec-bridge";
 import {
 	type CustomCommandsLoadResult,
 	loadCustomCommands as loadCustomCommandsInternal,
 } from "./custom-commands/index";
 import type { CustomTool, CustomToolContext, CustomToolSessionEvent } from "./custom-tools/types";
-import { createEventBus, type EventBus } from "./event-bus";
+import { EventBus } from "./event-bus";
 import {
 	discoverAndLoadExtensions,
 	type ExtensionContext,
@@ -79,29 +79,29 @@ import {
 	loadProjectContextFiles as loadContextFilesInternal,
 } from "./system-prompt";
 import { time } from "./timings";
-import { createToolContextStore } from "./tools/context";
+import { ToolContextStore } from "./tools/context";
 import { getGeminiImageTools } from "./tools/gemini-image";
 import {
+	BashTool,
 	BUILTIN_TOOLS,
-	createBashTool,
-	createFindTool,
-	createGitTool,
-	createGrepTool,
-	createLsTool,
-	createPythonTool,
-	createReadTool,
-	createSshTool,
 	createTools,
-	createWriteTool,
 	EditTool,
+	FindTool,
+	GitTool,
+	GrepTool,
 	getWebSearchTools,
+	LsTool,
+	loadSshTool,
+	PythonTool,
+	ReadTool,
 	setPreferredImageProvider,
 	setPreferredWebSearchProvider,
 	type Tool,
 	type ToolSession,
+	WriteTool,
 	warmupLspServers,
 } from "./tools/index";
-import { createTtsrManager } from "./ttsr";
+import { TtsrManager } from "./ttsr";
 
 // Types
 export interface CreateAgentSessionOptions {
@@ -212,21 +212,21 @@ export type { FileSlashCommand } from "./slash-commands";
 export type { Tool } from "./tools/index";
 
 export {
-	// Tool factories
+	// Tool classes and factories
 	BUILTIN_TOOLS,
 	createTools,
 	type ToolSession,
-	// Individual tool factories (for custom usage)
-	createReadTool,
-	createBashTool,
-	createPythonTool,
-	createSshTool,
+	// Individual tool classes (for custom usage)
+	BashTool,
 	EditTool,
-	createWriteTool,
-	createGrepTool,
-	createFindTool,
-	createGitTool,
-	createLsTool,
+	FindTool,
+	GitTool,
+	GrepTool,
+	loadSshTool,
+	LsTool,
+	PythonTool,
+	ReadTool,
+	WriteTool,
 };
 
 // Helper Functions
@@ -551,7 +551,7 @@ function createCustomToolsExtension(tools: CustomTool[]): ExtensionFactory {
 export async function createAgentSession(options: CreateAgentSessionOptions = {}): Promise<CreateAgentSessionResult> {
 	const cwd = options.cwd ?? process.cwd();
 	const agentDir = options.agentDir ?? getDefaultAgentDir();
-	const eventBus = options.eventBus ?? createEventBus();
+	const eventBus = options.eventBus ?? new EventBus();
 
 	registerSshCleanup();
 	registerPythonCleanup();
@@ -662,7 +662,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	time("discoverSkills");
 
 	// Discover rules
-	const ttsrManager = createTtsrManager(settingsManager.getTtsrSettings());
+	const ttsrManager = new TtsrManager(settingsManager.getTtsrSettings());
 	const rulesResult = await loadCapability<Rule>(ruleCapability.id, { cwd });
 	for (const rule of rulesResult.items) {
 		if (rule.ttsrTrigger) {
@@ -850,7 +850,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			session.abort();
 		},
 	});
-	const toolContextStore = createToolContextStore(getSessionContext);
+	const toolContextStore = new ToolContextStore(getSessionContext);
 
 	const registeredTools = extensionRunner?.getAllRegisteredTools() ?? [];
 	const allCustomTools = [
@@ -881,10 +881,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	time("combineTools");
 
 	let cursorEventEmitter: ((event: AgentEvent) => void) | undefined;
-	const cursorExecHandlers = createCursorExecHandlers({
+	const cursorExecHandlers = new CursorExecHandlers({
 		cwd,
 		tools: toolRegistry,
-		getToolContext: toolContextStore.getContext,
+		getToolContext: () => toolContextStore.getContext(),
 		emitEvent: (event) => cursorEventEmitter?.(event),
 	});
 
@@ -986,7 +986,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		followUpMode: settingsManager.getFollowUpMode(),
 		interruptMode: settingsManager.getInterruptMode(),
 		thinkingBudgets: settingsManager.getThinkingBudgets(),
-		getToolContext: toolContextStore.getContext,
+		getToolContext: (tc) => toolContextStore.getContext(tc),
 		getApiKey: async () => {
 			const currentModel = agent.state.model;
 			if (!currentModel) {

@@ -26,6 +26,11 @@ export class LspLinterClient implements LinterClient {
 	private cwd: string;
 	private client: LspClient | null = null;
 
+	/** Factory method for creating LspLinterClient instances */
+	static create(config: ServerConfig, cwd: string): LinterClient {
+		return new LspLinterClient(config, cwd);
+	}
+
 	constructor(config: ServerConfig, cwd: string) {
 		this.config = config;
 		this.cwd = cwd;
@@ -88,11 +93,4 @@ export class LspLinterClient implements LinterClient {
 	dispose(): void {
 		// Client lifecycle is managed globally, nothing to dispose here
 	}
-}
-
-/**
- * Factory function to create an LSP linter client.
- */
-export function createLspLinterClient(config: ServerConfig, cwd: string): LinterClient {
-	return new LspLinterClient(config, cwd);
 }

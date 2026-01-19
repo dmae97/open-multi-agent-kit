@@ -1,7 +1,6 @@
 import nodePath from "node:path";
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { Text } from "@oh-my-pi/pi-tui";
+import type { AgentTool, AgentToolResult } from "@oh-my-pi/pi-agent-core";
+import { type Component, Text } from "@oh-my-pi/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { getLanguageFromPath, type Theme } from "../../modes/interactive/theme/theme";
 import type { RenderResultOptions } from "../custom-tools/types";
@@ -69,129 +68,135 @@ const defaultLsOperations: LsOperations = {
 	},
 };
 
-export function createLsTool(session: ToolSession, options?: LsToolOptions): AgentTool<typeof lsSchema> {
-	const ops = options?.operations ?? defaultLsOperations;
+export class LsTool implements AgentTool<typeof lsSchema, LsToolDetails> {
+	public readonly name = "ls";
+	public readonly label = "Ls";
+	public readonly description =
+		'List directory contents with modification times. Returns entries sorted alphabetically, with \'/\' suffix for directories and relative age (e.g., "2d ago", "just now"). Includes dotfiles. Output is truncated to 500 entries or 50KB (whichever is hit first).';
+	public readonly parameters = lsSchema;
 
-	return {
-		name: "ls",
-		label: "Ls",
-		description: `List directory contents with modification times. Returns entries sorted alphabetically, with '/' suffix for directories and relative age (e.g., "2d ago", "just now"). Includes dotfiles. Output is truncated to 500 entries or 50KB (whichever is hit first).`,
-		parameters: lsSchema,
-		execute: async (
-			_toolCallId: string,
-			{ path, limit }: { path?: string; limit?: number },
-			signal?: AbortSignal,
-		) => {
-			return untilAborted(signal, async () => {
-				const dirPath = resolveToCwd(path || ".", session.cwd);
-				const effectiveLimit = limit ?? DEFAULT_LIMIT;
+	private readonly session: ToolSession;
+	private readonly ops: LsOperations;
 
-				// Check if path exists and is a directory
-				const dirStat = await ops.stat(dirPath);
-				if (!dirStat) {
-					throw new Error(`Path not found: ${dirPath}`);
+	constructor(session: ToolSession, options?: LsToolOptions) {
+		this.session = session;
+		this.ops = options?.operations ?? defaultLsOperations;
+	}
+
+	public async execute(
+		_toolCallId: string,
+		{ path, limit }: { path?: string; limit?: number },
+		signal?: AbortSignal,
+	): Promise<AgentToolResult<LsToolDetails>> {
+		return untilAborted(signal, async () => {
+			const dirPath = resolveToCwd(path || ".", this.session.cwd);
+			const effectiveLimit = limit ?? DEFAULT_LIMIT;
+
+			// Check if path exists and is a directory
+			const dirStat = await this.ops.stat(dirPath);
+			if (!dirStat) {
+				throw new Error(`Path not found: ${dirPath}`);
+			}
+
+			if (!dirStat.isDirectory()) {
+				throw new Error(`Not a directory: ${dirPath}`);
+			}
+
+			// Read directory entries
+			let entries: string[];
+			try {
+				entries = await this.ops.readdir(dirPath);
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				throw new Error(`Cannot read directory: ${message}`);
+			}
+
+			// Sort alphabetically (case-insensitive)
+			entries.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+
+			// Format entries with directory indicators
+			const results: string[] = [];
+			let entryLimitReached = false;
+			let dirCount = 0;
+			let fileCount = 0;
+
+			for (const entry of entries) {
+				signal?.throwIfAborted();
+				if (results.length >= effectiveLimit) {
+					entryLimitReached = true;
+					break;
 				}
 
-				if (!dirStat.isDirectory()) {
-					throw new Error(`Not a directory: ${dirPath}`);
+				const fullPath = nodePath.join(dirPath, entry);
+				let suffix = "";
+				let age = "";
+
+				const entryStat = await this.ops.stat(fullPath);
+				if (!entryStat) {
+					// Skip entries we can't stat
+					continue;
 				}
 
-				// Read directory entries
-				let entries: string[];
-				try {
-					entries = await ops.readdir(dirPath);
-				} catch (error) {
-					const message = error instanceof Error ? error.message : String(error);
-					throw new Error(`Cannot read directory: ${message}`);
+				if (entryStat.isDirectory()) {
+					suffix = "/";
+					dirCount += 1;
+				} else {
+					fileCount += 1;
 				}
+				// Calculate age from mtime
+				const ageSeconds = Math.floor((Date.now() - entryStat.mtimeMs) / 1000);
+				age = formatAge(ageSeconds);
 
-				// Sort alphabetically (case-insensitive)
-				entries.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+				// Format: "name/ (2d ago)" or "name (just now)"
+				const line = age ? `${entry}${suffix} (${age})` : entry + suffix;
+				results.push(line);
+			}
 
-				// Format entries with directory indicators
-				const results: string[] = [];
-				let entryLimitReached = false;
-				let dirCount = 0;
-				let fileCount = 0;
+			if (results.length === 0) {
+				return { content: [{ type: "text", text: "(empty directory)" }], details: {} };
+			}
 
-				for (const entry of entries) {
-					signal?.throwIfAborted();
-					if (results.length >= effectiveLimit) {
-						entryLimitReached = true;
-						break;
-					}
+			// Apply byte truncation (no line limit since we already have entry limit)
+			const rawOutput = results.join("\n");
+			const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
 
-					const fullPath = nodePath.join(dirPath, entry);
-					let suffix = "";
-					let age = "";
+			let output = truncation.content;
+			const details: LsToolDetails = {
+				entries: results,
+				dirCount,
+				fileCount,
+			};
+			const truncationReasons: Array<"entryLimit" | "byteLimit"> = [];
 
-					const entryStat = await ops.stat(fullPath);
-					if (!entryStat) {
-						// Skip entries we can't stat
-						continue;
-					}
+			// Build notices
+			const notices: string[] = [];
 
-					if (entryStat.isDirectory()) {
-						suffix = "/";
-						dirCount += 1;
-					} else {
-						fileCount += 1;
-					}
-					// Calculate age from mtime
-					const ageSeconds = Math.floor((Date.now() - entryStat.mtimeMs) / 1000);
-					age = formatAge(ageSeconds);
+			if (entryLimitReached) {
+				notices.push(`${effectiveLimit} entries limit reached. Use limit=${effectiveLimit * 2} for more`);
+				details.entryLimitReached = effectiveLimit;
+				truncationReasons.push("entryLimit");
+			}
 
-					// Format: "name/ (2d ago)" or "name (just now)"
-					const line = age ? `${entry}${suffix} (${age})` : entry + suffix;
-					results.push(line);
-				}
+			if (truncation.truncated) {
+				notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
+				details.truncation = truncation;
+				truncationReasons.push("byteLimit");
+			}
 
-				if (results.length === 0) {
-					return { content: [{ type: "text", text: "(empty directory)" }], details: undefined };
-				}
+			if (truncationReasons.length > 0) {
+				details.truncationReasons = truncationReasons;
+			}
 
-				// Apply byte truncation (no line limit since we already have entry limit)
-				const rawOutput = results.join("\n");
-				const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
+			if (notices.length > 0) {
+				output += `\n\n[${notices.join(". ")}]`;
+			}
 
-				let output = truncation.content;
-				const details: LsToolDetails = {
-					entries: results,
-					dirCount,
-					fileCount,
-				};
-				const truncationReasons: Array<"entryLimit" | "byteLimit"> = [];
-
-				// Build notices
-				const notices: string[] = [];
-
-				if (entryLimitReached) {
-					notices.push(`${effectiveLimit} entries limit reached. Use limit=${effectiveLimit * 2} for more`);
-					details.entryLimitReached = effectiveLimit;
-					truncationReasons.push("entryLimit");
-				}
-
-				if (truncation.truncated) {
-					notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
-					details.truncation = truncation;
-					truncationReasons.push("byteLimit");
-				}
-
-				if (truncationReasons.length > 0) {
-					details.truncationReasons = truncationReasons;
-				}
-
-				if (notices.length > 0) {
-					output += `\n\n[${notices.join(". ")}]`;
-				}
-
-				return {
-					content: [{ type: "text", text: output }],
-					details,
-				};
-			});
-		},
-	};
+			return {
+				content: [{ type: "text", text: output }],
+				details,
+			};
+		});
+	}
 }
 
 // =============================================================================

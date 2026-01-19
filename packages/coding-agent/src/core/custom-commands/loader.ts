@@ -12,8 +12,8 @@ import { getAgentDir, getConfigDirs } from "../../config";
 import * as piCodingAgent from "../../index";
 import { execCommand } from "../exec";
 import { logger } from "../logger";
-import { createReviewCommand } from "./bundled/review";
-import { createWorktreeCommand } from "./bundled/wt";
+import { ReviewCommand } from "./bundled/review";
+import { WorktreeCommand } from "./bundled/wt";
 import type {
 	CustomCommand,
 	CustomCommandAPI,
@@ -146,19 +146,17 @@ function loadBundledCommands(sharedApi: CustomCommandAPI): LoadedCustomCommand[]
 	const bundled: LoadedCustomCommand[] = [];
 
 	// Add bundled commands here
-	const reviewCommand = createReviewCommand(sharedApi);
 	bundled.push({
 		path: "bundled:review",
 		resolvedPath: "bundled:review",
-		command: reviewCommand,
+		command: new ReviewCommand(sharedApi),
 		source: "bundled",
 	});
 
-	const worktreeCommand = createWorktreeCommand(sharedApi);
 	bundled.push({
 		path: "bundled:wt",
 		resolvedPath: "bundled:wt",
-		command: worktreeCommand,
+		command: new WorktreeCommand(sharedApi),
 		source: "bundled",
 	});
 

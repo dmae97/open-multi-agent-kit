@@ -1,4 +1,4 @@
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
+import type { AgentTool, AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import { Type } from "@sinclair/typebox";
@@ -390,32 +390,47 @@ function formatResult(value: number): string {
 	return String(value);
 }
 
-export function createCalculatorTool(_session: ToolSession): AgentTool<typeof calculatorSchema> {
-	return {
-		name: "calc",
-		label: "Calc",
-		description: renderPromptTemplate(calculatorDescription),
-		parameters: calculatorSchema,
-		execute: async (
-			_toolCallId: string,
-			{ calculations }: { calculations: Array<{ expression: string; prefix: string; suffix: string }> },
-			signal?: AbortSignal,
-		) => {
-			return untilAborted(signal, async () => {
-				const results = calculations.map((calc) => {
-					const value = evaluateExpression(calc.expression);
-					const output = `${calc.prefix}${formatResult(value)}${calc.suffix}`;
-					return { expression: calc.expression, value, output };
-				});
+// ═══════════════════════════════════════════════════════════════════════════
+// Tool Class
+// ═══════════════════════════════════════════════════════════════════════════
 
-				const outputText = results.map((result) => result.output).join("\n");
-				return {
-					content: [{ type: "text", text: outputText }],
-					details: { results },
-				};
+type CalculatorParams = { calculations: Array<{ expression: string; prefix: string; suffix: string }> };
+
+/**
+ * Calculator tool for evaluating mathematical expressions.
+ *
+ * Supports decimal, hex (0x), binary (0b), octal (0o) literals,
+ * standard arithmetic operators, and parentheses.
+ */
+export class CalculatorTool implements AgentTool<typeof calculatorSchema, CalculatorToolDetails> {
+	public readonly name = "calc";
+	public readonly label = "Calc";
+	public readonly description: string;
+	public readonly parameters = calculatorSchema;
+
+	constructor(_session: ToolSession) {
+		this.description = renderPromptTemplate(calculatorDescription);
+	}
+
+	public async execute(
+		_toolCallId: string,
+		{ calculations }: CalculatorParams,
+		signal?: AbortSignal,
+	): Promise<AgentToolResult<CalculatorToolDetails>> {
+		return untilAborted(signal, async () => {
+			const results = calculations.map((calc) => {
+				const value = evaluateExpression(calc.expression);
+				const output = `${calc.prefix}${formatResult(value)}${calc.suffix}`;
+				return { expression: calc.expression, value, output };
 			});
-		},
-	};
+
+			const outputText = results.map((result) => result.output).join("\n");
+			return {
+				content: [{ type: "text", text: outputText }],
+				details: { results },
+			};
+		});
+	}
 }
 
 // =============================================================================
