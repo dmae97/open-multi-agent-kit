@@ -736,3 +736,263 @@ describe("regression: *** End of File marker handling (2A/2G)", () => {
 		expect(result).toBe("item\nmore content\nFINAL ITEM\n");
 	});
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Regression: Model edit attempts that failed due to parser limitations
+// These tests document real model behaviors that we want to recover from.
+// Session: 2026-01-19T08-29-03-476Z_v0FEI1ixUrlssLyHL3TT3.jsonl
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("regression: model edit attempt - @@ line N syntax (session 2026-01-19)", () => {
+	let tempDir: string;
+
+	beforeEach(() => {
+		tempDir = join(tmpdir(), `model-line-n-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		mkdirSync(tempDir, { recursive: true });
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	test("@@ line 125 is parsed as line hint, not literal context search", async () => {
+		const filePath = join(tempDir, "settings.ts");
+		// Create file with enough lines - the target is around line 125
+		const lines: string[] = [];
+		for (let i = 1; i <= 130; i++) {
+			if (i === 125) {
+				lines.push("\tfuzzyMatch?: boolean; // default: true");
+			} else if (i === 126) {
+				lines.push("\tfuzzyThreshold?: number; // default: 0.95");
+			} else if (i === 127) {
+				lines.push("\tpatchMode?: boolean; // default: false");
+			} else if (i === 128) {
+				lines.push("}");
+			} else {
+				lines.push(`// line ${i}`);
+			}
+		}
+		await Bun.write(filePath, `${lines.join("\n")}\n`);
+
+		// Model's actual attempt: used @@ line 125 as anchor
+		await applyPatch(
+			{
+				path: "settings.ts",
+				operation: "update",
+				diff: `@@ line 125
+ 	fuzzyMatch?: boolean; // default: true
+ 	fuzzyThreshold?: number; // default: 0.95
+-	patchMode?: boolean; // default: false
++	patchMode?: boolean; // default: true
+ }`,
+			},
+			{ cwd: tempDir },
+		);
+
+		const result = readFileSync(filePath, "utf-8");
+		expect(result).toContain("patchMode?: boolean; // default: true");
+		expect(result).not.toContain("patchMode?: boolean; // default: false");
+	});
+
+	test("@@ line N works with various formats", async () => {
+		const filePath = join(tempDir, "code.ts");
+		const lines = Array.from({ length: 20 }, (_, i) => `content line ${i + 1}`);
+		lines[9] = "old value"; // line 10
+		await Bun.write(filePath, `${lines.join("\n")}\n`);
+
+		// Variations the model might produce
+		await applyPatch(
+			{
+				path: "code.ts",
+				operation: "update",
+				diff: `@@ line 10
+-old value
++new value`,
+			},
+			{ cwd: tempDir },
+		);
+
+		expect(readFileSync(filePath, "utf-8")).toContain("new value");
+	});
+});
+
+describe("regression: model edit attempt - nested @@ anchors (session 2026-01-19)", () => {
+	let tempDir: string;
+
+	beforeEach(() => {
+		tempDir = join(tmpdir(), `model-nested-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		mkdirSync(tempDir, { recursive: true });
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	test("@@ class X followed by @@   method on next line is parsed as nested anchors", async () => {
+		const filePath = join(tempDir, "patch.ts");
+		await Bun.write(
+			filePath,
+			`class OtherTool {
+	constructor(session: ToolSession) {
+		this.session = session;
+		this.mode = false;
+	}
+}
+
+class PatchTool {
+	constructor(session: ToolSession) {
+		this.session = session;
+		this.patchMode = session.settings?.getEditPatchMode?.() ?? false;
+		this.allowFuzzy = true;
+	}
+}
+`,
+		);
+
+		// Model's actual attempt: multi-line @@ anchors
+		await applyPatch(
+			{
+				path: "patch.ts",
+				operation: "update",
+				diff: `@@ class PatchTool
+@@   constructor
+ 	constructor(session: ToolSession) {
+ 		this.session = session;
+-		this.patchMode = session.settings?.getEditPatchMode?.() ?? false;
++		this.patchMode = session.settings?.getEditPatchMode?.() ?? true;
+ 		this.allowFuzzy = true;`,
+			},
+			{ cwd: tempDir },
+		);
+
+		const result = readFileSync(filePath, "utf-8");
+		// Should change PatchTool's constructor, not OtherTool's
+		expect(result).toContain("this.patchMode = session.settings?.getEditPatchMode?.() ?? true;");
+		expect(result).toContain("this.mode = false;"); // OtherTool unchanged
+	});
+
+	test("nested @@ anchors disambiguate between multiple matching methods", async () => {
+		const filePath = join(tempDir, "multi-class.ts");
+		await Bun.write(
+			filePath,
+			`class Alpha {
+	process() {
+		return "alpha";
+	}
+}
+
+class Beta {
+	process() {
+		return "beta";
+	}
+}
+`,
+		);
+
+		await applyPatch(
+			{
+				path: "multi-class.ts",
+				operation: "update",
+				diff: `@@ class Beta
+@@   process
+ 	process() {
+-		return "beta";
++		return "BETA";
+ 	}`,
+			},
+			{ cwd: tempDir },
+		);
+
+		const result = readFileSync(filePath, "utf-8");
+		expect(result).toContain('return "alpha"'); // Alpha unchanged
+		expect(result).toContain('return "BETA"'); // Beta changed
+	});
+});
+
+describe("regression: model edit attempt - space-separated anchors (session 2026-01-19)", () => {
+	let tempDir: string;
+
+	beforeEach(() => {
+		tempDir = join(tmpdir(), `model-space-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		mkdirSync(tempDir, { recursive: true });
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	test("@@ class PatchTool constructor is parsed as hierarchical anchors", async () => {
+		const filePath = join(tempDir, "tool.ts");
+		await Bun.write(
+			filePath,
+			`class OtherTool {
+	constructor() {
+		this.value = 1;
+	}
+}
+
+class PatchTool {
+	constructor() {
+		this.value = 2;
+	}
+}
+`,
+		);
+
+		// Model's actual attempt: space-separated anchors
+		await applyPatch(
+			{
+				path: "tool.ts",
+				operation: "update",
+				diff: `@@ class PatchTool constructor
+ 	constructor() {
+-		this.value = 2;
++		this.value = 200;
+ 	}`,
+			},
+			{ cwd: tempDir },
+		);
+
+		const result = readFileSync(filePath, "utf-8");
+		expect(result).toContain("this.value = 1;"); // OtherTool unchanged
+		expect(result).toContain("this.value = 200;"); // PatchTool changed
+	});
+
+	test("space-separated anchors work with function keyword", async () => {
+		const filePath = join(tempDir, "funcs.ts");
+		await Bun.write(
+			filePath,
+			`function outer() {
+	function helper() {
+		return 1;
+	}
+	return helper();
+}
+
+function process() {
+	function helper() {
+		return 2;
+	}
+	return helper();
+}
+`,
+		);
+
+		await applyPatch(
+			{
+				path: "funcs.ts",
+				operation: "update",
+				diff: `@@ function process helper
+ 	function helper() {
+-		return 2;
++		return 200;
+ 	}`,
+			},
+			{ cwd: tempDir },
+		);
+
+		const result = readFileSync(filePath, "utf-8");
+		expect(result).toContain("return 1;"); // outer's helper unchanged
+		expect(result).toContain("return 200;"); // process's helper changed
+	});
+});

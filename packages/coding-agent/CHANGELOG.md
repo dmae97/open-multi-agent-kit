@@ -1,9 +1,13 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added support for `@@ line N` syntax to use line numbers as positioning hints
+- Added support for nested `@@` anchors on multiple lines for hierarchical context matching
+- Added support for space-separated hierarchical anchors like `@@ class PatchTool constructor`
+- Enhanced context matching to handle hierarchical searches with nested anchors
+- Added comprehensive regression tests for model-generated patch formats
 - Added configurable fuzzy matching threshold for edit operations
 - Added edit fuzzy threshold setting with options from 0.85 (lenient) to 0.98 (strict)
 - Added binary file reading support for improved BOM detection in patch operations
@@ -14,6 +18,10 @@
 
 ### Changed
 
+- Improved diff rendering to handle optional line numbers in diff lines
+- Enhanced patch parser to accumulate multiple `@@` context lines for nested matching
+- Updated context search to treat hierarchical matching as single unique match
+- Improved error messages to display hierarchical context with `>` separator for clarity
 - Refactored output sanitization logic into centralized streaming-output module
 - Converted voice recording from factory function to class-based implementation
 - Converted RPC extension UI context from factory function to class-based implementation
@@ -53,6 +61,9 @@
 
 ### Fixed
 
+- Fixed patch parser to correctly interpret `@@ line 125` as line hint instead of literal context
+- Fixed hierarchical context matching to properly disambiguate between similar code structures
+- Fixed space-separated anchor parsing to handle multi-word contexts correctly
 - Fixed BOM detection to check binary content when text-based detection fails
 - Fixed patch preview to use configured fuzzy threshold for consistent behavior
 - Fixed trailing newline preservation to maintain original file behavior

@@ -21,6 +21,9 @@ const EMPTY_CHANGE_CONTEXT_MARKER = "@@";
 /** Regex to match unified diff hunk headers: @@ -OLD,COUNT +NEW,COUNT @@ optional-context */
 const UNIFIED_HUNK_HEADER_REGEX = /^@@\s*-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s*@@(?:\s*(.*))?$/;
 
+/** Regex to match @@ line N pattern (model-generated line hints) */
+const LINE_HINT_REGEX = /^line\s+(\d+)$/i;
+
 /**
  * Check if a line is a diff content line (context, addition, or removal).
  * These should never be treated as metadata even if their content looks like it.
@@ -193,13 +196,20 @@ interface ParseHunkResult {
 
 /**
  * Parse a single hunk from lines starting at the current position.
+ *
+ * Handles several context formats:
+ * - Empty: `@@` (no context, match from current position)
+ * - Unified: `@@ -10,3 +10,3 @@` (line numbers as hints)
+ * - Context: `@@ function foo` (search for context line)
+ * - Line hint: `@@ line 125` (use line 125 as starting position)
+ * - Nested: `@@ class Foo\n@@   method` (hierarchical context search)
  */
 function parseOneHunk(lines: string[], lineNumber: number, allowMissingContext: boolean): ParseHunkResult {
 	if (lines.length === 0) {
 		throw new ParseError("Diff does not contain any lines", lineNumber);
 	}
 
-	let changeContext: string | undefined;
+	const changeContexts: string[] = [];
 	let oldStartLine: number | undefined;
 	let newStartLine: number | undefined;
 	let startIndex: number;
@@ -209,27 +219,60 @@ function parseOneHunk(lines: string[], lineNumber: number, allowMissingContext: 
 
 	// Check for context marker
 	if (headerLine === EMPTY_CHANGE_CONTEXT_MARKER) {
-		changeContext = undefined;
 		startIndex = 1;
 	} else if (unifiedHeader) {
-		changeContext = unifiedHeader.changeContext;
+		if (unifiedHeader.changeContext) {
+			changeContexts.push(unifiedHeader.changeContext);
+		}
 		oldStartLine = unifiedHeader.oldStartLine;
 		newStartLine = unifiedHeader.newStartLine;
 		startIndex = 1;
 	} else if (headerLine.startsWith(CHANGE_CONTEXT_MARKER)) {
-		changeContext = headerLine.slice(CHANGE_CONTEXT_MARKER.length);
+		const contextValue = headerLine.slice(CHANGE_CONTEXT_MARKER.length);
+
+		// Check for @@ line N pattern (model-generated line hints)
+		const lineHintMatch = contextValue.match(LINE_HINT_REGEX);
+		if (lineHintMatch) {
+			oldStartLine = Number(lineHintMatch[1]);
+			newStartLine = oldStartLine;
+		} else {
+			changeContexts.push(contextValue);
+		}
 		startIndex = 1;
 	} else {
 		if (!allowMissingContext) {
 			throw new ParseError(`Expected hunk to start with @@ context marker, got: '${lines[0]}'`, lineNumber);
 		}
-		changeContext = undefined;
 		startIndex = 0;
+	}
+
+	// Check for nested @@ anchors on subsequent lines
+	// Format: @@ class Foo
+	//         @@   method
+	while (startIndex < lines.length) {
+		const nextLine = lines[startIndex];
+		const trimmed = nextLine.trim();
+
+		// Check if it's another @@ line (nested anchor)
+		if (trimmed.startsWith(CHANGE_CONTEXT_MARKER)) {
+			const nestedContext = trimmed.slice(CHANGE_CONTEXT_MARKER.length);
+			changeContexts.push(nestedContext);
+			startIndex++;
+		} else if (trimmed === EMPTY_CHANGE_CONTEXT_MARKER) {
+			// Empty @@ as separator - skip it
+			startIndex++;
+		} else {
+			// Not an @@ line, stop accumulating
+			break;
+		}
 	}
 
 	if (startIndex >= lines.length) {
 		throw new ParseError("Hunk does not contain any lines", lineNumber + 1);
 	}
+
+	// Combine contexts: if multiple, join with newline for hierarchical matching
+	const changeContext = changeContexts.length > 0 ? changeContexts.join("\n") : undefined;
 
 	const hunk: DiffHunk = {
 		changeContext,

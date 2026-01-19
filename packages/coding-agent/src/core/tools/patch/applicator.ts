@@ -18,7 +18,7 @@ import {
 	stripBom,
 } from "./normalize";
 import { normalizeCreateContent, parseHunks } from "./parser";
-import type { ApplyPatchOptions, ApplyPatchResult, DiffHunk, FileSystem, PatchInput } from "./types";
+import type { ApplyPatchOptions, ApplyPatchResult, ContextLineResult, DiffHunk, FileSystem, PatchInput } from "./types";
 import { ApplyPatchError } from "./types";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -115,6 +115,123 @@ function getHunkHintIndex(hunk: DiffHunk, currentIndex: number): number | undefi
 	if (hunk.oldStartLine === undefined) return undefined;
 	const hintIndex = Math.max(0, hunk.oldStartLine - 1);
 	return hintIndex >= currentIndex ? hintIndex : undefined;
+}
+
+/**
+ * Find hierarchical context in file lines.
+ *
+ * Handles three formats:
+ * 1. Simple context: "function foo" - find this line
+ * 2. Hierarchical (newline): "class Foo\nmethod" - find class, then method after it
+ * 3. Hierarchical (space): "class Foo method" - try as literal first, then split and search
+ *
+ * @returns The result from finding the final (innermost) context, or undefined if not found
+ */
+function findHierarchicalContext(
+	lines: string[],
+	context: string,
+	startFrom: number,
+	lineHint: number | undefined,
+): ContextLineResult {
+	// Check for newline-separated hierarchical contexts (from nested @@ anchors)
+	if (context.includes("\n")) {
+		const parts = context
+			.split("\n")
+			.map((p) => p.trim())
+			.filter((p) => p.length > 0);
+		let currentStart = startFrom;
+
+		for (let i = 0; i < parts.length; i++) {
+			const part = parts[i];
+			const isLast = i === parts.length - 1;
+
+			// For intermediate contexts, we just need to find them and continue from there
+			// For the final context, we return the full result with match count
+			const result = findContextLine(lines, part, currentStart);
+
+			if (result.index === undefined) {
+				// Try from beginning if not found from current position
+				const fromStartResult = findContextLine(lines, part, 0);
+				if (fromStartResult.index === undefined) {
+					return { index: undefined, confidence: 0 };
+				}
+				currentStart = fromStartResult.index + 1;
+				if (isLast) {
+					// Hierarchical matching narrows scope - treat as single match
+					return { ...fromStartResult, matchCount: 1 };
+				}
+			} else {
+				currentStart = result.index + 1;
+				if (isLast) {
+					// Hierarchical matching narrows scope - treat as single match
+					return { ...result, matchCount: 1 };
+				}
+			}
+		}
+		return { index: undefined, confidence: 0 };
+	}
+
+	// Try literal context first
+	let result = findContextLine(lines, context, startFrom);
+
+	// If line hint exists and result is ambiguous or missing, try from hint
+	if ((result.index === undefined || (result.matchCount ?? 0) > 1) && lineHint !== undefined) {
+		const hintStart = Math.max(0, lineHint - 1);
+		const hintedResult = findContextLine(lines, context, hintStart);
+		if (hintedResult.index !== undefined) {
+			// Line hint successfully found a match - treat as disambiguated
+			return { ...hintedResult, matchCount: 1 };
+		}
+	}
+
+	// If found uniquely, return it
+	if (result.index !== undefined && (result.matchCount ?? 0) <= 1) {
+		return result;
+	}
+
+	// Try from beginning if not found
+	if (result.index === undefined && startFrom !== 0) {
+		result = findContextLine(lines, context, 0);
+		if (result.index !== undefined && (result.matchCount ?? 0) <= 1) {
+			return result;
+		}
+	}
+
+	// Fallback: try space-separated hierarchical matching
+	// e.g., "class PatchTool constructor" -> find "class PatchTool", then "constructor" after it
+	const spaceParts = context.split(/\s+/).filter((p) => p.length > 0);
+	if (spaceParts.length > 1) {
+		let currentStart = startFrom;
+
+		for (let i = 0; i < spaceParts.length; i++) {
+			const part = spaceParts[i];
+			const isLast = i === spaceParts.length - 1;
+
+			const partResult = findContextLine(lines, part, currentStart);
+
+			if (partResult.index === undefined) {
+				// Try from beginning
+				const fromStartResult = findContextLine(lines, part, 0);
+				if (fromStartResult.index === undefined) {
+					// Space-separated fallback failed, return original result
+					return result;
+				}
+				currentStart = fromStartResult.index + 1;
+				if (isLast) {
+					// Hierarchical matching narrows scope - treat as single match
+					return { ...fromStartResult, matchCount: 1 };
+				}
+			} else {
+				currentStart = partResult.index + 1;
+				if (isLast) {
+					// Hierarchical matching narrows scope - treat as single match
+					return { ...partResult, matchCount: 1 };
+				}
+			}
+		}
+	}
+
+	return result;
 }
 
 /** Find sequence with optional hint position, returning full search result */
@@ -224,49 +341,34 @@ function computeReplacements(originalLines: string[], path: string, hunks: DiffH
 
 		// If hunk has a changeContext, find it and adjust lineIndex
 		if (hunk.changeContext !== undefined) {
-			// Use findContextLine for robust matching with substring/fuzzy fallback
-			let result = findContextLine(originalLines, hunk.changeContext, lineIndex);
-			let usedLineHint = false;
+			// Use hierarchical context matching for nested @@ anchors and space-separated contexts
+			const result = findHierarchicalContext(originalLines, hunk.changeContext, lineIndex, lineHint);
 
-			// If ambiguous or missing and a line hint exists, bias using the hint
-			if ((result.index === undefined || (result.matchCount ?? 0) > 1) && lineHint !== undefined) {
-				const hintStart = Math.max(0, lineHint - 1);
-				const hintedResult = findContextLine(originalLines, hunk.changeContext, hintStart);
-				if (hintedResult.index !== undefined) {
-					result = hintedResult;
-					usedLineHint = true;
-				}
-			}
-
-			if (!usedLineHint && result.matchCount !== undefined && result.matchCount > 1) {
+			if (result.matchCount !== undefined && result.matchCount > 1) {
+				const displayContext = hunk.changeContext.includes("\n")
+					? hunk.changeContext.split("\n").pop()
+					: hunk.changeContext;
 				throw new ApplyPatchError(
-					`Found ${result.matchCount} matches for context '${hunk.changeContext}' in ${path}. ` +
+					`Found ${result.matchCount} matches for context '${displayContext}' in ${path}. ` +
 						`Add more surrounding context or additional @@ anchors to make it unique.`,
 				);
 			}
 
-			// If search failed, try fallback strategies
-			let idx = result.index;
-			if (idx === undefined && lineIndex !== 0) {
-				// Last resort: search from beginning (handles out-of-order hunks)
-				const fromStartResult = findContextLine(originalLines, hunk.changeContext, 0);
-				if (fromStartResult.matchCount !== undefined && fromStartResult.matchCount > 1) {
-					throw new ApplyPatchError(
-						`Found ${fromStartResult.matchCount} matches for context '${hunk.changeContext}' in ${path}. ` +
-							`Add more surrounding context or additional @@ anchors to make it unique.`,
-					);
-				}
-				idx = fromStartResult.index;
-			}
-
+			const idx = result.index;
 			if (idx === undefined) {
-				throw new ApplyPatchError(`Failed to find context '${hunk.changeContext}' in ${path}`);
+				const displayContext = hunk.changeContext.includes("\n")
+					? hunk.changeContext.split("\n").join(" > ")
+					: hunk.changeContext;
+				throw new ApplyPatchError(`Failed to find context '${displayContext}' in ${path}`);
 			}
 
-			// If oldLines[0] matches changeContext, start search at idx (not idx+1)
+			// If oldLines[0] matches the final context, start search at idx (not idx+1)
 			// This handles the common case where @@ scope and first context line are identical
 			const firstOldLine = hunk.oldLines[0];
-			if (firstOldLine !== undefined && firstOldLine.trim() === hunk.changeContext.trim()) {
+			const finalContext = hunk.changeContext.includes("\n")
+				? hunk.changeContext.split("\n").pop()?.trim()
+				: hunk.changeContext.trim();
+			if (firstOldLine !== undefined && firstOldLine.trim() === finalContext) {
 				lineIndex = idx;
 			} else {
 				lineIndex = idx + 1;
