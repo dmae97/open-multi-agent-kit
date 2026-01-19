@@ -96,7 +96,7 @@ function resolveExtractedDir(tempDir: string): string {
 }
 
 async function extractTarGz(archivePath: string): Promise<{ dir: string; cleanupDir: string }> {
-	const tempDir = await mkdtemp(join(tmpdir(), "edit-bench-fixtures-"));
+	const tempDir = await mkdtemp(join(tmpdir(), "reach-benchmark-fixtures-"));
 	const result = Bun.spawnSync(["tar", "-xzf", archivePath, "-C", tempDir]);
 	if (!result.success) {
 		await rm(tempDir, { recursive: true, force: true });

@@ -165,15 +165,17 @@ export interface AgentState {
 	error?: string;
 }
 
-export interface AgentToolResult<T> {
+export interface AgentToolResult<T, TNormative extends TSchema = TSchema> {
 	// Content blocks supporting text and images
 	content: (TextContent | ImageContent)[];
 	// Details to be displayed in a UI or logged
 	details?: T;
+	/** Normative input for the tool result */
+	$normative?: Static<TNormative>;
 }
 
 // Callback for streaming tool execution updates
-export type AgentToolUpdateCallback<T = any> = (partialResult: AgentToolResult<T>) => void;
+export type AgentToolUpdateCallback<T = any, TNormative extends TSchema = TSchema> = (partialResult: AgentToolResult<T, TNormative>) => void;
 
 /** Options passed to renderResult */
 export interface RenderResultOptions {
@@ -204,15 +206,15 @@ export interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any
 		toolCallId: string,
 		params: Static<TParameters>,
 		signal?: AbortSignal,
-		onUpdate?: AgentToolUpdateCallback<TDetails>,
+		onUpdate?: AgentToolUpdateCallback<TDetails, TParameters>,
 		context?: AgentToolContext,
-	) => Promise<AgentToolResult<TDetails>>;
+	) => Promise<AgentToolResult<TDetails, TParameters>>;
 
 	/** Optional custom rendering for tool call display (returns UI component) */
 	renderCall?: (args: Static<TParameters>, theme: TTheme) => unknown;
 
 	/** Optional custom rendering for tool result display (returns UI component) */
-	renderResult?: (result: AgentToolResult<TDetails>, options: RenderResultOptions, theme: TTheme) => unknown;
+	renderResult?: (result: AgentToolResult<TDetails, TParameters>, options: RenderResultOptions, theme: TTheme) => unknown;
 }
 
 // AgentContext is like Context but uses AgentTool

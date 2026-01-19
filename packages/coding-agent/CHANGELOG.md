@@ -1,9 +1,11 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added normative patch generation to canonicalize edit tool output
+- Added tool call argument rewriting for session history persistence
+- Added comprehensive test coverage for tool call argument rewriting
 - Added fallback variant generation for patch matching with trimmed context, collapsed duplicates, and single-line reduction
 - Added comment-prefix normalization for improved fuzzy matching across different comment styles
 - Added support for ellipsis (...) and ellipsis character (…) as context placeholders in patch hunks
@@ -32,6 +34,9 @@
 
 ### Changed
 
+- Enhanced patch applicator to support normalized patch input processing
+- Updated edit tool to include normative patch data in tool results
+- Improved session manager with tool call argument rewriting capabilities
 - Improved indentation adjustment to preserve original file context while fixing new lines
 - Enhanced patch parser to handle implicit context lines without space prefixes
 - Updated patch operation schema to use 'op' instead of 'operation' and 'rename' instead of 'moveTo'

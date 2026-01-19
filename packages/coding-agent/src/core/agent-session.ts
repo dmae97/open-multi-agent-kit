@@ -21,10 +21,10 @@ import { getAgentDbPath } from "../config";
 import { theme } from "../modes/interactive/theme/theme";
 import { type BashResult, executeBash as executeBashCommand, executeBashWithOperations } from "./bash-executor";
 import {
-	type CompactionResult,
 	calculateContextTokens,
 	collectEntriesForBranchSummary,
 	compact,
+	type CompactionResult,
 	estimateTokens,
 	generateBranchSummary,
 	prepareCompaction,
@@ -51,7 +51,7 @@ import { logger } from "./logger";
 import type { BashExecutionMessage, CustomMessage } from "./messages";
 import type { ModelRegistry } from "./model-registry";
 import { parseModelString } from "./model-resolver";
-import { expandPromptTemplate, type PromptTemplate, parseCommandArgs } from "./prompt-templates";
+import { expandPromptTemplate, parseCommandArgs, type PromptTemplate } from "./prompt-templates";
 import type { BranchSummaryEntry, CompactionEntry, NewSessionOptions, SessionManager } from "./session-manager";
 import type { SettingsManager, SkillsSettings } from "./settings-manager";
 import type { Skill, SkillWarning } from "./skills";
@@ -68,12 +68,12 @@ export type AgentSessionEvent =
 	| AgentEvent
 	| { type: "auto_compaction_start"; reason: "threshold" | "overflow" }
 	| {
-			type: "auto_compaction_end";
-			result: CompactionResult | undefined;
-			aborted: boolean;
-			willRetry: boolean;
-			errorMessage?: string;
-	  }
+		type: "auto_compaction_end";
+		result: CompactionResult | undefined;
+		aborted: boolean;
+		willRetry: boolean;
+		errorMessage?: string;
+	}
 	| { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
 	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
 	| { type: "ttsr_triggered"; rules: Rule[] }
@@ -174,12 +174,12 @@ const noOpUIContext: ExtensionUIContext = {
 	select: async (_title, _options, _dialogOptions) => undefined,
 	confirm: async (_title, _message, _dialogOptions) => false,
 	input: async (_title, _placeholder, _dialogOptions) => undefined,
-	notify: () => {},
-	setStatus: () => {},
-	setWidget: () => {},
-	setTitle: () => {},
+	notify: () => { },
+	setStatus: () => { },
+	setWidget: () => { },
+	setTitle: () => { },
 	custom: async () => undefined as never,
-	setEditorText: () => {},
+	setEditorText: () => { },
 	getEditorText: () => "",
 	editor: async () => undefined,
 	get theme() {
@@ -188,9 +188,9 @@ const noOpUIContext: ExtensionUIContext = {
 	getAllThemes: () => [],
 	getTheme: () => undefined,
 	setTheme: (_theme) => ({ success: false, error: "UI not available" }),
-	setFooter: () => {},
-	setHeader: () => {},
-	setEditorComponent: () => {},
+	setFooter: () => { },
+	setHeader: () => { },
+	setEditorComponent: () => { },
 };
 
 async function cleanupSshResources(): Promise<void> {
@@ -399,7 +399,7 @@ export class AgentSession {
 								timestamp: Date.now(),
 							});
 						}
-						this.agent.continue().catch(() => {});
+						this.agent.continue().catch(() => { });
 					}, 50);
 					return;
 				}
@@ -431,6 +431,18 @@ export class AgentSession {
 			// Track assistant message for auto-compaction (checked on agent_end)
 			if (event.message.role === "assistant") {
 				this._lastAssistantMessage = event.message;
+			}
+
+			if (event.message.role === "toolResult") {
+				const { $normative, toolCallId } = event.message as {
+					toolName?: string;
+					toolCallId?: string;
+					details?: unknown;
+					$normative?: Record<string, unknown>;
+				};
+				if ($normative && toolCallId) {
+					await this._rewriteToolCallArgs(toolCallId, $normative);
+				}
 			}
 		}
 
@@ -511,6 +523,33 @@ export class AgentSession {
 			}
 		}
 		return undefined;
+	}
+
+	/** Rewrite tool call arguments in agent state and persisted session history. */
+	private async _rewriteToolCallArgs(toolCallId: string, args: Record<string, unknown>): Promise<void> {
+		let updated = false;
+		const messages = this.agent.state.messages;
+		for (let i = messages.length - 1; i >= 0; i--) {
+			const msg = messages[i];
+			if (msg.role !== "assistant") continue;
+			const assistantMsg = msg as AssistantMessage;
+			if (!Array.isArray(assistantMsg.content)) continue;
+			for (const block of assistantMsg.content) {
+				if (typeof block !== "object" || block === null) continue;
+				if (!("type" in block) || (block as { type?: string }).type !== "toolCall") continue;
+				const toolCall = block as { id?: string; arguments?: Record<string, unknown> };
+				if (toolCall.id === toolCallId) {
+					toolCall.arguments = args;
+					updated = true;
+					break;
+				}
+			}
+			if (updated) break;
+		}
+
+		if (updated) {
+			await this.sessionManager.rewriteAssistantToolCallArgs(toolCallId, args);
+		}
 	}
 
 	/** Emit extension events based on agent events */
@@ -783,8 +822,8 @@ export class AgentSession {
 		if (!this.model) {
 			throw new Error(
 				"No model selected.\n\n" +
-					`Use /login, set an API key environment variable, or create ${getAgentDbPath()}\n\n` +
-					"Then use /model to select a model.",
+				`Use /login, set an API key environment variable, or create ${getAgentDbPath()}\n\n` +
+				"Then use /model to select a model.",
 			);
 		}
 
@@ -793,7 +832,7 @@ export class AgentSession {
 		if (!apiKey) {
 			throw new Error(
 				`No API key found for ${this.model.provider}.\n\n` +
-					`Use /login, set an API key environment variable, or create ${getAgentDbPath()}`,
+				`Use /login, set an API key environment variable, or create ${getAgentDbPath()}`,
 			);
 		}
 
@@ -1813,7 +1852,7 @@ export class AgentSession {
 			content: [{ type: "text", text: reminder }],
 			timestamp: Date.now(),
 		});
-		this.agent.continue().catch(() => {});
+		this.agent.continue().catch(() => { });
 	}
 
 	private _getModelKey(model: Model<any>): string {
@@ -2064,7 +2103,7 @@ export class AgentSession {
 				}
 
 				setTimeout(() => {
-					this.agent.continue().catch(() => {});
+					this.agent.continue().catch(() => { });
 				}, 100);
 			}
 		} catch (error) {
@@ -2345,13 +2384,13 @@ export class AgentSession {
 		try {
 			const result = options?.operations
 				? await executeBashWithOperations(command, process.cwd(), options.operations, {
-						onChunk,
-						signal: this._bashAbortController.signal,
-					})
+					onChunk,
+					signal: this._bashAbortController.signal,
+				})
 				: await executeBashCommand(command, {
-						onChunk,
-						signal: this._bashAbortController.signal,
-					});
+					onChunk,
+					signal: this._bashAbortController.signal,
+				});
 
 			this.recordBashResult(command, result, options);
 			return result;
@@ -2689,9 +2728,9 @@ export class AgentSession {
 				typeof targetEntry.content === "string"
 					? targetEntry.content
 					: targetEntry.content
-							.filter((c): c is { type: "text"; text: string } => c.type === "text")
-							.map((c) => c.text)
-							.join("");
+						.filter((c): c is { type: "text"; text: string } => c.type === "text")
+						.map((c) => c.text)
+						.join("");
 		} else {
 			// Non-user message: leaf = selected node
 			newLeafId = targetId;

@@ -8,10 +8,10 @@
  * The mode is determined by the `edit.patchMode` setting.
  */
 
-import { mkdir } from "node:fs/promises";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { StringEnum } from "@oh-my-pi/pi-ai";
 import { Type } from "@sinclair/typebox";
+import { mkdir } from "node:fs/promises";
 import patchDescription from "../../../prompts/tools/patch.md" with { type: "text" };
 import replaceDescription from "../../../prompts/tools/replace.md" with { type: "text" };
 import { renderPromptTemplate } from "../../prompt-templates";
@@ -28,6 +28,7 @@ import { applyPatch } from "./applicator";
 import { generateDiffString, generateUnifiedDiffString, replaceText } from "./diff";
 import { DEFAULT_FUZZY_THRESHOLD, findMatch } from "./fuzzy";
 import { detectLineEnding, normalizeToLF, restoreLineEndings, stripBom } from "./normalize";
+import { buildNormativeUpdateInput } from "./normative";
 import { type EditToolDetails, getLspBatchRequest } from "./shared";
 // Internal imports
 import type { FileSystem, Operation, PatchInput } from "./types";
@@ -48,7 +49,7 @@ export {
 	findContextLine,
 	findMatch as findEditMatch,
 	findMatch,
-	seekSequence,
+	seekSequence
 } from "./fuzzy";
 
 // Normalization
@@ -57,7 +58,7 @@ export {
 	detectLineEnding,
 	normalizeToLF,
 	restoreLineEndings,
-	stripBom,
+	stripBom
 } from "./normalize";
 
 // Parsing
@@ -69,22 +70,12 @@ export type {
 	ApplyPatchOptions,
 	ApplyPatchResult,
 	ContextLineResult,
-	DiffError,
-	DiffError as EditDiffError,
-	DiffHunk,
-	DiffHunk as UpdateChunk,
-	DiffHunk as UpdateFileChunk,
-	DiffResult,
-	DiffResult as EditDiffResult,
-	FileChange,
-	FileSystem,
-	FuzzyMatch as EditMatch,
-	FuzzyMatch,
-	MatchOutcome as EditMatchOutcome,
-	MatchOutcome,
+	DiffError, DiffHunk, DiffResult, DiffError as EditDiffError, DiffResult as EditDiffResult, FuzzyMatch as EditMatch, MatchOutcome as EditMatchOutcome, FileChange,
+	FileSystem, FuzzyMatch, MatchOutcome,
 	Operation,
 	PatchInput,
-	SequenceSearchResult,
+	SequenceSearchResult, DiffHunk as UpdateChunk,
+	DiffHunk as UpdateFileChunk
 } from "./types";
 // Types
 // Legacy aliases for backwards compatibility
@@ -118,8 +109,8 @@ const patchEditSchema = Type.Object({
 	),
 });
 
-type ReplaceParams = { path: string; oldText: string; newText: string; all?: boolean };
-type PatchParams = { path: string; op?: string; rename?: string; diff?: string };
+export type ReplaceParams = { path: string; oldText: string; newText: string; all?: boolean };
+export type PatchParams = { path: string; op?: string; rename?: string; diff?: string };
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LSP FileSystem for patch mode
@@ -188,16 +179,18 @@ class LspFileSystem implements FileSystem {
 // Tool Class
 // ═══════════════════════════════════════════════════════════════════════════
 
+type TInput = typeof replaceEditSchema | typeof patchEditSchema;
+
 /**
  * Edit tool implementation.
  *
  * Creates replace-mode or patch-mode behavior based on session settings.
  */
-export class EditTool implements AgentTool<typeof replaceEditSchema | typeof patchEditSchema, EditToolDetails> {
+export class EditTool implements AgentTool<TInput> {
 	public readonly name = "edit";
 	public readonly label = "Edit";
 	public readonly description: string;
-	public readonly parameters: typeof replaceEditSchema | typeof patchEditSchema;
+	public readonly parameters: TInput;
 
 	private readonly session: ToolSession;
 	private readonly patchMode: boolean;
@@ -270,9 +263,9 @@ export class EditTool implements AgentTool<typeof replaceEditSchema | typeof pat
 		_toolCallId: string,
 		params: ReplaceParams | PatchParams,
 		signal?: AbortSignal,
-		_onUpdate?: AgentToolUpdateCallback<EditToolDetails>,
+		_onUpdate?: AgentToolUpdateCallback<EditToolDetails, TInput>,
 		context?: AgentToolContext,
-	): Promise<AgentToolResult<EditToolDetails>> {
+	): Promise<AgentToolResult<EditToolDetails, TInput>> {
 		const batchRequest = getLspBatchRequest(context?.toolCall);
 
 		// ─────────────────────────────────────────────────────────────────
@@ -303,10 +296,17 @@ export class EditTool implements AgentTool<typeof replaceEditSchema | typeof pat
 
 			// Generate diff for display
 			let diffResult = { diff: "", firstChangedLine: undefined as number | undefined };
+			let normative: PatchInput | undefined;
 			if (result.change.type === "update" && result.change.oldContent && result.change.newContent) {
 				const normalizedOld = normalizeToLF(stripBom(result.change.oldContent).text);
 				const normalizedNew = normalizeToLF(stripBom(result.change.newContent).text);
 				diffResult = generateUnifiedDiffString(normalizedOld, normalizedNew);
+				normative = buildNormativeUpdateInput({
+					path,
+					rename: effRename,
+					oldContent: result.change.oldContent,
+					newContent: result.change.newContent,
+				});
 			}
 
 			let resultText: string;
@@ -341,6 +341,7 @@ export class EditTool implements AgentTool<typeof replaceEditSchema | typeof pat
 					op,
 					rename: effRename,
 				},
+				$normative: normative,
 			};
 		}
 

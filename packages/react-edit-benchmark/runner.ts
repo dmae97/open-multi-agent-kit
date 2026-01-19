@@ -7,14 +7,15 @@
 
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { RpcClient } from "@oh-my-pi/pi-coding-agent";
-import { appendFile, cp, mkdtemp, readdir, rm } from "node:fs/promises";
+import { appendFile, cp, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { formatDirectory } from "./formatter";
 import { extractTaskFiles, type EditTask } from "./tasks";
 import { verifyExpectedFileSubset, verifyExpectedFiles } from "./verify";
 
 
-const ROOT_DIR = await mkdtemp("reb-");
+const TMP = await mkdtemp(join(tmpdir(), "reach-benchmark-"));
 
 
 export interface BenchmarkConfig {
@@ -147,7 +148,8 @@ async function getExpectedDir(task: EditTask): Promise<{ dir: string; cleanup: (
 		return { dir: task.expectedDir, cleanup: async () => {} };
 	}
 	if (task.tarballPath) {
-		const tempDir = await mkdtemp(join(ROOT_DIR, `expected-${task.id}-`));
+		const tempDir = join(TMP, `expected-${task.id}-${crypto.randomUUID()}`);
+		await mkdir(tempDir, { recursive: true });
 		await extractTaskFiles(task.tarballPath, task.id, tempDir, "expected");
 		return {
 			dir: tempDir,
@@ -188,7 +190,7 @@ async function runSingleTask(
 		totalInputChars: 0,
 	};
 
-	const logFile = join(ROOT_DIR, `run-${task.id}-${runIndex}.jsonl`);
+	const logFile = join(TMP, `run-${task.id}-${runIndex}.jsonl`);
 	const logEvent = async (event: unknown) => {
 		await appendFile(logFile, JSON.stringify(event) + "\n");
 	};
@@ -406,7 +408,7 @@ async function runBatchedTask(
 		totalInputChars: 0,
 	};
 
-	const logFile = join(ROOT_DIR, `run-${task.id}-${runIndex}.jsonl`);
+	const logFile = join(TMP, `run-${task.id}-${runIndex}.jsonl`);
 	const logEvent = async (event: unknown) => {
 		await appendFile(logFile, JSON.stringify(event) + "\n");
 	};
@@ -740,7 +742,8 @@ async function runBatch(
 	cliPath: string,
 	onProgress?: (event: ProgressEvent) => void,
 ): Promise<Array<{ task: EditTask; result: TaskRunResult }>> {
-	const workDir = await mkdtemp(join(ROOT_DIR, "batch-"));
+	const workDir = join(TMP, `batch-${crypto.randomUUID()}`);
+	await mkdir(workDir, { recursive: true });
 	const results: Array<{ task: EditTask; result: TaskRunResult }> = [];
 	let client: RpcClient | null = null;
 	const expectedDirs = new Map<string, { dir: string; cleanup: () => Promise<void> }>();
@@ -836,7 +839,7 @@ export async function runTask(
 
 	try {
 		for (let i = 0; i < config.runsPerTask; i++) {
-			const tempDir = await mkdtemp(join(ROOT_DIR, `${task.id}-`));
+			const tempDir = await mkdtemp(join(TMP, `${task.id}-`));
 			tempDirs.push(tempDir);
 			await copyFixtures(task, tempDir);
 		}

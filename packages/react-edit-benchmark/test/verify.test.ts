@@ -10,7 +10,7 @@ async function createTempDirs(): Promise<{
 	actualDir: string;
 	cleanup: () => Promise<void>;
 }> {
-	const root = await mkdtemp(join(tmpdir(), "react-edit-verify-"));
+	const root = await mkdtemp(join(tmpdir(), "reach-benchmark-verify-"));
 	const expectedDir = join(root, "expected");
 	const actualDir = join(root, "actual");
 	await mkdir(expectedDir, { recursive: true });

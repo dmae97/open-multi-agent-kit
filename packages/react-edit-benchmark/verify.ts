@@ -92,10 +92,7 @@ function createCompactDiff(expected: string, actual: string, contextLines = 3): 
 	return output.join("\n");
 }
 
-export async function verifyExpectedFiles(
-	expectedDir: string,
-	actualDir: string,
-): Promise<VerificationResult> {
+export async function verifyExpectedFiles(expectedDir: string, actualDir: string): Promise<VerificationResult> {
 	return verifyExpectedFileSubset(expectedDir, actualDir);
 }
 

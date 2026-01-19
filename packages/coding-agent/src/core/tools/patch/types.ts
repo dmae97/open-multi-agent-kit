@@ -82,6 +82,23 @@ export interface PatchInput {
 	diff?: string;
 }
 
+/** Normalized patch input used internally by the applicator. */
+export interface NormalizedPatchInput {
+	path: string;
+	op: Operation;
+	rename?: string;
+	diff?: string;
+}
+
+export function normalizePatchInput(input: PatchInput): NormalizedPatchInput {
+	return {
+		path: input.path,
+		op: input.op ?? "update",
+		rename: input.rename,
+		diff: input.diff,
+	};
+}
+
 /** A single hunk/chunk in a diff */
 export interface DiffHunk {
 	/** Context line to narrow down position (e.g., class/method definition) */

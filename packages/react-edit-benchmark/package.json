@@ -16,8 +16,7 @@
 		"@oh-my-pi/pi-agent-core": "workspace:*",
 		"@oh-my-pi/pi-coding-agent": "workspace:*",
 		"diff": "^8.0.2",
-		"prettier": "^3.3.3",
-		"tar-stream": "^3.1.7"
+		"prettier": "^3.3.3"
 	},
 	"devDependencies": {
 		"@types/diff": "^7.0.2"

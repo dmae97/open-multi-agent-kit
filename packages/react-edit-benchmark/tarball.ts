@@ -1,12 +1,10 @@
 /**
  * Tarball utilities for reading fixtures directly from .tar.gz archives.
+ * Uses Bun.Archive for native tar.gz handling.
  */
 
-import { createReadStream } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join, dirname, basename } from "node:path";
-import { createGunzip } from "node:zlib";
-import { extract, type Headers } from "tar-stream";
 
 export interface TarballTask {
 	id: string;
@@ -35,30 +33,17 @@ interface ParsedTarballTask {
 }
 
 export async function readTarball(tarballPath: string): Promise<TarballEntry[]> {
-	return new Promise((resolve, reject) => {
-		const entries: TarballEntry[] = [];
-		const extractor = extract();
+	const bytes = await Bun.file(tarballPath).arrayBuffer();
+	const archive = new Bun.Archive(bytes);
+	const files = await archive.files();
 
-		extractor.on("entry", (header: Headers, stream, next) => {
-			const chunks: Buffer[] = [];
-			stream.on("data", (chunk: Buffer) => chunks.push(chunk));
-			stream.on("end", () => {
-				if (header.type === "file") {
-					entries.push({
-						path: header.name,
-						content: Buffer.concat(chunks),
-					});
-				}
-				next();
-			});
-			stream.resume();
-		});
+	const entries: TarballEntry[] = [];
+	for (const [path, file] of files) {
+		const content = Buffer.from(await file.arrayBuffer());
+		entries.push({ path, content });
+	}
 
-		extractor.on("finish", () => resolve(entries));
-		extractor.on("error", reject);
-
-		createReadStream(tarballPath).pipe(createGunzip()).pipe(extractor);
-	});
+	return entries;
 }
 
 function parseTarballEntries(entries: TarballEntry[]): {
@@ -170,9 +155,7 @@ export async function loadTasksFromTarball(tarballPath: string): Promise<Tarball
 	const entries = await readTarball(tarballPath);
 	const { tasks, issues } = parseTarballEntries(entries);
 	if (issues.length > 0) {
-		const details = issues
-			.map((issue) => `- ${issue.taskId}: ${issue.message}`)
-			.join("\n");
+		const details = issues.map((issue) => `- ${issue.taskId}: ${issue.message}`).join("\n");
 		throw new Error(`Fixture tarball validation failed:\n${details}`);
 	}
 
@@ -195,62 +178,18 @@ export async function extractTaskFiles(
 ): Promise<void> {
 	const prefix = `fixtures/${taskId}/${type}/`;
 
-	await new Promise<void>((resolve, reject) => {
-		const extractor = extract();
-		let failed = false;
-		const fail = (err: Error): void => {
-			if (failed) return;
-			failed = true;
-			reject(err);
-			extractor.destroy(err);
-		};
+	const bytes = await Bun.file(tarballPath).arrayBuffer();
+	const archive = new Bun.Archive(bytes);
+	const files = await archive.files();
 
-		extractor.on("entry", async (header: Headers, stream, next) => {
-			if (header.type === "file" && header.name.startsWith(prefix)) {
-				const relativePath = header.name.slice(prefix.length);
-				const destPath = join(destDir, relativePath);
+	for (const [path, file] of files) {
+		if (!path.startsWith(prefix)) continue;
 
-				try {
-					await mkdir(dirname(destPath), { recursive: true });
-				} catch (err) {
-					const error = err instanceof Error ? err : new Error(String(err));
-					fail(error);
-					return;
-				}
+		const relativePath = path.slice(prefix.length);
+		if (!relativePath) continue;
 
-				const chunks: Buffer[] = [];
-				stream.on("data", (chunk: Buffer) => chunks.push(chunk));
-				stream.on("error", (err) => {
-					fail(err instanceof Error ? err : new Error(String(err)));
-				});
-				stream.on("end", () => {
-					Bun.write(destPath, Buffer.concat(chunks))
-						.then(() => {
-							if (!failed) {
-								next();
-							}
-						})
-						.catch((err) => {
-							const error = err instanceof Error ? err : new Error(String(err));
-							fail(new Error(`Failed to write ${destPath}: ${error.message}`));
-						});
-				});
-				stream.resume();
-			} else {
-				stream.resume();
-				next();
-			}
-		});
-
-		extractor.on("finish", () => {
-			if (!failed) {
-				resolve();
-			}
-		});
-		extractor.on("error", (err) => {
-			fail(err instanceof Error ? err : new Error(String(err)));
-		});
-
-		createReadStream(tarballPath).pipe(createGunzip()).pipe(extractor);
-	});
+		const destPath = join(destDir, relativePath);
+		await mkdir(dirname(destPath), { recursive: true });
+		await Bun.write(destPath, await file.arrayBuffer());
+	}
 }

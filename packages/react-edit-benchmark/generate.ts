@@ -20,11 +20,9 @@
  */
 
 import { $ } from "bun";
-import { createWriteStream, existsSync, mkdirSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { parseArgs } from "node:util";
-import { createGzip } from "node:zlib";
-import { pack } from "tar-stream";
 import { ALL_MUTATIONS, CATEGORY_MAP, type Mutation, type MutationInfo } from "./mutations";
 
 const SCRIPT_DIR = import.meta.dir;
@@ -159,10 +157,6 @@ function collectFiles(reactDir: string): string[] {
 
 	walk(packagesDir);
 	return candidates.sort();
-}
-
-function readFile(filePath: string): string {
-	return Bun.file(filePath).text() as unknown as string;
 }
 
 async function readFileAsync(filePath: string): Promise<string> {
@@ -550,23 +544,11 @@ interface TarEntry {
 }
 
 async function writeTarball(entries: TarEntry[], outputPath: string): Promise<void> {
-	return new Promise((resolve, reject) => {
-		const packer = pack();
-		const output = createWriteStream(outputPath);
-		const gzip = createGzip();
-
-		packer.pipe(gzip).pipe(output);
-
+	const data: Record<string, string> = {};
 		for (const entry of entries) {
-			packer.entry({ name: entry.name }, entry.content);
+		data[entry.name] = entry.content;
 		}
-
-		packer.finalize();
-
-		output.on("close", resolve);
-		output.on("error", reject);
-		gzip.on("error", reject);
-	});
+	await Bun.Archive.write(outputPath, data, { compress: "gzip" });
 }
 
 function buildCaseEntries(result: CaseResult, reactDir: string): TarEntry[] {

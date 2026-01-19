@@ -19,8 +19,16 @@ import {
 	stripBom,
 } from "./normalize";
 import { normalizeCreateContent, parseHunks } from "./parser";
-import type { ApplyPatchOptions, ApplyPatchResult, ContextLineResult, DiffHunk, FileSystem, PatchInput } from "./types";
-import { ApplyPatchError } from "./types";
+import type {
+	ApplyPatchOptions,
+	ApplyPatchResult,
+	ContextLineResult,
+	DiffHunk,
+	FileSystem,
+	NormalizedPatchInput,
+	PatchInput,
+} from "./types";
+import { ApplyPatchError, normalizePatchInput } from "./types";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Default File System
@@ -953,6 +961,18 @@ function applyHunksToContent(
  * Apply a patch operation to the filesystem.
  */
 export async function applyPatch(input: PatchInput, options: ApplyPatchOptions): Promise<ApplyPatchResult> {
+	const normalized = normalizePatchInput(input);
+	return applyNormalizedPatch(normalized, options);
+}
+
+/**
+ * Apply a normalized patch operation to the filesystem.
+ * @internal
+ */
+async function applyNormalizedPatch(
+	input: NormalizedPatchInput,
+	options: ApplyPatchOptions,
+): Promise<ApplyPatchResult> {
 	const {
 		cwd,
 		dryRun = false,

@@ -142,9 +142,7 @@ export async function validateFixtures(fixturesPath?: string): Promise<FixtureVa
 	return validateFixturesFromDir(fixturesPath);
 }
 
-export async function validateFixturesFromDir(
-	fixturesPath: string,
-): Promise<FixtureValidationIssue[]> {
+export async function validateFixturesFromDir(fixturesPath: string): Promise<FixtureValidationIssue[]> {
 	const entries = readdirSync(fixturesPath, { withFileTypes: true });
 	const issues: FixtureValidationIssue[] = [];
 
@@ -171,9 +169,7 @@ export async function validateFixturesFromDir(
 			issues.push({ taskId, message: "expected directory is missing" });
 		}
 
-		const inputFiles = statSync(inputDir, { throwIfNoEntry: false })?.isDirectory()
-			? listFiles(inputDir)
-			: [];
+		const inputFiles = statSync(inputDir, { throwIfNoEntry: false })?.isDirectory() ? listFiles(inputDir) : [];
 		const expectedFiles = statSync(expectedDir, { throwIfNoEntry: false })?.isDirectory()
 			? listFiles(expectedDir)
 			: [];
