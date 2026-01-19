@@ -24,7 +24,7 @@ function Get-ArchitectureSuffix {
     $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
     switch ($arch) {
         "X64" { return "x64" }
-        "Arm64" { return "arm64" }
+        "Arm64" { throw "Windows ARM64 binaries are not available yet. Use -Source to install via bun instead." }
         default { throw "Unsupported architecture: $arch" }
     }
 }

@@ -2,9 +2,13 @@
 
 ## [Unreleased]
 
+## [6.0.0] - 2026-01-19
+
 ### Added
 
-- Added Windows ARM64 binary support
+- Added Cursor and OpenAI Codex OAuth providers
+- Added Windows installer bash shell auto-configuration
+- Added dedicated TTSR settings tab (separated from Voice/TTS)
 
 ### Fixed
 

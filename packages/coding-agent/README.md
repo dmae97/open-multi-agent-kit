@@ -66,7 +66,6 @@ Download from [GitHub Releases](https://github.com/can1357/oh-my-pi/releases):
 | Linux x64           | `omp-linux-x64`          |
 | Linux ARM64         | `omp-linux-arm64`        |
 | Windows x64         | `omp-windows-x64.exe`    |
-| Windows ARM64       | `omp-windows-arm64.exe`  |
 
 ```bash
 # macOS/Linux
@@ -1076,5 +1075,5 @@ MIT
 
 ## See Also
 
-- [@oh-my-pi/omp-ai](https://www.npmjs.com/package/@oh-my-pi/omp-ai): Core LLM toolkit
-- [@oh-my-pi/omp-agent](https://www.npmjs.com/package/@oh-my-pi/omp-agent): Agent framework
+- [@oh-my-pi/pi-ai](https://www.npmjs.com/package/@oh-my-pi/pi-ai): Core LLM toolkit
+- [@oh-my-pi/pi-agent-core](https://www.npmjs.com/package/@oh-my-pi/pi-agent-core): Agent framework
