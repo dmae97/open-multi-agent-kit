@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Updated Claude Code compatibility headers and version
+- Improved OAuth token handling with proper state generation
+- Enhanced cache control for tool and user message blocks
+- Simplified tool name prefixing for OAuth traffic
+- Updated PKCE verifier generation for better security
 
 ## [5.7.67] - 2026-01-18
 ### Fixed

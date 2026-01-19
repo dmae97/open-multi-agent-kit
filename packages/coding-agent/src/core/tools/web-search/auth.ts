@@ -10,7 +10,7 @@
 
 import * as os from "node:os";
 import * as path from "node:path";
-import { buildBetaHeader, claudeCodeHeaders, claudeCodeVersion } from "@oh-my-pi/pi-ai";
+import { buildAnthropicHeaders as buildProviderAnthropicHeaders } from "@oh-my-pi/pi-ai";
 import { getAgentDbPath, getConfigDirPaths } from "../../../config";
 import { AgentStorage } from "../../agent-storage";
 import type { AuthCredential, AuthCredentialEntry, AuthStorageData } from "../../auth-storage";
@@ -243,55 +243,19 @@ export async function findAnthropicAuth(): Promise<AnthropicAuthConfig | null> {
 }
 
 /**
- * Checks if a base URL points to the official Anthropic API.
- * @param baseUrl - The base URL to check
- * @returns True if the URL is for api.anthropic.com over HTTPS
- */
-function isAnthropicBaseUrl(baseUrl: string): boolean {
-	try {
-		const url = new URL(baseUrl);
-		return url.protocol === "https:" && url.hostname === "api.anthropic.com";
-	} catch {
-		return false;
-	}
-}
-
-/**
  * Builds HTTP headers for Anthropic API requests.
  * @param auth - The authentication configuration
  * @returns Headers object ready for use in fetch requests
  */
 export function buildAnthropicHeaders(auth: AnthropicAuthConfig): Record<string, string> {
-	const baseBetas = auth.isOAuth
-		? [
-				"claude-code-20250219",
-				"oauth-2025-04-20",
-				"interleaved-thinking-2025-05-14",
-				"fine-grained-tool-streaming-2025-05-14",
-			]
-		: ["fine-grained-tool-streaming-2025-05-14"];
-	const betaHeader = buildBetaHeader(baseBetas, ["web-search-2025-03-05"]);
-
-	const headers: Record<string, string> = {
-		accept: "application/json",
-		"content-type": "application/json",
-		"anthropic-dangerous-direct-browser-access": "true",
-		"anthropic-beta": betaHeader,
-		"user-agent": `claude-cli/${claudeCodeVersion} (external, cli)`,
-		"x-app": "cli",
-		"accept-encoding": "gzip, deflate, br, zstd",
-		connection: "keep-alive",
-		...claudeCodeHeaders,
-	};
-
-	if (auth.isOAuth || !isAnthropicBaseUrl(auth.baseUrl)) {
-		headers.authorization = `Bearer ${auth.apiKey}`;
-	} else {
-		headers["x-api-key"] = auth.apiKey;
+	return buildProviderAnthropicHeaders({
+		apiKey: auth.apiKey,
+		baseUrl: auth.baseUrl,
+		isOAuth: auth.isOAuth,
+		extraBetas: ["web-search-2025-03-05"],
+		stream: false,
+	});
 	}
-
-	return headers;
-}
 
 /**
  * Builds the full API URL for Anthropic messages endpoint.

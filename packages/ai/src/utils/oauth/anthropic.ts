@@ -9,8 +9,16 @@ const decode = (s: string) => atob(s);
 const CLIENT_ID = decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl");
 const AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
 const TOKEN_URL = "https://console.anthropic.com/v1/oauth/token";
-const REDIRECT_URI = "https://console.anthropic.com/oauth/code/callback";
+const REDIRECT_URI = "http://localhost:54545/callback";
 const SCOPES = "org:create_api_key user:profile user:inference";
+
+function generateState(): string {
+	const bytes = new Uint8Array(16);
+	crypto.getRandomValues(bytes);
+	return Array.from(bytes)
+		.map((value) => value.toString(16).padStart(2, "0"))
+		.join("");
+}
 
 function parseAuthCode(input: string): { code: string; state?: string } {
 	const trimmed = input.trim();
@@ -47,6 +55,7 @@ export async function loginAnthropic(
 	onPromptCode: () => Promise<string>,
 ): Promise<OAuthCredentials> {
 	const { verifier, challenge } = await generatePKCE();
+	const state = generateState();
 
 	// Build authorization URL
 	const authParams = new URLSearchParams({
@@ -57,7 +66,7 @@ export async function loginAnthropic(
 		scope: SCOPES,
 		code_challenge: challenge,
 		code_challenge_method: "S256",
-		state: verifier,
+		state,
 	});
 
 	const authUrl = `${AUTHORIZE_URL}?${authParams.toString()}`;
@@ -67,19 +76,21 @@ export async function loginAnthropic(
 
 	// Wait for user to paste authorization code (format: code#state)
 	const authCode = await onPromptCode();
-	const { code, state } = parseAuthCode(authCode);
+	const { code, state: parsedState } = parseAuthCode(authCode);
+	const requestState = parsedState ?? state;
 
 	// Exchange code for tokens
 	const tokenResponse = await fetch(TOKEN_URL, {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
+			Accept: "application/json",
 		},
 		body: JSON.stringify({
 			grant_type: "authorization_code",
 			client_id: CLIENT_ID,
 			code,
-			...(state ? { state } : {}),
+			state: requestState,
 			redirect_uri: REDIRECT_URI,
 			code_verifier: verifier,
 		}),
@@ -113,7 +124,7 @@ export async function loginAnthropic(
 export async function refreshAnthropicToken(refreshToken: string): Promise<OAuthCredentials> {
 	const response = await fetch(TOKEN_URL, {
 		method: "POST",
-		headers: { "Content-Type": "application/json" },
+		headers: { "Content-Type": "application/json", Accept: "application/json" },
 		body: JSON.stringify({
 			grant_type: "refresh_token",
 			client_id: CLIENT_ID,

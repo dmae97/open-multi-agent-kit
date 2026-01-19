@@ -20,7 +20,7 @@ function base64urlEncode(bytes: Uint8Array): string {
  */
 export async function generatePKCE(): Promise<{ verifier: string; challenge: string }> {
 	// Generate random verifier
-	const verifierBytes = new Uint8Array(32);
+	const verifierBytes = new Uint8Array(96);
 	crypto.getRandomValues(verifierBytes);
 	const verifier = base64urlEncode(verifierBytes);
 
