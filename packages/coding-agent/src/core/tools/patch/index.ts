@@ -205,10 +205,53 @@ export class EditTool implements AgentTool<typeof replaceEditSchema | typeof pat
 
 	constructor(session: ToolSession) {
 		this.session = session;
-		const envNoPatch = process.env.OMP_NO_PATCH;
-		this.patchMode = envNoPatch !== undefined ? envNoPatch !== "1" : (session.settings?.getEditPatchMode?.() ?? true);
-		this.allowFuzzy = session.settings?.getEditFuzzyMatch() ?? true;
-		this.fuzzyThreshold = session.settings?.getEditFuzzyThreshold?.() ?? DEFAULT_FUZZY_THRESHOLD;
+
+		const {
+			OMP_EDIT_FUZZY: editFuzzy = "auto",
+			OMP_EDIT_FUZZY_THRESHOLD: editFuzzyThreshold = "auto",
+			OMP_EDIT_VARIANT: editVariant = "auto",
+		} = process.env;
+
+		switch (editVariant) {
+			case "replace":
+				this.patchMode = false;
+				break;
+			case "patch":
+				this.patchMode = true;
+				break;
+			case "auto":
+				this.patchMode = session.settings?.getEditPatchMode?.() ?? true;
+				break;
+			default:
+				throw new Error(`Invalid OMP_EDIT_VARIANT: ${process.env.OMP_EDIT_VARIANT}`);
+		}
+		switch (editFuzzy) {
+			case "true":
+			case "1":
+				this.allowFuzzy = true;
+				break;
+			case "false":
+			case "0":
+				this.allowFuzzy = false;
+				break;
+			case "auto":
+				this.allowFuzzy = session.settings?.getEditFuzzyMatch() ?? true;
+				break;
+			default:
+				throw new Error(`Invalid OMP_EDIT_FUZZY: ${editFuzzy}`);
+		}
+		switch (editFuzzyThreshold) {
+			case "auto":
+				this.fuzzyThreshold = session.settings?.getEditFuzzyThreshold?.() ?? DEFAULT_FUZZY_THRESHOLD;
+				break;
+			default:
+				this.fuzzyThreshold = parseFloat(editFuzzyThreshold);
+				if (Number.isNaN(this.fuzzyThreshold) || this.fuzzyThreshold < 0 || this.fuzzyThreshold > 1) {
+					throw new Error(`Invalid OMP_EDIT_FUZZY_THRESHOLD: ${editFuzzyThreshold}`);
+				}
+				break;
+		}
+
 		const enableLsp = session.enableLsp ?? true;
 		const enableDiagnostics = enableLsp ? (session.settings?.getLspDiagnosticsOnEdit() ?? false) : false;
 		const enableFormat = enableLsp ? (session.settings?.getLspFormatOnWrite() ?? true) : false;

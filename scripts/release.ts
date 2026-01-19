@@ -148,11 +148,23 @@ async function cmdRelease(version: string): Promise<void> {
 	// 2. Update package versions
 	console.log(`Updating package versions to ${version}...`);
 	const pkgJsonPaths = await Array.fromAsync(packageJsonGlob.scan("."));
-	await $`sd '"version": "[^"]+"' ${`"version": "${version}"`} ${pkgJsonPaths}`;
+
+	// Filter out private packages
+	const publicPkgPaths: string[] = [];
+	for (const pkgPath of pkgJsonPaths) {
+		const pkgJson = await Bun.file(pkgPath).json();
+		if (pkgJson.private) {
+			console.log(`  Skipping ${pkgJson.name} (private)`);
+			continue;
+		}
+		publicPkgPaths.push(pkgPath);
+	}
+
+	await $`sd '"version": "[^"]+"' ${`"version": "${version}"`} ${publicPkgPaths}`;
 
 	// Verify
 	console.log("  Verifying versions:");
-	for (const pkgPath of pkgJsonPaths) {
+	for (const pkgPath of publicPkgPaths) {
 		const pkgJson = await Bun.file(pkgPath).json();
 		console.log(`    ${pkgJson.name}: ${pkgJson.version}`);
 	}

@@ -1,0 +1,13 @@
+# Vendor and dependencies
+**/vendor/**
+**/node_modules/**
+
+# Generated files
+**/test-sessions.ts
+**/models.generated.ts
+**/template.generated.ts
+**/gen/agent_pb.ts
+
+# Build outputs
+**/dist/**
+**/build/**

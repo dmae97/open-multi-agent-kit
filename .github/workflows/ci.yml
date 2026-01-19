@@ -89,6 +89,11 @@ jobs:
         run: |
           for pkg in packages/*/; do
             pkg_name=$(basename "$pkg")
+            # Skip private packages
+            if jq -e '.private == true' "$pkg/package.json" > /dev/null 2>&1; then
+              echo "Skipping $pkg_name (private)"
+              continue
+            fi
             echo "Publishing $pkg_name..."
             output=$(cd "$pkg" && bun publish --access public 2>&1) && echo "$output" && continue
             echo "$output"

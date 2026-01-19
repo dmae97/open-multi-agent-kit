@@ -1,0 +1,110 @@
+import { describe, expect, it } from "bun:test";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { verifyExpectedFiles } from "../verify";
+
+async function createTempDirs(): Promise<{
+	root: string;
+	expectedDir: string;
+	actualDir: string;
+	cleanup: () => Promise<void>;
+}> {
+	const root = await mkdtemp(join(tmpdir(), "react-edit-verify-"));
+	const expectedDir = join(root, "expected");
+	const actualDir = join(root, "actual");
+	await mkdir(expectedDir, { recursive: true });
+	await mkdir(actualDir, { recursive: true });
+	return {
+		root,
+		expectedDir,
+		actualDir,
+		cleanup: async () => {
+			await rm(root, { recursive: true, force: true });
+		},
+	};
+}
+
+describe("verifyExpectedFiles", () => {
+	it("reports missing files", async () => {
+		const { expectedDir, actualDir, cleanup } = await createTempDirs();
+		try {
+			await Bun.write(join(expectedDir, "index.ts"), "export const value = 1;\n");
+
+			const result = await verifyExpectedFiles(expectedDir, actualDir);
+
+			expect(result.success).toBe(false);
+			expect(result.error).toContain("Missing files: index.ts");
+		} finally {
+			await cleanup();
+		}
+	});
+
+	it("reports unexpected files", async () => {
+		const { expectedDir, actualDir, cleanup } = await createTempDirs();
+		try {
+			await Bun.write(join(expectedDir, "index.ts"), "export const value = 1;\n");
+			await Bun.write(join(actualDir, "index.ts"), "export const value = 1;\n");
+			await Bun.write(join(actualDir, "extra.ts"), "export const extra = true;\n");
+
+			const result = await verifyExpectedFiles(expectedDir, actualDir);
+
+			expect(result.success).toBe(false);
+			expect(result.error).toContain("Unexpected files: extra.ts");
+		} finally {
+			await cleanup();
+		}
+	});
+
+	it("includes diff output and stats for mismatched content", async () => {
+		const { expectedDir, actualDir, cleanup } = await createTempDirs();
+		try {
+			await Bun.write(join(expectedDir, "index.ts"), "  const value = 1;\n");
+			await Bun.write(join(actualDir, "index.ts"), "const value = 1;\n");
+
+			const result = await verifyExpectedFiles(expectedDir, actualDir);
+
+			expect(result.success).toBe(false);
+			expect(result.diff).toContain("-  const value = 1;");
+			expect(result.diff).toContain("+const value = 1;");
+			expect(result.diffStats?.linesChanged).toBe(2);
+			expect(result.diffStats?.charsChanged).toBeGreaterThan(0);
+			expect(result.indentScore).toBe(2);
+		} finally {
+			await cleanup();
+		}
+	});
+
+	it("does not mutate files and reports formatted equivalence", async () => {
+		const { expectedDir, actualDir, cleanup } = await createTempDirs();
+		try {
+			const expected = "function test() {\n  return 1;\n}\n";
+			const actual = "function test(){\nreturn 1;\n}\n";
+			await Bun.write(join(expectedDir, "index.ts"), expected);
+			await Bun.write(join(actualDir, "index.ts"), actual);
+
+			const result = await verifyExpectedFiles(expectedDir, actualDir);
+			const actualAfter = await Bun.file(join(actualDir, "index.ts")).text();
+
+			expect(result.success).toBe(false);
+			expect(result.formattedEquivalent).toBe(true);
+			expect(actualAfter).toBe(actual);
+		} finally {
+			await cleanup();
+		}
+	});
+
+	it("normalizes line endings before comparison", async () => {
+		const { expectedDir, actualDir, cleanup } = await createTempDirs();
+		try {
+			await Bun.write(join(expectedDir, "index.ts"), "export const value = 1;\r\n");
+			await Bun.write(join(actualDir, "index.ts"), "export const value = 1;\n");
+
+			const result = await verifyExpectedFiles(expectedDir, actualDir);
+
+			expect(result.success).toBe(true);
+		} finally {
+			await cleanup();
+		}
+	});
+});

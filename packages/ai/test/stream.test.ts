@@ -1,17 +1,13 @@
 import { type ChildProcess, execSync, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { Type } from "@sinclair/typebox";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { join } from "path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getModel } from "../src/models";
 import { complete, stream } from "../src/stream";
 import type { Api, Context, ImageContent, Model, OptionsForApi, Tool, ToolResultMessage } from "../src/types";
 import { StringEnum } from "../src/utils/typebox-helpers";
 import { resolveApiKey } from "./oauth";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 // Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([
@@ -222,7 +218,7 @@ async function handleImage<TApi extends Api>(model: Model<TApi>, options?: Optio
 	}
 
 	// Read the test image
-	const imagePath = join(__dirname, "data", "red-circle.png");
+	const imagePath = join(import.meta.dir, "data", "red-circle.png");
 	const imageBuffer = readFileSync(imagePath);
 	const base64Image = imageBuffer.toString("base64");
 

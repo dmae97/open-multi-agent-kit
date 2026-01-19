@@ -69,18 +69,13 @@
 
 import { execSync } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getModel } from "../src/models";
 import { complete } from "../src/stream";
 import type { Api, Context, ImageContent, Model, OptionsForApi, UserMessage } from "../src/types";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Temp directory for generated images
-const TEMP_DIR = join(__dirname, ".temp-images");
+const TEMP_DIR = join(import.meta.dir, ".temp-images");
 
 /**
  * Generate a valid PNG image of specified dimensions using ImageMagick

@@ -417,7 +417,7 @@ const readSchema = Type.Object({
 	path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
 	offset: Type.Optional(Type.Number({ description: "Line number to start reading from (1-indexed)" })),
 	limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" })),
-	lines: Type.Optional(Type.Boolean({ description: "Prepend line numbers to output (default: true)" })),
+	lines: Type.Optional(Type.Boolean({ description: "Prepend line numbers to output (default: false)" })),
 });
 
 export interface ReadToolDetails {
@@ -622,8 +622,8 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 				// Apply truncation (respects both line and byte limits)
 				const truncation = truncateHead(selectedContent);
 
-				// Add line numbers if requested (default: true)
-				const shouldAddLineNumbers = lines !== false;
+				// Add line numbers if requested (default: false)
+				const shouldAddLineNumbers = lines === true;
 				const prependLineNumbers = (text: string, startNum: number): string => {
 					const textLines = text.split("\n");
 					const lastLineNum = startNum + textLines.length - 1;

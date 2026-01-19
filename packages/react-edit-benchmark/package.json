@@ -1,0 +1,25 @@
+{
+	"name": "@oh-my-pi/react-edit-benchmark",
+	"version": "0.0.1",
+	"private": true,
+	"description": "Edit benchmark suite using React source code mutations",
+	"type": "module",
+	"main": "./index.ts",
+	"bin": {
+		"react-edit-benchmark": "index.ts"
+	},
+	"scripts": {
+		"start": "bun run index.ts",
+		"generate": "bun run generate.ts --react-dir /tmp/react-source --count-per-type 4"
+	},
+	"dependencies": {
+		"@oh-my-pi/pi-agent-core": "workspace:*",
+		"@oh-my-pi/pi-coding-agent": "workspace:*",
+		"diff": "^8.0.2",
+		"prettier": "^3.3.3",
+		"tar-stream": "^3.1.7"
+	},
+	"devDependencies": {
+		"@types/diff": "^7.0.2"
+	}
+}

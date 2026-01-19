@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { discoverPythonModules, loadPythonModules, type PythonModuleExecutor } from "../../src/core/python-modules";
 
-const fixturesDir = resolve(__dirname, "../../test/fixtures/python-modules");
+const fixturesDir = resolve(import.meta.dir, "../../test/fixtures/python-modules");
 
 const readFixture = (name: string): string => readFileSync(join(fixturesDir, name), "utf-8");
 

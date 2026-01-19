@@ -338,7 +338,7 @@ export class InputController {
 
 			// Generate session title on first message
 			const hasUserMessages = this.ctx.agent.state.messages.some((m: AgentMessage) => m.role === "user");
-			if (!hasUserMessages && !this.ctx.sessionManager.getSessionTitle()) {
+			if (!hasUserMessages && !this.ctx.sessionManager.getSessionTitle() && !process.env.OMP_NO_TITLE) {
 				const registry = this.ctx.session.modelRegistry;
 				const smolModel = this.ctx.settingsManager.getModelRole("smol");
 				generateSessionTitle(text, registry, smolModel, this.ctx.session.sessionId)

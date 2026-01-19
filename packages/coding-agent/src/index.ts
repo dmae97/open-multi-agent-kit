@@ -227,6 +227,9 @@ export {
 	InteractiveMode,
 	type InteractiveModeOptions,
 	type PrintModeOptions,
+	RpcClient,
+	type RpcClientOptions,
+	type RpcEventListener,
 	runPrintMode,
 	runRpcMode,
 } from "./modes/index";

@@ -1,0 +1,279 @@
+/**
+ * Edit benchmark task definitions loaded from fixtures.
+ *
+ * Supports loading from either:
+ * - A fixtures directory (for development)
+ * - A fixtures.tar.gz tarball (for distribution)
+ */
+
+/// <reference types="./bun-imports.d.ts" />
+
+import { readdirSync, statSync } from "node:fs";
+import { basename, join } from "node:path";
+import {
+	extractTaskFiles,
+	loadTasksFromTarball,
+	validateTarballFixtures,
+	type FixtureValidationIssue,
+	type TarballTask,
+} from "./tarball";
+
+export interface EditTask {
+	id: string;
+	name: string;
+	prompt: string;
+	files: string[];
+	metadata?: TaskMetadata;
+	/** Set when loading from directory */
+	inputDir?: string;
+	/** Set when loading from directory */
+	expectedDir?: string;
+	/** Set when loading from tarball */
+	tarballPath?: string;
+}
+
+export interface TaskMetadata {
+	seed?: number;
+	mutationType?: string;
+	mutationCategory?: string;
+	difficulty?: string;
+	difficultyScore?: number;
+}
+
+export const DEFAULT_TARBALL_PATH = join(import.meta.dir, "fixtures.tar.gz");
+
+function titleize(id: string): string {
+	return id
+		.split(/[-_]/)
+		.map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
+		.join(" ");
+}
+
+function listFiles(rootDir: string, subPath = ""): string[] {
+	const entries = readdirSync(join(rootDir, subPath), { withFileTypes: true });
+	const files: string[] = [];
+
+	for (const entry of entries) {
+		const relativePath = join(subPath, entry.name);
+		const absolutePath = join(rootDir, relativePath);
+		if (entry.isDirectory()) {
+			files.push(...listFiles(rootDir, relativePath));
+		} else if (entry.isFile()) {
+			files.push(relativePath);
+		} else if (entry.isSymbolicLink()) {
+			const stats = statSync(absolutePath, { throwIfNoEntry: false });
+			if (stats?.isFile()) {
+				files.push(relativePath);
+			}
+		}
+	}
+
+	return files.sort();
+}
+
+export async function loadTasksFromDir(fixturesDir: string): Promise<EditTask[]> {
+	const entries = readdirSync(fixturesDir, { withFileTypes: true });
+	const tasks: EditTask[] = [];
+
+	for (const entry of entries) {
+		if (!entry.isDirectory()) continue;
+		const challengeDir = join(fixturesDir, entry.name);
+		const promptPath = join(challengeDir, "prompt.md");
+		const inputDir = join(challengeDir, "input");
+		const expectedDir = join(challengeDir, "expected");
+		const metadataPath = join(challengeDir, "metadata.json");
+
+		const promptExists = await Bun.file(promptPath).exists();
+		if (!promptExists) {
+			throw new Error(`Missing prompt.md for ${entry.name}`);
+		}
+
+		if (!statSync(inputDir, { throwIfNoEntry: false })?.isDirectory()) {
+			throw new Error(`Missing input directory for ${entry.name}`);
+		}
+
+		if (!statSync(expectedDir, { throwIfNoEntry: false })?.isDirectory()) {
+			throw new Error(`Missing expected directory for ${entry.name}`);
+		}
+
+		const prompt = (await Bun.file(promptPath).text()).trim();
+		const files = listFiles(inputDir);
+		const metadata = await loadMetadata(metadataPath);
+
+		tasks.push({
+			id: entry.name,
+			name: titleize(entry.name),
+			prompt,
+			inputDir,
+			expectedDir,
+			files,
+			metadata,
+		});
+	}
+
+	return tasks.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function tarballTaskToEditTask(task: TarballTask, tarballPath: string): EditTask {
+	return {
+		id: task.id,
+		name: titleize(task.id),
+		prompt: task.prompt,
+		files: task.inputFiles,
+		metadata: parseTaskMetadata(task.metadata),
+		tarballPath,
+	};
+}
+
+export async function loadTasks(): Promise<EditTask[]> {
+	const tarballTasks = await loadTasksFromTarball(DEFAULT_TARBALL_PATH);
+	return tarballTasks.map((t) => tarballTaskToEditTask(t, DEFAULT_TARBALL_PATH));
+}
+
+export { extractTaskFiles };
+
+export async function validateFixtures(fixturesPath?: string): Promise<FixtureValidationIssue[]> {
+	if (!fixturesPath) {
+		return validateTarballFixtures(DEFAULT_TARBALL_PATH);
+	}
+	if (fixturesPath.endsWith(".tar.gz") || fixturesPath.endsWith(".tgz")) {
+		return validateTarballFixtures(fixturesPath);
+	}
+	return validateFixturesFromDir(fixturesPath);
+}
+
+export async function validateFixturesFromDir(
+	fixturesPath: string,
+): Promise<FixtureValidationIssue[]> {
+	const entries = readdirSync(fixturesPath, { withFileTypes: true });
+	const issues: FixtureValidationIssue[] = [];
+
+	for (const entry of entries) {
+		if (!entry.isDirectory()) continue;
+		const taskId = entry.name;
+		const challengeDir = join(fixturesPath, entry.name);
+		const promptPath = join(challengeDir, "prompt.md");
+		const inputDir = join(challengeDir, "input");
+		const expectedDir = join(challengeDir, "expected");
+		const metadataPath = join(challengeDir, "metadata.json");
+
+		const promptFile = Bun.file(promptPath);
+		if (!(await promptFile.exists())) {
+			issues.push({ taskId, message: "prompt.md is missing" });
+		} else if ((await promptFile.text()).trim().length === 0) {
+			issues.push({ taskId, message: "prompt.md is empty" });
+		}
+
+		if (!statSync(inputDir, { throwIfNoEntry: false })?.isDirectory()) {
+			issues.push({ taskId, message: "input directory is missing" });
+		}
+		if (!statSync(expectedDir, { throwIfNoEntry: false })?.isDirectory()) {
+			issues.push({ taskId, message: "expected directory is missing" });
+		}
+
+		const inputFiles = statSync(inputDir, { throwIfNoEntry: false })?.isDirectory()
+			? listFiles(inputDir)
+			: [];
+		const expectedFiles = statSync(expectedDir, { throwIfNoEntry: false })?.isDirectory()
+			? listFiles(expectedDir)
+			: [];
+
+		if (inputFiles.length === 0) {
+			issues.push({ taskId, message: "input directory is empty" });
+		}
+		if (expectedFiles.length === 0) {
+			issues.push({ taskId, message: "expected directory is empty" });
+		}
+
+		for (const file of inputFiles) {
+			const content = await Bun.file(join(inputDir, file)).text();
+			if (content.length === 0) {
+				issues.push({ taskId, message: `input/${file} is empty` });
+			}
+		}
+		for (const file of expectedFiles) {
+			const content = await Bun.file(join(expectedDir, file)).text();
+			if (content.length === 0) {
+				issues.push({ taskId, message: `expected/${file} is empty` });
+			}
+		}
+
+		const metadataFile = Bun.file(metadataPath);
+		if (!(await metadataFile.exists())) {
+			issues.push({ taskId, message: "metadata.json is missing" });
+			continue;
+		}
+		let metadata: Record<string, unknown> | undefined;
+		try {
+			metadata = JSON.parse(await metadataFile.text()) as Record<string, unknown>;
+		} catch (err) {
+			const error = err instanceof Error ? err.message : String(err);
+			issues.push({ taskId, message: `metadata.json is invalid JSON: ${error}` });
+			continue;
+		}
+
+		if (typeof metadata.file_path !== "string" || metadata.file_path.trim().length === 0) {
+			issues.push({ taskId, message: "metadata.json missing file_path" });
+			continue;
+		}
+		const fileName = basename(metadata.file_path);
+		if (!inputFiles.some((file) => basename(file) === fileName)) {
+			issues.push({
+				taskId,
+				message: `metadata file_path ${metadata.file_path} not found in input files`,
+			});
+		}
+		if (!expectedFiles.some((file) => basename(file) === fileName)) {
+			issues.push({
+				taskId,
+				message: `metadata file_path ${metadata.file_path} not found in expected files`,
+			});
+		}
+	}
+
+	return issues;
+}
+
+async function loadMetadata(metadataPath: string): Promise<TaskMetadata | undefined> {
+	const exists = await Bun.file(metadataPath).exists();
+	if (!exists) {
+		return undefined;
+	}
+	const raw = JSON.parse(await Bun.file(metadataPath).text()) as Record<string, unknown>;
+	return parseTaskMetadata(raw);
+}
+
+function parseTaskMetadata(raw: Record<string, unknown> | undefined): TaskMetadata | undefined {
+	if (!raw) {
+		return undefined;
+	}
+	const metadata: TaskMetadata = {};
+	if (typeof raw.seed === "number") {
+		metadata.seed = raw.seed;
+	}
+	if (typeof raw.mutation_type === "string") {
+		metadata.mutationType = raw.mutation_type;
+	}
+	if (typeof raw.mutation_category === "string") {
+		metadata.mutationCategory = raw.mutation_category;
+	}
+	if (typeof raw.category === "string" && !metadata.mutationCategory) {
+		metadata.mutationCategory = raw.category;
+	}
+	if (typeof raw.mutationType === "string" && !metadata.mutationType) {
+		metadata.mutationType = raw.mutationType;
+	}
+	if (typeof raw.mutationCategory === "string" && !metadata.mutationCategory) {
+		metadata.mutationCategory = raw.mutationCategory;
+	}
+	if (typeof raw.difficulty === "string") {
+		metadata.difficulty = raw.difficulty;
+	}
+	if (typeof raw.difficulty_score === "number") {
+		metadata.difficultyScore = raw.difficulty_score;
+	}
+	if (typeof raw.difficultyScore === "number" && metadata.difficultyScore === undefined) {
+		metadata.difficultyScore = raw.difficultyScore;
+	}
+	return Object.keys(metadata).length > 0 ? metadata : undefined;
+}

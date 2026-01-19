@@ -19,6 +19,7 @@ Performs patch operations on the file system. This is your primary tool for maki
 For `create`, the `diff` field contains the full file content (no prefixes needed).
 
 For `update`, the `diff` field contains one or more "hunks", each introduced by @@ (optionally followed by a hunk header).
+If you include a hunk header, it must be **verbatim text from the file** (a full line or a unique substring of a line, e.g., a function signature). Do **not** use line numbers, ranges, or labels like "top of file"—those are treated as literal anchors and will fail to match. If unsure, omit the header entirely.
 Within a hunk each line starts with:
 - ` ` (space) for context lines
 - `-` for removed lines
@@ -29,6 +30,7 @@ Line numbers are hints only; do not rely on them. Use semantic anchors via `@@` 
 
 For instructions on [context_before] and [context_after]:
 - By default, show 3 lines of code immediately above and 3 lines immediately below each change. If a change is within 3 lines of a previous change, do NOT duplicate the first change's [context_after] lines in the second change's [context_before] lines.
+- Context lines must be copied **verbatim**, including whitespace and punctuation. Avoid paraphrasing or reformatting.
 - If 3 lines of context is insufficient to uniquely identify the snippet of code within the file, use the @@ operator to indicate the class or function to which the snippet belongs. For instance, we might have:
 @@ class BaseClass
 [3 lines of pre-context]
@@ -36,7 +38,7 @@ For instructions on [context_before] and [context_after]:
 + [new_code]
 [3 lines of post-context]
 
-- If a code block is repeated so many times in a class or function such that even a single `@@` statement and 3 lines of context cannot uniquely identify the snippet of code, you can use multiple `@@` statements to jump to the right context. For instance:
+- If a code block is repeated so many times in a class or function such that even a single `@@` statement and 3 lines of context cannot uniquely identify the snippet of code, use multiple `@@` statements plus **extra surrounding context** to make the match unique. For instance:
 
 @@ class BaseClass
 @@   def method():
@@ -75,4 +77,6 @@ edit {"path": "obsolete.txt", "operation": "delete"}
 4. For delete: omit the `diff` field
 5. Use relative paths only
 6. If a context or change appears more than once, add more surrounding context or additional `@@` anchors to make it unique
+7. Do not include no-op edits (identical `-` and `+` lines). If nothing changes, omit the hunk
+8. Ensure each hunk starts with @@ and contains only valid diff lines (space/+/ -). No extra preamble text
 </rules>

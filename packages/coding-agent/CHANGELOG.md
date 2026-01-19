@@ -1,9 +1,10 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added `--no-title` flag to disable automatic session title generation
+- Added environment variable support for edit tool configuration (OMP_EDIT_VARIANT, OMP_EDIT_FUZZY, OMP_EDIT_FUZZY_THRESHOLD)
 - Added `allowFuzzy` option to control fuzzy matching behavior in patch operations
 - Added validation for line numbers to ensure they are >= 1 in patch headers and hints
 - Added unique substring acceptance for context matching - single matches are now accepted regardless of line length ratio
@@ -22,6 +23,8 @@
 
 ### Changed
 
+- Changed default behavior of read tool to omit line numbers by default
+- Updated patch tool prompts to clarify verbatim context requirements and hunk formatting rules
 - Enhanced fuzzy matching algorithms to respect the `allowFuzzy` setting for more precise control
 - Improved hierarchical context matching to better handle ambiguous matches with line hints
 - Updated diff rendering to correctly count lines without trailing empty lines
@@ -70,6 +73,8 @@
 
 ### Fixed
 
+- Fixed session title generation to respect OMP_NO_TITLE environment variable
+- Fixed Python module discovery to use import.meta.dir for ES module compatibility
 - Fixed LSP writethrough batching to flush when delete operations complete a batch
 - Fixed patch application to prefer actual diff over cached preview when displaying results
 - Fixed line number validation to properly reject zero and negative values in patch headers
