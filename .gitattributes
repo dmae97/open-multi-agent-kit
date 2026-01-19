@@ -1,1 +1,1 @@
-*.wasm filter=lfs diff=lfs merge=lfs -text
+*.wasm filter=lfs diff=lfs merge=lfs -text linguist-vendored

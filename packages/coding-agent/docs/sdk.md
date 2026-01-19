@@ -20,8 +20,8 @@ See [examples/sdk/](../examples/sdk/) for working examples from minimal to full 
 import { createAgentSession, discoverAuthStorage, discoverModels, SessionManager } from "@oh-my-pi/pi-coding-agent";
 
 // Set up credential storage and model registry
-const authStorage = discoverAuthStorage();
-const modelRegistry = discoverModels(authStorage);
+const authStorage = await discoverAuthStorage();
+const modelRegistry = await discoverModels(authStorage);
 
 const { session } = await createAgentSession({
 	sessionManager: SessionManager.inMemory(),
@@ -251,8 +251,8 @@ const { session } = await createAgentSession({
 import { getModel } from "@oh-my-pi/pi-ai";
 import { discoverAuthStorage, discoverModels } from "@oh-my-pi/pi-coding-agent";
 
-const authStorage = discoverAuthStorage();
-const modelRegistry = discoverModels(authStorage);
+const authStorage = await discoverAuthStorage();
+const modelRegistry = await discoverModels(authStorage);
 
 // Find specific built-in model (doesn't check if API key exists)
 const opus = getModel("anthropic", "claude-opus-4-5");
@@ -301,8 +301,8 @@ API key resolution priority (handled by AuthStorage):
 import { AuthStorage, ModelRegistry, discoverAuthStorage, discoverModels } from "@oh-my-pi/pi-coding-agent";
 
 // Default: uses ~/.omp/agent/auth.json and ~/.omp/agent/models.json
-const authStorage = discoverAuthStorage();
-const modelRegistry = discoverModels(authStorage);
+const authStorage = await discoverAuthStorage();
+const modelRegistry = await discoverModels(authStorage);
 
 const { session } = await createAgentSession({
 	sessionManager: SessionManager.inMemory(),
@@ -742,8 +742,8 @@ import {
 } from "@oh-my-pi/pi-coding-agent";
 
 // Auth and Models
-const authStorage = discoverAuthStorage(); // ~/.omp/agent/auth.json
-const modelRegistry = discoverModels(authStorage); // + ~/.omp/agent/models.json
+const authStorage = await discoverAuthStorage(); // ~/.omp/agent/agent.db
+const modelRegistry = await discoverModels(authStorage); // + ~/.omp/agent/models.json
 const allModels = modelRegistry.getAll(); // All models (built-in + custom)
 const available = await modelRegistry.getAvailable(); // Only models with API keys
 const model = modelRegistry.find("provider", "id"); // Find specific model

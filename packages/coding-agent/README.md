@@ -264,10 +264,10 @@ The agent reads, writes, and edits files, and executes commands via bash.
 | Ctrl+D                | Exit (when editor is empty)                              |
 | Ctrl+Z                | Suspend to background (use `fg` in shell to resume)      |
 | Shift+Tab             | Cycle thinking level                                     |
-| Ctrl+P / Shift+Ctrl+P | Cycle models forward/backward (scoped by `--models`)     |
+| Ctrl+P / Shift+Ctrl+P | Cycle role models (slow/default/smol)                    |
 | Ctrl+L                | Open model selector                                      |
 | Ctrl+O                | Toggle tool output expansion                             |
-| Ctrl+T                | Toggle thinking block visibility                         |
+| Ctrl+T                | Toggle todo list expansion                               |
 | Ctrl+G                | Edit message in external editor (`$VISUAL` or `$EDITOR`) |
 
 ### Bash Mode
@@ -472,7 +472,7 @@ Add custom models (Ollama, vLLM, LM Studio, etc.) via `~/.omp/agent/models.json`
 }
 ```
 
-**Supported APIs:** `openai-completions`, `openai-responses`, `anthropic-messages`, `google-generative-ai`
+**Supported APIs:** `openai-completions`, `openai-responses`, `openai-codex-responses`, `anthropic-messages`, `google-generative-ai`, `google-vertex`
 
 **API key resolution:** The `apiKey` field is checked as environment variable name first, then used as literal value.
 
@@ -506,7 +506,6 @@ Add custom models (Ollama, vLLM, LM Studio, etc.) via `~/.omp/agent/models.json`
 | `supportsStore`           | Whether provider supports `store` field     |
 | `supportsDeveloperRole`   | Use `developer` vs `system` role            |
 | `supportsReasoningEffort` | Support for `reasoning_effort` parameter    |
-| `supportsUsageInStreaming` | Whether provider supports `stream_options: { include_usage: true }`. Default: `true` |
 | `maxTokensField`          | Use `max_completion_tokens` or `max_tokens` |
 
 **Live reload:** The file reloads each time you open `/model`. Edit during session; no restart needed.
@@ -535,8 +534,9 @@ Global `~/.omp/agent/settings.json` stores persistent preferences:
 ```json
 {
 	"theme": "dark",
-	"defaultProvider": "anthropic",
-	"defaultModel": "claude-sonnet-4-20250514",
+	"modelRoles": {
+		"default": "anthropic/claude-sonnet-4-20250514"
+	},
 	"defaultThinkingLevel": "medium",
 	"enabledModels": ["anthropic/*", "*gpt*", "gemini-2.5-pro:high"],
 	"queueMode": "one-at-a-time",
@@ -558,22 +558,19 @@ Global `~/.omp/agent/settings.json` stores persistent preferences:
 	},
 	"terminal": {
 		"showImages": true
-	},
-	"hooks": ["/path/to/hook.ts"],
-	"customTools": ["/path/to/tool.ts"]
+	}
 }
 ```
 
 | Setting                       | Description                                                                                                                         | Default         |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------- |
 | `theme`                       | Color theme name                                                                                                                    | auto-detected   |
-| `defaultProvider`             | Default model provider                                                                                                              | -               |
-| `defaultModel`                | Default model ID                                                                                                                    | -               |
+| `modelRoles`                  | Model assignments by role (e.g., `{"default": "anthropic/claude-sonnet-4-20250514", "slow": "...", "smol": "..."}`)                  | -               |
 | `defaultThinkingLevel`        | Thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`                                                                  | -               |
 | `enabledModels`               | Model patterns for cycling. Supports glob patterns (`github-copilot/*`, `*sonnet*`) and fuzzy matching. Same as `--models` CLI flag | -               |
 | `queueMode`                   | Message queue mode: `all` or `one-at-a-time`                                                                                        | `one-at-a-time` |
 | `shellPath`                   | Custom bash path (Windows)                                                                                                          | auto-detected   |
-| `hideThinkingBlock`           | Hide thinking blocks in output (Ctrl+T to toggle)                                                                                   | `false`         |
+| `hideThinkingBlock`           | Hide thinking blocks in output                                                                                                      | `false`         |
 | `collapseChangelog`           | Show condensed changelog after update                                                                                               | `false`         |
 | `compaction.enabled`          | Enable auto-compaction                                                                                                              | `true`          |
 | `compaction.reserveTokens`    | Tokens to reserve before compaction triggers                                                                                        | `16384`         |
@@ -583,8 +580,6 @@ Global `~/.omp/agent/settings.json` stores persistent preferences:
 | `retry.maxRetries`            | Maximum retry attempts                                                                                                              | `3`             |
 | `retry.baseDelayMs`           | Base delay for exponential backoff                                                                                                  | `2000`          |
 | `terminal.showImages`         | Render images inline (supported terminals)                                                                                          | `true`          |
-| `hooks`                       | Additional hook file paths                                                                                                          | `[]`            |
-| `customTools`                 | Additional custom tool file paths                                                                                                   | `[]`            |
 
 ---
 
@@ -668,10 +663,10 @@ A skill provides specialized workflows, setup instructions, helper scripts, and 
 
 **Skill locations:**
 
-- Omp user: `~/.omp/agent/skills/**/SKILL.md` (recursive)
-- Omp project: `.omp/skills/**/SKILL.md` (recursive)
+- Omp user: `~/.omp/agent/skills/*/SKILL.md`
+- Omp project: `.omp/skills/*/SKILL.md`
 - Claude Code: `~/.claude/skills/*/SKILL.md` and `.claude/skills/*/SKILL.md`
-- Codex CLI: `~/.codex/skills/**/SKILL.md` (recursive)
+- Codex CLI: `~/.codex/skills/*/SKILL.md`
 
 **Format:**
 
@@ -716,8 +711,8 @@ Hooks are TypeScript modules that extend omp's behavior by subscribing to lifecy
 
 **Hook locations:**
 
-- Global: `~/.omp/agent/hooks/*.ts`
-- Project: `.omp/hooks/*.ts`
+- Global: `~/.omp/agent/hooks/pre/*.ts`, `~/.omp/agent/hooks/post/*.ts`
+- Project: `.omp/hooks/pre/*.ts`, `.omp/hooks/post/*.ts`
 - CLI: `--hook <path>` (for debugging)
 
 **Quick example** (permission gate):
@@ -832,7 +827,7 @@ omp [options] [@files...] [messages...]
 
 | Option                                | Description                                                                                                                                                                  |
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--provider <name>`                   | Provider: `anthropic`, `openai`, `google`, `mistral`, `xai`, `groq`, `cerebras`, `openrouter`, `zai`, `github-copilot`, `google-gemini-cli`, `google-antigravity`, or custom |
+| `--provider <name>`                   | Provider: `anthropic`, `openai`, `google`, `mistral`, `xai`, `groq`, `cerebras`, `openrouter`, `zai`, `cursor`, `github-copilot`, `openai-codex`, `google-gemini-cli`, `google-antigravity`, or custom |
 | `--model <id>`                        | Model ID                                                                                                                                                                     |
 | `--api-key <key>`                     | API key (overrides environment)                                                                                                                                              |
 | `--system-prompt <text\|file>`        | Custom system prompt (text or file path)                                                                                                                                     |
@@ -844,14 +839,16 @@ omp [options] [@files...] [messages...]
 | `--session-dir <dir>`                 | Directory for session storage and lookup                                                                                                                                     |
 | `--continue`, `-c`                    | Continue most recent session                                                                                                                                                 |
 | `--resume`, `-r`                      | Select session to resume                                                                                                                                                     |
-| `--models <patterns>`                 | Comma-separated patterns for Ctrl+P cycling. Supports glob patterns (e.g., `anthropic/*`, `*sonnet*:high`) and fuzzy matching (e.g., `sonnet,haiku:low`)                     |
+| `--models <patterns>`                 | Comma-separated patterns for model role cycling. Supports glob patterns (e.g., `anthropic/*`, `*sonnet*:high`) and fuzzy matching (e.g., `sonnet,haiku:low`)                 |
 | `--no-tools`                          | Disable all built-in tools                                                                                                                                                   |
-| `--tools <tools>`                     | Comma-separated tool list (default: `read,bash,edit,write`)                                                                                                                  |
-| `--thinking <level>`                  | Thinking level: `off`, `minimal`, `low`, `medium`, `high`                                                                                                                    |
+| `--tools <tools>`                     | Restrict to comma-separated tool list (default: all tools enabled)                                                                                                           |
+| `--thinking <level>`                  | Thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`                                                                                                           |
 | `--extension <path>`, `-e`            | Load an extension file (can be used multiple times)                                                                                                                          |
 | `--no-extensions`                     | Disable extension discovery (explicit `-e` paths still work)                                                                                                                 |
 | `--no-skills`                         | Disable skills discovery and loading                                                                                                                                         |
 | `--skills <patterns>`                 | Comma-separated glob patterns to filter skills (e.g., `git-*,docker`)                                                                                                        |
+| `--no-lsp`                            | Disable LSP integration                                                                                                                                                      |
+| `--hook <path>`                       | Load a hook file (for debugging)                                                                                                                                             |
 | `--export <file> [output]`            | Export session to HTML                                                                                                                                                       |
 | `--help`, `-h`                        | Show help                                                                                                                                                                    |
 | `--version`, `-v`                     | Show version                                                                                                                                                                 |
@@ -913,34 +910,40 @@ omp --export session.jsonl output.html
 | Variable | Description |
 |----------|-------------|
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc. | API keys for providers (see [API Keys & OAuth](#api-keys--oauth)) |
-| `PI_CODING_AGENT_DIR` | Override the agent config directory (default: `~/.omp/agent`) |
-| `PI_SKIP_VERSION_CHECK` | Skip new version check at startup (useful for Nix or other package manager installs) |
+| `OMP_CODING_AGENT_DIR` | Override the agent config directory (default: `~/.omp/agent`) |
 | `VISUAL`, `EDITOR` | External editor for Ctrl+G (e.g., `vim`, `code --wait`) |
 
 ---
 
 ## Tools
 
-### Default Tools
+All tools are enabled by default. Use `--tools <list>` to restrict to a subset.
 
-| Tool    | Description                                                                                                                              |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`  | Read file contents. Images sent as attachments. Text: first 2000 lines, lines truncated at 2000 chars. Use offset/limit for large files. |
-| `write` | Write/overwrite file. Creates parent directories.                                                                                        |
-| `edit`  | Replace exact text in file. Must match exactly including whitespace. Fails if text appears multiple times or not found.                  |
-| `bash`  | Execute command. Returns stdout/stderr. Optional `timeout` parameter.                                                                    |
+### Core Tools
 
-### Read-Only Tools
+| Tool    | Description                                                                                                     |
+| ------- | --------------------------------------------------------------------------------------------------------------- |
+| `read`  | Read file contents. Images sent as attachments. Text: first 2000 lines. Use offset/limit for large files.       |
+| `write` | Write/overwrite file. Creates parent directories.                                                               |
+| `edit`  | Replace text in file with fuzzy whitespace matching. Fails if text appears multiple times or not found.         |
+| `bash`  | Execute command. Returns stdout/stderr. Optional `timeout` parameter.                                           |
+| `grep`  | Search file contents (regex or literal). Respects `.gitignore`.                                                 |
+| `find`  | Search for files by glob pattern. Respects `.gitignore`.                                                        |
+| `ls`    | List directory contents. Includes dotfiles.                                                                     |
 
-Available via `--tools` flag:
+### Additional Built-in Tools
 
-| Tool   | Description                                                     |
-| ------ | --------------------------------------------------------------- |
-| `grep` | Search file contents (regex or literal). Respects `.gitignore`. |
-| `find` | Search for files by glob pattern. Respects `.gitignore`.        |
-| `ls`   | List directory contents. Includes dotfiles.                     |
+| Tool          | Description                                           |
+| ------------- | ----------------------------------------------------- |
+| `task`        | Spawn sub-agents for complex multi-step tasks         |
+| `lsp`         | Language Server Protocol queries (go-to-definition, references, hover) |
+| `todo_write`  | Track task progress during sessions                   |
+| `web_search`  | Search the web                                        |
+| `web_fetch`   | Fetch and render URLs                                 |
+| `python`      | Execute Python code in IPython kernel                 |
+| `notebook`    | Edit Jupyter notebook cells                           |
 
-Example: `--tools read,grep,find,ls` for code review without modification.
+Example: `--tools read,grep,find,ls` for read-only code review.
 
 For adding new tools, see [Custom Tools](#custom-tools) in the Configuration section.
 
@@ -955,8 +958,8 @@ For embedding omp in Node.js/TypeScript applications, use the SDK:
 ```typescript
 import { createAgentSession, discoverAuthStorage, discoverModels, SessionManager } from "@oh-my-pi/pi-coding-agent";
 
-const authStorage = discoverAuthStorage();
-const modelRegistry = discoverModels(authStorage);
+const authStorage = await discoverAuthStorage();
+const modelRegistry = await discoverModels(authStorage);
 
 const { session } = await createAgentSession({
 	sessionManager: SessionManager.inMemory(),
@@ -1018,21 +1021,15 @@ Works with both session files and streaming event logs from `--mode json`.
 
 ## Philosophy
 
-Omp is opinionated about what it won't do. These are intentional design decisions to minimize context bloat and avoid anti-patterns.
+Omp is a fork of [Pi](https://github.com/badlogic/pi) by [Mario Zechner](https://github.com/badlogic). Pi is intentionally minimal—no MCP, no sub-agents, no built-in todos. Omp is the opposite: batteries included.
 
-**No MCP.** Build CLI tools with READMEs (see [Skills](#skills)). The agent reads them on demand. [Would you like to know more?](https://mariozechner.at/posts/2025-11-02-what-if-you-dont-need-mcp/)
+**Yin to Pi's Yang.** Same foundation, different philosophy. Pi strips away; omp adds on. Both are valid approaches—pick what fits your workflow.
 
-**No sub-agents.** Spawn omp instances via tmux, or [build your own sub-agent tool](examples/custom-tools/subagent/) with [custom tools](#custom-tools). Full observability and steerability.
+**Full toolset by default.** Sub-agents, MCP, LSP, web search, Python execution, todo tracking—all enabled out of the box. Use `--tools` to restrict when needed.
 
-**No permission popups.** Security theater. Run in a container or build your own with [Hooks](#hooks).
+**Agent orchestration built-in.** The Task tool spawns specialized sub-agents (explore, plan, reviewer, task) for complex multi-step work. Parallelism and delegation, not just chat.
 
-**No plan mode.** Gather context in one session, write plans to file, start fresh for implementation.
-
-**No built-in to-dos.** They confuse models. Use a TODO.md file, or [build your own](examples/custom-tools/todo/) with [custom tools](#custom-tools).
-
-**No background bash.** Use tmux. Full observability, direct interaction.
-
-Read the [blog post](https://mariozechner.at/posts/2025-11-30-pi-coding-agent/) for the full rationale.
+**Multiple extension points.** [Skills](#skills) for on-demand capabilities, [Hooks](#hooks) for lifecycle control, [Custom Tools](#custom-tools) for new abilities, MCP for existing integrations.
 
 ---
 
@@ -1057,10 +1054,10 @@ Change `name`, `configDir`, and `bin` field for your fork. Affects CLI banner, c
 
 Three execution modes: npm install, standalone binary, tsx from source.
 
-**Always use `src/paths.ts`** for package assets:
+**Always use `src/config.ts`** for package assets:
 
 ```typescript
-import { getPackageDir, getThemeDir } from "./paths.js";
+import { getPackageDir } from "./config.js";
 ```
 
 Never use `__dirname` directly for package assets.
