@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added comprehensive apply-patch mode for edit tool with support for create, update, delete, and rename operations
@@ -10,6 +11,16 @@
 
 ### Changed
 
+- Converted edit tool from factory function to class-based implementation
+- Improved patch application with better ambiguity detection and error handling
+- Enhanced fuzzy matching algorithms to track multiple matches for disambiguation
+- Improved line ending preservation and BOM handling in patch operations
+- Added support for out-of-order hunk processing with fallback search strategies
+- Enhanced context line matching with ambiguity rejection for non-unique matches
+- Improved diff parsing to preserve context lines that resemble metadata
+- Added validation for multi-file patch markers in single-file operations
+- Enhanced trailing newline policy to preserve original file behavior
+- Added validation for out-of-range line hints in insertion operations
 - Refactored edit tool implementation with modular patch architecture
 - Moved edit tool implementation from `edit/` to `patch/` module
 - Updated import paths for EditToolDetails across core modules

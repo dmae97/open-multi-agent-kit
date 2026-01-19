@@ -942,7 +942,7 @@ createTools                // Create all tools from ToolSession
 type ToolSession           // Session context for tool creation
 
 // Individual tool factories
-createReadTool, createBashTool, createEditTool, createWriteTool
+createReadTool, createBashTool, EditTool, createWriteTool
 createGrepTool, createFindTool, createLsTool, createGitTool
 
 // Types

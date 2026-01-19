@@ -128,7 +128,6 @@ export {
 	// Factory
 	createAgentSession,
 	createBashTool,
-	createEditTool,
 	createFindTool,
 	createGrepTool,
 	createLsTool,
@@ -144,6 +143,7 @@ export {
 	discoverModels,
 	discoverPromptTemplates,
 	discoverSkills,
+	EditTool,
 	loadSettings,
 	type ToolSession,
 } from "./core/sdk";

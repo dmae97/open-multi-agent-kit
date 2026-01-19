@@ -49,6 +49,8 @@ export interface SequenceSearchResult {
 	index: number | undefined;
 	/** Confidence score (1.0 for exact match, lower for fuzzy) */
 	confidence: number;
+	/** Number of matches at the same confidence level (for ambiguity detection) */
+	matchCount?: number;
 }
 
 /** Result of a context line search */
@@ -57,6 +59,8 @@ export interface ContextLineResult {
 	index: number | undefined;
 	/** Confidence score (1.0 for exact match, lower for fuzzy) */
 	confidence: number;
+	/** Number of matches at the same confidence level (for ambiguity detection) */
+	matchCount?: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

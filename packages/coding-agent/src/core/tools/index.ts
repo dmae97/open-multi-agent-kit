@@ -23,7 +23,7 @@ export {
 } from "./lsp/index";
 export { createNotebookTool, type NotebookToolDetails } from "./notebook";
 export { createOutputTool, type OutputToolDetails } from "./output";
-export { createEditTool, type EditToolDetails } from "./patch";
+export { EditTool, type EditToolDetails } from "./patch";
 export { createPythonTool, type PythonToolDetails } from "./python";
 export { createReadTool, type ReadToolDetails } from "./read";
 export { reportFindingTool, type SubmitReviewDetails } from "./review";
@@ -79,7 +79,7 @@ import { createLsTool } from "./ls";
 import { createLspTool } from "./lsp/index";
 import { createNotebookTool } from "./notebook";
 import { createOutputTool } from "./output";
-import { createEditTool } from "./patch";
+import { EditTool } from "./patch";
 import { createPythonTool } from "./python";
 import { createReadTool } from "./read";
 import { reportFindingTool } from "./review";
@@ -149,7 +149,7 @@ export const BUILTIN_TOOLS: Record<string, ToolFactory> = {
 	python: createPythonTool,
 	calc: createCalculatorTool,
 	ssh: createSshTool,
-	edit: createEditTool,
+	edit: (s) => new EditTool(s),
 	find: createFindTool,
 	git: createGitTool,
 	grep: createGrepTool,

@@ -8,7 +8,7 @@
  */
 
 import type { DiffHunk } from "./types";
-import { ParseError } from "./types";
+import { ApplyPatchError, ParseError } from "./types";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Constants
@@ -20,6 +20,25 @@ const EMPTY_CHANGE_CONTEXT_MARKER = "@@";
 
 /** Regex to match unified diff hunk headers: @@ -OLD,COUNT +NEW,COUNT @@ optional-context */
 const UNIFIED_HUNK_HEADER_REGEX = /^@@\s*-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s*@@(?:\s*(.*))?$/;
+
+/**
+ * Check if a line is a diff content line (context, addition, or removal).
+ * These should never be treated as metadata even if their content looks like it.
+ * Note: `--- ` and `+++ ` are metadata headers, not content lines.
+ */
+function isDiffContentLine(line: string): boolean {
+	const firstChar = line[0];
+	if (firstChar === " ") return true;
+	if (firstChar === "+") {
+		// `+++ ` is metadata, single `+` followed by content is addition
+		return !line.startsWith("+++ ");
+	}
+	if (firstChar === "-") {
+		// `--- ` is metadata, single `-` followed by content is removal
+		return !line.startsWith("--- ");
+	}
+	return false;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Normalization
@@ -36,9 +55,16 @@ const UNIFIED_HUNK_HEADER_REGEX = /^@@\s*-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\
 export function normalizeDiff(diff: string): string {
 	let lines = diff.split("\n");
 
-	// Strip trailing empty lines first
-	while (lines.length > 0 && lines[lines.length - 1]?.trim() === "") {
-		lines = lines.slice(0, -1);
+	// Strip trailing truly empty lines (not diff content lines like " " which represent blank context)
+	while (lines.length > 0) {
+		const lastLine = lines[lines.length - 1];
+		// Only strip if line is completely empty (no characters) OR
+		// if it's whitespace-only but NOT a diff content line (space prefix = context line)
+		if (lastLine === "" || (lastLine?.trim() === "" && !isDiffContentLine(lastLine ?? ""))) {
+			lines = lines.slice(0, -1);
+		} else {
+			break;
+		}
 	}
 
 	// Layer 1: Strip *** Begin Patch / *** End Patch (may have only one or both)
@@ -51,7 +77,14 @@ export function normalizeDiff(diff: string): string {
 
 	// Layer 2: Strip Codex-style file operation markers and unified diff metadata
 	// NOTE: Do NOT strip "*** End of File" - that's a valid marker within hunks, not a wrapper
+	// IMPORTANT: Only strip actual metadata lines, NOT diff content lines (starting with space, +, or -)
 	lines = lines.filter((line) => {
+		// Preserve diff content lines even if their content looks like metadata
+		// Note: `--- ` and `+++ ` are metadata, not content lines
+		if (isDiffContentLine(line)) {
+			return true;
+		}
+
 		const trimmed = line.trim();
 
 		// Codex file operation markers (these wrap multiple file changes)
@@ -260,25 +293,62 @@ function parseOneHunk(lines: string[], lineNumber: number, allowMissingContext: 
 	return { hunk, linesConsumed: parsedLines + startIndex };
 }
 
+/** Multi-file patch markers that indicate this is not a single-file patch */
+const MULTI_FILE_MARKERS = ["*** Update File:", "*** Add File:", "*** Delete File:", "diff --git "];
+
+/**
+ * Count multi-file markers in a diff.
+ * Returns the count of file-level markers found.
+ * Only counts lines that are actual metadata (not diff content lines).
+ */
+function countMultiFileMarkers(diff: string): number {
+	let count = 0;
+	const lines = diff.split("\n");
+	for (const line of lines) {
+		if (isDiffContentLine(line)) {
+			continue;
+		}
+		const trimmed = line.trim();
+		for (const marker of MULTI_FILE_MARKERS) {
+			if (trimmed.startsWith(marker)) {
+				count++;
+				break;
+			}
+		}
+	}
+	return count;
+}
+
 /**
  * Parse all diff hunks from a diff string.
  */
 export function parseHunks(diff: string): DiffHunk[] {
+	const multiFileCount = countMultiFileMarkers(diff);
+	if (multiFileCount > 1) {
+		throw new ApplyPatchError(
+			`Diff contains ${multiFileCount} file markers. Single-file patches cannot contain multi-file markers.`,
+		);
+	}
+
 	const normalizedDiff = normalizeDiff(diff);
 	const lines = normalizedDiff.split("\n");
 	const hunks: DiffHunk[] = [];
 	let i = 0;
 
 	while (i < lines.length) {
+		const line = lines[i];
+		const trimmed = line.trim();
+
 		// Skip blank lines between hunks
-		const trimmed = lines[i].trim();
 		if (trimmed === "") {
 			i++;
 			continue;
 		}
 
-		// Skip unified diff metadata lines
-		if (isUnifiedDiffMetadataLine(trimmed)) {
+		// Skip unified diff metadata lines, but only if they're not diff content lines
+		const firstChar = line[0];
+		const isDiffContent = firstChar === " " || firstChar === "+" || firstChar === "-";
+		if (!isDiffContent && isUnifiedDiffMetadataLine(trimmed)) {
 			i++;
 			continue;
 		}

@@ -138,6 +138,9 @@ export interface ReplaceResult {
  * Find and replace text in content using fuzzy matching.
  */
 export function replaceText(content: string, oldText: string, newText: string, options: ReplaceOptions): ReplaceResult {
+	if (oldText.length === 0) {
+		throw new Error("oldText must not be empty.");
+	}
 	const threshold = options.threshold ?? DEFAULT_FUZZY_THRESHOLD;
 	let normalizedContent = normalizeToLF(content);
 	const normalizedOldText = normalizeToLF(oldText);
@@ -226,6 +229,9 @@ export async function computeEditDiff(
 	fuzzy = true,
 	all = false,
 ): Promise<DiffResult | DiffError> {
+	if (oldText.length === 0) {
+		return { error: "oldText must not be empty." };
+	}
 	const absolutePath = resolveToCwd(path, cwd);
 
 	try {

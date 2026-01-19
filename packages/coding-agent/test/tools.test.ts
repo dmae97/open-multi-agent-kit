@@ -8,7 +8,7 @@ import { createFindTool } from "../src/core/tools/find";
 import { createGrepTool } from "../src/core/tools/grep";
 import type { ToolSession } from "../src/core/tools/index";
 import { createLsTool } from "../src/core/tools/ls";
-import { createEditTool } from "../src/core/tools/patch";
+import { EditTool } from "../src/core/tools/patch";
 import { createReadTool } from "../src/core/tools/read";
 import { createWriteTool } from "../src/core/tools/write";
 import * as shellModule from "../src/utils/shell";
@@ -36,7 +36,7 @@ describe("Coding Agent Tools", () => {
 	let testDir: string;
 	let readTool: ReturnType<typeof createReadTool>;
 	let writeTool: ReturnType<typeof createWriteTool>;
-	let editTool: ReturnType<typeof createEditTool>;
+	let editTool: EditTool;
 	let bashTool: ReturnType<typeof createBashTool>;
 	let grepTool: ReturnType<typeof createGrepTool>;
 	let findTool: ReturnType<typeof createFindTool>;
@@ -51,7 +51,7 @@ describe("Coding Agent Tools", () => {
 		const session = createTestToolSession(testDir);
 		readTool = createReadTool(session);
 		writeTool = createWriteTool(session);
-		editTool = createEditTool(session);
+		editTool = new EditTool(session);
 		bashTool = createBashTool(session);
 		grepTool = createGrepTool(session);
 		findTool = createFindTool(session);
@@ -515,12 +515,12 @@ function b() {
 
 describe("edit tool CRLF handling", () => {
 	let testDir: string;
-	let editTool: ReturnType<typeof createEditTool>;
+	let editTool: EditTool;
 
 	beforeEach(() => {
 		testDir = join(tmpdir(), `coding-agent-crlf-test-${nanoid()}`);
 		mkdirSync(testDir, { recursive: true });
-		editTool = createEditTool(createTestToolSession(testDir));
+		editTool = new EditTool(createTestToolSession(testDir));
 	});
 
 	afterEach(() => {

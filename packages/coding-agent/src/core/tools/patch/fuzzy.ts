@@ -346,17 +346,33 @@ export function seekSequence(lines: string[], pattern: string[], start: number, 
 		}
 	}
 
-	// Pass 5: Partial line prefix match
-	for (let i = searchStart; i <= maxStart; i++) {
-		if (matchesAt(lines, pattern, i, lineStartsWithPattern)) {
-			return { index: i, confidence: 0.965 };
+	// Pass 5: Partial line prefix match (track all matches for ambiguity detection)
+	{
+		let firstMatch: number | undefined;
+		let matchCount = 0;
+		for (let i = searchStart; i <= maxStart; i++) {
+			if (matchesAt(lines, pattern, i, lineStartsWithPattern)) {
+				if (firstMatch === undefined) firstMatch = i;
+				matchCount++;
+			}
+		}
+		if (matchCount > 0) {
+			return { index: firstMatch, confidence: 0.965, matchCount };
 		}
 	}
 
-	// Pass 6: Partial line substring match
-	for (let i = searchStart; i <= maxStart; i++) {
-		if (matchesAt(lines, pattern, i, lineIncludesPattern)) {
-			return { index: i, confidence: 0.94 };
+	// Pass 6: Partial line substring match (track all matches for ambiguity detection)
+	{
+		let firstMatch: number | undefined;
+		let matchCount = 0;
+		for (let i = searchStart; i <= maxStart; i++) {
+			if (matchesAt(lines, pattern, i, lineIncludesPattern)) {
+				if (firstMatch === undefined) firstMatch = i;
+				matchCount++;
+			}
+		}
+		if (matchCount > 0) {
+			return { index: firstMatch, confidence: 0.94, matchCount };
 		}
 	}
 
@@ -418,48 +434,84 @@ export function findContextLine(lines: string[], context: string, startFrom: num
 	const trimmedContext = context.trim();
 
 	// Pass 1: Exact line match
-	for (let i = startFrom; i < lines.length; i++) {
-		if (lines[i] === context) {
-			return { index: i, confidence: 1.0 };
+	{
+		let firstMatch: number | undefined;
+		let matchCount = 0;
+		for (let i = startFrom; i < lines.length; i++) {
+			if (lines[i] === context) {
+				if (firstMatch === undefined) firstMatch = i;
+				matchCount++;
+			}
+		}
+		if (matchCount > 0) {
+			return { index: firstMatch, confidence: 1.0, matchCount };
 		}
 	}
 
 	// Pass 2: Trimmed match
-	for (let i = startFrom; i < lines.length; i++) {
-		if (lines[i].trim() === trimmedContext) {
-			return { index: i, confidence: 0.99 };
+	{
+		let firstMatch: number | undefined;
+		let matchCount = 0;
+		for (let i = startFrom; i < lines.length; i++) {
+			if (lines[i].trim() === trimmedContext) {
+				if (firstMatch === undefined) firstMatch = i;
+				matchCount++;
+			}
+		}
+		if (matchCount > 0) {
+			return { index: firstMatch, confidence: 0.99, matchCount };
 		}
 	}
 
 	// Pass 3: Unicode normalization match
 	const normalizedContext = normalizeUnicode(context);
-	for (let i = startFrom; i < lines.length; i++) {
-		if (normalizeUnicode(lines[i]) === normalizedContext) {
-			return { index: i, confidence: 0.98 };
+	{
+		let firstMatch: number | undefined;
+		let matchCount = 0;
+		for (let i = startFrom; i < lines.length; i++) {
+			if (normalizeUnicode(lines[i]) === normalizedContext) {
+				if (firstMatch === undefined) firstMatch = i;
+				matchCount++;
+			}
+		}
+		if (matchCount > 0) {
+			return { index: firstMatch, confidence: 0.98, matchCount };
 		}
 	}
 
 	// Pass 4: Prefix match (file line starts with context)
 	const contextNorm = normalizeForFuzzy(context);
 	if (contextNorm.length > 0) {
+		let firstMatch: number | undefined;
+		let matchCount = 0;
 		for (let i = startFrom; i < lines.length; i++) {
 			const lineNorm = normalizeForFuzzy(lines[i]);
 			if (lineNorm.startsWith(contextNorm)) {
-				return { index: i, confidence: 0.96 };
+				if (firstMatch === undefined) firstMatch = i;
+				matchCount++;
 			}
+		}
+		if (matchCount > 0) {
+			return { index: firstMatch, confidence: 0.96, matchCount };
 		}
 	}
 
 	// Pass 5: Substring match (file line contains context)
 	if (contextNorm.length >= PARTIAL_MATCH_MIN_LENGTH) {
+		let firstMatch: number | undefined;
+		let matchCount = 0;
 		for (let i = startFrom; i < lines.length; i++) {
 			const lineNorm = normalizeForFuzzy(lines[i]);
 			if (lineNorm.includes(contextNorm)) {
 				const ratio = contextNorm.length / Math.max(1, lineNorm.length);
 				if (ratio >= PARTIAL_MATCH_MIN_RATIO) {
-					return { index: i, confidence: 0.94 };
+					if (firstMatch === undefined) firstMatch = i;
+					matchCount++;
 				}
 			}
+		}
+		if (matchCount > 0) {
+			return { index: firstMatch, confidence: 0.94, matchCount };
 		}
 	}
 
@@ -477,7 +529,7 @@ export function findContextLine(lines: string[], context: string, startFrom: num
 	}
 
 	if (bestIndex !== undefined && bestScore >= CONTEXT_FUZZY_THRESHOLD) {
-		return { index: bestIndex, confidence: bestScore };
+		return { index: bestIndex, confidence: bestScore, matchCount: 1 };
 	}
 
 	return { index: undefined, confidence: bestScore };
