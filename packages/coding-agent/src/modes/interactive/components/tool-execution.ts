@@ -135,6 +135,8 @@ export class ToolExecutionComponent extends Container {
 	// Spinner animation for partial task results
 	private spinnerFrame = 0;
 	private spinnerInterval: ReturnType<typeof setInterval> | null = null;
+	// Track if args are still being streamed (for edit/write spinner)
+	private argsComplete = false;
 
 	constructor(
 		toolName: string,
@@ -175,6 +177,7 @@ export class ToolExecutionComponent extends Container {
 
 	updateArgs(args: any, _toolCallId?: string): void {
 		this.args = args;
+		this.updateSpinnerAnimation();
 		this.updateDisplay();
 	}
 
@@ -183,6 +186,8 @@ export class ToolExecutionComponent extends Container {
 	 * This triggers diff computation for edit tool.
 	 */
 	setArgsComplete(_toolCallId?: string): void {
+		this.argsComplete = true;
+		this.updateSpinnerAnimation();
 		this.maybeComputeEditDiff();
 	}
 
@@ -311,7 +316,10 @@ export class ToolExecutionComponent extends Container {
 	 * Start or stop spinner animation based on whether this is a partial task result.
 	 */
 	private updateSpinnerAnimation(): void {
-		const needsSpinner = this.isPartial && this.toolName === "task";
+		// Spinner for: task tool with partial result, or edit/write while args streaming
+		const isStreamingArgs = !this.argsComplete && (this.toolName === "edit" || this.toolName === "write");
+		const isPartialTask = this.isPartial && this.toolName === "task";
+		const needsSpinner = isStreamingArgs || isPartialTask;
 		if (needsSpinner && !this.spinnerInterval) {
 			this.spinnerInterval = setInterval(() => {
 				const frameCount = theme.spinnerFrames.length;
@@ -428,7 +436,9 @@ export class ToolExecutionComponent extends Container {
 			if (shouldRenderCall) {
 				// Render call component
 				try {
-					const callComponent = renderer.renderCall(this.args, theme);
+					const callComponent = renderer.renderCall(this.args, theme, {
+						spinnerFrame: this.spinnerFrame,
+					});
 					if (callComponent) {
 						// Ensure component has invalidate() method for Component interface
 						const component = callComponent as any;

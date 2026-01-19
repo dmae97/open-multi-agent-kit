@@ -125,6 +125,7 @@ export interface ToolSession {
 	/** Settings manager (optional) */
 	settings?: {
 		getImageAutoResize(): boolean;
+		getReadLineNumbers?(): boolean;
 		getLspFormatOnWrite(): boolean;
 		getLspDiagnosticsOnWrite(): boolean;
 		getLspDiagnosticsOnEdit(): boolean;

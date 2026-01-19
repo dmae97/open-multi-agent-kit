@@ -1,6 +1,18 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added normative rewrite setting to control tool call argument normalization in session history
+- Added read line numbers setting to prepend line numbers to read tool output by default
+- Added streaming preview for edit and write tools with spinner animation
+- Added automatic anchor derivation for normative patches when anchors not specified
+
+### Changed
+
+- Enhanced edit and write tool renderers to show streaming content preview
+- Updated read tool to respect default line numbers setting
+- Improved normative patch anchor handling to support undefined anchors
 
 ## [6.7.0] - 2026-01-19
 

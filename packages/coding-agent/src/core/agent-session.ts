@@ -440,7 +440,7 @@ export class AgentSession {
 					details?: unknown;
 					$normative?: Record<string, unknown>;
 				};
-				if ($normative && toolCallId) {
+				if ($normative && toolCallId && this.settingsManager.getNormativeRewrite()) {
 					await this._rewriteToolCallArgs(toolCallId, $normative);
 				}
 			}

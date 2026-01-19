@@ -210,6 +210,15 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		set: (sm, v) => sm.setCollapseChangelog(v),
 	},
 	{
+		id: "normativeRewrite",
+		tab: "behavior",
+		type: "boolean",
+		label: "Normative rewrite",
+		description: "Rewrite tool call arguments to normalized format in session history",
+		get: (sm) => sm.getNormativeRewrite(),
+		set: (sm, v) => sm.setNormativeRewrite(v),
+	},
+	{
 		id: "doubleEscapeAction",
 		tab: "behavior",
 		type: "enum",
@@ -311,6 +320,15 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		description: "Use codex-style apply-patch format instead of oldText/newText for edits",
 		get: (sm) => sm.getEditPatchMode(),
 		set: (sm, v) => sm.setEditPatchMode(v),
+	},
+	{
+		id: "readLineNumbers",
+		tab: "tools",
+		type: "boolean",
+		label: "Read line numbers",
+		description: "Prepend line numbers to read tool output by default",
+		get: (sm) => sm.getReadLineNumbers(),
+		set: (sm, v) => sm.setReadLineNumbers(v),
 	},
 	{
 		id: "mcpProjectConfig",

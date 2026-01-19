@@ -21,7 +21,8 @@ import {
 	writethroughNoop,
 } from "./lsp/index";
 import { resolveToCwd } from "./path-utils";
-import { formatDiagnostics, formatExpandHint, replaceTabs, shortenPath } from "./render-utils";
+import { formatDiagnostics, formatExpandHint, formatStatusIcon, replaceTabs, shortenPath } from "./render-utils";
+import type { RenderCallOptions } from "./renderers";
 
 const writeSchema = Type.Object({
 	path: Type.String({ description: "Path to the file to write (relative or absolute)" }),
@@ -124,9 +125,32 @@ interface WriteRenderArgs {
 	content?: string;
 }
 
+const WRITE_STREAMING_PREVIEW_LINES = 12;
+
 function countLines(text: string): number {
 	if (!text) return 0;
 	return text.split("\n").length;
+}
+
+function formatStreamingContent(content: string, rawPath: string, uiTheme: Theme): string {
+	if (!content) return "";
+	const lang = getLanguageFromPath(rawPath);
+	const lines = content.split("\n");
+	const total = lines.length;
+	const displayLines = lines.slice(-WRITE_STREAMING_PREVIEW_LINES);
+	const hidden = total - displayLines.length;
+
+	const formattedLines = lang
+		? highlightCode(replaceTabs(displayLines.join("\n")), lang)
+		: displayLines.map((line: string) => uiTheme.fg("toolOutput", replaceTabs(line)));
+
+	let text = "\n\n";
+	if (hidden > 0) {
+		text += uiTheme.fg("dim", `${uiTheme.format.ellipsis} (${hidden} earlier lines)\n`);
+	}
+	text += formattedLines.join("\n");
+	text += uiTheme.fg("dim", `\n${uiTheme.format.ellipsis} (streaming)`);
+	return text;
 }
 
 function formatMetadataLine(lineCount: number | null, language: string | undefined, uiTheme: Theme): string {
@@ -138,11 +162,19 @@ function formatMetadataLine(lineCount: number | null, language: string | undefin
 }
 
 export const writeToolRenderer = {
-	renderCall(args: WriteRenderArgs, uiTheme: Theme): Component {
+	renderCall(args: WriteRenderArgs, uiTheme: Theme, options?: RenderCallOptions): Component {
 		const rawPath = args.file_path || args.path || "";
 		const filePath = shortenPath(rawPath);
 		const pathDisplay = filePath ? uiTheme.fg("accent", filePath) : uiTheme.fg("toolOutput", uiTheme.format.ellipsis);
-		const text = `${uiTheme.fg("toolTitle", uiTheme.bold("Write"))} ${pathDisplay}`;
+		const spinner =
+			options?.spinnerFrame !== undefined ? formatStatusIcon("running", uiTheme, options.spinnerFrame) : "";
+		let text = `${uiTheme.fg("toolTitle", uiTheme.bold("Write"))} ${spinner ? `${spinner} ` : ""}${pathDisplay}`;
+
+		// Show streaming preview of content
+		if (args.content) {
+			text += formatStreamingContent(args.content, rawPath, uiTheme);
+		}
+
 		return new Text(text, 0, 0);
 	},
 

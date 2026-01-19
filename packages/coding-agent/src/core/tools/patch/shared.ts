@@ -5,17 +5,20 @@
 import type { ToolCallContext } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
+import { renderDiff as renderDiffColored } from "../../../modes/interactive/components/diff";
 import { getLanguageFromPath, type Theme } from "../../../modes/interactive/theme/theme";
 import type { RenderResultOptions } from "../../custom-tools/types";
 import type { FileDiagnosticsResult } from "../lsp/index";
 import {
 	createToolUIKit,
 	formatExpandHint,
+	formatStatusIcon,
 	getDiffStats,
 	shortenPath,
 	type ToolUIKit,
 	truncateDiffByHunk,
 } from "../render-utils";
+import type { RenderCallOptions } from "../renderers";
 import type { DiffError, DiffResult, Operation } from "./types";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -82,10 +85,27 @@ export interface EditRenderContext {
 
 const EDIT_DIFF_PREVIEW_HUNKS = 2;
 const EDIT_DIFF_PREVIEW_LINES = 24;
+const EDIT_STREAMING_PREVIEW_LINES = 12;
 
 function countLines(text: string): number {
 	if (!text) return 0;
 	return text.split("\n").length;
+}
+
+function formatStreamingDiff(diff: string, rawPath: string, uiTheme: Theme): string {
+	if (!diff) return "";
+	const lines = diff.split("\n");
+	const total = lines.length;
+	const displayLines = lines.slice(-EDIT_STREAMING_PREVIEW_LINES);
+	const hidden = total - displayLines.length;
+
+	let text = "\n\n";
+	if (hidden > 0) {
+		text += uiTheme.fg("dim", `${uiTheme.format.ellipsis} (${hidden} earlier lines)\n`);
+	}
+	text += renderDiffColored(displayLines.join("\n"), { filePath: rawPath });
+	text += uiTheme.fg("dim", `\n${uiTheme.format.ellipsis} (streaming)`);
+	return text;
 }
 
 function formatMetadataLine(lineCount: number | null, language: string | undefined, uiTheme: Theme): string {
@@ -136,7 +156,7 @@ function renderDiffSection(
 export const editToolRenderer = {
 	mergeCallAndResult: true,
 
-	renderCall(args: EditRenderArgs, uiTheme: Theme): Component {
+	renderCall(args: EditRenderArgs, uiTheme: Theme, options?: RenderCallOptions): Component {
 		const ui = createToolUIKit(uiTheme);
 		const rawPath = args.file_path || args.path || "";
 		const filePath = shortenPath(rawPath);
@@ -151,7 +171,16 @@ export const editToolRenderer = {
 
 		// Show operation type for patch mode
 		const opTitle = args.op === "create" ? "Create" : args.op === "delete" ? "Delete" : "Edit";
-		const text = `${ui.title(opTitle)} ${editIcon} ${pathDisplay}`;
+		const spinner =
+			options?.spinnerFrame !== undefined ? formatStatusIcon("running", uiTheme, options.spinnerFrame) : "";
+		let text = `${ui.title(opTitle)} ${spinner ? `${spinner} ` : ""}${editIcon} ${pathDisplay}`;
+
+		// Show streaming preview of diff/content
+		const streamingContent = args.diff ?? args.newText ?? args.patch;
+		if (streamingContent) {
+			text += formatStreamingDiff(streamingContent, rawPath, uiTheme);
+		}
+
 		return new Text(text, 0, 0);
 	},
 

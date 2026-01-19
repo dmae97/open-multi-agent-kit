@@ -236,6 +236,8 @@ export interface Settings {
 	disabledExtensions?: string[]; // Individual extension IDs that are disabled (e.g., "skill:commit")
 	statusLine?: StatusLineSettings; // Status line configuration
 	showHardwareCursor?: boolean; // Show terminal cursor while still positioning it for IME
+	normativeRewrite?: boolean; // default: false (rewrite tool call arguments to normalized format in session history)
+	readLineNumbers?: boolean; // default: false (prepend line numbers to read tool output by default)
 }
 
 export const DEFAULT_BASH_INTERCEPTOR_RULES: BashInterceptorRule[] = [
@@ -1296,6 +1298,24 @@ export class SettingsManager {
 			this.globalSettings.edit = {};
 		}
 		this.globalSettings.edit.patchMode = enabled;
+		await this.save();
+	}
+
+	getNormativeRewrite(): boolean {
+		return this.settings.normativeRewrite ?? false;
+	}
+
+	async setNormativeRewrite(enabled: boolean): Promise<void> {
+		this.globalSettings.normativeRewrite = enabled;
+		await this.save();
+	}
+
+	getReadLineNumbers(): boolean {
+		return this.settings.readLineNumbers ?? false;
+	}
+
+	async setReadLineNumbers(enabled: boolean): Promise<void> {
+		this.globalSettings.readLineNumbers = enabled;
 		await this.save();
 	}
 

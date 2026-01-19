@@ -441,11 +441,13 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 
 	private readonly session: ToolSession;
 	private readonly autoResizeImages: boolean;
+	private readonly defaultLineNumbers: boolean;
 	private readonly lsTool: LsTool;
 
 	constructor(session: ToolSession) {
 		this.session = session;
 		this.autoResizeImages = session.settings?.getImageAutoResize() ?? true;
+		this.defaultLineNumbers = session.settings?.getReadLineNumbers?.() ?? false;
 		this.lsTool = new LsTool(session);
 		this.description = renderPromptTemplate(readDescription, {
 			DEFAULT_MAX_LINES: String(DEFAULT_MAX_LINES),
@@ -622,8 +624,8 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 				// Apply truncation (respects both line and byte limits)
 				const truncation = truncateHead(selectedContent);
 
-				// Add line numbers if requested (default: false)
-				const shouldAddLineNumbers = lines === true;
+				// Add line numbers if requested (uses setting default if not specified)
+				const shouldAddLineNumbers = lines ?? this.defaultLineNumbers;
 				const prependLineNumbers = (text: string, startNum: number): string => {
 					const textLines = text.split("\n");
 					const lastLineNum = startNum + textLines.length - 1;

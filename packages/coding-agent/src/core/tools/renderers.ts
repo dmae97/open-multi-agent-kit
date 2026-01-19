@@ -26,8 +26,12 @@ import { webFetchToolRenderer } from "./web-fetch";
 import { webSearchToolRenderer } from "./web-search/render";
 import { writeToolRenderer } from "./write";
 
+export interface RenderCallOptions {
+	spinnerFrame?: number;
+}
+
 type ToolRenderer = {
-	renderCall: (args: unknown, theme: Theme) => Component;
+	renderCall: (args: unknown, theme: Theme, options?: RenderCallOptions) => Component;
 	renderResult: (
 		result: { content: Array<{ type: string; text?: string }>; details?: unknown; isError?: boolean },
 		options: RenderResultOptions & { renderContext?: Record<string, unknown> },
