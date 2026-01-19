@@ -443,30 +443,20 @@ const isAgentEvent = (event: AgentSessionEvent): event is AgentEvent => {
 	return agentEventTypes.has(event.type as AgentEvent["type"]);
 };
 
-interface RunState {
-	abortController: AbortController;
-	startTime: number;
-	session: { abort: () => Promise<void>; dispose: () => Promise<void> } | null;
-	unsubscribe: (() => void) | null;
-	sendDoneOnce: (message: Extract<SubagentWorkerResponse, { type: "done" }>) => void;
-}
+class RunState {
+	abortController = new AbortController();
+	startTime = Date.now();
+	session: { abort: () => Promise<void>; dispose: () => Promise<void> } | null = null;
+	unsubscribe: (() => void) | null = null;
 
-const createSendDoneOnce = (): RunState["sendDoneOnce"] => {
-	let sent = false;
-	return (message) => {
-		if (sent) return;
-		sent = true;
+	private doneSent = false;
+
+	sendDoneOnce(message: Extract<SubagentWorkerResponse, { type: "done" }>): void {
+		if (this.doneSent) return;
+		this.doneSent = true;
 		postMessageSafe(message);
-	};
-};
-
-const createRunState = (): RunState => ({
-	abortController: new AbortController(),
-	startTime: Date.now(),
-	session: null,
-	unsubscribe: null,
-	sendDoneOnce: createSendDoneOnce(),
-});
+	}
+}
 
 let activeRun: RunState | null = null;
 let pendingAbort = false;
@@ -861,7 +851,7 @@ globalThis.addEventListener("message", (event: WorkerMessageEvent<SubagentWorker
 	if (message.type === "start") {
 		// Only allow one task per worker
 		if (activeRun) return;
-		const runState = createRunState();
+		const runState = new RunState();
 		if (pendingAbort) {
 			pendingAbort = false;
 			runState.abortController.abort();

@@ -67,55 +67,60 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 	// Shutdown request flag (wrapped in object to allow mutation with const)
 	const shutdownState = { requested: false };
 
-	/** Helper for dialog methods with signal/timeout support */
-	function createDialogPromise<T>(
-		opts: ExtensionUIDialogOptions | undefined,
-		defaultValue: T,
-		request: Record<string, unknown>,
-		parseResponse: (response: RpcExtensionUIResponse) => T,
-	): Promise<T> {
-		if (opts?.signal?.aborted) return Promise.resolve(defaultValue);
+	/**
+	 * Extension UI context that uses the RPC protocol.
+	 */
+	class RpcExtensionUIContext implements ExtensionUIContext {
+		constructor(
+			private pendingRequests: Map<string, PendingExtensionRequest>,
+			private output: (obj: RpcResponse | RpcExtensionUIRequest | object) => void,
+		) {}
 
-		const id = nanoid();
-		return new Promise((resolve, reject) => {
-			let timeoutId: ReturnType<typeof setTimeout> | undefined;
+		/** Helper for dialog methods with signal/timeout support */
+		private createDialogPromise<T>(
+			opts: ExtensionUIDialogOptions | undefined,
+			defaultValue: T,
+			request: Record<string, unknown>,
+			parseResponse: (response: RpcExtensionUIResponse) => T,
+		): Promise<T> {
+			if (opts?.signal?.aborted) return Promise.resolve(defaultValue);
 
-			const cleanup = () => {
-				if (timeoutId) clearTimeout(timeoutId);
-				opts?.signal?.removeEventListener("abort", onAbort);
-				pendingExtensionRequests.delete(id);
-			};
+			const id = nanoid();
+			return new Promise((resolve, reject) => {
+				let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-			const onAbort = () => {
-				cleanup();
-				resolve(defaultValue);
-			};
-			opts?.signal?.addEventListener("abort", onAbort, { once: true });
+				const cleanup = () => {
+					if (timeoutId) clearTimeout(timeoutId);
+					opts?.signal?.removeEventListener("abort", onAbort);
+					this.pendingRequests.delete(id);
+				};
 
-			if (opts?.timeout !== undefined) {
-				timeoutId = setTimeout(() => {
+				const onAbort = () => {
 					cleanup();
 					resolve(defaultValue);
-				}, opts.timeout);
-			}
+				};
+				opts?.signal?.addEventListener("abort", onAbort, { once: true });
 
-			pendingExtensionRequests.set(id, {
-				resolve: (response: RpcExtensionUIResponse) => {
-					cleanup();
-					resolve(parseResponse(response));
-				},
-				reject,
+				if (opts?.timeout !== undefined) {
+					timeoutId = setTimeout(() => {
+						cleanup();
+						resolve(defaultValue);
+					}, opts.timeout);
+				}
+
+				this.pendingRequests.set(id, {
+					resolve: (response: RpcExtensionUIResponse) => {
+						cleanup();
+						resolve(parseResponse(response));
+					},
+					reject,
+				});
+				this.output({ type: "extension_ui_request", id, ...request } as RpcExtensionUIRequest);
 			});
-			output({ type: "extension_ui_request", id, ...request } as RpcExtensionUIRequest);
-		});
-	}
+		}
 
-	/**
-	 * Create an extension UI context that uses the RPC protocol.
-	 */
-	const createExtensionUIContext = (): ExtensionUIContext => ({
-		select: (title, options, dialogOptions) =>
-			createDialogPromise(
+		select(title: string, options: string[], dialogOptions?: ExtensionUIDialogOptions): Promise<string | undefined> {
+			return this.createDialogPromise(
 				dialogOptions,
 				undefined,
 				{ method: "select", title, options, timeout: dialogOptions?.timeout },
@@ -125,10 +130,11 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 						: "value" in response
 							? response.value
 							: undefined,
-			),
+			);
+		}
 
-		confirm: (title, message, dialogOptions) =>
-			createDialogPromise(
+		confirm(title: string, message: string, dialogOptions?: ExtensionUIDialogOptions): Promise<boolean> {
+			return this.createDialogPromise(
 				dialogOptions,
 				false,
 				{ method: "confirm", title, message, timeout: dialogOptions?.timeout },
@@ -138,10 +144,15 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 						: "confirmed" in response
 							? response.confirmed
 							: false,
-			),
+			);
+		}
 
-		input: (title, placeholder, dialogOptions) =>
-			createDialogPromise(
+		input(
+			title: string,
+			placeholder?: string,
+			dialogOptions?: ExtensionUIDialogOptions,
+		): Promise<string | undefined> {
+			return this.createDialogPromise(
 				dialogOptions,
 				undefined,
 				{ method: "input", title, placeholder, timeout: dialogOptions?.timeout },
@@ -151,34 +162,35 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 						: "value" in response
 							? response.value
 							: undefined,
-			),
+			);
+		}
 
 		notify(message: string, type?: "info" | "warning" | "error"): void {
 			// Fire and forget - no response needed
-			output({
+			this.output({
 				type: "extension_ui_request",
 				id: nanoid(),
 				method: "notify",
 				message,
 				notifyType: type,
 			} as RpcExtensionUIRequest);
-		},
+		}
 
 		setStatus(key: string, text: string | undefined): void {
 			// Fire and forget - no response needed
-			output({
+			this.output({
 				type: "extension_ui_request",
 				id: nanoid(),
 				method: "setStatus",
 				statusKey: key,
 				statusText: text,
 			} as RpcExtensionUIRequest);
-		},
+		}
 
 		setWidget(key: string, content: unknown): void {
 			// Only support string arrays in RPC mode - factory functions are ignored
 			if (content === undefined || Array.isArray(content)) {
-				output({
+				this.output({
 					type: "extension_ui_request",
 					id: nanoid(),
 					method: "setWidget",
@@ -187,53 +199,53 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 				} as RpcExtensionUIRequest);
 			}
 			// Component factories are not supported in RPC mode - would need TUI access
-		},
+		}
 
 		setFooter(_factory: unknown): void {
 			// Custom footer not supported in RPC mode - requires TUI access
-		},
+		}
 
 		setHeader(_factory: unknown): void {
 			// Custom header not supported in RPC mode - requires TUI access
-		},
+		}
 
 		setTitle(title: string): void {
 			// Fire and forget - host can implement terminal title control
-			output({
+			this.output({
 				type: "extension_ui_request",
 				id: nanoid(),
 				method: "setTitle",
 				title,
 			} as RpcExtensionUIRequest);
-		},
+		}
 
-		async custom() {
+		async custom(): Promise<never> {
 			// Custom UI not supported in RPC mode
 			return undefined as never;
-		},
+		}
 
 		setEditorText(text: string): void {
 			// Fire and forget - host can implement editor control
-			output({
+			this.output({
 				type: "extension_ui_request",
 				id: nanoid(),
 				method: "set_editor_text",
 				text,
 			} as RpcExtensionUIRequest);
-		},
+		}
 
 		getEditorText(): string {
 			// Synchronous method can't wait for RPC response
 			// Host should track editor state locally if needed
 			return "";
-		},
+		}
 
 		async editor(title: string, prefill?: string): Promise<string | undefined> {
 			const id = nanoid();
 			return new Promise((resolve, reject) => {
-				pendingExtensionRequests.set(id, {
+				this.pendingRequests.set(id, {
 					resolve: (response: RpcExtensionUIResponse) => {
-						pendingExtensionRequests.delete(id);
+						this.pendingRequests.delete(id);
 						if ("cancelled" in response && response.cancelled) {
 							resolve(undefined);
 						} else if ("value" in response) {
@@ -244,31 +256,37 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 					},
 					reject,
 				});
-				output({ type: "extension_ui_request", id, method: "editor", title, prefill } as RpcExtensionUIRequest);
+				this.output({
+					type: "extension_ui_request",
+					id,
+					method: "editor",
+					title,
+					prefill,
+				} as RpcExtensionUIRequest);
 			});
-		},
+		}
 
-		get theme() {
+		get theme(): Theme {
 			return theme;
-		},
+		}
 
-		getAllThemes() {
+		getAllThemes(): { name: string; path: string | undefined }[] {
 			return [];
-		},
+		}
 
-		getTheme(_name: string) {
+		getTheme(_name: string): Theme | undefined {
 			return undefined;
-		},
+		}
 
-		setTheme(_theme: string | Theme) {
+		setTheme(_theme: string | Theme): { success: boolean; error?: string } {
 			// Theme switching not supported in RPC mode
 			return { success: false, error: "Theme switching not supported in RPC mode" };
-		},
+		}
 
 		setEditorComponent(): void {
 			// Custom editor components not supported in RPC mode
-		},
-	});
+		}
+	}
 
 	// Set up extensions with RPC-based UI context
 	const extensionRunner = session.extensionRunner;
@@ -352,7 +370,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 					await session.compact(instructions, options);
 				},
 			},
-			createExtensionUIContext(),
+			new RpcExtensionUIContext(pendingExtensionRequests, output),
 		);
 		extensionRunner.onError((err) => {
 			output({ type: "extension_error", extensionPath: err.extensionPath, event: err.event, error: err.error });

@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added configurable fuzzy matching threshold for edit operations
@@ -13,6 +14,12 @@
 
 ### Changed
 
+- Refactored output sanitization logic into centralized streaming-output module
+- Converted voice recording from factory function to class-based implementation
+- Converted RPC extension UI context from factory function to class-based implementation
+- Converted task worker run state from object to class-based implementation
+- Updated SSH executor to use shared output streaming infrastructure
+- Improved text sanitization across Python executor and tool execution components
 - Changed default edit tool mode to use apply-patch format instead of oldText/newText
 - Converted tool implementations from factory functions to class-based architecture for better modularity
 - Updated tool exports to expose classes instead of factory functions

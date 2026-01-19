@@ -10,13 +10,12 @@ import {
 	Text,
 	type TUI,
 } from "@oh-my-pi/pi-tui";
-import stripAnsi from "strip-ansi";
+import { sanitizeText } from "../../../core/streaming-output";
 import { BASH_DEFAULT_PREVIEW_LINES } from "../../../core/tools/bash";
 import { computeEditDiff, computePatchDiff, type EditDiffError, type EditDiffResult } from "../../../core/tools/patch";
 import { PYTHON_DEFAULT_PREVIEW_LINES } from "../../../core/tools/python";
 import { toolRenderers } from "../../../core/tools/renderers";
 import { convertToPng } from "../../../utils/image-convert";
-import { sanitizeBinaryOutput } from "../../../utils/shell";
 import { theme } from "../theme/theme";
 import { renderDiff } from "./diff";
 
@@ -558,8 +557,7 @@ export class ToolExecutionComponent extends Container {
 
 		let output = textBlocks
 			.map((c: any) => {
-				// Use sanitizeBinaryOutput to handle binary data that crashes string-width
-				return sanitizeBinaryOutput(stripAnsi(c.text || "")).replace(/\r/g, "");
+				return sanitizeText(c.text || "");
 			})
 			.join("\n");
 

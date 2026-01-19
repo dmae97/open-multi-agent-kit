@@ -1,12 +1,8 @@
-import { createWriteStream, type WriteStream } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { Subprocess } from "bun";
-import { nanoid } from "nanoid";
-import stripAnsi from "strip-ansi";
-import { killProcessTree, sanitizeBinaryOutput } from "../../utils/shell";
+import { killProcessTree } from "../../utils/shell";
 import { logger } from "../logger";
-import { DEFAULT_MAX_BYTES, truncateTail } from "../tools/truncate";
+import { OutputSink, pumpStream } from "../streaming-output";
+import { DEFAULT_MAX_BYTES } from "../tools/truncate";
 import { ScopeSignal } from "../utils";
 import { buildRemoteCommand, ensureConnection, ensureHostInfo, type SSHConnectionTarget } from "./connection-manager";
 import { hasSshfs, mountRemote } from "./sshfs-mount";
@@ -35,68 +31,6 @@ export interface SSHResult {
 	truncated: boolean;
 	/** Path to temp file containing full output (if output exceeded truncation threshold) */
 	fullOutputPath?: string;
-}
-
-function createSanitizer(): TransformStream<Uint8Array, string> {
-	const decoder = new TextDecoder();
-	return new TransformStream({
-		transform(chunk, controller) {
-			const text = sanitizeBinaryOutput(stripAnsi(decoder.decode(chunk, { stream: true }))).replace(/\r/g, "");
-			controller.enqueue(text);
-		},
-	});
-}
-
-function createOutputSink(
-	spillThreshold: number,
-	maxBuffer: number,
-	onChunk?: (text: string) => void,
-): WritableStream<string> & {
-	dump: (annotation?: string) => { output: string; truncated: boolean; fullOutputPath?: string };
-} {
-	const chunks: string[] = [];
-	let chunkBytes = 0;
-	let totalBytes = 0;
-	let fullOutputPath: string | undefined;
-	let fullOutputStream: WriteStream | undefined;
-
-	const sink = new WritableStream<string>({
-		write(text) {
-			totalBytes += text.length;
-
-			if (totalBytes > spillThreshold && !fullOutputPath) {
-				fullOutputPath = join(tmpdir(), `omp-${nanoid()}.buffer`);
-				const ts = createWriteStream(fullOutputPath);
-				chunks.forEach((c) => {
-					ts.write(c);
-				});
-				fullOutputStream = ts;
-			}
-			fullOutputStream?.write(text);
-
-			chunks.push(text);
-			chunkBytes += text.length;
-			while (chunkBytes > maxBuffer && chunks.length > 1) {
-				chunkBytes -= chunks.shift()!.length;
-			}
-
-			onChunk?.(text);
-		},
-		close() {
-			fullOutputStream?.end();
-		},
-	});
-
-	return Object.assign(sink, {
-		dump(annotation?: string) {
-			if (annotation) {
-				chunks.push(`\n\n${annotation}`);
-			}
-			const full = chunks.join("");
-			const { content, truncated } = truncateTail(full);
-			return { output: truncated ? content : full, truncated, fullOutputPath };
-		},
-	});
 }
 
 function quoteForCompatShell(command: string): string {
@@ -146,25 +80,13 @@ export async function executeSSH(
 		killProcessTree(child.pid);
 	});
 
-	const sink = createOutputSink(DEFAULT_MAX_BYTES, DEFAULT_MAX_BYTES * 2, options?.onChunk);
+	const sink = new OutputSink(DEFAULT_MAX_BYTES, DEFAULT_MAX_BYTES * 2, options?.onChunk);
 
 	const writer = sink.getWriter();
 	try {
-		async function pumpStream(readable: ReadableStream<Uint8Array>) {
-			const reader = readable.pipeThrough(createSanitizer()).getReader();
-			try {
-				while (true) {
-					const { done, value } = await reader.read();
-					if (done) break;
-					await writer.write(value);
-				}
-			} finally {
-				reader.releaseLock();
-			}
-		}
 		await Promise.all([
-			pumpStream(child.stdout as ReadableStream<Uint8Array>),
-			pumpStream(child.stderr as ReadableStream<Uint8Array>),
+			pumpStream(child.stdout as ReadableStream<Uint8Array>, writer),
+			pumpStream(child.stderr as ReadableStream<Uint8Array>, writer),
 		]);
 	} finally {
 		await writer.close();

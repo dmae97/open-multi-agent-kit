@@ -1,5 +1,3 @@
-import stripAnsi from "strip-ansi";
-import { sanitizeBinaryOutput } from "../utils/shell";
 import { logger } from "./logger";
 import {
 	checkPythonKernelAvailability,
@@ -9,7 +7,7 @@ import {
 	type PreludeHelper,
 	PythonKernel,
 } from "./python-kernel";
-import { OutputSink } from "./streaming-output";
+import { OutputSink, sanitizeText } from "./streaming-output";
 import { DEFAULT_MAX_BYTES } from "./tools/truncate";
 
 export type PythonKernelMode = "session" | "per-call";
@@ -70,10 +68,6 @@ let cachedPreludeDocs: PreludeHelper[] | null = null;
 export async function disposeAllKernelSessions(): Promise<void> {
 	const sessions = Array.from(kernelSessions.values());
 	await Promise.allSettled(sessions.map((session) => disposeKernelSession(session)));
-}
-
-function sanitizeChunk(text: string): string {
-	return sanitizeBinaryOutput(stripAnsi(text)).replace(/\r/g, "");
 }
 
 async function ensureKernelAvailable(cwd: string): Promise<void> {
@@ -227,7 +221,7 @@ async function executeWithKernel(
 			signal: options?.signal,
 			timeoutMs: options?.timeout,
 			onChunk: async (text) => {
-				await writer.write(sanitizeChunk(text));
+				await writer.write(sanitizeText(text));
 			},
 			onDisplay: async (output) => {
 				displayOutputs.push(output);

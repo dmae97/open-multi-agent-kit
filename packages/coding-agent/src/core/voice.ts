@@ -23,6 +23,50 @@ export interface VoiceRecordingHandle {
 	cleanup: () => void;
 }
 
+export class VoiceRecording implements VoiceRecordingHandle {
+	readonly filePath: string;
+	private proc: ReturnType<typeof Bun.spawn>;
+
+	constructor(_settings: VoiceSettings) {
+		const sampleRate = DEFAULT_SAMPLE_RATE;
+		const channels = DEFAULT_CHANNELS;
+		this.filePath = join(tmpdir(), `omp-voice-${nanoid()}.wav`);
+		const command = buildRecordingCommand(this.filePath, sampleRate, channels);
+		if (!command) {
+			throw new Error("No audio recorder found (install sox, arecord, or ffmpeg).");
+		}
+
+		logger.debug("voice: starting recorder", { command });
+		this.proc = Bun.spawn(command, {
+			stdin: "ignore",
+			stdout: "ignore",
+			stderr: "pipe",
+		});
+	}
+
+	async stop(): Promise<void> {
+		try {
+			this.proc.kill();
+		} catch {
+			// ignore
+		}
+		await this.proc.exited;
+	}
+
+	cleanup(): void {
+		try {
+			unlinkSync(this.filePath);
+		} catch {
+			// ignore cleanup errors
+		}
+	}
+
+	async cancel(): Promise<void> {
+		await this.stop();
+		this.cleanup();
+	}
+}
+
 export interface VoiceTranscriptionResult {
 	text: string;
 }
@@ -99,45 +143,11 @@ function buildRecordingCommand(filePath: string, sampleRate: number, channels: n
 	return null;
 }
 
-export async function startVoiceRecording(_settings: VoiceSettings): Promise<VoiceRecordingHandle> {
-	const sampleRate = DEFAULT_SAMPLE_RATE;
-	const channels = DEFAULT_CHANNELS;
-	const filePath = join(tmpdir(), `omp-voice-${nanoid()}.wav`);
-	const command = buildRecordingCommand(filePath, sampleRate, channels);
-	if (!command) {
-		throw new Error("No audio recorder found (install sox, arecord, or ffmpeg).");
-	}
-
-	logger.debug("voice: starting recorder", { command });
-	const proc = Bun.spawn(command, {
-		stdin: "ignore",
-		stdout: "ignore",
-		stderr: "pipe",
-	});
-
-	const stop = async (): Promise<void> => {
-		try {
-			proc.kill();
-		} catch {
-			// ignore
-		}
-		await proc.exited;
-	};
-
-	const cleanup = (): void => {
-		try {
-			unlinkSync(filePath);
-		} catch {
-			// ignore cleanup errors
-		}
-	};
-
-	const cancel = async (): Promise<void> => {
-		await stop();
-		cleanup();
-	};
-
-	return { filePath, stop, cancel, cleanup };
+/**
+ * @deprecated Use `new VoiceRecording(settings)` instead.
+ */
+export function startVoiceRecording(settings: VoiceSettings): VoiceRecordingHandle {
+	return new VoiceRecording(settings);
 }
 
 export async function transcribeAudio(
