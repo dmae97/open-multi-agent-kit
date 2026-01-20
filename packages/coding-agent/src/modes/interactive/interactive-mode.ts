@@ -168,6 +168,9 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.editor.onAutocompleteCancel = () => {
 			this.ui.requestRender(true);
 		};
+		this.editor.onAutocompleteUpdate = () => {
+			this.ui.requestRender(true);
+		};
 		try {
 			this.historyStorage = HistoryStorage.open();
 			this.editor.setHistoryStorage(this.historyStorage);

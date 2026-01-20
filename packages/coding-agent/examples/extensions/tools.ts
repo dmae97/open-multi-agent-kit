@@ -31,12 +31,12 @@ export default function toolsExtension(pi: ExtensionAPI) {
 	}
 
 	// Apply current tool selection
-	function applyTools() {
-		pi.setActiveTools(Array.from(enabledTools));
+	async function applyTools() {
+		await pi.setActiveTools(Array.from(enabledTools));
 	}
 
 	// Find the last tools-config entry in the current branch
-	function restoreFromBranch(ctx: ExtensionContext) {
+	async function restoreFromBranch(ctx: ExtensionContext) {
 		allTools = pi.getAllTools();
 
 		// Get entries in current branch only
@@ -55,7 +55,7 @@ export default function toolsExtension(pi: ExtensionAPI) {
 		if (savedTools) {
 			// Restore saved tool selection (filter to only tools that still exist)
 			enabledTools = new Set(savedTools.filter((t: string) => allTools.includes(t)));
-			applyTools();
+			await applyTools();
 		} else {
 			// No saved state - sync with currently active tools
 			enabledTools = new Set(pi.getActiveTools());
@@ -130,16 +130,16 @@ export default function toolsExtension(pi: ExtensionAPI) {
 
 	// Restore state on session start
 	pi.on("session_start", async (_event, ctx) => {
-		restoreFromBranch(ctx);
+		await restoreFromBranch(ctx);
 	});
 
 	// Restore state when navigating the session tree
 	pi.on("session_tree", async (_event, ctx) => {
-		restoreFromBranch(ctx);
+		await restoreFromBranch(ctx);
 	});
 
 	// Restore state after branching
 	pi.on("session_branch", async (_event, ctx) => {
-		restoreFromBranch(ctx);
+		await restoreFromBranch(ctx);
 	});
 }

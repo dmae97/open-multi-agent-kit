@@ -757,7 +757,7 @@ export interface ExtensionAPI {
 	getAllTools(): string[];
 
 	/** Set the active tools by name. */
-	setActiveTools(toolNames: string[]): void;
+	setActiveTools(toolNames: string[]): Promise<void>;
 
 	/** Set the current model. Returns false if no API key available. */
 	setModel(model: Model<any>): Promise<boolean>;

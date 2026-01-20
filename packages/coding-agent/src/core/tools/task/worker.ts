@@ -15,7 +15,7 @@
 
 import type { AgentEvent, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
-import { logger, untilAborted } from "@oh-my-pi/pi-utils";
+import { logger, postmortem, untilAborted } from "@oh-my-pi/pi-utils";
 import type { TSchema } from "@sinclair/typebox";
 import lspDescription from "../../../prompts/tools/lsp.md" with { type: "text" };
 import type { AgentSessionEvent } from "../../agent-session";
@@ -377,17 +377,29 @@ function createPythonProxyTool(): CustomTool<typeof pythonSchema> {
 		description: getPythonToolDescription(),
 		parameters: pythonSchema,
 		execute: async (_toolCallId, params, _onUpdate, _ctx, signal) => {
-			const timeoutMs = getPythonCallTimeoutMs(params as PythonToolParams);
-			const result = await callPythonToolViaParent(params as PythonToolParams, signal, timeoutMs);
-			return {
-				content:
-					result?.content?.map((c) =>
-						c.type === "text"
-							? { type: "text" as const, text: c.text ?? "" }
-							: { type: "text" as const, text: JSON.stringify(c) },
-					) ?? [],
-				details: result?.details as PythonToolDetails | undefined,
-			};
+			try {
+				const timeoutMs = getPythonCallTimeoutMs(params as PythonToolParams);
+				const result = await callPythonToolViaParent(params as PythonToolParams, signal, timeoutMs);
+				return {
+					content:
+						result?.content?.map((c) =>
+							c.type === "text"
+								? { type: "text" as const, text: c.text ?? "" }
+								: { type: "text" as const, text: JSON.stringify(c) },
+						) ?? [],
+					details: result?.details as PythonToolDetails | undefined,
+				};
+			} catch (error) {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: `Python error: ${error instanceof Error ? error.message : String(error)}`,
+						},
+					],
+					details: { isError: true } as PythonToolDetails,
+				};
+			}
 		},
 	};
 }
@@ -780,7 +792,14 @@ function handleAbort(): void {
 	}
 }
 
-const reportFatal = (message: string): void => {
+const reportFatal = async (message: string): Promise<void> => {
+	// Run postmortem cleanup first to ensure child processes are killed
+	try {
+		await postmortem.cleanup();
+	} catch {
+		// Ignore cleanup errors
+	}
+
 	const runState = activeRun;
 	if (runState) {
 		runState.abortController.abort();
@@ -821,6 +840,16 @@ self.addEventListener("error", (event) => {
 self.addEventListener("unhandledrejection", (event) => {
 	const reason = event.reason;
 	const message = reason instanceof Error ? reason.stack || reason.message : String(reason);
+
+	// Avoid terminating active runs on tool-level errors that bubble as rejections.
+	if (activeRun) {
+		logger.error("Unhandled rejection in subagent worker", { error: message });
+		if ("preventDefault" in event && typeof event.preventDefault === "function") {
+			event.preventDefault();
+		}
+		return;
+	}
+
 	reportFatal(`Unhandled rejection: ${message}`);
 });
 

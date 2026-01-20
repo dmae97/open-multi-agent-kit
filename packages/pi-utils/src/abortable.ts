@@ -5,9 +5,8 @@ export class AbortError extends Error {
 		assert(signal.aborted, "Abort signal must be aborted");
 
 		const message = signal.reason instanceof Error ? signal.reason.message : "Cancelled";
-		super(`Aborted: ${message}`, { cause: message });
+		super(`Aborted: ${message}`, { cause: signal.reason });
 		this.name = "AbortError";
-		this.cause = signal.reason;
 	}
 }
 
@@ -42,9 +41,11 @@ export function createAbortablePromise<T>(signal?: AbortSignal): {
 		reject(new AbortError(signal));
 	};
 	signal.addEventListener("abort", abortHandler, { once: true });
-	promise.finally(() => {
-		signal.removeEventListener("abort", abortHandler);
-	});
+	promise
+		.finally(() => {
+			signal.removeEventListener("abort", abortHandler);
+		})
+		.catch(() => {});
 	return { promise, resolve, reject };
 }
 
@@ -63,7 +64,20 @@ export function untilAborted<T>(signal: AbortSignal | undefined | null, pr: () =
 		return Promise.reject(new AbortError(signal));
 	}
 	const { promise, resolve, reject } = createAbortablePromise<T>(signal);
-	pr().then(resolve, reject);
+	let settled = false;
+	const wrappedResolve = (value: T | PromiseLike<T>) => {
+		if (!settled) {
+			settled = true;
+			resolve(value);
+		}
+	};
+	const wrappedReject = (reason?: unknown) => {
+		if (!settled) {
+			settled = true;
+			reject(reason);
+		}
+	};
+	pr().then(wrappedResolve, wrappedReject);
 	return promise;
 }
 

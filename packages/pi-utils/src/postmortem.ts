@@ -6,6 +6,7 @@
  * allow reliably releasing resources or shutting down subprocesses, files, sockets, etc.
  */
 
+import { isMainThread } from "node:worker_threads";
 import { logger } from ".";
 
 // Cleanup reasons, in order of priority/meaning.
@@ -45,7 +46,8 @@ function runCleanup(reason: Reason): Promise<void> {
 
 	// Call .cleanup() for each callback that is still "armed".
 	// Use Promise.try to handle sync/async, but only those armed.
-	const promises = callbackList.reverse().map((callback) => {
+	// Create a copy to avoid mutating the original array with reverse()
+	const promises = [...callbackList].reverse().map((callback) => {
 		return Promise.try(() => callback(reason));
 	});
 
@@ -61,33 +63,45 @@ function runCleanup(reason: Reason): Promise<void> {
 }
 
 // Register signal and error event handlers to trigger cleanup before exit.
-process
-	.on("SIGINT", async () => {
-		await runCleanup(Reason.SIGINT);
-		process.exit(130); // 128 + SIGINT (2)
-	})
-	.on("uncaughtException", async (err) => {
-		logger.error("Uncaught exception", { err, stack: err.stack });
-		await runCleanup(Reason.UNCAUGHT_EXCEPTION);
-		process.exit(1);
-	})
-	.on("unhandledRejection", async (reason) => {
-		const err = reason instanceof Error ? reason : new Error(String(reason));
-		logger.error("Unhandled rejection", { err, stack: err.stack });
-		await runCleanup(Reason.UNHANDLED_REJECTION);
-		process.exit(1);
-	})
-	.on("exit", async () => {
-		void runCleanup(Reason.EXIT); // fire and forget (exit imminent)
-	})
-	.on("SIGTERM", async () => {
-		await runCleanup(Reason.SIGTERM);
-		process.exit(143); // 128 + SIGTERM (15)
-	})
-	.on("SIGHUP", async () => {
-		await runCleanup(Reason.SIGHUP);
-		process.exit(129); // 128 + SIGHUP (1)
+// Main thread: full signal handling (SIGINT, SIGTERM, SIGHUP) + exceptions + exit
+// Worker thread: exit only (workers use self.addEventListener for exceptions)
+if (isMainThread) {
+	process
+		.on("SIGINT", async () => {
+			await runCleanup(Reason.SIGINT);
+			process.exit(130); // 128 + SIGINT (2)
+		})
+		.on("uncaughtException", async (err) => {
+			logger.error("Uncaught exception", { err, stack: err.stack });
+			await runCleanup(Reason.UNCAUGHT_EXCEPTION);
+			process.exit(1);
+		})
+		.on("unhandledRejection", async (reason) => {
+			const err = reason instanceof Error ? reason : new Error(String(reason));
+			logger.error("Unhandled rejection", { err, stack: err.stack });
+			await runCleanup(Reason.UNHANDLED_REJECTION);
+			process.exit(1);
+		})
+		.on("exit", async () => {
+			void runCleanup(Reason.EXIT); // fire and forget (exit imminent)
+		})
+		.on("SIGTERM", async () => {
+			await runCleanup(Reason.SIGTERM);
+			process.exit(143); // 128 + SIGTERM (15)
+		})
+		.on("SIGHUP", async () => {
+			await runCleanup(Reason.SIGHUP);
+			process.exit(129); // 128 + SIGHUP (1)
+		});
+} else {
+	// Worker thread: only register exit handler for cleanup.
+	// DO NOT register uncaughtException/unhandledRejection handlers here -
+	// they would swallow errors before the worker's own handlers (self.addEventListener)
+	// can report failures back to the parent thread.
+	process.on("exit", () => {
+		void runCleanup(Reason.EXIT);
 	});
+}
 
 /**
  * Register a process cleanup callback, to be run on shutdown, signal, or fatal error.
@@ -134,10 +148,26 @@ export function register(id: string, callback: (reason: Reason) => void | Promis
 }
 
 /**
- * Runs all cleanup callbacks and exits the process.
+ * Runs all cleanup callbacks without exiting.
+ * Use this in workers or when you need to clean up but continue execution.
+ */
+export function cleanup(): Promise<void> {
+	return runCleanup(Reason.MANUAL);
+}
+
+/**
+ * Runs all cleanup callbacks and exits.
+ *
+ * In main thread: waits for stdout drain, then calls process.exit().
+ * In workers: runs cleanup only (process.exit would kill entire process).
  */
 export async function quit(code: number = 0): Promise<void> {
 	await runCleanup(Reason.MANUAL);
+
+	if (!isMainThread) {
+		return; // Workers: cleanup done, let worker exit naturally
+	}
+
 	if (process.stdout.writableLength > 0) {
 		const { promise, resolve } = Promise.withResolvers<void>();
 		process.stdout.once("drain", resolve);

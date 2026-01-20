@@ -158,12 +158,14 @@ export abstract class OAuthCallbackFlow {
 			resultState = { ok: true, code, state };
 		}
 
-		// Signal to waitForCallback
+		// Signal to waitForCallback - capture refs before they could be cleared
+		const resolve = this.callbackResolve;
+		const reject = this.callbackReject;
 		queueMicrotask(() => {
 			if (resultState.ok) {
-				this.callbackResolve?.({ code: resultState.code, state: resultState.state });
+				resolve?.({ code: resultState.code, state: resultState.state });
 			} else {
-				this.callbackReject?.(resultState.error ?? "Unknown error");
+				reject?.(resultState.error ?? "Unknown error");
 			}
 		});
 

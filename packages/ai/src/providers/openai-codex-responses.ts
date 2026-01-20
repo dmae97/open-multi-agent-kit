@@ -1,4 +1,5 @@
 import os from "node:os";
+import { abortableSleep } from "@oh-my-pi/pi-utils";
 import type {
 	ResponseFunctionToolCall,
 	ResponseInput,
@@ -440,13 +441,13 @@ async function fetchWithRetry(url: string, init: RequestInit, signal?: AbortSign
 			}
 			if (signal?.aborted) return response;
 			const delay = getRetryDelayMs(response, attempt);
-			await Bun.sleep(delay);
+			await abortableSleep(delay, signal);
 		} catch (error) {
 			if (attempt >= CODEX_MAX_RETRIES || signal?.aborted) {
 				throw error;
 			}
 			const delay = CODEX_RETRY_DELAY_MS * (attempt + 1);
-			await Bun.sleep(delay);
+			await abortableSleep(delay, signal);
 		}
 		attempt += 1;
 	}

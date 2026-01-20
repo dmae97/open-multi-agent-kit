@@ -3,6 +3,7 @@ import { createInterface } from "readline";
 import { CliAuthStorage } from "./storage";
 import "./utils/migrate-env";
 import { loginAnthropic } from "./utils/oauth/anthropic";
+import { loginCursor } from "./utils/oauth/cursor";
 import { loginGitHubCopilot } from "./utils/oauth/github-copilot";
 import { loginAntigravity } from "./utils/oauth/google-antigravity";
 import { loginGeminiCli } from "./utils/oauth/google-gemini-cli";
@@ -86,6 +87,17 @@ async function login(provider: OAuthProvider): Promise<void> {
 						return await promptFn(`${p.message}${p.placeholder ? ` (${p.placeholder})` : ""}:`);
 					},
 				});
+				break;
+
+			case "cursor":
+				credentials = await loginCursor(
+					(url) => {
+						console.log(`\nOpen this URL in your browser:\n${url}\n`);
+					},
+					() => {
+						console.log("Waiting for browser authentication...");
+					},
+				);
 				break;
 
 			default:

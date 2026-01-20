@@ -107,10 +107,12 @@ function toBoolean(value: unknown): boolean | undefined {
 export class AuthStorage {
 	private static readonly codexUsageCacheTtlMs = 60_000; // Cache usage data for 1 minute
 	private static readonly defaultBackoffMs = 60_000; // Default backoff when no reset time available
+	private static readonly cacheCleanupIntervalMs = 300_000; // Clean expired cache every 5 minutes
 
 	/** Provider -> credentials cache, populated from agent.db on reload(). */
 	private data: Map<string, StoredCredential[]> = new Map();
 	private storage: AgentStorage;
+	private lastCacheCleanup = 0;
 	/** Resolved path to agent.db (derived from authPath or used directly if .db). */
 	private dbPath: string;
 	private runtimeOverrides: Map<string, string> = new Map();
@@ -153,6 +155,7 @@ export class AuthStorage {
 		instance.sessionLastCredential = new Map();
 		instance.credentialBackoff = new Map();
 		instance.codexUsageCache = new Map();
+		instance.lastCacheCleanup = 0;
 
 		for (const [provider, creds] of Object.entries(data.credentials)) {
 			instance.data.set(
@@ -747,6 +750,11 @@ export class AuthStorage {
 		const normalizedBase = this.normalizeCodexBaseUrl(baseUrl);
 		const cacheKey = this.getCodexUsageCacheKey(accountId, normalizedBase);
 		const now = Date.now();
+
+		if (now - this.lastCacheCleanup > AuthStorage.cacheCleanupIntervalMs) {
+			this.lastCacheCleanup = now;
+			this.storage.cleanExpiredCache();
+		}
 
 		// Check in-memory cache first (fastest)
 		const memCached = this.codexUsageCache.get(cacheKey);

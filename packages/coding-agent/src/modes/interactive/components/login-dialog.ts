@@ -109,7 +109,9 @@ export class LoginDialogComponent extends Container {
 	showManualInput(prompt: string): Promise<string> {
 		this.contentContainer.addChild(new Spacer(1));
 		this.contentContainer.addChild(new Text(theme.fg("dim", prompt), 1, 0));
-		this.contentContainer.addChild(this.input);
+		if (!this.contentContainer.children.includes(this.input)) {
+			this.contentContainer.addChild(this.input);
+		}
 		this.contentContainer.addChild(new Text(theme.fg("dim", "(Escape to cancel)"), 1, 0));
 		this.tui.requestRender();
 
@@ -129,7 +131,9 @@ export class LoginDialogComponent extends Container {
 		if (placeholder) {
 			this.contentContainer.addChild(new Text(theme.fg("dim", `e.g., ${placeholder}`), 1, 0));
 		}
-		this.contentContainer.addChild(this.input);
+		if (!this.contentContainer.children.includes(this.input)) {
+			this.contentContainer.addChild(this.input);
+		}
 		this.contentContainer.addChild(new Text(theme.fg("dim", "(Escape to cancel, Enter to submit)"), 1, 0));
 
 		this.input.setValue("");

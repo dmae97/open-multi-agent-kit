@@ -4,8 +4,8 @@ import * as path from "node:path";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
+import { ptree } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
-import { $ } from "bun";
 import { nanoid } from "nanoid";
 import { parse as parseHtml } from "node-html-parser";
 import { type Theme, theme } from "../../modes/interactive/theme/theme";
@@ -75,18 +75,58 @@ const CONVERTIBLE_EXTENSIONS = new Set([
  * Execute a command and return stdout
  */
 
+type WritableLike = {
+	write: (chunk: string | Uint8Array) => unknown;
+	flush?: () => unknown;
+	end?: () => unknown;
+};
+
+const textEncoder = new TextEncoder();
+
+async function writeStdin(handle: unknown, input: string | Buffer): Promise<void> {
+	if (!handle || typeof handle === "number") return;
+	if (typeof (handle as WritableStream<Uint8Array>).getWriter === "function") {
+		const writer = (handle as WritableStream<Uint8Array>).getWriter();
+		try {
+			const chunk = typeof input === "string" ? textEncoder.encode(input) : new Uint8Array(input);
+			await writer.write(chunk);
+		} finally {
+			await writer.close();
+		}
+		return;
+	}
+
+	const sink = handle as WritableLike;
+	sink.write(input);
+	if (sink.flush) sink.flush();
+	if (sink.end) sink.end();
+}
+
 async function exec(
 	cmd: string,
 	args: string[],
 	options?: { timeout?: number; input?: string | Buffer },
 ): Promise<{ stdout: string; stderr: string; ok: boolean }> {
-	void options;
-	const result = await $`${cmd} ${args}`.quiet().nothrow();
-	const decoder = new TextDecoder();
+	const proc = ptree.cspawn([cmd, ...args], {
+		stdin: options?.input ? "pipe" : null,
+		timeout: options?.timeout,
+	});
+
+	if (options?.input) {
+		await writeStdin(proc.stdin, options.input);
+	}
+
+	const [stdout, stderr] = await Promise.all([proc.stdout.text(), proc.stderr.text()]);
+	try {
+		await proc.exited;
+	} catch {
+		// Handle non-zero exit or timeout
+	}
+
 	return {
-		stdout: result.stdout ? decoder.decode(result.stdout) : "",
-		stderr: result.stderr ? decoder.decode(result.stderr) : "",
-		ok: result.exitCode === 0,
+		stdout,
+		stderr,
+		ok: proc.exitCode === 0,
 	};
 }
 

@@ -4,7 +4,7 @@
  * Provides unified bash execution for AgentSession.executeBash() and direct calls.
  */
 
-import { cspawn, Exception } from "@oh-my-pi/pi-utils";
+import { cspawn, Exception, ptree } from "@oh-my-pi/pi-utils";
 import { getShellConfig } from "../utils/shell";
 import { getOrCreateSnapshot, getSnapshotSourceCommand } from "../utils/shell-snapshot";
 import { OutputSink } from "./streaming-output";
@@ -63,7 +63,7 @@ export async function executeBash(command: string, options?: BashExecutorOptions
 		// Exception covers NonZeroExitError, AbortError, TimeoutError
 		if (err instanceof Exception) {
 			if (err.aborted) {
-				const isTimeout = err.message.includes("timed out");
+				const isTimeout = err instanceof ptree.TimeoutError || err.message.toLowerCase().includes("timed out");
 				const annotation = isTimeout
 					? `Command timed out after ${Math.round((options?.timeout ?? 0) / 1000)} seconds`
 					: undefined;

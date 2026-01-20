@@ -260,6 +260,10 @@ export class ToolExecutionComponent extends Container {
 	): void {
 		this.result = result;
 		this.isPartial = isPartial;
+		// When tool is complete, ensure args are marked complete so spinner stops
+		if (!isPartial) {
+			this.argsComplete = true;
+		}
 		this.updateSpinnerAnimation();
 		this.updateDisplay();
 		// Convert non-PNG images to PNG for Kitty protocol (async)

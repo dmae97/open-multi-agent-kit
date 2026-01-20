@@ -2226,7 +2226,7 @@ export class AgentSession {
 								error: message,
 								model: `${candidate.provider}/${candidate.id}`,
 							});
-							await Bun.sleep(delayMs);
+							await abortableSleep(delayMs, this._autoCompactionAbortController.signal);
 						}
 					}
 
@@ -2291,6 +2291,10 @@ export class AgentSession {
 				}, 100);
 			}
 		} catch (error) {
+			if (this._autoCompactionAbortController?.signal.aborted) {
+				this._emit({ type: "auto_compaction_end", result: undefined, aborted: true, willRetry: false });
+				return;
+			}
 			const errorMessage = error instanceof Error ? error.message : "compaction failed";
 			this._emit({
 				type: "auto_compaction_end",

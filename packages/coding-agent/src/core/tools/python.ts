@@ -64,6 +64,7 @@ export interface PythonToolDetails {
 	images?: ImageContent[];
 	/** Structured status events from prelude helpers */
 	statusEvents?: PythonStatusEvent[];
+	isError?: boolean;
 }
 
 function formatJsonScalar(value: unknown): string {

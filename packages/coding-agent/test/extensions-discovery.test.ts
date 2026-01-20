@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
-import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTempDirSync } from "@oh-my-pi/pi-utils";
@@ -13,7 +12,7 @@ describe("extensions discovery", () => {
 	let extensionsDir: string;
 
 	beforeEach(() => {
-		tempDir = createTempDirSync(path.join(tmpdir(), "pi-ext-test-"));
+		tempDir = createTempDirSync("@pi-ext-test-");
 		extensionsDir = path.join(tempDir.path, ".omp", "extensions");
 		fs.mkdirSync(extensionsDir, { recursive: true });
 	});

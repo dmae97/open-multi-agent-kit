@@ -40,11 +40,16 @@ function getAccountId(accessToken: string): string | null {
 	return typeof accountId === "string" && accountId.length > 0 ? accountId : null;
 }
 
-class OpenAICodexOAuthFlow extends OAuthCallbackFlow {
-	private verifier: string = "";
-	private challenge: string = "";
+interface PKCE {
+	verifier: string;
+	challenge: string;
+}
 
-	constructor(ctrl: OAuthController) {
+class OpenAICodexOAuthFlow extends OAuthCallbackFlow {
+	constructor(
+		ctrl: OAuthController,
+		private readonly pkce: PKCE,
+	) {
 		super(ctrl, CALLBACK_PORT, CALLBACK_PATH);
 	}
 
@@ -52,16 +57,12 @@ class OpenAICodexOAuthFlow extends OAuthCallbackFlow {
 		state: string,
 		redirectUri: string,
 	): Promise<{ url: string; instructions?: string }> {
-		const pkce = await generatePKCE();
-		this.verifier = pkce.verifier;
-		this.challenge = pkce.challenge;
-
 		const searchParams = new URLSearchParams({
 			response_type: "code",
 			client_id: CLIENT_ID,
 			redirect_uri: redirectUri,
 			scope: SCOPE,
-			code_challenge: this.challenge,
+			code_challenge: this.pkce.challenge,
 			code_challenge_method: "S256",
 			state,
 			id_token_add_organizations: "true",
@@ -74,56 +75,61 @@ class OpenAICodexOAuthFlow extends OAuthCallbackFlow {
 	}
 
 	protected async exchangeToken(code: string, _state: string, redirectUri: string): Promise<OAuthCredentials> {
-		const tokenResponse = await fetch(TOKEN_URL, {
-			method: "POST",
-			headers: { "Content-Type": "application/x-www-form-urlencoded" },
-			body: new URLSearchParams({
-				grant_type: "authorization_code",
-				client_id: CLIENT_ID,
-				code,
-				code_verifier: this.verifier,
-				redirect_uri: redirectUri,
-			}),
-		});
-
-		if (!tokenResponse.ok) {
-			throw new Error(`Token exchange failed: ${tokenResponse.status}`);
-		}
-
-		const tokenData = (await tokenResponse.json()) as {
-			access_token?: string;
-			refresh_token?: string;
-			expires_in?: number;
-		};
-
-		if (!tokenData.access_token || !tokenData.refresh_token || typeof tokenData.expires_in !== "number") {
-			throw new Error("Token response missing required fields");
-		}
-
-		const accountId = getAccountId(tokenData.access_token);
-		if (!accountId) {
-			throw new Error("Failed to extract accountId from token");
-		}
-
-		return {
-			access: tokenData.access_token,
-			refresh: tokenData.refresh_token,
-			expires: Date.now() + tokenData.expires_in * 1000,
-			accountId,
-		};
+		return exchangeCodeForToken(code, this.pkce.verifier, redirectUri);
 	}
+}
+
+async function exchangeCodeForToken(code: string, verifier: string, redirectUri: string): Promise<OAuthCredentials> {
+	const tokenResponse = await fetch(TOKEN_URL, {
+		method: "POST",
+		headers: { "Content-Type": "application/x-www-form-urlencoded" },
+		body: new URLSearchParams({
+			grant_type: "authorization_code",
+			client_id: CLIENT_ID,
+			code,
+			code_verifier: verifier,
+			redirect_uri: redirectUri,
+		}),
+	});
+
+	if (!tokenResponse.ok) {
+		throw new Error(`Token exchange failed: ${tokenResponse.status}`);
+	}
+
+	const tokenData = (await tokenResponse.json()) as {
+		access_token?: string;
+		refresh_token?: string;
+		expires_in?: number;
+	};
+
+	if (!tokenData.access_token || !tokenData.refresh_token || typeof tokenData.expires_in !== "number") {
+		throw new Error("Token response missing required fields");
+	}
+
+	const accountId = getAccountId(tokenData.access_token);
+	if (!accountId) {
+		throw new Error("Failed to extract accountId from token");
+	}
+
+	return {
+		access: tokenData.access_token,
+		refresh: tokenData.refresh_token,
+		expires: Date.now() + tokenData.expires_in * 1000,
+		accountId,
+	};
 }
 
 /**
  * Login with OpenAI Codex OAuth
  */
 export async function loginOpenAICodex(ctrl: OAuthController): Promise<OAuthCredentials> {
-	const flow = new OpenAICodexOAuthFlow(ctrl);
+	const pkce = await generatePKCE();
+	const flow = new OpenAICodexOAuthFlow(ctrl, pkce);
+	const redirectUri = `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`;
 
 	try {
 		return await flow.login();
 	} catch (error) {
-		// Callback failed - fall back to onPrompt if available
 		if (!ctrl.onPrompt) {
 			throw error;
 		}
@@ -139,47 +145,7 @@ export async function loginOpenAICodex(ctrl: OAuthController): Promise<OAuthCred
 			throw new Error("No authorization code found in input");
 		}
 
-		const redirectUri = `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`;
-
-		// Manual token exchange
-		const pkce = await generatePKCE();
-		const tokenResponse = await fetch(TOKEN_URL, {
-			method: "POST",
-			headers: { "Content-Type": "application/x-www-form-urlencoded" },
-			body: new URLSearchParams({
-				grant_type: "authorization_code",
-				client_id: CLIENT_ID,
-				code: parsed.code,
-				code_verifier: pkce.verifier,
-				redirect_uri: redirectUri,
-			}),
-		});
-
-		if (!tokenResponse.ok) {
-			throw new Error(`Token exchange failed: ${tokenResponse.status}`);
-		}
-
-		const tokenData = (await tokenResponse.json()) as {
-			access_token?: string;
-			refresh_token?: string;
-			expires_in?: number;
-		};
-
-		if (!tokenData.access_token || !tokenData.refresh_token || typeof tokenData.expires_in !== "number") {
-			throw new Error("Token response missing required fields");
-		}
-
-		const accountId = getAccountId(tokenData.access_token);
-		if (!accountId) {
-			throw new Error("Failed to extract accountId from token");
-		}
-
-		return {
-			access: tokenData.access_token,
-			refresh: tokenData.refresh_token,
-			expires: Date.now() + tokenData.expires_in * 1000,
-			accountId,
-		};
+		return exchangeCodeForToken(parsed.code, pkce.verifier, redirectUri);
 	}
 }
 

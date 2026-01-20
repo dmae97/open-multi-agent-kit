@@ -343,7 +343,9 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 	let abortSent = false;
 	let abortReason: AbortReason | undefined;
 	let terminationScheduled = false;
-	let pendingTerminationController: AbortController | null = null;
+	let terminated = false;
+	let terminationTimeoutId: ReturnType<typeof setTimeout> | null = null;
+	let pendingTerminationTimeoutId: ReturnType<typeof setTimeout> | null = null;
 	let finalize: ((message: Extract<SubagentWorkerResponse, { type: "done" }>) => void) | null = null;
 	const listenerController = new AbortController();
 	const listenerSignal = listenerController.signal;
@@ -416,28 +418,25 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 	const scheduleTermination = () => {
 		if (terminationScheduled) return;
 		terminationScheduled = true;
-		const timeoutSignal = AbortSignal.timeout(2000);
-		timeoutSignal.addEventListener(
-			"abort",
-			() => {
-				if (resolved) return;
-				try {
-					worker.terminate();
-				} catch {
-					// Ignore termination errors
-				}
-				if (finalize && !resolved) {
-					finalize({
-						type: "done",
-						exitCode: 1,
-						durationMs: Date.now() - startTime,
-						error: abortReason === "signal" ? "Aborted" : "Worker terminated after tool completion",
-						aborted: abortReason === "signal",
-					});
-				}
-			},
-			{ once: true, signal: listenerSignal },
-		);
+		terminationTimeoutId = setTimeout(() => {
+			terminationTimeoutId = null;
+			if (resolved || terminated) return;
+			terminated = true;
+			try {
+				worker.terminate();
+			} catch {
+				// Ignore termination errors
+			}
+			if (finalize && !resolved) {
+				finalize({
+					type: "done",
+					exitCode: 1,
+					durationMs: Date.now() - startTime,
+					error: abortReason === "signal" ? "Aborted" : "Worker terminated after tool completion",
+					aborted: abortReason === "signal",
+				});
+			}
+		}, 2000);
 	};
 
 	const requestAbort = (reason: AbortReason) => {
@@ -461,28 +460,25 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			// Worker already terminated, nothing to do
 		}
 		// Cancel pending termination if it exists
-		if (pendingTerminationController) {
-			pendingTerminationController.abort();
-			pendingTerminationController = null;
-		}
+		cancelPendingTermination();
 		scheduleTermination();
 	};
 
 	const schedulePendingTermination = () => {
-		if (pendingTerminationController || abortSent || terminationScheduled || resolved) return;
-		const readyController = new AbortController();
-		pendingTerminationController = readyController;
-		const pendingSignal = AbortSignal.any([AbortSignal.timeout(2000), readyController.signal]);
-		pendingSignal.addEventListener(
-			"abort",
-			() => {
-				pendingTerminationController = null;
-				if (!resolved) {
-					requestAbort("terminate");
-				}
-			},
-			{ once: true, signal: listenerSignal },
-		);
+		if (pendingTerminationTimeoutId || abortSent || terminationScheduled || resolved) return;
+		pendingTerminationTimeoutId = setTimeout(() => {
+			pendingTerminationTimeoutId = null;
+			if (!resolved) {
+				requestAbort("terminate");
+			}
+		}, 2000);
+	};
+
+	const cancelPendingTermination = () => {
+		if (pendingTerminationTimeoutId) {
+			clearTimeout(pendingTerminationTimeoutId);
+			pendingTerminationTimeoutId = null;
+		}
 	};
 
 	// Handle abort signal
@@ -655,9 +651,10 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 					// Accumulate tokens for progress display
 					progress.tokens += getUsageTokens(messageUsage);
 				}
-				// If pending termination, now we have tokens - terminate
-				if (pendingTerminationController) {
-					pendingTerminationController.abort();
+				// If pending termination, now we have tokens - terminate immediately
+				if (pendingTerminationTimeoutId) {
+					cancelPendingTermination();
+					requestAbort("terminate");
 				}
 				break;
 			}
@@ -714,7 +711,6 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 
 	const done = await new Promise<Extract<SubagentWorkerResponse, { type: "done" }>>((resolve) => {
 		const cleanup = () => {
-			pendingTerminationController = null;
 			listenerController.abort();
 		};
 		finalize = (message) => {
@@ -723,10 +719,18 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			cleanup();
 			resolve(message);
 		};
+		const postMessageSafe = (message: unknown) => {
+			if (resolved || terminated) return;
+			try {
+				worker.postMessage(message);
+			} catch {
+				// Worker already terminated
+			}
+		};
 		const handleMCPCall = async (request: MCPToolCallRequest) => {
 			const mcpManager = options.mcpManager;
 			if (!mcpManager) {
-				worker.postMessage({
+				postMessageSafe({
 					type: "mcp_tool_result",
 					callId: request.callId,
 					error: "MCP not available",
@@ -743,13 +747,13 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 					})(),
 					request.timeoutMs,
 				);
-				worker.postMessage({
+				postMessageSafe({
 					type: "mcp_tool_result",
 					callId: request.callId,
 					result: { content: result.content ?? [], isError: result.isError },
 				});
 			} catch (error) {
-				worker.postMessage({
+				postMessageSafe({
 					type: "mcp_tool_result",
 					callId: request.callId,
 					error: error instanceof Error ? error.message : String(error),
@@ -767,7 +771,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 
 		const handlePythonCall = async (request: PythonToolCallRequest) => {
 			if (!pythonTool) {
-				worker.postMessage({
+				postMessageSafe({
 					type: "python_tool_result",
 					callId: request.callId,
 					error: "Python proxy not available",
@@ -785,7 +789,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 					request.params as { code: string; timeout?: number; workdir?: string; reset?: boolean },
 					combinedSignal,
 				);
-				worker.postMessage({
+				postMessageSafe({
 					type: "python_tool_result",
 					callId: request.callId,
 					result: { content: result.content ?? [], details: result.details },
@@ -797,7 +801,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 						: error instanceof Error
 							? error.message
 							: String(error);
-				worker.postMessage({
+				postMessageSafe({
 					type: "python_tool_result",
 					callId: request.callId,
 					error: message,
@@ -816,7 +820,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 
 		const handleLspCall = async (request: LspToolCallRequest) => {
 			if (!lspTool) {
-				worker.postMessage({
+				postMessageSafe({
 					type: "lsp_tool_result",
 					callId: request.callId,
 					error: "LSP proxy not available",
@@ -828,7 +832,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 					lspTool.execute(request.callId, request.params as LspParams, signal),
 					request.timeoutMs,
 				);
-				worker.postMessage({
+				postMessageSafe({
 					type: "lsp_tool_result",
 					callId: request.callId,
 					result: { content: result.content ?? [], details: result.details },
@@ -840,7 +844,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 						: error instanceof Error
 							? error.message
 							: String(error);
-				worker.postMessage({
+				postMessageSafe({
 					type: "lsp_tool_result",
 					callId: request.callId,
 					error: message,
@@ -881,10 +885,14 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				return;
 			}
 			if (message.type === "done") {
+				// Worker is exiting - mark as terminated to prevent calling terminate() on dead worker
+				terminated = true;
 				finalize?.(message);
 			}
 		};
 		const onError = (event: WorkerErrorEvent) => {
+			// Worker error likely means it's dead or dying
+			terminated = true;
 			finalize?.({
 				type: "done",
 				exitCode: 1,
@@ -893,6 +901,8 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			});
 		};
 		const onMessageError = () => {
+			// Message error may indicate worker is in bad state
+			terminated = true;
 			finalize?.({
 				type: "done",
 				exitCode: 1,
@@ -902,6 +912,8 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		};
 		const onClose = () => {
 			// Worker terminated unexpectedly (crashed or was killed without sending done)
+			// Mark as terminated since the worker is already dead - calling terminate() again would crash
+			terminated = true;
 			const abortMessage =
 				abortSent && abortReason === "signal"
 					? "Worker terminated after abort"
@@ -932,11 +944,19 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		}
 	});
 
-	// Cleanup
-	try {
-		worker.terminate();
-	} catch {
-		// Ignore termination errors
+	// Cleanup - cancel any pending timeouts first
+	if (terminationTimeoutId) {
+		clearTimeout(terminationTimeoutId);
+		terminationTimeoutId = null;
+	}
+	cancelPendingTermination();
+	if (!terminated) {
+		terminated = true;
+		try {
+			worker.terminate();
+		} catch {
+			// Ignore termination errors
+		}
 	}
 
 	let exitCode = done.exitCode;

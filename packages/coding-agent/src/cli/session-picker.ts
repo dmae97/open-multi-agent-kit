@@ -28,8 +28,11 @@ export async function selectSession(sessions: SessionInfo[]): Promise<string | n
 			}
 		},
 		() => {
-			ui.stop();
-			process.exit(0);
+			if (!resolved) {
+				resolved = true;
+				ui.stop();
+				process.exit(0);
+			}
 		},
 	);
 

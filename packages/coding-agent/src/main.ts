@@ -92,11 +92,13 @@ async function runInteractiveMode(
 
 	await mode.init();
 
-	versionCheckPromise.then((newVersion) => {
-		if (newVersion) {
-			mode.showNewVersionNotification(newVersion);
-		}
-	});
+	versionCheckPromise
+		.then((newVersion) => {
+			if (newVersion) {
+				mode.showNewVersionNotification(newVersion);
+			}
+		})
+		.catch(() => {});
 
 	mode.renderInitialMessages();
 

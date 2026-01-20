@@ -105,20 +105,19 @@ export function streamProxy(model: Model<any>, context: Context, options: ProxyS
 			timestamp: Date.now(),
 		};
 
-		let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
-
+		let response: Response | null = null;
 		const abortHandler = () => {
-			if (reader) {
-				reader.cancel("Request aborted by user").catch(() => {});
+			const body = response?.body;
+			if (body) {
+				body.cancel("Request aborted by user").catch(() => {});
 			}
 		};
-
 		if (options.signal) {
-			options.signal.addEventListener("abort", abortHandler);
+			options.signal.addEventListener("abort", abortHandler, { once: true });
 		}
 
 		try {
-			const response = await fetch(`${options.proxyUrl}/api/stream`, {
+			response = await fetch(`${options.proxyUrl}/api/stream`, {
 				method: "POST",
 				headers: {
 					Authorization: `Bearer ${options.authToken}`,

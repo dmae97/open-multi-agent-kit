@@ -63,7 +63,12 @@ class AnthropicOAuthFlow extends OAuthCallbackFlow {
 		});
 
 		if (!tokenResponse.ok) {
-			const error = await tokenResponse.text();
+			let error: string;
+			try {
+				error = await tokenResponse.text();
+			} catch {
+				error = `HTTP ${tokenResponse.status}`;
+			}
 			throw new Error(`Token exchange failed: ${error}`);
 		}
 

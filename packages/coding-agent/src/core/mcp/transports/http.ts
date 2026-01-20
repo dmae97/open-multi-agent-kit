@@ -5,7 +5,7 @@
  * Based on MCP spec 2025-03-26.
  */
 
-import type { JsonRpcResponse, MCPHttpServerConfig, MCPSseServerConfig, MCPTransport } from "../types";
+import type { JsonRpcMessage, JsonRpcResponse, MCPHttpServerConfig, MCPSseServerConfig, MCPTransport } from "../types";
 
 /** Generate unique request ID */
 function generateId(): string {
@@ -167,39 +167,47 @@ export class HttpTransport implements MCPTransport {
 			throw new Error("No response body");
 		}
 
-		let result: T | undefined;
+		const timeout = this.config.timeout ?? 30000;
 
-		for await (const event of readSseEvents(response.body)) {
-			const data = event.data?.trim();
-			if (!data || data === "[DONE]") continue;
-			try {
-				const message = JSON.parse(data) as JsonRpcResponse;
+		const parse = async (): Promise<T> => {
+			for await (const event of readSseEvents(response.body!)) {
+				const data = event.data?.trim();
+				if (!data || data === "[DONE]") continue;
 
-				// Handle our response
-				if ("id" in message && message.id === expectedId) {
-					if (message.error) {
-						throw new Error(`MCP error ${message.error.code}: ${message.error.message}`);
+				try {
+					const message = JSON.parse(data) as JsonRpcMessage;
+
+					if (
+						"id" in message &&
+						(message as JsonRpcResponse).id === expectedId &&
+						("result" in message || "error" in message)
+					) {
+						const response = message as JsonRpcResponse;
+						if (response.error) {
+							throw new Error(`MCP error ${response.error.code}: ${response.error.message}`);
+						}
+						return response.result as T;
 					}
-					result = message.result as T;
+
+					if ("method" in message && !("id" in message)) {
+						this.onNotification?.(message.method, message.params);
+					}
+				} catch (error) {
+					if (error instanceof Error && error.message.startsWith("MCP error")) {
+						throw error;
+					}
 				}
-				// Handle notifications
-				else if ("method" in message && !("id" in message)) {
-					const notification = message as { method: string; params?: unknown };
-					this.onNotification?.(notification.method, notification.params);
-				}
-			} catch (error) {
-				if (error instanceof Error && error.message.startsWith("MCP error")) {
-					throw error;
-				}
-				// Ignore other parse errors
 			}
-		}
 
-		if (result === undefined) {
-			throw new Error("No response received");
-		}
+			throw new Error(`No response received for request ID ${expectedId}`);
+		};
 
-		return result;
+		return Promise.race([
+			parse(),
+			new Promise<never>((_, reject) =>
+				setTimeout(() => reject(new Error(`SSE response timeout after ${timeout}ms`)), timeout),
+			),
+		]);
 	}
 
 	async notify(method: string, params?: Record<string, unknown>): Promise<void> {

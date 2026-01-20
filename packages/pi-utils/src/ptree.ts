@@ -201,7 +201,14 @@ export class ChildProcess {
 	async killAndWait(): Promise<void> {
 		// Try killing with SIGTERM, then SIGKILL if it doesn't exit within 1 second
 		this.kill("SIGTERM");
-		await Promise.race([this.exited, Bun.sleep(1000).then(() => this.kill("SIGKILL"))]);
+		const exitedOrTimeout = await Promise.race([
+			this.exited.then(() => "exited" as const),
+			Bun.sleep(1000).then(() => "timeout" as const),
+		]);
+		if (exitedOrTimeout === "timeout") {
+			this.kill("SIGKILL");
+			await this.exited.catch(() => {});
+		}
 	}
 
 	// Output utilities (aliases for easy chaining)
@@ -329,7 +336,7 @@ export class AbortError extends Exception {
  */
 export class TimeoutError extends AbortError {
 	constructor(timeout: number, stderr: string) {
-		super(new Error(`Process timed out after ${timeout}ms`), stderr);
+		super(new Error(`Timed out after ${Math.round(timeout / 1000)}s`), stderr);
 	}
 }
 

@@ -126,12 +126,16 @@ export async function refreshCursorToken(apiKeyOrRefreshToken: string): Promise<
 
 function getTokenExpiry(token: string): number {
 	try {
-		const [, payload] = token.split(".");
+		const parts = token.split(".");
+		if (parts.length !== 3) {
+			return Date.now() + 3600 * 1000;
+		}
+		const payload = parts[1];
 		if (!payload) {
 			return Date.now() + 3600 * 1000;
 		}
 		const decoded = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
-		if (decoded.exp) {
+		if (decoded && typeof decoded === "object" && typeof decoded.exp === "number") {
 			return decoded.exp * 1000 - 5 * 60 * 1000;
 		}
 	} catch {

@@ -247,16 +247,16 @@ export default function planModeExtension(pi: ExtensionAPI) {
 		}
 	}
 
-	function togglePlanMode(ctx: ExtensionContext) {
+	async function togglePlanMode(ctx: ExtensionContext) {
 		planModeEnabled = !planModeEnabled;
 		executionMode = false;
 		todoItems = [];
 
 		if (planModeEnabled) {
-			pi.setActiveTools(PLAN_MODE_TOOLS);
+			await pi.setActiveTools(PLAN_MODE_TOOLS);
 			ctx.ui.notify(`Plan mode enabled. Tools: ${PLAN_MODE_TOOLS.join(", ")}`);
 		} else {
-			pi.setActiveTools(NORMAL_MODE_TOOLS);
+			await pi.setActiveTools(NORMAL_MODE_TOOLS);
 			ctx.ui.notify("Plan mode disabled. Full access restored.");
 		}
 		updateStatus(ctx);
@@ -266,7 +266,7 @@ export default function planModeExtension(pi: ExtensionAPI) {
 	pi.registerCommand("plan", {
 		description: "Toggle plan mode (read-only exploration)",
 		handler: async (_args, ctx) => {
-			togglePlanMode(ctx);
+			await togglePlanMode(ctx);
 		},
 	});
 
@@ -294,7 +294,7 @@ export default function planModeExtension(pi: ExtensionAPI) {
 	pi.registerShortcut(Key.shift("p"), {
 		description: "Toggle plan mode",
 		handler: async (ctx) => {
-			togglePlanMode(ctx);
+			await togglePlanMode(ctx);
 		},
 	});
 
@@ -417,7 +417,7 @@ Execute each step in order.`,
 
 				executionMode = false;
 				todoItems = [];
-				pi.setActiveTools(NORMAL_MODE_TOOLS);
+				await pi.setActiveTools(NORMAL_MODE_TOOLS);
 				updateStatus(ctx);
 			}
 			return;
@@ -470,7 +470,7 @@ Execute each step in order.`,
 		if (choice?.startsWith("Execute")) {
 			planModeEnabled = false;
 			executionMode = hasTodos;
-			pi.setActiveTools(NORMAL_MODE_TOOLS);
+			await pi.setActiveTools(NORMAL_MODE_TOOLS);
 			updateStatus(ctx);
 
 			// Simple execution message - context event filters old plan mode messages
@@ -519,7 +519,7 @@ Execute each step in order.`,
 		}
 
 		if (planModeEnabled) {
-			pi.setActiveTools(PLAN_MODE_TOOLS);
+			await pi.setActiveTools(PLAN_MODE_TOOLS);
 		}
 		updateStatus(ctx);
 	});

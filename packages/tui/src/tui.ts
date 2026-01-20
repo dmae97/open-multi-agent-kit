@@ -1090,7 +1090,9 @@ export class TUI extends Container {
 		this.terminal.write(buffer);
 
 		// Track cursor position for next render
-		this.cursorRow = finalCursorRow;
+		// cursorRow represents end-of-content for viewport calculations,
+		// hardwareCursorRow tracks actual cursor position (may move to cursorPos below)
+		this.cursorRow = Math.max(0, newLines.length - 1);
 		this.hardwareCursorRow = finalCursorRow;
 
 		// Position hardware cursor for IME

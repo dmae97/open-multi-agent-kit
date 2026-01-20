@@ -116,8 +116,8 @@ const DEFAULT_ENV_DENYLIST = new Set([
 const CASE_INSENSITIVE_ENV = process.platform === "win32";
 const ACTIVE_ENV_ALLOWLIST = CASE_INSENSITIVE_ENV ? WINDOWS_ENV_ALLOWLIST : DEFAULT_ENV_ALLOWLIST;
 
-const NORMALIZED_ALLOWLIST = new Set(
-	Array.from(ACTIVE_ENV_ALLOWLIST, (key) => (CASE_INSENSITIVE_ENV ? key.toUpperCase() : key)),
+const NORMALIZED_ALLOWLIST = new Map(
+	Array.from(ACTIVE_ENV_ALLOWLIST, (key) => [CASE_INSENSITIVE_ENV ? key.toUpperCase() : key, key] as const),
 );
 const NORMALIZED_DENYLIST = new Set(
 	Array.from(DEFAULT_ENV_DENYLIST, (key) => (CASE_INSENSITIVE_ENV ? key.toUpperCase() : key)),
@@ -168,8 +168,9 @@ function filterEnv(env: Record<string, string | undefined>): Record<string, stri
 		if (value === undefined) continue;
 		const normalizedKey = normalizeEnvKey(key);
 		if (NORMALIZED_DENYLIST.has(normalizedKey)) continue;
-		if (NORMALIZED_ALLOWLIST.has(normalizedKey)) {
-			filtered[key] = value;
+		const canonicalKey = NORMALIZED_ALLOWLIST.get(normalizedKey);
+		if (canonicalKey !== undefined) {
+			filtered[canonicalKey] = value;
 			continue;
 		}
 		if (NORMALIZED_ALLOW_PREFIXES.some((prefix) => normalizedKey.startsWith(prefix))) {

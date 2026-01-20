@@ -290,6 +290,7 @@ export class Editor implements Component, Focusable {
 	private autocompleteList?: SelectList;
 	private isAutocompleting: boolean = false;
 	private autocompletePrefix: string = "";
+	public onAutocompleteUpdate?: () => void;
 
 	// Paste tracking for large pastes
 	private pastes: Map<number, string> = new Map();
@@ -689,6 +690,7 @@ export class Editor implements Component, Focusable {
 				// Only pass arrow keys to the list, not Enter/Tab (we handle those directly)
 				if (matchesKey(data, "up") || matchesKey(data, "down")) {
 					this.autocompleteList.handleInput(data);
+					this.onAutocompleteUpdate?.();
 					return;
 				}
 

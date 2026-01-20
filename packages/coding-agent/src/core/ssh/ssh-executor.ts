@@ -95,7 +95,7 @@ export async function executeSSH(
 				return {
 					exitCode: undefined,
 					cancelled: true,
-					...sink.dump(`SSH command timed out after ${Math.round(options!.timeout! / 1000)} seconds`),
+					...sink.dump(`SSH: ${err.message}`),
 				};
 			}
 			if (err.aborted) {

@@ -41,14 +41,16 @@ export async function execCommand(
 		signal: options?.signal,
 		timeout: options?.timeout,
 	});
+	// Read streams before awaiting exit to avoid data loss if streams close
+	const [stdoutText, stderrText] = await Promise.all([proc.stdout.text(), proc.stderr.text()]);
 	try {
 		await proc.exited;
 	} catch {
 		// ChildProcess rejects on non-zero exit; we handle it below
 	}
 	return {
-		stdout: await proc.stdout.text(),
-		stderr: await proc.stderr.text(),
+		stdout: stdoutText,
+		stderr: stderrText,
 		code: proc.exitCode ?? 0,
 		killed: proc.exitReason instanceof ptree.AbortError,
 	};
