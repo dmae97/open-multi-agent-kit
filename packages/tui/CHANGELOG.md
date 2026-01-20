@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [6.8.1] - 2026-01-20
+
 ### Fixed
 
 - Fixed viewport tracking after partial renders to prevent autocomplete list artifacts

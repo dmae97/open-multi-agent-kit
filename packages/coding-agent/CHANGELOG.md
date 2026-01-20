@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [6.8.1] - 2026-01-20
+
 ### Fixed
 
 - Fixed unhandled promise rejection when tool execution fails by adding missing `.catch()` to floating `.finally()` chain in `createAbortablePromise`
