@@ -13,21 +13,22 @@
  * Modes use this class and add their own I/O layer on top.
  */
 
-import { existsSync, readFileSync } from "node:fs";
 import type { Agent, AgentEvent, AgentMessage, AgentState, AgentTool, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage, ImageContent, Message, Model, TextContent, ToolCall, Usage } from "@oh-my-pi/pi-ai";
 import { isContextOverflow, modelsAreEqual, supportsXhigh } from "@oh-my-pi/pi-ai";
 import { abortableSleep, logger } from "@oh-my-pi/pi-utils";
+import { YAML } from "bun";
+import { existsSync, readFileSync } from "node:fs";
 import type { Rule } from "../capability/rule";
 import { getAgentDbPath } from "../config";
 import { theme } from "../modes/interactive/theme/theme";
 import ttsrInterruptTemplate from "../prompts/system/ttsr-interrupt.md" with { type: "text" };
 import { type BashResult, executeBash as executeBashCommand } from "./bash-executor";
 import {
-	type CompactionResult,
 	calculateContextTokens,
 	collectEntriesForBranchSummary,
 	compact,
+	type CompactionResult,
 	estimateTokens,
 	generateBranchSummary,
 	prepareCompaction,
@@ -50,10 +51,20 @@ import type {
 import type { CompactOptions, ContextUsage } from "./extensions/types";
 import { extractFileMentions, generateFileMentionMessages } from "./file-mentions";
 import type { HookCommandContext } from "./hooks/types";
-import type { BashExecutionMessage, CustomMessage, PythonExecutionMessage } from "./messages";
+import {
+	type BashExecutionMessage,
+	bashExecutionToText,
+	type BranchSummaryMessage,
+	type CompactionSummaryMessage,
+	type CustomMessage,
+	type FileMentionMessage,
+	type HookMessage,
+	type PythonExecutionMessage,
+	pythonExecutionToText,
+} from "./messages";
 import type { ModelRegistry } from "./model-registry";
 import { parseModelString } from "./model-resolver";
-import { expandPromptTemplate, type PromptTemplate, parseCommandArgs, renderPromptTemplate } from "./prompt-templates";
+import { expandPromptTemplate, parseCommandArgs, type PromptTemplate, renderPromptTemplate } from "./prompt-templates";
 import { executePython as executePythonCommand, type PythonResult } from "./python-executor";
 import type { BranchSummaryEntry, CompactionEntry, NewSessionOptions, SessionManager } from "./session-manager";
 import type { SettingsManager, SkillsSettings } from "./settings-manager";
@@ -3265,6 +3276,36 @@ export class AgentSession {
 	formatSessionAsText(): string {
 		const lines: string[] = [];
 
+		// Include system prompt at the beginning
+		const systemPrompt = this.agent.state.systemPrompt;
+		if (systemPrompt) {
+			lines.push("## System Prompt\n");
+			lines.push(systemPrompt);
+			lines.push("\n");
+		}
+
+		// Include model and thinking level
+		const model = this.agent.state.model;
+		const thinkingLevel = this.agent.state.thinkingLevel;
+		lines.push("## Configuration\n");
+		lines.push(`Model: ${model.provider}/${model.id}`);
+		lines.push(`Thinking Level: ${thinkingLevel}`);
+		lines.push("\n");
+
+		// Include available tools
+		const tools = this.agent.state.tools;
+		if (tools.length > 0) {
+			lines.push("## Available Tools\n");
+			for (const tool of tools) {
+				lines.push(`### ${tool.name}\n`);
+				lines.push(tool.description);
+				lines.push("\n```yaml");
+				lines.push(YAML.stringify(tool.parameters, null, 2));
+				lines.push("```\n");
+			}
+			lines.push("\n");
+		}
+
 		for (const msg of this.messages) {
 			if (msg.role === "user") {
 				lines.push("## User\n");
@@ -3293,8 +3334,8 @@ export class AgentSession {
 						lines.push("</thinking>\n");
 					} else if (c.type === "toolCall") {
 						lines.push(`### Tool: ${c.name}`);
-						lines.push("```json");
-						lines.push(JSON.stringify(c.arguments, null, 2));
+						lines.push("```yaml");
+						lines.push(YAML.stringify(c.arguments, null, 2));
 						lines.push("```\n");
 					}
 				}
@@ -3314,6 +3355,56 @@ export class AgentSession {
 					}
 				}
 				lines.push("");
+			} else if (msg.role === "bashExecution") {
+				const bashMsg = msg as BashExecutionMessage;
+				if (!bashMsg.excludeFromContext) {
+					lines.push("## Bash Execution\n");
+					lines.push(bashExecutionToText(bashMsg));
+					lines.push("\n");
+				}
+			} else if (msg.role === "pythonExecution") {
+				const pythonMsg = msg as PythonExecutionMessage;
+				if (!pythonMsg.excludeFromContext) {
+					lines.push("## Python Execution\n");
+					lines.push(pythonExecutionToText(pythonMsg));
+					lines.push("\n");
+				}
+			} else if (msg.role === "custom" || msg.role === "hookMessage") {
+				const customMsg = msg as CustomMessage | HookMessage;
+				lines.push(`## ${customMsg.customType}\n`);
+				if (typeof customMsg.content === "string") {
+					lines.push(customMsg.content);
+				} else {
+					for (const c of customMsg.content) {
+						if (c.type === "text") {
+							lines.push(c.text);
+						} else if (c.type === "image") {
+							lines.push("[Image]");
+						}
+					}
+				}
+				lines.push("\n");
+			} else if (msg.role === "branchSummary") {
+				const branchMsg = msg as BranchSummaryMessage;
+				lines.push("## Branch Summary\n");
+				lines.push(`(from branch: ${branchMsg.fromId})\n`);
+				lines.push(branchMsg.summary);
+				lines.push("\n");
+			} else if (msg.role === "compactionSummary") {
+				const compactMsg = msg as CompactionSummaryMessage;
+				lines.push("## Compaction Summary\n");
+				lines.push(`(${compactMsg.tokensBefore} tokens before compaction)\n`);
+				lines.push(compactMsg.summary);
+				lines.push("\n");
+			} else if (msg.role === "fileMention") {
+				const fileMsg = msg as FileMentionMessage;
+				lines.push("## File Mention\n");
+				for (const file of fileMsg.files) {
+					lines.push(`<file path="${file.path}">`);
+					lines.push(file.content);
+					lines.push("</file>\n");
+				}
+				lines.push("\n");
 			}
 		}
 

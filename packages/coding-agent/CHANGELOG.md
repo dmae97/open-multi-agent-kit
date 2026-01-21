@@ -10,6 +10,11 @@
 - Added offset and limit parameters for reading specific line ranges from outputs
 - Added "." and "c" shortcuts to continue agent without sending visible message
 
+### Changed
+
+- Changed `/dump` command to include complete agent context: system prompt, model config, available tools with schemas, and all message types (bash/python executions, custom messages, branch summaries, compaction summaries, file mentions)
+- Changed `/dump` format to use YAML instead of JSON for tool schemas and arguments (more readable)
+
 ### Fixed
 
 - Fixed find tool to properly handle no matches case without treating as error
