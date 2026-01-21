@@ -1,8 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Changed
 
+- Updated keybinding system to normalize key IDs to lowercase
+- Changed label edit shortcut from 'l' to 'Shift+L' in tree selector
 - Changed output file extension from `.out.md` to `.md` for artifacts
 
 ### Removed
@@ -11,6 +14,7 @@
 
 ### Fixed
 
+- Fixed keybinding case sensitivity issues by normalizing all key IDs
 - Fixed task artifact path handling and simplified file structure
 
 ## [6.8.2] - 2026-01-21

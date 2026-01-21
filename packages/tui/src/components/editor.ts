@@ -306,6 +306,10 @@ export class Editor implements Component, Focusable {
 	private historyIndex: number = -1; // -1 = not browsing, 0 = most recent, 1 = older, etc.
 	private historyStorage?: HistoryStorage;
 
+	// Undo stack for editor state changes
+	private undoStack: EditorState[] = [];
+	private suspendUndo = false;
+
 	public onSubmit?: (text: string) => void;
 	public onAltEnter?: (text: string) => void;
 	public onChange?: (text: string) => void;
@@ -406,6 +410,7 @@ export class Editor implements Component, Focusable {
 
 	/** Internal setText that doesn't reset history state - used by navigateHistory */
 	private setTextInternal(text: string): void {
+		this.clearUndoStack();
 		const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
 		this.state.lines = lines.length === 0 ? [""] : lines;
 		this.state.cursorLine = this.state.lines.length - 1;
@@ -671,6 +676,12 @@ export class Editor implements Component, Focusable {
 			return;
 		}
 
+		// Ctrl+- / Ctrl+_ - Undo last edit
+		if (matchesKey(data, "ctrl+-") || matchesKey(data, "ctrl+_")) {
+			this.applyUndo();
+			return;
+		}
+
 		// Handle autocomplete special keys first (but don't block other input)
 		if (this.isAutocompleting && this.autocompleteList) {
 			// Escape - cancel autocomplete
@@ -794,7 +805,7 @@ export class Editor implements Component, Focusable {
 			this.deleteWordBackwards();
 		}
 		// Option/Alt+D - Delete word forwards
-		else if (matchesKey(data, "alt+d")) {
+		else if (matchesKey(data, "alt+d") || matchesKey(data, "alt+delete")) {
 			this.deleteWordForwards();
 		}
 		// Ctrl+Y - Yank from kill ring
@@ -857,6 +868,7 @@ export class Editor implements Component, Focusable {
 				cursorLine: 0,
 				cursorCol: 0,
 			};
+			this.clearUndoStack();
 			this.pastes.clear();
 			this.pasteCounter = 0;
 			this.historyIndex = -1; // Exit history browsing mode
@@ -1059,6 +1071,7 @@ export class Editor implements Component, Focusable {
 	insertText(text: string): void {
 		this.historyIndex = -1;
 		this.resetKillSequence();
+		this.recordUndoState();
 
 		const line = this.state.lines[this.state.cursorLine] || "";
 		const before = line.slice(0, this.state.cursorCol);
@@ -1076,6 +1089,7 @@ export class Editor implements Component, Focusable {
 	private insertCharacter(char: string): void {
 		this.historyIndex = -1; // Exit history browsing mode
 		this.resetKillSequence();
+		this.recordUndoState();
 
 		const line = this.state.lines[this.state.cursorLine] || "";
 
@@ -1126,107 +1140,105 @@ export class Editor implements Component, Focusable {
 	private handlePaste(pastedText: string): void {
 		this.historyIndex = -1; // Exit history browsing mode
 		this.resetKillSequence();
+		this.recordUndoState();
 
-		// Clean the pasted text
-		const cleanText = pastedText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+		this.withUndoSuspended(() => {
+			// Clean the pasted text
+			const cleanText = pastedText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
-		// Convert tabs to spaces (4 spaces per tab)
-		const tabExpandedText = cleanText.replace(/\t/g, "    ");
+			// Convert tabs to spaces (4 spaces per tab)
+			const tabExpandedText = cleanText.replace(/\t/g, "    ");
 
-		// Filter out non-printable characters except newlines
-		let filteredText = tabExpandedText
-			.split("")
-			.filter((char) => char === "\n" || char.charCodeAt(0) >= 32)
-			.join("");
+			// Filter out non-printable characters except newlines
+			let filteredText = tabExpandedText
+				.split("")
+				.filter((char) => char === "\n" || char.charCodeAt(0) >= 32)
+				.join("");
 
-		// If pasting a file path (starts with /, ~, or .) and the character before
-		// the cursor is a word character, prepend a space for better readability
-		if (/^[/~.]/.test(filteredText)) {
+			// If pasting a file path (starts with /, ~, or .) and the character before
+			// the cursor is a word character, prepend a space for better readability
+			if (/^[/~.]/.test(filteredText)) {
+				const currentLine = this.state.lines[this.state.cursorLine] || "";
+				const charBeforeCursor = this.state.cursorCol > 0 ? currentLine[this.state.cursorCol - 1] : "";
+				if (charBeforeCursor && /\w/.test(charBeforeCursor)) {
+					filteredText = ` ${filteredText}`;
+				}
+			}
+
+			// Split into lines
+			const pastedLines = filteredText.split("\n");
+
+			// Check if this is a large paste (> 10 lines or > 1000 characters)
+			const totalChars = filteredText.length;
+			if (pastedLines.length > 10 || totalChars > 1000) {
+				// Store the paste and insert a marker
+				this.pasteCounter++;
+				const pasteId = this.pasteCounter;
+				this.pastes.set(pasteId, filteredText);
+
+				// Insert marker like "[paste #1 +123 lines]" or "[paste #1 1234 chars]"
+				const marker =
+					pastedLines.length > 10
+						? `[paste #${pasteId} +${pastedLines.length} lines]`
+						: `[paste #${pasteId} ${totalChars} chars]`;
+				this.insertTextAtCursor(marker);
+
+				return;
+			}
+
+			if (pastedLines.length === 1) {
+				const text = pastedLines[0] || "";
+				this.insertTextAtCursor(text);
+				return;
+			}
+
+			// Multi-line paste - be very careful with array manipulation
 			const currentLine = this.state.lines[this.state.cursorLine] || "";
-			const charBeforeCursor = this.state.cursorCol > 0 ? currentLine[this.state.cursorCol - 1] : "";
-			if (charBeforeCursor && /\w/.test(charBeforeCursor)) {
-				filteredText = ` ${filteredText}`;
-			}
-		}
+			const beforeCursor = currentLine.slice(0, this.state.cursorCol);
+			const afterCursor = currentLine.slice(this.state.cursorCol);
 
-		// Split into lines
-		const pastedLines = filteredText.split("\n");
+			// Build the new lines array step by step
+			const newLines: string[] = [];
 
-		// Check if this is a large paste (> 10 lines or > 1000 characters)
-		const totalChars = filteredText.length;
-		if (pastedLines.length > 10 || totalChars > 1000) {
-			// Store the paste and insert a marker
-			this.pasteCounter++;
-			const pasteId = this.pasteCounter;
-			this.pastes.set(pasteId, filteredText);
-
-			// Insert marker like "[paste #1 +123 lines]" or "[paste #1 1234 chars]"
-			const marker =
-				pastedLines.length > 10
-					? `[paste #${pasteId} +${pastedLines.length} lines]`
-					: `[paste #${pasteId} ${totalChars} chars]`;
-			for (const char of marker) {
-				this.insertCharacter(char);
+			// Add all lines before current line
+			for (let i = 0; i < this.state.cursorLine; i++) {
+				newLines.push(this.state.lines[i] || "");
 			}
 
-			return;
-		}
+			// Add the first pasted line merged with before cursor text
+			newLines.push(beforeCursor + (pastedLines[0] || ""));
 
-		if (pastedLines.length === 1) {
-			// Single line - just insert each character
-			const text = pastedLines[0] || "";
-			for (const char of text) {
-				this.insertCharacter(char);
+			// Add all middle pasted lines
+			for (let i = 1; i < pastedLines.length - 1; i++) {
+				newLines.push(pastedLines[i] || "");
 			}
 
-			return;
-		}
+			// Add the last pasted line with after cursor text
+			newLines.push((pastedLines[pastedLines.length - 1] || "") + afterCursor);
 
-		// Multi-line paste - be very careful with array manipulation
-		const currentLine = this.state.lines[this.state.cursorLine] || "";
-		const beforeCursor = currentLine.slice(0, this.state.cursorCol);
-		const afterCursor = currentLine.slice(this.state.cursorCol);
+			// Add all lines after current line
+			for (let i = this.state.cursorLine + 1; i < this.state.lines.length; i++) {
+				newLines.push(this.state.lines[i] || "");
+			}
 
-		// Build the new lines array step by step
-		const newLines: string[] = [];
+			// Replace the entire lines array
+			this.state.lines = newLines;
 
-		// Add all lines before current line
-		for (let i = 0; i < this.state.cursorLine; i++) {
-			newLines.push(this.state.lines[i] || "");
-		}
+			// Update cursor position to end of pasted content
+			this.state.cursorLine += pastedLines.length - 1;
+			this.state.cursorCol = (pastedLines[pastedLines.length - 1] || "").length;
 
-		// Add the first pasted line merged with before cursor text
-		newLines.push(beforeCursor + (pastedLines[0] || ""));
-
-		// Add all middle pasted lines
-		for (let i = 1; i < pastedLines.length - 1; i++) {
-			newLines.push(pastedLines[i] || "");
-		}
-
-		// Add the last pasted line with after cursor text
-		newLines.push((pastedLines[pastedLines.length - 1] || "") + afterCursor);
-
-		// Add all lines after current line
-		for (let i = this.state.cursorLine + 1; i < this.state.lines.length; i++) {
-			newLines.push(this.state.lines[i] || "");
-		}
-
-		// Replace the entire lines array
-		this.state.lines = newLines;
-
-		// Update cursor position to end of pasted content
-		this.state.cursorLine += pastedLines.length - 1;
-		this.state.cursorCol = (pastedLines[pastedLines.length - 1] || "").length;
-
-		// Notify of change
-		if (this.onChange) {
-			this.onChange(this.getText());
-		}
+			// Notify of change
+			if (this.onChange) {
+				this.onChange(this.getText());
+			}
+		});
 	}
 
 	private addNewLine(): void {
 		this.historyIndex = -1; // Exit history browsing mode
 		this.resetKillSequence();
+		this.recordUndoState();
 
 		const currentLine = this.state.lines[this.state.cursorLine] || "";
 
@@ -1249,6 +1261,7 @@ export class Editor implements Component, Focusable {
 	private handleBackspace(): void {
 		this.historyIndex = -1; // Exit history browsing mode
 		this.resetKillSequence();
+		this.recordUndoState();
 
 		if (this.state.cursorCol > 0) {
 			// Delete grapheme before cursor (handles emojis, combining characters, etc.)
@@ -1314,6 +1327,73 @@ export class Editor implements Component, Focusable {
 		this.lastKillWasKillCommand = false;
 	}
 
+	private clearUndoStack(): void {
+		this.undoStack = [];
+	}
+
+	private withUndoSuspended<T>(fn: () => T): T {
+		const wasSuspended = this.suspendUndo;
+		this.suspendUndo = true;
+		try {
+			return fn();
+		} finally {
+			this.suspendUndo = wasSuspended;
+		}
+	}
+
+	private recordUndoState(): void {
+		if (this.suspendUndo) return;
+		const snapshot: EditorState = {
+			lines: [...this.state.lines],
+			cursorLine: this.state.cursorLine,
+			cursorCol: this.state.cursorCol,
+		};
+
+		const last = this.undoStack[this.undoStack.length - 1];
+		if (last) {
+			const sameLines =
+				last.cursorLine === snapshot.cursorLine &&
+				last.cursorCol === snapshot.cursorCol &&
+				last.lines.length === snapshot.lines.length &&
+				last.lines.every((line, index) => line === snapshot.lines[index]);
+			if (sameLines) return;
+		}
+
+		this.undoStack.push(snapshot);
+		if (this.undoStack.length > 200) {
+			this.undoStack.shift();
+		}
+	}
+
+	private applyUndo(): void {
+		const snapshot = this.undoStack.pop();
+		if (!snapshot) return;
+
+		this.historyIndex = -1;
+		this.resetKillSequence();
+		this.state = {
+			lines: [...snapshot.lines],
+			cursorLine: snapshot.cursorLine,
+			cursorCol: snapshot.cursorCol,
+		};
+
+		if (this.onChange) {
+			this.onChange(this.getText());
+		}
+
+		if (this.isAutocompleting) {
+			this.updateAutocomplete();
+		} else {
+			const currentLine = this.state.lines[this.state.cursorLine] || "";
+			const textBeforeCursor = currentLine.slice(0, this.state.cursorCol);
+			if (textBeforeCursor.trimStart().startsWith("/")) {
+				this.tryTriggerAutocomplete();
+			} else if (textBeforeCursor.match(/(?:^|[\s])@[^\s]*$/)) {
+				this.tryTriggerAutocomplete();
+			}
+		}
+	}
+
 	private recordKill(text: string, direction: "forward" | "backward"): void {
 		if (!text) return;
 		if (this.lastKillWasKillCommand && this.killRing.length > 0) {
@@ -1331,6 +1411,7 @@ export class Editor implements Component, Focusable {
 	private insertTextAtCursor(text: string): void {
 		this.historyIndex = -1;
 		this.resetKillSequence();
+		this.recordUndoState();
 
 		const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 		const lines = normalized.split("\n");
@@ -1378,6 +1459,7 @@ export class Editor implements Component, Focusable {
 
 	private deleteToStartOfLine(): void {
 		this.historyIndex = -1; // Exit history browsing mode
+		this.recordUndoState();
 
 		const currentLine = this.state.lines[this.state.cursorLine] || "";
 		let deletedText = "";
@@ -1406,6 +1488,7 @@ export class Editor implements Component, Focusable {
 
 	private deleteToEndOfLine(): void {
 		this.historyIndex = -1; // Exit history browsing mode
+		this.recordUndoState();
 
 		const currentLine = this.state.lines[this.state.cursorLine] || "";
 		let deletedText = "";
@@ -1431,6 +1514,7 @@ export class Editor implements Component, Focusable {
 
 	private deleteWordBackwards(): void {
 		this.historyIndex = -1; // Exit history browsing mode
+		this.recordUndoState();
 
 		const currentLine = this.state.lines[this.state.cursorLine] || "";
 
@@ -1464,6 +1548,7 @@ export class Editor implements Component, Focusable {
 
 	private deleteWordForwards(): void {
 		this.historyIndex = -1; // Exit history browsing mode
+		this.recordUndoState();
 
 		const currentLine = this.state.lines[this.state.cursorLine] || "";
 
@@ -1493,6 +1578,7 @@ export class Editor implements Component, Focusable {
 	private handleForwardDelete(): void {
 		this.historyIndex = -1; // Exit history browsing mode
 		this.resetKillSequence();
+		this.recordUndoState();
 
 		const currentLine = this.state.lines[this.state.cursorLine] || "";
 

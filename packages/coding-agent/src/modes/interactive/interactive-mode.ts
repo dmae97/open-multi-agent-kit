@@ -383,15 +383,6 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		// Initial top border update
 		this.updateEditorTopBorder();
-
-		if (!startupQuiet) {
-			const templateNames = this.session.promptTemplates.map((template) => template.name).sort();
-			if (templateNames.length > 0) {
-				const preview = templateNames.slice(0, 3).join(", ");
-				const suffix = templateNames.length > 3 ? ` +${templateNames.length - 3} more` : "";
-				this.showStatus(`Loaded prompt templates: ${preview}${suffix}`);
-			}
-		}
 	}
 
 	async getUserInput(): Promise<{ text: string; images?: ImageContent[] }> {

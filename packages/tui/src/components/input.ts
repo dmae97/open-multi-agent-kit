@@ -127,6 +127,11 @@ export class Input implements Component, Focusable {
 			return;
 		}
 
+		if (kb.matches(data, "deleteWordForward")) {
+			this.deleteWordForwards();
+			return;
+		}
+
 		if (kb.matches(data, "deleteToLineStart")) {
 			this.value = this.value.slice(this.cursor);
 			this.cursor = 0;
@@ -203,6 +208,19 @@ export class Input implements Component, Focusable {
 
 		this.value = this.value.slice(0, deleteFrom) + this.value.slice(this.cursor);
 		this.cursor = deleteFrom;
+	}
+
+	private deleteWordForwards(): void {
+		if (this.cursor >= this.value.length) {
+			return;
+		}
+
+		const oldCursor = this.cursor;
+		this.moveWordForwards();
+		const deleteTo = this.cursor;
+		this.cursor = oldCursor;
+
+		this.value = this.value.slice(0, oldCursor) + this.value.slice(deleteTo);
 	}
 
 	private moveWordBackwards(): void {

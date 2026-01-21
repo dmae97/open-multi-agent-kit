@@ -290,6 +290,23 @@ const SYMBOL_KEYS = new Set([
 	"?",
 ]);
 
+const CTRL_SYMBOL_MAP: Record<string, string> = {
+	"@": "\x00",
+	"[": "\x1b",
+	"\\": "\x1c",
+	"]": "\x1d",
+	"^": "\x1e",
+	_: "\x1f",
+	"-": "\x1f",
+} as const;
+
+const CTRL_SYMBOL_CODES: Record<number, KeyId> = {
+	28: "ctrl+\\",
+	29: "ctrl+]",
+	30: "ctrl+^",
+	31: "ctrl+_",
+} as const;
+
 const MODIFIERS = {
 	shift: 1,
 	alt: 2,
@@ -966,6 +983,7 @@ export function matchesKey(data: string, keyId: KeyId): boolean {
 	// Handle single letter keys (a-z) and some symbols
 	if (key.length === 1 && ((key >= "a" && key <= "z") || SYMBOL_KEYS.has(key))) {
 		const codepoint = key.charCodeAt(0);
+		const isLetterKey = key >= "a" && key <= "z";
 
 		if (ctrl && alt && !shift && !_kittyProtocolActive && key >= "a" && key <= "z") {
 			return data === `\x1b${rawCtrlChar(key)}`;
@@ -977,9 +995,16 @@ export function matchesKey(data: string, keyId: KeyId): boolean {
 		}
 
 		if (ctrl && !shift && !alt) {
+			if (!isLetterKey) {
+				const legacyCtrl = CTRL_SYMBOL_MAP[key];
+				if (legacyCtrl && data === legacyCtrl) return true;
+				if (matchesModifyOtherKeys(data, codepoint, MODIFIERS.ctrl)) return true;
+				return matchesKittySequence(data, codepoint, MODIFIERS.ctrl);
+			}
 			const raw = rawCtrlChar(key);
 			if (data === raw) return true;
 			if (data.length > 0 && data.charCodeAt(0) === raw.charCodeAt(0)) return true;
+			if (matchesModifyOtherKeys(data, codepoint, MODIFIERS.ctrl)) return true;
 			return matchesKittySequence(data, codepoint, MODIFIERS.ctrl);
 		}
 
@@ -1096,6 +1121,10 @@ export function parseKey(data: string): string | undefined {
 	// Raw Ctrl+letter
 	if (data.length === 1) {
 		const code = data.charCodeAt(0);
+		const ctrlSymbol = CTRL_SYMBOL_CODES[code];
+		if (ctrlSymbol) {
+			return ctrlSymbol;
+		}
 		if (code >= 1 && code <= 26) {
 			return `ctrl+${String.fromCharCode(code + 96)}`;
 		}

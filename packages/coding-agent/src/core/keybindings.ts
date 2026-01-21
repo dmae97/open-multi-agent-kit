@@ -124,6 +124,8 @@ const KEY_LABELS: Record<string, string> = {
 	right: "Right",
 };
 
+const normalizeKeyId = (key: KeyId): KeyId => key.toLowerCase() as KeyId;
+
 function formatKeyPart(part: string): string {
 	const lower = part.toLowerCase();
 	const modifier = MODIFIER_LABELS[lower];
@@ -199,14 +201,20 @@ export class KeybindingsManager {
 		// Set defaults for app actions
 		for (const [action, keys] of Object.entries(DEFAULT_APP_KEYBINDINGS)) {
 			const keyArray = Array.isArray(keys) ? keys : [keys];
-			this.appActionToKeys.set(action as AppAction, [...keyArray]);
+			this.appActionToKeys.set(
+				action as AppAction,
+				keyArray.map((key) => normalizeKeyId(key as KeyId)),
+			);
 		}
 
 		// Override with user config (app actions only)
 		for (const [action, keys] of Object.entries(this.config)) {
 			if (keys === undefined || !isAppAction(action)) continue;
 			const keyArray = Array.isArray(keys) ? keys : [keys];
-			this.appActionToKeys.set(action, keyArray);
+			this.appActionToKeys.set(
+				action,
+				keyArray.map((key) => normalizeKeyId(key as KeyId)),
+			);
 		}
 	}
 

@@ -52,6 +52,8 @@ export class Markdown implements Component {
 	private defaultTextStyle?: DefaultTextStyle;
 	private theme: MarkdownTheme;
 	private defaultStylePrefix?: string;
+	/** Number of spaces used to indent code block content. */
+	private codeBlockIndent: number;
 
 	// Cache for rendered output
 	private cachedText?: string;
@@ -64,12 +66,14 @@ export class Markdown implements Component {
 		paddingY: number,
 		theme: MarkdownTheme,
 		defaultTextStyle?: DefaultTextStyle,
+		codeBlockIndent: number = 2,
 	) {
 		this.text = text;
 		this.paddingX = paddingX;
 		this.paddingY = paddingY;
 		this.theme = theme;
 		this.defaultTextStyle = defaultTextStyle;
+		this.codeBlockIndent = Math.max(0, Math.floor(codeBlockIndent));
 	}
 
 	setText(text: string): void {
@@ -263,17 +267,18 @@ export class Markdown implements Component {
 			}
 
 			case "code": {
+				const codeIndent = " ".repeat(this.codeBlockIndent);
 				lines.push(this.theme.codeBlockBorder(`\`\`\`${token.lang || ""}`));
 				if (this.theme.highlightCode) {
 					const highlightedLines = this.theme.highlightCode(token.text, token.lang);
 					for (const hlLine of highlightedLines) {
-						lines.push(`  ${hlLine}`);
+						lines.push(`${codeIndent}${hlLine}`);
 					}
 				} else {
 					// Split code by newlines and style each line
 					const codeLines = token.text.split("\n");
 					for (const codeLine of codeLines) {
-						lines.push(`  ${this.theme.codeBlock(codeLine)}`);
+						lines.push(`${codeIndent}${this.theme.codeBlock(codeLine)}`);
 					}
 				}
 				lines.push(this.theme.codeBlockBorder("```"));
@@ -493,16 +498,17 @@ export class Markdown implements Component {
 				lines.push(text);
 			} else if (token.type === "code") {
 				// Code block in list item
+				const codeIndent = " ".repeat(this.codeBlockIndent);
 				lines.push(this.theme.codeBlockBorder(`\`\`\`${token.lang || ""}`));
 				if (this.theme.highlightCode) {
 					const highlightedLines = this.theme.highlightCode(token.text, token.lang);
 					for (const hlLine of highlightedLines) {
-						lines.push(`  ${hlLine}`);
+						lines.push(`${codeIndent}${hlLine}`);
 					}
 				} else {
 					const codeLines = token.text.split("\n");
 					for (const codeLine of codeLines) {
-						lines.push(`  ${this.theme.codeBlock(codeLine)}`);
+						lines.push(`${codeIndent}${this.theme.codeBlock(codeLine)}`);
 					}
 				}
 				lines.push(this.theme.codeBlockBorder("```"));

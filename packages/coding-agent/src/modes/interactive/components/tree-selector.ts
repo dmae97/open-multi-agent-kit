@@ -707,7 +707,7 @@ class TreeList implements Component {
 				this.searchQuery = this.searchQuery.slice(0, -1);
 				this.applyFilter();
 			}
-		} else if (keyData === "l" && !this.searchQuery) {
+		} else if (matchesKey(keyData, "shift+l") && !this.searchQuery) {
 			const selected = this.filteredNodes[this.selectedIndex];
 			if (selected && this.onLabelEdit) {
 				this.onLabelEdit(selected.node.entry.id, selected.node.label);
@@ -821,7 +821,7 @@ export class TreeSelectorComponent extends Container {
 			new TruncatedText(
 				theme.fg(
 					"muted",
-					"  Up/Down: move. Left/Right: page. l: label. Ctrl+O/Shift+Ctrl+O: filter. Alt+D/T/U/L/A: filter. Type to search",
+					"  Up/Down: move. Left/Right: page. Shift+L: label. Ctrl+O/Shift+Ctrl+O: filter. Alt+D/T/U/L/A: filter. Type to search",
 				),
 				0,
 				0,

@@ -225,7 +225,9 @@ editor.borderColor = (s) => chalk.blue(s); // Change border dynamically
 - `Shift+Enter`, `Ctrl+Enter`, or `Alt+Enter` - New line (terminal-dependent, Alt+Enter most reliable)
 - `Tab` - Autocomplete
 - `Ctrl+K` - Delete line
+- `Alt+D` / `Alt+Delete` - Delete word forward
 - `Ctrl+A` / `Ctrl+E` - Line start/end
+- `Ctrl+-` - Undo last edit
 - Arrow keys, Backspace, Delete work as expected
 
 ### Markdown
@@ -266,7 +268,8 @@ const md = new Markdown(
 	1, // paddingX
 	1, // paddingY
 	theme, // MarkdownTheme
-	defaultStyle // optional DefaultTextStyle
+	defaultStyle, // optional DefaultTextStyle
+	2 // optional code block indent (spaces)
 );
 md.setText("Updated markdown");
 ```

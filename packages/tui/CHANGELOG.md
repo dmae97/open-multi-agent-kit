@@ -1,6 +1,26 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added undo support in the editor via `Ctrl+-`
+- Added `Alt+Delete` as a delete-word-forward shortcut
+- Added configurable code block indentation for Markdown rendering
+- Added undo support in the editor via `Ctrl+-`.
+- Added configurable code block indentation for Markdown rendering.
+- Added `Alt+Delete` as a delete-word-forward shortcut.
+
+### Changed
+
+- Improved fuzzy matching to handle alphanumeric swaps
+- Normalized keybinding definitions to lowercase internally
+- Improved fuzzy matching to handle alphanumeric swaps.
+- Normalized keybinding definitions to lowercase internally.
+
+### Fixed
+
+- Added legacy terminal support for `Ctrl+` symbol key combinations
+- Added legacy terminal support for `Ctrl+` symbol key combinations.
 
 ## [6.8.1] - 2026-01-20
 

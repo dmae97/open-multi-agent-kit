@@ -17,6 +17,7 @@ export type EditorAction =
 	| "deleteCharBackward"
 	| "deleteCharForward"
 	| "deleteWordBackward"
+	| "deleteWordForward"
 	| "deleteToLineStart"
 	| "deleteToLineEnd"
 	// Text input
@@ -60,6 +61,7 @@ export const DEFAULT_EDITOR_KEYBINDINGS: Required<EditorKeybindingsConfig> = {
 	deleteCharBackward: "backspace",
 	deleteCharForward: "delete",
 	deleteWordBackward: ["ctrl+w", "alt+backspace"],
+	deleteWordForward: ["alt+delete", "alt+d"],
 	deleteToLineStart: "ctrl+u",
 	deleteToLineEnd: "ctrl+k",
 	// Text input
@@ -100,6 +102,8 @@ const SHIFTED_SYMBOL_KEYS = new Set<string>([
 	"~",
 ]);
 
+const normalizeKeyId = (key: KeyId): KeyId => key.toLowerCase() as KeyId;
+
 /**
  * Manages keybindings for the editor.
  */
@@ -117,14 +121,20 @@ export class EditorKeybindingsManager {
 		// Start with defaults
 		for (const [action, keys] of Object.entries(DEFAULT_EDITOR_KEYBINDINGS)) {
 			const keyArray = Array.isArray(keys) ? keys : [keys];
-			this.actionToKeys.set(action as EditorAction, [...keyArray]);
+			this.actionToKeys.set(
+				action as EditorAction,
+				keyArray.map((key) => normalizeKeyId(key as KeyId)),
+			);
 		}
 
 		// Override with user config
 		for (const [action, keys] of Object.entries(config)) {
 			if (keys === undefined) continue;
 			const keyArray = Array.isArray(keys) ? keys : [keys];
-			this.actionToKeys.set(action as EditorAction, keyArray);
+			this.actionToKeys.set(
+				action as EditorAction,
+				keyArray.map((key) => normalizeKeyId(key as KeyId)),
+			);
 		}
 	}
 

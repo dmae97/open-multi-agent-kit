@@ -9,10 +9,9 @@ export interface FuzzyMatch {
 	score: number;
 }
 
-export function fuzzyMatch(query: string, text: string): FuzzyMatch {
-	const queryLower = query.toLowerCase();
-	const textLower = text.toLowerCase();
+const ALPHANUMERIC_SWAP_PENALTY = 5;
 
+function scoreMatch(queryLower: string, textLower: string): FuzzyMatch {
 	if (queryLower.length === 0) {
 		return { matches: true, score: 0 };
 	}
@@ -60,6 +59,43 @@ export function fuzzyMatch(query: string, text: string): FuzzyMatch {
 	}
 
 	return { matches: true, score };
+}
+
+function buildAlphanumericSwapQueries(queryLower: string): string[] {
+	const variants = new Set<string>();
+	for (let i = 0; i < queryLower.length - 1; i++) {
+		const current = queryLower[i];
+		const next = queryLower[i + 1];
+		const isAlphaNumSwap =
+			(current && /[a-z]/.test(current) && next && /\d/.test(next)) ||
+			(current && /\d/.test(current) && next && /[a-z]/.test(next));
+		if (!isAlphaNumSwap) continue;
+		const swapped = queryLower.slice(0, i) + next + current + queryLower.slice(i + 2);
+		variants.add(swapped);
+	}
+	return [...variants];
+}
+
+export function fuzzyMatch(query: string, text: string): FuzzyMatch {
+	const queryLower = query.toLowerCase();
+	const textLower = text.toLowerCase();
+
+	const direct = scoreMatch(queryLower, textLower);
+	if (direct.matches) {
+		return direct;
+	}
+
+	let bestSwap: FuzzyMatch | null = null;
+	for (const variant of buildAlphanumericSwapQueries(queryLower)) {
+		const match = scoreMatch(variant, textLower);
+		if (!match.matches) continue;
+		const score = match.score + ALPHANUMERIC_SWAP_PENALTY;
+		if (!bestSwap || score < bestSwap.score) {
+			bestSwap = { matches: true, score };
+		}
+	}
+
+	return bestSwap ?? direct;
 }
 
 /**
