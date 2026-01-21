@@ -269,6 +269,7 @@ export class PythonTool implements AgentTool<typeof pythonSchema> {
 				sessionId,
 				kernelMode: this.session.settings?.getPythonKernelMode?.() ?? "session",
 				useSharedGateway: this.session.settings?.getPythonSharedGateway?.() ?? true,
+				sessionFile: sessionFile ?? undefined,
 			};
 
 			for (let i = 0; i < cells.length; i++) {

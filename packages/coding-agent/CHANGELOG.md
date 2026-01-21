@@ -1,8 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added `output()` function to read task/agent outputs by ID with support for multiple formats and queries
+- Added session file support to Python executor for accessing task outputs
+- Added support for jq-like queries when reading JSON outputs
+- Added offset and limit parameters for reading specific line ranges from outputs
 - Added "." and "c" shortcuts to continue agent without sending visible message
 
 ### Fixed

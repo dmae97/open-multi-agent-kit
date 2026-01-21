@@ -914,6 +914,207 @@ if "__omp_prelude_loaded__" not in globals():
         _emit_status("git_has_changes", has_changes=has_changes)
         return has_changes
 
+    @_category("Agent")
+    def output(
+        *ids: str,
+        format: str = "raw",
+        query: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+    ) -> str | dict | list[dict]:
+        """Read task/agent output by ID. Returns text or JSON depending on format.
+        
+        Args:
+            *ids: Output IDs to read (e.g., 'explore_0', 'reviewer_1')
+            format: 'raw' (default), 'json' (dict with metadata), 'stripped' (no ANSI)
+            query: jq-like query for JSON outputs (e.g., '.endpoints[0].file')
+            offset: Line number to start reading from (1-indexed)
+            limit: Maximum number of lines to read
+        
+        Returns:
+            Single ID: str (format='raw'/'stripped') or dict (format='json')
+            Multiple IDs: list of dict with 'id' and 'content'/'data' keys
+        
+        Examples:
+            output('explore_0')  # Read as raw text
+            output('reviewer_0', format='json')  # Read with metadata
+            output('explore_0', query='.files[0]')  # Extract JSON field
+            output('explore_0', offset=10, limit=20)  # Lines 10-29
+            output('explore_0', 'reviewer_1')  # Read multiple outputs
+        """
+        session_file = os.environ.get("OMP_SESSION_FILE")
+        if not session_file:
+            _emit_status("output", error="No session file available")
+            raise RuntimeError("No session - output artifacts unavailable")
+        
+        artifacts_dir = session_file.rsplit(".", 1)[0]  # Strip .jsonl extension
+        if not Path(artifacts_dir).exists():
+            _emit_status("output", error="Artifacts directory not found", path=artifacts_dir)
+            raise RuntimeError(f"No artifacts directory found: {artifacts_dir}")
+        
+        if not ids:
+            _emit_status("output", error="No IDs provided")
+            raise ValueError("At least one output ID is required")
+        
+        if query and (offset is not None or limit is not None):
+            _emit_status("output", error="query cannot be combined with offset/limit")
+            raise ValueError("query cannot be combined with offset/limit")
+        
+        results: list[dict] = []
+        not_found: list[str] = []
+        
+        for output_id in ids:
+            output_path = Path(artifacts_dir) / f"{output_id}.md"
+            if not output_path.exists():
+                not_found.append(output_id)
+                continue
+            
+            raw_content = output_path.read_text(encoding="utf-8")
+            raw_lines = raw_content.splitlines()
+            total_lines = len(raw_lines)
+            
+            selected_content = raw_content
+            range_info: dict | None = None
+            
+            # Handle query
+            if query:
+                try:
+                    json_value = json.loads(raw_content)
+                except json.JSONDecodeError as e:
+                    _emit_status("output", id=output_id, error=f"Not valid JSON: {e}")
+                    raise ValueError(f"Output {output_id} is not valid JSON: {e}")
+                
+                # Apply jq-like query
+                result_value = _apply_query(json_value, query)
+                try:
+                    selected_content = json.dumps(result_value, indent=2) if result_value is not None else "null"
+                except (TypeError, ValueError):
+                    selected_content = str(result_value)
+            
+            # Handle offset/limit
+            elif offset is not None or limit is not None:
+                start_line = max(1, offset or 1)
+                if start_line > total_lines:
+                    _emit_status("output", id=output_id, error=f"Offset {start_line} beyond end ({total_lines} lines)")
+                    raise ValueError(f"Offset {start_line} is beyond end of output ({total_lines} lines) for {output_id}")
+                
+                effective_limit = limit if limit is not None else total_lines - start_line + 1
+                end_line = min(total_lines, start_line + effective_limit - 1)
+                selected_lines = raw_lines[start_line - 1 : end_line]
+                selected_content = "\n".join(selected_lines)
+                range_info = {"start_line": start_line, "end_line": end_line, "total_lines": total_lines}
+            
+            # Strip ANSI codes if requested
+            if format == "stripped":
+                import re
+                selected_content = re.sub(r"\x1b\[[0-9;]*m", "", selected_content)
+            
+            # Build result
+            if format == "json":
+                result_data = {
+                    "id": output_id,
+                    "path": str(output_path),
+                    "line_count": total_lines if not query else len(selected_content.splitlines()),
+                    "char_count": len(raw_content) if not query else len(selected_content),
+                    "content": selected_content,
+                }
+                if range_info:
+                    result_data["range"] = range_info
+                if query:
+                    result_data["query"] = query
+                results.append(result_data)
+            else:
+                results.append({"id": output_id, "content": selected_content})
+        
+        # Handle not found
+        if not_found:
+            available = sorted(
+                [f.stem for f in Path(artifacts_dir).glob("*.md")]
+            )
+            error_msg = f"Output not found: {', '.join(not_found)}"
+            if available:
+                error_msg += f"\n\nAvailable outputs: {', '.join(available[:20])}"
+                if len(available) > 20:
+                    error_msg += f" (and {len(available) - 20} more)"
+            _emit_status("output", not_found=not_found, available_count=len(available))
+            raise FileNotFoundError(error_msg)
+        
+        # Return format
+        if len(ids) == 1:
+            if format == "json":
+                _emit_status("output", id=ids[0], chars=results[0]["char_count"])
+                return results[0]
+            _emit_status("output", id=ids[0], chars=len(results[0]["content"]))
+            return results[0]["content"]
+        
+        # Multiple IDs
+        if format == "json":
+            total_chars = sum(r["char_count"] for r in results)
+            _emit_status("output", count=len(results), total_chars=total_chars)
+            return results
+        
+        combined_output: list[dict] = []
+        for r in results:
+            combined_output.append({"id": r["id"], "content": r["content"]})
+        total_chars = sum(len(r["content"]) for r in combined_output)
+        _emit_status("output", count=len(combined_output), total_chars=total_chars)
+        return combined_output
+
+    def _apply_query(data: any, query: str) -> any:
+        """Apply jq-like query to data. Supports .key, [index], and chaining."""
+        if not query:
+            return data
+        
+        query = query.strip()
+        if query.startswith("."):
+            query = query[1:]
+        if not query:
+            return data
+        
+        # Parse query into tokens
+        tokens = []
+        current_token = ""
+        i = 0
+        while i < len(query):
+            ch = query[i]
+            if ch == ".":
+                if current_token:
+                    tokens.append(("key", current_token))
+                    current_token = ""
+            elif ch == "[":
+                if current_token:
+                    tokens.append(("key", current_token))
+                    current_token = ""
+                # Find matching ]
+                j = i + 1
+                while j < len(query) and query[j] != "]":
+                    j += 1
+                bracket_content = query[i+1:j]
+                if bracket_content.startswith('"') and bracket_content.endswith('"'):
+                    tokens.append(("key", bracket_content[1:-1]))
+                else:
+                    tokens.append(("index", int(bracket_content)))
+                i = j
+            else:
+                current_token += ch
+            i += 1
+        if current_token:
+            tokens.append(("key", current_token))
+        
+        # Apply tokens
+        current = data
+        for token_type, value in tokens:
+            if token_type == "index":
+                if not isinstance(current, list) or value >= len(current):
+                    return None
+                current = current[value]
+            elif token_type == "key":
+                if not isinstance(current, dict) or value not in current:
+                    return None
+                current = current[value]
+        
+        return current
+
     def __omp_prelude_docs__() -> list[dict[str, str]]:
         """Return prelude helper docs for templating. Discovers functions by _omp_category attribute."""
         helpers: list[dict[str, str]] = []
