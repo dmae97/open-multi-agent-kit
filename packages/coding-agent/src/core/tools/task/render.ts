@@ -380,6 +380,7 @@ export function renderCall(args: TaskParams, theme: Theme): Component {
 	const branch = theme.fg("dim", theme.tree.branch);
 	const last = theme.fg("dim", theme.tree.last);
 	const vertical = theme.fg("dim", theme.tree.vertical);
+	const showIsolated = args.isolated === true;
 
 	if (hasContext) {
 		lines.push(` ${branch} ${theme.fg("dim", "Context")}`);
@@ -387,11 +388,18 @@ export function renderCall(args: TaskParams, theme: Theme): Component {
 			const content = line ? theme.fg("muted", line) : "";
 			lines.push(` ${vertical}  ${content}`);
 		}
-		lines.push(` ${last} ${theme.fg("dim", "Tasks")}: ${theme.fg("muted", `${args.tasks.length} agents`)}`);
+		const taskPrefix = showIsolated ? branch : last;
+		lines.push(` ${taskPrefix} ${theme.fg("dim", "Tasks")}: ${theme.fg("muted", `${args.tasks.length} agents`)}`);
+		if (showIsolated) {
+			lines.push(` ${last} ${theme.fg("dim", "Isolated")}: ${theme.fg("muted", "true")}`);
+		}
 		return new Text(lines.join("\n"), 0, 0);
 	}
 
 	lines.push(`${theme.fg("dim", "Tasks")}: ${theme.fg("muted", `${args.tasks.length} agents`)}`);
+	if (showIsolated) {
+		lines.push(`${theme.fg("dim", "Isolated")}: ${theme.fg("muted", "true")}`);
+	}
 
 	return new Text(lines.join("\n"), 0, 0);
 }
@@ -722,6 +730,10 @@ function renderAgentResult(result: SingleResult, isLast: boolean, expanded: bool
 		lines.push(...renderOutputSection(result.output, continuePrefix, expanded, theme, 3, 12));
 	}
 
+	if (result.patchPath && !aborted && result.exitCode === 0) {
+		lines.push(`${continuePrefix}${theme.fg("dim", `Patch: ${result.patchPath}`)}`);
+	}
+
 	// Error message
 	if (result.error && !success) {
 		lines.push(`${continuePrefix}${theme.fg("error", truncate(result.error, 70, theme.format.ellipsis))}`);
@@ -739,6 +751,7 @@ export function renderResult(
 	theme: Theme,
 ): Component {
 	const { expanded, isPartial, spinnerFrame } = options;
+	const fallbackText = result.content.find((c) => c.type === "text")?.text ?? "";
 	const details = result.details;
 
 	if (!details) {
@@ -785,7 +798,22 @@ export function renderResult(
 	}
 
 	if (lines.length === 0) {
-		return new Text(theme.fg("dim", "No results"), 0, 0);
+		const text = fallbackText.trim() ? fallbackText : "No results";
+		return new Text(theme.fg("dim", truncate(text, 140, theme.format.ellipsis)), 0, 0);
+	}
+
+	if (fallbackText.trim()) {
+		const summaryLines = fallbackText.split("\n");
+		const markerIndex = summaryLines.findIndex(
+			(line) => line.includes("<system-notification>") || line.startsWith("Applied patches:"),
+		);
+		if (markerIndex >= 0) {
+			const extra = summaryLines.slice(markerIndex);
+			for (const line of extra) {
+				if (!line.trim()) continue;
+				lines.push(theme.fg("dim", line));
+			}
+		}
 	}
 
 	const indented = lines.map((line) => (line.trim() ? `   ${line}` : ""));

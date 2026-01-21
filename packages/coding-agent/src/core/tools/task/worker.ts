@@ -538,9 +538,6 @@ async function runTask(runState: RunState, payload: SubagentWorkerStartPayload):
 		// Check for pre-start abort
 		checkAbort();
 
-		// Set working directory (CLI does this implicitly)
-		process.chdir(payload.cwd);
-
 		// Use serialized auth/models if provided, otherwise discover from disk
 		let authStorage: AuthStorage;
 		let modelRegistry: ModelRegistry;
@@ -574,7 +571,7 @@ async function runTask(runState: RunState, payload: SubagentWorkerStartPayload):
 		// Create session manager (equivalent to CLI's --session or --no-session)
 		const sessionManager = payload.sessionFile
 			? await SessionManager.open(payload.sessionFile)
-			: SessionManager.inMemory(payload.cwd);
+			: SessionManager.inMemory(payload.worktree ?? payload.cwd);
 		checkAbort();
 
 		// Use serialized settings if provided, otherwise use empty in-memory settings
@@ -585,9 +582,12 @@ async function runTask(runState: RunState, payload: SubagentWorkerStartPayload):
 		// Note: hasUI: false disables interactive features
 		const completionInstruction =
 			"When finished, call the complete tool exactly once. Do not end with a plain-text final answer.";
+		const worktreeNotice = payload.worktree
+			? `You will work under this working tree: ${payload.worktree}. CRITICAL: Do not touch the original repository; only make changes inside this worktree.`
+			: "";
 
 		const { session } = await createAgentSession({
-			cwd: payload.cwd,
+			cwd: payload.worktree ?? payload.cwd,
 			authStorage,
 			modelRegistry,
 			settingsManager,
@@ -597,7 +597,8 @@ async function runTask(runState: RunState, payload: SubagentWorkerStartPayload):
 			outputSchema: payload.outputSchema,
 			requireCompleteTool: true,
 			// Append system prompt (equivalent to CLI's --append-system-prompt)
-			systemPrompt: (defaultPrompt) => `${defaultPrompt}\n\n${payload.systemPrompt}\n\n${completionInstruction}`,
+			systemPrompt: (defaultPrompt) =>
+				`${defaultPrompt}\n\n${payload.systemPrompt}\n\n${worktreeNotice}\n\n${completionInstruction}`,
 			sessionManager,
 			hasUI: false,
 			// Pass spawn restrictions to nested tasks

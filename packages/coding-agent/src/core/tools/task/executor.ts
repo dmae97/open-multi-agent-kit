@@ -41,6 +41,7 @@ import type {
 /** Options for worker execution */
 export interface ExecutorOptions {
 	cwd: string;
+	worktree?: string;
 	agent: AgentDefinition;
 	task: string;
 	description?: string;
@@ -205,6 +206,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		task,
 		index,
 		taskId,
+		worktree,
 		context,
 		modelOverride,
 		thinkingLevel,
@@ -689,6 +691,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		type: "start",
 		payload: {
 			cwd,
+			worktree,
 			task: fullTask,
 			systemPrompt: agent.systemPrompt,
 			model: resolvedModel,

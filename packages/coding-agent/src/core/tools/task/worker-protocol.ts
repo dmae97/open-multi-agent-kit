@@ -84,6 +84,7 @@ export interface LspToolCallResponse {
 
 export interface SubagentWorkerStartPayload {
 	cwd: string;
+	worktree?: string;
 	task: string;
 	systemPrompt: string;
 	model?: string;

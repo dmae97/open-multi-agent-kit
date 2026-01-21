@@ -51,6 +51,7 @@ Agents with "Output: structured" have a fixed schema enforced via frontmatter; y
 - `agent`: Agent type to use for all tasks
 - `context`: Template with `{{placeholders}}` for multi-task. Each placeholder is filled from task vars.
 - `model`: (optional) Model override for all tasks (fuzzy matching, e.g., "sonnet", "opus")
+- `isolated`: (optional) Run each task in its own git worktree and return patches; patches are applied only if all apply cleanly.
 - `tasks`: Array of `{id, description, vars}` - tasks to run in parallel (max {{MAX_PARALLEL_TASKS}}, {{MAX_CONCURRENCY}} concurrent)
   - `id`: Short CamelCase identifier for display (max 20 chars, e.g., "SessionStore", "LspRefactor")
   - `description`: Short human-readable description of what the task does

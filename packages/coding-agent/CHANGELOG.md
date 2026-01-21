@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `isolated` option to run tasks in isolated git worktrees
+- Added automatic patch generation and application for isolated task execution
+- Added worktree management for isolated task execution with baseline capture and delta patching
 
 ## [7.0.0] - 2026-01-21
 ### Added

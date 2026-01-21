@@ -13,11 +13,12 @@
  *   - Session artifacts for debugging
  */
 
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Usage } from "@oh-my-pi/pi-ai";
+import { $ } from "bun";
 import { nanoid } from "nanoid";
 import type { Theme } from "../../../modes/interactive/theme/theme";
 import taskDescriptionTemplate from "../../../prompts/tools/task.md" with { type: "text" };
@@ -39,6 +40,14 @@ import {
 	type TaskToolDetails,
 	taskSchema,
 } from "./types";
+import {
+	applyBaseline,
+	captureBaseline,
+	captureDeltaPatch,
+	cleanupWorktree,
+	ensureWorktree,
+	getRepoRoot,
+} from "./worktree";
 
 // Import review tools for side effects (registers subagent tool handlers)
 import "../review";
@@ -153,7 +162,8 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 	): Promise<AgentToolResult<TaskToolDetails>> {
 		const startTime = Date.now();
 		const { agents, projectAgentsDir } = await discoverAgents(this.session.cwd);
-		const { agent: agentName, context, model, output: outputSchema } = params;
+		const { agent: agentName, context, model, output: outputSchema, isolated } = params;
+		const isIsolated = isolated === true;
 
 		const isDefaultModelAlias = (value: string | undefined): boolean => {
 			if (!value) return true;
@@ -283,6 +293,30 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 			};
 		}
 
+		let repoRoot: string | null = null;
+		let baseline = null as Awaited<ReturnType<typeof captureBaseline>> | null;
+		if (isIsolated) {
+			try {
+				repoRoot = await getRepoRoot(this.session.cwd);
+				baseline = await captureBaseline(repoRoot);
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Isolated task execution requires a git repository. ${message}`,
+						},
+					],
+					details: {
+						projectAgentsDir,
+						results: [],
+						totalDurationMs: Date.now() - startTime,
+					},
+				};
+			}
+		}
+
 		// Derive artifacts directory
 		const sessionFile = this.session.getSessionFile();
 		const artifactsDir = sessionFile ? sessionFile.slice(0, -6) : null;
@@ -377,11 +411,8 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 			}
 			emitProgress();
 
-			// Execute in parallel with concurrency limit
-			const { results: partialResults, aborted } = await mapWithConcurrencyLimit(
-				tasksWithContext,
-				MAX_CONCURRENCY,
-				async (task, index) => {
+			const runTask = async (task: (typeof tasksWithContext)[number], index: number) => {
+				if (!isIsolated) {
 					return runSubprocess({
 						cwd: this.session.cwd,
 						agent,
@@ -411,7 +442,83 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 						settingsManager: this.session.settingsManager,
 						mcpManager: this.session.mcpManager,
 					});
-				},
+				}
+
+				const taskStart = Date.now();
+				let worktreeDir: string | undefined;
+				try {
+					if (!repoRoot || !baseline) {
+						throw new Error("Isolated task execution not initialized.");
+					}
+					worktreeDir = await ensureWorktree(repoRoot, task.taskId);
+					await applyBaseline(worktreeDir, baseline);
+					const result = await runSubprocess({
+						cwd: this.session.cwd,
+						worktree: worktreeDir,
+						agent,
+						task: task.task,
+						description: task.description,
+						index,
+						taskId: task.taskId,
+						context: undefined, // Already prepended above
+						modelOverride,
+						thinkingLevel: thinkingLevelOverride,
+						outputSchema: effectiveOutputSchema,
+						sessionFile,
+						persistArtifacts: !!artifactsDir,
+						artifactsDir: effectiveArtifactsDir,
+						enableLsp: false,
+						signal,
+						eventBus: undefined,
+						onProgress: (progress) => {
+							progressMap.set(index, {
+								...structuredClone(progress),
+								vars: tasksWithContext[index]?.vars,
+							});
+							emitProgress();
+						},
+						authStorage: this.session.authStorage,
+						modelRegistry: this.session.modelRegistry,
+						settingsManager: this.session.settingsManager,
+						mcpManager: this.session.mcpManager,
+					});
+					const patch = await captureDeltaPatch(worktreeDir, baseline);
+					const patchPath = path.join(effectiveArtifactsDir, `${task.taskId}.patch`);
+					await Bun.write(patchPath, patch);
+					return {
+						...result,
+						patchPath,
+					};
+				} catch (err) {
+					const message = err instanceof Error ? err.message : String(err);
+					return {
+						index,
+						taskId: task.taskId,
+						agent: agent.name,
+						agentSource: agent.source,
+						task: task.task,
+						description: task.description,
+						exitCode: 1,
+						output: "",
+						stderr: message,
+						truncated: false,
+						durationMs: Date.now() - taskStart,
+						tokens: 0,
+						modelOverride,
+						error: message,
+					};
+				} finally {
+					if (worktreeDir) {
+						await cleanupWorktree(worktreeDir);
+					}
+				}
+			};
+
+			// Execute in parallel with concurrency limit
+			const { results: partialResults, aborted } = await mapWithConcurrencyLimit(
+				tasksWithContext,
+				MAX_CONCURRENCY,
+				runTask,
 				signal,
 			);
 
@@ -456,9 +563,74 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 
 			// Collect output paths (artifacts already written by executor in real-time)
 			const outputPaths: string[] = [];
+			const patchPaths: string[] = [];
 			for (const result of results) {
 				if (result.outputPath) {
 					outputPaths.push(result.outputPath);
+				}
+				if (result.patchPath) {
+					patchPaths.push(result.patchPath);
+				}
+			}
+
+			let patchApplySummary = "";
+			let patchesApplied: boolean | null = null;
+			if (isIsolated) {
+				const patchesInOrder = results.map((result) => result.patchPath).filter(Boolean) as string[];
+				const missingPatch = results.some((result) => !result.patchPath);
+				if (!repoRoot || missingPatch) {
+					patchesApplied = false;
+				} else {
+					const patchStats = await Promise.all(
+						patchesInOrder.map(async (patchPath) => ({
+							patchPath,
+							size: (await stat(patchPath)).size,
+						})),
+					);
+					const nonEmptyPatches = patchStats.filter((patch) => patch.size > 0).map((patch) => patch.patchPath);
+					if (nonEmptyPatches.length === 0) {
+						patchesApplied = true;
+					} else {
+						const patchTexts = await Promise.all(
+							nonEmptyPatches.map(async (patchPath) => Bun.file(patchPath).text()),
+						);
+						const combinedPatch = patchTexts.map((text) => (text.endsWith("\n") ? text : `${text}\n`)).join("");
+						if (!combinedPatch.trim()) {
+							patchesApplied = true;
+						} else {
+							const combinedPatchPath = path.join(tmpdir(), `omp-task-combined-${nanoid()}.patch`);
+							try {
+								await Bun.write(combinedPatchPath, combinedPatch);
+								const checkResult = await $`git apply --check --binary ${combinedPatchPath}`
+									.cwd(repoRoot)
+									.quiet()
+									.nothrow();
+								if (checkResult.exitCode !== 0) {
+									patchesApplied = false;
+								} else {
+									const applyResult = await $`git apply --binary ${combinedPatchPath}`
+										.cwd(repoRoot)
+										.quiet()
+										.nothrow();
+									patchesApplied = applyResult.exitCode === 0;
+								}
+							} finally {
+								await rm(combinedPatchPath, { force: true });
+							}
+						}
+					}
+				}
+
+				if (patchesApplied) {
+					patchApplySummary = "\n\nApplied patches: yes";
+				} else {
+					const notification =
+						"<system-notification>Patches were not applied and must be handled manually.</system-notification>";
+					const patchList =
+						patchPaths.length > 0
+							? `\n\nPatch artifacts:\n${patchPaths.map((patch) => `- ${patch}`).join("\n")}`
+							: "";
+					patchApplySummary = `\n\n${notification}${patchList}`;
 				}
 			}
 
@@ -486,10 +658,12 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 			const cancelledNote = aborted && cancelledCount > 0 ? ` (${cancelledCount} cancelled)` : "";
 			const summary = `${successCount}/${results.length} succeeded${cancelledNote} [${formatDuration(
 				totalDuration,
-			)}]\n\n${summaries.join("\n\n---\n\n")}${outputHint}${schemaNote}`;
+			)}]\n\n${summaries.join("\n\n---\n\n")}${outputHint}${schemaNote}${patchApplySummary}`;
 
 			// Cleanup temp directory if used
-			if (tempArtifactsDir) {
+			const shouldCleanupTempArtifacts =
+				tempArtifactsDir && (!isIsolated || patchesApplied === true || patchesApplied === null);
+			if (shouldCleanupTempArtifacts) {
 				await rm(tempArtifactsDir, { recursive: true, force: true });
 			}
 

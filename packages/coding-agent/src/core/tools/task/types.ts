@@ -63,6 +63,11 @@ export const taskSchema = Type.Object({
 			description: "Model override for all tasks (fuzzy matching, e.g. 'sonnet', 'opus')",
 		}),
 	),
+	isolated: Type.Optional(
+		Type.Boolean({
+			description: "Run each task in an isolated git worktree",
+		}),
+	),
 	output: Type.Optional(
 		Type.Record(Type.String(), Type.Unknown(), {
 			description: "JTD schema for structured subagent output",
@@ -159,6 +164,8 @@ export interface SingleResult {
 	usage?: Usage;
 	/** Output path for the task result */
 	outputPath?: string;
+	/** Patch path for isolated worktree output */
+	patchPath?: string;
 	/** Data extracted by registered subprocess tool handlers (keyed by tool name) */
 	extractedToolData?: Record<string, unknown[]>;
 	/** Output metadata for Output tool integration */
