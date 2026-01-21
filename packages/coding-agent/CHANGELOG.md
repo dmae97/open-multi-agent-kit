@@ -19,6 +19,7 @@
 ### Fixed
 
 - Fixed indentation adjustment logic to handle edge cases with mixed indentation levels
+- Fixed patch indentation normalization for fuzzy matches, tab/space diffs, and ambiguous context alignment
 
 ## [6.9.0] - 2026-01-21
 ### Removed

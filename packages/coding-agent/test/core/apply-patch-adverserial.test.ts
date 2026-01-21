@@ -161,6 +161,52 @@ describe("applyPatch adversarial inputs", () => {
 		expect(readFileSync(filePath, "utf-8")).toBe("section\nvalue\nx\nsection\nVALUE\n\n");
 	});
 
+	test("fuzzy under-indented context can shift indentation", async () => {
+		const filePath = join(tempDir, "under-indent.ts");
+		await Bun.write(
+			filePath,
+			"function sum(values, offset) {\n" +
+				"  let total = 0;\n" +
+				"  for (const value of values) {\n" +
+				"    total += value + offset;\n" +
+				"    total += 1;\n" +
+				"  }\n" +
+				"  return total + 1;\n" +
+				"}\n",
+		);
+
+		await applyPatch(
+			{
+				path: "under-indent.ts",
+				op: "update",
+				diff:
+					"@@ -1,6 +1,7 @@\n" +
+					" function sum(values, offset) {\n" +
+					"-let total = 0;\n" +
+					"-for (const value of values) {\n" +
+					"+let total = 0;\n" +
+					'+  const tag = "sum";\n' +
+					"+for (const value of values) {\n" +
+					"     total += value + offset;\n" +
+					"     total += 1;\n" +
+					"   }\n",
+			},
+			{ cwd: tempDir },
+		);
+
+		expect(readFileSync(filePath, "utf-8")).toBe(
+			"function sum(values, offset) {\n" +
+				"  let total = 0;\n" +
+				'  const tag = "sum";\n' +
+				"  for (const value of values) {\n" +
+				"    total += value + offset;\n" +
+				"    total += 1;\n" +
+				"  }\n" +
+				"  return total + 1;\n" +
+				"}\n",
+		);
+	});
+
 	test("preserves CRLF endings and trailing newline", async () => {
 		const filePath = join(tempDir, "crlf.txt");
 		await Bun.write(filePath, "foo\r\nbar\r\n");
@@ -189,5 +235,77 @@ describe("applyPatch adversarial inputs", () => {
 
 		const content = readFileSync(filePath, "utf-8");
 		expect(content).toBe("foo\nbaz");
+	});
+
+	test("normalizes tab-indented diff to space-indented file", async () => {
+		const filePath = join(tempDir, "tabs-to-spaces.js");
+		// File uses 4-space indentation
+		await Bun.write(
+			filePath,
+			`class Foo {
+    method() {
+        const x = 1;
+        return x;
+    }
+}
+`,
+		);
+
+		// Diff uses tab indentation (common LLM output)
+		await applyPatch(
+			{
+				path: "tabs-to-spaces.js",
+				op: "update",
+				diff: "@@ method() {\n\tmethod() {\n\t\tconst x = 1;\n+\t\tconsole.log(x);\n\t\treturn x;",
+			},
+			{ cwd: tempDir },
+		);
+
+		const content = readFileSync(filePath, "utf-8");
+		// Added line should use spaces, not tabs
+		expect(content).toBe(`class Foo {
+    method() {
+        const x = 1;
+        console.log(x);
+        return x;
+    }
+}
+`);
+		// Verify no tabs were introduced
+		expect(content).not.toContain("\t");
+	});
+
+	test("preserves indentation when trailing context has less indent than additions", async () => {
+		const filePath = join(tempDir, "dedent-context.js");
+		await Bun.write(
+			filePath,
+			`class Foo {
+    method() {
+    }
+}
+`,
+		);
+
+		// Trailing context ` }` has less indentation than added lines
+		await applyPatch(
+			{
+				path: "dedent-context.js",
+				op: "update",
+				diff: "@@\n     method() {\n     }\n+\n+    other() {\n+        return 1;\n+    }\n }",
+			},
+			{ cwd: tempDir },
+		);
+
+		const content = readFileSync(filePath, "utf-8");
+		// The closing brace of other() should have 4-space indent, not 0
+		expect(content).toBe(`class Foo {
+    method() {
+    }
+
+    other() {
+        return 1;
+    }
+}
+`);
 	});
 });

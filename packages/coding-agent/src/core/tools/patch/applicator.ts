@@ -11,6 +11,7 @@ import { resolveToCwd } from "../path-utils";
 import { DEFAULT_FUZZY_THRESHOLD, findContextLine, findMatch, seekSequence } from "./fuzzy";
 import {
 	adjustIndentation,
+	convertLeadingTabsToSpaces,
 	countLeadingWhitespace,
 	detectLineEnding,
 	getLeadingWhitespace,
@@ -92,6 +93,55 @@ function adjustLinesIndentation(patternLines: string[], actualLines: string[], n
 		}
 	}
 
+	let patternTabOnly = true;
+	let actualSpaceOnly = true;
+	let patternMixed = false;
+	let actualMixed = false;
+
+	for (const line of patternLines) {
+		if (line.trim().length === 0) continue;
+		const ws = getLeadingWhitespace(line);
+		if (ws.includes(" ")) patternTabOnly = false;
+		if (ws.includes(" ") && ws.includes("\t")) patternMixed = true;
+	}
+
+	for (const line of actualLines) {
+		if (line.trim().length === 0) continue;
+		const ws = getLeadingWhitespace(line);
+		if (ws.includes("\t")) actualSpaceOnly = false;
+		if (ws.includes(" ") && ws.includes("\t")) actualMixed = true;
+	}
+
+	if (!patternMixed && !actualMixed && patternTabOnly && actualSpaceOnly) {
+		let ratio: number | undefined;
+		const lineCount = Math.min(patternLines.length, actualLines.length);
+		let consistent = true;
+		for (let i = 0; i < lineCount; i++) {
+			const patternLine = patternLines[i];
+			const actualLine = actualLines[i];
+			if (patternLine.trim().length === 0 || actualLine.trim().length === 0) continue;
+			const patternIndent = countLeadingWhitespace(patternLine);
+			const actualIndent = countLeadingWhitespace(actualLine);
+			if (patternIndent === 0) continue;
+			if (actualIndent % patternIndent !== 0) {
+				consistent = false;
+				break;
+			}
+			const nextRatio = actualIndent / patternIndent;
+			if (!ratio) {
+				ratio = nextRatio;
+			} else if (ratio !== nextRatio) {
+				consistent = false;
+				break;
+			}
+		}
+
+		if (consistent && ratio) {
+			const converted = convertLeadingTabsToSpaces(newLines.join("\n"), ratio).split("\n");
+			return converted;
+		}
+	}
+
 	// Build a map from trimmed content to actual lines (by content, not position)
 	// This handles fuzzy matches where pattern and actual may not be positionally aligned
 	const contentToActualLines = new Map<string, string[]>();
@@ -106,18 +156,29 @@ function adjustLinesIndentation(patternLines: string[], actualLines: string[], n
 		}
 	}
 
-	// Compute fallback delta from all non-empty lines (for truly new lines)
-	let totalDelta = 0;
-	let deltaCount = 0;
-	for (let i = 0; i < Math.min(patternLines.length, actualLines.length); i++) {
-		if (patternLines[i].trim().length > 0 && actualLines[i].trim().length > 0) {
-			const pIndent = countLeadingWhitespace(patternLines[i]);
-			const aIndent = countLeadingWhitespace(actualLines[i]);
-			totalDelta += aIndent - pIndent;
-			deltaCount++;
-		}
+	let patternMin = Infinity;
+	for (const line of patternLines) {
+		if (line.trim().length === 0) continue;
+		patternMin = Math.min(patternMin, countLeadingWhitespace(line));
 	}
-	const avgDelta = deltaCount > 0 ? Math.round(totalDelta / deltaCount) : 0;
+	if (patternMin === Infinity) {
+		patternMin = 0;
+	}
+
+	let delta: number | undefined;
+	const deltas: number[] = [];
+	for (let i = 0; i < Math.min(patternLines.length, actualLines.length); i++) {
+		const patternLine = patternLines[i];
+		const actualLine = actualLines[i];
+		if (patternLine.trim().length === 0 || actualLine.trim().length === 0) continue;
+		const pIndent = countLeadingWhitespace(patternLine);
+		const aIndent = countLeadingWhitespace(actualLine);
+		deltas.push(aIndent - pIndent);
+	}
+
+	if (deltas.length > 0 && deltas.every((value) => value === deltas[0])) {
+		delta = deltas[0];
+	}
 
 	// Track which actual lines we've used to handle duplicate content correctly
 	const usedActualLines = new Map<string, number>(); // trimmed content -> count used
@@ -132,6 +193,12 @@ function adjustLinesIndentation(patternLines: string[], actualLines: string[], n
 
 		// Check if this is a context line (same trimmed content exists in actual)
 		if (matchingActualLines && matchingActualLines.length > 0) {
+			if (matchingActualLines.length === 1) {
+				return matchingActualLines[0];
+			}
+			if (matchingActualLines.includes(newLine)) {
+				return newLine;
+			}
 			const usedCount = usedActualLines.get(trimmed) ?? 0;
 			if (usedCount < matchingActualLines.length) {
 				usedActualLines.set(trimmed, usedCount + 1);
@@ -140,13 +207,16 @@ function adjustLinesIndentation(patternLines: string[], actualLines: string[], n
 			}
 		}
 
-		// This is a new/added line - apply average delta
-		if (avgDelta > 0) {
-			return indentChar.repeat(avgDelta) + newLine;
-		}
-		if (avgDelta < 0) {
-			const toRemove = Math.min(-avgDelta, countLeadingWhitespace(newLine));
-			return newLine.slice(toRemove);
+		// This is a new/added line - apply consistent delta if safe
+		if (delta && delta !== 0) {
+			const newIndent = countLeadingWhitespace(newLine);
+			if (newIndent === patternMin) {
+				if (delta > 0) {
+					return indentChar.repeat(delta) + newLine;
+				}
+				const toRemove = Math.min(-delta, newIndent);
+				return newLine.slice(toRemove);
+			}
 		}
 		return newLine;
 	});
