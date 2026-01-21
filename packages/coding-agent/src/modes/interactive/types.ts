@@ -1,5 +1,5 @@
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, ImageContent, Message } from "@oh-my-pi/pi-ai";
+import type { AssistantMessage, ImageContent, Message, UsageReport } from "@oh-my-pi/pi-ai";
 import type { Component, Container, Loader, Spacer, Text, TUI } from "@oh-my-pi/pi-tui";
 import type { AgentSession, AgentSessionEvent } from "../../core/agent-session";
 import type { ExtensionUIContext } from "../../core/extensions/index";
@@ -134,6 +134,7 @@ export interface InteractiveModeContext {
 	handleShareCommand(): Promise<void>;
 	handleCopyCommand(): Promise<void>;
 	handleSessionCommand(): void;
+	handleUsageCommand(reports?: UsageReport[] | null): Promise<void>;
 	handleChangelogCommand(): void;
 	handleHotkeysCommand(): void;
 	handleDumpCommand(): Promise<void>;

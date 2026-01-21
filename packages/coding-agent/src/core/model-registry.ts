@@ -433,6 +433,13 @@ export class ModelRegistry {
 	}
 
 	/**
+	 * Get the base URL associated with a provider, if any model defines one.
+	 */
+	getProviderBaseUrl(provider: string): string | undefined {
+		return this.models.find((m) => m.provider === provider && m.baseUrl)?.baseUrl;
+	}
+
+	/**
 	 * Get API key for a model.
 	 */
 	async getApiKey(model: Model<Api>, sessionId?: string): Promise<string | undefined> {

@@ -87,10 +87,22 @@ export async function runFd(fdPath: string, args: string[], signal?: AbortSignal
 		throw err;
 	}
 
+	let exitError: unknown;
+	try {
+		await child.exited;
+	} catch (err) {
+		exitError = err;
+		if (err instanceof ptree.Exception && err.aborted) {
+			throw new Error("Operation aborted");
+		}
+	}
+
+	const exitCode = child.exitCode ?? (exitError instanceof ptree.Exception ? exitError.exitCode : null);
+
 	return {
 		stdout,
 		stderr: child.peekStderr(),
-		exitCode: child.exitCode,
+		exitCode,
 	};
 }
 

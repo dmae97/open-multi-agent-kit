@@ -3,10 +3,15 @@
  * Handles loading, saving, and refreshing credentials from agent.db.
  */
 
+import { Buffer } from "node:buffer";
 import { dirname, join } from "node:path";
 import {
+	antigravityUsageProvider,
+	claudeUsageProvider,
 	getEnvApiKey,
 	getOAuthApiKey,
+	githubCopilotUsageProvider,
+	googleGeminiCliUsageProvider,
 	loginAnthropic,
 	loginAntigravity,
 	loginCursor,
@@ -16,6 +21,16 @@ import {
 	type OAuthController,
 	type OAuthCredentials,
 	type OAuthProvider,
+	openaiCodexUsageProvider,
+	type Provider,
+	type UsageCache,
+	type UsageCacheEntry,
+	type UsageCredential,
+	type UsageLimit,
+	type UsageLogger,
+	type UsageProvider,
+	type UsageReport,
+	zaiUsageProvider,
 } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
 import { getAgentDbPath, getAuthPath } from "../config";
@@ -61,43 +76,64 @@ export interface SerializedAuthStorage {
  */
 type StoredCredential = { id: number; credential: AuthCredential };
 
-/** Rate limit window from Codex usage API (primary or secondary quota). */
-type CodexUsageWindow = {
-	usedPercent?: number;
-	limitWindowSeconds?: number;
-	resetAt?: number; // Unix timestamp (seconds)
+export type AuthStorageOptions = {
+	usageProviderResolver?: (provider: Provider) => UsageProvider | undefined;
+	usageCache?: UsageCache;
+	usageFetch?: typeof fetch;
+	usageNow?: () => number;
+	usageLogger?: UsageLogger;
 };
 
-/** Parsed usage data from Codex /wham/usage endpoint. */
-type CodexUsage = {
-	allowed?: boolean;
-	limitReached?: boolean;
-	primary?: CodexUsageWindow;
-	secondary?: CodexUsageWindow;
-};
+const DEFAULT_USAGE_PROVIDERS: UsageProvider[] = [
+	openaiCodexUsageProvider,
+	antigravityUsageProvider,
+	googleGeminiCliUsageProvider,
+	claudeUsageProvider,
+	zaiUsageProvider,
+	githubCopilotUsageProvider,
+];
 
-/** Cached usage entry with TTL for avoiding redundant API calls. */
-type CodexUsageCacheEntry = {
-	fetchedAt: number;
-	expiresAt: number;
-	usage?: CodexUsage;
-};
+const DEFAULT_USAGE_PROVIDER_MAP = new Map<Provider, UsageProvider>(
+	DEFAULT_USAGE_PROVIDERS.map((provider) => [provider.id, provider]),
+);
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return !!value && typeof value === "object" && !Array.isArray(value);
+const USAGE_CACHE_PREFIX = "usage_cache:";
+
+function resolveDefaultUsageProvider(provider: Provider): UsageProvider | undefined {
+	return DEFAULT_USAGE_PROVIDER_MAP.get(provider);
 }
 
-function toNumber(value: unknown): number | undefined {
-	if (typeof value === "number" && Number.isFinite(value)) return value;
-	if (typeof value === "string" && value.trim()) {
-		const parsed = Number(value);
-		return Number.isFinite(parsed) ? parsed : undefined;
+function parseUsageCacheEntry(raw: string): UsageCacheEntry | undefined {
+	try {
+		const parsed = JSON.parse(raw) as { value?: UsageReport | null; expiresAt?: unknown };
+		const expiresAt = typeof parsed.expiresAt === "number" ? parsed.expiresAt : undefined;
+		if (!expiresAt || !Number.isFinite(expiresAt)) return undefined;
+		return { value: parsed.value ?? null, expiresAt };
+	} catch {
+		return undefined;
 	}
-	return undefined;
 }
 
-function toBoolean(value: unknown): boolean | undefined {
-	return typeof value === "boolean" ? value : undefined;
+class AuthStorageUsageCache implements UsageCache {
+	constructor(private storage: AgentStorage) {}
+
+	get(key: string): UsageCacheEntry | undefined {
+		const raw = this.storage.getCache(`${USAGE_CACHE_PREFIX}${key}`);
+		if (!raw) return undefined;
+		const entry = parseUsageCacheEntry(raw);
+		if (!entry) return undefined;
+		if (entry.expiresAt <= Date.now()) return undefined;
+		return entry;
+	}
+
+	set(key: string, entry: UsageCacheEntry): void {
+		const payload = JSON.stringify({ value: entry.value ?? null, expiresAt: entry.expiresAt });
+		this.storage.setCache(`${USAGE_CACHE_PREFIX}${key}`, payload, Math.floor(entry.expiresAt / 1000));
+	}
+
+	cleanup(): void {
+		this.storage.cleanExpiredCache();
+	}
 }
 
 /**
@@ -105,14 +141,11 @@ function toBoolean(value: unknown): boolean | undefined {
  * Reads from SQLite and migrates legacy auth.json paths.
  */
 export class AuthStorage {
-	private static readonly codexUsageCacheTtlMs = 60_000; // Cache usage data for 1 minute
 	private static readonly defaultBackoffMs = 60_000; // Default backoff when no reset time available
-	private static readonly cacheCleanupIntervalMs = 300_000; // Clean expired cache every 5 minutes
 
 	/** Provider -> credentials cache, populated from agent.db on reload(). */
 	private data: Map<string, StoredCredential[]> = new Map();
 	private storage: AgentStorage;
-	private lastCacheCleanup = 0;
 	/** Resolved path to agent.db (derived from authPath or used directly if .db). */
 	private dbPath: string;
 	private runtimeOverrides: Map<string, string> = new Map();
@@ -122,8 +155,11 @@ export class AuthStorage {
 	private sessionLastCredential: Map<string, Map<string, { type: AuthCredential["type"]; index: number }>> = new Map();
 	/** Maps provider:type -> credentialIndex -> blockedUntilMs for temporary backoff. */
 	private credentialBackoff: Map<string, Map<number, number>> = new Map();
-	/** Cached usage info for providers that expose usage endpoints. */
-	private codexUsageCache: Map<string, CodexUsageCacheEntry> = new Map();
+	private usageProviderResolver?: (provider: Provider) => UsageProvider | undefined;
+	private usageCache?: UsageCache;
+	private usageFetch: typeof fetch;
+	private usageNow: () => number;
+	private usageLogger?: UsageLogger;
 	private fallbackResolver?: (provider: string) => string | undefined;
 
 	/**
@@ -133,16 +169,27 @@ export class AuthStorage {
 	constructor(
 		private authPath: string,
 		private fallbackPaths: string[] = [],
+		options: AuthStorageOptions = {},
 	) {
 		this.dbPath = AuthStorage.resolveDbPath(authPath);
 		this.storage = AgentStorage.open(this.dbPath);
+		this.usageProviderResolver = options.usageProviderResolver ?? resolveDefaultUsageProvider;
+		this.usageCache = options.usageCache ?? new AuthStorageUsageCache(this.storage);
+		this.usageFetch = options.usageFetch ?? fetch;
+		this.usageNow = options.usageNow ?? Date.now;
+		this.usageLogger =
+			options.usageLogger ??
+			({
+				debug: (message, meta) => logger.debug(message, meta),
+				warn: (message, meta) => logger.warn(message, meta),
+			} satisfies UsageLogger);
 	}
 
 	/**
 	 * Create an in-memory AuthStorage instance from serialized data.
 	 * Used by subagent workers to bypass discovery and use parent's credentials.
 	 */
-	static fromSerialized(data: SerializedAuthStorage): AuthStorage {
+	static fromSerialized(data: SerializedAuthStorage, options: AuthStorageOptions = {}): AuthStorage {
 		const instance = Object.create(AuthStorage.prototype) as AuthStorage;
 		const authPath = data.authPath ?? data.dbPath ?? getAuthPath();
 		instance.authPath = authPath;
@@ -154,8 +201,16 @@ export class AuthStorage {
 		instance.providerRoundRobinIndex = new Map();
 		instance.sessionLastCredential = new Map();
 		instance.credentialBackoff = new Map();
-		instance.codexUsageCache = new Map();
-		instance.lastCacheCleanup = 0;
+		instance.usageProviderResolver = options.usageProviderResolver ?? resolveDefaultUsageProvider;
+		instance.usageCache = options.usageCache ?? new AuthStorageUsageCache(instance.storage);
+		instance.usageFetch = options.usageFetch ?? fetch;
+		instance.usageNow = options.usageNow ?? Date.now;
+		instance.usageLogger =
+			options.usageLogger ??
+			({
+				debug: (message, meta) => logger.debug(message, meta),
+				warn: (message, meta) => logger.warn(message, meta),
+			} satisfies UsageLogger);
 
 		for (const [provider, creds] of Object.entries(data.credentials)) {
 			instance.data.set(
@@ -257,7 +312,15 @@ export class AuthStorage {
 			list.push({ id: record.id, credential: record.credential });
 			grouped.set(record.provider, list);
 		}
-		this.data = grouped;
+
+		const dedupedGrouped = new Map<string, StoredCredential[]>();
+		for (const [provider, entries] of grouped.entries()) {
+			const deduped = this.pruneDuplicateStoredCredentials(provider, entries);
+			if (deduped.length > 0) {
+				dedupedGrouped.set(provider, deduped);
+			}
+		}
+		this.data = dedupedGrouped;
 	}
 
 	/**
@@ -281,6 +344,115 @@ export class AuthStorage {
 		} else {
 			this.data.set(provider, credentials);
 		}
+	}
+
+	private getOAuthIdentifiers(credential: OAuthCredential): string[] {
+		const identifiers: string[] = [];
+		const accountId = credential.accountId?.trim();
+		if (accountId) identifiers.push(`account:${accountId}`);
+		const email = credential.email?.trim().toLowerCase();
+		if (email) identifiers.push(`email:${email}`);
+		if (identifiers.length > 0) return identifiers;
+		const tokenIdentifiers = this.getOAuthIdentifiersFromToken(credential.access) ?? [];
+		for (const identifier of tokenIdentifiers) {
+			identifiers.push(identifier);
+		}
+		if (identifiers.length > 0) return identifiers;
+		const refreshIdentifiers = this.getOAuthIdentifiersFromToken(credential.refresh) ?? [];
+		for (const identifier of refreshIdentifiers) {
+			identifiers.push(identifier);
+		}
+		return identifiers;
+	}
+
+	private getOAuthIdentifiersFromToken(token: string | undefined): string[] | undefined {
+		if (!token) return undefined;
+		const parts = token.split(".");
+		if (parts.length !== 3) return undefined;
+		const payloadRaw = parts[1];
+		try {
+			const payload = JSON.parse(
+				Buffer.from(payloadRaw.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"),
+			) as Record<string, unknown>;
+			if (!payload || typeof payload !== "object") return undefined;
+			const identifiers: string[] = [];
+			const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : undefined;
+			if (email) identifiers.push(`email:${email}`);
+			const accountId =
+				typeof payload.account_id === "string"
+					? payload.account_id
+					: typeof payload.accountId === "string"
+						? payload.accountId
+						: typeof payload.user_id === "string"
+							? payload.user_id
+							: typeof payload.sub === "string"
+								? payload.sub
+								: undefined;
+			const trimmedAccountId = accountId?.trim();
+			if (trimmedAccountId) identifiers.push(`account:${trimmedAccountId}`);
+			return identifiers.length > 0 ? identifiers : undefined;
+		} catch {
+			return undefined;
+		}
+	}
+
+	private dedupeOAuthCredentials(credentials: AuthCredential[]): AuthCredential[] {
+		const seen = new Set<string>();
+		const deduped: AuthCredential[] = [];
+		for (let index = credentials.length - 1; index >= 0; index -= 1) {
+			const credential = credentials[index];
+			if (credential.type !== "oauth") {
+				deduped.push(credential);
+				continue;
+			}
+			const identifiers = this.getOAuthIdentifiers(credential);
+			if (identifiers.length === 0) {
+				deduped.push(credential);
+				continue;
+			}
+			if (identifiers.some((identifier) => seen.has(identifier))) {
+				continue;
+			}
+			for (const identifier of identifiers) {
+				seen.add(identifier);
+			}
+			deduped.push(credential);
+		}
+		return deduped.reverse();
+	}
+
+	private pruneDuplicateStoredCredentials(provider: string, entries: StoredCredential[]): StoredCredential[] {
+		const seen = new Set<string>();
+		const kept: StoredCredential[] = [];
+		const removed: StoredCredential[] = [];
+		for (let index = entries.length - 1; index >= 0; index -= 1) {
+			const entry = entries[index];
+			const credential = entry.credential;
+			if (credential.type !== "oauth") {
+				kept.push(entry);
+				continue;
+			}
+			const identifiers = this.getOAuthIdentifiers(credential);
+			if (identifiers.length === 0) {
+				kept.push(entry);
+				continue;
+			}
+			if (identifiers.some((identifier) => seen.has(identifier))) {
+				removed.push(entry);
+				continue;
+			}
+			for (const identifier of identifiers) {
+				seen.add(identifier);
+			}
+			kept.push(entry);
+		}
+		if (removed.length > 0) {
+			for (const entry of removed) {
+				this.storage.deleteAuthCredential(entry.id);
+			}
+			this.resetProviderAssignments(provider);
+		}
+		return kept.reverse();
 	}
 
 	/** Returns all credentials for a provider as an array */
@@ -469,7 +641,8 @@ export class AuthStorage {
 	 */
 	async set(provider: string, credential: AuthCredentialEntry): Promise<void> {
 		const normalized = Array.isArray(credential) ? credential : [credential];
-		const stored = this.storage.replaceAuthCredentialsForProvider(provider, normalized);
+		const deduped = this.dedupeOAuthCredentials(normalized);
+		const stored = this.storage.replaceAuthCredentialsForProvider(provider, deduped);
 		this.setStoredCredentials(
 			provider,
 			stored.map((record) => ({ id: record.id, credential: record.credential })),
@@ -611,202 +784,195 @@ export class AuthStorage {
 	}
 
 	// ─────────────────────────────────────────────────────────────────────────────
-	// Codex Usage API Integration
-	// Queries ChatGPT/Codex usage endpoints to detect rate limits before they occur.
+	// Usage API Integration
+	// Queries provider usage endpoints to detect rate limits before they occur.
 	// ─────────────────────────────────────────────────────────────────────────────
 
-	/** Normalizes Codex base URL to include /backend-api path. */
-	private normalizeCodexBaseUrl(baseUrl?: string): string {
-		const fallback = "https://chatgpt.com/backend-api";
-		const trimmed = baseUrl?.trim() ? baseUrl.trim() : fallback;
-		const base = trimmed.replace(/\/+$/, "");
-		const lower = base.toLowerCase();
-		if (
-			(lower.startsWith("https://chatgpt.com") || lower.startsWith("https://chat.openai.com")) &&
-			!lower.includes("/backend-api")
-		) {
-			return `${base}/backend-api`;
-		}
-		return base;
-	}
-
-	private getCodexUsagePath(baseUrl: string): string {
-		return baseUrl.includes("/backend-api") ? "wham/usage" : "api/codex/usage";
-	}
-
-	private buildCodexUsageUrl(baseUrl: string, path: string): string {
-		const normalized = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
-		return `${normalized}${path.replace(/^\/+/, "")}`;
-	}
-
-	private getCodexUsageCacheKey(accountId: string, baseUrl: string): string {
-		return `${baseUrl}|${accountId}`;
-	}
-
-	private extractCodexUsageWindow(window: unknown): CodexUsageWindow | undefined {
-		if (!isRecord(window)) return undefined;
-		const usedPercent = toNumber(window.used_percent);
-		const limitWindowSeconds = toNumber(window.limit_window_seconds);
-		const resetAt = toNumber(window.reset_at);
-		if (usedPercent === undefined && limitWindowSeconds === undefined && resetAt === undefined) return undefined;
-		return { usedPercent, limitWindowSeconds, resetAt };
-	}
-
-	private extractCodexUsage(payload: unknown): CodexUsage | undefined {
-		if (!isRecord(payload)) return undefined;
-		const rateLimit = isRecord(payload.rate_limit) ? payload.rate_limit : undefined;
-		if (!rateLimit) return undefined;
-		const primary = this.extractCodexUsageWindow(rateLimit.primary_window);
-		const secondary = this.extractCodexUsageWindow(rateLimit.secondary_window);
-		const usage: CodexUsage = {
-			allowed: toBoolean(rateLimit.allowed),
-			limitReached: toBoolean(rateLimit.limit_reached),
-			primary,
-			secondary,
+	private buildUsageCredential(credential: OAuthCredential): UsageCredential {
+		return {
+			type: "oauth",
+			accessToken: credential.access,
+			refreshToken: credential.refresh,
+			expiresAt: credential.expires,
+			accountId: credential.accountId,
+			projectId: credential.projectId,
+			email: credential.email,
+			enterpriseUrl: credential.enterpriseUrl,
 		};
-		if (!primary && !secondary && usage.allowed === undefined && usage.limitReached === undefined) return undefined;
-		return usage;
 	}
 
-	/** Returns true if usage indicates rate limit has been reached. */
-	private isCodexUsageLimitReached(usage: CodexUsage): boolean {
-		if (usage.allowed === false || usage.limitReached === true) return true;
-		if (usage.primary?.usedPercent !== undefined && usage.primary.usedPercent >= 100) return true;
-		if (usage.secondary?.usedPercent !== undefined && usage.secondary.usedPercent >= 100) return true;
+	private isUsageLimitExhausted(limit: UsageLimit): boolean {
+		if (limit.status === "exhausted") return true;
+		const amount = limit.amount;
+		if (amount.usedFraction !== undefined && amount.usedFraction >= 1) return true;
+		if (amount.remainingFraction !== undefined && amount.remainingFraction <= 0) return true;
+		if (amount.used !== undefined && amount.limit !== undefined && amount.used >= amount.limit) return true;
+		if (amount.remaining !== undefined && amount.remaining <= 0) return true;
+		if (amount.unit === "percent" && amount.used !== undefined && amount.used >= 100) return true;
 		return false;
 	}
 
-	/** Extracts the earliest reset timestamp from usage windows (in ms). */
-	private getCodexResetAtMs(usage: CodexUsage): number | undefined {
-		const now = Date.now();
+	/** Returns true if usage indicates rate limit has been reached. */
+	private isUsageLimitReached(report: UsageReport): boolean {
+		return report.limits.some((limit) => this.isUsageLimitExhausted(limit));
+	}
+
+	/** Extracts the earliest reset timestamp from exhausted windows (in ms). */
+	private getUsageResetAtMs(report: UsageReport, nowMs: number): number | undefined {
 		const candidates: number[] = [];
-		const addCandidate = (value: number | undefined) => {
-			if (!value) return;
-			const ms = value > 1_000_000_000_000 ? value : value * 1000;
-			if (Number.isFinite(ms) && ms > now) {
-				candidates.push(ms);
+		for (const limit of report.limits) {
+			if (!this.isUsageLimitExhausted(limit)) continue;
+			const window = limit.window;
+			if (window?.resetsAt && window.resetsAt > nowMs) {
+				candidates.push(window.resetsAt);
 			}
-		};
-		const useAll = usage.limitReached === true || usage.allowed === false;
-		if (useAll) {
-			addCandidate(usage.primary?.resetAt);
-			addCandidate(usage.secondary?.resetAt);
-		} else {
-			if (usage.primary?.usedPercent !== undefined && usage.primary.usedPercent >= 100) {
-				addCandidate(usage.primary.resetAt);
-			}
-			if (usage.secondary?.usedPercent !== undefined && usage.secondary.usedPercent >= 100) {
-				addCandidate(usage.secondary.resetAt);
+			if (window?.resetInMs && window.resetInMs > 0) {
+				const resetAt = nowMs + window.resetInMs;
+				if (resetAt > nowMs) candidates.push(resetAt);
 			}
 		}
 		if (candidates.length === 0) return undefined;
 		return Math.min(...candidates);
 	}
 
-	private getCodexUsageExpiryMs(usage: CodexUsage, nowMs: number): number {
-		const resetAtMs = this.getCodexResetAtMs(usage);
-		if (this.isCodexUsageLimitReached(usage)) {
-			if (resetAtMs) return resetAtMs;
-			return nowMs + AuthStorage.defaultBackoffMs;
-		}
-		const defaultExpiry = nowMs + AuthStorage.codexUsageCacheTtlMs;
-		if (!resetAtMs) return defaultExpiry;
-		return Math.min(defaultExpiry, resetAtMs);
-	}
+	private async getUsageReport(
+		provider: Provider,
+		credential: OAuthCredential,
+		options?: { baseUrl?: string },
+	): Promise<UsageReport | null> {
+		const resolver = this.usageProviderResolver;
+		const cache = this.usageCache;
+		if (!resolver || !cache) return null;
 
-	/** Fetches usage data from Codex API. */
-	private async fetchCodexUsage(credential: OAuthCredential, baseUrl?: string): Promise<CodexUsage | undefined> {
-		const accountId = credential.accountId;
-		if (!accountId) return undefined;
+		const providerImpl = resolver(provider);
+		if (!providerImpl) return null;
 
-		const normalizedBase = this.normalizeCodexBaseUrl(baseUrl);
-		const url = this.buildCodexUsageUrl(normalizedBase, this.getCodexUsagePath(normalizedBase));
-		const headers = {
-			authorization: `Bearer ${credential.access}`,
-			"chatgpt-account-id": accountId,
-			"openai-beta": "responses=experimental",
-			originator: "codex_cli_rs",
+		const params = {
+			provider,
+			credential: this.buildUsageCredential(credential),
+			baseUrl: options?.baseUrl,
 		};
 
-		try {
-			const response = await fetch(url, { headers });
-			if (!response.ok) {
-				logger.debug("AuthStorage codex usage fetch failed", {
-					status: response.status,
-					statusText: response.statusText,
-				});
-				return undefined;
-			}
+		if (providerImpl.supports && !providerImpl.supports(params)) return null;
 
-			const payload = (await response.json()) as unknown;
-			return this.extractCodexUsage(payload);
+		try {
+			return await providerImpl.fetchUsage(params, {
+				cache,
+				fetch: this.usageFetch,
+				now: this.usageNow,
+				logger: this.usageLogger,
+			});
 		} catch (error) {
-			logger.debug("AuthStorage codex usage fetch error", { error: String(error) });
-			return undefined;
+			logger.debug("AuthStorage usage fetch failed", {
+				provider,
+				error: String(error),
+			});
+			return null;
 		}
 	}
 
-	/** Gets usage data with caching to avoid redundant API calls. */
-	private async getCodexUsage(credential: OAuthCredential, baseUrl?: string): Promise<CodexUsage | undefined> {
-		const accountId = credential.accountId;
-		if (!accountId) return undefined;
+	async fetchUsageReports(options?: {
+		baseUrlResolver?: (provider: Provider) => string | undefined;
+	}): Promise<UsageReport[] | null> {
+		const resolver = this.usageProviderResolver;
+		const cache = this.usageCache;
+		if (!resolver || !cache) return null;
 
-		const normalizedBase = this.normalizeCodexBaseUrl(baseUrl);
-		const cacheKey = this.getCodexUsageCacheKey(accountId, normalizedBase);
-		const now = Date.now();
+		const tasks: Array<Promise<UsageReport | null>> = [];
+		const providers = new Set<string>([
+			...this.data.keys(),
+			...DEFAULT_USAGE_PROVIDERS.map((provider) => provider.id),
+		]);
+		for (const provider of providers) {
+			const providerImpl = resolver(provider as Provider);
+			if (!providerImpl) continue;
+			const baseUrl = options?.baseUrlResolver?.(provider as Provider);
+			let entries = this.getStoredCredentials(provider);
+			if (entries.length > 0) {
+				const dedupedEntries = this.pruneDuplicateStoredCredentials(provider, entries);
+				if (dedupedEntries.length !== entries.length) {
+					this.setStoredCredentials(provider, dedupedEntries);
+				}
+				entries = dedupedEntries;
+			}
 
-		if (now - this.lastCacheCleanup > AuthStorage.cacheCleanupIntervalMs) {
-			this.lastCacheCleanup = now;
-			this.storage.cleanExpiredCache();
-		}
+			if (entries.length === 0) {
+				const runtimeKey = this.runtimeOverrides.get(provider);
+				const envKey = getEnvApiKey(provider);
+				const apiKey = runtimeKey ?? envKey;
+				if (!apiKey) {
+					continue;
+				}
+				const params = {
+					provider: provider as Provider,
+					credential: { type: "api_key", apiKey } satisfies UsageCredential,
+					baseUrl,
+				};
+				if (providerImpl.supports && !providerImpl.supports(params)) {
+					continue;
+				}
+				tasks.push(
+					providerImpl
+						.fetchUsage(params, {
+							cache,
+							fetch: this.usageFetch,
+							now: this.usageNow,
+							logger: this.usageLogger,
+						})
+						.catch((error) => {
+							logger.debug("AuthStorage usage fetch failed", {
+								provider,
+								error: String(error),
+							});
+							return null;
+						}),
+				);
+				continue;
+			}
 
-		// Check in-memory cache first (fastest)
-		const memCached = this.codexUsageCache.get(cacheKey);
-		if (memCached && memCached.expiresAt > now) {
-			return memCached.usage;
-		}
+			for (const entry of entries) {
+				const credential = entry.credential;
+				const usageCredential: UsageCredential =
+					credential.type === "api_key"
+						? { type: "api_key", apiKey: credential.key }
+						: this.buildUsageCredential(credential);
+				const params = {
+					provider: provider as Provider,
+					credential: usageCredential,
+					baseUrl,
+				};
 
-		// Check DB cache (survives restarts)
-		const dbCached = this.storage.getCache(`codex_usage:${cacheKey}`);
-		if (dbCached) {
-			try {
-				const parsed = JSON.parse(dbCached) as CodexUsage;
-				// Store in memory for faster subsequent access
-				this.codexUsageCache.set(cacheKey, {
-					fetchedAt: now,
-					expiresAt: now + AuthStorage.codexUsageCacheTtlMs,
-					usage: parsed,
-				});
-				return parsed;
-			} catch {
-				// Invalid cache, continue to fetch
+				if (providerImpl.supports && !providerImpl.supports(params)) {
+					continue;
+				}
+
+				tasks.push(
+					providerImpl
+						.fetchUsage(params, {
+							cache,
+							fetch: this.usageFetch,
+							now: this.usageNow,
+							logger: this.usageLogger,
+						})
+						.catch((error) => {
+							logger.debug("AuthStorage usage fetch failed", {
+								provider,
+								error: String(error),
+							});
+							return null;
+						}),
+				);
 			}
 		}
 
-		// Fetch from API
-		const usage = await this.fetchCodexUsage(credential, normalizedBase);
-		if (usage) {
-			const expiresAt = this.getCodexUsageExpiryMs(usage, now);
-			this.codexUsageCache.set(cacheKey, { fetchedAt: now, expiresAt, usage });
-			// Store in DB with 60s TTL
-			this.storage.setCache(
-				`codex_usage:${cacheKey}`,
-				JSON.stringify(usage),
-				Math.floor((now + AuthStorage.codexUsageCacheTtlMs) / 1000),
-			);
-			return usage;
-		}
-
-		this.codexUsageCache.set(cacheKey, {
-			fetchedAt: now,
-			expiresAt: now + AuthStorage.defaultBackoffMs,
-		});
-		return undefined;
+		if (tasks.length === 0) return [];
+		const results = await Promise.all(tasks);
+		return results.filter((report): report is UsageReport => report !== null);
 	}
 
 	/**
 	 * Marks the current session's credential as temporarily blocked due to usage limits.
-	 * Queries the Codex usage API to determine accurate reset time.
+	 * Uses usage reports to determine accurate reset time when available.
 	 * Returns true if a credential was blocked, enabling automatic fallback to the next credential.
 	 */
 	async markUsageLimitReached(
@@ -818,15 +984,15 @@ export class AuthStorage {
 		if (!sessionCredential) return false;
 
 		const providerKey = this.getProviderTypeKey(provider, sessionCredential.type);
-		const now = Date.now();
+		const now = this.usageNow();
 		let blockedUntil = now + (options?.retryAfterMs ?? AuthStorage.defaultBackoffMs);
 
 		if (provider === "openai-codex" && sessionCredential.type === "oauth") {
 			const credential = this.getCredentialsForProvider(provider)[sessionCredential.index];
 			if (credential?.type === "oauth") {
-				const usage = await this.getCodexUsage(credential, options?.baseUrl);
-				if (usage) {
-					const resetAtMs = this.getCodexResetAtMs(usage);
+				const report = await this.getUsageReport(provider, credential, options);
+				if (report && this.isUsageLimitReached(report)) {
+					const resetAtMs = this.getUsageResetAtMs(report, this.usageNow());
 					if (resetAtMs && resetAtMs > blockedUntil) {
 						blockedUntil = resetAtMs;
 					}
@@ -848,7 +1014,7 @@ export class AuthStorage {
 
 	/**
 	 * Resolves an OAuth API key, trying credentials in priority order.
-	 * Skips blocked credentials and checks usage limits for Codex accounts.
+	 * Skips blocked credentials and checks usage limits for providers with usage data.
 	 * Falls back to earliest-unblocking credential if all are blocked.
 	 */
 	private async resolveOAuthApiKey(
@@ -902,14 +1068,18 @@ export class AuthStorage {
 			return undefined;
 		}
 
+		let usage: UsageReport | null = null;
+		let usageChecked = false;
+
 		if (checkUsage) {
-			const usage = await this.getCodexUsage(selection.credential, options?.baseUrl);
-			if (usage && this.isCodexUsageLimitReached(usage)) {
-				const resetAtMs = this.getCodexResetAtMs(usage);
+			usage = await this.getUsageReport(provider, selection.credential, options);
+			usageChecked = true;
+			if (usage && this.isUsageLimitReached(usage)) {
+				const resetAtMs = this.getUsageResetAtMs(usage, this.usageNow());
 				this.markCredentialBlocked(
 					providerKey,
 					selection.index,
-					resetAtMs ?? Date.now() + AuthStorage.defaultBackoffMs,
+					resetAtMs ?? this.usageNow() + AuthStorage.defaultBackoffMs,
 				);
 				return undefined;
 			}
@@ -927,13 +1097,16 @@ export class AuthStorage {
 			this.replaceCredentialAt(provider, selection.index, updated);
 
 			if (checkUsage) {
-				const usage = await this.getCodexUsage(updated, options?.baseUrl);
-				if (usage && this.isCodexUsageLimitReached(usage)) {
-					const resetAtMs = this.getCodexResetAtMs(usage);
+				const sameAccount = selection.credential.accountId === updated.accountId;
+				if (!usageChecked || !sameAccount) {
+					usage = await this.getUsageReport(provider, updated, options);
+				}
+				if (usage && this.isUsageLimitReached(usage)) {
+					const resetAtMs = this.getUsageResetAtMs(usage, this.usageNow());
 					this.markCredentialBlocked(
 						providerKey,
 						selection.index,
-						resetAtMs ?? Date.now() + AuthStorage.defaultBackoffMs,
+						resetAtMs ?? this.usageNow() + AuthStorage.defaultBackoffMs,
 					);
 					return undefined;
 				}

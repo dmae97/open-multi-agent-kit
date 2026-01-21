@@ -5,7 +5,7 @@
 
 import * as path from "node:path";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, ImageContent, Message } from "@oh-my-pi/pi-ai";
+import type { AssistantMessage, ImageContent, Message, UsageReport } from "@oh-my-pi/pi-ai";
 import type { Component, Loader, SlashCommand } from "@oh-my-pi/pi-tui";
 import {
 	CombinedAutocompleteProvider,
@@ -187,6 +187,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			{ name: "share", description: "Share session as a secret GitHub gist" },
 			{ name: "copy", description: "Copy last agent message to clipboard" },
 			{ name: "session", description: "Show session info and stats" },
+			{ name: "usage", description: "Show provider usage and limits" },
 			{ name: "extensions", description: "Open Extension Control Center dashboard" },
 			{ name: "status", description: "Alias for /extensions" },
 			{ name: "changelog", description: "Show changelog entries" },
@@ -611,6 +612,10 @@ export class InteractiveMode implements InteractiveModeContext {
 
 	handleSessionCommand(): void {
 		this.commandController.handleSessionCommand();
+	}
+
+	handleUsageCommand(reports?: UsageReport[] | null): Promise<void> {
+		return this.commandController.handleUsageCommand(reports);
 	}
 
 	handleChangelogCommand(): void {

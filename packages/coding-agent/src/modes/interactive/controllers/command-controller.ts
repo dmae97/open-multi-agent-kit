@@ -1,6 +1,7 @@
 import { mkdir, rm } from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import type { UsageLimit, UsageReport } from "@oh-my-pi/pi-ai";
 import { Loader, Markdown, Spacer, Text, visibleWidth } from "@oh-my-pi/pi-tui";
 import { $ } from "bun";
 import { nanoid } from "nanoid";
@@ -281,6 +282,33 @@ export class CommandController {
 
 		this.ctx.chatContainer.addChild(new Spacer(1));
 		this.ctx.chatContainer.addChild(new Text(info, 1, 0));
+		this.ctx.ui.requestRender();
+	}
+
+	async handleUsageCommand(reports?: UsageReport[] | null): Promise<void> {
+		let usageReports = reports ?? null;
+		if (!usageReports) {
+			const provider = this.ctx.session as { fetchUsageReports?: () => Promise<UsageReport[] | null> };
+			if (!provider.fetchUsageReports) {
+				this.ctx.showWarning("Usage reporting is not configured for this session.");
+				return;
+			}
+			try {
+				usageReports = await provider.fetchUsageReports();
+			} catch (error) {
+				this.ctx.showError(`Failed to fetch usage data: ${error instanceof Error ? error.message : String(error)}`);
+				return;
+			}
+		}
+
+		if (!usageReports || usageReports.length === 0) {
+			this.ctx.showWarning("No usage data available.");
+			return;
+		}
+
+		const output = renderUsageReports(usageReports, theme, Date.now());
+		this.ctx.chatContainer.addChild(new Spacer(1));
+		this.ctx.chatContainer.addChild(new Text(output, 1, 0));
 		this.ctx.ui.requestRender();
 	}
 
@@ -597,4 +625,308 @@ export class CommandController {
 		}
 		await this.ctx.flushCompactionQueue({ willRetry: false });
 	}
+}
+
+const BAR_WIDTH = 24;
+const COLUMN_WIDTH = BAR_WIDTH + 2;
+
+function formatProviderName(provider: string): string {
+	return provider
+		.split(/[-_]/g)
+		.map((part) => (part ? part[0].toUpperCase() + part.slice(1) : ""))
+		.join(" ");
+}
+
+function formatNumber(value: number, maxFractionDigits = 1): string {
+	return new Intl.NumberFormat("en-US", { maximumFractionDigits: maxFractionDigits }).format(value);
+}
+
+function formatUsedAccounts(value: number): string {
+	return `${value.toFixed(2)} used`;
+}
+
+function formatDuration(ms: number): string {
+	const totalSeconds = Math.max(0, Math.round(ms / 1000));
+	const minutes = Math.floor(totalSeconds / 60);
+	const seconds = totalSeconds % 60;
+	const hours = Math.floor(minutes / 60);
+	const mins = minutes % 60;
+	const days = Math.floor(hours / 24);
+	const hrs = hours % 24;
+	if (days > 0) return `${days}d ${hrs}h`;
+	if (hours > 0) return `${hours}h ${mins}m`;
+	if (minutes > 0) return `${minutes}m ${seconds}s`;
+	return `${seconds}s`;
+}
+
+function formatDurationShort(ms: number): string {
+	const totalSeconds = Math.max(0, Math.round(ms / 1000));
+	const minutes = Math.floor(totalSeconds / 60);
+	const hours = Math.floor(minutes / 60);
+	const mins = minutes % 60;
+	const days = Math.floor(hours / 24);
+	const hrs = hours % 24;
+	if (days > 0) return `${days}d${hrs > 0 ? ` ${hrs}h` : ""}`;
+	if (hours > 0) return `${hours}h${mins > 0 ? ` ${mins}m` : ""}`;
+	if (minutes > 0) return `${minutes}m`;
+	return `${totalSeconds}s`;
+}
+
+function resolveFraction(limit: UsageLimit): number | undefined {
+	const amount = limit.amount;
+	if (amount.usedFraction !== undefined) return amount.usedFraction;
+	if (amount.used !== undefined && amount.limit !== undefined && amount.limit > 0) {
+		return amount.used / amount.limit;
+	}
+	if (amount.unit === "percent" && amount.used !== undefined) {
+		return amount.used / 100;
+	}
+	return undefined;
+}
+
+function formatLimitTitle(limit: UsageLimit): string {
+	const tier = limit.scope.tier;
+	if (tier && !limit.label.toLowerCase().includes(tier.toLowerCase())) {
+		return `${limit.label} (${tier})`;
+	}
+	return limit.label;
+}
+
+function formatWindowSuffix(label: string, windowLabel: string, uiTheme: typeof theme): string {
+	const normalizedLabel = label.toLowerCase();
+	const normalizedWindow = windowLabel.toLowerCase();
+	if (normalizedWindow === "quota window") return "";
+	if (normalizedLabel.includes(normalizedWindow)) return "";
+	return uiTheme.fg("dim", `(${windowLabel})`);
+}
+
+function formatAccountLabel(limit: UsageLimit, report: UsageReport, index: number): string {
+	const email = (report.metadata?.email as string | undefined) ?? limit.scope.accountId;
+	if (email) return email;
+	const accountId = (report.metadata?.accountId as string | undefined) ?? limit.scope.accountId;
+	if (accountId) return accountId;
+	return `account ${index + 1}`;
+}
+
+function formatResetShort(limit: UsageLimit, nowMs: number): string | undefined {
+	if (limit.window?.resetInMs !== undefined) {
+		return formatDurationShort(limit.window.resetInMs);
+	}
+	if (limit.window?.resetsAt !== undefined) {
+		return formatDurationShort(limit.window.resetsAt - nowMs);
+	}
+	return undefined;
+}
+
+function formatAccountHeader(limit: UsageLimit, report: UsageReport, index: number, nowMs: number): string {
+	const label = formatAccountLabel(limit, report, index);
+	const reset = formatResetShort(limit, nowMs);
+	if (!reset) return label;
+	return `${label} (${reset})`;
+}
+
+function padColumn(text: string, width: number): string {
+	const visible = visibleWidth(text);
+	if (visible >= width) return text;
+	return `${text}${" ".repeat(width - visible)}`;
+}
+
+function resolveAggregateStatus(limits: UsageLimit[]): UsageLimit["status"] {
+	const hasOk = limits.some((limit) => limit.status === "ok");
+	const hasWarning = limits.some((limit) => limit.status === "warning");
+	const hasExhausted = limits.some((limit) => limit.status === "exhausted");
+	if (!hasOk && !hasWarning && !hasExhausted) return "unknown";
+	if (hasOk) {
+		return hasWarning || hasExhausted ? "warning" : "ok";
+	}
+	if (hasWarning) return "warning";
+	return "exhausted";
+}
+
+function isZeroUsage(limit: UsageLimit): boolean {
+	const amount = limit.amount;
+	if (amount.usedFraction !== undefined) return amount.usedFraction <= 0;
+	if (amount.used !== undefined) return amount.used <= 0;
+	if (amount.unit === "percent" && amount.used !== undefined) return amount.used <= 0;
+	if (amount.remainingFraction !== undefined) return amount.remainingFraction >= 1;
+	return false;
+}
+
+function isZeroUsageGroup(limits: UsageLimit[]): boolean {
+	return limits.length > 0 && limits.every((limit) => isZeroUsage(limit));
+}
+
+function formatAggregateAmount(limits: UsageLimit[]): string {
+	const fractions = limits
+		.map((limit) => resolveFraction(limit))
+		.filter((value): value is number => value !== undefined);
+	if (fractions.length === limits.length && fractions.length > 0) {
+		const sum = fractions.reduce((total, value) => total + value, 0);
+		const usedPct = Math.max(sum * 100, 0);
+		const remainingPct = Math.max(0, limits.length * 100 - usedPct);
+		const avgRemaining = limits.length > 0 ? remainingPct / limits.length : remainingPct;
+		return `${formatUsedAccounts(sum)} (${formatNumber(avgRemaining)}% left)`;
+	}
+
+	const amounts = limits
+		.map((limit) => limit.amount)
+		.filter((amount) => amount.used !== undefined && amount.limit !== undefined && amount.limit > 0);
+	if (amounts.length === limits.length && amounts.length > 0) {
+		const totalUsed = amounts.reduce((sum, amount) => sum + (amount.used ?? 0), 0);
+		const totalLimit = amounts.reduce((sum, amount) => sum + (amount.limit ?? 0), 0);
+		const usedPct = totalLimit > 0 ? (totalUsed / totalLimit) * 100 : 0;
+		const remainingPct = Math.max(0, 100 - usedPct);
+		const usedAccounts = totalLimit > 0 ? (usedPct / 100) * limits.length : 0;
+		return `${formatUsedAccounts(usedAccounts)} (${formatNumber(remainingPct)}% left)`;
+	}
+
+	return `Accounts: ${limits.length}`;
+}
+
+function resolveResetRange(limits: UsageLimit[], nowMs: number): string | null {
+	const resets = limits
+		.map((limit) => limit.window?.resetInMs ?? undefined)
+		.filter((value): value is number => value !== undefined && Number.isFinite(value) && value > 0);
+	if (resets.length === 0) {
+		const absolute = limits
+			.map((limit) => limit.window?.resetsAt)
+			.filter((value): value is number => value !== undefined && Number.isFinite(value) && value > nowMs);
+		if (absolute.length === 0) return null;
+		const earliest = Math.min(...absolute);
+		return `resets at ${new Date(earliest).toLocaleString()}`;
+	}
+	const minReset = Math.min(...resets);
+	const maxReset = Math.max(...resets);
+	if (maxReset - minReset > 60_000) {
+		return `resets in ${formatDuration(minReset)}–${formatDuration(maxReset)}`;
+	}
+	return `resets in ${formatDuration(minReset)}`;
+}
+
+function resolveStatusIcon(status: UsageLimit["status"], uiTheme: typeof theme): string {
+	if (status === "exhausted") return uiTheme.fg("error", uiTheme.status.error);
+	if (status === "warning") return uiTheme.fg("warning", uiTheme.status.warning);
+	if (status === "ok") return uiTheme.fg("success", uiTheme.status.success);
+	return uiTheme.fg("dim", uiTheme.status.pending);
+}
+
+function resolveStatusColor(status: UsageLimit["status"]): "success" | "warning" | "error" | "dim" {
+	if (status === "exhausted") return "error";
+	if (status === "warning") return "warning";
+	if (status === "ok") return "success";
+	return "dim";
+}
+
+function renderUsageBar(limit: UsageLimit, uiTheme: typeof theme): string {
+	const fraction = resolveFraction(limit);
+	if (fraction === undefined) {
+		return uiTheme.fg("dim", `[${"·".repeat(BAR_WIDTH)}]`);
+	}
+	const clamped = Math.min(Math.max(fraction, 0), 1);
+	const filled = Math.round(clamped * BAR_WIDTH);
+	const filledBar = "█".repeat(filled);
+	const emptyBar = "░".repeat(Math.max(0, BAR_WIDTH - filled));
+	const color = resolveStatusColor(limit.status);
+	return `${uiTheme.fg("dim", "[")}${uiTheme.fg(color, filledBar)}${uiTheme.fg("dim", emptyBar)}${uiTheme.fg("dim", "]")}`;
+}
+
+function renderUsageReports(reports: UsageReport[], uiTheme: typeof theme, nowMs: number): string {
+	const lines: string[] = [];
+	const latestFetchedAt = Math.max(...reports.map((report) => report.fetchedAt ?? 0));
+	const headerSuffix = latestFetchedAt ? ` (${formatDuration(nowMs - latestFetchedAt)} ago)` : "";
+	lines.push(uiTheme.bold(uiTheme.fg("accent", `Usage${headerSuffix}`)));
+	const grouped = new Map<string, UsageReport[]>();
+	for (const report of reports) {
+		const list = grouped.get(report.provider) ?? [];
+		list.push(report);
+		grouped.set(report.provider, list);
+	}
+
+	for (const [provider, providerReports] of grouped.entries()) {
+		lines.push("");
+		const providerName = formatProviderName(provider);
+
+		const limitGroups = new Map<
+			string,
+			{ label: string; windowLabel: string; limits: UsageLimit[]; reports: UsageReport[] }
+		>();
+		for (const report of providerReports) {
+			for (const limit of report.limits) {
+				const windowId = limit.window?.id ?? limit.scope.windowId ?? "default";
+				const key = `${formatLimitTitle(limit)}|${windowId}`;
+				const windowLabel = limit.window?.label ?? windowId;
+				const entry = limitGroups.get(key) ?? {
+					label: formatLimitTitle(limit),
+					windowLabel,
+					limits: [],
+					reports: [],
+				};
+				entry.limits.push(limit);
+				entry.reports.push(report);
+				limitGroups.set(key, entry);
+			}
+		}
+
+		const providerAllZero = isZeroUsageGroup(Array.from(limitGroups.values()).flatMap((group) => group.limits));
+		if (providerAllZero) {
+			const providerTitle = `${resolveStatusIcon("ok", uiTheme)} ${uiTheme.fg("accent", `${providerName} (0%)`)}`;
+			lines.push(uiTheme.bold(providerTitle));
+			continue;
+		}
+
+		lines.push(uiTheme.bold(uiTheme.fg("accent", providerName)));
+
+		for (const group of limitGroups.values()) {
+			const entries = group.limits.map((limit, index) => ({
+				limit,
+				report: group.reports[index],
+				fraction: resolveFraction(limit),
+				index,
+			}));
+			entries.sort((a, b) => {
+				const aFraction = a.fraction ?? -1;
+				const bFraction = b.fraction ?? -1;
+				if (aFraction !== bFraction) return bFraction - aFraction;
+				return a.index - b.index;
+			});
+			const sortedLimits = entries.map((entry) => entry.limit);
+			const sortedReports = entries.map((entry) => entry.report);
+
+			const status = resolveAggregateStatus(sortedLimits);
+			const statusIcon = resolveStatusIcon(status, uiTheme);
+			if (isZeroUsageGroup(sortedLimits)) {
+				const resetText = resolveResetRange(sortedLimits, nowMs);
+				const resetSuffix = resetText ? ` | ${resetText}` : "";
+				const windowSuffix = formatWindowSuffix(group.label, group.windowLabel, uiTheme);
+				lines.push(
+					`${statusIcon} ${uiTheme.bold(group.label)} ${windowSuffix} ${uiTheme.fg(
+						"dim",
+						`0%${resetSuffix}`,
+					)}`.trim(),
+				);
+				continue;
+			}
+
+			const windowSuffix = formatWindowSuffix(group.label, group.windowLabel, uiTheme);
+			lines.push(`${statusIcon} ${uiTheme.bold(group.label)} ${windowSuffix}`.trim());
+			const accountLabels = sortedLimits.map((limit, index) =>
+				padColumn(formatAccountHeader(limit, sortedReports[index], index, nowMs), COLUMN_WIDTH),
+			);
+			lines.push(`  ${accountLabels.join(" ")}`.trimEnd());
+			const bars = sortedLimits.map((limit) => padColumn(renderUsageBar(limit, uiTheme), COLUMN_WIDTH));
+			lines.push(`  ${bars.join(" ")} ${formatAggregateAmount(sortedLimits)}`.trimEnd());
+			const resetText = sortedLimits.length <= 1 ? resolveResetRange(sortedLimits, nowMs) : null;
+			if (resetText) {
+				lines.push(`  ${uiTheme.fg("dim", resetText)}`.trimEnd());
+			}
+			const notes = sortedLimits.flatMap((limit) => limit.notes ?? []);
+			if (notes.length > 0) {
+				lines.push(`  ${uiTheme.fg("dim", notes.join(" • "))}`.trimEnd());
+			}
+		}
+
+		// No per-provider footer; global header shows last check.
+	}
+
+	return lines.join("\n");
 }

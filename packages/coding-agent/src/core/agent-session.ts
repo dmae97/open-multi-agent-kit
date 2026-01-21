@@ -13,22 +13,31 @@
  * Modes use this class and add their own I/O layer on top.
  */
 
+import { existsSync, readFileSync } from "node:fs";
 import type { Agent, AgentEvent, AgentMessage, AgentState, AgentTool, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, ImageContent, Message, Model, TextContent, ToolCall, Usage } from "@oh-my-pi/pi-ai";
+import type {
+	AssistantMessage,
+	ImageContent,
+	Message,
+	Model,
+	TextContent,
+	ToolCall,
+	Usage,
+	UsageReport,
+} from "@oh-my-pi/pi-ai";
 import { isContextOverflow, modelsAreEqual, supportsXhigh } from "@oh-my-pi/pi-ai";
 import { abortableSleep, logger } from "@oh-my-pi/pi-utils";
 import { YAML } from "bun";
-import { existsSync, readFileSync } from "node:fs";
 import type { Rule } from "../capability/rule";
 import { getAgentDbPath } from "../config";
 import { theme } from "../modes/interactive/theme/theme";
 import ttsrInterruptTemplate from "../prompts/system/ttsr-interrupt.md" with { type: "text" };
 import { type BashResult, executeBash as executeBashCommand } from "./bash-executor";
 import {
+	type CompactionResult,
 	calculateContextTokens,
 	collectEntriesForBranchSummary,
 	compact,
-	type CompactionResult,
 	estimateTokens,
 	generateBranchSummary,
 	prepareCompaction,
@@ -53,8 +62,8 @@ import { extractFileMentions, generateFileMentionMessages } from "./file-mention
 import type { HookCommandContext } from "./hooks/types";
 import {
 	type BashExecutionMessage,
-	bashExecutionToText,
 	type BranchSummaryMessage,
+	bashExecutionToText,
 	type CompactionSummaryMessage,
 	type CustomMessage,
 	type FileMentionMessage,
@@ -64,7 +73,7 @@ import {
 } from "./messages";
 import type { ModelRegistry } from "./model-registry";
 import { parseModelString } from "./model-resolver";
-import { expandPromptTemplate, parseCommandArgs, type PromptTemplate, renderPromptTemplate } from "./prompt-templates";
+import { expandPromptTemplate, type PromptTemplate, parseCommandArgs, renderPromptTemplate } from "./prompt-templates";
 import { executePython as executePythonCommand, type PythonResult } from "./python-executor";
 import type { BranchSummaryEntry, CompactionEntry, NewSessionOptions, SessionManager } from "./session-manager";
 import type { SettingsManager, SkillsSettings } from "./settings-manager";
@@ -3170,6 +3179,14 @@ export class AgentSession {
 			trailingTokens: estimate.trailingTokens,
 			lastUsageIndex: estimate.lastUsageIndex,
 		};
+	}
+
+	async fetchUsageReports(): Promise<UsageReport[] | null> {
+		const authStorage = this._modelRegistry.authStorage;
+		if (!authStorage.fetchUsageReports) return null;
+		return authStorage.fetchUsageReports({
+			baseUrlResolver: (provider) => this._modelRegistry.getProviderBaseUrl?.(provider),
+		});
 	}
 
 	/**

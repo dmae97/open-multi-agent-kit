@@ -1,14 +1,25 @@
 # Changelog
 
 ## [Unreleased]
+
+### Added
+
+- Added usage tracking system with normalized schema for provider quota/limit endpoints
+- Added Claude usage provider for 5-hour and 7-day quota windows
+- Added GitHub Copilot usage provider for chat, completions, and premium requests
+- Added Google Antigravity usage provider for model quota tracking
+- Added Google Gemini CLI usage provider for tier-based quota monitoring
+- Added OpenAI Codex usage provider for primary and secondary rate limit windows
+- Added ZAI usage provider for token and request quota tracking
+
 ### Fixed
 
 - Fixed API validation errors when sending empty user messages (resume with `.`) across all providers:
-  - Google Cloud Code Assist (google-shared.ts)
-  - OpenAI Responses API (openai-responses.ts)
-   - OpenAI Codex Responses API (openai-codex-responses.ts)
-   - Cursor (cursor.ts)
-   - Amazon Bedrock (amazon-bedrock.ts)
+- Google Cloud Code Assist (google-shared.ts)
+- OpenAI Responses API (openai-responses.ts)
+- OpenAI Codex Responses API (openai-codex-responses.ts)
+- Cursor (cursor.ts)
+- Amazon Bedrock (amazon-bedrock.ts)
 - Clamped OpenAI Codex reasoning effort "minimal" to "low" for gpt-5.2 models to avoid API errors
 
 ## [6.9.69] - 2026-01-21

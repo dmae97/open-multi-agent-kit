@@ -1,9 +1,13 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added `/usage` command to display provider usage and limits
+- Added support for multiple usage providers beyond Codex
+- Added usage report caching with configurable TTL
+- Added visual usage bars and account aggregation in usage display
+- Added `fetchUsageReports()` method to agent session
 - Added `output()` function to read task/agent outputs by ID with support for multiple formats and queries
 - Added session file support to Python executor for accessing task outputs
 - Added support for jq-like queries when reading JSON outputs
@@ -12,6 +16,9 @@
 
 ### Changed
 
+- Refactored usage tracking from Codex-specific to generic provider system
+- Updated usage limit detection to work with multiple provider APIs
+- Changed usage cache to use persistent storage instead of in-memory only
 - Limited diagnostic messages to 50 items to prevent overwhelming output when processing files with many issues
 - Changed `/dump` command to include complete agent context: system prompt, model config, available tools with schemas, and all message types (bash/python executions, custom messages, branch summaries, compaction summaries, file mentions)
 - Changed `/dump` format to use YAML instead of JSON for tool schemas and arguments (more readable)
@@ -21,6 +28,7 @@
 - Fixed external editor to work properly on Unix systems by correctly handling terminal I/O
 - Fixed external editor to show warning message when it fails to open instead of silently failing
 - Fixed find tool to properly handle no matches case without treating as error
+- Fixed find tool to wait for fd exit so error messages no longer report exit null
 - Fixed read tool to properly handle no matches case without treating as error
 - Fixed orphaned Python kernel gateway processes not being killed on process exit
 

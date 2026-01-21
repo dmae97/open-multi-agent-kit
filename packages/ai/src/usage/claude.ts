@@ -1,0 +1,321 @@
+import type {
+	UsageAmount,
+	UsageFetchContext,
+	UsageFetchParams,
+	UsageLimit,
+	UsageProvider,
+	UsageReport,
+	UsageStatus,
+	UsageWindow,
+} from "../usage";
+
+const DEFAULT_ENDPOINT = "https://api.anthropic.com/api/oauth";
+const DEFAULT_CACHE_TTL_MS = 60_000;
+const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_RETRIES = 3;
+const BASE_RETRY_DELAY_MS = 500;
+
+const CLAUDE_HEADERS = {
+	accept: "application/json, text/plain, */*",
+	"accept-encoding": "gzip, compress, deflate, br",
+	"anthropic-beta": "oauth-2025-04-20",
+	"content-type": "application/json",
+	"user-agent": "claude-code/2.0.20",
+	connection: "keep-alive",
+} as const;
+
+function normalizeClaudeBaseUrl(baseUrl?: string): string {
+	if (!baseUrl || !baseUrl.trim()) return DEFAULT_ENDPOINT;
+	const trimmed = baseUrl.trim().replace(/\/+$/, "");
+	const lower = trimmed.toLowerCase();
+	if (lower.endsWith("/api/oauth")) return trimmed;
+	let url: URL;
+	try {
+		url = new URL(trimmed);
+	} catch {
+		return DEFAULT_ENDPOINT;
+	}
+	let path = url.pathname.replace(/\/+$/, "");
+	if (path === "/") path = "";
+	if (path.toLowerCase().endsWith("/v1")) {
+		path = path.slice(0, -3);
+	}
+	if (!path) return `${url.origin}/api/oauth`;
+	return `${url.origin}${path}/api/oauth`;
+}
+
+interface ClaudeUsageBucket {
+	utilization?: number;
+	resets_at?: string;
+}
+
+interface ParsedUsageBucket {
+	utilization?: number;
+	resetsAt?: number;
+}
+
+interface ClaudeUsageResponse {
+	five_hour?: ClaudeUsageBucket | null;
+	seven_day?: ClaudeUsageBucket | null;
+	seven_day_opus?: ClaudeUsageBucket | null;
+	seven_day_sonnet?: ClaudeUsageBucket | null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toNumber(value: unknown): number | undefined {
+	if (typeof value === "number" && Number.isFinite(value)) return value;
+	if (typeof value === "string" && value.trim()) {
+		const parsed = Number(value);
+		return Number.isFinite(parsed) ? parsed : undefined;
+	}
+	return undefined;
+}
+
+function parseIsoTime(value: string | undefined): number | undefined {
+	if (!value) return undefined;
+	const parsed = Date.parse(value);
+	return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseBucket(bucket: unknown): ParsedUsageBucket | undefined {
+	if (!isRecord(bucket)) return undefined;
+	const utilization = toNumber(bucket.utilization);
+	const resetsAt = parseIsoTime(typeof bucket.resets_at === "string" ? bucket.resets_at : undefined);
+	if (utilization === undefined && resetsAt === undefined) {
+		if ("utilization" in bucket || "resets_at" in bucket) {
+			return { utilization: 0, resetsAt: undefined };
+		}
+		return undefined;
+	}
+	return { utilization, resetsAt };
+}
+
+function hasUsageData(payload: ClaudeUsageResponse): boolean {
+	return Boolean(payload.five_hour || payload.seven_day || payload.seven_day_opus || payload.seven_day_sonnet);
+}
+
+async function fetchUsagePayload(
+	url: string,
+	headers: Record<string, string>,
+	ctx: UsageFetchContext,
+	signal?: AbortSignal,
+): Promise<ClaudeUsageResponse | null> {
+	let lastPayload: ClaudeUsageResponse | null = null;
+	for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+		try {
+			const response = await ctx.fetch(url, { headers, signal });
+			if (!response.ok) {
+				ctx.logger?.warn("Claude usage fetch failed", { status: response.status, statusText: response.statusText });
+				return null;
+			}
+			const payload = (await response.json()) as ClaudeUsageResponse;
+			lastPayload = payload;
+			if (payload && isRecord(payload) && hasUsageData(payload)) {
+				return payload;
+			}
+		} catch (error) {
+			ctx.logger?.warn("Claude usage fetch error", { error: String(error) });
+			return null;
+		}
+
+		if (attempt < MAX_RETRIES - 1) {
+			await Bun.sleep(BASE_RETRY_DELAY_MS * 2 ** attempt);
+		}
+	}
+
+	return lastPayload;
+}
+
+function buildUsageAmount(utilization: number | undefined): UsageAmount | undefined {
+	if (utilization === undefined) return undefined;
+	const clamped = Math.min(Math.max(utilization, 0), 100);
+	const usedFraction = clamped / 100;
+	return {
+		used: clamped,
+		limit: 100,
+		remaining: Math.max(0, 100 - clamped),
+		usedFraction,
+		remainingFraction: Math.max(0, 1 - usedFraction),
+		unit: "percent",
+	};
+}
+
+function buildUsageWindow(
+	id: string,
+	label: string,
+	durationMs: number,
+	resetsAt: number | undefined,
+	now: number,
+): UsageWindow {
+	const resolvedResetAt = resetsAt ?? now + durationMs;
+	const resetInMs = Math.max(0, resolvedResetAt - now);
+	return {
+		id,
+		label,
+		durationMs,
+		resetsAt: resolvedResetAt,
+		resetInMs,
+	};
+}
+
+function buildUsageStatus(usedFraction: number | undefined): UsageStatus | undefined {
+	if (usedFraction === undefined) return undefined;
+	if (usedFraction >= 1) return "exhausted";
+	if (usedFraction >= 0.9) return "warning";
+	return "ok";
+}
+
+function buildUsageLimit(args: {
+	id: string;
+	label: string;
+	windowId: string;
+	windowLabel: string;
+	durationMs: number;
+	bucket: ParsedUsageBucket | undefined;
+	provider: "anthropic";
+	tier?: string;
+	shared?: boolean;
+	now: number;
+}): UsageLimit | null {
+	if (!args.bucket) return null;
+	const amount = buildUsageAmount(args.bucket.utilization);
+	if (!amount) return null;
+	const window = buildUsageWindow(args.windowId, args.windowLabel, args.durationMs, args.bucket.resetsAt, args.now);
+	return {
+		id: args.id,
+		label: args.label,
+		scope: {
+			provider: args.provider,
+			windowId: args.windowId,
+			tier: args.tier,
+			shared: args.shared,
+		},
+		window,
+		amount,
+		status: buildUsageStatus(amount.usedFraction),
+	};
+}
+
+function buildCacheKey(params: UsageFetchParams): string {
+	const credential = params.credential;
+	const account = credential.accountId ?? credential.email ?? "unknown";
+	const token = credential.accessToken ?? credential.refreshToken;
+	const fingerprint = token && typeof token === "string" ? Bun.hash(token).toString(16) : "anonymous";
+	const baseUrl = params.baseUrl ?? DEFAULT_ENDPOINT;
+	return `usage:${params.provider}:${account}:${fingerprint}:${baseUrl}`;
+}
+
+function resolveCacheExpiry(now: number, limits: UsageLimit[]): number {
+	const earliestReset = limits
+		.map((limit) => limit.window?.resetsAt)
+		.filter((value): value is number => typeof value === "number" && Number.isFinite(value))
+		.reduce((min, value) => (min === undefined ? value : Math.min(min, value)), undefined as number | undefined);
+	const exhausted = limits.some((limit) => limit.status === "exhausted");
+	if (earliestReset === undefined) return now + DEFAULT_CACHE_TTL_MS;
+	if (exhausted) return earliestReset;
+	return Math.min(now + DEFAULT_CACHE_TTL_MS, earliestReset);
+}
+
+async function fetchClaudeUsage(params: UsageFetchParams, ctx: UsageFetchContext): Promise<UsageReport | null> {
+	if (params.provider !== "anthropic") return null;
+	const credential = params.credential;
+	if (credential.type !== "oauth" || !credential.accessToken) return null;
+
+	const cacheKey = buildCacheKey(params);
+	const cachedEntry = await ctx.cache.get(cacheKey);
+	const now = ctx.now();
+	if (cachedEntry && cachedEntry.expiresAt > now) {
+		return cachedEntry.value;
+	}
+	const cachedValue = cachedEntry?.value ?? null;
+
+	const baseUrl = normalizeClaudeBaseUrl(params.baseUrl);
+	const url = `${baseUrl}/usage`;
+	const headers: Record<string, string> = {
+		...CLAUDE_HEADERS,
+		authorization: `Bearer ${credential.accessToken}`,
+	};
+
+	const payload = await fetchUsagePayload(url, headers, ctx, params.signal);
+	if (!payload || !isRecord(payload)) return cachedValue;
+
+	const fiveHour = parseBucket(payload.five_hour);
+	const sevenDay = parseBucket(payload.seven_day);
+	const sevenDayOpus = parseBucket(payload.seven_day_opus);
+	const sevenDaySonnet = parseBucket(payload.seven_day_sonnet);
+
+	const limits = [
+		buildUsageLimit({
+			id: "anthropic:5h",
+			label: "Claude 5 Hour",
+			windowId: "5h",
+			windowLabel: "5 Hour",
+			durationMs: FIVE_HOURS_MS,
+			bucket: fiveHour,
+			provider: "anthropic",
+			shared: true,
+			now,
+		}),
+		buildUsageLimit({
+			id: "anthropic:7d",
+			label: "Claude 7 Day",
+			windowId: "7d",
+			windowLabel: "7 Day",
+			durationMs: SEVEN_DAYS_MS,
+			bucket: sevenDay,
+			provider: "anthropic",
+			shared: true,
+			now,
+		}),
+		buildUsageLimit({
+			id: "anthropic:7d:opus",
+			label: "Claude 7 Day (Opus)",
+			windowId: "7d",
+			windowLabel: "7 Day",
+			durationMs: SEVEN_DAYS_MS,
+			bucket: sevenDayOpus,
+			provider: "anthropic",
+			tier: "opus",
+			now,
+		}),
+		buildUsageLimit({
+			id: "anthropic:7d:sonnet",
+			label: "Claude 7 Day (Sonnet)",
+			windowId: "7d",
+			windowLabel: "7 Day",
+			durationMs: SEVEN_DAYS_MS,
+			bucket: sevenDaySonnet,
+			provider: "anthropic",
+			tier: "sonnet",
+			now,
+		}),
+	].filter((limit): limit is UsageLimit => limit !== null);
+
+	if (limits.length === 0) return cachedValue;
+
+	const report: UsageReport = {
+		provider: params.provider,
+		fetchedAt: now,
+		limits,
+		metadata: {
+			accountId: credential.accountId,
+			email: credential.email,
+			endpoint: url,
+		},
+		raw: payload,
+	};
+
+	const expiresAt = resolveCacheExpiry(now, limits);
+	await ctx.cache.set(cacheKey, { value: report, expiresAt });
+	return report;
+}
+
+export const claudeUsageProvider: UsageProvider = {
+	id: "anthropic",
+	fetchUsage: fetchClaudeUsage,
+	supports: (params) => params.provider === "anthropic" && params.credential.type === "oauth",
+};

@@ -211,6 +211,11 @@ export class InputController {
 				this.ctx.editor.setText("");
 				return;
 			}
+			if (text === "/usage") {
+				await this.ctx.handleUsageCommand();
+				this.ctx.editor.setText("");
+				return;
+			}
 			if (text === "/changelog") {
 				this.ctx.handleChangelogCommand();
 				this.ctx.editor.setText("");
