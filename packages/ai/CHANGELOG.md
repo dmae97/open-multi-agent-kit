@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Updated prompt caching strategy to follow Anthropic's recommended hierarchy
+- Fixed token usage tracking to properly handle cumulative output tokens from message_delta events
+- Improved message validation to filter out empty or invalid content blocks
+- Increased OAuth callback timeout from 120 seconds to 120,000 milliseconds
 
 ## [6.8.3] - 2026-01-21
 ### Added

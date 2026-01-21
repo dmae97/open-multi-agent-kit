@@ -14,7 +14,7 @@
 import templateHtml from "./oauth.html" with { type: "text" };
 import type { OAuthController, OAuthCredentials } from "./types";
 
-const DEFAULT_TIMEOUT = 120;
+const DEFAULT_TIMEOUT = 120_000;
 const DEFAULT_HOSTNAME = "localhost";
 const CALLBACK_PATH = "/callback";
 
@@ -182,7 +182,7 @@ export abstract class OAuthCallbackFlow {
 	 * Wait for OAuth callback or manual input (whichever comes first).
 	 */
 	private waitForCallback(expectedState: string): Promise<CallbackResult> {
-		const timeoutSignal = AbortSignal.timeout(DEFAULT_TIMEOUT * 1000);
+		const timeoutSignal = AbortSignal.timeout(DEFAULT_TIMEOUT);
 		const signal = this.ctrl.signal ? AbortSignal.any([this.ctrl.signal, timeoutSignal]) : timeoutSignal;
 
 		const callbackPromise = new Promise<CallbackResult>((resolve, reject) => {

@@ -292,11 +292,21 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 					if (event.delta.stop_reason) {
 						output.stopReason = mapStopReason(event.delta.stop_reason);
 					}
-					output.usage.input = event.usage.input_tokens || 0;
-					output.usage.output = event.usage.output_tokens || 0;
-					output.usage.cacheRead = event.usage.cache_read_input_tokens || 0;
-					output.usage.cacheWrite = event.usage.cache_creation_input_tokens || 0;
-					// Anthropic doesn't provide total_tokens, compute from components
+					// message_delta.usage only contains output_tokens (cumulative), not input_tokens
+					// Preserve input token counts from message_start, only update output
+					if (event.usage.output_tokens !== undefined && event.usage.output_tokens !== null) {
+						output.usage.output = event.usage.output_tokens;
+					}
+					// These fields may or may not be present in message_delta
+					if (event.usage.cache_read_input_tokens !== undefined && event.usage.cache_read_input_tokens !== null) {
+						output.usage.cacheRead = event.usage.cache_read_input_tokens;
+					}
+					if (
+						event.usage.cache_creation_input_tokens !== undefined &&
+						event.usage.cache_creation_input_tokens !== null
+					) {
+						output.usage.cacheWrite = event.usage.cache_creation_input_tokens;
+					}
 					output.usage.totalTokens =
 						output.usage.input + output.usage.output + output.usage.cacheRead + output.usage.cacheWrite;
 					calculateCost(model, output.usage);
@@ -468,16 +478,13 @@ export type AnthropicSystemBlock = {
 };
 
 type CacheControlBlock = {
-	cache_control?: { type: "ephemeral" };
+	cache_control?: { type: "ephemeral" } | null;
 };
-
-type CacheControlMode = "none" | "toolBlocks" | "userText";
 
 const cacheControlEphemeral = { type: "ephemeral" as const };
 
 type SystemBlockOptions = {
 	includeClaudeCodeInstruction?: boolean;
-	includeCacheControl?: boolean;
 	extraInstructions?: string[];
 };
 
@@ -485,17 +492,15 @@ export function buildAnthropicSystemBlocks(
 	systemPrompt: string | undefined,
 	options: SystemBlockOptions = {},
 ): AnthropicSystemBlock[] | undefined {
-	const { includeClaudeCodeInstruction = false, includeCacheControl = true, extraInstructions = [] } = options;
+	const { includeClaudeCodeInstruction = false, extraInstructions = [] } = options;
 	const blocks: AnthropicSystemBlock[] = [];
 	const sanitizedPrompt = systemPrompt ? sanitizeSurrogates(systemPrompt) : "";
 	const hasClaudeCodeInstruction = sanitizedPrompt.includes(claudeCodeSystemInstruction);
-	const cacheControl = includeCacheControl ? { type: "ephemeral" as const } : undefined;
 
 	if (includeClaudeCodeInstruction && !hasClaudeCodeInstruction) {
 		blocks.push({
 			type: "text",
 			text: claudeCodeSystemInstruction,
-			...(cacheControl ? { cache_control: cacheControl } : {}),
 		});
 	}
 
@@ -505,7 +510,6 @@ export function buildAnthropicSystemBlocks(
 		blocks.push({
 			type: "text",
 			text: trimmed,
-			...(cacheControl ? { cache_control: cacheControl } : {}),
 		});
 	}
 
@@ -513,7 +517,6 @@ export function buildAnthropicSystemBlocks(
 		blocks.push({
 			type: "text",
 			text: sanitizedPrompt,
-			...(cacheControl ? { cache_control: cacheControl } : {}),
 		});
 	}
 
@@ -548,11 +551,9 @@ function buildParams(
 	isOAuthToken: boolean,
 	options?: AnthropicOptions,
 ): MessageCreateParamsStreaming {
-	const hasTools = Boolean(context.tools?.length);
-	const cacheControlMode = resolveCacheControlMode(context.messages, hasTools && isOAuthToken);
 	const params: MessageCreateParamsStreaming = {
 		model: model.id,
-		messages: convertMessages(context.messages, model, isOAuthToken, cacheControlMode),
+		messages: convertMessages(context.messages, model, isOAuthToken),
 		max_tokens: options?.maxTokens || (model.maxTokens / 3) | 0,
 		stream: true,
 	};
@@ -560,7 +561,6 @@ function buildParams(
 	const includeClaudeCodeSystem = !model.id.startsWith("claude-3-5-haiku");
 	const systemBlocks = buildAnthropicSystemBlocks(context.systemPrompt, {
 		includeClaudeCodeInstruction: includeClaudeCodeSystem,
-		includeCacheControl: cacheControlMode !== "none",
 	});
 	if (systemBlocks) {
 		params.system = systemBlocks;
@@ -598,6 +598,8 @@ function buildParams(
 		ensureMaxTokensForThinking(params, model);
 	}
 
+	applyPromptCaching(params);
+
 	return params;
 }
 
@@ -607,75 +609,141 @@ function sanitizeToolCallId(id: string): string {
 	return id.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
-function resolveCacheControlMode(messages: Message[], includeCacheControl: boolean): CacheControlMode {
-	if (!includeCacheControl) return "none";
+function stripCacheControl<T extends CacheControlBlock>(blocks: T[]): void {
+	for (const block of blocks) {
+		if ("cache_control" in block) {
+			delete block.cache_control;
+		}
+	}
+}
 
-	for (const message of messages) {
-		if (message.role === "toolResult") return "toolBlocks";
-		if (message.role === "assistant") {
-			const hasToolCall = message.content.some((block) => block.type === "toolCall");
-			if (hasToolCall) return "toolBlocks";
+function applyCacheControlToLastBlock<T extends CacheControlBlock>(blocks: T[]): void {
+	if (blocks.length === 0) return;
+	const lastIndex = blocks.length - 1;
+	blocks[lastIndex] = { ...blocks[lastIndex], cache_control: cacheControlEphemeral };
+}
+
+function applyCacheControlToLastTextBlock(blocks: Array<ContentBlockParam & CacheControlBlock>): void {
+	if (blocks.length === 0) return;
+	for (let i = blocks.length - 1; i >= 0; i--) {
+		if (blocks[i].type === "text") {
+			blocks[i] = { ...blocks[i], cache_control: cacheControlEphemeral };
+			return;
+		}
+	}
+	applyCacheControlToLastBlock(blocks);
+}
+
+function applyPromptCaching(params: MessageCreateParamsStreaming): void {
+	// Anthropic allows max 4 cache breakpoints
+	const MAX_CACHE_BREAKPOINTS = 4;
+
+	// First, strip ALL existing cache_control to ensure clean slate
+	if (params.tools) {
+		for (const tool of params.tools) {
+			delete (tool as CacheControlBlock).cache_control;
 		}
 	}
 
-	return "userText";
+	if (params.system && Array.isArray(params.system)) {
+		stripCacheControl(params.system);
+	}
+
+	for (const message of params.messages) {
+		if (Array.isArray(message.content)) {
+			stripCacheControl(message.content as Array<ContentBlockParam & CacheControlBlock>);
+		}
+	}
+
+	let cacheBreakpointsUsed = 0;
+
+	// Cache hierarchy order: tools -> system -> messages
+	// See: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
+
+	// 1. Cache tools - place breakpoint on last tool definition
+	if (params.tools && params.tools.length > 0) {
+		applyCacheControlToLastBlock(params.tools as Array<CacheControlBlock>);
+		cacheBreakpointsUsed++;
+	}
+
+	if (cacheBreakpointsUsed >= MAX_CACHE_BREAKPOINTS) return;
+
+	// 2. Cache system prompt
+	if (params.system && Array.isArray(params.system) && params.system.length > 0) {
+		applyCacheControlToLastBlock(params.system);
+		cacheBreakpointsUsed++;
+	}
+
+	if (cacheBreakpointsUsed >= MAX_CACHE_BREAKPOINTS) return;
+
+	// 3. Cache penultimate user message for conversation history caching
+	const userIndexes = params.messages
+		.map((message, index) => (message.role === "user" ? index : -1))
+		.filter((index) => index >= 0);
+
+	if (userIndexes.length >= 2) {
+		const penultimateUserIndex = userIndexes[userIndexes.length - 2];
+		const penultimateUser = params.messages[penultimateUserIndex];
+		if (penultimateUser) {
+			if (typeof penultimateUser.content === "string") {
+				penultimateUser.content = [
+					{ type: "text", text: penultimateUser.content, cache_control: cacheControlEphemeral },
+				];
+				cacheBreakpointsUsed++;
+			} else if (Array.isArray(penultimateUser.content) && penultimateUser.content.length > 0) {
+				applyCacheControlToLastTextBlock(penultimateUser.content as Array<ContentBlockParam & CacheControlBlock>);
+				cacheBreakpointsUsed++;
+			}
+		}
+	}
+
+	if (cacheBreakpointsUsed >= MAX_CACHE_BREAKPOINTS) return;
+
+	// 4. Cache final user message for current turn (enables cache hit on next request)
+	if (userIndexes.length >= 1) {
+		const lastUserIndex = userIndexes[userIndexes.length - 1];
+		const lastUser = params.messages[lastUserIndex];
+		if (lastUser) {
+			if (typeof lastUser.content === "string") {
+				lastUser.content = [{ type: "text", text: lastUser.content, cache_control: cacheControlEphemeral }];
+			} else if (Array.isArray(lastUser.content) && lastUser.content.length > 0) {
+				applyCacheControlToLastTextBlock(lastUser.content as Array<ContentBlockParam & CacheControlBlock>);
+			}
+		}
+	}
 }
 
 function convertMessages(
 	messages: Message[],
 	model: Model<"anthropic-messages">,
 	isOAuthToken: boolean,
-	cacheControlMode: CacheControlMode,
 ): MessageParam[] {
 	const params: MessageParam[] = [];
-	const applyToolCacheControl = cacheControlMode === "toolBlocks";
-	const applyUserTextCacheControl = cacheControlMode === "userText";
-	const withCacheControl = <T extends object>(block: T, enabled: boolean): T | (T & CacheControlBlock) => {
-		if (!enabled) return block;
-		return { ...block, cache_control: cacheControlEphemeral };
-	};
 
 	// Transform messages for cross-provider compatibility
 	const transformedMessages = transformMessages(messages, model);
-
 	for (let i = 0; i < transformedMessages.length; i++) {
 		const msg = transformedMessages[i];
 
 		if (msg.role === "user") {
+			// Skip messages with undefined/null content
+			if (!msg.content) continue;
+
 			if (typeof msg.content === "string") {
 				if (msg.content.trim().length > 0) {
 					const text = sanitizeSurrogates(msg.content);
-					if (applyUserTextCacheControl) {
-						const blocks: Array<ContentBlockParam & CacheControlBlock> = [
-							withCacheControl(
-								{
-									type: "text",
-									text,
-								},
-								true,
-							),
-						];
-						params.push({
-							role: "user",
-							content: blocks,
-						});
-					} else {
-						params.push({
-							role: "user",
-							content: text,
-						});
-					}
+					params.push({
+						role: "user",
+						content: text,
+					});
 				}
-			} else {
+			} else if (Array.isArray(msg.content)) {
 				const blocks: Array<ContentBlockParam & CacheControlBlock> = msg.content.map((item) => {
 					if (item.type === "text") {
-						return withCacheControl(
-							{
-								type: "text",
-								text: sanitizeSurrogates(item.text),
-							},
-							applyUserTextCacheControl,
-						);
+						return {
+							type: "text",
+							text: sanitizeSurrogates(item.text),
+						};
 					}
 					return {
 						type: "image",
@@ -700,6 +768,9 @@ function convertMessages(
 				});
 			}
 		} else if (msg.role === "assistant") {
+			// Skip messages with undefined/null content
+			if (!msg.content || !Array.isArray(msg.content)) continue;
+
 			const blocks: Array<ContentBlockParam & CacheControlBlock> = [];
 
 			for (const block of msg.content) {
@@ -727,17 +798,12 @@ function convertMessages(
 						});
 					}
 				} else if (block.type === "toolCall") {
-					blocks.push(
-						withCacheControl(
-							{
-								type: "tool_use",
-								id: sanitizeToolCallId(block.id),
-								name: isOAuthToken ? toClaudeCodeName(block.name) : block.name,
-								input: block.arguments,
-							},
-							applyToolCacheControl,
-						),
-					);
+					blocks.push({
+						type: "tool_use",
+						id: sanitizeToolCallId(block.id),
+						name: isOAuthToken ? toClaudeCodeName(block.name) : block.name,
+						input: block.arguments,
+					});
 				}
 			}
 			if (blocks.length === 0) continue;
@@ -750,33 +816,23 @@ function convertMessages(
 			const toolResults: Array<ContentBlockParam & CacheControlBlock> = [];
 
 			// Add the current tool result
-			toolResults.push(
-				withCacheControl(
-					{
-						type: "tool_result",
-						tool_use_id: sanitizeToolCallId(msg.toolCallId),
-						content: convertContentBlocks(msg.content),
-						is_error: msg.isError,
-					},
-					applyToolCacheControl,
-				),
-			);
+			toolResults.push({
+				type: "tool_result",
+				tool_use_id: sanitizeToolCallId(msg.toolCallId),
+				content: convertContentBlocks(msg.content),
+				is_error: msg.isError,
+			});
 
 			// Look ahead for consecutive toolResult messages
 			let j = i + 1;
 			while (j < transformedMessages.length && transformedMessages[j].role === "toolResult") {
 				const nextMsg = transformedMessages[j] as ToolResultMessage; // We know it's a toolResult
-				toolResults.push(
-					withCacheControl(
-						{
-							type: "tool_result",
-							tool_use_id: sanitizeToolCallId(nextMsg.toolCallId),
-							content: convertContentBlocks(nextMsg.content),
-							is_error: nextMsg.isError,
-						},
-						applyToolCacheControl,
-					),
-				);
+				toolResults.push({
+					type: "tool_result",
+					tool_use_id: sanitizeToolCallId(nextMsg.toolCallId),
+					content: convertContentBlocks(nextMsg.content),
+					is_error: nextMsg.isError,
+				});
 				j++;
 			}
 
@@ -784,14 +840,22 @@ function convertMessages(
 			i = j - 1;
 
 			// Add a single user message with all tool results
-			params.push({
-				role: "user",
-				content: toolResults,
-			});
+			if (toolResults.length > 0) {
+				params.push({
+					role: "user",
+					content: toolResults,
+				});
+			}
 		}
 	}
 
-	return params;
+	// Final validation: filter out any messages with invalid content
+	return params.filter((msg) => {
+		if (!msg.content) return false;
+		if (typeof msg.content === "string") return msg.content.length > 0;
+		if (Array.isArray(msg.content)) return msg.content.length > 0;
+		return false;
+	});
 }
 
 function convertTools(tools: Tool[], isOAuthToken: boolean): Anthropic.Messages.Tool[] {
