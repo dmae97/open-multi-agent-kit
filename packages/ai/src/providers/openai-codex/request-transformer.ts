@@ -50,6 +50,10 @@ function clampReasoningEffort(model: string, effort: ReasoningConfig["effort"]):
 		return "high";
 	}
 
+	if ((modelId === "gpt-5.2" || modelId === "gpt-5.2-codex") && effort === "minimal") {
+		return "low";
+	}
+
 	// gpt-5.1-codex-mini only supports medium/high.
 	if (modelId === "gpt-5.1-codex-mini") {
 		return effort === "high" || effort === "xhigh" ? "high" : "medium";
