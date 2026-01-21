@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [6.8.2] - 2026-01-21
+
 ### Fixed
 
 - Improved error messages when multiple text occurrences are found by showing line previews and context

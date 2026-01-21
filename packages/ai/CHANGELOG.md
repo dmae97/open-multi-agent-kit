@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [6.8.2] - 2026-01-21
 ### Fixed
 
 - Improved error handling for aborted requests in Google Gemini CLI provider
