@@ -1,4 +1,6 @@
-import { rm } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import type { FileHandle } from "node:fs/promises";
+import { open, rm } from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
@@ -624,6 +626,25 @@ export class InputController {
 		this.ctx.showStatus(`Thinking blocks: ${this.ctx.hideThinkingBlock ? "hidden" : "visible"}`);
 	}
 
+	private getEditorTerminalPath(): string | null {
+		if (process.platform === "win32") {
+			return null;
+		}
+		return "/dev/tty";
+	}
+
+	private async openEditorTerminalHandle(): Promise<FileHandle | null> {
+		const terminalPath = this.getEditorTerminalPath();
+		if (!terminalPath) {
+			return null;
+		}
+		try {
+			return await open(terminalPath, "r+");
+		} catch {
+			return null;
+		}
+	}
+
 	async openExternalEditor(): Promise<void> {
 		// Determine editor (respect $VISUAL, then $EDITOR)
 		const editorCmd = process.env.VISUAL || process.env.EDITOR;
@@ -635,23 +656,27 @@ export class InputController {
 		const currentText = this.ctx.editor.getText();
 		const tmpFile = path.join(os.tmpdir(), `omp-editor-${nanoid()}.omp.md`);
 
+		let ttyHandle: FileHandle | null = null;
 		try {
 			// Write current content to temp file
 			await Bun.write(tmpFile, currentText);
 
 			// Stop TUI to release terminal
+			ttyHandle = await this.openEditorTerminalHandle();
 			this.ctx.ui.stop();
 
 			// Split by space to support editor arguments (e.g., "code --wait")
 			const [editor, ...editorArgs] = editorCmd.split(" ");
 
-			// Spawn editor synchronously with inherited stdio for interactive editing
-			const child = Bun.spawn([editor, ...editorArgs, tmpFile], {
-				stdin: "inherit",
-				stdout: "inherit",
-				stderr: "inherit",
+			const stdio: [number | "inherit", number | "inherit", number | "inherit"] = ttyHandle
+				? [ttyHandle.fd, ttyHandle.fd, ttyHandle.fd]
+				: ["inherit", "inherit", "inherit"];
+
+			const child = spawn(editor, [...editorArgs, tmpFile], { stdio });
+			const exitCode = await new Promise<number>((resolve, reject) => {
+				child.once("exit", (code, signal) => resolve(code ?? (signal ? -1 : 0)));
+				child.once("error", (error) => reject(error));
 			});
-			const exitCode = await child.exited;
 
 			// On successful exit (exitCode 0), replace editor content
 			if (exitCode === 0) {
@@ -659,12 +684,20 @@ export class InputController {
 				this.ctx.editor.setText(newContent);
 			}
 			// On non-zero exit, keep original text (no action needed)
+		} catch (error) {
+			this.ctx.showWarning(
+				`Failed to open external editor: ${error instanceof Error ? error.message : String(error)}`,
+			);
 		} finally {
 			// Clean up temp file
 			try {
 				await rm(tmpFile, { force: true });
 			} catch {
 				// Ignore cleanup errors
+			}
+
+			if (ttyHandle) {
+				await ttyHandle.close();
 			}
 
 			// Restart TUI

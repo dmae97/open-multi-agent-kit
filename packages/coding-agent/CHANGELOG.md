@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - Added `output()` function to read task/agent outputs by ID with support for multiple formats and queries
@@ -17,6 +16,8 @@
 
 ### Fixed
 
+- Fixed external editor to work properly on Unix systems by correctly handling terminal I/O
+- Fixed external editor to show warning message when it fails to open instead of silently failing
 - Fixed find tool to properly handle no matches case without treating as error
 - Fixed read tool to properly handle no matches case without treating as error
 - Fixed orphaned Python kernel gateway processes not being killed on process exit
