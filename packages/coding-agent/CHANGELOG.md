@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [6.8.4] - 2026-01-21
 ### Changed
 
 - Updated output sink to properly handle large outputs

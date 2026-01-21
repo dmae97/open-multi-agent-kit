@@ -215,11 +215,11 @@ export const OUTPUT_FALLBACK_BUFFER = 4000;
 const ANTHROPIC_USE_INTERLEAVED_THINKING = true;
 
 const ANTHROPIC_THINKING: Record<ThinkingLevel, number> = {
-	minimal: 3072,
-	low: 6144,
-	medium: 12288,
-	high: 24576,
-	xhigh: 49152,
+	minimal: 1024,
+	low: 4096,
+	medium: 8192,
+	high: 16384,
+	xhigh: 32768,
 };
 
 const GOOGLE_THINKING: Record<ThinkingLevel, number> = {

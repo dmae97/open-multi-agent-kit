@@ -34,6 +34,7 @@ export class OutputSink {
 		sink: Bun.FileSink;
 	};
 	#bytesWritten: number = 0;
+	#pending: Promise<void> = Promise.resolve();
 
 	readonly #allocateFilePath: () => string;
 	readonly #spillThreshold: number;
@@ -80,7 +81,9 @@ export class OutputSink {
 
 	async push(chunk: string): Promise<void> {
 		chunk = sanitizeText(chunk);
-		await this.#pushSanitized(chunk);
+		const op = this.#pending.then(() => this.#pushSanitized(chunk));
+		this.#pending = op.catch(() => {});
+		await op;
 	}
 
 	createInput(): WritableStream<Uint8Array | string> {
@@ -108,6 +111,7 @@ export class OutputSink {
 	}
 
 	async dump(notice?: string): Promise<OutputResult> {
+		await this.#pending;
 		const noticeLine = notice ? `[${notice}]\n` : "";
 
 		if (this.#file) {

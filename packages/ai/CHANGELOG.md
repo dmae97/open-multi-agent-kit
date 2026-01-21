@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [6.8.4] - 2026-01-21
 ### Changed
 
 - Updated prompt caching strategy to follow Anthropic's recommended hierarchy
