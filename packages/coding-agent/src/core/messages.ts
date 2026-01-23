@@ -7,6 +7,8 @@
 
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent, Message, TextContent } from "@oh-my-pi/pi-ai";
+import type { OutputMeta } from "./output-meta";
+import { formatOutputNotice } from "./output-meta";
 
 export const COMPACTION_SUMMARY_PREFIX = `The conversation history before this point was compacted into the following summary:
 
@@ -33,7 +35,7 @@ export interface BashExecutionMessage {
 	exitCode: number | undefined;
 	cancelled: boolean;
 	truncated: boolean;
-	fullOutputPath?: string;
+	meta?: OutputMeta;
 	timestamp: number;
 	/** If true, this message is excluded from LLM context (!! prefix) */
 	excludeFromContext?: boolean;
@@ -50,7 +52,7 @@ export interface PythonExecutionMessage {
 	exitCode: number | undefined;
 	cancelled: boolean;
 	truncated: boolean;
-	fullOutputPath?: string;
+	meta?: OutputMeta;
 	timestamp: number;
 	/** If true, this message is excluded from LLM context ($$ prefix) */
 	excludeFromContext?: boolean;
@@ -136,9 +138,7 @@ export function bashExecutionToText(msg: BashExecutionMessage): string {
 	} else if (msg.exitCode !== null && msg.exitCode !== undefined && msg.exitCode !== 0) {
 		text += `\n\nCommand exited with code ${msg.exitCode}`;
 	}
-	if (msg.truncated && msg.fullOutputPath) {
-		text += `\n\n[Output truncated. Full output: ${msg.fullOutputPath}]`;
-	}
+	text += formatOutputNotice(msg.meta);
 	return text;
 }
 
@@ -157,9 +157,7 @@ export function pythonExecutionToText(msg: PythonExecutionMessage): string {
 	} else if (msg.exitCode !== null && msg.exitCode !== undefined && msg.exitCode !== 0) {
 		text += `\n\nExecution failed with code ${msg.exitCode}`;
 	}
-	if (msg.truncated && msg.fullOutputPath) {
-		text += `\n\n[Output truncated. Full output: ${msg.fullOutputPath}]`;
-	}
+	text += formatOutputNotice(msg.meta);
 	return text;
 }
 

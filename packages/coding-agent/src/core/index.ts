@@ -65,7 +65,7 @@ export {
 } from "./ssh/connection-manager";
 export { executeSSH, type SSHExecutorOptions, type SSHResult } from "./ssh/ssh-executor";
 export { hasSshfs, isMounted, mountRemote, unmountAll, unmountRemote } from "./ssh/sshfs-mount";
-export { type ArtifactSaver, type OutputResult, OutputSink, type OutputSinkOptions } from "./streaming-output";
+export { OutputSink, type OutputSinkOptions, type OutputSummary } from "./streaming-output";
 export { type ErrorEntry, MultiError, renderError, ToolError } from "./tool-errors";
 
 export * as utils from "./utils";

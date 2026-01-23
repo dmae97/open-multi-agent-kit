@@ -8,14 +8,17 @@ import { loadCapability } from "../../discovery/index";
 import type { Theme } from "../../modes/interactive/theme/theme";
 import sshDescriptionBase from "../../prompts/tools/ssh.md" with { type: "text" };
 import type { RenderResultOptions } from "../custom-tools/types";
-import { type OutputMeta, outputMeta } from "../output-meta";
+import type { OutputMeta } from "../output-meta";
 import { renderPromptTemplate } from "../prompt-templates";
 import type { SSHHostInfo } from "../ssh/connection-manager";
 import { ensureHostInfo, getHostInfoForHost } from "../ssh/connection-manager";
 import { executeSSH } from "../ssh/ssh-executor";
+import { ToolError } from "../tool-errors";
 import type { ToolSession } from "./index";
+import { allocateOutputArtifact, createTailBuffer } from "./output-utils";
 import { ToolUIKit } from "./render-utils";
-import { type TruncationResult, truncateTail } from "./truncate";
+import { toolResult } from "./tool-result";
+import { DEFAULT_MAX_BYTES } from "./truncate";
 
 const sshSchema = Type.Object({
 	host: Type.String({ description: "Host name from ssh.json or .ssh.json" }),
@@ -25,8 +28,6 @@ const sshSchema = Type.Object({
 });
 
 export interface SSHToolDetails {
-	truncation?: TruncationResult;
-	fullOutputPath?: string;
 	meta?: OutputMeta;
 }
 
@@ -127,11 +128,14 @@ export class SshTool implements AgentTool<typeof sshSchema, SSHToolDetails> {
 	public readonly description: string;
 	public readonly parameters = sshSchema;
 
+	private readonly session: ToolSession;
+
 	private readonly allowedHosts: Set<string>;
 	private readonly hostsByName: Map<string, SSHHost>;
 	private readonly hostNames: string[];
 
-	constructor(hostNames: string[], hostsByName: Map<string, SSHHost>) {
+	constructor(session: ToolSession, hostNames: string[], hostsByName: Map<string, SSHHost>) {
+		this.session = session;
 		this.hostNames = hostNames;
 		this.hostsByName = hostsByName;
 		this.allowedHosts = new Set(hostNames);
@@ -151,12 +155,12 @@ export class SshTool implements AgentTool<typeof sshSchema, SSHToolDetails> {
 		_ctx?: AgentToolContext,
 	): Promise<AgentToolResult<SSHToolDetails>> {
 		if (!this.allowedHosts.has(host)) {
-			throw new Error(`Unknown SSH host: ${host}. Available hosts: ${this.hostNames.join(", ")}`);
+			throw new ToolError(`Unknown SSH host: ${host}. Available hosts: ${this.hostNames.join(", ")}`);
 		}
 
 		const hostConfig = this.hostsByName.get(host);
 		if (!hostConfig) {
-			throw new Error(`SSH host not loaded: ${host}`);
+			throw new ToolError(`SSH host not loaded: ${host}`);
 		}
 
 		const hostInfo = await ensureHostInfo(hostConfig);
@@ -168,48 +172,39 @@ export class SshTool implements AgentTool<typeof sshSchema, SSHToolDetails> {
 		timeoutSec = Math.max(1, Math.min(3600, timeoutSec));
 		const timeoutMs = timeoutSec * 1000;
 
-		let currentOutput = "";
+		const tailBuffer = createTailBuffer(DEFAULT_MAX_BYTES);
+		const { artifactPath, artifactId } = await allocateOutputArtifact(this.session, "ssh");
 
 		const result = await executeSSH(hostConfig, remoteCommand, {
 			timeout: timeoutMs,
 			signal,
 			compatEnabled: hostInfo.compatEnabled,
+			artifactPath,
+			artifactId,
 			onChunk: (chunk) => {
-				currentOutput += chunk;
+				tailBuffer.append(chunk);
 				if (onUpdate) {
-					const truncation = truncateTail(currentOutput);
 					onUpdate({
-						content: [{ type: "text", text: truncation.content || "" }],
-						details: {
-							truncation: truncation.truncated ? truncation : undefined,
-						},
+						content: [{ type: "text", text: tailBuffer.text() }],
+						details: {},
 					});
 				}
 			},
 		});
 
 		if (result.cancelled) {
-			throw new Error(result.output || "Command aborted");
+			throw new ToolError(result.output || "Command aborted");
 		}
 
-		const truncation = truncateTail(result.output);
-		const outputText = truncation.content || "(no output)";
-
+		const outputText = result.output || "(no output)";
 		const details: SSHToolDetails = {};
-
-		if (truncation.truncated) {
-			details.truncation = truncation;
-			details.fullOutputPath = result.fullOutputPath;
-
-			const startLine = truncation.totalLines - truncation.outputLines + 1;
-			details.meta = outputMeta().truncation(truncation, { direction: "tail", startLine }).get();
-		}
+		const resultBuilder = toolResult(details).text(outputText).truncationFromSummary(result, { direction: "tail" });
 
 		if (result.exitCode !== 0 && result.exitCode !== undefined) {
-			throw new Error(`${outputText}\n\nCommand exited with code ${result.exitCode}`);
+			throw new ToolError(`${outputText}\n\nCommand exited with code ${result.exitCode}`);
 		}
 
-		return { content: [{ type: "text", text: outputText }], details };
+		return resultBuilder.done();
 	}
 }
 
@@ -218,7 +213,7 @@ export async function loadSshTool(session: ToolSession): Promise<SshTool | null>
 	if (hostNames.length === 0) {
 		return null;
 	}
-	return new SshTool(hostNames, hostsByName);
+	return new SshTool(session, hostNames, hostsByName);
 }
 
 // =============================================================================
@@ -296,21 +291,18 @@ export const sshToolRenderer = {
 			}
 		}
 
-		const truncation = details?.truncation;
-		const fullOutputPath = details?.fullOutputPath;
-		if (truncation?.truncated || fullOutputPath) {
+		const truncation = details?.meta?.truncation;
+		if (truncation) {
 			const warnings: string[] = [];
-			if (fullOutputPath) {
-				warnings.push(`Full output: ${fullOutputPath}`);
+			if (truncation.artifactId) {
+				warnings.push(`Full output: artifact://${truncation.artifactId}`);
 			}
-			if (truncation?.truncated) {
-				if (truncation.truncatedBy === "lines") {
-					warnings.push(`Truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines`);
-				} else {
-					warnings.push(
-						`Truncated: ${truncation.outputLines} lines shown (${ui.formatBytes(truncation.maxBytes)} limit)`,
-					);
-				}
+			if (truncation.truncatedBy === "lines") {
+				warnings.push(`Truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines`);
+			} else {
+				warnings.push(
+					`Truncated: ${truncation.outputLines} lines shown (${ui.formatBytes(truncation.outputBytes)} limit)`,
+				);
 			}
 			lines.push(uiTheme.fg("warning", ui.wrapBrackets(warnings.join(". "))));
 		}

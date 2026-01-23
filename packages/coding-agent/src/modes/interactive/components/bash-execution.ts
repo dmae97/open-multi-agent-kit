@@ -4,12 +4,8 @@
 
 import { Container, Loader, Spacer, Text, type TUI } from "@oh-my-pi/pi-tui";
 import stripAnsi from "strip-ansi";
-import {
-	DEFAULT_MAX_BYTES,
-	DEFAULT_MAX_LINES,
-	type TruncationResult,
-	truncateTail,
-} from "../../../core/tools/truncate";
+import type { TruncationMeta } from "../../../core/output-meta";
+import { formatSize } from "../../../core/tools/truncate";
 import { getSymbolTheme, theme } from "../theme/theme";
 import { DynamicBorder } from "./dynamic-border";
 import { truncateToVisualLines } from "./visual-truncate";
@@ -23,8 +19,7 @@ export class BashExecutionComponent extends Container {
 	private status: "running" | "complete" | "cancelled" | "error" = "running";
 	private exitCode: number | undefined = undefined;
 	private loader: Loader;
-	private truncationResult?: TruncationResult;
-	private fullOutputPath?: string;
+	private truncation?: TruncationMeta;
 	private expanded = false;
 	private contentContainer: Container;
 
@@ -78,9 +73,7 @@ export class BashExecutionComponent extends Container {
 	}
 
 	appendOutput(chunk: string): void {
-		// Strip ANSI codes and normalize line endings
-		// Note: binary data is already sanitized in tui-renderer.ts executeBashCommand
-		const clean = stripAnsi(chunk).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+		const clean = this.normalizeOutput(chunk);
 
 		// Append to output lines
 		const newLines = clean.split("\n");
@@ -98,8 +91,7 @@ export class BashExecutionComponent extends Container {
 	setComplete(
 		exitCode: number | undefined,
 		cancelled: boolean,
-		truncationResult?: TruncationResult,
-		fullOutputPath?: string,
+		options?: { output?: string; truncation?: TruncationMeta },
 	): void {
 		this.exitCode = exitCode;
 		this.status = cancelled
@@ -107,8 +99,10 @@ export class BashExecutionComponent extends Container {
 			: exitCode !== 0 && exitCode !== undefined && exitCode !== null
 				? "error"
 				: "complete";
-		this.truncationResult = truncationResult;
-		this.fullOutputPath = fullOutputPath;
+		this.truncation = options?.truncation;
+		if (options?.output !== undefined) {
+			this.setOutput(options.output);
+		}
 
 		// Stop loader
 		this.loader.stop();
@@ -117,15 +111,7 @@ export class BashExecutionComponent extends Container {
 	}
 
 	private updateDisplay(): void {
-		// Apply truncation for LLM context limits (same limits as bash tool)
-		const fullOutput = this.outputLines.join("\n");
-		const contextTruncation = truncateTail(fullOutput, {
-			maxLines: DEFAULT_MAX_LINES,
-			maxBytes: DEFAULT_MAX_BYTES,
-		});
-
-		// Get the lines to potentially display (after context truncation)
-		const availableLines = contextTruncation.content ? contextTruncation.content.split("\n") : [];
+		const availableLines = this.outputLines;
 
 		// Apply preview truncation based on expanded state
 		const previewLogicalLines = availableLines.slice(-PREVIEW_LINES);
@@ -177,16 +163,38 @@ export class BashExecutionComponent extends Container {
 				statusParts.push(theme.fg("error", `(exit ${this.exitCode})`));
 			}
 
-			// Add truncation warning (context truncation, not preview truncation)
-			const wasTruncated = this.truncationResult?.truncated || contextTruncation.truncated;
-			if (wasTruncated && this.fullOutputPath) {
-				statusParts.push(theme.fg("warning", `Output truncated. Full output: ${this.fullOutputPath}`));
+			if (this.truncation) {
+				const warnings: string[] = [];
+				if (this.truncation.artifactId) {
+					warnings.push(`Full output: artifact://${this.truncation.artifactId}`);
+				}
+				if (this.truncation.truncatedBy === "lines") {
+					warnings.push(
+						`Truncated: showing ${this.truncation.outputLines} of ${this.truncation.totalLines} lines`,
+					);
+				} else {
+					warnings.push(
+						`Truncated: ${this.truncation.outputLines} lines shown (${formatSize(this.truncation.outputBytes)} limit)`,
+					);
+				}
+				statusParts.push(theme.fg("warning", warnings.join(". ")));
 			}
 
 			if (statusParts.length > 0) {
 				this.contentContainer.addChild(new Text(`\n${statusParts.join("\n")}`, 1, 0));
 			}
 		}
+	}
+
+	private normalizeOutput(text: string): string {
+		// Strip ANSI codes and normalize line endings
+		// Note: binary data is already sanitized in tui-renderer.ts executeBashCommand
+		return stripAnsi(text).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+	}
+
+	private setOutput(output: string): void {
+		const clean = this.normalizeOutput(output);
+		this.outputLines = clean ? clean.split("\n") : [];
 	}
 
 	/**

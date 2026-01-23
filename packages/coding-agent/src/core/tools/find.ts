@@ -10,13 +10,15 @@ import { getLanguageFromPath, type Theme } from "../../modes/interactive/theme/t
 import findDescription from "../../prompts/tools/find.md" with { type: "text" };
 import { ensureTool } from "../../utils/tools-manager";
 import type { RenderResultOptions } from "../custom-tools/types";
-import { type OutputMeta, outputMeta } from "../output-meta";
+import type { OutputMeta } from "../output-meta";
 import { renderPromptTemplate } from "../prompt-templates";
-import { ToolAbortError, throwIfAborted } from "../tool-errors";
+import { ToolAbortError, ToolError, throwIfAborted } from "../tool-errors";
 
 import type { ToolSession } from "./index";
+import { applyListLimit } from "./list-limit";
 import { resolveToCwd } from "./path-utils";
 import { PREVIEW_LIMITS, ToolUIKit } from "./render-utils";
+import { toolResult } from "./tool-result";
 import { type TruncationResult, truncateHead } from "./truncate";
 
 const findSchema = Type.Object({
@@ -141,7 +143,7 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 			// If custom operations provided with glob, use that instead of fd
 			if (this.customOps?.glob) {
 				if (!(await this.customOps.exists(searchPath))) {
-					throw new Error(`Path not found: ${searchPath}`);
+					throw new ToolError(`Path not found: ${searchPath}`);
 				}
 
 				const results = await this.customOps.glob(pattern, searchPath, {
@@ -150,10 +152,8 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 				});
 
 				if (results.length === 0) {
-					return {
-						content: [{ type: "text", text: "No files found matching pattern" }],
-						details: { scopePath, fileCount: 0, files: [], truncated: false },
-					};
+					const details: FindToolDetails = { scopePath, fileCount: 0, files: [], truncated: false };
+					return toolResult(details).text("No files found matching pattern").done();
 				}
 
 				// Relativize paths
@@ -164,33 +164,35 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 					return path.relative(searchPath, p);
 				});
 
-				const resultLimitReached = relativized.length >= effectiveLimit;
-				const rawOutput = relativized.join("\n");
+				const listLimit = applyListLimit(relativized, { limit: effectiveLimit });
+				const limited = listLimit.items;
+				const limitMeta = listLimit.meta;
+				const rawOutput = limited.join("\n");
 				const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
 
 				const details: FindToolDetails = {
 					scopePath,
-					fileCount: relativized.length,
-					files: relativized,
-					truncated: resultLimitReached || truncation.truncated,
-					resultLimitReached: resultLimitReached ? effectiveLimit : undefined,
+					fileCount: limited.length,
+					files: limited,
+					truncated: Boolean(limitMeta.resultLimit || truncation.truncated),
+					resultLimitReached: limitMeta.resultLimit?.reached,
 					truncation: truncation.truncated ? truncation : undefined,
-					meta: outputMeta()
-						.resultLimit(resultLimitReached ? effectiveLimit : 0)
-						.truncation(truncation, { direction: "head" })
-						.get(),
 				};
 
-				return {
-					content: [{ type: "text", text: truncation.content }],
-					details,
-				};
+				const resultBuilder = toolResult(details)
+					.text(truncation.content)
+					.limits({ resultLimit: limitMeta.resultLimit?.reached });
+				if (truncation.truncated) {
+					resultBuilder.truncation(truncation, { direction: "head" });
+				}
+
+				return resultBuilder.done();
 			}
 
 			// Default: use fd
 			const fdPath = await ensureTool("fd", true);
 			if (!fdPath) {
-				throw new Error("fd is not available and could not be downloaded");
+				throw new ToolError("fd is not available and could not be downloaded");
 			}
 
 			// Build fd arguments
@@ -272,12 +274,10 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 			// Treat exit code 1 with no output as "no files found"
 			if (!output) {
 				if (exitCode !== 0 && exitCode !== 1) {
-					throw new Error(stderr.trim() || `fd failed (exit ${exitCode})`);
+					throw new ToolError(stderr.trim() || `fd failed (exit ${exitCode})`);
 				}
-				return {
-					content: [{ type: "text", text: "No files found matching pattern" }],
-					details: { scopePath, fileCount: 0, files: [], truncated: false },
-				};
+				const details: FindToolDetails = { scopePath, fileCount: 0, files: [], truncated: false };
+				return toolResult(details).text("No files found matching pattern").done();
 			}
 
 			const lines = output.split("\n");
@@ -323,31 +323,32 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 				relativized.push(...indexed.map((item) => item.path));
 			}
 
-			// Check if we hit the result limit
-			const resultLimitReached = relativized.length >= effectiveLimit;
+			const listLimit = applyListLimit(relativized, { limit: effectiveLimit });
+			const limited = listLimit.items;
+			const limitMeta = listLimit.meta;
 
 			// Apply byte truncation (no line limit since we already have result limit)
-			const rawOutput = relativized.join("\n");
+			const rawOutput = limited.join("\n");
 			const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
 
 			const resultOutput = truncation.content;
 			const details: FindToolDetails = {
 				scopePath,
-				fileCount: relativized.length,
-				files: relativized,
-				truncated: resultLimitReached || truncation.truncated,
-				resultLimitReached: resultLimitReached ? effectiveLimit : undefined,
+				fileCount: limited.length,
+				files: limited,
+				truncated: Boolean(limitMeta.resultLimit || truncation.truncated),
+				resultLimitReached: limitMeta.resultLimit?.reached,
 				truncation: truncation.truncated ? truncation : undefined,
-				meta: outputMeta()
-					.resultLimit(resultLimitReached ? effectiveLimit : 0)
-					.truncation(truncation, { direction: "head" })
-					.get(),
 			};
 
-			return {
-				content: [{ type: "text", text: resultOutput }],
-				details,
-			};
+			const resultBuilder = toolResult(details)
+				.text(resultOutput)
+				.limits({ resultLimit: limitMeta.resultLimit?.reached });
+			if (truncation.truncated) {
+				resultBuilder.truncation(truncation, { direction: "head" });
+			}
+
+			return resultBuilder.done();
 		});
 	}
 }
@@ -430,7 +431,11 @@ export const findToolRenderer = {
 		}
 
 		const fileCount = details?.fileCount ?? 0;
-		const truncated = details?.truncated ?? details?.truncation?.truncated ?? false;
+		const truncation = details?.meta?.truncation;
+		const limits = details?.meta?.limits;
+		const truncated = Boolean(
+			details?.truncated || truncation || limits?.resultLimit || limits?.headLimit || limits?.matchLimit,
+		);
 		const files = details?.files ?? [];
 
 		if (fileCount === 0) {
@@ -447,11 +452,14 @@ export const findToolRenderer = {
 		let text = `  ${icon} ${uiTheme.fg("dim", summaryText)}${ui.truncationSuffix(truncated)}${scopeLabel}${expandHint}`;
 
 		const truncationReasons: string[] = [];
-		if (details?.resultLimitReached) {
-			truncationReasons.push(`limit ${details.resultLimitReached} results`);
+		if (limits?.resultLimit) {
+			truncationReasons.push(`limit ${limits.resultLimit.reached} results`);
 		}
-		if (details?.truncation?.truncated) {
-			truncationReasons.push("size limit");
+		if (truncation) {
+			truncationReasons.push(truncation.truncatedBy === "lines" ? "line limit" : "size limit");
+		}
+		if (truncation?.artifactId) {
+			truncationReasons.push(`full output: artifact://${truncation.artifactId}`);
 		}
 
 		const hasTruncation = truncationReasons.length > 0;

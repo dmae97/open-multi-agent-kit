@@ -1,9 +1,12 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added list-limit utility for consistent result limiting across tools
+- Added output-utils module with tail buffer and artifact allocation helpers
+- Added tool-result module for standardized tool result construction
+- Added truncation summary options to OutputMetaBuilder for better output tracking
 - Added artifact storage system for truncated tool outputs with artifact:// URL protocol
 - Added structured output metadata system with fluent OutputMetaBuilder for consistent notices
 - Added standardized tool error types (ToolError, MultiError, ToolAbortError) for better error handling
@@ -19,6 +22,12 @@
 
 ### Changed
 
+- Replaced inline output truncation notices with structured metadata system across all tools
+- Updated bash, python, and ssh executors to track detailed output statistics (total lines/bytes vs output lines/bytes)
+- Modified artifact storage to use pre-allocated paths instead of inline file writing
+- Changed message format to use meta field instead of fullOutputPath for truncation information
+- Updated interactive components to display truncation metadata from structured format
+- Standardized tool result building with new ToolResultBuilder for consistent metadata handling
 - Simplified Python gateway coordination by removing reference counting and client tracking
 - Updated Python gateway to use global shared instance instead of per-process coordination
 - Modified Python kernel initialization to set working directory and environment per kernel

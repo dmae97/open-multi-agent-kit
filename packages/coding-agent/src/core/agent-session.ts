@@ -73,6 +73,7 @@ import {
 } from "./messages";
 import type { ModelRegistry } from "./model-registry";
 import { parseModelString } from "./model-resolver";
+import { outputMeta } from "./output-meta";
 import { expandPromptTemplate, type PromptTemplate, parseCommandArgs, renderPromptTemplate } from "./prompt-templates";
 import { executePython as executePythonCommand, type PythonResult } from "./python-executor";
 import type { BranchSummaryEntry, CompactionEntry, NewSessionOptions, SessionManager } from "./session-manager";
@@ -2597,6 +2598,7 @@ export class AgentSession {
 	 * Used by executeBash and by extensions that handle bash execution themselves.
 	 */
 	recordBashResult(command: string, result: BashResult, options?: { excludeFromContext?: boolean }): void {
+		const meta = outputMeta().truncationFromSummary(result, { direction: "tail" }).get();
 		const bashMessage: BashExecutionMessage = {
 			role: "bashExecution",
 			command,
@@ -2604,7 +2606,7 @@ export class AgentSession {
 			exitCode: result.exitCode,
 			cancelled: result.cancelled,
 			truncated: result.truncated,
-			fullOutputPath: result.fullOutputPath,
+			meta,
 			timestamp: Date.now(),
 			excludeFromContext: options?.excludeFromContext,
 		};
@@ -2701,6 +2703,7 @@ export class AgentSession {
 	 * Record a Python execution result in session history.
 	 */
 	recordPythonResult(code: string, result: PythonResult, options?: { excludeFromContext?: boolean }): void {
+		const meta = outputMeta().truncationFromSummary(result, { direction: "tail" }).get();
 		const pythonMessage: PythonExecutionMessage = {
 			role: "pythonExecution",
 			code,
@@ -2708,7 +2711,7 @@ export class AgentSession {
 			exitCode: result.exitCode,
 			cancelled: result.cancelled,
 			truncated: result.truncated,
-			fullOutputPath: result.fullOutputPath,
+			meta,
 			timestamp: Date.now(),
 			excludeFromContext: options?.excludeFromContext,
 		};

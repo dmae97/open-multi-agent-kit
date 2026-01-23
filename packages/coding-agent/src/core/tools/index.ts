@@ -61,6 +61,7 @@ export { WriteTool, type WriteToolDetails } from "./write";
 
 import type { AgentTool } from "@oh-my-pi/pi-agent-core";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { ArtifactManager } from "../artifacts";
 import type { EventBus } from "../event-bus";
 import type { InternalUrlRouter } from "../internal-urls";
 import { getPreludeDocs, warmPythonEnvironment } from "../python-executor";
@@ -105,6 +106,8 @@ export interface ToolSession {
 	requireCompleteTool?: boolean;
 	/** Get session file */
 	getSessionFile: () => string | null;
+	/** Cached artifact manager (allocated per ToolSession) */
+	artifactManager?: ArtifactManager;
 	/** Get artifacts directory for artifact:// URLs and $ARTIFACTS env var */
 	getArtifactsDir?: () => string | null;
 	/** Get session spawns */

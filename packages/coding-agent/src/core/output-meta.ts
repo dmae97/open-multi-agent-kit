@@ -7,6 +7,7 @@
 
 import type { AgentTool, AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent, TextContent } from "@oh-my-pi/pi-ai";
+import type { OutputSummary } from "./streaming-output";
 import { renderError } from "./tool-errors";
 import type { TruncationResult } from "./tools/truncate";
 import { formatSize } from "./tools/truncate";
@@ -76,6 +77,19 @@ export interface TruncationOptions {
 	artifactId?: string;
 }
 
+export interface TruncationSummaryOptions {
+	direction: "head" | "tail";
+	startLine?: number;
+	totalFileLines?: number;
+}
+
+export interface TruncationTextOptions {
+	direction: "head" | "tail";
+	totalLines?: number;
+	totalBytes?: number;
+	maxBytes?: number;
+}
+
 /**
  * Fluent builder for OutputMeta.
  *
@@ -123,10 +137,110 @@ export class OutputMetaBuilder {
 		return this;
 	}
 
+	/** Add truncation info from OutputSummary. No-op if not truncated. */
+	truncationFromSummary(summary: OutputSummary, options: TruncationSummaryOptions): this {
+		if (!summary.truncated) return this;
+
+		const { direction, startLine = 1, totalFileLines } = options;
+		const totalLines = totalFileLines ?? summary.totalLines;
+		const truncatedBy: "lines" | "bytes" =
+			summary.outputBytes < summary.totalBytes
+				? "bytes"
+				: summary.outputLines < summary.totalLines
+					? "lines"
+					: "bytes";
+
+		let shownStart: number;
+		let shownEnd: number;
+
+		if (direction === "tail") {
+			shownStart = totalLines - summary.outputLines + 1;
+			shownEnd = totalLines;
+		} else {
+			shownStart = startLine;
+			shownEnd = startLine + summary.outputLines - 1;
+		}
+
+		this.#meta.truncation = {
+			direction,
+			truncatedBy,
+			totalLines,
+			totalBytes: summary.totalBytes,
+			outputLines: summary.outputLines,
+			outputBytes: summary.outputBytes,
+			shownRange: { start: shownStart, end: shownEnd },
+			artifactId: summary.artifactId,
+			nextOffset: direction === "head" ? shownEnd + 1 : undefined,
+		};
+
+		return this;
+	}
+
+	/** Add truncation info from truncated output text. No-op if truncation not detected. */
+	truncationFromText(text: string, options: TruncationTextOptions): this {
+		const outputLines = text.length > 0 ? text.split("\n").length : 0;
+		const outputBytes = Buffer.byteLength(text, "utf-8");
+		const totalLines = options.totalLines ?? outputLines;
+		const totalBytes = options.totalBytes ?? outputBytes;
+
+		const truncated = totalLines > outputLines || totalBytes > outputBytes || false;
+		if (!truncated) return this;
+
+		const truncatedBy: "lines" | "bytes" =
+			options.maxBytes && outputBytes >= options.maxBytes
+				? "bytes"
+				: totalBytes > outputBytes
+					? "bytes"
+					: totalLines > outputLines
+						? "lines"
+						: "bytes";
+
+		let shownStart: number;
+		let shownEnd: number;
+
+		if (options.direction === "tail") {
+			shownStart = totalLines - outputLines + 1;
+			shownEnd = totalLines;
+		} else {
+			shownStart = 1;
+			shownEnd = outputLines;
+		}
+
+		this.#meta.truncation = {
+			direction: options.direction,
+			truncatedBy,
+			totalLines,
+			totalBytes,
+			outputLines,
+			outputBytes,
+			shownRange: { start: shownStart, end: shownEnd },
+			nextOffset: options.direction === "head" ? shownEnd + 1 : undefined,
+		};
+
+		return this;
+	}
+
 	/** Add match limit notice. No-op if reached <= 0. */
 	matchLimit(reached: number, suggestion = reached * 2): this {
 		if (reached <= 0) return this;
 		this.#meta.limits = { ...this.#meta.limits, matchLimit: { reached, suggestion } };
+		return this;
+	}
+
+	/** Add limit notices in one call. */
+	limits(limits: { matchLimit?: number; resultLimit?: number; headLimit?: number; columnMax?: number }): this {
+		if (limits.matchLimit !== undefined) {
+			this.matchLimit(limits.matchLimit);
+		}
+		if (limits.resultLimit !== undefined) {
+			this.resultLimit(limits.resultLimit);
+		}
+		if (limits.headLimit !== undefined) {
+			this.headLimit(limits.headLimit);
+		}
+		if (limits.columnMax !== undefined) {
+			this.columnTruncated(limits.columnMax);
+		}
 		return this;
 	}
 

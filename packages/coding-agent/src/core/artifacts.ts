@@ -35,12 +35,31 @@ export class ArtifactManager {
 		return this.#dir;
 	}
 
+	async #ensureDir(): Promise<void> {
+		if (!this.#dirCreated) {
+			await mkdir(this.#dir, { recursive: true });
+			this.#dirCreated = true;
+		}
+	}
+
 	/**
 	 * Atomically allocate next artifact ID.
 	 * IDs are sequential within the session.
 	 */
 	allocateId(): number {
 		return this.#nextId++;
+	}
+
+	/**
+	 * Allocate a new artifact path and ID without writing content.
+	 *
+	 * @param toolType Tool name for file extension (e.g., "bash", "fetch")
+	 */
+	async allocatePath(toolType: string): Promise<{ id: string; path: string }> {
+		await this.#ensureDir();
+		const id = String(this.allocateId());
+		const filename = `${id}.${toolType}.txt`;
+		return { id, path: join(this.#dir, filename) };
 	}
 
 	/**
@@ -51,16 +70,9 @@ export class ArtifactManager {
 	 * @returns Artifact ID (numeric string)
 	 */
 	async save(content: string, toolType: string): Promise<string> {
-		if (!this.#dirCreated) {
-			await mkdir(this.#dir, { recursive: true });
-			this.#dirCreated = true;
-		}
-
-		const id = this.allocateId();
-		const filename = `${id}.${toolType}.txt`;
-		await Bun.write(join(this.#dir, filename), content);
-
-		return String(id);
+		const { id, path } = await this.allocatePath(toolType);
+		await Bun.write(path, content);
+		return id;
 	}
 
 	/**

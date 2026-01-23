@@ -3,7 +3,6 @@ import type { AssistantMessage, Message } from "@oh-my-pi/pi-ai";
 import { Spacer, Text, TruncatedText } from "@oh-my-pi/pi-tui";
 import type { CustomMessage } from "../../../core/messages";
 import type { SessionContext } from "../../../core/session-manager";
-import type { TruncationResult } from "../../../core/tools/truncate";
 import { AssistantMessageComponent } from "../components/assistant-message";
 import { BashExecutionComponent } from "../components/bash-execution";
 import { BranchSummaryMessageComponent } from "../components/branch-summary-message";
@@ -75,12 +74,9 @@ export class UiHelpers {
 				if (message.output) {
 					component.appendOutput(message.output);
 				}
-				component.setComplete(
-					message.exitCode,
-					message.cancelled,
-					message.truncated ? ({ truncated: true } as TruncationResult) : undefined,
-					message.fullOutputPath,
-				);
+				component.setComplete(message.exitCode, message.cancelled, {
+					truncation: message.meta?.truncation,
+				});
 				this.ctx.chatContainer.addChild(component);
 				break;
 			}
@@ -89,12 +85,9 @@ export class UiHelpers {
 				if (message.output) {
 					component.appendOutput(message.output);
 				}
-				component.setComplete(
-					message.exitCode,
-					message.cancelled,
-					message.truncated ? ({ truncated: true } as TruncationResult) : undefined,
-					message.fullOutputPath,
-				);
+				component.setComplete(message.exitCode, message.cancelled, {
+					truncation: message.meta?.truncation,
+				});
 				this.ctx.chatContainer.addChild(component);
 				break;
 			}

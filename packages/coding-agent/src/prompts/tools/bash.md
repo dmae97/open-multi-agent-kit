@@ -13,6 +13,7 @@ Executes a bash command in a shell session for terminal operations like git, bun
 <output>
 Returns stdout, stderr, and exit code from command execution.
 - Output truncated after 50KB or 2000 lines (whichever comes first); use `| head -n 50` for large output
+- If output is truncated, full output is stored under $ARTIFACTS and referenced as `artifact://<id>` in metadata
 - Exit codes shown on non-zero exit; stderr captured
 </output>
 

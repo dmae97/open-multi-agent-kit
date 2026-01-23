@@ -33,6 +33,10 @@ describe("python tool execution", () => {
 			exitCode: 0,
 			cancelled: false,
 			truncated: false,
+			totalLines: 1,
+			totalBytes: 2,
+			outputLines: 1,
+			outputBytes: 2,
 			displayOutputs: [],
 			stdinRequested: false,
 		});

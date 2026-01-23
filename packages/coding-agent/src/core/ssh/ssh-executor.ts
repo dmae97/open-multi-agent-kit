@@ -14,6 +14,9 @@ export interface SSHExecutorOptions {
 	remotePath?: string;
 	/** Wrap commands in a POSIX shell for compat mode */
 	compatEnabled?: boolean;
+	/** Artifact path/id for full output storage */
+	artifactPath?: string;
+	artifactId?: string;
 }
 
 export interface SSHResult {
@@ -25,8 +28,16 @@ export interface SSHResult {
 	cancelled: boolean;
 	/** Whether the output was truncated */
 	truncated: boolean;
-	/** Path to temp file containing full output (if output exceeded truncation threshold) */
-	fullOutputPath?: string;
+	/** Total number of lines in the output stream */
+	totalLines: number;
+	/** Total number of bytes in the output stream */
+	totalBytes: number;
+	/** Number of lines included in the output text */
+	outputLines: number;
+	/** Number of bytes included in the output text */
+	outputBytes: number;
+	/** Artifact ID if full output was saved to artifact storage */
+	artifactId?: string;
 }
 
 function quoteForCompatShell(command: string): string {
@@ -70,7 +81,11 @@ export async function executeSSH(
 		timeout: options?.timeout,
 	});
 
-	const sink = new OutputSink({ onChunk: options?.onChunk });
+	const sink = new OutputSink({
+		onChunk: options?.onChunk,
+		artifactPath: options?.artifactPath,
+		artifactId: options?.artifactId,
+	});
 
 	await Promise.allSettled([child.stdout.pipeTo(sink.createInput()), child.stderr.pipeTo(sink.createInput())]).catch(
 		() => {},

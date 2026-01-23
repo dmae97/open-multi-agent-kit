@@ -10,13 +10,15 @@ import { getLanguageFromPath, type Theme } from "../../modes/interactive/theme/t
 import grepDescription from "../../prompts/tools/grep.md" with { type: "text" };
 import { ensureTool } from "../../utils/tools-manager";
 import type { RenderResultOptions } from "../custom-tools/types";
-import { type OutputMeta, outputMeta } from "../output-meta";
+import type { OutputMeta } from "../output-meta";
 import { renderPromptTemplate } from "../prompt-templates";
-import { ToolAbortError } from "../tool-errors";
+import { ToolAbortError, ToolError } from "../tool-errors";
 import { untilAborted } from "../utils";
 import type { ToolSession } from "./index";
+import { applyListLimit } from "./list-limit";
 import { resolveToCwd } from "./path-utils";
 import { PREVIEW_LIMITS, ToolUIKit } from "./render-utils";
+import { toolResult } from "./tool-result";
 import { DEFAULT_MAX_COLUMN, type TruncationResult, truncateHead, truncateLine } from "./truncate";
 
 const grepSchema = Type.Object({
@@ -174,7 +176,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 
 			const rgPath = await this.rgPath;
 			if (!rgPath) {
-				throw new Error("ripgrep (rg) is not available and could not be downloaded");
+				throw new ToolError("ripgrep (rg) is not available and could not be downloaded");
 			}
 
 			const searchPath = resolveToCwd(searchDir || ".", this.session.cwd);
@@ -187,13 +189,12 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 			try {
 				isDirectory = await this.ops.isDirectory(searchPath);
 			} catch {
-				throw new Error(`Path not found: ${searchPath}`);
+				throw new ToolError(`Path not found: ${searchPath}`);
 			}
 			const contextValue = context && context > 0 ? context : 0;
 			const effectiveLimit = Math.max(1, limit ?? DEFAULT_LIMIT);
 			const effectiveOutputMode = output_mode ?? "content";
 			const effectiveOffset = offset && offset > 0 ? offset : 0;
-			const hasHeadLimit = head_limit !== undefined && head_limit > 0;
 
 			const formatPath = (filePath: string): string => {
 				if (isDirectory) {
@@ -295,7 +296,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 				const exitCode = child.exitCode ?? 0;
 				if (exitCode !== 0 && exitCode !== 1) {
 					const errorMsg = child.peekStderr().trim() || `ripgrep exited with code ${exitCode}`;
-					throw new Error(errorMsg);
+					throw new ToolError(errorMsg);
 				}
 
 				const lines = stdout
@@ -304,27 +305,25 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 					.filter((line) => line.length > 0);
 
 				if (lines.length === 0) {
-					return {
-						content: [{ type: "text", text: "No matches found" }],
-						details: {
-							scopePath,
-							matchCount: 0,
-							fileCount: 0,
-							files: [],
-							mode: effectiveOutputMode,
-							truncated: false,
-						},
+					const details: GrepToolDetails = {
+						scopePath,
+						matchCount: 0,
+						fileCount: 0,
+						files: [],
+						mode: effectiveOutputMode,
+						truncated: false,
 					};
+					return toolResult(details).text("No matches found").done();
 				}
 
-				// Apply offset and head_limit
-				let processedLines = lines;
-				if (effectiveOffset > 0) {
-					processedLines = processedLines.slice(effectiveOffset);
-				}
-				if (hasHeadLimit) {
-					processedLines = processedLines.slice(0, head_limit);
-				}
+				const offsetLines = effectiveOffset > 0 ? lines.slice(effectiveOffset) : lines;
+				const listLimit = applyListLimit(offsetLines, {
+					limit: effectiveLimit,
+					headLimit: head_limit,
+					limitType: "result",
+				});
+				const processedLines = listLimit.items;
+				const limitMeta = listLimit.meta;
 
 				let simpleMatchCount = 0;
 				let fileCount = 0;
@@ -367,7 +366,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 					fileCount = simpleFiles.size;
 				}
 
-				const truncatedByHeadLimit = hasHeadLimit && processedLines.length < lines.length;
+				const truncatedByLimit = Boolean(limitMeta.resultLimit || limitMeta.headLimit);
 
 				// For count mode, format as "path:count"
 				if (effectiveOutputMode === "count") {
@@ -378,39 +377,47 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 						return `${relative}:${count}`;
 					});
 					const output = formatted.join("\n");
-					return {
-						content: [{ type: "text", text: output }],
-						details: {
-							scopePath,
-							matchCount: simpleMatchCount,
-							fileCount,
-							files: simpleFileList,
-							fileMatches: simpleFileList.map((path) => ({
-								path,
-								count: simpleFileMatchCounts.get(path) ?? 0,
-							})),
-							mode: effectiveOutputMode,
-							truncated: truncatedByHeadLimit,
-							headLimitReached: truncatedByHeadLimit ? head_limit : undefined,
-						},
+					const details: GrepToolDetails = {
+						scopePath,
+						matchCount: simpleMatchCount,
+						fileCount,
+						files: simpleFileList,
+						fileMatches: simpleFileList.map((path) => ({
+							path,
+							count: simpleFileMatchCounts.get(path) ?? 0,
+						})),
+						mode: effectiveOutputMode,
+						truncated: truncatedByLimit,
+						headLimitReached: limitMeta.headLimit?.reached,
 					};
+					return toolResult(details)
+						.text(output)
+						.limits({
+							resultLimit: limitMeta.resultLimit?.reached,
+							headLimit: limitMeta.headLimit?.reached,
+						})
+						.done();
 				}
 
 				// For files_with_matches, format paths
 				const formatted = processedLines.map((line) => formatPath(line));
 				const output = formatted.join("\n");
-				return {
-					content: [{ type: "text", text: output }],
-					details: {
-						scopePath,
-						matchCount: simpleMatchCount,
-						fileCount,
-						files: simpleFileList,
-						mode: effectiveOutputMode,
-						truncated: truncatedByHeadLimit,
-						headLimitReached: truncatedByHeadLimit ? head_limit : undefined,
-					},
+				const details: GrepToolDetails = {
+					scopePath,
+					matchCount: simpleMatchCount,
+					fileCount,
+					files: simpleFileList,
+					mode: effectiveOutputMode,
+					truncated: truncatedByLimit,
+					headLimitReached: limitMeta.headLimit?.reached,
 				};
+				return toolResult(details)
+					.text(output)
+					.limits({
+						resultLimit: limitMeta.resultLimit?.reached,
+						headLimit: limitMeta.headLimit?.reached,
+					})
+					.done();
 			}
 
 			// Content mode - existing JSON processing
@@ -503,7 +510,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 					// Non-zero exit is ok if we killed due to limit or exit code 1 (no matches)
 					if (!killedDueToLimit && err.exitCode !== 1) {
 						const errorMsg = child.peekStderr().trim() || `ripgrep exited with code ${err.exitCode}`;
-						throw new Error(errorMsg);
+						throw new ToolError(errorMsg);
 					}
 				} else {
 					throw err;
@@ -511,34 +518,29 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 			}
 
 			if (matchCount === 0) {
-				return {
-					content: [{ type: "text", text: "No matches found" }],
-					details: {
-						scopePath,
-						matchCount: 0,
-						fileCount: 0,
-						files: [],
-						mode: effectiveOutputMode,
-						truncated: false,
-					},
+				const details: GrepToolDetails = {
+					scopePath,
+					matchCount: 0,
+					fileCount: 0,
+					files: [],
+					mode: effectiveOutputMode,
+					truncated: false,
 				};
+				return toolResult(details).text("No matches found").done();
 			}
 
 			// Apply offset and head_limit to output lines
-			let processedLines = outputLines;
-			if (effectiveOffset > 0) {
-				processedLines = processedLines.slice(effectiveOffset);
-			}
-			if (hasHeadLimit) {
-				processedLines = processedLines.slice(0, head_limit);
-			}
+			let processedLines = effectiveOffset > 0 ? outputLines.slice(effectiveOffset) : outputLines;
+			const listLimit = applyListLimit(processedLines, { headLimit: head_limit });
+			processedLines = listLimit.items;
+			const limitMeta = listLimit.meta;
 
 			// Apply byte truncation (no line limit since we already have match limit)
 			const rawOutput = processedLines.join("\n");
 			const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
 
 			const output = truncation.content;
-			const truncatedByHeadLimit = hasHeadLimit && processedLines.length < outputLines.length;
+			const truncated = Boolean(matchLimitReached || truncation.truncated || limitMeta.headLimit || linesTruncated);
 			const details: GrepToolDetails = {
 				scopePath,
 				matchCount,
@@ -549,26 +551,27 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 					count: fileMatchCounts.get(path) ?? 0,
 				})),
 				mode: effectiveOutputMode,
-				truncated: matchLimitReached || truncation.truncated || truncatedByHeadLimit,
-				headLimitReached: truncatedByHeadLimit ? head_limit : undefined,
+				truncated,
+				headLimitReached: limitMeta.headLimit?.reached,
 			};
-
-			// Build OutputMeta using fluent builder
-			details.meta = outputMeta()
-				.matchLimit(matchLimitReached ? effectiveLimit : 0)
-				.truncation(truncation, { direction: "head" })
-				.columnTruncated(linesTruncated ? DEFAULT_MAX_COLUMN : 0)
-				.get();
 
 			// Keep TUI compatibility fields
 			if (matchLimitReached) details.matchLimitReached = effectiveLimit;
 			if (truncation.truncated) details.truncation = truncation;
 			if (linesTruncated) details.linesTruncated = true;
 
-			return {
-				content: [{ type: "text", text: output }],
-				details,
-			};
+			const resultBuilder = toolResult(details)
+				.text(output)
+				.limits({
+					matchLimit: matchLimitReached ? effectiveLimit : undefined,
+					headLimit: limitMeta.headLimit?.reached,
+					columnMax: linesTruncated ? DEFAULT_MAX_COLUMN : undefined,
+				});
+			if (truncation.truncated) {
+				resultBuilder.truncation(truncation, { direction: "head" });
+			}
+
+			return resultBuilder.done();
 		});
 	}
 }
@@ -669,7 +672,16 @@ export const grepToolRenderer = {
 		const matchCount = details?.matchCount ?? 0;
 		const fileCount = details?.fileCount ?? 0;
 		const mode = details?.mode ?? "files_with_matches";
-		const truncated = details?.truncated ?? details?.truncation?.truncated ?? false;
+		const truncation = details?.meta?.truncation;
+		const limits = details?.meta?.limits;
+		const truncated = Boolean(
+			details?.truncated ||
+				truncation ||
+				limits?.matchLimit ||
+				limits?.resultLimit ||
+				limits?.headLimit ||
+				limits?.columnTruncated,
+		);
 		const files = details?.files ?? [];
 
 		if (matchCount === 0) {
@@ -694,17 +706,23 @@ export const grepToolRenderer = {
 		let text = `  ${icon} ${uiTheme.fg("dim", summaryText)}${ui.truncationSuffix(truncated)}${scopeLabel}${expandHint}`;
 
 		const truncationReasons: string[] = [];
-		if (details?.matchLimitReached) {
-			truncationReasons.push(`limit ${details.matchLimitReached} matches`);
+		if (limits?.matchLimit) {
+			truncationReasons.push(`limit ${limits.matchLimit.reached} matches`);
 		}
-		if (details?.headLimitReached) {
-			truncationReasons.push(`head limit ${details.headLimitReached}`);
+		if (limits?.resultLimit) {
+			truncationReasons.push(`limit ${limits.resultLimit.reached} results`);
 		}
-		if (details?.truncation?.truncated) {
-			truncationReasons.push("size limit");
+		if (limits?.headLimit) {
+			truncationReasons.push(`head limit ${limits.headLimit.reached}`);
 		}
-		if (details?.linesTruncated) {
-			truncationReasons.push("line length");
+		if (truncation) {
+			truncationReasons.push(truncation.truncatedBy === "lines" ? "line limit" : "size limit");
+		}
+		if (limits?.columnTruncated) {
+			truncationReasons.push(`line length ${limits.columnTruncated.maxColumn}`);
+		}
+		if (truncation?.artifactId) {
+			truncationReasons.push(`full output: artifact://${truncation.artifactId}`);
 		}
 
 		const hasTruncation = truncationReasons.length > 0;

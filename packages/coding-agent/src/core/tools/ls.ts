@@ -5,9 +5,10 @@ import { untilAborted } from "@oh-my-pi/pi-utils";
 import { Type } from "@sinclair/typebox";
 import { getLanguageFromPath, type Theme } from "../../modes/interactive/theme/theme";
 import type { RenderResultOptions } from "../custom-tools/types";
-import { type OutputMeta, outputMeta } from "../output-meta";
-import { throwIfAborted } from "../tool-errors";
+import type { OutputMeta } from "../output-meta";
+import { ToolError, throwIfAborted } from "../tool-errors";
 import type { ToolSession } from "./index";
+import { applyListLimit } from "./list-limit";
 import { resolveToCwd } from "./path-utils";
 import {
 	formatAge,
@@ -21,6 +22,7 @@ import {
 	formatTruncationSuffix,
 	PREVIEW_LIMITS,
 } from "./render-utils";
+import { toolResult } from "./tool-result";
 import { type TruncationResult, truncateHead } from "./truncate";
 
 const lsSchema = Type.Object({
@@ -98,11 +100,11 @@ export class LsTool implements AgentTool<typeof lsSchema, LsToolDetails> {
 			// Check if path exists and is a directory
 			const dirStat = await this.ops.stat(dirPath);
 			if (!dirStat) {
-				throw new Error(`Path not found: ${dirPath}`);
+				throw new ToolError(`Path not found: ${dirPath}`);
 			}
 
 			if (!dirStat.isDirectory()) {
-				throw new Error(`Not a directory: ${dirPath}`);
+				throw new ToolError(`Not a directory: ${dirPath}`);
 			}
 
 			// Read directory entries
@@ -111,25 +113,23 @@ export class LsTool implements AgentTool<typeof lsSchema, LsToolDetails> {
 				entries = await this.ops.readdir(dirPath);
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
-				throw new Error(`Cannot read directory: ${message}`);
+				throw new ToolError(`Cannot read directory: ${message}`);
 			}
 
 			// Sort alphabetically (case-insensitive)
 			entries.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 
+			const listLimit = applyListLimit(entries, { limit: effectiveLimit });
+			const limitedEntries = listLimit.items;
+			const limitMeta = listLimit.meta;
+
 			// Format entries with directory indicators
 			const results: string[] = [];
-			let entryLimitReached = false;
 			let dirCount = 0;
 			let fileCount = 0;
 
-			for (const entry of entries) {
+			for (const entry of limitedEntries) {
 				throwIfAborted(signal);
-				if (results.length >= effectiveLimit) {
-					entryLimitReached = true;
-					break;
-				}
-
 				const fullPath = nodePath.join(dirPath, entry);
 				let suffix = "";
 				let age = "";
@@ -171,8 +171,8 @@ export class LsTool implements AgentTool<typeof lsSchema, LsToolDetails> {
 			};
 			const truncationReasons: Array<"entryLimit" | "byteLimit"> = [];
 
-			if (entryLimitReached) {
-				details.entryLimitReached = effectiveLimit;
+			if (limitMeta.resultLimit) {
+				details.entryLimitReached = limitMeta.resultLimit.reached;
 				truncationReasons.push("entryLimit");
 			}
 
@@ -185,15 +185,12 @@ export class LsTool implements AgentTool<typeof lsSchema, LsToolDetails> {
 				details.truncationReasons = truncationReasons;
 			}
 
-			details.meta = outputMeta()
-				.resultLimit(entryLimitReached ? effectiveLimit : 0)
-				.truncation(truncation, { direction: "head" })
-				.get();
+			const resultBuilder = toolResult(details).text(output).limits({ resultLimit: limitMeta.resultLimit?.reached });
+			if (truncation.truncated) {
+				resultBuilder.truncation(truncation, { direction: "head" });
+			}
 
-			return {
-				content: [{ type: "text", text: output }],
-				details,
-			};
+			return resultBuilder.done();
 		});
 	}
 }
@@ -265,7 +262,9 @@ export const lsToolRenderer = {
 			}
 		}
 
-		const truncated = Boolean(details?.truncation?.truncated || details?.entryLimitReached);
+		const truncation = details?.meta?.truncation;
+		const limits = details?.meta?.limits;
+		const truncated = Boolean(details?.entryLimitReached || truncation || limits?.resultLimit || limits?.headLimit);
 		const icon = truncated
 			? uiTheme.styledSymbol("status.warning", "warning")
 			: uiTheme.styledSymbol("status.success", "success");
@@ -280,11 +279,14 @@ export const lsToolRenderer = {
 		let text = `  ${icon} ${uiTheme.fg("dim", summaryText)}${formatTruncationSuffix(truncated, uiTheme)}${expandHint}`;
 
 		const truncationReasons: string[] = [];
-		if (details?.entryLimitReached) {
-			truncationReasons.push(`entry limit ${details.entryLimitReached}`);
+		if (limits?.resultLimit) {
+			truncationReasons.push(`entry limit ${limits.resultLimit.reached}`);
 		}
-		if (details?.truncation?.truncated) {
-			truncationReasons.push(`output cap ${formatBytes(details.truncation.maxBytes)}`);
+		if (truncation) {
+			truncationReasons.push(`output cap ${formatBytes(truncation.outputBytes)}`);
+		}
+		if (truncation?.artifactId) {
+			truncationReasons.push(`full output: artifact://${truncation.artifactId}`);
 		}
 
 		const hasTruncation = truncationReasons.length > 0;

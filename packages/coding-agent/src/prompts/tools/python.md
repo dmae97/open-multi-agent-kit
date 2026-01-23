@@ -38,6 +38,7 @@ All helpers auto-print results and return values for chaining.
 
 <output>
 Output streams in real time, truncated after 100KB.
+If output is truncated, full output is stored under $ARTIFACTS and referenced as `artifact://<id>` in metadata.
 
 The user sees output like a Jupyter notebook—rich displays are fully rendered:
 - `display(JSON(data))` → interactive JSON tree

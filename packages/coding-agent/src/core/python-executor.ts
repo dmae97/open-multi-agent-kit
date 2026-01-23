@@ -1,5 +1,3 @@
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
 import { logger } from "@oh-my-pi/pi-utils";
 import {
 	checkPythonKernelAvailability,
@@ -33,6 +31,9 @@ export interface PythonExecutorOptions {
 	sessionFile?: string;
 	/** Artifacts directory for $ARTIFACTS env var and artifact storage */
 	artifactsDir?: string;
+	/** Artifact path/id for full output storage */
+	artifactPath?: string;
+	artifactId?: string;
 }
 
 export interface PythonKernelExecutor {
@@ -48,10 +49,16 @@ export interface PythonResult {
 	cancelled: boolean;
 	/** Whether the output was truncated */
 	truncated: boolean;
-	/** Path to temp file containing full output (if output exceeded truncation threshold) */
-	fullOutputPath?: string;
 	/** Artifact ID if full output was saved to artifact storage */
 	artifactId?: string;
+	/** Total number of lines in the output stream */
+	totalLines: number;
+	/** Total number of bytes in the output stream */
+	totalBytes: number;
+	/** Number of lines included in the output text */
+	outputLines: number;
+	/** Number of bytes included in the output text */
+	outputBytes: number;
 	/** Rich display outputs captured from display_data/execute_result */
 	displayOutputs: KernelDisplayOutput[];
 	/** Whether stdin was requested */
@@ -248,18 +255,11 @@ async function executeWithKernel(
 	code: string,
 	options: PythonExecutorOptions | undefined,
 ): Promise<PythonResult> {
-	let artifactIdCounter = 0;
-	const saveArtifact = options?.artifactsDir
-		? async (content: string): Promise<string> => {
-				const id = String(artifactIdCounter++);
-				await mkdir(options.artifactsDir!, { recursive: true });
-				const filename = `${id}.python.txt`;
-				await Bun.write(join(options.artifactsDir!, filename), content);
-				return id;
-			}
-		: undefined;
-
-	const sink = new OutputSink({ onChunk: options?.onChunk, saveArtifact });
+	const sink = new OutputSink({
+		onChunk: options?.onChunk,
+		artifactPath: options?.artifactPath,
+		artifactId: options?.artifactId,
+	});
 	const displayOutputs: KernelDisplayOutput[] = [];
 
 	try {

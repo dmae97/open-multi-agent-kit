@@ -8,14 +8,17 @@ import type { Theme } from "../../modes/interactive/theme/theme";
 import bashDescription from "../../prompts/tools/bash.md" with { type: "text" };
 import { type BashExecutorOptions, executeBash } from "../bash-executor";
 import type { RenderResultOptions } from "../custom-tools/types";
-import { type OutputMeta, outputMeta } from "../output-meta";
+import type { OutputMeta } from "../output-meta";
 import { renderPromptTemplate } from "../prompt-templates";
+import { ToolError } from "../tool-errors";
 
 import { checkBashInterception, checkSimpleLsInterception } from "./bash-interceptor";
 import type { ToolSession } from "./index";
+import { allocateOutputArtifact, createTailBuffer } from "./output-utils";
 import { resolveToCwd } from "./path-utils";
 import { ToolUIKit } from "./render-utils";
-import { type TruncationResult, truncateTail } from "./truncate";
+import { toolResult } from "./tool-result";
+import { DEFAULT_MAX_BYTES } from "./truncate";
 
 export const BASH_DEFAULT_PREVIEW_LINES = 10;
 
@@ -26,9 +29,6 @@ const bashSchema = Type.Object({
 });
 
 export interface BashToolDetails {
-	truncation?: TruncationResult;
-	fullOutputPath?: string;
-	fullOutput?: string;
 	meta?: OutputMeta;
 }
 
@@ -64,12 +64,12 @@ export class BashTool implements AgentTool<typeof bashSchema, BashToolDetails> {
 			const rules = this.session.settings?.getBashInterceptorRules?.();
 			const interception = checkBashInterception(command, ctx?.toolNames ?? [], rules);
 			if (interception.block) {
-				throw new Error(interception.message);
+				throw new ToolError(interception.message ?? "Command blocked");
 			}
 			if (this.session.settings?.getBashInterceptorSimpleLsEnabled?.() !== false) {
 				const lsInterception = checkSimpleLsInterception(command, ctx?.toolNames ?? []);
 				if (lsInterception.block) {
-					throw new Error(lsInterception.message);
+					throw new ToolError(lsInterception.message ?? "Command blocked");
 				}
 			}
 		}
@@ -79,10 +79,10 @@ export class BashTool implements AgentTool<typeof bashSchema, BashToolDetails> {
 		try {
 			cwdStat = await Bun.file(commandCwd).stat();
 		} catch {
-			throw new Error(`Working directory does not exist: ${commandCwd}`);
+			throw new ToolError(`Working directory does not exist: ${commandCwd}`);
 		}
 		if (!cwdStat.isDirectory()) {
-			throw new Error(`Working directory is not a directory: ${commandCwd}`);
+			throw new ToolError(`Working directory is not a directory: ${commandCwd}`);
 		}
 
 		// Auto-convert milliseconds to seconds if value > 1000 (16+ min is unreasonable)
@@ -91,37 +91,27 @@ export class BashTool implements AgentTool<typeof bashSchema, BashToolDetails> {
 		timeoutSec = Math.max(1, Math.min(3600, timeoutSec));
 		const timeoutMs = timeoutSec * 1000;
 
-		// Track output for streaming updates
-		let currentOutput = "";
+		// Track output for streaming updates (tail only)
+		const tailBuffer = createTailBuffer(DEFAULT_MAX_BYTES);
 
-		// Set up artifacts environment and save callback
+		// Set up artifacts environment and allocation
 		const artifactsDir = this.session.getArtifactsDir?.();
 		const extraEnv = artifactsDir ? { ARTIFACTS: artifactsDir } : undefined;
-		let savedArtifactId: string | undefined;
-		const saveArtifact = artifactsDir
-			? async (content: string) => {
-					const { ArtifactManager } = await import("../artifacts");
-					const sessionFile = this.session.getSessionFile();
-					if (!sessionFile) throw new Error("No session file");
-					const manager = new ArtifactManager(sessionFile);
-					savedArtifactId = await manager.save(content, "bash");
-					return savedArtifactId;
-				}
-			: undefined;
+		const { artifactPath, artifactId } = await allocateOutputArtifact(this.session, "bash");
 
 		const executorOptions: BashExecutorOptions = {
 			cwd: commandCwd,
 			timeout: timeoutMs,
 			signal,
 			env: extraEnv,
-			saveArtifact,
+			artifactPath,
+			artifactId,
 			onChunk: (chunk) => {
-				currentOutput += chunk;
+				tailBuffer.append(chunk);
 				if (onUpdate) {
-					const truncation = truncateTail(currentOutput);
 					onUpdate({
-						content: [{ type: "text", text: truncation.content || "" }],
-						details: truncation.truncated ? { truncation, fullOutput: currentOutput } : {},
+						content: [{ type: "text", text: tailBuffer.text() }],
+						details: {},
 					});
 				}
 			},
@@ -130,31 +120,18 @@ export class BashTool implements AgentTool<typeof bashSchema, BashToolDetails> {
 		// Handle errors
 		const result = await executeBash(command, executorOptions);
 		if (result.cancelled) {
-			throw new Error(result.output || "Command aborted");
+			throw new ToolError(result.output || "Command aborted");
 		}
 
-		// Apply tail truncation for final output
-		const truncation = truncateTail(result.output);
-		const outputText = truncation.content || "(no output)";
-
-		let details: BashToolDetails | undefined;
-
-		if (truncation.truncated) {
-			details = {
-				truncation,
-				fullOutputPath: result.fullOutputPath,
-				fullOutput: currentOutput,
-				meta: outputMeta()
-					.truncation(truncation, { direction: "tail", artifactId: result.artifactId ?? savedArtifactId })
-					.get(),
-			};
-		}
+		const outputText = result.output || "(no output)";
+		const details: BashToolDetails = {};
+		const resultBuilder = toolResult(details).text(outputText).truncationFromSummary(result, { direction: "tail" });
 
 		if (result.exitCode !== 0 && result.exitCode !== undefined) {
-			throw new Error(`${outputText}\n\nCommand exited with code ${result.exitCode}`);
+			throw new ToolError(`${outputText}\n\nCommand exited with code ${result.exitCode}`);
 		}
 
-		return { content: [{ type: "text", text: outputText }], details };
+		return resultBuilder.done();
 	}
 }
 
@@ -171,6 +148,8 @@ interface BashRenderArgs {
 interface BashRenderContext {
 	/** Raw output text */
 	output?: string;
+	/** Whether output came from artifact storage */
+	isFullOutput?: boolean;
 	/** Whether output is expanded */
 	expanded?: boolean;
 	/** Number of preview lines when collapsed */
@@ -222,38 +201,33 @@ export const bashToolRenderer = {
 		const ui = new ToolUIKit(uiTheme);
 		const { renderContext } = options;
 		const details = result.details;
-
 		const expanded = renderContext?.expanded ?? options.expanded;
 		const previewLines = renderContext?.previewLines ?? BASH_DEFAULT_PREVIEW_LINES;
 
 		// Get output from context (preferred) or fall back to result content
 		const output = renderContext?.output ?? (result.content?.find((c) => c.type === "text")?.text ?? "").trim();
-		const fullOutput = details?.fullOutput;
-		const displayOutput = expanded ? (fullOutput ?? output) : output;
-		const showingFullOutput = expanded && fullOutput !== undefined;
+		const displayOutput = output;
+		const showingFullOutput = expanded && renderContext?.isFullOutput === true;
 
 		// Build truncation warning lines (static, doesn't depend on width)
-		const truncation = details?.truncation;
-		const fullOutputPath = details?.fullOutputPath;
+		const truncation = details?.meta?.truncation;
 		const timeoutSeconds = renderContext?.timeout;
 		const timeoutLine =
 			typeof timeoutSeconds === "number"
 				? uiTheme.fg("dim", ui.wrapBrackets(`Timeout: ${timeoutSeconds}s`))
 				: undefined;
 		let warningLine: string | undefined;
-		if (fullOutputPath || (truncation?.truncated && !showingFullOutput)) {
+		if (truncation && !showingFullOutput) {
 			const warnings: string[] = [];
-			if (fullOutputPath) {
-				warnings.push(`Full output: ${fullOutputPath}`);
+			if (truncation?.artifactId) {
+				warnings.push(`Full output: artifact://${truncation.artifactId}`);
 			}
-			if (truncation?.truncated && !showingFullOutput) {
-				if (truncation.truncatedBy === "lines") {
-					warnings.push(`Truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines`);
-				} else {
-					warnings.push(
-						`Truncated: ${truncation.outputLines} lines shown (${ui.formatBytes(truncation.maxBytes)} limit)`,
-					);
-				}
+			if (truncation.truncatedBy === "lines") {
+				warnings.push(`Truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines`);
+			} else {
+				warnings.push(
+					`Truncated: ${truncation.outputLines} lines shown (${ui.formatBytes(truncation.outputBytes)} limit)`,
+				);
 			}
 			if (warnings.length > 0) {
 				warningLine = uiTheme.fg("warning", ui.wrapBrackets(warnings.join(". ")));

@@ -9,8 +9,8 @@ import { getDebugLogPath } from "../../../config";
 import { loadCustomShare } from "../../../core/custom-share";
 import type { CompactOptions } from "../../../core/extensions/types";
 import { createCompactionSummaryMessage } from "../../../core/messages";
+import { outputMeta } from "../../../core/output-meta";
 import { getGatewayStatus } from "../../../core/python-gateway-coordinator";
-import type { TruncationResult } from "../../../core/tools/truncate";
 import { getChangelogPath, parseChangelog } from "../../../utils/changelog";
 import { copyToClipboard } from "../../../utils/clipboard";
 import { ArminComponent } from "../components/armin";
@@ -488,12 +488,11 @@ export class CommandController {
 			);
 
 			if (this.ctx.bashComponent) {
-				this.ctx.bashComponent.setComplete(
-					result.exitCode,
-					result.cancelled,
-					result.truncated ? ({ truncated: true, content: result.output } as TruncationResult) : undefined,
-					result.fullOutputPath,
-				);
+				const meta = outputMeta().truncationFromSummary(result, { direction: "tail" }).get();
+				this.ctx.bashComponent.setComplete(result.exitCode, result.cancelled, {
+					output: result.output,
+					truncation: meta?.truncation,
+				});
 			}
 		} catch (error) {
 			if (this.ctx.bashComponent) {
@@ -531,12 +530,11 @@ export class CommandController {
 			);
 
 			if (this.ctx.pythonComponent) {
-				this.ctx.pythonComponent.setComplete(
-					result.exitCode,
-					result.cancelled,
-					result.truncated ? ({ truncated: true, content: result.output } as TruncationResult) : undefined,
-					result.fullOutputPath,
-				);
+				const meta = outputMeta().truncationFromSummary(result, { direction: "tail" }).get();
+				this.ctx.pythonComponent.setComplete(result.exitCode, result.cancelled, {
+					output: result.output,
+					truncation: meta?.truncation,
+				});
 			}
 		} catch (error) {
 			if (this.ctx.pythonComponent) {

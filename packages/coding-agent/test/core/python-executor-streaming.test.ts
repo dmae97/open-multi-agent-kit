@@ -1,5 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { describe, expect, it } from "bun:test";
 import { executePythonWithKernel, type PythonKernelExecutor } from "../../src/core/python-executor";
 import type { KernelExecuteOptions, KernelExecuteResult } from "../../src/core/python-kernel";
 import { DEFAULT_MAX_BYTES } from "../../src/core/tools/truncate";
@@ -19,21 +18,8 @@ class FakeKernel implements PythonKernelExecutor {
 	}
 }
 
-const cleanupPaths: string[] = [];
-
-afterEach(() => {
-	while (cleanupPaths.length > 0) {
-		const path = cleanupPaths.pop();
-		if (path) {
-			try {
-				rmSync(path, { force: true });
-			} catch {}
-		}
-	}
-});
-
 describe("executePythonWithKernel streaming", () => {
-	it("truncates large output and writes full output file", async () => {
+	it("truncates large output and tracks totals", async () => {
 		const largeOutput = "a".repeat(DEFAULT_MAX_BYTES + 128);
 		const kernel = new FakeKernel(
 			{ status: "ok", cancelled: false, timedOut: false, stdinRequested: false },
@@ -43,11 +29,8 @@ describe("executePythonWithKernel streaming", () => {
 		const result = await executePythonWithKernel(kernel, "print('hi')");
 
 		expect(result.truncated).toBe(true);
-		expect(result.fullOutputPath).toBeDefined();
 		expect(result.output.length).toBeLessThan(largeOutput.length);
-		if (result.fullOutputPath) {
-			cleanupPaths.push(result.fullOutputPath);
-		}
+		expect(result.totalBytes).toBeGreaterThan(result.outputBytes);
 	});
 
 	it("annotates timed out runs", async () => {

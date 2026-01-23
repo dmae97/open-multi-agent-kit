@@ -1,5 +1,4 @@
-import { rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, rm } from "node:fs/promises";
 import * as path from "node:path";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
@@ -12,11 +11,13 @@ import { type Theme, theme } from "../../modes/interactive/theme/theme";
 import fetchDescription from "../../prompts/tools/fetch.md" with { type: "text" };
 import { ensureTool } from "../../utils/tools-manager";
 import type { RenderResultOptions } from "../custom-tools/types";
-import { type OutputMeta, outputMeta } from "../output-meta";
+import type { OutputMeta } from "../output-meta";
 import { renderPromptTemplate } from "../prompt-templates";
 import { ToolAbortError } from "../tool-errors";
 import type { ToolSession } from "./index";
+import { applyListLimit } from "./list-limit";
 import { formatExpandHint } from "./render-utils";
+import { toolResult } from "./tool-result";
 import { specialHandlers } from "./web-scrapers/index";
 import type { RenderResult } from "./web-scrapers/types";
 import { finalizeOutput, loadPage, MAX_OUTPUT_CHARS } from "./web-scrapers/types";
@@ -446,9 +447,10 @@ function parseFeedToMarkdown(content: string, maxItems = 10): string {
 async function renderHtmlToText(
 	html: string,
 	timeout: number,
+	scratchDir: string,
 ): Promise<{ content: string; ok: boolean; method: string }> {
-	const tmpDir = tmpdir();
-	const tmpFile = path.join(tmpDir, `omp-${nanoid()}.html`);
+	await mkdir(scratchDir, { recursive: true });
+	const tmpFile = path.join(scratchDir, `omp-${nanoid()}.html`);
 
 	try {
 		await Bun.write(tmpFile, html);
@@ -548,7 +550,8 @@ async function handleSpecialUrls(url: string, timeout: number, signal?: AbortSig
 async function renderUrl(
 	url: string,
 	timeout: number,
-	raw: boolean = false,
+	raw: boolean,
+	scratchDir: string,
 	signal?: AbortSignal,
 ): Promise<RenderResult> {
 	const notes: string[] = [];
@@ -789,7 +792,7 @@ async function renderUrl(
 		}
 
 		// Step 6: Render HTML with lynx or html2text
-		const htmlResult = await renderHtmlToText(rawContent, timeout);
+		const htmlResult = await renderHtmlToText(rawContent, timeout, scratchDir);
 		if (!htmlResult.ok) {
 			notes.push("html rendering failed (lynx/html2text unavailable)");
 			const output = finalizeOutput(rawContent);
@@ -890,8 +893,10 @@ export class FetchTool implements AgentTool<typeof fetchSchema, FetchToolDetails
 	public readonly label = "Fetch";
 	public readonly description: string;
 	public readonly parameters = fetchSchema;
+	private readonly session: ToolSession;
 
-	constructor(_session: ToolSession) {
+	constructor(session: ToolSession) {
+		this.session = session;
 		this.description = renderPromptTemplate(fetchDescription);
 	}
 
@@ -914,7 +919,8 @@ export class FetchTool implements AgentTool<typeof fetchSchema, FetchToolDetails
 			throw new ToolAbortError();
 		}
 
-		const result = await renderUrl(url, effectiveTimeout, raw, signal);
+		const scratchDir = this.session.getArtifactsDir?.() ?? this.session.cwd;
+		const result = await renderUrl(url, effectiveTimeout, raw, scratchDir, signal);
 
 		// Format output
 		let output = "";
@@ -927,30 +933,6 @@ export class FetchTool implements AgentTool<typeof fetchSchema, FetchToolDetails
 		output += `\n---\n\n`;
 		output += result.content;
 
-		// Build OutputMeta using fluent builder
-		const metaBuilder = outputMeta().sourceUrl(result.finalUrl);
-		if (result.truncated) {
-			const outputBytes = result.content.length;
-			const outputLines = result.content.split("\n").length;
-			// Create a synthetic TruncationResult for the builder
-			metaBuilder.truncation(
-				{
-					truncated: true,
-					truncatedBy: "bytes",
-					totalLines: outputLines + 1,
-					totalBytes: MAX_OUTPUT_CHARS + 1,
-					outputLines,
-					outputBytes,
-					content: result.content,
-					lastLinePartial: false,
-					firstLineExceedsLimit: false,
-					maxLines: Number.MAX_SAFE_INTEGER,
-					maxBytes: MAX_OUTPUT_CHARS,
-				},
-				{ direction: "tail" },
-			);
-		}
-
 		const details: FetchToolDetails = {
 			url: result.url,
 			finalUrl: result.finalUrl,
@@ -958,13 +940,23 @@ export class FetchTool implements AgentTool<typeof fetchSchema, FetchToolDetails
 			method: result.method,
 			truncated: result.truncated,
 			notes: result.notes,
-			meta: metaBuilder.get(),
 		};
 
-		return {
-			content: [{ type: "text", text: output }],
-			details,
-		};
+		const resultBuilder = toolResult(details).text(output).sourceUrl(result.finalUrl);
+		if (result.truncated) {
+			const outputLines = result.content.split("\n").length;
+			const outputBytes = Buffer.byteLength(result.content, "utf-8");
+			const totalBytes = Math.max(outputBytes + 1, MAX_OUTPUT_CHARS + 1);
+			const totalLines = outputLines + 1;
+			resultBuilder.truncationFromText(result.content, {
+				direction: "tail",
+				totalLines,
+				totalBytes,
+				maxBytes: MAX_OUTPUT_CHARS,
+			});
+		}
+
+		return resultBuilder.done();
 	}
 }
 
@@ -987,12 +979,6 @@ function getDomain(url: string): string {
 	} catch {
 		return url;
 	}
-}
-
-/** Get first N lines of text as preview */
-function getPreviewLines(text: string, maxLines: number, maxLineLen: number, ellipsis: string): string[] {
-	const lines = text.split("\n").filter((l) => l.trim());
-	return lines.slice(0, maxLines).map((l) => truncate(l.trim(), maxLineLen, ellipsis));
 }
 
 /** Count non-empty lines */
@@ -1028,7 +1014,9 @@ export function renderFetchResult(
 	const domain = getDomain(details.finalUrl);
 	const hasRedirect = details.url !== details.finalUrl;
 	const hasNotes = details.notes.length > 0;
-	const statusIcon = details.truncated
+	const truncation = details.meta?.truncation;
+	const truncated = Boolean(details.truncated || truncation);
+	const statusIcon = truncated
 		? uiTheme.styledSymbol("status.warning", "warning")
 		: uiTheme.styledSymbol("status.success", "success");
 	const expandHint = formatExpandHint(uiTheme, expanded);
@@ -1043,6 +1031,7 @@ export function renderFetchResult(
 		: contentText;
 	const lineCount = countNonEmptyLines(contentBody);
 	const charCount = contentBody.trim().length;
+	const contentLines = contentBody.split("\n").filter((l) => l.trim());
 
 	if (!expanded) {
 		// Collapsed view: metadata + preview
@@ -1053,14 +1042,19 @@ export function renderFetchResult(
 		if (hasRedirect) {
 			metaLines.push(`${uiTheme.fg("muted", "Final URL:")} ${uiTheme.fg("mdLinkUrl", details.finalUrl)}`);
 		}
-		if (details.truncated) {
+		if (truncated) {
 			metaLines.push(uiTheme.fg("warning", `${uiTheme.status.warning} Output truncated`));
+			if (truncation?.artifactId) {
+				metaLines.push(uiTheme.fg("warning", `Full output: artifact://${truncation.artifactId}`));
+			}
 		}
 		if (hasNotes) {
 			metaLines.push(`${uiTheme.fg("muted", "Notes:")} ${details.notes.join("; ")}`);
 		}
 
-		const previewLines = getPreviewLines(contentBody, 3, 100, uiTheme.format.ellipsis);
+		const previewLimit = 3;
+		const previewList = applyListLimit(contentLines, { headLimit: previewLimit });
+		const previewLines = previewList.items.map((line) => truncate(line.trim(), 100, uiTheme.format.ellipsis));
 		const detailLines: string[] = [...metaLines];
 
 		if (previewLines.length === 0) {
@@ -1071,7 +1065,7 @@ export function renderFetchResult(
 			}
 		}
 
-		const remaining = Math.max(0, lineCount - previewLines.length);
+		const remaining = Math.max(0, contentLines.length - previewLines.length);
 		if (remaining > 0) {
 			detailLines.push(uiTheme.fg("muted", `${uiTheme.format.ellipsis} ${remaining} more lines`));
 		} else {
@@ -1096,8 +1090,11 @@ export function renderFetchResult(
 		const lineLabel = `${lineCount} line${lineCount === 1 ? "" : "s"}`;
 		metaLines.push(`${uiTheme.fg("muted", "Lines:")} ${lineLabel}`);
 		metaLines.push(`${uiTheme.fg("muted", "Chars:")} ${charCount}`);
-		if (details.truncated) {
+		if (truncated) {
 			metaLines.push(uiTheme.fg("warning", `${uiTheme.status.warning} Output truncated`));
+			if (truncation?.artifactId) {
+				metaLines.push(uiTheme.fg("warning", `Full output: artifact://${truncation.artifactId}`));
+			}
 		}
 		if (hasNotes) {
 			metaLines.push(`${uiTheme.fg("muted", "Notes:")} ${details.notes.join("; ")}`);
@@ -1111,8 +1108,10 @@ export function renderFetchResult(
 		}
 
 		text += `\n ${uiTheme.fg("dim", uiTheme.tree.last)} ${uiTheme.fg("accent", "Content Preview")}`;
-		const previewLines = getPreviewLines(contentBody, 12, 120, uiTheme.format.ellipsis);
-		const remaining = Math.max(0, lineCount - previewLines.length);
+		const previewLimit = 12;
+		const previewList = applyListLimit(contentLines, { headLimit: previewLimit });
+		const previewLines = previewList.items.map((line) => truncate(line.trim(), 120, uiTheme.format.ellipsis));
+		const remaining = Math.max(0, contentLines.length - previewLines.length);
 		const contentPrefix = uiTheme.fg("dim", " ");
 
 		if (previewLines.length === 0) {

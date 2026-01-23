@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { rmSync } from "node:fs";
+import { join } from "node:path";
 import { createTempDirSync } from "@oh-my-pi/pi-utils";
 import {
 	disposeAllKernelSessions,
@@ -121,7 +121,7 @@ describe("executePythonWithKernel", () => {
 		expect(result.output).not.toContain("Command timed out");
 	});
 
-	it("truncates large output and stores full output file", async () => {
+	it("truncates large output and stores full output artifact", async () => {
 		const lineLength = 100;
 		const lineCount = Math.ceil((DEFAULT_MAX_BYTES * 1.5) / lineLength);
 		const lines = Array.from(
@@ -135,17 +135,20 @@ describe("executePythonWithKernel", () => {
 				await options?.onChunk?.(largeOutput);
 			},
 		);
+		using tempDir = createTempDirSync("@python-executor-artifacts-");
+		const artifactPath = join(tempDir.path, "0.python.txt");
 
-		const result = await executePythonWithKernel(kernel, "print('big')");
+		const result = await executePythonWithKernel(kernel, "print('big')", {
+			artifactPath,
+			artifactId: "0",
+		});
 
 		expect(result.truncated).toBe(true);
-		expect(result.fullOutputPath).toBeDefined();
+		expect(result.artifactId).toBe("0");
 		expect(result.output).toContain("TAIL");
 
-		const fullText = await Bun.file(result.fullOutputPath as string).text();
+		const fullText = await Bun.file(artifactPath).text();
 		expect(fullText).toBe(largeOutput);
-
-		rmSync(result.fullOutputPath as string, { force: true });
 	});
 });
 

@@ -33,6 +33,7 @@ Execute commands on remote SSH hosts.
 
 <output>
 Command output (stdout/stderr combined), truncated at 50KB. Exit code is captured.
+If output is truncated, full output is stored under $ARTIFACTS and referenced as `artifact://<id>` in metadata.
 </output>
 
 <critical>

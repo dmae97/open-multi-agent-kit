@@ -5,12 +5,8 @@
 
 import { Container, Loader, Spacer, Text, type TUI } from "@oh-my-pi/pi-tui";
 import stripAnsi from "strip-ansi";
-import {
-	DEFAULT_MAX_BYTES,
-	DEFAULT_MAX_LINES,
-	type TruncationResult,
-	truncateTail,
-} from "../../../core/tools/truncate";
+import type { TruncationMeta } from "../../../core/output-meta";
+import { formatSize } from "../../../core/tools/truncate";
 import { getSymbolTheme, highlightCode, theme } from "../theme/theme";
 import { DynamicBorder } from "./dynamic-border";
 import { truncateToVisualLines } from "./visual-truncate";
@@ -23,8 +19,7 @@ export class PythonExecutionComponent extends Container {
 	private status: "running" | "complete" | "cancelled" | "error" = "running";
 	private exitCode: number | undefined = undefined;
 	private loader: Loader;
-	private truncationResult?: TruncationResult;
-	private fullOutputPath?: string;
+	private truncation?: TruncationMeta;
 	private expanded = false;
 	private contentContainer: Container;
 	private excludeFromContext: boolean;
@@ -77,7 +72,7 @@ export class PythonExecutionComponent extends Container {
 	}
 
 	appendOutput(chunk: string): void {
-		const clean = stripAnsi(chunk).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+		const clean = this.normalizeOutput(chunk);
 
 		const newLines = clean.split("\n");
 		if (this.outputLines.length > 0 && newLines.length > 0) {
@@ -93,8 +88,7 @@ export class PythonExecutionComponent extends Container {
 	setComplete(
 		exitCode: number | undefined,
 		cancelled: boolean,
-		truncationResult?: TruncationResult,
-		fullOutputPath?: string,
+		options?: { output?: string; truncation?: TruncationMeta },
 	): void {
 		this.exitCode = exitCode;
 		this.status = cancelled
@@ -102,21 +96,17 @@ export class PythonExecutionComponent extends Container {
 			: exitCode !== 0 && exitCode !== undefined && exitCode !== null
 				? "error"
 				: "complete";
-		this.truncationResult = truncationResult;
-		this.fullOutputPath = fullOutputPath;
+		this.truncation = options?.truncation;
+		if (options?.output !== undefined) {
+			this.setOutput(options.output);
+		}
 
 		this.loader.stop();
 		this.updateDisplay();
 	}
 
 	private updateDisplay(): void {
-		const fullOutput = this.outputLines.join("\n");
-		const contextTruncation = truncateTail(fullOutput, {
-			maxLines: DEFAULT_MAX_LINES,
-			maxBytes: DEFAULT_MAX_BYTES,
-		});
-
-		const availableLines = contextTruncation.content ? contextTruncation.content.split("\n") : [];
+		const availableLines = this.outputLines;
 		const previewLogicalLines = availableLines.slice(-PREVIEW_LINES);
 		const hiddenLineCount = availableLines.length - previewLogicalLines.length;
 
@@ -159,15 +149,36 @@ export class PythonExecutionComponent extends Container {
 				statusParts.push(theme.fg("error", `(exit ${this.exitCode})`));
 			}
 
-			const wasTruncated = this.truncationResult?.truncated || contextTruncation.truncated;
-			if (wasTruncated && this.fullOutputPath) {
-				statusParts.push(theme.fg("warning", `Output truncated. Full output: ${this.fullOutputPath}`));
+			if (this.truncation) {
+				const warnings: string[] = [];
+				if (this.truncation.artifactId) {
+					warnings.push(`Full output: artifact://${this.truncation.artifactId}`);
+				}
+				if (this.truncation.truncatedBy === "lines") {
+					warnings.push(
+						`Truncated: showing ${this.truncation.outputLines} of ${this.truncation.totalLines} lines`,
+					);
+				} else {
+					warnings.push(
+						`Truncated: ${this.truncation.outputLines} lines shown (${formatSize(this.truncation.outputBytes)} limit)`,
+					);
+				}
+				statusParts.push(theme.fg("warning", warnings.join(". ")));
 			}
 
 			if (statusParts.length > 0) {
 				this.contentContainer.addChild(new Text(`\n${statusParts.join("\n")}`, 1, 0));
 			}
 		}
+	}
+
+	private normalizeOutput(text: string): string {
+		return stripAnsi(text).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+	}
+
+	private setOutput(output: string): void {
+		const clean = this.normalizeOutput(output);
+		this.outputLines = clean ? clean.split("\n") : [];
 	}
 
 	getOutput(): string {

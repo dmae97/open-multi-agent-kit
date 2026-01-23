@@ -7,7 +7,7 @@
 import { cspawn, Exception, ptree } from "@oh-my-pi/pi-utils";
 import { getShellConfig } from "../utils/shell";
 import { getOrCreateSnapshot, getSnapshotSourceCommand } from "../utils/shell-snapshot";
-import { type ArtifactSaver, OutputSink } from "./streaming-output";
+import { OutputSink } from "./streaming-output";
 
 export interface BashExecutorOptions {
 	cwd?: string;
@@ -16,8 +16,9 @@ export interface BashExecutorOptions {
 	signal?: AbortSignal;
 	/** Additional environment variables to inject */
 	env?: Record<string, string>;
-	/** Function to save full output as artifact when truncated */
-	saveArtifact?: ArtifactSaver;
+	/** Artifact path/id for full output storage */
+	artifactPath?: string;
+	artifactId?: string;
 }
 
 export interface BashResult {
@@ -25,7 +26,10 @@ export interface BashResult {
 	exitCode: number | undefined;
 	cancelled: boolean;
 	truncated: boolean;
-	fullOutputPath?: string;
+	totalLines: number;
+	totalBytes: number;
+	outputLines: number;
+	outputBytes: number;
 	artifactId?: string;
 }
 
@@ -41,7 +45,11 @@ export async function executeBash(command: string, options?: BashExecutorOptions
 	const prefixedCommand = prefix ? `${prefix} ${command}` : command;
 	const finalCommand = `${snapshotPrefix}${prefixedCommand}`;
 
-	const sink = new OutputSink({ onChunk: options?.onChunk, saveArtifact: options?.saveArtifact });
+	const sink = new OutputSink({
+		onChunk: options?.onChunk,
+		artifactPath: options?.artifactPath,
+		artifactId: options?.artifactId,
+	});
 
 	const child = cspawn([shell, ...args, finalCommand], {
 		cwd: options?.cwd,
