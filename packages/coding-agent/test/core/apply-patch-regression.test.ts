@@ -1152,7 +1152,7 @@ describe("regression: bench edit failures (2026-01-19)", () => {
 		["@@ Line 3-5", 3],
 		["@@ line 3-5 @@", 3],
 		["@@ @@ line 3", 3],
-	])("line hint variants (%s) target the correct line", async (header, targetLine) => {
+	])("line hint variants (%s) target the correct line", async (header: string, targetLine: number) => {
 		const filePath = join(tempDir, `line-hint-${targetLine}.txt`);
 		await Bun.write(filePath, "line 1\nline 2\nline 3\nline 4\nline 5\n");
 

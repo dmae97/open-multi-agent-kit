@@ -6,18 +6,18 @@
  */
 
 import { join, sep } from "node:path";
-import { registerProvider } from "@oh-my-pi/pi-coding-agent/capability";
-import { type ContextFile, contextFileCapability } from "@oh-my-pi/pi-coding-agent/capability/context-file";
-import { type ExtensionModule, extensionModuleCapability } from "@oh-my-pi/pi-coding-agent/capability/extension-module";
-import { readFile } from "@oh-my-pi/pi-coding-agent/capability/fs";
-import { type Hook, hookCapability } from "@oh-my-pi/pi-coding-agent/capability/hook";
-import { type MCPServer, mcpCapability } from "@oh-my-pi/pi-coding-agent/capability/mcp";
-import { type Settings, settingsCapability } from "@oh-my-pi/pi-coding-agent/capability/settings";
-import { type Skill, skillCapability } from "@oh-my-pi/pi-coding-agent/capability/skill";
-import { type SlashCommand, slashCommandCapability } from "@oh-my-pi/pi-coding-agent/capability/slash-command";
-import { type SystemPrompt, systemPromptCapability } from "@oh-my-pi/pi-coding-agent/capability/system-prompt";
-import { type CustomTool, toolCapability } from "@oh-my-pi/pi-coding-agent/capability/tool";
-import type { LoadContext, LoadResult } from "@oh-my-pi/pi-coding-agent/capability/types";
+import { registerProvider } from "../capability";
+import { type ContextFile, contextFileCapability } from "../capability/context-file";
+import { type ExtensionModule, extensionModuleCapability } from "../capability/extension-module";
+import { readFile } from "../capability/fs";
+import { type Hook, hookCapability } from "../capability/hook";
+import { type MCPServer, mcpCapability } from "../capability/mcp";
+import { type Settings, settingsCapability } from "../capability/settings";
+import { type Skill, skillCapability } from "../capability/skill";
+import { type SlashCommand, slashCommandCapability } from "../capability/slash-command";
+import { type SystemPrompt, systemPromptCapability } from "../capability/system-prompt";
+import { type CustomTool, toolCapability } from "../capability/tool";
+import type { LoadContext, LoadResult } from "../capability/types";
 import {
 	calculateDepth,
 	createSourceMeta,

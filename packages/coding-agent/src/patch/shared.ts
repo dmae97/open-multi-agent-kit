@@ -3,11 +3,13 @@
  */
 
 import type { ToolCallContext } from "@oh-my-pi/pi-agent-core";
-import type { RenderResultOptions } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools/types";
-import type { FileDiagnosticsResult } from "@oh-my-pi/pi-coding-agent/lsp";
-import { renderDiff as renderDiffColored } from "@oh-my-pi/pi-coding-agent/modes/components/diff";
-import { getLanguageFromPath, type Theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { OutputMeta } from "@oh-my-pi/pi-coding-agent/tools/output-meta";
+import type { Component } from "@oh-my-pi/pi-tui";
+import { Text } from "@oh-my-pi/pi-tui";
+import type { RenderResultOptions } from "../extensibility/custom-tools/types";
+import type { FileDiagnosticsResult } from "../lsp";
+import { renderDiff as renderDiffColored } from "../modes/components/diff";
+import { getLanguageFromPath, type Theme } from "../modes/theme/theme";
+import type { OutputMeta } from "../tools/output-meta";
 import {
 	formatExpandHint,
 	formatStatusIcon,
@@ -15,11 +17,9 @@ import {
 	shortenPath,
 	ToolUIKit,
 	truncateDiffByHunk,
-} from "@oh-my-pi/pi-coding-agent/tools/render-utils";
-import type { RenderCallOptions } from "@oh-my-pi/pi-coding-agent/tools/renderers";
-import { renderStatusLine } from "@oh-my-pi/pi-coding-agent/tui";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { Text } from "@oh-my-pi/pi-tui";
+} from "../tools/render-utils";
+import type { RenderCallOptions } from "../tools/renderers";
+import { renderStatusLine } from "../tui";
 import type { DiffError, DiffResult, Operation } from "./types";
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -1,5 +1,5 @@
+import { describe, expect, it } from "bun:test";
 import { isThinkingPart, retainThoughtSignature } from "@oh-my-pi/pi-ai/providers/google-shared";
-import { describe, expect, it } from "vitest";
 
 describe("Google thinking detection (thoughtSignature)", () => {
 	it("treats part.thought === true as thinking", () => {

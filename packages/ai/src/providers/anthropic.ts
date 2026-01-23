@@ -4,8 +4,8 @@ import type {
 	MessageCreateParamsStreaming,
 	MessageParam,
 } from "@anthropic-ai/sdk/resources/messages";
-import { calculateCost } from "@oh-my-pi/pi-ai/models";
-import { getEnvApiKey, OUTPUT_FALLBACK_BUFFER } from "@oh-my-pi/pi-ai/stream";
+import { calculateCost } from "../models";
+import { getEnvApiKey, OUTPUT_FALLBACK_BUFFER } from "../stream";
 import type {
 	Api,
 	AssistantMessage,
@@ -21,11 +21,11 @@ import type {
 	Tool,
 	ToolCall,
 	ToolResultMessage,
-} from "@oh-my-pi/pi-ai/types";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
-import { parseStreamingJson } from "@oh-my-pi/pi-ai/utils/json-parse";
-import { formatErrorMessageWithRetryAfter } from "@oh-my-pi/pi-ai/utils/retry-after";
-import { sanitizeSurrogates } from "@oh-my-pi/pi-ai/utils/sanitize-unicode";
+} from "../types";
+import { AssistantMessageEventStream } from "../utils/event-stream";
+import { parseStreamingJson } from "../utils/json-parse";
+import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
+import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 
 import { transformMessages } from "./transform-messages";
 

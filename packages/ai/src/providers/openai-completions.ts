@@ -1,5 +1,15 @@
-import { calculateCost } from "@oh-my-pi/pi-ai/models";
-import { getEnvApiKey } from "@oh-my-pi/pi-ai/stream";
+import OpenAI from "openai";
+import type {
+	ChatCompletionAssistantMessageParam,
+	ChatCompletionChunk,
+	ChatCompletionContentPart,
+	ChatCompletionContentPartImage,
+	ChatCompletionContentPartText,
+	ChatCompletionMessageParam,
+	ChatCompletionToolMessageParam,
+} from "openai/resources/chat/completions";
+import { calculateCost } from "../models";
+import { getEnvApiKey } from "../stream";
 import type {
 	AssistantMessage,
 	Context,
@@ -14,21 +24,11 @@ import type {
 	Tool,
 	ToolCall,
 	ToolResultMessage,
-} from "@oh-my-pi/pi-ai/types";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
-import { parseStreamingJson } from "@oh-my-pi/pi-ai/utils/json-parse";
-import { formatErrorMessageWithRetryAfter } from "@oh-my-pi/pi-ai/utils/retry-after";
-import { sanitizeSurrogates } from "@oh-my-pi/pi-ai/utils/sanitize-unicode";
-import OpenAI from "openai";
-import type {
-	ChatCompletionAssistantMessageParam,
-	ChatCompletionChunk,
-	ChatCompletionContentPart,
-	ChatCompletionContentPartImage,
-	ChatCompletionContentPartText,
-	ChatCompletionMessageParam,
-	ChatCompletionToolMessageParam,
-} from "openai/resources/chat/completions";
+} from "../types";
+import { AssistantMessageEventStream } from "../utils/event-stream";
+import { parseStreamingJson } from "../utils/json-parse";
+import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
+import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import { transformMessages } from "./transform-messages";
 
 /**

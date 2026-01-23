@@ -4,14 +4,14 @@
 
 import * as path from "node:path";
 import * as piCodingAgent from "@oh-my-pi/pi-coding-agent";
-import { hookCapability } from "@oh-my-pi/pi-coding-agent/capability/hook";
-import type { Hook } from "@oh-my-pi/pi-coding-agent/discovery";
-import { loadCapability } from "@oh-my-pi/pi-coding-agent/discovery";
-import { expandPath } from "@oh-my-pi/pi-coding-agent/discovery/helpers";
-import type { HookMessage } from "@oh-my-pi/pi-coding-agent/session/messages";
-import type { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { logger } from "@oh-my-pi/pi-utils";
 import * as typebox from "@sinclair/typebox";
+import { hookCapability } from "../../capability/hook";
+import type { Hook } from "../../discovery";
+import { loadCapability } from "../../discovery";
+import { expandPath } from "../../discovery/helpers";
+import type { HookMessage } from "../../session/messages";
+import type { SessionManager } from "../../session/session-manager";
 import { execCommand } from "./runner";
 import type { ExecOptions, HookAPI, HookFactory, HookMessageRenderer, RegisteredCommand } from "./types";
 

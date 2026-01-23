@@ -1,4 +1,4 @@
-import type { AssistantMessage, AssistantMessageEvent } from "@oh-my-pi/pi-ai/types";
+import type { AssistantMessage, AssistantMessageEvent } from "../types";
 
 // Generic event stream class for async iteration
 export class EventStream<T, R = T> implements AsyncIterable<T> {

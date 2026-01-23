@@ -5,22 +5,16 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { contextFileCapability } from "@oh-my-pi/pi-coding-agent/capability/context-file";
-import { systemPromptCapability } from "@oh-my-pi/pi-coding-agent/capability/system-prompt";
-import { renderPromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import type { SkillsSettings } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
-import {
-	type ContextFile,
-	loadCapability,
-	type SystemPrompt as SystemPromptFile,
-} from "@oh-my-pi/pi-coding-agent/discovery";
-import { loadSkills, type Skill } from "@oh-my-pi/pi-coding-agent/extensibility/skills";
-import customSystemPromptTemplate from "@oh-my-pi/pi-coding-agent/prompts/system/custom-system-prompt.md" with {
-	type: "text",
-};
-import systemPromptTemplate from "@oh-my-pi/pi-coding-agent/prompts/system/system-prompt.md" with { type: "text" };
 import { $ } from "bun";
 import chalk from "chalk";
+import { contextFileCapability } from "./capability/context-file";
+import { systemPromptCapability } from "./capability/system-prompt";
+import { renderPromptTemplate } from "./config/prompt-templates";
+import type { SkillsSettings } from "./config/settings-manager";
+import { type ContextFile, loadCapability, type SystemPrompt as SystemPromptFile } from "./discovery";
+import { loadSkills, type Skill } from "./extensibility/skills";
+import customSystemPromptTemplate from "./prompts/system/custom-system-prompt.md" with { type: "text" };
+import systemPromptTemplate from "./prompts/system/system-prompt.md" with { type: "text" };
 import type { ToolName } from "./tools";
 
 interface GitContext {

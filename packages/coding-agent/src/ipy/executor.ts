@@ -1,4 +1,6 @@
-import { shutdownSharedGateway } from "@oh-my-pi/pi-coding-agent/ipy/gateway-coordinator";
+import { logger } from "@oh-my-pi/pi-utils";
+import { OutputSink } from "../session/streaming-output";
+import { shutdownSharedGateway } from "./gateway-coordinator";
 import {
 	checkPythonKernelAvailability,
 	type KernelDisplayOutput,
@@ -6,9 +8,7 @@ import {
 	type KernelExecuteResult,
 	type PreludeHelper,
 	PythonKernel,
-} from "@oh-my-pi/pi-coding-agent/ipy/kernel";
-import { OutputSink } from "@oh-my-pi/pi-coding-agent/session/streaming-output";
-import { logger } from "@oh-my-pi/pi-utils";
+} from "./kernel";
 
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_KERNEL_SESSIONS = 4;

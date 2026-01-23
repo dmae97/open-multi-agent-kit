@@ -5,10 +5,10 @@
  * Supports MCP server discovery from `mcp.json` with nested `mcp.servers` structure.
  */
 
-import { registerProvider } from "@oh-my-pi/pi-coding-agent/capability";
-import { readFile } from "@oh-my-pi/pi-coding-agent/capability/fs";
-import { type MCPServer, mcpCapability } from "@oh-my-pi/pi-coding-agent/capability/mcp";
-import type { LoadContext, LoadResult } from "@oh-my-pi/pi-coding-agent/capability/types";
+import { registerProvider } from "../capability";
+import { readFile } from "../capability/fs";
+import { type MCPServer, mcpCapability } from "../capability/mcp";
+import type { LoadContext, LoadResult } from "../capability/types";
 import { createSourceMeta, expandEnvVarsDeep, getProjectPath, parseJSON } from "./helpers";
 
 const PROVIDER_ID = "vscode";

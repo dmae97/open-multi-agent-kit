@@ -4,8 +4,8 @@ import {
 	type ImageDimensions,
 	imageFallback,
 	renderImage,
-} from "@oh-my-pi/pi-tui/terminal-image";
-import type { Component } from "@oh-my-pi/pi-tui/tui";
+} from "../terminal-image";
+import type { Component } from "../tui";
 
 export interface ImageTheme {
 	fallbackColor: (str: string) => string;

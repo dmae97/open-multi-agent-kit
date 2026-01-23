@@ -11,14 +11,14 @@
  * The isContextOverflow() function must return true for all providers.
  */
 
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import type { ChildProcess } from "node:child_process";
 import { execSync, spawn } from "node:child_process";
 import { getModel } from "@oh-my-pi/pi-ai/models";
 import { complete } from "@oh-my-pi/pi-ai/stream";
 import type { AssistantMessage, Context, Model, Usage } from "@oh-my-pi/pi-ai/types";
 import { isContextOverflow } from "@oh-my-pi/pi-ai/utils/overflow";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { resolveApiKey } from "./oauth";
+import { e2eApiKey, resolveApiKey } from "./oauth";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([
@@ -97,7 +97,7 @@ function logResult(result: OverflowResult) {
 // =============================================================================
 
 describe("Context overflow error handling", () => {
-	describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Anthropic (API Key)", () => {
+	describe.skipIf(!e2eApiKey("ANTHROPIC_API_KEY"))("Anthropic (API Key)", () => {
 		it("claude-3-5-haiku - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("anthropic", "claude-3-5-haiku-20241022");
 			const result = await testContextOverflow(model, process.env.ANTHROPIC_API_KEY!);
@@ -163,7 +163,7 @@ describe("Context overflow error handling", () => {
 	// Expected pattern: "exceeds the context window"
 	// =============================================================================
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions", () => {
+	describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("OpenAI Completions", () => {
 		it("gpt-4o-mini - should detect overflow via isContextOverflow", async () => {
 			const model = { ...getModel("openai", "gpt-4o-mini") };
 			model.api = "openai-completions" as any;
@@ -176,7 +176,7 @@ describe("Context overflow error handling", () => {
 		}, 120000);
 	});
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses", () => {
+	describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("OpenAI Responses", () => {
 		it("gpt-4o - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("openai", "gpt-4o");
 			const result = await testContextOverflow(model, process.env.OPENAI_API_KEY!);
@@ -193,7 +193,7 @@ describe("Context overflow error handling", () => {
 	// Expected pattern: "input token count (X) exceeds the maximum"
 	// =============================================================================
 
-	describe.skipIf(!process.env.GEMINI_API_KEY)("Google", () => {
+	describe.skipIf(!e2eApiKey("GEMINI_API_KEY"))("Google", () => {
 		it("gemini-2.0-flash - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("google", "gemini-2.0-flash");
 			const result = await testContextOverflow(model, process.env.GEMINI_API_KEY!);
@@ -289,7 +289,7 @@ describe("Context overflow error handling", () => {
 	// Expected pattern: "maximum prompt length is X but the request contains Y"
 	// =============================================================================
 
-	describe.skipIf(!process.env.XAI_API_KEY)("xAI", () => {
+	describe.skipIf(!e2eApiKey("XAI_API_KEY"))("xAI", () => {
 		it("grok-3-fast - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("xai", "grok-3-fast");
 			const result = await testContextOverflow(model, process.env.XAI_API_KEY!);
@@ -306,7 +306,7 @@ describe("Context overflow error handling", () => {
 	// Expected pattern: "reduce the length of the messages"
 	// =============================================================================
 
-	describe.skipIf(!process.env.GROQ_API_KEY)("Groq", () => {
+	describe.skipIf(!e2eApiKey("GROQ_API_KEY"))("Groq", () => {
 		it("llama-3.3-70b-versatile - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("groq", "llama-3.3-70b-versatile");
 			const result = await testContextOverflow(model, process.env.GROQ_API_KEY!);
@@ -323,7 +323,7 @@ describe("Context overflow error handling", () => {
 	// Expected: 400/413 status code with no body
 	// =============================================================================
 
-	describe.skipIf(!process.env.CEREBRAS_API_KEY)("Cerebras", () => {
+	describe.skipIf(!e2eApiKey("CEREBRAS_API_KEY"))("Cerebras", () => {
 		it("qwen-3-235b - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("cerebras", "qwen-3-235b-a22b-instruct-2507");
 			const result = await testContextOverflow(model, process.env.CEREBRAS_API_KEY!);
@@ -342,7 +342,7 @@ describe("Context overflow error handling", () => {
 	// Detection via usage.input > contextWindow when successful
 	// =============================================================================
 
-	describe.skipIf(!process.env.ZAI_API_KEY)("z.ai", () => {
+	describe.skipIf(!e2eApiKey("ZAI_API_KEY"))("z.ai", () => {
 		it("glm-4.5-flash - should detect overflow via isContextOverflow (silent overflow or rate limit)", async () => {
 			const model = getModel("zai", "glm-4.5-flash");
 			const result = await testContextOverflow(model, process.env.ZAI_API_KEY!);
@@ -368,7 +368,7 @@ describe("Context overflow error handling", () => {
 	// Expected pattern: TBD - need to test actual error message
 	// =============================================================================
 
-	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral", () => {
+	describe.skipIf(!e2eApiKey("MISTRAL_API_KEY"))("Mistral", () => {
 		it("devstral-medium-latest - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("mistral", "devstral-medium-latest");
 			const result = await testContextOverflow(model, process.env.MISTRAL_API_KEY!);
@@ -384,7 +384,7 @@ describe("Context overflow error handling", () => {
 	// Expected pattern: "maximum context length is X tokens"
 	// =============================================================================
 
-	describe.skipIf(!process.env.OPENROUTER_API_KEY)("OpenRouter", () => {
+	describe.skipIf(!e2eApiKey("OPENROUTER_API_KEY"))("OpenRouter", () => {
 		// Anthropic backend
 		it("anthropic/claude-sonnet-4 via OpenRouter - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("openrouter", "anthropic/claude-sonnet-4");

@@ -7,10 +7,10 @@
 
 import type { AgentTool, AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent, TextContent } from "@oh-my-pi/pi-ai";
-import type { OutputSummary } from "@oh-my-pi/pi-coding-agent/session/streaming-output";
-import type { TruncationResult } from "@oh-my-pi/pi-coding-agent/tools/truncate";
-import { formatSize } from "@oh-my-pi/pi-coding-agent/tools/truncate";
+import type { OutputSummary } from "../session/streaming-output";
 import { renderError } from "./tool-errors";
+import type { TruncationResult } from "./truncate";
+import { formatSize } from "./truncate";
 
 /**
  * Truncation metadata for the output notice.

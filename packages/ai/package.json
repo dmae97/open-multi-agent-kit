@@ -10,28 +10,50 @@
 			"types": "./src/index.ts",
 			"import": "./src/index.ts"
 		},
+		"./models": {
+			"types": "./src/models.ts",
+			"import": "./src/models.ts"
+		},
+		"./models.generated": {
+			"types": "./src/models.generated.ts",
+			"import": "./src/models.generated.ts"
+		},
+		"./stream": {
+			"types": "./src/stream.ts",
+			"import": "./src/stream.ts"
+		},
+		"./types": {
+			"types": "./src/types.ts",
+			"import": "./src/types.ts"
+		},
+		"./usage": {
+			"types": "./src/usage.ts",
+			"import": "./src/usage.ts"
+		},
+		"./storage": {
+			"types": "./src/storage.ts",
+			"import": "./src/storage.ts"
+		},
+		"./providers/*": {
+			"types": "./src/providers/*.ts",
+			"import": "./src/providers/*.ts"
+		},
 		"./utils/*": {
 			"types": "./src/utils/*.ts",
 			"import": "./src/utils/*.ts"
-		},
-		"./*": {
-			"types": "./src/*",
-			"import": "./src/*"
 		}
 	},
 	"bin": {
-		"pi-ai": "./dist/cli.js"
+		"pi-ai": "./src/cli.ts"
 	},
 	"files": [
-		"dist",
 		"src",
 		"README.md"
 	],
 	"scripts": {
-		"build": "tsgo -p tsconfig.build.json",
+		"check": "tsgo -p tsconfig.json",
 		"generate-models": "bun scripts/generate-models.ts",
-		"test": "bun test",
-		"prepublishOnly": "cp tsconfig.publish.json tsconfig.json && bun run build"
+		"test": "bun test"
 	},
 	"dependencies": {
 		"@oh-my-pi/pi-utils": "workspace:*",

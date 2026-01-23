@@ -1,6 +1,6 @@
-import type { Rule } from "@oh-my-pi/pi-coding-agent/capability/rule";
-import { theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
 import { Box, Container, Spacer, Text } from "@oh-my-pi/pi-tui";
+import type { Rule } from "../../capability/rule";
+import { theme } from "../../modes/theme/theme";
 
 /**
  * Component that renders a TTSR (Time Traveling Stream Rules) notification.

@@ -38,7 +38,7 @@ jobs:
           sudo ln -sf /usr/bin/convert /usr/local/bin/magick
       - run: bun install --frozen-lockfile
       - run: bun run check
-      - run: bun test --only-failures
+      - run: bun run test
       - name: CLI smoke test
         run: |
           bun packages/coding-agent/src/cli.ts --version
@@ -67,8 +67,7 @@ jobs:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
       - run: bun install --frozen-lockfile
-      - name: Generate WASM base64
-        run: bun packages/coding-agent/scripts/generate-wasm-b64.ts
+
       - name: Build binaries
         run: |
           cd packages/coding-agent

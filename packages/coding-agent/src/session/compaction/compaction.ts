@@ -8,22 +8,12 @@
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage, Model, Usage } from "@oh-my-pi/pi-ai";
 import { completeSimple } from "@oh-my-pi/pi-ai";
-import { renderPromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import compactionSummaryPrompt from "@oh-my-pi/pi-coding-agent/prompts/compaction/compaction-summary.md" with {
-	type: "text",
-};
-import compactionTurnPrefixPrompt from "@oh-my-pi/pi-coding-agent/prompts/compaction/compaction-turn-prefix.md" with {
-	type: "text",
-};
-import compactionUpdateSummaryPrompt from "@oh-my-pi/pi-coding-agent/prompts/compaction/compaction-update-summary.md" with {
-	type: "text",
-};
-import {
-	convertToLlm,
-	createBranchSummaryMessage,
-	createCustomMessage,
-} from "@oh-my-pi/pi-coding-agent/session/messages";
-import type { CompactionEntry, SessionEntry } from "@oh-my-pi/pi-coding-agent/session/session-manager";
+import { renderPromptTemplate } from "../../config/prompt-templates";
+import compactionSummaryPrompt from "../../prompts/compaction/compaction-summary.md" with { type: "text" };
+import compactionTurnPrefixPrompt from "../../prompts/compaction/compaction-turn-prefix.md" with { type: "text" };
+import compactionUpdateSummaryPrompt from "../../prompts/compaction/compaction-update-summary.md" with { type: "text" };
+import { convertToLlm, createBranchSummaryMessage, createCustomMessage } from "../../session/messages";
+import type { CompactionEntry, SessionEntry } from "../../session/session-manager";
 import {
 	computeFileLists,
 	createFileOps,

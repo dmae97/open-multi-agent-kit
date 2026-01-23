@@ -8,9 +8,6 @@
  *     - Config value editor
  */
 
-import { PluginManager } from "@oh-my-pi/pi-coding-agent/extensibility/plugins/manager";
-import type { InstalledPlugin, PluginSettingSchema } from "@oh-my-pi/pi-coding-agent/extensibility/plugins/types";
-import { getSelectListTheme, getSettingsListTheme, theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
 import {
 	Container,
 	Input,
@@ -21,6 +18,9 @@ import {
 	Spacer,
 	Text,
 } from "@oh-my-pi/pi-tui";
+import { PluginManager } from "../../extensibility/plugins/manager";
+import type { InstalledPlugin, PluginSettingSchema } from "../../extensibility/plugins/types";
+import { getSelectListTheme, getSettingsListTheme, theme } from "../../modes/theme/theme";
 import { DynamicBorder } from "./dynamic-border";
 
 // =============================================================================

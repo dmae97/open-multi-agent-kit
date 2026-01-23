@@ -1,17 +1,17 @@
-import type { CommitAgentState } from "@oh-my-pi/pi-coding-agent/commit/agentic/state";
-import { createAnalyzeFileTool } from "@oh-my-pi/pi-coding-agent/commit/agentic/tools/analyze-file";
-import { createGitFileDiffTool } from "@oh-my-pi/pi-coding-agent/commit/agentic/tools/git-file-diff";
-import { createGitHunkTool } from "@oh-my-pi/pi-coding-agent/commit/agentic/tools/git-hunk";
-import { createGitOverviewTool } from "@oh-my-pi/pi-coding-agent/commit/agentic/tools/git-overview";
-import { createProposeChangelogTool } from "@oh-my-pi/pi-coding-agent/commit/agentic/tools/propose-changelog";
-import { createProposeCommitTool } from "@oh-my-pi/pi-coding-agent/commit/agentic/tools/propose-commit";
-import { createRecentCommitsTool } from "@oh-my-pi/pi-coding-agent/commit/agentic/tools/recent-commits";
-import { createSplitCommitTool } from "@oh-my-pi/pi-coding-agent/commit/agentic/tools/split-commit";
-import type { ControlledGit } from "@oh-my-pi/pi-coding-agent/commit/git";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import type { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
-import type { CustomTool } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools/types";
-import type { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
+import type { CommitAgentState } from "../../../commit/agentic/state";
+import type { ControlledGit } from "../../../commit/git";
+import type { ModelRegistry } from "../../../config/model-registry";
+import type { SettingsManager } from "../../../config/settings-manager";
+import type { CustomTool } from "../../../extensibility/custom-tools/types";
+import type { AuthStorage } from "../../../session/auth-storage";
+import { createAnalyzeFileTool } from "./analyze-file";
+import { createGitFileDiffTool } from "./git-file-diff";
+import { createGitHunkTool } from "./git-hunk";
+import { createGitOverviewTool } from "./git-overview";
+import { createProposeChangelogTool } from "./propose-changelog";
+import { createProposeCommitTool } from "./propose-commit";
+import { createRecentCommitsTool } from "./recent-commits";
+import { createSplitCommitTool } from "./split-commit";
 
 export interface CommitToolOptions {
 	cwd: string;

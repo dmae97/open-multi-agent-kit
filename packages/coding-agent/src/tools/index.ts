@@ -1,6 +1,7 @@
 // Exa MCP tools (22 tools)
-export { exaTools } from "@oh-my-pi/pi-coding-agent/exa";
-export type { ExaRenderDetails, ExaSearchResponse, ExaSearchResult } from "@oh-my-pi/pi-coding-agent/exa/types";
+
+export { exaTools } from "../exa";
+export type { ExaRenderDetails, ExaSearchResponse, ExaSearchResult } from "../exa/types";
 export {
 	type FileDiagnosticsResult,
 	type FileFormatResult,
@@ -11,9 +12,9 @@ export {
 	type LspWarmupOptions,
 	type LspWarmupResult,
 	warmupLspServers,
-} from "@oh-my-pi/pi-coding-agent/lsp";
-export { EditTool, type EditToolDetails } from "@oh-my-pi/pi-coding-agent/patch";
-export { BUNDLED_AGENTS, TaskTool } from "@oh-my-pi/pi-coding-agent/task";
+} from "../lsp";
+export { EditTool, type EditToolDetails } from "../patch";
+export { BUNDLED_AGENTS, TaskTool } from "../task";
 export {
 	companyWebSearchTools,
 	exaWebSearchTools,
@@ -31,7 +32,7 @@ export {
 	webSearchCustomTool,
 	webSearchDeepTool,
 	webSearchLinkedinTool,
-} from "@oh-my-pi/pi-coding-agent/web/search";
+} from "../web/search";
 export { AskTool, type AskToolDetails } from "./ask";
 export { BashTool, type BashToolDetails, type BashToolOptions } from "./bash";
 export { CalculatorTool, type CalculatorToolDetails } from "./calculator";
@@ -60,18 +61,18 @@ export {
 export { WriteTool, type WriteToolDetails } from "./write";
 
 import type { AgentTool } from "@oh-my-pi/pi-agent-core";
-import type { BashInterceptorRule } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
-import type { InternalUrlRouter } from "@oh-my-pi/pi-coding-agent/internal-urls";
-import { getPreludeDocs, warmPythonEnvironment } from "@oh-my-pi/pi-coding-agent/ipy/executor";
-import { checkPythonKernelAvailability } from "@oh-my-pi/pi-coding-agent/ipy/kernel";
-import { LspTool } from "@oh-my-pi/pi-coding-agent/lsp";
-import { EditTool } from "@oh-my-pi/pi-coding-agent/patch";
-import type { ArtifactManager } from "@oh-my-pi/pi-coding-agent/session/artifacts";
-import { TaskTool } from "@oh-my-pi/pi-coding-agent/task";
-import type { AgentOutputManager } from "@oh-my-pi/pi-coding-agent/task/output-manager";
-import type { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
-import { WebSearchTool } from "@oh-my-pi/pi-coding-agent/web/search";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { BashInterceptorRule } from "../config/settings-manager";
+import type { InternalUrlRouter } from "../internal-urls";
+import { getPreludeDocs, warmPythonEnvironment } from "../ipy/executor";
+import { checkPythonKernelAvailability } from "../ipy/kernel";
+import { LspTool } from "../lsp";
+import { EditTool } from "../patch";
+import type { ArtifactManager } from "../session/artifacts";
+import { TaskTool } from "../task";
+import type { AgentOutputManager } from "../task/output-manager";
+import type { EventBus } from "../utils/event-bus";
+import { WebSearchTool } from "../web/search";
 import { AskTool } from "./ask";
 import { BashTool } from "./bash";
 import { CalculatorTool } from "./calculator";

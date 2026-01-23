@@ -1,6 +1,6 @@
-import { matchesKey } from "@oh-my-pi/pi-tui/keys";
-import type { Component } from "@oh-my-pi/pi-tui/tui";
-import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@oh-my-pi/pi-tui/utils";
+import { matchesKey } from "../keys";
+import type { Component } from "../tui";
+import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "../utils";
 
 export interface SettingItem {
 	/** Unique identifier for this setting */

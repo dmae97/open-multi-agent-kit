@@ -14,10 +14,31 @@
 		"inlineSourceMap": false,
 		"moduleResolution": "Bundler",
 		"resolveJsonModule": true,
+		"allowArbitraryExtensions": true,
 		"allowImportingTsExtensions": false,
 		"experimentalDecorators": true,
 		"emitDecoratorMetadata": true,
 		"useDefineForClassFields": false,
-		"types": ["bun", "node"]
-	}
+		"types": ["bun", "node", "assets"],
+		"typeRoots": ["./types", "./node_modules/@types"],
+		"paths": {
+			"@oh-my-pi/pi-ai": ["./packages/ai/src/index.ts"],
+			"@oh-my-pi/pi-ai/*": ["./packages/ai/src/*"],
+			"@oh-my-pi/pi-agent-core": ["./packages/agent/src/index.ts"],
+			"@oh-my-pi/pi-agent-core/*": ["./packages/agent/src/*"],
+			"@oh-my-pi/pi-utils": ["./packages/pi-utils/src/index.ts"],
+			"@oh-my-pi/pi-utils/*": ["./packages/pi-utils/src/*"],
+			"@oh-my-pi/pi-coding-agent": ["./packages/coding-agent/src/index.ts"],
+			"@oh-my-pi/pi-coding-agent/hooks": ["./packages/coding-agent/src/extensibility/hooks/index.ts"],
+			"@oh-my-pi/pi-coding-agent/*": ["./packages/coding-agent/src/*"],
+			"@oh-my-pi/omp-stats": ["./packages/stats/src/index.ts"],
+			"@oh-my-pi/omp-stats/src/*": ["./packages/stats/src/*"],
+			"@oh-my-pi/omp-stats/*": ["./packages/stats/src/*"],
+			"@oh-my-pi/pi-tui": ["./packages/tui/src/index.ts"],
+			"@oh-my-pi/pi-tui/*": ["./packages/tui/src/*"],
+		"@sinclair/typebox": ["./node_modules/@sinclair/typebox/build/esm/index.d.mts"],
+		"@sinclair/typebox/*": ["./node_modules/@sinclair/typebox/build/esm/*"]
+		}
+	},
+	"files": ["./types/assets/index.d.ts"]
 }

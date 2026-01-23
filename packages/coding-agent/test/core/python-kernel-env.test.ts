@@ -102,7 +102,7 @@ describe("PythonKernel.start (local gateway)", () => {
 		using tempDir = createTempDirSync("@python-kernel-env-");
 		const kernel = await PythonKernel.start({ cwd: tempDir.path, env: { CUSTOM_VAR: "ok" } });
 
-		const createCall = fetchSpy.mock.calls.find(([input, init]) => {
+		const createCall = fetchSpy.mock.calls.find(([input, init]: [string | URL, RequestInit?]) => {
 			const url = typeof input === "string" ? input : input.toString();
 			return url.endsWith("/api/kernels") && init?.method === "POST";
 		});

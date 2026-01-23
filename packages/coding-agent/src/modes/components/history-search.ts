@@ -1,5 +1,3 @@
-import { theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { HistoryEntry, HistoryStorage } from "@oh-my-pi/pi-coding-agent/session/history-storage";
 import {
 	type Component,
 	Container,
@@ -10,6 +8,8 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "@oh-my-pi/pi-tui";
+import { theme } from "../../modes/theme/theme";
+import type { HistoryEntry, HistoryStorage } from "../../session/history-storage";
 import { DynamicBorder } from "./dynamic-border";
 
 class HistoryResultsList implements Component {

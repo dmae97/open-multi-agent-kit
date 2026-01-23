@@ -3,11 +3,11 @@
  * Shares the same kernel session as the agent's Python tool.
  */
 
-import { getSymbolTheme, highlightCode, theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { TruncationMeta } from "@oh-my-pi/pi-coding-agent/tools/output-meta";
-import { formatSize } from "@oh-my-pi/pi-coding-agent/tools/truncate";
 import { Container, Loader, Spacer, Text, type TUI } from "@oh-my-pi/pi-tui";
 import stripAnsi from "strip-ansi";
+import { getSymbolTheme, highlightCode, theme } from "../../modes/theme/theme";
+import type { TruncationMeta } from "../../tools/output-meta";
+import { formatSize } from "../../tools/truncate";
 import { DynamicBorder } from "./dynamic-border";
 import { truncateToVisualLines } from "./visual-truncate";
 

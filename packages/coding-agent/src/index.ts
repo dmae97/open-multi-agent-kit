@@ -3,52 +3,6 @@
 // TypeBox helper for string enums (convenience for custom tools)
 // Re-export from pi-ai which uses the correct enum-based schema format
 export { StringEnum } from "@oh-my-pi/pi-ai";
-export type { FileDiagnosticsResult } from "@oh-my-pi/pi-coding-agent/lsp";
-// UI components for extensions
-export {
-	ArminComponent,
-	AssistantMessageComponent,
-	BashExecutionComponent,
-	BorderedLoader,
-	BranchSummaryMessageComponent,
-	CompactionSummaryMessageComponent,
-	CustomEditor,
-	CustomMessageComponent,
-	DynamicBorder,
-	FooterComponent,
-	HookEditorComponent as ExtensionEditorComponent,
-	HookInputComponent as ExtensionInputComponent,
-	HookSelectorComponent as ExtensionSelectorComponent,
-	LoginDialogComponent,
-	ModelSelectorComponent,
-	OAuthSelectorComponent,
-	type RenderDiffOptions,
-	renderDiff,
-	SessionSelectorComponent,
-	type SettingsCallbacks,
-	SettingsSelectorComponent,
-	ShowImagesSelectorComponent,
-	ThemeSelectorComponent,
-	ThinkingSelectorComponent,
-	ToolExecutionComponent,
-	type ToolExecutionOptions,
-	TreeSelectorComponent,
-	truncateToVisualLines,
-	UserMessageComponent,
-	UserMessageSelectorComponent,
-	type VisualTruncateResult,
-} from "@oh-my-pi/pi-coding-agent/modes/components";
-// Theme utilities for custom tools
-export {
-	getLanguageFromPath,
-	getMarkdownTheme,
-	getSelectListTheme,
-	getSettingsListTheme,
-	highlightCode,
-	initTheme,
-	Theme,
-	type ThemeColor,
-} from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
 // Re-export TUI components for custom tool rendering
 export { Container, Markdown, Spacer, Text } from "@oh-my-pi/pi-tui";
 // Logging
@@ -150,6 +104,7 @@ export {
 } from "./extensibility/skills";
 // Slash commands
 export { type FileSlashCommand, loadSlashCommands as discoverSlashCommands } from "./extensibility/slash-commands";
+export type { FileDiagnosticsResult } from "./lsp";
 // Main entry point
 export { main } from "./main";
 // Run modes for programmatic SDK usage
@@ -163,6 +118,51 @@ export {
 	runPrintMode,
 	runRpcMode,
 } from "./modes";
+// UI components for extensions
+export {
+	ArminComponent,
+	AssistantMessageComponent,
+	BashExecutionComponent,
+	BorderedLoader,
+	BranchSummaryMessageComponent,
+	CompactionSummaryMessageComponent,
+	CustomEditor,
+	CustomMessageComponent,
+	DynamicBorder,
+	FooterComponent,
+	HookEditorComponent as ExtensionEditorComponent,
+	HookInputComponent as ExtensionInputComponent,
+	HookSelectorComponent as ExtensionSelectorComponent,
+	LoginDialogComponent,
+	ModelSelectorComponent,
+	OAuthSelectorComponent,
+	type RenderDiffOptions,
+	renderDiff,
+	SessionSelectorComponent,
+	type SettingsCallbacks,
+	SettingsSelectorComponent,
+	ShowImagesSelectorComponent,
+	ThemeSelectorComponent,
+	ThinkingSelectorComponent,
+	ToolExecutionComponent,
+	type ToolExecutionOptions,
+	TreeSelectorComponent,
+	truncateToVisualLines,
+	UserMessageComponent,
+	UserMessageSelectorComponent,
+	type VisualTruncateResult,
+} from "./modes/components";
+// Theme utilities for custom tools
+export {
+	getLanguageFromPath,
+	getMarkdownTheme,
+	getSelectListTheme,
+	getSettingsListTheme,
+	highlightCode,
+	initTheme,
+	Theme,
+	type ThemeColor,
+} from "./modes/theme/theme";
 // SDK for programmatic usage
 export {
 	// Factory

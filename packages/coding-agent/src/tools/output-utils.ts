@@ -1,4 +1,4 @@
-import { ArtifactManager } from "@oh-my-pi/pi-coding-agent/session/artifacts";
+import { ArtifactManager } from "../session/artifacts";
 import type { ToolSession } from ".";
 
 export interface TailBuffer {

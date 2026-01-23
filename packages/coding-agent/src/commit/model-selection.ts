@@ -1,10 +1,6 @@
 import type { Api, Model } from "@oh-my-pi/pi-ai";
-import {
-	parseModelPattern,
-	parseModelString,
-	SMOL_MODEL_PRIORITY,
-} from "@oh-my-pi/pi-coding-agent/config/model-resolver";
-import type { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
+import { parseModelPattern, parseModelString, SMOL_MODEL_PRIORITY } from "../config/model-resolver";
+import type { SettingsManager } from "../config/settings-manager";
 
 export async function resolvePrimaryModel(
 	override: string | undefined,

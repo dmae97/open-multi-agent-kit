@@ -11,35 +11,29 @@
 import type { AgentMessage, AgentToolResult, AgentToolUpdateCallback, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent, Model, TextContent, ToolResultMessage } from "@oh-my-pi/pi-ai";
 import type * as piCodingAgent from "@oh-my-pi/pi-coding-agent";
-import type { KeybindingsManager } from "@oh-my-pi/pi-coding-agent/config/keybindings";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import type { BashResult } from "@oh-my-pi/pi-coding-agent/exec/bash-executor";
-import type { ExecOptions, ExecResult } from "@oh-my-pi/pi-coding-agent/exec/exec";
-import type { PythonResult } from "@oh-my-pi/pi-coding-agent/ipy/executor";
-import type { Theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { EditToolDetails } from "@oh-my-pi/pi-coding-agent/patch";
-import type { CompactionPreparation, CompactionResult } from "@oh-my-pi/pi-coding-agent/session/compaction";
-import type { CustomMessage } from "@oh-my-pi/pi-coding-agent/session/messages";
+import type { AutocompleteItem, Component, EditorComponent, EditorTheme, KeyId, TUI } from "@oh-my-pi/pi-tui";
+import type { Static, TSchema } from "@sinclair/typebox";
+import type { KeybindingsManager } from "../../config/keybindings";
+import type { ModelRegistry } from "../../config/model-registry";
+import type { BashResult } from "../../exec/bash-executor";
+import type { ExecOptions, ExecResult } from "../../exec/exec";
+import type { PythonResult } from "../../ipy/executor";
+import type { Theme } from "../../modes/theme/theme";
+import type { EditToolDetails } from "../../patch";
+import type { CompactionPreparation, CompactionResult } from "../../session/compaction";
+import type { CustomMessage } from "../../session/messages";
 import type {
 	BranchSummaryEntry,
 	CompactionEntry,
 	ReadonlySessionManager,
 	SessionEntry,
 	SessionManager,
-} from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import type {
-	BashToolDetails,
-	FindToolDetails,
-	GrepToolDetails,
-	LsToolDetails,
-	ReadToolDetails,
-} from "@oh-my-pi/pi-coding-agent/tools";
-import type { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
-import type { AutocompleteItem, Component, EditorComponent, EditorTheme, KeyId, TUI } from "@oh-my-pi/pi-tui";
-import type { Static, TSchema } from "@sinclair/typebox";
+} from "../../session/session-manager";
+import type { BashToolDetails, FindToolDetails, GrepToolDetails, LsToolDetails, ReadToolDetails } from "../../tools";
+import type { EventBus } from "../../utils/event-bus";
 
-export type { AppAction, KeybindingsManager } from "@oh-my-pi/pi-coding-agent/config/keybindings";
-export type { ExecOptions, ExecResult } from "@oh-my-pi/pi-coding-agent/exec/exec";
+export type { AppAction, KeybindingsManager } from "../../config/keybindings";
+export type { ExecOptions, ExecResult } from "../../exec/exec";
 export type { AgentToolResult, AgentToolUpdateCallback };
 
 // ============================================================================

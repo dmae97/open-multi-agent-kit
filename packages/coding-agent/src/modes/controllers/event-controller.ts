@@ -1,17 +1,13 @@
-import { AssistantMessageComponent } from "@oh-my-pi/pi-coding-agent/modes/components/assistant-message";
-import { ReadToolGroupComponent } from "@oh-my-pi/pi-coding-agent/modes/components/read-tool-group";
-import { TodoReminderComponent } from "@oh-my-pi/pi-coding-agent/modes/components/todo-reminder";
-import { ToolExecutionComponent } from "@oh-my-pi/pi-coding-agent/modes/components/tool-execution";
-import { TtsrNotificationComponent } from "@oh-my-pi/pi-coding-agent/modes/components/ttsr-notification";
-import { getSymbolTheme, theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext, TodoItem } from "@oh-my-pi/pi-coding-agent/modes/types";
-import type { AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import {
-	detectNotificationProtocol,
-	isNotificationSuppressed,
-	sendNotification,
-} from "@oh-my-pi/pi-coding-agent/utils/terminal-notify";
 import { Loader, Text } from "@oh-my-pi/pi-tui";
+import { AssistantMessageComponent } from "../../modes/components/assistant-message";
+import { ReadToolGroupComponent } from "../../modes/components/read-tool-group";
+import { TodoReminderComponent } from "../../modes/components/todo-reminder";
+import { ToolExecutionComponent } from "../../modes/components/tool-execution";
+import { TtsrNotificationComponent } from "../../modes/components/ttsr-notification";
+import { getSymbolTheme, theme } from "../../modes/theme/theme";
+import type { InteractiveModeContext, TodoItem } from "../../modes/types";
+import type { AgentSessionEvent } from "../../session/agent-session";
+import { detectNotificationProtocol, isNotificationSuppressed, sendNotification } from "../../utils/terminal-notify";
 
 export class EventController {
 	private lastReadGroup: ReadToolGroupComponent | undefined = undefined;

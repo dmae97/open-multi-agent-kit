@@ -1,10 +1,10 @@
 import type { Api, AssistantMessage, Model, ToolCall } from "@oh-my-pi/pi-ai";
 import { completeSimple, validateToolCall } from "@oh-my-pi/pi-ai";
-import changelogSystemPrompt from "@oh-my-pi/pi-coding-agent/commit/prompts/changelog-system.md" with { type: "text" };
-import changelogUserPrompt from "@oh-my-pi/pi-coding-agent/commit/prompts/changelog-user.md" with { type: "text" };
-import type { ChangelogGenerationResult } from "@oh-my-pi/pi-coding-agent/commit/types";
-import { renderPromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
 import { Type } from "@sinclair/typebox";
+import changelogSystemPrompt from "../../commit/prompts/changelog-system.md" with { type: "text" };
+import changelogUserPrompt from "../../commit/prompts/changelog-user.md" with { type: "text" };
+import type { ChangelogGenerationResult } from "../../commit/types";
+import { renderPromptTemplate } from "../../config/prompt-templates";
 
 const ChangelogTool = {
 	name: "create_changelog_entries",

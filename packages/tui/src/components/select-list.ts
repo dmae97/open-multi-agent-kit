@@ -1,7 +1,7 @@
-import { matchesKey } from "@oh-my-pi/pi-tui/keys";
-import type { SymbolTheme } from "@oh-my-pi/pi-tui/symbols";
-import type { Component } from "@oh-my-pi/pi-tui/tui";
-import { truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui/utils";
+import { matchesKey } from "../keys";
+import type { SymbolTheme } from "../symbols";
+import type { Component } from "../tui";
+import { truncateToWidth, visibleWidth } from "../utils";
 
 export interface SelectItem {
 	value: string;

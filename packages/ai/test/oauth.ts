@@ -3,9 +3,27 @@
  *
  * Supports both API key and OAuth credentials.
  * OAuth tokens are automatically refreshed if expired and saved back to auth.json.
+ *
+ * E2E tests are disabled by default. Set E2E=1 environment variable to enable.
  */
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+
+/**
+ * E2E tests require explicit opt-in via E2E=1 environment variable.
+ * This prevents accidental API calls when keys happen to be in the environment.
+ */
+export const E2E_ENABLED = process.env.E2E === "1" || process.env.E2E === "true";
+
+/**
+ * Get an API key from environment, but only if E2E tests are enabled.
+ * Use this in skipIf conditions: `describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))(...)`
+ */
+export function e2eApiKey(envVar: string): string | undefined {
+	if (!E2E_ENABLED) return undefined;
+	return process.env[envVar];
+}
+
 import { getOAuthApiKey } from "@oh-my-pi/pi-ai/utils/oauth";
 import type { OAuthCredentials, OAuthProvider } from "@oh-my-pi/pi-ai/utils/oauth/types";
 import { homedir } from "os";
@@ -56,6 +74,8 @@ function saveAuthStorage(storage: AuthStorage): void {
  * For google-gemini-cli and google-antigravity, returns JSON-encoded { token, projectId }
  */
 export async function resolveApiKey(provider: string): Promise<string | undefined> {
+	if (!E2E_ENABLED) return undefined;
+
 	const storage = loadAuthStorage();
 	const entry = storage[provider];
 

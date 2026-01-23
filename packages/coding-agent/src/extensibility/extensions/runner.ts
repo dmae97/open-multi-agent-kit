@@ -4,11 +4,11 @@
 
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent, Model } from "@oh-my-pi/pi-ai";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { type Theme, theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import type { KeyId } from "@oh-my-pi/pi-tui";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { ModelRegistry } from "../../config/model-registry";
+import { type Theme, theme } from "../../modes/theme/theme";
+import type { SessionManager } from "../../session/session-manager";
 import type {
 	BeforeAgentStartEvent,
 	BeforeAgentStartEventResult,

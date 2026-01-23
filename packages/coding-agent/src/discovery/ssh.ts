@@ -6,10 +6,10 @@
  */
 
 import { join } from "node:path";
-import { registerProvider } from "@oh-my-pi/pi-coding-agent/capability";
-import { readFile } from "@oh-my-pi/pi-coding-agent/capability/fs";
-import { type SSHHost, sshCapability } from "@oh-my-pi/pi-coding-agent/capability/ssh";
-import type { LoadContext, LoadResult, SourceMeta } from "@oh-my-pi/pi-coding-agent/capability/types";
+import { registerProvider } from "../capability";
+import { readFile } from "../capability/fs";
+import { type SSHHost, sshCapability } from "../capability/ssh";
+import type { LoadContext, LoadResult, SourceMeta } from "../capability/types";
 import { createSourceMeta, expandEnvVarsDeep, parseJSON } from "./helpers";
 
 const PROVIDER_ID = "ssh-json";

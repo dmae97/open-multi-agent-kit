@@ -9,6 +9,7 @@
  */
 
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
+import { getCapabilities } from "@oh-my-pi/pi-tui";
 import type {
 	ImageProviderOption,
 	NotificationMethod,
@@ -19,8 +20,7 @@ import type {
 	StatusLineSeparatorStyle,
 	SymbolPreset,
 	WebSearchProviderOption,
-} from "@oh-my-pi/pi-coding-agent/config/settings-manager";
-import { getCapabilities } from "@oh-my-pi/pi-tui";
+} from "../../config/settings-manager";
 import { getPreset } from "./status-line/presets";
 
 // Setting value types

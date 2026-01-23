@@ -10,7 +10,8 @@
 	},
 	"scripts": {
 		"start": "bun run index.ts",
-		"generate": "bun run generate.ts --react-dir /tmp/react-source --count-per-type 4"
+		"generate": "bun run generate.ts --react-dir /tmp/react-source --count-per-type 4",
+		"check": "tsgo -p tsconfig.json --noEmit"
 	},
 	"dependencies": {
 		"@oh-my-pi/pi-agent-core": "workspace:*",

@@ -5,12 +5,12 @@
  */
 
 import * as path from "node:path";
-import { type SlashCommand, slashCommandCapability } from "@oh-my-pi/pi-coding-agent/capability/slash-command";
-import { renderPromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import { loadCapability } from "@oh-my-pi/pi-coding-agent/discovery";
+import { type SlashCommand, slashCommandCapability } from "../capability/slash-command";
+import { renderPromptTemplate } from "../config/prompt-templates";
+import { loadCapability } from "../discovery";
 // Embed command markdown files at build time
-import initMd from "@oh-my-pi/pi-coding-agent/prompts/agents/init.md" with { type: "text" };
-import { parseFrontmatter } from "@oh-my-pi/pi-coding-agent/utils/frontmatter";
+import initMd from "../prompts/agents/init.md" with { type: "text" };
+import { parseFrontmatter } from "../utils/frontmatter";
 
 const EMBEDDED_COMMANDS: { name: string; content: string }[] = [
 	{ name: "init.md", content: renderPromptTemplate(initMd) },

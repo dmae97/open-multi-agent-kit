@@ -8,10 +8,10 @@
  */
 
 import { join } from "node:path";
-import { registerProvider } from "@oh-my-pi/pi-coding-agent/capability";
-import { readFile } from "@oh-my-pi/pi-coding-agent/capability/fs";
-import { type MCPServer, mcpCapability } from "@oh-my-pi/pi-coding-agent/capability/mcp";
-import type { LoadContext, LoadResult, SourceMeta } from "@oh-my-pi/pi-coding-agent/capability/types";
+import { registerProvider } from "../capability";
+import { readFile } from "../capability/fs";
+import { type MCPServer, mcpCapability } from "../capability/mcp";
+import type { LoadContext, LoadResult, SourceMeta } from "../capability/types";
 import { createSourceMeta, expandEnvVarsDeep, parseJSON } from "./helpers";
 
 const PROVIDER_ID = "mcp-json";

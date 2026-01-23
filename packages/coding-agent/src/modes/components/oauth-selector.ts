@@ -1,7 +1,7 @@
 import { getOAuthProviders, type OAuthProviderInfo } from "@oh-my-pi/pi-ai";
-import { theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 import { Container, matchesKey, Spacer, TruncatedText } from "@oh-my-pi/pi-tui";
+import { theme } from "../../modes/theme/theme";
+import type { AuthStorage } from "../../session/auth-storage";
 import { DynamicBorder } from "./dynamic-border";
 
 /**

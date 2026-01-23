@@ -1,10 +1,10 @@
 import { existsSync, type FSWatcher, readFileSync, watch } from "node:fs";
 import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import { theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { shortenPath } from "@oh-my-pi/pi-coding-agent/tools/render-utils";
 import { type Component, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
 import { dirname, join } from "path";
+import { theme } from "../../modes/theme/theme";
+import type { AgentSession } from "../../session/agent-session";
+import { shortenPath } from "../../tools/render-utils";
 
 /**
  * Sanitize text for display in a single-line status.

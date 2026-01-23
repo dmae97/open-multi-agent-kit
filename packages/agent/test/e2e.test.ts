@@ -1,7 +1,7 @@
+import { describe, expect, it } from "bun:test";
 import { Agent } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage, Model, ToolResultMessage, UserMessage } from "@oh-my-pi/pi-ai";
 import { getModel } from "@oh-my-pi/pi-ai";
-import { describe, expect, it } from "vitest";
 import { calculateTool } from "./utils/calculate";
 
 async function basicPrompt(model: Model<any>) {
@@ -455,6 +455,7 @@ describe("Agent.continue()", () => {
 				toolCallId: "calc-1",
 				toolName: "calculate",
 				content: [{ type: "text", text: "5 + 3 = 8" }],
+				isError: false,
 				timestamp: Date.now(),
 			};
 

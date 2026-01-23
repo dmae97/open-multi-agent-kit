@@ -4,11 +4,11 @@
 
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { completeSimple } from "@oh-my-pi/pi-ai";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { parseModelString, SMOL_MODEL_PRIORITY } from "@oh-my-pi/pi-coding-agent/config/model-resolver";
-import { renderPromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import titleSystemPrompt from "@oh-my-pi/pi-coding-agent/prompts/system/title-system.md" with { type: "text" };
 import { logger } from "@oh-my-pi/pi-utils";
+import type { ModelRegistry } from "../config/model-registry";
+import { parseModelString, SMOL_MODEL_PRIORITY } from "../config/model-resolver";
+import { renderPromptTemplate } from "../config/prompt-templates";
+import titleSystemPrompt from "../prompts/system/title-system.md" with { type: "text" };
 
 const TITLE_SYSTEM_PROMPT = renderPromptTemplate(titleSystemPrompt);
 

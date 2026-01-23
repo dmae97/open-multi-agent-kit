@@ -6,17 +6,17 @@
 
 import path from "node:path";
 import type { AgentEvent, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { formatModelString, parseModelPattern } from "@oh-my-pi/pi-coding-agent/config/model-resolver";
-import { checkPythonKernelAvailability } from "@oh-my-pi/pi-coding-agent/ipy/kernel";
-import { LspTool } from "@oh-my-pi/pi-coding-agent/lsp";
-import type { LspParams } from "@oh-my-pi/pi-coding-agent/lsp/types";
-import { callTool } from "@oh-my-pi/pi-coding-agent/mcp/client";
-import type { MCPManager } from "@oh-my-pi/pi-coding-agent/mcp/manager";
-import type { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { PythonTool, type PythonToolParams } from "@oh-my-pi/pi-coding-agent/tools/python";
-import type { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
 import type { ToolSession } from "..";
+import type { ModelRegistry } from "../config/model-registry";
+import { formatModelString, parseModelPattern } from "../config/model-resolver";
+import { checkPythonKernelAvailability } from "../ipy/kernel";
+import { LspTool } from "../lsp";
+import type { LspParams } from "../lsp/types";
+import { callTool } from "../mcp/client";
+import type { MCPManager } from "../mcp/manager";
+import type { AuthStorage } from "../session/auth-storage";
+import { PythonTool, type PythonToolParams } from "../tools/python";
+import type { EventBus } from "../utils/event-bus";
 import { subprocessToolRegistry } from "./subprocess-tool-registry";
 import {
 	type AgentDefinition,

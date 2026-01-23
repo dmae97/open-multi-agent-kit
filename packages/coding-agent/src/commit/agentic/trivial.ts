@@ -1,4 +1,4 @@
-import type { CommitType } from "@oh-my-pi/pi-coding-agent/commit/types";
+import type { CommitType } from "../../commit/types";
 
 export interface TrivialChangeResult {
 	isTrivial: true;

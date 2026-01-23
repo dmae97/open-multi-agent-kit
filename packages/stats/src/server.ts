@@ -1,3 +1,4 @@
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
 	getDashboardStats,
@@ -8,7 +9,68 @@ import {
 	syncAllSessions,
 } from "./aggregator";
 
+const CLIENT_DIR = join(import.meta.dir, "client");
 const STATIC_DIR = join(import.meta.dir, "..", "dist", "client");
+
+const ensureClientBuild = async () => {
+	const indexFile = Bun.file(join(STATIC_DIR, "index.html"));
+	if (await indexFile.exists()) return;
+
+	await rm(STATIC_DIR, { recursive: true, force: true });
+
+	const result = await Bun.build({
+		entrypoints: [join(CLIENT_DIR, "index.tsx")],
+		outdir: STATIC_DIR,
+		minify: true,
+		naming: "[dir]/[name].[ext]",
+	});
+
+	if (!result.success) {
+		const errors = result.logs.map((log) => log.message).join("\n");
+		throw new Error(`Failed to build stats client:\n${errors}`);
+	}
+
+	const indexHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Usage Statistics</title>
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-card: #0f3460;
+            --text-primary: #eee;
+            --text-secondary: #aaa;
+            --accent: #e94560;
+            --success: #4ade80;
+            --error: #f87171;
+            --border: #1f2937;
+        }
+        body { 
+            margin: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb { background: var(--bg-card); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script src="index.js" type="module"></script>
+</body>
+</html>`;
+
+	await Bun.write(join(STATIC_DIR, "index.html"), indexHtml);
+};
 
 /**
  * Handle API requests.
@@ -93,7 +155,9 @@ async function handleStatic(path: string): Promise<Response> {
 /**
  * Start the HTTP server.
  */
-export function startServer(port = 3847): { port: number; stop: () => void } {
+export async function startServer(port = 3847): Promise<{ port: number; stop: () => void }> {
+	await ensureClientBuild();
+
 	const server = Bun.serve({
 		port,
 		async fetch(req) {

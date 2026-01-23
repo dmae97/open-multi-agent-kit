@@ -7,7 +7,7 @@ import type {
 	UsageReport,
 	UsageStatus,
 	UsageWindow,
-} from "@oh-my-pi/pi-ai/usage";
+} from "../usage";
 
 const DEFAULT_ENDPOINT = "https://api.z.ai";
 const QUOTA_PATH = "/api/monitor/usage/quota/limit";

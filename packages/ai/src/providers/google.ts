@@ -4,8 +4,8 @@ import {
 	GoogleGenAI,
 	type ThinkingConfig,
 } from "@google/genai";
-import { calculateCost } from "@oh-my-pi/pi-ai/models";
-import { getEnvApiKey } from "@oh-my-pi/pi-ai/stream";
+import { calculateCost } from "../models";
+import { getEnvApiKey } from "../stream";
 import type {
 	Api,
 	AssistantMessage,
@@ -16,10 +16,10 @@ import type {
 	TextContent,
 	ThinkingContent,
 	ToolCall,
-} from "@oh-my-pi/pi-ai/types";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
-import { formatErrorMessageWithRetryAfter } from "@oh-my-pi/pi-ai/utils/retry-after";
-import { sanitizeSurrogates } from "@oh-my-pi/pi-ai/utils/sanitize-unicode";
+} from "../types";
+import { AssistantMessageEventStream } from "../utils/event-stream";
+import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
+import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import type { GoogleThinkingLevel } from "./google-gemini-cli";
 import {
 	convertMessages,

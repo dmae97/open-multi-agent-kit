@@ -14,26 +14,17 @@
 
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { StringEnum } from "@oh-my-pi/pi-ai";
-import { renderPromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import {
-	callExaTool,
-	findApiKey as findExaKey,
-	formatSearchResults,
-	isSearchResponse,
-} from "@oh-my-pi/pi-coding-agent/exa/mcp-client";
-import { renderExaCall, renderExaResult } from "@oh-my-pi/pi-coding-agent/exa/render";
-import type { ExaRenderDetails } from "@oh-my-pi/pi-coding-agent/exa/types";
-import type {
-	CustomTool,
-	CustomToolContext,
-	RenderResultOptions,
-} from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools/types";
-import type { Theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import webSearchSystemPrompt from "@oh-my-pi/pi-coding-agent/prompts/system/web-search.md" with { type: "text" };
-import webSearchDescription from "@oh-my-pi/pi-coding-agent/prompts/tools/web-search.md" with { type: "text" };
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { formatAge } from "@oh-my-pi/pi-coding-agent/tools/render-utils";
 import { Type } from "@sinclair/typebox";
+import { renderPromptTemplate } from "../../config/prompt-templates";
+import { callExaTool, findApiKey as findExaKey, formatSearchResults, isSearchResponse } from "../../exa/mcp-client";
+import { renderExaCall, renderExaResult } from "../../exa/render";
+import type { ExaRenderDetails } from "../../exa/types";
+import type { CustomTool, CustomToolContext, RenderResultOptions } from "../../extensibility/custom-tools/types";
+import type { Theme } from "../../modes/theme/theme";
+import webSearchSystemPrompt from "../../prompts/system/web-search.md" with { type: "text" };
+import webSearchDescription from "../../prompts/tools/web-search.md" with { type: "text" };
+import type { ToolSession } from "../../tools";
+import { formatAge } from "../../tools/render-utils";
 import { findAnthropicAuth } from "./auth";
 import { searchAnthropic } from "./providers/anthropic";
 import { searchExa } from "./providers/exa";

@@ -6,16 +6,6 @@
 import * as path from "node:path";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage, ImageContent, Message, UsageReport } from "@oh-my-pi/pi-ai";
-import { KeybindingsManager } from "@oh-my-pi/pi-coding-agent/config/keybindings";
-import type { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
-import type { ExtensionUIContext } from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
-import type { CompactOptions } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/types";
-import { loadSlashCommands } from "@oh-my-pi/pi-coding-agent/extensibility/slash-commands";
-import type { AgentSession, AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { HistoryStorage } from "@oh-my-pi/pi-coding-agent/session/history-storage";
-import type { SessionContext, SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { getRecentSessions } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { setTerminalTitle } from "@oh-my-pi/pi-coding-agent/utils/title-generator";
 import type { Component, Loader, SlashCommand } from "@oh-my-pi/pi-tui";
 import {
 	CombinedAutocompleteProvider,
@@ -28,6 +18,16 @@ import {
 } from "@oh-my-pi/pi-tui";
 import { logger, postmortem } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
+import { KeybindingsManager } from "../config/keybindings";
+import type { SettingsManager } from "../config/settings-manager";
+import type { ExtensionUIContext } from "../extensibility/extensions";
+import type { CompactOptions } from "../extensibility/extensions/types";
+import { loadSlashCommands } from "../extensibility/slash-commands";
+import type { AgentSession, AgentSessionEvent } from "../session/agent-session";
+import { HistoryStorage } from "../session/history-storage";
+import type { SessionContext, SessionManager } from "../session/session-manager";
+import { getRecentSessions } from "../session/session-manager";
+import { setTerminalTitle } from "../utils/title-generator";
 import type { AssistantMessageComponent } from "./components/assistant-message";
 import type { BashExecutionComponent } from "./components/bash-execution";
 import { CustomEditor } from "./components/custom-editor";

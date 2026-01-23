@@ -1,4 +1,4 @@
-import type { LimitsMeta } from "@oh-my-pi/pi-coding-agent/tools/output-meta";
+import type { LimitsMeta } from "./output-meta";
 
 export interface ListLimitResult<T> {
 	items: T[];

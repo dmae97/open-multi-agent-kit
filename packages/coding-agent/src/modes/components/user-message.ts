@@ -1,5 +1,5 @@
-import { getMarkdownTheme, theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
 import { Container, Markdown, Spacer } from "@oh-my-pi/pi-tui";
+import { getMarkdownTheme, theme } from "../../modes/theme/theme";
 
 /**
  * Component that renders a user message

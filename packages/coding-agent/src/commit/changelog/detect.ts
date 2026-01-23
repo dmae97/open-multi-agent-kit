@@ -1,5 +1,5 @@
 import { dirname, resolve } from "node:path";
-import type { ChangelogBoundary } from "@oh-my-pi/pi-coding-agent/commit/types";
+import type { ChangelogBoundary } from "../../commit/types";
 
 const CHANGELOG_NAME = "CHANGELOG.md";
 

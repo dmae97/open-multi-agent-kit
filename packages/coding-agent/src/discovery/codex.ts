@@ -8,29 +8,29 @@
  */
 
 import { join } from "node:path";
-import { registerProvider } from "@oh-my-pi/pi-coding-agent/capability";
-import type { ContextFile } from "@oh-my-pi/pi-coding-agent/capability/context-file";
-import { contextFileCapability } from "@oh-my-pi/pi-coding-agent/capability/context-file";
-import { type ExtensionModule, extensionModuleCapability } from "@oh-my-pi/pi-coding-agent/capability/extension-module";
-import { readFile } from "@oh-my-pi/pi-coding-agent/capability/fs";
-import type { Hook } from "@oh-my-pi/pi-coding-agent/capability/hook";
-import { hookCapability } from "@oh-my-pi/pi-coding-agent/capability/hook";
-import type { MCPServer } from "@oh-my-pi/pi-coding-agent/capability/mcp";
-import { mcpCapability } from "@oh-my-pi/pi-coding-agent/capability/mcp";
-import type { Prompt } from "@oh-my-pi/pi-coding-agent/capability/prompt";
-import { promptCapability } from "@oh-my-pi/pi-coding-agent/capability/prompt";
-import type { Settings } from "@oh-my-pi/pi-coding-agent/capability/settings";
-import { settingsCapability } from "@oh-my-pi/pi-coding-agent/capability/settings";
-import type { Skill } from "@oh-my-pi/pi-coding-agent/capability/skill";
-import { skillCapability } from "@oh-my-pi/pi-coding-agent/capability/skill";
-import type { SlashCommand } from "@oh-my-pi/pi-coding-agent/capability/slash-command";
-import { slashCommandCapability } from "@oh-my-pi/pi-coding-agent/capability/slash-command";
-import type { CustomTool } from "@oh-my-pi/pi-coding-agent/capability/tool";
-import { toolCapability } from "@oh-my-pi/pi-coding-agent/capability/tool";
-import type { LoadContext, LoadResult } from "@oh-my-pi/pi-coding-agent/capability/types";
-import { parseFrontmatter } from "@oh-my-pi/pi-coding-agent/utils/frontmatter";
 import { logger } from "@oh-my-pi/pi-utils";
 import { parse as parseToml } from "smol-toml";
+import { registerProvider } from "../capability";
+import type { ContextFile } from "../capability/context-file";
+import { contextFileCapability } from "../capability/context-file";
+import { type ExtensionModule, extensionModuleCapability } from "../capability/extension-module";
+import { readFile } from "../capability/fs";
+import type { Hook } from "../capability/hook";
+import { hookCapability } from "../capability/hook";
+import type { MCPServer } from "../capability/mcp";
+import { mcpCapability } from "../capability/mcp";
+import type { Prompt } from "../capability/prompt";
+import { promptCapability } from "../capability/prompt";
+import type { Settings } from "../capability/settings";
+import { settingsCapability } from "../capability/settings";
+import type { Skill } from "../capability/skill";
+import { skillCapability } from "../capability/skill";
+import type { SlashCommand } from "../capability/slash-command";
+import { slashCommandCapability } from "../capability/slash-command";
+import type { CustomTool } from "../capability/tool";
+import { toolCapability } from "../capability/tool";
+import type { LoadContext, LoadResult } from "../capability/types";
+import { parseFrontmatter } from "../utils/frontmatter";
 import {
 	createSourceMeta,
 	discoverExtensionModulePaths,

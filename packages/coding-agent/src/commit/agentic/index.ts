@@ -1,28 +1,21 @@
 import { relative } from "node:path";
 import { createInterface } from "node:readline/promises";
-import { type ExistingChangelogEntries, runCommitAgentSession } from "@oh-my-pi/pi-coding-agent/commit/agentic/agent";
-import { generateFallbackProposal } from "@oh-my-pi/pi-coding-agent/commit/agentic/fallback";
-import splitConfirmPrompt from "@oh-my-pi/pi-coding-agent/commit/agentic/prompts/split-confirm.md" with {
-	type: "text",
-};
-import type {
-	CommitAgentState,
-	CommitProposal,
-	HunkSelector,
-	SplitCommitPlan,
-} from "@oh-my-pi/pi-coding-agent/commit/agentic/state";
-import { computeDependencyOrder } from "@oh-my-pi/pi-coding-agent/commit/agentic/topo-sort";
-import { detectTrivialChange } from "@oh-my-pi/pi-coding-agent/commit/agentic/trivial";
-import { applyChangelogProposals } from "@oh-my-pi/pi-coding-agent/commit/changelog";
-import { detectChangelogBoundaries } from "@oh-my-pi/pi-coding-agent/commit/changelog/detect";
-import { parseUnreleasedSection } from "@oh-my-pi/pi-coding-agent/commit/changelog/parse";
-import { ControlledGit } from "@oh-my-pi/pi-coding-agent/commit/git";
-import { formatCommitMessage } from "@oh-my-pi/pi-coding-agent/commit/message";
-import { resolvePrimaryModel, resolveSmolModel } from "@oh-my-pi/pi-coding-agent/commit/model-selection";
-import type { CommitCommandArgs, ConventionalAnalysis } from "@oh-my-pi/pi-coding-agent/commit/types";
-import { renderPromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
-import { discoverAuthStorage, discoverContextFiles, discoverModels } from "@oh-my-pi/pi-coding-agent/sdk";
+import { applyChangelogProposals } from "../../commit/changelog";
+import { detectChangelogBoundaries } from "../../commit/changelog/detect";
+import { parseUnreleasedSection } from "../../commit/changelog/parse";
+import { ControlledGit } from "../../commit/git";
+import { formatCommitMessage } from "../../commit/message";
+import { resolvePrimaryModel, resolveSmolModel } from "../../commit/model-selection";
+import type { CommitCommandArgs, ConventionalAnalysis } from "../../commit/types";
+import { renderPromptTemplate } from "../../config/prompt-templates";
+import { SettingsManager } from "../../config/settings-manager";
+import { discoverAuthStorage, discoverContextFiles, discoverModels } from "../../sdk";
+import { type ExistingChangelogEntries, runCommitAgentSession } from "./agent";
+import { generateFallbackProposal } from "./fallback";
+import splitConfirmPrompt from "./prompts/split-confirm.md" with { type: "text" };
+import type { CommitAgentState, CommitProposal, HunkSelector, SplitCommitPlan } from "./state";
+import { computeDependencyOrder } from "./topo-sort";
+import { detectTrivialChange } from "./trivial";
 
 interface CommitExecutionContext {
 	git: ControlledGit;

@@ -26,21 +26,23 @@ import type {
 	UsageReport,
 } from "@oh-my-pi/pi-ai";
 import { isContextOverflow, modelsAreEqual, supportsXhigh } from "@oh-my-pi/pi-ai";
-import type { Rule } from "@oh-my-pi/pi-coding-agent/capability/rule";
-import { getAgentDbPath } from "@oh-my-pi/pi-coding-agent/config";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { parseModelString } from "@oh-my-pi/pi-coding-agent/config/model-resolver";
+import { abortableSleep, logger } from "@oh-my-pi/pi-utils";
+import { YAML } from "bun";
+import type { Rule } from "../capability/rule";
+import { getAgentDbPath } from "../config";
+import type { ModelRegistry } from "../config/model-registry";
+import { parseModelString } from "../config/model-resolver";
 import {
 	expandPromptTemplate,
 	type PromptTemplate,
 	parseCommandArgs,
 	renderPromptTemplate,
-} from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import type { SettingsManager, SkillsSettings } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
-import { type BashResult, executeBash as executeBashCommand } from "@oh-my-pi/pi-coding-agent/exec/bash-executor";
-import { exportSessionToHtml } from "@oh-my-pi/pi-coding-agent/export/html";
-import type { TtsrManager } from "@oh-my-pi/pi-coding-agent/export/ttsr";
-import type { LoadedCustomCommand } from "@oh-my-pi/pi-coding-agent/extensibility/custom-commands";
+} from "../config/prompt-templates";
+import type { SettingsManager, SkillsSettings } from "../config/settings-manager";
+import { type BashResult, executeBash as executeBashCommand } from "../exec/bash-executor";
+import { exportSessionToHtml } from "../export/html";
+import type { TtsrManager } from "../export/ttsr";
+import type { LoadedCustomCommand } from "../extensibility/custom-commands";
 import type {
 	ExtensionCommandContext,
 	ExtensionRunner,
@@ -52,23 +54,21 @@ import type {
 	TreePreparation,
 	TurnEndEvent,
 	TurnStartEvent,
-} from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
-import type { CompactOptions, ContextUsage } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/types";
-import type { HookCommandContext } from "@oh-my-pi/pi-coding-agent/extensibility/hooks/types";
-import type { Skill, SkillWarning } from "@oh-my-pi/pi-coding-agent/extensibility/skills";
-import { expandSlashCommand, type FileSlashCommand } from "@oh-my-pi/pi-coding-agent/extensibility/slash-commands";
-import { executePython as executePythonCommand, type PythonResult } from "@oh-my-pi/pi-coding-agent/ipy/executor";
-import { theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { normalizeDiff, normalizeToLF, ParseError, previewPatch, stripBom } from "@oh-my-pi/pi-coding-agent/patch";
-import ttsrInterruptTemplate from "@oh-my-pi/pi-coding-agent/prompts/system/ttsr-interrupt.md" with { type: "text" };
-import { closeAllConnections } from "@oh-my-pi/pi-coding-agent/ssh/connection-manager";
-import { unmountAll } from "@oh-my-pi/pi-coding-agent/ssh/sshfs-mount";
-import { outputMeta } from "@oh-my-pi/pi-coding-agent/tools/output-meta";
-import { resolveToCwd } from "@oh-my-pi/pi-coding-agent/tools/path-utils";
-import type { TodoItem } from "@oh-my-pi/pi-coding-agent/tools/todo-write";
-import { extractFileMentions, generateFileMentionMessages } from "@oh-my-pi/pi-coding-agent/utils/file-mentions";
-import { abortableSleep, logger } from "@oh-my-pi/pi-utils";
-import { YAML } from "bun";
+} from "../extensibility/extensions";
+import type { CompactOptions, ContextUsage } from "../extensibility/extensions/types";
+import type { HookCommandContext } from "../extensibility/hooks/types";
+import type { Skill, SkillWarning } from "../extensibility/skills";
+import { expandSlashCommand, type FileSlashCommand } from "../extensibility/slash-commands";
+import { executePython as executePythonCommand, type PythonResult } from "../ipy/executor";
+import { theme } from "../modes/theme/theme";
+import { normalizeDiff, normalizeToLF, ParseError, previewPatch, stripBom } from "../patch";
+import ttsrInterruptTemplate from "../prompts/system/ttsr-interrupt.md" with { type: "text" };
+import { closeAllConnections } from "../ssh/connection-manager";
+import { unmountAll } from "../ssh/sshfs-mount";
+import { outputMeta } from "../tools/output-meta";
+import { resolveToCwd } from "../tools/path-utils";
+import type { TodoItem } from "../tools/todo-write";
+import { extractFileMentions, generateFileMentionMessages } from "../utils/file-mentions";
 import {
 	type CompactionResult,
 	calculateContextTokens,

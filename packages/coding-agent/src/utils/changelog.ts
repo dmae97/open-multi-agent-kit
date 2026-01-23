@@ -96,4 +96,4 @@ export function getNewEntries(entries: ChangelogEntry[], lastVersion: string): C
 }
 
 // Re-export getChangelogPath from paths.ts for convenience
-export { getChangelogPath } from "@oh-my-pi/pi-coding-agent/config";
+export { getChangelogPath } from "../config";

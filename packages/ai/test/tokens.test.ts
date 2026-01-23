@@ -1,8 +1,8 @@
+import { describe, expect, it } from "bun:test";
 import { getModel } from "@oh-my-pi/pi-ai/models";
 import { stream } from "@oh-my-pi/pi-ai/stream";
 import type { Api, Context, Model, OptionsForApi } from "@oh-my-pi/pi-ai/types";
-import { describe, expect, it } from "vitest";
-import { resolveApiKey } from "./oauth";
+import { e2eApiKey, resolveApiKey } from "./oauth";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([
@@ -69,79 +69,115 @@ async function testTokensOnAbort<TApi extends Api>(llm: Model<TApi>, options: Op
 }
 
 describe("Token Statistics on Abort", () => {
-	describe.skipIf(!process.env.GEMINI_API_KEY)("Google Provider", () => {
+	describe.skipIf(!e2eApiKey("GEMINI_API_KEY"))("Google Provider", () => {
 		const llm = getModel("google", "gemini-2.5-flash");
 
-		it("should include token stats when aborted mid-stream", { retry: 3, timeout: 30000 }, async () => {
-			await testTokensOnAbort(llm, { thinking: { enabled: true } });
-		});
+		it(
+			"should include token stats when aborted mid-stream",
+			async () => {
+				await testTokensOnAbort(llm, { thinking: { enabled: true } });
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions Provider", () => {
+	describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("OpenAI Completions Provider", () => {
 		const llm: Model<"openai-completions"> = {
 			...getModel("openai", "gpt-4o-mini")!,
 			api: "openai-completions",
 		};
 
-		it("should include token stats when aborted mid-stream", { retry: 3, timeout: 30000 }, async () => {
-			await testTokensOnAbort(llm);
-		});
+		it(
+			"should include token stats when aborted mid-stream",
+			async () => {
+				await testTokensOnAbort(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses Provider", () => {
+	describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("OpenAI Responses Provider", () => {
 		const llm = getModel("openai", "gpt-5-mini");
 
-		it("should include token stats when aborted mid-stream", { retry: 3, timeout: 30000 }, async () => {
-			await testTokensOnAbort(llm);
-		});
+		it(
+			"should include token stats when aborted mid-stream",
+			async () => {
+				await testTokensOnAbort(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 
-	describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Anthropic Provider", () => {
+	describe.skipIf(!e2eApiKey("ANTHROPIC_API_KEY"))("Anthropic Provider", () => {
 		const llm = getModel("anthropic", "claude-3-5-haiku-20241022");
 
-		it("should include token stats when aborted mid-stream", { retry: 3, timeout: 30000 }, async () => {
-			await testTokensOnAbort(llm);
-		});
+		it(
+			"should include token stats when aborted mid-stream",
+			async () => {
+				await testTokensOnAbort(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 
-	describe.skipIf(!process.env.XAI_API_KEY)("xAI Provider", () => {
+	describe.skipIf(!e2eApiKey("XAI_API_KEY"))("xAI Provider", () => {
 		const llm = getModel("xai", "grok-3-fast");
 
-		it("should include token stats when aborted mid-stream", { retry: 3, timeout: 30000 }, async () => {
-			await testTokensOnAbort(llm);
-		});
+		it(
+			"should include token stats when aborted mid-stream",
+			async () => {
+				await testTokensOnAbort(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 
-	describe.skipIf(!process.env.GROQ_API_KEY)("Groq Provider", () => {
+	describe.skipIf(!e2eApiKey("GROQ_API_KEY"))("Groq Provider", () => {
 		const llm = getModel("groq", "openai/gpt-oss-20b");
 
-		it("should include token stats when aborted mid-stream", { retry: 3, timeout: 30000 }, async () => {
-			await testTokensOnAbort(llm);
-		});
+		it(
+			"should include token stats when aborted mid-stream",
+			async () => {
+				await testTokensOnAbort(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 
-	describe.skipIf(!process.env.CEREBRAS_API_KEY)("Cerebras Provider", () => {
+	describe.skipIf(!e2eApiKey("CEREBRAS_API_KEY"))("Cerebras Provider", () => {
 		const llm = getModel("cerebras", "gpt-oss-120b");
 
-		it("should include token stats when aborted mid-stream", { retry: 3, timeout: 30000 }, async () => {
-			await testTokensOnAbort(llm);
-		});
+		it(
+			"should include token stats when aborted mid-stream",
+			async () => {
+				await testTokensOnAbort(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 
-	describe.skipIf(!process.env.ZAI_API_KEY)("zAI Provider", () => {
+	describe.skipIf(!e2eApiKey("ZAI_API_KEY"))("zAI Provider", () => {
 		const llm = getModel("zai", "glm-4.5-flash");
 
-		it("should include token stats when aborted mid-stream", { retry: 3, timeout: 30000 }, async () => {
-			await testTokensOnAbort(llm);
-		});
+		it(
+			"should include token stats when aborted mid-stream",
+			async () => {
+				await testTokensOnAbort(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 
-	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Provider", () => {
+	describe.skipIf(!e2eApiKey("MISTRAL_API_KEY"))("Mistral Provider", () => {
 		const llm = getModel("mistral", "devstral-medium-latest");
 
-		it("should include token stats when aborted mid-stream", { retry: 3, timeout: 30000 }, async () => {
-			await testTokensOnAbort(llm);
-		});
+		it(
+			"should include token stats when aborted mid-stream",
+			async () => {
+				await testTokensOnAbort(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 
 	// =========================================================================
@@ -153,81 +189,81 @@ describe("Token Statistics on Abort", () => {
 
 		it.skipIf(!anthropicOAuthToken)(
 			"should include token stats when aborted mid-stream",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				await testTokensOnAbort(llm, { apiKey: anthropicOAuthToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 	});
 
 	describe("GitHub Copilot Provider", () => {
 		it.skipIf(!githubCopilotToken)(
 			"gpt-4o - should include token stats when aborted mid-stream",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("github-copilot", "gpt-4o");
 				await testTokensOnAbort(llm, { apiKey: githubCopilotToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 
 		it.skipIf(!githubCopilotToken)(
 			"claude-sonnet-4 - should include token stats when aborted mid-stream",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("github-copilot", "claude-sonnet-4");
 				await testTokensOnAbort(llm, { apiKey: githubCopilotToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 	});
 
 	describe("Google Gemini CLI Provider", () => {
 		it.skipIf(!geminiCliToken)(
 			"gemini-2.5-flash - should include token stats when aborted mid-stream",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("google-gemini-cli", "gemini-2.5-flash");
 				await testTokensOnAbort(llm, { apiKey: geminiCliToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 	});
 
 	describe("Google Antigravity Provider", () => {
 		it.skipIf(!antigravityToken)(
 			"gemini-3-flash - should include token stats when aborted mid-stream",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("google-antigravity", "gemini-3-flash");
 				await testTokensOnAbort(llm, { apiKey: antigravityToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 
 		it.skipIf(!antigravityToken)(
 			"claude-sonnet-4-5 - should include token stats when aborted mid-stream",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("google-antigravity", "claude-sonnet-4-5");
 				await testTokensOnAbort(llm, { apiKey: antigravityToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 
 		it.skipIf(!antigravityToken)(
 			"gpt-oss-120b-medium - should include token stats when aborted mid-stream",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("google-antigravity", "gpt-oss-120b-medium");
 				await testTokensOnAbort(llm, { apiKey: antigravityToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 	});
 
 	describe("OpenAI Codex Provider", () => {
 		it.skipIf(!openaiCodexToken)(
 			"gpt-5.2-codex - should include token stats when aborted mid-stream",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("openai-codex", "gpt-5.2-codex");
 				await testTokensOnAbort(llm, { apiKey: openaiCodexToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 	});
 });

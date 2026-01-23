@@ -1,4 +1,4 @@
-import type { UnreleasedSection } from "@oh-my-pi/pi-coding-agent/commit/types";
+import type { UnreleasedSection } from "../../commit/types";
 
 const UNRELEASED_PATTERN = /^##\s+\[?Unreleased\]?/i;
 const SECTION_PATTERN = /^###\s+(.*)$/;

@@ -1,4 +1,4 @@
-import { matchesKey } from "@oh-my-pi/pi-tui/keys";
+import { matchesKey } from "../keys";
 import { Loader } from "./loader";
 
 /**

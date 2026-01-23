@@ -1,21 +1,19 @@
 import type { Api, Model } from "@oh-my-pi/pi-ai";
-import agentUserPrompt from "@oh-my-pi/pi-coding-agent/commit/agentic/prompts/session-user.md" with { type: "text" };
-import agentSystemPrompt from "@oh-my-pi/pi-coding-agent/commit/agentic/prompts/system.md" with { type: "text" };
-import type { CommitAgentState } from "@oh-my-pi/pi-coding-agent/commit/agentic/state";
-import { createCommitTools } from "@oh-my-pi/pi-coding-agent/commit/agentic/tools";
-import type { ControlledGit } from "@oh-my-pi/pi-coding-agent/commit/git";
-import typesDescriptionPrompt from "@oh-my-pi/pi-coding-agent/commit/prompts/types-description.md" with {
-	type: "text",
-};
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { renderPromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import type { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
-import { getMarkdownTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { createAgentSession } from "@oh-my-pi/pi-coding-agent/sdk";
-import type { AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import type { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 import { Markdown } from "@oh-my-pi/pi-tui";
 import chalk from "chalk";
+import type { ControlledGit } from "../../commit/git";
+import typesDescriptionPrompt from "../../commit/prompts/types-description.md" with { type: "text" };
+import type { ModelRegistry } from "../../config/model-registry";
+import { renderPromptTemplate } from "../../config/prompt-templates";
+import type { SettingsManager } from "../../config/settings-manager";
+import { getMarkdownTheme } from "../../modes/theme/theme";
+import { createAgentSession } from "../../sdk";
+import type { AgentSessionEvent } from "../../session/agent-session";
+import type { AuthStorage } from "../../session/auth-storage";
+import agentUserPrompt from "./prompts/session-user.md" with { type: "text" };
+import agentSystemPrompt from "./prompts/system.md" with { type: "text" };
+import type { CommitAgentState } from "./state";
+import { createCommitTools } from "./tools";
 
 export interface CommitAgentInput {
 	cwd: string;

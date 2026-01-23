@@ -8,18 +8,16 @@
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { Model } from "@oh-my-pi/pi-ai";
 import { completeSimple } from "@oh-my-pi/pi-ai";
-import { renderPromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import branchSummaryPrompt from "@oh-my-pi/pi-coding-agent/prompts/compaction/branch-summary.md" with { type: "text" };
-import branchSummaryPreamble from "@oh-my-pi/pi-coding-agent/prompts/compaction/branch-summary-preamble.md" with {
-	type: "text",
-};
+import { renderPromptTemplate } from "../../config/prompt-templates";
+import branchSummaryPrompt from "../../prompts/compaction/branch-summary.md" with { type: "text" };
+import branchSummaryPreamble from "../../prompts/compaction/branch-summary-preamble.md" with { type: "text" };
 import {
 	convertToLlm,
 	createBranchSummaryMessage,
 	createCompactionSummaryMessage,
 	createCustomMessage,
-} from "@oh-my-pi/pi-coding-agent/session/messages";
-import type { ReadonlySessionManager, SessionEntry } from "@oh-my-pi/pi-coding-agent/session/session-manager";
+} from "../../session/messages";
+import type { ReadonlySessionManager, SessionEntry } from "../../session/session-manager";
 import { estimateTokens } from "./compaction";
 import {
 	computeFileLists,

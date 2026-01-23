@@ -1,4 +1,4 @@
-import type { Component } from "@oh-my-pi/pi-tui/tui";
+import type { Component } from "../tui";
 
 /**
  * Spacer component that renders empty lines

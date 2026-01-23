@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { type ChildProcess, execSync, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { getModel } from "@oh-my-pi/pi-ai/models";
@@ -6,8 +7,7 @@ import type { Api, Context, ImageContent, Model, OptionsForApi, Tool, ToolResult
 import { StringEnum } from "@oh-my-pi/pi-ai/utils/typebox-helpers";
 import { Type } from "@sinclair/typebox";
 import { join } from "path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { resolveApiKey } from "./oauth";
+import { e2eApiKey, resolveApiKey } from "./oauth";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([
@@ -339,32 +339,56 @@ async function multiTurn<TApi extends Api>(model: Model<TApi>, options?: Options
 }
 
 describe("Generate E2E Tests", () => {
-	describe.skipIf(!process.env.GEMINI_API_KEY)("Gemini Provider (gemini-2.5-flash)", () => {
+	describe.skipIf(!e2eApiKey("GEMINI_API_KEY"))("Gemini Provider (gemini-2.5-flash)", () => {
 		const llm = getModel("google", "gemini-2.5-flash");
 
-		it("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm);
-		});
+		it(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm);
-		});
+		it(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm);
-		});
+		it(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle ", { retry: 3 }, async () => {
-			await handleThinking(llm, { thinking: { enabled: true, budgetTokens: 1024 } });
-		});
+		it(
+			"should handle ",
+			async () => {
+				await handleThinking(llm, { thinking: { enabled: true, budgetTokens: 1024 } });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-			await multiTurn(llm, { thinking: { enabled: true, budgetTokens: 2048 } });
-		});
+		it(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				await multiTurn(llm, { thinking: { enabled: true, budgetTokens: 2048 } });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle image input", { retry: 3 }, async () => {
-			await handleImage(llm);
-		});
+		it(
+			"should handle image input",
+			async () => {
+				await handleImage(llm);
+			},
+			{ retry: 3 },
+		);
 	});
 
 	describe("Google Vertex Provider (gemini-3-flash-preview)", () => {
@@ -374,326 +398,586 @@ describe("Generate E2E Tests", () => {
 		const vertexOptions = { project: vertexProject, location: vertexLocation } as const;
 		const llm = getModel("google-vertex", "gemini-3-flash-preview");
 
-		it.skipIf(!isVertexConfigured)("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm, vertexOptions);
-		});
+		it.skipIf(!isVertexConfigured)(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm, vertexOptions);
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!isVertexConfigured)("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm, vertexOptions);
-		});
+		it.skipIf(!isVertexConfigured)(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm, vertexOptions);
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!isVertexConfigured)("should handle thinking", { retry: 3 }, async () => {
-			const { ThinkingLevel } = await import("@google/genai");
-			await handleThinking(llm, {
-				...vertexOptions,
-				thinking: { enabled: true, budgetTokens: 1024, level: ThinkingLevel.LOW },
-			});
-		});
+		it.skipIf(!isVertexConfigured)(
+			"should handle thinking",
+			async () => {
+				const { ThinkingLevel } = await import("@google/genai");
+				await handleThinking(llm, {
+					...vertexOptions,
+					thinking: { enabled: true, budgetTokens: 1024, level: ThinkingLevel.LOW },
+				});
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!isVertexConfigured)("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm, vertexOptions);
-		});
+		it.skipIf(!isVertexConfigured)(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm, vertexOptions);
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!isVertexConfigured)("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-			const { ThinkingLevel } = await import("@google/genai");
-			await multiTurn(llm, {
-				...vertexOptions,
-				thinking: { enabled: true, budgetTokens: 1024, level: ThinkingLevel.MEDIUM },
-			});
-		});
+		it.skipIf(!isVertexConfigured)(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				const { ThinkingLevel } = await import("@google/genai");
+				await multiTurn(llm, {
+					...vertexOptions,
+					thinking: { enabled: true, budgetTokens: 1024, level: ThinkingLevel.MEDIUM },
+				});
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!isVertexConfigured)("should handle image input", { retry: 3 }, async () => {
-			await handleImage(llm, vertexOptions);
-		});
+		it.skipIf(!isVertexConfigured)(
+			"should handle image input",
+			async () => {
+				await handleImage(llm, vertexOptions);
+			},
+			{ retry: 3 },
+		);
 	});
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions Provider (gpt-4o-mini)", () => {
+	describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("OpenAI Completions Provider (gpt-4o-mini)", () => {
 		const llm: Model<"openai-completions"> = { ...getModel("openai", "gpt-4o-mini"), api: "openai-completions" };
 
-		it("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm);
-		});
+		it(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm);
-		});
+		it(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm);
-		});
+		it(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle image input", { retry: 3 }, async () => {
-			await handleImage(llm);
-		});
+		it(
+			"should handle image input",
+			async () => {
+				await handleImage(llm);
+			},
+			{ retry: 3 },
+		);
 	});
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses Provider (gpt-5-mini)", () => {
+	describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("OpenAI Responses Provider (gpt-5-mini)", () => {
 		const llm = getModel("openai", "gpt-5-mini");
 
-		it("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm);
-		});
+		it(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm);
-		});
+		it(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm);
-		});
+		it(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle thinking", { retry: 2 }, async () => {
-			await handleThinking(llm, { reasoningEffort: "high" });
-		});
+		it(
+			"should handle thinking",
+			async () => {
+				await handleThinking(llm, { reasoningEffort: "high" });
+			},
+			{ retry: 2 },
+		);
 
-		it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-			await multiTurn(llm, { reasoningEffort: "high" });
-		});
+		it(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				await multiTurn(llm, { reasoningEffort: "high" });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle image input", { retry: 3 }, async () => {
-			await handleImage(llm);
-		});
+		it(
+			"should handle image input",
+			async () => {
+				await handleImage(llm);
+			},
+			{ retry: 3 },
+		);
 	});
 
-	describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Anthropic Provider (claude-3-5-haiku-20241022)", () => {
+	describe.skipIf(!e2eApiKey("ANTHROPIC_API_KEY"))("Anthropic Provider (claude-3-5-haiku-20241022)", () => {
 		const model = getModel("anthropic", "claude-3-5-haiku-20241022");
 
-		it("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(model, { thinkingEnabled: true });
-		});
+		it(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(model, { thinkingEnabled: true });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(model);
-		});
+		it(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(model);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(model);
-		});
+		it(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(model);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle image input", { retry: 3 }, async () => {
-			await handleImage(model);
-		});
+		it(
+			"should handle image input",
+			async () => {
+				await handleImage(model);
+			},
+			{ retry: 3 },
+		);
 	});
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses Provider (gpt-5-mini)", () => {
+	describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("OpenAI Responses Provider (gpt-5-mini)", () => {
 		const model = getModel("openai", "gpt-5-mini");
 
-		it("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(model);
-		});
+		it(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(model);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(model);
-		});
+		it(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(model);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(model);
-		});
+		it(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(model);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle image input", { retry: 3 }, async () => {
-			await handleImage(model);
-		});
+		it(
+			"should handle image input",
+			async () => {
+				await handleImage(model);
+			},
+			{ retry: 3 },
+		);
 	});
 
-	describe.skipIf(!process.env.XAI_API_KEY)("xAI Provider (grok-code-fast-1 via OpenAI Completions)", () => {
+	describe.skipIf(!e2eApiKey("XAI_API_KEY"))("xAI Provider (grok-code-fast-1 via OpenAI Completions)", () => {
 		const llm = getModel("xai", "grok-code-fast-1");
 
-		it("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm);
-		});
+		it(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm);
-		});
+		it(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm);
-		});
+		it(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle thinking mode", { retry: 3 }, async () => {
-			await handleThinking(llm, { reasoningEffort: "medium" });
-		});
+		it(
+			"should handle thinking mode",
+			async () => {
+				await handleThinking(llm, { reasoningEffort: "medium" });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-			await multiTurn(llm, { reasoningEffort: "medium" });
-		});
+		it(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				await multiTurn(llm, { reasoningEffort: "medium" });
+			},
+			{ retry: 3 },
+		);
 	});
 
-	describe.skipIf(!process.env.GROQ_API_KEY)("Groq Provider (gpt-oss-20b via OpenAI Completions)", () => {
+	describe.skipIf(!e2eApiKey("GROQ_API_KEY"))("Groq Provider (gpt-oss-20b via OpenAI Completions)", () => {
 		const llm = getModel("groq", "openai/gpt-oss-20b");
 
-		it("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm);
-		});
+		it(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm);
-		});
+		it(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm);
-		});
+		it(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle thinking mode", { retry: 3 }, async () => {
-			await handleThinking(llm, { reasoningEffort: "medium" });
-		});
+		it(
+			"should handle thinking mode",
+			async () => {
+				await handleThinking(llm, { reasoningEffort: "medium" });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-			await multiTurn(llm, { reasoningEffort: "medium" });
-		});
+		it(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				await multiTurn(llm, { reasoningEffort: "medium" });
+			},
+			{ retry: 3 },
+		);
 	});
 
-	describe.skipIf(!process.env.CEREBRAS_API_KEY)("Cerebras Provider (gpt-oss-120b via OpenAI Completions)", () => {
+	describe.skipIf(!e2eApiKey("CEREBRAS_API_KEY"))("Cerebras Provider (gpt-oss-120b via OpenAI Completions)", () => {
 		const llm = getModel("cerebras", "gpt-oss-120b");
 
-		it("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm);
-		});
+		it(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm);
-		});
+		it(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm);
-		});
+		it(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle thinking mode", { retry: 3 }, async () => {
-			await handleThinking(llm, { reasoningEffort: "medium" });
-		});
+		it(
+			"should handle thinking mode",
+			async () => {
+				await handleThinking(llm, { reasoningEffort: "medium" });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-			await multiTurn(llm, { reasoningEffort: "medium" });
-		});
+		it(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				await multiTurn(llm, { reasoningEffort: "medium" });
+			},
+			{ retry: 3 },
+		);
 	});
 
-	describe.skipIf(!process.env.OPENROUTER_API_KEY)("OpenRouter Provider (glm-4.5v via OpenAI Completions)", () => {
+	describe.skipIf(!e2eApiKey("OPENROUTER_API_KEY"))("OpenRouter Provider (glm-4.5v via OpenAI Completions)", () => {
 		const llm = getModel("openrouter", "z-ai/glm-4.5v");
 
-		it("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm);
-		});
+		it(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm);
-		});
+		it(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm);
-		});
+		it(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle thinking mode", { retry: 3 }, async () => {
-			await handleThinking(llm, { reasoningEffort: "medium" });
-		});
+		it(
+			"should handle thinking mode",
+			async () => {
+				await handleThinking(llm, { reasoningEffort: "medium" });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle multi-turn with thinking and tools", { retry: 2 }, async () => {
-			await multiTurn(llm, { reasoningEffort: "medium" });
-		});
+		it(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				await multiTurn(llm, { reasoningEffort: "medium" });
+			},
+			{ retry: 2 },
+		);
 
-		it("should handle image input", { retry: 3 }, async () => {
-			await handleImage(llm);
-		});
+		it(
+			"should handle image input",
+			async () => {
+				await handleImage(llm);
+			},
+			{ retry: 3 },
+		);
 	});
 
-	describe.skipIf(!process.env.ZAI_API_KEY)("zAI Provider (glm-4.5-air via OpenAI Completions)", () => {
+	describe.skipIf(!e2eApiKey("ZAI_API_KEY"))("zAI Provider (glm-4.5-air via OpenAI Completions)", () => {
 		const llm = getModel("zai", "glm-4.5-air");
 
-		it("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm);
-		});
+		it(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm);
-		});
+		it(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm);
-		});
+		it(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it.skip("should handle thinking mode", { retry: 3 }, async () => {
-			await handleThinking(llm, { reasoningEffort: "medium" });
-		});
+		it.skip(
+			"should handle thinking mode",
+			async () => {
+				await handleThinking(llm, { reasoningEffort: "medium" });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-			await multiTurn(llm, { reasoningEffort: "medium" });
-		});
+		it(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				await multiTurn(llm, { reasoningEffort: "medium" });
+			},
+			{ retry: 3 },
+		);
 	});
 
-	describe.skipIf(!process.env.ZAI_API_KEY)("zAI Provider (glm-4.5v via OpenAI Completions)", () => {
+	describe.skipIf(!e2eApiKey("ZAI_API_KEY"))("zAI Provider (glm-4.5v via OpenAI Completions)", () => {
 		const llm = getModel("zai", "glm-4.5v");
 
-		it("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm);
-		});
+		it(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm);
-		});
+		it(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm);
-		});
+		it(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle thinking mode", { retry: 3 }, async () => {
-			await handleThinking(llm, { reasoningEffort: "medium" });
-		});
+		it(
+			"should handle thinking mode",
+			async () => {
+				await handleThinking(llm, { reasoningEffort: "medium" });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-			await multiTurn(llm, { reasoningEffort: "medium" });
-		});
+		it(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				await multiTurn(llm, { reasoningEffort: "medium" });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle image input", { retry: 3 }, async () => {
-			await handleImage(llm);
-		});
+		it(
+			"should handle image input",
+			async () => {
+				await handleImage(llm);
+			},
+			{ retry: 3 },
+		);
 	});
 
-	describe.skipIf(!process.env.MISTRAL_API_KEY)(
+	describe.skipIf(!e2eApiKey("MISTRAL_API_KEY"))(
 		"Mistral Provider (devstral-medium-latest via OpenAI Completions)",
 		() => {
 			const llm = getModel("mistral", "devstral-medium-latest");
 
-			it("should complete basic text generation", { retry: 3 }, async () => {
-				await basicTextGeneration(llm);
-			});
+			it(
+				"should complete basic text generation",
+				async () => {
+					await basicTextGeneration(llm);
+				},
+				{ retry: 3 },
+			);
 
-			it("should handle tool calling", { retry: 3 }, async () => {
-				await handleToolCall(llm);
-			});
+			it(
+				"should handle tool calling",
+				async () => {
+					await handleToolCall(llm);
+				},
+				{ retry: 3 },
+			);
 
-			it("should handle streaming", { retry: 3 }, async () => {
-				await handleStreaming(llm);
-			});
+			it(
+				"should handle streaming",
+				async () => {
+					await handleStreaming(llm);
+				},
+				{ retry: 3 },
+			);
 
-			it("should handle thinking mode", { retry: 3 }, async () => {
-				// FIXME Skip for now, getting a 422 stauts code, need to test with official SDK
-				// const llm = getModel("mistral", "magistral-medium-latest");
-				// await handleThinking(llm, { reasoningEffort: "medium" });
-			});
+			it(
+				"should handle thinking mode",
+				async () => {
+					// FIXME Skip for now, getting a 422 stauts code, need to test with official SDK
+					// const llm = getModel("mistral", "magistral-medium-latest");
+					// await handleThinking(llm, { reasoningEffort: "medium" });
+				},
+				{ retry: 3 },
+			);
 
-			it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-				await multiTurn(llm, { reasoningEffort: "medium" });
-			});
+			it(
+				"should handle multi-turn with thinking and tools",
+				async () => {
+					await multiTurn(llm, { reasoningEffort: "medium" });
+				},
+				{ retry: 3 },
+			);
 		},
 	);
 
-	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Provider (pixtral-12b with image support)", () => {
+	describe.skipIf(!e2eApiKey("MISTRAL_API_KEY"))("Mistral Provider (pixtral-12b with image support)", () => {
 		const llm = getModel("mistral", "pixtral-12b");
 
-		it("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm);
-		});
+		it(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm);
-		});
+		it(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm);
-		});
+		it(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle image input", { retry: 3 }, async () => {
-			await handleImage(llm);
-		});
+		it(
+			"should handle image input",
+			async () => {
+				await handleImage(llm);
+			},
+			{ retry: 3 },
+		);
 	});
 
 	// =========================================================================
@@ -704,205 +988,364 @@ describe("Generate E2E Tests", () => {
 	describe("Anthropic OAuth Provider (claude-sonnet-4-20250514)", () => {
 		const model = getModel("anthropic", "claude-sonnet-4-20250514");
 
-		it.skipIf(!anthropicOAuthToken)("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(model, { apiKey: anthropicOAuthToken });
-		});
+		it.skipIf(!anthropicOAuthToken)(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(model, { apiKey: anthropicOAuthToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!anthropicOAuthToken)("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(model, { apiKey: anthropicOAuthToken });
-		});
+		it.skipIf(!anthropicOAuthToken)(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(model, { apiKey: anthropicOAuthToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!anthropicOAuthToken)("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(model, { apiKey: anthropicOAuthToken });
-		});
+		it.skipIf(!anthropicOAuthToken)(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(model, { apiKey: anthropicOAuthToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!anthropicOAuthToken)("should handle thinking", { retry: 3 }, async () => {
-			await handleThinking(model, { apiKey: anthropicOAuthToken, thinkingEnabled: true });
-		});
+		it.skipIf(!anthropicOAuthToken)(
+			"should handle thinking",
+			async () => {
+				await handleThinking(model, { apiKey: anthropicOAuthToken, thinkingEnabled: true });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!anthropicOAuthToken)("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-			await multiTurn(model, { apiKey: anthropicOAuthToken, thinkingEnabled: true });
-		});
+		it.skipIf(!anthropicOAuthToken)(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				await multiTurn(model, { apiKey: anthropicOAuthToken, thinkingEnabled: true });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!anthropicOAuthToken)("should handle image input", { retry: 3 }, async () => {
-			await handleImage(model, { apiKey: anthropicOAuthToken });
-		});
+		it.skipIf(!anthropicOAuthToken)(
+			"should handle image input",
+			async () => {
+				await handleImage(model, { apiKey: anthropicOAuthToken });
+			},
+			{ retry: 3 },
+		);
 	});
 
 	describe("GitHub Copilot Provider (gpt-4o via OpenAI Completions)", () => {
 		const llm = getModel("github-copilot", "gpt-4o");
 
-		it.skipIf(!githubCopilotToken)("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm, { apiKey: githubCopilotToken });
-		});
+		it.skipIf(!githubCopilotToken)(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm, { apiKey: githubCopilotToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!githubCopilotToken)("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm, { apiKey: githubCopilotToken });
-		});
+		it.skipIf(!githubCopilotToken)(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm, { apiKey: githubCopilotToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!githubCopilotToken)("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm, { apiKey: githubCopilotToken });
-		});
+		it.skipIf(!githubCopilotToken)(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm, { apiKey: githubCopilotToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!githubCopilotToken)("should handle thinking", { retry: 2 }, async () => {
-			const thinkingModel = getModel("github-copilot", "gpt-5-mini");
-			await handleThinking(thinkingModel, { apiKey: githubCopilotToken, reasoningEffort: "high" });
-		});
+		it.skipIf(!githubCopilotToken)(
+			"should handle thinking",
+			async () => {
+				const thinkingModel = getModel("github-copilot", "gpt-5-mini");
+				await handleThinking(thinkingModel, { apiKey: githubCopilotToken, reasoningEffort: "high" });
+			},
+			{ retry: 2 },
+		);
 
-		it.skipIf(!githubCopilotToken)("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-			const thinkingModel = getModel("github-copilot", "gpt-5-mini");
-			await multiTurn(thinkingModel, { apiKey: githubCopilotToken, reasoningEffort: "high" });
-		});
+		it.skipIf(!githubCopilotToken)(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				const thinkingModel = getModel("github-copilot", "gpt-5-mini");
+				await multiTurn(thinkingModel, { apiKey: githubCopilotToken, reasoningEffort: "high" });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!githubCopilotToken)("should handle image input", { retry: 3 }, async () => {
-			await handleImage(llm, { apiKey: githubCopilotToken });
-		});
+		it.skipIf(!githubCopilotToken)(
+			"should handle image input",
+			async () => {
+				await handleImage(llm, { apiKey: githubCopilotToken });
+			},
+			{ retry: 3 },
+		);
 	});
 
 	describe("Google Gemini CLI Provider (gemini-2.5-flash)", () => {
 		const llm = getModel("google-gemini-cli", "gemini-2.5-flash");
 
-		it.skipIf(!geminiCliToken)("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm, { apiKey: geminiCliToken });
-		});
+		it.skipIf(!geminiCliToken)(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm, { apiKey: geminiCliToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!geminiCliToken)("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm, { apiKey: geminiCliToken });
-		});
+		it.skipIf(!geminiCliToken)(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm, { apiKey: geminiCliToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!geminiCliToken)("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm, { apiKey: geminiCliToken });
-		});
+		it.skipIf(!geminiCliToken)(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm, { apiKey: geminiCliToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!geminiCliToken)("should handle thinking", { retry: 3 }, async () => {
-			await handleThinking(llm, { apiKey: geminiCliToken, thinking: { enabled: true, budgetTokens: 1024 } });
-		});
+		it.skipIf(!geminiCliToken)(
+			"should handle thinking",
+			async () => {
+				await handleThinking(llm, { apiKey: geminiCliToken, thinking: { enabled: true, budgetTokens: 1024 } });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!geminiCliToken)("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-			await multiTurn(llm, { apiKey: geminiCliToken, thinking: { enabled: true, budgetTokens: 2048 } });
-		});
+		it.skipIf(!geminiCliToken)(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				await multiTurn(llm, { apiKey: geminiCliToken, thinking: { enabled: true, budgetTokens: 2048 } });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!geminiCliToken)("should handle image input", { retry: 3 }, async () => {
-			await handleImage(llm, { apiKey: geminiCliToken });
-		});
+		it.skipIf(!geminiCliToken)(
+			"should handle image input",
+			async () => {
+				await handleImage(llm, { apiKey: geminiCliToken });
+			},
+			{ retry: 3 },
+		);
 	});
 
 	describe("Google Gemini CLI Provider (gemini-3-flash-preview with thinkingLevel)", () => {
 		const llm = getModel("google-gemini-cli", "gemini-3-flash-preview");
 
-		it.skipIf(!geminiCliToken)("should handle thinking with thinkingLevel", { retry: 3 }, async () => {
-			await handleThinking(llm, { apiKey: geminiCliToken, thinking: { enabled: true, level: "LOW" } });
-		});
+		it.skipIf(!geminiCliToken)(
+			"should handle thinking with thinkingLevel",
+			async () => {
+				await handleThinking(llm, { apiKey: geminiCliToken, thinking: { enabled: true, level: "LOW" } });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!geminiCliToken)("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-			await multiTurn(llm, { apiKey: geminiCliToken, thinking: { enabled: true, level: "MEDIUM" } });
-		});
+		it.skipIf(!geminiCliToken)(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				await multiTurn(llm, { apiKey: geminiCliToken, thinking: { enabled: true, level: "MEDIUM" } });
+			},
+			{ retry: 3 },
+		);
 	});
 
 	describe("Google Antigravity Provider (gemini-3-flash)", () => {
 		const llm = getModel("google-antigravity", "gemini-3-flash");
 
-		it.skipIf(!antigravityToken)("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm, { apiKey: antigravityToken });
-		});
+		it.skipIf(!antigravityToken)(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm, { apiKey: antigravityToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!antigravityToken)("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm, { apiKey: antigravityToken });
-		});
+		it.skipIf(!antigravityToken)(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm, { apiKey: antigravityToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!antigravityToken)("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm, { apiKey: antigravityToken });
-		});
+		it.skipIf(!antigravityToken)(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm, { apiKey: antigravityToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!antigravityToken)("should handle thinking with thinkingLevel", { retry: 3 }, async () => {
-			// gemini-3-flash supports all four levels: MINIMAL, LOW, MEDIUM, HIGH
-			await handleThinking(llm, {
-				apiKey: antigravityToken,
-				thinking: { enabled: true, level: "LOW" },
-			});
-		});
+		it.skipIf(!antigravityToken)(
+			"should handle thinking with thinkingLevel",
+			async () => {
+				// gemini-3-flash supports all four levels: MINIMAL, LOW, MEDIUM, HIGH
+				await handleThinking(llm, {
+					apiKey: antigravityToken,
+					thinking: { enabled: true, level: "LOW" },
+				});
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!antigravityToken)("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-			await multiTurn(llm, { apiKey: antigravityToken, thinking: { enabled: true, level: "MEDIUM" } });
-		});
+		it.skipIf(!antigravityToken)(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				await multiTurn(llm, { apiKey: antigravityToken, thinking: { enabled: true, level: "MEDIUM" } });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!antigravityToken)("should handle image input", { retry: 3 }, async () => {
-			await handleImage(llm, { apiKey: antigravityToken });
-		});
+		it.skipIf(!antigravityToken)(
+			"should handle image input",
+			async () => {
+				await handleImage(llm, { apiKey: antigravityToken });
+			},
+			{ retry: 3 },
+		);
 	});
 
 	describe("Google Antigravity Provider (gemini-3-pro-high with thinkingLevel)", () => {
 		const llm = getModel("google-antigravity", "gemini-3-pro-high");
 
-		it.skipIf(!antigravityToken)("should handle thinking with thinkingLevel HIGH", { retry: 3 }, async () => {
-			// gemini-3-pro only supports LOW/HIGH
-			await handleThinking(llm, {
-				apiKey: antigravityToken,
-				thinking: { enabled: true, level: "HIGH" },
-			});
-		});
+		it.skipIf(!antigravityToken)(
+			"should handle thinking with thinkingLevel HIGH",
+			async () => {
+				// gemini-3-pro only supports LOW/HIGH
+				await handleThinking(llm, {
+					apiKey: antigravityToken,
+					thinking: { enabled: true, level: "HIGH" },
+				});
+			},
+			{ retry: 3 },
+		);
 	});
 
 	describe("Google Antigravity Provider (claude-sonnet-4-5)", () => {
 		const llm = getModel("google-antigravity", "claude-sonnet-4-5");
 
-		it.skipIf(!antigravityToken)("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm, { apiKey: antigravityToken });
-		});
+		it.skipIf(!antigravityToken)(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm, { apiKey: antigravityToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!antigravityToken)("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm, { apiKey: antigravityToken });
-		});
+		it.skipIf(!antigravityToken)(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm, { apiKey: antigravityToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!antigravityToken)("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm, { apiKey: antigravityToken });
-		});
+		it.skipIf(!antigravityToken)(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm, { apiKey: antigravityToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!antigravityToken)("should handle thinking", { retry: 3 }, async () => {
-			// claude-sonnet-4-5 has reasoning: false, use claude-sonnet-4-5-thinking
-			const thinkingModel = getModel("google-antigravity", "claude-sonnet-4-5-thinking");
-			await handleThinking(thinkingModel, {
-				apiKey: antigravityToken,
-				thinking: { enabled: true, budgetTokens: 4096 },
-			});
-		});
+		it.skipIf(!antigravityToken)(
+			"should handle thinking",
+			async () => {
+				// claude-sonnet-4-5 has reasoning: false, use claude-sonnet-4-5-thinking
+				const thinkingModel = getModel("google-antigravity", "claude-sonnet-4-5-thinking");
+				await handleThinking(thinkingModel, {
+					apiKey: antigravityToken,
+					thinking: { enabled: true, budgetTokens: 4096 },
+				});
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!antigravityToken)("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-			const thinkingModel = getModel("google-antigravity", "claude-sonnet-4-5-thinking");
-			await multiTurn(thinkingModel, { apiKey: antigravityToken, thinking: { enabled: true, budgetTokens: 4096 } });
-		});
+		it.skipIf(!antigravityToken)(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				const thinkingModel = getModel("google-antigravity", "claude-sonnet-4-5-thinking");
+				await multiTurn(thinkingModel, {
+					apiKey: antigravityToken,
+					thinking: { enabled: true, budgetTokens: 4096 },
+				});
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!antigravityToken)("should handle image input", { retry: 3 }, async () => {
-			await handleImage(llm, { apiKey: antigravityToken });
-		});
+		it.skipIf(!antigravityToken)(
+			"should handle image input",
+			async () => {
+				await handleImage(llm, { apiKey: antigravityToken });
+			},
+			{ retry: 3 },
+		);
 	});
 
 	describe("OpenAI Codex Provider (gpt-5.2-codex)", () => {
 		const llm = getModel("openai-codex", "gpt-5.2-codex");
 
-		it.skipIf(!openaiCodexToken)("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm, { apiKey: openaiCodexToken });
-		});
+		it.skipIf(!openaiCodexToken)(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm, { apiKey: openaiCodexToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!openaiCodexToken)("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm, { apiKey: openaiCodexToken });
-		});
+		it.skipIf(!openaiCodexToken)(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm, { apiKey: openaiCodexToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!openaiCodexToken)("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm, { apiKey: openaiCodexToken });
-		});
+		it.skipIf(!openaiCodexToken)(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm, { apiKey: openaiCodexToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!openaiCodexToken)("should handle thinking", { retry: 3 }, async () => {
-			await handleThinking(llm, { apiKey: openaiCodexToken, reasoningEffort: "high" });
-		});
+		it.skipIf(!openaiCodexToken)(
+			"should handle thinking",
+			async () => {
+				await handleThinking(llm, { apiKey: openaiCodexToken, reasoningEffort: "high" });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!openaiCodexToken)("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-			await multiTurn(llm, { apiKey: openaiCodexToken });
-		});
+		it.skipIf(!openaiCodexToken)(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				await multiTurn(llm, { apiKey: openaiCodexToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!openaiCodexToken)("should handle image input", { retry: 3 }, async () => {
-			await handleImage(llm, { apiKey: openaiCodexToken });
-		});
+		it.skipIf(!openaiCodexToken)(
+			"should handle image input",
+			async () => {
+				await handleImage(llm, { apiKey: openaiCodexToken });
+			},
+			{ retry: 3 },
+		);
 	});
 
 	// Check if ollama is installed and local LLM tests are enabled
@@ -984,24 +1427,44 @@ describe("Generate E2E Tests", () => {
 			}
 		});
 
-		it("should complete basic text generation", { retry: 3 }, async () => {
-			await basicTextGeneration(llm, { apiKey: "test" });
-		});
+		it(
+			"should complete basic text generation",
+			async () => {
+				await basicTextGeneration(llm, { apiKey: "test" });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle tool calling", { retry: 3 }, async () => {
-			await handleToolCall(llm, { apiKey: "test" });
-		});
+		it(
+			"should handle tool calling",
+			async () => {
+				await handleToolCall(llm, { apiKey: "test" });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle streaming", { retry: 3 }, async () => {
-			await handleStreaming(llm, { apiKey: "test" });
-		});
+		it(
+			"should handle streaming",
+			async () => {
+				await handleStreaming(llm, { apiKey: "test" });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle thinking mode", { retry: 3 }, async () => {
-			await handleThinking(llm, { apiKey: "test", reasoningEffort: "medium" });
-		});
+		it(
+			"should handle thinking mode",
+			async () => {
+				await handleThinking(llm, { apiKey: "test", reasoningEffort: "medium" });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-			await multiTurn(llm, { apiKey: "test", reasoningEffort: "medium" });
-		});
+		it(
+			"should handle multi-turn with thinking and tools",
+			async () => {
+				await multiTurn(llm, { apiKey: "test", reasoningEffort: "medium" });
+			},
+			{ retry: 3 },
+		);
 	});
 });

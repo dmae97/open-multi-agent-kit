@@ -1,14 +1,8 @@
-import type { AutocompleteProvider, CombinedAutocompleteProvider } from "@oh-my-pi/pi-tui/autocomplete";
-import { matchesKey } from "@oh-my-pi/pi-tui/keys";
-import type { SymbolTheme } from "@oh-my-pi/pi-tui/symbols";
-import { type Component, CURSOR_MARKER, type Focusable } from "@oh-my-pi/pi-tui/tui";
-import {
-	getSegmenter,
-	isPunctuationChar,
-	isWhitespaceChar,
-	truncateToWidth,
-	visibleWidth,
-} from "@oh-my-pi/pi-tui/utils";
+import type { AutocompleteProvider, CombinedAutocompleteProvider } from "../autocomplete";
+import { matchesKey } from "../keys";
+import type { SymbolTheme } from "../symbols";
+import { type Component, CURSOR_MARKER, type Focusable } from "../tui";
+import { getSegmenter, isPunctuationChar, isWhitespaceChar, truncateToWidth, visibleWidth } from "../utils";
 import { SelectList, type SelectListTheme } from "./select-list";
 
 const segmenter = getSegmenter();

@@ -21,10 +21,42 @@
 			"types": "./src/extensibility/hooks/index.ts",
 			"import": "./src/extensibility/hooks/index.ts"
 		},
-		"./prompts/*": "./src/prompts/*",
+		"./sdk": {
+			"types": "./src/sdk.ts",
+			"import": "./src/sdk.ts"
+		},
+		"./prompts/*": "./src/prompts/*.md",
+		"./capability/*": {
+			"types": "./src/capability/*.ts",
+			"import": "./src/capability/*.ts"
+		},
+		"./config/*": {
+			"types": "./src/config/*.ts",
+			"import": "./src/config/*.ts"
+		},
+		"./extensibility/*": {
+			"types": "./src/extensibility/*.ts",
+			"import": "./src/extensibility/*.ts"
+		},
+		"./extensibility/hooks/*": {
+			"types": "./src/extensibility/hooks/*.ts",
+			"import": "./src/extensibility/hooks/*.ts"
+		},
+		"./extensibility/extensions/*": {
+			"types": "./src/extensibility/extensions/*.ts",
+			"import": "./src/extensibility/extensions/*.ts"
+		},
+		"./session/*": {
+			"types": "./src/session/*.ts",
+			"import": "./src/session/*.ts"
+		},
+		"./vendor/photon/*": {
+			"types": "./src/vendor/photon/*",
+			"import": "./src/vendor/photon/*"
+		},
 		"./*": {
-			"types": "./src/*",
-			"import": "./src/*"
+			"types": "./src/*.ts",
+			"import": "./src/*.ts"
 		}
 	},
 	"files": [
@@ -32,19 +64,15 @@
 		"scripts",
 		"docs",
 		"examples",
+		"README.md",
 		"CHANGELOG.md"
 	],
 	"scripts": {
-		"check": "tsgo -p tsconfig.check.json",
+		"check": "tsgo -p tsconfig.json",
 		"format-prompts": "bun scripts/format-prompts.ts",
-		"clean": "rm -rf dist",
-		"build": "tsgo -p tsconfig.build.json && chmod +x dist/cli.js",
-		"build:binary": "bun run generate-wasm-b64 && bun build --compile ./src/cli.ts --outfile dist/omp",
-		"generate-wasm-b64": "bun scripts/generate-wasm-b64.ts",
+		"build:binary": "bun build --compile ./src/cli.ts --outfile dist/omp",
 		"generate-template": "bun scripts/generate-template.ts",
-		"postinstall": "(bun run generate-wasm-b64 && bun run generate-template) || true",
-		"test": "bun test",
-		"prepublishOnly": "cp tsconfig.publish.json tsconfig.json && bun run generate-template"
+		"test": "bun test"
 	},
 	"dependencies": {
 		"@oh-my-pi/omp-stats": "workspace:*",

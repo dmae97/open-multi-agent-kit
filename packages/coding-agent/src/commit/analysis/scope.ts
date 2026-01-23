@@ -1,5 +1,5 @@
-import type { NumstatEntry } from "@oh-my-pi/pi-coding-agent/commit/types";
-import { isExcludedFile } from "@oh-my-pi/pi-coding-agent/commit/utils/exclusions";
+import type { NumstatEntry } from "../../commit/types";
+import { isExcludedFile } from "../../commit/utils/exclusions";
 
 interface ScopeCandidate {
 	path: string;

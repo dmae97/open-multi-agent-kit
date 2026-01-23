@@ -1,26 +1,20 @@
-import { KeybindingsManager } from "@oh-my-pi/pi-coding-agent/config/keybindings";
+import type { Component, TUI } from "@oh-my-pi/pi-tui";
+import { Spacer, Text } from "@oh-my-pi/pi-tui";
+import { logger } from "@oh-my-pi/pi-utils";
+import { KeybindingsManager } from "../../config/keybindings";
 import type {
 	ExtensionActions,
 	ExtensionCommandContextActions,
 	ExtensionContextActions,
 	ExtensionError,
 	ExtensionUIContext,
-} from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
-import { HookEditorComponent } from "@oh-my-pi/pi-coding-agent/modes/components/hook-editor";
-import { HookInputComponent } from "@oh-my-pi/pi-coding-agent/modes/components/hook-input";
-import { HookSelectorComponent } from "@oh-my-pi/pi-coding-agent/modes/components/hook-selector";
-import {
-	getAvailableThemesWithPaths,
-	getThemeByName,
-	setTheme,
-	type Theme,
-	theme,
-} from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import { setTerminalTitle } from "@oh-my-pi/pi-coding-agent/utils/title-generator";
-import type { Component, TUI } from "@oh-my-pi/pi-tui";
-import { Spacer, Text } from "@oh-my-pi/pi-tui";
-import { logger } from "@oh-my-pi/pi-utils";
+} from "../../extensibility/extensions";
+import { HookEditorComponent } from "../../modes/components/hook-editor";
+import { HookInputComponent } from "../../modes/components/hook-input";
+import { HookSelectorComponent } from "../../modes/components/hook-selector";
+import { getAvailableThemesWithPaths, getThemeByName, setTheme, type Theme, theme } from "../../modes/theme/theme";
+import type { InteractiveModeContext } from "../../modes/types";
+import { setTerminalTitle } from "../../utils/title-generator";
 
 export class ExtensionUiController {
 	constructor(private ctx: InteractiveModeContext) {}

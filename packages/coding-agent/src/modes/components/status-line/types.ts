@@ -4,8 +4,8 @@ import type {
 	StatusLineSegmentOptions,
 	StatusLineSeparatorStyle,
 	StatusLineSettings,
-} from "@oh-my-pi/pi-coding-agent/config/settings-manager";
-import type { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
+} from "../../../config/settings-manager";
+import type { AgentSession } from "../../../session/agent-session";
 
 // Re-export types from settings-manager (single source of truth)
 export type {

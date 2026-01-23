@@ -1,3 +1,4 @@
+import { describe, expect, it } from "bun:test";
 import { Agent } from "@oh-my-pi/pi-agent-core";
 import {
 	type AssistantMessage,
@@ -7,7 +8,6 @@ import {
 	type ThinkingBudgets,
 	type Usage,
 } from "@oh-my-pi/pi-ai";
-import { describe, expect, it } from "vitest";
 
 class MockAssistantStream extends EventStream<AssistantMessageEvent, AssistantMessage> {
 	constructor() {
@@ -130,8 +130,8 @@ describe("Agent", () => {
 		expect(agent.state.messages).not.toBe(messages); // Should be a copy
 
 		// Test appendMessage
-		const newMessage = { role: "assistant" as const, content: [{ type: "text" as const, text: "Hi" }] };
-		agent.appendMessage(newMessage as any);
+		const newMessage = createAssistantMessage([{ type: "text", text: "Hi" }]);
+		agent.appendMessage(newMessage);
 		expect(agent.state.messages).toHaveLength(2);
 		expect(agent.state.messages[1]).toBe(newMessage);
 

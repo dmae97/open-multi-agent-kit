@@ -6,8 +6,8 @@
  */
 
 import { homedir } from "node:os";
-import type { Theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { getTreeBranch } from "@oh-my-pi/pi-coding-agent/tui/utils";
+import type { Theme } from "../modes/theme/theme";
+import { getTreeBranch } from "../tui/utils";
 
 // =============================================================================
 // Standardized Display Constants

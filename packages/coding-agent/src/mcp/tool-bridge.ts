@@ -5,13 +5,9 @@
  */
 
 import type { AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
-import type { SourceMeta } from "@oh-my-pi/pi-coding-agent/capability/types";
-import type {
-	CustomTool,
-	CustomToolContext,
-	CustomToolResult,
-} from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools/types";
 import type { TSchema } from "@sinclair/typebox";
+import type { SourceMeta } from "../capability/types";
+import type { CustomTool, CustomToolContext, CustomToolResult } from "../extensibility/custom-tools/types";
 import { callTool } from "./client";
 import type { MCPContent, MCPServerConnection, MCPToolDefinition } from "./types";
 

@@ -5,173 +5,173 @@
  * For use when communicating between JS and WASM, and also natively.
  */
 export class PhotonImage {
-    static __wrap(ptr) {
-        ptr = ptr >>> 0;
-        const obj = Object.create(PhotonImage.prototype);
-        obj.__wbg_ptr = ptr;
-        PhotonImageFinalization.register(obj, obj.__wbg_ptr, obj);
-        return obj;
-    }
-    __destroy_into_raw() {
-        const ptr = this.__wbg_ptr;
-        this.__wbg_ptr = 0;
-        PhotonImageFinalization.unregister(this);
-        return ptr;
-    }
-    free() {
-        const ptr = this.__destroy_into_raw();
-        wasm.__wbg_photonimage_free(ptr, 0);
-    }
-    /**
-     * Convert the PhotonImage to base64.
-     * @returns {string}
-     */
-    get_base64() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const ret = wasm.photonimage_get_base64(this.__wbg_ptr);
-            deferred1_0 = ret[0];
-            deferred1_1 = ret[1];
-            return getStringFromWasm0(ret[0], ret[1]);
-        } finally {
-            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
-        }
-    }
-    /**
-     * Convert the PhotonImage to raw bytes. Returns PNG.
-     * @returns {Uint8Array}
-     */
-    get_bytes() {
-        const ret = wasm.photonimage_get_bytes(this.__wbg_ptr);
-        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-        return v1;
-    }
-    /**
-     * Convert the PhotonImage to raw bytes. Returns a JPEG.
-     * @param {number} quality
-     * @returns {Uint8Array}
-     */
-    get_bytes_jpeg(quality) {
-        const ret = wasm.photonimage_get_bytes_jpeg(this.__wbg_ptr, quality);
-        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-        return v1;
-    }
-    /**
-     * Convert the PhotonImage to raw bytes. Returns a WEBP.
-     * @returns {Uint8Array}
-     */
-    get_bytes_webp() {
-        const ret = wasm.photonimage_get_bytes_webp(this.__wbg_ptr);
-        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-        return v1;
-    }
-    /**
-     * Calculates estimated filesize and returns number of bytes
-     * @returns {bigint}
-     */
-    get_estimated_filesize() {
-        const ret = wasm.photonimage_get_estimated_filesize(this.__wbg_ptr);
-        return BigInt.asUintN(64, ret);
-    }
-    /**
-     * Get the height of the PhotonImage.
-     * @returns {number}
-     */
-    get_height() {
-        const ret = wasm.photonimage_get_height(this.__wbg_ptr);
-        return ret >>> 0;
-    }
-    /**
-     * Convert the PhotonImage's raw pixels to JS-compatible ImageData.
-     * @returns {ImageData}
-     */
-    get_image_data() {
-        const ret = wasm.photonimage_get_image_data(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * Get the PhotonImage's pixels as a Vec of u8s.
-     * @returns {Uint8Array}
-     */
-    get_raw_pixels() {
-        const ret = wasm.photonimage_get_raw_pixels(this.__wbg_ptr);
-        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-        return v1;
-    }
-    /**
-     * Get the width of the PhotonImage.
-     * @returns {number}
-     */
-    get_width() {
-        const ret = wasm.photonimage_get_width(this.__wbg_ptr);
-        return ret >>> 0;
-    }
-    /**
-     * Create a new PhotonImage from a Vec of u8s, which represent raw pixels.
-     * @param {Uint8Array} raw_pixels
-     * @param {number} width
-     * @param {number} height
-     */
-    constructor(raw_pixels, width, height) {
-        const ptr0 = passArray8ToWasm0(raw_pixels, wasm.__wbindgen_malloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.photonimage_new(ptr0, len0, width, height);
-        this.__wbg_ptr = ret >>> 0;
-        PhotonImageFinalization.register(this, this.__wbg_ptr, this);
-        return this;
-    }
-    /**
-     * Create a new PhotonImage from a base64 string.
-     * @param {string} base64
-     * @returns {PhotonImage}
-     */
-    static new_from_base64(base64) {
-        const ptr0 = passStringToWasm0(base64, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.base64_to_image(ptr0, len0);
-        return PhotonImage.__wrap(ret);
-    }
-    /**
-     * Create a new PhotonImage from a Blob/File.
-     * @param {Blob} blob
-     * @returns {PhotonImage}
-     */
-    static new_from_blob(blob) {
-        const ret = wasm.photonimage_new_from_blob(blob);
-        return PhotonImage.__wrap(ret);
-    }
-    /**
-     * Create a new PhotonImage from a byteslice.
-     * @param {Uint8Array} vec
-     * @returns {PhotonImage}
-     */
-    static new_from_byteslice(vec) {
-        const ptr0 = passArray8ToWasm0(vec, wasm.__wbindgen_malloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.photonimage_new_from_byteslice(ptr0, len0);
-        return PhotonImage.__wrap(ret);
-    }
-    /**
-     * Create a new PhotonImage from a HTMLImageElement
-     * @param {HTMLImageElement} image
-     * @returns {PhotonImage}
-     */
-    static new_from_image(image) {
-        const ret = wasm.photonimage_new_from_image(image);
-        return PhotonImage.__wrap(ret);
-    }
-    /**
-     * Convert ImageData to raw pixels, and update the PhotonImage's raw pixels to this.
-     * @param {ImageData} img_data
-     */
-    set_imgdata(img_data) {
-        wasm.photonimage_set_imgdata(this.__wbg_ptr, img_data);
-    }
+	static __wrap(ptr) {
+		ptr = ptr >>> 0;
+		const obj = Object.create(PhotonImage.prototype);
+		obj.__wbg_ptr = ptr;
+		PhotonImageFinalization.register(obj, obj.__wbg_ptr, obj);
+		return obj;
+	}
+	__destroy_into_raw() {
+		const ptr = this.__wbg_ptr;
+		this.__wbg_ptr = 0;
+		PhotonImageFinalization.unregister(this);
+		return ptr;
+	}
+	free() {
+		const ptr = this.__destroy_into_raw();
+		wasm.__wbg_photonimage_free(ptr, 0);
+	}
+	/**
+	 * Convert the PhotonImage to base64.
+	 * @returns {string}
+	 */
+	get_base64() {
+		let deferred1_0;
+		let deferred1_1;
+		try {
+			const ret = wasm.photonimage_get_base64(this.__wbg_ptr);
+			deferred1_0 = ret[0];
+			deferred1_1 = ret[1];
+			return getStringFromWasm0(ret[0], ret[1]);
+		} finally {
+			wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+		}
+	}
+	/**
+	 * Convert the PhotonImage to raw bytes. Returns PNG.
+	 * @returns {Uint8Array}
+	 */
+	get_bytes() {
+		const ret = wasm.photonimage_get_bytes(this.__wbg_ptr);
+		var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+		wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+		return v1;
+	}
+	/**
+	 * Convert the PhotonImage to raw bytes. Returns a JPEG.
+	 * @param {number} quality
+	 * @returns {Uint8Array}
+	 */
+	get_bytes_jpeg(quality) {
+		const ret = wasm.photonimage_get_bytes_jpeg(this.__wbg_ptr, quality);
+		var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+		wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+		return v1;
+	}
+	/**
+	 * Convert the PhotonImage to raw bytes. Returns a WEBP.
+	 * @returns {Uint8Array}
+	 */
+	get_bytes_webp() {
+		const ret = wasm.photonimage_get_bytes_webp(this.__wbg_ptr);
+		var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+		wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+		return v1;
+	}
+	/**
+	 * Calculates estimated filesize and returns number of bytes
+	 * @returns {bigint}
+	 */
+	get_estimated_filesize() {
+		const ret = wasm.photonimage_get_estimated_filesize(this.__wbg_ptr);
+		return BigInt.asUintN(64, ret);
+	}
+	/**
+	 * Get the height of the PhotonImage.
+	 * @returns {number}
+	 */
+	get_height() {
+		const ret = wasm.photonimage_get_height(this.__wbg_ptr);
+		return ret >>> 0;
+	}
+	/**
+	 * Convert the PhotonImage's raw pixels to JS-compatible ImageData.
+	 * @returns {ImageData}
+	 */
+	get_image_data() {
+		const ret = wasm.photonimage_get_image_data(this.__wbg_ptr);
+		return ret;
+	}
+	/**
+	 * Get the PhotonImage's pixels as a Vec of u8s.
+	 * @returns {Uint8Array}
+	 */
+	get_raw_pixels() {
+		const ret = wasm.photonimage_get_raw_pixels(this.__wbg_ptr);
+		var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+		wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+		return v1;
+	}
+	/**
+	 * Get the width of the PhotonImage.
+	 * @returns {number}
+	 */
+	get_width() {
+		const ret = wasm.photonimage_get_width(this.__wbg_ptr);
+		return ret >>> 0;
+	}
+	/**
+	 * Create a new PhotonImage from a Vec of u8s, which represent raw pixels.
+	 * @param {Uint8Array} raw_pixels
+	 * @param {number} width
+	 * @param {number} height
+	 */
+	constructor(raw_pixels, width, height) {
+		const ptr0 = passArray8ToWasm0(raw_pixels, wasm.__wbindgen_malloc);
+		const len0 = WASM_VECTOR_LEN;
+		const ret = wasm.photonimage_new(ptr0, len0, width, height);
+		this.__wbg_ptr = ret >>> 0;
+		PhotonImageFinalization.register(this, this.__wbg_ptr, this);
+		return this;
+	}
+	/**
+	 * Create a new PhotonImage from a base64 string.
+	 * @param {string} base64
+	 * @returns {PhotonImage}
+	 */
+	static new_from_base64(base64) {
+		const ptr0 = passStringToWasm0(base64, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+		const len0 = WASM_VECTOR_LEN;
+		const ret = wasm.base64_to_image(ptr0, len0);
+		return PhotonImage.__wrap(ret);
+	}
+	/**
+	 * Create a new PhotonImage from a Blob/File.
+	 * @param {Blob} blob
+	 * @returns {PhotonImage}
+	 */
+	static new_from_blob(blob) {
+		const ret = wasm.photonimage_new_from_blob(blob);
+		return PhotonImage.__wrap(ret);
+	}
+	/**
+	 * Create a new PhotonImage from a byteslice.
+	 * @param {Uint8Array} vec
+	 * @returns {PhotonImage}
+	 */
+	static new_from_byteslice(vec) {
+		const ptr0 = passArray8ToWasm0(vec, wasm.__wbindgen_malloc);
+		const len0 = WASM_VECTOR_LEN;
+		const ret = wasm.photonimage_new_from_byteslice(ptr0, len0);
+		return PhotonImage.__wrap(ret);
+	}
+	/**
+	 * Create a new PhotonImage from a HTMLImageElement
+	 * @param {HTMLImageElement} image
+	 * @returns {PhotonImage}
+	 */
+	static new_from_image(image) {
+		const ret = wasm.photonimage_new_from_image(image);
+		return PhotonImage.__wrap(ret);
+	}
+	/**
+	 * Convert ImageData to raw pixels, and update the PhotonImage's raw pixels to this.
+	 * @param {ImageData} img_data
+	 */
+	set_imgdata(img_data) {
+		wasm.photonimage_set_imgdata(this.__wbg_ptr, img_data);
+	}
 }
 if (Symbol.dispose) PhotonImage.prototype[Symbol.dispose] = PhotonImage.prototype.free;
 
@@ -179,73 +179,73 @@ if (Symbol.dispose) PhotonImage.prototype[Symbol.dispose] = PhotonImage.prototyp
  * RGB color type.
  */
 export class Rgb {
-    __destroy_into_raw() {
-        const ptr = this.__wbg_ptr;
-        this.__wbg_ptr = 0;
-        RgbFinalization.unregister(this);
-        return ptr;
-    }
-    free() {
-        const ptr = this.__destroy_into_raw();
-        wasm.__wbg_rgb_free(ptr, 0);
-    }
-    /**
-     * Get the Blue value.
-     * @returns {number}
-     */
-    get_blue() {
-        const ret = wasm.rgb_get_blue(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * Get the Green value.
-     * @returns {number}
-     */
-    get_green() {
-        const ret = wasm.rgb_get_green(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * Get the Red value.
-     * @returns {number}
-     */
-    get_red() {
-        const ret = wasm.rgb_get_red(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * Create a new RGB struct.
-     * @param {number} r
-     * @param {number} g
-     * @param {number} b
-     */
-    constructor(r, g, b) {
-        const ret = wasm.rgb_new(r, g, b);
-        this.__wbg_ptr = ret >>> 0;
-        RgbFinalization.register(this, this.__wbg_ptr, this);
-        return this;
-    }
-    /**
-     * Set the Blue value.
-     * @param {number} b
-     */
-    set_blue(b) {
-        wasm.rgb_set_blue(this.__wbg_ptr, b);
-    }
-    /**
-     * Get the Green value.
-     * @param {number} g
-     */
-    set_green(g) {
-        wasm.rgb_set_green(this.__wbg_ptr, g);
-    }
-    /**
-     * Set the Red value.
-     * @param {number} r
-     */
-    set_red(r) {
-        wasm.rgb_set_red(this.__wbg_ptr, r);
-    }
+	__destroy_into_raw() {
+		const ptr = this.__wbg_ptr;
+		this.__wbg_ptr = 0;
+		RgbFinalization.unregister(this);
+		return ptr;
+	}
+	free() {
+		const ptr = this.__destroy_into_raw();
+		wasm.__wbg_rgb_free(ptr, 0);
+	}
+	/**
+	 * Get the Blue value.
+	 * @returns {number}
+	 */
+	get_blue() {
+		const ret = wasm.rgb_get_blue(this.__wbg_ptr);
+		return ret;
+	}
+	/**
+	 * Get the Green value.
+	 * @returns {number}
+	 */
+	get_green() {
+		const ret = wasm.rgb_get_green(this.__wbg_ptr);
+		return ret;
+	}
+	/**
+	 * Get the Red value.
+	 * @returns {number}
+	 */
+	get_red() {
+		const ret = wasm.rgb_get_red(this.__wbg_ptr);
+		return ret;
+	}
+	/**
+	 * Create a new RGB struct.
+	 * @param {number} r
+	 * @param {number} g
+	 * @param {number} b
+	 */
+	constructor(r, g, b) {
+		const ret = wasm.rgb_new(r, g, b);
+		this.__wbg_ptr = ret >>> 0;
+		RgbFinalization.register(this, this.__wbg_ptr, this);
+		return this;
+	}
+	/**
+	 * Set the Blue value.
+	 * @param {number} b
+	 */
+	set_blue(b) {
+		wasm.rgb_set_blue(this.__wbg_ptr, b);
+	}
+	/**
+	 * Get the Green value.
+	 * @param {number} g
+	 */
+	set_green(g) {
+		wasm.rgb_set_green(this.__wbg_ptr, g);
+	}
+	/**
+	 * Set the Red value.
+	 * @param {number} r
+	 */
+	set_red(r) {
+		wasm.rgb_set_red(this.__wbg_ptr, r);
+	}
 }
 if (Symbol.dispose) Rgb.prototype[Symbol.dispose] = Rgb.prototype.free;
 
@@ -253,89 +253,89 @@ if (Symbol.dispose) Rgb.prototype[Symbol.dispose] = Rgb.prototype.free;
  * RGBA color type.
  */
 export class Rgba {
-    __destroy_into_raw() {
-        const ptr = this.__wbg_ptr;
-        this.__wbg_ptr = 0;
-        RgbaFinalization.unregister(this);
-        return ptr;
-    }
-    free() {
-        const ptr = this.__destroy_into_raw();
-        wasm.__wbg_rgba_free(ptr, 0);
-    }
-    /**
-     * Get the alpha value for this color.
-     * @returns {number}
-     */
-    get_alpha() {
-        const ret = wasm.rgba_get_alpha(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * Get the Blue value.
-     * @returns {number}
-     */
-    get_blue() {
-        const ret = wasm.rgb_get_blue(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * Get the Green value.
-     * @returns {number}
-     */
-    get_green() {
-        const ret = wasm.rgb_get_green(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * Get the Red value.
-     * @returns {number}
-     */
-    get_red() {
-        const ret = wasm.rgb_get_red(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * Create a new RGBA struct.
-     * @param {number} r
-     * @param {number} g
-     * @param {number} b
-     * @param {number} a
-     */
-    constructor(r, g, b, a) {
-        const ret = wasm.rgba_new(r, g, b, a);
-        this.__wbg_ptr = ret >>> 0;
-        RgbaFinalization.register(this, this.__wbg_ptr, this);
-        return this;
-    }
-    /**
-     * Set the alpha value.
-     * @param {number} a
-     */
-    set_alpha(a) {
-        wasm.rgba_set_alpha(this.__wbg_ptr, a);
-    }
-    /**
-     * Set the Blue value.
-     * @param {number} b
-     */
-    set_blue(b) {
-        wasm.rgb_set_blue(this.__wbg_ptr, b);
-    }
-    /**
-     * Get the Green value.
-     * @param {number} g
-     */
-    set_green(g) {
-        wasm.rgb_set_green(this.__wbg_ptr, g);
-    }
-    /**
-     * Set the Red value.
-     * @param {number} r
-     */
-    set_red(r) {
-        wasm.rgb_set_red(this.__wbg_ptr, r);
-    }
+	__destroy_into_raw() {
+		const ptr = this.__wbg_ptr;
+		this.__wbg_ptr = 0;
+		RgbaFinalization.unregister(this);
+		return ptr;
+	}
+	free() {
+		const ptr = this.__destroy_into_raw();
+		wasm.__wbg_rgba_free(ptr, 0);
+	}
+	/**
+	 * Get the alpha value for this color.
+	 * @returns {number}
+	 */
+	get_alpha() {
+		const ret = wasm.rgba_get_alpha(this.__wbg_ptr);
+		return ret;
+	}
+	/**
+	 * Get the Blue value.
+	 * @returns {number}
+	 */
+	get_blue() {
+		const ret = wasm.rgb_get_blue(this.__wbg_ptr);
+		return ret;
+	}
+	/**
+	 * Get the Green value.
+	 * @returns {number}
+	 */
+	get_green() {
+		const ret = wasm.rgb_get_green(this.__wbg_ptr);
+		return ret;
+	}
+	/**
+	 * Get the Red value.
+	 * @returns {number}
+	 */
+	get_red() {
+		const ret = wasm.rgb_get_red(this.__wbg_ptr);
+		return ret;
+	}
+	/**
+	 * Create a new RGBA struct.
+	 * @param {number} r
+	 * @param {number} g
+	 * @param {number} b
+	 * @param {number} a
+	 */
+	constructor(r, g, b, a) {
+		const ret = wasm.rgba_new(r, g, b, a);
+		this.__wbg_ptr = ret >>> 0;
+		RgbaFinalization.register(this, this.__wbg_ptr, this);
+		return this;
+	}
+	/**
+	 * Set the alpha value.
+	 * @param {number} a
+	 */
+	set_alpha(a) {
+		wasm.rgba_set_alpha(this.__wbg_ptr, a);
+	}
+	/**
+	 * Set the Blue value.
+	 * @param {number} b
+	 */
+	set_blue(b) {
+		wasm.rgb_set_blue(this.__wbg_ptr, b);
+	}
+	/**
+	 * Get the Green value.
+	 * @param {number} g
+	 */
+	set_green(g) {
+		wasm.rgb_set_green(this.__wbg_ptr, g);
+	}
+	/**
+	 * Set the Red value.
+	 * @param {number} r
+	 */
+	set_red(r) {
+		wasm.rgb_set_red(this.__wbg_ptr, r);
+	}
 }
 if (Symbol.dispose) Rgba.prototype[Symbol.dispose] = Rgba.prototype.free;
 
@@ -343,11 +343,16 @@ if (Symbol.dispose) Rgba.prototype[Symbol.dispose] = Rgba.prototype.free;
  * @enum {1 | 2 | 3 | 4 | 5}
  */
 export const SamplingFilter = Object.freeze({
-    Nearest: 1, "1": "Nearest",
-    Triangle: 2, "2": "Triangle",
-    CatmullRom: 3, "3": "CatmullRom",
-    Gaussian: 4, "4": "Gaussian",
-    Lanczos3: 5, "5": "Lanczos3",
+	Nearest: 1,
+	1: "Nearest",
+	Triangle: 2,
+	2: "Triangle",
+	CatmullRom: 3,
+	3: "CatmullRom",
+	Gaussian: 4,
+	4: "Gaussian",
+	Lanczos3: 5,
+	5: "Lanczos3",
 });
 
 /**
@@ -373,8 +378,8 @@ export const SamplingFilter = Object.freeze({
  * @param {PhotonImage} photon_image
  */
 export function add_noise_rand(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.add_noise_rand(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.add_noise_rand(photon_image.__wbg_ptr);
 }
 
 /**
@@ -398,8 +403,8 @@ export function add_noise_rand(photon_image) {
  * @param {number} brightness
  */
 export function adjust_brightness(photon_image, brightness) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.adjust_brightness(photon_image.__wbg_ptr, brightness);
+	_assertClass(photon_image, PhotonImage);
+	wasm.adjust_brightness(photon_image.__wbg_ptr, brightness);
 }
 
 /**
@@ -422,8 +427,8 @@ export function adjust_brightness(photon_image, brightness) {
  * @param {number} contrast
  */
 export function adjust_contrast(photon_image, contrast) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.adjust_contrast(photon_image.__wbg_ptr, contrast);
+	_assertClass(photon_image, PhotonImage);
+	wasm.adjust_contrast(photon_image.__wbg_ptr, contrast);
 }
 
 /**
@@ -447,8 +452,8 @@ export function adjust_contrast(photon_image, contrast) {
  * @param {number} amt
  */
 export function alter_blue_channel(img, amt) {
-    _assertClass(img, PhotonImage);
-    wasm.alter_blue_channel(img.__wbg_ptr, amt);
+	_assertClass(img, PhotonImage);
+	wasm.alter_blue_channel(img.__wbg_ptr, amt);
 }
 
 /**
@@ -489,8 +494,8 @@ export function alter_blue_channel(img, amt) {
  * @param {number} amt
  */
 export function alter_channel(img, channel, amt) {
-    _assertClass(img, PhotonImage);
-    wasm.alter_channel(img.__wbg_ptr, channel, amt);
+	_assertClass(img, PhotonImage);
+	wasm.alter_channel(img.__wbg_ptr, channel, amt);
 }
 
 /**
@@ -519,8 +524,8 @@ export function alter_channel(img, channel, amt) {
  * @param {number} b_amt
  */
 export function alter_channels(img, r_amt, g_amt, b_amt) {
-    _assertClass(img, PhotonImage);
-    wasm.alter_channels(img.__wbg_ptr, r_amt, g_amt, b_amt);
+	_assertClass(img, PhotonImage);
+	wasm.alter_channels(img.__wbg_ptr, r_amt, g_amt, b_amt);
 }
 
 /**
@@ -544,8 +549,8 @@ export function alter_channels(img, r_amt, g_amt, b_amt) {
  * @param {number} amt
  */
 export function alter_green_channel(img, amt) {
-    _assertClass(img, PhotonImage);
-    wasm.alter_green_channel(img.__wbg_ptr, amt);
+	_assertClass(img, PhotonImage);
+	wasm.alter_green_channel(img.__wbg_ptr, amt);
 }
 
 /**
@@ -569,8 +574,8 @@ export function alter_green_channel(img, amt) {
  * @param {number} amt
  */
 export function alter_red_channel(photon_image, amt) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.alter_red_channel(photon_image.__wbg_ptr, amt);
+	_assertClass(photon_image, PhotonImage);
+	wasm.alter_red_channel(photon_image.__wbg_ptr, amt);
 }
 
 /**
@@ -600,8 +605,8 @@ export function alter_red_channel(photon_image, amt) {
  * @param {number} amt2
  */
 export function alter_two_channels(img, channel1, amt1, channel2, amt2) {
-    _assertClass(img, PhotonImage);
-    wasm.alter_two_channels(img.__wbg_ptr, channel1, amt1, channel2, amt2);
+	_assertClass(img, PhotonImage);
+	wasm.alter_two_channels(img.__wbg_ptr, channel1, amt1, channel2, amt2);
 }
 
 /**
@@ -609,8 +614,8 @@ export function alter_two_channels(img, channel1, amt1, channel2, amt2) {
  * @param {PhotonImage} image
  */
 export function apply_gradient(image) {
-    _assertClass(image, PhotonImage);
-    wasm.apply_gradient(image.__wbg_ptr);
+	_assertClass(image, PhotonImage);
+	wasm.apply_gradient(image.__wbg_ptr);
 }
 
 /**
@@ -631,8 +636,8 @@ export function apply_gradient(image) {
  * @param {PhotonImage} photon_image
  */
 export function b_grayscale(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.b_grayscale(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.b_grayscale(photon_image.__wbg_ptr);
 }
 
 /**
@@ -641,10 +646,10 @@ export function b_grayscale(photon_image) {
  * @returns {PhotonImage}
  */
 export function base64_to_image(base64) {
-    const ptr0 = passStringToWasm0(base64, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.base64_to_image(ptr0, len0);
-    return PhotonImage.__wrap(ret);
+	const ptr0 = passStringToWasm0(base64, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+	const len0 = WASM_VECTOR_LEN;
+	const ret = wasm.base64_to_image(ptr0, len0);
+	return PhotonImage.__wrap(ret);
 }
 
 /**
@@ -653,12 +658,12 @@ export function base64_to_image(base64) {
  * @returns {Uint8Array}
  */
 export function base64_to_vec(base64) {
-    const ptr0 = passStringToWasm0(base64, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.base64_to_vec(ptr0, len0);
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
+	const ptr0 = passStringToWasm0(base64, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+	const len0 = WASM_VECTOR_LEN;
+	const ret = wasm.base64_to_vec(ptr0, len0);
+	var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+	wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+	return v2;
 }
 
 /**
@@ -690,11 +695,11 @@ export function base64_to_vec(base64) {
  * @param {string} blend_mode
  */
 export function blend(photon_image, photon_image2, blend_mode) {
-    _assertClass(photon_image, PhotonImage);
-    _assertClass(photon_image2, PhotonImage);
-    const ptr0 = passStringToWasm0(blend_mode, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    wasm.blend(photon_image.__wbg_ptr, photon_image2.__wbg_ptr, ptr0, len0);
+	_assertClass(photon_image, PhotonImage);
+	_assertClass(photon_image2, PhotonImage);
+	const ptr0 = passStringToWasm0(blend_mode, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+	const len0 = WASM_VECTOR_LEN;
+	wasm.blend(photon_image.__wbg_ptr, photon_image2.__wbg_ptr, ptr0, len0);
 }
 
 /**
@@ -716,8 +721,8 @@ export function blend(photon_image, photon_image2, blend_mode) {
  * @param {PhotonImage} photon_image
  */
 export function box_blur(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.box_blur(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.box_blur(photon_image.__wbg_ptr);
 }
 
 /**
@@ -737,8 +742,8 @@ export function box_blur(photon_image) {
  * @param {PhotonImage} img
  */
 export function cali(img) {
-    _assertClass(img, PhotonImage);
-    wasm.cali(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.cali(img.__wbg_ptr);
 }
 
 /**
@@ -765,10 +770,10 @@ export function cali(img) {
  * @param {Rgb} color
  */
 export function color_horizontal_strips(photon_image, num_strips, color) {
-    _assertClass(photon_image, PhotonImage);
-    _assertClass(color, Rgb);
-    var ptr0 = color.__destroy_into_raw();
-    wasm.color_horizontal_strips(photon_image.__wbg_ptr, num_strips, ptr0);
+	_assertClass(photon_image, PhotonImage);
+	_assertClass(color, Rgb);
+	var ptr0 = color.__destroy_into_raw();
+	wasm.color_horizontal_strips(photon_image.__wbg_ptr, num_strips, ptr0);
 }
 
 /**
@@ -795,10 +800,10 @@ export function color_horizontal_strips(photon_image, num_strips, color) {
  * @param {Rgb} color
  */
 export function color_vertical_strips(photon_image, num_strips, color) {
-    _assertClass(photon_image, PhotonImage);
-    _assertClass(color, Rgb);
-    var ptr0 = color.__destroy_into_raw();
-    wasm.color_vertical_strips(photon_image.__wbg_ptr, num_strips, ptr0);
+	_assertClass(photon_image, PhotonImage);
+	_assertClass(color, Rgb);
+	var ptr0 = color.__destroy_into_raw();
+	wasm.color_vertical_strips(photon_image.__wbg_ptr, num_strips, ptr0);
 }
 
 /**
@@ -819,8 +824,8 @@ export function color_vertical_strips(photon_image, num_strips, color) {
  * @param {PhotonImage} photon_image
  */
 export function colorize(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.colorize(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.colorize(photon_image.__wbg_ptr);
 }
 
 /**
@@ -829,8 +834,8 @@ export function colorize(photon_image) {
  * @returns {PhotonImage}
  */
 export function create_gradient(width, height) {
-    const ret = wasm.create_gradient(width, height);
-    return PhotonImage.__wrap(ret);
+	const ret = wasm.create_gradient(width, height);
+	return PhotonImage.__wrap(ret);
 }
 
 /**
@@ -859,9 +864,9 @@ export function create_gradient(width, height) {
  * @returns {PhotonImage}
  */
 export function crop(photon_image, x1, y1, x2, y2) {
-    _assertClass(photon_image, PhotonImage);
-    const ret = wasm.crop(photon_image.__wbg_ptr, x1, y1, x2, y2);
-    return PhotonImage.__wrap(ret);
+	_assertClass(photon_image, PhotonImage);
+	const ret = wasm.crop(photon_image.__wbg_ptr, x1, y1, x2, y2);
+	return PhotonImage.__wrap(ret);
 }
 
 /**
@@ -873,8 +878,8 @@ export function crop(photon_image, x1, y1, x2, y2) {
  * @returns {HTMLCanvasElement}
  */
 export function crop_img_browser(source_canvas, width, height, left, top) {
-    const ret = wasm.crop_img_browser(source_canvas, width, height, left, top);
-    return ret;
+	const ret = wasm.crop_img_browser(source_canvas, width, height, left, top);
+	return ret;
 }
 
 /**
@@ -900,8 +905,8 @@ export function crop_img_browser(source_canvas, width, height, left, top) {
  * @param {number} level
  */
 export function darken_hsl(img, level) {
-    _assertClass(img, PhotonImage);
-    wasm.darken_hsl(img.__wbg_ptr, level);
+	_assertClass(img, PhotonImage);
+	wasm.darken_hsl(img.__wbg_ptr, level);
 }
 
 /**
@@ -927,8 +932,8 @@ export function darken_hsl(img, level) {
  * @param {number} level
  */
 export function darken_hsluv(img, level) {
-    _assertClass(img, PhotonImage);
-    wasm.darken_hsluv(img.__wbg_ptr, level);
+	_assertClass(img, PhotonImage);
+	wasm.darken_hsluv(img.__wbg_ptr, level);
 }
 
 /**
@@ -954,8 +959,8 @@ export function darken_hsluv(img, level) {
  * @param {number} level
  */
 export function darken_hsv(img, level) {
-    _assertClass(img, PhotonImage);
-    wasm.darken_hsv(img.__wbg_ptr, level);
+	_assertClass(img, PhotonImage);
+	wasm.darken_hsv(img.__wbg_ptr, level);
 }
 
 /**
@@ -981,8 +986,8 @@ export function darken_hsv(img, level) {
  * @param {number} level
  */
 export function darken_lch(img, level) {
-    _assertClass(img, PhotonImage);
-    wasm.darken_lch(img.__wbg_ptr, level);
+	_assertClass(img, PhotonImage);
+	wasm.darken_lch(img.__wbg_ptr, level);
 }
 
 /**
@@ -1005,8 +1010,8 @@ export function darken_lch(img, level) {
  * @param {number} brightness
  */
 export function dec_brightness(photon_image, brightness) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.dec_brightness(photon_image.__wbg_ptr, brightness);
+	_assertClass(photon_image, PhotonImage);
+	wasm.dec_brightness(photon_image.__wbg_ptr, brightness);
 }
 
 /**
@@ -1028,8 +1033,8 @@ export function dec_brightness(photon_image, brightness) {
  * @param {PhotonImage} img
  */
 export function decompose_max(img) {
-    _assertClass(img, PhotonImage);
-    wasm.decompose_max(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.decompose_max(img.__wbg_ptr);
 }
 
 /**
@@ -1051,8 +1056,8 @@ export function decompose_max(img) {
  * @param {PhotonImage} img
  */
 export function decompose_min(img) {
-    _assertClass(img, PhotonImage);
-    wasm.decompose_min(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.decompose_min(img.__wbg_ptr);
 }
 
 /**
@@ -1073,8 +1078,8 @@ export function decompose_min(img) {
  * @param {PhotonImage} img
  */
 export function desaturate(img) {
-    _assertClass(img, PhotonImage);
-    wasm.desaturate(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.desaturate(img.__wbg_ptr);
 }
 
 /**
@@ -1100,8 +1105,8 @@ export function desaturate(img) {
  * @param {number} level
  */
 export function desaturate_hsl(img, level) {
-    _assertClass(img, PhotonImage);
-    wasm.desaturate_hsl(img.__wbg_ptr, level);
+	_assertClass(img, PhotonImage);
+	wasm.desaturate_hsl(img.__wbg_ptr, level);
 }
 
 /**
@@ -1127,8 +1132,8 @@ export function desaturate_hsl(img, level) {
  * @param {number} level
  */
 export function desaturate_hsluv(img, level) {
-    _assertClass(img, PhotonImage);
-    wasm.desaturate_hsluv(img.__wbg_ptr, level);
+	_assertClass(img, PhotonImage);
+	wasm.desaturate_hsluv(img.__wbg_ptr, level);
 }
 
 /**
@@ -1154,8 +1159,8 @@ export function desaturate_hsluv(img, level) {
  * @param {number} level
  */
 export function desaturate_hsv(img, level) {
-    _assertClass(img, PhotonImage);
-    wasm.desaturate_hsv(img.__wbg_ptr, level);
+	_assertClass(img, PhotonImage);
+	wasm.desaturate_hsv(img.__wbg_ptr, level);
 }
 
 /**
@@ -1181,8 +1186,8 @@ export function desaturate_hsv(img, level) {
  * @param {number} level
  */
 export function desaturate_lch(img, level) {
-    _assertClass(img, PhotonImage);
-    wasm.desaturate_lch(img.__wbg_ptr, level);
+	_assertClass(img, PhotonImage);
+	wasm.desaturate_lch(img.__wbg_ptr, level);
 }
 
 /**
@@ -1204,8 +1209,8 @@ export function desaturate_lch(img, level) {
  * @param {PhotonImage} photon_image
  */
 export function detect_135_deg_lines(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.detect_135_deg_lines(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.detect_135_deg_lines(photon_image.__wbg_ptr);
 }
 
 /**
@@ -1227,8 +1232,8 @@ export function detect_135_deg_lines(photon_image) {
  * @param {PhotonImage} photon_image
  */
 export function detect_45_deg_lines(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.detect_45_deg_lines(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.detect_45_deg_lines(photon_image.__wbg_ptr);
 }
 
 /**
@@ -1250,8 +1255,8 @@ export function detect_45_deg_lines(photon_image) {
  * @param {PhotonImage} photon_image
  */
 export function detect_horizontal_lines(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.detect_horizontal_lines(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.detect_horizontal_lines(photon_image.__wbg_ptr);
 }
 
 /**
@@ -1273,8 +1278,8 @@ export function detect_horizontal_lines(photon_image) {
  * @param {PhotonImage} photon_image
  */
 export function detect_vertical_lines(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.detect_vertical_lines(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.detect_vertical_lines(photon_image.__wbg_ptr);
 }
 
 /**
@@ -1298,8 +1303,8 @@ export function detect_vertical_lines(photon_image) {
  * @param {number} depth
  */
 export function dither(photon_image, depth) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.dither(photon_image.__wbg_ptr, depth);
+	_assertClass(photon_image, PhotonImage);
+	wasm.dither(photon_image.__wbg_ptr, depth);
 }
 
 /**
@@ -1319,8 +1324,8 @@ export function dither(photon_image, depth) {
  * @param {PhotonImage} img
  */
 export function dramatic(img) {
-    _assertClass(img, PhotonImage);
-    wasm.dramatic(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.dramatic(img.__wbg_ptr);
 }
 
 /**
@@ -1353,10 +1358,10 @@ export function dramatic(img) {
  * @param {number} font_size
  */
 export function draw_text(photon_img, text, x, y, font_size) {
-    _assertClass(photon_img, PhotonImage);
-    const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    wasm.draw_text(photon_img.__wbg_ptr, ptr0, len0, x, y, font_size);
+	_assertClass(photon_img, PhotonImage);
+	const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+	const len0 = WASM_VECTOR_LEN;
+	wasm.draw_text(photon_img.__wbg_ptr, ptr0, len0, x, y, font_size);
 }
 
 /**
@@ -1389,10 +1394,10 @@ export function draw_text(photon_img, text, x, y, font_size) {
  * @param {number} font_size
  */
 export function draw_text_with_border(photon_img, text, x, y, font_size) {
-    _assertClass(photon_img, PhotonImage);
-    const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    wasm.draw_text_with_border(photon_img.__wbg_ptr, ptr0, len0, x, y, font_size);
+	_assertClass(photon_img, PhotonImage);
+	const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+	const len0 = WASM_VECTOR_LEN;
+	wasm.draw_text_with_border(photon_img.__wbg_ptr, ptr0, len0, x, y, font_size);
 }
 
 /**
@@ -1401,12 +1406,12 @@ export function draw_text_with_border(photon_img, text, x, y, font_size) {
  * @param {Rgb} color_b
  */
 export function duotone(photon_image, color_a, color_b) {
-    _assertClass(photon_image, PhotonImage);
-    _assertClass(color_a, Rgb);
-    var ptr0 = color_a.__destroy_into_raw();
-    _assertClass(color_b, Rgb);
-    var ptr1 = color_b.__destroy_into_raw();
-    wasm.duotone(photon_image.__wbg_ptr, ptr0, ptr1);
+	_assertClass(photon_image, PhotonImage);
+	_assertClass(color_a, Rgb);
+	var ptr0 = color_a.__destroy_into_raw();
+	_assertClass(color_b, Rgb);
+	var ptr1 = color_b.__destroy_into_raw();
+	wasm.duotone(photon_image.__wbg_ptr, ptr0, ptr1);
 }
 
 /**
@@ -1426,8 +1431,8 @@ export function duotone(photon_image, color_a, color_b) {
  * @param {PhotonImage} img
  */
 export function duotone_horizon(img) {
-    _assertClass(img, PhotonImage);
-    wasm.duotone_horizon(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.duotone_horizon(img.__wbg_ptr);
 }
 
 /**
@@ -1447,8 +1452,8 @@ export function duotone_horizon(img) {
  * @param {PhotonImage} img
  */
 export function duotone_lilac(img) {
-    _assertClass(img, PhotonImage);
-    wasm.duotone_lilac(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.duotone_lilac(img.__wbg_ptr);
 }
 
 /**
@@ -1468,8 +1473,8 @@ export function duotone_lilac(img) {
  * @param {PhotonImage} img
  */
 export function duotone_ochre(img) {
-    _assertClass(img, PhotonImage);
-    wasm.duotone_ochre(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.duotone_ochre(img.__wbg_ptr);
 }
 
 /**
@@ -1493,10 +1498,10 @@ export function duotone_ochre(img) {
  * @param {Rgb} rgb_color
  */
 export function duotone_tint(img, rgb_color) {
-    _assertClass(img, PhotonImage);
-    _assertClass(rgb_color, Rgb);
-    var ptr0 = rgb_color.__destroy_into_raw();
-    wasm.duotone_tint(img.__wbg_ptr, ptr0);
+	_assertClass(img, PhotonImage);
+	_assertClass(rgb_color, Rgb);
+	var ptr0 = rgb_color.__destroy_into_raw();
+	wasm.duotone_tint(img.__wbg_ptr, ptr0);
 }
 
 /**
@@ -1516,8 +1521,8 @@ export function duotone_tint(img, rgb_color) {
  * @param {PhotonImage} img
  */
 export function duotone_violette(img) {
-    _assertClass(img, PhotonImage);
-    wasm.duotone_violette(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.duotone_violette(img.__wbg_ptr);
 }
 
 /**
@@ -1539,8 +1544,8 @@ export function duotone_violette(img) {
  * @param {PhotonImage} photon_image
  */
 export function edge_detection(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.edge_detection(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.edge_detection(photon_image.__wbg_ptr);
 }
 
 /**
@@ -1562,8 +1567,8 @@ export function edge_detection(photon_image) {
  * @param {PhotonImage} photon_image
  */
 export function edge_one(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.edge_one(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.edge_one(photon_image.__wbg_ptr);
 }
 
 /**
@@ -1585,8 +1590,8 @@ export function edge_one(photon_image) {
  * @param {PhotonImage} photon_image
  */
 export function emboss(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.emboss(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.emboss(photon_image.__wbg_ptr);
 }
 
 /**
@@ -1624,10 +1629,10 @@ export function emboss(photon_image) {
  * @param {string} filter_name
  */
 export function filter(img, filter_name) {
-    _assertClass(img, PhotonImage);
-    const ptr0 = passStringToWasm0(filter_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    wasm.filter(img.__wbg_ptr, ptr0, len0);
+	_assertClass(img, PhotonImage);
+	const ptr0 = passStringToWasm0(filter_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+	const len0 = WASM_VECTOR_LEN;
+	wasm.filter(img.__wbg_ptr, ptr0, len0);
 }
 
 /**
@@ -1647,8 +1652,8 @@ export function filter(img, filter_name) {
  * @param {PhotonImage} img
  */
 export function firenze(img) {
-    _assertClass(img, PhotonImage);
-    wasm.firenze(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.firenze(img.__wbg_ptr);
 }
 
 /**
@@ -1670,8 +1675,8 @@ export function firenze(img) {
  * @param {PhotonImage} photon_image
  */
 export function fliph(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.fliph(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.fliph(photon_image.__wbg_ptr);
 }
 
 /**
@@ -1693,8 +1698,8 @@ export function fliph(photon_image) {
  * @param {PhotonImage} photon_image
  */
 export function flipv(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.flipv(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.flipv(photon_image.__wbg_ptr);
 }
 
 /**
@@ -1715,8 +1720,8 @@ export function flipv(photon_image) {
  * @param {PhotonImage} photon_image
  */
 export function frosted_glass(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.frosted_glass(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.frosted_glass(photon_image.__wbg_ptr);
 }
 
 /**
@@ -1737,8 +1742,8 @@ export function frosted_glass(photon_image) {
  * @param {PhotonImage} photon_image
  */
 export function g_grayscale(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.g_grayscale(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.g_grayscale(photon_image.__wbg_ptr);
 }
 
 /**
@@ -1764,8 +1769,8 @@ export function g_grayscale(photon_image) {
  * @param {number} blue
  */
 export function gamma_correction(photon_image, red, green, blue) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.gamma_correction(photon_image.__wbg_ptr, red, green, blue);
+	_assertClass(photon_image, PhotonImage);
+	wasm.gamma_correction(photon_image.__wbg_ptr, red, green, blue);
 }
 
 /**
@@ -1789,8 +1794,8 @@ export function gamma_correction(photon_image, red, green, blue) {
  * @param {number} radius
  */
 export function gaussian_blur(photon_image, radius) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.gaussian_blur(photon_image.__wbg_ptr, radius);
+	_assertClass(photon_image, PhotonImage);
+	wasm.gaussian_blur(photon_image.__wbg_ptr, radius);
 }
 
 /**
@@ -1800,8 +1805,8 @@ export function gaussian_blur(photon_image, radius) {
  * @returns {ImageData}
  */
 export function get_image_data(canvas, ctx) {
-    const ret = wasm.get_image_data(canvas, ctx);
-    return ret;
+	const ret = wasm.get_image_data(canvas, ctx);
+	return ret;
 }
 
 /**
@@ -1821,8 +1826,8 @@ export function get_image_data(canvas, ctx) {
  * @param {PhotonImage} img
  */
 export function golden(img) {
-    _assertClass(img, PhotonImage);
-    wasm.golden(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.golden(img.__wbg_ptr);
 }
 
 /**
@@ -1843,8 +1848,8 @@ export function golden(img) {
  * @param {PhotonImage} img
  */
 export function grayscale(img) {
-    _assertClass(img, PhotonImage);
-    wasm.grayscale(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.grayscale(img.__wbg_ptr);
 }
 
 /**
@@ -1865,8 +1870,8 @@ export function grayscale(img) {
  * @param {PhotonImage} img
  */
 export function grayscale_human_corrected(img) {
-    _assertClass(img, PhotonImage);
-    wasm.grayscale_human_corrected(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.grayscale_human_corrected(img.__wbg_ptr);
 }
 
 /**
@@ -1890,8 +1895,8 @@ export function grayscale_human_corrected(img) {
  * @param {number} num_shades
  */
 export function grayscale_shades(photon_image, num_shades) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.grayscale_shades(photon_image.__wbg_ptr, num_shades);
+	_assertClass(photon_image, PhotonImage);
+	wasm.grayscale_shades(photon_image.__wbg_ptr, num_shades);
 }
 
 /**
@@ -1912,8 +1917,8 @@ export function grayscale_shades(photon_image, num_shades) {
  * @param {PhotonImage} photon_image
  */
 export function halftone(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.halftone(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.halftone(photon_image.__wbg_ptr);
 }
 
 /**
@@ -1936,8 +1941,8 @@ export function halftone(photon_image) {
  * @param {number} num_strips
  */
 export function horizontal_strips(photon_image, num_strips) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.horizontal_strips(photon_image.__wbg_ptr, num_strips);
+	_assertClass(photon_image, PhotonImage);
+	wasm.horizontal_strips(photon_image.__wbg_ptr, num_strips);
 }
 
 /**
@@ -1969,10 +1974,10 @@ export function horizontal_strips(photon_image, num_strips) {
  * @param {number} amt
  */
 export function hsl(photon_image, mode, amt) {
-    _assertClass(photon_image, PhotonImage);
-    const ptr0 = passStringToWasm0(mode, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    wasm.hsl(photon_image.__wbg_ptr, ptr0, len0, amt);
+	_assertClass(photon_image, PhotonImage);
+	const ptr0 = passStringToWasm0(mode, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+	const len0 = WASM_VECTOR_LEN;
+	wasm.hsl(photon_image.__wbg_ptr, ptr0, len0, amt);
 }
 
 /**
@@ -2004,10 +2009,10 @@ export function hsl(photon_image, mode, amt) {
  * @param {number} amt
  */
 export function hsluv(photon_image, mode, amt) {
-    _assertClass(photon_image, PhotonImage);
-    const ptr0 = passStringToWasm0(mode, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    wasm.hsluv(photon_image.__wbg_ptr, ptr0, len0, amt);
+	_assertClass(photon_image, PhotonImage);
+	const ptr0 = passStringToWasm0(mode, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+	const len0 = WASM_VECTOR_LEN;
+	wasm.hsluv(photon_image.__wbg_ptr, ptr0, len0, amt);
 }
 
 /**
@@ -2040,10 +2045,10 @@ export function hsluv(photon_image, mode, amt) {
  * @param {number} amt
  */
 export function hsv(photon_image, mode, amt) {
-    _assertClass(photon_image, PhotonImage);
-    const ptr0 = passStringToWasm0(mode, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    wasm.hsv(photon_image.__wbg_ptr, ptr0, len0, amt);
+	_assertClass(photon_image, PhotonImage);
+	const ptr0 = passStringToWasm0(mode, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+	const len0 = WASM_VECTOR_LEN;
+	wasm.hsv(photon_image.__wbg_ptr, ptr0, len0, amt);
 }
 
 /**
@@ -2066,8 +2071,8 @@ export function hsv(photon_image, mode, amt) {
  * @param {number} degrees
  */
 export function hue_rotate_hsl(img, degrees) {
-    _assertClass(img, PhotonImage);
-    wasm.hue_rotate_hsl(img.__wbg_ptr, degrees);
+	_assertClass(img, PhotonImage);
+	wasm.hue_rotate_hsl(img.__wbg_ptr, degrees);
 }
 
 /**
@@ -2090,8 +2095,8 @@ export function hue_rotate_hsl(img, degrees) {
  * @param {number} degrees
  */
 export function hue_rotate_hsluv(img, degrees) {
-    _assertClass(img, PhotonImage);
-    wasm.hue_rotate_hsluv(img.__wbg_ptr, degrees);
+	_assertClass(img, PhotonImage);
+	wasm.hue_rotate_hsluv(img.__wbg_ptr, degrees);
 }
 
 /**
@@ -2114,8 +2119,8 @@ export function hue_rotate_hsluv(img, degrees) {
  * @param {number} degrees
  */
 export function hue_rotate_hsv(img, degrees) {
-    _assertClass(img, PhotonImage);
-    wasm.hue_rotate_hsv(img.__wbg_ptr, degrees);
+	_assertClass(img, PhotonImage);
+	wasm.hue_rotate_hsv(img.__wbg_ptr, degrees);
 }
 
 /**
@@ -2138,8 +2143,8 @@ export function hue_rotate_hsv(img, degrees) {
  * @param {number} degrees
  */
 export function hue_rotate_lch(img, degrees) {
-    _assertClass(img, PhotonImage);
-    wasm.hue_rotate_lch(img.__wbg_ptr, degrees);
+	_assertClass(img, PhotonImage);
+	wasm.hue_rotate_lch(img.__wbg_ptr, degrees);
 }
 
 /**
@@ -2161,8 +2166,8 @@ export function hue_rotate_lch(img, degrees) {
  * @param {PhotonImage} photon_image
  */
 export function identity(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.identity(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.identity(photon_image.__wbg_ptr);
 }
 
 /**
@@ -2184,8 +2189,8 @@ export function identity(photon_image) {
  * @param {number} brightness
  */
 export function inc_brightness(photon_image, brightness) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.inc_brightness(photon_image.__wbg_ptr, brightness);
+	_assertClass(photon_image, PhotonImage);
+	wasm.inc_brightness(photon_image.__wbg_ptr, brightness);
 }
 
 /**
@@ -2205,8 +2210,8 @@ export function inc_brightness(photon_image, brightness) {
  * @param {PhotonImage} photon_image
  */
 export function invert(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.invert(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.invert(photon_image.__wbg_ptr);
 }
 
 /**
@@ -2228,8 +2233,8 @@ export function invert(photon_image) {
  * @param {PhotonImage} photon_image
  */
 export function laplace(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.laplace(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.laplace(photon_image.__wbg_ptr);
 }
 
 /**
@@ -2261,10 +2266,10 @@ export function laplace(photon_image) {
  * @param {number} amt
  */
 export function lch(photon_image, mode, amt) {
-    _assertClass(photon_image, PhotonImage);
-    const ptr0 = passStringToWasm0(mode, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    wasm.lch(photon_image.__wbg_ptr, ptr0, len0, amt);
+	_assertClass(photon_image, PhotonImage);
+	const ptr0 = passStringToWasm0(mode, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+	const len0 = WASM_VECTOR_LEN;
+	wasm.lch(photon_image.__wbg_ptr, ptr0, len0, amt);
 }
 
 /**
@@ -2289,8 +2294,8 @@ export function lch(photon_image, mode, amt) {
  * @param {number} level
  */
 export function lighten_hsl(img, level) {
-    _assertClass(img, PhotonImage);
-    wasm.lighten_hsl(img.__wbg_ptr, level);
+	_assertClass(img, PhotonImage);
+	wasm.lighten_hsl(img.__wbg_ptr, level);
 }
 
 /**
@@ -2316,8 +2321,8 @@ export function lighten_hsl(img, level) {
  * @param {number} level
  */
 export function lighten_hsluv(img, level) {
-    _assertClass(img, PhotonImage);
-    wasm.lighten_hsluv(img.__wbg_ptr, level);
+	_assertClass(img, PhotonImage);
+	wasm.lighten_hsluv(img.__wbg_ptr, level);
 }
 
 /**
@@ -2343,8 +2348,8 @@ export function lighten_hsluv(img, level) {
  * @param {number} level
  */
 export function lighten_hsv(img, level) {
-    _assertClass(img, PhotonImage);
-    wasm.lighten_hsv(img.__wbg_ptr, level);
+	_assertClass(img, PhotonImage);
+	wasm.lighten_hsv(img.__wbg_ptr, level);
 }
 
 /**
@@ -2370,8 +2375,8 @@ export function lighten_hsv(img, level) {
  * @param {number} level
  */
 export function lighten_lch(img, level) {
-    _assertClass(img, PhotonImage);
-    wasm.lighten_lch(img.__wbg_ptr, level);
+	_assertClass(img, PhotonImage);
+	wasm.lighten_lch(img.__wbg_ptr, level);
 }
 
 /**
@@ -2391,8 +2396,8 @@ export function lighten_lch(img, level) {
  * @param {PhotonImage} photon_image
  */
 export function lix(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.lix(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.lix(photon_image.__wbg_ptr);
 }
 
 /**
@@ -2412,8 +2417,8 @@ export function lix(photon_image) {
  * @param {PhotonImage} img
  */
 export function lofi(img) {
-    _assertClass(img, PhotonImage);
-    wasm.lofi(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.lofi(img.__wbg_ptr);
 }
 
 /**
@@ -2445,10 +2450,10 @@ export function lofi(img) {
  * @param {number} opacity
  */
 export function mix_with_colour(photon_image, mix_colour, opacity) {
-    _assertClass(photon_image, PhotonImage);
-    _assertClass(mix_colour, Rgb);
-    var ptr0 = mix_colour.__destroy_into_raw();
-    wasm.mix_with_colour(photon_image.__wbg_ptr, ptr0, opacity);
+	_assertClass(photon_image, PhotonImage);
+	_assertClass(mix_colour, Rgb);
+	var ptr0 = mix_colour.__destroy_into_raw();
+	wasm.mix_with_colour(photon_image.__wbg_ptr, ptr0, opacity);
 }
 
 /**
@@ -2478,8 +2483,8 @@ export function mix_with_colour(photon_image, mix_colour, opacity) {
  * @param {number} b_offset
  */
 export function monochrome(img, r_offset, g_offset, b_offset) {
-    _assertClass(img, PhotonImage);
-    wasm.monochrome(img.__wbg_ptr, r_offset, g_offset, b_offset);
+	_assertClass(img, PhotonImage);
+	wasm.monochrome(img.__wbg_ptr, r_offset, g_offset, b_offset);
 }
 
 /**
@@ -2503,10 +2508,10 @@ export function monochrome(img, r_offset, g_offset, b_offset) {
  * @param {Rgb} rgb_color
  */
 export function monochrome_tint(img, rgb_color) {
-    _assertClass(img, PhotonImage);
-    _assertClass(rgb_color, Rgb);
-    var ptr0 = rgb_color.__destroy_into_raw();
-    wasm.monochrome_tint(img.__wbg_ptr, ptr0);
+	_assertClass(img, PhotonImage);
+	_assertClass(rgb_color, Rgb);
+	var ptr0 = rgb_color.__destroy_into_raw();
+	wasm.monochrome_tint(img.__wbg_ptr, ptr0);
 }
 
 /**
@@ -2531,8 +2536,8 @@ export function monochrome_tint(img, rgb_color) {
  * @param {number} channel_index2
  */
 export function multiple_offsets(photon_image, offset, channel_index, channel_index2) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.multiple_offsets(photon_image.__wbg_ptr, offset, channel_index, channel_index2);
+	_assertClass(photon_image, PhotonImage);
+	wasm.multiple_offsets(photon_image.__wbg_ptr, offset, channel_index, channel_index2);
 }
 
 /**
@@ -2552,8 +2557,8 @@ export function multiple_offsets(photon_image, offset, channel_index, channel_in
  * @param {PhotonImage} photon_image
  */
 export function neue(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.neue(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.neue(photon_image.__wbg_ptr);
 }
 
 /**
@@ -2576,8 +2581,8 @@ export function neue(photon_image) {
  * @param {PhotonImage} photon_image
  */
 export function noise_reduction(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.noise_reduction(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.noise_reduction(photon_image.__wbg_ptr);
 }
 
 /**
@@ -2599,8 +2604,8 @@ export function noise_reduction(photon_image) {
  * @param {PhotonImage} photon_image
  */
 export function normalize(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.normalize(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.normalize(photon_image.__wbg_ptr);
 }
 
 /**
@@ -2620,8 +2625,8 @@ export function normalize(photon_image) {
  * @param {PhotonImage} img
  */
 export function obsidian(img) {
-    _assertClass(img, PhotonImage);
-    wasm.obsidian(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.obsidian(img.__wbg_ptr);
 }
 
 /**
@@ -2648,8 +2653,8 @@ export function obsidian(img) {
  * @param {number} offset
  */
 export function offset(photon_image, channel_index, offset) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.offset(photon_image.__wbg_ptr, channel_index, offset);
+	_assertClass(photon_image, PhotonImage);
+	wasm.offset(photon_image.__wbg_ptr, channel_index, offset);
 }
 
 /**
@@ -2672,8 +2677,8 @@ export function offset(photon_image, channel_index, offset) {
  * @param {number} offset_amt
  */
 export function offset_blue(img, offset_amt) {
-    _assertClass(img, PhotonImage);
-    wasm.offset_blue(img.__wbg_ptr, offset_amt);
+	_assertClass(img, PhotonImage);
+	wasm.offset_blue(img.__wbg_ptr, offset_amt);
 }
 
 /**
@@ -2696,8 +2701,8 @@ export function offset_blue(img, offset_amt) {
  * @param {number} offset_amt
  */
 export function offset_green(img, offset_amt) {
-    _assertClass(img, PhotonImage);
-    wasm.offset_green(img.__wbg_ptr, offset_amt);
+	_assertClass(img, PhotonImage);
+	wasm.offset_green(img.__wbg_ptr, offset_amt);
 }
 
 /**
@@ -2720,8 +2725,8 @@ export function offset_green(img, offset_amt) {
  * @param {number} offset_amt
  */
 export function offset_red(img, offset_amt) {
-    _assertClass(img, PhotonImage);
-    wasm.offset_red(img.__wbg_ptr, offset_amt);
+	_assertClass(img, PhotonImage);
+	wasm.offset_red(img.__wbg_ptr, offset_amt);
 }
 
 /**
@@ -2746,8 +2751,8 @@ export function offset_red(img, offset_amt) {
  * @param {number} intensity
  */
 export function oil(photon_image, radius, intensity) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.oil(photon_image.__wbg_ptr, radius, intensity);
+	_assertClass(photon_image, PhotonImage);
+	wasm.oil(photon_image.__wbg_ptr, radius, intensity);
 }
 
 /**
@@ -2760,8 +2765,8 @@ export function oil(photon_image, radius, intensity) {
  * @returns {PhotonImage}
  */
 export function open_image(canvas, ctx) {
-    const ret = wasm.open_image(canvas, ctx);
-    return PhotonImage.__wrap(ret);
+	const ret = wasm.open_image(canvas, ctx);
+	return PhotonImage.__wrap(ret);
 }
 
 /**
@@ -2790,11 +2795,11 @@ export function open_image(canvas, ctx) {
  * @returns {PhotonImage}
  */
 export function padding_bottom(img, padding, padding_rgba) {
-    _assertClass(img, PhotonImage);
-    _assertClass(padding_rgba, Rgba);
-    var ptr0 = padding_rgba.__destroy_into_raw();
-    const ret = wasm.padding_bottom(img.__wbg_ptr, padding, ptr0);
-    return PhotonImage.__wrap(ret);
+	_assertClass(img, PhotonImage);
+	_assertClass(padding_rgba, Rgba);
+	var ptr0 = padding_rgba.__destroy_into_raw();
+	const ret = wasm.padding_bottom(img.__wbg_ptr, padding, ptr0);
+	return PhotonImage.__wrap(ret);
 }
 
 /**
@@ -2823,11 +2828,11 @@ export function padding_bottom(img, padding, padding_rgba) {
  * @returns {PhotonImage}
  */
 export function padding_left(img, padding, padding_rgba) {
-    _assertClass(img, PhotonImage);
-    _assertClass(padding_rgba, Rgba);
-    var ptr0 = padding_rgba.__destroy_into_raw();
-    const ret = wasm.padding_left(img.__wbg_ptr, padding, ptr0);
-    return PhotonImage.__wrap(ret);
+	_assertClass(img, PhotonImage);
+	_assertClass(padding_rgba, Rgba);
+	var ptr0 = padding_rgba.__destroy_into_raw();
+	const ret = wasm.padding_left(img.__wbg_ptr, padding, ptr0);
+	return PhotonImage.__wrap(ret);
 }
 
 /**
@@ -2856,11 +2861,11 @@ export function padding_left(img, padding, padding_rgba) {
  * @returns {PhotonImage}
  */
 export function padding_right(img, padding, padding_rgba) {
-    _assertClass(img, PhotonImage);
-    _assertClass(padding_rgba, Rgba);
-    var ptr0 = padding_rgba.__destroy_into_raw();
-    const ret = wasm.padding_right(img.__wbg_ptr, padding, ptr0);
-    return PhotonImage.__wrap(ret);
+	_assertClass(img, PhotonImage);
+	_assertClass(padding_rgba, Rgba);
+	var ptr0 = padding_rgba.__destroy_into_raw();
+	const ret = wasm.padding_right(img.__wbg_ptr, padding, ptr0);
+	return PhotonImage.__wrap(ret);
 }
 
 /**
@@ -2889,11 +2894,11 @@ export function padding_right(img, padding, padding_rgba) {
  * @returns {PhotonImage}
  */
 export function padding_top(img, padding, padding_rgba) {
-    _assertClass(img, PhotonImage);
-    _assertClass(padding_rgba, Rgba);
-    var ptr0 = padding_rgba.__destroy_into_raw();
-    const ret = wasm.padding_top(img.__wbg_ptr, padding, ptr0);
-    return PhotonImage.__wrap(ret);
+	_assertClass(img, PhotonImage);
+	_assertClass(padding_rgba, Rgba);
+	var ptr0 = padding_rgba.__destroy_into_raw();
+	const ret = wasm.padding_top(img.__wbg_ptr, padding, ptr0);
+	return PhotonImage.__wrap(ret);
 }
 
 /**
@@ -2922,11 +2927,11 @@ export function padding_top(img, padding, padding_rgba) {
  * @returns {PhotonImage}
  */
 export function padding_uniform(img, padding, padding_rgba) {
-    _assertClass(img, PhotonImage);
-    _assertClass(padding_rgba, Rgba);
-    var ptr0 = padding_rgba.__destroy_into_raw();
-    const ret = wasm.padding_uniform(img.__wbg_ptr, padding, ptr0);
-    return PhotonImage.__wrap(ret);
+	_assertClass(img, PhotonImage);
+	_assertClass(padding_rgba, Rgba);
+	var ptr0 = padding_rgba.__destroy_into_raw();
+	const ret = wasm.padding_uniform(img.__wbg_ptr, padding, ptr0);
+	return PhotonImage.__wrap(ret);
 }
 
 /**
@@ -2946,8 +2951,8 @@ export function padding_uniform(img, padding, padding_rgba) {
  * @param {PhotonImage} img
  */
 export function pastel_pink(img) {
-    _assertClass(img, PhotonImage);
-    wasm.pastel_pink(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.pastel_pink(img.__wbg_ptr);
 }
 
 /**
@@ -2971,8 +2976,8 @@ export function pastel_pink(img) {
  * @param {PhotonImage} photon_image
  */
 export function pink_noise(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.pink_noise(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.pink_noise(photon_image.__wbg_ptr);
 }
 
 /**
@@ -2995,8 +3000,8 @@ export function pink_noise(photon_image) {
  * @param {number} pixel_size
  */
 export function pixelize(photon_image, pixel_size) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.pixelize(photon_image.__wbg_ptr, pixel_size);
+	_assertClass(photon_image, PhotonImage);
+	wasm.pixelize(photon_image.__wbg_ptr, pixel_size);
 }
 
 /**
@@ -3018,8 +3023,8 @@ export function pixelize(photon_image, pixel_size) {
  * @param {PhotonImage} photon_image
  */
 export function prewitt_horizontal(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.prewitt_horizontal(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.prewitt_horizontal(photon_image.__wbg_ptr);
 }
 
 /**
@@ -3040,8 +3045,8 @@ export function prewitt_horizontal(photon_image) {
  * @param {PhotonImage} img
  */
 export function primary(img) {
-    _assertClass(img, PhotonImage);
-    wasm.primary(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.primary(img.__wbg_ptr);
 }
 
 /**
@@ -3051,9 +3056,9 @@ export function primary(img) {
  * @param {PhotonImage} new_image
  */
 export function putImageData(canvas, ctx, new_image) {
-    _assertClass(new_image, PhotonImage);
-    var ptr0 = new_image.__destroy_into_raw();
-    wasm.putImageData(canvas, ctx, ptr0);
+	_assertClass(new_image, PhotonImage);
+	var ptr0 = new_image.__destroy_into_raw();
+	wasm.putImageData(canvas, ctx, ptr0);
 }
 
 /**
@@ -3074,8 +3079,8 @@ export function putImageData(canvas, ctx, new_image) {
  * @param {PhotonImage} photon_image
  */
 export function r_grayscale(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.r_grayscale(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.r_grayscale(photon_image.__wbg_ptr);
 }
 
 /**
@@ -3099,8 +3104,8 @@ export function r_grayscale(photon_image) {
  * @param {number} min_filter
  */
 export function remove_blue_channel(img, min_filter) {
-    _assertClass(img, PhotonImage);
-    wasm.remove_blue_channel(img.__wbg_ptr, min_filter);
+	_assertClass(img, PhotonImage);
+	wasm.remove_blue_channel(img.__wbg_ptr, min_filter);
 }
 
 /**
@@ -3128,8 +3133,8 @@ export function remove_blue_channel(img, min_filter) {
  * @param {number} min_filter
  */
 export function remove_channel(img, channel, min_filter) {
-    _assertClass(img, PhotonImage);
-    wasm.remove_channel(img.__wbg_ptr, channel, min_filter);
+	_assertClass(img, PhotonImage);
+	wasm.remove_channel(img.__wbg_ptr, channel, min_filter);
 }
 
 /**
@@ -3153,8 +3158,8 @@ export function remove_channel(img, channel, min_filter) {
  * @param {number} min_filter
  */
 export function remove_green_channel(img, min_filter) {
-    _assertClass(img, PhotonImage);
-    wasm.remove_green_channel(img.__wbg_ptr, min_filter);
+	_assertClass(img, PhotonImage);
+	wasm.remove_green_channel(img.__wbg_ptr, min_filter);
 }
 
 /**
@@ -3178,8 +3183,8 @@ export function remove_green_channel(img, min_filter) {
  * @param {number} min_filter
  */
 export function remove_red_channel(img, min_filter) {
-    _assertClass(img, PhotonImage);
-    wasm.remove_red_channel(img.__wbg_ptr, min_filter);
+	_assertClass(img, PhotonImage);
+	wasm.remove_red_channel(img.__wbg_ptr, min_filter);
 }
 
 /**
@@ -3206,9 +3211,9 @@ export function remove_red_channel(img, min_filter) {
  * @returns {PhotonImage}
  */
 export function resample(img, dst_width, dst_height) {
-    _assertClass(img, PhotonImage);
-    const ret = wasm.resample(img.__wbg_ptr, dst_width, dst_height);
-    return PhotonImage.__wrap(ret);
+	_assertClass(img, PhotonImage);
+	const ret = wasm.resample(img.__wbg_ptr, dst_width, dst_height);
+	return PhotonImage.__wrap(ret);
 }
 
 /**
@@ -3226,9 +3231,9 @@ export function resample(img, dst_width, dst_height) {
  * @returns {PhotonImage}
  */
 export function resize(photon_img, width, height, sampling_filter) {
-    _assertClass(photon_img, PhotonImage);
-    const ret = wasm.resize(photon_img.__wbg_ptr, width, height, sampling_filter);
-    return PhotonImage.__wrap(ret);
+	_assertClass(photon_img, PhotonImage);
+	const ret = wasm.resize(photon_img.__wbg_ptr, width, height, sampling_filter);
+	return PhotonImage.__wrap(ret);
 }
 
 /**
@@ -3246,9 +3251,9 @@ export function resize(photon_img, width, height, sampling_filter) {
  * @returns {HTMLCanvasElement}
  */
 export function resize_img_browser(photon_img, width, height, sampling_filter) {
-    _assertClass(photon_img, PhotonImage);
-    const ret = wasm.resize_img_browser(photon_img.__wbg_ptr, width, height, sampling_filter);
-    return ret;
+	_assertClass(photon_img, PhotonImage);
+	const ret = wasm.resize_img_browser(photon_img.__wbg_ptr, width, height, sampling_filter);
+	return ret;
 }
 
 /**
@@ -3274,19 +3279,19 @@ export function resize_img_browser(photon_img, width, height, sampling_filter) {
  * @returns {PhotonImage}
  */
 export function rotate(photon_img, angle) {
-    _assertClass(photon_img, PhotonImage);
-    const ret = wasm.rotate(photon_img.__wbg_ptr, angle);
-    return PhotonImage.__wrap(ret);
+	_assertClass(photon_img, PhotonImage);
+	const ret = wasm.rotate(photon_img.__wbg_ptr, angle);
+	return PhotonImage.__wrap(ret);
 }
 
 /**
  * ! [temp] Check if WASM is supported.
  */
 export function run() {
-    const ret = wasm.run();
-    if (ret[1]) {
-        throw takeFromExternrefTable0(ret[0]);
-    }
+	const ret = wasm.run();
+	if (ret[1]) {
+		throw takeFromExternrefTable0(ret[0]);
+	}
 }
 
 /**
@@ -3306,8 +3311,8 @@ export function run() {
  * @param {PhotonImage} photon_image
  */
 export function ryo(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.ryo(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.ryo(photon_image.__wbg_ptr);
 }
 
 /**
@@ -3333,8 +3338,8 @@ export function ryo(photon_image) {
  * @param {number} level
  */
 export function saturate_hsl(img, level) {
-    _assertClass(img, PhotonImage);
-    wasm.saturate_hsl(img.__wbg_ptr, level);
+	_assertClass(img, PhotonImage);
+	wasm.saturate_hsl(img.__wbg_ptr, level);
 }
 
 /**
@@ -3359,8 +3364,8 @@ export function saturate_hsl(img, level) {
  * @param {number} level
  */
 export function saturate_hsluv(img, level) {
-    _assertClass(img, PhotonImage);
-    wasm.saturate_hsluv(img.__wbg_ptr, level);
+	_assertClass(img, PhotonImage);
+	wasm.saturate_hsluv(img.__wbg_ptr, level);
 }
 
 /**
@@ -3385,8 +3390,8 @@ export function saturate_hsluv(img, level) {
  * @param {number} level
  */
 export function saturate_hsv(img, level) {
-    _assertClass(img, PhotonImage);
-    wasm.saturate_hsv(img.__wbg_ptr, level);
+	_assertClass(img, PhotonImage);
+	wasm.saturate_hsv(img.__wbg_ptr, level);
 }
 
 /**
@@ -3411,8 +3416,8 @@ export function saturate_hsv(img, level) {
  * @param {number} level
  */
 export function saturate_lch(img, level) {
-    _assertClass(img, PhotonImage);
-    wasm.saturate_lch(img.__wbg_ptr, level);
+	_assertClass(img, PhotonImage);
+	wasm.saturate_lch(img.__wbg_ptr, level);
 }
 
 /**
@@ -3442,9 +3447,9 @@ export function saturate_lch(img, level) {
  * @returns {PhotonImage}
  */
 export function seam_carve(img, width, height) {
-    _assertClass(img, PhotonImage);
-    const ret = wasm.seam_carve(img.__wbg_ptr, width, height);
-    return PhotonImage.__wrap(ret);
+	_assertClass(img, PhotonImage);
+	const ret = wasm.seam_carve(img.__wbg_ptr, width, height);
+	return PhotonImage.__wrap(ret);
 }
 
 /**
@@ -3478,12 +3483,12 @@ export function seam_carve(img, width, height) {
  * @param {number} fraction
  */
 export function selective_color_convert(photon_image, ref_color, new_color, fraction) {
-    _assertClass(photon_image, PhotonImage);
-    _assertClass(ref_color, Rgb);
-    var ptr0 = ref_color.__destroy_into_raw();
-    _assertClass(new_color, Rgb);
-    var ptr1 = new_color.__destroy_into_raw();
-    wasm.selective_color_convert(photon_image.__wbg_ptr, ptr0, ptr1, fraction);
+	_assertClass(photon_image, PhotonImage);
+	_assertClass(ref_color, Rgb);
+	var ptr0 = ref_color.__destroy_into_raw();
+	_assertClass(new_color, Rgb);
+	var ptr1 = new_color.__destroy_into_raw();
+	wasm.selective_color_convert(photon_image.__wbg_ptr, ptr0, ptr1, fraction);
 }
 
 /**
@@ -3514,10 +3519,10 @@ export function selective_color_convert(photon_image, ref_color, new_color, frac
  * @param {number} amt
  */
 export function selective_desaturate(img, ref_color, amt) {
-    _assertClass(img, PhotonImage);
-    _assertClass(ref_color, Rgb);
-    var ptr0 = ref_color.__destroy_into_raw();
-    wasm.selective_desaturate(img.__wbg_ptr, ptr0, amt);
+	_assertClass(img, PhotonImage);
+	_assertClass(ref_color, Rgb);
+	var ptr0 = ref_color.__destroy_into_raw();
+	wasm.selective_desaturate(img.__wbg_ptr, ptr0, amt);
 }
 
 /**
@@ -3547,11 +3552,11 @@ export function selective_desaturate(img, ref_color, amt) {
  * @param {Rgb} ref_color
  */
 export function selective_greyscale(photon_image, ref_color) {
-    _assertClass(photon_image, PhotonImage);
-    var ptr0 = photon_image.__destroy_into_raw();
-    _assertClass(ref_color, Rgb);
-    var ptr1 = ref_color.__destroy_into_raw();
-    wasm.selective_greyscale(ptr0, ptr1);
+	_assertClass(photon_image, PhotonImage);
+	var ptr0 = photon_image.__destroy_into_raw();
+	_assertClass(ref_color, Rgb);
+	var ptr1 = ref_color.__destroy_into_raw();
+	wasm.selective_greyscale(ptr0, ptr1);
 }
 
 /**
@@ -3582,10 +3587,10 @@ export function selective_greyscale(photon_image, ref_color) {
  * @param {number} degrees
  */
 export function selective_hue_rotate(photon_image, ref_color, degrees) {
-    _assertClass(photon_image, PhotonImage);
-    _assertClass(ref_color, Rgb);
-    var ptr0 = ref_color.__destroy_into_raw();
-    wasm.selective_hue_rotate(photon_image.__wbg_ptr, ptr0, degrees);
+	_assertClass(photon_image, PhotonImage);
+	_assertClass(ref_color, Rgb);
+	var ptr0 = ref_color.__destroy_into_raw();
+	wasm.selective_hue_rotate(photon_image.__wbg_ptr, ptr0, degrees);
 }
 
 /**
@@ -3615,10 +3620,10 @@ export function selective_hue_rotate(photon_image, ref_color, degrees) {
  * @param {number} amt
  */
 export function selective_lighten(img, ref_color, amt) {
-    _assertClass(img, PhotonImage);
-    _assertClass(ref_color, Rgb);
-    var ptr0 = ref_color.__destroy_into_raw();
-    wasm.selective_lighten(img.__wbg_ptr, ptr0, amt);
+	_assertClass(img, PhotonImage);
+	_assertClass(ref_color, Rgb);
+	var ptr0 = ref_color.__destroy_into_raw();
+	wasm.selective_lighten(img.__wbg_ptr, ptr0, amt);
 }
 
 /**
@@ -3649,10 +3654,10 @@ export function selective_lighten(img, ref_color, amt) {
  * @param {number} amt
  */
 export function selective_saturate(img, ref_color, amt) {
-    _assertClass(img, PhotonImage);
-    _assertClass(ref_color, Rgb);
-    var ptr0 = ref_color.__destroy_into_raw();
-    wasm.selective_saturate(img.__wbg_ptr, ptr0, amt);
+	_assertClass(img, PhotonImage);
+	_assertClass(ref_color, Rgb);
+	var ptr0 = ref_color.__destroy_into_raw();
+	wasm.selective_saturate(img.__wbg_ptr, ptr0, amt);
 }
 
 /**
@@ -3673,8 +3678,8 @@ export function selective_saturate(img, ref_color, amt) {
  * @param {PhotonImage} img
  */
 export function sepia(img) {
-    _assertClass(img, PhotonImage);
-    wasm.sepia(img.__wbg_ptr);
+	_assertClass(img, PhotonImage);
+	wasm.sepia(img.__wbg_ptr);
 }
 
 /**
@@ -3697,8 +3702,8 @@ export function sepia(img) {
  * @param {PhotonImage} photon_image
  */
 export function sharpen(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.sharpen(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.sharpen(photon_image.__wbg_ptr);
 }
 
 /**
@@ -3724,9 +3729,9 @@ export function sharpen(photon_image) {
  * @returns {PhotonImage}
  */
 export function shearx(photon_img, shear) {
-    _assertClass(photon_img, PhotonImage);
-    const ret = wasm.shearx(photon_img.__wbg_ptr, shear);
-    return PhotonImage.__wrap(ret);
+	_assertClass(photon_img, PhotonImage);
+	const ret = wasm.shearx(photon_img.__wbg_ptr, shear);
+	return PhotonImage.__wrap(ret);
 }
 
 /**
@@ -3752,9 +3757,9 @@ export function shearx(photon_img, shear) {
  * @returns {PhotonImage}
  */
 export function sheary(photon_img, shear) {
-    _assertClass(photon_img, PhotonImage);
-    const ret = wasm.sheary(photon_img.__wbg_ptr, shear);
-    return PhotonImage.__wrap(ret);
+	_assertClass(photon_img, PhotonImage);
+	const ret = wasm.sheary(photon_img.__wbg_ptr, shear);
+	return PhotonImage.__wrap(ret);
 }
 
 /**
@@ -3777,8 +3782,8 @@ export function sheary(photon_img, shear) {
  * @param {number} channel
  */
 export function single_channel_grayscale(photon_image, channel) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.single_channel_grayscale(photon_image.__wbg_ptr, channel);
+	_assertClass(photon_image, PhotonImage);
+	wasm.single_channel_grayscale(photon_image.__wbg_ptr, channel);
 }
 
 /**
@@ -3803,8 +3808,8 @@ export function single_channel_grayscale(photon_image, channel) {
  * @param {PhotonImage} photon_image
  */
 export function sobel_global(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.sobel_global(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.sobel_global(photon_image.__wbg_ptr);
 }
 
 /**
@@ -3826,8 +3831,8 @@ export function sobel_global(photon_image) {
  * @param {PhotonImage} photon_image
  */
 export function sobel_horizontal(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.sobel_horizontal(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.sobel_horizontal(photon_image.__wbg_ptr);
 }
 
 /**
@@ -3849,8 +3854,8 @@ export function sobel_horizontal(photon_image) {
  * @param {PhotonImage} photon_image
  */
 export function sobel_vertical(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.sobel_vertical(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.sobel_vertical(photon_image.__wbg_ptr);
 }
 
 /**
@@ -3871,8 +3876,8 @@ export function sobel_vertical(photon_image) {
  * @param {PhotonImage} photon_image
  */
 export function solarize(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.solarize(photon_image.__wbg_ptr);
+	_assertClass(photon_image, PhotonImage);
+	wasm.solarize(photon_image.__wbg_ptr);
 }
 
 /**
@@ -3895,9 +3900,9 @@ export function solarize(photon_image) {
  * @returns {PhotonImage}
  */
 export function solarize_retimg(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    const ret = wasm.solarize_retimg(photon_image.__wbg_ptr);
-    return PhotonImage.__wrap(ret);
+	_assertClass(photon_image, PhotonImage);
+	const ret = wasm.solarize_retimg(photon_image.__wbg_ptr);
+	return PhotonImage.__wrap(ret);
 }
 
 /**
@@ -3923,8 +3928,8 @@ export function solarize_retimg(photon_image) {
  * @param {number} channel2
  */
 export function swap_channels(img, channel1, channel2) {
-    _assertClass(img, PhotonImage);
-    wasm.swap_channels(img.__wbg_ptr, channel1, channel2);
+	_assertClass(img, PhotonImage);
+	wasm.swap_channels(img.__wbg_ptr, channel1, channel2);
 }
 
 /**
@@ -3947,8 +3952,8 @@ export function swap_channels(img, channel1, channel2) {
  * @param {number} threshold
  */
 export function threshold(img, threshold) {
-    _assertClass(img, PhotonImage);
-    wasm.threshold(img.__wbg_ptr, threshold);
+	_assertClass(img, PhotonImage);
+	wasm.threshold(img.__wbg_ptr, threshold);
 }
 
 /**
@@ -3975,8 +3980,8 @@ export function threshold(img, threshold) {
  * @param {number} b_offset
  */
 export function tint(photon_image, r_offset, g_offset, b_offset) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.tint(photon_image.__wbg_ptr, r_offset, g_offset, b_offset);
+	_assertClass(photon_image, PhotonImage);
+	wasm.tint(photon_image.__wbg_ptr, r_offset, g_offset, b_offset);
 }
 
 /**
@@ -3985,10 +3990,10 @@ export function tint(photon_image, r_offset, g_offset, b_offset) {
  * @returns {ImageData}
  */
 export function to_image_data(photon_image) {
-    _assertClass(photon_image, PhotonImage);
-    var ptr0 = photon_image.__destroy_into_raw();
-    const ret = wasm.to_image_data(ptr0);
-    return ret;
+	_assertClass(photon_image, PhotonImage);
+	var ptr0 = photon_image.__destroy_into_raw();
+	const ret = wasm.to_image_data(ptr0);
+	return ret;
 }
 
 /**
@@ -3997,10 +4002,10 @@ export function to_image_data(photon_image) {
  * @returns {Uint8Array}
  */
 export function to_raw_pixels(imgdata) {
-    const ret = wasm.to_raw_pixels(imgdata);
-    var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v1;
+	const ret = wasm.to_raw_pixels(imgdata);
+	var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+	wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+	return v1;
 }
 
 /**
@@ -4023,8 +4028,8 @@ export function to_raw_pixels(imgdata) {
  * @param {number} num_strips
  */
 export function vertical_strips(photon_image, num_strips) {
-    _assertClass(photon_image, PhotonImage);
-    wasm.vertical_strips(photon_image.__wbg_ptr, num_strips);
+	_assertClass(photon_image, PhotonImage);
+	wasm.vertical_strips(photon_image.__wbg_ptr, num_strips);
 }
 
 /**
@@ -4052,401 +4057,428 @@ export function vertical_strips(photon_image, num_strips) {
  * @param {bigint} y
  */
 export function watermark(img, watermark, x, y) {
-    _assertClass(img, PhotonImage);
-    _assertClass(watermark, PhotonImage);
-    wasm.watermark(img.__wbg_ptr, watermark.__wbg_ptr, x, y);
+	_assertClass(img, PhotonImage);
+	_assertClass(watermark, PhotonImage);
+	wasm.watermark(img.__wbg_ptr, watermark.__wbg_ptr, x, y);
 }
 
 function __wbg_get_imports() {
-    const import0 = {
-        __proto__: null,
-        __wbg___wbindgen_debug_string_0bc8482c6e3508ae: function(arg0, arg1) {
-            const ret = debugString(arg1);
-            const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-            const len1 = WASM_VECTOR_LEN;
-            getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
-            getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
-        },
-        __wbg___wbindgen_is_undefined_9e4d92534c42d778: function(arg0) {
-            const ret = arg0 === undefined;
-            return ret;
-        },
-        __wbg___wbindgen_throw_be289d5034ed271b: function(arg0, arg1) {
-            throw new Error(getStringFromWasm0(arg0, arg1));
-        },
-        __wbg_appendChild_dea38765a26d346d: function() { return handleError(function (arg0, arg1) {
-            const ret = arg0.appendChild(arg1);
-            return ret;
-        }, arguments); },
-        __wbg_body_f67922363a220026: function(arg0) {
-            const ret = arg0.body;
-            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-        },
-        __wbg_call_389efe28435a9388: function() { return handleError(function (arg0, arg1) {
-            const ret = arg0.call(arg1);
-            return ret;
-        }, arguments); },
-        __wbg_createElement_49f60fdcaae809c8: function() { return handleError(function (arg0, arg1, arg2) {
-            const ret = arg0.createElement(getStringFromWasm0(arg1, arg2));
-            return ret;
-        }, arguments); },
-        __wbg_data_d52fd40cc1d7d4e8: function(arg0, arg1) {
-            const ret = arg1.data;
-            const ptr1 = passArray8ToWasm0(ret, wasm.__wbindgen_malloc);
-            const len1 = WASM_VECTOR_LEN;
-            getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
-            getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
-        },
-        __wbg_document_ee35a3d3ae34ef6c: function(arg0) {
-            const ret = arg0.document;
-            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-        },
-        __wbg_drawImage_00302fc1908197cc: function() { return handleError(function (arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9) {
-            arg0.drawImage(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
-        }, arguments); },
-        __wbg_drawImage_51b6a9d03c34c5cc: function() { return handleError(function (arg0, arg1, arg2, arg3) {
-            arg0.drawImage(arg1, arg2, arg3);
-        }, arguments); },
-        __wbg_error_7534b8e9a36f1ab4: function(arg0, arg1) {
-            let deferred0_0;
-            let deferred0_1;
-            try {
-                deferred0_0 = arg0;
-                deferred0_1 = arg1;
-                console.error(getStringFromWasm0(arg0, arg1));
-            } finally {
-                wasm.__wbindgen_free(deferred0_0, deferred0_1, 1);
-            }
-        },
-        __wbg_getContext_2a5764d48600bc43: function() { return handleError(function (arg0, arg1, arg2) {
-            const ret = arg0.getContext(getStringFromWasm0(arg1, arg2));
-            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-        }, arguments); },
-        __wbg_getImageData_24d72830c218154d: function() { return handleError(function (arg0, arg1, arg2, arg3, arg4) {
-            const ret = arg0.getImageData(arg1, arg2, arg3, arg4);
-            return ret;
-        }, arguments); },
-        __wbg_height_38750dc6de41ee75: function(arg0) {
-            const ret = arg0.height;
-            return ret;
-        },
-        __wbg_height_408f385de046f7e5: function(arg0) {
-            const ret = arg0.height;
-            return ret;
-        },
-        __wbg_height_87250db2be5164b9: function(arg0) {
-            const ret = arg0.height;
-            return ret;
-        },
-        __wbg_instanceof_CanvasRenderingContext2d_4bb052fd1c3d134d: function(arg0) {
-            let result;
-            try {
-                result = arg0 instanceof CanvasRenderingContext2D;
-            } catch (_) {
-                result = false;
-            }
-            const ret = result;
-            return ret;
-        },
-        __wbg_instanceof_HtmlCanvasElement_3f2f6e1edb1c9792: function(arg0) {
-            let result;
-            try {
-                result = arg0 instanceof HTMLCanvasElement;
-            } catch (_) {
-                result = false;
-            }
-            const ret = result;
-            return ret;
-        },
-        __wbg_instanceof_Window_ed49b2db8df90359: function(arg0) {
-            let result;
-            try {
-                result = arg0 instanceof Window;
-            } catch (_) {
-                result = false;
-            }
-            const ret = result;
-            return ret;
-        },
-        __wbg_length_32ed9a279acd054c: function(arg0) {
-            const ret = arg0.length;
-            return ret;
-        },
-        __wbg_new_8a6f238a6ece86ea: function() {
-            const ret = new Error();
-            return ret;
-        },
-        __wbg_new_dd2b680c8bf6ae29: function(arg0) {
-            const ret = new Uint8Array(arg0);
-            return ret;
-        },
-        __wbg_new_no_args_1c7c842f08d00ebb: function(arg0, arg1) {
-            const ret = new Function(getStringFromWasm0(arg0, arg1));
-            return ret;
-        },
-        __wbg_new_with_u8_clamped_array_and_sh_0c0b789ceb2eab31: function() { return handleError(function (arg0, arg1, arg2, arg3) {
-            const ret = new ImageData(getClampedArrayU8FromWasm0(arg0, arg1), arg2 >>> 0, arg3 >>> 0);
-            return ret;
-        }, arguments); },
-        __wbg_prototypesetcall_bdcdcc5842e4d77d: function(arg0, arg1, arg2) {
-            Uint8Array.prototype.set.call(getArrayU8FromWasm0(arg0, arg1), arg2);
-        },
-        __wbg_putImageData_78318465ad96c2c3: function() { return handleError(function (arg0, arg1, arg2, arg3) {
-            arg0.putImageData(arg1, arg2, arg3);
-        }, arguments); },
-        __wbg_set_height_f21f985387070100: function(arg0, arg1) {
-            arg0.height = arg1 >>> 0;
-        },
-        __wbg_set_textContent_3e87dba095d9cdbc: function(arg0, arg1, arg2) {
-            arg0.textContent = arg1 === 0 ? undefined : getStringFromWasm0(arg1, arg2);
-        },
-        __wbg_set_width_d60bc4f2f20c56a4: function(arg0, arg1) {
-            arg0.width = arg1 >>> 0;
-        },
-        __wbg_stack_0ed75d68575b0f3c: function(arg0, arg1) {
-            const ret = arg1.stack;
-            const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-            const len1 = WASM_VECTOR_LEN;
-            getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
-            getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
-        },
-        __wbg_static_accessor_GLOBAL_12837167ad935116: function() {
-            const ret = typeof global === 'undefined' ? null : global;
-            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-        },
-        __wbg_static_accessor_GLOBAL_THIS_e628e89ab3b1c95f: function() {
-            const ret = typeof globalThis === 'undefined' ? null : globalThis;
-            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-        },
-        __wbg_static_accessor_SELF_a621d3dfbb60d0ce: function() {
-            const ret = typeof self === 'undefined' ? null : self;
-            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-        },
-        __wbg_static_accessor_WINDOW_f8727f0cf888e0bd: function() {
-            const ret = typeof window === 'undefined' ? null : window;
-            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-        },
-        __wbg_width_5901d980713eb80b: function(arg0) {
-            const ret = arg0.width;
-            return ret;
-        },
-        __wbg_width_5f66bde2e810fbde: function(arg0) {
-            const ret = arg0.width;
-            return ret;
-        },
-        __wbg_width_be8f36d66d37751f: function(arg0) {
-            const ret = arg0.width;
-            return ret;
-        },
-        __wbindgen_init_externref_table: function() {
-            const table = wasm.__wbindgen_externrefs;
-            const offset = table.grow(4);
-            table.set(0, undefined);
-            table.set(offset + 0, undefined);
-            table.set(offset + 1, null);
-            table.set(offset + 2, true);
-            table.set(offset + 3, false);
-        },
-    };
-    return {
-        __proto__: null,
-        "./photon_rs_bg.js": import0,
-    };
+	const import0 = {
+		__proto__: null,
+		__wbg___wbindgen_debug_string_0bc8482c6e3508ae: function (arg0, arg1) {
+			const ret = debugString(arg1);
+			const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+			const len1 = WASM_VECTOR_LEN;
+			getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+			getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+		},
+		__wbg___wbindgen_is_undefined_9e4d92534c42d778: function (arg0) {
+			const ret = arg0 === undefined;
+			return ret;
+		},
+		__wbg___wbindgen_throw_be289d5034ed271b: function (arg0, arg1) {
+			throw new Error(getStringFromWasm0(arg0, arg1));
+		},
+		__wbg_appendChild_dea38765a26d346d: function () {
+			return handleError(function (arg0, arg1) {
+				const ret = arg0.appendChild(arg1);
+				return ret;
+			}, arguments);
+		},
+		__wbg_body_f67922363a220026: function (arg0) {
+			const ret = arg0.body;
+			return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+		},
+		__wbg_call_389efe28435a9388: function () {
+			return handleError(function (arg0, arg1) {
+				const ret = arg0.call(arg1);
+				return ret;
+			}, arguments);
+		},
+		__wbg_createElement_49f60fdcaae809c8: function () {
+			return handleError(function (arg0, arg1, arg2) {
+				const ret = arg0.createElement(getStringFromWasm0(arg1, arg2));
+				return ret;
+			}, arguments);
+		},
+		__wbg_data_d52fd40cc1d7d4e8: function (arg0, arg1) {
+			const ret = arg1.data;
+			const ptr1 = passArray8ToWasm0(ret, wasm.__wbindgen_malloc);
+			const len1 = WASM_VECTOR_LEN;
+			getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+			getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+		},
+		__wbg_document_ee35a3d3ae34ef6c: function (arg0) {
+			const ret = arg0.document;
+			return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+		},
+		__wbg_drawImage_00302fc1908197cc: function () {
+			return handleError(function (arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9) {
+				arg0.drawImage(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
+			}, arguments);
+		},
+		__wbg_drawImage_51b6a9d03c34c5cc: function () {
+			return handleError(function (arg0, arg1, arg2, arg3) {
+				arg0.drawImage(arg1, arg2, arg3);
+			}, arguments);
+		},
+		__wbg_error_7534b8e9a36f1ab4: function (arg0, arg1) {
+			let deferred0_0;
+			let deferred0_1;
+			try {
+				deferred0_0 = arg0;
+				deferred0_1 = arg1;
+				console.error(getStringFromWasm0(arg0, arg1));
+			} finally {
+				wasm.__wbindgen_free(deferred0_0, deferred0_1, 1);
+			}
+		},
+		__wbg_getContext_2a5764d48600bc43: function () {
+			return handleError(function (arg0, arg1, arg2) {
+				const ret = arg0.getContext(getStringFromWasm0(arg1, arg2));
+				return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+			}, arguments);
+		},
+		__wbg_getImageData_24d72830c218154d: function () {
+			return handleError(function (arg0, arg1, arg2, arg3, arg4) {
+				const ret = arg0.getImageData(arg1, arg2, arg3, arg4);
+				return ret;
+			}, arguments);
+		},
+		__wbg_height_38750dc6de41ee75: function (arg0) {
+			const ret = arg0.height;
+			return ret;
+		},
+		__wbg_height_408f385de046f7e5: function (arg0) {
+			const ret = arg0.height;
+			return ret;
+		},
+		__wbg_height_87250db2be5164b9: function (arg0) {
+			const ret = arg0.height;
+			return ret;
+		},
+		__wbg_instanceof_CanvasRenderingContext2d_4bb052fd1c3d134d: function (arg0) {
+			let result;
+			try {
+				result = arg0 instanceof CanvasRenderingContext2D;
+			} catch (_) {
+				result = false;
+			}
+			const ret = result;
+			return ret;
+		},
+		__wbg_instanceof_HtmlCanvasElement_3f2f6e1edb1c9792: function (arg0) {
+			let result;
+			try {
+				result = arg0 instanceof HTMLCanvasElement;
+			} catch (_) {
+				result = false;
+			}
+			const ret = result;
+			return ret;
+		},
+		__wbg_instanceof_Window_ed49b2db8df90359: function (arg0) {
+			let result;
+			try {
+				result = arg0 instanceof Window;
+			} catch (_) {
+				result = false;
+			}
+			const ret = result;
+			return ret;
+		},
+		__wbg_length_32ed9a279acd054c: function (arg0) {
+			const ret = arg0.length;
+			return ret;
+		},
+		__wbg_new_8a6f238a6ece86ea: function () {
+			const ret = new Error();
+			return ret;
+		},
+		__wbg_new_dd2b680c8bf6ae29: function (arg0) {
+			const ret = new Uint8Array(arg0);
+			return ret;
+		},
+		__wbg_new_no_args_1c7c842f08d00ebb: function (arg0, arg1) {
+			const ret = new Function(getStringFromWasm0(arg0, arg1));
+			return ret;
+		},
+		__wbg_new_with_u8_clamped_array_and_sh_0c0b789ceb2eab31: function () {
+			return handleError(function (arg0, arg1, arg2, arg3) {
+				const ret = new ImageData(getClampedArrayU8FromWasm0(arg0, arg1), arg2 >>> 0, arg3 >>> 0);
+				return ret;
+			}, arguments);
+		},
+		__wbg_prototypesetcall_bdcdcc5842e4d77d: function (arg0, arg1, arg2) {
+			Uint8Array.prototype.set.call(getArrayU8FromWasm0(arg0, arg1), arg2);
+		},
+		__wbg_putImageData_78318465ad96c2c3: function () {
+			return handleError(function (arg0, arg1, arg2, arg3) {
+				arg0.putImageData(arg1, arg2, arg3);
+			}, arguments);
+		},
+		__wbg_set_height_f21f985387070100: function (arg0, arg1) {
+			arg0.height = arg1 >>> 0;
+		},
+		__wbg_set_textContent_3e87dba095d9cdbc: function (arg0, arg1, arg2) {
+			arg0.textContent = arg1 === 0 ? undefined : getStringFromWasm0(arg1, arg2);
+		},
+		__wbg_set_width_d60bc4f2f20c56a4: function (arg0, arg1) {
+			arg0.width = arg1 >>> 0;
+		},
+		__wbg_stack_0ed75d68575b0f3c: function (arg0, arg1) {
+			const ret = arg1.stack;
+			const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+			const len1 = WASM_VECTOR_LEN;
+			getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+			getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+		},
+		__wbg_static_accessor_GLOBAL_12837167ad935116: function () {
+			const ret = typeof global === "undefined" ? null : global;
+			return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+		},
+		__wbg_static_accessor_GLOBAL_THIS_e628e89ab3b1c95f: function () {
+			const ret = typeof globalThis === "undefined" ? null : globalThis;
+			return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+		},
+		__wbg_static_accessor_SELF_a621d3dfbb60d0ce: function () {
+			const ret = typeof self === "undefined" ? null : self;
+			return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+		},
+		__wbg_static_accessor_WINDOW_f8727f0cf888e0bd: function () {
+			const ret = typeof window === "undefined" ? null : window;
+			return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+		},
+		__wbg_width_5901d980713eb80b: function (arg0) {
+			const ret = arg0.width;
+			return ret;
+		},
+		__wbg_width_5f66bde2e810fbde: function (arg0) {
+			const ret = arg0.width;
+			return ret;
+		},
+		__wbg_width_be8f36d66d37751f: function (arg0) {
+			const ret = arg0.width;
+			return ret;
+		},
+		__wbindgen_init_externref_table: function () {
+			const table = wasm.__wbindgen_externrefs;
+			const offset = table.grow(4);
+			table.set(0, undefined);
+			table.set(offset + 0, undefined);
+			table.set(offset + 1, null);
+			table.set(offset + 2, true);
+			table.set(offset + 3, false);
+		},
+	};
+	return {
+		__proto__: null,
+		"./photon_rs_bg.js": import0,
+	};
 }
 
-const PhotonImageFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_photonimage_free(ptr >>> 0, 1));
-const RgbFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_rgb_free(ptr >>> 0, 1));
-const RgbaFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_rgba_free(ptr >>> 0, 1));
+const PhotonImageFinalization =
+	typeof FinalizationRegistry === "undefined"
+		? { register: () => {}, unregister: () => {} }
+		: new FinalizationRegistry((ptr) => wasm.__wbg_photonimage_free(ptr >>> 0, 1));
+const RgbFinalization =
+	typeof FinalizationRegistry === "undefined"
+		? { register: () => {}, unregister: () => {} }
+		: new FinalizationRegistry((ptr) => wasm.__wbg_rgb_free(ptr >>> 0, 1));
+const RgbaFinalization =
+	typeof FinalizationRegistry === "undefined"
+		? { register: () => {}, unregister: () => {} }
+		: new FinalizationRegistry((ptr) => wasm.__wbg_rgba_free(ptr >>> 0, 1));
 
 function addToExternrefTable0(obj) {
-    const idx = wasm.__externref_table_alloc();
-    wasm.__wbindgen_externrefs.set(idx, obj);
-    return idx;
+	const idx = wasm.__externref_table_alloc();
+	wasm.__wbindgen_externrefs.set(idx, obj);
+	return idx;
 }
 
 function _assertClass(instance, klass) {
-    if (!(instance instanceof klass)) {
-        throw new Error(`expected instance of ${klass.name}`);
-    }
+	if (!(instance instanceof klass)) {
+		throw new Error(`expected instance of ${klass.name}`);
+	}
 }
 
 function debugString(val) {
-    // primitive types
-    const type = typeof val;
-    if (type == 'number' || type == 'boolean' || val == null) {
-        return  `${val}`;
-    }
-    if (type == 'string') {
-        return `"${val}"`;
-    }
-    if (type == 'symbol') {
-        const description = val.description;
-        if (description == null) {
-            return 'Symbol';
-        } else {
-            return `Symbol(${description})`;
-        }
-    }
-    if (type == 'function') {
-        const name = val.name;
-        if (typeof name == 'string' && name.length > 0) {
-            return `Function(${name})`;
-        } else {
-            return 'Function';
-        }
-    }
-    // objects
-    if (Array.isArray(val)) {
-        const length = val.length;
-        let debug = '[';
-        if (length > 0) {
-            debug += debugString(val[0]);
-        }
-        for(let i = 1; i < length; i++) {
-            debug += ', ' + debugString(val[i]);
-        }
-        debug += ']';
-        return debug;
-    }
-    // Test for built-in
-    const builtInMatches = /\[object ([^\]]+)\]/.exec(toString.call(val));
-    let className;
-    if (builtInMatches && builtInMatches.length > 1) {
-        className = builtInMatches[1];
-    } else {
-        // Failed to match the standard '[object ClassName]'
-        return toString.call(val);
-    }
-    if (className == 'Object') {
-        // we're a user defined class or Object
-        // JSON.stringify avoids problems with cycles, and is generally much
-        // easier than looping through ownProperties of `val`.
-        try {
-            return 'Object(' + JSON.stringify(val) + ')';
-        } catch (_) {
-            return 'Object';
-        }
-    }
-    // errors
-    if (val instanceof Error) {
-        return `${val.name}: ${val.message}\n${val.stack}`;
-    }
-    // TODO we could test for more things here, like `Set`s and `Map`s.
-    return className;
+	// primitive types
+	const type = typeof val;
+	if (type == "number" || type == "boolean" || val == null) {
+		return `${val}`;
+	}
+	if (type == "string") {
+		return `"${val}"`;
+	}
+	if (type == "symbol") {
+		const description = val.description;
+		if (description == null) {
+			return "Symbol";
+		} else {
+			return `Symbol(${description})`;
+		}
+	}
+	if (type == "function") {
+		const name = val.name;
+		if (typeof name == "string" && name.length > 0) {
+			return `Function(${name})`;
+		} else {
+			return "Function";
+		}
+	}
+	// objects
+	if (Array.isArray(val)) {
+		const length = val.length;
+		let debug = "[";
+		if (length > 0) {
+			debug += debugString(val[0]);
+		}
+		for (let i = 1; i < length; i++) {
+			debug += ", " + debugString(val[i]);
+		}
+		debug += "]";
+		return debug;
+	}
+	// Test for built-in
+	const builtInMatches = /\[object ([^\]]+)\]/.exec(toString.call(val));
+	let className;
+	if (builtInMatches && builtInMatches.length > 1) {
+		className = builtInMatches[1];
+	} else {
+		// Failed to match the standard '[object ClassName]'
+		return toString.call(val);
+	}
+	if (className == "Object") {
+		// we're a user defined class or Object
+		// JSON.stringify avoids problems with cycles, and is generally much
+		// easier than looping through ownProperties of `val`.
+		try {
+			return "Object(" + JSON.stringify(val) + ")";
+		} catch (_) {
+			return "Object";
+		}
+	}
+	// errors
+	if (val instanceof Error) {
+		return `${val.name}: ${val.message}\n${val.stack}`;
+	}
+	// TODO we could test for more things here, like `Set`s and `Map`s.
+	return className;
 }
 
 function getArrayU8FromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
+	ptr = ptr >>> 0;
+	return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
 
 function getClampedArrayU8FromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return getUint8ClampedArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
+	ptr = ptr >>> 0;
+	return getUint8ClampedArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
 
 let cachedDataViewMemory0 = null;
 function getDataViewMemory0() {
-    if (cachedDataViewMemory0 === null || cachedDataViewMemory0.buffer.detached === true || (cachedDataViewMemory0.buffer.detached === undefined && cachedDataViewMemory0.buffer !== wasm.memory.buffer)) {
-        cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
-    }
-    return cachedDataViewMemory0;
+	if (
+		cachedDataViewMemory0 === null ||
+		cachedDataViewMemory0.buffer.detached === true ||
+		(cachedDataViewMemory0.buffer.detached === undefined && cachedDataViewMemory0.buffer !== wasm.memory.buffer)
+	) {
+		cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
+	}
+	return cachedDataViewMemory0;
 }
 
 function getStringFromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return decodeText(ptr, len);
+	ptr = ptr >>> 0;
+	return decodeText(ptr, len);
 }
 
 let cachedUint8ArrayMemory0 = null;
 function getUint8ArrayMemory0() {
-    if (cachedUint8ArrayMemory0 === null || cachedUint8ArrayMemory0.byteLength === 0) {
-        cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
-    }
-    return cachedUint8ArrayMemory0;
+	if (cachedUint8ArrayMemory0 === null || cachedUint8ArrayMemory0.byteLength === 0) {
+		cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
+	}
+	return cachedUint8ArrayMemory0;
 }
 
 let cachedUint8ClampedArrayMemory0 = null;
 function getUint8ClampedArrayMemory0() {
-    if (cachedUint8ClampedArrayMemory0 === null || cachedUint8ClampedArrayMemory0.byteLength === 0) {
-        cachedUint8ClampedArrayMemory0 = new Uint8ClampedArray(wasm.memory.buffer);
-    }
-    return cachedUint8ClampedArrayMemory0;
+	if (cachedUint8ClampedArrayMemory0 === null || cachedUint8ClampedArrayMemory0.byteLength === 0) {
+		cachedUint8ClampedArrayMemory0 = new Uint8ClampedArray(wasm.memory.buffer);
+	}
+	return cachedUint8ClampedArrayMemory0;
 }
 
 function handleError(f, args) {
-    try {
-        return f.apply(this, args);
-    } catch (e) {
-        const idx = addToExternrefTable0(e);
-        wasm.__wbindgen_exn_store(idx);
-    }
+	try {
+		return f.apply(this, args);
+	} catch (e) {
+		const idx = addToExternrefTable0(e);
+		wasm.__wbindgen_exn_store(idx);
+	}
 }
 
 function isLikeNone(x) {
-    return x === undefined || x === null;
+	return x === undefined || x === null;
 }
 
 function passArray8ToWasm0(arg, malloc) {
-    const ptr = malloc(arg.length * 1, 1) >>> 0;
-    getUint8ArrayMemory0().set(arg, ptr / 1);
-    WASM_VECTOR_LEN = arg.length;
-    return ptr;
+	const ptr = malloc(arg.length * 1, 1) >>> 0;
+	getUint8ArrayMemory0().set(arg, ptr / 1);
+	WASM_VECTOR_LEN = arg.length;
+	return ptr;
 }
 
 function passStringToWasm0(arg, malloc, realloc) {
-    if (realloc === undefined) {
-        const buf = cachedTextEncoder.encode(arg);
-        const ptr = malloc(buf.length, 1) >>> 0;
-        getUint8ArrayMemory0().subarray(ptr, ptr + buf.length).set(buf);
-        WASM_VECTOR_LEN = buf.length;
-        return ptr;
-    }
+	if (realloc === undefined) {
+		const buf = cachedTextEncoder.encode(arg);
+		const ptr = malloc(buf.length, 1) >>> 0;
+		getUint8ArrayMemory0()
+			.subarray(ptr, ptr + buf.length)
+			.set(buf);
+		WASM_VECTOR_LEN = buf.length;
+		return ptr;
+	}
 
-    let len = arg.length;
-    let ptr = malloc(len, 1) >>> 0;
+	let len = arg.length;
+	let ptr = malloc(len, 1) >>> 0;
 
-    const mem = getUint8ArrayMemory0();
+	const mem = getUint8ArrayMemory0();
 
-    let offset = 0;
+	let offset = 0;
 
-    for (; offset < len; offset++) {
-        const code = arg.charCodeAt(offset);
-        if (code > 0x7F) break;
-        mem[ptr + offset] = code;
-    }
-    if (offset !== len) {
-        if (offset !== 0) {
-            arg = arg.slice(offset);
-        }
-        ptr = realloc(ptr, len, len = offset + arg.length * 3, 1) >>> 0;
-        const view = getUint8ArrayMemory0().subarray(ptr + offset, ptr + len);
-        const ret = cachedTextEncoder.encodeInto(arg, view);
+	for (; offset < len; offset++) {
+		const code = arg.charCodeAt(offset);
+		if (code > 0x7f) break;
+		mem[ptr + offset] = code;
+	}
+	if (offset !== len) {
+		if (offset !== 0) {
+			arg = arg.slice(offset);
+		}
+		ptr = realloc(ptr, len, (len = offset + arg.length * 3), 1) >>> 0;
+		const view = getUint8ArrayMemory0().subarray(ptr + offset, ptr + len);
+		const ret = cachedTextEncoder.encodeInto(arg, view);
 
-        offset += ret.written;
-        ptr = realloc(ptr, len, offset, 1) >>> 0;
-    }
+		offset += ret.written;
+		ptr = realloc(ptr, len, offset, 1) >>> 0;
+	}
 
-    WASM_VECTOR_LEN = offset;
-    return ptr;
+	WASM_VECTOR_LEN = offset;
+	return ptr;
 }
 
 function takeFromExternrefTable0(idx) {
-    const value = wasm.__wbindgen_externrefs.get(idx);
-    wasm.__externref_table_dealloc(idx);
-    return value;
+	const value = wasm.__wbindgen_externrefs.get(idx);
+	wasm.__externref_table_dealloc(idx);
+	return value;
 }
 
-let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
+let cachedTextDecoder = new TextDecoder("utf-8", { ignoreBOM: true, fatal: true });
 cachedTextDecoder.decode();
 function decodeText(ptr, len) {
-    return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
+	return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
 }
 
 const cachedTextEncoder = new TextEncoder();
@@ -4457,24 +4489,32 @@ let WASM_VECTOR_LEN = 0;
 let wasmInstantiated;
 const imports = __wbg_get_imports();
 
-// Try .wasm file first (dev) - streaming is most efficient
-let streamingError;
-try {
-    const wasmPath = new URL("./photon_rs_bg.wasm", import.meta.url);
-    wasmInstantiated = await WebAssembly.instantiateStreaming(fetch(wasmPath), imports);
-} catch (e) {
-    streamingError = e;
-}
+import wasmPath from "./photon_rs_bg.wasm";
 
-// Fall back to base64 (compiled binary/npm)
-if (!wasmInstantiated) {
-    try {
-        const { default: wasmBase64 } = await import("./photon_rs_bg.wasm.b64.js");
-        const wasmBytes = Uint8Array.from(atob(wasmBase64), c => c.charCodeAt(0));
-        wasmInstantiated = await WebAssembly.instantiate(wasmBytes, imports);
-    } catch (b64Error) {
-        throw new Error(`Failed to load photon WASM:\n  streaming: ${streamingError?.message}\n  base64: ${b64Error.message}`);
-    }
+try {
+	const url = import.meta.resolve(wasmPath);
+	wasmInstantiated = await WebAssembly.instantiateStreaming(fetch(url), imports);
+} catch (e) {
+	const log = (message) => {
+		try {
+			process.stderr.write(`${message}\n`);
+		} catch {
+			console.error(message);
+		}
+	};
+	log("============== PHOTON LOADER ==============");
+	if (error instanceof Error) {
+		log(`${error.name}: ${error.message}\n${error.stack}`);
+	} else {
+		log(`Unknown error: ${String(error)}`);
+	}
+	log("============== PHOTON LOADER ==============");
+	try {
+		process.stderr.end();
+	} catch {
+		// Ignore
+	}
+	process.exit(3);
 }
 
 const wasm = wasmInstantiated.instance.exports;

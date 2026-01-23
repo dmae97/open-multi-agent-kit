@@ -6,9 +6,9 @@
  * injected as a system reminder, and the request is retried.
  */
 
-import type { Rule } from "@oh-my-pi/pi-coding-agent/capability/rule";
-import type { TtsrSettings } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { Rule } from "../capability/rule";
+import type { TtsrSettings } from "../config/settings-manager";
 
 interface TtsrEntry {
 	rule: Rule;

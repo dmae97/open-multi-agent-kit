@@ -1,9 +1,4 @@
 import { type Model, modelsAreEqual } from "@oh-my-pi/pi-ai";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { parseModelString } from "@oh-my-pi/pi-coding-agent/config/model-resolver";
-import type { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
-import { type ThemeColor, theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { fuzzyFilter } from "@oh-my-pi/pi-coding-agent/utils/fuzzy";
 import {
 	Container,
 	Input,
@@ -16,6 +11,11 @@ import {
 	type TUI,
 	visibleWidth,
 } from "@oh-my-pi/pi-tui";
+import type { ModelRegistry } from "../../config/model-registry";
+import { parseModelString } from "../../config/model-resolver";
+import type { SettingsManager } from "../../config/settings-manager";
+import { type ThemeColor, theme } from "../../modes/theme/theme";
+import { fuzzyFilter } from "../../utils/fuzzy";
 import { DynamicBorder } from "./dynamic-border";
 
 function makeInvertedBadge(label: string, color: ThemeColor): string {

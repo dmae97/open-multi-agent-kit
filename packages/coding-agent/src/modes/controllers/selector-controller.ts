@@ -1,29 +1,23 @@
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { OAuthProvider } from "@oh-my-pi/pi-ai";
-import { getAgentDbPath } from "@oh-my-pi/pi-coding-agent/config";
-import { disableProvider, enableProvider } from "@oh-my-pi/pi-coding-agent/discovery";
-import { AssistantMessageComponent } from "@oh-my-pi/pi-coding-agent/modes/components/assistant-message";
-import { ExtensionDashboard } from "@oh-my-pi/pi-coding-agent/modes/components/extensions";
-import { HistorySearchComponent } from "@oh-my-pi/pi-coding-agent/modes/components/history-search";
-import { ModelSelectorComponent } from "@oh-my-pi/pi-coding-agent/modes/components/model-selector";
-import { OAuthSelectorComponent } from "@oh-my-pi/pi-coding-agent/modes/components/oauth-selector";
-import { SessionSelectorComponent } from "@oh-my-pi/pi-coding-agent/modes/components/session-selector";
-import { SettingsSelectorComponent } from "@oh-my-pi/pi-coding-agent/modes/components/settings-selector";
-import { ToolExecutionComponent } from "@oh-my-pi/pi-coding-agent/modes/components/tool-execution";
-import { TreeSelectorComponent } from "@oh-my-pi/pi-coding-agent/modes/components/tree-selector";
-import { UserMessageSelectorComponent } from "@oh-my-pi/pi-coding-agent/modes/components/user-message-selector";
-import {
-	getAvailableThemes,
-	getSymbolTheme,
-	setSymbolPreset,
-	setTheme,
-	theme,
-} from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { setPreferredImageProvider, setPreferredWebSearchProvider } from "@oh-my-pi/pi-coding-agent/tools";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Input, Loader, Spacer, Text } from "@oh-my-pi/pi-tui";
+import { getAgentDbPath } from "../../config";
+import { disableProvider, enableProvider } from "../../discovery";
+import { AssistantMessageComponent } from "../../modes/components/assistant-message";
+import { ExtensionDashboard } from "../../modes/components/extensions";
+import { HistorySearchComponent } from "../../modes/components/history-search";
+import { ModelSelectorComponent } from "../../modes/components/model-selector";
+import { OAuthSelectorComponent } from "../../modes/components/oauth-selector";
+import { SessionSelectorComponent } from "../../modes/components/session-selector";
+import { SettingsSelectorComponent } from "../../modes/components/settings-selector";
+import { ToolExecutionComponent } from "../../modes/components/tool-execution";
+import { TreeSelectorComponent } from "../../modes/components/tree-selector";
+import { UserMessageSelectorComponent } from "../../modes/components/user-message-selector";
+import { getAvailableThemes, getSymbolTheme, setSymbolPreset, setTheme, theme } from "../../modes/theme/theme";
+import type { InteractiveModeContext } from "../../modes/types";
+import { SessionManager } from "../../session/session-manager";
+import { setPreferredImageProvider, setPreferredWebSearchProvider } from "../../tools";
 
 export class SelectorController {
 	constructor(private ctx: InteractiveModeContext) {}

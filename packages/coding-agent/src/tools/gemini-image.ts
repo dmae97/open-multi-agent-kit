@@ -1,15 +1,15 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { StringEnum } from "@oh-my-pi/pi-ai";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { renderPromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import type { CustomTool } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools/types";
-import geminiImageDescription from "@oh-my-pi/pi-coding-agent/prompts/tools/gemini-image.md" with { type: "text" };
-import { detectSupportedImageMimeTypeFromFile } from "@oh-my-pi/pi-coding-agent/utils/mime";
-import { getEnv } from "@oh-my-pi/pi-coding-agent/web/search/auth";
 import { untilAborted } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import { nanoid } from "nanoid";
+import type { ModelRegistry } from "../config/model-registry";
+import { renderPromptTemplate } from "../config/prompt-templates";
+import type { CustomTool } from "../extensibility/custom-tools/types";
+import geminiImageDescription from "../prompts/tools/gemini-image.md" with { type: "text" };
+import { detectSupportedImageMimeTypeFromFile } from "../utils/mime";
+import { getEnv } from "../web/search/auth";
 import { resolveReadPath } from "./path-utils";
 
 const DEFAULT_MODEL = "gemini-3-pro-image-preview";

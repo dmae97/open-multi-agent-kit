@@ -1,7 +1,7 @@
-import { theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { shortenPath } from "@oh-my-pi/pi-coding-agent/tools/render-utils";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Container, Text } from "@oh-my-pi/pi-tui";
+import { theme } from "../../modes/theme/theme";
+import { shortenPath } from "../../tools/render-utils";
 import type { ToolExecutionHandle } from "./tool-execution";
 
 type ReadRenderArgs = {

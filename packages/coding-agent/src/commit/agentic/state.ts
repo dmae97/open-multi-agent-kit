@@ -1,9 +1,4 @@
-import type {
-	CommitType,
-	ConventionalAnalysis,
-	ConventionalDetail,
-	NumstatEntry,
-} from "@oh-my-pi/pi-coding-agent/commit/types";
+import type { CommitType, ConventionalAnalysis, ConventionalDetail, NumstatEntry } from "../../commit/types";
 
 export interface GitOverviewSnapshot {
 	files: string[];

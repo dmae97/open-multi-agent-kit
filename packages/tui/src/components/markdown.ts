@@ -1,9 +1,9 @@
-import type { MermaidImage } from "@oh-my-pi/pi-tui/mermaid";
-import type { SymbolTheme } from "@oh-my-pi/pi-tui/symbols";
-import { encodeITerm2, encodeKitty, getCapabilities, getCellDimensions } from "@oh-my-pi/pi-tui/terminal-image";
-import type { Component } from "@oh-my-pi/pi-tui/tui";
-import { applyBackgroundToLine, visibleWidth, wrapTextWithAnsi } from "@oh-my-pi/pi-tui/utils";
 import { marked, type Token } from "marked";
+import type { MermaidImage } from "../mermaid";
+import type { SymbolTheme } from "../symbols";
+import { encodeITerm2, encodeKitty, getCapabilities, getCellDimensions } from "../terminal-image";
+import type { Component } from "../tui";
+import { applyBackgroundToLine, visibleWidth, wrapTextWithAnsi } from "../utils";
 
 /**
  * Default text styling for markdown content.

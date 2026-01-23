@@ -145,7 +145,7 @@ Examples:
 
 		// Start server
 		const port = parseInt(values.port || "3847", 10);
-		const { port: actualPort } = startServer(port);
+		const { port: actualPort } = await startServer(port);
 		console.log(`Dashboard available at: http://localhost:${actualPort}`);
 		console.log("Press Ctrl+C to stop\n");
 

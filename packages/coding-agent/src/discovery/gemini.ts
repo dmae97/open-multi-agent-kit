@@ -17,19 +17,15 @@
  */
 
 import { join, sep } from "node:path";
-import { registerProvider } from "@oh-my-pi/pi-coding-agent/capability";
-import { type ContextFile, contextFileCapability } from "@oh-my-pi/pi-coding-agent/capability/context-file";
-import {
-	type Extension,
-	type ExtensionManifest,
-	extensionCapability,
-} from "@oh-my-pi/pi-coding-agent/capability/extension";
-import { type ExtensionModule, extensionModuleCapability } from "@oh-my-pi/pi-coding-agent/capability/extension-module";
-import { readDirEntries, readFile } from "@oh-my-pi/pi-coding-agent/capability/fs";
-import { type MCPServer, mcpCapability } from "@oh-my-pi/pi-coding-agent/capability/mcp";
-import { type Settings, settingsCapability } from "@oh-my-pi/pi-coding-agent/capability/settings";
-import { type SystemPrompt, systemPromptCapability } from "@oh-my-pi/pi-coding-agent/capability/system-prompt";
-import type { LoadContext, LoadResult } from "@oh-my-pi/pi-coding-agent/capability/types";
+import { registerProvider } from "../capability";
+import { type ContextFile, contextFileCapability } from "../capability/context-file";
+import { type Extension, type ExtensionManifest, extensionCapability } from "../capability/extension";
+import { type ExtensionModule, extensionModuleCapability } from "../capability/extension-module";
+import { readDirEntries, readFile } from "../capability/fs";
+import { type MCPServer, mcpCapability } from "../capability/mcp";
+import { type Settings, settingsCapability } from "../capability/settings";
+import { type SystemPrompt, systemPromptCapability } from "../capability/system-prompt";
+import type { LoadContext, LoadResult } from "../capability/types";
 import {
 	calculateDepth,
 	createSourceMeta,

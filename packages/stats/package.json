@@ -6,7 +6,7 @@
 	"main": "./src/index.ts",
 	"types": "./src/index.ts",
 	"bin": {
-		"omp-stats": "./dist/index.js"
+		"omp-stats": "./src/index.ts"
 	},
 	"exports": {
 		".": {
@@ -23,7 +23,6 @@
 		}
 	},
 	"files": [
-		"dist",
 		"src",
 		"public",
 		"README.md"
@@ -38,9 +37,8 @@
 	],
 	"scripts": {
 		"dev": "bun run src/index.ts",
-		"check": "tsgo --noEmit && tsgo --noEmit -p tsconfig.client.json",
-		"build": "bun run build.ts && tsgo -p tsconfig.build.json",
-		"prepublishOnly": "cp tsconfig.publish.json tsconfig.json && bun run build"
+		"check": "tsgo -p tsconfig.json && tsgo -p tsconfig.client.json",
+		"build": "bun run build.ts"
 	},
 	"author": "Can Bölük",
 	"license": "MIT",

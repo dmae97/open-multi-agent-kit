@@ -11,8 +11,8 @@
 			"import": "./src/index.ts"
 		},
 		"./*": {
-			"types": "./src/*",
-			"import": "./src/*"
+			"types": "./src/*.ts",
+			"import": "./src/*.ts"
 		}
 	},
 	"files": [
@@ -20,8 +20,8 @@
 		"README.md"
 	],
 	"scripts": {
-		"test": "vitest --run",
-		"prepublishOnly": "cp tsconfig.publish.json tsconfig.json"
+		"check": "tsgo -p tsconfig.json",
+		"test": "bun test"
 	},
 	"dependencies": {
 		"@oh-my-pi/pi-ai": "workspace:*",
@@ -47,7 +47,6 @@
 	},
 	"devDependencies": {
 		"@sinclair/typebox": "^0.34.46",
-		"@types/node": "^24.3.0",
-		"vitest": "^3.2.4"
+		"@types/node": "^24.3.0"
 	}
 }

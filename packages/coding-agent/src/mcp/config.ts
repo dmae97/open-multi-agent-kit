@@ -4,9 +4,9 @@
  * Uses the capability system to load MCP servers from multiple sources.
  */
 
-import { mcpCapability } from "@oh-my-pi/pi-coding-agent/capability/mcp";
-import type { MCPServer } from "@oh-my-pi/pi-coding-agent/discovery";
-import { loadCapability } from "@oh-my-pi/pi-coding-agent/discovery";
+import { mcpCapability } from "../capability/mcp";
+import type { MCPServer } from "../discovery";
+import { loadCapability } from "../discovery";
 import type { MCPServerConfig } from "./types";
 
 /** Options for loading MCP configs */

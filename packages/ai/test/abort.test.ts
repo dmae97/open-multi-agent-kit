@@ -1,8 +1,8 @@
+import { describe, expect, it } from "bun:test";
 import { getModel } from "@oh-my-pi/pi-ai/models";
 import { complete, stream } from "@oh-my-pi/pi-ai/stream";
 import type { Api, Context, Model, OptionsForApi } from "@oh-my-pi/pi-ai/types";
-import { describe, expect, it } from "vitest";
-import { resolveApiKey } from "./oauth";
+import { e2eApiKey, resolveApiKey } from "./oauth";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
 const [geminiCliToken, openaiCodexToken] = await Promise.all([
@@ -67,91 +67,147 @@ async function testImmediateAbort<TApi extends Api>(llm: Model<TApi>, options: O
 }
 
 describe("AI Providers Abort Tests", () => {
-	describe.skipIf(!process.env.GEMINI_API_KEY)("Google Provider Abort", () => {
+	describe.skipIf(!e2eApiKey("GEMINI_API_KEY"))("Google Provider Abort", () => {
 		const llm = getModel("google", "gemini-2.5-flash");
 
-		it("should abort mid-stream", { retry: 3 }, async () => {
-			await testAbortSignal(llm, { thinking: { enabled: true } });
-		});
+		it(
+			"should abort mid-stream",
+			async () => {
+				await testAbortSignal(llm, { thinking: { enabled: true } });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle immediate abort", { retry: 3 }, async () => {
-			await testImmediateAbort(llm, { thinking: { enabled: true } });
-		});
+		it(
+			"should handle immediate abort",
+			async () => {
+				await testImmediateAbort(llm, { thinking: { enabled: true } });
+			},
+			{ retry: 3 },
+		);
 	});
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions Provider Abort", () => {
+	describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("OpenAI Completions Provider Abort", () => {
 		const llm: Model<"openai-completions"> = {
 			...getModel("openai", "gpt-4o-mini")!,
 			api: "openai-completions",
 		};
 
-		it("should abort mid-stream", { retry: 3 }, async () => {
-			await testAbortSignal(llm);
-		});
+		it(
+			"should abort mid-stream",
+			async () => {
+				await testAbortSignal(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle immediate abort", { retry: 3 }, async () => {
-			await testImmediateAbort(llm);
-		});
+		it(
+			"should handle immediate abort",
+			async () => {
+				await testImmediateAbort(llm);
+			},
+			{ retry: 3 },
+		);
 	});
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses Provider Abort", () => {
+	describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("OpenAI Responses Provider Abort", () => {
 		const llm = getModel("openai", "gpt-5-mini");
 
-		it("should abort mid-stream", { retry: 3 }, async () => {
-			await testAbortSignal(llm);
-		});
+		it(
+			"should abort mid-stream",
+			async () => {
+				await testAbortSignal(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle immediate abort", { retry: 3 }, async () => {
-			await testImmediateAbort(llm);
-		});
+		it(
+			"should handle immediate abort",
+			async () => {
+				await testImmediateAbort(llm);
+			},
+			{ retry: 3 },
+		);
 	});
 
 	describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)("Anthropic Provider Abort", () => {
 		const llm = getModel("anthropic", "claude-opus-4-1-20250805");
 
-		it("should abort mid-stream", { retry: 3 }, async () => {
-			await testAbortSignal(llm, { thinkingEnabled: true, thinkingBudgetTokens: 2048 });
-		});
+		it(
+			"should abort mid-stream",
+			async () => {
+				await testAbortSignal(llm, { thinkingEnabled: true, thinkingBudgetTokens: 2048 });
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle immediate abort", { retry: 3 }, async () => {
-			await testImmediateAbort(llm, { thinkingEnabled: true, thinkingBudgetTokens: 2048 });
-		});
+		it(
+			"should handle immediate abort",
+			async () => {
+				await testImmediateAbort(llm, { thinkingEnabled: true, thinkingBudgetTokens: 2048 });
+			},
+			{ retry: 3 },
+		);
 	});
 
-	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Provider Abort", () => {
+	describe.skipIf(!e2eApiKey("MISTRAL_API_KEY"))("Mistral Provider Abort", () => {
 		const llm = getModel("mistral", "devstral-medium-latest");
 
-		it("should abort mid-stream", { retry: 3 }, async () => {
-			await testAbortSignal(llm);
-		});
+		it(
+			"should abort mid-stream",
+			async () => {
+				await testAbortSignal(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle immediate abort", { retry: 3 }, async () => {
-			await testImmediateAbort(llm);
-		});
+		it(
+			"should handle immediate abort",
+			async () => {
+				await testImmediateAbort(llm);
+			},
+			{ retry: 3 },
+		);
 	});
 
 	// Google Gemini CLI / Antigravity share the same provider, so one test covers both
 	describe("Google Gemini CLI Provider Abort", () => {
-		it.skipIf(!geminiCliToken)("should abort mid-stream", { retry: 3 }, async () => {
-			const llm = getModel("google-gemini-cli", "gemini-2.5-flash");
-			await testAbortSignal(llm, { apiKey: geminiCliToken });
-		});
+		it.skipIf(!geminiCliToken)(
+			"should abort mid-stream",
+			async () => {
+				const llm = getModel("google-gemini-cli", "gemini-2.5-flash");
+				await testAbortSignal(llm, { apiKey: geminiCliToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!geminiCliToken)("should handle immediate abort", { retry: 3 }, async () => {
-			const llm = getModel("google-gemini-cli", "gemini-2.5-flash");
-			await testImmediateAbort(llm, { apiKey: geminiCliToken });
-		});
+		it.skipIf(!geminiCliToken)(
+			"should handle immediate abort",
+			async () => {
+				const llm = getModel("google-gemini-cli", "gemini-2.5-flash");
+				await testImmediateAbort(llm, { apiKey: geminiCliToken });
+			},
+			{ retry: 3 },
+		);
 	});
 
 	describe("OpenAI Codex Provider Abort", () => {
-		it.skipIf(!openaiCodexToken)("should abort mid-stream", { retry: 3 }, async () => {
-			const llm = getModel("openai-codex", "gpt-5.2-codex");
-			await testAbortSignal(llm, { apiKey: openaiCodexToken });
-		});
+		it.skipIf(!openaiCodexToken)(
+			"should abort mid-stream",
+			async () => {
+				const llm = getModel("openai-codex", "gpt-5.2-codex");
+				await testAbortSignal(llm, { apiKey: openaiCodexToken });
+			},
+			{ retry: 3 },
+		);
 
-		it.skipIf(!openaiCodexToken)("should handle immediate abort", { retry: 3 }, async () => {
-			const llm = getModel("openai-codex", "gpt-5.2-codex");
-			await testImmediateAbort(llm, { apiKey: openaiCodexToken });
-		});
+		it.skipIf(!openaiCodexToken)(
+			"should handle immediate abort",
+			async () => {
+				const llm = getModel("openai-codex", "gpt-5.2-codex");
+				await testImmediateAbort(llm, { apiKey: openaiCodexToken });
+			},
+			{ retry: 3 },
+		);
 	});
 });

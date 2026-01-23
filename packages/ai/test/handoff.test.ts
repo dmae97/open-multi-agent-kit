@@ -1,8 +1,9 @@
+import { describe, expect, it } from "bun:test";
 import { getModel } from "@oh-my-pi/pi-ai/models";
 import { complete } from "@oh-my-pi/pi-ai/stream";
 import type { Api, AssistantMessage, Context, Message, Model, Tool, ToolResultMessage } from "@oh-my-pi/pi-ai/types";
 import { Type } from "@sinclair/typebox";
-import { describe, expect, it } from "vitest";
+import { e2eApiKey } from "./oauth";
 
 // Tool for testing
 const weatherSchema = Type.Object({
@@ -366,7 +367,7 @@ async function testProviderHandoff<TApi extends Api>(
 }
 
 describe("Cross-Provider Handoff Tests", () => {
-	describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Anthropic Provider Handoff", () => {
+	describe.skipIf(!e2eApiKey("ANTHROPIC_API_KEY"))("Anthropic Provider Handoff", () => {
 		const model = getModel("anthropic", "claude-3-5-haiku-20241022");
 
 		it("should handle contexts from all providers", async () => {
@@ -402,7 +403,7 @@ describe("Cross-Provider Handoff Tests", () => {
 		});
 	});
 
-	describe.skipIf(!process.env.GEMINI_API_KEY)("Google Provider Handoff", () => {
+	describe.skipIf(!e2eApiKey("GEMINI_API_KEY"))("Google Provider Handoff", () => {
 		const model = getModel("google", "gemini-2.5-flash");
 
 		it("should handle contexts from all providers", async () => {
@@ -438,7 +439,7 @@ describe("Cross-Provider Handoff Tests", () => {
 		});
 	});
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions Provider Handoff", () => {
+	describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("OpenAI Completions Provider Handoff", () => {
 		const model: Model<"openai-completions"> = { ...getModel("openai", "gpt-4o-mini"), api: "openai-completions" };
 
 		it("should handle contexts from all providers", async () => {
@@ -474,7 +475,7 @@ describe("Cross-Provider Handoff Tests", () => {
 		});
 	});
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses Provider Handoff", () => {
+	describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("OpenAI Responses Provider Handoff", () => {
 		const model = getModel("openai", "gpt-5-mini");
 
 		it("should handle contexts from all providers", async () => {
@@ -510,7 +511,7 @@ describe("Cross-Provider Handoff Tests", () => {
 		});
 	});
 
-	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Provider Handoff", () => {
+	describe.skipIf(!e2eApiKey("MISTRAL_API_KEY"))("Mistral Provider Handoff", () => {
 		const model = getModel("mistral", "devstral-medium-latest");
 
 		it("should handle contexts from all providers", async () => {

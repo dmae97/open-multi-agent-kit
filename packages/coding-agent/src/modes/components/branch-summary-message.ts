@@ -1,6 +1,6 @@
-import { getMarkdownTheme, theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { BranchSummaryMessage } from "@oh-my-pi/pi-coding-agent/session/messages";
 import { Box, Markdown, Spacer, Text } from "@oh-my-pi/pi-tui";
+import { getMarkdownTheme, theme } from "../../modes/theme/theme";
+import type { BranchSummaryMessage } from "../../session/messages";
 
 /**
  * Component that renders a branch summary message with collapsed/expanded state.

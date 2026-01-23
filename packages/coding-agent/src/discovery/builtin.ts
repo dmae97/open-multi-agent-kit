@@ -5,28 +5,24 @@
  * .pi is an alias for backwards compatibility.
  */
 
-import { registerProvider } from "@oh-my-pi/pi-coding-agent/capability";
-import { type ContextFile, contextFileCapability } from "@oh-my-pi/pi-coding-agent/capability/context-file";
-import {
-	type Extension,
-	type ExtensionManifest,
-	extensionCapability,
-} from "@oh-my-pi/pi-coding-agent/capability/extension";
-import { type ExtensionModule, extensionModuleCapability } from "@oh-my-pi/pi-coding-agent/capability/extension-module";
-import { readDirEntries, readFile } from "@oh-my-pi/pi-coding-agent/capability/fs";
-import { type Hook, hookCapability } from "@oh-my-pi/pi-coding-agent/capability/hook";
-import { type Instruction, instructionCapability } from "@oh-my-pi/pi-coding-agent/capability/instruction";
-import { type MCPServer, mcpCapability } from "@oh-my-pi/pi-coding-agent/capability/mcp";
-import { type Prompt, promptCapability } from "@oh-my-pi/pi-coding-agent/capability/prompt";
-import { type Rule, ruleCapability } from "@oh-my-pi/pi-coding-agent/capability/rule";
-import { type Settings, settingsCapability } from "@oh-my-pi/pi-coding-agent/capability/settings";
-import { type Skill, skillCapability } from "@oh-my-pi/pi-coding-agent/capability/skill";
-import { type SlashCommand, slashCommandCapability } from "@oh-my-pi/pi-coding-agent/capability/slash-command";
-import { type SystemPrompt, systemPromptCapability } from "@oh-my-pi/pi-coding-agent/capability/system-prompt";
-import { type CustomTool, toolCapability } from "@oh-my-pi/pi-coding-agent/capability/tool";
-import type { LoadContext, LoadResult } from "@oh-my-pi/pi-coding-agent/capability/types";
-import { parseFrontmatter } from "@oh-my-pi/pi-coding-agent/utils/frontmatter";
 import { dirname, isAbsolute, join, resolve } from "path";
+import { registerProvider } from "../capability";
+import { type ContextFile, contextFileCapability } from "../capability/context-file";
+import { type Extension, type ExtensionManifest, extensionCapability } from "../capability/extension";
+import { type ExtensionModule, extensionModuleCapability } from "../capability/extension-module";
+import { readDirEntries, readFile } from "../capability/fs";
+import { type Hook, hookCapability } from "../capability/hook";
+import { type Instruction, instructionCapability } from "../capability/instruction";
+import { type MCPServer, mcpCapability } from "../capability/mcp";
+import { type Prompt, promptCapability } from "../capability/prompt";
+import { type Rule, ruleCapability } from "../capability/rule";
+import { type Settings, settingsCapability } from "../capability/settings";
+import { type Skill, skillCapability } from "../capability/skill";
+import { type SlashCommand, slashCommandCapability } from "../capability/slash-command";
+import { type SystemPrompt, systemPromptCapability } from "../capability/system-prompt";
+import { type CustomTool, toolCapability } from "../capability/tool";
+import type { LoadContext, LoadResult } from "../capability/types";
+import { parseFrontmatter } from "../utils/frontmatter";
 import {
 	createSourceMeta,
 	discoverExtensionModulePaths,

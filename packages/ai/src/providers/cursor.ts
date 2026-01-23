@@ -3,7 +3,8 @@ import { appendFile } from "node:fs/promises";
 import http2 from "node:http2";
 import { create, fromBinary, fromJson, type JsonValue, toBinary, toJson } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
-import { calculateCost } from "@oh-my-pi/pi-ai/models";
+import JSON5 from "json5";
+import { calculateCost } from "../models";
 import type {
 	Api,
 	AssistantMessage,
@@ -22,11 +23,10 @@ import type {
 	Tool,
 	ToolCall,
 	ToolResultMessage,
-} from "@oh-my-pi/pi-ai/types";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
-import { parseStreamingJson } from "@oh-my-pi/pi-ai/utils/json-parse";
-import { formatErrorMessageWithRetryAfter } from "@oh-my-pi/pi-ai/utils/retry-after";
-import JSON5 from "json5";
+} from "../types";
+import { AssistantMessageEventStream } from "../utils/event-stream";
+import { parseStreamingJson } from "../utils/json-parse";
+import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
 import type { McpToolDefinition } from "./cursor/gen/agent_pb";
 import {
 	AgentClientMessageSchema,

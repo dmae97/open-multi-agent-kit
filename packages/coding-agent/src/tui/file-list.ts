@@ -2,8 +2,8 @@
  * Render file listings with optional icons and metadata.
  */
 
-import type { Theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { getLanguageFromPath } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
+import type { Theme } from "../modes/theme/theme";
+import { getLanguageFromPath } from "../modes/theme/theme";
 import { renderTreeList } from "./tree-list";
 
 export interface FileEntry {

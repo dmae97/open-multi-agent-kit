@@ -1,3 +1,4 @@
+import { describe, expect, it } from "bun:test";
 import { agentLoop, agentLoopContinue } from "@oh-my-pi/pi-agent-core/agent-loop";
 import type {
 	AgentContext,
@@ -17,7 +18,6 @@ import {
 	type UserMessage,
 } from "@oh-my-pi/pi-ai";
 import { Type } from "@sinclair/typebox";
-import { describe, expect, it } from "vitest";
 
 // Mock stream for testing - mimics MockAssistantStream
 class MockAssistantStream extends EventStream<AssistantMessageEvent, AssistantMessage> {

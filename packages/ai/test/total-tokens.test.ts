@@ -12,11 +12,11 @@
  * - Other OpenAI-compatible providers: Uses native total_tokens field
  */
 
+import { describe, expect, it } from "bun:test";
 import { getModel } from "@oh-my-pi/pi-ai/models";
 import { complete } from "@oh-my-pi/pi-ai/stream";
 import type { Api, Context, Model, OptionsForApi, Usage } from "@oh-my-pi/pi-ai/types";
-import { describe, expect, it } from "vitest";
-import { resolveApiKey } from "./oauth";
+import { e2eApiKey, resolveApiKey } from "./oauth";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([
@@ -99,10 +99,9 @@ describe("totalTokens field", () => {
 	// Anthropic
 	// =========================================================================
 
-	describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Anthropic (API Key)", () => {
+	describe.skipIf(!e2eApiKey("ANTHROPIC_API_KEY"))("Anthropic (API Key)", () => {
 		it(
 			"claude-3-5-haiku - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("anthropic", "claude-3-5-haiku-20241022");
 
@@ -119,13 +118,13 @@ describe("totalTokens field", () => {
 				const hasCache = second.cacheRead > 0 || second.cacheWrite > 0 || first.cacheWrite > 0;
 				expect(hasCache).toBe(true);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 	});
 
 	describe("Anthropic (OAuth)", () => {
 		it.skipIf(!anthropicOAuthToken)(
 			"claude-sonnet-4 - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("anthropic", "claude-sonnet-4-20250514");
 
@@ -142,6 +141,7 @@ describe("totalTokens field", () => {
 				const hasCache = second.cacheRead > 0 || second.cacheWrite > 0 || first.cacheWrite > 0;
 				expect(hasCache).toBe(true);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 	});
 
@@ -149,10 +149,9 @@ describe("totalTokens field", () => {
 	// OpenAI
 	// =========================================================================
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions", () => {
+	describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("OpenAI Completions", () => {
 		it(
 			"gpt-4o-mini - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm: Model<"openai-completions"> = {
 					...getModel("openai", "gpt-4o-mini")!,
@@ -168,32 +167,36 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 	});
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses", () => {
-		it("gpt-4o - should return totalTokens equal to sum of components", { retry: 3, timeout: 60000 }, async () => {
-			const llm = getModel("openai", "gpt-4o");
+	describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("OpenAI Responses", () => {
+		it(
+			"gpt-4o - should return totalTokens equal to sum of components",
+			async () => {
+				const llm = getModel("openai", "gpt-4o");
 
-			console.log(`\nOpenAI Responses / ${llm.id}:`);
-			const { first, second } = await testTotalTokensWithCache(llm);
+				console.log(`\nOpenAI Responses / ${llm.id}:`);
+				const { first, second } = await testTotalTokensWithCache(llm);
 
-			logUsage("First request", first);
-			logUsage("Second request", second);
+				logUsage("First request", first);
+				logUsage("Second request", second);
 
-			assertTotalTokensEqualsComponents(first);
-			assertTotalTokensEqualsComponents(second);
-		});
+				assertTotalTokensEqualsComponents(first);
+				assertTotalTokensEqualsComponents(second);
+			},
+			{ retry: 3, timeout: 60000 },
+		);
 	});
 
 	// =========================================================================
 	// Google
 	// =========================================================================
 
-	describe.skipIf(!process.env.GEMINI_API_KEY)("Google", () => {
+	describe.skipIf(!e2eApiKey("GEMINI_API_KEY"))("Google", () => {
 		it(
 			"gemini-2.0-flash - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("google", "gemini-2.0-flash");
 
@@ -206,6 +209,7 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 	});
 
@@ -213,10 +217,9 @@ describe("totalTokens field", () => {
 	// xAI
 	// =========================================================================
 
-	describe.skipIf(!process.env.XAI_API_KEY)("xAI", () => {
+	describe.skipIf(!e2eApiKey("XAI_API_KEY"))("xAI", () => {
 		it(
 			"grok-3-fast - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("xai", "grok-3-fast");
 
@@ -229,6 +232,7 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 	});
 
@@ -236,10 +240,9 @@ describe("totalTokens field", () => {
 	// Groq
 	// =========================================================================
 
-	describe.skipIf(!process.env.GROQ_API_KEY)("Groq", () => {
+	describe.skipIf(!e2eApiKey("GROQ_API_KEY"))("Groq", () => {
 		it(
 			"openai/gpt-oss-120b - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("groq", "openai/gpt-oss-120b");
 
@@ -252,6 +255,7 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 	});
 
@@ -259,10 +263,9 @@ describe("totalTokens field", () => {
 	// Cerebras
 	// =========================================================================
 
-	describe.skipIf(!process.env.CEREBRAS_API_KEY)("Cerebras", () => {
+	describe.skipIf(!e2eApiKey("CEREBRAS_API_KEY"))("Cerebras", () => {
 		it(
 			"gpt-oss-120b - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("cerebras", "gpt-oss-120b");
 
@@ -275,6 +278,7 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 	});
 
@@ -282,10 +286,9 @@ describe("totalTokens field", () => {
 	// z.ai
 	// =========================================================================
 
-	describe.skipIf(!process.env.ZAI_API_KEY)("z.ai", () => {
+	describe.skipIf(!e2eApiKey("ZAI_API_KEY"))("z.ai", () => {
 		it(
 			"glm-4.5-flash - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("zai", "glm-4.5-flash");
 
@@ -298,6 +301,7 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 	});
 
@@ -305,10 +309,9 @@ describe("totalTokens field", () => {
 	// Mistral
 	// =========================================================================
 
-	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral", () => {
+	describe.skipIf(!e2eApiKey("MISTRAL_API_KEY"))("Mistral", () => {
 		it(
 			"devstral-medium-latest - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("mistral", "devstral-medium-latest");
 
@@ -321,6 +324,7 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 	});
 
@@ -328,10 +332,9 @@ describe("totalTokens field", () => {
 	// OpenRouter - Multiple backend providers
 	// =========================================================================
 
-	describe.skipIf(!process.env.OPENROUTER_API_KEY)("OpenRouter", () => {
+	describe.skipIf(!e2eApiKey("OPENROUTER_API_KEY"))("OpenRouter", () => {
 		it(
 			"anthropic/claude-sonnet-4 - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("openrouter", "anthropic/claude-sonnet-4");
 
@@ -344,11 +347,11 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 
 		it(
 			"deepseek/deepseek-chat - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("openrouter", "deepseek/deepseek-chat");
 
@@ -361,11 +364,11 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 
 		it(
 			"mistralai/mistral-small-3.1-24b-instruct - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("openrouter", "mistralai/mistral-small-3.1-24b-instruct");
 
@@ -378,11 +381,11 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 
 		it(
 			"google/gemini-2.0-flash-001 - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("openrouter", "google/gemini-2.0-flash-001");
 
@@ -395,11 +398,11 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 
 		it(
 			"meta-llama/llama-4-maverick - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("openrouter", "meta-llama/llama-4-maverick");
 
@@ -412,6 +415,7 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 	});
 
@@ -422,7 +426,6 @@ describe("totalTokens field", () => {
 	describe("GitHub Copilot (OAuth)", () => {
 		it.skipIf(!githubCopilotToken)(
 			"gpt-4o - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("github-copilot", "gpt-4o");
 
@@ -435,11 +438,11 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 
 		it.skipIf(!githubCopilotToken)(
 			"claude-sonnet-4 - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("github-copilot", "claude-sonnet-4");
 
@@ -452,6 +455,7 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 	});
 
@@ -462,7 +466,6 @@ describe("totalTokens field", () => {
 	describe("Google Gemini CLI (OAuth)", () => {
 		it.skipIf(!geminiCliToken)(
 			"gemini-2.5-flash - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("google-gemini-cli", "gemini-2.5-flash");
 
@@ -475,6 +478,7 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 	});
 
@@ -485,7 +489,6 @@ describe("totalTokens field", () => {
 	describe("Google Antigravity (OAuth)", () => {
 		it.skipIf(!antigravityToken)(
 			"gemini-3-flash - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("google-antigravity", "gemini-3-flash");
 
@@ -498,11 +501,11 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 
 		it.skipIf(!antigravityToken)(
 			"claude-sonnet-4-5 - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("google-antigravity", "claude-sonnet-4-5");
 
@@ -515,11 +518,11 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 
 		it.skipIf(!antigravityToken)(
 			"gpt-oss-120b-medium - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("google-antigravity", "gpt-oss-120b-medium");
 
@@ -532,6 +535,7 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 	});
 
@@ -542,7 +546,6 @@ describe("totalTokens field", () => {
 	describe("OpenAI Codex (OAuth)", () => {
 		it.skipIf(!openaiCodexToken)(
 			"gpt-5.2-codex - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
 			async () => {
 				const llm = getModel("openai-codex", "gpt-5.2-codex");
 
@@ -555,6 +558,7 @@ describe("totalTokens field", () => {
 				assertTotalTokensEqualsComponents(first);
 				assertTotalTokensEqualsComponents(second);
 			},
+			{ retry: 3, timeout: 60000 },
 		);
 	});
 });

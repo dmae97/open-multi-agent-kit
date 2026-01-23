@@ -1,20 +1,20 @@
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage, Message } from "@oh-my-pi/pi-ai";
-import { AssistantMessageComponent } from "@oh-my-pi/pi-coding-agent/modes/components/assistant-message";
-import { BashExecutionComponent } from "@oh-my-pi/pi-coding-agent/modes/components/bash-execution";
-import { BranchSummaryMessageComponent } from "@oh-my-pi/pi-coding-agent/modes/components/branch-summary-message";
-import { CompactionSummaryMessageComponent } from "@oh-my-pi/pi-coding-agent/modes/components/compaction-summary-message";
-import { CustomMessageComponent } from "@oh-my-pi/pi-coding-agent/modes/components/custom-message";
-import { DynamicBorder } from "@oh-my-pi/pi-coding-agent/modes/components/dynamic-border";
-import { PythonExecutionComponent } from "@oh-my-pi/pi-coding-agent/modes/components/python-execution";
-import { ReadToolGroupComponent } from "@oh-my-pi/pi-coding-agent/modes/components/read-tool-group";
-import { ToolExecutionComponent } from "@oh-my-pi/pi-coding-agent/modes/components/tool-execution";
-import { UserMessageComponent } from "@oh-my-pi/pi-coding-agent/modes/components/user-message";
-import { theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { CompactionQueuedMessage, InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import type { CustomMessage } from "@oh-my-pi/pi-coding-agent/session/messages";
-import type { SessionContext } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { Spacer, Text, TruncatedText } from "@oh-my-pi/pi-tui";
+import { AssistantMessageComponent } from "../../modes/components/assistant-message";
+import { BashExecutionComponent } from "../../modes/components/bash-execution";
+import { BranchSummaryMessageComponent } from "../../modes/components/branch-summary-message";
+import { CompactionSummaryMessageComponent } from "../../modes/components/compaction-summary-message";
+import { CustomMessageComponent } from "../../modes/components/custom-message";
+import { DynamicBorder } from "../../modes/components/dynamic-border";
+import { PythonExecutionComponent } from "../../modes/components/python-execution";
+import { ReadToolGroupComponent } from "../../modes/components/read-tool-group";
+import { ToolExecutionComponent } from "../../modes/components/tool-execution";
+import { UserMessageComponent } from "../../modes/components/user-message";
+import { theme } from "../../modes/theme/theme";
+import type { CompactionQueuedMessage, InteractiveModeContext } from "../../modes/types";
+import type { CustomMessage } from "../../session/messages";
+import type { SessionContext } from "../../session/session-manager";
 
 type TextBlock = { type: "text"; text: string };
 

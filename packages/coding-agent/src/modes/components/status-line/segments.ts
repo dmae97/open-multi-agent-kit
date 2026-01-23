@@ -1,6 +1,6 @@
 import { hostname as osHostname } from "node:os";
-import { theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { shortenPath } from "@oh-my-pi/pi-coding-agent/tools/render-utils";
+import { theme } from "../../../modes/theme/theme";
+import { shortenPath } from "../../../tools/render-utils";
 import type { RenderedSegment, SegmentContext, StatusLineSegment, StatusLineSegmentId } from "./types";
 
 export type { SegmentContext } from "./types";

@@ -7,17 +7,17 @@ import * as path from "node:path";
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent, Model, TextContent } from "@oh-my-pi/pi-ai";
 import * as piCodingAgent from "@oh-my-pi/pi-coding-agent";
-import { type ExtensionModule, extensionModuleCapability } from "@oh-my-pi/pi-coding-agent/capability/extension-module";
-import { loadCapability } from "@oh-my-pi/pi-coding-agent/discovery";
-import { expandPath, getExtensionNameFromPath } from "@oh-my-pi/pi-coding-agent/discovery/helpers";
-import type { ExecOptions } from "@oh-my-pi/pi-coding-agent/exec/exec";
-import { execCommand } from "@oh-my-pi/pi-coding-agent/exec/exec";
-import type { CustomMessage } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
 import type { KeyId } from "@oh-my-pi/pi-tui";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { TSchema } from "@sinclair/typebox";
 import * as TypeBox from "@sinclair/typebox";
+import { type ExtensionModule, extensionModuleCapability } from "../../capability/extension-module";
+import { loadCapability } from "../../discovery";
+import { expandPath, getExtensionNameFromPath } from "../../discovery/helpers";
+import type { ExecOptions } from "../../exec/exec";
+import { execCommand } from "../../exec/exec";
+import type { CustomMessage } from "../../session/messages";
+import { EventBus } from "../../utils/event-bus";
 import type {
 	Extension,
 	ExtensionAPI,

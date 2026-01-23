@@ -1,28 +1,26 @@
 import { relative } from "node:path";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
-import { runAgenticCommit } from "@oh-my-pi/pi-coding-agent/commit/agentic";
+import { logger } from "@oh-my-pi/pi-utils";
+import { renderPromptTemplate } from "../config/prompt-templates";
+import { SettingsManager } from "../config/settings-manager";
+import { discoverAuthStorage, discoverModels } from "../sdk";
+import { loadProjectContextFiles } from "../system-prompt";
+import { runAgenticCommit } from "./agentic";
 import {
 	extractScopeCandidates,
 	generateConventionalAnalysis,
 	generateSummary,
 	validateAnalysis,
 	validateSummary,
-} from "@oh-my-pi/pi-coding-agent/commit/analysis";
-import { runChangelogFlow } from "@oh-my-pi/pi-coding-agent/commit/changelog";
-import { ControlledGit } from "@oh-my-pi/pi-coding-agent/commit/git";
-import { runMapReduceAnalysis, shouldUseMapReduce } from "@oh-my-pi/pi-coding-agent/commit/map-reduce";
-import { formatCommitMessage } from "@oh-my-pi/pi-coding-agent/commit/message";
-import { resolvePrimaryModel, resolveSmolModel } from "@oh-my-pi/pi-coding-agent/commit/model-selection";
-import summaryRetryPrompt from "@oh-my-pi/pi-coding-agent/commit/prompts/summary-retry.md" with { type: "text" };
-import typesDescriptionPrompt from "@oh-my-pi/pi-coding-agent/commit/prompts/types-description.md" with {
-	type: "text",
-};
-import type { CommitCommandArgs, ConventionalAnalysis } from "@oh-my-pi/pi-coding-agent/commit/types";
-import { renderPromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
-import { discoverAuthStorage, discoverModels } from "@oh-my-pi/pi-coding-agent/sdk";
-import { loadProjectContextFiles } from "@oh-my-pi/pi-coding-agent/system-prompt";
-import { logger } from "@oh-my-pi/pi-utils";
+} from "./analysis";
+import { runChangelogFlow } from "./changelog";
+import { ControlledGit } from "./git";
+import { runMapReduceAnalysis, shouldUseMapReduce } from "./map-reduce";
+import { formatCommitMessage } from "./message";
+import { resolvePrimaryModel, resolveSmolModel } from "./model-selection";
+import summaryRetryPrompt from "./prompts/summary-retry.md" with { type: "text" };
+import typesDescriptionPrompt from "./prompts/types-description.md" with { type: "text" };
+import type { CommitCommandArgs, ConventionalAnalysis } from "./types";
 
 const SUMMARY_MAX_CHARS = 72;
 const RECENT_COMMITS_COUNT = 8;

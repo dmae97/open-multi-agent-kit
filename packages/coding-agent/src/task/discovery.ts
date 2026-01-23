@@ -14,9 +14,9 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { findAllNearestProjectConfigDirs, getConfigDirs } from "@oh-my-pi/pi-coding-agent/config";
-import { parseAgentFields } from "@oh-my-pi/pi-coding-agent/discovery/helpers";
-import { parseFrontmatter } from "@oh-my-pi/pi-coding-agent/utils/frontmatter";
+import { findAllNearestProjectConfigDirs, getConfigDirs } from "../config";
+import { parseAgentFields } from "../discovery/helpers";
+import { parseFrontmatter } from "../utils/frontmatter";
 import { loadBundledAgents } from "./agents";
 import type { AgentDefinition, AgentSource } from "./types";
 

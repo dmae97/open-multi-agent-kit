@@ -1,7 +1,8 @@
+import { describe, expect, it } from "bun:test";
 import { getModel } from "@oh-my-pi/pi-ai/models";
 import { stream } from "@oh-my-pi/pi-ai/stream";
 import type { Context, Model } from "@oh-my-pi/pi-ai/types";
-import { describe, expect, it } from "vitest";
+import { e2eApiKey } from "./oauth";
 
 function makeContext(): Context {
 	return {
@@ -15,7 +16,7 @@ function makeContext(): Context {
 	};
 }
 
-describe.skipIf(!process.env.OPENAI_API_KEY)("xhigh reasoning", () => {
+describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("xhigh reasoning", () => {
 	describe("codex-max (supports xhigh)", () => {
 		// Note: codex models only support the responses API, not chat completions
 		it("should work with openai-responses", async () => {

@@ -2,7 +2,7 @@
  * Types for the Extension Control Center dashboard.
  */
 
-import type { SourceMeta } from "@oh-my-pi/pi-coding-agent/capability/types";
+import type { SourceMeta } from "../../../capability/types";
 
 /**
  * Extension kinds matching capability types.

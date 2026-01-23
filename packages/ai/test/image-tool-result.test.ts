@@ -1,11 +1,11 @@
+import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Api, Context, Model, Tool, ToolResultMessage } from "@oh-my-pi/pi-ai";
 import { complete, getModel } from "@oh-my-pi/pi-ai";
 import type { OptionsForApi } from "@oh-my-pi/pi-ai/types";
 import { Type } from "@sinclair/typebox";
-import { describe, expect, it } from "vitest";
-import { resolveApiKey } from "./oauth";
+import { e2eApiKey, resolveApiKey } from "./oauth";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([
@@ -201,76 +201,124 @@ async function handleToolWithTextAndImageResult<TApi extends Api>(model: Model<T
 }
 
 describe("Tool Results with Images", () => {
-	describe.skipIf(!process.env.GEMINI_API_KEY)("Google Provider (gemini-2.5-flash)", () => {
+	describe.skipIf(!e2eApiKey("GEMINI_API_KEY"))("Google Provider (gemini-2.5-flash)", () => {
 		const llm = getModel("google", "gemini-2.5-flash");
 
-		it("should handle tool result with only image", { retry: 3, timeout: 30000 }, async () => {
-			await handleToolWithImageResult(llm);
-		});
+		it(
+			"should handle tool result with only image",
+			async () => {
+				await handleToolWithImageResult(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 
-		it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, async () => {
-			await handleToolWithTextAndImageResult(llm);
-		});
+		it(
+			"should handle tool result with text and image",
+			async () => {
+				await handleToolWithTextAndImageResult(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions Provider (gpt-4o-mini)", () => {
+	describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("OpenAI Completions Provider (gpt-4o-mini)", () => {
 		const llm: Model<"openai-completions"> = { ...getModel("openai", "gpt-4o-mini"), api: "openai-completions" };
 
-		it("should handle tool result with only image", { retry: 3, timeout: 30000 }, async () => {
-			await handleToolWithImageResult(llm);
-		});
+		it(
+			"should handle tool result with only image",
+			async () => {
+				await handleToolWithImageResult(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 
-		it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, async () => {
-			await handleToolWithTextAndImageResult(llm);
-		});
+		it(
+			"should handle tool result with text and image",
+			async () => {
+				await handleToolWithTextAndImageResult(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses Provider (gpt-5-mini)", () => {
+	describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("OpenAI Responses Provider (gpt-5-mini)", () => {
 		const llm = getModel("openai", "gpt-5-mini");
 
-		it("should handle tool result with only image", { retry: 3, timeout: 30000 }, async () => {
-			await handleToolWithImageResult(llm);
-		});
+		it(
+			"should handle tool result with only image",
+			async () => {
+				await handleToolWithImageResult(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 
-		it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, async () => {
-			await handleToolWithTextAndImageResult(llm);
-		});
+		it(
+			"should handle tool result with text and image",
+			async () => {
+				await handleToolWithTextAndImageResult(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 
-	describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Anthropic Provider (claude-haiku-4-5)", () => {
+	describe.skipIf(!e2eApiKey("ANTHROPIC_API_KEY"))("Anthropic Provider (claude-haiku-4-5)", () => {
 		const model = getModel("anthropic", "claude-haiku-4-5");
 
-		it("should handle tool result with only image", { retry: 3, timeout: 30000 }, async () => {
-			await handleToolWithImageResult(model);
-		});
+		it(
+			"should handle tool result with only image",
+			async () => {
+				await handleToolWithImageResult(model);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 
-		it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, async () => {
-			await handleToolWithTextAndImageResult(model);
-		});
+		it(
+			"should handle tool result with text and image",
+			async () => {
+				await handleToolWithTextAndImageResult(model);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 
-	describe.skipIf(!process.env.OPENROUTER_API_KEY)("OpenRouter Provider (glm-4.5v)", () => {
+	describe.skipIf(!e2eApiKey("OPENROUTER_API_KEY"))("OpenRouter Provider (glm-4.5v)", () => {
 		const llm = getModel("openrouter", "z-ai/glm-4.5v");
 
-		it("should handle tool result with only image", { retry: 3, timeout: 30000 }, async () => {
-			await handleToolWithImageResult(llm);
-		});
+		it(
+			"should handle tool result with only image",
+			async () => {
+				await handleToolWithImageResult(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 
-		it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, async () => {
-			await handleToolWithTextAndImageResult(llm);
-		});
+		it(
+			"should handle tool result with text and image",
+			async () => {
+				await handleToolWithTextAndImageResult(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 
-	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Provider (pixtral-12b)", () => {
+	describe.skipIf(!e2eApiKey("MISTRAL_API_KEY"))("Mistral Provider (pixtral-12b)", () => {
 		const llm = getModel("mistral", "pixtral-12b");
 
-		it("should handle tool result with only image", { retry: 3, timeout: 30000 }, async () => {
-			await handleToolWithImageResult(llm);
-		});
+		it(
+			"should handle tool result with only image",
+			async () => {
+				await handleToolWithImageResult(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 
-		it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, async () => {
-			await handleToolWithTextAndImageResult(llm);
-		});
+		it(
+			"should handle tool result with text and image",
+			async () => {
+				await handleToolWithTextAndImageResult(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 
 	// =========================================================================
@@ -282,116 +330,114 @@ describe("Tool Results with Images", () => {
 
 		it.skipIf(!anthropicOAuthToken)(
 			"should handle tool result with only image",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				await handleToolWithImageResult(model, { apiKey: anthropicOAuthToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 
 		it.skipIf(!anthropicOAuthToken)(
 			"should handle tool result with text and image",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				await handleToolWithTextAndImageResult(model, { apiKey: anthropicOAuthToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 	});
 
 	describe("GitHub Copilot Provider", () => {
 		it.skipIf(!githubCopilotToken)(
 			"gpt-4o - should handle tool result with only image",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("github-copilot", "gpt-4o");
 				await handleToolWithImageResult(llm, { apiKey: githubCopilotToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 
 		it.skipIf(!githubCopilotToken)(
 			"gpt-4o - should handle tool result with text and image",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("github-copilot", "gpt-4o");
 				await handleToolWithTextAndImageResult(llm, { apiKey: githubCopilotToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 
 		it.skipIf(!githubCopilotToken)(
 			"claude-sonnet-4 - should handle tool result with only image",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("github-copilot", "claude-sonnet-4");
 				await handleToolWithImageResult(llm, { apiKey: githubCopilotToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 
 		it.skipIf(!githubCopilotToken)(
 			"claude-sonnet-4 - should handle tool result with text and image",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("github-copilot", "claude-sonnet-4");
 				await handleToolWithTextAndImageResult(llm, { apiKey: githubCopilotToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 	});
 
 	describe("Google Gemini CLI Provider", () => {
 		it.skipIf(!geminiCliToken)(
 			"gemini-2.5-flash - should handle tool result with only image",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("google-gemini-cli", "gemini-2.5-flash");
 				await handleToolWithImageResult(llm, { apiKey: geminiCliToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 
 		it.skipIf(!geminiCliToken)(
 			"gemini-2.5-flash - should handle tool result with text and image",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("google-gemini-cli", "gemini-2.5-flash");
 				await handleToolWithTextAndImageResult(llm, { apiKey: geminiCliToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 	});
 
 	describe("Google Antigravity Provider", () => {
 		it.skipIf(!antigravityToken)(
 			"gemini-3-flash - should handle tool result with only image",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("google-antigravity", "gemini-3-flash");
 				await handleToolWithImageResult(llm, { apiKey: antigravityToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 
 		it.skipIf(!antigravityToken)(
 			"gemini-3-flash - should handle tool result with text and image",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("google-antigravity", "gemini-3-flash");
 				await handleToolWithTextAndImageResult(llm, { apiKey: antigravityToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 
 		/** These two don't work, the model simply won't call the tool, works in pi
 		it.skipIf(!antigravityToken)(
 			"claude-sonnet-4-5 - should handle tool result with only image",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("google-antigravity", "claude-sonnet-4-5");
 				await handleToolWithImageResult(llm, { apiKey: antigravityToken });
 			},
-		);
+			{ retry: 3, timeout: 30000 });
 
 		it.skipIf(!antigravityToken)(
 			"claude-sonnet-4-5 - should handle tool result with text and image",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("google-antigravity", "claude-sonnet-4-5");
 				await handleToolWithTextAndImageResult(llm, { apiKey: antigravityToken });
 			},
-		);**/
+			{ retry: 3, timeout: 30000 });**/
 
 		// Note: gpt-oss-120b-medium does not support images, so not tested here
 	});
@@ -399,20 +445,20 @@ describe("Tool Results with Images", () => {
 	describe("OpenAI Codex Provider", () => {
 		it.skipIf(!openaiCodexToken)(
 			"gpt-5.2-codex - should handle tool result with only image",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("openai-codex", "gpt-5.2-codex");
 				await handleToolWithImageResult(llm, { apiKey: openaiCodexToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 
 		it.skipIf(!openaiCodexToken)(
 			"gpt-5.2-codex - should handle tool result with text and image",
-			{ retry: 3, timeout: 30000 },
 			async () => {
 				const llm = getModel("openai-codex", "gpt-5.2-codex");
 				await handleToolWithTextAndImageResult(llm, { apiKey: openaiCodexToken });
 			},
+			{ retry: 3, timeout: 30000 },
 		);
 	});
 });

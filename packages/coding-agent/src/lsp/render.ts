@@ -9,16 +9,11 @@
  */
 
 import type { AgentToolResult, RenderResultOptions } from "@oh-my-pi/pi-agent-core";
-import { getLanguageFromPath, type Theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import {
-	formatExpandHint,
-	formatMoreItems,
-	TRUNCATE_LENGTHS,
-	truncate,
-} from "@oh-my-pi/pi-coding-agent/tools/render-utils";
-import { renderOutputBlock, renderStatusLine } from "@oh-my-pi/pi-coding-agent/tui";
 import { type Component, Text } from "@oh-my-pi/pi-tui";
 import { highlight, supportsLanguage } from "cli-highlight";
+import { getLanguageFromPath, type Theme } from "../modes/theme/theme";
+import { formatExpandHint, formatMoreItems, TRUNCATE_LENGTHS, truncate } from "../tools/render-utils";
+import { renderOutputBlock, renderStatusLine } from "../tui";
 import type { LspParams, LspToolDetails } from "./types";
 
 // =============================================================================

@@ -44,7 +44,8 @@
 - Added two-level mermaid caching with pending deduplication to prevent redundant renders
 - Added Python kernel session pooling with MAX_KERNEL_SESSIONS limit and automatic eviction of oldest sessions
 - Added automatic idle kernel session cleanup timer (5-minute timeout, 30-second interval)
-- Added WASM binary generation script for photon module distribution
+- Added types/assets/index.d.ts for global TypeScript module declarations supporting `.md`, `.py`, and `.wasm?raw` imports
+- Added bunfig.toml loader configuration for importing markdown, Python, and WASM files as text modules
 
 ### Changed
 - Changed changelog diff truncation limit to be configurable via settings
@@ -98,6 +99,9 @@
 - Changed AuthStorage from constructor-based instantiation to async factory method (AuthStorage.create())
 - Changed Python kernel resource management with gateway shutdown on session disposal
 - Updated TypeScript configuration for better publish-time configuration handling with tsconfig.publish.json
+- Updated TypeScript and Bun configuration for monorepo-wide build consistency and reduced boilerplate
+- Removed WASM base64 encoding build script; imports now use Bun loader with `wasm?raw` query parameter
+- Unified TypeScript checking pipeline with tsgo-based configuration instead of per-package tsconfig.publish.json boilerplate
 
 ### Fixed
 - Fixed database busy errors during concurrent access by adding retry logic with exponential backoff when opening storage

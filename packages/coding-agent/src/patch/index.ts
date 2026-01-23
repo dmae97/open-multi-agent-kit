@@ -11,20 +11,20 @@
 import { mkdir } from "node:fs/promises";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { StringEnum } from "@oh-my-pi/pi-ai";
-import { renderPromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
+import { Type } from "@sinclair/typebox";
+import { renderPromptTemplate } from "../config/prompt-templates";
 import {
 	createLspWritethrough,
 	type FileDiagnosticsResult,
 	flushLspWritethroughBatch,
 	type WritethroughCallback,
 	writethroughNoop,
-} from "@oh-my-pi/pi-coding-agent/lsp";
-import patchDescription from "@oh-my-pi/pi-coding-agent/prompts/tools/patch.md" with { type: "text" };
-import replaceDescription from "@oh-my-pi/pi-coding-agent/prompts/tools/replace.md" with { type: "text" };
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { outputMeta } from "@oh-my-pi/pi-coding-agent/tools/output-meta";
-import { resolveToCwd } from "@oh-my-pi/pi-coding-agent/tools/path-utils";
-import { Type } from "@sinclair/typebox";
+} from "../lsp";
+import patchDescription from "../prompts/tools/patch.md" with { type: "text" };
+import replaceDescription from "../prompts/tools/replace.md" with { type: "text" };
+import type { ToolSession } from "../tools";
+import { outputMeta } from "../tools/output-meta";
+import { resolveToCwd } from "../tools/path-utils";
 import { applyPatch } from "./applicator";
 import { generateDiffString, generateUnifiedDiffString, replaceText } from "./diff";
 import { DEFAULT_FUZZY_THRESHOLD, findMatch } from "./fuzzy";

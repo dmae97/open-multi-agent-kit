@@ -1,22 +1,3 @@
-import { calculateCost } from "@oh-my-pi/pi-ai/models";
-import { getEnvApiKey } from "@oh-my-pi/pi-ai/stream";
-import type {
-	Api,
-	AssistantMessage,
-	Context,
-	Model,
-	StopReason,
-	StreamFunction,
-	StreamOptions,
-	TextContent,
-	ThinkingContent,
-	Tool,
-	ToolCall,
-} from "@oh-my-pi/pi-ai/types";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
-import { parseStreamingJson } from "@oh-my-pi/pi-ai/utils/json-parse";
-import { formatErrorMessageWithRetryAfter } from "@oh-my-pi/pi-ai/utils/retry-after";
-import { sanitizeSurrogates } from "@oh-my-pi/pi-ai/utils/sanitize-unicode";
 import OpenAI from "openai";
 import type {
 	Tool as OpenAITool,
@@ -29,6 +10,25 @@ import type {
 	ResponseOutputMessage,
 	ResponseReasoningItem,
 } from "openai/resources/responses/responses";
+import { calculateCost } from "../models";
+import { getEnvApiKey } from "../stream";
+import type {
+	Api,
+	AssistantMessage,
+	Context,
+	Model,
+	StopReason,
+	StreamFunction,
+	StreamOptions,
+	TextContent,
+	ThinkingContent,
+	Tool,
+	ToolCall,
+} from "../types";
+import { AssistantMessageEventStream } from "../utils/event-stream";
+import { parseStreamingJson } from "../utils/json-parse";
+import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
+import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import { transformMessages } from "./transform-messages";
 
 /** Fast deterministic hash to shorten long strings */

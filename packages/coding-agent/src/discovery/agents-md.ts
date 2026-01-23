@@ -7,10 +7,10 @@
  */
 
 import { dirname, join, sep } from "node:path";
-import { registerProvider } from "@oh-my-pi/pi-coding-agent/capability";
-import { type ContextFile, contextFileCapability } from "@oh-my-pi/pi-coding-agent/capability/context-file";
-import { readFile } from "@oh-my-pi/pi-coding-agent/capability/fs";
-import type { LoadContext, LoadResult } from "@oh-my-pi/pi-coding-agent/capability/types";
+import { registerProvider } from "../capability";
+import { type ContextFile, contextFileCapability } from "../capability/context-file";
+import { readFile } from "../capability/fs";
+import type { LoadContext, LoadResult } from "../capability/types";
 import { calculateDepth, createSourceMeta } from "./helpers";
 
 const PROVIDER_ID = "agents-md";

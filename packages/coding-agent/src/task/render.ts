@@ -6,8 +6,10 @@
  */
 
 import path from "node:path";
-import type { RenderResultOptions } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools/types";
-import type { Theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
+import type { Component } from "@oh-my-pi/pi-tui";
+import { Container, Text } from "@oh-my-pi/pi-tui";
+import type { RenderResultOptions } from "../extensibility/custom-tools/types";
+import type { Theme } from "../modes/theme/theme";
 import {
 	formatBadge,
 	formatDuration,
@@ -15,17 +17,15 @@ import {
 	formatStatusIcon,
 	formatTokens,
 	truncate,
-} from "@oh-my-pi/pi-coding-agent/tools/render-utils";
+} from "../tools/render-utils";
 import {
 	type FindingPriority,
 	getPriorityInfo,
 	PRIORITY_LABELS,
 	type ReportFindingDetails,
 	type SubmitReviewDetails,
-} from "@oh-my-pi/pi-coding-agent/tools/review";
-import { renderStatusLine } from "@oh-my-pi/pi-coding-agent/tui";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { Container, Text } from "@oh-my-pi/pi-tui";
+} from "../tools/review";
+import { renderStatusLine } from "../tui";
 import { subprocessToolRegistry } from "./subprocess-tool-registry";
 import type { AgentProgress, SingleResult, TaskParams, TaskToolDetails } from "./types";
 

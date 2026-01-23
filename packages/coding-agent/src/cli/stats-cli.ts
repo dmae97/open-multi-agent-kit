@@ -4,8 +4,8 @@
  * Handles `omp stats` subcommand for viewing AI usage statistics.
  */
 
-import { APP_NAME } from "@oh-my-pi/pi-coding-agent/config";
 import chalk from "chalk";
+import { APP_NAME } from "../config";
 
 // =============================================================================
 // Types
@@ -106,7 +106,7 @@ export async function runStatsCommand(cmd: StatsCommandArgs): Promise<void> {
 	}
 
 	// Start the dashboard server
-	const { port } = startServer(cmd.port);
+	const { port } = await startServer(cmd.port);
 	console.log(chalk.green(`Dashboard available at: http://localhost:${port}`));
 	console.log("Press Ctrl+C to stop\n");
 

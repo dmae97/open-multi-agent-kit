@@ -1,15 +1,4 @@
 import type { AgentTool } from "@oh-my-pi/pi-agent-core";
-import { theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import {
-	computeEditDiff,
-	computePatchDiff,
-	type EditDiffError,
-	type EditDiffResult,
-} from "@oh-my-pi/pi-coding-agent/patch";
-import { BASH_DEFAULT_PREVIEW_LINES } from "@oh-my-pi/pi-coding-agent/tools/bash";
-import { PYTHON_DEFAULT_PREVIEW_LINES } from "@oh-my-pi/pi-coding-agent/tools/python";
-import { toolRenderers } from "@oh-my-pi/pi-coding-agent/tools/renderers";
-import { convertToPng } from "@oh-my-pi/pi-coding-agent/utils/image-convert";
 import {
 	Box,
 	Container,
@@ -22,6 +11,12 @@ import {
 	type TUI,
 } from "@oh-my-pi/pi-tui";
 import { sanitizeText } from "@oh-my-pi/pi-utils";
+import { theme } from "../../modes/theme/theme";
+import { computeEditDiff, computePatchDiff, type EditDiffError, type EditDiffResult } from "../../patch";
+import { BASH_DEFAULT_PREVIEW_LINES } from "../../tools/bash";
+import { PYTHON_DEFAULT_PREVIEW_LINES } from "../../tools/python";
+import { toolRenderers } from "../../tools/renderers";
+import { convertToPng } from "../../utils/image-convert";
 import { renderDiff } from "./diff";
 
 // Preview line limit for bash when not expanded

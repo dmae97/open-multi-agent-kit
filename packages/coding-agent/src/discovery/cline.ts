@@ -6,12 +6,12 @@
  */
 
 import { dirname, resolve } from "node:path";
-import { registerProvider } from "@oh-my-pi/pi-coding-agent/capability";
-import { readDirEntries, readFile } from "@oh-my-pi/pi-coding-agent/capability/fs";
-import type { Rule } from "@oh-my-pi/pi-coding-agent/capability/rule";
-import { ruleCapability } from "@oh-my-pi/pi-coding-agent/capability/rule";
-import type { LoadContext, LoadResult } from "@oh-my-pi/pi-coding-agent/capability/types";
-import { parseFrontmatter } from "@oh-my-pi/pi-coding-agent/utils/frontmatter";
+import { registerProvider } from "../capability";
+import { readDirEntries, readFile } from "../capability/fs";
+import type { Rule } from "../capability/rule";
+import { ruleCapability } from "../capability/rule";
+import type { LoadContext, LoadResult } from "../capability/types";
+import { parseFrontmatter } from "../utils/frontmatter";
 import { createSourceMeta, loadFilesFromDir } from "./helpers";
 
 const PROVIDER_ID = "cline";
