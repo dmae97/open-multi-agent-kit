@@ -1,13 +1,13 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { rename } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { logger } from "@oh-my-pi/pi-utils";
-import { YAML } from "bun";
 import { type Settings as SettingsItem, settingsCapability } from "$c/capability/settings";
 import { getAgentDbPath, getAgentDir, getConfigPath } from "$c/config";
 import { loadCapability } from "$c/discovery";
 import type { SymbolPreset } from "$c/modes/theme/theme";
 import { AgentStorage } from "$c/session/agent-storage";
+import { logger } from "@oh-my-pi/pi-utils";
+import { YAML } from "bun";
+import { existsSync, readFileSync } from "node:fs";
+import { rename } from "node:fs/promises";
+import { join } from "node:path";
 
 export interface CompactionSettings {
 	enabled?: boolean; // default: true
@@ -119,6 +119,15 @@ export interface PythonSettings {
 	sharedGateway?: boolean;
 }
 
+export interface CommitSettings {
+	mapReduceEnabled?: boolean;
+	mapReduceMinFiles?: number;
+	mapReduceMaxFileTokens?: number;
+	mapReduceTimeoutMs?: number;
+	mapReduceMaxConcurrency?: number;
+	changelogMaxDiffChars?: number;
+}
+
 export interface EditSettings {
 	fuzzyMatch?: boolean; // default: true (accept high-confidence fuzzy matches for whitespace/indentation)
 	fuzzyThreshold?: number; // default: 0.95 (similarity threshold for fuzzy matching)
@@ -216,6 +225,7 @@ export interface Settings {
 	mcp?: MCPSettings;
 	lsp?: LspSettings;
 	python?: PythonSettings;
+	commit?: CommitSettings;
 	edit?: EditSettings;
 	ttsr?: TtsrSettings;
 	todoCompletion?: TodoCompletionSettings;
@@ -615,8 +625,7 @@ export class SettingsManager {
 		// 3. Write merged settings to config.yml if we found any
 		if (migrated && Object.keys(settings).length > 0) {
 			try {
-				mkdirSync(dirname(configPath), { recursive: true });
-				await Bun.write(configPath, YAML.stringify(settings));
+				await Bun.write(configPath, YAML.stringify(settings, null, 2));
 				logger.debug("SettingsManager migrated settings to config.yml", { path: configPath });
 			} catch (error) {
 				logger.warn("SettingsManager failed to write config.yml", { path: configPath, error: String(error) });
@@ -683,8 +692,7 @@ export class SettingsManager {
 				const mergedSettings = deepMergeSettings(currentSettings, this.globalSettings);
 				this.globalSettings = mergedSettings;
 				// Write YAML
-				mkdirSync(dirname(this.configPath), { recursive: true });
-				await Bun.write(this.configPath, YAML.stringify(this.globalSettings));
+				await Bun.write(this.configPath, YAML.stringify(this.globalSettings, null, 2));
 			} catch (error) {
 				logger.warn("SettingsManager save failed", { error: String(error) });
 			}
@@ -852,6 +860,17 @@ export class SettingsManager {
 			enabled: this.getRetryEnabled(),
 			maxRetries: this.settings.retry?.maxRetries ?? 3,
 			baseDelayMs: this.settings.retry?.baseDelayMs ?? 2000,
+		};
+	}
+
+	getCommitSettings(): Required<CommitSettings> {
+		return {
+			mapReduceEnabled: this.settings.commit?.mapReduceEnabled ?? true,
+			mapReduceMinFiles: this.settings.commit?.mapReduceMinFiles ?? 4,
+			mapReduceMaxFileTokens: this.settings.commit?.mapReduceMaxFileTokens ?? 50_000,
+			mapReduceTimeoutMs: this.settings.commit?.mapReduceTimeoutMs ?? 120_000,
+			mapReduceMaxConcurrency: this.settings.commit?.mapReduceMaxConcurrency ?? 5,
+			changelogMaxDiffChars: this.settings.commit?.changelogMaxDiffChars ?? 120_000,
 		};
 	}
 
