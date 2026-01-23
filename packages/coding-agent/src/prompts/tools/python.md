@@ -16,26 +16,6 @@ The kernel persists between calls and between cells. **Imports, variables, and f
 - Earlier cells already ran—their state persists in the kernel
 - Resubmit with only the fixed cell (or the fixed cell + remaining cells)
 - Do NOT rewrite working cells or re-import modules
-
-**Use Python for user-facing operations:**
-- Displaying, concatenating, or merging files → `cat(*paths)`
-- Batch transformations across files → `batch(paths, fn)`, `rsed()`
-- Formatted output, tables, summaries
-- Any loop, conditional, or multi-step logic
-- Anything you'd write a bash script for
-
-**Use specialized tools for YOUR reconnaissance:**
-- Reading to understand code → Read tool
-- Searching to locate something → Grep tool
-- Finding files to identify targets → Find tool
-
-The distinction: Read/Grep/Find gather info for *your* decisions. Python executes *the user's* request.
-
-**Prefer Python over bash for:**
-- Loops and iteration → Python for-loops, not bash for/while
-- Text processing → `sed()`, `cols()`, `sort_lines()`, not sed/awk/cut
-- File operations → prelude helpers, not mv/cp/rm commands
-- Conditionals → Python if/else, not bash [[ ]]
 </instruction>
 
 <prelude>
