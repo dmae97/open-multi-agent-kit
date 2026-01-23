@@ -410,7 +410,7 @@ async function executeToolCalls(
 			result = await tool.execute(
 				toolCall.id,
 				validatedArgs,
-				signal,
+				tool.nonAbortable ? undefined : signal,
 				(partialResult) => {
 					stream.push({
 						type: "tool_execution_update",

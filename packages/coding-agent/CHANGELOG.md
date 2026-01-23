@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - Added `isolated` option to run tasks in isolated git worktrees
@@ -10,6 +9,11 @@
 
 ### Changed
 
+- Simplified tool parameter descriptions across all tools for brevity
+- Updated find tool to always sort results by modification time
+- Changed web-fetch timeout default from 20s to 45s maximum
+- Updated bash prompt to use `cwd` parameter instead of `workdir`
+- Simplified tool prompt documentation for better readability
 - Removed model parameter from task tool to use session model by default
 - Removed model parameter from gemini-image tool to use provider defaults
 - Improved variable display in task output with humanized keys for single variables

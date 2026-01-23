@@ -25,34 +25,23 @@ import {
 } from "./truncate";
 
 const grepSchema = Type.Object({
-	pattern: Type.String({ description: "Search pattern (regex or literal string)" }),
-	path: Type.Optional(Type.String({ description: "Directory or file to search (default: current directory)" })),
-	glob: Type.Optional(Type.String({ description: "Filter files by glob pattern, e.g. '*.ts' or '**/*.spec.ts'" })),
-	type: Type.Optional(Type.String({ description: "File type filter (e.g., 'ts', 'rust', 'py')" })),
-	ignoreCase: Type.Optional(
-		Type.Boolean({ description: "Force case-insensitive search (default: false, uses smart-case otherwise)" }),
-	),
-	caseSensitive: Type.Optional(
-		Type.Boolean({ description: "Force case-sensitive search (default: false, disables smart-case)" }),
-	),
-	literal: Type.Optional(
-		Type.Boolean({ description: "Treat pattern as literal string instead of regex (default: false)" }),
-	),
-	multiline: Type.Optional(
-		Type.Boolean({ description: "Enable multiline matching for cross-line patterns (default: false)" }),
-	),
-	context: Type.Optional(
-		Type.Number({ description: "Number of lines to show before and after each match (default: 0)" }),
-	),
-	limit: Type.Optional(Type.Number({ description: "Maximum number of matches to return (default: 100)" })),
+	pattern: Type.String({ description: "Search pattern (regex)" }),
+	path: Type.Optional(Type.String({ description: "Directory or file to search (default: cwd)" })),
+	glob: Type.Optional(Type.String({ description: "Glob filter, e.g. '*.ts', '**/*.spec.ts'" })),
+	type: Type.Optional(Type.String({ description: "File type filter, e.g. 'ts', 'py', 'rust'" })),
+	ignoreCase: Type.Optional(Type.Boolean({ description: "Force case-insensitive (default: smart-case)" })),
+	caseSensitive: Type.Optional(Type.Boolean({ description: "Force case-sensitive (default: smart-case)" })),
+	literal: Type.Optional(Type.Boolean({ description: "Treat pattern as literal, not regex (default: false)" })),
+	multiline: Type.Optional(Type.Boolean({ description: "Match across line boundaries (default: false)" })),
+	context: Type.Optional(Type.Number({ description: "Lines of context before/after match (default: 0)" })),
+	limit: Type.Optional(Type.Number({ description: "Max matches to return (default: 100)" })),
 	outputMode: Type.Optional(
 		StringEnum(["content", "files_with_matches", "count"], {
-			description:
-				"Output mode: 'content' shows matching lines, 'files_with_matches' shows only file paths, 'count' shows match counts per file (default: 'content')",
+			description: "Output format (default: content)",
 		}),
 	),
-	headLimit: Type.Optional(Type.Number({ description: "Limit output to first N results (default: unlimited)" })),
-	offset: Type.Optional(Type.Number({ description: "Skip first N results before applying headLimit (default: 0)" })),
+	headLimit: Type.Optional(Type.Number({ description: "Truncate output to first N results" })),
+	offset: Type.Optional(Type.Number({ description: "Skip first N results (default: 0)" })),
 });
 
 const DEFAULT_LIMIT = 100;

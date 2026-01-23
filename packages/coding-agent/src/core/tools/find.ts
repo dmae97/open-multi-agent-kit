@@ -17,19 +17,13 @@ import { PREVIEW_LIMITS, ToolUIKit } from "./render-utils";
 import { DEFAULT_MAX_BYTES, formatSize, type TruncationResult, truncateHead } from "./truncate";
 
 const findSchema = Type.Object({
-	pattern: Type.String({
-		description: "Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'",
-	}),
-	path: Type.Optional(Type.String({ description: "Directory to search in (default: current directory)" })),
-	limit: Type.Optional(Type.Number({ description: "Maximum number of results (default: 1000)" })),
+	pattern: Type.String({ description: "Glob pattern, e.g. '*.ts', '**/*.json'" }),
+	path: Type.Optional(Type.String({ description: "Directory to search (default: cwd)" })),
+	limit: Type.Optional(Type.Number({ description: "Max results (default: 1000)" })),
 	hidden: Type.Optional(Type.Boolean({ description: "Include hidden files (default: true)" })),
-	sortByMtime: Type.Optional(
-		Type.Boolean({ description: "Sort results by modification time, most recent first (default: false)" }),
-	),
 	type: Type.Optional(
 		StringEnum(["file", "dir", "all"], {
-			description:
-				"Filter by type: 'file' for files only, 'dir' for directories only, 'all' for both (default: 'all')",
+			description: "Filter: file, dir, or all (default: all)",
 		}),
 	),
 });
@@ -128,7 +122,7 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 		_onUpdate?: AgentToolUpdateCallback<FindToolDetails>,
 		_context?: AgentToolContext,
 	): Promise<AgentToolResult<FindToolDetails>> {
-		const { pattern, path: searchDir, limit, hidden, sortByMtime, type } = params;
+		const { pattern, path: searchDir, limit, hidden, type } = params;
 
 		return untilAborted(signal, async () => {
 			const searchPath = resolveToCwd(searchDir || ".", this.session.cwd);
@@ -139,7 +133,6 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 			const effectiveLimit = limit ?? DEFAULT_LIMIT;
 			const effectiveType = type ?? "all";
 			const includeHidden = hidden ?? true;
-			const shouldSortByMtime = sortByMtime ?? false;
 
 			// If custom operations provided with glob, use that instead of fd
 			if (this.customOps?.glob) {
@@ -318,24 +311,20 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 					relativePath += "/";
 				}
 
-				// When sorting by mtime, keep files that fail to stat with mtime 0
-				if (shouldSortByMtime) {
-					try {
-						const fullPath = path.join(searchPath, relativePath);
-						const stat = await Bun.file(fullPath).stat();
-						relativized.push(relativePath);
-						mtimes.push(stat.mtimeMs);
-					} catch {
-						relativized.push(relativePath);
-						mtimes.push(0);
-					}
-				} else {
+				// Get mtime for sorting (files that fail to stat get mtime 0)
+				try {
+					const fullPath = path.join(searchPath, relativePath);
+					const stat = await Bun.file(fullPath).stat();
 					relativized.push(relativePath);
+					mtimes.push(stat.mtimeMs);
+				} catch {
+					relativized.push(relativePath);
+					mtimes.push(0);
 				}
 			}
 
-			// Sort by mtime if requested (most recent first)
-			if (shouldSortByMtime && relativized.length > 0) {
+			// Sort by mtime (most recent first)
+			if (relativized.length > 0) {
 				const indexed = relativized.map((path, idx) => ({ path, mtime: mtimes[idx] }));
 				indexed.sort((a, b) => b.mtime - a.mtime);
 				relativized.length = 0;

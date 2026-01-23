@@ -38,20 +38,16 @@ export const webSearchSchema = Type.Object({
 	query: Type.String({ description: "Search query" }),
 	provider: Type.Optional(
 		StringEnum(["auto", "exa", "anthropic", "perplexity"], {
-			description: "Search provider (auto-detected if omitted or set to auto)",
+			description: "Search provider (default: auto)",
 		}),
 	),
-	num_results: Type.Optional(Type.Number({ description: "Maximum number of results to return" })),
+	num_results: Type.Optional(Type.Number({ description: "Max results to return" })),
 
 	// Common (Anthropic & Perplexity)
-	system_prompt: Type.Optional(
-		Type.String({
-			description: "System prompt to guide response style",
-		}),
-	),
+	system_prompt: Type.Optional(Type.String({ description: "System prompt for response style" })),
 	max_tokens: Type.Optional(
 		Type.Number({
-			description: "Maximum tokens in response, 1-16384, default 4096 (Anthropic only)",
+			description: "Max tokens, 1-16384 (default: 4096, Anthropic only)",
 			minimum: 1,
 			maximum: 16384,
 		}),
@@ -60,29 +56,21 @@ export const webSearchSchema = Type.Object({
 	// Perplexity-specific
 	model: Type.Optional(
 		StringEnum(["sonar", "sonar-pro"], {
-			description: "Perplexity model - sonar (fast) or sonar-pro (comprehensive research)",
+			description: "Perplexity model: sonar or sonar-pro",
 		}),
 	),
 	search_recency_filter: Type.Optional(
 		StringEnum(["day", "week", "month", "year"], {
-			description: "Filter results by recency (Perplexity only)",
+			description: "Recency filter (Perplexity)",
 		}),
 	),
 	search_domain_filter: Type.Optional(
-		Type.Array(Type.String(), {
-			description: "Domain filter - include domains, prefix with - to exclude (Perplexity only)",
-		}),
+		Type.Array(Type.String(), { description: "Domain filter, prefix - to exclude (Perplexity)" }),
 	),
 	search_context_size: Type.Optional(
-		StringEnum(["low", "medium", "high"], {
-			description: "Context size for cost control (Perplexity only)",
-		}),
+		StringEnum(["low", "medium", "high"], { description: "Context size (Perplexity)" }),
 	),
-	return_related_questions: Type.Optional(
-		Type.Boolean({
-			description: "Include follow-up question suggestions, default true (Perplexity only)",
-		}),
-	),
+	return_related_questions: Type.Optional(Type.Boolean({ description: "Include related questions (Perplexity)" })),
 });
 
 export type WebSearchParams = {

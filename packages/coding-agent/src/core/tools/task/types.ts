@@ -40,12 +40,12 @@ export const TASK_SUBAGENT_PROGRESS_CHANNEL = "task:subagent:progress";
 /** Single task item for parallel execution */
 export const taskItemSchema = Type.Object({
 	id: Type.String({
-		description: "Short task identifier for display (max 32 chars, CamelCase, e.g. 'SessionStore', 'WebFetchFix')",
+		description: "Task ID, CamelCase, max 32 chars",
 		maxLength: 32,
 	}),
-	description: Type.String({ description: "Short description for UI display" }),
+	description: Type.String({ description: "Short description for display" }),
 	vars: Type.Record(Type.String(), Type.String(), {
-		description: "Template variables to fill {{placeholders}} in context",
+		description: "Variables to fill {{placeholders}} in context",
 	}),
 });
 
@@ -53,22 +53,13 @@ export type TaskItem = Static<typeof taskItemSchema>;
 
 /** Task tool parameters */
 export const taskSchema = Type.Object({
-	agent: Type.String({ description: "Agent type to use for all tasks" }),
-	context: Type.String({ description: "Template with {{placeholders}} filled by task vars" }),
-	isolated: Type.Optional(
-		Type.Boolean({
-			description: "Run each task in an isolated git worktree",
-		}),
-	),
+	agent: Type.String({ description: "Agent type for all tasks" }),
+	context: Type.String({ description: "Template with {{placeholders}} for vars" }),
+	isolated: Type.Optional(Type.Boolean({ description: "Run in isolated git worktree" })),
 	output: Type.Optional(
-		Type.Record(Type.String(), Type.Unknown(), {
-			description: "JTD schema for structured subagent output",
-		}),
+		Type.Record(Type.String(), Type.Unknown(), { description: "JTD schema for structured output" }),
 	),
-	tasks: Type.Array(taskItemSchema, {
-		description: "Tasks to run in parallel",
-		maxItems: MAX_PARALLEL_TASKS,
-	}),
+	tasks: Type.Array(taskItemSchema, { description: "Tasks to run in parallel", maxItems: MAX_PARALLEL_TASKS }),
 });
 
 export type TaskParams = Static<typeof taskSchema>;

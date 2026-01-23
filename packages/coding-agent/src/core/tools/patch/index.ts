@@ -90,27 +90,21 @@ export { ApplyPatchError, EditMatchError, ParseError } from "./types";
 // ═══════════════════════════════════════════════════════════════════════════
 
 const replaceEditSchema = Type.Object({
-	path: Type.String({ description: "Path to the file to edit (relative or absolute)" }),
-	oldText: Type.String({
-		description: "Text to find and replace (high-confidence fuzzy matching for whitespace/indentation is always on)",
-	}),
-	newText: Type.String({ description: "New text to replace the old text with" }),
-	all: Type.Optional(Type.Boolean({ description: "Replace all occurrences instead of requiring unique match" })),
+	path: Type.String({ description: "File path (relative or absolute)" }),
+	oldText: Type.String({ description: "Text to find (fuzzy whitespace matching enabled)" }),
+	newText: Type.String({ description: "Replacement text" }),
+	all: Type.Optional(Type.Boolean({ description: "Replace all occurrences (default: unique match required)" })),
 });
 
 const patchEditSchema = Type.Object({
-	path: Type.String({ description: "Path to the file" }),
+	path: Type.String({ description: "File path" }),
 	op: Type.Optional(
 		StringEnum(["create", "delete", "update"], {
-			description: "The operation to perform (Defaults to 'update')",
+			description: "Operation (default: update)",
 		}),
 	),
-	rename: Type.Optional(Type.String({ description: "New path, if moving" })),
-	diff: Type.Optional(
-		Type.String({
-			description: "Diff hunk(s) for update. Full content for create.",
-		}),
-	),
+	rename: Type.Optional(Type.String({ description: "New path for move" })),
+	diff: Type.Optional(Type.String({ description: "Diff hunks (update) or full content (create)" })),
 });
 
 export type ReplaceParams = { path: string; oldText: string; newText: string; all?: boolean };

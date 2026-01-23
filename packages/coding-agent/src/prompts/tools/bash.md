@@ -13,7 +13,7 @@ Do NOT use Bash for:
 </critical>
 
 <instruction>
-- Use `workdir` parameter to run commands in a specific directory instead of `cd dir && ...`
+- Use `cwd` parameter to set working directory instead of `cd dir && ...`
 - Paths with spaces must use double quotes: `cd "/path/with spaces"`
 - For sequential dependent operations, chain with `&&`: `mkdir foo && cd foo && touch bar`
 - For parallel independent operations, make multiple tool calls in one message

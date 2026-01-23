@@ -18,9 +18,9 @@ import { formatTailTruncationNotice, type TruncationResult, truncateTail } from 
 export const BASH_DEFAULT_PREVIEW_LINES = 10;
 
 const bashSchema = Type.Object({
-	command: Type.String({ description: "Bash command to execute" }),
-	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (optional, no default timeout)" })),
-	cwd: Type.Optional(Type.String({ description: "Working directory for the command (default: current directory)" })),
+	command: Type.String({ description: "Command to execute" }),
+	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds" })),
+	cwd: Type.Optional(Type.String({ description: "Working directory (default: cwd)" })),
 });
 
 export interface BashToolDetails {

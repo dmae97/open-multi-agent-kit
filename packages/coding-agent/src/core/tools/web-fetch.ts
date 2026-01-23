@@ -872,11 +872,9 @@ async function renderUrl(
 // =============================================================================
 
 const webFetchSchema = Type.Object({
-	url: Type.String({ description: "The URL to fetch and render" }),
-	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (default: 20, max: 120)" })),
-	raw: Type.Optional(
-		Type.Boolean({ description: "Return raw content without site-specific rendering or LLM-friendly transforms" }),
-	),
+	url: Type.String({ description: "URL to fetch" }),
+	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (default: 20, max: 45)" })),
+	raw: Type.Optional(Type.Boolean({ description: "Return raw HTML without transforms" })),
 });
 
 export interface WebFetchToolDetails {

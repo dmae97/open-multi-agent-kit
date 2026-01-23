@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `nonAbortable` option to tools to ignore abort signals during execution
 
 ## [6.8.0] - 2026-01-20
 ### Changed

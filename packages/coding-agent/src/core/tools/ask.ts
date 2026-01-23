@@ -31,29 +31,21 @@ import { ToolUIKit } from "./render-utils";
 // =============================================================================
 
 const OptionItem = Type.Object({
-	label: Type.String({ description: "Display label for this option" }),
+	label: Type.String({ description: "Display label" }),
 });
 
 const QuestionItem = Type.Object({
-	id: Type.String({ description: "Short identifier for this question (e.g., 'auth', 'cache')" }),
-	question: Type.String({ description: "The question text" }),
-	options: Type.Array(OptionItem, { description: "Options for this question" }),
-	multi: Type.Optional(Type.Boolean({ description: "Allow multiple selections for this question" })),
+	id: Type.String({ description: "Question ID, e.g. 'auth', 'cache'" }),
+	question: Type.String({ description: "Question text" }),
+	options: Type.Array(OptionItem, { description: "Available options" }),
+	multi: Type.Optional(Type.Boolean({ description: "Allow multiple selections" })),
 });
 
 const askSchema = Type.Object({
-	question: Type.Optional(Type.String({ description: "The question to ask the user" })),
-	options: Type.Optional(Type.Array(OptionItem, { description: "Available options for the user to choose from." })),
-	multi: Type.Optional(
-		Type.Boolean({
-			description: "Allow multiple options to be selected (default: false)",
-		}),
-	),
-	questions: Type.Optional(
-		Type.Array(QuestionItem, {
-			description: "Multiple questions to ask in sequence, each with their own options",
-		}),
-	),
+	question: Type.Optional(Type.String({ description: "Question to ask" })),
+	options: Type.Optional(Type.Array(OptionItem, { description: "Available options" })),
+	multi: Type.Optional(Type.Boolean({ description: "Allow multiple selections (default: false)" })),
+	questions: Type.Optional(Type.Array(QuestionItem, { description: "Multiple questions in sequence" })),
 });
 
 /** Result for a single question */

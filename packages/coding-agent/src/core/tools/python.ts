@@ -41,22 +41,14 @@ function groupPreludeHelpers(helpers: PreludeHelper[]): PreludeCategory[] {
 export const pythonSchema = Type.Object({
 	cells: Type.Array(
 		Type.Object({
-			code: Type.String({
-				description:
-					"Python code for this cell. Keep it focused (imports, helper, test, use). No narrative text—put explanations in the assistant message or in the cell title.",
-			}),
-			title: Type.Optional(
-				Type.String({ description: "Short label for the cell (e.g., 'imports', 'parse helper')." }),
-			),
+			code: Type.String({ description: "Python code to execute" }),
+			title: Type.Optional(Type.String({ description: "Cell label, e.g. 'imports', 'helper'" })),
 		}),
-		{
-			description:
-				"Python cells to execute sequentially. Each cell runs in the same kernel—imports and variables persist. Keep cells small: one logical step each (import, define, test, use). If a cell fails, fix only that cell; earlier cells' state remains.",
-		},
+		{ description: "Cells to execute sequentially in persistent kernel" },
 	),
-	timeoutMs: Type.Optional(Type.Number({ description: "Timeout in milliseconds (default: 30000)" })),
-	cwd: Type.Optional(Type.String({ description: "Working directory for the command (default: current directory)" })),
-	reset: Type.Optional(Type.Boolean({ description: "Restart the kernel before executing this code" })),
+	timeoutMs: Type.Optional(Type.Number({ description: "Timeout in ms (default: 30000)" })),
+	cwd: Type.Optional(Type.String({ description: "Working directory (default: cwd)" })),
+	reset: Type.Optional(Type.Boolean({ description: "Restart kernel before execution" })),
 });
 export type PythonToolParams = Static<typeof pythonSchema>;
 
