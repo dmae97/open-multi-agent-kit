@@ -24,10 +24,6 @@ import { convertWithMarkitdown, fetchBinary } from "./web-scrapers/utils";
 // Types and Constants
 // =============================================================================
 
-const MIN_TIMEOUT = 1_000;
-const DEFAULT_TIMEOUT = 20_000;
-const MAX_TIMEOUT = 45_000;
-
 // Convertible document types (markitdown supported)
 const CONVERTIBLE_MIMES = new Set([
 	"application/pdf",
@@ -246,7 +242,7 @@ async function tryMdSuffix(url: string, timeout: number, signal?: AbortSignal): 
 		if (signal?.aborted) {
 			return null;
 		}
-		const result = await loadPage(candidate, { timeout: Math.min(timeout, MAX_TIMEOUT), signal });
+		const result = await loadPage(candidate, { timeout, signal });
 		if (result.ok && result.content.trim().length > 100 && !looksLikeHtml(result.content)) {
 			return result.content;
 		}
@@ -873,7 +869,7 @@ async function renderUrl(
 
 const webFetchSchema = Type.Object({
 	url: Type.String({ description: "URL to fetch" }),
-	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (default: 20, max: 45)" })),
+	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (default: 20)" })),
 	raw: Type.Optional(Type.Boolean({ description: "Return raw HTML without transforms" })),
 });
 
@@ -903,14 +899,17 @@ export class WebFetchTool implements AgentTool<typeof webFetchSchema, WebFetchTo
 		_onUpdate?: AgentToolUpdateCallback<WebFetchToolDetails>,
 		_context?: AgentToolContext,
 	): Promise<AgentToolResult<WebFetchToolDetails>> {
-		const { url, timeout = DEFAULT_TIMEOUT, raw = false } = params;
+		const { url, timeout: rawTimeout = 20, raw = false } = params;
+
+		// Auto-convert milliseconds to seconds if value > 1000 (16+ min is unreasonable)
+		const timeoutSec = rawTimeout > 1000 ? rawTimeout / 1000 : rawTimeout;
+
+		// Clamp to valid range (seconds)
+		const effectiveTimeout = Math.min(Math.max(timeoutSec, 1), 45);
 
 		if (signal?.aborted) {
 			throw new Error("Operation aborted");
 		}
-
-		// Clamp timeout
-		const effectiveTimeout = Math.min(Math.max(timeout, MIN_TIMEOUT), MAX_TIMEOUT);
 
 		const result = await renderUrl(url, effectiveTimeout, raw, signal);
 

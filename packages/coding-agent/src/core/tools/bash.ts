@@ -19,7 +19,7 @@ export const BASH_DEFAULT_PREVIEW_LINES = 10;
 
 const bashSchema = Type.Object({
 	command: Type.String({ description: "Command to execute" }),
-	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds" })),
+	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (default: 300)" })),
 	cwd: Type.Optional(Type.String({ description: "Working directory (default: cwd)" })),
 });
 
@@ -51,7 +51,7 @@ export class BashTool implements AgentTool<typeof bashSchema, BashToolDetails> {
 
 	public async execute(
 		_toolCallId: string,
-		{ command, timeout, cwd }: { command: string; timeout?: number; cwd?: string },
+		{ command, timeout: rawTimeout = 300, cwd }: { command: string; timeout?: number; cwd?: string },
 		signal?: AbortSignal,
 		onUpdate?: AgentToolUpdateCallback<BashToolDetails>,
 		ctx?: AgentToolContext,
@@ -82,12 +82,18 @@ export class BashTool implements AgentTool<typeof bashSchema, BashToolDetails> {
 			throw new Error(`Working directory is not a directory: ${commandCwd}`);
 		}
 
+		// Auto-convert milliseconds to seconds if value > 1000 (16+ min is unreasonable)
+		let timeoutSec = rawTimeout > 1000 ? rawTimeout / 1000 : rawTimeout;
+		// Clamp to reasonable range: 1s - 3600s (1 hour)
+		timeoutSec = Math.max(1, Math.min(3600, timeoutSec));
+		const timeoutMs = timeoutSec * 1000;
+
 		// Track output for streaming updates
 		let currentOutput = "";
 
 		const executorOptions: BashExecutorOptions = {
 			cwd: commandCwd,
-			timeout: timeout ? timeout * 1000 : undefined, // Convert to milliseconds
+			timeout: timeoutMs,
 			signal,
 			onChunk: (chunk) => {
 				currentOutput += chunk;

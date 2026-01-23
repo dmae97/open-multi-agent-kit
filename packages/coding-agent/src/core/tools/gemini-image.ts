@@ -105,13 +105,7 @@ const baseImageSchema = Type.Object(
 				description: "Optional input images for edits or variations.",
 			}),
 		),
-		timeout_seconds: Type.Optional(
-			Type.Number({
-				description: `Request timeout in seconds (default: ${DEFAULT_TIMEOUT_SECONDS}).`,
-				minimum: 1,
-				maximum: 600,
-			}),
-		),
+		timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (default: 120)" })),
 	},
 	{ additionalProperties: false },
 );
@@ -480,7 +474,11 @@ export const geminiImageTool: CustomTool<typeof geminiImageSchema, GeminiImageTo
 				}
 			}
 
-			const timeoutSeconds = params.timeout_seconds ?? DEFAULT_TIMEOUT_SECONDS;
+			const { timeout: rawTimeout = DEFAULT_TIMEOUT_SECONDS } = params;
+			// Auto-convert milliseconds to seconds if value > 1000 (16+ min is unreasonable)
+			let timeoutSeconds = rawTimeout > 1000 ? rawTimeout / 1000 : rawTimeout;
+			// Clamp to reasonable range: 1s - 600s (10 min)
+			timeoutSeconds = Math.max(1, Math.min(600, timeoutSeconds));
 			const requestSignal = createRequestSignal(signal, timeoutSeconds);
 
 			if (provider === "openrouter") {

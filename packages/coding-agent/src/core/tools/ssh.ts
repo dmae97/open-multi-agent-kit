@@ -20,7 +20,7 @@ const sshSchema = Type.Object({
 	host: Type.String({ description: "Host name from ssh.json or .ssh.json" }),
 	command: Type.String({ description: "Command to execute on the remote host" }),
 	cwd: Type.Optional(Type.String({ description: "Remote working directory (optional)" })),
-	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (optional, no default timeout)" })),
+	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (default: 60)" })),
 });
 
 export interface SSHToolDetails {
@@ -143,7 +143,7 @@ export class SshTool implements AgentTool<typeof sshSchema, SSHToolDetails> {
 
 	public async execute(
 		_toolCallId: string,
-		{ host, command, cwd, timeout }: SshToolParams,
+		{ host, command, cwd, timeout: rawTimeout = 60 }: SshToolParams,
 		signal?: AbortSignal,
 		onUpdate?: AgentToolUpdateCallback<SSHToolDetails>,
 		_ctx?: AgentToolContext,
@@ -159,10 +159,17 @@ export class SshTool implements AgentTool<typeof sshSchema, SSHToolDetails> {
 
 		const hostInfo = await ensureHostInfo(hostConfig);
 		const remoteCommand = buildRemoteCommand(command, cwd, hostInfo);
+
+		// Auto-convert milliseconds to seconds if value > 1000 (16+ min is unreasonable)
+		let timeoutSec = rawTimeout > 1000 ? rawTimeout / 1000 : rawTimeout;
+		// Clamp to reasonable range: 1s - 3600s (1 hour)
+		timeoutSec = Math.max(1, Math.min(3600, timeoutSec));
+		const timeoutMs = timeoutSec * 1000;
+
 		let currentOutput = "";
 
 		const result = await executeSSH(hostConfig, remoteCommand, {
-			timeout: timeout ? timeout * 1000 : undefined,
+			timeout: timeoutMs,
 			signal,
 			compatEnabled: hostInfo.compatEnabled,
 			onChunk: (chunk) => {

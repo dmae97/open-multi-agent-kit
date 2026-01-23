@@ -41,7 +41,7 @@ export const webSearchSchema = Type.Object({
 			description: "Search provider (default: auto)",
 		}),
 	),
-	num_results: Type.Optional(Type.Number({ description: "Max results to return" })),
+	limit: Type.Optional(Type.Number({ description: "Max results to return" })),
 
 	// Common (Anthropic & Perplexity)
 	system_prompt: Type.Optional(Type.String({ description: "System prompt for response style" })),
@@ -76,7 +76,7 @@ export const webSearchSchema = Type.Object({
 export type WebSearchParams = {
 	query: string;
 	provider?: "auto" | "exa" | "anthropic" | "perplexity";
-	num_results?: number;
+	limit?: number;
 	// Anthropic
 	system_prompt?: string;
 	max_tokens?: number;
@@ -272,14 +272,14 @@ async function executeWebSearch(
 			if (provider === "exa") {
 				response = await searchExa({
 					query: params.query,
-					num_results: params.num_results,
+					num_results: params.limit,
 				});
 			} else if (provider === "anthropic") {
 				response = await searchAnthropic({
 					query: params.query,
 					system_prompt: params.system_prompt,
 					max_tokens: params.max_tokens,
-					num_results: params.num_results,
+					num_results: params.limit,
 				});
 			} else {
 				response = await searchPerplexity({
@@ -290,7 +290,7 @@ async function executeWebSearch(
 					search_domain_filter: params.search_domain_filter,
 					search_context_size: params.search_context_size,
 					return_related_questions: params.return_related_questions,
-					num_results: params.num_results,
+					num_results: params.limit,
 				});
 			}
 

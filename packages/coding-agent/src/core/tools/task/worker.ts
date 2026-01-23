@@ -366,7 +366,7 @@ function createMCPProxyTool(metadata: MCPToolMetadata): CustomTool<TSchema> {
 }
 
 function getPythonCallTimeoutMs(params: PythonToolParams): number | undefined {
-	const timeout = params.timeout_ms;
+	const timeout = params.timeout;
 	if (typeof timeout === "number" && Number.isFinite(timeout) && timeout > 0) {
 		return Math.max(1000, Math.round(timeout * 1000) + 1000);
 	}

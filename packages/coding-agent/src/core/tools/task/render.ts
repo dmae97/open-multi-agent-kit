@@ -278,7 +278,16 @@ function renderOutputSection(
 
 function formatVarsInline(vars: Record<string, string>, theme: Theme): string {
 	const entries = Object.entries(vars);
-	if (entries.length === 0) return "Vars: none";
+	if (entries.length === 0) return "No variables";
+
+	// Single variable: show inline as "Key: value" without tree structure
+	if (entries.length === 1) {
+		const [key, value] = entries[0];
+		const humanKey = humanizeKey(key);
+		const displayValue = `"${truncate(value, 32, theme.format.ellipsis)}"`;
+		return `${humanKey}: ${displayValue}`;
+	}
+
 	const pairs = entries.map(([key, value]) => `${key}=${truncate(value, 24, theme.format.ellipsis)}`);
 	return `Vars: ${pairs.join(", ")}`;
 }

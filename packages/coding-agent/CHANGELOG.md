@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added `isolated` option to run tasks in isolated git worktrees
@@ -9,6 +10,13 @@
 
 ### Changed
 
+- Updated bash tool timeout parameter to default 300 seconds with auto-conversion from milliseconds
+- Updated python tool timeout parameter from timeout_ms to timeout with default 30 seconds
+- Updated ssh tool timeout parameter to default 60 seconds with auto-conversion from milliseconds
+- Updated gemini-image tool timeout parameter from timeout_seconds to timeout with default 120 seconds
+- Updated web-fetch tool timeout parameter to remove maximum limit and improve handling
+- Updated web-search tool parameter from num_results to limit for result count
+- Improved task output formatting to display single variables inline without tree structure
 - Updated MCP tool name handling to use direct server and tool name properties instead of parsing normalized names
 - Improved MCP tool metadata extraction to use explicit mcpToolName and mcpServerName properties
 - Updated edit tool parameters from camelCase to snake_case (oldText → old_text, newText → new_text)
@@ -25,6 +33,11 @@
 - Removed model parameter from task tool to use session model by default
 - Removed model parameter from gemini-image tool to use provider defaults
 - Improved variable display in task output with humanized keys for single variables
+
+### Fixed
+
+- Added timeout clamping to reasonable ranges across all tools (1s to 3600s for bash/ssh, 1s to 600s for python/gemini-image)
+- Fixed timeout parameter handling to auto-convert milliseconds to seconds when value exceeds 1000
 
 ## [7.0.0] - 2026-01-21
 ### Added

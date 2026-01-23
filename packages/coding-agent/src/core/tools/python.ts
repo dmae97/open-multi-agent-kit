@@ -46,7 +46,7 @@ export const pythonSchema = Type.Object({
 		}),
 		{ description: "Cells to execute sequentially in persistent kernel" },
 	),
-	timeout_ms: Type.Optional(Type.Number({ description: "Timeout in ms (default: 30000)" })),
+	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (default: 30)" })),
 	cwd: Type.Optional(Type.String({ description: "Working directory (default: cwd)" })),
 	reset: Type.Optional(Type.Boolean({ description: "Restart kernel before execution" })),
 });
@@ -166,7 +166,12 @@ export class PythonTool implements AgentTool<typeof pythonSchema> {
 			throw new Error("Python tool requires a session when not using proxy executor");
 		}
 
-		const { cells, timeout_ms = 30000, cwd, reset } = params;
+		const { cells, timeout: rawTimeout = 30, cwd, reset } = params;
+		// Auto-convert milliseconds to seconds if value > 1000 (16+ min is unreasonable)
+		let timeoutSec = rawTimeout > 1000 ? rawTimeout / 1000 : rawTimeout;
+		// Clamp to reasonable range: 1s - 600s (10 min)
+		timeoutSec = Math.max(1, Math.min(600, timeoutSec));
+		const timeoutMs = timeoutSec * 1000;
 		const controller = new AbortController();
 		const onAbort = () => controller.abort();
 		signal?.addEventListener("abort", onAbort, { once: true });
@@ -256,7 +261,7 @@ export class PythonTool implements AgentTool<typeof pythonSchema> {
 			const sessionId = sessionFile ? `session:${sessionFile}:cwd:${commandCwd}` : `cwd:${commandCwd}`;
 			const baseExecutorOptions: Omit<PythonExecutorOptions, "reset"> = {
 				cwd: commandCwd,
-				timeoutMs: timeout_ms,
+				timeoutMs,
 				signal: controller.signal,
 				sessionId,
 				kernelMode: this.session.settings?.getPythonKernelMode?.() ?? "session",
