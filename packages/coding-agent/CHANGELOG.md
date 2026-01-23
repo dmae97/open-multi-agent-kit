@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added fetch tool for URL content retrieval with enhanced processing capabilities
@@ -10,6 +11,11 @@
 
 ### Changed
 
+- Updated task decomposition guidance with clearer triggers for using Task tool
+- Added mandatory CHECKPOINT step for task evaluation before first tool call
+- Enhanced skills and rules checking with explicit validation requirements
+- Improved task decomposition criteria with dependency analysis
+- Added failure conditions for checkpoint and parallel processing validation
 - Renamed web_fetch tool to fetch for consistency and brevity
 - Updated output tool to automatically convert JSON to YAML for better readability
 - Removed format parameter from output tool to simplify usage
