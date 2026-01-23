@@ -900,7 +900,7 @@ export const pythonToolRenderer = {
 								spinnerFrame: options.spinnerFrame,
 								duration: cell.durationMs,
 								output: outputLines.length > 0 ? outputLines.join("\n") : undefined,
-							outputMaxLines: outputLines.length,
+								outputMaxLines: outputLines.length,
 								codeMaxLines: expanded ? Number.POSITIVE_INFINITY : PYTHON_DEFAULT_PREVIEW_LINES,
 								expanded,
 								width,

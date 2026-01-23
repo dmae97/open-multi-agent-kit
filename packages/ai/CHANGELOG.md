@@ -2,8 +2,8 @@
 
 ## [Unreleased]
 
-### Changed
-- Updated TypeScript configuration for better publish-time configuration handling with tsconfig.publish.json
+### Fixed
+- Fixed orphaned tool result handling by tracking skipped tool call IDs in message conversion to prevent dangling references
 ## [8.0.0] - 2026-01-23
 
 ### Fixed

@@ -727,6 +727,8 @@ function convertMessages(
 	isOAuthToken: boolean,
 ): MessageParam[] {
 	const params: MessageParam[] = [];
+	// Track tool call IDs from skipped assistant messages to also skip their results
+	let skippedToolCallIds: string[] | null = null;
 
 	// Transform messages for cross-provider compatibility
 	const transformedMessages = transformMessages(messages, model);
@@ -779,6 +781,31 @@ function convertMessages(
 			// Skip messages with undefined/null content
 			if (!msg.content || !Array.isArray(msg.content)) continue;
 
+			// When interleaved thinking is enabled, Anthropic requires the last assistant
+			// message to start with a thinking block. If the first content block is a thinking
+			// block with a missing/invalid signature (e.g., from aborted stream), we must skip
+			// the entire message to avoid API rejection. Checking the first non-empty block.
+			const firstContentBlock = msg.content.find(
+				(b) =>
+					(b.type === "text" && b.text.trim().length > 0) ||
+					(b.type === "thinking" && b.thinking.trim().length > 0) ||
+					b.type === "toolCall",
+			);
+			if (
+				firstContentBlock?.type === "thinking" &&
+				(!firstContentBlock.thinkingSignature || firstContentBlock.thinkingSignature.trim().length === 0)
+			) {
+				// Skip this assistant message - it has corrupt thinking that would break the API.
+				// Also track any tool calls in this message so we can skip their results.
+				for (const block of msg.content) {
+					if (block.type === "toolCall") {
+						skippedToolCallIds ??= [];
+						skippedToolCallIds.push(block.id);
+					}
+				}
+				continue;
+			}
+
 			const blocks: Array<ContentBlockParam & CacheControlBlock> = [];
 
 			for (const block of msg.content) {
@@ -824,23 +851,27 @@ function convertMessages(
 			const toolResults: Array<ContentBlockParam & CacheControlBlock> = [];
 
 			// Add the current tool result
-			toolResults.push({
-				type: "tool_result",
-				tool_use_id: sanitizeToolCallId(msg.toolCallId),
-				content: convertContentBlocks(msg.content),
-				is_error: msg.isError,
-			});
+			if (!skippedToolCallIds?.includes(msg.toolCallId)) {
+				toolResults.push({
+					type: "tool_result",
+					tool_use_id: sanitizeToolCallId(msg.toolCallId),
+					content: convertContentBlocks(msg.content),
+					is_error: msg.isError,
+				});
+			}
 
 			// Look ahead for consecutive toolResult messages
 			let j = i + 1;
 			while (j < transformedMessages.length && transformedMessages[j].role === "toolResult") {
 				const nextMsg = transformedMessages[j] as ToolResultMessage; // We know it's a toolResult
-				toolResults.push({
-					type: "tool_result",
-					tool_use_id: sanitizeToolCallId(nextMsg.toolCallId),
-					content: convertContentBlocks(nextMsg.content),
-					is_error: nextMsg.isError,
-				});
+				if (!skippedToolCallIds?.includes(nextMsg.toolCallId)) {
+					toolResults.push({
+						type: "tool_result",
+						tool_use_id: sanitizeToolCallId(nextMsg.toolCallId),
+						content: convertContentBlocks(nextMsg.content),
+						is_error: nextMsg.isError,
+					});
+				}
 				j++;
 			}
 

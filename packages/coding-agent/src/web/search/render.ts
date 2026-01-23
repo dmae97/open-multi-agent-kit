@@ -126,10 +126,8 @@ export function renderWebSearchResult(
 		{
 			icon: sourceCount > 0 ? "success" : "warning",
 			title: "Web Search",
-			description: queryPreview ?? providerLabel,
-			meta: queryPreview
-				? [providerLabel, formatCount("source", sourceCount)]
-				: [providerLabel, formatCount("source", sourceCount)],
+			description: providerLabel,
+			meta: [formatCount("source", sourceCount)],
 		},
 		theme,
 	);
@@ -241,6 +239,13 @@ export function renderWebSearchResult(
 	}
 
 	const sections = [
+		...(queryPreview
+			? [
+					{
+						lines: [`${theme.fg("muted", "Query:")} ${theme.fg("text", queryPreview)}`],
+					},
+				]
+			: []),
 		{ label: theme.fg("toolTitle", "Answer"), lines: answerTree },
 		{
 			label: theme.fg("toolTitle", "Sources"),

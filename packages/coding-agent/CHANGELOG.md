@@ -106,6 +106,7 @@
 - Handle undefined code parameter in code cell renderer
 - Fixed indentation formatting in split-commit tool function signature
 - Fixed changelog application to process proposals containing only deletion entries without additions
+- Fixed indentation formatting in Python tool output renderer
 ## [8.0.0] - 2026-01-23
 ### Added
 
