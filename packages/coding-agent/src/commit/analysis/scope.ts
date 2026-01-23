@@ -34,6 +34,7 @@ export interface ScopeCandidatesResult {
 export function extractScopeCandidates(numstat: NumstatEntry[]): ScopeCandidatesResult {
 	const componentLines = new Map<string, number>();
 	const paths: string[] = [];
+	const distinctRoots = new Set<string>();
 	let totalLines = 0;
 
 	for (const entry of numstat) {
@@ -42,6 +43,10 @@ export function extractScopeCandidates(numstat: NumstatEntry[]): ScopeCandidates
 		const normalizedPath = normalizePathForScope(entry.path);
 		if (isExcludedFile(normalizedPath)) continue;
 		paths.push(normalizedPath);
+		const root = extractTopLevelRoot(normalizedPath);
+		if (root) {
+			distinctRoots.add(root);
+		}
 		totalLines += linesChanged;
 		const components = extractComponentsFromPath(normalizedPath);
 		for (const component of components) {
@@ -57,7 +62,7 @@ export function extractScopeCandidates(numstat: NumstatEntry[]): ScopeCandidates
 	}
 
 	const candidates = buildScopeCandidates(componentLines, totalLines);
-	const isWide = isWideChange(candidates, 0.6);
+	const isWide = isWideChange(candidates, 0.6, distinctRoots.size);
 	if (isWide) {
 		const pattern = analyzeWideChange(paths);
 		if (pattern) {
@@ -99,7 +104,8 @@ function buildScopeCandidates(componentLines: Map<string, number>, totalLines: n
 	return candidates.sort((a, b) => b.confidence - a.confidence);
 }
 
-function isWideChange(candidates: ScopeCandidate[], threshold: number): boolean {
+function isWideChange(candidates: ScopeCandidate[], threshold: number, distinctRoots: number): boolean {
+	if (distinctRoots >= 3) return true;
 	const top = candidates[0];
 	if (!top) return false;
 	return top.percentage / 100 < threshold;
@@ -141,6 +147,26 @@ function extractComponentsFromPath(path: string): string[] {
 	}
 
 	return components;
+}
+
+function extractTopLevelRoot(path: string): string | null {
+	const segments = path.split("/").filter((segment) => segment.length > 0);
+	if (segments.length === 0) return null;
+	if (segments.length === 1) {
+		return segments[0]!.startsWith(".") ? null : "(root)";
+	}
+
+	for (let index = 0; index < segments.length; index += 1) {
+		const segment = segments[index] ?? "";
+		if (PLACEHOLDER_DIRS.has(segment) && segments.length > index + 1) {
+			continue;
+		}
+		if (SKIP_DIRS.has(segment)) continue;
+		if (segment.startsWith(".")) continue;
+		return segment;
+	}
+
+	return null;
 }
 
 function normalizePathForScope(path: string): string {
