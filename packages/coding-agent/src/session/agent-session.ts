@@ -27,14 +27,15 @@ import type {
 import { isContextOverflow, modelsAreEqual, supportsXhigh } from "@oh-my-pi/pi-ai";
 import { abortableSleep, isEnoent, logger } from "@oh-my-pi/pi-utils";
 import { YAML } from "bun";
+import * as fs from "node:fs";
 import type { Rule } from "../capability/rule";
 import { getAgentDbPath } from "../config";
 import type { ModelRegistry } from "../config/model-registry";
 import { parseModelString } from "../config/model-resolver";
 import {
 	expandPromptTemplate,
-	type PromptTemplate,
 	parseCommandArgs,
+	type PromptTemplate,
 	renderPromptTemplate,
 } from "../config/prompt-templates";
 import type { SettingsManager, SkillsSettings } from "../config/settings-manager";
@@ -69,10 +70,10 @@ import { resolveToCwd } from "../tools/path-utils";
 import type { TodoItem } from "../tools/todo-write";
 import { extractFileMentions, generateFileMentionMessages } from "../utils/file-mentions";
 import {
-	type CompactionResult,
 	calculateContextTokens,
 	collectEntriesForBranchSummary,
 	compact,
+	type CompactionResult,
 	estimateTokens,
 	generateBranchSummary,
 	prepareCompaction,
@@ -80,8 +81,8 @@ import {
 } from "./compaction";
 import {
 	type BashExecutionMessage,
-	type BranchSummaryMessage,
 	bashExecutionToText,
+	type BranchSummaryMessage,
 	type CompactionSummaryMessage,
 	type CustomMessage,
 	type FileMentionMessage,
@@ -577,7 +578,7 @@ export class AgentSession {
 		this._streamingEditFileCache.clear();
 	}
 
-	private _preCacheStreamingEditFile(event: AgentEvent): void {
+	private async _preCacheStreamingEditFile(event: AgentEvent): Promise<void> {
 		if (!this.settingsManager.getEditStreamingAbort()) return;
 		if (event.type !== "message_update") return;
 		const assistantEvent = event.assistantMessageEvent;
@@ -598,14 +599,14 @@ export class AgentSession {
 		if (!path) return;
 
 		const resolvedPath = resolveToCwd(path, this.sessionManager.getCwd());
-		void this._ensureFileCache(resolvedPath);
+		this._ensureFileCache(resolvedPath);
 	}
 
-	private async _ensureFileCache(resolvedPath: string): Promise<void> {
+	private _ensureFileCache(resolvedPath: string): void {
 		if (this._streamingEditFileCache.has(resolvedPath)) return;
 
 		try {
-			const rawText = await Bun.file(resolvedPath).text();
+			const rawText = fs.readFileSync(resolvedPath, "utf-8");
 			const { text } = stripBom(rawText);
 			this._streamingEditFileCache.set(resolvedPath, normalizeToLF(text));
 		} catch {

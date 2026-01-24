@@ -49,6 +49,7 @@
 - Added color manipulation utilities (hexToHsv, hsvToHex, shiftHue) to pi-utils for accessible theme adjustments
 - Added color-blind mode setting for improved accessibility
 - Added filesystem error type guards (isEnoent, isEacces, isPerm, isEnotempty, isFsError, hasFsCode) to pi-utils for safe error handling
+- Added tarball installation test Dockerfile to validate npm publish/install flow
 
 ### Changed
 - Changed changelog diff truncation limit to be configurable via settings
@@ -109,6 +110,7 @@
 - Improved error logging in settings manager for config file access failures
 - Migrated node module imports from named to namespace imports across all packages for consistency with project guidelines
 - Improved filesystem error handling in extension loader with additional type guards (isEacces, hasFsCode) for permission and EPERM errors
+- Changed model discovery to synchronous file operations for more immediate initialization
 
 ### Fixed
 - Fixed database busy errors during concurrent access by adding retry logic with exponential backoff when opening storage

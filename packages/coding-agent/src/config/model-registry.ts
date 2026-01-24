@@ -2,8 +2,8 @@
  * Model registry - manages built-in and custom models, provides API key resolution.
  */
 
+import * as fs from "node:fs";
 import * as path from "node:path";
-
 import {
 	type Api,
 	getGitHubCopilotBaseUrl,
@@ -149,6 +149,8 @@ export class ModelRegistry {
 			}
 			return undefined;
 		});
+		// Load models synchronously in constructor
+		this.loadModels();
 	}
 
 	/**
@@ -191,10 +193,10 @@ export class ModelRegistry {
 	/**
 	 * Reload models from disk (built-in + custom from models.json).
 	 */
-	async refresh(): Promise<void> {
+	refresh(): void {
 		this.customProviderApiKeys.clear();
 		this.loadError = undefined;
-		await this.loadModels();
+		this.loadModels();
 	}
 
 	/**
@@ -204,7 +206,7 @@ export class ModelRegistry {
 		return this.loadError;
 	}
 
-	private async loadModels(): Promise<void> {
+	private loadModels() {
 		// Load custom models from models.json first (to know which providers to skip/override)
 		let customModels: Model<Api>[] = [];
 		let replacedProviders: Set<string> = new Set();
@@ -216,7 +218,7 @@ export class ModelRegistry {
 		}
 
 		for (const modelsPath of pathsToCheck) {
-			const result = await this.loadCustomModels(modelsPath);
+			const result = this.loadCustomModels(modelsPath);
 			if (!result.found) {
 				continue; // File doesn't exist, try next path
 			}
@@ -266,10 +268,10 @@ export class ModelRegistry {
 			});
 	}
 
-	private async loadCustomModels(modelsPath: string): Promise<CustomModelsResult> {
+	private loadCustomModels(modelsPath: string): CustomModelsResult {
 		let content: string;
 		try {
-			content = await Bun.file(modelsPath).text();
+			content = fs.readFileSync(modelsPath, "utf-8");
 		} catch (error) {
 			if (isEnoent(error)) {
 				return emptyCustomModelsResult();

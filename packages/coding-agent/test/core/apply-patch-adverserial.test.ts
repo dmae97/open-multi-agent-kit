@@ -219,11 +219,11 @@ describe("applyPatch adversarial inputs", () => {
 
 	test("preserves UTF-8 BOM and CRLF endings", async () => {
 		const filePath = path.join(tempDir, "bom.txt");
-		await Bun.write(filePath, "\uFEFFfoo\r\nbar\r\n");
+		fs.writeFileSync(filePath, "\uFEFFfoo\r\nbar\r\n");
 
 		await applyPatch({ path: "bom.txt", op: "update", diff: "@@\n-foo\n+FOO" }, { cwd: tempDir });
 
-		const content = await Bun.file(filePath).text();
+		const content = fs.readFileSync(filePath, "utf-8");
 		expect(content).toBe("\uFEFFFOO\r\nbar\r\n");
 	});
 

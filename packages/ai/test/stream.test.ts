@@ -1360,7 +1360,7 @@ describe("Generate E2E Tests", () => {
 	}
 
 	describe.skipIf(!ollamaInstalled)("Ollama Provider (gpt-oss-20b via OpenAI Completions)", () => {
-		let llm: Model<"openai-completions">;
+		let llm: Model<"openai-completions"> | undefined;
 		let ollamaProcess: ChildProcess | null = null;
 
 		beforeAll(async () => {
@@ -1430,6 +1430,7 @@ describe("Generate E2E Tests", () => {
 		it(
 			"should complete basic text generation",
 			async () => {
+				if (!llm) return;
 				await basicTextGeneration(llm, { apiKey: "test" });
 			},
 			{ retry: 3 },
@@ -1438,6 +1439,7 @@ describe("Generate E2E Tests", () => {
 		it(
 			"should handle tool calling",
 			async () => {
+				if (!llm) return;
 				await handleToolCall(llm, { apiKey: "test" });
 			},
 			{ retry: 3 },
@@ -1446,6 +1448,7 @@ describe("Generate E2E Tests", () => {
 		it(
 			"should handle streaming",
 			async () => {
+				if (!llm) return;
 				await handleStreaming(llm, { apiKey: "test" });
 			},
 			{ retry: 3 },
@@ -1454,6 +1457,7 @@ describe("Generate E2E Tests", () => {
 		it(
 			"should handle thinking mode",
 			async () => {
+				if (!llm) return;
 				await handleThinking(llm, { apiKey: "test", reasoningEffort: "medium" });
 			},
 			{ retry: 3 },
@@ -1462,6 +1466,7 @@ describe("Generate E2E Tests", () => {
 		it(
 			"should handle multi-turn with thinking and tools",
 			async () => {
+				if (!llm) return;
 				await multiTurn(llm, { apiKey: "test", reasoningEffort: "medium" });
 			},
 			{ retry: 3 },

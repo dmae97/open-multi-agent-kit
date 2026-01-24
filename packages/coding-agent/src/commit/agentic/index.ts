@@ -27,9 +27,9 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 	const cwd = process.cwd();
 	const git = new ControlledGit(cwd);
 	const [settingsManager, authStorage] = await Promise.all([SettingsManager.create(cwd), discoverAuthStorage()]);
-	const modelRegistryPromise = discoverModels(authStorage);
 
 	writeStdout("● Resolving model...");
+	const modelRegistry = discoverModels(authStorage);
 	const stagedFilesPromise = (async () => {
 		let stagedFiles = await git.getStagedFiles();
 		if (stagedFiles.length === 0) {
@@ -40,7 +40,6 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 		return stagedFiles;
 	})();
 
-	const modelRegistry = await modelRegistryPromise;
 	const primaryModelPromise = resolvePrimaryModel(args.model, settingsManager, modelRegistry);
 	const [primaryModelResult, stagedFiles] = await Promise.all([primaryModelPromise, stagedFilesPromise]);
 	const { model: primaryModel, apiKey: primaryApiKey } = primaryModelResult;

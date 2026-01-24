@@ -65,7 +65,7 @@ describe("ModelRegistry", () => {
 	}
 
 	describe("baseUrl override (no custom models)", () => {
-		test("overriding baseUrl keeps all built-in models", () => {
+		test("overriding baseUrl keeps all built-in models", async () => {
 			writeRawModelsJson({
 				anthropic: overrideConfig("https://my-proxy.example.com/v1"),
 			});
@@ -78,7 +78,7 @@ describe("ModelRegistry", () => {
 			expect(anthropicModels.some((m) => m.id.includes("claude"))).toBe(true);
 		});
 
-		test("overriding baseUrl changes URL on all built-in models", () => {
+		test("overriding baseUrl changes URL on all built-in models", async () => {
 			writeRawModelsJson({
 				anthropic: overrideConfig("https://my-proxy.example.com/v1"),
 			});
@@ -92,7 +92,7 @@ describe("ModelRegistry", () => {
 			}
 		});
 
-		test("overriding headers merges with model headers", () => {
+		test("overriding headers merges with model headers", async () => {
 			writeRawModelsJson({
 				anthropic: overrideConfig("https://my-proxy.example.com/v1", {
 					"X-Custom-Header": "custom-value",
@@ -107,7 +107,7 @@ describe("ModelRegistry", () => {
 			}
 		});
 
-		test("baseUrl-only override does not affect other providers", () => {
+		test("baseUrl-only override does not affect other providers", async () => {
 			writeRawModelsJson({
 				anthropic: overrideConfig("https://my-proxy.example.com/v1"),
 			});
@@ -120,7 +120,7 @@ describe("ModelRegistry", () => {
 			expect(googleModels[0].baseUrl).not.toBe("https://my-proxy.example.com/v1");
 		});
 
-		test("can mix baseUrl override and full replacement", () => {
+		test("can mix baseUrl override and full replacement", async () => {
 			writeRawModelsJson({
 				// baseUrl-only for anthropic
 				anthropic: overrideConfig("https://anthropic-proxy.example.com/v1"),
@@ -164,7 +164,7 @@ describe("ModelRegistry", () => {
 	});
 
 	describe("provider replacement (with custom models)", () => {
-		test("custom provider with same name as built-in replaces built-in models", () => {
+		test("custom provider with same name as built-in replaces built-in models", async () => {
 			writeModelsJson({
 				anthropic: providerConfig("https://my-proxy.example.com/v1", [{ id: "claude-custom" }]),
 			});
@@ -177,7 +177,7 @@ describe("ModelRegistry", () => {
 			expect(anthropicModels[0].baseUrl).toBe("https://my-proxy.example.com/v1");
 		});
 
-		test("custom provider with same name as built-in does not affect other built-in providers", () => {
+		test("custom provider with same name as built-in does not affect other built-in providers", async () => {
 			writeModelsJson({
 				anthropic: providerConfig("https://my-proxy.example.com/v1", [{ id: "claude-custom" }]),
 			});
@@ -188,7 +188,7 @@ describe("ModelRegistry", () => {
 			expect(getModelsForProvider(registry, "openai").length).toBeGreaterThan(0);
 		});
 
-		test("multiple built-in providers can be overridden", () => {
+		test("multiple built-in providers can be overridden", async () => {
 			writeModelsJson({
 				anthropic: providerConfig("https://anthropic-proxy.example.com/v1", [{ id: "claude-proxy" }]),
 				google: providerConfig(

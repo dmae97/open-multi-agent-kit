@@ -26,7 +26,7 @@
  * ```
  */
 
-import * as fs from "node:fs/promises";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool, type ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { type Message, type Model, supportsXhigh } from "@oh-my-pi/pi-ai";
@@ -274,20 +274,19 @@ export async function discoverAuthStorage(agentDir: string = getDefaultAgentDir(
  * Prefers models.yml over models.json. Reads from primary path first,
  * then falls back to legacy paths (.pi, .claude).
  */
-export async function discoverModels(
-	authStorage: AuthStorage,
-	agentDir: string = getDefaultAgentDir(),
-): Promise<ModelRegistry> {
+export function discoverModels(authStorage: AuthStorage, agentDir: string = getDefaultAgentDir()): ModelRegistry {
 	const yamlPath = path.join(agentDir, "models.yml");
 	const jsonPath = path.join(agentDir, "models.json");
 
 	// Check existence of yaml and json files
-	let [yamlExists, jsonExists] = await Promise.all([Bun.file(yamlPath).exists(), Bun.file(jsonPath).exists()]);
+	let yamlExists = fs.existsSync(yamlPath);
+	let jsonExists = fs.existsSync(jsonPath);
 
 	// Migrate models.json to models.yml if yaml doesn't exist but json does
 	if (!yamlExists && jsonExists) {
-		await migrateModelsJsonToYaml(jsonPath, yamlPath);
-		[yamlExists, jsonExists] = await Promise.all([Bun.file(yamlPath).exists(), Bun.file(jsonPath).exists()]);
+		migrateModelsJsonToYaml(jsonPath, yamlPath);
+		yamlExists = fs.existsSync(yamlPath);
+		jsonExists = fs.existsSync(jsonPath);
 	}
 
 	// Prefer models.yml, fall back to models.json
@@ -297,36 +296,30 @@ export async function discoverModels(
 	const yamlPaths = getConfigDirPaths("models.yml", { project: false });
 	const jsonPaths = getConfigDirPaths("models.json", { project: false });
 	const allPaths = [...yamlPaths, ...jsonPaths];
-	const existenceResults = await Promise.all(
-		allPaths.map((p) =>
-			Bun.file(p)
-				.exists()
-				.then((exists) => ({ p, exists })),
-		),
-	);
+	const existenceResults = allPaths.map((p) => {
+		return { p, exists: fs.existsSync(p) };
+	});
 	const fallbackPaths = existenceResults.filter(({ p, exists }) => p !== primaryPath && exists).map(({ p }) => p);
 
 	logger.debug("discoverModels", { primaryPath, fallbackPaths });
-
-	const registry = new ModelRegistry(authStorage, primaryPath, fallbackPaths);
-	await registry.refresh();
-	return registry;
+	return new ModelRegistry(authStorage, primaryPath, fallbackPaths);
 }
 
 /**
  * Migrate models.json to models.yml.
  * Creates models.yml from models.json and renames the json file to .bak.
  */
-async function migrateModelsJsonToYaml(jsonPath: string, yamlPath: string): Promise<void> {
+function migrateModelsJsonToYaml(jsonPath: string, yamlPath: string): void {
 	try {
-		const content = await Bun.file(jsonPath).text();
+		const content = fs.readFileSync(jsonPath, "utf-8");
 		const parsed = JSON.parse(content);
 		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
 			logger.warn("migrateModelsJsonToYaml: invalid models.json structure", { path: jsonPath });
 			return;
 		}
-		await Bun.write(yamlPath, YAML.stringify(parsed, null, 2));
-		await fs.rename(jsonPath, `${jsonPath}.bak`);
+		fs.mkdirSync(path.dirname(yamlPath), { recursive: true });
+		fs.writeFileSync(yamlPath, YAML.stringify(parsed, null, 2));
+		fs.renameSync(jsonPath, `${jsonPath}.bak`);
 		logger.debug("migrateModelsJsonToYaml: migrated models.json to models.yml", { from: jsonPath, to: yamlPath });
 	} catch (error) {
 		logger.warn("migrateModelsJsonToYaml: migration failed", { error: String(error) });
@@ -608,7 +601,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	// Use provided or create AuthStorage and ModelRegistry
 	const authStorage = options.authStorage ?? (await discoverAuthStorage(agentDir));
-	const modelRegistry = options.modelRegistry ?? (await discoverModels(authStorage, agentDir));
+	const modelRegistry = options.modelRegistry ?? discoverModels(authStorage, agentDir);
 	time("discoverModels");
 
 	const settingsManager = options.settingsManager ?? (await SettingsManager.create(cwd, agentDir));

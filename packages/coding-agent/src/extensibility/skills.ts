@@ -72,34 +72,30 @@ export async function loadSkillsFromDir(options: LoadSkillsFromDirOptions): Prom
 
 	async function scanDir(dir: string): Promise<void> {
 		try {
+			// First check if this directory itself is a skill
+			const selfSkillFile = path.join(dir, "SKILL.md");
+			try {
+				const s = await fs.stat(selfSkillFile);
+				if (s.isFile()) {
+					await addSkill(selfSkillFile, dir, path.basename(dir));
+					// This directory is a skill, don't recurse
+					return;
+				}
+			} catch {
+				// No SKILL.md in this directory
+			}
+
+			// Recurse into subdirectories
 			const entries = await fs.readdir(dir, { withFileTypes: true });
-			const tasks: Promise<void>[] = [];
 
 			for (const entry of entries) {
 				if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
 
 				const fullPath = path.join(dir, entry.name);
 				if (entry.isDirectory()) {
-					const skillFile = path.join(fullPath, "SKILL.md");
-					tasks.push(
-						fs
-							.stat(skillFile)
-							.then((s) => {
-								if (s.isFile()) {
-									return addSkill(skillFile, fullPath, entry.name);
-								}
-							})
-							.catch(() => {
-								// No SKILL.md in this directory
-							}),
-					);
-					tasks.push(scanDir(fullPath));
-				} else if (entry.isFile() && entry.name === "SKILL.md") {
-					tasks.push(addSkill(fullPath, dir, path.basename(dir)));
+					await scanDir(fullPath);
 				}
 			}
-
-			await Promise.all(tasks);
 		} catch (err) {
 			warnings.push({ skillPath: dir, message: `Failed to read directory: ${err}` });
 		}
@@ -144,34 +140,30 @@ async function scanDirectoryForSkills(dir: string): Promise<LoadSkillsResult> {
 
 	async function scanDir(currentDir: string): Promise<void> {
 		try {
+			// First check if this directory itself is a skill
+			const selfSkillFile = path.join(currentDir, "SKILL.md");
+			try {
+				const s = await fs.stat(selfSkillFile);
+				if (s.isFile()) {
+					await addSkill(selfSkillFile, currentDir, path.basename(currentDir));
+					// This directory is a skill, don't recurse
+					return;
+				}
+			} catch {
+				// No SKILL.md in this directory
+			}
+
+			// Recurse into subdirectories
 			const entries = await fs.readdir(currentDir, { withFileTypes: true });
-			const tasks: Promise<void>[] = [];
 
 			for (const entry of entries) {
 				if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
 
 				const fullPath = path.join(currentDir, entry.name);
 				if (entry.isDirectory()) {
-					const skillFile = path.join(fullPath, "SKILL.md");
-					tasks.push(
-						fs
-							.stat(skillFile)
-							.then((s) => {
-								if (s.isFile()) {
-									return addSkill(skillFile, fullPath, entry.name);
-								}
-							})
-							.catch(() => {
-								// No SKILL.md in this directory
-							}),
-					);
-					tasks.push(scanDir(fullPath));
-				} else if (entry.isFile() && entry.name === "SKILL.md") {
-					tasks.push(addSkill(fullPath, currentDir, path.basename(currentDir)));
+					await scanDir(fullPath);
 				}
 			}
-
-			await Promise.all(tasks);
 		} catch (err) {
 			warnings.push({ skillPath: currentDir, message: `Failed to read directory: ${err}` });
 		}

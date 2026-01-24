@@ -571,7 +571,7 @@ export async function main(args: string[]) {
 
 	// Create AuthStorage and ModelRegistry upfront
 	const authStorage = await discoverAuthStorage();
-	const modelRegistry = await discoverModels(authStorage);
+	const modelRegistry = discoverModels(authStorage);
 	time("discoverModels");
 
 	if (parsed.version) {

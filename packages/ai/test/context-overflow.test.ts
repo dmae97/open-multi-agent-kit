@@ -458,7 +458,7 @@ describe("Context overflow error handling", () => {
 
 	describe.skipIf(!ollamaInstalled)("Ollama (local)", () => {
 		let ollamaProcess: ChildProcess | null = null;
-		let model: Model<"openai-completions">;
+		let model: Model<"openai-completions"> | undefined;
 
 		beforeAll(async () => {
 			// Check if model is available, if not pull it
@@ -519,6 +519,7 @@ describe("Context overflow error handling", () => {
 		});
 
 		it("gpt-oss:20b - should detect overflow via isContextOverflow (ollama silently truncates)", async () => {
+			if (!model) return;
 			const result = await testContextOverflow(model, "ollama");
 			logResult(result);
 
