@@ -133,7 +133,7 @@ function buildCacheKey(params: UsageFetchParams): string {
 
 function resolveCacheExpiry(now: number, limits: UsageLimit[]): number {
 	const earliestReset = limits
-		.map((limit) => limit.window?.resetsAt)
+		.map(limit => limit.window?.resetsAt)
 		.filter((value): value is number => typeof value === "number" && Number.isFinite(value))
 		.reduce((min, value) => (min === undefined ? value : Math.min(min, value)), undefined as number | undefined);
 	if (!earliestReset) return now + DEFAULT_CACHE_TTL_MS;
@@ -288,5 +288,5 @@ async function fetchZaiUsage(params: UsageFetchParams, ctx: UsageFetchContext): 
 export const zaiUsageProvider: UsageProvider = {
 	id: "zai",
 	fetchUsage: fetchZaiUsage,
-	supports: (params) => params.provider === "zai" && params.credential.type === "api_key",
+	supports: params => params.provider === "zai" && params.credential.type === "api_key",
 };

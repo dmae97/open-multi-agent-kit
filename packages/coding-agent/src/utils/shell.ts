@@ -137,7 +137,7 @@ export async function getShellConfig(): Promise<ShellConfig> {
 				`  1. Install Git for Windows: https://git-scm.com/download/win\n` +
 				`  2. Add your bash to PATH (Cygwin, MSYS2, etc.)\n` +
 				`  3. Set shellPath in ~/.omp/agent/settings.json\n\n` +
-				`Searched Git Bash in:\n${paths.map((p) => `  ${p}`).join("\n")}`,
+				`Searched Git Bash in:\n${paths.map(p => `  ${p}`).join("\n")}`,
 		);
 	}
 

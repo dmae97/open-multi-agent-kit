@@ -1,7 +1,6 @@
 /**
  * Armin says hi! A fun easter egg with animated XBM art.
  */
-
 import type { Component, TUI } from "@oh-my-pi/pi-tui";
 import { theme } from "../../modes/theme/theme";
 
@@ -91,7 +90,7 @@ export class ArminComponent implements Component {
 		const padding = 1;
 		const availableWidth = width - padding;
 
-		this.cachedLines = this.currentGrid.map((row) => {
+		this.cachedLines = this.currentGrid.map(row => {
 			// Clip row to available width before applying color
 			const clipped = row.slice(0, availableWidth).join("");
 			const padRight = Math.max(0, width - padding - clipped.length);
@@ -332,7 +331,7 @@ export class ArminComponent implements Component {
 
 		if (state.phase < state.glitchFrames) {
 			// Glitch phase: show corrupted version
-			this.currentGrid = this.finalGrid.map((row) => {
+			this.currentGrid = this.finalGrid.map(row => {
 				const offset = Math.floor(Math.random() * 7) - 3;
 				const glitchRow = [...row];
 
@@ -355,7 +354,7 @@ export class ArminComponent implements Component {
 		}
 
 		// Final frame: show clean image
-		this.currentGrid = this.finalGrid.map((row) => [...row]);
+		this.currentGrid = this.finalGrid.map(row => [...row]);
 		return true;
 	}
 

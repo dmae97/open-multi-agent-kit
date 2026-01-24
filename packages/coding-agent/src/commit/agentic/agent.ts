@@ -174,8 +174,8 @@ function writeStdout(message: string): void {
 
 function extractMessagePreview(content: Array<{ type: string; text?: string }>): string | null {
 	const textBlocks = content
-		.filter((block) => block.type === "text" && typeof block.text === "string")
-		.map((block) => block.text?.trim())
+		.filter(block => block.type === "text" && typeof block.text === "string")
+		.map(block => block.text?.trim())
 		.filter((value): value is string => Boolean(value));
 	if (textBlocks.length === 0) return null;
 	const combined = textBlocks.join(" ").replace(/\s+/g, " ").trim();
@@ -184,9 +184,9 @@ function extractMessagePreview(content: Array<{ type: string; text?: string }>):
 
 function extractMessageText(content: Array<{ type: string; text?: string }>): string | null {
 	const textBlocks = content
-		.filter((block) => block.type === "text" && typeof block.text === "string")
-		.map((block) => block.text ?? "")
-		.filter((value) => value.trim().length > 0);
+		.filter(block => block.type === "text" && typeof block.text === "string")
+		.map(block => block.text ?? "")
+		.filter(value => value.trim().length > 0);
 	if (textBlocks.length === 0) return null;
 	return textBlocks.join("\n").trim();
 }
@@ -194,7 +194,7 @@ function extractMessageText(content: Array<{ type: string; text?: string }>): st
 function writeAssistantMessage(message: string): void {
 	const lines = renderMarkdownLines(message);
 	if (lines.length === 0) return;
-	let firstContentIndex = lines.findIndex((line) => line.trim().length > 0);
+	let firstContentIndex = lines.findIndex(line => line.trim().length > 0);
 	if (firstContentIndex === -1) {
 		firstContentIndex = 0;
 	}
@@ -213,7 +213,7 @@ function renderMarkdownLines(message: string): string[] {
 function formatToolLabel(toolName: string): string {
 	const displayName = toolName
 		.split(/[_-]/)
-		.map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+		.map(segment => segment.charAt(0).toUpperCase() + segment.slice(1))
 		.join("");
 	return displayName;
 }
@@ -225,7 +225,7 @@ function formatToolArgs(args?: Record<string, unknown>): string[] {
 		if (value === null || value === undefined) return;
 		if (Array.isArray(value)) {
 			if (value.length === 0) return;
-			const rendered = value.map((item) => renderPrimitive(item)).filter(Boolean);
+			const rendered = value.map(item => renderPrimitive(item)).filter(Boolean);
 			if (rendered.length > 0) {
 				lines.push(`${keyPath}: ${rendered.join(", ")}`);
 			}

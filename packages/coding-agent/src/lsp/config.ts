@@ -141,7 +141,7 @@ function applyRuntimeDefaults(servers: Record<string, ServerConfig>): Record<str
 	}
 
 	if (updated.omnisharp?.args) {
-		const args = updated.omnisharp.args.map((arg) => (arg === PID_TOKEN ? String(process.pid) : arg));
+		const args = updated.omnisharp.args.map(arg => (arg === PID_TOKEN ? String(process.pid) : arg));
 		updated.omnisharp = { ...updated.omnisharp, args };
 	}
 
@@ -357,7 +357,7 @@ export function getServersForFile(config: LspConfig, filePath: string): Array<[s
 	const matches: Array<[string, ServerConfig]> = [];
 
 	for (const [name, serverConfig] of Object.entries(config.servers)) {
-		const supportsFile = serverConfig.fileTypes.some((fileType) => {
+		const supportsFile = serverConfig.fileTypes.some(fileType => {
 			const normalized = fileType.toLowerCase();
 			return normalized === ext || normalized === fileName;
 		});

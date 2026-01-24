@@ -95,7 +95,7 @@ function prettifyRepo(repo: string): string {
 	// Fallback: titlecase with underscores replaced
 	return repo
 		.split("_")
-		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+		.map(w => w.charAt(0).toUpperCase() + w.slice(1))
 		.join(" ");
 }
 
@@ -157,7 +157,7 @@ export const handleRepology: SpecialHandler = async (
 
 		// If no newest found, find the highest version
 		if (newestVersions.size === 0) {
-			const versions = packages.map((p) => p.version);
+			const versions = packages.map(p => p.version);
 			if (versions.length > 0) newestVersions.add(versions[0]);
 		}
 

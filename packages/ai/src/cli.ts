@@ -91,7 +91,7 @@ async function login(provider: OAuthProvider): Promise<void> {
 
 			case "cursor":
 				credentials = await loginCursor(
-					(url) => {
+					url => {
 						console.log(`\nOpen this URL in your browser:\n${url}\n`);
 					},
 					() => {
@@ -243,7 +243,7 @@ Examples:
 			provider = PROVIDERS[index].id;
 		}
 
-		if (!PROVIDERS.some((p) => p.id === provider)) {
+		if (!PROVIDERS.some(p => p.id === provider)) {
 			console.error(`Unknown provider: ${provider}`);
 			console.error(`Use 'bunx @oh-my-pi/pi-ai list' to see available providers`);
 			process.exit(1);
@@ -259,7 +259,7 @@ Examples:
 	process.exit(1);
 }
 
-main().catch((err) => {
+main().catch(err => {
 	console.error("Error:", err.message);
 	process.exit(1);
 });

@@ -3,7 +3,6 @@
  *
  * Commands are embedded at build time via Bun's import with { type: "text" }.
  */
-
 import * as path from "node:path";
 import { type SlashCommand, slashCommandCapability } from "../capability/slash-command";
 import { renderPromptTemplate } from "../config/prompt-templates";
@@ -116,7 +115,7 @@ export async function discoverCommands(cwd: string): Promise<WorkflowCommand[]> 
  * Get a command by name.
  */
 export function getCommand(commands: WorkflowCommand[], name: string): WorkflowCommand | undefined {
-	return commands.find((c) => c.name === name);
+	return commands.find(c => c.name === name);
 }
 
 /**

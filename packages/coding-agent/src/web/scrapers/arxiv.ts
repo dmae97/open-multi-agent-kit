@@ -40,12 +40,12 @@ export const handleArxiv: SpecialHandler = async (
 		const summary = entry.querySelector("summary")?.text?.trim();
 		const authors = entry
 			.querySelectorAll("author name")
-			.map((n) => n.text?.trim())
+			.map(n => n.text?.trim())
 			.filter(Boolean);
 		const published = entry.querySelector("published")?.text?.trim()?.split("T")[0];
 		const categories = entry
 			.querySelectorAll("category")
-			.map((c) => c.getAttribute("term"))
+			.map(c => c.getAttribute("term"))
 			.filter(Boolean);
 		const pdfLink = entry.querySelector('link[title="pdf"]')?.getAttribute("href");
 

@@ -11,7 +11,6 @@
  * rich context for the orchestrating agent to distribute work across
  * multiple reviewer agents based on diff weight and locality.
  */
-
 import { renderPromptTemplate } from "../../../../config/prompt-templates";
 import type { CustomCommand, CustomCommandAPI } from "../../../../extensibility/custom-commands/types";
 import type { HookCommandContext } from "../../../../extensibility/hooks/types";
@@ -203,7 +202,7 @@ function buildReviewPrompt(mode: string, stats: DiffStats, rawDiff: string): str
 	const totalLines = stats.totalAdded + stats.totalRemoved;
 	const linesPerFile = skipDiff ? Math.max(5, Math.floor(100 / stats.files.length)) : 0;
 
-	const filesWithExt = stats.files.map((f) => ({
+	const filesWithExt = stats.files.map(f => ({
 		...f,
 		ext: getFileExt(f.path),
 		hunksPreview: skipDiff ? getDiffPreview(f.hunks, linesPerFile) : "",
@@ -393,7 +392,7 @@ async function getGitBranches(api: CustomCommandAPI): Promise<string[]> {
 		if (result.code !== 0) return [];
 		return result.stdout
 			.split("\n")
-			.map((b) => b.trim())
+			.map(b => b.trim())
 			.filter(Boolean);
 	} catch {
 		return [];
@@ -424,7 +423,7 @@ async function getRecentCommits(api: CustomCommandAPI, count: number): Promise<s
 		if (result.code !== 0) return [];
 		return result.stdout
 			.split("\n")
-			.map((c) => c.trim())
+			.map(c => c.trim())
 			.filter(Boolean);
 	} catch {
 		return [];

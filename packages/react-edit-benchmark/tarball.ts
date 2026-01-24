@@ -2,7 +2,6 @@
  * Tarball utilities for reading fixtures directly from .tar.gz archives.
  * Uses Bun.Archive for native tar.gz handling.
  */
-
 import * as fs from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 

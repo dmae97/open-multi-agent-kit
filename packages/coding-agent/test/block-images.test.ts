@@ -74,7 +74,7 @@ describe("blockImages setting", () => {
 
 			// Should have text note + image content
 			expect(result.content.length).toBeGreaterThanOrEqual(1);
-			const hasImage = result.content.some((c) => c.type === "image");
+			const hasImage = result.content.some(c => c.type === "image");
 			expect(hasImage).toBe(true);
 		});
 

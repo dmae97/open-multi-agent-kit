@@ -4,7 +4,6 @@
  * Loads rules from .clinerules (can be single file or directory with *.md files).
  * Project-only (no user-level config).
  */
-
 import * as path from "node:path";
 import { registerProvider } from "../capability";
 import { readDirEntries, readFile } from "../capability/fs";
@@ -23,7 +22,7 @@ async function findClinerules(startDir: string): Promise<{ path: string; isDir: 
 
 	while (true) {
 		const entries = await readDirEntries(current);
-		const entry = entries.find((e) => e.name === ".clinerules");
+		const entry = entries.find(e => e.name === ".clinerules");
 		if (entry) {
 			return {
 				path: path.resolve(current, ".clinerules"),

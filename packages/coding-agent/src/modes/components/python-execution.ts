@@ -2,7 +2,6 @@
  * Component for displaying user-initiated Python execution with streaming output.
  * Shares the same kernel session as the agent's Python tool.
  */
-
 import { Container, Loader, Spacer, Text, type TUI } from "@oh-my-pi/pi-tui";
 import stripAnsi from "strip-ansi";
 import { getSymbolTheme, highlightCode, theme } from "../../modes/theme/theme";
@@ -51,8 +50,8 @@ export class PythonExecutionComponent extends Container {
 
 		this.loader = new Loader(
 			ui,
-			(spinner) => theme.fg(colorKey, spinner),
-			(text) => theme.fg("muted", text),
+			spinner => theme.fg(colorKey, spinner),
+			text => theme.fg("muted", text),
 			`Running${theme.format.ellipsis} (esc to cancel)`,
 			getSymbolTheme().spinnerFrames,
 		);
@@ -117,10 +116,10 @@ export class PythonExecutionComponent extends Container {
 
 		if (availableLines.length > 0) {
 			if (this.expanded) {
-				const displayText = availableLines.map((line) => theme.fg("muted", line)).join("\n");
+				const displayText = availableLines.map(line => theme.fg("muted", line)).join("\n");
 				this.contentContainer.addChild(new Text(`\n${displayText}`, 1, 0));
 			} else {
-				const styledOutput = previewLogicalLines.map((line) => theme.fg("muted", line)).join("\n");
+				const styledOutput = previewLogicalLines.map(line => theme.fg("muted", line)).join("\n");
 				const previewText = `\n${styledOutput}`;
 				this.contentContainer.addChild({
 					render: (width: number) => {

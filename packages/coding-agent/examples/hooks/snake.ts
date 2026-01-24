@@ -1,7 +1,6 @@
 /**
  * Snake game hook - play snake with /snake command
  */
-
 import type { HookAPI } from "@oh-my-pi/pi-coding-agent";
 import { matchesKey, visibleWidth } from "@oh-my-pi/pi-tui";
 
@@ -47,7 +46,7 @@ function spawnFood(snake: Point[]): Point {
 			x: Math.floor(Math.random() * GAME_WIDTH),
 			y: Math.floor(Math.random() * GAME_HEIGHT),
 		};
-	} while (snake.some((s) => s.x === food.x && s.y === food.y));
+	} while (snake.some(s => s.x === food.x && s.y === food.y));
 	return food;
 }
 
@@ -127,7 +126,7 @@ class SnakeComponent {
 		}
 
 		// Check self collision
-		if (this.state.snake.some((s) => s.x === newHead.x && s.y === newHead.y)) {
+		if (this.state.snake.some(s => s.x === newHead.x && s.y === newHead.y)) {
 			this.state.gameOver = true;
 			return;
 		}
@@ -249,7 +248,7 @@ class SnakeComponent {
 			let row = "";
 			for (let x = 0; x < effectiveWidth; x++) {
 				const isHead = this.state.snake[0].x === x && this.state.snake[0].y === y;
-				const isBody = this.state.snake.slice(1).some((s) => s.x === x && s.y === y);
+				const isBody = this.state.snake.slice(1).some(s => s.x === x && s.y === y);
 				const isFood = this.state.food.x === x && this.state.food.y === y;
 
 				if (isHead) {
@@ -331,7 +330,7 @@ export default function (pi: HookAPI) {
 				return new SnakeComponent(
 					tui,
 					() => done(undefined),
-					(state) => {
+					state => {
 						// Save or clear state
 						pi.appendEntry(SNAKE_SAVE_TYPE, state);
 					},

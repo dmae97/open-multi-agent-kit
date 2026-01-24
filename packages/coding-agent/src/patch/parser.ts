@@ -6,7 +6,6 @@
  * - Unified diff format (@@ -X,Y +A,B @@)
  * - Codex-style wrapped patches (*** Begin Patch / *** End Patch)
  */
-
 import type { DiffHunk } from "./types";
 import { ApplyPatchError, ParseError } from "./types";
 
@@ -90,7 +89,7 @@ export function normalizeDiff(diff: string): string {
 	// Layer 2: Strip Codex-style file operation markers and unified diff metadata
 	// NOTE: Do NOT strip "*** End of File" - that's a valid marker within hunks, not a wrapper
 	// IMPORTANT: Only strip actual metadata lines, NOT diff content lines (starting with space, +, or -)
-	lines = lines.filter((line) => {
+	lines = lines.filter(line => {
 		// Preserve diff content lines even if their content looks like metadata
 		// Note: `--- ` and `+++ ` are metadata, not content lines
 		if (isDiffContentLine(line)) {
@@ -130,12 +129,12 @@ export function normalizeDiff(diff: string): string {
  */
 export function normalizeCreateContent(content: string): string {
 	const lines = content.split("\n");
-	const nonEmptyLines = lines.filter((l) => l.length > 0);
+	const nonEmptyLines = lines.filter(l => l.length > 0);
 
 	// Check if all non-empty lines start with "+ " or "+"
-	if (nonEmptyLines.length > 0 && nonEmptyLines.every((l) => l.startsWith("+ ") || l.startsWith("+"))) {
+	if (nonEmptyLines.length > 0 && nonEmptyLines.every(l => l.startsWith("+ ") || l.startsWith("+"))) {
 		return lines
-			.map((l) => {
+			.map(l => {
 				if (l.startsWith("+ ")) return l.slice(2);
 				if (l.startsWith("+")) return l.slice(1);
 				return l;
@@ -390,18 +389,18 @@ function parseOneHunk(lines: string[], lineNumber: number, allowMissingContext: 
 }
 
 function stripLineNumberPrefixes(hunk: DiffHunk): void {
-	const allLines = [...hunk.oldLines, ...hunk.newLines].filter((line) => line.trim().length > 0);
+	const allLines = [...hunk.oldLines, ...hunk.newLines].filter(line => line.trim().length > 0);
 	if (allLines.length < 2) return;
 
 	const numberMatches = allLines
-		.map((line) => line.match(/^\s*(\d{1,6})\s+(.+)$/u))
+		.map(line => line.match(/^\s*(\d{1,6})\s+(.+)$/u))
 		.filter((match): match is RegExpMatchArray => match !== null);
 
 	if (numberMatches.length < Math.max(2, Math.ceil(allLines.length * 0.6))) {
 		return;
 	}
 
-	const numbers = numberMatches.map((match) => Number(match[1]));
+	const numbers = numberMatches.map(match => Number(match[1]));
 	let sequential = 0;
 	for (let i = 1; i < numbers.length; i++) {
 		if (numbers[i] === numbers[i - 1] + 1) {
@@ -515,7 +514,7 @@ export function parseHunks(diff: string): DiffHunk[] {
 			continue;
 		}
 
-		if (trimmed.startsWith("@@") && lines.slice(i + 1).every((l) => l.trim() === "")) {
+		if (trimmed.startsWith("@@") && lines.slice(i + 1).every(l => l.trim() === "")) {
 			break;
 		}
 

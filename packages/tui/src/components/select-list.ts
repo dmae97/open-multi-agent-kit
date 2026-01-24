@@ -37,7 +37,7 @@ export class SelectList implements Component {
 	}
 
 	setFilter(filter: string): void {
-		this.filteredItems = this.items.filter((item) => item.value.toLowerCase().startsWith(filter.toLowerCase()));
+		this.filteredItems = this.items.filter(item => item.value.toLowerCase().startsWith(filter.toLowerCase()));
 		// Reset selection when filter changes
 		this.selectedIndex = 0;
 	}

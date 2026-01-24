@@ -63,7 +63,7 @@ function normalizeStringList(value: unknown): string[] {
 	if (typeof value === "string") {
 		return value
 			.split(/[,;\n]+/)
-			.map((item) => item.trim())
+			.map(item => item.trim())
 			.filter(Boolean);
 	}
 	return [];

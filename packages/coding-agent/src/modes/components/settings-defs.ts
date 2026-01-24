@@ -7,7 +7,6 @@
  * 2. Add the definition here
  * 3. Add the handler in interactive-mode.ts settingsHandlers
  */
-
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { getCapabilities } from "@oh-my-pi/pi-tui";
 import type {
@@ -98,7 +97,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Auto-compact",
 		description: "Automatically compact context when it gets too large",
-		get: (sm) => sm.getCompactionEnabled(),
+		get: sm => sm.getCompactionEnabled(),
 		set: (sm, v) => sm.setCompactionEnabled(v),
 	},
 	{
@@ -107,7 +106,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Branch summaries",
 		description: "Prompt to summarize when leaving a branch",
-		get: (sm) => sm.getBranchSummaryEnabled(),
+		get: sm => sm.getBranchSummaryEnabled(),
 		set: (sm, v) => sm.setBranchSummaryEnabled(v),
 	},
 	{
@@ -116,7 +115,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Todo completion",
 		description: "Remind agent to complete todos before stopping",
-		get: (sm) => sm.getTodoCompletionEnabled(),
+		get: sm => sm.getTodoCompletionEnabled(),
 		set: (sm, v) => sm.setTodoCompletionEnabled(v),
 	},
 	{
@@ -125,7 +124,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "submenu",
 		label: "Todo max reminders",
 		description: "Maximum reminders to complete todos before giving up",
-		get: (sm) => String(sm.getTodoCompletionMaxReminders()),
+		get: sm => String(sm.getTodoCompletionMaxReminders()),
 		set: (sm, v) => sm.setTodoCompletionMaxReminders(Number.parseInt(v, 10)),
 		getOptions: () => [
 			{ value: "1", label: "1 reminder" },
@@ -141,7 +140,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "Steering mode",
 		description: "How to process queued messages while agent is working",
 		values: ["one-at-a-time", "all"],
-		get: (sm) => sm.getSteeringMode(),
+		get: sm => sm.getSteeringMode(),
 		set: (sm, v) => sm.setSteeringMode(v as "all" | "one-at-a-time"),
 	},
 	{
@@ -151,7 +150,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "Follow-up mode",
 		description: "How to drain follow-up messages after a turn completes",
 		values: ["one-at-a-time", "all"],
-		get: (sm) => sm.getFollowUpMode(),
+		get: sm => sm.getFollowUpMode(),
 		set: (sm, v) => sm.setFollowUpMode(v as "one-at-a-time" | "all"),
 	},
 	{
@@ -161,7 +160,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "Interrupt mode",
 		description: "When steering messages interrupt tool execution",
 		values: ["immediate", "wait"],
-		get: (sm) => sm.getInterruptMode(),
+		get: sm => sm.getInterruptMode(),
 		set: (sm, v) => sm.setInterruptMode(v as "immediate" | "wait"),
 	},
 	{
@@ -170,7 +169,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "submenu",
 		label: "Retry max attempts",
 		description: "Maximum retry attempts on API errors",
-		get: (sm) => String(sm.getRetryMaxRetries()),
+		get: sm => String(sm.getRetryMaxRetries()),
 		set: (sm, v) => sm.setRetryMaxRetries(Number.parseInt(v, 10)),
 		getOptions: () => [
 			{ value: "1", label: "1 retry" },
@@ -187,7 +186,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "Completion notification",
 		description: "Notify when the agent completes",
 		values: ["auto", "bell", "osc99", "osc9", "off"],
-		get: (sm) => sm.getNotificationOnComplete(),
+		get: sm => sm.getNotificationOnComplete(),
 		set: (sm, v) => sm.setNotificationOnComplete(v as NotificationMethod),
 	},
 	{
@@ -196,7 +195,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Startup quiet",
 		description: "Skip welcome screen and startup status messages",
-		get: (sm) => sm.getStartupQuiet(),
+		get: sm => sm.getStartupQuiet(),
 		set: (sm, v) => sm.setStartupQuiet(v),
 	},
 	{
@@ -205,7 +204,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Collapse changelog",
 		description: "Show condensed changelog after updates",
-		get: (sm) => sm.getCollapseChangelog(),
+		get: sm => sm.getCollapseChangelog(),
 		set: (sm, v) => sm.setCollapseChangelog(v),
 	},
 	{
@@ -214,7 +213,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Normative rewrite",
 		description: "Rewrite tool call arguments to normalized format in session history",
-		get: (sm) => sm.getNormativeRewrite(),
+		get: sm => sm.getNormativeRewrite(),
 		set: (sm, v) => sm.setNormativeRewrite(v),
 	},
 	{
@@ -224,7 +223,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "Double-escape action",
 		description: "Action when pressing Escape twice with empty editor",
 		values: ["tree", "branch"],
-		get: (sm) => sm.getDoubleEscapeAction(),
+		get: sm => sm.getDoubleEscapeAction(),
 		set: (sm, v) => sm.setDoubleEscapeAction(v as "branch" | "tree"),
 	},
 
@@ -237,7 +236,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Bash interceptor",
 		description: "Block shell commands that have dedicated tools (grep, cat, etc.)",
-		get: (sm) => sm.getBashInterceptorEnabled(),
+		get: sm => sm.getBashInterceptorEnabled(),
 		set: (sm, v) => sm.setBashInterceptorEnabled(v),
 	},
 	{
@@ -246,7 +245,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Intercept simple ls",
 		description: "Intercept bare ls commands (when bash interceptor is enabled)",
-		get: (sm) => sm.getBashInterceptorSimpleLsEnabled(),
+		get: sm => sm.getBashInterceptorSimpleLsEnabled(),
 		set: (sm, v) => sm.setBashInterceptorSimpleLsEnabled(v),
 	},
 	{
@@ -256,7 +255,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "Python tool mode",
 		description: "How Python code is executed",
 		values: ["ipy-only", "bash-only", "both"],
-		get: (sm) => sm.getPythonToolMode(),
+		get: sm => sm.getPythonToolMode(),
 		set: (sm, v) => sm.setPythonToolMode(v as PythonToolMode),
 	},
 	{
@@ -266,7 +265,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "Python kernel mode",
 		description: "Whether to keep IPython kernel alive across calls",
 		values: ["session", "per-call"],
-		get: (sm) => sm.getPythonKernelMode(),
+		get: sm => sm.getPythonKernelMode(),
 		set: (sm, v) => sm.setPythonKernelMode(v as PythonKernelMode),
 	},
 	{
@@ -275,7 +274,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Python shared gateway",
 		description: "Share IPython kernel gateway across pi instances",
-		get: (sm) => sm.getPythonSharedGateway(),
+		get: sm => sm.getPythonSharedGateway(),
 		set: (sm, v) => sm.setPythonSharedGateway(v),
 	},
 	{
@@ -284,7 +283,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Edit fuzzy match",
 		description: "Accept high-confidence fuzzy matches for whitespace/indentation differences",
-		get: (sm) => sm.getEditFuzzyMatch(),
+		get: sm => sm.getEditFuzzyMatch(),
 		set: (sm, v) => sm.setEditFuzzyMatch(v),
 	},
 	{
@@ -293,7 +292,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "submenu",
 		label: "Edit fuzzy threshold",
 		description: "Similarity threshold for fuzzy matches (higher = stricter)",
-		get: (sm) => sm.getEditFuzzyThreshold().toFixed(2),
+		get: sm => sm.getEditFuzzyThreshold().toFixed(2),
 		set: (sm, v) => sm.setEditFuzzyThreshold(Number(v)),
 		getOptions: () => [
 			{ value: "0.85", label: "0.85", description: "Lenient" },
@@ -308,7 +307,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Edit patch mode",
 		description: "Use codex-style apply-patch format instead of old_text/new_text for edits",
-		get: (sm) => sm.getEditPatchMode(),
+		get: sm => sm.getEditPatchMode(),
 		set: (sm, v) => sm.setEditPatchMode(v),
 	},
 	{
@@ -317,7 +316,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Edit streaming abort",
 		description: "Abort streaming edit tool calls when patch preview fails",
-		get: (sm) => sm.getEditStreamingAbort(),
+		get: sm => sm.getEditStreamingAbort(),
 		set: (sm, v) => sm.setEditStreamingAbort(v),
 	},
 	{
@@ -326,7 +325,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Read line numbers",
 		description: "Prepend line numbers to read tool output by default",
-		get: (sm) => sm.getReadLineNumbers(),
+		get: sm => sm.getReadLineNumbers(),
 		set: (sm, v) => sm.setReadLineNumbers(v),
 	},
 	{
@@ -335,7 +334,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "MCP project config",
 		description: "Load .mcp.json/mcp.json from project root",
-		get: (sm) => sm.getMCPProjectConfigEnabled(),
+		get: sm => sm.getMCPProjectConfigEnabled(),
 		set: (sm, v) => sm.setMCPProjectConfigEnabled(v),
 	},
 	{
@@ -344,7 +343,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Skill commands",
 		description: "Register skills as /skill:name commands",
-		get: (sm) => sm.getEnableSkillCommands(),
+		get: sm => sm.getEnableSkillCommands(),
 		set: (sm, v) => sm.setEnableSkillCommands(v),
 	},
 	{
@@ -353,7 +352,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Claude user commands",
 		description: "Load commands from ~/.claude/commands/",
-		get: (sm) => sm.getCommandsEnableClaudeUser(),
+		get: sm => sm.getCommandsEnableClaudeUser(),
 		set: (sm, v) => sm.setCommandsEnableClaudeUser(v),
 	},
 	{
@@ -362,7 +361,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Claude project commands",
 		description: "Load commands from .claude/commands/",
-		get: (sm) => sm.getCommandsEnableClaudeProject(),
+		get: sm => sm.getCommandsEnableClaudeProject(),
 		set: (sm, v) => sm.setCommandsEnableClaudeProject(v),
 	},
 	{
@@ -371,7 +370,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "submenu",
 		label: "Web search provider",
 		description: "Provider for web search tool",
-		get: (sm) => sm.getWebSearchProvider(),
+		get: sm => sm.getWebSearchProvider(),
 		set: (sm, v) => sm.setWebSearchProvider(v as WebSearchProviderOption),
 		getOptions: () => [
 			{ value: "auto", label: "Auto", description: "Priority: Exa > Perplexity > Anthropic" },
@@ -386,7 +385,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "submenu",
 		label: "Image provider",
 		description: "Provider for image generation tool",
-		get: (sm) => sm.getImageProvider(),
+		get: sm => sm.getImageProvider(),
 		set: (sm, v) => sm.setImageProvider(v as ImageProviderOption),
 		getOptions: () => [
 			{ value: "auto", label: "Auto", description: "Priority: OpenRouter > Gemini" },
@@ -404,7 +403,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "submenu",
 		label: "Theme",
 		description: "Color theme for the interface",
-		get: (sm) => sm.getTheme() ?? "dark",
+		get: sm => sm.getTheme() ?? "dark",
 		set: (sm, v) => sm.setTheme(v),
 		getOptions: () => [], // Filled dynamically from context
 	},
@@ -414,7 +413,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "submenu",
 		label: "Symbol preset",
 		description: "Icon/symbol style (overrides theme default)",
-		get: (sm) => sm.getSymbolPreset() ?? "unicode",
+		get: sm => sm.getSymbolPreset() ?? "unicode",
 		set: (sm, v) => sm.setSymbolPreset(v as SymbolPreset),
 		getOptions: () => [
 			{ value: "unicode", label: "Unicode", description: "Standard Unicode symbols (default)" },
@@ -428,7 +427,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Color blind mode",
 		description: "Use blue instead of green for diff additions (red-green color blindness)",
-		get: (sm) => sm.getColorBlindMode(),
+		get: sm => sm.getColorBlindMode(),
 		set: (sm, v) => sm.setColorBlindMode(v),
 	},
 	{
@@ -437,10 +436,10 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "submenu",
 		label: "Thinking level",
 		description: "Reasoning depth for thinking-capable models",
-		get: (sm) => sm.getDefaultThinkingLevel() ?? "off",
+		get: sm => sm.getDefaultThinkingLevel() ?? "off",
 		set: (sm, v) => sm.setDefaultThinkingLevel(v as ThinkingLevel),
 		getOptions: () =>
-			(["off", "minimal", "low", "medium", "high", "xhigh"] as ThinkingLevel[]).map((level) => ({
+			(["off", "minimal", "low", "medium", "high", "xhigh"] as ThinkingLevel[]).map(level => ({
 				value: level,
 				label: level,
 				description: THINKING_DESCRIPTIONS[level],
@@ -452,7 +451,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Hide thinking",
 		description: "Hide thinking blocks in assistant responses",
-		get: (sm) => sm.getHideThinkingBlock(),
+		get: sm => sm.getHideThinkingBlock(),
 		set: (sm, v) => sm.setHideThinkingBlock(v),
 	},
 	{
@@ -461,7 +460,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Show images",
 		description: "Render images inline in terminal",
-		get: (sm) => sm.getShowImages(),
+		get: sm => sm.getShowImages(),
 		set: (sm, v) => sm.setShowImages(v),
 		condition: () => !!getCapabilities().images,
 	},
@@ -471,7 +470,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Auto-resize images",
 		description: "Resize large images to 2000x2000 max for better model compatibility",
-		get: (sm) => sm.getImageAutoResize(),
+		get: sm => sm.getImageAutoResize(),
 		set: (sm, v) => sm.setImageAutoResize(v),
 	},
 	{
@@ -480,7 +479,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Block images",
 		description: "Prevent images from being sent to LLM providers",
-		get: (sm) => sm.getBlockImages(),
+		get: sm => sm.getBlockImages(),
 		set: (sm, v) => sm.setBlockImages(v),
 	},
 	{
@@ -489,7 +488,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Hardware cursor",
 		description: "Show terminal cursor for IME support (default: on for Linux/macOS)",
-		get: (sm) => sm.getShowHardwareCursor(),
+		get: sm => sm.getShowHardwareCursor(),
 		set: (sm, v) => sm.setShowHardwareCursor(v),
 	},
 
@@ -502,7 +501,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "TTSR enabled",
 		description: "Time Traveling Stream Rules: interrupt agent when output matches patterns",
-		get: (sm) => sm.getTtsrEnabled(),
+		get: sm => sm.getTtsrEnabled(),
 		set: (sm, v) => sm.setTtsrEnabled(v),
 	},
 	{
@@ -512,7 +511,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "TTSR context mode",
 		description: "What to do with partial output when TTSR triggers",
 		values: ["discard", "keep"],
-		get: (sm) => sm.getTtsrContextMode(),
+		get: sm => sm.getTtsrContextMode(),
 		set: (sm, v) => sm.setTtsrContextMode(v as "keep" | "discard"),
 	},
 	{
@@ -522,7 +521,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "TTSR repeat mode",
 		description: "How rules can repeat: once per session or after a message gap",
 		values: ["once", "after-gap"],
-		get: (sm) => sm.getTtsrRepeatMode(),
+		get: sm => sm.getTtsrRepeatMode(),
 		set: (sm, v) => sm.setTtsrRepeatMode(v as "once" | "after-gap"),
 	},
 	{
@@ -531,7 +530,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "submenu",
 		label: "TTSR repeat gap",
 		description: "Messages before a rule can trigger again (when repeat mode is after-gap)",
-		get: (sm) => String(sm.getTtsrRepeatGap()),
+		get: sm => String(sm.getTtsrRepeatGap()),
 		set: (sm, v) => sm.setTtsrRepeatGap(Number.parseInt(v, 10)),
 		getOptions: () => [
 			{ value: "5", label: "5 messages" },
@@ -551,7 +550,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "submenu",
 		label: "Preset",
 		description: "Pre-built status line configurations",
-		get: (sm) => sm.getStatusLinePreset(),
+		get: sm => sm.getStatusLinePreset(),
 		set: (sm, v) => sm.setStatusLinePreset(v as StatusLinePreset),
 		getOptions: () => [
 			{ value: "default", label: "Default", description: "Model, path, git, context, tokens, cost" },
@@ -569,7 +568,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "submenu",
 		label: "Separator style",
 		description: "Style of separators between segments",
-		get: (sm) => {
+		get: sm => {
 			const settings = sm.getStatusLineSettings();
 			if (settings.separator) return settings.separator;
 			return getPreset(sm.getStatusLinePreset()).separator;
@@ -591,7 +590,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Show extension status",
 		description: "Display hook status messages below status line",
-		get: (sm) => sm.getStatusLineShowHookStatus(),
+		get: sm => sm.getStatusLineShowHookStatus(),
 		set: (sm, v) => sm.setStatusLineShowHookStatus(v),
 	},
 	{
@@ -611,7 +610,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "Model thinking level",
 		description: "Show thinking level in the model segment",
 		values: ["default", "on", "off"],
-		get: (sm) => {
+		get: sm => {
 			const value = sm.getStatusLineSegmentOptions().model?.showThinkingLevel;
 			if (value === undefined) return "default";
 			return value ? "on" : "off";
@@ -631,7 +630,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "Path abbreviate",
 		description: "Use ~ and strip home prefix in path segment",
 		values: ["default", "on", "off"],
-		get: (sm) => {
+		get: sm => {
 			const value = sm.getStatusLineSegmentOptions().path?.abbreviate;
 			if (value === undefined) return "default";
 			return value ? "on" : "off";
@@ -650,7 +649,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "submenu",
 		label: "Path max length",
 		description: "Maximum length for displayed path",
-		get: (sm) => {
+		get: sm => {
 			const value = sm.getStatusLineSegmentOptions().path?.maxLength;
 			return typeof value === "number" ? String(value) : "default";
 		},
@@ -678,7 +677,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "Path strip /work",
 		description: "Strip /work prefix in path segment",
 		values: ["default", "on", "off"],
-		get: (sm) => {
+		get: sm => {
 			const value = sm.getStatusLineSegmentOptions().path?.stripWorkPrefix;
 			if (value === undefined) return "default";
 			return value ? "on" : "off";
@@ -698,7 +697,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "Git show branch",
 		description: "Show branch name in git segment",
 		values: ["default", "on", "off"],
-		get: (sm) => {
+		get: sm => {
 			const value = sm.getStatusLineSegmentOptions().git?.showBranch;
 			if (value === undefined) return "default";
 			return value ? "on" : "off";
@@ -718,7 +717,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "Git show staged",
 		description: "Show staged file count in git segment",
 		values: ["default", "on", "off"],
-		get: (sm) => {
+		get: sm => {
 			const value = sm.getStatusLineSegmentOptions().git?.showStaged;
 			if (value === undefined) return "default";
 			return value ? "on" : "off";
@@ -738,7 +737,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "Git show unstaged",
 		description: "Show unstaged file count in git segment",
 		values: ["default", "on", "off"],
-		get: (sm) => {
+		get: sm => {
 			const value = sm.getStatusLineSegmentOptions().git?.showUnstaged;
 			if (value === undefined) return "default";
 			return value ? "on" : "off";
@@ -758,7 +757,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "Git show untracked",
 		description: "Show untracked file count in git segment",
 		values: ["default", "on", "off"],
-		get: (sm) => {
+		get: sm => {
 			const value = sm.getStatusLineSegmentOptions().git?.showUntracked;
 			if (value === undefined) return "default";
 			return value ? "on" : "off";
@@ -778,7 +777,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "Time format",
 		description: "Clock segment time format",
 		values: ["default", "12h", "24h"],
-		get: (sm) => sm.getStatusLineSegmentOptions().time?.format ?? "default",
+		get: sm => sm.getStatusLineSegmentOptions().time?.format ?? "default",
 		set: (sm, v) => {
 			if (v === "default") {
 				sm.clearStatusLineSegmentOption("time", "format");
@@ -794,7 +793,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		label: "Time show seconds",
 		description: "Include seconds in clock segment",
 		values: ["default", "on", "off"],
-		get: (sm) => {
+		get: sm => {
 			const value = sm.getStatusLineSegmentOptions().time?.showSeconds;
 			if (value === undefined) return "default";
 			return value ? "on" : "off";
@@ -817,7 +816,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Format on write",
 		description: "Automatically format code files using LSP after writing",
-		get: (sm) => sm.getLspFormatOnWrite(),
+		get: sm => sm.getLspFormatOnWrite(),
 		set: (sm, v) => sm.setLspFormatOnWrite(v),
 	},
 	{
@@ -826,7 +825,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Diagnostics on write",
 		description: "Return LSP diagnostics (errors/warnings) after writing code files",
-		get: (sm) => sm.getLspDiagnosticsOnWrite(),
+		get: sm => sm.getLspDiagnosticsOnWrite(),
 		set: (sm, v) => sm.setLspDiagnosticsOnWrite(v),
 	},
 	{
@@ -835,7 +834,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Diagnostics on edit",
 		description: "Return LSP diagnostics (errors/warnings) after editing code files",
-		get: (sm) => sm.getLspDiagnosticsOnEdit(),
+		get: sm => sm.getLspDiagnosticsOnEdit(),
 		set: (sm, v) => sm.setLspDiagnosticsOnEdit(v),
 	},
 
@@ -848,7 +847,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Exa enabled",
 		description: "Master toggle for all Exa search tools",
-		get: (sm) => sm.getExaSettings().enabled,
+		get: sm => sm.getExaSettings().enabled,
 		set: (sm, v) => sm.setExaEnabled(v),
 	},
 	{
@@ -857,7 +856,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Exa search",
 		description: "Basic search, deep search, code search, crawl",
-		get: (sm) => sm.getExaSettings().enableSearch,
+		get: sm => sm.getExaSettings().enableSearch,
 		set: (sm, v) => sm.setExaSearchEnabled(v),
 	},
 	{
@@ -866,7 +865,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Exa LinkedIn",
 		description: "Search LinkedIn for people and companies",
-		get: (sm) => sm.getExaSettings().enableLinkedin,
+		get: sm => sm.getExaSettings().enableLinkedin,
 		set: (sm, v) => sm.setExaLinkedinEnabled(v),
 	},
 	{
@@ -875,7 +874,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Exa company",
 		description: "Comprehensive company research tool",
-		get: (sm) => sm.getExaSettings().enableCompany,
+		get: sm => sm.getExaSettings().enableCompany,
 		set: (sm, v) => sm.setExaCompanyEnabled(v),
 	},
 	{
@@ -884,7 +883,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Exa researcher",
 		description: "AI-powered deep research tasks",
-		get: (sm) => sm.getExaSettings().enableResearcher,
+		get: sm => sm.getExaSettings().enableResearcher,
 		set: (sm, v) => sm.setExaResearcherEnabled(v),
 	},
 	{
@@ -893,7 +892,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		type: "boolean",
 		label: "Exa websets",
 		description: "Webset management and enrichment tools",
-		get: (sm) => sm.getExaSettings().enableWebsets,
+		get: sm => sm.getExaSettings().enableWebsets,
 		set: (sm, v) => sm.setExaWebsetsEnabled(v),
 	},
 ];
@@ -907,10 +906,10 @@ function getAllSettings(): SettingDef[] {
 
 /** Get settings for a specific tab */
 export function getSettingsForTab(tab: string): SettingDef[] {
-	return getAllSettings().filter((def) => def.tab === tab);
+	return getAllSettings().filter(def => def.tab === tab);
 }
 
 /** Get a setting definition by id */
 export function getSettingDef(id: string): SettingDef | undefined {
-	return getAllSettings().find((def) => def.id === id);
+	return getAllSettings().find(def => def.id === id);
 }

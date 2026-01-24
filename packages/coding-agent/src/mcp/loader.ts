@@ -3,7 +3,6 @@
  *
  * Integrates MCP tool discovery with the custom tools system.
  */
-
 import { logger } from "@oh-my-pi/pi-utils";
 import type { LoadedCustomTool } from "../extensibility/custom-tools/types";
 import { AgentStorage } from "../session/agent-storage";
@@ -78,7 +77,7 @@ export async function discoverAndLoadMCPTools(cwd: string, options?: MCPToolsLoa
 	}
 
 	// Convert MCP tools to LoadedCustomTool format
-	const loadedTools: LoadedCustomTool[] = result.tools.map((tool) => {
+	const loadedTools: LoadedCustomTool[] = result.tools.map(tool => {
 		// MCPTool and DeferredMCPTool have these properties
 		const mcpTool = tool as { mcpServerName?: string };
 		const serverName = mcpTool.mcpServerName;

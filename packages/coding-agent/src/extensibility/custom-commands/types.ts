@@ -5,7 +5,6 @@
  * Unlike markdown commands which expand to prompts, custom commands can execute
  * arbitrary logic with full access to the hook context.
  */
-
 import type { ExecOptions, ExecResult, HookCommandContext } from "../../extensibility/hooks/types";
 
 // Re-export for custom commands to use

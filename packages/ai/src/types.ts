@@ -1,3 +1,4 @@
+import type { TSchema } from "@sinclair/typebox";
 import type { BedrockOptions } from "./providers/amazon-bedrock";
 import type { AnthropicOptions } from "./providers/anthropic";
 import type { CursorOptions } from "./providers/cursor";
@@ -236,8 +237,6 @@ export interface CursorExecHandlers {
 	mcp?: (call: CursorMcpCall) => Promise<CursorExecHandlerResult<McpResult>>;
 	onToolResult?: CursorToolResultHandler;
 }
-
-import type { TSchema } from "@sinclair/typebox";
 
 export interface Tool<TParameters extends TSchema = TSchema> {
 	name: string;

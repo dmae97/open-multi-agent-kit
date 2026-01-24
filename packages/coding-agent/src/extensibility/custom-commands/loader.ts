@@ -4,7 +4,6 @@
  * Dependencies (@sinclair/typebox and pi-coding-agent) are injected via the CustomCommandAPI
  * to avoid import resolution issues with custom commands loaded from user directories.
  */
-
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as piCodingAgent from "@oh-my-pi/pi-coding-agent";
@@ -102,7 +101,7 @@ export async function discoverCustomCommands(
 
 	for (const entry of getConfigDirs("commands", { cwd, existingOnly: true })) {
 		const source = entry.level === "user" ? "user" : "project";
-		if (!commandDirs.some((d) => d.path === entry.path)) {
+		if (!commandDirs.some(d => d.path === entry.path)) {
 			commandDirs.push({ path: entry.path, source });
 		}
 	}
@@ -199,7 +198,7 @@ export async function loadCustomCommands(options: LoadCustomCommandsOptions = {}
 		if (loadedCommands) {
 			for (const command of loadedCommands) {
 				// Allow overriding bundled commands, but not user/project conflicts
-				const existingIdx = commands.findIndex((c) => c.command.name === command.name);
+				const existingIdx = commands.findIndex(c => c.command.name === command.name);
 				if (existingIdx !== -1) {
 					const existing = commands[existingIdx];
 					if (existing.source === "bundled") {

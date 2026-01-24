@@ -81,9 +81,9 @@ function formatChannelName(channel?: SnapcraftChannel): string | null {
 }
 
 function pickVersionFromChannels(entries: SnapcraftChannelMapEntry[]): string | undefined {
-	const stable = entries.find((entry) => entry.channel?.risk === "stable" && entry.version);
+	const stable = entries.find(entry => entry.channel?.risk === "stable" && entry.version);
 	if (stable?.version) return stable.version;
-	const first = entries.find((entry) => entry.version);
+	const first = entries.find(entry => entry.version);
 	return first?.version;
 }
 

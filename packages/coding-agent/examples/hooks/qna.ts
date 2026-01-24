@@ -6,7 +6,6 @@
  * 2. Shows a spinner while extracting (hides editor)
  * 3. Loads the result into the editor for user to fill in answers
  */
-
 import { complete, type UserMessage } from "@oh-my-pi/pi-ai";
 import type { HookAPI } from "@oh-my-pi/pi-coding-agent";
 import { BorderedLoader } from "@oh-my-pi/pi-coding-agent";
@@ -56,7 +55,7 @@ export default function (pi: HookAPI) {
 						}
 						const textParts = msg.content
 							.filter((c): c is { type: "text"; text: string } => c.type === "text")
-							.map((c) => c.text);
+							.map(c => c.text);
 						if (textParts.length > 0) {
 							lastAssistantText = textParts.join("\n");
 							break;
@@ -96,7 +95,7 @@ export default function (pi: HookAPI) {
 
 					return response.content
 						.filter((c): c is { type: "text"; text: string } => c.type === "text")
-						.map((c) => c.text)
+						.map(c => c.text)
 						.join("\n");
 				};
 

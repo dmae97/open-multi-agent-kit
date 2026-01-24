@@ -26,7 +26,7 @@ class KeyLogger implements Component {
 		// Convert to various representations
 		const hex = Buffer.from(data).toString("hex");
 		const charCodes = Array.from(data)
-			.map((c) => c.charCodeAt(0))
+			.map(c => c.charCodeAt(0))
 			.join(", ");
 		const repr = data
 			.replace(/\x1b/g, "\\x1b")

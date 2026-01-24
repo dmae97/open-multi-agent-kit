@@ -7,7 +7,6 @@
  *
  * The onSession callback reconstructs state by scanning past tool results.
  */
-
 import type {
 	CustomTool,
 	CustomToolContext,
@@ -29,7 +28,7 @@ interface TodoDetails {
 	error?: string;
 }
 
-const factory: CustomToolFactory = (pi) => {
+const factory: CustomToolFactory = pi => {
 	const { Type } = pi.typebox;
 	const { StringEnum, Text } = pi.pi;
 
@@ -85,7 +84,7 @@ const factory: CustomToolFactory = (pi) => {
 							{
 								type: "text",
 								text: todos.length
-									? todos.map((t) => `[${t.done ? "x" : " "}] #${t.id}: ${t.text}`).join("\n")
+									? todos.map(t => `[${t.done ? "x" : " "}] #${t.id}: ${t.text}`).join("\n")
 									: "No todos",
 							},
 						],
@@ -114,7 +113,7 @@ const factory: CustomToolFactory = (pi) => {
 							details: { action: "toggle", todos: [...todos], nextId, error: "id required" },
 						};
 					}
-					const todo = todos.find((t) => t.id === params.id);
+					const todo = todos.find(t => t.id === params.id);
 					if (!todo) {
 						return {
 							content: [{ type: "text", text: `Todo #${params.id} not found` }],

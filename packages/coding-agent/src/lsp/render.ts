@@ -7,7 +7,6 @@
  * - Grouped references and symbols
  * - Collapsible/expandable views
  */
-
 import type { AgentToolResult, RenderResultOptions } from "@oh-my-pi/pi-agent-core";
 import { type Component, Text } from "@oh-my-pi/pi-tui";
 import { highlight, supportsLanguage } from "cli-highlight";
@@ -260,11 +259,11 @@ function renderDiagnostics(
 	if (warnCount > 0) meta.push(`${warnCount} warning${warnCount !== 1 ? "s" : ""}`);
 	if (meta.length === 0) meta.push("No issues");
 
-	const diagLines = lines.filter((l) => l.includes(theme.status.error) || /:\d+:\d+/.test(l));
+	const diagLines = lines.filter(l => l.includes(theme.status.error) || /:\d+:\d+/.test(l));
 	const parsedDiagnostics = diagLines
-		.map((line) => parseDiagnosticLine(line))
+		.map(line => parseDiagnosticLine(line))
 		.filter((diag): diag is ParsedDiagnostic => diag !== null);
-	const fallbackDiagnostics: RawDiagnostic[] = diagLines.map((line) => ({ raw: line.trim() }));
+	const fallbackDiagnostics: RawDiagnostic[] = diagLines.map(line => ({ raw: line.trim() }));
 
 	if (expanded) {
 		let output = `${icon} ${theme.fg("dim", meta.join(theme.sep.dot))}`;
@@ -338,7 +337,7 @@ function renderReferences(refMatch: RegExpMatchArray, lines: string[], expanded:
 	const icon =
 		refCount > 0 ? theme.styledSymbol("status.success", "success") : theme.styledSymbol("status.warning", "warning");
 
-	const locLines = lines.filter((l) => /^\s*\S+:\d+:\d+/.test(l));
+	const locLines = lines.filter(l => /^\s*\S+:\d+:\d+/.test(l));
 
 	// Group by file
 	const byFile = new Map<string, Array<[string, string]>>();
@@ -431,7 +430,7 @@ function renderSymbols(symbolsMatch: RegExpMatchArray, lines: string[], expanded
 		icon: string;
 	}
 
-	const symbolLines = lines.filter((l) => l.includes("@") && l.includes("line"));
+	const symbolLines = lines.filter(l => l.includes("@") && l.includes("line"));
 	const symbols: SymbolInfo[] = [];
 
 	for (const line of symbolLines) {
@@ -474,7 +473,7 @@ function renderSymbols(symbolsMatch: RegExpMatchArray, lines: string[], expanded
 		return prefix;
 	};
 
-	const topLevelCount = symbols.filter((s) => s.indent === 0).length;
+	const topLevelCount = symbols.filter(s => s.indent === 0).length;
 
 	if (expanded) {
 		let output = `${icon} ${theme.fg("dim", `in ${fileName}`)}`;
@@ -492,7 +491,7 @@ function renderSymbols(symbolsMatch: RegExpMatchArray, lines: string[], expanded
 	}
 
 	// Collapsed: show first 3 top-level symbols
-	const topLevel = symbols.filter((s) => s.indent === 0).slice(0, 3);
+	const topLevel = symbols.filter(s => s.indent === 0).slice(0, 3);
 	const hasMoreSymbols = symbols.length > topLevel.length;
 	const expandHint = formatExpandHint(theme, expanded, hasMoreSymbols);
 	let output = `${icon} ${theme.fg("dim", `in ${fileName}`)}${expandHint}`;

@@ -40,8 +40,8 @@ async function listModuleCandidates(dir: string, source: PythonModuleSource): Pr
 	try {
 		const entries = await fs.readdir(dir, { withFileTypes: true });
 		return entries
-			.filter((entry) => entry.isFile() && entry.name.endsWith(".py"))
-			.map((entry) => ({
+			.filter(entry => entry.isFile() && entry.name.endsWith(".py"))
+			.map(entry => ({
 				name: entry.name,
 				path: path.resolve(dir, entry.name),
 				source,
@@ -71,8 +71,8 @@ export async function discoverPythonModules(options: DiscoverPythonModulesOption
 	const userDirs = [path.join(homeDir, ".omp", "agent", "modules"), path.join(homeDir, ".pi", "agent", "modules")];
 	const projectDirs = [path.resolve(cwd, ".omp", "modules"), path.resolve(cwd, ".pi", "modules")];
 
-	const userCandidates = (await Promise.all(userDirs.map((dir) => listModuleCandidates(dir, "user")))).flat();
-	const projectCandidates = (await Promise.all(projectDirs.map((dir) => listModuleCandidates(dir, "project")))).flat();
+	const userCandidates = (await Promise.all(userDirs.map(dir => listModuleCandidates(dir, "user")))).flat();
+	const projectCandidates = (await Promise.all(projectDirs.map(dir => listModuleCandidates(dir, "project")))).flat();
 
 	const byName = new Map<string, ModuleCandidate>();
 	for (const candidate of userCandidates) {
@@ -88,7 +88,7 @@ export async function discoverPythonModules(options: DiscoverPythonModulesOption
 	}
 
 	const sorted = Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
-	return Promise.all(sorted.map((candidate) => readModuleContent(candidate)));
+	return Promise.all(sorted.map(candidate => readModuleContent(candidate)));
 }
 
 /**

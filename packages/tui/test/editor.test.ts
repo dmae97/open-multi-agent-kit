@@ -524,7 +524,7 @@ describe("Editor component", () => {
 
 			// Verify content split correctly - extract content between borders
 			// Middle lines use "│  " and "  │", last line uses "╰─ " and " ─╯"
-			const contentLines = lines.slice(1).map((l) => {
+			const contentLines = lines.slice(1).map(l => {
 				const stripped = stripVTControlCharacters(l);
 				// Both border styles use 3 chars on each side
 				return stripped.slice(3, -3).trim();
@@ -599,7 +599,7 @@ describe("Editor component", () => {
 
 			// Extract text content (strip borders and control characters)
 			const allText = lines
-				.map((l) => stripVTControlCharacters(l))
+				.map(l => stripVTControlCharacters(l))
 				.join("")
 				.replace(/[+\-|]/g, "")
 				.replace(/\s+/g, " ")
@@ -688,7 +688,7 @@ describe("Editor component", () => {
 
 			// Extract and verify content
 			const allText = lines
-				.map((l) => stripVTControlCharacters(l))
+				.map(l => stripVTControlCharacters(l))
 				.join("")
 				.replace(/[+\-|]/g, "")
 				.trim();

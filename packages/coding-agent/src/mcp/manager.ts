@@ -4,7 +4,6 @@
  * Discovers, connects to, and manages MCP servers.
  * Handles tool loading and lifecycle.
  */
-
 import { logger } from "@oh-my-pi/pi-utils";
 import type { TSchema } from "@sinclair/typebox";
 import type { CustomTool } from "../extensibility/custom-tools/types";
@@ -34,11 +33,11 @@ const STARTUP_TIMEOUT_MS = 250;
 function trackPromise<T>(promise: Promise<T>): TrackedPromise<T> {
 	const tracked: TrackedPromise<T> = { promise, status: "pending" };
 	promise.then(
-		(value) => {
+		value => {
 			tracked.status = "fulfilled";
 			tracked.value = value;
 		},
-		(reason) => {
+		reason => {
 			tracked.status = "rejected";
 			tracked.reason = reason;
 		},
@@ -156,7 +155,7 @@ export class MCPManager {
 			}
 
 			const connectionPromise = connectToServer(name, config).then(
-				(connection) => {
+				connection => {
 					if (sources[name]) {
 						connection._source = sources[name];
 					}
@@ -166,7 +165,7 @@ export class MCPManager {
 					}
 					return connection;
 				},
-				(error) => {
+				error => {
 					if (this.pendingConnections.get(name) === connectionPromise) {
 						this.pendingConnections.delete(name);
 					}
@@ -175,7 +174,7 @@ export class MCPManager {
 			);
 			this.pendingConnections.set(name, connectionPromise);
 
-			const toolsPromise = connectionPromise.then(async (connection) => {
+			const toolsPromise = connectionPromise.then(async connection => {
 				const serverTools = await listTools(connection);
 				return { connection, serverTools };
 			});
@@ -192,7 +191,7 @@ export class MCPManager {
 					this.replaceServerTools(name, customTools);
 					void this.toolCache?.set(name, config, serverTools);
 				})
-				.catch((error) => {
+				.catch(error => {
 					if (this.pendingToolLoads.get(name) !== toolsPromise) return;
 					this.pendingToolLoads.delete(name);
 					if (!allowBackgroundLogging || reportedErrors.has(name)) return;
@@ -203,22 +202,22 @@ export class MCPManager {
 
 		// Notify about servers we're connecting to
 		if (connectionTasks.length > 0 && onConnecting) {
-			onConnecting(connectionTasks.map((task) => task.name));
+			onConnecting(connectionTasks.map(task => task.name));
 		}
 
 		if (connectionTasks.length > 0) {
 			await Promise.race([
-				Promise.allSettled(connectionTasks.map((task) => task.tracked.promise)),
+				Promise.allSettled(connectionTasks.map(task => task.tracked.promise)),
 				delay(STARTUP_TIMEOUT_MS),
 			]);
 
 			const cachedTools = new Map<string, MCPToolDefinition[]>();
-			const pendingTasks = connectionTasks.filter((task) => task.tracked.status === "pending");
+			const pendingTasks = connectionTasks.filter(task => task.tracked.status === "pending");
 
 			if (pendingTasks.length > 0) {
 				if (this.toolCache) {
 					await Promise.all(
-						pendingTasks.map(async (task) => {
+						pendingTasks.map(async task => {
 							const cached = await this.toolCache?.get(task.name, task.config);
 							if (cached) {
 								cachedTools.set(task.name, cached);
@@ -227,9 +226,9 @@ export class MCPManager {
 					);
 				}
 
-				const pendingWithoutCache = pendingTasks.filter((task) => !cachedTools.has(task.name));
+				const pendingWithoutCache = pendingTasks.filter(task => !cachedTools.has(task.name));
 				if (pendingWithoutCache.length > 0) {
-					await Promise.allSettled(pendingWithoutCache.map((task) => task.tracked.promise));
+					await Promise.allSettled(pendingWithoutCache.map(task => task.tracked.promise));
 				}
 			}
 
@@ -269,7 +268,7 @@ export class MCPManager {
 	}
 
 	private replaceServerTools(name: string, tools: CustomTool<TSchema, MCPToolDetails>[]): void {
-		this.tools = this.tools.filter((t) => !t.name.startsWith(`mcp_${name}_`));
+		this.tools = this.tools.filter(t => !t.name.startsWith(`mcp_${name}_`));
 		this.tools.push(...tools);
 	}
 
@@ -327,14 +326,14 @@ export class MCPManager {
 		}
 
 		// Remove tools from this server
-		this.tools = this.tools.filter((t) => !t.name.startsWith(`mcp_${name}_`));
+		this.tools = this.tools.filter(t => !t.name.startsWith(`mcp_${name}_`));
 	}
 
 	/**
 	 * Disconnect from all servers.
 	 */
 	async disconnectAll(): Promise<void> {
-		const promises = Array.from(this.connections.values()).map((conn) => disconnectServer(conn));
+		const promises = Array.from(this.connections.values()).map(conn => disconnectServer(conn));
 		await Promise.allSettled(promises);
 
 		this.pendingConnections.clear();
@@ -367,7 +366,7 @@ export class MCPManager {
 	 * Refresh tools from all servers.
 	 */
 	async refreshAllTools(): Promise<void> {
-		const promises = Array.from(this.connections.keys()).map((name) => this.refreshServerTools(name));
+		const promises = Array.from(this.connections.keys()).map(name => this.refreshServerTools(name));
 		await Promise.allSettled(promises);
 	}
 }

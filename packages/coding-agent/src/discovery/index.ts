@@ -4,7 +4,6 @@
  * Auto-registers all providers by importing them.
  * Import this module to ensure all providers are registered with the capability registry.
  */
-
 // Import capability definitions (ensures capabilities are defined before providers register)
 import "../capability/context-file";
 import "../capability/extension";
@@ -20,7 +19,6 @@ import "../capability/slash-command";
 import "../capability/ssh";
 import "../capability/system-prompt";
 import "../capability/tool";
-
 // Import providers (each registers itself on import)
 import "./agents-md";
 import "./builtin";

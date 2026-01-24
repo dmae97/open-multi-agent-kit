@@ -26,7 +26,7 @@ const ensureClientBuild = async () => {
 	});
 
 	if (!result.success) {
-		const errors = result.logs.map((log) => log.message).join("\n");
+		const errors = result.logs.map(log => log.message).join("\n");
 		throw new Error(`Failed to build stats client:\n${errors}`);
 	}
 

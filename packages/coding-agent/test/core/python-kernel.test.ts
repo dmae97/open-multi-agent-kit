@@ -189,7 +189,7 @@ describe("PythonKernel (external gateway)", () => {
 		await Bun.sleep(10);
 		const ws = FakeWebSocket.lastInstance;
 		if (!ws) throw new Error("WebSocket not initialized");
-		ws.setSendHandler((data) => {
+		ws.setSendHandler(data => {
 			const msg = typeof data === "string" ? (JSON.parse(data) as JupyterMessage) : decodeMessage(data);
 			const code = String(msg.content.code ?? "");
 			if (!initSeen) {
@@ -282,10 +282,10 @@ describe("PythonKernel (external gateway)", () => {
 		const displays: KernelDisplayOutput[] = [];
 
 		const result = await kernel.execute("print('hello')", {
-			onChunk: (text) => {
+			onChunk: text => {
 				chunks.push(text);
 			},
-			onDisplay: (output) => {
+			onDisplay: output => {
 				displays.push(output);
 			},
 		});
@@ -321,7 +321,7 @@ describe("PythonKernel (external gateway)", () => {
 		await Bun.sleep(10);
 		const ws = FakeWebSocket.lastInstance;
 		if (!ws) throw new Error("WebSocket not initialized");
-		ws.setSendHandler((data) => {
+		ws.setSendHandler(data => {
 			const msg = typeof data === "string" ? (JSON.parse(data) as JupyterMessage) : decodeMessage(data);
 			const code = String(msg.content.code ?? "");
 			if (!initSeen) {
@@ -363,7 +363,7 @@ describe("PythonKernel (external gateway)", () => {
 		await Bun.sleep(10);
 		const ws = FakeWebSocket.lastInstance;
 		if (!ws) throw new Error("WebSocket not initialized");
-		ws.setSendHandler((data) => {
+		ws.setSendHandler(data => {
 			const msg = typeof data === "string" ? (JSON.parse(data) as JupyterMessage) : decodeMessage(data);
 			const code = String(msg.content.code ?? "");
 			if (!initSeen) {
@@ -409,7 +409,7 @@ describe("PythonKernel (external gateway)", () => {
 		await Bun.sleep(10);
 		const ws = FakeWebSocket.lastInstance;
 		if (!ws) throw new Error("WebSocket not initialized");
-		ws.setSendHandler((data) => {
+		ws.setSendHandler(data => {
 			const msg = typeof data === "string" ? (JSON.parse(data) as JupyterMessage) : decodeMessage(data);
 			const code = String(msg.content.code ?? "");
 			if (!initSeen) {

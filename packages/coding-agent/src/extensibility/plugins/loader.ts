@@ -4,7 +4,6 @@
  * Reads enabled plugins from the runtime config and loads their tools/hooks
  * based on manifest entries and enabled features.
  */
-
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { isEnoent } from "@oh-my-pi/pi-utils";

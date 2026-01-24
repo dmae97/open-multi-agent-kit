@@ -1,7 +1,6 @@
 /**
  * Default themes for TUI tests using chalk
  */
-
 import type { EditorTheme, MarkdownTheme, SelectListTheme, SymbolTheme } from "@oh-my-pi/pi-tui";
 import { Chalk } from "chalk";
 

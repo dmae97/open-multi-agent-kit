@@ -120,7 +120,7 @@ describe("openai-codex streaming", () => {
 			}
 			if (event.type === "done") {
 				sawDone = true;
-				expect(event.message.content.find((c) => c.type === "text")?.text).toBe("Hello");
+				expect(event.message.content.find(c => c.type === "text")?.text).toBe("Hello");
 			}
 		}
 

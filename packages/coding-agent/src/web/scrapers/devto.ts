@@ -62,7 +62,7 @@ export const handleDevTo: SpecialHandler = async (
 				md += `by **${article.user?.name || "Unknown"}** (@${article.user?.username || "unknown"})`;
 				md += `${readTime}${reactStr}\n`;
 				md += `*${new Date(article.published_at || article.published_timestamp || "").toISOString().split("T")[0]}*\n`;
-				if (tags.length > 0) md += `Tags: ${tags.map((t) => `#${t}`).join(", ")}\n`;
+				if (tags.length > 0) md += `Tags: ${tags.map(t => `#${t}`).join(", ")}\n`;
 				if (article.description) md += `\n${article.description}\n`;
 				md += `\n---\n\n`;
 			}
@@ -104,7 +104,7 @@ export const handleDevTo: SpecialHandler = async (
 				md += `### ${article.title}\n\n`;
 				md += `${readTime.substring(3)}${reactStr}\n`;
 				md += `*${new Date(article.published_at || article.published_timestamp || "").toISOString().split("T")[0]}*\n`;
-				if (tags.length > 0) md += `Tags: ${tags.map((t) => `#${t}`).join(", ")}\n`;
+				if (tags.length > 0) md += `Tags: ${tags.map(t => `#${t}`).join(", ")}\n`;
 				if (article.description) md += `\n${article.description}\n`;
 				md += `\n---\n\n`;
 			}
@@ -146,7 +146,7 @@ export const handleDevTo: SpecialHandler = async (
 			if (readTime > 0) md += `**Reading time:** ${readTime} min\n`;
 			if (reactions > 0) md += `**Reactions:** ${formatCount(reactions)}\n`;
 			if (comments > 0) md += `**Comments:** ${formatCount(comments)}\n`;
-			if (tags.length > 0) md += `**Tags:** ${tags.map((t) => `#${t}`).join(", ")}\n`;
+			if (tags.length > 0) md += `**Tags:** ${tags.map(t => `#${t}`).join(", ")}\n`;
 			md += `\n---\n\n`;
 
 			// Prefer body_markdown over body_html

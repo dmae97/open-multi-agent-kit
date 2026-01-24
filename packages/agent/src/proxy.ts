@@ -2,7 +2,6 @@
  * Proxy stream function for apps that route LLM calls through a server.
  * The server manages auth and proxies requests to LLM providers.
  */
-
 import {
 	type AssistantMessage,
 	type AssistantMessageEvent,
@@ -20,8 +19,8 @@ import { readSseEvents } from "@oh-my-pi/pi-utils";
 class ProxyMessageEventStream extends EventStream<AssistantMessageEvent, AssistantMessage> {
 	constructor() {
 		super(
-			(event) => event.type === "done" || event.type === "error",
-			(event) => {
+			event => event.type === "done" || event.type === "error",
+			event => {
 				if (event.type === "done") return event.message;
 				if (event.type === "error") return event.error;
 				throw new Error("Unexpected event type");

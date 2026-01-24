@@ -35,14 +35,14 @@ describe("openai-codex request transformer", () => {
 		expect(transformed.include).toEqual(["reasoning.encrypted_content"]);
 
 		const input = transformed.input || [];
-		expect(input.some((item) => item.type === "item_reference")).toBe(false);
-		expect(input.some((item) => "id" in item)).toBe(false);
+		expect(input.some(item => item.type === "item_reference")).toBe(false);
+		expect(input.some(item => "id" in item)).toBe(false);
 		const first = input[0];
 		expect(first?.type).toBe("message");
 		expect(first?.role).toBe("developer");
 		expect(first?.content).toEqual([{ type: "input_text", text: `${DEFAULT_PROMPT_PREFIX}...` }]);
 
-		const orphaned = input.find((item) => item.type === "message" && item.role === "assistant");
+		const orphaned = input.find(item => item.type === "message" && item.role === "assistant");
 		expect(orphaned?.content).toMatch(/Previous tool result/);
 	});
 });

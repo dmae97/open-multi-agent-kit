@@ -245,7 +245,7 @@ function decodeLogData(value: unknown): unknown {
 		return value;
 	}
 	if (Array.isArray(value)) {
-		return value.map((entry) => decodeLogData(entry));
+		return value.map(entry => decodeLogData(entry));
 	}
 	const record = value as Record<string, unknown>;
 	const typeName = record.$typeName;
@@ -375,13 +375,13 @@ export const streamCursor: StreamFunction<"cursor-agent"> = (
 				get firstTokenTime() {
 					return firstTokenTime;
 				},
-				setTextBlock: (b) => {
+				setTextBlock: b => {
 					currentTextBlock = b;
 				},
-				setThinkingBlock: (b) => {
+				setThinkingBlock: b => {
 					currentThinkingBlock = b;
 				},
-				setToolCall: (t) => {
+				setToolCall: t => {
 					currentToolCall = t;
 				},
 				setFirstTokenTime: () => {
@@ -427,7 +427,7 @@ export const streamCursor: StreamFunction<"cursor-agent"> = (
 							usageState,
 							requestContextTools,
 							onConversationCheckpoint,
-						).catch((error) => {
+						).catch(error => {
 							log("error", "handleServerMessage", { error: String(error) });
 						});
 					} catch (e) {
@@ -452,7 +452,7 @@ export const streamCursor: StreamFunction<"cursor-agent"> = (
 			heartbeatTimer = setInterval(sendHeartbeat, 5000);
 
 			await new Promise<void>((resolve, reject) => {
-				h2Request!.on("trailers", (trailers) => {
+				h2Request!.on("trailers", trailers => {
 					const status = trailers["grpc-status"];
 					const msg = trailers["grpc-message"];
 					if (status && status !== "0") {
@@ -662,9 +662,9 @@ async function handleShellStreamArgs(
 		args as any,
 		execHandlers?.shell,
 		onToolResult,
-		(toolResult) => buildShellResultFromToolResult(args as any, toolResult),
-		(reason) => buildShellRejectedResult((args as any).command, (args as any).workingDirectory, reason),
-		(error) => buildShellFailureResult((args as any).command, (args as any).workingDirectory, error),
+		toolResult => buildShellResultFromToolResult(args as any, toolResult),
+		reason => buildShellRejectedResult((args as any).command, (args as any).workingDirectory, reason),
+		error => buildShellFailureResult((args as any).command, (args as any).workingDirectory, error),
 	);
 
 	sendShellStreamEvent(h2Request, execMsg, { case: "start", value: create(ShellStreamStartSchema, {}) });
@@ -810,9 +810,9 @@ async function handleExecServerMessage(
 				args,
 				execHandlers?.read,
 				onToolResult,
-				(toolResult) => buildReadResultFromToolResult(args.path, toolResult),
-				(reason) => buildReadRejectedResult(args.path, reason),
-				(error) => buildReadErrorResult(args.path, error),
+				toolResult => buildReadResultFromToolResult(args.path, toolResult),
+				reason => buildReadRejectedResult(args.path, reason),
+				error => buildReadErrorResult(args.path, error),
 			);
 			sendExecClientMessage(h2Request, execMsg, "readResult", execResult);
 			return;
@@ -823,9 +823,9 @@ async function handleExecServerMessage(
 				args,
 				execHandlers?.ls,
 				onToolResult,
-				(toolResult) => buildLsResultFromToolResult(args.path, toolResult),
-				(reason) => buildLsRejectedResult(args.path, reason),
-				(error) => buildLsErrorResult(args.path, error),
+				toolResult => buildLsResultFromToolResult(args.path, toolResult),
+				reason => buildLsRejectedResult(args.path, reason),
+				error => buildLsErrorResult(args.path, error),
 			);
 			sendExecClientMessage(h2Request, execMsg, "lsResult", execResult);
 			return;
@@ -836,9 +836,9 @@ async function handleExecServerMessage(
 				args,
 				execHandlers?.grep,
 				onToolResult,
-				(toolResult) => buildGrepResultFromToolResult(args, toolResult),
-				(reason) => buildGrepErrorResult(reason),
-				(error) => buildGrepErrorResult(error),
+				toolResult => buildGrepResultFromToolResult(args, toolResult),
+				reason => buildGrepErrorResult(reason),
+				error => buildGrepErrorResult(error),
 			);
 			sendExecClientMessage(h2Request, execMsg, "grepResult", execResult);
 			return;
@@ -849,7 +849,7 @@ async function handleExecServerMessage(
 				args,
 				execHandlers?.write,
 				onToolResult,
-				(toolResult) =>
+				toolResult =>
 					buildWriteResultFromToolResult(
 						{
 							path: args.path,
@@ -859,8 +859,8 @@ async function handleExecServerMessage(
 						},
 						toolResult,
 					),
-				(reason) => buildWriteRejectedResult(args.path, reason),
-				(error) => buildWriteErrorResult(args.path, error),
+				reason => buildWriteRejectedResult(args.path, reason),
+				error => buildWriteErrorResult(args.path, error),
 			);
 			sendExecClientMessage(h2Request, execMsg, "writeResult", execResult);
 			return;
@@ -871,9 +871,9 @@ async function handleExecServerMessage(
 				args,
 				execHandlers?.delete,
 				onToolResult,
-				(toolResult) => buildDeleteResultFromToolResult(args.path, toolResult),
-				(reason) => buildDeleteRejectedResult(args.path, reason),
-				(error) => buildDeleteErrorResult(args.path, error),
+				toolResult => buildDeleteResultFromToolResult(args.path, toolResult),
+				reason => buildDeleteRejectedResult(args.path, reason),
+				error => buildDeleteErrorResult(args.path, error),
 			);
 			sendExecClientMessage(h2Request, execMsg, "deleteResult", execResult);
 			return;
@@ -884,9 +884,9 @@ async function handleExecServerMessage(
 				args,
 				execHandlers?.shell,
 				onToolResult,
-				(toolResult) => buildShellResultFromToolResult(args, toolResult),
-				(reason) => buildShellRejectedResult(args.command, args.workingDirectory, reason),
-				(error) => buildShellFailureResult(args.command, args.workingDirectory, error),
+				toolResult => buildShellResultFromToolResult(args, toolResult),
+				reason => buildShellRejectedResult(args.command, args.workingDirectory, reason),
+				error => buildShellFailureResult(args.command, args.workingDirectory, error),
 			);
 			sendExecClientMessage(h2Request, execMsg, "shellResult", execResult);
 			return;
@@ -944,9 +944,9 @@ async function handleExecServerMessage(
 				args,
 				execHandlers?.diagnostics,
 				onToolResult,
-				(toolResult) => buildDiagnosticsResultFromToolResult(args.path, toolResult),
-				(reason) => buildDiagnosticsRejectedResult(args.path, reason),
-				(error) => buildDiagnosticsErrorResult(args.path, error),
+				toolResult => buildDiagnosticsResultFromToolResult(args.path, toolResult),
+				reason => buildDiagnosticsRejectedResult(args.path, reason),
+				error => buildDiagnosticsErrorResult(args.path, error),
 			);
 			sendExecClientMessage(h2Request, execMsg, "diagnosticsResult", execResult);
 			return;
@@ -958,9 +958,9 @@ async function handleExecServerMessage(
 				mcpCall,
 				execHandlers?.mcp,
 				onToolResult,
-				(toolResult) => buildMcpResultFromToolResult(mcpCall, toolResult),
-				(_reason) => buildMcpToolNotFoundResult(mcpCall),
-				(error) => buildMcpErrorResult(error),
+				toolResult => buildMcpResultFromToolResult(mcpCall, toolResult),
+				_reason => buildMcpToolNotFoundResult(mcpCall),
+				error => buildMcpErrorResult(error),
 			);
 			sendExecClientMessage(h2Request, execMsg, "mcpResult", execResult);
 			return;
@@ -1075,7 +1075,7 @@ async function applyToolResultHandler(
 }
 
 function toolResultToText(toolResult: ToolResultMessage): string {
-	return toolResult.content.map((item) => (item.type === "text" ? item.text : `[${item.mimeType} image]`)).join("\n");
+	return toolResult.content.map(item => (item.type === "text" ? item.text : `[${item.mimeType} image]`)).join("\n");
 }
 
 function toolResultWasTruncated(toolResult: ToolResultMessage): boolean {
@@ -1274,8 +1274,8 @@ function buildLsResultFromToolResult(path: string, toolResult: ToolResultMessage
 	const rootPath = path || ".";
 	const entries = text
 		.split("\n")
-		.map((line) => line.trim())
-		.filter((line) => line.length > 0 && !line.startsWith("["));
+		.map(line => line.trim())
+		.filter(line => line.length > 0 && !line.startsWith("["));
 	const childrenDirs: LsDirectoryTreeNode[] = [];
 	const childrenFiles: LsDirectoryTreeNode_File[] = [];
 
@@ -1346,8 +1346,8 @@ function buildGrepResultFromToolResult(
 	const clientTruncated = toolResultDetailBoolean(toolResult, "truncated");
 	const lines = text
 		.split("\n")
-		.map((line) => line.trimEnd())
-		.filter((line) => line.length > 0 && !line.startsWith("[") && !line.toLowerCase().startsWith("no matches"));
+		.map(line => line.trimEnd())
+		.filter(line => line.length > 0 && !line.startsWith("[") && !line.toLowerCase().startsWith("no matches"));
 
 	const workspaceKey = args.path || ".";
 	let unionResult: GrepUnionResult;
@@ -1367,7 +1367,7 @@ function buildGrepResultFromToolResult(
 		});
 	} else if (outputMode === "count") {
 		const counts = lines
-			.map((line) => {
+			.map(line => {
 				const separatorIndex = line.lastIndexOf(":");
 				if (separatorIndex === -1) {
 					return null;
@@ -1417,7 +1417,7 @@ function buildGrepResultFromToolResult(
 		const matches = Array.from(matchMap.entries()).map(([file, matches]) =>
 			create(GrepFileMatchSchema, {
 				file,
-				matches: matches.map((entry) =>
+				matches: matches.map(entry =>
 					create(GrepContentMatchSchema, {
 						lineNumber: entry.line,
 						content: entry.content,
@@ -1586,7 +1586,7 @@ function buildTodoWriteArgs(toolCall: CursorUpdateTodosToolCall): {
 	const todos = toolCall.updateTodosToolCall?.args?.todos;
 	if (!todos) return null;
 	return {
-		todos: todos.map((todo) => ({
+		todos: todos.map(todo => ({
 			id: typeof todo.id === "string" && todo.id.length > 0 ? todo.id : undefined,
 			content: typeof todo.content === "string" ? todo.content : "",
 			activeForm: typeof todo.content === "string" ? todo.content : "",
@@ -1599,7 +1599,7 @@ function buildMcpResultFromToolResult(_mcpCall: CursorMcpCall, toolResult: ToolR
 	if (toolResult.isError) {
 		return buildMcpErrorResult(toolResultToText(toolResult) || "MCP tool failed");
 	}
-	const content = toolResult.content.map((item) => {
+	const content = toolResult.content.map(item => {
 		if (item.type === "image") {
 			return create(McpToolResultContentItemSchema, {
 				content: {
@@ -1810,12 +1810,12 @@ function buildMcpToolDefinitions(tools: Tool[] | undefined): McpToolDefinition[]
 		return [];
 	}
 
-	const advertisedTools = tools.filter((tool) => !CURSOR_NATIVE_TOOL_NAMES.has(tool.name));
+	const advertisedTools = tools.filter(tool => !CURSOR_NATIVE_TOOL_NAMES.has(tool.name));
 	if (advertisedTools.length === 0) {
 		return [];
 	}
 
-	return advertisedTools.map((tool) => {
+	return advertisedTools.map(tool => {
 		const jsonSchema = tool.parameters as Record<string, unknown> | undefined;
 		const schemaValue: JsonValue =
 			jsonSchema && typeof jsonSchema === "object"
@@ -1841,7 +1841,7 @@ function extractUserMessageText(msg: Message): string {
 	if (typeof content === "string") return content.trim();
 	const text = content
 		.filter((c): c is TextContent => c.type === "text")
-		.map((c) => c.text)
+		.map(c => c.text)
 		.join("\n");
 	return text.trim();
 }
@@ -1854,7 +1854,7 @@ function extractAssistantMessageText(msg: Message): string {
 	if (!Array.isArray(msg.content)) return "";
 	return msg.content
 		.filter((c): c is TextContent => c.type === "text")
-		.map((c) => c.text)
+		.map(c => c.text)
 		.join("\n");
 }
 
@@ -2007,7 +2007,7 @@ function buildGrpcRequest(
 	// Build conversation turns from prior messages (excluding the last user message)
 	const turns = buildConversationTurns(context.messages);
 
-	const hasMatchingPrompt = state.conversationState?.rootPromptMessagesJson?.some((entry) =>
+	const hasMatchingPrompt = state.conversationState?.rootPromptMessagesJson?.some(entry =>
 		Buffer.from(entry).equals(systemPromptId),
 	);
 
@@ -2064,7 +2064,7 @@ function buildGrpcRequest(
 
 	const requestBytes = toBinary(AgentClientMessageSchema, clientMessage);
 
-	const toolNames = context.tools?.map((tool) => tool.name) ?? [];
+	const toolNames = context.tools?.map(tool => tool.name) ?? [];
 	const detail =
 		process.env.DEBUG_CURSOR === "2"
 			? ` ${JSON.stringify(clientMessage.message.value, debugReplacer, 2)?.slice(0, 2000)}`
@@ -2082,6 +2082,6 @@ function buildGrpcRequest(
 function extractText(content: (TextContent | ImageContent)[]): string {
 	return content
 		.filter((c): c is TextContent => c.type === "text")
-		.map((c) => c.text)
+		.map(c => c.text)
 		.join("\n");
 }

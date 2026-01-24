@@ -1,7 +1,6 @@
 /**
  * PubMed handler for web-fetch
  */
-
 import type { RenderResult, SpecialHandler } from "./types";
 import { finalizeOutput, loadPage } from "./types";
 
@@ -100,7 +99,7 @@ export const handlePubMed: SpecialHandler = async (
 
 		// Authors
 		if (article.authors && article.authors.length > 0) {
-			const authorNames = article.authors.map((a) => a.name).join(", ");
+			const authorNames = article.authors.map(a => a.name).join(", ");
 			md += `**Authors:** ${authorNames}\n`;
 		}
 

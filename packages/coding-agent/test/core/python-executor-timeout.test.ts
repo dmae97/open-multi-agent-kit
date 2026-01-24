@@ -21,7 +21,7 @@ describe("executePythonWithKernel cancellation", () => {
 	it("annotates timeouts when cancelled", async () => {
 		const kernel = new FakeKernel(
 			{ status: "ok", cancelled: true, timedOut: true, stdinRequested: false },
-			(options) => {
+			options => {
 				options?.onChunk?.("tick\n");
 			},
 		);

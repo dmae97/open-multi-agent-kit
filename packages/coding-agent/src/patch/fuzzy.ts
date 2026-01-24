@@ -4,7 +4,6 @@
  * Provides both character-level and line-level fuzzy matching with progressive
  * fallback strategies for finding text in files.
  */
-
 import { countLeadingWhitespace, normalizeForFuzzy, normalizeUnicode } from "./normalize";
 import type { ContextLineResult, FuzzyMatch, MatchOutcome, SequenceSearchResult } from "./types";
 
@@ -89,7 +88,7 @@ function computeRelativeIndentDepths(lines: string[]): number[] {
 		}
 	}
 	const minIndent = nonEmptyIndents.length > 0 ? Math.min(...nonEmptyIndents) : 0;
-	const indentSteps = nonEmptyIndents.map((indent) => indent - minIndent).filter((step) => step > 0);
+	const indentSteps = nonEmptyIndents.map(indent => indent - minIndent).filter(step => step > 0);
 	const indentUnit = indentSteps.length > 0 ? Math.min(...indentSteps) : 1;
 
 	return lines.map((line, index) => {

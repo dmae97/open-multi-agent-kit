@@ -225,7 +225,7 @@ export class PythonTool implements AgentTool<typeof pythonSchema> {
 
 			const buildUpdateDetails = (): PythonToolDetails => {
 				const details: PythonToolDetails = {
-					cells: cellResults.map((cell) => ({
+					cells: cellResults.map(cell => ({
 						...cell,
 						statusEvents: cell.statusEvents ? [...cell.statusEvents] : undefined,
 					})),
@@ -257,7 +257,7 @@ export class PythonTool implements AgentTool<typeof pythonSchema> {
 			outputSink = new OutputSink({
 				artifactPath,
 				artifactId,
-				onChunk: (chunk) => {
+				onChunk: chunk => {
 					appendTail(chunk);
 					pushUpdate();
 				},
@@ -288,7 +288,7 @@ export class PythonTool implements AgentTool<typeof pythonSchema> {
 				const executorOptions: PythonExecutorOptions = {
 					...baseExecutorOptions,
 					reset: isFirstCell ? reset : false,
-					onChunk: async (chunk) => {
+					onChunk: async chunk => {
 						await outputSink!.push(chunk);
 					},
 				};
@@ -638,14 +638,14 @@ function formatStatusEventExpanded(event: PythonStatusEvent, theme: Theme): stri
 	switch (op) {
 		case "find":
 		case "glob":
-			if (data.matches) addItems(data.matches as unknown[], (m) => String(m));
+			if (data.matches) addItems(data.matches as unknown[], m => String(m));
 			break;
 		case "ls":
-			if (data.items) addItems(data.items as unknown[], (m) => String(m));
+			if (data.items) addItems(data.items as unknown[], m => String(m));
 			break;
 		case "grep":
 			if (data.hits) {
-				addItems(data.hits as unknown[], (h) => {
+				addItems(data.hits as unknown[], h => {
 					const hit = h as { line: number; text: string };
 					return `${hit.line}: ${truncate(hit.text, 60, theme.format.ellipsis)}`;
 				});
@@ -653,7 +653,7 @@ function formatStatusEventExpanded(event: PythonStatusEvent, theme: Theme): stri
 			break;
 		case "rgrep":
 			if (data.hits) {
-				addItems(data.hits as unknown[], (h) => {
+				addItems(data.hits as unknown[], h => {
 					const hit = h as { file: string; line: number; text: string };
 					return `${shortenPath(hit.file)}:${hit.line}: ${truncate(hit.text, 50, theme.format.ellipsis)}`;
 				});
@@ -661,28 +661,28 @@ function formatStatusEventExpanded(event: PythonStatusEvent, theme: Theme): stri
 			break;
 		case "rsed":
 			if (data.changed) {
-				addItems(data.changed as unknown[], (c) => {
+				addItems(data.changed as unknown[], c => {
 					const change = c as { file: string; count: number };
 					return `${shortenPath(change.file)}: ${change.count} replacement${change.count !== 1 ? "s" : ""}`;
 				});
 			}
 			break;
 		case "env":
-			if (data.keys) addItems(data.keys as unknown[], (k) => String(k), 10);
+			if (data.keys) addItems(data.keys as unknown[], k => String(k), 10);
 			break;
 		case "git_log":
 			if (data.entries) {
-				addItems(data.entries as unknown[], (e) => {
+				addItems(data.entries as unknown[], e => {
 					const entry = e as { sha: string; subject: string };
 					return `${entry.sha} ${truncate(entry.subject, 50, theme.format.ellipsis)}`;
 				});
 			}
 			break;
 		case "git_status":
-			if (data.files) addItems(data.files as unknown[], (f) => String(f));
+			if (data.files) addItems(data.files as unknown[], f => String(f));
 			break;
 		case "git_branch":
-			if (data.branches) addItems(data.branches as unknown[], (b) => String(b));
+			if (data.branches) addItems(data.branches as unknown[], b => String(b));
 			break;
 		case "read":
 		case "cat":
@@ -748,7 +748,7 @@ function formatCellOutputLines(
 	const rawLines = cell.output ? cell.output.split("\n") : [];
 	const displayLines = expanded ? rawLines : rawLines.slice(-previewLines);
 	const hiddenCount = rawLines.length - displayLines.length;
-	const outputLines = displayLines.map((line) => theme.fg("toolOutput", line));
+	const outputLines = displayLines.map(line => theme.fg("toolOutput", line));
 
 	if (outputLines.length === 0) {
 		return { lines: [], hiddenCount: 0 };
@@ -831,7 +831,7 @@ export const pythonToolRenderer = {
 
 		const expanded = renderContext?.expanded ?? options.expanded;
 		const previewLines = renderContext?.previewLines ?? PYTHON_DEFAULT_PREVIEW_LINES;
-		const output = renderContext?.output ?? (result.content?.find((c) => c.type === "text")?.text ?? "").trimEnd();
+		const output = renderContext?.output ?? (result.content?.find(c => c.type === "text")?.text ?? "").trimEnd();
 
 		const jsonOutputs = details?.jsonOutputs ?? [];
 		const jsonLines = jsonOutputs.flatMap((value, index) => {
@@ -950,7 +950,7 @@ export const pythonToolRenderer = {
 		if (expanded) {
 			const styledOutput = combinedOutput
 				.split("\n")
-				.map((line) => uiTheme.fg("toolOutput", line))
+				.map(line => uiTheme.fg("toolOutput", line))
 				.join("\n");
 			const lines = [
 				styledOutput,
@@ -963,7 +963,7 @@ export const pythonToolRenderer = {
 
 		const styledOutput = combinedOutput
 			.split("\n")
-			.map((line) => uiTheme.fg("toolOutput", line))
+			.map(line => uiTheme.fg("toolOutput", line))
 			.join("\n");
 		const textContent = `\n${styledOutput}`;
 

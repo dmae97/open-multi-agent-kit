@@ -45,7 +45,7 @@ class SessionList implements Component {
 	}
 
 	private filterSessions(query: string): void {
-		this.filteredSessions = fuzzyFilter(this.allSessions, query, (session) => {
+		this.filteredSessions = fuzzyFilter(this.allSessions, query, session => {
 			const parts = [
 				session.id,
 				session.title ?? "",

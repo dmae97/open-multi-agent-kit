@@ -98,7 +98,7 @@ export class StatusLineComponent implements Component {
 			this.gitWatcher = null;
 		}
 
-		findGitHeadPath().then((gitHeadPath) => {
+		findGitHeadPath().then(gitHeadPath => {
 			if (!gitHeadPath) return;
 
 			try {
@@ -132,7 +132,7 @@ export class StatusLineComponent implements Component {
 
 		// Note: synchronous call to async function - will return undefined on first call
 		// This is acceptable since it's a cached value that will update on next render
-		findGitHeadPath().then(async (gitHeadPath) => {
+		findGitHeadPath().then(async gitHeadPath => {
 			if (!gitHeadPath) {
 				this.cachedBranch = null;
 				return;
@@ -222,7 +222,7 @@ export class StatusLineComponent implements Component {
 		const lastAssistantMessage = state.messages
 			.slice()
 			.reverse()
-			.find((m) => m.role === "assistant" && m.stopReason !== "aborted") as AssistantMessage | undefined;
+			.find(m => m.role === "assistant" && m.stopReason !== "aborted") as AssistantMessage | undefined;
 
 		const contextTokens = lastAssistantMessage
 			? lastAssistantMessage.usage.input +

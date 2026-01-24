@@ -3,7 +3,6 @@
  *
  * File-based slash commands defined as markdown files.
  */
-
 import { defineCapability } from ".";
 import type { SourceMeta } from "./types";
 
@@ -27,8 +26,8 @@ export const slashCommandCapability = defineCapability<SlashCommand>({
 	id: "slash-commands",
 	displayName: "Slash Commands",
 	description: "Custom slash commands defined as markdown files",
-	key: (cmd) => cmd.name,
-	validate: (cmd) => {
+	key: cmd => cmd.name,
+	validate: cmd => {
 		if (!cmd.name) return "Missing name";
 		if (!cmd.path) return "Missing path";
 		if (cmd.content === undefined) return "Missing content";

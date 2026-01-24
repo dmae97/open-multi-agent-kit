@@ -29,7 +29,7 @@ describe("createTools python fallback", () => {
 		process.env.OMP_PYTHON_SKIP_CHECK = "1";
 		const session = createSession();
 		const tools = await createTools(session, ["python"]);
-		const names = tools.map((tool) => tool.name);
+		const names = tools.map(tool => tool.name);
 
 		expect(names).toEqual(["bash"]);
 

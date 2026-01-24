@@ -1,13 +1,10 @@
 /**
  * One-time migrations that run on startup.
  */
-
 import * as fs from "node:fs";
 import * as path from "node:path";
-
 import { isEnoent, logger } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
-
 import { getAgentDbPath, getAgentDir, getBinDir } from "./config";
 import { AgentStorage } from "./session/agent-storage";
 import type { AuthCredential } from "./session/auth-storage";
@@ -92,7 +89,7 @@ export async function migrateSessionsFromAgentRoot(): Promise<void> {
 	let files: string[];
 	try {
 		const entries = await fs.promises.readdir(agentDir);
-		files = entries.filter((f) => f.endsWith(".jsonl")).map((f) => path.join(agentDir, f));
+		files = entries.filter(f => f.endsWith(".jsonl")).map(f => path.join(agentDir, f));
 	} catch (error) {
 		logger.warn("Failed to read agent directory for session migration", { path: agentDir, error: String(error) });
 		return;

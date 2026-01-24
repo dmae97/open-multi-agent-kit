@@ -32,8 +32,8 @@ describe("Documentation example", () => {
 				expect(Array.isArray(branchEntries)).toBe(true);
 
 				const summary = messagesToSummarize
-					.filter((m) => m.role === "user")
-					.map((m) => `- ${typeof m.content === "string" ? m.content.slice(0, 100) : "[complex]"}`)
+					.filter(m => m.role === "user")
+					.map(m => `- ${typeof m.content === "string" ? m.content.slice(0, 100) : "[complex]"}`)
 					.join("\n");
 
 				// Hooks return compaction content - SessionManager adds id/parentId

@@ -103,9 +103,9 @@ export const handleOsv: SpecialHandler = async (
 		}
 
 		// Severity
-		const severities = vuln.severity || vuln.affected?.flatMap((a) => a.severity || []) || [];
+		const severities = vuln.severity || vuln.affected?.flatMap(a => a.severity || []) || [];
 		if (severities.length) {
-			const formatted = severities.map((s) => `${s.type}: ${s.score}`).join(", ");
+			const formatted = severities.map(s => `${s.type}: ${s.score}`).join(", ");
 			md += `**Severity:** ${formatted}\n`;
 		}
 		md += "\n";

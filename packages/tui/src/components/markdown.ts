@@ -628,7 +628,7 @@ export class Markdown implements Component {
 			} else {
 				// Distribute space proportionally based on natural widths
 				const totalNatural = naturalWidths.reduce((a, b) => a + b, 0);
-				columnWidths = naturalWidths.map((w) => {
+				columnWidths = naturalWidths.map(w => {
 					const proportion = w / totalNatural;
 					return Math.max(1, Math.floor(proportion * availableForCells));
 				});
@@ -648,7 +648,7 @@ export class Markdown implements Component {
 		const v = t.vertical;
 
 		// Render top border
-		const topBorderCells = columnWidths.map((w) => h.repeat(w));
+		const topBorderCells = columnWidths.map(w => h.repeat(w));
 		lines.push(`${t.topLeft}${h}${topBorderCells.join(`${h}${t.teeDown}${h}`)}${h}${t.topRight}`);
 
 		// Render header with wrapping
@@ -656,7 +656,7 @@ export class Markdown implements Component {
 			const text = this.renderInlineTokens(cell.tokens || []);
 			return this.wrapCellText(text, columnWidths[i]);
 		});
-		const headerLineCount = Math.max(...headerCellLines.map((c) => c.length));
+		const headerLineCount = Math.max(...headerCellLines.map(c => c.length));
 
 		for (let lineIdx = 0; lineIdx < headerLineCount; lineIdx++) {
 			const rowParts = headerCellLines.map((cellLines, colIdx) => {
@@ -668,7 +668,7 @@ export class Markdown implements Component {
 		}
 
 		// Render separator
-		const separatorCells = columnWidths.map((w) => h.repeat(w));
+		const separatorCells = columnWidths.map(w => h.repeat(w));
 		lines.push(`${t.teeRight}${h}${separatorCells.join(`${h}${t.cross}${h}`)}${h}${t.teeLeft}`);
 
 		// Render rows with wrapping
@@ -677,7 +677,7 @@ export class Markdown implements Component {
 				const text = this.renderInlineTokens(cell.tokens || []);
 				return this.wrapCellText(text, columnWidths[i]);
 			});
-			const rowLineCount = Math.max(...rowCellLines.map((c) => c.length));
+			const rowLineCount = Math.max(...rowCellLines.map(c => c.length));
 
 			for (let lineIdx = 0; lineIdx < rowLineCount; lineIdx++) {
 				const rowParts = rowCellLines.map((cellLines, colIdx) => {
@@ -689,7 +689,7 @@ export class Markdown implements Component {
 		}
 
 		// Render bottom border
-		const bottomBorderCells = columnWidths.map((w) => h.repeat(w));
+		const bottomBorderCells = columnWidths.map(w => h.repeat(w));
 		lines.push(`${t.bottomLeft}${h}${bottomBorderCells.join(`${h}${t.teeUp}${h}`)}${h}${t.bottomRight}`);
 
 		lines.push(""); // Add spacing after table

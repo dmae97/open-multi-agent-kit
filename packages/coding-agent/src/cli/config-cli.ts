@@ -4,7 +4,6 @@
  * Handles `omp config <command>` subcommands for managing settings.
  * Uses SETTINGS_DEFS as the source of truth for available settings.
  */
-
 import chalk from "chalk";
 import { APP_NAME, getAgentDir } from "../config";
 import { SettingsManager } from "../config/settings-manager";
@@ -32,7 +31,7 @@ export interface ConfigCommandArgs {
 
 /** Find setting definition by ID */
 function findSettingDef(id: string): SettingDef | undefined {
-	return SETTINGS_DEFS.find((def) => def.id === id);
+	return SETTINGS_DEFS.find(def => def.id === id);
 }
 
 /** Get available values for a setting */
@@ -43,7 +42,7 @@ function getSettingValues(def: SettingDef, sm: SettingsManager): readonly string
 	if (def.type === "submenu") {
 		const options = def.getOptions(sm);
 		if (options.length > 0) {
-			return options.map((o) => o.value);
+			return options.map(o => o.value);
 		}
 	}
 	return undefined;

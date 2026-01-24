@@ -14,7 +14,7 @@ export function sanitizeBinaryOutput(str: string): string {
 	// This handles surrogate pairs correctly and catches edge cases where
 	// codePointAt() might return undefined
 	return Array.from(str)
-		.filter((char) => {
+		.filter(char => {
 			// Filter out characters that cause string-width to crash
 			// This includes:
 			// - Unicode format characters

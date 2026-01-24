@@ -15,7 +15,6 @@
  * - extensions: From extensions/STAR/gemini-extension.json manifests (STAR = wildcard)
  * - settings: From settings.json
  */
-
 import * as path from "node:path";
 import { registerProvider } from "../capability";
 import { type ContextFile, contextFileCapability } from "../capability/context-file";
@@ -190,10 +189,10 @@ async function loadExtensions(ctx: LoadContext): Promise<LoadResult<Extension>> 
 
 async function loadExtensionsFromDir(extensionsDir: string, level: "user" | "project"): Promise<LoadResult<Extension>> {
 	const entries = await readDirEntries(extensionsDir);
-	const dirEntries = entries.filter((entry) => entry.isDirectory());
+	const dirEntries = entries.filter(entry => entry.isDirectory());
 
 	const results = await Promise.all(
-		dirEntries.map(async (entry) => {
+		dirEntries.map(async entry => {
 			const extPath = path.join(extensionsDir, entry.name);
 			const manifestPath = path.join(extPath, "gemini-extension.json");
 			const content = await readFile(manifestPath);
@@ -239,13 +238,13 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 	]);
 
 	const items: ExtensionModule[] = [
-		...userPaths.map((extPath) => ({
+		...userPaths.map(extPath => ({
 			name: getExtensionNameFromPath(extPath),
 			path: extPath,
 			level: "user" as const,
 			_source: createSourceMeta(PROVIDER_ID, extPath, "user"),
 		})),
-		...projectPaths.map((extPath) => ({
+		...projectPaths.map(extPath => ({
 			name: getExtensionNameFromPath(extPath),
 			path: extPath,
 			level: "project" as const,

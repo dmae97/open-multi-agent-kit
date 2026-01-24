@@ -3,7 +3,6 @@
  *
  * Async research tasks with polling for completion.
  */
-
 import { Type } from "@sinclair/typebox";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import { callExaTool, findApiKey } from "./mcp-client";

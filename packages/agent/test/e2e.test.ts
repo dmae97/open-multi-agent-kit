@@ -25,7 +25,7 @@ async function basicPrompt(model: Model<any>) {
 	if (assistantMessage.role !== "assistant") throw new Error("Expected assistant message");
 	expect(assistantMessage.content.length).toBeGreaterThan(0);
 
-	const textContent = assistantMessage.content.find((c) => c.type === "text");
+	const textContent = assistantMessage.content.find(c => c.type === "text");
 	expect(textContent).toBeDefined();
 	if (textContent?.type !== "text") throw new Error("Expected text content");
 	expect(textContent.text).toContain("4");
@@ -46,12 +46,12 @@ async function toolExecution(model: Model<any>) {
 	expect(agent.state.isStreaming).toBe(false);
 	expect(agent.state.messages.length).toBeGreaterThanOrEqual(3);
 
-	const toolResultMsg = agent.state.messages.find((m) => m.role === "toolResult");
+	const toolResultMsg = agent.state.messages.find(m => m.role === "toolResult");
 	expect(toolResultMsg).toBeDefined();
 	if (toolResultMsg?.role !== "toolResult") throw new Error("Expected tool result message");
 	const textContent =
 		toolResultMsg.content
-			?.filter((c) => c.type === "text")
+			?.filter(c => c.type === "text")
 			.map((c: any) => c.text)
 			.join("\n") || "";
 	expect(textContent).toBeDefined();
@@ -61,7 +61,7 @@ async function toolExecution(model: Model<any>) {
 
 	const finalMessage = agent.state.messages[agent.state.messages.length - 1];
 	if (finalMessage.role !== "assistant") throw new Error("Expected final assistant message");
-	const finalText = finalMessage.content.find((c) => c.type === "text");
+	const finalText = finalMessage.content.find(c => c.type === "text");
 	expect(finalText).toBeDefined();
 	if (finalText?.type !== "text") throw new Error("Expected text content");
 	// Check for number with or without comma formatting
@@ -113,7 +113,7 @@ async function stateUpdates(model: Model<any>) {
 
 	const events: Array<string> = [];
 
-	agent.subscribe((event) => {
+	agent.subscribe(event => {
 		events.push(event.type);
 	});
 
@@ -125,7 +125,7 @@ async function stateUpdates(model: Model<any>) {
 	expect(events).toContain("message_start");
 	expect(events).toContain("message_end");
 	// May have message_update events during streaming
-	const hasMessageUpdates = events.some((e) => e === "message_update");
+	const hasMessageUpdates = events.some(e => e === "message_update");
 	expect(hasMessageUpdates).toBe(true);
 
 	// Check final state
@@ -151,7 +151,7 @@ async function multiTurnConversation(model: Model<any>) {
 
 	const lastMessage = agent.state.messages[3];
 	if (lastMessage.role !== "assistant") throw new Error("Expected assistant message");
-	const lastText = lastMessage.content.find((c) => c.type === "text");
+	const lastText = lastMessage.content.find(c => c.type === "text");
 	if (lastText?.type !== "text") throw new Error("Expected text content");
 	expect(lastText.text.toLowerCase()).toContain("alice");
 }
@@ -400,7 +400,7 @@ describe("Agent.continue()", () => {
 			expect(agent.state.messages[1].role).toBe("assistant");
 
 			const assistantMsg = agent.state.messages[1] as AssistantMessage;
-			const textContent = assistantMsg.content.find((c) => c.type === "text");
+			const textContent = assistantMsg.content.find(c => c.type === "text");
 			expect(textContent).toBeDefined();
 			if (textContent?.type === "text") {
 				expect(textContent.text.toUpperCase()).toContain("HELLO WORLD");
@@ -473,8 +473,8 @@ describe("Agent.continue()", () => {
 
 			if (lastMessage.role === "assistant") {
 				const textContent = lastMessage.content
-					.filter((c) => c.type === "text")
-					.map((c) => (c as { type: "text"; text: string }).text)
+					.filter(c => c.type === "text")
+					.map(c => (c as { type: "text"; text: string }).text)
 					.join(" ");
 				// Should mention 8 in the response
 				expect(textContent).toMatch(/8/);

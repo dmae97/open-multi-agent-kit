@@ -3,7 +3,6 @@
  *
  * TypeScript/JavaScript extension modules loaded by the extension system.
  */
-
 import { defineCapability } from ".";
 import type { SourceMeta } from "./types";
 
@@ -25,8 +24,8 @@ export const extensionModuleCapability = defineCapability<ExtensionModule>({
 	id: "extension-modules",
 	displayName: "Extension Modules",
 	description: "TypeScript/JavaScript extension modules loaded by the extension system",
-	key: (ext) => ext.name,
-	validate: (ext) => {
+	key: ext => ext.name,
+	validate: ext => {
 		if (!ext.name) return "Missing name";
 		if (!ext.path) return "Missing path";
 		return undefined;

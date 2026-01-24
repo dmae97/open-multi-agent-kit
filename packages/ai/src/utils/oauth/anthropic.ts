@@ -1,7 +1,6 @@
 /**
  * Anthropic OAuth flow (Claude Pro/Max)
  */
-
 import { OAuthCallbackFlow } from "./callback-server";
 import { generatePKCE } from "./pkce";
 import type { OAuthController, OAuthCredentials } from "./types";

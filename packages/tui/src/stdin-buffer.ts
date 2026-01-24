@@ -16,7 +16,6 @@
  * Based on code from OpenTUI (https://github.com/anomalyco/opentui)
  * MIT License - Copyright (c) 2025 opentui
  */
-
 import { EventEmitter } from "events";
 
 const ESC = "\x1b";
@@ -111,7 +110,7 @@ function isCompleteCsiSequence(data: string): "complete" | "incomplete" {
 			if (lastChar === "M" || lastChar === "m") {
 				// Check if we have the right structure
 				const parts = payload.slice(1, -1).split(";");
-				if (parts.length === 3 && parts.every((p) => /^\d+$/.test(p))) {
+				if (parts.length === 3 && parts.every(p => /^\d+$/.test(p))) {
 					return "complete";
 				}
 			}

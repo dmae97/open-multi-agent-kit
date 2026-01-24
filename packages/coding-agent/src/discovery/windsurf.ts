@@ -10,7 +10,6 @@
  * - Rules from .windsurf/rules/*.md and ~/.codeium/windsurf/memories/global_rules.md
  * - Legacy .windsurfrules file
  */
-
 import { registerProvider } from "../capability";
 import { readFile } from "../capability/fs";
 import { type MCPServer, mcpCapability } from "../capability/mcp";

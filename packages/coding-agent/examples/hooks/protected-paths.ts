@@ -4,7 +4,6 @@
  * Blocks write and edit operations to protected paths.
  * Useful for preventing accidental modifications to sensitive files.
  */
-
 import type { HookAPI } from "@oh-my-pi/pi-coding-agent";
 
 export default function (pi: HookAPI) {
@@ -16,7 +15,7 @@ export default function (pi: HookAPI) {
 		}
 
 		const path = event.input.path as string;
-		const isProtected = protectedPaths.some((p) => path.includes(p));
+		const isProtected = protectedPaths.some(p => path.includes(p));
 
 		if (isProtected) {
 			if (ctx.hasUI) {

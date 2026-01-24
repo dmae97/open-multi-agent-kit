@@ -8,7 +8,6 @@
  * - 2 researcher tools (start, poll)
  * - 14 websets tools (CRUD, items, search, enrichment, monitor)
  */
-
 import type { ExaSettings } from "../config/settings-manager";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import { companyTool } from "./company";

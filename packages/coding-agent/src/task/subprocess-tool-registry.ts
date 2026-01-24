@@ -6,7 +6,6 @@
  * - Trigger subprocess termination on completion
  * - Provide custom rendering for realtime/final display
  */
-
 import type { Component } from "@oh-my-pi/pi-tui";
 import type { Theme } from "../modes/theme/theme";
 

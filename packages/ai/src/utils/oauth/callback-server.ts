@@ -10,7 +10,6 @@
  * - generateAuthUrl(): Build provider-specific authorization URL
  * - exchangeToken(): Exchange authorization code for tokens
  */
-
 import templateHtml from "./oauth.html" with { type: "text" };
 import type { OAuthController, OAuthCredentials } from "./types";
 
@@ -63,7 +62,7 @@ export abstract class OAuthCallbackFlow {
 		const bytes = new Uint8Array(16);
 		crypto.getRandomValues(bytes);
 		return Array.from(bytes)
-			.map((value) => value.toString(16).padStart(2, "0"))
+			.map(value => value.toString(16).padStart(2, "0"))
 			.join("");
 	}
 
@@ -125,7 +124,7 @@ export abstract class OAuthCallbackFlow {
 			hostname: DEFAULT_HOSTNAME,
 			port,
 			reusePort: false,
-			fetch: (req) => this.handleCallback(req, expectedState),
+			fetch: req => this.handleCallback(req, expectedState),
 		});
 	}
 

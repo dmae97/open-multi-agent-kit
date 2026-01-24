@@ -481,7 +481,7 @@ describe("Context overflow error handling", () => {
 			});
 
 			// Wait for server to be ready
-			await new Promise<void>((resolve) => {
+			await new Promise<void>(resolve => {
 				const checkServer = async () => {
 					try {
 						const response = await fetch("http://localhost:11434/api/tags");

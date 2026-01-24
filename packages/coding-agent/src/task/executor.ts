@@ -3,7 +3,6 @@
  *
  * Runs each subagent in a Bun Worker and forwards AgentEvents for progress tracking.
  */
-
 import path from "node:path";
 import type { AgentEvent, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { ToolSession } from "..";
@@ -171,7 +170,7 @@ function getUsageTokens(usage: unknown): number {
  * falling back to empty strings if not.
  */
 function extractMCPToolMetadata(mcpManager: MCPManager): MCPToolMetadata[] {
-	return mcpManager.getTools().map((tool) => {
+	return mcpManager.getTools().map(tool => {
 		// MCPTool and DeferredMCPTool have these properties
 		const mcpTool = tool as { mcpToolName?: string; mcpServerName?: string };
 		return {
@@ -264,7 +263,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 
 	const pythonToolMode = options.settingsManager?.getPythonToolMode?.() ?? "ipy-only";
 	if (toolNames?.includes("exec")) {
-		const expanded = toolNames.filter((name) => name !== "exec");
+		const expanded = toolNames.filter(name => name !== "exec");
 		if (pythonToolMode === "bash-only") {
 			expanded.push("bash");
 		} else if (pythonToolMode === "ipy-only") {
@@ -706,11 +705,11 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		message: string;
 	}
 
-	const done = await new Promise<Extract<SubagentWorkerResponse, { type: "done" }>>((resolve) => {
+	const done = await new Promise<Extract<SubagentWorkerResponse, { type: "done" }>>(resolve => {
 		const cleanup = () => {
 			listenerController.abort();
 		};
-		finalize = (message) => {
+		finalize = message => {
 			if (resolved) return;
 			resolved = true;
 			cleanup();

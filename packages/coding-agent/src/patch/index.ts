@@ -7,7 +7,6 @@
  *
  * The mode is determined by the `edit.patchMode` setting.
  */
-
 import * as fs from "node:fs/promises";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { StringEnum } from "@oh-my-pi/pi-ai";

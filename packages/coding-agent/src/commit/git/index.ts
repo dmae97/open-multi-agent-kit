@@ -36,7 +36,7 @@ export class ControlledGit {
 		this.ensureSuccess(result, "git diff --name-only");
 		return result.stdout
 			.split("\n")
-			.map((line) => line.trim())
+			.map(line => line.trim())
 			.filter(Boolean);
 	}
 
@@ -66,7 +66,7 @@ export class ControlledGit {
 		this.ensureSuccess(result, "git log");
 		return result.stdout
 			.split("\n")
-			.map((line) => line.trim())
+			.map(line => line.trim())
 			.filter(Boolean);
 	}
 
@@ -75,7 +75,7 @@ export class ControlledGit {
 		this.ensureSuccess(result, "git diff --cached --name-only");
 		return result.stdout
 			.split("\n")
-			.map((line) => line.trim())
+			.map(line => line.trim())
 			.filter(Boolean);
 	}
 
@@ -84,7 +84,7 @@ export class ControlledGit {
 		this.ensureSuccess(result, "git ls-files --others --exclude-standard");
 		return result.stdout
 			.split("\n")
-			.map((line) => line.trim())
+			.map(line => line.trim())
 			.filter(Boolean);
 	}
 
@@ -102,7 +102,7 @@ export class ControlledGit {
 		if (selections.length === 0) return;
 		const diff = await this.getDiff(false);
 		const fileDiffs = parseFileDiffs(diff);
-		const fileDiffMap = new Map(fileDiffs.map((entry) => [entry.filename, entry]));
+		const fileDiffMap = new Map(fileDiffs.map(entry => [entry.filename, entry]));
 		const patchParts: string[] = [];
 		for (const selection of selections) {
 			const fileDiff = fileDiffMap.get(selection.path);
@@ -128,7 +128,7 @@ export class ControlledGit {
 				throw new GitError("git apply --cached", `No hunks selected for ${selection.path}`);
 			}
 			const header = extractFileHeader(fileDiff.content);
-			const filePatch = [header, ...selectedHunks.map((hunk) => hunk.content)].join("\n");
+			const filePatch = [header, ...selectedHunks.map(hunk => hunk.content)].join("\n");
 			patchParts.push(filePatch);
 		}
 
@@ -192,7 +192,7 @@ function extractFileHeader(diff: string): string {
 
 function joinPatch(parts: string[]): string {
 	return parts
-		.map((part) => (part.endsWith("\n") ? part : `${part}\n`))
+		.map(part => (part.endsWith("\n") ? part : `${part}\n`))
 		.join("\n")
 		.trimEnd()
 		.concat("\n");
@@ -200,13 +200,13 @@ function joinPatch(parts: string[]): string {
 
 function selectHunks(file: FileHunks, selector: HunkSelection["hunks"]): FileHunks["hunks"] {
 	if (selector.type === "indices") {
-		const wanted = new Set(selector.indices.map((value) => Math.max(1, Math.floor(value))));
-		return file.hunks.filter((hunk) => wanted.has(hunk.index + 1));
+		const wanted = new Set(selector.indices.map(value => Math.max(1, Math.floor(value))));
+		return file.hunks.filter(hunk => wanted.has(hunk.index + 1));
 	}
 	if (selector.type === "lines") {
 		const start = Math.floor(selector.start);
 		const end = Math.floor(selector.end);
-		return file.hunks.filter((hunk) => hunk.newStart <= end && hunk.newStart + hunk.newLines - 1 >= start);
+		return file.hunks.filter(hunk => hunk.newStart <= end && hunk.newStart + hunk.newLines - 1 >= start);
 	}
 	return file.hunks;
 }

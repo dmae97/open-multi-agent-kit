@@ -61,7 +61,7 @@ async function handleToolWithImageResult<TApi extends Api>(model: Model<TApi>, o
 	expect(firstResponse.stopReason).toBe("toolUse");
 
 	// Find the tool call
-	const toolCall = firstResponse.content.find((b) => b.type === "toolCall");
+	const toolCall = firstResponse.content.find(b => b.type === "toolCall");
 	expect(toolCall).toBeTruthy();
 	if (!toolCall || toolCall.type !== "toolCall") {
 		throw new Error("Expected tool call");
@@ -95,7 +95,7 @@ async function handleToolWithImageResult<TApi extends Api>(model: Model<TApi>, o
 	expect(secondResponse.errorMessage).toBeFalsy();
 
 	// Verify the LLM can see and describe the image
-	const textContent = secondResponse.content.find((b) => b.type === "text");
+	const textContent = secondResponse.content.find(b => b.type === "text");
 	expect(textContent).toBeTruthy();
 	if (textContent && textContent.type === "text") {
 		const lowerContent = textContent.text.toLowerCase();
@@ -150,7 +150,7 @@ async function handleToolWithTextAndImageResult<TApi extends Api>(model: Model<T
 	expect(firstResponse.stopReason).toBe("toolUse");
 
 	// Find the tool call
-	const toolCall = firstResponse.content.find((b) => b.type === "toolCall");
+	const toolCall = firstResponse.content.find(b => b.type === "toolCall");
 	expect(toolCall).toBeTruthy();
 	if (!toolCall || toolCall.type !== "toolCall") {
 		throw new Error("Expected tool call");
@@ -188,7 +188,7 @@ async function handleToolWithTextAndImageResult<TApi extends Api>(model: Model<T
 	expect(secondResponse.errorMessage).toBeFalsy();
 
 	// Verify the LLM can see both text and image
-	const textContent = secondResponse.content.find((b) => b.type === "text");
+	const textContent = secondResponse.content.find(b => b.type === "text");
 	expect(textContent).toBeTruthy();
 	if (textContent && textContent.type === "text") {
 		const lowerContent = textContent.text.toLowerCase();

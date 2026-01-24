@@ -11,7 +11,6 @@
  *
  * Agent files use markdown with YAML frontmatter.
  */
-
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { logger } from "@oh-my-pi/pi-utils";
@@ -31,14 +30,14 @@ export interface DiscoveryResult {
 async function loadAgentsFromDir(dir: string, source: AgentSource): Promise<AgentDefinition[]> {
 	const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
 	const files = entries
-		.filter((entry) => (entry.isFile() || entry.isSymbolicLink()) && entry.name.endsWith(".md"))
+		.filter(entry => (entry.isFile() || entry.isSymbolicLink()) && entry.name.endsWith(".md"))
 		.sort((a, b) => a.name.localeCompare(b.name))
-		.map((file) => {
+		.map(file => {
 			const filePath = path.join(dir, file.name);
 			return fs
 				.readFile(filePath, "utf-8")
-				.then((content) => parseAgent(filePath, content, source, "warn"))
-				.catch((error) => {
+				.then(content => parseAgent(filePath, content, source, "warn"))
+				.catch(error => {
 					logger.warn("Failed to read agent file", { filePath, error });
 					return null;
 				});
@@ -56,47 +55,46 @@ async function loadAgentsFromDir(dir: string, source: AgentSource): Promise<Agen
  */
 export async function discoverAgents(cwd: string): Promise<DiscoveryResult> {
 	const resolvedCwd = path.resolve(cwd);
-	const agentSources = Array.from(new Set(getConfigDirs("", { project: false }).map((entry) => entry.source)));
+	const agentSources = Array.from(new Set(getConfigDirs("", { project: false }).map(entry => entry.source)));
 
 	// Get user directories (priority order: .omp, .pi, .claude, ...)
 	const userDirs = getConfigDirs("agents", { project: false })
-		.filter((entry) => agentSources.includes(entry.source))
-		.map((entry) => ({
+		.filter(entry => agentSources.includes(entry.source))
+		.map(entry => ({
 			...entry,
 			path: path.resolve(entry.path),
 		}));
 
 	// Get project directories by walking up from cwd (priority order)
 	const projectDirs = (await findAllNearestProjectConfigDirs("agents", resolvedCwd))
-		.filter((entry) => agentSources.includes(entry.source))
-		.map((entry) => ({
+		.filter(entry => agentSources.includes(entry.source))
+		.map(entry => ({
 			...entry,
 			path: path.resolve(entry.path),
 		}));
 
 	const orderedSources = agentSources.filter(
-		(source) =>
-			userDirs.some((entry) => entry.source === source) || projectDirs.some((entry) => entry.source === source),
+		source => userDirs.some(entry => entry.source === source) || projectDirs.some(entry => entry.source === source),
 	);
 
 	const orderedDirs: Array<{ dir: string; source: AgentSource }> = [];
 	for (const source of orderedSources) {
-		const project = projectDirs.find((entry) => entry.source === source);
+		const project = projectDirs.find(entry => entry.source === source);
 		if (project) orderedDirs.push({ dir: project.path, source: "project" });
-		const user = userDirs.find((entry) => entry.source === source);
+		const user = userDirs.find(entry => entry.source === source);
 		if (user) orderedDirs.push({ dir: user.path, source: "user" });
 	}
 
 	const seen = new Set<string>();
 	const loadedAgents = (await Promise.all(orderedDirs.map(({ dir, source }) => loadAgentsFromDir(dir, source))))
 		.flat()
-		.filter((agent) => {
+		.filter(agent => {
 			if (seen.has(agent.name)) return false;
 			seen.add(agent.name);
 			return true;
 		});
 
-	const bundledAgents = loadBundledAgents().filter((agent) => {
+	const bundledAgents = loadBundledAgents().filter(agent => {
 		if (seen.has(agent.name)) return false;
 		seen.add(agent.name);
 		return true;
@@ -111,5 +109,5 @@ export async function discoverAgents(cwd: string): Promise<DiscoveryResult> {
  * Get an agent by name from discovered agents.
  */
 export function getAgent(agents: AgentDefinition[], name: string): AgentDefinition | undefined {
-	return agents.find((a) => a.name === name);
+	return agents.find(a => a.name === name);
 }

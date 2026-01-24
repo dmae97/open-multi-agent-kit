@@ -4,7 +4,6 @@
  * Discovers SSH hosts from ssh.json or .ssh.json in the project root.
  * Priority: 5 (low, project-level only)
  */
-
 import * as path from "node:path";
 import { registerProvider } from "../capability";
 import { readFile } from "../capability/fs";
@@ -134,10 +133,10 @@ async function loadSshJsonFile(_ctx: LoadContext, path: string): Promise<LoadRes
 
 async function load(ctx: LoadContext): Promise<LoadResult<SSHHost>> {
 	const filenames = ["ssh.json", ".ssh.json"];
-	const results = await Promise.all(filenames.map((filename) => loadSshJsonFile(ctx, path.join(ctx.cwd, filename))));
+	const results = await Promise.all(filenames.map(filename => loadSshJsonFile(ctx, path.join(ctx.cwd, filename))));
 
-	const allItems = results.flatMap((r) => r.items);
-	const allWarnings = results.flatMap((r) => r.warnings ?? []);
+	const allItems = results.flatMap(r => r.items);
+	const allWarnings = results.flatMap(r => r.warnings ?? []);
 
 	return {
 		items: allItems,

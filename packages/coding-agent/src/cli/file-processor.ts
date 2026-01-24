@@ -1,7 +1,6 @@
 /**
  * Process @file CLI arguments into text content and image attachments
  */
-
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ImageContent } from "@oh-my-pi/pi-ai";

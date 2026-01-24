@@ -5,12 +5,17 @@
  * Hidden by default - only enabled when explicitly listed in agent's tools.
  * Reviewers finish via `complete` tool with SubmitReviewDetails schema.
  */
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Subprocess tool handlers - registered for extraction/rendering in task tool
+// ─────────────────────────────────────────────────────────────────────────────
+import path from "node:path";
 import type { AgentTool } from "@oh-my-pi/pi-agent-core";
+import { StringEnum } from "@oh-my-pi/pi-ai";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Container, Text } from "@oh-my-pi/pi-tui";
 import { Type } from "@sinclair/typebox";
 import type { Theme, ThemeColor } from "../modes/theme/theme";
+import { subprocessToolRegistry } from "../task/subprocess-tool-registry";
 
 export type FindingPriority = "P0" | "P1" | "P2" | "P3";
 
@@ -145,17 +150,9 @@ export interface SubmitReviewDetails {
 // Re-export types for external use
 export type { ReportFindingDetails };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Subprocess tool handlers - registered for extraction/rendering in task tool
-// ─────────────────────────────────────────────────────────────────────────────
-
-import path from "node:path";
-import { StringEnum } from "@oh-my-pi/pi-ai";
-import { subprocessToolRegistry } from "../task/subprocess-tool-registry";
-
 // Register report_finding handler
 subprocessToolRegistry.register<ReportFindingDetails>("report_finding", {
-	extractData: (event) => event.result?.details as ReportFindingDetails | undefined,
+	extractData: event => event.result?.details as ReportFindingDetails | undefined,
 
 	renderInline: (data, theme) => {
 		const { label, icon, color } = getPriorityDisplay(data.priority, theme);

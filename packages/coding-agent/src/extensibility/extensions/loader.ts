@@ -1,7 +1,6 @@
 /**
  * Extension loader - loads TypeScript extension modules using native Bun import.
  */
-
 import type * as fs1 from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";

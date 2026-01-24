@@ -379,8 +379,8 @@ describe("apply-patch scenarios", () => {
 	// Get all scenario directories
 	const scenarioDirs = fs
 		.readdirSync(fixturesDir, { withFileTypes: true })
-		.filter((d) => d.isDirectory())
-		.map((d) => d.name)
+		.filter(d => d.isDirectory())
+		.map(d => d.name)
 		.sort();
 
 	for (const scenarioName of scenarioDirs) {

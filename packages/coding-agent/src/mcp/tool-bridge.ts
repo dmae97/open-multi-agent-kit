@@ -3,7 +3,6 @@
  *
  * Converts MCP tool definitions to CustomTool format for the agent.
  */
-
 import type { AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { TSchema } from "@sinclair/typebox";
 import type { SourceMeta } from "../capability/types";
@@ -121,7 +120,7 @@ export class MCPTool implements CustomTool<TSchema, MCPToolDetails> {
 
 	/** Create MCPTool instances for all tools from an MCP server connection */
 	static fromTools(connection: MCPServerConnection, tools: MCPToolDefinition[]): MCPTool[] {
-		return tools.map((tool) => new MCPTool(connection, tool));
+		return tools.map(tool => new MCPTool(connection, tool));
 	}
 
 	constructor(
@@ -205,7 +204,7 @@ export class DeferredMCPTool implements CustomTool<TSchema, MCPToolDetails> {
 		getConnection: () => Promise<MCPServerConnection>,
 		source?: SourceMeta,
 	): DeferredMCPTool[] {
-		return tools.map((tool) => new DeferredMCPTool(serverName, tool, getConnection, source));
+		return tools.map(tool => new DeferredMCPTool(serverName, tool, getConnection, source));
 	}
 
 	constructor(

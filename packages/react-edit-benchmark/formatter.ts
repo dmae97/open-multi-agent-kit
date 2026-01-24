@@ -1,7 +1,6 @@
 /**
  * Prettier formatting utilities for edit benchmarks.
  */
-
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as prettier from "prettier";

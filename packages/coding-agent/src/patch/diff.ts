@@ -4,7 +4,6 @@
  * Provides diff string generation and the replace-mode edit logic
  * used when not in patch mode.
  */
-
 import * as Diff from "diff";
 import { resolveToCwd } from "../tools/path-utils";
 import { previewPatch } from "./applicator";

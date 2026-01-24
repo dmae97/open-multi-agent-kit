@@ -82,11 +82,9 @@ function convertMDNBody(sections: MDNSection[]): string {
 			case "table":
 				if (value.rows && value.rows.length > 0) {
 					// Simple markdown table
-					const header = value.rows[0].map((cell) => htmlToBasicMarkdown(cell)).join(" | ");
+					const header = value.rows[0].map(cell => htmlToBasicMarkdown(cell)).join(" | ");
 					const separator = value.rows[0].map(() => "---").join(" | ");
-					const bodyRows = value.rows
-						.slice(1)
-						.map((row) => row.map((cell) => htmlToBasicMarkdown(cell)).join(" | "));
+					const bodyRows = value.rows.slice(1).map(row => row.map(cell => htmlToBasicMarkdown(cell)).join(" | "));
 
 					parts.push(`| ${header} |`);
 					parts.push(`| ${separator} |`);

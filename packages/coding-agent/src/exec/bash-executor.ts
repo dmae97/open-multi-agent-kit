@@ -3,7 +3,6 @@
  *
  * Provides unified bash execution for AgentSession.executeBash() and direct calls.
  */
-
 import { cspawn, Exception, ptree } from "@oh-my-pi/pi-utils";
 import { OutputSink } from "../session/streaming-output";
 import { getShellConfig } from "../utils/shell";

@@ -2,7 +2,6 @@
  * Interactive mode for the coding agent.
  * Handles TUI rendering and user interaction, delegating business logic to AgentSession.
  */
-
 import * as path from "node:path";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage, ImageContent, Message, UsageReport } from "@oh-my-pi/pi-ai";
@@ -207,14 +206,14 @@ export class InteractiveMode implements InteractiveModeContext {
 		];
 
 		// Convert hook commands to SlashCommand format
-		const hookCommands: SlashCommand[] = (this.session.extensionRunner?.getRegisteredCommands() ?? []).map((cmd) => ({
+		const hookCommands: SlashCommand[] = (this.session.extensionRunner?.getRegisteredCommands() ?? []).map(cmd => ({
 			name: cmd.name,
 			description: cmd.description ?? "(hook command)",
 			getArgumentCompletions: cmd.getArgumentCompletions,
 		}));
 
 		// Convert custom commands (TypeScript) to SlashCommand format
-		const customCommands: SlashCommand[] = this.session.customCommands.map((loaded) => ({
+		const customCommands: SlashCommand[] = this.session.customCommands.map(loaded => ({
 			name: loaded.command.name,
 			description: `${loaded.command.description} (${loaded.source})`,
 		}));
@@ -250,8 +249,8 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		// Load and convert file commands to SlashCommand format (async)
 		const fileCommands = await loadSlashCommands({ cwd: process.cwd() });
-		this.fileSlashCommands = new Set(fileCommands.map((cmd) => cmd.name));
-		const fileSlashCommands: SlashCommand[] = fileCommands.map((cmd) => ({
+		this.fileSlashCommands = new Set(fileCommands.map(cmd => cmd.name));
+		const fileSlashCommands: SlashCommand[] = fileCommands.map(cmd => ({
 			name: cmd.name,
 			description: cmd.description,
 		}));
@@ -268,14 +267,14 @@ export class InteractiveMode implements InteractiveModeContext {
 		const providerName = this.session.model?.provider ?? "Unknown";
 
 		// Get recent sessions
-		const recentSessions = (await getRecentSessions(this.sessionManager.getSessionDir())).map((s) => ({
+		const recentSessions = (await getRecentSessions(this.sessionManager.getSessionDir())).map(s => ({
 			name: s.name,
 			timeAgo: s.timeAgo,
 		}));
 
 		// Convert LSP servers to welcome format
 		const lspServerInfo =
-			this.lspServers?.map((s) => ({
+			this.lspServers?.map(s => ({
 				name: s.name,
 				status: s.status as "ready" | "error" | "connecting",
 				fileTypes: s.fileTypes,
@@ -364,7 +363,7 @@ export class InteractiveMode implements InteractiveModeContext {
 
 	async getUserInput(): Promise<{ text: string; images?: ImageContent[] }> {
 		const { promise, resolve } = Promise.withResolvers<{ text: string; images?: ImageContent[] }>();
-		this.onInputCallback = (input) => {
+		this.onInputCallback = input => {
 			this.onInputCallback = undefined;
 			resolve(input);
 		};

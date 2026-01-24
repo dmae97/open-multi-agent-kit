@@ -4,7 +4,6 @@
  * Pure functions for compaction logic. The session manager handles I/O,
  * and after compaction the session is reloaded.
  */
-
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage, Model, Usage } from "@oh-my-pi/pi-ai";
 import { completeSimple } from "@oh-my-pi/pi-ai";
@@ -444,7 +443,7 @@ export async function generateSummary(
 
 	const textContent = response.content
 		.filter((c): c is { type: "text"; text: string } => c.type === "text")
-		.map((c) => c.text)
+		.map(c => c.text)
 		.join("\n");
 
 	return textContent;
@@ -665,6 +664,6 @@ async function generateTurnPrefixSummary(
 
 	return response.content
 		.filter((c): c is { type: "text"; text: string } => c.type === "text")
-		.map((c) => c.text)
+		.map(c => c.text)
 		.join("\n");
 }

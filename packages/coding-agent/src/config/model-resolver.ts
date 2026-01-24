@@ -1,7 +1,6 @@
 /**
  * Model resolution, scoping, and initial selection
  */
-
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { type Api, type KnownProvider, type Model, modelsAreEqual } from "@oh-my-pi/pi-ai";
 import chalk from "chalk";
@@ -84,7 +83,7 @@ function tryMatchModel(modelPattern: string, availableModels: Model<Api>[]): Mod
 		const provider = modelPattern.substring(0, slashIndex);
 		const modelId = modelPattern.substring(slashIndex + 1);
 		const providerMatch = availableModels.find(
-			(m) => m.provider.toLowerCase() === provider.toLowerCase() && m.id.toLowerCase() === modelId.toLowerCase(),
+			m => m.provider.toLowerCase() === provider.toLowerCase() && m.id.toLowerCase() === modelId.toLowerCase(),
 		);
 		if (providerMatch) {
 			return providerMatch;
@@ -93,14 +92,14 @@ function tryMatchModel(modelPattern: string, availableModels: Model<Api>[]): Mod
 	}
 
 	// Check for exact ID match (case-insensitive)
-	const exactMatch = availableModels.find((m) => m.id.toLowerCase() === modelPattern.toLowerCase());
+	const exactMatch = availableModels.find(m => m.id.toLowerCase() === modelPattern.toLowerCase());
 	if (exactMatch) {
 		return exactMatch;
 	}
 
 	// No exact match - fall back to partial matching
 	const matches = availableModels.filter(
-		(m) =>
+		m =>
 			m.id.toLowerCase().includes(modelPattern.toLowerCase()) ||
 			m.name?.toLowerCase().includes(modelPattern.toLowerCase()),
 	);
@@ -110,8 +109,8 @@ function tryMatchModel(modelPattern: string, availableModels: Model<Api>[]): Mod
 	}
 
 	// Separate into aliases and dated versions
-	const aliases = matches.filter((m) => isAlias(m.id));
-	const datedVersions = matches.filter((m) => !isAlias(m.id));
+	const aliases = matches.filter(m => isAlias(m.id));
+	const datedVersions = matches.filter(m => !isAlias(m.id));
 
 	if (aliases.length > 0) {
 		// Prefer alias - if multiple aliases, pick the one that sorts highest
@@ -226,7 +225,7 @@ export async function resolveModelScope(patterns: string[], modelRegistry: Model
 
 			// Match against "provider/modelId" format OR just model ID
 			// This allows "*sonnet*" to match without requiring "anthropic/*sonnet*"
-			const matchingModels = availableModels.filter((m) => {
+			const matchingModels = availableModels.filter(m => {
 				const fullId = `${m.provider}/${m.id}`;
 				const glob = new Bun.Glob(globPattern.toLowerCase());
 				return glob.match(fullId.toLowerCase()) || glob.match(m.id.toLowerCase());
@@ -238,7 +237,7 @@ export async function resolveModelScope(patterns: string[], modelRegistry: Model
 			}
 
 			for (const model of matchingModels) {
-				if (!scopedModels.find((sm) => modelsAreEqual(sm.model, model))) {
+				if (!scopedModels.find(sm => modelsAreEqual(sm.model, model))) {
 					scopedModels.push({ model, thinkingLevel, explicitThinkingLevel });
 				}
 			}
@@ -257,7 +256,7 @@ export async function resolveModelScope(patterns: string[], modelRegistry: Model
 		}
 
 		// Avoid duplicates
-		if (!scopedModels.find((sm) => modelsAreEqual(sm.model, model))) {
+		if (!scopedModels.find(sm => modelsAreEqual(sm.model, model))) {
 			scopedModels.push({ model, thinkingLevel, explicitThinkingLevel });
 		}
 	}
@@ -343,7 +342,7 @@ export async function findInitialModel(options: {
 		// Try to find a default model from known providers
 		for (const provider of Object.keys(defaultModelPerProvider) as KnownProvider[]) {
 			const defaultId = defaultModelPerProvider[provider];
-			const match = availableModels.find((m) => m.provider === provider && m.id === defaultId);
+			const match = availableModels.find(m => m.provider === provider && m.id === defaultId);
 			if (match) {
 				return { model: match, thinkingLevel: "off", fallbackMessage: undefined };
 			}
@@ -405,7 +404,7 @@ export async function restoreModelFromSession(
 		let fallbackModel: Model<Api> | undefined;
 		for (const provider of Object.keys(defaultModelPerProvider) as KnownProvider[]) {
 			const defaultId = defaultModelPerProvider[provider];
-			const match = availableModels.find((m) => m.provider === provider && m.id === defaultId);
+			const match = availableModels.find(m => m.provider === provider && m.id === defaultId);
 			if (match) {
 				fallbackModel = match;
 				break;
@@ -450,7 +449,7 @@ export async function findSmolModel(
 	if (savedModel) {
 		const parsed = parseModelString(savedModel);
 		if (parsed) {
-			const match = availableModels.find((m) => m.provider === parsed.provider && m.id === parsed.id);
+			const match = availableModels.find(m => m.provider === parsed.provider && m.id === parsed.id);
 			if (match) return match;
 		}
 	}
@@ -458,15 +457,15 @@ export async function findSmolModel(
 	// 2. Try priority chain
 	for (const pattern of SMOL_MODEL_PRIORITY) {
 		// Try exact match with provider prefix
-		const providerMatch = availableModels.find((m) => `${m.provider}/${m.id}`.toLowerCase() === pattern);
+		const providerMatch = availableModels.find(m => `${m.provider}/${m.id}`.toLowerCase() === pattern);
 		if (providerMatch) return providerMatch;
 
 		// Try exact match first
-		const exactMatch = availableModels.find((m) => m.id.toLowerCase() === pattern);
+		const exactMatch = availableModels.find(m => m.id.toLowerCase() === pattern);
 		if (exactMatch) return exactMatch;
 
 		// Try fuzzy match (substring)
-		const fuzzyMatch = availableModels.find((m) => m.id.toLowerCase().includes(pattern));
+		const fuzzyMatch = availableModels.find(m => m.id.toLowerCase().includes(pattern));
 		if (fuzzyMatch) return fuzzyMatch;
 	}
 
@@ -493,7 +492,7 @@ export async function findSlowModel(
 	if (savedModel) {
 		const parsed = parseModelString(savedModel);
 		if (parsed) {
-			const match = availableModels.find((m) => m.provider === parsed.provider && m.id === parsed.id);
+			const match = availableModels.find(m => m.provider === parsed.provider && m.id === parsed.id);
 			if (match) return match;
 		}
 	}
@@ -501,11 +500,11 @@ export async function findSlowModel(
 	// 2. Try priority chain
 	for (const pattern of SLOW_MODEL_PRIORITY) {
 		// Try exact match first
-		const exactMatch = availableModels.find((m) => m.id.toLowerCase() === pattern.toLowerCase());
+		const exactMatch = availableModels.find(m => m.id.toLowerCase() === pattern.toLowerCase());
 		if (exactMatch) return exactMatch;
 
 		// Try fuzzy match (substring)
-		const fuzzyMatch = availableModels.find((m) => m.id.toLowerCase().includes(pattern.toLowerCase()));
+		const fuzzyMatch = availableModels.find(m => m.id.toLowerCase().includes(pattern.toLowerCase()));
 		if (fuzzyMatch) return fuzzyMatch;
 	}
 

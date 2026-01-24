@@ -1,7 +1,6 @@
 /**
  * CLI argument parsing and help display
  */
-
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import chalk from "chalk";
 import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR } from "../config";
@@ -99,13 +98,13 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 		} else if (arg === "--session-dir" && i + 1 < args.length) {
 			result.sessionDir = args[++i];
 		} else if (arg === "--models" && i + 1 < args.length) {
-			result.models = args[++i].split(",").map((s) => s.trim());
+			result.models = args[++i].split(",").map(s => s.trim());
 		} else if (arg === "--no-tools") {
 			result.noTools = true;
 		} else if (arg === "--no-lsp") {
 			result.noLsp = true;
 		} else if (arg === "--tools" && i + 1 < args.length) {
-			const toolNames = args[++i].split(",").map((s) => s.trim());
+			const toolNames = args[++i].split(",").map(s => s.trim());
 			const validTools: string[] = [];
 			for (const name of toolNames) {
 				if (name in BUILTIN_TOOLS) {
@@ -148,7 +147,7 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 			result.noTitle = true;
 		} else if (arg === "--skills" && i + 1 < args.length) {
 			// Comma-separated glob patterns for skill filtering
-			result.skills = args[++i].split(",").map((s) => s.trim());
+			result.skills = args[++i].split(",").map(s => s.trim());
 		} else if (arg === "--list-models") {
 			// Check if next arg is a search pattern (not a flag or file arg)
 			if (i + 1 < args.length && !args[i + 1].startsWith("-") && !args[i + 1].startsWith("@")) {

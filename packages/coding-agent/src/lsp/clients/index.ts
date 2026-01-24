@@ -1,3 +1,6 @@
+import type { LinterClient, ServerConfig } from "../../lsp/types";
+import { LspLinterClient } from "./lsp-linter-client";
+
 /**
  * Linter client implementations.
  *
@@ -7,9 +10,6 @@
 
 export { BiomeClient } from "./biome-client";
 export { LspLinterClient } from "./lsp-linter-client";
-
-import type { LinterClient, ServerConfig } from "../../lsp/types";
-import { LspLinterClient } from "./lsp-linter-client";
 
 // Cache of linter clients by server name + cwd
 const clientCache = new Map<string, LinterClient>();

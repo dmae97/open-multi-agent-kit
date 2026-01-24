@@ -26,7 +26,6 @@ import { AssistantMessageEventStream } from "../utils/event-stream";
 import { parseStreamingJson } from "../utils/json-parse";
 import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode";
-
 import { transformMessages } from "./transform-messages";
 
 // Stealth mode: Mimic Claude Code headers and tool prefixing.
@@ -89,13 +88,13 @@ function convertContentBlocks(content: (TextContent | ImageContent)[]):
 			  }
 	  > {
 	// If only text blocks, return as concatenated string for simplicity
-	const hasImages = content.some((c) => c.type === "image");
+	const hasImages = content.some(c => c.type === "image");
 	if (!hasImages) {
-		return sanitizeSurrogates(content.map((c) => (c as TextContent).text).join("\n"));
+		return sanitizeSurrogates(content.map(c => (c as TextContent).text).join("\n"));
 	}
 
 	// If we have images, convert to content block array
-	const blocks = content.map((block) => {
+	const blocks = content.map(block => {
 		if (block.type === "text") {
 			return {
 				type: "text" as const,
@@ -113,7 +112,7 @@ function convertContentBlocks(content: (TextContent | ImageContent)[]):
 	});
 
 	// If only images (no text), add placeholder text block
-	const hasText = blocks.some((b) => b.type === "text");
+	const hasText = blocks.some(b => b.type === "text");
 	if (!hasText) {
 		blocks.unshift({
 			type: "text" as const,
@@ -218,7 +217,7 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 					}
 				} else if (event.type === "content_block_delta") {
 					if (event.delta.type === "text_delta") {
-						const index = blocks.findIndex((b) => b.index === event.index);
+						const index = blocks.findIndex(b => b.index === event.index);
 						const block = blocks[index];
 						if (block && block.type === "text") {
 							block.text += event.delta.text;
@@ -230,7 +229,7 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 							});
 						}
 					} else if (event.delta.type === "thinking_delta") {
-						const index = blocks.findIndex((b) => b.index === event.index);
+						const index = blocks.findIndex(b => b.index === event.index);
 						const block = blocks[index];
 						if (block && block.type === "thinking") {
 							block.thinking += event.delta.thinking;
@@ -242,7 +241,7 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 							});
 						}
 					} else if (event.delta.type === "input_json_delta") {
-						const index = blocks.findIndex((b) => b.index === event.index);
+						const index = blocks.findIndex(b => b.index === event.index);
 						const block = blocks[index];
 						if (block && block.type === "toolCall") {
 							block.partialJson += event.delta.partial_json;
@@ -255,7 +254,7 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 							});
 						}
 					} else if (event.delta.type === "signature_delta") {
-						const index = blocks.findIndex((b) => b.index === event.index);
+						const index = blocks.findIndex(b => b.index === event.index);
 						const block = blocks[index];
 						if (block && block.type === "thinking") {
 							block.thinkingSignature = block.thinkingSignature || "";
@@ -263,7 +262,7 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 						}
 					}
 				} else if (event.type === "content_block_stop") {
-					const index = blocks.findIndex((b) => b.index === event.index);
+					const index = blocks.findIndex(b => b.index === event.index);
 					const block = blocks[index];
 					if (block) {
 						delete (block as any).index;
@@ -360,7 +359,7 @@ function isAnthropicBaseUrl(baseUrl?: string): boolean {
 export function normalizeExtraBetas(betas?: string[] | string): string[] {
 	if (!betas) return [];
 	const raw = Array.isArray(betas) ? betas : betas.split(",");
-	return raw.map((beta) => beta.trim()).filter((beta) => beta.length > 0);
+	return raw.map(beta => beta.trim()).filter(beta => beta.length > 0);
 }
 
 // Build deduplicated beta header string
@@ -406,7 +405,7 @@ export function buildAnthropicHeaders(options: AnthropicHeaderOptions): Record<s
 			"X-App",
 			"Authorization",
 			"X-Api-Key",
-		].map((key) => key.toLowerCase()),
+		].map(key => key.toLowerCase()),
 	);
 	const modelHeaders = Object.fromEntries(
 		Object.entries(options.modelHeaders ?? {}).filter(([key]) => !enforcedHeaderKeys.has(key.toLowerCase())),
@@ -687,7 +686,7 @@ function applyPromptCaching(params: MessageCreateParamsStreaming): void {
 	// 3. Cache penultimate user message for conversation history caching
 	const userIndexes = params.messages
 		.map((message, index) => (message.role === "user" ? index : -1))
-		.filter((index) => index >= 0);
+		.filter(index => index >= 0);
 
 	if (userIndexes.length >= 2) {
 		const penultimateUserIndex = userIndexes[userIndexes.length - 2];
@@ -748,7 +747,7 @@ function convertMessages(
 					});
 				}
 			} else if (Array.isArray(msg.content)) {
-				const blocks: Array<ContentBlockParam & CacheControlBlock> = msg.content.map((item) => {
+				const blocks: Array<ContentBlockParam & CacheControlBlock> = msg.content.map(item => {
 					if (item.type === "text") {
 						return {
 							type: "text",
@@ -764,8 +763,8 @@ function convertMessages(
 						},
 					};
 				});
-				let filteredBlocks = !model?.input.includes("image") ? blocks.filter((b) => b.type !== "image") : blocks;
-				filteredBlocks = filteredBlocks.filter((b) => {
+				let filteredBlocks = !model?.input.includes("image") ? blocks.filter(b => b.type !== "image") : blocks;
+				filteredBlocks = filteredBlocks.filter(b => {
 					if (b.type === "text") {
 						return b.text.trim().length > 0;
 					}
@@ -786,7 +785,7 @@ function convertMessages(
 			// block with a missing/invalid signature (e.g., from aborted stream), we must skip
 			// the entire message to avoid API rejection. Checking the first non-empty block.
 			const firstContentBlock = msg.content.find(
-				(b) =>
+				b =>
 					(b.type === "text" && b.text.trim().length > 0) ||
 					(b.type === "thinking" && b.thinking.trim().length > 0) ||
 					b.type === "toolCall",
@@ -889,7 +888,7 @@ function convertMessages(
 	}
 
 	// Final validation: filter out any messages with invalid content
-	return params.filter((msg) => {
+	return params.filter(msg => {
 		if (!msg.content) return false;
 		if (typeof msg.content === "string") return msg.content.length > 0;
 		if (Array.isArray(msg.content)) return msg.content.length > 0;
@@ -900,7 +899,7 @@ function convertMessages(
 function convertTools(tools: Tool[], isOAuthToken: boolean): Anthropic.Messages.Tool[] {
 	if (!tools) return [];
 
-	return tools.map((tool) => {
+	return tools.map(tool => {
 		const jsonSchema = tool.parameters as any; // TypeBox already generates JSON Schema
 
 		return {

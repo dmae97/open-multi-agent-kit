@@ -16,7 +16,7 @@ describe("SessionManager labels", () => {
 
 		// Label entry should be in entries
 		const entries = session.getEntries();
-		const labelEntry = entries.find((e) => e.type === "label") as LabelEntry;
+		const labelEntry = entries.find(e => e.type === "label") as LabelEntry;
 		expect(labelEntry).toBeDefined();
 		expect(labelEntry.id).toBe(labelId);
 		expect(labelEntry.targetId).toBe(msgId);
@@ -76,11 +76,11 @@ describe("SessionManager labels", () => {
 		const tree = session.getTree();
 
 		// Find the message nodes (skip label entries)
-		const msg1Node = tree.find((n) => n.entry.id === msg1Id);
+		const msg1Node = tree.find(n => n.entry.id === msg1Id);
 		expect(msg1Node?.label).toBe("start");
 
 		// msg2 is a child of msg1
-		const msg2Node = msg1Node?.children.find((n) => n.entry.id === msg2Id);
+		const msg2Node = msg1Node?.children.find(n => n.entry.id === msg2Id);
 		expect(msg2Node?.label).toBe("response");
 	});
 
@@ -118,7 +118,7 @@ describe("SessionManager labels", () => {
 
 		// New label entries should exist
 		const entries = session.getEntries();
-		const labelEntries = entries.filter((e) => e.type === "label") as LabelEntry[];
+		const labelEntries = entries.filter(e => e.type === "label") as LabelEntry[];
 		expect(labelEntries).toHaveLength(2);
 	});
 

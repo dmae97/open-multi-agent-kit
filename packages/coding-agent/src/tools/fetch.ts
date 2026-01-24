@@ -497,13 +497,13 @@ function isLowQualityOutput(content: string): boolean {
 		"please enable javascript",
 		"browser not supported",
 	];
-	if (content.length < 1024 && jsGated.some((t) => lower.includes(t))) {
+	if (content.length < 1024 && jsGated.some(t => lower.includes(t))) {
 		return true;
 	}
 
 	// Mostly navigation (high link/menu density)
-	const lines = content.split("\n").filter((l) => l.trim());
-	const shortLines = lines.filter((l) => l.trim().length < 40);
+	const lines = content.split("\n").filter(l => l.trim());
+	const shortLines = lines.filter(l => l.trim().length < 40);
 	if (lines.length > 10 && shortLines.length / lines.length > 0.7) {
 		return true;
 	}
@@ -694,7 +694,7 @@ async function renderUrl(
 	if (isHtml && !raw) {
 		// 5A: Check for page-specific markdown alternate
 		const alternates = parseAlternateLinks(rawContent, finalUrl);
-		const markdownAlt = alternates.find((alt) => alt.endsWith(".md") || alt.includes("markdown"));
+		const markdownAlt = alternates.find(alt => alt.endsWith(".md") || alt.includes("markdown"));
 		if (markdownAlt) {
 			const resolved = markdownAlt.startsWith("http") ? markdownAlt : new URL(markdownAlt, finalUrl).href;
 			const altResult = await loadPage(resolved, { timeout, signal });
@@ -766,7 +766,7 @@ async function renderUrl(
 		}
 
 		// 5E: Check for feed alternates
-		const feedAlternates = alternates.filter((alt) => !alt.endsWith(".md") && !alt.includes("markdown"));
+		const feedAlternates = alternates.filter(alt => !alt.endsWith(".md") && !alt.includes("markdown"));
 		for (const altUrl of feedAlternates.slice(0, 2)) {
 			const resolved = altUrl.startsWith("http") ? altUrl : new URL(altUrl, finalUrl).href;
 			const altResult = await loadPage(resolved, { timeout, signal });
@@ -983,7 +983,7 @@ function getDomain(url: string): string {
 
 /** Count non-empty lines */
 function countNonEmptyLines(text: string): number {
-	return text.split("\n").filter((l) => l.trim()).length;
+	return text.split("\n").filter(l => l.trim()).length;
 }
 
 /** Render fetch call (URL preview) */
@@ -1036,7 +1036,7 @@ export function renderFetchResult(
 		: contentText;
 	const lineCount = countNonEmptyLines(contentBody);
 	const charCount = contentBody.trim().length;
-	const contentLines = contentBody.split("\n").filter((l) => l.trim());
+	const contentLines = contentBody.split("\n").filter(l => l.trim());
 
 	const metadataLines: string[] = [
 		`${uiTheme.fg("muted", "Content-Type:")} ${details.contentType || "unknown"}`,
@@ -1060,12 +1060,10 @@ export function renderFetchResult(
 
 	const previewLimit = expanded ? 12 : 3;
 	const previewList = applyListLimit(contentLines, { headLimit: previewLimit });
-	const previewLines = previewList.items.map((line) => truncate(line.trimEnd(), 120, uiTheme.format.ellipsis));
+	const previewLines = previewList.items.map(line => truncate(line.trimEnd(), 120, uiTheme.format.ellipsis));
 	const remaining = Math.max(0, contentLines.length - previewLines.length);
 	const contentPreviewLines =
-		previewLines.length > 0
-			? previewLines.map((line) => uiTheme.fg("dim", line))
-			: [uiTheme.fg("dim", "(no content)")];
+		previewLines.length > 0 ? previewLines.map(line => uiTheme.fg("dim", line)) : [uiTheme.fg("dim", "(no content)")];
 	if (remaining > 0) {
 		const hint = formatExpandHint(uiTheme, expanded, true);
 		contentPreviewLines.push(

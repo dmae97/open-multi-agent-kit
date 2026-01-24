@@ -93,7 +93,7 @@ function formatPost(post: BlueskyPost, isQuote = false): string {
 		md += `> **${name}** (${handle}) - ${date}\n>\n`;
 		md += post.record.text
 			.split("\n")
-			.map((line) => `> ${line}`)
+			.map(line => `> ${line}`)
 			.join("\n");
 		md += "\n";
 	} else {
@@ -126,7 +126,7 @@ function formatPost(post: BlueskyPost, isQuote = false): string {
 				md += `> **${rec.author.displayName || rec.author.handle}** (@${rec.author.handle})\n`;
 				md += rec.value.text
 					.split("\n")
-					.map((line) => `> ${line}`)
+					.map(line => `> ${line}`)
 					.join("\n");
 				md += "\n";
 			}

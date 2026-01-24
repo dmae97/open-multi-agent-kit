@@ -123,7 +123,7 @@ export class EditorKeybindingsManager {
 			const keyArray = Array.isArray(keys) ? keys : [keys];
 			this.actionToKeys.set(
 				action as EditorAction,
-				keyArray.map((key) => normalizeKeyId(key as KeyId)),
+				keyArray.map(key => normalizeKeyId(key as KeyId)),
 			);
 		}
 
@@ -133,7 +133,7 @@ export class EditorKeybindingsManager {
 			const keyArray = Array.isArray(keys) ? keys : [keys];
 			this.actionToKeys.set(
 				action as EditorAction,
-				keyArray.map((key) => normalizeKeyId(key as KeyId)),
+				keyArray.map(key => normalizeKeyId(key as KeyId)),
 			);
 		}
 	}

@@ -5,7 +5,7 @@ const SECTION_PATTERN = /^###\s+(.*)$/;
 
 export function parseUnreleasedSection(content: string): UnreleasedSection {
 	const lines = content.split("\n");
-	const startIndex = lines.findIndex((line) => UNRELEASED_PATTERN.test(line.trim()));
+	const startIndex = lines.findIndex(line => UNRELEASED_PATTERN.test(line.trim()));
 	if (startIndex === -1) {
 		throw new Error("No [Unreleased] section found in changelog");
 	}

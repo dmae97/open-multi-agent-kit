@@ -5,7 +5,6 @@
  * we automatically inject the file contents as a FileMentionMessage
  * so the agent doesn't need to read them manually.
  */
-
 import path from "node:path";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { FileMentionMessage } from "../session/messages";

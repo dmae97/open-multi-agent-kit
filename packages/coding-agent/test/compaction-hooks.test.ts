@@ -185,14 +185,14 @@ describe.skipIf(!API_KEY)("Compaction hooks", () => {
 
 		await expect(session.compact()).rejects.toThrow("Compaction cancelled");
 
-		const compactEvents = capturedEvents.filter((e) => e.type === "session_compact");
+		const compactEvents = capturedEvents.filter(e => e.type === "session_compact");
 		expect(compactEvents.length).toBe(0);
 	}, 120000);
 
 	it("should allow hooks to provide custom compaction", async () => {
 		const customSummary = "Custom summary from hook";
 
-		const hook = createHook((event) => {
+		const hook = createHook(event => {
 			if (event.type === "session_before_compact") {
 				return {
 					compaction: {
@@ -216,7 +216,7 @@ describe.skipIf(!API_KEY)("Compaction hooks", () => {
 
 		expect(result.summary).toBe(customSummary);
 
-		const compactEvents = capturedEvents.filter((e) => e.type === "session_compact");
+		const compactEvents = capturedEvents.filter(e => e.type === "session_compact");
 		expect(compactEvents.length).toBe(1);
 
 		const afterEvent = compactEvents[0];
@@ -235,7 +235,7 @@ describe.skipIf(!API_KEY)("Compaction hooks", () => {
 
 		await session.compact();
 
-		const compactEvents = capturedEvents.filter((e) => e.type === "session_compact");
+		const compactEvents = capturedEvents.filter(e => e.type === "session_compact");
 		expect(compactEvents.length).toBe(1);
 
 		const afterEvent = compactEvents[0];
@@ -366,7 +366,7 @@ describe.skipIf(!API_KEY)("Compaction hooks", () => {
 	it("should pass correct data in before_compact event", async () => {
 		let capturedBeforeEvent: SessionBeforeCompactEvent | null = null;
 
-		const hook = createHook((event) => {
+		const hook = createHook(event => {
 			capturedBeforeEvent = event;
 			return undefined;
 		});
@@ -405,7 +405,7 @@ describe.skipIf(!API_KEY)("Compaction hooks", () => {
 	it("should use hook compaction even with different values", async () => {
 		const customSummary = "Custom summary with modified values";
 
-		const hook = createHook((event) => {
+		const hook = createHook(event => {
 			if (event.type === "session_before_compact") {
 				return {
 					compaction: {

@@ -23,7 +23,7 @@ describe("executePythonWithKernel streaming", () => {
 		const largeOutput = "a".repeat(DEFAULT_MAX_BYTES + 128);
 		const kernel = new FakeKernel(
 			{ status: "ok", cancelled: false, timedOut: false, stdinRequested: false },
-			(options) => options?.onChunk?.(largeOutput),
+			options => options?.onChunk?.(largeOutput),
 		);
 
 		const result = await executePythonWithKernel(kernel, "print('hi')");
@@ -46,7 +46,7 @@ describe("executePythonWithKernel streaming", () => {
 	it("sanitizes ANSI and carriage returns", async () => {
 		const kernel = new FakeKernel(
 			{ status: "ok", cancelled: false, timedOut: false, stdinRequested: false },
-			(options) => options?.onChunk?.("\u001b[31mhello\r\n"),
+			options => options?.onChunk?.("\u001b[31mhello\r\n"),
 		);
 
 		const result = await executePythonWithKernel(kernel, "print('hello')");

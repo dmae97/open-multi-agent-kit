@@ -1,7 +1,6 @@
 /**
  * Minimal TUI implementation with differential rendering
  */
-
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -337,7 +336,7 @@ export class TUI extends Container {
 
 	/** Check if there are any visible overlays */
 	hasOverlay(): boolean {
-		return this.overlayStack.some((o) => this.isOverlayVisible(o));
+		return this.overlayStack.some(o => this.isOverlayVisible(o));
 	}
 
 	/** Check if an overlay entry is currently visible */
@@ -366,7 +365,7 @@ export class TUI extends Container {
 
 	start(): void {
 		this.terminal.start(
-			(data) => this.handleInput(data),
+			data => this.handleInput(data),
 			() => this.requestRender(),
 		);
 		this.terminal.hideCursor();
@@ -423,7 +422,7 @@ export class TUI extends Container {
 
 	async waitForRender(): Promise<void> {
 		if (!this.renderRequested && !this.rendering) return;
-		await new Promise<void>((resolve) => {
+		await new Promise<void>(resolve => {
 			const check = () => {
 				if (!this.renderRequested && !this.rendering) {
 					resolve();
@@ -467,7 +466,7 @@ export class TUI extends Container {
 
 		// If focused component is an overlay, verify it's still visible
 		// (visibility can change due to terminal resize or visible() callback)
-		const focusedOverlay = this.overlayStack.find((o) => o.component === this.focusedComponent);
+		const focusedOverlay = this.overlayStack.find(o => o.component === this.focusedComponent);
 		if (focusedOverlay && !this.isOverlayVisible(focusedOverlay)) {
 			// Focused overlay is no longer visible, redirect to topmost visible overlay
 			const topVisible = this.getTopmostVisibleOverlay();
@@ -752,7 +751,7 @@ export class TUI extends Container {
 
 	private applyLineResets(lines: string[]): string[] {
 		const reset = TUI.SEGMENT_RESET;
-		return lines.map((line) => (this.containsImage(line) ? line : line + reset));
+		return lines.map(line => (this.containsImage(line) ? line : line + reset));
 	}
 
 	/**

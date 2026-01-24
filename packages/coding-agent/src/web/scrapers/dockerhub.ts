@@ -134,7 +134,7 @@ export const handleDockerHub: SpecialHandler = async (
 				const size = tag.full_size ? formatSize(tag.full_size) : "-";
 				const archs =
 					tag.images
-						?.map((img) => img.architecture)
+						?.map(img => img.architecture)
 						.filter(Boolean)
 						.join(", ") || "-";
 				const updated = tag.last_updated ? new Date(tag.last_updated).toISOString().split("T")[0] : "-";

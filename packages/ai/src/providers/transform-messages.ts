@@ -98,7 +98,7 @@ export function transformMessages<TApi extends Api>(messages: Message[], model: 
 			const needsToolCallIdNormalization = targetRequiresStrictIds && (crossProviderSwitch || copilotCrossApiSwitch);
 
 			// Transform message from different provider/model
-			const transformedContent = assistantMsg.content.flatMap((block) => {
+			const transformedContent = assistantMsg.content.flatMap(block => {
 				if (block.type === "thinking") {
 					// Skip empty thinking blocks, convert others to plain text
 					if (!block.thinking || block.thinking.trim() === "") return [];
@@ -173,7 +173,7 @@ export function transformMessages<TApi extends Api>(messages: Message[], model: 
 
 			const assistantMsg = msg as AssistantMessage;
 			const isErroredAssistant = assistantMsg.stopReason === "error" || assistantMsg.stopReason === "aborted";
-			const toolCalls = assistantMsg.content.filter((b) => b.type === "toolCall") as ToolCall[];
+			const toolCalls = assistantMsg.content.filter(b => b.type === "toolCall") as ToolCall[];
 
 			result.push(msg);
 

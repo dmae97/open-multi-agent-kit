@@ -91,7 +91,7 @@ export function getNewEntries(entries: ChangelogEntry[], lastVersion: string): C
 		content: "",
 	};
 
-	return entries.filter((entry) => compareVersions(entry, last) > 0);
+	return entries.filter(entry => compareVersions(entry, last) > 0);
 }
 
 // Re-export getChangelogPath from paths.ts for convenience

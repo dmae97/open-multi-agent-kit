@@ -27,12 +27,12 @@ function parseLineNumbers(lines: SearchcodeResult["lines"]): number[] | null {
 
 	if (typeof lines === "string") {
 		const parts = lines.split(/[,\s]+/).filter(Boolean);
-		const parsed = parts.map((part) => Number.parseInt(part, 10)).filter((value) => Number.isFinite(value));
+		const parsed = parts.map(part => Number.parseInt(part, 10)).filter(value => Number.isFinite(value));
 		return parsed.length ? parsed : null;
 	}
 
 	if (Array.isArray(lines)) {
-		const parsed = lines.map((part) => Number.parseInt(String(part), 10)).filter((value) => Number.isFinite(value));
+		const parsed = lines.map(part => Number.parseInt(String(part), 10)).filter(value => Number.isFinite(value));
 		return parsed.length ? parsed : null;
 	}
 

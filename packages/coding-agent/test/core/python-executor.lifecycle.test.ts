@@ -61,7 +61,7 @@ describe("executePython session lifecycle", () => {
 
 	it("reuses a session kernel across calls", async () => {
 		let startCount = 0;
-		const kernel = new FakeKernel(okResult, { onExecute: (options) => options?.onChunk?.("ok\n") });
+		const kernel = new FakeKernel(okResult, { onExecute: options => options?.onChunk?.("ok\n") });
 		PythonKernel.start = async () => {
 			startCount += 1;
 			return kernel as unknown as PythonKernel;
@@ -78,7 +78,7 @@ describe("executePython session lifecycle", () => {
 
 	it("restarts the session kernel when not alive", async () => {
 		const deadKernel = new FakeKernel(okResult, { alive: false });
-		const liveKernel = new FakeKernel(okResult, { onExecute: (options) => options?.onChunk?.("live\n") });
+		const liveKernel = new FakeKernel(okResult, { onExecute: options => options?.onChunk?.("live\n") });
 		const kernels = [deadKernel, liveKernel];
 		let startCount = 0;
 

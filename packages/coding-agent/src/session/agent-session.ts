@@ -13,6 +13,7 @@
  * Modes use this class and add their own I/O layer on top.
  */
 
+import * as fs from "node:fs";
 import type { Agent, AgentEvent, AgentMessage, AgentState, AgentTool, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type {
 	AssistantMessage,
@@ -27,15 +28,14 @@ import type {
 import { isContextOverflow, modelsAreEqual, supportsXhigh } from "@oh-my-pi/pi-ai";
 import { abortableSleep, isEnoent, logger } from "@oh-my-pi/pi-utils";
 import { YAML } from "bun";
-import * as fs from "node:fs";
 import type { Rule } from "../capability/rule";
 import { getAgentDbPath } from "../config";
 import type { ModelRegistry } from "../config/model-registry";
 import { parseModelString } from "../config/model-resolver";
 import {
 	expandPromptTemplate,
-	parseCommandArgs,
 	type PromptTemplate,
+	parseCommandArgs,
 	renderPromptTemplate,
 } from "../config/prompt-templates";
 import type { SettingsManager, SkillsSettings } from "../config/settings-manager";
@@ -70,10 +70,10 @@ import { resolveToCwd } from "../tools/path-utils";
 import type { TodoItem } from "../tools/todo-write";
 import { extractFileMentions, generateFileMentionMessages } from "../utils/file-mentions";
 import {
+	type CompactionResult,
 	calculateContextTokens,
 	collectEntriesForBranchSummary,
 	compact,
-	type CompactionResult,
 	estimateTokens,
 	generateBranchSummary,
 	prepareCompaction,
@@ -81,8 +81,8 @@ import {
 } from "./compaction";
 import {
 	type BashExecutionMessage,
-	bashExecutionToText,
 	type BranchSummaryMessage,
+	bashExecutionToText,
 	type CompactionSummaryMessage,
 	type CustomMessage,
 	type FileMentionMessage,
@@ -216,7 +216,7 @@ const noOpUIContext: ExtensionUIContext = {
 	},
 	getAllThemes: () => Promise.resolve([]),
 	getTheme: () => Promise.resolve(undefined),
-	setTheme: (_theme) => Promise.resolve({ success: false, error: "UI not available" }),
+	setTheme: _theme => Promise.resolve({ success: false, error: "UI not available" }),
 	setFooter: () => {},
 	setHeader: () => {},
 	setEditorComponent: () => {},
@@ -542,7 +542,7 @@ export class AgentSession {
 	private _getTtsrInjectionContent(): string | undefined {
 		if (this._pendingTtsrInjections.length === 0) return undefined;
 		const content = this._pendingTtsrInjections
-			.map((r) => renderPromptTemplate(ttsrInterruptTemplate, { name: r.name, path: r.path, content: r.content }))
+			.map(r => renderPromptTemplate(ttsrInterruptTemplate, { name: r.name, path: r.path, content: r.content }))
 			.join("\n\n");
 		this._pendingTtsrInjections = [];
 		return content;
@@ -553,10 +553,10 @@ export class AgentSession {
 		if (message.role !== "user") return "";
 		const content = message.content;
 		if (typeof content === "string") return content;
-		const textBlocks = content.filter((c) => c.type === "text");
-		const text = textBlocks.map((c) => (c as TextContent).text).join("");
+		const textBlocks = content.filter(c => c.type === "text");
+		const text = textBlocks.map(c => (c as TextContent).text).join("");
 		if (text.length > 0) return text;
-		const hasImages = content.some((c) => c.type === "image");
+		const hasImages = content.some(c => c.type === "image");
 		return hasImages ? "[Image]" : "";
 	}
 
@@ -653,7 +653,7 @@ export class AgentSession {
 		const normalizedDiff = normalizeDiff(diffForCheck.replace(/\r/g, ""));
 		if (!normalizedDiff) return;
 		const lines = normalizedDiff.split("\n");
-		const hasChangeLine = lines.some((line) => line.startsWith("+") || line.startsWith("-"));
+		const hasChangeLine = lines.some(line => line.startsWith("+") || line.startsWith("-"));
 		if (!hasChangeLine) return;
 
 		const lineCount = lines.length;
@@ -664,13 +664,13 @@ export class AgentSession {
 		const rename = typeof args.rename === "string" ? args.rename : undefined;
 
 		const removedLines = lines
-			.filter((line) => line.startsWith("-") && !line.startsWith("--- "))
-			.map((line) => line.slice(1));
+			.filter(line => line.startsWith("-") && !line.startsWith("--- "))
+			.map(line => line.slice(1));
 		if (removedLines.length > 0) {
 			const resolvedPath = resolveToCwd(path, this.sessionManager.getCwd());
 			const cachedContent = this._streamingEditFileCache.get(resolvedPath);
 			if (cachedContent !== undefined) {
-				const missing = removedLines.find((line) => !cachedContent.includes(normalizeToLF(line)));
+				const missing = removedLines.find(line => !cachedContent.includes(normalizeToLF(line)));
 				if (missing) {
 					this._streamingEditAbortTriggered = true;
 					logger.warn("Streaming edit aborted due to patch preview failure", {
@@ -701,7 +701,7 @@ export class AgentSession {
 		try {
 			const { text } = stripBom(await Bun.file(resolvedPath).text());
 			const normalizedContent = normalizeToLF(text);
-			const missing = removedLines.find((line) => !normalizedContent.includes(normalizeToLF(line)));
+			const missing = removedLines.find(line => !normalizedContent.includes(normalizeToLF(line)));
 			if (missing) {
 				this._streamingEditAbortTriggered = true;
 				logger.warn("Streaming edit aborted due to patch preview failure", {
@@ -886,7 +886,7 @@ export class AgentSession {
 	 * Returns the names of tools currently set on the agent.
 	 */
 	getActiveToolNames(): string[] {
-		return this.agent.state.tools.map((t) => t.name);
+		return this.agent.state.tools.map(t => t.name);
 	}
 
 	/**
@@ -1179,7 +1179,7 @@ export class AgentSession {
 			hasQueuedMessages: () => this.queuedMessageCount > 0,
 			getContextUsage: () => this.getContextUsage(),
 			waitForIdle: () => this.agent.waitForIdle(),
-			newSession: async (options) => {
+			newSession: async options => {
 				const success = await this.newSession({ parentSession: options?.parentSession });
 				if (!success) {
 					return { cancelled: true };
@@ -1189,7 +1189,7 @@ export class AgentSession {
 				}
 				return { cancelled: false };
 			},
-			branch: async (entryId) => {
+			branch: async entryId => {
 				const result = await this.branch(entryId);
 				return { cancelled: result.cancelled };
 			},
@@ -1197,7 +1197,7 @@ export class AgentSession {
 				const result = await this.navigateTree(targetId, { summarize: options?.summarize });
 				return { cancelled: result.cancelled };
 			},
-			compact: async (instructionsOrOptions) => {
+			compact: async instructionsOrOptions => {
 				const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
 				const options =
 					instructionsOrOptions && typeof instructionsOrOptions === "object" ? instructionsOrOptions : undefined;
@@ -1219,7 +1219,7 @@ export class AgentSession {
 		const argsString = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1);
 
 		// Find matching command
-		const loaded = this._customCommands.find((c) => c.command.name === commandName);
+		const loaded = this._customCommands.find(c => c.command.name === commandName);
 		if (!loaded) return null;
 
 		// Get command context from extension runner (includes session control methods)
@@ -1606,10 +1606,10 @@ export class AgentSession {
 			const parsed = parseModelString(roleModelStr);
 			let match: Model<any> | undefined;
 			if (parsed) {
-				match = availableModels.find((m) => m.provider === parsed.provider && m.id === parsed.id);
+				match = availableModels.find(m => m.provider === parsed.provider && m.id === parsed.id);
 			}
 			if (!match) {
-				match = availableModels.find((m) => m.id.toLowerCase() === roleModelStr.toLowerCase());
+				match = availableModels.find(m => m.id.toLowerCase() === roleModelStr.toLowerCase());
 			}
 			if (!match) continue;
 
@@ -1620,8 +1620,8 @@ export class AgentSession {
 
 		const lastRole = this.sessionManager.getLastModelChangeRole();
 		let currentIndex = lastRole
-			? roleModels.findIndex((entry) => entry.role === lastRole)
-			: roleModels.findIndex((entry) => modelsAreEqual(entry.model, currentModel));
+			? roleModels.findIndex(entry => entry.role === lastRole)
+			: roleModels.findIndex(entry => modelsAreEqual(entry.model, currentModel));
 		if (currentIndex === -1) currentIndex = 0;
 
 		const nextIndex = (currentIndex + 1) % roleModels.length;
@@ -1640,7 +1640,7 @@ export class AgentSession {
 		if (this._scopedModels.length <= 1) return undefined;
 
 		const currentModel = this.model;
-		let currentIndex = this._scopedModels.findIndex((sm) => modelsAreEqual(sm.model, currentModel));
+		let currentIndex = this._scopedModels.findIndex(sm => modelsAreEqual(sm.model, currentModel));
 
 		if (currentIndex === -1) currentIndex = 0;
 		const len = this._scopedModels.length;
@@ -1669,7 +1669,7 @@ export class AgentSession {
 		if (availableModels.length <= 1) return undefined;
 
 		const currentModel = this.model;
-		let currentIndex = availableModels.findIndex((m) => modelsAreEqual(m, currentModel));
+		let currentIndex = availableModels.findIndex(m => modelsAreEqual(m, currentModel));
 
 		if (currentIndex === -1) currentIndex = 0;
 		const len = availableModels.length;
@@ -1899,7 +1899,7 @@ export class AgentSession {
 			this.agent.replaceMessages(sessionContext.messages);
 
 			// Get the saved compaction entry for the hook
-			const savedCompactionEntry = newEntries.find((e) => e.type === "compaction" && e.summary === summary) as
+			const savedCompactionEntry = newEntries.find(e => e.type === "compaction" && e.summary === summary) as
 				| CompactionEntry
 				| undefined;
 
@@ -1976,7 +1976,7 @@ export class AgentSession {
 		// The error shouldn't trigger another compaction since we already compacted.
 		// Example: opus fails → switch to codex → compact → switch back to opus → opus error
 		// is still in context but shouldn't trigger compaction again.
-		const compactionEntry = this.sessionManager.getBranch().find((e) => e.type === "compaction");
+		const compactionEntry = this.sessionManager.getBranch().find(e => e.type === "compaction");
 		const errorIsFromBeforeCompaction =
 			compactionEntry && assistantMessage.timestamp < new Date(compactionEntry.timestamp).getTime();
 
@@ -2036,7 +2036,7 @@ export class AgentSession {
 		}
 
 		// Check for incomplete todos
-		const incomplete = todos.filter((t) => t.status !== "completed");
+		const incomplete = todos.filter(t => t.status !== "completed");
 		if (incomplete.length === 0) {
 			this._todoReminderCount = 0;
 			return;
@@ -2044,7 +2044,7 @@ export class AgentSession {
 
 		// Build reminder message
 		this._todoReminderCount++;
-		const todoList = incomplete.map((t) => `- ${t.content}`).join("\n");
+		const todoList = incomplete.map(t => `- ${t.content}`).join("\n");
 		const reminder =
 			`<system_reminder>\n` +
 			`You stopped with ${incomplete.length} incomplete todo item(s):\n${todoList}\n\n` +
@@ -2093,10 +2093,10 @@ export class AgentSession {
 
 		const parsed = parseModelString(roleModelStr);
 		if (parsed) {
-			return availableModels.find((m) => m.provider === parsed.provider && m.id === parsed.id);
+			return availableModels.find(m => m.provider === parsed.provider && m.id === parsed.id);
 		}
 		const roleLower = roleModelStr.toLowerCase();
-		return availableModels.find((m) => m.id.toLowerCase() === roleLower);
+		return availableModels.find(m => m.id.toLowerCase() === roleLower);
 	}
 
 	private _getCompactionModelCandidates(availableModels: Model<any>[]): Model<any>[] {
@@ -2294,7 +2294,7 @@ export class AgentSession {
 			this.agent.replaceMessages(sessionContext.messages);
 
 			// Get the saved compaction entry for the hook
-			const savedCompactionEntry = newEntries.find((e) => e.type === "compaction" && e.summary === summary) as
+			const savedCompactionEntry = newEntries.find(e => e.type === "compaction" && e.summary === summary) as
 				| CompactionEntry
 				| undefined;
 
@@ -2821,7 +2821,7 @@ export class AgentSession {
 				const provider = defaultModelStr.slice(0, slashIdx);
 				const modelId = defaultModelStr.slice(slashIdx + 1);
 				const availableModels = this._modelRegistry.getAvailable();
-				const match = availableModels.find((m) => m.provider === provider && m.id === modelId);
+				const match = availableModels.find(m => m.provider === provider && m.id === modelId);
 				if (match) {
 					this.agent.setModel(match);
 				}
@@ -3025,7 +3025,7 @@ export class AgentSession {
 					? targetEntry.content
 					: targetEntry.content
 							.filter((c): c is { type: "text"; text: string } => c.type === "text")
-							.map((c) => c.text)
+							.map(c => c.text)
 							.join("");
 		} else {
 			// Non-user message: leaf = selected node
@@ -3091,7 +3091,7 @@ export class AgentSession {
 		if (Array.isArray(content)) {
 			return content
 				.filter((c): c is { type: "text"; text: string } => c.type === "text")
-				.map((c) => c.text)
+				.map(c => c.text)
 				.join("");
 		}
 		return "";
@@ -3102,9 +3102,9 @@ export class AgentSession {
 	 */
 	getSessionStats(): SessionStats {
 		const state = this.state;
-		const userMessages = state.messages.filter((m) => m.role === "user").length;
-		const assistantMessages = state.messages.filter((m) => m.role === "assistant").length;
-		const toolResults = state.messages.filter((m) => m.role === "toolResult").length;
+		const userMessages = state.messages.filter(m => m.role === "user").length;
+		const assistantMessages = state.messages.filter(m => m.role === "assistant").length;
+		const toolResults = state.messages.filter(m => m.role === "toolResult").length;
 
 		let toolCalls = 0;
 		let totalInput = 0;
@@ -3124,7 +3124,7 @@ export class AgentSession {
 		for (const message of state.messages) {
 			if (message.role === "assistant") {
 				const assistantMsg = message as AssistantMessage;
-				toolCalls += assistantMsg.content.filter((c) => c.type === "toolCall").length;
+				toolCalls += assistantMsg.content.filter(c => c.type === "toolCall").length;
 				totalInput += assistantMsg.usage.input;
 				totalOutput += assistantMsg.usage.output;
 				totalCacheRead += assistantMsg.usage.cacheRead;
@@ -3192,7 +3192,7 @@ export class AgentSession {
 		const authStorage = this._modelRegistry.authStorage;
 		if (!authStorage.fetchUsageReports) return null;
 		return authStorage.fetchUsageReports({
-			baseUrlResolver: (provider) => this._modelRegistry.getProviderBaseUrl?.(provider),
+			baseUrlResolver: provider => this._modelRegistry.getProviderBaseUrl?.(provider),
 		});
 	}
 
@@ -3273,7 +3273,7 @@ export class AgentSession {
 		const lastAssistant = this.messages
 			.slice()
 			.reverse()
-			.find((m) => {
+			.find(m => {
 				if (m.role !== "assistant") return false;
 				const msg = m as AssistantMessage;
 				// Skip aborted messages with no content

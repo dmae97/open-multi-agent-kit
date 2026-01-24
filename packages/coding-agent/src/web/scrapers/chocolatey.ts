@@ -110,7 +110,7 @@ export const handleChocolatey: SpecialHandler = async (
 		if (pkg.LicenseUrl) md += `**License:** ${pkg.LicenseUrl}\n`;
 
 		if (pkg.Tags) {
-			const tags = pkg.Tags.split(/\s+/).filter((t) => t.length > 0);
+			const tags = pkg.Tags.split(/\s+/).filter(t => t.length > 0);
 			if (tags.length > 0) {
 				md += `**Tags:** ${tags.join(", ")}\n`;
 			}
@@ -127,7 +127,7 @@ export const handleChocolatey: SpecialHandler = async (
 
 		if (pkg.Dependencies) {
 			// Dependencies format: "id:version|id:version"
-			const deps = pkg.Dependencies.split("|").filter((d) => d.trim().length > 0);
+			const deps = pkg.Dependencies.split("|").filter(d => d.trim().length > 0);
 			if (deps.length > 0) {
 				md += `\n## Dependencies\n\n`;
 				for (const dep of deps) {

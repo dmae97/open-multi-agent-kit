@@ -4,7 +4,6 @@
  * Automatically commits changes when the agent exits.
  * Uses the last assistant message to generate a commit message.
  */
-
 import type { HookAPI } from "@oh-my-pi/pi-coding-agent";
 
 export default function (pi: HookAPI) {
@@ -27,7 +26,7 @@ export default function (pi: HookAPI) {
 				if (Array.isArray(content)) {
 					lastAssistantText = content
 						.filter((c): c is { type: "text"; text: string } => c.type === "text")
-						.map((c) => c.text)
+						.map(c => c.text)
 						.join("\n");
 				}
 				break;

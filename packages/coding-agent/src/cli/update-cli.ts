@@ -4,7 +4,6 @@
  * Handles `omp update` to check for and install updates.
  * Uses bun if available, otherwise downloads binary from GitHub releases.
  */
-
 import { execSync, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -74,7 +73,7 @@ async function getLatestRelease(): Promise<ReleaseInfo> {
 	return {
 		tag: data.tag_name,
 		version: data.tag_name.replace(/^v/, ""),
-		assets: data.assets.map((a) => ({ name: a.name, url: a.browser_download_url })),
+		assets: data.assets.map(a => ({ name: a.name, url: a.browser_download_url })),
 	};
 }
 
@@ -155,7 +154,7 @@ async function updateViaBun(): Promise<void> {
  */
 async function updateViaBinary(release: ReleaseInfo): Promise<void> {
 	const binaryName = getBinaryName();
-	const asset = release.assets.find((a) => a.name === binaryName);
+	const asset = release.assets.find(a => a.name === binaryName);
 
 	if (!asset) {
 		throw new Error(`No binary found for ${binaryName}`);

@@ -119,7 +119,7 @@ export const handleNvd: SpecialHandler = async (
 		md += ` · **Modified:** ${formatDate(vuln.lastModified)}\n\n`;
 
 		// Description
-		const desc = vuln.descriptions.find((d) => d.lang === "en")?.value;
+		const desc = vuln.descriptions.find(d => d.lang === "en")?.value;
 		if (desc) {
 			md += `## Description\n\n${desc}\n\n`;
 		}
@@ -165,8 +165,8 @@ export const handleNvd: SpecialHandler = async (
 
 		// Weaknesses (CWE)
 		const cwes = vuln.weaknesses
-			?.flatMap((w) => w.description)
-			.filter((d) => d.lang === "en" && d.value !== "NVD-CWE-Other" && d.value !== "NVD-CWE-noinfo");
+			?.flatMap(w => w.description)
+			.filter(d => d.lang === "en" && d.value !== "NVD-CWE-Other" && d.value !== "NVD-CWE-noinfo");
 
 		if (cwes?.length) {
 			md += `## Weaknesses\n\n`;

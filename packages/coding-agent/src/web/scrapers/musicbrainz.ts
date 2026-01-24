@@ -1,7 +1,6 @@
 /**
  * MusicBrainz URL handler for artists, releases, and recordings
  */
-
 import type { RenderResult, SpecialHandler } from "./types";
 import { finalizeOutput, loadPage } from "./types";
 
@@ -133,7 +132,7 @@ function formatArtistCredits(credits: MusicBrainzArtistCredit[] | undefined): st
 	if (!credits?.length) return null;
 
 	const names = credits
-		.map((credit) => credit.name || credit.artist?.name)
+		.map(credit => credit.name || credit.artist?.name)
 		.filter((name): name is string => Boolean(name));
 
 	if (!names.length) return null;

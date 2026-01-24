@@ -11,8 +11,8 @@ const gitHunkSchema = Type.Object({
 
 function selectHunks(fileHunks: FileHunks, requested?: number[]): DiffHunk[] {
 	if (!requested || requested.length === 0) return fileHunks.hunks;
-	const wanted = new Set(requested.map((value) => Math.max(1, Math.floor(value))));
-	return fileHunks.hunks.filter((hunk) => wanted.has(hunk.index + 1));
+	const wanted = new Set(requested.map(value => Math.max(1, Math.floor(value))));
+	return fileHunks.hunks.filter(hunk => wanted.has(hunk.index + 1));
 }
 
 export function createGitHunkTool(git: ControlledGit): CustomTool<typeof gitHunkSchema> {
@@ -24,7 +24,7 @@ export function createGitHunkTool(git: ControlledGit): CustomTool<typeof gitHunk
 		async execute(_toolCallId, params) {
 			const staged = params.staged ?? true;
 			const hunks = await git.getHunks([params.file], staged);
-			const fileHunks = hunks.find((entry) => entry.filename === params.file) ?? {
+			const fileHunks = hunks.find(entry => entry.filename === params.file) ?? {
 				filename: params.file,
 				isBinary: false,
 				hunks: [],
@@ -36,7 +36,7 @@ export function createGitHunkTool(git: ControlledGit): CustomTool<typeof gitHunk
 				};
 			}
 			const selected = selectHunks(fileHunks, params.hunks);
-			const text = selected.length ? selected.map((hunk) => hunk.content).join("\n\n") : "(no matching hunks)";
+			const text = selected.length ? selected.map(hunk => hunk.content).join("\n\n") : "(no matching hunks)";
 			return {
 				content: [{ type: "text", text }],
 				details: {

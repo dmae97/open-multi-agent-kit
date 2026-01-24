@@ -1,7 +1,6 @@
 /**
  * Shared utilities for compaction and branch summarization.
  */
-
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { Message } from "@oh-my-pi/pi-ai";
 import { renderPromptTemplate } from "../../config/prompt-templates";
@@ -64,7 +63,7 @@ export function extractFileOpsFromMessage(message: AgentMessage, fileOps: FileOp
  */
 export function computeFileLists(fileOps: FileOperations): { readFiles: string[]; modifiedFiles: string[] } {
 	const modified = new Set([...fileOps.edited, ...fileOps.written]);
-	const readOnly = [...fileOps.read].filter((f) => !modified.has(f)).sort();
+	const readOnly = [...fileOps.read].filter(f => !modified.has(f)).sort();
 	const modifiedFiles = [...modified].sort();
 	return { readFiles: readOnly, modifiedFiles };
 }
@@ -96,7 +95,7 @@ export function serializeConversation(messages: Message[]): string {
 					? msg.content
 					: msg.content
 							.filter((c): c is { type: "text"; text: string } => c.type === "text")
-							.map((c) => c.text)
+							.map(c => c.text)
 							.join("");
 			if (content) parts.push(`[User]: ${content}`);
 		} else if (msg.role === "assistant") {
@@ -130,7 +129,7 @@ export function serializeConversation(messages: Message[]): string {
 		} else if (msg.role === "toolResult") {
 			const content = msg.content
 				.filter((c): c is { type: "text"; text: string } => c.type === "text")
-				.map((c) => c.text)
+				.map(c => c.text)
 				.join("");
 			if (content) {
 				parts.push(`[Tool result]: ${content}`);

@@ -63,7 +63,7 @@ function normalizeTodoStatus(status?: string): TodoStatus {
 }
 
 function normalizeTodos(items: Array<{ id?: string; content?: string; status?: string }>): TodoItem[] {
-	return items.map((item) => {
+	return items.map(item => {
 		if (!item.content) {
 			throw new Error("Todo content is required.");
 		}
@@ -82,7 +82,7 @@ function normalizeTodos(items: Array<{ id?: string; content?: string; status?: s
 function validateSequentialTodos(todos: TodoItem[]): { valid: boolean; error?: string } {
 	if (todos.length === 0) return { valid: true };
 
-	const firstIncompleteIndex = todos.findIndex((todo) => todo.status !== "completed");
+	const firstIncompleteIndex = todos.findIndex(todo => todo.status !== "completed");
 	if (firstIncompleteIndex >= 0) {
 		for (let i = firstIncompleteIndex + 1; i < todos.length; i++) {
 			if (todos[i].status === "completed") {
@@ -128,9 +128,9 @@ async function loadTodoFile(filePath: string): Promise<TodoFile | null> {
 
 function formatTodoSummary(todos: TodoItem[]): string {
 	if (todos.length === 0) return "Todo list cleared.";
-	const completed = todos.filter((t) => t.status === "completed").length;
-	const inProgress = todos.filter((t) => t.status === "in_progress").length;
-	const pending = todos.filter((t) => t.status === "pending").length;
+	const completed = todos.filter(t => t.status === "completed").length;
+	const inProgress = todos.filter(t => t.status === "in_progress").length;
+	const pending = todos.filter(t => t.status === "pending").length;
 	return `Saved ${todos.length} todos (${pending} pending, ${inProgress} in progress, ${completed} completed).`;
 }
 
@@ -237,7 +237,7 @@ export const todoWriteToolRenderer = {
 			uiTheme,
 		);
 		if (todos.length === 0) {
-			const fallback = result.content?.find((c) => c.type === "text")?.text ?? "No todos";
+			const fallback = result.content?.find(c => c.type === "text")?.text ?? "No todos";
 			return new Text([header, uiTheme.fg("dim", fallback)].join("\n"), 0, 0);
 		}
 		const lines = renderTreeList(
@@ -246,7 +246,7 @@ export const todoWriteToolRenderer = {
 				expanded,
 				maxCollapsed: PREVIEW_LIMITS.COLLAPSED_ITEMS,
 				itemType: "todo",
-				renderItem: (todo) => formatTodoLine(todo, uiTheme, ""),
+				renderItem: todo => formatTodoLine(todo, uiTheme, ""),
 			},
 			uiTheme,
 		);

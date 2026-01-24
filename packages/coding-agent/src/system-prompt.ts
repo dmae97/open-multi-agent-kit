@@ -1,7 +1,6 @@
 /**
  * System prompt construction and project context loading
  */
-
 import * as os from "node:os";
 import * as path from "node:path";
 import { $ } from "bun";
@@ -35,7 +34,7 @@ export async function loadGitContext(cwd: string): Promise<GitContext | null> {
 			.quiet()
 			.text()
 			.catch(() => null)
-			.then((text) => text?.trim() ?? null);
+			.then(text => text?.trim() ?? null);
 
 	// Check if inside a git repo
 	const isGitRepo = await git("rev-parse", "--is-inside-work-tree");
@@ -79,7 +78,7 @@ function firstNonEmptyLine(value: string | null): string | null {
 	if (!value) return null;
 	const line = value
 		.split("\n")
-		.map((entry) => entry.trim())
+		.map(entry => entry.trim())
 		.filter(Boolean)[0];
 	return line ?? null;
 }
@@ -87,9 +86,9 @@ function firstNonEmptyLine(value: string | null): string | null {
 function parseWmicTable(output: string, header: string): string | null {
 	const lines = output
 		.split("\n")
-		.map((line) => line.trim())
+		.map(line => line.trim())
 		.filter(Boolean);
-	const filtered = lines.filter((line) => line.toLowerCase() !== header.toLowerCase());
+	const filtered = lines.filter(line => line.toLowerCase() !== header.toLowerCase());
 	return filtered[0] ?? null;
 }
 
@@ -130,8 +129,8 @@ function listAgentsMdFiles(root: string, limit: number): string[] {
 			new Bun.Glob(AGENTS_MD_PATTERN).scanSync({ cwd: root, onlyFiles: true, dot: false, absolute: false }),
 		);
 		const normalized = entries
-			.map((entry) => normalizePath(entry))
-			.filter((entry) => entry.length > 0 && !entry.includes("node_modules"))
+			.map(entry => normalizePath(entry))
+			.filter(entry => entry.length > 0 && !entry.includes("node_modules"))
 			.sort();
 		return normalized.length > limit ? normalized.slice(0, limit) : normalized;
 	} catch {
@@ -267,8 +266,8 @@ async function getCpuModel(): Promise<string | null> {
 			if (lscpu) {
 				const match = lscpu
 					.split("\n")
-					.map((line) => line.trim())
-					.find((line) => line.toLowerCase().startsWith("model name:"));
+					.map(line => line.trim())
+					.find(line => line.toLowerCase().startsWith("model name:"));
 				if (match) return match.split(":").slice(1).join(":").trim();
 			}
 			const cpuInfo = await Bun.file("/proc/cpuinfo")
@@ -363,7 +362,7 @@ function normalizeDesktopValue(value: string): string {
 	if (!trimmed) return "unknown";
 	const parts = trimmed
 		.split(":")
-		.map((part) => part.trim())
+		.map(part => part.trim())
 		.filter(Boolean);
 	return parts[0] ?? trimmed;
 }
@@ -488,7 +487,7 @@ async function getDiskInfo(): Promise<string | null> {
 				.text()
 				.catch(() => null);
 			if (!output) return null;
-			const lines = output.split("\n").filter((l) => l.trim() && !l.startsWith("Node"));
+			const lines = output.split("\n").filter(l => l.trim() && !l.startsWith("Node"));
 			const disks: string[] = [];
 			for (const line of lines) {
 				const parts = line.split(",");
@@ -584,7 +583,7 @@ export async function loadProjectContextFiles(
 	const result = await loadCapability(contextFileCapability.id, { cwd: resolvedCwd });
 
 	// Convert ContextFile items and preserve depth info
-	const files = result.items.map((item) => {
+	const files = result.items.map(item => {
 		const contextFile = item as ContextFile;
 		return {
 			path: contextFile.path,
@@ -616,8 +615,8 @@ export async function loadSystemPromptFiles(options: LoadContextFilesOptions = {
 	if (result.items.length === 0) return null;
 
 	// Combine all SYSTEM.md contents (user-level first, then project-level)
-	const userLevel = result.items.filter((item) => item.level === "user");
-	const projectLevel = result.items.filter((item) => item.level === "project");
+	const userLevel = result.items.filter(item => item.level === "user");
+	const projectLevel = result.items.filter(item => item.level === "project");
 
 	const parts: string[] = [];
 	for (const item of [...userLevel, ...projectLevel]) {

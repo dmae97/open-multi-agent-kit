@@ -8,7 +8,6 @@
  * - Shift+J/K: Reorder segment within column
  * - Live preview shown in the actual status line above
  */
-
 import { Container, matchesKey } from "@oh-my-pi/pi-tui";
 import type { StatusLineSegmentId } from "../../config/settings-manager";
 import { theme } from "../../modes/theme/theme";
@@ -93,7 +92,7 @@ export class StatusLineSegmentEditorComponent extends Container {
 	}
 
 	private getSegmentsForColumn(column: Column): SegmentState[] {
-		return this.segments.filter((s) => s.column === column).sort((a, b) => a.order - b.order);
+		return this.segments.filter(s => s.column === column).sort((a, b) => a.order - b.order);
 	}
 
 	private getCurrentColumnSegments(): SegmentState[] {
@@ -101,8 +100,8 @@ export class StatusLineSegmentEditorComponent extends Container {
 	}
 
 	private triggerPreview(): void {
-		const left = this.getSegmentsForColumn("left").map((s) => s.id);
-		const right = this.getSegmentsForColumn("right").map((s) => s.id);
+		const left = this.getSegmentsForColumn("left").map(s => s.id);
+		const right = this.getSegmentsForColumn("right").map(s => s.id);
 		this.callbacks.onPreview?.(left, right);
 	}
 
@@ -236,8 +235,8 @@ export class StatusLineSegmentEditorComponent extends Container {
 				this.triggerPreview();
 			}
 		} else if (matchesKey(data, "enter") || matchesKey(data, "return") || data === "\n") {
-			const left = this.getSegmentsForColumn("left").map((s) => s.id);
-			const right = this.getSegmentsForColumn("right").map((s) => s.id);
+			const left = this.getSegmentsForColumn("left").map(s => s.id);
+			const right = this.getSegmentsForColumn("right").map(s => s.id);
 			this.callbacks.onSave(left, right);
 		} else if (matchesKey(data, "escape") || matchesKey(data, "esc")) {
 			this.callbacks.onCancel();

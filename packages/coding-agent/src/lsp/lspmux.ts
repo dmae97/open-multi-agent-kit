@@ -108,7 +108,7 @@ async function checkServerRunning(binaryPath: string): Promise<boolean> {
 
 		const exited = await Promise.race([
 			proc.exited,
-			new Promise<null>((resolve) => setTimeout(() => resolve(null), LIVENESS_TIMEOUT_MS)),
+			new Promise<null>(resolve => setTimeout(() => resolve(null), LIVENESS_TIMEOUT_MS)),
 		]);
 
 		if (exited === null) {

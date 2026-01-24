@@ -5,7 +5,6 @@
  * .bashrc/.zshrc, which can be sourced before each command to provide a familiar
  * shell experience.
  */
-
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";

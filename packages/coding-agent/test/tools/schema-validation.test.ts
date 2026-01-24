@@ -244,7 +244,7 @@ describe("tool schema validation (post-sanitization)", () => {
 			// Apply the same sanitization that happens before sending to providers
 			const sanitized = sanitizeSchemaForGoogle(schema);
 			const violations = validateSchema(sanitized, tool.name);
-			const errors = violations.filter((v) => v.severity === "error");
+			const errors = violations.filter(v => v.severity === "error");
 
 			if (errors.length > 0) {
 				allViolations.push({ tool: tool.name, violations: errors });
@@ -254,7 +254,7 @@ describe("tool schema validation (post-sanitization)", () => {
 		if (allViolations.length > 0) {
 			const message = allViolations
 				.map(({ tool, violations }) => {
-					const details = violations.map((v) => `  - ${v.path}: ${v.key} = ${JSON.stringify(v.value)}`).join("\n");
+					const details = violations.map(v => `  - ${v.path}: ${v.key} = ${JSON.stringify(v.value)}`).join("\n");
 					return `${tool}:\n${details}`;
 				})
 				.join("\n\n");
@@ -274,7 +274,7 @@ describe("tool schema validation (post-sanitization)", () => {
 			if (!schema) continue;
 
 			const sanitized = sanitizeSchemaForGoogle(schema);
-			const violations = validateSchema(sanitized, tool.name).filter((v) => v.key === "$schema");
+			const violations = validateSchema(sanitized, tool.name).filter(v => v.key === "$schema");
 			expect(violations).toEqual([]);
 		}
 	});
@@ -288,7 +288,7 @@ describe("tool schema validation (post-sanitization)", () => {
 			if (!schema) continue;
 
 			const sanitized = sanitizeSchemaForGoogle(schema);
-			const violations = validateSchema(sanitized, tool.name).filter((v) => v.key === "$ref" || v.key === "$defs");
+			const violations = validateSchema(sanitized, tool.name).filter(v => v.key === "$ref" || v.key === "$defs");
 			expect(violations).toEqual([]);
 		}
 	});
@@ -310,7 +310,7 @@ describe("tool schema validation (post-sanitization)", () => {
 			if (!schema) continue;
 
 			const sanitized = sanitizeSchemaForGoogle(schema);
-			const violations = validateSchema(sanitized, tool.name).filter((v) => draft2020Features.includes(v.key));
+			const violations = validateSchema(sanitized, tool.name).filter(v => draft2020Features.includes(v.key));
 			expect(violations).toEqual([]);
 		}
 	});
@@ -324,7 +324,7 @@ describe("tool schema validation (post-sanitization)", () => {
 			if (!schema) continue;
 
 			const sanitized = sanitizeSchemaForGoogle(schema);
-			const violations = validateSchema(sanitized, tool.name).filter((v) => v.key === "const");
+			const violations = validateSchema(sanitized, tool.name).filter(v => v.key === "const");
 			expect(violations).toEqual([]);
 		}
 	});
@@ -338,7 +338,7 @@ describe("tool schema validation (post-sanitization)", () => {
 			if (!schema) continue;
 
 			const sanitized = sanitizeSchemaForGoogle(schema);
-			const violations = validateSchema(sanitized, tool.name).filter((v) => v.key === "examples");
+			const violations = validateSchema(sanitized, tool.name).filter(v => v.key === "examples");
 			expect(violations).toEqual([]);
 		}
 	});
@@ -355,10 +355,10 @@ describe("tool schema validation (post-sanitization)", () => {
 
 			const sanitized = sanitizeSchemaForGoogle(schema);
 			const violations = validateSchema(sanitized, name);
-			const errors = violations.filter((v) => v.severity === "error");
+			const errors = violations.filter(v => v.severity === "error");
 
 			if (errors.length > 0) {
-				const details = errors.map((v) => `  - ${v.path}: ${v.key} = ${JSON.stringify(v.value)}`).join("\n");
+				const details = errors.map(v => `  - ${v.path}: ${v.key} = ${JSON.stringify(v.value)}`).join("\n");
 				throw new Error(`Hidden tool ${name} has prohibited schema features after sanitization:\n${details}`);
 			}
 		}
@@ -400,7 +400,7 @@ describe("tool schema validation (post-sanitization)", () => {
 
 			const sanitized = sanitizeSchemaForGoogle(schema);
 			const violations = validateSchema(sanitized, tool.name);
-			const toolWarnings = violations.filter((v) => v.severity === "warning");
+			const toolWarnings = violations.filter(v => v.severity === "warning");
 
 			if (toolWarnings.length > 0) {
 				warnings.push({ tool: tool.name, violations: toolWarnings });
@@ -411,7 +411,7 @@ describe("tool schema validation (post-sanitization)", () => {
 		if (warnings.length > 0) {
 			const message = warnings
 				.map(({ tool, violations }) => {
-					const details = violations.map((v) => `  - ${v.path}: ${v.key} = ${JSON.stringify(v.value)}`).join("\n");
+					const details = violations.map(v => `  - ${v.path}: ${v.key} = ${JSON.stringify(v.value)}`).join("\n");
 					return `${tool}:\n${details}`;
 				})
 				.join("\n\n");
@@ -428,62 +428,62 @@ describe("validateSchema helper", () => {
 	it("detects $schema declarations", () => {
 		const schema = { $schema: "http://json-schema.org/draft-07/schema#", type: "object" };
 		const violations = validateSchema(schema);
-		expect(violations.some((v) => v.key === "$schema")).toBe(true);
+		expect(violations.some(v => v.key === "$schema")).toBe(true);
 	});
 
 	it("detects $ref usage", () => {
 		const schema = { type: "object", properties: { foo: { $ref: "#/$defs/Foo" } } };
 		const violations = validateSchema(schema);
-		expect(violations.some((v) => v.key === "$ref")).toBe(true);
+		expect(violations.some(v => v.key === "$ref")).toBe(true);
 	});
 
 	it("detects $defs usage", () => {
 		const schema = { $defs: { Foo: { type: "string" } }, type: "object" };
 		const violations = validateSchema(schema);
-		expect(violations.some((v) => v.key === "$defs")).toBe(true);
+		expect(violations.some(v => v.key === "$defs")).toBe(true);
 	});
 
 	it("detects const usage (should be sanitized away)", () => {
 		const schema = { type: "object", properties: { status: { const: "active" } } };
 		const violations = validateSchema(schema);
-		expect(violations.some((v) => v.key === "const")).toBe(true);
+		expect(violations.some(v => v.key === "const")).toBe(true);
 	});
 
 	it("detects examples field", () => {
 		const schema = { type: "string", examples: ["foo", "bar"] };
 		const violations = validateSchema(schema);
-		expect(violations.some((v) => v.key === "examples")).toBe(true);
+		expect(violations.some(v => v.key === "examples")).toBe(true);
 	});
 
 	it("detects prefixItems (Draft 2020-12)", () => {
 		const schema = { type: "array", prefixItems: [{ type: "string" }] };
 		const violations = validateSchema(schema);
-		expect(violations.some((v) => v.key === "prefixItems")).toBe(true);
+		expect(violations.some(v => v.key === "prefixItems")).toBe(true);
 	});
 
 	it("detects unevaluatedProperties (Draft 2020-12)", () => {
 		const schema = { type: "object", unevaluatedProperties: false };
 		const violations = validateSchema(schema);
-		expect(violations.some((v) => v.key === "unevaluatedProperties")).toBe(true);
+		expect(violations.some(v => v.key === "unevaluatedProperties")).toBe(true);
 	});
 
 	it("warns on additionalProperties: false", () => {
 		const schema = { type: "object", additionalProperties: false };
 		const violations = validateSchema(schema);
-		const warning = violations.find((v) => v.key === "additionalProperties");
+		const warning = violations.find(v => v.key === "additionalProperties");
 		expect(warning?.severity).toBe("warning");
 	});
 
 	it("does not warn on additionalProperties: true", () => {
 		const schema = { type: "object", additionalProperties: true };
 		const violations = validateSchema(schema);
-		expect(violations.some((v) => v.key === "additionalProperties")).toBe(false);
+		expect(violations.some(v => v.key === "additionalProperties")).toBe(false);
 	});
 
 	it("warns on format keyword", () => {
 		const schema = { type: "string", format: "uri" };
 		const violations = validateSchema(schema);
-		const warning = violations.find((v) => v.key === "format");
+		const warning = violations.find(v => v.key === "format");
 		expect(warning?.severity).toBe("warning");
 	});
 
@@ -500,8 +500,8 @@ describe("validateSchema helper", () => {
 			},
 		};
 		const violations = validateSchema(schema);
-		expect(violations.some((v) => v.key === "$ref")).toBe(true);
-		expect(violations.find((v) => v.key === "$ref")?.path).toContain("nested");
+		expect(violations.some(v => v.key === "$ref")).toBe(true);
+		expect(violations.find(v => v.key === "$ref")?.path).toContain("nested");
 	});
 
 	it("validates array items", () => {
@@ -510,7 +510,7 @@ describe("validateSchema helper", () => {
 			items: [{ const: "first" }, { type: "string" }],
 		};
 		const violations = validateSchema(schema);
-		expect(violations.some((v) => v.key === "const")).toBe(true);
+		expect(violations.some(v => v.key === "const")).toBe(true);
 	});
 
 	it("returns empty array for valid schema", () => {
@@ -523,6 +523,6 @@ describe("validateSchema helper", () => {
 			required: ["name"],
 		};
 		const violations = validateSchema(schema);
-		expect(violations.filter((v) => v.severity === "error")).toEqual([]);
+		expect(violations.filter(v => v.severity === "error")).toEqual([]);
 	});
 });

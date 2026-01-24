@@ -84,7 +84,7 @@ export const handleNpm: SpecialHandler = async (
 		const repoUrl = typeof pkg.repository === "string" ? pkg.repository : pkg.repository?.url;
 		if (repoUrl) md += `**Repository:** ${repoUrl.replace(/^git\+/, "").replace(/\.git$/, "")}\n`;
 		if (pkg.keywords?.length) md += `**Keywords:** ${pkg.keywords.join(", ")}\n`;
-		if (pkg.maintainers?.length) md += `**Maintainers:** ${pkg.maintainers.map((m) => m.name).join(", ")}\n`;
+		if (pkg.maintainers?.length) md += `**Maintainers:** ${pkg.maintainers.map(m => m.name).join(", ")}\n`;
 
 		if (pkg.dependencies && Object.keys(pkg.dependencies).length > 0) {
 			md += `\n## Dependencies\n\n`;

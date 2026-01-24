@@ -32,8 +32,8 @@ describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("xhigh reasoning", () => {
 
 			const response = await s.result();
 			expect(response.stopReason, `Error: ${response.errorMessage}`).toBe("stop");
-			expect(response.content.some((b) => b.type === "text")).toBe(true);
-			expect(hasThinking || response.content.some((b) => b.type === "thinking")).toBe(true);
+			expect(response.content.some(b => b.type === "text")).toBe(true);
+			expect(hasThinking || response.content.some(b => b.type === "thinking")).toBe(true);
 		});
 	});
 

@@ -365,7 +365,7 @@ describe("Large session fixture", () => {
 		const entries = await loadLargeSessionEntries();
 		expect(entries.length).toBeGreaterThan(100);
 
-		const messageCount = entries.filter((e) => e.type === "message").length;
+		const messageCount = entries.filter(e => e.type === "message").length;
 		expect(messageCount).toBeGreaterThan(100);
 	});
 

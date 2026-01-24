@@ -7,7 +7,6 @@
  * - skill://<name> - Reads SKILL.md
  * - skill://<name>/<path> - Reads relative path within skill's baseDir
  */
-
 import * as path from "node:path";
 import type { Skill } from "../extensibility/skills";
 import type { InternalResource, InternalUrl, ProtocolHandler } from "./types";
@@ -62,9 +61,9 @@ export class SkillProtocolHandler implements ProtocolHandler {
 		}
 
 		// Find the skill
-		const skill = skills.find((s) => s.name === skillName);
+		const skill = skills.find(s => s.name === skillName);
 		if (!skill) {
-			const available = skills.map((s) => s.name);
+			const available = skills.map(s => s.name);
 			const availableStr = available.length > 0 ? available.join(", ") : "none";
 			throw new Error(`Unknown skill: ${skillName}\nAvailable: ${availableStr}`);
 		}

@@ -39,7 +39,7 @@ export class MultiError extends ToolError {
 	readonly errors: ErrorEntry[];
 
 	constructor(errors: ErrorEntry[]) {
-		super(errors.map((e) => e.message).join("; "));
+		super(errors.map(e => e.message).join("; "));
 		this.name = "MultiError";
 		this.errors = errors;
 	}
@@ -49,11 +49,11 @@ export class MultiError extends ToolError {
 			const e = this.errors[0];
 			return e.context ? `${e.context}: ${e.message}` : e.message;
 		}
-		return this.errors.map((e) => (e.context ? `${e.context}: ${e.message}` : e.message)).join("\n");
+		return this.errors.map(e => (e.context ? `${e.context}: ${e.message}` : e.message)).join("\n");
 	}
 
 	static from(errors: Array<string | ErrorEntry>): MultiError {
-		return new MultiError(errors.map((e) => (typeof e === "string" ? { message: e } : e)));
+		return new MultiError(errors.map(e => (typeof e === "string" ? { message: e } : e)));
 	}
 }
 

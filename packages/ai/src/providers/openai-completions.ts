@@ -61,7 +61,7 @@ function hasToolHistory(messages: Message[]): boolean {
 			return true;
 		}
 		if (msg.role === "assistant") {
-			if (msg.content.some((block) => block.type === "toolCall")) {
+			if (msg.content.some(block => block.type === "toolCall")) {
 				return true;
 			}
 		}
@@ -287,7 +287,7 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 						for (const detail of reasoningDetails) {
 							if (detail.type === "reasoning.encrypted" && detail.id && detail.data) {
 								const matchingToolCall = output.content.find(
-									(b) => b.type === "toolCall" && b.id === detail.id,
+									b => b.type === "toolCall" && b.id === detail.id,
 								) as ToolCall | undefined;
 								if (matchingToolCall) {
 									matchingToolCall.thoughtSignature = JSON.stringify(detail);
@@ -356,12 +356,12 @@ function createClient(
 		headers["Openai-Intent"] = "conversation-edits";
 
 		// Copilot requires this header when sending images
-		const hasImages = messages.some((msg) => {
+		const hasImages = messages.some(msg => {
 			if (msg.role === "user" && Array.isArray(msg.content)) {
-				return msg.content.some((c) => c.type === "image");
+				return msg.content.some(c => c.type === "image");
 			}
 			if (msg.role === "toolResult" && Array.isArray(msg.content)) {
-				return msg.content.some((c) => c.type === "image");
+				return msg.content.some(c => c.type === "image");
 			}
 			return false;
 		});
@@ -516,7 +516,7 @@ export function convertMessages(
 					}
 				});
 				const filteredContent = !model.input.includes("image")
-					? content.filter((c) => c.type !== "image_url")
+					? content.filter(c => c.type !== "image_url")
 					: content;
 				if (filteredContent.length === 0) continue;
 				params.push({
@@ -531,29 +531,29 @@ export function convertMessages(
 				content: compat.requiresAssistantAfterToolResult ? "" : null,
 			};
 
-			const textBlocks = msg.content.filter((b) => b.type === "text") as TextContent[];
+			const textBlocks = msg.content.filter(b => b.type === "text") as TextContent[];
 			// Filter out empty text blocks to avoid API validation errors
-			const nonEmptyTextBlocks = textBlocks.filter((b) => b.text && b.text.trim().length > 0);
+			const nonEmptyTextBlocks = textBlocks.filter(b => b.text && b.text.trim().length > 0);
 			if (nonEmptyTextBlocks.length > 0) {
 				// GitHub Copilot requires assistant content as a string, not an array.
 				// Sending as array causes Claude models to re-answer all previous prompts.
 				if (model.provider === "github-copilot") {
-					assistantMsg.content = nonEmptyTextBlocks.map((b) => sanitizeSurrogates(b.text)).join("");
+					assistantMsg.content = nonEmptyTextBlocks.map(b => sanitizeSurrogates(b.text)).join("");
 				} else {
-					assistantMsg.content = nonEmptyTextBlocks.map((b) => {
+					assistantMsg.content = nonEmptyTextBlocks.map(b => {
 						return { type: "text", text: sanitizeSurrogates(b.text) };
 					});
 				}
 			}
 
 			// Handle thinking blocks
-			const thinkingBlocks = msg.content.filter((b) => b.type === "thinking") as ThinkingContent[];
+			const thinkingBlocks = msg.content.filter(b => b.type === "thinking") as ThinkingContent[];
 			// Filter out empty thinking blocks to avoid API validation errors
-			const nonEmptyThinkingBlocks = thinkingBlocks.filter((b) => b.thinking && b.thinking.trim().length > 0);
+			const nonEmptyThinkingBlocks = thinkingBlocks.filter(b => b.thinking && b.thinking.trim().length > 0);
 			if (nonEmptyThinkingBlocks.length > 0) {
 				if (compat.requiresThinkingAsText) {
 					// Convert thinking blocks to plain text (no tags to avoid model mimicking them)
-					const thinkingText = nonEmptyThinkingBlocks.map((b) => b.thinking).join("\n\n");
+					const thinkingText = nonEmptyThinkingBlocks.map(b => b.thinking).join("\n\n");
 					const textContent = assistantMsg.content as Array<{ type: "text"; text: string }> | null;
 					if (textContent) {
 						textContent.unshift({ type: "text", text: thinkingText });
@@ -564,14 +564,14 @@ export function convertMessages(
 					// Use the signature from the first thinking block if available (for llama.cpp server + gpt-oss)
 					const signature = nonEmptyThinkingBlocks[0].thinkingSignature;
 					if (signature && signature.length > 0) {
-						(assistantMsg as any)[signature] = nonEmptyThinkingBlocks.map((b) => b.thinking).join("\n");
+						(assistantMsg as any)[signature] = nonEmptyThinkingBlocks.map(b => b.thinking).join("\n");
 					}
 				}
 			}
 
-			const toolCalls = msg.content.filter((b) => b.type === "toolCall") as ToolCall[];
+			const toolCalls = msg.content.filter(b => b.type === "toolCall") as ToolCall[];
 			if (toolCalls.length > 0) {
-				assistantMsg.tool_calls = toolCalls.map((tc) => ({
+				assistantMsg.tool_calls = toolCalls.map(tc => ({
 					id: normalizeMistralToolId(tc.id, compat.requiresMistralToolIds),
 					type: "function" as const,
 					function: {
@@ -580,8 +580,8 @@ export function convertMessages(
 					},
 				}));
 				const reasoningDetails = toolCalls
-					.filter((tc) => tc.thoughtSignature)
-					.map((tc) => {
+					.filter(tc => tc.thoughtSignature)
+					.map(tc => {
 						try {
 							return JSON.parse(tc.thoughtSignature!);
 						} catch {
@@ -616,10 +616,10 @@ export function convertMessages(
 
 				// Extract text and image content
 				const textResult = toolMsg.content
-					.filter((c) => c.type === "text")
-					.map((c) => (c as any).text)
+					.filter(c => c.type === "text")
+					.map(c => (c as any).text)
 					.join("\n");
-				const hasImages = toolMsg.content.some((c) => c.type === "image");
+				const hasImages = toolMsg.content.some(c => c.type === "image");
 
 				// Always send tool result with text (or placeholder if only images)
 				const hasText = textResult.length > 0;
@@ -683,7 +683,7 @@ export function convertMessages(
 }
 
 function convertTools(tools: Tool[]): OpenAI.Chat.Completions.ChatCompletionTool[] {
-	return tools.map((tool) => ({
+	return tools.map(tool => ({
 		type: "function",
 		function: {
 			name: tool.name,

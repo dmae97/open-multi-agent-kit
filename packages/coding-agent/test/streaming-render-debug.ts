@@ -3,7 +3,6 @@
  * Uses real fixture data that caused the bug.
  * Run with: npx tsx test/streaming-render-debug.ts
  */
-
 import * as path from "node:path";
 import type { AssistantMessage } from "@oh-my-pi/pi-ai";
 import { AssistantMessageComponent } from "@oh-my-pi/pi-coding-agent/modes/components/assistant-message";
@@ -22,8 +21,8 @@ async function main() {
 	);
 
 	// Extract thinking and text content
-	const thinkingContent = fixtureMessage.content.find((c) => c.type === "thinking");
-	const textContent = fixtureMessage.content.find((c) => c.type === "text");
+	const thinkingContent = fixtureMessage.content.find(c => c.type === "thinking");
+	const textContent = fixtureMessage.content.find(c => c.type === "text");
 
 	if (!thinkingContent || thinkingContent.type !== "thinking") {
 		console.error("No thinking content in fixture");

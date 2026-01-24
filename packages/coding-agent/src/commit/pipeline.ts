@@ -85,7 +85,7 @@ async function runLegacyCommitCommand(args: CommitCommandArgs): Promise<void> {
 	const scopeCandidates = extractScopeCandidates(numstat).scopeCandidates;
 	const recentCommits = await git.getRecentCommits(RECENT_COMMITS_COUNT);
 	const contextFiles = await loadProjectContextFiles({ cwd });
-	const formattedContextFiles = contextFiles.map((file) => ({
+	const formattedContextFiles = contextFiles.map(file => ({
 		path: path.relative(cwd, file.path),
 		content: file.content,
 	}));
@@ -207,7 +207,7 @@ async function generateSummaryWithRetry(input: {
 			apiKey: input.apiKey,
 			commitType: input.analysis.type,
 			scope: input.analysis.scope,
-			details: input.analysis.details.map((detail) => detail.text),
+			details: input.analysis.details.map(detail => detail.text),
 			stat: input.stat,
 			maxChars: SUMMARY_MAX_CHARS,
 			userContext: context,

@@ -1,7 +1,6 @@
 /**
  * Hierarchical tree list rendering helper.
  */
-
 import type { Theme } from "../modes/theme/theme";
 import { formatMoreItems } from "../tools/render-utils";
 import type { TreeContext } from "./types";

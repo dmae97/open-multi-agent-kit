@@ -3,7 +3,6 @@
  *
  * Handles connection initialization, tool listing, and tool calling.
  */
-
 import { createHttpTransport } from "./transports/http";
 import { createStdioTransport } from "./transports/stdio";
 import type {
@@ -39,11 +38,11 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
 	const { promise: wrapped, resolve, reject } = Promise.withResolvers<T>();
 	const timer = setTimeout(() => reject(new Error(message)), ms);
 	promise.then(
-		(value) => {
+		value => {
 			clearTimeout(timer);
 			resolve(value);
 		},
-		(error) => {
+		error => {
 			clearTimeout(timer);
 			reject(error);
 		},

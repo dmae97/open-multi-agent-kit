@@ -4,7 +4,6 @@
  * Loads configuration from .claude directories.
  * Priority: 80 (tool-specific, below builtin but above shared standards)
  */
-
 import * as path from "node:path";
 import { registerProvider } from "../capability";
 import { type ContextFile, contextFileCapability } from "../capability/context-file";
@@ -169,8 +168,8 @@ async function loadSkills(ctx: LoadContext): Promise<LoadResult<Skill>> {
 	]);
 
 	return {
-		items: results.flatMap((r) => r.items),
-		warnings: results.flatMap((r) => r.warnings ?? []),
+		items: results.flatMap(r => r.items),
+		warnings: results.flatMap(r => r.warnings ?? []),
 	};
 }
 
@@ -194,7 +193,7 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 	const pathsByLevel = await Promise.all(
 		dirsToDiscover.map(async ({ dir, level }) => {
 			const paths = await discoverExtensionModulePaths(ctx, dir);
-			return paths.map((extPath) => ({ extPath, level }));
+			return paths.map(extPath => ({ extPath, level }));
 		}),
 	);
 

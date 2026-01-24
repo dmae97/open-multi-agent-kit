@@ -341,7 +341,7 @@ export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"
 				} else if (eventType === "response.output_item.done") {
 					const item = rawEvent.item as ResponseReasoningItem | ResponseOutputMessage | ResponseFunctionToolCall;
 					if (item.type === "reasoning" && currentBlock?.type === "thinking") {
-						currentBlock.thinking = item.summary?.map((s) => s.text).join("\n\n") || "";
+						currentBlock.thinking = item.summary?.map(s => s.text).join("\n\n") || "";
 						currentBlock.thinkingSignature = JSON.stringify(item);
 						stream.push({
 							type: "thinking_end",
@@ -351,7 +351,7 @@ export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"
 						});
 						currentBlock = null;
 					} else if (item.type === "message" && currentBlock?.type === "text") {
-						currentBlock.text = item.content.map((c) => (c.type === "output_text" ? c.text : c.refusal)).join("");
+						currentBlock.text = item.content.map(c => (c.type === "output_text" ? c.text : c.refusal)).join("");
 						currentBlock.textSignature = item.id;
 						stream.push({
 							type: "text_end",
@@ -396,7 +396,7 @@ export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"
 					}
 					calculateCost(model, output.usage);
 					output.stopReason = mapStopReason(response?.status);
-					if (output.content.some((b) => b.type === "toolCall") && output.stopReason === "stop") {
+					if (output.content.some(b => b.type === "toolCall") && output.stopReason === "stop") {
 						output.stopReason = "toolUse";
 					}
 				} else if (eventType === "error") {
@@ -593,9 +593,9 @@ function convertMessages(model: Model<"openai-codex-responses">, context: Contex
 				});
 				// Filter out images if model doesn't support them, and empty text blocks
 				let filteredContent = !model.input.includes("image")
-					? content.filter((c) => c.type !== "input_image")
+					? content.filter(c => c.type !== "input_image")
 					: content;
-				filteredContent = filteredContent.filter((c) => {
+				filteredContent = filteredContent.filter(c => {
 					if (c.type === "input_text") {
 						return c.text.trim().length > 0;
 					}
@@ -647,10 +647,10 @@ function convertMessages(model: Model<"openai-codex-responses">, context: Contex
 			messages.push(...output);
 		} else if (msg.role === "toolResult") {
 			const textResult = msg.content
-				.filter((c) => c.type === "text")
-				.map((c) => (c as { text: string }).text)
+				.filter(c => c.type === "text")
+				.map(c => (c as { text: string }).text)
 				.join("\n");
-			const hasImages = msg.content.some((c) => c.type === "image");
+			const hasImages = msg.content.some(c => c.type === "image");
 			const normalized = normalizeResponsesToolCallId(msg.toolCallId);
 
 			const hasText = textResult.length > 0;
@@ -692,7 +692,7 @@ function convertMessages(model: Model<"openai-codex-responses">, context: Contex
 function convertTools(
 	tools: Tool[],
 ): Array<{ type: "function"; name: string; description: string; parameters: Record<string, unknown>; strict: null }> {
-	return tools.map((tool) => ({
+	return tools.map(tool => ({
 		type: "function",
 		name: tool.name,
 		description: tool.description,

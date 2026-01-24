@@ -71,7 +71,7 @@ function normalizeCategories(categories?: string[] | Record<string, string[]>): 
 	}
 
 	const seen = new Set<string>();
-	return values.filter((item) => {
+	return values.filter(item => {
 		if (seen.has(item)) return false;
 		seen.add(item);
 		return true;
@@ -135,8 +135,8 @@ export const handleFirefoxAddons: SpecialHandler = async (
 		const description = descriptionRaw ? htmlToBasicMarkdown(descriptionRaw) : undefined;
 
 		const authors = (data.authors ?? [])
-			.map((author) => author.name ?? "")
-			.map((author) => author.trim())
+			.map(author => author.name ?? "")
+			.map(author => author.trim())
 			.filter(Boolean);
 
 		const ratingAverage = data.ratings?.average;

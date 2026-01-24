@@ -3,7 +3,6 @@
  *
  * Spawns the agent in RPC mode and provides a typed API for all operations.
  */
-
 import type { AgentEvent, AgentMessage, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent } from "@oh-my-pi/pi-ai";
 import { createSanitizerStream, createSplitterStream, createTextDecoderStream, ptree } from "@oh-my-pi/pi-utils";
@@ -372,7 +371,7 @@ export class RpcClient {
 	waitForIdle(timeout = 60000): Promise<void> {
 		const { promise, resolve, reject } = Promise.withResolvers<void>();
 		let settled = false;
-		const unsubscribe = this.onEvent((event) => {
+		const unsubscribe = this.onEvent(event => {
 			if (event.type === "agent_end") {
 				settled = true;
 				unsubscribe();
@@ -397,7 +396,7 @@ export class RpcClient {
 		const { promise, resolve, reject } = Promise.withResolvers<AgentEvent[]>();
 		const events: AgentEvent[] = [];
 		let settled = false;
-		const unsubscribe = this.onEvent((event) => {
+		const unsubscribe = this.onEvent(event => {
 			events.push(event);
 			if (event.type === "agent_end") {
 				settled = true;
@@ -470,12 +469,12 @@ export class RpcClient {
 		})();
 
 		this.pendingRequests.set(id, {
-			resolve: (response) => {
+			resolve: response => {
 				if (settled) return;
 				settled = true;
 				resolve(response);
 			},
-			reject: (error) => {
+			reject: error => {
 				if (settled) return;
 				settled = true;
 				reject(error);

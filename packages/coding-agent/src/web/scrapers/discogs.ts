@@ -4,7 +4,6 @@
  * Uses the Discogs API to extract structured metadata about releases.
  * API docs: https://www.discogs.com/developers
  */
-
 import type { RenderResult, SpecialHandler } from "./types";
 import { finalizeOutput, loadPage } from "./types";
 
@@ -76,7 +75,7 @@ interface DiscogsMaster {
 function formatArtists(artists: DiscogsArtist[] | undefined): string {
 	if (!artists?.length) return "Unknown Artist";
 	return artists
-		.map((a) => {
+		.map(a => {
 			const name = a.anv || a.name;
 			const join = a.join || ", ";
 			return name + (a.join ? ` ${join} ` : "");
@@ -126,7 +125,7 @@ function formatFormats(formats: DiscogsFormat[] | undefined): string {
 	if (!formats?.length) return "";
 
 	return formats
-		.map((f) => {
+		.map(f => {
 			const parts: string[] = [];
 			if (f.qty && parseInt(f.qty, 10) > 1) parts.push(`${f.qty}×`);
 			parts.push(f.name);
@@ -142,7 +141,7 @@ function formatFormats(formats: DiscogsFormat[] | undefined): string {
 function formatLabels(labels: DiscogsLabel[] | undefined): string {
 	if (!labels?.length) return "";
 	return labels
-		.map((l) => {
+		.map(l => {
 			if (l.catno && l.catno !== "none") return `${l.name} (${l.catno})`;
 			return l.name;
 		})

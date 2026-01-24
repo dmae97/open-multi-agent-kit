@@ -2,7 +2,6 @@
  * Multi-line editor component for hooks.
  * Supports Ctrl+G for external editor.
  */
-
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";

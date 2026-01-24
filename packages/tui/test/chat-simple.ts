@@ -1,7 +1,6 @@
 /**
  * Simple chat interface demo using tui.ts
  */
-
 import { CombinedAutocompleteProvider } from "@oh-my-pi/pi-tui/autocomplete";
 import { Editor } from "@oh-my-pi/pi-tui/components/editor";
 import { Loader } from "@oh-my-pi/pi-tui/components/loader";
@@ -87,8 +86,8 @@ editor.onSubmit = (value: string) => {
 
 		const loader = new Loader(
 			tui,
-			(s) => chalk.cyan(s),
-			(s) => chalk.dim(s),
+			s => chalk.cyan(s),
+			s => chalk.dim(s),
 			"Thinking...",
 		);
 		children.splice(children.length - 1, 0, loader);

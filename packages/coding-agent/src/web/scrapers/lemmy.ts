@@ -87,14 +87,14 @@ function formatAuthor(creator: LemmyCreator): string {
 function indentBlock(text: string, indent: string): string {
 	return text
 		.split("\n")
-		.map((line) => `${indent}${line}`)
+		.map(line => `${indent}${line}`)
 		.join("\n");
 }
 
 function renderComments(comments: LemmyCommentView[]): string {
 	const childrenByParent = new Map<number, LemmyCommentView[]>();
 
-	const commentIds = new Set(comments.map((view) => view.comment.id));
+	const commentIds = new Set(comments.map(view => view.comment.id));
 
 	for (const commentView of comments) {
 		const parentId = commentView.comment.parent_id;

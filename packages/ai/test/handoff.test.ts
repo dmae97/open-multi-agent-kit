@@ -319,16 +319,16 @@ async function testProviderHandoff<TApi extends Api>(
 
 		// Extract text from response
 		const responseText = response.content
-			.filter((b) => b.type === "text")
-			.map((b) => b.text)
+			.filter(b => b.type === "text")
+			.map(b => b.text)
 			.join(" ")
 			.toLowerCase();
 
 		// For aborted messages, we don't expect to find the facts
 		if (sourceContext.message.stopReason === "error") {
-			const hasToolCalls = response.content.some((b) => b.type === "toolCall");
-			const hasThinking = response.content.some((b) => b.type === "thinking");
-			const hasText = response.content.some((b) => b.type === "text");
+			const hasToolCalls = response.content.some(b => b.type === "toolCall");
+			const hasThinking = response.content.some(b => b.type === "thinking");
+			const hasText = response.content.some(b => b.type === "text");
 
 			expect(response.stopReason === "stop" || response.stopReason === "toolUse").toBe(true);
 			expect(hasThinking || hasText || hasToolCalls).toBe(true);

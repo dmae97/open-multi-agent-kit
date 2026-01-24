@@ -71,7 +71,7 @@ export function fuzzyFilter<T>(items: T[], query: string, getText: (item: T) => 
 	const tokens = query
 		.trim()
 		.split(/\s+/)
-		.filter((t) => t.length > 0);
+		.filter(t => t.length > 0);
 
 	if (tokens.length === 0) {
 		return items;
@@ -104,5 +104,5 @@ export function fuzzyFilter<T>(items: T[], query: string, getText: (item: T) => 
 	// Sort by score (asc, lower is better)
 	results.sort((a, b) => a.totalScore - b.totalScore);
 
-	return results.map((r) => r.item);
+	return results.map(r => r.item);
 }

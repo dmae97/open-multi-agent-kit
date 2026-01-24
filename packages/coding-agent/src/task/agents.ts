@@ -3,7 +3,6 @@
  *
  * Agents are embedded at build time via Bun's import with { type: "text" }.
  */
-
 import { renderPromptTemplate } from "../config/prompt-templates";
 import { parseAgentFields } from "../discovery/helpers";
 import exploreMd from "../prompts/agents/explore.md" with { type: "text" };
@@ -69,7 +68,7 @@ const EMBEDDED_AGENT_DEFS: EmbeddedAgentDef[] = [
 	},
 ];
 
-const EMBEDDED_AGENTS: { name: string; content: string }[] = EMBEDDED_AGENT_DEFS.map((def) => ({
+const EMBEDDED_AGENTS: { name: string; content: string }[] = EMBEDDED_AGENT_DEFS.map(def => ({
 	name: def.fileName,
 	content: buildAgentContent(def),
 }));
@@ -141,7 +140,7 @@ export function loadBundledAgents(): AgentDefinition[] {
  * Get a bundled agent by name.
  */
 export function getBundledAgent(name: string): AgentDefinition | undefined {
-	return loadBundledAgents().find((a) => a.name === name);
+	return loadBundledAgents().find(a => a.name === name);
 }
 
 /**

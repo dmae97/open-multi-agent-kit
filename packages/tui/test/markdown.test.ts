@@ -25,13 +25,13 @@ describe("Markdown component", () => {
 			expect(lines.length > 0).toBeTruthy();
 
 			// Strip ANSI codes for checking
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
 
 			// Check structure
-			expect(plainLines.some((line) => line.includes("- Item 1"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("  - Nested 1.1"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("  - Nested 1.2"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("- Item 2"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("- Item 1"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("  - Nested 1.1"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("  - Nested 1.2"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("- Item 2"))).toBeTruthy();
 		});
 
 		it("should render deeply nested list", () => {
@@ -46,13 +46,13 @@ describe("Markdown component", () => {
 			);
 
 			const lines = markdown.render(80);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
 
 			// Check proper indentation
-			expect(plainLines.some((line) => line.includes("- Level 1"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("  - Level 2"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("    - Level 3"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("      - Level 4"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("- Level 1"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("  - Level 2"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("    - Level 3"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("      - Level 4"))).toBeTruthy();
 		});
 
 		it("should render ordered nested list", () => {
@@ -67,12 +67,12 @@ describe("Markdown component", () => {
 			);
 
 			const lines = markdown.render(80);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
 
-			expect(plainLines.some((line) => line.includes("1. First"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("  1. Nested first"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("  2. Nested second"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("2. Second"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("1. First"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("  1. Nested first"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("  2. Nested second"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("2. Second"))).toBeTruthy();
 		});
 
 		it("should render mixed ordered and unordered nested lists", () => {
@@ -88,11 +88,11 @@ describe("Markdown component", () => {
 			);
 
 			const lines = markdown.render(80);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
 
-			expect(plainLines.some((line) => line.includes("1. Ordered item"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("  - Unordered nested"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("2. Second ordered"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("1. Ordered item"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("  - Unordered nested"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("2. Second ordered"))).toBeTruthy();
 		});
 	});
 
@@ -109,16 +109,16 @@ describe("Markdown component", () => {
 			);
 
 			const lines = markdown.render(80);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
 
 			// Check table structure
-			expect(plainLines.some((line) => line.includes("Name"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("Age"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("Alice"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("Bob"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("Name"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("Age"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("Alice"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("Bob"))).toBeTruthy();
 			// Check for table borders
-			expect(plainLines.some((line) => line.includes("|"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("-"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("|"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("-"))).toBeTruthy();
 		});
 
 		it("should render table with alignment", () => {
@@ -133,14 +133,14 @@ describe("Markdown component", () => {
 			);
 
 			const lines = markdown.render(80);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
 
 			// Check headers
-			expect(plainLines.some((line) => line.includes("Left"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("Center"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("Right"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("Left"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("Center"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("Right"))).toBeTruthy();
 			// Check content
-			expect(plainLines.some((line) => line.includes("Long text"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("Long text"))).toBeTruthy();
 		});
 
 		it("should handle tables with varying column widths", () => {
@@ -159,9 +159,9 @@ describe("Markdown component", () => {
 			// Should render without errors
 			expect(lines.length > 0).toBeTruthy();
 
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
-			expect(plainLines.some((line) => line.includes("Very long column header"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("This is a much longer cell content"))).toBeTruthy();
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
+			expect(plainLines.some(line => line.includes("Very long column header"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("This is a much longer cell content"))).toBeTruthy();
 		});
 
 		it("should wrap table cells when table exceeds available width", () => {
@@ -177,7 +177,7 @@ describe("Markdown component", () => {
 
 			// Render at narrow width that forces wrapping
 			const lines = markdown.render(50);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
 
 			// All lines should fit within width
 			for (const line of plainLines) {
@@ -204,10 +204,10 @@ describe("Markdown component", () => {
 
 			// Render at width that forces the cell to wrap
 			const lines = markdown.render(25);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
 
 			// Should have multiple data rows due to wrapping
-			const dataRows = plainLines.filter((line) => line.startsWith("|") && !line.includes("-"));
+			const dataRows = plainLines.filter(line => line.startsWith("|") && !line.includes("-"));
 			expect(dataRows.length > 2).toBeTruthy();
 
 			// All content should be preserved (may be split across lines)
@@ -230,7 +230,7 @@ describe("Markdown component", () => {
 
 			const width = 30;
 			const lines = markdown.render(width);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
 
 			for (const line of plainLines) {
 				expect(
@@ -240,7 +240,7 @@ describe("Markdown component", () => {
 			}
 
 			// Borders should stay intact (exactly 2 vertical borders for a 1-col table)
-			const tableLines = plainLines.filter((line) => line.startsWith("|"));
+			const tableLines = plainLines.filter(line => line.startsWith("|"));
 			for (const line of tableLines) {
 				const borderCount = line.split("|").length - 1;
 				expect(borderCount).toBe(2);
@@ -268,7 +268,7 @@ describe("Markdown component", () => {
 			const joinedOutput = lines.join("\n");
 			expect(joinedOutput.includes("\x1b[33m")).toBeTruthy();
 
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
 			for (const line of plainLines) {
 				expect(
 					line.length <= width,
@@ -276,7 +276,7 @@ describe("Markdown component", () => {
 				);
 			}
 
-			const tableLines = plainLines.filter((line) => line.startsWith("|"));
+			const tableLines = plainLines.filter(line => line.startsWith("|"));
 			for (const line of tableLines) {
 				const borderCount = line.split("|").length - 1;
 				expect(borderCount).toBe(2);
@@ -295,7 +295,7 @@ describe("Markdown component", () => {
 
 			// Very narrow width
 			const lines = markdown.render(15);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
 
 			// Should not crash and should produce output
 			expect(lines.length > 0).toBeTruthy();
@@ -318,17 +318,17 @@ describe("Markdown component", () => {
 
 			// Wide width where table fits naturally
 			const lines = markdown.render(80);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
 
 			// Should have proper table structure
-			const headerLine = plainLines.find((line) => line.includes("A") && line.includes("B"));
+			const headerLine = plainLines.find(line => line.includes("A") && line.includes("B"));
 			expect(headerLine).toBeTruthy();
 			expect(headerLine?.includes("|")).toBeTruthy();
 
-			const separatorLine = plainLines.find((line) => line.includes("+") && line.includes("+"));
+			const separatorLine = plainLines.find(line => line.includes("+") && line.includes("+"));
 			expect(separatorLine).toBeTruthy();
 
-			const dataLine = plainLines.find((line) => line.includes("1") && line.includes("2"));
+			const dataLine = plainLines.find(line => line.includes("1") && line.includes("2"));
 			expect(dataLine).toBeTruthy();
 		});
 
@@ -344,7 +344,7 @@ describe("Markdown component", () => {
 
 			// Width 40 with paddingX=2 means contentWidth=36
 			const lines = markdown.render(40);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
 
 			// All lines should respect width
 			for (const line of plainLines) {
@@ -352,7 +352,7 @@ describe("Markdown component", () => {
 			}
 
 			// Table rows should have left padding
-			const tableRow = plainLines.find((line) => line.includes("|"));
+			const tableRow = plainLines.find(line => line.includes("|"));
 			expect(tableRow?.startsWith("  ")).toBeTruthy();
 		});
 	});
@@ -375,16 +375,16 @@ describe("Markdown component", () => {
 			);
 
 			const lines = markdown.render(80);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
 
 			// Check heading
-			expect(plainLines.some((line) => line.includes("Test Document"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("Test Document"))).toBeTruthy();
 			// Check list
-			expect(plainLines.some((line) => line.includes("- Item 1"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("  - Nested item"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("- Item 1"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("  - Nested item"))).toBeTruthy();
 			// Check table
-			expect(plainLines.some((line) => line.includes("Col1"))).toBeTruthy();
-			expect(plainLines.some((line) => line.includes("|"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("Col1"))).toBeTruthy();
+			expect(plainLines.some(line => line.includes("|"))).toBeTruthy();
 		});
 	});
 
@@ -397,7 +397,7 @@ describe("Markdown component", () => {
 				0,
 				defaultMarkdownTheme,
 				{
-					color: (text) => chalk.gray(text),
+					color: text => chalk.gray(text),
 					italic: true,
 				},
 			);
@@ -424,7 +424,7 @@ describe("Markdown component", () => {
 				0,
 				defaultMarkdownTheme,
 				{
-					color: (text) => chalk.gray(text),
+					color: text => chalk.gray(text),
 					italic: true,
 				},
 			);
@@ -460,13 +460,13 @@ again, hello world`,
 			);
 
 			const lines = markdown.render(80);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
 
 			const closingBackticksIndex = plainLines.indexOf("```");
 			expect(closingBackticksIndex !== -1).toBeTruthy();
 
 			const afterBackticks = plainLines.slice(closingBackticksIndex + 1);
-			const emptyLineCount = afterBackticks.findIndex((line) => line !== "");
+			const emptyLineCount = afterBackticks.findIndex(line => line !== "");
 
 			expect(emptyLineCount).toBe(1);
 		});
@@ -486,13 +486,13 @@ again, hello world`,
 			);
 
 			const lines = markdown.render(80);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
 
-			const dividerIndex = plainLines.findIndex((line) => line.includes("-"));
+			const dividerIndex = plainLines.findIndex(line => line.includes("-"));
 			expect(dividerIndex !== -1).toBeTruthy();
 
 			const afterDivider = plainLines.slice(dividerIndex + 1);
-			const emptyLineCount = afterDivider.findIndex((line) => line !== "");
+			const emptyLineCount = afterDivider.findIndex(line => line !== "");
 
 			expect(emptyLineCount).toBe(1);
 		});
@@ -510,13 +510,13 @@ This is a paragraph`,
 			);
 
 			const lines = markdown.render(80);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
 
-			const headingIndex = plainLines.findIndex((line) => line.includes("Hello"));
+			const headingIndex = plainLines.findIndex(line => line.includes("Hello"));
 			expect(headingIndex !== -1).toBeTruthy();
 
 			const afterHeading = plainLines.slice(headingIndex + 1);
-			const emptyLineCount = afterHeading.findIndex((line) => line !== "");
+			const emptyLineCount = afterHeading.findIndex(line => line !== "");
 
 			expect(emptyLineCount).toBe(1);
 		});
@@ -536,13 +536,13 @@ again, hello world`,
 			);
 
 			const lines = markdown.render(80);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
 
-			const quoteIndex = plainLines.findIndex((line) => line.includes("This is a quote"));
+			const quoteIndex = plainLines.findIndex(line => line.includes("This is a quote"));
 			expect(quoteIndex !== -1).toBeTruthy();
 
 			const afterQuote = plainLines.slice(quoteIndex + 1);
-			const emptyLineCount = afterQuote.findIndex((line) => line !== "");
+			const emptyLineCount = afterQuote.findIndex(line => line !== "");
 
 			expect(emptyLineCount).toBe(1);
 		});
@@ -560,7 +560,7 @@ again, hello world`,
 			);
 
 			const lines = markdown.render(80);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
 			const joinedPlain = plainLines.join(" ");
 
 			// The content inside the tags should be visible
@@ -571,7 +571,7 @@ again, hello world`,
 			const markdown = new Markdown("```html\n<div>Some HTML</div>\n```", 0, 0, defaultMarkdownTheme);
 
 			const lines = markdown.render(80);
-			const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
 			const joinedPlain = plainLines.join("\n");
 
 			// HTML in code blocks should be visible

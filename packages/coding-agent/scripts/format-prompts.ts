@@ -10,7 +10,6 @@
  * 5. Trim trailing whitespace (preserve indentation)
  * 6. Ensure single newline at EOF
  */
-
 import { Glob } from "bun";
 
 const PROMPTS_DIR = new URL("../src/prompts/", import.meta.url).pathname;

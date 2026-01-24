@@ -4,7 +4,6 @@
  * Primary provider for OMP native configs. Supports all capabilities.
  * .pi is an alias for backwards compatibility.
  */
-
 import * as path from "node:path";
 import { registerProvider } from "../capability";
 import { type ContextFile, contextFileCapability } from "../capability/context-file";
@@ -95,18 +94,18 @@ async function loadMCPServers(ctx: LoadContext): Promise<LoadResult<MCPServer>> 
 	};
 
 	const projectDirs = await Promise.all(
-		PROJECT_DIRS.map(async (name) => {
+		PROJECT_DIRS.map(async name => {
 			const dir = path.join(ctx.cwd, name);
 			const entries = await readDirEntries(dir);
 			return entries.length > 0 ? dir : null;
 		}),
 	);
-	const userPaths = USER_DIRS.map((name) => path.join(ctx.home, name, "mcp.json"));
+	const userPaths = USER_DIRS.map(name => path.join(ctx.home, name, "mcp.json"));
 
-	const projectDir = projectDirs.find((dir) => dir !== null);
+	const projectDir = projectDirs.find(dir => dir !== null);
 	if (projectDir) {
-		const projectCandidates = ["mcp.json", ".mcp.json"].map((filename) => path.join(projectDir, filename));
-		const projectContents = await Promise.all(projectCandidates.map((path) => readFile(path)));
+		const projectCandidates = ["mcp.json", ".mcp.json"].map(filename => path.join(projectDir, filename));
+		const projectContents = await Promise.all(projectCandidates.map(path => readFile(path)));
 		for (let i = 0; i < projectCandidates.length; i++) {
 			const content = projectContents[i];
 			if (content) {
@@ -116,7 +115,7 @@ async function loadMCPServers(ctx: LoadContext): Promise<LoadResult<MCPServer>> 
 		}
 	}
 
-	const userContents = await Promise.all(userPaths.map((path) => readFile(path)));
+	const userContents = await Promise.all(userPaths.map(path => readFile(path)));
 	for (let i = 0; i < userPaths.length; i++) {
 		const content = userContents[i];
 		if (content) {
@@ -140,10 +139,10 @@ registerProvider<MCPServer>(mcpCapability.id, {
 async function loadSystemPrompt(ctx: LoadContext): Promise<LoadResult<SystemPrompt>> {
 	const items: SystemPrompt[] = [];
 
-	const userPaths = USER_DIRS.map((name) =>
+	const userPaths = USER_DIRS.map(name =>
 		path.join(ctx.home, name, PATHS.userAgent.replace(`${PATHS.userBase}/`, ""), "SYSTEM.md"),
 	);
-	const userContents = await Promise.all(userPaths.map((p) => readFile(p)));
+	const userContents = await Promise.all(userPaths.map(p => readFile(p)));
 	for (let i = 0; i < userPaths.length; i++) {
 		const content = userContents[i];
 		if (content) {
@@ -167,8 +166,8 @@ async function loadSystemPrompt(ctx: LoadContext): Promise<LoadResult<SystemProm
 	}
 
 	for (const dir of ancestors) {
-		const configDirs = PROJECT_DIRS.map((name) => path.join(dir, name));
-		const entriesResults = await Promise.all(configDirs.map((d) => readDirEntries(d)));
+		const configDirs = PROJECT_DIRS.map(name => path.join(dir, name));
+		const entriesResults = await Promise.all(configDirs.map(d => readDirEntries(d)));
 		const validConfigDir = configDirs.find((_, i) => entriesResults[i].length > 0);
 		if (!validConfigDir) continue;
 
@@ -211,8 +210,8 @@ async function loadSkills(ctx: LoadContext): Promise<LoadResult<Skill>> {
 	);
 
 	return {
-		items: results.flatMap((r) => r.items),
-		warnings: results.flatMap((r) => r.warnings ?? []),
+		items: results.flatMap(r => r.items),
+		warnings: results.flatMap(r => r.warnings ?? []),
 	};
 }
 
@@ -420,7 +419,7 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 		}
 	}
 
-	const dirDiscoveryResults = await Promise.all(dirDiscoveryPromises.map((d) => d.promise));
+	const dirDiscoveryResults = await Promise.all(dirDiscoveryPromises.map(d => d.promise));
 	for (let i = 0; i < dirDiscoveryPromises.length; i++) {
 		const { level } = dirDiscoveryPromises[i];
 		for (const extPath of dirDiscoveryResults[i]) {
@@ -735,10 +734,10 @@ async function loadContextFiles(ctx: LoadContext): Promise<LoadResult<ContextFil
 	const items: ContextFile[] = [];
 	const warnings: string[] = [];
 
-	const userPaths = USER_DIRS.map((name) =>
+	const userPaths = USER_DIRS.map(name =>
 		path.join(ctx.home, name, PATHS.userAgent.replace(`${PATHS.userBase}/`, ""), "AGENTS.md"),
 	);
-	const userContents = await Promise.all(userPaths.map((p) => readFile(p)));
+	const userContents = await Promise.all(userPaths.map(p => readFile(p)));
 	for (let i = 0; i < userPaths.length; i++) {
 		const content = userContents[i];
 		if (content) {
@@ -764,8 +763,8 @@ async function loadContextFiles(ctx: LoadContext): Promise<LoadResult<ContextFil
 	}
 
 	for (const { dir, depth: ancestorDepth } of ancestors) {
-		const configDirs = PROJECT_DIRS.map((name) => path.join(dir, name));
-		const entriesResults = await Promise.all(configDirs.map((d) => readDirEntries(d)));
+		const configDirs = PROJECT_DIRS.map(name => path.join(dir, name));
+		const entriesResults = await Promise.all(configDirs.map(d => readDirEntries(d)));
 		const validConfigDir = configDirs.find((_, i) => entriesResults[i].length > 0);
 		if (!validConfigDir) continue;
 

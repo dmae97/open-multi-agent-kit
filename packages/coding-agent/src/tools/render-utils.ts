@@ -4,7 +4,6 @@
  * Provides consistent formatting, truncation, and display patterns across all
  * tool renderers to ensure a unified TUI experience.
  */
-
 import * as os from "node:os";
 import type { Theme } from "../modes/theme/theme";
 import { getTreeBranch } from "../tui/utils";
@@ -62,8 +61,8 @@ export function truncate(text: string, maxLen: number, ellipsis: string): string
  * Get first N lines of text as preview, with each line truncated.
  */
 export function getPreviewLines(text: string, maxLines: number, maxLineLen: number, ellipsis: string): string[] {
-	const lines = text.split("\n").filter((l) => l.trim());
-	return lines.slice(0, maxLines).map((l) => truncate(l.trim(), maxLineLen, ellipsis));
+	const lines = text.split("\n").filter(l => l.trim());
+	return lines.slice(0, maxLines).map(l => truncate(l.trim(), maxLineLen, ellipsis));
 }
 
 // =============================================================================
@@ -554,7 +553,7 @@ export function truncateDiffByHunk(
 
 	const segments = parseDiffSegments(lines);
 
-	const changeSegments = segments.filter((s) => s.isChange);
+	const changeSegments = segments.filter(s => s.isChange);
 	const changeLineCount = changeSegments.reduce((sum, s) => sum + s.lines.length, 0);
 
 	if (changeLineCount > maxLines) {
@@ -579,7 +578,7 @@ export function truncateDiffByHunk(
 	}
 
 	const contextBudget = maxLines - changeLineCount;
-	const contextSegments = segments.filter((s) => !s.isChange && !s.isEllipsis);
+	const contextSegments = segments.filter(s => !s.isChange && !s.isEllipsis);
 	const totalContextLines = contextSegments.reduce((sum, s) => sum + s.lines.length, 0);
 
 	const kept: string[] = [];

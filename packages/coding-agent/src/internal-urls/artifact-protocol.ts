@@ -9,7 +9,6 @@
  *
  * Pagination is handled by the read tool via offset/limit parameters.
  */
-
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { isEnoent } from "@oh-my-pi/pi-utils";
@@ -29,8 +28,8 @@ async function listAvailableArtifacts(artifactsDir: string): Promise<string[]> {
 	try {
 		const files = await fs.readdir(artifactsDir);
 		return files
-			.filter((f) => /^\d+\./.test(f))
-			.map((f) => f.split(".")[0])
+			.filter(f => /^\d+\./.test(f))
+			.map(f => f.split(".")[0])
 			.sort((a, b) => Number(a) - Number(b));
 	} catch {
 		return [];
@@ -76,7 +75,7 @@ export class ArtifactProtocolHandler implements ProtocolHandler {
 			throw err;
 		}
 
-		const match = files.find((f) => f.startsWith(`${id}.`));
+		const match = files.find(f => f.startsWith(`${id}.`));
 
 		if (!match) {
 			const available = await listAvailableArtifacts(artifactsDir);

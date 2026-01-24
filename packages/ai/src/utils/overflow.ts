@@ -85,7 +85,7 @@ export function isContextOverflow(message: AssistantMessage, contextWindow?: num
 	// Case 1: Check error message patterns
 	if (message.stopReason === "error" && message.errorMessage) {
 		// Check known patterns
-		if (OVERFLOW_PATTERNS.some((p) => p.test(message.errorMessage!))) {
+		if (OVERFLOW_PATTERNS.some(p => p.test(message.errorMessage!))) {
 			return true;
 		}
 

@@ -3,7 +3,6 @@
  *
  * Handles `omp plugin <command>` subcommands for plugin lifecycle management.
  */
-
 import chalk from "chalk";
 import { APP_NAME } from "../config";
 import { PluginManager, parseSettingValue, validateSetting } from "../extensibility/plugins";
@@ -247,7 +246,7 @@ async function handleList(manager: PluginManager, flags: { json?: boolean }): Pr
 			if (availableFeatures.length > 0) {
 				const enabledSet = new Set(plugin.enabledFeatures ?? []);
 				const featureDisplay = availableFeatures
-					.map((f) => (enabledSet.has(f) ? chalk.green(f) : chalk.dim(f)))
+					.map(f => (enabledSet.has(f) ? chalk.green(f) : chalk.dim(f)))
 					.join(", ");
 				console.log(chalk.dim(`  Available: [${featureDisplay}]`));
 			}
@@ -298,10 +297,10 @@ async function handleDoctor(manager: PluginManager, flags: { json?: boolean; fix
 		}
 	}
 
-	const errors = checks.filter((c) => c.status === "error" && !c.fixed).length;
-	const warnings = checks.filter((c) => c.status === "warning" && !c.fixed).length;
-	const ok = checks.filter((c) => c.status === "ok").length;
-	const fixed = checks.filter((c) => c.fixed).length;
+	const errors = checks.filter(c => c.status === "error" && !c.fixed).length;
+	const warnings = checks.filter(c => c.status === "warning" && !c.fixed).length;
+	const ok = checks.filter(c => c.status === "ok").length;
+	const fixed = checks.filter(c => c.fixed).length;
 
 	console.log("");
 	console.log(`Summary: ${ok} ok, ${warnings} warnings, ${errors} errors${fixed > 0 ? `, ${fixed} fixed` : ""}`);
@@ -328,7 +327,7 @@ async function handleFeatures(
 
 	const pluginName = args[0];
 	const plugins = await manager.list();
-	const plugin = plugins.find((p) => p.name === pluginName);
+	const plugin = plugins.find(p => p.name === pluginName);
 
 	if (!plugin) {
 		console.error(chalk.red(`Plugin "${pluginName}" not found`));
@@ -344,14 +343,14 @@ async function handleFeatures(
 			currentFeatures = new Set(
 				flags.set
 					.split(",")
-					.map((f) => f.trim())
+					.map(f => f.trim())
 					.filter(Boolean),
 			);
 		} else {
 			if (flags.enable) {
 				for (const f of flags.enable
 					.split(",")
-					.map((f) => f.trim())
+					.map(f => f.trim())
 					.filter(Boolean)) {
 					currentFeatures.add(f);
 				}
@@ -359,7 +358,7 @@ async function handleFeatures(
 			if (flags.disable) {
 				for (const f of flags.disable
 					.split(",")
-					.map((f) => f.trim())
+					.map(f => f.trim())
 					.filter(Boolean)) {
 					currentFeatures.delete(f);
 				}
@@ -433,7 +432,7 @@ async function handleConfig(
 	}
 
 	const plugins = await manager.list();
-	const plugin = plugins.find((p) => p.name === pluginName);
+	const plugin = plugins.find(p => p.name === pluginName);
 
 	if (!plugin) {
 		console.error(chalk.red(`Plugin "${pluginName}" not found`));

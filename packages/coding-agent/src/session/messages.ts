@@ -4,7 +4,6 @@
  * Extends the base AgentMessage type with coding-agent specific message types,
  * and provides a transformer to convert them to LLM-compatible messages.
  */
-
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent, Message, TextContent } from "@oh-my-pi/pi-ai";
 import type { OutputMeta } from "../tools/output-meta";
@@ -255,7 +254,7 @@ export function convertToLlm(messages: AgentMessage[]): Message[] {
 						timestamp: m.timestamp,
 					};
 				case "fileMention": {
-					const fileContents = m.files.map((f) => `<file path="${f.path}">\n${f.content}\n</file>`).join("\n\n");
+					const fileContents = m.files.map(f => `<file path="${f.path}">\n${f.content}\n</file>`).join("\n\n");
 					return {
 						role: "user",
 						content: [{ type: "text" as const, text: `<system-reminder>\n${fileContents}\n</system-reminder>` }],
@@ -272,5 +271,5 @@ export function convertToLlm(messages: AgentMessage[]): Message[] {
 					return undefined;
 			}
 		})
-		.filter((m) => m !== undefined);
+		.filter(m => m !== undefined);
 }

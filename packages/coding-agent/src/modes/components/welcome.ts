@@ -65,14 +65,14 @@ export class WelcomeComponent implements Component {
 		const piLogo = ["▀████████████▀", " ╘███    ███  ", "  ███    ███  ", "  ███    ███  ", " ▄███▄  ▄███▄ "];
 
 		// Apply gradient to logo
-		const logoColored = piLogo.map((line) => this.gradientLine(line));
+		const logoColored = piLogo.map(line => this.gradientLine(line));
 
 		// Left column - centered content
 		const leftLines = [
 			"",
 			this.centerText(theme.bold("Welcome back!"), leftCol),
 			"",
-			...logoColored.map((l) => this.centerText(l, leftCol)),
+			...logoColored.map(l => this.centerText(l, leftCol)),
 			"",
 			this.centerText(theme.fg("muted", this.modelName), leftCol),
 			this.centerText(theme.fg("borderMuted", this.providerName), leftCol),

@@ -31,17 +31,17 @@ export class ExtensionUiController {
 			notify: (message, type) => this.showHookNotify(message, type),
 			setStatus: (key, text) => this.setHookStatus(key, text),
 			setWidget: (key, content) => this.setHookWidget(key, content),
-			setTitle: (title) => setTerminalTitle(title),
+			setTitle: title => setTerminalTitle(title),
 			custom: (factory, _options) => this.showHookCustom(factory),
-			setEditorText: (text) => this.ctx.editor.setText(text),
+			setEditorText: text => this.ctx.editor.setText(text),
 			getEditorText: () => this.ctx.editor.getText(),
 			editor: (title, prefill) => this.showHookEditor(title, prefill),
 			get theme() {
 				return theme;
 			},
-			getAllThemes: async () => (await getAvailableThemesWithPaths()).map((t) => ({ name: t.name, path: t.path })),
-			getTheme: (name) => getThemeByName(name),
-			setTheme: async (themeArg) => {
+			getAllThemes: async () => (await getAvailableThemesWithPaths()).map(t => ({ name: t.name, path: t.path })),
+			getTheme: name => getThemeByName(name),
+			setTheme: async themeArg => {
 				if (typeof themeArg === "string") {
 					return await setTheme(themeArg, true);
 				}
@@ -92,15 +92,15 @@ export class ExtensionUiController {
 			},
 			getActiveTools: () => this.ctx.session.getActiveToolNames(),
 			getAllTools: () => this.ctx.session.getAllToolNames(),
-			setActiveTools: (toolNames) => this.ctx.session.setActiveToolsByName(toolNames),
-			setModel: async (model) => {
+			setActiveTools: toolNames => this.ctx.session.setActiveToolsByName(toolNames),
+			setModel: async model => {
 				const key = await this.ctx.session.modelRegistry.getApiKey(model);
 				if (!key) return false;
 				await this.ctx.session.setModel(model);
 				return true;
 			},
 			getThinkingLevel: () => this.ctx.session.thinkingLevel,
-			setThinkingLevel: (level) => this.ctx.session.setThinkingLevel(level),
+			setThinkingLevel: level => this.ctx.session.setThinkingLevel(level),
 		};
 		const contextActions: ExtensionContextActions = {
 			getModel: () => this.ctx.session.model,
@@ -111,7 +111,7 @@ export class ExtensionUiController {
 				// Signal shutdown request (will be handled by main loop)
 			},
 			getContextUsage: () => this.ctx.session.getContextUsage(),
-			compact: async (instructionsOrOptions) => {
+			compact: async instructionsOrOptions => {
 				const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
 				const options =
 					instructionsOrOptions && typeof instructionsOrOptions === "object" ? instructionsOrOptions : undefined;
@@ -121,7 +121,7 @@ export class ExtensionUiController {
 		const commandActions: ExtensionCommandContextActions = {
 			getContextUsage: () => this.ctx.session.getContextUsage(),
 			waitForIdle: () => this.ctx.session.agent.waitForIdle(),
-			newSession: async (options) => {
+			newSession: async options => {
 				// Stop any loading animation
 				if (this.ctx.loadingAnimation) {
 					this.ctx.loadingAnimation.stop();
@@ -157,7 +157,7 @@ export class ExtensionUiController {
 
 				return { cancelled: false };
 			},
-			branch: async (entryId) => {
+			branch: async entryId => {
 				const result = await this.ctx.session.branch(entryId);
 				if (result.cancelled) {
 					return { cancelled: true };
@@ -189,7 +189,7 @@ export class ExtensionUiController {
 
 				return { cancelled: false };
 			},
-			compact: async (instructionsOrOptions) => {
+			compact: async instructionsOrOptions => {
 				const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
 				const options =
 					instructionsOrOptions && typeof instructionsOrOptions === "object" ? instructionsOrOptions : undefined;
@@ -261,15 +261,15 @@ export class ExtensionUiController {
 			},
 			getActiveTools: () => this.ctx.session.getActiveToolNames(),
 			getAllTools: () => this.ctx.session.getAllToolNames(),
-			setActiveTools: (toolNames) => this.ctx.session.setActiveToolsByName(toolNames),
-			setModel: async (model) => {
+			setActiveTools: toolNames => this.ctx.session.setActiveToolsByName(toolNames),
+			setModel: async model => {
 				const key = await this.ctx.session.modelRegistry.getApiKey(model);
 				if (!key) return false;
 				await this.ctx.session.setModel(model);
 				return true;
 			},
 			getThinkingLevel: () => this.ctx.session.thinkingLevel,
-			setThinkingLevel: (level) => this.ctx.session.setThinkingLevel(level),
+			setThinkingLevel: level => this.ctx.session.setThinkingLevel(level),
 		};
 		const contextActions: ExtensionContextActions = {
 			getModel: () => this.ctx.session.model,
@@ -280,7 +280,7 @@ export class ExtensionUiController {
 				// Signal shutdown request (will be handled by main loop)
 			},
 			getContextUsage: () => this.ctx.session.getContextUsage(),
-			compact: async (instructionsOrOptions) => {
+			compact: async instructionsOrOptions => {
 				const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
 				const options =
 					instructionsOrOptions && typeof instructionsOrOptions === "object" ? instructionsOrOptions : undefined;
@@ -290,7 +290,7 @@ export class ExtensionUiController {
 		const commandActions: ExtensionCommandContextActions = {
 			getContextUsage: () => this.ctx.session.getContextUsage(),
 			waitForIdle: () => this.ctx.session.agent.waitForIdle(),
-			newSession: async (options) => {
+			newSession: async options => {
 				if (this.ctx.isBackgrounded) {
 					return { cancelled: true };
 				}
@@ -329,7 +329,7 @@ export class ExtensionUiController {
 
 				return { cancelled: false };
 			},
-			branch: async (entryId) => {
+			branch: async entryId => {
 				if (this.ctx.isBackgrounded) {
 					return { cancelled: true };
 				}
@@ -367,7 +367,7 @@ export class ExtensionUiController {
 
 				return { cancelled: false };
 			},
-			compact: async (instructionsOrOptions) => {
+			compact: async instructionsOrOptions => {
 				const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
 				const options =
 					instructionsOrOptions && typeof instructionsOrOptions === "object" ? instructionsOrOptions : undefined;
@@ -425,7 +425,7 @@ export class ExtensionUiController {
 					await registeredTool.definition.onSession(event, {
 						ui: uiContext,
 						getContextUsage: () => this.ctx.session.getContextUsage(),
-						compact: async (instructionsOrOptions) => {
+						compact: async instructionsOrOptions => {
 							const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
 							const options =
 								instructionsOrOptions && typeof instructionsOrOptions === "object"
@@ -487,7 +487,7 @@ export class ExtensionUiController {
 		this.ctx.hookSelector = new HookSelectorComponent(
 			title,
 			options,
-			(option) => {
+			option => {
 				this.hideHookSelector();
 				resolve(option);
 			},
@@ -532,7 +532,7 @@ export class ExtensionUiController {
 		this.ctx.hookInput = new HookInputComponent(
 			title,
 			placeholder,
-			(value) => {
+			value => {
 				this.hideHookInput();
 				resolve(value);
 			},
@@ -569,7 +569,7 @@ export class ExtensionUiController {
 			this.ctx.ui,
 			title,
 			prefill,
-			(value) => {
+			value => {
 				this.hideHookEditor();
 				resolve(value);
 			},
@@ -637,7 +637,7 @@ export class ExtensionUiController {
 			resolve(result);
 		};
 
-		Promise.try(() => factory(this.ctx.ui, theme, keybindings, close)).then((c) => {
+		Promise.try(() => factory(this.ctx.ui, theme, keybindings, close)).then(c => {
 			component = c;
 			this.ctx.editorContainer.clear();
 			this.ctx.editorContainer.addChild(component);

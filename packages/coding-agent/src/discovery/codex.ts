@@ -6,7 +6,6 @@
  *
  * User directory: ~/.codex
  */
-
 import * as path from "node:path";
 import { logger } from "@oh-my-pi/pi-utils";
 import { parse as parseToml } from "smol-toml";
@@ -227,8 +226,8 @@ async function loadSkills(ctx: LoadContext): Promise<LoadResult<Skill>> {
 		}),
 	]);
 
-	const items = results.flatMap((r) => r.items);
-	const warnings = results.flatMap((r) => r.warnings || []);
+	const items = results.flatMap(r => r.items);
+	const warnings = results.flatMap(r => r.warnings || []);
 
 	return { items, warnings };
 }
@@ -250,13 +249,13 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 	]);
 
 	const items: ExtensionModule[] = [
-		...userPaths.map((extPath) => ({
+		...userPaths.map(extPath => ({
 			name: getExtensionNameFromPath(extPath),
 			path: extPath,
 			level: "user" as const,
 			_source: createSourceMeta(PROVIDER_ID, extPath, "user"),
 		})),
-		...projectPaths.map((extPath) => ({
+		...projectPaths.map(extPath => ({
 			name: getExtensionNameFromPath(extPath),
 			path: extPath,
 			level: "project" as const,
@@ -301,8 +300,8 @@ async function loadSlashCommands(ctx: LoadContext): Promise<LoadResult<SlashComm
 		}),
 	]);
 
-	const items = results.flatMap((r) => r.items);
-	const warnings = results.flatMap((r) => r.warnings || []);
+	const items = results.flatMap(r => r.items);
+	const warnings = results.flatMap(r => r.warnings || []);
 
 	return { items, warnings };
 }
@@ -344,8 +343,8 @@ async function loadPrompts(ctx: LoadContext): Promise<LoadResult<Prompt>> {
 		}),
 	]);
 
-	const items = results.flatMap((r) => r.items);
-	const warnings = results.flatMap((r) => r.warnings || []);
+	const items = results.flatMap(r => r.items);
+	const warnings = results.flatMap(r => r.warnings || []);
 
 	return { items, warnings };
 }
@@ -387,8 +386,8 @@ async function loadHooks(ctx: LoadContext): Promise<LoadResult<Hook>> {
 		}),
 	]);
 
-	const items = results.flatMap((r) => r.items);
-	const warnings = results.flatMap((r) => r.warnings || []);
+	const items = results.flatMap(r => r.items);
+	const warnings = results.flatMap(r => r.warnings || []);
 
 	return { items, warnings };
 }
@@ -425,8 +424,8 @@ async function loadTools(ctx: LoadContext): Promise<LoadResult<CustomTool>> {
 		}),
 	]);
 
-	const items = results.flatMap((r) => r.items);
-	const warnings = results.flatMap((r) => r.warnings || []);
+	const items = results.flatMap(r => r.items);
+	const warnings = results.flatMap(r => r.warnings || []);
 
 	return { items, warnings };
 }

@@ -264,9 +264,9 @@ function buildUsageLimit(args: {
 function resolveCacheExpiry(args: { report: UsageReport | null; nowMs: number }): number {
 	const { report, nowMs } = args;
 	if (!report) return nowMs + DEFAULT_CACHE_TTL_MS;
-	const exhausted = report.limits.some((limit) => limit.status === "exhausted");
+	const exhausted = report.limits.some(limit => limit.status === "exhausted");
 	const resetCandidates = report.limits
-		.map((limit) => limit.window?.resetsAt)
+		.map(limit => limit.window?.resetsAt)
 		.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
 	const earliestReset = resetCandidates.length > 0 ? Math.min(...resetCandidates) : undefined;
 	if (exhausted && earliestReset) return earliestReset;

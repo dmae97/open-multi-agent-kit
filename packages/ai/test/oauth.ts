@@ -6,8 +6,11 @@
  *
  * E2E tests are disabled by default. Set E2E=1 environment variable to enable.
  */
-
 import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+import { getOAuthApiKey } from "@oh-my-pi/pi-ai/utils/oauth";
+import type { OAuthCredentials, OAuthProvider } from "@oh-my-pi/pi-ai/utils/oauth/types";
 import { isEnoent } from "@oh-my-pi/pi-utils";
 
 /**
@@ -24,11 +27,6 @@ export function e2eApiKey(envVar: string): string | undefined {
 	if (!E2E_ENABLED) return undefined;
 	return process.env[envVar];
 }
-
-import * as os from "node:os";
-import * as path from "node:path";
-import { getOAuthApiKey } from "@oh-my-pi/pi-ai/utils/oauth";
-import type { OAuthCredentials, OAuthProvider } from "@oh-my-pi/pi-ai/utils/oauth/types";
 
 const AUTH_PATH = path.join(os.homedir(), ".pi", "agent", "auth.json");
 

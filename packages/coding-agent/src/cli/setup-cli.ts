@@ -3,7 +3,6 @@
  *
  * Handles `omp setup <component>` to install dependencies for optional features.
  */
-
 import { $ } from "bun";
 import chalk from "chalk";
 import { APP_NAME } from "../config";

@@ -417,13 +417,13 @@ export class CalculatorTool implements AgentTool<typeof calculatorSchema, Calcul
 		signal?: AbortSignal,
 	): Promise<AgentToolResult<CalculatorToolDetails>> {
 		return untilAborted(signal, async () => {
-			const results = calculations.map((calc) => {
+			const results = calculations.map(calc => {
 				const value = evaluateExpression(calc.expression);
 				const output = `${calc.prefix}${formatResult(value)}${calc.suffix}`;
 				return { expression: calc.expression, value, output };
 			});
 
-			const outputText = results.map((result) => result.output).join("\n");
+			const outputText = results.map(result => result.output).join("\n");
 			return {
 				content: [{ type: "text", text: outputText }],
 				details: { results },
@@ -471,17 +471,17 @@ export const calculatorToolRenderer = {
 		args?: CalculatorRenderArgs,
 	): Component {
 		const details = result.details;
-		const textContent = result.content?.find((c) => c.type === "text")?.text ?? "";
+		const textContent = result.content?.find(c => c.type === "text")?.text ?? "";
 		if (result.isError) {
 			const header = renderStatusLine({ icon: "error", title: "Calc" }, uiTheme);
 			return new Text([header, formatErrorMessage(textContent, uiTheme)].join("\n"), 0, 0);
 		}
 
 		// Prefer structured details; fall back to parsing text content
-		let outputs = details?.results?.map((entry) => `${entry.expression} = ${entry.output}`) ?? [];
+		let outputs = details?.results?.map(entry => `${entry.expression} = ${entry.output}`) ?? [];
 		if (outputs.length === 0 && textContent.trim()) {
-			const rawOutputs = textContent.split("\n").filter((line) => line.trim().length > 0);
-			const expressions = args?.calculations?.map((calc) => calc.expression) ?? [];
+			const rawOutputs = textContent.split("\n").filter(line => line.trim().length > 0);
+			const expressions = args?.calculations?.map(calc => calc.expression) ?? [];
 			if (expressions.length === rawOutputs.length && expressions.length > 0) {
 				outputs = rawOutputs.map((output, index) => `${expressions[index]} = ${output}`);
 			} else {
@@ -507,7 +507,7 @@ export const calculatorToolRenderer = {
 				expanded,
 				maxCollapsed: COLLAPSED_LIST_LIMIT,
 				itemType: "result",
-				renderItem: (output) => uiTheme.fg("toolOutput", output),
+				renderItem: output => uiTheme.fg("toolOutput", output),
 			},
 			uiTheme,
 		);

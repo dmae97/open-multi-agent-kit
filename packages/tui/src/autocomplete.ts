@@ -134,11 +134,11 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 				// No space yet - complete command names
 				const prefix = textBeforeCursor.slice(1); // Remove the "/"
 				const filtered = this.commands
-					.filter((cmd) => {
+					.filter(cmd => {
 						const name = "name" in cmd ? cmd.name : cmd.value; // Check if SlashCommand or AutocompleteItem
 						return name?.toLowerCase().startsWith(prefix.toLowerCase());
 					})
-					.map((cmd) => ({
+					.map(cmd => ({
 						value: "name" in cmd ? cmd.name : cmd.value,
 						label: "name" in cmd ? cmd.name : cmd.label,
 						...(cmd.description && { description: cmd.description }),
@@ -155,7 +155,7 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 				const commandName = textBeforeCursor.slice(1, spaceIndex); // Command without "/"
 				const argumentText = textBeforeCursor.slice(spaceIndex + 1); // Text after space
 
-				const command = this.commands.find((cmd) => {
+				const command = this.commands.find(cmd => {
 					const name = "name" in cmd ? cmd.name : cmd.value;
 					return name === commandName;
 				});
@@ -537,11 +537,11 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 			const entries = await walkDirectoryWithFd(this.basePath, this.fdPath, query, 100);
 
 			const scoredEntries = entries
-				.map((entry) => ({
+				.map(entry => ({
 					...entry,
 					score: query ? this.scoreEntry(entry.path, query, entry.isDirectory) : 1,
 				}))
-				.filter((entry) => entry.score > 0);
+				.filter(entry => entry.score > 0);
 
 			scoredEntries.sort((a, b) => b.score - a.score);
 			const topEntries = scoredEntries.slice(0, 20);

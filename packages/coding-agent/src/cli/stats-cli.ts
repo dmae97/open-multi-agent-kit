@@ -3,7 +3,6 @@
  *
  * Handles `omp stats` subcommand for viewing AI usage statistics.
  */
-
 import chalk from "chalk";
 import { APP_NAME } from "../config";
 

@@ -17,7 +17,6 @@ import {
 	type ToolConfiguration,
 	ToolResultStatus,
 } from "@aws-sdk/client-bedrock-runtime";
-
 import { calculateCost } from "../models";
 import type {
 	Api,
@@ -200,7 +199,7 @@ function handleContentBlockDelta(
 ): void {
 	const contentBlockIndex = event.contentBlockIndex!;
 	const delta = event.delta;
-	let index = blocks.findIndex((b) => b.index === contentBlockIndex);
+	let index = blocks.findIndex(b => b.index === contentBlockIndex);
 	let block = blocks[index];
 
 	if (delta?.text !== undefined) {
@@ -271,7 +270,7 @@ function handleContentBlockStop(
 	output: AssistantMessage,
 	stream: AssistantMessageEventStream,
 ): void {
-	const index = blocks.findIndex((b) => b.index === event.contentBlockIndex);
+	const index = blocks.findIndex(b => b.index === event.contentBlockIndex);
 	const block = blocks[index];
 	if (!block) return;
 	delete (block as Block).index;
@@ -351,7 +350,7 @@ function convertMessages(context: Context, model: Model<"bedrock-converse-stream
 					});
 				} else {
 					const contentBlocks = m.content
-						.map((c) => {
+						.map(c => {
 							switch (c.type) {
 								case "text":
 									return { text: sanitizeSurrogates(c.text) };
@@ -361,7 +360,7 @@ function convertMessages(context: Context, model: Model<"bedrock-converse-stream
 									throw new Error("Unknown user content type");
 							}
 						})
-						.filter((block) => {
+						.filter(block => {
 							// Filter out empty text blocks
 							if ("text" in block && block.text) {
 								return block.text.trim().length > 0;
@@ -442,7 +441,7 @@ function convertMessages(context: Context, model: Model<"bedrock-converse-stream
 				toolResults.push({
 					toolResult: {
 						toolUseId: sanitizeToolCallId(m.toolCallId),
-						content: m.content.map((c) =>
+						content: m.content.map(c =>
 							c.type === "image"
 								? { image: createImageBlock(c.mimeType, c.data) }
 								: { text: sanitizeSurrogates(c.text) },
@@ -458,7 +457,7 @@ function convertMessages(context: Context, model: Model<"bedrock-converse-stream
 					toolResults.push({
 						toolResult: {
 							toolUseId: sanitizeToolCallId(nextMsg.toolCallId),
-							content: nextMsg.content.map((c) =>
+							content: nextMsg.content.map(c =>
 								c.type === "image"
 									? { image: createImageBlock(c.mimeType, c.data) }
 									: { text: sanitizeSurrogates(c.text) },
@@ -500,7 +499,7 @@ function convertToolConfig(
 ): ToolConfiguration | undefined {
 	if (!tools?.length || toolChoice === "none") return undefined;
 
-	const bedrockTools: BedrockTool[] = tools.map((tool) => ({
+	const bedrockTools: BedrockTool[] = tools.map(tool => ({
 		toolSpec: {
 			name: tool.name,
 			description: tool.description,

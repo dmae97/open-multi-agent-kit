@@ -11,7 +11,6 @@
  * - web_search_linkedin: Search LinkedIn profiles and companies
  * - web_search_company: Comprehensive company research
  */
-
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { StringEnum } from "@oh-my-pi/pi-ai";
 import { Type } from "@sinclair/typebox";
@@ -94,7 +93,7 @@ function formatProviderLabel(provider: WebSearchProvider): string {
 }
 
 function formatProviderList(providers: WebSearchProvider[]): string {
-	return providers.map((provider) => formatProviderLabel(provider)).join(", ");
+	return providers.map(provider => formatProviderLabel(provider)).join(", ");
 }
 
 function buildNoProviderError(): string {

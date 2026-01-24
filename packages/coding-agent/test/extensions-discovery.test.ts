@@ -48,7 +48,7 @@ describe("extensions discovery", () => {
 
 		expect(result.errors).toHaveLength(0);
 		expect(result.extensions).toHaveLength(2);
-		expect(result.extensions.map((e) => path.basename(e.path)).sort()).toEqual(["bar.ts", "foo.ts"]);
+		expect(result.extensions.map(e => path.basename(e.path)).sort()).toEqual(["bar.ts", "foo.ts"]);
 	});
 
 	it("discovers direct .js files in extensions/", async () => {

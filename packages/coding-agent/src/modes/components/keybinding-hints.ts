@@ -1,7 +1,6 @@
 /**
  * Utilities for formatting keybinding hints in the UI.
  */
-
 import { type EditorAction, getEditorKeybindings, type KeyId } from "@oh-my-pi/pi-tui";
 import type { AppAction, KeybindingsManager } from "../../config/keybindings";
 import { theme } from "../../modes/theme/theme";

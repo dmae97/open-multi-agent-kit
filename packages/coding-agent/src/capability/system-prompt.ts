@@ -4,7 +4,6 @@
  * Custom system prompt files (SYSTEM.md) that modify the agent's base system prompt.
  * Distinct from context-files which are user instructions shown in conversation.
  */
-
 import { defineCapability } from ".";
 import type { SourceMeta } from "./types";
 
@@ -26,8 +25,8 @@ export const systemPromptCapability = defineCapability<SystemPrompt>({
 	id: "system-prompt",
 	displayName: "System Prompt",
 	description: "Custom system prompt files (SYSTEM.md) that modify agent behavior",
-	key: (sp) => sp.level,
-	validate: (sp) => {
+	key: sp => sp.level,
+	validate: sp => {
 		if (!sp.path) return "Missing path";
 		if (sp.content === undefined) return "Missing content";
 		return undefined;

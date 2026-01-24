@@ -3,7 +3,6 @@
  *
  * Research companies using Exa's comprehensive data sources.
  */
-
 import { Type } from "@sinclair/typebox";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import { callExaTool, findApiKey, formatSearchResults, isSearchResponse } from "./mcp-client";

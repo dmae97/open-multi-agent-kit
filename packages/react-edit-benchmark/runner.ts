@@ -4,14 +4,13 @@
  * Orchestrates benchmark runs by launching RPC clients, sending prompts,
  * and verifying results. Supports parallel runs for reliability measurement.
  */
-
+import * as fs from "node:fs/promises";
+import { join } from "node:path";
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { RpcClient } from "@oh-my-pi/pi-coding-agent";
 import { TempDir } from "@oh-my-pi/pi-utils";
-import * as fs from "node:fs/promises";
-import { join } from "node:path";
 import { formatDirectory } from "./formatter";
-import { extractTaskFiles, type EditTask } from "./tasks";
+import { type EditTask, extractTaskFiles } from "./tasks";
 import { verifyExpectedFileSubset, verifyExpectedFiles } from "./verify";
 
 const TMP_DIR = await TempDir.create("@reach-benchmark-");

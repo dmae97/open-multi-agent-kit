@@ -132,13 +132,13 @@ const BASE_ENV_ALLOWLIST = CASE_INSENSITIVE_ENV
 	? new Set([...DEFAULT_ENV_ALLOWLIST, ...WINDOWS_ENV_ALLOWLIST])
 	: DEFAULT_ENV_ALLOWLIST;
 const NORMALIZED_ALLOWLIST = new Set(
-	Array.from(BASE_ENV_ALLOWLIST, (key) => (CASE_INSENSITIVE_ENV ? key.toUpperCase() : key)),
+	Array.from(BASE_ENV_ALLOWLIST, key => (CASE_INSENSITIVE_ENV ? key.toUpperCase() : key)),
 );
 const NORMALIZED_DENYLIST = new Set(
-	Array.from(DEFAULT_ENV_DENYLIST, (key) => (CASE_INSENSITIVE_ENV ? key.toUpperCase() : key)),
+	Array.from(DEFAULT_ENV_DENYLIST, key => (CASE_INSENSITIVE_ENV ? key.toUpperCase() : key)),
 );
 const NORMALIZED_ALLOW_PREFIXES = CASE_INSENSITIVE_ENV
-	? DEFAULT_ENV_ALLOW_PREFIXES.map((prefix) => prefix.toUpperCase())
+	? DEFAULT_ENV_ALLOW_PREFIXES.map(prefix => prefix.toUpperCase())
 	: DEFAULT_ENV_ALLOW_PREFIXES;
 
 function normalizeEnvKey(key: string): string {
@@ -147,7 +147,7 @@ function normalizeEnvKey(key: string): string {
 
 function resolvePathKey(env: Record<string, string | undefined>): string {
 	if (!CASE_INSENSITIVE_ENV) return "PATH";
-	const match = Object.keys(env).find((candidate) => candidate.toLowerCase() === "path");
+	const match = Object.keys(env).find(candidate => candidate.toLowerCase() === "path");
 	return match ?? "PATH";
 }
 
@@ -231,7 +231,7 @@ function filterEnv(env: Record<string, string | undefined>): Record<string, stri
 			filtered[destKey] = value;
 			continue;
 		}
-		if (NORMALIZED_ALLOW_PREFIXES.some((prefix) => normalizedKey.startsWith(prefix))) {
+		if (NORMALIZED_ALLOW_PREFIXES.some(prefix => normalizedKey.startsWith(prefix))) {
 			filtered[key] = value;
 		}
 	}
@@ -762,7 +762,7 @@ export class PythonKernel {
 			resolve();
 		};
 
-		ws.onerror = (event) => {
+		ws.onerror = event => {
 			const error = new Error(`WebSocket error: ${event}`);
 			if (!settled) {
 				settled = true;
@@ -787,7 +787,7 @@ export class PythonKernel {
 			this.abortPendingExecutions("WebSocket closed");
 		};
 
-		ws.onmessage = (event) => {
+		ws.onmessage = event => {
 			let msg: JupyterMessage | null = null;
 			if (event.data instanceof ArrayBuffer) {
 				msg = deserializeWebSocketMessage(event.data);
@@ -958,7 +958,7 @@ export class PythonKernel {
 			return promise;
 		}
 
-		this.#messageHandlers.set(msgId, async (response) => {
+		this.#messageHandlers.set(msgId, async response => {
 			switch (response.header.msg_type) {
 				case "execute_reply": {
 					replyReceived = true;
@@ -1053,7 +1053,7 @@ export class PythonKernel {
 		const result = await this.execute(PRELUDE_INTROSPECTION_SNIPPET, {
 			silent: false,
 			storeHistory: false,
-			onChunk: (text) => {
+			onChunk: text => {
 				output += text;
 			},
 		});

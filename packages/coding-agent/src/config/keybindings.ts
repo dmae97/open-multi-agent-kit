@@ -201,7 +201,7 @@ export class KeybindingsManager {
 			const keyArray = Array.isArray(keys) ? keys : [keys];
 			this.appActionToKeys.set(
 				action as AppAction,
-				keyArray.map((key) => normalizeKeyId(key as KeyId)),
+				keyArray.map(key => normalizeKeyId(key as KeyId)),
 			);
 		}
 
@@ -211,7 +211,7 @@ export class KeybindingsManager {
 			const keyArray = Array.isArray(keys) ? keys : [keys];
 			this.appActionToKeys.set(
 				action,
-				keyArray.map((key) => normalizeKeyId(key as KeyId)),
+				keyArray.map(key => normalizeKeyId(key as KeyId)),
 			);
 		}
 	}

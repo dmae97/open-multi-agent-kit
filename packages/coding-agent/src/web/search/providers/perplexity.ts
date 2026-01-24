@@ -4,7 +4,6 @@
  * Supports both sonar (fast) and sonar-pro (comprehensive) models.
  * Returns synthesized answers with citations and related questions.
  */
-
 import * as os from "node:os";
 import type {
 	PerplexityRequest,
@@ -123,7 +122,7 @@ function parseResponse(response: PerplexityResponse): WebSearchResponse {
 	const searchResults = response.search_results ?? [];
 
 	for (const url of citationUrls) {
-		const searchResult = searchResults.find((r) => r.url === url);
+		const searchResult = searchResults.find(r => r.url === url);
 		sources.push({
 			title: searchResult?.title ?? url,
 			url,

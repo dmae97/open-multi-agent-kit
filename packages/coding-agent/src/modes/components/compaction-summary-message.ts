@@ -11,7 +11,7 @@ export class CompactionSummaryMessageComponent extends Box {
 	private message: CompactionSummaryMessage;
 
 	constructor(message: CompactionSummaryMessage) {
-		super(1, 1, (t) => theme.bg("customMessageBg", t));
+		super(1, 1, t => theme.bg("customMessageBg", t));
 		this.message = message;
 		this.updateDisplay();
 	}

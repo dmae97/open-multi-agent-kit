@@ -4,7 +4,6 @@
  * Dependencies (@sinclair/typebox and pi-coding-agent) are injected via the CustomToolAPI
  * to avoid import resolution issues with custom tools loaded from user directories.
  */
-
 import * as path from "node:path";
 import * as piCodingAgent from "@oh-my-pi/pi-coding-agent";
 import { logger } from "@oh-my-pi/pi-utils";
@@ -90,7 +89,7 @@ async function loadTool(
 		const toolResult = await factory(sharedApi);
 		const toolsArray = Array.isArray(toolResult) ? toolResult : [toolResult];
 
-		const loadedTools: LoadedCustomTool[] = toolsArray.map((tool) => ({
+		const loadedTools: LoadedCustomTool[] = toolsArray.map(tool => ({
 			path: toolPath,
 			resolvedPath,
 			tool,

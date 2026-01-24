@@ -197,8 +197,8 @@ async function renderGitLabTree(
 		md += `**Ref:** ${gl.ref}\n\n`;
 
 		// Separate directories and files
-		const dirs = tree.filter((item) => item.type === "tree");
-		const files = tree.filter((item) => item.type === "blob");
+		const dirs = tree.filter(item => item.type === "tree");
+		const files = tree.filter(item => item.type === "blob");
 
 		if (dirs.length > 0) {
 			md += `## Directories (${dirs.length})\n\n`;
@@ -260,7 +260,7 @@ async function renderGitLabIssue(
 		}
 
 		if (issue.assignees && issue.assignees.length > 0) {
-			md += `**Assignees:** ${issue.assignees.map((a) => a.name).join(", ")}\n`;
+			md += `**Assignees:** ${issue.assignees.map(a => a.name).join(", ")}\n`;
 		}
 
 		md += `\n---\n\n## Description\n\n`;
@@ -317,7 +317,7 @@ async function renderGitLabMR(
 		}
 
 		if (mr.assignees && mr.assignees.length > 0) {
-			md += `**Assignees:** ${mr.assignees.map((a) => a.name).join(", ")}\n`;
+			md += `**Assignees:** ${mr.assignees.map(a => a.name).join(", ")}\n`;
 		}
 
 		md += `\n---\n\n## Description\n\n`;

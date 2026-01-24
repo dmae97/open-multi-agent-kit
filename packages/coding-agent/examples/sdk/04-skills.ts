@@ -4,18 +4,17 @@
  * Skills provide specialized instructions loaded into the system prompt.
  * Discover, filter, merge, or replace them.
  */
-
 import { createAgentSession, discoverSkills, SessionManager, type Skill } from "@oh-my-pi/pi-coding-agent";
 
 // Discover all skills from cwd/.omp/skills, ~/.omp/agent/skills, etc.
 const { skills: allSkills } = await discoverSkills();
 console.log(
 	"Discovered skills:",
-	allSkills.map((s) => s.name),
+	allSkills.map(s => s.name),
 );
 
 // Filter to specific skills
-const filteredSkills = allSkills.filter((s) => s.name.includes("browser") || s.name.includes("search"));
+const filteredSkills = allSkills.filter(s => s.name.includes("browser") || s.name.includes("search"));
 
 // Or define custom skills inline
 const customSkill: Skill = {

@@ -50,7 +50,7 @@ export function extractScopeCandidates(numstat: NumstatEntry[]): ScopeCandidates
 		totalLines += linesChanged;
 		const components = extractComponentsFromPath(normalizedPath);
 		for (const component of components) {
-			if (component.split("/").some((segment) => segment.includes("."))) {
+			if (component.split("/").some(segment => segment.includes("."))) {
 				continue;
 			}
 			componentLines.set(component, (componentLines.get(component) ?? 0) + linesChanged);
@@ -150,7 +150,7 @@ function extractComponentsFromPath(path: string): string[] {
 }
 
 function extractTopLevelRoot(path: string): string | null {
-	const segments = path.split("/").filter((segment) => segment.length > 0);
+	const segments = path.split("/").filter(segment => segment.length > 0);
 	if (segments.length === 0) return null;
 	if (segments.length === 1) {
 		return segments[0]!.startsWith(".") ? null : "(root)";

@@ -4,7 +4,6 @@
  * Prompts for confirmation before running potentially dangerous bash commands.
  * Patterns checked: rm -rf, sudo, chmod/chown 777
  */
-
 import type { HookAPI } from "@oh-my-pi/pi-coding-agent";
 
 export default function (pi: HookAPI) {
@@ -14,7 +13,7 @@ export default function (pi: HookAPI) {
 		if (event.toolName !== "bash") return undefined;
 
 		const command = event.input.command as string;
-		const isDangerous = dangerousPatterns.some((p) => p.test(command));
+		const isDangerous = dangerousPatterns.some(p => p.test(command));
 
 		if (isDangerous) {
 			if (!ctx.hasUI) {

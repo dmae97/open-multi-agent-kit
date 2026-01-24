@@ -42,7 +42,7 @@ export async function readDirEntries(dirPath: string): Promise<fs.Dirent[]> {
 
 export async function readDir(dirPath: string): Promise<string[]> {
 	const entries = await readDirEntries(dirPath);
-	return entries.map((entry) => entry.name);
+	return entries.map(entry => entry.name);
 }
 
 export async function walkUp(
@@ -55,7 +55,7 @@ export async function walkUp(
 
 	while (true) {
 		const entries = await readDirEntries(current);
-		const entry = entries.find((e) => e.name === name);
+		const entry = entries.find(e => e.name === name);
 		if (entry) {
 			if (file && entry.isFile()) return path.join(current, name);
 			if (dir && entry.isDirectory()) return path.join(current, name);

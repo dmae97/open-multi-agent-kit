@@ -105,7 +105,7 @@ export class CliAuthStorage {
 		const dir = path.dirname(dbPath);
 		const dirExists = await fs
 			.stat(dir)
-			.then((s) => s.isDirectory())
+			.then(s => s.isDirectory())
 			.catch(() => false);
 		if (!dirExists) {
 			await fs.mkdir(dir, { recursive: true, mode: 0o700 });

@@ -360,7 +360,7 @@ export const handleHuggingFace: SpecialHandler = async (url: string, timeout: nu
 				if (user.numSpaces !== undefined) md += `**Spaces:** ${formatCount(user.numSpaces)}\n`;
 
 				if (user.orgs?.length) {
-					md += `**Organizations:** ${user.orgs.map((o) => o.name).join(", ")}\n`;
+					md += `**Organizations:** ${user.orgs.map(o => o.name).join(", ")}\n`;
 				}
 
 				const { content, truncated } = finalizeOutput(md);

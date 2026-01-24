@@ -6,7 +6,6 @@
  *
  * Priority: 5 (low, as this is a fallback after tool-specific providers)
  */
-
 import * as path from "node:path";
 import { registerProvider } from "../capability";
 import { readFile } from "../capability/fs";
@@ -102,11 +101,11 @@ async function loadMCPJsonFile(
 async function load(ctx: LoadContext): Promise<LoadResult<MCPServer>> {
 	const filenames = ["mcp.json", ".mcp.json"];
 	const results = await Promise.all(
-		filenames.map((filename) => loadMCPJsonFile(ctx, path.join(ctx.cwd, filename), "project")),
+		filenames.map(filename => loadMCPJsonFile(ctx, path.join(ctx.cwd, filename), "project")),
 	);
 
-	const allItems = results.flatMap((r) => r.items);
-	const allWarnings = results.flatMap((r) => r.warnings ?? []);
+	const allItems = results.flatMap(r => r.items);
+	const allWarnings = results.flatMap(r => r.warnings ?? []);
 
 	return {
 		items: allItems,

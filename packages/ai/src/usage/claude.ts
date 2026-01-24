@@ -241,10 +241,10 @@ function buildCacheKey(params: UsageFetchParams): string {
 
 function resolveCacheExpiry(now: number, limits: UsageLimit[]): number {
 	const earliestReset = limits
-		.map((limit) => limit.window?.resetsAt)
+		.map(limit => limit.window?.resetsAt)
 		.filter((value): value is number => typeof value === "number" && Number.isFinite(value))
 		.reduce((min, value) => (min === undefined ? value : Math.min(min, value)), undefined as number | undefined);
-	const exhausted = limits.some((limit) => limit.status === "exhausted");
+	const exhausted = limits.some(limit => limit.status === "exhausted");
 	if (earliestReset === undefined) return now + DEFAULT_CACHE_TTL_MS;
 	if (exhausted) return earliestReset;
 	return Math.min(now + DEFAULT_CACHE_TTL_MS, earliestReset);
@@ -351,5 +351,5 @@ async function fetchClaudeUsage(params: UsageFetchParams, ctx: UsageFetchContext
 export const claudeUsageProvider: UsageProvider = {
 	id: "anthropic",
 	fetchUsage: fetchClaudeUsage,
-	supports: (params) => params.provider === "anthropic" && params.credential.type === "oauth",
+	supports: params => params.provider === "anthropic" && params.credential.type === "oauth",
 };

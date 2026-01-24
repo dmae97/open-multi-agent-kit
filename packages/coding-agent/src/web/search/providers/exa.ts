@@ -4,7 +4,6 @@
  * High-quality neural search via Exa Search API.
  * Returns structured search results with optional content extraction.
  */
-
 import * as os from "node:os";
 import type { WebSearchResponse, WebSearchSource } from "../../../web/search/types";
 import { WebSearchProviderError } from "../../../web/search/types";

@@ -54,7 +54,7 @@ export async function prerenderMermaid(
 		}
 
 		promises.push(
-			promise.then((image) => {
+			promise.then(image => {
 				pending.delete(hash);
 				if (image) {
 					cache.set(hash, image);
@@ -66,7 +66,7 @@ export async function prerenderMermaid(
 	}
 
 	const results = await Promise.all(promises);
-	const newImages = results.some((added) => added);
+	const newImages = results.some(added => added);
 
 	if (newImages && onRenderNeeded) {
 		onRenderNeeded();

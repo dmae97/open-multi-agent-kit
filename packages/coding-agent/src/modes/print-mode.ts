@@ -5,7 +5,6 @@
  * - `omp -p "prompt"` - text output
  * - `omp --mode json "prompt"` - JSON event stream
  */
-
 import type { AssistantMessage, ImageContent } from "@oh-my-pi/pi-ai";
 import type { AgentSession } from "../session/agent-session";
 
@@ -44,12 +43,12 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 			// ExtensionActions
 			{
 				sendMessage: (message, options) => {
-					session.sendCustomMessage(message, options).catch((e) => {
+					session.sendCustomMessage(message, options).catch(e => {
 						process.stderr.write(`Extension sendMessage failed: ${e instanceof Error ? e.message : String(e)}\n`);
 					});
 				},
 				sendUserMessage: (content, options) => {
-					session.sendUserMessage(content, options).catch((e) => {
+					session.sendUserMessage(content, options).catch(e => {
 						process.stderr.write(
 							`Extension sendUserMessage failed: ${e instanceof Error ? e.message : String(e)}\n`,
 						);
@@ -64,14 +63,14 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 				getActiveTools: () => session.getActiveToolNames(),
 				getAllTools: () => session.getAllToolNames(),
 				setActiveTools: (toolNames: string[]) => session.setActiveToolsByName(toolNames),
-				setModel: async (model) => {
+				setModel: async model => {
 					const key = await session.modelRegistry.getApiKey(model);
 					if (!key) return false;
 					await session.setModel(model);
 					return true;
 				},
 				getThinkingLevel: () => session.thinkingLevel,
-				setThinkingLevel: (level) => session.setThinkingLevel(level),
+				setThinkingLevel: level => session.setThinkingLevel(level),
 			},
 			// ExtensionContextActions
 			{
@@ -81,7 +80,7 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 				hasPendingMessages: () => session.queuedMessageCount > 0,
 				shutdown: () => {},
 				getContextUsage: () => session.getContextUsage(),
-				compact: async (instructionsOrOptions) => {
+				compact: async instructionsOrOptions => {
 					const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
 					const options =
 						instructionsOrOptions && typeof instructionsOrOptions === "object"
@@ -94,14 +93,14 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 			{
 				getContextUsage: () => session.getContextUsage(),
 				waitForIdle: () => session.agent.waitForIdle(),
-				newSession: async (options) => {
+				newSession: async options => {
 					const success = await session.newSession({ parentSession: options?.parentSession });
 					if (success && options?.setup) {
 						await options.setup(session.sessionManager);
 					}
 					return { cancelled: !success };
 				},
-				branch: async (entryId) => {
+				branch: async entryId => {
 					const result = await session.branch(entryId);
 					return { cancelled: result.cancelled };
 				},
@@ -109,7 +108,7 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 					const result = await session.navigateTree(targetId, { summarize: options?.summarize });
 					return { cancelled: result.cancelled };
 				},
-				compact: async (instructionsOrOptions) => {
+				compact: async instructionsOrOptions => {
 					const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
 					const options =
 						instructionsOrOptions && typeof instructionsOrOptions === "object"
@@ -120,7 +119,7 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 			},
 			// No UI context
 		);
-		extensionRunner.onError((err) => {
+		extensionRunner.onError(err => {
 			process.stderr.write(`Extension error (${err.extensionPath}): ${err.error}\n`);
 		});
 		// Emit session_start event
@@ -130,7 +129,7 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 	}
 
 	// Always subscribe to enable session persistence via _handleAgentEvent
-	session.subscribe((event) => {
+	session.subscribe(event => {
 		// In JSON mode, output all events
 		if (mode === "json") {
 			process.stdout.write(`${JSON.stringify(event)}\n`);
@@ -173,7 +172,7 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 	// Ensure stdout is fully flushed before returning
 	// This prevents race conditions where the process exits before all output is written
 	await new Promise<void>((resolve, reject) => {
-		process.stdout.write("", (err) => {
+		process.stdout.write("", err => {
 			if (err) reject(err);
 			else resolve();
 		});

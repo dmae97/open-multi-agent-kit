@@ -4,7 +4,6 @@
  * Canonical shape for MCP server configurations, regardless of source format.
  * All providers translate their native format to this shape.
  */
-
 import { defineCapability } from ".";
 import type { SourceMeta } from "./types";
 
@@ -34,8 +33,8 @@ export const mcpCapability = defineCapability<MCPServer>({
 	id: "mcps",
 	displayName: "MCP Servers",
 	description: "Model Context Protocol server configurations for external tool integrations",
-	key: (server) => server.name,
-	validate: (server) => {
+	key: server => server.name,
+	validate: server => {
 		if (!server.name) return "Missing server name";
 		if (!server.command && !server.url) return "Must have command or url";
 

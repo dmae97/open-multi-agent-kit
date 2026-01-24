@@ -3,7 +3,6 @@
  * Shared implementation for both google-gemini-cli and google-antigravity providers.
  * Uses the Cloud Code Assist API endpoint to access Gemini and Claude models.
  */
-
 import { createHash } from "node:crypto";
 import type { Content, ThinkingConfig } from "@google/genai";
 import { abortableSleep } from "@oh-my-pi/pi-utils";
@@ -660,8 +659,7 @@ export const streamGoogleGeminiCli: StreamFunction<"google-gemini-cli"> = (
 
 										const providedId = part.functionCall.id;
 										const needsNewId =
-											!providedId ||
-											output.content.some((b) => b.type === "toolCall" && b.id === providedId);
+											!providedId || output.content.some(b => b.type === "toolCall" && b.id === providedId);
 										const toolCallId = needsNewId
 											? `${part.functionCall.name}_${Date.now()}_${++toolCallCounter}`
 											: providedId;
@@ -695,7 +693,7 @@ export const streamGoogleGeminiCli: StreamFunction<"google-gemini-cli"> = (
 
 							if (candidate?.finishReason) {
 								output.stopReason = mapStopReasonString(candidate.finishReason);
-								if (output.content.some((b) => b.type === "toolCall")) {
+								if (output.content.some(b => b.type === "toolCall")) {
 									output.stopReason = "toolUse";
 								}
 							}
@@ -840,7 +838,7 @@ function deriveSessionId(context: Context): string | undefined {
 		} else if (Array.isArray(message.content)) {
 			text = message.content
 				.filter((item): item is TextContent => item.type === "text")
-				.map((item) => item.text)
+				.map(item => item.text)
 				.join("\n");
 		}
 

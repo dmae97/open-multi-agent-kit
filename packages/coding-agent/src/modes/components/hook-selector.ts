@@ -2,7 +2,6 @@
  * Generic selector component for hooks.
  * Displays a list of string options with keyboard navigation.
  */
-
 import { Container, matchesKey, Spacer, Text, type TUI } from "@oh-my-pi/pi-tui";
 import { theme } from "../../modes/theme/theme";
 import { CountdownTimer } from "./countdown-timer";
@@ -50,7 +49,7 @@ export class HookSelectorComponent extends Container {
 			this.countdown = new CountdownTimer(
 				opts.timeout,
 				opts.tui,
-				(s) => this.titleText.setText(theme.fg("accent", `${this.baseTitle} (${s}s)`)),
+				s => this.titleText.setText(theme.fg("accent", `${this.baseTitle} (${s}s)`)),
 				() => this.onCancelCallback(),
 			);
 		}

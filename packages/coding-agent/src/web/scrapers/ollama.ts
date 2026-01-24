@@ -108,7 +108,7 @@ function formatSize(bytes: number): string {
 }
 
 function buildModelPath(parts: string[]): string {
-	return parts.map((part) => encodeURIComponent(part)).join("/");
+	return parts.map(part => encodeURIComponent(part)).join("/");
 }
 
 function parseOllamaUrl(url: string): { modelRef: string; baseRef: string; pageUrl: string } | null {
@@ -152,7 +152,7 @@ function sortTags(tags: string[]): string[] {
 
 function formatTagList(tags: string[], maxItems: number): string {
 	const limited = tags.slice(0, maxItems);
-	const formatted = limited.map((tag) => `\`${tag}\``).join(", ");
+	const formatted = limited.map(tag => `\`${tag}\``).join(", ");
 	if (tags.length > maxItems) {
 		return `${formatted} (and ${tags.length - maxItems} more)`;
 	}
@@ -205,17 +205,17 @@ export const handleOllama: SpecialHandler = async (
 
 		const baseLower = baseRef.toLowerCase();
 		const models = tagsData?.models ?? [];
-		const matchingModels = models.filter((model) => {
+		const matchingModels = models.filter(model => {
 			const name = (model.model ?? model.name ?? "").toLowerCase();
 			return name === baseLower || name.startsWith(`${baseLower}:`);
 		});
 
 		const tagRef = modelRef.includes(":") ? modelRef : null;
-		const selectedTag = tagRef ? matchingModels.find((model) => (model.model ?? model.name ?? "") === tagRef) : null;
+		const selectedTag = tagRef ? matchingModels.find(model => (model.model ?? model.name ?? "") === tagRef) : null;
 
 		const availableTagsRaw = matchingModels
-			.map((model) => model.model ?? model.name ?? "")
-			.filter((tag) => tag.length > 0);
+			.map(model => model.model ?? model.name ?? "")
+			.filter(tag => tag.length > 0);
 		const availableTags = sortTags(Array.from(new Set(availableTagsRaw)));
 
 		const fallbackTags = sortTags(Array.from(new Set(htmlTags)));
@@ -223,9 +223,7 @@ export const handleOllama: SpecialHandler = async (
 
 		const parameterSizes = collectParameterSizes(selectedTag ? [selectedTag] : matchingModels, htmlParameterSizes);
 
-		const sizes = matchingModels
-			.map((model) => model.size)
-			.filter((size): size is number => typeof size === "number");
+		const sizes = matchingModels.map(model => model.size).filter((size): size is number => typeof size === "number");
 		let sizeLine: string | null = null;
 
 		if (selectedTag?.size) {

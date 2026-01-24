@@ -1,7 +1,6 @@
 /**
  * Extension runner - executes extensions and manages their lifecycle.
  */
-
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent, Model } from "@oh-my-pi/pi-ai";
 import type { KeyId } from "@oh-my-pi/pi-tui";
@@ -184,7 +183,7 @@ export class ExtensionRunner {
 	}
 
 	getExtensionPaths(): string[] {
-		return this.extensions.map((e) => e.path);
+		return this.extensions.map(e => e.path);
 	}
 
 	/** Get all registered tools from all extensions. */
@@ -313,7 +312,7 @@ export class ExtensionRunner {
 		return {
 			ui: this.uiContext,
 			getContextUsage: () => this.getContextUsageFn(),
-			compact: (instructionsOrOptions) => this.compactFn(instructionsOrOptions),
+			compact: instructionsOrOptions => this.compactFn(instructionsOrOptions),
 			hasUI: this.hasUI(),
 			cwd: this.cwd,
 			sessionManager: this.sessionManager,
@@ -341,10 +340,10 @@ export class ExtensionRunner {
 			...this.createContext(),
 			getContextUsage: () => this.getContextUsageFn(),
 			waitForIdle: () => this.waitForIdleFn(),
-			newSession: (options) => this.newSessionHandler(options),
-			branch: (entryId) => this.branchHandler(entryId),
+			newSession: options => this.newSessionHandler(options),
+			branch: entryId => this.branchHandler(entryId),
 			navigateTree: (targetId, options) => this.navigateTreeHandler(targetId, options),
-			compact: (instructionsOrOptions) => this.compactFn(instructionsOrOptions),
+			compact: instructionsOrOptions => this.compactFn(instructionsOrOptions),
 		};
 	}
 

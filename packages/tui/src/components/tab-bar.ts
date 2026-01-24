@@ -8,7 +8,6 @@
  * - Tab / Arrow Right: Next tab (wraps around)
  * - Shift+Tab / Arrow Left: Previous tab (wraps around)
  */
-
 import { matchesKey } from "../keys";
 import type { Component } from "../tui";
 import { wrapTextWithAnsi } from "../utils";

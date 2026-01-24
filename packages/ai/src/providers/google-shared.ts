@@ -1,7 +1,6 @@
 /**
  * Shared utilities for Google Generative AI and Google Cloud Code Assist providers.
  */
-
 import { type Content, FinishReason, FunctionCallingConfigMode, type Part, type Schema } from "@google/genai";
 import type { Context, ImageContent, Model, StopReason, TextContent, Tool } from "../types";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode";
@@ -86,7 +85,7 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 					parts: [{ text: sanitizeSurrogates(msg.content) }],
 				});
 			} else {
-				const parts: Part[] = msg.content.map((item) => {
+				const parts: Part[] = msg.content.map(item => {
 					if (item.type === "text") {
 						return { text: sanitizeSurrogates(item.text) };
 					} else {
@@ -99,8 +98,8 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 					}
 				});
 				// Filter out images if model doesn't support them, and empty text blocks
-				let filteredParts = !model.input.includes("image") ? parts.filter((p) => p.text !== undefined) : parts;
-				filteredParts = filteredParts.filter((p) => {
+				let filteredParts = !model.input.includes("image") ? parts.filter(p => p.text !== undefined) : parts;
+				filteredParts = filteredParts.filter(p => {
 					if (p.text !== undefined) {
 						return p.text.trim().length > 0;
 					}
@@ -180,7 +179,7 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 		} else if (msg.role === "toolResult") {
 			// Extract text and image content
 			const textContent = msg.content.filter((c): c is TextContent => c.type === "text");
-			const textResult = textContent.map((c) => c.text).join("\n");
+			const textResult = textContent.map(c => c.text).join("\n");
 			const imageContent = model.input.includes("image")
 				? msg.content.filter((c): c is ImageContent => c.type === "image")
 				: [];
@@ -196,7 +195,7 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 			// Use "output" key for success, "error" key for errors as per SDK documentation
 			const responseValue = hasText ? sanitizeSurrogates(textResult) : hasImages ? "(see attached image)" : "";
 
-			const imageParts: Part[] = imageContent.map((imageBlock) => ({
+			const imageParts: Part[] = imageContent.map(imageBlock => ({
 				inlineData: {
 					mimeType: imageBlock.mimeType,
 					data: imageBlock.data,
@@ -221,7 +220,7 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 			// Cloud Code Assist API requires all function responses to be in a single user turn.
 			// Check if the last content is already a user turn with function responses and merge.
 			const lastContent = contents[contents.length - 1];
-			if (lastContent?.role === "user" && lastContent.parts?.some((p) => p.functionResponse)) {
+			if (lastContent?.role === "user" && lastContent.parts?.some(p => p.functionResponse)) {
 				lastContent.parts.push(functionResponsePart);
 			} else {
 				contents.push({
@@ -270,7 +269,7 @@ const UNSUPPORTED_SCHEMA_FIELDS = new Set([
 
 function sanitizeSchemaImpl(value: unknown, isInsideProperties: boolean): unknown {
 	if (Array.isArray(value)) {
-		return value.map((entry) => sanitizeSchemaImpl(entry, isInsideProperties));
+		return value.map(entry => sanitizeSchemaImpl(entry, isInsideProperties));
 	}
 
 	if (!value || typeof value !== "object") {
@@ -286,11 +285,11 @@ function sanitizeSchemaImpl(value: unknown, isInsideProperties: boolean): unknow
 			const variants = obj[combiner] as Record<string, unknown>[];
 
 			// Check if ALL variants have a const field
-			const allHaveConst = variants.every((v) => v && typeof v === "object" && "const" in v);
+			const allHaveConst = variants.every(v => v && typeof v === "object" && "const" in v);
 
 			if (allHaveConst && variants.length > 0) {
 				// Extract all const values into enum
-				result.enum = variants.map((v) => v.const);
+				result.enum = variants.map(v => v.const);
 
 				// Inherit type from first variant if present
 				const firstType = variants[0]?.type;
@@ -327,7 +326,7 @@ function sanitizeSchemaImpl(value: unknown, isInsideProperties: boolean): unknow
 	if (constValue !== undefined) {
 		// Convert const to enum, merging with existing enum if present
 		const existingEnum = Array.isArray(result.enum) ? result.enum : [];
-		if (!existingEnum.some((item) => Object.is(item, constValue))) {
+		if (!existingEnum.some(item => Object.is(item, constValue))) {
 			existingEnum.push(constValue);
 		}
 		result.enum = existingEnum;

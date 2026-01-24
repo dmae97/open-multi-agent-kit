@@ -45,8 +45,8 @@ describe("SessionManager tool call rewrite", () => {
 		expect(updated).toBe(true);
 
 		const ctx = session.buildSessionContext();
-		const assistant = ctx.messages.find((m) => m.role === "assistant") as AssistantMessage;
-		const updatedCall = assistant.content.find((b) => b.type === "toolCall") as ToolCall;
+		const assistant = ctx.messages.find(m => m.role === "assistant") as AssistantMessage;
+		const updatedCall = assistant.content.find(b => b.type === "toolCall") as ToolCall;
 		expect(updatedCall.arguments).toEqual({ path: "file.ts", op: "update", diff: "@@\n-old\n+newer" });
 	});
 });

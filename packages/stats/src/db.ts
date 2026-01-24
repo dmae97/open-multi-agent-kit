@@ -245,7 +245,7 @@ export function getStatsByModel(): ModelStats[] {
 	`);
 
 	const rows = stmt.all() as any[];
-	return rows.map((row) => ({
+	return rows.map(row => ({
 		model: row.model,
 		provider: row.provider,
 		...buildAggregatedStats([row]),
@@ -279,7 +279,7 @@ export function getStatsByFolder(): FolderStats[] {
 	`);
 
 	const rows = stmt.all() as any[];
-	return rows.map((row) => ({
+	return rows.map(row => ({
 		folder: row.folder,
 		...buildAggregatedStats([row]),
 	}));
@@ -307,7 +307,7 @@ export function getTimeSeries(hours = 24): TimeSeriesPoint[] {
 	`);
 
 	const rows = stmt.all(cutoff) as any[];
-	return rows.map((row) => ({
+	return rows.map(row => ({
 		timestamp: row.bucket,
 		requests: row.requests,
 		errors: row.errors,

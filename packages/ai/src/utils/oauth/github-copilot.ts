@@ -1,7 +1,6 @@
 /**
  * GitHub Copilot OAuth flow
  */
-
 import { abortableSleep } from "@oh-my-pi/pi-utils";
 import { getModels } from "../../models";
 import type { OAuthCredentials } from "./types";
@@ -279,7 +278,7 @@ async function enableAllGitHubCopilotModels(
 ): Promise<void> {
 	const models = getModels("github-copilot");
 	await Promise.all(
-		models.map(async (model) => {
+		models.map(async model => {
 			const success = await enableGitHubCopilotModel(token, model.id, enterpriseDomain);
 			onProgress?.(model.id, success);
 		}),

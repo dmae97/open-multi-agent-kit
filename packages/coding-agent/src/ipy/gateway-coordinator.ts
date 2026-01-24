@@ -3,7 +3,6 @@ import { createServer } from "node:net";
 import * as path from "node:path";
 import { isEnoent, logger } from "@oh-my-pi/pi-utils";
 import type { Subprocess } from "bun";
-
 import { getAgentDir } from "../config";
 import { getShellConfig, killProcessTree } from "../utils/shell";
 import { getOrCreateSnapshot } from "../utils/shell-snapshot";
@@ -105,13 +104,13 @@ const CASE_INSENSITIVE_ENV = process.platform === "win32";
 const ACTIVE_ENV_ALLOWLIST = CASE_INSENSITIVE_ENV ? WINDOWS_ENV_ALLOWLIST : DEFAULT_ENV_ALLOWLIST;
 
 const NORMALIZED_ALLOWLIST = new Map(
-	Array.from(ACTIVE_ENV_ALLOWLIST, (key) => [CASE_INSENSITIVE_ENV ? key.toUpperCase() : key, key] as const),
+	Array.from(ACTIVE_ENV_ALLOWLIST, key => [CASE_INSENSITIVE_ENV ? key.toUpperCase() : key, key] as const),
 );
 const NORMALIZED_DENYLIST = new Set(
-	Array.from(DEFAULT_ENV_DENYLIST, (key) => (CASE_INSENSITIVE_ENV ? key.toUpperCase() : key)),
+	Array.from(DEFAULT_ENV_DENYLIST, key => (CASE_INSENSITIVE_ENV ? key.toUpperCase() : key)),
 );
 const NORMALIZED_ALLOW_PREFIXES = CASE_INSENSITIVE_ENV
-	? DEFAULT_ENV_ALLOW_PREFIXES.map((prefix) => prefix.toUpperCase())
+	? DEFAULT_ENV_ALLOW_PREFIXES.map(prefix => prefix.toUpperCase())
 	: DEFAULT_ENV_ALLOW_PREFIXES;
 
 function normalizeEnvKey(key: string): string {
@@ -120,7 +119,7 @@ function normalizeEnvKey(key: string): string {
 
 function resolvePathKey(env: Record<string, string | undefined>): string {
 	if (!CASE_INSENSITIVE_ENV) return "PATH";
-	const match = Object.keys(env).find((candidate) => candidate.toLowerCase() === "path");
+	const match = Object.keys(env).find(candidate => candidate.toLowerCase() === "path");
 	return match ?? "PATH";
 }
 
@@ -157,7 +156,7 @@ function filterEnv(env: Record<string, string | undefined>): Record<string, stri
 			filtered[canonicalKey] = value;
 			continue;
 		}
-		if (NORMALIZED_ALLOW_PREFIXES.some((prefix) => normalizedKey.startsWith(prefix))) {
+		if (NORMALIZED_ALLOW_PREFIXES.some(prefix => normalizedKey.startsWith(prefix))) {
 			filtered[key] = value;
 		}
 	}

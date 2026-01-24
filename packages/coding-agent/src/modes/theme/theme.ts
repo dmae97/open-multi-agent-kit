@@ -1636,7 +1636,7 @@ export async function getAvailableThemesWithPaths(): Promise<ThemeInfo[]> {
 		for (const file of files) {
 			if (file.endsWith(".json")) {
 				const name = file.slice(0, -5);
-				if (!result.some((themeInfo) => themeInfo.name === name)) {
+				if (!result.some(themeInfo => themeInfo.name === name)) {
 					result.push({ name, path: path.join(customThemesDir, file) });
 				}
 			}
@@ -1686,7 +1686,7 @@ async function loadThemeJson(name: string): Promise<ThemeJson> {
 		let errorMessage = `Invalid theme "${name}":\n`;
 		if (missingColors.length > 0) {
 			errorMessage += `\nMissing required color tokens:\n`;
-			errorMessage += missingColors.map((c) => `  - ${c}`).join("\n");
+			errorMessage += missingColors.map(c => `  - ${c}`).join("\n");
 			errorMessage += `\n\nPlease add these colors to your theme's "colors" object.`;
 			errorMessage += `\nSee the built-in themes (dark.json, light.json) for reference values.`;
 		}
@@ -1942,18 +1942,18 @@ async function startThemeWatcher(): Promise<void> {
 	}
 
 	try {
-		themeWatcher = fs.watch(themeFile, (eventType) => {
+		themeWatcher = fs.watch(themeFile, eventType => {
 			if (eventType === "change") {
 				// Debounce rapid changes
 				setTimeout(() => {
 					loadTheme(currentThemeName!, getCurrentThemeOptions())
-						.then((loadedTheme) => {
+						.then(loadedTheme => {
 							theme = loadedTheme;
 							if (onThemeChangeCallback) {
 								onThemeChangeCallback();
 							}
 						})
-						.catch((err) => {
+						.catch(err => {
 							logger.debug("Theme reload error during file change", { error: String(err) });
 						});
 				}, 100);
@@ -1963,13 +1963,13 @@ async function startThemeWatcher(): Promise<void> {
 					if (!fs.existsSync(themeFile)) {
 						currentThemeName = "dark";
 						loadTheme("dark", getCurrentThemeOptions())
-							.then((loadedTheme) => {
+							.then(loadedTheme => {
 								theme = loadedTheme;
 								if (onThemeChangeCallback) {
 									onThemeChangeCallback();
 								}
 							})
-							.catch((err) => {
+							.catch(err => {
 								logger.debug("Theme reload error during rename fallback", { error: String(err) });
 							});
 						if (themeWatcher) {
@@ -2312,7 +2312,7 @@ export function getMarkdownTheme(): MarkdownTheme {
 			try {
 				return highlight(code, opts).split("\n");
 			} catch {
-				return code.split("\n").map((line) => theme.fg("mdCodeBlock", line));
+				return code.split("\n").map(line => theme.fg("mdCodeBlock", line));
 			}
 		},
 	};

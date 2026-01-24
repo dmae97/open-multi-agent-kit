@@ -12,7 +12,6 @@
  *   - Progress tracking via JSON events
  *   - Session artifacts for debugging
  */
-
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import path from "node:path";
@@ -25,6 +24,8 @@ import { renderPromptTemplate } from "../config/prompt-templates";
 import type { Theme } from "../modes/theme/theme";
 import taskDescriptionTemplate from "../prompts/tools/task.md" with { type: "text" };
 import { formatDuration } from "../tools/render-utils";
+// Import review tools for side effects (registers subagent tool handlers)
+import "../tools/review";
 import { discoverAgents, getAgent } from "./discovery";
 import { runSubprocess } from "./executor";
 import { AgentOutputManager } from "./output-manager";
@@ -48,9 +49,6 @@ import {
 	ensureWorktree,
 	getRepoRoot,
 } from "./worktree";
-
-// Import review tools for side effects (registers subagent tool handlers)
-import "../tools/review";
 
 /** Format byte count for display */
 function formatBytes(bytes: number): string {
@@ -174,7 +172,7 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 		// Validate agent exists
 		const agent = getAgent(agents, agentName);
 		if (!agent) {
-			const available = agents.map((a) => a.name).join(", ") || "none";
+			const available = agents.map(a => a.name).join(", ") || "none";
 			return {
 				content: [
 					{
@@ -268,7 +266,7 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 				problems.push(`Missing task ids at indexes: ${missingTaskIndexes.join(", ")}`);
 			}
 			if (duplicateIds.length > 0) {
-				const details = duplicateIds.map((entry) => `${entry.id} (indexes ${entry.indexes.join(", ")})`).join("; ");
+				const details = duplicateIds.map(entry => `${entry.id} (indexes ${entry.indexes.join(", ")})`).join("; ");
 				problems.push(`Duplicate task ids detected (case-insensitive): ${details}`);
 			}
 			return {
@@ -348,7 +346,7 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 
 			// Check spawn restrictions from parent
 			const parentSpawns = this.session.getSessionSpawns() ?? "*";
-			const allowedSpawns = parentSpawns.split(",").map((s) => s.trim());
+			const allowedSpawns = parentSpawns.split(",").map(s => s.trim());
 			const isSpawnAllowed = (): boolean => {
 				if (parentSpawns === "") return false; // Empty = deny all
 				if (parentSpawns === "*") return true; // Wildcard = allow all
@@ -371,11 +369,11 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 			// Allocate unique IDs across the session to prevent artifact collisions
 			const outputManager =
 				this.session.agentOutputManager ?? new AgentOutputManager(this.session.getArtifactsDir ?? (() => null));
-			const uniqueIds = await outputManager.allocateBatch(tasks.map((t) => t.id));
+			const uniqueIds = await outputManager.allocateBatch(tasks.map(t => t.id));
 			const tasksWithUniqueIds = tasks.map((t, i) => ({ ...t, id: uniqueIds[i] }));
 
 			// Build full prompts with context prepended
-			const tasksWithContext = tasksWithUniqueIds.map((t) => renderTemplate(context, t));
+			const tasksWithContext = tasksWithUniqueIds.map(t => renderTemplate(context, t));
 
 			// Initialize progress for all tasks
 			for (let i = 0; i < tasksWithContext.length; i++) {
@@ -418,7 +416,7 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 						enableLsp: false,
 						signal,
 						eventBus: undefined,
-						onProgress: (progress) => {
+						onProgress: progress => {
 							progressMap.set(index, {
 								...structuredClone(progress),
 								args: tasksWithContext[index]?.args,
@@ -458,7 +456,7 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 						enableLsp: false,
 						signal,
 						eventBus: undefined,
-						onProgress: (progress) => {
+						onProgress: progress => {
 							progressMap.set(index, {
 								...structuredClone(progress),
 								args: tasksWithContext[index]?.args,
@@ -564,25 +562,25 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 			let patchApplySummary = "";
 			let patchesApplied: boolean | null = null;
 			if (isIsolated) {
-				const patchesInOrder = results.map((result) => result.patchPath).filter(Boolean) as string[];
-				const missingPatch = results.some((result) => !result.patchPath);
+				const patchesInOrder = results.map(result => result.patchPath).filter(Boolean) as string[];
+				const missingPatch = results.some(result => !result.patchPath);
 				if (!repoRoot || missingPatch) {
 					patchesApplied = false;
 				} else {
 					const patchStats = await Promise.all(
-						patchesInOrder.map(async (patchPath) => ({
+						patchesInOrder.map(async patchPath => ({
 							patchPath,
 							size: (await fs.stat(patchPath)).size,
 						})),
 					);
-					const nonEmptyPatches = patchStats.filter((patch) => patch.size > 0).map((patch) => patch.patchPath);
+					const nonEmptyPatches = patchStats.filter(patch => patch.size > 0).map(patch => patch.patchPath);
 					if (nonEmptyPatches.length === 0) {
 						patchesApplied = true;
 					} else {
 						const patchTexts = await Promise.all(
-							nonEmptyPatches.map(async (patchPath) => Bun.file(patchPath).text()),
+							nonEmptyPatches.map(async patchPath => Bun.file(patchPath).text()),
 						);
-						const combinedPatch = patchTexts.map((text) => (text.endsWith("\n") ? text : `${text}\n`)).join("");
+						const combinedPatch = patchTexts.map(text => (text.endsWith("\n") ? text : `${text}\n`)).join("");
 						if (!combinedPatch.trim()) {
 							patchesApplied = true;
 						} else {
@@ -616,18 +614,18 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 						"<system-notification>Patches were not applied and must be handled manually.</system-notification>";
 					const patchList =
 						patchPaths.length > 0
-							? `\n\nPatch artifacts:\n${patchPaths.map((patch) => `- ${patch}`).join("\n")}`
+							? `\n\nPatch artifacts:\n${patchPaths.map(patch => `- ${patch}`).join("\n")}`
 							: "";
 					patchApplySummary = `\n\n${notification}${patchList}`;
 				}
 			}
 
 			// Build final output - match plugin format
-			const successCount = results.filter((r) => r.exitCode === 0).length;
-			const cancelledCount = results.filter((r) => r.aborted).length;
+			const successCount = results.filter(r => r.exitCode === 0).length;
+			const cancelledCount = results.filter(r => r.aborted).length;
 			const totalDuration = Date.now() - startTime;
 
-			const summaries = results.map((r) => {
+			const summaries = results.map(r => {
 				const status = r.aborted ? "cancelled" : r.exitCode === 0 ? "completed" : `failed (exit ${r.exitCode})`;
 				const output = r.output.trim() || r.stderr.trim() || "(no output)";
 				const preview = output.split("\n").slice(0, 5).join("\n");
@@ -637,10 +635,10 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 				return `[${r.agent}] ${status}${meta} ${r.id}\n${preview}`;
 			});
 
-			const outputIds = results.filter((r) => !r.aborted || r.output.trim()).map((r) => r.id);
+			const outputIds = results.filter(r => !r.aborted || r.output.trim()).map(r => r.id);
 			const outputHint =
 				outputIds.length > 0
-					? `\n\nUse read with agent:// for full logs: ${outputIds.map((id) => `agent://${id}`).join(", ")}`
+					? `\n\nUse read with agent:// for full logs: ${outputIds.map(id => `agent://${id}`).join(", ")}`
 					: "";
 			const schemaNote = schemaOverridden
 				? `\n\nNote: Agent '${agentName}' has a fixed output schema; your 'output' parameter was ignored.\nRequired schema: ${JSON.stringify(agent.output)}`

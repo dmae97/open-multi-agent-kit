@@ -170,7 +170,7 @@ export const streamGoogle: StreamFunction<"google-generative-ai"> = (
 							// Generate unique ID if not provided or if it's a duplicate
 							const providedId = part.functionCall.id;
 							const needsNewId =
-								!providedId || output.content.some((b) => b.type === "toolCall" && b.id === providedId);
+								!providedId || output.content.some(b => b.type === "toolCall" && b.id === providedId);
 							const toolCallId = needsNewId
 								? `${part.functionCall.name}_${Date.now()}_${++toolCallCounter}`
 								: providedId;
@@ -198,7 +198,7 @@ export const streamGoogle: StreamFunction<"google-generative-ai"> = (
 
 				if (candidate?.finishReason) {
 					output.stopReason = mapStopReason(candidate.finishReason);
-					if (output.content.some((b) => b.type === "toolCall")) {
+					if (output.content.some(b => b.type === "toolCall")) {
 						output.stopReason = "toolUse";
 					}
 				}

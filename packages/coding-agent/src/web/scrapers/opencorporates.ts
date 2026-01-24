@@ -166,8 +166,8 @@ export const handleOpenCorporates: SpecialHandler = async (
 
 		// Officers/Directors
 		if (company.officers && company.officers.length > 0) {
-			const activeOfficers = company.officers.filter((o) => !o.officer.inactive && !o.officer.end_date);
-			const inactiveOfficers = company.officers.filter((o) => o.officer.inactive || o.officer.end_date);
+			const activeOfficers = company.officers.filter(o => !o.officer.inactive && !o.officer.end_date);
+			const inactiveOfficers = company.officers.filter(o => o.officer.inactive || o.officer.end_date);
 
 			if (activeOfficers.length > 0) {
 				md += `## Current Officers (${activeOfficers.length})\n\n`;

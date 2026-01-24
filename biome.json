@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.3.11/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.3.12/schema.json",
 	"linter": {
 		"enabled": true,
 		"rules": {
@@ -29,14 +29,14 @@
 			"quoteStyle": "double",
 			"trailingCommas": "all",
 			"bracketSpacing": true,
-			"arrowParentheses": "always"
+			"arrowParentheses": "asNeeded"
 		}
 	},
 	"files": {
 		"includes": [
 			"packages/*/src/**/*.ts",
 			"packages/*/test/**/*.ts",
-			"packages/coding-agent/examples/**/*.ts",
+			"packages/*/examples/**/*.ts",
 			"!**/vendor/**/*",
 			"!**/node_modules/**/*",
 			"!**/test-sessions.ts",

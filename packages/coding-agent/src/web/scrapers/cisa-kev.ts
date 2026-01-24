@@ -60,7 +60,7 @@ export const handleCisaKev: SpecialHandler = async (
 			return null;
 		}
 
-		const entry = data.vulnerabilities?.find((item) => item.cveID?.toUpperCase() === cveId);
+		const entry = data.vulnerabilities?.find(item => item.cveID?.toUpperCase() === cveId);
 		if (!entry) return null;
 
 		let md = `# ${entry.cveID}\n\n`;

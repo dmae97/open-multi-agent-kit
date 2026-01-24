@@ -5,7 +5,6 @@
  * This handles AGENTS.md files that live in project root (not in config directories
  * like .codex/ or .gemini/, which are handled by their respective providers).
  */
-
 import * as path from "node:path";
 import { registerProvider } from "../capability";
 import { type ContextFile, contextFileCapability } from "../capability/context-file";

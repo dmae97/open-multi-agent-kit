@@ -11,7 +11,6 @@
  * - Space: Toggle selected item (or master switch)
  * - Esc: Close dashboard (clears search first if active)
  */
-
 import { type Component, Container, matchesKey, Spacer, Text, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
 import type { SettingsManager } from "../../../config/settings-manager";
 import { DynamicBorder } from "../../../modes/components/dynamic-border";
@@ -60,14 +59,14 @@ export class ExtensionDashboard extends Container {
 		this.mainList = new ExtensionList(
 			this.state.searchFiltered,
 			{
-				onSelectionChange: (ext) => {
+				onSelectionChange: ext => {
 					this.state.selected = ext;
 					this.inspector.setExtension(ext);
 				},
 				onToggle: (extensionId, enabled) => {
 					this.handleExtensionToggle(extensionId, enabled);
 				},
-				onMasterToggle: (providerId) => {
+				onMasterToggle: providerId => {
 					this.handleProviderToggle(providerId);
 				},
 				masterSwitchProvider: this.getActiveProviderId(),
@@ -176,7 +175,7 @@ export class ExtensionDashboard extends Container {
 
 		// Find the same tab in the new (re-sorted) list
 		if (currentTabId) {
-			const newIndex = this.state.tabs.findIndex((t) => t.id === currentTabId);
+			const newIndex = this.state.tabs.findIndex(t => t.id === currentTabId);
 			if (newIndex >= 0) {
 				this.state.activeTabIndex = newIndex;
 			}

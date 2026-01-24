@@ -3,7 +3,6 @@
  *
  * File-based templates that inject content when invoked with /templatename.
  */
-
 import {
 	createAgentSession,
 	discoverPromptTemplates,

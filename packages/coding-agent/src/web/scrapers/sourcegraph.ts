@@ -129,7 +129,7 @@ function parseSourcegraphUrl(url: string): SourcegraphTarget | null {
 		const parts = parsed.pathname
 			.split("/")
 			.filter(Boolean)
-			.map((part) => decodeURIComponent(part));
+			.map(part => decodeURIComponent(part));
 		if (parts.length < 3) return null;
 
 		const hyphenIndex = parts.indexOf("-");

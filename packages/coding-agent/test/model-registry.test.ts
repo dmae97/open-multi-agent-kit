@@ -34,7 +34,7 @@ describe("ModelRegistry", () => {
 			baseUrl,
 			apiKey: "TEST_KEY",
 			api,
-			models: models.map((m) => ({
+			models: models.map(m => ({
 				id: m.id,
 				name: m.name ?? m.id,
 				reasoning: false,
@@ -51,7 +51,7 @@ describe("ModelRegistry", () => {
 	}
 
 	function getModelsForProvider(registry: ModelRegistry, provider: string) {
-		return registry.getAll().filter((m) => m.provider === provider);
+		return registry.getAll().filter(m => m.provider === provider);
 	}
 
 	/** Create a baseUrl-only override (no custom models) */
@@ -75,7 +75,7 @@ describe("ModelRegistry", () => {
 
 			// Should have multiple built-in models, not just one
 			expect(anthropicModels.length).toBeGreaterThan(1);
-			expect(anthropicModels.some((m) => m.id.includes("claude"))).toBe(true);
+			expect(anthropicModels.some(m => m.id.includes("claude"))).toBe(true);
 		});
 
 		test("overriding baseUrl changes URL on all built-in models", async () => {
@@ -244,7 +244,7 @@ describe("ModelRegistry", () => {
 
 			const anthropicModels = getModelsForProvider(registry, "anthropic");
 			expect(anthropicModels.length).toBeGreaterThan(1);
-			expect(anthropicModels.some((m) => m.id.includes("claude"))).toBe(true);
+			expect(anthropicModels.some(m => m.id.includes("claude"))).toBe(true);
 		});
 	});
 });

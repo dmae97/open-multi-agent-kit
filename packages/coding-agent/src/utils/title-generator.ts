@@ -1,7 +1,6 @@
 /**
  * Generate session titles using a smol, fast model.
  */
-
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { completeSimple } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
@@ -21,7 +20,7 @@ function getTitleModelCandidates(registry: ModelRegistry, savedSmolModel?: strin
 	const candidates: Model<Api>[] = [];
 	const addCandidate = (model?: Model<Api>): void => {
 		if (!model) return;
-		const exists = candidates.some((candidate) => candidate.provider === model.provider && candidate.id === model.id);
+		const exists = candidates.some(candidate => candidate.provider === model.provider && candidate.id === model.id);
 		if (!exists) {
 			candidates.push(model);
 		}
@@ -30,17 +29,17 @@ function getTitleModelCandidates(registry: ModelRegistry, savedSmolModel?: strin
 	if (savedSmolModel) {
 		const parsed = parseModelString(savedSmolModel);
 		if (parsed) {
-			const match = availableModels.find((model) => model.provider === parsed.provider && model.id === parsed.id);
+			const match = availableModels.find(model => model.provider === parsed.provider && model.id === parsed.id);
 			addCandidate(match);
 		}
 	}
 
 	for (const pattern of SMOL_MODEL_PRIORITY) {
 		const needle = pattern.toLowerCase();
-		const exactMatch = availableModels.find((model) => model.id.toLowerCase() === needle);
+		const exactMatch = availableModels.find(model => model.id.toLowerCase() === needle);
 		addCandidate(exactMatch);
 
-		const fuzzyMatch = availableModels.find((model) => model.id.toLowerCase().includes(needle));
+		const fuzzyMatch = availableModels.find(model => model.id.toLowerCase().includes(needle));
 		addCandidate(fuzzyMatch);
 	}
 

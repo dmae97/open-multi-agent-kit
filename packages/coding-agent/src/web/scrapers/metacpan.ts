@@ -183,7 +183,7 @@ function formatModuleMarkdown(module: ModuleResponse, release: ReleaseResponse |
 
 		// Show runtime dependencies
 		const runtimeDeps = release.dependency?.filter(
-			(d) => d.phase === "runtime" && d.relationship === "requires" && d.module !== "perl",
+			d => d.phase === "runtime" && d.relationship === "requires" && d.module !== "perl",
 		);
 		if (runtimeDeps?.length) {
 			md += `\n## Dependencies\n\n`;
@@ -233,7 +233,7 @@ function formatReleaseMarkdown(release: ReleaseResponse): string {
 
 	// Show runtime dependencies
 	const runtimeDeps = release.dependency?.filter(
-		(d) => d.phase === "runtime" && d.relationship === "requires" && d.module !== "perl",
+		d => d.phase === "runtime" && d.relationship === "requires" && d.module !== "perl",
 	);
 	if (runtimeDeps?.length) {
 		md += `\n## Dependencies\n\n`;

@@ -4,7 +4,6 @@
  * Applies parsed diff hunks to file content using fuzzy matching
  * for robust handling of whitespace and formatting differences.
  */
-
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { resolveToCwd } from "../tools/path-utils";
@@ -204,14 +203,14 @@ function adjustLinesIndentation(patternLines: string[], actualLines: string[], n
 		deltas.push(aIndent - pIndent);
 	}
 
-	if (deltas.length > 0 && deltas.every((value) => value === deltas[0])) {
+	if (deltas.length > 0 && deltas.every(value => value === deltas[0])) {
 		delta = deltas[0];
 	}
 
 	// Track which actual lines we've used to handle duplicate content correctly
 	const usedActualLines = new Map<string, number>(); // trimmed content -> count used
 
-	return newLines.map((newLine) => {
+	return newLines.map(newLine => {
 		if (newLine.trim().length === 0) {
 			return newLine;
 		}
@@ -277,7 +276,7 @@ function trimCommonContext(oldLines: string[], newLines: string[]): HunkVariant 
 }
 
 function collapseConsecutiveSharedLines(oldLines: string[], newLines: string[]): HunkVariant | undefined {
-	const shared = new Set(oldLines.filter((line) => newLines.includes(line)));
+	const shared = new Set(oldLines.filter(line => newLines.includes(line)));
 	const collapse = (lines: string[]): string[] => {
 		const out: string[] = [];
 		let i = 0;
@@ -302,7 +301,7 @@ function collapseConsecutiveSharedLines(oldLines: string[], newLines: string[]):
 }
 
 function collapseRepeatedBlocks(oldLines: string[], newLines: string[]): HunkVariant | undefined {
-	const shared = new Set(oldLines.filter((line) => newLines.includes(line)));
+	const shared = new Set(oldLines.filter(line => newLines.includes(line)));
 	const collapse = (lines: string[]): string[] => {
 		const output = [...lines];
 		let changed = false;
@@ -313,7 +312,7 @@ function collapseRepeatedBlocks(oldLines: string[], newLines: string[]): HunkVar
 				const first = output.slice(i, i + size);
 				const second = output.slice(i + size, i + size * 2);
 				if (first.length !== second.length || first.length === 0) continue;
-				if (!first.every((line) => shared.has(line))) continue;
+				if (!first.every(line => shared.has(line))) continue;
 				let same = true;
 				for (let idx = 0; idx < size; idx++) {
 					if (first[idx] !== second[idx]) {
@@ -379,7 +378,7 @@ function buildFallbackVariants(hunk: DiffHunk): HunkVariant[] {
 	if (singleLine) variants.push(singleLine);
 
 	const seen = new Set<string>();
-	return variants.filter((variant) => {
+	return variants.filter(variant => {
 		if (variant.oldLines.length === 0 && variant.newLines.length === 0) return false;
 		const key = `${variant.oldLines.join("\n")}||${variant.newLines.join("\n")}`;
 		if (seen.has(key)) return false;
@@ -443,8 +442,8 @@ function findHierarchicalContext(
 	if (context.includes("\n")) {
 		const parts = context
 			.split("\n")
-			.map((p) => p.trim())
-			.filter((p) => p.length > 0);
+			.map(p => p.trim())
+			.filter(p => p.length > 0);
 		let currentStart = startFrom;
 
 		for (let i = 0; i < parts.length; i++) {
@@ -488,7 +487,7 @@ function findHierarchicalContext(
 	}
 
 	// Try literal context first
-	const spaceParts = context.split(/\s+/).filter((p) => p.length > 0);
+	const spaceParts = context.split(/\s+/).filter(p => p.length > 0);
 	const hasSignatureChars = /[(){}[\]]/.test(context);
 	if (!hasSignatureChars && spaceParts.length > 2) {
 		const outer = spaceParts.slice(0, -1).join(" ");
@@ -899,7 +898,7 @@ function computeReplacements(
 			for (const variant of buildFallbackVariants(hunk)) {
 				if (variant.oldLines.length !== 1 || variant.newLines.length !== 1) continue;
 				const removedLine = variant.oldLines[0];
-				const hasSharedDuplicate = hunk.newLines.some((line) => line.trim() === removedLine.trim());
+				const hasSharedDuplicate = hunk.newLines.some(line => line.trim() === removedLine.trim());
 				const adjacentIndex = findContextRelativeMatch(
 					originalLines,
 					removedLine,
@@ -922,7 +921,7 @@ function computeReplacements(
 				if (line.trim() === trimmed) occurrenceCount++;
 			}
 			if (occurrenceCount > 1) {
-				const hasSharedDuplicate = hunk.newLines.some((line) => line.trim() === trimmed);
+				const hasSharedDuplicate = hunk.newLines.some(line => line.trim() === trimmed);
 				const contextMatch = findContextRelativeMatch(originalLines, pattern[0], contextIndex, hasSharedDuplicate);
 				if (contextMatch !== undefined) {
 					searchResult = { index: contextMatch, confidence: searchResult.confidence ?? 0.95 };

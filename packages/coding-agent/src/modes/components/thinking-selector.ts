@@ -26,7 +26,7 @@ export class ThinkingSelectorComponent extends Container {
 	) {
 		super();
 
-		const thinkingLevels: SelectItem[] = availableLevels.map((level) => ({
+		const thinkingLevels: SelectItem[] = availableLevels.map(level => ({
 			value: level,
 			label: level,
 			description: LEVEL_DESCRIPTIONS[level],
@@ -39,12 +39,12 @@ export class ThinkingSelectorComponent extends Container {
 		this.selectList = new SelectList(thinkingLevels, thinkingLevels.length, getSelectListTheme());
 
 		// Preselect current level
-		const currentIndex = thinkingLevels.findIndex((item) => item.value === currentLevel);
+		const currentIndex = thinkingLevels.findIndex(item => item.value === currentLevel);
 		if (currentIndex !== -1) {
 			this.selectList.setSelectedIndex(currentIndex);
 		}
 
-		this.selectList.onSelect = (item) => {
+		this.selectList.onSelect = item => {
 			onSelect(item.value as ThinkingLevel);
 		};
 

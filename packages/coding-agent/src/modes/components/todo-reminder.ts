@@ -20,7 +20,7 @@ export class TodoReminderComponent extends Container {
 
 		this.addChild(new Spacer(1));
 
-		this.box = new Box(1, 1, (t) => theme.inverse(theme.fg("warning", t)));
+		this.box = new Box(1, 1, t => theme.inverse(theme.fg("warning", t)));
 		this.addChild(this.box);
 
 		this.rebuild();
@@ -36,7 +36,7 @@ export class TodoReminderComponent extends Container {
 		this.box.addChild(new Text(header, 0, 0));
 		this.box.addChild(new Spacer(1));
 
-		const todoList = this.todos.map((t) => `  ${theme.checkbox.unchecked} ${t.content}`).join("\n");
+		const todoList = this.todos.map(t => `  ${theme.checkbox.unchecked} ${t.content}`).join("\n");
 		this.box.addChild(new Text(theme.italic(todoList), 0, 0));
 	}
 }

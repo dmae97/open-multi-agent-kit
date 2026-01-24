@@ -6,7 +6,6 @@
  * - Registering providers (where to find it)
  * - Loading items for a capability across all providers
  */
-
 import * as os from "node:os";
 import * as path from "node:path";
 import { clearCache as clearFsCache, cacheStats as fsCacheStats, invalidate as invalidateFs } from "./fs";
@@ -81,7 +80,7 @@ export function registerProvider<T>(capabilityId: string, provider: Provider<T>)
 
 	// Insert in priority order (highest first)
 	const providers = capability.providers as Provider<T>[];
-	const idx = providers.findIndex((p) => p.priority < provider.priority);
+	const idx = providers.findIndex(p => p.priority < provider.priority);
 	if (idx === -1) {
 		providers.push(provider);
 	} else {
@@ -107,7 +106,7 @@ async function loadImpl<T>(
 	const contributingProviders: string[] = [];
 
 	const results = await Promise.all(
-		providers.map(async (provider) => {
+		providers.map(async provider => {
 			try {
 				const result = await provider.load(ctx);
 				return { provider, result };
@@ -128,7 +127,7 @@ async function loadImpl<T>(
 		if (!result) continue;
 
 		if (result.warnings) {
-			allWarnings.push(...result.warnings.map((w) => `[${provider.displayName}] ${w}`));
+			allWarnings.push(...result.warnings.map(w => `[${provider.displayName}] ${w}`));
 		}
 
 		if (result.items.length > 0) {
@@ -190,15 +189,15 @@ async function loadImpl<T>(
  * Filter providers based on options and disabled state.
  */
 function filterProviders<T>(capability: Capability<T>, options: LoadOptions): Provider<T>[] {
-	let providers = (capability.providers as Provider<T>[]).filter((p) => !disabledProviders.has(p.id));
+	let providers = (capability.providers as Provider<T>[]).filter(p => !disabledProviders.has(p.id));
 
 	if (options.providers) {
 		const allowed = new Set(options.providers);
-		providers = providers.filter((p) => allowed.has(p.id));
+		providers = providers.filter(p => allowed.has(p.id));
 	}
 	if (options.excludeProviders) {
 		const excluded = new Set(options.excludeProviders);
-		providers = providers.filter((p) => !excluded.has(p.id));
+		providers = providers.filter(p => !excluded.has(p.id));
 	}
 
 	return providers;
@@ -321,7 +320,7 @@ export function getCapabilityInfo(capabilityId: string): CapabilityInfo | undefi
 		id: capability.id,
 		displayName: capability.displayName,
 		description: capability.description,
-		providers: capability.providers.map((p) => ({
+		providers: capability.providers.map(p => ({
 			id: p.id,
 			displayName: p.displayName,
 			description: p.description,
@@ -335,7 +334,7 @@ export function getCapabilityInfo(capabilityId: string): CapabilityInfo | undefi
  * Get all capabilities info for UI display.
  */
 export function getAllCapabilitiesInfo(): CapabilityInfo[] {
-	return listCapabilities().map((id) => getCapabilityInfo(id)!);
+	return listCapabilities().map(id => getCapabilityInfo(id)!);
 }
 
 /**
@@ -350,7 +349,7 @@ export function getProviderInfo(providerId: string): ProviderInfo | undefined {
 	let priority = 0;
 	for (const capId of caps) {
 		const cap = capabilities.get(capId);
-		const provider = cap?.providers.find((p) => p.id === providerId);
+		const provider = cap?.providers.find(p => p.id === providerId);
 		if (provider) {
 			priority = provider.priority;
 			break;

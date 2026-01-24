@@ -25,7 +25,6 @@
  * });
  * ```
  */
-
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool, type ThinkingLevel } from "@oh-my-pi/pi-agent-core";
@@ -253,7 +252,7 @@ export async function discoverAuthStorage(agentDir: string = getDefaultAgentDir(
 	const primaryPath = path.join(agentDir, "auth.json");
 	// Get all auth.json paths (user-level only), excluding the primary
 	const allPaths = getConfigDirPaths("auth.json", { project: false });
-	const fallbackPaths = allPaths.filter((p) => p !== primaryPath);
+	const fallbackPaths = allPaths.filter(p => p !== primaryPath);
 
 	logger.debug("discoverAuthStorage", { agentDir, primaryPath, allPaths, fallbackPaths });
 
@@ -296,7 +295,7 @@ export function discoverModels(authStorage: AuthStorage, agentDir: string = getD
 	const yamlPaths = getConfigDirPaths("models.yml", { project: false });
 	const jsonPaths = getConfigDirPaths("models.json", { project: false });
 	const allPaths = [...yamlPaths, ...jsonPaths];
-	const existenceResults = allPaths.map((p) => {
+	const existenceResults = allPaths.map(p => {
 		return { p, exists: fs.existsSync(p) };
 	});
 	const fallbackPaths = existenceResults.filter(({ p, exists }) => p !== primaryPath && exists).map(({ p }) => p);
@@ -524,7 +523,7 @@ function customToolToDefinition(tool: CustomTool): ToolDefinition {
 }
 
 function createCustomToolsExtension(tools: CustomTool[]): ExtensionFactory {
-	return (api) => {
+	return api => {
 		for (const tool of tools) {
 			api.registerTool(customToolToDefinition(tool));
 		}
@@ -659,9 +658,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	if (!model) {
 		const allModels = modelRegistry.getAll();
 		const keyResults = await Promise.all(
-			allModels.map(async (m) => ({ model: m, hasKey: !!(await modelRegistry.getApiKey(m, sessionId)) })),
+			allModels.map(async m => ({ model: m, hasKey: !!(await modelRegistry.getApiKey(m, sessionId)) })),
 		);
-		model = keyResults.find((r) => r.hasKey)?.model;
+		model = keyResults.find(r => r.hasKey)?.model;
 		time("findAvailableModel");
 		if (model) {
 			if (modelFallbackMessage) {
@@ -784,7 +783,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const customTools: CustomTool[] = [];
 	if (enableMCP) {
 		const mcpResult = await discoverAndLoadMCPTools(cwd, {
-			onConnecting: (serverNames) => {
+			onConnecting: serverNames => {
 				if (options.hasUI && serverNames.length > 0) {
 					process.stderr.write(
 						chalk.gray(`Connecting to MCP servers: ${serverNames.join(", ")}...
@@ -813,7 +812,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 		if (mcpResult.tools.length > 0) {
 			// MCP tools are LoadedCustomTool, extract the tool property
-			customTools.push(...mcpResult.tools.map((loaded) => loaded.tool));
+			customTools.push(...mcpResult.tools.map(loaded => loaded.tool));
 		}
 	}
 
@@ -832,7 +831,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			enableCompany: exaSettings.enableCompany,
 		});
 		// Filter out the base web_search (already in built-in tools), add specialized Exa tools
-		const specializedTools = exaWebSearchTools.filter((t) => t.name !== "web_search");
+		const specializedTools = exaWebSearchTools.filter(t => t.name !== "web_search");
 		if (specializedTools.length > 0) {
 			customTools.push(...specializedTools);
 		}
@@ -922,7 +921,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const registeredTools = extensionRunner?.getAllRegisteredTools() ?? [];
 	const allCustomTools = [
 		...registeredTools,
-		...(options.customTools?.map((tool) => {
+		...(options.customTools?.map(tool => {
 			const definition = isCustomTool(tool) ? customToolToDefinition(tool) : tool;
 			return { definition, extensionPath: "<sdk>" };
 		}) ?? []),
@@ -952,7 +951,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		cwd,
 		tools: toolRegistry,
 		getToolContext: () => toolContextStore.getContext(),
-		emitEvent: (event) => cursorEventEmitter?.(event),
+		emitEvent: event => cursorEventEmitter?.(event),
 	});
 
 	const rebuildSystemPrompt = async (toolNames: string[], tools: Map<string, AgentTool>): Promise<string> => {
@@ -1002,16 +1001,14 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			return converted;
 		}
 		// Filter out ImageContent from all messages, replacing with text placeholder
-		return converted.map((msg) => {
+		return converted.map(msg => {
 			if (msg.role === "user" || msg.role === "toolResult") {
 				const content = msg.content;
 				if (Array.isArray(content)) {
-					const hasImages = content.some((c) => c.type === "image");
+					const hasImages = content.some(c => c.type === "image");
 					if (hasImages) {
 						const filteredContent = content
-							.map((c) =>
-								c.type === "image" ? { type: "text" as const, text: "Image reading is disabled." } : c,
-							)
+							.map(c => (c.type === "image" ? { type: "text" as const, text: "Image reading is disabled." } : c))
 							.filter(
 								(c, i, arr) =>
 									// Dedupe consecutive "Image reading is disabled." texts
@@ -1045,7 +1042,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		convertToLlm: convertToLlmWithBlockImages,
 		sessionId: sessionManager.getSessionId(),
 		transformContext: extensionRunner
-			? async (messages) => {
+			? async messages => {
 					return extensionRunner.emitContext(messages);
 				}
 			: undefined,
@@ -1053,7 +1050,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		followUpMode: settingsManager.getFollowUpMode(),
 		interruptMode: settingsManager.getInterruptMode(),
 		thinkingBudgets: settingsManager.getThinkingBudgets(),
-		getToolContext: (tc) => toolContextStore.getContext(tc),
+		getToolContext: tc => toolContextStore.getContext(tc),
 		getApiKey: async () => {
 			const currentModel = agent.state.model;
 			if (!currentModel) {
@@ -1067,7 +1064,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		},
 		cursorExecHandlers,
 	});
-	cursorEventEmitter = (event) => agent.emitExternalEvent(event);
+	cursorEventEmitter = event => agent.emitExternalEvent(event);
 	time("createAgent");
 
 	// Restore messages if session has existing data
@@ -1105,7 +1102,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	if (enableLsp && settingsManager.getLspDiagnosticsOnWrite()) {
 		try {
 			const result = await warmupLspServers(cwd, {
-				onConnecting: (serverNames) => {
+				onConnecting: serverNames => {
 					if (options.hasUI && serverNames.length > 0) {
 						process.stderr.write(chalk.gray(`Starting LSP servers: ${serverNames.join(", ")}...\n`));
 					}

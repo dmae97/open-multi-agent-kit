@@ -12,8 +12,8 @@ import {
 class MockAssistantStream extends EventStream<AssistantMessageEvent, AssistantMessage> {
 	constructor() {
 		super(
-			(event) => event.type === "done" || event.type === "error",
-			(event) => {
+			event => event.type === "done" || event.type === "error",
+			event => {
 				if (event.type === "done") return event.message;
 				if (event.type === "error") return event.error;
 				throw new Error("Unexpected event type");
@@ -84,7 +84,7 @@ describe("Agent", () => {
 		const agent = new Agent();
 
 		let eventCount = 0;
-		const unsubscribe = agent.subscribe((_event) => {
+		const unsubscribe = agent.subscribe(_event => {
 			eventCount++;
 		});
 

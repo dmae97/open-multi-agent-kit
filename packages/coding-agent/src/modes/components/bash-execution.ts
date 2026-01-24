@@ -1,7 +1,6 @@
 /**
  * Component for displaying bash command execution with streaming output.
  */
-
 import { Container, Loader, Spacer, Text, type TUI } from "@oh-my-pi/pi-tui";
 import stripAnsi from "strip-ansi";
 import { getSymbolTheme, theme } from "../../modes/theme/theme";
@@ -48,8 +47,8 @@ export class BashExecutionComponent extends Container {
 		// Loader
 		this.loader = new Loader(
 			ui,
-			(spinner) => theme.fg(colorKey, spinner),
-			(text) => theme.fg("muted", text),
+			spinner => theme.fg(colorKey, spinner),
+			text => theme.fg("muted", text),
 			`Running${theme.format.ellipsis} (esc to cancel)`,
 			getSymbolTheme().spinnerFrames,
 		);
@@ -128,11 +127,11 @@ export class BashExecutionComponent extends Container {
 		if (availableLines.length > 0) {
 			if (this.expanded) {
 				// Show all lines
-				const displayText = availableLines.map((line) => theme.fg("muted", line)).join("\n");
+				const displayText = availableLines.map(line => theme.fg("muted", line)).join("\n");
 				this.contentContainer.addChild(new Text(`\n${displayText}`, 1, 0));
 			} else {
 				// Use shared visual truncation utility, recomputed per render width
-				const styledOutput = previewLogicalLines.map((line) => theme.fg("muted", line)).join("\n");
+				const styledOutput = previewLogicalLines.map(line => theme.fg("muted", line)).join("\n");
 				const previewText = `\n${styledOutput}`;
 				this.contentContainer.addChild({
 					render: (width: number) => {

@@ -555,7 +555,7 @@ function wrapSingleLine(line: string, width: number): string[] {
 	}
 
 	// Trailing whitespace can cause lines to exceed the requested width
-	return wrapped.length > 0 ? wrapped.map((line) => line.trimEnd()) : [""];
+	return wrapped.length > 0 ? wrapped.map(line => line.trimEnd()) : [""];
 }
 
 const PUNCTUATION_REGEX = /[(){}[\]<>.,;:'"!?+\-=*/\\|&%^$#@~`]/;

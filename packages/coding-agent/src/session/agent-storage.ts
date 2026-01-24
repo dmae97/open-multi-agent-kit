@@ -191,8 +191,8 @@ CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
 
 		const settingsInfo = this.db.prepare("PRAGMA table_info(settings)").all() as Array<{ name?: string }>;
 		const hasSettingsTable = settingsInfo.length > 0;
-		const hasKey = settingsInfo.some((column) => column.name === "key");
-		const hasValue = settingsInfo.some((column) => column.name === "value");
+		const hasKey = settingsInfo.some(column => column.name === "key");
+		const hasValue = settingsInfo.some(column => column.name === "value");
 
 		if (!hasSettingsTable) {
 			this.db.exec(`

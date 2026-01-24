@@ -7,7 +7,6 @@
  *   3. OAuth credentials in ~/.omp/agent/agent.db (with expiry check)
  *   4. ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL fallback
  */
-
 import * as os from "node:os";
 import * as path from "node:path";
 import { buildAnthropicHeaders as buildProviderAnthropicHeaders } from "@oh-my-pi/pi-ai";

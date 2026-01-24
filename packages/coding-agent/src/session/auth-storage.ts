@@ -2,7 +2,6 @@
  * Credential storage for API keys and OAuth tokens.
  * Handles loading, saving, and refreshing credentials from agent.db.
  */
-
 import { Buffer } from "node:buffer";
 import * as path from "node:path";
 import {
@@ -94,7 +93,7 @@ const DEFAULT_USAGE_PROVIDERS: UsageProvider[] = [
 ];
 
 const DEFAULT_USAGE_PROVIDER_MAP = new Map<Provider, UsageProvider>(
-	DEFAULT_USAGE_PROVIDERS.map((provider) => [provider.id, provider]),
+	DEFAULT_USAGE_PROVIDERS.map(provider => [provider.id, provider]),
 );
 
 const USAGE_CACHE_PREFIX = "usage_cache:";
@@ -230,7 +229,7 @@ export class AuthStorage {
 		for (const [provider, creds] of Object.entries(data.credentials)) {
 			instance.data.set(
 				provider,
-				creds.map((c) => ({
+				creds.map(c => ({
 					id: c.id,
 					credential:
 						c.type === "api_key"
@@ -255,7 +254,7 @@ export class AuthStorage {
 	serialize(): SerializedAuthStorage {
 		const credentials: SerializedAuthStorage["credentials"] = {};
 		for (const [provider, creds] of this.data.entries()) {
-			credentials[provider] = creds.map((c) => ({
+			credentials[provider] = creds.map(c => ({
 				id: c.id,
 				type: c.credential.type,
 				data: c.credential.type === "api_key" ? { key: c.credential.key } : { ...c.credential },
@@ -425,7 +424,7 @@ export class AuthStorage {
 				deduped.push(credential);
 				continue;
 			}
-			if (identifiers.some((identifier) => seen.has(identifier))) {
+			if (identifiers.some(identifier => seen.has(identifier))) {
 				continue;
 			}
 			for (const identifier of identifiers) {
@@ -452,7 +451,7 @@ export class AuthStorage {
 				kept.push(entry);
 				continue;
 			}
-			if (identifiers.some((identifier) => seen.has(identifier))) {
+			if (identifiers.some(identifier => seen.has(identifier))) {
 				removed.push(entry);
 				continue;
 			}
@@ -472,7 +471,7 @@ export class AuthStorage {
 
 	/** Returns all credentials for a provider as an array */
 	private getCredentialsForProvider(provider: string): AuthCredential[] {
-		return this.getStoredCredentials(provider).map((entry) => entry.credential);
+		return this.getStoredCredentials(provider).map(entry => entry.credential);
 	}
 
 	/** Composite key for round-robin tracking: "anthropic:oauth" or "openai:api_key" */
@@ -660,7 +659,7 @@ export class AuthStorage {
 		const stored = this.storage.replaceAuthCredentialsForProvider(provider, deduped);
 		this.setStoredCredentials(
 			provider,
-			stored.map((record) => ({ id: record.id, credential: record.credential })),
+			stored.map(record => ({ id: record.id, credential: record.credential })),
 		);
 		this.resetProviderAssignments(provider);
 	}
@@ -704,7 +703,7 @@ export class AuthStorage {
 	 * Check if OAuth credentials are configured for a provider.
 	 */
 	hasOAuth(provider: string): boolean {
-		return this.getCredentialsForProvider(provider).some((credential) => credential.type === "oauth");
+		return this.getCredentialsForProvider(provider).some(credential => credential.type === "oauth");
 	}
 
 	/**
@@ -722,7 +721,7 @@ export class AuthStorage {
 	getAll(): AuthStorageData {
 		const result: AuthStorageData = {};
 		for (const [provider, entries] of this.data.entries()) {
-			const credentials = entries.map((entry) => entry.credential);
+			const credentials = entries.map(entry => entry.credential);
 			if (credentials.length === 1) {
 				result[provider] = credentials[0];
 			} else if (credentials.length > 1) {
@@ -773,7 +772,7 @@ export class AuthStorage {
 				break;
 			case "cursor":
 				credentials = await loginCursor(
-					(url) => ctrl.onAuth({ url }),
+					url => ctrl.onAuth({ url }),
 					ctrl.onProgress ? () => ctrl.onProgress?.("Waiting for browser authentication...") : undefined,
 				);
 				break;
@@ -847,7 +846,7 @@ export class AuthStorage {
 		if (username) identifiers.push(`account:${username}`);
 		const scopeAccountId = this.getUsageReportScopeAccountId(report);
 		if (scopeAccountId) identifiers.push(`account:${scopeAccountId}`);
-		return identifiers.map((identifier) => `${report.provider}:${identifier.toLowerCase()}`);
+		return identifiers.map(identifier => `${report.provider}:${identifier.toLowerCase()}`);
 	}
 
 	private mergeUsageReportGroup(reports: UsageReport[]): UsageReport {
@@ -859,7 +858,7 @@ export class AuthStorage {
 		});
 		const base = sorted[0];
 		const mergedLimits = [...base.limits];
-		const limitIds = new Set(mergedLimits.map((limit) => limit.id));
+		const limitIds = new Set(mergedLimits.map(limit => limit.id));
 		const mergedMetadata: Record<string, unknown> = { ...(base.metadata ?? {}) };
 		let fetchedAt = base.fetchedAt;
 
@@ -912,7 +911,7 @@ export class AuthStorage {
 			}
 		}
 
-		const deduped = groups.map((group) => this.mergeUsageReportGroup(group));
+		const deduped = groups.map(group => this.mergeUsageReportGroup(group));
 		if (deduped.length !== reports.length) {
 			this.usageLogger?.debug("Usage reports deduped", {
 				before: reports.length,
@@ -935,7 +934,7 @@ export class AuthStorage {
 
 	/** Returns true if usage indicates rate limit has been reached. */
 	private isUsageLimitReached(report: UsageReport): boolean {
-		return report.limits.some((limit) => this.isUsageLimitExhausted(limit));
+		return report.limits.some(limit => this.isUsageLimitExhausted(limit));
 	}
 
 	/** Extracts the earliest reset timestamp from exhausted windows (in ms). */
@@ -1000,10 +999,7 @@ export class AuthStorage {
 		if (!resolver || !cache) return null;
 
 		const tasks: Array<Promise<UsageReport | null>> = [];
-		const providers = new Set<string>([
-			...this.data.keys(),
-			...DEFAULT_USAGE_PROVIDERS.map((provider) => provider.id),
-		]);
+		const providers = new Set<string>([...this.data.keys(), ...DEFAULT_USAGE_PROVIDERS.map(provider => provider.id)]);
 		this.usageLogger?.debug("Usage fetch requested", {
 			providers: Array.from(providers).sort(),
 		});
@@ -1048,7 +1044,7 @@ export class AuthStorage {
 							now: this.usageNow,
 							logger: this.usageLogger,
 						})
-						.catch((error) => {
+						.catch(error => {
 							logger.debug("AuthStorage usage fetch failed", {
 								provider,
 								error: String(error),
@@ -1091,7 +1087,7 @@ export class AuthStorage {
 							now: this.usageNow,
 							logger: this.usageLogger,
 						})
-						.catch((error) => {
+						.catch(error => {
 							logger.debug("AuthStorage usage fetch failed", {
 								provider,
 								error: String(error),
@@ -1107,7 +1103,7 @@ export class AuthStorage {
 		const reports = results.filter((report): report is UsageReport => report !== null);
 		const deduped = this.dedupeUsageReports(reports);
 		this.usageLogger?.debug("Usage fetch resolved", {
-			reports: deduped.map((report) => {
+			reports: deduped.map(report => {
 				const accountLabel =
 					this.getUsageReportMetadataValue(report, "email") ??
 					this.getUsageReportMetadataValue(report, "accountId") ??
@@ -1164,7 +1160,7 @@ export class AuthStorage {
 					entry.credential.type === sessionCredential.type && entry.index !== sessionCredential.index,
 			);
 
-		return remainingCredentials.some((candidate) => !this.isCredentialBlocked(providerKey, candidate.index));
+		return remainingCredentials.some(candidate => !this.isCredentialBlocked(providerKey, candidate.index));
 	}
 
 	/**
@@ -1285,7 +1281,7 @@ export class AuthStorage {
 				error: String(error),
 			});
 			this.removeCredentialAt(provider, selection.index);
-			if (this.getCredentialsForProvider(provider).some((credential) => credential.type === "oauth")) {
+			if (this.getCredentialsForProvider(provider).some(credential => credential.type === "oauth")) {
 				return this.getApiKey(provider, sessionId, options);
 			}
 		}

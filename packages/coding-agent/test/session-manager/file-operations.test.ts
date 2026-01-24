@@ -109,7 +109,7 @@ describe("findMostRecentSession", () => {
 
 		fs.writeFileSync(file1, '{"type":"session","id":"old","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n');
 		// Small delay to ensure different mtime
-		await new Promise((r) => setTimeout(r, 10));
+		await new Promise(r => setTimeout(r, 10));
 		fs.writeFileSync(file2, '{"type":"session","id":"new","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n');
 
 		expect(await findMostRecentSession(tempDir)).toBe(file2);
@@ -120,7 +120,7 @@ describe("findMostRecentSession", () => {
 		const valid = path.join(tempDir, "valid.jsonl");
 
 		fs.writeFileSync(invalid, '{"type":"not-session"}\n');
-		await new Promise((r) => setTimeout(r, 10));
+		await new Promise(r => setTimeout(r, 10));
 		fs.writeFileSync(valid, '{"type":"session","id":"abc","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n');
 
 		expect(await findMostRecentSession(tempDir)).toBe(valid);

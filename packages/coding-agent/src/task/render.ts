@@ -4,7 +4,6 @@
  * Provides renderCall and renderResult functions for displaying
  * task execution in the terminal UI.
  */
-
 import path from "node:path";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Container, Text } from "@oh-my-pi/pi-tui";
@@ -79,7 +78,7 @@ function formatJsonScalar(value: unknown, theme: Theme): string {
 }
 
 function buildTreePrefix(ancestors: boolean[], theme: Theme): string {
-	return ancestors.map((hasNext) => (hasNext ? `${theme.tree.vertical}  ` : "   ")).join("");
+	return ancestors.map(hasNext => (hasNext ? `${theme.tree.vertical}  ` : "   ")).join("");
 }
 
 function renderJsonTreeLines(
@@ -295,7 +294,7 @@ function formatArgsInline(args: Record<string, string>, theme: Theme): string {
 
 /** Convert snake_case or kebab-case to Title Case */
 function humanizeKey(key: string): string {
-	return key.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+	return key.replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
 function formatScalarInline(value: unknown, maxLen: number, theme: Theme): string {
@@ -512,8 +511,8 @@ function renderAgentProgress(
 			const completeData = progress.extractedToolData.complete as Array<{ data: unknown }> | undefined;
 			const reportFindingData = progress.extractedToolData.report_finding as ReportFindingDetails[] | undefined;
 			const reviewData = completeData
-				?.map((c) => c.data as SubmitReviewDetails)
-				.filter((d) => d && typeof d === "object" && "overall_correctness" in d);
+				?.map(c => c.data as SubmitReviewDetails)
+				.filter(d => d && typeof d === "object" && "overall_correctness" in d);
 			if (reviewData && reviewData.length > 0) {
 				const summary = reviewData[reviewData.length - 1];
 				const findings = reportFindingData ?? [];
@@ -697,8 +696,8 @@ function renderAgentResult(result: SingleResult, isLast: boolean, expanded: bool
 
 	// Extract review verdict from complete tool's data field if it matches SubmitReviewDetails
 	const reviewData = completeData
-		?.map((c) => c.data as SubmitReviewDetails)
-		.filter((d) => d && typeof d === "object" && "overall_correctness" in d);
+		?.map(c => c.data as SubmitReviewDetails)
+		.filter(d => d && typeof d === "object" && "overall_correctness" in d);
 	const submitReviewData = reviewData && reviewData.length > 0 ? reviewData : undefined;
 
 	if (submitReviewData && submitReviewData.length > 0) {
@@ -775,12 +774,12 @@ export function renderResult(
 	theme: Theme,
 ): Component {
 	const { expanded, isPartial, spinnerFrame } = options;
-	const fallbackText = result.content.find((c) => c.type === "text")?.text ?? "";
+	const fallbackText = result.content.find(c => c.type === "text")?.text ?? "";
 	const details = result.details;
 
 	if (!details) {
 		// Fallback to simple text
-		const text = result.content.find((c) => c.type === "text")?.text || "";
+		const text = result.content.find(c => c.type === "text")?.text || "";
 		return new Text(theme.fg("dim", truncate(text, 100, theme.format.ellipsis)), 0, 0);
 	}
 
@@ -800,8 +799,8 @@ export function renderResult(
 		});
 
 		// Summary line
-		const abortedCount = details.results.filter((r) => r.aborted).length;
-		const successCount = details.results.filter((r) => !r.aborted && r.exitCode === 0).length;
+		const abortedCount = details.results.filter(r => r.aborted).length;
+		const successCount = details.results.filter(r => !r.aborted && r.exitCode === 0).length;
 		const failCount = details.results.length - successCount - abortedCount;
 		let summary = `${theme.fg("dim", "Total:")} `;
 		if (abortedCount > 0) {
@@ -829,7 +828,7 @@ export function renderResult(
 	if (fallbackText.trim()) {
 		const summaryLines = fallbackText.split("\n");
 		const markerIndex = summaryLines.findIndex(
-			(line) => line.includes("<system-notification>") || line.startsWith("Applied patches:"),
+			line => line.includes("<system-notification>") || line.startsWith("Applied patches:"),
 		);
 		if (markerIndex >= 0) {
 			const extra = summaryLines.slice(markerIndex);
@@ -840,7 +839,7 @@ export function renderResult(
 		}
 	}
 
-	const indented = lines.map((line) => (line.length > 0 ? `   ${line}` : ""));
+	const indented = lines.map(line => (line.length > 0 ? `   ${line}` : ""));
 	return new Text(indented.join("\n"), 0, 0);
 }
 

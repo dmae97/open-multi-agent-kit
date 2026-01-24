@@ -1,7 +1,6 @@
 /**
  * Render file listings with optional icons and metadata.
  */
-
 import type { Theme } from "../modes/theme/theme";
 import { getLanguageFromPath } from "../modes/theme/theme";
 import { renderTreeList } from "./tree-list";
@@ -28,7 +27,7 @@ export function renderFileList(options: FileListOptions, theme: Theme): string[]
 			expanded,
 			maxCollapsed,
 			itemType: "file",
-			renderItem: (entry) => {
+			renderItem: entry => {
 				const isDirectory = entry.isDirectory ?? entry.path.endsWith("/");
 				const displayPath = isDirectory && entry.path.endsWith("/") ? entry.path : entry.path;
 				const lang = isDirectory ? undefined : getLanguageFromPath(displayPath);

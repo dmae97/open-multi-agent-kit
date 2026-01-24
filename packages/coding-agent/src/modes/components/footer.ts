@@ -4,7 +4,6 @@ import type { AssistantMessage } from "@oh-my-pi/pi-ai";
 import { type Component, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
 import { isEnoent } from "@oh-my-pi/pi-utils";
 import { theme } from "../../modes/theme/theme";
-
 import type { AgentSession } from "../../session/agent-session";
 import { shortenPath } from "../../tools/render-utils";
 
@@ -89,7 +88,7 @@ export class FooterComponent implements Component {
 			this.gitWatcher = null;
 		}
 
-		findGitHeadPath().then((result) => {
+		findGitHeadPath().then(result => {
 			if (!result) {
 				return;
 			}
@@ -134,7 +133,7 @@ export class FooterComponent implements Component {
 
 		// Note: fire-and-forget async call - will return undefined on first call
 		// This is acceptable since it's a cached value that will update on next render
-		findGitHeadPath().then((result) => {
+		findGitHeadPath().then(result => {
 			if (!result) {
 				this.cachedBranch = null;
 				if (this.onBranchChange) {
@@ -182,7 +181,7 @@ export class FooterComponent implements Component {
 		const lastAssistantMessage = state.messages
 			.slice()
 			.reverse()
-			.find((m) => m.role === "assistant" && m.stopReason !== "aborted") as AssistantMessage | undefined;
+			.find(m => m.role === "assistant" && m.stopReason !== "aborted") as AssistantMessage | undefined;
 
 		// Calculate context percentage from last message (input + output + cacheRead + cacheWrite)
 		const contextTokens = lastAssistantMessage

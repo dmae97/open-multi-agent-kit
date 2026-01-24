@@ -141,7 +141,7 @@ export class OutputSink {
 		};
 
 		return new WritableStream<Uint8Array | string>({
-			write: async (chunk) => {
+			write: async chunk => {
 				if (typeof chunk === "string") {
 					await this.push(chunk);
 				} else {

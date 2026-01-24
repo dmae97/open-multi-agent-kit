@@ -3,7 +3,6 @@
  *
  * Shows how to replace or modify the default system prompt.
  */
-
 import { createAgentSession, SessionManager } from "@oh-my-pi/pi-coding-agent";
 
 // Option 1: Replace prompt entirely
@@ -13,7 +12,7 @@ Always end responses with "Arrr!"`,
 	sessionManager: SessionManager.inMemory(),
 });
 
-session1.subscribe((event) => {
+session1.subscribe(event => {
 	if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
 		process.stdout.write(event.assistantMessageEvent.delta);
 	}
@@ -25,7 +24,7 @@ console.log("\n");
 
 // Option 2: Modify default prompt (receives default, returns modified)
 const { session: session2 } = await createAgentSession({
-	systemPrompt: (defaultPrompt) => `${defaultPrompt}
+	systemPrompt: defaultPrompt => `${defaultPrompt}
 
 ## Additional Instructions
 - Always be concise
@@ -33,7 +32,7 @@ const { session: session2 } = await createAgentSession({
 	sessionManager: SessionManager.inMemory(),
 });
 
-session2.subscribe((event) => {
+session2.subscribe(event => {
 	if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
 		process.stdout.write(event.assistantMessageEvent.delta);
 	}

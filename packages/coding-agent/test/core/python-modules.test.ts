@@ -42,16 +42,16 @@ describe("python modules", () => {
 		await writeModule(path.join(cwd, ".pi", "modules"), "gamma.py", "project-pi");
 
 		const modules = await discoverPythonModules({ cwd, homeDir });
-		const names = modules.map((module) => path.basename(module.path));
+		const names = modules.map(module => path.basename(module.path));
 		expect(names).toEqual(["alpha.py", "beta.py", "delta.py", "gamma.py"]);
-		expect(modules.map((module) => ({ name: path.basename(module.path), source: module.source }))).toEqual([
+		expect(modules.map(module => ({ name: path.basename(module.path), source: module.source }))).toEqual([
 			{ name: "alpha.py", source: "project" },
 			{ name: "beta.py", source: "project" },
 			{ name: "delta.py", source: "user" },
 			{ name: "gamma.py", source: "project" },
 		]);
-		expect(modules.find((module) => module.path.endsWith("alpha.py"))?.content).toContain("project-omp");
-		expect(modules.find((module) => module.path.endsWith("delta.py"))?.content).toContain("user-pi");
+		expect(modules.find(module => module.path.endsWith("alpha.py"))?.content).toContain("project-omp");
+		expect(modules.find(module => module.path.endsWith("delta.py"))?.content).toContain("user-pi");
 	});
 
 	it("loads modules in sorted order with silent execution", async () => {
@@ -72,7 +72,7 @@ describe("python modules", () => {
 		};
 
 		await loadPythonModules(executor, { cwd, homeDir });
-		expect(calls.map((call) => call.name)).toEqual(["alpha", "beta"]);
+		expect(calls.map(call => call.name)).toEqual(["alpha", "beta"]);
 		for (const call of calls) {
 			expect(call.options).toEqual({ silent: true, storeHistory: false });
 		}

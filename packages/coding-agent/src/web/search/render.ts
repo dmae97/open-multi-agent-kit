@@ -3,7 +3,6 @@
  *
  * Tree-based rendering with collapsed/expanded states for web search results.
  */
-
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import type { RenderResultOptions } from "../../extensibility/custom-tools/types";
@@ -34,9 +33,9 @@ const MAX_QUERY_LEN = 90;
 const MAX_REQUEST_ID_LEN = 36;
 
 function renderFallbackText(contentText: string, expanded: boolean, theme: Theme): Component {
-	const lines = contentText.split("\n").filter((line) => line.trim());
+	const lines = contentText.split("\n").filter(line => line.trim());
 	const maxLines = expanded ? lines.length : 6;
-	const displayLines = lines.slice(0, maxLines).map((line) => truncate(line.trim(), 110, theme.format.ellipsis));
+	const displayLines = lines.slice(0, maxLines).map(line => truncate(line.trim(), 110, theme.format.ellipsis));
 	const remaining = lines.length - displayLines.length;
 
 	const headerIcon = formatStatusIcon("warning", theme);
@@ -81,7 +80,7 @@ export function renderWebSearchResult(
 		return new Text(theme.fg("error", `Error: ${details.error}`), 0, 0);
 	}
 
-	const rawText = result.content?.find((block) => block.type === "text")?.text?.trim() ?? "";
+	const rawText = result.content?.find(block => block.type === "text")?.text?.trim() ?? "";
 	const response = details?.response;
 	if (!response) {
 		return renderFallbackText(rawText, expanded, theme);
@@ -92,18 +91,18 @@ export function renderWebSearchResult(
 	const citations = Array.isArray(response.citations) ? response.citations : [];
 	const citationCount = citations.length;
 	const related = Array.isArray(response.relatedQuestions)
-		? response.relatedQuestions.filter((item) => typeof item === "string")
+		? response.relatedQuestions.filter(item => typeof item === "string")
 		: [];
 	const relatedCount = related.length;
 	const searchQueries = Array.isArray(response.searchQueries)
-		? response.searchQueries.filter((item) => typeof item === "string")
+		? response.searchQueries.filter(item => typeof item === "string")
 		: [];
 	const provider = response.provider;
 
 	// Get answer text
 	const answerText = typeof response.answer === "string" ? response.answer.trim() : "";
 	const contentText = answerText || rawText;
-	const totalAnswerLines = contentText ? contentText.split("\n").filter((l) => l.trim()).length : 0;
+	const totalAnswerLines = contentText ? contentText.split("\n").filter(l => l.trim()).length : 0;
 	const answerLimit = expanded ? MAX_EXPANDED_ANSWER_LINES : MAX_COLLAPSED_ANSWER_LINES;
 	const answerPreview = contentText
 		? getPreviewLines(contentText, answerLimit, MAX_ANSWER_LINE_LEN, theme.format.ellipsis)
@@ -140,7 +139,7 @@ export function renderWebSearchResult(
 			expanded: true,
 			maxCollapsed: answerLines.length,
 			itemType: "line",
-			renderItem: (line) => (line === "No answer text returned" ? theme.fg("muted", line) : theme.fg("dim", line)),
+			renderItem: line => (line === "No answer text returned" ? theme.fg("muted", line) : theme.fg("dim", line)),
 		},
 		theme,
 	);
@@ -154,7 +153,7 @@ export function renderWebSearchResult(
 			expanded,
 			maxCollapsed: MAX_COLLAPSED_ITEMS,
 			itemType: "source",
-			renderItem: (src) => {
+			renderItem: src => {
 				const titleText =
 					typeof src.title === "string" && src.title.trim()
 						? src.title
@@ -198,8 +197,7 @@ export function renderWebSearchResult(
 			expanded,
 			maxCollapsed: MAX_COLLAPSED_ITEMS,
 			itemType: "question",
-			renderItem: (line) =>
-				theme.fg("muted", line === "No related questions" ? line : `${theme.format.dash} ${line}`),
+			renderItem: line => theme.fg("muted", line === "No related questions" ? line : `${theme.format.dash} ${line}`),
 		},
 		theme,
 	);
@@ -233,7 +231,7 @@ export function renderWebSearchResult(
 	}
 	if (searchQueries.length > 0) {
 		const queriesPreview = searchQueries.slice(0, MAX_QUERY_PREVIEW);
-		const queryList = queriesPreview.map((q) => truncate(q, MAX_QUERY_LEN, theme.format.ellipsis));
+		const queryList = queriesPreview.map(q => truncate(q, MAX_QUERY_LEN, theme.format.ellipsis));
 		const suffix = searchQueries.length > queriesPreview.length ? theme.format.ellipsis : "";
 		metaLines.push(`${theme.fg("muted", "Queries:")} ${theme.fg("text", queryList.join("; "))}${suffix}`);
 	}

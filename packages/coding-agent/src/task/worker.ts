@@ -12,7 +12,6 @@
  * 4. Worker sends { type: "done", exitCode, ... } on completion
  * 5. Parent can send { type: "abort" } to request cancellation
  */
-
 import type { AgentEvent, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { logger, postmortem, untilAborted } from "@oh-my-pi/pi-utils";
@@ -42,7 +41,7 @@ import type {
 
 type PostMessageFn = (message: SubagentWorkerResponse) => void;
 
-const postMessageSafe: PostMessageFn = (message) => {
+const postMessageSafe: PostMessageFn = message => {
 	try {
 		(globalThis as typeof globalThis & { postMessage: PostMessageFn }).postMessage(message);
 	} catch {
@@ -127,11 +126,11 @@ function callMCPToolViaParent(
 	}
 
 	pendingMCPCalls.set(callId, {
-		resolve: (result) => {
+		resolve: result => {
 			cleanup();
 			resolve(result ?? { content: [] });
 		},
-		reject: (error) => {
+		reject: error => {
 			cleanup();
 			reject(error);
 		},
@@ -195,11 +194,11 @@ function callPythonToolViaParent(
 	}
 
 	pendingPythonCalls.set(callId, {
-		resolve: (result) => {
+		resolve: result => {
 			cleanup();
 			resolve(result ?? { content: [] });
 		},
-		reject: (error) => {
+		reject: error => {
 			cleanup();
 			reject(error);
 		},
@@ -255,11 +254,11 @@ function callLspToolViaParent(
 	}
 
 	pendingLspCalls.set(callId, {
-		resolve: (result) => {
+		resolve: result => {
 			cleanup();
 			resolve(result ?? { content: [] });
 		},
-		reject: (error) => {
+		reject: error => {
 			cleanup();
 			reject(error);
 		},
@@ -344,7 +343,7 @@ function createMCPProxyTool(metadata: MCPToolMetadata): CustomTool<TSchema> {
 					metadata.timeoutMs,
 				);
 				return {
-					content: result.content.map((c) =>
+					content: result.content.map(c =>
 						c.type === "text"
 							? { type: "text" as const, text: c.text ?? "" }
 							: { type: "text" as const, text: JSON.stringify(c) },
@@ -386,7 +385,7 @@ function createPythonProxyTool(): CustomTool<typeof pythonSchema> {
 				const result = await callPythonToolViaParent(params as PythonToolParams, signal, timeoutMs);
 				return {
 					content:
-						result?.content?.map((c) =>
+						result?.content?.map(c =>
 							c.type === "text"
 								? { type: "text" as const, text: c.text ?? "" }
 								: { type: "text" as const, text: JSON.stringify(c) },
@@ -419,7 +418,7 @@ function createLspProxyTool(): CustomTool<typeof lspSchema> {
 				const result = await callLspToolViaParent(params as Record<string, unknown>, signal);
 				return {
 					content:
-						result?.content?.map((c) =>
+						result?.content?.map(c =>
 							c.type === "text"
 								? { type: "text" as const, text: c.text ?? "" }
 								: { type: "text" as const, text: JSON.stringify(c) },
@@ -601,7 +600,7 @@ async function runTask(runState: RunState, payload: SubagentWorkerStartPayload):
 			outputSchema: payload.outputSchema,
 			requireCompleteTool: true,
 			// Append system prompt (equivalent to CLI's --append-system-prompt)
-			systemPrompt: (defaultPrompt) =>
+			systemPrompt: defaultPrompt =>
 				`${defaultPrompt}\n\n${payload.systemPrompt}\n\n${worktreeNotice}\n\n${completionInstruction}`,
 			sessionManager,
 			hasUI: false,
@@ -633,14 +632,14 @@ async function runTask(runState: RunState, payload: SubagentWorkerStartPayload):
 				// ExtensionActions
 				{
 					sendMessage: (message, options) => {
-						session.sendCustomMessage(message, options).catch((e) => {
+						session.sendCustomMessage(message, options).catch(e => {
 							logger.error("Extension sendMessage failed", {
 								error: e instanceof Error ? e.message : String(e),
 							});
 						});
 					},
 					sendUserMessage: (content, options) => {
-						session.sendUserMessage(content, options).catch((e) => {
+						session.sendUserMessage(content, options).catch(e => {
 							logger.error("Extension sendUserMessage failed", {
 								error: e instanceof Error ? e.message : String(e),
 							});
@@ -655,14 +654,14 @@ async function runTask(runState: RunState, payload: SubagentWorkerStartPayload):
 					getActiveTools: () => session.getActiveToolNames(),
 					getAllTools: () => session.getAllToolNames(),
 					setActiveTools: (toolNames: string[]) => session.setActiveToolsByName(toolNames),
-					setModel: async (model) => {
+					setModel: async model => {
 						const key = await session.modelRegistry.getApiKey(model);
 						if (!key) return false;
 						await session.setModel(model);
 						return true;
 					},
 					getThinkingLevel: () => session.thinkingLevel,
-					setThinkingLevel: (level) => session.setThinkingLevel(level),
+					setThinkingLevel: level => session.setThinkingLevel(level),
 				},
 				// ExtensionContextActions
 				{
@@ -672,7 +671,7 @@ async function runTask(runState: RunState, payload: SubagentWorkerStartPayload):
 					hasPendingMessages: () => session.queuedMessageCount > 0,
 					shutdown: () => {},
 					getContextUsage: () => session.getContextUsage(),
-					compact: async (instructionsOrOptions) => {
+					compact: async instructionsOrOptions => {
 						const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
 						const options =
 							instructionsOrOptions && typeof instructionsOrOptions === "object"
@@ -682,7 +681,7 @@ async function runTask(runState: RunState, payload: SubagentWorkerStartPayload):
 					},
 				},
 			);
-			extensionRunner.onError((err) => {
+			extensionRunner.onError(err => {
 				logger.error("Extension error", { path: err.extensionPath, error: err.error });
 			});
 			await extensionRunner.emit({ type: "session_start" });
@@ -839,11 +838,11 @@ declare const self: {
 	addEventListener(type: "messageerror", listener: (event: MessageEvent) => void): void;
 };
 
-self.addEventListener("error", (event) => {
+self.addEventListener("error", event => {
 	reportFatal(`Uncaught error: ${event.message || "Unknown error"}`);
 });
 
-self.addEventListener("unhandledrejection", (event) => {
+self.addEventListener("unhandledrejection", event => {
 	const reason = event.reason;
 	const message = reason instanceof Error ? reason.stack || reason.message : String(reason);
 

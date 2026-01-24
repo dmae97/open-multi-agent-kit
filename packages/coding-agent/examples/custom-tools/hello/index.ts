@@ -1,6 +1,6 @@
 import type { CustomToolFactory } from "@oh-my-pi/pi-coding-agent";
 
-const factory: CustomToolFactory = (pi) => ({
+const factory: CustomToolFactory = pi => ({
 	name: "hello",
 	label: "Hello",
 	description: "A simple greeting tool",

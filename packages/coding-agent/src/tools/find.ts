@@ -163,7 +163,7 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 				}
 
 				// Relativize paths
-				const relativized = results.map((p) => {
+				const relativized = results.map(p => {
 					if (p.startsWith(searchPath)) {
 						return p.slice(searchPath.length + 1);
 					}
@@ -330,7 +330,7 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 				const indexed = relativized.map((path, idx) => ({ path, mtime: mtimes[idx] }));
 				indexed.sort((a, b) => b.mtime - a.mtime);
 				relativized.length = 0;
-				relativized.push(...indexed.map((item) => item.path));
+				relativized.push(...indexed.map(item => item.path));
 			}
 
 			const listLimit = applyListLimit(relativized, { limit: effectiveLimit });
@@ -404,12 +404,12 @@ export const findToolRenderer = {
 		const details = result.details;
 
 		if (result.isError || details?.error) {
-			const errorText = details?.error || result.content?.find((c) => c.type === "text")?.text || "Unknown error";
+			const errorText = details?.error || result.content?.find(c => c.type === "text")?.text || "Unknown error";
 			return new Text(formatErrorMessage(errorText, uiTheme), 0, 0);
 		}
 
 		const hasDetailedData = details?.fileCount !== undefined;
-		const textContent = result.content?.find((c) => c.type === "text")?.text;
+		const textContent = result.content?.find(c => c.type === "text")?.text;
 
 		if (!hasDetailedData) {
 			if (
@@ -421,7 +421,7 @@ export const findToolRenderer = {
 				return new Text(formatEmptyMessage("No files found", uiTheme), 0, 0);
 			}
 
-			const lines = textContent.split("\n").filter((l) => l.trim());
+			const lines = textContent.split("\n").filter(l => l.trim());
 			const header = renderStatusLine(
 				{
 					icon: "success",
@@ -437,7 +437,7 @@ export const findToolRenderer = {
 					expanded,
 					maxCollapsed: COLLAPSED_LIST_LIMIT,
 					itemType: "file",
-					renderItem: (line) => uiTheme.fg("accent", line),
+					renderItem: line => uiTheme.fg("accent", line),
 				},
 				uiTheme,
 			);
@@ -467,7 +467,7 @@ export const findToolRenderer = {
 
 		const fileLines = renderFileList(
 			{
-				files: files.map((entry) => ({ path: entry, isDirectory: entry.endsWith("/") })),
+				files: files.map(entry => ({ path: entry, isDirectory: entry.endsWith("/") })),
 				expanded,
 				maxCollapsed: COLLAPSED_LIST_LIMIT,
 			},

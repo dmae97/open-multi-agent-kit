@@ -1,7 +1,6 @@
 /**
  * OpenAI Codex (ChatGPT OAuth) flow
  */
-
 import { OAuthCallbackFlow } from "./callback-server";
 import { generatePKCE } from "./pkce";
 import type { OAuthController, OAuthCredentials } from "./types";

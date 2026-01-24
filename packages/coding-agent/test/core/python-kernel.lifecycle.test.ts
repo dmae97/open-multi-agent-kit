@@ -178,17 +178,15 @@ describe("PythonKernel gateway lifecycle", () => {
 				"--JupyterApp.answer_yes=true",
 			]),
 		);
-		expect(env.fetchCalls.filter((call) => call.url.endsWith("/api/kernelspecs"))).toHaveLength(2);
-		expect(env.fetchCalls.some((call) => call.url.endsWith("/api/kernels") && call.init?.method === "POST")).toBe(
-			true,
-		);
+		expect(env.fetchCalls.filter(call => call.url.endsWith("/api/kernelspecs"))).toHaveLength(2);
+		expect(env.fetchCalls.some(call => call.url.endsWith("/api/kernels") && call.init?.method === "POST")).toBe(true);
 
 		await kernel.interrupt();
-		expect(env.fetchCalls.some((call) => call.url.includes("/interrupt") && call.init?.method === "POST")).toBe(true);
+		expect(env.fetchCalls.some(call => call.url.includes("/interrupt") && call.init?.method === "POST")).toBe(true);
 		expect(FakeWebSocket.instances[0]?.sent.length).toBe(1);
 
 		await kernel.shutdown();
-		expect(env.fetchCalls.some((call) => call.init?.method === "DELETE")).toBe(true);
+		expect(env.fetchCalls.some(call => call.init?.method === "DELETE")).toBe(true);
 		expect(kernel.isAlive()).toBe(false);
 	});
 

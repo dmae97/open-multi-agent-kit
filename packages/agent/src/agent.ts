@@ -2,7 +2,6 @@
  * Agent class that uses the agent-loop directly.
  * No transport abstraction - calls streamSimple via the loop.
  */
-
 import {
 	type AssistantMessage,
 	type CursorExecHandlers,
@@ -34,7 +33,7 @@ import type {
  * Default convertToLlm: Keep only LLM-compatible messages, convert attachments.
  */
 function defaultConvertToLlm(messages: AgentMessage[]): Message[] {
-	return messages.filter((m) => m.role === "user" || m.role === "assistant" || m.role === "toolResult");
+	return messages.filter(m => m.role === "user" || m.role === "assistant" || m.role === "toolResult");
 }
 
 export interface AgentOptions {
@@ -420,7 +419,7 @@ export class Agent {
 		const model = this._state.model;
 		if (!model) throw new Error("No model configured");
 
-		this.runningPrompt = new Promise<void>((resolve) => {
+		this.runningPrompt = new Promise<void>(resolve => {
 			this.resolveRunningPrompt = resolve;
 		});
 
@@ -569,7 +568,7 @@ export class Agent {
 			// Handle any remaining partial message
 			if (partial && partial.role === "assistant" && partial.content.length > 0) {
 				const onlyEmpty = !partial.content.some(
-					(c) =>
+					c =>
 						(c.type === "thinking" && c.thinking.trim().length > 0) ||
 						(c.type === "text" && c.text.trim().length > 0) ||
 						(c.type === "toolCall" && c.name.trim().length > 0),
@@ -655,7 +654,7 @@ export class Agent {
 		}
 
 		// Find the split point: minimum text length at first tool call
-		const splitPoint = Math.min(...buffer.map((r) => r.textLengthAtCall));
+		const splitPoint = Math.min(...buffer.map(r => r.textLengthAtCall));
 
 		// Extract text content from assistant message
 		const content = assistantMessage.content;
@@ -687,7 +686,7 @@ export class Agent {
 		const continuationText = fullText.slice(splitPoint);
 
 		// Create preamble message (text before tools)
-		const preambleContent = content.map((block) => {
+		const preambleContent = content.map(block => {
 			if (block.type === "text") {
 				return { ...block, text: preambleText };
 			}

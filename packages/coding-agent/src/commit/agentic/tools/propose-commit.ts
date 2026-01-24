@@ -71,7 +71,7 @@ function normalizeDetails(
 		user_visible?: boolean;
 	}>,
 ): ConventionalDetail[] {
-	return details.map((detail) => ({
+	return details.map(detail => ({
 		text: detail.text.trim(),
 		changelogCategory: detail.user_visible ? detail.changelog_category : undefined,
 		userVisible: detail.user_visible ?? false,

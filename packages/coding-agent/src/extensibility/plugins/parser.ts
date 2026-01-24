@@ -57,7 +57,7 @@ export function parsePluginSpec(spec: string): ParsedPluginSpec {
 	// Specific features (comma-separated)
 	const features = featureStr
 		.split(",")
-		.map((f) => f.trim())
+		.map(f => f.trim())
 		.filter(Boolean);
 
 	return { packageName, features };

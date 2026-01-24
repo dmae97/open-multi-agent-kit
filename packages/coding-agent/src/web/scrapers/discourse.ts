@@ -157,7 +157,7 @@ export const handleDiscourse: SpecialHandler = async (
 		const fetchedAt = new Date().toISOString();
 
 		const posts: DiscoursePost[] = [...(topic.post_stream?.posts ?? [])];
-		if (requestedPost && !posts.some((post) => post.id === requestedPost?.id)) {
+		if (requestedPost && !posts.some(post => post.id === requestedPost?.id)) {
 			posts.unshift(requestedPost);
 		}
 

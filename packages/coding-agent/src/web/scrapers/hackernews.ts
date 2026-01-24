@@ -29,7 +29,7 @@ async function fetchItem(id: number, timeout: number, signal?: AbortSignal): Pro
 }
 
 async function fetchItems(ids: number[], timeout: number, limit = 20, signal?: AbortSignal): Promise<HNItem[]> {
-	const promises = ids.slice(0, limit).map((id) => fetchItem(id, timeout, signal));
+	const promises = ids.slice(0, limit).map(id => fetchItem(id, timeout, signal));
 	const results = await Promise.all(promises);
 	return results.filter((item): item is HNItem => item !== null && !item.deleted && !item.dead);
 }
@@ -103,7 +103,7 @@ async function renderStory(item: HNItem, timeout: number, depth = 0, signal?: Ab
 				if (comment.text) {
 					const text = decodeHNText(comment.text);
 					const lines = text.split("\n");
-					output += `${lines.map((line) => `${indent}${line}`).join("\n")}\n\n`;
+					output += `${lines.map(line => `${indent}${line}`).join("\n")}\n\n`;
 				}
 
 				if (comment.kids && comment.kids.length > 0 && depth < 1) {

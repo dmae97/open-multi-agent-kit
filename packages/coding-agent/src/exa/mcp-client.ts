@@ -3,11 +3,9 @@
  *
  * Client for interacting with Exa MCP servers.
  */
-
 import * as os from "node:os";
 import { isEnoent, logger } from "@oh-my-pi/pi-utils";
 import type { TSchema } from "@sinclair/typebox";
-
 import type { CustomTool, CustomToolResult } from "../extensibility/custom-tools/types";
 import { callMCP } from "../mcp/json-rpc";
 import type {
@@ -231,7 +229,7 @@ export async function fetchMCPToolSchema(
 
 	try {
 		const tools = isWebsetsTool ? await fetchWebsetsTools(apiKey) : await fetchExaTools(apiKey, [mcpToolName]);
-		const tool = tools.find((t) => t.name === mcpToolName);
+		const tool = tools.find(t => t.name === mcpToolName);
 		if (tool) {
 			mcpSchemaCache.set(cacheKey, tool);
 			return tool;

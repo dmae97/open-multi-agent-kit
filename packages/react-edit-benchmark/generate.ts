@@ -18,12 +18,11 @@
  * - hard: Long files with similar blocks, no location hint
  * - nightmare: Long files where target line repeats, minimal info
  */
-
-import { TempDir } from "@oh-my-pi/pi-utils";
-import { $ } from "bun";
 import * as fs from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { parseArgs } from "node:util";
+import { TempDir } from "@oh-my-pi/pi-utils";
+import { $ } from "bun";
 import { ALL_MUTATIONS, CATEGORY_MAP, type Mutation, type MutationInfo } from "./mutations";
 
 const SCRIPT_DIR = import.meta.dir;

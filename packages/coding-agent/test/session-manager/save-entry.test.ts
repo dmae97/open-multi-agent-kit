@@ -34,7 +34,7 @@ describe("SessionManager.saveCustomEntry", () => {
 		const entries = session.getEntries();
 		expect(entries).toHaveLength(3);
 
-		const customEntry = entries.find((e) => e.type === "custom") as CustomEntry;
+		const customEntry = entries.find(e => e.type === "custom") as CustomEntry;
 		expect(customEntry).toBeDefined();
 		expect(customEntry.customType).toBe("my_hook");
 		expect(customEntry.data).toEqual({ foo: "bar" });

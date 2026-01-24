@@ -116,7 +116,7 @@ describe.skipIf(!shouldRun)("PYTHON_PRELUDE integration", () => {
 	`;
 
 		const result = await tool.execute("tool-call-1", { cells: [{ code }] });
-		const output = result.content.find((item) => item.type === "text")?.text ?? "";
+		const output = result.content.find(item => item.type === "text")?.text ?? "";
 		expect(output).toContain("HELPERS_OK=1");
 		expect(output).toContain("DOCS_OK=1");
 	});
@@ -125,7 +125,7 @@ describe.skipIf(!shouldRun)("PYTHON_PRELUDE integration", () => {
 		resetPreludeDocsCache();
 		const result = await warmPythonEnvironment(process.cwd(), undefined, false);
 		expect(result.ok).toBe(true);
-		const names = result.docs.map((doc) => doc.name);
+		const names = result.docs.map(doc => doc.name);
 		expect(names).toContain("pwd");
 	});
 

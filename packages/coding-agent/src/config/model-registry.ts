@@ -1,7 +1,6 @@
 /**
  * Model registry - manages built-in and custom models, provides API key resolution.
  */
-
 import * as fs from "node:fs";
 import * as path from "node:path";
 import {
@@ -12,7 +11,6 @@ import {
 	type Model,
 	normalizeDomain,
 } from "@oh-my-pi/pi-ai";
-
 import { isEnoent, logger } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import AjvModule from "ajv";
@@ -142,7 +140,7 @@ export class ModelRegistry {
 		private fallbackPaths: string[] = [],
 	) {
 		// Set up fallback resolver for custom provider API keys
-		this.authStorage.setFallbackResolver((provider) => {
+		this.authStorage.setFallbackResolver(provider => {
 			const keyConfig = this.customProviderApiKeys.get(provider);
 			if (keyConfig) {
 				return resolveApiKeyConfig(keyConfig);
@@ -164,7 +162,7 @@ export class ModelRegistry {
 		instance.customProviderApiKeys = new Map(Object.entries(data.customProviderApiKeys ?? {}));
 		instance.loadError = data.loadError;
 
-		authStorage.setFallbackResolver((provider) => {
+		authStorage.setFallbackResolver(provider => {
 			const keyConfig = instance.customProviderApiKeys.get(provider);
 			if (keyConfig) {
 				return resolveApiKeyConfig(keyConfig);
@@ -244,7 +242,7 @@ export class ModelRegistry {
 				? (normalizeDomain(copilotCred.enterpriseUrl) ?? undefined)
 				: undefined;
 			const baseUrl = getGitHubCopilotBaseUrl(copilotCred.access, domain);
-			this.models = combined.map((m) => (m.provider === "github-copilot" ? { ...m, baseUrl } : m));
+			this.models = combined.map(m => (m.provider === "github-copilot" ? { ...m, baseUrl } : m));
 		} else {
 			this.models = combined;
 		}
@@ -253,14 +251,14 @@ export class ModelRegistry {
 	/** Load built-in models, skipping replaced providers and applying overrides */
 	private loadBuiltInModels(replacedProviders: Set<string>, overrides: Map<string, ProviderOverride>): Model<Api>[] {
 		return getProviders()
-			.filter((provider) => !replacedProviders.has(provider))
-			.flatMap((provider) => {
+			.filter(provider => !replacedProviders.has(provider))
+			.flatMap(provider => {
 				const models = getModels(provider as any) as Model<Api>[];
 				const override = overrides.get(provider);
 				if (!override) return models;
 
 				// Apply baseUrl/headers override to all models of this provider
-				return models.map((m) => ({
+				return models.map(m => ({
 					...m,
 					baseUrl: override.baseUrl ?? m.baseUrl,
 					headers: override.headers ? { ...m.headers, ...override.headers } : m.headers,
@@ -451,21 +449,21 @@ export class ModelRegistry {
 	 * This is a fast check that doesn't refresh OAuth tokens.
 	 */
 	getAvailable(): Model<Api>[] {
-		return this.models.filter((m) => this.authStorage.hasAuth(m.provider));
+		return this.models.filter(m => this.authStorage.hasAuth(m.provider));
 	}
 
 	/**
 	 * Find a model by provider and ID.
 	 */
 	find(provider: string, modelId: string): Model<Api> | undefined {
-		return this.models.find((m) => m.provider === provider && m.id === modelId);
+		return this.models.find(m => m.provider === provider && m.id === modelId);
 	}
 
 	/**
 	 * Get the base URL associated with a provider, if any model defines one.
 	 */
 	getProviderBaseUrl(provider: string): string | undefined {
-		return this.models.find((m) => m.provider === provider && m.baseUrl)?.baseUrl;
+		return this.models.find(m => m.provider === provider && m.baseUrl)?.baseUrl;
 	}
 
 	/**

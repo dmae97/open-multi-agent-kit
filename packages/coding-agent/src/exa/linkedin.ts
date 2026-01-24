@@ -3,7 +3,6 @@
  *
  * Search LinkedIn for people, companies, and professional content.
  */
-
 import { Type } from "@sinclair/typebox";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import { callExaTool, findApiKey, formatSearchResults, isSearchResponse } from "./mcp-client";

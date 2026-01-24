@@ -297,7 +297,7 @@ async function handleConfigurationRequest(client: LspClient, message: LspJsonRpc
 	if (typeof message.id !== "number") return;
 	const params = message.params as { items?: Array<{ section?: string }> };
 	const items = params?.items ?? [];
-	const result = items.map((item) => {
+	const result = items.map(item => {
 		const section = item.section ?? "";
 		return client.config.settings?.[section] ?? {};
 	});
@@ -759,12 +759,12 @@ export async function sendRequest(
 
 	// Register pending request with timeout wrapper
 	client.pendingRequests.set(id, {
-		resolve: (result) => {
+		resolve: result => {
 			if (timeout) clearTimeout(timeout);
 			cleanup();
 			resolve(result);
 		},
-		reject: (err) => {
+		reject: err => {
 			if (timeout) clearTimeout(timeout);
 			cleanup();
 			reject(err);
@@ -773,7 +773,7 @@ export async function sendRequest(
 	});
 
 	// Write request
-	writeMessage(client.process.stdin as import("bun").FileSink, request).catch((err) => {
+	writeMessage(client.process.stdin as import("bun").FileSink, request).catch(err => {
 		if (timeout) clearTimeout(timeout);
 		client.pendingRequests.delete(id);
 		cleanup();
@@ -827,7 +827,7 @@ export interface LspServerStatus {
  * Get status of all active LSP clients.
  */
 export function getActiveClients(): LspServerStatus[] {
-	return Array.from(clients.values()).map((client) => ({
+	return Array.from(clients.values()).map(client => ({
 		name: client.config.command,
 		status: "ready" as const,
 		fileTypes: client.config.fileTypes,

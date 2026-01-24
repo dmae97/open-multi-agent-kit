@@ -2,7 +2,6 @@
  * Agent loop that works with AgentMessage throughout.
  * Transforms to Message[] only at the LLM call boundary.
  */
-
 import {
 	type AssistantMessage,
 	type Context,
@@ -107,12 +106,12 @@ function normalizeMessagesForProvider(
 	}
 
 	let changed = false;
-	const normalized = messages.map((message) => {
+	const normalized = messages.map(message => {
 		if (message.role !== "assistant" || !Array.isArray(message.content)) {
 			return message;
 		}
 
-		const filtered = message.content.filter((block) => block.type !== "thinking");
+		const filtered = message.content.filter(block => block.type !== "thinking");
 		if (filtered.length === message.content.length) {
 			return message;
 		}
@@ -186,7 +185,7 @@ async function runLoop(
 			}
 
 			// Check for tool calls
-			const toolCalls = message.content.filter((c) => c.type === "toolCall");
+			const toolCalls = message.content.filter(c => c.type === "toolCall");
 			hasMoreToolCalls = toolCalls.length > 0;
 
 			const toolResults: ToolResultMessage[] = [];
@@ -373,16 +372,16 @@ async function executeToolCalls(
 	getToolContext?: AgentLoopConfig["getToolContext"],
 	interruptMode: AgentLoopConfig["interruptMode"] = "immediate",
 ): Promise<{ toolResults: ToolResultMessage[]; steeringMessages?: AgentMessage[] }> {
-	const toolCalls = assistantMessage.content.filter((c) => c.type === "toolCall");
+	const toolCalls = assistantMessage.content.filter(c => c.type === "toolCall");
 	const results: ToolResultMessage[] = [];
 	let steeringMessages: AgentMessage[] | undefined;
 	const shouldInterruptImmediately = interruptMode !== "wait";
-	const toolCallInfos = toolCalls.map((call) => ({ id: call.id, name: call.name }));
+	const toolCallInfos = toolCalls.map(call => ({ id: call.id, name: call.name }));
 	const batchId = `${assistantMessage.timestamp ?? Date.now()}_${toolCalls[0]?.id ?? "batch"}`;
 
 	for (let index = 0; index < toolCalls.length; index++) {
 		const toolCall = toolCalls[index];
-		const tool = tools?.find((t) => t.name === toolCall.name);
+		const tool = tools?.find(t => t.name === toolCall.name);
 
 		stream.push({
 			type: "tool_execution_start",
@@ -411,7 +410,7 @@ async function executeToolCalls(
 				toolCall.id,
 				validatedArgs,
 				tool.nonAbortable ? undefined : signal,
-				(partialResult) => {
+				partialResult => {
 					stream.push({
 						type: "tool_execution_update",
 						toolCallId: toolCall.id,

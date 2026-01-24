@@ -121,7 +121,7 @@ export const handlePackagist: SpecialHandler = async (
 
 		// Maintainers
 		if (pkg.maintainers?.length) {
-			md += `**Maintainers:** ${pkg.maintainers.map((m) => m.name).join(", ")}\n`;
+			md += `**Maintainers:** ${pkg.maintainers.map(m => m.name).join(", ")}\n`;
 		}
 
 		// Links

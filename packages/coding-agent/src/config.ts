@@ -202,7 +202,7 @@ export function getConfigDirs(subpath: string, options: GetConfigDirsOptions = {
  * Returns just the paths, highest priority first.
  */
 export function getConfigDirPaths(subpath: string, options: GetConfigDirsOptions = {}): string[] {
-	return getConfigDirs(subpath, options).map((e) => e.path);
+	return getConfigDirs(subpath, options).map(e => e.path);
 }
 
 export interface ConfigFileResult<T> {
@@ -392,7 +392,7 @@ export async function findAllNearestProjectConfigDirs(
 	}
 
 	// Sort by priority order
-	const order = PROJECT_CONFIG_BASES.map((b) => b.name);
+	const order = PROJECT_CONFIG_BASES.map(b => b.name);
 	results.sort((a, b) => order.indexOf(a.source) - order.indexOf(b.source));
 
 	return results;

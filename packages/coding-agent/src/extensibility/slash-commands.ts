@@ -29,7 +29,7 @@ function parseCommandTemplate(
 	// Get description from frontmatter or first non-empty line
 	let description = frontmatterDesc;
 	if (!description) {
-		const firstLine = body.split("\n").find((line) => line.trim());
+		const firstLine = body.split("\n").find(line => line.trim());
 		if (firstLine) {
 			description = firstLine.slice(0, 60);
 			if (firstLine.length > 60) description += "...";
@@ -114,7 +114,7 @@ export interface LoadSlashCommandsOptions {
 export async function loadSlashCommands(options: LoadSlashCommandsOptions = {}): Promise<FileSlashCommand[]> {
 	const result = await loadCapability<SlashCommand>(slashCommandCapability.id, { cwd: options.cwd });
 
-	const fileCommands: FileSlashCommand[] = result.items.map((cmd) => {
+	const fileCommands: FileSlashCommand[] = result.items.map(cmd => {
 		const { description, body } = parseCommandTemplate(cmd.content, {
 			source: cmd.path ?? `slash-command:${cmd.name}`,
 			level: cmd.level === "native" ? "fatal" : "warn",
@@ -133,7 +133,7 @@ export async function loadSlashCommands(options: LoadSlashCommandsOptions = {}):
 		};
 	});
 
-	const seenNames = new Set(fileCommands.map((cmd) => cmd.name));
+	const seenNames = new Set(fileCommands.map(cmd => cmd.name));
 	for (const cmd of EMBEDDED_SLASH_COMMANDS) {
 		const name = cmd.name.replace(/\.md$/, "");
 		if (seenNames.has(name)) continue;
@@ -165,7 +165,7 @@ export function expandSlashCommand(text: string, fileCommands: FileSlashCommand[
 	const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
 	const argsString = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1);
 
-	const fileCommand = fileCommands.find((cmd) => cmd.name === commandName);
+	const fileCommand = fileCommands.find(cmd => cmd.name === commandName);
 	if (fileCommand) {
 		const args = parseCommandArgs(argsString);
 		const argsText = args.join(" ");

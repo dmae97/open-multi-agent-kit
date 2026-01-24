@@ -86,15 +86,13 @@ function parseSummaryFromResponse(message: AssistantMessage, commitType: string,
 }
 
 function extractToolCall(message: AssistantMessage, name: string): ToolCall | undefined {
-	return message.content.find((content) => content.type === "toolCall" && content.name === name) as
-		| ToolCall
-		| undefined;
+	return message.content.find(content => content.type === "toolCall" && content.name === name) as ToolCall | undefined;
 }
 
 function extractTextContent(message: AssistantMessage): string {
 	return message.content
-		.filter((content) => content.type === "text")
-		.map((content) => content.text)
+		.filter(content => content.type === "text")
+		.map(content => content.text)
 		.join("")
 		.trim();
 }

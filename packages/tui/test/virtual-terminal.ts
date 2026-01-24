@@ -124,7 +124,7 @@ export class VirtualTerminal implements Terminal {
 	 */
 	async flush(): Promise<void> {
 		// Write an empty string to ensure all previous writes are flushed
-		return new Promise<void>((resolve) => {
+		return new Promise<void>(resolve => {
 			this.xterm.write("", () => resolve());
 		});
 	}

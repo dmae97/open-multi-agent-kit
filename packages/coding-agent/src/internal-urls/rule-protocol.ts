@@ -6,7 +6,6 @@
  * URL forms:
  * - rule://<name> - Reads rule content
  */
-
 import type { Rule } from "../capability/rule";
 import type { InternalResource, InternalUrl, ProtocolHandler } from "./types";
 
@@ -37,9 +36,9 @@ export class RuleProtocolHandler implements ProtocolHandler {
 		}
 
 		// Find the rule
-		const rule = rules.find((r) => r.name === ruleName);
+		const rule = rules.find(r => r.name === ruleName);
 		if (!rule) {
-			const available = rules.map((r) => r.name);
+			const available = rules.map(r => r.name);
 			const availableStr = available.length > 0 ? available.join(", ") : "none";
 			throw new Error(`Unknown rule: ${ruleName}\nAvailable: ${availableStr}`);
 		}

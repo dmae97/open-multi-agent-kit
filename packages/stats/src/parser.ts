@@ -106,7 +106,7 @@ export async function parseSessionFile(
 export async function listSessionFolders(): Promise<string[]> {
 	try {
 		const entries = await fs.readdir(SESSIONS_DIR, { withFileTypes: true });
-		return entries.filter((e) => e.isDirectory()).map((e) => path.join(SESSIONS_DIR, e.name));
+		return entries.filter(e => e.isDirectory()).map(e => path.join(SESSIONS_DIR, e.name));
 	} catch {
 		return [];
 	}
@@ -118,7 +118,7 @@ export async function listSessionFolders(): Promise<string[]> {
 export async function listSessionFiles(folderPath: string): Promise<string[]> {
 	try {
 		const entries = await fs.readdir(folderPath, { withFileTypes: true });
-		return entries.filter((e) => e.isFile() && e.name.endsWith(".jsonl")).map((e) => path.join(folderPath, e.name));
+		return entries.filter(e => e.isFile() && e.name.endsWith(".jsonl")).map(e => path.join(folderPath, e.name));
 	} catch {
 		return [];
 	}

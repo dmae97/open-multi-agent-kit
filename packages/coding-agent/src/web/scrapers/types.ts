@@ -1,7 +1,6 @@
 /**
  * Shared types and utilities for web-fetch handlers
  */
-
 import { ToolAbortError } from "../../tools/tool-errors";
 
 export interface RenderResult {

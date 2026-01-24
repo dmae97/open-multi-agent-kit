@@ -36,7 +36,7 @@ function formatCompactValue(value: unknown, maxLength: number): string {
 	} else if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
 		rendered = String(value);
 	} else if (Array.isArray(value)) {
-		const previewItems = value.slice(0, 3).map((item) => formatCompactValue(item, maxLength));
+		const previewItems = value.slice(0, 3).map(item => formatCompactValue(item, maxLength));
 		rendered = `[${previewItems.join(", ")}${value.length > 3 ? ", ..." : ""}]`;
 	} else if (typeof value === "object") {
 		try {
@@ -213,7 +213,7 @@ export class ToolExecutionComponent extends Container {
 			computePatchDiff({ path, op, rename, diff }, this.cwd, {
 				fuzzyThreshold: this.editFuzzyThreshold,
 				allowFuzzy: this.editAllowFuzzy,
-			}).then((result) => {
+			}).then(result => {
 				if (this.editDiffArgsKey === argsKey) {
 					this.editDiffPreview = result;
 					this.updateDisplay();
@@ -239,7 +239,7 @@ export class ToolExecutionComponent extends Container {
 		this.editDiffArgsKey = argsKey;
 
 		// Compute diff async
-		computeEditDiff(path, oldText, newText, this.cwd, true, all, this.editFuzzyThreshold).then((result) => {
+		computeEditDiff(path, oldText, newText, this.cwd, true, all, this.editFuzzyThreshold).then(result => {
 			// Only update if args haven't changed since we started
 			if (this.editDiffArgsKey === argsKey) {
 				this.editDiffPreview = result;
@@ -303,7 +303,7 @@ export class ToolExecutionComponent extends Container {
 			// Convert async - catch errors from WASM processing
 			const index = i;
 			convertToPng(img.data, img.mimeType)
-				.then((converted) => {
+				.then(converted => {
 					if (converted) {
 						this.convertedImages.set(index, converted);
 						this.updateDisplay();
@@ -629,7 +629,7 @@ export class ToolExecutionComponent extends Container {
 			const displayLines = lines.slice(-maxLines);
 			const remaining = lines.length - displayLines.length;
 			text += ` ${theme.fg("dim", `(${lines.length} lines)`)}`;
-			text += `\n${displayLines.map((line) => theme.fg("toolOutput", line)).join("\n")}`;
+			text += `\n${displayLines.map(line => theme.fg("toolOutput", line)).join("\n")}`;
 			if (remaining > 0) {
 				text += theme.fg("dim", `\n${theme.format.ellipsis} (${remaining} earlier lines) (ctrl+o to expand)`);
 			}

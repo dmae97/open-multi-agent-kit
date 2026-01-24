@@ -57,13 +57,13 @@ describe("fuzzyMatch", () => {
 describe("fuzzyFilter", () => {
 	test("empty query returns all items unchanged", () => {
 		const items = ["apple", "banana", "cherry"];
-		const result = fuzzyFilter(items, "", (x) => x);
+		const result = fuzzyFilter(items, "", x => x);
 		expect(result).toEqual(items);
 	});
 
 	test("filters out non-matching items", () => {
 		const items = ["apple", "banana", "cherry"];
-		const result = fuzzyFilter(items, "an", (x) => x);
+		const result = fuzzyFilter(items, "an", x => x);
 		expect(result).toContain("banana");
 		expect(result).not.toContain("apple");
 		expect(result).not.toContain("cherry");
@@ -71,7 +71,7 @@ describe("fuzzyFilter", () => {
 
 	test("sorts results by match quality", () => {
 		const items = ["a_p_p", "app", "application"];
-		const result = fuzzyFilter(items, "app", (x) => x);
+		const result = fuzzyFilter(items, "app", x => x);
 
 		// "app" should be first (exact consecutive match at start)
 		expect(result[0]).toBe("app");
@@ -83,10 +83,10 @@ describe("fuzzyFilter", () => {
 			{ name: "bar", id: 2 },
 			{ name: "foobar", id: 3 },
 		];
-		const result = fuzzyFilter(items, "foo", (item) => item.name);
+		const result = fuzzyFilter(items, "foo", item => item.name);
 
 		expect(result.length).toBe(2);
-		expect(result.map((r) => r.name)).toContain("foo");
-		expect(result.map((r) => r.name)).toContain("foobar");
+		expect(result.map(r => r.name)).toContain("foo");
+		expect(result.map(r => r.name)).toContain("foobar");
 	});
 });

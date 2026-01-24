@@ -61,7 +61,7 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 		git.getNumstat(true),
 		git.getDiff(true),
 	]);
-	const changelogTargets = changelogBoundaries.map((boundary) => boundary.changelogPath);
+	const changelogTargets = changelogBoundaries.map(boundary => boundary.changelogPath);
 	if (!args.noChangelog) {
 		if (changelogTargets.length > 0) {
 			for (const path of changelogTargets) {
@@ -73,7 +73,7 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 	}
 
 	writeStdout("● Discovering context files...");
-	const agentsMdFiles = contextFiles.filter((file) => file.path.endsWith("AGENTS.md"));
+	const agentsMdFiles = contextFiles.filter(file => file.path.endsWith("AGENTS.md"));
 	if (agentsMdFiles.length > 0) {
 		for (const file of agentsMdFiles) {
 			writeStdout(`  └─ ${file.path}`);
@@ -160,11 +160,11 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 			cwd,
 			proposals: commitState.changelogProposal.entries,
 			dryRun: args.dryRun,
-			onProgress: (message) => {
+			onProgress: message => {
 				writeStdout(`  ├─ ${message}`);
 			},
 		});
-		updatedChangelogFiles = updated.map((filePath) => path.relative(cwd, filePath));
+		updatedChangelogFiles = updated.map(filePath => path.relative(cwd, filePath));
 		if (updated.length > 0) {
 			for (const filePath of updated) {
 				writeStdout(`  └─ ${filePath}`);
@@ -221,8 +221,8 @@ async function runSplitCommit(
 		appendFilesToLastCommit(plan, ctx.additionalFiles);
 	}
 	const stagedFiles = await ctx.git.getStagedFiles();
-	const plannedFiles = new Set(plan.commits.flatMap((commit) => commit.changes.map((change) => change.path)));
-	const missingFiles = stagedFiles.filter((file) => !plannedFiles.has(file));
+	const plannedFiles = new Set(plan.commits.flatMap(commit => commit.changes.map(change => change.path)));
+	const missingFiles = stagedFiles.filter(file => !plannedFiles.has(file));
 	if (missingFiles.length > 0) {
 		writeStderr(`Split commit plan missing staged files: ${missingFiles.join(", ")}`);
 		return;
@@ -240,7 +240,7 @@ async function runSplitCommit(
 			const message = formatCommitMessage(analysis, commit.summary);
 			writeStdout(`Commit ${index + 1}:\n${message}\n`);
 			const changeSummary = commit.changes
-				.map((change) => formatFileChangeSummary(change.path, change.hunks))
+				.map(change => formatFileChangeSummary(change.path, change.hunks))
 				.join(", ");
 			writeStdout(`Changes: ${changeSummary}\n`);
 		}
@@ -280,7 +280,7 @@ async function runSplitCommit(
 
 function appendFilesToLastCommit(plan: SplitCommitPlan, files: string[]): void {
 	if (plan.commits.length === 0) return;
-	const planned = new Set(plan.commits.flatMap((commit) => commit.changes.map((change) => change.path)));
+	const planned = new Set(plan.commits.flatMap(commit => commit.changes.map(change => change.path)));
 	const targetCommit = plan.commits[plan.commits.length - 1];
 	for (const file of files) {
 		if (planned.has(file)) continue;
@@ -304,7 +304,7 @@ async function confirmSplitCommitPlan(plan: SplitCommitPlan): Promise<boolean> {
 }
 
 function formatWarnings(warnings: string[]): string {
-	return `Warnings:\n${warnings.map((warning) => `- ${warning}`).join("\n")}`;
+	return `Warnings:\n${warnings.map(warning => `- ${warning}`).join("\n")}`;
 }
 
 function writeStdout(message: string): void {
@@ -327,7 +327,7 @@ function formatFileChangeSummary(path: string, hunks: HunkSelector): string {
 
 async function loadExistingChangelogEntries(paths: string[]): Promise<ExistingChangelogEntries[]> {
 	const entries = await Promise.all(
-		paths.map(async (path) => {
+		paths.map(async path => {
 			const file = Bun.file(path);
 			if (!(await file.exists())) {
 				return null;

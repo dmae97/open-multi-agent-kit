@@ -129,7 +129,7 @@ export function capDetails(details: ConventionalDetail[]): { details: Convention
 	}));
 
 	scored.sort((a, b) => b.score - a.score || a.index - b.index);
-	const keep = new Set(scored.slice(0, MAX_DETAIL_ITEMS).map((entry) => entry.index));
+	const keep = new Set(scored.slice(0, MAX_DETAIL_ITEMS).map(entry => entry.index));
 	const kept = details.filter((_detail, index) => keep.has(index));
 	const warnings = [`Capped detail list to ${MAX_DETAIL_ITEMS} items based on priority scoring.`];
 	return { details: kept, warnings };
@@ -155,18 +155,18 @@ export function validateTypeConsistency(
 ): { errors: string[]; warnings: string[] } {
 	const errors: string[] = [];
 	const warnings: string[] = [];
-	const lowerFiles = files.map((file) => file.toLowerCase());
-	const hasDocs = lowerFiles.some((file) => /\.(md|mdx|adoc|rst)$/.test(file));
+	const lowerFiles = files.map(file => file.toLowerCase());
+	const hasDocs = lowerFiles.some(file => /\.(md|mdx|adoc|rst)$/.test(file));
 	const hasTests = lowerFiles.some(
-		(file) => /(^|\/)(test|tests|__tests__)(\/|$)/.test(file) || /(^|\/).*(_test|\.test|\.spec)\./.test(file),
+		file => /(^|\/)(test|tests|__tests__)(\/|$)/.test(file) || /(^|\/).*(_test|\.test|\.spec)\./.test(file),
 	);
-	const hasCI = lowerFiles.some((file) => file.startsWith(".github/workflows/") || file.startsWith(".gitlab-ci"));
-	const hasBuild = lowerFiles.some((file) =>
-		["cargo.toml", "package.json", "makefile"].some((candidate) => file.endsWith(candidate)),
+	const hasCI = lowerFiles.some(file => file.startsWith(".github/workflows/") || file.startsWith(".gitlab-ci"));
+	const hasBuild = lowerFiles.some(file =>
+		["cargo.toml", "package.json", "makefile"].some(candidate => file.endsWith(candidate)),
 	);
-	const hasPerfEvidence = lowerFiles.some((file) => /(bench|benchmark|perf)/.test(file));
+	const hasPerfEvidence = lowerFiles.some(file => /(bench|benchmark|perf)/.test(file));
 	const summary = options.summary?.toLowerCase() ?? "";
-	const detailText = options.details?.map((detail) => detail.text.toLowerCase()).join(" ") ?? "";
+	const detailText = options.details?.map(detail => detail.text.toLowerCase()).join(" ") ?? "";
 	const hasPerfKeywords = /(performance|optimiz|latency|throughput|benchmark)/.test(`${summary} ${detailText}`);
 
 	switch (type) {

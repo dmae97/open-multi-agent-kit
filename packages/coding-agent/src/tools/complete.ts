@@ -3,7 +3,6 @@
  *
  * Subagents must call this tool to finish and return structured JSON output.
  */
-
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { StringEnum } from "@oh-my-pi/pi-ai";
 import type { Static, TObject } from "@sinclair/typebox";
@@ -46,7 +45,7 @@ function formatSchema(schema: unknown): string {
 function formatAjvErrors(errors: ErrorObject[] | null | undefined): string {
 	if (!errors || errors.length === 0) return "Unknown schema validation error.";
 	return errors
-		.map((err) => {
+		.map(err => {
 			const path = err.instancePath ? `${err.instancePath}: ` : "";
 			return `${path}${err.message ?? "invalid"}`;
 		})
@@ -137,6 +136,6 @@ export class CompleteTool implements AgentTool<TObject, CompleteDetails> {
 
 // Register subprocess tool handler for extraction + termination.
 subprocessToolRegistry.register<CompleteDetails>("complete", {
-	extractData: (event) => event.result?.details as CompleteDetails | undefined,
+	extractData: event => event.result?.details as CompleteDetails | undefined,
 	shouldTerminate: () => true,
 });

@@ -100,7 +100,7 @@ describe("python tool exposure", () => {
 	it("includes python only in ipy-only mode", async () => {
 		const session = createSession({ settings: createSettings("ipy-only") });
 		const tools = await createTools(session);
-		const names = tools.map((tool) => tool.name);
+		const names = tools.map(tool => tool.name);
 		expect(names).toContain("python");
 		expect(names).not.toContain("bash");
 	});
@@ -108,7 +108,7 @@ describe("python tool exposure", () => {
 	it("includes bash only in bash-only mode", async () => {
 		const session = createSession({ settings: createSettings("bash-only") });
 		const tools = await createTools(session);
-		const names = tools.map((tool) => tool.name);
+		const names = tools.map(tool => tool.name);
 		expect(names).toContain("bash");
 		expect(names).not.toContain("python");
 	});
@@ -116,7 +116,7 @@ describe("python tool exposure", () => {
 	it("includes bash and python in both mode", async () => {
 		const session = createSession({ settings: createSettings("both") });
 		const tools = await createTools(session);
-		const names = tools.map((tool) => tool.name);
+		const names = tools.map(tool => tool.name);
 		expect(names).toContain("bash");
 		expect(names).toContain("python");
 	});

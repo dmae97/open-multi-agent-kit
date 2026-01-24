@@ -44,8 +44,8 @@ export async function captureBaseline(repoRoot: string): Promise<WorktreeBaselin
 	const untrackedRaw = await $`git ls-files --others --exclude-standard`.cwd(repoRoot).quiet().text();
 	const untracked = untrackedRaw
 		.split("\n")
-		.map((line) => line.trim())
-		.filter((line) => line.length > 0);
+		.map(line => line.trim())
+		.filter(line => line.length > 0);
 
 	return {
 		repoRoot,
@@ -114,8 +114,8 @@ async function listUntracked(cwd: string): Promise<string[]> {
 	const raw = await $`git ls-files --others --exclude-standard`.cwd(cwd).quiet().text();
 	return raw
 		.split("\n")
-		.map((line) => line.trim())
-		.filter((line) => line.length > 0);
+		.map(line => line.trim())
+		.filter(line => line.length > 0);
 }
 
 export async function captureDeltaPatch(worktreeDir: string, baseline: WorktreeBaseline): Promise<string> {
@@ -136,12 +136,12 @@ export async function captureDeltaPatch(worktreeDir: string, baseline: WorktreeB
 
 		const currentUntracked = await listUntracked(worktreeDir);
 		const baselineUntracked = new Set(baseline.untracked);
-		const newUntracked = currentUntracked.filter((entry) => !baselineUntracked.has(entry));
+		const newUntracked = currentUntracked.filter(entry => !baselineUntracked.has(entry));
 
 		if (newUntracked.length === 0) return diff;
 
 		const untrackedDiffs = await Promise.all(
-			newUntracked.map((entry) =>
+			newUntracked.map(entry =>
 				$`git diff --binary --no-index /dev/null ${entry}`.cwd(worktreeDir).quiet().nothrow().text(),
 			),
 		);

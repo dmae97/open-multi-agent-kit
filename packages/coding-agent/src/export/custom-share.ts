@@ -4,7 +4,6 @@
  * Allows users to define a custom share handler at ~/.omp/agent/share.ts
  * that will be used instead of the default GitHub Gist sharing.
  */
-
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getAgentDir } from "../config";

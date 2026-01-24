@@ -11,7 +11,6 @@
  *
  * The generated prompt appears as a draft in the editor for review/editing.
  */
-
 import { complete, type Message } from "@oh-my-pi/pi-ai";
 import type { HookAPI, SessionEntry } from "@oh-my-pi/pi-coding-agent";
 import { BorderedLoader, convertToLlm, serializeConversation } from "@oh-my-pi/pi-coding-agent";
@@ -62,7 +61,7 @@ export default function (pi: HookAPI) {
 			const branch = ctx.sessionManager.getBranch();
 			const messages = branch
 				.filter((entry): entry is SessionEntry & { type: "message" } => entry.type === "message")
-				.map((entry) => entry.message);
+				.map(entry => entry.message);
 
 			if (messages.length === 0) {
 				ctx.ui.notify("No conversation to hand off", "error");
@@ -105,13 +104,13 @@ export default function (pi: HookAPI) {
 
 					return response.content
 						.filter((c): c is { type: "text"; text: string } => c.type === "text")
-						.map((c) => c.text)
+						.map(c => c.text)
 						.join("\n");
 				};
 
 				doGenerate()
 					.then(done)
-					.catch((err) => {
+					.catch(err => {
 						console.error("Handoff generation failed:", err);
 						done(null);
 					});

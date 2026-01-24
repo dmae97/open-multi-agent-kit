@@ -4,7 +4,6 @@
  * Uses oEmbed API and Open Graph metadata to extract information
  * from Spotify URLs without requiring authentication.
  */
-
 import type { SpecialHandler } from "./types";
 import { finalizeOutput, loadPage } from "./types";
 

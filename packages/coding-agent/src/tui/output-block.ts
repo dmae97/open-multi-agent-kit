@@ -1,7 +1,6 @@
 /**
  * Bordered output container with optional header and sections.
  */
-
 import { visibleWidth } from "@oh-my-pi/pi-tui";
 import type { Theme } from "../modes/theme/theme";
 import type { State } from "./types";

@@ -4,7 +4,6 @@
  * When navigating to a different point in the session tree, this generates
  * a summary of the branch being left so context isn't lost.
  */
-
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { Model } from "@oh-my-pi/pi-ai";
 import { completeSimple } from "@oh-my-pi/pi-ai";
@@ -105,7 +104,7 @@ export function collectEntriesForBranchSummary(
 	}
 
 	// Find common ancestor (deepest node that's on both paths)
-	const oldPath = new Set(session.getBranch(oldLeafId).map((e) => e.id));
+	const oldPath = new Set(session.getBranch(oldLeafId).map(e => e.id));
 	const targetPath = session.getBranch(targetId);
 
 	// targetPath is root-first, so iterate backwards to find deepest common ancestor
@@ -298,7 +297,7 @@ export async function generateBranchSummary(
 
 	let summary = response.content
 		.filter((c): c is { type: "text"; text: string } => c.type === "text")
-		.map((c) => c.text)
+		.map(c => c.text)
 		.join("\n");
 
 	// Prepend preamble to provide context about the branch summary

@@ -130,7 +130,7 @@ describe("ExtensionRunner", () => {
 			const tools = runner.getAllRegisteredTools();
 
 			expect(tools.length).toBe(2);
-			expect(tools.map((t) => t.definition.name).sort()).toEqual(["tool_a", "tool_b"]);
+			expect(tools.map(t => t.definition.name).sort()).toEqual(["tool_a", "tool_b"]);
 		});
 	});
 
@@ -158,7 +158,7 @@ describe("ExtensionRunner", () => {
 			const commands = runner.getRegisteredCommands();
 
 			expect(commands.length).toBe(2);
-			expect(commands.map((c) => c.name).sort()).toEqual(["cmd-a", "cmd-b"]);
+			expect(commands.map(c => c.name).sort()).toEqual(["cmd-a", "cmd-b"]);
 		});
 
 		it("gets command by name", async () => {
@@ -212,7 +212,7 @@ describe("ExtensionRunner", () => {
 			);
 
 			const errors: Array<{ extensionPath: string; event: string; error: string }> = [];
-			runner.onError((err) => {
+			runner.onError(err => {
 				errors.push(err);
 			});
 

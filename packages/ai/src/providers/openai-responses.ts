@@ -245,7 +245,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 					const item = event.item;
 
 					if (item.type === "reasoning" && currentBlock && currentBlock.type === "thinking") {
-						currentBlock.thinking = item.summary?.map((s) => s.text).join("\n\n") || "";
+						currentBlock.thinking = item.summary?.map(s => s.text).join("\n\n") || "";
 						currentBlock.thinkingSignature = JSON.stringify(item);
 						stream.push({
 							type: "thinking_end",
@@ -255,7 +255,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 						});
 						currentBlock = null;
 					} else if (item.type === "message" && currentBlock && currentBlock.type === "text") {
-						currentBlock.text = item.content.map((c) => (c.type === "output_text" ? c.text : c.refusal)).join("");
+						currentBlock.text = item.content.map(c => (c.type === "output_text" ? c.text : c.refusal)).join("");
 						currentBlock.textSignature = item.id;
 						stream.push({
 							type: "text_end",
@@ -293,7 +293,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 					calculateCost(model, output.usage);
 					// Map status to stop reason
 					output.stopReason = mapStopReason(response?.status);
-					if (output.content.some((b) => b.type === "toolCall") && output.stopReason === "stop") {
+					if (output.content.some(b => b.type === "toolCall") && output.stopReason === "stop") {
 						output.stopReason = "toolUse";
 					}
 				}
@@ -358,12 +358,12 @@ function createClient(
 		headers["Openai-Intent"] = "conversation-edits";
 
 		// Copilot requires this header when sending images
-		const hasImages = messages.some((msg) => {
+		const hasImages = messages.some(msg => {
 			if (msg.role === "user" && Array.isArray(msg.content)) {
-				return msg.content.some((c) => c.type === "image");
+				return msg.content.some(c => c.type === "image");
 			}
 			if (msg.role === "toolResult" && Array.isArray(msg.content)) {
-				return msg.content.some((c) => c.type === "image");
+				return msg.content.some(c => c.type === "image");
 			}
 			return false;
 		});
@@ -491,9 +491,9 @@ function convertMessages(
 				});
 				// Filter out images if model doesn't support them, and empty text blocks
 				let filteredContent = !model.input.includes("image")
-					? content.filter((c) => c.type !== "input_image")
+					? content.filter(c => c.type !== "input_image")
 					: content;
-				filteredContent = filteredContent.filter((c) => {
+				filteredContent = filteredContent.filter(c => {
 					if (c.type === "input_text") {
 						return c.text.trim().length > 0;
 					}
@@ -567,10 +567,10 @@ function convertMessages(
 		} else if (msg.role === "toolResult") {
 			// Extract text and image content
 			const textResult = msg.content
-				.filter((c) => c.type === "text")
-				.map((c) => (c as any).text)
+				.filter(c => c.type === "text")
+				.map(c => (c as any).text)
 				.join("\n");
-			const hasImages = msg.content.some((c) => c.type === "image");
+			const hasImages = msg.content.some(c => c.type === "image");
 			const normalized = normalizeResponsesToolCallId(msg.toolCallId);
 			if (strictResponsesPairing && !knownCallIds.has(normalized.callId)) {
 				continue;
@@ -618,7 +618,7 @@ function convertMessages(
 }
 
 function convertTools(tools: Tool[]): OpenAITool[] {
-	return tools.map((tool) => ({
+	return tools.map(tool => ({
 		type: "function",
 		name: tool.name,
 		description: tool.description,

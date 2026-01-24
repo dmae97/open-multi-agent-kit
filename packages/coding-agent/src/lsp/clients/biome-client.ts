@@ -2,7 +2,6 @@
  * Biome CLI-based linter client.
  * Uses Biome's CLI with JSON output instead of LSP (which has stale diagnostics issues).
  */
-
 import path from "node:path";
 import type { Diagnostic, DiagnosticSeverity, LinterClient, ServerConfig } from "../../lsp/types";
 

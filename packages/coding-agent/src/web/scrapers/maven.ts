@@ -124,10 +124,10 @@ export const handleMaven: SpecialHandler = async (
 
 		// Add available classifiers/extensions if present
 		if (doc.ec && doc.ec.length > 0) {
-			const extensions = doc.ec.filter((e) => e && e !== "-");
+			const extensions = doc.ec.filter(e => e && e !== "-");
 			if (extensions.length > 0) {
 				md += `\n## Available Extensions\n\n`;
-				md += `${extensions.map((e) => `- ${e}`).join("\n")}\n`;
+				md += `${extensions.map(e => `- ${e}`).join("\n")}\n`;
 			}
 		}
 

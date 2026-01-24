@@ -304,7 +304,7 @@ export const handleYouTube: SpecialHandler = async (
 	} finally {
 		// Cleanup temp files (fire-and-forget with error suppression)
 		Array.fromAsync(new Bun.Glob(`${tmpBase}*`).scan({ absolute: true }))
-			.then((tmpFiles) => Promise.all(tmpFiles.map((f) => fs.unlink(f).catch(() => {}))))
+			.then(tmpFiles => Promise.all(tmpFiles.map(f => fs.unlink(f).catch(() => {}))))
 			.catch(() => {});
 	}
 

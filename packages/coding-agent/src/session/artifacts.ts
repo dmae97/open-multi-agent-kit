@@ -4,7 +4,6 @@
  * Artifacts are stored in a directory alongside the session file,
  * accessible via artifact:// URLs or the $ARTIFACTS environment variable.
  */
-
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
@@ -104,7 +103,7 @@ export class ArtifactManager {
 	 */
 	async exists(id: string): Promise<boolean> {
 		const files = await this.listFiles();
-		return files.some((f) => f.startsWith(`${id}.`));
+		return files.some(f => f.startsWith(`${id}.`));
 	}
 
 	/**
@@ -127,7 +126,7 @@ export class ArtifactManager {
 	 */
 	async getPath(id: string): Promise<string | null> {
 		const files = await this.listFiles();
-		const match = files.find((f) => f.startsWith(`${id}.`));
+		const match = files.find(f => f.startsWith(`${id}.`));
 		return match ? path.join(this.#dir, match) : null;
 	}
 }

@@ -4,7 +4,7 @@
  * Implements JSON-RPC 2.0 over HTTP POST with optional SSE streaming.
  * Based on MCP spec 2025-03-26.
  */
-
+import { readSseEvents } from "@oh-my-pi/pi-utils";
 import type {
 	JsonRpcMessage,
 	JsonRpcResponse,
@@ -17,8 +17,6 @@ import type {
 function generateId(): string {
 	return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
-
-import { readSseEvents } from "@oh-my-pi/pi-utils";
 
 /**
  * HTTP transport for MCP servers.

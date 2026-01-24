@@ -28,14 +28,14 @@ export interface MapPhaseInput {
 }
 
 export async function runMapPhase({ model, apiKey, files, config }: MapPhaseInput): Promise<FileObservation[]> {
-	const filtered = files.filter((file) => !isExcludedFile(file.filename));
+	const filtered = files.filter(file => !isExcludedFile(file.filename));
 	const systemPrompt = renderPromptTemplate(fileObserverSystemPrompt);
 	const maxFileTokens = config?.maxFileTokens ?? MAX_FILE_TOKENS;
 	const maxConcurrency = config?.maxConcurrency ?? MAX_CONCURRENCY;
 	const timeoutMs = config?.timeoutMs ?? MAP_PHASE_TIMEOUT_MS;
 	const maxRetries = config?.maxRetries ?? MAX_RETRIES;
 	const retryBackoffMs = config?.retryBackoffMs ?? RETRY_BACKOFF_MS;
-	return runWithConcurrency(filtered, maxConcurrency, async (file) => {
+	return runWithConcurrency(filtered, maxConcurrency, async file => {
 		if (file.isBinary) {
 			return {
 				file: file.filename,
@@ -75,8 +75,8 @@ export async function runMapPhase({ model, apiKey, files, config }: MapPhaseInpu
 
 function parseObservations(message: AssistantMessage): string[] {
 	const text = message.content
-		.filter((content) => content.type === "text")
-		.map((content) => content.text)
+		.filter(content => content.type === "text")
+		.map(content => content.text)
 		.join("")
 		.trim();
 
@@ -84,9 +84,9 @@ function parseObservations(message: AssistantMessage): string[] {
 
 	const lines = text
 		.split("\n")
-		.map((line) => line.trim())
+		.map(line => line.trim())
 		.filter(Boolean)
-		.map((line) => line.replace(/^[-*]\s+/, ""))
+		.map(line => line.replace(/^[-*]\s+/, ""))
 		.filter(Boolean);
 
 	return lines.slice(0, 5);
@@ -97,7 +97,7 @@ function generateContextHeader(files: FileDiff[], currentFile: string): string {
 		return `(Large commit with ${files.length} total files)`;
 	}
 
-	const otherFiles = files.filter((file) => file.filename !== currentFile);
+	const otherFiles = files.filter(file => file.filename !== currentFile);
 	if (otherFiles.length === 0) return "";
 
 	const sorted = [...otherFiles].sort((a, b) => b.additions + b.deletions - (a.additions + a.deletions));

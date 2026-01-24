@@ -5,17 +5,15 @@
  * - A fixtures directory (for development)
  * - A fixtures.tar.gz tarball (for distribution)
  */
-
 /// <reference types="./bun-imports.d.ts" />
-
 import * as fs from "node:fs/promises";
 import { basename, join } from "node:path";
 import {
+	type FixtureValidationIssue,
+	type TarballTask,
 	extractTaskFiles,
 	loadTasksFromTarball,
 	validateTarballFixtures,
-	type FixtureValidationIssue,
-	type TarballTask,
 } from "./tarball";
 
 export interface EditTask {

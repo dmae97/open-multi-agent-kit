@@ -1,7 +1,6 @@
 /**
  * List available models with optional fuzzy search
  */
-
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import type { ModelRegistry } from "../config/model-registry";
 import { fuzzyFilter } from "../utils/fuzzy";
@@ -35,7 +34,7 @@ export async function listModels(modelRegistry: ModelRegistry, searchPattern?: s
 	// Apply fuzzy filter if search pattern provided
 	let filteredModels: Model<Api>[] = models;
 	if (searchPattern) {
-		filteredModels = fuzzyFilter(models, searchPattern, (m) => `${m.provider} ${m.id}`);
+		filteredModels = fuzzyFilter(models, searchPattern, m => `${m.provider} ${m.id}`);
 	}
 
 	if (filteredModels.length === 0) {
@@ -51,7 +50,7 @@ export async function listModels(modelRegistry: ModelRegistry, searchPattern?: s
 	});
 
 	// Calculate column widths
-	const rows = filteredModels.map((m) => ({
+	const rows = filteredModels.map(m => ({
 		provider: m.provider,
 		model: m.id,
 		context: formatTokenCount(m.contextWindow),
@@ -70,12 +69,12 @@ export async function listModels(modelRegistry: ModelRegistry, searchPattern?: s
 	};
 
 	const widths = {
-		provider: Math.max(headers.provider.length, ...rows.map((r) => r.provider.length)),
-		model: Math.max(headers.model.length, ...rows.map((r) => r.model.length)),
-		context: Math.max(headers.context.length, ...rows.map((r) => r.context.length)),
-		maxOut: Math.max(headers.maxOut.length, ...rows.map((r) => r.maxOut.length)),
-		thinking: Math.max(headers.thinking.length, ...rows.map((r) => r.thinking.length)),
-		images: Math.max(headers.images.length, ...rows.map((r) => r.images.length)),
+		provider: Math.max(headers.provider.length, ...rows.map(r => r.provider.length)),
+		model: Math.max(headers.model.length, ...rows.map(r => r.model.length)),
+		context: Math.max(headers.context.length, ...rows.map(r => r.context.length)),
+		maxOut: Math.max(headers.maxOut.length, ...rows.map(r => r.maxOut.length)),
+		thinking: Math.max(headers.thinking.length, ...rows.map(r => r.thinking.length)),
+		images: Math.max(headers.images.length, ...rows.map(r => r.images.length)),
 	};
 
 	// Print header

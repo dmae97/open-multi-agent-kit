@@ -9,7 +9,6 @@
  * proper branching - when you branch, the todo state is automatically
  * correct for that point in history.
  */
-
 import { StringEnum } from "@oh-my-pi/pi-ai";
 import type { ExtensionAPI, ExtensionContext, Theme } from "@oh-my-pi/pi-coding-agent";
 import { matchesKey, Text, truncateToWidth } from "@oh-my-pi/pi-tui";
@@ -74,7 +73,7 @@ class TodoListComponent {
 		if (this.todos.length === 0) {
 			lines.push(truncateToWidth(`  ${th.fg("dim", "No todos yet. Ask the agent to add some!")}`, width));
 		} else {
-			const done = this.todos.filter((t) => t.done).length;
+			const done = this.todos.filter(t => t.done).length;
 			const total = this.todos.length;
 			lines.push(truncateToWidth(`  ${th.fg("muted", `${done}/${total} completed`)}`, width));
 			lines.push("");
@@ -149,7 +148,7 @@ export default function (pi: ExtensionAPI) {
 							{
 								type: "text",
 								text: todos.length
-									? todos.map((t) => `[${t.done ? "x" : " "}] #${t.id}: ${t.text}`).join("\n")
+									? todos.map(t => `[${t.done ? "x" : " "}] #${t.id}: ${t.text}`).join("\n")
 									: "No todos",
 							},
 						],
@@ -178,7 +177,7 @@ export default function (pi: ExtensionAPI) {
 							details: { action: "toggle", todos: [...todos], nextId, error: "id required" } as TodoDetails,
 						};
 					}
-					const todo = todos.find((t) => t.id === params.id);
+					const todo = todos.find(t => t.id === params.id);
 					if (!todo) {
 						return {
 							content: [{ type: "text", text: `Todo #${params.id} not found` }],

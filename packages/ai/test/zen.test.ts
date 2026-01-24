@@ -7,7 +7,7 @@ import { e2eApiKey } from "./oauth";
 describe.skipIf(!e2eApiKey("OPENCODE_API_KEY"))("OpenCode Zen Models Smoke Test", () => {
 	const zenModels = Object.values(MODELS.opencode);
 
-	zenModels.forEach((model) => {
+	zenModels.forEach(model => {
 		it(`${model.id}`, async () => {
 			const response = await complete(model as Model<any>, {
 				messages: [{ role: "user", content: "Say hello.", timestamp: Date.now() }],

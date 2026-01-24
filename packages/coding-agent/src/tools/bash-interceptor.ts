@@ -5,7 +5,6 @@
  * this interceptor provides helpful error messages directing them to use
  * the specialized tools instead.
  */
-
 import { type BashInterceptorRule, DEFAULT_BASH_INTERCEPTOR_RULES } from "../config/settings-manager";
 
 export interface InterceptionResult {

@@ -36,7 +36,7 @@ describe("executePythonWithKernel result mapping", () => {
 	it("maps kernel error status to exit code 1", async () => {
 		const kernel = new FakeKernel(
 			{ status: "error", cancelled: false, timedOut: false, stdinRequested: false },
-			(options) => {
+			options => {
 				options?.onChunk?.("Traceback...\n");
 			},
 		);

@@ -1,7 +1,6 @@
 /**
  * Hook runner - executes hooks and manages their lifecycle.
  */
-
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { Model } from "@oh-my-pi/pi-ai";
 import type { ModelRegistry } from "../../config/model-registry";
@@ -159,7 +158,7 @@ export class HookRunner {
 	 * Get the paths of all loaded hooks.
 	 */
 	getHookPaths(): string[] {
-		return this.hooks.map((h) => h.path);
+		return this.hooks.map(h => h.path);
 	}
 
 	/**
@@ -262,8 +261,8 @@ export class HookRunner {
 		return {
 			...this.createContext(),
 			waitForIdle: () => this.waitForIdleFn(),
-			newSession: (options) => this.newSessionHandler(options),
-			branch: (entryId) => this.branchHandler(entryId),
+			newSession: options => this.newSessionHandler(options),
+			branch: entryId => this.branchHandler(entryId),
 			navigateTree: (targetId, options) => this.navigateTreeHandler(targetId, options),
 		};
 	}

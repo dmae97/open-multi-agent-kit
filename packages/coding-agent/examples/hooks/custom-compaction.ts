@@ -12,7 +12,6 @@
  * Usage:
  *   omp --hook examples/hooks/custom-compaction.ts
  */
-
 import { complete, getModel } from "@oh-my-pi/pi-ai";
 import type { HookAPI } from "@oh-my-pi/pi-coding-agent";
 import { convertToLlm, serializeConversation } from "@oh-my-pi/pi-coding-agent";
@@ -89,7 +88,7 @@ ${conversationText}
 
 			const summary = response.content
 				.filter((c): c is { type: "text"; text: string } => c.type === "text")
-				.map((c) => c.text)
+				.map(c => c.text)
 				.join("\n");
 
 			if (!summary.trim()) {

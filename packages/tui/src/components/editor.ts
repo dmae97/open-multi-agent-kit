@@ -355,7 +355,7 @@ export class Editor implements Component, Focusable {
 	setHistoryStorage(storage: HistoryStorage): void {
 		this.historyStorage = storage;
 		const recent = storage.getRecent(100);
-		this.history = recent.map((entry) => entry.prompt);
+		this.history = recent.map(entry => entry.prompt);
 		this.historyIndex = -1;
 	}
 
@@ -547,7 +547,7 @@ export class Editor implements Component, Focusable {
 							// Rebuild 'before' without the last grapheme
 							const beforeWithoutLast = beforeGraphemes
 								.slice(0, -1)
-								.map((g) => g.segment)
+								.map(g => g.segment)
 								.join("");
 							displayText = beforeWithoutLast + marker + cursor;
 							displayWidth -= 1; // Back to original width (reverse video replaces, doesn't add)
@@ -1156,7 +1156,7 @@ export class Editor implements Component, Focusable {
 			// Filter out non-printable characters except newlines
 			let filteredText = tabExpandedText
 				.split("")
-				.filter((char) => char === "\n" || char.charCodeAt(0) >= 32)
+				.filter(char => char === "\n" || char.charCodeAt(0) >= 32)
 				.join("");
 
 			// If pasting a file path (starts with /, ~, or .) and the character before

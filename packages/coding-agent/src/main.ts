@@ -4,7 +4,6 @@
  * This file handles CLI argument parsing and translates them into
  * createAgentSession() options. The SDK does the heavy lifting.
  */
-
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -98,7 +97,7 @@ async function runInteractiveMode(
 	await mode.init();
 
 	versionCheckPromise
-		.then((newVersion) => {
+		.then(newVersion => {
 			if (newVersion) {
 				mode.showNewVersionNotification(newVersion);
 			}
@@ -184,11 +183,11 @@ async function resolveSessionMatch(
 	sessionDir?: string,
 ): Promise<SessionInfo | undefined> {
 	const sessions = await SessionManager.list(cwd, sessionDir);
-	let matches = sessions.filter((session) => session.id.startsWith(sessionArg));
+	let matches = sessions.filter(session => session.id.startsWith(sessionArg));
 
 	if (matches.length === 0 && !sessionDir) {
 		const globalSessions = await SessionManager.listAll();
-		matches = globalSessions.filter((session) => session.id.startsWith(sessionArg));
+		matches = globalSessions.filter(session => session.id.startsWith(sessionArg));
 	}
 
 	return matches[0];
@@ -220,13 +219,13 @@ async function getChangelogForDisplay(parsed: Args, settingsManager: SettingsMan
 	if (!lastVersion) {
 		if (entries.length > 0) {
 			settingsManager.setLastChangelogVersion(VERSION);
-			return entries.map((e) => e.content).join("\n\n");
+			return entries.map(e => e.content).join("\n\n");
 		}
 	} else {
 		const newEntries = getNewEntries(entries, lastVersion);
 		if (newEntries.length > 0) {
 			settingsManager.setLastChangelogVersion(VERSION);
-			return newEntries.map((e) => e.content).join("\n\n");
+			return newEntries.map(e => e.content).join("\n\n");
 		}
 	}
 
@@ -392,10 +391,10 @@ async function buildSessionOptions(
 			const parsedModel = parseModelString(remembered);
 			const rememberedModel = parsedModel
 				? scopedModels.find(
-						(scopedModel) =>
+						scopedModel =>
 							scopedModel.model.provider === parsedModel.provider && scopedModel.model.id === parsedModel.id,
 					)
-				: scopedModels.find((scopedModel) => scopedModel.model.id.toLowerCase() === remembered.toLowerCase());
+				: scopedModels.find(scopedModel => scopedModel.model.id.toLowerCase() === remembered.toLowerCase());
 			if (rememberedModel) {
 				options.model = rememberedModel.model;
 			}
@@ -420,7 +419,7 @@ async function buildSessionOptions(
 	// Scoped models for Ctrl+P cycling - fill in default thinking levels when not explicit
 	if (scopedModels.length > 0) {
 		const defaultThinkingLevel = settingsManager.getDefaultThinkingLevel() ?? "off";
-		options.scopedModels = scopedModels.map((scopedModel) => ({
+		options.scopedModels = scopedModels.map(scopedModel => ({
 			model: scopedModel.model,
 			thinkingLevel: scopedModel.explicitThinkingLevel
 				? (scopedModel.thinkingLevel ?? defaultThinkingLevel)
@@ -437,7 +436,7 @@ async function buildSessionOptions(
 	} else if (resolvedSystemPrompt) {
 		options.systemPrompt = resolvedSystemPrompt;
 	} else if (resolvedAppendPrompt) {
-		options.systemPrompt = (defaultPrompt) => `${defaultPrompt}\n\n${resolvedAppendPrompt}`;
+		options.systemPrompt = defaultPrompt => `${defaultPrompt}\n\n${resolvedAppendPrompt}`;
 	}
 
 	// Tools
@@ -749,7 +748,7 @@ export async function main(args: string[]) {
 		const scopedModelsForDisplay = sessionOptions.scopedModels ?? scopedModels;
 		if (scopedModelsForDisplay.length > 0) {
 			const modelList = scopedModelsForDisplay
-				.map((scopedModel) => {
+				.map(scopedModel => {
 					const thinkingStr = scopedModel.thinkingLevel !== "off" ? `:${scopedModel.thinkingLevel}` : "";
 					return `${scopedModel.model.id}${thinkingStr}`;
 				})

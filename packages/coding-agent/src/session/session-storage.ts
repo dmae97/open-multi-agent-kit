@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-
 import { isEnoent } from "@oh-my-pi/pi-utils";
 
 export interface SessionStorageStat {
@@ -39,7 +38,7 @@ function toError(value: unknown): Error {
 }
 
 // FinalizationRegistry to clean up leaked file descriptors
-const writerRegistry = new FinalizationRegistry<number>((fd) => {
+const writerRegistry = new FinalizationRegistry<number>(fd => {
 	try {
 		fs.closeSync(fd);
 	} catch {
@@ -147,7 +146,7 @@ export class FileSessionStorage implements SessionStorage {
 
 	listFilesSync(dir: string, pattern: string): string[] {
 		try {
-			return Array.from(new Bun.Glob(pattern).scanSync(dir)).map((name) => path.join(dir, name));
+			return Array.from(new Bun.Glob(pattern).scanSync(dir)).map(name => path.join(dir, name));
 		} catch {
 			return [];
 		}

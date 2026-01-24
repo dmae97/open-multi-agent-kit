@@ -34,10 +34,10 @@ export function shouldUseMapReduce(diff: string, settings?: MapReduceSettings): 
 	if (settings?.enabled === false) return false;
 	const minFiles = settings?.minFiles ?? MIN_FILES_FOR_MAP_REDUCE;
 	const maxFileTokens = settings?.maxFileTokens ?? MAX_FILE_TOKENS;
-	const files = parseFileDiffs(diff).filter((file) => !isExcludedFile(file.filename));
+	const files = parseFileDiffs(diff).filter(file => !isExcludedFile(file.filename));
 	const fileCount = files.length;
 	if (fileCount >= minFiles) return true;
-	return files.some((file) => estimateTokens(file.content) > maxFileTokens);
+	return files.some(file => estimateTokens(file.content) > maxFileTokens);
 }
 
 /**
@@ -45,7 +45,7 @@ export function shouldUseMapReduce(diff: string, settings?: MapReduceSettings): 
  */
 
 export async function runMapReduceAnalysis(input: MapReduceInput): Promise<ConventionalAnalysis> {
-	const fileDiffs = parseFileDiffs(input.diff).filter((file) => !isExcludedFile(file.filename));
+	const fileDiffs = parseFileDiffs(input.diff).filter(file => !isExcludedFile(file.filename));
 	const observations = await runMapPhase({
 		model: input.smolModel,
 		apiKey: input.smolApiKey,

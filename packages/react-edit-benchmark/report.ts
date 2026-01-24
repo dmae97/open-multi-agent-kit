@@ -1,7 +1,6 @@
 /**
  * Markdown report generator for edit benchmark results.
  */
-
 import type { BenchmarkResult, TaskResult } from "./runner";
 
 function formatDuration(ms: number): string {

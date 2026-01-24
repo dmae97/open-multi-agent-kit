@@ -35,7 +35,7 @@ describe("SessionManager append and tree traversal", () => {
 			const entries = session.getEntries();
 			expect(entries).toHaveLength(3);
 
-			const thinkingEntry = entries.find((e) => e.type === "thinking_level_change");
+			const thinkingEntry = entries.find(e => e.type === "thinking_level_change");
 			expect(thinkingEntry).toBeDefined();
 			expect(thinkingEntry!.id).toBe(thinkingId);
 			expect(thinkingEntry!.parentId).toBe(msgId);
@@ -51,7 +51,7 @@ describe("SessionManager append and tree traversal", () => {
 			const _msg2Id = session.appendMessage(assistantMsg("response"));
 
 			const entries = session.getEntries();
-			const modelEntry = entries.find((e) => e.type === "model_change");
+			const modelEntry = entries.find(e => e.type === "model_change");
 			expect(modelEntry).toBeDefined();
 			expect(modelEntry?.id).toBe(modelId);
 			expect(modelEntry?.parentId).toBe(msgId);
@@ -71,7 +71,7 @@ describe("SessionManager append and tree traversal", () => {
 			const _id3 = session.appendMessage(userMsg("3"));
 
 			const entries = session.getEntries();
-			const compactionEntry = entries.find((e) => e.type === "compaction");
+			const compactionEntry = entries.find(e => e.type === "compaction");
 			expect(compactionEntry).toBeDefined();
 			expect(compactionEntry?.id).toBe(compactionId);
 			expect(compactionEntry?.parentId).toBe(id2);
@@ -92,7 +92,7 @@ describe("SessionManager append and tree traversal", () => {
 			const _msg2Id = session.appendMessage(assistantMsg("response"));
 
 			const entries = session.getEntries();
-			const customEntry = entries.find((e) => e.type === "custom") as CustomEntry;
+			const customEntry = entries.find(e => e.type === "custom") as CustomEntry;
 			expect(customEntry).toBeDefined();
 			expect(customEntry.id).toBe(customId);
 			expect(customEntry.parentId).toBe(msgId);
@@ -143,7 +143,7 @@ describe("SessionManager append and tree traversal", () => {
 
 			const path = session.getBranch();
 			expect(path).toHaveLength(4);
-			expect(path.map((e) => e.id)).toEqual([id1, id2, id3, id4]);
+			expect(path.map(e => e.id)).toEqual([id1, id2, id3, id4]);
 		});
 
 		it("returns path from specified entry to root", () => {
@@ -156,7 +156,7 @@ describe("SessionManager append and tree traversal", () => {
 
 			const path = session.getBranch(id2);
 			expect(path).toHaveLength(2);
-			expect(path.map((e) => e.id)).toEqual([id1, id2]);
+			expect(path.map(e => e.id)).toEqual([id1, id2]);
 		});
 	});
 
@@ -208,7 +208,7 @@ describe("SessionManager append and tree traversal", () => {
 			expect(node2.entry.id).toBe(id2);
 			expect(node2.children).toHaveLength(2); // id3 and id4 are siblings
 
-			const childIds = node2.children.map((c) => c.entry.id).sort();
+			const childIds = node2.children.map(c => c.entry.id).sort();
 			expect(childIds).toEqual([id3, id4].sort());
 		});
 
@@ -235,7 +235,7 @@ describe("SessionManager append and tree traversal", () => {
 			expect(node2.entry.id).toBe(id2);
 			expect(node2.children).toHaveLength(3);
 
-			const branchIds = node2.children.map((c) => c.entry.id).sort();
+			const branchIds = node2.children.map(c => c.entry.id).sort();
 			expect(branchIds).toEqual([idA, idB, idC].sort());
 		});
 
@@ -263,10 +263,10 @@ describe("SessionManager append and tree traversal", () => {
 			const node2 = tree[0].children[0];
 			expect(node2.children).toHaveLength(2); // id3 and id5
 
-			const node5 = node2.children.find((c) => c.entry.id === id5)!;
+			const node5 = node2.children.find(c => c.entry.id === id5)!;
 			expect(node5.children).toHaveLength(2); // id6 and id7
 
-			const node3 = node2.children.find((c) => c.entry.id === id3)!;
+			const node3 = node2.children.find(c => c.entry.id === id3)!;
 			expect(node3.children).toHaveLength(1); // id4
 		});
 	});
@@ -302,7 +302,7 @@ describe("SessionManager append and tree traversal", () => {
 			const id3 = session.appendMessage(userMsg("branched"));
 
 			const entries = session.getEntries();
-			const branchedEntry = entries.find((e) => e.id === id3)!;
+			const branchedEntry = entries.find(e => e.id === id3)!;
 			expect(branchedEntry.parentId).toBe(id1); // sibling of id2
 		});
 	});
@@ -320,7 +320,7 @@ describe("SessionManager append and tree traversal", () => {
 			expect(session.getLeafId()).toBe(summaryId);
 
 			const entries = session.getEntries();
-			const summaryEntry = entries.find((e) => e.type === "branch_summary");
+			const summaryEntry = entries.find(e => e.type === "branch_summary");
 			expect(summaryEntry).toBeDefined();
 			expect(summaryEntry?.parentId).toBe(id1);
 			if (summaryEntry?.type === "branch_summary") {
@@ -454,6 +454,6 @@ describe("createBranchedSession", () => {
 
 		const entries = session.getEntries();
 		expect(entries).toHaveLength(4);
-		expect(entries.map((e) => e.id)).toEqual([id1, id2, id4, id5]);
+		expect(entries.map(e => e.id)).toEqual([id1, id2, id4, id5]);
 	});
 });

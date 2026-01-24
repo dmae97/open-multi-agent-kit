@@ -110,7 +110,7 @@ END;
 
 		try {
 			const rows = this.recentStmt.all(safeLimit) as HistoryRow[];
-			return rows.map((row) => this.toEntry(row));
+			return rows.map(row => this.toEntry(row));
 		} catch (error) {
 			logger.error("HistoryStorage getRecent failed", { error: String(error) });
 			return [];
@@ -126,7 +126,7 @@ END;
 
 		try {
 			const rows = this.searchStmt.all(ftsQuery, safeLimit) as HistoryRow[];
-			return rows.map((row) => this.toEntry(row));
+			return rows.map(row => this.toEntry(row));
 		} catch (error) {
 			logger.error("HistoryStorage search failed", { error: String(error) });
 			return [];
@@ -148,13 +148,13 @@ END;
 		const tokens = query
 			.trim()
 			.split(/\s+/)
-			.map((token) => token.trim())
+			.map(token => token.trim())
 			.filter(Boolean);
 
 		if (tokens.length === 0) return null;
 
 		return tokens
-			.map((token) => {
+			.map(token => {
 				const escaped = token.replace(/"/g, '""');
 				return `"${escaped}"*`;
 			})

@@ -408,7 +408,7 @@ export class PluginManager {
 		// Validate features if setting specific ones
 		if (features && features.length > 0) {
 			const plugins = await this.list();
-			const plugin = plugins.find((p) => p.name === name);
+			const plugin = plugins.find(p => p.name === name);
 			if (plugin?.manifest.features) {
 				for (const feat of features) {
 					if (!(feat in plugin.manifest.features)) {
@@ -632,7 +632,7 @@ export class PluginManager {
 		const config = await this.ensureConfigLoaded();
 		const state = config.plugins[name];
 		if (state?.enabledFeatures) {
-			state.enabledFeatures = state.enabledFeatures.filter((f) => f !== feat);
+			state.enabledFeatures = state.enabledFeatures.filter(f => f !== feat);
 			await this.saveRuntimeConfig();
 			return true;
 		}

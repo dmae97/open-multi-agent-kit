@@ -112,12 +112,12 @@ function inferFileType(path: string): string {
 }
 
 function formatRelatedFiles(files: string[], currentFile: string, numstat: NumstatEntry[]): string | undefined {
-	const others = files.filter((file) => file !== currentFile);
+	const others = files.filter(file => file !== currentFile);
 	if (others.length === 0) return undefined;
 
-	const numstatMap = new Map(numstat.map((entry) => [entry.path, entry]));
+	const numstatMap = new Map(numstat.map(entry => [entry.path, entry]));
 
-	const lines = others.map((file) => {
+	const lines = others.map(file => {
 		const entry = numstatMap.get(file);
 		const fileType = inferFileType(file);
 		if (entry) {

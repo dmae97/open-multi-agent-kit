@@ -106,7 +106,7 @@ export const handleNuGet: SpecialHandler = async (
 
 				if (pageItems) {
 					const found = pageItems.find(
-						(item) => item.catalogEntry.version.toLowerCase() === requestedVersion.toLowerCase(),
+						item => item.catalogEntry.version.toLowerCase() === requestedVersion.toLowerCase(),
 					);
 					if (found) {
 						targetEntry = found.catalogEntry;
@@ -162,7 +162,7 @@ export const handleNuGet: SpecialHandler = async (
 
 		// Show dependencies by target framework
 		if (targetEntry.dependencyGroups?.length) {
-			const hasAnyDeps = targetEntry.dependencyGroups.some((g) => g.dependencies?.length);
+			const hasAnyDeps = targetEntry.dependencyGroups.some(g => g.dependencies?.length);
 			if (hasAnyDeps) {
 				md += `\n## Dependencies\n\n`;
 				for (const group of targetEntry.dependencyGroups) {

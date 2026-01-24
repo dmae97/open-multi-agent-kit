@@ -224,7 +224,7 @@ export const lsToolRenderer = {
 		args?: LsRenderArgs,
 	): Component {
 		const details = result.details;
-		const textContent = result.content?.find((c) => c.type === "text")?.text ?? "";
+		const textContent = result.content?.find(c => c.type === "text")?.text ?? "";
 
 		if (result.isError) {
 			const header = renderStatusLine({ icon: "error", title: "Ls", description: args?.path || "." }, uiTheme);
@@ -243,7 +243,7 @@ export const lsToolRenderer = {
 		let rawEntries: string[] | undefined = details?.rawEntries;
 		if (entries.length === 0) {
 			const rawLines = textContent.split("\n").filter((l: string) => l.trim());
-			entries = rawLines.filter((line) => !/^\[.*\]$/.test(line.trim()));
+			entries = rawLines.filter(line => !/^\[.*\]$/.test(line.trim()));
 			rawEntries = undefined; // Can't reliably extract raw paths from text
 		}
 

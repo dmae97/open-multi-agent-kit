@@ -4,7 +4,6 @@
  * Logs to ~/.omp/logs/ with size-based rotation, supporting concurrent omp instances.
  * Each log entry includes process.pid for traceability.
  */
-
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";

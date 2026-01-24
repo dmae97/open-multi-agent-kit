@@ -5,7 +5,6 @@
  * that toggles the entire provider. All items below are dimmed when the
  * master switch is off.
  */
-
 import { type Component, matchesKey, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
 import { isProviderEnabled } from "../../../discovery";
 import { theme } from "../../../modes/theme/theme";

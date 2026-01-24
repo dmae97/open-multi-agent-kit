@@ -80,7 +80,7 @@ describe.skipIf(!API_KEY)("AgentSession compaction e2e", () => {
 		});
 
 		// Subscribe to track events
-		session.subscribe((event) => {
+		session.subscribe(event => {
 			events.push(event);
 		});
 
@@ -134,7 +134,7 @@ describe.skipIf(!API_KEY)("AgentSession compaction e2e", () => {
 		expect(session.messages.length).toBeGreaterThan(0);
 
 		// The agent should have responded
-		const assistantMessages = session.messages.filter((m) => m.role === "assistant");
+		const assistantMessages = session.messages.filter(m => m.role === "assistant");
 		expect(assistantMessages.length).toBeGreaterThan(0);
 	}, 180000);
 
@@ -154,7 +154,7 @@ describe.skipIf(!API_KEY)("AgentSession compaction e2e", () => {
 		const entries = sessionManager.getEntries();
 
 		// Should have a compaction entry
-		const compactionEntries = entries.filter((e) => e.type === "compaction");
+		const compactionEntries = entries.filter(e => e.type === "compaction");
 		expect(compactionEntries.length).toBe(1);
 
 		const compaction = compactionEntries[0];
@@ -184,7 +184,7 @@ describe.skipIf(!API_KEY)("AgentSession compaction e2e", () => {
 
 		// In-memory entries should have the compaction
 		const entries = sessionManager.getEntries();
-		const compactionEntries = entries.filter((e) => e.type === "compaction");
+		const compactionEntries = entries.filter(e => e.type === "compaction");
 		expect(compactionEntries.length).toBe(1);
 	}, 120000);
 
@@ -200,13 +200,13 @@ describe.skipIf(!API_KEY)("AgentSession compaction e2e", () => {
 
 		// Check that no auto_compaction events were emitted for manual compaction
 		const autoCompactionEvents = events.filter(
-			(e) => e.type === "auto_compaction_start" || e.type === "auto_compaction_end",
+			e => e.type === "auto_compaction_start" || e.type === "auto_compaction_end",
 		);
 		// Manual compaction doesn't emit auto_compaction events
 		expect(autoCompactionEvents.length).toBe(0);
 
 		// Regular events should have been emitted
-		const messageEndEvents = events.filter((e) => e.type === "message_end");
+		const messageEndEvents = events.filter(e => e.type === "message_end");
 		expect(messageEndEvents.length).toBeGreaterThan(0);
 	}, 120000);
 });

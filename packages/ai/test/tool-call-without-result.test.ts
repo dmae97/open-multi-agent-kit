@@ -51,7 +51,7 @@ async function testToolCallWithoutResult<TApi extends Api>(
 	console.log("First response:", JSON.stringify(firstResponse, null, 2));
 
 	// Verify the response contains a tool call
-	const hasToolCall = firstResponse.content.some((block) => block.type === "toolCall");
+	const hasToolCall = firstResponse.content.some(block => block.type === "toolCall");
 	expect(hasToolCall).toBe(true);
 
 	if (!hasToolCall) {
@@ -79,10 +79,10 @@ async function testToolCallWithoutResult<TApi extends Api>(
 	// The LLM may choose to answer directly or make a new tool call - either is fine
 	// The important thing is it didn't fail with the orphaned tool call error
 	const textContent = secondResponse.content
-		.filter((block) => block.type === "text")
-		.map((block) => (block.type === "text" ? block.text : ""))
+		.filter(block => block.type === "text")
+		.map(block => (block.type === "text" ? block.text : ""))
 		.join(" ");
-	const toolCalls = secondResponse.content.filter((block) => block.type === "toolCall").length;
+	const toolCalls = secondResponse.content.filter(block => block.type === "toolCall").length;
 	expect(toolCalls || textContent.length).toBeGreaterThan(0);
 	console.log("Answer:", textContent);
 

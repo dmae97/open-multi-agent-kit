@@ -491,7 +491,7 @@ function b() {
 
 			const outputLines = getTextOutput(result)
 				.split("\n")
-				.map((line) => line.trim())
+				.map(line => line.trim())
 				.filter(Boolean);
 
 			expect(outputLines).toContain("visible.txt");

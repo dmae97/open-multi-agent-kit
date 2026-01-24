@@ -30,7 +30,7 @@ function pickLocalizedText(value?: LocalizedText): string | undefined {
 	if (typeof value === "string") return value;
 	const preferred = value["en-US"] ?? value.en_US ?? value.en;
 	if (preferred) return preferred;
-	const first = Object.values(value).find((entry) => typeof entry === "string");
+	const first = Object.values(value).find(entry => typeof entry === "string");
 	return first;
 }
 
@@ -61,7 +61,7 @@ function collectAntiFeatures(data: FdroidPackage): string[] {
 function resolveSuggestedVersion(data: FdroidPackage): string | undefined {
 	if (data.suggestedVersionName) return data.suggestedVersionName;
 	if (data.suggestedVersionCode) {
-		const match = data.packages?.find((pkg) => pkg.versionCode === data.suggestedVersionCode);
+		const match = data.packages?.find(pkg => pkg.versionCode === data.suggestedVersionCode);
 		if (match?.versionName) return match.versionName;
 	}
 	return data.packages?.[0]?.versionName;

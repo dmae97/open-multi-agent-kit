@@ -42,7 +42,7 @@ export class AssistantMessageComponent extends Container {
 		if (!caps.images || this.prerenderInFlight) return;
 
 		// Check if any text content has pending mermaid blocks
-		const hasPending = message.content.some((c) => c.type === "text" && c.text.trim() && hasPendingMermaid(c.text));
+		const hasPending = message.content.some(c => c.type === "text" && c.text.trim() && hasPendingMermaid(c.text));
 		if (!hasPending) return;
 
 		this.prerenderInFlight = true;
@@ -70,7 +70,7 @@ export class AssistantMessageComponent extends Container {
 		this.triggerMermaidPrerender(message);
 
 		const hasVisibleContent = message.content.some(
-			(c) => (c.type === "text" && c.text.trim()) || (c.type === "thinking" && c.thinking.trim()),
+			c => (c.type === "text" && c.text.trim()) || (c.type === "thinking" && c.thinking.trim()),
 		);
 
 		if (hasVisibleContent) {
@@ -86,7 +86,7 @@ export class AssistantMessageComponent extends Container {
 				this.contentContainer.addChild(new Markdown(content.text.trim(), 1, 0, getMarkdownTheme()));
 			} else if (content.type === "thinking" && content.thinking.trim()) {
 				// Check if there's text content after this thinking block
-				const hasTextAfter = message.content.slice(i + 1).some((c) => c.type === "text" && c.text.trim());
+				const hasTextAfter = message.content.slice(i + 1).some(c => c.type === "text" && c.text.trim());
 
 				if (this.hideThinkingBlock) {
 					// Show static "Thinking..." label when hidden
@@ -109,7 +109,7 @@ export class AssistantMessageComponent extends Container {
 
 		// Check if aborted - show after partial content
 		// But only if there are no tool calls (tool execution components will show the error)
-		const hasToolCalls = message.content.some((c) => c.type === "toolCall");
+		const hasToolCalls = message.content.some(c => c.type === "toolCall");
 		if (!hasToolCalls) {
 			if (message.stopReason === "aborted") {
 				const abortMessage =

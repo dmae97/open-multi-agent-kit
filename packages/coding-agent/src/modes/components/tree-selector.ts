@@ -71,7 +71,7 @@ class TreeList implements Component {
 		this.applyFilter();
 
 		// Start with current leaf selected
-		const leafIndex = this.filteredNodes.findIndex((n) => n.node.entry.id === currentLeafId);
+		const leafIndex = this.filteredNodes.findIndex(n => n.node.entry.id === currentLeafId);
 		if (leafIndex !== -1) {
 			this.selectedIndex = leafIndex;
 		} else {
@@ -236,7 +236,7 @@ class TreeList implements Component {
 
 		const searchTokens = this.searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
 
-		this.filteredNodes = this.flatNodes.filter((flatNode) => {
+		this.filteredNodes = this.flatNodes.filter(flatNode => {
 			const entry = flatNode.node.entry;
 			const isCurrentLeaf = entry.id === this.currentLeafId;
 
@@ -289,7 +289,7 @@ class TreeList implements Component {
 			// Apply search filter
 			if (searchTokens.length > 0) {
 				const nodeText = this.getSearchableText(flatNode.node).toLowerCase();
-				return searchTokens.every((token) => nodeText.includes(token));
+				return searchTokens.every(token => nodeText.includes(token));
 			}
 
 			return true;
@@ -297,7 +297,7 @@ class TreeList implements Component {
 
 		// Try to preserve cursor on the same node after filtering
 		if (previouslySelectedId) {
-			const newIndex = this.filteredNodes.findIndex((n) => n.node.entry.id === previouslySelectedId);
+			const newIndex = this.filteredNodes.findIndex(n => n.node.entry.id === previouslySelectedId);
 			if (newIndex !== -1) {
 				this.selectedIndex = newIndex;
 				return;
@@ -442,7 +442,7 @@ class TreeList implements Component {
 				const posInLevel = i % 3;
 
 				// Check if there's a gutter at this level
-				const gutter = flatNode.gutters.find((g) => g.position === level);
+				const gutter = flatNode.gutters.find(g => g.position === level);
 				if (gutter) {
 					if (posInLevel === 0) {
 						prefixChars.push(gutter.show ? theme.tree.vertical : " ");
@@ -537,7 +537,7 @@ class TreeList implements Component {
 						? entry.content
 						: entry.content
 								.filter((c): c is { type: "text"; text: string } => c.type === "text")
-								.map((c) => c.text)
+								.map(c => c.text)
 								.join("");
 				result = theme.fg("customMessageLabel", `[${entry.customType}]: `) + normalize(content);
 				break;
@@ -713,7 +713,7 @@ class TreeList implements Component {
 				this.onLabelEdit(selected.node.entry.id, selected.node.label);
 			}
 		} else {
-			const hasControlChars = [...keyData].some((ch) => {
+			const hasControlChars = [...keyData].some(ch => {
 				const code = ch.charCodeAt(0);
 				return code < 32 || code === 0x7f || (code >= 0x80 && code <= 0x9f);
 			});
@@ -764,7 +764,7 @@ class LabelInput implements Component {
 		const indent = "  ";
 		const availableWidth = width - indent.length;
 		lines.push(truncateToWidth(`${indent}${theme.fg("muted", "Label (empty to remove):")}`, width));
-		lines.push(...this.input.render(availableWidth).map((line) => truncateToWidth(`${indent}${line}`, width)));
+		lines.push(...this.input.render(availableWidth).map(line => truncateToWidth(`${indent}${line}`, width)));
 		lines.push(truncateToWidth(`${indent}${theme.fg("dim", "enter: save  esc: cancel")}`, width));
 		return lines;
 	}

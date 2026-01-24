@@ -22,10 +22,10 @@ import { StatusLineSegmentEditorComponent } from "./status-line-segment-editor";
 
 function getTabBarTheme(): TabBarTheme {
 	return {
-		label: (text) => theme.bold(theme.fg("accent", text)),
-		activeTab: (text) => theme.bold(theme.bg("selectedBg", theme.fg("text", text))),
-		inactiveTab: (text) => theme.fg("muted", text),
-		hint: (text) => theme.fg("dim", text),
+		label: text => theme.bold(theme.fg("accent", text)),
+		activeTab: text => theme.bold(theme.bg("selectedBg", theme.fg("text", text))),
+		inactiveTab: text => theme.fg("muted", text),
+		hint: text => theme.fg("dim", text),
 	};
 }
 
@@ -74,19 +74,19 @@ class SelectSubmenu extends Container {
 		this.selectList = new SelectList(options, Math.min(options.length, 10), getSelectListTheme());
 
 		// Pre-select current value
-		const currentIndex = options.findIndex((o) => o.value === currentValue);
+		const currentIndex = options.findIndex(o => o.value === currentValue);
 		if (currentIndex !== -1) {
 			this.selectList.setSelectedIndex(currentIndex);
 		}
 
-		this.selectList.onSelect = (item) => {
+		this.selectList.onSelect = item => {
 			onSelect(item.value);
 		};
 
 		this.selectList.onCancel = onCancel;
 
 		if (onSelectionChange) {
-			this.selectList.onSelectionChange = (item) => {
+			this.selectList.onSelectionChange = item => {
 				onSelectionChange(item.value);
 				// Update preview after the preview callback has applied changes
 				this.updatePreview();
@@ -307,12 +307,12 @@ export class SettingsSelectorComponent extends Container {
 
 		// Special case: inject runtime options
 		if (def.id === "thinkingLevel") {
-			options = this.context.availableThinkingLevels.map((level) => {
-				const baseOpt = def.getOptions(this.settingsManager).find((o) => o.value === level);
+			options = this.context.availableThinkingLevels.map(level => {
+				const baseOpt = def.getOptions(this.settingsManager).find(o => o.value === level);
 				return baseOpt || { value: level, label: level };
 			});
 		} else if (def.id === "theme") {
-			options = this.context.availableThemes.map((t) => ({ value: t, label: t }));
+			options = this.context.availableThemes.map(t => ({ value: t, label: t }));
 		}
 
 		// Preview handlers
@@ -323,7 +323,7 @@ export class SettingsSelectorComponent extends Container {
 			onPreview = this.callbacks.onThemePreview;
 			onPreviewCancel = () => this.callbacks.onThemePreview?.(currentValue);
 		} else if (def.id === "statusLinePreset") {
-			onPreview = (value) => {
+			onPreview = value => {
 				const presetDef = getPreset((value as StatusLineSettings["preset"]) ?? "default");
 				this.callbacks.onStatusLinePreview?.({
 					preset: value as StatusLineSettings["preset"],
@@ -345,7 +345,7 @@ export class SettingsSelectorComponent extends Container {
 				this.updateStatusPreview();
 			};
 		} else if (def.id === "statusLineSeparator") {
-			onPreview = (value) => {
+			onPreview = value => {
 				this.callbacks.onStatusLinePreview?.({
 					separator: value as StatusLineSettings["separator"],
 				});
@@ -370,7 +370,7 @@ export class SettingsSelectorComponent extends Container {
 			def.description,
 			options,
 			currentValue,
-			(value) => {
+			value => {
 				// Persist to SettingsManager
 				def.set(this.settingsManager, value);
 				// Notify for side effects
@@ -454,7 +454,7 @@ export class SettingsSelectorComponent extends Container {
 			10,
 			getSettingsListTheme(),
 			(id, newValue) => {
-				const def = defs.find((d) => d.id === id);
+				const def = defs.find(d => d.id === id);
 				if (!def) return;
 
 				// Persist to SettingsManager based on type

@@ -3,7 +3,6 @@
  *
  * Demonstrates using ExtensionAPI's logger, typebox, and pi module access.
  */
-
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 
 export default function (pi: ExtensionAPI) {

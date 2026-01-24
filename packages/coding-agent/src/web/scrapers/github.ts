@@ -141,7 +141,7 @@ async function renderGitHubIssue(
 	md += `**#${issue.number}** · ${issue.state} · opened by @${issue.user.login}\n`;
 	md += `Created: ${issue.created_at} · Updated: ${issue.updated_at}\n`;
 	if (issue.labels.length > 0) {
-		md += `Labels: ${issue.labels.map((l) => l.name).join(", ")}\n`;
+		md += `Labels: ${issue.labels.map(l => l.name).join(", ")}\n`;
 	}
 	md += `\n---\n\n`;
 	md += issue.body || "*No description provided.*";
@@ -196,7 +196,7 @@ async function renderGitHubIssuesList(
 
 	for (const issue of issues) {
 		if (issue.pull_request) continue; // Skip PRs in issues list
-		const labels = issue.labels.length > 0 ? ` [${issue.labels.map((l) => l.name).join(", ")}]` : "";
+		const labels = issue.labels.length > 0 ? ` [${issue.labels.map(l => l.name).join(", ")}]` : "";
 		md += `- **#${issue.number}** ${issue.title}${labels}\n`;
 		md += `  by @${issue.user.login} · ${issue.comments} comments · ${issue.created_at}\n\n`;
 	}
@@ -259,7 +259,7 @@ async function renderGitHubTree(
 		md += "```\n\n";
 
 		// Look for README in this directory
-		const readmeFile = items.find((item) => item.type === "file" && /^readme\.md$/i.test(item.name));
+		const readmeFile = items.find(item => item.type === "file" && /^readme\.md$/i.test(item.name));
 		if (readmeFile) {
 			const readmePath = dirPath ? `${dirPath}/${readmeFile.name}` : readmeFile.name;
 			const rawUrl = `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${ref}/${readmePath}`;

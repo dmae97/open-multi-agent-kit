@@ -343,7 +343,7 @@ function normalizeBashInterceptorSettings(
 		patterns = DEFAULT_BASH_INTERCEPTOR_RULES;
 	} else if (Array.isArray(rawPatterns)) {
 		patterns = rawPatterns
-			.map((rule) => normalizeBashInterceptorRule(rule))
+			.map(rule => normalizeBashInterceptorRule(rule))
 			.filter((rule): rule is BashInterceptorRule => rule !== null);
 	} else {
 		patterns = DEFAULT_BASH_INTERCEPTOR_RULES;
@@ -372,7 +372,7 @@ function hasNerdFonts(): boolean {
 	const termProgram = (process.env.TERM_PROGRAM || "").toLowerCase();
 	const term = (process.env.TERM || "").toLowerCase();
 	const nerdTerms = ["iterm", "wezterm", "kitty", "ghostty", "alacritty"];
-	cachedNerdFonts = nerdTerms.some((candidate) => termProgram.includes(candidate) || term.includes(candidate));
+	cachedNerdFonts = nerdTerms.some(candidate => termProgram.includes(candidate) || term.includes(candidate));
 	return cachedNerdFonts;
 }
 

@@ -7,7 +7,6 @@
  *     - Feature toggles
  *     - Config value editor
  */
-
 import {
 	Container,
 	Input,
@@ -62,7 +61,7 @@ export class PluginListComponent extends Container {
 			return;
 		}
 
-		const items: SelectItem[] = plugins.map((p) => {
+		const items: SelectItem[] = plugins.map(p => {
 			const status = p.enabled
 				? theme.fg("success", theme.status.enabled)
 				: theme.fg("muted", theme.status.disabled);
@@ -83,8 +82,8 @@ export class PluginListComponent extends Container {
 
 		this.selectList = new SelectList(items, Math.min(items.length, 8), getSelectListTheme());
 
-		this.selectList.onSelect = (item) => {
-			const plugin = this.plugins.find((p) => p.name === item.value);
+		this.selectList.onSelect = item => {
+			const plugin = this.plugins.find(p => p.name === item.value);
 			if (plugin) {
 				callbacks.onPluginSelect(plugin);
 			}
@@ -210,7 +209,7 @@ export class PluginDetailComponent extends Container {
 								schema.description || `Select value for ${key}`,
 								schema.values,
 								cv,
-								(value) => {
+								value => {
 									this.callbacks.onConfigChange(key, value);
 									done(value);
 								},
@@ -229,7 +228,7 @@ export class PluginDetailComponent extends Container {
 								key,
 								schema,
 								cv === "(not set)" ? "" : cv,
-								(value) => {
+								value => {
 									const parsed = schema.type === "number" ? Number(value) : value;
 									this.callbacks.onConfigChange(key, parsed);
 									done(String(value));
@@ -310,7 +309,7 @@ class ConfigEnumSubmenu extends Container {
 		}
 		this.addChild(new Spacer(1));
 
-		const items: SelectItem[] = values.map((v) => ({ value: v, label: v }));
+		const items: SelectItem[] = values.map(v => ({ value: v, label: v }));
 		this.selectList = new SelectList(items, Math.min(items.length, 8), getSelectListTheme());
 
 		const currentIndex = values.indexOf(currentValue);
@@ -318,7 +317,7 @@ class ConfigEnumSubmenu extends Container {
 			this.selectList.setSelectedIndex(currentIndex);
 		}
 
-		this.selectList.onSelect = (item) => onSelect(item.value);
+		this.selectList.onSelect = item => onSelect(item.value);
 		this.selectList.onCancel = onCancel;
 
 		this.addChild(this.selectList);
@@ -375,7 +374,7 @@ class ConfigInputSubmenu extends Container {
 			this.input.setValue(currentValue);
 		}
 
-		this.input.onSubmit = (value) => {
+		this.input.onSubmit = value => {
 			if (value.trim()) {
 				this.onSubmit(value);
 			} else {
@@ -439,7 +438,7 @@ export class PluginSettingsComponent extends Container {
 		const plugins = await this.manager.list();
 
 		this.viewComponent = new PluginListComponent(plugins, {
-			onPluginSelect: (plugin) => this.showPluginDetail(plugin),
+			onPluginSelect: plugin => this.showPluginDetail(plugin),
 			onCancel: () => this.callbacks.onClose(),
 		});
 
@@ -452,7 +451,7 @@ export class PluginSettingsComponent extends Container {
 		this.clear();
 
 		this.viewComponent = new PluginDetailComponent(plugin, this.manager, {
-			onEnabledChange: async (enabled) => {
+			onEnabledChange: async enabled => {
 				await this.manager.setEnabled(plugin.name, enabled);
 				this.callbacks.onPluginChanged();
 			},

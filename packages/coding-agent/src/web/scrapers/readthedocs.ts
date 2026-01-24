@@ -1,7 +1,6 @@
 /**
  * Read the Docs handler for web-fetch
  */
-
 import { parse as parseHtml } from "node-html-parser";
 import type { RenderResult, SpecialHandler } from "./types";
 import { finalizeOutput, htmlToBasicMarkdown, loadPage } from "./types";
@@ -62,7 +61,7 @@ export const handleReadTheDocs: SpecialHandler = async (
 		?.querySelectorAll(
 			".headerlink, .viewcode-link, nav, .sidebar, footer, .related, .sphinxsidebar, .toctree-wrapper",
 		)
-		.forEach((el) => {
+		.forEach(el => {
 			el.remove();
 		});
 

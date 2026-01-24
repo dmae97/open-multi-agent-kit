@@ -6,7 +6,6 @@
  *
  * This enables reliable agent:// URL resolution and prevents artifact collisions.
  */
-
 import * as fs from "node:fs/promises";
 
 /**
@@ -73,7 +72,7 @@ export class AgentOutputManager {
 	 */
 	async allocateBatch(ids: string[]): Promise<string[]> {
 		await this.#ensureInitialized();
-		return ids.map((id) => `${this.#nextId++}-${id}`);
+		return ids.map(id => `${this.#nextId++}-${id}`);
 	}
 
 	/**

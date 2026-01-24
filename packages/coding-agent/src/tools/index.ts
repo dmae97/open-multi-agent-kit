@@ -1,3 +1,34 @@
+import type { AgentTool } from "@oh-my-pi/pi-agent-core";
+import { logger } from "@oh-my-pi/pi-utils";
+import type { BashInterceptorRule } from "../config/settings-manager";
+import type { InternalUrlRouter } from "../internal-urls";
+import { getPreludeDocs, warmPythonEnvironment } from "../ipy/executor";
+import { checkPythonKernelAvailability } from "../ipy/kernel";
+import { LspTool } from "../lsp";
+import { EditTool } from "../patch";
+import type { ArtifactManager } from "../session/artifacts";
+import { TaskTool } from "../task";
+import type { AgentOutputManager } from "../task/output-manager";
+import type { EventBus } from "../utils/event-bus";
+import { time } from "../utils/timings";
+import { WebSearchTool } from "../web/search";
+import { AskTool } from "./ask";
+import { BashTool } from "./bash";
+import { CalculatorTool } from "./calculator";
+import { CompleteTool } from "./complete";
+import { FetchTool } from "./fetch";
+import { FindTool } from "./find";
+import { GrepTool } from "./grep";
+import { LsTool } from "./ls";
+import { NotebookTool } from "./notebook";
+import { wrapToolsWithMetaNotice } from "./output-meta";
+import { PythonTool } from "./python";
+import { ReadTool } from "./read";
+import { reportFindingTool } from "./review";
+import { loadSshTool } from "./ssh";
+import { TodoWriteTool } from "./todo-write";
+import { WriteTool } from "./write";
+
 // Exa MCP tools (22 tools)
 
 export { exaTools } from "../exa";
@@ -59,37 +90,6 @@ export {
 	truncateTail,
 } from "./truncate";
 export { WriteTool, type WriteToolDetails } from "./write";
-
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
-import { logger } from "@oh-my-pi/pi-utils";
-import type { BashInterceptorRule } from "../config/settings-manager";
-import type { InternalUrlRouter } from "../internal-urls";
-import { getPreludeDocs, warmPythonEnvironment } from "../ipy/executor";
-import { checkPythonKernelAvailability } from "../ipy/kernel";
-import { LspTool } from "../lsp";
-import { EditTool } from "../patch";
-import type { ArtifactManager } from "../session/artifacts";
-import { TaskTool } from "../task";
-import type { AgentOutputManager } from "../task/output-manager";
-import type { EventBus } from "../utils/event-bus";
-import { time } from "../utils/timings";
-import { WebSearchTool } from "../web/search";
-import { AskTool } from "./ask";
-import { BashTool } from "./bash";
-import { CalculatorTool } from "./calculator";
-import { CompleteTool } from "./complete";
-import { FetchTool } from "./fetch";
-import { FindTool } from "./find";
-import { GrepTool } from "./grep";
-import { LsTool } from "./ls";
-import { NotebookTool } from "./notebook";
-import { wrapToolsWithMetaNotice } from "./output-meta";
-import { PythonTool } from "./python";
-import { ReadTool } from "./read";
-import { reportFindingTool } from "./review";
-import { loadSshTool } from "./ssh";
-import { TodoWriteTool } from "./todo-write";
-import { WriteTool } from "./write";
 
 /** Tool type (AgentTool from pi-ai) */
 export type Tool = AgentTool<any, any, any>;
@@ -155,26 +155,26 @@ type ToolFactory = (session: ToolSession) => Tool | null | Promise<Tool | null>;
 
 export const BUILTIN_TOOLS: Record<string, ToolFactory> = {
 	ask: AskTool.createIf,
-	bash: (s) => new BashTool(s),
-	python: (s) => new PythonTool(s),
-	calc: (s) => new CalculatorTool(s),
+	bash: s => new BashTool(s),
+	python: s => new PythonTool(s),
+	calc: s => new CalculatorTool(s),
 	ssh: loadSshTool,
-	edit: (s) => new EditTool(s),
-	find: (s) => new FindTool(s),
-	grep: (s) => new GrepTool(s),
-	ls: (s) => new LsTool(s),
+	edit: s => new EditTool(s),
+	find: s => new FindTool(s),
+	grep: s => new GrepTool(s),
+	ls: s => new LsTool(s),
 	lsp: LspTool.createIf,
-	notebook: (s) => new NotebookTool(s),
-	read: (s) => new ReadTool(s),
+	notebook: s => new NotebookTool(s),
+	read: s => new ReadTool(s),
 	task: TaskTool.create,
-	todo_write: (s) => new TodoWriteTool(s),
-	fetch: (s) => new FetchTool(s),
-	web_search: (s) => new WebSearchTool(s),
-	write: (s) => new WriteTool(s),
+	todo_write: s => new TodoWriteTool(s),
+	fetch: s => new FetchTool(s),
+	web_search: s => new WebSearchTool(s),
+	write: s => new WriteTool(s),
 };
 
 export const HIDDEN_TOOLS: Record<string, ToolFactory> = {
-	complete: (s) => new CompleteTool(s),
+	complete: s => new CompleteTool(s),
 	report_finding: () => reportFindingTool,
 };
 
@@ -270,11 +270,11 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		requestedTools.push("complete");
 	}
 
-	const filteredRequestedTools = requestedTools?.filter((name) => name in allTools && isToolAllowed(name));
+	const filteredRequestedTools = requestedTools?.filter(name => name in allTools && isToolAllowed(name));
 
 	const entries =
 		filteredRequestedTools !== undefined
-			? filteredRequestedTools.map((name) => [name, allTools[name]] as const)
+			? filteredRequestedTools.map(name => [name, allTools[name]] as const)
 			: [
 					...Object.entries(BUILTIN_TOOLS).filter(([name]) => isToolAllowed(name)),
 					...(includeComplete ? ([["complete", HIDDEN_TOOLS.complete]] as const) : []),
@@ -296,12 +296,12 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 	if (slowTools.length > 0 && process.env.OMP_TIMING === "1") {
 		logger.debug("Tool factory timings", { slowTools });
 	}
-	const tools = results.filter((r) => r.tool !== null).map((r) => r.tool as Tool);
+	const tools = results.filter(r => r.tool !== null).map(r => r.tool as Tool);
 	const wrappedTools = wrapToolsWithMetaNotice(tools);
 
 	if (filteredRequestedTools !== undefined) {
 		const allowed = new Set(filteredRequestedTools);
-		return wrappedTools.filter((tool) => allowed.has(tool.name));
+		return wrappedTools.filter(tool => allowed.has(tool.name));
 	}
 
 	return wrappedTools;

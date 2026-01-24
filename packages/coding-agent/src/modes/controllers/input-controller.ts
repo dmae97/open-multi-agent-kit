@@ -385,7 +385,7 @@ export class InputController {
 				const registry = this.ctx.session.modelRegistry;
 				const smolModel = this.ctx.settingsManager.getModelRole("smol");
 				generateSessionTitle(text, registry, smolModel, this.ctx.session.sessionId)
-					.then(async (title) => {
+					.then(async title => {
 						if (title) {
 							await this.ctx.sessionManager.setSessionTitle(title);
 							setTerminalTitle(`π: ${title}`);
@@ -454,7 +454,7 @@ export class InputController {
 		}
 		const queuedText = allQueued.join("\n\n");
 		const currentText = options?.currentText ?? this.ctx.editor.getText();
-		const combinedText = [queuedText, currentText].filter((t) => t.trim()).join("\n\n");
+		const combinedText = [queuedText, currentText].filter(t => t.trim()).join("\n\n");
 		this.ctx.editor.setText(combinedText);
 		this.ctx.updatePendingMessagesDisplay();
 		if (options?.abort) {
@@ -585,7 +585,7 @@ export class InputController {
 			const tempLabel = options?.temporary ? " (temporary)" : "";
 			const cycleSeparator = theme.fg("dim", " > ");
 			const cycleLabel = roleOrder
-				.map((role) => {
+				.map(role => {
 					if (role === result.role) {
 						return theme.bold(theme.fg("accent", role));
 					}
@@ -679,7 +679,7 @@ export class InputController {
 			const child = spawn(editor, [...editorArgs, tmpFile], { stdio });
 			const exitCode = await new Promise<number>((resolve, reject) => {
 				child.once("exit", (code, signal) => resolve(code ?? (signal ? -1 : 0)));
-				child.once("error", (error) => reject(error));
+				child.once("error", error => reject(error));
 			});
 
 			// On successful exit (exitCode 0), replace editor content

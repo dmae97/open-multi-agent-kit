@@ -1,11 +1,10 @@
 import AjvModule from "ajv";
 import addFormatsModule from "ajv-formats";
+import type { Tool, ToolCall } from "../types";
 
 // Handle both default and named exports (ESM/CJS interop)
 const Ajv = (AjvModule as any).default || AjvModule;
 const addFormats = (addFormatsModule as any).default || addFormatsModule;
-
-import type { Tool, ToolCall } from "../types";
 
 // ============================================================================
 // Type Coercion Utilities
@@ -50,7 +49,7 @@ function normalizeExpectedTypes(typeParam: unknown): string[] {
  * Used to verify that a parsed JSON value is actually what the schema wants.
  */
 function matchesExpectedType(value: unknown, expectedTypes: string[]): boolean {
-	return expectedTypes.some((type) => {
+	return expectedTypes.some(type => {
 		switch (type) {
 			case "string":
 				return typeof value === "string";
@@ -157,7 +156,7 @@ function decodeJsonPointer(pointer: string): string[] {
 	return pointer
 		.split("/")
 		.slice(1) // Remove leading empty segment from initial "/"
-		.map((segment) => segment.replace(/~1/g, "/").replace(/~0/g, "~"));
+		.map(segment => segment.replace(/~1/g, "/").replace(/~0/g, "~"));
 }
 
 /**
@@ -310,7 +309,7 @@ if (!isBrowserExtension) {
  * @throws Error if tool is not found or validation fails
  */
 export function validateToolCall(tools: Tool[], toolCall: ToolCall): any {
-	const tool = tools.find((t) => t.name === toolCall.name);
+	const tool = tools.find(t => t.name === toolCall.name);
 	if (!tool) {
 		throw new Error(`Tool "${toolCall.name}" not found`);
 	}

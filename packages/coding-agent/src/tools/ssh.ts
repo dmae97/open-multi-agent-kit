@@ -177,7 +177,7 @@ export class SshTool implements AgentTool<typeof sshSchema, SSHToolDetails> {
 			compatEnabled: hostInfo.compatEnabled,
 			artifactPath,
 			artifactId,
-			onChunk: (chunk) => {
+			onChunk: chunk => {
 				tailBuffer.append(chunk);
 				if (onUpdate) {
 					onUpdate({
@@ -211,7 +211,7 @@ export async function loadSshTool(session: ToolSession): Promise<SshTool | null>
 	}
 
 	const descriptionHosts = hostNames
-		.map((name) => hostsByName.get(name))
+		.map(name => hostsByName.get(name))
 		.filter((host): host is SSHHost => host !== undefined);
 	const description = await formatDescription(descriptionHosts);
 
@@ -264,12 +264,12 @@ export const sshToolRenderer = {
 		);
 		const outputLines: string[] = [];
 
-		const textContent = result.content?.find((c) => c.type === "text")?.text ?? "";
+		const textContent = result.content?.find(c => c.type === "text")?.text ?? "";
 		const output = textContent.trimEnd();
 
 		if (output) {
 			if (expanded) {
-				outputLines.push(...output.split("\n").map((line) => uiTheme.fg("toolOutput", line)));
+				outputLines.push(...output.split("\n").map(line => uiTheme.fg("toolOutput", line)));
 			} else if (renderContext?.visualLines) {
 				const { visualLines, skippedCount = 0, totalVisualLines = visualLines.length } = renderContext;
 				if (skippedCount > 0) {
@@ -280,7 +280,7 @@ export const sshToolRenderer = {
 						),
 					);
 				}
-				const styledVisual = visualLines.map((line) =>
+				const styledVisual = visualLines.map(line =>
 					line.includes("\x1b[") ? line : uiTheme.fg("toolOutput", line),
 				);
 				outputLines.push(...styledVisual);
@@ -289,7 +289,7 @@ export const sshToolRenderer = {
 				const maxLines = 5;
 				const displayLines = outputLinesRaw.slice(0, maxLines);
 				const remaining = outputLinesRaw.length - maxLines;
-				outputLines.push(...displayLines.map((line) => uiTheme.fg("toolOutput", line)));
+				outputLines.push(...displayLines.map(line => uiTheme.fg("toolOutput", line)));
 				if (remaining > 0) {
 					outputLines.push(
 						uiTheme.fg("dim", `${uiTheme.format.ellipsis} (${remaining} more lines) (ctrl+o to expand)`),

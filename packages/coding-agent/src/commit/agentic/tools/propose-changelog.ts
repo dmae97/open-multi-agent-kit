@@ -48,14 +48,14 @@ export function createProposeChangelogTool(
 			const targets = new Set(changelogTargets);
 			const seen = new Set<string>();
 
-			const normalized = params.entries.map((entry) => {
+			const normalized = params.entries.map(entry => {
 				const cleaned: Record<string, string[]> = {};
 				for (const [category, values] of Object.entries(entry.entries ?? {})) {
 					if (!allowedCategories.has(category as ChangelogCategory)) {
 						errors.push(`Unknown changelog category for ${entry.path}: ${category}`);
 						continue;
 					}
-					const items = values.map((value) => value.trim().replace(/\.$/, "")).filter((value) => value.length > 0);
+					const items = values.map(value => value.trim().replace(/\.$/, "")).filter(value => value.length > 0);
 					if (items.length > 0) {
 						cleaned[category] = Array.from(new Set(items));
 					}
@@ -69,7 +69,7 @@ export function createProposeChangelogTool(
 							errors.push(`Unknown deletion category for ${entry.path}: ${category}`);
 							continue;
 						}
-						const items = values.map((value) => value.trim()).filter((value) => value.length > 0);
+						const items = values.map(value => value.trim()).filter(value => value.length > 0);
 						if (items.length > 0) {
 							cleanedDeletions[category] = Array.from(new Set(items));
 						}

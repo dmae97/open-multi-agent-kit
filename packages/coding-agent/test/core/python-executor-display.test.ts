@@ -30,7 +30,7 @@ describe("executePythonWithKernel display outputs", () => {
 
 		const kernel = new FakeKernel(
 			{ status: "ok", cancelled: false, timedOut: false, stdinRequested: false },
-			async (options) => {
+			async options => {
 				if (!options?.onDisplay) return;
 				for (const output of outputs) {
 					await options.onDisplay(output);

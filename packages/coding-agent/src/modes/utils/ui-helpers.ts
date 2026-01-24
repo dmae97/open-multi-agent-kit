@@ -33,7 +33,7 @@ export class UiHelpers {
 			typeof message.content === "string"
 				? [{ type: "text", text: message.content }]
 				: message.content.filter((content): content is TextBlock => content.type === "text");
-		return textBlocks.map((block) => block.text).join("");
+		return textBlocks.map(block => block.text).join("");
 	}
 
 	/**
@@ -306,7 +306,7 @@ export class UiHelpers {
 
 	showNewVersionNotification(newVersion: string): void {
 		this.ctx.chatContainer.addChild(new Spacer(1));
-		this.ctx.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
+		this.ctx.chatContainer.addChild(new DynamicBorder(text => theme.fg("warning", text)));
 		this.ctx.chatContainer.addChild(
 			new Text(
 				theme.bold(theme.fg("warning", "Update Available")) +
@@ -317,7 +317,7 @@ export class UiHelpers {
 				0,
 			),
 		);
-		this.ctx.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
+		this.ctx.chatContainer.addChild(new DynamicBorder(text => theme.fg("warning", text)));
 		this.ctx.ui.requestRender();
 	}
 

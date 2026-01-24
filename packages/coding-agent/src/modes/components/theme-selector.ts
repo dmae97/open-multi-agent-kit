@@ -21,7 +21,7 @@ export class ThemeSelectorComponent extends Container {
 		this.onPreview = onPreview;
 
 		// Create select items from provided themes
-		const themeItems: SelectItem[] = themes.map((name) => ({
+		const themeItems: SelectItem[] = themes.map(name => ({
 			value: name,
 			label: name,
 			description: name === currentTheme ? "(current)" : undefined,
@@ -39,7 +39,7 @@ export class ThemeSelectorComponent extends Container {
 			this.selectList.setSelectedIndex(currentIndex);
 		}
 
-		this.selectList.onSelect = (item) => {
+		this.selectList.onSelect = item => {
 			onSelect(item.value);
 		};
 
@@ -47,7 +47,7 @@ export class ThemeSelectorComponent extends Container {
 			onCancel();
 		};
 
-		this.selectList.onSelectionChange = (item) => {
+		this.selectList.onSelectionChange = item => {
 			this.onPreview(item.value);
 		};
 

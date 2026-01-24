@@ -1,7 +1,6 @@
 /**
  * ORCID handler for web-fetch
  */
-
 import type { RenderResult, SpecialHandler } from "./types";
 import { finalizeOutput, loadPage } from "./types";
 

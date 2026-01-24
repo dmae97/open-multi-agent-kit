@@ -1,7 +1,6 @@
 /**
  * Normalize applied patch output into a canonical edit tool payload.
  */
-
 import { generateUnifiedDiffString } from "./diff";
 import { normalizeToLF, stripBom } from "./normalize";
 import { parseHunks } from "./parser";
@@ -37,7 +36,7 @@ function applyAnchors(diff: string, anchors: Array<string | undefined> | undefin
 
 function deriveAnchors(diff: string): Array<string | undefined> {
 	const hunks = parseHunks(diff);
-	return hunks.map((hunk) => {
+	return hunks.map(hunk => {
 		if (hunk.oldLines.length === 0 || hunk.newLines.length === 0) {
 			return undefined;
 		}

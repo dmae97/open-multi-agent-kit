@@ -5,7 +5,6 @@
  * the agent's output. When a match occurs, the stream is aborted, the rule is
  * injected as a system reminder, and the request is retried.
  */
-
 import { logger } from "@oh-my-pi/pi-utils";
 import type { Rule } from "../capability/rule";
 import type { TtsrSettings } from "../config/settings-manager";

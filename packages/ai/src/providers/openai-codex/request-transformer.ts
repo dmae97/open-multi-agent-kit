@@ -73,8 +73,8 @@ function filterInput(input: InputItem[] | undefined): InputItem[] | undefined {
 	if (!Array.isArray(input)) return input;
 
 	return input
-		.filter((item) => item.type !== "item_reference")
-		.map((item) => {
+		.filter(item => item.type !== "item_reference")
+		.map(item => {
 			if (item.id != null) {
 				const { id: _id, ...rest } = item;
 				return rest as InputItem;
@@ -97,11 +97,11 @@ export async function transformRequestBody(
 		if (body.input) {
 			const functionCallIds = new Set(
 				body.input
-					.filter((item) => item.type === "function_call" && typeof item.call_id === "string")
-					.map((item) => item.call_id as string),
+					.filter(item => item.type === "function_call" && typeof item.call_id === "string")
+					.map(item => item.call_id as string),
 			);
 
-			body.input = body.input.map((item) => {
+			body.input = body.input.map(item => {
 				if (item.type === "function_call_output" && typeof item.call_id === "string") {
 					const callId = item.call_id as string;
 					if (!functionCallIds.has(callId)) {
@@ -131,7 +131,7 @@ export async function transformRequestBody(
 
 	if (prompt?.developerMessages && prompt.developerMessages.length > 0 && Array.isArray(body.input)) {
 		const developerMessages = prompt.developerMessages.map(
-			(text) =>
+			text =>
 				({
 					type: "message",
 					role: "developer",

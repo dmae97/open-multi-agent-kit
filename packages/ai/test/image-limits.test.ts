@@ -290,7 +290,7 @@ describe("Image Limits E2E Tests", () => {
 			async () => {
 				// Known limit: 100 images
 				const { limit, lastError } = await findLimit(
-					(count) => testImageCount(model, count, smallImage),
+					count => testImageCount(model, count, smallImage),
 					20,
 					120,
 					20,
@@ -380,7 +380,7 @@ describe("Image Limits E2E Tests", () => {
 			async () => {
 				// Known limit: 500 images
 				const { limit, lastError } = await findLimit(
-					(count) => testImageCount(model, count, smallImage),
+					count => testImageCount(model, count, smallImage),
 					100,
 					600,
 					100,
@@ -468,7 +468,7 @@ describe("Image Limits E2E Tests", () => {
 			async () => {
 				// Known to work up to ~2500, hits errors around 3000
 				const { limit, lastError } = await findLimit(
-					(count) => testImageCount(model, count, smallImage),
+					count => testImageCount(model, count, smallImage),
 					500,
 					3000,
 					500,
@@ -554,7 +554,7 @@ describe("Image Limits E2E Tests", () => {
 			"should find maximum image count limit",
 			async () => {
 				// Known to fail around 9 images
-				const { limit, lastError } = await findLimit((count) => testImageCount(model, count, smallImage), 5, 15, 1);
+				const { limit, lastError } = await findLimit(count => testImageCount(model, count, smallImage), 5, 15, 1);
 				console.log(`\n  Mistral max images: ~${limit} (last error: ${lastError})`);
 				expect(limit).toBeGreaterThanOrEqual(5);
 			},
@@ -635,12 +635,7 @@ describe("Image Limits E2E Tests", () => {
 			"should find maximum image count limit",
 			async () => {
 				// Limited by context window, not explicit image limit
-				const { limit, lastError } = await findLimit(
-					(count) => testImageCount(model, count, smallImage),
-					10,
-					60,
-					10,
-				);
+				const { limit, lastError } = await findLimit(count => testImageCount(model, count, smallImage), 10, 60, 10);
 				console.log(`\n  OpenRouter max images: ~${limit} (last error: ${lastError})`);
 				expect(limit).toBeGreaterThanOrEqual(10);
 			},
@@ -720,7 +715,7 @@ describe("Image Limits E2E Tests", () => {
 			"should find maximum image count limit",
 			async () => {
 				const { limit, lastError } = await findLimit(
-					(count) => testImageCount(model, count, smallImage),
+					count => testImageCount(model, count, smallImage),
 					10,
 					100,
 					10,
@@ -803,7 +798,7 @@ describe("Image Limits E2E Tests", () => {
 		it(
 			"should find maximum image count limit",
 			async () => {
-				const { limit, lastError } = await findLimit((count) => testImageCount(model, count, smallImage), 5, 50, 5);
+				const { limit, lastError } = await findLimit(count => testImageCount(model, count, smallImage), 5, 50, 5);
 				console.log(`\n  Groq max images: ~${limit} (last error: ${lastError})`);
 				expect(limit).toBeGreaterThanOrEqual(5);
 			},
@@ -883,7 +878,7 @@ describe("Image Limits E2E Tests", () => {
 			"should find maximum image count limit",
 			async () => {
 				const { limit, lastError } = await findLimit(
-					(count) => testImageCount(model, count, smallImage),
+					count => testImageCount(model, count, smallImage),
 					10,
 					100,
 					10,

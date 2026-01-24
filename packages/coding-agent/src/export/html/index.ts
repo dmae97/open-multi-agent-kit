@@ -4,7 +4,6 @@ import { isEnoent } from "@oh-my-pi/pi-utils";
 import { APP_NAME } from "../../config";
 import { getResolvedThemeColors, getThemeExportColors } from "../../modes/theme/theme";
 import { SessionManager } from "../../session/session-manager";
-
 // Pre-generated template (created by scripts/generate-template.ts at publish time)
 import { TEMPLATE } from "./template.generated";
 
@@ -127,7 +126,7 @@ export async function exportSessionToHtml(
 		entries: sm.getEntries(),
 		leafId: sm.getLeafId(),
 		systemPrompt: state?.systemPrompt,
-		tools: state?.tools?.map((t) => ({ name: t.name, description: t.description })),
+		tools: state?.tools?.map(t => ({ name: t.name, description: t.description })),
 	};
 
 	const html = await generateHtml(sessionData, opts.themeName);

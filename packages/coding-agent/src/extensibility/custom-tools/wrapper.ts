@@ -1,7 +1,6 @@
 /**
  * CustomToolAdapter wraps CustomTool instances into AgentTool for use with the agent.
  */
-
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback, RenderResultOptions } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
 import type { Static, TSchema } from "@sinclair/typebox";
@@ -64,6 +63,6 @@ export class CustomToolAdapter<TParams extends TSchema = TSchema, TDetails = any
 		loadedTools: LoadedCustomTool<TParams, TDetails>[],
 		getContext: () => CustomToolContext,
 	): AgentTool<TParams, TDetails, TTheme>[] {
-		return loadedTools.map((lt) => CustomToolAdapter.wrap(lt.tool, getContext));
+		return loadedTools.map(lt => CustomToolAdapter.wrap(lt.tool, getContext));
 	}
 }

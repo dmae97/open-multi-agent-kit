@@ -36,7 +36,7 @@ describe("executePythonWithKernel", () => {
 	it("captures text and display outputs", async () => {
 		const kernel = new FakeKernel(
 			{ status: "ok", cancelled: false, timedOut: false, stdinRequested: false },
-			(options) => {
+			options => {
 				options?.onChunk?.("hello\n");
 				options?.onDisplay?.({ type: "json", data: { foo: "bar" } });
 			},
@@ -65,7 +65,7 @@ describe("executePythonWithKernel", () => {
 	it("maps error status to exit code 1", async () => {
 		const kernel = new FakeKernel(
 			{ status: "error", cancelled: false, timedOut: false, stdinRequested: false },
-			(options) => {
+			options => {
 				options?.onChunk?.("Traceback\n");
 			},
 		);
@@ -80,7 +80,7 @@ describe("executePythonWithKernel", () => {
 	it("sanitizes streamed chunks", async () => {
 		const kernel = new FakeKernel(
 			{ status: "ok", cancelled: false, timedOut: false, stdinRequested: false },
-			(options) => {
+			options => {
 				options?.onChunk?.("\u001b[31mred\r\n");
 			},
 		);
@@ -93,7 +93,7 @@ describe("executePythonWithKernel", () => {
 	it("returns cancelled result with timeout annotation", async () => {
 		const kernel = new FakeKernel(
 			{ status: "ok", cancelled: true, timedOut: true, stdinRequested: false },
-			(options) => {
+			options => {
 				options?.onChunk?.("partial output\n");
 			},
 		);
@@ -108,7 +108,7 @@ describe("executePythonWithKernel", () => {
 	it("returns cancelled result without timeout annotation", async () => {
 		const kernel = new FakeKernel(
 			{ status: "ok", cancelled: true, timedOut: false, stdinRequested: false },
-			(options) => {
+			options => {
 				options?.onChunk?.("cancelled output\n");
 			},
 		);
@@ -131,7 +131,7 @@ describe("executePythonWithKernel", () => {
 		const largeOutput = `${lines.join("\n")}\nTAIL\n`;
 		const kernel = new FakeKernel(
 			{ status: "ok", cancelled: false, timedOut: false, stdinRequested: false },
-			async (options) => {
+			async options => {
 				await options?.onChunk?.(largeOutput);
 			},
 		);

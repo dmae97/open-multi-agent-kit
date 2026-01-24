@@ -8,15 +8,14 @@
  *   bun run bench:edit --runs 5 --output report.md
  *   bun run bench:edit --fixtures fixtures.tar.gz
  */
-
-import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import { TempDir } from "@oh-my-pi/pi-utils";
 import * as fs from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
+import { TempDir } from "@oh-my-pi/pi-utils";
 import { generateJsonReport, generateReport } from "./report";
-import { runBenchmark, type BenchmarkConfig, type ProgressEvent } from "./runner";
-import { loadTasks, loadTasksFromDir, validateFixtures, type EditTask } from "./tasks";
+import { type BenchmarkConfig, type ProgressEvent, runBenchmark } from "./runner";
+import { type EditTask, loadTasks, loadTasksFromDir, validateFixtures } from "./tasks";
 
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
 

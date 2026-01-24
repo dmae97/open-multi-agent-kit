@@ -4,7 +4,6 @@
  * Implements JSON-RPC 2.0 over subprocess stdin/stdout.
  * Messages are newline-delimited JSON.
  */
-
 import { type Subprocess, spawn } from "bun";
 import type { JsonRpcResponse, MCPStdioServerConfig, MCPTransport } from "../../mcp/types";
 

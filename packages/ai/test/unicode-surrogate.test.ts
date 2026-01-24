@@ -200,7 +200,7 @@ Unanswered Comments: 2
 
 	expect(response.stopReason).not.toBe("error");
 	expect(response.errorMessage).toBeFalsy();
-	expect(response.content.some((b) => b.type === "text")).toBe(true);
+	expect(response.content.some(b => b.type === "text")).toBe(true);
 }
 
 async function testUnpairedHighSurrogate<TApi extends Api>(llm: Model<TApi>, options: OptionsForApi<TApi> = {}) {

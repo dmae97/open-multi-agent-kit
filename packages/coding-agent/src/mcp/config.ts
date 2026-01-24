@@ -3,7 +3,6 @@
  *
  * Uses the capability system to load MCP servers from multiple sources.
  */
-
 import { mcpCapability } from "../capability/mcp";
 import type { MCPServer } from "../discovery";
 import { loadCapability } from "../discovery";
@@ -86,7 +85,7 @@ export async function loadAllMCPConfigs(cwd: string, options?: LoadMCPConfigsOpt
 	// Filter out project-level configs if disabled
 	const servers = enableProjectConfig
 		? result.items
-		: result.items.filter((server) => server._source.level !== "project");
+		: result.items.filter(server => server._source.level !== "project");
 
 	// Convert to legacy format and preserve source metadata
 	const configs: Record<string, MCPServerConfig> = {};
@@ -130,7 +129,7 @@ export function isExaMCPServer(name: string, config: MCPServerConfig): boolean {
 	// Check by args for stdio servers (e.g., mcp-remote to exa)
 	if (!config.type || config.type === "stdio") {
 		const stdioConfig = config as { args?: string[] };
-		if (stdioConfig.args?.some((arg) => EXA_MCP_URL_PATTERN.test(arg))) {
+		if (stdioConfig.args?.some(arg => EXA_MCP_URL_PATTERN.test(arg))) {
 			return true;
 		}
 	}

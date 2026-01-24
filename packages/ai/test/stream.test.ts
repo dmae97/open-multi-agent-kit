@@ -48,7 +48,7 @@ async function basicTextGeneration<TApi extends Api>(model: Model<TApi>, options
 	expect(response.usage.input + response.usage.cacheRead).toBeGreaterThan(0);
 	expect(response.usage.output).toBeGreaterThan(0);
 	expect(response.errorMessage).toBeFalsy();
-	expect(response.content.map((b) => (b.type === "text" ? b.text : "")).join("")).toContain("Hello test successful");
+	expect(response.content.map(b => (b.type === "text" ? b.text : "")).join("")).toContain("Hello test successful");
 
 	context.messages.push(response);
 	context.messages.push({ role: "user", content: "Now say 'Goodbye test successful'", timestamp: Date.now() });
@@ -60,7 +60,7 @@ async function basicTextGeneration<TApi extends Api>(model: Model<TApi>, options
 	expect(secondResponse.usage.input + secondResponse.usage.cacheRead).toBeGreaterThan(0);
 	expect(secondResponse.usage.output).toBeGreaterThan(0);
 	expect(secondResponse.errorMessage).toBeFalsy();
-	expect(secondResponse.content.map((b) => (b.type === "text" ? b.text : "")).join("")).toContain(
+	expect(secondResponse.content.map(b => (b.type === "text" ? b.text : "")).join("")).toContain(
 		"Goodbye test successful",
 	);
 }
@@ -133,8 +133,8 @@ async function handleToolCall<TApi extends Api>(model: Model<TApi>, options?: Op
 
 	const response = await s.result();
 	expect(response.stopReason).toBe("toolUse");
-	expect(response.content.some((b) => b.type === "toolCall")).toBeTruthy();
-	const toolCall = response.content.find((b) => b.type === "toolCall");
+	expect(response.content.some(b => b.type === "toolCall")).toBeTruthy();
+	const toolCall = response.content.find(b => b.type === "toolCall");
 	if (toolCall && toolCall.type === "toolCall") {
 		expect(toolCall.name).toBe("calculator");
 		expect(toolCall.id).toBeTruthy();
@@ -169,7 +169,7 @@ async function handleStreaming<TApi extends Api>(model: Model<TApi>, options?: O
 	expect(textStarted).toBe(true);
 	expect(textChunks.length).toBeGreaterThan(0);
 	expect(textCompleted).toBe(true);
-	expect(response.content.some((b) => b.type === "text")).toBeTruthy();
+	expect(response.content.some(b => b.type === "text")).toBeTruthy();
 }
 
 async function handleThinking<TApi extends Api>(model: Model<TApi>, options?: OptionsForApi<TApi>) {
@@ -207,7 +207,7 @@ async function handleThinking<TApi extends Api>(model: Model<TApi>, options?: Op
 	expect(thinkingStarted).toBe(true);
 	expect(thinkingChunks.length).toBeGreaterThan(0);
 	expect(thinkingCompleted).toBe(true);
-	expect(response.content.some((b) => b.type === "thinking")).toBeTruthy();
+	expect(response.content.some(b => b.type === "thinking")).toBeTruthy();
 }
 
 async function handleImage<TApi extends Api>(model: Model<TApi>, options?: OptionsForApi<TApi>) {
@@ -248,7 +248,7 @@ async function handleImage<TApi extends Api>(model: Model<TApi>, options?: Optio
 
 	// Check the response mentions red and circle
 	expect(response.content.length > 0).toBeTruthy();
-	const textContent = response.content.find((b) => b.type === "text");
+	const textContent = response.content.find(b => b.type === "text");
 	if (textContent && textContent.type === "text") {
 		const lowerContent = textContent.text.toLowerCase();
 		expect(lowerContent).toContain("red");
@@ -1384,7 +1384,7 @@ describe("Generate E2E Tests", () => {
 			});
 
 			// Wait for server to be ready
-			await new Promise<void>((resolve) => {
+			await new Promise<void>(resolve => {
 				const checkServer = async () => {
 					try {
 						const response = await fetch("http://localhost:11434/api/tags");

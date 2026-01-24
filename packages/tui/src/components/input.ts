@@ -186,7 +186,7 @@ export class Input implements Component, Focusable {
 
 		// Regular character input - accept printable characters including Unicode,
 		// but reject control characters (C0: 0x00-0x1F, DEL: 0x7F, C1: 0x80-0x9F)
-		const hasControlChars = [...data].some((ch) => {
+		const hasControlChars = [...data].some(ch => {
 			const code = ch.charCodeAt(0);
 			return code < 32 || code === 0x7f || (code >= 0x80 && code <= 0x9f);
 		});

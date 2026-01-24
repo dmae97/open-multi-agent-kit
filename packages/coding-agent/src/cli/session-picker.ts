@@ -1,7 +1,6 @@
 /**
  * TUI session selector for --resume flag
  */
-
 import { ProcessTerminal, TUI } from "@oh-my-pi/pi-tui";
 import { SessionSelectorComponent } from "../modes/components/session-selector";
 import type { SessionInfo } from "../session/session-manager";

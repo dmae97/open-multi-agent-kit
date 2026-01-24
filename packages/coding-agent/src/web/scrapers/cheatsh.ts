@@ -43,7 +43,7 @@ export const handleCheatSh: SpecialHandler = async (
 		const content = result.content.trim();
 		const lines = content.split("\n");
 		const hasCodeIndicators = lines.some(
-			(line) =>
+			line =>
 				line.startsWith("$") ||
 				line.startsWith("#") ||
 				line.includes("()") ||

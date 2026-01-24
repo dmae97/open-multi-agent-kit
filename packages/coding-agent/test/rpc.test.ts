@@ -49,7 +49,7 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_OAUTH_T
 		const events = await client.promptAndWait("Reply with just the word 'hello'");
 
 		// Should have message events
-		const messageEndEvents = events.filter((e) => e.type === "message_end");
+		const messageEndEvents = events.filter(e => e.type === "message_end");
 		expect(messageEndEvents.length).toBeGreaterThanOrEqual(2); // user + assistant
 
 		// Wait for file writes
@@ -63,11 +63,11 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_OAUTH_T
 		expect(sessionDirs.length).toBeGreaterThan(0);
 
 		const cwdSessionDir = path.join(sessionsPath, sessionDirs[0]);
-		const sessionFiles = fs.readdirSync(cwdSessionDir).filter((f) => f.endsWith(".jsonl"));
+		const sessionFiles = fs.readdirSync(cwdSessionDir).filter(f => f.endsWith(".jsonl"));
 		expect(sessionFiles.length).toBe(1);
 
 		const sessionContent = await Bun.file(path.join(cwdSessionDir, sessionFiles[0])).text();
-		const entries = sessionContent.split("\n").map((line) => JSON.parse(line));
+		const entries = sessionContent.split("\n").map(line => JSON.parse(line));
 
 		// First entry should be session header
 		expect(entries[0].type).toBe("session");
@@ -99,12 +99,12 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_OAUTH_T
 		const sessionsPath = path.join(sessionDir, "sessions");
 		const sessionDirs = fs.readdirSync(sessionsPath);
 		const cwdSessionDir = path.join(sessionsPath, sessionDirs[0]);
-		const sessionFiles = fs.readdirSync(cwdSessionDir).filter((f) => f.endsWith(".jsonl"));
+		const sessionFiles = fs.readdirSync(cwdSessionDir).filter(f => f.endsWith(".jsonl"));
 		const sessionContent = await Bun.file(path.join(cwdSessionDir, sessionFiles[0])).text();
 		const entries = sessionContent
 			.trim()
 			.split("\n")
-			.map((line) => JSON.parse(line));
+			.map(line => JSON.parse(line));
 
 		const compactionEntries = entries.filter((e: { type: string }) => e.type === "compaction");
 		expect(compactionEntries.length).toBe(1);
@@ -137,12 +137,12 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_OAUTH_T
 		const sessionsPath = path.join(sessionDir, "sessions");
 		const sessionDirs = fs.readdirSync(sessionsPath);
 		const cwdSessionDir = path.join(sessionsPath, sessionDirs[0]);
-		const sessionFiles = fs.readdirSync(cwdSessionDir).filter((f) => f.endsWith(".jsonl"));
+		const sessionFiles = fs.readdirSync(cwdSessionDir).filter(f => f.endsWith(".jsonl"));
 		const sessionContent = await Bun.file(path.join(cwdSessionDir, sessionFiles[0])).text();
 		const entries = sessionContent
 			.trim()
 			.split("\n")
-			.map((line) => JSON.parse(line));
+			.map(line => JSON.parse(line));
 
 		const bashMessages = entries.filter(
 			(e: { type: string; message?: { role: string } }) =>
@@ -165,9 +165,9 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_OAUTH_T
 		);
 
 		// Find assistant's response
-		const messageEndEvents = events.filter((e) => e.type === "message_end") as AgentEvent[];
+		const messageEndEvents = events.filter(e => e.type === "message_end") as AgentEvent[];
 		const assistantMessage = messageEndEvents.find(
-			(e) => e.type === "message_end" && e.message?.role === "assistant",
+			e => e.type === "message_end" && e.message?.role === "assistant",
 		) as any;
 
 		expect(assistantMessage).toBeDefined();

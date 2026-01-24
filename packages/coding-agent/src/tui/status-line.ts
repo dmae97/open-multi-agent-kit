@@ -1,7 +1,6 @@
 /**
  * Standardized status header rendering for tool output.
  */
-
 import type { Theme, ThemeColor } from "../modes/theme/theme";
 import type { IconType } from "./types";
 import { getStateIcon } from "./utils";
@@ -31,7 +30,7 @@ export function renderStatusLine(options: StatusLineOptions, theme: Theme): stri
 		line += ` ${theme.fg(color, `${theme.format.bracketLeft}${label}${theme.format.bracketRight}`)}`;
 	}
 
-	const meta = options.meta?.filter((value) => value.trim().length > 0) ?? [];
+	const meta = options.meta?.filter(value => value.trim().length > 0) ?? [];
 	if (meta.length > 0) {
 		line += ` ${theme.fg("dim", meta.join(theme.sep.dot))}`;
 	}

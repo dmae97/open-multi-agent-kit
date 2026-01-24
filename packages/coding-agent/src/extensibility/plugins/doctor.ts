@@ -57,8 +57,8 @@ export function formatDoctorResults(checks: DoctorCheck[]): string {
 		lines.push(`${icon} ${check.name}: ${check.message}`);
 	}
 
-	const errors = checks.filter((c) => c.status === "error").length;
-	const warnings = checks.filter((c) => c.status === "warning").length;
+	const errors = checks.filter(c => c.status === "error").length;
+	const warnings = checks.filter(c => c.status === "warning").length;
 
 	lines.push("");
 	lines.push(`Summary: ${checks.length - errors - warnings} ok, ${warnings} warnings, ${errors} errors`);

@@ -3,7 +3,6 @@
  *
  * Types for the Exa MCP client and tool implementations.
  */
-
 import type { TSchema } from "@sinclair/typebox";
 
 /** MCP endpoint URLs */

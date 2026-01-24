@@ -53,7 +53,7 @@ export class SettingsList implements Component {
 
 	/** Update an item's currentValue */
 	updateValue(id: string, newValue: string): void {
-		const item = this.items.find((i) => i.id === id);
+		const item = this.items.find(i => i.id === id);
 		if (item) {
 			item.currentValue = newValue;
 		}
@@ -88,7 +88,7 @@ export class SettingsList implements Component {
 		const endIndex = Math.min(startIndex + this.maxVisible, this.items.length);
 
 		// Calculate max label width for alignment
-		const maxLabelWidth = Math.min(30, Math.max(...this.items.map((item) => visibleWidth(item.label))));
+		const maxLabelWidth = Math.min(30, Math.max(...this.items.map(item => visibleWidth(item.label))));
 
 		// Render visible items
 		for (let i = startIndex; i < endIndex; i++) {

@@ -58,10 +58,10 @@ export const handleRawg: SpecialHandler = async (
 			md += `**Rating:** ${game.rating.toFixed(2)} / 5\n`;
 		}
 
-		const platforms = collectNames(game.platforms?.map((entry) => entry.platform?.name));
+		const platforms = collectNames(game.platforms?.map(entry => entry.platform?.name));
 		if (platforms.length) md += `**Platforms:** ${platforms.join(", ")}\n`;
 
-		const genres = collectNames(game.genres?.map((entry) => entry.name));
+		const genres = collectNames(game.genres?.map(entry => entry.name));
 		if (genres.length) md += `**Genres:** ${genres.join(", ")}\n`;
 
 		md += `**RAWG:** https://rawg.io/games/${encodeURIComponent(slug)}\n`;

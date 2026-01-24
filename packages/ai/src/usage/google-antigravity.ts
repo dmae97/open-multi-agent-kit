@@ -214,5 +214,5 @@ async function fetchAntigravityUsage(params: UsageFetchParams, ctx: UsageFetchCo
 export const antigravityUsageProvider: UsageProvider = {
 	id: "google-antigravity",
 	fetchUsage: fetchAntigravityUsage,
-	supports: (params) => params.provider === "google-antigravity",
+	supports: params => params.provider === "google-antigravity",
 };

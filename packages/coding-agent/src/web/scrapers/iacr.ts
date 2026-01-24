@@ -38,10 +38,10 @@ export const handleIacr: SpecialHandler = async (
 			doc.querySelector('meta[name="citation_title"]')?.getAttribute("content");
 		const authors = doc
 			.querySelectorAll('meta[name="citation_author"]')
-			.map((m) => m.getAttribute("content"))
+			.map(m => m.getAttribute("content"))
 			.filter(Boolean);
 		// Abstract is in <p> after <h5>Abstract</h5>
-		const abstractHeading = doc.querySelectorAll("h5").find((h) => h.text?.includes("Abstract"));
+		const abstractHeading = doc.querySelectorAll("h5").find(h => h.text?.includes("Abstract"));
 		const abstract =
 			abstractHeading?.parentNode?.querySelector("p")?.text?.trim() ||
 			doc.querySelector('meta[name="description"]')?.getAttribute("content");

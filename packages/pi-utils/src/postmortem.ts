@@ -5,7 +5,6 @@
  * in response to process exit, signals, or fatal exceptions. It is intended to
  * allow reliably releasing resources or shutting down subprocesses, files, sockets, etc.
  */
-
 import inspector from "node:inspector";
 import { isMainThread } from "node:worker_threads";
 import { logger } from ".";
@@ -48,11 +47,11 @@ function runCleanup(reason: Reason): Promise<void> {
 	// Call .cleanup() for each callback that is still "armed".
 	// Use Promise.try to handle sync/async, but only those armed.
 	// Create a copy to avoid mutating the original array with reverse()
-	const promises = [...callbackList].reverse().map((callback) => {
+	const promises = [...callbackList].reverse().map(callback => {
 		return Promise.try(() => callback(reason));
 	});
 
-	return Promise.allSettled(promises).then((results) => {
+	return Promise.allSettled(promises).then(results => {
 		for (const result of results) {
 			if (result.status === "rejected") {
 				const err = result.reason instanceof Error ? result.reason : new Error(String(result.reason));
@@ -81,12 +80,12 @@ if (isMainThread) {
 			const url = inspector.url();
 			process.stderr.write(`Inspector opened: ${url}\n`);
 		})
-		.on("uncaughtException", async (err) => {
+		.on("uncaughtException", async err => {
 			logger.error("Uncaught exception", { err, stack: err.stack });
 			await runCleanup(Reason.UNCAUGHT_EXCEPTION);
 			process.exit(1);
 		})
-		.on("unhandledRejection", async (reason) => {
+		.on("unhandledRejection", async reason => {
 			const err = reason instanceof Error ? reason : new Error(String(reason));
 			logger.error("Unhandled rejection", { err, stack: err.stack });
 			await runCleanup(Reason.UNHANDLED_REJECTION);

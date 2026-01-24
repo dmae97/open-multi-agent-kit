@@ -15,7 +15,7 @@ async function ensureDir(path: string, mode = 0o700): Promise<void> {
 	try {
 		await fs.promises.mkdir(path, { recursive: true, mode });
 	} catch {
-		await fs.promises.chmod(path, mode).catch((e) => void e);
+		await fs.promises.chmod(path, mode).catch(e => void e);
 	}
 }
 

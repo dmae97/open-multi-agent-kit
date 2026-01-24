@@ -20,7 +20,7 @@ function inferTypeFromFiles(numstat: NumstatEntry[]): CommitType {
 		const lowerPath = entry.path.toLowerCase();
 		const ext = getExtension(entry.path);
 
-		if (TEST_PATTERNS.some((pattern) => lowerPath.includes(pattern))) {
+		if (TEST_PATTERNS.some(pattern => lowerPath.includes(pattern))) {
 			hasTests = true;
 		} else if (DOC_EXTENSIONS.has(ext)) {
 			hasDocs = true;
@@ -48,7 +48,7 @@ function getExtension(filePath: string): string {
 
 export function generateFallbackAnalysis(numstat: NumstatEntry[]): ConventionalAnalysis {
 	const type = inferTypeFromFiles(numstat);
-	const details = numstat.slice(0, 3).map((e) => ({
+	const details = numstat.slice(0, 3).map(e => ({
 		text: `Updated ${path.basename(e.path)}`,
 		userVisible: false,
 	}));

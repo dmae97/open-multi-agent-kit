@@ -62,8 +62,8 @@ export class EventController {
 				this.ctx.statusContainer.clear();
 				this.ctx.loadingAnimation = new Loader(
 					this.ctx.ui,
-					(spinner) => theme.fg("accent", spinner),
-					(text) => theme.fg("muted", text),
+					spinner => theme.fg("accent", spinner),
+					text => theme.fg("muted", text),
 					`Working${theme.format.ellipsis} (esc to interrupt)`,
 					getSymbolTheme().spinnerFrames,
 				);
@@ -107,7 +107,7 @@ export class EventController {
 					this.ctx.streamingComponent.updateContent(this.ctx.streamingMessage);
 
 					const thinkingCount = this.ctx.streamingMessage.content.filter(
-						(content) => content.type === "thinking" && content.thinking.trim(),
+						content => content.type === "thinking" && content.thinking.trim(),
 					).length;
 					if (thinkingCount > this.lastThinkingCount) {
 						this.resetReadGroup();
@@ -273,8 +273,8 @@ export class EventController {
 				const reasonText = event.reason === "overflow" ? "Context overflow detected, " : "";
 				this.ctx.autoCompactionLoader = new Loader(
 					this.ctx.ui,
-					(spinner) => theme.fg("accent", spinner),
-					(text) => theme.fg("muted", text),
+					spinner => theme.fg("accent", spinner),
+					text => theme.fg("muted", text),
 					`${reasonText}Auto-compacting${theme.format.ellipsis} (esc to cancel)`,
 					getSymbolTheme().spinnerFrames,
 				);
@@ -323,8 +323,8 @@ export class EventController {
 				const delaySeconds = Math.round(event.delayMs / 1000);
 				this.ctx.retryLoader = new Loader(
 					this.ctx.ui,
-					(spinner) => theme.fg("warning", spinner),
-					(text) => theme.fg("muted", text),
+					spinner => theme.fg("warning", spinner),
+					text => theme.fg("muted", text),
 					`Retrying (${event.attempt}/${event.maxAttempts}) in ${delaySeconds}s${theme.format.ellipsis} (esc to cancel)`,
 					getSymbolTheme().spinnerFrames,
 				);

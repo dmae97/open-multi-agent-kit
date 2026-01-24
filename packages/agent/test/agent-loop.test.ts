@@ -23,8 +23,8 @@ import { Type } from "@sinclair/typebox";
 class MockAssistantStream extends EventStream<AssistantMessageEvent, AssistantMessage> {
 	constructor() {
 		super(
-			(event) => event.type === "done" || event.type === "error",
-			(event) => {
+			event => event.type === "done" || event.type === "error",
+			event => {
 				if (event.type === "done") return event.message;
 				if (event.type === "error") return event.error;
 				throw new Error("Unexpected event type");
@@ -85,7 +85,7 @@ function createUserMessage(text: string): UserMessage {
 
 // Simple identity converter for tests - just passes through standard messages
 function identityConverter(messages: AgentMessage[]): Message[] {
-	return messages.filter((m) => m.role === "user" || m.role === "assistant" || m.role === "toolResult") as Message[];
+	return messages.filter(m => m.role === "user" || m.role === "assistant" || m.role === "toolResult") as Message[];
 }
 
 describe("agentLoop with AgentMessage", () => {
@@ -127,7 +127,7 @@ describe("agentLoop with AgentMessage", () => {
 		expect(messages[1].role).toBe("assistant");
 
 		// Verify event sequence
-		const eventTypes = events.map((e) => e.type);
+		const eventTypes = events.map(e => e.type);
 		expect(eventTypes).toContain("agent_start");
 		expect(eventTypes).toContain("turn_start");
 		expect(eventTypes).toContain("message_start");
@@ -161,11 +161,11 @@ describe("agentLoop with AgentMessage", () => {
 		let convertedMessages: Message[] = [];
 		const config: AgentLoopConfig = {
 			model: createModel(),
-			convertToLlm: (messages) => {
+			convertToLlm: messages => {
 				// Filter out notifications, convert rest
 				convertedMessages = messages
-					.filter((m) => (m as { role: string }).role !== "notification")
-					.filter((m) => m.role === "user" || m.role === "assistant" || m.role === "toolResult") as Message[];
+					.filter(m => (m as { role: string }).role !== "notification")
+					.filter(m => m.role === "user" || m.role === "assistant" || m.role === "toolResult") as Message[];
 				return convertedMessages;
 			},
 		};
@@ -210,14 +210,14 @@ describe("agentLoop with AgentMessage", () => {
 
 		const config: AgentLoopConfig = {
 			model: createModel(),
-			transformContext: async (messages) => {
+			transformContext: async messages => {
 				// Keep only last 2 messages (prune old ones)
 				transformedMessages = messages.slice(-2);
 				return transformedMessages;
 			},
-			convertToLlm: (messages) => {
+			convertToLlm: messages => {
 				convertedMessages = messages.filter(
-					(m) => m.role === "user" || m.role === "assistant" || m.role === "toolResult",
+					m => m.role === "user" || m.role === "assistant" || m.role === "toolResult",
 				) as Message[];
 				return convertedMessages;
 			},
@@ -275,7 +275,7 @@ describe("agentLoop with AgentMessage", () => {
 		const config: AgentLoopConfig = {
 			model: createModel(),
 			convertToLlm: identityConverter,
-			getToolContext: (toolCall) => ({ toolCall }) as AgentToolContext,
+			getToolContext: toolCall => ({ toolCall }) as AgentToolContext,
 		};
 
 		let callIndex = 0;
@@ -379,8 +379,8 @@ describe("agentLoop with AgentMessage", () => {
 		expect(executed).toEqual(["hello"]);
 
 		// Should have tool execution events
-		const toolStart = events.find((e) => e.type === "tool_execution_start");
-		const toolEnd = events.find((e) => e.type === "tool_execution_end");
+		const toolStart = events.find(e => e.type === "tool_execution_start");
+		const toolEnd = events.find(e => e.type === "tool_execution_end");
 		expect(toolStart).toBeDefined();
 		expect(toolEnd).toBeDefined();
 		if (toolEnd?.type === "tool_execution_end") {
@@ -436,7 +436,7 @@ describe("agentLoop with AgentMessage", () => {
 			// Check if interrupt message is in context on second call
 			if (callIndex === 1) {
 				sawInterruptInContext = ctx.messages.some(
-					(m) => m.role === "user" && typeof m.content === "string" && m.content === "interrupt",
+					m => m.role === "user" && typeof m.content === "string" && m.content === "interrupt",
 				);
 			}
 
@@ -482,7 +482,7 @@ describe("agentLoop with AgentMessage", () => {
 
 		// Queued message should appear in events
 		const queuedMessageEvent = events.find(
-			(e) =>
+			e =>
 				e.type === "message_start" &&
 				e.message.role === "user" &&
 				typeof e.message.content === "string" &&
@@ -548,7 +548,7 @@ describe("agentLoopContinue with AgentMessage", () => {
 		expect(messages[0].role).toBe("assistant");
 
 		// Should NOT have user message events (that's the key difference from agentLoop)
-		const messageEndEvents = events.filter((e) => e.type === "message_end");
+		const messageEndEvents = events.filter(e => e.type === "message_end");
 		expect(messageEndEvents.length).toBe(1);
 		expect((messageEndEvents[0] as any).message.role).toBe("assistant");
 	});
@@ -575,10 +575,10 @@ describe("agentLoopContinue with AgentMessage", () => {
 
 		const config: AgentLoopConfig = {
 			model: createModel(),
-			convertToLlm: (messages) => {
+			convertToLlm: messages => {
 				// Convert hookMessage to user message
 				return messages
-					.map((m) => {
+					.map(m => {
 						if ((m as any).role === "hookMessage") {
 							return {
 								role: "user" as const,
@@ -588,7 +588,7 @@ describe("agentLoopContinue with AgentMessage", () => {
 						}
 						return m;
 					})
-					.filter((m) => m.role === "user" || m.role === "assistant" || m.role === "toolResult") as Message[];
+					.filter(m => m.role === "user" || m.role === "assistant" || m.role === "toolResult") as Message[];
 			},
 		};
 

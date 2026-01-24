@@ -14,7 +14,6 @@
  *   - If you recommend a specific option, make that the first option in the list
  *     and add "(Recommended)" at the end of the label
  */
-
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
@@ -238,7 +237,7 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 			const results: QuestionResult[] = [];
 
 			for (const q of params.questions) {
-				const optionLabels = q.options.map((o) => o.label);
+				const optionLabels = q.options.map(o => o.label);
 				const { selectedOptions, customInput } = await askSingleQuestion(
 					ui,
 					q.question,
@@ -267,7 +266,7 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 		const question = params.question ?? "";
 		const options = params.options ?? [];
 		const multi = params.multi ?? false;
-		const optionLabels = options.map((o) => o.label);
+		const optionLabels = options.map(o => o.label);
 
 		if (!question || optionLabels.length === 0) {
 			return {
@@ -391,7 +390,7 @@ export const askToolRenderer = {
 		if (details.results && details.results.length > 0) {
 			const lines: string[] = [];
 			const hasAnySelection = details.results.some(
-				(r) => r.customInput || (r.selectedOptions && r.selectedOptions.length > 0),
+				r => r.customInput || (r.selectedOptions && r.selectedOptions.length > 0),
 			);
 			const header = renderStatusLine(
 				{

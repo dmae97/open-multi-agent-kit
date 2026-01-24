@@ -4,7 +4,6 @@
  * Lightweight utilities for calling MCP servers directly via HTTP
  * without maintaining persistent connections.
  */
-
 import { logger } from "@oh-my-pi/pi-utils";
 
 /** Parse SSE response format (lines starting with "data: ") */

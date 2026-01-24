@@ -18,7 +18,7 @@ export class TtsrNotificationComponent extends Container {
 		this.addChild(new Spacer(1));
 
 		// Use inverse warning color for yellow background effect
-		this.box = new Box(1, 1, (t) => theme.inverse(theme.fg("warning", t)));
+		this.box = new Box(1, 1, t => theme.inverse(theme.fg("warning", t)));
 		this.addChild(this.box);
 
 		this.rebuild();
@@ -39,7 +39,7 @@ export class TtsrNotificationComponent extends Container {
 		this.box.clear();
 
 		// Build header: warning symbol + rule name + rewind icon
-		const ruleNames = this.rules.map((r) => theme.bold(r.name)).join(", ");
+		const ruleNames = this.rules.map(r => theme.bold(r.name)).join(", ");
 		const label = this.rules.length === 1 ? "rule" : "rules";
 		const header = `${theme.icon.warning} Injecting ${label}: ${ruleNames}`;
 
@@ -70,7 +70,7 @@ export class TtsrNotificationComponent extends Container {
 
 		// Show expand hint if collapsed and there's more content
 		if (!this._expanded) {
-			const hasMoreContent = this.rules.some((r) => {
+			const hasMoreContent = this.rules.some(r => {
 				const desc = r.description || r.content;
 				return desc && desc.split("\n").length > 2;
 			});

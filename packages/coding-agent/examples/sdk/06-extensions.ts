@@ -13,7 +13,6 @@
  * An extension is a TypeScript file that exports a default function:
  *   export default function (pi: ExtensionAPI) { ... }
  */
-
 import { createAgentSession, SessionManager } from "@oh-my-pi/pi-coding-agent";
 
 // Extensions are loaded from disk, not passed inline to createAgentSession.
@@ -28,7 +27,7 @@ const { session } = await createAgentSession({
 	sessionManager: SessionManager.inMemory(),
 });
 
-session.subscribe((event) => {
+session.subscribe(event => {
 	if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
 		process.stdout.write(event.assistantMessageEvent.delta);
 	}

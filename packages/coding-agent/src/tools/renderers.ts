@@ -3,7 +3,6 @@
  *
  * These provide rich visualization for tool calls and results in the TUI.
  */
-
 import type { Component } from "@oh-my-pi/pi-tui";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { lspToolRenderer } from "../lsp/render";

@@ -30,11 +30,11 @@ function formatYesNo(value?: boolean): string {
 
 function collectCrossReferences(license: SpdxLicense): string[] {
 	const ordered = (license.crossRef ?? [])
-		.filter((ref) => ref.url)
+		.filter(ref => ref.url)
 		.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-		.map((ref) => ref.url as string);
+		.map(ref => ref.url as string);
 
-	const seeAlso = (license.seeAlso ?? []).filter((url) => url);
+	const seeAlso = (license.seeAlso ?? []).filter(url => url);
 	const combined = [...ordered, ...seeAlso];
 	return combined.filter((url, index) => combined.indexOf(url) === index);
 }

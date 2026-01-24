@@ -1,7 +1,6 @@
 /**
  * Internal URL router for resolving agent:// and skill:// URLs.
  */
-
 import type { InternalResource, InternalUrl, ProtocolHandler } from "./types";
 
 /**
@@ -59,7 +58,7 @@ export class InternalUrlRouter {
 
 		if (!handler) {
 			const available = Array.from(this.handlers.keys())
-				.map((s) => `${s}://`)
+				.map(s => `${s}://`)
 				.join(", ");
 			throw new Error(`Unknown protocol: ${scheme}://\nSupported: ${available || "none"}`);
 		}

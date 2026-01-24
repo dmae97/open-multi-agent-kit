@@ -10,7 +10,6 @@
  * - Events: AgentSessionEvent objects streamed as they occur
  * - Extension UI: Extension UI requests are emitted, client responds with extension_ui_response
  */
-
 import { readLines } from "@oh-my-pi/pi-utils";
 import { nanoid } from "nanoid";
 import type { ExtensionUIContext, ExtensionUIDialogOptions } from "../../extensibility/extensions";
@@ -125,7 +124,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 				dialogOptions,
 				undefined,
 				{ method: "select", title, options, timeout: dialogOptions?.timeout },
-				(response) =>
+				response =>
 					"cancelled" in response && response.cancelled
 						? undefined
 						: "value" in response
@@ -139,7 +138,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 				dialogOptions,
 				false,
 				{ method: "confirm", title, message, timeout: dialogOptions?.timeout },
-				(response) =>
+				response =>
 					"cancelled" in response && response.cancelled
 						? false
 						: "confirmed" in response
@@ -157,7 +156,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 				dialogOptions,
 				undefined,
 				{ method: "input", title, placeholder, timeout: dialogOptions?.timeout },
-				(response) =>
+				response =>
 					"cancelled" in response && response.cancelled
 						? undefined
 						: "value" in response
@@ -296,12 +295,12 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 			// ExtensionActions
 			{
 				sendMessage: (message, options) => {
-					session.sendCustomMessage(message, options).catch((e) => {
+					session.sendCustomMessage(message, options).catch(e => {
 						output(error(undefined, "extension_send", e.message));
 					});
 				},
 				sendUserMessage: (content, options) => {
-					session.sendUserMessage(content, options).catch((e) => {
+					session.sendUserMessage(content, options).catch(e => {
 						output(error(undefined, "extension_send_user", e.message));
 					});
 				},
@@ -314,14 +313,14 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 				getActiveTools: () => session.getActiveToolNames(),
 				getAllTools: () => session.getAllToolNames(),
 				setActiveTools: (toolNames: string[]) => session.setActiveToolsByName(toolNames),
-				setModel: async (model) => {
+				setModel: async model => {
 					const key = await session.modelRegistry.getApiKey(model);
 					if (!key) return false;
 					await session.setModel(model);
 					return true;
 				},
 				getThinkingLevel: () => session.thinkingLevel,
-				setThinkingLevel: (level) => session.setThinkingLevel(level),
+				setThinkingLevel: level => session.setThinkingLevel(level),
 			},
 			// ExtensionContextActions
 			{
@@ -333,7 +332,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 					shutdownState.requested = true;
 				},
 				getContextUsage: () => session.getContextUsage(),
-				compact: async (instructionsOrOptions) => {
+				compact: async instructionsOrOptions => {
 					const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
 					const options =
 						instructionsOrOptions && typeof instructionsOrOptions === "object"
@@ -346,7 +345,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 			{
 				getContextUsage: () => session.getContextUsage(),
 				waitForIdle: () => session.agent.waitForIdle(),
-				newSession: async (options) => {
+				newSession: async options => {
 					const success = await session.newSession({ parentSession: options?.parentSession });
 					// Note: setup callback runs but no UI feedback in RPC mode
 					if (success && options?.setup) {
@@ -354,7 +353,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 					}
 					return { cancelled: !success };
 				},
-				branch: async (entryId) => {
+				branch: async entryId => {
 					const result = await session.branch(entryId);
 					return { cancelled: result.cancelled };
 				},
@@ -362,7 +361,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 					const result = await session.navigateTree(targetId, { summarize: options?.summarize });
 					return { cancelled: result.cancelled };
 				},
-				compact: async (instructionsOrOptions) => {
+				compact: async instructionsOrOptions => {
 					const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
 					const options =
 						instructionsOrOptions && typeof instructionsOrOptions === "object"
@@ -373,7 +372,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 			},
 			new RpcExtensionUIContext(pendingExtensionRequests, output),
 		);
-		extensionRunner.onError((err) => {
+		extensionRunner.onError(err => {
 			output({ type: "extension_error", extensionPath: err.extensionPath, event: err.event, error: err.error });
 		});
 		// Emit session_start event
@@ -383,7 +382,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 	}
 
 	// Output all agent events as JSON
-	session.subscribe((event) => {
+	session.subscribe(event => {
 		output(event);
 	});
 
@@ -405,7 +404,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 						images: command.images,
 						streamingBehavior: command.streamingBehavior,
 					})
-					.catch((e) => output(error(id, "prompt", e.message)));
+					.catch(e => output(error(id, "prompt", e.message)));
 				return success(id, "prompt");
 			}
 
@@ -458,7 +457,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 
 			case "set_model": {
 				const models = session.getAvailableModels();
-				const model = models.find((m) => m.provider === command.provider && m.id === command.modelId);
+				const model = models.find(m => m.provider === command.provider && m.id === command.modelId);
 				if (!model) {
 					return error(id, "set_model", `Model not found: ${command.provider}/${command.modelId}`);
 				}

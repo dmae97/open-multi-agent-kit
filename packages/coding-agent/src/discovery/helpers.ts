@@ -1,7 +1,6 @@
 /**
  * Shared helpers for discovery providers.
  */
-
 import * as os from "node:os";
 import * as path from "node:path";
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
@@ -137,7 +136,7 @@ export function parseThinkingLevel(frontmatter: Record<string, unknown>): Thinki
 export function parseCSV(value: string): string[] {
 	return value
 		.split(",")
-		.map((s) => s.trim())
+		.map(s => s.trim())
 		.filter(Boolean);
 }
 
@@ -224,11 +223,11 @@ export async function loadSkillsFromDir(
 
 	const entries = await readDirEntries(dir);
 	const skillDirs = entries.filter(
-		(entry) => entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules",
+		entry => entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules",
 	);
 
 	const results = await Promise.all(
-		skillDirs.map(async (entry) => {
+		skillDirs.map(async entry => {
 			const skillFile = path.join(dir, entry.name, "SKILL.md");
 			const content = await readFile(skillFile);
 			if (!content) {
@@ -283,7 +282,7 @@ export function expandEnvVarsDeep<T>(obj: T, extraEnv?: Record<string, string>):
 		return expandEnvVars(obj, extraEnv) as T;
 	}
 	if (Array.isArray(obj)) {
-		return obj.map((item) => expandEnvVarsDeep(item, extraEnv)) as T;
+		return obj.map(item => expandEnvVarsDeep(item, extraEnv)) as T;
 	}
 	if (obj !== null && typeof obj === "object") {
 		const result: Record<string, unknown> = {};
@@ -314,23 +313,23 @@ export async function loadFilesFromDir<T>(
 ): Promise<LoadResult<T>> {
 	const entries = await readDirEntries(dir);
 
-	const visibleEntries = entries.filter((entry) => !entry.name.startsWith("."));
+	const visibleEntries = entries.filter(entry => !entry.name.startsWith("."));
 
-	const directories = options.recursive ? visibleEntries.filter((entry) => entry.isDirectory()) : [];
+	const directories = options.recursive ? visibleEntries.filter(entry => entry.isDirectory()) : [];
 
 	const files = visibleEntries
-		.filter((entry) => entry.isFile())
-		.filter((entry) => {
+		.filter(entry => entry.isFile())
+		.filter(entry => {
 			if (!options.extensions) return true;
-			return options.extensions.some((ext) => entry.name.endsWith(`.${ext}`));
+			return options.extensions.some(ext => entry.name.endsWith(`.${ext}`));
 		});
 
 	const [subResults, fileResults] = await Promise.all([
 		Promise.all(
-			directories.map((entry) => loadFilesFromDir(_ctx, path.join(dir, entry.name), provider, level, options)),
+			directories.map(entry => loadFilesFromDir(_ctx, path.join(dir, entry.name), provider, level, options)),
 		),
 		Promise.all(
-			files.map(async (entry) => {
+			files.map(async entry => {
 				const filePath = path.join(dir, entry.name);
 				const content = await readFile(filePath);
 				return { entry, path: filePath, content };
@@ -440,7 +439,7 @@ export async function discoverExtensionModulePaths(ctx: LoadContext, dir: string
 		// 2 & 3. Subdirectories
 		if (entry.isDirectory()) {
 			const subEntries = await readDirEntries(entryPath);
-			const subFileNames = new Set(subEntries.filter((e) => e.isFile()).map((e) => e.name));
+			const subFileNames = new Set(subEntries.filter(e => e.isFile()).map(e => e.name));
 
 			// Check for package.json with "omp"/"pi" field first
 			if (subFileNames.has("package.json")) {

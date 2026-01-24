@@ -47,8 +47,8 @@ export class SelectorController {
 	}
 
 	showSettingsSelector(): void {
-		getAvailableThemes().then((availableThemes) => {
-			this.showSelector((done) => {
+		getAvailableThemes().then(availableThemes => {
+			this.showSelector(done => {
 				const selector = new SettingsSelectorComponent(
 					this.ctx.settingsManager,
 					{
@@ -59,15 +59,15 @@ export class SelectorController {
 					},
 					{
 						onChange: (id, value) => this.handleSettingChange(id, value),
-						onThemePreview: (themeName) => {
-							setTheme(themeName, true).then((result) => {
+						onThemePreview: themeName => {
+							setTheme(themeName, true).then(result => {
 								if (result.success) {
 									this.ctx.ui.invalidate();
 									this.ctx.ui.requestRender();
 								}
 							});
 						},
-						onStatusLinePreview: (settings) => {
+						onStatusLinePreview: settings => {
 							// Update status line with preview settings
 							const currentSettings = this.ctx.settingsManager.getStatusLineSettings();
 							this.ctx.statusLine.updateSettings({ ...currentSettings, ...settings });
@@ -100,10 +100,10 @@ export class SelectorController {
 		const historyStorage = this.ctx.historyStorage;
 		if (!historyStorage) return;
 
-		this.showSelector((done) => {
+		this.showSelector(done => {
 			const component = new HistorySearchComponent(
 				historyStorage,
-				(prompt) => {
+				prompt => {
 					done();
 					this.ctx.editor.setText(prompt);
 					this.ctx.ui.requestRender();
@@ -127,7 +127,7 @@ export class SelectorController {
 			this.ctx.settingsManager,
 			this.ctx.ui.terminal.rows,
 		);
-		this.showSelector((done) => {
+		this.showSelector(done => {
 			dashboard.onClose = () => {
 				done();
 				this.ctx.ui.requestRender();
@@ -193,7 +193,7 @@ export class SelectorController {
 				this.ctx.rebuildChatFromMessages();
 				break;
 			case "theme": {
-				setTheme(value as string, true).then((result) => {
+				setTheme(value as string, true).then(result => {
 					this.ctx.statusLine.invalidate();
 					this.ctx.updateEditorTopBorder();
 					this.ctx.ui.invalidate();
@@ -251,7 +251,7 @@ export class SelectorController {
 	}
 
 	showModelSelector(options?: { temporaryOnly?: boolean }): void {
-		this.showSelector((done) => {
+		this.showSelector(done => {
 			const selector = new ModelSelectorComponent(
 				this.ctx.ui,
 				this.ctx.session.model,
@@ -303,10 +303,10 @@ export class SelectorController {
 			return;
 		}
 
-		this.showSelector((done) => {
+		this.showSelector(done => {
 			const selector = new UserMessageSelectorComponent(
-				userMessages.map((m) => ({ id: m.entryId, text: m.text })),
-				async (entryId) => {
+				userMessages.map(m => ({ id: m.entryId, text: m.text })),
+				async entryId => {
 					const result = await this.ctx.session.branch(entryId);
 					if (result.cancelled) {
 						// Hook cancelled the branch
@@ -348,12 +348,12 @@ export class SelectorController {
 			return;
 		}
 
-		this.showSelector((done) => {
+		this.showSelector(done => {
 			const selector = new TreeSelectorComponent(
 				tree,
 				visibleLeafId,
 				this.ctx.ui.terminal.rows,
-				async (entryId) => {
+				async entryId => {
 					// Selecting the visible leaf is a no-op (already there)
 					if (entryId === visibleLeafId) {
 						done();
@@ -408,8 +408,8 @@ export class SelectorController {
 						this.ctx.chatContainer.addChild(new Spacer(1));
 						summaryLoader = new Loader(
 							this.ctx.ui,
-							(spinner) => theme.fg("accent", spinner),
-							(text) => theme.fg("muted", text),
+							spinner => theme.fg("accent", spinner),
+							text => theme.fg("muted", text),
 							"Summarizing branch... (esc to cancel)",
 							getSymbolTheme().spinnerFrames,
 						);
@@ -470,10 +470,10 @@ export class SelectorController {
 			this.ctx.sessionManager.getCwd(),
 			this.ctx.sessionManager.getSessionDir(),
 		);
-		this.showSelector((done) => {
+		this.showSelector(done => {
 			const selector = new SessionSelectorComponent(
 				sessions,
-				async (sessionPath) => {
+				async sessionPath => {
 					done();
 					await this.handleResumeSession(sessionPath);
 				},
@@ -517,14 +517,14 @@ export class SelectorController {
 	async showOAuthSelector(mode: "login" | "logout"): Promise<void> {
 		if (mode === "logout") {
 			const providers = this.ctx.session.modelRegistry.authStorage.list();
-			const loggedInProviders = providers.filter((p) => this.ctx.session.modelRegistry.authStorage.hasOAuth(p));
+			const loggedInProviders = providers.filter(p => this.ctx.session.modelRegistry.authStorage.hasOAuth(p));
 			if (loggedInProviders.length === 0) {
 				this.ctx.showStatus("No OAuth providers logged in. Use /login first.");
 				return;
 			}
 		}
 
-		this.showSelector((done) => {
+		this.showSelector(done => {
 			const selector = new OAuthSelectorComponent(
 				mode,
 				this.ctx.session.modelRegistry.authStorage,
@@ -558,7 +558,7 @@ export class SelectorController {
 									}
 									this.ctx.ui.requestRender();
 
-									return new Promise<string>((resolve) => {
+									return new Promise<string>(resolve => {
 										const codeInput = new Input();
 										codeInput.onSubmit = () => {
 											const code = codeInput.getValue();

@@ -73,8 +73,8 @@ export interface GrepOperations {
 }
 
 const defaultGrepOperations: GrepOperations = {
-	isDirectory: async (p) => (await Bun.file(p).stat()).isDirectory(),
-	readFile: (p) => Bun.file(p).text(),
+	isDirectory: async p => (await Bun.file(p).stat()).isDirectory(),
+	readFile: p => Bun.file(p).text(),
 };
 
 export interface GrepToolOptions {
@@ -287,7 +287,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 
 			// For simple output modes (files_with_matches, count), process text directly
 			if (effectiveOutputMode === "files_with_matches" || effectiveOutputMode === "count") {
-				const stdout = await child.text().catch((x) => {
+				const stdout = await child.text().catch(x => {
 					if (x instanceof ptree.Exception && x.exitCode === 1) {
 						return "";
 					}
@@ -303,7 +303,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 				const lines = stdout
 					.trim()
 					.split("\n")
-					.filter((line) => line.length > 0);
+					.filter(line => line.length > 0);
 
 				if (lines.length === 0) {
 					const details: GrepToolDetails = {
@@ -371,7 +371,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 
 				// For count mode, format as "path:count"
 				if (effectiveOutputMode === "count") {
-					const formatted = processedLines.map((line) => {
+					const formatted = processedLines.map(line => {
 						const separatorIndex = line.lastIndexOf(":");
 						const relative = formatPath(separatorIndex === -1 ? line : line.slice(0, separatorIndex));
 						const count = separatorIndex === -1 ? "0" : line.slice(separatorIndex + 1);
@@ -383,7 +383,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 						matchCount: simpleMatchCount,
 						fileCount,
 						files: simpleFileList,
-						fileMatches: simpleFileList.map((path) => ({
+						fileMatches: simpleFileList.map(path => ({
 							path,
 							count: simpleFileMatchCounts.get(path) ?? 0,
 						})),
@@ -401,7 +401,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 				}
 
 				// For files_with_matches, format paths
-				const formatted = processedLines.map((line) => formatPath(line));
+				const formatted = processedLines.map(line => formatPath(line));
 				const output = formatted.join("\n");
 				const details: GrepToolDetails = {
 					scopePath,
@@ -547,7 +547,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 				matchCount,
 				fileCount: files.size,
 				files: fileList,
-				fileMatches: fileList.map((path) => ({
+				fileMatches: fileList.map(path => ({
 					path,
 					count: fileMatchCounts.get(path) ?? 0,
 				})),
@@ -632,18 +632,18 @@ export const grepToolRenderer = {
 		const details = result.details;
 
 		if (result.isError || details?.error) {
-			const errorText = details?.error || result.content?.find((c) => c.type === "text")?.text || "Unknown error";
+			const errorText = details?.error || result.content?.find(c => c.type === "text")?.text || "Unknown error";
 			return new Text(formatErrorMessage(errorText, uiTheme), 0, 0);
 		}
 
 		const hasDetailedData = details?.matchCount !== undefined || details?.fileCount !== undefined;
 
 		if (!hasDetailedData) {
-			const textContent = result.content?.find((c) => c.type === "text")?.text;
+			const textContent = result.content?.find(c => c.type === "text")?.text;
 			if (!textContent || textContent === "No matches found") {
 				return new Text(formatEmptyMessage("No matches found", uiTheme), 0, 0);
 			}
-			const lines = textContent.split("\n").filter((line) => line.trim() !== "");
+			const lines = textContent.split("\n").filter(line => line.trim() !== "");
 			const description = args?.pattern ?? undefined;
 			const header = renderStatusLine(
 				{ icon: "success", title: "Grep", description, meta: [formatCount("item", lines.length)] },
@@ -655,7 +655,7 @@ export const grepToolRenderer = {
 					expanded,
 					maxCollapsed: COLLAPSED_TEXT_LIMIT,
 					itemType: "item",
-					renderItem: (line) => uiTheme.fg("toolOutput", line),
+					renderItem: line => uiTheme.fg("toolOutput", line),
 				},
 				uiTheme,
 			);
@@ -699,15 +699,15 @@ export const grepToolRenderer = {
 		);
 
 		if (mode === "content") {
-			const textContent = result.content?.find((c) => c.type === "text")?.text ?? "";
-			const contentLines = textContent.split("\n").filter((line) => line.trim().length > 0);
+			const textContent = result.content?.find(c => c.type === "text")?.text ?? "";
+			const contentLines = textContent.split("\n").filter(line => line.trim().length > 0);
 			const matchLines = renderTreeList(
 				{
 					items: contentLines,
 					expanded,
 					maxCollapsed: COLLAPSED_TEXT_LIMIT,
 					itemType: "match",
-					renderItem: (line) => uiTheme.fg("toolOutput", line),
+					renderItem: line => uiTheme.fg("toolOutput", line),
 				},
 				uiTheme,
 			);
@@ -715,11 +715,11 @@ export const grepToolRenderer = {
 		}
 
 		const fileEntries: Array<{ path: string; count?: number }> = details?.fileMatches?.length
-			? details.fileMatches.map((entry) => ({ path: entry.path, count: entry.count }))
-			: files.map((path) => ({ path }));
+			? details.fileMatches.map(entry => ({ path: entry.path, count: entry.count }))
+			: files.map(path => ({ path }));
 		const fileLines = renderFileList(
 			{
-				files: fileEntries.map((entry) => ({
+				files: fileEntries.map(entry => ({
 					path: entry.path,
 					isDirectory: entry.path.endsWith("/"),
 					meta: entry.count !== undefined ? `(${entry.count} match${entry.count !== 1 ? "es" : ""})` : undefined,

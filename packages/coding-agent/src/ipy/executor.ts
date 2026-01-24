@@ -113,7 +113,7 @@ async function cleanupIdleSessions(): Promise<void> {
 
 	if (toDispose.length > 0) {
 		logger.debug("Cleaning up idle kernel sessions", { count: toDispose.length });
-		await Promise.allSettled(toDispose.map((session) => disposeKernelSession(session)));
+		await Promise.allSettled(toDispose.map(session => disposeKernelSession(session)));
 	}
 
 	if (kernelSessions.size === 0) {
@@ -137,7 +137,7 @@ async function evictOldestSession(): Promise<void> {
 export async function disposeAllKernelSessions(): Promise<void> {
 	stopCleanupTimer();
 	const sessions = Array.from(kernelSessions.values());
-	await Promise.allSettled(sessions.map((session) => disposeKernelSession(session)));
+	await Promise.allSettled(sessions.map(session => disposeKernelSession(session)));
 }
 
 async function ensureKernelAvailable(cwd: string): Promise<void> {
@@ -169,7 +169,7 @@ export async function warmPythonEnvironment(
 		const docs = await withKernelSession(
 			resolvedSessionId,
 			cwd,
-			async (kernel) => kernel.introspectPrelude(),
+			async kernel => kernel.introspectPrelude(),
 			useSharedGateway,
 			sessionFile,
 		);
@@ -366,8 +366,8 @@ async function executeWithKernel(
 		const result = await kernel.execute(code, {
 			signal: options?.signal,
 			timeoutMs: options?.timeoutMs,
-			onChunk: (text) => sink.push(text),
-			onDisplay: (output) => void displayOutputs.push(output),
+			onChunk: text => sink.push(text),
+			onDisplay: output => void displayOutputs.push(output),
 		});
 
 		if (result.cancelled) {
@@ -451,7 +451,7 @@ export async function executePython(code: string, options?: PythonExecutorOption
 	return await withKernelSession(
 		sessionId,
 		cwd,
-		async (kernel) => executeWithKernel(kernel, code, options),
+		async kernel => executeWithKernel(kernel, code, options),
 		useSharedGateway,
 		sessionFile,
 		artifactsDir,

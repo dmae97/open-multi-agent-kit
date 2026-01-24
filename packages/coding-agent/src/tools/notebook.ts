@@ -249,7 +249,7 @@ export const notebookToolRenderer = {
 		if (lineCount > 0) summaryParts.push(formatCount("line", lineCount));
 		if (totalCells !== undefined) summaryParts.push(`${totalCells} total`);
 
-		const outputLines = summaryParts.map((part) => uiTheme.fg("dim", part));
+		const outputLines = summaryParts.map(part => uiTheme.fg("dim", part));
 		const codeText = cellSource.join("");
 		const language = cellType === "markdown" ? "markdown" : undefined;
 

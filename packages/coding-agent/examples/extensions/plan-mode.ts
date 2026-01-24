@@ -18,7 +18,6 @@
  * 2. Use /plan to toggle plan mode on/off
  * 3. Or start in plan mode with --plan flag
  */
-
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { Key } from "@oh-my-pi/pi-tui";
 
@@ -120,12 +119,12 @@ const SAFE_COMMANDS = [
 ];
 
 function isSafeCommand(command: string): boolean {
-	if (SAFE_COMMANDS.some((pattern) => pattern.test(command))) {
-		if (!DESTRUCTIVE_PATTERNS.some((pattern) => pattern.test(command))) {
+	if (SAFE_COMMANDS.some(pattern => pattern.test(command))) {
+		if (!DESTRUCTIVE_PATTERNS.some(pattern => pattern.test(command))) {
 			return true;
 		}
 	}
-	if (DESTRUCTIVE_PATTERNS.some((pattern) => pattern.test(command))) {
+	if (DESTRUCTIVE_PATTERNS.some(pattern => pattern.test(command))) {
 		return false;
 	}
 	return true;
@@ -223,7 +222,7 @@ export default function planModeExtension(pi: ExtensionAPI) {
 	// Helper to update status displays
 	function updateStatus(ctx: ExtensionContext) {
 		if (executionMode && todoItems.length > 0) {
-			const completed = todoItems.filter((t) => t.completed).length;
+			const completed = todoItems.filter(t => t.completed).length;
 			ctx.ui.setStatus("plan-mode", ctx.ui.theme.fg("accent", `📋 ${completed}/${todoItems.length}`));
 		} else if (planModeEnabled) {
 			ctx.ui.setStatus("plan-mode", ctx.ui.theme.fg("warning", "⏸ plan"));
@@ -293,13 +292,13 @@ export default function planModeExtension(pi: ExtensionAPI) {
 	// Register Shift+P shortcut
 	pi.registerShortcut(Key.shift("p"), {
 		description: "Toggle plan mode",
-		handler: async (ctx) => {
+		handler: async ctx => {
 			await togglePlanMode(ctx);
 		},
 	});
 
 	// Block destructive bash in plan mode
-	pi.on("tool_call", async (event) => {
+	pi.on("tool_call", async event => {
 		if (!planModeEnabled) return;
 		if (event.toolName !== "bash") return;
 
@@ -319,7 +318,7 @@ export default function planModeExtension(pi: ExtensionAPI) {
 		if (!executionMode || todoItems.length === 0) return;
 
 		// Mark the first uncompleted step as done when any tool succeeds
-		const nextStep = todoItems.find((t) => !t.completed);
+		const nextStep = todoItems.find(t => !t.completed);
 		if (nextStep) {
 			nextStep.completed = true;
 			updateStatus(ctx);
@@ -328,7 +327,7 @@ export default function planModeExtension(pi: ExtensionAPI) {
 
 	// Filter out stale plan mode context messages from LLM context
 	// This ensures the agent only sees the CURRENT state (plan mode on/off)
-	pi.on("context", async (event) => {
+	pi.on("context", async event => {
 		// Only filter when NOT in plan mode (i.e., when executing)
 		if (planModeEnabled) {
 			return;
@@ -336,7 +335,7 @@ export default function planModeExtension(pi: ExtensionAPI) {
 
 		// Remove any previous plan-mode-context messages
 		const _beforeCount = event.messages.length;
-		const filtered = event.messages.filter((m) => {
+		const filtered = event.messages.filter(m => {
 			if (m.role === "user" && Array.isArray(m.content)) {
 				const hasOldContext = m.content.some(
 					(c: { type: string; text?: string }) => c.type === "text" && c.text?.includes("[PLAN MODE ACTIVE]"),
@@ -381,8 +380,8 @@ Do NOT attempt to make changes - just describe what you would do.`,
 		}
 
 		if (executionMode && todoItems.length > 0) {
-			const remaining = todoItems.filter((t) => !t.completed);
-			const todoList = remaining.map((t) => `${t.step}. ${t.text}`).join("\n");
+			const remaining = todoItems.filter(t => !t.completed);
+			const todoList = remaining.map(t => `${t.step}. ${t.text}`).join("\n");
 			return {
 				message: {
 					customType: "plan-execution-context",
@@ -402,10 +401,10 @@ Execute each step in order.`,
 	pi.on("agent_end", async (event, ctx) => {
 		// In execution mode, check if all steps complete
 		if (executionMode && todoItems.length > 0) {
-			const allComplete = todoItems.every((t) => t.completed);
+			const allComplete = todoItems.every(t => t.completed);
 			if (allComplete) {
 				// Show final completed list in chat
-				const completedList = todoItems.map((t) => `~~${t.text}~~`).join("\n");
+				const completedList = todoItems.map(t => `~~${t.text}~~`).join("\n");
 				pi.sendMessage(
 					{
 						customType: "plan-complete",
@@ -428,7 +427,7 @@ Execute each step in order.`,
 
 		// Extract todos from last message
 		const messages = event.messages;
-		const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+		const lastAssistant = [...messages].reverse().find(m => m.role === "assistant");
 		if (lastAssistant && Array.isArray(lastAssistant.content)) {
 			const textContent = lastAssistant.content
 				.filter(
@@ -541,7 +540,7 @@ Execute each step in order.`,
 		// If no tools were called this turn, the agent was doing analysis/explanation
 		// Mark the next uncompleted step as done
 		if (!toolsCalledThisTurn) {
-			const nextStep = todoItems.find((t) => !t.completed);
+			const nextStep = todoItems.find(t => !t.completed);
 			if (nextStep) {
 				nextStep.completed = true;
 				updateStatus(ctx);

@@ -44,7 +44,7 @@ handlebars.registerHelper(
 		const suffix = (options.hash.suffix as string) ?? "";
 		const rawSeparator = (options.hash.join as string) ?? "\n";
 		const separator = rawSeparator.replace(/\\n/g, "\n").replace(/\\t/g, "\t");
-		return context.map((item) => `${prefix}${options.fn(item)}${suffix}`).join(separator);
+		return context.map(item => `${prefix}${options.fn(item)}${suffix}`).join(separator);
 	},
 );
 
@@ -126,7 +126,7 @@ handlebars.registerHelper(
 		const headers = headersStr?.split("|") ?? [];
 		const separator = headers.map(() => "---").join(" | ");
 		const headerRow = headers.length > 0 ? `| ${headers.join(" | ")} |\n| ${separator} |\n` : "";
-		const rows = context.map((item) => `| ${options.fn(item).trim()} |`).join("\n");
+		const rows = context.map(item => `| ${options.fn(item).trim()} |`).join("\n");
 		return headerRow + rows;
 	},
 );
@@ -235,7 +235,7 @@ function optimizePromptLayout(input: string): string {
 	// normalize NBSP -> space
 	s = s.replace(/\u00A0/g, " ");
 
-	const lines = s.split("\n").map((line) => {
+	const lines = s.split("\n").map(line => {
 		// 2) remove trailing whitespace (spaces/tabs) per line
 		let l = line.replace(/[ \t]+$/g, "");
 
@@ -409,7 +409,7 @@ async function loadTemplatesFromDir(
 					// Get description from frontmatter or first non-empty line
 					let description = String(frontmatter.description || "");
 					if (!description) {
-						const firstLine = body.split("\n").find((line) => line.trim());
+						const firstLine = body.split("\n").find(line => line.trim());
 						if (firstLine) {
 							// Truncate if too long
 							description = firstLine.slice(0, 60);
@@ -482,7 +482,7 @@ export function expandPromptTemplate(text: string, templates: PromptTemplate[]):
 	const templateName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
 	const argsString = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1);
 
-	const template = templates.find((t) => t.name === templateName);
+	const template = templates.find(t => t.name === templateName);
 	if (template) {
 		const args = parseCommandArgs(argsString);
 		const argsText = args.join(" ");

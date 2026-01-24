@@ -114,7 +114,7 @@ export const handleSemanticScholar: SpecialHandler = async (url: string, timeout
 	sections.push("");
 
 	if (paper.authors && paper.authors.length > 0) {
-		const authorList = paper.authors.map((a) => a.name).join(", ");
+		const authorList = paper.authors.map(a => a.name).join(", ");
 		sections.push(`**Authors:** ${authorList}`);
 		sections.push("");
 	}

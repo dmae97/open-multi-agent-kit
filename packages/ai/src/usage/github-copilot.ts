@@ -3,7 +3,6 @@
  *
  * Normalizes Copilot quota usage into the shared UsageReport schema.
  */
-
 import type {
 	UsageAmount,
 	UsageCacheEntry,
@@ -316,7 +315,7 @@ function normalizeBillingUsage(data: BillingUsageResponse): UsageLimit[] {
 	};
 
 	const premiumItems = data.usageItems.filter(
-		(item) => item.sku === "Copilot Premium Request" || item.sku.includes("Premium"),
+		item => item.sku === "Copilot Premium Request" || item.sku.includes("Premium"),
 	);
 	const totalUsed = premiumItems.reduce((sum, item) => sum + item.grossQuantity, 0);
 	const totalLimit = premiumItems.reduce((sum, item) => sum + (item.limit ?? 0), 0) || undefined;
@@ -359,7 +358,7 @@ function normalizeBillingUsage(data: BillingUsageResponse): UsageLimit[] {
 function resolveCacheTtl(now: number, report: UsageReport | null): UsageCacheEntry["expiresAt"] {
 	if (!report) return now + DEFAULT_CACHE_TTL_MS;
 	const resetInMs = report.limits
-		.map((limit) => limit.window?.resetInMs)
+		.map(limit => limit.window?.resetInMs)
 		.find((value): value is number => typeof value === "number" && Number.isFinite(value));
 	if (!resetInMs || resetInMs <= 0) return now + DEFAULT_CACHE_TTL_MS;
 	return now + Math.min(MAX_CACHE_TTL_MS, resetInMs);

@@ -8,7 +8,6 @@
  * - agent://<id>/<path> - JSON extraction via path form
  * - agent://<id>?q=<query> - JSON extraction via query form
  */
-
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { isEnoent } from "@oh-my-pi/pi-utils";
@@ -29,7 +28,7 @@ export interface AgentProtocolOptions {
 async function listAvailableOutputs(artifactsDir: string): Promise<string[]> {
 	try {
 		const files = await fs.readdir(artifactsDir);
-		return files.filter((f) => f.endsWith(".md")).map((f) => f.replace(".md", ""));
+		return files.filter(f => f.endsWith(".md")).map(f => f.replace(".md", ""));
 	} catch {
 		return [];
 	}

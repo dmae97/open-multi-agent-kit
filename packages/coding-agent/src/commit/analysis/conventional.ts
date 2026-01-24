@@ -122,7 +122,7 @@ function normalizeAnalysis(parsed: {
 	details: Array<{ text: string; changelog_category?: ChangelogCategory; user_visible?: boolean }>;
 	issue_refs: string[];
 }): ConventionalAnalysis {
-	const details: ConventionalDetail[] = parsed.details.map((detail) => ({
+	const details: ConventionalDetail[] = parsed.details.map(detail => ({
 		text: detail.text.trim(),
 		changelogCategory: detail.user_visible ? detail.changelog_category : undefined,
 		userVisible: detail.user_visible ?? false,
@@ -146,8 +146,8 @@ function extractToolCall(message: AssistantMessage, name: string): ToolCall | un
 
 function extractTextContent(message: AssistantMessage): string {
 	return message.content
-		.filter((content) => content.type === "text")
-		.map((content) => content.text)
+		.filter(content => content.type === "text")
+		.map(content => content.text)
 		.join("")
 		.trim();
 }

@@ -129,7 +129,7 @@ async function fetchWork(workId: string, timeout: number, signal?: AbortSignal):
 	// Fetch author names if we have author keys
 	if (work.authors?.length) {
 		const authorNames = await fetchAuthorNames(
-			work.authors.map((a) => a.author.key),
+			work.authors.map(a => a.author.key),
 			timeout,
 			signal,
 		);
@@ -179,7 +179,7 @@ async function fetchEdition(editionId: string, timeout: number, signal?: AbortSi
 	// Fetch author names
 	if (edition.authors?.length) {
 		const authorNames = await fetchAuthorNames(
-			edition.authors.map((a) => a.key),
+			edition.authors.map(a => a.key),
 			timeout,
 			signal,
 		);
@@ -250,11 +250,11 @@ async function fetchByIsbn(isbn: string, timeout: number, signal?: AbortSignal):
 	let md = `# ${book.title}\n\n`;
 
 	if (book.authors?.length) {
-		md += `**Authors:** ${book.authors.map((a) => a.name).join(", ")}\n`;
+		md += `**Authors:** ${book.authors.map(a => a.name).join(", ")}\n`;
 	}
 
 	if (book.publishers?.length) {
-		md += `**Publishers:** ${book.publishers.map((p) => p.name).join(", ")}\n`;
+		md += `**Publishers:** ${book.publishers.map(p => p.name).join(", ")}\n`;
 	}
 
 	if (book.publish_date) {
@@ -280,7 +280,7 @@ async function fetchByIsbn(isbn: string, timeout: number, signal?: AbortSignal):
 	if (book.subjects?.length) {
 		md += `## Subjects\n\n${book.subjects
 			.slice(0, 20)
-			.map((s) => s.name)
+			.map(s => s.name)
 			.join(", ")}\n`;
 	}
 
@@ -291,7 +291,7 @@ async function fetchAuthorNames(authorKeys: string[], timeout: number, signal?: 
 	const names: string[] = [];
 
 	// Fetch authors in parallel (limit to first 5)
-	const promises = authorKeys.slice(0, 5).map(async (key) => {
+	const promises = authorKeys.slice(0, 5).map(async key => {
 		const authorKey = key.startsWith("/authors/") ? key : `/authors/${key}`;
 		const apiUrl = `https://openlibrary.org${authorKey}.json`;
 		try {

@@ -24,7 +24,7 @@ export class HookMessageComponent extends Container {
 		this.addChild(new Spacer(1));
 
 		// Create box with purple background (used for default rendering)
-		this.box = new Box(1, 1, (t) => theme.bg("customMessageBg", t));
+		this.box = new Box(1, 1, t => theme.bg("customMessageBg", t));
 
 		this.rebuild();
 	}
@@ -80,7 +80,7 @@ export class HookMessageComponent extends Container {
 		} else {
 			text = this.message.content
 				.filter((c): c is TextContent => c.type === "text")
-				.map((c) => c.text)
+				.map(c => c.text)
 				.join("\n");
 		}
 

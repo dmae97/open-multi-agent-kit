@@ -16,7 +16,7 @@ async function main() {
 	});
 
 	// Stream events to console
-	client.onEvent((event) => {
+	client.onEvent(event => {
 		if (event.type === "message_update") {
 			const { assistantMessageEvent } = event;
 			if (assistantMessageEvent.type === "text_delta" || assistantMessageEvent.type === "thinking_delta") {
@@ -52,7 +52,7 @@ async function main() {
 		if (!isWaiting) process.stdout.write("You: ");
 	};
 
-	rl.on("line", async (line) => {
+	rl.on("line", async line => {
 		if (isWaiting) return;
 		if (line.trim() === "exit") {
 			await client.stop();

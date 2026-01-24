@@ -1,7 +1,6 @@
 /**
  * Types for the Extension Control Center dashboard.
  */
-
 import type { SourceMeta } from "../../../capability/types";
 
 /**

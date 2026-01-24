@@ -189,7 +189,7 @@ export function convertLeadingTabsToSpaces(text: string, spacesPerTab: number): 
 	if (spacesPerTab <= 0) return text;
 	return text
 		.split("\n")
-		.map((line) => {
+		.map(line => {
 			const trimmed = line.trimStart();
 			if (trimmed.length === 0) return line;
 			const leading = getLeadingWhitespace(line);
@@ -212,7 +212,7 @@ export function normalizeUnicode(s: string): string {
 	return s
 		.trim()
 		.split("")
-		.map((c) => {
+		.map(c => {
 			const code = c.charCodeAt(0);
 
 			// Various dash/hyphen code-points → ASCII '-'
@@ -367,7 +367,7 @@ export function adjustIndentation(oldText: string, actualText: string, newText: 
 	}
 
 	const delta = deltas[0];
-	if (!deltas.every((value) => value === delta)) {
+	if (!deltas.every(value => value === delta)) {
 		return newText;
 	}
 
@@ -380,7 +380,7 @@ export function adjustIndentation(oldText: string, actualText: string, newText: 
 	}
 
 	const indentChar = actualProfile.char ?? oldProfile.char ?? detectIndentChar(actualText);
-	const adjusted = newText.split("\n").map((line) => {
+	const adjusted = newText.split("\n").map(line => {
 		if (line.trim().length === 0) {
 			return line;
 		}

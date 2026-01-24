@@ -80,7 +80,7 @@ describe("Duplicate Tool Results Regression", () => {
 
 		// Count tool results with the same ID
 		const toolResults = transformed.filter(
-			(m) => m.role === "toolResult" && (m as ToolResultMessage).toolCallId === toolCallId,
+			m => m.role === "toolResult" && (m as ToolResultMessage).toolCallId === toolCallId,
 		);
 
 		// Should have exactly ONE tool result, not two
@@ -138,7 +138,7 @@ describe("Duplicate Tool Results Regression", () => {
 		const transformed = transformMessages(messages, model);
 
 		const toolResults = transformed.filter(
-			(m) => m.role === "toolResult" && (m as ToolResultMessage).toolCallId === toolCallId,
+			m => m.role === "toolResult" && (m as ToolResultMessage).toolCallId === toolCallId,
 		);
 
 		expect(toolResults.length).toBe(1);
@@ -187,7 +187,7 @@ describe("Duplicate Tool Results Regression", () => {
 		const transformed = transformMessages(messages, model);
 
 		const toolResults = transformed.filter(
-			(m) => m.role === "toolResult" && (m as ToolResultMessage).toolCallId === toolCallId,
+			m => m.role === "toolResult" && (m as ToolResultMessage).toolCallId === toolCallId,
 		);
 
 		// Should have exactly ONE synthetic tool result added
@@ -241,13 +241,13 @@ describe("Duplicate Tool Results Regression", () => {
 		const transformed = transformMessages(messages, model);
 
 		// Should have exactly 3 tool results total
-		const allToolResults = transformed.filter((m) => m.role === "toolResult");
+		const allToolResults = transformed.filter(m => m.role === "toolResult");
 		expect(allToolResults.length).toBe(3);
 
 		// Each tool call should have exactly one result
-		const result1 = allToolResults.filter((m) => (m as ToolResultMessage).toolCallId === toolCallId1);
-		const result2 = allToolResults.filter((m) => (m as ToolResultMessage).toolCallId === toolCallId2);
-		const result3 = allToolResults.filter((m) => (m as ToolResultMessage).toolCallId === toolCallId3);
+		const result1 = allToolResults.filter(m => (m as ToolResultMessage).toolCallId === toolCallId1);
+		const result2 = allToolResults.filter(m => (m as ToolResultMessage).toolCallId === toolCallId2);
+		const result3 = allToolResults.filter(m => (m as ToolResultMessage).toolCallId === toolCallId3);
 
 		expect(result1.length).toBe(1);
 		expect(result2.length).toBe(1);

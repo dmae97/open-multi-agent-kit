@@ -324,7 +324,7 @@ export class CommandController {
 			allEntries.length > 0
 				? allEntries
 						.reverse()
-						.map((e) => e.content)
+						.map(e => e.content)
 						.join("\n\n")
 				: "No changelog entries found.";
 
@@ -434,7 +434,7 @@ export class CommandController {
 			}),
 			"",
 			"=== Agent messages (JSONL) ===",
-			...this.ctx.session.messages.map((msg) => JSON.stringify(msg)),
+			...this.ctx.session.messages.map(msg => JSON.stringify(msg)),
 			"",
 		].join("\n");
 
@@ -477,7 +477,7 @@ export class CommandController {
 		try {
 			const result = await this.ctx.session.executeBash(
 				command,
-				(chunk) => {
+				chunk => {
 					if (this.ctx.bashComponent) {
 						this.ctx.bashComponent.appendOutput(chunk);
 						this.ctx.ui.requestRender();
@@ -519,7 +519,7 @@ export class CommandController {
 		try {
 			const result = await this.ctx.session.executePython(
 				code,
-				(chunk) => {
+				chunk => {
 					if (this.ctx.pythonComponent) {
 						this.ctx.pythonComponent.appendOutput(chunk);
 						this.ctx.ui.requestRender();
@@ -548,7 +548,7 @@ export class CommandController {
 
 	async handleCompactCommand(customInstructions?: string): Promise<void> {
 		const entries = this.ctx.sessionManager.getEntries();
-		const messageCount = entries.filter((e) => e.type === "message").length;
+		const messageCount = entries.filter(e => e.type === "message").length;
 
 		if (messageCount < 2) {
 			this.ctx.showWarning("Nothing to compact (no messages yet)");
@@ -589,8 +589,8 @@ export class CommandController {
 		const label = isAuto ? "Auto-compacting context... (esc to cancel)" : "Compacting context... (esc to cancel)";
 		const compactingLoader = new Loader(
 			this.ctx.ui,
-			(spinner) => theme.fg("accent", spinner),
-			(text) => theme.fg("muted", text),
+			spinner => theme.fg("accent", spinner),
+			text => theme.fg("muted", text),
 			label,
 			getSymbolTheme().spinnerFrames,
 		);
@@ -634,7 +634,7 @@ const COLUMN_WIDTH = BAR_WIDTH + 2;
 function formatProviderName(provider: string): string {
 	return provider
 		.split(/[-_]/g)
-		.map((part) => (part ? part[0].toUpperCase() + part.slice(1) : ""))
+		.map(part => (part ? part[0].toUpperCase() + part.slice(1) : ""))
 		.join(" ");
 }
 
@@ -687,8 +687,8 @@ function resolveFraction(limit: UsageLimit): number | undefined {
 
 function resolveProviderUsageTotal(reports: UsageReport[]): number {
 	return reports
-		.flatMap((report) => report.limits)
-		.map((limit) => resolveFraction(limit) ?? 0)
+		.flatMap(report => report.limits)
+		.map(limit => resolveFraction(limit) ?? 0)
 		.reduce((sum, value) => sum + value, 0);
 }
 
@@ -740,9 +740,9 @@ function padColumn(text: string, width: number): string {
 }
 
 function resolveAggregateStatus(limits: UsageLimit[]): UsageLimit["status"] {
-	const hasOk = limits.some((limit) => limit.status === "ok");
-	const hasWarning = limits.some((limit) => limit.status === "warning");
-	const hasExhausted = limits.some((limit) => limit.status === "exhausted");
+	const hasOk = limits.some(limit => limit.status === "ok");
+	const hasWarning = limits.some(limit => limit.status === "warning");
+	const hasExhausted = limits.some(limit => limit.status === "exhausted");
 	if (!hasOk && !hasWarning && !hasExhausted) return "unknown";
 	if (hasOk) {
 		return hasWarning || hasExhausted ? "warning" : "ok";
@@ -761,12 +761,12 @@ function isZeroUsage(limit: UsageLimit): boolean {
 }
 
 function isZeroUsageGroup(limits: UsageLimit[]): boolean {
-	return limits.length > 0 && limits.every((limit) => isZeroUsage(limit));
+	return limits.length > 0 && limits.every(limit => isZeroUsage(limit));
 }
 
 function formatAggregateAmount(limits: UsageLimit[]): string {
 	const fractions = limits
-		.map((limit) => resolveFraction(limit))
+		.map(limit => resolveFraction(limit))
 		.filter((value): value is number => value !== undefined);
 	if (fractions.length === limits.length && fractions.length > 0) {
 		const sum = fractions.reduce((total, value) => total + value, 0);
@@ -777,8 +777,8 @@ function formatAggregateAmount(limits: UsageLimit[]): string {
 	}
 
 	const amounts = limits
-		.map((limit) => limit.amount)
-		.filter((amount) => amount.used !== undefined && amount.limit !== undefined && amount.limit > 0);
+		.map(limit => limit.amount)
+		.filter(amount => amount.used !== undefined && amount.limit !== undefined && amount.limit > 0);
 	if (amounts.length === limits.length && amounts.length > 0) {
 		const totalUsed = amounts.reduce((sum, amount) => sum + (amount.used ?? 0), 0);
 		const totalLimit = amounts.reduce((sum, amount) => sum + (amount.limit ?? 0), 0);
@@ -793,11 +793,11 @@ function formatAggregateAmount(limits: UsageLimit[]): string {
 
 function resolveResetRange(limits: UsageLimit[], nowMs: number): string | null {
 	const resets = limits
-		.map((limit) => limit.window?.resetInMs ?? undefined)
+		.map(limit => limit.window?.resetInMs ?? undefined)
 		.filter((value): value is number => value !== undefined && Number.isFinite(value) && value > 0);
 	if (resets.length === 0) {
 		const absolute = limits
-			.map((limit) => limit.window?.resetsAt)
+			.map(limit => limit.window?.resetsAt)
 			.filter((value): value is number => value !== undefined && Number.isFinite(value) && value > nowMs);
 		if (absolute.length === 0) return null;
 		const earliest = Math.min(...absolute);
@@ -840,7 +840,7 @@ function renderUsageBar(limit: UsageLimit, uiTheme: typeof theme): string {
 
 function renderUsageReports(reports: UsageReport[], uiTheme: typeof theme, nowMs: number): string {
 	const lines: string[] = [];
-	const latestFetchedAt = Math.max(...reports.map((report) => report.fetchedAt ?? 0));
+	const latestFetchedAt = Math.max(...reports.map(report => report.fetchedAt ?? 0));
 	const headerSuffix = latestFetchedAt ? ` (${formatDuration(nowMs - latestFetchedAt)} ago)` : "";
 	lines.push(uiTheme.bold(uiTheme.fg("accent", `Usage${headerSuffix}`)));
 	const grouped = new Map<string, UsageReport[]>();
@@ -885,7 +885,7 @@ function renderUsageReports(reports: UsageReport[], uiTheme: typeof theme, nowMs
 			}
 		}
 
-		const providerAllZero = isZeroUsageGroup(Array.from(limitGroups.values()).flatMap((group) => group.limits));
+		const providerAllZero = isZeroUsageGroup(Array.from(limitGroups.values()).flatMap(group => group.limits));
 		if (providerAllZero) {
 			const providerTitle = `${resolveStatusIcon("ok", uiTheme)} ${uiTheme.fg("accent", `${providerName} (0%)`)}`;
 			lines.push(uiTheme.bold(providerTitle));
@@ -907,8 +907,8 @@ function renderUsageReports(reports: UsageReport[], uiTheme: typeof theme, nowMs
 				if (aFraction !== bFraction) return bFraction - aFraction;
 				return a.index - b.index;
 			});
-			const sortedLimits = entries.map((entry) => entry.limit);
-			const sortedReports = entries.map((entry) => entry.report);
+			const sortedLimits = entries.map(entry => entry.limit);
+			const sortedReports = entries.map(entry => entry.report);
 
 			const status = resolveAggregateStatus(sortedLimits);
 			const statusIcon = resolveStatusIcon(status, uiTheme);
@@ -931,13 +931,13 @@ function renderUsageReports(reports: UsageReport[], uiTheme: typeof theme, nowMs
 				padColumn(formatAccountHeader(limit, sortedReports[index], index, nowMs), COLUMN_WIDTH),
 			);
 			lines.push(`  ${accountLabels.join(" ")}`.trimEnd());
-			const bars = sortedLimits.map((limit) => padColumn(renderUsageBar(limit, uiTheme), COLUMN_WIDTH));
+			const bars = sortedLimits.map(limit => padColumn(renderUsageBar(limit, uiTheme), COLUMN_WIDTH));
 			lines.push(`  ${bars.join(" ")} ${formatAggregateAmount(sortedLimits)}`.trimEnd());
 			const resetText = sortedLimits.length <= 1 ? resolveResetRange(sortedLimits, nowMs) : null;
 			if (resetText) {
 				lines.push(`  ${uiTheme.fg("dim", resetText)}`.trimEnd());
 			}
-			const notes = sortedLimits.flatMap((limit) => limit.notes ?? []);
+			const notes = sortedLimits.flatMap(limit => limit.notes ?? []);
 			if (notes.length > 0) {
 				lines.push(`  ${uiTheme.fg("dim", notes.join(" • "))}`.trimEnd());
 			}

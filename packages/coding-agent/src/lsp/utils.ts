@@ -232,7 +232,7 @@ export function severityToIcon(severity?: DiagnosticSeverity): string {
 function stripDiagnosticNoise(message: string): string {
 	return message
 		.split("\n")
-		.filter((line) => {
+		.filter(line => {
 			const trimmed = line.trim();
 			// Skip "for further information visit <url>" lines
 			if (trimmed.startsWith("for further information visit")) return false;
@@ -491,7 +491,7 @@ export function extractHoverText(
 	}
 
 	if (Array.isArray(contents)) {
-		return contents.map((c) => extractHoverText(c as string | { kind: string; value: string })).join("\n\n");
+		return contents.map(c => extractHoverText(c as string | { kind: string; value: string })).join("\n\n");
 	}
 
 	if (typeof contents === "object" && contents !== null) {

@@ -6,7 +6,6 @@
  * NOTE: Settings migration is now handled by SettingsManager.migrateToYaml(),
  * which migrates from both settings.json and agent.db to config.yaml.
  */
-
 import { logger } from "@oh-my-pi/pi-utils";
 import { getAgentDbPath } from "../config";
 import { AgentStorage } from "./agent-storage";
@@ -128,7 +127,7 @@ async function migrateAuth(storage: AgentStorage, authPaths: string[], warnings:
 	for (const [provider, entry] of Object.entries(authJson.data)) {
 		const credentials = normalizeCredentialEntry(entry)
 			.filter(isValidCredential)
-			.map((credential) => credential);
+			.map(credential => credential);
 
 		if (credentials.length === 0) continue;
 		sawValid = true;

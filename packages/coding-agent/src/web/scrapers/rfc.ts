@@ -135,7 +135,7 @@ export const handleRfc: SpecialHandler = async (
 			// Authors
 			if (metadata.authors?.length) {
 				const authorList = metadata.authors
-					.map((a) => (a.affiliation ? `${a.name} (${a.affiliation})` : a.name))
+					.map(a => (a.affiliation ? `${a.name} (${a.affiliation})` : a.name))
 					.join(", ");
 				md += `**Authors:** ${authorList}\n`;
 			}

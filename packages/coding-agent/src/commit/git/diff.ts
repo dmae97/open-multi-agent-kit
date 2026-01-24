@@ -31,7 +31,7 @@ export function parseFileDiffs(diff: string): FileDiff[] {
 		if (!match) continue;
 		const filename = match[2];
 		const content = part;
-		const isBinary = lines.some((line) => line.startsWith("Binary files "));
+		const isBinary = lines.some(line => line.startsWith("Binary files "));
 		let additions = 0;
 		let deletions = 0;
 		for (const line of lines) {
@@ -52,7 +52,7 @@ export function parseFileDiffs(diff: string): FileDiff[] {
 
 export function parseDiffHunks(diff: string): FileHunks[] {
 	const files = parseFileDiffs(diff);
-	return files.map((file) => parseFileHunks(file));
+	return files.map(file => parseFileHunks(file));
 }
 
 export function parseFileHunks(fileDiff: FileDiff): FileHunks {

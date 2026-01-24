@@ -8,7 +8,6 @@
  * - Summary attachment at correct position in tree
  * - Abort handling during summarization
  */
-
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { API_KEY, createTestSession, type TestSessionContext } from "./utilities";
 
@@ -62,7 +61,7 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation e2e", () => {
 
 		// Get the assistant message
 		const entries = sessionManager.getEntries();
-		const assistantEntry = entries.find((e) => e.type === "message" && e.message.role === "assistant");
+		const assistantEntry = entries.find(e => e.type === "message" && e.message.role === "assistant");
 		expect(assistantEntry).toBeDefined();
 
 		// Navigate to assistant message
@@ -118,11 +117,11 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation e2e", () => {
 
 		// Get the second user message (u2)
 		const entries = sessionManager.getEntries();
-		const userEntries = entries.filter((e) => e.type === "message" && e.message.role === "user");
+		const userEntries = entries.filter(e => e.type === "message" && e.message.role === "user");
 		expect(userEntries.length).toBe(3);
 
 		const u2 = userEntries[1];
-		const a1 = entries.find((e) => e.id === u2.parentId); // a1 is parent of u2
+		const a1 = entries.find(e => e.id === u2.parentId); // a1 is parent of u2
 
 		// Navigate to u2 with summarization
 		const result = await session.navigateTree(u2.id, { summarize: true });
@@ -139,7 +138,7 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation e2e", () => {
 		const children = sessionManager.getChildren(a1!.id);
 		expect(children.length).toBe(2);
 
-		const childTypes = children.map((c) => c.type).sort();
+		const childTypes = children.map(c => c.type).sort();
 		expect(childTypes).toContain("branch_summary");
 		expect(childTypes).toContain("message");
 	}, 120000);
@@ -155,7 +154,7 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation e2e", () => {
 
 		// Get the first assistant message (a1)
 		const entries = sessionManager.getEntries();
-		const assistantEntries = entries.filter((e) => e.type === "message" && e.message.role === "assistant");
+		const assistantEntries = entries.filter(e => e.type === "message" && e.message.role === "assistant");
 		const a1 = assistantEntries[0];
 
 		// Navigate to a1 with summarization
@@ -227,7 +226,7 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation e2e", () => {
 		expect(entriesAfter).toBe(entriesBefore);
 
 		// No branch_summary entries
-		const summaries = sessionManager.getEntries().filter((e) => e.type === "branch_summary");
+		const summaries = sessionManager.getEntries().filter(e => e.type === "branch_summary");
 		expect(summaries.length).toBe(0);
 	}, 60000);
 
@@ -295,7 +294,7 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation - branch scenarios", () 
 
 		// Get a1 id for branching
 		const entries = sessionManager.getEntries();
-		const a1 = entries.find((e) => e.type === "message" && e.message.role === "assistant");
+		const a1 = entries.find(e => e.type === "message" && e.message.role === "assistant");
 
 		// Create a branch from a1: a1 -> u3 -> a3
 		sessionManager.branch(a1!.id);
@@ -303,7 +302,7 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation - branch scenarios", () 
 		await session.agent.waitForIdle();
 
 		// Now navigate back to u2 (on main branch) with summarization
-		const userEntries = entries.filter((e) => e.type === "message" && e.message.role === "user");
+		const userEntries = entries.filter(e => e.type === "message" && e.message.role === "user");
 		const u2 = userEntries[1]; // "Main branch continue"
 
 		const result = await session.navigateTree(u2.id, { summarize: true });

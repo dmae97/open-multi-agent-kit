@@ -1,7 +1,6 @@
 /**
  * Tool wrappers for extensions.
  */
-
 import type { AgentTool, AgentToolContext, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent, TextContent } from "@oh-my-pi/pi-ai";
 import type { Static, TSchema } from "@sinclair/typebox";
@@ -63,7 +62,7 @@ export function wrapRegisteredTool(registeredTool: RegisteredTool, runner: Exten
  * Wrap all registered tools into AgentTools.
  */
 export function wrapRegisteredTools(registeredTools: RegisteredTool[], runner: ExtensionRunner): AgentTool[] {
-	return registeredTools.map((rt) => wrapRegisteredTool(rt, runner));
+	return registeredTools.map(rt => wrapRegisteredTool(rt, runner));
 }
 
 /**
@@ -156,7 +155,7 @@ export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetail
 				if (resultResult.isError === true && !executionError) {
 					// Extension marks a successful result as error
 					const textBlocks = (modifiedContent ?? []).filter((c): c is TextContent => c.type === "text");
-					const errorText = textBlocks.map((t) => t.text).join("\n") || "Tool result marked as error by extension";
+					const errorText = textBlocks.map(t => t.text).join("\n") || "Tool result marked as error by extension";
 					throw new Error(errorText);
 				}
 				if (resultResult.isError === false && executionError) {

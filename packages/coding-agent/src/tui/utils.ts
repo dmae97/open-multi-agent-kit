@@ -1,13 +1,12 @@
 /**
  * Shared helpers for tool-rendered UI components.
  */
-
 import { truncateToWidth as truncateToWidthBase, visibleWidth } from "@oh-my-pi/pi-tui";
 import type { Theme, ThemeBg } from "../modes/theme/theme";
 import type { IconType, State } from "./types";
 
 export function buildTreePrefix(ancestors: boolean[], theme: Theme): string {
-	return ancestors.map((hasNext) => (hasNext ? `${theme.tree.vertical}  ` : "   ")).join("");
+	return ancestors.map(hasNext => (hasNext ? `${theme.tree.vertical}  ` : "   ")).join("");
 }
 
 export function getTreeBranch(isLast: boolean, theme: Theme): string {

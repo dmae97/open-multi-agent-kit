@@ -252,7 +252,7 @@ function migrateV2ToV3(entries: FileEntry[]): void {
  * Mutates entries in place. Returns true if any migration was applied.
  */
 function migrateToCurrentVersion(entries: FileEntry[]): boolean {
-	const header = entries.find((e) => e.type === "session") as SessionHeader | undefined;
+	const header = entries.find(e => e.type === "session") as SessionHeader | undefined;
 	const version = header?.version ?? 1;
 
 	if (version >= CURRENT_SESSION_VERSION) return false;
@@ -397,7 +397,7 @@ export function buildSessionContext(
 		messages.push(createCompactionSummaryMessage(compaction.summary, compaction.tokensBefore, compaction.timestamp));
 
 		// Find compaction index in path
-		const compactionIdx = path.findIndex((e) => e.type === "compaction" && e.id === compaction.id);
+		const compactionIdx = path.findIndex(e => e.type === "compaction" && e.id === compaction.id);
 
 		// Emit kept messages (before compaction, starting from firstKeptEntryId)
 		let foundFirstKept = false;
@@ -682,7 +682,7 @@ async function truncateForPersistence<T>(obj: T, key?: string): Promise<T> {
 	if (Array.isArray(obj)) {
 		let changed = false;
 		const result = await Promise.all(
-			obj.map(async (item) => {
+			obj.map(async item => {
 				// Special handling: compress oversized images while preserving shape
 				if (key === TEXT_CONTENT_KEY && isImageBlock(item)) {
 					if (item.data.length > MAX_PERSIST_CHARS) {
@@ -889,7 +889,7 @@ function extractTextFromContent(content: Message["content"]): string {
 	if (typeof content === "string") return content;
 	return content
 		.filter((block): block is TextContent => block.type === "text")
-		.map((block) => block.text)
+		.map(block => block.text)
 		.join(" ");
 }
 
@@ -1013,7 +1013,7 @@ export class SessionManager {
 		this.sessionFile = path.resolve(sessionFile);
 		this.fileEntries = await loadEntriesFromFile(this.sessionFile, this.storage);
 		if (this.fileEntries.length > 0) {
-			const header = this.fileEntries.find((e) => e.type === "session") as SessionHeader | undefined;
+			const header = this.fileEntries.find(e => e.type === "session") as SessionHeader | undefined;
 			this.sessionId = header?.id ?? nanoid();
 			this.sessionTitle = header?.title;
 
@@ -1122,7 +1122,7 @@ export class SessionManager {
 			if (this.persistError && !options?.ignoreError) throw this.persistError;
 			await task();
 		});
-		this.persistChain = next.catch((err) => {
+		this.persistChain = next.catch(err => {
 			this._recordPersistError(err);
 		});
 		return next;
@@ -1134,7 +1134,7 @@ export class SessionManager {
 		if (this.persistWriter && this.persistWriterPath === this.sessionFile) return this.persistWriter;
 		// Note: caller must await _closePersistWriter() before calling this if switching files
 		this.persistWriter = new NdjsonFileWriter(this.storage, this.sessionFile, {
-			onError: (err) => {
+			onError: err => {
 				this._recordPersistError(err);
 			},
 		});
@@ -1192,7 +1192,7 @@ export class SessionManager {
 		if (!this.persist || !this.sessionFile) return;
 		await this._queuePersistTask(async () => {
 			await this._closePersistWriterInternal();
-			const entries = await Promise.all(this.fileEntries.map((entry) => prepareEntryForPersistence(entry)));
+			const entries = await Promise.all(this.fileEntries.map(entry => prepareEntryForPersistence(entry)));
 			await this._writeEntriesAtomically(entries);
 			this.flushed = true;
 		});
@@ -1243,7 +1243,7 @@ export class SessionManager {
 		this.sessionTitle = title;
 
 		// Update the in-memory header (so first flush includes title)
-		const header = this.fileEntries.find((e) => e.type === "session") as SessionHeader | undefined;
+		const header = this.fileEntries.find(e => e.type === "session") as SessionHeader | undefined;
 		if (header) {
 			header.title = title;
 		}
@@ -1259,7 +1259,7 @@ export class SessionManager {
 		if (!this.persist || !this.sessionFile) return;
 		if (this.persistError) throw this.persistError;
 
-		const hasAssistant = this.fileEntries.some((e) => e.type === "message" && e.message.role === "assistant");
+		const hasAssistant = this.fileEntries.some(e => e.type === "message" && e.message.role === "assistant");
 		if (!hasAssistant) return;
 
 		if (!this.flushed) {
@@ -1267,7 +1267,7 @@ export class SessionManager {
 			void this._queuePersistTask(async () => {
 				const writer = this._ensurePersistWriter();
 				if (!writer) return;
-				const entries = await Promise.all(this.fileEntries.map((e) => prepareEntryForPersistence(e)));
+				const entries = await Promise.all(this.fileEntries.map(e => prepareEntryForPersistence(e)));
 				for (const persistedEntry of entries) {
 					await writer.write(persistedEntry);
 				}
@@ -1603,7 +1603,7 @@ export class SessionManager {
 	 * Get session header.
 	 */
 	getHeader(): SessionHeader | null {
-		const h = this.fileEntries.find((e) => e.type === "session");
+		const h = this.fileEntries.find(e => e.type === "session");
 		return h ? (h as SessionHeader) : null;
 	}
 
@@ -1722,7 +1722,7 @@ export class SessionManager {
 		}
 
 		// Filter out LabelEntry from path - we'll recreate them from the resolved map
-		const pathWithoutLabels = branchPath.filter((e) => e.type !== "label");
+		const pathWithoutLabels = branchPath.filter(e => e.type !== "label");
 
 		const newSessionId = nanoid();
 		const timestamp = new Date().toISOString();
@@ -1739,7 +1739,7 @@ export class SessionManager {
 		};
 
 		// Collect labels for entries in the path
-		const pathEntryIds = new Set(pathWithoutLabels.map((e) => e.id));
+		const pathEntryIds = new Set(pathWithoutLabels.map(e => e.id));
 		const labelsToWrite: Array<{ targetId: string; label: string }> = [];
 		for (const [targetId, label] of this.labelsById) {
 			if (pathEntryIds.has(targetId)) {
@@ -1784,7 +1784,7 @@ export class SessionManager {
 		for (const { targetId, label } of labelsToWrite) {
 			const labelEntry: LabelEntry = {
 				type: "label",
-				id: generateId(new Set([...pathEntryIds, ...labelEntries.map((e) => e.id)])),
+				id: generateId(new Set([...pathEntryIds, ...labelEntries.map(e => e.id)])),
 				parentId,
 				timestamp: new Date().toISOString(),
 				targetId,
@@ -1825,8 +1825,8 @@ export class SessionManager {
 		const manager = new SessionManager(cwd, dir, true, storage);
 		const forkEntries = structuredClone(await loadEntriesFromFile(sourcePath, storage)) as FileEntry[];
 		migrateToCurrentVersion(forkEntries);
-		const sourceHeader = forkEntries.find((e) => e.type === "session") as SessionHeader | undefined;
-		const historyEntries = forkEntries.filter((entry) => entry.type !== "session") as SessionEntry[];
+		const sourceHeader = forkEntries.find(e => e.type === "session") as SessionHeader | undefined;
+		const historyEntries = forkEntries.filter(entry => entry.type !== "session") as SessionEntry[];
 		manager._newSessionSync({ parentSession: sourceHeader?.id });
 		const newHeader = manager.fileEntries[0] as SessionHeader;
 		newHeader.title = sourceHeader?.title;
@@ -1849,7 +1849,7 @@ export class SessionManager {
 	): Promise<SessionManager> {
 		// Extract cwd from session header if possible, otherwise use process.cwd()
 		const entries = await loadEntriesFromFile(filePath, storage);
-		const header = entries.find((e) => e.type === "session") as SessionHeader | undefined;
+		const header = entries.find(e => e.type === "session") as SessionHeader | undefined;
 		const cwd = header?.cwd ?? process.cwd();
 		// If no sessionDir provided, derive from file's parent directory
 		const dir = sessionDir ?? path.resolve(filePath, "..");
@@ -1911,7 +1911,7 @@ export class SessionManager {
 	static async listAll(storage: SessionStorage = new FileSessionStorage()): Promise<SessionInfo[]> {
 		const sessionsRoot = path.join(getDefaultAgentDir(), "sessions");
 		try {
-			const files = Array.from(new Bun.Glob("**/*.jsonl").scanSync(sessionsRoot)).map((name) =>
+			const files = Array.from(new Bun.Glob("**/*.jsonl").scanSync(sessionsRoot)).map(name =>
 				path.join(sessionsRoot, name),
 			);
 			return await collectSessionsFromFiles(files, storage);

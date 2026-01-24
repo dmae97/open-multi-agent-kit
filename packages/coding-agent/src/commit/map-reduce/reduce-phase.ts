@@ -64,7 +64,7 @@ export async function runReducePhase({
 }: ReducePhaseInput): Promise<ConventionalAnalysis> {
 	const prompt = renderPromptTemplate(reduceUserPrompt, {
 		types_description: typesDescription,
-		observations: observations.flatMap((obs) => obs.observations.map((line) => `- ${obs.file}: ${line}`)).join("\n"),
+		observations: observations.flatMap(obs => obs.observations.map(line => `- ${obs.file}: ${line}`)).join("\n"),
 		stat,
 		scope_candidates: scopeCandidates,
 	});
@@ -123,7 +123,7 @@ function normalizeAnalysis(parsed: {
 	return {
 		type: parsed.type,
 		scope: parsed.scope?.trim() || null,
-		details: parsed.details.map((detail) => ({
+		details: parsed.details.map(detail => ({
 			text: detail.text.trim(),
 			changelogCategory: detail.user_visible ? detail.changelog_category : undefined,
 			userVisible: detail.user_visible ?? false,
@@ -133,15 +133,13 @@ function normalizeAnalysis(parsed: {
 }
 
 function extractToolCall(message: AssistantMessage, name: string): ToolCall | undefined {
-	return message.content.find((content) => content.type === "toolCall" && content.name === name) as
-		| ToolCall
-		| undefined;
+	return message.content.find(content => content.type === "toolCall" && content.name === name) as ToolCall | undefined;
 }
 
 function extractTextContent(message: AssistantMessage): string {
 	return message.content
-		.filter((content) => content.type === "text")
-		.map((content) => content.text)
+		.filter(content => content.type === "text")
+		.map(content => content.text)
 		.join("")
 		.trim();
 }

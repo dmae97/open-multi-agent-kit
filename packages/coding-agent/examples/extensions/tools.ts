@@ -8,7 +8,6 @@
  * 1. Copy this file to ~/.omp/agent/extensions/ (legacy: ~/.pi/agent/extensions/) or your project's .omp/extensions/
  * 2. Use /tools to open the tool selector
  */
-
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { getSettingsListTheme } from "@oh-my-pi/pi-coding-agent";
 import { Container, type SettingItem, SettingsList } from "@oh-my-pi/pi-tui";
@@ -71,7 +70,7 @@ export default function toolsExtension(pi: ExtensionAPI) {
 
 			await ctx.ui.custom((tui, theme, done) => {
 				// Build settings items for each tool
-				const items: SettingItem[] = allTools.map((tool) => ({
+				const items: SettingItem[] = allTools.map(tool => ({
 					id: tool,
 					label: tool,
 					currentValue: enabledTools.has(tool) ? "enabled" : "disabled",

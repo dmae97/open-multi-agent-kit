@@ -13,7 +13,6 @@
  * - rules: From rules/*.mdc files with MDC frontmatter (description, globs, alwaysApply)
  * - settings: From settings.json if present
  */
-
 import { registerProvider } from "../capability";
 import { readFile } from "../capability/fs";
 import { type MCPServer, mcpCapability } from "../capability/mcp";

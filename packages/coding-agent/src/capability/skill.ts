@@ -3,7 +3,6 @@
  *
  * Skills provide specialized knowledge or workflows that extend agent capabilities.
  */
-
 import { defineCapability } from ".";
 import type { SourceMeta } from "./types";
 
@@ -40,8 +39,8 @@ export const skillCapability = defineCapability<Skill>({
 	id: "skills",
 	displayName: "Skills",
 	description: "Specialized knowledge and workflow files that extend agent capabilities",
-	key: (skill) => skill.name,
-	validate: (skill) => {
+	key: skill => skill.name,
+	validate: skill => {
 		if (!skill.name) return "Missing skill name";
 		if (!skill.path) return "Missing skill path";
 		return undefined;

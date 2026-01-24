@@ -3,7 +3,6 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { isEnoent, logger } from "@oh-my-pi/pi-utils";
 import { $ } from "bun";
-
 import { CONFIG_DIR_NAME } from "../config";
 
 export interface SSHConnectionTarget {

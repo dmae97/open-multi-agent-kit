@@ -4,7 +4,6 @@
  * File-based commands that inject content when invoked with /commandname.
  * Note: File-based slash commands are now called "prompt templates".
  */
-
 import {
 	createAgentSession,
 	discoverPromptTemplates,

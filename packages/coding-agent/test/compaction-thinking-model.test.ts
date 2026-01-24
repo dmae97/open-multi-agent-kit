@@ -101,7 +101,7 @@ describe.skipIf(!HAS_ANTIGRAVITY_AUTH)("Compaction with thinking models (Antigra
 		const messages = session.messages;
 		expect(messages.length).toBeGreaterThan(0);
 
-		const assistantMessages = messages.filter((m) => m.role === "assistant");
+		const assistantMessages = messages.filter(m => m.role === "assistant");
 		expect(assistantMessages.length).toBeGreaterThan(0);
 
 		// Now try to compact - this should not throw
@@ -204,7 +204,7 @@ describe.skipIf(!HAS_ANTHROPIC_AUTH)("Compaction with thinking models (Anthropic
 		const messages = session.messages;
 		expect(messages.length).toBeGreaterThan(0);
 
-		const assistantMessages = messages.filter((m) => m.role === "assistant");
+		const assistantMessages = messages.filter(m => m.role === "assistant");
 		expect(assistantMessages.length).toBeGreaterThan(0);
 
 		// Now try to compact - this should not throw

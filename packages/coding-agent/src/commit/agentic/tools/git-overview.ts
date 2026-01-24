@@ -62,7 +62,7 @@ export function createGitOverviewTool(
 			const { filtered: files, excluded } = filterExcludedFiles(allFiles);
 			const stat = await git.getStat(staged);
 			const allNumstat = await git.getNumstat(staged);
-			const numstat = allNumstat.filter((entry) => !isExcludedFile(entry.path));
+			const numstat = allNumstat.filter(entry => !isExcludedFile(entry.path));
 			const scopeResult = extractScopeCandidates(numstat);
 			const untrackedFiles = !staged && params.include_untracked ? await git.getUntrackedFiles() : undefined;
 			const snapshot: GitOverviewSnapshot = {

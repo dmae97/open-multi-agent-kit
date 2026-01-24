@@ -60,7 +60,7 @@ describe("python tool execution", () => {
 				reset: true,
 			}),
 		);
-		const text = result.content.find((item) => item.type === "text")?.text;
+		const text = result.content.find(item => item.type === "text")?.text;
 		expect(text).toBe("ok");
 
 		executeSpy.mockRestore();

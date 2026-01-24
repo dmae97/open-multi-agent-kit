@@ -179,8 +179,8 @@ export const handleWikidata: SpecialHandler = async (
 
 			// Sort: known properties first, then by property ID
 			processedProperties.sort((a, b) => {
-				const aKnown = Object.values(PROPERTY_LABELS).some((l) => a.includes(`**${l}:**`));
-				const bKnown = Object.values(PROPERTY_LABELS).some((l) => b.includes(`**${l}:**`));
+				const aKnown = Object.values(PROPERTY_LABELS).some(l => a.includes(`**${l}:**`));
+				const bKnown = Object.values(PROPERTY_LABELS).some(l => b.includes(`**${l}:**`));
 				if (aKnown && !bKnown) return -1;
 				if (!aKnown && bKnown) return 1;
 				return a.localeCompare(b);
@@ -254,7 +254,7 @@ function getLocalizedAliases(
 	if (!aliases) return [];
 	const langAliases = aliases[preferredLang];
 	if (!langAliases) return [];
-	return langAliases.map((a) => a.value);
+	return langAliases.map(a => a.value);
 }
 
 /**

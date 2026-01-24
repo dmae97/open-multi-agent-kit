@@ -31,12 +31,12 @@ export class QueueModeSelectorComponent extends Container {
 		this.selectList = new SelectList(queueModes, 2, getSelectListTheme());
 
 		// Preselect current mode
-		const currentIndex = queueModes.findIndex((item) => item.value === currentMode);
+		const currentIndex = queueModes.findIndex(item => item.value === currentMode);
 		if (currentIndex !== -1) {
 			this.selectList.setSelectedIndex(currentIndex);
 		}
 
-		this.selectList.onSelect = (item) => {
+		this.selectList.onSelect = item => {
 			onSelect(item.value as "all" | "one-at-a-time");
 		};
 

@@ -159,7 +159,7 @@ describe.skipIf(SKIP)("handleArxiv", () => {
 		expect(result?.method).toBe("arxiv");
 		if (!result?.content.includes("Too Many Requests") && !result?.content.includes("Failed to fetch")) {
 			expect(result?.content).toContain("Attention");
-			expect(result?.notes?.some((n) => n.includes("PDF"))).toBe(true);
+			expect(result?.notes?.some(n => n.includes("PDF"))).toBe(true);
 		}
 	});
 
@@ -233,7 +233,7 @@ describe.skipIf(SKIP)("handleIacr", () => {
 		expect(result).not.toBeNull();
 		expect(result?.method).toBe("iacr");
 		if (!result?.content.includes("Too Many Requests") && !result?.content.includes("Failed to fetch")) {
-			expect(result?.notes?.some((n) => n.includes("PDF"))).toBe(true);
+			expect(result?.notes?.some(n => n.includes("PDF"))).toBe(true);
 		}
 	});
 });

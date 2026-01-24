@@ -253,7 +253,7 @@ function limitDiagnosticMessages(messages: string[]): string[] {
 }
 
 function findFileByExtensions(baseDir: string, extensions: string[], maxDepth: number): string | null {
-	const normalized = extensions.map((ext) => ext.toLowerCase());
+	const normalized = extensions.map(ext => ext.toLowerCase());
 	const search = (dir: string, depth: number): string | null => {
 		if (depth > maxDepth) return null;
 		const entries: fs.Dirent[] = [];
@@ -280,7 +280,7 @@ function findFileByExtensions(baseDir: string, extensions: string[], maxDepth: n
 
 			if (entry.isFile()) {
 				const lowerName = entry.name.toLowerCase();
-				if (normalized.some((ext) => lowerName.endsWith(ext))) {
+				if (normalized.some(ext => lowerName.endsWith(ext))) {
 					return fullPath;
 				}
 			} else if (entry.isDirectory()) {
@@ -411,10 +411,10 @@ async function runWorkspaceDiagnostics(
 					return { output: "No issues found", projectType };
 				}
 
-				const summary = formatDiagnosticsSummary(collected.map((d) => d.diagnostic));
-				const formatted = collected.slice(0, 50).map((d) => formatDiagnostic(d.diagnostic, d.filePath));
+				const summary = formatDiagnosticsSummary(collected.map(d => d.diagnostic));
+				const formatted = collected.slice(0, 50).map(d => formatDiagnostic(d.diagnostic, d.filePath));
 				const more = collected.length > 50 ? `\n  ... and ${collected.length - 50} more` : "";
-				return { output: `${summary}:\n${formatted.map((f) => `  ${f}`).join("\n")}${more}`, projectType };
+				return { output: `${summary}:\n${formatted.map(f => `  ${f}`).join("\n")}${more}`, projectType };
 			} catch (err) {
 				logger.debug("LSP diagnostics failed, falling back to shell", { error: String(err) });
 				// Fall through to shell command
@@ -570,10 +570,10 @@ async function getDiagnosticsForFile(
 		}
 	}
 
-	const formatted = uniqueDiagnostics.map((d) => formatDiagnostic(d, relPath));
+	const formatted = uniqueDiagnostics.map(d => formatDiagnostic(d, relPath));
 	const limited = limitDiagnosticMessages(formatted);
 	const summary = formatDiagnosticsSummary(uniqueDiagnostics);
-	const hasErrors = uniqueDiagnostics.some((d) => d.severity === 1);
+	const hasErrors = uniqueDiagnostics.some(d => d.severity === 1);
 
 	return {
 		server: serverNames.join(", "),
@@ -1095,8 +1095,8 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 					}
 
 					const summary = formatDiagnosticsSummary(uniqueDiagnostics);
-					const formatted = uniqueDiagnostics.map((d) => formatDiagnostic(d, relPath));
-					const output = `${summary}:\n${formatted.map((f) => `  ${f}`).join("\n")}`;
+					const formatted = uniqueDiagnostics.map(d => formatDiagnostic(d, relPath));
+					const output = `${summary}:\n${formatted.map(f => `  ${f}`).join("\n")}`;
 					return {
 						content: [{ type: "text", text: output }],
 						details: { action, serverName: Array.from(allServerNames).join(", "), success: true },
@@ -1186,7 +1186,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 						output = "No definition found";
 					} else {
 						const raw = Array.isArray(result) ? result : [result];
-						const locations = raw.flatMap((loc) => {
+						const locations = raw.flatMap(loc => {
 							if ("uri" in loc) {
 								return [loc as Location];
 							}
@@ -1202,7 +1202,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 							output = "No definition found";
 						} else {
 							output = `Found ${locations.length} definition(s):\n${locations
-								.map((loc) => `  ${formatLocation(loc, this.session.cwd)}`)
+								.map(loc => `  ${formatLocation(loc, this.session.cwd)}`)
 								.join("\n")}`;
 						}
 					}
@@ -1219,7 +1219,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 					if (!result || result.length === 0) {
 						output = "No references found";
 					} else {
-						const lines = result.map((loc) => `  ${formatLocation(loc, this.session.cwd)}`);
+						const lines = result.map(loc => `  ${formatLocation(loc, this.session.cwd)}`);
 						output = `Found ${result.length} reference(s):\n${lines.join("\n")}`;
 					}
 					break;
@@ -1256,11 +1256,11 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 						// Check if hierarchical (DocumentSymbol) or flat (SymbolInformation)
 						if ("selectionRange" in result[0]) {
 							// Hierarchical
-							const lines = (result as DocumentSymbol[]).flatMap((s) => formatDocumentSymbol(s));
+							const lines = (result as DocumentSymbol[]).flatMap(s => formatDocumentSymbol(s));
 							output = `Symbols in ${relPath}:\n${lines.join("\n")}`;
 						} else {
 							// Flat
-							const lines = (result as SymbolInformation[]).map((s) => {
+							const lines = (result as SymbolInformation[]).map(s => {
 								const line = s.location.range.start.line + 1;
 								const icon = symbolKindToIcon(s.kind);
 								return `${icon} ${s.name} @ line ${line}`;
@@ -1284,8 +1284,8 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 					if (!result || result.length === 0) {
 						output = `No symbols matching "${query}"`;
 					} else {
-						const lines = result.map((s) => formatSymbolInformation(s, this.session.cwd));
-						output = `Found ${result.length} symbol(s) matching "${query}":\n${lines.map((l) => `  ${l}`).join("\n")}`;
+						const lines = result.map(s => formatSymbolInformation(s, this.session.cwd));
+						output = `Found ${result.length} symbol(s) matching "${query}":\n${lines.map(l => `  ${l}`).join("\n")}`;
 					}
 					break;
 				}
@@ -1310,10 +1310,10 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 						const shouldApply = apply !== false;
 						if (shouldApply) {
 							const applied = await applyWorkspaceEdit(result, this.session.cwd);
-							output = `Applied rename:\n${applied.map((a) => `  ${a}`).join("\n")}`;
+							output = `Applied rename:\n${applied.map(a => `  ${a}`).join("\n")}`;
 						} else {
 							const preview = formatWorkspaceEdit(result, this.session.cwd);
-							output = `Rename preview:\n${preview.map((p) => `  ${p}`).join("\n")}`;
+							output = `Rename preview:\n${preview.map(p => `  ${p}`).join("\n")}`;
 						}
 					}
 					break;
@@ -1334,7 +1334,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 					const endCharacter = (end_character ?? column ?? 1) - 1;
 					const range = { start: position, end: { line: endLine, character: endCharacter } };
 					const relevantDiagnostics = diagnostics.filter(
-						(d) => d.range.start.line <= range.end.line && d.range.end.line >= range.start.line,
+						d => d.range.start.line <= range.end.line && d.range.end.line >= range.start.line,
 					);
 
 					const codeActionContext: { diagnostics: Diagnostic[]; only?: string[] } = {
@@ -1400,7 +1400,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 
 						if (isCodeAction(resolvedAction) && resolvedAction.edit) {
 							const applied = await applyWorkspaceEdit(resolvedAction.edit, this.session.cwd);
-							output = `Applied "${codeAction.title}":\n${applied.map((a) => `  ${a}`).join("\n")}`;
+							output = `Applied "${codeAction.title}":\n${applied.map(a => `  ${a}`).join("\n")}`;
 						} else {
 							const commandPayload = getCommandPayload(resolvedAction);
 							if (commandPayload) {
@@ -1449,7 +1449,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 						if (!calls || calls.length === 0) {
 							output = `No callers found for "${item.name}"`;
 						} else {
-							const lines = calls.map((call) => {
+							const lines = calls.map(call => {
 								const loc = { uri: call.from.uri, range: call.from.selectionRange };
 								const detail = call.from.detail ? ` (${call.from.detail})` : "";
 								return `  ${call.from.name}${detail} @ ${formatLocation(loc, this.session.cwd)}`;
@@ -1464,7 +1464,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 						if (!calls || calls.length === 0) {
 							output = `"${item.name}" doesn't call any functions`;
 						} else {
-							const lines = calls.map((call) => {
+							const lines = calls.map(call => {
 								const loc = { uri: call.to.uri, range: call.to.selectionRange };
 								const detail = call.to.detail ? ` (${call.to.detail})` : "";
 								return `  ${call.to.name}${detail} @ ${formatLocation(loc, this.session.cwd)}`;
@@ -1499,10 +1499,10 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 					if (collected.length === 0) {
 						output = "Flycheck: no issues found";
 					} else {
-						const summary = formatDiagnosticsSummary(collected.map((d) => d.diagnostic));
-						const formatted = collected.slice(0, 20).map((d) => formatDiagnostic(d.diagnostic, d.filePath));
+						const summary = formatDiagnosticsSummary(collected.map(d => d.diagnostic));
+						const formatted = collected.slice(0, 20).map(d => formatDiagnostic(d.diagnostic, d.filePath));
 						const more = collected.length > 20 ? `\n  ... and ${collected.length - 20} more` : "";
-						output = `Flycheck ${summary}:\n${formatted.map((f) => `  ${f}`).join("\n")}${more}`;
+						output = `Flycheck ${summary}:\n${formatted.map(f => `  ${f}`).join("\n")}${more}`;
 					}
 					break;
 				}
@@ -1560,13 +1560,13 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 						const applied = await applyWorkspaceEdit(result, this.session.cwd);
 						output =
 							applied.length > 0
-								? `Applied SSR:\n${applied.map((a) => `  ${a}`).join("\n")}`
+								? `Applied SSR:\n${applied.map(a => `  ${a}`).join("\n")}`
 								: "SSR: no matches found";
 					} else {
 						const preview = formatWorkspaceEdit(result, this.session.cwd);
 						output =
 							preview.length > 0
-								? `SSR preview:\n${preview.map((p) => `  ${p}`).join("\n")}`
+								? `SSR preview:\n${preview.map(p => `  ${p}`).join("\n")}`
 								: "SSR: no matches found";
 					}
 					break;
@@ -1591,7 +1591,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 					if (result.length === 0) {
 						output = "No runnables found";
 					} else {
-						const lines = result.map((r) => {
+						const lines = result.map(r => {
 							const args = r.args?.cargoArgs?.join(" ") || "";
 							return `  [${r.kind}] ${r.label}${args ? ` (cargo ${args})` : ""}`;
 						});
@@ -1619,7 +1619,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 					if (result.length === 0) {
 						output = "No related tests found";
 					} else {
-						output = `Found ${result.length} related test(s):\n${result.map((t) => `  ${t}`).join("\n")}`;
+						output = `Found ${result.length} related test(s):\n${result.map(t => `  ${t}`).join("\n")}`;
 					}
 					break;
 				}

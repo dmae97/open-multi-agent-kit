@@ -1,3 +1,14 @@
+// ============================================================================
+// High-level API
+// ============================================================================
+import { refreshAnthropicToken } from "./anthropic";
+import { refreshCursorToken } from "./cursor";
+import { refreshGitHubCopilotToken } from "./github-copilot";
+import { refreshAntigravityToken } from "./google-antigravity";
+import { refreshGoogleCloudToken } from "./google-gemini-cli";
+import { refreshOpenAICodexToken } from "./openai-codex";
+import type { OAuthCredentials, OAuthProvider, OAuthProviderInfo } from "./types";
+
 /**
  * OAuth credential management for AI providers.
  *
@@ -35,18 +46,6 @@ export type { OpenAICodexLoginOptions } from "./openai-codex";
 export { loginOpenAICodex, refreshOpenAICodexToken } from "./openai-codex";
 
 export * from "./types";
-
-// ============================================================================
-// High-level API
-// ============================================================================
-
-import { refreshAnthropicToken } from "./anthropic";
-import { refreshCursorToken } from "./cursor";
-import { refreshGitHubCopilotToken } from "./github-copilot";
-import { refreshAntigravityToken } from "./google-antigravity";
-import { refreshGoogleCloudToken } from "./google-gemini-cli";
-import { refreshOpenAICodexToken } from "./openai-codex";
-import type { OAuthCredentials, OAuthProvider, OAuthProviderInfo } from "./types";
 
 /**
  * Refresh token for any OAuth provider.

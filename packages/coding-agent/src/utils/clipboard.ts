@@ -16,18 +16,18 @@ function baseMimeType(mimeType: string): string {
 
 function selectPreferredImageMimeType(mimeTypes: string[]): string | null {
 	const normalized = mimeTypes
-		.map((t) => t.trim())
+		.map(t => t.trim())
 		.filter(Boolean)
-		.map((t) => ({ raw: t, base: baseMimeType(t) }));
+		.map(t => ({ raw: t, base: baseMimeType(t) }));
 
 	for (const preferred of PREFERRED_IMAGE_MIME_TYPES) {
-		const match = normalized.find((t) => t.base === preferred);
+		const match = normalized.find(t => t.base === preferred);
 		if (match) {
 			return match.raw;
 		}
 	}
 
-	const anyImage = normalized.find((t) => t.base.startsWith("image/"));
+	const anyImage = normalized.find(t => t.base.startsWith("image/"));
 	return anyImage?.raw ?? null;
 }
 
@@ -125,7 +125,7 @@ async function readImageWayland(): Promise<ClipboardReadResult> {
 
 	const typeList = types
 		.split(/\r?\n/)
-		.map((t) => t.trim())
+		.map(t => t.trim())
 		.filter(Boolean);
 
 	const selectedType = selectPreferredImageMimeType(typeList);
@@ -149,7 +149,7 @@ async function readImageX11(): Promise<ClipboardReadResult> {
 
 	const candidateTypes = targets
 		.split(/\r?\n/)
-		.map((t) => t.trim())
+		.map(t => t.trim())
 		.filter(Boolean);
 
 	const selectedType = selectPreferredImageMimeType(candidateTypes);

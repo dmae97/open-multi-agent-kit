@@ -151,7 +151,7 @@ function assemblePrompt(params: GeminiImageParams): string {
 	if (params.style) parts.push(params.style);
 
 	// Join with periods for sentence structure
-	let prompt = `${parts.map((p) => p.replace(/[.!,;:]+$/, "")).join(". ")}.`;
+	let prompt = `${parts.map(p => p.replace(/[.!,;:]+$/, "")).join(". ")}.`;
 
 	// Text rendering specs
 	if (params.text) {
@@ -160,7 +160,7 @@ function assemblePrompt(params: GeminiImageParams): string {
 
 	// Edit mode: changes and preserve directives
 	if (params.changes?.length) {
-		prompt += `\n\nChanges:\n${params.changes.map((c) => `- ${c}`).join("\n")}`;
+		prompt += `\n\nChanges:\n${params.changes.map(c => `- ${c}`).join("\n")}`;
 		if (params.preserve) {
 			prompt += `\n\nPreserve: ${params.preserve}`;
 		}
@@ -330,8 +330,8 @@ function collectOpenRouterResponseText(message: OpenRouterMessage | undefined): 
 	}
 	if (Array.isArray(message.content)) {
 		const texts = message.content
-			.filter((part) => part.type === "text")
-			.map((part) => part.text)
+			.filter(part => part.type === "text")
+			.map(part => part.text)
 			.filter((text): text is string => Boolean(text));
 		const combined = texts.join("\n").trim();
 		return combined.length > 0 ? combined : undefined;
@@ -515,7 +515,7 @@ function buildResponseSummary(
 }
 
 function collectResponseText(parts: GeminiPart[]): string | undefined {
-	const texts = parts.map((part) => part.text).filter((text): text is string => Boolean(text));
+	const texts = parts.map(part => part.text).filter((text): text is string => Boolean(text));
 	const combined = texts.join("\n").trim();
 	return combined.length > 0 ? combined : undefined;
 }

@@ -25,7 +25,7 @@ export class ShowImagesSelectorComponent extends Container {
 		// Preselect current value
 		this.selectList.setSelectedIndex(currentValue ? 0 : 1);
 
-		this.selectList.onSelect = (item) => {
+		this.selectList.onSelect = item => {
 			onSelect(item.value === "yes");
 		};
 

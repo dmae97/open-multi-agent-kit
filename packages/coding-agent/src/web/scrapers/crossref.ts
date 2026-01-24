@@ -42,7 +42,7 @@ function extractDoi(pathname: string): string | null {
 function formatAuthors(authors?: CrossrefAuthor[]): string | null {
 	if (!authors || authors.length === 0) return null;
 	const names = authors
-		.map((author) => {
+		.map(author => {
 			if (author.name) return author.name;
 			const parts = [author.given, author.family].filter(Boolean);
 			return parts.length > 0 ? parts.join(" ") : null;
@@ -67,7 +67,7 @@ function formatDate(date?: CrossrefDate): string | null {
 
 function formatAbstract(abstract?: string): string | null {
 	if (!abstract) return null;
-	const normalized = abstract.replace(/<\/?jats:p[^>]*>/g, (match) => (match.startsWith("</") ? "</p>" : "<p>"));
+	const normalized = abstract.replace(/<\/?jats:p[^>]*>/g, match => (match.startsWith("</") ? "</p>" : "<p>"));
 	const markdown = htmlToBasicMarkdown(normalized);
 	return markdown.trim().length > 0 ? markdown : null;
 }

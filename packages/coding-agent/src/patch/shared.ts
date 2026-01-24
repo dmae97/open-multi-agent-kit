@@ -1,7 +1,6 @@
 /**
  * Shared utilities for edit tool TUI rendering.
  */
-
 import type { ToolCallContext } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
@@ -38,7 +37,7 @@ export function getLspBatchRequest(toolCall: ToolCallContext | undefined): { id:
 	if (!hasOtherWrites) {
 		return undefined;
 	}
-	const hasLaterWrites = toolCall.toolCalls.slice(toolCall.index + 1).some((call) => LSP_BATCH_TOOLS.has(call.name));
+	const hasLaterWrites = toolCall.toolCalls.slice(toolCall.index + 1).some(call => LSP_BATCH_TOOLS.has(call.name));
 	return { id: toolCall.batchId, flush: !hasLaterWrites };
 }
 
@@ -259,7 +258,7 @@ export const editToolRenderer = {
 
 		if (result.isError) {
 			// Show error from result
-			const errorText = result.content?.find((c) => c.type === "text")?.text ?? "";
+			const errorText = result.content?.find(c => c.type === "text")?.text ?? "";
 			if (errorText) {
 				text += `\n\n${uiTheme.fg("error", errorText)}`;
 			}

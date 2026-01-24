@@ -59,7 +59,7 @@ async function executeTool(
 	let isError = false;
 
 	const onUpdate: AgentToolUpdateCallback<unknown> | undefined = options.emitEvent
-		? (partialResult) => {
+		? partialResult => {
 				options.emitEvent?.({
 					type: "tool_execution_update",
 					toolCallId,
@@ -222,7 +222,7 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 		const toolCallId = decodeToolCallId(call.toolCallId);
 		const tool = this.options.tools.get(toolName);
 		if (!tool) {
-			const availableTools = Array.from(this.options.tools.keys()).filter((name) => name.startsWith("mcp_"));
+			const availableTools = Array.from(this.options.tools.keys()).filter(name => name.startsWith("mcp_"));
 			const message = formatMcpToolErrorMessage(toolName, availableTools);
 			const toolResult: ToolResultMessage = {
 				role: "toolResult",

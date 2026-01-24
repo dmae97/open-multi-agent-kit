@@ -2,7 +2,6 @@
  * LSP-based linter client.
  * Uses the Language Server Protocol for formatting and diagnostics.
  */
-
 import { getOrCreateClient, notifySaved, sendRequest, syncContent } from "../../lsp/client";
 import { applyTextEditsToString } from "../../lsp/edits";
 import type { Diagnostic, LinterClient, LspClient, ServerConfig, TextEdit } from "../../lsp/types";

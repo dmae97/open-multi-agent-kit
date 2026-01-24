@@ -11,7 +11,6 @@
  * - context-files: copilot-instructions.md in .github/
  * - instructions: *.instructions.md in .github/instructions/ with applyTo frontmatter
  */
-
 import * as path from "node:path";
 import { registerProvider } from "../capability";
 import { type ContextFile, contextFileCapability } from "../capability/context-file";

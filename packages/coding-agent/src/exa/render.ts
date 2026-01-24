@@ -3,7 +3,6 @@
  *
  * Tree-based rendering with collapsed/expanded states for Exa search results.
  */
-
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import { logger } from "@oh-my-pi/pi-utils";
@@ -60,7 +59,7 @@ export function renderExaResult(
 	if (!response) {
 		if (details?.raw) {
 			const rawText = typeof details.raw === "string" ? details.raw : JSON.stringify(details.raw, null, 2);
-			const rawLines = rawText.split("\n").filter((l) => l.trim());
+			const rawLines = rawText.split("\n").filter(l => l.trim());
 			const maxLines = expanded ? rawLines.length : Math.min(rawLines.length, COLLAPSED_PREVIEW_LINES);
 			const displayLines = rawLines.slice(0, maxLines);
 			const remaining = rawLines.length - maxLines;
@@ -104,7 +103,7 @@ export function renderExaResult(
 	let hasMorePreview = false;
 	if (!expanded && resultCount > 0) {
 		const previewText = results[0].text ?? results[0].title ?? "";
-		const totalLines = previewText.split("\n").filter((l) => l.trim()).length;
+		const totalLines = previewText.split("\n").filter(l => l.trim()).length;
 		hasMorePreview = totalLines > COLLAPSED_PREVIEW_LINES || resultCount > 1;
 	}
 	const expandHint = formatExpandHint(uiTheme, expanded, hasMorePreview);
@@ -123,7 +122,7 @@ export function renderExaResult(
 			? getPreviewLines(previewText, COLLAPSED_PREVIEW_LINES, COLLAPSED_PREVIEW_LINE_LEN, uiTheme.format.ellipsis)
 			: [];
 		const safePreviewLines = previewLines.length > 0 ? previewLines : ["No preview text"];
-		const totalLines = previewText.split("\n").filter((l) => l.trim()).length;
+		const totalLines = previewText.split("\n").filter(l => l.trim()).length;
 		const remainingLines = Math.max(0, totalLines - previewLines.length);
 		const extraItems: string[] = [];
 		if (remainingLines > 0) {
@@ -189,7 +188,7 @@ export function renderExaResult(
 		}
 
 		if (res.text) {
-			const textLines = res.text.split("\n").filter((l) => l.trim());
+			const textLines = res.text.split("\n").filter(l => l.trim());
 			const displayLines = textLines.slice(0, EXPANDED_TEXT_LINES);
 			for (const line of displayLines) {
 				text += `\n ${uiTheme.fg("dim", cont)} ${uiTheme.fg("dim", uiTheme.tree.hook)} ${uiTheme.fg(

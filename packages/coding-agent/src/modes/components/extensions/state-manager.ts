@@ -2,7 +2,6 @@
  * State manager for the Extension Control Center.
  * Handles data loading, tree building, filtering, and toggle persistence.
  */
-
 import { logger } from "@oh-my-pi/pi-utils";
 import type { ContextFile } from "../../../capability/context-file";
 import type { ExtensionModule } from "../../../capability/extension-module";
@@ -103,8 +102,8 @@ export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): P
 	try {
 		const skills = await loadCapability<Skill>("skills", loadOpts);
 		addItems(skills.all, "skill", {
-			getDescription: (s) => s.frontmatter?.description,
-			getTrigger: (s) => s.frontmatter?.globs?.join(", "),
+			getDescription: s => s.frontmatter?.description,
+			getTrigger: s => s.frontmatter?.globs?.join(", "),
 		});
 	} catch (error) {
 		logger.warn("Failed to load skills capability", { error: String(error) });
@@ -114,8 +113,8 @@ export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): P
 	try {
 		const rules = await loadCapability<Rule>("rules", loadOpts);
 		addItems(rules.all, "rule", {
-			getDescription: (r) => r.description,
-			getTrigger: (r) => r.globs?.join(", ") || (r.alwaysApply ? "always" : undefined),
+			getDescription: r => r.description,
+			getTrigger: r => r.globs?.join(", ") || (r.alwaysApply ? "always" : undefined),
 		});
 	} catch (error) {
 		logger.warn("Failed to load rules capability", { error: String(error) });
@@ -125,7 +124,7 @@ export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): P
 	try {
 		const tools = await loadCapability<CustomTool>("tools", loadOpts);
 		addItems(tools.all, "tool", {
-			getDescription: (t) => t.description,
+			getDescription: t => t.description,
 		});
 	} catch (error) {
 		logger.warn("Failed to load tools capability", { error: String(error) });
@@ -134,7 +133,7 @@ export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): P
 	// Load extension modules
 	try {
 		const modules = await loadCapability<ExtensionModule>("extension-modules", loadOpts);
-		const nativeModules = modules.all.filter((module) => module._source.provider === "native");
+		const nativeModules = modules.all.filter(module => module._source.provider === "native");
 		addItems(nativeModules, "extension-module");
 	} catch (error) {
 		logger.warn("Failed to load extension-modules capability", { error: String(error) });
@@ -188,7 +187,7 @@ export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): P
 		const prompts = await loadCapability<Prompt>("prompts", loadOpts);
 		addItems(prompts.all, "prompt", {
 			getDescription: () => undefined,
-			getTrigger: (p) => `/prompts:${p.name}`,
+			getTrigger: p => `/prompts:${p.name}`,
 		});
 	} catch (error) {
 		logger.warn("Failed to load prompts capability", { error: String(error) });
@@ -199,7 +198,7 @@ export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): P
 		const commands = await loadCapability<SlashCommand>("slash-commands", loadOpts);
 		addItems(commands.all, "slash-command", {
 			getDescription: () => undefined,
-			getTrigger: (c) => `/${c.name}`,
+			getTrigger: c => `/${c.name}`,
 		});
 	} catch (error) {
 		logger.warn("Failed to load slash-commands capability", { error: String(error) });
@@ -396,7 +395,7 @@ export function applyFilter(extensions: Extension[], query: string): Extension[]
 		return extensions;
 	}
 
-	return extensions.filter((ext) => {
+	return extensions.filter(ext => {
 		const searchable = [
 			ext.name,
 			ext.displayName,
@@ -408,7 +407,7 @@ export function applyFilter(extensions: Extension[], query: string): Extension[]
 			.join(" ")
 			.toLowerCase();
 
-		return tokens.every((token) => searchable.includes(token));
+		return tokens.every(token => searchable.includes(token));
 	});
 }
 
@@ -506,7 +505,7 @@ export function filterByProvider(extensions: Extension[], providerId: string): E
 	if (providerId === "all") {
 		return extensions;
 	}
-	return extensions.filter((ext) => ext.source.provider === providerId);
+	return extensions.filter(ext => ext.source.provider === providerId);
 }
 
 /**
@@ -564,12 +563,12 @@ export async function refreshState(
 	const searchFiltered = applyFilter(tabFiltered, state.searchQuery);
 
 	// Find new index for current provider (tabs may have reordered)
-	const newActiveTabIndex = tabs.findIndex((t) => t.id === providerId);
+	const newActiveTabIndex = tabs.findIndex(t => t.id === providerId);
 	const activeTabIndex = newActiveTabIndex >= 0 ? newActiveTabIndex : 0;
 
 	// Try to preserve selection
 	const selectedId = state.selected?.id;
-	let selected = selectedId ? searchFiltered.find((e) => e.id === selectedId) : null;
+	let selected = selectedId ? searchFiltered.find(e => e.id === selectedId) : null;
 	if (!selected && searchFiltered.length > 0) {
 		selected = searchFiltered[Math.min(state.listIndex, searchFiltered.length - 1)];
 	}

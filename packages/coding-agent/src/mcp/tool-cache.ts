@@ -3,7 +3,6 @@
  *
  * Stores tool definitions per server in agent.db for fast startup.
  */
-
 import { logger } from "@oh-my-pi/pi-utils";
 import type { AgentStorage } from "../session/agent-storage";
 import type { MCPServerConfig, MCPToolDefinition } from "./types";
@@ -24,7 +23,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stableClone(value: unknown): unknown {
 	if (Array.isArray(value)) {
-		return value.map((item) => stableClone(item));
+		return value.map(item => stableClone(item));
 	}
 	if (isRecord(value)) {
 		const sorted: Record<string, unknown> = {};

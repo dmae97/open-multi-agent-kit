@@ -3,7 +3,6 @@
  *
  * Shows how to select a specific model and thinking level.
  */
-
 import { getModel } from "@oh-my-pi/pi-ai";
 import { createAgentSession, discoverAuthStorage, discoverModels } from "@oh-my-pi/pi-coding-agent";
 
@@ -27,7 +26,7 @@ if (customModel) {
 const available = modelRegistry.getAvailable();
 console.log(
 	"Available models:",
-	available.map((m) => `${m.provider}/${m.id}`),
+	available.map(m => `${m.provider}/${m.id}`),
 );
 
 if (available.length > 0) {
@@ -38,7 +37,7 @@ if (available.length > 0) {
 		modelRegistry,
 	});
 
-	session.subscribe((event) => {
+	session.subscribe(event => {
 		if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
 			process.stdout.write(event.assistantMessageEvent.delta);
 		}

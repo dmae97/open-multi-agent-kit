@@ -3,11 +3,10 @@
  *
  * Compares output files against expected fixtures with byte-for-byte equality.
  */
-
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { formatContent } from "./formatter";
 import { diffLines } from "diff";
+import { formatContent } from "./formatter";
 
 export interface VerificationResult {
 	success: boolean;

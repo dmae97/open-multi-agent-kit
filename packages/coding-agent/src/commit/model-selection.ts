@@ -65,7 +65,7 @@ function resolveModelFromSettings(settingsManager: SettingsManager, available: M
 function resolveModelFromString(value: string, available: Model<Api>[]): Model<Api> | undefined {
 	const parsed = parseModelString(value);
 	if (parsed) {
-		return available.find((model) => model.provider === parsed.provider && model.id === parsed.id);
+		return available.find(model => model.provider === parsed.provider && model.id === parsed.id);
 	}
 	return parseModelPattern(value, available).model;
 }

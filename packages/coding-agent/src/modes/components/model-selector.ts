@@ -190,7 +190,7 @@ export class ModelSelectorComponent extends Container {
 		if (defaultStr) {
 			const parsed = parseModelString(defaultStr);
 			if (parsed) {
-				this.defaultModel = allModels.find((m) => m.provider === parsed.provider && m.id === parsed.id);
+				this.defaultModel = allModels.find(m => m.provider === parsed.provider && m.id === parsed.id);
 			}
 		}
 
@@ -199,7 +199,7 @@ export class ModelSelectorComponent extends Container {
 		if (smolStr) {
 			const parsed = parseModelString(smolStr);
 			if (parsed) {
-				this.smolModel = allModels.find((m) => m.provider === parsed.provider && m.id === parsed.id);
+				this.smolModel = allModels.find(m => m.provider === parsed.provider && m.id === parsed.id);
 			}
 		}
 
@@ -208,7 +208,7 @@ export class ModelSelectorComponent extends Container {
 		if (slowStr) {
 			const parsed = parseModelString(slowStr);
 			if (parsed) {
-				this.slowModel = allModels.find((m) => m.provider === parsed.provider && m.id === parsed.id);
+				this.slowModel = allModels.find(m => m.provider === parsed.provider && m.id === parsed.id);
 			}
 		}
 	}
@@ -218,7 +218,7 @@ export class ModelSelectorComponent extends Container {
 
 		// Use scoped models if provided via --models flag
 		if (this.scopedModels.length > 0) {
-			models = this.scopedModels.map((scoped) => ({
+			models = this.scopedModels.map(scoped => ({
 				provider: scoped.model.provider,
 				id: scoped.model.id,
 				model: scoped.model,
@@ -279,7 +279,7 @@ export class ModelSelectorComponent extends Container {
 	private updateTabBar(): void {
 		this.headerContainer.clear();
 
-		const tabs: Tab[] = this.providers.map((provider) => ({ id: provider, label: provider }));
+		const tabs: Tab[] = this.providers.map(provider => ({ id: provider, label: provider }));
 		const tabBar = new TabBar("Models", tabs, getTabBarTheme(), this.activeTabIndex);
 		tabBar.onTabChange = (_tab, index) => {
 			this.activeTabIndex = index;
@@ -300,7 +300,7 @@ export class ModelSelectorComponent extends Container {
 		// Start with all models or filter by provider
 		let baseModels = this.allModels;
 		if (activeProvider !== ALL_TAB) {
-			baseModels = this.allModels.filter((m) => m.provider.toUpperCase() === activeProvider);
+			baseModels = this.allModels.filter(m => m.provider.toUpperCase() === activeProvider);
 		}
 
 		// Apply fuzzy filter if query is present
@@ -426,7 +426,7 @@ export class ModelSelectorComponent extends Container {
 		const menuWidth = Math.max(
 			visibleWidth(headerText),
 			visibleWidth(hintText),
-			...actionLines.map((line) => visibleWidth(line)),
+			...actionLines.map(line => visibleWidth(line)),
 		);
 
 		// Menu header

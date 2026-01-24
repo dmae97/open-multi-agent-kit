@@ -4,7 +4,6 @@
  * Tools populate details.meta using the fluent OutputMetaBuilder.
  * The tool wrapper automatically formats and appends notices at message boundary.
  */
-
 import type { AgentTool, AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent, TextContent } from "@oh-my-pi/pi-ai";
 import type { OutputSummary } from "../session/streaming-output";

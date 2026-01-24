@@ -202,8 +202,8 @@ async function listCandidateFiles(
 		if (output) {
 			const nestedGitignores = output
 				.split("\n")
-				.map((line) => line.replace(/\r$/, "").trim())
-				.filter((line) => line.length > 0);
+				.map(line => line.replace(/\r$/, "").trim())
+				.filter(line => line.length > 0);
 			for (const file of nestedGitignores) {
 				const normalized = file.replace(/\\/g, "/");
 				if (normalized.includes("/node_modules/") || normalized.includes("/.git/")) {
@@ -238,8 +238,8 @@ async function listCandidateFiles(
 
 	const files = output
 		.split("\n")
-		.map((line) => line.replace(/\r$/, "").trim())
-		.filter((line) => line.length > 0);
+		.map(line => line.replace(/\r$/, "").trim())
+		.filter(line => line.length > 0);
 
 	return { files, truncated: files.length >= MAX_FUZZY_CANDIDATES };
 }
@@ -337,7 +337,7 @@ async function findReadPathSuggestions(
 	});
 
 	const listLimit = applyListLimit(matches, { limit: MAX_FUZZY_RESULTS });
-	const suggestions = listLimit.items.map((match) => match.path);
+	const suggestions = listLimit.items.map(match => match.path);
 
 	return { suggestions, scopeLabel, truncated };
 }
@@ -446,7 +446,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 
 					if (suggestions?.suggestions.length) {
 						const scopeLabel = suggestions.scopeLabel ? ` in ${suggestions.scopeLabel}` : "";
-						message += `\n\nClosest matches${scopeLabel}:\n${suggestions.suggestions.map((match) => `- ${match}`).join("\n")}`;
+						message += `\n\nClosest matches${scopeLabel}:\n${suggestions.suggestions.map(match => `- ${match}`).join("\n")}`;
 						if (suggestions.truncated) {
 							message += `\n[Search truncated to first ${MAX_FUZZY_CANDIDATES} paths. Refine the path if the match isn't listed.]`;
 						}
@@ -856,8 +856,8 @@ export const readToolRenderer = {
 		args?: ReadRenderArgs,
 	): Component {
 		const details = result.details;
-		const contentText = result.content?.find((c) => c.type === "text")?.text ?? "";
-		const imageContent = result.content?.find((c) => c.type === "image");
+		const contentText = result.content?.find(c => c.type === "text")?.text ?? "";
+		const imageContent = result.content?.find(c => c.type === "image");
 		const rawPath = args?.file_path || args?.path || "";
 		const filePath = shortenPath(rawPath);
 		const lang = getLanguageFromPath(rawPath);
@@ -892,7 +892,7 @@ export const readToolRenderer = {
 				{ icon: "success", title: "Read", description: filePath || rawPath || "image" },
 				uiTheme,
 			);
-			const detailLines = contentText ? contentText.split("\n").map((line) => uiTheme.fg("toolOutput", line)) : [];
+			const detailLines = contentText ? contentText.split("\n").map(line => uiTheme.fg("toolOutput", line)) : [];
 			const lines = [...detailLines, ...warningLines];
 			return {
 				render: (width: number) =>

@@ -119,7 +119,7 @@ export const handleArtifactHub: SpecialHandler = async (
 
 		// Maintainers
 		if (pkg.maintainers?.length) {
-			const maintainerNames = pkg.maintainers.map((m) => m.name).join(", ");
+			const maintainerNames = pkg.maintainers.map(m => m.name).join(", ");
 			md += `**Maintainers:** ${maintainerNames}\n`;
 		}
 

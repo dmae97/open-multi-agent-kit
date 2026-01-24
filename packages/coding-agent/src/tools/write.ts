@@ -44,7 +44,7 @@ function getLspBatchRequest(toolCall: ToolCallContext | undefined): { id: string
 	if (!hasOtherWrites) {
 		return undefined;
 	}
-	const hasLaterWrites = toolCall.toolCalls.slice(toolCall.index + 1).some((call) => LSP_BATCH_TOOLS.has(call.name));
+	const hasLaterWrites = toolCall.toolCalls.slice(toolCall.index + 1).some(call => LSP_BATCH_TOOLS.has(call.name));
 	return { id: toolCall.batchId, flush: !hasLaterWrites };
 }
 
@@ -226,12 +226,12 @@ export const writeToolRenderer = {
 		}
 
 		if (result.details?.diagnostics) {
-			const diagText = formatDiagnostics(result.details.diagnostics, expanded, uiTheme, (fp) =>
+			const diagText = formatDiagnostics(result.details.diagnostics, expanded, uiTheme, fp =>
 				uiTheme.getLangIcon(getLanguageFromPath(fp)),
 			);
 			if (diagText.trim()) {
 				const diagLines = diagText.split("\n");
-				const firstNonEmpty = diagLines.findIndex((line) => line.trim());
+				const firstNonEmpty = diagLines.findIndex(line => line.trim());
 				outputLines.push(...(firstNonEmpty >= 0 ? diagLines.slice(firstNonEmpty) : []));
 			}
 		}

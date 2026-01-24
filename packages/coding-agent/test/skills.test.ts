@@ -143,7 +143,7 @@ describe("skills", () => {
 			});
 			expect(skills.length).toBeGreaterThan(0);
 			// Custom directory skills have source "custom:user"
-			expect(skills.every((s) => s.source.startsWith("custom"))).toBe(true);
+			expect(skills.every(s => s.source.startsWith("custom"))).toBe(true);
 		});
 
 		it("should filter out ignoredSkills", async () => {
@@ -169,7 +169,7 @@ describe("skills", () => {
 				customDirectories: [fixturesDir],
 				ignoredSkills: ["valid-*"],
 			});
-			expect(skills.every((s) => !s.name.startsWith("valid-"))).toBe(true);
+			expect(skills.every(s => !s.name.startsWith("valid-"))).toBe(true);
 		});
 
 		it("should have ignoredSkills take precedence over includeSkills", async () => {
@@ -184,7 +184,7 @@ describe("skills", () => {
 				ignoredSkills: ["valid-skill"],
 			});
 			// valid-skill should be excluded even though it matches includeSkills
-			expect(skills.every((s) => s.name !== "valid-skill")).toBe(true);
+			expect(skills.every(s => s.name !== "valid-skill")).toBe(true);
 		});
 
 		it("should expand ~ in customDirectories", async () => {
@@ -256,7 +256,7 @@ describe("skills", () => {
 				includeSkills: ["valid-*"],
 			});
 			expect(skills.length).toBeGreaterThan(0);
-			expect(skills.every((s) => s.name.startsWith("valid-"))).toBe(true);
+			expect(skills.every(s => s.name.startsWith("valid-"))).toBe(true);
 		});
 
 		it("should return all skills when includeSkills is empty", async () => {

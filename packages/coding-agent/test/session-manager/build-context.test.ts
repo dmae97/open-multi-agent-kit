@@ -85,7 +85,7 @@ describe("buildSessionContext", () => {
 			];
 			const ctx = buildSessionContext(entries);
 			expect(ctx.messages).toHaveLength(4);
-			expect(ctx.messages.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant"]);
+			expect(ctx.messages.map(m => m.role)).toEqual(["user", "assistant", "user", "assistant"]);
 		});
 
 		it("tracks thinking level changes", () => {

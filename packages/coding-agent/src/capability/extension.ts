@@ -3,7 +3,6 @@
  *
  * Gemini-style extensions that provide MCP servers, tools, and context.
  */
-
 import { defineCapability } from ".";
 import type { MCPServer } from "./mcp";
 import type { SourceMeta } from "./types";
@@ -39,8 +38,8 @@ export const extensionCapability = defineCapability<Extension>({
 	id: "extensions",
 	displayName: "Extensions",
 	description: "Gemini-style extensions providing MCP servers, tools, and context",
-	key: (ext) => ext.name,
-	validate: (ext) => {
+	key: ext => ext.name,
+	validate: ext => {
 		if (!ext.name) return "Missing extension name";
 		if (!ext.path) return "Missing extension path";
 		return undefined;

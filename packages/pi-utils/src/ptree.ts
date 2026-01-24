@@ -6,7 +6,6 @@
  * - Windows and Unix support for proper tree killing.
  * - ChildProcess wrapper for capturing output, errors, and kill/detach.
  */
-
 import { type FileSink, type Spawn, type Subprocess, spawn, spawnSync } from "bun";
 import { postmortem } from ".";
 
@@ -49,7 +48,7 @@ class AsyncQueue<T> {
 		if (this.#closed) {
 			return { value: undefined, done: true };
 		}
-		return await new Promise<IteratorResult<T>>((resolve) => {
+		return await new Promise<IteratorResult<T>>(resolve => {
 			this.#resolvers.push(resolve);
 		});
 	}
@@ -57,7 +56,7 @@ class AsyncQueue<T> {
 
 function createProcessStream(queue: AsyncQueue<Uint8Array>): ReadableStream<Uint8Array> {
 	const stream = new ReadableStream<Uint8Array>({
-		pull: async (controller) => {
+		pull: async controller => {
 			const result = await queue.next();
 			if (result.done) {
 				controller.close();
@@ -231,7 +230,7 @@ export class ChildProcess {
 		this.#resolveExited = resolve;
 
 		// On exit, resolve with a ChildError if nonzero code.
-		proc.exited.then((exitCode) => {
+		proc.exited.then(exitCode => {
 			if (exitCode !== 0) {
 				resolve(new NonZeroExitError(exitCode, this.#stderrBuffer));
 			} else {

@@ -85,7 +85,7 @@ function normalizeDetails(
 		user_visible?: boolean;
 	}>,
 ): ConventionalDetail[] {
-	return details.map((detail) => ({
+	return details.map(detail => ({
 		text: detail.text.trim(),
 		changelogCategory: detail.user_visible ? detail.changelog_category : undefined,
 		userVisible: detail.user_visible ?? false,
@@ -116,14 +116,14 @@ export function createSplitCommitTool(
 				const summary = normalizeSummary(commit.summary, commit.type, scope);
 				const detailInput = normalizeDetails(commit.details ?? []);
 				const detailResult = capDetails(detailInput);
-				warnings.push(...detailResult.warnings.map((warning) => `Commit ${index + 1}: ${warning}`));
+				warnings.push(...detailResult.warnings.map(warning => `Commit ${index + 1}: ${warning}`));
 				const issueRefs = commit.issue_refs ?? [];
-				const dependencies = (commit.dependencies ?? []).map((dep) => Math.floor(dep));
-				const changes = commit.changes.map((change) => ({
+				const dependencies = (commit.dependencies ?? []).map(dep => Math.floor(dep));
+				const changes = commit.changes.map(change => ({
 					path: change.path,
 					hunks: change.hunks,
 				}));
-				const files = changes.map((change) => change.path);
+				const files = changes.map(change => change.path);
 
 				const summaryValidation = validateSummaryRules(summary);
 				const scopeValidation = validateScope(scope);
@@ -134,16 +134,16 @@ export function createSplitCommitTool(
 				});
 
 				if (summaryValidation.errors.length > 0) {
-					errors.push(...summaryValidation.errors.map((error) => `Commit ${index + 1}: ${error}`));
+					errors.push(...summaryValidation.errors.map(error => `Commit ${index + 1}: ${error}`));
 				}
 				if (!scopeValidation.valid) {
-					errors.push(...scopeValidation.errors.map((error) => `Commit ${index + 1}: ${error}`));
+					errors.push(...scopeValidation.errors.map(error => `Commit ${index + 1}: ${error}`));
 				}
 				if (typeValidation.errors.length > 0) {
-					errors.push(...typeValidation.errors.map((error) => `Commit ${index + 1}: ${error}`));
+					errors.push(...typeValidation.errors.map(error => `Commit ${index + 1}: ${error}`));
 				}
-				warnings.push(...summaryValidation.warnings.map((warning) => `Commit ${index + 1}: ${warning}`));
-				warnings.push(...typeValidation.warnings.map((warning) => `Commit ${index + 1}: ${warning}`));
+				warnings.push(...summaryValidation.warnings.map(warning => `Commit ${index + 1}: ${warning}`));
+				warnings.push(...typeValidation.warnings.map(warning => `Commit ${index + 1}: ${warning}`));
 				const hunkValidation = validateHunkSelectors(index, changes, files);
 				warnings.push(...hunkValidation.warnings);
 				errors.push(...hunkValidation.errors);
@@ -239,7 +239,7 @@ function validateHunkSelectors(
 	for (const change of changes) {
 		if (change.hunks.type === "indices") {
 			const invalid = change.hunks.indices.filter(
-				(value) => !Number.isFinite(value) || Math.floor(value) !== value || value < 1,
+				value => !Number.isFinite(value) || Math.floor(value) !== value || value < 1,
 			);
 			if (invalid.length > 0) {
 				errors.push(`${prefix}: invalid hunk indices for ${change.path}`);

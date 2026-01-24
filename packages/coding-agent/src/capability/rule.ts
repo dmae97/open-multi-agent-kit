@@ -4,7 +4,6 @@
  * Project-specific rules from Cursor (.mdc), Windsurf (.md), and Cline formats.
  * Translated to a canonical shape regardless of source format.
  */
-
 import { defineCapability } from ".";
 import type { SourceMeta } from "./types";
 
@@ -46,8 +45,8 @@ export const ruleCapability = defineCapability<Rule>({
 	id: "rules",
 	displayName: "Rules",
 	description: "Project-specific rules and constraints (Cursor MDC, Windsurf, Cline formats)",
-	key: (rule) => rule.name,
-	validate: (rule) => {
+	key: rule => rule.name,
+	validate: rule => {
 		if (!rule.name) return "Missing rule name";
 		if (!rule.path) return "Missing rule path";
 		if (!rule.content || typeof rule.content !== "string") return "Rule must have content";

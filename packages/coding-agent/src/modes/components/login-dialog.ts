@@ -23,7 +23,7 @@ export class LoginDialogComponent extends Container {
 		super();
 		this.tui = tui;
 
-		const providerInfo = getOAuthProviders().find((p) => p.id === providerId);
+		const providerInfo = getOAuthProviders().find(p => p.id === providerId);
 		const providerName = providerInfo?.name || providerId;
 
 		// Top border
