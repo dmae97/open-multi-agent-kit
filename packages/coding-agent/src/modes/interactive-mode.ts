@@ -5,7 +5,6 @@
 import * as path from "node:path";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage, ImageContent, Message, Model, UsageReport } from "@oh-my-pi/pi-ai";
-import { resolvePlanUrlToPath } from "@oh-my-pi/pi-coding-agent/internal-urls";
 import type { Component, Loader, SlashCommand } from "@oh-my-pi/pi-tui";
 import {
 	CombinedAutocompleteProvider,
@@ -24,6 +23,7 @@ import type { SettingsManager } from "../config/settings-manager";
 import type { ExtensionUIContext } from "../extensibility/extensions";
 import type { CompactOptions } from "../extensibility/extensions/types";
 import { loadSlashCommands } from "../extensibility/slash-commands";
+import { resolvePlanUrlToPath } from "../internal-urls";
 import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" with { type: "text" };
 import type { AgentSession, AgentSessionEvent } from "../session/agent-session";
 import { HistoryStorage } from "../session/history-storage";
@@ -136,7 +136,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	private planModeHasEntered = false;
 	public readonly lspServers: Array<{ name: string; status: "ready" | "error"; fileTypes: string[] }> | undefined =
 		undefined;
-	public mcpManager?: import("@oh-my-pi/pi-coding-agent/mcp").MCPManager;
+	public mcpManager?: import("../mcp").MCPManager;
 	private readonly toolUiContextSetter: (uiContext: ExtensionUIContext, hasUI: boolean) => void;
 
 	private readonly commandController: CommandController;
@@ -152,7 +152,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		changelogMarkdown: string | undefined = undefined,
 		setToolUIContext: (uiContext: ExtensionUIContext, hasUI: boolean) => void = () => {},
 		lspServers: Array<{ name: string; status: "ready" | "error"; fileTypes: string[] }> | undefined = undefined,
-		mcpManager?: import("@oh-my-pi/pi-coding-agent/mcp").MCPManager,
+		mcpManager?: import("../mcp").MCPManager,
 	) {
 		this.session = session;
 		this.sessionManager = session.sessionManager;

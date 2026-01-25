@@ -5,18 +5,18 @@
  */
 import path from "node:path";
 import type { AgentEvent, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { PromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import type { Skill } from "@oh-my-pi/pi-coding-agent/extensibility/skills";
-import { getPreludeDocs } from "@oh-my-pi/pi-coding-agent/ipy/executor";
-import { checkPythonKernelAvailability } from "@oh-my-pi/pi-coding-agent/ipy/kernel";
-import type { ContextFileEntry, ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 import type { ModelRegistry } from "../config/model-registry";
 import { formatModelString, parseModelPattern } from "../config/model-resolver";
+import type { PromptTemplate } from "../config/prompt-templates";
+import type { Skill } from "../extensibility/skills";
+import { getPreludeDocs } from "../ipy/executor";
+import { checkPythonKernelAvailability } from "../ipy/kernel";
 import { LspTool } from "../lsp";
 import type { LspParams } from "../lsp/types";
 import { callTool } from "../mcp/client";
 import type { MCPManager } from "../mcp/manager";
 import type { AuthStorage } from "../session/auth-storage";
+import type { ContextFileEntry, ToolSession } from "../tools";
 import { PythonTool, type PythonToolParams } from "../tools/python";
 import type { EventBus } from "../utils/event-bus";
 import { subprocessToolRegistry } from "./subprocess-tool-registry";
@@ -80,7 +80,7 @@ export interface ExecutorOptions {
 	authStorage?: AuthStorage;
 	modelRegistry?: ModelRegistry;
 	settingsManager?: {
-		serialize: () => import("@oh-my-pi/pi-coding-agent/config/settings-manager").Settings;
+		serialize: () => import("../config/settings-manager").Settings;
 		getPlansDirectory: (cwd?: string) => string;
 		getPythonToolMode?: () => "ipy-only" | "bash-only" | "both";
 		getPythonKernelMode?: () => "session" | "per-call";

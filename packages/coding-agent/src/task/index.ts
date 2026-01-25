@@ -17,14 +17,12 @@ import * as os from "node:os";
 import path from "node:path";
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Usage } from "@oh-my-pi/pi-ai";
-import planModeSubagentPrompt from "@oh-my-pi/pi-coding-agent/prompts/system/plan-mode-subagent.md" with {
-	type: "text",
-};
 import { $ } from "bun";
 import { nanoid } from "nanoid";
 import type { ToolSession } from "..";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import type { Theme } from "../modes/theme/theme";
+import planModeSubagentPrompt from "../prompts/system/plan-mode-subagent.md" with { type: "text" };
 import taskDescriptionTemplate from "../prompts/tools/task.md" with { type: "text" };
 import { formatDuration } from "../tools/render-utils";
 // Import review tools for side effects (registers subagent tool handlers)

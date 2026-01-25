@@ -1,12 +1,12 @@
 import * as fs from "node:fs/promises";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
-import { renderPromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import { resolvePlanUrlToPath } from "@oh-my-pi/pi-coding-agent/internal-urls";
-import enterPlanModeDescription from "@oh-my-pi/pi-coding-agent/prompts/tools/enter-plan-mode.md" with { type: "text" };
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { ToolError } from "@oh-my-pi/pi-coding-agent/tools/tool-errors";
 import { isEnoent } from "@oh-my-pi/pi-utils";
 import { Type } from "@sinclair/typebox";
+import { renderPromptTemplate } from "../config/prompt-templates";
+import { resolvePlanUrlToPath } from "../internal-urls";
+import enterPlanModeDescription from "../prompts/tools/enter-plan-mode.md" with { type: "text" };
+import type { ToolSession } from ".";
+import { ToolError } from "./tool-errors";
 
 const enterPlanModeSchema = Type.Object({
 	workflow: Type.Optional(Type.Union([Type.Literal("parallel"), Type.Literal("iterative")])),

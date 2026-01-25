@@ -1,8 +1,8 @@
 import type { AgentTool } from "@oh-my-pi/pi-agent-core";
-import type { PromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import type { Skill } from "@oh-my-pi/pi-coding-agent/extensibility/skills";
 import { logger } from "@oh-my-pi/pi-utils";
+import type { PromptTemplate } from "../config/prompt-templates";
 import type { BashInterceptorRule } from "../config/settings-manager";
+import type { Skill } from "../extensibility/skills";
 import type { InternalUrlRouter } from "../internal-urls";
 import { getPreludeDocs, warmPythonEnvironment } from "../ipy/executor";
 import { checkPythonKernelAvailability } from "../ipy/kernel";
@@ -144,9 +144,9 @@ export interface ToolSession {
 	/** Get the current session model string, regardless of how it was chosen */
 	getActiveModelString?: () => string | undefined;
 	/** Auth storage for passing to subagents (avoids re-discovery) */
-	authStorage?: import("@oh-my-pi/pi-coding-agent/session/auth-storage").AuthStorage;
+	authStorage?: import("../session/auth-storage").AuthStorage;
 	/** Model registry for passing to subagents (avoids re-discovery) */
-	modelRegistry?: import("@oh-my-pi/pi-coding-agent/config/model-registry").ModelRegistry;
+	modelRegistry?: import("../config/model-registry").ModelRegistry;
 	/** MCP manager for proxying MCP calls through parent */
 	mcpManager?: import("../mcp/manager").MCPManager;
 	/** Internal URL router for agent:// and skill:// URLs */
@@ -155,7 +155,7 @@ export interface ToolSession {
 	agentOutputManager?: AgentOutputManager;
 	/** Settings manager for passing to subagents (avoids SQLite access in workers) */
 	settingsManager?: {
-		serialize: () => import("@oh-my-pi/pi-coding-agent/config/settings-manager").Settings;
+		serialize: () => import("../config/settings-manager").Settings;
 		getPlansDirectory: (cwd?: string) => string;
 	};
 	/** Settings manager (optional) */

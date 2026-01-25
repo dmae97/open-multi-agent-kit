@@ -14,7 +14,6 @@
  */
 import type { AgentEvent, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
-import { setPreludeDocsCache } from "@oh-my-pi/pi-coding-agent/ipy/executor";
 import { logger, postmortem, untilAborted } from "@oh-my-pi/pi-utils";
 import type { TSchema } from "@sinclair/typebox";
 import { ModelRegistry } from "../config/model-registry";
@@ -22,6 +21,7 @@ import { parseModelPattern, parseModelString } from "../config/model-resolver";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import { SettingsManager } from "../config/settings-manager";
 import type { CustomTool } from "../extensibility/custom-tools/types";
+import { setPreludeDocsCache } from "../ipy/executor";
 import { type LspToolDetails, lspSchema } from "../lsp/types";
 import lspDescription from "../prompts/tools/lsp.md" with { type: "text" };
 import { createAgentSession, discoverAuthStorage, discoverModels } from "../sdk";

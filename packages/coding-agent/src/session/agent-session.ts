@@ -27,7 +27,6 @@ import type {
 	UsageReport,
 } from "@oh-my-pi/pi-ai";
 import { isContextOverflow, modelsAreEqual, supportsXhigh } from "@oh-my-pi/pi-ai";
-import { resolvePlanUrlToPath } from "@oh-my-pi/pi-coding-agent/internal-urls";
 import { abortableSleep, isEnoent, logger } from "@oh-my-pi/pi-utils";
 import { YAML } from "bun";
 import type { Rule } from "../capability/rule";
@@ -61,6 +60,7 @@ import type { CompactOptions, ContextUsage } from "../extensibility/extensions/t
 import type { HookCommandContext } from "../extensibility/hooks/types";
 import type { Skill, SkillWarning } from "../extensibility/skills";
 import { expandSlashCommand, type FileSlashCommand } from "../extensibility/slash-commands";
+import { resolvePlanUrlToPath } from "../internal-urls";
 import { executePython as executePythonCommand, type PythonResult } from "../ipy/executor";
 import { theme } from "../modes/theme/theme";
 import { normalizeDiff, normalizeToLF, ParseError, previewPatch, stripBom } from "../patch";

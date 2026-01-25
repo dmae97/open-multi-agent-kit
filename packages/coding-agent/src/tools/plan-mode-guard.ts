@@ -1,4 +1,4 @@
-import { resolvePlanUrlToPath } from "@oh-my-pi/pi-coding-agent/internal-urls";
+import { resolvePlanUrlToPath } from "../internal-urls";
 import type { ToolSession } from ".";
 import { resolveToCwd } from "./path-utils";
 import { ToolError } from "./tool-errors";

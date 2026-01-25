@@ -50,6 +50,14 @@
 			"types": "./src/session/*.ts",
 			"import": "./src/session/*.ts"
 		},
+		"./internal-urls": {
+			"types": "./src/internal-urls/index.ts",
+			"import": "./src/internal-urls/index.ts"
+		},
+		"./internal-urls/*": {
+			"types": "./src/internal-urls/*.ts",
+			"import": "./src/internal-urls/*.ts"
+		},
 		"./vendor/photon/*": {
 			"types": "./src/vendor/photon/*",
 			"import": "./src/vendor/photon/*"

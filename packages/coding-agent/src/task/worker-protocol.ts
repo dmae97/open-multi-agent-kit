@@ -1,11 +1,11 @@
 import type { AgentEvent, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { PromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import type { Skill } from "@oh-my-pi/pi-coding-agent/extensibility/skills";
-import type { PreludeHelper } from "@oh-my-pi/pi-coding-agent/ipy/kernel";
-import type { ContextFileEntry } from "@oh-my-pi/pi-coding-agent/tools";
 import type { SerializedModelRegistry } from "../config/model-registry";
+import type { PromptTemplate } from "../config/prompt-templates";
 import type { Settings } from "../config/settings-manager";
+import type { Skill } from "../extensibility/skills";
+import type { PreludeHelper } from "../ipy/kernel";
 import type { SerializedAuthStorage } from "../session/auth-storage";
+import type { ContextFileEntry } from "../tools";
 
 /**
  * MCP tool metadata passed from parent to worker for proxy tool creation.
