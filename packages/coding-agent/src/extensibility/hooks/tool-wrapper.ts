@@ -23,6 +23,8 @@ export class HookToolWrapper<TParameters extends TSchema = TSchema, TDetails = u
 	parameters: TParameters;
 	renderCall?: AgentTool<TParameters, TDetails>["renderCall"];
 	renderResult?: AgentTool<TParameters, TDetails>["renderResult"];
+	mergeCallAndResult?: boolean;
+	inline?: boolean;
 
 	constructor(
 		private tool: AgentTool<TParameters, TDetails>,
@@ -34,6 +36,8 @@ export class HookToolWrapper<TParameters extends TSchema = TSchema, TDetails = u
 		this.parameters = tool.parameters;
 		this.renderCall = tool.renderCall;
 		this.renderResult = tool.renderResult;
+		this.mergeCallAndResult = (tool as { mergeCallAndResult?: boolean }).mergeCallAndResult;
+		this.inline = (tool as { inline?: boolean }).inline;
 	}
 
 	async execute(

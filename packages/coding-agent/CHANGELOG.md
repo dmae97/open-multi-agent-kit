@@ -8,6 +8,8 @@
 - Refactored patch applicator with improved fuzzy matching (7-pass sequence matching with Levenshtein distance) and indentation adjustment
 - Added inline rendering flag to bash and fetch tool renderers
 - Extracted constants for preview formatting to improve code maintainability
+- Exposed mergeCallAndResult and inline rendering options from tools to their wrappers
+- Added timeout validation and normalization for tool timeout parameters
 
 ### Fixed
 - Fixed output block border rendering (bottom-right corner was missing)

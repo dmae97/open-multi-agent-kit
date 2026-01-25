@@ -552,10 +552,16 @@ export class ToolExecutionComponent extends Container {
 	}
 
 	/**
-	 * Build render context for tools that need extra state (bash, edit)
+	 * Build render context for tools that need extra state (bash, python, edit)
 	 */
 	private buildRenderContext(): Record<string, unknown> {
 		const context: Record<string, unknown> = {};
+		const normalizeTimeoutSeconds = (value: unknown, maxSeconds: number): number | undefined => {
+			if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+			let timeoutSec = value > 1000 ? value / 1000 : value;
+			timeoutSec = Math.max(1, Math.min(maxSeconds, timeoutSec));
+			return timeoutSec;
+		};
 
 		if (this.toolName === "bash" && this.result) {
 			// Pass raw output and expanded state - renderer handles width-aware truncation
@@ -563,13 +569,13 @@ export class ToolExecutionComponent extends Container {
 			context.output = output;
 			context.expanded = this.expanded;
 			context.previewLines = BASH_DEFAULT_PREVIEW_LINES;
-			context.timeout = typeof this.args?.timeout === "number" ? this.args.timeout : undefined;
+			context.timeout = normalizeTimeoutSeconds(this.args?.timeout, 3600);
 		} else if (this.toolName === "python" && this.result) {
 			const output = this.getTextOutput().trimEnd();
 			context.output = output;
 			context.expanded = this.expanded;
 			context.previewLines = PYTHON_DEFAULT_PREVIEW_LINES;
-			context.timeout = typeof this.args?.timeout === "number" ? this.args.timeout : undefined;
+			context.timeout = normalizeTimeoutSeconds(this.args?.timeout, 600);
 		} else if (this.toolName === "edit") {
 			// Edit needs diff preview and renderDiff function
 			context.editDiffPreview = this.editDiffPreview;
