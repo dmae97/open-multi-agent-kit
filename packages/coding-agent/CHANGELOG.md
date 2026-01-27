@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Reduced Task tool progress update overhead to keep the UI responsive during high-volume streaming output
+
 ## [8.4.5] - 2026-01-26
 
 ### Added

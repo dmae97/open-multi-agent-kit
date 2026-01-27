@@ -437,7 +437,7 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 						eventBus: undefined,
 						onProgress: progress => {
 							progressMap.set(index, {
-								...structuredClone(progress),
+								...progress,
 								args: tasksWithContext[index]?.args,
 							});
 							emitProgress();
@@ -480,7 +480,7 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 						eventBus: undefined,
 						onProgress: progress => {
 							progressMap.set(index, {
-								...structuredClone(progress),
+								...progress,
 								args: tasksWithContext[index]?.args,
 							});
 							emitProgress();

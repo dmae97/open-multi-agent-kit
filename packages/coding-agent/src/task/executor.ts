@@ -361,6 +361,8 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 
 	const outputChunks: string[] = [];
 	const finalOutputChunks: string[] = [];
+	const RECENT_OUTPUT_TAIL_BYTES = 8 * 1024;
+	let recentOutputTail = "";
 	let stderr = "";
 	let resolved = false;
 	type AbortReason = "signal" | "terminate";
@@ -513,7 +515,11 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		signal.addEventListener("abort", onAbort, { once: true, signal: listenerSignal });
 	}
 
-	const emitProgress = () => {
+	const PROGRESS_COALESCE_MS = 150;
+	let lastProgressEmitMs = 0;
+	let progressTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+	const emitProgressNow = () => {
 		progress.durationMs = Date.now() - startTime;
 		onProgress?.({ ...progress });
 		if (options.eventBus) {
@@ -525,6 +531,33 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				progress: { ...progress },
 			});
 		}
+		lastProgressEmitMs = Date.now();
+	};
+
+	const scheduleProgress = (flush = false) => {
+		if (flush) {
+			if (progressTimeoutId) {
+				clearTimeout(progressTimeoutId);
+				progressTimeoutId = null;
+			}
+			emitProgressNow();
+			return;
+		}
+		const now = Date.now();
+		const elapsed = now - lastProgressEmitMs;
+		if (lastProgressEmitMs === 0 || elapsed >= PROGRESS_COALESCE_MS) {
+			if (progressTimeoutId) {
+				clearTimeout(progressTimeoutId);
+				progressTimeoutId = null;
+			}
+			emitProgressNow();
+			return;
+		}
+		if (progressTimeoutId) return;
+		progressTimeoutId = setTimeout(() => {
+			progressTimeoutId = null;
+			emitProgressNow();
+		}, PROGRESS_COALESCE_MS - elapsed);
 	};
 
 	const getMessageContent = (message: unknown): unknown => {
@@ -541,6 +574,40 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		return undefined;
 	};
 
+	const updateRecentOutputLines = () => {
+		const lines = recentOutputTail.split("\n").filter(line => line.trim());
+		progress.recentOutput = lines.slice(-8).reverse();
+	};
+
+	const appendRecentOutputTail = (text: string) => {
+		if (!text) return;
+		recentOutputTail += text;
+		if (recentOutputTail.length > RECENT_OUTPUT_TAIL_BYTES) {
+			recentOutputTail = recentOutputTail.slice(-RECENT_OUTPUT_TAIL_BYTES);
+		}
+		updateRecentOutputLines();
+	};
+
+	const replaceRecentOutputFromContent = (content: unknown[]) => {
+		recentOutputTail = "";
+		for (const block of content) {
+			if (!block || typeof block !== "object") continue;
+			const record = block as { type?: unknown; text?: unknown };
+			if (record.type !== "text" || typeof record.text !== "string") continue;
+			if (!record.text) continue;
+			recentOutputTail += record.text;
+			if (recentOutputTail.length > RECENT_OUTPUT_TAIL_BYTES) {
+				recentOutputTail = recentOutputTail.slice(-RECENT_OUTPUT_TAIL_BYTES);
+			}
+		}
+		updateRecentOutputLines();
+	};
+
+	const resetRecentOutput = () => {
+		recentOutputTail = "";
+		progress.recentOutput = [];
+	};
+
 	const processEvent = (event: AgentEvent) => {
 		if (resolved) return;
 
@@ -555,8 +622,15 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		}
 
 		const now = Date.now();
+		let flushProgress = false;
 
 		switch (event.type) {
+			case "message_start":
+				if (event.message?.role === "assistant") {
+					resetRecentOutput();
+				}
+				break;
+
 			case "tool_execution_start":
 				progress.toolCount++;
 				progress.currentTool = event.toolName;
@@ -616,23 +690,28 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 						schedulePendingTermination();
 					}
 				}
+				flushProgress = true;
 				break;
 			}
 
 			case "message_update": {
-				// Extract text for progress display only (replace, don't accumulate)
+				if (event.message?.role !== "assistant") break;
+				const assistantEvent = (
+					event as AgentEvent & {
+						assistantMessageEvent?: { type?: string; delta?: string };
+					}
+				).assistantMessageEvent;
+				if (assistantEvent?.type === "text_delta" && typeof assistantEvent.delta === "string") {
+					appendRecentOutputTail(assistantEvent.delta);
+					break;
+				}
+				if (assistantEvent && assistantEvent.type !== "text_delta") {
+					break;
+				}
 				const updateContent =
 					getMessageContent(event.message) || (event as AgentEvent & { content?: unknown }).content;
 				if (updateContent && Array.isArray(updateContent)) {
-					const allText: string[] = [];
-					for (const block of updateContent) {
-						if (block.type === "text" && block.text) {
-							const lines = block.text.split("\n").filter((l: string) => l.trim());
-							allText.push(...lines);
-						}
-					}
-					// Show last 8 lines from current state (not accumulated)
-					progress.recentOutput = allText.slice(-8).reverse();
+					replaceRecentOutputFromContent(updateContent);
 				}
 				break;
 			}
@@ -698,10 +777,11 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 						}
 					}
 				}
+				flushProgress = true;
 				break;
 		}
 
-		emitProgress();
+		scheduleProgress(flushProgress);
 	};
 
 	const startMessage: SubagentWorkerRequest = {
@@ -972,6 +1052,10 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		clearTimeout(terminationTimeoutId);
 		terminationTimeoutId = null;
 	}
+	if (progressTimeoutId) {
+		clearTimeout(progressTimeoutId);
+		progressTimeoutId = null;
+	}
 	cancelPendingTermination();
 	if (!terminated) {
 		terminated = true;
@@ -1066,7 +1150,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 	// Update final progress
 	const wasAborted = abortedViaComplete || (!hasComplete && (done.aborted || signal?.aborted || false));
 	progress.status = wasAborted ? "aborted" : exitCode === 0 ? "completed" : "failed";
-	emitProgress();
+	scheduleProgress(true);
 
 	return {
 		index,
