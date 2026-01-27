@@ -256,11 +256,11 @@ src/
 │   ├── agents.ts             # Agent definitions
 │   ├── commands.ts           # Task commands
 │   ├── discovery.ts          # Task discovery
-│   ├── executor.ts           # Task execution
+│   ├── executor.ts           # In-process task execution
 │   ├── render.ts             # Task rendering
 │   ├── subprocess-tool-registry.ts # Subprocess tool registry
-│   ├── worker-protocol.ts    # Worker protocol
-│   └── worker.ts             # Task worker
+│   ├── parallel.ts           # Task concurrency helpers
+│   └── template.ts           # Task templating
 
 ├── tools/                    # Built-in tool implementations
 │   ├── index.ts              # Tool exports, BUILTIN_TOOLS, createTools

@@ -7,6 +7,14 @@
 - Added `--plan` CLI flag and `OMP_PLAN_MODEL` environment variable for ephemeral plan model override
 - Added plan model selection in model selector UI with PLAN badge
 
+### Changed
+- Task tool subagents now execute in-process instead of using worker threads
+
+### Fixed
+- Queued skill commands as follow-ups when the agent is already streaming to avoid load failures
+- Deduplicated repeated review findings in subagent progress rendering
+- Restored MCP proxy tool timeout handling to prevent subagent hangs
+
 ## [8.5.0] - 2026-01-27
 
 ### Added

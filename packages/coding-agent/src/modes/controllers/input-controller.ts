@@ -324,7 +324,7 @@ export class InputController {
 							metaLines.push(`User: ${args}`);
 						}
 						const message = `${body}\n\n---\n\n${metaLines.join("\n")}`;
-						await this.ctx.session.prompt(message);
+						await this.ctx.session.prompt(message, { streamingBehavior: "followUp" });
 					} catch (err) {
 						this.ctx.showError(`Failed to load skill: ${err instanceof Error ? err.message : String(err)}`);
 					}

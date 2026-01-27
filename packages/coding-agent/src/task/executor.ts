@@ -1,24 +1,28 @@
 /**
- * Worker execution for subagents.
+ * In-process execution for subagents.
  *
- * Runs each subagent in a Bun Worker and forwards AgentEvents for progress tracking.
+ * Runs each subagent on the main thread and forwards AgentEvents for progress tracking.
  */
 import path from "node:path";
 import type { AgentEvent, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { ModelRegistry } from "../config/model-registry";
-import { formatModelString, parseModelPattern } from "../config/model-resolver";
-import type { PromptTemplate } from "../config/prompt-templates";
-import type { Skill } from "../extensibility/skills";
-import { getPreludeDocs } from "../ipy/executor";
-import { checkPythonKernelAvailability } from "../ipy/kernel";
-import { LspTool } from "../lsp";
-import type { LspParams } from "../lsp/types";
-import { callTool } from "../mcp/client";
-import type { MCPManager } from "../mcp/manager";
-import type { AuthStorage } from "../session/auth-storage";
-import type { ContextFileEntry, ToolSession } from "../tools";
-import { PythonTool, type PythonToolParams } from "../tools/python";
-import type { EventBus } from "../utils/event-bus";
+import type { Api, Model } from "@oh-my-pi/pi-ai";
+import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
+import { parseModelPattern } from "@oh-my-pi/pi-coding-agent/config/model-resolver";
+import type { PromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
+import { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
+import type { CustomTool } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools/types";
+import type { Skill } from "@oh-my-pi/pi-coding-agent/extensibility/skills";
+import { callTool } from "@oh-my-pi/pi-coding-agent/mcp/client";
+import type { MCPManager } from "@oh-my-pi/pi-coding-agent/mcp/manager";
+import { createAgentSession, discoverAuthStorage, discoverModels } from "@oh-my-pi/pi-coding-agent/sdk";
+import type { AgentSession, AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
+import type { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
+import type { ContextFileEntry } from "@oh-my-pi/pi-coding-agent/tools";
+import { ToolAbortError } from "@oh-my-pi/pi-coding-agent/tools/tool-errors";
+import type { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
+import { logger, untilAborted } from "@oh-my-pi/pi-utils";
+import type { TSchema } from "@sinclair/typebox";
 import { subprocessToolRegistry } from "./subprocess-tool-registry";
 import {
 	type AgentDefinition,
@@ -30,17 +34,26 @@ import {
 	TASK_SUBAGENT_EVENT_CHANNEL,
 	TASK_SUBAGENT_PROGRESS_CHANNEL,
 } from "./types";
-import type {
-	LspToolCallRequest,
-	MCPToolCallRequest,
-	MCPToolMetadata,
-	PythonToolCallCancel,
-	PythonToolCallRequest,
-	SubagentWorkerRequest,
-	SubagentWorkerResponse,
-} from "./worker-protocol";
 
 const DEFAULT_MODEL_ALIASES = new Set(["default", "pi/default", "omp/default"]);
+const MCP_CALL_TIMEOUT_MS = 60_000;
+
+/** Agent event types to forward for progress tracking. */
+const agentEventTypes = new Set<AgentEvent["type"]>([
+	"agent_start",
+	"agent_end",
+	"turn_start",
+	"turn_end",
+	"message_start",
+	"message_update",
+	"message_end",
+	"tool_execution_start",
+	"tool_execution_update",
+	"tool_execution_end",
+]);
+
+const isAgentEvent = (event: AgentSessionEvent): event is AgentEvent =>
+	agentEventTypes.has(event.type as AgentEvent["type"]);
 
 function normalizeModelPatterns(value: string | string[] | undefined): string[] {
 	if (!value) return [];
@@ -53,7 +66,93 @@ function normalizeModelPatterns(value: string | string[] | undefined): string[] 
 		.filter(Boolean);
 }
 
-/** Options for worker execution */
+function withAbortTimeout<T>(promise: Promise<T>, timeoutMs: number, signal?: AbortSignal): Promise<T> {
+	return new Promise((resolve, reject) => {
+		let settled = false;
+		const timeoutId = setTimeout(() => {
+			if (settled) return;
+			settled = true;
+			reject(new Error(`MCP tool call timed out after ${timeoutMs}ms`));
+		}, timeoutMs);
+
+		const onAbort = () => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timeoutId);
+			reject(new ToolAbortError());
+		};
+
+		if (signal) {
+			if (signal.aborted) {
+				clearTimeout(timeoutId);
+				reject(new ToolAbortError());
+				return;
+			}
+			signal.addEventListener("abort", onAbort, { once: true });
+		}
+
+		promise.then(
+			value => {
+				if (settled) return;
+				settled = true;
+				clearTimeout(timeoutId);
+				if (signal) signal.removeEventListener("abort", onAbort);
+				resolve(value);
+			},
+			error => {
+				if (settled) return;
+				settled = true;
+				clearTimeout(timeoutId);
+				if (signal) signal.removeEventListener("abort", onAbort);
+				reject(error);
+			},
+		);
+	});
+}
+
+function getReportFindingKey(value: unknown): string | null {
+	if (!value || typeof value !== "object") return null;
+	const record = value as Record<string, unknown>;
+	const title = typeof record.title === "string" ? record.title : null;
+	const filePath = typeof record.file_path === "string" ? record.file_path : null;
+	const lineStart = typeof record.line_start === "number" ? record.line_start : null;
+	const lineEnd = typeof record.line_end === "number" ? record.line_end : null;
+	const priority = typeof record.priority === "string" ? record.priority : null;
+	if (!title || !filePath || lineStart === null || lineEnd === null) {
+		return null;
+	}
+	return `${filePath}:${lineStart}:${lineEnd}:${priority ?? ""}:${title}`;
+}
+
+function resolveModelOverride(
+	modelPatterns: string[],
+	modelRegistry: ModelRegistry,
+	settingsManager?: SettingsManager,
+): { model?: Model<Api>; thinkingLevel?: ThinkingLevel } {
+	if (modelPatterns.length === 0) return {};
+	const roles = settingsManager?.serialize().modelRoles as Record<string, string> | undefined;
+	for (const pattern of modelPatterns) {
+		const normalized = pattern.trim().toLowerCase();
+		if (!normalized || DEFAULT_MODEL_ALIASES.has(normalized)) {
+			continue;
+		}
+		let effectivePattern = pattern;
+		if (normalized.startsWith("omp/") || normalized.startsWith("pi/")) {
+			const role = normalized.startsWith("omp/") ? pattern.slice(4) : pattern.slice(3);
+			const configured = roles?.[role] ?? roles?.[role.toLowerCase()];
+			if (configured) {
+				effectivePattern = configured;
+			}
+		}
+		const { model, thinkingLevel } = parseModelPattern(effectivePattern, modelRegistry.getAvailable());
+		if (model) {
+			return { model, thinkingLevel: thinkingLevel !== "off" ? thinkingLevel : undefined };
+		}
+	}
+	return {};
+}
+
+/** Options for subagent execution */
 export interface ExecutorOptions {
 	cwd: string;
 	worktree?: string;
@@ -80,13 +179,7 @@ export interface ExecutorOptions {
 	mcpManager?: MCPManager;
 	authStorage?: AuthStorage;
 	modelRegistry?: ModelRegistry;
-	settingsManager?: {
-		serialize: () => import("../config/settings-manager").Settings;
-		getPlansDirectory: (cwd?: string) => string;
-		getPythonToolMode?: () => "ipy-only" | "bash-only" | "both";
-		getPythonKernelMode?: () => "session" | "per-call";
-		getPythonSharedGateway?: () => boolean;
-	};
+	settingsManager?: SettingsManager;
 }
 
 /**
@@ -184,29 +277,60 @@ function getUsageTokens(usage: unknown): number {
 }
 
 /**
- * Extract MCP tool metadata from MCPManager for passing to worker.
- *
- * MCPTool and DeferredMCPTool expose mcpToolName (original MCP tool name)
- * and mcpServerName properties. We use these directly when available,
- * falling back to empty strings if not.
+ * Create proxy tools that reuse the parent's MCP connections.
  */
-function extractMCPToolMetadata(mcpManager: MCPManager): MCPToolMetadata[] {
+function createMCPProxyTools(mcpManager: MCPManager): CustomTool<TSchema>[] {
 	return mcpManager.getTools().map(tool => {
-		// MCPTool and DeferredMCPTool have these properties
 		const mcpTool = tool as { mcpToolName?: string; mcpServerName?: string };
 		return {
 			name: tool.name,
 			label: tool.label ?? tool.name,
 			description: tool.description ?? "",
-			parameters: tool.parameters,
-			serverName: mcpTool.mcpServerName ?? "",
-			mcpToolName: mcpTool.mcpToolName ?? "",
+			parameters: tool.parameters as TSchema,
+			execute: async (_toolCallId, params, _onUpdate, _ctx, signal) => {
+				if (signal?.aborted) {
+					throw new ToolAbortError();
+				}
+				const serverName = mcpTool.mcpServerName ?? "";
+				const mcpToolName = mcpTool.mcpToolName ?? "";
+				try {
+					const result = await withAbortTimeout(
+						(async () => {
+							const connection = await mcpManager.waitForConnection(serverName);
+							return callTool(connection, mcpToolName, params as Record<string, unknown>);
+						})(),
+						MCP_CALL_TIMEOUT_MS,
+						signal,
+					);
+					return {
+						content: (result.content ?? []).map(item =>
+							item.type === "text"
+								? { type: "text" as const, text: item.text ?? "" }
+								: { type: "text" as const, text: JSON.stringify(item) },
+						),
+						details: { serverName, mcpToolName, isError: result.isError },
+					};
+				} catch (error) {
+					if (error instanceof ToolAbortError) {
+						throw error;
+					}
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `MCP error: ${error instanceof Error ? error.message : String(error)}`,
+							},
+						],
+						details: { serverName, mcpToolName, isError: true },
+					};
+				}
+			},
 		};
 	});
 }
 
 /**
- * Run a single agent in a worker.
+ * Run a single agent in-process.
  */
 export async function runSubprocess(options: ExecutorOptions): Promise<SingleResult> {
 	const {
@@ -282,7 +406,8 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		}
 	}
 
-	const pythonToolMode = options.settingsManager?.getPythonToolMode?.() ?? "ipy-only";
+	const settingsManager = options.settingsManager ?? SettingsManager.inMemory();
+	const pythonToolMode = settingsManager.getPythonToolMode?.() ?? "ipy-only";
 	if (toolNames?.includes("exec")) {
 		const expanded = toolNames.filter(name => name !== "exec");
 		if (pythonToolMode === "bash-only") {
@@ -295,70 +420,12 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		toolNames = Array.from(new Set(expanded));
 	}
 
-	const serializedSettings = options.settingsManager?.serialize();
-	const availableModels = options.modelRegistry?.getAvailable() ?? [];
-
-	// Resolve model pattern list to provider/modelId string
 	const modelPatterns = normalizeModelPatterns(modelOverride ?? agent.model);
-	let resolvedModel: string | undefined;
-	if (modelPatterns.length > 0) {
-		const roles = serializedSettings?.modelRoles as Record<string, string> | undefined;
-		for (const pattern of modelPatterns) {
-			const normalized = pattern.trim().toLowerCase();
-			if (!normalized || DEFAULT_MODEL_ALIASES.has(normalized)) {
-				continue;
-			}
-			let effectivePattern = pattern;
-			if (normalized.startsWith("omp/") || normalized.startsWith("pi/")) {
-				const role = normalized.startsWith("omp/") ? pattern.slice(4) : pattern.slice(3);
-				const configured = roles?.[role] ?? roles?.[role.toLowerCase()];
-				if (configured) {
-					effectivePattern = configured;
-				}
-			}
-			const { model } = parseModelPattern(effectivePattern, availableModels);
-			if (model) {
-				resolvedModel = formatModelString(model);
-				break;
-			}
-		}
-	}
 	const sessionFile = subtaskSessionFile ?? null;
 	const spawnsEnv = agent.spawns === undefined ? "" : agent.spawns === "*" ? "*" : agent.spawns.join(",");
 
-	const pythonToolRequested = toolNames === undefined || toolNames.includes("python");
-	let pythonProxyEnabled = pythonToolRequested && pythonToolMode !== "bash-only";
-	if (pythonProxyEnabled) {
-		const availability = await checkPythonKernelAvailability(cwd);
-		pythonProxyEnabled = availability.ok;
-	}
-
 	const lspEnabled = enableLsp ?? true;
-	const lspToolRequested = lspEnabled && (toolNames === undefined || toolNames.includes("lsp"));
-	const pythonPreludeDocs = getPreludeDocs();
-	const pythonPreludeDocsPayload = pythonPreludeDocs.length > 0 ? pythonPreludeDocs : undefined;
-
-	let worker: Worker;
-	try {
-		worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
-	} catch (err) {
-		return {
-			index,
-			id,
-			agent: agent.name,
-			agentSource: agent.source,
-			task,
-			description: options.description,
-			exitCode: 1,
-			output: "",
-			stderr: `Failed to create worker: ${err instanceof Error ? err.message : String(err)}`,
-			truncated: false,
-			durationMs: Date.now() - startTime,
-			tokens: 0,
-			modelOverride,
-			error: `Failed to create worker: ${err instanceof Error ? err.message : String(err)}`,
-		};
-	}
+	const skipPythonPreflight = Array.isArray(toolNames) && !toolNames.includes("python");
 
 	const outputChunks: string[] = [];
 	const finalOutputChunks: string[] = [];
@@ -369,67 +436,14 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 	type AbortReason = "signal" | "terminate";
 	let abortSent = false;
 	let abortReason: AbortReason | undefined;
-	let terminationScheduled = false;
-	let terminated = false;
-	let terminationTimeoutId: ReturnType<typeof setTimeout> | null = null;
 	let pendingTerminationTimeoutId: ReturnType<typeof setTimeout> | null = null;
-	let finalize: ((message: Extract<SubagentWorkerResponse, { type: "done" }>) => void) | null = null;
 	const listenerController = new AbortController();
 	const listenerSignal = listenerController.signal;
-	const withTimeout = async <T>(promise: Promise<T>, timeoutMs?: number): Promise<T> => {
-		if (timeoutMs === undefined) return promise;
-		let timeoutId: ReturnType<typeof setTimeout> | undefined;
-		try {
-			return await Promise.race([
-				promise,
-				new Promise<T>((_resolve, reject) => {
-					timeoutId = setTimeout(() => {
-						reject(new Error(`Tool call timed out after ${timeoutMs}ms`));
-					}, timeoutMs);
-				}),
-			]);
-		} finally {
-			if (timeoutId) clearTimeout(timeoutId);
-		}
-	};
-
-	const combineSignals = (signals: Array<AbortSignal | undefined>): AbortSignal | undefined => {
-		const filtered = signals.filter((value): value is AbortSignal => Boolean(value));
-		if (filtered.length === 0) return undefined;
-		if (filtered.length === 1) return filtered[0];
-		return AbortSignal.any(filtered);
-	};
-
-	const createTimeoutSignal = (timeoutMs?: number): AbortSignal | undefined => {
-		if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-			return undefined;
-		}
-		return AbortSignal.timeout(timeoutMs);
-	};
-
-	const pythonSessionFile = sessionFile ?? `subtask:${id}`;
-	const pythonToolSession: ToolSession = {
-		cwd,
-		hasUI: false,
-		enableLsp: false,
-		getSessionFile: () => pythonSessionFile,
-		getSessionSpawns: () => spawnsEnv,
-		settings: options.settingsManager as ToolSession["settings"],
-		settingsManager: options.settingsManager,
-	};
-	const pythonTool = pythonProxyEnabled ? new PythonTool(pythonToolSession) : null;
-	const pythonCallControllers = new Map<string, AbortController>();
-
-	const lspToolSession: ToolSession = {
-		cwd,
-		hasUI: false,
-		enableLsp: lspEnabled,
-		getSessionFile: () => pythonSessionFile,
-		getSessionSpawns: () => spawnsEnv,
-		settings: options.settingsManager as ToolSession["settings"],
-		settingsManager: options.settingsManager,
-	};
-	const lspTool = lspToolRequested ? new LspTool(lspToolSession) : null;
+	const abortController = new AbortController();
+	const abortSignal = abortController.signal;
+	let activeSession: AgentSession | null = null;
+	let unsubscribe: (() => void) | null = null;
+	let completeCalled = false;
 
 	// Accumulate usage incrementally from message_end events (no memory for streaming events)
 	const accumulatedUsage = {
@@ -442,30 +456,6 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 	};
 	let hasUsage = false;
 
-	const scheduleTermination = () => {
-		if (terminationScheduled) return;
-		terminationScheduled = true;
-		terminationTimeoutId = setTimeout(() => {
-			terminationTimeoutId = null;
-			if (resolved || terminated) return;
-			terminated = true;
-			try {
-				worker.terminate();
-			} catch {
-				// Ignore termination errors
-			}
-			if (finalize && !resolved) {
-				finalize({
-					type: "done",
-					exitCode: 1,
-					durationMs: Date.now() - startTime,
-					error: abortReason === "signal" ? "Aborted" : "Worker terminated after tool completion",
-					aborted: abortReason === "signal",
-				});
-			}
-		}, 2000);
-	};
-
 	const requestAbort = (reason: AbortReason) => {
 		if (abortSent) {
 			if (reason === "signal" && abortReason !== "signal") {
@@ -476,23 +466,15 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		if (resolved) return;
 		abortSent = true;
 		abortReason = reason;
-		for (const controller of pythonCallControllers.values()) {
-			controller.abort();
+		abortController.abort();
+		if (activeSession) {
+			void activeSession.abort();
 		}
-		pythonCallControllers.clear();
-		const abortMessage: SubagentWorkerRequest = { type: "abort" };
-		try {
-			worker.postMessage(abortMessage);
-		} catch {
-			// Worker already terminated, nothing to do
-		}
-		// Cancel pending termination if it exists
 		cancelPendingTermination();
-		scheduleTermination();
 	};
 
 	const schedulePendingTermination = () => {
-		if (pendingTerminationTimeoutId || abortSent || terminationScheduled || resolved) return;
+		if (pendingTerminationTimeoutId || abortSent || resolved) return;
 		pendingTerminationTimeoutId = setTimeout(() => {
 			pendingTerminationTimeoutId = null;
 			if (!resolved) {
@@ -672,12 +654,23 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 						});
 						if (data !== undefined) {
 							progress.extractedToolData = progress.extractedToolData || {};
-							progress.extractedToolData[event.toolName] = progress.extractedToolData[event.toolName] || [];
-							progress.extractedToolData[event.toolName].push(data);
+							const existing = progress.extractedToolData[event.toolName] || [];
+							const findingKey = event.toolName === "report_finding" ? getReportFindingKey(data) : null;
+							if (findingKey) {
+								const existingIndex = existing.findIndex(item => getReportFindingKey(item) === findingKey);
+								if (existingIndex >= 0) {
+									existing[existingIndex] = data;
+								} else {
+									existing.push(data);
+								}
+							} else {
+								existing.push(data);
+							}
+							progress.extractedToolData[event.toolName] = existing;
 						}
 					}
 
-					// Check if handler wants to terminate worker
+					// Check if handler wants to terminate the session
 					if (
 						handler.shouldTerminate?.({
 							toolName: event.toolName,
@@ -785,288 +778,242 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		scheduleProgress(flushProgress);
 	};
 
-	const startMessage: SubagentWorkerRequest = {
-		type: "start",
-		payload: {
-			cwd,
-			worktree,
-			task: fullTask,
-			systemPrompt: agent.systemPrompt,
-			model: resolvedModel,
-			thinkingLevel,
-			toolNames,
-			outputSchema,
-			sessionFile,
-			spawnsEnv,
-			enableLsp: lspEnabled,
-			serializedAuth: options.authStorage?.serialize(),
-			serializedModels: options.modelRegistry?.serialize(),
-			serializedSettings,
-			pythonPreludeDocs: pythonPreludeDocsPayload,
-			contextFiles: options.contextFiles,
-			skills: options.skills,
-			preloadedSkills: options.preloadedSkills,
-			promptTemplates: options.promptTemplates,
-			mcpTools: options.mcpManager ? extractMCPToolMetadata(options.mcpManager) : undefined,
-			pythonToolProxy: pythonProxyEnabled,
-			lspToolProxy: Boolean(lspTool),
-		},
+	const runSubagent = async (): Promise<{
+		exitCode: number;
+		error?: string;
+		aborted?: boolean;
+		durationMs: number;
+	}> => {
+		const sessionAbortController = new AbortController();
+		let exitCode = 0;
+		let error: string | undefined;
+		let aborted = false;
+
+		const checkAbort = () => {
+			if (abortSignal.aborted) {
+				aborted = abortReason === "signal" || abortReason === undefined;
+				exitCode = 1;
+				throw new ToolAbortError();
+			}
+		};
+
+		try {
+			checkAbort();
+			const authStorage = options.authStorage ?? (await discoverAuthStorage());
+			checkAbort();
+			const modelRegistry = options.modelRegistry ?? discoverModels(authStorage);
+			checkAbort();
+
+			const { model, thinkingLevel: resolvedThinkingLevel } = resolveModelOverride(
+				modelPatterns,
+				modelRegistry,
+				settingsManager,
+			);
+			const effectiveThinkingLevel = thinkingLevel ?? resolvedThinkingLevel;
+
+			const sessionManager = sessionFile
+				? await SessionManager.open(sessionFile)
+				: SessionManager.inMemory(worktree ?? cwd);
+
+			const mcpProxyTools = options.mcpManager ? createMCPProxyTools(options.mcpManager) : [];
+			const enableMCP = !options.mcpManager;
+
+			const completionInstruction =
+				"When finished, call the complete tool exactly once. Do not end with a plain-text final answer.";
+			const worktreeNotice = worktree
+				? `You will work under this working tree: ${worktree}. CRITICAL: Do not touch the original repository; only make changes inside this worktree.`
+				: "";
+
+			const { session } = await createAgentSession({
+				cwd: worktree ?? cwd,
+				authStorage,
+				modelRegistry,
+				settingsManager,
+				model,
+				thinkingLevel: effectiveThinkingLevel,
+				toolNames,
+				outputSchema,
+				requireCompleteTool: true,
+				contextFiles: options.contextFiles,
+				skills: options.skills,
+				preloadedSkills: options.preloadedSkills,
+				promptTemplates: options.promptTemplates,
+				systemPrompt: defaultPrompt =>
+					`${defaultPrompt}\n\n${agent.systemPrompt}\n\n${worktreeNotice}\n\n${completionInstruction}`,
+				sessionManager,
+				hasUI: false,
+				spawns: spawnsEnv,
+				enableLsp: lspEnabled,
+				skipPythonPreflight,
+				enableMCP,
+				customTools: mcpProxyTools.length > 0 ? mcpProxyTools : undefined,
+			});
+
+			activeSession = session;
+
+			session.sessionManager.appendSessionInit({
+				systemPrompt: session.agent.state.systemPrompt,
+				task: fullTask,
+				tools: session.getAllToolNames(),
+				outputSchema,
+			});
+
+			abortSignal.addEventListener(
+				"abort",
+				() => {
+					void session.abort();
+				},
+				{ once: true, signal: sessionAbortController.signal },
+			);
+
+			const extensionRunner = session.extensionRunner;
+			if (extensionRunner) {
+				extensionRunner.initialize(
+					{
+						sendMessage: (message, options) => {
+							session.sendCustomMessage(message, options).catch(e => {
+								logger.error("Extension sendMessage failed", {
+									error: e instanceof Error ? e.message : String(e),
+								});
+							});
+						},
+						sendUserMessage: (content, options) => {
+							session.sendUserMessage(content, options).catch(e => {
+								logger.error("Extension sendUserMessage failed", {
+									error: e instanceof Error ? e.message : String(e),
+								});
+							});
+						},
+						appendEntry: (customType, data) => {
+							session.sessionManager.appendCustomEntry(customType, data);
+						},
+						setLabel: (targetId, label) => {
+							session.sessionManager.appendLabelChange(targetId, label);
+						},
+						getActiveTools: () => session.getActiveToolNames(),
+						getAllTools: () => session.getAllToolNames(),
+						setActiveTools: (toolNames: string[]) => session.setActiveToolsByName(toolNames),
+						setModel: async model => {
+							const key = await session.modelRegistry.getApiKey(model);
+							if (!key) return false;
+							await session.setModel(model);
+							return true;
+						},
+						getThinkingLevel: () => session.thinkingLevel,
+						setThinkingLevel: level => session.setThinkingLevel(level),
+					},
+					{
+						getModel: () => session.model,
+						isIdle: () => !session.isStreaming,
+						abort: () => session.abort(),
+						hasPendingMessages: () => session.queuedMessageCount > 0,
+						shutdown: () => {},
+						getContextUsage: () => session.getContextUsage(),
+						compact: async instructionsOrOptions => {
+							const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
+							const options =
+								instructionsOrOptions && typeof instructionsOrOptions === "object"
+									? instructionsOrOptions
+									: undefined;
+							await session.compact(instructions, options);
+						},
+					},
+				);
+				extensionRunner.onError(err => {
+					logger.error("Extension error", { path: err.extensionPath, error: err.error });
+				});
+				await extensionRunner.emit({ type: "session_start" });
+			}
+
+			const MAX_COMPLETE_RETRIES = 3;
+			unsubscribe = session.subscribe(event => {
+				if (event.type === "tool_execution_end" && event.toolName === "complete") {
+					completeCalled = true;
+				}
+				if (isAgentEvent(event)) {
+					try {
+						processEvent(event);
+					} catch (err) {
+						logger.error("Subagent event processing failed", {
+							error: err instanceof Error ? err.message : String(err),
+						});
+						requestAbort("terminate");
+					}
+				}
+			});
+
+			await session.prompt(fullTask);
+
+			let retryCount = 0;
+			while (!completeCalled && retryCount < MAX_COMPLETE_RETRIES && !abortSignal.aborted) {
+				retryCount++;
+				const reminder = `<system-reminder>
+CRITICAL: You stopped without calling the complete tool. This is reminder ${retryCount} of ${MAX_COMPLETE_RETRIES}.
+
+You MUST call the complete tool to finish your task. Options:
+1. Call complete with your result data if you have completed the task
+2. Call complete with status="aborted" and an error message if you cannot complete the task
+
+Failure to call complete after ${MAX_COMPLETE_RETRIES} reminders will result in task failure.
+</system-reminder>
+
+Call complete now.`;
+
+				await session.prompt(reminder);
+			}
+
+			const lastMessage = session.state.messages[session.state.messages.length - 1];
+			if (lastMessage?.role === "assistant" && lastMessage.stopReason === "aborted") {
+				aborted = abortReason === "signal" || abortReason === undefined;
+				exitCode = 1;
+			}
+		} catch (err) {
+			exitCode = 1;
+			if (!abortSignal.aborted) {
+				error = err instanceof Error ? err.stack || err.message : String(err);
+			}
+		} finally {
+			if (abortSignal.aborted) {
+				aborted = abortReason === "signal" || abortReason === undefined;
+				if (exitCode === 0) exitCode = 1;
+			}
+			sessionAbortController.abort();
+			if (unsubscribe) {
+				try {
+					unsubscribe();
+				} catch {
+					// Ignore unsubscribe errors
+				}
+				unsubscribe = null;
+			}
+			if (activeSession) {
+				const session = activeSession;
+				activeSession = null;
+				try {
+					await untilAborted(AbortSignal.timeout(5000), () => session.dispose());
+				} catch {
+					// Ignore cleanup errors
+				}
+			}
+		}
+
+		return {
+			exitCode,
+			error,
+			aborted,
+			durationMs: Date.now() - startTime,
+		};
 	};
 
-	interface WorkerMessageEvent<T> {
-		data: T;
-	}
-	interface WorkerErrorEvent {
-		message: string;
-	}
+	const done = await runSubagent();
+	resolved = true;
+	listenerController.abort();
 
-	const done = await new Promise<Extract<SubagentWorkerResponse, { type: "done" }>>(resolve => {
-		const cleanup = () => {
-			listenerController.abort();
-		};
-		finalize = message => {
-			if (resolved) return;
-			resolved = true;
-			cleanup();
-			resolve(message);
-		};
-		const postMessageSafe = (message: unknown) => {
-			if (resolved || terminated) return;
-			try {
-				worker.postMessage(message);
-			} catch {
-				// Worker already terminated
-			}
-		};
-		const handleMCPCall = async (request: MCPToolCallRequest) => {
-			const mcpManager = options.mcpManager;
-			if (!mcpManager) {
-				postMessageSafe({
-					type: "mcp_tool_result",
-					callId: request.callId,
-					error: "MCP not available",
-				});
-				return;
-			}
-			try {
-				const result = await withTimeout(
-					(async () => {
-						const connection = await mcpManager.waitForConnection(request.serverName);
-						return callTool(connection, request.mcpToolName, request.params);
-					})(),
-					request.timeoutMs,
-				);
-				postMessageSafe({
-					type: "mcp_tool_result",
-					callId: request.callId,
-					result: { content: result.content ?? [], isError: result.isError },
-				});
-			} catch (error) {
-				postMessageSafe({
-					type: "mcp_tool_result",
-					callId: request.callId,
-					error: error instanceof Error ? error.message : String(error),
-				});
-			}
-		};
-
-		const getPythonCallTimeoutMs = (params: { timeout?: number }): number | undefined => {
-			const timeout = params.timeout;
-			if (typeof timeout === "number" && Number.isFinite(timeout) && timeout > 0) {
-				return Math.max(1000, Math.round(timeout * 1000) + 1000);
-			}
-			return undefined;
-		};
-
-		const handlePythonCall = async (request: PythonToolCallRequest) => {
-			if (!pythonTool) {
-				postMessageSafe({
-					type: "python_tool_result",
-					callId: request.callId,
-					error: "Python proxy not available",
-				});
-				return;
-			}
-			const callController = new AbortController();
-			pythonCallControllers.set(request.callId, callController);
-			const timeoutMs = getPythonCallTimeoutMs(request.params as { timeout?: number });
-			const timeoutSignal = createTimeoutSignal(timeoutMs);
-			const combinedSignal = combineSignals([signal, callController.signal, timeoutSignal]);
-			try {
-				const result = await pythonTool.execute(request.callId, request.params as PythonToolParams, combinedSignal);
-				postMessageSafe({
-					type: "python_tool_result",
-					callId: request.callId,
-					result: { content: result.content ?? [], details: result.details },
-				});
-			} catch (error) {
-				const message =
-					timeoutSignal?.aborted && timeoutMs !== undefined
-						? `Python tool call timed out after ${timeoutMs}ms`
-						: error instanceof Error
-							? error.message
-							: String(error);
-				postMessageSafe({
-					type: "python_tool_result",
-					callId: request.callId,
-					error: message,
-				});
-			} finally {
-				pythonCallControllers.delete(request.callId);
-			}
-		};
-
-		const handlePythonCancel = (request: PythonToolCallCancel) => {
-			const controller = pythonCallControllers.get(request.callId);
-			if (controller) {
-				controller.abort();
-			}
-		};
-
-		const handleLspCall = async (request: LspToolCallRequest) => {
-			if (!lspTool) {
-				postMessageSafe({
-					type: "lsp_tool_result",
-					callId: request.callId,
-					error: "LSP proxy not available",
-				});
-				return;
-			}
-			try {
-				const result = await withTimeout(
-					lspTool.execute(request.callId, request.params as LspParams, signal),
-					request.timeoutMs,
-				);
-				postMessageSafe({
-					type: "lsp_tool_result",
-					callId: request.callId,
-					result: { content: result.content ?? [], details: result.details },
-				});
-			} catch (error) {
-				const message =
-					request.timeoutMs !== undefined && error instanceof Error && error.message.includes("timed out")
-						? `LSP tool call timed out after ${request.timeoutMs}ms`
-						: error instanceof Error
-							? error.message
-							: String(error);
-				postMessageSafe({
-					type: "lsp_tool_result",
-					callId: request.callId,
-					error: message,
-				});
-			}
-		};
-
-		const onMessage = (event: WorkerMessageEvent<SubagentWorkerResponse>) => {
-			const message = event.data;
-			if (!message || resolved) return;
-			if (message.type === "mcp_tool_call") {
-				handleMCPCall(message as MCPToolCallRequest);
-				return;
-			}
-			if (message.type === "python_tool_call") {
-				handlePythonCall(message as PythonToolCallRequest);
-				return;
-			}
-			if (message.type === "python_tool_cancel") {
-				handlePythonCancel(message as PythonToolCallCancel);
-				return;
-			}
-			if (message.type === "lsp_tool_call") {
-				handleLspCall(message as LspToolCallRequest);
-				return;
-			}
-			if (message.type === "event") {
-				try {
-					processEvent(message.event);
-				} catch (err) {
-					finalize?.({
-						type: "done",
-						exitCode: 1,
-						durationMs: Date.now() - startTime,
-						error: `Failed to process worker event: ${err instanceof Error ? err.message : String(err)}`,
-					});
-				}
-				return;
-			}
-			if (message.type === "done") {
-				// Worker is exiting - mark as terminated to prevent calling terminate() on dead worker
-				terminated = true;
-				finalize?.(message);
-			}
-		};
-		const onError = (event: WorkerErrorEvent) => {
-			// Worker error likely means it's dead or dying
-			terminated = true;
-			finalize?.({
-				type: "done",
-				exitCode: 1,
-				durationMs: Date.now() - startTime,
-				error: event.message,
-			});
-		};
-		const onMessageError = () => {
-			// Message error may indicate worker is in bad state
-			terminated = true;
-			finalize?.({
-				type: "done",
-				exitCode: 1,
-				durationMs: Date.now() - startTime,
-				error: "Worker message deserialization failed",
-			});
-		};
-		const onClose = () => {
-			// Worker terminated unexpectedly (crashed or was killed without sending done)
-			// Mark as terminated since the worker is already dead - calling terminate() again would crash
-			terminated = true;
-			const abortMessage =
-				abortSent && abortReason === "signal"
-					? "Worker terminated after abort"
-					: abortSent
-						? "Worker terminated after tool completion"
-						: "Worker terminated unexpectedly";
-			finalize?.({
-				type: "done",
-				exitCode: 1,
-				durationMs: Date.now() - startTime,
-				error: abortMessage,
-				aborted: abortReason === "signal",
-			});
-		};
-		worker.addEventListener("message", onMessage, { signal: listenerSignal });
-		worker.addEventListener("error", onError, { signal: listenerSignal });
-		worker.addEventListener("close", onClose, { signal: listenerSignal });
-		worker.addEventListener("messageerror", onMessageError, { signal: listenerSignal });
-		try {
-			worker.postMessage(startMessage);
-		} catch (err) {
-			finalize({
-				type: "done",
-				exitCode: 1,
-				durationMs: Date.now() - startTime,
-				error: `Failed to start worker: ${err instanceof Error ? err.message : String(err)}`,
-			});
-		}
-	});
-
-	// Cleanup - cancel any pending timeouts first
-	if (terminationTimeoutId) {
-		clearTimeout(terminationTimeoutId);
-		terminationTimeoutId = null;
-	}
 	if (progressTimeoutId) {
 		clearTimeout(progressTimeoutId);
 		progressTimeoutId = null;
 	}
 	cancelPendingTermination();
-	if (!terminated) {
-		terminated = true;
-		try {
-			worker.terminate();
-		} catch {
-			// Ignore termination errors
-		}
-	}
 
 	let exitCode = done.exitCode;
 	if (done.error) {

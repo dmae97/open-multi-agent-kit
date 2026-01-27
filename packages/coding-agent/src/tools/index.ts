@@ -1,4 +1,5 @@
 import type { AgentTool } from "@oh-my-pi/pi-agent-core";
+import type { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { PromptTemplate } from "../config/prompt-templates";
 import type { BashInterceptorRule } from "../config/settings-manager";
@@ -151,11 +152,8 @@ export interface ToolSession {
 	internalRouter?: InternalUrlRouter;
 	/** Agent output manager for unique agent:// IDs across task invocations */
 	agentOutputManager?: AgentOutputManager;
-	/** Settings manager for passing to subagents (avoids SQLite access in workers) */
-	settingsManager?: {
-		serialize: () => import("../config/settings-manager").Settings;
-		getPlansDirectory: (cwd?: string) => string;
-	};
+	/** Settings manager for passing to subagents */
+	settingsManager?: SettingsManager;
 	/** Settings manager (optional) */
 	settings?: {
 		getImageAutoResize(): boolean;

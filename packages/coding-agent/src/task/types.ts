@@ -22,7 +22,7 @@ function getEnv(name: string, defaultValue: number): number {
 /** Maximum tasks per call */
 export const MAX_PARALLEL_TASKS = getEnv("OMP_TASK_MAX_PARALLEL", 32);
 
-/** Maximum concurrent workers */
+/** Maximum concurrent tasks */
 export const MAX_CONCURRENCY = getEnv("OMP_TASK_MAX_CONCURRENCY", 16);
 
 /** Maximum output bytes per agent */
