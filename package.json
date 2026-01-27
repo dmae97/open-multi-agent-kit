@@ -39,7 +39,7 @@
 		"*.{js,ts,jsx,tsx,json,jsonc,css}": "biome check --write --no-errors-on-unmatched"
 	},
 	"engines": {
-		"bun": ">=1.0.0"
+		"bun": ">=1.2.0"
 	},
 	"packageManager": "bun@1.3.6",
 	"version": "0.0.3",

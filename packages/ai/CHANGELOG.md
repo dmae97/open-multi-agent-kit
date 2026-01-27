@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [8.6.0] - 2026-01-27
+
 ### Changed
 - Replaced JSON5 dependency with Bun.JSON5 parsing
 
