@@ -145,10 +145,19 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 				} else if (block.type === "toolCall") {
 					const thoughtSignature = resolveThoughtSignature(isSameProviderAndModel, block.thoughtSignature);
 					if (isGemini3Model(model.id) && !thoughtSignature) {
-						const argsStr = JSON.stringify(block.arguments, null, 2);
+						const params = Object.entries(block.arguments ?? {})
+							.map(([key, value]) => {
+								const valueStr = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+								return `<parameter name="${key}">${valueStr}</parameter>`;
+							})
+							.join("\n");
+
 						parts.push({
 							text: sanitizeSurrogates(
-								`[Historical context: a different model called tool "${block.name}" with arguments: ${argsStr}. Do not mimic this format - use proper function calling.]`,
+								`<call_record tool="${block.name}">
+<critical>Historical context only. You cannot invoke tools this way—use proper function calling.</critical>
+${params}
+</call_record>`,
 							),
 						});
 						continue;
