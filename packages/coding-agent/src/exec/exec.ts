@@ -35,8 +35,7 @@ export async function execCommand(
 	cwd: string,
 	options?: ExecOptions,
 ): Promise<ExecResult> {
-	const result = await ptree.execText([command, ...args], {
-		mode: "attached",
+	const result = await ptree.exec([command, ...args], {
 		cwd,
 		signal: options?.signal,
 		timeout: options?.timeout,

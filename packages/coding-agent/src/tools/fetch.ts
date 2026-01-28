@@ -410,7 +410,7 @@ async function renderHtmlToText(
 		if (lynx) {
 			const normalizedPath = tmpFile.replace(/\\/g, "/");
 			const fileUrl = normalizedPath.startsWith("/") ? `file://${normalizedPath}` : `file:///${normalizedPath}`;
-			const result = await ptree.execText(["lynx", "-dump", "-nolist", "-width", "120", fileUrl], execOptions);
+			const result = await ptree.exec(["lynx", "-dump", "-nolist", "-width", "120", fileUrl], execOptions);
 			if (result.ok) {
 				return { content: result.stdout, ok: true, method: "lynx" };
 			}
@@ -419,7 +419,7 @@ async function renderHtmlToText(
 		// Fall back to html2text (auto-install via uv/pip)
 		const html2text = await ensureTool("html2text", true);
 		if (html2text) {
-			const result = await ptree.execText([html2text, tmpFile], execOptions);
+			const result = await ptree.exec([html2text, tmpFile], execOptions);
 			if (result.ok) {
 				return { content: result.stdout, ok: true, method: "html2text" };
 			}

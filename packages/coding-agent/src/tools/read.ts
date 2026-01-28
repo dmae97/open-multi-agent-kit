@@ -296,12 +296,12 @@ async function convertWithMarkitdown(
 		return { content: "", ok: false, error: "markitdown not found (uv/pip unavailable)" };
 	}
 
-	const result = await ptree.execText([cmd, filePath], {
-		mode: "group",
+	const result = await ptree.exec([cmd, filePath], {
 		signal,
 		allowNonZero: true,
 		allowAbort: true,
 		stderr: "buffer",
+		detached: true,
 	});
 
 	if (result.exitError?.aborted) {

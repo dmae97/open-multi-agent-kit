@@ -76,7 +76,7 @@ export async function executeSSH(
 		}
 	}
 
-	using child = ptree.spawnAttached(["ssh", ...(await buildRemoteCommand(host, resolvedCommand))], {
+	using child = ptree.spawn(["ssh", ...(await buildRemoteCommand(host, resolvedCommand))], {
 		signal: options?.signal,
 		timeout: options?.timeout,
 	});

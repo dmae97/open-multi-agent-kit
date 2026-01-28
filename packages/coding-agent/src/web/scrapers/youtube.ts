@@ -146,7 +146,7 @@ export const handleYouTube: SpecialHandler = async (
 
 	// Fetch video metadata
 	throwIfAborted(signal);
-	const metaResult = await ptree.execText(
+	const metaResult = await ptree.exec(
 		[ytdlp, "--dump-json", "--no-warnings", "--no-playlist", "--skip-download", videoUrl],
 		execOptions,
 	);
@@ -191,7 +191,7 @@ export const handleYouTube: SpecialHandler = async (
 
 	// First, list available subtitles
 	throwIfAborted(signal);
-	const listResult = await ptree.execText(
+	const listResult = await ptree.exec(
 		[ytdlp, "--list-subs", "--no-warnings", "--no-playlist", "--skip-download", videoUrl],
 		execOptions,
 	);
@@ -208,7 +208,7 @@ export const handleYouTube: SpecialHandler = async (
 		// Try manual subtitles first (English preferred)
 		if (hasManualSubs) {
 			throwIfAborted(signal);
-			const subResult = await ptree.execText(
+			const subResult = await ptree.exec(
 				[
 					ytdlp,
 					"--write-sub",
@@ -243,7 +243,7 @@ export const handleYouTube: SpecialHandler = async (
 		// Fall back to auto-generated captions
 		if (!transcript && hasAutoSubs) {
 			throwIfAborted(signal);
-			const autoResult = await ptree.execText(
+			const autoResult = await ptree.exec(
 				[
 					ytdlp,
 					"--write-auto-sub",

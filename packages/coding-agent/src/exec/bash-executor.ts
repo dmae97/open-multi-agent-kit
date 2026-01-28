@@ -50,11 +50,12 @@ export async function executeBash(command: string, options?: BashExecutorOptions
 		artifactId: options?.artifactId,
 	});
 
-	using child = ptree.spawnGroup([shell, ...args, finalCommand], {
+	using child = ptree.spawn([shell, ...args, finalCommand], {
 		cwd: options?.cwd,
 		env: finalEnv,
 		signal: options?.signal,
 		timeout: options?.timeout,
+		detached: true,
 	});
 
 	// Pump streams - errors during abort/timeout are expected

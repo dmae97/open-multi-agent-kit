@@ -77,7 +77,7 @@ export async function runRg(
 	const timeoutSeconds = options?.timeoutMs ? Math.max(1, Math.round(options.timeoutMs / 1000)) : undefined;
 	const timeoutMessage = timeoutSeconds ? `rg timed out after ${timeoutSeconds}s` : "rg timed out";
 
-	const result = await ptree.execText([rgPath, ...args], {
+	const result = await ptree.exec([rgPath, ...args], {
 		signal: options?.signal,
 		timeout: options?.timeoutMs,
 		allowNonZero: true,
@@ -149,7 +149,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 		// Run ripgrep against the null device with the pattern - this validates regex syntax
 		// without searching any files
 		const nullDevice = process.platform === "win32" ? "NUL" : "/dev/null";
-		const result = await ptree.execText([rgPath, "--no-config", "--quiet", "--", pattern, nullDevice], {
+		const result = await ptree.exec([rgPath, "--no-config", "--quiet", "--", pattern, nullDevice], {
 			allowNonZero: true,
 			allowAbort: true,
 		});
@@ -314,7 +314,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 
 			args.push("--", normalizedPattern, searchPath);
 
-			using child = ptree.spawnAttached([rgPath, ...args], { signal });
+			using child = ptree.spawn([rgPath, ...args], { signal });
 
 			let matchCount = 0;
 			let matchLimitReached = false;

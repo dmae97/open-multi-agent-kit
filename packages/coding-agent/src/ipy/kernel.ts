@@ -1,9 +1,9 @@
 import { createServer } from "node:net";
 import * as path from "node:path";
-import { logger } from "@oh-my-pi/pi-utils";
-import { $, type Subprocess } from "bun";
+import { logger, ptree } from "@oh-my-pi/pi-utils";
+import { $ } from "bun";
 import { nanoid } from "nanoid";
-import { getShellConfig, killProcessTree } from "../utils/shell";
+import { getShellConfig } from "../utils/shell";
 import { getOrCreateSnapshot } from "../utils/shell-snapshot";
 import { time } from "../utils/timings";
 import { htmlToBasicMarkdown } from "../web/scrapers/types";
@@ -452,7 +452,7 @@ export function serializeWebSocketMessage(msg: JupyterMessage): ArrayBuffer {
 export class PythonKernel {
 	readonly id: string;
 	readonly kernelId: string;
-	readonly gatewayProcess: Subprocess | null;
+	readonly gatewayProcess: ptree.ChildProcess | null;
 	readonly gatewayUrl: string;
 	readonly sessionId: string;
 	readonly username: string;
@@ -469,7 +469,7 @@ export class PythonKernel {
 	private constructor(
 		id: string,
 		kernelId: string,
-		gatewayProcess: Subprocess | null,
+		gatewayProcess: ptree.ChildProcess | null,
 		gatewayUrl: string,
 		sessionId: string,
 		username: string,
@@ -633,14 +633,14 @@ export class PythonKernel {
 			kernelEnv.PYTHONPATH = pythonPathParts;
 		}
 
-		let gatewayProcess: Subprocess | null = null;
+		let gatewayProcess: ptree.ChildProcess | null = null;
 		let gatewayUrl: string | null = null;
 		let lastError: string | null = null;
 
 		for (let attempt = 0; attempt < GATEWAY_STARTUP_ATTEMPTS; attempt += 1) {
 			const gatewayPort = await allocatePort();
 			const candidateUrl = `http://127.0.0.1:${gatewayPort}`;
-			const candidateProcess = Bun.spawn(
+			const candidateProcess = ptree.spawn(
 				[
 					runtime.pythonPath,
 					"-m",
@@ -653,10 +653,8 @@ export class PythonKernel {
 				],
 				{
 					cwd: options.cwd,
-					stdin: "ignore",
-					stdout: "pipe",
-					stderr: "pipe",
 					env: kernelEnv,
+					detached: true,
 				},
 			);
 
@@ -687,7 +685,7 @@ export class PythonKernel {
 
 			if (gatewayProcess && gatewayUrl) break;
 
-			await killProcessTree(candidateProcess.pid);
+			candidateProcess.kill();
 			lastError = exited ? "Kernel gateway process exited during startup" : "Kernel gateway failed to start";
 		}
 
@@ -702,7 +700,7 @@ export class PythonKernel {
 		});
 
 		if (!createResponse.ok) {
-			await killProcessTree(gatewayProcess.pid);
+			gatewayProcess.kill();
 			throw new Error(`Failed to create kernel: ${await createResponse.text()}`);
 		}
 
@@ -1118,7 +1116,7 @@ export class PythonKernel {
 			await releaseSharedGateway();
 		} else if (this.gatewayProcess) {
 			try {
-				await killProcessTree(this.gatewayProcess.pid);
+				this.gatewayProcess.kill();
 			} catch (err: unknown) {
 				logger.warn("Failed to terminate gateway process", {
 					error: err instanceof Error ? err.message : String(err),

@@ -49,11 +49,11 @@ export async function convertWithMarkitdown(
 
 	try {
 		await Bun.write(tmpFile, content);
-		const result = await ptree.execText([markitdown, tmpFile], {
-			mode: "group",
+		const result = await ptree.exec([markitdown, tmpFile], {
 			timeout,
 			allowNonZero: true,
 			stderr: "full",
+			detached: true,
 		});
 		if (!result.ok) {
 			return {

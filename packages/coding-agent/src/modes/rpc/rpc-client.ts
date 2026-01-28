@@ -112,7 +112,7 @@ export class RpcClient {
 			args.push(...this.options.args);
 		}
 
-		this.process = ptree.spawnAttached(["bun", cliPath, ...args], {
+		this.process = ptree.spawn(["bun", cliPath, ...args], {
 			cwd: this.options.cwd,
 			env: { ...process.env, ...this.options.env },
 			stdin: "pipe",
