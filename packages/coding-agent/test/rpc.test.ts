@@ -43,7 +43,7 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_OAUTH_T
 	});
 
 	afterEach(async () => {
-		await client.stop();
+		client.stop();
 		if (sessionDir && fs.existsSync(sessionDir)) {
 			fs.rmSync(sessionDir, { recursive: true });
 		}

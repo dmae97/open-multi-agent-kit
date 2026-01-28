@@ -35,7 +35,7 @@ export async function execCommand(
 	cwd: string,
 	options?: ExecOptions,
 ): Promise<ExecResult> {
-	const proc = ptree.cspawn([command, ...args], {
+	using proc = ptree.spawnAttached([command, ...args], {
 		cwd,
 		signal: options?.signal,
 		timeout: options?.timeout,

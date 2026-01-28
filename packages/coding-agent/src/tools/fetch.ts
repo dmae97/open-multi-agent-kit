@@ -111,7 +111,7 @@ async function exec(
 	args: string[],
 	options?: { timeout?: number; input?: string | Buffer },
 ): Promise<{ stdout: string; stderr: string; ok: boolean }> {
-	const proc = ptree.cspawn([cmd, ...args], {
+	using proc = ptree.spawnGroup([cmd, ...args], {
 		stdin: options?.input ? "pipe" : null,
 		timeout: options?.timeout ? options.timeout * 1000 : undefined,
 	});

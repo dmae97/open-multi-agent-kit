@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import path from "node:path";
-import { cspawn } from "@oh-my-pi/pi-utils";
+import { ptree } from "@oh-my-pi/pi-utils";
 import { nanoid } from "nanoid";
 import { throwIfAborted } from "../../tools/tool-errors";
 import { ensureTool } from "../../utils/tools-manager";
@@ -16,7 +16,7 @@ async function exec(
 	args: string[],
 	options?: { timeout?: number; input?: string | Buffer; signal?: AbortSignal },
 ): Promise<{ stdout: string; stderr: string; ok: boolean; exitCode: number | null }> {
-	const proc = cspawn([cmd, ...args], {
+	using proc = ptree.spawnGroup([cmd, ...args], {
 		signal: options?.signal,
 		timeout: options?.timeout,
 		stdin: options?.input ? Buffer.from(options.input) : undefined,

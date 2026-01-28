@@ -3,7 +3,7 @@
  *
  * Provides unified bash execution for AgentSession.executeBash() and direct calls.
  */
-import { cspawn, Exception, ptree } from "@oh-my-pi/pi-utils";
+import { Exception, ptree } from "@oh-my-pi/pi-utils";
 import { OutputSink } from "../session/streaming-output";
 import { getShellConfig } from "../utils/shell";
 import { getOrCreateSnapshot, getSnapshotSourceCommand } from "../utils/shell-snapshot";
@@ -50,7 +50,7 @@ export async function executeBash(command: string, options?: BashExecutorOptions
 		artifactId: options?.artifactId,
 	});
 
-	const child = cspawn([shell, ...args, finalCommand], {
+	using child = ptree.spawnGroup([shell, ...args, finalCommand], {
 		cwd: options?.cwd,
 		env: finalEnv,
 		signal: options?.signal,

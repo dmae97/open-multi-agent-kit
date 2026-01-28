@@ -78,7 +78,7 @@ export async function runRg(
 	args: string[],
 	options?: { signal?: AbortSignal; timeoutMs?: number },
 ): Promise<RgResult> {
-	const child = ptree.cspawn([rgPath, ...args], { signal: options?.signal, timeout: options?.timeoutMs });
+	using child = ptree.spawnAttached([rgPath, ...args], { signal: options?.signal, timeout: options?.timeoutMs });
 	const timeoutSeconds = options?.timeoutMs ? Math.max(1, Math.round(options.timeoutMs / 1000)) : undefined;
 	const timeoutMessage = timeoutSeconds ? `rg timed out after ${timeoutSeconds}s` : "rg timed out";
 
@@ -370,7 +370,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 
 			args.push("--", normalizedPattern, searchPath);
 
-			const child = ptree.cspawn([rgPath, ...args], { signal });
+			using child = ptree.spawnAttached([rgPath, ...args], { signal });
 
 			let matchCount = 0;
 			let matchLimitReached = false;
@@ -583,7 +583,6 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 				if (maxMatches !== undefined && nextIndex > maxMatches) {
 					matchLimitReached = true;
 					killedDueToLimit = true;
-					child.kill("SIGKILL");
 					return;
 				}
 

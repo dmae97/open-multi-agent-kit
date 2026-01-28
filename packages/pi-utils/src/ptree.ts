@@ -6,14 +6,14 @@
  * - Windows and Unix support for proper tree killing.
  * - ChildProcess wrapper for capturing output, errors, and kill/detach.
  */
-import { type FileSink, type Spawn, type Subprocess, spawn, spawnSync } from "bun";
+import { $, type FileSink, type Spawn, type Subprocess, spawn } from "bun";
 import { postmortem } from ".";
 
 // Platform detection: process tree kill behavior differs.
 const isWindows = process.platform === "win32";
 
 // Set of live children for managed termination/cleanup on shutdown.
-const managedChildren = new Set<PipedSubprocess>();
+const managedChildren = new Set<ChildProcess>();
 
 class AsyncQueue<T> {
 	#items: T[] = [];
@@ -73,53 +73,53 @@ function createProcessStream(queue: AsyncQueue<Uint8Array>): ReadableStream<Uint
  * - Windows: uses taskkill for tree and forceful kill (/T /F)
  * - Unix: negative PID sends signal to process group (tree kill)
  */
-function killChild(child: PipedSubprocess, signal: NodeJS.Signals = "SIGTERM"): void {
+async function killChild(child: ChildProcess) {
 	const pid = child.pid;
-	if (!pid) return;
+	if (!pid || child.killed) return;
 
-	try {
-		if (isWindows) {
-			// /T (tree), /F (force): ensure entire tree is killed.
-			spawnSync(["taskkill", ...(signal === "SIGKILL" ? ["/F"] : []), "/T", "/PID", pid.toString()], {
-				stdout: "ignore",
-				stderr: "ignore",
-				timeout: 1000,
-			});
-		} else {
-			// Send signal to process group (negative PID).
-			process.kill(-pid, signal);
-		}
+	const waitForExit = (timeout = 1000) =>
+		Promise.race([Bun.sleep(timeout).then(() => false), child.exited.then(() => true)]);
 
-		// If killed, remove from managed set and clean up.
-		if (child.killed) {
-			managedChildren.delete(child);
-			child.unref();
+	const sendSignal = async (signal?: NodeJS.Signals) => {
+		try {
+			process.kill(pid, signal);
+		} catch {}
+
+		if (child.isProcessGroup) {
+			if (await waitForExit(1000)) return;
+
+			try {
+				if (isWindows) {
+					// /T (tree), /F (force): ensure entire tree is killed.
+					await $`taskkill ${signal === "SIGKILL" ? "/F" : ""} /T /PID ${pid}`.quiet().nothrow();
+				} else {
+					// Send signal to process group (negative PID).
+					process.kill(-pid, signal);
+				}
+			} catch {}
 		}
-	} catch {
-		// Ignore: process may already be dead.
-	}
+		return await waitForExit(1000);
+	};
+
+	if (await sendSignal()) return;
+	await sendSignal("SIGKILL");
 }
 
-postmortem.register("managed-children", () => {
-	for (const child of [...managedChildren]) {
-		killChild(child, "SIGKILL");
-		managedChildren.delete(child);
-	}
+postmortem.register("managed-children", async () => {
+	const children = Array.from(managedChildren);
+	managedChildren.clear();
+	await Promise.all(children.map(killChild));
 });
 
 /**
  * Register a subprocess for managed cleanup.
  * Will attach to exit Promise so removal happens even if child exits "naturally".
  */
-function registerManaged(child: PipedSubprocess): void {
+function registerManaged(child: ChildProcess): void {
 	if (child.exitCode !== null) return;
-	if (managedChildren.has(child)) return;
-	child.ref();
 	managedChildren.add(child);
-
-	child.exited.then(() => {
+	child.exited.finally(() => {
 		managedChildren.delete(child);
-		child.unref();
 	});
 }
 
@@ -133,6 +133,7 @@ type PipedSubprocess = Subprocess<"pipe" | "ignore" | null, "pipe", "pipe">;
 export class ChildProcess {
 	#proc: PipedSubprocess;
 	#detached = false;
+	#group = false;
 	#nothrow = false;
 	#stderrBuffer = "";
 	#stdoutQueue = new AsyncQueue<Uint8Array>();
@@ -144,8 +145,9 @@ export class ChildProcess {
 	#exited: Promise<number>;
 	#resolveExited: (ex?: PromiseLike<Exception> | Exception) => void;
 
-	constructor(proc: PipedSubprocess) {
-		registerManaged(proc);
+	constructor(proc: PipedSubprocess, group: boolean) {
+		this.#group = group;
+		registerManaged(this);
 
 		const exitSettled = proc.exited.then(
 			() => {},
@@ -241,6 +243,9 @@ export class ChildProcess {
 		this.#proc = proc;
 	}
 
+	get isProcessGroup(): boolean {
+		return this.#group;
+	}
 	get pid(): number | undefined {
 		return this.#proc.pid;
 	}
@@ -271,6 +276,9 @@ export class ChildProcess {
 		}
 		return this.#stderrStream;
 	}
+	get proc(): PipedSubprocess {
+		return this.#proc;
+	}
 
 	/**
 	 * Peek at the stderr buffer.
@@ -286,7 +294,7 @@ export class ChildProcess {
 	detach(): void {
 		if (this.#detached || this.#proc.killed) return;
 		this.#detached = true;
-		if (managedChildren.delete(this.#proc)) {
+		if (managedChildren.delete(this)) {
 			this.#proc.unref();
 		}
 	}
@@ -303,25 +311,12 @@ export class ChildProcess {
 	 * Kill the process tree.
 	 * Optionally set an exit reason (for better error propagation on cancellation).
 	 */
-	kill(signal: NodeJS.Signals = "SIGTERM", reason?: Exception) {
+	kill(reason?: Exception) {
 		if (this.#proc.killed) return;
 		if (reason) {
 			this.#exitReasonPending = reason;
 		}
-		killChild(this.#proc, signal);
-	}
-
-	async killAndWait(): Promise<void> {
-		// Try killing with SIGTERM, then SIGKILL if it doesn't exit within 1 second
-		this.kill("SIGTERM");
-		const exitedOrTimeout = await Promise.race([
-			this.exited.then(() => "exited" as const),
-			Bun.sleep(1000).then(() => "timeout" as const),
-		]);
-		if (exitedOrTimeout === "timeout") {
-			this.kill("SIGKILL");
-			await this.exited.catch(() => {});
-		}
+		killChild(this);
 	}
 
 	// Output utilities (aliases for easy chaining)
@@ -356,7 +351,7 @@ export class ChildProcess {
 	attachSignal(signal: AbortSignal): void {
 		const onAbort = () => {
 			const cause = new AbortError(signal.reason, "<cancelled>");
-			this.kill("SIGKILL", cause);
+			this.kill(cause);
 			if (this.#proc.killed) {
 				queueMicrotask(() => {
 					try {
@@ -385,7 +380,7 @@ export class ChildProcess {
 	attachTimeout(timeout: number): void {
 		if (timeout <= 0) return;
 		const timeoutId = setTimeout(() => {
-			this.kill("SIGKILL", new TimeoutError(timeout, this.#stderrBuffer));
+			this.kill(new TimeoutError(timeout, this.#stderrBuffer));
 		}, timeout);
 		// Use .finally().catch() to avoid unhandled rejection when #exited rejects
 		this.#exited
@@ -393,6 +388,10 @@ export class ChildProcess {
 				clearTimeout(timeoutId);
 			})
 			.catch(() => {});
+	}
+
+	[Symbol.dispose](): void {
+		this.kill(new AbortError("process disposed", this.#stderrBuffer));
 	}
 }
 
@@ -468,7 +467,7 @@ type ChildSpawnOptions = Omit<
  * - Always pipes stdout/stderr, launches in new session/process group (detached).
  * - Optional AbortSignal integrates with kill-on-abort.
  */
-export function cspawn(cmd: string[], options?: ChildSpawnOptions): ChildProcess {
+export function spawnGroup(cmd: string[], options?: ChildSpawnOptions): ChildProcess {
 	const { timeout, ...rest } = options ?? {};
 	const child = spawn(cmd, {
 		stdin: "ignore",
@@ -478,7 +477,30 @@ export function cspawn(cmd: string[], options?: ChildSpawnOptions): ChildProcess
 		// Windows: new console/pgroup; Unix: setsid for process group.
 		detached: true,
 	});
-	const cproc = new ChildProcess(child);
+	const cproc = new ChildProcess(child, true);
+	if (options?.signal) {
+		cproc.attachSignal(options.signal);
+	}
+	if (timeout && timeout > 0) {
+		cproc.attachTimeout(timeout);
+	}
+	return cproc;
+}
+
+/**
+ * Spawn a subprocess as a managed child process.
+ * - Always pipes stdout/stderr, launches in new session/process group (detached).
+ * - Optional AbortSignal integrates with kill-on-abort.
+ */
+export function spawnAttached(cmd: string[], options?: ChildSpawnOptions): ChildProcess {
+	const { timeout, ...rest } = options ?? {};
+	const child = spawn(cmd, {
+		stdin: "ignore",
+		...rest,
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const cproc = new ChildProcess(child, false);
 	if (options?.signal) {
 		cproc.attachSignal(options.signal);
 	}

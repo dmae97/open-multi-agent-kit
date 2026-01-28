@@ -296,7 +296,7 @@ async function convertWithMarkitdown(
 		return { content: "", ok: false, error: "markitdown not found (uv/pip unavailable)" };
 	}
 
-	const child = ptree.cspawn([cmd, filePath], { signal });
+	using child = ptree.spawnGroup([cmd, filePath], { signal });
 	let stdout: string;
 	try {
 		stdout = await child.nothrow().text();

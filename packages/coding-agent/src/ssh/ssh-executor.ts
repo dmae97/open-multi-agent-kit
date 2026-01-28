@@ -1,4 +1,4 @@
-import { cspawn, logger, ptree } from "@oh-my-pi/pi-utils";
+import { logger, ptree } from "@oh-my-pi/pi-utils";
 import { OutputSink } from "../session/streaming-output";
 import { buildRemoteCommand, ensureConnection, ensureHostInfo, type SSHConnectionTarget } from "./connection-manager";
 import { hasSshfs, mountRemote } from "./sshfs-mount";
@@ -76,7 +76,7 @@ export async function executeSSH(
 		}
 	}
 
-	const child = cspawn(["ssh", ...(await buildRemoteCommand(host, resolvedCommand))], {
+	using child = ptree.spawnAttached(["ssh", ...(await buildRemoteCommand(host, resolvedCommand))], {
 		signal: options?.signal,
 		timeout: options?.timeout,
 	});

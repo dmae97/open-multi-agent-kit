@@ -49,8 +49,8 @@ export async function convertWithMarkitdown(
 
 	try {
 		await Bun.write(tmpFile, content);
-		const result = await ptree.cspawn([markitdown, tmpFile], { timeout });
-		const [stdout, stderr, exitCode] = await Promise.all([result.stdout.text(), result.stderr.text(), result.exited]);
+		using child = await ptree.spawnGroup([markitdown, tmpFile], { timeout });
+		const [stdout, stderr, exitCode] = await Promise.all([child.stdout.text(), child.stderr.text(), child.exited]);
 		if (exitCode !== 0) {
 			return {
 				content: stdout,

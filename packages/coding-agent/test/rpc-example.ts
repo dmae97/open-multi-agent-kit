@@ -55,7 +55,7 @@ async function main() {
 	rl.on("line", async line => {
 		if (isWaiting) return;
 		if (line.trim() === "exit") {
-			await client.stop();
+			client.stop();
 			process.exit(0);
 		}
 

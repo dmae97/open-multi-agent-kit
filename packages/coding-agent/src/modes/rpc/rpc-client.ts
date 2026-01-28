@@ -112,7 +112,7 @@ export class RpcClient {
 			args.push(...this.options.args);
 		}
 
-		this.process = ptree.cspawn(["bun", cliPath, ...args], {
+		this.process = ptree.spawnAttached(["bun", cliPath, ...args], {
 			cwd: this.options.cwd,
 			env: { ...process.env, ...this.options.env },
 			stdin: "pipe",
@@ -154,11 +154,11 @@ export class RpcClient {
 	/**
 	 * Stop the RPC agent process.
 	 */
-	async stop(): Promise<void> {
+	stop() {
 		if (!this.process) return;
 
 		this.lineReader?.cancel();
-		await this.process.killAndWait();
+		this.process.kill();
 
 		this.process = null;
 		this.lineReader = null;
