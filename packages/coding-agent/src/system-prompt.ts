@@ -1,10 +1,10 @@
 /**
  * System prompt construction and project context loading
  */
-import type * as fsTypes from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { globPaths } from "@oh-my-pi/pi-utils";
 import { $ } from "bun";
 import chalk from "chalk";
 import { contextFileCapability } from "./capability/context-file";
@@ -16,8 +16,6 @@ import { loadSkills, type Skill } from "./extensibility/skills";
 import customSystemPromptTemplate from "./prompts/system/custom-system-prompt.md" with { type: "text" };
 import systemPromptTemplate from "./prompts/system/system-prompt.md" with { type: "text" };
 import type { ToolName } from "./tools";
-import { runRg } from "./tools/grep";
-import { ensureTool } from "./utils/tools-manager";
 
 interface GitContext {
 	isRepo: boolean;
@@ -200,23 +198,20 @@ type ProjectTreeScan = {
 	truncatedDirs: Set<string>;
 };
 
-const RG_TIMEOUT_MS = 5000;
+const GLOB_TIMEOUT_MS = 5000;
 
 /**
- * Scan project tree using ripgrep to respect gitignore.
- * Returns null if ripgrep is unavailable.
+ * Scan project tree using fs.promises.glob with exclusion filters.
+ * Returns null if glob fails.
  */
-async function scanProjectTreeWithRg(root: string): Promise<ProjectTreeScan | null> {
-	const rgPath = await ensureTool("rg", { silent: true });
-	if (!rgPath) return null;
-
-	const args = ["--files", "--no-require-git", "--color=never", root];
-
-	let stdout: string;
+async function scanProjectTreeWithGlob(root: string): Promise<ProjectTreeScan | null> {
+	let entries: string[];
 	try {
-		const result = await runRg(rgPath, args, { timeoutMs: RG_TIMEOUT_MS });
-		if (result.exitCode !== 0 && result.exitCode !== 1) return null;
-		stdout = result.stdout;
+		entries = await globPaths("**/*", {
+			cwd: root,
+			gitignore: true,
+			timeoutMs: GLOB_TIMEOUT_MS,
+		});
 	} catch {
 		return null;
 	}
@@ -226,19 +221,19 @@ async function scanProjectTreeWithRg(root: string): Promise<ProjectTreeScan | nu
 	const dirContents = new Map<string, Map<string, boolean>>();
 	dirContents.set(root, new Map());
 
-	for (const line of stdout.split("\n")) {
-		const filePath = line.trim();
+	for (const entry of entries) {
+		const filePath = entry.trim();
 		if (!filePath) continue;
-
+		const absolutePath = path.join(root, filePath);
 		// Check static ignores on path components
-		const relative = path.relative(root, filePath);
+		const relative = path.relative(root, absolutePath);
 		const parts = relative.split(path.sep);
 		if (parts.some(p => PROJECT_TREE_IGNORED.has(p))) continue;
 
 		// Add file to its parent directory
-		const parent = path.dirname(filePath);
+		const parent = path.dirname(absolutePath);
 		if (!dirContents.has(parent)) dirContents.set(parent, new Map());
-		dirContents.get(parent)!.set(filePath, false);
+		dirContents.get(parent)!.set(absolutePath, false);
 
 		// Add all intermediate directories
 		let dir = parent;
@@ -316,82 +311,10 @@ async function scanProjectTreeWithRg(root: string): Promise<ProjectTreeScan | nu
 	return { children, truncated, truncatedDirs };
 }
 
-/**
- * Fallback scan using readdir when ripgrep is unavailable.
- */
-async function scanProjectTreeFallback(root: string): Promise<ProjectTreeScan> {
-	const children = new Map<string, ProjectTreeEntry[]>();
-	let entryCount = 0;
-	let truncated = false;
-	const truncatedDirs = new Set<string>();
-
-	const queue: Array<{ dirPath: string; depth: number }> = [{ dirPath: root, depth: 0 }];
-	let cursor = 0;
-
-	while (cursor < queue.length && !truncated) {
-		const { dirPath, depth } = queue[cursor];
-		cursor += 1;
-		let entries: fsTypes.Dirent[];
-		try {
-			entries = await fs.readdir(dirPath, { withFileTypes: true });
-		} catch {
-			continue;
-		}
-
-		const filtered = entries.filter(entry => !PROJECT_TREE_IGNORED.has(entry.name));
-		const withStats = await Promise.all(
-			filtered.map(async entry => {
-				const entryPath = path.join(dirPath, entry.name);
-				try {
-					const stats = await fs.stat(entryPath);
-					return { entry, entryPath, mtimeMs: stats.mtimeMs };
-				} catch {
-					return { entry, entryPath, mtimeMs: 0 };
-				}
-			}),
-		);
-
-		withStats.sort((a, b) => {
-			if (a.mtimeMs !== b.mtimeMs) return b.mtimeMs - a.mtimeMs;
-			return a.entry.name.localeCompare(b.entry.name);
-		});
-
-		const perDirLimit = depth >= PROJECT_TREE_PER_DIR_DEPTH ? PROJECT_TREE_PER_DIR_LIMIT : null;
-		const limited = perDirLimit === null ? withStats : withStats.slice(0, perDirLimit);
-		const hasMoreEntries = perDirLimit !== null && withStats.length > perDirLimit;
-
-		const mapped: ProjectTreeEntry[] = [];
-		for (const entryWithStat of limited) {
-			if (entryCount >= PROJECT_TREE_LIMIT) {
-				truncated = true;
-				break;
-			}
-
-			mapped.push({
-				name: entryWithStat.entry.name,
-				isDirectory: entryWithStat.entry.isDirectory(),
-				path: entryWithStat.entryPath,
-			});
-			entryCount += 1;
-
-			if (entryWithStat.entry.isDirectory()) {
-				queue.push({ dirPath: entryWithStat.entryPath, depth: depth + 1 });
-			}
-		}
-
-		if (!truncated && hasMoreEntries) {
-			truncatedDirs.add(dirPath);
-		}
-		children.set(dirPath, mapped);
-	}
-
-	return { children, truncated, truncatedDirs };
-}
-
 async function scanProjectTree(root: string): Promise<ProjectTreeScan> {
-	const rgResult = await scanProjectTreeWithRg(root);
-	if (rgResult) return rgResult;
-	return scanProjectTreeFallback(root);
+	const globResult = await scanProjectTreeWithGlob(root);
+	if (globResult) return globResult;
+	return { children: new Map(), truncated: false, truncatedDirs: new Set() };
 }
 
 function renderProjectTree(scan: ProjectTreeScan, root: string): string {

@@ -2,7 +2,7 @@
  * Generic selector component for hooks.
  * Displays a list of string options with keyboard navigation.
  */
-import { Container, matchesKey, Spacer, Text, type TUI } from "@oh-my-pi/pi-tui";
+import { Container, matchesKey, Spacer, Text, type TUI, visibleWidth } from "@oh-my-pi/pi-tui";
 import { theme } from "../../modes/theme/theme";
 import { CountdownTimer } from "./countdown-timer";
 import { DynamicBorder } from "./dynamic-border";
@@ -11,12 +11,34 @@ export interface HookSelectorOptions {
 	tui?: TUI;
 	timeout?: number;
 	initialIndex?: number;
+	outline?: boolean;
+}
+
+class OutlinedList extends Container {
+	private lines: string[] = [];
+
+	setLines(lines: string[]): void {
+		this.lines = lines;
+		this.invalidate();
+	}
+
+	render(width: number): string[] {
+		const borderColor = (text: string) => theme.fg("border", text);
+		const horizontal = borderColor(theme.boxSharp.horizontal.repeat(Math.max(1, width)));
+		const innerWidth = Math.max(1, width - 2);
+		const content = this.lines.map(line => {
+			const pad = Math.max(0, innerWidth - visibleWidth(line));
+			return `${borderColor(theme.boxSharp.vertical)}${line}${" ".repeat(pad)}${borderColor(theme.boxSharp.vertical)}`;
+		});
+		return [horizontal, ...content, horizontal];
+	}
 }
 
 export class HookSelectorComponent extends Container {
 	private options: string[];
 	private selectedIndex: number;
-	private listContainer: Container;
+	private listContainer: Container | undefined;
+	private outlinedList: OutlinedList | undefined;
 	private onSelectCallback: (option: string) => void;
 	private onCancelCallback: () => void;
 	private titleText: Text;
@@ -62,8 +84,13 @@ export class HookSelectorComponent extends Container {
 			);
 		}
 
-		this.listContainer = new Container();
-		this.addChild(this.listContainer);
+		if (opts?.outline) {
+			this.outlinedList = new OutlinedList();
+			this.addChild(this.outlinedList);
+		} else {
+			this.listContainer = new Container();
+			this.addChild(this.listContainer);
+		}
 		this.addChild(new Spacer(1));
 		this.addChild(new Text(theme.fg("dim", "up/down navigate  enter select  esc cancel"), 1, 0));
 		this.addChild(new Spacer(1));
@@ -73,13 +100,21 @@ export class HookSelectorComponent extends Container {
 	}
 
 	private updateList(): void {
-		this.listContainer.clear();
+		const lines: string[] = [];
 		for (let i = 0; i < this.options.length; i++) {
 			const isSelected = i === this.selectedIndex;
 			const text = isSelected
 				? theme.fg("accent", `${theme.nav.cursor} `) + theme.fg("accent", this.options[i])
 				: `  ${theme.fg("text", this.options[i])}`;
-			this.listContainer.addChild(new Text(text, 1, 0));
+			lines.push(text);
+		}
+		if (this.outlinedList) {
+			this.outlinedList.setLines(lines);
+			return;
+		}
+		this.listContainer?.clear();
+		for (const line of lines) {
+			this.listContainer?.addChild(new Text(line, 1, 0));
 		}
 	}
 

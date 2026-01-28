@@ -77,6 +77,7 @@ export interface AskToolDetails {
 
 const OTHER_OPTION = "Other (type your own)";
 const RECOMMENDED_SUFFIX = " (Recommended)";
+const ASK_TIMEOUT_MS = 30000;
 
 function getDoneOptionLabel(): string {
 	return `${theme.status.success} Done selecting`;
@@ -113,7 +114,7 @@ interface UIContext {
 	select(
 		prompt: string,
 		options: string[],
-		options_?: { initialIndex?: number; timeout?: number },
+		options_?: { initialIndex?: number; timeout?: number; outline?: boolean },
 	): Promise<string | undefined>;
 	input(prompt: string): Promise<string | undefined>;
 }
@@ -131,7 +132,7 @@ async function askSingleQuestion(
 
 	if (multi) {
 		const selected = new Set<string>();
-		let cursorIndex = 0;
+		let cursorIndex = Math.min(Math.max(recommended ?? 0, 0), optionLabels.length - 1);
 
 		while (true) {
 			const opts: string[] = [];
@@ -148,13 +149,22 @@ async function askSingleQuestion(
 			opts.push(OTHER_OPTION);
 
 			const prefix = selected.size > 0 ? `(${selected.size} selected) ` : "";
-			const choice = await ui.select(`${prefix}${question}`, opts, { initialIndex: cursorIndex });
+			const selectionStart = Date.now();
+			const choice = await ui.select(`${prefix}${question}`, opts, {
+				initialIndex: cursorIndex,
+				timeout: ASK_TIMEOUT_MS,
+				outline: true,
+			});
+			const elapsed = Date.now() - selectionStart;
+			const timedOut = elapsed >= ASK_TIMEOUT_MS;
 
 			if (choice === undefined || choice === doneLabel) break;
 
 			if (choice === OTHER_OPTION) {
-				const input = await ui.input("Enter your response:");
-				if (input) customInput = input;
+				if (!timedOut) {
+					const input = await ui.input("Enter your response:");
+					if (input) customInput = input;
+				}
 				break;
 			}
 
@@ -179,13 +189,18 @@ async function askSingleQuestion(
 					selected.add(opt);
 				}
 			}
+
+			if (timedOut) {
+				break;
+			}
 		}
 		selectedOptions = Array.from(selected);
 	} else {
 		const displayLabels = addRecommendedSuffix(optionLabels, recommended);
 		const choice = await ui.select(question, [...displayLabels, OTHER_OPTION], {
-			timeout: 30000,
+			timeout: ASK_TIMEOUT_MS,
 			initialIndex: recommended,
+			outline: true,
 		});
 		if (choice === OTHER_OPTION) {
 			const input = await ui.input("Enter your response:");

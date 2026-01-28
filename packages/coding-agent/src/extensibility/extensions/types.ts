@@ -47,6 +47,8 @@ export interface ExtensionUIDialogOptions {
 	timeout?: number;
 	/** Initial cursor position for select dialogs (0-indexed) */
 	initialIndex?: number;
+	/** Render an outlined list for select dialogs */
+	outline?: boolean;
 }
 
 /**

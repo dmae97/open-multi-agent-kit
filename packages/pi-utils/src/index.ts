@@ -1,6 +1,7 @@
 export * from "./abortable";
 export * from "./color";
 export * from "./fs-error";
+export * from "./glob";
 export * as logger from "./logger";
 export * as postmortem from "./postmortem";
 export * as ptree from "./ptree";

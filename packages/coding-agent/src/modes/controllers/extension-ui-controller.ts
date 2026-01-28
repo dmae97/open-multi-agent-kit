@@ -515,7 +515,12 @@ export class ExtensionUiController {
 				this.hideHookSelector();
 				resolve(undefined);
 			},
-			{ initialIndex: dialogOptions?.initialIndex, timeout: dialogOptions?.timeout, tui: this.ctx.ui },
+			{
+				initialIndex: dialogOptions?.initialIndex,
+				timeout: dialogOptions?.timeout,
+				tui: this.ctx.ui,
+				outline: dialogOptions?.outline,
+			},
 		);
 		this.hookSelectorOverlay = this.ctx.ui.showOverlay(this.ctx.hookSelector, this.dialogOverlayOptions);
 		return promise;

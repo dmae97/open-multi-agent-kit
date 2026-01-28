@@ -4,7 +4,7 @@ import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallb
 import type { ImageContent, TextContent } from "@oh-my-pi/pi-ai";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
-import { ptree } from "@oh-my-pi/pi-utils";
+import { globPaths, ptree } from "@oh-my-pi/pi-utils";
 import { Type } from "@sinclair/typebox";
 import { CONFIG_DIR_NAME } from "../config";
 import { renderPromptTemplate } from "../config/prompt-templates";
@@ -16,7 +16,6 @@ import { renderCodeCell, renderOutputBlock, renderStatusLine } from "../tui";
 import { formatDimensionNote, resizeImage } from "../utils/image-resize";
 import { detectSupportedImageMimeTypeFromFile } from "../utils/mime";
 import { ensureTool } from "../utils/tools-manager";
-import { runRg } from "./grep";
 import { applyListLimit } from "./list-limit";
 import { LsTool } from "./ls";
 import type { OutputMeta } from "./output-meta";
@@ -49,6 +48,7 @@ const MAX_FUZZY_RESULTS = 5;
 const MAX_FUZZY_CANDIDATES = 20000;
 const MIN_BASE_SIMILARITY = 0.5;
 const MIN_FULL_SIMILARITY = 0.6;
+const GLOB_TIMEOUT_MS = 5000;
 
 function normalizePathForMatch(value: string): string {
 	return value
@@ -162,95 +162,32 @@ function similarityScore(a: string, b: string): number {
 async function listCandidateFiles(
 	searchRoot: string,
 	signal?: AbortSignal,
-	notify?: (message: string) => void,
+	_notify?: (message: string) => void,
 ): Promise<{ files: string[]; truncated: boolean; error?: string }> {
-	let rgPath: string | undefined;
+	let files: string[];
 	try {
-		rgPath = await ensureTool("rg", { silent: true, notify });
-	} catch {
-		return { files: [], truncated: false, error: "rg not available" };
-	}
-
-	if (!rgPath) {
-		return { files: [], truncated: false, error: "rg not available" };
-	}
-
-	const args: string[] = [
-		"--files",
-		"--color=never",
-		"--hidden",
-		"--glob",
-		"!**/.git/**",
-		"--glob",
-		"!**/node_modules/**",
-	];
-
-	const gitignoreFiles = new Set<string>();
-	const rootGitignore = path.join(searchRoot, ".gitignore");
-	if (await Bun.file(rootGitignore).exists()) {
-		gitignoreFiles.add(rootGitignore);
-	}
-
-	try {
-		const gitignoreArgs = [
-			"--files",
-			"--color=never",
-			"--hidden",
-			"--no-ignore",
-			"--glob",
-			"!**/.git/**",
-			"--glob",
-			"!**/node_modules/**",
-			"--glob",
-			".gitignore",
-			searchRoot,
-		];
-		const { stdout } = await runRg(rgPath, gitignoreArgs, { signal });
-		const output = stdout.trim();
-		if (output) {
-			const nestedGitignores = output
-				.split("\n")
-				.map(line => line.replace(/\r$/, "").trim())
-				.filter(line => line.length > 0);
-			for (const file of nestedGitignores) {
-				const normalized = file.replace(/\\/g, "/");
-				if (normalized.includes("/node_modules/") || normalized.includes("/.git/")) {
-					continue;
-				}
-				gitignoreFiles.add(file);
-			}
-		}
+		files = await globPaths("**/*", {
+			cwd: searchRoot,
+			gitignore: true,
+			dot: true,
+			signal,
+			timeoutMs: GLOB_TIMEOUT_MS,
+		});
 	} catch (error) {
-		if (error instanceof ToolAbortError) {
-			throw error;
+		if (error instanceof Error && error.name === "AbortError") {
+			throw new ToolAbortError();
 		}
-		// Ignore gitignore scan errors.
-	}
-
-	for (const gitignorePath of gitignoreFiles) {
-		args.push("--ignore-file", gitignorePath);
-	}
-
-	args.push(searchRoot);
-
-	const { stdout, stderr, exitCode } = await runRg(rgPath, args, { signal });
-	const output = stdout.trim();
-
-	if (!output) {
-		// rg exit codes: 0 = ok, 1 = no matches, other = error
-		if (exitCode !== 0 && exitCode !== 1) {
-			return { files: [], truncated: false, error: stderr.trim() || `rg failed (exit ${exitCode})` };
+		if (error instanceof Error && error.name === "TimeoutError") {
+			const timeoutSeconds = Math.max(1, Math.round(GLOB_TIMEOUT_MS / 1000));
+			return { files: [], truncated: false, error: `glob timed out after ${timeoutSeconds}s` };
 		}
-		return { files: [], truncated: false };
+		const message = error instanceof Error ? error.message : String(error);
+		return { files: [], truncated: false, error: message };
 	}
 
-	const files = output
-		.split("\n")
-		.map(line => line.replace(/\r$/, "").trim())
-		.filter(line => line.length > 0);
-
-	const truncated = files.length > MAX_FUZZY_CANDIDATES;
-	const limited = truncated ? files.slice(0, MAX_FUZZY_CANDIDATES) : files;
+	const normalizedFiles = files.map(line => line.replace(/\r$/, "").trim()).filter(line => line.length > 0);
+	const truncated = normalizedFiles.length > MAX_FUZZY_CANDIDATES;
+	const limited = truncated ? normalizedFiles.slice(0, MAX_FUZZY_CANDIDATES) : normalizedFiles;
 
 	return { files: limited, truncated };
 }
@@ -304,11 +241,7 @@ async function findReadPathSuggestions(
 		const cleaned = file.replace(/\r$/, "").trim();
 		if (!cleaned) continue;
 
-		const relativePath = path.isAbsolute(cleaned)
-			? cleaned.startsWith(searchRoot)
-				? cleaned.slice(searchRoot.length + 1)
-				: path.relative(searchRoot, cleaned)
-			: cleaned;
+		const relativePath = cleaned;
 
 		if (!relativePath || relativePath.startsWith("..")) {
 			continue;

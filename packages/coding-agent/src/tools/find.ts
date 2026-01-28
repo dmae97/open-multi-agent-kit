@@ -3,7 +3,7 @@ import * as path from "node:path";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
-import { isEnoent, untilAborted } from "@oh-my-pi/pi-utils";
+import { globPaths, isEnoent, untilAborted } from "@oh-my-pi/pi-utils";
 import type { Static } from "@sinclair/typebox";
 import { Type } from "@sinclair/typebox";
 import { renderPromptTemplate } from "../config/prompt-templates";
@@ -11,14 +11,12 @@ import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
 import findDescription from "../prompts/tools/find.md" with { type: "text" };
 import { renderFileList, renderStatusLine, renderTreeList } from "../tui";
-import { ensureTool } from "../utils/tools-manager";
 import type { ToolSession } from ".";
-import { runRg } from "./grep";
 import { applyListLimit } from "./list-limit";
 import type { OutputMeta } from "./output-meta";
 import { resolveToCwd } from "./path-utils";
 import { formatCount, formatEmptyMessage, formatErrorMessage, PREVIEW_LIMITS } from "./render-utils";
-import { ToolError, throwIfAborted } from "./tool-errors";
+import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";
 import { type TruncationResult, truncateHead } from "./truncate";
 
@@ -30,7 +28,7 @@ const findSchema = Type.Object({
 });
 
 const DEFAULT_LIMIT = 1000;
-const RG_TIMEOUT_MS = 5000;
+const GLOB_TIMEOUT_MS = 5000;
 
 export interface FindToolDetails {
 	truncation?: TruncationResult;
@@ -80,7 +78,7 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 		params: Static<typeof findSchema>,
 		signal?: AbortSignal,
 		_onUpdate?: AgentToolUpdateCallback<FindToolDetails>,
-		context?: AgentToolContext,
+		_context?: AgentToolContext,
 	): Promise<AgentToolResult<FindToolDetails>> {
 		const { pattern, path: searchDir, limit, hidden } = params;
 
@@ -107,7 +105,6 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 			}
 			const includeHidden = hidden ?? true;
 			const globPattern = normalizedPattern.replace(/\\/g, "/");
-			const globMatcher = new Bun.Glob(globPattern);
 
 			// If custom operations provided with glob, use that instead of fd
 			if (this.customOps?.glob) {
@@ -171,42 +168,30 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 				throw new ToolError(`Path is not a directory: ${searchPath}`);
 			}
 
-			// Default: use rg
-			const rgPath = await ensureTool("rg", {
-				silent: true,
-				notify: message => context?.ui?.notify(message, "info"),
-			});
-			if (!rgPath) {
-				throw new ToolError("rg is not available and could not be downloaded");
+			let lines: string[];
+			try {
+				lines = await globPaths(globPattern, {
+					cwd: searchPath,
+					gitignore: true,
+					dot: includeHidden,
+					signal,
+					timeoutMs: GLOB_TIMEOUT_MS,
+				});
+			} catch (error) {
+				if (error instanceof Error && error.name === "AbortError") {
+					throw new ToolAbortError();
+				}
+				if (error instanceof Error && error.name === "TimeoutError") {
+					const timeoutSeconds = Math.max(1, Math.round(GLOB_TIMEOUT_MS / 1000));
+					throw new ToolError(`glob timed out after ${timeoutSeconds}s`);
+				}
+				throw error;
 			}
 
-			const args = [
-				"--files",
-				...(includeHidden ? ["--hidden"] : []),
-				"--no-require-git",
-				"--color=never",
-				"--glob",
-				"!**/.git/**",
-				"--glob",
-				"!**/node_modules/**",
-				searchPath,
-			];
-
-			// Run rg with timeout
-			const { stdout, stderr, exitCode } = await runRg(rgPath, args, { signal, timeoutMs: RG_TIMEOUT_MS });
-			const output = stdout.trim();
-
-			// rg exit codes: 0 = found files, 1 = no matches, other = error
-			// Treat exit code 1 with no output as "no files found"
-			if (!output) {
-				if (exitCode !== 0 && exitCode !== 1) {
-					throw new ToolError(stderr.trim() || `rg failed (exit ${exitCode})`);
-				}
+			if (lines.length === 0) {
 				const details: FindToolDetails = { scopePath, fileCount: 0, files: [], truncated: false };
 				return toolResult(details).text("No files found matching pattern").done();
 			}
-
-			const lines = output.split("\n");
 			const relativized: string[] = [];
 			const mtimes: number[] = [];
 
@@ -218,16 +203,7 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 				}
 
 				const hadTrailingSlash = line.endsWith("/") || line.endsWith("\\");
-				let relativePath = line;
-				if (line.startsWith(searchPath)) {
-					relativePath = line.slice(searchPath.length + 1); // +1 for the /
-				} else {
-					relativePath = path.relative(searchPath, line);
-				}
-				const matchPath = relativePath.replace(/\\/g, "/");
-				if (!globMatcher.match(matchPath)) {
-					continue;
-				}
+				let relativePath = line.replace(/\\/g, "/");
 
 				let mtimeMs = 0;
 				let isDirectory = false;
