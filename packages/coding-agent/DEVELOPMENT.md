@@ -268,7 +268,7 @@ src/
 │   ├── bash.ts               # Bash command execution
 │   ├── bash-interceptor.ts   # Bash command interception
 │   ├── calculator.ts         # Calculator tool
-│   ├── complete.ts           # Completion tool
+│   ├── submit-result.ts      # Submit result tool
 │   ├── context.ts            # Tool context utilities
 │   ├── fetch.ts              # URL content fetching
 │   ├── find.ts               # File search by glob

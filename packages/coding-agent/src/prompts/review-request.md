@@ -41,7 +41,7 @@ Each reviewer agent should:
 2. {{#if skipDiff}}Run `git diff` or `git show` to get the diff for assigned files{{else}}Use the diff hunks provided below (don't re-run git diff){{/if}}
 3. Read full file context as needed via the `read` tool
 4. Call `report_finding` for each issue found
-5. Call `complete` with verdict when done
+5. Call `submit_result` with verdict when done
 
 {{#if skipDiff}}
 ### Diff Previews

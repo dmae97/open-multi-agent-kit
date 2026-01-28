@@ -155,7 +155,7 @@ function resolveModelOverride(
 	return {};
 }
 
-function buildCompleteToolChoice(model?: Model<Api>): ToolChoice | undefined {
+function buildSubmitResultToolChoice(model?: Model<Api>): ToolChoice | undefined {
 	if (!model) return undefined;
 	if (
 		model.api === "openai-codex-responses" ||
@@ -163,10 +163,10 @@ function buildCompleteToolChoice(model?: Model<Api>): ToolChoice | undefined {
 		model.api === "openai-completions" ||
 		model.api === "azure-openai-responses"
 	) {
-		return { type: "function", name: "complete" };
+		return { type: "function", name: "submit_result" };
 	}
 	if (model.api === "anthropic-messages" || model.api === "bedrock-converse-stream") {
-		return { type: "tool", name: "complete" };
+		return { type: "tool", name: "submit_result" };
 	}
 	return undefined;
 }
@@ -545,7 +545,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 	const abortSignal = abortController.signal;
 	let activeSession: AgentSession | null = null;
 	let unsubscribe: (() => void) | null = null;
-	let completeCalled = false;
+	let submitResultCalled = false;
 
 	// Accumulate usage incrementally from message_end events (no memory for streaming events)
 	const accumulatedUsage = {
@@ -921,7 +921,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			const enableMCP = !options.mcpManager;
 
 			const completionInstruction =
-				"When finished, call the complete tool exactly once. Do not output JSON or code blocks. Do not end with a plain-text final answer.";
+				"When finished, call the submit_result tool exactly once. Do not output JSON or code blocks. Do not end with a plain-text final answer.";
 			const worktreeNotice = worktree
 				? `You will work under this working tree: ${worktree}. CRITICAL: Do not touch the original repository; only make changes inside this worktree.`
 				: "";
@@ -935,7 +935,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				thinkingLevel: effectiveThinkingLevel,
 				toolNames,
 				outputSchema,
-				requireCompleteTool: true,
+				requireSubmitResultTool: true,
 				contextFiles: options.contextFiles,
 				skills: options.skills,
 				preloadedSkills: options.preloadedSkills,
@@ -1027,10 +1027,10 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				await extensionRunner.emit({ type: "session_start" });
 			}
 
-			const MAX_COMPLETE_RETRIES = 3;
+			const MAX_SUBMIT_RESULT_RETRIES = 3;
 			unsubscribe = session.subscribe(event => {
-				if (event.type === "tool_execution_end" && event.toolName === "complete") {
-					completeCalled = true;
+				if (event.type === "tool_execution_end" && event.toolName === "submit_result") {
+				submitResultCalled = true;
 				}
 				if (isAgentEvent(event)) {
 					try {
@@ -1046,28 +1046,28 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 
 			await session.prompt(fullTask);
 
-			const reminderToolChoice = buildCompleteToolChoice(session.model);
+			const reminderToolChoice = buildSubmitResultToolChoice(session.model);
 
 			let retryCount = 0;
 			let previousTools: string[] | null = null;
 			try {
-				while (!completeCalled && retryCount < MAX_COMPLETE_RETRIES && !abortSignal.aborted) {
+				while (!submitResultCalled && retryCount < MAX_SUBMIT_RESULT_RETRIES && !abortSignal.aborted) {
 					retryCount++;
 					if (!previousTools) {
 						previousTools = session.getActiveToolNames();
-						await session.setActiveToolsByName(["complete"]);
+					await session.setActiveToolsByName(["submit_result"]);
 					}
 					const reminder = `<system-reminder>
-CRITICAL: You stopped without calling the complete tool. This is reminder ${retryCount} of ${MAX_COMPLETE_RETRIES}.
+CRITICAL: You stopped without calling the submit_result tool. This is reminder ${retryCount} of ${MAX_SUBMIT_RESULT_RETRIES}.
 
-You MUST call the complete tool to finish your task. Options:
-1. Call complete with your result data if you have completed the task
-2. Call complete with status="aborted" and an error message if you cannot complete the task
+You MUST call the submit_result tool to finish your task. Options:
+1. Call submit_result with your result data if you have completed the task
+2. Call submit_result with status="aborted" and an error message if you cannot complete the task
 
-Failure to call complete after ${MAX_COMPLETE_RETRIES} reminders will result in task failure.
+Failure to call submit_result after ${MAX_SUBMIT_RESULT_RETRIES} reminders will result in task failure.
 </system-reminder>
 
-Call complete now.`;
+Call submit_result now.`;
 
 					await session.prompt(reminder, reminderToolChoice ? { toolChoice: reminderToolChoice } : undefined);
 				}
@@ -1137,32 +1137,32 @@ Call complete now.`;
 
 	// Use final output if available, otherwise accumulated output
 	let rawOutput = finalOutputChunks.length > 0 ? finalOutputChunks.join("") : outputChunks.join("");
-	let abortedViaComplete = false;
-	const completeItems = progress.extractedToolData?.complete as
+	let abortedViaSubmitResult = false;
+	const submitResultItems = progress.extractedToolData?.submit_result as
 		| Array<{ data?: unknown; status?: "success" | "aborted"; error?: string }>
 		| undefined;
 	const reportFindings = progress.extractedToolData?.report_finding as ReviewFinding[] | undefined;
-	const hasComplete = Array.isArray(completeItems) && completeItems.length > 0;
-	if (hasComplete) {
-		const lastComplete = completeItems[completeItems.length - 1];
-		if (lastComplete?.status === "aborted") {
-			// Agent explicitly aborted via complete tool - clean exit with error info
-			abortedViaComplete = true;
+	const hasSubmitResult = Array.isArray(submitResultItems) && submitResultItems.length > 0;
+	if (hasSubmitResult) {
+		const lastSubmitResult = submitResultItems[submitResultItems.length - 1];
+		if (lastSubmitResult?.status === "aborted") {
+			// Agent explicitly aborted via submit_result tool - clean exit with error info
+			abortedViaSubmitResult = true;
 			exitCode = 0;
-			stderr = lastComplete.error || "Subagent aborted task";
+			stderr = lastSubmitResult.error || "Subagent aborted task";
 			try {
-				rawOutput = JSON.stringify({ aborted: true, error: lastComplete.error }, null, 2);
+				rawOutput = JSON.stringify({ aborted: true, error: lastSubmitResult.error }, null, 2);
 			} catch {
-				rawOutput = `{"aborted":true,"error":"${lastComplete.error || "Unknown error"}"}`;
+				rawOutput = `{"aborted":true,"error":"${lastSubmitResult.error || "Unknown error"}"}`;
 			}
 		} else {
 			// Normal successful completion
-			const completeData = normalizeCompleteData(lastComplete?.data ?? null, reportFindings);
+			const completeData = normalizeCompleteData(lastSubmitResult?.data ?? null, reportFindings);
 			try {
 				rawOutput = JSON.stringify(completeData, null, 2) ?? "null";
 			} catch (err) {
 				const errorMessage = err instanceof Error ? err.message : String(err);
-				rawOutput = `{"error":"Failed to serialize complete data: ${errorMessage}"}`;
+				rawOutput = `{"error":"Failed to serialize submit_result data: ${errorMessage}"}`;
 			}
 			exitCode = 0;
 			stderr = "";
@@ -1186,7 +1186,7 @@ Call complete now.`;
 			exitCode = 0;
 			stderr = "";
 		} else {
-			const warning = "SYSTEM WARNING: Subagent exited without calling complete tool after 3 reminders.";
+		const warning = "SYSTEM WARNING: Subagent exited without calling submit_result tool after 3 reminders.";
 			rawOutput = rawOutput ? `${warning}\n\n${rawOutput}` : warning;
 		}
 	}
@@ -1210,7 +1210,7 @@ Call complete now.`;
 	}
 
 	// Update final progress
-	const wasAborted = abortedViaComplete || (!hasComplete && (done.aborted || signal?.aborted || false));
+	const wasAborted = abortedViaSubmitResult || (!hasSubmitResult && (done.aborted || signal?.aborted || false));
 	progress.status = wasAborted ? "aborted" : exitCode === 0 ? "completed" : "failed";
 	scheduleProgress(true);
 

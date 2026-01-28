@@ -3,7 +3,7 @@
  *
  * Used by the reviewer agent to report findings in a structured way.
  * Hidden by default - only enabled when explicitly listed in agent's tools.
- * Reviewers finish via `complete` tool with SubmitReviewDetails schema.
+ * Reviewers finish via `submit_result` tool with SubmitReviewDetails schema.
  */
 // ─────────────────────────────────────────────────────────────────────────────
 // Subprocess tool handlers - registered for extraction/rendering in task tool
@@ -85,7 +85,7 @@ interface ReportFindingDetails {
 export const reportFindingTool: AgentTool<typeof ReportFindingParams, ReportFindingDetails, Theme> = {
 	name: "report_finding",
 	label: "Report Finding",
-	description: "Report a code review finding. Use this for each issue found. Call complete when done.",
+	description: "Report a code review finding. Use this for each issue found. Call submit_result when done.",
 	parameters: ReportFindingParams,
 	async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 		const { title, body, priority, confidence, file_path, line_start, line_end } = params;
@@ -140,7 +140,7 @@ export const reportFindingTool: AgentTool<typeof ReportFindingParams, ReportFind
 	},
 };
 
-/** SubmitReviewDetails - used for rendering review results from complete tool */
+/** SubmitReviewDetails - used for rendering review results from submit_result tool */
 export interface SubmitReviewDetails {
 	overall_correctness: "correct" | "incorrect";
 	explanation: string;

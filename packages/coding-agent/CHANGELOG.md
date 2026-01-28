@@ -5,6 +5,9 @@
 ### Added
 - Added `/fork` command to create a new session with the exact same state (entries and artifacts) as the current session
 
+### Changed
+- Renamed the `complete` tool to `submit_result` for subagent result submission
+
 ## [8.6.0] - 2026-01-27
 
 ### Added

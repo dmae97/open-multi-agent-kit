@@ -19,7 +19,7 @@ import { WebSearchTool } from "../web/search";
 import { AskTool } from "./ask";
 import { BashTool } from "./bash";
 import { CalculatorTool } from "./calculator";
-import { CompleteTool } from "./complete";
+import { SubmitResultTool } from "./submit-result";
 import { ExitPlanModeTool } from "./exit-plan-mode";
 import { FetchTool } from "./fetch";
 import { FindTool } from "./find";
@@ -72,7 +72,7 @@ export {
 export { AskTool, type AskToolDetails } from "./ask";
 export { BashTool, type BashToolDetails, type BashToolOptions } from "./bash";
 export { CalculatorTool, type CalculatorToolDetails } from "./calculator";
-export { CompleteTool } from "./complete";
+export { SubmitResultTool } from "./submit-result";
 export { type ExitPlanModeDetails, ExitPlanModeTool } from "./exit-plan-mode";
 export { FetchTool, type FetchToolDetails } from "./fetch";
 export { type FindOperations, FindTool, type FindToolDetails, type FindToolOptions } from "./find";
@@ -126,8 +126,8 @@ export interface ToolSession {
 	eventBus?: EventBus;
 	/** Output schema for structured completion (subagents) */
 	outputSchema?: unknown;
-	/** Whether to include the complete tool by default */
-	requireCompleteTool?: boolean;
+	/** Whether to include the submit_result tool by default */
+	requireSubmitResultTool?: boolean;
 	/** Get session file */
 	getSessionFile: () => string | null;
 	/** Get session ID */
@@ -198,7 +198,7 @@ export const BUILTIN_TOOLS: Record<string, ToolFactory> = {
 };
 
 export const HIDDEN_TOOLS: Record<string, ToolFactory> = {
-	complete: s => new CompleteTool(s),
+	submit_result: s => new SubmitResultTool(s),
 	report_finding: () => reportFindingTool,
 	exit_plan_mode: s => new ExitPlanModeTool(s),
 };
@@ -240,7 +240,7 @@ function getPythonModeFromEnv(): PythonToolMode | null {
  */
 export async function createTools(session: ToolSession, toolNames?: string[]): Promise<Tool[]> {
 	time("createTools:start");
-	const includeComplete = session.requireCompleteTool === true;
+	const includeSubmitResult = session.requireSubmitResultTool === true;
 	const enableLsp = session.enableLsp ?? true;
 	const requestedTools = toolNames && toolNames.length > 0 ? [...new Set(toolNames)] : undefined;
 	if (requestedTools && !requestedTools.includes("exit_plan_mode")) {
@@ -296,8 +296,8 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		if (name === "python") return allowPython;
 		return true;
 	};
-	if (includeComplete && requestedTools && !requestedTools.includes("complete")) {
-		requestedTools.push("complete");
+	if (includeSubmitResult && requestedTools && !requestedTools.includes("submit_result")) {
+		requestedTools.push("submit_result");
 	}
 
 	const filteredRequestedTools = requestedTools?.filter(name => name in allTools && isToolAllowed(name));
@@ -307,7 +307,7 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 			? filteredRequestedTools.map(name => [name, allTools[name]] as const)
 			: [
 					...Object.entries(BUILTIN_TOOLS).filter(([name]) => isToolAllowed(name)),
-					...(includeComplete ? ([["complete", HIDDEN_TOOLS.complete]] as const) : []),
+					...(includeSubmitResult ? ([["submit_result", HIDDEN_TOOLS.submit_result]] as const) : []),
 					...([["exit_plan_mode", HIDDEN_TOOLS.exit_plan_mode]] as const),
 				];
 	time("createTools:beforeFactories");

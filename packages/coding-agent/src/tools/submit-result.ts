@@ -1,5 +1,5 @@
 /**
- * Complete tool for structured subagent output.
+ * Submit result tool for structured subagent output.
  *
  * Subagents must call this tool to finish and return structured JSON output.
  */
@@ -12,7 +12,7 @@ import { subprocessToolRegistry } from "../task/subprocess-tool-registry";
 import type { ToolSession } from ".";
 import { jtdToJsonSchema } from "./jtd-to-json-schema";
 
-export interface CompleteDetails {
+export interface SubmitResultDetails {
 	data: unknown;
 	status: "success" | "aborted";
 	error?: string;
@@ -52,9 +52,9 @@ function formatAjvErrors(errors: ErrorObject[] | null | undefined): string {
 		.join("; ");
 }
 
-export class CompleteTool implements AgentTool<TObject, CompleteDetails> {
-	public readonly name = "complete";
-	public readonly label = "Complete";
+export class SubmitResultTool implements AgentTool<TObject, SubmitResultDetails> {
+	public readonly name = "submit_result";
+	public readonly label = "Submit Result";
 	public readonly description =
 		"Finish the task with structured JSON output. Call exactly once at the end of the task.\n\n" +
 		"If you cannot complete the task, call with status='aborted' and an error message.";
@@ -106,9 +106,9 @@ export class CompleteTool implements AgentTool<TObject, CompleteDetails> {
 		_toolCallId: string,
 		params: Static<TObject>,
 		_signal?: AbortSignal,
-		_onUpdate?: AgentToolUpdateCallback<CompleteDetails>,
+		_onUpdate?: AgentToolUpdateCallback<SubmitResultDetails>,
 		_context?: AgentToolContext,
-	): Promise<AgentToolResult<CompleteDetails>> {
+	): Promise<AgentToolResult<SubmitResultDetails>> {
 		const status = (params.status ?? "success") as "success" | "aborted";
 
 		// Skip validation when aborting - data is optional for aborts
@@ -125,7 +125,7 @@ export class CompleteTool implements AgentTool<TObject, CompleteDetails> {
 		}
 
 		const responseText =
-			status === "aborted" ? `Task aborted: ${params.error || "No reason provided"}` : "Completion recorded.";
+			status === "aborted" ? `Task aborted: ${params.error || "No reason provided"}` : "Result submitted.";
 
 		return {
 			content: [{ type: "text", text: responseText }],
@@ -135,7 +135,7 @@ export class CompleteTool implements AgentTool<TObject, CompleteDetails> {
 }
 
 // Register subprocess tool handler for extraction + termination.
-subprocessToolRegistry.register<CompleteDetails>("complete", {
-	extractData: event => event.result?.details as CompleteDetails | undefined,
+subprocessToolRegistry.register<SubmitResultDetails>("submit_result", {
+	extractData: event => event.result?.details as SubmitResultDetails | undefined,
 	shouldTerminate: () => true,
 });

@@ -117,5 +117,5 @@ Infer from task, default medium:
 </procedure>
 
 <critical>
-Read-only; no file modifications. Call `complete` with your findings when done.
+Read-only; no file modifications. Call `submit_result` with your findings when done.
 </critical>

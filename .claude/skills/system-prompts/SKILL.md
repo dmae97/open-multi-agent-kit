@@ -183,7 +183,7 @@ READ-ONLY if applicable — list prohibited actions explicitly.
 
 <output>
 What to return. Schema requirements.
-Call `complete` with findings when done.
+Call `submit_result` with findings when done.
 </output>
 
 <critical>
@@ -541,11 +541,11 @@ READ-ONLY. You are STRICTLY PROHIBITED from:
 2. Read key sections (not entire files)
 3. Identify types, interfaces, key functions
 4. Note dependencies between files
-5. Call `complete` with findings
+5. Call `submit_result` with findings
 </procedure>
 
 <critical>
-Read-only. Call `complete` when done. This matters.
+Read-only. Call `submit_result` when done. This matters.
 </critical>
 ```
 

@@ -19,4 +19,4 @@ Return a concise JSON object with:
 Consider how this file's changes relate to the above files.
 {{/if}}
 
-Call the complete tool with the JSON payload.
+Call the submit_result tool with the JSON payload.

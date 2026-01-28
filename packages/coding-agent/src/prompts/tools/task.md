@@ -2,6 +2,21 @@
 
 Launch a new agent to handle complex, multi-step tasks autonomously. Each agent type has specific capabilities and tools available to it.
 
+<critical>
+This matters. Get it right.
+
+Subagents have NO access to conversation history. They only see:
+1. Their agent-specific system prompt
+2. The `context` string you provide
+3. The `task` string you provide
+
+Use a single Task call with multiple `tasks` entries when parallelizing. Multiple concurrent Task calls bypass coordination.
+
+For code changes, have subagents write files directly with Edit/Write. Do not ask them to return patches for you to apply.
+
+Agents with `output="structured"` enforce their own schema; the `output` parameter is ignored for those agents.
+</critical>
+
 <agents>
 {{#list agents join="\n"}}
 <agent name="{{name}}"{{#if output}} output="structured"{{/if}}>
@@ -9,20 +24,17 @@ Launch a new agent to handle complex, multi-step tasks autonomously. Each agent 
 <tools>{{default (join tools ", ") "All tools"}}</tools>
 </agent>
 {{/list}}
-
-Agents with `output="structured"` have a fixed schema enforced via frontmatter; your `output` parameter will be ignored for these agents.
 </agents>
 
 <instruction>
-- Always include a short description of the task in the task parameter
-- **Plan-then-execute**: Put shared constraints in `context`, keep each task focused, specify acceptance criteria; **always provide an `output` schema unless the task explicitly does not require structured output**
-- **Minimize tool chatter**: Avoid repeating large context; use `read agent://<id>` for full logs
-- **Parallelize**: Launch multiple agents whenever possible. You MUST use a single Task call with multiple entries in the `tasks` array to do this.
-- **Isolate file scopes**: Assign each task distinct files or directories so agents don't conflict
-- **Results are intermediate data**: Agent findings provide context for YOU to perform actual work. Do not treat agent reports as "task complete" signals.
-- **Trust outputs**: Agent results should generally be trusted
-- **Clarify intent**: Tell the agent whether you expect code changes or just research (search, file reads, web fetches)
-- **Proactive use**: If an agent description says to use it proactively, do so without waiting for explicit user request
+This matters. Be thorough.
+
+1. Plan before acting. Define the goal, acceptance criteria, and scope per task.
+2. Put shared constraints and decisions in `context`; keep each task request short and unambiguous.
+3. State whether each task is research-only or should modify files.
+4. Provide an `output` schema whenever possible. Do not repeat the schema in `context`; the agent does not need it there.
+5. Assign distinct file scopes per task to avoid conflicts.
+6. Trust the returned data, then verify with tools when correctness matters.
 </instruction>
 
 <parameters>
@@ -34,7 +46,7 @@ Agents with `output="structured"` have a fixed schema enforced via frontmatter; 
 		- `description`: Short human-readable description of what the task does
 		- `args`: Object with keys matching `\{{placeholders}}` in context (always include this, even if empty)
 		- `skills`: (optional) Array of skill names to preload into this task's system prompt. When set, the skills index section is omitted and the full SKILL.md contents are embedded.
-- `output`: (optional) JTD schema for structured subagent output (used by the complete tool)
+- `output`: (optional) JTD schema for structured subagent output (used by the submit_result tool). Do not duplicate this schema in `context`.
 </parameters>
 
 <output>
@@ -45,17 +57,6 @@ Returns task results for each spawned agent:
 
 Results are keyed by task `id` (e.g., "AuthProvider", "AuthApi").
 </output>
-
-<critical>
-**Subagents have NO access to conversation history.** They only see:
-1. Their agent-specific system prompt
-2. The `context` string you provide
-3. The `task` string you provide
-
-If you discussed requirements, plans, schemas, or decisions with the user, you MUST include that information in `context`. Subagents cannot see prior messages—they start fresh with only what you explicitly pass them.
-**Never call Task multiple times in parallel.** Use a single Task call with multiple entries in the `tasks` array. Parallel Task calls waste resources and bypass coordination.
-**For code changes, subagents write files directly.** Never ask an agent to "return the changes" for you to apply—they have Edit and Write tools. Their context window holds the work; asking them to report back wastes it.
-</critical>
 
 <example>
 user: "Looks good, execute the plan"
@@ -80,7 +81,7 @@ assistant: Uses the Task tool:
 </example>
 
 <avoid>
-- Confirmation bias: avoid yes/no exploration prompts; ask for factual discovery instead
+- Confirmation bias: ask for factual discovery instead of yes/no exploration prompts
 - Reading a specific file path → Use Read tool instead
 - Finding files by pattern/name → Use Find tool instead
 - Searching for a specific class/function definition → Use Grep tool instead

@@ -178,8 +178,8 @@ export interface CreateAgentSessionOptions {
 
 	/** Output schema for structured completion (subagents) */
 	outputSchema?: unknown;
-	/** Whether to include the complete tool by default */
-	requireCompleteTool?: boolean;
+	/** Whether to include the submit_result tool by default */
+	requireSubmitResultTool?: boolean;
 
 	/** Session manager. Default: SessionManager.create(cwd) */
 	sessionManager?: SessionManager;
@@ -746,7 +746,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		skills,
 		eventBus,
 		outputSchema: options.outputSchema,
-		requireCompleteTool: options.requireCompleteTool,
+		requireSubmitResultTool: options.requireSubmitResultTool,
 		getSessionFile: () => sessionManager.getSessionFile() ?? null,
 		getSessionId: () => sessionManager.getSessionId?.() ?? null,
 		getSessionSpawns: () => options.spawns ?? "*",

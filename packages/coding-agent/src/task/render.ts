@@ -77,12 +77,12 @@ function formatJsonScalar(value: unknown, theme: Theme): string {
 	return "";
 }
 
-const MISSING_COMPLETE_WARNING_PREFIX = "SYSTEM WARNING: Subagent exited without calling complete tool";
+const MISSING_SUBMIT_RESULT_WARNING_PREFIX = "SYSTEM WARNING: Subagent exited without calling submit_result tool";
 
-function extractMissingCompleteWarning(output: string): { warning?: string; rest: string } {
+function extractMissingSubmitResultWarning(output: string): { warning?: string; rest: string } {
 	const lines = output.split("\n");
 	const firstLine = lines[0]?.trim() ?? "";
-	if (!firstLine.startsWith(MISSING_COMPLETE_WARNING_PREFIX)) {
+	if (!firstLine.startsWith(MISSING_SUBMIT_RESULT_WARNING_PREFIX)) {
 		return { rest: output };
 	}
 	const rest = lines
@@ -574,9 +574,9 @@ function renderAgentProgress(
 
 	// Render extracted tool data inline (e.g., review findings)
 	if (progress.extractedToolData) {
-		// For completed tasks, check for review verdict from complete tool
+		// For completed tasks, check for review verdict from submit_result tool
 		if (progress.status === "completed") {
-			const completeData = progress.extractedToolData.complete as Array<{ data: unknown }> | undefined;
+			const completeData = progress.extractedToolData.submit_result as Array<{ data: unknown }> | undefined;
 			const reportFindingData = progress.extractedToolData.report_finding as ReportFindingDetails[] | undefined;
 			const reviewData = completeData
 				?.map(c => c.data as SubmitReviewDetails)
@@ -732,7 +732,8 @@ function renderAgentResult(result: SingleResult, isLast: boolean, expanded: bool
 	const prefix = isLast ? theme.fg("dim", theme.tree.last) : theme.fg("dim", theme.tree.branch);
 	const continuePrefix = isLast ? "   " : `${theme.fg("dim", theme.tree.vertical)}  `;
 
-	const { warning: missingCompleteWarning, rest: outputWithoutWarning } = extractMissingCompleteWarning(result.output);
+	const { warning: missingCompleteWarning, rest: outputWithoutWarning } =
+		extractMissingSubmitResultWarning(result.output);
 	const aborted = result.aborted ?? false;
 	const success = !aborted && result.exitCode === 0;
 	const needsWarning = Boolean(missingCompleteWarning) && success;
@@ -766,11 +767,11 @@ function renderAgentResult(result: SingleResult, isLast: boolean, expanded: bool
 	lines.push(statusLine);
 	lines.push(...renderArgsSection(result.args, continuePrefix, expanded, theme));
 
-	// Check for review result (complete with review schema + report_finding)
-	const completeData = result.extractedToolData?.complete as Array<{ data: unknown }> | undefined;
+	// Check for review result (submit_result with review schema + report_finding)
+	const completeData = result.extractedToolData?.submit_result as Array<{ data: unknown }> | undefined;
 	const reportFindingData = result.extractedToolData?.report_finding as ReportFindingDetails[] | undefined;
 
-	// Extract review verdict from complete tool's data field if it matches SubmitReviewDetails
+	// Extract review verdict from submit_result tool's data field if it matches SubmitReviewDetails
 	const reviewData = completeData
 		?.map(c => c.data as SubmitReviewDetails)
 		.filter(d => d && typeof d === "object" && "overall_correctness" in d);
@@ -787,7 +788,7 @@ function renderAgentResult(result: SingleResult, isLast: boolean, expanded: bool
 		const hasCompleteData = completeData && completeData.length > 0;
 		const message = hasCompleteData
 			? "Review verdict missing expected fields"
-			: "Review incomplete (complete not called)";
+			: "Review incomplete (submit_result not called)";
 		lines.push(`${continuePrefix}${theme.fg("warning", theme.status.warning)} ${theme.fg("dim", message)}`);
 		lines.push(`${continuePrefix}${formatFindingSummary(reportFindingData, theme)}`);
 		lines.push(...renderFindings(reportFindingData, continuePrefix, expanded, theme));
@@ -799,7 +800,7 @@ function renderAgentResult(result: SingleResult, isLast: boolean, expanded: bool
 	if (result.extractedToolData) {
 		for (const [toolName, dataArray] of Object.entries(result.extractedToolData)) {
 			// Skip review tools - handled above
-			if (toolName === "complete" || toolName === "report_finding") continue;
+			if (toolName === "submit_result" || toolName === "report_finding") continue;
 
 			const handler = subprocessToolRegistry.getHandler(toolName);
 			if (handler?.renderFinal && (dataArray as unknown[]).length > 0) {

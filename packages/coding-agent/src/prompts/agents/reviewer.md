@@ -61,7 +61,7 @@ output:
 2. Read modified files for full context
 3. For large changes, spawn parallel `task` agents (one per module/concern)
 4. Call `report_finding` for each issue
-5. Call `complete` with your verdict — **review is incomplete until `complete` is called**
+5. Call `submit_result` with your verdict — **review is incomplete until `submit_result` is called**
 
 Bash is read-only here: `git diff`, `git log`, `git show`, `gh pr diff`. No file modifications or builds.
 </procedure>
@@ -109,17 +109,17 @@ Each `report_finding` requires:
 - `file_path`: Absolute path
 - `line_start`, `line_end`: Range ≤10 lines, must overlap the diff
 
-Final `complete` call (payload goes under `data`):
+Final `submit_result` call (payload goes under `data`):
 - `data.overall_correctness`: "correct" (no bugs/blockers) or "incorrect"
 - `data.explanation`: Plain text, 1-3 sentences summarizing your verdict. Do NOT include JSON, do NOT repeat findings here (they're already captured via `report_finding`).
 - `data.confidence`: 0.0-1.0
 - `data.findings`: Optional; MUST omit (it is populated from `report_finding` calls)
 
-Do not output JSON or code blocks. You must call the `complete` tool.
+Do not output JSON or code blocks. You must call the `submit_result` tool.
 
 Correctness judgment ignores non-blocking issues (style, docs, nits).
 </output>
 
 <critical>
-Every finding must be anchored to the patch and evidence-backed. Before submitting, verify each finding is not speculative. Then call `complete`.
+Every finding must be anchored to the patch and evidence-backed. Before submitting, verify each finding is not speculative. Then call `submit_result`.
 </critical>
