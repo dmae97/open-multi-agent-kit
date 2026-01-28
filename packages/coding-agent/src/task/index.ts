@@ -24,6 +24,7 @@ import { renderPromptTemplate } from "../config/prompt-templates";
 import type { Theme } from "../modes/theme/theme";
 import planModeSubagentPrompt from "../prompts/system/plan-mode-subagent.md" with { type: "text" };
 import taskDescriptionTemplate from "../prompts/tools/task.md" with { type: "text" };
+import taskSummaryTemplate from "../prompts/tools/task-summary.md" with { type: "text" };
 import { formatDuration } from "../tools/render-utils";
 // Import review tools for side effects (registers subagent tool handlers)
 import "../tools/review";
@@ -700,29 +701,43 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 			const summaries = results.map(r => {
 				const status = r.aborted ? "cancelled" : r.exitCode === 0 ? "completed" : `failed (exit ${r.exitCode})`;
 				const output = r.output.trim() || r.stderr.trim() || "(no output)";
-				const outputLines = output.split("\n");
-				const outputLineCount = r.outputMeta?.lineCount ?? outputLines.length;
-				const fullOutputThreshold = 30;
-				const previewLimit = outputLineCount <= fullOutputThreshold ? outputLines.length : 10;
-				const preview = outputLines.slice(0, previewLimit).join("\n");
-				const meta = r.outputMeta
-					? ` [${r.outputMeta.lineCount} lines, ${formatBytes(r.outputMeta.charCount)}]`
-					: "";
-				return `[${r.agent}] ${status}${meta} ${r.id}\n${preview}`;
+				const outputCharCount = r.outputMeta?.charCount ?? output.length;
+				const fullOutputThreshold = 5000;
+				let preview = output;
+				if (outputCharCount > fullOutputThreshold) {
+					const slice = output.slice(0, fullOutputThreshold);
+					const lastNewline = slice.lastIndexOf("\n");
+					preview = lastNewline >= 0 ? slice.slice(0, lastNewline) : slice;
+				}
+				return {
+					agent: r.agent,
+					status,
+					id: r.id,
+					preview,
+					meta: r.outputMeta
+						? {
+								lineCount: r.outputMeta.lineCount,
+								charCount: r.outputMeta.charCount,
+								charSize: formatBytes(r.outputMeta.charCount),
+							}
+						: undefined,
+				};
 			});
 
-			const outputIds = results.filter(r => !r.aborted || r.output.trim()).map(r => r.id);
-			const outputHint =
-				outputIds.length > 0
-					? `\n\nUse read with agent:// for full logs: ${outputIds.map(id => `agent://${id}`).join(", ")}`
-					: "";
-			const schemaNote = schemaOverridden
-				? `\n\nNote: Agent '${agentName}' has a fixed output schema; your 'output' parameter was ignored.\nRequired schema: ${JSON.stringify(agent.output)}`
-				: "";
-			const cancelledNote = aborted && cancelledCount > 0 ? ` (${cancelledCount} cancelled)` : "";
-			const summary = `${successCount}/${results.length} succeeded${cancelledNote} [${formatDuration(
-				totalDuration,
-			)}]\n\n${summaries.join("\n\n---\n\n")}${outputHint}${schemaNote}${patchApplySummary}`;
+			const outputIds = results.filter(r => !r.aborted || r.output.trim()).map(r => `agent://${r.id}`);
+			const summary = renderPromptTemplate(taskSummaryTemplate, {
+				successCount,
+				totalCount: results.length,
+				cancelledCount,
+				hasCancelledNote: aborted && cancelledCount > 0,
+				duration: formatDuration(totalDuration),
+				summaries,
+				outputIds,
+				schemaOverridden,
+				agentName,
+				requiredSchema: agent.output ? JSON.stringify(agent.output) : "",
+				patchApplySummary,
+			});
 
 			// Cleanup temp directory if used
 			const shouldCleanupTempArtifacts =

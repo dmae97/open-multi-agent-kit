@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import { jtdToTypeScript } from "@oh-my-pi/pi-coding-agent/tools/jtd-to-typescript";
 import { logger } from "@oh-my-pi/pi-utils";
 import Handlebars from "handlebars";
 import { CONFIG_DIR_NAME, getPromptsDir } from "../config";
@@ -221,6 +222,8 @@ handlebars.registerHelper("includes", (collection: unknown, item: unknown): bool
  * Returns logical NOT of value. For use in subexpressions.
  */
 handlebars.registerHelper("not", (value: unknown): boolean => !value);
+
+handlebars.registerHelper("jtdToTypeScript", (schema: unknown): string => jtdToTypeScript(schema));
 
 export function renderPromptTemplate(template: string, context: TemplateContext = {}): string {
 	const compiled = handlebars.compile(template, { noEscape: true, strict: false });

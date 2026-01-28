@@ -28,7 +28,6 @@ Agents with `output="structured"` enforce their own schema; the `output` paramet
 
 <instruction>
 This matters. Be thorough.
-
 1. Plan before acting. Define the goal, acceptance criteria, and scope per task.
 2. Put shared constraints and decisions in `context`; keep each task request short and unambiguous.
 3. State whether each task is research-only or should modify files.

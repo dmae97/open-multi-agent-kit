@@ -19,7 +19,6 @@ import { WebSearchTool } from "../web/search";
 import { AskTool } from "./ask";
 import { BashTool } from "./bash";
 import { CalculatorTool } from "./calculator";
-import { SubmitResultTool } from "./submit-result";
 import { ExitPlanModeTool } from "./exit-plan-mode";
 import { FetchTool } from "./fetch";
 import { FindTool } from "./find";
@@ -31,6 +30,7 @@ import { PythonTool } from "./python";
 import { ReadTool } from "./read";
 import { reportFindingTool } from "./review";
 import { loadSshTool } from "./ssh";
+import { SubmitResultTool } from "./submit-result";
 import { TodoWriteTool } from "./todo-write";
 import { WriteTool } from "./write";
 
@@ -72,7 +72,6 @@ export {
 export { AskTool, type AskToolDetails } from "./ask";
 export { BashTool, type BashToolDetails, type BashToolOptions } from "./bash";
 export { CalculatorTool, type CalculatorToolDetails } from "./calculator";
-export { SubmitResultTool } from "./submit-result";
 export { type ExitPlanModeDetails, ExitPlanModeTool } from "./exit-plan-mode";
 export { FetchTool, type FetchToolDetails } from "./fetch";
 export { type FindOperations, FindTool, type FindToolDetails, type FindToolOptions } from "./find";
@@ -84,6 +83,7 @@ export { PythonTool, type PythonToolDetails, type PythonToolOptions } from "./py
 export { ReadTool, type ReadToolDetails } from "./read";
 export { reportFindingTool, type SubmitReviewDetails } from "./review";
 export { loadSshTool, type SSHToolDetails, SshTool } from "./ssh";
+export { SubmitResultTool } from "./submit-result";
 export { type TodoItem, TodoWriteTool, type TodoWriteToolDetails } from "./todo-write";
 export {
 	DEFAULT_MAX_BYTES,

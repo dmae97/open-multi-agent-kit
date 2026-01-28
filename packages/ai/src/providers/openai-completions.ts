@@ -30,6 +30,7 @@ import { AssistantMessageEventStream } from "../utils/event-stream";
 import { parseStreamingJson } from "../utils/json-parse";
 import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode";
+import { mapToOpenAICompletionsToolChoice } from "../utils/tool-choice";
 import { transformMessages } from "./transform-messages";
 
 /**
@@ -422,7 +423,7 @@ function buildParams(model: Model<"openai-completions">, context: Context, optio
 	}
 
 	if (options?.toolChoice && compat.supportsToolChoice) {
-		params.tool_choice = options.toolChoice;
+		params.tool_choice = mapToOpenAICompletionsToolChoice(options.toolChoice);
 	}
 
 	if (compat.thinkingFormat === "zai" && model.reasoning) {

@@ -32,6 +32,7 @@ import { AssistantMessageEventStream } from "../utils/event-stream";
 import { parseStreamingJson } from "../utils/json-parse";
 import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode";
+import { mapToOpenAIResponsesToolChoice } from "../utils/tool-choice";
 import { transformMessages } from "./transform-messages";
 
 const DEFAULT_AZURE_API_VERSION = "v1";
@@ -452,7 +453,7 @@ function buildParams(
 	if (context.tools) {
 		params.tools = convertTools(context.tools);
 		if (options?.toolChoice) {
-			params.tool_choice = options.toolChoice;
+			params.tool_choice = mapToOpenAIResponsesToolChoice(options.toolChoice);
 		}
 	}
 

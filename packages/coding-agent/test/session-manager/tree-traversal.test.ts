@@ -67,7 +67,7 @@ describe("SessionManager append and tree traversal", () => {
 
 			const id1 = session.appendMessage(userMsg("1"));
 			const id2 = session.appendMessage(assistantMsg("2"));
-			const compactionId = session.appendCompaction("summary", id1, 1000);
+			const compactionId = session.appendCompaction("summary", undefined, id1, 1000);
 			const _id3 = session.appendMessage(userMsg("3"));
 
 			const entries = session.getEntries();

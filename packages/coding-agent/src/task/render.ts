@@ -732,8 +732,9 @@ function renderAgentResult(result: SingleResult, isLast: boolean, expanded: bool
 	const prefix = isLast ? theme.fg("dim", theme.tree.last) : theme.fg("dim", theme.tree.branch);
 	const continuePrefix = isLast ? "   " : `${theme.fg("dim", theme.tree.vertical)}  `;
 
-	const { warning: missingCompleteWarning, rest: outputWithoutWarning } =
-		extractMissingSubmitResultWarning(result.output);
+	const { warning: missingCompleteWarning, rest: outputWithoutWarning } = extractMissingSubmitResultWarning(
+		result.output,
+	);
 	const aborted = result.aborted ?? false;
 	const success = !aborted && result.exitCode === 0;
 	const needsWarning = Boolean(missingCompleteWarning) && success;

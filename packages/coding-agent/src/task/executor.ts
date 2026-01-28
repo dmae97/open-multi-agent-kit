@@ -8,12 +8,15 @@ import type { AgentEvent, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, Model, ToolChoice } from "@oh-my-pi/pi-ai";
 import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { parseModelPattern } from "@oh-my-pi/pi-coding-agent/config/model-resolver";
-import type { PromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
+import { type PromptTemplate, renderPromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
 import { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
 import type { CustomTool } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools/types";
 import type { Skill } from "@oh-my-pi/pi-coding-agent/extensibility/skills";
 import { callTool } from "@oh-my-pi/pi-coding-agent/mcp/client";
 import type { MCPManager } from "@oh-my-pi/pi-coding-agent/mcp/manager";
+import subagentSystemPromptTemplate from "@oh-my-pi/pi-coding-agent/prompts/system/subagent-system-prompt.md" with {
+	type: "text",
+};
 import { createAgentSession, discoverAuthStorage, discoverModels } from "@oh-my-pi/pi-coding-agent/sdk";
 import type { AgentSession, AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import type { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
@@ -920,11 +923,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			const mcpProxyTools = options.mcpManager ? createMCPProxyTools(options.mcpManager) : [];
 			const enableMCP = !options.mcpManager;
 
-			const completionInstruction =
-				"When finished, call the submit_result tool exactly once. Do not output JSON or code blocks. Do not end with a plain-text final answer.";
-			const worktreeNotice = worktree
-				? `You will work under this working tree: ${worktree}. CRITICAL: Do not touch the original repository; only make changes inside this worktree.`
-				: "";
+			const { normalized: normalizedOutputSchema } = normalizeOutputSchema(outputSchema);
 
 			const { session } = await createAgentSession({
 				cwd: worktree ?? cwd,
@@ -941,7 +940,12 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				preloadedSkills: options.preloadedSkills,
 				promptTemplates: options.promptTemplates,
 				systemPrompt: defaultPrompt =>
-					`${defaultPrompt}\n\n${agent.systemPrompt}\n\n${worktreeNotice}\n\n${completionInstruction}`,
+					renderPromptTemplate(subagentSystemPromptTemplate, {
+						base: defaultPrompt,
+						agent: agent.systemPrompt,
+						worktree: worktree ?? "",
+						outputSchema: normalizedOutputSchema,
+					}),
 				sessionManager,
 				hasUI: false,
 				spawns: spawnsEnv,
@@ -1030,7 +1034,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			const MAX_SUBMIT_RESULT_RETRIES = 3;
 			unsubscribe = session.subscribe(event => {
 				if (event.type === "tool_execution_end" && event.toolName === "submit_result") {
-				submitResultCalled = true;
+					submitResultCalled = true;
 				}
 				if (isAgentEvent(event)) {
 					try {
@@ -1055,7 +1059,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 					retryCount++;
 					if (!previousTools) {
 						previousTools = session.getActiveToolNames();
-					await session.setActiveToolsByName(["submit_result"]);
+						await session.setActiveToolsByName(["submit_result"]);
 					}
 					const reminder = `<system-reminder>
 CRITICAL: You stopped without calling the submit_result tool. This is reminder ${retryCount} of ${MAX_SUBMIT_RESULT_RETRIES}.
@@ -1186,7 +1190,7 @@ Call submit_result now.`;
 			exitCode = 0;
 			stderr = "";
 		} else {
-		const warning = "SYSTEM WARNING: Subagent exited without calling submit_result tool after 3 reminders.";
+			const warning = "SYSTEM WARNING: Subagent exited without calling submit_result tool after 3 reminders.";
 			rawOutput = rawOutput ? `${warning}\n\n${rawOutput}` : warning;
 		}
 	}

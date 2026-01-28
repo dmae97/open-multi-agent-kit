@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { supportsXhigh } from "./models";
 import { type BedrockOptions, streamBedrock } from "./providers/amazon-bedrock";
 import { type AnthropicOptions, streamAnthropic } from "./providers/anthropic";
-import { type AzureOpenAIResponsesOptions, streamAzureOpenAIResponses } from "./providers/azure-openai-responses";
+import { streamAzureOpenAIResponses } from "./providers/azure-openai-responses";
 import { type CursorOptions, streamCursor } from "./providers/cursor";
 import { type GoogleOptions, streamGoogle } from "./providers/google";
 import {
@@ -13,9 +13,9 @@ import {
 	streamGoogleGeminiCli,
 } from "./providers/google-gemini-cli";
 import { type GoogleVertexOptions, streamGoogleVertex } from "./providers/google-vertex";
-import { type OpenAICodexResponsesOptions, streamOpenAICodexResponses } from "./providers/openai-codex-responses";
+import { streamOpenAICodexResponses } from "./providers/openai-codex-responses";
 import { type OpenAICompletionsOptions, streamOpenAICompletions } from "./providers/openai-completions";
-import { type OpenAIResponsesOptions, streamOpenAIResponses } from "./providers/openai-responses";
+import { streamOpenAIResponses } from "./providers/openai-responses";
 import type {
 	Api,
 	AssistantMessage,
@@ -338,7 +338,7 @@ function mapOptionsForApi<TApi extends Api>(
 					...base,
 					thinkingEnabled: false,
 					toolChoice: mapAnthropicToolChoice(options?.toolChoice),
-				} satisfies AnthropicOptions;
+				} as OptionsForApi<TApi>;
 			}
 
 			let thinkingBudget = options.thinkingBudgets?.[reasoning] ?? ANTHROPIC_THINKING[reasoning];
@@ -347,7 +347,7 @@ function mapOptionsForApi<TApi extends Api>(
 					...base,
 					thinkingEnabled: false,
 					toolChoice: mapAnthropicToolChoice(options?.toolChoice),
-				} satisfies AnthropicOptions;
+				} as OptionsForApi<TApi>;
 			}
 
 			if (ANTHROPIC_USE_INTERLEAVED_THINKING) {
@@ -356,7 +356,7 @@ function mapOptionsForApi<TApi extends Api>(
 					thinkingEnabled: true,
 					thinkingBudgetTokens: thinkingBudget,
 					toolChoice: mapAnthropicToolChoice(options?.toolChoice),
-				} satisfies AnthropicOptions;
+				} as OptionsForApi<TApi>;
 			}
 
 			// Caller's maxTokens is the desired output; add thinking budget on top, capped at model limit
@@ -373,7 +373,7 @@ function mapOptionsForApi<TApi extends Api>(
 					...base,
 					thinkingEnabled: false,
 					toolChoice: mapAnthropicToolChoice(options?.toolChoice),
-				} satisfies AnthropicOptions;
+				} as OptionsForApi<TApi>;
 			} else {
 				return {
 					...base,
@@ -381,7 +381,7 @@ function mapOptionsForApi<TApi extends Api>(
 					thinkingEnabled: true,
 					thinkingBudgetTokens: thinkingBudget,
 					toolChoice: mapAnthropicToolChoice(options?.toolChoice),
-				} satisfies AnthropicOptions;
+				} as OptionsForApi<TApi>;
 			}
 		}
 
@@ -414,28 +414,28 @@ function mapOptionsForApi<TApi extends Api>(
 				...base,
 				reasoningEffort: supportsXhigh(model) ? options?.reasoning : clampReasoning(options?.reasoning),
 				toolChoice: mapOpenAiToolChoice(options?.toolChoice),
-			} satisfies OpenAICompletionsOptions;
+			} as OptionsForApi<TApi>;
 
 		case "openai-responses":
 			return {
 				...base,
 				reasoningEffort: supportsXhigh(model) ? options?.reasoning : clampReasoning(options?.reasoning),
 				toolChoice: mapOpenAiToolChoice(options?.toolChoice),
-			} satisfies OpenAIResponsesOptions;
+			} as OptionsForApi<TApi>;
 
 		case "azure-openai-responses":
 			return {
 				...base,
 				reasoningEffort: supportsXhigh(model) ? options?.reasoning : clampReasoning(options?.reasoning),
 				toolChoice: mapOpenAiToolChoice(options?.toolChoice),
-			} satisfies AzureOpenAIResponsesOptions;
+			} as OptionsForApi<TApi>;
 
 		case "openai-codex-responses":
 			return {
 				...base,
 				reasoningEffort: supportsXhigh(model) ? options?.reasoning : clampReasoning(options?.reasoning),
 				toolChoice: mapOpenAiToolChoice(options?.toolChoice),
-			} satisfies OpenAICodexResponsesOptions;
+			} as OptionsForApi<TApi>;
 
 		case "google-generative-ai": {
 			// Explicitly disable thinking when reasoning is not specified
@@ -445,7 +445,7 @@ function mapOptionsForApi<TApi extends Api>(
 					...base,
 					thinking: { enabled: false },
 					toolChoice: mapGoogleToolChoice(options?.toolChoice),
-				} satisfies GoogleOptions;
+				} as OptionsForApi<TApi>;
 			}
 
 			const googleModel = model as Model<"google-generative-ai">;
@@ -461,7 +461,7 @@ function mapOptionsForApi<TApi extends Api>(
 						level: getGemini3ThinkingLevel(effort, googleModel),
 					},
 					toolChoice: mapGoogleToolChoice(options?.toolChoice),
-				} satisfies GoogleOptions;
+				} as OptionsForApi<TApi>;
 			}
 
 			return {
@@ -471,7 +471,7 @@ function mapOptionsForApi<TApi extends Api>(
 					budgetTokens: getGoogleBudget(googleModel, effort, options?.thinkingBudgets),
 				},
 				toolChoice: mapGoogleToolChoice(options?.toolChoice),
-			} satisfies GoogleOptions;
+			} as OptionsForApi<TApi>;
 		}
 
 		case "google-gemini-cli": {
@@ -480,7 +480,7 @@ function mapOptionsForApi<TApi extends Api>(
 					...base,
 					thinking: { enabled: false },
 					toolChoice: mapGoogleToolChoice(options?.toolChoice),
-				} satisfies GoogleGeminiCliOptions;
+				} as OptionsForApi<TApi>;
 			}
 
 			const effort = clampReasoning(options.reasoning)!;
@@ -494,7 +494,7 @@ function mapOptionsForApi<TApi extends Api>(
 						level: getGeminiCliThinkingLevel(effort, model.id),
 					},
 					toolChoice: mapGoogleToolChoice(options?.toolChoice),
-				} satisfies GoogleGeminiCliOptions;
+				} as OptionsForApi<TApi>;
 			}
 
 			let thinkingBudget = options.thinkingBudgets?.[effort] ?? GOOGLE_THINKING[effort];
@@ -513,14 +513,14 @@ function mapOptionsForApi<TApi extends Api>(
 					...base,
 					thinking: { enabled: false },
 					toolChoice: mapGoogleToolChoice(options?.toolChoice),
-				} satisfies GoogleGeminiCliOptions;
+				} as OptionsForApi<TApi>;
 			} else {
 				return {
 					...base,
 					maxTokens,
 					thinking: { enabled: true, budgetTokens: thinkingBudget },
 					toolChoice: mapGoogleToolChoice(options?.toolChoice),
-				} satisfies GoogleGeminiCliOptions;
+				} as OptionsForApi<TApi>;
 			}
 		}
 
@@ -531,7 +531,7 @@ function mapOptionsForApi<TApi extends Api>(
 					...base,
 					thinking: { enabled: false },
 					toolChoice: mapGoogleToolChoice(options?.toolChoice),
-				} satisfies GoogleVertexOptions;
+				} as OptionsForApi<TApi>;
 			}
 
 			const vertexModel = model as Model<"google-vertex">;
@@ -546,7 +546,7 @@ function mapOptionsForApi<TApi extends Api>(
 						level: getGemini3ThinkingLevel(effort, geminiModel),
 					},
 					toolChoice: mapGoogleToolChoice(options?.toolChoice),
-				} satisfies GoogleVertexOptions;
+				} as OptionsForApi<TApi>;
 			}
 
 			return {
@@ -556,7 +556,7 @@ function mapOptionsForApi<TApi extends Api>(
 					budgetTokens: getGoogleBudget(geminiModel, effort, options?.thinkingBudgets),
 				},
 				toolChoice: mapGoogleToolChoice(options?.toolChoice),
-			} satisfies GoogleVertexOptions;
+			} as OptionsForApi<TApi>;
 		}
 
 		case "cursor-agent": {
@@ -566,7 +566,7 @@ function mapOptionsForApi<TApi extends Api>(
 				...base,
 				execHandlers,
 				onToolResult,
-			} satisfies CursorOptions;
+			} as OptionsForApi<TApi>;
 		}
 
 		default: {
