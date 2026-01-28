@@ -92,10 +92,8 @@ export async function executeSSH(
 	);
 
 	try {
-		await child.exited;
-		const exitCode = child.exitCode ?? 0;
 		return {
-			exitCode,
+			exitCode: await child.exited,
 			cancelled: false,
 			...(await sink.dump()),
 		};

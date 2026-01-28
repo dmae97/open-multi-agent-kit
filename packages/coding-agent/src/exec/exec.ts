@@ -35,22 +35,20 @@ export async function execCommand(
 	cwd: string,
 	options?: ExecOptions,
 ): Promise<ExecResult> {
-	using proc = ptree.spawnAttached([command, ...args], {
+	const result = await ptree.execText([command, ...args], {
+		mode: "attached",
 		cwd,
 		signal: options?.signal,
 		timeout: options?.timeout,
+		allowNonZero: true,
+		allowAbort: true,
+		stderr: "full",
 	});
-	// Read streams before awaiting exit to avoid data loss if streams close
-	const [stdoutText, stderrText] = await Promise.all([proc.stdout.text(), proc.stderr.text()]);
-	try {
-		await proc.exited;
-	} catch {
-		// ChildProcess rejects on non-zero exit; we handle it below
-	}
+
 	return {
-		stdout: stdoutText,
-		stderr: stderrText,
-		code: proc.exitCode ?? 0,
-		killed: proc.exitReason instanceof ptree.AbortError,
+		stdout: result.stdout,
+		stderr: result.stderr,
+		code: result.exitCode ?? 0,
+		killed: Boolean(result.exitError?.aborted),
 	};
 }

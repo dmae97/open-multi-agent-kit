@@ -49,16 +49,21 @@ export async function convertWithMarkitdown(
 
 	try {
 		await Bun.write(tmpFile, content);
-		using child = await ptree.spawnGroup([markitdown, tmpFile], { timeout });
-		const [stdout, stderr, exitCode] = await Promise.all([child.stdout.text(), child.stderr.text(), child.exited]);
-		if (exitCode !== 0) {
+		const result = await ptree.execText([markitdown, tmpFile], {
+			mode: "group",
+			timeout,
+			allowNonZero: true,
+			stderr: "full",
+		});
+		if (!result.ok) {
 			return {
-				content: stdout,
+				content: result.stdout,
 				ok: false,
-				error: stderr.length > 0 ? stderr : `markitdown failed (exit ${exitCode})`,
+				error:
+					result.stderr.length > 0 ? result.stderr : `markitdown failed (exit ${result.exitCode ?? "unknown"})`,
 			};
 		}
-		return { content: stdout, ok: true };
+		return { content: result.stdout, ok: true };
 	} finally {
 		try {
 			await fs.rm(tmpFile, { force: true });

@@ -140,7 +140,7 @@ export class RpcClient {
 		await Bun.sleep(100);
 
 		try {
-			const exitCode = await Promise.race([this.process.exited, Bun.sleep(50).then(() => null)]);
+			const exitCode = await Promise.race([this.process.exited, Bun.sleep(500).then(() => null)]);
 			if (exitCode !== null) {
 				throw new Error(
 					`Agent process exited immediately with code ${exitCode}. Stderr: ${this.process.peekStderr()}`,

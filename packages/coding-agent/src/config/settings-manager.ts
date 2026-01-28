@@ -72,6 +72,13 @@ export interface NotificationSettings {
 	onComplete?: NotificationMethod; // default: "auto"
 }
 
+export interface AskSettings {
+	/** Timeout in seconds for ask tool selections (0 or null to disable, default: 30) */
+	timeout?: number | null;
+	/** Notification method when ask tool is waiting for input (default: "auto") */
+	notification?: NotificationMethod;
+}
+
 export interface ExaSettings {
 	enabled?: boolean; // default: true (master toggle for all Exa tools)
 	enableSearch?: boolean; // default: true (search, deep, code, crawl)
@@ -242,6 +249,7 @@ export interface Settings {
 	showHardwareCursor?: boolean; // Show terminal cursor while still positioning it for IME
 	normativeRewrite?: boolean; // default: false (rewrite tool call arguments to normalized format in session history)
 	readLineNumbers?: boolean; // default: false (prepend line numbers to read tool output by default)
+	ask?: AskSettings;
 }
 
 export const DEFAULT_BASH_INTERCEPTOR_RULES: BashInterceptorRule[] = [
@@ -307,6 +315,7 @@ const DEFAULT_SETTINGS: Settings = {
 	terminal: { showImages: true },
 	images: { autoResize: true },
 	notifications: { onComplete: "auto" },
+	ask: { timeout: 30, notification: "auto" },
 	exa: {
 		enabled: true,
 		enableSearch: true,
@@ -1114,6 +1123,33 @@ export class SettingsManager {
 			this.globalSettings.notifications = {};
 		}
 		this.globalSettings.notifications.onComplete = method;
+		await this.save();
+	}
+
+	/** Get ask tool timeout in milliseconds (0 or null = disabled) */
+	getAskTimeout(): number | null {
+		const timeout = this.settings.ask?.timeout;
+		if (timeout === null || timeout === 0) return null;
+		return (timeout ?? 30) * 1000;
+	}
+
+	async setAskTimeout(seconds: number | null): Promise<void> {
+		if (!this.globalSettings.ask) {
+			this.globalSettings.ask = {};
+		}
+		this.globalSettings.ask.timeout = seconds;
+		await this.save();
+	}
+
+	getAskNotification(): NotificationMethod {
+		return this.settings.ask?.notification ?? "auto";
+	}
+
+	async setAskNotification(method: NotificationMethod): Promise<void> {
+		if (!this.globalSettings.ask) {
+			this.globalSettings.ask = {};
+		}
+		this.globalSettings.ask.notification = method;
 		await this.save();
 	}
 

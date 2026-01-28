@@ -296,22 +296,23 @@ async function convertWithMarkitdown(
 		return { content: "", ok: false, error: "markitdown not found (uv/pip unavailable)" };
 	}
 
-	using child = ptree.spawnGroup([cmd, filePath], { signal });
-	let stdout: string;
-	try {
-		stdout = await child.nothrow().text();
-	} catch (err) {
-		if (err instanceof ptree.Exception && err.aborted) {
-			throw new ToolAbortError();
-		}
-		throw err;
+	const result = await ptree.execText([cmd, filePath], {
+		mode: "group",
+		signal,
+		allowNonZero: true,
+		allowAbort: true,
+		stderr: "buffer",
+	});
+
+	if (result.exitError?.aborted) {
+		throw new ToolAbortError();
 	}
 
-	if (child.exitCode === 0 && stdout.length > 0) {
-		return { content: stdout, ok: true };
+	if (result.exitCode === 0 && result.stdout.length > 0) {
+		return { content: result.stdout, ok: true };
 	}
 
-	return { content: "", ok: false, error: child.peekStderr().trim() || "Conversion failed" };
+	return { content: "", ok: false, error: result.stderr.trim() || "Conversion failed" };
 }
 
 const readSchema = Type.Object({

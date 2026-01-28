@@ -4,8 +4,7 @@ import { StringEnum } from "@oh-my-pi/pi-ai";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import { ptree } from "@oh-my-pi/pi-utils";
-import { Type } from "@sinclair/typebox";
-import { $ } from "bun";
+import { type Static, Type } from "@sinclair/typebox";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
@@ -34,10 +33,7 @@ const grepSchema = Type.Object({
 	),
 	i: Type.Optional(Type.Boolean({ description: "Case-insensitive search (default: false)" })),
 	n: Type.Optional(Type.Boolean({ description: "Show line numbers (default: true)" })),
-	a: Type.Optional(Type.Number({ description: "Lines to show after each match (default: 0)" })),
-	b: Type.Optional(Type.Number({ description: "Lines to show before each match (default: 0)" })),
-	c: Type.Optional(Type.Number({ description: "Lines of context (before and after) (default: 0)" })),
-	context: Type.Optional(Type.Number({ description: "Lines of context (alias for c)" })),
+	context: Type.Optional(Type.Number({ description: "Lines of context (default: 5)" })),
 	multiline: Type.Optional(Type.Boolean({ description: "Enable multiline matching (default: false)" })),
 	limit: Type.Optional(Type.Number({ description: "Limit output to first N matches (default: 100 in content mode)" })),
 	offset: Type.Optional(Type.Number({ description: "Skip first N entries before applying limit (default: 0)" })),
@@ -78,42 +74,28 @@ export async function runRg(
 	args: string[],
 	options?: { signal?: AbortSignal; timeoutMs?: number },
 ): Promise<RgResult> {
-	using child = ptree.spawnAttached([rgPath, ...args], { signal: options?.signal, timeout: options?.timeoutMs });
 	const timeoutSeconds = options?.timeoutMs ? Math.max(1, Math.round(options.timeoutMs / 1000)) : undefined;
 	const timeoutMessage = timeoutSeconds ? `rg timed out after ${timeoutSeconds}s` : "rg timed out";
 
-	let stdout: string;
-	try {
-		stdout = await child.nothrow().text();
-	} catch (err) {
-		if (err instanceof ptree.TimeoutError) {
-			throw new ToolError(timeoutMessage);
-		}
-		if (err instanceof ptree.Exception && err.aborted) {
-			throw new ToolAbortError();
-		}
-		throw err;
-	}
+	const result = await ptree.execText([rgPath, ...args], {
+		signal: options?.signal,
+		timeout: options?.timeoutMs,
+		allowNonZero: true,
+		allowAbort: true,
+		stderr: "buffer",
+	});
 
-	let exitError: unknown;
-	try {
-		await child.exited;
-	} catch (err) {
-		exitError = err;
-		if (err instanceof ptree.TimeoutError) {
-			throw new ToolError(timeoutMessage);
-		}
-		if (err instanceof ptree.Exception && err.aborted) {
-			throw new ToolAbortError();
-		}
+	if (result.exitError instanceof ptree.TimeoutError) {
+		throw new ToolError(timeoutMessage);
 	}
-
-	const exitCode = child.exitCode ?? (exitError instanceof ptree.Exception ? exitError.exitCode : null);
+	if (result.exitError?.aborted) {
+		throw new ToolAbortError();
+	}
 
 	return {
-		stdout,
-		stderr: child.peekStderr(),
-		exitCode,
+		stdout: result.stdout,
+		stderr: result.stderr,
+		exitCode: result.exitCode,
 	};
 }
 
@@ -138,22 +120,7 @@ export interface GrepToolOptions {
 	operations?: GrepOperations;
 }
 
-interface GrepParams {
-	pattern: string;
-	path?: string;
-	glob?: string;
-	type?: string;
-	output_mode?: "content" | "files_with_matches" | "count";
-	i?: boolean;
-	n?: boolean;
-	a?: number;
-	b?: number;
-	c?: number;
-	context?: number;
-	multiline?: boolean;
-	limit?: number;
-	offset?: number;
-}
+type GrepParams = Static<typeof grepSchema>;
 
 export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 	public readonly name = "grep";
@@ -172,23 +139,25 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 
 	/**
 	 * Validates a pattern against ripgrep's regex engine.
-	 * Uses a quick dry-run against /dev/null to check for parse errors.
+	 * Uses a quick dry-run against the null device to check for parse errors.
 	 */
 	private async validateRegexPattern(pattern: string, rgPath?: string): Promise<{ valid: boolean; error?: string }> {
 		if (!rgPath) {
 			return { valid: true }; // Can't validate, assume valid
 		}
 
-		// Run ripgrep against /dev/null with the pattern - this validates regex syntax
+		// Run ripgrep against the null device with the pattern - this validates regex syntax
 		// without searching any files
-		const result = await $`${rgPath} --no-config --quiet -- ${pattern} /dev/null`.quiet().nothrow();
-		const stderr = result.stderr?.toString() ?? "";
-		const exitCode = result.exitCode ?? 0;
+		const nullDevice = process.platform === "win32" ? "NUL" : "/dev/null";
+		const result = await ptree.execText([rgPath, "--no-config", "--quiet", "--", pattern, nullDevice], {
+			allowNonZero: true,
+			allowAbort: true,
+		});
 
 		// Exit code 1 = no matches (pattern is valid), 0 = matches found
 		// Exit code 2 = error (often regex parse error)
-		if (exitCode === 2 && stderr.includes("regex parse error")) {
-			return { valid: false, error: stderr.trim() };
+		if (result.exitCode === 2 && result.stderr.includes("regex parse error")) {
+			return { valid: false, error: result.stderr.trim() };
 		}
 
 		return { valid: true };
@@ -201,22 +170,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 		_onUpdate?: AgentToolUpdateCallback<GrepToolDetails>,
 		toolContext?: AgentToolContext,
 	): Promise<AgentToolResult<GrepToolDetails>> {
-		const {
-			pattern,
-			path: searchDir,
-			glob,
-			type,
-			output_mode,
-			i,
-			n,
-			a,
-			b,
-			c,
-			context,
-			multiline,
-			limit,
-			offset,
-		} = params;
+		const { pattern, path: searchDir, glob, type, output_mode, i, n, context, multiline, limit, offset } = params;
 
 		return untilAborted(signal, async () => {
 			const normalizedPattern = pattern.trim();
@@ -244,25 +198,12 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 				return normalized;
 			};
 
-			const normalizedAfter = normalizeContext(a, "After context");
-			const normalizedBefore = normalizeContext(b, "Before context");
-			const hasContextParam = context !== undefined;
-			const hasCParam = c !== undefined;
-			if (hasContextParam && hasCParam) {
-				throw new ToolError("Cannot combine context with c");
-			}
-			const normalizedContext = normalizeContext(hasContextParam ? context : c, "Context");
-			if (normalizedContext > 0 && (normalizedAfter > 0 || normalizedBefore > 0)) {
-				throw new ToolError("Cannot combine context with a or b");
-			}
-			const contextAfterValue = normalizedContext > 0 ? normalizedContext : normalizedAfter;
-			const contextBeforeValue = normalizedContext > 0 ? normalizedContext : normalizedBefore;
+			const normalizedContext = normalizeContext(context ?? 5, "Context");
 			const showLineNumbers = n ?? true;
 			const ignoreCase = i ?? false;
 			const normalizedGlob = glob?.trim() ?? "";
 			const normalizedType = type?.trim() ?? "";
-			const hasContentHints =
-				limit !== undefined || context !== undefined || c !== undefined || a !== undefined || b !== undefined;
+			const hasContentHints = limit !== undefined || context !== undefined;
 
 			// Validate regex patterns early to surface parse errors before running rg
 			const rgPath = await ensureTool("rg", {
@@ -326,6 +267,9 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 			};
 
 			const args: string[] = [];
+
+			// Ignore user config files for consistent behavior
+			args.push("--no-config");
 
 			// Base arguments depend on output mode
 			if (effectiveOutputMode === "files_with_matches") {
@@ -538,8 +482,8 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 				}
 
 				const block: string[] = [];
-				const start = contextBeforeValue > 0 ? Math.max(1, lineNumber - contextBeforeValue) : lineNumber;
-				const end = contextAfterValue > 0 ? Math.min(lines.length, lineNumber + contextAfterValue) : lineNumber;
+				const start = normalizedContext > 0 ? Math.max(1, lineNumber - normalizedContext) : lineNumber;
+				const end = normalizedContext > 0 ? Math.min(lines.length, lineNumber + normalizedContext) : lineNumber;
 
 				for (let current = start; current <= end; current++) {
 					const lineText = lines[current - 1] ?? "";
@@ -601,7 +545,6 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 				}
 			};
 
-			const decoder = new TextDecoder();
 			let buffer = "";
 			const parseBuffer = async () => {
 				while (buffer.length > 0) {
@@ -631,6 +574,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 			};
 
 			// Process stdout stream with JSONL chunk parsing
+			const decoder = new TextDecoder();
 			try {
 				for await (const chunk of child.stdout) {
 					if (killedDueToLimit) {
@@ -655,7 +599,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 
 			// Wait for process to exit
 			try {
-				await child.exited;
+				await child.exitedCleanly;
 			} catch (err) {
 				if (err instanceof ptree.Exception) {
 					if (err.aborted) {
@@ -741,9 +685,6 @@ interface GrepRenderArgs {
 	type?: string;
 	i?: boolean;
 	n?: boolean;
-	a?: number;
-	b?: number;
-	c?: number;
 	context?: number;
 	multiline?: boolean;
 	output_mode?: string;
@@ -764,10 +705,7 @@ export const grepToolRenderer = {
 		if (args.output_mode && args.output_mode !== "files_with_matches") meta.push(`mode:${args.output_mode}`);
 		if (args.i) meta.push("case:insensitive");
 		if (args.n === false) meta.push("no-line-numbers");
-		const contextValue = args.context ?? args.c;
-		if (contextValue !== undefined && contextValue > 0) meta.push(`context:${contextValue}`);
-		if (args.a !== undefined && args.a > 0) meta.push(`after:${args.a}`);
-		if (args.b !== undefined && args.b > 0) meta.push(`before:${args.b}`);
+		if (args.context !== undefined && args.context > 0) meta.push(`context:${args.context}`);
 		if (args.multiline) meta.push("multiline");
 		if (args.limit !== undefined && args.limit > 0) meta.push(`limit:${args.limit}`);
 		if (args.offset !== undefined && args.offset > 0) meta.push(`offset:${args.offset}`);

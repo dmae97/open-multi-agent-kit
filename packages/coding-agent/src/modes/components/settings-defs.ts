@@ -190,6 +190,29 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		set: (sm, v) => sm.setNotificationOnComplete(v as NotificationMethod),
 	},
 	{
+		id: "askTimeout",
+		tab: "behavior",
+		type: "enum",
+		label: "Ask tool timeout",
+		description: "Auto-select recommended option after timeout (disabled in plan mode)",
+		values: ["off", "15", "30", "60", "120"],
+		get: sm => {
+			const timeout = sm.getAskTimeout();
+			return timeout === null ? "off" : String(timeout / 1000);
+		},
+		set: (sm, v) => sm.setAskTimeout(v === "off" ? null : Number.parseInt(v, 10)),
+	},
+	{
+		id: "askNotification",
+		tab: "behavior",
+		type: "enum",
+		label: "Ask notification",
+		description: "Notify when ask tool is waiting for input",
+		values: ["auto", "bell", "osc99", "osc9", "off"],
+		get: sm => sm.getAskNotification(),
+		set: (sm, v) => sm.setAskNotification(v as NotificationMethod),
+	},
+	{
 		id: "startupQuiet",
 		tab: "behavior",
 		type: "boolean",

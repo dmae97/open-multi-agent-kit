@@ -76,65 +76,6 @@ const CONVERTIBLE_EXTENSIONS = new Set([
 // =============================================================================
 
 /**
- * Execute a command and return stdout
- */
-
-type WritableLike = {
-	write: (chunk: string | Uint8Array) => unknown;
-	flush?: () => unknown;
-	end?: () => unknown;
-};
-
-const textEncoder = new TextEncoder();
-
-async function writeStdin(handle: unknown, input: string | Buffer): Promise<void> {
-	if (!handle || typeof handle === "number") return;
-	if (typeof (handle as WritableStream<Uint8Array>).getWriter === "function") {
-		const writer = (handle as WritableStream<Uint8Array>).getWriter();
-		try {
-			const chunk = typeof input === "string" ? textEncoder.encode(input) : new Uint8Array(input);
-			await writer.write(chunk);
-		} finally {
-			await writer.close();
-		}
-		return;
-	}
-
-	const sink = handle as WritableLike;
-	sink.write(input);
-	if (sink.flush) sink.flush();
-	if (sink.end) sink.end();
-}
-
-async function exec(
-	cmd: string,
-	args: string[],
-	options?: { timeout?: number; input?: string | Buffer },
-): Promise<{ stdout: string; stderr: string; ok: boolean }> {
-	using proc = ptree.spawnGroup([cmd, ...args], {
-		stdin: options?.input ? "pipe" : null,
-		timeout: options?.timeout ? options.timeout * 1000 : undefined,
-	});
-
-	if (options?.input) {
-		await writeStdin(proc.stdin, options.input);
-	}
-
-	const [stdout, stderr] = await Promise.all([proc.stdout.text(), proc.stderr.text()]);
-	try {
-		await proc.exited;
-	} catch {
-		// Handle non-zero exit or timeout
-	}
-
-	return {
-		stdout,
-		stderr,
-		ok: proc.exitCode === 0,
-	};
-}
-
-/**
  * Check if a command exists (cross-platform)
  */
 function hasCommand(cmd: string): boolean {
@@ -456,13 +397,20 @@ async function renderHtmlToText(
 
 	try {
 		await Bun.write(tmpFile, html);
+		const execOptions = {
+			mode: "group" as const,
+			timeout: timeout * 1000,
+			allowNonZero: true,
+			allowAbort: true,
+			stderr: "full" as const,
+		};
 
 		// Try lynx first (can't auto-install, system package)
 		const lynx = hasCommand("lynx");
 		if (lynx) {
 			const normalizedPath = tmpFile.replace(/\\/g, "/");
 			const fileUrl = normalizedPath.startsWith("/") ? `file://${normalizedPath}` : `file:///${normalizedPath}`;
-			const result = await exec("lynx", ["-dump", "-nolist", "-width", "120", fileUrl], { timeout });
+			const result = await ptree.execText(["lynx", "-dump", "-nolist", "-width", "120", fileUrl], execOptions);
 			if (result.ok) {
 				return { content: result.stdout, ok: true, method: "lynx" };
 			}
@@ -471,7 +419,7 @@ async function renderHtmlToText(
 		// Fall back to html2text (auto-install via uv/pip)
 		const html2text = await ensureTool("html2text", true);
 		if (html2text) {
-			const result = await exec(html2text, [tmpFile], { timeout });
+			const result = await ptree.execText([html2text, tmpFile], execOptions);
 			if (result.ok) {
 				return { content: result.stdout, ok: true, method: "html2text" };
 			}

@@ -30,9 +30,17 @@ class AsyncQueue<T> {
 		this.#items.push(item);
 	}
 
-	close(): void {
-		if (this.#closed) return;
+	close(options?: { discard?: boolean }): void {
+		if (this.#closed) {
+			if (options?.discard) {
+				this.#items = [];
+			}
+			return;
+		}
 		this.#closed = true;
+		if (options?.discard) {
+			this.#items = [];
+		}
 		while (this.#resolvers.length > 0) {
 			const resolver = this.#resolvers.shift();
 			if (resolver) {
@@ -54,7 +62,7 @@ class AsyncQueue<T> {
 	}
 }
 
-function createProcessStream(queue: AsyncQueue<Uint8Array>): ReadableStream<Uint8Array> {
+function createProcessStream(queue: AsyncQueue<Uint8Array>, onCancel?: () => void): ReadableStream<Uint8Array> {
 	const stream = new ReadableStream<Uint8Array>({
 		pull: async controller => {
 			const result = await queue.next();
@@ -63,6 +71,10 @@ function createProcessStream(queue: AsyncQueue<Uint8Array>): ReadableStream<Uint
 				return;
 			}
 			controller.enqueue(result.value);
+		},
+		cancel: () => {
+			onCancel?.();
+			queue.close({ discard: true });
 		},
 	});
 	return stream;
@@ -78,11 +90,17 @@ async function killChild(child: ChildProcess) {
 	if (!pid || child.killed) return;
 
 	const waitForExit = (timeout = 1000) =>
-		Promise.race([Bun.sleep(timeout).then(() => false), child.exited.then(() => true)]);
+		Promise.race([
+			Bun.sleep(timeout).then(() => false),
+			child.proc.exited.then(
+				() => true,
+				() => true,
+			),
+		]);
 
 	const sendSignal = async (signal?: NodeJS.Signals) => {
 		try {
-			process.kill(pid, signal);
+			child.proc.kill(signal);
 		} catch {}
 
 		if (child.isProcessGroup) {
@@ -111,58 +129,81 @@ postmortem.register("managed-children", async () => {
 	await Promise.all(children.map(killChild));
 });
 
-/**
- * Register a subprocess for managed cleanup.
- * Will attach to exit Promise so removal happens even if child exits "naturally".
- */
-function registerManaged(child: ChildProcess): void {
-	if (child.exitCode !== null) return;
-	managedChildren.add(child);
-	child.exited.finally(() => {
-		managedChildren.delete(child);
-	});
-}
-
 // A Bun subprocess with stdin=Writable/ignore, stdout/stderr=pipe (for tracking/cleanup).
 type PipedSubprocess = Subprocess<"pipe" | "ignore" | null, "pipe", "pipe">;
+
+type StreamReadResult = { done: boolean; value: Uint8Array | undefined };
+
+/**
+ * Options for capturing process output as text.
+ */
+export interface CaptureTextOptions {
+	/** Allow non-zero exit codes without throwing. */
+	allowNonZero?: boolean;
+	/** Allow abort/timeout without throwing. */
+	allowAbort?: boolean;
+	/** Select stderr source: full stream or bounded buffer. */
+	stderr?: "full" | "buffer";
+}
+
+/**
+ * Result from captureText/execText.
+ */
+export interface CaptureTextResult {
+	stdout: string;
+	stderr: string;
+	exitCode: number | null;
+	ok: boolean;
+	exitError?: Exception;
+}
 
 /**
  * ChildProcess wraps a managed subprocess, capturing output, errors, and providing
  * cross-platform kill/detach logic plus AbortSignal integration.
  */
 export class ChildProcess {
-	#proc: PipedSubprocess;
-	#detached = false;
-	#group = false;
 	#nothrow = false;
 	#stderrBuffer = "";
 	#stdoutQueue = new AsyncQueue<Uint8Array>();
 	#stderrQueue = new AsyncQueue<Uint8Array>();
+	#stderrDone!: Promise<void>;
+	#streamStop = new AbortController();
+	#stdoutActive = true;
 	#stdoutStream?: ReadableStream<Uint8Array>;
 	#stderrStream?: ReadableStream<Uint8Array>;
 	#exitReason?: Exception;
 	#exitReasonPending?: Exception;
 	#exited: Promise<number>;
-	#resolveExited: (ex?: PromiseLike<Exception> | Exception) => void;
 
-	constructor(proc: PipedSubprocess, group: boolean) {
-		this.#group = group;
-		registerManaged(this);
+	constructor(
+		public readonly proc: PipedSubprocess,
+		public readonly isProcessGroup: boolean,
+	) {
+		const stopStreaming: Promise<StreamReadResult> = new Promise(resolve => {
+			if (this.#streamStop.signal.aborted) {
+				resolve({ done: true, value: undefined });
+				return;
+			}
+			this.#streamStop.signal.addEventListener(
+				"abort",
+				() => {
+					resolve({ done: true, value: undefined });
+				},
+				{ once: true },
+			);
+		});
 
-		const exitSettled = proc.exited.then(
-			() => {},
-			() => {},
-		);
+		const { promise: stderrDone, resolve: resolveStderrDone } = Promise.withResolvers<void>();
+		this.#stderrDone = stderrDone;
 
-		// Capture stdout at all times. Close the passthrough when the process exits.
+		// Capture stdout while active. Buffering starts enabled and is disabled when the
+		// stream is cancelled. The underlying process stdout is always drained to prevent
+		// the process from blocking on a full pipe buffer.
 		void (async () => {
 			const reader = proc.stdout.getReader();
 			try {
-				while (true) {
-					const result = await Promise.race([
-						reader.read(),
-						exitSettled.then(() => ({ done: true, value: undefined as Uint8Array | undefined })),
-					]);
+				while (this.#stdoutActive) {
+					const result = await Promise.race([reader.read(), stopStreaming]);
 					if (result.done) break;
 					if (!result.value) continue;
 					this.#stdoutQueue.push(result.value);
@@ -188,10 +229,7 @@ export class ChildProcess {
 			const reader = proc.stderr.getReader();
 			try {
 				while (true) {
-					const result = await Promise.race([
-						reader.read(),
-						exitSettled.then(() => ({ done: true, value: undefined as Uint8Array | undefined })),
-					]);
+					const result = await Promise.race([reader.read(), stopStreaming]);
 					if (result.done) break;
 					if (!result.value) continue;
 					this.#stderrQueue.push(result.value);
@@ -214,70 +252,98 @@ export class ChildProcess {
 					reader.releaseLock();
 				} catch {}
 				this.#stderrQueue.close();
+				resolveStderrDone();
 			}
 		})().catch(() => {
 			this.#stderrQueue.close();
+			resolveStderrDone();
 		});
 
-		const { promise, resolve } = Promise.withResolvers<Exception | undefined>();
-
-		this.#exited = promise.then((ex?: Exception) => {
-			if (!ex) return proc.exitCode ?? -1337; // success, no exception
-			if (proc.killed && this.#exitReasonPending) {
-				ex = this.#exitReasonPending; // propagate reason if killed
-			}
-			this.#exitReason = ex;
-			return Promise.reject(ex);
-		});
-		this.#resolveExited = resolve;
+		const { promise, resolve, reject } = Promise.withResolvers<number>();
+		this.#exited = promise;
 
 		// On exit, resolve with a ChildError if nonzero code.
-		proc.exited.then(exitCode => {
-			if (exitCode !== 0) {
-				resolve(new NonZeroExitError(exitCode, this.#stderrBuffer));
-			} else {
-				resolve(undefined);
-			}
-		});
+		if (this.proc.exitCode === null) {
+			managedChildren.add(this);
+		}
+		proc.exited
+			.catch(() => null)
+			.then(async exitCode => {
+				// If we have an exit reason pending (e.g., kill() was called), use it immediately.
+				if (this.#exitReasonPending) {
+					this.#exitReason = this.#exitReasonPending;
+					reject(this.#exitReasonPending);
+					return;
+				}
 
-		this.#proc = proc;
+				// If successful, resolve as 0.
+				if (exitCode === 0) {
+					resolve(0);
+					return;
+				}
+
+				// Wait for stderr capture to complete before creating error with stderr content.
+				await this.#stderrDone;
+
+				let ex: Exception;
+				if (exitCode !== null) {
+					this.#exitReason = new NonZeroExitError(exitCode, this.#stderrBuffer);
+					resolve(exitCode);
+					return;
+				} else if (this.proc.killed) {
+					ex = new AbortError(new Error("process killed"), this.#stderrBuffer);
+				} else {
+					ex = new NonZeroExitError(-1, this.#stderrBuffer);
+				}
+				this.#exitReason = ex;
+				reject(ex);
+			})
+			.finally(() => {
+				managedChildren.delete(this);
+			});
 	}
 
-	get isProcessGroup(): boolean {
-		return this.#group;
-	}
 	get pid(): number | undefined {
-		return this.#proc.pid;
+		return this.proc.pid;
 	}
 	get exited(): Promise<number> {
 		return this.#exited;
 	}
+	get exitedCleanly(): Promise<number> {
+		if (this.#nothrow) return this.exited;
+		return this.exited.then(code => {
+			if (code !== 0) {
+				throw new NonZeroExitError(code, this.#stderrBuffer);
+			}
+			return code;
+		});
+	}
 	get exitCode(): number | null {
-		return this.#proc.exitCode;
+		return this.proc.exitCode;
 	}
 	get exitReason(): Exception | undefined {
 		return this.#exitReason;
 	}
 	get killed(): boolean {
-		return this.#proc.killed;
+		return this.proc.killed;
 	}
 	get stdin(): FileSink | undefined {
-		return this.#proc.stdin;
+		return this.proc.stdin;
 	}
 	get stdout(): ReadableStream<Uint8Array> {
 		if (!this.#stdoutStream) {
-			this.#stdoutStream = createProcessStream(this.#stdoutQueue);
+			this.#stdoutStream = createProcessStream(this.#stdoutQueue, () => {
+				this.#stdoutActive = false;
+			});
 		}
 		return this.#stdoutStream;
 	}
 	get stderr(): ReadableStream<Uint8Array> {
 		if (!this.#stderrStream) {
-			this.#stderrStream = createProcessStream(this.#stderrQueue);
+			// stderr cancellation doesn't affect the internal buffer used for error context
+			this.#stderrStream = createProcessStream(this.#stderrQueue, () => {});
 		}
 		return this.#stderrStream;
-	}
-	get proc(): PipedSubprocess {
-		return this.#proc;
 	}
 
 	/**
@@ -288,15 +354,8 @@ export class ChildProcess {
 		return this.#stderrBuffer;
 	}
 
-	/**
-	 * Detach this process from management (no cleanup on shutdown).
-	 */
-	detach(): void {
-		if (this.#detached || this.#proc.killed) return;
-		this.#detached = true;
-		if (managedChildren.delete(this)) {
-			this.#proc.unref();
-		}
+	#requestStreamStop(): void {
+		this.#streamStop.abort();
 	}
 
 	/**
@@ -312,10 +371,11 @@ export class ChildProcess {
 	 * Optionally set an exit reason (for better error propagation on cancellation).
 	 */
 	kill(reason?: Exception) {
-		if (this.#proc.killed) return;
-		if (reason) {
+		if (reason && !this.#exitReasonPending) {
 			this.#exitReasonPending = reason;
 		}
+		this.#requestStreamStop();
+		if (this.proc.killed) return;
 		killChild(this);
 	}
 
@@ -337,12 +397,51 @@ export class ChildProcess {
 
 		const blob = this.stdout.blob();
 		if (!this.#nothrow) {
-			this.#exited.catch((ex: Exception) => {
-				reject(ex);
-			});
+			this.exitedCleanly.catch(reject);
 		}
 		blob.then(resolve, reject);
 		return promise;
+	}
+
+	/**
+	 * Capture stdout/stderr as text with optional exit handling.
+	 */
+	async captureText(options?: CaptureTextOptions): Promise<CaptureTextResult> {
+		const stderrMode = options?.stderr ?? "buffer";
+		const stdoutPromise = this.stdout.text();
+		const stderrPromise =
+			stderrMode === "full"
+				? this.stderr.text()
+				: (async () => {
+						await Promise.allSettled([stdoutPromise, this.exited, this.#stderrDone]);
+						return this.peekStderr();
+					})();
+
+		const [stdout, stderr] = await Promise.all([stdoutPromise, stderrPromise]);
+
+		let exitError: Exception | undefined;
+		try {
+			await this.exited;
+		} catch (err) {
+			if (err instanceof Exception) {
+				exitError = err;
+			} else {
+				throw err;
+			}
+		}
+
+		const exitCode = this.exitCode ?? (exitError && !exitError.aborted ? exitError.exitCode : null);
+		const ok = exitCode === 0;
+
+		if (exitError) {
+			const allowAbort = options?.allowAbort ?? false;
+			const allowNonZero = options?.allowNonZero ?? false;
+			if ((exitError.aborted && !allowAbort) || (!exitError.aborted && !allowNonZero)) {
+				throw exitError;
+			}
+		}
+
+		return { stdout, stderr, exitCode, ok, exitError };
 	}
 
 	/**
@@ -352,15 +451,6 @@ export class ChildProcess {
 		const onAbort = () => {
 			const cause = new AbortError(signal.reason, "<cancelled>");
 			this.kill(cause);
-			if (this.#proc.killed) {
-				queueMicrotask(() => {
-					try {
-						this.#resolveExited(cause);
-					} catch {
-						// Ignore
-					}
-				});
-			}
 		};
 		if (signal.aborted) {
 			return void onAbort();
@@ -368,10 +458,10 @@ export class ChildProcess {
 		signal.addEventListener("abort", onAbort, { once: true });
 		// Use .finally().catch() to avoid unhandled rejection when #exited rejects
 		this.#exited
+			.catch(() => {})
 			.finally(() => {
 				signal.removeEventListener("abort", onAbort);
-			})
-			.catch(() => {});
+			});
 	}
 
 	/**
@@ -379,15 +469,19 @@ export class ChildProcess {
 	 */
 	attachTimeout(timeout: number): void {
 		if (timeout <= 0) return;
-		const timeoutId = setTimeout(() => {
-			this.kill(new TimeoutError(timeout, this.#stderrBuffer));
-		}, timeout);
-		// Use .finally().catch() to avoid unhandled rejection when #exited rejects
-		this.#exited
-			.finally(() => {
-				clearTimeout(timeoutId);
-			})
-			.catch(() => {});
+		if (this.proc.killed) return;
+		void (async () => {
+			const result = await Promise.race([
+				Bun.sleep(timeout).then(() => true),
+				this.proc.exited.then(
+					() => false,
+					() => false,
+				),
+			]);
+			if (result) {
+				this.kill(new TimeoutError(timeout, this.#stderrBuffer));
+			}
+		});
 	}
 
 	[Symbol.dispose](): void {
@@ -462,22 +556,20 @@ type ChildSpawnOptions = Omit<
 	signal?: AbortSignal;
 };
 
-/**
- * Spawn a subprocess as a managed child process.
- * - Always pipes stdout/stderr, launches in new session/process group (detached).
- * - Optional AbortSignal integrates with kill-on-abort.
- */
-export function spawnGroup(cmd: string[], options?: ChildSpawnOptions): ChildProcess {
+function spawnManaged(
+	cmd: string[],
+	options: ChildSpawnOptions | undefined,
+	config: { detached: boolean; processGroup: boolean },
+): ChildProcess {
 	const { timeout, ...rest } = options ?? {};
 	const child = spawn(cmd, {
 		stdin: "ignore",
 		...rest,
 		stdout: "pipe",
 		stderr: "pipe",
-		// Windows: new console/pgroup; Unix: setsid for process group.
-		detached: true,
+		...(config.detached ? { detached: true } : {}),
 	});
-	const cproc = new ChildProcess(child, true);
+	const cproc = new ChildProcess(child, config.processGroup);
 	if (options?.signal) {
 		cproc.attachSignal(options.signal);
 	}
@@ -492,20 +584,43 @@ export function spawnGroup(cmd: string[], options?: ChildSpawnOptions): ChildPro
  * - Always pipes stdout/stderr, launches in new session/process group (detached).
  * - Optional AbortSignal integrates with kill-on-abort.
  */
+export function spawnGroup(cmd: string[], options?: ChildSpawnOptions): ChildProcess {
+	return spawnManaged(cmd, options, { detached: true, processGroup: true });
+}
+
+/**
+ * Spawn a subprocess as a managed child process.
+ * - Always pipes stdout/stderr, inherits the current session (not detached).
+ * - Optional AbortSignal integrates with kill-on-abort.
+ */
 export function spawnAttached(cmd: string[], options?: ChildSpawnOptions): ChildProcess {
-	const { timeout, ...rest } = options ?? {};
-	const child = spawn(cmd, {
-		stdin: "ignore",
-		...rest,
-		stdout: "pipe",
-		stderr: "pipe",
-	});
-	const cproc = new ChildProcess(child, false);
-	if (options?.signal) {
-		cproc.attachSignal(options.signal);
+	return spawnManaged(cmd, options, { detached: false, processGroup: false });
+}
+
+/**
+ * Options for execText.
+ */
+export interface ExecTextOptions extends Omit<ChildSpawnOptions, "stdin">, CaptureTextOptions {
+	/** Spawn mode (process group or attached). */
+	mode?: "group" | "attached";
+	/** Input to write to stdin (Buffer or UTF-8 string). */
+	input?: string | Buffer | Uint8Array;
+}
+
+function toStdinBuffer(input: string | Buffer | Uint8Array): Buffer {
+	if (typeof input === "string") {
+		return Buffer.from(input);
 	}
-	if (timeout && timeout > 0) {
-		cproc.attachTimeout(timeout);
-	}
-	return cproc;
+	return Buffer.isBuffer(input) ? input : Buffer.from(input);
+}
+
+/**
+ * Spawn a process and capture stdout/stderr as text.
+ */
+export async function execText(cmd: string[], options?: ExecTextOptions): Promise<CaptureTextResult> {
+	const { mode = "attached", input, stderr, allowAbort, allowNonZero, ...spawnOptions } = options ?? {};
+	const stdin = input === undefined ? undefined : toStdinBuffer(input);
+	const resolvedOptions: ChildSpawnOptions = stdin === undefined ? { ...spawnOptions } : { ...spawnOptions, stdin };
+	using child = mode === "group" ? spawnGroup(cmd, resolvedOptions) : spawnAttached(cmd, resolvedOptions);
+	return await child.captureText({ stderr, allowAbort, allowNonZero });
 }

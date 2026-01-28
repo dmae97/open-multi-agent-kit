@@ -12,7 +12,7 @@
  *   - Users will always be able to select "Other" to provide custom text input
  *   - Use multi: true to allow multiple answers to be selected for a question
  *   - Use recommended: <index> to mark the default option; "(Recommended)" suffix is added automatically
- *   - Questions time out after 30 seconds and auto-select the recommended option
+ *   - Questions may time out and auto-select the recommended option (configurable, disabled in plan mode)
  */
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
@@ -23,6 +23,7 @@ import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { type Theme, theme } from "../modes/theme/theme";
 import askDescription from "../prompts/tools/ask.md" with { type: "text" };
 import { renderStatusLine } from "../tui";
+import { detectNotificationProtocol, isNotificationSuppressed, sendNotification } from "../utils/terminal-notify";
 import type { ToolSession } from ".";
 import { ToolUIKit } from "./render-utils";
 
@@ -77,7 +78,8 @@ export interface AskToolDetails {
 
 const OTHER_OPTION = "Other (type your own)";
 const RECOMMENDED_SUFFIX = " (Recommended)";
-const ASK_TIMEOUT_MS = 30000;
+/** Default timeout in milliseconds (used when settings unavailable) */
+const DEFAULT_ASK_TIMEOUT_MS = 30000;
 
 function getDoneOptionLabel(): string {
 	return `${theme.status.success} Done selecting`;
@@ -119,13 +121,20 @@ interface UIContext {
 	input(prompt: string): Promise<string | undefined>;
 }
 
+interface AskQuestionOptions {
+	/** Timeout in milliseconds, null/undefined to disable */
+	timeout?: number | null;
+}
+
 async function askSingleQuestion(
 	ui: UIContext,
 	question: string,
 	optionLabels: string[],
 	multi: boolean,
 	recommended?: number,
+	options?: AskQuestionOptions,
 ): Promise<SelectionResult> {
+	const timeout = options?.timeout ?? undefined;
 	const doneLabel = getDoneOptionLabel();
 	let selectedOptions: string[] = [];
 	let customInput: string | undefined;
@@ -152,11 +161,11 @@ async function askSingleQuestion(
 			const selectionStart = Date.now();
 			const choice = await ui.select(`${prefix}${question}`, opts, {
 				initialIndex: cursorIndex,
-				timeout: ASK_TIMEOUT_MS,
+				timeout: timeout ?? undefined,
 				outline: true,
 			});
 			const elapsed = Date.now() - selectionStart;
-			const timedOut = elapsed >= ASK_TIMEOUT_MS;
+			const timedOut = timeout != null && elapsed >= timeout;
 
 			if (choice === undefined || choice === doneLabel) break;
 
@@ -198,7 +207,7 @@ async function askSingleQuestion(
 	} else {
 		const displayLabels = addRecommendedSuffix(optionLabels, recommended);
 		const choice = await ui.select(question, [...displayLabels, OTHER_OPTION], {
-			timeout: ASK_TIMEOUT_MS,
+			timeout: timeout ?? undefined,
 			initialIndex: recommended,
 			outline: true,
 		});
@@ -254,13 +263,26 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 	public readonly label = "Ask";
 	public readonly description: string;
 	public readonly parameters = askSchema;
+	private readonly session: ToolSession;
 
-	constructor(_session: ToolSession) {
+	constructor(session: ToolSession) {
+		this.session = session;
 		this.description = renderPromptTemplate(askDescription);
 	}
 
 	static createIf(session: ToolSession): AskTool | null {
 		return session.hasUI ? new AskTool(session) : null;
+	}
+
+	/** Send terminal notification when ask tool is waiting for input */
+	private sendAskNotification(): void {
+		if (isNotificationSuppressed()) return;
+
+		const method = this.session.settingsManager?.getAskNotification() ?? "auto";
+		if (method === "off") return;
+
+		const protocol = method === "auto" ? detectNotificationProtocol() : method;
+		sendNotification(protocol, "Waiting for input");
 	}
 
 	public async execute(
@@ -280,6 +302,14 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 
 		const { ui } = context;
 
+		// Determine timeout based on settings and plan mode
+		const planModeEnabled = this.session.getPlanModeState?.()?.enabled ?? false;
+		const settingsTimeout = this.session.settingsManager?.getAskTimeout() ?? DEFAULT_ASK_TIMEOUT_MS;
+		const timeout = planModeEnabled ? null : settingsTimeout;
+
+		// Send notification if waiting and not suppressed
+		this.sendAskNotification();
+
 		// Multi-part questions mode
 		if (params.questions && params.questions.length > 0) {
 			const results: QuestionResult[] = [];
@@ -292,6 +322,7 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 					optionLabels,
 					q.multi ?? false,
 					q.recommended,
+					{ timeout },
 				);
 
 				results.push({
@@ -330,6 +361,7 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 			optionLabels,
 			multi,
 			params.recommended,
+			{ timeout },
 		);
 
 		const details: AskToolDetails = {

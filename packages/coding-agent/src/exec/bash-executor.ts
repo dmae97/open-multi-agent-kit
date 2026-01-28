@@ -65,9 +65,8 @@ export async function executeBash(command: string, options?: BashExecutorOptions
 
 	// Wait for process exit
 	try {
-		await child.exited;
 		return {
-			exitCode: child.exitCode ?? 0,
+			exitCode: await child.exited,
 			cancelled: false,
 			...(await sink.dump()),
 		};

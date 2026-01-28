@@ -8,34 +8,6 @@ import { ensureTool } from "../../utils/tools-manager";
 import type { RenderResult, SpecialHandler } from "./types";
 import { finalizeOutput } from "./types";
 
-/**
- * Execute a command and return stdout
- */
-async function exec(
-	cmd: string,
-	args: string[],
-	options?: { timeout?: number; input?: string | Buffer; signal?: AbortSignal },
-): Promise<{ stdout: string; stderr: string; ok: boolean; exitCode: number | null }> {
-	using proc = ptree.spawnGroup([cmd, ...args], {
-		signal: options?.signal,
-		timeout: options?.timeout,
-		stdin: options?.input ? Buffer.from(options.input) : undefined,
-	});
-
-	const [stdout, stderr, exitResult] = await Promise.all([
-		proc.stdout.text(),
-		proc.stderr.text(),
-		proc.exited.then(() => proc.exitCode ?? 0),
-	]);
-
-	return {
-		stdout,
-		stderr,
-		ok: exitResult === 0,
-		exitCode: exitResult,
-	};
-}
-
 interface YouTubeUrl {
 	videoId: string;
 	playlistId?: string;
@@ -163,16 +135,20 @@ export const handleYouTube: SpecialHandler = async (
 	const fetchedAt = new Date().toISOString();
 	const notes: string[] = [];
 	const videoUrl = `https://www.youtube.com/watch?v=${yt.videoId}`;
+	const execOptions = {
+		mode: "group" as const,
+		signal,
+		timeout: timeout * 1000,
+		allowNonZero: true,
+		allowAbort: true,
+		stderr: "full" as const,
+	};
 
 	// Fetch video metadata
 	throwIfAborted(signal);
-	const metaResult = await exec(
-		ytdlp,
-		["--dump-json", "--no-warnings", "--no-playlist", "--skip-download", videoUrl],
-		{
-			timeout: timeout * 1000,
-			signal,
-		},
+	const metaResult = await ptree.execText(
+		[ytdlp, "--dump-json", "--no-warnings", "--no-playlist", "--skip-download", videoUrl],
+		execOptions,
 	);
 	throwIfAborted(signal);
 
@@ -215,13 +191,9 @@ export const handleYouTube: SpecialHandler = async (
 
 	// First, list available subtitles
 	throwIfAborted(signal);
-	const listResult = await exec(
-		ytdlp,
-		["--list-subs", "--no-warnings", "--no-playlist", "--skip-download", videoUrl],
-		{
-			timeout: timeout * 1000,
-			signal,
-		},
+	const listResult = await ptree.execText(
+		[ytdlp, "--list-subs", "--no-warnings", "--no-playlist", "--skip-download", videoUrl],
+		execOptions,
 	);
 	throwIfAborted(signal);
 
@@ -236,9 +208,9 @@ export const handleYouTube: SpecialHandler = async (
 		// Try manual subtitles first (English preferred)
 		if (hasManualSubs) {
 			throwIfAborted(signal);
-			const subResult = await exec(
-				ytdlp,
+			const subResult = await ptree.execText(
 				[
+					ytdlp,
 					"--write-sub",
 					"--sub-lang",
 					"en,en-US,en-GB",
@@ -251,7 +223,7 @@ export const handleYouTube: SpecialHandler = async (
 					tmpBase,
 					videoUrl,
 				],
-				{ timeout: timeout * 1000, signal },
+				execOptions,
 			);
 
 			if (subResult.ok) {
@@ -271,9 +243,9 @@ export const handleYouTube: SpecialHandler = async (
 		// Fall back to auto-generated captions
 		if (!transcript && hasAutoSubs) {
 			throwIfAborted(signal);
-			const autoResult = await exec(
-				ytdlp,
+			const autoResult = await ptree.execText(
 				[
+					ytdlp,
 					"--write-auto-sub",
 					"--sub-lang",
 					"en,en-US,en-GB",
@@ -286,7 +258,7 @@ export const handleYouTube: SpecialHandler = async (
 					tmpBase,
 					videoUrl,
 				],
-				{ timeout: timeout * 1000, signal },
+				execOptions,
 			);
 
 			if (autoResult.ok) {
