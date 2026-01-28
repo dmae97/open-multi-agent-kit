@@ -73,13 +73,22 @@ export interface RgResult {
  *
  * @throws ToolAbortError if signal is aborted
  */
-export async function runRg(rgPath: string, args: string[], signal?: AbortSignal): Promise<RgResult> {
-	const child = ptree.cspawn([rgPath, ...args], { signal });
+export async function runRg(
+	rgPath: string,
+	args: string[],
+	options?: { signal?: AbortSignal; timeoutMs?: number },
+): Promise<RgResult> {
+	const child = ptree.cspawn([rgPath, ...args], { signal: options?.signal, timeout: options?.timeoutMs });
+	const timeoutSeconds = options?.timeoutMs ? Math.max(1, Math.round(options.timeoutMs / 1000)) : undefined;
+	const timeoutMessage = timeoutSeconds ? `rg timed out after ${timeoutSeconds}s` : "rg timed out";
 
 	let stdout: string;
 	try {
 		stdout = await child.nothrow().text();
 	} catch (err) {
+		if (err instanceof ptree.TimeoutError) {
+			throw new ToolError(timeoutMessage);
+		}
 		if (err instanceof ptree.Exception && err.aborted) {
 			throw new ToolAbortError();
 		}
@@ -91,6 +100,9 @@ export async function runRg(rgPath: string, args: string[], signal?: AbortSignal
 		await child.exited;
 	} catch (err) {
 		exitError = err;
+		if (err instanceof ptree.TimeoutError) {
+			throw new ToolError(timeoutMessage);
+		}
 		if (err instanceof ptree.Exception && err.aborted) {
 			throw new ToolAbortError();
 		}

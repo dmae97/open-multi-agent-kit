@@ -205,7 +205,7 @@ async function listCandidateFiles(
 			".gitignore",
 			searchRoot,
 		];
-		const { stdout } = await runRg(rgPath, gitignoreArgs, signal);
+		const { stdout } = await runRg(rgPath, gitignoreArgs, { signal });
 		const output = stdout.trim();
 		if (output) {
 			const nestedGitignores = output
@@ -233,7 +233,7 @@ async function listCandidateFiles(
 
 	args.push(searchRoot);
 
-	const { stdout, stderr, exitCode } = await runRg(rgPath, args, signal);
+	const { stdout, stderr, exitCode } = await runRg(rgPath, args, { signal });
 	const output = stdout.trim();
 
 	if (!output) {

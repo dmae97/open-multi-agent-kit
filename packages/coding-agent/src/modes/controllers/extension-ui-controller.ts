@@ -516,6 +516,7 @@ export class ExtensionUiController {
 	 * Hide the hook selector.
 	 */
 	hideHookSelector(): void {
+		this.ctx.hookSelector?.dispose();
 		this.ctx.editorContainer.clear();
 		this.ctx.editorContainer.addChild(this.ctx.editor);
 		this.ctx.hookSelector = undefined;
@@ -560,6 +561,7 @@ export class ExtensionUiController {
 	 * Hide the hook input.
 	 */
 	hideHookInput(): void {
+		this.ctx.hookInput?.dispose();
 		this.ctx.editorContainer.clear();
 		this.ctx.editorContainer.addChild(this.ctx.editor);
 		this.ctx.hookInput = undefined;

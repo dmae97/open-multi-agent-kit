@@ -193,9 +193,7 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 			];
 
 			// Run rg with timeout
-			const mainTimeoutSignal = AbortSignal.timeout(RG_TIMEOUT_MS);
-			const mainCombinedSignal = signal ? AbortSignal.any([signal, mainTimeoutSignal]) : mainTimeoutSignal;
-			const { stdout, stderr, exitCode } = await runRg(rgPath, args, mainCombinedSignal);
+			const { stdout, stderr, exitCode } = await runRg(rgPath, args, { signal, timeoutMs: RG_TIMEOUT_MS });
 			const output = stdout.trim();
 
 			// rg exit codes: 0 = found files, 1 = no matches, other = error

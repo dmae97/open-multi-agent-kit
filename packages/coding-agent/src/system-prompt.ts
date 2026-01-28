@@ -214,8 +214,7 @@ async function scanProjectTreeWithRg(root: string): Promise<ProjectTreeScan | nu
 
 	let stdout: string;
 	try {
-		const signal = AbortSignal.timeout(RG_TIMEOUT_MS);
-		const result = await runRg(rgPath, args, signal);
+		const result = await runRg(rgPath, args, { timeoutMs: RG_TIMEOUT_MS });
 		if (result.exitCode !== 0 && result.exitCode !== 1) return null;
 		stdout = result.stdout;
 	} catch {
