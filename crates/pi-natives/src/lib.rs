@@ -164,7 +164,8 @@ impl Sink for MatchCollector {
 	fn matched(&mut self, _searcher: &Searcher, mat: &SinkMatch<'_>) -> Result<bool, Self::Error> {
 		self.match_count += 1;
 
-		// If we already hit the limit, stop now (after-context for previous match was collected)
+		// If we already hit the limit, stop now (after-context for previous match was
+		// collected)
 		if self.limit_reached {
 			return Ok(false);
 		}
