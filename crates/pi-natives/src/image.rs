@@ -42,7 +42,8 @@ pub struct PhotonImage {
 
 #[wasm_bindgen]
 impl PhotonImage {
-	/// Create a new `PhotonImage` from encoded image bytes (PNG, JPEG, WebP, GIF).
+	/// Create a new `PhotonImage` from encoded image bytes (PNG, JPEG, WebP,
+	/// GIF).
 	#[wasm_bindgen(js_name = new_from_byteslice)]
 	pub fn new_from_byteslice(bytes: &[u8]) -> Result<Self, JsValue> {
 		let reader = ImageReader::new(Cursor::new(bytes))
