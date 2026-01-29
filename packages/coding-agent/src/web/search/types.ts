@@ -5,7 +5,7 @@
  */
 
 /** Supported web search providers */
-export type WebSearchProvider = "exa" | "anthropic" | "perplexity";
+export type WebSearchProvider = "exa" | "anthropic" | "perplexity" | "gemini" | "codex";
 
 /** Source returned by search (all providers) */
 export interface WebSearchSource {
