@@ -764,7 +764,13 @@ export class TUI extends Container {
 
 	private applyLineResets(lines: string[]): string[] {
 		const reset = TUI.SEGMENT_RESET;
-		return lines.map(line => (TUI.containsImage(line) ? line : line + reset));
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			if (!TUI.containsImage(line)) {
+				lines[i] = line + reset;
+			}
+		}
+		return lines;
 	}
 
 	/**

@@ -138,7 +138,18 @@ export class AgentStorage {
 
 	private constructor(dbPath: string) {
 		this.ensureDir(dbPath);
-		this.db = new Database(dbPath);
+		try {
+			this.db = new Database(dbPath);
+		} catch (err) {
+			const dir = path.dirname(dbPath);
+			const dirExists = fs.existsSync(dir);
+			const errMsg = err instanceof Error ? err.message : String(err);
+			throw new Error(
+				`Failed to open agent database at '${dbPath}': ${errMsg}\n` +
+					`Directory '${dir}' exists: ${dirExists}\n` +
+					`Ensure the directory is writable and not corrupted.`,
+			);
+		}
 
 		this.initializeSchema();
 		this.hardenPermissions(dbPath);
@@ -537,7 +548,20 @@ CREATE TABLE settings (
 	 * @param dbPath - Path to the database file
 	 */
 	private ensureDir(dbPath: string): void {
-		fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+		const dir = path.dirname(dbPath);
+		try {
+			fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+		} catch (err) {
+			const code = (err as NodeJS.ErrnoException).code;
+			// EEXIST is fine - directory already exists
+			if (code !== "EEXIST") {
+				throw new Error(`Failed to create agent storage directory '${dir}': ${code || err}`);
+			}
+		}
+		// Verify directory was created
+		if (!fs.existsSync(dir)) {
+			throw new Error(`Agent storage directory '${dir}' does not exist after creation attempt`);
+		}
 	}
 
 	private hardenPermissions(dbPath: string): void {
