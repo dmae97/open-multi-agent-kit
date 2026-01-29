@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { logger } from "@oh-my-pi/pi-utils";
 import { setKittyProtocolActive } from "./keys";
 import { StdinBuffer } from "./stdin-buffer";
 
@@ -79,6 +80,8 @@ export class ProcessTerminal implements Terminal {
 	private stdinDataHandler?: (data: string) => void;
 	private dead = false;
 	private writeLogPath = process.env.OMP_TUI_WRITE_LOG || "";
+	private lastStdinEvent = Date.now();
+	private stdinMonitor?: ReturnType<typeof setInterval>;
 
 	get kittyProtocolActive(): boolean {
 		return this._kittyProtocolActive;
@@ -163,8 +166,27 @@ export class ProcessTerminal implements Terminal {
 
 		// Handler that pipes stdin data through the buffer
 		this.stdinDataHandler = (data: string) => {
+			this.lastStdinEvent = Date.now();
 			this.stdinBuffer!.process(data);
 		};
+	}
+
+	private startStdinMonitor(): void {
+		this.lastStdinEvent = Date.now();
+		this.stdinMonitor = setInterval(() => {
+			const elapsed = Date.now() - this.lastStdinEvent;
+			if (elapsed > 10000) {
+				logger.warn("stdin appears stalled - no input events received", { elapsedMs: elapsed });
+			}
+		}, 10000);
+		this.stdinMonitor.unref();
+	}
+
+	private stopStdinMonitor(): void {
+		if (this.stdinMonitor) {
+			clearInterval(this.stdinMonitor);
+			this.stdinMonitor = undefined;
+		}
 	}
 
 	/**
@@ -179,6 +201,7 @@ export class ProcessTerminal implements Terminal {
 	private queryAndEnableKittyProtocol(): void {
 		this.setupStdinBuffer();
 		process.stdin.on("data", this.stdinDataHandler!);
+		this.startStdinMonitor();
 		this.safeWrite("\x1b[?u");
 	}
 
@@ -187,6 +210,9 @@ export class ProcessTerminal implements Terminal {
 		if (activeTerminal === this) {
 			activeTerminal = null;
 		}
+
+		// Stop stdin monitor
+		this.stopStdinMonitor();
 
 		// Disable bracketed paste mode
 		this.safeWrite("\x1b[?2004l");
