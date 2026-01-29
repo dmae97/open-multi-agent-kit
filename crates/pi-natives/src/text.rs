@@ -39,16 +39,16 @@ struct AnsiCodeTracker {
 impl AnsiCodeTracker {
 	const fn new() -> Self {
 		Self {
-			bold: false,
-			dim: false,
-			italic: false,
-			underline: false,
-			blink: false,
-			inverse: false,
-			hidden: false,
+			bold:          false,
+			dim:           false,
+			italic:        false,
+			underline:     false,
+			blink:         false,
+			inverse:       false,
+			hidden:        false,
 			strikethrough: false,
-			fg_color: None,
-			bg_color: None,
+			fg_color:      None,
+			bg_color:      None,
 		}
 	}
 
@@ -74,7 +74,9 @@ impl AnsiCodeTracker {
 			return;
 		}
 
-		let params = ansi_code.strip_prefix("\x1b[").and_then(|code| code.strip_suffix('m'));
+		let params = ansi_code
+			.strip_prefix("\x1b[")
+			.and_then(|code| code.strip_suffix('m'));
 		let Some(params) = params else {
 			return;
 		};
@@ -260,9 +262,7 @@ pub fn visible_width(text: &str) -> usize {
 		return 0;
 	}
 
-	let is_pure_ascii = text
-		.bytes()
-		.all(|byte| (0x20..=0x7e).contains(&byte));
+	let is_pure_ascii = text.bytes().all(|byte| (0x20..=0x7e).contains(&byte));
 	if is_pure_ascii {
 		return text.len();
 	}
@@ -353,10 +353,7 @@ pub fn truncate_to_width(text: &str, max_width: usize, ellipsis: &str, pad: bool
 
 fn slice_with_width_impl(line: &str, start_col: usize, length: usize, strict: bool) -> SliceResult {
 	if length == 0 {
-		return SliceResult {
-			text: String::new(),
-			width: 0,
-		};
+		return SliceResult { text: String::new(), width: 0 };
 	}
 
 	let end_col = start_col + length;
@@ -405,10 +402,7 @@ fn slice_with_width_impl(line: &str, start_col: usize, length: usize, strict: bo
 		}
 	}
 
-	SliceResult {
-		text: result,
-		width: result_width,
-	}
+	SliceResult { text: result, width: result_width }
 }
 
 /// Slice a range of visible columns from a line.
@@ -496,12 +490,7 @@ fn extract_segments_impl(
 		}
 	}
 
-	ExtractSegmentsResult {
-		before,
-		before_width,
-		after,
-		after_width,
-	}
+	ExtractSegmentsResult { before, before_width, after, after_width }
 }
 
 /// Extract the before/after slices around an overlay region.

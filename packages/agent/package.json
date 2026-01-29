@@ -1,6 +1,6 @@
 {
 	"name": "@oh-my-pi/pi-agent-core",
-	"version": "8.12.5",
+	"version": "8.12.6",
 	"description": "General-purpose agent with transport abstraction, state management, and attachment support",
 	"type": "module",
 	"main": "./src/index.ts",
