@@ -51,22 +51,124 @@ async function streamLinesFromFile(
 	startLine: number,
 	maxLinesToCollect: number,
 	maxBytes: number,
+	selectedLineLimit: number | null,
 	signal?: AbortSignal,
 ): Promise<{
 	lines: string[];
 	totalFileLines: number;
 	collectedBytes: number;
 	stoppedByByteLimit: boolean;
+	firstLinePreview?: { text: string; bytes: number };
+	firstLineByteLength?: number;
+	selectedBytesTotal: number;
 }> {
-	const decoder = new TextDecoder();
 	const bufferChunk = Buffer.allocUnsafe(READ_CHUNK_SIZE);
 	const collectedLines: string[] = [];
 	let lineIndex = 0;
 	let collectedBytes = 0;
 	let stoppedByByteLimit = false;
-	let buffer = "";
 	let doneCollecting = false;
 	let fileHandle: fs.FileHandle | null = null;
+	let currentLineLength = 0;
+	let currentLineChunks: Buffer[] = [];
+	let sawAnyByte = false;
+	let endedWithNewline = false;
+	let firstLinePreviewBytes = 0;
+	let firstLinePreviewChunks: Buffer[] = [];
+	let firstLineByteLength: number | undefined;
+	let selectedBytesTotal = 0;
+	let selectedLinesSeen = 0;
+	let captureLine = false;
+	let discardLineChunks = false;
+	let lineCaptureLimit = 0;
+
+	const setupLineState = () => {
+		captureLine = !doneCollecting && lineIndex >= startLine;
+		discardLineChunks = !captureLine;
+		if (captureLine) {
+			const separatorBytes = collectedLines.length > 0 ? 1 : 0;
+			lineCaptureLimit = maxBytes - collectedBytes - separatorBytes;
+			if (lineCaptureLimit <= 0) {
+				discardLineChunks = true;
+			}
+		} else {
+			lineCaptureLimit = 0;
+		}
+	};
+
+	const decodeLine = (): string => {
+		if (currentLineLength === 0) return "";
+		if (currentLineChunks.length === 1 && currentLineChunks[0]?.length === currentLineLength) {
+			return currentLineChunks[0].toString("utf-8");
+		}
+		return Buffer.concat(currentLineChunks, currentLineLength).toString("utf-8");
+	};
+
+	const maybeCapturePreview = (segment: Uint8Array) => {
+		if (doneCollecting || lineIndex < startLine || collectedLines.length !== 0) return;
+		if (firstLinePreviewBytes >= maxBytes || segment.length === 0) return;
+		const remaining = maxBytes - firstLinePreviewBytes;
+		const slice = segment.length > remaining ? segment.subarray(0, remaining) : segment;
+		if (slice.length === 0) return;
+		firstLinePreviewChunks.push(Buffer.from(slice));
+		firstLinePreviewBytes += slice.length;
+	};
+
+	const appendSegment = (segment: Uint8Array) => {
+		currentLineLength += segment.length;
+		maybeCapturePreview(segment);
+		if (!captureLine || discardLineChunks || segment.length === 0) return;
+		if (currentLineLength <= lineCaptureLimit) {
+			currentLineChunks.push(Buffer.from(segment));
+		} else {
+			discardLineChunks = true;
+		}
+	};
+
+	const finalizeLine = () => {
+		if (lineIndex >= startLine && (selectedLineLimit === null || selectedLinesSeen < selectedLineLimit)) {
+			selectedBytesTotal += currentLineLength + (selectedLinesSeen > 0 ? 1 : 0);
+			selectedLinesSeen++;
+		}
+
+		if (!doneCollecting && lineIndex >= startLine) {
+			const separatorBytes = collectedLines.length > 0 ? 1 : 0;
+			if (collectedLines.length >= maxLinesToCollect) {
+				doneCollecting = true;
+			} else if (collectedLines.length === 0 && currentLineLength > maxBytes) {
+				stoppedByByteLimit = true;
+				doneCollecting = true;
+				if (firstLineByteLength === undefined) {
+					firstLineByteLength = currentLineLength;
+				}
+			} else if (collectedLines.length > 0 && collectedBytes + separatorBytes + currentLineLength > maxBytes) {
+				stoppedByByteLimit = true;
+				doneCollecting = true;
+			} else {
+				const lineText = decodeLine();
+				collectedLines.push(lineText);
+				collectedBytes += separatorBytes + currentLineLength;
+				if (firstLineByteLength === undefined) {
+					firstLineByteLength = currentLineLength;
+				}
+				if (collectedBytes > maxBytes) {
+					stoppedByByteLimit = true;
+					doneCollecting = true;
+				} else if (collectedLines.length >= maxLinesToCollect) {
+					doneCollecting = true;
+				}
+			}
+		} else if (lineIndex >= startLine && firstLineByteLength === undefined) {
+			firstLineByteLength = currentLineLength;
+		}
+
+		lineIndex++;
+		currentLineLength = 0;
+		currentLineChunks = [];
+		setupLineState();
+	};
+
+	setupLineState();
 
 	try {
 		fileHandle = await fs.open(filePath, "r");
@@ -76,59 +178,49 @@ async function streamLinesFromFile(
 			const { bytesRead } = await fileHandle.read(bufferChunk, 0, bufferChunk.length, null);
 			if (bytesRead === 0) break;
 
-			buffer += decoder.decode(bufferChunk.subarray(0, bytesRead), { stream: true });
+			sawAnyByte = true;
+			const chunk = bufferChunk.subarray(0, bytesRead);
+			endedWithNewline = chunk[bytesRead - 1] === 0x0a;
 
-			for (let newlinePos = buffer.indexOf("\n"); newlinePos !== -1; newlinePos = buffer.indexOf("\n")) {
-				const line = buffer.slice(0, newlinePos);
-				buffer = buffer.slice(newlinePos + 1);
-
-				if (!doneCollecting && lineIndex >= startLine) {
-					const lineBytes = Buffer.byteLength(line, "utf-8") + (collectedLines.length > 0 ? 1 : 0);
-
-					if (collectedBytes + lineBytes > maxBytes && collectedLines.length > 0) {
-						stoppedByByteLimit = true;
-						doneCollecting = true;
-					} else if (collectedLines.length < maxLinesToCollect) {
-						collectedLines.push(line);
-						collectedBytes += lineBytes;
-						if (collectedBytes > maxBytes) {
-							stoppedByByteLimit = true;
-							doneCollecting = true;
-						} else if (collectedLines.length >= maxLinesToCollect) {
-							doneCollecting = true;
-						}
-					} else {
-						doneCollecting = true;
+			let start = 0;
+			for (let i = 0; i < chunk.length; i++) {
+				if (chunk[i] === 0x0a) {
+					const segment = chunk.subarray(start, i);
+					if (segment.length > 0) {
+						appendSegment(segment);
 					}
+					finalizeLine();
+					start = i + 1;
 				}
+			}
 
-				lineIndex++;
+			if (start < chunk.length) {
+				appendSegment(chunk.subarray(start));
 			}
 		}
-
-		buffer += decoder.decode();
 	} finally {
 		if (fileHandle) {
 			await fileHandle.close();
 		}
 	}
 
-	if (buffer.length > 0) {
-		if (!doneCollecting && lineIndex >= startLine && collectedLines.length < maxLinesToCollect) {
-			const lineBytes = Buffer.byteLength(buffer, "utf-8") + (collectedLines.length > 0 ? 1 : 0);
-			if (collectedBytes + lineBytes > maxBytes && collectedLines.length > 0) {
-				stoppedByByteLimit = true;
-			} else {
-				collectedLines.push(buffer);
-				collectedBytes += lineBytes;
-				if (collectedBytes > maxBytes) {
-					stoppedByByteLimit = true;
-				}
-			}
-		} else if (!doneCollecting && lineIndex >= startLine && collectedLines.length >= maxLinesToCollect) {
-			doneCollecting = true;
+	if (endedWithNewline || currentLineLength > 0 || !sawAnyByte) {
+		finalizeLine();
+	}
+
+	let firstLinePreview: { text: string; bytes: number } | undefined;
+	if (firstLinePreviewBytes > 0) {
+		const buf = Buffer.concat(firstLinePreviewChunks, firstLinePreviewBytes);
+		let end = Math.min(buf.length, maxBytes);
+		while (end > 0 && (buf[end] & 0xc0) === 0x80) {
+			end--;
 		}
-		lineIndex++;
+		if (end > 0) {
+			const text = buf.slice(0, end).toString("utf-8");
+			firstLinePreview = { text, bytes: Buffer.byteLength(text, "utf-8") };
+		} else {
+			firstLinePreview = { text: "", bytes: 0 };
+		}
 	}
 
 	return {
@@ -136,6 +228,9 @@ async function streamLinesFromFile(
 		totalFileLines: lineIndex,
 		collectedBytes,
 		stoppedByByteLimit,
+		firstLinePreview,
+		firstLineByteLength,
+		selectedBytesTotal,
 	};
 }
 
@@ -614,16 +709,26 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			const startLine = offset ? Math.max(0, offset - 1) : 0;
 			const startLineDisplay = startLine + 1; // For display (1-indexed)
 
-			const maxLinesToCollect = limit !== undefined ? limit : DEFAULT_MAX_LINES;
+			const maxLinesToCollect = limit !== undefined ? Math.min(limit, DEFAULT_MAX_LINES) : DEFAULT_MAX_LINES;
+			const selectedLineLimit = limit ?? null;
 			const streamResult = await streamLinesFromFile(
 				absolutePath,
 				startLine,
 				maxLinesToCollect,
 				DEFAULT_MAX_BYTES,
+				selectedLineLimit,
 				signal,
 			);
 
-			const { lines: collectedLines, totalFileLines, collectedBytes, stoppedByByteLimit } = streamResult;
+			const {
+				lines: collectedLines,
+				totalFileLines,
+				collectedBytes,
+				stoppedByByteLimit,
+				firstLinePreview,
+				firstLineByteLength,
+				selectedBytesTotal,
+			} = streamResult;
 
 			// Check if offset is out of bounds - return graceful message instead of throwing
 			if (startLine >= totalFileLines) {
@@ -637,11 +742,14 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			}
 
 			const selectedContent = collectedLines.join("\n");
-			const userLimitedLines = limit !== undefined ? collectedLines.length : undefined;
+			const userLimitedLines =
+				limit !== undefined ? Math.min(limit, Math.max(0, totalFileLines - startLine)) : undefined;
 
-			const totalSelectedLines = totalFileLines - startLine;
-			const totalSelectedBytes = collectedBytes;
+			const totalSelectedLines =
+				limit !== undefined ? Math.min(limit, Math.max(0, totalFileLines - startLine)) : totalFileLines - startLine;
+			const totalSelectedBytes = selectedBytesTotal;
 			const wasTruncated = collectedLines.length < totalSelectedLines || stoppedByByteLimit;
+			const firstLineExceedsLimit = firstLineByteLength !== undefined && firstLineByteLength > DEFAULT_MAX_BYTES;
 
 			const truncation: TruncationResult = {
 				content: selectedContent,
@@ -652,7 +760,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 				outputLines: collectedLines.length,
 				outputBytes: collectedBytes,
 				lastLinePartial: false,
-				firstLineExceedsLimit: collectedLines.length === 0 && totalFileLines > startLine,
+				firstLineExceedsLimit,
 				maxLines: DEFAULT_MAX_LINES,
 				maxBytes: DEFAULT_MAX_BYTES,
 			};
@@ -674,9 +782,8 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			let outputText: string;
 
 			if (truncation.firstLineExceedsLimit) {
-				const firstLine = collectedLines[0] ?? "";
-				const firstLineBytes = Buffer.byteLength(firstLine, "utf-8");
-				const snippet = truncateStringToBytesFromStart(firstLine, DEFAULT_MAX_BYTES);
+				const firstLineBytes = firstLineByteLength ?? 0;
+				const snippet = firstLinePreview ?? { text: "", bytes: 0 };
 
 				outputText = shouldAddLineNumbers ? prependLineNumbers(snippet.text, startLineDisplay) : snippet.text;
 				if (snippet.text.length === 0) {
