@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
 import { EditTool } from "@oh-my-pi/pi-coding-agent/patch";
 import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 import { BashTool } from "@oh-my-pi/pi-coding-agent/tools/bash";
@@ -11,7 +12,6 @@ import { LsTool } from "@oh-my-pi/pi-coding-agent/tools/ls";
 import { wrapToolWithMetaNotice } from "@oh-my-pi/pi-coding-agent/tools/output-meta";
 import { ReadTool } from "@oh-my-pi/pi-coding-agent/tools/read";
 import { WriteTool } from "@oh-my-pi/pi-coding-agent/tools/write";
-import * as shellModule from "@oh-my-pi/pi-coding-agent/utils/shell";
 import { nanoid } from "nanoid";
 
 // Helper to extract text from content blocks
@@ -425,7 +425,7 @@ function b() {
 		});
 
 		it("should handle process spawn errors", async () => {
-			const getShellConfigSpy = vi.spyOn(shellModule, "getShellConfig").mockResolvedValueOnce({
+			const getShellConfigSpy = vi.spyOn(SettingsManager, "getGlobalShellConfig").mockResolvedValueOnce({
 				shell: "/nonexistent-shell-path-xyz123",
 				args: ["-c"],
 				env: {},

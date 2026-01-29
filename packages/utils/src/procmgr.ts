@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
-import { $ } from "bun";
-import { SettingsManager } from "../config/settings-manager";
+import * as timers from "node:timers";
+import type { Subprocess } from "bun";
 
 export interface ShellConfig {
 	shell: string;
@@ -10,6 +10,9 @@ export interface ShellConfig {
 }
 
 let cachedShellConfig: ShellConfig | null = null;
+
+const IS_WINDOWS = process.platform === "win32";
+const TERM_SIGNAL = IS_WINDOWS ? undefined : "SIGTERM";
 
 /**
  * Check if a shell binary is executable.
@@ -87,13 +90,10 @@ function buildConfig(shell: string): ShellConfig {
  * 3. On Unix: $SHELL if bash/zsh, then fallback paths
  * 4. Fallback: sh
  */
-export async function getShellConfig(): Promise<ShellConfig> {
+export async function getShellConfig(customShellPath?: string): Promise<ShellConfig> {
 	if (cachedShellConfig) {
 		return cachedShellConfig;
 	}
-
-	const settings = await SettingsManager.create();
-	const customShellPath = settings.getShellPath();
 
 	// 1. Check user-specified shell path
 	if (customShellPath) {
@@ -176,127 +176,142 @@ export async function getShellConfig(): Promise<ShellConfig> {
 	return cachedShellConfig;
 }
 
-let pgrepAvailable: string | null | undefined;
-
 /**
- * Check if pgrep is available on this system (cached).
+ * Options for terminating a process and all its descendants.
  */
-function hasPgrep(): string | null {
-	if (pgrepAvailable === undefined) {
-		try {
-			pgrepAvailable = Bun.which("pgrep") ?? null;
-		} catch {
-			pgrepAvailable = null;
-		}
-	}
-	return pgrepAvailable;
+export interface TerminateOptions {
+	/** The process to terminate */
+	target: Subprocess | number;
+	/** Whether to terminate the process group (Windows only) */
+	group?: boolean;
+	/** Timeout in milliseconds */
+	timeout?: number;
+	/** Abort signal */
+	signal?: AbortSignal;
 }
 
 /**
- * Get direct children of a PID using pgrep.
+ * Check if a process is running.
  */
-async function getChildrenViaPgrep(pid: number): Promise<number[]> {
-	const result = await $`pgrep -P ${pid}`.quiet().nothrow();
-	if (result.exitCode !== 0) return [];
-	const output = result.stdout.toString().trim();
-	if (!output) return [];
-
-	const children: number[] = [];
-	for (const line of output.split("\n")) {
-		const childPid = parseInt(line, 10);
-		if (!Number.isNaN(childPid)) children.push(childPid);
-	}
-	return children;
-}
-
-/**
- * Get direct children of a PID using /proc (Linux only).
- */
-async function getChildrenViaProc(pid: number): Promise<number[]> {
+export function isPidRunning(pid: number | Subprocess): boolean {
 	try {
-		const script = `for p in /proc/[0-9]*/stat; do cat "$p" 2>/dev/null; done | awk -v ppid=${pid} '$4 == ppid { print $1 }'`;
-		const result = await $`sh -c ${script}`.quiet().nothrow();
-		if (result.exitCode !== 0) return [];
-		const output = result.stdout.toString().trim();
-		if (!output) return [];
-
-		const children: number[] = [];
-		for (const line of output.split("\n")) {
-			const childPid = parseInt(line, 10);
-			if (!Number.isNaN(childPid)) children.push(childPid);
+		if (typeof pid === "number") {
+			process.kill(pid, 0);
+		} else {
+			if (pid.killed) return false;
+			if (pid.exitCode !== null) return false;
 		}
-		return children;
-	} catch {
-		return [];
-	}
-}
-
-/**
- * Collect all descendant PIDs breadth-first.
- * Returns deepest descendants first (reverse BFS order) for proper kill ordering.
- */
-async function getDescendantPids(pid: number): Promise<number[]> {
-	const getChildren = hasPgrep() ? getChildrenViaPgrep : getChildrenViaProc;
-	const descendants: number[] = [];
-	const queue = [pid];
-
-	while (queue.length > 0) {
-		const current = queue.shift()!;
-		const children = await getChildren(current);
-		for (const child of children) {
-			descendants.push(child);
-			queue.push(child);
-		}
-	}
-
-	// Reverse so deepest children are killed first
-	return descendants.reverse();
-}
-
-function tryKill(pid: number, signal: NodeJS.Signals): boolean {
-	try {
-		process.kill(pid, signal);
 		return true;
 	} catch {
 		return false;
 	}
 }
 
-/**
- * Kill a process and all its descendants.
- * @param gracePeriodMs - Time to wait after SIGTERM before SIGKILL (0 = immediate SIGKILL)
- */
-export async function killProcessTree(pid: number, gracePeriodMs = 0): Promise<void> {
-	if (process.platform === "win32") {
-		await $`taskkill /F /T /PID ${pid}`.quiet().nothrow();
-		return;
+function joinSignals(...sigs: (AbortSignal | null | undefined)[]): AbortSignal | undefined {
+	const nn = sigs.filter(Boolean) as AbortSignal[];
+	if (nn.length === 0) return undefined;
+	if (nn.length === 1) return nn[0];
+	return AbortSignal.any(nn);
+}
+
+export function onProcessExit(proc: Subprocess | number, abortSignal?: AbortSignal): Promise<boolean> {
+	if (typeof proc !== "number") {
+		return proc.exited.then(
+			() => true,
+			() => true,
+		);
 	}
 
-	const signal = gracePeriodMs > 0 ? "SIGTERM" : "SIGKILL";
+	if (!isPidRunning(proc)) {
+		return Promise.resolve(true);
+	}
 
-	// Fast path: process group kill (works if pid is group leader)
-	try {
-		process.kill(-pid, signal);
-		if (gracePeriodMs > 0) {
-			await Bun.sleep(gracePeriodMs);
-			try {
-				process.kill(-pid, "SIGKILL");
-			} catch {
-				// Already dead
+	const { promise, resolve, reject } = Promise.withResolvers<boolean>();
+	const localAbortController = new AbortController();
+
+	const timer = timers.promises.setInterval(300, null, {
+		signal: joinSignals(abortSignal, localAbortController.signal),
+	});
+	void (async () => {
+		try {
+			for await (const _ of timer) {
+				if (!isPidRunning(proc)) {
+					resolve(true);
+					break;
+				}
 			}
+		} catch (error) {
+			return reject(error);
+		} finally {
+			localAbortController.abort();
 		}
-		return;
-	} catch {
-		// Not a process group leader, fall through
+		resolve(false);
+	})();
+
+	return promise;
+}
+
+/**
+ * Terminate a process and all its descendants.
+ */
+export async function terminate(options: TerminateOptions): Promise<boolean> {
+	const { target, group = false, timeout = 5000, signal } = options;
+
+	const abortController = new AbortController();
+	try {
+		const abortSignal = joinSignals(signal, abortController.signal);
+
+		// Determine PID
+		let pid: number | undefined;
+		const exitPromise = onProcessExit(target, abortSignal);
+		if (typeof target === "number") {
+			pid = target;
+		} else {
+			pid = target.pid;
+			if (target.killed) return true;
+		}
+
+		// Give it a moment to exit gracefully first.
+		try {
+			if (typeof target === "number") {
+				process.kill(target, TERM_SIGNAL);
+			} else {
+				target.kill(TERM_SIGNAL);
+			}
+
+			if (exitPromise) {
+				const exited = await Promise.race([Bun.sleep(1000).then(() => false), exitPromise]);
+				if (exited) return true;
+			}
+		} catch {}
+
+		if (group) {
+			try {
+				if (IS_WINDOWS) {
+					const taskkill = Bun.spawn({
+						cmd: ["taskkill", "/F", "/T", "/PID", pid.toString()],
+						stdin: "ignore",
+						stdout: "ignore",
+						stderr: "ignore",
+						timeout: 5000,
+					});
+					void taskkill.exited.catch(() => {});
+					taskkill.unref();
+				} else {
+					process.kill(-pid, "SIGKILL");
+				}
+			} catch {}
+		}
+		try {
+			if (typeof target === "number") {
+				process.kill(target, "SIGKILL");
+			} else {
+				target.kill("SIGKILL");
+			}
+		} catch {}
+
+		return await Promise.race([Bun.sleep(timeout).then(() => false), exitPromise]);
+	} finally {
+		abortController.abort();
 	}
-
-	// Collect descendants BEFORE killing to minimize race window
-	const allPids = [...(await getDescendantPids(pid)), pid];
-
-	if (gracePeriodMs > 0) {
-		for (const p of allPids) tryKill(p, "SIGTERM");
-		await Bun.sleep(gracePeriodMs);
-	}
-
-	for (const p of allPids) tryKill(p, "SIGKILL");
 }

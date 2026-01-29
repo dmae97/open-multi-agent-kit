@@ -524,7 +524,7 @@ export class RpcClient {
 
 		// Write to stdin after registering the handler
 		const stdin = this.process!.stdin as import("bun").FileSink;
-		stdin.write(new TextEncoder().encode(`${JSON.stringify(fullCommand)}\n`));
+		stdin.write(`${JSON.stringify(fullCommand)}\n`);
 		// flush() returns number | Promise<number> - handle both cases
 		const flushResult = stdin.flush();
 		if (flushResult instanceof Promise) {

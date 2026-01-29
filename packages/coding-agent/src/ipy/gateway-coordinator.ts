@@ -1,10 +1,10 @@
 import * as fs from "node:fs";
 import { createServer } from "node:net";
 import * as path from "node:path";
-import { isEnoent, logger } from "@oh-my-pi/pi-utils";
+import { isEnoent, logger, procmgr } from "@oh-my-pi/pi-utils";
 import type { Subprocess } from "bun";
 import { getAgentDir } from "../config";
-import { getShellConfig, killProcessTree } from "../utils/shell";
+import { SettingsManager } from "../config/settings-manager";
 import { getOrCreateSnapshot } from "../utils/shell-snapshot";
 import { time } from "../utils/timings";
 
@@ -304,7 +304,7 @@ async function withGatewayLock<T>(handler: () => Promise<T>): Promise<T> {
 					const lockPid = lockInfo?.pid;
 					const lockAgeMs = lockInfo?.startedAt ? Date.now() - lockInfo.startedAt : Date.now() - lockStat.mtimeMs;
 					const staleByTime = lockAgeMs > GATEWAY_LOCK_STALE_MS;
-					const staleByPid = lockPid !== undefined && !isPidRunning(lockPid);
+					const staleByPid = lockPid !== undefined && !procmgr.isPidRunning(lockPid);
 					const staleByMissingPid = lockPid === undefined && staleByTime;
 					if (staleByPid || staleByMissingPid) {
 						await fs.promises.unlink(lockPath);
@@ -365,15 +365,6 @@ async function clearGatewayInfo(): Promise<void> {
 	}
 }
 
-function isPidRunning(pid: number): boolean {
-	try {
-		process.kill(pid, 0);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
 async function isGatewayHealthy(url: string): Promise<boolean> {
 	try {
 		const response = await fetch(`${url}/api/kernelspecs`, {
@@ -386,14 +377,14 @@ async function isGatewayHealthy(url: string): Promise<boolean> {
 }
 
 async function isGatewayAlive(info: GatewayInfo): Promise<boolean> {
-	if (!isPidRunning(info.pid)) return false;
+	if (!procmgr.isPidRunning(info.pid)) return false;
 	return await isGatewayHealthy(info.url);
 }
 
 async function startGatewayProcess(
 	cwd: string,
 ): Promise<{ url: string; pid: number; pythonPath: string; venvPath: string | null }> {
-	const { shell, env } = await getShellConfig();
+	const { shell, env } = await SettingsManager.getGlobalShellConfig();
 	const filteredEnv = filterEnv(env);
 	const runtime = await resolvePythonRuntime(cwd, filteredEnv);
 	const snapshotPath = await getOrCreateSnapshot(shell, env).catch((err: unknown) => {
@@ -428,16 +419,15 @@ async function startGatewayProcess(
 			stdin: "ignore",
 			stdout: "pipe",
 			stderr: "pipe",
+			detached: true,
 			env: kernelEnv,
 		},
 	);
 
 	let exited = false;
 	gatewayProcess.exited
+		.catch(() => {})
 		.then(() => {
-			exited = true;
-		})
-		.catch(() => {
 			exited = true;
 		});
 
@@ -459,13 +449,13 @@ async function startGatewayProcess(
 		await Bun.sleep(100);
 	}
 
-	await killProcessTree(gatewayProcess.pid);
+	await procmgr.terminate({ target: gatewayProcess, group: true });
 	throw new Error("Gateway startup timeout");
 }
 
 async function killGateway(pid: number, context: string): Promise<void> {
 	try {
-		await killProcessTree(pid);
+		await procmgr.terminate({ target: pid, group: true });
 	} catch (err) {
 		logger.warn("Failed to kill shared gateway process", {
 			error: err instanceof Error ? err.message : String(err),
@@ -495,7 +485,7 @@ export async function acquireSharedGateway(cwd: string): Promise<AcquireResult |
 				}
 
 				logger.debug("Cleaning up stale gateway info", { pid: existingInfo.pid });
-				if (isPidRunning(existingInfo.pid)) {
+				if (procmgr.isPidRunning(existingInfo.pid)) {
 					await killGateway(existingInfo.pid, "stale");
 				}
 				await clearGatewayInfo();
@@ -557,7 +547,7 @@ export async function getGatewayStatus(): Promise<GatewayStatus> {
 			venvPath: null,
 		};
 	}
-	const active = isPidRunning(info.pid);
+	const active = procmgr.isPidRunning(info.pid);
 	return {
 		active,
 		url: info.url,
@@ -573,7 +563,7 @@ export async function shutdownSharedGateway(): Promise<void> {
 		await withGatewayLock(async () => {
 			const info = await readGatewayInfo();
 			if (!info) return;
-			if (isPidRunning(info.pid)) {
+			if (procmgr.isPidRunning(info.pid)) {
 				await killGateway(info.pid, "shutdown");
 			}
 			await clearGatewayInfo();

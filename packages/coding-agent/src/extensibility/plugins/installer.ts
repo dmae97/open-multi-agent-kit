@@ -45,7 +45,7 @@ export async function installPlugin(packageName: string): Promise<InstalledPlugi
 	}
 
 	// Run npm install in plugins directory
-	const proc = Bun.spawn(["npm", "install", packageName], {
+	const proc = Bun.spawn(["bun", "install", packageName], {
 		cwd: PLUGINS_DIR,
 		stdin: "ignore",
 		stdout: "pipe",
@@ -86,7 +86,7 @@ export async function uninstallPlugin(name: string): Promise<void> {
 
 	await ensurePluginsDir();
 
-	const proc = Bun.spawn(["npm", "uninstall", name], {
+	const proc = Bun.spawn(["bun", "uninstall", name], {
 		cwd: PLUGINS_DIR,
 		stdin: "ignore",
 		stdout: "pipe",

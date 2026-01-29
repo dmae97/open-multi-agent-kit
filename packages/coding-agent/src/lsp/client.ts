@@ -1,4 +1,4 @@
-import { isEnoent, logger } from "@oh-my-pi/pi-utils";
+import { isEnoent, logger, ptree } from "@oh-my-pi/pi-utils";
 import { ToolAbortError, throwIfAborted } from "../tools/tool-errors";
 import { applyWorkspaceEdit } from "./edits";
 import { getLspmuxCommand, isLspmuxSupported } from "./lspmux";
@@ -206,7 +206,7 @@ function concatBuffers(a: Uint8Array, b: Uint8Array): Uint8Array {
 }
 
 async function writeMessage(
-	sink: import("bun").FileSink,
+	sink: Bun.FileSink,
 	message: LspJsonRpcRequest | LspJsonRpcNotification | LspJsonRpcResponse,
 ): Promise<void> {
 	const content = JSON.stringify(message);
@@ -230,7 +230,7 @@ async function startMessageReader(client: LspClient): Promise<void> {
 	if (client.isReading) return;
 	client.isReading = true;
 
-	const reader = (client.process.stdout as ReadableStream<Uint8Array>).getReader();
+	const reader = (client.proc.stdout as ReadableStream<Uint8Array>).getReader();
 
 	try {
 		while (true) {
@@ -364,7 +364,7 @@ async function sendResponse(
 	};
 
 	try {
-		await writeMessage(client.process.stdin as import("bun").FileSink, response);
+		await writeMessage(client.proc.stdin, response);
 	} catch (err) {
 		logger.error("LSP failed to respond.", { method, error: String(err) });
 	}
@@ -409,18 +409,17 @@ export async function getOrCreateClient(config: ServerConfig, cwd: string, initT
 			? await getLspmuxCommand(baseCommand, baseArgs)
 			: { command: baseCommand, args: baseArgs };
 
-		const proc = Bun.spawn([command, ...args], {
+		const proc = ptree.spawn([command, ...args], {
 			cwd,
+			detached: true,
 			stdin: "pipe",
-			stdout: "pipe",
-			stderr: "pipe",
 			env: env ? { ...process.env, ...env } : undefined,
 		});
 
 		const client: LspClient = {
 			name: key,
 			cwd,
-			process: proc,
+			proc,
 			config,
 			requestId: 0,
 			diagnostics: new Map(),
@@ -686,7 +685,7 @@ export function shutdownClient(key: string): void {
 	sendRequest(client, "shutdown", null).catch(() => {});
 
 	// Kill process
-	client.process.kill();
+	client.proc.kill();
 	clients.delete(key);
 }
 
@@ -773,7 +772,7 @@ export async function sendRequest(
 	});
 
 	// Write request
-	writeMessage(client.process.stdin as import("bun").FileSink, request).catch(err => {
+	writeMessage(client.proc.stdin, request).catch(err => {
 		if (timeout) clearTimeout(timeout);
 		client.pendingRequests.delete(id);
 		cleanup();
@@ -793,26 +792,33 @@ export async function sendNotification(client: LspClient, method: string, params
 	};
 
 	client.lastActivity = Date.now();
-	await writeMessage(client.process.stdin as import("bun").FileSink, notification);
+	await writeMessage(client.proc.stdin, notification);
 }
 
 /**
  * Shutdown all LSP clients.
  */
 export function shutdownAll(): void {
-	for (const client of Array.from(clients.values())) {
-		// Reject all pending requests
-		for (const pending of Array.from(client.pendingRequests.values())) {
-			pending.reject(new Error("LSP client shutdown"));
-		}
-		client.pendingRequests.clear();
-
-		// Send shutdown request (best effort, don't wait)
-		sendRequest(client, "shutdown", null).catch(() => {});
-
-		client.process.kill();
-	}
+	const clientsToShutdown = Array.from(clients.values());
 	clients.clear();
+
+	const err = new Error("LSP client shutdown");
+	for (const client of clientsToShutdown) {
+		/// Reject all pending requests
+		const reqs = Array.from(client.pendingRequests.values());
+		client.pendingRequests.clear();
+		for (const pending of reqs) {
+			pending.reject(err);
+		}
+
+		void (async () => {
+			// Send shutdown request (best effort, don't wait)
+			const timeout = Bun.sleep(5_000);
+			const result = sendRequest(client, "shutdown", null).catch(() => {});
+			await Promise.race([result, timeout]);
+			client.proc.kill();
+		})().catch(() => {});
+	}
 }
 
 /** Status of an LSP server */

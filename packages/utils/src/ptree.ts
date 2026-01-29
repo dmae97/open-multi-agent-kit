@@ -8,14 +8,15 @@
  * - Cross-platform tree kill for process groups (Windows taskkill, Unix -pid).
  * - Convenience helpers: captureText / execText, AbortSignal, timeouts.
  */
-import { $, type FileSink, type Spawn, type Subprocess } from "bun";
-import { postmortem } from ".";
 
-const isWindows = process.platform === "win32";
+import type { Spawn, Subprocess } from "bun";
+import { postmortem } from ".";
+import { terminate } from "./procmgr";
+
 const managedChildren = new Set<ChildProcess>();
 
 /** A Bun subprocess with stdout/stderr always piped (stdin may vary). */
-type PipedSubprocess = Subprocess<"pipe" | "ignore" | null, "pipe", "pipe">;
+type PipedSubprocess<In extends InMask = InMask> = Subprocess<In, "pipe", "pipe">;
 
 /** Minimal push-based ReadableStream that buffers unboundedly (like the old queue). */
 function pushStream<T>() {
@@ -97,35 +98,7 @@ async function pump(
  * - Unix: negative PID signals the process group
  */
 async function killChild(child: ChildProcess) {
-	const pid = child.pid;
-	if (!pid || child.killed) return;
-
-	const exited = child.proc.exited.then(
-		() => true,
-		() => true,
-	);
-	const waitForExit = (timeout = 1000) => Promise.race([Bun.sleep(timeout).then(() => false), exited]);
-
-	// Give it a moment to exit gracefully first.
-	try {
-		child.proc.kill();
-	} catch {}
-	if (await waitForExit(1000)) return true;
-
-	if (child.isProcessGroup) {
-		try {
-			if (isWindows) {
-				await $`taskkill /F /T /PID ${pid}`.quiet().nothrow();
-			} else {
-				process.kill(-pid);
-			}
-		} catch {}
-	}
-	try {
-		child.proc.kill("SIGKILL");
-	} catch {}
-
-	return await waitForExit(1000);
+	await terminate({ target: child.proc, group: child.isProcessGroup });
 }
 
 postmortem.register("managed-children", async () => {
@@ -211,11 +184,13 @@ export class TimeoutError extends AbortError {
 	}
 }
 
+type InMask = "pipe" | "ignore" | Buffer | Uint8Array | null;
+
 /**
  * ChildProcess wraps a managed subprocess, capturing stderr tail, providing
  * cross-platform kill/detach logic plus AbortSignal integration.
  */
-export class ChildProcess {
+export class ChildProcess<In extends InMask = InMask> {
 	#nothrow = false;
 
 	#stderrBuffer = "";
@@ -231,7 +206,7 @@ export class ChildProcess {
 	#exited: Promise<number>;
 
 	constructor(
-		public readonly proc: PipedSubprocess,
+		public readonly proc: PipedSubprocess<In>,
 		public readonly isProcessGroup: boolean,
 	) {
 		const { promise: stderrDone, resolve: resolveStderrDone } = Promise.withResolvers<void>();
@@ -329,7 +304,7 @@ export class ChildProcess {
 	get killed(): boolean {
 		return this.proc.killed;
 	}
-	get stdin(): FileSink | undefined {
+	get stdin(): Bun.SpawnOptions.WritableToIO<In> {
 		return this.proc.stdin;
 	}
 	get stdout(): ReadableStream<Uint8Array> {
@@ -443,8 +418,8 @@ export class ChildProcess {
 /**
  * Options for cspawn (child spawn). Always pipes stdout/stderr, allows signal.
  */
-type ChildSpawnOptions = Omit<
-	Spawn.SpawnOptions<"pipe" | "ignore" | Buffer | Uint8Array | null, "pipe", "pipe">,
+type ChildSpawnOptions<In extends InMask = InMask> = Omit<
+	Spawn.SpawnOptions<In, "pipe", "pipe">,
 	"stdout" | "stderr"
 > & { signal?: AbortSignal; detached?: boolean };
 
@@ -454,7 +429,7 @@ type ChildSpawnOptions = Omit<
  * @param options - The options for the spawn.
  * @returns A ChildProcess instance.
  */
-export function spawn(cmd: string[], options?: ChildSpawnOptions): ChildProcess {
+export function spawn<In extends InMask = InMask>(cmd: string[], options?: ChildSpawnOptions<In>): ChildProcess<In> {
 	const { detached = false, timeout, signal, ...rest } = options ?? {};
 	const child = Bun.spawn(cmd, {
 		stdin: "ignore",

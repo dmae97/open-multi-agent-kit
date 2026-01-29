@@ -1,6 +1,6 @@
 import { StringEnum } from "@oh-my-pi/pi-ai";
+import type { ptree } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
-import type { Subprocess } from "bun";
 
 // =============================================================================
 // Tool Schema
@@ -400,7 +400,7 @@ export interface LspClient {
 	name: string;
 	cwd: string;
 	config: ServerConfig;
-	process: Subprocess;
+	proc: ptree.ChildProcess<"pipe">;
 	requestId: number;
 	diagnostics: Map<string, Diagnostic[]>;
 	diagnosticsVersion: number;

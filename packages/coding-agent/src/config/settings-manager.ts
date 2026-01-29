@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { isEnoent, logger } from "@oh-my-pi/pi-utils";
+import { isEnoent, logger, procmgr } from "@oh-my-pi/pi-utils";
 import { YAML } from "bun";
 import { type Settings as SettingsItem, settingsCapability } from "../capability/settings";
 import { getAgentDbPath, getAgentDir } from "../config";
@@ -461,6 +461,8 @@ export class SettingsManager {
 	private settings!: Settings;
 	private persist: boolean;
 
+	static #lastInstance: SettingsManager | null = null;
+
 	/**
 	 * Private constructor - use static factory methods instead.
 	 * @param storage - SQLite storage instance for auth/cache, or null for in-memory mode
@@ -477,6 +479,7 @@ export class SettingsManager {
 		initialSettings: Settings,
 		persist: boolean,
 		projectSettings: Settings,
+		private agentDir: string | null,
 	) {
 		this.storage = storage;
 		this.configPath = configPath;
@@ -517,6 +520,9 @@ export class SettingsManager {
 	 * @returns Configured SettingsManager with merged global and user settings
 	 */
 	static async create(cwd: string = process.cwd(), agentDir: string = getAgentDir()): Promise<SettingsManager> {
+		cwd = path.normalize(cwd);
+		agentDir = path.normalize(agentDir);
+
 		const configPath = path.join(agentDir, "config.yml");
 		const storage = await AgentStorage.open(getAgentDbPath(agentDir));
 
@@ -541,7 +547,9 @@ export class SettingsManager {
 		// Load project settings before construction (constructor is sync)
 		const projectSettings = await SettingsManager.loadProjectSettingsStatic(cwd);
 
-		return new SettingsManager(storage, configPath, cwd, globalSettings, true, projectSettings);
+		const instance = new SettingsManager(storage, configPath, cwd, globalSettings, true, projectSettings, agentDir);
+		SettingsManager.#lastInstance = instance;
+		return instance;
 	}
 
 	/**
@@ -550,7 +558,7 @@ export class SettingsManager {
 	 * @returns SettingsManager that won't persist changes to disk
 	 */
 	static inMemory(settings: Partial<Settings> = {}): SettingsManager {
-		return new SettingsManager(null, null, null, settings, false, {});
+		return new SettingsManager(null, null, null, settings, false, {}, null);
 	}
 
 	/**
@@ -1783,5 +1791,55 @@ export class SettingsManager {
 			delete this.globalSettings.env[key];
 			await this.save();
 		}
+	}
+
+	_compareUniqueCtorKeys(cwd: string, agentDir: string): boolean {
+		if (this.cwd !== cwd) {
+			cwd = path.normalize(cwd);
+			if (this.cwd !== cwd) {
+				return false;
+			}
+		}
+		if (this.agentDir !== agentDir) {
+			agentDir = path.normalize(agentDir);
+			if (this.agentDir !== agentDir) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Acquire the last created SettingsManager instance.
+	 * If no instance exists, create a new one.
+	 * @returns The SettingsManager instance
+	 */
+	static acquire(
+		cwd: string = process.cwd(),
+		agentDir: string = getAgentDir(),
+	): SettingsManager | Promise<SettingsManager> {
+		const prev = SettingsManager.#lastInstance;
+		if (prev?._compareUniqueCtorKeys(cwd, agentDir)) {
+			return prev;
+		}
+		return SettingsManager.create(cwd, agentDir);
+	}
+
+	/**
+	 * Gets the shell configuration
+	 * @returns The shell configuration
+	 */
+	async getShellConfig() {
+		const shell = this.getShellPath();
+		return procmgr.getShellConfig(shell);
+	}
+
+	/**
+	 * Gets the shell configuration from the last created SettingsManager instance.
+	 * @returns The shell configuration
+	 */
+	static async getGlobalShellConfig() {
+		const settings = await SettingsManager.acquire();
+		return settings.getShellConfig();
 	}
 }

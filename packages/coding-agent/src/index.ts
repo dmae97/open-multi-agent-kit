@@ -276,4 +276,3 @@ export {
 	truncateTail,
 	type WriteToolDetails,
 } from "./tools";
-export { getShellConfig } from "./utils/shell";
