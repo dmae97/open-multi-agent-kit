@@ -1,4 +1,3 @@
-import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { htmlToMarkdown } from "@oh-my-pi/pi-natives";
@@ -6,7 +5,6 @@ import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import { ptree } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
-import { nanoid } from "nanoid";
 import { parse as parseHtml } from "node-html-parser";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
@@ -387,13 +385,12 @@ function parseFeedToMarkdown(content: string, maxItems = 10): string {
 }
 
 /**
- * Render HTML to markdown using native WASM, jina, trafilatura, lynx, or html2text (in order of preference)
+ * Render HTML to markdown using native WASM, jina, trafilatura, lynx, or html-to-markdown (in order of preference)
  */
 async function renderHtmlToText(
 	url: string,
 	html: string,
 	timeout: number,
-	scratchDir: string,
 	userSignal?: AbortSignal,
 ): Promise<{ content: string; ok: boolean; method: string }> {
 	const signal = ptree.combineSignals(userSignal, timeout * 1000);
@@ -404,17 +401,6 @@ async function renderHtmlToText(
 		stderr: "full" as const,
 		signal,
 	};
-
-	// Try native WASM converter first (fastest, no network/subprocess)
-	try {
-		const content = await htmlToMarkdown(html, { cleanContent: true });
-		if (content.trim().length > 100 && !isLowQualityOutput(content)) {
-			return { content, ok: true, method: "native" };
-		}
-	} catch {
-		// Native converter failed, continue to next method
-		signal?.throwIfAborted();
-	}
 
 	// Try jina first (reader API)
 	try {
@@ -452,19 +438,15 @@ async function renderHtmlToText(
 		}
 	}
 
-	// Fall back to html2text (auto-install via uv/pip)
-	const html2text = await ensureTool("html2text", { signal, silent: true });
-	if (html2text) {
-		const tmpFile = path.join(scratchDir, `omp-${nanoid()}.html`);
-		try {
-			await Bun.write(tmpFile, html);
-			const result = await ptree.exec([html2text, tmpFile], execOptions);
-			if (result.ok) {
-				return { content: result.stdout, ok: true, method: "html2text" };
-			}
-		} finally {
-			void fs.rm(tmpFile, { force: true }).catch(() => {});
+	// Fall back to native WASM converter (fastest, no network/subprocess)
+	try {
+		const content = await htmlToMarkdown(html, { cleanContent: true });
+		if (content.trim().length > 100 && !isLowQualityOutput(content)) {
+			return { content, ok: true, method: "native" };
 		}
+	} catch {
+		// Native converter failed, continue to next method
+		signal?.throwIfAborted();
 	}
 	return { content: "", ok: false, method: "none" };
 }
@@ -533,13 +515,7 @@ async function handleSpecialUrls(url: string, timeout: number, signal?: AbortSig
 /**
  * Main render function implementing the full pipeline
  */
-async function renderUrl(
-	url: string,
-	timeout: number,
-	raw: boolean,
-	scratchDir: string,
-	signal?: AbortSignal,
-): Promise<RenderResult> {
+async function renderUrl(url: string, timeout: number, raw: boolean, signal?: AbortSignal): Promise<RenderResult> {
 	const notes: string[] = [];
 	const fetchedAt = new Date().toISOString();
 	if (signal?.aborted) {
@@ -778,7 +754,7 @@ async function renderUrl(
 		}
 
 		// Step 6: Render HTML with lynx or html2text
-		const htmlResult = await renderHtmlToText(finalUrl, rawContent, timeout, scratchDir, signal);
+		const htmlResult = await renderHtmlToText(finalUrl, rawContent, timeout, signal);
 		if (!htmlResult.ok) {
 			notes.push("html rendering failed (lynx/html2text unavailable)");
 			const output = finalizeOutput(rawContent);
@@ -902,8 +878,7 @@ export class FetchTool implements AgentTool<typeof fetchSchema, FetchToolDetails
 			throw new ToolAbortError();
 		}
 
-		const scratchDir = this.session.getArtifactsDir?.() ?? this.session.cwd;
-		const result = await renderUrl(url, effectiveTimeout, raw, scratchDir, signal);
+		const result = await renderUrl(url, effectiveTimeout, raw, signal);
 		const truncation = truncateHead(result.content, { maxBytes: DEFAULT_MAX_BYTES, maxLines: DEFAULT_MAX_LINES });
 		const needsArtifact = truncation.truncated;
 		let artifactId: string | undefined;

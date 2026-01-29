@@ -1,6 +1,6 @@
 //! HTML to Markdown conversion.
 
-use html_to_markdown_rs::{convert, ConversionOptions, PreprocessingOptions, PreprocessingPreset};
+use html_to_markdown_rs::{ConversionOptions, PreprocessingOptions, PreprocessingPreset, convert};
 use serde::Deserialize;
 use wasm_bindgen::prelude::*;
 
@@ -13,7 +13,7 @@ pub struct HtmlToMarkdownOptions {
 	pub clean_content: bool,
 	/// Skip images during conversion.
 	#[serde(default)]
-	pub skip_images: bool,
+	pub skip_images:   bool,
 }
 
 /// Convert HTML to Markdown.
@@ -29,13 +29,14 @@ pub fn html_to_markdown(html: &str, options: JsValue) -> Result<String, JsValue>
 	let conversion_opts = ConversionOptions {
 		skip_images: opts.skip_images,
 		preprocessing: PreprocessingOptions {
-			enabled: opts.clean_content,
-			preset: PreprocessingPreset::Aggressive,
+			enabled:           opts.clean_content,
+			preset:            PreprocessingPreset::Aggressive,
 			remove_navigation: true,
-			remove_forms: true,
+			remove_forms:      true,
 		},
 		..Default::default()
 	};
 
-	convert(html, Some(conversion_opts)).map_err(|e| JsValue::from_str(&format!("Conversion error: {e}")))
+	convert(html, Some(conversion_opts))
+		.map_err(|e| JsValue::from_str(&format!("Conversion error: {e}")))
 }

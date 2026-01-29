@@ -171,4 +171,4 @@ export {
 // Worker Pool (shared infrastructure)
 // =============================================================================
 
-export { type BaseRequest, type BaseResponse, WorkerPool, type WorkerPoolOptions } from "./pool";
+export { type BaseRequest, type BaseResponse, type RequestOptions, WorkerPool, type WorkerPoolOptions } from "./pool";

@@ -4,7 +4,7 @@
  * Conversion happens in a worker thread to avoid blocking the main thread.
  */
 
-import { WorkerPool } from "../pool";
+import { type RequestOptions, WorkerPool } from "../pool";
 import type { HtmlRequest, HtmlResponse, HtmlToMarkdownOptions } from "./types";
 
 export type { HtmlToMarkdownOptions } from "./types";
@@ -22,12 +22,19 @@ const pool = new WorkerPool<HtmlRequest, HtmlResponse>({
  * @param options - Conversion options
  * @returns Markdown text
  */
-export async function htmlToMarkdown(html: string, options?: HtmlToMarkdownOptions): Promise<string> {
-	const response = await pool.request<Extract<HtmlResponse, { type: "converted" }>>({
-		type: "convert",
-		html,
-		options,
-	});
+export async function htmlToMarkdown(
+	html: string,
+	options?: HtmlToMarkdownOptions,
+	req?: RequestOptions,
+): Promise<string> {
+	const response = await pool.request<Extract<HtmlResponse, { type: "converted" }>>(
+		{
+			type: "convert",
+			html,
+			options,
+		},
+		req,
+	);
 	return response.markdown;
 }
 

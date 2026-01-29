@@ -27,6 +27,17 @@ export interface WorkerPoolOptions {
 	idleTimeoutMs?: number;
 	/** Timeout for worker initialization in ms (default: 10000). */
 	initTimeoutMs?: number;
+	/** Grace period after request timeout before force-terminating stuck workers (default: 5000). */
+	stuckGracePeriodMs?: number;
+}
+
+export interface RequestOptions {
+	/** Timeout for this request in ms. After this, the promise rejects but worker gets a grace period. */
+	timeoutMs?: number;
+	/** Abort signal for this request. */
+	signal?: AbortSignal;
+	/** Transfer list for postMessage. */
+	transfer?: ArrayBufferLike[];
 }
 
 interface PooledWorker {
@@ -39,7 +50,8 @@ interface PooledWorker {
 interface PendingRequest<T> {
 	resolve: (result: T) => void;
 	reject: (error: Error) => void;
-	timeout?: ReturnType<typeof setTimeout>;
+	worker?: PooledWorker;
+	dispose?: () => void;
 }
 
 /**
@@ -62,26 +74,51 @@ export class WorkerPool<TReq extends BaseRequest, TRes extends BaseResponse> {
 			maxWorkers: options.maxWorkers ?? 4,
 			idleTimeoutMs: options.idleTimeoutMs ?? 30_000,
 			initTimeoutMs: options.initTimeoutMs ?? 10_000,
+			stuckGracePeriodMs: options.stuckGracePeriodMs ?? 5_000,
 		};
 	}
 
 	/**
 	 * Send a request to a worker and wait for the response.
 	 * Workers are acquired from the pool (or created if under limit).
+	 *
+	 * @param msg - Request message
+	 * @param options - Request options (timeout, transfer)
 	 */
 	async request<T extends TRes = TRes>(
 		msg: TReq | (Omit<TReq, "id"> & { id?: number }),
-		transfer?: ArrayBufferLike[],
+		options?: RequestOptions,
 	): Promise<T> {
+		const { timeoutMs, signal, transfer } = options ?? {};
+		signal?.throwIfAborted();
+
 		const worker = await this.#acquireWorker();
 		const id = msg.id ?? this.#nextRequestId++;
 		const fullMsg = { ...msg, id } as TReq;
 
 		const { promise, resolve, reject } = Promise.withResolvers<T>();
-		this.#pending.set(id, {
+		const pending: PendingRequest<T> = {
 			resolve: resolve as (result: TRes) => void,
 			reject,
-		});
+			worker,
+		};
+		this.#pending.set(id, pending as PendingRequest<TRes>);
+
+		const onAbort = () => {
+			this.#handleRequestAbort(id, worker);
+		};
+
+		if (timeoutMs && timeoutMs > 0 && signal) {
+			const combined = AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
+			combined.addEventListener("abort", onAbort, { once: true });
+			pending.dispose = () => combined.removeEventListener("abort", onAbort);
+		} else if (timeoutMs && timeoutMs > 0) {
+			const timer = setTimeout(onAbort, timeoutMs);
+			pending.dispose = () => clearTimeout(timer);
+		} else if (signal) {
+			signal.addEventListener("abort", onAbort, { once: true });
+			pending.dispose = () => signal.removeEventListener("abort", onAbort);
+		}
 
 		worker.currentRequestId = id;
 		if (transfer) {
@@ -109,7 +146,7 @@ export class WorkerPool<TReq extends BaseRequest, TRes extends BaseResponse> {
 
 		for (const pending of this.#pending.values()) {
 			pending.reject(new Error("Worker pool terminated"));
-			if (pending.timeout) clearTimeout(pending.timeout);
+			void pending.dispose?.();
 		}
 		this.#pending.clear();
 	}
@@ -144,7 +181,7 @@ export class WorkerPool<TReq extends BaseRequest, TRes extends BaseResponse> {
 		if (!pending) return;
 
 		this.#pending.delete(msg.id);
-		if (pending.timeout) clearTimeout(pending.timeout);
+		void pending.dispose?.();
 
 		if (msg.type === "error" && "error" in msg) {
 			pending.reject(new Error(msg.error ?? "Unknown error"));
@@ -163,8 +200,55 @@ export class WorkerPool<TReq extends BaseRequest, TRes extends BaseResponse> {
 		const pending = this.#pending.get(id);
 		if (pending) {
 			this.#pending.delete(id);
-			if (pending.timeout) clearTimeout(pending.timeout);
+			void pending.dispose?.();
 			pending.reject(error);
+		}
+	}
+
+	#handleRequestAbort(id: number, worker: PooledWorker): void {
+		const pending = this.#pending.get(id);
+		if (!pending) return;
+
+		pending.dispose = undefined;
+		pending.reject(new Error("Request timeout"));
+
+		if (this.#options.stuckGracePeriodMs > 0) {
+			const timer = setTimeout(() => {
+				this.#terminateStuckWorker(id, worker);
+			}, this.#options.stuckGracePeriodMs);
+
+			pending.dispose = () => {
+				clearTimeout(timer);
+			};
+		}
+	}
+
+	#terminateStuckWorker(id: number, worker: PooledWorker): void {
+		const pending = this.#pending.get(id);
+		if (pending) {
+			this.#pending.delete(id);
+			void pending.dispose?.();
+		}
+
+		if (worker.currentRequestId !== id) return;
+		if (!this.#pool.includes(worker)) return;
+
+		this.#removeWorker(worker);
+
+		if (this.#pool.length === 0 && this.#waiters.length > 0) {
+			this.#replenishPool();
+		}
+	}
+
+	async #replenishPool(): Promise<void> {
+		const worker = this.#createWorker();
+		worker.busy = true;
+		this.#pool.push(worker);
+		try {
+			await this.#initializeWorker(worker);
+			this.#releaseWorker(worker);
+		} catch {
+			this.#removeWorker(worker);
 		}
 	}
 
@@ -227,7 +311,7 @@ export class WorkerPool<TReq extends BaseRequest, TRes extends BaseResponse> {
 		this.#pending.set(id, {
 			resolve: () => resolve(),
 			reject,
-			timeout,
+			dispose: () => clearTimeout(timeout),
 		} as PendingRequest<TRes>);
 
 		pooledWorker.worker.postMessage({ type: "init", id } satisfies BaseRequest);

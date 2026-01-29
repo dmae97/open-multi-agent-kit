@@ -49,9 +49,12 @@ export class PhotonImage {
 	 * The bytes are transferred to the worker (zero-copy).
 	 */
 	static async new_from_byteslice(bytes: Uint8Array): Promise<PhotonImage> {
-		const response = await pool.request<Extract<ImageResponse, { type: "loaded" }>>({ type: "load", bytes }, [
-			bytes.buffer,
-		]);
+		const response = await pool.request<Extract<ImageResponse, { type: "loaded" }>>(
+			{ type: "load", bytes },
+			{
+				transfer: [bytes.buffer],
+			},
+		);
 		return new PhotonImage(response.handle, response.width, response.height);
 	}
 

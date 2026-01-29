@@ -88,11 +88,6 @@ const PYTHON_TOOLS: Record<string, PythonToolConfig> = {
 		package: "markitdown",
 		binaryName: "markitdown",
 	},
-	html2text: {
-		name: "html2text",
-		package: "html2text",
-		binaryName: "html2text",
-	},
 	trafilatura: {
 		name: "trafilatura",
 		package: "trafilatura",
@@ -100,7 +95,7 @@ const PYTHON_TOOLS: Record<string, PythonToolConfig> = {
 	},
 };
 
-export type ToolName = "sd" | "sg" | "yt-dlp" | "markitdown" | "html2text" | "trafilatura";
+export type ToolName = "sd" | "sg" | "yt-dlp" | "markitdown" | "trafilatura";
 
 // Get the path to a tool (system-wide or in our tools dir)
 export async function getToolPath(tool: ToolName): Promise<string | null> {
