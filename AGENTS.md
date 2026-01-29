@@ -8,14 +8,16 @@ This repo contains multiple packages, but **`packages/coding-agent/`** is the pr
 
 ### Package Structure
 
-| Package                 | Description                                          |
-| ----------------------- | ---------------------------------------------------- |
-| `packages/ai`           | Multi-provider LLM client with streaming support     |
-| `packages/agent`        | Agent runtime with tool calling and state management |
-| `packages/coding-agent` | Main CLI application (primary focus)                 |
-| `packages/tui`          | Terminal UI library with differential rendering      |
-| `packages/stats`        | Local observability dashboard (`omp stats`)          |
-| `packages/pi-utils`     | Shared utilities (logger, streams, temp files)       |
+| Package                 | Description                                           |
+| ----------------------- | ----------------------------------------------------- |
+| `packages/ai`           | Multi-provider LLM client with streaming support      |
+| `packages/agent`        | Agent runtime with tool calling and state management  |
+| `packages/coding-agent` | Main CLI application (primary focus)                  |
+| `packages/tui`          | Terminal UI library with differential rendering       |
+| `packages/natives`      | WASM bindings for native text/image/grep operations   |
+| `packages/stats`        | Local observability dashboard (`omp stats`)           |
+| `packages/pi-utils`     | Shared utilities (logger, streams, temp files)        |
+| `crates/pi-natives`     | Rust WASM crate for performance-critical text/grep ops |
 
 ## Code Quality
 
@@ -426,12 +428,25 @@ Logs go to `~/.omp/logs/omp.YYYY-MM-DD.log` with automatic rotation.
 
 ## Commands
 
-- After code changes: `bun run check` (runs biome + tsc, get full output, no tail)
-- For auto-fixable lint issues: `bun run fix` (includes unsafe fixes)
+| Command        | Description                                      |
+| -------------- | ------------------------------------------------ |
+| `bun check`    | Check all (TypeScript + Rust)                    |
+| `bun check:ts` | Biome check + tsgo type checking                 |
+| `bun check:rs` | Cargo fmt --check + clippy                       |
+| `bun lint`     | Lint all                                         |
+| `bun lint:ts`  | Biome lint                                       |
+| `bun lint:rs`  | Cargo clippy                                     |
+| `bun fmt`      | Format all                                       |
+| `bun fmt:ts`   | Biome format                                     |
+| `bun fmt:rs`   | Cargo fmt                                        |
+| `bun fix`      | Fix all (unsafe fixes + format)                  |
+| `bun fix:ts`   | Biome --unsafe + format-prompts                  |
+| `bun fix:rs`   | Clippy --fix + cargo fmt                         |
+
 - NEVER run: `bun run dev`, `bun test` unless user instructs
 - Only run specific tests if user instructs: `bun test test/specific.test.ts`
 - NEVER commit unless user asks
-- Do NOT use `tsc` or `npx tsc` - always use `bun run check`
+- Do NOT use `tsc` or `npx tsc` - always use `bun check`
 
 ## GitHub Issues
 

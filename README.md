@@ -12,6 +12,7 @@
   <a href="https://github.com/can1357/oh-my-pi/actions"><img src="https://img.shields.io/github/actions/workflow/status/can1357/oh-my-pi/ci.yml?style=flat&colorA=222222&colorB=3FB950" alt="CI"></a>
   <a href="https://github.com/can1357/oh-my-pi/blob/main/LICENSE"><img src="https://img.shields.io/github/license/can1357/oh-my-pi?style=flat&colorA=222222&colorB=58A6FF" alt="License"></a>
   <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat&colorA=222222&logo=typescript&logoColor=white" alt="TypeScript"></a>
+  <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-DEA584?style=flat&colorA=222222&logo=rust&logoColor=white" alt="Rust"></a>
   <a href="https://bun.sh"><img src="https://img.shields.io/badge/runtime-Bun-f472b6?style=flat&colorA=222222" alt="Bun"></a>
   <a href="https://discord.gg/4NMW9cdXZa"><img src="https://img.shields.io/badge/Discord-5865F2?style=flat&colorA=222222&logo=discord&logoColor=white" alt="Discord"></a>
 </p>
@@ -346,7 +347,14 @@ Handles whitespace and indentation variance automatically:
 | **[@oh-my-pi/pi-agent-core](packages/agent)**          | Agent runtime with tool calling and state management                          |
 | **[@oh-my-pi/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI                                                  |
 | **[@oh-my-pi/pi-tui](packages/tui)**                   | Terminal UI library with differential rendering                               |
-| **[@oh-my-pi/omp-stats](packages/stats)**          | Local observability dashboard for AI usage statistics                         |
+| **[@oh-my-pi/pi-natives](packages/natives)**           | WASM bindings for native text, image, and grep operations                     |
+| **[@oh-my-pi/omp-stats](packages/stats)**              | Local observability dashboard for AI usage statistics                         |
+
+### Rust Crates
+
+| Crate                              | Description                                              |
+| ---------------------------------- | -------------------------------------------------------- |
+| **[pi-natives](crates/pi-natives)** | Rust WASM crate for performance-critical text/grep ops   |
 
 ---
 
