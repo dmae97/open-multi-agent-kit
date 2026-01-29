@@ -743,21 +743,29 @@ export class Editor implements Component, Focusable {
 					(matchesKey(data, "enter") || matchesKey(data, "return") || data === "\n") &&
 					this.autocompletePrefix.startsWith("/")
 				) {
-					const selected = this.autocompleteList.getSelectedItem();
-					if (selected && this.autocompleteProvider) {
-						const result = this.autocompleteProvider.applyCompletion(
-							this.state.lines,
-							this.state.cursorLine,
-							this.state.cursorCol,
-							selected,
-							this.autocompletePrefix,
-						);
+					// Check for stale autocomplete state due to debounce
+					const currentLine = this.state.lines[this.state.cursorLine] ?? "";
+					const currentTextBeforeCursor = currentLine.slice(0, this.state.cursorCol);
+					if (currentTextBeforeCursor !== this.autocompletePrefix) {
+						// Autocomplete is stale - cancel and fall through to normal submission
+						this.cancelAutocomplete();
+					} else {
+						const selected = this.autocompleteList.getSelectedItem();
+						if (selected && this.autocompleteProvider) {
+							const result = this.autocompleteProvider.applyCompletion(
+								this.state.lines,
+								this.state.cursorLine,
+								this.state.cursorCol,
+								selected,
+								this.autocompletePrefix,
+							);
 
-						this.state.lines = result.lines;
-						this.state.cursorLine = result.cursorLine;
-						this.state.cursorCol = result.cursorCol;
+							this.state.lines = result.lines;
+							this.state.cursorLine = result.cursorLine;
+							this.state.cursorCol = result.cursorCol;
+						}
+						this.cancelAutocomplete();
 					}
-					this.cancelAutocomplete();
 					// Don't return - fall through to submission logic
 				}
 				// If Enter was pressed on a file path, apply completion

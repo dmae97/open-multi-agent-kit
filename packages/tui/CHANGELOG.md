@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Fixed slash command autocomplete applying stale completion when typing quickly
+
 ## [8.4.1] - 2026-01-25
 
 ### Added

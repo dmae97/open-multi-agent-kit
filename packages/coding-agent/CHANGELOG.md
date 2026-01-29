@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- Fixed LSP servers showing as "unknown" in status display when server warmup fails
+- Fixed Read tool loading entire file into memory when offset/limit was specified
+
 ## [8.12.2] - 2026-01-28
 
 ### Changed

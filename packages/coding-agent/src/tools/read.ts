@@ -43,6 +43,87 @@ function isRemoteMountPath(absolutePath: string): boolean {
 	return absolutePath.startsWith(REMOTE_MOUNT_PREFIX);
 }
 
+/**
+ * Stream lines from a file, collecting only the requested range.
+ * Avoids loading the entire file into memory for large files.
+ *
+ * @param filePath - Path to the file
+ * @param startLine - 0-indexed start line
+ * @param maxLinesToCollect - Maximum lines to collect (from startLine)
+ * @param maxBytes - Maximum bytes to collect
+ * @returns Collected lines, total line count, and truncation info
+ */
+async function streamLinesFromFile(
+	filePath: string,
+	startLine: number,
+	maxLinesToCollect: number,
+	maxBytes: number,
+): Promise<{
+	lines: string[];
+	totalFileLines: number;
+	collectedBytes: number;
+	stoppedByByteLimit: boolean;
+}> {
+	const stream = Bun.file(filePath).stream();
+	const decoder = new TextDecoder();
+
+	const collectedLines: string[] = [];
+	let lineIndex = 0;
+	let collectedBytes = 0;
+	let stoppedByByteLimit = false;
+	let buffer = "";
+	let doneCollecting = false;
+
+	for await (const chunk of stream) {
+		buffer += decoder.decode(chunk, { stream: true });
+
+		for (let newlinePos = buffer.indexOf("\n"); newlinePos !== -1; newlinePos = buffer.indexOf("\n")) {
+			const line = buffer.slice(0, newlinePos);
+			buffer = buffer.slice(newlinePos + 1);
+
+			if (!doneCollecting && lineIndex >= startLine) {
+				const lineBytes = Buffer.byteLength(line, "utf-8") + (collectedLines.length > 0 ? 1 : 0);
+
+				if (collectedBytes + lineBytes > maxBytes && collectedLines.length > 0) {
+					stoppedByByteLimit = true;
+					doneCollecting = true;
+				} else if (collectedLines.length < maxLinesToCollect) {
+					collectedLines.push(line);
+					collectedBytes += lineBytes;
+					if (collectedLines.length >= maxLinesToCollect) {
+						doneCollecting = true;
+					}
+				} else {
+					doneCollecting = true;
+				}
+			}
+
+			lineIndex++;
+		}
+	}
+
+	// Handle remaining buffer (last line without trailing newline)
+	if (buffer.length > 0) {
+		if (!doneCollecting && lineIndex >= startLine && collectedLines.length < maxLinesToCollect) {
+			const lineBytes = Buffer.byteLength(buffer, "utf-8") + (collectedLines.length > 0 ? 1 : 0);
+			if (collectedBytes + lineBytes <= maxBytes || collectedLines.length === 0) {
+				collectedLines.push(buffer);
+				collectedBytes += lineBytes;
+			} else {
+				stoppedByByteLimit = true;
+			}
+		}
+		lineIndex++;
+	}
+
+	return {
+		lines: collectedLines,
+		totalFileLines: lineIndex,
+		collectedBytes,
+		stoppedByByteLimit,
+	};
+}
+
 // Maximum image file size (20MB) - larger images will be rejected to prevent OOM during serialization
 const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
 const MAX_FUZZY_RESULTS = 5;
@@ -514,40 +595,51 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 				content = [{ type: "text", text: `[Cannot read ${ext} file: conversion failed]` }];
 			}
 		} else {
-			// Read as text
-			const file = Bun.file(absolutePath);
-			const textContent = await file.text();
-			const allLines = textContent.split("\n");
-			const totalFileLines = allLines.length;
-
-			// Apply offset if specified (1-indexed to 0-indexed)
+			// Read as text using streaming to avoid loading huge files into memory
 			const startLine = offset ? Math.max(0, offset - 1) : 0;
 			const startLineDisplay = startLine + 1; // For display (1-indexed)
 
+			// Calculate how many lines to collect: user limit or default truncation limit
+			const maxLinesToCollect = limit !== undefined ? limit : DEFAULT_MAX_LINES;
+
+			// Stream the file, collecting only the needed lines
+			const streamResult = await streamLinesFromFile(absolutePath, startLine, maxLinesToCollect, DEFAULT_MAX_BYTES);
+
+			const { lines: collectedLines, totalFileLines, collectedBytes, stoppedByByteLimit } = streamResult;
+
 			// Check if offset is out of bounds - return graceful message instead of throwing
-			if (startLine >= allLines.length) {
+			if (startLine >= totalFileLines) {
 				const suggestion =
-					allLines.length === 0
+					totalFileLines === 0
 						? "The file is empty."
-						: `Use offset=1 to read from the start, or offset=${allLines.length} to read the last line.`;
+						: `Use offset=1 to read from the start, or offset=${totalFileLines} to read the last line.`;
 				return toolResult<ReadToolDetails>()
-					.text(`Offset ${offset} is beyond end of file (${allLines.length} lines total). ${suggestion}`)
+					.text(`Offset ${offset} is beyond end of file (${totalFileLines} lines total). ${suggestion}`)
 					.done();
 			}
 
-			// If limit is specified by user, use it; otherwise we'll let truncateHead decide
-			let selectedContent: string;
-			let userLimitedLines: number | undefined;
-			if (limit !== undefined) {
-				const endLine = Math.min(startLine + limit, allLines.length);
-				selectedContent = allLines.slice(startLine, endLine).join("\n");
-				userLimitedLines = endLine - startLine;
-			} else {
-				selectedContent = allLines.slice(startLine).join("\n");
-			}
+			// Build the selected content from collected lines
+			const selectedContent = collectedLines.join("\n");
+			const userLimitedLines = limit !== undefined ? collectedLines.length : undefined;
 
-			// Apply truncation (respects both line and byte limits)
-			const truncation = truncateHead(selectedContent);
+			// Build truncation result from streaming data
+			const totalSelectedLines = totalFileLines - startLine;
+			const totalSelectedBytes = collectedBytes; // We don't know exact total bytes without reading all
+			const wasTruncated = collectedLines.length < totalSelectedLines || stoppedByByteLimit;
+
+			const truncation: TruncationResult = {
+				content: selectedContent,
+				truncated: wasTruncated,
+				truncatedBy: stoppedByByteLimit ? "bytes" : wasTruncated ? "lines" : null,
+				totalLines: totalSelectedLines,
+				totalBytes: totalSelectedBytes,
+				outputLines: collectedLines.length,
+				outputBytes: collectedBytes,
+				lastLinePartial: false,
+				firstLineExceedsLimit: collectedLines.length === 0 && totalFileLines > startLine,
+				maxLines: DEFAULT_MAX_LINES,
+				maxBytes: DEFAULT_MAX_BYTES,
+			};
 
 			// Add line numbers if requested (uses setting default if not specified)
 			const shouldAddLineNumbers = lines ?? this.defaultLineNumbers;
@@ -566,7 +658,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			let outputText: string;
 
 			if (truncation.firstLineExceedsLimit) {
-				const firstLine = allLines[startLine] ?? "";
+				const firstLine = collectedLines[0] ?? "";
 				const firstLineBytes = Buffer.byteLength(firstLine, "utf-8");
 				const snippet = truncateStringToBytesFromStart(firstLine, DEFAULT_MAX_BYTES);
 
@@ -592,8 +684,8 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 					result: truncation,
 					options: { direction: "head", startLine: startLineDisplay, totalFileLines },
 				};
-			} else if (userLimitedLines !== undefined && startLine + userLimitedLines < allLines.length) {
-				const remaining = allLines.length - (startLine + userLimitedLines);
+			} else if (userLimitedLines !== undefined && startLine + userLimitedLines < totalFileLines) {
+				const remaining = totalFileLines - (startLine + userLimitedLines);
 				const nextOffset = startLine + userLimitedLines + 1;
 
 				outputText = shouldAddLineNumbers

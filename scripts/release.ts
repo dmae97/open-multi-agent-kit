@@ -13,6 +13,7 @@ import { $, Glob } from "bun";
 
 const changelogGlob = new Glob("packages/*/CHANGELOG.md");
 const packageJsonGlob = new Glob("packages/*/package.json");
+const cargoTomlGlob = new Glob("crates/*/Cargo.toml");
 
 // =============================================================================
 // Shared functions
@@ -170,36 +171,60 @@ async function cmdRelease(version: string): Promise<void> {
 	}
 	console.log();
 
-	// 3. Regenerate lockfile
-	console.log("Regenerating lockfile...");
-	await $`rm -f bun.lock`;
-	await $`bun install`;
+	// 3. Update Rust workspace version
+	console.log(`Updating Rust workspace version to ${version}...`);
+	await $`sd '^version = "[^"]+"' ${`version = "${version}"`} Cargo.toml`;
+
+	// Verify
+	const cargoToml = await Bun.file("Cargo.toml").text();
+	const versionMatch = cargoToml.match(/^\[workspace\.package\][\s\S]*?^version = "([^"]+)"/m);
+	if (versionMatch) {
+		console.log(`  workspace: ${versionMatch[1]}`);
+	}
+
+	// List crates using workspace version
+	for await (const cargoPath of cargoTomlGlob.scan(".")) {
+		const content = await Bun.file(cargoPath).text();
+		if (content.includes("version.workspace = true")) {
+			const nameMatch = content.match(/^name = "([^"]+)"/m);
+			if (nameMatch) {
+				console.log(`  ${nameMatch[1]}: ${version} (workspace)`);
+			}
+		}
+	}
 	console.log();
 
-	// 4. Update changelogs
+	// 4. Regenerate lockfiles
+	console.log("Regenerating lockfiles...");
+	await $`rm -f bun.lock`;
+	await $`bun install`;
+	await $`cargo generate-lockfile`;
+	console.log();
+
+	// 5. Update changelogs
 	console.log("Updating CHANGELOGs...");
 	await updateChangelogsForRelease(version);
 	console.log();
 
-	// 5. Run checks
+	// 6. Run checks
 	console.log("Running checks...");
 	await $`bun run check`;
 	console.log();
 
-	// 6. Commit and tag
+	// 7. Commit and tag
 	console.log("Committing and tagging...");
 	await $`git add .`;
 	await $`git commit -m ${`chore: bump version to ${version}`}`;
 	await $`git tag ${`v${version}`}`;
 	console.log();
 
-	// 7. Push
+	// 8. Push
 	console.log("Pushing to remote...");
 	await $`git push origin main`;
 	await $`git push origin ${`v${version}`}`;
 	console.log();
 
-	// 8. Watch CI
+	// 9. Watch CI
 	console.log("Watching CI...");
 	const success = await watchCI();
 

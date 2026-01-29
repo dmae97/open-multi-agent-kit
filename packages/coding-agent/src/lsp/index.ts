@@ -107,7 +107,9 @@ export async function warmupLspServers(cwd: string, options?: LspWarmupOptions):
 		}),
 	);
 
-	for (const result of results) {
+	for (let i = 0; i < results.length; i++) {
+		const result = results[i];
+		const [name, serverConfig] = lspServers[i];
 		if (result.status === "fulfilled") {
 			servers.push({
 				name: result.value.name,
@@ -115,12 +117,11 @@ export async function warmupLspServers(cwd: string, options?: LspWarmupOptions):
 				fileTypes: result.value.fileTypes,
 			});
 		} else {
-			// Extract server name from error if possible
 			const errorMsg = result.reason?.message ?? String(result.reason);
 			servers.push({
-				name: "unknown",
+				name,
 				status: "error",
-				fileTypes: [],
+				fileTypes: serverConfig.fileTypes,
 				error: errorMsg,
 			});
 		}
