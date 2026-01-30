@@ -1,5 +1,5 @@
 import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import { Container, getCapabilities, Markdown, Spacer, Text } from "@oh-my-pi/pi-tui";
+import { Container, Markdown, Spacer, TERMINAL_INFO, Text } from "@oh-my-pi/pi-tui";
 import { hasPendingMermaid, prerenderMermaid } from "../../modes/theme/mermaid-cache";
 import { getMarkdownTheme, theme } from "../../modes/theme/theme";
 
@@ -38,8 +38,7 @@ export class AssistantMessageComponent extends Container {
 	}
 
 	private triggerMermaidPrerender(message: AssistantMessage): void {
-		const caps = getCapabilities();
-		if (!caps.images || this.prerenderInFlight) return;
+		if (!TERMINAL_INFO.imageProtocol || this.prerenderInFlight) return;
 
 		// Check if any text content has pending mermaid blocks
 		const hasPending = message.content.some(c => c.type === "text" && c.text.trim() && hasPendingMermaid(c.text));

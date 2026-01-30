@@ -2,12 +2,12 @@ import { Image } from "@oh-my-pi/pi-tui/components/image";
 import { Spacer } from "@oh-my-pi/pi-tui/components/spacer";
 import { Text } from "@oh-my-pi/pi-tui/components/text";
 import { ProcessTerminal } from "@oh-my-pi/pi-tui/terminal";
-import { getCapabilities, getImageDimensions } from "@oh-my-pi/pi-tui/terminal-image";
+import { getImageDimensions, TERMINAL_INFO } from "@oh-my-pi/pi-tui/terminal-image";
 import { TUI } from "@oh-my-pi/pi-tui/tui";
 
 const testImagePath = Bun.argv[2] || "/tmp/test-image.png";
 
-console.log("Terminal capabilities:", getCapabilities());
+console.log("Terminal capabilities:", TERMINAL_INFO);
 console.log("Loading image from:", testImagePath);
 
 let imageBuffer: Uint8Array;

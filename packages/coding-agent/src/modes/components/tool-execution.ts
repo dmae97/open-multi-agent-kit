@@ -3,14 +3,15 @@ import {
 	Box,
 	type Component,
 	Container,
-	getCapabilities,
 	getImageDimensions,
 	Image,
 	imageFallback,
 	Spacer,
+	TERMINAL_INFO,
 	Text,
 	type TUI,
 } from "@oh-my-pi/pi-tui";
+import { ImageProtocol } from "@oh-my-pi/pi-tui/terminal-image";
 import { sanitizeText } from "@oh-my-pi/pi-utils";
 import type { Theme } from "../../modes/theme/theme";
 import { theme } from "../../modes/theme/theme";
@@ -288,9 +289,8 @@ export class ToolExecutionComponent extends Container {
 	 * Kitty requires PNG format (f=100), so JPEG/GIF/WebP won't display.
 	 */
 	private maybeConvertImagesForKitty(): void {
-		const caps = getCapabilities();
 		// Only needed for Kitty protocol
-		if (caps.images !== "kitty") return;
+		if (TERMINAL_INFO.imageProtocol !== ImageProtocol.Kitty) return;
 		if (!this.result) return;
 
 		const imageBlocks = this.getAllImageBlocks();
@@ -520,18 +520,17 @@ export class ToolExecutionComponent extends Container {
 
 		if (this.result) {
 			const imageBlocks = this.getAllImageBlocks();
-			const caps = getCapabilities();
 
 			for (let i = 0; i < imageBlocks.length; i++) {
 				const img = imageBlocks[i];
-				if (caps.images && this.showImages && img.data && img.mimeType) {
+				if (TERMINAL_INFO.imageProtocol && this.showImages && img.data && img.mimeType) {
 					// Use converted PNG for Kitty protocol if available
 					const converted = this.convertedImages.get(i);
 					const imageData = converted?.data ?? img.data;
 					const imageMimeType = converted?.mimeType ?? img.mimeType;
 
 					// For Kitty, skip non-PNG images that haven't been converted yet
-					if (caps.images === "kitty" && imageMimeType !== "image/png") {
+					if (TERMINAL_INFO.imageProtocol === ImageProtocol.Kitty && imageMimeType !== "image/png") {
 						continue;
 					}
 
@@ -595,8 +594,7 @@ export class ToolExecutionComponent extends Container {
 			})
 			.join("\n");
 
-		const caps = getCapabilities();
-		if (imageBlocks.length > 0 && (!caps.images || !this.showImages)) {
+		if (imageBlocks.length > 0 && (!TERMINAL_INFO.imageProtocol || !this.showImages)) {
 			const imageIndicators = imageBlocks
 				.map((img: any) => {
 					const dims = img.data ? (getImageDimensions(img.data, img.mimeType) ?? undefined) : undefined;

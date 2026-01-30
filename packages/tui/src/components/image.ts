@@ -1,10 +1,4 @@
-import {
-	getCapabilities,
-	getImageDimensions,
-	type ImageDimensions,
-	imageFallback,
-	renderImage,
-} from "../terminal-image";
+import { getImageDimensions, type ImageDimensions, imageFallback, renderImage, TERMINAL_INFO } from "../terminal-image";
 import type { Component } from "../tui";
 
 export interface ImageTheme {
@@ -53,10 +47,9 @@ export class Image implements Component {
 
 		const maxWidth = Math.min(width - 2, this.options.maxWidthCells ?? 60);
 
-		const caps = getCapabilities();
 		let lines: string[];
 
-		if (caps.images) {
+		if (TERMINAL_INFO.imageProtocol) {
 			const result = renderImage(this.base64Data, this.dimensions, { maxWidthCells: maxWidth });
 
 			if (result) {

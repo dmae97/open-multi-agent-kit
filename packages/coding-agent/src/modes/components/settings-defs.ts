@@ -8,7 +8,7 @@
  * 3. Add the handler in interactive-mode.ts settingsHandlers
  */
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import { getCapabilities } from "@oh-my-pi/pi-tui";
+import { TERMINAL_INFO } from "@oh-my-pi/pi-tui";
 import type {
 	ImageProviderOption,
 	NotificationMethod,
@@ -485,7 +485,7 @@ export const SETTINGS_DEFS: SettingDef[] = [
 		description: "Render images inline in terminal",
 		get: sm => sm.getShowImages(),
 		set: (sm, v) => sm.setShowImages(v),
-		condition: () => !!getCapabilities().images,
+		condition: () => !!TERMINAL_INFO.imageProtocol,
 	},
 	{
 		id: "autoResizeImages",

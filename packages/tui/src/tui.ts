@@ -6,7 +6,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { isKeyRelease, matchesKey } from "./keys";
 import type { Terminal } from "./terminal";
-import { getCapabilities, setCellDimensions } from "./terminal-image";
+import { setCellDimensions, TERMINAL_INFO } from "./terminal-image";
 import { extractSegments, sliceByColumn, sliceWithWidth, visibleWidth } from "./utils";
 
 /**
@@ -382,7 +382,7 @@ export class TUI extends Container {
 
 	private queryCellSize(): void {
 		// Only query if terminal supports images (cell size is only used for image rendering)
-		if (!getCapabilities().images) {
+		if (!TERMINAL_INFO.imageProtocol) {
 			return;
 		}
 		// Query terminal for cell size in pixels: CSI 16 t
@@ -542,7 +542,7 @@ export class TUI extends Container {
 	}
 
 	static containsImage(line: string): boolean {
-		return getCapabilities().containsImage(line);
+		return TERMINAL_INFO.isImageLine(line);
 	}
 
 	/**

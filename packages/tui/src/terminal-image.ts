@@ -1,10 +1,81 @@
-export type ImageProtocol = "kitty" | "iterm2" | null;
+export enum ImageProtocol {
+	Kitty = "\x1b_G",
+	Iterm2 = "\x1b]1337;File=",
+}
 
-export interface TerminalCapabilities {
-	readonly images: ImageProtocol;
-	readonly trueColor: boolean;
-	readonly hyperlinks: boolean;
-	containsImage(line: string): boolean;
+export type TerminalId = "kitty" | "ghostty" | "wezterm" | "iterm2" | "vscode" | "alacritty" | "base" | "trueColor";
+
+export class TerminalInfo {
+	constructor(
+		public readonly id: TerminalId,
+		public readonly imageProtocol: ImageProtocol | null,
+		public readonly trueColor: boolean,
+		public readonly hyperlinks: boolean,
+	) {}
+
+	isImageLine(line: string): boolean {
+		return !!this.imageProtocol && line.trimStart().startsWith(this.imageProtocol);
+	}
+}
+
+const KNOWN_TERMINALS = Object.freeze({
+	// Fallback terminals
+	base: new TerminalInfo("base", null, false, true),
+	trueColor: new TerminalInfo("trueColor", null, true, true),
+	// Recognized terminals
+	kitty: new TerminalInfo("kitty", ImageProtocol.Kitty, true, true),
+	ghostty: new TerminalInfo("ghostty", ImageProtocol.Kitty, true, true),
+	wezterm: new TerminalInfo("wezterm", ImageProtocol.Kitty, true, true),
+	iterm2: new TerminalInfo("iterm2", ImageProtocol.Iterm2, true, true),
+	vscode: new TerminalInfo("vscode", null, true, true),
+	alacritty: new TerminalInfo("alacritty", null, true, true),
+});
+
+export const TERMINAL_ID: TerminalId = (() => {
+	function caseEq(a: string, b: string): boolean {
+		return a.toLowerCase() === b.toLowerCase(); // For compiler to pattern match
+	}
+
+	const {
+		KITTY_WINDOW_ID,
+		GHOSTTY_RESOURCES_DIR,
+		WEZTERM_PANE,
+		ITERM_SESSION_ID,
+		VSCODE_PID,
+		ALACRITTY_WINDOW_ID,
+		TERM_PROGRAM,
+		TERM,
+		COLORTERM,
+	} = process.env;
+
+	if (KITTY_WINDOW_ID) return "kitty";
+	if (GHOSTTY_RESOURCES_DIR) return "ghostty";
+	if (WEZTERM_PANE) return "wezterm";
+	if (ITERM_SESSION_ID) return "iterm2";
+	if (VSCODE_PID) return "vscode";
+	if (ALACRITTY_WINDOW_ID) return "alacritty";
+
+	if (TERM_PROGRAM) {
+		if (caseEq(TERM_PROGRAM, "kitty")) return "kitty";
+		if (caseEq(TERM_PROGRAM, "ghostty")) return "ghostty";
+		if (caseEq(TERM_PROGRAM, "wezterm")) return "wezterm";
+		if (caseEq(TERM_PROGRAM, "iterm.app")) return "iterm2";
+		if (caseEq(TERM_PROGRAM, "vscode")) return "vscode";
+		if (caseEq(TERM_PROGRAM, "alacritty")) return "alacritty";
+	}
+
+	if (!!TERM && TERM.toLowerCase().includes("ghostty")) return "ghostty";
+
+	if (COLORTERM) {
+		if (caseEq(COLORTERM, "truecolor") || caseEq(COLORTERM, "24bit")) return "trueColor";
+	}
+	return "base";
+})();
+
+export const TERMINAL_INFO = getTerminalInfo(TERMINAL_ID);
+
+export function getTerminalInfo(terminalId: TerminalId): TerminalInfo {
+	return KNOWN_TERMINALS[terminalId];
 }
 
 export interface CellDimensions {
@@ -23,8 +94,6 @@ export interface ImageRenderOptions {
 	preserveAspectRatio?: boolean;
 }
 
-let cachedCapabilities: TerminalCapabilities | null = null;
-
 // Default cell dimensions - updated by TUI when terminal responds to query
 let cellDimensions: CellDimensions = { widthPx: 9, heightPx: 18 };
 
@@ -34,85 +103,6 @@ export function getCellDimensions(): CellDimensions {
 
 export function setCellDimensions(dims: CellDimensions): void {
 	cellDimensions = dims;
-}
-
-const kBaseCaps: TerminalCapabilities = {
-	images: null,
-	trueColor: false,
-	hyperlinks: true,
-	containsImage() {
-		return false;
-	},
-};
-
-function createTerminalCaps(parts: Partial<TerminalCapabilities>): TerminalCapabilities {
-	return Object.freeze({ ...kBaseCaps, ...parts });
-}
-
-const kKittyCaps = createTerminalCaps({
-	images: "kitty",
-	trueColor: true,
-	hyperlinks: true,
-	containsImage(line: string) {
-		return line.includes("\x1b_G");
-	},
-});
-const kGhosttyCaps = kKittyCaps;
-const kWeztermCaps = kKittyCaps;
-
-const kIterm2Caps = createTerminalCaps({
-	images: "iterm2",
-	trueColor: true,
-	hyperlinks: true,
-	containsImage(line: string) {
-		return line.includes("\x1b]1337;File=");
-	},
-});
-
-const kTrueColorCaps = createTerminalCaps({
-	...kBaseCaps,
-	trueColor: true,
-});
-
-const kVscodeCaps = kTrueColorCaps;
-const kAlacrittyCaps = kTrueColorCaps;
-
-export function detectCapabilities(): TerminalCapabilities {
-	const termProgram = process.env.TERM_PROGRAM?.toLowerCase() || "";
-	const term = process.env.TERM?.toLowerCase() || "";
-	const colorTerm = process.env.COLORTERM?.toLowerCase() || "";
-
-	if (process.env.KITTY_WINDOW_ID || termProgram === "kitty") {
-		return kKittyCaps;
-	}
-	if (termProgram === "ghostty" || term.includes("ghostty") || process.env.GHOSTTY_RESOURCES_DIR) {
-		return kGhosttyCaps;
-	}
-	if (process.env.WEZTERM_PANE || termProgram === "wezterm") {
-		return kWeztermCaps;
-	}
-	if (process.env.ITERM_SESSION_ID || termProgram === "iterm.app") {
-		return kIterm2Caps;
-	}
-	if (termProgram === "vscode") {
-		return kVscodeCaps;
-	}
-	if (termProgram === "alacritty") {
-		return kAlacrittyCaps;
-	}
-	const trueColor = colorTerm === "truecolor" || colorTerm === "24bit";
-	return trueColor ? kTrueColorCaps : kBaseCaps;
-}
-
-export function getCapabilities(): TerminalCapabilities {
-	if (!cachedCapabilities) {
-		cachedCapabilities = detectCapabilities();
-	}
-	return cachedCapabilities;
-}
-
-export function resetCapabilitiesCache(): void {
-	cachedCapabilities = null;
 }
 
 export function encodeKitty(
@@ -341,21 +331,19 @@ export function renderImage(
 	imageDimensions: ImageDimensions,
 	options: ImageRenderOptions = {},
 ): { sequence: string; rows: number } | null {
-	const caps = getCapabilities();
-
-	if (!caps.images) {
+	if (!TERMINAL_INFO.imageProtocol) {
 		return null;
 	}
 
 	const maxWidth = options.maxWidthCells ?? 80;
 	const rows = calculateImageRows(imageDimensions, maxWidth, getCellDimensions());
 
-	if (caps.images === "kitty") {
+	if (TERMINAL_INFO.imageProtocol === ImageProtocol.Kitty) {
 		const sequence = encodeKitty(base64Data, { columns: maxWidth, rows });
 		return { sequence, rows };
 	}
 
-	if (caps.images === "iterm2") {
+	if (TERMINAL_INFO.imageProtocol === ImageProtocol.Iterm2) {
 		const sequence = encodeITerm2(base64Data, {
 			width: maxWidth,
 			height: "auto",

@@ -1,7 +1,7 @@
 import { marked, type Token } from "marked";
 import type { MermaidImage } from "../mermaid";
 import type { SymbolTheme } from "../symbols";
-import { encodeITerm2, encodeKitty, getCapabilities, getCellDimensions } from "../terminal-image";
+import { encodeITerm2, encodeKitty, getCellDimensions, ImageProtocol, TERMINAL_INFO } from "../terminal-image";
 import type { Component } from "../tui";
 import { applyBackgroundToLine, visibleWidth, wrapTextWithAnsi } from "../utils";
 
@@ -290,9 +290,8 @@ export class Markdown implements Component {
 				if (token.lang === "mermaid" && this.theme.getMermaidImage) {
 					const hash = Bun.hash(token.text.trim()).toString(16);
 					const image = this.theme.getMermaidImage(hash);
-					const caps = getCapabilities();
 
-					if (image && caps.images) {
+					if (image && TERMINAL_INFO.imageProtocol) {
 						const imageLines = this.renderMermaidImage(image, width);
 						if (imageLines) {
 							lines.push(...imageLines);
@@ -771,8 +770,7 @@ export class Markdown implements Component {
 	 * Returns array of lines (image placeholder rows) or null if rendering fails.
 	 */
 	private renderMermaidImage(image: MermaidImage, availableWidth: number): string[] | null {
-		const caps = getCapabilities();
-		if (!caps.images) return null;
+		if (!TERMINAL_INFO.imageProtocol) return null;
 
 		const cellDims = getCellDimensions();
 		const scale = 0.5; // Render at 50% of natural size
@@ -796,16 +794,19 @@ export class Markdown implements Component {
 		}
 
 		let sequence: string;
-		if (caps.images === "kitty") {
-			sequence = encodeKitty(image.base64, { columns, rows });
-		} else if (caps.images === "iterm2") {
-			sequence = encodeITerm2(image.base64, {
-				width: columns,
-				height: "auto",
-				preserveAspectRatio: true,
-			});
-		} else {
-			return null;
+		switch (TERMINAL_INFO.imageProtocol) {
+			case ImageProtocol.Kitty:
+				sequence = encodeKitty(image.base64, { columns, rows });
+				break;
+			case ImageProtocol.Iterm2:
+				sequence = encodeITerm2(image.base64, {
+					width: columns,
+					height: "auto",
+					preserveAspectRatio: true,
+				});
+				break;
+			default:
+				return null;
 		}
 
 		// Reserve space with empty lines, then output image with cursor-up
