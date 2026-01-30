@@ -91,6 +91,29 @@ impl PhotonImage {
 			.map_err(|e| JsValue::from_str(&format!("Failed to encode JPEG: {e}")))?;
 		Ok(buffer)
 	}
+
+	/// Export image as lossless WebP bytes.
+	#[wasm_bindgen(js_name = get_bytes_webp)]
+	pub fn get_bytes_webp(&self) -> Result<Vec<u8>, JsValue> {
+		let mut buffer = Vec::new();
+		let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut buffer);
+		self
+			.img
+			.write_with_encoder(encoder)
+			.map_err(|e| JsValue::from_str(&format!("Failed to encode WebP: {e}")))?;
+		Ok(buffer)
+	}
+
+	/// Export image as GIF bytes.
+	#[wasm_bindgen(js_name = get_bytes_gif)]
+	pub fn get_bytes_gif(&self) -> Result<Vec<u8>, JsValue> {
+		let mut buffer = Vec::new();
+		self
+			.img
+			.write_to(&mut Cursor::new(&mut buffer), ImageFormat::Gif)
+			.map_err(|e| JsValue::from_str(&format!("Failed to encode GIF: {e}")))?;
+		Ok(buffer)
+	}
 }
 
 /// Resize an image to the specified dimensions.

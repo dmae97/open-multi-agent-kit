@@ -43,9 +43,17 @@ export class PhotonImage {
      */
     get_bytes(): Uint8Array;
     /**
+     * Export image as GIF bytes.
+     */
+    get_bytes_gif(): Uint8Array;
+    /**
      * Export image as JPEG bytes with specified quality (0-100).
      */
     get_bytes_jpeg(quality: number): Uint8Array;
+    /**
+     * Export image as lossless WebP bytes.
+     */
+    get_bytes_webp(): Uint8Array;
     /**
      * Get the height of the image.
      */
