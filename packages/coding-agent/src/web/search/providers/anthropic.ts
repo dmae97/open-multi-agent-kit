@@ -184,7 +184,7 @@ function parseResponse(response: AnthropicApiResponse): WebSearchResponse {
 					sources.push({
 						title: result.title,
 						url: result.url,
-						snippet: result.encrypted_content,
+						snippet: undefined,
 						publishedDate: result.page_age ?? undefined,
 						ageSeconds: parsePageAge(result.page_age),
 					});
