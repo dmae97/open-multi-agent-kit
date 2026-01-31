@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Updated plan mode prompt to guide model toward using `edit` tool for incremental plan updates instead of defaulting to `write`
 
 ## [9.3.1] - 2026-01-31
 ### Added

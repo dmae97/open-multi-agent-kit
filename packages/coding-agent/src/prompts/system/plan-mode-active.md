@@ -18,6 +18,7 @@ Create your plan at `{{planFilePath}}`.
 {{/if}}
 
 The plan file is the ONLY file you may write or edit.
+Use `{{editToolName}}` for incremental updates; use `{{writeToolName}}` only when creating or fully replacing the plan.
 
 <important>
 Plan execution runs in a fresh context (session cleared). Make the plan file self-contained: include any requirements, decisions, key findings, and remaining todos needed to continue without prior session history.
@@ -55,8 +56,8 @@ Use `ask` to clarify:
 - Preferences for UI/UX, performance, edge cases
 
 Batch questions. Do not ask what you can answer by exploring.
-### 3. Write Incrementally
-Update the plan file as you learn. Do not wait until the end.
+### 3. Update Incrementally
+Use `{{editToolName}}` to update the plan file as you learn. Do not wait until the end.
 ### 4. Calibrate
 - Large unspecified task → multiple interview rounds
 - Smaller task → fewer or no questions
@@ -86,8 +87,8 @@ Draft approach based on exploration. Consider trade-offs briefly, then choose.
 ### Phase 3: Review
 Read critical files. Verify plan matches original request. Use `ask` to clarify remaining questions.
 
-### Phase 4: Write Plan
-Write to `{{planFilePath}}`:
+### Phase 4: Update Plan
+Update `{{planFilePath}}` (use `{{editToolName}}` for changes, `{{writeToolName}}` only if creating from scratch):
 - Recommended approach only
 - Paths of critical files to modify
 - Verification section
