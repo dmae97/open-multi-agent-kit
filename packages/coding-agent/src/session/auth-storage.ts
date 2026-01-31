@@ -1281,14 +1281,29 @@ export class AuthStorage {
 			this.recordSessionCredential(provider, sessionId, "oauth", selection.index);
 			return result.apiKey;
 		} catch (error) {
-			logger.warn("OAuth token refresh failed, removing credential", {
+			const errorMsg = String(error);
+			// Only remove credentials for definitive auth failures
+			// Keep credentials for transient errors (network, 5xx) and block temporarily
+			const isDefinitiveFailure =
+				/invalid_grant|invalid_token|revoked|unauthorized|expired.*refresh|refresh.*expired/i.test(errorMsg) ||
+				(/401|403/.test(errorMsg) && !/timeout|network|fetch failed|ECONNREFUSED/i.test(errorMsg));
+
+			logger.warn("OAuth token refresh failed", {
 				provider,
 				index: selection.index,
-				error: String(error),
+				error: errorMsg,
+				isDefinitiveFailure,
 			});
-			this.removeCredentialAt(provider, selection.index);
-			if (this.getCredentialsForProvider(provider).some(credential => credential.type === "oauth")) {
-				return this.getApiKey(provider, sessionId, options);
+
+			if (isDefinitiveFailure) {
+				// Permanently remove invalid credentials
+				this.removeCredentialAt(provider, selection.index);
+				if (this.getCredentialsForProvider(provider).some(credential => credential.type === "oauth")) {
+					return this.getApiKey(provider, sessionId, options);
+				}
+			} else {
+				// Block temporarily for transient failures (5 minutes)
+				this.markCredentialBlocked(providerKey, selection.index, this.usageNow() + 5 * 60 * 1000);
 			}
 		}
 

@@ -113,6 +113,10 @@ export async function runCommitAgentSession(input: CommitAgentInput): Promise<Co
 					messageCount += 1;
 					isThinking = false;
 					clearThinkingLine();
+					const assistantMessage = event.message as { stopReason?: string; errorMessage?: string };
+					if (assistantMessage.stopReason === "error" && assistantMessage.errorMessage) {
+						writeStdout(`● Error: ${assistantMessage.errorMessage}`);
+					}
 					const messageText = extractMessageText(event.message?.content ?? []);
 					if (messageText) {
 						writeAssistantMessage(messageText);

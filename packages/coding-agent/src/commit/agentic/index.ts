@@ -134,7 +134,11 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 			existingChangelogEntries,
 		});
 	} catch (error) {
-		writeStderr(`Agent error: ${error instanceof Error ? error.message : String(error)}`);
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		writeStderr(`Agent error: ${errorMessage}`);
+		if (error instanceof Error && error.stack && process.env.DEBUG) {
+			writeStderr(error.stack);
+		}
 		writeStdout("● Using fallback commit generation...");
 		commitState = { proposal: generateFallbackProposal(numstat) };
 		usedFallback = true;
