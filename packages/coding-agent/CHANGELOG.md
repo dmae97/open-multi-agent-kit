@@ -1,8 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Changed
 
+- Updated task tool documentation to clarify that subagents can access parent conversation context via a searchable file, reducing need to repeat information in context parameter
 - Updated plan mode prompt to guide model toward using `edit` tool for incremental plan updates instead of defaulting to `write`
 
 ## [9.3.1] - 2026-01-31
