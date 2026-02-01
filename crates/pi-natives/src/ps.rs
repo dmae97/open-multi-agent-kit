@@ -89,7 +89,7 @@ mod platform {
 
 #[cfg(target_os = "windows")]
 mod platform {
-	use std::{collections::HashMap, mem, ptr};
+	use std::{collections::HashMap, mem};
 
 	#[repr(C)]
 	#[allow(non_snake_case)]
