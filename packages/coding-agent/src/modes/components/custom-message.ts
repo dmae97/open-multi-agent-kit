@@ -87,7 +87,7 @@ export class CustomMessageComponent extends Container {
 		if (!this._expanded) {
 			const lines = text.split("\n");
 			if (lines.length > 5) {
-				text = `${lines.slice(0, 5).join("\n")}\n${theme.format.ellipsis}`;
+				text = `${lines.slice(0, 5).join("\n")}\n…`;
 			}
 		}
 

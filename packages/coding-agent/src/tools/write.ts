@@ -155,12 +155,12 @@ function formatStreamingContent(content: string, uiTheme: Theme, ui: ToolUIKit):
 
 	let text = "\n\n";
 	if (hidden > 0) {
-		text += uiTheme.fg("dim", `${uiTheme.format.ellipsis} (${hidden} earlier lines)\n`);
+		text += uiTheme.fg("dim", `… (${hidden} earlier lines)\n`);
 	}
 	for (const line of displayLines) {
 		text += `${uiTheme.fg("toolOutput", ui.truncate(line, 80))}\n`;
 	}
-	text += uiTheme.fg("dim", `${uiTheme.format.ellipsis} (streaming)`);
+	text += uiTheme.fg("dim", `… (streaming)`);
 	return text;
 }
 
@@ -177,7 +177,7 @@ function renderContentPreview(content: string, expanded: boolean, uiTheme: Theme
 	}
 	if (!expanded && hidden > 0) {
 		const hint = formatExpandHint(uiTheme, expanded, hidden > 0);
-		const moreLine = `${formatMoreItems(hidden, "line", uiTheme)}${hint ? ` ${hint}` : ""}`;
+		const moreLine = `${formatMoreItems(hidden, "line")}${hint ? ` ${hint}` : ""}`;
 		text += uiTheme.fg("dim", moreLine);
 	}
 	return text;
@@ -190,7 +190,7 @@ export const writeToolRenderer = {
 		const filePath = shortenPath(rawPath);
 		const lang = getLanguageFromPath(rawPath) ?? "text";
 		const langIcon = uiTheme.fg("muted", uiTheme.getLangIcon(lang));
-		const pathDisplay = filePath ? uiTheme.fg("accent", filePath) : uiTheme.fg("toolOutput", uiTheme.format.ellipsis);
+		const pathDisplay = filePath ? uiTheme.fg("accent", filePath) : uiTheme.fg("toolOutput", "…");
 		const spinner =
 			options?.spinnerFrame !== undefined ? formatStatusIcon("running", uiTheme, options.spinnerFrame) : "";
 
@@ -218,7 +218,7 @@ export const writeToolRenderer = {
 		const fileContent = args?.content || "";
 		const lang = getLanguageFromPath(rawPath);
 		const langIcon = uiTheme.fg("muted", uiTheme.getLangIcon(lang));
-		const pathDisplay = filePath ? uiTheme.fg("accent", filePath) : uiTheme.fg("toolOutput", uiTheme.format.ellipsis);
+		const pathDisplay = filePath ? uiTheme.fg("accent", filePath) : uiTheme.fg("toolOutput", "…");
 		const lineCount = countLines(fileContent);
 
 		// Build header with status icon

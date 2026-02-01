@@ -516,7 +516,7 @@ export class Editor implements Component, Focusable {
 				result.push(topLeft + content + this.borderColor(box.horizontal.repeat(fillWidth)) + topRight);
 			} else {
 				// Status too long - truncate it
-				const truncated = truncateToWidth(content, topFillWidth - 1, this.borderColor(this.theme.symbols.ellipsis));
+				const truncated = truncateToWidth(content, topFillWidth - 1);
 				const truncatedWidth = visibleWidth(truncated);
 				const fillWidth = Math.max(0, topFillWidth - truncatedWidth);
 				result.push(topLeft + truncated + this.borderColor(box.horizontal.repeat(fillWidth)) + topRight);

@@ -17,7 +17,7 @@ import {
 	getPreviewLines,
 	PREVIEW_LIMITS,
 	TRUNCATE_LENGTHS,
-	truncate,
+	truncateToWidth,
 } from "../tools/render-utils";
 import type { ExaRenderDetails } from "./types";
 
@@ -72,14 +72,14 @@ export function renderExaResult(
 				const branch = isLast ? uiTheme.tree.last : uiTheme.tree.branch;
 				text += `\n ${uiTheme.fg("dim", branch)} ${uiTheme.fg(
 					"toolOutput",
-					truncate(displayLines[i], COLLAPSED_PREVIEW_LINE_LEN, uiTheme.format.ellipsis),
+					truncateToWidth(displayLines[i], COLLAPSED_PREVIEW_LINE_LEN),
 				)}`;
 			}
 
 			if (remaining > 0) {
 				text += `\n ${uiTheme.fg("dim", uiTheme.tree.last)} ${uiTheme.fg(
 					"muted",
-					formatMoreItems(remaining, "line", uiTheme),
+					formatMoreItems(remaining, "line"),
 				)}`;
 			}
 
@@ -119,17 +119,17 @@ export function renderExaResult(
 		const first = results[0];
 		const previewText = first.text ?? first.title ?? "";
 		const previewLines = previewText
-			? getPreviewLines(previewText, COLLAPSED_PREVIEW_LINES, COLLAPSED_PREVIEW_LINE_LEN, uiTheme.format.ellipsis)
+			? getPreviewLines(previewText, COLLAPSED_PREVIEW_LINES, COLLAPSED_PREVIEW_LINE_LEN)
 			: [];
 		const safePreviewLines = previewLines.length > 0 ? previewLines : ["No preview text"];
 		const totalLines = previewText.split("\n").filter(l => l.trim()).length;
 		const remainingLines = Math.max(0, totalLines - previewLines.length);
 		const extraItems: string[] = [];
 		if (remainingLines > 0) {
-			extraItems.push(formatMoreItems(remainingLines, "line", uiTheme));
+			extraItems.push(formatMoreItems(remainingLines, "line"));
 		}
 		if (resultCount > 1) {
-			extraItems.push(formatMoreItems(resultCount - 1, "result", uiTheme));
+			extraItems.push(formatMoreItems(resultCount - 1, "result"));
 		}
 
 		for (let i = 0; i < safePreviewLines.length; i++) {
@@ -160,7 +160,7 @@ export function renderExaResult(
 		const branch = isLast ? uiTheme.tree.last : uiTheme.tree.branch;
 		const cont = isLast ? " " : uiTheme.tree.vertical;
 
-		const title = truncate(res.title ?? "Untitled", MAX_TITLE_LEN, uiTheme.format.ellipsis);
+		const title = truncateToWidth(res.title ?? "Untitled", MAX_TITLE_LEN);
 		const domain = res.url ? getDomain(res.url) : "";
 		const domainPart = domain ? uiTheme.fg("dim", ` (${domain})`) : "";
 
@@ -193,13 +193,13 @@ export function renderExaResult(
 			for (const line of displayLines) {
 				text += `\n ${uiTheme.fg("dim", cont)} ${uiTheme.fg("dim", uiTheme.tree.hook)} ${uiTheme.fg(
 					"toolOutput",
-					truncate(line.trim(), EXPANDED_TEXT_LINE_LEN, uiTheme.format.ellipsis),
+					truncateToWidth(line.trim(), EXPANDED_TEXT_LINE_LEN),
 				)}`;
 			}
 			if (textLines.length > EXPANDED_TEXT_LINES) {
 				text += `\n ${uiTheme.fg("dim", cont)} ${uiTheme.fg("dim", uiTheme.tree.hook)} ${uiTheme.fg(
 					"muted",
-					formatMoreItems(textLines.length - EXPANDED_TEXT_LINES, "line", uiTheme),
+					formatMoreItems(textLines.length - EXPANDED_TEXT_LINES, "line"),
 				)}`;
 			}
 		}
@@ -214,13 +214,13 @@ export function renderExaResult(
 				const h = res.highlights[j];
 				text += `\n ${uiTheme.fg("dim", cont)} ${uiTheme.fg("dim", uiTheme.tree.hook)} ${uiTheme.fg(
 					"muted",
-					`${uiTheme.format.dash} ${truncate(h, MAX_HIGHLIGHT_LEN, uiTheme.format.ellipsis)}`,
+					`${uiTheme.format.dash} ${truncateToWidth(h, MAX_HIGHLIGHT_LEN)}`,
 				)}`;
 			}
 			if (res.highlights.length > maxHighlights) {
 				text += `\n ${uiTheme.fg("dim", cont)} ${uiTheme.fg("dim", uiTheme.tree.hook)} ${uiTheme.fg(
 					"muted",
-					formatMoreItems(res.highlights.length - maxHighlights, "highlight", uiTheme),
+					formatMoreItems(res.highlights.length - maxHighlights, "highlight"),
 				)}`;
 			}
 		}
@@ -232,7 +232,7 @@ export function renderExaResult(
 /** Render Exa call (query/args preview) */
 export function renderExaCall(args: Record<string, unknown>, toolName: string, uiTheme: Theme): Component {
 	const toolLabel = toolName || "Exa Search";
-	const query = typeof args.query === "string" ? truncate(args.query, 80, uiTheme.format.ellipsis) : "?";
+	const query = typeof args.query === "string" ? truncateToWidth(args.query, 80) : "?";
 	const numResults = typeof args.num_results === "number" ? args.num_results : undefined;
 
 	let text = `${uiTheme.fg("toolTitle", toolLabel)} ${uiTheme.fg("accent", query)}`;

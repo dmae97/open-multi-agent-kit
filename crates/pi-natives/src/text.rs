@@ -5,7 +5,7 @@
 //! identically in UTF-16. Text segments convert to UTF-8 only for grapheme
 //! iteration (unavoidable - unicode libraries work on &str).
 
-use napi::{Env, JsString, JsStringUtf16, bindgen_prelude::*};
+use napi::{Env, JsString, bindgen_prelude::*};
 use napi_derive::napi;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
@@ -24,14 +24,14 @@ pub struct SliceResult {
 
 /// Before/after segments extracted around an overlay region.
 #[napi(object)]
-pub struct ExtractSegmentsResult {
+pub struct ExtractSegmentsResult<'e> {
 	/// Text before the overlay region.
-	pub before:       String,
+	pub before:       JsString<'e>,
 	/// Visible width of `before` in columns.
 	#[napi(js_name = "beforeWidth")]
 	pub before_width: u32,
 	/// Text after the overlay region.
-	pub after:        String,
+	pub after:        JsString<'e>,
 	/// Visible width of `after` in columns.
 	#[napi(js_name = "afterWidth")]
 	pub after_width:  u32,
@@ -43,7 +43,7 @@ fn clamp_u32(value: usize) -> u32 {
 }
 
 #[inline]
-fn ascii_cell_width(b: u16) -> usize {
+const fn ascii_cell_width(b: u16) -> usize {
 	match b {
 		0x09 => TAB_WIDTH, // '\t'
 		0x20..=0x7e => 1,  // printable ASCII
@@ -153,19 +153,19 @@ where
 // ============================================================================
 
 /// Measure visible width, stopping early if it exceeds `limit`.
-/// Returns (width_so_far, exceeded_limit).
+/// Returns (`width_so_far`, `exceeded_limit`).
 fn visible_width_up_to(data: &[u16], limit: usize) -> (usize, bool) {
 	let mut w = 0usize;
 	let mut i = 0usize;
 
 	while i < data.len() {
-		if data[i] == ESC {
-			if let Some(len) = ansi_len(data, i) {
-				i += len;
-				continue;
-			}
-			// Not a valid ANSI sequence, treat as control char (width 0)
+		if data[i] == ESC
+			&& let Some(len) = ansi_len(data, i)
+		{
+			i += len;
+			continue;
 		}
+		// Not a valid ANSI sequence, treat as control char (width 0)
 
 		let next_esc = find_esc(data, i + 1).unwrap_or(data.len());
 		let end = if next_esc == i { i + 1 } else { next_esc };
@@ -200,20 +200,20 @@ fn visible_width_full(data: &[u16]) -> usize {
 }
 
 /// Copy a prefix (including ANSI codes) while visible width stays <=
-/// `target_width`. Returns (visible_width_copied, saw_any_ansi).
+/// `target_width`. Returns (`visible_width_copied`, `saw_any_ansi`).
 fn push_prefix_with_ansi(text: &[u16], target_width: usize, out: &mut Vec<u16>) -> (usize, bool) {
 	let mut w = 0usize;
 	let mut i = 0usize;
 	let mut saw_ansi = false;
 
 	while i < text.len() {
-		if text[i] == ESC {
-			if let Some(len) = ansi_len(text, i) {
-				out.extend_from_slice(&text[i..i + len]);
-				saw_ansi = true;
-				i += len;
-				continue;
-			}
+		if text[i] == ESC
+			&& let Some(len) = ansi_len(text, i)
+		{
+			out.extend_from_slice(&text[i..i + len]);
+			saw_ansi = true;
+			i += len;
+			continue;
 		}
 
 		let next_esc = find_esc(text, i + 1).unwrap_or(text.len());
@@ -271,13 +271,13 @@ enum ColorCode {
 
 impl Default for ColorCode {
 	fn default() -> Self {
-		ColorCode::Basic(39)
+		Self::Basic(39)
 	}
 }
 
 impl SgrState {
 	#[inline]
-	fn reset(&mut self) {
+	const fn reset(&mut self) {
 		self.flags = 0;
 		self.fg = None;
 		self.bg = None;
@@ -420,7 +420,7 @@ struct ParamIterU16<'a> {
 
 impl<'a> ParamIterU16<'a> {
 	#[inline]
-	fn new(data: &'a [u16]) -> Self {
+	const fn new(data: &'a [u16]) -> Self {
 		Self { data, i: 0 }
 	}
 
@@ -439,7 +439,7 @@ impl<'a> ParamIterU16<'a> {
 			if (0x30..=0x39).contains(&c) {
 				// '0'-'9'
 				has_digit = true;
-				n = n.saturating_mul(10).saturating_add((c - 0x30) as u16);
+				n = n.saturating_mul(10).saturating_add(c - 0x30);
 			}
 			self.i += 1;
 		}
@@ -464,7 +464,7 @@ fn push_u16_decimal(out: &mut Vec<u16>, mut n: u16) {
 
 	while n > 0 {
 		i -= 1;
-		buf[i] = 0x30 + (n % 10) as u16;
+		buf[i] = 0x30 + (n % 10);
 		n /= 10;
 	}
 
@@ -511,37 +511,34 @@ fn write_color_u16(out: &mut Vec<u16>, first: &mut bool, c: ColorCode) {
 }
 
 // ============================================================================
-// JsString Helpers
-// ============================================================================
-
-#[inline]
-fn js_string_from_u16<'e>(env: &'e Env, data: &[u16]) -> Result<JsString<'e>> {
-	unsafe { env.create_string_utf16(data) }
-}
-
-/// Convert Vec<u16> to String for struct fields.
-/// Uses from_utf16_lossy which handles surrogates gracefully.
-#[inline]
-fn u16_to_string(data: Vec<u16>) -> String {
-	String::from_utf16_lossy(&data)
-}
-
-// ============================================================================
 // truncateToWidth
 // ============================================================================
 
 /// Truncate text to a visible width, preserving ANSI codes.
+///
+/// `ellipsis_kind`: 0 = "…", 1 = "...", 2 = "" (omit)
 #[napi(js_name = "truncateToWidth")]
 pub fn truncate_to_width<'e>(
 	env: &'e Env,
 	text: JsString,
 	max_width: u32,
-	ellipsis: JsString,
+	ellipsis_kind: u8,
 	pad: bool,
 ) -> Result<JsString<'e>> {
 	let text_u16 = text.into_utf16()?;
 	let text_data = text_u16.as_slice();
 	let max_width = max_width as usize;
+
+	// Map ellipsis kind to UTF-16 data and width
+	const ELLIPSIS_UNICODE: &[u16] = &[0x2026]; // "…"
+	const ELLIPSIS_ASCII: &[u16] = &[0x2e, 0x2e, 0x2e]; // "..."
+	const ELLIPSIS_OMIT: &[u16] = &[];
+
+	let (ellipsis_data, ellipsis_w): (&[u16], usize) = match ellipsis_kind {
+		0 => (ELLIPSIS_UNICODE, 1),
+		1 => (ELLIPSIS_ASCII, 3),
+		_ => (ELLIPSIS_OMIT, 0),
+	};
 
 	// 1) Quick width check with early exit
 	let (w, exceeded) = visible_width_up_to(text_data, max_width);
@@ -550,7 +547,7 @@ pub fn truncate_to_width<'e>(
 		if !pad {
 			// Best case: return original string (but we consumed it with into_utf16)
 			// Recreate from the same data - this is still cheaper than full processing
-			return js_string_from_u16(&env, text_data);
+			return env.create_string_utf16(text_data);
 		}
 
 		// Padding required
@@ -558,20 +555,17 @@ pub fn truncate_to_width<'e>(
 		let mut out = Vec::with_capacity(text_data.len() + pad_spaces);
 		out.extend_from_slice(text_data);
 		out.resize(out.len() + pad_spaces, 0x20); // ' '
-		return js_string_from_u16(&env, &out);
+		return env.create_string_utf16(&out);
 	}
 
-	// 2) Truncation needed - now measure ellipsis (lazy)
-	let ellipsis_u16 = ellipsis.into_utf16()?;
-	let ellipsis_data = ellipsis_u16.as_slice();
-	let ellipsis_w = visible_width_full(ellipsis_data);
+	// 2) Truncation needed
 	let target_w = max_width.saturating_sub(ellipsis_w);
 
 	// If ellipsis alone doesn't fit
 	if target_w == 0 {
 		let mut out = Vec::with_capacity(ellipsis_data.len().min(32));
 		let _ = push_prefix_with_ansi(ellipsis_data, max_width, &mut out);
-		return js_string_from_u16(&env, &out);
+		return env.create_string_utf16(&out);
 	}
 
 	// 3) Build truncated prefix + reset + ellipsis
@@ -590,7 +584,7 @@ pub fn truncate_to_width<'e>(
 		}
 	}
 
-	js_string_from_u16(&env, &out)
+	env.create_string_utf16(&out)
 }
 
 // ============================================================================
@@ -614,16 +608,16 @@ fn slice_with_width_impl(
 
 	let mut i = 0usize;
 	while i < line.len() {
-		if line[i] == ESC {
-			if let Some(len) = ansi_len(line, i) {
-				if current_col >= start_col && current_col < end_col {
-					out.extend_from_slice(&line[i..i + len]);
-				} else if current_col < start_col {
-					pending_ansi.push((i, len));
-				}
-				i += len;
-				continue;
+		if line[i] == ESC
+			&& let Some(len) = ansi_len(line, i)
+		{
+			if current_col >= start_col && current_col < end_col {
+				out.extend_from_slice(&line[i..i + len]);
+			} else if current_col < start_col {
+				pending_ansi.push((i, len));
 			}
+			i += len;
+			continue;
 		}
 
 		let next_esc = find_esc(line, i + 1).unwrap_or(line.len());
@@ -631,7 +625,7 @@ fn slice_with_width_impl(
 		let chunk = &line[i..end];
 
 		if is_ascii_u16(chunk) {
-			for (idx, &c) in chunk.iter().enumerate() {
+			for &c in chunk {
 				let w = ascii_cell_width(c);
 				let in_range = current_col >= start_col && current_col < end_col;
 				let fits = !strict || current_col + w <= end_col;
@@ -695,7 +689,7 @@ pub fn slice_with_width(
 
 	let (out, out_w) = slice_with_width_impl(line_data, start_col as usize, length as usize, strict);
 
-	Ok(SliceResult { text: u16_to_string(out), width: clamp_u32(out_w) })
+	Ok(SliceResult { text: String::from_utf16_lossy(&out), width: clamp_u32(out_w) })
 }
 
 // ============================================================================
@@ -725,20 +719,20 @@ fn extract_segments_impl(
 	let mut i = 0usize;
 
 	while i < line.len() {
-		if line[i] == ESC {
-			if let Some(len) = ansi_len(line, i) {
-				let code = &line[i..i + len];
-				tracker.process_ansi(code);
+		if line[i] == ESC
+			&& let Some(len) = ansi_len(line, i)
+		{
+			let code = &line[i..i + len];
+			tracker.process_ansi(code);
 
-				if current_col < before_end {
-					pending_before_ansi.push((i, len));
-				} else if current_col >= after_start && current_col < after_end && after_started {
-					after.extend_from_slice(code);
-				}
-
-				i += len;
-				continue;
+			if current_col < before_end {
+				pending_before_ansi.push((i, len));
+			} else if current_col >= after_start && current_col < after_end && after_started {
+				after.extend_from_slice(code);
 			}
+
+			i += len;
+			continue;
 		}
 
 		let next_esc = find_esc(line, i + 1).unwrap_or(line.len());
@@ -841,13 +835,14 @@ fn extract_segments_impl(
 
 /// Extract the before/after slices around an overlay region.
 #[napi(js_name = "extractSegments")]
-pub fn extract_segments(
+pub fn extract_segments<'e>(
+	env: &'e Env,
 	line: JsString,
 	before_end: u32,
 	after_start: u32,
 	after_len: u32,
 	strict_after: bool,
-) -> Result<ExtractSegmentsResult> {
+) -> Result<ExtractSegmentsResult<'e>> {
 	let line_u16 = line.into_utf16()?;
 	let line_data = line_u16.as_slice();
 
@@ -860,9 +855,9 @@ pub fn extract_segments(
 	);
 
 	Ok(ExtractSegmentsResult {
-		before:       u16_to_string(before_out),
+		before:       env.create_string_utf16(&before_out)?,
 		before_width: clamp_u32(before_w),
-		after:        u16_to_string(after_out),
+		after:        env.create_string_utf16(&after_out)?,
 		after_width:  clamp_u32(after_w),
 	})
 }

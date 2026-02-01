@@ -317,7 +317,7 @@ export class FooterComponent implements Component {
 				.map(([, text]) => sanitizeStatusText(text));
 			const statusLine = sortedStatuses.join(" ");
 			// Truncate to terminal width with dim ellipsis for consistency with footer style
-			lines.push(truncateToWidth(statusLine, width, theme.fg("dim", "...")));
+			lines.push(truncateToWidth(statusLine, width));
 		}
 
 		return lines;

@@ -46,9 +46,7 @@ export function renderTreeList<T>(options: TreeListOptions<T>, theme: Theme): st
 
 	if (!expanded && items.length > maxItems) {
 		const remaining = items.length - maxItems;
-		lines.push(
-			`${theme.fg("dim", theme.tree.last)} ${theme.fg("muted", formatMoreItems(remaining, itemType, theme))}`,
-		);
+		lines.push(`${theme.fg("dim", theme.tree.last)} ${theme.fg("muted", formatMoreItems(remaining, itemType))}`);
 	}
 
 	return lines;

@@ -74,14 +74,14 @@ class SessionList implements Component {
 		if (this.filteredSessions.length === 0) {
 			if (this.showCwd) {
 				// "All" scope - no sessions anywhere that match filter
-				lines.push(truncateToWidth(theme.fg("muted", "  No sessions found"), width, theme.format.ellipsis));
+				lines.push(truncateToWidth(theme.fg("muted", "  No sessions found"), width));
 			} else {
 				// "Current folder" scope - hint to try "all"
 				lines.push(
 					truncateToWidth(
 						theme.fg("muted", "  No sessions in current folder. Press Tab to view all."),
 						width,
-						theme.format.ellipsis,
+						"…",
 					),
 				);
 			}
@@ -128,16 +128,16 @@ class SessionList implements Component {
 
 			if (session.title) {
 				// Has title: show title on first line, dimmed first message on second line
-				const truncatedTitle = truncateToWidth(session.title, maxWidth, theme.format.ellipsis);
+				const truncatedTitle = truncateToWidth(session.title, maxWidth);
 				const titleLine = cursor + (isSelected ? theme.bold(truncatedTitle) : truncatedTitle);
 				lines.push(titleLine);
 
 				// Second line: dimmed first message preview
-				const truncatedPreview = truncateToWidth(normalizedMessage, maxWidth, theme.format.ellipsis);
+				const truncatedPreview = truncateToWidth(normalizedMessage, maxWidth);
 				lines.push(`  ${theme.fg("dim", truncatedPreview)}`);
 			} else {
 				// No title: show first message as main line
-				const truncatedMsg = truncateToWidth(normalizedMessage, maxWidth, theme.format.ellipsis);
+				const truncatedMsg = truncateToWidth(normalizedMessage, maxWidth);
 				const messageLine = cursor + (isSelected ? theme.bold(truncatedMsg) : truncatedMsg);
 				lines.push(messageLine);
 			}
@@ -146,7 +146,7 @@ class SessionList implements Component {
 			const modified = formatDate(session.modified);
 			const msgCount = `${session.messageCount} message${session.messageCount !== 1 ? "s" : ""}`;
 			const metadata = `  ${modified} ${theme.sep.dot} ${msgCount}`;
-			const metadataLine = theme.fg("dim", truncateToWidth(metadata, width, theme.format.ellipsis));
+			const metadataLine = theme.fg("dim", truncateToWidth(metadata, width));
 
 			lines.push(metadataLine);
 			lines.push(""); // Blank line between sessions
@@ -155,7 +155,7 @@ class SessionList implements Component {
 		// Add scroll indicator if needed
 		if (startIndex > 0 || endIndex < this.filteredSessions.length) {
 			const scrollText = `  (${this.selectedIndex + 1}/${this.filteredSessions.length})`;
-			const scrollInfo = theme.fg("muted", truncateToWidth(scrollText, width, theme.format.ellipsis));
+			const scrollInfo = theme.fg("muted", truncateToWidth(scrollText, width));
 			lines.push(scrollInfo);
 		}
 

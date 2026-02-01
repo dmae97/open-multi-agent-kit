@@ -70,6 +70,7 @@ export {
 // =============================================================================
 
 export {
+	EllipsisKind,
 	type ExtractSegmentsResult,
 	extractSegments,
 	type SliceWithWidthResult,

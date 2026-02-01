@@ -17,7 +17,7 @@ import {
 	getPreviewLines,
 	PREVIEW_LIMITS,
 	TRUNCATE_LENGTHS,
-	truncate,
+	truncateToWidth,
 } from "../../tools/render-utils";
 import { renderOutputBlock, renderStatusLine, renderTreeList } from "../../tui";
 import type { WebSearchResponse } from "./types";
@@ -35,7 +35,7 @@ const MAX_REQUEST_ID_LEN = 36;
 function renderFallbackText(contentText: string, expanded: boolean, theme: Theme): Component {
 	const lines = contentText.split("\n").filter(line => line.trim());
 	const maxLines = expanded ? lines.length : 6;
-	const displayLines = lines.slice(0, maxLines).map(line => truncate(line.trim(), 110, theme.format.ellipsis));
+	const displayLines = lines.slice(0, maxLines).map(line => truncateToWidth(line.trim(), 110));
 	const remaining = lines.length - displayLines.length;
 
 	const headerIcon = formatStatusIcon("warning", theme);
@@ -54,7 +54,7 @@ function renderFallbackText(contentText: string, expanded: boolean, theme: Theme
 	}
 
 	if (!expanded && remaining > 0) {
-		text += `\n ${theme.fg("dim", theme.tree.last)} ${theme.fg("muted", formatMoreItems(remaining, "line", theme))}`;
+		text += `\n ${theme.fg("dim", theme.tree.last)} ${theme.fg("muted", formatMoreItems(remaining, "line"))}`;
 	}
 
 	return new Text(text, 0, 0);
@@ -104,9 +104,7 @@ export function renderWebSearchResult(
 	const contentText = answerText || rawText;
 	const totalAnswerLines = contentText ? contentText.split("\n").filter(l => l.trim()).length : 0;
 	const answerLimit = expanded ? MAX_EXPANDED_ANSWER_LINES : MAX_COLLAPSED_ANSWER_LINES;
-	const answerPreview = contentText
-		? getPreviewLines(contentText, answerLimit, MAX_ANSWER_LINE_LEN, theme.format.ellipsis)
-		: [];
+	const answerPreview = contentText ? getPreviewLines(contentText, answerLimit, MAX_ANSWER_LINE_LEN, "…") : [];
 
 	const providerLabel =
 		provider === "anthropic"
@@ -117,9 +115,9 @@ export function renderWebSearchResult(
 					? "Exa"
 					: "Unknown";
 	const queryPreview = args?.query
-		? truncate(args.query, 80, theme.format.ellipsis)
+		? truncateToWidth(args.query, 80)
 		: searchQueries[0]
-			? truncate(searchQueries[0], 80, theme.format.ellipsis)
+			? truncateToWidth(searchQueries[0], 80)
 			: undefined;
 	const header = renderStatusLine(
 		{
@@ -144,7 +142,7 @@ export function renderWebSearchResult(
 		theme,
 	);
 	if (remainingAnswer > 0) {
-		answerTree.push(theme.fg("muted", formatMoreItems(remainingAnswer, "line", theme)));
+		answerTree.push(theme.fg("muted", formatMoreItems(remainingAnswer, "line")));
 	}
 
 	const sourceTree = renderTreeList(
@@ -160,7 +158,7 @@ export function renderWebSearchResult(
 						: typeof src.url === "string" && src.url.trim()
 							? src.url
 							: "Untitled";
-				const title = truncate(titleText, 70, theme.format.ellipsis);
+				const title = truncateToWidth(titleText, 70);
 				const url = typeof src.url === "string" ? src.url : "";
 				const domain = url ? getDomain(url) : "";
 				const age = formatAge(src.ageSeconds) || (typeof src.publishedDate === "string" ? src.publishedDate : "");
@@ -173,12 +171,7 @@ export function renderWebSearchResult(
 				const lines: string[] = [`${theme.fg("accent", title)}${metaSuffix}`];
 				const snippetText = typeof src.snippet === "string" ? src.snippet : "";
 				if (snippetText.trim()) {
-					const snippetLines = getPreviewLines(
-						snippetText,
-						MAX_SNIPPET_LINES,
-						MAX_SNIPPET_LINE_LEN,
-						theme.format.ellipsis,
-					);
+					const snippetLines = getPreviewLines(snippetText, MAX_SNIPPET_LINES, MAX_SNIPPET_LINE_LEN, "…");
 					for (const snippetLine of snippetLines) {
 						lines.push(theme.fg("muted", `${theme.format.dash} ${snippetLine}`));
 					}
@@ -202,7 +195,7 @@ export function renderWebSearchResult(
 		theme,
 	);
 	if (!expanded && relatedCount > MAX_COLLAPSED_ITEMS) {
-		relatedTree.push(theme.fg("muted", formatMoreItems(relatedCount - MAX_COLLAPSED_ITEMS, "question", theme)));
+		relatedTree.push(theme.fg("muted", formatMoreItems(relatedCount - MAX_COLLAPSED_ITEMS, "question")));
 	}
 
 	const metaLines: string[] = [];
@@ -223,16 +216,13 @@ export function renderWebSearchResult(
 	}
 	if (response.requestId) {
 		metaLines.push(
-			`${theme.fg("muted", "Request:")} ${theme.fg(
-				"text",
-				truncate(response.requestId, MAX_REQUEST_ID_LEN, theme.format.ellipsis),
-			)}`,
+			`${theme.fg("muted", "Request:")} ${theme.fg("text", truncateToWidth(response.requestId, MAX_REQUEST_ID_LEN))}`,
 		);
 	}
 	if (searchQueries.length > 0) {
 		const queriesPreview = searchQueries.slice(0, MAX_QUERY_PREVIEW);
-		const queryList = queriesPreview.map(q => truncate(q, MAX_QUERY_LEN, theme.format.ellipsis));
-		const suffix = searchQueries.length > queriesPreview.length ? theme.format.ellipsis : "";
+		const queryList = queriesPreview.map(q => truncateToWidth(q, MAX_QUERY_LEN));
+		const suffix = searchQueries.length > queriesPreview.length ? "…" : "";
 		metaLines.push(`${theme.fg("muted", "Queries:")} ${theme.fg("text", queryList.join("; "))}${suffix}`);
 	}
 
@@ -274,7 +264,7 @@ export function renderWebSearchCall(
 	theme: Theme,
 ): Component {
 	const provider = args.provider ?? "auto";
-	const query = truncate(args.query, 80, theme.format.ellipsis);
+	const query = truncateToWidth(args.query, 80);
 	const text = renderStatusLine({ icon: "pending", title: "Web Search", description: query, meta: [provider] }, theme);
 	return new Text(text, 0, 0);
 }

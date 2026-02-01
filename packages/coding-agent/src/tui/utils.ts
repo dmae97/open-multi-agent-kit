@@ -1,9 +1,11 @@
 /**
  * Shared helpers for tool-rendered UI components.
  */
-import { padding, truncateToWidth as truncateToWidthBase, visibleWidth } from "@oh-my-pi/pi-tui";
+import { padding, visibleWidth } from "@oh-my-pi/pi-tui";
 import type { Theme, ThemeBg } from "../modes/theme/theme";
 import type { IconType, State } from "./types";
+
+export { truncateToWidth } from "@oh-my-pi/pi-tui";
 
 export function buildTreePrefix(ancestors: boolean[], theme: Theme): string {
 	return ancestors.map(hasNext => (hasNext ? `${theme.tree.vertical}  ` : "   ")).join("");
@@ -15,10 +17,6 @@ export function getTreeBranch(isLast: boolean, theme: Theme): string {
 
 export function getTreeContinuePrefix(isLast: boolean, theme: Theme): string {
 	return isLast ? "   " : `${theme.tree.vertical}  `;
-}
-
-export function truncateToWidth(text: string, width: number, ellipsis: string): string {
-	return truncateToWidthBase(text, width, ellipsis);
 }
 
 export function padToWidth(text: string, width: number, bgFn?: (s: string) => string): string {

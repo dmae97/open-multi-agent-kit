@@ -5,8 +5,11 @@
  * tool renderers to ensure a unified TUI experience.
  */
 import * as os from "node:os";
+import { EllipsisKind, truncateToWidth } from "@oh-my-pi/pi-tui";
 import type { Theme } from "../modes/theme/theme";
 import { getTreeBranch } from "../tui/utils";
+
+export { EllipsisKind, truncateToWidth } from "@oh-my-pi/pi-tui";
 
 // =============================================================================
 // Standardized Display Constants
@@ -48,21 +51,16 @@ export const EXPAND_HINT = "(Ctrl+O for more)";
 // =============================================================================
 
 /**
- * Truncate text to max length with ellipsis.
- * The most commonly duplicated utility across renderers.
- */
-export function truncate(text: string, maxLen: number, ellipsis: string): string {
-	if (text.length <= maxLen) return text;
-	const sliceLen = Math.max(0, maxLen - ellipsis.length);
-	return `${text.slice(0, sliceLen)}${ellipsis}`;
-}
-
-/**
  * Get first N lines of text as preview, with each line truncated.
  */
-export function getPreviewLines(text: string, maxLines: number, maxLineLen: number, ellipsis: string): string[] {
+export function getPreviewLines(
+	text: string,
+	maxLines: number,
+	maxLineLen: number,
+	ellipsis: EllipsisKind = EllipsisKind.Unicode,
+): string[] {
 	const lines = text.split("\n").filter(l => l.trim());
-	return lines.slice(0, maxLines).map(l => truncate(l.trim(), maxLineLen, ellipsis));
+	return lines.slice(0, maxLines).map(l => truncateToWidth(l.trim(), maxLineLen, ellipsis));
 }
 
 // =============================================================================
@@ -194,9 +192,9 @@ export function formatBadge(label: string, color: ToolUIColor, theme: Theme): st
  * Build a "more items" suffix line for truncated lists.
  * Uses consistent wording pattern.
  */
-export function formatMoreItems(remaining: number, itemType: string, theme: Theme): string {
+export function formatMoreItems(remaining: number, itemType: string): string {
 	const safeRemaining = Number.isFinite(remaining) ? remaining : 0;
-	return `${theme.format.ellipsis} ${safeRemaining} more ${pluralize(itemType, safeRemaining)}`;
+	return `… ${safeRemaining} more ${pluralize(itemType, safeRemaining)}`;
 }
 
 export function formatMeta(meta: string[], theme: Theme): string {
@@ -252,7 +250,7 @@ export class ToolUIKit {
 	}
 
 	moreItems(remaining: number, itemType: string): string {
-		return formatMoreItems(remaining, itemType, this.theme);
+		return formatMoreItems(remaining, itemType);
 	}
 
 	expandHint(expanded: boolean, hasMore: boolean): string {
@@ -288,11 +286,11 @@ export class ToolUIKit {
 	}
 
 	truncate(text: string, maxLen: number): string {
-		return truncate(text, maxLen, this.theme.format.ellipsis);
+		return truncateToWidth(text, maxLen);
 	}
 
 	previewLines(text: string, maxLines: number, maxLineLen: number): string[] {
-		return getPreviewLines(text, maxLines, maxLineLen, this.theme.format.ellipsis);
+		return getPreviewLines(text, maxLines, maxLineLen);
 	}
 
 	formatBytes(bytes: number): string {
@@ -457,7 +455,7 @@ export function formatDiagnostics(
 		const remaining = totalDiags - diagsShown;
 		output += `\n ${theme.fg("dim", theme.tree.last)} ${theme.fg(
 			"muted",
-			`${theme.format.ellipsis} ${remaining} more`,
+			`… ${remaining} more`,
 		)} ${formatExpandHint(theme)}`;
 	}
 
@@ -697,9 +695,7 @@ export function renderTreeList<T>(
 
 	if (!expanded && items.length > maxCollapsed) {
 		const remaining = items.length - maxCollapsed;
-		lines.push(
-			` ${theme.fg("dim", theme.tree.last)} ${theme.fg("muted", formatMoreItems(remaining, itemType, theme))}`,
-		);
+		lines.push(` ${theme.fg("dim", theme.tree.last)} ${theme.fg("muted", formatMoreItems(remaining, itemType))}`);
 	}
 
 	return lines;

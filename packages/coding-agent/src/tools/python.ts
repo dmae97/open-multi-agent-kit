@@ -2,7 +2,7 @@ import * as path from "node:path";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent } from "@oh-my-pi/pi-ai";
 import type { Component } from "@oh-my-pi/pi-tui";
-import { Text, truncateToWidth } from "@oh-my-pi/pi-tui";
+import { Text } from "@oh-my-pi/pi-tui";
 import { type Static, Type } from "@sinclair/typebox";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
@@ -17,7 +17,7 @@ import type { ToolSession } from ".";
 import type { OutputMeta } from "./output-meta";
 import { allocateOutputArtifact, createTailBuffer } from "./output-utils";
 import { resolveToCwd } from "./path-utils";
-import { shortenPath, ToolUIKit, truncate } from "./render-utils";
+import { shortenPath, ToolUIKit, truncateToWidth } from "./render-utils";
 import { ToolAbortError, ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
 import { DEFAULT_MAX_BYTES } from "./truncate";
@@ -494,7 +494,7 @@ function formatStatusEvent(event: PythonStatusEvent, theme: Theme): string {
 		case "find":
 		case "glob":
 			parts.push(`${data.count} match${(data.count as number) !== 1 ? "es" : ""}`);
-			if (data.pattern) parts.push(`for "${truncate(String(data.pattern), 20, theme.format.ellipsis)}"`);
+			if (data.pattern) parts.push(`for "${truncateToWidth(String(data.pattern), 20)}"`);
 			break;
 		case "grep":
 			parts.push(`${data.count} match${(data.count as number) !== 1 ? "es" : ""}`);
@@ -502,16 +502,16 @@ function formatStatusEvent(event: PythonStatusEvent, theme: Theme): string {
 			break;
 		case "rgrep":
 			parts.push(`${data.count} match${(data.count as number) !== 1 ? "es" : ""}`);
-			if (data.pattern) parts.push(`for "${truncate(String(data.pattern), 20, theme.format.ellipsis)}"`);
+			if (data.pattern) parts.push(`for "${truncateToWidth(String(data.pattern), 20)}"`);
 			break;
 		case "ls":
 			parts.push(`${data.count} entr${(data.count as number) !== 1 ? "ies" : "y"}`);
 			break;
 		case "env":
 			if (data.action === "set") {
-				parts.push(`set ${data.key}=${truncate(String(data.value ?? ""), 30, theme.format.ellipsis)}`);
+				parts.push(`set ${data.key}=${truncateToWidth(String(data.value ?? ""), 30)}`);
 			} else if (data.action === "get") {
-				parts.push(`${data.key}=${truncate(String(data.value ?? ""), 30, theme.format.ellipsis)}`);
+				parts.push(`${data.key}=${truncateToWidth(String(data.value ?? ""), 30)}`);
 			} else {
 				parts.push(`${data.count} variable${(data.count as number) !== 1 ? "s" : ""}`);
 			}
@@ -617,7 +617,7 @@ function formatStatusEventExpanded(event: PythonStatusEvent, theme: Theme): stri
 			lines.push(`   ${theme.fg("dim", formatter(arr[i]))}`);
 		}
 		if (arr.length > max) {
-			lines.push(`   ${theme.fg("dim", `${theme.format.ellipsis} ${arr.length - max} more`)}`);
+			lines.push(`   ${theme.fg("dim", `… ${arr.length - max} more`)}`);
 		}
 	};
 
@@ -625,11 +625,11 @@ function formatStatusEventExpanded(event: PythonStatusEvent, theme: Theme): stri
 	const addPreview = (preview: string, maxLines = 3) => {
 		const previewLines = String(preview).split("\n").slice(0, maxLines);
 		for (const line of previewLines) {
-			lines.push(`   ${theme.fg("toolOutput", truncate(line, 80, theme.format.ellipsis))}`);
+			lines.push(`   ${theme.fg("toolOutput", truncateToWidth(line, 80))}`);
 		}
 		const totalLines = String(preview).split("\n").length;
 		if (totalLines > maxLines) {
-			lines.push(`   ${theme.fg("dim", `${theme.format.ellipsis} ${totalLines - maxLines} more lines`)}`);
+			lines.push(`   ${theme.fg("dim", `… ${totalLines - maxLines} more lines`)}`);
 		}
 	};
 
@@ -645,7 +645,7 @@ function formatStatusEventExpanded(event: PythonStatusEvent, theme: Theme): stri
 			if (data.hits) {
 				addItems(data.hits as unknown[], h => {
 					const hit = h as { line: number; text: string };
-					return `${hit.line}: ${truncate(hit.text, 60, theme.format.ellipsis)}`;
+					return `${hit.line}: ${truncateToWidth(hit.text, 60)}`;
 				});
 			}
 			break;
@@ -653,7 +653,7 @@ function formatStatusEventExpanded(event: PythonStatusEvent, theme: Theme): stri
 			if (data.hits) {
 				addItems(data.hits as unknown[], h => {
 					const hit = h as { file: string; line: number; text: string };
-					return `${shortenPath(hit.file)}:${hit.line}: ${truncate(hit.text, 50, theme.format.ellipsis)}`;
+					return `${shortenPath(hit.file)}:${hit.line}: ${truncateToWidth(hit.text, 50)}`;
 				});
 			}
 			break;
@@ -672,7 +672,7 @@ function formatStatusEventExpanded(event: PythonStatusEvent, theme: Theme): stri
 			if (data.entries) {
 				addItems(data.entries as unknown[], e => {
 					const entry = e as { sha: string; subject: string };
-					return `${entry.sha} ${truncate(entry.subject, 50, theme.format.ellipsis)}`;
+					return `${entry.sha} ${truncateToWidth(entry.subject, 50)}`;
 				});
 			}
 			break;
@@ -725,13 +725,9 @@ function renderStatusEvents(events: PythonStatusEvent[], theme: Theme, expanded:
 	}
 
 	if (!expanded && events.length > maxCollapsed) {
-		lines.push(
-			`${theme.fg("dim", theme.tree.last)} ${theme.fg("dim", `${theme.format.ellipsis} ${events.length - maxCollapsed} more`)}`,
-		);
+		lines.push(`${theme.fg("dim", theme.tree.last)} ${theme.fg("dim", `… ${events.length - maxCollapsed} more`)}`);
 	} else if (expanded && events.length > maxExpanded) {
-		lines.push(
-			`${theme.fg("dim", theme.tree.last)} ${theme.fg("dim", `${theme.format.ellipsis} ${events.length - maxExpanded} more`)}`,
-		);
+		lines.push(`${theme.fg("dim", theme.tree.last)} ${theme.fg("dim", `… ${events.length - maxExpanded} more`)}`);
 	}
 
 	return lines;
@@ -781,7 +777,7 @@ export const pythonToolRenderer = {
 		if (cells.length === 0) {
 			const prompt = uiTheme.fg("accent", ">>>");
 			const prefix = workdirLabel ? `${uiTheme.fg("dim", `${workdirLabel} && `)}` : "";
-			const text = ui.title(`${prompt} ${prefix}${uiTheme.format.ellipsis}`);
+			const text = ui.title(`${prompt} ${prefix}…`);
 			return new Text(text, 0, 0);
 		}
 
@@ -896,10 +892,7 @@ export const pythonToolRenderer = {
 						const outputLines = [...outputContent.lines];
 						if (!expanded && outputContent.hiddenCount > 0) {
 							outputLines.push(
-								uiTheme.fg(
-									"dim",
-									`${uiTheme.format.ellipsis} ${outputContent.hiddenCount} more lines (ctrl+o to expand)`,
-								),
+								uiTheme.fg("dim", `… ${outputContent.hiddenCount} more lines (ctrl+o to expand)`),
 							);
 						}
 						if (statusLines.length > 0) {
@@ -1007,24 +1000,22 @@ export const pythonToolRenderer = {
 					outputLines.push("");
 					const skippedLine = uiTheme.fg(
 						"dim",
-						`${uiTheme.format.ellipsis} (${cachedSkipped} earlier lines, showing ${cachedLines.length} of ${cachedSkipped + cachedLines.length}) (ctrl+o to expand)`,
+						`… (${cachedSkipped} earlier lines, showing ${cachedLines.length} of ${cachedSkipped + cachedLines.length}) (ctrl+o to expand)`,
 					);
-					outputLines.push(truncateToWidth(skippedLine, width, uiTheme.fg("dim", uiTheme.format.ellipsis)));
+					outputLines.push(truncateToWidth(skippedLine, width));
 				}
 				outputLines.push(...cachedLines);
 				if (statusLines.length > 0) {
-					outputLines.push(
-						truncateToWidth(uiTheme.fg("dim", "Status"), width, uiTheme.fg("dim", uiTheme.format.ellipsis)),
-					);
+					outputLines.push(truncateToWidth(uiTheme.fg("dim", "Status"), width));
 					for (const statusLine of statusLines) {
-						outputLines.push(truncateToWidth(statusLine, width, uiTheme.fg("dim", uiTheme.format.ellipsis)));
+						outputLines.push(truncateToWidth(statusLine, width));
 					}
 				}
 				if (timeoutLine) {
-					outputLines.push(truncateToWidth(timeoutLine, width, uiTheme.fg("dim", uiTheme.format.ellipsis)));
+					outputLines.push(truncateToWidth(timeoutLine, width));
 				}
 				if (warningLine) {
-					outputLines.push(truncateToWidth(warningLine, width, uiTheme.fg("warning", uiTheme.format.ellipsis)));
+					outputLines.push(truncateToWidth(warningLine, width));
 				}
 				return outputLines;
 			},

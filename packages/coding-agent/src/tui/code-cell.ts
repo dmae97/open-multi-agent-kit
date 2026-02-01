@@ -80,7 +80,7 @@ export function renderCodeCell(options: CodeCellOptions, theme: Theme): string[]
 	const hiddenCodeLines = rawCodeLines.length - codeLines.length;
 	if (hiddenCodeLines > 0) {
 		const hint = formatExpandHint(theme, expanded, hiddenCodeLines > 0);
-		const moreLine = `${formatMoreItems(hiddenCodeLines, "line", theme)}${hint ? ` ${hint}` : ""}`;
+		const moreLine = `${formatMoreItems(hiddenCodeLines, "line")}${hint ? ` ${hint}` : ""}`;
 		codeLines.push(theme.fg("dim", moreLine));
 	}
 
@@ -95,7 +95,7 @@ export function renderCodeCell(options: CodeCellOptions, theme: Theme): string[]
 		const remaining = rawLines.length - maxLines;
 		if (remaining > 0) {
 			const hint = formatExpandHint(theme, expanded, remaining > 0);
-			const moreLine = `${formatMoreItems(remaining, "line", theme)}${hint ? ` ${hint}` : ""}`;
+			const moreLine = `${formatMoreItems(remaining, "line")}${hint ? ` ${hint}` : ""}`;
 			outputLines.push(theme.fg("dim", moreLine));
 		}
 	}

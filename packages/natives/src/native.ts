@@ -11,7 +11,7 @@ import type {
 } from "./grep/types";
 import type { HighlightColors } from "./highlight/index";
 import type { HtmlToMarkdownOptions } from "./html/types";
-import type { ExtractSegmentsResult, SliceWithWidthResult, TextInput } from "./text/index";
+import type { ExtractSegmentsResult, SliceWithWidthResult } from "./text/index";
 
 export interface NativePhotonImage {
 	getWidth(): number;
@@ -55,11 +55,11 @@ export interface NativeBindings {
 	getSupportedLanguages(): string[];
 	SamplingFilter: NativeSamplingFilter;
 	PhotonImage: NativePhotonImageConstructor;
-	truncateToWidth(text: TextInput, maxWidth: number, ellipsis: TextInput, pad: boolean): string;
-	sliceWithWidth(line: TextInput, startCol: number, length: number, strict: boolean): SliceWithWidthResult;
-	visibleWidth(text: TextInput): number;
+	truncateToWidth(text: string, maxWidth: number, ellipsisKind: number, pad: boolean): string;
+	sliceWithWidth(line: string, startCol: number, length: number, strict: boolean): SliceWithWidthResult;
+	visibleWidth(text: string): number;
 	extractSegments(
-		line: TextInput,
+		line: string,
 		beforeEnd: number,
 		afterStart: number,
 		afterLen: number,

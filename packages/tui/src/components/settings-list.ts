@@ -1,6 +1,6 @@
 import { matchesKey } from "../keys";
 import type { Component } from "../tui";
-import { padding, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "../utils";
+import { EllipsisKind, padding, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "../utils";
 
 export interface SettingItem {
 	/** Unique identifier for this setting */
@@ -108,7 +108,10 @@ export class SettingsList implements Component {
 			const usedWidth = prefixWidth + maxLabelWidth + visibleWidth(separator);
 			const valueMaxWidth = width - usedWidth - 2;
 
-			const valueText = this.theme.value(truncateToWidth(item.currentValue, valueMaxWidth, ""), isSelected);
+			const valueText = this.theme.value(
+				truncateToWidth(item.currentValue, valueMaxWidth, EllipsisKind.Omit),
+				isSelected,
+			);
 
 			lines.push(prefix + labelText + separator + valueText);
 		}
@@ -116,7 +119,7 @@ export class SettingsList implements Component {
 		// Add scroll indicator if needed
 		if (startIndex > 0 || endIndex < this.items.length) {
 			const scrollText = `  (${this.selectedIndex + 1}/${this.items.length})`;
-			lines.push(this.theme.hint(truncateToWidth(scrollText, width - 2, "")));
+			lines.push(this.theme.hint(truncateToWidth(scrollText, width - 2, EllipsisKind.Omit)));
 		}
 
 		// Add description for selected item

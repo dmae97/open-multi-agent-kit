@@ -9,7 +9,6 @@ const chalk = new Chalk({ level: 3 });
 const defaultSymbols: SymbolTheme = {
 	cursor: ">",
 	inputCursor: "|",
-	ellipsis: "...",
 	boxRound: {
 		topLeft: "+",
 		topRight: "+",

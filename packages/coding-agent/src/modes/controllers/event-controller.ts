@@ -66,7 +66,7 @@ export class EventController {
 					this.ctx.ui,
 					spinner => theme.fg("accent", spinner),
 					text => theme.fg("muted", text),
-					`Working${theme.format.ellipsis} (esc to interrupt)`,
+					`Working… (esc to interrupt)`,
 					getSymbolTheme().spinnerFrames,
 				);
 				this.ctx.statusContainer.addChild(this.ctx.loadingAnimation);
@@ -286,7 +286,7 @@ export class EventController {
 					this.ctx.ui,
 					spinner => theme.fg("accent", spinner),
 					text => theme.fg("muted", text),
-					`${reasonText}Auto-compacting${theme.format.ellipsis} (esc to cancel)`,
+					`${reasonText}Auto-compacting… (esc to cancel)`,
 					getSymbolTheme().spinnerFrames,
 				);
 				this.ctx.statusContainer.addChild(this.ctx.autoCompactionLoader);
@@ -337,7 +337,7 @@ export class EventController {
 					this.ctx.ui,
 					spinner => theme.fg("warning", spinner),
 					text => theme.fg("muted", text),
-					`Retrying (${event.attempt}/${event.maxAttempts}) in ${delaySeconds}s${theme.format.ellipsis} (esc to cancel)`,
+					`Retrying (${event.attempt}/${event.maxAttempts}) in ${delaySeconds}s… (esc to cancel)`,
 					getSymbolTheme().spinnerFrames,
 				);
 				this.ctx.statusContainer.addChild(this.ctx.retryLoader);

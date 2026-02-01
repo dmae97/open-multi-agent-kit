@@ -181,13 +181,7 @@ subprocessToolRegistry.register<ReportFindingDetails>("report_finding", {
 		}
 
 		if (allData.length > displayCount) {
-			container.addChild(
-				new Text(
-					theme.fg("dim", `  ${theme.format.ellipsis} ${allData.length - displayCount} more findings`),
-					0,
-					0,
-				),
-			);
+			container.addChild(new Text(theme.fg("dim", `  … ${allData.length - displayCount} more findings`), 0, 0));
 		}
 
 		return container;

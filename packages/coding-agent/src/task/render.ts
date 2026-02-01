@@ -15,7 +15,7 @@ import {
 	formatMoreItems,
 	formatStatusIcon,
 	formatTokens,
-	truncate,
+	truncateToWidth,
 } from "../tools/render-utils";
 import {
 	type FindingPriority,
@@ -67,10 +67,10 @@ function formatFindingSummary(findings: ReportFindingDetails[], theme: Theme): s
 	return `${theme.fg("dim", "Findings:")} ${parts.join(theme.sep.dot)}`;
 }
 
-function formatJsonScalar(value: unknown, theme: Theme): string {
+function formatJsonScalar(value: unknown, _theme: Theme): string {
 	if (value === null) return "null";
 	if (typeof value === "string") {
-		const trimmed = truncate(value, 70, theme.format.ellipsis);
+		const trimmed = truncateToWidth(value, 70);
 		return `"${trimmed}"`;
 	}
 	if (typeof value === "number" || typeof value === "boolean") return String(value);
@@ -150,7 +150,7 @@ function renderJsonTreeLines(
 				pushLine(
 					`${buildTreePrefix([...ancestors, !isLast], theme)}${theme.fg("dim", theme.tree.last)} ${theme.fg(
 						"dim",
-						theme.format.ellipsis,
+						"…",
 					)}`,
 				);
 				return;
@@ -183,7 +183,7 @@ function renderJsonTreeLines(
 				pushLine(
 					`${buildTreePrefix([...ancestors, !isLast], theme)}${theme.fg("dim", theme.tree.last)} ${theme.fg(
 						"dim",
-						theme.format.ellipsis,
+						"…",
 					)}`,
 				);
 				return;
@@ -253,7 +253,7 @@ function renderOutputSection(
 		lines.push(
 			`${continuePrefix}  ${theme.fg("warning", theme.status.warning)} ${theme.fg(
 				"dim",
-				truncate(warning, 80, theme.format.ellipsis),
+				truncateToWidth(warning, 80),
 			)}`,
 		);
 
@@ -276,7 +276,7 @@ function renderOutputSection(
 						lines.push(`${continuePrefix}  ${line}`);
 					}
 					if (tree.truncated) {
-						lines.push(`${continuePrefix}  ${theme.fg("dim", theme.format.ellipsis)}`);
+						lines.push(`${continuePrefix}  ${theme.fg("dim", "…")}`);
 					}
 					return lines;
 				}
@@ -288,12 +288,12 @@ function renderOutputSection(
 		const outputLines = output.trimEnd().split("\n");
 		const previewCount = expanded ? maxExpanded : maxCollapsed;
 		for (const line of outputLines.slice(0, previewCount)) {
-			lines.push(`${continuePrefix}  ${theme.fg("dim", truncate(line, 70, theme.format.ellipsis))}`);
+			lines.push(`${continuePrefix}  ${theme.fg("dim", truncateToWidth(line, 70))}`);
 		}
 
 		if (outputLines.length > previewCount) {
 			lines.push(
-				`${continuePrefix}  ${theme.fg("dim", formatMoreItems(outputLines.length - previewCount, "line", theme))}`,
+				`${continuePrefix}  ${theme.fg("dim", formatMoreItems(outputLines.length - previewCount, "line"))}`,
 			);
 		}
 
@@ -318,7 +318,7 @@ function renderOutputSection(
 					lines.push(`${continuePrefix}  ${line}`);
 				}
 				if (tree.truncated) {
-					lines.push(`${continuePrefix}  ${theme.fg("dim", theme.format.ellipsis)}`);
+					lines.push(`${continuePrefix}  ${theme.fg("dim", "…")}`);
 				}
 				return lines;
 			}
@@ -332,19 +332,17 @@ function renderOutputSection(
 	const outputLines = output.trimEnd().split("\n");
 	const previewCount = expanded ? maxExpanded : maxCollapsed;
 	for (const line of outputLines.slice(0, previewCount)) {
-		lines.push(`${continuePrefix}  ${theme.fg("dim", truncate(line, 70, theme.format.ellipsis))}`);
+		lines.push(`${continuePrefix}  ${theme.fg("dim", truncateToWidth(line, 70))}`);
 	}
 
 	if (outputLines.length > previewCount) {
-		lines.push(
-			`${continuePrefix}  ${theme.fg("dim", formatMoreItems(outputLines.length - previewCount, "line", theme))}`,
-		);
+		lines.push(`${continuePrefix}  ${theme.fg("dim", formatMoreItems(outputLines.length - previewCount, "line"))}`);
 	}
 
 	return lines;
 }
 
-function formatArgsInline(args: Record<string, string>, theme: Theme): string {
+function formatArgsInline(args: Record<string, string>, _theme: Theme): string {
 	const entries = Object.entries(args);
 	if (entries.length === 0) return "No arguments";
 
@@ -352,11 +350,11 @@ function formatArgsInline(args: Record<string, string>, theme: Theme): string {
 	if (entries.length === 1) {
 		const [key, value] = entries[0];
 		const humanKey = humanizeKey(key);
-		const displayValue = `"${truncate(value, 32, theme.format.ellipsis)}"`;
+		const displayValue = `"${truncateToWidth(value, 32)}"`;
 		return `${humanKey}: ${displayValue}`;
 	}
 
-	const pairs = entries.map(([key, value]) => `${key}=${truncate(value, 24, theme.format.ellipsis)}`);
+	const pairs = entries.map(([key, value]) => `${key}=${truncateToWidth(value, 24)}`);
 	return `Args: ${pairs.join(", ")}`;
 }
 
@@ -365,12 +363,12 @@ function humanizeKey(key: string): string {
 	return key.replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function formatScalarInline(value: unknown, maxLen: number, theme: Theme): string {
+function formatScalarInline(value: unknown, maxLen: number, _theme: Theme): string {
 	if (value === null) return "null";
 	if (value === undefined) return "undefined";
 	if (typeof value === "boolean") return String(value);
 	if (typeof value === "number") return String(value);
-	if (typeof value === "string") return `"${truncate(value, maxLen, theme.format.ellipsis)}"`;
+	if (typeof value === "string") return `"${truncateToWidth(value, maxLen)}"`;
 	if (Array.isArray(value)) return `[${value.length} items]`;
 	if (typeof value === "object") {
 		const keys = Object.keys(value);
@@ -391,7 +389,7 @@ function formatOutputInline(data: unknown, theme: Theme, maxWidth = 80): string 
 	if (Array.isArray(data)) {
 		if (data.length === 0) return "Output: []";
 		const preview = formatScalarInline(data[0], 40, theme);
-		return `Output: [${data.length} items] ${preview}${data.length > 1 ? theme.format.ellipsis : ""}`;
+		return `Output: [${data.length} items] ${preview}${data.length > 1 ? "…" : ""}`;
 	}
 
 	// For objects, show key=value pairs inline
@@ -407,7 +405,7 @@ function formatOutputInline(data: unknown, theme: Theme, maxWidth = 80): string 
 		const addLen = pairs.length > 0 ? pairStr.length + 2 : pairStr.length; // +2 for ", "
 
 		if (totalLen + addLen > maxWidth && pairs.length > 0) {
-			pairs.push(theme.format.ellipsis);
+			pairs.push("…");
 			break;
 		}
 
@@ -442,7 +440,7 @@ function renderArgsSection(
 	if (entries.length === 1) {
 		const [key, value] = entries[0];
 		const humanKey = humanizeKey(key);
-		const displayValue = `"${truncate(value, 60, theme.format.ellipsis)}"`;
+		const displayValue = `"${truncateToWidth(value, 60)}"`;
 		lines.push(`${continuePrefix}${theme.fg("dim", `${humanKey}: ${displayValue}`)}`);
 		return lines;
 	}
@@ -453,7 +451,7 @@ function renderArgsSection(
 		lines.push(`${continuePrefix}  ${line}`);
 	}
 	if (tree.truncated) {
-		lines.push(`${continuePrefix}  ${theme.fg("dim", theme.format.ellipsis)}`);
+		lines.push(`${continuePrefix}  ${theme.fg("dim", "…")}`);
 	}
 
 	return lines;
@@ -531,7 +529,7 @@ function renderAgentProgress(
 
 	if (progress.status === "running") {
 		if (!description) {
-			const taskPreview = truncate(progress.task, 40, theme.format.ellipsis);
+			const taskPreview = truncateToWidth(progress.task, 40);
 			statusLine += ` ${theme.fg("muted", taskPreview)}`;
 		}
 		statusLine += `${theme.sep.dot}${theme.fg("dim", `${progress.toolCount} tools`)}`;
@@ -552,7 +550,7 @@ function renderAgentProgress(
 		if (progress.currentTool) {
 			let toolLine = `${continuePrefix}${theme.tree.hook} ${theme.fg("muted", progress.currentTool)}`;
 			if (progress.currentToolArgs) {
-				toolLine += `: ${theme.fg("dim", truncate(progress.currentToolArgs, 40, theme.format.ellipsis))}`;
+				toolLine += `: ${theme.fg("dim", truncateToWidth(progress.currentToolArgs, 40))}`;
 			}
 			if (progress.currentToolStartMs) {
 				const elapsed = Date.now() - progress.currentToolStartMs;
@@ -566,7 +564,7 @@ function renderAgentProgress(
 			const recent = progress.recentTools[0];
 			let toolLine = `${continuePrefix}${theme.tree.hook} ${theme.fg("dim", recent.tool)}`;
 			if (recent.args) {
-				toolLine += `: ${theme.fg("dim", truncate(recent.args, 40, theme.format.ellipsis))}`;
+				toolLine += `: ${theme.fg("dim", truncateToWidth(recent.args, 40))}`;
 			}
 			lines.push(toolLine);
 		}
@@ -612,7 +610,7 @@ function renderAgentProgress(
 					lines.push(
 						`${continuePrefix}${theme.fg(
 							"dim",
-							formatMoreItems((dataArray as unknown[]).length - displayCount, "item", theme),
+							formatMoreItems((dataArray as unknown[]).length - displayCount, "item"),
 						)}`,
 					);
 				}
@@ -661,7 +659,7 @@ function renderReviewResult(
 			}
 		} else {
 			// Preview: first sentence or ~100 chars
-			const preview = truncate(`${summary.explanation.split(/[.!?]/)[0]}.`, 100, theme.format.ellipsis);
+			const preview = truncateToWidth(`${summary.explanation.split(/[.!?]/)[0]}.`, 100);
 			lines.push(`${continuePrefix}${theme.fg("dim", preview)}`);
 		}
 	}
@@ -718,7 +716,7 @@ function renderFindings(
 	}
 
 	if (!expanded && findings.length > 3) {
-		lines.push(`${continuePrefix}${theme.fg("dim", formatMoreItems(findings.length - 3, "finding", theme))}`);
+		lines.push(`${continuePrefix}${theme.fg("dim", formatMoreItems(findings.length - 3, "finding"))}`);
 	}
 
 	return lines;
@@ -830,7 +828,7 @@ function renderAgentResult(result: SingleResult, isLast: boolean, expanded: bool
 		lines.push(
 			`${continuePrefix}${theme.fg("warning", theme.status.warning)} ${theme.fg(
 				"dim",
-				truncate(missingCompleteWarning, 80, theme.format.ellipsis),
+				truncateToWidth(missingCompleteWarning, 80),
 			)}`,
 		);
 	}
@@ -848,7 +846,7 @@ function renderAgentResult(result: SingleResult, isLast: boolean, expanded: bool
 
 	// Error message
 	if (result.error && !success) {
-		lines.push(`${continuePrefix}${theme.fg("error", truncate(result.error, 70, theme.format.ellipsis))}`);
+		lines.push(`${continuePrefix}${theme.fg("error", truncateToWidth(result.error, 70))}`);
 	}
 
 	return lines;
@@ -869,7 +867,7 @@ export function renderResult(
 	if (!details) {
 		// Fallback to simple text
 		const text = result.content.find(c => c.type === "text")?.text || "";
-		return new Text(theme.fg("dim", truncate(text, 100, theme.format.ellipsis)), 0, 0);
+		return new Text(theme.fg("dim", truncateToWidth(text, 100)), 0, 0);
 	}
 
 	const lines: string[] = [];
@@ -911,7 +909,7 @@ export function renderResult(
 
 	if (lines.length === 0) {
 		const text = fallbackText.trim() ? fallbackText : "No results";
-		return new Text(theme.fg("dim", truncate(text, 140, theme.format.ellipsis)), 0, 0);
+		return new Text(theme.fg("dim", truncateToWidth(text, 140)), 0, 0);
 	}
 
 	if (fallbackText.trim()) {

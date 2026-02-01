@@ -110,7 +110,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	public autoCompactionLoader: Loader | undefined = undefined;
 	public retryLoader: Loader | undefined = undefined;
 	private pendingWorkingMessage: string | undefined;
-	private readonly defaultWorkingMessage = `Working${theme.format.ellipsis} (esc to interrupt)`;
+	private readonly defaultWorkingMessage = `Working… (esc to interrupt)`;
 	public autoCompactionEscapeHandler?: () => void;
 	public retryEscapeHandler?: () => void;
 	public unsubscribe?: () => void;

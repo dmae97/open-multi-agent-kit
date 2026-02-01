@@ -423,6 +423,6 @@ export class StatusLineComponent implements Component {
 			.sort(([a], [b]) => a.localeCompare(b))
 			.map(([, text]) => sanitizeStatusText(text));
 		const hookLine = sortedStatuses.join(" ");
-		return [truncateToWidth(hookLine, width, theme.fg("statusLineSep", theme.format.ellipsis))];
+		return [truncateToWidth(hookLine, width)];
 	}
 }

@@ -967,7 +967,7 @@ export function renderFetchCall(
 	uiTheme: Theme = theme,
 ): Component {
 	const domain = getDomain(args.url);
-	const path = truncate(args.url.replace(/^https?:\/\/[^/]+/, ""), 50, uiTheme.format.ellipsis);
+	const path = truncate(args.url.replace(/^https?:\/\/[^/]+/, ""), 50, "…");
 	const description = `${domain}${path ? ` ${path}` : ""}`.trim();
 	const meta: string[] = [];
 	if (args.raw) meta.push("raw");
@@ -990,7 +990,7 @@ export function renderFetchResult(
 	}
 
 	const domain = getDomain(details.finalUrl);
-	const path = truncate(details.finalUrl.replace(/^https?:\/\/[^/]+/, ""), 50, uiTheme.format.ellipsis);
+	const path = truncate(details.finalUrl.replace(/^https?:\/\/[^/]+/, ""), 50, "…");
 	const hasRedirect = details.url !== details.finalUrl;
 	const hasNotes = details.notes.length > 0;
 	const truncation = details.meta?.truncation;
@@ -1035,15 +1035,13 @@ export function renderFetchResult(
 
 	const previewLimit = expanded ? 12 : 3;
 	const previewList = applyListLimit(contentLines, { headLimit: previewLimit });
-	const previewLines = previewList.items.map(line => truncate(line.trimEnd(), 120, uiTheme.format.ellipsis));
+	const previewLines = previewList.items.map(line => truncate(line.trimEnd(), 120, "…"));
 	const remaining = Math.max(0, contentLines.length - previewLines.length);
 	const contentPreviewLines =
 		previewLines.length > 0 ? previewLines.map(line => uiTheme.fg("dim", line)) : [uiTheme.fg("dim", "(no content)")];
 	if (remaining > 0) {
 		const hint = formatExpandHint(uiTheme, expanded, true);
-		contentPreviewLines.push(
-			uiTheme.fg("muted", `${uiTheme.format.ellipsis} ${remaining} more lines${hint ? ` ${hint}` : ""}`),
-		);
+		contentPreviewLines.push(uiTheme.fg("muted", `… ${remaining} more lines${hint ? ` ${hint}` : ""}`));
 	}
 
 	return {

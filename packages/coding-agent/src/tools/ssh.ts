@@ -237,8 +237,8 @@ interface SshRenderContext {
 
 export const sshToolRenderer = {
 	renderCall(args: SshRenderArgs, uiTheme: Theme): Component {
-		const host = args.host || uiTheme.format.ellipsis;
-		const command = args.command || uiTheme.format.ellipsis;
+		const host = args.host || "…";
+		const command = args.command || "…";
 		const text = renderStatusLine({ icon: "pending", title: "SSH", description: `[${host}] $ ${command}` }, uiTheme);
 		return new Text(text, 0, 0);
 	},
@@ -254,8 +254,8 @@ export const sshToolRenderer = {
 	): Component {
 		const { expanded, renderContext } = options;
 		const details = result.details;
-		const host = args?.host || uiTheme.format.ellipsis;
-		const command = args?.command || uiTheme.format.ellipsis;
+		const host = args?.host || "…";
+		const command = args?.command || "…";
 		const header = renderStatusLine(
 			{ icon: "success", title: "SSH", description: `[${host}] $ ${command}` },
 			uiTheme,
@@ -274,7 +274,7 @@ export const sshToolRenderer = {
 					outputLines.push(
 						uiTheme.fg(
 							"dim",
-							`${uiTheme.format.ellipsis} (${skippedCount} earlier lines, showing ${visualLines.length} of ${totalVisualLines}) (ctrl+o to expand)`,
+							`… (${skippedCount} earlier lines, showing ${visualLines.length} of ${totalVisualLines}) (ctrl+o to expand)`,
 						),
 					);
 				}
@@ -289,9 +289,7 @@ export const sshToolRenderer = {
 				const remaining = outputLinesRaw.length - maxLines;
 				outputLines.push(...displayLines.map(line => uiTheme.fg("toolOutput", line)));
 				if (remaining > 0) {
-					outputLines.push(
-						uiTheme.fg("dim", `${uiTheme.format.ellipsis} (${remaining} more lines) (ctrl+o to expand)`),
-					);
+					outputLines.push(uiTheme.fg("dim", `… (${remaining} more lines) (ctrl+o to expand)`));
 				}
 			}
 		}

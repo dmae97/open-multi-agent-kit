@@ -1,6 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Replaced hardcoded ellipsis strings with Unicode ellipsis character (…) throughout rendering code
+- Removed `format.ellipsis` symbol from theme configuration; ellipsis now uses literal Unicode character
+- Updated `truncate()` function to `truncateToWidth()` with simplified API accepting default ellipsis parameter
+- Simplified `formatMoreItems()` function signature by removing theme parameter dependency
+
+### Removed
+
+- Removed `format.ellipsis` symbol key from theme symbol maps (Unicode, Nerd, and ASCII presets)
+- Removed `ellipsis` property from `SymbolTheme` type
 
 ## [9.6.1] - 2026-02-01
 

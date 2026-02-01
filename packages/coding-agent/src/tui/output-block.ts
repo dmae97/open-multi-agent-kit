@@ -42,7 +42,7 @@ export function renderOutputBlock(options: OutputBlockOptions, theme: Theme): st
 		const leftWidth = visibleWidth(left);
 		const rightWidth = visibleWidth(right);
 		const maxLabelWidth = Math.max(0, lineWidth - leftWidth - rightWidth);
-		const trimmedLabel = truncateToWidth(rawLabel, maxLabelWidth, theme.format.ellipsis);
+		const trimmedLabel = truncateToWidth(rawLabel, maxLabelWidth);
 		const labelWidth = visibleWidth(trimmedLabel);
 		const fillCount = Math.max(0, lineWidth - leftWidth - labelWidth - rightWidth);
 		return `${left}${trimmedLabel}${border(h.repeat(fillCount))}${right}`;
@@ -69,7 +69,7 @@ export function renderOutputBlock(options: OutputBlockOptions, theme: Theme): st
 		}
 		const allLines = section.lines.flatMap(l => l.split("\n"));
 		for (const line of allLines) {
-			const text = truncateToWidth(line, contentWidth, theme.format.ellipsis);
+			const text = truncateToWidth(line, contentWidth);
 			const innerPadding = padding(Math.max(0, contentWidth - visibleWidth(text)));
 			const fullLine = `${contentPrefix}${text}${innerPadding}${contentSuffix}`;
 			lines.push(padToWidth(fullLine, lineWidth, bgFn));

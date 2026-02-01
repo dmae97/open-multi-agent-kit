@@ -1,6 +1,7 @@
 import {
 	type Component,
 	Container,
+	EllipsisKind,
 	Input,
 	matchesKey,
 	padding,
@@ -55,13 +56,13 @@ class HistoryResultsList implements Component {
 			const maxWidth = width - cursorWidth;
 
 			const normalized = entry.prompt.replace(/\s+/g, " ").trim();
-			const truncated = truncateToWidth(normalized, maxWidth, theme.format.ellipsis);
+			const truncated = truncateToWidth(normalized, maxWidth);
 			lines.push(cursor + (isSelected ? theme.bold(truncated) : truncated));
 		}
 
 		if (startIndex > 0 || endIndex < this.results.length) {
 			const scrollText = `  (${this.selectedIndex + 1}/${this.results.length})`;
-			lines.push(theme.fg("muted", truncateToWidth(scrollText, width, "")));
+			lines.push(theme.fg("muted", truncateToWidth(scrollText, width, EllipsisKind.Omit)));
 		}
 
 		return lines;

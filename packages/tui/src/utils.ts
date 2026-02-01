@@ -1,8 +1,6 @@
-import {
-	extractSegments as nativeExtractSegments,
-	sliceWithWidth as nativeSliceWithWidth,
-	truncateToWidth as nativeTruncateToWidth,
-} from "@oh-my-pi/pi-natives";
+import { sliceWithWidth } from "@oh-my-pi/pi-natives";
+
+export { EllipsisKind, extractSegments, sliceWithWidth, truncateToWidth } from "@oh-my-pi/pi-natives";
 
 // Pre-allocated space buffer for padding
 const SPACE_BUFFER = " ".repeat(512);
@@ -133,50 +131,9 @@ export function applyBackgroundToLine(line: string, width: number, bgFn: (text: 
 }
 
 /**
- * Truncate text to fit within a maximum visible width, adding ellipsis if needed.
- * Optionally pad with spaces to reach exactly maxWidth.
- * Properly handles ANSI escape codes (they don't count toward width).
- *
- * @param text - Text to truncate (may contain ANSI codes)
- * @param maxWidth - Maximum visible width
- * @param ellipsis - Ellipsis string to append when truncating (default: "…")
- * @param pad - If true, pad result with spaces to exactly maxWidth (default: false)
- * @returns Truncated text, optionally padded to exactly maxWidth
- */
-export function truncateToWidth(text: string, maxWidth: number, ellipsis: string = "…", pad: boolean = false): string {
-	return nativeTruncateToWidth(text, maxWidth, ellipsis, pad);
-}
-
-/**
  * Extract a range of visible columns from a line. Handles ANSI codes and wide chars.
  * @param strict - If true, exclude wide chars at boundary that would extend past the range
  */
 export function sliceByColumn(line: string, startCol: number, length: number, strict = false): string {
 	return sliceWithWidth(line, startCol, length, strict).text;
-}
-
-/** Like sliceByColumn but also returns the actual visible width of the result. */
-export function sliceWithWidth(
-	line: string,
-	startCol: number,
-	length: number,
-	strict = false,
-): { text: string; width: number } {
-	if (length <= 0) return { text: "", width: 0 };
-	return nativeSliceWithWidth(line, startCol, length, strict);
-}
-
-/**
- * Extract "before" and "after" segments from a line in a single pass.
- * Used for overlay compositing where we need content before and after the overlay region.
- * Preserves styling from before the overlay that should affect content after it.
- */
-export function extractSegments(
-	line: string,
-	beforeEnd: number,
-	afterStart: number,
-	afterLen: number,
-	strictAfter = false,
-): { before: string; beforeWidth: number; after: string; afterWidth: number } {
-	return nativeExtractSegments(line, beforeEnd, afterStart, afterLen, strictAfter);
 }

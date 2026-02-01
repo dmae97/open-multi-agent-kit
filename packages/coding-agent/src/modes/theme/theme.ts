@@ -124,7 +124,6 @@ export type SymbolKey =
 	| "checkbox.checked"
 	| "checkbox.unchecked"
 	// Text Formatting
-	| "format.ellipsis"
 	| "format.bullet"
 	| "format.dash"
 	| "format.bracketLeft"
@@ -357,9 +356,6 @@ const UNICODE_SYMBOLS: SymbolMap = {
 	"checkbox.checked": "☑",
 	// pick: ☐ | alt: □ ▢
 	"checkbox.unchecked": "☐",
-	// Text Formatting
-	// pick: … | alt: ⋯ ...
-	"format.ellipsis": "…",
 	// pick: • | alt: · ▪ ◦
 	"format.bullet": "•",
 	// pick: – | alt: — ― -
@@ -598,9 +594,6 @@ const NERD_SYMBOLS: SymbolMap = {
 	"checkbox.checked": "\uf14a",
 	// pick:  | alt: 
 	"checkbox.unchecked": "\uf096",
-	// Text Formatting
-	// pick: … | alt: ⋯ ...
-	"format.ellipsis": "\u2026",
 	// pick:  | alt:   •
 	"format.bullet": "\uf111",
 	// pick: – | alt: — ― -
@@ -752,8 +745,6 @@ const ASCII_SYMBOLS: SymbolMap = {
 	// Checkboxes
 	"checkbox.checked": "[x]",
 	"checkbox.unchecked": "[ ]",
-	// Text Formatting
-	"format.ellipsis": "...",
 	"format.bullet": "*",
 	"format.dash": "-",
 	"format.bracketLeft": "[",
@@ -1458,7 +1449,6 @@ export class Theme {
 
 	get format() {
 		return {
-			ellipsis: this.symbols["format.ellipsis"],
 			bullet: this.symbols["format.bullet"],
 			dash: this.symbols["format.dash"],
 			bracketLeft: this.symbols["format.bracketLeft"],
@@ -2171,7 +2161,6 @@ export function getSymbolTheme(): SymbolTheme {
 	return {
 		cursor: theme.nav.cursor,
 		inputCursor: preset === "ascii" ? "|" : "▏",
-		ellipsis: theme.format.ellipsis,
 		boxRound: theme.boxRound,
 		boxSharp: theme.boxSharp,
 		table: theme.boxSharp,

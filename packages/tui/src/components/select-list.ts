@@ -1,7 +1,7 @@
 import { matchesKey } from "../keys";
 import type { SymbolTheme } from "../symbols";
 import type { Component } from "../tui";
-import { padding, truncateToWidth, visibleWidth } from "../utils";
+import { EllipsisKind, padding, truncateToWidth, visibleWidth } from "../utils";
 
 export interface SelectItem {
 	value: string;
@@ -83,7 +83,7 @@ export class SelectList implements Component {
 				if (item.description && width > 40) {
 					// Calculate how much space we have for value + description
 					const maxValueWidth = Math.min(30, width - prefixWidth - 4);
-					const truncatedValue = truncateToWidth(displayValue, maxValueWidth, "");
+					const truncatedValue = truncateToWidth(displayValue, maxValueWidth, EllipsisKind.Omit);
 					const spacing = padding(Math.max(1, 32 - truncatedValue.length));
 
 					// Calculate remaining space for description using visible widths
@@ -91,18 +91,20 @@ export class SelectList implements Component {
 					const remainingWidth = width - descriptionStart - 2; // -2 for safety
 
 					if (remainingWidth > 10) {
-						const truncatedDesc = truncateToWidth(item.description, remainingWidth, "");
+						const truncatedDesc = truncateToWidth(item.description, remainingWidth, EllipsisKind.Omit);
 						// Apply selectedText to entire line content
 						line = this.theme.selectedText(`${prefix}${truncatedValue}${spacing}${truncatedDesc}`);
 					} else {
 						// Not enough space for description
 						const maxWidth = width - prefixWidth - 2;
-						line = this.theme.selectedText(`${prefix}${truncateToWidth(displayValue, maxWidth, "")}`);
+						line = this.theme.selectedText(
+							`${prefix}${truncateToWidth(displayValue, maxWidth, EllipsisKind.Omit)}`,
+						);
 					}
 				} else {
 					// No description or not enough width
 					const maxWidth = width - prefixWidth - 2;
-					line = this.theme.selectedText(`${prefix}${truncateToWidth(displayValue, maxWidth, "")}`);
+					line = this.theme.selectedText(`${prefix}${truncateToWidth(displayValue, maxWidth, EllipsisKind.Omit)}`);
 				}
 			} else {
 				const displayValue = item.label || item.value;
@@ -111,7 +113,7 @@ export class SelectList implements Component {
 				if (item.description && width > 40) {
 					// Calculate how much space we have for value + description
 					const maxValueWidth = Math.min(30, width - prefix.length - 4);
-					const truncatedValue = truncateToWidth(displayValue, maxValueWidth, "");
+					const truncatedValue = truncateToWidth(displayValue, maxValueWidth, EllipsisKind.Omit);
 					const spacing = padding(Math.max(1, 32 - truncatedValue.length));
 
 					// Calculate remaining space for description
@@ -119,18 +121,18 @@ export class SelectList implements Component {
 					const remainingWidth = width - descriptionStart - 2; // -2 for safety
 
 					if (remainingWidth > 10) {
-						const truncatedDesc = truncateToWidth(item.description, remainingWidth, "");
+						const truncatedDesc = truncateToWidth(item.description, remainingWidth, EllipsisKind.Omit);
 						const descText = this.theme.description(spacing + truncatedDesc);
 						line = prefix + truncatedValue + descText;
 					} else {
 						// Not enough space for description
 						const maxWidth = width - prefix.length - 2;
-						line = prefix + truncateToWidth(displayValue, maxWidth, "");
+						line = prefix + truncateToWidth(displayValue, maxWidth, EllipsisKind.Omit);
 					}
 				} else {
 					// No description or not enough width
 					const maxWidth = width - prefix.length - 2;
-					line = prefix + truncateToWidth(displayValue, maxWidth, "");
+					line = prefix + truncateToWidth(displayValue, maxWidth, EllipsisKind.Omit);
 				}
 			}
 
@@ -141,7 +143,7 @@ export class SelectList implements Component {
 		if (startIndex > 0 || endIndex < this.filteredItems.length) {
 			const scrollText = `  (${this.selectedIndex + 1}/${this.filteredItems.length})`;
 			// Truncate if too long for terminal
-			lines.push(this.theme.scrollInfo(truncateToWidth(scrollText, width - 2, "")));
+			lines.push(this.theme.scrollInfo(truncateToWidth(scrollText, width - 2, EllipsisKind.Omit)));
 		}
 
 		return lines;

@@ -15,7 +15,7 @@ import {
 	formatErrorMessage,
 	PREVIEW_LIMITS,
 	TRUNCATE_LENGTHS,
-	truncate,
+	truncateToWidth,
 } from "./render-utils";
 
 // =============================================================================
@@ -454,7 +454,7 @@ export const calculatorToolRenderer = {
 	renderCall(args: CalculatorRenderArgs, uiTheme: Theme): Component {
 		const count = args.calculations?.length ?? 0;
 		const firstExpression = args.calculations?.[0]?.expression;
-		const description = firstExpression ? truncate(firstExpression, TRUNCATE_LENGTHS.TITLE, "...") : undefined;
+		const description = firstExpression ? truncateToWidth(firstExpression, TRUNCATE_LENGTHS.TITLE) : undefined;
 		const meta = count > 0 ? [formatCount("calc", count)] : [];
 		const text = renderStatusLine({ icon: "pending", title: "Calc", description, meta }, uiTheme);
 		return new Text(text, 0, 0);
@@ -495,7 +495,7 @@ export const calculatorToolRenderer = {
 		}
 
 		const description = args?.calculations?.[0]?.expression
-			? truncate(args.calculations[0].expression, TRUNCATE_LENGTHS.TITLE, "...")
+			? truncateToWidth(args.calculations[0].expression, TRUNCATE_LENGTHS.TITLE)
 			: undefined;
 		const header = renderStatusLine(
 			{ icon: "success", title: "Calc", description, meta: [formatCount("result", outputs.length)] },

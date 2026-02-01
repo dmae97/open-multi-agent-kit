@@ -17,7 +17,7 @@ import {
 	formatStatusIcon,
 	shortenPath,
 	TRUNCATE_LENGTHS,
-	truncate,
+	truncateToWidth,
 } from "../tools/render-utils";
 import { renderOutputBlock, renderStatusLine } from "../tui";
 import type { LspParams, LspToolDetails } from "./types";
@@ -32,10 +32,8 @@ import type { LspParams, LspToolDetails } from "./types";
  */
 export function renderCall(args: LspParams, theme: Theme): Text {
 	const actionLabel = (args.action ?? "request").replace(/_/g, " ");
-	const queryPreview = args.query ? truncate(args.query, TRUNCATE_LENGTHS.SHORT, theme.format.ellipsis) : undefined;
-	const replacementPreview = args.replacement
-		? truncate(args.replacement, TRUNCATE_LENGTHS.SHORT, theme.format.ellipsis)
-		: undefined;
+	const queryPreview = args.query ? truncateToWidth(args.query, TRUNCATE_LENGTHS.SHORT) : undefined;
+	const replacementPreview = args.replacement ? truncateToWidth(args.replacement, TRUNCATE_LENGTHS.SHORT) : undefined;
 
 	let target: string | undefined;
 	let hasFileTarget = false;
@@ -265,7 +263,7 @@ function renderHover(
 
 	let output = `${icon}${langLabel}${expandHint}`;
 	if (beforeCode) {
-		const preview = truncate(beforeCode, TRUNCATE_LENGTHS.TITLE, theme.format.ellipsis);
+		const preview = truncateToWidth(beforeCode, TRUNCATE_LENGTHS.TITLE);
 		output += `\n ${theme.fg("dim", theme.tree.branch)} ${theme.fg("muted", preview)}`;
 	}
 	const h = theme.boxSharp.horizontal;
@@ -274,14 +272,11 @@ function renderHover(
 	output += `\n ${theme.fg("mdCodeBlockBorder", v)} ${firstCodeLine}`;
 
 	if (codeLines.length > 1) {
-		output += `\n ${theme.fg("mdCodeBlockBorder", v)} ${theme.fg(
-			"muted",
-			`${theme.format.ellipsis} ${codeLines.length - 1} more lines`,
-		)}`;
+		output += `\n ${theme.fg("mdCodeBlockBorder", v)} ${theme.fg("muted", `… ${codeLines.length - 1} more lines`)}`;
 	}
 
 	if (afterCode) {
-		const docPreview = truncate(afterCode, TRUNCATE_LENGTHS.TITLE, theme.format.ellipsis);
+		const docPreview = truncateToWidth(afterCode, TRUNCATE_LENGTHS.TITLE);
 		output += `\n ${theme.fg("dim", theme.tree.last)} ${theme.fg("muted", docPreview)}`;
 	} else {
 		output += `\n ${theme.fg("mdCodeBlockBorder", bottom)}`;
@@ -377,7 +372,7 @@ function renderDiagnostics(
 			if (item.message) {
 				output += `\n ${theme.fg("dim", detailPrefix)}${theme.fg(
 					"muted",
-					truncate(item.message, TRUNCATE_LENGTHS.LINE, theme.format.ellipsis),
+					truncateToWidth(item.message, TRUNCATE_LENGTHS.LINE),
 				)}`;
 			}
 		}
@@ -402,15 +397,12 @@ function renderDiagnostics(
 		const severityColor = severityToColor(item.severity);
 		const location = formatDiagnosticLocation(item.file, item.line, item.col, theme);
 		const message = item.message
-			? ` ${theme.fg("muted", truncate(item.message, TRUNCATE_LENGTHS.CONTENT, theme.format.ellipsis))}`
+			? ` ${theme.fg("muted", truncateToWidth(item.message, TRUNCATE_LENGTHS.CONTENT))}`
 			: "";
 		output += `\n ${theme.fg("dim", branch)} ${theme.fg(severityColor, location)}${message}`;
 	}
 	if (remaining > 0) {
-		output += `\n ${theme.fg("dim", theme.tree.last)} ${theme.fg(
-			"muted",
-			`${theme.format.ellipsis} ${remaining} more`,
-		)}`;
+		output += `\n ${theme.fg("dim", theme.tree.last)} ${theme.fg("muted", `… ${remaining} more`)}`;
 	}
 
 	return output.split("\n");
@@ -473,14 +465,14 @@ function renderReferences(refMatch: RegExpMatchArray, lines: string[], expanded:
 						const context = `at ${file}:${line}:${col}`;
 						output += `\n ${theme.fg("dim", fileCont)}${theme.fg("dim", locCont)}${theme.fg(
 							"muted",
-							truncate(context, TRUNCATE_LENGTHS.LINE, theme.format.ellipsis),
+							truncateToWidth(context, TRUNCATE_LENGTHS.LINE),
 						)}`;
 					}
 				}
 				if (locs.length > maxLocsPerFile) {
 					output += `\n ${theme.fg("dim", fileCont)}${theme.fg("dim", theme.tree.last)} ${theme.fg(
 						"muted",
-						`${theme.format.ellipsis} ${locs.length - maxLocsPerFile} more`,
+						`… ${locs.length - maxLocsPerFile} more`,
 					)}`;
 				}
 			}
@@ -489,7 +481,7 @@ function renderReferences(refMatch: RegExpMatchArray, lines: string[], expanded:
 		if (files.length > maxFiles) {
 			output += `\n ${theme.fg("dim", theme.tree.last)} ${theme.fg(
 				"muted",
-				formatMoreItems(files.length - maxFiles, "file", theme),
+				formatMoreItems(files.length - maxFiles, "file"),
 			)}`;
 		}
 
@@ -596,10 +588,7 @@ function renderSymbols(symbolsMatch: RegExpMatchArray, lines: string[], expanded
 		)}`;
 	}
 	if (topLevelCount > 3) {
-		output += `\n ${theme.fg("dim", theme.tree.last)} ${theme.fg(
-			"muted",
-			`${theme.format.ellipsis} ${topLevelCount - 3} more`,
-		)}`;
+		output += `\n ${theme.fg("dim", theme.tree.last)} ${theme.fg("muted", `… ${topLevelCount - 3} more`)}`;
 	}
 
 	return output.split("\n");
@@ -635,10 +624,7 @@ function renderGeneric(text: string, lines: string[], expanded: boolean, theme: 
 
 	const firstLine = lines[0] || "No output";
 	const expandHint = formatExpandHint(theme, expanded, lines.length > 1);
-	let output = `${icon} ${theme.fg(
-		"dim",
-		truncate(firstLine, TRUNCATE_LENGTHS.TITLE, theme.format.ellipsis),
-	)}${expandHint}`;
+	let output = `${icon} ${theme.fg("dim", truncateToWidth(firstLine, TRUNCATE_LENGTHS.TITLE))}${expandHint}`;
 
 	if (lines.length > 1) {
 		const previewLines = lines.slice(1, 4);
@@ -647,13 +633,13 @@ function renderGeneric(text: string, lines: string[], expanded: boolean, theme: 
 			const branch = isLast ? theme.tree.last : theme.tree.branch;
 			output += `\n ${theme.fg("dim", branch)} ${theme.fg(
 				"dim",
-				truncate(previewLines[i].trim(), TRUNCATE_LENGTHS.CONTENT, theme.format.ellipsis),
+				truncateToWidth(previewLines[i].trim(), TRUNCATE_LENGTHS.CONTENT),
 			)}`;
 		}
 		if (lines.length > 4) {
 			output += `\n ${theme.fg("dim", theme.tree.last)} ${theme.fg(
 				"muted",
-				formatMoreItems(lines.length - 4, "line", theme),
+				formatMoreItems(lines.length - 4, "line"),
 			)}`;
 		}
 	}

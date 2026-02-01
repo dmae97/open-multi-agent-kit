@@ -1,9 +1,21 @@
 # Changelog
 
 ## [Unreleased]
+
+### Breaking Changes
+
+- Changed `TextInput` type parameter to `string` in `truncateToWidth()`, `visibleWidth()`, `sliceWithWidth()`, and `extractSegments()` functions—Uint8Array is no longer accepted
+- Removed `TextInput` type export from public API
+
 ### Added
 
 - Added `visibleWidth()` function to measure the visible width of text, excluding ANSI codes
+
+### Changed
+
+- Improved JSDoc documentation for `truncateToWidth()` with clearer parameter descriptions and behavior details
+- Added early return optimization in `truncateToWidth()` to skip native call when text fits within maxWidth and padding is not requested
+- Added early return optimization in `sliceWithWidth()` to return empty result when length is zero or negative
 
 ## [9.6.1] - 2026-02-01
 ### Added

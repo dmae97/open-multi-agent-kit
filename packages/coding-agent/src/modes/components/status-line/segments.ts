@@ -102,7 +102,7 @@ const pathSegment: StatusLineSegment = {
 
 		const maxLen = opts.maxLength ?? 40;
 		if (pwd.length > maxLen) {
-			const ellipsis = theme.format.ellipsis;
+			const ellipsis = "…";
 			const sliceLen = Math.max(0, maxLen - ellipsis.length);
 			pwd = `${ellipsis}${pwd.slice(-sliceLen)}`;
 		}

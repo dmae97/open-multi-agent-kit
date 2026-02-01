@@ -1,4 +1,4 @@
-import { visibleWidth, wrapTextWithAnsi, truncateToWidth, sliceWithWidth, extractSegments } from "../src/utils";
+import { visibleWidth, wrapTextWithAnsi, truncateToWidth, sliceWithWidth, extractSegments, EllipsisKind } from "../src/utils";
 import { matchesKey } from "../src/keys";
 
 const ITERATIONS = 2000;
@@ -35,7 +35,7 @@ bench("visibleWidth/ansi", () => {
 });
 
 bench("truncateToWidth/ansi", () => {
-	truncateToWidth(samples.ansi, 32, "…", true);
+	truncateToWidth(samples.ansi, 32, EllipsisKind.Unicode, true);
 });
 
 bench("wrapTextWithAnsi/ansi", () => {

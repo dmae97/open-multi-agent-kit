@@ -54,7 +54,7 @@ function formatCompactValue(value: unknown, maxLength: number): string {
 	}
 
 	if (rendered.length > maxLength) {
-		rendered = `${rendered.slice(0, maxLength - 1)}${theme.format.ellipsis}`;
+		rendered = `${rendered.slice(0, maxLength - 1)}…`;
 	}
 
 	return rendered;
@@ -630,7 +630,7 @@ export class ToolExecutionComponent extends Container {
 			text += `\n${theme.fg("dim", "(none)")}`;
 		}
 		if (argsPreview.remaining > 0) {
-			text += theme.fg("dim", `\n${theme.format.ellipsis} (${argsPreview.remaining} more args) (ctrl+o to expand)`);
+			text += theme.fg("dim", `\n… (${argsPreview.remaining} more args) (ctrl+o to expand)`);
 		}
 
 		const output = this.getTextOutput().trim();
@@ -643,7 +643,7 @@ export class ToolExecutionComponent extends Container {
 			text += ` ${theme.fg("dim", `(${lines.length} lines)`)}`;
 			text += `\n${displayLines.map(line => theme.fg("toolOutput", line)).join("\n")}`;
 			if (remaining > 0) {
-				text += theme.fg("dim", `\n${theme.format.ellipsis} (${remaining} earlier lines) (ctrl+o to expand)`);
+				text += theme.fg("dim", `\n… (${remaining} earlier lines) (ctrl+o to expand)`);
 			}
 		} else {
 			text += ` ${theme.fg("dim", "(empty)")}`;

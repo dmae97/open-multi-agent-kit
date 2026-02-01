@@ -182,8 +182,8 @@ interface BashRenderContext {
 	timeout?: number;
 }
 
-function formatBashCommand(args: BashRenderArgs, uiTheme: Theme): string {
-	const command = args.command || uiTheme.format.ellipsis;
+function formatBashCommand(args: BashRenderArgs, _uiTheme: Theme): string {
+	const command = args.command || "…";
 	const prompt = "$";
 	const cwd = process.cwd();
 	let displayWorkdir = args.cwd;
@@ -285,7 +285,7 @@ export const bashToolRenderer = {
 							outputLines.push(
 								uiTheme.fg(
 									"dim",
-									`${uiTheme.format.ellipsis} (${result.skippedCount} earlier lines, showing ${result.visualLines.length} of ${result.skippedCount + result.visualLines.length}) (ctrl+o to expand)`,
+									`… (${result.skippedCount} earlier lines, showing ${result.visualLines.length} of ${result.skippedCount + result.visualLines.length}) (ctrl+o to expand)`,
 								),
 							);
 						}

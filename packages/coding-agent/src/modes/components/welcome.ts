@@ -165,7 +165,7 @@ export class WelcomeComponent implements Component {
 	private centerText(text: string, width: number): string {
 		const visLen = visibleWidth(text);
 		if (visLen >= width) {
-			return truncateToWidth(text, width, theme.format.ellipsis);
+			return truncateToWidth(text, width);
 		}
 		const leftPad = Math.floor((width - visLen) / 2);
 		const rightPad = width - visLen - leftPad;
@@ -206,7 +206,7 @@ export class WelcomeComponent implements Component {
 	private fitToWidth(str: string, width: number): string {
 		const visLen = visibleWidth(str);
 		if (visLen > width) {
-			const ellipsis = theme.format.ellipsis;
+			const ellipsis = "…";
 			const ellipsisWidth = visibleWidth(ellipsis);
 			const maxWidth = Math.max(0, width - ellipsisWidth);
 			let truncated = "";

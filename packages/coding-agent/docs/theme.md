@@ -157,14 +157,14 @@ Example:
 
 ```json
 {
-  "symbols": {
-    "preset": "ascii",
-    "overrides": {
-      "icon.model": "[M]",
-      "sep.powerlineLeft": ">",
-      "sep.powerlineRight": "<"
-    }
-  }
+	"symbols": {
+		"preset": "ascii",
+		"overrides": {
+			"icon.model": "[M]",
+			"sep.powerlineLeft": ">",
+			"sep.powerlineRight": "<"
+		}
+	}
 }
 ```
 
@@ -179,7 +179,7 @@ Symbol keys by category:
 - Icons: `icon.model`, `icon.folder`, `icon.file`, `icon.git`, `icon.branch`, `icon.tokens`, `icon.context`, `icon.cost`, `icon.time`, `icon.pi`, `icon.agents`, `icon.cache`, `icon.input`, `icon.output`, `icon.host`, `icon.session`, `icon.package`, `icon.warning`, `icon.rewind`, `icon.auto`, `icon.extensionSkill`, `icon.extensionTool`, `icon.extensionSlashCommand`, `icon.extensionMcp`, `icon.extensionRule`, `icon.extensionHook`, `icon.extensionPrompt`, `icon.extensionContextFile`, `icon.extensionInstruction`
 - Thinking: `thinking.minimal`, `thinking.low`, `thinking.medium`, `thinking.high`, `thinking.xhigh`
 - Checkboxes: `checkbox.checked`, `checkbox.unchecked`
-- Formatting: `format.ellipsis`, `format.bullet`, `format.dash`
+- Formatting: `format.bullet`, `format.dash`
 - Markdown: `md.quoteBorder`, `md.hrChar`, `md.bullet`
 
 ### Color Values
@@ -620,7 +620,6 @@ const userMsg = theme.bg("userMessageBg", theme.fg("userMessageText", "Hello"));
 **Color resolution:**
 
 1. **Detect terminal capabilities:**
-
    - Check `$COLORTERM` env var (`truecolor` or `24bit` → truecolor support)
    - Check `$TERM` env var (`*-256color` → 256-color support)
    - Fallback to 256-color mode if detection fails
@@ -644,13 +643,11 @@ const userMsg = theme.bg("userMessageBg", theme.fg("userMessageText", "Hello"));
 4. **Convert colors to ANSI codes based on terminal capability:**
 
    **Truecolor mode (24-bit):**
-
    - Hex (`"#ff0000"`) → `\x1b[38;2;255;0;0m`
    - 256-color (`42`) → `\x1b[38;5;42m` (keep as-is)
    - Empty string (`""`) → `\x1b[39m`
 
    **256-color mode:**
-
    - Hex (`"#ff0000"`) → convert to nearest RGB cube color → `\x1b[38;5;196m`
    - 256-color (`42`) → `\x1b[38;5;42m` (keep as-is)
    - Empty string (`""`) → `\x1b[39m`

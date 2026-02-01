@@ -1,12 +1,16 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Changed
 
+- Changed hardcoded ellipsis character from theme-configurable to literal "…" in editor truncation
 - Refactored `visibleWidth` function to use caching wrapper around new `visibleWidthRaw` implementation for improved performance
 
 ### Removed
 
+- Removed `truncateToWidth`, `sliceWithWidth`, and `extractSegments` functions from public API (now re-exported directly from @oh-my-pi/pi-natives)
+- Removed `ellipsis` property from `SymbolTheme` interface
 - Removed `extractAnsiCode` function from public API
 
 ## [9.6.1] - 2026-02-01

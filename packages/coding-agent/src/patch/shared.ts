@@ -103,10 +103,10 @@ function formatStreamingDiff(diff: string, rawPath: string, uiTheme: Theme): str
 
 	let text = "\n\n";
 	if (hidden > 0) {
-		text += uiTheme.fg("dim", `${uiTheme.format.ellipsis} (${hidden} earlier lines)\n`);
+		text += uiTheme.fg("dim", `… (${hidden} earlier lines)\n`);
 	}
 	text += renderDiffColored(displayLines.join("\n"), { filePath: rawPath });
-	text += uiTheme.fg("dim", `\n${uiTheme.format.ellipsis} (streaming)`);
+	text += uiTheme.fg("dim", `\n… (streaming)`);
 	return text;
 }
 
@@ -147,10 +147,7 @@ function renderDiffSection(
 		const remainder: string[] = [];
 		if (hiddenHunks > 0) remainder.push(`${hiddenHunks} more hunks`);
 		if (hiddenLines > 0) remainder.push(`${hiddenLines} more lines`);
-		text += uiTheme.fg(
-			"toolOutput",
-			`\n${uiTheme.format.ellipsis} (${remainder.join(", ")}) ${formatExpandHint(uiTheme)}`,
-		);
+		text += uiTheme.fg("toolOutput", `\n… (${remainder.join(", ")}) ${formatExpandHint(uiTheme)}`);
 	}
 	return text;
 }
@@ -164,7 +161,7 @@ export const editToolRenderer = {
 		const filePath = shortenPath(rawPath);
 		const editLanguage = getLanguageFromPath(rawPath) ?? "text";
 		const editIcon = uiTheme.fg("muted", uiTheme.getLangIcon(editLanguage));
-		let pathDisplay = filePath ? uiTheme.fg("accent", filePath) : uiTheme.fg("toolOutput", uiTheme.format.ellipsis);
+		let pathDisplay = filePath ? uiTheme.fg("accent", filePath) : uiTheme.fg("toolOutput", "…");
 
 		// Add arrow for move/rename operations
 		if (args.rename) {
@@ -188,7 +185,7 @@ export const editToolRenderer = {
 				text += `${uiTheme.fg("toolOutput", ui.truncate(line, 80))}\n`;
 			}
 			if (previewLines.length > maxLines) {
-				text += uiTheme.fg("dim", `${uiTheme.format.ellipsis} ${previewLines.length - maxLines} more lines`);
+				text += uiTheme.fg("dim", `… ${previewLines.length - maxLines} more lines`);
 			}
 		} else if (args.newText || args.patch) {
 			const previewLines = (args.newText ?? args.patch ?? "").split("\n");
@@ -198,7 +195,7 @@ export const editToolRenderer = {
 				text += `${uiTheme.fg("toolOutput", ui.truncate(line, 80))}\n`;
 			}
 			if (previewLines.length > maxLines) {
-				text += uiTheme.fg("dim", `${uiTheme.format.ellipsis} ${previewLines.length - maxLines} more lines`);
+				text += uiTheme.fg("dim", `… ${previewLines.length - maxLines} more lines`);
 			}
 		}
 
@@ -225,7 +222,7 @@ export const editToolRenderer = {
 		const rename = args?.rename || result.details?.rename;
 
 		// Build path display with line number if available
-		let pathDisplay = filePath ? uiTheme.fg("accent", filePath) : uiTheme.fg("toolOutput", uiTheme.format.ellipsis);
+		let pathDisplay = filePath ? uiTheme.fg("accent", filePath) : uiTheme.fg("toolOutput", "…");
 		const firstChangedLine =
 			(editDiffPreview && "firstChangedLine" in editDiffPreview ? editDiffPreview.firstChangedLine : undefined) ||
 			(result.details && !result.isError ? result.details.firstChangedLine : undefined);

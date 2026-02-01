@@ -105,7 +105,7 @@ export class ReadToolGroupComponent extends Container implements ToolExecutionHa
 
 	private formatPath(entry: ReadEntry): string {
 		const filePath = shortenPath(entry.path);
-		let pathDisplay = filePath ? theme.fg("accent", filePath) : theme.fg("toolOutput", theme.format.ellipsis);
+		let pathDisplay = filePath ? theme.fg("accent", filePath) : theme.fg("toolOutput", "…");
 		if (entry.offset !== undefined || entry.limit !== undefined) {
 			const startLine = entry.offset ?? 1;
 			const endLine = entry.limit !== undefined ? startLine + entry.limit - 1 : "";

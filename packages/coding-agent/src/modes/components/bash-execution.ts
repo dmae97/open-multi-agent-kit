@@ -48,7 +48,7 @@ export class BashExecutionComponent extends Container {
 			ui,
 			spinner => theme.fg(colorKey, spinner),
 			text => theme.fg("muted", text),
-			`Running${theme.format.ellipsis} (esc to cancel)`,
+			`Running… (esc to cancel)`,
 			getSymbolTheme().spinnerFrames,
 		);
 		this.contentContainer.addChild(this.loader);
@@ -150,9 +150,7 @@ export class BashExecutionComponent extends Container {
 
 			// Show how many lines are hidden (collapsed preview)
 			if (hiddenLineCount > 0) {
-				statusParts.push(
-					theme.fg("dim", `${theme.format.ellipsis} ${hiddenLineCount} more lines (ctrl+o to expand)`),
-				);
+				statusParts.push(theme.fg("dim", `… ${hiddenLineCount} more lines (ctrl+o to expand)`));
 			}
 
 			if (this.status === "cancelled") {

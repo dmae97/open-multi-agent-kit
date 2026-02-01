@@ -1003,7 +1003,7 @@ export const readToolRenderer = {
 		const offset = args.offset;
 		const limit = args.limit;
 
-		let pathDisplay = filePath || uiTheme.format.ellipsis;
+		let pathDisplay = filePath || "…";
 		if (offset !== undefined || limit !== undefined) {
 			const startLine = offset ?? 1;
 			const endLine = limit !== undefined ? startLine + limit - 1 : "";

@@ -59,7 +59,7 @@ export class TtsrNotificationComponent extends Container {
 					// Truncate to first 2 lines
 					const lines = displayText.split("\n");
 					if (lines.length > 2) {
-						displayText = `${lines.slice(0, 2).join("\n")}${theme.format.ellipsis}`;
+						displayText = `${lines.slice(0, 2).join("\n")}…`;
 					}
 				}
 
