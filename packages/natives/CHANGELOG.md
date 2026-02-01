@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [9.8.0] - 2026-02-01
 ### Breaking Changes
 
 - Removed `resize()` function; use `PhotonImage.resize()` method instead

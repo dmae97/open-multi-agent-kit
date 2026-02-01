@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [9.8.0] - 2026-02-01
+
 ### Changed
 
 - Moved `wrapTextWithAnsi` export to `@oh-my-pi/pi-natives` package

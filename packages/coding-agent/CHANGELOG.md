@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [9.8.0] - 2026-02-01
 ### Breaking Changes
 
 - Removed persistent shell session support; bash execution now uses native bindings via brush-core for improved reliability
