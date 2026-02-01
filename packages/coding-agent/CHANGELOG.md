@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - Added `maxResults` parameter to find tool to limit result set at the native layer
@@ -14,6 +13,8 @@
 
 ### Changed
 
+- Updated binary build process to exclude worker files from compilation, reducing binary size
+- Modified update mechanism to download and install native addon alongside CLI binary for platform-specific functionality
 - Updated find tool to emit streaming match updates via callback, allowing real-time progress feedback during file searches
 - Modified find tool to use native match metadata (mtime, fileType) from WASM layer instead of redundant filesystem stats, improving performance
 - Restructured Task tool documentation to emphasize context quality and explicit API contracts for subagent success

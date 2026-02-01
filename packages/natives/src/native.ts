@@ -62,6 +62,9 @@ const platformTag = `${process.platform}-${process.arch}`;
 const nativeDir = path.join(import.meta.dir, "..", "native");
 const repoRoot = path.join(import.meta.dir, "..", "..", "..");
 const execDir = path.dirname(process.execPath);
+
+const SUPPORTED_PLATFORMS = ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64", "win32-x64"];
+
 const candidates = [
 	path.join(nativeDir, `pi_natives.${platformTag}.node`),
 	path.join(nativeDir, "pi_natives.node"),
@@ -85,8 +88,22 @@ function loadNative(): NativeBindings {
 		}
 	}
 
+	// Check if this is an unsupported platform
+	if (!SUPPORTED_PLATFORMS.includes(platformTag)) {
+		throw new Error(
+			`Unsupported platform: ${platformTag}\n` +
+				`Supported platforms: ${SUPPORTED_PLATFORMS.join(", ")}\n` +
+				"If you need support for this platform, please open an issue.",
+		);
+	}
+
 	const details = errors.map(error => `- ${error}`).join("\n");
-	throw new Error(`Failed to load pi_natives native addon. Tried:\n${details}`);
+	throw new Error(
+		`Failed to load pi_natives native addon for ${platformTag}.\n\n` +
+			`Tried:\n${details}\n\n` +
+			"If installed via npm/bun, try reinstalling: bun install @oh-my-pi/pi-natives\n" +
+			"If developing locally, build with: bun --cwd=packages/natives run build:native",
+	);
 }
 
 function validateNative(bindings: NativeBindings, source: string): void {

@@ -74,7 +74,7 @@
 	"scripts": {
 		"check": "tsgo -p tsconfig.json",
 		"format-prompts": "bun scripts/format-prompts.ts",
-		"build:binary": "cd ../.. && bun build --compile --define OMP_COMPILED=true --root . ./packages/coding-agent/src/cli.ts ./packages/natives/src/grep/worker.ts ./packages/natives/src/html/worker.ts ./packages/natives/src/image/worker.ts --outfile packages/coding-agent/dist/omp",
+		"build:binary": "cd ../.. && bun build --compile --define OMP_COMPILED=true --root . ./packages/coding-agent/src/cli.ts --outfile packages/coding-agent/dist/omp",
 		"generate-template": "bun scripts/generate-template.ts",
 		"test": "bun test"
 	},

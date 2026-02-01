@@ -136,6 +136,24 @@ function getBinaryName(): string {
 }
 
 /**
+ * Get the appropriate native addon name for this platform.
+ * Uses process.platform directly (linux, darwin, win32).
+ */
+function getNativeAddonName(): string {
+	const platform = process.platform;
+	const arch = process.arch;
+
+	if (!["linux", "darwin", "win32"].includes(platform)) {
+		throw new Error(`Unsupported platform: ${platform}`);
+	}
+	if (!["x64", "arm64"].includes(arch)) {
+		throw new Error(`Unsupported architecture: ${arch}`);
+	}
+
+	return `pi_natives.${platform}-${arch}.node`;
+}
+
+/**
  * Update via bun package manager.
  */
 async function updateViaBun(): Promise<void> {
@@ -154,16 +172,24 @@ async function updateViaBun(): Promise<void> {
  */
 async function updateViaBinary(release: ReleaseInfo): Promise<void> {
 	const binaryName = getBinaryName();
+	const nativeAddonName = getNativeAddonName();
+
 	const asset = release.assets.find(a => a.name === binaryName);
+	const nativeAsset = release.assets.find(a => a.name === nativeAddonName);
 
 	if (!asset) {
 		throw new Error(`No binary found for ${binaryName}`);
 	}
+	if (!nativeAsset) {
+		throw new Error(`No native addon found for ${nativeAddonName}`);
+	}
 
 	const execPath = process.execPath;
-	const _execDir = path.dirname(execPath);
+	const execDir = path.dirname(execPath);
 	const tempPath = `${execPath}.new`;
 	const backupPath = `${execPath}.bak`;
+	const nativePath = path.join(execDir, nativeAddonName);
+	const nativeTempPath = `${nativePath}.new`;
 
 	console.log(chalk.dim(`Downloading ${binaryName}...`));
 
@@ -177,6 +203,18 @@ async function updateViaBinary(release: ReleaseInfo): Promise<void> {
 	const nodeStream = Readable.fromWeb(response.body as import("stream/web").ReadableStream);
 	await pipeline(nodeStream, fileStream);
 
+	// Download native addon
+	console.log(chalk.dim(`Downloading ${nativeAddonName}...`));
+
+	const nativeResponse = await fetch(nativeAsset.url, { redirect: "follow" });
+	if (!nativeResponse.ok || !nativeResponse.body) {
+		throw new Error(`Native addon download failed: ${nativeResponse.statusText}`);
+	}
+
+	const nativeFileStream = fs.createWriteStream(nativeTempPath, { mode: 0o755 });
+	const nativeNodeStream = Readable.fromWeb(nativeResponse.body as import("stream/web").ReadableStream);
+	await pipeline(nativeNodeStream, nativeFileStream);
+
 	// Replace current binary
 	console.log(chalk.dim("Installing update..."));
 
@@ -187,10 +225,11 @@ async function updateViaBinary(release: ReleaseInfo): Promise<void> {
 			if (!isEnoent(err)) throw err;
 		}
 		await fs.promises.rename(execPath, backupPath);
-
 		await fs.promises.rename(tempPath, execPath);
-
 		await fs.promises.unlink(backupPath);
+
+		// Replace native addon (no backup needed, just overwrite)
+		await fs.promises.rename(nativeTempPath, nativePath);
 
 		console.log(chalk.green(`\n${theme.status.success} Updated to ${release.version}`));
 		console.log(chalk.dim(`Restart ${APP_NAME} to use the new version`));
@@ -200,6 +239,9 @@ async function updateViaBinary(release: ReleaseInfo): Promise<void> {
 		}
 		if (fs.existsSync(tempPath)) {
 			await fs.promises.unlink(tempPath);
+		}
+		if (fs.existsSync(nativeTempPath)) {
+			await fs.promises.unlink(nativeTempPath);
 		}
 		throw err;
 	}

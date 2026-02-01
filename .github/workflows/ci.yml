@@ -132,6 +132,20 @@ jobs:
           pattern: pi-natives-*
           path: packages/natives/native
           merge-multiple: true
+      - name: Verify native addons
+        run: |
+          echo "Native addons downloaded:"
+          ls -la packages/natives/native/
+          echo ""
+          echo "Expected platforms: linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64"
+          for plat in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64; do
+            if [ -f "packages/natives/native/pi_natives.${plat}.node" ]; then
+              echo "✓ pi_natives.${plat}.node"
+            else
+              echo "✗ pi_natives.${plat}.node MISSING"
+              exit 1
+            fi
+          done
 
       - name: Build binaries
         run: |

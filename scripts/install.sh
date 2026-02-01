@@ -200,6 +200,7 @@ install_binary() {
     esac
 
     BINARY="omp-${PLATFORM}-${ARCH}"
+    NATIVE_ADDON="pi_natives.${PLATFORM}-${ARCH}.node"
 
     # Get release tag
     if [ -n "$REF" ]; then
@@ -222,16 +223,22 @@ install_binary() {
     fi
     echo "Using version: $LATEST"
 
-    # Download binary
-    URL="https://github.com/${REPO}/releases/download/${LATEST}/${BINARY}"
-    echo "Downloading ${BINARY}..."
-
     mkdir -p "$INSTALL_DIR"
-    curl -fsSL "$URL" -o "${INSTALL_DIR}/omp"
+
+    # Download binary
+    BINARY_URL="https://github.com/${REPO}/releases/download/${LATEST}/${BINARY}"
+    echo "Downloading ${BINARY}..."
+    curl -fsSL "$BINARY_URL" -o "${INSTALL_DIR}/omp"
     chmod +x "${INSTALL_DIR}/omp"
+
+    # Download native addon
+    NATIVE_URL="https://github.com/${REPO}/releases/download/${LATEST}/${NATIVE_ADDON}"
+    echo "Downloading ${NATIVE_ADDON}..."
+    curl -fsSL "$NATIVE_URL" -o "${INSTALL_DIR}/${NATIVE_ADDON}"
 
     echo ""
     echo "✓ Installed omp to ${INSTALL_DIR}/omp"
+    echo "✓ Installed native addon to ${INSTALL_DIR}/${NATIVE_ADDON}"
 
     # Check if in PATH
     case ":$PATH:" in
