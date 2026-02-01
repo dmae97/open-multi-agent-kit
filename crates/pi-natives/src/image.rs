@@ -16,7 +16,7 @@ use image::{
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use crate::work::launch_task;
+use crate::work::launch_blocking;
 
 /// Sampling filter for resize operations.
 #[napi]
@@ -62,7 +62,7 @@ impl PhotonImage {
 	#[napi(factory, js_name = "parse")]
 	pub async fn parse(bytes: Uint8Array) -> Result<Self> {
 		let bytes = bytes.as_ref().to_vec();
-		let img = launch_task(move || -> Result<DynamicImage> {
+		let img = launch_blocking(move || -> Result<DynamicImage> {
 			let reader = ImageReader::new(Cursor::new(bytes))
 				.with_guessed_format()
 				.map_err(|e| Error::from_reason(format!("Failed to detect image format: {e}")))?;
@@ -104,7 +104,7 @@ impl PhotonImage {
 	#[napi(js_name = "encode")]
 	pub async fn encode(&self, format: u8, quality: u8) -> Result<Uint8Array> {
 		let img = Arc::clone(&self.img);
-		let buffer: Vec<u8> = launch_task(move || encode_image(&img, format, quality))
+		let buffer: Vec<u8> = launch_blocking(move || encode_image(&img, format, quality))
 			.wait()
 			.await?;
 		Ok(Uint8Array::from(buffer))
@@ -115,7 +115,7 @@ impl PhotonImage {
 	#[napi(js_name = "resize")]
 	pub async fn resize(&self, width: u32, height: u32, filter: SamplingFilter) -> Result<Self> {
 		let img = Arc::clone(&self.img);
-		let resized = launch_task(move || Ok(img.resize_exact(width, height, filter.into())))
+		let resized = launch_blocking(move || Ok(img.resize_exact(width, height, filter.into())))
 			.wait()
 			.await?;
 		Ok(Self { img: Arc::new(resized) })

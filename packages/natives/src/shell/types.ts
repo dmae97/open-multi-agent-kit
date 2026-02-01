@@ -55,9 +55,7 @@ export interface ShellExecuteOptions {
 	/** Timeout in milliseconds. */
 	timeoutMs?: number;
 	/** Unique identifier for this execution (used for abort). */
-	executionId: string;
-	/** Session key for persistent brush shell instances. */
-	sessionKey: string;
+	executionId: number;
 	/** Optional snapshot path to source for bash sessions. */
 	snapshotPath?: string;
 }
@@ -104,7 +102,7 @@ declare module "../bindings" {
 		 * Abort a running shell execution by ID.
 		 * @param executionId Execution identifier from ShellExecuteOptions.
 		 */
-		abortShellExecution(executionId: string): void;
+		abortShellExecution(executionId: number): void;
 		/** Shell class constructor for creating sessions. */
 		Shell: NativeShellConstructor;
 	}

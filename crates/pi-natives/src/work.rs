@@ -23,16 +23,17 @@
 
 use std::{
 	panic::{AssertUnwindSafe, catch_unwind},
-	sync::OnceLock,
+	sync::LazyLock,
 };
 
 use napi::{Error, Result};
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use tokio::sync::oneshot;
+use tokio::{sync::oneshot, task::JoinHandle};
 
 /// Handle for a scheduled blocking task.
-pub struct WorkHandle<T> {
-	receiver: oneshot::Receiver<Result<T>>,
+pub enum WorkHandle<T> {
+	Blocking(oneshot::Receiver<Result<T>>),
+	Async(JoinHandle<Result<T>>),
 }
 
 impl<T> WorkHandle<T> {
@@ -41,9 +42,23 @@ impl<T> WorkHandle<T> {
 	/// # Errors
 	/// Returns an error if the task panics or the channel is cancelled.
 	pub async fn wait(self) -> Result<T> {
-		match self.receiver.await {
-			Ok(result) => result,
-			Err(_) => Err(Error::from_reason("Rayon task cancelled")),
+		match self {
+			Self::Blocking(receiver) => match receiver.await {
+				Ok(result) => result,
+				Err(_) => Err(Error::from_reason("Blocking task cancelled")),
+			},
+			Self::Async(handle) => match handle.await {
+				Ok(result) => result,
+				Err(_) => Err(Error::from_reason("Async task cancelled")),
+			},
+		}
+	}
+
+	/// Abort the scheduled work.
+	pub fn abort(self) {
+		match self {
+			Self::Blocking(_) => (),
+			Self::Async(handle) => handle.abort(),
 		}
 	}
 }
@@ -52,27 +67,35 @@ impl<T> WorkHandle<T> {
 ///
 /// # Errors
 /// The returned handle resolves to an error if the task panics or is cancelled.
-pub fn launch_task<F, T>(work: F) -> WorkHandle<T>
+pub fn launch_blocking<F, T>(work: F) -> WorkHandle<T>
 where
 	F: FnOnce() -> Result<T> + Send + 'static,
 	T: Send + 'static,
 {
-	let pool = thread_pool();
 	let (sender, receiver) = oneshot::channel();
-	pool.spawn(move || {
+	POOL.spawn(move || {
 		let result = catch_unwind(AssertUnwindSafe(work))
 			.unwrap_or_else(|_| Err(Error::from_reason("Rayon task panicked")));
 		let _ = sender.send(result);
 	});
-	WorkHandle { receiver }
+	WorkHandle::Blocking(receiver)
 }
 
-fn thread_pool() -> &'static ThreadPool {
-	static POOL: OnceLock<ThreadPool> = OnceLock::new();
-	POOL.get_or_init(|| {
-		ThreadPoolBuilder::new()
-			.thread_name(|index| format!("pi-natives-{index}"))
-			.build()
-			.expect("Failed to build Rayon thread pool")
-	})
+/// Schedule non-blocking async work on the Tokio runtime.
+///
+/// # Errors
+/// The returned handle resolves to an error if the task panics or is cancelled.
+pub fn launch_async<Fut, T>(work: Fut) -> WorkHandle<T>
+where
+	Fut: Future<Output = Result<T>> + Send + 'static,
+	T: Send + 'static,
+{
+	WorkHandle::Async(tokio::spawn(work))
 }
+
+static POOL: LazyLock<ThreadPool> = LazyLock::new(|| {
+	ThreadPoolBuilder::new()
+		.thread_name(|index| format!("pi-natives-{index}"))
+		.build()
+		.expect("Failed to build Rayon thread pool")
+});

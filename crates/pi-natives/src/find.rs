@@ -23,7 +23,7 @@ use napi::{
 };
 use napi_derive::napi;
 
-use crate::work::launch_task;
+use crate::work::launch_blocking;
 
 /// Options for discovering files and directories.
 #[napi(object)]
@@ -317,7 +317,7 @@ pub async fn find(
 	let mentions_node_modules = pattern.contains("node_modules");
 	let sort_by_mtime = sort_by_mtime.unwrap_or(false);
 
-	launch_task(move || {
+	launch_blocking(move || {
 		let cancelled = AtomicBool::new(false);
 		let config = FindConfig {
 			root: search_path,

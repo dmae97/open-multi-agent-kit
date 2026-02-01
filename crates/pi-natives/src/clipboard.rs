@@ -21,7 +21,7 @@ use image::{DynamicImage, ImageFormat, RgbaImage};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use crate::work::launch_task;
+use crate::work::launch_blocking;
 
 /// Clipboard image payload encoded as PNG bytes.
 #[napi(object)]
@@ -58,7 +58,7 @@ fn encode_png(image: ImageData<'_>) -> Result<Vec<u8>> {
 /// Returns an error if clipboard access fails.
 #[napi(js_name = "copyToClipboard")]
 pub async fn copy_to_clipboard(text: String) -> Result<()> {
-	launch_task(move || -> Result<()> {
+	launch_blocking(move || -> Result<()> {
 		let mut clipboard = Clipboard::new()
 			.map_err(|err| Error::from_reason(format!("Failed to access clipboard: {err}")))?;
 		clipboard
@@ -79,7 +79,7 @@ pub async fn copy_to_clipboard(text: String) -> Result<()> {
 /// Returns an error if clipboard access fails or image encoding fails.
 #[napi(js_name = "readImageFromClipboard")]
 pub async fn read_image_from_clipboard() -> Result<Option<ClipboardImage>> {
-	let result = launch_task(move || -> Result<Option<ClipboardImage>> {
+	let result = launch_blocking(move || -> Result<Option<ClipboardImage>> {
 		let mut clipboard = Clipboard::new()
 			.map_err(|err| Error::from_reason(format!("Failed to access clipboard: {err}")))?;
 		match clipboard.get_image() {

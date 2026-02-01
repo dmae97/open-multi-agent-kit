@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+### Breaking Changes
+
+- Changed `executionId` parameter type from `string` to `number` in `abortShellExecution()` and `ShellExecuteOptions`
+- Removed `sessionKey` field from `ShellExecuteOptions`
 
 ## [9.8.0] - 2026-02-01
 ### Breaking Changes

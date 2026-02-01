@@ -4,7 +4,7 @@ use html_to_markdown_rs::{ConversionOptions, PreprocessingOptions, Preprocessing
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use crate::work::launch_task;
+use crate::work::launch_blocking;
 
 /// Options for HTML to Markdown conversion.
 #[napi(object)]
@@ -31,7 +31,7 @@ pub async fn html_to_markdown(
 	let clean_content = options.clean_content.unwrap_or(false);
 	let skip_images = options.skip_images.unwrap_or(false);
 
-	launch_task(move || {
+	launch_blocking(move || {
 		let conversion_opts = ConversionOptions {
 			skip_images,
 			preprocessing: PreprocessingOptions {

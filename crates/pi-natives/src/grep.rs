@@ -29,7 +29,7 @@ use napi::{
 use napi_derive::napi;
 use rayon::prelude::*;
 
-use crate::work::launch_task;
+use crate::work::launch_blocking;
 
 const MAX_FILE_BYTES: u64 = 4 * 1024 * 1024;
 
@@ -1034,7 +1034,7 @@ pub async fn grep(
 		ThreadsafeFunction<GrepMatch>,
 	>,
 ) -> Result<GrepResult> {
-	launch_task(move || grep_sync(options, on_match.as_ref()))
+	launch_blocking(move || grep_sync(options, on_match.as_ref()))
 		.wait()
 		.await
 }
@@ -1156,5 +1156,7 @@ fn fuzzy_find_sync(options: FuzzyFindOptions) -> Result<FuzzyFindResult> {
 /// Matching file and directory entries.
 #[napi(js_name = "fuzzyFind")]
 pub async fn fuzzy_find(options: FuzzyFindOptions) -> Result<FuzzyFindResult> {
-	launch_task(move || fuzzy_find_sync(options)).wait().await
+	launch_blocking(move || fuzzy_find_sync(options))
+		.wait()
+		.await
 }

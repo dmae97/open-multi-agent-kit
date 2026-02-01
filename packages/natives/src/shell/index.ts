@@ -38,6 +38,6 @@ export async function executeShell(
  *
  * @param executionId - The execution ID to abort
  */
-export function abortShellExecution(executionId: string): void {
+export function abortShellExecution(executionId: number): void {
 	native.abortShellExecution(executionId);
 }

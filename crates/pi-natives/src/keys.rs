@@ -275,10 +275,8 @@ pub fn parse_kitty_sequence_napi(data: String) -> Option<ParsedKittyResult> {
 // =============================================================================
 
 struct ParsedKeyId<'a> {
-	key:   &'a str,
-	ctrl:  bool,
-	shift: bool,
-	alt:   bool,
+	key:      &'a str,
+	modifier: u32,
 }
 
 fn parse_key_id(key_id: &str) -> Option<ParsedKeyId<'_>> {
@@ -297,27 +295,35 @@ fn parse_key_id(key_id: &str) -> Option<ParsedKeyId<'_>> {
 		(s, false)
 	};
 
-	let mut ctrl = false;
-	let mut shift = false;
-	let mut alt = false;
+	let mut modifier = 0;
 	let mut key: Option<&str> = if forced_key_plus { Some("+") } else { None };
 
 	for part in prefix.split('+') {
 		let p = part.trim();
-		if p.is_empty() {
+		let [c0, ..] = p.as_bytes() else {
 			continue;
-		}
-		if p.eq_ignore_ascii_case("ctrl") || p.eq_ignore_ascii_case("control") {
-			ctrl = true;
-			continue;
-		}
-		if p.eq_ignore_ascii_case("shift") {
-			shift = true;
-			continue;
-		}
-		if p.eq_ignore_ascii_case("alt") || p.eq_ignore_ascii_case("option") {
-			alt = true;
-			continue;
+		};
+
+		match c0 {
+			b'c' | b'C' => {
+				if p.eq_ignore_ascii_case("ctrl") {
+					modifier |= MOD_CTRL;
+					continue;
+				}
+			},
+			b's' | b'S' => {
+				if p.eq_ignore_ascii_case("shift") {
+					modifier |= MOD_SHIFT;
+					continue;
+				}
+			},
+			b'a' | b'A' => {
+				if p.eq_ignore_ascii_case("alt") {
+					modifier |= MOD_ALT;
+					continue;
+				}
+			},
+			_ => {},
 		}
 
 		// Treat this as the key token (last non-modifier wins)
@@ -332,7 +338,7 @@ fn parse_key_id(key_id: &str) -> Option<ParsedKeyId<'_>> {
 		key = "esc";
 	}
 
-	Some(ParsedKeyId { key, ctrl, shift, alt })
+	Some(ParsedKeyId { key, modifier })
 }
 
 #[inline]
@@ -343,12 +349,9 @@ const fn raw_ctrl_char(letter: u8) -> u8 {
 /// CTRL+symbol legacy mappings
 const fn ctrl_symbol_to_byte(symbol: u8) -> Option<u8> {
 	match symbol {
-		b'@' => Some(0x00),
-		b'[' => Some(0x1b),
-		b'\\' => Some(0x1c),
-		b']' => Some(0x1d),
-		b'^' => Some(0x1e),
-		b'_' | b'-' => Some(0x1f),
+		// 0x40 -> 0, 0x5b|0x5c|..-> 0x1b|0x1c|..
+		b'@' | b'[' | b'\\' | b']' | b'^' | b'_' => Some(symbol - 0x40),
+		b'-' => Some(0x1f),
 		_ => None,
 	}
 }
@@ -393,25 +396,9 @@ fn parse_modify_other_keys(bytes: &[u8]) -> Option<(u32, i32)> {
 }
 
 fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) -> bool {
-	let Some(parsed_id) = parse_key_id(key_id) else {
+	let Some(ParsedKeyId { key, modifier }) = parse_key_id(key_id) else {
 		return false;
 	};
-
-	let ctrl = parsed_id.ctrl;
-	let shift = parsed_id.shift;
-	let alt = parsed_id.alt;
-	let key = parsed_id.key;
-
-	let mut modifier: u32 = 0;
-	if shift {
-		modifier |= MOD_SHIFT;
-	}
-	if alt {
-		modifier |= MOD_ALT;
-	}
-	if ctrl {
-		modifier |= MOD_CTRL;
-	}
 
 	// Parse Kitty once (avoid repeated parsing in branches).
 	let kitty_parsed = parse_kitty_sequence(bytes);
@@ -454,11 +441,11 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 
 	if key.eq_ignore_ascii_case("space") {
 		// legacy ctrl+space
-		if !alt && ctrl && !shift && bytes == b"\x00" {
+		if modifier == MOD_CTRL && bytes == b"\x00" {
 			return true;
 		}
 		// legacy alt+space (only reliable when not disambiguated)
-		if !ctrl && alt && !shift && !kitty_protocol_active && bytes == b"\x1b " {
+		if modifier == MOD_ALT && !kitty_protocol_active && bytes == b"\x1b " {
 			return true;
 		}
 
@@ -470,7 +457,7 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 
 	if key.eq_ignore_ascii_case("tab") {
 		// shift+tab classic
-		if shift && !ctrl && !alt {
+		if modifier == MOD_SHIFT {
 			return bytes == b"\x1b[Z"
 				|| kitty_matches(CP_TAB, MOD_SHIFT)
 				|| mok_matches(CP_TAB, MOD_SHIFT);
@@ -478,7 +465,7 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 
 		// alt+tab stays ESC+TAB in many legacy/kitty-disambiguate scenarios (Tab is an
 		// exception).
-		if alt && !ctrl && !shift && bytes == b"\x1b\t" {
+		if modifier == MOD_ALT && bytes == b"\x1b\t" {
 			return true;
 		}
 
@@ -495,7 +482,7 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 	if key.eq_ignore_ascii_case("enter") || key.eq_ignore_ascii_case("return") {
 		// alt+enter is commonly ESC + CR even when kitty disambiguation is on (Enter is
 		// an exception).
-		if alt && !ctrl && !shift && bytes == b"\x1b\r" {
+		if modifier == MOD_ALT && bytes == b"\x1b\r" {
 			return true;
 		}
 
@@ -519,7 +506,7 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 	if key.eq_ignore_ascii_case("backspace") {
 		// alt+backspace is commonly ESC + (DEL or BS) even in kitty disambiguate mode
 		// (Backspace is an exception).
-		if alt && !ctrl && !shift {
+		if modifier == MOD_ALT {
 			return bytes == b"\x1b\x7f"
 				|| bytes == b"\x1b\x08"
 				|| kitty_matches(CP_BACKSPACE, MOD_ALT)
@@ -590,7 +577,7 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 	}
 
 	if key.eq_ignore_ascii_case("up") {
-		if alt && !ctrl && !shift {
+		if modifier == MOD_ALT {
 			return bytes == b"\x1bp" || kitty_matches(ARROW_UP, MOD_ALT);
 		}
 		if modifier == 0 {
@@ -601,7 +588,7 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 	}
 
 	if key.eq_ignore_ascii_case("down") {
-		if alt && !ctrl && !shift {
+		if modifier == MOD_ALT {
 			return bytes == b"\x1bn" || kitty_matches(ARROW_DOWN, MOD_ALT);
 		}
 		if modifier == 0 {
@@ -612,13 +599,13 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 	}
 
 	if key.eq_ignore_ascii_case("left") {
-		if alt && !ctrl && !shift {
+		if modifier == MOD_ALT {
 			return bytes == b"\x1b[1;3D"
 				|| (!kitty_protocol_active && bytes == b"\x1bB")
 				|| bytes == b"\x1bb"
 				|| kitty_matches(ARROW_LEFT, MOD_ALT);
 		}
-		if ctrl && !alt && !shift {
+		if modifier == MOD_CTRL {
 			return bytes == b"\x1b[1;5D"
 				|| matches_legacy_modifier_sequence(bytes, "left", MOD_CTRL)
 				|| kitty_matches(ARROW_LEFT, MOD_CTRL);
@@ -631,13 +618,13 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 	}
 
 	if key.eq_ignore_ascii_case("right") {
-		if alt && !ctrl && !shift {
+		if modifier == MOD_ALT {
 			return bytes == b"\x1b[1;3C"
 				|| (!kitty_protocol_active && bytes == b"\x1bF")
 				|| bytes == b"\x1bf"
 				|| kitty_matches(ARROW_RIGHT, MOD_ALT);
 		}
-		if ctrl && !alt && !shift {
+		if modifier == MOD_CTRL {
 			return bytes == b"\x1b[1;5C"
 				|| matches_legacy_modifier_sequence(bytes, "right", MOD_CTRL)
 				|| kitty_matches(ARROW_RIGHT, MOD_CTRL);
@@ -650,32 +637,12 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 	}
 
 	// Function keys (now allow modifiers via CSI forms too)
-	let f_code = if key.eq_ignore_ascii_case("f1") {
-		Some(FUNC_F1)
-	} else if key.eq_ignore_ascii_case("f2") {
-		Some(FUNC_F2)
-	} else if key.eq_ignore_ascii_case("f3") {
-		Some(FUNC_F3)
-	} else if key.eq_ignore_ascii_case("f4") {
-		Some(FUNC_F4)
-	} else if key.eq_ignore_ascii_case("f5") {
-		Some(FUNC_F5)
-	} else if key.eq_ignore_ascii_case("f6") {
-		Some(FUNC_F6)
-	} else if key.eq_ignore_ascii_case("f7") {
-		Some(FUNC_F7)
-	} else if key.eq_ignore_ascii_case("f8") {
-		Some(FUNC_F8)
-	} else if key.eq_ignore_ascii_case("f9") {
-		Some(FUNC_F9)
-	} else if key.eq_ignore_ascii_case("f10") {
-		Some(FUNC_F10)
-	} else if key.eq_ignore_ascii_case("f11") {
-		Some(FUNC_F11)
-	} else if key.eq_ignore_ascii_case("f12") {
-		Some(FUNC_F12)
-	} else {
-		None
+	let f_code = match key.as_bytes() {
+		[b'f' | b'F', n @ b'1'..=b'9'] => Some(FUNC_F1 + (n - b'1') as i32),
+		[b'f' | b'F', b'1', b'0'] => Some(FUNC_F10),
+		[b'f' | b'F', b'1', b'1'] => Some(FUNC_F11),
+		[b'f' | b'F', b'1', b'2'] => Some(FUNC_F12),
+		_ => None,
 	};
 
 	if let Some(cp) = f_code {
@@ -686,32 +653,28 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 	}
 
 	// Single-character keys: accept any ASCII graphic char (0x21..=0x7E).
-	if key.len() == 1 {
-		let mut ch = key.as_bytes()[0];
-		if ch.is_ascii_uppercase() {
-			ch = ch.to_ascii_lowercase();
-		}
-
+	if let [ch] = key.as_bytes() {
 		if !ch.is_ascii_graphic() {
 			return false;
 		}
 
+		let ch = ch.to_ascii_lowercase();
 		let codepoint = ch as i32;
 		let is_letter = ch.is_ascii_lowercase();
 
 		// ctrl+alt+letter in legacy mode
-		if ctrl && alt && !shift && !kitty_protocol_active && is_letter {
+		if modifier == (MOD_CTRL | MOD_ALT) && !kitty_protocol_active && is_letter {
 			let ctrl_char = raw_ctrl_char(ch);
 			return bytes.len() == 2 && bytes[0] == 0x1b && bytes[1] == ctrl_char;
 		}
 
 		// alt+letter in legacy mode
-		if alt && !ctrl && !shift && !kitty_protocol_active && is_letter {
+		if modifier == MOD_ALT && !kitty_protocol_active && is_letter {
 			return bytes.len() == 2 && bytes[0] == 0x1b && bytes[1] == ch;
 		}
 
 		// ctrl+key
-		if ctrl && !shift && !alt {
+		if modifier == MOD_CTRL {
 			if is_letter {
 				let raw = raw_ctrl_char(ch);
 				if bytes.len() == 1 && bytes[0] == raw {
@@ -722,8 +685,7 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 
 			// ctrl+symbol legacy mapping (layout dependent)
 			if let Some(legacy_ctrl) = ctrl_symbol_to_byte(ch)
-				&& bytes.len() == 1
-				&& bytes[0] == legacy_ctrl
+				&& bytes == &[legacy_ctrl]
 			{
 				return true;
 			}
@@ -732,13 +694,13 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 		}
 
 		// ctrl+shift
-		if ctrl && shift && !alt {
+		if modifier == (MOD_CTRL | MOD_SHIFT) {
 			return kitty_matches(codepoint, MOD_SHIFT + MOD_CTRL)
 				|| mok_matches(codepoint, MOD_SHIFT + MOD_CTRL);
 		}
 
 		// shift+key (letters can match uppercase in plain legacy mode)
-		if shift && !ctrl && !alt {
+		if modifier == MOD_SHIFT {
 			if is_letter && bytes.len() == 1 && bytes[0] == ch.to_ascii_uppercase() {
 				return true;
 			}
