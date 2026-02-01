@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [10.0.0] - 2026-02-01
 ### Added
 
 - Added `shell` subcommand for interactive shell console testing with brush-core

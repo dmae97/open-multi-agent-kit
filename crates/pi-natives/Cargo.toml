@@ -18,7 +18,7 @@ tokio-util = "0.7.16"
 napi = { version = "3", features = ["napi10", "tokio_rt", "tokio_time"] }
 napi-derive = "3"
 brush-core = { version = "0.4.0", path = "../brush-core-vendored" }
-brush-builtins = "0.1.0"
+brush-builtins = { version = "0.1.0", path = "../brush-builtins-vendored" }
 parking_lot = "0.12.5"
 clap = { version = "4", features = ["derive"] }
 os_pipe = "1"

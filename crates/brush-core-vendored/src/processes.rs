@@ -97,7 +97,7 @@ impl ChildProcess {
             unsafe {
                 #[expect(clippy::cast_sign_loss)]
                 let handle = OpenProcess(PROCESS_TERMINATE, 0, pid as u32);
-                if handle != 0 {
+                if !handle.is_null() {
                     let _ = TerminateProcess(handle, 1);
                     CloseHandle(handle);
                 }
