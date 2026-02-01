@@ -12,7 +12,7 @@ Executes a bash command in a shell session for terminal operations like git, bun
 
 <output>
 Returns stdout, stderr, and exit code from command execution.
-- Output truncated after 50KB or 2000 lines (whichever comes first); use `| head -n 50` for large output
+- Output truncated after 50KB or 2000 lines (whichever comes first); use `head` parameter to limit output
 - If output is truncated, full output is stored under $ARTIFACTS and referenced as `artifact://<id>` in metadata
 - Exit codes shown on non-zero exit; stderr captured
 </output>
@@ -25,3 +25,13 @@ Do NOT use Bash for these operations—specialized tools exist:
 - Content-addressed edits → Edit tool
 - Writing new files → Write tool
 </critical>
+
+<avoid>
+Do NOT pipe through `head` or `tail`—use the `head` and `tail` parameters instead:
+- `command | head -n 50` → use `head: 50` parameter
+- `command | tail -n 100` → use `tail: 100` parameter
+
+The pipe pattern breaks streaming output and prevents artifact storage.
+
+Do NOT use `2>&1`—stdout and stderr are already merged.
+</avoid>

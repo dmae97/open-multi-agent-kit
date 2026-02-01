@@ -1,8 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added `head` and `tail` parameters to bash tool to limit output lines without breaking streaming
+- Added automatic normalization of bash commands to extract `| head -n N` and `| tail -n N` patterns into native parameters
 - Added `maxResults` parameter to find tool to limit result set at the native layer
 - Added context-structure template showing required sections (Goal, Constraints, Existing Code, API Contract) with examples of good vs bad context
 - Added explicit dependency test: 'Can agent B write correct code without seeing agent A's output?' to determine sequencing
@@ -13,6 +16,7 @@
 
 ### Changed
 
+- Updated bash tool documentation to recommend using `head` and `tail` parameters instead of piping through head/tail commands
 - Updated binary build process to exclude worker files from compilation, reducing binary size
 - Modified update mechanism to download and install native addon alongside CLI binary for platform-specific functionality
 - Updated find tool to emit streaming match updates via callback, allowing real-time progress feedback during file searches

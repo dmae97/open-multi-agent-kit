@@ -12,6 +12,7 @@ import bashDescription from "../prompts/tools/bash.md" with { type: "text" };
 import { renderOutputBlock, renderStatusLine } from "../tui";
 import type { ToolSession } from ".";
 import { checkBashInterception, checkSimpleLsInterception } from "./bash-interceptor";
+import { applyHeadTail, normalizeBashCommand } from "./bash-normalize";
 import type { OutputMeta } from "./output-meta";
 import { allocateOutputArtifact, createTailBuffer } from "./output-utils";
 import { resolveToCwd } from "./path-utils";
@@ -26,6 +27,8 @@ const bashSchema = Type.Object({
 	command: Type.String({ description: "Command to execute" }),
 	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (default: 300)" })),
 	cwd: Type.Optional(Type.String({ description: "Working directory (default: cwd)" })),
+	head: Type.Optional(Type.Number({ description: "Return only first N lines of output" })),
+	tail: Type.Optional(Type.Number({ description: "Return only last N lines of output" })),
 });
 
 export interface BashToolDetails {
@@ -54,11 +57,25 @@ export class BashTool implements AgentTool<typeof bashSchema, BashToolDetails> {
 
 	public async execute(
 		_toolCallId: string,
-		{ command, timeout: rawTimeout = 300, cwd }: { command: string; timeout?: number; cwd?: string },
+		{
+			command: rawCommand,
+			timeout: rawTimeout = 300,
+			cwd,
+			head,
+			tail,
+		}: { command: string; timeout?: number; cwd?: string; head?: number; tail?: number },
 		signal?: AbortSignal,
 		onUpdate?: AgentToolUpdateCallback<BashToolDetails>,
 		ctx?: AgentToolContext,
 	): Promise<AgentToolResult<BashToolDetails>> {
+		// Normalize command: strip head/tail pipes and 2>&1
+		const normalized = normalizeBashCommand(rawCommand);
+		const command = normalized.command;
+
+		// Merge explicit params with extracted ones (explicit takes precedence)
+		const headLines = head ?? normalized.headLines;
+		const tailLines = tail ?? normalized.tailLines;
+
 		// Check interception if enabled and available tools are known
 		if (this.session.settings?.getBashInterceptorEnabled()) {
 			const rules = this.session.settings?.getBashInterceptorRules?.();
@@ -121,7 +138,16 @@ export class BashTool implements AgentTool<typeof bashSchema, BashToolDetails> {
 			throw new ToolError(result.output || "Command aborted");
 		}
 
-		const outputText = result.output || "(no output)";
+		// Apply head/tail filtering if specified
+		let outputText = result.output || "";
+		const headTailResult = applyHeadTail(outputText, headLines, tailLines);
+		if (headTailResult.applied) {
+			outputText = headTailResult.text;
+		}
+		if (!outputText) {
+			outputText = "(no output)";
+		}
+
 		const details: BashToolDetails = {};
 		const resultBuilder = toolResult(details).text(outputText).truncationFromSummary(result, { direction: "tail" });
 
