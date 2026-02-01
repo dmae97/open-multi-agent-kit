@@ -77,6 +77,7 @@ export interface NativeBindings {
 	SamplingFilter: NativeSamplingFilter;
 	PhotonImage: NativePhotonImageConstructor;
 	truncateToWidth(text: string, maxWidth: number, ellipsisKind: number, pad: boolean): string;
+	wrapTextWithAnsi(text: string, width: number): string[];
 	sliceWithWidth(line: string, startCol: number, length: number, strict: boolean): SliceWithWidthResult;
 	visibleWidth(text: string): number;
 	extractSegments(
@@ -178,6 +179,7 @@ function validateNative(bindings: NativeBindings, source: string): void {
 	checkFn("supportsLanguage");
 	checkFn("getSupportedLanguages");
 	checkFn("truncateToWidth");
+	checkFn("wrapTextWithAnsi");
 	checkFn("sliceWithWidth");
 	checkFn("extractSegments");
 	checkFn("matchesKittySequence");

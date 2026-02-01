@@ -1,6 +1,6 @@
 import { sliceWithWidth } from "@oh-my-pi/pi-natives";
 
-export { Ellipsis, extractSegments, sliceWithWidth, truncateToWidth } from "@oh-my-pi/pi-natives";
+export { Ellipsis, extractSegments, sliceWithWidth, truncateToWidth, wrapTextWithAnsi } from "@oh-my-pi/pi-natives";
 
 // Pre-allocated space buffer for padding
 const SPACE_BUFFER = " ".repeat(512);
@@ -82,23 +82,6 @@ export function visibleWidth(str: string): number {
 
 	return width;
 	*/
-}
-
-const WRAP_OPTIONS = { wordWrap: true, hard: true, trim: false } as const;
-
-/**
- * Wrap text with ANSI codes preserved.
- *
- * ONLY does word wrapping - NO padding, NO background colors.
- * Returns lines where each line is <= width visible chars.
- * Active ANSI codes are preserved across line breaks.
- *
- * @param text - Text to wrap (may contain ANSI codes and newlines)
- * @param width - Maximum visible width per line
- * @returns Array of wrapped lines (NOT padded to width)
- */
-export function wrapTextWithAnsi(text: string, width: number): string[] {
-	return Bun.wrapAnsi(text, width, WRAP_OPTIONS).split("\n");
 }
 
 const PUNCTUATION_REGEX = /[(){}[\]<>.,;:'"!?+\-=*/\\|&%^$#@~`]/;

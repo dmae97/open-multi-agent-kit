@@ -84,6 +84,7 @@ export {
 	type SliceWithWidthResult,
 	sliceWithWidth,
 	truncateToWidth,
+	wrapTextWithAnsi,
 	visibleWidth,
 } from "./text/index";
 

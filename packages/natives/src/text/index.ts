@@ -43,6 +43,17 @@ export function truncateToWidth(
 }
 
 /**
+ * Wrap text to a visible width, preserving ANSI escape codes across line breaks.
+ *
+ * @param text - Text to wrap (may contain ANSI codes and newlines)
+ * @param width - Maximum visible width per line
+ * @returns Array of wrapped lines (NOT padded to width)
+ */
+export function wrapTextWithAnsi(text: string, width: number): string[] {
+	return native.wrapTextWithAnsi(text, width);
+}
+
+/**
  * Measure the visible width of text (excluding ANSI codes).
  */
 export function visibleWidth(text: string): number {

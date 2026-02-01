@@ -443,6 +443,291 @@ fn visible_width_u16(data: &[u16]) -> usize {
 }
 
 // ============================================================================
+// wrapTextWithAnsi
+// ============================================================================
+
+#[inline]
+fn write_active_codes(state: &AnsiState, out: &mut Vec<u16>) {
+	if !state.is_empty() {
+		state.write_restore_u16(out);
+	}
+}
+
+#[inline]
+fn write_line_end_reset(state: &AnsiState, out: &mut Vec<u16>) {
+	if state.attrs & ATTR_UNDERLINE != 0 {
+		out.extend_from_slice(&[ESC, b'[' as u16, b'2' as u16, b'4' as u16, b'm' as u16]);
+	}
+}
+
+fn update_state_from_text(data: &[u16], state: &mut AnsiState) {
+	let mut i = 0usize;
+	while i < data.len() {
+		if data[i] == ESC {
+			if let Some(seq_len) = ansi_seq_len_u16(data, i) {
+				let seq = &data[i..i + seq_len];
+				if is_sgr_u16(seq) {
+					state.apply_sgr_u16(&seq[2..seq_len - 1]);
+				}
+				i += seq_len;
+				continue;
+			}
+		}
+		i += 1;
+	}
+}
+
+fn token_is_whitespace(token: &[u16]) -> bool {
+	let mut i = 0usize;
+	while i < token.len() {
+		if token[i] == ESC {
+			if let Some(seq_len) = ansi_seq_len_u16(token, i) {
+				i += seq_len;
+				continue;
+			}
+		}
+		if token[i] != b' ' as u16 {
+			return false;
+		}
+		i += 1;
+	}
+	true
+}
+
+fn trim_end_spaces_in_place(line: &mut Vec<u16>) {
+	while let Some(&last) = line.last() {
+		if last == b' ' as u16 {
+			line.pop();
+		} else {
+			break;
+		}
+	}
+}
+
+fn split_into_tokens_with_ansi(line: &[u16]) -> Vec<Vec<u16>> {
+	let mut tokens: Vec<Vec<u16>> = Vec::new();
+	let mut current: Vec<u16> = Vec::new();
+	let mut pending_ansi: Vec<u16> = Vec::new();
+	let mut in_whitespace = false;
+	let mut i = 0usize;
+
+	while i < line.len() {
+		if line[i] == ESC {
+			if let Some(seq_len) = ansi_seq_len_u16(line, i) {
+				pending_ansi.extend_from_slice(&line[i..i + seq_len]);
+				i += seq_len;
+				continue;
+			}
+		}
+
+		let ch = line[i];
+		let char_is_space = ch == b' ' as u16;
+		if char_is_space != in_whitespace && !current.is_empty() {
+			tokens.push(current);
+			current = Vec::new();
+		}
+
+		if !pending_ansi.is_empty() {
+			current.extend_from_slice(&pending_ansi);
+			pending_ansi.clear();
+		}
+
+		in_whitespace = char_is_space;
+		current.push(ch);
+		i += 1;
+	}
+
+	if !pending_ansi.is_empty() {
+		current.extend_from_slice(&pending_ansi);
+	}
+
+	if !current.is_empty() {
+		tokens.push(current);
+	}
+
+	tokens
+}
+
+fn break_long_word(word: &[u16], width: usize, state: &mut AnsiState) -> Vec<Vec<u16>> {
+	let mut lines: Vec<Vec<u16>> = Vec::new();
+	let mut current_line: Vec<u16> = Vec::new();
+	write_active_codes(state, &mut current_line);
+	let mut current_width = 0usize;
+	let mut i = 0usize;
+
+	while i < word.len() {
+		if word[i] == ESC {
+			if let Some(seq_len) = ansi_seq_len_u16(word, i) {
+				let seq = &word[i..i + seq_len];
+				current_line.extend_from_slice(seq);
+				if is_sgr_u16(seq) {
+					state.apply_sgr_u16(&seq[2..seq_len - 1]);
+				}
+				i += seq_len;
+				continue;
+			}
+		}
+
+		let start = i;
+		let mut is_ascii = true;
+		while i < word.len() && word[i] != ESC {
+			if word[i] > 0x7f {
+				is_ascii = false;
+			}
+			i += 1;
+		}
+		let seg = &word[start..i];
+
+		if is_ascii {
+			for &u in seg {
+				let gw = ascii_cell_width_u16(u);
+				if current_width + gw > width {
+					write_line_end_reset(state, &mut current_line);
+					lines.push(current_line);
+					current_line = Vec::new();
+					write_active_codes(state, &mut current_line);
+					current_width = 0;
+				}
+				current_line.push(u);
+				current_width += gw;
+			}
+		} else {
+			let _ = for_each_grapheme_u16_slow(seg, |gu16, gw| {
+				if current_width + gw > width {
+					write_line_end_reset(state, &mut current_line);
+					lines.push(std::mem::take(&mut current_line));
+					write_active_codes(state, &mut current_line);
+					current_width = 0;
+				}
+				current_line.extend_from_slice(gu16);
+				current_width += gw;
+				true
+			});
+		}
+	}
+
+	if !current_line.is_empty() {
+		lines.push(current_line);
+	}
+
+	lines
+}
+
+fn wrap_single_line(line: &[u16], width: usize) -> Vec<Vec<u16>> {
+	if line.is_empty() {
+		return vec![Vec::new()];
+	}
+
+	if visible_width_u16(line) <= width {
+		return vec![line.to_vec()];
+	}
+
+	let tokens = split_into_tokens_with_ansi(line);
+	let mut wrapped: Vec<Vec<u16>> = Vec::new();
+	let mut state = AnsiState::new();
+	let mut current_line: Vec<u16> = Vec::new();
+	let mut current_width = 0usize;
+
+	for token in tokens {
+		let token_width = visible_width_u16(&token);
+		let is_whitespace = token_is_whitespace(&token);
+
+		if token_width > width && !is_whitespace {
+			if !current_line.is_empty() {
+				write_line_end_reset(&state, &mut current_line);
+				wrapped.push(current_line);
+				current_line = Vec::new();
+				current_width = 0;
+			}
+
+			let mut broken = break_long_word(&token, width, &mut state);
+			if let Some(last) = broken.pop() {
+				wrapped.extend(broken);
+				current_line = last;
+				current_width = visible_width_u16(&current_line);
+			}
+			continue;
+		}
+
+		let total_needed = current_width + token_width;
+		if total_needed > width && current_width > 0 {
+			let mut line_to_wrap = current_line;
+			trim_end_spaces_in_place(&mut line_to_wrap);
+			write_line_end_reset(&state, &mut line_to_wrap);
+			wrapped.push(line_to_wrap);
+
+			current_line = Vec::new();
+			write_active_codes(&state, &mut current_line);
+			if is_whitespace {
+				current_width = 0;
+			} else {
+				current_line.extend_from_slice(&token);
+				current_width = token_width;
+			}
+		} else {
+			current_line.extend_from_slice(&token);
+			current_width += token_width;
+		}
+
+		update_state_from_text(&token, &mut state);
+	}
+
+	if !current_line.is_empty() {
+		wrapped.push(current_line);
+	}
+
+	for line in &mut wrapped {
+		trim_end_spaces_in_place(line);
+	}
+
+	if wrapped.is_empty() {
+		wrapped.push(Vec::new());
+	}
+
+	wrapped
+}
+
+fn wrap_text_with_ansi_impl(text: &[u16], width: usize) -> Vec<Vec<u16>> {
+	if text.is_empty() {
+		return vec![Vec::new()];
+	}
+
+	let mut result: Vec<Vec<u16>> = Vec::new();
+	let mut state = AnsiState::new();
+	let mut line_start = 0usize;
+
+	for i in 0..=text.len() {
+		if i == text.len() || text[i] == b'\n' as u16 {
+			let line = &text[line_start..i];
+			let mut line_with_prefix: Vec<u16> = Vec::new();
+			if !result.is_empty() {
+				write_active_codes(&state, &mut line_with_prefix);
+			}
+			line_with_prefix.extend_from_slice(line);
+
+			let wrapped = wrap_single_line(&line_with_prefix, width);
+			result.extend(wrapped);
+			update_state_from_text(line, &mut state);
+			line_start = i + 1;
+		}
+	}
+
+	if result.is_empty() {
+		result.push(Vec::new());
+	}
+
+	result
+}
+
+/// Wrap text to a visible width, preserving ANSI escape codes across line breaks.
+#[napi(js_name = "wrapTextWithAnsi")]
+pub fn wrap_text_with_ansi(text: JsString, width: u32) -> Result<Vec<Utf16String>> {
+	let text_u16 = text.into_utf16()?;
+	let lines = wrap_text_with_ansi_impl(text_u16.as_slice(), width as usize);
+	Ok(lines.into_iter().map(build_utf16_string).collect())
+}
+
+// ============================================================================
 // truncateToWidth
 // ============================================================================
 
@@ -955,5 +1240,17 @@ mod tests {
 		let (w, exceeded) = visible_width_u16_up_to(&data, 10);
 		assert!(exceeded);
 		assert!(w > 10);
+	}
+
+	#[test]
+	fn test_wrap_text_with_ansi_preserves_color() {
+		let data = to_u16("\x1b[38;2;156;163;176mhello world\x1b[0m");
+		let lines = wrap_text_with_ansi_impl(&data, 5);
+		assert_eq!(lines.len(), 2);
+		let first = String::from_utf16_lossy(&lines[0]);
+		let second = String::from_utf16_lossy(&lines[1]);
+		assert!(first.starts_with("\x1b[38;2;156;163;176m"));
+		assert!(second.starts_with("\x1b[38;2;156;163;176m"));
+		assert!(second.contains("world"));
 	}
 }
