@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Changed persistent shell from opt-out to opt-in (default: off) for improved reliability; enable via Settings > Bash > Persistent shell or `OMP_SHELL_PERSIST=1`
+- Added new "Bash" settings tab grouping shell-related settings (force basic shell, persistent shell, interceptor, intercept ls)
+
 ## [9.5.0] - 2026-02-01
 ### Added
 

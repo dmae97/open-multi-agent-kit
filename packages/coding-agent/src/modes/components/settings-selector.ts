@@ -116,6 +116,7 @@ type TabId = string;
 const SETTINGS_TABS: Tab[] = [
 	{ id: "behavior", label: "Behavior" },
 	{ id: "tools", label: "Tools" },
+	{ id: "bash", label: "Bash" },
 	{ id: "display", label: "Display" },
 	{ id: "ttsr", label: "TTSR" },
 	{ id: "status", label: "Status" },

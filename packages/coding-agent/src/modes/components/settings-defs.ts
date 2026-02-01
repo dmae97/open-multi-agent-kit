@@ -255,33 +255,6 @@ export const SETTINGS_DEFS: SettingDef[] = [
 	// Tools tab - Tool-specific settings
 	// ═══════════════════════════════════════════════════════════════════════════
 	{
-		id: "bashInterceptor",
-		tab: "tools",
-		type: "boolean",
-		label: "Bash interceptor",
-		description: "Block shell commands that have dedicated tools (grep, cat, etc.)",
-		get: sm => sm.getBashInterceptorEnabled(),
-		set: (sm, v) => sm.setBashInterceptorEnabled(v),
-	},
-	{
-		id: "shellForceBasic",
-		tab: "tools",
-		type: "boolean",
-		label: "Force basic shell",
-		description: "Use bash/sh even if your default shell is different",
-		get: sm => sm.getShellForceBasic(),
-		set: (sm, v) => sm.setShellForceBasic(v),
-	},
-	{
-		id: "bashInterceptorSimpleLs",
-		tab: "tools",
-		type: "boolean",
-		label: "Intercept simple ls",
-		description: "Intercept bare ls commands (when bash interceptor is enabled)",
-		get: sm => sm.getBashInterceptorSimpleLsEnabled(),
-		set: (sm, v) => sm.setBashInterceptorSimpleLsEnabled(v),
-	},
-	{
 		id: "pythonToolMode",
 		tab: "tools",
 		type: "enum",
@@ -438,6 +411,46 @@ export const SETTINGS_DEFS: SettingDef[] = [
 			{ value: "openai", label: "OpenAI", description: "Use OpenAI-compatible API (api.kimi.com)" },
 			{ value: "anthropic", label: "Anthropic", description: "Use Anthropic-compatible API (api.moonshot.ai)" },
 		],
+	},
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// Bash tab - Shell/Bash settings
+	// ═══════════════════════════════════════════════════════════════════════════
+	{
+		id: "shellForceBasic",
+		tab: "bash",
+		type: "boolean",
+		label: "Force basic shell",
+		description: "Use bash/sh even if your default shell is different",
+		get: sm => sm.getShellForceBasic(),
+		set: (sm, v) => sm.setShellForceBasic(v),
+	},
+	{
+		id: "bashPersistentShell",
+		tab: "bash",
+		type: "boolean",
+		label: "Persistent shell",
+		description: "Reuse shell session across commands (experimental, can get stuck)",
+		get: sm => sm.getBashPersistentShell(),
+		set: (sm, v) => sm.setBashPersistentShell(v),
+	},
+	{
+		id: "bashInterceptor",
+		tab: "bash",
+		type: "boolean",
+		label: "Interceptor",
+		description: "Block shell commands that have dedicated tools (grep, cat, etc.)",
+		get: sm => sm.getBashInterceptorEnabled(),
+		set: (sm, v) => sm.setBashInterceptorEnabled(v),
+	},
+	{
+		id: "bashInterceptorSimpleLs",
+		tab: "bash",
+		type: "boolean",
+		label: "Intercept ls",
+		description: "Intercept bare ls commands (when interceptor is enabled)",
+		get: sm => sm.getBashInterceptorSimpleLsEnabled(),
+		set: (sm, v) => sm.setBashInterceptorSimpleLsEnabled(v),
 	},
 
 	// ═══════════════════════════════════════════════════════════════════════════

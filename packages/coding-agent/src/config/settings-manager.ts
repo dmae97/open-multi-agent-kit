@@ -139,6 +139,11 @@ export interface CommitSettings {
 	changelogMaxDiffChars?: number;
 }
 
+export interface BashSettings {
+	/** Use persistent shell session instead of fresh shell per command (default: false) */
+	persistentShell?: boolean;
+}
+
 export interface EditSettings {
 	fuzzyMatch?: boolean; // default: true (accept high-confidence fuzzy matches for whitespace/indentation)
 	fuzzyThreshold?: number; // default: 0.95 (similarity threshold for fuzzy matching)
@@ -242,6 +247,7 @@ export interface Settings {
 	lsp?: LspSettings;
 	python?: PythonSettings;
 	commit?: CommitSettings;
+	bash?: BashSettings;
 	edit?: EditSettings;
 	ttsr?: TtsrSettings;
 	todoCompletion?: TodoCompletionSettings;
@@ -331,6 +337,7 @@ const DEFAULT_SETTINGS: Settings = {
 	mcp: { enableProjectConfig: true },
 	lsp: { formatOnWrite: false, diagnosticsOnWrite: true, diagnosticsOnEdit: false },
 	python: { toolMode: "both", kernelMode: "session", sharedGateway: true },
+	bash: { persistentShell: false },
 	edit: { fuzzyMatch: true, fuzzyThreshold: 0.95, streamingAbort: false },
 	ttsr: { enabled: true, contextMode: "discard", repeatMode: "once", repeatGap: 10 },
 	providers: { webSearch: "auto", image: "auto" },
@@ -1441,6 +1448,19 @@ export class SettingsManager {
 		}
 		this.globalSettings.python.sharedGateway = enabled;
 		this.markModified("python", "sharedGateway");
+		await this.save();
+	}
+
+	getBashPersistentShell(): boolean {
+		return this.settings.bash?.persistentShell ?? false;
+	}
+
+	async setBashPersistentShell(enabled: boolean): Promise<void> {
+		if (!this.globalSettings.bash) {
+			this.globalSettings.bash = {};
+		}
+		this.globalSettings.bash.persistentShell = enabled;
+		this.markModified("bash", "persistentShell");
 		await this.save();
 	}
 

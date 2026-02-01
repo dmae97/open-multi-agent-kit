@@ -34,10 +34,11 @@ export interface BashResult {
 }
 
 export async function executeBash(command: string, options?: BashExecutorOptions): Promise<BashResult> {
-	const { shell, args, env, prefix } = await SettingsManager.getGlobalShellConfig();
+	const settings = await SettingsManager.acquire();
+	const { shell, args, env, prefix } = settings.getShellConfig();
 	const snapshotPath = await getOrCreateSnapshot(shell, env);
 
-	if (shouldUsePersistentShell(shell)) {
+	if (shouldUsePersistentShell(settings.getBashPersistentShell())) {
 		return await executeShellCommand({ shell, env, prefix, snapshotPath }, command, {
 			cwd: options?.cwd,
 			timeout: options?.timeout,
@@ -52,19 +53,18 @@ export async function executeBash(command: string, options?: BashExecutorOptions
 	return await executeBashOnce(command, options, { shell, args, env, prefix, snapshotPath });
 }
 
-function shouldUsePersistentShell(shell: string): boolean {
+/**
+ * Determine whether to use persistent shell sessions.
+ * Priority: OMP_SHELL_PERSIST env var > settings > default (false)
+ */
+function shouldUsePersistentShell(settingValue: boolean): boolean {
+	// Env var takes precedence (for debugging/override)
 	const flag = parseEnvFlag(process.env.OMP_SHELL_PERSIST);
 	if (flag !== undefined) return flag;
+	// Windows never uses persistent shell (too unreliable)
 	if (process.platform === "win32") return false;
-	const normalized = shell.toLowerCase();
-	return (
-		normalized.includes("bash") ||
-		normalized.includes("zsh") ||
-		normalized.includes("fish") ||
-		normalized.endsWith("/sh") ||
-		normalized.endsWith("\\\\sh") ||
-		normalized.endsWith("sh")
-	);
+	// Use setting value (defaults to false)
+	return settingValue;
 }
 
 function parseEnvFlag(value: string | undefined): boolean | undefined {
