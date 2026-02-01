@@ -385,7 +385,8 @@ async function buildSessionOptions(
 			process.exit(1);
 		}
 		options.model = model;
-		settings.setModelRole("default", `${model.provider}/${model.id}`);
+		const currentRoles = settings.get("modelRoles") as Record<string, string>;
+		settings.override("modelRoles", { ...currentRoles, default: `${model.provider}/${model.id}` });
 	} else if (scopedModels.length > 0 && !parsed.continue && !parsed.resume) {
 		const remembered = settings.getModelRole("default");
 		if (remembered) {
@@ -637,9 +638,10 @@ export async function main(args: string[]) {
 	const planModel = parsed.plan ?? process.env.OMP_PLAN_MODEL;
 	if (smolModel || slowModel || planModel) {
 		const currentRoles = settings.get("modelRoles") as Record<string, string>;
-		if (smolModel) settings.override("modelRoles", { ...currentRoles, smol: smolModel });
-		if (slowModel) settings.override("modelRoles", { ...currentRoles, slow: slowModel });
-		if (planModel) settings.override("modelRoles", { ...currentRoles, plan: planModel });
+		if (smolModel) currentRoles.smol = smolModel;
+		if (slowModel) currentRoles.slow = slowModel;
+		if (planModel) currentRoles.plan = planModel;
+		settings.override("modelRoles", currentRoles);
 	}
 
 	await initTheme(settings.get("theme"), isInteractive, settings.get("symbolPreset"), settings.get("colorBlindMode"));
