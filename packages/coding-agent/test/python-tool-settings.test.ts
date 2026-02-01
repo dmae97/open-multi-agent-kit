@@ -2,35 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { type SettingPath, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import * as pythonExecutor from "@oh-my-pi/pi-coding-agent/ipy/executor";
 import * as pythonKernel from "@oh-my-pi/pi-coding-agent/ipy/kernel";
 import { createTools, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 import { PythonTool } from "@oh-my-pi/pi-coding-agent/tools/python";
 
-function createSettings(overrides?: Partial<ToolSession["settings"]>): ToolSession["settings"] {
-	return {
-		getImageAutoResize: () => true,
-		getLspFormatOnWrite: () => false,
-		getLspDiagnosticsOnWrite: () => true,
-		getLspDiagnosticsOnEdit: () => false,
-		getEditFuzzyMatch: () => true,
-		getBashInterceptorEnabled: () => false,
-		getBashInterceptorSimpleLsEnabled: () => true,
-		getBashInterceptorRules: () => [],
-		getPythonToolMode: () => "ipy-only",
-		getPythonKernelMode: () => "session",
-		getPythonSharedGateway: () => true,
-		...overrides,
-	};
-}
-
-function createSession(cwd: string, overrides?: Partial<ToolSession["settings"]>): ToolSession {
+function createSession(cwd: string, overrides?: Partial<Record<SettingPath, unknown>>): ToolSession {
 	return {
 		cwd,
 		hasUI: false,
 		getSessionFile: () => "session.json",
 		getSessionSpawns: () => null,
-		settings: createSettings(overrides),
+		settings: Settings.isolated({ "python.toolMode": "ipy-only", ...overrides }),
 	};
 }
 
@@ -78,7 +62,7 @@ describe("python tool settings", () => {
 			stdinRequested: false,
 		});
 
-		const session = createSession(testDir, { getPythonKernelMode: () => "per-call" });
+		const session = createSession(testDir, { "python.kernelMode": "per-call" });
 		const pythonTool = new PythonTool(session);
 
 		await pythonTool.execute("tool-call", { cells: [{ code: "print(1)" }] });

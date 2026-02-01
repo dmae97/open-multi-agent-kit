@@ -883,7 +883,7 @@ describe("regression: model edit attempt - nested @@ anchors (session 2026-01-19
 class PatchTool {
 	constructor(session: ToolSession) {
 		this.session = session;
-		this.patchMode = session.settings?.getEditPatchMode?.() ?? false;
+		this.patchMode = session.xyz(false);
 		this.allowFuzzy = true;
 	}
 }
@@ -899,8 +899,8 @@ class PatchTool {
 @@   constructor
  	constructor(session: ToolSession) {
  		this.session = session;
--		this.patchMode = session.settings?.getEditPatchMode?.() ?? false;
-+		this.patchMode = session.settings?.getEditPatchMode?.() ?? true;
+-		this.patchMode = session.xyz(false);
++		this.patchMode = session.xyz(true);
  		this.allowFuzzy = true;`,
 			},
 			{ cwd: tempDir },
@@ -908,7 +908,7 @@ class PatchTool {
 
 		const result = await Bun.file(filePath).text();
 		// Should change PatchTool's constructor, not OtherTool's
-		expect(result).toContain("this.patchMode = session.settings?.getEditPatchMode?.() ?? true;");
+		expect(result).toContain("this.patchMode = session.xyz(true);");
 		expect(result).toContain("this.mode = false;"); // OtherTool unchanged
 	});
 

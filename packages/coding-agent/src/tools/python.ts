@@ -266,8 +266,8 @@ export class PythonTool implements AgentTool<typeof pythonSchema> {
 				timeoutMs,
 				signal: combinedSignal,
 				sessionId,
-				kernelMode: this.session.settings?.getPythonKernelMode?.() ?? "session",
-				useSharedGateway: this.session.settings?.getPythonSharedGateway?.() ?? true,
+				kernelMode: this.session.settings.get("python.kernelMode"),
+				useSharedGateway: this.session.settings.get("python.sharedGateway"),
 				sessionFile: sessionFile ?? undefined,
 				artifactsDir: artifactsDir ?? undefined,
 			};

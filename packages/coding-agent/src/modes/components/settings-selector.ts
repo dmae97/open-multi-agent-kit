@@ -12,13 +12,18 @@ import {
 	type TabBarTheme,
 	Text,
 } from "@oh-my-pi/pi-tui";
-import type { SettingsManager, StatusLineSettings } from "../../config/settings-manager";
+import { type SettingPath, settings } from "../../config/settings";
+import type {
+	SettingTab,
+	StatusLinePreset,
+	StatusLineSegmentId,
+	StatusLineSeparatorStyle,
+} from "../../config/settings-schema";
 import { getSelectListTheme, getSettingsListTheme, theme } from "../../modes/theme/theme";
 import { DynamicBorder } from "./dynamic-border";
 import { PluginSettingsComponent } from "./plugin-settings";
 import { getSettingsForTab, type SettingDef } from "./settings-defs";
 import { getPreset } from "./status-line/presets";
-import { StatusLineSegmentEditorComponent } from "./status-line-segment-editor";
 
 function getTabBarTheme(): TabBarTheme {
 	return {
@@ -111,8 +116,6 @@ class SelectSubmenu extends Container {
 	}
 }
 
-type TabId = string;
-
 const SETTINGS_TABS: Tab[] = [
 	{ id: "behavior", label: "Behavior" },
 	{ id: "tools", label: "Tools" },
@@ -127,7 +130,7 @@ const SETTINGS_TABS: Tab[] = [
 
 /**
  * Dynamic context for settings that need runtime data.
- * Some settings (like thinking level) are managed by the session, not SettingsManager.
+ * Some settings (like thinking level) are managed by the session, not Settings.
  */
 export interface SettingsRuntimeContext {
 	/** Available thinking levels (from session) */
@@ -140,19 +143,21 @@ export interface SettingsRuntimeContext {
 	cwd: string;
 }
 
-/**
- * Callback when any setting changes.
- * The handler should dispatch based on settingId.
- */
-export type SettingChangeHandler = (settingId: string, newValue: string | boolean) => void;
+/** Status line settings subset for preview */
+export interface StatusLinePreviewSettings {
+	preset?: StatusLinePreset;
+	leftSegments?: StatusLineSegmentId[];
+	rightSegments?: StatusLineSegmentId[];
+	separator?: StatusLineSeparatorStyle;
+}
 
 export interface SettingsCallbacks {
 	/** Called when any setting value changes */
-	onChange: SettingChangeHandler;
+	onChange: (path: SettingPath, newValue: unknown) => void;
 	/** Called for theme preview while browsing */
 	onThemePreview?: (theme: string) => void;
-	/** Called for status line preview while configuring - updates actual status line */
-	onStatusLinePreview?: (settings: Partial<StatusLineSettings>) => void;
+	/** Called for status line preview while configuring */
+	onStatusLinePreview?: (settings: StatusLinePreviewSettings) => void;
 	/** Get current rendered status line for inline preview */
 	getStatusLinePreview?: () => string;
 	/** Called when plugins change */
@@ -172,16 +177,14 @@ export class SettingsSelectorComponent extends Container {
 	private pluginComponent: PluginSettingsComponent | null = null;
 	private statusPreviewContainer: Container | null = null;
 	private statusPreviewText: Text | null = null;
-	private currentTabId: TabId = "behavior";
+	private currentTabId: SettingTab | "plugins" = "behavior";
 
-	private settingsManager: SettingsManager;
 	private context: SettingsRuntimeContext;
 	private callbacks: SettingsCallbacks;
 
-	constructor(settingsManager: SettingsManager, context: SettingsRuntimeContext, callbacks: SettingsCallbacks) {
+	constructor(context: SettingsRuntimeContext, callbacks: SettingsCallbacks) {
 		super();
 
-		this.settingsManager = settingsManager;
 		this.context = context;
 		this.callbacks = callbacks;
 
@@ -191,7 +194,7 @@ export class SettingsSelectorComponent extends Container {
 		// Tab bar
 		this.tabBar = new TabBar("Settings", SETTINGS_TABS, getTabBarTheme());
 		this.tabBar.onTabChange = () => {
-			this.switchToTab(this.tabBar.getActiveTab().id as TabId);
+			this.switchToTab(this.tabBar.getActiveTab().id as SettingTab | "plugins");
 		};
 		this.addChild(this.tabBar);
 
@@ -205,7 +208,7 @@ export class SettingsSelectorComponent extends Container {
 		this.addChild(new DynamicBorder());
 	}
 
-	private switchToTab(tabId: TabId): void {
+	private switchToTab(tabId: SettingTab | "plugins"): void {
 		this.currentTabId = tabId;
 
 		// Remove current content
@@ -251,7 +254,7 @@ export class SettingsSelectorComponent extends Container {
 		switch (def.type) {
 			case "boolean":
 				return {
-					id: def.id,
+					id: def.path,
 					label: def.label,
 					description: def.description,
 					currentValue: currentValue ? "true" : "false",
@@ -260,7 +263,7 @@ export class SettingsSelectorComponent extends Container {
 
 			case "enum":
 				return {
-					id: def.id,
+					id: def.path,
 					label: def.label,
 					description: def.description,
 					currentValue: currentValue as string,
@@ -269,26 +272,24 @@ export class SettingsSelectorComponent extends Container {
 
 			case "submenu":
 				return {
-					id: def.id,
+					id: def.path,
 					label: def.label,
 					description: def.description,
-					currentValue: currentValue as string,
+					currentValue: String(currentValue ?? ""),
 					submenu: (cv, done) => this.createSubmenu(def, cv, done),
 				};
 		}
 	}
 
 	/**
-	 * Get the current value for a setting, using runtime context for special cases.
+	 * Get the current value for a setting.
 	 */
-	private getCurrentValue(def: SettingDef): string | boolean {
-		// Special cases that come from runtime context instead of SettingsManager
-		switch (def.id) {
-			case "thinkingLevel":
-				return this.context.thinkingLevel;
-			default:
-				return def.get(this.settingsManager);
+	private getCurrentValue(def: SettingDef): unknown {
+		// Special case: thinking level comes from runtime context
+		if (def.path === "defaultThinkingLevel") {
+			return this.context.thinkingLevel;
 		}
+		return settings.get(def.path);
 	}
 
 	/**
@@ -299,20 +300,15 @@ export class SettingsSelectorComponent extends Container {
 		currentValue: string,
 		done: (value?: string) => void,
 	): Container {
-		// Special case: segment editor
-		if (def.id === "statusLineSegments") {
-			return this.createSegmentEditor(done);
-		}
+		let options = def.getOptions();
 
-		let options = def.getOptions(this.settingsManager);
-
-		// Special case: inject runtime options
-		if (def.id === "thinkingLevel") {
+		// Special case: inject runtime options for thinking level
+		if (def.path === "defaultThinkingLevel") {
 			options = this.context.availableThinkingLevels.map(level => {
-				const baseOpt = def.getOptions(this.settingsManager).find(o => o.value === level);
+				const baseOpt = def.getOptions().find(o => o.value === level);
 				return baseOpt || { value: level, label: level };
 			});
-		} else if (def.id === "theme") {
+		} else if (def.path === "theme") {
 			options = this.context.availableThemes.map(t => ({ value: t, label: t }));
 		}
 
@@ -320,14 +316,16 @@ export class SettingsSelectorComponent extends Container {
 		let onPreview: ((value: string) => void) | undefined;
 		let onPreviewCancel: (() => void) | undefined;
 
-		if (def.id === "theme") {
+		if (def.path === "theme") {
 			onPreview = this.callbacks.onThemePreview;
 			onPreviewCancel = () => this.callbacks.onThemePreview?.(currentValue);
-		} else if (def.id === "statusLinePreset") {
+		} else if (def.path === "statusLine.preset") {
 			onPreview = value => {
-				const presetDef = getPreset((value as StatusLineSettings["preset"]) ?? "default");
+				const presetDef = getPreset(
+					value as "default" | "minimal" | "compact" | "full" | "nerd" | "ascii" | "custom",
+				);
 				this.callbacks.onStatusLinePreview?.({
-					preset: value as StatusLineSettings["preset"],
+					preset: value as StatusLinePreset,
 					leftSegments: presetDef.leftSegments,
 					rightSegments: presetDef.rightSegments,
 					separator: presetDef.separator,
@@ -335,7 +333,7 @@ export class SettingsSelectorComponent extends Container {
 				this.updateStatusPreview();
 			};
 			onPreviewCancel = () => {
-				const currentPreset = this.settingsManager.getStatusLinePreset();
+				const currentPreset = settings.get("statusLine.preset");
 				const presetDef = getPreset(currentPreset);
 				this.callbacks.onStatusLinePreview?.({
 					preset: currentPreset,
@@ -345,26 +343,20 @@ export class SettingsSelectorComponent extends Container {
 				});
 				this.updateStatusPreview();
 			};
-		} else if (def.id === "statusLineSeparator") {
+		} else if (def.path === "statusLine.separator") {
 			onPreview = value => {
-				this.callbacks.onStatusLinePreview?.({
-					separator: value as StatusLineSettings["separator"],
-				});
+				this.callbacks.onStatusLinePreview?.({ separator: value as StatusLineSeparatorStyle });
 				this.updateStatusPreview();
 			};
 			onPreviewCancel = () => {
-				const currentSettings = this.settingsManager.getStatusLineSettings();
-				const separator =
-					currentSettings.separator ?? getPreset(this.settingsManager.getStatusLinePreset()).separator;
-				this.callbacks.onStatusLinePreview?.({
-					separator,
-				});
+				const separator = settings.get("statusLine.separator");
+				this.callbacks.onStatusLinePreview?.({ separator });
 				this.updateStatusPreview();
 			};
 		}
 
 		// Provide status line preview for theme selection
-		const getPreview = def.id === "theme" ? this.callbacks.getStatusLinePreview : undefined;
+		const getPreview = def.path === "theme" ? this.callbacks.getStatusLinePreview : undefined;
 
 		return new SelectSubmenu(
 			def.label,
@@ -372,10 +364,10 @@ export class SettingsSelectorComponent extends Container {
 			options,
 			currentValue,
 			value => {
-				// Persist to SettingsManager
-				def.set(this.settingsManager, value);
-				// Notify for side effects
-				this.callbacks.onChange(def.id, value);
+				// Persist
+				this.setSettingValue(def.path, value);
+				// Notify
+				this.callbacks.onChange(def.path, value);
 				done(value);
 			},
 			() => {
@@ -388,47 +380,24 @@ export class SettingsSelectorComponent extends Container {
 	}
 
 	/**
-	 * Create the segment editor component.
+	 * Set a setting value, handling type conversion.
 	 */
-	private createSegmentEditor(done: (value?: string) => void): Container {
-		const currentSettings = this.settingsManager.getStatusLineSettings();
-		const preset = currentSettings.preset ?? "default";
-		const presetDef = getPreset(preset);
-
-		const leftSegments = currentSettings.leftSegments ?? presetDef.leftSegments;
-		const rightSegments = currentSettings.rightSegments ?? presetDef.rightSegments;
-
-		return new StatusLineSegmentEditorComponent(leftSegments, rightSegments, {
-			onSave: (left, right) => {
-				this.settingsManager.setStatusLineLeftSegments(left);
-				this.settingsManager.setStatusLineRightSegments(right);
-				this.callbacks.onChange("statusLineSegments", "saved");
-				this.callbacks.onStatusLinePreview?.({ leftSegments: left, rightSegments: right });
-				this.updateStatusPreview();
-				done("saved");
-			},
-			onCancel: () => {
-				// Restore preview to saved state
-				const saved = this.settingsManager.getStatusLineSettings();
-				const savedPreset = getPreset(saved.preset ?? "default");
-				this.callbacks.onStatusLinePreview?.({
-					leftSegments: saved.leftSegments ?? savedPreset.leftSegments,
-					rightSegments: saved.rightSegments ?? savedPreset.rightSegments,
-				});
-				this.updateStatusPreview();
-				done();
-			},
-			onPreview: (left, right) => {
-				this.callbacks.onStatusLinePreview?.({ leftSegments: left, rightSegments: right });
-				this.updateStatusPreview();
-			},
-		});
+	private setSettingValue(path: SettingPath, value: string): void {
+		// Handle number conversions
+		const currentValue = settings.get(path);
+		if (typeof currentValue === "number") {
+			settings.set(path, Number(value) as never);
+		} else if (typeof currentValue === "boolean") {
+			settings.set(path, (value === "true") as never);
+		} else {
+			settings.set(path, value as never);
+		}
 	}
 
 	/**
 	 * Show a settings tab using definitions.
 	 */
-	private showSettingsTab(tabId: string): void {
+	private showSettingsTab(tabId: SettingTab): void {
 		const defs = getSettingsForTab(tabId);
 		const items: SettingItem[] = [];
 
@@ -455,22 +424,22 @@ export class SettingsSelectorComponent extends Container {
 			10,
 			getSettingsListTheme(),
 			(id, newValue) => {
-				const def = defs.find(d => d.id === id);
+				const def = defs.find(d => d.path === id);
 				if (!def) return;
 
-				// Persist to SettingsManager based on type
+				const path = def.path;
+
 				if (def.type === "boolean") {
 					const boolValue = newValue === "true";
-					def.set(this.settingsManager, boolValue);
-					this.callbacks.onChange(id, boolValue);
+					settings.set(path, boolValue as never);
+					this.callbacks.onChange(path, boolValue);
 
-					// Trigger status line preview for status tab boolean settings
 					if (tabId === "status") {
 						this.triggerStatusLinePreview();
 					}
 				} else if (def.type === "enum") {
-					def.set(this.settingsManager, newValue);
-					this.callbacks.onChange(id, newValue);
+					settings.set(path, newValue as never);
+					this.callbacks.onChange(path, newValue);
 				}
 				// Submenu types are handled in createSubmenu
 			},
@@ -494,9 +463,13 @@ export class SettingsSelectorComponent extends Container {
 	 * Trigger status line preview with current settings.
 	 */
 	private triggerStatusLinePreview(): void {
-		const settings = this.settingsManager.getStatusLineSettings();
-		this.callbacks.onStatusLinePreview?.(settings);
-		// Update inline preview
+		const statusLineSettings: StatusLinePreviewSettings = {
+			preset: settings.get("statusLine.preset"),
+			leftSegments: settings.get("statusLine.leftSegments"),
+			rightSegments: settings.get("statusLine.rightSegments"),
+			separator: settings.get("statusLine.separator"),
+		};
+		this.callbacks.onStatusLinePreview?.(statusLineSettings);
 		this.updateStatusPreview();
 	}
 

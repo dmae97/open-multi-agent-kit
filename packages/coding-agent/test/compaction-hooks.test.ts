@@ -9,7 +9,7 @@ import * as path from "node:path";
 import { Agent } from "@oh-my-pi/pi-agent-core";
 import { getModel } from "@oh-my-pi/pi-ai";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
+import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import {
 	HookRunner,
 	type LoadedHook,
@@ -90,6 +90,7 @@ describe.skipIf(!API_KEY)("Compaction hooks", () => {
 			hasUI: false,
 			getSessionFile: () => null,
 			getSessionSpawns: () => "*",
+			settings: Settings.isolated(),
 		};
 		const tools = await createTools(toolSession);
 		const model = getModel("anthropic", "claude-sonnet-4-5")!;
@@ -103,7 +104,7 @@ describe.skipIf(!API_KEY)("Compaction hooks", () => {
 		});
 
 		const sessionManager = SessionManager.create(tempDir);
-		const settingsManager = await SettingsManager.create(tempDir, tempDir);
+		const settings = Settings.isolated();
 		const authStorage = await AuthStorage.create(path.join(tempDir, "auth.json"));
 		const modelRegistry = new ModelRegistry(authStorage);
 
@@ -132,7 +133,7 @@ describe.skipIf(!API_KEY)("Compaction hooks", () => {
 		session = new AgentSession({
 			agent,
 			sessionManager,
-			settingsManager,
+			settings,
 			extensionRunner: hookRunner as any,
 			modelRegistry,
 		});

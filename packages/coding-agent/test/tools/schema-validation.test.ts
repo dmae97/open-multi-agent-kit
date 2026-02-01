@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { sanitizeSchemaForGoogle } from "@oh-my-pi/pi-ai";
+import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { BUILTIN_TOOLS, createTools, HIDDEN_TOOLS, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 
 /**
@@ -108,6 +109,7 @@ function createTestSession(): ToolSession {
 		hasUI: true,
 		getSessionFile: () => null,
 		getSessionSpawns: () => "*",
+		settings: Settings.isolated(),
 	};
 }
 

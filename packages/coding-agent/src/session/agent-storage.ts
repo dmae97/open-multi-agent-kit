@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { logger } from "@oh-my-pi/pi-utils";
 import { getAgentDbPath } from "../config";
-import type { Settings } from "../config/settings-manager";
+import type { RawSettings as Settings } from "../config/settings";
 import type { AuthCredential } from "./auth-storage";
 
 /** Prepared SQLite statement type from bun:sqlite */

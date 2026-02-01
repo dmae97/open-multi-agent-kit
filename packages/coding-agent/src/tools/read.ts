@@ -547,8 +547,8 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 
 	constructor(session: ToolSession) {
 		this.session = session;
-		this.autoResizeImages = session.settings?.getImageAutoResize() ?? true;
-		this.defaultLineNumbers = session.settings?.getReadLineNumbers?.() ?? false;
+		this.autoResizeImages = session.settings.get("images.autoResize");
+		this.defaultLineNumbers = session.settings.get("readLineNumbers");
 		this.lsTool = new LsTool(session);
 		this.description = renderPromptTemplate(readDescription, {
 			DEFAULT_MAX_LINES: String(DEFAULT_MAX_LINES),

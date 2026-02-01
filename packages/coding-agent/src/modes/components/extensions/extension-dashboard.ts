@@ -21,7 +21,7 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "@oh-my-pi/pi-tui";
-import type { SettingsManager } from "../../../config/settings-manager";
+import { Settings } from "../../../config/settings";
 import { DynamicBorder } from "../../../modes/components/dynamic-border";
 import { theme } from "../../../modes/theme/theme";
 import { ExtensionList } from "./extension-list";
@@ -33,31 +33,32 @@ export class ExtensionDashboard extends Container {
 	private state!: DashboardState;
 	private mainList!: ExtensionList;
 	private inspector!: InspectorPanel;
-	private settingsManager: SettingsManager | null;
+	private settingsInstance: Settings | null;
 	private cwd: string;
 	private terminalHeight: number;
 
 	public onClose?: () => void;
 
-	private constructor(cwd: string, settingsManager: SettingsManager | null, terminalHeight: number) {
+	private constructor(cwd: string, settingsInstance: Settings | null, terminalHeight: number) {
 		super();
 		this.cwd = cwd;
-		this.settingsManager = settingsManager;
+		this.settingsInstance = settingsInstance;
 		this.terminalHeight = terminalHeight;
 	}
 
 	static async create(
 		cwd: string,
-		settingsManager: SettingsManager | null = null,
+		settingsInstance: Settings | null = null,
 		terminalHeight?: number,
 	): Promise<ExtensionDashboard> {
-		const dashboard = new ExtensionDashboard(cwd, settingsManager, terminalHeight ?? process.stdout.rows ?? 24);
+		const dashboard = new ExtensionDashboard(cwd, settingsInstance, terminalHeight ?? process.stdout.rows ?? 24);
 		await dashboard.init();
 		return dashboard;
 	}
 
 	private async init(): Promise<void> {
-		const disabledIds = this.settingsManager?.getDisabledExtensions() ?? [];
+		const sm = this.settingsInstance ?? (await Settings.init());
+		const disabledIds = sm ? ((sm.get("disabledExtensions") as string[]) ?? []) : [];
 		this.state = await createInitialState(this.cwd, disabledIds);
 
 		// Calculate max visible items based on terminal height
@@ -164,12 +165,21 @@ export class ExtensionDashboard extends Container {
 	}
 
 	private handleExtensionToggle(extensionId: string, enabled: boolean): void {
-		if (!this.settingsManager) return;
+		const sm = this.settingsInstance ?? Settings.instance;
+		if (!sm) return;
 
+		const disabled = ((sm.get("disabledExtensions") as string[]) ?? []).slice();
 		if (enabled) {
-			this.settingsManager.enableExtension(extensionId);
+			const index = disabled.indexOf(extensionId);
+			if (index !== -1) {
+				disabled.splice(index, 1);
+				sm.set("disabledExtensions", disabled);
+			}
 		} else {
-			this.settingsManager.disableExtension(extensionId);
+			if (!disabled.includes(extensionId)) {
+				disabled.push(extensionId);
+				sm.set("disabledExtensions", disabled);
+			}
 		}
 
 		void this.refreshFromState();
@@ -179,7 +189,8 @@ export class ExtensionDashboard extends Container {
 		// Remember current tab ID before refresh
 		const currentTabId = this.state.tabs[this.state.activeTabIndex]?.id;
 
-		const disabledIds = this.settingsManager?.getDisabledExtensions() ?? [];
+		const sm = this.settingsInstance ?? Settings.instance;
+		const disabledIds = sm ? ((sm.get("disabledExtensions") as string[]) ?? []) : [];
 		this.state = await refreshState(this.state, this.cwd, disabledIds);
 
 		// Find the same tab in the new (re-sorted) list

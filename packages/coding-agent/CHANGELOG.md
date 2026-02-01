@@ -1,6 +1,36 @@
 # Changelog
 
 ## [Unreleased]
+### Breaking Changes
+
+- Replaced `SettingsManager` class with new `Settings` singleton providing sync get/set API with background persistence
+- Changed settings access from method calls (e.g., `getTheme()`) to path-based access (e.g., `settings.get("theme")`)
+- Removed `settingsManager` parameter from `CreateAgentSessionOptions` in favor of `settingsInstance`
+- Removed `loadSettings()` export from public API
+- Removed example file `examples/sdk/10-settings.ts` demonstrating old SettingsManager API
+
+### Added
+
+- New `Settings` singleton class with sync get/set operations and background persistence
+- Added `Settings.isolated()` factory for creating isolated settings instances in tests
+- Added `Settings.init()` for initializing global settings instance
+- Added `settings` global export for convenient access to settings singleton
+- New `settings-schema.ts` providing unified, type-safe settings definitions with UI metadata
+
+### Changed
+
+- Unified settings schema into single source of truth with `settings-schema.ts` replacing scattered definitions
+- Refactored settings CLI to use new schema-based path resolution instead of SETTINGS_DEFS
+- Updated config command examples to use new nested path syntax (e.g., `compaction.enabled` instead of `autoCompact`)
+- Changed `InteractiveModeContext.settingsManager` to `InteractiveModeContext.settings`
+- Updated all internal settings access throughout codebase to use new `settings.get()` and `settings.set()` API
+- Moved `DEFAULT_BASH_INTERCEPTOR_RULES` from settings-manager to bash-interceptor module
+
+### Removed
+
+- Deleted `settings-manager.ts` (2035 lines) - functionality replaced by new Settings singleton
+- Removed `SettingsManager.create()`, `SettingsManager.acquire()`, and `SettingsManager.inMemory()` factory methods
+- Removed individual getter/setter methods from settings API (e.g., `getTheme()`, `setTheme()`, `getCompactionSettings()`)
 
 ## [9.5.1] - 2026-02-01
 

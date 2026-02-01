@@ -23,10 +23,10 @@ export { QueueModeSelectorComponent } from "./queue-mode-selector";
 export { ReadToolGroupComponent } from "./read-tool-group";
 export { SessionSelectorComponent } from "./session-selector";
 export {
-	type SettingChangeHandler,
 	type SettingsCallbacks,
 	type SettingsRuntimeContext,
 	SettingsSelectorComponent,
+	type StatusLinePreviewSettings,
 } from "./settings-selector";
 export { ShowImagesSelectorComponent } from "./show-images-selector";
 export { StatusLineComponent } from "./status-line";

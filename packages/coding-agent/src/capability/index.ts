@@ -8,6 +8,7 @@
  */
 import * as os from "node:os";
 import * as path from "node:path";
+import type { Settings } from "../config/settings";
 import { clearCache as clearFsCache, cacheStats as fsCacheStats, invalidate as invalidateFs } from "./fs";
 import type {
 	Capability,
@@ -37,7 +38,7 @@ const providerMeta = new Map<string, { displayName: string; description: string 
 const disabledProviders = new Set<string>();
 
 /** Settings manager for persistence (if set) */
-let settingsManager: { getDisabledProviders(): string[]; setDisabledProviders(ids: string[]): void } | null = null;
+let settings: Settings | null = null;
 
 // =============================================================================
 // Registration API
@@ -228,13 +229,10 @@ export async function loadCapability<T>(capabilityId: string, options: LoadOptio
  * Initialize capability system with settings manager for persistence.
  * Call this once on startup to enable persistent provider state.
  */
-export function initializeWithSettings(manager: {
-	getDisabledProviders(): string[];
-	setDisabledProviders(ids: string[]): void;
-}): void {
-	settingsManager = manager;
+export function initializeWithSettings(settingsInstance: Settings): void {
+	settings = settingsInstance;
 	// Load disabled providers from settings
-	const disabled = manager.getDisabledProviders();
+	const disabled = settings.get("disabledProviders");
 	disabledProviders.clear();
 	for (const id of disabled) {
 		disabledProviders.add(id);
@@ -245,8 +243,8 @@ export function initializeWithSettings(manager: {
  * Persist current disabled providers to settings.
  */
 function persistDisabledProviders(): void {
-	if (settingsManager) {
-		settingsManager.setDisabledProviders(Array.from(disabledProviders));
+	if (settings) {
+		settings.set("disabledProviders", Array.from(disabledProviders));
 	}
 }
 

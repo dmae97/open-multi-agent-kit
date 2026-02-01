@@ -40,7 +40,7 @@ import { getAgentDir, getConfigDirPaths } from "./config";
 import { ModelRegistry } from "./config/model-registry";
 import { formatModelString, parseModelString } from "./config/model-resolver";
 import { loadPromptTemplates as loadPromptTemplatesInternal, type PromptTemplate } from "./config/prompt-templates";
-import { type Settings, SettingsManager, type SkillsSettings } from "./config/settings-manager";
+import { Settings, type SkillsSettings } from "./config/settings";
 import { CursorExecHandlers } from "./cursor";
 import "./discovery";
 import { initializeWithSettings } from "./discovery";
@@ -184,8 +184,8 @@ export interface CreateAgentSessionOptions {
 	/** Session manager. Default: SessionManager.create(cwd) */
 	sessionManager?: SessionManager;
 
-	/** Settings manager. Default: SettingsManager.create(cwd, agentDir) */
-	settingsManager?: SettingsManager;
+	/** Settings instance. Default: Settings.init({ cwd, agentDir }) */
+	settingsInstance?: Settings;
 
 	/** Whether UI is available (enables interactive tools like ask). Default: false */
 	hasUI?: boolean;
@@ -210,7 +210,7 @@ export interface CreateAgentSessionResult {
 // Re-exports
 
 export type { PromptTemplate } from "./config/prompt-templates";
-export type { Settings, SkillsSettings } from "./config/settings-manager";
+export { Settings, type SkillsSettings } from "./config/settings";
 export type { CustomCommand, CustomCommandFactory } from "./extensibility/custom-commands/types";
 export type { CustomTool, CustomToolFactory } from "./extensibility/custom-tools/types";
 export type {
@@ -430,33 +430,6 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 	});
 }
 
-// Settings
-
-/**
- * Load settings from agentDir/settings.json merged with cwd/.omp/settings.json.
- */
-export async function loadSettings(cwd?: string, agentDir?: string): Promise<Settings> {
-	const manager = await SettingsManager.create(cwd ?? process.cwd(), agentDir ?? getDefaultAgentDir());
-	return {
-		modelRoles: manager.getModelRoles(),
-		defaultThinkingLevel: manager.getDefaultThinkingLevel(),
-		steeringMode: manager.getSteeringMode(),
-		followUpMode: manager.getFollowUpMode(),
-		interruptMode: manager.getInterruptMode(),
-		theme: manager.getTheme(),
-		compaction: manager.getCompactionSettings(),
-		retry: manager.getRetrySettings(),
-		hideThinkingBlock: manager.getHideThinkingBlock(),
-		shellPath: manager.getShellPath(),
-		shellForceBasic: manager.getShellForceBasic(),
-		collapseChangelog: manager.getCollapseChangelog(),
-		extensions: manager.getExtensionPaths(),
-		skills: manager.getSkillsSettings(),
-		terminal: { showImages: manager.getShowImages() },
-		images: { autoResize: manager.getImageAutoResize(), blockImages: manager.getBlockImages() },
-	};
-}
-
 // Internal Helpers
 
 function createCustomToolContext(ctx: ExtensionContext): CustomToolContext {
@@ -610,14 +583,14 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const modelRegistry = options.modelRegistry ?? discoverModels(authStorage, agentDir);
 	time("discoverModels");
 
-	const settingsManager = options.settingsManager ?? (await SettingsManager.create(cwd, agentDir));
-	time("settingsManager");
-	initializeWithSettings(settingsManager);
+	const settingsInstance = options.settingsInstance ?? (await Settings.init({ cwd, agentDir }));
+	time("settings");
+	initializeWithSettings(settingsInstance);
 	time("initializeWithSettings");
 
 	// Initialize provider preferences from settings
-	setPreferredWebSearchProvider(settingsManager.getWebSearchProvider());
-	setPreferredImageProvider(settingsManager.getImageProvider());
+	setPreferredWebSearchProvider(settingsInstance.get("providers.webSearch") ?? "auto");
+	setPreferredImageProvider(settingsInstance.get("providers.image") ?? "auto");
 
 	const sessionManager = options.sessionManager ?? SessionManager.create(cwd);
 	time("sessionManager");
@@ -649,7 +622,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	// If still no model, try settings default
 	if (!model) {
-		const settingsDefaultModel = settingsManager.getModelRole("default");
+		const settingsDefaultModel = settingsInstance.getModelRole("default");
 		if (settingsDefaultModel) {
 			const parsedModel = parseModelString(settingsDefaultModel);
 			if (parsedModel) {
@@ -689,7 +662,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	// Fall back to settings default
 	if (thinkingLevel === undefined) {
-		thinkingLevel = settingsManager.getDefaultThinkingLevel() ?? "off";
+		thinkingLevel = settingsInstance.get("defaultThinkingLevel") ?? "off";
 	}
 
 	// Clamp to model capabilities
@@ -705,14 +678,16 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		skills = options.skills;
 		skillWarnings = [];
 	} else {
-		const discovered = await discoverSkills(cwd, agentDir, settingsManager.getSkillsSettings());
+		const skillsSettings = settingsInstance.getGroup("skills") as SkillsSettings;
+		const discovered = await discoverSkills(cwd, agentDir, skillsSettings);
 		skills = discovered.skills;
 		skillWarnings = discovered.warnings;
 	}
 	time("discoverSkills");
 
 	// Discover rules
-	const ttsrManager = new TtsrManager(settingsManager.getTtsrSettings());
+	const ttsrSettings = settingsInstance.getGroup("ttsr");
+	const ttsrManager = new TtsrManager(ttsrSettings);
 	const rulesResult = await loadCapability<Rule>(ruleCapability.id, { cwd });
 	for (const rule of rulesResult.items) {
 		if (rule.ttsrTrigger) {
@@ -761,8 +736,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		},
 		getPlanModeState: () => session.getPlanModeState(),
 		getCompactContext: () => session.formatCompactContext(),
-		settings: settingsManager,
-		settingsManager,
+		settings: settingsInstance,
 		authStorage,
 		modelRegistry,
 	};
@@ -777,7 +751,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	internalRouter.register(new ArtifactProtocolHandler({ getArtifactsDir }));
 	internalRouter.register(
 		new PlanProtocolHandler({
-			getPlansDirectory: settingsManager.getPlansDirectory.bind(settingsManager),
+			getPlansDirectory: () => settingsInstance.getPlansDirectory(),
 			cwd,
 		}),
 	);
@@ -814,10 +788,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 					);
 				}
 			},
-			enableProjectConfig: settingsManager.getMCPProjectConfigEnabled(),
+			enableProjectConfig: settingsInstance.get("mcp.enableProjectConfig") ?? true,
 			// Always filter Exa - we have native integration
 			filterExa: true,
-			cacheStorage: settingsManager.getStorage(),
+			cacheStorage: settingsInstance.getStorage(),
 		});
 		time("discoverAndLoadMCPTools");
 		mcpManager = mcpResult.manager;
@@ -847,11 +821,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	time("getGeminiImageTools");
 
 	// Add specialized Exa web search tools if EXA_API_KEY is available
-	const exaSettings = settingsManager.getExaSettings();
+	const exaSettings = settingsInstance.getGroup("exa");
 	if (exaSettings.enabled && exaSettings.enableSearch) {
 		const exaWebSearchTools = await getWebSearchTools({
-			enableLinkedin: exaSettings.enableLinkedin,
-			enableCompany: exaSettings.enableCompany,
+			enableLinkedin: exaSettings.enableLinkedin as boolean,
+			enableCompany: exaSettings.enableCompany as boolean,
 		});
 		// Filter out the base web_search (already in built-in tools), add specialized Exa tools
 		const specializedTools = exaWebSearchTools.filter(t => t.name !== "web_search");
@@ -879,12 +853,15 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		extensionsResult = options.preloadedExtensions;
 	} else {
 		// Merge CLI extension paths with settings extension paths
-		const configuredPaths = [...(options.additionalExtensionPaths ?? []), ...settingsManager.getExtensionPaths()];
+		const configuredPaths = [
+			...(options.additionalExtensionPaths ?? []),
+			...((settingsInstance.get("extensions") as string[]) ?? []),
+		];
 		extensionsResult = await discoverAndLoadExtensions(
 			configuredPaths,
 			cwd,
 			eventBus,
-			settingsManager.getDisabledExtensions(),
+			(settingsInstance.get("disabledExtensions") as string[]) ?? [],
 		);
 		time("discoverAndLoadExtensions");
 		for (const { path, error } of extensionsResult.errors) {
@@ -1006,7 +983,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			tools,
 			toolNames,
 			rules: rulebookRules,
-			skillsSettings: settingsManager.getSkillsSettings(),
+			skillsSettings: settingsInstance.getGroup("skills") as SkillsSettings,
 			isCoordinator: options.hasUI,
 		});
 
@@ -1022,7 +999,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				tools,
 				toolNames,
 				rules: rulebookRules,
-				skillsSettings: settingsManager.getSkillsSettings(),
+				skillsSettings: settingsInstance.getGroup("skills") as SkillsSettings,
 				customPrompt: options.systemPrompt,
 				isCoordinator: options.hasUI,
 			});
@@ -1062,7 +1039,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const convertToLlmWithBlockImages = (messages: AgentMessage[]): Message[] => {
 		const converted = convertToLlm(messages);
 		// Check setting dynamically so mid-session changes take effect
-		if (!settingsManager.getBlockImages()) {
+		if (!settingsInstance.get("images.blockImages")) {
 			return converted;
 		}
 		// Filter out ImageContent from all messages, replacing with text placeholder
@@ -1115,11 +1092,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 					return extensionRunner.emitContext(messages);
 				}
 			: undefined,
-		steeringMode: settingsManager.getSteeringMode(),
-		followUpMode: settingsManager.getFollowUpMode(),
-		interruptMode: settingsManager.getInterruptMode(),
-		thinkingBudgets: settingsManager.getThinkingBudgets(),
-		kimiApiFormat: settingsManager.getKimiApiFormat(),
+		steeringMode: settingsInstance.get("steeringMode") ?? "one-at-a-time",
+		followUpMode: settingsInstance.get("followUpMode") ?? "one-at-a-time",
+		interruptMode: settingsInstance.get("interruptMode") ?? "immediate",
+		thinkingBudgets: settingsInstance.getGroup("thinkingBudgets"),
+		kimiApiFormat: settingsInstance.get("providers.kimiApiFormat") ?? "anthropic",
 		getToolContext: tc => toolContextStore.getContext(tc),
 		getApiKey: async () => {
 			const currentModel = agent.state.model;
@@ -1151,7 +1128,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	session = new AgentSession({
 		agent,
 		sessionManager,
-		settingsManager,
+		settings: settingsInstance,
 		scopedModels: options.scopedModels,
 		promptTemplates,
 		slashCommands,
@@ -1159,7 +1136,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		customCommands: customCommandsResult.commands,
 		skills,
 		skillWarnings,
-		skillsSettings: settingsManager.getSkillsSettings(),
+		skillsSettings: settingsInstance.getGroup("skills") as Required<SkillsSettings>,
 		modelRegistry,
 		toolRegistry,
 		rebuildSystemPrompt,
@@ -1169,7 +1146,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	// Warm up LSP servers (connects to detected servers)
 	let lspServers: CreateAgentSessionResult["lspServers"];
-	if (enableLsp && settingsManager.getLspDiagnosticsOnWrite()) {
+	if (enableLsp && settingsInstance.get("lsp.diagnosticsOnWrite")) {
 		try {
 			const result = await warmupLspServers(cwd, {
 				onConnecting: serverNames => {

@@ -5,7 +5,7 @@ import type { ControlledGit } from "../../commit/git";
 import typesDescriptionPrompt from "../../commit/prompts/types-description.md" with { type: "text" };
 import type { ModelRegistry } from "../../config/model-registry";
 import { renderPromptTemplate } from "../../config/prompt-templates";
-import type { SettingsManager } from "../../config/settings-manager";
+import type { Settings } from "../../config/settings";
 import { getMarkdownTheme } from "../../modes/theme/theme";
 import { createAgentSession } from "../../sdk";
 import type { AgentSessionEvent } from "../../session/agent-session";
@@ -19,7 +19,7 @@ export interface CommitAgentInput {
 	cwd: string;
 	git: ControlledGit;
 	model: Model<Api>;
-	settingsManager: SettingsManager;
+	settings: Settings;
 	modelRegistry: ModelRegistry;
 	authStorage: AuthStorage;
 	userContext?: string;
@@ -47,7 +47,7 @@ export async function runCommitAgentSession(input: CommitAgentInput): Promise<Co
 		git: input.git,
 		authStorage: input.authStorage,
 		modelRegistry: input.modelRegistry,
-		settingsManager: input.settingsManager,
+		settings: input.settings,
 		spawns,
 		state,
 		changelogTargets: input.changelogTargets,
@@ -58,7 +58,7 @@ export async function runCommitAgentSession(input: CommitAgentInput): Promise<Co
 		cwd: input.cwd,
 		authStorage: input.authStorage,
 		modelRegistry: input.modelRegistry,
-		settingsManager: input.settingsManager,
+		settingsInstance: input.settings,
 		model: input.model,
 		systemPrompt,
 		customTools: tools,

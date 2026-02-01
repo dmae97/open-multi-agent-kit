@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { logger, ptree } from "@oh-my-pi/pi-utils";
 import { $ } from "bun";
 import { nanoid } from "nanoid";
-import { SettingsManager } from "../config/settings-manager";
+import { Settings } from "../config/settings";
 import { getOrCreateSnapshot } from "../utils/shell-snapshot";
 import { time } from "../utils/timings";
 import { htmlToBasicMarkdown } from "../web/scrapers/types";
@@ -113,7 +113,8 @@ export async function checkPythonKernelAvailability(cwd: string): Promise<Python
 	}
 
 	try {
-		const { env } = await SettingsManager.getGlobalShellConfig();
+		const settings = await Settings.init();
+		const { env } = settings.getShellConfig();
 		const baseEnv = filterEnv(env);
 		const runtime = resolvePythonRuntime(cwd, baseEnv);
 		const checkScript =
@@ -445,7 +446,8 @@ export class PythonKernel {
 	}
 
 	private static async startWithLocalGateway(options: KernelStartOptions): Promise<PythonKernel> {
-		const { shell, env } = await SettingsManager.getGlobalShellConfig();
+		const settings = await Settings.init();
+		const { shell, env } = settings.getShellConfig();
 		const filteredEnv = filterEnv(env);
 		const runtime = resolvePythonRuntime(options.cwd, filteredEnv);
 		const snapshotPath = await getOrCreateSnapshot(shell, env).catch((err: unknown) => {

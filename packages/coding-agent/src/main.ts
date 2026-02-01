@@ -27,7 +27,7 @@ import { parseCommitArgs, printCommitHelp } from "./commit/cli";
 import { findConfigFile, getModelsPath, VERSION } from "./config";
 import type { ModelRegistry } from "./config/model-registry";
 import { parseModelPattern, parseModelString, resolveModelScope, type ScopedModel } from "./config/model-resolver";
-import { SettingsManager } from "./config/settings-manager";
+import { Settings, settings } from "./config/settings";
 import { initializeWithSettings } from "./discovery";
 import { exportFromFile } from "./export/html";
 import type { ExtensionUIContext } from "./extensibility/extensions/types";
@@ -208,24 +208,24 @@ async function promptForkSession(session: SessionInfo): Promise<boolean> {
 	}
 }
 
-async function getChangelogForDisplay(parsed: Args, settingsManager: SettingsManager): Promise<string | undefined> {
+async function getChangelogForDisplay(parsed: Args): Promise<string | undefined> {
 	if (parsed.continue || parsed.resume) {
 		return undefined;
 	}
 
-	const lastVersion = settingsManager.getLastChangelogVersion();
+	const lastVersion = settings.get("lastChangelogVersion");
 	const changelogPath = getChangelogPath();
 	const entries = await parseChangelog(changelogPath);
 
 	if (!lastVersion) {
 		if (entries.length > 0) {
-			settingsManager.setLastChangelogVersion(VERSION);
+			settings.set("lastChangelogVersion", VERSION);
 			return entries.map(e => e.content).join("\n\n");
 		}
 	} else {
 		const newEntries = getNewEntries(entries, lastVersion);
 		if (newEntries.length > 0) {
-			settingsManager.setLastChangelogVersion(VERSION);
+			settings.set("lastChangelogVersion", VERSION);
 			return newEntries.map(e => e.content).join("\n\n");
 		}
 	}
@@ -355,7 +355,6 @@ async function buildSessionOptions(
 	scopedModels: ScopedModel[],
 	sessionManager: SessionManager | undefined,
 	modelRegistry: ModelRegistry,
-	settingsManager: SettingsManager,
 ): Promise<CreateAgentSessionOptions> {
 	const options: CreateAgentSessionOptions = {
 		cwd: parsed.cwd ?? process.cwd(),
@@ -375,7 +374,7 @@ async function buildSessionOptions(
 	if (parsed.model) {
 		const available = modelRegistry.getAvailable();
 		const modelMatchPreferences = {
-			usageOrder: settingsManager.getStorage()?.getModelUsageOrder(),
+			usageOrder: settings.getStorage()?.getModelUsageOrder(),
 		};
 		const { model, warning } = parseModelPattern(parsed.model, available, modelMatchPreferences);
 		if (warning) {
@@ -386,11 +385,9 @@ async function buildSessionOptions(
 			process.exit(1);
 		}
 		options.model = model;
-		settingsManager.applyOverrides({
-			modelRoles: { default: `${model.provider}/${model.id}` },
-		});
+		settings.setModelRole("default", `${model.provider}/${model.id}`);
 	} else if (scopedModels.length > 0 && !parsed.continue && !parsed.resume) {
-		const remembered = settingsManager.getModelRole("default");
+		const remembered = settings.getModelRole("default");
 		if (remembered) {
 			const parsedModel = parseModelString(remembered);
 			const rememberedModel = parsedModel
@@ -422,7 +419,7 @@ async function buildSessionOptions(
 
 	// Scoped models for Ctrl+P cycling - fill in default thinking levels when not explicit
 	if (scopedModels.length > 0) {
-		const defaultThinkingLevel = settingsManager.getDefaultThinkingLevel() ?? "off";
+		const defaultThinkingLevel = settings.get("defaultThinkingLevel");
 		options.scopedModels = scopedModels.map(scopedModel => ({
 			model: scopedModel.model,
 			thinkingLevel: scopedModel.explicitThinkingLevel
@@ -458,13 +455,8 @@ async function buildSessionOptions(
 	if (parsed.noSkills) {
 		options.skills = [];
 	} else if (parsed.skills && parsed.skills.length > 0) {
-		// Override includeSkills in settingsManager for this session
-		settingsManager.applyOverrides({
-			skills: {
-				...settingsManager.getSkillsSettings(),
-				includeSkills: parsed.skills,
-			},
-		});
+		// Override includeSkills for this session
+		settings.override("skills.includeSkills", parsed.skills as string[]);
 	}
 
 	// Additional extension paths from CLI
@@ -623,11 +615,10 @@ export async function main(args: string[]) {
 	}
 
 	const cwd = process.cwd();
-	const settingsManager = await SettingsManager.create(cwd);
-	settingsManager.applyEnvironmentVariables();
-	time("SettingsManager.create");
+	await Settings.init({ cwd });
+	time("Settings.init");
 	const pipedInput = await readPipedInput();
-	let { initialMessage, initialImages } = await prepareInitialMessage(parsed, settingsManager.getImageAutoResize());
+	let { initialMessage, initialImages } = await prepareInitialMessage(parsed, settings.get("images.autoResize"));
 	if (pipedInput) {
 		initialMessage = initialMessage ? `${initialMessage}\n${pipedInput}` : pipedInput;
 	}
@@ -637,7 +628,7 @@ export async function main(args: string[]) {
 	const mode = parsed.mode || "text";
 
 	// Initialize discovery system with settings for provider persistence
-	initializeWithSettings(settingsManager);
+	initializeWithSettings(settings);
 	time("initializeWithSettings");
 
 	// Apply model role overrides from CLI args or env vars (ephemeral, not persisted)
@@ -645,19 +636,13 @@ export async function main(args: string[]) {
 	const slowModel = parsed.slow ?? process.env.OMP_SLOW_MODEL;
 	const planModel = parsed.plan ?? process.env.OMP_PLAN_MODEL;
 	if (smolModel || slowModel || planModel) {
-		const roleOverrides: Record<string, string> = {};
-		if (smolModel) roleOverrides.smol = smolModel;
-		if (slowModel) roleOverrides.slow = slowModel;
-		if (planModel) roleOverrides.plan = planModel;
-		settingsManager.applyOverrides({ modelRoles: roleOverrides });
+		const currentRoles = settings.get("modelRoles") as Record<string, string>;
+		if (smolModel) settings.override("modelRoles", { ...currentRoles, smol: smolModel });
+		if (slowModel) settings.override("modelRoles", { ...currentRoles, slow: slowModel });
+		if (planModel) settings.override("modelRoles", { ...currentRoles, plan: planModel });
 	}
 
-	await initTheme(
-		settingsManager.getTheme(),
-		isInteractive,
-		settingsManager.getSymbolPreset(),
-		settingsManager.getColorBlindMode(),
-	);
+	await initTheme(settings.get("theme"), isInteractive, settings.get("symbolPreset"), settings.get("colorBlindMode"));
 	time("initTheme");
 
 	// Show deprecation warnings in interactive mode
@@ -666,9 +651,9 @@ export async function main(args: string[]) {
 	}
 
 	let scopedModels: ScopedModel[] = [];
-	const modelPatterns = parsed.models ?? settingsManager.getEnabledModels();
+	const modelPatterns = parsed.models ?? settings.get("enabledModels");
 	const modelMatchPreferences = {
-		usageOrder: settingsManager.getStorage()?.getModelUsageOrder(),
+		usageOrder: settings.getStorage()?.getModelUsageOrder(),
 	};
 	if (modelPatterns && modelPatterns.length > 0) {
 		scopedModels = await resolveModelScope(modelPatterns, modelRegistry, modelMatchPreferences);
@@ -696,16 +681,9 @@ export async function main(args: string[]) {
 		sessionManager = await SessionManager.open(selectedPath);
 	}
 
-	const sessionOptions = await buildSessionOptions(
-		parsed,
-		scopedModels,
-		sessionManager,
-		modelRegistry,
-		settingsManager,
-	);
+	const sessionOptions = await buildSessionOptions(parsed, scopedModels, sessionManager, modelRegistry);
 	sessionOptions.authStorage = authStorage;
 	sessionOptions.modelRegistry = modelRegistry;
-	sessionOptions.settingsManager = settingsManager;
 	sessionOptions.hasUI = isInteractive;
 
 	// Handle CLI --api-key as runtime override (not persisted)
@@ -763,7 +741,7 @@ export async function main(args: string[]) {
 		await runRpcMode(session);
 	} else if (isInteractive) {
 		const versionCheckPromise = checkForNewVersion(VERSION).catch(() => undefined);
-		const changelogMarkdown = await getChangelogForDisplay(parsed, settingsManager);
+		const changelogMarkdown = await getChangelogForDisplay(parsed);
 
 		const scopedModelsForDisplay = sessionOptions.scopedModels ?? scopedModels;
 		if (scopedModelsForDisplay.length > 0) {

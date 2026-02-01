@@ -7,7 +7,7 @@ import * as path from "node:path";
 import { Agent } from "@oh-my-pi/pi-agent-core";
 import { getModel } from "@oh-my-pi/pi-ai";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
+import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
@@ -85,6 +85,7 @@ export async function createTestSession(options: TestSessionOptions = {}): Promi
 		hasUI: false,
 		getSessionFile: () => null,
 		getSessionSpawns: () => "*",
+		settings: Settings.isolated(options.settingsOverrides),
 	};
 	const tools = await createTools(toolSession);
 
@@ -99,18 +100,14 @@ export async function createTestSession(options: TestSessionOptions = {}): Promi
 	});
 
 	const sessionManager = options.inMemory ? SessionManager.inMemory() : SessionManager.create(tempDir);
-	const settingsManager = await SettingsManager.create(tempDir, tempDir);
-
-	if (options.settingsOverrides) {
-		settingsManager.applyOverrides(options.settingsOverrides);
-	}
+	const settings = Settings.isolated(options.settingsOverrides);
 
 	const authStorage = await AuthStorage.create(path.join(tempDir, "auth.json"));
 	const modelRegistry = new ModelRegistry(authStorage, tempDir);
 	const session = new AgentSession({
 		agent,
 		sessionManager,
-		settingsManager,
+		settings,
 		modelRegistry,
 	});
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { resetPreludeDocsCache, warmPythonEnvironment } from "@oh-my-pi/pi-coding-agent/ipy/executor";
 import { getPythonToolDescription, PythonTool } from "@oh-my-pi/pi-coding-agent/tools/python";
 
@@ -45,18 +46,11 @@ describe.skipIf(!shouldRun)("PYTHON_PRELUDE integration", () => {
 			hasUI: false,
 			getSessionFile: () => null,
 			getSessionSpawns: () => null,
-			settings: {
-				getImageAutoResize: () => true,
-				getLspFormatOnWrite: () => false,
-				getLspDiagnosticsOnWrite: () => false,
-				getLspDiagnosticsOnEdit: () => false,
-				getEditFuzzyMatch: () => true,
-				getBashInterceptorEnabled: () => true,
-				getBashInterceptorSimpleLsEnabled: () => true,
-				getBashInterceptorRules: () => [],
-				getPythonToolMode: () => "ipy-only" as const,
-				getPythonKernelMode: () => "per-call" as const,
-			},
+			settings: Settings.isolated({
+				"lsp.diagnosticsOnWrite": false,
+				"python.toolMode": "ipy-only",
+				"python.kernelMode": "per-call",
+			}),
 		};
 
 		const tool = new PythonTool(session);

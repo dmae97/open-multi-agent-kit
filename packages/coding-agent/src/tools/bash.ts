@@ -77,13 +77,13 @@ export class BashTool implements AgentTool<typeof bashSchema, BashToolDetails> {
 		const tailLines = tail ?? normalized.tailLines;
 
 		// Check interception if enabled and available tools are known
-		if (this.session.settings?.getBashInterceptorEnabled()) {
-			const rules = this.session.settings?.getBashInterceptorRules?.();
+		if (this.session.settings.get("bashInterceptor.enabled")) {
+			const rules = this.session.settings.getBashInterceptorRules();
 			const interception = checkBashInterception(command, ctx?.toolNames ?? [], rules);
 			if (interception.block) {
 				throw new ToolError(interception.message ?? "Command blocked");
 			}
-			if (this.session.settings?.getBashInterceptorSimpleLsEnabled?.() !== false) {
+			if (this.session.settings.get("bashInterceptor.simpleLs")) {
 				const lsInterception = checkSimpleLsInterception(command, ctx?.toolNames ?? []);
 				if (lsInterception.block) {
 					throw new ToolError(lsInterception.message ?? "Command blocked");

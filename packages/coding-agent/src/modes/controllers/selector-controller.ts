@@ -3,6 +3,7 @@ import type { OAuthProvider } from "@oh-my-pi/pi-ai";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Input, Loader, Spacer, Text } from "@oh-my-pi/pi-tui";
 import { getAgentDbPath } from "../../config";
+import { settings } from "../../config/settings";
 import { DebugSelectorComponent } from "../../debug";
 import { disableProvider, enableProvider } from "../../discovery";
 import { AssistantMessageComponent } from "../../modes/components/assistant-message";
@@ -51,7 +52,6 @@ export class SelectorController {
 		getAvailableThemes().then(availableThemes => {
 			this.showSelector(done => {
 				const selector = new SettingsSelectorComponent(
-					this.ctx.settingsManager,
 					{
 						availableThinkingLevels: this.ctx.session.getAvailableThinkingLevels(),
 						thinkingLevel: this.ctx.session.thinkingLevel,
@@ -68,10 +68,16 @@ export class SelectorController {
 								}
 							});
 						},
-						onStatusLinePreview: settings => {
+						onStatusLinePreview: previewSettings => {
 							// Update status line with preview settings
-							const currentSettings = this.ctx.settingsManager.getStatusLineSettings();
-							this.ctx.statusLine.updateSettings({ ...currentSettings, ...settings });
+							this.ctx.statusLine.updateSettings({
+								preset: settings.get("statusLine.preset"),
+								leftSegments: settings.get("statusLine.leftSegments"),
+								rightSegments: settings.get("statusLine.rightSegments"),
+								separator: settings.get("statusLine.separator"),
+								showHookStatus: settings.get("statusLine.showHookStatus"),
+								...previewSettings,
+							});
 							this.ctx.updateEditorTopBorder();
 							this.ctx.ui.requestRender();
 						},
@@ -86,7 +92,13 @@ export class SelectorController {
 						onCancel: () => {
 							done();
 							// Restore status line to saved settings
-							this.ctx.statusLine.updateSettings(this.ctx.settingsManager.getStatusLineSettings());
+							this.ctx.statusLine.updateSettings({
+								preset: settings.get("statusLine.preset"),
+								leftSegments: settings.get("statusLine.leftSegments"),
+								rightSegments: settings.get("statusLine.rightSegments"),
+								separator: settings.get("statusLine.separator"),
+								showHookStatus: settings.get("statusLine.showHookStatus"),
+							});
 							this.ctx.updateEditorTopBorder();
 							this.ctx.ui.requestRender();
 						},
@@ -123,11 +135,7 @@ export class SelectorController {
 	 * Replaces /status with a unified view of all providers and extensions.
 	 */
 	async showExtensionsDashboard(): Promise<void> {
-		const dashboard = await ExtensionDashboard.create(
-			process.cwd(),
-			this.ctx.settingsManager,
-			this.ctx.ui.terminal.rows,
-		);
+		const dashboard = await ExtensionDashboard.create(process.cwd(), this.ctx.settings, this.ctx.ui.terminal.rows);
 		this.showSelector(done => {
 			dashboard.onClose = () => {
 				done();
@@ -142,7 +150,7 @@ export class SelectorController {
 	 * Most settings are saved directly via SettingsManager in the definitions.
 	 * This handles side effects and session-specific settings.
 	 */
-	handleSettingChange(id: string, value: string | boolean): void {
+	handleSettingChange(id: string, value: unknown): void {
 		// Discovery provider toggles
 		if (id.startsWith("discovery.")) {
 			const providerId = id.replace("discovery.", "");
@@ -232,7 +240,15 @@ export class SelectorController {
 			case "statusLineGitShowUntracked":
 			case "statusLineTimeFormat":
 			case "statusLineTimeShowSeconds": {
-				this.ctx.statusLine.updateSettings(this.ctx.settingsManager.getStatusLineSettings());
+				const statusLineSettings = {
+					preset: settings.get("statusLine.preset"),
+					leftSegments: settings.get("statusLine.leftSegments"),
+					rightSegments: settings.get("statusLine.rightSegments"),
+					separator: settings.get("statusLine.separator"),
+					showHookStatus: settings.get("statusLine.showHookStatus"),
+					segmentOptions: settings.get("statusLine.segmentOptions"),
+				};
+				this.ctx.statusLine.updateSettings(statusLineSettings);
 				this.ctx.updateEditorTopBorder();
 				this.ctx.ui.requestRender();
 				break;
@@ -256,7 +272,7 @@ export class SelectorController {
 			const selector = new ModelSelectorComponent(
 				this.ctx.ui,
 				this.ctx.session.model,
-				this.ctx.settingsManager,
+				this.ctx.settings,
 				this.ctx.session.modelRegistry,
 				this.ctx.session.scopedModels,
 				async (model, role) => {
@@ -369,7 +385,7 @@ export class SelectorController {
 					let wantsSummary = false;
 					let customInstructions: string | undefined;
 
-					const branchSummariesEnabled = this.ctx.settingsManager.getBranchSummaryEnabled();
+					const branchSummariesEnabled = settings.get("branchSummary.enabled");
 
 					while (branchSummariesEnabled) {
 						const summaryChoice = await this.ctx.showHookSelector("Summarize branch?", [

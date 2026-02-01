@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { isEnoent, logger, procmgr } from "@oh-my-pi/pi-utils";
 import type { Subprocess } from "bun";
 import { getAgentDir } from "../config";
-import { SettingsManager } from "../config/settings-manager";
+import { Settings } from "../config/settings";
 import { getOrCreateSnapshot } from "../utils/shell-snapshot";
 import { time } from "../utils/timings";
 import { filterEnv, resolvePythonRuntime } from "./runtime";
@@ -229,7 +229,8 @@ async function isGatewayAlive(info: GatewayInfo): Promise<boolean> {
 async function startGatewayProcess(
 	cwd: string,
 ): Promise<{ url: string; pid: number; pythonPath: string; venvPath: string | null }> {
-	const { shell, env } = await SettingsManager.getGlobalShellConfig();
+	const settings = await Settings.init();
+	const { shell, env } = settings.getShellConfig();
 	const filteredEnv = filterEnv(env);
 	const runtime = await resolvePythonRuntime(cwd, filteredEnv);
 	const snapshotPath = await getOrCreateSnapshot(shell, env).catch((err: unknown) => {

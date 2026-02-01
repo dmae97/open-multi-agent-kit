@@ -1,4 +1,5 @@
 import { Loader, Text } from "@oh-my-pi/pi-tui";
+import { settings } from "../../config/settings";
 import { AssistantMessageComponent } from "../../modes/components/assistant-message";
 import { ReadToolGroupComponent } from "../../modes/components/read-tool-group";
 import { TodoReminderComponent } from "../../modes/components/todo-reminder";
@@ -136,9 +137,9 @@ export class EventController {
 								content.name,
 								content.arguments,
 								{
-									showImages: this.ctx.settingsManager.getShowImages(),
-									editFuzzyThreshold: this.ctx.settingsManager.getEditFuzzyThreshold(),
-									editAllowFuzzy: this.ctx.settingsManager.getEditFuzzyMatch(),
+									showImages: settings.get("terminal.showImages"),
+									editFuzzyThreshold: settings.get("edit.fuzzyThreshold"),
+									editAllowFuzzy: settings.get("edit.fuzzyMatch"),
 								},
 								tool,
 								this.ctx.ui,
@@ -210,9 +211,9 @@ export class EventController {
 						event.toolName,
 						event.args,
 						{
-							showImages: this.ctx.settingsManager.getShowImages(),
-							editFuzzyThreshold: this.ctx.settingsManager.getEditFuzzyThreshold(),
-							editAllowFuzzy: this.ctx.settingsManager.getEditFuzzyMatch(),
+							showImages: settings.get("terminal.showImages"),
+							editFuzzyThreshold: settings.get("edit.fuzzyThreshold"),
+							editAllowFuzzy: settings.get("edit.fuzzyMatch"),
 						},
 						tool,
 						this.ctx.ui,
@@ -383,7 +384,7 @@ export class EventController {
 	sendCompletionNotification(): void {
 		if (this.ctx.isBackgrounded === false) return;
 		if (isNotificationSuppressed()) return;
-		const method = this.ctx.settingsManager.getNotificationOnComplete();
+		const method = settings.get("notifications.onComplete");
 		if (method === "off") return;
 		const protocol = method === "auto" ? detectNotificationProtocol() : method;
 		const title = this.ctx.sessionManager.getSessionTitle();

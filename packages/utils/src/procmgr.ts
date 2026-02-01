@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import path from "node:path";
 import * as timers from "node:timers";
 import type { Subprocess } from "bun";
 
@@ -83,6 +84,30 @@ function buildConfig(shell: string): ShellConfig {
 }
 
 /**
+ * Resolve the basic shell to use if shellForceBasic is true.
+ */
+export function resolveBasicShell(): string | undefined {
+	for (const name of ["bash", "bash.exe", "sh", "sh.exe"]) {
+		const resolved = Bun.which(name);
+		if (resolved) return resolved;
+	}
+
+	if (process.platform !== "win32") {
+		const searchPaths = ["/bin", "/usr/bin", "/usr/local/bin", "/opt/homebrew/bin"];
+		const candidates = ["bash", "sh"];
+
+		for (const name of candidates) {
+			for (const dir of searchPaths) {
+				const fullPath = path.join(dir, name);
+				if (fs.existsSync(fullPath)) return fullPath;
+			}
+		}
+	}
+
+	return undefined;
+}
+
+/**
  * Get shell configuration based on platform.
  * Resolution order:
  * 1. User-specified shellPath in settings.json
@@ -149,30 +174,13 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
 		return cachedShellConfig;
 	}
 
-	// Fallback paths (Claude's approach: check known locations)
-	const fallbackPaths = ["/bin", "/usr/bin", "/usr/local/bin", "/opt/homebrew/bin"];
-	const preferZsh = !userShell?.includes("bash");
-	const shellOrder = preferZsh ? ["zsh", "bash"] : ["bash", "zsh"];
-
-	for (const shellName of shellOrder) {
-		for (const dir of fallbackPaths) {
-			const shellPath = `${dir}/${shellName}`;
-			if (isExecutable(shellPath)) {
-				cachedShellConfig = buildConfig(shellPath);
-				return cachedShellConfig;
-			}
-		}
-	}
-
-	// Last resort: use Bun.which
-	const bashPath = Bun.which("bash");
-	if (bashPath) {
-		cachedShellConfig = buildConfig(bashPath);
+	// 4. Fallback: use basic shell
+	const basicShell = resolveBasicShell();
+	if (basicShell) {
+		cachedShellConfig = buildConfig(basicShell);
 		return cachedShellConfig;
 	}
-
-	const shPath = Bun.which("sh");
-	cachedShellConfig = buildConfig(shPath || "sh");
+	cachedShellConfig = buildConfig("sh");
 	return cachedShellConfig;
 }
 

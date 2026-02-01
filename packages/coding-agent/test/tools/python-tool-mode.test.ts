@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { createTools, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 
 function createSession(overrides: Partial<ToolSession> = {}): ToolSession {
@@ -7,18 +8,11 @@ function createSession(overrides: Partial<ToolSession> = {}): ToolSession {
 		hasUI: false,
 		getSessionFile: () => null,
 		getSessionSpawns: () => "*",
-		settings: {
-			getImageAutoResize: () => true,
-			getLspFormatOnWrite: () => true,
-			getLspDiagnosticsOnWrite: () => true,
-			getLspDiagnosticsOnEdit: () => false,
-			getEditFuzzyMatch: () => true,
-			getBashInterceptorEnabled: () => true,
-			getBashInterceptorSimpleLsEnabled: () => true,
-			getBashInterceptorRules: () => [],
-			getPythonToolMode: () => "bash-only",
-			getPythonKernelMode: () => "session",
-		},
+		settings: Settings.isolated({
+			"lsp.formatOnWrite": true,
+			"bashInterceptor.enabled": true,
+			"python.toolMode": "bash-only",
+		}),
 		...overrides,
 	};
 }

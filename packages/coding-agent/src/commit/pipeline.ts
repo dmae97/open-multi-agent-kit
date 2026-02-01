@@ -2,7 +2,7 @@ import * as path from "node:path";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
 import { renderPromptTemplate } from "../config/prompt-templates";
-import { SettingsManager } from "../config/settings-manager";
+import { Settings } from "../config/settings";
 import { discoverAuthStorage, discoverModels } from "../sdk";
 import { loadProjectContextFiles } from "../system-prompt";
 import { runAgenticCommit } from "./agentic";
@@ -38,18 +38,18 @@ export async function runCommitCommand(args: CommitCommandArgs): Promise<void> {
 
 async function runLegacyCommitCommand(args: CommitCommandArgs): Promise<void> {
 	const cwd = process.cwd();
-	const settingsManager = await SettingsManager.create(cwd);
-	const commitSettings = settingsManager.getCommitSettings();
+	const settingsInstance = await Settings.init();
+	const commitSettings = settingsInstance.getGroup("commit");
 	const authStorage = await discoverAuthStorage();
 	const modelRegistry = discoverModels(authStorage);
 
 	const { model: primaryModel, apiKey: primaryApiKey } = await resolvePrimaryModel(
 		args.model,
-		settingsManager,
+		settingsInstance,
 		modelRegistry,
 	);
 	const { model: smolModel, apiKey: smolApiKey } = await resolveSmolModel(
-		settingsManager,
+		settingsInstance,
 		modelRegistry,
 		primaryModel,
 		primaryApiKey,

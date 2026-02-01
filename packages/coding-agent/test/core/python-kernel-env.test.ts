@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { SettingsManager } from "@oh-my-pi/pi-coding-agent";
+import { _resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { PythonKernel } from "@oh-my-pi/pi-coding-agent/ipy/kernel";
 import { PYTHON_PRELUDE } from "@oh-my-pi/pi-coding-agent/ipy/prelude";
 import * as shellSnapshot from "@oh-my-pi/pi-coding-agent/utils/shell-snapshot";
@@ -37,6 +37,7 @@ describe("PythonKernel.start (local gateway)", () => {
 	const originalWebSocket = globalThis.WebSocket;
 
 	beforeEach(() => {
+		_resetSettingsForTest();
 		process.env.BUN_ENV = "test";
 		delete process.env.OMP_PYTHON_GATEWAY_URL;
 		delete process.env.OMP_PYTHON_GATEWAY_TOKEN;
@@ -70,7 +71,7 @@ describe("PythonKernel.start (local gateway)", () => {
 		});
 		globalThis.fetch = fetchSpy as unknown as typeof fetch;
 
-		const shellSpy = vi.spyOn(SettingsManager, "getGlobalShellConfig").mockResolvedValue({
+		vi.spyOn(Settings.prototype, "getShellConfig").mockReturnValue({
 			shell: "/bin/bash",
 			args: ["-lc"],
 			env: {
@@ -131,7 +132,7 @@ describe("PythonKernel.start (local gateway)", () => {
 
 		await kernel.shutdown();
 
-		shellSpy.mockRestore();
+		vi.restoreAllMocks();
 		snapshotSpy.mockRestore();
 		whichSpy.mockRestore();
 		spawnSpy.mockRestore();

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { type SettingPath, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { BUILTIN_TOOLS, createTools, HIDDEN_TOOLS, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 
 process.env.OMP_PYTHON_SKIP_CHECK = "1";
@@ -9,22 +10,17 @@ function createTestSession(overrides: Partial<ToolSession> = {}): ToolSession {
 		hasUI: false,
 		getSessionFile: () => null,
 		getSessionSpawns: () => "*",
+		settings: Settings.isolated(),
 		...overrides,
 	};
 }
 
-function createBaseSettings(overrides: Partial<NonNullable<ToolSession["settings"]>> = {}) {
-	return {
-		getImageAutoResize: () => true,
-		getLspFormatOnWrite: () => true,
-		getLspDiagnosticsOnWrite: () => true,
-		getLspDiagnosticsOnEdit: () => false,
-		getEditFuzzyMatch: () => true,
-		getBashInterceptorEnabled: () => true,
-		getBashInterceptorSimpleLsEnabled: () => true,
-		getBashInterceptorRules: () => [],
+function createSettingsWithOverrides(overrides: Partial<Record<SettingPath, unknown>> = {}): Settings {
+	return Settings.isolated({
+		"lsp.formatOnWrite": true,
+		"bashInterceptor.enabled": true,
 		...overrides,
-	};
+	});
 }
 
 describe("createTools", () => {
@@ -35,7 +31,7 @@ describe("createTools", () => {
 
 		// Core tools should always be present
 		expect(names).toContain("python");
-		expect(names).not.toContain("bash");
+		expect(names).toContain("bash");
 		expect(names).toContain("calc");
 		expect(names).toContain("read");
 		expect(names).toContain("edit");
@@ -54,9 +50,9 @@ describe("createTools", () => {
 
 	it("includes bash and python when python mode is both", async () => {
 		const session = createTestSession({
-			settings: createBaseSettings({
-				getPythonToolMode: () => "both",
-				getPythonKernelMode: () => "session",
+			settings: createSettingsWithOverrides({
+				"python.toolMode": "both",
+				"python.kernelMode": "session",
 			}),
 		});
 		const tools = await createTools(session);
@@ -68,9 +64,9 @@ describe("createTools", () => {
 
 	it("includes bash only when python mode is bash-only", async () => {
 		const session = createTestSession({
-			settings: createBaseSettings({
-				getPythonToolMode: () => "bash-only",
-				getPythonKernelMode: () => "session",
+			settings: createSettingsWithOverrides({
+				"python.toolMode": "bash-only",
+				"python.kernelMode": "session",
 			}),
 		});
 		const tools = await createTools(session);

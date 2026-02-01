@@ -13,7 +13,7 @@ import {
 } from "@oh-my-pi/pi-tui";
 import type { ModelRegistry } from "../../config/model-registry";
 import { parseModelString } from "../../config/model-resolver";
-import type { SettingsManager } from "../../config/settings-manager";
+import type { Settings } from "../../config/settings";
 import { type ThemeColor, theme } from "../../modes/theme/theme";
 import { fuzzyFilter } from "../../utils/fuzzy";
 import { DynamicBorder } from "./dynamic-border";
@@ -80,7 +80,7 @@ export class ModelSelectorComponent extends Container {
 	private smolModel?: Model<any>;
 	private slowModel?: Model<any>;
 	private planModel?: Model<any>;
-	private settingsManager: SettingsManager;
+	private settings: Settings;
 	private modelRegistry: ModelRegistry;
 	private onSelectCallback: (model: Model<any>, role: string) => void;
 	private onCancelCallback: () => void;
@@ -100,7 +100,7 @@ export class ModelSelectorComponent extends Container {
 	constructor(
 		tui: TUI,
 		_currentModel: Model<any> | undefined,
-		settingsManager: SettingsManager,
+		settings: Settings,
 		modelRegistry: ModelRegistry,
 		scopedModels: ReadonlyArray<ScopedModelItem>,
 		onSelect: (model: Model<any>, role: string) => void,
@@ -110,7 +110,7 @@ export class ModelSelectorComponent extends Container {
 		super();
 
 		this.tui = tui;
-		this.settingsManager = settingsManager;
+		this.settings = settings;
 		this.modelRegistry = modelRegistry;
 		this.scopedModels = scopedModels;
 		this.onSelectCallback = onSelect;
@@ -182,7 +182,7 @@ export class ModelSelectorComponent extends Container {
 	}
 
 	private _loadRoleModels(): void {
-		const roles = this.settingsManager.getModelRoles();
+		const roles = this.settings.get("modelRoles") as Record<string, string>;
 		const allModels = this.modelRegistry.getAll();
 
 		// Load default model
@@ -224,7 +224,7 @@ export class ModelSelectorComponent extends Container {
 
 	private sortModels(models: ModelItem[]): void {
 		// Sort: tagged models (default/smol/slow/plan) first, then MRU, then alphabetical
-		const mruOrder = this.settingsManager.getStorage()?.getModelUsageOrder() ?? [];
+		const mruOrder = this.settings.getStorage()?.getModelUsageOrder() ?? [];
 		const mruIndex = new Map(mruOrder.map((key, i) => [key, i]));
 
 		models.sort((a, b) => {
@@ -593,7 +593,7 @@ export class ModelSelectorComponent extends Container {
 		}
 
 		// Save to settings
-		this.settingsManager.setModelRole(role, `${model.provider}/${model.id}`);
+		this.settings.setModelRole(role, `${model.provider}/${model.id}`);
 
 		// Update local state for UI
 		if (role === "default") {

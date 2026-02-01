@@ -2,15 +2,18 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
+import { _resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { YAML } from "bun";
 
-describe("SettingsManager", () => {
+describe("Settings", () => {
 	let testDir: string;
 	let agentDir: string;
 	let projectDir: string;
 
 	beforeEach(() => {
+		// Reset global singleton so each test gets a fresh instance
+		_resetSettingsForTest();
+
 		// Use random UUID to isolate parallel test runs (SQLite files can't be shared)
 		testDir = path.join(os.tmpdir(), "test-settings-tmp", crypto.randomUUID());
 		agentDir = path.join(testDir, "agent");
@@ -54,8 +57,8 @@ describe("SettingsManager", () => {
 				modelRoles: { default: "claude-sonnet" },
 			});
 
-			// Manager loads the initial state
-			const manager = await SettingsManager.create(projectDir, agentDir);
+			// Settings loads the initial state
+			const settings = await Settings.init({ cwd: projectDir, agentDir });
 
 			// Simulate external edit (e.g., user modifying DB directly or another process)
 			await writeSettings({
@@ -64,8 +67,9 @@ describe("SettingsManager", () => {
 				enabledModels: ["claude-opus-4-5", "gpt-5.2-codex"],
 			});
 
-			// Manager saves a change - should merge, not overwrite
-			await manager.setDefaultThinkingLevel("high");
+			// Settings saves a change - should merge, not overwrite
+			settings.set("defaultThinkingLevel", "high");
+			await settings.flush();
 
 			const savedSettings = await readSettings();
 			expect(savedSettings.enabledModels).toEqual(["claude-opus-4-5", "gpt-5.2-codex"]);
@@ -79,7 +83,7 @@ describe("SettingsManager", () => {
 				modelRoles: { default: "claude-sonnet" },
 			});
 
-			const manager = await SettingsManager.create(projectDir, agentDir);
+			const settings = await Settings.init({ cwd: projectDir, agentDir });
 
 			await writeSettings({
 				modelRoles: { default: "claude-sonnet" },
@@ -87,7 +91,8 @@ describe("SettingsManager", () => {
 				extensions: ["/path/to/extension.ts"],
 			});
 
-			await manager.setTheme("light");
+			settings.set("theme", "light");
+			await settings.flush();
 
 			const savedSettings = await readSettings();
 			expect(savedSettings.shellPath).toBe("/bin/zsh");
@@ -100,14 +105,15 @@ describe("SettingsManager", () => {
 				theme: "dark",
 			});
 
-			const manager = await SettingsManager.create(projectDir, agentDir);
+			const settings = await Settings.init({ cwd: projectDir, agentDir });
 
 			await writeSettings({
 				theme: "dark",
 				defaultThinkingLevel: "low",
 			});
 
-			await manager.setDefaultThinkingLevel("high");
+			settings.set("defaultThinkingLevel", "high");
+			await settings.flush();
 
 			const savedSettings = await readSettings();
 			expect(savedSettings.defaultThinkingLevel).toBe("high");

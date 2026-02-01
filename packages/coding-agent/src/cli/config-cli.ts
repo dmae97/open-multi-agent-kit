@@ -2,12 +2,20 @@
  * Config CLI command handlers.
  *
  * Handles `omp config <command>` subcommands for managing settings.
- * Uses SETTINGS_DEFS as the source of truth for available settings.
+ * Uses settings-defs as the source of truth for available settings.
  */
 import chalk from "chalk";
 import { APP_NAME, getAgentDir } from "../config";
-import { SettingsManager } from "../config/settings-manager";
-import { SETTINGS_DEFS, type SettingDef } from "../modes/components/settings-defs";
+import {
+	getDefault,
+	getEnumValues,
+	getType,
+	type SettingPath,
+	Settings,
+	type SettingValue,
+	settings,
+} from "../config/settings";
+import { getAllSettingDefs, type SettingDef } from "../modes/components/settings-defs";
 import { theme } from "../modes/theme/theme";
 
 // =============================================================================
@@ -29,18 +37,18 @@ export interface ConfigCommandArgs {
 // Setting Filtering
 // =============================================================================
 
-/** Find setting definition by ID */
-function findSettingDef(id: string): SettingDef | undefined {
-	return SETTINGS_DEFS.find(def => def.id === id);
+/** Find setting definition by path */
+function findSettingDef(path: string): SettingDef | undefined {
+	return getAllSettingDefs().find(def => def.path === path);
 }
 
 /** Get available values for a setting */
-function getSettingValues(def: SettingDef, sm: SettingsManager): readonly string[] | undefined {
+function getSettingValues(def: SettingDef): readonly string[] | undefined {
 	if (def.type === "enum") {
 		return def.values;
 	}
 	if (def.type === "submenu") {
-		const options = def.getOptions(sm);
+		const options = def.getOptions();
 		if (options.length > 0) {
 			return options.map(o => o.value);
 		}
@@ -100,28 +108,8 @@ export function parseConfigArgs(args: string[]): ConfigCommandArgs | undefined {
 }
 
 // =============================================================================
-// Value Parsing
+// Value Formatting
 // =============================================================================
-
-function parseValue(value: string, def: SettingDef, sm: SettingsManager): unknown {
-	if (def.type === "boolean") {
-		const lower = value.toLowerCase();
-		if (lower === "true" || lower === "1" || lower === "yes" || lower === "on") {
-			return true;
-		}
-		if (lower === "false" || lower === "0" || lower === "no" || lower === "off") {
-			return false;
-		}
-		throw new Error(`Invalid boolean value: ${value}. Use true/false, yes/no, on/off, or 1/0`);
-	}
-
-	const validValues = getSettingValues(def, sm);
-	if (validValues && validValues.length > 0 && !validValues.includes(value)) {
-		throw new Error(`Invalid value: ${value}. Valid values: ${validValues.join(", ")}`);
-	}
-
-	return value;
-}
 
 function formatValue(value: unknown): string {
 	if (value === undefined || value === null) {
@@ -136,11 +124,11 @@ function formatValue(value: unknown): string {
 	return chalk.yellow(String(value));
 }
 
-function getTypeDisplay(def: SettingDef, sm: SettingsManager): string {
+function getTypeDisplay(def: SettingDef): string {
 	if (def.type === "boolean") {
 		return "(boolean)";
 	}
-	const values = getSettingValues(def, sm);
+	const values = getSettingValues(def);
 	if (values && values.length > 0) {
 		return `(${values.join("|")})`;
 	}
@@ -148,24 +136,60 @@ function getTypeDisplay(def: SettingDef, sm: SettingsManager): string {
 }
 
 // =============================================================================
+// Schema-Driven Value Parsing
+// =============================================================================
+
+function parseAndSetValue(path: SettingPath, rawValue: string): void {
+	const schemaType = getType(path);
+	let parsedValue: unknown;
+
+	const trimmed = rawValue.trim();
+	switch (schemaType) {
+		case "boolean": {
+			const lower = trimmed.toLowerCase();
+			if (["true", "1", "yes", "on"].includes(lower)) parsedValue = true;
+			else if (["false", "0", "no", "off"].includes(lower)) parsedValue = false;
+			else throw new Error(`Invalid boolean value: ${rawValue}. Use true/false, yes/no, on/off, or 1/0`);
+			break;
+		}
+		case "number":
+			parsedValue = Number(trimmed);
+			if (!Number.isFinite(parsedValue)) throw new Error(`Invalid number: ${rawValue}`);
+			break;
+		case "enum": {
+			const valid = getEnumValues(path);
+			if (valid && !valid.includes(trimmed)) {
+				throw new Error(`Invalid value: ${rawValue}. Valid values: ${valid.join(", ")}`);
+			}
+			parsedValue = trimmed;
+			break;
+		}
+		default:
+			parsedValue = trimmed;
+	}
+
+	settings.set(path, parsedValue as SettingValue<typeof path>);
+}
+
+// =============================================================================
 // Command Handlers
 // =============================================================================
 
 export async function runConfigCommand(cmd: ConfigCommandArgs): Promise<void> {
-	const settingsManager = await SettingsManager.create();
+	await Settings.init();
 
 	switch (cmd.action) {
 		case "list":
-			handleList(settingsManager, cmd.flags);
+			handleList(cmd.flags);
 			break;
 		case "get":
-			handleGet(settingsManager, cmd.key, cmd.flags);
+			handleGet(cmd.key, cmd.flags);
 			break;
 		case "set":
-			await handleSet(settingsManager, cmd.key, cmd.value, cmd.flags);
+			await handleSet(cmd.key, cmd.value, cmd.flags);
 			break;
 		case "reset":
-			await handleReset(settingsManager, cmd.key, cmd.flags);
+			await handleReset(cmd.key, cmd.flags);
 			break;
 		case "path":
 			handlePath();
@@ -173,12 +197,14 @@ export async function runConfigCommand(cmd: ConfigCommandArgs): Promise<void> {
 	}
 }
 
-function handleList(settingsManager: SettingsManager, flags: { json?: boolean }): void {
+function handleList(flags: { json?: boolean }): void {
+	const defs = getAllSettingDefs();
+
 	if (flags.json) {
 		const result: Record<string, { value: unknown; type: string; description: string }> = {};
-		for (const def of SETTINGS_DEFS) {
-			result[def.id] = {
-				value: def.get(settingsManager),
+		for (const def of defs) {
+			result[def.path] = {
+				value: settings.get(def.path as SettingPath),
 				type: def.type,
 				description: def.description,
 			};
@@ -189,9 +215,8 @@ function handleList(settingsManager: SettingsManager, flags: { json?: boolean })
 
 	console.log(chalk.bold("Settings:\n"));
 
-	// Group by tab
 	const groups: Record<string, SettingDef[]> = {};
-	for (const def of SETTINGS_DEFS) {
+	for (const def of defs) {
 		if (!groups[def.tab]) {
 			groups[def.tab] = [];
 		}
@@ -207,16 +232,16 @@ function handleList(settingsManager: SettingsManager, flags: { json?: boolean })
 	for (const group of sortedGroups) {
 		console.log(chalk.bold.blue(`[${group}]`));
 		for (const def of groups[group]) {
-			const value = def.get(settingsManager);
+			const value = settings.get(def.path as SettingPath);
 			const valueStr = formatValue(value);
-			const typeStr = getTypeDisplay(def, settingsManager);
-			console.log(`  ${chalk.white(def.id)} = ${valueStr} ${chalk.dim(typeStr)}`);
+			const typeStr = getTypeDisplay(def);
+			console.log(`  ${chalk.white(def.path)} = ${valueStr} ${chalk.dim(typeStr)}`);
 		}
 		console.log("");
 	}
 }
 
-function handleGet(settingsManager: SettingsManager, key: string | undefined, flags: { json?: boolean }): void {
+function handleGet(key: string | undefined, flags: { json?: boolean }): void {
 	if (!key) {
 		console.error(chalk.red(`Usage: ${APP_NAME} config get <key>`));
 		console.error(chalk.dim(`\nRun '${APP_NAME} config list' to see available keys`));
@@ -230,22 +255,17 @@ function handleGet(settingsManager: SettingsManager, key: string | undefined, fl
 		process.exit(1);
 	}
 
-	const value = def.get(settingsManager);
+	const value = settings.get(def.path as SettingPath);
 
 	if (flags.json) {
-		console.log(JSON.stringify({ key: def.id, value, type: def.type, description: def.description }, null, 2));
+		console.log(JSON.stringify({ key: def.path, value, type: def.type, description: def.description }, null, 2));
 		return;
 	}
 
 	console.log(formatValue(value));
 }
 
-async function handleSet(
-	settingsManager: SettingsManager,
-	key: string | undefined,
-	value: string | undefined,
-	flags: { json?: boolean },
-): Promise<void> {
+async function handleSet(key: string | undefined, value: string | undefined, flags: { json?: boolean }): Promise<void> {
 	if (!key || value === undefined) {
 		console.error(chalk.red(`Usage: ${APP_NAME} config set <key> <value>`));
 		console.error(chalk.dim(`\nRun '${APP_NAME} config list' to see available keys`));
@@ -259,28 +279,23 @@ async function handleSet(
 		process.exit(1);
 	}
 
-	let parsedValue: unknown;
 	try {
-		parsedValue = parseValue(value, def, settingsManager);
+		parseAndSetValue(def.path as SettingPath, value);
 	} catch (err) {
 		console.error(chalk.red(String(err)));
 		process.exit(1);
 	}
 
-	def.set(settingsManager, parsedValue as never);
+	const newValue = settings.get(def.path as SettingPath);
 
 	if (flags.json) {
-		console.log(JSON.stringify({ key: def.id, value: parsedValue }));
+		console.log(JSON.stringify({ key: def.path, value: newValue }));
 	} else {
-		console.log(chalk.green(`${theme.status.success} Set ${def.id} = ${formatValue(parsedValue)}`));
+		console.log(chalk.green(`${theme.status.success} Set ${def.path} = ${formatValue(newValue)}`));
 	}
 }
 
-async function handleReset(
-	settingsManager: SettingsManager,
-	key: string | undefined,
-	flags: { json?: boolean },
-): Promise<void> {
+async function handleReset(key: string | undefined, flags: { json?: boolean }): Promise<void> {
 	if (!key) {
 		console.error(chalk.red(`Usage: ${APP_NAME} config reset <key>`));
 		console.error(chalk.dim(`\nRun '${APP_NAME} config list' to see available keys`));
@@ -294,16 +309,14 @@ async function handleReset(
 		process.exit(1);
 	}
 
-	// Get default value from a fresh in-memory settings manager
-	const defaults = SettingsManager.inMemory();
-	const defaultValue = def.get(defaults);
-
-	def.set(settingsManager, defaultValue as never);
+	const path = def.path as SettingPath;
+	const defaultValue = getDefault(path);
+	settings.set(path, defaultValue as SettingValue<typeof path>);
 
 	if (flags.json) {
-		console.log(JSON.stringify({ key: def.id, value: defaultValue }));
+		console.log(JSON.stringify({ key: def.path, value: defaultValue }));
 	} else {
-		console.log(chalk.green(`${theme.status.success} Reset ${def.id} to ${formatValue(defaultValue)}`));
+		console.log(chalk.green(`${theme.status.success} Reset ${def.path} to ${formatValue(defaultValue)}`));
 	}
 }
 
@@ -332,8 +345,8 @@ ${chalk.bold("Examples:")}
   ${APP_NAME} config list
   ${APP_NAME} config get theme
   ${APP_NAME} config set theme catppuccin-mocha
-  ${APP_NAME} config set autoCompact false
-  ${APP_NAME} config set thinkingLevel medium
+  ${APP_NAME} config set compaction.enabled false
+  ${APP_NAME} config set defaultThinkingLevel medium
   ${APP_NAME} config reset steeringMode
   ${APP_NAME} config list --json
 

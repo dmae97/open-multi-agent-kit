@@ -12,7 +12,7 @@ import Ajv, { type ValidateFunction } from "ajv";
 import type { ModelRegistry } from "../config/model-registry";
 import { parseModelPattern } from "../config/model-resolver";
 import { type PromptTemplate, renderPromptTemplate } from "../config/prompt-templates";
-import { SettingsManager } from "../config/settings-manager";
+import { Settings } from "../config/settings";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import type { Skill } from "../extensibility/skills";
 import { callTool } from "../mcp/client";
@@ -131,11 +131,11 @@ function getReportFindingKey(value: unknown): string | null {
 function resolveModelOverride(
 	modelPatterns: string[],
 	modelRegistry: ModelRegistry,
-	settingsManager?: SettingsManager,
+	settings?: Settings,
 ): { model?: Model<Api>; thinkingLevel?: ThinkingLevel } {
 	if (modelPatterns.length === 0) return {};
-	const matchPreferences = { usageOrder: settingsManager?.getStorage()?.getModelUsageOrder() };
-	const roles = settingsManager?.serialize().modelRoles as Record<string, string> | undefined;
+	const matchPreferences = { usageOrder: settings?.getStorage()?.getModelUsageOrder() };
+	const roles = settings?.serialize().modelRoles as Record<string, string> | undefined;
 	for (const pattern of modelPatterns) {
 		const normalized = pattern.trim().toLowerCase();
 		if (!normalized || DEFAULT_MODEL_ALIASES.has(normalized)) {
@@ -206,7 +206,7 @@ export interface ExecutorOptions {
 	mcpManager?: MCPManager;
 	authStorage?: AuthStorage;
 	modelRegistry?: ModelRegistry;
-	settingsManager?: SettingsManager;
+	settings?: Settings;
 }
 
 /**
@@ -516,8 +516,8 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		}
 	}
 
-	const settingsManager = options.settingsManager ?? SettingsManager.inMemory();
-	const pythonToolMode = settingsManager.getPythonToolMode?.() ?? "ipy-only";
+	const settings = options.settings ?? Settings.isolated();
+	const pythonToolMode = settings.get("python.toolMode") ?? "both";
 	if (toolNames?.includes("exec")) {
 		const expanded = toolNames.filter(name => name !== "exec");
 		if (pythonToolMode === "bash-only") {
@@ -917,7 +917,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			const { model, thinkingLevel: resolvedThinkingLevel } = resolveModelOverride(
 				modelPatterns,
 				modelRegistry,
-				settingsManager,
+				settings,
 			);
 			const effectiveThinkingLevel = thinkingLevel ?? resolvedThinkingLevel;
 
@@ -934,7 +934,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				cwd: worktree ?? cwd,
 				authStorage,
 				modelRegistry,
-				settingsManager,
+				settingsInstance: settings,
 				model,
 				thinkingLevel: effectiveThinkingLevel,
 				toolNames,

@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { logger } from "@oh-my-pi/pi-utils";
 import { skillCapability } from "../capability/skill";
 import type { SourceMeta } from "../capability/types";
-import type { SkillsSettings } from "../config/settings-manager";
+import type { SkillsSettings } from "../config/settings";
 import type { Skill as CapabilitySkill, SkillFrontmatter as ImportedSkillFrontmatter } from "../discovery";
 import { loadCapability } from "../discovery";
 import { parseFrontmatter } from "../utils/frontmatter";

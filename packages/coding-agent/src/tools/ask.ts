@@ -79,7 +79,7 @@ export interface AskToolDetails {
 const OTHER_OPTION = "Other (type your own)";
 const RECOMMENDED_SUFFIX = " (Recommended)";
 /** Default timeout in milliseconds (used when settings unavailable) */
-const DEFAULT_ASK_TIMEOUT_MS = 30000;
+const _DEFAULT_ASK_TIMEOUT_MS = 30000;
 
 function getDoneOptionLabel(): string {
 	return `${theme.status.success} Done selecting`;
@@ -278,7 +278,7 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 	private sendAskNotification(): void {
 		if (isNotificationSuppressed()) return;
 
-		const method = this.session.settingsManager?.getAskNotification() ?? "auto";
+		const method = this.session.settings.get("ask.notification");
 		if (method === "off") return;
 
 		const protocol = method === "auto" ? detectNotificationProtocol() : method;
@@ -304,10 +304,9 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 
 		// Determine timeout based on settings and plan mode
 		const planModeEnabled = this.session.getPlanModeState?.()?.enabled ?? false;
-		// getAskTimeout returns: number (ms), null (disabled), or undefined (no settingsManager)
-		// Only fall back to default if undefined; preserve null as "disabled"
-		const rawTimeout = this.session.settingsManager?.getAskTimeout();
-		const settingsTimeout = rawTimeout === undefined ? DEFAULT_ASK_TIMEOUT_MS : rawTimeout;
+		// Settings.get("ask.timeout") returns seconds (0 = disabled), convert to ms
+		const timeoutSeconds = this.session.settings.get("ask.timeout");
+		const settingsTimeout = timeoutSeconds === 0 ? null : timeoutSeconds * 1000;
 		const timeout = planModeEnabled ? null : settingsTimeout;
 
 		// Send notification if waiting and not suppressed

@@ -8,7 +8,7 @@ import { formatCommitMessage } from "../../commit/message";
 import { resolvePrimaryModel, resolveSmolModel } from "../../commit/model-selection";
 import type { CommitCommandArgs, ConventionalAnalysis } from "../../commit/types";
 import { renderPromptTemplate } from "../../config/prompt-templates";
-import { SettingsManager } from "../../config/settings-manager";
+import { Settings } from "../../config/settings";
 import { discoverAuthStorage, discoverContextFiles, discoverModels } from "../../sdk";
 import { type ExistingChangelogEntries, runCommitAgentSession } from "./agent";
 import { generateFallbackProposal } from "./fallback";
@@ -26,7 +26,8 @@ interface CommitExecutionContext {
 export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 	const cwd = process.cwd();
 	const git = new ControlledGit(cwd);
-	const [settingsManager, authStorage] = await Promise.all([SettingsManager.create(cwd), discoverAuthStorage()]);
+	const [settingsInstance, authStorage] = await Promise.all([Settings.init({ cwd }), discoverAuthStorage()]);
+	const settings = settingsInstance;
 
 	writeStdout("● Resolving model...");
 	const modelRegistry = discoverModels(authStorage);
@@ -40,12 +41,12 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 		return stagedFiles;
 	})();
 
-	const primaryModelPromise = resolvePrimaryModel(args.model, settingsManager, modelRegistry);
+	const primaryModelPromise = resolvePrimaryModel(args.model, settings, modelRegistry);
 	const [primaryModelResult, stagedFiles] = await Promise.all([primaryModelPromise, stagedFilesPromise]);
 	const { model: primaryModel, apiKey: primaryApiKey } = primaryModelResult;
 	writeStdout(`  └─ ${primaryModel.name}`);
 
-	const { model: agentModel } = await resolveSmolModel(settingsManager, modelRegistry, primaryModel, primaryApiKey);
+	const { model: agentModel } = await resolveSmolModel(settings, modelRegistry, primaryModel, primaryApiKey);
 
 	if (stagedFiles.length === 0) {
 		writeStderr("No changes to commit.");
@@ -123,7 +124,7 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 			cwd,
 			git,
 			model: agentModel,
-			settingsManager,
+			settings,
 			modelRegistry,
 			authStorage,
 			userContext: args.context,

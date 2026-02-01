@@ -1,7 +1,7 @@
 import type { CommitAgentState } from "../../../commit/agentic/state";
 import type { ControlledGit } from "../../../commit/git";
 import type { ModelRegistry } from "../../../config/model-registry";
-import type { SettingsManager } from "../../../config/settings-manager";
+import type { Settings } from "../../../config/settings";
 import type { CustomTool } from "../../../extensibility/custom-tools/types";
 import type { AuthStorage } from "../../../session/auth-storage";
 import { createAnalyzeFileTool } from "./analyze-file";
@@ -18,7 +18,7 @@ export interface CommitToolOptions {
 	git: ControlledGit;
 	authStorage: AuthStorage;
 	modelRegistry: ModelRegistry;
-	settingsManager: SettingsManager;
+	settings: Settings;
 	spawns: string;
 	state: CommitAgentState;
 	changelogTargets: string[];
@@ -39,7 +39,7 @@ export function createCommitTools(options: CommitToolOptions): Array<CustomTool<
 				cwd: options.cwd,
 				authStorage: options.authStorage,
 				modelRegistry: options.modelRegistry,
-				settingsManager: options.settingsManager,
+				settings: options.settings,
 				spawns: options.spawns,
 				state: options.state,
 			}),

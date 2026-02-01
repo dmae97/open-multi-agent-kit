@@ -11,7 +11,7 @@ import chalk from "chalk";
 import { contextFileCapability } from "./capability/context-file";
 import { systemPromptCapability } from "./capability/system-prompt";
 import { renderPromptTemplate } from "./config/prompt-templates";
-import { SettingsManager, type SkillsSettings } from "./config/settings-manager";
+import { Settings, type SkillsSettings } from "./config/settings";
 import { type ContextFile, loadCapability, type SystemPrompt as SystemPromptFile } from "./discovery";
 import { loadSkills, type Skill } from "./extensibility/skills";
 import customSystemPromptTemplate from "./prompts/system/custom-system-prompt.md" with { type: "text" };
@@ -761,7 +761,7 @@ async function getEnvironmentInfo(): Promise<Array<{ label: string; value: strin
 	}
 
 	// Get the actual shell used for command execution (not $SHELL)
-	const shellConfig = await SettingsManager.getGlobalShellConfig();
+	const shellConfig = (await Settings.init()).getShellConfig();
 
 	return [
 		{ label: "OS", value: sysInfo.os },

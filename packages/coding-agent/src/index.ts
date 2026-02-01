@@ -12,15 +12,8 @@ export { formatKeyHint, formatKeyHints } from "./config/keybindings";
 export { ModelRegistry } from "./config/model-registry";
 // Prompt templates
 export type { PromptTemplate } from "./config/prompt-templates";
-export {
-	type CompactionSettings,
-	type ImageSettings,
-	type LspSettings,
-	type RetrySettings,
-	type Settings,
-	SettingsManager,
-	type SkillsSettings,
-} from "./config/settings-manager";
+export type { CompactionSettings, RetrySettings, SkillsSettings } from "./config/settings";
+export { Settings, settings } from "./config/settings";
 // Custom commands
 export type {
 	CustomCommand,
@@ -188,7 +181,6 @@ export {
 	FindTool,
 	GrepTool,
 	LsTool,
-	loadSettings,
 	loadSshTool,
 	PythonTool,
 	ReadTool,

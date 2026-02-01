@@ -10,7 +10,7 @@ import { Agent, type AgentTool } from "@oh-my-pi/pi-agent-core";
 import { type AssistantMessage, getModel, type StopReason, type ToolCall } from "@oh-my-pi/pi-ai";
 import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
+import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
@@ -92,7 +92,7 @@ async function createSession(tempDir: string, streamFn: Agent["streamFn"], tool:
 	});
 
 	const sessionManager = SessionManager.inMemory(tempDir);
-	const settingsManager = SettingsManager.inMemory({ edit: { streamingAbort: true } });
+	const settings = Settings.isolated({ "edit.streamingAbort": true });
 	const authStorage = await AuthStorage.create(path.join(tempDir, "auth.json"));
 	authStorage.setRuntimeApiKey("anthropic", "test-key");
 	const modelRegistry = new ModelRegistry(authStorage, tempDir);
@@ -100,7 +100,7 @@ async function createSession(tempDir: string, streamFn: Agent["streamFn"], tool:
 	return new AgentSession({
 		agent,
 		sessionManager,
-		settingsManager,
+		settings,
 		modelRegistry,
 	});
 }

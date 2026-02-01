@@ -7,7 +7,7 @@
  */
 import { logger } from "@oh-my-pi/pi-utils";
 import type { Rule } from "../capability/rule";
-import type { TtsrSettings } from "../config/settings-manager";
+import type { TtsrSettings } from "../config/settings";
 
 interface TtsrEntry {
 	rule: Rule;

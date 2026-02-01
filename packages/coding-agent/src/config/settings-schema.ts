@@ -1,0 +1,836 @@
+/**
+ * Unified settings schema - single source of truth for all settings.
+ *
+ * Each setting is defined once here with:
+ * - Type and default value
+ * - Optional UI metadata (label, description, tab)
+ *
+ * The Settings singleton provides type-safe path-based access:
+ *   settings.get("compaction.enabled")  // => boolean
+ *   settings.set("theme", "dark")       // sync, saves in background
+ */
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Schema Definition Types
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type SettingTab = "behavior" | "tools" | "bash" | "display" | "ttsr" | "status" | "lsp" | "exa";
+
+/** Status line segment identifiers */
+export type StatusLineSegmentId =
+	| "pi"
+	| "model"
+	| "plan_mode"
+	| "path"
+	| "git"
+	| "subagents"
+	| "token_in"
+	| "token_out"
+	| "token_total"
+	| "cost"
+	| "context_pct"
+	| "context_total"
+	| "time_spent"
+	| "time"
+	| "session"
+	| "hostname"
+	| "cache_read"
+	| "cache_write";
+
+interface UiMetadata {
+	tab: SettingTab;
+	label: string;
+	description: string;
+	/** For enum/submenu - display as inline toggle vs dropdown */
+	submenu?: boolean;
+	/** Condition function name - setting only shown when true */
+	condition?: string;
+}
+
+interface BooleanDef {
+	type: "boolean";
+	default: boolean;
+	ui?: UiMetadata;
+}
+
+interface StringDef {
+	type: "string";
+	default: string | undefined;
+	ui?: UiMetadata;
+}
+
+interface NumberDef {
+	type: "number";
+	default: number;
+	ui?: UiMetadata;
+}
+
+interface EnumDef<T extends readonly string[]> {
+	type: "enum";
+	values: T;
+	default: T[number];
+	ui?: UiMetadata;
+}
+
+interface ArrayDef<T> {
+	type: "array";
+	default: T[];
+	ui?: UiMetadata;
+}
+
+interface RecordDef<T> {
+	type: "record";
+	default: Record<string, T>;
+	ui?: UiMetadata;
+}
+
+type SettingDef =
+	| BooleanDef
+	| StringDef
+	| NumberDef
+	| EnumDef<readonly string[]>
+	| ArrayDef<unknown>
+	| RecordDef<unknown>;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Schema Definition
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const SETTINGS_SCHEMA = {
+	// ─────────────────────────────────────────────────────────────────────────
+	// Top-level settings
+	// ─────────────────────────────────────────────────────────────────────────
+	lastChangelogVersion: { type: "string", default: undefined },
+	theme: {
+		type: "string",
+		default: undefined,
+		ui: { tab: "display", label: "Theme", description: "Color theme for the interface", submenu: true },
+	},
+	symbolPreset: {
+		type: "enum",
+		values: ["unicode", "nerd", "ascii"] as const,
+		default: "unicode",
+		ui: { tab: "display", label: "Symbol preset", description: "Icon/symbol style", submenu: true },
+	},
+	colorBlindMode: {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "display",
+			label: "Color blind mode",
+			description: "Use blue instead of green for diff additions",
+		},
+	},
+	defaultThinkingLevel: {
+		type: "enum",
+		values: ["off", "minimal", "low", "medium", "high", "xhigh"] as const,
+		default: "off",
+		ui: {
+			tab: "display",
+			label: "Thinking level",
+			description: "Reasoning depth for thinking-capable models",
+			submenu: true,
+		},
+	},
+	hideThinkingBlock: {
+		type: "boolean",
+		default: false,
+		ui: { tab: "display", label: "Hide thinking", description: "Hide thinking blocks in assistant responses" },
+	},
+	steeringMode: {
+		type: "enum",
+		values: ["all", "one-at-a-time"] as const,
+		default: "one-at-a-time",
+		ui: {
+			tab: "behavior",
+			label: "Steering mode",
+			description: "How to process queued messages while agent is working",
+		},
+	},
+	followUpMode: {
+		type: "enum",
+		values: ["all", "one-at-a-time"] as const,
+		default: "one-at-a-time",
+		ui: {
+			tab: "behavior",
+			label: "Follow-up mode",
+			description: "How to drain follow-up messages after a turn completes",
+		},
+	},
+	interruptMode: {
+		type: "enum",
+		values: ["immediate", "wait"] as const,
+		default: "immediate",
+		ui: { tab: "behavior", label: "Interrupt mode", description: "When steering messages interrupt tool execution" },
+	},
+	doubleEscapeAction: {
+		type: "enum",
+		values: ["branch", "tree"] as const,
+		default: "tree",
+		ui: {
+			tab: "behavior",
+			label: "Double-escape action",
+			description: "Action when pressing Escape twice with empty editor",
+		},
+	},
+	shellPath: { type: "string", default: undefined },
+	shellForceBasic: {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "bash",
+			label: "Force basic shell",
+			description: "Use bash/sh even if your default shell is different",
+		},
+	},
+	collapseChangelog: {
+		type: "boolean",
+		default: false,
+		ui: { tab: "behavior", label: "Collapse changelog", description: "Show condensed changelog after updates" },
+	},
+	normativeRewrite: {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "behavior",
+			label: "Normative rewrite",
+			description: "Rewrite tool call arguments to normalized format in session history",
+		},
+	},
+	readLineNumbers: {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tools",
+			label: "Read line numbers",
+			description: "Prepend line numbers to read tool output by default",
+		},
+	},
+	showHardwareCursor: {
+		type: "boolean",
+		default: true, // will be computed based on platform if undefined
+		ui: { tab: "display", label: "Hardware cursor", description: "Show terminal cursor for IME support" },
+	},
+	extensions: { type: "array", default: [] as string[] },
+	enabledModels: { type: "array", default: [] as string[] },
+	disabledProviders: { type: "array", default: [] as string[] },
+	disabledExtensions: { type: "array", default: [] as string[] },
+	env: { type: "record", default: {} as Record<string, string> },
+	modelRoles: { type: "record", default: {} as Record<string, string> },
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Compaction settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"compaction.enabled": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "behavior",
+			label: "Auto-compact",
+			description: "Automatically compact context when it gets too large",
+		},
+	},
+	"compaction.reserveTokens": { type: "number", default: 16384 },
+	"compaction.keepRecentTokens": { type: "number", default: 20000 },
+	"compaction.autoContinue": { type: "boolean", default: true },
+	"compaction.remoteEndpoint": { type: "string", default: undefined },
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Branch summary settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"branchSummary.enabled": {
+		type: "boolean",
+		default: false,
+		ui: { tab: "behavior", label: "Branch summaries", description: "Prompt to summarize when leaving a branch" },
+	},
+	"branchSummary.reserveTokens": { type: "number", default: 16384 },
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Retry settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"retry.enabled": { type: "boolean", default: true },
+	"retry.maxRetries": {
+		type: "number",
+		default: 3,
+		ui: {
+			tab: "behavior",
+			label: "Retry max attempts",
+			description: "Maximum retry attempts on API errors",
+			submenu: true,
+		},
+	},
+	"retry.baseDelayMs": { type: "number", default: 2000 },
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Todo completion settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"todoCompletion.enabled": {
+		type: "boolean",
+		default: false,
+		ui: { tab: "behavior", label: "Todo completion", description: "Remind agent to complete todos before stopping" },
+	},
+	"todoCompletion.maxReminders": {
+		type: "number",
+		default: 3,
+		ui: {
+			tab: "behavior",
+			label: "Todo max reminders",
+			description: "Maximum reminders to complete todos before giving up",
+			submenu: true,
+		},
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Startup settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"startup.quiet": {
+		type: "boolean",
+		default: false,
+		ui: { tab: "behavior", label: "Startup quiet", description: "Skip welcome screen and startup status messages" },
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Notification settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"notifications.onComplete": {
+		type: "enum",
+		values: ["auto", "bell", "osc99", "osc9", "off"] as const,
+		default: "auto",
+		ui: { tab: "behavior", label: "Completion notification", description: "Notify when the agent completes" },
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Ask settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"ask.timeout": {
+		type: "number",
+		default: 30,
+		ui: {
+			tab: "behavior",
+			label: "Ask tool timeout",
+			description: "Auto-select recommended option after timeout (0 to disable)",
+			submenu: true,
+		},
+	},
+	"ask.notification": {
+		type: "enum",
+		values: ["auto", "bell", "osc99", "osc9", "off"] as const,
+		default: "auto",
+		ui: { tab: "behavior", label: "Ask notification", description: "Notify when ask tool is waiting for input" },
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Terminal settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"terminal.showImages": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "display",
+			label: "Show images",
+			description: "Render images inline in terminal",
+			condition: "hasImageProtocol",
+		},
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Image settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"images.autoResize": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "display",
+			label: "Auto-resize images",
+			description: "Resize large images to 2000x2000 max for better model compatibility",
+		},
+	},
+	"images.blockImages": {
+		type: "boolean",
+		default: false,
+		ui: { tab: "display", label: "Block images", description: "Prevent images from being sent to LLM providers" },
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Skills settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"skills.enabled": { type: "boolean", default: true },
+	"skills.enableSkillCommands": {
+		type: "boolean",
+		default: true,
+		ui: { tab: "tools", label: "Skill commands", description: "Register skills as /skill:name commands" },
+	},
+	"skills.enableCodexUser": { type: "boolean", default: true },
+	"skills.enableClaudeUser": { type: "boolean", default: true },
+	"skills.enableClaudeProject": { type: "boolean", default: true },
+	"skills.enablePiUser": { type: "boolean", default: true },
+	"skills.enablePiProject": { type: "boolean", default: true },
+	"skills.customDirectories": { type: "array", default: [] as string[] },
+	"skills.ignoredSkills": { type: "array", default: [] as string[] },
+	"skills.includeSkills": { type: "array", default: [] as string[] },
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Commands settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"commands.enableClaudeUser": {
+		type: "boolean",
+		default: true,
+		ui: { tab: "tools", label: "Claude user commands", description: "Load commands from ~/.claude/commands/" },
+	},
+	"commands.enableClaudeProject": {
+		type: "boolean",
+		default: true,
+		ui: { tab: "tools", label: "Claude project commands", description: "Load commands from .claude/commands/" },
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Provider settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"providers.webSearch": {
+		type: "enum",
+		values: ["auto", "exa", "perplexity", "anthropic"] as const,
+		default: "auto",
+		ui: { tab: "tools", label: "Web search provider", description: "Provider for web search tool", submenu: true },
+	},
+	"providers.image": {
+		type: "enum",
+		values: ["auto", "gemini", "openrouter"] as const,
+		default: "auto",
+		ui: { tab: "tools", label: "Image provider", description: "Provider for image generation tool", submenu: true },
+	},
+	"providers.kimiApiFormat": {
+		type: "enum",
+		values: ["openai", "anthropic"] as const,
+		default: "anthropic",
+		ui: { tab: "tools", label: "Kimi API format", description: "API format for Kimi Code provider", submenu: true },
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Exa settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"exa.enabled": {
+		type: "boolean",
+		default: true,
+		ui: { tab: "exa", label: "Exa enabled", description: "Master toggle for all Exa search tools" },
+	},
+	"exa.enableSearch": {
+		type: "boolean",
+		default: true,
+		ui: { tab: "exa", label: "Exa search", description: "Basic search, deep search, code search, crawl" },
+	},
+	"exa.enableLinkedin": {
+		type: "boolean",
+		default: false,
+		ui: { tab: "exa", label: "Exa LinkedIn", description: "Search LinkedIn for people and companies" },
+	},
+	"exa.enableCompany": {
+		type: "boolean",
+		default: false,
+		ui: { tab: "exa", label: "Exa company", description: "Comprehensive company research tool" },
+	},
+	"exa.enableResearcher": {
+		type: "boolean",
+		default: false,
+		ui: { tab: "exa", label: "Exa researcher", description: "AI-powered deep research tasks" },
+	},
+	"exa.enableWebsets": {
+		type: "boolean",
+		default: false,
+		ui: { tab: "exa", label: "Exa websets", description: "Webset management and enrichment tools" },
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Bash interceptor settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"bashInterceptor.enabled": {
+		type: "boolean",
+		default: false,
+		ui: { tab: "bash", label: "Interceptor", description: "Block shell commands that have dedicated tools" },
+	},
+	"bashInterceptor.simpleLs": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "bash",
+			label: "Intercept ls",
+			description: "Intercept bare ls commands (when interceptor is enabled)",
+		},
+	},
+	// bashInterceptor.patterns is complex - handle separately
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Bash settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"bash.persistentShell": {
+		type: "boolean",
+		default: false,
+		ui: { tab: "bash", label: "Persistent shell", description: "Reuse shell session across commands (experimental)" },
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// MCP settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"mcp.enableProjectConfig": {
+		type: "boolean",
+		default: true,
+		ui: { tab: "tools", label: "MCP project config", description: "Load .mcp.json/mcp.json from project root" },
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// LSP settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"lsp.formatOnWrite": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "lsp",
+			label: "Format on write",
+			description: "Automatically format code files using LSP after writing",
+		},
+	},
+	"lsp.diagnosticsOnWrite": {
+		type: "boolean",
+		default: true,
+		ui: { tab: "lsp", label: "Diagnostics on write", description: "Return LSP diagnostics after writing code files" },
+	},
+	"lsp.diagnosticsOnEdit": {
+		type: "boolean",
+		default: false,
+		ui: { tab: "lsp", label: "Diagnostics on edit", description: "Return LSP diagnostics after editing code files" },
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Python settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"python.toolMode": {
+		type: "enum",
+		values: ["ipy-only", "bash-only", "both"] as const,
+		default: "both",
+		ui: { tab: "tools", label: "Python tool mode", description: "How Python code is executed" },
+	},
+	"python.kernelMode": {
+		type: "enum",
+		values: ["session", "per-call"] as const,
+		default: "session",
+		ui: {
+			tab: "tools",
+			label: "Python kernel mode",
+			description: "Whether to keep IPython kernel alive across calls",
+		},
+	},
+	"python.sharedGateway": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "tools",
+			label: "Python shared gateway",
+			description: "Share IPython kernel gateway across pi instances",
+		},
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Edit settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"edit.fuzzyMatch": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "tools",
+			label: "Edit fuzzy match",
+			description: "Accept high-confidence fuzzy matches for whitespace differences",
+		},
+	},
+	"edit.fuzzyThreshold": {
+		type: "number",
+		default: 0.95,
+		ui: {
+			tab: "tools",
+			label: "Edit fuzzy threshold",
+			description: "Similarity threshold for fuzzy matches",
+			submenu: true,
+		},
+	},
+	"edit.patchMode": {
+		type: "boolean",
+		default: true,
+		ui: { tab: "tools", label: "Edit patch mode", description: "Use codex-style apply-patch format for edits" },
+	},
+	"edit.streamingAbort": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tools",
+			label: "Edit streaming abort",
+			description: "Abort streaming edit tool calls when patch preview fails",
+		},
+	},
+	// edit.modelVariants is complex - handle separately
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// TTSR settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"ttsr.enabled": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "ttsr",
+			label: "TTSR enabled",
+			description: "Time Traveling Stream Rules: interrupt agent when output matches patterns",
+		},
+	},
+	"ttsr.contextMode": {
+		type: "enum",
+		values: ["discard", "keep"] as const,
+		default: "discard",
+		ui: { tab: "ttsr", label: "TTSR context mode", description: "What to do with partial output when TTSR triggers" },
+	},
+	"ttsr.repeatMode": {
+		type: "enum",
+		values: ["once", "after-gap"] as const,
+		default: "once",
+		ui: {
+			tab: "ttsr",
+			label: "TTSR repeat mode",
+			description: "How rules can repeat: once per session or after a message gap",
+		},
+	},
+	"ttsr.repeatGap": {
+		type: "number",
+		default: 10,
+		ui: {
+			tab: "ttsr",
+			label: "TTSR repeat gap",
+			description: "Messages before a rule can trigger again",
+			submenu: true,
+		},
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Commit settings (no UI - advanced)
+	// ─────────────────────────────────────────────────────────────────────────
+	"commit.mapReduceEnabled": { type: "boolean", default: true },
+	"commit.mapReduceMinFiles": { type: "number", default: 4 },
+	"commit.mapReduceMaxFileTokens": { type: "number", default: 50000 },
+	"commit.mapReduceTimeoutMs": { type: "number", default: 120000 },
+	"commit.mapReduceMaxConcurrency": { type: "number", default: 5 },
+	"commit.changelogMaxDiffChars": { type: "number", default: 120000 },
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Thinking budgets (no UI - advanced)
+	// ─────────────────────────────────────────────────────────────────────────
+	"thinkingBudgets.minimal": { type: "number", default: 1024 },
+	"thinkingBudgets.low": { type: "number", default: 2048 },
+	"thinkingBudgets.medium": { type: "number", default: 8192 },
+	"thinkingBudgets.high": { type: "number", default: 16384 },
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Status line settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"statusLine.preset": {
+		type: "enum",
+		values: ["default", "minimal", "compact", "full", "nerd", "ascii", "custom"] as const,
+		default: "default",
+		ui: { tab: "status", label: "Preset", description: "Pre-built status line configurations", submenu: true },
+	},
+	"statusLine.separator": {
+		type: "enum",
+		values: ["powerline", "powerline-thin", "slash", "pipe", "block", "none", "ascii"] as const,
+		default: "powerline-thin",
+		ui: {
+			tab: "status",
+			label: "Separator style",
+			description: "Style of separators between segments",
+			submenu: true,
+		},
+	},
+	"statusLine.showHookStatus": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "status",
+			label: "Show extension status",
+			description: "Display hook status messages below status line",
+		},
+	},
+	"statusLine.leftSegments": { type: "array", default: [] as StatusLineSegmentId[] },
+	"statusLine.rightSegments": { type: "array", default: [] as StatusLineSegmentId[] },
+	"statusLine.segmentOptions": { type: "record", default: {} as Record<string, unknown> },
+} as const;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Type Inference
+// ═══════════════════════════════════════════════════════════════════════════
+
+type Schema = typeof SETTINGS_SCHEMA;
+
+/** All valid setting paths */
+export type SettingPath = keyof Schema;
+
+/** Infer the value type for a setting path */
+export type SettingValue<P extends SettingPath> = Schema[P] extends { type: "boolean" }
+	? boolean
+	: Schema[P] extends { type: "string" }
+		? string | undefined
+		: Schema[P] extends { type: "number" }
+			? number
+			: Schema[P] extends { type: "enum"; values: infer V }
+				? V extends readonly string[]
+					? V[number]
+					: never
+				: Schema[P] extends { type: "array"; default: infer D }
+					? D
+					: Schema[P] extends { type: "record"; default: infer D }
+						? D
+						: never;
+
+/** Get the default value for a setting path */
+export function getDefault<P extends SettingPath>(path: P): SettingValue<P> {
+	return SETTINGS_SCHEMA[path].default as SettingValue<P>;
+}
+
+/** Check if a path has UI metadata (should appear in settings panel) */
+export function hasUi(path: SettingPath): boolean {
+	return "ui" in SETTINGS_SCHEMA[path];
+}
+
+/** Get UI metadata for a path (undefined if no UI) */
+export function getUi(path: SettingPath): UiMetadata | undefined {
+	const def = SETTINGS_SCHEMA[path];
+	return "ui" in def ? (def.ui as UiMetadata) : undefined;
+}
+
+/** Get all paths for a specific tab */
+export function getPathsForTab(tab: SettingTab): SettingPath[] {
+	return (Object.keys(SETTINGS_SCHEMA) as SettingPath[]).filter(path => {
+		const ui = getUi(path);
+		return ui?.tab === tab;
+	});
+}
+
+/** Get the type of a setting */
+export function getType(path: SettingPath): SettingDef["type"] {
+	return SETTINGS_SCHEMA[path].type;
+}
+
+/** Get enum values for an enum setting */
+export function getEnumValues(path: SettingPath): readonly string[] | undefined {
+	const def = SETTINGS_SCHEMA[path];
+	return "values" in def ? (def.values as readonly string[]) : undefined;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Derived Types from Schema
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Status line preset - derived from schema */
+export type StatusLinePreset = SettingValue<"statusLine.preset">;
+
+/** Status line separator style - derived from schema */
+export type StatusLineSeparatorStyle = SettingValue<"statusLine.separator">;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Typed Group Definitions
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface CompactionSettings {
+	enabled: boolean;
+	reserveTokens: number;
+	keepRecentTokens: number;
+	autoContinue: boolean;
+	remoteEndpoint: string | undefined;
+}
+
+export interface RetrySettings {
+	enabled: boolean;
+	maxRetries: number;
+	baseDelayMs: number;
+}
+
+export interface TodoCompletionSettings {
+	enabled: boolean;
+	maxReminders: number;
+}
+
+export interface BranchSummarySettings {
+	enabled: boolean;
+	reserveTokens: number;
+}
+
+export interface SkillsSettings {
+	enabled?: boolean;
+	enableSkillCommands?: boolean;
+	enableCodexUser?: boolean;
+	enableClaudeUser?: boolean;
+	enableClaudeProject?: boolean;
+	enablePiUser?: boolean;
+	enablePiProject?: boolean;
+	customDirectories?: string[];
+	ignoredSkills?: string[];
+	includeSkills?: string[];
+}
+
+export interface CommitSettings {
+	mapReduceEnabled: boolean;
+	mapReduceMinFiles: number;
+	mapReduceMaxFileTokens: number;
+	mapReduceTimeoutMs: number;
+	mapReduceMaxConcurrency: number;
+	changelogMaxDiffChars: number;
+}
+
+export interface TtsrSettings {
+	enabled: boolean;
+	contextMode: "discard" | "keep";
+	repeatMode: "once" | "after-gap";
+	repeatGap: number;
+}
+
+export interface ExaSettings {
+	enabled: boolean;
+	enableSearch: boolean;
+	enableLinkedin: boolean;
+	enableCompany: boolean;
+	enableResearcher: boolean;
+	enableWebsets: boolean;
+}
+
+export interface StatusLineSettings {
+	preset: StatusLinePreset;
+	separator: StatusLineSeparatorStyle;
+	showHookStatus: boolean;
+	leftSegments: StatusLineSegmentId[];
+	rightSegments: StatusLineSegmentId[];
+	segmentOptions: Record<string, unknown>;
+}
+
+export interface ThinkingBudgetsSettings {
+	minimal: number;
+	low: number;
+	medium: number;
+	high: number;
+}
+
+export interface BashInterceptorRule {
+	pattern: string;
+	flags?: string;
+	tool: string;
+	message: string;
+	allowSubcommands?: string[];
+}
+
+/** Map group prefix -> typed settings interface */
+export interface GroupTypeMap {
+	compaction: CompactionSettings;
+	retry: RetrySettings;
+	todoCompletion: TodoCompletionSettings;
+	branchSummary: BranchSummarySettings;
+	skills: SkillsSettings;
+	commit: CommitSettings;
+	ttsr: TtsrSettings;
+	exa: ExaSettings;
+	statusLine: StatusLineSettings;
+	thinkingBudgets: ThinkingBudgetsSettings;
+	modelRoles: Record<string, string>;
+}
+
+export type GroupPrefix = keyof GroupTypeMap;

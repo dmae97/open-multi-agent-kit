@@ -1,23 +1,24 @@
 import { describe, expect, it } from "bun:test";
-import { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
+import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 
-describe("SettingsManager python settings", () => {
+describe("Settings python settings", () => {
 	it("defaults to both and session", () => {
-		const settings = SettingsManager.inMemory();
+		const settings = Settings.isolated({});
 
-		expect(settings.getPythonToolMode()).toBe("both");
-		expect(settings.getPythonKernelMode()).toBe("session");
+		expect(settings.get("python.toolMode")).toBe("both");
+		expect(settings.get("python.kernelMode")).toBe("session");
 	});
 
-	it("persists python tool and kernel modes", async () => {
-		const settings = SettingsManager.inMemory();
+	it("persists python tool and kernel modes", () => {
+		const settings = Settings.isolated({});
 
-		await settings.setPythonToolMode("bash-only");
-		await settings.setPythonKernelMode("per-call");
+		settings.set("python.toolMode", "bash-only");
+		settings.set("python.kernelMode", "per-call");
 
-		expect(settings.getPythonToolMode()).toBe("bash-only");
-		expect(settings.getPythonKernelMode()).toBe("per-call");
-		expect(settings.serialize().python?.toolMode).toBe("bash-only");
-		expect(settings.serialize().python?.kernelMode).toBe("per-call");
+		expect(settings.get("python.toolMode")).toBe("bash-only");
+		expect(settings.get("python.kernelMode")).toBe("per-call");
+		const serialized = settings.serialize();
+		expect((serialized.python as any)?.toolMode).toBe("bash-only");
+		expect((serialized.python as any)?.kernelMode).toBe("per-call");
 	});
 });

@@ -1,7 +1,7 @@
 import type { AgentTool } from "@oh-my-pi/pi-agent-core";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { PromptTemplate } from "../config/prompt-templates";
-import type { BashInterceptorRule, SettingsManager } from "../config/settings-manager";
+import type { Settings } from "../config/settings";
 import type { Skill } from "../extensibility/skills";
 import type { InternalUrlRouter } from "../internal-urls";
 import { getPreludeDocs, warmPythonEnvironment } from "../ipy/executor";
@@ -151,26 +151,8 @@ export interface ToolSession {
 	internalRouter?: InternalUrlRouter;
 	/** Agent output manager for unique agent:// IDs across task invocations */
 	agentOutputManager?: AgentOutputManager;
-	/** Settings manager for passing to subagents */
-	settingsManager?: SettingsManager;
-	/** Settings manager (optional) */
-	settings?: {
-		getImageAutoResize(): boolean;
-		getReadLineNumbers?(): boolean;
-		getLspFormatOnWrite(): boolean;
-		getLspDiagnosticsOnWrite(): boolean;
-		getLspDiagnosticsOnEdit(): boolean;
-		getEditFuzzyMatch(): boolean;
-		getEditFuzzyThreshold?(): number;
-		getEditPatchMode?(): boolean;
-		getEditVariantForModel?(model: string | undefined): "patch" | "replace" | null;
-		getBashInterceptorEnabled(): boolean;
-		getBashInterceptorSimpleLsEnabled(): boolean;
-		getBashInterceptorRules(): BashInterceptorRule[];
-		getPythonToolMode?(): "ipy-only" | "bash-only" | "both";
-		getPythonKernelMode?(): "session" | "per-call";
-		getPythonSharedGateway?(): boolean;
-	};
+	/** Settings instance for passing to subagents */
+	settings: Settings;
 	/** Plan mode state (if active) */
 	getPlanModeState?: () => PlanModeState | undefined;
 	/** Get compact conversation context for subagents (excludes tool results, system prompts) */
@@ -248,7 +230,7 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 	if (requestedTools && !requestedTools.includes("exit_plan_mode")) {
 		requestedTools.push("exit_plan_mode");
 	}
-	const pythonMode = getPythonModeFromEnv() ?? session.settings?.getPythonToolMode?.() ?? "ipy-only";
+	const pythonMode = getPythonModeFromEnv() ?? session.settings.get("python.toolMode");
 	const skipPythonPreflight = session.skipPythonPreflight === true;
 	let pythonAvailable = true;
 	const shouldCheckPython =
@@ -269,7 +251,7 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 			const sessionFile = session.getSessionFile?.() ?? undefined;
 			const warmSessionId = sessionFile ? `session:${sessionFile}:cwd:${session.cwd}` : `cwd:${session.cwd}`;
 			try {
-				await warmPythonEnvironment(session.cwd, warmSessionId, session.settings?.getPythonSharedGateway?.());
+				await warmPythonEnvironment(session.cwd, warmSessionId, session.settings.get("python.sharedGateway"));
 				time("createTools:warmPython");
 			} catch (err) {
 				logger.warn("Failed to warm Python environment", {

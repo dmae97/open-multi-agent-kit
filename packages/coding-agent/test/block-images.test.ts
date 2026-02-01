@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { processFileArguments } from "@oh-my-pi/pi-coding-agent/cli/file-processor";
-import { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
+import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 import { ReadTool } from "@oh-my-pi/pi-coding-agent/tools/read";
 
@@ -17,38 +17,40 @@ function createTestToolSession(cwd: string): ToolSession {
 		hasUI: false,
 		getSessionFile: () => null,
 		getSessionSpawns: () => "*",
+		settings: Settings.isolated(),
 	};
 }
 
 describe("blockImages setting", () => {
-	describe("SettingsManager", () => {
+	describe("Settings", () => {
 		it("should default blockImages to false", () => {
-			const manager = SettingsManager.inMemory({});
-			expect(manager.getBlockImages()).toBe(false);
+			const settings = Settings.isolated({});
+			expect(settings.get("images.blockImages")).toBe(false);
 		});
 
 		it("should return true when blockImages is set to true", () => {
-			const manager = SettingsManager.inMemory({ images: { blockImages: true } });
-			expect(manager.getBlockImages()).toBe(true);
+			const settings = Settings.isolated({ "images.blockImages": true });
+			expect(settings.get("images.blockImages")).toBe(true);
 		});
 
-		it("should persist blockImages setting via setBlockImages", async () => {
-			const manager = SettingsManager.inMemory({});
-			expect(manager.getBlockImages()).toBe(false);
+		it("should persist blockImages setting via set", () => {
+			const settings = Settings.isolated({});
+			expect(settings.get("images.blockImages")).toBe(false);
 
-			await manager.setBlockImages(true);
-			expect(manager.getBlockImages()).toBe(true);
+			settings.set("images.blockImages", true);
+			expect(settings.get("images.blockImages")).toBe(true);
 
-			await manager.setBlockImages(false);
-			expect(manager.getBlockImages()).toBe(false);
+			settings.set("images.blockImages", false);
+			expect(settings.get("images.blockImages")).toBe(false);
 		});
 
 		it("should handle blockImages alongside autoResize", () => {
-			const manager = SettingsManager.inMemory({
-				images: { autoResize: true, blockImages: true },
+			const settings = Settings.isolated({
+				"images.autoResize": true,
+				"images.blockImages": true,
 			});
-			expect(manager.getImageAutoResize()).toBe(true);
-			expect(manager.getBlockImages()).toBe(true);
+			expect(settings.get("images.autoResize")).toBe(true);
+			expect(settings.get("images.blockImages")).toBe(true);
 		});
 	});
 

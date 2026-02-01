@@ -10,13 +10,8 @@ export function resolvePlanPath(session: ToolSession, targetPath: string): strin
 		return resolveToCwd(targetPath, session.cwd);
 	}
 
-	const settingsManager = session.settingsManager;
-	if (!settingsManager) {
-		throw new ToolError("Plan mode: settings manager unavailable for plan path resolution.");
-	}
-
 	return resolvePlanUrlToPath(targetPath, {
-		getPlansDirectory: settingsManager.getPlansDirectory.bind(settingsManager),
+		getPlansDirectory: () => session.settings.getPlansDirectory(),
 		cwd: session.cwd,
 	});
 }

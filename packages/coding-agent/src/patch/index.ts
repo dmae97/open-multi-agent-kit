@@ -26,7 +26,7 @@ import { outputMeta } from "../tools/output-meta";
 import { enforcePlanModeWrite, resolvePlanPath } from "../tools/plan-mode-guard";
 import { applyPatch } from "./applicator";
 import { generateDiffString, generateUnifiedDiffString, replaceText } from "./diff";
-import { DEFAULT_FUZZY_THRESHOLD, findMatch } from "./fuzzy";
+import { findMatch } from "./fuzzy";
 import { detectLineEnding, normalizeToLF, restoreLineEndings, stripBom } from "./normalize";
 import { buildNormativeUpdateInput } from "./normative";
 import { type EditToolDetails, getLspBatchRequest } from "./shared";
@@ -233,14 +233,14 @@ export class EditTool implements AgentTool<TInput> {
 				this.allowFuzzy = false;
 				break;
 			case "auto":
-				this.allowFuzzy = session.settings?.getEditFuzzyMatch() ?? true;
+				this.allowFuzzy = session.settings.get("edit.fuzzyMatch");
 				break;
 			default:
 				throw new Error(`Invalid OMP_EDIT_FUZZY: ${editFuzzy}`);
 		}
 		switch (editFuzzyThreshold) {
 			case "auto":
-				this.fuzzyThreshold = session.settings?.getEditFuzzyThreshold?.() ?? DEFAULT_FUZZY_THRESHOLD;
+				this.fuzzyThreshold = session.settings.get("edit.fuzzyThreshold");
 				break;
 			default:
 				this.fuzzyThreshold = parseFloat(editFuzzyThreshold);
@@ -251,8 +251,8 @@ export class EditTool implements AgentTool<TInput> {
 		}
 
 		const enableLsp = session.enableLsp ?? true;
-		const enableDiagnostics = enableLsp ? (session.settings?.getLspDiagnosticsOnEdit() ?? false) : false;
-		const enableFormat = enableLsp ? (session.settings?.getLspFormatOnWrite() ?? true) : false;
+		const enableDiagnostics = enableLsp && session.settings.get("lsp.diagnosticsOnEdit");
+		const enableFormat = enableLsp && session.settings.get("lsp.formatOnWrite");
 		this.writethrough = enableLsp
 			? createLspWritethrough(session.cwd, { enableFormat, enableDiagnostics })
 			: writethroughNoop;
@@ -268,11 +268,11 @@ export class EditTool implements AgentTool<TInput> {
 
 		// Auto mode: check model-specific settings
 		const activeModel = this.session.getActiveModelString?.();
-		const modelVariant = this.session.settings?.getEditVariantForModel?.(activeModel);
+		const modelVariant = this.session.settings.getEditVariantForModel(activeModel);
 		if (modelVariant === "replace") return false;
 		if (modelVariant === "patch") return true;
 
-		return this.session.settings?.getEditPatchMode?.() ?? true;
+		return this.session.settings.get("edit.patchMode");
 	}
 
 	/**

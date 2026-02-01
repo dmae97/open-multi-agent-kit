@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import { nanoid } from "nanoid";
+import { settings } from "../../config/settings";
 import { theme } from "../../modes/theme/theme";
 import type { InteractiveModeContext } from "../../modes/types";
 import type { AgentSessionEvent } from "../../session/agent-session";
@@ -43,7 +44,7 @@ export class InputController {
 				// Double-escape with empty editor triggers /tree or /branch based on setting
 				const now = Date.now();
 				if (now - this.ctx.lastEscapeTime < 500) {
-					if (this.ctx.settingsManager.getDoubleEscapeAction() === "tree") {
+					if (settings.get("doubleEscapeAction") === "tree") {
 						this.ctx.showTreeSelector();
 					} else {
 						this.ctx.showUserMessageSelector();
@@ -242,7 +243,7 @@ export class InputController {
 				return;
 			}
 			if (text === "/branch") {
-				if (this.ctx.settingsManager.getDoubleEscapeAction() === "tree") {
+				if (settings.get("doubleEscapeAction") === "tree") {
 					this.ctx.showTreeSelector();
 				} else {
 					this.ctx.showUserMessageSelector();
@@ -420,7 +421,7 @@ export class InputController {
 			const hasUserMessages = this.ctx.agent.state.messages.some((m: AgentMessage) => m.role === "user");
 			if (!hasUserMessages && !this.ctx.sessionManager.getSessionTitle() && !process.env.OMP_NO_TITLE) {
 				const registry = this.ctx.session.modelRegistry;
-				const smolModel = this.ctx.settingsManager.getModelRole("smol");
+				const smolModel = this.ctx.settings.getModelRole("smol");
 				generateSessionTitle(text, registry, smolModel, this.ctx.session.sessionId)
 					.then(async title => {
 						if (title) {
@@ -560,7 +561,7 @@ export class InputController {
 			const image = await readImageFromClipboard();
 			if (image) {
 				let imageData = image;
-				if (this.ctx.settingsManager.getImageAutoResize()) {
+				if (settings.get("images.autoResize")) {
 					try {
 						const resized = await resizeImage({
 							type: "image",
@@ -651,7 +652,7 @@ export class InputController {
 
 	toggleThinkingBlockVisibility(): void {
 		this.ctx.hideThinkingBlock = !this.ctx.hideThinkingBlock;
-		this.ctx.settingsManager.setHideThinkingBlock(this.ctx.hideThinkingBlock);
+		settings.set("hideThinkingBlock", this.ctx.hideThinkingBlock);
 
 		// Rebuild chat from session messages
 		this.ctx.chatContainer.clear();

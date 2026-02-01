@@ -1,6 +1,7 @@
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage, Message } from "@oh-my-pi/pi-ai";
 import { Spacer, Text, TruncatedText } from "@oh-my-pi/pi-tui";
+import { settings } from "../../config/settings";
 import { AssistantMessageComponent } from "../../modes/components/assistant-message";
 import { BashExecutionComponent } from "../../modes/components/bash-execution";
 import { BranchSummaryMessageComponent } from "../../modes/components/branch-summary-message";
@@ -224,9 +225,9 @@ export class UiHelpers {
 						content.name,
 						content.arguments,
 						{
-							showImages: this.ctx.settingsManager.getShowImages(),
-							editFuzzyThreshold: this.ctx.settingsManager.getEditFuzzyThreshold(),
-							editAllowFuzzy: this.ctx.settingsManager.getEditFuzzyMatch(),
+							showImages: settings.get("terminal.showImages"),
+							editFuzzyThreshold: settings.get("edit.fuzzyThreshold"),
+							editAllowFuzzy: settings.get("edit.fuzzyMatch"),
 						},
 						tool,
 						this.ctx.ui,

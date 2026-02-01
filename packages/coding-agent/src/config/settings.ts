@@ -1,0 +1,702 @@
+/**
+ * Settings singleton with sync get/set and background persistence.
+ *
+ * Usage:
+ *   import { settings } from "./settings";
+ *
+ *   const enabled = settings.get("compaction.enabled");  // sync read
+ *   settings.set("theme", "dark");                       // sync write, saves in background
+ *
+ * For tests:
+ *   const isolated = Settings.isolated({ "compaction.enabled": false });
+ */
+
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { isEnoent, logger, procmgr } from "@oh-my-pi/pi-utils";
+import { YAML } from "bun";
+import { type Settings as SettingsCapabilityItem, settingsCapability } from "../capability/settings";
+import { getAgentDbPath, getAgentDir } from "../config";
+import { loadCapability } from "../discovery";
+import { setColorBlindMode, setSymbolPreset, setTheme } from "../modes/theme/theme";
+import { AgentStorage } from "../session/agent-storage";
+import { withFileLock } from "./file-lock";
+import {
+	type BashInterceptorRule,
+	type GroupPrefix,
+	type GroupTypeMap,
+	getDefault,
+	SETTINGS_SCHEMA,
+	type SettingPath,
+	type SettingValue,
+} from "./settings-schema";
+
+// Re-export types that callers need
+export type {
+	BashInterceptorRule,
+	BranchSummarySettings,
+	CommitSettings,
+	CompactionSettings,
+	ExaSettings,
+	GroupPrefix,
+	GroupTypeMap,
+	RetrySettings,
+	SettingPath,
+	SettingValue,
+	SkillsSettings,
+	StatusLineSettings,
+	ThinkingBudgetsSettings,
+	TodoCompletionSettings,
+	TtsrSettings,
+} from "./settings-schema";
+export { getDefault, getEnumValues, getPathsForTab, getType, getUi, hasUi } from "./settings-schema";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Types
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Raw settings object as stored in YAML */
+export interface RawSettings {
+	[key: string]: unknown;
+}
+
+export interface SettingsOptions {
+	/** Current working directory for project settings discovery */
+	cwd?: string;
+	/** Agent directory for config.yml storage */
+	agentDir?: string;
+	/** Don't persist to disk (for tests) */
+	inMemory?: boolean;
+	/** Initial overrides */
+	overrides?: Partial<Record<SettingPath, unknown>>;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Path Utilities
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Parse a dotted path into segments.
+ * "compaction.enabled" → ["compaction", "enabled"]
+ * "theme" → ["theme"]
+ */
+function parsePath(path: string): string[] {
+	return path.split(".");
+}
+
+/**
+ * Get a nested value from an object by path segments.
+ */
+function getByPath(obj: RawSettings, segments: string[]): unknown {
+	let current: unknown = obj;
+	for (const segment of segments) {
+		if (current === null || current === undefined || typeof current !== "object") {
+			return undefined;
+		}
+		current = (current as Record<string, unknown>)[segment];
+	}
+	return current;
+}
+
+/**
+ * Set a nested value in an object by path segments.
+ * Creates intermediate objects as needed.
+ */
+function setByPath(obj: RawSettings, segments: string[], value: unknown): void {
+	let current = obj;
+	for (let i = 0; i < segments.length - 1; i++) {
+		const segment = segments[i];
+		if (!(segment in current) || typeof current[segment] !== "object" || current[segment] === null) {
+			current[segment] = {};
+		}
+		current = current[segment] as RawSettings;
+	}
+	current[segments[segments.length - 1]] = value;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Settings Class
+// ═══════════════════════════════════════════════════════════════════════════
+
+export class Settings {
+	private configPath: string | null;
+	private cwd: string;
+	private agentDir: string;
+	private storage: AgentStorage | null = null;
+
+	/** Global settings from config.yml */
+	private global: RawSettings = {};
+	/** Project settings from .claude/settings.yml etc */
+	private project: RawSettings = {};
+	/** Runtime overrides (not persisted) */
+	private overrides: RawSettings = {};
+	/** Merged view (global + project + overrides) */
+	private merged: RawSettings = {};
+
+	/** Paths modified during this session (for partial save) */
+	private modified = new Set<string>();
+
+	/** Pending save (debounced) */
+	private saveTimer: ReturnType<typeof setTimeout> | null = null;
+	private savePromise: Promise<void> | null = null;
+
+	/** Whether to persist changes */
+	private persist: boolean;
+
+	private constructor(options: SettingsOptions = {}) {
+		this.cwd = path.normalize(options.cwd ?? process.cwd());
+		this.agentDir = path.normalize(options.agentDir ?? getAgentDir());
+		this.configPath = options.inMemory ? null : path.join(this.agentDir, "config.yml");
+		this.persist = !options.inMemory;
+
+		if (options.overrides) {
+			for (const [key, value] of Object.entries(options.overrides)) {
+				setByPath(this.overrides, parsePath(key), value);
+			}
+		}
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Factory Methods
+	// ─────────────────────────────────────────────────────────────────────────
+
+	/**
+	 * Initialize the global singleton.
+	 * Call once at startup before accessing `settings`.
+	 */
+	static init(options: SettingsOptions = {}): Promise<Settings> {
+		if (globalInstancePromise) return globalInstancePromise;
+
+		const instance = new Settings(options);
+		const promise = instance.load();
+		globalInstancePromise = promise;
+
+		return promise.then(
+			instance => {
+				globalInstance = instance;
+				globalInstancePromise = Promise.resolve(instance);
+				return instance;
+			},
+			error => {
+				globalInstance = null;
+				throw error;
+			},
+		);
+	}
+
+	/**
+	 * Create an isolated instance for testing.
+	 * Does not affect the global singleton.
+	 */
+	static isolated(overrides: Partial<Record<SettingPath, unknown>> = {}): Settings {
+		const instance = new Settings({ inMemory: true, overrides });
+		instance.rebuildMerged();
+		return instance;
+	}
+
+	/**
+	 * Get the global singleton.
+	 * Throws if not initialized.
+	 */
+	static get instance(): Settings {
+		if (!globalInstance) {
+			throw new Error("Settings not initialized. Call Settings.init() first.");
+		}
+		return globalInstance;
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Core API
+	// ─────────────────────────────────────────────────────────────────────────
+
+	/**
+	 * Get a setting value (sync).
+	 * Returns the merged value from global + project + overrides, or the default.
+	 */
+	get<P extends SettingPath>(path: P): SettingValue<P> {
+		const segments = parsePath(path);
+		const value = getByPath(this.merged, segments);
+		if (value !== undefined) {
+			return value as SettingValue<P>;
+		}
+		return getDefault(path);
+	}
+
+	/**
+	 * Set a setting value (sync).
+	 * Updates global settings and queues a background save.
+	 * Triggers hooks for settings that have side effects.
+	 */
+	set<P extends SettingPath>(path: P, value: SettingValue<P>): void {
+		const prev = this.get(path);
+		const segments = parsePath(path);
+		setByPath(this.global, segments, value);
+		this.modified.add(path);
+		this.rebuildMerged();
+		this.queueSave();
+
+		// Trigger hook if exists
+		const hook = SETTING_HOOKS[path];
+		if (hook) {
+			hook(value, prev);
+		}
+	}
+
+	/**
+	 * Apply runtime overrides (not persisted).
+	 */
+	override<P extends SettingPath>(path: P, value: SettingValue<P>): void {
+		const segments = parsePath(path);
+		setByPath(this.overrides, segments, value);
+		this.rebuildMerged();
+	}
+
+	/**
+	 * Clear a runtime override.
+	 */
+	clearOverride(path: SettingPath): void {
+		const segments = parsePath(path);
+		let current = this.overrides;
+		for (let i = 0; i < segments.length - 1; i++) {
+			const segment = segments[i];
+			if (!(segment in current)) return;
+			current = current[segment] as RawSettings;
+		}
+		delete current[segments[segments.length - 1]];
+		this.rebuildMerged();
+	}
+
+	/**
+	 * Flush any pending saves to disk.
+	 * Call before exit to ensure all changes are persisted.
+	 */
+	async flush(): Promise<void> {
+		if (this.saveTimer) {
+			clearTimeout(this.saveTimer);
+			this.saveTimer = null;
+		}
+		if (this.savePromise) {
+			await this.savePromise;
+		}
+		if (this.modified.size > 0) {
+			await this.saveNow();
+		}
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Accessors
+	// ─────────────────────────────────────────────────────────────────────────
+
+	getStorage(): AgentStorage | null {
+		return this.storage;
+	}
+
+	getCwd(): string {
+		return this.cwd;
+	}
+
+	getAgentDir(): string {
+		return this.agentDir;
+	}
+
+	getPlansDirectory(): string {
+		return path.join(this.agentDir, "plans");
+	}
+
+	/**
+	 * Get shell configuration based on settings.
+	 */
+	getShellConfig() {
+		if (this.get("shellForceBasic")) {
+			const basicShell = procmgr.resolveBasicShell();
+			if (basicShell) {
+				return procmgr.getShellConfig(basicShell);
+			}
+		}
+		const shell = this.get("shellPath");
+		return procmgr.getShellConfig(shell);
+	}
+
+	/**
+	 * Serialize current settings for passing to subagent workers.
+	 */
+	serialize(): RawSettings {
+		return structuredClone(this.merged);
+	}
+
+	/**
+	 * Get all settings in a group with full type safety.
+	 */
+	getGroup<G extends GroupPrefix>(prefix: G): GroupTypeMap[G] {
+		const result: Record<string, unknown> = {};
+		for (const key of Object.keys(SETTINGS_SCHEMA) as SettingPath[]) {
+			if (key.startsWith(`${prefix}.`)) {
+				const suffix = key.slice(prefix.length + 1);
+				result[suffix] = this.get(key);
+			}
+		}
+		return result as unknown as GroupTypeMap[G];
+	}
+
+	/**
+	 * Get edit model variants (typed accessor for complex nested config).
+	 */
+	getEditModelVariants(): Record<string, "patch" | "replace"> {
+		const variants = (this.merged.edit as { modelVariants?: Record<string, string> })?.modelVariants ?? {};
+		const result: Record<string, "patch" | "replace"> = {};
+		for (const pattern in variants) {
+			const value = variants[pattern];
+			switch (value) {
+				case "patch":
+					result[pattern] = "patch";
+					break;
+				case "replace":
+					result[pattern] = "replace";
+					break;
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * Get the edit variant for a specific model.
+	 * Returns "patch", "replace", or null (use global default).
+	 */
+	getEditVariantForModel(model: string | undefined): "patch" | "replace" | null {
+		if (!model) return null;
+		const variants = (this.merged.edit as { modelVariants?: Record<string, string> })?.modelVariants;
+		if (!variants) return null;
+		const modelLower = model.toLowerCase();
+		for (const pattern in variants) {
+			if (modelLower.includes(pattern)) {
+				switch (variants[pattern]) {
+					case "patch":
+						return "patch";
+					case "replace":
+						return "replace";
+				}
+			}
+		}
+		return modelLower.includes("kimi") ? "replace" : null;
+	}
+
+	/**
+	 * Get bash interceptor rules (typed accessor for complex array config).
+	 */
+	getBashInterceptorRules(): BashInterceptorRule[] {
+		const patterns = (this.merged.bashInterceptor as { patterns?: unknown[] })?.patterns;
+		if (!Array.isArray(patterns)) return [];
+
+		return patterns.filter((p): p is BashInterceptorRule => typeof p === "object" && p !== null && "pattern" in p);
+	}
+
+	/**
+	 * Set a model role (helper for modelRoles record).
+	 */
+	setModelRole(role: string, modelId: string): void {
+		const current = this.get("modelRoles");
+		this.set("modelRoles", { ...current, [role]: modelId });
+	}
+
+	/**
+	 * Get a model role (helper for modelRoles record).
+	 */
+	getModelRole(role: string): string | undefined {
+		const roles = this.get("modelRoles");
+		return roles[role];
+	}
+
+	/**
+	 * Set disabled providers (for compatibility with discovery system).
+	 */
+	setDisabledProviders(ids: string[]): void {
+		this.set("disabledProviders", ids);
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Loading
+	// ─────────────────────────────────────────────────────────────────────────
+
+	private async load(): Promise<Settings> {
+		if (this.persist) {
+			// Open storage
+			this.storage = await AgentStorage.open(getAgentDbPath(this.agentDir));
+
+			// Migrate from legacy formats if needed
+			await this.migrateFromLegacy();
+
+			// Load global settings from config.yml
+			this.global = await this.loadYaml(this.configPath!);
+		}
+
+		// Load project settings
+		this.project = await this.loadProjectSettings();
+
+		// Build merged view
+		this.rebuildMerged();
+
+		// Apply environment variables
+		this.applyEnvironmentVariables();
+
+		return this;
+	}
+
+	private async loadYaml(filePath: string): Promise<RawSettings> {
+		try {
+			const content = await Bun.file(filePath).text();
+			const parsed = YAML.parse(content);
+			if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+				return {};
+			}
+			return this.migrateRawSettings(parsed as RawSettings);
+		} catch (error) {
+			if (isEnoent(error)) return {};
+			logger.warn("Settings: failed to load", { path: filePath, error: String(error) });
+			return {};
+		}
+	}
+
+	private async loadProjectSettings(): Promise<RawSettings> {
+		try {
+			const result = await loadCapability(settingsCapability.id, { cwd: this.cwd });
+			let merged: RawSettings = {};
+			for (const item of result.items as SettingsCapabilityItem[]) {
+				if (item.level === "project") {
+					merged = this.deepMerge(merged, item.data as RawSettings);
+				}
+			}
+			return this.migrateRawSettings(merged);
+		} catch {
+			return {};
+		}
+	}
+
+	private async migrateFromLegacy(): Promise<void> {
+		if (!this.configPath) return;
+
+		// Check if config.yml already exists
+		try {
+			await Bun.file(this.configPath).text();
+			return; // Already exists, no migration needed
+		} catch (err) {
+			if (!isEnoent(err)) return;
+		}
+
+		let settings: RawSettings = {};
+		let migrated = false;
+
+		// 1. Migrate from settings.json
+		const settingsJsonPath = path.join(this.agentDir, "settings.json");
+		try {
+			const parsed = JSON.parse(await Bun.file(settingsJsonPath).text());
+			if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+				settings = this.deepMerge(settings, this.migrateRawSettings(parsed));
+				migrated = true;
+				try {
+					fs.renameSync(settingsJsonPath, `${settingsJsonPath}.bak`);
+				} catch {}
+			}
+		} catch {}
+
+		// 2. Migrate from agent.db
+		try {
+			const dbSettings = this.storage?.getSettings();
+			if (dbSettings) {
+				settings = this.deepMerge(settings, this.migrateRawSettings(dbSettings as RawSettings));
+				migrated = true;
+			}
+		} catch {}
+
+		// 3. Write merged settings
+		if (migrated && Object.keys(settings).length > 0) {
+			try {
+				await Bun.write(this.configPath, YAML.stringify(settings, null, 2));
+				logger.debug("Settings: migrated to config.yml", { path: this.configPath });
+			} catch {}
+		}
+	}
+
+	/** Apply schema migrations to raw settings */
+	private migrateRawSettings(raw: RawSettings): RawSettings {
+		// queueMode -> steeringMode
+		if ("queueMode" in raw && !("steeringMode" in raw)) {
+			raw.steeringMode = raw.queueMode;
+			delete raw.queueMode;
+		}
+
+		// ask.timeout: ms -> seconds (if value > 1000, it's old ms format)
+		if (raw.ask && typeof (raw.ask as Record<string, unknown>).timeout === "number") {
+			const oldValue = (raw.ask as Record<string, unknown>).timeout as number;
+			if (oldValue > 1000) {
+				(raw.ask as Record<string, unknown>).timeout = Math.round(oldValue / 1000);
+			}
+		}
+
+		return raw;
+	}
+
+	private applyEnvironmentVariables(): void {
+		const env = this.get("env") as Record<string, string>;
+		if (!env) return;
+		for (const [key, value] of Object.entries(env)) {
+			if (typeof key === "string" && typeof value === "string" && !(key in process.env)) {
+				process.env[key] = value;
+			}
+		}
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Saving
+	// ─────────────────────────────────────────────────────────────────────────
+
+	private queueSave(): void {
+		if (!this.persist || !this.configPath) return;
+
+		// Debounce: wait 100ms for more changes
+		if (this.saveTimer) {
+			clearTimeout(this.saveTimer);
+		}
+		this.saveTimer = setTimeout(() => {
+			this.saveTimer = null;
+			this.saveNow().catch(err => {
+				logger.warn("Settings: background save failed", { error: String(err) });
+			});
+		}, 100);
+	}
+
+	private async saveNow(): Promise<void> {
+		if (!this.persist || !this.configPath || this.modified.size === 0) return;
+
+		const configPath = this.configPath;
+		const modifiedPaths = [...this.modified];
+		this.modified.clear();
+
+		try {
+			await withFileLock(configPath, async () => {
+				// Re-read to preserve external changes
+				const current = await this.loadYaml(configPath);
+
+				// Apply only our modified paths
+				for (const modPath of modifiedPaths) {
+					const segments = parsePath(modPath);
+					const value = getByPath(this.global, segments);
+					setByPath(current, segments, value);
+				}
+
+				// Update our global with any external changes we preserved
+				this.global = current;
+				await Bun.write(configPath, YAML.stringify(this.global, null, 2));
+			});
+		} catch (error) {
+			logger.warn("Settings: save failed", { error: String(error) });
+			// Re-add failed paths for retry
+			for (const p of modifiedPaths) {
+				this.modified.add(p);
+			}
+		}
+
+		this.rebuildMerged();
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Utilities
+	// ─────────────────────────────────────────────────────────────────────────
+
+	private rebuildMerged(): void {
+		this.merged = this.deepMerge(this.deepMerge({}, this.global), this.project);
+		this.merged = this.deepMerge(this.merged, this.overrides);
+	}
+
+	private deepMerge(base: RawSettings, overrides: RawSettings): RawSettings {
+		const result = { ...base };
+		for (const key of Object.keys(overrides)) {
+			const override = overrides[key];
+			const baseVal = base[key];
+
+			if (override === undefined) continue;
+
+			if (
+				typeof override === "object" &&
+				override !== null &&
+				!Array.isArray(override) &&
+				typeof baseVal === "object" &&
+				baseVal !== null &&
+				!Array.isArray(baseVal)
+			) {
+				result[key] = this.deepMerge(baseVal as RawSettings, override as RawSettings);
+			} else {
+				result[key] = override;
+			}
+		}
+		return result;
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Setting Hooks
+// ═══════════════════════════════════════════════════════════════════════════
+
+type SettingHook<P extends SettingPath> = (value: SettingValue<P>, prev: SettingValue<P>) => void;
+
+const SETTING_HOOKS: Partial<Record<SettingPath, SettingHook<any>>> = {
+	theme: value => {
+		// Theme loading is async, but we call it synchronously here.
+		// The hook fires immediately, and the theme system handles async loading internally.
+		if (typeof value === "string") {
+			setTheme(value, false).catch(err => {
+				logger.warn("Settings: theme hook failed", { theme: value, error: String(err) });
+			});
+		}
+	},
+	symbolPreset: value => {
+		if (typeof value === "string" && (value === "unicode" || value === "nerd" || value === "ascii")) {
+			setSymbolPreset(value).catch(err => {
+				logger.warn("Settings: symbolPreset hook failed", { preset: value, error: String(err) });
+			});
+		}
+	},
+	colorBlindMode: value => {
+		if (typeof value === "boolean") {
+			setColorBlindMode(value).catch(err => {
+				logger.warn("Settings: colorBlindMode hook failed", { enabled: value, error: String(err) });
+			});
+		}
+	},
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Global Singleton
+// ═══════════════════════════════════════════════════════════════════════════
+
+let globalInstance: Settings | null = null;
+let globalInstancePromise: Promise<Settings> | null = null;
+
+/**
+ * Reset the global singleton for testing.
+ * @internal
+ */
+export function _resetSettingsForTest(): void {
+	globalInstance = null;
+	globalInstancePromise = null;
+}
+
+/**
+ * The global settings singleton.
+ * Must call `Settings.init()` before using.
+ */
+export const settings = new Proxy({} as Settings, {
+	get(_target, prop) {
+		if (!globalInstance) {
+			throw new Error("Settings not initialized. Call Settings.init() first.");
+		}
+		const value = (globalInstance as unknown as Record<string | symbol, unknown>)[prop];
+		if (typeof value === "function") {
+			return value.bind(globalInstance);
+		}
+		return value;
+	},
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════════════════

@@ -40,7 +40,7 @@ import {
 	parseCommandArgs,
 	renderPromptTemplate,
 } from "../config/prompt-templates";
-import type { SettingsManager, SkillsSettings } from "../config/settings-manager";
+import type { Settings, SkillsSettings } from "../config/settings";
 import { type BashResult, executeBash as executeBashCommand } from "../exec/bash-executor";
 import { exportSessionToHtml } from "../export/html";
 import type { TtsrManager } from "../export/ttsr";
@@ -125,7 +125,7 @@ export type AgentSessionEventListener = (event: AgentSessionEvent) => void;
 export interface AgentSessionConfig {
 	agent: Agent;
 	sessionManager: SessionManager;
-	settingsManager: SettingsManager;
+	settings: Settings;
 	/** Models to cycle through with Ctrl+P (from --models flag) */
 	scopedModels?: Array<{ model: Model<any>; thinkingLevel: ThinkingLevel }>;
 	/** Prompt templates for expansion */
@@ -255,7 +255,7 @@ async function cleanupSshResources(): Promise<void> {
 export class AgentSession {
 	readonly agent: Agent;
 	readonly sessionManager: SessionManager;
-	readonly settingsManager: SettingsManager;
+	readonly settings: Settings;
 
 	private _scopedModels: Array<{ model: Model<any>; thinkingLevel: ThinkingLevel }>;
 	private _promptTemplates: PromptTemplate[];
@@ -333,7 +333,7 @@ export class AgentSession {
 	constructor(config: AgentSessionConfig) {
 		this.agent = config.agent;
 		this.sessionManager = config.sessionManager;
-		this.settingsManager = config.settingsManager;
+		this.settings = config.settings;
 		this._scopedModels = config.scopedModels ?? [];
 		this._promptTemplates = config.promptTemplates ?? [];
 		this._slashCommands = config.slashCommands ?? [];
@@ -524,7 +524,7 @@ export class AgentSession {
 					details?: { path?: string };
 					$normative?: Record<string, unknown>;
 				};
-				if ($normative && toolCallId && this.settingsManager.getNormativeRewrite()) {
+				if ($normative && toolCallId && this.settings.get("normativeRewrite")) {
 					await this._rewriteToolCallArgs(toolCallId, $normative);
 				}
 				// Invalidate streaming edit cache when edit tool completes to prevent stale data
@@ -604,7 +604,7 @@ export class AgentSession {
 	}
 
 	private async _preCacheStreamingEditFile(event: AgentEvent): Promise<void> {
-		if (!this.settingsManager.getEditStreamingAbort()) return;
+		if (!this.settings.get("edit.streamingAbort")) return;
 		if (event.type !== "message_update") return;
 		const assistantEvent = event.assistantMessageEvent;
 		if (assistantEvent.type !== "toolcall_start") return;
@@ -646,7 +646,7 @@ export class AgentSession {
 	}
 
 	private _maybeAbortStreamingEdit(event: AgentEvent): void {
-		if (!this.settingsManager.getEditStreamingAbort()) return;
+		if (!this.settings.get("edit.streamingAbort")) return;
 		if (this._streamingEditAbortTriggered) return;
 		if (event.type !== "message_update") return;
 		const assistantEvent = event.assistantMessageEvent;
@@ -757,8 +757,8 @@ export class AgentSession {
 				{ path, op: "update", rename, diff: normalizedDiff },
 				{
 					cwd: this.sessionManager.getCwd(),
-					allowFuzzy: this.settingsManager.getEditFuzzyMatch(),
-					fuzzyThreshold: this.settingsManager.getEditFuzzyThreshold(),
+					allowFuzzy: this.settings.get("edit.fuzzyMatch"),
+					fuzzyThreshold: this.settings.get("edit.fuzzyThreshold"),
 				},
 			);
 		} catch (error) {
@@ -1037,7 +1037,7 @@ export class AgentSession {
 
 		const planFilePath = `plan://${this.sessionManager.getSessionId()}/plan.md`;
 		const resolvedPlanPath = resolvePlanUrlToPath(planFilePath, {
-			getPlansDirectory: this.settingsManager.getPlansDirectory.bind(this.settingsManager),
+			getPlansDirectory: () => this.settings.getPlansDirectory(),
 			cwd: this.sessionManager.getCwd(),
 		});
 		let planContent: string;
@@ -1072,12 +1072,12 @@ export class AgentSession {
 		const sessionPlanUrl = `plan://${this.sessionManager.getSessionId()}/plan.md`;
 		const resolvedPlanPath = state.planFilePath.startsWith("plan://")
 			? resolvePlanUrlToPath(state.planFilePath, {
-					getPlansDirectory: this.settingsManager.getPlansDirectory.bind(this.settingsManager),
+					getPlansDirectory: () => this.settings.getPlansDirectory(),
 					cwd: this.sessionManager.getCwd(),
 				})
 			: resolveToCwd(state.planFilePath, this.sessionManager.getCwd());
 		const resolvedSessionPlan = resolvePlanUrlToPath(sessionPlanUrl, {
-			getPlansDirectory: this.settingsManager.getPlansDirectory.bind(this.settingsManager),
+			getPlansDirectory: () => this.settings.getPlansDirectory(),
 			cwd: this.sessionManager.getCwd(),
 		});
 		const displayPlanPath =
@@ -1796,8 +1796,8 @@ export class AgentSession {
 
 		this.agent.setModel(model);
 		this.sessionManager.appendModelChange(`${model.provider}/${model.id}`, role);
-		this.settingsManager.setModelRole(role, `${model.provider}/${model.id}`);
-		this.settingsManager.getStorage()?.recordModelUsage(`${model.provider}/${model.id}`);
+		this.settings.setModelRole(role, `${model.provider}/${model.id}`);
+		this.settings.getStorage()?.recordModelUsage(`${model.provider}/${model.id}`);
 
 		// Re-clamp thinking level for new model's capabilities
 		this.setThinkingLevel(this.thinkingLevel);
@@ -1816,7 +1816,7 @@ export class AgentSession {
 
 		this.agent.setModel(model);
 		this.sessionManager.appendModelChange(`${model.provider}/${model.id}`, "temporary");
-		this.settingsManager.getStorage()?.recordModelUsage(`${model.provider}/${model.id}`);
+		this.settings.getStorage()?.recordModelUsage(`${model.provider}/${model.id}`);
 
 		// Re-clamp thinking level for new model's capabilities
 		this.setThinkingLevel(this.thinkingLevel);
@@ -1855,8 +1855,8 @@ export class AgentSession {
 		for (const role of roleOrder) {
 			const roleModelStr =
 				role === "default"
-					? (this.settingsManager.getModelRole("default") ?? `${currentModel.provider}/${currentModel.id}`)
-					: this.settingsManager.getModelRole(role);
+					? (this.settings.getModelRole("default") ?? `${currentModel.provider}/${currentModel.id}`)
+					: this.settings.getModelRole(role);
 			if (!roleModelStr) continue;
 
 			const parsed = parseModelString(roleModelStr);
@@ -1912,8 +1912,8 @@ export class AgentSession {
 		// Apply model
 		this.agent.setModel(next.model);
 		this.sessionManager.appendModelChange(`${next.model.provider}/${next.model.id}`);
-		this.settingsManager.setModelRole("default", `${next.model.provider}/${next.model.id}`);
-		this.settingsManager.getStorage()?.recordModelUsage(`${next.model.provider}/${next.model.id}`);
+		this.settings.setModelRole("default", `${next.model.provider}/${next.model.id}`);
+		this.settings.getStorage()?.recordModelUsage(`${next.model.provider}/${next.model.id}`);
 
 		// Apply thinking level (setThinkingLevel clamps to model capabilities)
 		this.setThinkingLevel(next.thinkingLevel);
@@ -1940,8 +1940,8 @@ export class AgentSession {
 
 		this.agent.setModel(nextModel);
 		this.sessionManager.appendModelChange(`${nextModel.provider}/${nextModel.id}`);
-		this.settingsManager.setModelRole("default", `${nextModel.provider}/${nextModel.id}`);
-		this.settingsManager.getStorage()?.recordModelUsage(`${nextModel.provider}/${nextModel.id}`);
+		this.settings.setModelRole("default", `${nextModel.provider}/${nextModel.id}`);
+		this.settings.getStorage()?.recordModelUsage(`${nextModel.provider}/${nextModel.id}`);
 
 		// Re-clamp thinking level for new model's capabilities
 		this.setThinkingLevel(this.thinkingLevel);
@@ -1970,7 +1970,7 @@ export class AgentSession {
 		const effectiveLevel = availableLevels.includes(level) ? level : this._clampThinkingLevel(level, availableLevels);
 		this.agent.setThinkingLevel(effectiveLevel);
 		this.sessionManager.appendThinkingLevelChange(effectiveLevel);
-		this.settingsManager.setDefaultThinkingLevel(effectiveLevel);
+		this.settings.set("defaultThinkingLevel", effectiveLevel);
 	}
 
 	/**
@@ -2040,7 +2040,7 @@ export class AgentSession {
 	 */
 	setSteeringMode(mode: "all" | "one-at-a-time"): void {
 		this.agent.setSteeringMode(mode);
-		this.settingsManager.setSteeringMode(mode);
+		this.settings.set("steeringMode", mode);
 	}
 
 	/**
@@ -2049,7 +2049,7 @@ export class AgentSession {
 	 */
 	setFollowUpMode(mode: "all" | "one-at-a-time"): void {
 		this.agent.setFollowUpMode(mode);
-		this.settingsManager.setFollowUpMode(mode);
+		this.settings.set("followUpMode", mode);
 	}
 
 	/**
@@ -2058,7 +2058,7 @@ export class AgentSession {
 	 */
 	setInterruptMode(mode: "immediate" | "wait"): void {
 		this.agent.setInterruptMode(mode);
-		this.settingsManager.setInterruptMode(mode);
+		this.settings.set("interruptMode", mode);
 	}
 
 	// =========================================================================
@@ -2094,7 +2094,7 @@ export class AgentSession {
 				throw new Error("No model selected");
 			}
 
-			const settings = this.settingsManager.getCompactionSettings();
+			const compactionSettings = this.settings.getGroup("compaction");
 			const compactionModel = this.model;
 			const apiKey = await this._modelRegistry.getApiKey(compactionModel, this.sessionId);
 			if (!apiKey) {
@@ -2103,7 +2103,7 @@ export class AgentSession {
 
 			const pathEntries = this.sessionManager.getBranch();
 
-			const preparation = prepareCompaction(pathEntries, settings);
+			const preparation = prepareCompaction(pathEntries, compactionSettings);
 			if (!preparation) {
 				// Check why we can't compact
 				const lastEntry = pathEntries[pathEntries.length - 1];
@@ -2394,8 +2394,8 @@ Be thorough - include exact file paths, function names, error messages, and tech
 	 * @param skipAbortedCheck If false, include aborted messages (for pre-prompt check). Default: true
 	 */
 	private async _checkCompaction(assistantMessage: AssistantMessage, skipAbortedCheck = true): Promise<void> {
-		const settings = this.settingsManager.getCompactionSettings();
-		if (!settings.enabled) return;
+		const compactionSettings = this.settings.getGroup("compaction");
+		if (!compactionSettings.enabled) return;
 
 		const pruneResult = await this._pruneToolOutputs();
 
@@ -2440,7 +2440,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 		if (pruneResult) {
 			contextTokens = Math.max(0, contextTokens - pruneResult.tokensSaved);
 		}
-		if (shouldCompact(contextTokens, contextWindow, settings)) {
+		if (shouldCompact(contextTokens, contextWindow, compactionSettings)) {
 			await this._runAutoCompaction("threshold", false);
 		}
 	}
@@ -2449,14 +2449,13 @@ Be thorough - include exact file paths, function names, error messages, and tech
 	 * Check if agent stopped with incomplete todos and prompt to continue.
 	 */
 	private async _checkTodoCompletion(): Promise<void> {
-		const settings = this.settingsManager.getTodoCompletionSettings();
-		if (!settings.enabled) {
+		const todoSettings = this.settings.getGroup("todoCompletion");
+		if (!todoSettings.enabled) {
 			this._todoReminderCount = 0;
 			return;
 		}
 
-		const maxReminders = settings.maxReminders ?? 3;
-		if (this._todoReminderCount >= maxReminders) {
+		if (this._todoReminderCount >= todoSettings.maxReminders) {
 			logger.debug("Todo completion: max reminders reached", { count: this._todoReminderCount });
 			return;
 		}
@@ -2492,7 +2491,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			`<system_reminder>\n` +
 			`You stopped with ${incomplete.length} incomplete todo item(s):\n${todoList}\n\n` +
 			`Please continue working on these tasks or mark them complete if finished.\n` +
-			`(Reminder ${this._todoReminderCount}/${maxReminders})\n` +
+			`(Reminder ${this._todoReminderCount}/${todoSettings.maxReminders})\n` +
 			`</system_reminder>`;
 
 		logger.debug("Todo completion: sending reminder", {
@@ -2505,7 +2504,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			type: "todo_reminder",
 			todos: incomplete,
 			attempt: this._todoReminderCount,
-			maxAttempts: maxReminders,
+			maxAttempts: todoSettings.maxReminders,
 		});
 
 		// Inject reminder and continue the conversation
@@ -2528,9 +2527,9 @@ Be thorough - include exact file paths, function names, error messages, and tech
 	): Model<any> | undefined {
 		const roleModelStr =
 			role === "default"
-				? (this.settingsManager.getModelRole("default") ??
+				? (this.settings.getModelRole("default") ??
 					(currentModel ? `${currentModel.provider}/${currentModel.id}` : undefined))
-				: this.settingsManager.getModelRole(role);
+				: this.settings.getModelRole(role);
 
 		if (!roleModelStr) return undefined;
 
@@ -2575,7 +2574,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 	 * Internal: Run auto-compaction with events.
 	 */
 	private async _runAutoCompaction(reason: "overflow" | "threshold", willRetry: boolean): Promise<void> {
-		const settings = this.settingsManager.getCompactionSettings();
+		const compactionSettings = this.settings.getGroup("compaction");
 
 		this._emit({ type: "auto_compaction_start", reason });
 		// Properly abort and null existing controller before replacing
@@ -2598,7 +2597,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 
 			const pathEntries = this.sessionManager.getBranch();
 
-			const preparation = prepareCompaction(pathEntries, settings);
+			const preparation = prepareCompaction(pathEntries, compactionSettings);
 			if (!preparation) {
 				this._emit({ type: "auto_compaction_end", result: undefined, aborted: false, willRetry: false });
 				return;
@@ -2659,7 +2658,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 				preserveData ??= hookCompaction.preserveData;
 			} else {
 				const candidates = this._getCompactionModelCandidates(availableModels);
-				const retrySettings = this.settingsManager.getRetrySettings();
+				const retrySettings = this.settings.getGroup("retry");
 				let compactResult: CompactionResult | undefined;
 				let lastError: unknown;
 
@@ -2788,7 +2787,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			};
 			this._emit({ type: "auto_compaction_end", result, aborted: false, willRetry });
 
-			if (!willRetry && settings.autoContinue !== false) {
+			if (!willRetry && compactionSettings.autoContinue !== false) {
 				await this.prompt("Continue if you have next steps.", {
 					expandPromptTemplates: false,
 					synthetic: true,
@@ -2831,12 +2830,12 @@ Be thorough - include exact file paths, function names, error messages, and tech
 	 * Toggle auto-compaction setting.
 	 */
 	setAutoCompactionEnabled(enabled: boolean): void {
-		this.settingsManager.setCompactionEnabled(enabled);
+		this.settings.set("compaction.enabled", enabled);
 	}
 
 	/** Whether auto-compaction is enabled */
 	get autoCompactionEnabled(): boolean {
-		return this.settingsManager.getCompactionEnabled();
+		return this.settings.get("compaction.enabled");
 	}
 
 	// =========================================================================
@@ -2919,8 +2918,8 @@ Be thorough - include exact file paths, function names, error messages, and tech
 	 * @returns true if retry was initiated, false if max retries exceeded or disabled
 	 */
 	private async _handleRetryableError(message: AssistantMessage): Promise<boolean> {
-		const settings = this.settingsManager.getRetrySettings();
-		if (!settings.enabled) return false;
+		const retrySettings = this.settings.getGroup("retry");
+		if (!retrySettings.enabled) return false;
 
 		this._retryAttempt++;
 
@@ -2932,7 +2931,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			this._retryResolve = resolve;
 		}
 
-		if (this._retryAttempt > settings.maxRetries) {
+		if (this._retryAttempt > retrySettings.maxRetries) {
 			// Max retries exceeded, emit final failure and reset
 			this._emit({
 				type: "auto_retry_end",
@@ -2946,7 +2945,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 		}
 
 		const errorMessage = message.errorMessage || "Unknown error";
-		let delayMs = settings.baseDelayMs * 2 ** (this._retryAttempt - 1);
+		let delayMs = retrySettings.baseDelayMs * 2 ** (this._retryAttempt - 1);
 
 		if (this.model && this._isUsageLimitErrorMessage(errorMessage)) {
 			const retryAfterMs = this._parseRetryAfterMsFromError(errorMessage);
@@ -2966,7 +2965,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 		this._emit({
 			type: "auto_retry_start",
 			attempt: this._retryAttempt,
-			maxAttempts: settings.maxRetries,
+			maxAttempts: retrySettings.maxRetries,
 			delayMs,
 			errorMessage,
 		});
@@ -3037,14 +3036,14 @@ Be thorough - include exact file paths, function names, error messages, and tech
 
 	/** Whether auto-retry is enabled */
 	get autoRetryEnabled(): boolean {
-		return this.settingsManager.getRetryEnabled();
+		return this.settings.get("retry.enabled") ?? true;
 	}
 
 	/**
 	 * Toggle auto-retry setting.
 	 */
 	setAutoRetryEnabled(enabled: boolean): void {
-		this.settingsManager.setRetryEnabled(enabled);
+		this.settings.set("retry.enabled", enabled);
 	}
 
 	// =========================================================================
@@ -3171,8 +3170,8 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			const result = await executePythonCommand(code, {
 				cwd,
 				sessionId,
-				kernelMode: this.settingsManager?.getPythonKernelMode?.() ?? "session",
-				useSharedGateway: this.settingsManager?.getPythonSharedGateway?.() ?? true,
+				kernelMode: this.settings.get("python.kernelMode"),
+				useSharedGateway: this.settings.get("python.sharedGateway"),
 				onChunk,
 				signal: this._pythonAbortController.signal,
 			});
@@ -3465,7 +3464,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			if (!apiKey) {
 				throw new Error(`No API key for ${model.provider}`);
 			}
-			const branchSummarySettings = this.settingsManager.getBranchSummarySettings();
+			const branchSummarySettings = this.settings.getGroup("branchSummary");
 			const result = await generateBranchSummary(entriesToSummarize, {
 				model,
 				apiKey,
@@ -3737,7 +3736,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 	 * @returns Path to exported file
 	 */
 	async exportToHtml(outputPath?: string): Promise<string> {
-		const themeName = this.settingsManager.getTheme();
+		const themeName = this.settings.get("theme");
 		return exportSessionToHtml(this.sessionManager, this.state, { outputPath, themeName });
 	}
 

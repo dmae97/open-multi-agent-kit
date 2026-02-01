@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "bun:test";
+import { type SettingPath, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import * as pythonKernelModule from "@oh-my-pi/pi-coding-agent/ipy/kernel";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { createTools } from "@oh-my-pi/pi-coding-agent/tools";
+import { createTools, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 
 function createTestSession(overrides: Partial<ToolSession> = {}): ToolSession {
 	return {
@@ -9,22 +9,17 @@ function createTestSession(overrides: Partial<ToolSession> = {}): ToolSession {
 		hasUI: false,
 		getSessionFile: () => null,
 		getSessionSpawns: () => "*",
+		settings: Settings.isolated(),
 		...overrides,
 	};
 }
 
-function createBaseSettings(overrides: Partial<NonNullable<ToolSession["settings"]>> = {}) {
-	return {
-		getImageAutoResize: () => true,
-		getLspFormatOnWrite: () => true,
-		getLspDiagnosticsOnWrite: () => true,
-		getLspDiagnosticsOnEdit: () => false,
-		getEditFuzzyMatch: () => true,
-		getBashInterceptorEnabled: () => true,
-		getBashInterceptorSimpleLsEnabled: () => true,
-		getBashInterceptorRules: () => [],
+function createSettingsWithOverrides(overrides: Partial<Record<SettingPath, unknown>> = {}): Settings {
+	return Settings.isolated({
+		"lsp.formatOnWrite": true,
+		"bashInterceptor.enabled": true,
 		...overrides,
-	};
+	});
 }
 
 describe("createTools python fallback", () => {
@@ -34,9 +29,9 @@ describe("createTools python fallback", () => {
 			.mockResolvedValue({ ok: false, reason: "unavailable" });
 
 		const session = createTestSession({
-			settings: createBaseSettings({
-				getPythonToolMode: () => "ipy-only",
-				getPythonKernelMode: () => "session",
+			settings: createSettingsWithOverrides({
+				"python.toolMode": "ipy-only",
+				"python.kernelMode": "session",
 			}),
 		});
 
@@ -54,9 +49,9 @@ describe("createTools python fallback", () => {
 			.mockResolvedValue({ ok: false, reason: "unavailable" });
 
 		const session = createTestSession({
-			settings: createBaseSettings({
-				getPythonToolMode: () => "both",
-				getPythonKernelMode: () => "session",
+			settings: createSettingsWithOverrides({
+				"python.toolMode": "both",
+				"python.kernelMode": "session",
 			}),
 		});
 

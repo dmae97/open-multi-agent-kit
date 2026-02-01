@@ -3,12 +3,29 @@ import * as path from "node:path";
 import type { AssistantMessage } from "@oh-my-pi/pi-ai";
 import { type Component, padding, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
 import { $ } from "bun";
-import type { StatusLineSegmentOptions, StatusLineSettings } from "../../config/settings-manager";
+import { settings } from "../../config/settings";
+import type { StatusLinePreset, StatusLineSegmentId, StatusLineSeparatorStyle } from "../../config/settings-schema";
 import { theme } from "../../modes/theme/theme";
 import type { AgentSession } from "../../session/agent-session";
 import { getPreset } from "./status-line/presets";
 import { renderSegment, type SegmentContext } from "./status-line/segments";
 import { getSeparator } from "./status-line/separators";
+
+export interface StatusLineSegmentOptions {
+	model?: { showThinkingLevel?: boolean };
+	path?: { abbreviate?: boolean; maxLength?: number; stripWorkPrefix?: boolean };
+	git?: { showBranch?: boolean; showStaged?: boolean; showUnstaged?: boolean; showUntracked?: boolean };
+	time?: { format?: "12h" | "24h"; showSeconds?: boolean };
+}
+
+export interface StatusLineSettings {
+	preset?: StatusLinePreset;
+	leftSegments?: StatusLineSegmentId[];
+	rightSegments?: StatusLineSegmentId[];
+	separator?: StatusLineSeparatorStyle;
+	segmentOptions?: StatusLineSegmentOptions;
+	showHookStatus?: boolean;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Rendering Helpers
@@ -60,8 +77,14 @@ export class StatusLineComponent implements Component {
 
 	constructor(session: AgentSession) {
 		this.session = session;
-		// Load initial settings
-		this.settings = session.settingsManager?.getStatusLineSettings() ?? {};
+		this.settings = {
+			preset: settings.get("statusLine.preset"),
+			leftSegments: settings.get("statusLine.leftSegments"),
+			rightSegments: settings.get("statusLine.rightSegments"),
+			separator: settings.get("statusLine.separator"),
+			showHookStatus: settings.get("statusLine.showHookStatus"),
+			segmentOptions: settings.getGroup("statusLine").segmentOptions,
+		};
 	}
 
 	updateSettings(settings: StatusLineSettings): void {

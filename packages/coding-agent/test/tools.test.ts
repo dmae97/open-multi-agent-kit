@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
+import { _resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { EditTool } from "@oh-my-pi/pi-coding-agent/patch";
 import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 import { BashTool } from "@oh-my-pi/pi-coding-agent/tools/bash";
@@ -31,6 +31,7 @@ function createTestToolSession(cwd: string): ToolSession {
 		hasUI: false,
 		getSessionFile: () => sessionFile,
 		getSessionSpawns: () => "*",
+		settings: Settings.isolated(),
 	};
 }
 
@@ -477,7 +478,8 @@ function b() {
 		});
 
 		it("should handle process spawn errors", async () => {
-			const getShellConfigSpy = vi.spyOn(SettingsManager.prototype, "getShellConfig").mockReturnValueOnce({
+			_resetSettingsForTest();
+			vi.spyOn(Settings.prototype, "getShellConfig").mockReturnValue({
 				shell: "/nonexistent-shell-path-xyz123",
 				args: ["-c"],
 				env: {},
@@ -488,7 +490,7 @@ function b() {
 
 			await expect(bashWithBadShell.execute("test-call-12", { command: "echo test" })).rejects.toThrow(/ENOENT/);
 
-			getShellConfigSpy.mockRestore();
+			vi.restoreAllMocks();
 		});
 	});
 

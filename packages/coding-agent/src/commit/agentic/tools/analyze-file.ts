@@ -4,7 +4,7 @@ import type { CommitAgentState } from "../../../commit/agentic/state";
 import type { NumstatEntry } from "../../../commit/types";
 import type { ModelRegistry } from "../../../config/model-registry";
 import { renderPromptTemplate } from "../../../config/prompt-templates";
-import type { SettingsManager } from "../../../config/settings-manager";
+import type { Settings } from "../../../config/settings";
 import type { CustomTool, CustomToolContext } from "../../../extensibility/custom-tools/types";
 import type { AuthStorage } from "../../../session/auth-storage";
 import { TaskTool } from "../../../task";
@@ -31,18 +31,16 @@ function buildToolSession(
 		cwd: string;
 		authStorage: AuthStorage;
 		modelRegistry: ModelRegistry;
-		settingsManager: SettingsManager;
+		settings: Settings;
 		spawns: string;
 	},
 ): ToolSession {
-	const sessionFile = () => ctx.sessionManager.getSessionFile() ?? null;
 	return {
 		cwd: options.cwd,
 		hasUI: false,
-		getSessionFile: sessionFile,
+		getSessionFile: () => ctx.sessionManager.getSessionFile() ?? null,
 		getSessionSpawns: () => options.spawns,
-		settings: options.settingsManager,
-		settingsManager: options.settingsManager,
+		settings: options.settings,
 		authStorage: options.authStorage,
 		modelRegistry: options.modelRegistry,
 	};
@@ -52,7 +50,7 @@ export function createAnalyzeFileTool(options: {
 	cwd: string;
 	authStorage: AuthStorage;
 	modelRegistry: ModelRegistry;
-	settingsManager: SettingsManager;
+	settings: Settings;
 	spawns: string;
 	state: CommitAgentState;
 }): CustomTool<typeof analyzeFileSchema> {

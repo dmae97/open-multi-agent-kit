@@ -4,7 +4,7 @@
  * Provides unified bash execution for AgentSession.executeBash() and direct calls.
  */
 import { Exception, ptree } from "@oh-my-pi/pi-utils";
-import { SettingsManager } from "../config/settings-manager";
+import { Settings } from "../config/settings";
 import { OutputSink } from "../session/streaming-output";
 import { getOrCreateSnapshot, getSnapshotSourceCommand } from "../utils/shell-snapshot";
 import { executeShellCommand } from "./shell-session";
@@ -34,11 +34,11 @@ export interface BashResult {
 }
 
 export async function executeBash(command: string, options?: BashExecutorOptions): Promise<BashResult> {
-	const settings = await SettingsManager.acquire();
+	const settings = await Settings.init();
 	const { shell, args, env, prefix } = settings.getShellConfig();
 	const snapshotPath = await getOrCreateSnapshot(shell, env);
 
-	if (shouldUsePersistentShell(settings.getBashPersistentShell())) {
+	if (shouldUsePersistentShell(settings.get("bash.persistentShell"))) {
 		return await executeShellCommand({ shell, env, prefix, snapshotPath }, command, {
 			cwd: options?.cwd,
 			timeout: options?.timeout,

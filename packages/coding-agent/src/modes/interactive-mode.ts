@@ -19,7 +19,7 @@ import { isEnoent, logger, postmortem } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { KeybindingsManager } from "../config/keybindings";
 import { renderPromptTemplate } from "../config/prompt-templates";
-import type { SettingsManager } from "../config/settings-manager";
+import { type Settings, settings } from "../config/settings";
 import type { ExtensionUIContext, ExtensionUIDialogOptions } from "../extensibility/extensions";
 import type { CompactOptions } from "../extensibility/extensions/types";
 import { loadSlashCommands } from "../extensibility/slash-commands";
@@ -72,7 +72,7 @@ export interface InteractiveModeOptions {
 export class InteractiveMode implements InteractiveModeContext {
 	public session: AgentSession;
 	public sessionManager: SessionManager;
-	public settingsManager: SettingsManager;
+	public settings: Settings;
 	public keybindings: KeybindingsManager;
 	public agent: AgentSession["agent"];
 	public historyStorage?: HistoryStorage;
@@ -159,7 +159,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	) {
 		this.session = session;
 		this.sessionManager = session.sessionManager;
-		this.settingsManager = session.settingsManager;
+		this.settings = session.settings;
 		this.keybindings = KeybindingsManager.inMemory();
 		this.agent = session.agent;
 		this.version = version;
@@ -168,7 +168,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.lspServers = lspServers;
 		this.mcpManager = mcpManager;
 
-		this.ui = new TUI(new ProcessTerminal(), this.settingsManager.getShowHardwareCursor());
+		this.ui = new TUI(new ProcessTerminal(), settings.get("showHardwareCursor"));
 		setMermaidRenderCallback(() => this.ui.requestRender());
 		this.chatContainer = new Container();
 		this.pendingMessagesContainer = new Container();
@@ -193,7 +193,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.statusLine = new StatusLineComponent(session);
 		this.statusLine.setAutoCompactEnabled(session.autoCompactionEnabled);
 
-		this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
+		this.hideThinkingBlock = settings.get("hideThinkingBlock");
 
 		// Define slash commands for autocomplete
 		const slashCommands: SlashCommand[] = [
@@ -240,7 +240,7 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		// Build skill commands from session.skills (if enabled)
 		const skillCommandList: SlashCommand[] = [];
-		if (this.settingsManager.getEnableSkillCommands?.()) {
+		if (settings.get("skills.enableSkillCommands")) {
 			for (const skill of this.session.skills) {
 				const commandName = `skill:${skill.name}`;
 				this.skillCommands.set(commandName, skill.filePath);
@@ -300,7 +300,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				fileTypes: s.fileTypes,
 			})) ?? [];
 
-		const startupQuiet = this.settingsManager.getStartupQuiet();
+		const startupQuiet = settings.get("startup.quiet");
 
 		if (!startupQuiet) {
 			// Add welcome header
@@ -314,7 +314,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			// Add changelog if provided
 			if (this.changelogMarkdown) {
 				this.ui.addChild(new DynamicBorder());
-				if (this.settingsManager.getCollapseChangelog()) {
+				if (settings.get("collapseChangelog")) {
 					const versionMatch = this.changelogMarkdown.match(/##\s+\[?(\d+\.\d+\.\d+)\]?/);
 					const latestVersion = versionMatch ? versionMatch[1] : this.version;
 					const condensedText = `Updated to v${latestVersion}. Use ${theme.bold("/changelog")} to view full changelog.`;
@@ -494,7 +494,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	private resolvePlanFilePath(planFilePath: string): string {
 		if (planFilePath.startsWith("plan://")) {
 			return resolvePlanUrlToPath(planFilePath, {
-				getPlansDirectory: this.settingsManager.getPlansDirectory.bind(this.settingsManager),
+				getPlansDirectory: () => this.settings.getPlansDirectory(),
 				cwd: this.sessionManager.getCwd(),
 			});
 		}

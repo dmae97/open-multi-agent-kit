@@ -1,13 +1,7 @@
-import type {
-	StatusLinePreset,
-	StatusLineSegmentId,
-	StatusLineSegmentOptions,
-	StatusLineSeparatorStyle,
-	StatusLineSettings,
-} from "../../../config/settings-manager";
+import type { StatusLinePreset, StatusLineSegmentId, StatusLineSeparatorStyle } from "../../../config/settings-schema";
 import type { AgentSession } from "../../../session/agent-session";
+import type { StatusLineSegmentOptions, StatusLineSettings } from "../status-line";
 
-// Re-export types from settings-manager (single source of truth)
 export type {
 	StatusLinePreset,
 	StatusLineSegmentId,

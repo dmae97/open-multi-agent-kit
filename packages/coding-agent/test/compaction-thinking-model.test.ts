@@ -15,7 +15,7 @@ import * as path from "node:path";
 import { Agent, type ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { getModel, type Model } from "@oh-my-pi/pi-ai";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { SettingsManager } from "@oh-my-pi/pi-coding-agent/config/settings-manager";
+import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
@@ -54,6 +54,7 @@ describe.skipIf(!HAS_ANTIGRAVITY_AUTH)("Compaction with thinking models (Antigra
 			hasUI: false,
 			getSessionFile: () => null,
 			getSessionSpawns: () => "*",
+			settings: Settings.isolated(),
 		};
 		const tools = await createTools(toolSession);
 
@@ -73,7 +74,7 @@ describe.skipIf(!HAS_ANTIGRAVITY_AUTH)("Compaction with thinking models (Antigra
 		});
 
 		const sessionManager = SessionManager.inMemory();
-		const settingsManager = await SettingsManager.create(tempDir, tempDir);
+		const settings = Settings.isolated();
 
 		const authStorage = await AuthStorage.create(path.join(tempDir, "auth.json"));
 		const modelRegistry = new ModelRegistry(authStorage);
@@ -81,7 +82,7 @@ describe.skipIf(!HAS_ANTIGRAVITY_AUTH)("Compaction with thinking models (Antigra
 		session = new AgentSession({
 			agent,
 			sessionManager,
-			settingsManager,
+			settings,
 			modelRegistry,
 		});
 
@@ -161,6 +162,7 @@ describe.skipIf(!HAS_ANTHROPIC_AUTH)("Compaction with thinking models (Anthropic
 			hasUI: false,
 			getSessionFile: () => null,
 			getSessionSpawns: () => "*",
+			settings: Settings.isolated(),
 		};
 		const tools = await createTools(toolSession);
 
@@ -175,7 +177,7 @@ describe.skipIf(!HAS_ANTHROPIC_AUTH)("Compaction with thinking models (Anthropic
 		});
 
 		const sessionManager = SessionManager.inMemory();
-		const settingsManager = await SettingsManager.create(tempDir, tempDir);
+		const settings = Settings.isolated();
 
 		const authStorage = await AuthStorage.create(path.join(tempDir, "auth.json"));
 		const modelRegistry = new ModelRegistry(authStorage);
@@ -183,7 +185,7 @@ describe.skipIf(!HAS_ANTHROPIC_AUTH)("Compaction with thinking models (Anthropic
 		session = new AgentSession({
 			agent,
 			sessionManager,
-			settingsManager,
+			settings,
 			modelRegistry,
 		});
 
