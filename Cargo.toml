@@ -1,5 +1,6 @@
 [workspace]
 members = ["crates/*"]
+exclude = ["crates/brush-core-vendored"]
 resolver = "3"
 
 [workspace.package]

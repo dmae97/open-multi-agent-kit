@@ -191,4 +191,51 @@ describe("executeBash", () => {
 			expect(result.output.toLowerCase()).toContain("exec");
 		}
 	});
+
+	it("kills spawned process on timeout (not just orphans it)", async () => {
+		if (process.platform === "win32") return;
+
+		const marker = path.join(tempDir, "marker.txt");
+
+		// Command creates marker after 2s, but we timeout after 100ms
+		const result = await executeBash(`sleep 2 && echo done > ${marker}`, {
+			cwd: tempDir,
+			timeout: 100,
+		});
+
+		expect(result.cancelled).toBe(true);
+
+		// Wait longer than the command would have taken
+		await Bun.sleep(3000);
+
+		// If process was killed (not orphaned), marker should NOT exist
+		expect(fs.existsSync(marker)).toBe(false);
+	});
+
+	it("kills spawned process on abort (not just orphans it)", async () => {
+		if (process.platform === "win32") return;
+
+		const marker = path.join(tempDir, "marker.txt");
+		const controller = new AbortController();
+
+		// Command creates marker after 2s
+		const promise = executeBash(`sleep 2 && echo done > ${marker}`, {
+			cwd: tempDir,
+			timeout: 10000,
+			signal: controller.signal,
+		});
+
+		// Abort after 100ms
+		await Bun.sleep(100);
+		controller.abort();
+		const result = await promise;
+
+		expect(result.cancelled).toBe(true);
+
+		// Wait longer than the command would have taken
+		await Bun.sleep(3000);
+
+		// If process was killed (not orphaned), marker should NOT exist
+		expect(fs.existsSync(marker)).toBe(false);
+	});
 });
