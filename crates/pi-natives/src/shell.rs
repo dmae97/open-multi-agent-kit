@@ -23,13 +23,13 @@ use std::{
 	time::Duration,
 };
 
+use brush_builtins::{BuiltinSet, default_builtins};
 use brush_core::{
 	CreateOptions, ExecutionContext, ExecutionControlFlow, ExecutionExitCode, ExecutionResult,
 	ProcessGroupPolicy, Shell as BrushShell, ShellValue, ShellVariable, builtins,
 	env::EnvironmentScope,
 	openfiles::{self, OpenFile, OpenFiles},
 };
-use brush_builtins::{BuiltinSet, default_builtins};
 use clap::Parser;
 use napi::{
 	bindgen_prelude::*,
@@ -360,24 +360,23 @@ async fn execute_shell_with_options(
 		remove_session(&options.session_key);
 	}
 
-	Ok(ShellExecuteResult { exit_code: exit_code(&run_result), cancelled, timed_out })
+	Ok(ShellExecuteResult { exit_code: Some(exit_code(&run_result)), cancelled, timed_out })
 }
 
 fn null_file() -> Result<OpenFile> {
-	Ok(openfiles::null()
-		.map_err(|err| Error::from_reason(format!("Failed to create null file: {err}")))?)
+	openfiles::null().map_err(|err| Error::from_reason(format!("Failed to create null file: {err}")))
 }
 
-fn exit_code(result: &ExecutionResult) -> Option<i32> {
+const fn exit_code(result: &ExecutionResult) -> i32 {
 	match result.exit_code {
-		ExecutionExitCode::Success => Some(0),
-		ExecutionExitCode::GeneralError => Some(1),
-		ExecutionExitCode::InvalidUsage => Some(2),
-		ExecutionExitCode::Unimplemented => Some(99),
-		ExecutionExitCode::CannotExecute => Some(126),
-		ExecutionExitCode::NotFound => Some(127),
-		ExecutionExitCode::Interrupted => Some(130),
-		ExecutionExitCode::Custom(code) => Some(code as i32),
+		ExecutionExitCode::Success => 0,
+		ExecutionExitCode::GeneralError => 1,
+		ExecutionExitCode::InvalidUsage => 2,
+		ExecutionExitCode::Unimplemented => 99,
+		ExecutionExitCode::CannotExecute => 126,
+		ExecutionExitCode::NotFound => 127,
+		ExecutionExitCode::Interrupted => 130,
+		ExecutionExitCode::Custom(code) => code as i32,
 	}
 }
 

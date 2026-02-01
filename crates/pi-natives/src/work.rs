@@ -71,7 +71,7 @@ fn thread_pool() -> &'static ThreadPool {
 	static POOL: OnceLock<ThreadPool> = OnceLock::new();
 	POOL.get_or_init(|| {
 		ThreadPoolBuilder::new()
-			.thread_name(|index| format!("pi-natives-{}", index))
+			.thread_name(|index| format!("pi-natives-{index}"))
 			.build()
 			.expect("Failed to build Rayon thread pool")
 	})

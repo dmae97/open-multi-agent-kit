@@ -19,10 +19,10 @@ const TAB_WIDTH: usize = 3;
 const ESC: u16 = 0x1b;
 
 fn build_utf16_string(mut data: Vec<u16>) -> Utf16String {
-	// SAFETY: we know Utf16String == struct(Vec<u16>)
 	while data.last() == Some(&0) {
 		data.pop();
 	}
+	// SAFETY: we know Utf16String == struct(Vec<u16>)
 	unsafe { std::mem::transmute(data) }
 }
 

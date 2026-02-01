@@ -54,8 +54,8 @@ pub struct PhotonImage {
 
 #[napi]
 impl PhotonImage {
-	/// Create a new `PhotonImage` from encoded image bytes (PNG, JPEG, WebP, GIF).
-	/// Returns the decoded image handle on success.
+	/// Create a new `PhotonImage` from encoded image bytes (PNG, JPEG, WebP,
+	/// GIF). Returns the decoded image handle on success.
 	///
 	/// # Errors
 	/// Returns an error if the image format cannot be detected or decoded.

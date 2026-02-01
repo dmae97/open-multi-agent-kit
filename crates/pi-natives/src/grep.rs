@@ -1156,7 +1156,5 @@ fn fuzzy_find_sync(options: FuzzyFindOptions) -> Result<FuzzyFindResult> {
 /// Matching file and directory entries.
 #[napi(js_name = "fuzzyFind")]
 pub async fn fuzzy_find(options: FuzzyFindOptions) -> Result<FuzzyFindResult> {
-		launch_task(move || fuzzy_find_sync(options))
-			.wait()
-		.await
+	launch_task(move || fuzzy_find_sync(options)).wait().await
 }
