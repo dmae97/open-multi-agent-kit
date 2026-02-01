@@ -550,6 +550,7 @@ function b() {
 		});
 
 		it("should respect .gitignore", async () => {
+			fs.mkdirSync(path.join(testDir, ".git"));
 			fs.writeFileSync(path.join(testDir, ".gitignore"), "ignored.txt\n");
 			fs.writeFileSync(path.join(testDir, "ignored.txt"), "ignored");
 			fs.writeFileSync(path.join(testDir, "kept.txt"), "kept");
