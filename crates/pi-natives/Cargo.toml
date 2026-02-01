@@ -16,7 +16,7 @@ workspace = true
 tokio = { version = "1", features = ["full"] }
 napi = { version = "3", features = ["napi10", "tokio_rt", "tokio_time"] }
 napi-derive = "3"
-brush-core = "0.4.0"
+brush-core = { version = "0.4.0", path = "../brush-core-vendored" }
 brush-builtins = "0.1.0"
 parking_lot = "0.12.5"
 clap = { version = "4", features = ["derive"] }

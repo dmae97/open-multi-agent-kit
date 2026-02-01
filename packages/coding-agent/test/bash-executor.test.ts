@@ -1,9 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { _resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { executeBash } from "@oh-my-pi/pi-coding-agent/exec/bash-executor";
+import { DEFAULT_MAX_BYTES } from "@oh-my-pi/pi-coding-agent/tools/truncate";
+import * as shellSnapshot from "@oh-my-pi/pi-coding-agent/utils/shell-snapshot";
 
 function makeTempDir(): string {
 	return fs.mkdtempSync(path.join(os.tmpdir(), "omp-bash-exec-"));
@@ -20,6 +22,7 @@ describe("executeBash", () => {
 
 	afterEach(() => {
 		_resetSettingsForTest();
+		vi.restoreAllMocks();
 		if (fs.existsSync(tempDir)) {
 			fs.rmSync(tempDir, { recursive: true });
 		}
@@ -45,6 +48,22 @@ describe("executeBash", () => {
 		expect(result.output.trim()).toBe("hello");
 	});
 
+	it("invokes onChunk with command output", async () => {
+		let seenChunk: string | null = null;
+		const result = await executeBash("echo hello", {
+			cwd: tempDir,
+			timeout: 5000,
+			onChunk: chunk => {
+				if (seenChunk === null) {
+					seenChunk = chunk;
+				}
+			},
+		});
+		expect(result.output.trim()).toBe("hello");
+		expect(seenChunk).not.toBeNull();
+		expect(seenChunk ?? "").toContain("hello");
+	});
+
 	it("times out commands", async () => {
 		if (process.platform === "win32") {
 			return;
@@ -52,6 +71,16 @@ describe("executeBash", () => {
 		const result = await executeBash("sleep 10", { cwd: tempDir, timeout: 50 });
 		expect(result.cancelled).toBe(true);
 		expect(result.output).toContain("timed out");
+	});
+
+	it("times out before follow-up output", async () => {
+		if (process.platform === "win32") {
+			return;
+		}
+		const result = await executeBash("sleep 10; echo done", { cwd: tempDir, timeout: 50 });
+		expect(result.cancelled).toBe(true);
+		expect(result.output).toContain("timed out");
+		expect(result.output).not.toContain("done");
 	});
 
 	it("aborts commands", async () => {
@@ -71,12 +100,33 @@ describe("executeBash", () => {
 		expect(result.output).toContain("Command cancelled");
 	});
 
+	it("aborts before follow-up output", async () => {
+		if (process.platform === "win32") {
+			return;
+		}
+		const controller = new AbortController();
+		const promise = executeBash("sleep 10; echo done", {
+			cwd: tempDir,
+			timeout: 5000,
+			signal: controller.signal,
+		});
+		await Bun.sleep(100);
+		controller.abort();
+		const result = await promise;
+		expect(result.cancelled).toBe(true);
+		expect(result.output).toContain("Command cancelled");
+		expect(result.output).not.toContain("done");
+	});
+
 	it("streams output chunks", async () => {
 		const chunks: string[] = [];
 		const result = await executeBash("i=1; while [ $i -le 20 ]; do echo line$i; i=$((i+1)); done", {
 			cwd: tempDir,
 			timeout: 5000,
-			onChunk: chunk => chunks.push(chunk),
+			onChunk: chunk => {
+				expect(chunk.length).toBeGreaterThan(0);
+				chunks.push(chunk);
+			},
 		});
 		const combined = chunks.join("");
 		expect(chunks.length).toBeGreaterThan(0);
@@ -84,6 +134,53 @@ describe("executeBash", () => {
 		expect(combined).toContain("line20");
 		expect(result.output).toContain("line1");
 		expect(result.output).toContain("line20");
+	});
+
+	it("streams large output without exhausting memory", async () => {
+		if (process.platform === "win32") {
+			return;
+		}
+		let totalBytes = 0;
+		let sawChunk = false;
+		const result = await executeBash("awk 'BEGIN { for (i = 0; i < 100000; i++) printf \"a\" }'", {
+			cwd: tempDir,
+			timeout: 5000,
+			onChunk: chunk => {
+				sawChunk = true;
+				totalBytes += Buffer.byteLength(chunk, "utf-8");
+			},
+		});
+		expect(sawChunk).toBe(true);
+		expect(totalBytes).toBe(100000);
+		expect(result.totalBytes).toBe(100000);
+		expect(result.outputBytes).toBeLessThanOrEqual(DEFAULT_MAX_BYTES);
+		expect(result.output).toContain("a");
+	});
+
+	it("sources snapshot env vars across session commands", async () => {
+		if (process.platform === "win32") {
+			return;
+		}
+		const bashPath = process.env.SHELL?.includes("bash") ? process.env.SHELL : "/bin/bash";
+		if (!fs.existsSync(bashPath)) {
+			return;
+		}
+		const snapshotPath = path.join(tempDir, "snapshot.sh");
+		fs.writeFileSync(snapshotPath, "export OMP_SNAPSHOT_TEST=from_snapshot\n");
+		vi.spyOn(Settings.prototype, "getShellConfig").mockReturnValue({
+			shell: bashPath,
+			args: ["-l", "-c"],
+			env: {
+				PATH: process.env.PATH ?? "",
+				HOME: process.env.HOME ?? tempDir,
+			},
+			prefix: undefined,
+		});
+		vi.spyOn(shellSnapshot, "getOrCreateSnapshot").mockResolvedValue(snapshotPath);
+		const sessionKey = "snapshot-test";
+		await executeBash("true", { cwd: tempDir, timeout: 5000, sessionKey });
+		const result = await executeBash("echo $OMP_SNAPSHOT_TEST", { cwd: tempDir, timeout: 5000, sessionKey });
+		expect(result.output.trim()).toBe("from_snapshot");
 	});
 
 	it("does not allow exec to replace the host", async () => {

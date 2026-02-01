@@ -96,6 +96,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.100"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
+
+[[package]]
 name = "arboard"
 version = "3.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -270,9 +276,8 @@ dependencies = [
 [[package]]
 name = "brush-core"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a3ad2f2d4eb45ef7f11e74bc1a0816c8f3dce298072352c6b3b41a2c4bfdb74"
 dependencies = [
+ "anyhow",
  "async-recursion",
  "async-trait",
  "bon",
