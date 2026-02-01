@@ -188,8 +188,9 @@ function wordWrapLine(line: string, maxWidth: number): TextChunk[] {
 	return chunks.length > 0 ? chunks : [{ text: "", startIndex: 0, endIndex: 0 }];
 }
 
-// Kitty CSI-u sequences for printable keys, including optional shifted/base codepoints.
-const KITTY_CSI_U_REGEX = /^\x1b\[(\d+)(?::(\d*))?(?::(\d+))?(?:;(\d+))?(?::(\d+))?u$/;
+// Kitty CSI-u sequences for printable keys, including optional shifted/base codepoints and text field.
+const KITTY_CSI_U_REGEX =
+	/^\x1b\[(\d+)(?::(\d*))?(?::(\d+))?(?:;(\d+))?(?::(\d+))?(?:;([\d:]*))?u$/;
 const KITTY_MOD_SHIFT = 1;
 const KITTY_MOD_ALT = 2;
 const KITTY_MOD_CTRL = 4;
@@ -211,10 +212,29 @@ function decodeKittyPrintable(data: string): string | undefined {
 	// Ignore CSI-u sequences used for Alt/Ctrl shortcuts.
 	if (modifier & (KITTY_MOD_ALT | KITTY_MOD_CTRL)) return undefined;
 
+	const textField = match[6];
+	if (textField && textField.length > 0) {
+		const codepoints = textField
+			.split(":")
+			.filter(Boolean)
+			.map(value => Number.parseInt(value, 10))
+			.filter(value => Number.isFinite(value) && value >= 32);
+		if (codepoints.length > 0) {
+			try {
+				return String.fromCodePoint(...codepoints);
+			} catch {
+				return undefined;
+			}
+		}
+	}
+
 	// Prefer the shifted keycode when Shift is held.
 	let effectiveCodepoint = codepoint;
 	if (modifier & KITTY_MOD_SHIFT && typeof shiftedKey === "number") {
 		effectiveCodepoint = shiftedKey;
+	}
+	if (effectiveCodepoint >= 0xe000 && effectiveCodepoint <= 0xf8ff) {
+		return undefined;
 	}
 	// Drop control characters or invalid codepoints.
 	if (!Number.isFinite(effectiveCodepoint) || effectiveCodepoint < 32) return undefined;

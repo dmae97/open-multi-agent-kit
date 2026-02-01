@@ -1,9 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Changed
 
 - Moved `wrapTextWithAnsi` export to `@oh-my-pi/pi-natives` package
+
+### Fixed
+
+- Improved Kitty terminal key sequence parsing to correctly handle text field codepoints in CSI-u sequences
+- Fixed handling of private use Unicode codepoints (U+E000 to U+F8FF) in Kitty key decoding to prevent invalid character interpretation
 
 ## [9.7.0] - 2026-02-01
 ### Breaking Changes
