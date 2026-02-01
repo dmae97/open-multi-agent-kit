@@ -12,6 +12,7 @@ use std::cell::RefCell;
 
 use napi::{JsString, bindgen_prelude::*};
 use napi_derive::napi;
+use smallvec::{SmallVec, smallvec};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
@@ -513,10 +514,10 @@ fn trim_end_spaces_in_place(line: &mut Vec<u16>) {
 	}
 }
 
-fn split_into_tokens_with_ansi(line: &[u16]) -> Vec<Vec<u16>> {
-	let mut tokens: Vec<Vec<u16>> = Vec::new();
-	let mut current: Vec<u16> = Vec::new();
-	let mut pending_ansi: Vec<u16> = Vec::new();
+fn split_into_tokens_with_ansi(line: &[u16]) -> SmallVec<[Vec<u16>; 4]> {
+	let mut tokens = SmallVec::<[Vec<u16>; 4]>::new();
+	let mut current = Vec::<u16>::new();
+	let mut pending_ansi = SmallVec::<[u16; 32]>::new();
 	let mut in_whitespace = false;
 	let mut i = 0usize;
 
@@ -557,9 +558,9 @@ fn split_into_tokens_with_ansi(line: &[u16]) -> Vec<Vec<u16>> {
 	tokens
 }
 
-fn break_long_word(word: &[u16], width: usize, state: &mut AnsiState) -> Vec<Vec<u16>> {
-	let mut lines: Vec<Vec<u16>> = Vec::new();
-	let mut current_line: Vec<u16> = Vec::new();
+fn break_long_word(word: &[u16], width: usize, state: &mut AnsiState) -> SmallVec<[Vec<u16>; 4]> {
+	let mut lines = SmallVec::<[Vec<u16>; 4]>::new();
+	let mut current_line = Vec::<u16>::new();
 	write_active_codes(state, &mut current_line);
 	let mut current_width = 0usize;
 	let mut i = 0usize;
@@ -622,20 +623,20 @@ fn break_long_word(word: &[u16], width: usize, state: &mut AnsiState) -> Vec<Vec
 	lines
 }
 
-fn wrap_single_line(line: &[u16], width: usize) -> Vec<Vec<u16>> {
+fn wrap_single_line(line: &[u16], width: usize) -> SmallVec<[Vec<u16>; 4]> {
 	if line.is_empty() {
-		return vec![Vec::new()];
+		return smallvec![Vec::new()];
 	}
 
 	if visible_width_u16(line) <= width {
-		return vec![line.to_vec()];
+		return smallvec![line.to_vec()];
 	}
 
 	let tokens = split_into_tokens_with_ansi(line);
-	let mut wrapped: Vec<Vec<u16>> = Vec::new();
-	let mut state = AnsiState::new();
-	let mut current_line: Vec<u16> = Vec::new();
+	let mut wrapped = SmallVec::<[Vec<u16>; 4]>::new();
+	let mut current_line = Vec::<u16>::new();
 	let mut current_width = 0usize;
+	let mut state = AnsiState::new();
 
 	for token in tokens {
 		let token_width = visible_width_u16(&token);
@@ -696,12 +697,12 @@ fn wrap_single_line(line: &[u16], width: usize) -> Vec<Vec<u16>> {
 	wrapped
 }
 
-fn wrap_text_with_ansi_impl(text: &[u16], width: usize) -> Vec<Vec<u16>> {
+fn wrap_text_with_ansi_impl(text: &[u16], width: usize) -> SmallVec<[Vec<u16>; 4]> {
 	if text.is_empty() {
-		return vec![Vec::new()];
+		return smallvec![Vec::new()];
 	}
 
-	let mut result: Vec<Vec<u16>> = Vec::new();
+	let mut result = SmallVec::<[Vec<u16>; 4]>::new();
 	let mut state = AnsiState::new();
 	let mut line_start = 0usize;
 
@@ -910,8 +911,8 @@ fn slice_with_width_impl(
 	let mut i = 0usize;
 	let line_len = line.len();
 
-	// store pending ANSI ranges (pos,len) to avoid copying until needed
-	let mut pending_ansi: Vec<(usize, usize)> = Vec::new();
+	// Store pending ANSI ranges (pos, len) to avoid copying until needed
+	let mut pending_ansi: SmallVec<[(usize, usize); 4]> = SmallVec::new();
 
 	while i < line_len && current_col < end_col {
 		if line[i] == ESC {
@@ -1046,7 +1047,7 @@ fn extract_segments_impl(
 	let line_len = line.len();
 
 	// Store pending ANSI ranges for "before"
-	let mut pending_before_ansi: Vec<(usize, usize)> = Vec::new();
+	let mut pending_before_ansi: SmallVec<[(usize, usize); 4]> = SmallVec::new();
 
 	let mut after_started = false;
 	let mut state = AnsiState::new();

@@ -42,6 +42,7 @@ use napi::{
 };
 use napi_derive::napi;
 use parking_lot::Mutex;
+use smallvec::SmallVec;
 use tokio::{io::AsyncReadExt as _, sync::oneshot};
 use tokio_util::sync::CancellationToken;
 #[cfg(windows)]
@@ -252,7 +253,7 @@ impl Shell {
 	#[napi]
 	pub fn abort(&self) -> Result<()> {
 		let mut executions = EXECUTIONS.lock();
-		let ids: Vec<u64> = executions
+		let ids: SmallVec<[u64; 4]> = executions
 			.iter()
 			.filter_map(|(id, ctrl)| (ctrl.shell_id == self.id).then_some(*id))
 			.collect();

@@ -143,10 +143,12 @@ export class DebugSelectorComponent extends Container {
 
 		try {
 			const cpuProfile = await session.stop();
+			const workProfile = getWorkProfile(30);
 			const result = await createReportBundle({
 				sessionFile: this.ctx.sessionManager.getSessionFile(),
 				settings: this.getResolvedSettings(),
 				cpuProfile,
+				workProfile,
 			});
 
 			loader.stop();

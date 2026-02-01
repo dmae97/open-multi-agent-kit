@@ -74,14 +74,14 @@ static PROFILE_BUFFER: LazyLock<Mutex<CircularBuffer>> =
 
 thread_local! {
 	/// Thread-local stack of active regions.
-	static REGION_STACK: RefCell<Vec<&'static str>> = const { RefCell::new(Vec::new()) };
+	static REGION_STACK: RefCell<SmallVec<[&'static str; 4]>> = const { RefCell::new(SmallVec::new_const()) };
 }
 
 /// A single profiling sample with timing data.
 #[derive(Clone)]
 struct ProfileSample {
 	/// Stack of region names (from root to leaf).
-	stack:        SmallVec<[&'static str; 2]>,
+	stack:        SmallVec<[&'static str; 4]>,
 	/// Duration in microseconds.
 	duration_us:  u64,
 	/// Timestamp (microseconds since process start).
@@ -143,7 +143,8 @@ impl Drop for ProfileGuard {
 
 		REGION_STACK.with(|stack| {
 			let mut stack = stack.borrow_mut();
-			let sample = ProfileSample { stack: stack.clone().into(), duration_us, timestamp_us };
+			let sample =
+				ProfileSample { stack: stack.iter().copied().collect(), duration_us, timestamp_us };
 
 			if stack.last() == Some(&self.region) {
 				stack.pop();

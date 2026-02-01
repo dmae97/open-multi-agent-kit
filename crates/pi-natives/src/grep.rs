@@ -28,6 +28,7 @@ use napi::{
 };
 use napi_derive::napi;
 use rayon::prelude::*;
+use smallvec::SmallVec;
 
 use crate::work::launch_blocking;
 
@@ -182,9 +183,25 @@ pub struct GrepResult {
 	pub limit_reached:      Option<bool>,
 }
 
-struct TypeFilter {
-	extensions: Vec<String>,
-	names:      Vec<String>,
+enum TypeFilter {
+	Known { exts: &'static [&'static str], names: &'static [&'static str] },
+	Custom(String),
+}
+
+impl TypeFilter {
+	fn match_ext(&self, ext: &str) -> bool {
+		match self {
+			Self::Known { exts, .. } => exts.iter().any(|e| ext.eq_ignore_ascii_case(e)),
+			Self::Custom(ext) => ext.eq_ignore_ascii_case(ext),
+		}
+	}
+
+	fn match_name(&self, name: &str) -> bool {
+		match self {
+			Self::Known { names, .. } => names.iter().any(|n| name.eq_ignore_ascii_case(n)),
+			Self::Custom(ext) => ext.eq_ignore_ascii_case(name),
+		}
+	}
 }
 
 struct MatchCollector {
@@ -195,7 +212,7 @@ struct MatchCollector {
 	offset:          u64,
 	skipped:         u64,
 	limit_reached:   bool,
-	context_before:  Vec<ContextLine>,
+	context_before:  SmallVec<[ContextLine; 8]>,
 	max_columns:     Option<usize>,
 	collect_matches: bool,
 }
@@ -203,8 +220,8 @@ struct MatchCollector {
 struct CollectedMatch {
 	line_number:    u64,
 	line:           String,
-	context_before: Vec<ContextLine>,
-	context_after:  Vec<ContextLine>,
+	context_before: SmallVec<[ContextLine; 8]>,
+	context_after:  SmallVec<[ContextLine; 8]>,
 	truncated:      bool,
 }
 
@@ -227,7 +244,7 @@ struct FileSearchResult {
 }
 
 impl MatchCollector {
-	const fn new(
+	fn new(
 		max_count: Option<u64>,
 		offset: u64,
 		max_columns: Option<usize>,
@@ -241,7 +258,7 @@ impl MatchCollector {
 			offset,
 			skipped: 0,
 			limit_reached: false,
-			context_before: Vec::new(),
+			context_before: SmallVec::new(),
 			max_columns,
 			collect_matches,
 		}
@@ -298,7 +315,7 @@ impl Sink for MatchCollector {
 				line_number,
 				line,
 				context_before: std::mem::take(&mut self.context_before),
-				context_after: Vec::new(),
+				context_after: SmallVec::new(),
 				truncated,
 			});
 		} else {
@@ -401,55 +418,40 @@ fn resolve_type_filter(type_name: Option<&str>) -> Option<TypeFilter> {
 		.filter(|value| !value.is_empty())
 		.map(|value| value.trim_start_matches('.').to_lowercase())?;
 
-	let (extensions, names): (Vec<&str>, Vec<&str>) = match normalized.as_str() {
-		"js" | "javascript" => (vec!["js", "jsx", "mjs", "cjs"], vec![]),
-		"ts" | "typescript" => (vec!["ts", "tsx", "mts", "cts"], vec![]),
-		"json" => (vec!["json", "jsonc", "json5"], vec![]),
-		"yaml" | "yml" => (vec!["yaml", "yml"], vec![]),
-		"toml" => (vec!["toml"], vec![]),
-		"md" | "markdown" => (vec!["md", "markdown", "mdx"], vec![]),
-		"py" | "python" => (vec!["py", "pyi"], vec![]),
-		"rs" | "rust" => (vec!["rs"], vec![]),
-		"go" => (vec!["go"], vec![]),
-		"java" => (vec!["java"], vec![]),
-		"kt" | "kotlin" => (vec!["kt", "kts"], vec![]),
-		"c" => (vec!["c", "h"], vec![]),
-		"cpp" | "cxx" => (vec!["cpp", "cc", "cxx", "hpp", "hxx", "hh"], vec![]),
-		"cs" | "csharp" => (vec!["cs", "csx"], vec![]),
-		"php" => (vec!["php", "phtml"], vec![]),
-		"rb" | "ruby" => (vec!["rb", "rake", "gemspec"], vec![]),
-		"sh" | "bash" => (vec!["sh", "bash", "zsh"], vec![]),
-		"zsh" => (vec!["zsh"], vec![]),
-		"fish" => (vec!["fish"], vec![]),
-		"html" => (vec!["html", "htm"], vec![]),
-		"css" => (vec!["css"], vec![]),
-		"scss" => (vec!["scss"], vec![]),
-		"sass" => (vec!["sass"], vec![]),
-		"less" => (vec!["less"], vec![]),
-		"xml" => (vec!["xml"], vec![]),
-		"docker" | "dockerfile" => (vec![], vec!["dockerfile"]),
-		"make" | "makefile" => (vec![], vec!["makefile"]),
-		_ => (vec![normalized.as_str()], vec![]),
+	let (exts, names): (&[&str], &[&str]) = match normalized.as_str() {
+		"js" | "javascript" => (&["js", "jsx", "mjs", "cjs"], &[]),
+		"ts" | "typescript" => (&["ts", "tsx", "mts", "cts"], &[]),
+		"json" => (&["json", "jsonc", "json5"], &[]),
+		"yaml" | "yml" => (&["yaml", "yml"], &[]),
+		"toml" => (&["toml"], &[]),
+		"md" | "markdown" => (&["md", "markdown", "mdx"], &[]),
+		"py" | "python" => (&["py", "pyi"], &[]),
+		"rs" | "rust" => (&["rs"], &[]),
+		"go" => (&["go"], &[]),
+		"java" => (&["java"], &[]),
+		"kt" | "kotlin" => (&["kt", "kts"], &[]),
+		"c" => (&["c", "h"], &[]),
+		"cpp" | "cxx" => (&["cpp", "cc", "cxx", "hpp", "hxx", "hh"], &[]),
+		"cs" | "csharp" => (&["cs", "csx"], &[]),
+		"php" => (&["php", "phtml"], &[]),
+		"rb" | "ruby" => (&["rb", "rake", "gemspec"], &[]),
+		"sh" | "bash" => (&["sh", "bash", "zsh"], &[]),
+		"zsh" => (&["zsh"], &[]),
+		"fish" => (&["fish"], &[]),
+		"html" => (&["html", "htm"], &[]),
+		"css" => (&["css"], &[]),
+		"scss" => (&["scss"], &[]),
+		"sass" => (&["sass"], &[]),
+		"less" => (&["less"], &[]),
+		"xml" => (&["xml"], &[]),
+		"docker" | "dockerfile" => (&[], &["dockerfile"]),
+		"make" | "makefile" => (&[], &["makefile"]),
+		_ => {
+			return Some(TypeFilter::Custom(normalized));
+		},
 	};
 
-	Some(TypeFilter {
-		extensions: extensions
-			.into_iter()
-			.map(|value| value.to_string())
-			.collect(),
-		names:      names.into_iter().map(|value| value.to_string()).collect(),
-	})
-}
-
-fn matches_case_insensitive(value: &str, candidates: &[String]) -> bool {
-	if value.is_ascii() {
-		candidates
-			.iter()
-			.any(|candidate| value.eq_ignore_ascii_case(candidate))
-	} else {
-		let lowered = value.to_lowercase();
-		candidates.iter().any(|candidate| candidate == &lowered)
-	}
+	Some(TypeFilter::Known { exts, names })
 }
 
 fn matches_type_filter(path: &Path, filter: &TypeFilter) -> bool {
@@ -457,14 +459,14 @@ fn matches_type_filter(path: &Path, filter: &TypeFilter) -> bool {
 		.file_name()
 		.and_then(|name| name.to_str())
 		.unwrap_or("");
-	if matches_case_insensitive(base_name, &filter.names) {
+	if filter.match_name(base_name) {
 		return true;
 	}
 	let ext = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
 	if ext.is_empty() {
 		return false;
 	}
-	matches_case_insensitive(ext, &filter.extensions)
+	filter.match_ext(ext)
 }
 
 fn normalize_relative_path<'a>(root: &Path, path: &'a Path) -> Cow<'a, str> {
@@ -536,12 +538,12 @@ fn to_public_match(matched: CollectedMatch) -> Match {
 	let context_before = if matched.context_before.is_empty() {
 		None
 	} else {
-		Some(matched.context_before)
+		Some(matched.context_before.into_vec())
 	};
 	let context_after = if matched.context_after.is_empty() {
 		None
 	} else {
-		Some(matched.context_after)
+		Some(matched.context_after.into_vec())
 	};
 	Match {
 		line_number: clamp_u32(matched.line_number),
@@ -556,12 +558,12 @@ fn to_grep_match(path: &str, matched: CollectedMatch) -> GrepMatch {
 	let context_before = if matched.context_before.is_empty() {
 		None
 	} else {
-		Some(matched.context_before)
+		Some(matched.context_before.into_vec())
 	};
 	let context_after = if matched.context_after.is_empty() {
 		None
 	} else {
-		Some(matched.context_after)
+		Some(matched.context_after.into_vec())
 	};
 	GrepMatch {
 		path: path.to_string(),

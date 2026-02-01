@@ -125,6 +125,8 @@ mod platform {
 mod platform {
 	use std::{collections::HashMap, mem};
 
+	use smallvec::SmallVec;
+
 	#[repr(C)]
 	#[allow(non_snake_case)]
 	struct PROCESSENTRY32W {
@@ -156,8 +158,8 @@ mod platform {
 	}
 
 	/// Build a map of parent_pid -> [child_pids] for all processes.
-	fn build_process_tree() -> HashMap<u32, Vec<u32>> {
-		let mut tree: HashMap<u32, Vec<u32>> = HashMap::new();
+	fn build_process_tree() -> HashMap<u32, SmallVec<[u32; 4]>> {
+		let mut tree: HashMap<u32, SmallVec<[u32; 4]>> = HashMap::new();
 
 		unsafe {
 			let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -194,7 +196,11 @@ mod platform {
 		collect_descendants_from_tree(pid as u32, &tree, pids);
 	}
 
-	fn collect_descendants_from_tree(pid: u32, tree: &HashMap<u32, Vec<u32>>, pids: &mut Vec<i32>) {
+	fn collect_descendants_from_tree(
+		pid: u32,
+		tree: &HashMap<u32, SmallVec<[u32; 4]>>,
+		pids: &mut Vec<i32>,
+	) {
 		if let Some(children) = tree.get(&pid) {
 			for &child_pid in children {
 				pids.push(child_pid as i32);
