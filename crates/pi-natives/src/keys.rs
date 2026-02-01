@@ -50,16 +50,46 @@ const CP_ENTER: i32 = 13;
 const CP_SPACE: i32 = 32;
 const CP_BACKSPACE: i32 = 127;
 const CP_KP_ENTER: i32 = 57414;
+const CP_KP_0: i32 = 57399;
+const CP_KP_1: i32 = 57400;
+const CP_KP_2: i32 = 57401;
+const CP_KP_3: i32 = 57402;
+const CP_KP_4: i32 = 57403;
+const CP_KP_5: i32 = 57404;
+const CP_KP_6: i32 = 57405;
+const CP_KP_7: i32 = 57406;
+const CP_KP_8: i32 = 57407;
+const CP_KP_9: i32 = 57408;
+const CP_KP_DECIMAL: i32 = 57409;
 
 const MOD_SHIFT: u32 = 1;
 const MOD_ALT: u32 = 2;
 const MOD_CTRL: u32 = 4;
+
+#[inline]
+const fn map_keypad_nav(codepoint: i32) -> Option<i32> {
+	match codepoint {
+		CP_KP_0 => Some(FUNC_INSERT),
+		CP_KP_1 => Some(FUNC_END),
+		CP_KP_2 => Some(ARROW_DOWN),
+		CP_KP_3 => Some(FUNC_PAGE_DOWN),
+		CP_KP_4 => Some(ARROW_LEFT),
+		CP_KP_5 => Some(FUNC_CLEAR),
+		CP_KP_6 => Some(ARROW_RIGHT),
+		CP_KP_7 => Some(FUNC_HOME),
+		CP_KP_8 => Some(ARROW_UP),
+		CP_KP_9 => Some(FUNC_PAGE_UP),
+		CP_KP_DECIMAL => Some(FUNC_DELETE),
+		_ => None,
+	}
+}
 
 /// Parsed Kitty keyboard protocol sequence (subset we care about).
 struct ParsedKittySequence {
 	codepoint:       i32,
 	shifted_key:     Option<i32>,
 	base_layout_key: Option<i32>,
+	text_codepoint:  Option<i32>,
 	modifier:        u32,
 	event_type:      Option<u32>,
 }
@@ -379,7 +409,19 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 		if actual_mod != expected_mod {
 			return false;
 		}
-		p.codepoint == codepoint || p.base_layout_key == Some(codepoint)
+		let mut parsed_codepoint = p.codepoint;
+		let mut parsed_base = p.base_layout_key;
+		if p.text_codepoint.is_none() {
+			if let Some(mapped) = map_keypad_nav(parsed_codepoint) {
+				parsed_codepoint = mapped;
+			}
+			if let Some(base) = parsed_base
+				&& let Some(mapped) = map_keypad_nav(base)
+			{
+				parsed_base = Some(mapped);
+			}
+		}
+		parsed_codepoint == codepoint || parsed_base == Some(codepoint)
 	};
 
 	// Parse modifyOtherKeys once.
@@ -922,6 +964,8 @@ fn parse_csi_u(bytes: &[u8]) -> Option<ParsedKittySequence> {
 	}
 
 	// ;text-as-codepoints (optional, may be empty)
+	let mut text_codepoint: Option<i32> = None;
+	let mut text_count: u32 = 0;
 	if idx < end && bytes[idx] == b';' {
 		idx += 1;
 		// validate "digits(:digits)*" but allow empty and ignore values
@@ -930,7 +974,20 @@ fn parse_csi_u(bytes: &[u8]) -> Option<ParsedKittySequence> {
 				idx += 1;
 				continue;
 			}
-			let (_cp, next_idx) = parse_digits(bytes, idx, end)?;
+			let (cp, next_idx) = parse_digits(bytes, idx, end)?;
+			text_count += 1;
+			if text_count == 1 {
+				if cp >= 32 {
+					let cp_i32 = i32::try_from(cp).ok();
+					if let Some(value) = cp_i32
+						&& char::from_u32(cp).is_some()
+					{
+						text_codepoint = Some(value);
+					}
+				}
+			} else {
+				text_codepoint = None;
+			}
 			idx = next_idx;
 			if idx < end && bytes[idx] == b':' {
 				idx += 1;
@@ -946,6 +1003,7 @@ fn parse_csi_u(bytes: &[u8]) -> Option<ParsedKittySequence> {
 		codepoint,
 		shifted_key,
 		base_layout_key,
+		text_codepoint,
 		modifier: mod_value - 1,
 		event_type,
 	})
@@ -992,6 +1050,7 @@ fn parse_csi_1_letter(bytes: &[u8]) -> Option<ParsedKittySequence> {
 		codepoint,
 		shifted_key: None,
 		base_layout_key: None,
+		text_codepoint: None,
 		modifier: mod_value - 1,
 		event_type,
 	})
@@ -1056,6 +1115,7 @@ fn parse_functional(bytes: &[u8]) -> Option<ParsedKittySequence> {
 		codepoint,
 		shifted_key: None,
 		base_layout_key: None,
+		text_codepoint: None,
 		modifier: mod_value - 1,
 		event_type,
 	})
@@ -1071,6 +1131,11 @@ fn format_kitty_key(parsed: &ParsedKittySequence) -> Option<Cow<'static, str>> {
 
 	// No modifiers - return static string
 	if effective_mod == 0 {
+		if let Some(text_codepoint) = parsed.text_codepoint {
+			if let Some(key_name) = format_key_name(text_codepoint) {
+				return Some(Cow::Borrowed(key_name));
+			}
+		}
 		return format_key_name(effective_codepoint).map(Cow::Borrowed);
 	}
 
@@ -1086,6 +1151,17 @@ fn format_key_name(codepoint: i32) -> Option<&'static str> {
 		CP_ENTER | CP_KP_ENTER => Some("enter"),
 		CP_SPACE => Some("space"),
 		CP_BACKSPACE => Some("backspace"),
+		CP_KP_0 => Some("insert"),
+		CP_KP_1 => Some("end"),
+		CP_KP_2 => Some("down"),
+		CP_KP_3 => Some("pageDown"),
+		CP_KP_4 => Some("left"),
+		CP_KP_5 => Some("clear"),
+		CP_KP_6 => Some("right"),
+		CP_KP_7 => Some("home"),
+		CP_KP_8 => Some("up"),
+		CP_KP_9 => Some("pageUp"),
+		CP_KP_DECIMAL => Some("delete"),
 
 		FUNC_DELETE => Some("delete"),
 		FUNC_INSERT => Some("insert"),
