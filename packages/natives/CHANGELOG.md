@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Breaking Changes
 
 - Removed `resize()` function; use `PhotonImage.resize()` method instead
@@ -14,6 +13,8 @@
 
 ### Added
 
+- Added automatic extraction of embedded native addon to `~/.omp/natives/<version>` on first run for compiled binaries
+- Added `embed:native` build script to embed platform-specific native addon payloads into compiled binaries
 - Exported `Shell` class for creating persistent shell sessions with `run()` method and session options
 - Exported `ShellOptions`, `ShellRunOptions`, and `ShellRunResult` types for shell session management
 - Exported `find()` function for file discovery with glob patterns and .gitignore support
@@ -30,12 +31,15 @@
 
 ### Changed
 
+- Enhanced native addon loading to prioritize extracted embedded addon for compiled binaries before falling back to system paths
+- Improved error messages to provide platform-specific guidance for addon loading failures, including manual download instructions for compiled binaries
 - Reorganized native bindings into modular type files with declaration merging via `NativeBindings` interface
 - Moved type definitions from implementation files to dedicated `types.ts` modules for better separation of concerns
 - Enhanced `SystemInfo` type with additional fields: `os`, `arch`, `hostname`, `shell`, `terminal`, `de`, `wm`, and `gpu`
 - Refactored module exports to use direct destructuring from native bindings instead of wrapper functions
 - Changed `PhotonImage` API to use instance methods (`resize()`, `encode()`) instead of standalone functions
 - Changed `PhotonImage` to use property accessors for `width` and `height` instead of getter methods
+- Embedded native addon payload for compiled binaries and extract to `~/.omp/natives/<version>` on first run
 
 ## [9.7.0] - 2026-02-01
 
