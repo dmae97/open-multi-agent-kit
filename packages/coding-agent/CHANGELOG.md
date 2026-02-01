@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [9.5.0] - 2026-02-01
 ### Added
 
 - Added `head` and `tail` parameters to bash tool to limit output lines without breaking streaming

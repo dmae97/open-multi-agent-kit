@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [9.5.0] - 2026-02-01
 ### Changed
 
 - Improved fuzzy file search performance by using native implementation instead of spawning external process

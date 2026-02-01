@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [9.5.0] - 2026-02-01
+
 ### Added
 
 - Added `sortByMtime` option to `FindOptions` to sort results by modification time (most recent first) before applying limit

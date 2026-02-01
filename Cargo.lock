@@ -648,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "pi-natives"
-version = "9.4.0"
+version = "9.5.0"
 dependencies = [
  "globset",
  "grep-matcher",
