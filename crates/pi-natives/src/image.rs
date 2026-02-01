@@ -3,7 +3,7 @@
 //! Provides only the subset of functionality needed:
 //! - Load image from bytes (PNG, JPEG, WebP, GIF)
 //! - Get dimensions
-//! - Resize with Lanczos3 filter
+//! - Resize with configurable filter
 //! - Export as PNG, JPEG, WebP, or GIF
 
 use std::{io::Cursor, sync::Arc};
@@ -38,7 +38,7 @@ impl From<SamplingFilter> for FilterType {
 	}
 }
 
-/// Image container for native interop. Stores image directly (no Arc overhead).
+/// Image container for native interop.
 #[napi]
 pub struct PhotonImage {
 	img: Arc<DynamicImage>,
@@ -51,8 +51,8 @@ impl PhotonImage {
 	///
 	/// # Errors
 	/// Returns an error if the image format cannot be detected or decoded.
-	#[napi(factory, js_name = "newFromByteslice")]
-	pub async fn new_from_byteslice(bytes: Uint8Array) -> Result<Self> {
+	#[napi(factory, js_name = "parse")]
+	pub async fn parse(bytes: Uint8Array) -> Result<Self> {
 		let bytes = bytes.as_ref().to_vec();
 		let img = spawn_blocking(move || -> Result<DynamicImage> {
 			let reader = ImageReader::new(Cursor::new(bytes))
@@ -72,92 +72,33 @@ impl PhotonImage {
 	}
 
 	/// Get the width of the image.
-	#[napi(js_name = "getWidth")]
+	#[napi(getter, js_name = "width")]
 	pub fn get_width(&self) -> u32 {
 		self.img.width()
 	}
 
 	/// Get the height of the image.
-	#[napi(js_name = "getHeight")]
+	#[napi(getter, js_name = "height")]
 	pub fn get_height(&self) -> u32 {
 		self.img.height()
 	}
 
-	/// Export image as PNG bytes.
+	/// Encode image to bytes in the specified format.
+	///
+	/// Format values (matching `ImageFormat` enum in TS):
+	/// - 0: PNG (quality ignored)
+	/// - 1: JPEG (quality 0-100)
+	/// - 2: WebP (lossless, quality ignored)
+	/// - 3: GIF (quality ignored)
 	///
 	/// # Errors
-	/// Returns an error if PNG encoding fails.
-	#[napi(js_name = "getBytes")]
-	pub async fn get_bytes(&self) -> Result<Uint8Array> {
+	/// Returns an error if encoding fails or format is invalid.
+	#[napi(js_name = "encode")]
+	pub async fn encode(&self, format: u8, quality: u8) -> Result<Uint8Array> {
 		let img = Arc::clone(&self.img);
-		let capacity = (img.width() * img.height() * 4) as usize;
-		let buffer = spawn_blocking(move || -> Result<Vec<u8>> {
-			let mut buffer = Vec::with_capacity(capacity);
-			img.write_to(&mut Cursor::new(&mut buffer), ImageFormat::Png)
-				.map_err(|e| Error::from_reason(format!("Failed to encode PNG: {e}")))?;
-			Ok(buffer)
-		})
-		.await
-		.map_err(|e| Error::from_reason(format!("PNG encode task failed: {e}")))??;
-		Ok(Uint8Array::from(buffer))
-	}
-
-	/// Export image as JPEG bytes with specified quality (0-100).
-	///
-	/// # Errors
-	/// Returns an error if JPEG encoding fails.
-	#[napi(js_name = "getBytesJpeg")]
-	pub async fn get_bytes_jpeg(&self, quality: u8) -> Result<Uint8Array> {
-		let img = Arc::clone(&self.img);
-		let capacity = (img.width() * img.height() * 3) as usize;
-		let buffer = spawn_blocking(move || -> Result<Vec<u8>> {
-			let mut buffer = Vec::with_capacity(capacity);
-			let encoder = JpegEncoder::new_with_quality(&mut buffer, quality);
-			img.write_with_encoder(encoder)
-				.map_err(|e| Error::from_reason(format!("Failed to encode JPEG: {e}")))?;
-			Ok(buffer)
-		})
-		.await
-		.map_err(|e| Error::from_reason(format!("JPEG encode task failed: {e}")))??;
-		Ok(Uint8Array::from(buffer))
-	}
-
-	/// Export image as lossless WebP bytes.
-	///
-	/// # Errors
-	/// Returns an error if WebP encoding fails.
-	#[napi(js_name = "getBytesWebp")]
-	pub async fn get_bytes_webp(&self) -> Result<Uint8Array> {
-		let img = Arc::clone(&self.img);
-		let capacity = (img.width() * img.height() * 4) as usize;
-		let buffer = spawn_blocking(move || -> Result<Vec<u8>> {
-			let mut buffer = Vec::with_capacity(capacity);
-			let encoder = WebPEncoder::new_lossless(&mut buffer);
-			img.write_with_encoder(encoder)
-				.map_err(|e| Error::from_reason(format!("Failed to encode WebP: {e}")))?;
-			Ok(buffer)
-		})
-		.await
-		.map_err(|e| Error::from_reason(format!("WebP encode task failed: {e}")))??;
-		Ok(Uint8Array::from(buffer))
-	}
-
-	/// Export image as GIF bytes.
-	///
-	/// # Errors
-	/// Returns an error if GIF encoding fails.
-	#[napi(js_name = "getBytesGif")]
-	pub async fn get_bytes_gif(&self) -> Result<Uint8Array> {
-		let img = Arc::clone(&self.img);
-		let capacity = (img.width() * img.height()) as usize;
-		let buffer = spawn_blocking(move || -> Result<Vec<u8>> {
-			let mut buffer = Vec::with_capacity(capacity);
-			img.write_to(&mut Cursor::new(&mut buffer), ImageFormat::Gif)
-				.map_err(|e| Error::from_reason(format!("Failed to encode GIF: {e}")))?;
-			Ok(buffer)
-		})
-		.await
-		.map_err(|e| Error::from_reason(format!("GIF encode task failed: {e}")))??;
+		let buffer = spawn_blocking(move || encode_image(&img, format, quality))
+			.await
+			.map_err(|e| Error::from_reason(format!("Encode task failed: {e}")))??;
 		Ok(Uint8Array::from(buffer))
 	}
 
@@ -169,5 +110,39 @@ impl PhotonImage {
 			.await
 			.map_err(|e| Error::from_reason(format!("Resize task failed: {e}")))?;
 		Ok(Self { img: Arc::new(resized) })
+	}
+}
+
+fn encode_image(img: &DynamicImage, format: u8, quality: u8) -> Result<Vec<u8>> {
+	let (w, h) = (img.width(), img.height());
+
+	match format {
+		0 => {
+			let mut buffer = Vec::with_capacity((w * h * 4) as usize);
+			img.write_to(&mut Cursor::new(&mut buffer), ImageFormat::Png)
+				.map_err(|e| Error::from_reason(format!("Failed to encode PNG: {e}")))?;
+			Ok(buffer)
+		},
+		1 => {
+			let mut buffer = Vec::with_capacity((w * h * 3) as usize);
+			let encoder = JpegEncoder::new_with_quality(&mut buffer, quality);
+			img.write_with_encoder(encoder)
+				.map_err(|e| Error::from_reason(format!("Failed to encode JPEG: {e}")))?;
+			Ok(buffer)
+		},
+		2 => {
+			let mut buffer = Vec::with_capacity((w * h * 4) as usize);
+			let encoder = WebPEncoder::new_lossless(&mut buffer);
+			img.write_with_encoder(encoder)
+				.map_err(|e| Error::from_reason(format!("Failed to encode WebP: {e}")))?;
+			Ok(buffer)
+		},
+		3 => {
+			let mut buffer = Vec::with_capacity((w * h) as usize);
+			img.write_to(&mut Cursor::new(&mut buffer), ImageFormat::Gif)
+				.map_err(|e| Error::from_reason(format!("Failed to encode GIF: {e}")))?;
+			Ok(buffer)
+		},
+		_ => Err(Error::from_reason(format!("Invalid image format: {format}"))),
 	}
 }

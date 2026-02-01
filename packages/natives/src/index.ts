@@ -74,9 +74,7 @@ export async function find(options: FindOptions, onMatch?: (match: FindMatch) =>
 
 export {
 	PhotonImage,
-	resize,
 	SamplingFilter,
-	terminate as terminateImageWorker,
 } from "./image/index";
 
 // =============================================================================

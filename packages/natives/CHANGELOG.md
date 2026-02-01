@@ -1,12 +1,21 @@
 # Changelog
 
 ## [Unreleased]
+### Breaking Changes
+
+- Removed `resize()` function; use `PhotonImage.resize()` method instead
+- Removed `terminateImageWorker()` function
+- Changed `PhotonImage.new_from_byteslice()` to `PhotonImage.parse()`
+- Changed `PhotonImage.get_bytes()` to `encode(ImageFormat.PNG, 100)`
+- Changed `PhotonImage.get_bytes_jpeg(quality)` to `encode(ImageFormat.JPEG, quality)`
+- Removed `get_width()` and `get_height()` methods; use `width` and `height` properties instead
+- Removed manual resource management via `free()` and `Symbol.dispose`
 
 ### Added
 
-- Added `sessionEnv` option to `ShellExecuteOptions` for setting environment variables once per session
-- Added `sessionKey` option to `ShellExecuteOptions` for managing persistent brush shell instances
-- Added `snapshotPath` option to `ShellExecuteOptions` to source bash session snapshots
+- Added `ImageFormat` enum for specifying output format (PNG, JPEG, WEBP, GIF) in `encode()` method
+- Added `SamplingFilter` as exported enum instead of object
+- Added `Shell` class with persistent session options (`sessionEnv`, `snapshotPath`) and a `run()` command API
 - Exported `getSystemInfo()` function and `SystemInfo` type for retrieving system information including distro, kernel, CPU, and disk details
 - Exported `copyToClipboard()` and `readImageFromClipboard()` functions for clipboard operations
 - Exported `ClipboardImage` type for clipboard image data with MIME type information
@@ -15,7 +24,8 @@
 
 ### Changed
 
-- Updated `env` option documentation in `ShellExecuteOptions` to clarify it applies variables for the current command only
+- Changed `PhotonImage` API to use instance methods (`resize()`, `encode()`) instead of standalone functions
+- Changed `PhotonImage` to use property accessors for `width` and `height` instead of getter methods
 
 ## [9.7.0] - 2026-02-01
 

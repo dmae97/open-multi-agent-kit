@@ -1,5 +1,6 @@
 import type { ImageContent } from "@oh-my-pi/pi-ai";
-import { PhotonImage, resize, SamplingFilter } from "@oh-my-pi/pi-natives";
+import { PhotonImage, SamplingFilter } from "@oh-my-pi/pi-natives";
+import { ImageFormat } from "@oh-my-pi/pi-natives/native";
 
 export interface ImageResizeOptions {
 	maxWidth?: number; // Default: 2000
@@ -54,10 +55,10 @@ export async function resizeImage(img: ImageContent, options?: ImageResizeOption
 	const inputBuffer = Buffer.from(img.data, "base64");
 
 	try {
-		using image = await PhotonImage.new_from_byteslice(new Uint8Array(inputBuffer));
+		const image = await PhotonImage.parse(inputBuffer);
 
-		const originalWidth = image.get_width();
-		const originalHeight = image.get_height();
+		const originalWidth = image.width;
+		const originalHeight = image.height;
 		const format = img.mimeType?.split("/")[1] ?? "png";
 
 		// Check if already within all limits (dimensions AND size)
@@ -91,11 +92,14 @@ export async function resizeImage(img: ImageContent, options?: ImageResizeOption
 		async function tryBothFormats(
 			width: number,
 			height: number,
-			jpegQuality: number,
+			quality: number,
 		): Promise<{ buffer: Uint8Array; mimeType: string }> {
-			using resized = await resize(image!, width, height, SamplingFilter.Lanczos3);
+			const resized = await image.resize(width, height, SamplingFilter.Lanczos3);
 
-			const [pngBuffer, jpegBuffer] = await Promise.all([resized.get_bytes(), resized.get_bytes_jpeg(jpegQuality)]);
+			const [pngBuffer, jpegBuffer] = await Promise.all([
+				resized.encode(ImageFormat.PNG, quality),
+				resized.encode(ImageFormat.JPEG, quality),
+			]);
 
 			return pickSmaller(
 				{ buffer: pngBuffer, mimeType: "image/png" },

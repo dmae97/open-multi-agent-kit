@@ -1,4 +1,5 @@
 import { PhotonImage } from "@oh-my-pi/pi-natives";
+import { ImageFormat } from "@oh-my-pi/pi-natives/native";
 
 /**
  * Convert image to PNG format for terminal display.
@@ -14,8 +15,8 @@ export async function convertToPng(
 	}
 
 	try {
-		using image = await PhotonImage.new_from_byteslice(new Uint8Array(Buffer.from(base64Data, "base64")));
-		const pngBuffer = await image.get_bytes();
+		const image = await PhotonImage.parse(new Uint8Array(Buffer.from(base64Data, "base64")));
+		const pngBuffer = await image.encode(ImageFormat.PNG, 100);
 		return {
 			data: Buffer.from(pngBuffer).toString("base64"),
 			mimeType: "image/png",

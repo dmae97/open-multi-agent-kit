@@ -11,7 +11,7 @@ Native Rust functionality via N-API.
 ## Usage
 
 ```typescript
-import { grep, find, PhotonImage, resize, SamplingFilter } from "@oh-my-pi/pi-natives";
+import { grep, find, PhotonImage, SamplingFilter, ImageFormat } from "@oh-my-pi/pi-natives";
 
 // Grep for a pattern
 const results = await grep({
@@ -29,9 +29,9 @@ const files = await find({
 });
 
 // Image processing
-using image = await PhotonImage.new_from_byteslice(bytes);
-using resized = await resize(image, 800, 600, SamplingFilter.Lanczos3);
-const pngBytes = await resized.get_bytes();
+const image = await PhotonImage.parse(bytes);
+const resized = await image.resize(800, 600, SamplingFilter.Lanczos3);
+const pngBytes = await resized.encode(ImageFormat.PNG, 100);
 ```
 
 ## Building
