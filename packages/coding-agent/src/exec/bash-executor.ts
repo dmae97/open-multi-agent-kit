@@ -105,7 +105,6 @@ async function executeBashOnce(
 		env: finalEnv,
 		signal: options?.signal,
 		timeout: options?.timeout,
-		detached: true,
 	});
 
 	// Pump streams - errors during abort/timeout are expected

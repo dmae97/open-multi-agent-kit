@@ -411,7 +411,6 @@ export async function getOrCreateClient(config: ServerConfig, cwd: string, initT
 
 		const proc = ptree.spawn([command, ...args], {
 			cwd,
-			detached: true,
 			stdin: "pipe",
 			env: env ? { ...process.env, ...env } : undefined,
 		});

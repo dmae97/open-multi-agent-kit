@@ -54,7 +54,6 @@ export async function convertWithMarkitdown(
 			signal,
 			allowNonZero: true,
 			stderr: "full",
-			detached: true,
 		});
 		if (!result.ok) {
 			return {

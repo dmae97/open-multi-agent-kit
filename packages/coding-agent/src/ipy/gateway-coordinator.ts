@@ -265,8 +265,8 @@ async function startGatewayProcess(
 			stdin: "ignore",
 			stdout: "pipe",
 			stderr: "pipe",
-			detached: true,
 			windowsHide: true,
+			detached: true,
 			env: kernelEnv,
 		},
 	);
@@ -296,13 +296,13 @@ async function startGatewayProcess(
 		await Bun.sleep(100);
 	}
 
-	await procmgr.terminate({ target: gatewayProcess, group: true });
+	gatewayProcess.kill();
 	throw new Error("Gateway startup timeout");
 }
 
 async function killGateway(pid: number, context: string): Promise<void> {
 	try {
-		await procmgr.terminate({ target: pid, group: true });
+		await procmgr.terminate({ target: pid });
 	} catch (err) {
 		logger.warn("Failed to kill shared gateway process", {
 			error: err instanceof Error ? err.message : String(err),

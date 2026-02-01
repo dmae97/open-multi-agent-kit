@@ -1379,7 +1379,6 @@ describe("Generate E2E Tests", () => {
 
 			// Start ollama server
 			ollamaProcess = spawn("ollama", ["serve"], {
-				detached: false,
 				stdio: "ignore",
 			});
 

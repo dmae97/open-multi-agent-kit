@@ -10,10 +10,7 @@
  */
 
 import type { Spawn, Subprocess } from "bun";
-import { postmortem } from ".";
 import { terminate } from "./procmgr";
-
-const managedChildren = new Set<ChildProcess>();
 
 /** A Bun subprocess with stdout/stderr always piped (stdin may vary). */
 type PipedSubprocess<In extends InMask = InMask> = Subprocess<In, "pipe", "pipe">;
@@ -98,14 +95,8 @@ async function pump(
  * - Unix: negative PID signals the process group
  */
 async function killChild(child: ChildProcess) {
-	await terminate({ target: child.proc, group: child.isProcessGroup });
+	await terminate({ target: child.proc });
 }
-
-postmortem.register("managed-children", async () => {
-	const children = Array.from(managedChildren);
-	managedChildren.clear();
-	await Promise.all(children.map(killChild));
-});
 
 /**
  * Options for waiting for process exit and capturing output.
@@ -205,10 +196,7 @@ export class ChildProcess<In extends InMask = InMask> {
 	#stderrDone: Promise<void>;
 	#exited: Promise<number>;
 
-	constructor(
-		public readonly proc: PipedSubprocess<In>,
-		public readonly isProcessGroup: boolean,
-	) {
+	constructor(public readonly proc: PipedSubprocess<In>) {
 		const { promise: stderrDone, resolve: resolveStderrDone } = Promise.withResolvers<void>();
 		this.#stderrDone = stderrDone;
 
@@ -245,8 +233,6 @@ export class ChildProcess<In extends InMask = InMask> {
 		const { promise, resolve, reject } = Promise.withResolvers<number>();
 		this.#exited = promise;
 
-		if (this.proc.exitCode === null) managedChildren.add(this);
-
 		// Normalize Bun's exited promise into our "exitReason / exitedCleanly" model.
 		proc.exited
 			.catch(() => null)
@@ -279,9 +265,6 @@ export class ChildProcess<In extends InMask = InMask> {
 
 				this.#exitReason = ex;
 				reject(ex);
-			})
-			.finally(() => {
-				managedChildren.delete(this);
 			});
 	}
 
@@ -426,7 +409,7 @@ export class ChildProcess<In extends InMask = InMask> {
  */
 type ChildSpawnOptions<In extends InMask = InMask> = Omit<
 	Spawn.SpawnOptions<In, "pipe", "pipe">,
-	"stdout" | "stderr"
+	"stdout" | "stderr" | "detached"
 > & {
 	/** AbortSignal to cancel the process */
 	signal?: AbortSignal;
@@ -441,16 +424,15 @@ type ChildSpawnOptions<In extends InMask = InMask> = Omit<
  * @returns A ChildProcess instance.
  */
 export function spawn<In extends InMask = InMask>(cmd: string[], options?: ChildSpawnOptions<In>): ChildProcess<In> {
-	const { detached = false, timeout = -1, signal, ...rest } = options ?? {};
+	const { timeout = -1, signal, ...rest } = options ?? {};
 	const child = Bun.spawn(cmd, {
 		stdin: "ignore",
 		stdout: "pipe",
 		stderr: "pipe",
-		detached,
 		windowsHide: true,
 		...rest,
 	});
-	const cproc = new ChildProcess(child, detached);
+	const cproc = new ChildProcess(child);
 	if (signal) cproc.attachSignal(signal);
 	if (timeout > 0) cproc.attachTimeout(timeout);
 	return cproc;

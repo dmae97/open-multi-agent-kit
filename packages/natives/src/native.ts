@@ -90,6 +90,8 @@ export interface NativeBindings {
 	matchesLegacySequence(data: string, keyName: string): boolean;
 	parseKittySequence(data: string): ParsedKittyResult | null;
 	matchesKey(data: string, keyId: string, kittyProtocolActive: boolean): boolean;
+	killTree(pid: number, signal: number): number;
+	listDescendants(pid: number): number[];
 }
 
 const require = createRequire(import.meta.url);
@@ -178,6 +180,8 @@ function validateNative(bindings: NativeBindings, source: string): void {
 	checkFn("parseKittySequence");
 	checkFn("matchesKey");
 	checkFn("visibleWidth");
+	checkFn("killTree");
+	checkFn("listDescendants");
 
 	if (missing.length) {
 		throw new Error(

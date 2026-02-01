@@ -476,7 +476,6 @@ describe("Context overflow error handling", () => {
 
 			// Start ollama server
 			ollamaProcess = spawn("ollama", ["serve"], {
-				detached: false,
 				stdio: "ignore",
 			});
 

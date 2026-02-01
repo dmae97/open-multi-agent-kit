@@ -497,7 +497,6 @@ async function convertWithMarkitdown(
 		allowNonZero: true,
 		allowAbort: true,
 		stderr: "buffer",
-		detached: true,
 	});
 
 	if (result.exitError?.aborted) {

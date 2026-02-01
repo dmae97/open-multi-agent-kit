@@ -490,7 +490,6 @@ export class PythonKernel {
 				{
 					cwd: options.cwd,
 					env: kernelEnv,
-					detached: true,
 				},
 			);
 

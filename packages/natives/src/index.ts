@@ -3,8 +3,11 @@
  */
 
 import * as path from "node:path";
+import { setNativeKillTree } from "@oh-my-pi/pi-utils";
 import type { FindMatch, FindOptions, FindResult } from "./find/types";
 import { native } from "./native";
+
+setNativeKillTree(native.killTree);
 
 // =============================================================================
 // Grep (ripgrep-based regex search)
@@ -115,3 +118,33 @@ export {
 	type HtmlToMarkdownOptions,
 	htmlToMarkdown,
 } from "./html/index";
+
+// =============================================================================
+// Process management
+// =============================================================================
+
+/**
+ * Kill a process and all its descendants.
+ *
+ * Uses platform-native APIs for efficiency:
+ * - Linux: /proc/{pid}/children
+ * - macOS: libproc (proc_listchildpids)
+ * - Windows: CreateToolhelp32Snapshot
+ *
+ * @param pid - Process ID to kill
+ * @param signal - Signal number (e.g., 9 for SIGKILL). Ignored on Windows.
+ * @returns Number of processes successfully killed
+ */
+export function killTree(pid: number, signal: number): number {
+	return native.killTree(pid, signal);
+}
+
+/**
+ * List all descendant PIDs of a process.
+ *
+ * @param pid - Process ID to query
+ * @returns Array of descendant PIDs (children, grandchildren, etc.)
+ */
+export function listDescendants(pid: number): number[] {
+	return native.listDescendants(pid);
+}

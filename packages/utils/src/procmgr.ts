@@ -185,12 +185,31 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
 }
 
 /**
+ * Function signature for native process tree killing.
+ * Returns the number of processes killed.
+ */
+export type KillTreeFn = (pid: number, signal: number) => number;
+
+/**
+ * Global native kill tree function, injected by pi-natives when loaded.
+ * Falls back to platform-specific behavior if not set.
+ */
+export let nativeKillTree: KillTreeFn | undefined;
+
+/**
+ * Set the native kill tree function. Called by pi-natives on load.
+ */
+export function setNativeKillTree(fn: KillTreeFn): void {
+	nativeKillTree = fn;
+}
+
+/**
  * Options for terminating a process and all its descendants.
  */
 export interface TerminateOptions {
 	/** The process to terminate */
 	target: Subprocess | number;
-	/** Whether to terminate the process group (Windows only) */
+	/** Whether to terminate the process tree (all descendants) */
 	group?: boolean;
 	/** Timeout in milliseconds */
 	timeout?: number;
@@ -293,31 +312,22 @@ export async function terminate(options: TerminateOptions): Promise<boolean> {
 			}
 		} catch {}
 
-		if (group) {
-			try {
-				if (IS_WINDOWS) {
-					const taskkill = Bun.spawn({
-						cmd: ["taskkill", "/F", "/T", "/PID", pid.toString()],
-						stdin: "ignore",
-						stdout: "ignore",
-						stderr: "ignore",
-						timeout: 5000,
-						windowsHide: true,
-					});
-					void taskkill.exited.catch(() => {});
-					taskkill.unref();
-				} else {
+		if (nativeKillTree) {
+			nativeKillTree(pid, 9);
+		} else {
+			if (group && !IS_WINDOWS) {
+				try {
 					process.kill(-pid, "SIGKILL");
+				} catch {}
+			}
+			try {
+				if (typeof target === "number") {
+					process.kill(target, "SIGKILL");
+				} else {
+					target.kill("SIGKILL");
 				}
 			} catch {}
 		}
-		try {
-			if (typeof target === "number") {
-				process.kill(target, "SIGKILL");
-			} else {
-				target.kill("SIGKILL");
-			}
-		} catch {}
 
 		return await Promise.race([Bun.sleep(timeout).then(() => false), exitPromise]);
 	} finally {

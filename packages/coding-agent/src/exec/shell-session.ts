@@ -254,7 +254,6 @@ class ShellSession {
 		this.#child = ptree.spawn([this.config.shell, ...args], {
 			stdin: "pipe",
 			env: this.config.env,
-			detached: !IS_WINDOWS,
 		});
 
 		if (this.#child.proc.exitCode !== null) {

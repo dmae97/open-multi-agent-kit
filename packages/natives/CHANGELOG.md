@@ -1,8 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Exported `killTree` function to kill a process and all its descendants using platform-native APIs
+- Exported `listDescendants` function to list all descendant PIDs of a process
 - Added `dev:native` npm script to build debug native binaries with `--dev` flag
 - Added `OMP_DEV` environment variable support for loading and debugging development native builds
 - Exported keyboard parsing and matching functions: `parseKey`, `parseKittySequence`, `matchesLegacySequence`, and `matchesKey` for terminal input handling

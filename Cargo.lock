@@ -842,6 +842,7 @@ dependencies = [
  "html-to-markdown-rs",
  "ignore",
  "image",
+ "libc",
  "napi",
  "napi-build",
  "napi-derive",
