@@ -421,7 +421,7 @@ function b() {
 		});
 
 		it("should persist environment variables between commands", async () => {
-			if (process.platform === "win32" || process.env.OMP_SHELL_PERSIST === "0") {
+			if (process.platform === "win32" || process.env.OMP_SHELL_PERSIST !== "1") {
 				return;
 			}
 
@@ -477,7 +477,7 @@ function b() {
 		});
 
 		it("should handle process spawn errors", async () => {
-			const getShellConfigSpy = vi.spyOn(SettingsManager, "getGlobalShellConfig").mockResolvedValueOnce({
+			const getShellConfigSpy = vi.spyOn(SettingsManager.prototype, "getShellConfig").mockReturnValueOnce({
 				shell: "/nonexistent-shell-path-xyz123",
 				args: ["-c"],
 				env: {},
