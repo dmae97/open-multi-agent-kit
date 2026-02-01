@@ -1,9 +1,10 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added `dev:native` npm script to build debug native binaries with `--dev` flag
+- Added `OMP_DEV` environment variable support for loading and debugging development native builds
 - Exported keyboard parsing and matching functions: `parseKey`, `parseKittySequence`, `matchesLegacySequence`, and `matchesKey` for terminal input handling
 - Exported `KeyEventType` enum and `ParsedKittyResult` type for Kitty keyboard protocol support
 - Added `parseKey` function to parse terminal input and return normalized key identifiers (e.g., "ctrl+c", "shift+tab")
@@ -13,6 +14,9 @@
 
 ### Changed
 
+- Modified native binary build process to support both debug and release builds via `--dev` flag
+- Updated native binary search to prioritize platform-tagged builds and separate debug/release candidates
+- Changed debug builds to output to `pi_natives.dev.node` instead of mixing with release artifacts
 - Improved native binary installation to use atomic rename operations and better fallback handling for Windows DLLs
 - Reordered native binary search candidates to prioritize platform-tagged builds and avoid loading stale cross-compiled binaries
 - Enhanced cross-compilation detection to prevent installing wrong-platform fallback binaries during cross-compilation builds

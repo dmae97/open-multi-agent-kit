@@ -246,8 +246,8 @@ fn parse_key_id(key_id: &str) -> Option<ParsedKeyId<'_>> {
 	// In this case the trailing "++" means: delimiter '+' + key '+'
 	let (prefix, forced_key_plus): (&str, bool) = if s == "+" {
 		("", true)
-	} else if s.ends_with("++") {
-		(&s[..s.len() - 2], true)
+	} else if let Some(stripped) = s.strip_suffix("++") {
+		(stripped, true)
 	} else {
 		(s, false)
 	};
@@ -291,12 +291,12 @@ fn parse_key_id(key_id: &str) -> Option<ParsedKeyId<'_>> {
 }
 
 #[inline]
-fn raw_ctrl_char(letter: u8) -> u8 {
+const fn raw_ctrl_char(letter: u8) -> u8 {
 	(letter.to_ascii_lowercase() - b'a') + 1
 }
 
 /// CTRL+symbol legacy mappings
-fn ctrl_symbol_to_byte(symbol: u8) -> Option<u8> {
+const fn ctrl_symbol_to_byte(symbol: u8) -> Option<u8> {
 	match symbol {
 		b'@' => Some(0x00),
 		b'[' => Some(0x1b),
@@ -345,12 +345,6 @@ fn parse_modify_other_keys(bytes: &[u8]) -> Option<(u32, i32)> {
 	let modifier = mod_value - 1;
 	let keycode = i32::try_from(keycode_u32).ok()?;
 	Some((modifier, keycode))
-}
-
-#[inline]
-fn matches_modify_other_keys(bytes: &[u8], expected_keycode: i32, expected_modifier: u32) -> bool {
-	parse_modify_other_keys(bytes)
-		.is_some_and(|(m, k)| k == expected_keycode && m == expected_modifier)
 }
 
 fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) -> bool {
@@ -670,10 +664,11 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 			}
 
 			// ctrl+symbol legacy mapping (layout dependent)
-			if let Some(legacy_ctrl) = ctrl_symbol_to_byte(ch) {
-				if bytes.len() == 1 && bytes[0] == legacy_ctrl {
-					return true;
-				}
+			if let Some(legacy_ctrl) = ctrl_symbol_to_byte(ch)
+				&& bytes.len() == 1
+				&& bytes[0] == legacy_ctrl
+			{
+				return true;
 			}
 
 			return mok_matches(codepoint, MOD_CTRL) || kitty_matches(codepoint, MOD_CTRL);
@@ -1120,10 +1115,6 @@ fn format_key_name(codepoint: i32) -> Option<&'static str> {
 
 		// Any printable ASCII can be represented without allocation via the static table.
 		33..=126 => Some(ASCII_PRINTABLE[(codepoint - 33) as usize]),
-
-		// Keep lowercase letters as a fast/consistent path (optional):
-		97..=122 => Some(LETTERS[(codepoint - 97) as usize]),
-
 		_ => None,
 	}
 }

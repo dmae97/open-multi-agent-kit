@@ -29,21 +29,21 @@ import {
 // Global Kitty Protocol State
 // =============================================================================
 
-let _kittyProtocolActive = false;
+let kittyProtocolActive = false;
 
 /**
  * Set the global Kitty keyboard protocol state.
  * Called by ProcessTerminal after detecting protocol support.
  */
 export function setKittyProtocolActive(active: boolean): void {
-	_kittyProtocolActive = active;
+	kittyProtocolActive = active;
 }
 
 /**
  * Query whether Kitty keyboard protocol is currently active.
  */
 export function isKittyProtocolActive(): boolean {
-	return _kittyProtocolActive;
+	return kittyProtocolActive;
 }
 
 // =============================================================================
@@ -192,7 +192,7 @@ const KITTY_REPEAT_PATTERN = /^\x1b\[[\d:;]*:2[u~ABCDHF]$/;
  */
 export function isKeyRelease(data: string): boolean {
 	// Only detect release events when Kitty protocol is active
-	if (!_kittyProtocolActive) {
+	if (!kittyProtocolActive) {
 		return false;
 	}
 
@@ -212,7 +212,7 @@ export function isKeyRelease(data: string): boolean {
  */
 export function isKeyRepeat(data: string): boolean {
 	// Only detect repeat events when Kitty protocol is active
-	if (!_kittyProtocolActive) {
+	if (!kittyProtocolActive) {
 		return false;
 	}
 
@@ -254,7 +254,7 @@ export function parseKittySequence(data: string): ParsedKittySequence | null {
  * @param keyId - Key identifier (e.g., "ctrl+c", "escape", Key.ctrl("c"))
  */
 export function matchesKey(data: string, keyId: KeyId): boolean {
-	return matchesKeyNative(data, keyId, _kittyProtocolActive);
+	return matchesKeyNative(data, keyId, kittyProtocolActive);
 }
 
 /**
@@ -266,5 +266,5 @@ export function matchesKey(data: string, keyId: KeyId): boolean {
  * @param data - Raw input data from terminal
  */
 export function parseKey(data: string): string | undefined {
-	return parseKeyNative(data, _kittyProtocolActive) ?? undefined;
+	return parseKeyNative(data, kittyProtocolActive) ?? undefined;
 }

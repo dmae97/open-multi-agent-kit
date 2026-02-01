@@ -17,6 +17,7 @@
 	],
 	"scripts": {
 		"build:native": "bun scripts/build-native.ts",
+		"dev:native": "bun scripts/build-native.ts --dev",
 		"check": "biome check . && tsgo -p tsconfig.json",
 		"fix": "biome check --write --unsafe .",
 		"test": "bun run build:native && bun test",
