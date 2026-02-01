@@ -501,11 +501,7 @@ class ShellSession {
 				child.proc.kill("SIGINT");
 				return;
 			}
-			if (child.isProcessGroup) {
-				process.kill(-child.pid, "SIGINT");
-			} else {
-				process.kill(child.pid, "SIGINT");
-			}
+			process.kill(child.pid, "SIGINT");
 		} catch {}
 	}
 
