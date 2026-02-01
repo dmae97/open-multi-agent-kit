@@ -41,21 +41,16 @@ export async function find(options: FindOptions, onMatch?: (match: FindMatch) =>
 	// Convert simple patterns to recursive globs if needed
 	const globPattern = pattern.includes("/") || pattern.startsWith("**") ? pattern : `**/${pattern}`;
 
-	const result = await native.find({
-		...options,
-		path: searchPath,
-		pattern: globPattern,
-		hidden: options.hidden ?? false,
-		gitignore: options.gitignore ?? true,
-	});
-
-	if (onMatch) {
-		for (const match of result.matches) {
-			onMatch(match);
-		}
-	}
-
-	return result;
+	return native.find(
+		{
+			...options,
+			path: searchPath,
+			pattern: globPattern,
+			hidden: options.hidden ?? false,
+			gitignore: options.gitignore ?? true,
+		},
+		onMatch,
+	);
 }
 
 // =============================================================================

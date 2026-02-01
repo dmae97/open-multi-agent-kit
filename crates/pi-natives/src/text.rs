@@ -299,34 +299,21 @@ fn visible_width_impl(text: &str) -> usize {
 		return text.len();
 	}
 
-	let mut ansi_ranges = Vec::new();
-	let bytes = text.as_bytes();
+	// Single-pass: skip ANSI codes, measure graphemes
 	let mut i = 0;
-	while i < bytes.len() {
-		if bytes[i] == 0x1b
-			&& let Some(len) = extract_ansi_code(text, i)
-		{
-			ansi_ranges.push((i, i + len));
+	let mut width = 0;
+	while i < text.len() {
+		if let Some(len) = extract_ansi_code(text, i) {
 			i += len;
 			continue;
 		}
-		i += 1;
-	}
 
-	let mut width = 0;
-	let mut cursor = 0;
-	for (start, end) in ansi_ranges {
-		if start > cursor {
-			for grapheme in text[cursor..start].graphemes(true) {
-				width += grapheme_width(grapheme);
-			}
-		}
-		cursor = end;
-	}
-	if cursor < text.len() {
-		for grapheme in text[cursor..].graphemes(true) {
+		// Find next ANSI code or end of string
+		let next_ansi = next_ansi_start(text, i + 1).unwrap_or(text.len());
+		for grapheme in text[i..next_ansi].graphemes(true) {
 			width += grapheme_width(grapheme);
 		}
+		i = next_ansi;
 	}
 
 	width
@@ -366,52 +353,49 @@ pub fn truncate_to_width(
 		return Ok(ellipsis.graphemes(true).take(max_width).collect());
 	}
 
-	let mut segments: Vec<(bool, &str)> = Vec::new();
+	// Streaming: walk string once, copy ANSI codes through, copy graphemes until
+	// target
+	let mut out = String::with_capacity(text.len().min(max_width * 4));
+	let mut width = 0usize;
 	let mut i = 0;
+
 	while i < text.len() {
+		// Pass through ANSI codes unchanged
 		if let Some(len) = extract_ansi_code(text, i) {
-			segments.push((true, &text[i..i + len]));
+			out.push_str(&text[i..i + len]);
 			i += len;
 			continue;
 		}
 
-		let next_ansi = next_ansi_start(text, i);
-		let end = next_ansi.unwrap_or(text.len());
-		for grapheme in text[i..end].graphemes(true) {
-			segments.push((false, grapheme));
+		// Copy graphemes until we hit target width or next ANSI code
+		let next_ansi = next_ansi_start(text, i + 1).unwrap_or(text.len());
+		for grapheme in text[i..next_ansi].graphemes(true) {
+			let w = grapheme_width(grapheme);
+			if width + w > target_width {
+				// Hit limit, stop copying
+				i = text.len(); // Signal outer loop to exit
+				break;
+			}
+			out.push_str(grapheme);
+			width += w;
 		}
-		i = end;
-	}
-
-	let mut result = String::new();
-	let mut current_width = 0;
-	for (is_ansi, value) in segments {
-		if is_ansi {
-			result.push_str(value);
-			continue;
-		}
-
-		if value.is_empty() {
-			continue;
-		}
-
-		let width = grapheme_width(value);
-		if current_width + width > target_width {
+		if width >= target_width || i >= text.len() {
 			break;
 		}
-		result.push_str(value);
-		current_width += width;
+		i = next_ansi;
 	}
 
-	let mut truncated = format!("{result}\x1b[0m{ellipsis}");
+	out.push_str("\x1b[0m");
+	out.push_str(ellipsis);
+
 	if pad {
-		let truncated_width = visible_width_impl(&truncated);
-		if truncated_width < max_width {
-			truncated.push_str(&" ".repeat(max_width - truncated_width));
+		let out_width = width + ellipsis_width; // We know the width without re-scanning
+		if out_width < max_width {
+			out.push_str(&" ".repeat(max_width - out_width));
 		}
 	}
 
-	Ok(truncated)
+	Ok(out)
 }
 
 fn slice_with_width_impl(line: &str, start_col: usize, length: usize, strict: bool) -> SliceResult {

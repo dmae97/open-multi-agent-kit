@@ -443,14 +443,6 @@ fn matches_type_filter(path: &Path, filter: &TypeFilter) -> bool {
 	matches_case_insensitive(ext, &filter.extensions)
 }
 
-fn read_file_prefix(path: &Path) -> io::Result<Vec<u8>> {
-	let file = File::open(path)?;
-	let mut limited = file.take(MAX_FILE_BYTES);
-	let mut buffer = Vec::new();
-	limited.read_to_end(&mut buffer)?;
-	Ok(buffer)
-}
-
 fn normalize_relative_path<'a>(root: &Path, path: &'a Path) -> Cow<'a, str> {
 	let relative = path.strip_prefix(root).unwrap_or(path);
 	if cfg!(windows) {
@@ -483,6 +475,19 @@ fn run_search(
 	max_count: Option<u64>,
 	offset: u64,
 ) -> io::Result<SearchResultInternal> {
+	run_search_reader(matcher, Cursor::new(content), context, max_columns, mode, max_count, offset)
+}
+
+/// Stream-based search that reads directly from a `Read` without buffering.
+fn run_search_reader<R: Read>(
+	matcher: &grep_regex::RegexMatcher,
+	reader: R,
+	context: u32,
+	max_columns: Option<u32>,
+	mode: OutputMode,
+	max_count: Option<u64>,
+	offset: u64,
+) -> io::Result<SearchResultInternal> {
 	let mut searcher = build_searcher(if mode == OutputMode::Content {
 		context
 	} else {
@@ -491,11 +496,10 @@ fn run_search(
 	let mut collector = MatchCollector::new(
 		max_count,
 		offset,
-		max_columns.map(|value| value as usize),
+		max_columns.map(|v| v as usize),
 		mode == OutputMode::Content,
 	);
-	let cursor = Cursor::new(content);
-	searcher.search_reader(matcher, cursor, &mut collector)?;
+	searcher.search_reader(matcher, reader, &mut collector)?;
 	Ok(SearchResultInternal {
 		matches:       collector.matches,
 		match_count:   collector.match_count,
@@ -613,8 +617,10 @@ fn run_parallel_search(
 	let mut results: Vec<FileSearchResult> = entries
 		.par_iter()
 		.filter_map(|entry| {
-			let bytes = read_file_prefix(&entry.path).ok()?;
-			let search = run_search(matcher, &bytes, context, max_columns, mode, None, 0).ok()?;
+			let file = File::open(&entry.path).ok()?;
+			let reader = file.take(MAX_FILE_BYTES);
+			let search =
+				run_search_reader(matcher, reader, context, max_columns, mode, None, 0).ok()?;
 			Some(FileSearchResult {
 				relative_path: entry.relative_path.clone(),
 				matches:       search.matches,
@@ -646,14 +652,8 @@ fn run_sequential_search(
 		if limit_reached {
 			break;
 		}
-		let Ok(bytes) = read_file_prefix(&entry.path) else {
-			continue;
-		};
-		files_searched = files_searched.saturating_add(1);
-		if !matcher.is_match(&bytes).unwrap_or(false) {
-			continue;
-		}
 
+		// Check remaining count before opening file
 		let file_offset = offset.saturating_sub(total_matches);
 		let remaining = max_count.map(|max| max.saturating_sub(total_matches));
 		if remaining == Some(0) {
@@ -661,8 +661,15 @@ fn run_sequential_search(
 			break;
 		}
 
+		// Open file and search directly - no intermediate buffer, no precheck scan
+		let Ok(file) = File::open(&entry.path) else {
+			continue;
+		};
+		files_searched = files_searched.saturating_add(1);
+		let reader = file.take(MAX_FILE_BYTES);
+
 		let Ok(search) =
-			run_search(matcher, &bytes, context, max_columns, mode, remaining, file_offset)
+			run_search_reader(matcher, reader, context, max_columns, mode, remaining, file_offset)
 		else {
 			continue;
 		};
@@ -762,7 +769,7 @@ fn grep_sync(options: GrepOptions) -> Result<GrepResult> {
 			});
 		}
 
-		let Ok(bytes) = read_file_prefix(&search_path) else {
+		let Ok(file) = File::open(&search_path) else {
 			return Ok(GrepResult {
 				matches:            Vec::new(),
 				total_matches:      0,
@@ -771,9 +778,10 @@ fn grep_sync(options: GrepOptions) -> Result<GrepResult> {
 				limit_reached:      None,
 			});
 		};
+		let reader = file.take(MAX_FILE_BYTES);
 
 		let search =
-			run_search(&matcher, &bytes, context, max_columns, output_mode, max_count, offset)
+			run_search_reader(&matcher, reader, context, max_columns, output_mode, max_count, offset)
 				.map_err(|err| Error::from_reason(format!("Search failed: {err}")))?;
 
 		if search.match_count == 0 {
@@ -926,26 +934,28 @@ pub fn has_match(
 	ignore_case: bool,
 	multiline: bool,
 ) -> Result<bool> {
-	let content_bytes: Vec<u8>;
+	// Hold JsStringUtf8 on the stack and borrow - no copy
+	let content_utf8;
 	let content_slice: &[u8] = match &content {
 		Either::A(js_str) => {
-			content_bytes = js_str.into_utf8()?.as_slice().to_vec();
-			&content_bytes
+			content_utf8 = js_str.into_utf8()?;
+			content_utf8.as_slice()
 		},
 		Either::B(buf) => buf.as_ref(),
 	};
 
-	let pattern_str: String;
+	let pattern_utf8;
+	let pattern_string;
 	let pattern_ref: &str = match &pattern {
 		Either::A(js_str) => {
-			pattern_str = js_str.into_utf8()?.as_str()?.to_owned();
-			&pattern_str
+			pattern_utf8 = js_str.into_utf8()?;
+			pattern_utf8.as_str()?
 		},
 		Either::B(buf) => {
-			pattern_str = std::str::from_utf8(buf.as_ref())
+			pattern_string = std::str::from_utf8(buf.as_ref())
 				.map_err(|err| Error::from_reason(format!("Invalid UTF-8 in pattern: {err}")))?
 				.to_owned();
-			&pattern_str
+			&pattern_string
 		},
 	};
 

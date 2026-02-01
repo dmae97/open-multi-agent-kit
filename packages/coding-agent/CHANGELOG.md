@@ -1,8 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added `maxResults` parameter to find tool to limit result set at the native layer
 - Added context-structure template showing required sections (Goal, Constraints, Existing Code, API Contract) with examples of good vs bad context
 - Added explicit dependency test: 'Can agent B write correct code without seeing agent A's output?' to determine sequencing
 - Added detailed phased execution pattern with four phases (Foundation, Parallel Implementation, Integration, Dependent Layer) and WASM-to-N-API migration example
@@ -12,6 +14,8 @@
 
 ### Changed
 
+- Updated find tool to emit streaming match updates via callback, allowing real-time progress feedback during file searches
+- Modified find tool to use native match metadata (mtime, fileType) from WASM layer instead of redundant filesystem stats, improving performance
 - Restructured Task tool documentation to emphasize context quality and explicit API contracts for subagent success
 - Updated task execution guidance to require structured context with Goal, Constraints, Existing Code, and API Contract sections
 - Reorganized parallelization rules with explicit dependency patterns and phased execution guidance for migrations

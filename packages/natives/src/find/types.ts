@@ -20,6 +20,7 @@ export interface FindOptions {
 export interface FindMatch {
 	path: string;
 	fileType: "file" | "dir" | "symlink";
+	mtime?: number;
 }
 
 export interface FindResult {

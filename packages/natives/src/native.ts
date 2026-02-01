@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import * as path from "node:path";
-import type { FindOptions, FindResult } from "./find/types";
+import type { FindMatch, FindOptions, FindResult } from "./find/types";
 import type { GrepOptions, GrepResult, SearchOptions, SearchResult } from "./grep/types";
 import type { HighlightColors } from "./highlight/index";
 import type { HtmlToMarkdownOptions } from "./html/types";
@@ -30,7 +30,7 @@ export interface NativeSamplingFilter {
 }
 
 export interface NativeBindings {
-	find(options: FindOptions): Promise<FindResult>;
+	find(options: FindOptions, onMatch?: (match: FindMatch) => void): Promise<FindResult>;
 	grep(options: GrepOptions): Promise<GrepResult>;
 	search(content: string | Uint8Array, options: SearchOptions): SearchResult;
 	hasMatch(

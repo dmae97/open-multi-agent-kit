@@ -6,7 +6,7 @@
 //! - Resize with Lanczos3 filter
 //! - Export as PNG, JPEG, WebP, or GIF
 
-use std::{io::Cursor, sync::Arc};
+use std::io::Cursor;
 
 use image::{
 	DynamicImage, ImageFormat, ImageReader,
@@ -38,10 +38,10 @@ impl From<SamplingFilter> for FilterType {
 	}
 }
 
-/// Image container for native interop.
+/// Image container for native interop. Stores image directly (no Arc overhead).
 #[napi]
 pub struct PhotonImage {
-	img: Arc<DynamicImage>,
+	img: DynamicImage,
 }
 
 #[napi]
@@ -68,7 +68,7 @@ impl PhotonImage {
 		.await
 		.map_err(|e| Error::from_reason(format!("Image decode task failed: {e}")))??;
 
-		Ok(Self { img: Arc::new(img) })
+		Ok(Self { img })
 	}
 
 	/// Get the width of the image.
@@ -89,9 +89,10 @@ impl PhotonImage {
 	/// Returns an error if PNG encoding fails.
 	#[napi(js_name = "getBytes")]
 	pub async fn get_bytes(&self) -> Result<Uint8Array> {
-		let img = Arc::clone(&self.img);
+		let img = self.img.clone();
+		let capacity = (img.width() * img.height() * 4) as usize;
 		let buffer = spawn_blocking(move || -> Result<Vec<u8>> {
-			let mut buffer = Vec::new();
+			let mut buffer = Vec::with_capacity(capacity);
 			img.write_to(&mut Cursor::new(&mut buffer), ImageFormat::Png)
 				.map_err(|e| Error::from_reason(format!("Failed to encode PNG: {e}")))?;
 			Ok(buffer)
@@ -107,9 +108,10 @@ impl PhotonImage {
 	/// Returns an error if JPEG encoding fails.
 	#[napi(js_name = "getBytesJpeg")]
 	pub async fn get_bytes_jpeg(&self, quality: u8) -> Result<Uint8Array> {
-		let img = Arc::clone(&self.img);
+		let img = self.img.clone();
+		let capacity = (img.width() * img.height() * 3) as usize;
 		let buffer = spawn_blocking(move || -> Result<Vec<u8>> {
-			let mut buffer = Vec::new();
+			let mut buffer = Vec::with_capacity(capacity);
 			let encoder = JpegEncoder::new_with_quality(&mut buffer, quality);
 			img.write_with_encoder(encoder)
 				.map_err(|e| Error::from_reason(format!("Failed to encode JPEG: {e}")))?;
@@ -126,9 +128,10 @@ impl PhotonImage {
 	/// Returns an error if WebP encoding fails.
 	#[napi(js_name = "getBytesWebp")]
 	pub async fn get_bytes_webp(&self) -> Result<Uint8Array> {
-		let img = Arc::clone(&self.img);
+		let img = self.img.clone();
+		let capacity = (img.width() * img.height() * 4) as usize;
 		let buffer = spawn_blocking(move || -> Result<Vec<u8>> {
-			let mut buffer = Vec::new();
+			let mut buffer = Vec::with_capacity(capacity);
 			let encoder = WebPEncoder::new_lossless(&mut buffer);
 			img.write_with_encoder(encoder)
 				.map_err(|e| Error::from_reason(format!("Failed to encode WebP: {e}")))?;
@@ -145,9 +148,10 @@ impl PhotonImage {
 	/// Returns an error if GIF encoding fails.
 	#[napi(js_name = "getBytesGif")]
 	pub async fn get_bytes_gif(&self) -> Result<Uint8Array> {
-		let img = Arc::clone(&self.img);
+		let img = self.img.clone();
+		let capacity = (img.width() * img.height()) as usize;
 		let buffer = spawn_blocking(move || -> Result<Vec<u8>> {
-			let mut buffer = Vec::new();
+			let mut buffer = Vec::with_capacity(capacity);
 			img.write_to(&mut Cursor::new(&mut buffer), ImageFormat::Gif)
 				.map_err(|e| Error::from_reason(format!("Failed to encode GIF: {e}")))?;
 			Ok(buffer)
@@ -160,10 +164,10 @@ impl PhotonImage {
 	/// Resize the image to the specified dimensions.
 	#[napi(js_name = "resize")]
 	pub async fn resize(&self, width: u32, height: u32, filter: SamplingFilter) -> Result<Self> {
-		let img = Arc::clone(&self.img);
+		let img = self.img.clone();
 		let resized = spawn_blocking(move || img.resize_exact(width, height, filter.into()))
 			.await
 			.map_err(|e| Error::from_reason(format!("Resize task failed: {e}")))?;
-		Ok(Self { img: Arc::new(resized) })
+		Ok(Self { img: resized })
 	}
 }

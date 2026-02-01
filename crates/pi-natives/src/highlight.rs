@@ -5,7 +5,7 @@
 //! - comment, keyword, function, variable, string, number, type, operator,
 //!   punctuation, inserted, deleted
 
-use std::sync::OnceLock;
+use std::{cell::RefCell, collections::HashMap, sync::OnceLock};
 
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -13,6 +13,11 @@ use syntect::parsing::{ParseState, Scope, ScopeStack, ScopeStackOp, SyntaxRefere
 
 static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
 static SCOPE_MATCHERS: OnceLock<ScopeMatchers> = OnceLock::new();
+
+// Thread-local cache for scope -> color index lookups
+thread_local! {
+	static SCOPE_COLOR_CACHE: RefCell<HashMap<Scope, usize>> = RefCell::new(HashMap::with_capacity(256));
+}
 
 fn get_syntax_set() -> &'static SyntaxSet {
 	SYNTAX_SET.get_or_init(SyntaxSet::load_defaults_newlines)
@@ -204,105 +209,115 @@ fn is_known_alias(lang: &str) -> bool {
 		.any(|(aliases, _)| aliases.iter().any(|a| lang.eq_ignore_ascii_case(a)))
 }
 
-/// Determine the semantic color category from a scope stack.
-/// Uses bitwise prefix matching for fast comparison.
+/// Compute the color index for a single scope (uncached).
 #[inline]
-fn scope_to_color_index(scope: &ScopeStack) -> usize {
+fn compute_scope_color(s: Scope) -> usize {
 	let m = get_scope_matchers();
 
-	// Walk from innermost to outermost scope
-	for s in scope.as_slice().iter().rev() {
-		// Check for specific scopes (order matters - more specific first)
-
-		// Comment (index 0)
-		if m.comment.is_prefix_of(*s) {
-			return 0;
-		}
-
-		// Diff inserted (index 9) - check before other scopes
-		if m.markup_inserted.is_prefix_of(*s) {
-			return 9;
-		}
-
-		// Diff deleted (index 10)
-		if m.markup_deleted.is_prefix_of(*s) {
-			return 10;
-		}
-
-		// Diff header/range -> keyword (index 1)
-		if m.meta_diff_header.is_prefix_of(*s) || m.meta_diff_range.is_prefix_of(*s) {
-			return 1;
-		}
-
-		// String (index 4)
-		if m.string.is_prefix_of(*s)
-			|| m.constant_character.is_prefix_of(*s)
-			|| m.meta_string.is_prefix_of(*s)
-		{
-			return 4;
-		}
-
-		// Number (index 5) - check specific numeric first
-		if m.constant_numeric.is_prefix_of(*s) || m.constant_integer.is_prefix_of(*s) {
-			return 5;
-		}
-
-		// Keyword (index 1)
-		if m.keyword.is_prefix_of(*s)
-			|| m.storage_type.is_prefix_of(*s)
-			|| m.storage_modifier.is_prefix_of(*s)
-		{
-			return 1;
-		}
-
-		// Function (index 2)
-		if m.entity_name_function.is_prefix_of(*s)
-			|| m.support_function.is_prefix_of(*s)
-			|| m.meta_function_call.is_prefix_of(*s)
-			|| m.variable_function.is_prefix_of(*s)
-		{
-			return 2;
-		}
-
-		// Type (index 6)
-		if m.entity_name_type.is_prefix_of(*s)
-			|| m.support_type.is_prefix_of(*s)
-			|| m.support_class.is_prefix_of(*s)
-			|| m.entity_name_class.is_prefix_of(*s)
-			|| m.entity_name_struct.is_prefix_of(*s)
-			|| m.entity_name_enum.is_prefix_of(*s)
-			|| m.entity_name_interface.is_prefix_of(*s)
-			|| m.entity_name_trait.is_prefix_of(*s)
-		{
-			return 6;
-		}
-
-		// Operator (index 7)
-		if m.keyword_operator.is_prefix_of(*s) || m.punctuation_accessor.is_prefix_of(*s) {
-			return 7;
-		}
-
-		// Punctuation (index 8)
-		if m.punctuation.is_prefix_of(*s) {
-			return 8;
-		}
-
-		// Variable (index 3)
-		if m.variable.is_prefix_of(*s)
-			|| m.entity_name.is_prefix_of(*s)
-			|| m.meta_path.is_prefix_of(*s)
-		{
-			return 3;
-		}
-
-		// Generic constant -> number (index 5)
-		if m.constant.is_prefix_of(*s) {
-			return 5;
-		}
+	// Comment (index 0)
+	if m.comment.is_prefix_of(s) {
+		return 0;
 	}
 
-	// Default: no special color (will render as-is)
+	// Diff inserted (index 9)
+	if m.markup_inserted.is_prefix_of(s) {
+		return 9;
+	}
+
+	// Diff deleted (index 10)
+	if m.markup_deleted.is_prefix_of(s) {
+		return 10;
+	}
+
+	// Diff header/range -> keyword (index 1)
+	if m.meta_diff_header.is_prefix_of(s) || m.meta_diff_range.is_prefix_of(s) {
+		return 1;
+	}
+
+	// String (index 4)
+	if m.string.is_prefix_of(s)
+		|| m.constant_character.is_prefix_of(s)
+		|| m.meta_string.is_prefix_of(s)
+	{
+		return 4;
+	}
+
+	// Number (index 5)
+	if m.constant_numeric.is_prefix_of(s) || m.constant_integer.is_prefix_of(s) {
+		return 5;
+	}
+
+	// Keyword (index 1)
+	if m.keyword.is_prefix_of(s)
+		|| m.storage_type.is_prefix_of(s)
+		|| m.storage_modifier.is_prefix_of(s)
+	{
+		return 1;
+	}
+
+	// Function (index 2)
+	if m.entity_name_function.is_prefix_of(s)
+		|| m.support_function.is_prefix_of(s)
+		|| m.meta_function_call.is_prefix_of(s)
+		|| m.variable_function.is_prefix_of(s)
+	{
+		return 2;
+	}
+
+	// Type (index 6)
+	if m.entity_name_type.is_prefix_of(s)
+		|| m.support_type.is_prefix_of(s)
+		|| m.support_class.is_prefix_of(s)
+		|| m.entity_name_class.is_prefix_of(s)
+		|| m.entity_name_struct.is_prefix_of(s)
+		|| m.entity_name_enum.is_prefix_of(s)
+		|| m.entity_name_interface.is_prefix_of(s)
+		|| m.entity_name_trait.is_prefix_of(s)
+	{
+		return 6;
+	}
+
+	// Operator (index 7)
+	if m.keyword_operator.is_prefix_of(s) || m.punctuation_accessor.is_prefix_of(s) {
+		return 7;
+	}
+
+	// Punctuation (index 8)
+	if m.punctuation.is_prefix_of(s) {
+		return 8;
+	}
+
+	// Variable (index 3)
+	if m.variable.is_prefix_of(s) || m.entity_name.is_prefix_of(s) || m.meta_path.is_prefix_of(s) {
+		return 3;
+	}
+
+	// Generic constant -> number (index 5)
+	if m.constant.is_prefix_of(s) {
+		return 5;
+	}
+
+	// No match
 	usize::MAX
+}
+
+/// Determine the semantic color category from a scope stack.
+/// Uses per-scope caching to avoid repeated prefix checks.
+#[inline]
+fn scope_to_color_index(scope: &ScopeStack) -> usize {
+	SCOPE_COLOR_CACHE.with(|cache| {
+		let mut cache = cache.borrow_mut();
+
+		// Walk from innermost to outermost scope
+		for s in scope.as_slice().iter().rev() {
+			let color_idx = *cache.entry(*s).or_insert_with(|| compute_scope_color(*s));
+			if color_idx != usize::MAX {
+				return color_idx;
+			}
+		}
+
+		usize::MAX
+	})
 }
 
 /// Find the appropriate syntax for a language name.

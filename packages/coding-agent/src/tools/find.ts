@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
-import { find as wasmFind } from "@oh-my-pi/pi-natives";
+import { type FindMatch, find as wasmFind } from "@oh-my-pi/pi-natives";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import { isEnoent, untilAborted } from "@oh-my-pi/pi-utils";
@@ -122,7 +122,7 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 		_toolCallId: string,
 		params: Static<typeof findSchema>,
 		signal?: AbortSignal,
-		_onUpdate?: AgentToolUpdateCallback<FindToolDetails>,
+		onUpdate?: AgentToolUpdateCallback<FindToolDetails>,
 		_context?: AgentToolContext,
 	): Promise<AgentToolResult<FindToolDetails>> {
 		const { pattern, limit, hidden } = params;
@@ -217,19 +217,54 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 				throw new ToolError(`Path is not a directory: ${searchPath}`);
 			}
 
-			let lines: string[];
+			let matches: Awaited<ReturnType<typeof wasmFind>>["matches"];
+			const onUpdateMatches: string[] = [];
+			const updateIntervalMs = 200;
+			let lastUpdate = 0;
+			const emitUpdate = () => {
+				if (!onUpdate) return;
+				const now = Date.now();
+				if (now - lastUpdate < updateIntervalMs) return;
+				lastUpdate = now;
+				const details: FindToolDetails = {
+					scopePath,
+					fileCount: onUpdateMatches.length,
+					files: onUpdateMatches.slice(),
+					truncated: false,
+				};
+				onUpdate({
+					content: [{ type: "text", text: onUpdateMatches.join("\n") }],
+					details,
+				});
+			};
+			const onMatch = onUpdate
+				? (match: FindMatch) => {
+						if (signal?.aborted) return;
+						let relativePath = match.path;
+						if (!relativePath) return;
+						if (match.fileType === "dir" && !relativePath.endsWith("/")) {
+							relativePath += "/";
+						}
+						onUpdateMatches.push(relativePath);
+						emitUpdate();
+					}
+				: undefined;
 			const timeoutSignal = AbortSignal.timeout(GLOB_TIMEOUT_MS);
 			const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
 			try {
 				const result = await untilAborted(combinedSignal, () =>
-					wasmFind({
-						pattern: globPattern,
-						path: searchPath,
-						fileType: "file",
-						hidden: includeHidden,
-					}),
+					wasmFind(
+						{
+							pattern: globPattern,
+							path: searchPath,
+							fileType: "file",
+							hidden: includeHidden,
+							maxResults: effectiveLimit,
+						},
+						onMatch,
+					),
 				);
-				lines = result.matches.map(match => match.path);
+				matches = result.matches;
 			} catch (error) {
 				if (error instanceof Error && error.name === "AbortError") {
 					if (timeoutSignal.aborted && !signal?.aborted) {
@@ -241,16 +276,16 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 				throw error;
 			}
 
-			if (lines.length === 0) {
+			if (matches.length === 0) {
 				const details: FindToolDetails = { scopePath, fileCount: 0, files: [], truncated: false };
 				return toolResult(details).text("No files found matching pattern").done();
 			}
 			const relativized: string[] = [];
 			const mtimes: number[] = [];
 
-			for (const rawLine of lines) {
+			for (const match of matches) {
 				throwIfAborted(signal);
-				const line = rawLine;
+				const line = match.path;
 				if (!line) {
 					continue;
 				}
@@ -258,16 +293,17 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 				const hadTrailingSlash = line.endsWith("/") || line.endsWith("\\");
 				let relativePath = line;
 
-				let mtimeMs = 0;
-				let isDirectory = false;
-				// Get mtime for sorting (files that fail to stat get mtime 0)
-				try {
-					const fullPath = path.join(searchPath, relativePath);
-					const stat = await fs.stat(fullPath);
-					mtimeMs = stat.mtimeMs;
-					isDirectory = stat.isDirectory();
-				} catch {
-					mtimeMs = 0;
+				let mtimeMs = match.mtime;
+				let isDirectory = match.fileType === "dir";
+				if (mtimeMs === undefined) {
+					try {
+						const fullPath = path.join(searchPath, relativePath);
+						const stat = await fs.stat(fullPath);
+						mtimeMs = stat.mtimeMs;
+						isDirectory = stat.isDirectory();
+					} catch {
+						mtimeMs = 0;
+					}
 				}
 
 				if ((isDirectory || hadTrailingSlash) && !relativePath.endsWith("/")) {
@@ -275,7 +311,7 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 				}
 
 				relativized.push(relativePath);
-				mtimes.push(mtimeMs);
+				mtimes.push(mtimeMs ?? 0);
 			}
 
 			if (relativized.length === 0) {
