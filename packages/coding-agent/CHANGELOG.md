@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [10.2.1] - 2026-02-02
 ### Breaking Changes
 
 - Removed `strippedRedirect` field from `NormalizedCommand` interface returned by `normalizeBashCommand()`
