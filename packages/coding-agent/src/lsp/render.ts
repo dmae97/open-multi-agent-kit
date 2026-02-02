@@ -33,7 +33,6 @@ import type { LspParams, LspToolDetails } from "./types";
 export function renderCall(args: LspParams, theme: Theme): Text {
 	const actionLabel = (args.action ?? "request").replace(/_/g, " ");
 	const queryPreview = args.query ? truncateToWidth(args.query, TRUNCATE_LENGTHS.SHORT) : undefined;
-	const replacementPreview = args.replacement ? truncateToWidth(args.replacement, TRUNCATE_LENGTHS.SHORT) : undefined;
 
 	let target: string | undefined;
 	let hasFileTarget = false;
@@ -67,16 +66,9 @@ export function renderCall(args: LspParams, theme: Theme): Text {
 	const meta: string[] = [];
 	if (queryPreview && target) meta.push(`query:${queryPreview}`);
 	if (args.new_name) meta.push(`new:${args.new_name}`);
-	if (replacementPreview) meta.push(`replace:${replacementPreview}`);
-	if (args.kind) meta.push(`kind:${args.kind}`);
 	if (args.apply !== undefined) meta.push(`apply:${args.apply ? "true" : "false"}`);
-	if (args.action_index !== undefined) meta.push(`action:${args.action_index}`);
 	if (args.include_declaration !== undefined) {
 		meta.push(`include_decl:${args.include_declaration ? "true" : "false"}`);
-	}
-	if (args.end_line !== undefined && args.line === undefined) {
-		const endCol = args.end_character !== undefined ? `:${args.end_character}` : "";
-		meta.push(`end:${args.end_line}${endCol}`);
 	}
 
 	const descriptionParts = [actionLabel];
@@ -178,10 +170,7 @@ export function renderResult(
 	}
 	if (request?.query) requestLines.push(theme.fg("dim", `query: ${request.query}`));
 	if (request?.new_name) requestLines.push(theme.fg("dim", `new name: ${request.new_name}`));
-	if (request?.replacement) requestLines.push(theme.fg("dim", `replacement: ${request.replacement}`));
-	if (request?.kind) requestLines.push(theme.fg("dim", `kind: ${request.kind}`));
 	if (request?.apply !== undefined) requestLines.push(theme.fg("dim", `apply: ${request.apply ? "true" : "false"}`));
-	if (request?.action_index !== undefined) requestLines.push(theme.fg("dim", `action: ${request.action_index}`));
 	if (request?.include_declaration !== undefined) {
 		requestLines.push(theme.fg("dim", `include declaration: ${request.include_declaration ? "true" : "false"}`));
 	}

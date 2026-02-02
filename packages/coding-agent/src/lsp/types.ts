@@ -7,31 +7,9 @@ import { type Static, Type } from "@sinclair/typebox";
 // =============================================================================
 
 export const lspSchema = Type.Object({
-	action: StringEnum(
-		[
-			// Standard LSP operations
-			"diagnostics",
-			"workspace_diagnostics",
-			"references",
-			"definition",
-			"hover",
-			"symbols",
-			"workspace_symbols",
-			"rename",
-			"actions",
-			"incoming_calls",
-			"outgoing_calls",
-			"status",
-			// Rust-analyzer specific operations
-			"flycheck",
-			"expand_macro",
-			"ssr",
-			"runnables",
-			"related_tests",
-			"reload_workspace",
-		],
-		{ description: "LSP operation" },
-	),
+	action: StringEnum(["diagnostics", "definition", "references", "hover", "symbols", "rename", "status", "reload"], {
+		description: "LSP operation",
+	}),
 	files: Type.Optional(Type.Array(Type.String({ description: "File path" }))),
 	file: Type.Optional(Type.String({ description: "File path" })),
 	line: Type.Optional(Type.Number({ description: "Line number (1-indexed)" })),
@@ -40,10 +18,7 @@ export const lspSchema = Type.Object({
 	end_character: Type.Optional(Type.Number({ description: "End column for range (1-indexed)" })),
 	query: Type.Optional(Type.String({ description: "Search query or SSR pattern" })),
 	new_name: Type.Optional(Type.String({ description: "New name for rename" })),
-	replacement: Type.Optional(Type.String({ description: "Replacement text for SSR" })),
-	kind: Type.Optional(Type.String({ description: "Action kind: quickfix, refactor, source" })),
 	apply: Type.Optional(Type.Boolean({ description: "Apply edits (default: true)" })),
-	action_index: Type.Optional(Type.Number({ description: "Index of action to apply" })),
 	include_declaration: Type.Optional(Type.Boolean({ description: "Include declaration in refs (default: true)" })),
 });
 
@@ -412,65 +387,6 @@ export interface LspClient {
 	isReading: boolean;
 	serverCapabilities?: LspServerCapabilities;
 	lastActivity: number;
-}
-
-// =============================================================================
-// Call Hierarchy Types
-// =============================================================================
-
-export interface CallHierarchyItem {
-	name: string;
-	kind: SymbolKind;
-	tags?: number[];
-	detail?: string;
-	uri: string;
-	range: Range;
-	selectionRange: Range;
-	data?: unknown;
-}
-
-export interface CallHierarchyIncomingCall {
-	from: CallHierarchyItem;
-	fromRanges: Range[];
-}
-
-export interface CallHierarchyOutgoingCall {
-	to: CallHierarchyItem;
-	fromRanges: Range[];
-}
-
-// =============================================================================
-// Rust-analyzer Specific Types
-// =============================================================================
-
-export interface ExpandMacroResult {
-	name: string;
-	expansion: string;
-}
-
-export interface Runnable {
-	label: string;
-	kind: string;
-	args?: {
-		workspaceRoot?: string;
-		cargoArgs?: string[];
-		cargoExtraArgs?: string[];
-		executableArgs?: string[];
-	};
-	location?: {
-		targetUri: string;
-		targetRange?: Range;
-		targetSelectionRange?: Range;
-	};
-}
-
-export interface RelatedTest {
-	runnable?: {
-		label: string;
-		kind: string;
-		args?: Runnable["args"];
-		location?: Runnable["location"];
-	};
 }
 
 // =============================================================================

@@ -50,7 +50,7 @@ User sees output like Jupyter notebook; rich displays render fully:
 </important>
 
 <critical>
-- Use `sh()` or `run()` for shell commands; never raw `subprocess`
+- Use `run()` for shell commands; never raw `subprocess`
 </critical>
 
 <example name="good">
@@ -62,36 +62,5 @@ cells: [
     {"title": "test helper", "code": "parse_config('config.json')"},
     {"title": "use helper", "code": "configs = [parse_config(p) for p in Path('.').glob('*.json')]"}
 ]
-```
-</example>
-
-<example name="prelude-helpers">
-```python
-# Concatenate all markdown files in docs/
-cat(*find("*.md", "docs"))
-
-# Mass rename: foo -> bar across all .py files
-rsed(r'\bfoo\b', 'bar', glob_pattern="*.py")
-
-# Process files in batch
-batch(find("*.json"), lambda p: json.loads(p.read_text()))
-
-# Sort and deduplicate lines
-sort_lines(read("data.txt"), unique=True)
-
-# Extract columns 0 and 2 from TSV
-cols(read("data.tsv"), 0, 2, sep="\t")
-```
-</example>
-
-<example name="shell-commands">
-```python
-# Good
-sh("bun run check")
-run("cargo build --release")
-
-# Bad - never use subprocess directly
-import subprocess
-subprocess.run(["bun", "run", "check"], ...)
 ```
 </example>

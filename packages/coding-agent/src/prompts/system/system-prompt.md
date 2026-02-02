@@ -89,11 +89,9 @@ Never use Python/Bash when specialized tool exists.
 
 Grep finds strings; LSP finds meaning. For semantic questions, use semantic tool.
 - Where is X defined? → `lsp definition`
-- What calls X? → `lsp incoming_calls`
-- What does X call? → `lsp outgoing_calls`
+- What calls X? → `lsp references`
 - What type is X? → `lsp hover`
 - What lives in this file? → `lsp symbols`
-- Where does this symbol exist? → `lsp workspace_symbols`
 {{/has}}
 {{#has tools "ssh"}}
 ### SSH: Know shell you're speaking to

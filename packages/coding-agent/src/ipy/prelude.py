@@ -2,7 +2,7 @@
 if "__omp_prelude_loaded__" not in globals():
     __omp_prelude_loaded__ = True
     from pathlib import Path
-    import os, sys, re, json, shutil, subprocess, glob, textwrap, inspect
+    import os, re, json, shutil, subprocess, inspect
     from datetime import datetime
     from IPython.display import display
 
@@ -16,13 +16,6 @@ if "__omp_prelude_loaded__" not in globals():
             fn._omp_category = cat
             return fn
         return decorator
-
-    @_category("Navigation")
-    def pwd() -> Path:
-        """Return current working directory."""
-        p = Path.cwd()
-        _emit_status("pwd", path=str(p))
-        return p
 
     @_category("Shell")
     def env(key: str | None = None, value: str | None = None):
@@ -74,14 +67,6 @@ if "__omp_prelude_loaded__" not in globals():
         return p
 
     @_category("File ops")
-    def mkdir(path: str | Path) -> Path:
-        """Create directory (parents=True)."""
-        p = Path(path)
-        p.mkdir(parents=True, exist_ok=True)
-        _emit_status("mkdir", path=str(p))
-        return p
-
-    @_category("File ops")
     def rm(path: str | Path, *, recursive: bool = False) -> None:
         """Delete file or directory (recursive optional)."""
         p = Path(path)
@@ -120,14 +105,6 @@ if "__omp_prelude_loaded__" not in globals():
             shutil.copy2(src_p, dst_p)
         _emit_status("cp", src=str(src_p), dst=str(dst_p))
         return dst_p
-
-    @_category("Navigation")
-    def ls(path: str | Path = ".") -> list[Path]:
-        """List directory contents."""
-        p = Path(path)
-        items = sorted(p.iterdir())
-        _emit_status("ls", path=str(p), count=len(items), items=[i.name + ("/" if i.is_dir() else "") for i in items[:20]])
-        return items
 
     def _load_gitignore_patterns(base: Path) -> list[str]:
         """Load .gitignore patterns from base directory and parents."""
@@ -311,22 +288,6 @@ if "__omp_prelude_loaded__" not in globals():
         _emit_status("rgrep", pattern=pattern, path=str(base), count=len(hits), hits=[{"file": str(h[0]), "line": h[1], "text": h[2][:80]} for h in hits[:10]])
         return hits
 
-    @_category("Text")
-    def head(text: str, n: int = 10) -> str:
-        """Return the first n lines of text."""
-        lines = text.splitlines()[:n]
-        out = "\n".join(lines)
-        _emit_status("head", lines=len(lines), preview=out[:500])
-        return out
-
-    @_category("Text")
-    def tail(text: str, n: int = 10) -> str:
-        """Return the last n lines of text."""
-        lines = text.splitlines()[-n:]
-        out = "\n".join(lines)
-        _emit_status("tail", lines=len(lines), preview=out[:500])
-        return out
-
     @_category("Find/Replace")
     def replace(path: str | Path, pattern: str, repl: str, *, regex: bool = False) -> int:
         """Replace text in a file (regex optional)."""
@@ -399,62 +360,6 @@ if "__omp_prelude_loaded__" not in globals():
         args = [shell_path, "-c", cmd]
         return _run_with_interrupt(args, str(cwd) if cwd else None, timeout, cmd)
 
-    @_category("Shell")
-    def sh(cmd: str, *, cwd: str | Path | None = None, timeout: int | None = None) -> ShellResult:
-        """Run a shell command via user's login shell with environment snapshot."""
-        snapshot = os.environ.get("OMP_SHELL_SNAPSHOT")
-        prefix = f"source '{snapshot}' 2>/dev/null && " if snapshot else ""
-        final = f"{prefix}{cmd}"
-
-        shell_path = os.environ.get("SHELL")
-        if not shell_path or not shutil.which(shell_path):
-            shell_path = shutil.which("bash") or shutil.which("zsh") or shutil.which("sh")
-
-        if not shell_path:
-            if sys.platform.startswith("win"):
-                proc = subprocess.run(
-                    ["cmd", "/c", cmd],
-                    cwd=str(cwd) if cwd else None,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout,
-                )
-                return _make_shell_result(proc, cmd)
-            raise RuntimeError("No suitable shell found")
-
-        no_login = os.environ.get("OMP_BASH_NO_LOGIN") or os.environ.get("CLAUDE_BASH_NO_LOGIN")
-        args = [shell_path, "-c", final] if no_login else [shell_path, "-l", "-c", final]
-
-        return _run_with_interrupt(args, str(cwd) if cwd else None, timeout, cmd)
-
-    @_category("File I/O")
-    def cat(*paths: str | Path, separator: str = "\n") -> str:
-        """Concatenate multiple files. Like shell cat."""
-        parts = []
-        for p in paths:
-            parts.append(Path(p).read_text(encoding="utf-8"))
-        out = separator.join(parts)
-        _emit_status("cat", files=len(paths), chars=len(out), preview=out[:500])
-        return out
-
-    @_category("File I/O")
-    def touch(path: str | Path) -> Path:
-        """Create empty file or update mtime."""
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.touch()
-        _emit_status("touch", path=str(p))
-        return p
-
-    @_category("Text")
-    def wc(text: str) -> dict:
-        """Word/line/char count."""
-        lines = text.splitlines()
-        words = text.split()
-        result = {"lines": len(lines), "words": len(words), "chars": len(text)}
-        _emit_status("wc", lines=result["lines"], words=result["words"], chars=result["chars"])
-        return result
-
     @_category("Text")
     def sort_lines(text: str, *, reverse: bool = False, unique: bool = False) -> str:
         """Sort lines of text."""
@@ -526,13 +431,6 @@ if "__omp_prelude_loaded__" not in globals():
         return out
 
     @_category("Navigation")
-    def basenames(paths: list[str | Path]) -> list[str]:
-        """Extract basename from each path. Like: sed 's|.*/||'."""
-        names = [Path(p).name for p in paths]
-        _emit_status("basenames", count=len(names), sample=names[:10])
-        return names
-
-    @_category("Navigation")
     def tree(path: str | Path = ".", *, max_depth: int = 3, show_hidden: bool = False) -> str:
         """Return directory tree."""
         base = Path(path)
@@ -601,16 +499,6 @@ if "__omp_prelude_loaded__" not in globals():
         matches = sorted(matches)
         _emit_status("glob", pattern=pattern, path=str(p), count=len(matches), matches=[str(m) for m in matches[:20]])
         return matches
-
-    @_category("Batch")
-    def batch(paths: list[str | Path], fn) -> list:
-        """Apply function to multiple files. Returns list of results."""
-        results = []
-        for p in paths:
-            result = fn(Path(p))
-            results.append(result)
-        _emit_status("batch", files=len(paths))
-        return results
 
     @_category("Find/Replace")
     def sed(path: str | Path, pattern: str, repl: str, *, flags: int = 0) -> int:

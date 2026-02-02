@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - Added `find.enabled`, `grep.enabled`, `ls.enabled`, `notebook.enabled`, `fetch.enabled`, `web_search.enabled`, `lsp.enabled`, and `calc.enabled` settings to control availability of individual tools
@@ -11,6 +10,10 @@
 
 ### Changed
 
+- Consolidated `symbols` action to handle both file-based document symbols and workspace symbol search (query-based)
+- Consolidated `diagnostics` action to handle both single-file and workspace-wide diagnostics (no file = workspace)
+- Simplified `reload` action to gracefully reload language server with fallback to kill
+- Updated LSP tool documentation to reflect simplified operation set and consolidated actions
 - Reorganized settings tabs from 8 to 9 tabs with clearer categorization: Display, Agent, Input, Tools, Config, Services, Bash, LSP, and TTSR
 - Moved behavior-related settings to new Agent tab for better organization
 - Moved input/interaction settings to new Input tab
@@ -26,6 +29,12 @@
 
 ### Removed
 
+- Removed Rust-analyzer specific LSP operations: `flycheck`, `expand_macro`, `ssr`, `runnables`, `related_tests`, and `reload_workspace`
+- Removed `workspace_diagnostics` action; use `diagnostics` without file parameter instead
+- Removed `workspace_symbols` action; use `symbols` with query parameter and no file instead
+- Removed `actions`, `incoming_calls`, and `outgoing_calls` LSP operations
+- Removed `replacement`, `kind`, `action_index`, `end_line`, and `end_character` parameters from LSP tool
+- Removed Python prelude helper functions: `pwd()`, `mkdir()`, `ls()`, `head()`, `tail()`, `sh()`, `cat()`, `touch()`, `wc()`, `basenames()`, and `batch()`
 - Removed type guard functions (`isBashToolResult`, `isReadToolResult`, `isEditToolResult`, `isWriteToolResult`, `isGrepToolResult`, `isFindToolResult`, `isLsToolResult`) from public API exports
 - Removed `ls` tool—directory listing is now handled by the `read` tool
 - Removed `ls.enabled` setting and related configuration options
