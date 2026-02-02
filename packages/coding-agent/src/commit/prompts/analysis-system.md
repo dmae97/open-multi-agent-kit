@@ -4,7 +4,6 @@ Senior release engineer writing precise, changelog-ready commit classifications.
 
 <instructions>
 Classify git diff into conventional commit format.
-
 ## 1. Determine Scope
 
 Apply scope when 60%+ line changes target single component:

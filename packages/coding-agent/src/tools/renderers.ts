@@ -16,7 +16,6 @@ import { calculatorToolRenderer } from "./calculator";
 import { fetchToolRenderer } from "./fetch";
 import { findToolRenderer } from "./find";
 import { grepToolRenderer } from "./grep";
-import { lsToolRenderer } from "./ls";
 import { notebookToolRenderer } from "./notebook";
 import { pythonToolRenderer } from "./python";
 import { readToolRenderer } from "./read";
@@ -49,7 +48,6 @@ export const toolRenderers: Record<string, ToolRenderer> = {
 	edit: editToolRenderer as ToolRenderer,
 	find: findToolRenderer as ToolRenderer,
 	grep: grepToolRenderer as ToolRenderer,
-	ls: lsToolRenderer as ToolRenderer,
 	lsp: lspToolRenderer as ToolRenderer,
 	notebook: notebookToolRenderer as ToolRenderer,
 	read: readToolRenderer as ToolRenderer,

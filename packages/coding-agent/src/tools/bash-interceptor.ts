@@ -103,27 +103,3 @@ export function checkBashInterception(
 
 	return { block: false };
 }
-
-/**
- * Check if a command is a simple directory listing that should use `ls` tool.
- * Only applies to bare `ls` without complex flags.
- */
-export function checkSimpleLsInterception(command: string, availableTools: string[]): InterceptionResult {
-	if (!availableTools.includes("ls")) {
-		return { block: false };
-	}
-
-	// Match simple ls commands (ls, ls -la, ls /path, etc.)
-	// Don't intercept complex pipes or commands
-	const simpleLsPattern = /^\s*ls(\s+(-[a-zA-Z]+\s*)*)?(\s+[^|;&]+)?\s*$/;
-
-	if (simpleLsPattern.test(command.trim())) {
-		return {
-			block: true,
-			message: `Use the \`ls\` tool instead of bash ls. It provides structured output.\n\nOriginal command: ${command}`,
-			suggestedTool: "ls",
-		};
-	}
-
-	return { block: false };
-}

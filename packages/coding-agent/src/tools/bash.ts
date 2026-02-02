@@ -11,7 +11,7 @@ import type { Theme } from "../modes/theme/theme";
 import bashDescription from "../prompts/tools/bash.md" with { type: "text" };
 import { renderOutputBlock, renderStatusLine } from "../tui";
 import type { ToolSession } from ".";
-import { checkBashInterception, checkSimpleLsInterception } from "./bash-interceptor";
+import { checkBashInterception } from "./bash-interceptor";
 import { applyHeadTail, normalizeBashCommand } from "./bash-normalize";
 import type { OutputMeta } from "./output-meta";
 import { allocateOutputArtifact, createTailBuffer } from "./output-utils";
@@ -82,12 +82,6 @@ export class BashTool implements AgentTool<typeof bashSchema, BashToolDetails> {
 			const interception = checkBashInterception(command, ctx?.toolNames ?? [], rules);
 			if (interception.block) {
 				throw new ToolError(interception.message ?? "Command blocked");
-			}
-			if (this.session.settings.get("bashInterceptor.simpleLs")) {
-				const lsInterception = checkSimpleLsInterception(command, ctx?.toolNames ?? []);
-				if (lsInterception.block) {
-					throw new ToolError(lsInterception.message ?? "Command blocked");
-				}
 			}
 		}
 

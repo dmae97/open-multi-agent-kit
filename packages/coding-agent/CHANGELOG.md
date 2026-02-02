@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - Added `find.enabled`, `grep.enabled`, `ls.enabled`, `notebook.enabled`, `fetch.enabled`, `web_search.enabled`, `lsp.enabled`, and `calc.enabled` settings to control availability of individual tools
@@ -11,12 +10,17 @@
 
 ### Changed
 
+- Updated `read` tool to handle directory paths by returning formatted listings with modification times instead of redirecting to `ls`
+- Updated tool documentation to reflect that `read` now handles both files and directories
 - Updated system prompt tool precedence section to conditionally display only available specialized tools based on enabled settings
 - Renamed todo completion settings from `todoCompletion.*` to `todos.reminders.*` and `todos.enabled` for clearer organization
 - Updated todo reminder logic to check both `todos.reminders` and `todos.enabled` settings independently
 
 ### Removed
 
+- Removed `ls` tool—directory listing is now handled by the `read` tool
+- Removed `ls.enabled` setting and related configuration options
+- Removed `bashInterceptor.simpleLs` setting that redirected simple `ls` commands to the dedicated tool
 - Removed project tree snapshot generation from system prompt (unused feature)
 
 ### Fixed

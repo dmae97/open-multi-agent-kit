@@ -7,7 +7,7 @@ Reads files from local filesystem or internal URLs.
 - Use `offset` and `limit` for large files
 - Use `lines: true` include line numbers
 - Supports images (PNG, JPG) and PDFs
-- For directories, use ls tool instead
+- For directories, returns formatted listing with modification times
 - Parallelize reads when exploring related files
 - Supports internal URLs:
   - `skill://<name>` - read SKILL.md for a skill

@@ -8,7 +8,6 @@ import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 import { BashTool } from "@oh-my-pi/pi-coding-agent/tools/bash";
 import { FindTool } from "@oh-my-pi/pi-coding-agent/tools/find";
 import { GrepTool } from "@oh-my-pi/pi-coding-agent/tools/grep";
-import { LsTool } from "@oh-my-pi/pi-coding-agent/tools/ls";
 import { wrapToolWithMetaNotice } from "@oh-my-pi/pi-coding-agent/tools/output-meta";
 import { ReadTool } from "@oh-my-pi/pi-coding-agent/tools/read";
 import { WriteTool } from "@oh-my-pi/pi-coding-agent/tools/write";
@@ -43,7 +42,6 @@ describe("Coding Agent Tools", () => {
 	let bashTool: BashTool;
 	let grepTool: GrepTool;
 	let findTool: FindTool;
-	let lsTool: LsTool;
 	let originalEditVariant: string | undefined;
 
 	beforeEach(() => {
@@ -63,7 +61,6 @@ describe("Coding Agent Tools", () => {
 		bashTool = wrapToolWithMetaNotice(new BashTool(session));
 		grepTool = wrapToolWithMetaNotice(new GrepTool(session));
 		findTool = wrapToolWithMetaNotice(new FindTool(session));
-		lsTool = wrapToolWithMetaNotice(new LsTool(session));
 	});
 
 	afterEach(() => {
@@ -564,19 +561,6 @@ function b() {
 			const output = getTextOutput(result);
 			expect(output).toContain("kept.txt");
 			expect(output).not.toContain("ignored.txt");
-		});
-	});
-
-	describe("ls tool", () => {
-		it("should list dotfiles and directories", async () => {
-			fs.writeFileSync(path.join(testDir, ".hidden-file"), "secret");
-			fs.mkdirSync(path.join(testDir, ".hidden-dir"));
-
-			const result = await lsTool.execute("test-call-15", { path: testDir });
-			const output = getTextOutput(result);
-
-			expect(output).toContain(".hidden-file");
-			expect(output).toContain(".hidden-dir/");
 		});
 	});
 });

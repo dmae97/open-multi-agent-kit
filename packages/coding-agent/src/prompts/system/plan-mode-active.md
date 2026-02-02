@@ -34,7 +34,6 @@ Plan execution runs in fresh context (session cleared). Make plan file self-cont
    - **Same task, continuing** → Update and clean outdated sections
 4. Call `exit_plan_mode` when complete
 </procedure>
-
 {{/if}}
 
 {{#if iterative}}

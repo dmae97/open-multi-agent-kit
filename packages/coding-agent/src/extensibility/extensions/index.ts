@@ -56,7 +56,6 @@ export type {
 	InputEventResult,
 	KeybindingsManager,
 	LoadExtensionsResult,
-	LsToolResultEvent,
 	// Message Rendering
 	MessageRenderer,
 	MessageRenderOptions,
@@ -110,7 +109,6 @@ export {
 	isEditToolResult,
 	isFindToolResult,
 	isGrepToolResult,
-	isLsToolResult,
 	isReadToolResult,
 	isWriteToolResult,
 } from "./types";

@@ -495,11 +495,6 @@ export interface FindToolResultEvent extends ToolResultEventBase {
 	details: FindToolDetails | undefined;
 }
 
-export interface LsToolResultEvent extends ToolResultEventBase {
-	toolName: "ls";
-	details: LsToolDetails | undefined;
-}
-
 export interface CustomToolResultEvent extends ToolResultEventBase {
 	toolName: string;
 	details: unknown;
@@ -513,7 +508,6 @@ export type ToolResultEvent =
 	| WriteToolResultEvent
 	| GrepToolResultEvent
 	| FindToolResultEvent
-	| LsToolResultEvent
 	| CustomToolResultEvent;
 
 // Type guards
@@ -534,9 +528,6 @@ export function isGrepToolResult(e: ToolResultEvent): e is GrepToolResultEvent {
 }
 export function isFindToolResult(e: ToolResultEvent): e is FindToolResultEvent {
 	return e.toolName === "find";
-}
-export function isLsToolResult(e: ToolResultEvent): e is LsToolResultEvent {
-	return e.toolName === "ls";
 }
 
 /** Union of all event types */

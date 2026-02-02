@@ -22,7 +22,6 @@ import { ExitPlanModeTool } from "./exit-plan-mode";
 import { FetchTool } from "./fetch";
 import { FindTool } from "./find";
 import { GrepTool } from "./grep";
-import { LsTool } from "./ls";
 import { NotebookTool } from "./notebook";
 import { wrapToolsWithMetaNotice } from "./output-meta";
 import { PythonTool } from "./python";
@@ -76,7 +75,6 @@ export { FetchTool, type FetchToolDetails } from "./fetch";
 export { type FindOperations, FindTool, type FindToolDetails, type FindToolOptions } from "./find";
 export { setPreferredImageProvider } from "./gemini-image";
 export { type GrepOperations, GrepTool, type GrepToolDetails, type GrepToolOptions } from "./grep";
-export { type LsOperations, LsTool, type LsToolDetails, type LsToolOptions } from "./ls";
 export { NotebookTool, type NotebookToolDetails } from "./notebook";
 export { PythonTool, type PythonToolDetails, type PythonToolOptions } from "./python";
 export { ReadTool, type ReadToolDetails } from "./read";
@@ -170,7 +168,6 @@ export const BUILTIN_TOOLS: Record<string, ToolFactory> = {
 	edit: s => new EditTool(s),
 	find: s => new FindTool(s),
 	grep: s => new GrepTool(s),
-	ls: s => new LsTool(s),
 	lsp: LspTool.createIf,
 	notebook: s => new NotebookTool(s),
 	read: s => new ReadTool(s),
@@ -279,7 +276,6 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		if (name === "bash") return allowBash;
 		if (name === "python") return allowPython;
 		if (name === "todo_write") return !includeSubmitResult && session.settings.get("todo.enabled");
-		if (name === "ls") return session.settings.get("ls.enabled");
 		if (name === "find") return session.settings.get("find.enabled");
 		if (name === "grep") return session.settings.get("grep.enabled");
 		if (name === "notebook") return session.settings.get("notebook.enabled");

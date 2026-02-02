@@ -19,10 +19,9 @@ import { formatDimensionNote, resizeImage } from "../utils/image-resize";
 import { detectSupportedImageMimeTypeFromFile } from "../utils/mime";
 import { ensureTool } from "../utils/tools-manager";
 import { applyListLimit } from "./list-limit";
-import { LsTool } from "./ls";
 import type { OutputMeta } from "./output-meta";
 import { resolveReadPath, resolveToCwd } from "./path-utils";
-import { shortenPath, wrapBrackets } from "./render-utils";
+import { formatAge, shortenPath, wrapBrackets } from "./render-utils";
 import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";
 import {
@@ -519,7 +518,7 @@ const readSchema = Type.Object({
 
 export interface ReadToolDetails {
 	truncation?: TruncationResult;
-	redirectedTo?: "ls";
+	isDirectory?: boolean;
 	resolvedPath?: string;
 	meta?: OutputMeta;
 }
@@ -530,7 +529,7 @@ type ReadParams = { path: string; offset?: number; limit?: number; lines?: boole
  * Read tool implementation.
  *
  * Reads files with support for images, documents (via markitdown), and text.
- * Directories redirect to the ls tool.
+ * Directories return a formatted listing with modification times.
  */
 export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 	public readonly name = "read";
@@ -542,20 +541,18 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 	private readonly session: ToolSession;
 	private readonly autoResizeImages: boolean;
 	private readonly defaultLineNumbers: boolean;
-	private readonly lsTool: LsTool;
 
 	constructor(session: ToolSession) {
 		this.session = session;
 		this.autoResizeImages = session.settings.get("images.autoResize");
 		this.defaultLineNumbers = session.settings.get("readLineNumbers");
-		this.lsTool = new LsTool(session);
 		this.description = renderPromptTemplate(readDescription, {
 			DEFAULT_MAX_LINES: String(DEFAULT_MAX_LINES),
 		});
 	}
 
 	public async execute(
-		toolCallId: string,
+		_toolCallId: string,
 		params: ReadParams,
 		signal?: AbortSignal,
 		_onUpdate?: AgentToolUpdateCallback<ReadToolDetails>,
@@ -606,13 +603,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		}
 
 		if (isDirectory) {
-			const lsResult = await this.lsTool.execute(toolCallId, { path: readPath, limit }, signal);
-			const details: ReadToolDetails = {
-				redirectedTo: "ls",
-				truncation: lsResult.details?.truncation,
-				meta: lsResult.details?.meta,
-			};
-			return toolResult(details).content(lsResult.content).done();
+			return this.readDirectory(absolutePath, limit, signal);
 		}
 
 		const mimeType = await detectSupportedImageMimeTypeFromFile(absolutePath);
@@ -982,6 +973,75 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		}
 		return resultBuilder.done();
 	}
+
+	/** Read directory contents as a formatted listing */
+	private async readDirectory(
+		absolutePath: string,
+		limit: number | undefined,
+		signal?: AbortSignal,
+	): Promise<AgentToolResult<ReadToolDetails>> {
+		const DEFAULT_LIMIT = 500;
+		const effectiveLimit = limit ?? DEFAULT_LIMIT;
+
+		let entries: string[];
+		try {
+			entries = await fs.readdir(absolutePath);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			throw new ToolError(`Cannot read directory: ${message}`);
+		}
+
+		// Sort alphabetically (case-insensitive)
+		entries.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+
+		const listLimit = applyListLimit(entries, { limit: effectiveLimit });
+		const limitedEntries = listLimit.items;
+		const limitMeta = listLimit.meta;
+
+		// Format entries with directory indicators and ages
+		const results: string[] = [];
+
+		for (const entry of limitedEntries) {
+			throwIfAborted(signal);
+			const fullPath = path.join(absolutePath, entry);
+			let suffix = "";
+			let age = "";
+
+			try {
+				const entryStat = await fs.stat(fullPath);
+				suffix = entryStat.isDirectory() ? "/" : "";
+				const ageSeconds = Math.floor((Date.now() - entryStat.mtimeMs) / 1000);
+				age = formatAge(ageSeconds);
+			} catch {
+				// Skip entries we can't stat
+				continue;
+			}
+
+			const line = age ? `${entry}${suffix} (${age})` : entry + suffix;
+			results.push(line);
+		}
+
+		if (results.length === 0) {
+			return { content: [{ type: "text", text: "(empty directory)" }], details: {} };
+		}
+
+		const output = results.join("\n");
+		const truncation = truncateHead(output, { maxLines: Number.MAX_SAFE_INTEGER });
+
+		const details: ReadToolDetails = {
+			isDirectory: true,
+		};
+
+		const resultBuilder = toolResult(details)
+			.text(truncation.content)
+			.limits({ resultLimit: limitMeta.resultLimit?.reached });
+		if (truncation.truncated) {
+			resultBuilder.truncation(truncation, { direction: "head" });
+			details.truncation = truncation;
+		}
+
+		return resultBuilder.done();
+	}
 }
 
 // =============================================================================
@@ -1029,9 +1089,6 @@ export const readToolRenderer = {
 		const warningLines: string[] = [];
 		const truncation = details?.meta?.truncation;
 		const fallback = details?.truncation;
-		if (details?.redirectedTo) {
-			warningLines.push(uiTheme.fg("warning", wrapBrackets(`Redirected to ${details.redirectedTo}`, uiTheme)));
-		}
 		if (details?.resolvedPath) {
 			warningLines.push(uiTheme.fg("dim", wrapBrackets(`Resolved path: ${details.resolvedPath}`, uiTheme)));
 		}

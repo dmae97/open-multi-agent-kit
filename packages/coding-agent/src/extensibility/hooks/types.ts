@@ -20,7 +20,7 @@ import type {
 	SessionEntry,
 	SessionManager,
 } from "../../session/session-manager";
-import type { BashToolDetails, FindToolDetails, GrepToolDetails, LsToolDetails, ReadToolDetails } from "../../tools";
+import type { BashToolDetails, FindToolDetails, GrepToolDetails, ReadToolDetails } from "../../tools";
 
 // Re-export for backward compatibility
 export type { ExecOptions, ExecResult } from "../../exec/exec";
@@ -454,12 +454,6 @@ export interface FindToolResultEvent extends ToolResultEventBase {
 	details: FindToolDetails | undefined;
 }
 
-/** Tool result event for ls tool */
-export interface LsToolResultEvent extends ToolResultEventBase {
-	toolName: "ls";
-	details: LsToolDetails | undefined;
-}
-
 /** Tool result event for custom/unknown tools */
 export interface CustomToolResultEvent extends ToolResultEventBase {
 	toolName: string;
@@ -478,7 +472,6 @@ export type ToolResultEvent =
 	| WriteToolResultEvent
 	| GrepToolResultEvent
 	| FindToolResultEvent
-	| LsToolResultEvent
 	| CustomToolResultEvent;
 
 // Type guards for narrowing ToolResultEvent to specific tool types
