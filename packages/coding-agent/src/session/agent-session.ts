@@ -2461,13 +2461,15 @@ Be thorough - include exact file paths, function names, error messages, and tech
 	 * Check if agent stopped with incomplete todos and prompt to continue.
 	 */
 	private async _checkTodoCompletion(): Promise<void> {
-		const todoSettings = this.settings.getGroup("todoCompletion");
-		if (!todoSettings.enabled) {
+		const remindersEnabled = this.settings.get("todo.reminders");
+		const todosEnabled = this.settings.get("todo.enabled");
+		if (!remindersEnabled || !todosEnabled) {
 			this._todoReminderCount = 0;
 			return;
 		}
 
-		if (this._todoReminderCount >= todoSettings.maxReminders) {
+		const remindersMax = this.settings.get("todo.reminders.max");
+		if (this._todoReminderCount >= remindersMax) {
 			logger.debug("Todo completion: max reminders reached", { count: this._todoReminderCount });
 			return;
 		}
@@ -2503,7 +2505,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			`<system_reminder>\n` +
 			`You stopped with ${incomplete.length} incomplete todo item(s):\n${todoList}\n\n` +
 			`Please continue working on these tasks or mark them complete if finished.\n` +
-			`(Reminder ${this._todoReminderCount}/${todoSettings.maxReminders})\n` +
+			`(Reminder ${this._todoReminderCount}/${remindersMax})\n` +
 			`</system_reminder>`;
 
 		logger.debug("Todo completion: sending reminder", {
@@ -2516,7 +2518,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			type: "todo_reminder",
 			todos: incomplete,
 			attempt: this._todoReminderCount,
-			maxAttempts: todoSettings.maxReminders,
+			maxAttempts: remindersMax,
 		});
 
 		// Inject reminder and continue the conversation

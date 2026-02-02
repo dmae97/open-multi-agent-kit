@@ -264,12 +264,12 @@ export const SETTINGS_SCHEMA = {
 	// ─────────────────────────────────────────────────────────────────────────
 	// Todo completion settings
 	// ─────────────────────────────────────────────────────────────────────────
-	"todoCompletion.enabled": {
+	"todo.reminders": {
 		type: "boolean",
 		default: false,
-		ui: { tab: "behavior", label: "Todo completion", description: "Remind agent to complete todos before stopping" },
+		ui: { tab: "behavior", label: "Todo reminders", description: "Remind agent to complete todos before stopping" },
 	},
-	"todoCompletion.maxReminders": {
+	"todo.reminders.max": {
 		type: "number",
 		default: 3,
 		ui: {
@@ -278,6 +278,15 @@ export const SETTINGS_SCHEMA = {
 			description: "Maximum reminders to complete todos before giving up",
 			submenu: true,
 		},
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Todos settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"todo.enabled": {
+		type: "boolean",
+		default: true,
+		ui: { tab: "tools", label: "Todos", description: "Enable the todo_write tool for task tracking" },
 	},
 
 	// ─────────────────────────────────────────────────────────────────────────
@@ -822,7 +831,6 @@ export interface BashInterceptorRule {
 export interface GroupTypeMap {
 	compaction: CompactionSettings;
 	retry: RetrySettings;
-	todoCompletion: TodoCompletionSettings;
 	branchSummary: BranchSummarySettings;
 	skills: SkillsSettings;
 	commit: CommitSettings;

@@ -1,10 +1,15 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added `todos.enabled` setting to control availability of the todo_write tool for task tracking
 - Added `tools` field to agent frontmatter for declaring agent-specific tool capabilities
+
+### Changed
+
+- Renamed todo completion settings from `todoCompletion.*` to `todos.reminders.*` and `todos.enabled` for clearer organization
+- Updated todo reminder logic to check both `todos.reminders` and `todos.enabled` settings independently
 
 ### Removed
 

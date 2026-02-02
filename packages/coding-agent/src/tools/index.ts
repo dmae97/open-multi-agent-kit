@@ -278,6 +278,7 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		if (name === "lsp") return enableLsp;
 		if (name === "bash") return allowBash;
 		if (name === "python") return allowPython;
+		if (name === "todo_write") return !includeSubmitResult && session.settings.get("todo.enabled");
 		return true;
 	};
 	if (includeSubmitResult && requestedTools && !requestedTools.includes("submit_result")) {
