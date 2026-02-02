@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { type SettingPath, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { BUILTIN_TOOLS, createTools, HIDDEN_TOOLS, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
+import { createTools, HIDDEN_TOOLS, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 
 process.env.OMP_PYTHON_SKIP_CHECK = "1";
 
@@ -32,13 +32,11 @@ describe("createTools", () => {
 		// Core tools should always be present
 		expect(names).toContain("python");
 		expect(names).toContain("bash");
-		expect(names).toContain("calc");
 		expect(names).toContain("read");
 		expect(names).toContain("edit");
 		expect(names).toContain("write");
 		expect(names).toContain("grep");
 		expect(names).toContain("find");
-		expect(names).toContain("ls");
 		expect(names).toContain("lsp");
 		expect(names).toContain("notebook");
 		expect(names).toContain("task");
@@ -130,35 +128,6 @@ describe("createTools", () => {
 		const names = tools.map(t => t.name);
 
 		expect(names).toContain("ask");
-	});
-
-	it("BUILTIN_TOOLS contains all expected tools", () => {
-		const expectedTools = [
-			"ask",
-			"bash",
-			"python",
-			"calc",
-			"ssh",
-			"edit",
-			"find",
-			"grep",
-			"ls",
-			"lsp",
-			"notebook",
-			"read",
-			"task",
-			"todo_write",
-			"fetch",
-			"web_search",
-			"write",
-		];
-
-		for (const tool of expectedTools) {
-			expect(BUILTIN_TOOLS).toHaveProperty(tool);
-		}
-
-		// Ensure we haven't missed any
-		expect(Object.keys(BUILTIN_TOOLS).sort()).toEqual(expectedTools.sort());
 	});
 
 	it("HIDDEN_TOOLS contains review tools", () => {

@@ -39,7 +39,7 @@ const shouldRun = Boolean(pythonPath) && hasKernelDeps;
 
 describe.skipIf(!shouldRun)("PYTHON_PRELUDE integration", () => {
 	it("exposes prelude helpers via python tool", async () => {
-		const helpers = ["pwd", "env", "read", "write", "append", "mkdir", "rm", "mv", "cp", "ls"];
+		const helpers = ["env", "read", "write", "append", "rm", "mv", "cp", "find", "grep"];
 
 		const session = {
 			cwd: process.cwd(),
@@ -61,7 +61,7 @@ describe.skipIf(!shouldRun)("PYTHON_PRELUDE integration", () => {
 	doc_names = [d.get("name") for d in docs]
 	doc_categories = [d.get("category") for d in docs]
 	print("HELPERS_OK=" + ("1" if not missing else "0"))
-	print("DOCS_OK=" + ("1" if "pwd" in doc_names and "Navigation" in doc_categories else "0"))
+	print("DOCS_OK=" + ("1" if "read" in doc_names and "File I/O" in doc_categories else "0"))
 	if missing:
 	    print("MISSING=" + ",".join(missing))
 	`;
@@ -77,7 +77,7 @@ describe.skipIf(!shouldRun)("PYTHON_PRELUDE integration", () => {
 		const result = await warmPythonEnvironment(process.cwd(), undefined, false);
 		expect(result.ok).toBe(true);
 		const names = result.docs.map(doc => doc.name);
-		expect(names).toContain("pwd");
+		expect(names).toContain("read");
 	});
 
 	it("renders prelude docs in python tool description", async () => {
@@ -85,7 +85,7 @@ describe.skipIf(!shouldRun)("PYTHON_PRELUDE integration", () => {
 		const result = await warmPythonEnvironment(process.cwd(), undefined, false);
 		expect(result.ok).toBe(true);
 		const description = getPythonToolDescription();
-		expect(description).toContain("pwd");
+		expect(description).toContain("read");
 		expect(description).not.toContain("Documentation unavailable");
 	});
 });

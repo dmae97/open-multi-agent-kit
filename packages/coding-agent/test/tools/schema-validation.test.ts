@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { sanitizeSchemaForGoogle } from "@oh-my-pi/pi-ai";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { BUILTIN_TOOLS, createTools, HIDDEN_TOOLS, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
+import { createTools, HIDDEN_TOOLS, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 
 /**
  * Problematic JSON Schema features that cause issues with various providers.
@@ -364,30 +364,6 @@ describe("tool schema validation (post-sanitization)", () => {
 				throw new Error(`Hidden tool ${name} has prohibited schema features after sanitization:\n${details}`);
 			}
 		}
-	});
-
-	it("BUILTIN_TOOLS registry matches expected tools", () => {
-		const expectedTools = [
-			"ask",
-			"bash",
-			"calc",
-			"ssh",
-			"edit",
-			"find",
-			"grep",
-			"ls",
-			"lsp",
-			"notebook",
-			"python",
-			"read",
-			"task",
-			"todo_write",
-			"fetch",
-			"web_search",
-			"write",
-		];
-
-		expect(Object.keys(BUILTIN_TOOLS).sort()).toEqual(expectedTools.sort());
 	});
 
 	it("logs warnings for potentially problematic features (non-blocking)", async () => {

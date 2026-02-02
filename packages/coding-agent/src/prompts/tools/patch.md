@@ -48,7 +48,7 @@ Returns success/failure; on failure, error message indicates:
 - Never use anchors as comments (no line numbers, location labels, placeholders like `@@ @@`)
 - Do not place new lines outside intended block
 - If edit fails or breaks structure, re-read file and produce new patch from current content—do not retry same diff
-- If indentation wrong after editing, run project formatter (if available) rather than making repeated edit attempts
+- If indentation/alignment wrong after editing, run formatter (`go fmt`, `cargo fmt`, `ruff format`, `biome`, etc.)—never make repeated edit attempts to fix whitespace
 </critical>
 
 <example name="create">
