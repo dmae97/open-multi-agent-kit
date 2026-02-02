@@ -6,7 +6,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { WorkProfile } from "@oh-my-pi/pi-natives/work";
+import type { WorkProfile } from "@oh-my-pi/pi-natives";
 import { isEnoent } from "@oh-my-pi/pi-utils";
 import type { CpuProfile, HeapSnapshot } from "./profiler";
 import { collectSystemInfo, sanitizeEnv } from "./system-info";

@@ -4,7 +4,7 @@
  * Provides tools for debugging, bug report generation, and system diagnostics.
  */
 import * as fs from "node:fs/promises";
-import { getWorkProfile } from "@oh-my-pi/pi-natives/work";
+import { getWorkProfile } from "@oh-my-pi/pi-natives";
 import { Container, Loader, type SelectItem, SelectList, Spacer, Text } from "@oh-my-pi/pi-tui";
 import { getSessionsDir } from "../config";
 import { DynamicBorder } from "../modes/components/dynamic-border";
