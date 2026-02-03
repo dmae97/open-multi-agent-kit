@@ -2,6 +2,7 @@
 
 use crate::error;
 
+#[cfg(not(windows))]
 impl crate::sys::fs::PathExt for std::path::Path {
     fn readable(&self) -> bool {
         true
