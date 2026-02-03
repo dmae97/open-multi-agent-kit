@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [10.3.0] - 2026-02-03
 ### Removed
 
 - Removed `shellForceBasic` setting that forced bash/sh shell selection
