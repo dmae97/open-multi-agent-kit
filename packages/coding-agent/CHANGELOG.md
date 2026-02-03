@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [10.3.2] - 2026-02-03
 ### Added
 
 - Added `renderCall` and `renderResult` methods to MCP tools for structured TUI display of tool calls and results
