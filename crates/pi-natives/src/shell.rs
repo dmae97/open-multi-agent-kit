@@ -46,13 +46,13 @@ use windows::configure_windows_path;
 use crate::task;
 
 struct ShellSessionCore {
-	shell: BrushShell,
+	shell:         BrushShell,
 	current_abort: Option<task::AbortToken>,
 }
 
 #[derive(Clone)]
 struct ShellConfig {
-	session_env: Option<HashMap<String, String>>,
+	session_env:   Option<HashMap<String, String>>,
 	snapshot_path: Option<String>,
 }
 
@@ -60,7 +60,7 @@ struct ShellConfig {
 #[napi(object)]
 pub struct ShellOptions {
 	/// Environment variables to apply once per session.
-	pub session_env: Option<HashMap<String, String>>,
+	pub session_env:   Option<HashMap<String, String>>,
 	/// Optional snapshot file to source on session creation.
 	pub snapshot_path: Option<String>,
 }
@@ -70,25 +70,25 @@ struct ShellRunConfig {
 	/// Command string to execute in the shell.
 	command: String,
 	/// Working directory for the command.
-	cwd: Option<String>,
+	cwd:     Option<String>,
 	/// Environment variables to apply for this command only.
-	env: Option<HashMap<String, String>>,
+	env:     Option<HashMap<String, String>>,
 }
 
 /// Options for running a shell command.
 #[napi(object)]
 pub struct ShellRunOptions<'env> {
 	/// Command string to execute in the shell.
-	pub command: String,
+	pub command:    String,
 	/// Working directory for the command.
-	pub cwd: Option<String>,
+	pub cwd:        Option<String>,
 	/// Environment variables to apply for this command only.
-	pub env: Option<HashMap<String, String>>,
+	pub env:        Option<HashMap<String, String>>,
 	/// Timeout in milliseconds before cancelling the command.
 	#[napi(js_name = "timeoutMs")]
 	pub timeout_ms: Option<u32>,
 	/// Abort signal for cancelling the operation.
-	pub signal: Option<Unknown<'env>>,
+	pub signal:     Option<Unknown<'env>>,
 }
 
 /// Result of running a shell command.
@@ -106,7 +106,7 @@ pub struct ShellRunResult {
 #[napi]
 pub struct Shell {
 	session: Arc<TokioMutex<Option<ShellSessionCore>>>,
-	config: ShellConfig,
+	config:  ShellConfig,
 }
 
 #[napi]
@@ -215,21 +215,21 @@ async fn run_shell_session(
 #[napi(object)]
 pub struct ShellExecuteOptions<'env> {
 	/// Command string to execute in the shell.
-	pub command: String,
+	pub command:       String,
 	/// Working directory for the command.
-	pub cwd: Option<String>,
+	pub cwd:           Option<String>,
 	/// Environment variables to apply for this command only.
-	pub env: Option<HashMap<String, String>>,
+	pub env:           Option<HashMap<String, String>>,
 	/// Environment variables to apply once per session.
-	pub session_env: Option<HashMap<String, String>>,
+	pub session_env:   Option<HashMap<String, String>>,
 	/// Timeout in milliseconds before cancelling the command.
 	#[napi(js_name = "timeoutMs")]
-	pub timeout_ms: Option<u32>,
+	pub timeout_ms:    Option<u32>,
 	/// Optional snapshot file to source on session creation.
 	#[napi(js_name = "snapshotPath")]
 	pub snapshot_path: Option<String>,
 	/// Abort signal for cancelling the operation.
-	pub signal: Option<Unknown<'env>>,
+	pub signal:        Option<Unknown<'env>>,
 }
 
 /// Result of executing a shell command via brush-core.
@@ -258,7 +258,8 @@ pub fn execute_shell<'env>(
 ) -> Result<PromiseRaw<'env, ShellExecuteResult>> {
 	let config =
 		ShellConfig { session_env: options.session_env, snapshot_path: options.snapshot_path };
-	let run_config = ShellRunConfig { command: options.command, cwd: options.cwd, env: options.env };
+	let run_config =
+		ShellRunConfig { command: options.command, cwd: options.cwd, env: options.env };
 
 	let ct = task::CancelToken::new(options.timeout_ms, options.signal);
 	task::future(env, "shell.execute", async move {
@@ -302,21 +303,7 @@ async fn run_shell_oneshot(
 }
 
 fn null_file() -> Result<OpenFile> {
-	#[cfg(windows)]
-	{
-		use std::fs::OpenOptions;
-		let file = OpenOptions::new()
-			.read(true)
-			.write(true)
-			.open("NUL")
-			.map_err(|err| Error::from_reason(format!("Failed to open NUL: {err}")))?;
-		Ok(OpenFile::from(file))
-	}
-	#[cfg(not(windows))]
-	{
-		openfiles::null()
-			.map_err(|err| Error::from_reason(format!("Failed to create null file: {err}")))
-	}
+	openfiles::null().map_err(|err| Error::from_reason(format!("Failed to create null file: {err}")))
 }
 
 const fn exit_code(result: &ExecutionResult) -> i32 {
@@ -698,7 +685,7 @@ struct TimeoutCommand {
 	#[arg(required = true)]
 	duration: String,
 	#[arg(required = true, num_args = 1.., trailing_var_arg = true)]
-	command: Vec<String>,
+	command:  Vec<String>,
 }
 
 impl builtins::Command for TimeoutCommand {
