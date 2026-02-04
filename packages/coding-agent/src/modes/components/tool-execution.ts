@@ -18,72 +18,22 @@ import { theme } from "../../modes/theme/theme";
 import { computeEditDiff, computePatchDiff, type EditDiffError, type EditDiffResult } from "../../patch";
 import { BASH_DEFAULT_PREVIEW_LINES } from "../../tools/bash";
 import { PYTHON_DEFAULT_PREVIEW_LINES } from "../../tools/python";
+import {
+	formatArgsInline,
+	JSON_TREE_MAX_DEPTH_COLLAPSED,
+	JSON_TREE_MAX_DEPTH_EXPANDED,
+	JSON_TREE_MAX_LINES_COLLAPSED,
+	JSON_TREE_MAX_LINES_EXPANDED,
+	JSON_TREE_SCALAR_LEN_COLLAPSED,
+	JSON_TREE_SCALAR_LEN_EXPANDED,
+	renderJsonTreeLines,
+} from "../../tools/json-tree";
+import { formatExpandHint, truncateToWidth } from "../../tools/render-utils";
 import { toolRenderers } from "../../tools/renderers";
+import { renderStatusLine } from "../../tui";
 import { convertToPng } from "../../utils/image-convert";
 import { renderDiff } from "./diff";
 
-// Preview line limit for bash when not expanded
-const GENERIC_PREVIEW_LINES = 6;
-const GENERIC_ARG_PREVIEW = 6;
-const GENERIC_VALUE_MAX = 80;
-
-function formatCompactValue(value: unknown, maxLength: number): string {
-	let rendered = "";
-
-	if (value === null) {
-		rendered = "null";
-	} else if (value === undefined) {
-		rendered = "undefined";
-	} else if (typeof value === "string") {
-		rendered = value;
-	} else if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
-		rendered = String(value);
-	} else if (Array.isArray(value)) {
-		const previewItems = value.slice(0, 3).map(item => formatCompactValue(item, maxLength));
-		rendered = `[${previewItems.join(", ")}${value.length > 3 ? ", ..." : ""}]`;
-	} else if (typeof value === "object") {
-		try {
-			rendered = JSON.stringify(value);
-		} catch {
-			rendered = "[object]";
-		}
-	} else if (typeof value === "function") {
-		rendered = "[function]";
-	} else {
-		rendered = String(value);
-	}
-
-	if (rendered.length > maxLength) {
-		rendered = `${rendered.slice(0, maxLength - 1)}…`;
-	}
-
-	return rendered;
-}
-
-function formatArgsPreview(
-	args: unknown,
-	maxEntries: number,
-	maxValueLength: number,
-): { lines: string[]; remaining: number; total: number } {
-	if (args === undefined) {
-		return { lines: [theme.fg("dim", "(none)")], remaining: 0, total: 0 };
-	}
-	if (args === null || typeof args !== "object") {
-		const single = theme.fg("toolOutput", formatCompactValue(args, maxValueLength));
-		return { lines: [single], remaining: 0, total: 1 };
-	}
-
-	const entries = Object.entries(args as Record<string, unknown>);
-	const total = entries.length;
-	const visible = entries.slice(0, maxEntries);
-	const lines = visible.map(([key, value]) => {
-		const keyText = theme.fg("accent", key);
-		const valueText = theme.fg("toolOutput", formatCompactValue(value, maxValueLength));
-		return `${keyText}: ${valueText}`;
-	});
-
-	return { lines, remaining: Math.max(total - visible.length, 0), total };
-}
 
 export interface ToolExecutionOptions {
 	showImages?: boolean; // default: true (only used if terminal supports images)
@@ -611,44 +561,82 @@ export class ToolExecutionComponent extends Container {
 	 * Format a generic tool execution (fallback for tools without custom renderers)
 	 */
 	private formatToolExecution(): string {
-		let text = theme.fg("toolTitle", theme.bold(this.toolLabel));
+		const lines: string[] = [];
+		const icon = this.isPartial ? "pending" : this.result?.isError ? "error" : "success";
+		lines.push(renderStatusLine({ icon, title: this.toolLabel }, theme));
 
-		const argTotal =
-			this.args && typeof this.args === "object"
-				? Object.keys(this.args as Record<string, unknown>).length
-				: this.args === undefined
-					? 0
-					: 1;
-		const argPreviewLimit = this.expanded ? argTotal : GENERIC_ARG_PREVIEW;
-		const valueLimit = this.expanded ? 2000 : GENERIC_VALUE_MAX;
-		const argsPreview = formatArgsPreview(this.args, argPreviewLimit, valueLimit);
-
-		text += `\n\n${theme.fg("toolTitle", "Args")} ${theme.fg("dim", `(${argsPreview.total})`)}`;
-		if (argsPreview.lines.length > 0) {
-			text += `\n${argsPreview.lines.join("\n")}`;
-		} else {
-			text += `\n${theme.fg("dim", "(none)")}`;
-		}
-		if (argsPreview.remaining > 0) {
-			text += theme.fg("dim", `\n… (${argsPreview.remaining} more args) (ctrl+o to expand)`);
-		}
-
-		const output = this.getTextOutput().trim();
-		text += `\n\n${theme.fg("toolTitle", "Output")}`;
-		if (output) {
-			const lines = output.split("\n");
-			const maxLines = this.expanded ? lines.length : GENERIC_PREVIEW_LINES;
-			const displayLines = lines.slice(-maxLines);
-			const remaining = lines.length - displayLines.length;
-			text += ` ${theme.fg("dim", `(${lines.length} lines)`)}`;
-			text += `\n${displayLines.map(line => theme.fg("toolOutput", line)).join("\n")}`;
-			if (remaining > 0) {
-				text += theme.fg("dim", `\n… (${remaining} earlier lines) (ctrl+o to expand)`);
+		const argsObject = this.args && typeof this.args === "object" ? (this.args as Record<string, unknown>) : null;
+		if (!this.expanded && argsObject && Object.keys(argsObject).length > 0) {
+			const preview = formatArgsInline(argsObject, 70);
+			if (preview) {
+				lines.push(` ${theme.fg("dim", theme.tree.last)} ${theme.fg("dim", preview)}`);
 			}
-		} else {
-			text += ` ${theme.fg("dim", "(empty)")}`;
 		}
 
-		return text;
+		if (this.expanded && this.args !== undefined) {
+			lines.push("");
+			lines.push(theme.fg("dim", "Args"));
+			const tree = renderJsonTreeLines(
+				this.args,
+				theme,
+				JSON_TREE_MAX_DEPTH_EXPANDED,
+				JSON_TREE_MAX_LINES_EXPANDED,
+				JSON_TREE_SCALAR_LEN_EXPANDED,
+			);
+			lines.push(...tree.lines);
+			if (tree.truncated) {
+				lines.push(theme.fg("dim", "…"));
+			}
+			lines.push("");
+		}
+
+		if (!this.result) {
+			return lines.join("\n");
+		}
+
+		const textContent = this.getTextOutput().trimEnd();
+		if (!textContent) {
+			lines.push(theme.fg("dim", "(no output)"));
+			return lines.join("\n");
+		}
+
+		if (textContent.startsWith("{") || textContent.startsWith("[")) {
+			try {
+				const parsed = JSON.parse(textContent);
+				const maxDepth = this.expanded ? JSON_TREE_MAX_DEPTH_EXPANDED : JSON_TREE_MAX_DEPTH_COLLAPSED;
+				const maxLines = this.expanded ? JSON_TREE_MAX_LINES_EXPANDED : JSON_TREE_MAX_LINES_COLLAPSED;
+				const maxScalarLen = this.expanded ? JSON_TREE_SCALAR_LEN_EXPANDED : JSON_TREE_SCALAR_LEN_COLLAPSED;
+				const tree = renderJsonTreeLines(parsed, theme, maxDepth, maxLines, maxScalarLen);
+
+				if (tree.lines.length > 0) {
+					lines.push(...tree.lines);
+					if (!this.expanded) {
+						lines.push(formatExpandHint(theme, this.expanded, true));
+					} else if (tree.truncated) {
+						lines.push(theme.fg("dim", "…"));
+					}
+					return lines.join("\n");
+				}
+			} catch {
+				// Fall through to raw output
+			}
+		}
+
+		const outputLines = textContent.split("\n");
+		const maxOutputLines = this.expanded ? 12 : 4;
+		const displayLines = outputLines.slice(0, maxOutputLines);
+
+		for (const line of displayLines) {
+			lines.push(theme.fg("toolOutput", truncateToWidth(line, 80)));
+		}
+
+		if (outputLines.length > maxOutputLines) {
+			const remaining = outputLines.length - maxOutputLines;
+			lines.push(`${theme.fg("dim", `… ${remaining} more lines`)} ${formatExpandHint(theme, this.expanded, true)}`);
+		} else if (!this.expanded) {
+			lines.push(formatExpandHint(theme, this.expanded, true));
+		}
+
+		return lines.join("\n");
 	}
 }
