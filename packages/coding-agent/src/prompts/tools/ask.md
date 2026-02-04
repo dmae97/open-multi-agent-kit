@@ -24,11 +24,11 @@ Returns selected option(s) as text. For multi-part questions, returns map of que
 </important>
 
 <critical>
-**Exhaust all other options before asking.**
-1. **Unknown file location?** → Search with grep/find first; ask only if search fails.
-2. **Ambiguous syntax/format?** → Infer from context and codebase conventions; make reasonable choice.
-3. **Missing details?** → Check docs, related files, commit history; fill gaps yourself.
-4. **Implementation approach?** → Choose based on codebase patterns; ask only for genuinely novel architectural decisions.
+**Be proactive and default to action. Ask only when you are truly blocked.**
+1. **Resolve ambiguity yourself** using repo conventions, existing patterns, and reasonable defaults.
+2. **Try to find answers** in the codebase, configs, docs, or history before asking.
+3. **If multiple choices are acceptable**, pick the most conservative/standard option and state it.
+4. **Ask only for decisions that materially change scope, behavior, or risk.**
 **Do NOT include "Other" option in your options array.** UI automatically adds "Other (type your own)" to every question; adding your own creates duplicates.
 </critical>
 

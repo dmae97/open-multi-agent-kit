@@ -44,11 +44,7 @@ const QuestionItem = Type.Object({
 });
 
 const askSchema = Type.Object({
-	question: Type.Optional(Type.String({ description: "Question to ask" })),
-	options: Type.Optional(Type.Array(OptionItem, { description: "Available options" })),
-	multi: Type.Optional(Type.Boolean({ description: "Allow multiple selections (default: false)" })),
-	recommended: Type.Optional(Type.Number({ description: "Index of recommended option (0-indexed, default: 0)" })),
-	questions: Type.Optional(Type.Array(QuestionItem, { description: "Multiple questions in sequence" })),
+	questions: Type.Array(QuestionItem, { description: "Questions to ask", minItems: 1 }),
 });
 
 /** Result for a single question */
@@ -239,11 +235,7 @@ function formatQuestionResult(result: QuestionResult): string {
 // =============================================================================
 
 interface AskParams {
-	question?: string;
-	options?: Array<{ label: string }>;
-	multi?: boolean;
-	recommended?: number;
-	questions?: Array<{
+	questions: Array<{
 		id: string;
 		question: string;
 		options: Array<{ label: string }>;
@@ -312,76 +304,73 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 		// Send notification if waiting and not suppressed
 		this.sendAskNotification();
 
-		// Multi-part questions mode
-		if (params.questions && params.questions.length > 0) {
-			const results: QuestionResult[] = [];
-
-			for (const q of params.questions) {
-				const optionLabels = q.options.map(o => o.label);
-				const { selectedOptions, customInput } = await askSingleQuestion(
-					ui,
-					q.question,
-					optionLabels,
-					q.multi ?? false,
-					q.recommended,
-					{ timeout },
-				);
-
-				results.push({
-					id: q.id,
-					question: q.question,
-					options: optionLabels,
-					multi: q.multi ?? false,
-					selectedOptions,
-					customInput,
-				});
-			}
-
-			const details: AskToolDetails = { results };
-			const responseLines = results.map(formatQuestionResult);
-			const responseText = `User answers:\n${responseLines.join("\n")}`;
-
-			return { content: [{ type: "text" as const, text: responseText }], details };
-		}
-
-		// Single question mode (backwards compatible)
-		const question = params.question ?? "";
-		const options = params.options ?? [];
-		const multi = params.multi ?? false;
-		const optionLabels = options.map(o => o.label);
-
-		if (!question || optionLabels.length === 0) {
+		if (params.questions.length === 0) {
 			return {
-				content: [{ type: "text" as const, text: "Error: question and options are required" }],
+				content: [{ type: "text" as const, text: "Error: questions must not be empty" }],
 				details: {},
 			};
 		}
 
-		const { selectedOptions, customInput } = await askSingleQuestion(
-			ui,
-			question,
-			optionLabels,
-			multi,
-			params.recommended,
-			{ timeout },
-		);
+		if (params.questions.length === 1) {
+			const [q] = params.questions;
+			const optionLabels = q.options.map(o => o.label);
+			const { selectedOptions, customInput } = await askSingleQuestion(
+				ui,
+				q.question,
+				optionLabels,
+				q.multi ?? false,
+				q.recommended,
+				{ timeout },
+			);
 
-		const details: AskToolDetails = {
-			question,
-			options: optionLabels,
-			multi,
-			selectedOptions,
-			customInput,
-		};
+			const details: AskToolDetails = {
+				question: q.question,
+				options: optionLabels,
+				multi: q.multi ?? false,
+				selectedOptions,
+				customInput,
+			};
 
-		let responseText: string;
-		if (customInput) {
-			responseText = `User provided custom input: ${customInput}`;
-		} else if (selectedOptions.length > 0) {
-			responseText = multi ? `User selected: ${selectedOptions.join(", ")}` : `User selected: ${selectedOptions[0]}`;
-		} else {
-			responseText = "User cancelled the selection";
+			let responseText: string;
+			if (customInput) {
+				responseText = `User provided custom input: ${customInput}`;
+			} else if (selectedOptions.length > 0) {
+				responseText = q.multi
+					? `User selected: ${selectedOptions.join(", ")}`
+					: `User selected: ${selectedOptions[0]}`;
+			} else {
+				responseText = "User cancelled the selection";
+			}
+
+			return { content: [{ type: "text" as const, text: responseText }], details };
 		}
+
+		const results: QuestionResult[] = [];
+
+		for (const q of params.questions) {
+			const optionLabels = q.options.map(o => o.label);
+			const { selectedOptions, customInput } = await askSingleQuestion(
+				ui,
+				q.question,
+				optionLabels,
+				q.multi ?? false,
+				q.recommended,
+				{ timeout },
+			);
+
+			results.push({
+				id: q.id,
+				question: q.question,
+				options: optionLabels,
+				multi: q.multi ?? false,
+				selectedOptions,
+				customInput,
+			});
+		}
+
+		const details: AskToolDetails = { results };
+		const responseLines = results.map(formatQuestionResult);
+		const responseText = `User answers:\n${responseLines.join("\n")}`;
 
 		return { content: [{ type: "text" as const, text: responseText }], details };
 	}

@@ -1,18 +1,20 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Breaking Changes
 
+- Changed `ask` tool to require `questions` array parameter; single-question mode with `question`, `options`, `multi`, and `recommended` parameters is no longer supported
 - Removed support for local Python kernel gateway startup; shared gateway is now required
 
 ### Added
 
 - Added Python prelude caching to improve startup performance by storing compiled prelude helpers and module metadata
 - Added `OMP_DEBUG_STARTUP` environment variable for conditional startup performance debugging output
+- Added autonomous memory system with storage, memory tools, and context injection
 
 ### Changed
 
+- Updated `ask` tool guidance to prioritize proactive problem-solving and default to action, asking only when truly blocked by decisions that materially change scope or behavior
 - Changed Python kernel initialization to require shared gateway mode; local gateway startup has been removed
 - Changed shared gateway error handling to retry on server errors (5xx status codes) before failing
 
