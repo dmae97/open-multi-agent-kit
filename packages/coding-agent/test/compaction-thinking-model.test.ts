@@ -156,7 +156,7 @@ describe.skipIf(!HAS_ANTHROPIC_AUTH)("Compaction with thinking models (Anthropic
 		}
 	});
 
-	async function createSession(model: Model<any>, thinkingLevel: ThinkingLevel = "high") {
+	async function createSession(model: Model, thinkingLevel: ThinkingLevel = "high") {
 		const toolSession: ToolSession = {
 			cwd: tempDir,
 			hasUI: false,

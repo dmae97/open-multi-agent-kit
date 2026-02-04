@@ -131,11 +131,11 @@ export interface CreateAgentSessionOptions {
 	modelRegistry?: ModelRegistry;
 
 	/** Model to use. Default: from settings, else first available */
-	model?: Model<any>;
+	model?: Model;
 	/** Thinking level. Default: from settings, else 'off' (clamped to model capabilities) */
 	thinkingLevel?: ThinkingLevel;
 	/** Models available for cycling (Ctrl+P in interactive mode) */
-	scopedModels?: Array<{ model: Model<any>; thinkingLevel: ThinkingLevel }>;
+	scopedModels?: Array<{ model: Model; thinkingLevel: ThinkingLevel }>;
 
 	/** System prompt. String replaces default, function receives default and returns final. */
 	systemPrompt?: string | ((defaultPrompt: string) => string);

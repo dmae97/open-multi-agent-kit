@@ -39,7 +39,6 @@ import {
 	TASK_SUBAGENT_PROGRESS_CHANNEL,
 } from "./types";
 
-const DEFAULT_MODEL_ALIASES = new Set(["default", "pi/default"]);
 const MCP_CALL_TIMEOUT_MS = 60_000;
 const ajv = new Ajv({ allErrors: true, strict: false });
 
@@ -138,7 +137,7 @@ function resolveModelOverride(
 	const matchPreferences = { usageOrder: settings?.getStorage()?.getModelUsageOrder() };
 	for (const pattern of modelPatterns) {
 		const normalized = pattern.trim().toLowerCase();
-		if (!normalized || DEFAULT_MODEL_ALIASES.has(normalized)) {
+		if (!normalized || normalized === "default" || normalized === "pi/default") {
 			continue;
 		}
 		let effectivePattern = pattern;

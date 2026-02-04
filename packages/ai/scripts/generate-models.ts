@@ -52,13 +52,13 @@ const COPILOT_STATIC_HEADERS = {
 const AI_GATEWAY_MODELS_URL = "https://ai-gateway.vercel.sh/v1";
 const AI_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh";
 
-async function fetchOpenRouterModels(): Promise<Model<any>[]> {
+async function fetchOpenRouterModels(): Promise<Model[]> {
 	try {
 		console.log("Fetching models from OpenRouter API...");
 		const response = await fetch("https://openrouter.ai/api/v1/models");
 		const data = await response.json();
 
-		const models: Model<any>[] = [];
+		const models: Model[] = [];
 
 		for (const model of data.data) {
 			// Only include models that support tools
@@ -84,7 +84,7 @@ async function fetchOpenRouterModels(): Promise<Model<any>[]> {
 			// Check if model supports tool_choice parameter
 			const supportsToolChoice = model.supported_parameters?.includes("tool_choice") ?? false;
 
-			const normalizedModel: Model<any> = {
+			const normalizedModel: Model = {
 				id: modelKey,
 				name: model.name,
 				api: "openai-completions",
@@ -114,12 +114,12 @@ async function fetchOpenRouterModels(): Promise<Model<any>[]> {
 	}
 }
 
-async function fetchAiGatewayModels(): Promise<Model<any>[]> {
+async function fetchAiGatewayModels(): Promise<Model[]> {
 	try {
 		console.log("Fetching models from Vercel AI Gateway API...");
 		const response = await fetch(`${AI_GATEWAY_MODELS_URL}/models`);
 		const data = await response.json();
-		const models: Model<any>[] = [];
+		const models: Model[] = [];
 
 		const toNumber = (value: string | number | undefined): number => {
 			if (typeof value === "number") {
@@ -331,13 +331,13 @@ function getKimiCodeFallbackModels(): Model<"openai-completions">[] {
 	];
 }
 
-async function loadModelsDevData(): Promise<Model<any>[]> {
+async function loadModelsDevData(): Promise<Model[]> {
 	try {
 		console.log("Fetching models from models.dev API...");
 		const response = await fetch("https://models.dev/api.json");
 		const data = await response.json();
 
-		const models: Model<any>[] = [];
+		const models: Model[] = [];
 
 		// Process Amazon Bedrock models
 		if (data["amazon-bedrock"]?.models) {
@@ -700,7 +700,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 				// gpt-5 models require responses API, others use completions
 				const needsResponsesApi = modelId.startsWith("gpt-5") || modelId.startsWith("oswe");
 
-				const copilotModel: Model<any> = {
+				const copilotModel: Model = {
 					id: modelId,
 					name: m.name || modelId,
 					api: needsResponsesApi ? "openai-responses" : "openai-completions",
@@ -1433,7 +1433,7 @@ async function generateModels() {
 	allModels.push(...cursorModels);
 
 	// Group by provider and deduplicate by model ID
-	const providers: Record<string, Record<string, Model<any>>> = {};
+	const providers: Record<string, Record<string, Model>> = {};
 	for (const model of allModels) {
 		if (!providers[model.provider]) {
 			providers[model.provider] = {};

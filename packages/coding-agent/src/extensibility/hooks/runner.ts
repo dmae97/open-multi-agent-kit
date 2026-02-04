@@ -69,7 +69,7 @@ export class HookRunner {
 	private sessionManager: SessionManager;
 	private modelRegistry: ModelRegistry;
 	private errorListeners: Set<HookErrorListener> = new Set();
-	private getModel: () => Model<any> | undefined = () => undefined;
+	private getModel: () => Model | undefined = () => undefined;
 	private isIdleFn: () => boolean = () => true;
 	private waitForIdleFn: () => Promise<void> = async () => {};
 	private abortFn: () => void = () => {};
@@ -93,7 +93,7 @@ export class HookRunner {
 	 */
 	initialize(options: {
 		/** Function to get the current model */
-		getModel: () => Model<any> | undefined;
+		getModel: () => Model | undefined;
 		/** Handler for hooks to send messages */
 		sendMessageHandler: SendMessageHandler;
 		/** Handler for hooks to append entries */

@@ -133,7 +133,7 @@ const agent = new Agent({
   // Initial state
   initialState: {
     systemPrompt: string,
-    model: Model<any>,
+    model: Model,
     thinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh",
     tools: AgentTool<any>[],
     messages: AgentMessage[],
@@ -164,7 +164,7 @@ const agent = new Agent({
 ```typescript
 interface AgentState {
 	systemPrompt: string;
-	model: Model<any>;
+	model: Model;
 	thinkingLevel: ThinkingLevel;
 	tools: AgentTool<any>[];
 	messages: AgentMessage[];

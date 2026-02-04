@@ -68,7 +68,7 @@ export type RpcCommand =
 // ============================================================================
 
 export interface RpcSessionState {
-	model?: Model<any>;
+	model?: Model;
 	thinkingLevel: ThinkingLevel;
 	isStreaming: boolean;
 	isCompacting: boolean;
@@ -105,21 +105,21 @@ export type RpcResponse =
 			type: "response";
 			command: "set_model";
 			success: true;
-			data: Model<any>;
+			data: Model;
 	  }
 	| {
 			id?: string;
 			type: "response";
 			command: "cycle_model";
 			success: true;
-			data: { model: Model<any>; thinkingLevel: ThinkingLevel; isScoped: boolean } | null;
+			data: { model: Model; thinkingLevel: ThinkingLevel; isScoped: boolean } | null;
 	  }
 	| {
 			id?: string;
 			type: "response";
 			command: "get_available_models";
 			success: true;
-			data: { models: Model<any>[] };
+			data: { models: Model[] };
 	  }
 
 	// Thinking

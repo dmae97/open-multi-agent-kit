@@ -127,7 +127,7 @@ export interface AgentSessionConfig {
 	sessionManager: SessionManager;
 	settings: Settings;
 	/** Models to cycle through with Ctrl+P (from --models flag) */
-	scopedModels?: Array<{ model: Model<any>; thinkingLevel: ThinkingLevel }>;
+	scopedModels?: Array<{ model: Model; thinkingLevel: ThinkingLevel }>;
 	/** Prompt templates for expansion */
 	promptTemplates?: PromptTemplate[];
 	/** File-based slash commands for expansion */
@@ -167,7 +167,7 @@ export interface PromptOptions {
 
 /** Result from cycleModel() */
 export interface ModelCycleResult {
-	model: Model<any>;
+	model: Model;
 	thinkingLevel: ThinkingLevel;
 	/** Whether cycling through scoped models (--models flag) or all available */
 	isScoped: boolean;
@@ -175,9 +175,9 @@ export interface ModelCycleResult {
 
 /** Result from cycleRoleModels() */
 export interface RoleModelCycleResult {
-	model: Model<any>;
+	model: Model;
 	thinkingLevel: ThinkingLevel;
-	role: string;
+	role: ModelRole;
 }
 
 /** Session statistics for /session command */
@@ -257,7 +257,7 @@ export class AgentSession {
 	readonly sessionManager: SessionManager;
 	readonly settings: Settings;
 
-	private _scopedModels: Array<{ model: Model<any>; thinkingLevel: ThinkingLevel }>;
+	private _scopedModels: Array<{ model: Model; thinkingLevel: ThinkingLevel }>;
 	private _promptTemplates: PromptTemplate[];
 	private _slashCommands: FileSlashCommand[];
 
@@ -887,7 +887,7 @@ export class AgentSession {
 	}
 
 	/** Current model (may be undefined if not yet selected) */
-	get model(): Model<any> | undefined {
+	get model(): Model | undefined {
 		return this.agent.state.model;
 	}
 
@@ -994,7 +994,7 @@ export class AgentSession {
 	}
 
 	/** Scoped models for cycling (from --models flag) */
-	get scopedModels(): ReadonlyArray<{ model: Model<any>; thinkingLevel: ThinkingLevel }> {
+	get scopedModels(): ReadonlyArray<{ model: Model; thinkingLevel: ThinkingLevel }> {
 		return this._scopedModels;
 	}
 
@@ -1014,7 +1014,7 @@ export class AgentSession {
 		this._planReferenceSent = true;
 	}
 
-	resolveRoleModel(role: ModelRole): Model<any> | undefined {
+	resolveRoleModel(role: ModelRole): Model | undefined {
 		return this._resolveRoleModel(role, this._modelRegistry.getAvailable(), this.model);
 	}
 
@@ -1800,7 +1800,7 @@ export class AgentSession {
 	 * Validates API key, saves to session and settings.
 	 * @throws Error if no API key available for the model
 	 */
-	async setModel(model: Model<any>, role: string = "default"): Promise<void> {
+	async setModel(model: Model, role: ModelRole = "default"): Promise<void> {
 		const apiKey = await this._modelRegistry.getApiKey(model, this.sessionId);
 		if (!apiKey) {
 			throw new Error(`No API key for ${model.provider}/${model.id}`);
@@ -1820,7 +1820,7 @@ export class AgentSession {
 	 * Validates API key, saves to session log but NOT to settings.
 	 * @throws Error if no API key available for the model
 	 */
-	async setModelTemporary(model: Model<any>): Promise<void> {
+	async setModelTemporary(model: Model): Promise<void> {
 		const apiKey = await this._modelRegistry.getApiKey(model, this.sessionId);
 		if (!apiKey) {
 			throw new Error(`No API key for ${model.provider}/${model.id}`);
@@ -1854,7 +1854,7 @@ export class AgentSession {
 	 * @param options - Optional settings: `temporary` to not persist to settings
 	 */
 	async cycleRoleModels(
-		roleOrder: string[],
+		roleOrder: ModelRole[],
 		options?: { temporary?: boolean },
 	): Promise<RoleModelCycleResult | undefined> {
 		const availableModels = this._modelRegistry.getAvailable();
@@ -1862,7 +1862,7 @@ export class AgentSession {
 
 		const currentModel = this.model;
 		if (!currentModel) return undefined;
-		const roleModels: Array<{ role: string; model: Model<any> }> = [];
+		const roleModels: Array<{ role: ModelRole; model: Model }> = [];
 
 		for (const role of roleOrder) {
 			const roleModelStr =
@@ -1872,7 +1872,7 @@ export class AgentSession {
 			if (!roleModelStr) continue;
 
 			const parsed = parseModelString(roleModelStr);
-			let match: Model<any> | undefined;
+			let match: Model | undefined;
 			if (parsed) {
 				match = availableModels.find(m => m.provider === parsed.provider && m.id === parsed.id);
 			}
@@ -1964,7 +1964,7 @@ export class AgentSession {
 	/**
 	 * Get all available models with valid API keys.
 	 */
-	getAvailableModels(): Model<any>[] {
+	getAvailableModels(): Model[] {
 		return this._modelRegistry.getAvailable();
 	}
 
@@ -2530,15 +2530,15 @@ Be thorough - include exact file paths, function names, error messages, and tech
 		this.agent.continue().catch(() => {});
 	}
 
-	private _getModelKey(model: Model<any>): string {
+	private _getModelKey(model: Model): string {
 		return `${model.provider}/${model.id}`;
 	}
 
 	private _resolveRoleModel(
 		role: ModelRole,
-		availableModels: Model<any>[],
-		currentModel: Model<any> | undefined,
-	): Model<any> | undefined {
+		availableModels: Model[],
+		currentModel: Model | undefined,
+	): Model | undefined {
 		const roleModelStr =
 			role === "default"
 				? (this.settings.getModelRole("default") ??
@@ -2555,11 +2555,11 @@ Be thorough - include exact file paths, function names, error messages, and tech
 		return availableModels.find(m => m.id.toLowerCase() === roleLower);
 	}
 
-	private _getCompactionModelCandidates(availableModels: Model<any>[]): Model<any>[] {
-		const candidates: Model<any>[] = [];
+	private _getCompactionModelCandidates(availableModels: Model[]): Model[] {
+		const candidates: Model[] = [];
 		const seen = new Set<string>();
 
-		const addCandidate = (model: Model<any> | undefined): void => {
+		const addCandidate = (model: Model | undefined): void => {
 			if (!model) return;
 			const key = this._getModelKey(model);
 			if (seen.has(key)) return;

@@ -13,6 +13,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { ModelRole } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { isEnoent, logger, procmgr } from "@oh-my-pi/pi-utils";
 import { YAML } from "bun";
 import { type Settings as SettingsCapabilityItem, settingsCapability } from "../capability/settings";
@@ -387,7 +388,7 @@ export class Settings {
 	/**
 	 * Set a model role (helper for modelRoles record).
 	 */
-	setModelRole(role: string, modelId: string): void {
+	setModelRole(role: ModelRole | string, modelId: string): void {
 		const current = this.get("modelRoles");
 		this.set("modelRoles", { ...current, [role]: modelId });
 	}
@@ -395,7 +396,7 @@ export class Settings {
 	/**
 	 * Get a model role (helper for modelRoles record).
 	 */
-	getModelRole(role: string): string | undefined {
+	getModelRole(role: ModelRole | string): string | undefined {
 		const roles = this.get("modelRoles");
 		return roles[role];
 	}
@@ -410,7 +411,7 @@ export class Settings {
 	/*
 	 * Override model roles (helper for modelRoles record).
 	 */
-	overrideModelRoles(roles: Record<string, string>): void {
+	overrideModelRoles(roles: ReadOnlyDict<string>): void {
 		const prev = this.get("modelRoles");
 		for (const [role, modelId] of Object.entries(roles)) {
 			if (modelId) {

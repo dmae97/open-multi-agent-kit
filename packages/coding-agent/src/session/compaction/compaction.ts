@@ -478,7 +478,7 @@ export interface SummaryOptions {
 
 export async function generateSummary(
 	currentMessages: AgentMessage[],
-	model: Model<any>,
+	model: Model,
 	reserveTokens: number,
 	apiKey: string,
 	signal?: AbortSignal,
@@ -547,7 +547,7 @@ export async function generateSummary(
 async function generateShortSummary(
 	recentMessages: AgentMessage[],
 	historySummary: string | undefined,
-	model: Model<any>,
+	model: Model,
 	reserveTokens: number,
 	apiKey: string,
 	signal?: AbortSignal,
@@ -724,7 +724,7 @@ const TURN_PREFIX_SUMMARIZATION_PROMPT = renderPromptTemplate(compactionTurnPref
  */
 export async function compact(
 	preparation: CompactionPreparation,
-	model: Model<any>,
+	model: Model,
 	apiKey: string,
 	customInstructions?: string,
 	signal?: AbortSignal,
@@ -822,7 +822,7 @@ export async function compact(
  */
 async function generateTurnPrefixSummary(
 	messages: AgentMessage[],
-	model: Model<any>,
+	model: Model,
 	reserveTokens: number,
 	apiKey: string,
 	signal?: AbortSignal,

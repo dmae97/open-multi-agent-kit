@@ -162,7 +162,7 @@ export interface ExtensionContext {
 	/** Model registry for API key resolution */
 	modelRegistry: ModelRegistry;
 	/** Current model (may be undefined) */
-	model: Model<any> | undefined;
+	model: Model | undefined;
 	/** Whether the agent is idle (not streaming) */
 	isIdle(): boolean;
 	/** Abort the current agent operation */
@@ -776,7 +776,7 @@ export interface ExtensionAPI {
 	setActiveTools(toolNames: string[]): Promise<void>;
 
 	/** Set the current model. Returns false if no API key available. */
-	setModel(model: Model<any>): Promise<boolean>;
+	setModel(model: Model): Promise<boolean>;
 
 	/** Get current thinking level. */
 	getThinkingLevel(): ThinkingLevel;
@@ -835,7 +835,7 @@ export type GetAllToolsHandler = () => string[];
 
 export type SetActiveToolsHandler = (toolNames: string[]) => Promise<void>;
 
-export type SetModelHandler = (model: Model<any>) => Promise<boolean>;
+export type SetModelHandler = (model: Model) => Promise<boolean>;
 
 export type GetThinkingLevelHandler = () => ThinkingLevel;
 
@@ -862,7 +862,7 @@ export interface ExtensionActions {
 
 /** Actions for ExtensionContext (ctx.* in event handlers). */
 export interface ExtensionContextActions {
-	getModel: () => Model<any> | undefined;
+	getModel: () => Model | undefined;
 	isIdle: () => boolean;
 	abort: () => void;
 	hasPendingMessages: () => boolean;

@@ -349,7 +349,7 @@ export interface VercelGatewayRouting {
 }
 
 // Model interface for the unified model system
-export interface Model<TApi extends Api> {
+export interface Model<TApi extends Api = any> {
 	id: string;
 	name: string;
 	api: TApi;

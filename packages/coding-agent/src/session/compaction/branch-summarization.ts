@@ -66,7 +66,7 @@ export interface CollectEntriesResult {
 
 export interface GenerateBranchSummaryOptions {
 	/** Model to use for summarization */
-	model: Model<any>;
+	model: Model;
 	/** API key for the model */
 	apiKey: string;
 	/** Abort signal for cancellation */

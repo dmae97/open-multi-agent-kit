@@ -27,11 +27,11 @@ function makeInvertedBadge(label: string, color: ThemeColor): string {
 interface ModelItem {
 	provider: string;
 	id: string;
-	model: Model<any>;
+	model: Model;
 }
 
 interface ScopedModelItem {
-	model: Model<any>;
+	model: Model;
 	thinkingLevel: string;
 }
 
@@ -69,10 +69,10 @@ export class ModelSelectorComponent extends Container {
 	private allModels: ModelItem[] = [];
 	private filteredModels: ModelItem[] = [];
 	private selectedIndex: number = 0;
-	private roles: { [key in ModelRole]?: Model<any> } = {};
+	private roles: { [key in ModelRole]?: Model } = {};
 	private settings: Settings;
 	private modelRegistry: ModelRegistry;
-	private onSelectCallback: (model: Model<any>, role: string) => void;
+	private onSelectCallback: (model: Model, role: ModelRole | null) => void;
 	private onCancelCallback: () => void;
 	private errorMessage?: string;
 	private tui: TUI;
@@ -89,11 +89,11 @@ export class ModelSelectorComponent extends Container {
 
 	constructor(
 		tui: TUI,
-		_currentModel: Model<any> | undefined,
+		_currentModel: Model | undefined,
 		settings: Settings,
 		modelRegistry: ModelRegistry,
 		scopedModels: ReadonlyArray<ScopedModelItem>,
-		onSelect: (model: Model<any>, role: string) => void,
+		onSelect: (model: Model, role: ModelRole | null) => void,
 		onCancel: () => void,
 		options?: { temporaryOnly?: boolean; initialSearchInput?: string },
 	) {
@@ -246,7 +246,7 @@ export class ModelSelectorComponent extends Container {
 			// Load available models (built-in models still work even if models.json failed)
 			try {
 				const availableModels = this.modelRegistry.getAvailable();
-				models = availableModels.map((model: Model<any>) => ({
+				models = availableModels.map((model: Model) => ({
 					provider: model.provider,
 					id: model.id,
 					model,
@@ -542,10 +542,10 @@ export class ModelSelectorComponent extends Container {
 		}
 	}
 
-	private handleSelect(model: Model<any>, role: ModelRole | null): void {
+	private handleSelect(model: Model, role: ModelRole | null): void {
 		// For temporary role, don't save to settings - just notify caller
 		if (role === null) {
-			this.onSelectCallback(model, "temporary");
+			this.onSelectCallback(model, null);
 			return;
 		}
 

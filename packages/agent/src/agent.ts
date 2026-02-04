@@ -246,7 +246,7 @@ export class Agent {
 		this._state.systemPrompt = v;
 	}
 
-	setModel(m: Model<any>) {
+	setModel(m: Model) {
 		this._state.model = m;
 	}
 

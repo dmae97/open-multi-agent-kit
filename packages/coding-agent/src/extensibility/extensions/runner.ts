@@ -112,7 +112,7 @@ export class ExtensionRunner {
 	private sessionManager: SessionManager;
 	private modelRegistry: ModelRegistry;
 	private errorListeners: Set<ExtensionErrorListener> = new Set();
-	private getModel: () => Model<any> | undefined = () => undefined;
+	private getModel: () => Model | undefined = () => undefined;
 	private isIdleFn: () => boolean = () => true;
 	private waitForIdleFn: () => Promise<void> = async () => {};
 	private abortFn: () => void = () => {};

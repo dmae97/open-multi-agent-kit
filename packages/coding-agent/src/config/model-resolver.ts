@@ -6,7 +6,8 @@ import { type Api, type KnownProvider, type Model, modelsAreEqual } from "@oh-my
 import chalk from "chalk";
 import { isValidThinkingLevel } from "../cli/args";
 import { fuzzyMatch } from "../utils/fuzzy";
-import type { ModelRegistry } from "./model-registry";
+import { MODEL_ROLE_IDS, type ModelRegistry } from "./model-registry";
+import type { Settings } from "./settings";
 
 /** Default model IDs for each known provider */
 export const defaultModelPerProvider: Record<KnownProvider, string> = {
@@ -308,6 +309,94 @@ export function parseModelPattern(
 ): ParsedModelResult {
 	const context = buildPreferenceContext(availableModels, preferences);
 	return parseModelPatternWithContext(pattern, availableModels, context);
+}
+
+const MODEL_ROLE_ALIAS_PREFIX = "pi/";
+const DEFAULT_MODEL_ROLE = "default";
+const DEFAULT_MODEL_ALIASES = new Set([DEFAULT_MODEL_ROLE, `${MODEL_ROLE_ALIAS_PREFIX}${DEFAULT_MODEL_ROLE}`]);
+
+/**
+ * Check if a model override value is effectively the default role.
+ */
+export function isDefaultModelAlias(value: string | string[] | undefined): boolean {
+	if (!value) return true;
+	const values = Array.isArray(value) ? value : [value];
+	if (values.length === 0) return true;
+	return values.every(entry => DEFAULT_MODEL_ALIASES.has(entry.trim().toLowerCase()));
+}
+
+/**
+ * Expand a role alias like "pi/smol" to the configured model string.
+ */
+export function expandRoleAlias(value: string, settings?: Settings): string {
+	const normalized = value.trim().toLowerCase();
+	if (!normalized.startsWith(MODEL_ROLE_ALIAS_PREFIX)) return value;
+	const role = normalized.slice(MODEL_ROLE_ALIAS_PREFIX.length);
+	if (!MODEL_ROLE_IDS.includes(role as (typeof MODEL_ROLE_IDS)[number])) return value;
+	return settings?.getModelRole(role) ?? value;
+}
+
+/**
+ * Resolve a model identifier or pattern to a Model instance.
+ */
+export function resolveModelFromString(
+	value: string,
+	available: Model<Api>[],
+	matchPreferences?: ModelMatchPreferences,
+): Model<Api> | undefined {
+	const parsed = parseModelString(value);
+	if (parsed) {
+		return available.find(model => model.provider === parsed.provider && model.id === parsed.id);
+	}
+	return parseModelPattern(value, available, matchPreferences).model;
+}
+
+/**
+ * Resolve a model from configured roles, honoring order and overrides.
+ */
+export function resolveModelFromSettings(options: {
+	settings: Settings;
+	availableModels: Model<Api>[];
+	matchPreferences?: ModelMatchPreferences;
+	roleOrder?: string[];
+}): Model<Api> | undefined {
+	const { settings, availableModels, matchPreferences, roleOrder } = options;
+	const roles = roleOrder ?? MODEL_ROLE_IDS;
+	for (const role of roles) {
+		const configured = settings.getModelRole(role);
+		if (!configured) continue;
+		const resolved = resolveModelFromString(expandRoleAlias(configured, settings), availableModels, matchPreferences);
+		if (resolved) return resolved;
+	}
+	return availableModels[0];
+}
+
+/**
+ * Resolve a list of override patterns to the first matching model.
+ */
+export function resolveModelOverride(
+	modelPatterns: string[],
+	modelRegistry: ModelRegistry,
+	settings?: Settings,
+): { model?: Model<Api>; thinkingLevel?: ThinkingLevel } {
+	if (modelPatterns.length === 0) return {};
+	const matchPreferences = { usageOrder: settings?.getStorage()?.getModelUsageOrder() };
+	for (const pattern of modelPatterns) {
+		const normalized = pattern.trim().toLowerCase();
+		if (!normalized || DEFAULT_MODEL_ALIASES.has(normalized)) {
+			continue;
+		}
+		const effectivePattern = expandRoleAlias(pattern, settings);
+		const { model, thinkingLevel } = parseModelPattern(
+			effectivePattern,
+			modelRegistry.getAvailable(),
+			matchPreferences,
+		);
+		if (model) {
+			return { model, thinkingLevel: thinkingLevel !== "off" ? thinkingLevel : undefined };
+		}
+	}
+	return {};
 }
 
 /**

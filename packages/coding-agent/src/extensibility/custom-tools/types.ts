@@ -51,7 +51,7 @@ export interface CustomToolContext {
 	/** Model registry - use for API key resolution and model retrieval */
 	modelRegistry: ModelRegistry;
 	/** Current model (may be undefined if no model is selected yet) */
-	model: Model<any> | undefined;
+	model: Model | undefined;
 	/** Whether the agent is idle (not streaming) */
 	isIdle(): boolean;
 	/** Whether there are queued messages waiting to be processed */

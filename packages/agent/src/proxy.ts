@@ -81,7 +81,7 @@ export interface ProxyStreamOptions extends SimpleStreamOptions {
  * });
  * ```
  */
-export function streamProxy(model: Model<any>, context: Context, options: ProxyStreamOptions): ProxyMessageEventStream {
+export function streamProxy(model: Model, context: Context, options: ProxyStreamOptions): ProxyMessageEventStream {
 	const stream = new ProxyMessageEventStream();
 
 	(async () => {

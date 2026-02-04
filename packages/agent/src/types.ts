@@ -20,7 +20,7 @@ export type StreamFn = (
  * Configuration for the agent loop.
  */
 export interface AgentLoopConfig extends SimpleStreamOptions {
-	model: Model<any>;
+	model: Model;
 
 	/**
 	 * When to interrupt tool execution for steering messages.
@@ -155,7 +155,7 @@ export type AgentMessage = Message | CustomAgentMessages[keyof CustomAgentMessag
  */
 export interface AgentState {
 	systemPrompt: string;
-	model: Model<any>;
+	model: Model;
 	thinkingLevel: ThinkingLevel;
 	tools: AgentTool<any>[];
 	messages: AgentMessage[]; // Can include attachments + custom message types

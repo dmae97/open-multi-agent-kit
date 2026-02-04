@@ -52,7 +52,7 @@ interface OverflowResult {
 	response: AssistantMessage;
 }
 
-async function testContextOverflow(model: Model<any>, apiKey: string): Promise<OverflowResult> {
+async function testContextOverflow(model: Model, apiKey: string): Promise<OverflowResult> {
 	const overflowContent = generateOverflowContent(model.contextWindow);
 
 	const context: Context = {

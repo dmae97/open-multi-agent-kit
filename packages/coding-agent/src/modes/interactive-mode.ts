@@ -137,7 +137,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	private readonly version: string;
 	private readonly changelogMarkdown: string | undefined;
 	private planModePreviousTools: string[] | undefined;
-	private planModePreviousModel: Model<any> | undefined;
+	private planModePreviousModel: Model | undefined;
 	private planModeHasEntered = false;
 	public readonly lspServers:
 		| Array<{ name: string; status: "ready" | "error"; fileTypes: string[]; error?: string }>

@@ -9,7 +9,7 @@ describe.skipIf(!e2eApiKey("OPENCODE_API_KEY"))("OpenCode Zen Models Smoke Test"
 
 	zenModels.forEach(model => {
 		it(`${model.id}`, async () => {
-			const response = await complete(model as Model<any>, {
+			const response = await complete(model as Model, {
 				messages: [{ role: "user", content: "Say hello.", timestamp: Date.now() }],
 			});
 
