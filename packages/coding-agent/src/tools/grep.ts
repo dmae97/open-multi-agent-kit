@@ -1,7 +1,7 @@
 import * as nodePath from "node:path";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 
-import { grep as wasmGrep } from "@oh-my-pi/pi-natives";
+import { grep } from "@oh-my-pi/pi-natives";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import { untilAborted } from "@oh-my-pi/pi-utils";
@@ -124,10 +124,10 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 			const effectiveOutputMode = "content";
 			const effectiveLimit = normalizedLimit ?? DEFAULT_MATCH_LIMIT;
 
-			// Run WASM grep
-			let result: Awaited<ReturnType<typeof wasmGrep>>;
+			// Run grep
+			let result: Awaited<ReturnType<typeof grep>>;
 			try {
-				result = await wasmGrep({
+				result = await grep({
 					pattern: normalizedPattern,
 					path: searchPath,
 					glob: glob?.trim() || undefined,
@@ -150,7 +150,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 			}
 
 			const formatPath = (filePath: string): string => {
-				// WASM returns paths starting with / (the virtual root)
+				// returns paths starting with / (the virtual root)
 				const cleanPath = filePath.startsWith("/") ? filePath.slice(1) : filePath;
 				if (isDirectory) {
 					return cleanPath.replace(/\\/g, "/");

@@ -40,7 +40,7 @@ function pickSmaller(
  * Resize an image to fit within the specified max dimensions and file size.
  * Returns the original image if it already fits within the limits.
  *
- * Uses Photon (Rust/WASM) for image processing. If Photon is not available,
+ * Uses Photon for image processing. If Photon is not available,
  * returns the original image unchanged.
  *
  * Strategy for staying under maxBytes:

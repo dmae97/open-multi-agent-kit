@@ -385,7 +385,7 @@ function parseFeedToMarkdown(content: string, maxItems = 10): string {
 }
 
 /**
- * Render HTML to markdown using native WASM, jina, trafilatura, lynx, or html-to-markdown (in order of preference)
+ * Render HTML to markdown using native, jina, trafilatura, lynx (in order of preference)
  */
 async function renderHtmlToText(
 	url: string,
@@ -438,7 +438,7 @@ async function renderHtmlToText(
 		}
 	}
 
-	// Fall back to native WASM converter (fastest, no network/subprocess)
+	// Fall back to native converter (fastest, no network/subprocess)
 	try {
 		const content = await htmlToMarkdown(html, { cleanContent: true });
 		if (content.trim().length > 100 && !isLowQualityOutput(content)) {

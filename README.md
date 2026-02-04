@@ -341,20 +341,20 @@ Handles whitespace and indentation variance automatically:
 
 ## Packages
 
-| Package                                                | Description                                                                   |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| Package                                                | Description                                                                            |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------- |
 | **[@oh-my-pi/pi-ai](packages/ai)**                     | Multi-provider LLM client (Anthropic, OpenAI, Gemini, Bedrock, Cursor, Codex, Copilot) |
-| **[@oh-my-pi/pi-agent-core](packages/agent)**          | Agent runtime with tool calling and state management                          |
-| **[@oh-my-pi/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI                                                  |
-| **[@oh-my-pi/pi-tui](packages/tui)**                   | Terminal UI library with differential rendering                               |
-| **[@oh-my-pi/pi-natives](packages/natives)**           | WASM bindings for native text, image, and grep operations                     |
-| **[@oh-my-pi/omp-stats](packages/stats)**              | Local observability dashboard for AI usage statistics                         |
+| **[@oh-my-pi/pi-agent-core](packages/agent)**          | Agent runtime with tool calling and state management                                   |
+| **[@oh-my-pi/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI                                                           |
+| **[@oh-my-pi/pi-tui](packages/tui)**                   | Terminal UI library with differential rendering                                        |
+| **[@oh-my-pi/pi-natives](packages/natives)**           | WASM bindings for native text, image, and grep operations                              |
+| **[@oh-my-pi/omp-stats](packages/stats)**              | Local observability dashboard for AI usage statistics                                  |
 
 ### Rust Crates
 
-| Crate                              | Description                                              |
-| ---------------------------------- | -------------------------------------------------------- |
-| **[pi-natives](crates/pi-natives)** | Rust WASM crate for performance-critical text/grep ops   |
+| Crate                               | Description                                   |
+| ----------------------------------- | --------------------------------------------- |
+| **[pi-natives](crates/pi-natives)** | Rust N-API crate for performance-critical ops |
 
 ---
 

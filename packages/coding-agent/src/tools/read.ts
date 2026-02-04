@@ -636,7 +636,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 					const base64 = Buffer.from(buffer).toString("base64");
 
 					if (this.autoResizeImages) {
-						// Resize image if needed - catch errors from WASM
+						// Resize image if needed - catch errors from Photon
 						try {
 							const resized = await resizeImage({ type: "image", data: base64, mimeType });
 							const dimensionNote = formatDimensionNote(resized);

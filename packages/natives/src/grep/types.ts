@@ -130,11 +130,6 @@ export interface SearchResult {
 	error?: string;
 }
 
-/** Legacy alias for WASM match output. */
-export type WasmMatch = SearchMatch;
-/** Legacy alias for WASM search output. */
-export type WasmSearchResult = SearchResult;
-
 /** Options for fuzzy file path search. */
 export interface FuzzyFindOptions extends Cancellable {
 	/** Substring query to match against file paths (case-insensitive). */

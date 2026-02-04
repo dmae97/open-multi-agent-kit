@@ -1003,9 +1003,14 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			}
 
 			const lastMessage = session.state.messages[session.state.messages.length - 1];
-			if (lastMessage?.role === "assistant" && lastMessage.stopReason === "aborted") {
-				aborted = abortReason === "signal" || abortReason === undefined;
-				exitCode = 1;
+			if (lastMessage?.role === "assistant") {
+				if (lastMessage.stopReason === "aborted") {
+					aborted = abortReason === "signal" || abortReason === undefined;
+					exitCode = 1;
+				} else if (lastMessage.stopReason === "error") {
+					exitCode = 1;
+					error ??= lastMessage.errorMessage || "Subagent failed";
+				}
 			}
 		} catch (err) {
 			exitCode = 1;
@@ -1093,7 +1098,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			stderr = "";
 		}
 	} else {
-		const allowFallback = !done.aborted && !signal?.aborted;
+		const allowFallback = exitCode === 0 && !done.aborted && !signal?.aborted;
 		const { normalized: normalizedSchema, error: schemaError } = normalizeOutputSchema(outputSchema);
 		const hasOutputSchema = normalizedSchema !== undefined && !schemaError;
 		const fallback = allowFallback ? resolveFallbackCompletion(rawOutput, outputSchema) : null;
@@ -1110,7 +1115,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		} else if (!hasOutputSchema && allowFallback && rawOutput.trim().length > 0) {
 			exitCode = 0;
 			stderr = "";
-		} else {
+		} else if (exitCode === 0) {
 			const warning = "SYSTEM WARNING: Subagent exited without calling submit_result tool after 3 reminders.";
 			rawOutput = rawOutput ? `${warning}\n\n${rawOutput}` : warning;
 		}
