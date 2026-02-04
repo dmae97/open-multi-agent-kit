@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { _resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { PythonKernel } from "@oh-my-pi/pi-coding-agent/ipy/kernel";
-import { PYTHON_PRELUDE } from "@oh-my-pi/pi-coding-agent/ipy/prelude";
+import { acquireSharedGateway } from "@oh-my-pi/pi-coding-agent/ipy/gateway-coordinator";
 import * as shellSnapshot from "@oh-my-pi/pi-coding-agent/utils/shell-snapshot";
 import { TempDir } from "@oh-my-pi/pi-utils";
 
@@ -31,7 +30,7 @@ class FakeWebSocket {
 	}
 }
 
-describe("PythonKernel.start (local gateway)", () => {
+describe("Shared Python gateway environment", () => {
 	const originalEnv = { ...process.env };
 	const originalFetch = globalThis.fetch;
 	const originalWebSocket = globalThis.WebSocket;
@@ -58,14 +57,11 @@ describe("PythonKernel.start (local gateway)", () => {
 		vi.restoreAllMocks();
 	});
 
-	it("filters environment variables before spawning gateway", async () => {
-		const fetchSpy = vi.fn(async (input: string | URL, init?: RequestInit) => {
+	it("filters environment variables before spawning shared gateway", async () => {
+		const fetchSpy = vi.fn(async (input: string | URL) => {
 			const url = typeof input === "string" ? input : input.toString();
 			if (url.endsWith("/api/kernelspecs")) {
 				return new Response(JSON.stringify({}), { status: 200 });
-			}
-			if (url.endsWith("/api/kernels") && init?.method === "POST") {
-				return new Response(JSON.stringify({ id: "kernel-1" }), { status: 201 });
 			}
 			return new Response("", { status: 200 });
 		});
@@ -96,46 +92,21 @@ describe("PythonKernel.start (local gateway)", () => {
 			return { pid: 1234, exited: Promise.resolve(0) } as unknown as Bun.Subprocess;
 		}) as unknown as typeof Bun.spawn);
 
-		const executeSpy = vi
-			.spyOn(PythonKernel.prototype, "execute")
-			.mockResolvedValue({ status: "ok", cancelled: false, timedOut: false, stdinRequested: false });
-
 		using tempDir = TempDir.createSync("@python-kernel-env-");
-		const kernel = await PythonKernel.start({ cwd: tempDir.path(), env: { CUSTOM_VAR: "ok" } });
-
-		const createCall = fetchSpy.mock.calls.find(([input, init]: [string | URL, RequestInit?]) => {
-			const url = typeof input === "string" ? input : input.toString();
-			return url.endsWith("/api/kernels") && init?.method === "POST";
-		});
-		expect(createCall).toBeDefined();
-		if (createCall) {
-			expect(JSON.parse(String(createCall[1]?.body ?? "{}"))).toEqual({ name: "python3" });
-		}
+		process.env.OMP_CODING_AGENT_DIR = tempDir.path();
+		await acquireSharedGateway(tempDir.path());
 
 		expect(spawnArgs).toContain("kernel_gateway");
 		expect(spawnEnv?.PATH).toBe("/bin");
 		expect(spawnEnv?.HOME).toBe("/home/test");
 		expect(spawnEnv?.OMP_CUSTOM).toBe("1");
 		expect(spawnEnv?.LC_ALL).toBe("en_US.UTF-8");
-		expect(spawnEnv?.CUSTOM_VAR).toBe("ok");
 		expect(spawnEnv?.OPENAI_API_KEY).toBeUndefined();
 		expect(spawnEnv?.UNSAFE_TOKEN).toBeUndefined();
-		expect(spawnEnv?.PYTHONPATH).toBe(tempDir.path());
-
-		expect(executeSpy).toHaveBeenCalledWith(
-			PYTHON_PRELUDE,
-			expect.objectContaining({
-				silent: true,
-				storeHistory: false,
-			}),
-		);
-
-		await kernel.shutdown();
 
 		vi.restoreAllMocks();
 		snapshotSpy.mockRestore();
 		whichSpy.mockRestore();
 		spawnSpy.mockRestore();
-		executeSpy.mockRestore();
 	});
 });

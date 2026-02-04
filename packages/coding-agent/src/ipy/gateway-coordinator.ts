@@ -313,10 +313,6 @@ async function killGateway(pid: number, context: string): Promise<void> {
 }
 
 export async function acquireSharedGateway(cwd: string): Promise<AcquireResult | null> {
-	if (process.env.BUN_ENV === "test" || process.env.NODE_ENV === "test") {
-		return null;
-	}
-
 	try {
 		return await withGatewayLock(async () => {
 			time("acquireSharedGateway:lockAcquired");

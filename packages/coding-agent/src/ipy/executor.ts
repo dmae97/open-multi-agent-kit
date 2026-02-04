@@ -227,6 +227,7 @@ export async function warmPythonEnvironment(
 	useSharedGateway?: boolean,
 	sessionFile?: string,
 ): Promise<{ ok: boolean; reason?: string; docs: PreludeHelper[] }> {
+	const isTestEnv = process.env.BUN_ENV === "test" || process.env.NODE_ENV === "test";
 	let cacheState: PreludeCacheState | null = null;
 	try {
 		debugStartup("warmPython:ensureKernel:start");
@@ -238,16 +239,18 @@ export async function warmPythonEnvironment(
 		cachedPreludeDocs = [];
 		return { ok: false, reason, docs: [] };
 	}
-	try {
-		cacheState = await buildPreludeCacheState(cwd);
-		const cached = await readPreludeCache(cacheState);
-		if (cached) {
-			cachedPreludeDocs = cached;
-			return { ok: true, docs: cached };
+	if (!isTestEnv) {
+		try {
+			cacheState = await buildPreludeCacheState(cwd);
+			const cached = await readPreludeCache(cacheState);
+			if (cached) {
+				cachedPreludeDocs = cached;
+				return { ok: true, docs: cached };
+			}
+		} catch (err) {
+			logger.warn("Failed to resolve Python prelude cache", { error: String(err) });
+			cacheState = null;
 		}
-	} catch (err) {
-		logger.warn("Failed to resolve Python prelude cache", { error: String(err) });
-		cacheState = null;
 	}
 	if (cachedPreludeDocs && cachedPreludeDocs.length > 0) {
 		return { ok: true, docs: cachedPreludeDocs };
@@ -265,7 +268,7 @@ export async function warmPythonEnvironment(
 		debugStartup("warmPython:withKernelSession:done");
 		time("warmPython:withKernelSession");
 		cachedPreludeDocs = docs;
-		if (docs.length > 0) {
+		if (!isTestEnv && docs.length > 0) {
 			const state = cacheState ?? (await buildPreludeCacheState(cwd));
 			await writePreludeCache(state, docs);
 		}
@@ -526,8 +529,7 @@ export async function executePython(code: string, options?: PythonExecutorOption
 	await ensureKernelAvailable(cwd);
 
 	const kernelMode = options?.kernelMode ?? "session";
-	const isTestEnv = process.env.BUN_ENV === "test" || process.env.NODE_ENV === "test";
-	const useSharedGateway = isTestEnv ? false : options?.useSharedGateway;
+	const useSharedGateway = options?.useSharedGateway;
 	const sessionFile = options?.sessionFile;
 	const artifactsDir = options?.artifactsDir;
 

@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { PythonKernel } from "@oh-my-pi/pi-coding-agent/ipy/kernel";
+import * as gatewayCoordinator from "@oh-my-pi/pi-coding-agent/ipy/gateway-coordinator";
 import { TempDir } from "@oh-my-pi/pi-utils";
 import type { Subprocess } from "bun";
 
@@ -148,17 +149,15 @@ describe("PythonKernel gateway lifecycle", () => {
 		Object.defineProperty(PythonKernel.prototype, "execute", { value: originalExecute, configurable: true });
 	});
 
-	it("starts local gateway, polls readiness, interrupts, and shuts down", async () => {
-		let kernelspecAttempts = 0;
+	it("starts shared gateway, interrupts, and shuts down", async () => {
+		vi.spyOn(gatewayCoordinator, "acquireSharedGateway").mockResolvedValue({
+			url: "http://127.0.0.1:9999",
+			isShared: true,
+		});
+
 		globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
 			const url = String(input);
 			env.fetchCalls.push({ url, init });
-
-			if (url.endsWith("/api/kernelspecs")) {
-				kernelspecAttempts += 1;
-				const ok = kernelspecAttempts >= 2;
-				return createResponse({ ok }) as unknown as Response;
-			}
 
 			if (url.endsWith("/api/kernels") && init?.method === "POST") {
 				return createResponse({ ok: true, json: { id: "kernel-123" } }) as unknown as Response;
@@ -167,66 +166,47 @@ describe("PythonKernel gateway lifecycle", () => {
 			return createResponse({ ok: true }) as unknown as Response;
 		}) as typeof fetch;
 
-		const kernel = await PythonKernel.start({ cwd: tempDir.path(), useSharedGateway: false });
+		const kernel = await PythonKernel.start({ cwd: tempDir.path() });
 
-		expect(env.spawnCalls).toHaveLength(1);
-		expect(env.spawnCalls[0].cmd).toEqual(
-			expect.arrayContaining([
-				"-m",
-				"kernel_gateway",
-				"--KernelGatewayApp.allow_origin=*",
-				"--JupyterApp.answer_yes=true",
-			]),
-		);
-		expect(env.fetchCalls.filter(call => call.url.endsWith("/api/kernelspecs"))).toHaveLength(2);
 		expect(env.fetchCalls.some(call => call.url.endsWith("/api/kernels") && call.init?.method === "POST")).toBe(true);
 
 		await kernel.interrupt();
 		expect(env.fetchCalls.some(call => call.url.includes("/interrupt") && call.init?.method === "POST")).toBe(true);
-		expect(FakeWebSocket.instances[0]?.sent.length).toBe(1);
 
 		await kernel.shutdown();
 		expect(env.fetchCalls.some(call => call.init?.method === "DELETE")).toBe(true);
 		expect(kernel.isAlive()).toBe(false);
 	});
 
-	it("throws when gateway readiness never succeeds", async () => {
-		const originalNow = Date.now;
-		let now = 0;
-		Date.now = () => {
-			now += 1000;
-			return now;
-		};
+	it("throws when shared gateway kernel creation never succeeds", async () => {
+		vi.spyOn(gatewayCoordinator, "acquireSharedGateway").mockResolvedValue({
+			url: "http://127.0.0.1:9999",
+			isShared: true,
+		});
 
-		try {
-			globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
-				const url = String(input);
-				env.fetchCalls.push({ url, init });
-				if (url.endsWith("/api/kernelspecs")) {
-					return createResponse({ ok: false, status: 503 }) as unknown as Response;
-				}
-				return createResponse({ ok: true }) as unknown as Response;
-			}) as typeof fetch;
-
-			await expect(PythonKernel.start({ cwd: tempDir.path(), useSharedGateway: false })).rejects.toThrow(
-				"Kernel gateway failed to start",
-			);
-			expect(env.spawnCalls).toHaveLength(3);
-		} finally {
-			Date.now = originalNow;
-		}
-	});
-
-	it("does not throw when shutdown API fails", async () => {
-		let kernelspecAttempts = 0;
 		globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
 			const url = String(input);
 			env.fetchCalls.push({ url, init });
-			if (url.endsWith("/api/kernelspecs")) {
-				kernelspecAttempts += 1;
-				const ok = kernelspecAttempts >= 1;
-				return createResponse({ ok }) as unknown as Response;
+			if (url.endsWith("/api/kernels") && init?.method === "POST") {
+				return createResponse({ ok: false, status: 503, text: "oops" }) as unknown as Response;
 			}
+			return createResponse({ ok: true }) as unknown as Response;
+		}) as typeof fetch;
+
+		await expect(PythonKernel.start({ cwd: tempDir.path() })).rejects.toThrow(
+			"Failed to create kernel on shared gateway",
+		);
+	});
+
+	it("does not throw when shutdown API fails", async () => {
+		vi.spyOn(gatewayCoordinator, "acquireSharedGateway").mockResolvedValue({
+			url: "http://127.0.0.1:9999",
+			isShared: true,
+		});
+
+		globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+			const url = String(input);
+			env.fetchCalls.push({ url, init });
 			if (url.endsWith("/api/kernels") && init?.method === "POST") {
 				return createResponse({ ok: true, json: { id: "kernel-456" } }) as unknown as Response;
 			}

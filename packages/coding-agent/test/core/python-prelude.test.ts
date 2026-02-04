@@ -50,6 +50,7 @@ describe.skipIf(!shouldRun)("PYTHON_PRELUDE integration", () => {
 				"lsp.diagnosticsOnWrite": false,
 				"python.toolMode": "ipy-only",
 				"python.kernelMode": "per-call",
+				"python.sharedGateway": true,
 			}),
 		};
 
@@ -74,7 +75,7 @@ describe.skipIf(!shouldRun)("PYTHON_PRELUDE integration", () => {
 
 	it("exposes prelude docs via warmup", async () => {
 		resetPreludeDocsCache();
-		const result = await warmPythonEnvironment(process.cwd(), undefined, false);
+		const result = await warmPythonEnvironment(process.cwd());
 		expect(result.ok).toBe(true);
 		const names = result.docs.map(doc => doc.name);
 		expect(names).toContain("read");
@@ -82,7 +83,7 @@ describe.skipIf(!shouldRun)("PYTHON_PRELUDE integration", () => {
 
 	it("renders prelude docs in python tool description", async () => {
 		resetPreludeDocsCache();
-		const result = await warmPythonEnvironment(process.cwd(), undefined, false);
+		const result = await warmPythonEnvironment(process.cwd());
 		expect(result.ok).toBe(true);
 		const description = getPythonToolDescription();
 		expect(description).toContain("read");
