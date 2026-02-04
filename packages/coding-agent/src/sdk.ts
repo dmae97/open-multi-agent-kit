@@ -111,6 +111,11 @@ import { wrapToolsWithMetaNotice } from "./tools/output-meta";
 import { EventBus } from "./utils/event-bus";
 import { time } from "./utils/timings";
 
+/** Conditional startup debug prints (stderr) when OMP_DEBUG_STARTUP is set */
+const debugStartup = process.env.OMP_DEBUG_STARTUP
+	? (stage: string) => process.stderr.write(`[startup] ${stage}\n`)
+	: () => {};
+
 // Types
 export interface CreateAgentSessionOptions {
 	/** Working directory for project-local discovery. Default: process.cwd() */
@@ -568,6 +573,7 @@ function createCustomToolsExtension(tools: CustomTool[]): ExtensionFactory {
  * ```
  */
 export async function createAgentSession(options: CreateAgentSessionOptions = {}): Promise<CreateAgentSessionResult> {
+	debugStartup("sdk:createAgentSession:entry");
 	const cwd = options.cwd ?? process.cwd();
 	const agentDir = options.agentDir ?? getDefaultAgentDir();
 	const eventBus = options.eventBus ?? new EventBus();
@@ -681,6 +687,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		skillWarnings = discovered.warnings;
 	}
 	time("discoverSkills");
+	debugStartup("sdk:discoverSkills");
 
 	// Discover rules
 	const ttsrSettings = settingsInstance.getGroup("ttsr");
@@ -703,6 +710,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	time("filterRulebookRules");
 
 	const contextFiles = options.contextFiles ?? (await discoverContextFiles(cwd, agentDir));
+	debugStartup("sdk:discoverContextFiles");
 	time("discoverContextFiles");
 
 	let agent: Agent;
@@ -766,11 +774,14 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	toolSession.getArtifactsDir = getArtifactsDir;
 	toolSession.agentOutputManager = new AgentOutputManager(getArtifactsDir);
 
+	debugStartup("sdk:createTools:start");
 	// Create and wrap tools with meta notice formatting
 	const rawBuiltinTools = await createTools(toolSession, options.toolNames);
 	const builtinTools = wrapToolsWithMetaNotice(rawBuiltinTools);
+	debugStartup("sdk:createTools");
 	time("createAllTools");
 
+	debugStartup("sdk:discoverMCP:start");
 	// Discover MCP tools from .mcp.json files
 	let mcpManager: MCPManager | undefined;
 	const enableMCP = options.enableMCP ?? true;
@@ -791,6 +802,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			cacheStorage: settingsInstance.getStorage(),
 		});
 		time("discoverAndLoadMCPTools");
+		debugStartup("sdk:discoverAndLoadMCPTools");
 		mcpManager = mcpResult.manager;
 		toolSession.mcpManager = mcpManager;
 
@@ -810,6 +822,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		}
 	}
 
+	debugStartup("sdk:geminiImageTools:start");
 	// Add Gemini image tools if GEMINI_API_KEY (or GOOGLE_API_KEY) is available
 	const geminiImageTools = await getGeminiImageTools();
 	if (geminiImageTools.length > 0) {
@@ -837,6 +850,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		inlineExtensions.push(createCustomToolsExtension(customTools));
 	}
 
+	debugStartup("sdk:loadExtensions:start");
 	// Load extensions (discovers from standard locations + configured paths)
 	let extensionsResult: LoadExtensionsResult;
 	if (options.disableExtensionDiscovery) {
@@ -861,6 +875,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			(settingsInstance.get("disabledExtensions") as string[]) ?? [],
 		);
 		time("discoverAndLoadExtensions");
+		debugStartup("sdk:discoverAndLoadExtensions");
 		for (const { path, error } of extensionsResult.errors) {
 			logger.error("Failed to load extension", { path, error });
 		}
@@ -1023,6 +1038,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	}
 
 	const systemPrompt = await rebuildSystemPrompt(initialToolNames, toolRegistry);
+	debugStartup("sdk:buildSystemPrompt:done");
 	time("buildSystemPrompt");
 
 	const promptTemplates = options.promptTemplates ?? (await discoverPromptTemplates(cwd, agentDir));
@@ -1109,6 +1125,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		cursorExecHandlers,
 	});
 	cursorEventEmitter = event => agent.emitExternalEvent(event);
+	debugStartup("sdk:createAgent");
 	time("createAgent");
 
 	// Restore messages if session has existing data
@@ -1139,12 +1156,14 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		rebuildSystemPrompt,
 		ttsrManager,
 	});
+	debugStartup("sdk:createAgentSession");
 	time("createAgentSession");
 
 	// Warm up LSP servers (connects to detected servers)
 	let lspServers: CreateAgentSessionResult["lspServers"];
 	if (enableLsp && settingsInstance.get("lsp.diagnosticsOnWrite")) {
 		try {
+			debugStartup("sdk:warmupLspServers:start");
 			const result = await warmupLspServers(cwd, {
 				onConnecting: serverNames => {
 					if (options.hasUI && serverNames.length > 0) {
@@ -1152,6 +1171,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 					}
 				},
 			});
+			debugStartup("sdk:warmupLspServers:done");
 			lspServers = result.servers;
 			time("warmupLspServers");
 		} catch (error) {
@@ -1159,6 +1179,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		}
 	}
 
+	debugStartup("sdk:return");
 	return {
 		session,
 		extensionsResult,

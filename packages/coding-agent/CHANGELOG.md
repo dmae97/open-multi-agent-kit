@@ -1,6 +1,21 @@
 # Changelog
 
 ## [Unreleased]
+
+### Breaking Changes
+
+- Removed support for local Python kernel gateway startup; shared gateway is now required
+
+### Added
+
+- Added Python prelude caching to improve startup performance by storing compiled prelude helpers and module metadata
+- Added `OMP_DEBUG_STARTUP` environment variable for conditional startup performance debugging output
+
+### Changed
+
+- Changed Python kernel initialization to require shared gateway mode; local gateway startup has been removed
+- Changed shared gateway error handling to retry on server errors (5xx status codes) before failing
+
 ### Fixed
 
 - Fixed glob search returning no results when all files are ignored by gitignore by automatically retrying without gitignore filtering

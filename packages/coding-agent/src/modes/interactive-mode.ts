@@ -53,6 +53,11 @@ import { getEditorTheme, getMarkdownTheme, onThemeChange, theme } from "./theme/
 import type { CompactionQueuedMessage, InteractiveModeContext, TodoItem } from "./types";
 import { UiHelpers } from "./utils/ui-helpers";
 
+/** Conditional startup debug prints (stderr) when OMP_DEBUG_STARTUP is set */
+const debugStartup = process.env.OMP_DEBUG_STARTUP
+	? (stage: string) => process.stderr.write(`[startup] ${stage}\n`)
+	: () => {};
+
 const TODO_FILE_NAME = "todos.json";
 
 /** Options for creating an InteractiveMode instance (for future API use) */
@@ -261,14 +266,18 @@ export class InteractiveMode implements InteractiveModeContext {
 
 	async init(): Promise<void> {
 		if (this.isInitialized) return;
+		debugStartup("InteractiveMode.init:entry");
 
 		this.keybindings = await KeybindingsManager.create();
+		debugStartup("InteractiveMode.init:keybindings");
 
 		// Register session manager flush for signal handlers (SIGINT, SIGTERM, SIGHUP)
 		this.cleanupUnsubscribe = postmortem.register("session-manager-flush", () => this.sessionManager.flush());
+		debugStartup("InteractiveMode.init:cleanupRegistered");
 
 		// Load and convert file commands to SlashCommand format (async)
 		const fileCommands = await loadSlashCommands({ cwd: process.cwd() });
+		debugStartup("InteractiveMode.init:slashCommands");
 		this.fileSlashCommands = new Set(fileCommands.map(cmd => cmd.name));
 		const fileSlashCommands: SlashCommand[] = fileCommands.map(cmd => ({
 			name: cmd.name,
@@ -291,6 +300,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			name: s.name,
 			timeAgo: s.timeAgo,
 		}));
+		debugStartup("InteractiveMode.init:recentSessions");
 
 		// Convert LSP servers to welcome format
 		const lspServerInfo =
@@ -304,7 +314,9 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		if (!startupQuiet) {
 			// Add welcome header
+			debugStartup("InteractiveMode.init:welcomeComponent:start");
 			const welcome = new WelcomeComponent(this.version, modelName, providerName, recentSessions, lspServerInfo);
+			debugStartup("InteractiveMode.init:welcomeComponent:created");
 
 			// Setup UI layout
 			this.ui.addChild(new Spacer(1));

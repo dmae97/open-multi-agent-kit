@@ -1,23 +1,31 @@
-import { createServer } from "node:net";
-import * as path from "node:path";
-import { logger, ptree } from "@oh-my-pi/pi-utils";
+import { logger } from "@oh-my-pi/pi-utils";
 import { $ } from "bun";
 import { nanoid } from "nanoid";
 import { Settings } from "../config/settings";
-import { getOrCreateSnapshot } from "../utils/shell-snapshot";
 import { time } from "../utils/timings";
 import { htmlToBasicMarkdown } from "../web/scrapers/types";
-import { acquireSharedGateway, releaseSharedGateway } from "./gateway-coordinator";
+import { acquireSharedGateway, releaseSharedGateway, shutdownSharedGateway } from "./gateway-coordinator";
 import { loadPythonModules } from "./modules";
 import { PYTHON_PRELUDE } from "./prelude";
 import { filterEnv, resolvePythonRuntime } from "./runtime";
 
 const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder();
-const GATEWAY_STARTUP_TIMEOUT_MS = 30000;
-const GATEWAY_STARTUP_ATTEMPTS = 3;
 const TRACE_IPC = process.env.OMP_PYTHON_IPC_TRACE === "1";
 const PRELUDE_INTROSPECTION_SNIPPET = "import json\nprint(json.dumps(__omp_prelude_docs__()))";
+
+const debugStartup = process.env.OMP_DEBUG_STARTUP
+	? (stage: string) => process.stderr.write(`[startup] ${stage}\n`)
+	: () => {};
+
+class SharedGatewayCreateError extends Error {
+	readonly status: number;
+
+	constructor(status: number, message: string) {
+		super(message);
+		this.status = status;
+	}
+}
 
 interface ExternalGatewayConfig {
 	url: string;
@@ -178,31 +186,6 @@ async function checkExternalGatewayAvailability(config: ExternalGatewayConfig): 
 	}
 }
 
-async function allocatePort(): Promise<number> {
-	const { promise, resolve, reject } = Promise.withResolvers<number>();
-	const server = createServer();
-	server.unref();
-	server.on("error", reject);
-	server.listen(0, "127.0.0.1", () => {
-		const address = server.address();
-		if (address && typeof address === "object") {
-			const port = address.port;
-			server.close((err: Error | null | undefined) => {
-				if (err) {
-					reject(err);
-				} else {
-					resolve(port);
-				}
-			});
-		} else {
-			server.close();
-			reject(new Error("Failed to allocate port"));
-		}
-	});
-
-	return promise;
-}
-
 function normalizeDisplayText(text: string): string {
 	return text.endsWith("\n") ? text : `${text}\n`;
 }
@@ -287,7 +270,6 @@ export function serializeWebSocketMessage(msg: JupyterMessage): ArrayBuffer {
 export class PythonKernel {
 	readonly id: string;
 	readonly kernelId: string;
-	readonly gatewayProcess: ptree.ChildProcess | null;
 	readonly gatewayUrl: string;
 	readonly sessionId: string;
 	readonly username: string;
@@ -304,7 +286,6 @@ export class PythonKernel {
 	private constructor(
 		id: string,
 		kernelId: string,
-		gatewayProcess: ptree.ChildProcess | null,
 		gatewayUrl: string,
 		sessionId: string,
 		username: string,
@@ -313,18 +294,11 @@ export class PythonKernel {
 	) {
 		this.id = id;
 		this.kernelId = kernelId;
-		this.gatewayProcess = gatewayProcess;
 		this.gatewayUrl = gatewayUrl;
 		this.sessionId = sessionId;
 		this.username = username;
 		this.isSharedGateway = isSharedGateway;
 		this.#authToken = authToken;
-
-		if (this.gatewayProcess) {
-			this.gatewayProcess.exited.then(() => {
-				this.#alive = false;
-			});
-		}
 	}
 
 	#authHeaders(): Record<string, string> {
@@ -333,7 +307,9 @@ export class PythonKernel {
 	}
 
 	static async start(options: KernelStartOptions): Promise<PythonKernel> {
+		debugStartup("PythonKernel.start:entry");
 		const availability = await checkPythonKernelAvailability(options.cwd);
+		debugStartup("PythonKernel.start:availCheck");
 		time("PythonKernel.start:availabilityCheck");
 		if (!availability.ok) {
 			throw new Error(availability.reason ?? "Python kernel unavailable");
@@ -344,24 +320,40 @@ export class PythonKernel {
 			return PythonKernel.startWithExternalGateway(externalConfig, options.cwd, options.env);
 		}
 
-		// Try shared gateway first (unless explicitly disabled)
-		if (options.useSharedGateway !== false) {
+		if (options.useSharedGateway === false) {
+			throw new Error("Shared Python gateway required; local gateways are disabled");
+		}
+
+		for (let attempt = 0; attempt < 2; attempt += 1) {
 			try {
+				debugStartup("PythonKernel.start:acquireShared:start");
 				const sharedResult = await acquireSharedGateway(options.cwd);
+				debugStartup("PythonKernel.start:acquireShared:done");
 				time("PythonKernel.start:acquireSharedGateway");
-				if (sharedResult) {
-					const kernel = await PythonKernel.startWithSharedGateway(sharedResult.url, options.cwd, options.env);
-					time("PythonKernel.start:startWithSharedGateway");
-					return kernel;
+				if (!sharedResult) {
+					throw new Error("Shared Python gateway unavailable");
 				}
+				debugStartup("PythonKernel.start:startShared:start");
+				const kernel = await PythonKernel.startWithSharedGateway(sharedResult.url, options.cwd, options.env);
+				debugStartup("PythonKernel.start:startShared:done");
+				time("PythonKernel.start:startWithSharedGateway");
+				return kernel;
 			} catch (err) {
-				logger.warn("Failed to acquire shared gateway, falling back to local", {
+				debugStartup("PythonKernel.start:sharedFailed");
+				if (attempt === 0 && err instanceof SharedGatewayCreateError && err.status >= 500) {
+					logger.warn("Shared gateway kernel creation failed, retrying", {
+						status: err.status,
+					});
+					continue;
+				}
+				logger.warn("Failed to acquire shared gateway", {
 					error: err instanceof Error ? err.message : String(err),
 				});
+				throw err;
 			}
 		}
 
-		return PythonKernel.startWithLocalGateway(options);
+		throw new Error("Shared Python gateway unavailable after retry");
 	}
 
 	private static async startWithExternalGateway(
@@ -387,7 +379,7 @@ export class PythonKernel {
 		const kernelInfo = (await createResponse.json()) as { id: string };
 		const kernelId = kernelInfo.id;
 
-		const kernel = new PythonKernel(nanoid(), kernelId, null, config.url, nanoid(), "omp", false, config.token);
+		const kernel = new PythonKernel(nanoid(), kernelId, config.url, nanoid(), "omp", false, config.token);
 
 		try {
 			await kernel.connectWebSocket();
@@ -409,149 +401,55 @@ export class PythonKernel {
 		cwd: string,
 		env?: Record<string, string | undefined>,
 	): Promise<PythonKernel> {
+		debugStartup("sharedGateway:fetch:start");
 		const createResponse = await fetch(`${gatewayUrl}/api/kernels`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ name: "python3" }),
 		});
+		debugStartup("sharedGateway:fetch:done");
 		time("startWithSharedGateway:createKernel");
 
 		if (!createResponse.ok) {
-			await releaseSharedGateway();
-			throw new Error(`Failed to create kernel on shared gateway: ${await createResponse.text()}`);
+			debugStartup(`sharedGateway:fetch:notOk:${createResponse.status}`);
+			await shutdownSharedGateway();
+			debugStartup("sharedGateway:fetch:shutdown");
+			const text = await createResponse.text();
+			debugStartup("sharedGateway:fetch:textRead");
+			throw new SharedGatewayCreateError(
+				createResponse.status,
+				`Failed to create kernel on shared gateway: ${text}`,
+			);
 		}
 
+		debugStartup("sharedGateway:json:start");
 		const kernelInfo = (await createResponse.json()) as { id: string };
+		debugStartup("sharedGateway:json:done");
 		const kernelId = kernelInfo.id;
 
-		const kernel = new PythonKernel(nanoid(), kernelId, null, gatewayUrl, nanoid(), "omp", true);
+		const kernel = new PythonKernel(nanoid(), kernelId, gatewayUrl, nanoid(), "omp", true);
+		debugStartup("sharedGateway:kernelCreated");
 
 		try {
+			debugStartup("sharedGateway:connectWS:start");
 			await kernel.connectWebSocket();
+			debugStartup("sharedGateway:connectWS:done");
 			time("startWithSharedGateway:connectWS");
+			debugStartup("sharedGateway:initEnv:start");
 			await kernel.initializeKernelEnvironment(cwd, env);
+			debugStartup("sharedGateway:initEnv:done");
 			time("startWithSharedGateway:initEnv");
+			debugStartup("sharedGateway:prelude:start");
 			const preludeResult = await kernel.execute(PYTHON_PRELUDE, { silent: true, storeHistory: false });
+			debugStartup("sharedGateway:prelude:done");
 			time("startWithSharedGateway:prelude");
 			if (preludeResult.cancelled || preludeResult.status === "error") {
 				throw new Error("Failed to initialize Python kernel prelude");
 			}
+			debugStartup("sharedGateway:loadModules:start");
 			await loadPythonModules(kernel, { cwd });
+			debugStartup("sharedGateway:loadModules:done");
 			time("startWithSharedGateway:loadModules");
-			return kernel;
-		} catch (err: unknown) {
-			await kernel.shutdown();
-			throw err;
-		}
-	}
-
-	private static async startWithLocalGateway(options: KernelStartOptions): Promise<PythonKernel> {
-		const settings = await Settings.init();
-		const { shell, env } = settings.getShellConfig();
-		const filteredEnv = filterEnv(env);
-		const runtime = resolvePythonRuntime(options.cwd, filteredEnv);
-		const snapshotPath = await getOrCreateSnapshot(shell, env).catch((err: unknown) => {
-			logger.warn("Failed to resolve shell snapshot for Python kernel", {
-				error: err instanceof Error ? err.message : String(err),
-			});
-			return null;
-		});
-
-		const kernelEnv: Record<string, string | undefined> = {
-			...runtime.env,
-			...options.env,
-			PYTHONUNBUFFERED: "1",
-			OMP_SHELL_SNAPSHOT: snapshotPath ?? undefined,
-		};
-
-		const pythonPathParts = [options.cwd, kernelEnv.PYTHONPATH].filter(Boolean).join(path.delimiter);
-		if (pythonPathParts) {
-			kernelEnv.PYTHONPATH = pythonPathParts;
-		}
-
-		let gatewayProcess: ptree.ChildProcess | null = null;
-		let gatewayUrl: string | null = null;
-		let lastError: string | null = null;
-
-		for (let attempt = 0; attempt < GATEWAY_STARTUP_ATTEMPTS; attempt += 1) {
-			const gatewayPort = await allocatePort();
-			const candidateUrl = `http://127.0.0.1:${gatewayPort}`;
-			const candidateProcess = ptree.spawn(
-				[
-					runtime.pythonPath,
-					"-m",
-					"kernel_gateway",
-					"--KernelGatewayApp.ip=127.0.0.1",
-					`--KernelGatewayApp.port=${gatewayPort}`,
-					"--KernelGatewayApp.port_retries=0",
-					"--KernelGatewayApp.allow_origin=*",
-					"--JupyterApp.answer_yes=true",
-				],
-				{
-					cwd: options.cwd,
-					env: kernelEnv,
-				},
-			);
-
-			let exited = false;
-			candidateProcess.exited
-				.then(() => {
-					exited = true;
-				})
-				.catch(() => {
-					exited = true;
-				});
-
-			const startTime = Date.now();
-			while (Date.now() - startTime < GATEWAY_STARTUP_TIMEOUT_MS) {
-				if (exited) break;
-				try {
-					const response = await fetch(`${candidateUrl}/api/kernelspecs`);
-					if (response.ok) {
-						gatewayProcess = candidateProcess;
-						gatewayUrl = candidateUrl;
-						break;
-					}
-				} catch {
-					// Gateway not ready yet
-				}
-				await Bun.sleep(100);
-			}
-
-			if (gatewayProcess && gatewayUrl) break;
-
-			candidateProcess.kill();
-			lastError = exited ? "Kernel gateway process exited during startup" : "Kernel gateway failed to start";
-		}
-
-		if (!gatewayProcess || !gatewayUrl) {
-			throw new Error(lastError ?? "Kernel gateway failed to start");
-		}
-
-		const createResponse = await fetch(`${gatewayUrl}/api/kernels`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ name: "python3" }),
-		});
-
-		if (!createResponse.ok) {
-			gatewayProcess.kill();
-			throw new Error(`Failed to create kernel: ${await createResponse.text()}`);
-		}
-
-		const kernelInfo = (await createResponse.json()) as { id: string };
-		const kernelId = kernelInfo.id;
-
-		const kernel = new PythonKernel(nanoid(), kernelId, gatewayProcess, gatewayUrl, nanoid(), "omp", false);
-
-		try {
-			await kernel.connectWebSocket();
-			await kernel.initializeKernelEnvironment(options.cwd, options.env);
-			const preludeResult = await kernel.execute(PYTHON_PRELUDE, { silent: true, storeHistory: false });
-			if (preludeResult.cancelled || preludeResult.status === "error") {
-				throw new Error("Failed to initialize Python kernel prelude");
-			}
-			await loadPythonModules(kernel, { cwd: options.cwd });
 			return kernel;
 		} catch (err: unknown) {
 			await kernel.shutdown();
@@ -949,14 +847,6 @@ export class PythonKernel {
 
 		if (this.isSharedGateway) {
 			await releaseSharedGateway();
-		} else if (this.gatewayProcess) {
-			try {
-				this.gatewayProcess.kill();
-			} catch (err: unknown) {
-				logger.warn("Failed to terminate gateway process", {
-					error: err instanceof Error ? err.message : String(err),
-				});
-			}
 		}
 	}
 

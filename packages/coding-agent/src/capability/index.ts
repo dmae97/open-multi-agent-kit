@@ -8,6 +8,12 @@
  */
 import * as os from "node:os";
 import * as path from "node:path";
+
+/** Conditional startup debug prints (stderr) when OMP_DEBUG_STARTUP is set */
+const debugStartup = process.env.OMP_DEBUG_STARTUP
+	? (stage: string) => process.stderr.write(`[startup] ${stage}\n`)
+	: () => {};
+
 import type { Settings } from "../config/settings";
 import { clearCache as clearFsCache, cacheStats as fsCacheStats, invalidate as invalidateFs } from "./fs";
 import type {
@@ -109,9 +115,12 @@ async function loadImpl<T>(
 	const results = await Promise.all(
 		providers.map(async provider => {
 			try {
+				debugStartup(`capability:${capability.id}:${provider.id}:start`);
 				const result = await provider.load(ctx);
+				debugStartup(`capability:${capability.id}:${provider.id}:done`);
 				return { provider, result };
 			} catch (error) {
+				debugStartup(`capability:${capability.id}:${provider.id}:error`);
 				return { provider, error };
 			}
 		}),

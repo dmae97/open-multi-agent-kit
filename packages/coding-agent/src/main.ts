@@ -42,6 +42,11 @@ import { resolvePromptInput } from "./system-prompt";
 import { getChangelogPath, getNewEntries, parseChangelog } from "./utils/changelog";
 import { printTimings, time } from "./utils/timings";
 
+/** Conditional startup debug prints (stderr) when OMP_DEBUG_STARTUP is set */
+const debugStartup = process.env.OMP_DEBUG_STARTUP
+	? (stage: string) => process.stderr.write(`[startup] ${stage}\n`)
+	: () => {};
+
 async function checkForNewVersion(currentVersion: string): Promise<string | undefined> {
 	try {
 		const response = await fetch("https://registry.npmjs.org/@oh-my-pi/pi-coding-agent/latest");
@@ -477,10 +482,12 @@ async function buildSessionOptions(
 
 export async function main(args: string[]) {
 	time("start");
+	debugStartup("main:entry");
 
 	// Initialize theme early with defaults (CLI commands need symbols)
 	// Will be re-initialized with user preferences later
 	await initTheme();
+	debugStartup("main:initTheme");
 
 	// Handle plugin subcommand before regular parsing
 	const pluginCmd = parsePluginArgs(args);
@@ -582,15 +589,18 @@ export async function main(args: string[]) {
 	}
 
 	const parsed = parseArgs(args);
+	debugStartup("main:parseArgs");
 	time("parseArgs");
 	await maybeAutoChdir(parsed);
 
 	// Run migrations (pass cwd for project-local migrations)
 	const { migratedAuthProviders: migratedProviders, deprecationWarnings } = await runMigrations(process.cwd());
+	debugStartup("main:runMigrations");
 
 	// Create AuthStorage and ModelRegistry upfront
 	const authStorage = await discoverAuthStorage();
 	const modelRegistry = discoverModels(authStorage);
+	debugStartup("main:discoverModels");
 	time("discoverModels");
 
 	if (parsed.version) {
@@ -629,6 +639,7 @@ export async function main(args: string[]) {
 
 	const cwd = process.cwd();
 	await Settings.init({ cwd });
+	debugStartup("main:Settings.init");
 	time("Settings.init");
 	const pipedInput = await readPipedInput();
 	let { initialMessage, initialImages } = await prepareInitialMessage(parsed, settings.get("images.autoResize"));
@@ -657,6 +668,7 @@ export async function main(args: string[]) {
 	}
 
 	await initTheme(settings.get("theme"), isInteractive, settings.get("symbolPreset"), settings.get("colorBlindMode"));
+	debugStartup("main:initTheme2");
 	time("initTheme");
 
 	// Show deprecation warnings in interactive mode
@@ -676,6 +688,7 @@ export async function main(args: string[]) {
 
 	// Create session manager based on CLI flags
 	let sessionManager = await createSessionManager(parsed, cwd);
+	debugStartup("main:createSessionManager");
 	time("createSessionManager");
 
 	// Handle --resume: show session picker
@@ -696,6 +709,7 @@ export async function main(args: string[]) {
 	}
 
 	const sessionOptions = await buildSessionOptions(parsed, scopedModels, sessionManager, modelRegistry);
+	debugStartup("main:buildSessionOptions");
 	sessionOptions.authStorage = authStorage;
 	sessionOptions.modelRegistry = modelRegistry;
 	sessionOptions.hasUI = isInteractive;
@@ -712,6 +726,7 @@ export async function main(args: string[]) {
 	time("buildSessionOptions");
 	const { session, setToolUIContext, modelFallbackMessage, lspServers, mcpManager } =
 		await createAgentSession(sessionOptions);
+	debugStartup("main:createAgentSession");
 	time("createAgentSession");
 
 	// Re-parse CLI args with extension flags and apply values
@@ -729,6 +744,7 @@ export async function main(args: string[]) {
 		}
 	}
 	time("applyExtensionFlags");
+	debugStartup("main:applyExtensionFlags");
 
 	if (!isInteractive && !session.model) {
 		writeStderr(chalk.red("No models available."));
@@ -769,6 +785,7 @@ export async function main(args: string[]) {
 		}
 
 		printTimings();
+		debugStartup("main:runInteractiveMode:start");
 		await runInteractiveMode(
 			session,
 			VERSION,
