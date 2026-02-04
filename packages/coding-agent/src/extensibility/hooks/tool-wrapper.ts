@@ -3,6 +3,7 @@
  */
 import type { AgentTool, AgentToolContext, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Static, TSchema } from "@sinclair/typebox";
+import { applyToolProxy } from "../tool-proxy";
 import type { HookRunner } from "./runner";
 import type { ToolCallEventResult, ToolResultEventResult } from "./types";
 
@@ -17,27 +18,16 @@ import type { ToolCallEventResult, ToolResultEventResult } from "./types";
 export class HookToolWrapper<TParameters extends TSchema = TSchema, TDetails = unknown>
 	implements AgentTool<TParameters, TDetails>
 {
-	name: string;
-	label: string;
-	description: string;
-	parameters: TParameters;
-	renderCall?: AgentTool<TParameters, TDetails>["renderCall"];
-	renderResult?: AgentTool<TParameters, TDetails>["renderResult"];
-	mergeCallAndResult?: boolean;
-	inline?: boolean;
+	declare name: string;
+	declare description: string;
+	declare parameters: TParameters;
+	declare label: string;
 
 	constructor(
 		private tool: AgentTool<TParameters, TDetails>,
 		private hookRunner: HookRunner,
 	) {
-		this.name = tool.name;
-		this.label = tool.label ?? "";
-		this.description = tool.description;
-		this.parameters = tool.parameters;
-		this.renderCall = tool.renderCall?.bind(tool);
-		this.renderResult = tool.renderResult?.bind(tool);
-		this.mergeCallAndResult = (tool as { mergeCallAndResult?: boolean }).mergeCallAndResult;
-		this.inline = (tool as { inline?: boolean }).inline;
+		applyToolProxy(tool, this);
 	}
 
 	async execute(

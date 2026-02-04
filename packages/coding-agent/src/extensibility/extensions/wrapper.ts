@@ -5,6 +5,7 @@ import type { AgentTool, AgentToolContext, AgentToolUpdateCallback } from "@oh-m
 import type { ImageContent, TextContent } from "@oh-my-pi/pi-ai";
 import type { Static, TSchema } from "@sinclair/typebox";
 import type { Theme } from "../../modes/theme/theme";
+import { applyToolProxy } from "../tool-proxy";
 import type { ExtensionRunner } from "./runner";
 import type { RegisteredTool, ToolCallEventResult, ToolResultEventResult } from "./types";
 
@@ -12,20 +13,16 @@ import type { RegisteredTool, ToolCallEventResult, ToolResultEventResult } from 
  * Adapts a RegisteredTool into an AgentTool.
  */
 export class RegisteredToolAdapter implements AgentTool<any, any, any> {
-	readonly name: string;
-	readonly label: string;
-	readonly description: string;
-	readonly parameters: any;
+	declare name: string;
+	declare description: string;
+	declare parameters: any;
+	declare label: string;
 
 	constructor(
 		private registeredTool: RegisteredTool,
 		private runner: ExtensionRunner,
 	) {
-		const { definition } = registeredTool;
-		this.name = definition.name;
-		this.label = definition.label || "";
-		this.description = definition.description;
-		this.parameters = definition.parameters;
+		applyToolProxy(registeredTool.definition, this);
 	}
 
 	async execute(
@@ -74,35 +71,25 @@ export function wrapRegisteredTools(registeredTools: RegisteredTool[], runner: E
 export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetails = unknown>
 	implements AgentTool<TParameters, TDetails>
 {
-	renderCall?: AgentTool<TParameters, TDetails>["renderCall"];
-	renderResult?: AgentTool<TParameters, TDetails>["renderResult"];
-	mergeCallAndResult?: boolean;
-	inline?: boolean;
+	declare name: string;
+	declare description: string;
+	declare parameters: TParameters;
+	declare label: string;
 
 	constructor(
 		private tool: AgentTool<TParameters, TDetails>,
 		private runner: ExtensionRunner,
 	) {
-		this.renderCall = tool.renderCall?.bind(tool);
-		this.renderResult = tool.renderResult?.bind(tool);
-		this.mergeCallAndResult = (tool as { mergeCallAndResult?: boolean }).mergeCallAndResult;
-		this.inline = (tool as { inline?: boolean }).inline;
+		applyToolProxy(tool, this);
 	}
 
-	get name(): string {
-		return this.tool.name;
-	}
-
-	get label(): string {
-		return this.tool.label ?? "";
-	}
-
-	get description(): string {
-		return this.tool.description;
-	}
-
-	get parameters(): TParameters {
-		return this.tool.parameters;
+	/**
+	 * Forward Puppeteer mode changes when available.
+	 */
+	restartForModeChange(): Promise<void> {
+		const target = this.tool as { restartForModeChange?: () => Promise<void> };
+		if (!target.restartForModeChange) return Promise.resolve();
+		return target.restartForModeChange();
 	}
 
 	async execute(

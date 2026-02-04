@@ -1,34 +1,25 @@
 /**
  * CustomToolAdapter wraps CustomTool instances into AgentTool for use with the agent.
  */
-import type { AgentTool, AgentToolResult, AgentToolUpdateCallback, RenderResultOptions } from "@oh-my-pi/pi-agent-core";
-import type { Component } from "@oh-my-pi/pi-tui";
+import type { AgentTool, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Static, TSchema } from "@sinclair/typebox";
 import type { Theme } from "../../modes/theme/theme";
+import { applyToolProxy } from "../tool-proxy";
 import type { CustomTool, CustomToolContext, LoadedCustomTool } from "./types";
 
 export class CustomToolAdapter<TParams extends TSchema = TSchema, TDetails = any, TTheme extends Theme = Theme>
 	implements AgentTool<TParams, TDetails, TTheme>
 {
+	declare name: string;
+	declare label: string;
+	declare description: string;
+	declare parameters: TParams;
+
 	constructor(
 		private tool: CustomTool<TParams, TDetails>,
 		private getContext: () => CustomToolContext,
-	) {}
-
-	get name() {
-		return this.tool.name;
-	}
-
-	get label() {
-		return this.tool.label;
-	}
-
-	get description() {
-		return this.tool.description;
-	}
-
-	get parameters() {
-		return this.tool.parameters;
+	) {
+		applyToolProxy(tool, this);
 	}
 
 	execute(
@@ -39,21 +30,6 @@ export class CustomToolAdapter<TParams extends TSchema = TSchema, TDetails = any
 		context?: CustomToolContext,
 	) {
 		return this.tool.execute(toolCallId, params, onUpdate, context ?? this.getContext(), signal);
-	}
-
-	/** Optional custom rendering for tool call display (returns UI component) */
-	renderCall(args: Static<TParams>, theme: TTheme): Component | undefined {
-		return this.tool.renderCall?.(args, theme);
-	}
-
-	/** Optional custom rendering for tool result display (returns UI component) */
-	renderResult(
-		result: AgentToolResult<TDetails>,
-		options: RenderResultOptions,
-		theme: TTheme,
-		args?: Static<TParams>,
-	): Component | undefined {
-		return this.tool.renderResult?.(result, options, theme, args);
 	}
 
 	/**
