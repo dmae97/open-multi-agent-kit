@@ -74,9 +74,27 @@ export interface TimeSeriesPoint {
 	cost: number;
 }
 
+export interface ModelTimeSeriesPoint {
+	timestamp: number;
+	model: string;
+	provider: string;
+	requests: number;
+}
+
+export interface ModelPerformancePoint {
+	timestamp: number;
+	model: string;
+	provider: string;
+	requests: number;
+	avgTtft: number | null;
+	avgTokensPerSecond: number | null;
+}
+
 export interface DashboardStats {
 	overall: AggregatedStats;
 	byModel: ModelStats[];
 	byFolder: FolderStats[];
 	timeSeries: TimeSeriesPoint[];
+	modelSeries: ModelTimeSeriesPoint[];
+	modelPerformanceSeries: ModelPerformancePoint[];
 }

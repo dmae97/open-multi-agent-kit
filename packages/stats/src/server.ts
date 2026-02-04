@@ -12,9 +12,38 @@ import {
 const CLIENT_DIR = path.join(import.meta.dir, "client");
 const STATIC_DIR = path.join(import.meta.dir, "..", "dist", "client");
 
+async function getLatestMtime(dir: string): Promise<number> {
+	let latest = 0;
+	const entries = await fs.readdir(dir, { withFileTypes: true });
+
+	for (const entry of entries) {
+		const fullPath = path.join(dir, entry.name);
+		if (entry.isDirectory()) {
+			latest = Math.max(latest, await getLatestMtime(fullPath));
+		} else if (entry.isFile()) {
+			const stats = await fs.stat(fullPath);
+			latest = Math.max(latest, stats.mtimeMs);
+		}
+	}
+
+	return latest;
+}
+
 const ensureClientBuild = async () => {
-	const indexFile = Bun.file(path.join(STATIC_DIR, "index.html"));
-	if (await indexFile.exists()) return;
+	const indexPath = path.join(STATIC_DIR, "index.html");
+	const sourceMtime = await getLatestMtime(CLIENT_DIR);
+	let shouldBuild = true;
+
+	try {
+		const indexStats = await fs.stat(indexPath);
+		if (indexStats.isFile() && indexStats.mtimeMs >= sourceMtime) {
+			shouldBuild = false;
+		}
+	} catch {
+		shouldBuild = true;
+	}
+
+	if (!shouldBuild) return;
 
 	await fs.rm(STATIC_DIR, { recursive: true, force: true });
 

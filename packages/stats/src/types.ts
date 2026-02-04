@@ -107,6 +107,38 @@ export interface TimeSeriesPoint {
 }
 
 /**
+ * Model usage time series data point (daily buckets).
+ */
+export interface ModelTimeSeriesPoint {
+	/** Bucket timestamp (start of day) */
+	timestamp: number;
+	/** Model name */
+	model: string;
+	/** Provider name */
+	provider: string;
+	/** Request count */
+	requests: number;
+}
+
+/**
+ * Model performance time series data point (daily buckets).
+ */
+export interface ModelPerformancePoint {
+	/** Bucket timestamp (start of day) */
+	timestamp: number;
+	/** Model name */
+	model: string;
+	/** Provider name */
+	provider: string;
+	/** Request count */
+	requests: number;
+	/** Average TTFT in ms */
+	avgTtft: number | null;
+	/** Average tokens per second */
+	avgTokensPerSecond: number | null;
+}
+
+/**
  * Overall dashboard stats.
  */
 export interface DashboardStats {
@@ -114,6 +146,8 @@ export interface DashboardStats {
 	byModel: ModelStats[];
 	byFolder: FolderStats[];
 	timeSeries: TimeSeriesPoint[];
+	modelSeries: ModelTimeSeriesPoint[];
+	modelPerformanceSeries: ModelPerformancePoint[];
 }
 
 /**

@@ -6,7 +6,16 @@ import { closeDb } from "./db";
 import { startServer } from "./server";
 
 export { getDashboardStats, getTotalMessageCount, syncAllSessions } from "./aggregator";
-export type { AggregatedStats, DashboardStats, FolderStats, MessageStats, ModelStats, TimeSeriesPoint } from "./types";
+export type {
+	AggregatedStats,
+	DashboardStats,
+	FolderStats,
+	MessageStats,
+	ModelPerformancePoint,
+	ModelStats,
+	ModelTimeSeriesPoint,
+	TimeSeriesPoint,
+} from "./types";
 
 /**
  * Format a number with appropriate suffix (K, M, etc.)

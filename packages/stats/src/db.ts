@@ -2,7 +2,15 @@ import { Database } from "bun:sqlite";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AggregatedStats, FolderStats, MessageStats, ModelStats, TimeSeriesPoint } from "./types";
+import type {
+	AggregatedStats,
+	FolderStats,
+	MessageStats,
+	ModelPerformancePoint,
+	ModelStats,
+	ModelTimeSeriesPoint,
+	TimeSeriesPoint,
+} from "./types";
 
 const DB_PATH = path.join(os.homedir(), ".omp", "stats.db");
 
@@ -313,6 +321,71 @@ export function getTimeSeries(hours = 24): TimeSeriesPoint[] {
 		errors: row.errors,
 		tokens: row.tokens,
 		cost: row.cost,
+	}));
+}
+
+/**
+ * Get daily performance time series data for the last N days.
+ */
+/**
+ * Get daily model usage time series data for the last N days.
+ */
+export function getModelTimeSeries(days = 14): ModelTimeSeriesPoint[] {
+	if (!db) return [];
+
+	const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+
+	const stmt = db.prepare(`
+		SELECT
+			(timestamp / 86400000) * 86400000 as bucket,
+			model,
+			provider,
+			COUNT(*) as requests
+		FROM messages
+		WHERE timestamp >= ?
+		GROUP BY bucket, model, provider
+		ORDER BY bucket ASC
+	`);
+
+	const rows = stmt.all(cutoff) as any[];
+	return rows.map(row => ({
+		timestamp: row.bucket,
+		model: row.model,
+		provider: row.provider,
+		requests: row.requests,
+	}));
+}
+
+/**
+ * Get daily model performance time series data for the last N days.
+ */
+export function getModelPerformanceSeries(days = 14): ModelPerformancePoint[] {
+	if (!db) return [];
+
+	const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+
+	const stmt = db.prepare(`
+		SELECT
+			(timestamp / 86400000) * 86400000 as bucket,
+			model,
+			provider,
+			COUNT(*) as requests,
+			AVG(ttft) as avg_ttft,
+			AVG(CASE WHEN duration > 0 THEN output_tokens * 1000.0 / duration ELSE NULL END) as avg_tokens_per_second
+		FROM messages
+		WHERE timestamp >= ?
+		GROUP BY bucket, model, provider
+		ORDER BY bucket ASC
+	`);
+
+	const rows = stmt.all(cutoff) as any[];
+	return rows.map(row => ({
+		timestamp: row.bucket,
+		model: row.model,
+		provider: row.provider,
+		requests: row.requests,
+		avgTtft: row.avg_ttft,
+		avgTokensPerSecond: row.avg_tokens_per_second,
 	}));
 }
 

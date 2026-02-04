@@ -5,6 +5,8 @@ import {
 	getFileOffset,
 	getMessageById,
 	getMessageCount,
+	getModelPerformanceSeries,
+	getModelTimeSeries,
 	getOverallStats,
 	getStatsByFolder,
 	getStatsByModel,
@@ -84,6 +86,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 		byModel: getStatsByModel(),
 		byFolder: getStatsByFolder(),
 		timeSeries: getTimeSeries(24),
+		modelSeries: getModelTimeSeries(14),
+		modelPerformanceSeries: getModelPerformanceSeries(14),
 	};
 }
 
