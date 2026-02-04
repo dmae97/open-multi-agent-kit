@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Treated inline image lines with cursor-move prefixes as image sequences to prevent width overflow crashes
+
 ## [9.8.0] - 2026-02-01
 
 ### Changed

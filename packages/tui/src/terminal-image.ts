@@ -14,7 +14,8 @@ export class TerminalInfo {
 	) {}
 
 	isImageLine(line: string): boolean {
-		return !!this.imageProtocol && line.startsWith(this.imageProtocol);
+		if (!this.imageProtocol) return false;
+		return line.slice(0, 64).includes(this.imageProtocol);
 	}
 }
 
