@@ -2,30 +2,51 @@
 
 use std::{collections::VecDeque, path::PathBuf};
 
+
 use crate::sys::fs::PathExt;
 
 /// Encapsulates the result of a path search.
-pub struct ExecutablePathSearch<PI, N>
+pub struct ExecutablePathSearch<PI>
 where
     PI: AsRef<str>,
-    N: AsRef<str>,
 {
     paths: VecDeque<PI>,
-    filename: N,
+    filenames: Vec<String>,
 }
 
-impl<PI, N> Iterator for ExecutablePathSearch<PI, N>
+#[cfg(windows)]
+fn candidate_filenames(filename: &str) -> Vec<String> {
+    if std::path::Path::new(filename).extension().is_some() {
+        return vec![filename.to_string()];
+    }
+
+    let mut candidates = Vec::new();
+    candidates.push(filename.to_string());
+    for ext in crate::sys::fs::executable_extensions() {
+        candidates.push(format!("{filename}{ext}"));
+    }
+    candidates
+}
+
+#[cfg(not(windows))]
+fn candidate_filenames(filename: &str) -> Vec<String> {
+    vec![filename.to_string()]
+}
+
+impl<PI> Iterator for ExecutablePathSearch<PI>
 where
     PI: AsRef<str>,
-    N: AsRef<str>,
 {
     type Item = PathBuf;
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(path) = self.paths.pop_front() {
-            let path = PathBuf::from(path.as_ref()).join(self.filename.as_ref());
-            if path.is_file() && path.as_path().executable() {
-                return Some(path);
+            let base_path = PathBuf::from(path.as_ref());
+            for filename in &self.filenames {
+                let path = base_path.join(filename);
+                if path.is_file() && path.as_path().executable() {
+                    return Some(path);
+                }
             }
         }
 
@@ -95,15 +116,16 @@ where
 ///
 /// * `paths` - An iterator over the paths to search.
 /// * `filename` - The name of the executable file to search for.
-pub fn search_for_executable<P, PI, N>(paths: P, filename: N) -> ExecutablePathSearch<PI, N>
+pub fn search_for_executable<P, PI, N>(paths: P, filename: N) -> ExecutablePathSearch<PI>
 where
     P: Iterator<Item = PI>,
     PI: AsRef<str>,
     N: AsRef<str>,
 {
+    let filenames = candidate_filenames(filename.as_ref());
     ExecutablePathSearch {
         paths: paths.collect(),
-        filename,
+        filenames,
     }
 }
 

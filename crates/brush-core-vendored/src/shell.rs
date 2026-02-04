@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::ffi::OsStr;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -12,7 +13,6 @@ use crate::env::{EnvironmentLookup, EnvironmentScope, ShellEnvironment};
 use crate::interp::{self, Execute, ExecutionParameters};
 use crate::options::RuntimeOptions;
 use crate::results::ExecutionSpawnResult;
-use crate::sys::fs::PathExt;
 use crate::variables::{self, ShellVariable};
 use crate::{
     ExecutionControlFlow, ExecutionExitCode, ExecutionResult, ProcessGroupPolicy, history,
@@ -1286,7 +1286,8 @@ impl Shell {
         filename: &'a str,
     ) -> impl Iterator<Item = PathBuf> + 'a {
         let path_var = self.env.get_str("PATH", self).unwrap_or_default();
-        let paths = path_var.split(':').map(|s| s.to_owned());
+        let paths = std::env::split_paths(OsStr::new(path_var.as_ref()))
+            .map(|path| path.to_string_lossy().to_string());
 
         pathsearch::search_for_executable(paths.into_iter(), filename)
     }
@@ -1303,7 +1304,8 @@ impl Shell {
         case_insensitive: bool,
     ) -> impl Iterator<Item = PathBuf> {
         let path_var = self.env.get_str("PATH", self).unwrap_or_default();
-        let paths = path_var.split(':').map(|s| s.to_owned());
+        let paths = std::env::split_paths(OsStr::new(path_var.as_ref()))
+            .map(|path| path.to_string_lossy().to_string());
 
         pathsearch::search_for_executable_with_prefix(
             paths.into_iter(),
@@ -1322,13 +1324,10 @@ impl Shell {
         &self,
         candidate_name: S,
     ) -> Option<PathBuf> {
-        for dir_str in self.env_str("PATH").unwrap_or_default().split(':') {
-            let candidate_path = Path::new(dir_str).join(candidate_name.as_ref());
-            if candidate_path.executable() {
-                return Some(candidate_path);
-            }
-        }
-        None
+        let path_var = self.env_str("PATH").unwrap_or_default();
+        let paths = std::env::split_paths(OsStr::new(path_var.as_ref()))
+            .map(|path| path.to_string_lossy().to_string());
+        pathsearch::search_for_executable(paths.into_iter(), candidate_name.as_ref()).next()
     }
 
     /// Uses the shell's hash-based path cache to check whether the given filename is the name

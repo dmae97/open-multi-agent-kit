@@ -1,6 +1,7 @@
 //! Filesystem utilities.
 
 use crate::error;
+use std::{ffi::OsStr, sync::OnceLock};
 
 impl crate::sys::fs::PathExt for std::path::Path {
 	fn readable(&self) -> bool {
@@ -12,7 +13,16 @@ impl crate::sys::fs::PathExt for std::path::Path {
 	}
 
 	fn executable(&self) -> bool {
-		true
+		if !self.is_file() {
+			return false;
+		}
+		let Some(ext) = self.extension().and_then(OsStr::to_str) else {
+			return false;
+		};
+		let ext = format!(".{ext}");
+		executable_extensions()
+			.iter()
+			.any(|known| known.eq_ignore_ascii_case(&ext))
 	}
 
 	fn exists_and_is_block_device(&self) -> bool {
@@ -75,4 +85,36 @@ pub fn open_null_file() -> Result<std::fs::File, error::Error> {
 	let f = std::fs::File::options().read(true).write(true).open("NUL")?;
 
 	Ok(f)
+}
+
+pub(crate) fn executable_extensions() -> &'static [String] {
+	static PATHEXT: OnceLock<Vec<String>> = OnceLock::new();
+	PATHEXT.get_or_init(|| {
+		let fallback = [".COM", ".EXE", ".BAT", ".CMD"];
+		let Some(value) = std::env::var_os("PATHEXT") else {
+			return fallback.iter().map(|ext| (*ext).to_string()).collect();
+		};
+
+		let value = value.to_string_lossy();
+		let mut exts = value
+			.split(';')
+			.filter_map(|ext| {
+				let ext = ext.trim();
+				if ext.is_empty() {
+					None
+				} else if ext.starts_with('.') {
+					Some(ext.to_string())
+				} else {
+					Some(format!(".{ext}"))
+				}
+			})
+			.collect::<Vec<_>>();
+
+		if exts.is_empty() {
+			exts = fallback.iter().map(|ext| (*ext).to_string()).collect::<Vec<_>>();
+			return exts;
+		}
+
+		exts
+	})
 }
