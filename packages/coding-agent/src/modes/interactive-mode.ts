@@ -15,7 +15,7 @@ import {
 	Text,
 	TUI,
 } from "@oh-my-pi/pi-tui";
-import { isEnoent, logger, postmortem } from "@oh-my-pi/pi-utils";
+import { getEnv, isEnoent, logger, postmortem } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { KeybindingsManager } from "../config/keybindings";
 import { renderPromptTemplate } from "../config/prompt-templates";
@@ -53,8 +53,8 @@ import { getEditorTheme, getMarkdownTheme, onThemeChange, theme } from "./theme/
 import type { CompactionQueuedMessage, InteractiveModeContext, TodoItem } from "./types";
 import { UiHelpers } from "./utils/ui-helpers";
 
-/** Conditional startup debug prints (stderr) when OMP_DEBUG_STARTUP is set */
-const debugStartup = process.env.OMP_DEBUG_STARTUP
+/** Conditional startup debug prints (stderr) when PI_DEBUG_STARTUP is set */
+const debugStartup = getEnv("PI_DEBUG_STARTUP")
 	? (stage: string) => process.stderr.write(`[startup] ${stage}\n`)
 	: () => {};
 

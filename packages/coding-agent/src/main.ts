@@ -9,7 +9,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { type ImageContent, supportsXhigh } from "@oh-my-pi/pi-ai";
-import { postmortem } from "@oh-my-pi/pi-utils";
+import { getEnv, postmortem } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { type Args, parseArgs, printHelp } from "./cli/args";
 import { parseConfigArgs, printConfigHelp, runConfigCommand } from "./cli/config-cli";
@@ -42,8 +42,8 @@ import { resolvePromptInput } from "./system-prompt";
 import { getChangelogPath, getNewEntries, parseChangelog } from "./utils/changelog";
 import { printTimings, time } from "./utils/timings";
 
-/** Conditional startup debug prints (stderr) when OMP_DEBUG_STARTUP is set */
-const debugStartup = process.env.OMP_DEBUG_STARTUP
+/** Conditional startup debug prints (stderr) when PI_DEBUG_STARTUP is set */
+const debugStartup = getEnv("PI_DEBUG_STARTUP")
 	? (stage: string) => process.stderr.write(`[startup] ${stage}\n`)
 	: () => {};
 
@@ -655,9 +655,9 @@ export async function main(args: string[]) {
 	time("initializeWithSettings");
 
 	// Apply model role overrides from CLI args or env vars (ephemeral, not persisted)
-	const smolModel = parsed.smol ?? process.env.OMP_SMOL_MODEL;
-	const slowModel = parsed.slow ?? process.env.OMP_SLOW_MODEL;
-	const planModel = parsed.plan ?? process.env.OMP_PLAN_MODEL;
+	const smolModel = parsed.smol ?? getEnv("PI_SMOL_MODEL");
+	const slowModel = parsed.slow ?? getEnv("PI_SLOW_MODEL");
+	const planModel = parsed.plan ?? getEnv("PI_PLAN_MODEL");
 	if (smolModel || slowModel || planModel) {
 		const currentRoles = settings.get("modelRoles") as Record<string, string>;
 		if (smolModel) currentRoles.smol = smolModel;

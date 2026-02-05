@@ -306,12 +306,12 @@ async function probeHostInfo(host: SSHConnectionTarget): Promise<SSHHostInfo> {
 	const hasBash = !unexpandedPosixVars && (Boolean(bashVersion) || shell === "bash");
 	let compatShell: SSHHostInfo["compatShell"];
 	if (os === "windows" && host.compat !== false) {
-		const bashProbe = await runSshCaptureSync(await buildRemoteCommand(host, 'bash -lc "echo OMP_BASH_OK"'));
-		if (bashProbe.exitCode === 0 && bashProbe.stdout.includes("OMP_BASH_OK")) {
+		const bashProbe = await runSshCaptureSync(await buildRemoteCommand(host, 'bash -lc "echo PI_BASH_OK"'));
+		if (bashProbe.exitCode === 0 && bashProbe.stdout.includes("PI_BASH_OK")) {
 			compatShell = "bash";
 		} else {
-			const shProbe = await runSshCaptureSync(await buildRemoteCommand(host, 'sh -lc "echo OMP_SH_OK"'));
-			if (shProbe.exitCode === 0 && shProbe.stdout.includes("OMP_SH_OK")) {
+			const shProbe = await runSshCaptureSync(await buildRemoteCommand(host, 'sh -lc "echo PI_SH_OK"'));
+			if (shProbe.exitCode === 0 && shProbe.stdout.includes("PI_SH_OK")) {
 				compatShell = "sh";
 			}
 		}

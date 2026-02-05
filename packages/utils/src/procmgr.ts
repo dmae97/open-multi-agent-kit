@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import path from "node:path";
 import * as timers from "node:timers";
 import type { Subprocess } from "bun";
+import { getEnv } from "./env";
 
 export interface ShellConfig {
 	shell: string;
@@ -31,7 +32,7 @@ function isExecutable(path: string): boolean {
  * Build the spawn environment (cached).
  */
 function buildSpawnEnv(shell: string): Record<string, string> {
-	const noCI = process.env.OMP_BASH_NO_CI || process.env.CLAUDE_BASH_NO_CI;
+	const noCI = getEnv("PI_BASH_NO_CI") || getEnv("CLAUDE_BASH_NO_CI");
 	return {
 		...process.env,
 		SHELL: shell,
@@ -45,18 +46,18 @@ function buildSpawnEnv(shell: string): Record<string, string> {
 
 /**
  * Get shell args, optionally including login shell flag.
- * Supports OMP_BASH_NO_LOGIN and CLAUDE_BASH_NO_LOGIN to skip -l.
+ * Supports PI_BASH_NO_LOGIN and CLAUDE_BASH_NO_LOGIN to skip -l.
  */
 function getShellArgs(): string[] {
-	const noLogin = process.env.OMP_BASH_NO_LOGIN || process.env.CLAUDE_BASH_NO_LOGIN;
-	return noLogin ? ["-c"] : ["-l", "-c"];
+	const noLogin = getEnv("PI_BASH_NO_LOGIN") || getEnv("CLAUDE_BASH_NO_LOGIN");
+	return noLogin ? ["-l", "-c"] : ["-l", "-c"];
 }
 
 /**
  * Get shell prefix for wrapping commands (profilers, strace, etc.).
  */
 function getShellPrefix(): string | undefined {
-	return process.env.OMP_SHELL_PREFIX || process.env.CLAUDE_CODE_SHELL_PREFIX;
+	return getEnv("PI_SHELL_PREFIX") || getEnv("CLAUDE_CODE_SHELL_PREFIX");
 }
 
 /**

@@ -181,7 +181,7 @@ Configure different models for different purposes with automatic discovery:
 - **Three roles**: `default` (main model), `smol` (fast/cheap), `slow` (comprehensive reasoning)
 - **Auto-discovery**: Smol finds haiku → flash → mini; Slow finds codex → gpt → opus → pro
 - **Role-based selection**: Task tool agents can use `model: pi/smol` for cost-effective exploration
-- CLI args (`--smol`, `--slow`) and env vars (`OMP_SMOL_MODEL`, `OMP_SLOW_MODEL`)
+- CLI args (`--smol`, `--slow`) and env vars (`PI_SMOL_MODEL`, `PI_SLOW_MODEL`)
 - Configure via `/model` selector with keybindings (Enter=default, S=smol, L=slow)
 
 ## + Todo Tool (Task Tracking)

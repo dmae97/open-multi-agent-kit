@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { isEnoent, logger } from "@oh-my-pi/pi-utils";
+import { getEnv, isEnoent, logger } from "@oh-my-pi/pi-utils";
 import { getAgentDir } from "../config";
 import { OutputSink } from "../session/streaming-output";
 import { time } from "../utils/timings";
@@ -15,7 +15,7 @@ import {
 import { discoverPythonModules } from "./modules";
 import { PYTHON_PRELUDE } from "./prelude";
 
-const debugStartup = process.env.OMP_DEBUG_STARTUP
+const debugStartup = getEnv("PI_DEBUG_STARTUP")
 	? (stage: string) => process.stderr.write(`[startup] ${stage}\n`)
 	: () => {};
 
@@ -327,7 +327,7 @@ async function createKernelSession(
 	const env: Record<string, string> | undefined =
 		sessionFile || artifactsDir
 			? {
-					...(sessionFile ? { OMP_SESSION_FILE: sessionFile } : {}),
+					...(sessionFile ? { PI_SESSION_FILE: sessionFile } : {}),
 					...(artifactsDir ? { ARTIFACTS: artifactsDir } : {}),
 				}
 			: undefined;
@@ -384,7 +384,7 @@ async function restartKernelSession(
 	const env: Record<string, string> | undefined =
 		sessionFile || artifactsDir
 			? {
-					...(sessionFile ? { OMP_SESSION_FILE: sessionFile } : {}),
+					...(sessionFile ? { PI_SESSION_FILE: sessionFile } : {}),
 					...(artifactsDir ? { ARTIFACTS: artifactsDir } : {}),
 				}
 			: undefined;
@@ -537,7 +537,7 @@ export async function executePython(code: string, options?: PythonExecutorOption
 		const env: Record<string, string> | undefined =
 			sessionFile || artifactsDir
 				? {
-						...(sessionFile ? { OMP_SESSION_FILE: sessionFile } : {}),
+						...(sessionFile ? { PI_SESSION_FILE: sessionFile } : {}),
 						...(artifactsDir ? { ARTIFACTS: artifactsDir } : {}),
 					}
 				: undefined;

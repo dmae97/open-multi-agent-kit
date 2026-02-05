@@ -7,6 +7,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Container, Editor, matchesKey, Spacer, Text, type TUI } from "@oh-my-pi/pi-tui";
 import { nanoid } from "nanoid";
+import { getEnv } from "@oh-my-pi/pi-utils";
 import { getEditorTheme, theme } from "../../modes/theme/theme";
 import { DynamicBorder } from "./dynamic-border";
 
@@ -47,7 +48,7 @@ export class HookEditorComponent extends Container {
 		this.addChild(new Spacer(1));
 
 		// Add hint
-		const hasExternalEditor = !!(process.env.VISUAL || process.env.EDITOR);
+		const hasExternalEditor = !!(getEnv("VISUAL") || getEnv("EDITOR"));
 		const hint = hasExternalEditor
 			? "ctrl+enter submit  esc cancel  ctrl+g external editor"
 			: "ctrl+enter submit  esc cancel";
@@ -83,7 +84,7 @@ export class HookEditorComponent extends Container {
 	}
 
 	private async openExternalEditor(): Promise<void> {
-		const editorCmd = process.env.VISUAL || process.env.EDITOR;
+		const editorCmd = getEnv("VISUAL") || getEnv("EDITOR");
 		if (!editorCmd) {
 			return;
 		}

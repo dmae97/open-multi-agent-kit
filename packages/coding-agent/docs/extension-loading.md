@@ -23,7 +23,7 @@ For each root:
 
 Additional extension paths can be provided via settings and CLI:
 
-- **Global settings**: `~/.omp/agent/config.yml` (or `$OMP_CODING_AGENT_DIR/config.yml`)
+- **Global settings**: `~/.omp/agent/config.yml` (or `$PI_CODING_AGENT_DIR/config.yml`)
 - **Project settings**: `<cwd>/.omp/settings.json`
 - **CLI**: `--extension` or `-e`
 
@@ -39,7 +39,7 @@ extensions:
 ```json
 // .omp/settings.json
 {
-  "extensions": ["./project-extension.ts"]
+	"extensions": ["./project-extension.ts"]
 }
 ```
 
@@ -66,10 +66,10 @@ Example `package.json` manifest:
 
 ```json
 {
-  "name": "my-extension-pack",
-  "omp": {
-    "extensions": ["./src/safety-gates.ts", "./src/custom-tools.ts"]
-  }
+	"name": "my-extension-pack",
+	"omp": {
+		"extensions": ["./src/safety-gates.ts", "./src/custom-tools.ts"]
+	}
 }
 ```
 

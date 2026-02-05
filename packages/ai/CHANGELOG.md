@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Replaced direct `process.env` access with `getEnv()` utility from `@oh-my-pi/pi-utils` for consistent environment variable handling across all providers
+- Updated environment variable names from `OMP_*` prefix to `PI_*` prefix for consistency (e.g., `OMP_CODING_AGENT_DIR` → `PI_CODING_AGENT_DIR`)
+
+### Removed
+
+- Removed automatic environment variable migration from `PI_*` to `OMP_*` prefixes via `migrate-env.ts` module
 
 ## [10.5.0] - 2026-02-04
 ### Changed

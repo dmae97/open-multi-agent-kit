@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 import { createInterface } from "readline";
 import { CliAuthStorage } from "./storage";
-import "./utils/migrate-env";
 import { getOAuthProviders } from "./utils/oauth";
 import { loginAnthropic } from "./utils/oauth/anthropic";
 import { loginCursor } from "./utils/oauth/cursor";

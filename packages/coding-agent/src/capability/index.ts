@@ -8,9 +8,10 @@
  */
 import * as os from "node:os";
 import * as path from "node:path";
+import { getEnv } from "@oh-my-pi/pi-utils";
 
-/** Conditional startup debug prints (stderr) when OMP_DEBUG_STARTUP is set */
-const debugStartup = process.env.OMP_DEBUG_STARTUP
+/** Conditional startup debug prints (stderr) when PI_DEBUG_STARTUP is set */
+const debugStartup = getEnv("PI_DEBUG_STARTUP")
 	? (stage: string) => process.stderr.write(`[startup] ${stage}\n`)
 	: () => {};
 

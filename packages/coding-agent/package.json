@@ -74,7 +74,7 @@
 	"scripts": {
 		"check": "tsgo -p tsconfig.json",
 		"format-prompts": "bun scripts/format-prompts.ts",
-		"build:binary": "cd ../.. && bun --cwd=packages/natives run embed:native && bun build --compile --define OMP_COMPILED=true --root . ./packages/coding-agent/src/cli.ts --outfile packages/coding-agent/dist/omp && bun --cwd=packages/natives run embed:native --reset",
+		"build:binary": "cd ../.. && bun --cwd=packages/natives run embed:native && bun build --compile --define PI_COMPILED=true --root . ./packages/coding-agent/src/cli.ts --outfile packages/coding-agent/dist/omp && bun --cwd=packages/natives run embed:native --reset",
 		"generate-template": "bun scripts/generate-template.ts",
 		"test": "bun test"
 	},

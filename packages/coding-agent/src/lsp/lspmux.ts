@@ -1,6 +1,6 @@
 import * as os from "node:os";
 import * as path from "node:path";
-import { logger } from "@oh-my-pi/pi-utils";
+import { getEnv, logger } from "@oh-my-pi/pi-utils";
 import { TOML } from "bun";
 
 /**
@@ -127,7 +127,7 @@ async function checkServerRunning(binaryPath: string): Promise<boolean> {
  * Detect lspmux availability and state.
  * Results are cached for STATE_CACHE_TTL_MS.
  *
- * Set OMP_DISABLE_LSPMUX=1 to disable.
+ * Set PI_DISABLE_LSPMUX=1 to disable.
  */
 export async function detectLspmux(): Promise<LspmuxState> {
 	const now = Date.now();
@@ -135,7 +135,7 @@ export async function detectLspmux(): Promise<LspmuxState> {
 		return cachedState;
 	}
 
-	if (process.env.OMP_DISABLE_LSPMUX === "1") {
+	if (getEnv("PI_DISABLE_LSPMUX") === "1") {
 		cachedState = { available: false, running: false, binaryPath: null, config: null };
 		cacheTimestamp = now;
 		return cachedState;

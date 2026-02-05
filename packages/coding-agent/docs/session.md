@@ -8,7 +8,7 @@ Sessions are stored as JSONL (JSON Lines) files. Each line is a JSON object with
 ~/.omp/agent/sessions/--<cwd>--/<timestamp>_<sessionId>.jsonl
 ```
 
-Default base directory comes from `getAgentDir()` (overridable via `OMP_CODING_AGENT_DIR`).
+Default base directory comes from `getAgentDir()` (overridable via `PI_CODING_AGENT_DIR`).
 `<cwd>` is the working directory with the leading slash removed and `/`, `\`, `:` replaced by `-`.
 `<timestamp>` is ISO-8601 with `:`/`.` replaced by `-`. `sessionId` is a nanoid.
 
@@ -49,7 +49,14 @@ interface SessionEntryBase {
 First line of the file. Metadata only, not part of the tree (no `id`/`parentId`). `version` is absent in v1 sessions.
 
 ```json
-{ "type": "session", "version": 3, "id": "nanoid", "timestamp": "2024-12-03T14:00:00.000Z", "cwd": "/path/to/project", "title": "Optional title" }
+{
+	"type": "session",
+	"version": 3,
+	"id": "nanoid",
+	"timestamp": "2024-12-03T14:00:00.000Z",
+	"cwd": "/path/to/project",
+	"title": "Optional title"
+}
 ```
 
 For sessions with a parent (created via `/branch`, `newSession({ parentSession })`, or fork operations):
@@ -280,7 +287,6 @@ const text = await Bun.file("session.jsonl").text();
 const entries = Bun.JSONL.parse(text);
 
 for (const entry of entries) {
-
 	switch (entry.type) {
 		case "session":
 			console.log(`Session v${entry.version ?? 1}: ${entry.id}`);

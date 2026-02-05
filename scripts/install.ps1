@@ -18,7 +18,7 @@ $ErrorActionPreference = "Stop"
 
 $Repo = "can1357/oh-my-pi"
 $Package = "@oh-my-pi/pi-coding-agent"
-$InstallDir = if ($env:OMP_INSTALL_DIR) { $env:OMP_INSTALL_DIR } else { "$env:LOCALAPPDATA\omp" }
+$InstallDir = if ($env:PI_INSTALL_DIR) { $env:PI_INSTALL_DIR } else { "$env:LOCALAPPDATA\omp" }
 $BinaryName = "omp-windows-x64.exe"
 $NativeAddonName = "pi_natives.win32-x64.node"
 $MinimumBunVersion = "1.3.7"

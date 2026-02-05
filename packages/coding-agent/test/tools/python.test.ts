@@ -9,16 +9,16 @@ let previousSkipCheck: string | undefined;
 let tempDir: TempDir;
 beforeAll(() => {
 	tempDir = TempDir.createSync("@omp-python-test-");
-	previousSkipCheck = process.env.OMP_PYTHON_SKIP_CHECK;
-	process.env.OMP_PYTHON_SKIP_CHECK = "1";
+	previousSkipCheck = process.env.PI_PYTHON_SKIP_CHECK;
+	process.env.PI_PYTHON_SKIP_CHECK = "1";
 });
 
 afterAll(() => {
 	if (previousSkipCheck === undefined) {
-		delete process.env.OMP_PYTHON_SKIP_CHECK;
+		delete process.env.PI_PYTHON_SKIP_CHECK;
 		return;
 	}
-	process.env.OMP_PYTHON_SKIP_CHECK = previousSkipCheck;
+	process.env.PI_PYTHON_SKIP_CHECK = previousSkipCheck;
 	tempDir.removeSync();
 });
 

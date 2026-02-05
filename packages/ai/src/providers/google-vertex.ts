@@ -6,6 +6,7 @@ import {
 	ThinkingLevel,
 } from "@google/genai";
 import { calculateCost } from "../models";
+import { getEnv } from "@oh-my-pi/pi-utils";
 import type {
 	Api,
 	AssistantMessage,
@@ -304,7 +305,7 @@ function createClient(model: Model<"google-vertex">, project: string, location: 
 }
 
 function resolveProject(options?: GoogleVertexOptions): string {
-	const project = options?.project || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
+	const project = options?.project || getEnv("GOOGLE_CLOUD_PROJECT") || getEnv("GCLOUD_PROJECT");
 	if (!project) {
 		throw new Error(
 			"Vertex AI requires a project ID. Set GOOGLE_CLOUD_PROJECT/GCLOUD_PROJECT or pass project in options.",
@@ -314,7 +315,7 @@ function resolveProject(options?: GoogleVertexOptions): string {
 }
 
 function resolveLocation(options?: GoogleVertexOptions): string {
-	const location = options?.location || process.env.GOOGLE_CLOUD_LOCATION;
+	const location = options?.location || getEnv("GOOGLE_CLOUD_LOCATION");
 	if (!location) {
 		throw new Error("Vertex AI requires a location. Set GOOGLE_CLOUD_LOCATION or pass location in options.");
 	}

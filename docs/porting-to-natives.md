@@ -17,11 +17,13 @@ Avoid ports that depend on JS-only state or dynamic imports. N-API exports shoul
 ## Anatomy of a native export
 
 **Rust side:**
+
 - Implementation lives in `crates/pi-natives/src/<module>.rs`. If you add a new module, register it in `crates/pi-natives/src/lib.rs`.
 - Export with `#[napi]` and `#[napi(js_name = "...")]` to keep JS-facing camelCase names. Use `#[napi(object)]` for structs.
 - Use `task::blocking(tag, cancel_token, work)` (see `crates/pi-natives/src/task.rs`) for CPU-bound or blocking work. Use `task::future(env, tag, work)` for async work that needs Tokio (e.g., shell sessions). Pass a `CancelToken` when you expose `timeoutMs` or `AbortSignal`.
 
 **JS side:**
+
 - `packages/natives/src/bindings.ts` holds the base `NativeBindings` interface.
 - `packages/natives/src/<module>/types.ts` defines TS types and augments `NativeBindings` via declaration merging.
 - `packages/natives/src/native.ts` imports each `<module>/types.ts` file to activate the declarations.
@@ -31,43 +33,51 @@ Avoid ports that depend on JS-only state or dynamic imports. N-API exports shoul
 
 ## Porting checklist
 
-1) **Add the Rust implementation**
+1. **Add the Rust implementation**
+
 - Put the core logic in a plain Rust function.
 - If it’s a new module, add it to `crates/pi-natives/src/lib.rs`.
 - Expose it with `#[napi(js_name = "...")]` to keep camelCase names stable.
 - Keep signatures owned and simple: `String`, `Vec<String>`, `Uint8Array`, or `Either<JsString, Uint8Array>` for large string/byte inputs.
 - For CPU-bound or blocking work, use `task::blocking`; for async work, use `task::future`. Pass a `CancelToken` and call `heartbeat()` inside long loops.
 
-2) **Wire JS bindings**
+2. **Wire JS bindings**
+
 - Add the types and `NativeBindings` augmentation in `packages/natives/src/<module>/types.ts`.
 - Import `./<module>/types` in `packages/natives/src/native.ts` to trigger declaration merging.
 - Add a wrapper in `packages/natives/src/<module>/index.ts` that calls `native`.
 - Re-export from `packages/natives/src/index.ts`.
 
-3) **Update native validation**
+3. **Update native validation**
+
 - Add `checkFn("newExport")` in `validateNative` (`packages/natives/src/native.ts`).
 
-4) **Add benchmarks**
+4. **Add benchmarks**
+
 - Put benchmarks next to the owning package (`packages/tui/bench`, `packages/natives/bench`, or `packages/coding-agent/bench`).
 - Include a JS baseline and native version in the same run.
 - Use `performance.now()` and a fixed iteration count.
 - Keep the benchmark inputs small and realistic (actual data seen in the hot path).
 
-5) **Build the native binary**
-- `bun --cwd=packages/natives run build:native`
-- Use `bun --cwd=packages/natives run dev:native` for debug builds (`pi_natives.dev.node`) and set `OMP_DEV=1` when loading it.
+5. **Build the native binary**
 
-6) **Run the benchmark**
+- `bun --cwd=packages/natives run build:native`
+- Use `bun --cwd=packages/natives run dev:native` for debug builds (`pi_natives.dev.node`) and set `PI_DEV=1` when loading it.
+
+6. **Run the benchmark**
+
 - `bun run packages/<pkg>/bench/<bench>.ts` (or `bun --cwd=packages/natives run bench`)
 
-7) **Decide on usage**
+7. **Decide on usage**
+
 - If native is slower, **keep JS** and leave the native export unused.
 - If native is faster, switch call sites to the native wrapper.
 
 ## Pain points and how to avoid them
 
 ### 1) Stale `pi_natives.node` prevents new exports
-The loader prefers the platform-tagged binary in `packages/natives/native` (`pi_natives.<platform>-<arch>.node`). When `OMP_DEV=1`, it will load `pi_natives.dev.node` instead. There is also a fallback `pi_natives.node`. Compiled binaries extract to `~/.omp/natives/<version>/pi_natives.<platform>-<arch>.node`. If any of these are stale, exports won’t update.
+
+The loader prefers the platform-tagged binary in `packages/natives/native` (`pi_natives.<platform>-<arch>.node`). When `PI_DEV=1`, it will load `pi_natives.dev.node` instead. There is also a fallback `pi_natives.node`. Compiled binaries extract to `~/.omp/natives/<version>/pi_natives.<platform>-<arch>.node`. If any of these are stale, exports won’t update.
 
 **Fix:** remove the stale file before rebuilding.
 
@@ -90,6 +100,7 @@ bun -e 'const tag = `${process.platform}-${process.arch}`; const mod = require(`
 ```
 
 ### 2) “Missing exports” errors from `validateNative`
+
 This is **good** — it prevents silent mismatches. When you see this:
 
 ```
@@ -99,9 +110,11 @@ Native addon missing exports ... Missing: visibleWidth
 it means your binary is stale, the Rust `#[napi(js_name = "...")]` doesn’t match the JS name, or the export never compiled in. Fix the build and the naming mismatch, don’t weaken validation.
 
 ### 3) Rust signature mismatch
+
 Keep it simple and owned. `String`, `Vec<String>`, and `Uint8Array` work. Avoid references like `&str` in public exports. If you need structured data, wrap it in `#[napi(object)]` structs.
 
 ### 4) Benchmarking mistakes
+
 - Don’t compare different inputs or allocations.
 - Keep JS and native using identical input arrays.
 - Run both in the same benchmark file to avoid skew.

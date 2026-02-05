@@ -19,10 +19,10 @@ const parseNumber = (value: string | undefined, defaultValue: number): number =>
 };
 
 /** Maximum output bytes per agent */
-export const MAX_OUTPUT_BYTES = parseNumber(getEnv("OMP_TASK_MAX_OUTPUT_BYTES"), 500_000);
+export const MAX_OUTPUT_BYTES = parseNumber(getEnv("PI_TASK_MAX_OUTPUT_BYTES"), 500_000);
 
 /** Maximum output lines per agent */
-export const MAX_OUTPUT_LINES = parseNumber(getEnv("OMP_TASK_MAX_OUTPUT_LINES"), 5000);
+export const MAX_OUTPUT_LINES = parseNumber(getEnv("PI_TASK_MAX_OUTPUT_LINES"), 5000);
 
 /** EventBus channel for raw subagent events */
 export const TASK_SUBAGENT_EVENT_CHANNEL = "task:subagent:event";

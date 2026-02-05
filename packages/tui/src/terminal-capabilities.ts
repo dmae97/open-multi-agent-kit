@@ -42,7 +42,7 @@ export class TerminalInfo {
 }
 
 export function isNotificationSuppressed(): boolean {
-	const value = getEnv("OMP_NOTIFICATIONS");
+	const value = getEnv("PI_NOTIFICATIONS");
 	if (!value) return false;
 	return value === "off" || value === "0" || value === "false";
 }

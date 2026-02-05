@@ -150,8 +150,8 @@ describe("PythonKernel (external gateway)", () => {
 	const originalWebSocket = globalThis.WebSocket;
 
 	beforeEach(() => {
-		process.env.OMP_PYTHON_GATEWAY_URL = "http://gateway.test";
-		process.env.OMP_PYTHON_SKIP_CHECK = "1";
+		process.env.PI_PYTHON_GATEWAY_URL = "http://gateway.test";
+		process.env.PI_PYTHON_SKIP_CHECK = "1";
 		globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
 	});
 

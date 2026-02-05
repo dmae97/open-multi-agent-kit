@@ -154,6 +154,7 @@
       "version": "10.6.2",
       "dependencies": {
         "@oh-my-pi/pi-natives": "workspace:*",
+        "@oh-my-pi/pi-utils": "workspace:*",
         "@types/mime-types": "^3.0.1",
         "chalk": "^5.6.2",
         "marked": "^17.0.1",

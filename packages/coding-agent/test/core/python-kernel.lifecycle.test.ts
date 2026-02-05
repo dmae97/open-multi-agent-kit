@@ -80,8 +80,8 @@ describe("PythonKernel gateway lifecycle", () => {
 	const originalSleep = Bun.sleep;
 	const originalWhich = Bun.which;
 	const originalExecute = PythonKernel.prototype.execute;
-	const originalGatewayUrl = process.env.OMP_PYTHON_GATEWAY_URL;
-	const originalGatewayToken = process.env.OMP_PYTHON_GATEWAY_TOKEN;
+	const originalGatewayUrl = process.env.PI_PYTHON_GATEWAY_URL;
+	const originalGatewayToken = process.env.PI_PYTHON_GATEWAY_TOKEN;
 	const originalBunEnv = process.env.BUN_ENV;
 
 	let tempDir: TempDir;
@@ -92,8 +92,8 @@ describe("PythonKernel gateway lifecycle", () => {
 		env = { fetchCalls: [], spawnCalls: [] };
 
 		process.env.BUN_ENV = "test";
-		delete process.env.OMP_PYTHON_GATEWAY_URL;
-		delete process.env.OMP_PYTHON_GATEWAY_TOKEN;
+		delete process.env.PI_PYTHON_GATEWAY_URL;
+		delete process.env.PI_PYTHON_GATEWAY_TOKEN;
 
 		FakeWebSocket.instances = [];
 		globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
@@ -130,14 +130,14 @@ describe("PythonKernel gateway lifecycle", () => {
 			process.env.BUN_ENV = originalBunEnv;
 		}
 		if (originalGatewayUrl === undefined) {
-			delete process.env.OMP_PYTHON_GATEWAY_URL;
+			delete process.env.PI_PYTHON_GATEWAY_URL;
 		} else {
-			process.env.OMP_PYTHON_GATEWAY_URL = originalGatewayUrl;
+			process.env.PI_PYTHON_GATEWAY_URL = originalGatewayUrl;
 		}
 		if (originalGatewayToken === undefined) {
-			delete process.env.OMP_PYTHON_GATEWAY_TOKEN;
+			delete process.env.PI_PYTHON_GATEWAY_TOKEN;
 		} else {
-			process.env.OMP_PYTHON_GATEWAY_TOKEN = originalGatewayToken;
+			process.env.PI_PYTHON_GATEWAY_TOKEN = originalGatewayToken;
 		}
 
 		globalThis.fetch = originalFetch;

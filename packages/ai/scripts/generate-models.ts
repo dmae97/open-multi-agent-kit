@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { join } from "node:path";
+import { getEnv } from "@oh-my-pi/pi-utils";
 import type { Api, KnownProvider, Model } from "../src/types";
 
 const packageRoot = join(import.meta.dir, "..");
@@ -191,7 +192,6 @@ interface KimiModelInfo {
 async function fetchKimiCodeModels(): Promise<Model<"openai-completions">[]> {
 	// Kimi Code /models endpoint requires authentication
 	// Use KIMI_API_KEY env var if available, otherwise return fallback models
-	const apiKey = process.env.KIMI_API_KEY;
 
 	if (apiKey) {
 		try {

@@ -640,7 +640,7 @@ if "__omp_prelude_loaded__" not in globals():
             output('explore_0', offset=10, limit=20)  # Lines 10-29
             output('explore_0', 'reviewer_1')  # Read multiple outputs
         """
-        session_file = os.environ.get("OMP_SESSION_FILE")
+        session_file = os.environ.get("PI_SESSION_FILE")
         if not session_file:
             _emit_status("output", error="No session file available")
             raise RuntimeError("No session - output artifacts unavailable")

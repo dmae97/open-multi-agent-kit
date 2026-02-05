@@ -6,7 +6,7 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { abortableSleep, isEnoent } from "@oh-my-pi/pi-utils";
+import { abortableSleep, getEnv, isEnoent } from "@oh-my-pi/pi-utils";
 import packageJson from "../../../package.json" with { type: "json" };
 import type { OAuthController, OAuthCredentials } from "./types";
 
@@ -37,12 +37,12 @@ interface TokenResponse {
 }
 
 function getAgentDir(): string {
-	const configDir = process.env.OMP_CODING_AGENT_DIR || path.join(os.homedir(), ".omp", "agent");
+	const configDir = getEnv("PI_CODING_AGENT_DIR") || path.join(os.homedir(), ".omp", "agent");
 	return configDir;
 }
 
 function resolveOAuthHost(): string {
-	return process.env.KIMI_CODE_OAUTH_HOST || process.env.KIMI_OAUTH_HOST || DEFAULT_OAUTH_HOST;
+	return getEnv("KIMI_CODE_OAUTH_HOST") || getEnv("KIMI_OAUTH_HOST") || DEFAULT_OAUTH_HOST;
 }
 
 function formatDeviceModel(system: string, release: string, arch: string): string {

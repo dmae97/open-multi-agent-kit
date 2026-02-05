@@ -7,6 +7,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { getEnv } from "@oh-my-pi/pi-utils";
+
 const DEFAULT_ENV_ALLOWLIST = new Set([
 	"PATH",
 	"HOME",
@@ -76,7 +78,7 @@ const DEFAULT_ENV_DENYLIST = new Set([
 	"MISTRAL_API_KEY",
 ]);
 
-const DEFAULT_ENV_ALLOW_PREFIXES = ["LC_", "XDG_", "OMP_"];
+const DEFAULT_ENV_ALLOW_PREFIXES = ["LC_", "XDG_", "PI_"];
 
 const CASE_INSENSITIVE_ENV = process.platform === "win32";
 const BASE_ENV_ALLOWLIST = new Set([...DEFAULT_ENV_ALLOWLIST, ...WINDOWS_ENV_ALLOWLIST]);
@@ -107,7 +109,7 @@ export interface PythonRuntime {
 	/** Filtered environment variables */
 	env: Record<string, string | undefined>;
 	/** Path to virtual environment, if detected */
-	venvPath: string | null;
+	venvPath?: string;
 }
 
 /**
@@ -135,15 +137,15 @@ export function filterEnv(env: Record<string, string | undefined>): Record<strin
 /**
  * Detect virtual environment path from VIRTUAL_ENV or common locations.
  */
-export function resolveVenvPath(cwd: string): string | null {
-	if (process.env.VIRTUAL_ENV) return process.env.VIRTUAL_ENV;
+export function resolveVenvPath(cwd: string): string | undefined {
+	if (getEnv("VIRTUAL_ENV")) return getEnv("VIRTUAL_ENV");
 	const candidates = [path.join(cwd, ".venv"), path.join(cwd, "venv")];
 	for (const candidate of candidates) {
 		if (fs.existsSync(candidate)) {
 			return candidate;
 		}
 	}
-	return null;
+	return undefined;
 }
 
 /**
@@ -189,6 +191,5 @@ export function resolvePythonRuntime(cwd: string, baseEnv: Record<string, string
 	return {
 		pythonPath: resolveWindowlessPython(pythonPath),
 		env,
-		venvPath: null,
 	};
 }

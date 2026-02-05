@@ -5,6 +5,7 @@
 import { OAuthCallbackFlow } from "./callback-server";
 import { generatePKCE } from "./pkce";
 import type { OAuthController, OAuthCredentials } from "./types";
+import { getEnv } from "@oh-my-pi/pi-utils";
 
 const decode = (s: string) => atob(s);
 const CLIENT_ID = decode(
@@ -91,7 +92,7 @@ async function pollOperation(
 }
 
 async function discoverProject(accessToken: string, onProgress?: (message: string) => void): Promise<string> {
-	const envProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID;
+	const envProjectId = getEnv("GOOGLE_CLOUD_PROJECT") || getEnv("GOOGLE_CLOUD_PROJECT_ID");
 
 	const headers = {
 		Authorization: `Bearer ${accessToken}`,

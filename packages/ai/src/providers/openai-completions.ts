@@ -10,6 +10,7 @@ import type {
 } from "openai/resources/chat/completions";
 import { calculateCost } from "../models";
 import { getEnvApiKey } from "../stream";
+import { getEnv } from "@oh-my-pi/pi-utils";
 import type {
 	AssistantMessage,
 	Context,
@@ -348,12 +349,12 @@ async function createClient(
 	extraHeaders?: Record<string, string>,
 ) {
 	if (!apiKey) {
-		if (!process.env.OPENAI_API_KEY) {
+		if (!getEnv("OPENAI_API_KEY")) {
 			throw new Error(
 				"OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass it as an argument.",
 			);
 		}
-		apiKey = process.env.OPENAI_API_KEY;
+		apiKey = getEnv("OPENAI_API_KEY");
 	}
 
 	let headers = { ...(model.headers ?? {}), ...(extraHeaders ?? {}) };

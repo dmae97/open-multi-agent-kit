@@ -449,10 +449,6 @@ export class Settings {
 
 		// Build merged view
 		this.rebuildMerged();
-
-		// Apply environment variables
-		this.applyEnvironmentVariables();
-
 		return this;
 	}
 
@@ -548,16 +544,6 @@ export class Settings {
 		}
 
 		return raw;
-	}
-
-	private applyEnvironmentVariables(): void {
-		const env = this.get("env") as Record<string, string>;
-		if (!env) return;
-		for (const [key, value] of Object.entries(env)) {
-			if (typeof key === "string" && typeof value === "string" && !(key in process.env)) {
-				process.env[key] = value;
-			}
-		}
 	}
 
 	// ─────────────────────────────────────────────────────────────────────────

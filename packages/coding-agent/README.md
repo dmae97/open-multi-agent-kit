@@ -59,13 +59,13 @@ npm install -g @oh-my-pi/pi-coding-agent
 
 Download from [GitHub Releases](https://github.com/can1357/oh-my-pi/releases):
 
-| Platform            | Binary                   |
-| ------------------- | ------------------------ |
-| macOS Apple Silicon | `omp-darwin-arm64`       |
-| macOS Intel         | `omp-darwin-x64`         |
-| Linux x64           | `omp-linux-x64`          |
-| Linux ARM64         | `omp-linux-arm64`        |
-| Windows x64         | `omp-windows-x64.exe`    |
+| Platform            | Binary                |
+| ------------------- | --------------------- |
+| macOS Apple Silicon | `omp-darwin-arm64`    |
+| macOS Intel         | `omp-darwin-x64`      |
+| Linux x64           | `omp-linux-x64`       |
+| Linux ARM64         | `omp-linux-arm64`     |
+| Windows x64         | `omp-windows-x64.exe` |
 
 ```bash
 # macOS/Linux
@@ -201,24 +201,24 @@ The agent reads, writes, and edits files, and executes commands via bash.
 
 ### Slash Commands
 
-| Command                   | Description                                                                 |
-| ------------------------- | --------------------------------------------------------------------------- |
-| `/settings`               | Open settings menu (thinking, theme, queue mode, toggles)                   |
+| Command                   | Description                                                                                     |
+| ------------------------- | ----------------------------------------------------------------------------------------------- |
+| `/settings`               | Open settings menu (thinking, theme, queue mode, toggles)                                       |
 | `/model`                  | Switch models mid-session. Use `/model <search>` or `provider/model` to prefilter/disambiguate. |
-| `/export [file]`          | Export session to HTML file                                                 |
-| `/dump`                   | Copy session transcript to clipboard                                        |
-| `/share`                  | Upload session as secret GitHub gist, get shareable URL (requires `gh` CLI) |
-| `/session`                | Show session info: path, message counts, token usage, cost                  |
-| `/hotkeys`                | Show all keyboard shortcuts                                                 |
-| `/changelog`              | Display full version history                                                |
-| `/tree`                   | Navigate session tree in-place (search, filter, label entries)              |
-| `/branch`                 | Create new conversation branch from a previous message                      |
-| `/resume`                 | Switch to a different session (interactive selector)                        |
-| `/login`                  | OAuth login for subscription-based models                                   |
-| `/logout`                 | Clear OAuth tokens                                                          |
-| `/new`                    | Start a new session                                                         |
-| `/copy`                   | Copy last agent message to clipboard                                        |
-| `/compact [instructions]` | Manually compact conversation context                                       |
+| `/export [file]`          | Export session to HTML file                                                                     |
+| `/dump`                   | Copy session transcript to clipboard                                                            |
+| `/share`                  | Upload session as secret GitHub gist, get shareable URL (requires `gh` CLI)                     |
+| `/session`                | Show session info: path, message counts, token usage, cost                                      |
+| `/hotkeys`                | Show all keyboard shortcuts                                                                     |
+| `/changelog`              | Display full version history                                                                    |
+| `/tree`                   | Navigate session tree in-place (search, filter, label entries)                                  |
+| `/branch`                 | Create new conversation branch from a previous message                                          |
+| `/resume`                 | Switch to a different session (interactive selector)                                            |
+| `/login`                  | OAuth login for subscription-based models                                                       |
+| `/logout`                 | Clear OAuth tokens                                                                              |
+| `/new`                    | Start a new session                                                                             |
+| `/copy`                   | Copy last agent message to clipboard                                                            |
+| `/compact [instructions]` | Manually compact conversation context                                                           |
 
 ### Editor Features
 
@@ -245,13 +245,13 @@ The agent reads, writes, and edits files, and executes commands via bash.
 
 **Editing:**
 
-| Key                       | Action                       |
-| ------------------------- | ---------------------------- |
-| Enter                     | Send message                 |
+| Key                       | Action                                    |
+| ------------------------- | ----------------------------------------- |
+| Enter                     | Send message                              |
 | Shift+Enter               | New line (Ctrl+Enter on Windows Terminal) |
-| Ctrl+W / Option+Backspace | Delete word backwards        |
-| Ctrl+U                    | Delete to start of line      |
-| Ctrl+K                    | Delete to end of line        |
+| Ctrl+W / Option+Backspace | Delete word backwards                     |
+| Ctrl+U                    | Delete to start of line                   |
+| Ctrl+K                    | Delete to end of line                     |
 
 **Other:**
 
@@ -366,6 +366,7 @@ When disabled, neither case triggers automatic compaction (use `/compact` manual
 ```
 
 **Environment Variables (`env`):**
+
 - Automatically sets environment variables when the application starts
 - Only sets variables that aren't already present in `process.env`
 - Supports any environment variable, not just API keys
@@ -564,7 +565,7 @@ Global `~/.omp/agent/settings.json` stores persistent preferences:
 | Setting                       | Description                                                                                                                         | Default         |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------- |
 | `theme`                       | Color theme name                                                                                                                    | auto-detected   |
-| `modelRoles`                  | Model assignments by role (e.g., `{"default": "...", "slow": "...", "smol": "...", "plan": "..."}`)                                  | -               |
+| `modelRoles`                  | Model assignments by role (e.g., `{"default": "...", "slow": "...", "smol": "...", "plan": "..."}`)                                 | -               |
 | `defaultThinkingLevel`        | Thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`                                                                  | -               |
 | `enabledModels`               | Model patterns for cycling. Supports glob patterns (`github-copilot/*`, `*sonnet*`) and fuzzy matching. Same as `--models` CLI flag | -               |
 | `queueMode`                   | Message queue mode: `all` or `one-at-a-time`                                                                                        | `one-at-a-time` |
@@ -824,33 +825,33 @@ omp [options] [@files...] [messages...]
 
 ### Options
 
-| Option                                | Description                                                                                                                                                                  |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Option                                | Description                                                                                                                                                                                            |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `--provider <name>`                   | Provider: `anthropic`, `openai`, `google`, `mistral`, `xai`, `groq`, `cerebras`, `openrouter`, `zai`, `cursor`, `github-copilot`, `openai-codex`, `google-gemini-cli`, `google-antigravity`, or custom |
-| `--model <id>`                        | Model ID                                                                                                                                                                     |
-| `--api-key <key>`                     | API key (overrides environment)                                                                                                                                              |
-| `--system-prompt <text\|file>`        | Custom system prompt (text or file path)                                                                                                                                     |
-| `--append-system-prompt <text\|file>` | Append to system prompt                                                                                                                                                      |
-| `--mode <mode>`                       | Output mode: `text`, `json`, `rpc` (implies `--print`)                                                                                                                       |
-| `--print`, `-p`                       | Non-interactive: process prompt and exit                                                                                                                                     |
-| `--no-session`                        | Don't save session                                                                                                                                                           |
-| `--session <path>`                    | Use specific session file                                                                                                                                                    |
-| `--session-dir <dir>`                 | Directory for session storage and lookup                                                                                                                                     |
-| `--continue`, `-c`                    | Continue most recent session                                                                                                                                                 |
-| `--resume`, `-r`                      | Select session to resume                                                                                                                                                     |
-| `--models <patterns>`                 | Comma-separated patterns for model role cycling. Supports glob patterns (e.g., `anthropic/*`, `*sonnet*:high`) and fuzzy matching (e.g., `sonnet,haiku:low`)                 |
-| `--no-tools`                          | Disable all built-in tools                                                                                                                                                   |
-| `--tools <tools>`                     | Restrict to comma-separated tool list (default: all tools enabled)                                                                                                           |
-| `--thinking <level>`                  | Thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`                                                                                                           |
-| `--extension <path>`, `-e`            | Load an extension file (can be used multiple times)                                                                                                                          |
-| `--no-extensions`                     | Disable extension discovery (explicit `-e` paths still work)                                                                                                                 |
-| `--no-skills`                         | Disable skills discovery and loading                                                                                                                                         |
-| `--skills <patterns>`                 | Comma-separated glob patterns to filter skills (e.g., `git-*,docker`)                                                                                                        |
-| `--no-lsp`                            | Disable LSP integration                                                                                                                                                      |
-| `--hook <path>`                       | Load a hook file (for debugging)                                                                                                                                             |
-| `--export <file> [output]`            | Export session to HTML                                                                                                                                                       |
-| `--help`, `-h`                        | Show help                                                                                                                                                                    |
-| `--version`, `-v`                     | Show version                                                                                                                                                                 |
+| `--model <id>`                        | Model ID                                                                                                                                                                                               |
+| `--api-key <key>`                     | API key (overrides environment)                                                                                                                                                                        |
+| `--system-prompt <text\|file>`        | Custom system prompt (text or file path)                                                                                                                                                               |
+| `--append-system-prompt <text\|file>` | Append to system prompt                                                                                                                                                                                |
+| `--mode <mode>`                       | Output mode: `text`, `json`, `rpc` (implies `--print`)                                                                                                                                                 |
+| `--print`, `-p`                       | Non-interactive: process prompt and exit                                                                                                                                                               |
+| `--no-session`                        | Don't save session                                                                                                                                                                                     |
+| `--session <path>`                    | Use specific session file                                                                                                                                                                              |
+| `--session-dir <dir>`                 | Directory for session storage and lookup                                                                                                                                                               |
+| `--continue`, `-c`                    | Continue most recent session                                                                                                                                                                           |
+| `--resume`, `-r`                      | Select session to resume                                                                                                                                                                               |
+| `--models <patterns>`                 | Comma-separated patterns for model role cycling. Supports glob patterns (e.g., `anthropic/*`, `*sonnet*:high`) and fuzzy matching (e.g., `sonnet,haiku:low`)                                           |
+| `--no-tools`                          | Disable all built-in tools                                                                                                                                                                             |
+| `--tools <tools>`                     | Restrict to comma-separated tool list (default: all tools enabled)                                                                                                                                     |
+| `--thinking <level>`                  | Thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`                                                                                                                                     |
+| `--extension <path>`, `-e`            | Load an extension file (can be used multiple times)                                                                                                                                                    |
+| `--no-extensions`                     | Disable extension discovery (explicit `-e` paths still work)                                                                                                                                           |
+| `--no-skills`                         | Disable skills discovery and loading                                                                                                                                                                   |
+| `--skills <patterns>`                 | Comma-separated glob patterns to filter skills (e.g., `git-*,docker`)                                                                                                                                  |
+| `--no-lsp`                            | Disable LSP integration                                                                                                                                                                                |
+| `--hook <path>`                       | Load a hook file (for debugging)                                                                                                                                                                       |
+| `--export <file> [output]`            | Export session to HTML                                                                                                                                                                                 |
+| `--help`, `-h`                        | Show help                                                                                                                                                                                              |
+| `--version`, `-v`                     | Show version                                                                                                                                                                                           |
 
 ### File Arguments
 
@@ -906,11 +907,11 @@ omp --export session.jsonl output.html
 
 ### Environment Variables
 
-| Variable | Description |
-|----------|-------------|
+| Variable                                    | Description                                                       |
+| ------------------------------------------- | ----------------------------------------------------------------- |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc. | API keys for providers (see [API Keys & OAuth](#api-keys--oauth)) |
-| `OMP_CODING_AGENT_DIR` | Override the agent config directory (default: `~/.omp/agent`) |
-| `VISUAL`, `EDITOR` | External editor for Ctrl+G (e.g., `vim`, `code --wait`) |
+| `PI_CODING_AGENT_DIR`                       | Override the agent config directory (default: `~/.omp/agent`)     |
+| `VISUAL`, `EDITOR`                          | External editor for Ctrl+G (e.g., `vim`, `code --wait`)           |
 
 ---
 
@@ -920,27 +921,27 @@ All tools are enabled by default. Use `--tools <list>` to restrict to a subset.
 
 ### Core Tools
 
-| Tool    | Description                                                                                                     |
-| ------- | --------------------------------------------------------------------------------------------------------------- |
-| `read`  | Read file contents. Images sent as attachments. Text: first 2000 lines. Use offset/limit for large files.       |
-| `write` | Write/overwrite file. Creates parent directories.                                                               |
-| `edit`  | Replace text in file with fuzzy whitespace matching. Fails if text appears multiple times or not found.         |
-| `bash`  | Execute command. Returns stdout/stderr. Optional `timeout` parameter.                                           |
-| `grep`  | Search file contents (regex or literal). Respects `.gitignore`.                                                 |
-| `find`  | Search for files by glob pattern. Respects `.gitignore`.                                                        |
-| `ls`    | List directory contents. Includes dotfiles.                                                                     |
+| Tool    | Description                                                                                               |
+| ------- | --------------------------------------------------------------------------------------------------------- |
+| `read`  | Read file contents. Images sent as attachments. Text: first 2000 lines. Use offset/limit for large files. |
+| `write` | Write/overwrite file. Creates parent directories.                                                         |
+| `edit`  | Replace text in file with fuzzy whitespace matching. Fails if text appears multiple times or not found.   |
+| `bash`  | Execute command. Returns stdout/stderr. Optional `timeout` parameter.                                     |
+| `grep`  | Search file contents (regex or literal). Respects `.gitignore`.                                           |
+| `find`  | Search for files by glob pattern. Respects `.gitignore`.                                                  |
+| `ls`    | List directory contents. Includes dotfiles.                                                               |
 
 ### Additional Built-in Tools
 
-| Tool          | Description                                           |
-| ------------- | ----------------------------------------------------- |
-| `task`        | Spawn sub-agents for complex multi-step tasks         |
-| `lsp`         | Language Server Protocol queries (go-to-definition, references, hover) |
-| `todo_write`  | Track task progress during sessions                   |
-| `web_search`  | Search the web                                        |
-| `fetch`       | Fetch and process URLs                                |
-| `python`      | Execute Python code in IPython kernel                 |
-| `notebook`    | Edit Jupyter notebook cells                           |
+| Tool         | Description                                                            |
+| ------------ | ---------------------------------------------------------------------- |
+| `task`       | Spawn sub-agents for complex multi-step tasks                          |
+| `lsp`        | Language Server Protocol queries (go-to-definition, references, hover) |
+| `todo_write` | Track task progress during sessions                                    |
+| `web_search` | Search the web                                                         |
+| `fetch`      | Fetch and process URLs                                                 |
+| `python`     | Execute Python code in IPython kernel                                  |
+| `notebook`   | Edit Jupyter notebook cells                                            |
 
 Example: `--tools read,grep,find,ls` for read-only code review.
 

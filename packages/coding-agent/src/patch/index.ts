@@ -215,14 +215,14 @@ export class EditTool implements AgentTool<TInput> {
 		this.session = session;
 
 		const {
-			OMP_EDIT_FUZZY: editFuzzy = "auto",
-			OMP_EDIT_FUZZY_THRESHOLD: editFuzzyThreshold = "auto",
-			OMP_EDIT_VARIANT: envEditVariant = "auto",
+			PI_EDIT_FUZZY: editFuzzy = "auto",
+			PI_EDIT_FUZZY_THRESHOLD: editFuzzyThreshold = "auto",
+			PI_EDIT_VARIANT: envEditVariant = "auto",
 		} = process.env;
 		this.envEditVariant = envEditVariant;
 
 		if (envEditVariant !== "replace" && envEditVariant !== "patch" && envEditVariant !== "auto") {
-			throw new Error(`Invalid OMP_EDIT_VARIANT: ${envEditVariant}`);
+			throw new Error(`Invalid PI_EDIT_VARIANT: ${envEditVariant}`);
 		}
 
 		switch (editFuzzy) {
@@ -238,7 +238,7 @@ export class EditTool implements AgentTool<TInput> {
 				this.allowFuzzy = session.settings.get("edit.fuzzyMatch");
 				break;
 			default:
-				throw new Error(`Invalid OMP_EDIT_FUZZY: ${editFuzzy}`);
+				throw new Error(`Invalid PI_EDIT_FUZZY: ${editFuzzy}`);
 		}
 		switch (editFuzzyThreshold) {
 			case "auto":
@@ -247,7 +247,7 @@ export class EditTool implements AgentTool<TInput> {
 			default:
 				this.fuzzyThreshold = parseFloat(editFuzzyThreshold);
 				if (Number.isNaN(this.fuzzyThreshold) || this.fuzzyThreshold < 0 || this.fuzzyThreshold > 1) {
-					throw new Error(`Invalid OMP_EDIT_FUZZY_THRESHOLD: ${editFuzzyThreshold}`);
+					throw new Error(`Invalid PI_EDIT_FUZZY_THRESHOLD: ${editFuzzyThreshold}`);
 				}
 				break;
 		}

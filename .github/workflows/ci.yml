@@ -166,7 +166,7 @@ jobs:
         run: |
           mkdir -p packages/coding-agent/binaries
           ENTRYPOINT="./packages/coding-agent/src/cli.ts"
-          DEFINES="--define OMP_COMPILED=true --root ."
+          DEFINES="--define PI_COMPILED=true --root ."
           build_binary() {
             PLATFORM="$1"
             ARCH="$2"

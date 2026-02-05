@@ -9,7 +9,7 @@ describe("Python gateway environment filtering", () => {
 			OPENAI_API_KEY: "secret",
 			ANTHROPIC_API_KEY: "also-secret",
 			UNSAFE_TOKEN: "nope",
-			OMP_CUSTOM: "1",
+			PI_CUSTOM: "1",
 			LC_ALL: "en_US.UTF-8",
 		};
 
@@ -17,7 +17,7 @@ describe("Python gateway environment filtering", () => {
 
 		expect(filtered.PATH).toBe("/bin");
 		expect(filtered.HOME).toBe("/home/test");
-		expect(filtered.OMP_CUSTOM).toBe("1");
+		expect(filtered.PI_CUSTOM).toBe("1");
 		expect(filtered.LC_ALL).toBe("en_US.UTF-8");
 		expect(filtered.OPENAI_API_KEY).toBeUndefined();
 		expect(filtered.ANTHROPIC_API_KEY).toBeUndefined();
@@ -45,12 +45,12 @@ describe("Python gateway environment filtering", () => {
 			PATH: "/usr/bin",
 			HOME: "/home/test",
 			OPENAI_API_KEY: "secret",
-			OMP_DEBUG: "1",
+			PI_DEBUG: "1",
 		};
 
 		const filtered = filterEnv(env);
 		expect(filtered.OPENAI_API_KEY).toBeUndefined();
 		expect(filtered.PATH).toBe("/usr/bin");
-		expect(filtered.OMP_DEBUG).toBe("1");
+		expect(filtered.PI_DEBUG).toBe("1");
 	});
 });

@@ -142,7 +142,7 @@ ${chalk.bold("Options:")}
   -h, --help            Show this help
 
 ${chalk.bold("Environment:")}
-  OMP_GREP_WORKERS=0    Disable worker pool (use single-threaded mode)
+  PI_GREP_WORKERS=0    Disable worker pool (use single-threaded mode)
 
 ${chalk.bold("Examples:")}
   ${APP_NAME} grep "import" src/

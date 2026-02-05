@@ -40,10 +40,10 @@ describe("executeBash", () => {
 	});
 
 	it("passes env vars", async () => {
-		const result = await executeBash("echo $OMP_TEST_ENV", {
+		const result = await executeBash("echo $PI_TEST_ENV", {
 			cwd: tempDir,
 			timeout: 5000,
-			env: { OMP_TEST_ENV: "hello" },
+			env: { PI_TEST_ENV: "hello" },
 		});
 		expect(result.output.trim()).toBe("hello");
 	});
@@ -166,7 +166,7 @@ describe("executeBash", () => {
 			return;
 		}
 		const snapshotPath = path.join(tempDir, "snapshot.sh");
-		fs.writeFileSync(snapshotPath, "export OMP_SNAPSHOT_TEST=from_snapshot\n");
+		fs.writeFileSync(snapshotPath, "export PI_SNAPSHOT_TEST=from_snapshot\n");
 		vi.spyOn(Settings.prototype, "getShellConfig").mockReturnValue({
 			shell: bashPath,
 			args: ["-l", "-c"],
@@ -179,7 +179,7 @@ describe("executeBash", () => {
 		vi.spyOn(shellSnapshot, "getOrCreateSnapshot").mockResolvedValue(snapshotPath);
 		const sessionKey = "snapshot-test";
 		await executeBash("true", { cwd: tempDir, timeout: 5000, sessionKey });
-		const result = await executeBash("echo $OMP_SNAPSHOT_TEST", { cwd: tempDir, timeout: 5000, sessionKey });
+		const result = await executeBash("echo $PI_SNAPSHOT_TEST", { cwd: tempDir, timeout: 5000, sessionKey });
 		expect(result.output.trim()).toBe("from_snapshot");
 	});
 

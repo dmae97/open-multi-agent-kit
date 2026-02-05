@@ -1,5 +1,7 @@
 import process from "node:process";
 
+import { getEnv } from "@oh-my-pi/pi-utils";
+
 interface OmpCommand {
 	cmd: string;
 	args: string[];
@@ -10,7 +12,7 @@ const DEFAULT_CMD = process.platform === "win32" ? "omp.cmd" : "omp";
 const DEFAULT_SHELL = process.platform === "win32";
 
 export function resolveOmpCommand(): OmpCommand {
-	const envCmd = process.env.OMP_SUBPROCESS_CMD;
+	const envCmd = getEnv("PI_SUBPROCESS_CMD");
 	if (envCmd?.trim()) {
 		return { cmd: envCmd, args: [], shell: DEFAULT_SHELL };
 	}

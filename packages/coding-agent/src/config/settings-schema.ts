@@ -246,7 +246,6 @@ export const SETTINGS_SCHEMA = {
 	enabledModels: { type: "array", default: [] as string[] },
 	disabledProviders: { type: "array", default: [] as string[] },
 	disabledExtensions: { type: "array", default: [] as string[] },
-	env: { type: "record", default: {} as Record<string, string> },
 	modelRoles: { type: "record", default: {} as Record<string, string> },
 
 	// ─────────────────────────────────────────────────────────────────────────

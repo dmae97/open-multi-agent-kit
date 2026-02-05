@@ -10,6 +10,7 @@ import type {
 	UsageWindow,
 } from "../usage";
 import { getKimiCommonHeaders, refreshKimiToken } from "../utils/oauth/kimi";
+import { getEnv } from "@oh-my-pi/pi-utils";
 
 const DEFAULT_BASE_URL = "https://api.kimi.com/coding/v1";
 const USAGE_PATH = "usages";
@@ -45,7 +46,7 @@ const toNumber = (value: unknown): number | undefined => {
 };
 
 function normalizeBaseUrl(baseUrl?: string): string {
-	const envBase = process.env.KIMI_CODE_BASE_URL?.trim();
+	const envBase = getEnv("KIMI_CODE_BASE_URL")?.trim();
 	const candidate = baseUrl?.trim() || envBase || DEFAULT_BASE_URL;
 	return candidate.replace(/\/+$/, "");
 }

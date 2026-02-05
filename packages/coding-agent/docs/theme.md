@@ -85,14 +85,14 @@ Used for native syntax highlighting in tool output and editors:
 
 Editor border colors that indicate the current thinking/reasoning level:
 
-| Token             | Purpose                                                           |
-| ----------------- | ----------------------------------------------------------------- |
-| `thinkingOff`     | Border when thinking is off (most subtle)                         |
-| `thinkingMinimal` | Border for minimal thinking                                       |
-| `thinkingLow`     | Border for low thinking                                           |
-| `thinkingMedium`  | Border for medium thinking                                        |
-| `thinkingHigh`    | Border for high thinking                                          |
-| `thinkingXhigh`   | Border for xhigh thinking (most prominent)                       |
+| Token             | Purpose                                    |
+| ----------------- | ------------------------------------------ |
+| `thinkingOff`     | Border when thinking is off (most subtle)  |
+| `thinkingMinimal` | Border for minimal thinking                |
+| `thinkingLow`     | Border for low thinking                    |
+| `thinkingMedium`  | Border for medium thinking                 |
+| `thinkingHigh`    | Border for high thinking                   |
+| `thinkingXhigh`   | Border for xhigh thinking (most prominent) |
 
 These create a visual hierarchy: off → minimal → low → medium → high → xhigh
 
@@ -101,26 +101,26 @@ These create a visual hierarchy: off → minimal → low → medium → high →
 | Token        | Purpose                                          |
 | ------------ | ------------------------------------------------ |
 | `bashMode`   | Editor border color when in bash mode (! prefix) |
-| `pythonMode` | Editor border color when in python mode (>>>)   |
+| `pythonMode` | Editor border color when in python mode (>>>)    |
 
 ### Status Line (14 colors)
 
-| Token               | Purpose                                 |
-| ------------------- | --------------------------------------- |
-| `statusLineBg`      | Status line background                  |
-| `statusLineSep`     | Separators between status line segments |
-| `statusLineModel`   | Model segment text                      |
-| `statusLinePath`    | Working directory segment               |
-| `statusLineGitClean` | Git segment (clean)                    |
-| `statusLineGitDirty` | Git segment (dirty)                    |
-| `statusLineContext` | Context window usage segment            |
-| `statusLineSpend`   | Token input/total segment               |
-| `statusLineStaged`  | Git staged count                        |
-| `statusLineDirty`   | Git unstaged count                      |
-| `statusLineUntracked` | Git untracked count                   |
-| `statusLineOutput`  | Token output/cache output segment       |
-| `statusLineCost`    | Cost segment                            |
-| `statusLineSubagents` | Subagent count segment                |
+| Token                 | Purpose                                 |
+| --------------------- | --------------------------------------- |
+| `statusLineBg`        | Status line background                  |
+| `statusLineSep`       | Separators between status line segments |
+| `statusLineModel`     | Model segment text                      |
+| `statusLinePath`      | Working directory segment               |
+| `statusLineGitClean`  | Git segment (clean)                     |
+| `statusLineGitDirty`  | Git segment (dirty)                     |
+| `statusLineContext`   | Context window usage segment            |
+| `statusLineSpend`     | Token input/total segment               |
+| `statusLineStaged`    | Git staged count                        |
+| `statusLineDirty`     | Git unstaged count                      |
+| `statusLineUntracked` | Git untracked count                     |
+| `statusLineOutput`    | Token output/cache output segment       |
+| `statusLineCost`      | Cost segment                            |
+| `statusLineSubagents` | Subagent count segment                  |
 
 **Total: 66 color tokens** (all required)
 
@@ -280,20 +280,20 @@ On first run, OMP uses the terminal background reported by `COLORFGBG` and falls
 
 ### Theme Locations
 
-Custom themes are loaded from `~/.omp/agent/themes/*.json` by default, or from `$OMP_CODING_AGENT_DIR/themes` if that environment variable is set.
+Custom themes are loaded from `~/.omp/agent/themes/*.json` by default, or from `$PI_CODING_AGENT_DIR/themes` if that environment variable is set.
 
 ### Creating a Custom Theme
 
 1. **Create theme directory:**
 
    ```bash
-   mkdir -p "${OMP_CODING_AGENT_DIR:-~/.omp/agent}/themes"
+   mkdir -p "${PI_CODING_AGENT_DIR:-~/.omp/agent}/themes"
    ```
 
 2. **Create theme file:**
 
    ```bash
-   vim "${OMP_CODING_AGENT_DIR:-~/.omp/agent}/themes/my-theme.json"
+   vim "${PI_CODING_AGENT_DIR:-~/.omp/agent}/themes/my-theme.json"
    ```
 
 3. **Define all colors (see the schema for the full list; snippet below shows structure):**
@@ -573,12 +573,9 @@ export async function initTheme(
 	themeName?: string,
 	enableWatcher?: boolean,
 	symbolPreset?: SymbolPreset,
-	colorBlindMode?: boolean,
+	colorBlindMode?: boolean
 ): Promise<void>;
-export async function setTheme(
-	name: string,
-	enableWatcher?: boolean,
-): Promise<{ success: boolean; error?: string }>;
+export async function setTheme(name: string, enableWatcher?: boolean): Promise<{ success: boolean; error?: string }>;
 
 // Usage throughout coding-agent
 import { theme } from "./theme.js";
@@ -629,7 +626,9 @@ export function getMarkdownTheme(): MarkdownTheme {
 		strikethrough: (text) => chalk.strikethrough(text),
 		symbols: getSymbolTheme(),
 		getMermaidImage,
-		highlightCode: (code, lang) => { /* uses native syntax highlighter */ },
+		highlightCode: (code, lang) => {
+			/* uses native syntax highlighter */
+		},
 	};
 }
 ```
@@ -688,7 +687,6 @@ const userMsg = theme.bg("userMessageBg", theme.fg("userMessageText", "Hello"));
    ```
 
 4. **Convert colors to ANSI codes based on terminal capability:**
-
    - Empty string (`""`) → terminal default (foreground/background reset)
    - 256-color (`42`) → `\x1b[38;5;42m` / `\x1b[48;5;42m`
    - Hex or resolved vars → `Bun.color(value, "ansi-16m" | "ansi-256")`
