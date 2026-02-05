@@ -41,6 +41,7 @@ export type {
 	ExaSettings,
 	GroupPrefix,
 	GroupTypeMap,
+	PyroscopeSettings,
 	RetrySettings,
 	SettingPath,
 	SettingValue,

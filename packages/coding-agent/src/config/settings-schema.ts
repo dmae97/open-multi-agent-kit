@@ -756,6 +756,17 @@ export const SETTINGS_SCHEMA = {
 	"thinkingBudgets.high": { type: "number", default: 16384 },
 
 	// ─────────────────────────────────────────────────────────────────────────
+	// Pyroscope continuous profiling settings (no UI - advanced)
+	// ─────────────────────────────────────────────────────────────────────────
+	"pyroscope.enabled": { type: "boolean", default: false },
+	"pyroscope.serverAddress": { type: "string", default: undefined },
+	"pyroscope.appName": { type: "string", default: undefined },
+	"pyroscope.basicAuthUser": { type: "string", default: undefined },
+	"pyroscope.basicAuthPassword": { type: "string", default: undefined },
+	"pyroscope.tenantID": { type: "string", default: undefined },
+	"pyroscope.flushIntervalMs": { type: "number", default: 60000 },
+
+	// ─────────────────────────────────────────────────────────────────────────
 	// Status line settings
 	// ─────────────────────────────────────────────────────────────────────────
 	"statusLine.preset": {
@@ -942,6 +953,16 @@ export interface ThinkingBudgetsSettings {
 	high: number;
 }
 
+export interface PyroscopeSettings {
+	enabled: boolean;
+	serverAddress: string | undefined;
+	appName: string | undefined;
+	basicAuthUser: string | undefined;
+	basicAuthPassword: string | undefined;
+	tenantID: string | undefined;
+	flushIntervalMs: number;
+}
+
 export interface BashInterceptorRule {
 	pattern: string;
 	flags?: string;
@@ -961,6 +982,7 @@ export interface GroupTypeMap {
 	exa: ExaSettings;
 	statusLine: StatusLineSettings;
 	thinkingBudgets: ThinkingBudgetsSettings;
+	pyroscope: PyroscopeSettings;
 	modelRoles: Record<string, string>;
 }
 
