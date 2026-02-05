@@ -147,11 +147,20 @@ export function streamProxy(model: Model, context: Context, options: ProxyStream
 				throw new Error(errorMessage);
 			}
 
+			let sawTerminalEvent = false;
 			for await (const event of readSseJson<ProxyAssistantMessageEvent>(response.body!, options.signal)) {
 				const parsedEvent = processProxyEvent(event, partial);
 				if (parsedEvent) {
+					if (parsedEvent.type === "done" || parsedEvent.type === "error") {
+						sawTerminalEvent = true;
+					}
 					stream.push(parsedEvent);
 				}
+			}
+
+			if (options.signal?.aborted && !sawTerminalEvent) {
+				const reason = options.signal.reason;
+				throw reason instanceof Error ? reason : new Error(String(reason ?? "Request aborted"));
 			}
 
 			stream.end();

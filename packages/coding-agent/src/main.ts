@@ -23,6 +23,7 @@ import { parseSetupArgs, printSetupHelp, runSetupCommand } from "./cli/setup-cli
 import { parseShellArgs, printShellHelp, runShellCommand } from "./cli/shell-cli";
 import { parseStatsArgs, printStatsHelp, runStatsCommand } from "./cli/stats-cli";
 import { parseUpdateArgs, printUpdateHelp, runUpdateCommand } from "./cli/update-cli";
+import { parseWebSearchArgs, printWebSearchHelp, runWebSearchCommand } from "./cli/web-search-cli";
 import { runCommitCommand } from "./commit";
 import { parseCommitArgs, printCommitHelp } from "./commit/cli";
 import { findConfigFile, getModelsPath, VERSION } from "./config";

@@ -251,7 +251,7 @@ export class ChildProcess<In extends InMask = InMask> {
 	async wait(opts?: WaitOptions): Promise<ExecResult> {
 		const { allowNonZero = false, allowAbort = false, stderr: stderrMode = "buffer" } = opts ?? {};
 
-		const stdoutP = this.text();
+		const stdoutP = new Response(this.stdout).text();
 		const stderrP =
 			stderrMode === "full"
 				? this.#stderrDone.then(() => new TextDecoder().decode(Buffer.concat(this.#stderrChunks)))
@@ -265,6 +265,11 @@ export class ChildProcess<In extends InMask = InMask> {
 		} catch (err) {
 			if (err instanceof Exception) exitError = err;
 			else throw err;
+		}
+
+		if (!exitError) exitError = this.exitReason;
+		if (!exitError && this.exitCode !== null && this.exitCode !== 0) {
+			exitError = new NonZeroExitError(this.exitCode, this.#stderrTail);
 		}
 
 		const exitCode = this.exitCode ?? (exitError && !exitError.aborted ? exitError.exitCode : null);
