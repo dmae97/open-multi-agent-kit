@@ -78,19 +78,29 @@ function formatMCPContent(content: MCPContent[]): string {
  * "puppeteer_screenshot"), strips the redundant prefix to produce
  * "mcp_puppeteer_screenshot" instead of "mcp_puppeteer_puppeteer_screenshot".
  */
-export function createMCPToolName(serverName: string, toolName: string): string {
-	// Strip redundant server name prefix from tool name if present
-	const prefixWithUnderscore = `${serverName}_`;
-	const prefixWithHyphen = `${serverName}-`;
+function sanitizeMCPToolNamePart(value: string, fallback: string): string {
+	const sanitized = value
+		.toLowerCase()
+		.replace(/[^a-z_]+/g, "_")
+		.replace(/_+/g, "_")
+		.replace(/^_+|_+$/g, "");
 
-	let normalizedToolName = toolName;
-	if (toolName.startsWith(prefixWithUnderscore)) {
-		normalizedToolName = toolName.slice(prefixWithUnderscore.length);
-	} else if (toolName.startsWith(prefixWithHyphen)) {
-		normalizedToolName = toolName.slice(prefixWithHyphen.length);
+	return sanitized.length > 0 ? sanitized : fallback;
+}
+
+export function createMCPToolName(serverName: string, toolName: string): string {
+	const sanitizedServerName = sanitizeMCPToolNamePart(serverName, "server");
+	const sanitizedToolName = sanitizeMCPToolNamePart(toolName, "tool");
+
+	// Strip redundant server name prefix from tool name if present
+	const prefixWithUnderscore = `${sanitizedServerName}_`;
+
+	let normalizedToolName = sanitizedToolName;
+	if (sanitizedToolName.startsWith(prefixWithUnderscore)) {
+		normalizedToolName = sanitizedToolName.slice(prefixWithUnderscore.length);
 	}
 
-	return `mcp_${serverName}_${normalizedToolName}`;
+	return `mcp_${sanitizedServerName}_${normalizedToolName}`;
 }
 
 /**

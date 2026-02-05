@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - Added `task.maxRecursionDepth` setting to control how many levels deep subagents can spawn their own subagents (0=none, 1=one level, 2=two levels, -1=unlimited)
@@ -36,6 +35,7 @@
 
 ### Fixed
 
+- Fixed MCP tool name generation to properly sanitize server and tool names, preventing invalid characters and duplicate prefixes in tool identifiers
 - Fixed task ID display formatting to show hierarchical structure for nested tasks (e.g., "0.1 Auth>Subtask" instead of "0-Auth.1-Subtask")
 - Improved frontmatter parsing error messages to include source context for better debugging
 
