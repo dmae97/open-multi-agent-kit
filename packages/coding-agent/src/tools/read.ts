@@ -538,12 +538,10 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 	public readonly parameters = readSchema;
 	public readonly nonAbortable = true;
 
-	private readonly session: ToolSession;
 	private readonly autoResizeImages: boolean;
 	private readonly defaultLineNumbers: boolean;
 
-	constructor(session: ToolSession) {
-		this.session = session;
+	constructor(private readonly session: ToolSession) {
 		this.autoResizeImages = session.settings.get("images.autoResize");
 		this.defaultLineNumbers = session.settings.get("readLineNumbers");
 		this.description = renderPromptTemplate(readDescription, {

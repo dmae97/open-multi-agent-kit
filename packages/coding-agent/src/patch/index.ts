@@ -205,15 +205,12 @@ export class EditTool implements AgentTool<TInput> {
 	public readonly nonAbortable = true;
 	public readonly concurrency = "exclusive";
 
-	private readonly session: ToolSession;
 	private readonly allowFuzzy: boolean;
 	private readonly fuzzyThreshold: number;
 	private readonly writethrough: WritethroughCallback;
 	private readonly envEditVariant: string;
 
-	constructor(session: ToolSession) {
-		this.session = session;
-
+	constructor(private readonly session: ToolSession) {
 		const {
 			PI_EDIT_FUZZY: editFuzzy = "auto",
 			PI_EDIT_FUZZY_THRESHOLD: editFuzzyThreshold = "auto",

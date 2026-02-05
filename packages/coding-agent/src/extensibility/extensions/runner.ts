@@ -105,12 +105,7 @@ const noOpUIContext: ExtensionUIContext = {
 };
 
 export class ExtensionRunner {
-	private extensions: Extension[];
-	private runtime: ExtensionRuntime;
 	private uiContext: ExtensionUIContext;
-	private cwd: string;
-	private sessionManager: SessionManager;
-	private modelRegistry: ModelRegistry;
 	private errorListeners: Set<ExtensionErrorListener> = new Set();
 	private getModel: () => Model | undefined = () => undefined;
 	private isIdleFn: () => boolean = () => true;
@@ -125,18 +120,13 @@ export class ExtensionRunner {
 	private shutdownHandler: ShutdownHandler = () => {};
 
 	constructor(
-		extensions: Extension[],
-		runtime: ExtensionRuntime,
-		cwd: string,
-		sessionManager: SessionManager,
-		modelRegistry: ModelRegistry,
+		private readonly extensions: Extension[],
+		private readonly runtime: ExtensionRuntime,
+		private readonly cwd: string,
+		private readonly sessionManager: SessionManager,
+		private readonly modelRegistry: ModelRegistry,
 	) {
-		this.extensions = extensions;
-		this.runtime = runtime;
 		this.uiContext = noOpUIContext;
-		this.cwd = cwd;
-		this.sessionManager = sessionManager;
-		this.modelRegistry = modelRegistry;
 	}
 
 	initialize(

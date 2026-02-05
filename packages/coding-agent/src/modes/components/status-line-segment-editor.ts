@@ -53,15 +53,13 @@ export class StatusLineSegmentEditorComponent extends Container {
 	private segments: SegmentState[];
 	private selectedIndex: number = 0;
 	private focusColumn: "left" | "right" | "disabled" = "left";
-	private callbacks: SegmentEditorCallbacks;
 
 	constructor(
 		currentLeft: StatusLineSegmentId[],
 		currentRight: StatusLineSegmentId[],
-		callbacks: SegmentEditorCallbacks,
+		private readonly callbacks: SegmentEditorCallbacks,
 	) {
 		super();
-		this.callbacks = callbacks;
 
 		// Initialize segment states
 		this.segments = [];

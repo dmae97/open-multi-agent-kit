@@ -7,16 +7,14 @@ import type { TodoItem } from "../../tools/todo-write";
  * Shows when the agent stops with incomplete todos.
  */
 export class TodoReminderComponent extends Container {
-	private todos: TodoItem[];
-	private attempt: number;
-	private maxAttempts: number;
 	private box: Box;
 
-	constructor(todos: TodoItem[], attempt: number, maxAttempts: number) {
+	constructor(
+		private readonly todos: TodoItem[],
+		private readonly attempt: number,
+		private readonly maxAttempts: number,
+	) {
 		super();
-		this.todos = todos;
-		this.attempt = attempt;
-		this.maxAttempts = maxAttempts;
 
 		this.addChild(new Spacer(1));
 

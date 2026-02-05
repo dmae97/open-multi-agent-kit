@@ -10,16 +10,15 @@ import type { CustomMessage } from "../../session/messages";
  * Uses distinct styling to differentiate from user messages.
  */
 export class CustomMessageComponent extends Container {
-	private message: CustomMessage<unknown>;
-	private customRenderer?: MessageRenderer;
 	private box: Box;
 	private customComponent?: Component;
 	private _expanded = false;
 
-	constructor(message: CustomMessage<unknown>, customRenderer?: MessageRenderer) {
+	constructor(
+		private readonly message: CustomMessage<unknown>,
+		private readonly customRenderer?: MessageRenderer,
+	) {
 		super();
-		this.message = message;
-		this.customRenderer = customRenderer;
 
 		this.addChild(new Spacer(1));
 

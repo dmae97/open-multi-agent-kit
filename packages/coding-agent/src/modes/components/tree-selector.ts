@@ -50,8 +50,6 @@ class TreeList implements Component {
 	private flatNodes: FlatNode[] = [];
 	private filteredNodes: FlatNode[] = [];
 	private selectedIndex = 0;
-	private currentLeafId: string | null;
-	private maxVisibleLines: number;
 	private filterMode: FilterMode = "default";
 	private searchQuery = "";
 	private toolCallMap: Map<string, ToolCallInfo> = new Map();
@@ -62,9 +60,11 @@ class TreeList implements Component {
 	public onCancel?: () => void;
 	public onLabelEdit?: (entryId: string, currentLabel: string | undefined) => void;
 
-	constructor(tree: SessionTreeNode[], currentLeafId: string | null, maxVisibleLines: number) {
-		this.currentLeafId = currentLeafId;
-		this.maxVisibleLines = maxVisibleLines;
+	constructor(
+		tree: SessionTreeNode[],
+		private readonly currentLeafId: string | null,
+		private readonly maxVisibleLines: number,
+	) {
 		this.multipleRoots = tree.length > 1;
 		this.flatNodes = this.flattenTree(tree);
 		this.buildActivePath();
@@ -745,12 +745,13 @@ class SearchLine implements Component {
 /** Label input component shown when editing a label */
 class LabelInput implements Component {
 	private input: Input;
-	private entryId: string;
 	public onSubmit?: (entryId: string, label: string | undefined) => void;
 	public onCancel?: () => void;
 
-	constructor(entryId: string, currentLabel: string | undefined) {
-		this.entryId = entryId;
+	constructor(
+		private readonly entryId: string,
+		currentLabel: string | undefined,
+	) {
 		this.input = new Input();
 		if (currentLabel) {
 			this.input.setValue(currentLabel);
@@ -789,7 +790,6 @@ export class TreeSelectorComponent extends Container {
 	private labelInput: LabelInput | null = null;
 	private labelInputContainer: Container;
 	private treeContainer: Container;
-	private onLabelChangeCallback?: (entryId: string, label: string | undefined) => void;
 
 	constructor(
 		tree: SessionTreeNode[],
@@ -797,11 +797,9 @@ export class TreeSelectorComponent extends Container {
 		terminalHeight: number,
 		onSelect: (entryId: string) => void,
 		onCancel: () => void,
-		onLabelChange?: (entryId: string, label: string | undefined) => void,
+		private readonly onLabelChangeCallback?: (entryId: string, label: string | undefined) => void,
 	) {
 		super();
-
-		this.onLabelChangeCallback = onLabelChange;
 		const maxVisibleLines = Math.max(5, Math.floor(terminalHeight / 2));
 
 		this.treeList = new TreeList(tree, currentLeafId, maxVisibleLines);

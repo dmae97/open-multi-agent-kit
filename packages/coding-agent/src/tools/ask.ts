@@ -254,10 +254,8 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 	public readonly label = "Ask";
 	public readonly description: string;
 	public readonly parameters = askSchema;
-	private readonly session: ToolSession;
 
-	constructor(session: ToolSession) {
-		this.session = session;
+	constructor(private readonly session: ToolSession) {
 		this.description = renderPromptTemplate(askDescription);
 	}
 

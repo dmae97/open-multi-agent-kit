@@ -36,12 +36,9 @@ export interface ErrorEntry {
  * Error with multiple entries (e.g., multiple validation failures, batch errors).
  */
 export class MultiError extends ToolError {
-	readonly errors: ErrorEntry[];
-
-	constructor(errors: ErrorEntry[]) {
+	constructor(readonly errors: ErrorEntry[]) {
 		super(errors.map(e => e.message).join("; "));
 		this.name = "MultiError";
-		this.errors = errors;
 	}
 
 	render(): string {

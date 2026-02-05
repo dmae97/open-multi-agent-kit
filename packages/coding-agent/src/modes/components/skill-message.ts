@@ -5,14 +5,12 @@ import { getMarkdownTheme, theme } from "../../modes/theme/theme";
 import type { CustomMessage, SkillPromptDetails } from "../../session/messages";
 
 export class SkillMessageComponent extends Container {
-	private message: CustomMessage<SkillPromptDetails>;
 	private box: Box;
 	private contentComponent?: Component;
 	private _expanded = false;
 
-	constructor(message: CustomMessage<SkillPromptDetails>) {
+	constructor(private readonly message: CustomMessage<SkillPromptDetails>) {
 		super();
-		this.message = message;
 		this.addChild(new Spacer(1));
 
 		this.box = new Box(1, 1, t => theme.bg("customMessageBg", t));

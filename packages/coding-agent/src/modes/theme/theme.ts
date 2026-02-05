@@ -1221,19 +1221,15 @@ const langMap: Record<string, SymbolKey> = {
 export class Theme {
 	private fgColors: Record<ThemeColor, string>;
 	private bgColors: Record<ThemeBg, string>;
-	private mode: ColorMode;
 	private symbols: SymbolMap;
-	private symbolPreset: SymbolPreset;
 
 	constructor(
 		fgColors: Record<ThemeColor, string | number>,
 		bgColors: Record<ThemeBg, string | number>,
-		mode: ColorMode,
-		symbolPreset: SymbolPreset,
+		private readonly mode: ColorMode,
+		private readonly symbolPreset: SymbolPreset,
 		symbolOverrides: Partial<Record<SymbolKey, string>>,
 	) {
-		this.mode = mode;
-		this.symbolPreset = symbolPreset;
 		this.fgColors = {} as Record<ThemeColor, string>;
 		for (const [key, value] of Object.entries(fgColors) as [ThemeColor, string | number][]) {
 			this.fgColors[key] = fgAnsi(value, mode);

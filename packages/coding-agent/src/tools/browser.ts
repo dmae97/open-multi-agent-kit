@@ -257,7 +257,6 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 	public readonly label = "Puppeteer";
 	public readonly description: string;
 	public readonly parameters = browserSchema;
-	private readonly session: ToolSession;
 	private browser: Browser | null = null;
 	private page: Page | null = null;
 	private currentHeadless: boolean | null = null;
@@ -267,8 +266,7 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 	private readonly elementCache = new Map<number, ElementHandle>();
 	private readonly patchedClients = new WeakSet<object>();
 
-	constructor(session: ToolSession) {
-		this.session = session;
+	constructor(private readonly session: ToolSession) {
 		this.description = renderPromptTemplate(browserDescription, {});
 	}
 

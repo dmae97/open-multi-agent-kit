@@ -124,17 +124,16 @@ async function buildDescription(cwd: string, maxConcurrency: number): Promise<st
 export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, Theme> {
 	public readonly name = "task";
 	public readonly label = "Task";
-	public readonly description: string;
 	public readonly parameters = taskSchema;
 	public readonly renderCall = renderCall;
 	public readonly renderResult = renderResult;
 
-	private readonly session: ToolSession;
 	private readonly blockedAgent: string | undefined;
 
-	private constructor(session: ToolSession, description: string) {
-		this.session = session;
-		this.description = description;
+	private constructor(
+		private readonly session: ToolSession,
+		public readonly description: string,
+	) {
 		this.blockedAgent = $env.PI_BLOCKED_AGENT;
 	}
 

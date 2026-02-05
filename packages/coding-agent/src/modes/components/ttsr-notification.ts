@@ -7,13 +7,11 @@ import { theme } from "../../modes/theme/theme";
  * Shows when a rule violation is detected and the stream is being rewound.
  */
 export class TtsrNotificationComponent extends Container {
-	private rules: Rule[];
 	private box: Box;
 	private _expanded = false;
 
-	constructor(rules: Rule[]) {
+	constructor(private readonly rules: Rule[]) {
 		super();
-		this.rules = rules;
 
 		this.addChild(new Spacer(1));
 

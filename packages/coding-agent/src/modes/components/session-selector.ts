@@ -18,20 +18,19 @@ import { DynamicBorder } from "./dynamic-border";
  * Custom session list component with multi-line items and search
  */
 class SessionList implements Component {
-	private allSessions: SessionInfo[] = [];
 	private filteredSessions: SessionInfo[] = [];
 	private selectedIndex: number = 0;
-	private searchInput: Input;
-	private showCwd = false;
+	private readonly searchInput: Input;
 	public onSelect?: (sessionPath: string) => void;
 	public onCancel?: () => void;
 	public onExit: () => void = () => {};
 	private maxVisible: number = 5; // Max sessions visible (each session is 3 lines: msg + metadata + blank)
 
-	constructor(sessions: SessionInfo[], showCwd = false) {
-		this.allSessions = sessions;
-		this.filteredSessions = sessions;
-		this.showCwd = showCwd;
+	constructor(
+		private readonly allSessions: SessionInfo[],
+		private readonly showCwd = false,
+	) {
+		this.filteredSessions = allSessions;
 		this.searchInput = new Input();
 
 		// Handle Enter in search input - select current item

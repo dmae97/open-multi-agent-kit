@@ -17,25 +17,13 @@ export interface LspServerInfo {
  * Premium welcome screen with block-based OMP logo and two-column layout.
  */
 export class WelcomeComponent implements Component {
-	private version: string;
-	private modelName: string;
-	private providerName: string;
-	private recentSessions: RecentSession[];
-	private lspServers: LspServerInfo[];
-
 	constructor(
-		version: string,
-		modelName: string,
-		providerName: string,
-		recentSessions: RecentSession[] = [],
-		lspServers: LspServerInfo[] = [],
-	) {
-		this.version = version;
-		this.modelName = modelName;
-		this.providerName = providerName;
-		this.recentSessions = recentSessions;
-		this.lspServers = lspServers;
-	}
+		private readonly version: string,
+		private modelName: string,
+		private providerName: string,
+		private recentSessions: RecentSession[] = [],
+		private lspServers: LspServerInfo[] = [],
+	) {}
 
 	invalidate(): void {}
 

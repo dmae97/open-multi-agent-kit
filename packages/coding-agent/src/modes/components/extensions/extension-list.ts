@@ -31,19 +31,19 @@ type ListItem =
 	| { type: "extension"; item: Extension };
 
 export class ExtensionList implements Component {
-	private extensions: Extension[] = [];
 	private listItems: ListItem[] = [];
 	private selectedIndex = 0;
 	private scrollOffset = 0;
 	private searchQuery = "";
 	private focused = false;
-	private callbacks: ExtensionListCallbacks;
 	private masterSwitchProvider: string | null = null;
 	private maxVisible: number;
 
-	constructor(extensions: Extension[], callbacks: ExtensionListCallbacks = {}, maxVisible?: number) {
-		this.extensions = extensions;
-		this.callbacks = callbacks;
+	constructor(
+		private extensions: Extension[],
+		private readonly callbacks: ExtensionListCallbacks = {},
+		maxVisible?: number,
+	) {
 		this.masterSwitchProvider = callbacks.masterSwitchProvider ?? null;
 		this.maxVisible = maxVisible ?? DEFAULT_MAX_VISIBLE;
 		this.rebuildList();

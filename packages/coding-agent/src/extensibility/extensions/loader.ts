@@ -103,17 +103,14 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	readonly logger = logger;
 	readonly typebox = TypeBox;
 	readonly pi = piCodingAgent;
-	readonly events: EventBus;
 	readonly flagValues = new Map<string, boolean | string>();
 
 	constructor(
-		private extension: Extension,
-		private runtime: IExtensionRuntime,
-		private cwd: string,
-		eventBus: EventBus,
-	) {
-		this.events = eventBus;
-	}
+		private readonly extension: Extension,
+		private readonly runtime: IExtensionRuntime,
+		private readonly cwd: string,
+		public readonly events: EventBus,
+	) {}
 
 	on<F extends HandlerFn>(event: string, handler: F): void {
 		const list = this.extension.handlers.get(event) ?? [];

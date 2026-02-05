@@ -506,17 +506,16 @@ function sanitizeSessionName(value: string | undefined): string | undefined {
 }
 
 class RecentSessionInfo {
-	readonly path: string;
-	readonly mtime: number;
-
 	#fullName: string | undefined;
 	#name: string | undefined;
 	#timeAgo: string | undefined;
 
-	constructor(path: string, mtime: number, header: Record<string, unknown>, firstPrompt?: string) {
-		this.path = path;
-		this.mtime = mtime;
-
+	constructor(
+		readonly path: string,
+		readonly mtime: number,
+		header: Record<string, unknown>,
+		firstPrompt?: string,
+	) {
 		// Extract title from session header, falling back to first user prompt, then id
 		const trystr = (v: unknown) => (typeof v === "string" ? v : undefined);
 		this.#fullName =
@@ -975,9 +974,6 @@ export class SessionManager {
 	private sessionId: string = "";
 	private sessionName: string | undefined;
 	private sessionFile: string | undefined;
-	private sessionDir: string;
-	private cwd: string;
-	private persist: boolean;
 	private flushed: boolean = false;
 	private fileEntries: FileEntry[] = [];
 	private byId: Map<string, SessionEntry> = new Map();
@@ -989,13 +985,13 @@ export class SessionManager {
 	private persistChain: Promise<void> = Promise.resolve();
 	private persistError: Error | undefined;
 	private persistErrorReported = false;
-	private storage: SessionStorage;
 
-	private constructor(cwd: string, sessionDir: string, persist: boolean, storage: SessionStorage) {
-		this.cwd = cwd;
-		this.sessionDir = sessionDir;
-		this.persist = persist;
-		this.storage = storage;
+	private constructor(
+		private readonly cwd: string,
+		private readonly sessionDir: string,
+		private readonly persist: boolean,
+		private readonly storage: SessionStorage,
+	) {
 		if (persist && sessionDir) {
 			this.storage.ensureDirSync(sessionDir);
 		}

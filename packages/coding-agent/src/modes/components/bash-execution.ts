@@ -12,7 +12,6 @@ import { truncateToVisualLines } from "./visual-truncate";
 const PREVIEW_LINES = 20;
 
 export class BashExecutionComponent extends Container {
-	private command: string;
 	private outputLines: string[] = [];
 	private status: "running" | "complete" | "cancelled" | "error" = "running";
 	private exitCode: number | undefined = undefined;
@@ -21,9 +20,12 @@ export class BashExecutionComponent extends Container {
 	private expanded = false;
 	private contentContainer: Container;
 
-	constructor(command: string, ui: TUI, excludeFromContext = false) {
+	constructor(
+		private readonly command: string,
+		ui: TUI,
+		excludeFromContext = false,
+	) {
 		super();
-		this.command = command;
 
 		// Use dim border for excluded-from-context commands (!! prefix)
 		const colorKey = excludeFromContext ? "dim" : "bashMode";

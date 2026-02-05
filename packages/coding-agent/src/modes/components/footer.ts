@@ -42,16 +42,13 @@ async function findGitHeadPath(): Promise<{ path: string; content: string } | nu
  * Footer component that shows pwd, token stats, and context usage
  */
 export class FooterComponent implements Component {
-	private session: AgentSession;
 	private cachedBranch: string | null | undefined = undefined; // undefined = not checked yet, null = not in git repo, string = branch name
 	private gitWatcher: fs.FSWatcher | null = null;
 	private onBranchChange: (() => void) | null = null;
 	private autoCompactEnabled: boolean = true;
 	private extensionStatuses: Map<string, string> = new Map();
 
-	constructor(session: AgentSession) {
-		this.session = session;
-	}
+	constructor(private readonly session: AgentSession) {}
 
 	setAutoCompactEnabled(enabled: boolean): void {
 		this.autoCompactEnabled = enabled;

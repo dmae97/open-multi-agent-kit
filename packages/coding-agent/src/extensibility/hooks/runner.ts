@@ -62,12 +62,8 @@ const noOpUIContext: HookUIContext = {
  * HookRunner executes hooks and manages event emission.
  */
 export class HookRunner {
-	private hooks: LoadedHook[];
 	private uiContext: HookUIContext;
 	private hasUI: boolean;
-	private cwd: string;
-	private sessionManager: SessionManager;
-	private modelRegistry: ModelRegistry;
 	private errorListeners: Set<HookErrorListener> = new Set();
 	private getModel: () => Model | undefined = () => undefined;
 	private isIdleFn: () => boolean = () => true;
@@ -78,13 +74,14 @@ export class HookRunner {
 	private branchHandler: BranchHandler = async () => ({ cancelled: false });
 	private navigateTreeHandler: NavigateTreeHandler = async () => ({ cancelled: false });
 
-	constructor(hooks: LoadedHook[], cwd: string, sessionManager: SessionManager, modelRegistry: ModelRegistry) {
-		this.hooks = hooks;
+	constructor(
+		private readonly hooks: LoadedHook[],
+		private readonly cwd: string,
+		private readonly sessionManager: SessionManager,
+		private readonly modelRegistry: ModelRegistry,
+	) {
 		this.uiContext = noOpUIContext;
 		this.hasUI = false;
-		this.cwd = cwd;
-		this.sessionManager = sessionManager;
-		this.modelRegistry = modelRegistry;
 	}
 
 	/**

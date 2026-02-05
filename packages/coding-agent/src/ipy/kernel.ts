@@ -16,11 +16,11 @@ const PRELUDE_INTROSPECTION_SNIPPET = "import json\nprint(json.dumps(__omp_prelu
 const debugStartup = $env.PI_DEBUG_STARTUP ? (stage: string) => process.stderr.write(`[startup] ${stage}\n`) : () => {};
 
 class SharedGatewayCreateError extends Error {
-	readonly status: number;
-
-	constructor(status: number, message: string) {
+	constructor(
+		readonly status: number,
+		message: string,
+	) {
 		super(message);
-		this.status = status;
 	}
 }
 
@@ -265,12 +265,6 @@ export function serializeWebSocketMessage(msg: JupyterMessage): ArrayBuffer {
 }
 
 export class PythonKernel {
-	readonly id: string;
-	readonly kernelId: string;
-	readonly gatewayUrl: string;
-	readonly sessionId: string;
-	readonly username: string;
-	readonly isSharedGateway: boolean;
 	readonly #authToken?: string;
 
 	#ws: WebSocket | null = null;
@@ -281,20 +275,14 @@ export class PythonKernel {
 	#pendingExecutions = new Map<string, (reason: string) => void>();
 
 	private constructor(
-		id: string,
-		kernelId: string,
-		gatewayUrl: string,
-		sessionId: string,
-		username: string,
-		isSharedGateway: boolean,
+		readonly id: string,
+		readonly kernelId: string,
+		readonly gatewayUrl: string,
+		readonly sessionId: string,
+		readonly username: string,
+		readonly isSharedGateway: boolean,
 		authToken?: string,
 	) {
-		this.id = id;
-		this.kernelId = kernelId;
-		this.gatewayUrl = gatewayUrl;
-		this.sessionId = sessionId;
-		this.username = username;
-		this.isSharedGateway = isSharedGateway;
 		this.#authToken = authToken;
 	}
 

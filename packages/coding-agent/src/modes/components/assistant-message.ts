@@ -8,14 +8,14 @@ import { getMarkdownTheme, theme } from "../../modes/theme/theme";
  */
 export class AssistantMessageComponent extends Container {
 	private contentContainer: Container;
-	private hideThinkingBlock: boolean;
 	private lastMessage?: AssistantMessage;
 	private prerenderInFlight = false;
 
-	constructor(message?: AssistantMessage, hideThinkingBlock = false) {
+	constructor(
+		message?: AssistantMessage,
+		private hideThinkingBlock = false,
+	) {
 		super();
-
-		this.hideThinkingBlock = hideThinkingBlock;
 
 		// Container for text/thinking content
 		this.contentContainer = new Container();

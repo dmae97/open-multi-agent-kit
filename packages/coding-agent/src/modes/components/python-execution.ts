@@ -12,7 +12,6 @@ import { truncateToVisualLines } from "./visual-truncate";
 const PREVIEW_LINES = 20;
 
 export class PythonExecutionComponent extends Container {
-	private code: string;
 	private outputLines: string[] = [];
 	private status: "running" | "complete" | "cancelled" | "error" = "running";
 	private exitCode: number | undefined = undefined;
@@ -20,7 +19,6 @@ export class PythonExecutionComponent extends Container {
 	private truncation?: TruncationMeta;
 	private expanded = false;
 	private contentContainer: Container;
-	private excludeFromContext: boolean;
 
 	private formatHeader(colorKey: "dim" | "pythonMode"): Text {
 		const prompt = theme.fg(colorKey, theme.bold(">>>"));
@@ -32,10 +30,12 @@ export class PythonExecutionComponent extends Container {
 		return new Text(headerLines.join("\n"), 1, 0);
 	}
 
-	constructor(code: string, ui: TUI, excludeFromContext = false) {
+	constructor(
+		private readonly code: string,
+		ui: TUI,
+		private readonly excludeFromContext = false,
+	) {
 		super();
-		this.code = code;
-		this.excludeFromContext = excludeFromContext;
 
 		const colorKey = this.excludeFromContext ? "dim" : "pythonMode";
 		const borderColor = (str: string) => theme.fg(colorKey, str);

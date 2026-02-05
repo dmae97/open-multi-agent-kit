@@ -858,10 +858,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 	public readonly mergeCallAndResult = true;
 	public readonly inline = true;
 
-	private readonly session: ToolSession;
-
-	constructor(session: ToolSession) {
-		this.session = session;
+	constructor(private readonly session: ToolSession) {
 		this.description = renderPromptTemplate(lspDescription);
 	}
 

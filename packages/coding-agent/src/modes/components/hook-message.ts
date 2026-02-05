@@ -10,16 +10,15 @@ import type { HookMessage } from "../../session/messages";
  * Uses distinct styling to differentiate from user messages.
  */
 export class HookMessageComponent extends Container {
-	private message: HookMessage<unknown>;
-	private customRenderer?: HookMessageRenderer;
 	private box: Box;
 	private customComponent?: Component;
 	private _expanded = false;
 
-	constructor(message: HookMessage<unknown>, customRenderer?: HookMessageRenderer) {
+	constructor(
+		private readonly message: HookMessage<unknown>,
+		private readonly customRenderer?: HookMessageRenderer,
+	) {
 		super();
-		this.message = message;
-		this.customRenderer = customRenderer;
 
 		this.addChild(new Spacer(1));
 

@@ -126,22 +126,18 @@ interface SshToolParams {
 export class SshTool implements AgentTool<typeof sshSchema, SSHToolDetails> {
 	public readonly name = "ssh";
 	public readonly label = "SSH";
-	public readonly description: string;
 	public readonly parameters = sshSchema;
 	public readonly concurrency = "exclusive";
 
-	private readonly session: ToolSession;
-
 	private readonly allowedHosts: Set<string>;
-	private readonly hostsByName: Map<string, SSHHost>;
-	private readonly hostNames: string[];
 
-	constructor(session: ToolSession, hostNames: string[], hostsByName: Map<string, SSHHost>, description: string) {
-		this.session = session;
-		this.hostNames = hostNames;
-		this.hostsByName = hostsByName;
-		this.allowedHosts = new Set(hostNames);
-		this.description = description;
+	constructor(
+		private readonly session: ToolSession,
+		private readonly hostNames: string[],
+		private readonly hostsByName: Map<string, SSHHost>,
+		public readonly description: string,
+	) {
+		this.allowedHosts = new Set(this.hostNames);
 	}
 
 	public async execute(

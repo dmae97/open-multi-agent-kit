@@ -33,17 +33,15 @@ export class ExtensionDashboard extends Container {
 	private state!: DashboardState;
 	private mainList!: ExtensionList;
 	private inspector!: InspectorPanel;
-	private settingsInstance: Settings | null;
-	private cwd: string;
-	private terminalHeight: number;
 
 	public onClose?: () => void;
 
-	private constructor(cwd: string, settingsInstance: Settings | null, terminalHeight: number) {
+	private constructor(
+		private readonly cwd: string,
+		private readonly settingsInstance: Settings | null,
+		private readonly terminalHeight: number,
+	) {
 		super();
-		this.cwd = cwd;
-		this.settingsInstance = settingsInstance;
-		this.terminalHeight = terminalHeight;
 	}
 
 	static async create(
@@ -292,15 +290,11 @@ export class ExtensionDashboard extends Container {
  * Two-column body component for side-by-side rendering.
  */
 class TwoColumnBody implements Component {
-	private leftPane: ExtensionList;
-	private rightPane: InspectorPanel;
-	private maxHeight: number;
-
-	constructor(left: ExtensionList, right: InspectorPanel, maxHeight: number) {
-		this.leftPane = left;
-		this.rightPane = right;
-		this.maxHeight = maxHeight;
-	}
+	constructor(
+		private readonly leftPane: ExtensionList,
+		private readonly rightPane: InspectorPanel,
+		private readonly maxHeight: number,
+	) {}
 
 	render(width: number): string[] {
 		const leftWidth = Math.floor(width * 0.5);

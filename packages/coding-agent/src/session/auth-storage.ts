@@ -148,7 +148,6 @@ export class AuthStorage {
 
 	/** Provider -> credentials cache, populated from agent.db on reload(). */
 	private data: Map<string, StoredCredential[]> = new Map();
-	private storage: AgentStorage;
 	/** Resolved path to agent.db (derived from authPath or used directly if .db). */
 	private dbPath: string;
 	private runtimeOverrides: Map<string, string> = new Map();
@@ -168,11 +167,10 @@ export class AuthStorage {
 	private constructor(
 		private authPath: string,
 		private fallbackPaths: string[] = [],
-		storage: AgentStorage,
+		private storage: AgentStorage,
 		options: AuthStorageOptions = {},
 	) {
 		this.dbPath = AuthStorage.resolveDbPath(authPath);
-		this.storage = storage;
 		this.usageProviderResolver = options.usageProviderResolver ?? resolveDefaultUsageProvider;
 		this.usageCache = options.usageCache ?? new AuthStorageUsageCache(this.storage);
 		this.usageFetch = options.usageFetch ?? fetch;

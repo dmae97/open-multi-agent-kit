@@ -57,7 +57,6 @@ function buildFinalGrid(): string[][] {
 }
 
 export class ArminComponent implements Component {
-	private ui: TUI;
 	private interval: ReturnType<typeof setInterval> | null = null;
 	private effect: Effect;
 	private finalGrid: string[][];
@@ -68,8 +67,7 @@ export class ArminComponent implements Component {
 	private gridVersion = 0;
 	private cachedVersion = -1;
 
-	constructor(ui: TUI) {
-		this.ui = ui;
+	constructor(private readonly ui: TUI) {
 		this.effect = EFFECTS[Math.floor(Math.random() * EFFECTS.length)];
 		this.finalGrid = buildFinalGrid();
 		this.currentGrid = this.createEmptyGrid();

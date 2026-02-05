@@ -60,7 +60,6 @@ function findGitHeadPath(): string | null {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export class StatusLineComponent implements Component {
-	private session: AgentSession;
 	private settings: StatusLineSettings = {};
 	private cachedBranch: string | null | undefined = undefined;
 	private gitWatcher: fs.FSWatcher | null = null;
@@ -75,8 +74,7 @@ export class StatusLineComponent implements Component {
 	private cachedGitStatus: { staged: number; unstaged: number; untracked: number } | null = null;
 	private gitStatusLastFetch = 0;
 
-	constructor(session: AgentSession) {
-		this.session = session;
+	constructor(private readonly session: AgentSession) {
 		this.settings = {
 			preset: settings.get("statusLine.preset"),
 			leftSegments: settings.get("statusLine.leftSegments"),

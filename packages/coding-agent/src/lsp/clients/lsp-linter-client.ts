@@ -21,8 +21,6 @@ const DEFAULT_FORMAT_OPTIONS = {
  * Wraps the existing LSP client infrastructure.
  */
 export class LspLinterClient implements LinterClient {
-	private config: ServerConfig;
-	private cwd: string;
 	private client: LspClient | null = null;
 
 	/** Factory method for creating LspLinterClient instances */
@@ -30,10 +28,10 @@ export class LspLinterClient implements LinterClient {
 		return new LspLinterClient(config, cwd);
 	}
 
-	constructor(config: ServerConfig, cwd: string) {
-		this.config = config;
-		this.cwd = cwd;
-	}
+	constructor(
+		private readonly config: ServerConfig,
+		private readonly cwd: string,
+	) {}
 
 	private async getClient(): Promise<LspClient> {
 		if (!this.client) {

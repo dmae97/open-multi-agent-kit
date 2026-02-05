@@ -118,11 +118,12 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 	public readonly description: string;
 	public readonly parameters = findSchema;
 
-	private readonly session: ToolSession;
 	private readonly customOps?: FindOperations;
 
-	constructor(session: ToolSession, options?: FindToolOptions) {
-		this.session = session;
+	constructor(
+		private readonly session: ToolSession,
+		options?: FindToolOptions,
+	) {
 		this.customOps = options?.operations;
 		this.description = renderPromptTemplate(findDescription);
 	}

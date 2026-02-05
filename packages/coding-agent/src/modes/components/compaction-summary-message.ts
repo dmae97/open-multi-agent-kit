@@ -8,11 +8,9 @@ import type { CompactionSummaryMessage } from "../../session/messages";
  */
 export class CompactionSummaryMessageComponent extends Box {
 	private expanded = false;
-	private message: CompactionSummaryMessage;
 
-	constructor(message: CompactionSummaryMessage) {
+	constructor(private readonly message: CompactionSummaryMessage) {
 		super(1, 1, t => theme.bg("customMessageBg", t));
-		this.message = message;
 		this.updateDisplay();
 	}
 

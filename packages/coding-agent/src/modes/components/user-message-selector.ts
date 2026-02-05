@@ -12,17 +12,15 @@ interface UserMessageItem {
  * Custom user message list component with selection
  */
 class UserMessageList implements Component {
-	private messages: UserMessageItem[] = [];
 	private selectedIndex: number = 0;
 	public onSelect?: (entryId: string) => void;
 	public onCancel?: () => void;
 	private maxVisible: number = 10; // Max messages visible
 
-	constructor(messages: UserMessageItem[]) {
+	constructor(private readonly messages: UserMessageItem[]) {
 		// Store messages in chronological order (oldest to newest)
-		this.messages = messages;
 		// Start with the last (most recent) message selected
-		this.selectedIndex = Math.max(0, messages.length - 1);
+		this.selectedIndex = Math.max(0, this.messages.length - 1);
 	}
 
 	invalidate(): void {

@@ -107,18 +107,15 @@ async function runBiome(
  * Parses Biome's --reporter=json output into LSP Diagnostic format.
  */
 export class BiomeClient implements LinterClient {
-	private config: ServerConfig;
-	private cwd: string;
-
 	/** Factory method for creating BiomeClient instances */
 	static create(config: ServerConfig, cwd: string): LinterClient {
 		return new BiomeClient(config, cwd);
 	}
 
-	constructor(config: ServerConfig, cwd: string) {
-		this.config = config;
-		this.cwd = cwd;
-	}
+	constructor(
+		private readonly config: ServerConfig,
+		private readonly cwd: string,
+	) {}
 
 	async format(filePath: string, content: string): Promise<string> {
 		// Write content to file first

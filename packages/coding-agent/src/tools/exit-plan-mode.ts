@@ -21,10 +21,7 @@ export class ExitPlanModeTool implements AgentTool<typeof exitPlanModeSchema, Ex
 	public readonly description: string;
 	public readonly parameters = exitPlanModeSchema;
 
-	private readonly session: ToolSession;
-
-	constructor(session: ToolSession) {
-		this.session = session;
+	constructor(private readonly session: ToolSession) {
 		this.description = renderPromptTemplate(exitPlanModeDescription);
 	}
 

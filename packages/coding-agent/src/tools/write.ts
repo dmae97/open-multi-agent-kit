@@ -74,11 +74,9 @@ export class WriteTool implements AgentTool<typeof writeSchema, WriteToolDetails
 	public readonly nonAbortable = true;
 	public readonly concurrency = "exclusive";
 
-	private readonly session: ToolSession;
 	private readonly writethrough: WritethroughCallback;
 
-	constructor(session: ToolSession) {
-		this.session = session;
+	constructor(private readonly session: ToolSession) {
 		const enableLsp = session.enableLsp ?? true;
 		const enableFormat = enableLsp && session.settings.get("lsp.formatOnWrite");
 		const enableDiagnostics = enableLsp && session.settings.get("lsp.diagnosticsOnWrite");

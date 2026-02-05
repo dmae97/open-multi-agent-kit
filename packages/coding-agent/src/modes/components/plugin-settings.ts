@@ -36,12 +36,13 @@ export interface PluginListCallbacks {
  * Selecting a plugin opens its detail view.
  */
 export class PluginListComponent extends Container {
-	private selectList: SelectList;
-	private plugins: InstalledPlugin[];
+	private readonly selectList: SelectList;
 
-	constructor(plugins: InstalledPlugin[], callbacks: PluginListCallbacks) {
+	constructor(
+		private readonly plugins: InstalledPlugin[],
+		callbacks: PluginListCallbacks,
+	) {
 		super();
-		this.plugins = plugins;
 
 		// Title
 		this.addChild(new DynamicBorder());
@@ -121,15 +122,13 @@ export interface PluginDetailCallbacks {
  */
 export class PluginDetailComponent extends Container {
 	private settingsList!: SettingsList;
-	private plugin: InstalledPlugin;
-	private manager: PluginManager;
-	private callbacks: PluginDetailCallbacks;
 
-	constructor(plugin: InstalledPlugin, manager: PluginManager, callbacks: PluginDetailCallbacks) {
+	constructor(
+		private plugin: InstalledPlugin,
+		private readonly manager: PluginManager,
+		private readonly callbacks: PluginDetailCallbacks,
+	) {
 		super();
-		this.plugin = plugin;
-		this.manager = manager;
-		this.callbacks = callbacks;
 
 		void this.rebuild();
 	}
@@ -335,19 +334,15 @@ class ConfigEnumSubmenu extends Container {
  */
 class ConfigInputSubmenu extends Container {
 	private input: Input;
-	private onSubmit: (value: string) => void;
-	private onCancel: () => void;
 
 	constructor(
 		key: string,
 		schema: PluginSettingSchema,
 		currentValue: string,
-		onSubmit: (value: string) => void,
-		onCancel: () => void,
+		private readonly onSubmit: (value: string) => void,
+		private readonly onCancel: () => void,
 	) {
 		super();
-		this.onSubmit = onSubmit;
-		this.onCancel = onCancel;
 
 		this.addChild(new Text(theme.bold(theme.fg("accent", key)), 0, 0));
 		if (schema.description) {
@@ -416,17 +411,18 @@ interface InputHandler {
  */
 export class PluginSettingsComponent extends Container {
 	private manager: PluginManager;
-	private callbacks: PluginSettingsCallbacks;
 	private viewComponent: (Container & InputHandler) | null = null;
 	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: state tracking for view management
 	private currentView: "list" | "detail" = "list";
 	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: state tracking for view management
 	private currentPlugin: InstalledPlugin | null = null;
 
-	constructor(cwd: string, callbacks: PluginSettingsCallbacks) {
+	constructor(
+		cwd: string,
+		private readonly callbacks: PluginSettingsCallbacks,
+	) {
 		super();
 		this.manager = new PluginManager(cwd);
-		this.callbacks = callbacks;
 		this.showPluginList();
 	}
 

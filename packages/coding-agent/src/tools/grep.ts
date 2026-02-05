@@ -66,10 +66,10 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 	public readonly description: string;
 	public readonly parameters = grepSchema;
 
-	private readonly session: ToolSession;
-
-	constructor(session: ToolSession, _options?: GrepToolOptions) {
-		this.session = session;
+	constructor(
+		private readonly session: ToolSession,
+		_options?: GrepToolOptions,
+	) {
 		this.description = renderPromptTemplate(grepDescription);
 	}
 

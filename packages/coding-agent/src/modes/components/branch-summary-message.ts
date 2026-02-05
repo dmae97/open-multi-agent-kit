@@ -8,11 +8,9 @@ import type { BranchSummaryMessage } from "../../session/messages";
  */
 export class BranchSummaryMessageComponent extends Box {
 	private expanded = false;
-	private message: BranchSummaryMessage;
 
-	constructor(message: BranchSummaryMessage) {
+	constructor(private readonly message: BranchSummaryMessage) {
 		super(1, 1, t => theme.bg("customMessageBg", t));
-		this.message = message;
 		this.updateDisplay();
 	}
 

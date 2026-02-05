@@ -67,11 +67,7 @@ export class NotebookTool implements AgentTool<typeof notebookSchema, NotebookTo
 	public readonly parameters = notebookSchema;
 	public readonly concurrency = "exclusive";
 
-	private readonly session: ToolSession;
-
-	constructor(session: ToolSession) {
-		this.session = session;
-	}
+	constructor(private readonly session: ToolSession) {}
 
 	public async execute(
 		_toolCallId: string,

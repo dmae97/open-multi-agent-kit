@@ -249,17 +249,14 @@ export async function fetchMCPToolSchema(
 export class MCPWrappedTool implements CustomTool<TSchema, ExaRenderDetails> {
 	public readonly name: string;
 	public readonly label: string;
-	public readonly description: string;
-	public readonly parameters: TSchema;
 
-	private readonly config: MCPToolWrapperConfig;
-
-	constructor(config: MCPToolWrapperConfig, schema: TSchema, description: string) {
-		this.config = config;
+	constructor(
+		private readonly config: MCPToolWrapperConfig,
+		public readonly parameters: TSchema,
+		public readonly description: string,
+	) {
 		this.name = config.name;
 		this.label = config.label;
-		this.description = description;
-		this.parameters = schema;
 	}
 
 	async execute(

@@ -156,10 +156,7 @@ export class TodoWriteTool implements AgentTool<typeof todoWriteSchema, TodoWrit
 	public readonly parameters = todoWriteSchema;
 	public readonly concurrency = "exclusive";
 
-	private readonly session: ToolSession;
-
-	constructor(session: ToolSession) {
-		this.session = session;
+	constructor(private readonly session: ToolSession) {
 		this.description = renderPromptTemplate(todoWriteDescription);
 	}
 

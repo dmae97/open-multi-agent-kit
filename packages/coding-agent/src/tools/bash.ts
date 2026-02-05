@@ -49,10 +49,7 @@ export class BashTool implements AgentTool<typeof bashSchema, BashToolDetails> {
 	public readonly parameters = bashSchema;
 	public readonly concurrency = "exclusive";
 
-	private readonly session: ToolSession;
-
-	constructor(session: ToolSession) {
-		this.session = session;
+	constructor(private readonly session: ToolSession) {
 		this.description = renderPromptTemplate(bashDescription);
 	}
 

@@ -151,11 +151,9 @@ export function formatKeyHints(keys: KeyId | KeyId[]): string {
  * Manages all keybindings (app + editor).
  */
 export class KeybindingsManager {
-	private config: KeybindingsConfig;
 	private appActionToKeys: Map<AppAction, KeyId[]>;
 
-	private constructor(config: KeybindingsConfig) {
-		this.config = config;
+	private constructor(private readonly config: KeybindingsConfig) {
 		this.appActionToKeys = new Map();
 		this.buildMaps();
 	}
