@@ -1,9 +1,12 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added new subcommands to help text: `commit` for AI-assisted git commits, `stats` for AI usage statistics dashboard, and `jupyter` for managing the shared Jupyter gateway
+- Added `grep` subcommand to help text for testing the grep tool
+- Added `browser` tool documentation for browser automation using Puppeteer
+- Added `todo_write` tool documentation for managing todo and task lists
 - Added documentation for additional LLM provider API keys (Groq, Cerebras, xAI, OpenRouter, Mistral, z.ai, MiniMax, OpenCode, Cursor, Vercel AI Gateway) in environment variables reference
 - Added documentation for cloud provider configuration (AWS Bedrock, Google Vertex AI) in environment variables reference
 - Added documentation for search provider API keys (Perplexity, Anthropic Search) in environment variables reference
@@ -17,6 +20,10 @@
 
 ### Changed
 
+- Updated help text to reflect expanded tool availability - default now enables all tools instead of just read, bash, edit, write
+- Updated available tools list in help documentation to include python, notebook, task, fetch, web_search, browser, and ask
+- Simplified main description in help text from 'AI coding assistant with read, bash, edit, write tools' to 'AI coding assistant'
+- Updated `--tools` option documentation to clarify default behavior and list all available tools
 - Changed all environment variable access from `process.env` to `Bun.env` throughout the codebase for Bun runtime compatibility
 - Updated documentation to reference `Bun.env` instead of `process.env` in examples and comments
 

@@ -181,7 +181,7 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 }
 
 export function printHelp(): void {
-	console.log(`${chalk.bold(APP_NAME)} - AI coding assistant with read, bash, edit, write tools
+	console.log(`${chalk.bold(APP_NAME)} - AI coding assistant
 
 ${chalk.bold("Usage:")}
   ${APP_NAME} [options] [@files...] [messages...]
@@ -191,7 +191,11 @@ ${chalk.bold("Subcommands:")}
   update    Check for and install updates
   config    Manage configuration settings
   setup     Install dependencies for optional features
+  commit    AI-assisted git commits
+  stats     AI usage statistics dashboard
+  jupyter   Manage the shared Jupyter gateway
   shell     Interactive shell console (brush-core test)
+  grep      Test grep tool
 
 ${chalk.bold("Options:")}
   --model <pattern>              Model to use (fuzzy match: "opus", "gpt-5.2", or "p-openai/gpt-5.2")
@@ -213,8 +217,9 @@ ${chalk.bold("Options:")}
                                  Supports globs (anthropic/*, *sonnet*) and fuzzy matching
   --no-tools                     Disable all built-in tools
   --no-lsp                       Disable LSP tools, formatting, and diagnostics
-  --tools <tools>                Comma-separated list of tools to enable (default: read,bash,edit,write)
-                                 Available: read, bash, edit, write, grep, find, ls
+  --tools <tools>                Comma-separated list of tools to enable (default: all)
+                                 Available: read, bash, edit, write, grep, find, lsp,
+                                 python, notebook, task, fetch, web_search, browser, ask
   --thinking <level>             Set thinking level: off, minimal, low, medium, high, xhigh
   --hook <path>                  Load a hook/extension file (can be used multiple times)
   --extension, -e <path>         Load an extension file (can be used multiple times)
@@ -261,38 +266,18 @@ ${chalk.bold("Examples:")}
   ${APP_NAME} --thinking high "Solve this complex problem"
 
   # Read-only mode (no file modifications possible)
-  ${APP_NAME} --tools read,grep,find,ls -p "Review the code in src/"
+  ${APP_NAME} --tools read,grep,find -p "Review the code in src/"
 
   # Export a session file to HTML
   ${APP_NAME} --export ~/${CONFIG_DIR_NAME}/agent/sessions/--path--/session.jsonl
   ${APP_NAME} --export session.jsonl output.html
 
 ${chalk.bold("Environment Variables:")}
-  ${chalk.dim("# Model providers")}
-  ANTHROPIC_API_KEY       - Anthropic Claude API key
-  ANTHROPIC_OAUTH_TOKEN   - Anthropic OAuth token (alternative to API key)
-  OPENAI_API_KEY          - OpenAI GPT API key
-  GEMINI_API_KEY          - Google Gemini API key
-  GROQ_API_KEY            - Groq API key
-  CEREBRAS_API_KEY        - Cerebras API key
-  XAI_API_KEY             - xAI Grok API key
-  OPENROUTER_API_KEY      - OpenRouter API key
-  MISTRAL_API_KEY         - Mistral API key
-  ZAI_API_KEY             - ZAI API key
-  GITHUB_TOKEN            - GitHub Copilot models (or GH_TOKEN, COPILOT_GITHUB_TOKEN)
-
-  ${chalk.dim("# Web search providers")}
-  EXA_API_KEY             - Exa search API key
-  PERPLEXITY_API_KEY      - Perplexity search API key
-
-  ${chalk.dim("# Configuration")}
-  PI_CODING_AGENT_DIR    - Session storage directory (default: ~/${CONFIG_DIR_NAME}/agent)
-${chalk.bold("API Keys (Environment Variables):")}
   ${chalk.dim("# Core Providers")}
   ANTHROPIC_API_KEY          - Anthropic Claude models
   ANTHROPIC_OAUTH_TOKEN      - Anthropic OAuth (takes precedence over API key)
   OPENAI_API_KEY             - OpenAI GPT models
-  GOOGLE_API_KEY             - Google Gemini models
+  GEMINI_API_KEY             - Google Gemini models
   GITHUB_TOKEN               - GitHub Copilot (or GH_TOKEN, COPILOT_GITHUB_TOKEN)
 
   ${chalk.dim("# Additional LLM Providers")}
@@ -333,11 +318,12 @@ ${chalk.bold("Available Tools (all enabled by default):")}
   write      - Write files (creates/overwrites)
   grep       - Search file contents
   find       - Find files by glob pattern
-  ls         - List directory contents
   lsp        - Language server protocol (code intelligence)
   python     - Execute Python code (requires: ${APP_NAME} setup python)
   notebook   - Edit Jupyter notebooks
+  browser    - Browser automation (Puppeteer)
   task       - Launch sub-agents for parallel tasks
+  todo_write - Manage todo/task lists
   fetch      - Fetch and process URLs
   web_search - Search the web
   ask        - Ask user questions (interactive mode only)
