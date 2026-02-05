@@ -7,6 +7,7 @@
 
 import { getEnvApiKey } from "@oh-my-pi/pi-ai";
 import type {
+	PerplexityMessageOutput,
 	PerplexityRequest,
 	PerplexityResponse,
 	WebSearchCitation,
@@ -20,7 +21,7 @@ const PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions";
 export interface PerplexitySearchParams {
 	query: string;
 	system_prompt?: string;
-	search_recency_filter?: "day" | "week" | "month" | "year";
+	search_recency_filter?: "hour" | "day" | "week" | "month" | "year";
 	num_results?: number;
 }
 
@@ -53,7 +54,7 @@ async function callPerplexity(apiKey: string, request: PerplexityRequest): Promi
 }
 
 /** Calculate age in seconds from ISO date string */
-function dateToAgeSeconds(dateStr: string | undefined): number | undefined {
+function dateToAgeSeconds(dateStr: string | null | undefined): number | undefined {
 	if (!dateStr) return undefined;
 	try {
 		const date = new Date(dateStr);
@@ -64,9 +65,16 @@ function dateToAgeSeconds(dateStr: string | undefined): number | undefined {
 	}
 }
 
+function messageContentToText(content: PerplexityMessageOutput["content"]): string {
+	if (!content) return "";
+	if (typeof content === "string") return content;
+	return content.map(chunk => (chunk.type === "text" ? chunk.text : "")).join("");
+}
+
 /** Parse API response into unified WebSearchResponse */
 function parseResponse(response: PerplexityResponse): WebSearchResponse {
-	const answer = response.choices[0]?.message?.content ?? "";
+	const messageContent = response.choices[0]?.message?.content ?? null;
+	const answer = messageContentToText(messageContent);
 
 	// Build sources by matching citations to search_results
 	const sources: WebSearchSource[] = [];
@@ -82,7 +90,7 @@ function parseResponse(response: PerplexityResponse): WebSearchResponse {
 				title: searchResult?.title ?? url,
 				url,
 				snippet: searchResult?.snippet,
-				publishedDate: searchResult?.date,
+				publishedDate: searchResult?.date ?? undefined,
 				ageSeconds: dateToAgeSeconds(searchResult?.date),
 			});
 			citations.push({
@@ -96,7 +104,7 @@ function parseResponse(response: PerplexityResponse): WebSearchResponse {
 				title: searchResult.title ?? searchResult.url,
 				url: searchResult.url,
 				snippet: searchResult.snippet,
-				publishedDate: searchResult.date,
+				publishedDate: searchResult.date ?? undefined,
 				ageSeconds: dateToAgeSeconds(searchResult.date),
 			});
 		}
@@ -107,12 +115,13 @@ function parseResponse(response: PerplexityResponse): WebSearchResponse {
 		answer: answer || undefined,
 		sources,
 		citations: citations.length > 0 ? citations : undefined,
-		relatedQuestions: response.related_questions,
-		usage: {
-			inputTokens: response.usage.prompt_tokens,
-			outputTokens: response.usage.completion_tokens,
-			totalTokens: response.usage.total_tokens,
-		},
+		usage: response.usage
+			? {
+					inputTokens: response.usage.prompt_tokens,
+					outputTokens: response.usage.completion_tokens,
+					totalTokens: response.usage.total_tokens,
+				}
+			: undefined,
 		model: response.model,
 		requestId: response.id,
 	};
@@ -134,7 +143,6 @@ export async function searchPerplexity(params: PerplexitySearchParams): Promise<
 	const request: PerplexityRequest = {
 		model: "sonar-pro",
 		messages,
-		return_related_questions: false,
 		web_search_options: {
 			search_type: "pro",
 			search_context_size: "high",

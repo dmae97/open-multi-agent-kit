@@ -196,6 +196,7 @@ ${chalk.bold("Subcommands:")}
   jupyter   Manage the shared Jupyter gateway
   shell     Interactive shell console (brush-core test)
   grep      Test grep tool
+  q         Test web search providers
 
 ${chalk.bold("Options:")}
   --model <pattern>              Model to use (fuzzy match: "opus", "gpt-5.2", or "p-openai/gpt-5.2")

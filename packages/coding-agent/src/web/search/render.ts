@@ -4,7 +4,7 @@
  * Tree-based rendering with collapsed/expanded states for web search results.
  */
 import type { Component } from "@oh-my-pi/pi-tui";
-import { Text } from "@oh-my-pi/pi-tui";
+import { Text, visibleWidth, wrapTextWithAnsi } from "@oh-my-pi/pi-tui";
 import type { RenderResultOptions } from "../../extensibility/custom-tools/types";
 import type { Theme } from "../../modes/theme/theme";
 import {
@@ -20,6 +20,7 @@ import {
 	truncateToWidth,
 } from "../../tools/render-utils";
 import { renderOutputBlock, renderStatusLine, renderTreeList } from "../../tui";
+import { formatWebSearchProviderLabel } from "./provider-info";
 import type { WebSearchResponse } from "./types";
 
 const MAX_COLLAPSED_ANSWER_LINES = PREVIEW_LIMITS.COLLAPSED_LINES;
@@ -70,7 +71,12 @@ export function renderWebSearchResult(
 	result: { content: Array<{ type: string; text?: string }>; details?: WebSearchRenderDetails },
 	options: RenderResultOptions,
 	theme: Theme,
-	args?: { query?: string; provider?: string },
+	args?: {
+		query?: string;
+		provider?: string;
+		allowLongAnswer?: boolean;
+		maxAnswerLines?: number;
+	},
 ): Component {
 	const { expanded } = options;
 	const details = result.details;
@@ -90,10 +96,6 @@ export function renderWebSearchResult(
 	const sourceCount = sources.length;
 	const citations = Array.isArray(response.citations) ? response.citations : [];
 	const citationCount = citations.length;
-	const related = Array.isArray(response.relatedQuestions)
-		? response.relatedQuestions.filter(item => typeof item === "string")
-		: [];
-	const relatedCount = related.length;
 	const searchQueries = Array.isArray(response.searchQueries)
 		? response.searchQueries.filter(item => typeof item === "string")
 		: [];
@@ -102,20 +104,21 @@ export function renderWebSearchResult(
 	// Get answer text
 	const answerText = typeof response.answer === "string" ? response.answer.trim() : "";
 	const contentText = answerText || rawText;
-	const totalAnswerLines = contentText ? contentText.split("\n").filter(l => l.trim()).length : 0;
+	const answerLines = contentText
+		? contentText
+				.split("\n")
+				.filter(l => l.trim())
+				.map(l => l.trim())
+		: [];
+	const totalAnswerLines = answerLines.length;
 	const answerLimit = expanded ? MAX_EXPANDED_ANSWER_LINES : MAX_COLLAPSED_ANSWER_LINES;
-	const answerPreview = contentText ? getPreviewLines(contentText, answerLimit, MAX_ANSWER_LINE_LEN) : [];
+	const answerPreview = contentText
+		? args?.allowLongAnswer
+			? answerLines.slice(0, args.maxAnswerLines ?? answerLines.length)
+			: getPreviewLines(contentText, answerLimit, MAX_ANSWER_LINE_LEN)
+		: [];
 
-	const providerLabel =
-		provider === "anthropic"
-			? "Anthropic"
-			: provider === "perplexity"
-				? "Perplexity"
-				: provider === "exa"
-					? "Exa"
-					: provider === "jina"
-						? "Jina"
-						: "Unknown";
+	const providerLabel = formatWebSearchProviderLabel(provider);
 	const queryPreview = args?.query
 		? truncateToWidth(args.query, 80)
 		: searchQueries[0]
@@ -132,20 +135,6 @@ export function renderWebSearchResult(
 	);
 
 	const remainingAnswer = totalAnswerLines - answerPreview.length;
-	const answerLines = answerPreview.length > 0 ? answerPreview : ["No answer text returned"];
-	const answerTree = renderTreeList(
-		{
-			items: answerLines,
-			expanded: true,
-			maxCollapsed: answerLines.length,
-			itemType: "line",
-			renderItem: line => (line === "No answer text returned" ? theme.fg("muted", line) : theme.fg("dim", line)),
-		},
-		theme,
-	);
-	if (remainingAnswer > 0) {
-		answerTree.push(theme.fg("muted", formatMoreItems(remainingAnswer, "line")));
-	}
 
 	const sourceTree = renderTreeList(
 		{
@@ -185,28 +174,12 @@ export function renderWebSearchResult(
 		theme,
 	);
 
-	const relatedLines = related.length > 0 ? related : ["No related questions"];
-	const relatedTree = renderTreeList(
-		{
-			items: relatedLines,
-			expanded,
-			maxCollapsed: MAX_COLLAPSED_ITEMS,
-			itemType: "question",
-			renderItem: line => theme.fg("muted", line === "No related questions" ? line : `${theme.format.dash} ${line}`),
-		},
-		theme,
-	);
-	if (!expanded && relatedCount > MAX_COLLAPSED_ITEMS) {
-		relatedTree.push(theme.fg("muted", formatMoreItems(relatedCount - MAX_COLLAPSED_ITEMS, "question")));
-	}
-
 	const metaLines: string[] = [];
 	metaLines.push(`${theme.fg("muted", "Provider:")} ${theme.fg("text", providerLabel)}`);
 	if (response.model) metaLines.push(`${theme.fg("muted", "Model:")} ${theme.fg("text", response.model)}`);
 	metaLines.push(`${theme.fg("muted", "Sources:")} ${theme.fg("text", String(sourceCount))}`);
 	if (citationCount > 0)
 		metaLines.push(`${theme.fg("muted", "Citations:")} ${theme.fg("text", String(citationCount))}`);
-	if (relatedCount > 0) metaLines.push(`${theme.fg("muted", "Related:")} ${theme.fg("text", String(relatedCount))}`);
 	if (response.usage) {
 		const usageParts: string[] = [];
 		if (response.usage.inputTokens !== undefined) usageParts.push(`in ${response.usage.inputTokens}`);
@@ -228,30 +201,66 @@ export function renderWebSearchResult(
 		metaLines.push(`${theme.fg("muted", "Queries:")} ${theme.fg("text", queryList.join("; "))}${suffix}`);
 	}
 
-	const sections = [
-		...(queryPreview
-			? [
-					{
-						lines: [`${theme.fg("muted", "Query:")} ${theme.fg("text", queryPreview)}`],
-					},
-				]
-			: []),
-		{ label: theme.fg("toolTitle", "Answer"), lines: answerTree },
-		{
-			label: theme.fg("toolTitle", "Sources"),
-			lines: sourceTree.length > 0 ? sourceTree : [theme.fg("muted", "No sources returned")],
-		},
-		{ label: theme.fg("toolTitle", "Related"), lines: relatedTree },
-		{ label: theme.fg("toolTitle", "Metadata"), lines: metaLines },
-	];
-
 	return {
 		render: (width: number) =>
 			renderOutputBlock(
 				{
 					header,
 					state: sourceCount > 0 ? "success" : "warning",
-					sections,
+					sections: [
+						...(queryPreview
+							? [
+									{
+										lines: [`${theme.fg("muted", "Query:")} ${theme.fg("text", queryPreview)}`],
+									},
+								]
+							: []),
+						{
+							label: theme.fg("toolTitle", "Answer"),
+							lines: (() => {
+								const state = sourceCount > 0 ? "success" : "warning";
+								const borderColor: "warning" | "dim" = state === "warning" ? "warning" : "dim";
+								const border = (text: string) => theme.fg(borderColor, text);
+								const contentPrefix = border(`${theme.boxSharp.vertical} `);
+								const contentSuffix = border(theme.boxSharp.vertical);
+								const contentWidth = Math.max(
+									0,
+									width - visibleWidth(contentPrefix) - visibleWidth(contentSuffix),
+								);
+								const answerTreeLines = answerPreview.length > 0 ? answerPreview : ["No answer text returned"];
+								const answerTree = renderTreeList(
+									{
+										items: answerTreeLines,
+										expanded: true,
+										maxCollapsed: answerTreeLines.length,
+										itemType: "line",
+										renderItem: (line, context) => {
+											const coloredLine =
+												line === "No answer text returned"
+													? theme.fg("muted", line)
+													: theme.fg("dim", line);
+											if (!args?.allowLongAnswer) {
+												return coloredLine;
+											}
+											const prefixWidth = visibleWidth(context.continuePrefix);
+											const wrapWidth = Math.max(10, contentWidth - prefixWidth);
+											return wrapTextWithAnsi(coloredLine, wrapWidth);
+										},
+									},
+									theme,
+								);
+								if (remainingAnswer > 0) {
+									answerTree.push(theme.fg("muted", formatMoreItems(remainingAnswer, "line")));
+								}
+								return answerTree;
+							})(),
+						},
+						{
+							label: theme.fg("toolTitle", "Sources"),
+							lines: sourceTree.length > 0 ? sourceTree : [theme.fg("muted", "No sources returned")],
+						},
+						{ label: theme.fg("toolTitle", "Metadata"), lines: metaLines },
+					],
 					width,
 				},
 				theme,

@@ -45,8 +45,6 @@ export interface WebSearchResponse {
 	sources: WebSearchSource[];
 	/** Text citations with context */
 	citations?: WebSearchCitation[];
-	/** Follow-up questions (perplexity) */
-	relatedQuestions?: string[];
 	/** Intermediate search queries (anthropic) */
 	searchQueries?: string[];
 	/** Token usage metrics */
@@ -148,52 +146,283 @@ export interface AnthropicApiResponse {
 }
 
 /** Perplexity API types */
-export interface PerplexityMessage {
-	role: "system" | "user" | "assistant";
-	content: string;
+export type PerplexityChatMessageRole = "system" | "user" | "assistant" | "tool";
+
+export interface PerplexityUrl {
+	url: string;
+}
+
+export interface PerplexityVideoUrl {
+	url: string;
+	frame_interval?: string | number;
+}
+
+export interface PerplexityContentTextChunk {
+	type: "text";
+	text: string;
+}
+
+export interface PerplexityContentImageChunk {
+	type: "image_url";
+	image_url: PerplexityUrl | string;
+}
+
+export interface PerplexityContentFileChunk {
+	type: "file_url";
+	file_url: PerplexityUrl | string;
+	file_name?: string | null;
+}
+
+export interface PerplexityContentPdfChunk {
+	type: "pdf_url";
+	pdf_url: PerplexityUrl | string;
+}
+
+export interface PerplexityContentVideoChunk {
+	type: "video_url";
+	video_url: PerplexityVideoUrl | string;
+}
+
+export type PerplexityContentChunk =
+	| PerplexityContentTextChunk
+	| PerplexityContentImageChunk
+	| PerplexityContentFileChunk
+	| PerplexityContentPdfChunk
+	| PerplexityContentVideoChunk;
+
+export interface PerplexityWebSearchStepDetails {
+	search_results: PerplexitySearchResult[];
+	search_keywords: string[];
+}
+
+export interface PerplexityFetchUrlContentStepDetails {
+	contents: PerplexitySearchResult[];
+}
+
+export interface PerplexityExecutePythonStepDetails {
+	code: string;
+	result: string;
+}
+
+export interface PerplexityReasoningStepInput {
+	thought: string;
+	type?: string | null;
+	web_search?: PerplexityWebSearchStepDetails | null;
+	fetch_url_content?: PerplexityFetchUrlContentStepDetails | null;
+	execute_python?: PerplexityExecutePythonStepDetails | null;
+}
+
+export interface PerplexityReasoningStepOutput {
+	thought: string;
+	type?: string | null;
+	web_search?: PerplexityWebSearchStepDetails | null;
+	fetch_url_content?: PerplexityFetchUrlContentStepDetails | null;
+	execute_python?: PerplexityExecutePythonStepDetails | null;
+}
+
+export interface PerplexityToolCallFunction {
+	name?: string | null;
+	arguments?: string | null;
+}
+
+export interface PerplexityToolCall {
+	id?: string | null;
+	type?: "function" | null;
+	function?: PerplexityToolCallFunction | null;
+}
+
+export interface PerplexityMessageInput {
+	role: PerplexityChatMessageRole;
+	content: string | PerplexityContentChunk[] | null;
+	reasoning_steps?: PerplexityReasoningStepInput[] | null;
+	tool_calls?: PerplexityToolCall[] | null;
+	tool_call_id?: string | null;
+}
+
+export interface PerplexityMessageOutput {
+	role: PerplexityChatMessageRole;
+	content: string | PerplexityContentChunk[] | null;
+	reasoning_steps?: PerplexityReasoningStepOutput[] | null;
+	tool_calls?: PerplexityToolCall[] | null;
+	tool_call_id?: string | null;
+}
+
+export type PerplexityMessage = PerplexityMessageInput;
+
+export interface PerplexityResponseFormatText {
+	type: "text";
+}
+
+export interface PerplexityJSONSchema {
+	schema: Record<string, unknown>;
+	name?: string | null;
+	description?: string | null;
+	strict?: boolean | null;
+}
+
+export interface PerplexityResponseFormatJSONSchema {
+	type: "json_schema";
+	json_schema: PerplexityJSONSchema;
+}
+
+export interface PerplexityRegexSchema {
+	regex: string;
+	name?: string | null;
+	description?: string | null;
+	strict?: boolean | null;
+}
+
+export interface PerplexityResponseFormatRegex {
+	type: "regex";
+	regex: PerplexityRegexSchema;
+}
+
+export type PerplexityResponseFormat =
+	| PerplexityResponseFormatText
+	| PerplexityResponseFormatJSONSchema
+	| PerplexityResponseFormatRegex;
+
+export interface PerplexityParameterSpec {
+	type: string;
+	properties: Record<string, unknown>;
+	required?: string[] | null;
+	additional_properties?: boolean | null;
+}
+
+export interface PerplexityFunctionSpec {
+	name: string;
+	description: string;
+	parameters: PerplexityParameterSpec;
+	strict?: boolean | null;
+}
+
+export interface PerplexityToolSpec {
+	type: "function";
+	function: PerplexityFunctionSpec;
+}
+
+export interface PerplexityUserLocation {
+	latitude?: number | null;
+	longitude?: number | null;
+	country?: string | null;
+	city?: string | null;
+	region?: string | null;
+}
+
+export interface PerplexityWebSearchOptions {
+	search_context_size?: "low" | "medium" | "high";
+	search_type?: "fast" | "pro" | "auto" | null;
+	user_location?: PerplexityUserLocation | null;
+	image_results_enhanced_relevance?: boolean;
 }
 
 export interface PerplexityRequest {
+	max_tokens?: number | null;
+	n?: number | null;
 	model: string;
-	messages: PerplexityMessage[];
-	temperature?: number;
-	max_tokens?: number;
-	search_domain_filter?: string[];
-	search_recency_filter?: "day" | "week" | "month" | "year";
-	return_images?: boolean;
-	return_related_questions?: boolean;
-	web_search_options?: {
-		search_type?: "fast" | "pro";
-		search_context_size?: "low" | "medium" | "high";
-	};
+	stream?: boolean | null;
+	stop?: string | string[] | null;
+	cum_logprobs?: boolean | null;
+	logprobs?: boolean | null;
+	top_logprobs?: number | null;
+	best_of?: number | null;
+	response_metadata?: Record<string, unknown> | null;
+	response_format?: PerplexityResponseFormat | null;
+	diverse_first_token?: boolean | null;
+	_inputs?: number[] | null;
+	_prompt_token_length?: number | null;
+	messages: PerplexityMessageInput[];
+	tools?: PerplexityToolSpec[] | null;
+	tool_choice?: "none" | "auto" | "required" | null;
+	parallel_tool_calls?: boolean | null;
+	web_search_options?: PerplexityWebSearchOptions;
+	search_mode?: "web" | "academic" | "sec" | null;
+	return_images?: boolean | null;
+	return_related_questions?: boolean | null;
+	num_search_results?: number;
+	num_images?: number;
+	enable_search_classifier?: boolean | null;
+	disable_search?: boolean | null;
+	search_domain_filter?: string[] | null;
+	search_language_filter?: string[] | null;
+	search_tenant?: string | null;
+	ranking_model?: string | null;
+	latitude?: number | null;
+	longitude?: number | null;
+	country?: string | null;
+	search_recency_filter?: "hour" | "day" | "week" | "month" | "year" | null;
+	search_after_date_filter?: string | null;
+	search_before_date_filter?: string | null;
+	last_updated_before_filter?: string | null;
+	last_updated_after_filter?: string | null;
+	image_format_filter?: string[] | null;
+	image_domain_filter?: string[] | null;
+	safe_search?: boolean | null;
+	file_workspace_id?: string | null;
+	updated_before_timestamp?: number | null;
+	updated_after_timestamp?: number | null;
+	search_internal_properties?: Record<string, unknown> | null;
+	use_threads?: boolean | null;
+	thread_id?: string | null;
+	stream_mode?: "full" | "concise";
+	_debug_pro_search?: boolean;
+	has_image_url?: boolean;
+	reasoning_effort?: "minimal" | "low" | "medium" | "high" | null;
+	language_preference?: string | null;
+	user_original_query?: string | null;
+	_force_new_agent?: boolean | null;
 }
 
 export interface PerplexitySearchResult {
 	title: string;
 	url: string;
-	date?: string;
+	date?: string | null;
+	last_updated?: string | null;
 	snippet?: string;
+	source?: "web" | "attachment";
+}
+
+export interface PerplexityCost {
+	input_tokens_cost: number;
+	output_tokens_cost: number;
+	reasoning_tokens_cost?: number | null;
+	request_cost?: number | null;
+	citation_tokens_cost?: number | null;
+	search_queries_cost?: number | null;
+	total_cost: number;
+}
+
+export interface PerplexityUsageInfo {
+	prompt_tokens: number;
+	completion_tokens: number;
+	total_tokens: number;
+	search_context_size?: string | null;
+	citation_tokens?: number | null;
+	num_search_queries?: number | null;
+	reasoning_tokens?: number | null;
+	cost: PerplexityCost;
+}
+
+export type PerplexityCompletionResponseType = "message" | "info" | "end_of_stream";
+
+export type PerplexityCompletionResponseStatus = "PENDING" | "COMPLETED";
+
+export interface PerplexityChoice {
+	index: number;
+	finish_reason?: "stop" | "length" | null;
+	message: PerplexityMessageOutput;
+	delta: PerplexityMessageOutput;
 }
 
 export interface PerplexityResponse {
 	id: string;
 	model: string;
 	created: number;
-	usage: {
-		prompt_tokens: number;
-		completion_tokens: number;
-		total_tokens: number;
-		search_context_size?: string;
-	};
-	citations?: string[];
-	search_results?: PerplexitySearchResult[];
-	related_questions?: string[];
-	choices: Array<{
-		index: number;
-		finish_reason: string;
-		message: {
-			role: string;
-			content: string;
-		};
-	}>;
+	usage?: PerplexityUsageInfo | null;
+	object?: string;
+	choices: PerplexityChoice[];
+	citations?: string[] | null;
+	search_results?: PerplexitySearchResult[] | null;
+	type?: PerplexityCompletionResponseType | null;
+	status?: PerplexityCompletionResponseStatus | null;
 }

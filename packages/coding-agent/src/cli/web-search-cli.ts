@@ -1,0 +1,148 @@
+/**
+ * Web search CLI command handlers.
+ *
+ * Handles `omp q`/`omp web-search` subcommands for testing web search providers.
+ */
+import chalk from "chalk";
+import { APP_NAME } from "../config";
+import { initTheme, theme } from "../modes/theme/theme";
+import { renderWebSearchResult } from "../web/search/render";
+import { runWebSearchQuery, type WebSearchParams } from "../web/search/index";
+import type { WebSearchProvider } from "../web/search/types";
+
+export interface WebSearchCommandArgs {
+	query: string;
+	provider?: WebSearchProvider | "auto";
+	recency?: "day" | "week" | "month" | "year";
+	limit?: number;
+	expanded: boolean;
+}
+
+const PROVIDERS: Array<WebSearchProvider | "auto"> = [
+	"auto",
+	"anthropic",
+	"perplexity",
+	"exa",
+	"jina",
+	"gemini",
+	"codex",
+];
+
+const RECENCY_OPTIONS: WebSearchCommandArgs["recency"][] = ["day", "week", "month", "year"];
+
+/**
+ * Parse web search subcommand arguments.
+ * Returns undefined if not a web search command.
+ */
+export function parseWebSearchArgs(args: string[]): WebSearchCommandArgs | undefined {
+	if (args.length === 0 || (args[0] !== "q" && args[0] !== "web-search")) {
+		return undefined;
+	}
+
+	const result: WebSearchCommandArgs = {
+		query: "",
+		expanded: true,
+	};
+
+	const positional: string[] = [];
+
+	for (let i = 1; i < args.length; i++) {
+		const arg = args[i];
+		if (arg === "--provider") {
+			result.provider = args[++i] as WebSearchCommandArgs["provider"];
+		} else if (arg === "--recency") {
+			result.recency = args[++i] as WebSearchCommandArgs["recency"];
+		} else if (arg === "--limit" || arg === "-l") {
+			result.limit = Number.parseInt(args[++i], 10);
+		} else if (arg === "--compact") {
+			result.expanded = false;
+		} else if (!arg.startsWith("-")) {
+			positional.push(arg);
+		}
+	}
+
+	if (positional.length > 0) {
+		result.query = positional.join(" ");
+	}
+
+	return result;
+}
+
+export async function runWebSearchCommand(cmd: WebSearchCommandArgs): Promise<void> {
+	if (!cmd.query) {
+		writeStderr(chalk.red("Error: Query is required"));
+		process.exit(1);
+	}
+
+	if (cmd.provider && !PROVIDERS.includes(cmd.provider)) {
+		writeStderr(chalk.red(`Error: Unknown provider "${cmd.provider}"`));
+		writeStderr(chalk.dim(`Valid providers: ${PROVIDERS.join(", ")}`));
+		process.exit(1);
+	}
+
+	if (cmd.recency && !RECENCY_OPTIONS.includes(cmd.recency)) {
+		writeStderr(chalk.red(`Error: Invalid recency "${cmd.recency}"`));
+		writeStderr(chalk.dim(`Valid recency values: ${RECENCY_OPTIONS.join(", ")}`));
+		process.exit(1);
+	}
+
+	if (cmd.limit !== undefined && Number.isNaN(cmd.limit)) {
+		writeStderr(chalk.red("Error: --limit must be a number"));
+		process.exit(1);
+	}
+
+	await initTheme();
+
+	const params: WebSearchParams = {
+		query: cmd.query,
+		provider: cmd.provider,
+		recency: cmd.recency,
+		limit: cmd.limit,
+	};
+
+	const result = await runWebSearchQuery(params);
+	const component = renderWebSearchResult(result, { expanded: cmd.expanded, isPartial: false }, theme, {
+		query: cmd.query,
+		provider: cmd.provider,
+		allowLongAnswer: true,
+		maxAnswerLines: cmd.expanded ? undefined : 6,
+	});
+
+	const width = Math.max(60, process.stdout.columns ?? 100);
+	writeStdout(component.render(width).join("\n"));
+
+	if (result.details?.error) {
+		process.exitCode = 1;
+	}
+}
+
+export function printWebSearchHelp(): void {
+	writeStdout(`${chalk.bold(`${APP_NAME} q`)} - Test web search providers
+
+${chalk.bold("Usage:")}
+  ${APP_NAME} q [options] <query>
+  ${APP_NAME} web-search [options] <query>
+
+${chalk.bold("Arguments:")}
+  query      Search query text
+
+${chalk.bold("Options:")}
+  --provider <name>   Provider: ${PROVIDERS.join(", ")}
+  --recency <value>   Recency filter (Perplexity only): ${RECENCY_OPTIONS.join(", ")}
+  -l, --limit <n>     Max results to return
+  --compact           Render condensed output
+  -h, --help          Show this help
+
+${chalk.bold("Examples:")}
+  ${APP_NAME} q --provider=exa "what's the color of the sky"
+  ${APP_NAME} q --provider=perplexity --recency=week "latest TypeScript 5.7 changes"
+`);
+}
+
+function writeStdout(message: string): void {
+	process.stdout.write(`${message}\n`);
+}
+
+function writeStderr(message: string): void {
+	process.stderr.write(`${message}\n`);
+}

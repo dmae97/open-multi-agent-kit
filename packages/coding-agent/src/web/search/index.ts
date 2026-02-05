@@ -24,13 +24,12 @@ import webSearchSystemPrompt from "../../prompts/system/web-search.md" with { ty
 import webSearchDescription from "../../prompts/tools/web-search.md" with { type: "text" };
 import type { ToolSession } from "../../tools";
 import { formatAge } from "../../tools/render-utils";
-import { findAnthropicAuth } from "./auth";
-import { searchAnthropic } from "./providers/anthropic";
-import { searchCodex, hasCodexWebSearch } from "./providers/codex";
-import { searchExa } from "./providers/exa";
-import { searchGemini, hasGeminiWebSearch } from "./providers/gemini";
-import { findApiKey as findJinaKey, searchJina } from "./providers/jina";
-import { findApiKey as findPerplexityKey, searchPerplexity } from "./providers/perplexity";
+import {
+	formatWebSearchProviderLabel,
+	getWebSearchProviderInfo,
+	WEB_SEARCH_PROVIDER_ORDER,
+	WEB_SEARCH_PROVIDERS,
+} from "./provider-info";
 import { renderWebSearchCall, renderWebSearchResult, type WebSearchRenderDetails } from "./render";
 import type { WebSearchProvider, WebSearchResponse } from "./types";
 import { WebSearchProviderError } from "./types";
@@ -58,90 +57,6 @@ export type WebSearchParams = {
 	limit?: number;
 };
 
-interface WebSearchProviderDefinition {
-	id: WebSearchProvider;
-	label: string;
-	isAvailable: () => Promise<boolean>;
-	search: (params: {
-		query: string;
-		limit?: number;
-		recency?: "day" | "week" | "month" | "year";
-		systemPrompt: string;
-		signal?: AbortSignal;
-	}) => Promise<WebSearchResponse>;
-}
-
-const webSearchProviders: WebSearchProviderDefinition[] = [
-	{
-		id: "exa",
-		label: "Exa",
-		isAvailable: async () => Boolean(findExaKey()),
-		search: async ({ query, limit }) =>
-			searchExa({
-				query,
-				num_results: limit,
-			}),
-	},
-	{
-		id: "jina",
-		label: "Jina",
-		isAvailable: async () => Boolean(findJinaKey()),
-		search: async ({ query, limit }) =>
-			searchJina({
-				query,
-				num_results: limit,
-			}),
-	},
-	{
-		id: "perplexity",
-		label: "Perplexity",
-		isAvailable: async () => Boolean(findPerplexityKey()),
-		search: async ({ query, limit, recency, systemPrompt }) =>
-			searchPerplexity({
-				query,
-				system_prompt: systemPrompt,
-				search_recency_filter: recency,
-				num_results: limit,
-			}),
-	},
-	{
-		id: "anthropic",
-		label: "Anthropic",
-		isAvailable: async () => Boolean(await findAnthropicAuth()),
-		search: async ({ query, limit, systemPrompt }) =>
-			searchAnthropic({
-				query,
-				system_prompt: systemPrompt,
-				num_results: limit,
-			}),
-	},
-	{
-		id: "gemini",
-		label: "Gemini",
-		isAvailable: hasGeminiWebSearch,
-		search: async ({ query, limit, systemPrompt }) =>
-			searchGemini({
-				query,
-				system_prompt: systemPrompt,
-				num_results: limit,
-			}),
-	},
-	{
-		id: "codex",
-		label: "Codex",
-		isAvailable: hasCodexWebSearch,
-		search: async ({ query, limit, systemPrompt, signal }) =>
-			searchCodex({
-				signal,
-				query,
-				system_prompt: systemPrompt,
-				num_results: limit,
-			}),
-	},
-];
-
-const webSearchProviderMap = new Map(webSearchProviders.map(provider => [provider.id, provider]));
-
 /** Preferred provider set via settings (default: auto) */
 let preferredProvider: WebSearchProvider | "auto" = "auto";
 
@@ -154,21 +69,18 @@ export function setPreferredWebSearchProvider(provider: WebSearchProvider | "aut
 async function getAvailableProviders(): Promise<WebSearchProvider[]> {
 	const providers: WebSearchProvider[] = [];
 
-	for (const provider of webSearchProviders) {
-		if (await provider.isAvailable()) {
-			providers.push(provider.id);
+	for (const provider of WEB_SEARCH_PROVIDER_ORDER) {
+		const definition = getWebSearchProviderInfo(provider);
+		if (await definition.isAvailable()) {
+			providers.push(provider);
 		}
 	}
 
 	return providers;
 }
 
-function formatProviderLabel(provider: WebSearchProvider): string {
-	return webSearchProviderMap.get(provider)?.label ?? provider;
-}
-
 function formatProviderList(providers: WebSearchProvider[]): string {
-	return providers.map(provider => formatProviderLabel(provider)).join(", ");
+	return providers.map(provider => formatWebSearchProviderLabel(provider)).join(", ");
 }
 
 function formatProviderError(error: unknown, provider: WebSearchProvider): string {
@@ -177,12 +89,12 @@ function formatProviderError(error: unknown, provider: WebSearchProvider): strin
 			return "Anthropic web search returned 404 (model or endpoint not found).";
 		}
 		if (error.status === 401 || error.status === 403) {
-			return `${formatProviderLabel(error.provider)} authorization failed (${error.status}). Check API key or base URL.`;
+			return `${formatWebSearchProviderLabel(error.provider)} authorization failed (${error.status}). Check API key or base URL.`;
 		}
 		return error.message;
 	}
 	if (error instanceof Error) return error.message;
-	return `Unknown error from ${formatProviderLabel(provider)}`;
+	return `Unknown error from ${formatWebSearchProviderLabel(provider)}`;
 }
 
 async function resolveProviderChain(
@@ -305,7 +217,7 @@ async function executeWebSearch(
 
 	for (const provider of providers) {
 		lastProvider = provider;
-		const providerDefinition = webSearchProviderMap.get(provider);
+		const providerDefinition = WEB_SEARCH_PROVIDERS[provider];
 		if (!providerDefinition) {
 			lastError = new Error(`Unknown web search provider: ${provider}`);
 			if (!allowFallback) break;
@@ -313,7 +225,7 @@ async function executeWebSearch(
 		}
 		try {
 			const response = await providerDefinition.search({
-				query: params.query,
+				query: params.query.replace(/202\d/g, String(new Date().getFullYear())), // LUL
 				limit: params.limit,
 				recency: params.recency,
 				systemPrompt: webSearchSystemPrompt,
@@ -341,6 +253,15 @@ async function executeWebSearch(
 		content: [{ type: "text" as const, text: `Error: ${message}` }],
 		details: { response: { provider: lastProvider, sources: [] }, error: message },
 	};
+}
+
+/**
+ * Execute a web search query for CLI/testing workflows.
+ */
+export async function runWebSearchQuery(
+	params: WebSearchParams,
+): Promise<{ content: Array<{ type: "text"; text: string }>; details: WebSearchRenderDetails }> {
+	return executeWebSearch("cli-web-search", params);
 }
 
 /**
@@ -693,4 +614,10 @@ export async function hasExaWebSearch(): Promise<boolean> {
 	return exaKey !== null;
 }
 
+export {
+	formatWebSearchProviderLabel,
+	getWebSearchProviderInfo,
+	WEB_SEARCH_PROVIDER_ORDER,
+	WEB_SEARCH_PROVIDERS,
+} from "./provider-info";
 export type { WebSearchProvider, WebSearchResponse } from "./types";

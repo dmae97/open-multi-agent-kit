@@ -563,6 +563,17 @@ export async function main(args: string[]) {
 		return;
 	}
 
+	// Handle web search subcommand (for testing web search providers)
+	const webSearchCmd = parseWebSearchArgs(args);
+	if (webSearchCmd) {
+		if (args.includes("--help") || args.includes("-h")) {
+			printWebSearchHelp();
+			return;
+		}
+		await runWebSearchCommand(webSearchCmd);
+		return;
+	}
+
 	// Handle shell subcommand (for testing brush-core shell)
 	const shellCmd = parseShellArgs(args);
 	if (shellCmd) {
