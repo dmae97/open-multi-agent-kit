@@ -8,9 +8,10 @@ import { ControlledGit } from "../../commit/git";
 import { formatCommitMessage } from "../../commit/message";
 import { resolvePrimaryModel, resolveSmolModel } from "../../commit/model-selection";
 import type { CommitCommandArgs, ConventionalAnalysis } from "../../commit/types";
+import { ModelRegistry } from "../../config/model-registry";
 import { renderPromptTemplate } from "../../config/prompt-templates";
 import { Settings } from "../../config/settings";
-import { discoverAuthStorage, discoverContextFiles, discoverModels } from "../../sdk";
+import { discoverAuthStorage, discoverContextFiles } from "../../sdk";
 import { type ExistingChangelogEntries, runCommitAgentSession } from "./agent";
 import { generateFallbackProposal } from "./fallback";
 import splitConfirmPrompt from "./prompts/split-confirm.md" with { type: "text" };
@@ -31,7 +32,7 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 	const settings = settingsInstance;
 
 	writeStdout("● Resolving model...");
-	const modelRegistry = discoverModels(authStorage);
+	const modelRegistry = new ModelRegistry(authStorage);
 	const stagedFilesPromise = (async () => {
 		let stagedFiles = await git.getStagedFiles();
 		if (stagedFiles.length === 0) {

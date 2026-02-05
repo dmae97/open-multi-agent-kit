@@ -74,7 +74,7 @@ export class ModelSelectorComponent extends Container {
 	private modelRegistry: ModelRegistry;
 	private onSelectCallback: (model: Model, role: ModelRole | null) => void;
 	private onCancelCallback: () => void;
-	private errorMessage?: string;
+	private errorMessage?: unknown;
 	private tui: TUI;
 	private scopedModels: ReadonlyArray<ScopedModelItem>;
 	private temporaryOnly: boolean;
@@ -392,7 +392,7 @@ export class ModelSelectorComponent extends Container {
 
 		// Show error message or "no results" if empty
 		if (this.errorMessage) {
-			const errorLines = this.errorMessage.split("\n");
+			const errorLines = String(this.errorMessage).split("\n");
 			for (const line of errorLines) {
 				this.listContainer.addChild(new Text(theme.fg("error", line), 0, 0));
 			}

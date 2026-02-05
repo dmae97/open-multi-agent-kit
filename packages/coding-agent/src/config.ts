@@ -2,6 +2,10 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { $env, isEnoent, logger } from "@oh-my-pi/pi-utils";
+import type { TSchema } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value/index.mjs";
+import { Ajv, type ErrorObject, type ValidateFunction } from "ajv";
+import { JSONC, TOML, YAML } from "bun";
 // Embed package.json at build time for config
 import packageJson from "../package.json" with { type: "json" };
 
@@ -51,6 +55,195 @@ export function getChangelogPath(): string {
 // User Config Paths (~/.omp/agent/*)
 // =============================================================================
 
+function migrateJsonToYml(jsonPath: string, ymlPath: string) {
+	try {
+		if (fs.existsSync(ymlPath)) return;
+		if (!fs.existsSync(jsonPath)) return;
+
+		const content = fs.readFileSync(jsonPath, "utf-8");
+		const parsed = JSON.parse(content);
+		if (!parsed) {
+			logger.warn("migrateJsonToYml: invalid json structure", { path: jsonPath });
+			return;
+		}
+		fs.writeFileSync(ymlPath, YAML.stringify(parsed, null, 2));
+	} catch (error) {
+		logger.warn("migrateJsonToYml: migration failed", { error: String(error) });
+	}
+}
+
+export interface IConfigFile<T> {
+	readonly id: string;
+	readonly schema: TSchema;
+	path?(): string;
+	load(): T | null;
+	invalidate?(): void;
+}
+
+export class ConfigError extends Error {
+	readonly #message: string;
+	constructor(
+		public readonly id: string,
+		public readonly schemaErrors: ErrorObject[] | null | undefined,
+		public readonly other?: { err: unknown; stage: string },
+	) {
+		let messages: string[] | undefined;
+		let cause: any | undefined;
+		let klass: string;
+
+		if (schemaErrors) {
+			klass = "Schema";
+			messages = schemaErrors.map(e => `${e.instancePath || "root"}: ${e.message}`);
+		} else if (other) {
+			klass = other.stage;
+			if (other.err instanceof Error) {
+				messages = [other.err.message];
+				cause = other.err;
+			} else {
+				messages = [String(other.err)];
+			}
+		} else {
+			klass = "Unknown";
+		}
+
+		const title = `Failed to load config file ${id}, ${klass} error:`;
+		let message: string;
+		switch (messages?.length ?? 0) {
+			case 0:
+				message = title.slice(0, -1);
+				break;
+			case 1:
+				message = `${title} ${messages![0]}`;
+				break;
+			default:
+				message = `${title}\n${messages!.map(m => `  - ${m}`).join("\n")}`;
+				break;
+		}
+
+		super(message, { cause });
+		this.name = "LoadError";
+		this.#message = message;
+	}
+
+	get message(): string {
+		return this.#message;
+	}
+
+	toString(): string {
+		return this.message;
+	}
+}
+
+export type LoadStatus = "ok" | "error" | "not-found";
+
+export type LoadResult<T> =
+	| { value?: null; error: ConfigError; status: "error" }
+	| { value: T; error?: undefined; status: "ok" }
+	| { value?: null; error?: unknown; status: "not-found" };
+
+const ajv = new Ajv();
+export class ConfigFile<T> implements IConfigFile<T> {
+	readonly #basePath: string;
+	#cache?: LoadResult<T>;
+	#auxValidate?: (value: T) => void;
+
+	constructor(
+		public readonly id: string,
+		public readonly schema: TSchema,
+		configPath: string = path.join(getAgentDir(), `${id}.yml`),
+	) {
+		this.#basePath = configPath;
+		if (configPath.endsWith(".yml")) {
+			const jsonPath = `${configPath.slice(0, -4)}.json`;
+			migrateJsonToYml(jsonPath, configPath);
+		} else if (configPath.endsWith(".yaml")) {
+			const jsonPath = `${configPath.slice(0, -5)}.json`;
+			migrateJsonToYml(jsonPath, configPath);
+		} else {
+			throw new Error(`Invalid config file path: ${configPath}`);
+		}
+	}
+
+	relocate(path?: string): ConfigFile<T> {
+		if (!path || path === this.#basePath) return this;
+		const result = new ConfigFile<T>(this.id, this.schema, path);
+		result.#auxValidate = this.#auxValidate;
+		return result;
+	}
+
+	withValidation(name: string, validate: (value: T) => void): this {
+		const prev = this.#auxValidate;
+		this.#auxValidate = (value: T) => {
+			prev?.(value);
+			try {
+				validate(value);
+			} catch (error) {
+				throw new ConfigError(this.id, undefined, { err: error, stage: `Validate(${name})` });
+			}
+		};
+		return this;
+	}
+
+	createDefault() {
+		return Value.Default(this.schema, [], undefined) as T;
+	}
+
+	#storeCache(result: LoadResult<T>): LoadResult<T> {
+		this.#cache = result;
+		return result;
+	}
+
+	tryLoad(): LoadResult<T> {
+		if (this.#cache) return this.#cache;
+
+		try {
+			const content = fs.readFileSync(this.path(), "utf-8").trim();
+
+			let parsed: unknown;
+			if (this.#basePath.endsWith(".json") || this.#basePath.endsWith(".jsonc")) {
+				parsed = JSONC.parse(content);
+			} else if (this.#basePath.endsWith(".yml") || this.#basePath.endsWith(".yaml")) {
+				parsed = YAML.parse(content);
+			} else {
+				throw new Error(`Invalid config file path: ${this.#basePath}`);
+			}
+
+			const validate = ajv.compile(this.schema) as ValidateFunction<T>;
+			if (!validate(parsed)) {
+				const error = new ConfigError(this.id, validate.errors);
+				logger.warn("Failed to parse config file", { path: this.path(), error });
+				return this.#storeCache({ error, status: "error" });
+			}
+			return this.#storeCache({ value: parsed, status: "ok" });
+		} catch (error) {
+			if (!isEnoent(error)) {
+				return this.#storeCache({ status: "not-found" });
+			}
+			logger.warn("Failed to parse config file", { path: this.path(), error });
+			return this.#storeCache({
+				error: new ConfigError(this.id, undefined, { err: error, stage: "Unexpected" }),
+				status: "error",
+			});
+		}
+	}
+
+	load(): T | null {
+		return this.tryLoad().value ?? null;
+	}
+
+	loadOrDefault(): T {
+		return this.tryLoad().value ?? this.createDefault();
+	}
+
+	path(): string {
+		return this.#basePath;
+	}
+
+	invalidate() {
+		this.#cache = undefined;
+	}
+}
+
 /** Get the agent config directory (e.g., ~/.omp/agent/) */
 export function getAgentDir(): string {
 	return $env.PI_CODING_AGENT_DIR || path.join(os.homedir(), CONFIG_DIR_NAME, "agent");
@@ -59,16 +252,6 @@ export function getAgentDir(): string {
 /** Get path to user's custom themes directory */
 export function getCustomThemesDir(): string {
 	return path.join(getAgentDir(), "themes");
-}
-
-/** Get path to models.json */
-export function getModelsPath(): string {
-	return path.join(getAgentDir(), "models.json");
-}
-
-/** Get path to models.yml (preferred over models.json) */
-export function getModelsYamlPath(): string {
-	return path.join(getAgentDir(), "models.yml");
 }
 
 /** Get path to auth.json */
@@ -205,75 +388,6 @@ export interface ConfigFileResult<T> {
 }
 
 /**
- * Read the first existing config file from priority-ordered locations.
- *
- * @param subpath - Subpath within config dirs (e.g., "settings.json", "models.json")
- * @param options - Options for filtering (same as getConfigDirs)
- * @returns The parsed content and metadata, or undefined if not found
- *
- * @example
- * const result = readConfigFile<Settings>("settings.json", { project: false });
- * if (result) {
- *   console.log(`Loaded from ${result.path}`);
- *   console.log(result.content);
- * }
- */
-export async function readConfigFile<T = unknown>(
-	subpath: string,
-	options: GetConfigDirsOptions = {},
-): Promise<ConfigFileResult<T> | undefined> {
-	const dirs = getConfigDirs("", { ...options, existingOnly: false });
-
-	for (const { path: base, source, level } of dirs) {
-		const filePath = path.join(base, subpath);
-		try {
-			const content = await Bun.file(filePath).text();
-			return {
-				path: filePath,
-				source,
-				level,
-				content: JSON.parse(content) as T,
-			};
-		} catch (error) {
-			if (isEnoent(error)) continue;
-			logger.warn("Failed to parse config file", { path: filePath, error: String(error) });
-		}
-	}
-
-	return undefined;
-}
-
-/**
- * Get all existing config files for a subpath (for merging scenarios).
- * Returns in priority order (highest first).
- */
-export async function readAllConfigFiles<T = unknown>(
-	subpath: string,
-	options: GetConfigDirsOptions = {},
-): Promise<ConfigFileResult<T>[]> {
-	const dirs = getConfigDirs("", { ...options, existingOnly: false });
-	const results: ConfigFileResult<T>[] = [];
-
-	for (const { path: base, source, level } of dirs) {
-		const filePath = path.join(base, subpath);
-		try {
-			const content = await Bun.file(filePath).text();
-			results.push({
-				path: filePath,
-				source,
-				level,
-				content: JSON.parse(content) as T,
-			});
-		} catch (error) {
-			if (isEnoent(error)) continue;
-			logger.warn("Failed to parse config file", { path: filePath, error: String(error) });
-		}
-	}
-
-	return results;
-}
-
-/**
  * Find the first existing config file (for non-JSON files like SYSTEM.md).
  * Returns just the path, or undefined if not found.
  */
@@ -313,55 +427,12 @@ export function findConfigFileWithMeta(
 // Walk-Up Config Discovery (for monorepo scenarios)
 // =============================================================================
 
-async function isDirectory(p: string): Promise<boolean> {
-	try {
-		return (await fs.promises.stat(p)).isDirectory();
-	} catch {
-		return false;
-	}
-}
-
-/**
- * Find nearest config directory by walking up from cwd.
- * Checks all config bases (.omp, .pi, .claude) at each level.
- *
- * @param subpath - Subpath within config dirs (e.g., "commands", "agents")
- * @param cwd - Starting directory
- * @returns First existing directory found, or undefined
- */
-export async function findNearestProjectConfigDir(
-	subpath: string,
-	cwd: string = process.cwd(),
-): Promise<ConfigDirEntry | undefined> {
-	let currentDir = cwd;
-
-	while (true) {
-		// Check all config bases at this level, in priority order
-		for (const { base, name } of PROJECT_CONFIG_BASES) {
-			const candidate = path.join(currentDir, base, subpath);
-			if (await isDirectory(candidate)) {
-				return { path: candidate, source: name, level: "project" };
-			}
-		}
-
-		// Move up one directory
-		const parentDir = path.dirname(currentDir);
-		if (parentDir === currentDir) break; // Reached root
-		currentDir = parentDir;
-	}
-
-	return undefined;
-}
-
 /**
  * Find all nearest config directories by walking up from cwd.
  * Returns one entry per config base (.omp, .pi, .claude) - the nearest one found.
  * Results are in priority order (highest first).
  */
-export async function findAllNearestProjectConfigDirs(
-	subpath: string,
-	cwd: string = process.cwd(),
-): Promise<ConfigDirEntry[]> {
+export function findAllNearestProjectConfigDirs(subpath: string, cwd: string = process.cwd()): ConfigDirEntry[] {
 	const results: ConfigDirEntry[] = [];
 	const foundBases = new Set<string>();
 
@@ -372,10 +443,12 @@ export async function findAllNearestProjectConfigDirs(
 			if (foundBases.has(name)) continue;
 
 			const candidate = path.join(currentDir, base, subpath);
-			if (await isDirectory(candidate)) {
-				results.push({ path: candidate, source: name, level: "project" });
-				foundBases.add(name);
-			}
+			try {
+				if (fs.statSync(candidate).isDirectory()) {
+					results.push({ path: candidate, source: name, level: "project" });
+					foundBases.add(name);
+				}
+			} catch {}
 		}
 
 		const parentDir = path.dirname(currentDir);

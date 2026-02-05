@@ -9,7 +9,7 @@ import type { Api, Model, ToolChoice } from "@oh-my-pi/pi-ai";
 import { logger, untilAborted } from "@oh-my-pi/pi-utils";
 import type { TSchema } from "@sinclair/typebox";
 import Ajv, { type ValidateFunction } from "ajv";
-import type { ModelRegistry } from "../config/model-registry";
+import { ModelRegistry } from "../config/model-registry";
 import { resolveModelOverride } from "../config/model-resolver";
 import { type PromptTemplate, renderPromptTemplate } from "../config/prompt-templates";
 import { Settings } from "../config/settings";
@@ -19,7 +19,7 @@ import { callTool } from "../mcp/client";
 import type { MCPManager } from "../mcp/manager";
 import submitReminderTemplate from "../prompts/system/subagent-submit-reminder.md" with { type: "text" };
 import subagentSystemPromptTemplate from "../prompts/system/subagent-system-prompt.md" with { type: "text" };
-import { createAgentSession, discoverAuthStorage, discoverModels } from "../sdk";
+import { createAgentSession, discoverAuthStorage } from "../sdk";
 import type { AgentSession, AgentSessionEvent } from "../session/agent-session";
 import type { AuthStorage } from "../session/auth-storage";
 import { SessionManager } from "../session/session-manager";
@@ -844,7 +844,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			checkAbort();
 			const authStorage = options.authStorage ?? (await discoverAuthStorage());
 			checkAbort();
-			const modelRegistry = options.modelRegistry ?? discoverModels(authStorage);
+			const modelRegistry = options.modelRegistry ?? new ModelRegistry(authStorage);
 			checkAbort();
 
 			const { model, thinkingLevel: resolvedThinkingLevel } = resolveModelOverride(

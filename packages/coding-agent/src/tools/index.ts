@@ -14,7 +14,7 @@ import { TaskTool } from "../task";
 import type { AgentOutputManager } from "../task/output-manager";
 import type { EventBus } from "../utils/event-bus";
 import { time } from "../utils/timings";
-import { WebSearchTool } from "../web/search";
+import { SearchTool } from "../web/search";
 import { AskTool } from "./ask";
 import { BashTool } from "./bash";
 import { BrowserTool } from "./browser";
@@ -51,16 +51,14 @@ export {
 export { EditTool, type EditToolDetails } from "../patch";
 export { BUNDLED_AGENTS, TaskTool } from "../task";
 export {
-	companyWebSearchTools,
-	exaWebSearchTools,
-	getWebSearchTools,
-	hasExaWebSearch,
-	linkedinWebSearchTools,
-	setPreferredWebSearchProvider,
-	type WebSearchProvider,
-	type WebSearchResponse,
-	WebSearchTool,
-	type WebSearchToolsOptions,
+	companySearchTools,
+	exaSearchTools,
+	getSearchTools,
+	type SearchProvider,
+	type SearchResponse,
+	SearchTool,
+	type SearchToolsOptions,
+	setPreferredSearchProvider,
 	webSearchCodeContextTool,
 	webSearchCompanyTool,
 	webSearchCrawlTool,
@@ -179,7 +177,7 @@ export const BUILTIN_TOOLS: Record<string, ToolFactory> = {
 	task: TaskTool.create,
 	todo_write: s => new TodoWriteTool(s),
 	fetch: s => new FetchTool(s),
-	web_search: s => new WebSearchTool(s),
+	web_search: s => new SearchTool(s),
 	write: s => new WriteTool(s),
 };
 

@@ -167,7 +167,6 @@ export {
 	discoverCustomTSCommands,
 	discoverExtensions,
 	discoverMCPServers,
-	discoverModels,
 	discoverPromptTemplates,
 	discoverSkills,
 	EditTool,

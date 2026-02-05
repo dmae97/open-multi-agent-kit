@@ -5,10 +5,10 @@
  */
 
 /** Supported web search providers */
-export type WebSearchProvider = "exa" | "jina" | "anthropic" | "perplexity" | "gemini" | "codex";
+export type SearchProviderId = "exa" | "jina" | "anthropic" | "perplexity" | "gemini" | "codex";
 
 /** Source returned by search (all providers) */
-export interface WebSearchSource {
+export interface SearchSource {
 	title: string;
 	url: string;
 	snippet?: string;
@@ -20,14 +20,14 @@ export interface WebSearchSource {
 }
 
 /** Citation with text reference (anthropic, perplexity) */
-export interface WebSearchCitation {
+export interface SearchCitation {
 	url: string;
 	title: string;
 	citedText?: string;
 }
 
 /** Usage metrics */
-export interface WebSearchUsage {
+export interface SearchUsage {
 	inputTokens?: number;
 	outputTokens?: number;
 	/** Anthropic: number of web search requests made */
@@ -37,18 +37,20 @@ export interface WebSearchUsage {
 }
 
 /** Unified response across providers */
-export interface WebSearchResponse {
-	provider: WebSearchProvider;
+export interface SearchResponse {
+	provider: SearchProviderId | "none";
 	/** Synthesized answer text (anthropic, perplexity) */
 	answer?: string;
 	/** Search result sources */
-	sources: WebSearchSource[];
+	sources: SearchSource[];
 	/** Text citations with context */
-	citations?: WebSearchCitation[];
+	citations?: SearchCitation[];
 	/** Intermediate search queries (anthropic) */
 	searchQueries?: string[];
+	/** Follow-up question suggestions (provider-dependent) */
+	relatedQuestions?: string[];
 	/** Token usage metrics */
-	usage?: WebSearchUsage;
+	usage?: SearchUsage;
 	/** Model used */
 	model?: string;
 	/** Request ID for debugging */
@@ -56,14 +58,14 @@ export interface WebSearchResponse {
 }
 
 /** Provider-specific error with optional HTTP status */
-export class WebSearchProviderError extends Error {
+export class SearchProviderError extends Error {
 	constructor(
-		public readonly provider: WebSearchProvider,
+		public readonly provider: SearchProviderId,
 		message: string,
 		public readonly status?: number,
 	) {
 		super(message);
-		this.name = "WebSearchProviderError";
+		this.name = "SearchProviderError";
 	}
 }
 
@@ -102,7 +104,7 @@ export interface AuthJson {
 }
 
 /** Anthropic API response types */
-export interface AnthropicWebSearchResult {
+export interface AnthropicSearchResult {
 	type: "web_search_result";
 	title: string;
 	url: string;
@@ -129,7 +131,7 @@ export interface AnthropicContentBlock {
 	/** Tool input (for type="server_tool_use") */
 	input?: { query: string };
 	/** Search results (for type="web_search_tool_result") */
-	content?: AnthropicWebSearchResult[];
+	content?: AnthropicSearchResult[];
 }
 
 export interface AnthropicApiResponse {
@@ -190,7 +192,7 @@ export type PerplexityContentChunk =
 	| PerplexityContentPdfChunk
 	| PerplexityContentVideoChunk;
 
-export interface PerplexityWebSearchStepDetails {
+export interface PerplexitySearchStepDetails {
 	search_results: PerplexitySearchResult[];
 	search_keywords: string[];
 }
@@ -207,7 +209,7 @@ export interface PerplexityExecutePythonStepDetails {
 export interface PerplexityReasoningStepInput {
 	thought: string;
 	type?: string | null;
-	web_search?: PerplexityWebSearchStepDetails | null;
+	web_search?: PerplexitySearchStepDetails | null;
 	fetch_url_content?: PerplexityFetchUrlContentStepDetails | null;
 	execute_python?: PerplexityExecutePythonStepDetails | null;
 }
@@ -215,7 +217,7 @@ export interface PerplexityReasoningStepInput {
 export interface PerplexityReasoningStepOutput {
 	thought: string;
 	type?: string | null;
-	web_search?: PerplexityWebSearchStepDetails | null;
+	web_search?: PerplexitySearchStepDetails | null;
 	fetch_url_content?: PerplexityFetchUrlContentStepDetails | null;
 	execute_python?: PerplexityExecutePythonStepDetails | null;
 }
@@ -309,7 +311,7 @@ export interface PerplexityUserLocation {
 	region?: string | null;
 }
 
-export interface PerplexityWebSearchOptions {
+export interface PerplexitySearchOptions {
 	search_context_size?: "low" | "medium" | "high";
 	search_type?: "fast" | "pro" | "auto" | null;
 	user_location?: PerplexityUserLocation | null;
@@ -318,6 +320,7 @@ export interface PerplexityWebSearchOptions {
 
 export interface PerplexityRequest {
 	max_tokens?: number | null;
+	temperature?: number | null;
 	n?: number | null;
 	model: string;
 	stream?: boolean | null;
@@ -335,7 +338,7 @@ export interface PerplexityRequest {
 	tools?: PerplexityToolSpec[] | null;
 	tool_choice?: "none" | "auto" | "required" | null;
 	parallel_tool_calls?: boolean | null;
-	web_search_options?: PerplexityWebSearchOptions;
+	web_search_options?: PerplexitySearchOptions;
 	search_mode?: "web" | "academic" | "sec" | null;
 	return_images?: boolean | null;
 	return_related_questions?: boolean | null;

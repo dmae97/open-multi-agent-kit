@@ -3,6 +3,8 @@
  *
  * Tree-based rendering with collapsed/expanded states for web search results.
  */
+
+import { getSearchProvider } from "@oh-my-pi/pi-coding-agent/web/search/provider-info";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text, visibleWidth, wrapTextWithAnsi } from "@oh-my-pi/pi-tui";
 import type { RenderResultOptions } from "../../extensibility/custom-tools/types";
@@ -20,8 +22,7 @@ import {
 	truncateToWidth,
 } from "../../tools/render-utils";
 import { renderOutputBlock, renderStatusLine, renderTreeList } from "../../tui";
-import { formatWebSearchProviderLabel } from "./provider-info";
-import type { WebSearchResponse } from "./types";
+import type { SearchResponse } from "./types";
 
 const MAX_COLLAPSED_ANSWER_LINES = PREVIEW_LIMITS.COLLAPSED_LINES;
 const MAX_EXPANDED_ANSWER_LINES = PREVIEW_LIMITS.EXPANDED_LINES;
@@ -61,14 +62,14 @@ function renderFallbackText(contentText: string, expanded: boolean, theme: Theme
 	return new Text(text, 0, 0);
 }
 
-export interface WebSearchRenderDetails {
-	response: WebSearchResponse;
+export interface SearchRenderDetails {
+	response: SearchResponse;
 	error?: string;
 }
 
 /** Render web search result with tree-based layout */
-export function renderWebSearchResult(
-	result: { content: Array<{ type: string; text?: string }>; details?: WebSearchRenderDetails },
+export function renderSearchResult(
+	result: { content: Array<{ type: string; text?: string }>; details?: SearchRenderDetails },
 	options: RenderResultOptions,
 	theme: Theme,
 	args?: {
@@ -118,7 +119,7 @@ export function renderWebSearchResult(
 			: getPreviewLines(contentText, answerLimit, MAX_ANSWER_LINE_LEN)
 		: [];
 
-	const providerLabel = formatWebSearchProviderLabel(provider);
+	const providerLabel = provider !== "none" ? getSearchProvider(provider).label : "None";
 	const queryPreview = args?.query
 		? truncateToWidth(args.query, 80)
 		: searchQueries[0]
@@ -270,7 +271,7 @@ export function renderWebSearchResult(
 }
 
 /** Render web search call (query preview) */
-export function renderWebSearchCall(
+export function renderSearchCall(
 	args: { query: string; provider?: string; [key: string]: unknown },
 	theme: Theme,
 ): Component {
@@ -281,7 +282,7 @@ export function renderWebSearchCall(
 }
 
 export const webSearchToolRenderer = {
-	renderCall: renderWebSearchCall,
-	renderResult: renderWebSearchResult,
+	renderCall: renderSearchCall,
+	renderResult: renderSearchResult,
 	mergeCallAndResult: true,
 };

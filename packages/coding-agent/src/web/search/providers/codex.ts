@@ -10,8 +10,8 @@ import { readSseJson } from "@oh-my-pi/pi-utils";
 import packageJson from "../../../../package.json" with { type: "json" };
 import { getAgentDbPath, getConfigDirPaths } from "../../../config";
 import { AgentStorage } from "../../../session/agent-storage";
-import type { WebSearchResponse, WebSearchSource } from "../../../web/search/types";
-import { WebSearchProviderError } from "../../../web/search/types";
+import type { SearchResponse, SearchSource } from "../../../web/search/types";
+import { SearchProviderError } from "../../../web/search/types";
 
 const CODEX_BASE_URL = "https://chatgpt.com/backend-api";
 const CODEX_RESPONSES_PATH = "/codex/responses";
@@ -174,15 +174,15 @@ function buildCodexHeaders(accessToken: string, accountId: string): Record<strin
  * @param query - Search query from the user
  * @param options - Search options including system prompt and context size
  * @returns Parsed response with answer, sources, and usage
- * @throws {WebSearchProviderError} If the API request fails
+ * @throws {SearchProviderError} If the API request fails
  */
-async function callCodexWebSearch(
+async function callCodexSearch(
 	auth: { accessToken: string; accountId: string },
 	query: string,
 	options: { signal?: AbortSignal; systemPrompt?: string; searchContextSize?: "low" | "medium" | "high" },
 ): Promise<{
 	answer: string;
-	sources: WebSearchSource[];
+	sources: SearchSource[];
 	model: string;
 	requestId: string;
 	usage?: { inputTokens: number; outputTokens: number; totalTokens: number };
@@ -218,16 +218,16 @@ async function callCodexWebSearch(
 
 	if (!response.ok) {
 		const errorText = await response.text();
-		throw new WebSearchProviderError("codex", `Codex API error (${response.status}): ${errorText}`, response.status);
+		throw new SearchProviderError("codex", `Codex API error (${response.status}): ${errorText}`, response.status);
 	}
 
 	if (!response.body) {
-		throw new WebSearchProviderError("codex", "Codex API returned no response body", 500);
+		throw new SearchProviderError("codex", "Codex API returned no response body", 500);
 	}
 
 	// Parse SSE stream
 	const answerParts: string[] = [];
-	const sources: WebSearchSource[] = [];
+	const sources: SearchSource[] = [];
 	let model = DEFAULT_MODEL;
 	let requestId = "";
 	let usage: { inputTokens: number; outputTokens: number; totalTokens: number } | undefined;
@@ -289,11 +289,11 @@ async function callCodexWebSearch(
 		} else if (eventType === "error") {
 			const code = (rawEvent as { code?: string }).code ?? "";
 			const message = (rawEvent as { message?: string }).message ?? "Unknown error";
-			throw new WebSearchProviderError("codex", `Codex error (${code}): ${message}`, 500);
+			throw new SearchProviderError("codex", `Codex error (${code}): ${message}`, 500);
 		} else if (eventType === "response.failed") {
 			const resp = (rawEvent as { response?: { error?: { message?: string } } }).response;
 			const errorMessage = resp?.error?.message ?? "Request failed";
-			throw new WebSearchProviderError("codex", `Codex request failed: ${errorMessage}`, 500);
+			throw new SearchProviderError("codex", `Codex request failed: ${errorMessage}`, 500);
 		}
 	}
 
@@ -313,7 +313,7 @@ async function callCodexWebSearch(
  * @returns Search response with synthesized answer, sources, and usage
  * @throws {Error} If no Codex OAuth credentials are configured
  */
-export async function searchCodex(params: CodexSearchParams): Promise<WebSearchResponse> {
+export async function searchCodex(params: CodexSearchParams): Promise<SearchResponse> {
 	const auth = await findCodexAuth();
 	if (!auth) {
 		throw new Error(
@@ -321,7 +321,7 @@ export async function searchCodex(params: CodexSearchParams): Promise<WebSearchR
 		);
 	}
 
-	const result = await callCodexWebSearch(auth, params.query, {
+	const result = await callCodexSearch(auth, params.query, {
 		systemPrompt: params.system_prompt,
 		searchContextSize: params.search_context_size ?? "high",
 	});
@@ -353,7 +353,7 @@ export async function searchCodex(params: CodexSearchParams): Promise<WebSearchR
  * Checks if Codex web search is available.
  * @returns True if valid OAuth credentials exist for openai-codex
  */
-export async function hasCodexWebSearch(): Promise<boolean> {
+export async function hasCodexSearch(): Promise<boolean> {
 	const auth = await findCodexAuth();
 	return auth !== null;
 }

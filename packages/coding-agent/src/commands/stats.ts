@@ -2,7 +2,7 @@
  * View usage statistics dashboard.
  */
 import { Command, Flags } from "@oclif/core";
-import { type StatsCommandArgs, runStatsCommand } from "../cli/stats-cli";
+import { runStatsCommand, type StatsCommandArgs } from "../cli/stats-cli";
 import { initTheme } from "../modes/theme/theme";
 
 export default class Stats extends Command {

@@ -11,11 +11,11 @@ import type {
 	AnthropicApiResponse,
 	AnthropicAuthConfig,
 	AnthropicCitation,
-	WebSearchCitation,
-	WebSearchResponse,
-	WebSearchSource,
+	SearchCitation,
+	SearchResponse,
+	SearchSource,
 } from "../../../web/search/types";
-import { WebSearchProviderError } from "../../../web/search/types";
+import { SearchProviderError } from "../../../web/search/types";
 
 const DEFAULT_MODEL = "claude-haiku-4-5";
 const DEFAULT_MAX_TOKENS = 4096;
@@ -74,9 +74,9 @@ function buildSystemBlocks(
  * @param query - Search query from the user
  * @param systemPrompt - Optional system prompt for guiding response style
  * @returns Raw API response from Anthropic
- * @throws {WebSearchProviderError} If the API request fails
+ * @throws {SearchProviderError} If the API request fails
  */
-async function callWebSearch(
+async function callSearch(
 	auth: AnthropicAuthConfig,
 	model: string,
 	query: string,
@@ -111,7 +111,7 @@ async function callWebSearch(
 
 	if (!response.ok) {
 		const errorText = await response.text();
-		throw new WebSearchProviderError(
+		throw new SearchProviderError(
 			"anthropic",
 			`Anthropic API error (${response.status}): ${errorText}`,
 			response.status,
@@ -158,15 +158,15 @@ function parsePageAge(pageAge: string | null | undefined): number | undefined {
 }
 
 /**
- * Parses the Anthropic API response into a unified WebSearchResponse.
+ * Parses the Anthropic API response into a unified SearchResponse.
  * @param response - Raw API response containing content blocks
  * @returns Normalized response with answer, sources, citations, and usage
  */
-function parseResponse(response: AnthropicApiResponse): WebSearchResponse {
+function parseResponse(response: AnthropicApiResponse): SearchResponse {
 	const answerParts: string[] = [];
 	const searchQueries: string[] = [];
-	const sources: WebSearchSource[] = [];
-	const citations: WebSearchCitation[] = [];
+	const sources: SearchSource[] = [];
+	const citations: SearchCitation[] = [];
 
 	for (const block of response.content) {
 		if (
@@ -228,7 +228,7 @@ function parseResponse(response: AnthropicApiResponse): WebSearchResponse {
  * @returns Search response with synthesized answer, sources, and citations
  * @throws {Error} If no Anthropic credentials are configured
  */
-export async function searchAnthropic(params: AnthropicSearchParams): Promise<WebSearchResponse> {
+export async function searchAnthropic(params: AnthropicSearchParams): Promise<SearchResponse> {
 	const auth = await findAnthropicAuth();
 	if (!auth) {
 		throw new Error(
@@ -237,7 +237,7 @@ export async function searchAnthropic(params: AnthropicSearchParams): Promise<We
 	}
 
 	const model = getModel();
-	const response = await callWebSearch(auth, model, params.query, params.system_prompt);
+	const response = await callSearch(auth, model, params.query, params.system_prompt);
 
 	const result = parseResponse(response);
 

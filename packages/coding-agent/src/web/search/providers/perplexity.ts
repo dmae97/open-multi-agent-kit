@@ -10,19 +10,29 @@ import type {
 	PerplexityMessageOutput,
 	PerplexityRequest,
 	PerplexityResponse,
-	WebSearchCitation,
-	WebSearchResponse,
-	WebSearchSource,
+	SearchCitation,
+	SearchResponse,
+	SearchSource,
 } from "../../../web/search/types";
-import { WebSearchProviderError } from "../../../web/search/types";
+import { SearchProviderError } from "../../../web/search/types";
 
 const PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions";
+
+const DEFAULT_MAX_TOKENS = 4096;
+const DEFAULT_TEMPERATURE = 0.2;
+const DEFAULT_NUM_SEARCH_RESULTS = 10;
 
 export interface PerplexitySearchParams {
 	query: string;
 	system_prompt?: string;
 	search_recency_filter?: "hour" | "day" | "week" | "month" | "year";
 	num_results?: number;
+	/** Maximum output tokens. Defaults to 4096. */
+	max_tokens?: number;
+	/** Sampling temperature (0–1). Lower = more focused/factual. Defaults to 0.2. */
+	temperature?: number;
+	/** Number of search results to retrieve. Defaults to 10. */
+	num_search_results?: number;
 }
 
 /** Find PERPLEXITY_API_KEY from environment or .env files (also checks PPLX_API_KEY) */
@@ -43,7 +53,7 @@ async function callPerplexity(apiKey: string, request: PerplexityRequest): Promi
 
 	if (!response.ok) {
 		const errorText = await response.text();
-		throw new WebSearchProviderError(
+		throw new SearchProviderError(
 			"perplexity",
 			`Perplexity API error (${response.status}): ${errorText}`,
 			response.status,
@@ -71,14 +81,14 @@ function messageContentToText(content: PerplexityMessageOutput["content"]): stri
 	return content.map(chunk => (chunk.type === "text" ? chunk.text : "")).join("");
 }
 
-/** Parse API response into unified WebSearchResponse */
-function parseResponse(response: PerplexityResponse): WebSearchResponse {
+/** Parse API response into unified SearchResponse */
+function parseResponse(response: PerplexityResponse): SearchResponse {
 	const messageContent = response.choices[0]?.message?.content ?? null;
 	const answer = messageContentToText(messageContent);
 
 	// Build sources by matching citations to search_results
-	const sources: WebSearchSource[] = [];
-	const citations: WebSearchCitation[] = [];
+	const sources: SearchSource[] = [];
+	const citations: SearchCitation[] = [];
 
 	const citationUrls = response.citations ?? [];
 	const searchResults = response.search_results ?? [];
@@ -128,21 +138,26 @@ function parseResponse(response: PerplexityResponse): WebSearchResponse {
 }
 
 /** Execute Perplexity web search */
-export async function searchPerplexity(params: PerplexitySearchParams): Promise<WebSearchResponse> {
+export async function searchPerplexity(params: PerplexitySearchParams): Promise<SearchResponse> {
 	const apiKey = findApiKey();
 	if (!apiKey) {
 		throw new Error("PERPLEXITY_API_KEY not found. Set it in environment or .env file.");
 	}
 
+	const systemPrompt = params.system_prompt;
 	const messages: PerplexityRequest["messages"] = [];
-	if (params.system_prompt) {
-		messages.push({ role: "system", content: params.system_prompt });
+	if (systemPrompt) {
+		messages.push({ role: "system", content: systemPrompt });
 	}
 	messages.push({ role: "user", content: params.query });
 
 	const request: PerplexityRequest = {
 		model: "sonar-pro",
 		messages,
+		max_tokens: params.max_tokens ?? DEFAULT_MAX_TOKENS,
+		temperature: params.temperature ?? DEFAULT_TEMPERATURE,
+		search_mode: "web",
+		num_search_results: params.num_search_results ?? DEFAULT_NUM_SEARCH_RESULTS,
 		web_search_options: {
 			search_type: "pro",
 			search_context_size: "high",

@@ -2,7 +2,7 @@
  * Install dependencies for optional features.
  */
 import { Args, Command, Flags } from "@oclif/core";
-import { type SetupCommandArgs, type SetupComponent, runSetupCommand } from "../cli/setup-cli";
+import { runSetupCommand, type SetupCommandArgs, type SetupComponent } from "../cli/setup-cli";
 import { initTheme } from "../modes/theme/theme";
 
 const COMPONENTS: SetupComponent[] = ["python"];

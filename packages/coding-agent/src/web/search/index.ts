@@ -24,15 +24,10 @@ import webSearchSystemPrompt from "../../prompts/system/web-search.md" with { ty
 import webSearchDescription from "../../prompts/tools/web-search.md" with { type: "text" };
 import type { ToolSession } from "../../tools";
 import { formatAge } from "../../tools/render-utils";
-import {
-	formatWebSearchProviderLabel,
-	getWebSearchProviderInfo,
-	WEB_SEARCH_PROVIDER_ORDER,
-	WEB_SEARCH_PROVIDERS,
-} from "./provider-info";
-import { renderWebSearchCall, renderWebSearchResult, type WebSearchRenderDetails } from "./render";
-import type { WebSearchProvider, WebSearchResponse } from "./types";
-import { WebSearchProviderError } from "./types";
+import { getSearchProvider, resolveProviderChain, type SearchProvider } from "./provider-info";
+import { renderSearchCall, renderSearchResult, type SearchRenderDetails } from "./render";
+import type { SearchResponse } from "./types";
+import { SearchProviderError } from "./types";
 
 /** Web search parameters schema */
 export const webSearchSchema = Type.Object({
@@ -50,66 +45,35 @@ export const webSearchSchema = Type.Object({
 	limit: Type.Optional(Type.Number({ description: "Max results to return" })),
 });
 
-export type WebSearchParams = {
+export type SearchParams = {
 	query: string;
 	provider?: "auto" | "exa" | "jina" | "anthropic" | "perplexity" | "gemini" | "codex";
 	recency?: "day" | "week" | "month" | "year";
 	limit?: number;
+	/** Maximum output tokens. Defaults to 4096. */
+	max_tokens?: number;
+	/** Sampling temperature (0–1). Lower = more focused/factual. Defaults to 0.2. */
+	temperature?: number;
+	/** Number of search results to retrieve. Defaults to 10. */
+	num_search_results?: number;
 };
 
-/** Preferred provider set via settings (default: auto) */
-let preferredProvider: WebSearchProvider | "auto" = "auto";
-
-/** Set the preferred web search provider from settings */
-export function setPreferredWebSearchProvider(provider: WebSearchProvider | "auto"): void {
-	preferredProvider = provider;
+function formatProviderList(providers: SearchProvider[]): string {
+	return providers.map(provider => provider.label).join(", ");
 }
 
-/** Determine which providers are configured (priority order) */
-async function getAvailableProviders(): Promise<WebSearchProvider[]> {
-	const providers: WebSearchProvider[] = [];
-
-	for (const provider of WEB_SEARCH_PROVIDER_ORDER) {
-		const definition = getWebSearchProviderInfo(provider);
-		if (await definition.isAvailable()) {
-			providers.push(provider);
-		}
-	}
-
-	return providers;
-}
-
-function formatProviderList(providers: WebSearchProvider[]): string {
-	return providers.map(provider => formatWebSearchProviderLabel(provider)).join(", ");
-}
-
-function formatProviderError(error: unknown, provider: WebSearchProvider): string {
-	if (error instanceof WebSearchProviderError) {
+function formatProviderError(error: unknown, provider: SearchProvider): string {
+	if (error instanceof SearchProviderError) {
 		if (error.provider === "anthropic" && error.status === 404) {
 			return "Anthropic web search returned 404 (model or endpoint not found).";
 		}
 		if (error.status === 401 || error.status === 403) {
-			return `${formatWebSearchProviderLabel(error.provider)} authorization failed (${error.status}). Check API key or base URL.`;
+			return `${getSearchProvider(error.provider).label} authorization failed (${error.status}). Check API key or base URL.`;
 		}
 		return error.message;
 	}
 	if (error instanceof Error) return error.message;
-	return `Unknown error from ${formatWebSearchProviderLabel(provider)}`;
-}
-
-async function resolveProviderChain(
-	requestedProvider?: WebSearchProvider | "auto",
-): Promise<{ providers: WebSearchProvider[]; allowFallback: boolean }> {
-	if (requestedProvider && requestedProvider !== "auto") {
-		return { providers: [requestedProvider], allowFallback: false };
-	}
-
-	if (preferredProvider !== "auto") {
-		return { providers: [preferredProvider], allowFallback: false };
-	}
-
-	const providers = await getAvailableProviders();
-	return { providers, allowFallback: true };
+	return `Unknown error from ${provider.label}`;
 }
 
 /** Truncate text for tool output */
@@ -123,7 +87,7 @@ function formatCount(label: string, count: number): string {
 }
 
 /** Format response for LLM consumption */
-function formatForLLM(response: WebSearchResponse): string {
+function formatForLLM(response: SearchResponse): string {
 	const parts: string[] = [];
 
 	parts.push("## Answer");
@@ -197,18 +161,17 @@ function formatForLLM(response: WebSearchResponse): string {
 }
 
 /** Execute web search */
-async function executeWebSearch(
+async function executeSearch(
 	_toolCallId: string,
-	params: WebSearchParams,
-): Promise<{ content: Array<{ type: "text"; text: string }>; details: WebSearchRenderDetails }> {
-	const { providers, allowFallback } = await resolveProviderChain(params.provider);
+	params: SearchParams,
+): Promise<{ content: Array<{ type: "text"; text: string }>; details: SearchRenderDetails }> {
+	const providers = await resolveProviderChain(params.provider);
 
 	if (providers.length === 0) {
 		const message = "No web search provider configured.";
-		const fallbackProvider = preferredProvider === "auto" ? "anthropic" : preferredProvider;
 		return {
 			content: [{ type: "text" as const, text: `Error: ${message}` }],
-			details: { response: { provider: fallbackProvider, sources: [] }, error: message },
+			details: { response: { provider: "none", sources: [] }, error: message },
 		};
 	}
 
@@ -217,14 +180,8 @@ async function executeWebSearch(
 
 	for (const provider of providers) {
 		lastProvider = provider;
-		const providerDefinition = WEB_SEARCH_PROVIDERS[provider];
-		if (!providerDefinition) {
-			lastError = new Error(`Unknown web search provider: ${provider}`);
-			if (!allowFallback) break;
-			continue;
-		}
 		try {
-			const response = await providerDefinition.search({
+			const response = await provider.search({
 				query: params.query.replace(/202\d/g, String(new Date().getFullYear())), // LUL
 				limit: params.limit,
 				recency: params.recency,
@@ -239,29 +196,28 @@ async function executeWebSearch(
 			};
 		} catch (error) {
 			lastError = error;
-			if (!allowFallback) break;
 		}
 	}
 
 	const baseMessage = formatProviderError(lastError, lastProvider);
 	const message =
-		allowFallback && providers.length > 1
+		providers.length > 1
 			? `All web search providers failed (${formatProviderList(providers)}). Last error: ${baseMessage}`
 			: baseMessage;
 
 	return {
 		content: [{ type: "text" as const, text: `Error: ${message}` }],
-		details: { response: { provider: lastProvider, sources: [] }, error: message },
+		details: { response: { provider: lastProvider.id, sources: [] }, error: message },
 	};
 }
 
 /**
  * Execute a web search query for CLI/testing workflows.
  */
-export async function runWebSearchQuery(
-	params: WebSearchParams,
-): Promise<{ content: Array<{ type: "text"; text: string }>; details: WebSearchRenderDetails }> {
-	return executeWebSearch("cli-web-search", params);
+export async function runSearchQuery(
+	params: SearchParams,
+): Promise<{ content: Array<{ type: "text"; text: string }>; details: SearchRenderDetails }> {
+	return executeSearch("cli-web-search", params);
 }
 
 /**
@@ -270,7 +226,7 @@ export async function runWebSearchQuery(
  * Supports Anthropic, Perplexity, Exa, Jina, Gemini, and Codex providers with automatic fallback.
  * Session is accepted for interface consistency but not used.
  */
-export class WebSearchTool implements AgentTool<typeof webSearchSchema, WebSearchRenderDetails> {
+export class SearchTool implements AgentTool<typeof webSearchSchema, SearchRenderDetails> {
 	public readonly name = "web_search";
 	public readonly label = "Web Search";
 	public readonly description: string;
@@ -282,38 +238,32 @@ export class WebSearchTool implements AgentTool<typeof webSearchSchema, WebSearc
 
 	public async execute(
 		_toolCallId: string,
-		params: WebSearchParams,
+		params: SearchParams,
 		_signal?: AbortSignal,
-		_onUpdate?: AgentToolUpdateCallback<WebSearchRenderDetails>,
+		_onUpdate?: AgentToolUpdateCallback<SearchRenderDetails>,
 		_context?: AgentToolContext,
-	): Promise<AgentToolResult<WebSearchRenderDetails>> {
-		return executeWebSearch(_toolCallId, params);
+	): Promise<AgentToolResult<SearchRenderDetails>> {
+		return executeSearch(_toolCallId, params);
 	}
 }
 
 /** Web search tool as CustomTool (for TUI rendering support) */
-export const webSearchCustomTool: CustomTool<typeof webSearchSchema, WebSearchRenderDetails> = {
+export const webSearchCustomTool: CustomTool<typeof webSearchSchema, SearchRenderDetails> = {
 	name: "web_search",
 	label: "Web Search",
 	description: renderPromptTemplate(webSearchDescription),
 	parameters: webSearchSchema,
 
-	async execute(
-		toolCallId: string,
-		params: WebSearchParams,
-		_onUpdate,
-		_ctx: CustomToolContext,
-		_signal?: AbortSignal,
-	) {
-		return executeWebSearch(toolCallId, params);
+	async execute(toolCallId: string, params: SearchParams, _onUpdate, _ctx: CustomToolContext, _signal?: AbortSignal) {
+		return executeSearch(toolCallId, params);
 	},
 
-	renderCall(args: WebSearchParams, theme: Theme) {
-		return renderWebSearchCall(args, theme);
+	renderCall(args: SearchParams, theme: Theme) {
+		return renderSearchCall(args, theme);
 	},
 
 	renderResult(result, options: RenderResultOptions, theme: Theme) {
-		return renderWebSearchResult(result, options, theme);
+		return renderSearchResult(result, options, theme);
 	},
 };
 
@@ -559,19 +509,19 @@ Parameters:
 };
 
 /** All Exa-specific web search tools */
-export const exaWebSearchTools: CustomTool<any, ExaRenderDetails>[] = [
+export const exaSearchTools: CustomTool<any, ExaRenderDetails>[] = [
 	webSearchDeepTool,
 	webSearchCodeContextTool,
 	webSearchCrawlTool,
 ];
 
 /** LinkedIn-specific tool (requires LinkedIn addon on Exa account) */
-export const linkedinWebSearchTools: CustomTool<any, ExaRenderDetails>[] = [webSearchLinkedinTool];
+export const linkedinSearchTools: CustomTool<any, ExaRenderDetails>[] = [webSearchLinkedinTool];
 
 /** Company-specific tool (requires Company addon on Exa account) */
-export const companyWebSearchTools: CustomTool<any, ExaRenderDetails>[] = [webSearchCompanyTool];
+export const companySearchTools: CustomTool<any, ExaRenderDetails>[] = [webSearchCompanyTool];
 
-export interface WebSearchToolsOptions {
+export interface SearchToolsOptions {
 	/** Enable LinkedIn search tool (requires Exa LinkedIn addon) */
 	enableLinkedin?: boolean;
 	/** Enable company research tool (requires Exa Company addon) */
@@ -587,19 +537,19 @@ export interface WebSearchToolsOptions {
  * - With EXA_API_KEY + options.enableLinkedin: web_search_linkedin
  * - With EXA_API_KEY + options.enableCompany: web_search_company
  */
-export async function getWebSearchTools(options: WebSearchToolsOptions = {}): Promise<CustomTool<any, any>[]> {
+export async function getSearchTools(options: SearchToolsOptions = {}): Promise<CustomTool<any, any>[]> {
 	const tools: CustomTool<any, any>[] = [webSearchCustomTool];
 
 	// Check for Exa API key
 	const exaKey = await findExaKey();
 	if (exaKey) {
-		tools.push(...exaWebSearchTools);
+		tools.push(...exaSearchTools);
 
 		if (options.enableLinkedin) {
-			tools.push(...linkedinWebSearchTools);
+			tools.push(...linkedinSearchTools);
 		}
 		if (options.enableCompany) {
-			tools.push(...companyWebSearchTools);
+			tools.push(...companySearchTools);
 		}
 	}
 
@@ -609,15 +559,15 @@ export async function getWebSearchTools(options: WebSearchToolsOptions = {}): Pr
 /**
  * Check if Exa-specific web search tools are available.
  */
-export async function hasExaWebSearch(): Promise<boolean> {
+export async function hasExaSearch(): Promise<boolean> {
 	const exaKey = await findExaKey();
 	return exaKey !== null;
 }
 
 export {
-	formatWebSearchProviderLabel,
-	getWebSearchProviderInfo,
-	WEB_SEARCH_PROVIDER_ORDER,
-	WEB_SEARCH_PROVIDERS,
+	getSearchProvider,
+	SEARCH_PROVIDER_ORDER,
+	SEARCH_PROVIDERS,
+	setPreferredSearchProvider,
 } from "./provider-info";
-export type { WebSearchProvider, WebSearchResponse } from "./types";
+export type { SearchProviderId as SearchProvider, SearchResponse } from "./types";

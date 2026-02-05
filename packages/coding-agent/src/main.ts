@@ -12,12 +12,12 @@ import { run } from "@oclif/core";
 import { type ImageContent, supportsXhigh } from "@oh-my-pi/pi-ai";
 import { $env, postmortem } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
-import { type Args } from "./cli/args";
+import type { Args } from "./cli/args";
 import { processFileArguments } from "./cli/file-processor";
 import { listModels } from "./cli/list-models";
 import { selectSession } from "./cli/session-picker";
-import { findConfigFile, getModelsPath, VERSION } from "./config";
-import type { ModelRegistry } from "./config/model-registry";
+import { findConfigFile, VERSION } from "./config";
+import { ModelRegistry, ModelsConfigFile } from "./config/model-registry";
 import { parseModelPattern, parseModelString, resolveModelScope, type ScopedModel } from "./config/model-resolver";
 import { Settings, settings } from "./config/settings";
 import { initializeWithSettings } from "./discovery";
@@ -26,7 +26,7 @@ import type { ExtensionUIContext } from "./extensibility/extensions/types";
 import { runMigrations, showDeprecationWarnings } from "./migrations";
 import { InteractiveMode, runPrintMode, runRpcMode } from "./modes";
 import { initTheme, stopThemeWatcher } from "./modes/theme/theme";
-import { type CreateAgentSessionOptions, createAgentSession, discoverAuthStorage, discoverModels } from "./sdk";
+import { type CreateAgentSessionOptions, createAgentSession, discoverAuthStorage } from "./sdk";
 import type { AgentSession } from "./session/agent-session";
 import { type SessionInfo, SessionManager } from "./session/session-manager";
 import { resolvePromptInput } from "./system-prompt";
@@ -73,13 +73,16 @@ async function readPipedInput(): Promise<string | undefined> {
 	}
 }
 
+export interface InteractiveModeNotify {
+	kind: "warn" | "error" | "info";
+	message: string;
+}
+
 async function runInteractiveMode(
 	session: AgentSession,
 	version: string,
 	changelogMarkdown: string | undefined,
-	modelFallbackMessage: string | undefined,
-	modelsJsonError: string | undefined,
-	migratedProviders: string[],
+	notifs: (InteractiveModeNotify | null)[],
 	versionCheckPromise: Promise<string | undefined>,
 	initialMessages: string[],
 	setExtensionUIContext: (uiContext: ExtensionUIContext, hasUI: boolean) => void,
@@ -102,16 +105,17 @@ async function runInteractiveMode(
 
 	mode.renderInitialMessages();
 
-	if (migratedProviders.length > 0) {
-		mode.showWarning(`Migrated credentials to agent.db: ${migratedProviders.join(", ")}`);
-	}
-
-	if (modelsJsonError) {
-		mode.showError(`models.json error: ${modelsJsonError}`);
-	}
-
-	if (modelFallbackMessage) {
-		mode.showWarning(modelFallbackMessage);
+	for (const notify of notifs) {
+		if (!notify) {
+			continue;
+		}
+		if (notify.kind === "warn") {
+			mode.showWarning(notify.message);
+		} else if (notify.kind === "error") {
+			mode.showError(notify.message);
+		} else if (notify.kind === "info") {
+			mode.showStatus(notify.message);
+		}
 	}
 
 	if (initialMessage) {
@@ -482,13 +486,18 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 	time("parseArgs");
 	await maybeAutoChdir(parsedArgs);
 
+	const notifs: (InteractiveModeNotify | null)[] = [];
+
 	// Run migrations (pass cwd for project-local migrations)
 	const { migratedAuthProviders: migratedProviders, deprecationWarnings } = await runMigrations(process.cwd());
 	debugStartup("main:runMigrations");
+	if (migratedProviders.length > 0) {
+		notifs.push({ kind: "warn", message: `Migrated credentials to agent.db: ${migratedProviders.join(", ")}` });
+	}
 
 	// Create AuthStorage and ModelRegistry upfront
 	const authStorage = await discoverAuthStorage();
-	const modelRegistry = discoverModels(authStorage);
+	const modelRegistry = new ModelRegistry(authStorage);
 	debugStartup("main:discoverModels");
 	time("discoverModels");
 
@@ -613,6 +622,15 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 	debugStartup("main:createAgentSession");
 	time("createAgentSession");
 
+	if (modelFallbackMessage) {
+		notifs.push({ kind: "warn", message: modelFallbackMessage });
+	}
+
+	const modelRegistryError = modelRegistry.getError();
+	if (modelRegistryError) {
+		notifs.push({ kind: "error", message: modelRegistryError.message });
+	}
+
 	// Re-parse CLI args with extension flags and apply values
 	if (session.extensionRunner) {
 		const extFlags = session.extensionRunner.getFlags();
@@ -644,7 +662,7 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 		writeStderr(chalk.red("No models available."));
 		writeStderr(chalk.yellow("\nSet an API key environment variable:"));
 		writeStderr("  ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, etc.");
-		writeStderr(chalk.yellow(`\nOr create ${getModelsPath()}`));
+		writeStderr(chalk.yellow(`\nOr create ${ModelsConfigFile.path()}`));
 		process.exit(1);
 	}
 
@@ -684,9 +702,7 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 			session,
 			VERSION,
 			changelogMarkdown,
-			modelFallbackMessage,
-			modelRegistry.getError(),
-			migratedProviders,
+			notifs,
 			versionCheckPromise,
 			parsedArgs.messages,
 			setToolUIContext,

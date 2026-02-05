@@ -2,7 +2,7 @@
  * Manage plugins (install, uninstall, list, etc.).
  */
 import { Args, Command, Flags } from "@oclif/core";
-import { type PluginCommandArgs, type PluginAction, runPluginCommand } from "../cli/plugin-cli";
+import { type PluginAction, type PluginCommandArgs, runPluginCommand } from "../cli/plugin-cli";
 import { initTheme } from "../modes/theme/theme";
 
 const ACTIONS: PluginAction[] = [
@@ -48,9 +48,10 @@ export default class Plugin extends Command {
 		const { args, flags } = await this.parse(Plugin);
 		const action = (args.action ?? "list") as PluginAction;
 
+		const targets = Array.isArray(args.targets) ? args.targets : args.targets ? [args.targets] : [];
 		const cmd: PluginCommandArgs = {
 			action,
-			args: args.targets ?? [],
+			args: targets,
 			flags: {
 				json: flags.json,
 				fix: flags.fix,

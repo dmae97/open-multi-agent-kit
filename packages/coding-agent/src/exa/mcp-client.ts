@@ -1,10 +1,4 @@
-/**
- * Exa MCP Client
- *
- * Client for interacting with Exa MCP servers.
- */
-import * as os from "node:os";
-import { $env, isEnoent, logger } from "@oh-my-pi/pi-utils";
+import { $env, logger } from "@oh-my-pi/pi-utils";
 import type { TSchema } from "@sinclair/typebox";
 import type { CustomTool, CustomToolResult } from "../extensibility/custom-tools/types";
 import { callMCP } from "../mcp/json-rpc";
@@ -19,32 +13,8 @@ import type {
 } from "./types";
 
 /** Find EXA_API_KEY from Bun.env or .env files */
-export async function findApiKey(): Promise<string | null> {
-	// Check Bun.env first
-	if ($env.EXA_API_KEY) {
-		return $env.EXA_API_KEY;
-	}
-
-	// Try loading from .env files in cwd and home
-	const cwd = process.cwd();
-	const home = os.homedir();
-
-	for (const dir of [cwd, home]) {
-		const envPath = `${dir}/.env`;
-		try {
-			const content = await Bun.file(envPath).text();
-			const match = content.match(/^EXA_API_KEY=(.+)$/m);
-			if (match?.[1]) {
-				return match[1].trim().replace(/^["']|["']$/g, "");
-			}
-		} catch (err) {
-			if (!isEnoent(err)) {
-				logger.debug("Error reading .env file", { path: envPath, error: String(err) });
-			}
-		}
-	}
-
-	return null;
+export function findApiKey(): string | null {
+	return $env.EXA_API_KEY;
 }
 
 /** Fetch available tools from Exa MCP */

@@ -2,12 +2,13 @@
  * Root command for the coding agent CLI.
  */
 import { Args, Command, Flags } from "@oclif/core";
-import { parseArgs } from "../cli/args";
-import { APP_NAME } from "../config";
-import { runRootCommand } from "../main";
+import { parseArgs } from "../../cli/args";
+import { APP_NAME } from "../../config";
+import { runRootCommand } from "../../main";
 
 export default class Index extends Command {
 	static description = "AI coding assistant";
+	static hidden = true;
 
 	static args = {
 		messages: Args.string({
@@ -19,7 +20,7 @@ export default class Index extends Command {
 
 	static flags = {
 		model: Flags.string({
-			description: "Model to use (fuzzy match: \"opus\", \"gpt-5.2\", or \"p-openai/gpt-5.2\")",
+			description: 'Model to use (fuzzy match: "opus", "gpt-5.2", or "p-openai/gpt-5.2")',
 		}),
 		smol: Flags.string({
 			description: "Smol/fast model for lightweight tasks (or PI_SMOL_MODEL env)",

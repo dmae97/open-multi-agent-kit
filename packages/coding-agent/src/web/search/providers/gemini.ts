@@ -8,8 +8,8 @@
 import { refreshGoogleCloudToken } from "@oh-my-pi/pi-ai";
 import { getAgentDbPath, getConfigDirPaths } from "../../../config";
 import { AgentStorage } from "../../../session/agent-storage";
-import type { WebSearchCitation, WebSearchResponse, WebSearchSource } from "../../../web/search/types";
-import { WebSearchProviderError } from "../../../web/search/types";
+import type { SearchCitation, SearchResponse, SearchSource } from "../../../web/search/types";
+import { SearchProviderError } from "../../../web/search/types";
 
 const DEFAULT_ENDPOINT = "https://cloudcode-pa.googleapis.com";
 const ANTIGRAVITY_ENDPOINT = "https://daily-cloudcode-pa.sandbox.googleapis.com";
@@ -67,7 +67,7 @@ interface GeminiAuth {
  * Checks google-antigravity first (daily sandbox, more quota), then google-gemini-cli (prod).
  * @returns OAuth credential with access token and project ID, or null if none found
  */
-async function findGeminiAuth(): Promise<GeminiAuth | null> {
+export async function findGeminiAuth(): Promise<GeminiAuth | null> {
 	const configDirs = getConfigDirPaths("", { project: false });
 	const expiryBuffer = 5 * 60 * 1000; // 5 minutes
 	const now = Date.now();
@@ -191,7 +191,7 @@ interface CloudCodeResponseChunk {
  * @param query - Search query from the user
  * @param systemPrompt - Optional system prompt
  * @returns Parsed response with answer, sources, and usage
- * @throws {WebSearchProviderError} If the API request fails
+ * @throws {SearchProviderError} If the API request fails
  */
 async function callGeminiSearch(
 	auth: GeminiAuth,
@@ -199,8 +199,8 @@ async function callGeminiSearch(
 	systemPrompt?: string,
 ): Promise<{
 	answer: string;
-	sources: WebSearchSource[];
-	citations: WebSearchCitation[];
+	sources: SearchSource[];
+	citations: SearchCitation[];
 	searchQueries: string[];
 	model: string;
 	usage?: { inputTokens: number; outputTokens: number; totalTokens: number };
@@ -244,7 +244,7 @@ async function callGeminiSearch(
 
 	if (!response.ok) {
 		const errorText = await response.text();
-		throw new WebSearchProviderError(
+		throw new SearchProviderError(
 			"gemini",
 			`Gemini Cloud Code API error (${response.status}): ${errorText}`,
 			response.status,
@@ -252,13 +252,13 @@ async function callGeminiSearch(
 	}
 
 	if (!response.body) {
-		throw new WebSearchProviderError("gemini", "Gemini API returned no response body", 500);
+		throw new SearchProviderError("gemini", "Gemini API returned no response body", 500);
 	}
 
 	// Parse SSE stream
 	const answerParts: string[] = [];
-	const sources: WebSearchSource[] = [];
-	const citations: WebSearchCitation[] = [];
+	const sources: SearchSource[] = [];
+	const citations: SearchCitation[] = [];
 	const searchQueries: string[] = [];
 	const seenUrls = new Set<string>();
 	let model = DEFAULT_MODEL;
@@ -388,7 +388,7 @@ async function callGeminiSearch(
  * @returns Search response with synthesized answer, sources, and citations
  * @throws {Error} If no Gemini OAuth credentials are configured
  */
-export async function searchGemini(params: GeminiSearchParams): Promise<WebSearchResponse> {
+export async function searchGemini(params: GeminiSearchParams): Promise<SearchResponse> {
 	const auth = await findGeminiAuth();
 	if (!auth) {
 		throw new Error(
@@ -414,13 +414,4 @@ export async function searchGemini(params: GeminiSearchParams): Promise<WebSearc
 		usage: result.usage,
 		model: result.model,
 	};
-}
-
-/**
- * Checks if Gemini web search is available.
- * @returns True if valid OAuth credentials exist for google-gemini-cli or google-antigravity
- */
-export async function hasGeminiWebSearch(): Promise<boolean> {
-	const auth = await findGeminiAuth();
-	return auth !== null;
 }

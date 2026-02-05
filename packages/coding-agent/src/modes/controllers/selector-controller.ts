@@ -27,7 +27,7 @@ import {
 } from "../../modes/theme/theme";
 import type { InteractiveModeContext } from "../../modes/types";
 import { SessionManager } from "../../session/session-manager";
-import { setPreferredImageProvider, setPreferredWebSearchProvider } from "../../tools";
+import { setPreferredImageProvider, setPreferredSearchProvider } from "../../tools";
 
 export class SelectorController {
 	constructor(private ctx: InteractiveModeContext) {}
@@ -258,7 +258,7 @@ export class SelectorController {
 
 			// Provider settings - update runtime preferences
 			case "webSearchProvider":
-				setPreferredWebSearchProvider(value as "auto" | "exa" | "perplexity" | "anthropic");
+				setPreferredSearchProvider(value as "auto" | "exa" | "perplexity" | "anthropic");
 				break;
 			case "imageProvider":
 				setPreferredImageProvider(value as "auto" | "gemini" | "openrouter");

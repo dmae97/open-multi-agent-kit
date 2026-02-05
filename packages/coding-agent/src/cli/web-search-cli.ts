@@ -6,19 +6,19 @@
 import chalk from "chalk";
 import { APP_NAME } from "../config";
 import { initTheme, theme } from "../modes/theme/theme";
-import { renderWebSearchResult } from "../web/search/render";
-import { runWebSearchQuery, type WebSearchParams } from "../web/search/index";
-import type { WebSearchProvider } from "../web/search/types";
+import { runSearchQuery, type SearchParams } from "../web/search/index";
+import { renderSearchResult } from "../web/search/render";
+import type { SearchProviderId } from "../web/search/types";
 
-export interface WebSearchCommandArgs {
+export interface SearchCommandArgs {
 	query: string;
-	provider?: WebSearchProvider | "auto";
+	provider?: SearchProviderId | "auto";
 	recency?: "day" | "week" | "month" | "year";
 	limit?: number;
 	expanded: boolean;
 }
 
-const PROVIDERS: Array<WebSearchProvider | "auto"> = [
+const PROVIDERS: Array<SearchProviderId | "auto"> = [
 	"auto",
 	"anthropic",
 	"perplexity",
@@ -28,18 +28,18 @@ const PROVIDERS: Array<WebSearchProvider | "auto"> = [
 	"codex",
 ];
 
-const RECENCY_OPTIONS: WebSearchCommandArgs["recency"][] = ["day", "week", "month", "year"];
+const RECENCY_OPTIONS: SearchCommandArgs["recency"][] = ["day", "week", "month", "year"];
 
 /**
  * Parse web search subcommand arguments.
  * Returns undefined if not a web search command.
  */
-export function parseWebSearchArgs(args: string[]): WebSearchCommandArgs | undefined {
+export function parseSearchArgs(args: string[]): SearchCommandArgs | undefined {
 	if (args.length === 0 || (args[0] !== "q" && args[0] !== "web-search")) {
 		return undefined;
 	}
 
-	const result: WebSearchCommandArgs = {
+	const result: SearchCommandArgs = {
 		query: "",
 		expanded: true,
 	};
@@ -49,9 +49,9 @@ export function parseWebSearchArgs(args: string[]): WebSearchCommandArgs | undef
 	for (let i = 1; i < args.length; i++) {
 		const arg = args[i];
 		if (arg === "--provider") {
-			result.provider = args[++i] as WebSearchCommandArgs["provider"];
+			result.provider = args[++i] as SearchCommandArgs["provider"];
 		} else if (arg === "--recency") {
-			result.recency = args[++i] as WebSearchCommandArgs["recency"];
+			result.recency = args[++i] as SearchCommandArgs["recency"];
 		} else if (arg === "--limit" || arg === "-l") {
 			result.limit = Number.parseInt(args[++i], 10);
 		} else if (arg === "--compact") {
@@ -68,7 +68,7 @@ export function parseWebSearchArgs(args: string[]): WebSearchCommandArgs | undef
 	return result;
 }
 
-export async function runWebSearchCommand(cmd: WebSearchCommandArgs): Promise<void> {
+export async function runSearchCommand(cmd: SearchCommandArgs): Promise<void> {
 	if (!cmd.query) {
 		writeStderr(chalk.red("Error: Query is required"));
 		process.exit(1);
@@ -93,15 +93,15 @@ export async function runWebSearchCommand(cmd: WebSearchCommandArgs): Promise<vo
 
 	await initTheme();
 
-	const params: WebSearchParams = {
+	const params: SearchParams = {
 		query: cmd.query,
 		provider: cmd.provider,
 		recency: cmd.recency,
 		limit: cmd.limit,
 	};
 
-	const result = await runWebSearchQuery(params);
-	const component = renderWebSearchResult(result, { expanded: cmd.expanded, isPartial: false }, theme, {
+	const result = await runSearchQuery(params);
+	const component = renderSearchResult(result, { expanded: cmd.expanded, isPartial: false }, theme, {
 		query: cmd.query,
 		provider: cmd.provider,
 		allowLongAnswer: true,
@@ -116,7 +116,7 @@ export async function runWebSearchCommand(cmd: WebSearchCommandArgs): Promise<vo
 	}
 }
 
-export function printWebSearchHelp(): void {
+export function printSearchHelp(): void {
 	writeStdout(`${chalk.bold(`${APP_NAME} q`)} - Test web search providers
 
 ${chalk.bold("Usage:")}

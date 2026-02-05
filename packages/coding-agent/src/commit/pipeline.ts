@@ -1,9 +1,10 @@
 import * as path from "node:path";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
+import { ModelRegistry } from "../config/model-registry";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import { Settings } from "../config/settings";
-import { discoverAuthStorage, discoverModels } from "../sdk";
+import { discoverAuthStorage } from "../sdk";
 import { loadProjectContextFiles } from "../system-prompt";
 import { runAgenticCommit } from "./agentic";
 import {
@@ -41,7 +42,7 @@ async function runLegacyCommitCommand(args: CommitCommandArgs): Promise<void> {
 	const settingsInstance = await Settings.init();
 	const commitSettings = settingsInstance.getGroup("commit");
 	const authStorage = await discoverAuthStorage();
-	const modelRegistry = discoverModels(authStorage);
+	const modelRegistry = new ModelRegistry(authStorage);
 
 	const { model: primaryModel, apiKey: primaryApiKey } = await resolvePrimaryModel(
 		args.model,

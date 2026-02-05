@@ -24,11 +24,7 @@ export default class Grep extends Command {
 	async run(): Promise<void> {
 		const { args, flags } = await this.parse(Grep);
 
-		const mode: GrepCommandArgs["mode"] = flags.count
-			? "count"
-			: flags.files
-				? "filesWithMatches"
-				: "content";
+		const mode: GrepCommandArgs["mode"] = flags.count ? "count" : flags.files ? "filesWithMatches" : "content";
 
 		const cmd: GrepCommandArgs = {
 			pattern: args.pattern ?? "",

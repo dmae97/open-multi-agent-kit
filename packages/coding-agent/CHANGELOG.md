@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added `omp commit` command to generate commit messages and update changelogs with `--push`, `--dry-run`, `--no-changelog`, and model override flags
@@ -22,6 +23,11 @@
 
 ### Changed
 
+- Renamed web search types and exports for consistency: `WebSearchProvider` → `SearchProviderId`, `WebSearchResponse` → `SearchResponse`, `WebSearchTool` → `SearchTool`, and related functions
+- Refactored web search provider system to use centralized provider registry with `getSearchProvider()` and `resolveProviderChain()` for improved provider management
+- Updated web search system prompt to emphasize comprehensive, detailed answers with concrete data and specific examples over brevity
+- Simplified Exa API key discovery to check environment variables only, removing .env file fallback logic
+- Refactored `ModelRegistry` instantiation to use direct constructor instead of `discoverModels()` helper function across codebase
 - Refactored CLI entry point to use oclif command framework instead of custom subcommand routing
 - Reorganized subcommands into individual command files under `src/commands/` directory for better maintainability
 - Updated extension flag handling to parse raw arguments directly instead of using custom flag definitions
@@ -35,6 +41,7 @@
 
 ### Fixed
 
+- Fixed type handling in model selector error message display to properly convert error objects to strings
 - Fixed web search to use search results when Perplexity API returns no citations, ensuring search results are always available to users
 - Fixed model switches deferred during streaming to apply correctly when the stream completes, preventing model changes from being lost
 - Fixed plan mode toggles during streaming to inject plan-mode context immediately, preventing file edits while in plan mode

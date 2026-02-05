@@ -6,8 +6,8 @@
  */
 
 import { getEnvApiKey } from "@oh-my-pi/pi-ai";
-import type { WebSearchResponse, WebSearchSource } from "../../../web/search/types";
-import { WebSearchProviderError } from "../../../web/search/types";
+import type { SearchResponse, SearchSource } from "../../../web/search/types";
+import { SearchProviderError } from "../../../web/search/types";
 
 const JINA_SEARCH_URL = "https://s.jina.ai";
 
@@ -41,7 +41,7 @@ async function callJinaSearch(apiKey: string, query: string): Promise<JinaSearch
 
 	if (!response.ok) {
 		const errorText = await response.text();
-		throw new WebSearchProviderError("jina", `Jina API error (${response.status}): ${errorText}`, response.status);
+		throw new SearchProviderError("jina", `Jina API error (${response.status}): ${errorText}`, response.status);
 	}
 
 	const data = (await response.json()) as unknown;
@@ -49,14 +49,14 @@ async function callJinaSearch(apiKey: string, query: string): Promise<JinaSearch
 }
 
 /** Execute Jina web search. */
-export async function searchJina(params: JinaSearchParams): Promise<WebSearchResponse> {
+export async function searchJina(params: JinaSearchParams): Promise<SearchResponse> {
 	const apiKey = findApiKey();
 	if (!apiKey) {
 		throw new Error("JINA_API_KEY not found. Set it in environment or .env file.");
 	}
 
 	const response = await callJinaSearch(apiKey, params.query);
-	const sources: WebSearchSource[] = [];
+	const sources: SearchSource[] = [];
 
 	for (const result of response) {
 		if (!result?.url) continue;

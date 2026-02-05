@@ -66,7 +66,7 @@ export async function discoverAgents(cwd: string): Promise<DiscoveryResult> {
 		}));
 
 	// Get project directories by walking up from cwd (priority order)
-	const projectDirs = (await findAllNearestProjectConfigDirs("agents", resolvedCwd))
+	const projectDirs = findAllNearestProjectConfigDirs("agents", resolvedCwd)
 		.filter(entry => agentSources.includes(entry.source))
 		.map(entry => ({
 			...entry,

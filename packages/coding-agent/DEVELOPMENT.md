@@ -316,7 +316,7 @@ src/
     │   ├── utils.ts          # Scraper utilities
     │   └── (domain-specific scrapers)
     └── search/               # Web search
-        ├── index.ts          # WebSearchTool exports
+        ├── index.ts          # SearchTool exports
         ├── auth.ts           # Search auth
         ├── render.ts         # Search result rendering
         └── providers/        # Search providers

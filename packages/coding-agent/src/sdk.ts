@@ -1,37 +1,8 @@
-/**
- * SDK for programmatic usage of AgentSession.
- *
- * Provides a factory function and discovery helpers that allow full control
- * over agent configuration, or sensible defaults that match CLI behavior.
- *
- * @example
- * ```typescript
- * // Minimal - everything auto-discovered
- * const session = await createAgentSession();
- *
- * // With custom extensions
- * const session = await createAgentSession({
- *   extensions: [myExtensionFactory],
- * });
- *
- * // Full control
- * const session = await createAgentSession({
- *   model: myModel,
- *   getApiKey: async () => Bun.env.MY_KEY,
- *   toolNames: ["read", "bash", "edit", "write"], // Filter tools
- *   extensions: [],
- *   skills: [],
- *   sessionFile: false,
- * });
- * ```
- */
-import * as fs from "node:fs";
 import * as path from "node:path";
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool, type ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { type Message, type Model, supportsXhigh } from "@oh-my-pi/pi-ai";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { $env, logger, postmortem } from "@oh-my-pi/pi-utils";
-import { YAML } from "bun";
 import chalk from "chalk";
 import { loadCapability } from "./capability";
 import { type Rule, ruleCapability } from "./capability/rule";
@@ -94,12 +65,12 @@ import {
 	EditTool,
 	FindTool,
 	GrepTool,
-	getWebSearchTools,
+	getSearchTools,
 	loadSshTool,
 	PythonTool,
 	ReadTool,
 	setPreferredImageProvider,
-	setPreferredWebSearchProvider,
+	setPreferredSearchProvider,
 	type Tool,
 	type ToolSession,
 	WriteTool,
@@ -276,63 +247,6 @@ export async function discoverAuthStorage(agentDir: string = getDefaultAgentDir(
 	const storage = await AuthStorage.create(primaryPath, fallbackPaths);
 	await storage.reload();
 	return storage;
-}
-
-/**
- * Create a ModelRegistry with fallback support.
- * Prefers models.yml over models.json. Reads from primary path first,
- * then falls back to legacy paths (.pi, .claude).
- */
-export function discoverModels(authStorage: AuthStorage, agentDir: string = getDefaultAgentDir()): ModelRegistry {
-	const yamlPath = path.join(agentDir, "models.yml");
-	const jsonPath = path.join(agentDir, "models.json");
-
-	// Check existence of yaml and json files
-	let yamlExists = fs.existsSync(yamlPath);
-	let jsonExists = fs.existsSync(jsonPath);
-
-	// Migrate models.json to models.yml if yaml doesn't exist but json does
-	if (!yamlExists && jsonExists) {
-		migrateModelsJsonToYaml(jsonPath, yamlPath);
-		yamlExists = fs.existsSync(yamlPath);
-		jsonExists = fs.existsSync(jsonPath);
-	}
-
-	// Prefer models.yml, fall back to models.json
-	const primaryPath = yamlExists ? yamlPath : jsonPath;
-
-	// Get all models config paths (user-level only), excluding the primary
-	const yamlPaths = getConfigDirPaths("models.yml", { project: false });
-	const jsonPaths = getConfigDirPaths("models.json", { project: false });
-	const allPaths = [...yamlPaths, ...jsonPaths];
-	const existenceResults = allPaths.map(p => {
-		return { p, exists: fs.existsSync(p) };
-	});
-	const fallbackPaths = existenceResults.filter(({ p, exists }) => p !== primaryPath && exists).map(({ p }) => p);
-
-	logger.debug("discoverModels", { primaryPath, fallbackPaths });
-	return new ModelRegistry(authStorage, primaryPath, fallbackPaths);
-}
-
-/**
- * Migrate models.json to models.yml.
- * Creates models.yml from models.json and renames the json file to .bak.
- */
-function migrateModelsJsonToYaml(jsonPath: string, yamlPath: string): void {
-	try {
-		const content = fs.readFileSync(jsonPath, "utf-8");
-		const parsed = JSON.parse(content);
-		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-			logger.warn("migrateModelsJsonToYaml: invalid models.json structure", { path: jsonPath });
-			return;
-		}
-		fs.mkdirSync(path.dirname(yamlPath), { recursive: true });
-		fs.writeFileSync(yamlPath, YAML.stringify(parsed, null, 2));
-		fs.renameSync(jsonPath, `${jsonPath}.bak`);
-		logger.debug("migrateModelsJsonToYaml: migrated models.json to models.yml", { from: jsonPath, to: yamlPath });
-	} catch (error) {
-		logger.warn("migrateModelsJsonToYaml: migration failed", { error: String(error) });
-	}
 }
 
 /**
@@ -585,7 +499,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	// Use provided or create AuthStorage and ModelRegistry
 	const authStorage = options.authStorage ?? (await discoverAuthStorage(agentDir));
-	const modelRegistry = options.modelRegistry ?? discoverModels(authStorage, agentDir);
+	const modelRegistry = options.modelRegistry ?? new ModelRegistry(authStorage);
 	time("discoverModels");
 
 	const settingsInstance = options.settingsInstance ?? (await Settings.init({ cwd, agentDir }));
@@ -594,7 +508,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	time("initializeWithSettings");
 
 	// Initialize provider preferences from settings
-	setPreferredWebSearchProvider(settingsInstance.get("providers.webSearch") ?? "auto");
+	setPreferredSearchProvider(settingsInstance.get("providers.webSearch") ?? "auto");
 	setPreferredImageProvider(settingsInstance.get("providers.image") ?? "auto");
 
 	const sessionManager = options.sessionManager ?? SessionManager.create(cwd);
@@ -839,16 +753,16 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	// Add specialized Exa web search tools if EXA_API_KEY is available
 	const exaSettings = settingsInstance.getGroup("exa");
 	if (exaSettings.enabled && exaSettings.enableSearch) {
-		const exaWebSearchTools = await getWebSearchTools({
+		const exaSearchTools = await getSearchTools({
 			enableLinkedin: exaSettings.enableLinkedin as boolean,
 			enableCompany: exaSettings.enableCompany as boolean,
 		});
 		// Filter out the base web_search (already in built-in tools), add specialized Exa tools
-		const specializedTools = exaWebSearchTools.filter(t => t.name !== "web_search");
+		const specializedTools = exaSearchTools.filter(t => t.name !== "web_search");
 		if (specializedTools.length > 0) {
 			customTools.push(...specializedTools);
 		}
-		time("getWebSearchTools");
+		time("getSearchTools");
 	}
 
 	const inlineExtensions: ExtensionFactory[] = options.extensions ? [...options.extensions] : [];

@@ -2,7 +2,7 @@
  * Interactive shell console.
  */
 import { Command, Flags } from "@oclif/core";
-import { type ShellCommandArgs, runShellCommand } from "../cli/shell-cli";
+import { runShellCommand, type ShellCommandArgs } from "../cli/shell-cli";
 import { initTheme } from "../modes/theme/theme";
 
 export default class Shell extends Command {

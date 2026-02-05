@@ -2,10 +2,10 @@
  * Test web search providers.
  */
 import { Args, Command, Flags } from "@oclif/core";
-import { type WebSearchCommandArgs, runWebSearchCommand } from "../cli/web-search-cli";
-import type { WebSearchProvider } from "../web/search/types";
+import { runSearchCommand, type SearchCommandArgs } from "../cli/web-search-cli";
+import type { SearchProviderId } from "../web/search/types";
 
-const PROVIDERS: Array<WebSearchProvider | "auto"> = [
+const PROVIDERS: Array<SearchProviderId | "auto"> = [
 	"auto",
 	"anthropic",
 	"perplexity",
@@ -15,9 +15,9 @@ const PROVIDERS: Array<WebSearchProvider | "auto"> = [
 	"codex",
 ];
 
-const RECENCY: NonNullable<WebSearchCommandArgs["recency"]>[] = ["day", "week", "month", "year"];
+const RECENCY: NonNullable<SearchCommandArgs["recency"]>[] = ["day", "week", "month", "year"];
 
-export default class WebSearch extends Command {
+export default class Search extends Command {
 	static description = "Test web search providers";
 
 	static aliases = ["q"];
@@ -34,17 +34,17 @@ export default class WebSearch extends Command {
 	};
 
 	async run(): Promise<void> {
-		const { args, flags } = await this.parse(WebSearch);
-		const query = Array.isArray(args.query) ? args.query.join(" ") : args.query ?? "";
+		const { args, flags } = await this.parse(Search);
+		const query = Array.isArray(args.query) ? args.query.join(" ") : (args.query ?? "");
 
-		const cmd: WebSearchCommandArgs = {
+		const cmd: SearchCommandArgs = {
 			query,
-			provider: flags.provider as WebSearchProvider | "auto" | undefined,
-			recency: flags.recency as WebSearchCommandArgs["recency"],
+			provider: flags.provider as SearchProviderId | "auto" | undefined,
+			recency: flags.recency as SearchCommandArgs["recency"],
 			limit: flags.limit,
 			expanded: !flags.compact,
 		};
 
-		await runWebSearchCommand(cmd);
+		await runSearchCommand(cmd);
 	}
 }

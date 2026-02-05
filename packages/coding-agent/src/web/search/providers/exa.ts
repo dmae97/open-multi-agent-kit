@@ -5,8 +5,8 @@
  * Returns structured search results with optional content extraction.
  */
 import { getEnvApiKey } from "@oh-my-pi/pi-ai";
-import type { WebSearchResponse, WebSearchSource } from "../../../web/search/types";
-import { WebSearchProviderError } from "../../../web/search/types";
+import type { SearchResponse, SearchSource } from "../../../web/search/types";
+import { SearchProviderError } from "../../../web/search/types";
 
 const EXA_API_URL = "https://api.exa.ai/search";
 
@@ -79,7 +79,7 @@ async function callExaSearch(apiKey: string, params: ExaSearchParams): Promise<E
 
 	if (!response.ok) {
 		const errorText = await response.text();
-		throw new WebSearchProviderError("exa", `Exa API error (${response.status}): ${errorText}`, response.status);
+		throw new SearchProviderError("exa", `Exa API error (${response.status}): ${errorText}`, response.status);
 	}
 
 	return response.json() as Promise<ExaSearchResponse>;
@@ -98,7 +98,7 @@ function dateToAgeSeconds(dateStr: string | null | undefined): number | undefine
 }
 
 /** Execute Exa web search */
-export async function searchExa(params: ExaSearchParams): Promise<WebSearchResponse> {
+export async function searchExa(params: ExaSearchParams): Promise<SearchResponse> {
 	const apiKey = getEnvApiKey("exa");
 	if (!apiKey) {
 		throw new Error("EXA_API_KEY not found. Set it in environment or .env file.");
@@ -106,8 +106,8 @@ export async function searchExa(params: ExaSearchParams): Promise<WebSearchRespo
 
 	const response = await callExaSearch(apiKey, params);
 
-	// Convert to unified WebSearchResponse
-	const sources: WebSearchSource[] = [];
+	// Convert to unified SearchResponse
+	const sources: SearchSource[] = [];
 
 	if (response.results) {
 		for (const result of response.results) {
