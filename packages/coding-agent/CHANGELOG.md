@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [11.0.3] - 2026-02-05
 ### Added
 
 - Added new subcommands to help text: `commit` for AI-assisted git commits, `stats` for AI usage statistics dashboard, and `jupyter` for managing the shared Jupyter gateway
