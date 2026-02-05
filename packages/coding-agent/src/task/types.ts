@@ -33,33 +33,47 @@ export const TASK_SUBAGENT_PROGRESS_CHANNEL = "task:subagent:progress";
 /** Single task item for parallel execution */
 export const taskItemSchema = Type.Object({
 	id: Type.String({
-		description: "Task ID, CamelCase, max 32 chars",
+		description: "CamelCase identifier, max 32 chars",
 		maxLength: 32,
 	}),
-	description: Type.String({ description: "Short description for display" }),
-	args: Type.Optional(
-		Type.Record(Type.String(), Type.String(), {
-			description: "Arguments to fill {{placeholders}} in context",
-		}),
-	),
+	description: Type.String({
+		description: "Short one-liner for UI display only — not seen by the subagent",
+	}),
+	assignment: Type.String({
+		description:
+			"Complete per-task instructions the subagent executes. Must follow the Target/Change/Edge Cases/Acceptance structure. Only include per-task deltas — shared background belongs in `context`.",
+	}),
 	skills: Type.Optional(
 		Type.Array(Type.String(), {
-			description: "Skill names to preload into the subagent system prompt",
+			description: "Skill names to preload into the subagent. Use only where it changes correctness.",
 		}),
 	),
 });
-
 export type TaskItem = Static<typeof taskItemSchema>;
 
-/** Task tool parameters */
 export const taskSchema = Type.Object({
-	agent: Type.String({ description: "Agent type for all tasks" }),
-	context: Type.String({ description: "Template with {{placeholders}} for args" }),
-	isolated: Type.Optional(Type.Boolean({ description: "Run in isolated git worktree" })),
-	schema: Type.Optional(
-		Type.Record(Type.String(), Type.Unknown(), { description: "JTD schema defining expected response structure" }),
+	agent: Type.String({ description: "Agent type for all tasks in this batch" }),
+	context: Type.Optional(
+		Type.String({
+			description:
+				"Shared background prepended to every task's assignment. Put goal, non-goals, constraints, conventions, reference paths, API contracts, and global acceptance commands here once — instead of duplicating across assignments.",
+		}),
 	),
-	tasks: Type.Array(taskItemSchema, { description: "Tasks to run in parallel" }),
+	isolated: Type.Optional(
+		Type.Boolean({
+			description: "Run in isolated git worktree; returns patches. Use when tasks edit overlapping files.",
+		}),
+	),
+	schema: Type.Optional(
+		Type.Record(Type.String(), Type.Unknown(), {
+			description:
+				"JTD schema defining expected response structure. Use typed properties. Output format belongs here — never in context or assignment.",
+		}),
+	),
+	tasks: Type.Array(taskItemSchema, {
+		description:
+			"Tasks to execute in parallel. Each must be small-scoped (3-5 files max) and self-contained given context + assignment.",
+	}),
 });
 
 export type TaskParams = Static<typeof taskSchema>;
@@ -110,7 +124,6 @@ export interface AgentProgress {
 	agentSource: AgentSource;
 	status: "pending" | "running" | "completed" | "failed" | "aborted";
 	task: string;
-	args?: Record<string, string>;
 	description?: string;
 	currentTool?: string;
 	currentToolArgs?: string;
@@ -132,7 +145,6 @@ export interface SingleResult {
 	agent: string;
 	agentSource: AgentSource;
 	task: string;
-	args?: Record<string, string>;
 	description?: string;
 	exitCode: number;
 	output: string;

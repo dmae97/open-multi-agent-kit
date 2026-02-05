@@ -354,25 +354,27 @@ function renderOutputSection(
 	return lines;
 }
 
-function formatArgsInline(args: Record<string, string>, _theme: Theme): string {
-	const entries = Object.entries(args);
-	if (entries.length === 0) return "No arguments";
+function renderTaskSection(
+	task: string,
+	continuePrefix: string,
+	expanded: boolean,
+	theme: Theme,
+	maxExpanded = 20,
+): string[] {
+	const lines: string[] = [];
+	const trimmed = task.trimEnd();
+	if (!expanded || !trimmed) return lines;
 
-	// Single variable: show inline as "Key: value" without tree structure
-	if (entries.length === 1) {
-		const [key, value] = entries[0];
-		const humanKey = humanizeKey(key);
-		const displayValue = `"${truncateToWidth(value, 32)}"`;
-		return `${humanKey}: ${displayValue}`;
+	lines.push(`${continuePrefix}${theme.fg("dim", "Task")}`);
+	const taskLines = trimmed.split("\n");
+	for (const line of taskLines.slice(0, maxExpanded)) {
+		lines.push(`${continuePrefix}  ${theme.fg("dim", truncateToWidth(line, 70))}`);
+	}
+	if (taskLines.length > maxExpanded) {
+		lines.push(`${continuePrefix}  ${theme.fg("dim", formatMoreItems(taskLines.length - maxExpanded, "line"))}`);
 	}
 
-	const pairs = entries.map(([key, value]) => `${key}=${truncateToWidth(value, 24)}`);
-	return `Args: ${pairs.join(", ")}`;
-}
-
-/** Convert snake_case or kebab-case to Title Case */
-function humanizeKey(key: string): string {
-	return key.replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+	return lines;
 }
 
 function formatScalarInline(value: unknown, maxLen: number, _theme: Theme): string {
@@ -426,47 +428,6 @@ function formatOutputInline(data: unknown, theme: Theme, maxWidth = 80): string 
 	}
 
 	return `Output: ${pairs.join(", ")}`;
-}
-
-function renderArgsSection(
-	args: Record<string, string> | undefined,
-	continuePrefix: string,
-	expanded: boolean,
-	theme: Theme,
-): string[] {
-	if (!args) return [];
-	// Filter out auto-injected id and description
-	const filteredArgs = Object.fromEntries(
-		Object.entries(args).filter(([key]) => key !== "id" && key !== "description"),
-	);
-	if (Object.keys(filteredArgs).length === 0) return [];
-	const lines: string[] = [];
-	const entries = Object.entries(filteredArgs);
-
-	if (!expanded) {
-		lines.push(`${continuePrefix}${theme.fg("dim", formatArgsInline(filteredArgs, theme))}`);
-		return lines;
-	}
-
-	// Single variable: show inline as "Key: value" without tree structure
-	if (entries.length === 1) {
-		const [key, value] = entries[0];
-		const humanKey = humanizeKey(key);
-		const displayValue = `"${truncateToWidth(value, 60)}"`;
-		lines.push(`${continuePrefix}${theme.fg("dim", `${humanKey}: ${displayValue}`)}`);
-		return lines;
-	}
-
-	lines.push(`${continuePrefix}${theme.fg("dim", "Args")}`);
-	const tree = renderJsonTreeLines(filteredArgs, theme, 4, 16);
-	for (const line of tree.lines) {
-		lines.push(`${continuePrefix}  ${line}`);
-	}
-	if (tree.truncated) {
-		lines.push(`${continuePrefix}  ${theme.fg("dim", "…")}`);
-	}
-
-	return lines;
 }
 
 /**
@@ -556,7 +517,7 @@ function renderAgentProgress(
 
 	lines.push(statusLine);
 
-	lines.push(...renderArgsSection(progress.args, continuePrefix, expanded, theme));
+	lines.push(...renderTaskSection(progress.task, continuePrefix, expanded, theme));
 
 	// Current tool (if running) or most recent completed tool
 	if (progress.status === "running") {
@@ -778,7 +739,8 @@ function renderAgentResult(result: SingleResult, isLast: boolean, expanded: bool
 	}
 
 	lines.push(statusLine);
-	lines.push(...renderArgsSection(result.args, continuePrefix, expanded, theme));
+
+	lines.push(...renderTaskSection(result.task, continuePrefix, expanded, theme));
 
 	// Check for review result (submit_result with review schema + report_finding)
 	const completeData = result.extractedToolData?.submit_result as Array<{ data: unknown }> | undefined;
@@ -810,6 +772,7 @@ function renderAgentResult(result: SingleResult, isLast: boolean, expanded: bool
 
 	// Check for extracted tool data with custom renderers (skip review tools)
 	let hasCustomRendering = false;
+	const deferredToolLines: string[] = [];
 	if (result.extractedToolData) {
 		for (const [toolName, dataArray] of Object.entries(result.extractedToolData)) {
 			// Skip review tools - handled above
@@ -817,20 +780,24 @@ function renderAgentResult(result: SingleResult, isLast: boolean, expanded: bool
 
 			const handler = subprocessToolRegistry.getHandler(toolName);
 			if (handler?.renderFinal && (dataArray as unknown[]).length > 0) {
-				hasCustomRendering = true;
+				const isTaskTool = toolName === "task";
 				const component = handler.renderFinal(dataArray as unknown[], theme, expanded);
-				lines.push(`${continuePrefix}${theme.fg("dim", `Tool: ${toolName}`)}`);
+				const target = isTaskTool ? deferredToolLines : lines;
+				if (!isTaskTool) {
+					hasCustomRendering = true;
+					target.push(`${continuePrefix}${theme.fg("dim", `Tool: ${toolName}`)}`);
+				}
 				if (component instanceof Text) {
 					// Prefix each line with continuePrefix
 					const text = component.getText();
 					for (const line of text.split("\n")) {
-						lines.push(`${continuePrefix}${line}`);
+						target.push(`${continuePrefix}${line}`);
 					}
 				} else if (component instanceof Container) {
 					// For containers, render each child
 					for (const child of (component as Container).children) {
 						if (child instanceof Text) {
-							lines.push(`${continuePrefix}${child.getText()}`);
+							target.push(`${continuePrefix}${child.getText()}`);
 						}
 					}
 				}
@@ -852,6 +819,10 @@ function renderAgentResult(result: SingleResult, isLast: boolean, expanded: bool
 		lines.push(
 			...renderOutputSection(outputWithoutWarning, continuePrefix, expanded, theme, 3, 12, missingCompleteWarning),
 		);
+	}
+
+	if (deferredToolLines.length > 0) {
+		lines.push(...deferredToolLines);
 	}
 
 	if (result.patchPath && !aborted && result.exitCode === 0) {
@@ -943,6 +914,38 @@ export function renderResult(
 	const indented = lines.map(line => (line.length > 0 ? `   ${line}` : ""));
 	return new Text(indented.join("\n"), 0, 0);
 }
+
+function isTaskToolDetails(value: unknown): value is TaskToolDetails {
+	return (
+		Boolean(value) &&
+		typeof value === "object" &&
+		"results" in (value as TaskToolDetails) &&
+		Array.isArray((value as TaskToolDetails).results)
+	);
+}
+
+function renderNestedTaskResults(detailsList: TaskToolDetails[], expanded: boolean, theme: Theme): string[] {
+	const lines: string[] = [];
+	for (const details of detailsList) {
+		if (!details.results || details.results.length === 0) continue;
+		details.results.forEach((result, index) => {
+			const isLast = index === details.results.length - 1;
+			lines.push(...renderAgentResult(result, isLast, expanded, theme));
+		});
+	}
+	return lines;
+}
+
+subprocessToolRegistry.register<TaskToolDetails>("task", {
+	extractData: event => {
+		const details = event.result?.details;
+		return isTaskToolDetails(details) ? details : undefined;
+	},
+	renderFinal: (allData, theme, expanded) => {
+		const lines = renderNestedTaskResults(allData, expanded, theme);
+		return new Text(lines.join("\n"), 0, 0);
+	},
+});
 
 export const taskToolRenderer = {
 	renderCall,

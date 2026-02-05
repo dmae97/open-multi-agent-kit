@@ -425,7 +425,6 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 					agentSource: agent.source,
 					status: "pending",
 					task: t.task,
-					args: t.args,
 					recentTools: [],
 					recentOutput: [],
 					toolCount: 0,
@@ -446,7 +445,6 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 						description: task.description,
 						index,
 						id: task.id,
-						context: undefined, // Already prepended above
 						taskDepth,
 						modelOverride,
 						thinkingLevel: thinkingLevelOverride,
@@ -461,7 +459,6 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 						onProgress: progress => {
 							progressMap.set(index, {
 								...structuredClone(progress),
-								args: tasksWithSkills[index]?.args,
 							});
 							emitProgress();
 						},
@@ -492,7 +489,6 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 						description: task.description,
 						index,
 						id: task.id,
-						context: undefined, // Already prepended above
 						taskDepth,
 						modelOverride,
 						thinkingLevel: thinkingLevelOverride,
@@ -507,7 +503,6 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 						onProgress: progress => {
 							progressMap.set(index, {
 								...structuredClone(progress),
-								args: tasksWithSkills[index]?.args,
 							});
 							emitProgress();
 						},
@@ -563,10 +558,7 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 			// Fill in skipped tasks (undefined entries from abort) with placeholder results
 			const results: SingleResult[] = partialResults.map((result, index) => {
 				if (result !== undefined) {
-					return {
-						...result,
-						args: tasksWithSkills[index]?.args,
-					};
+					return result;
 				}
 				const task = tasksWithSkills[index];
 				return {
@@ -575,7 +567,6 @@ export class TaskTool implements AgentTool<typeof taskSchema, TaskToolDetails, T
 					agent: agentName,
 					agentSource: agent.source,
 					task: task.task,
-					args: task.args,
 					description: task.description,
 					exitCode: 1,
 					output: "",

@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added `openInEditor()` utility function to centralize external editor handling with support for custom file extensions and stdio configuration
@@ -8,11 +9,23 @@
 
 ### Changed
 
+- Changed task API to use `assignment` field instead of `args` for per-task instructions, with shared `context` prepended to every task
+- Changed task template rendering to use structured context/assignment separation with `<swarm_context>` wrapper instead of placeholder-based substitution
+- Changed task item schema to require `assignment` string (complete per-task instructions) instead of optional `args` object
+- Changed `TaskItem` to remove `args` field and add `assignment` field for clearer per-task instruction semantics
+- Changed agent frontmatter to use `thinking-level` field name instead of `thinkingLevel` for consistency
+- Refactored task rendering to display full task text instead of args in progress and result views
 - Changed `SubmenuSettingDef.getOptions()` method to `options` getter property for cleaner API access
 - Converted static option providers from functions to direct array definitions for improved performance
 - Added `createSubmenuSettingDef()` helper function to support both static and dynamic option providers
 - Modified `setThinkingLevel()` API to accept optional `persist` parameter (defaults to false) for controlling whether thinking level changes are saved to settings
 - Refactored hook editor and input controller to use shared external editor utilities, reducing code duplication
+
+### Removed
+
+- Removed `context` parameter from `ExecutorOptions` — context now prepended at template level before task execution
+- Removed `args` field from `AgentProgress` and `SingleResult` interfaces
+- Removed placeholder-based template rendering in favor of structured context/assignment model
 
 ## [11.0.3] - 2026-02-05
 ### Added

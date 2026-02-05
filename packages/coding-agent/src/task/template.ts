@@ -1,47 +1,30 @@
+import { renderPromptTemplate } from "../config/prompt-templates";
+import subagentUserPromptTemplate from "../prompts/system/subagent-user-prompt.md" with { type: "text" };
 import type { TaskItem } from "./types";
 
-type RenderResult = {
+interface RenderResult {
+	/** Full task text sent to the subagent */
 	task: string;
-	args: Record<string, string>;
 	id: string;
 	description: string;
 	skills?: string[];
-};
+}
 
-export function renderTemplate(template: string, task: TaskItem): RenderResult {
-	const { id, description, args, skills } = task;
+/**
+ * Build the full task text from shared context and per-task assignment.
+ *
+ * If context is provided, it is prepended with a separator.
+ */
+export function renderTemplate(context: string | undefined, task: TaskItem): RenderResult {
+	let { id, description, assignment, skills } = task;
+	assignment = assignment.trim();
+	context = context?.trim();
 
-	let usedPlaceholder = false;
-	const unknownArguments: string[] = [];
-	let renderedTask = template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
-		const value = args?.[key];
-		if (value) {
-			usedPlaceholder = true;
-			return value;
-		}
-		switch (key) {
-			case "id":
-				usedPlaceholder = true;
-				return id;
-			case "description":
-				usedPlaceholder = true;
-				return description;
-			default:
-				unknownArguments.push(key);
-				return `{{${key}}}`;
-		}
-	});
-
-	if (unknownArguments.length > 0) {
-		throw new Error(`Task "${id}" has unknown arguments: ${unknownArguments.join(", ")}`);
-	}
-
-	if (!usedPlaceholder) {
-		renderedTask += `\n----------------------\n# ${id}\n${description}`;
+	if (!context || !assignment) {
+		return { task: assignment || context!, id, description, skills };
 	}
 	return {
-		task: renderedTask,
-		args: { id, description, ...args },
+		task: renderPromptTemplate(subagentUserPromptTemplate, { context, assignment }),
 		id,
 		description,
 		skills,

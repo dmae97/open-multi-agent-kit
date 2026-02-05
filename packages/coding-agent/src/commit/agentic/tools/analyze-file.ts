@@ -62,7 +62,6 @@ export function createAnalyzeFileTool(options: {
 		async execute(toolCallId, params, onUpdate, ctx, signal) {
 			const toolSession = buildToolSession(ctx, options);
 			const taskTool = await TaskTool.create(toolSession);
-			const context = "{{prompt}}";
 			const numstat = options.state.overview?.numstat ?? [];
 			const tasks = params.files.map((file, index) => {
 				const relatedFiles = formatRelatedFiles(params.files, file, numstat);
@@ -74,12 +73,11 @@ export function createAnalyzeFileTool(options: {
 				return {
 					id: `AnalyzeFile${index + 1}`,
 					description: `Analyze ${file}`,
-					args: { prompt },
+					assignment: prompt,
 				};
 			});
 			const taskParams: TaskParams = {
 				agent: "quick_task",
-				context,
 				schema: analyzeFileOutputSchema,
 				tasks,
 			};

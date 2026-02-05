@@ -2,43 +2,54 @@ import { describe, expect, test } from "bun:test";
 import { renderTemplate } from "@oh-my-pi/pi-coding-agent/task/template";
 
 describe("renderTemplate", () => {
-	test("renders explicit args", () => {
-		const result = renderTemplate("Hello {{name}}", { id: "Test", description: "A test", args: { name: "Ada" } });
-		expect(result.task).toBe("Hello Ada");
-		expect(result.args).toEqual({ id: "Test", description: "A test", name: "Ada" });
+	test("returns assignment as task when no context", () => {
+		const result = renderTemplate(undefined, {
+			id: "Test",
+			description: "Short label",
+			assignment: "Do the thing in detail.\nStep 1: read file.\nStep 2: edit it.",
+		});
+		expect(result.task).toBe("Do the thing in detail.\nStep 1: read file.\nStep 2: edit it.");
+		expect(result.id).toBe("Test");
+		expect(result.description).toBe("Short label");
 	});
 
-	test("renders id placeholder", () => {
-		const result = renderTemplate("Task: {{id}}", { id: "MyTask", description: "Does stuff" });
-		expect(result.task).toBe("Task: MyTask");
+	test("prepends context with separator when provided", () => {
+		const result = renderTemplate("Shared constraints here", {
+			id: "TaskA",
+			description: "First task",
+			assignment: "Full instructions for the agent.\nWith multiple lines.",
+		});
+		expect(result.task).toContain("Shared constraints here");
+		expect(result.task).toContain("<swarm_context>");
+		expect(result.task).toContain("Full instructions for the agent.\nWith multiple lines.");
 	});
 
-	test("renders description placeholder", () => {
-		const result = renderTemplate("{{description}}", { id: "X", description: "The description" });
-		expect(result.task).toBe("The description");
+	test("trims context whitespace", () => {
+		const result = renderTemplate("  \n  context  \n  ", {
+			id: "X",
+			description: "label",
+			assignment: "the real work",
+		});
+		expect(result.task).toStartWith("<swarm_context>context");
+		expect(result.task).toContain("the real work");
 	});
 
-	test("throws on unknown placeholders", () => {
-		expect(() => renderTemplate("{{unknown}}", { id: "Test", description: "A test" })).toThrow(
-			'Task "Test" has unknown arguments: unknown',
-		);
+	test("empty context treated as absent", () => {
+		const result = renderTemplate("   ", {
+			id: "X",
+			description: "label",
+			assignment: "just the assignment",
+		});
+		expect(result.task).toBe("just the assignment");
 	});
 
-	test("appends assignment block when no placeholders used", () => {
-		const result = renderTemplate("Do the thing", { id: "TaskA", description: "First task" });
-		expect(result.task).toContain("----------------------");
-		expect(result.task).toContain("# TaskA");
-		expect(result.task).toContain("First task");
-	});
-
-	test("does not append assignment block when placeholders used", () => {
-		const result = renderTemplate("Do {{id}}", { id: "TaskA", description: "First task" });
-		expect(result.task).toBe("Do TaskA");
-		expect(result.task).not.toContain("----------------------");
-	});
-
-	test("explicit args override id/description", () => {
-		const result = renderTemplate("{{id}}", { id: "Real", description: "Real desc", args: { id: "Custom" } });
-		expect(result.task).toBe("Custom");
+	test("passes through skills", () => {
+		const result = renderTemplate(undefined, {
+			id: "X",
+			description: "label",
+			assignment: "do stuff",
+			skills: ["react", "postgres"],
+		});
+		expect(result.skills).toEqual(["react", "postgres"]);
 	});
 });

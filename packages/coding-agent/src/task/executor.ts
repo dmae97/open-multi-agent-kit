@@ -153,7 +153,6 @@ export interface ExecutorOptions {
 	description?: string;
 	index: number;
 	id: string;
-	context?: string;
 	modelOverride?: string | string[];
 	thinkingLevel?: ThinkingLevel;
 	outputSchema?: unknown;
@@ -374,7 +373,6 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		index,
 		id,
 		worktree,
-		context,
 		modelOverride,
 		thinkingLevel,
 		outputSchema,
@@ -420,9 +418,6 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			error: "Aborted",
 		};
 	}
-
-	// Build full task with context
-	const fullTask = context ? `${context}\n\n${task}` : task;
 
 	// Set up artifact paths and write input file upfront if artifacts dir provided
 	let subtaskSessionFile: string | undefined;
@@ -905,7 +900,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 
 			session.sessionManager.appendSessionInit({
 				systemPrompt: session.agent.state.systemPrompt,
-				task: fullTask,
+				task,
 				tools: session.getAllToolNames(),
 				outputSchema,
 			});
@@ -994,7 +989,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				}
 			});
 
-			await session.prompt(fullTask);
+			await session.prompt(task);
 
 			const reminderToolChoice = buildSubmitResultToolChoice(session.model);
 
