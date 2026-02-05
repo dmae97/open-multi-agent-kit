@@ -3,6 +3,9 @@
 use futures::FutureExt;
 use tokio_util::sync::CancellationToken;
 
+#[cfg(windows)]
+use std::os::windows::io::{AsRawHandle, OwnedHandle, RawHandle};
+
 use crate::{error, sys};
 
 /// A waitable future that will yield the results of a child process's execution.
@@ -16,20 +19,35 @@ pub struct ChildProcess {
     pid: Option<sys::process::ProcessId>,
     /// A waitable future that will yield the results of a child process's execution.
     exec_future: WaitableChildProcess,
+    #[cfg(windows)]
+    /// Windows handle duplicated from the child process for safe termination.
+    kill_handle: Option<OwnedHandle>,
 }
 
 impl ChildProcess {
     /// Wraps a child process and its future.
     pub fn new(pid: Option<sys::process::ProcessId>, child: sys::process::Child) -> Self {
+        #[cfg(windows)]
+        let kill_handle = duplicate_handle(child.as_raw_handle());
+
         Self {
             pid,
             exec_future: Box::pin(child.wait_with_output()),
+            #[cfg(windows)]
+            kill_handle,
         }
     }
 
     /// Returns the process's ID.
     pub const fn pid(&self) -> Option<sys::process::ProcessId> {
         self.pid
+    }
+
+    /// Duplicates the process handle for termination use on Windows.
+    #[cfg(windows)]
+    pub fn duplicate_kill_handle(&self) -> Option<OwnedHandle> {
+        let handle = self.kill_handle.as_ref()?;
+        duplicate_handle(handle.as_raw_handle())
     }
 
     /// Waits for the process to exit.
@@ -111,6 +129,33 @@ impl ChildProcess {
             .now_or_never()
             .map(|result| result.map_err(Into::into))
     }
+}
+
+#[cfg(windows)]
+fn duplicate_handle(handle: RawHandle) -> Option<OwnedHandle> {
+    use std::os::windows::io::FromRawHandle;
+    use windows_sys::Win32::System::Threading::{
+        DuplicateHandle, GetCurrentProcess, DUPLICATE_SAME_ACCESS,
+    };
+
+    let current = unsafe { GetCurrentProcess() };
+    let mut out_handle = std::ptr::null_mut();
+    let ok = unsafe {
+        DuplicateHandle(
+            current,
+            handle as _,
+            current,
+            &mut out_handle,
+            0,
+            0,
+            DUPLICATE_SAME_ACCESS,
+        )
+    };
+    if ok == 0 || out_handle.is_null() {
+        return None;
+    }
+
+    Some(unsafe { OwnedHandle::from_raw_handle(out_handle) })
 }
 
 /// Represents the result of waiting for an executing process.

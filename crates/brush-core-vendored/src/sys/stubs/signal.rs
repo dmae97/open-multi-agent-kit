@@ -3,23 +3,55 @@
 use crate::{error, sys, traps};
 
 /// A stub enum representing system signals on unsupported platforms.
+#[cfg(not(windows))]
 #[allow(unnameable_types)]
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub enum Signal {}
 
+/// Minimal signal representation for Windows.
+#[cfg(windows)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+pub enum Signal {
+	Terminate,
+	Kill,
+	Interrupt,
+}
+
 impl Signal {
     /// Returns an iterator over all possible signals.
     pub fn iterator() -> impl Iterator<Item = Self> {
-        std::iter::empty()
+        #[cfg(windows)]
+        return [Self::Terminate, Self::Kill, Self::Interrupt].into_iter();
+        #[cfg(not(windows))]
+        return std::iter::empty();
     }
 
     /// Converts the signal into its corresponding name as a `&'static str`.
     pub const fn as_str(self) -> &'static str {
+        #[cfg(windows)]
+        {
+            return match self {
+                Self::Terminate => "TERM",
+                Self::Kill => "KILL",
+                Self::Interrupt => "INT",
+            };
+        }
+        #[cfg(not(windows))]
         ""
     }
 
     /// Creates a `Signal` from a string representation.
     pub fn from_str(s: &str) -> Result<Self, error::Error> {
+        #[cfg(windows)]
+        {
+            return match s.to_ascii_uppercase().as_str() {
+                "TERM" | "SIGTERM" => Ok(Self::Terminate),
+                "KILL" | "SIGKILL" => Ok(Self::Kill),
+                "INT" | "SIGINT" => Ok(Self::Interrupt),
+                _ => Err(error::ErrorKind::InvalidSignal(s.into()).into()),
+            };
+        }
+        #[cfg(not(windows))]
         Err(error::ErrorKind::InvalidSignal(s.into()).into())
     }
 }
@@ -43,6 +75,26 @@ pub fn kill_process(
     _pid: sys::process::ProcessId,
     _signal: traps::TrapSignal,
 ) -> Result<(), error::Error> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+
+        let pid = _pid as u32;
+        unsafe {
+            let handle = OpenProcess(PROCESS_TERMINATE, 0, pid);
+            if handle == 0 {
+                return Err(error::ErrorKind::FailedToSendSignal.into());
+            }
+            let ok = TerminateProcess(handle, 1);
+            let _ = CloseHandle(handle);
+            if ok == 0 {
+                return Err(error::ErrorKind::FailedToSendSignal.into());
+            }
+        }
+        return Ok(());
+    }
+    #[cfg(not(windows))]
     Err(error::ErrorKind::NotSupportedOnThisPlatform("killing process").into())
 }
 

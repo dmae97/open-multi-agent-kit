@@ -212,6 +212,46 @@ describe("executeBash", () => {
 		expect(fs.existsSync(marker)).toBe(false);
 	});
 
+	it("kills background jobs on timeout", async () => {
+		if (process.platform === "win32") return;
+
+		const marker = path.join(tempDir, "marker-bg.txt");
+		const markerEscaped = marker.replace(/'/g, "'\\''");
+
+		const result = await executeBash(`{ sleep 2; echo done > '${markerEscaped}'; } & sleep 10`, {
+			cwd: tempDir,
+			timeout: 100,
+		});
+
+		expect(result.cancelled).toBe(true);
+
+		await Bun.sleep(3000);
+		expect(fs.existsSync(marker)).toBe(false);
+	});
+
+	it("kills background jobs on abort", async () => {
+		if (process.platform === "win32") return;
+
+		const marker = path.join(tempDir, "marker-bg-abort.txt");
+		const markerEscaped = marker.replace(/'/g, "'\\''");
+		const controller = new AbortController();
+
+		const promise = executeBash(`{ sleep 2; echo done > '${markerEscaped}'; } & sleep 10`, {
+			cwd: tempDir,
+			timeout: 10000,
+			signal: controller.signal,
+		});
+
+		await Bun.sleep(100);
+		controller.abort();
+		const result = await promise;
+
+		expect(result.cancelled).toBe(true);
+
+		await Bun.sleep(3000);
+		expect(fs.existsSync(marker)).toBe(false);
+	});
+
 	it("kills spawned process on abort (not just orphans it)", async () => {
 		if (process.platform === "win32") return;
 

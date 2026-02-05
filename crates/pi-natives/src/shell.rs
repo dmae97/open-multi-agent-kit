@@ -12,8 +12,6 @@
 //! });
 //! ```
 
-#[cfg(windows)]
-use std::collections::HashSet;
 use std::{
 	collections::HashMap,
 	fs,
@@ -22,6 +20,8 @@ use std::{
 	sync::Arc,
 	time::Duration,
 };
+#[cfg(windows)]
+use std::{collections::HashSet, os::windows::io::AsRawHandle};
 
 #[cfg(windows)]
 mod windows;
@@ -32,6 +32,7 @@ use brush_core::{
 	ProcessGroupPolicy, Shell as BrushShell, ShellValue, ShellVariable, builtins,
 	env::EnvironmentScope,
 	openfiles::{self, OpenFile, OpenFiles},
+	sys, traps,
 };
 use clap::Parser;
 use napi::{
@@ -44,6 +45,8 @@ use tokio::io::AsyncReadExt as _;
 use tokio_util::sync::CancellationToken;
 #[cfg(windows)]
 use windows::configure_windows_path;
+#[cfg(windows)]
+use windows_sys::Win32::System::Threading::TerminateProcess;
 
 use crate::task;
 
@@ -524,7 +527,7 @@ async fn run_shell_command(
 	params.set_fd(OpenFiles::STDOUT_FD, stdout_file);
 	params.set_fd(OpenFiles::STDERR_FD, stderr_file);
 	params.process_group_policy = ProcessGroupPolicy::NewProcessGroup;
-	params.set_cancel_token(cancel_token);
+	params.set_cancel_token(cancel_token.clone());
 
 	let mut env_scope_pushed = false;
 	if let Some(env) = options.env.as_ref() {
@@ -548,14 +551,19 @@ async fn run_shell_command(
 		}
 	}
 
+	let reader_cancel = cancel_token.clone();
 	let reader_handle = tokio::spawn(async move {
-		read_output(reader_file, on_chunk).await;
+		read_output(reader_file, on_chunk, reader_cancel).await;
 		Result::<()>::Ok(())
 	});
 	let result = session
 		.shell
 		.run_string(options.command.clone(), &params)
 		.await;
+
+	if cancel_token.is_cancelled() {
+		terminate_background_jobs(&session.shell);
+	}
 
 	if env_scope_pushed {
 		session
@@ -570,6 +578,58 @@ async fn run_shell_command(
 	let _ = reader_handle.await;
 
 	result.map_err(|err| Error::from_reason(format!("Shell execution failed: {err}")))
+}
+
+#[cfg(unix)]
+fn terminate_background_jobs(shell: &BrushShell) {
+	if shell.jobs.jobs.is_empty() {
+		return;
+	}
+	let Ok(signal) = "TERM".parse::<traps::TrapSignal>() else {
+		return;
+	};
+	let mut pgids = Vec::new();
+	for job in &shell.jobs.jobs {
+		if let Some(pid) = job.process_group_id().or_else(|| job.representative_pid()) {
+			let _ = sys::signal::kill_process(pid, signal);
+			pgids.push(pid);
+		}
+	}
+	if pgids.is_empty() {
+		return;
+	}
+	tokio::spawn(async move {
+		time::sleep(Duration::from_millis(500)).await;
+		let Ok(signal) = "KILL".parse::<traps::TrapSignal>() else {
+			return;
+		};
+		for pid in pgids {
+			let _ = sys::signal::kill_process(pid, signal);
+		}
+	});
+}
+
+#[cfg(windows)]
+fn terminate_background_jobs(shell: &BrushShell) {
+	if shell.jobs.jobs.is_empty() {
+		return;
+	}
+	let mut handles = Vec::new();
+	for job in &shell.jobs.jobs {
+		handles.extend(job.duplicate_kill_handles());
+	}
+	if handles.is_empty() {
+		return;
+	}
+	tokio::spawn(async move {
+		time::sleep(Duration::from_millis(500)).await;
+		for handle in handles {
+			// SAFETY: OwnedHandle keeps the duplicated handle alive for the duration.
+			unsafe {
+				let _ = TerminateProcess(handle.as_raw_handle() as _, 1);
+			}
+		}
+	});
 }
 
 fn should_skip_env_var(key: &str) -> bool {
@@ -640,7 +700,11 @@ const fn session_keepalive(result: &ExecutionResult) -> bool {
 	}
 }
 
-async fn read_output(reader: fs::File, on_chunk: Option<ThreadsafeFunction<String>>) {
+async fn read_output(
+	reader: fs::File,
+	on_chunk: Option<ThreadsafeFunction<String>>,
+	cancel_token: CancellationToken,
+) {
 	const REPLACEMENT: &str = "\u{FFFD}";
 	const BUF: usize = 4096;
 	let mut buf = [0u8; BUF + 4]; // +4 for max UTF-8 char
@@ -650,7 +714,12 @@ async fn read_output(reader: fs::File, on_chunk: Option<ThreadsafeFunction<Strin
 	tokio::pin!(reader);
 
 	loop {
-		let n = match reader.read(&mut buf[it..BUF]).await {
+		let read_future = reader.read(&mut buf[it..BUF]);
+		tokio::pin!(read_future);
+		let n = match tokio::select! {
+			res = &mut read_future => res,
+			() = cancel_token.cancelled() => break,
+		} {
 			Ok(0) => break, // EOF
 			Ok(n) => n,
 			Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,

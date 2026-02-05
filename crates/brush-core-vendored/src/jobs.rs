@@ -12,6 +12,9 @@ use crate::sys;
 use crate::trace_categories;
 use crate::traps;
 
+#[cfg(windows)]
+use std::os::windows::io::OwnedHandle;
+
 pub(crate) type JobJoinHandle = tokio::task::JoinHandle<Result<ExecutionResult, error::Error>>;
 pub(crate) type JobResult = (Job, Result<ExecutionResult, error::Error>);
 
@@ -445,5 +448,19 @@ impl Job {
     pub fn process_group_id(&self) -> Option<sys::process::ProcessId> {
         // TODO: Don't assume that the first PID is the PGID.
         self.pgid.or_else(|| self.representative_pid())
+    }
+
+    /// Duplicates process handles for termination on Windows.
+    #[cfg(windows)]
+    pub fn duplicate_kill_handles(&self) -> Vec<OwnedHandle> {
+        let mut handles = Vec::new();
+        for task in &self.tasks {
+            if let JobTask::External(process) = task {
+                if let Some(handle) = process.duplicate_kill_handle() {
+                    handles.push(handle);
+                }
+            }
+        }
+        handles
     }
 }
