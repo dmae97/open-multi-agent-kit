@@ -292,9 +292,9 @@ async function cmdRelease(version: string): Promise<void> {
 	if (success) {
 		console.log(`=== Released v${version} ===`);
 	} else {
-		console.log("\nTo retry after fixing:");
-		console.log("  git commit --amend --no-edit");
-		console.log("  git push origin main --force");
+		console.log("\nTo retry after fixing (repeat until CI passes):");
+		console.log("  git commit -m \"fix: <brief description>\"");
+		console.log("  git push origin main");
 		console.log(`  git tag -f v${version} && git push origin v${version} --force`);
 		console.log("  bun scripts/release.ts watch");
 		process.exit(1);

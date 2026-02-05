@@ -31,11 +31,11 @@ The script handles everything automatically:
 
 ## Handling CI Failures
 
-If CI fails, the script exits with an error. Fix the issue, then:
+If CI fails, the script exits with an error. Fix the issue, then repeat until CI passes:
 
 ```bash
-git commit --amend --no-edit
-git push origin main --force
+git commit -m "fix: <brief description>"
+git push origin main
 git tag -f v$ARGUMENTS && git push origin v$ARGUMENTS --force
 bun scripts/release.ts watch
 ```

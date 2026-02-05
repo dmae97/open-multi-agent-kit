@@ -12,7 +12,7 @@
 		"test": "bun --cwd=packages/ai run test && bun --cwd=packages/agent run test && bun --cwd=packages/tui run test && bun --cwd=packages/natives run test && bun --cwd=packages/coding-agent run test",
 		"check": "bun run check:ts && bun run check:rs",
 		"check:ts": "biome check . && tsgo -p tsconfig.json && tsgo -p packages/stats/tsconfig.client.json",
-		"check:rs": "cargo fmt --all -- --check && cargo clippy --workspace -- -D warnings",
+		"check:rs": "cargo fmt --all -- --check && cargo clippy --workspace -- -D warnings && cargo check -Z minimal-versions --workspace && cargo check --workspace --target x86_64-pc-windows-msvc",
 		"lint": "bun run lint:ts && bun run lint:rs",
 		"lint:ts": "biome lint .",
 		"lint:rs": "cargo clippy --workspace -- -D warnings",
