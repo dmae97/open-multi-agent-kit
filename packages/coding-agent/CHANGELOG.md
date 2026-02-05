@@ -1,8 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added `sortDiagnostics()` utility function to sort diagnostics by severity, location, and message for consistent output ordering
 - Added `task.isolation.enabled` setting to control whether subagents run in isolated git worktrees
 - Added dynamic task schema that conditionally includes `isolated` parameter based on isolation setting
 - Added `openInEditor()` utility function to centralize external editor handling with support for custom file extensions and stdio configuration
@@ -10,6 +12,7 @@
 
 ### Changed
 
+- Changed diagnostic output to sort results by severity (errors first), then by file location and message for improved readability
 - Changed task tool to validate isolation setting and reject `isolated` parameter when isolation is disabled
 - Changed task API to use `assignment` field instead of `args` for per-task instructions, with shared `context` prepended to every task
 - Changed task template rendering to use structured context/assignment separation with `<swarm_context>` wrapper instead of placeholder-based substitution

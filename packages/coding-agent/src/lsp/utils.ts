@@ -206,6 +206,24 @@ export function severityToString(severity?: DiagnosticSeverity): string {
 }
 
 /**
+ * Sort diagnostics by severity, then by location and message.
+ */
+export function sortDiagnostics(diagnostics: Diagnostic[]): Diagnostic[] {
+	return diagnostics.sort((a, b) => {
+		const aSeverity = a.severity ?? 1;
+		const bSeverity = b.severity ?? 1;
+		if (aSeverity !== bSeverity) return aSeverity - bSeverity;
+		const aLine = a.range.start.line;
+		const bLine = b.range.start.line;
+		if (aLine !== bLine) return aLine - bLine;
+		const aCol = a.range.start.character;
+		const bCol = b.range.start.character;
+		if (aCol !== bCol) return aCol - bCol;
+		return a.message.localeCompare(b.message);
+	});
+}
+
+/**
  * Get icon for diagnostic severity.
  */
 export function severityToIcon(severity?: DiagnosticSeverity): string {

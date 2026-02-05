@@ -50,6 +50,7 @@ import {
 	formatLocation,
 	formatSymbolInformation,
 	formatWorkspaceEdit,
+	sortDiagnostics,
 	symbolKindToIcon,
 } from "./utils";
 
@@ -458,6 +459,7 @@ async function getDiagnosticsForFile(
 		}
 	}
 
+	sortDiagnostics(uniqueDiagnostics);
 	const formatted = uniqueDiagnostics.map(d => formatDiagnostic(d, relPath));
 	const limited = limitDiagnosticMessages(formatted);
 	const summary = formatDiagnosticsSummary(uniqueDiagnostics);
@@ -962,6 +964,8 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 						uniqueDiagnostics.push(d);
 					}
 				}
+
+				sortDiagnostics(uniqueDiagnostics);
 
 				if (!detailed && targets.length === 1) {
 					if (uniqueDiagnostics.length === 0) {

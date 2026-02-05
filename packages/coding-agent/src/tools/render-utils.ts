@@ -327,6 +327,19 @@ interface ParsedDiagnostic {
 	code?: string;
 }
 
+function getSeverityRank(severity: ParsedDiagnostic["severity"]): number {
+	switch (severity) {
+		case "error":
+			return 0;
+		case "warning":
+			return 1;
+		case "info":
+			return 2;
+		case "hint":
+			return 3;
+	}
+}
+
 function parseDiagnosticMessage(msg: string): ParsedDiagnostic | null {
 	const match = msg.match(/^(.+?):(\d+):(\d+)\s+\[(\w+)\]\s+(?:\[([^\]]+)\]\s+)?(.+?)(?:\s+\(([^)]+)\))?$/);
 	if (!match) return null;
@@ -361,6 +374,16 @@ export function formatDiagnostics(
 		} else {
 			unparsed.push(msg);
 		}
+	}
+
+	for (const diagnostics of byFile.values()) {
+		diagnostics.sort((a, b) => {
+			const severityCompare = getSeverityRank(a.severity) - getSeverityRank(b.severity);
+			if (severityCompare !== 0) return severityCompare;
+			if (a.line !== b.line) return a.line - b.line;
+			if (a.col !== b.col) return a.col - b.col;
+			return a.message.localeCompare(b.message);
+		});
 	}
 
 	const headerIcon = diag.errored
