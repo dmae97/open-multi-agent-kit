@@ -8,24 +8,14 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { createInterface } from "node:readline/promises";
+import { run } from "@oclif/core";
 import { type ImageContent, supportsXhigh } from "@oh-my-pi/pi-ai";
 import { $env, postmortem } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
-import { type Args, parseArgs, printHelp } from "./cli/args";
-import { parseConfigArgs, printConfigHelp, runConfigCommand } from "./cli/config-cli";
+import { type Args } from "./cli/args";
 import { processFileArguments } from "./cli/file-processor";
-import { parseGrepArgs, printGrepHelp, runGrepCommand } from "./cli/grep-cli";
-import { parseJupyterArgs, printJupyterHelp, runJupyterCommand } from "./cli/jupyter-cli";
 import { listModels } from "./cli/list-models";
-import { parsePluginArgs, printPluginHelp, runPluginCommand } from "./cli/plugin-cli";
 import { selectSession } from "./cli/session-picker";
-import { parseSetupArgs, printSetupHelp, runSetupCommand } from "./cli/setup-cli";
-import { parseShellArgs, printShellHelp, runShellCommand } from "./cli/shell-cli";
-import { parseStatsArgs, printStatsHelp, runStatsCommand } from "./cli/stats-cli";
-import { parseUpdateArgs, printUpdateHelp, runUpdateCommand } from "./cli/update-cli";
-import { parseWebSearchArgs, printWebSearchHelp, runWebSearchCommand } from "./cli/web-search-cli";
-import { runCommitCommand } from "./commit";
-import { parseCommitArgs, printCommitHelp } from "./commit/cli";
 import { findConfigFile, getModelsPath, VERSION } from "./config";
 import type { ModelRegistry } from "./config/model-registry";
 import { parseModelPattern, parseModelString, resolveModelScope, type ScopedModel } from "./config/model-resolver";
@@ -478,7 +468,7 @@ async function buildSessionOptions(
 	return options;
 }
 
-export async function main(args: string[]) {
+export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<void> {
 	time("start");
 	debugStartup("main:entry");
 
@@ -487,120 +477,10 @@ export async function main(args: string[]) {
 	await initTheme();
 	debugStartup("main:initTheme");
 
-	// Handle plugin subcommand before regular parsing
-	const pluginCmd = parsePluginArgs(args);
-	if (pluginCmd) {
-		if (args.includes("--help") || args.includes("-h")) {
-			printPluginHelp();
-			return;
-		}
-		await runPluginCommand(pluginCmd);
-		return;
-	}
-
-	// Handle update subcommand
-	const updateCmd = parseUpdateArgs(args);
-	if (updateCmd) {
-		if (args.includes("--help") || args.includes("-h")) {
-			printUpdateHelp();
-			return;
-		}
-		await runUpdateCommand(updateCmd);
-		return;
-	}
-
-	// Handle config subcommand
-	const configCmd = parseConfigArgs(args);
-	if (configCmd) {
-		if (args.includes("--help") || args.includes("-h")) {
-			printConfigHelp();
-			return;
-		}
-		await runConfigCommand(configCmd);
-		return;
-	}
-
-	// Handle setup subcommand
-	const setupCmd = parseSetupArgs(args);
-	if (setupCmd) {
-		if (args.includes("--help") || args.includes("-h")) {
-			printSetupHelp();
-			return;
-		}
-		await runSetupCommand(setupCmd);
-		return;
-	}
-
-	// Handle jupyter subcommand
-	const jupyterCmd = parseJupyterArgs(args);
-	if (jupyterCmd) {
-		if (args.includes("--help") || args.includes("-h")) {
-			printJupyterHelp();
-			return;
-		}
-		await runJupyterCommand(jupyterCmd);
-		return;
-	}
-
-	// Handle stats subcommand
-	const statsCmd = parseStatsArgs(args);
-	if (statsCmd) {
-		if (args.includes("--help") || args.includes("-h")) {
-			printStatsHelp();
-			return;
-		}
-		await runStatsCommand(statsCmd);
-		return;
-	}
-
-	// Handle grep subcommand (for testing grep tool)
-	const grepCmd = parseGrepArgs(args);
-	if (grepCmd) {
-		if (args.includes("--help") || args.includes("-h")) {
-			printGrepHelp();
-			return;
-		}
-		await runGrepCommand(grepCmd);
-		return;
-	}
-
-	// Handle web search subcommand (for testing web search providers)
-	const webSearchCmd = parseWebSearchArgs(args);
-	if (webSearchCmd) {
-		if (args.includes("--help") || args.includes("-h")) {
-			printWebSearchHelp();
-			return;
-		}
-		await runWebSearchCommand(webSearchCmd);
-		return;
-	}
-
-	// Handle shell subcommand (for testing brush-core shell)
-	const shellCmd = parseShellArgs(args);
-	if (shellCmd) {
-		if (args.includes("--help") || args.includes("-h")) {
-			printShellHelp();
-			return;
-		}
-		await runShellCommand(shellCmd);
-		return;
-	}
-
-	// Handle commit subcommand
-	const commitCmd = parseCommitArgs(args);
-	if (commitCmd) {
-		if (args.includes("--help") || args.includes("-h")) {
-			printCommitHelp();
-			return;
-		}
-		await runCommitCommand(commitCmd);
-		process.exit(0);
-	}
-
-	const parsed = parseArgs(args);
+	const parsedArgs = parsed;
 	debugStartup("main:parseArgs");
 	time("parseArgs");
-	await maybeAutoChdir(parsed);
+	await maybeAutoChdir(parsedArgs);
 
 	// Run migrations (pass cwd for project-local migrations)
 	const { migratedAuthProviders: migratedProviders, deprecationWarnings } = await runMigrations(process.cwd());
@@ -612,26 +492,21 @@ export async function main(args: string[]) {
 	debugStartup("main:discoverModels");
 	time("discoverModels");
 
-	if (parsed.version) {
+	if (parsedArgs.version) {
 		writeStdout(VERSION);
 		return;
 	}
 
-	if (parsed.help) {
-		printHelp();
-		return;
-	}
-
-	if (parsed.listModels !== undefined) {
-		const searchPattern = typeof parsed.listModels === "string" ? parsed.listModels : undefined;
+	if (parsedArgs.listModels !== undefined) {
+		const searchPattern = typeof parsedArgs.listModels === "string" ? parsedArgs.listModels : undefined;
 		await listModels(modelRegistry, searchPattern);
 		return;
 	}
 
-	if (parsed.export) {
+	if (parsedArgs.export) {
 		try {
-			const outputPath = parsed.messages.length > 0 ? parsed.messages[0] : undefined;
-			const result = await exportFromFile(parsed.export, outputPath);
+			const outputPath = parsedArgs.messages.length > 0 ? parsedArgs.messages[0] : undefined;
+			const result = await exportFromFile(parsedArgs.export, outputPath);
 			writeStdout(`Exported to: ${result}`);
 			return;
 		} catch (error: unknown) {
@@ -641,7 +516,7 @@ export async function main(args: string[]) {
 		}
 	}
 
-	if (parsed.mode === "rpc" && parsed.fileArgs.length > 0) {
+	if (parsedArgs.mode === "rpc" && parsedArgs.fileArgs.length > 0) {
 		writeStderr(chalk.red("Error: @file arguments are not supported in RPC mode"));
 		process.exit(1);
 	}
@@ -651,23 +526,23 @@ export async function main(args: string[]) {
 	debugStartup("main:Settings.init");
 	time("Settings.init");
 	const pipedInput = await readPipedInput();
-	let { initialMessage, initialImages } = await prepareInitialMessage(parsed, settings.get("images.autoResize"));
+	let { initialMessage, initialImages } = await prepareInitialMessage(parsedArgs, settings.get("images.autoResize"));
 	if (pipedInput) {
 		initialMessage = initialMessage ? `${initialMessage}\n${pipedInput}` : pipedInput;
 	}
 	time("prepareInitialMessage");
-	const autoPrint = pipedInput !== undefined && !parsed.print && parsed.mode === undefined;
-	const isInteractive = !parsed.print && !autoPrint && parsed.mode === undefined;
-	const mode = parsed.mode || "text";
+	const autoPrint = pipedInput !== undefined && !parsedArgs.print && parsedArgs.mode === undefined;
+	const isInteractive = !parsedArgs.print && !autoPrint && parsedArgs.mode === undefined;
+	const mode = parsedArgs.mode || "text";
 
 	// Initialize discovery system with settings for provider persistence
 	initializeWithSettings(settings);
 	time("initializeWithSettings");
 
 	// Apply model role overrides from CLI args or env vars (ephemeral, not persisted)
-	const smolModel = parsed.smol ?? $env.PI_SMOL_MODEL;
-	const slowModel = parsed.slow ?? $env.PI_SLOW_MODEL;
-	const planModel = parsed.plan ?? $env.PI_PLAN_MODEL;
+	const smolModel = parsedArgs.smol ?? $env.PI_SMOL_MODEL;
+	const slowModel = parsedArgs.slow ?? $env.PI_SLOW_MODEL;
+	const planModel = parsedArgs.plan ?? $env.PI_PLAN_MODEL;
 	if (smolModel || slowModel || planModel) {
 		settings.overrideModelRoles({
 			smol: smolModel,
@@ -686,7 +561,7 @@ export async function main(args: string[]) {
 	}
 
 	let scopedModels: ScopedModel[] = [];
-	const modelPatterns = parsed.models ?? settings.get("enabledModels");
+	const modelPatterns = parsedArgs.models ?? settings.get("enabledModels");
 	const modelMatchPreferences = {
 		usageOrder: settings.getStorage()?.getModelUsageOrder(),
 	};
@@ -696,13 +571,13 @@ export async function main(args: string[]) {
 	}
 
 	// Create session manager based on CLI flags
-	let sessionManager = await createSessionManager(parsed, cwd);
+	let sessionManager = await createSessionManager(parsedArgs, cwd);
 	debugStartup("main:createSessionManager");
 	time("createSessionManager");
 
 	// Handle --resume: show session picker
-	if (parsed.resume) {
-		const sessions = await SessionManager.list(cwd, parsed.sessionDir);
+	if (parsedArgs.resume) {
+		const sessions = await SessionManager.list(cwd, parsedArgs.sessionDir);
 		time("SessionManager.list");
 		if (sessions.length === 0) {
 			writeStdout(chalk.dim("No sessions found"));
@@ -717,19 +592,19 @@ export async function main(args: string[]) {
 		sessionManager = await SessionManager.open(selectedPath);
 	}
 
-	const sessionOptions = await buildSessionOptions(parsed, scopedModels, sessionManager, modelRegistry);
+	const sessionOptions = await buildSessionOptions(parsedArgs, scopedModels, sessionManager, modelRegistry);
 	debugStartup("main:buildSessionOptions");
 	sessionOptions.authStorage = authStorage;
 	sessionOptions.modelRegistry = modelRegistry;
 	sessionOptions.hasUI = isInteractive;
 
 	// Handle CLI --api-key as runtime override (not persisted)
-	if (parsed.apiKey) {
+	if (parsedArgs.apiKey) {
 		if (!sessionOptions.model) {
 			writeStderr(chalk.red("--api-key requires a model to be specified via --provider/--model or -m/--models"));
 			process.exit(1);
 		}
-		authStorage.setRuntimeApiKey(sessionOptions.model.provider, parsed.apiKey);
+		authStorage.setRuntimeApiKey(sessionOptions.model.provider, parsedArgs.apiKey);
 	}
 
 	time("buildSessionOptions");
@@ -742,13 +617,23 @@ export async function main(args: string[]) {
 	if (session.extensionRunner) {
 		const extFlags = session.extensionRunner.getFlags();
 		if (extFlags.size > 0) {
-			const flagDefs = new Map<string, { type: "boolean" | "string" }>();
-			for (const [name, flag] of extFlags) {
-				flagDefs.set(name, { type: flag.type });
-			}
-			const reparsed = parseArgs(args, flagDefs);
-			for (const [name, value] of reparsed.unknownFlags) {
-				session.extensionRunner.setFlagValue(name, value);
+			for (let i = 0; i < rawArgs.length; i++) {
+				const arg = rawArgs[i];
+				if (!arg.startsWith("--")) {
+					continue;
+				}
+				const flagName = arg.slice(2);
+				const extFlag = extFlags.get(flagName);
+				if (!extFlag) {
+					continue;
+				}
+				if (extFlag.type === "boolean") {
+					session.extensionRunner.setFlagValue(flagName, true);
+					continue;
+				}
+				if (i + 1 < rawArgs.length) {
+					session.extensionRunner.setFlagValue(flagName, rawArgs[++i]);
+				}
 			}
 		}
 	}
@@ -764,8 +649,8 @@ export async function main(args: string[]) {
 	}
 
 	// Clamp thinking level to model capabilities (for CLI override case)
-	if (session.model && parsed.thinking) {
-		let effectiveThinking = parsed.thinking;
+	if (session.model && parsedArgs.thinking) {
+		let effectiveThinking = parsedArgs.thinking;
 		if (!session.model.reasoning) {
 			effectiveThinking = "off";
 		} else if (effectiveThinking === "xhigh" && !supportsXhigh(session.model)) {
@@ -780,7 +665,7 @@ export async function main(args: string[]) {
 		await runRpcMode(session);
 	} else if (isInteractive) {
 		const versionCheckPromise = checkForNewVersion(VERSION).catch(() => undefined);
-		const changelogMarkdown = await getChangelogForDisplay(parsed);
+		const changelogMarkdown = await getChangelogForDisplay(parsedArgs);
 
 		const scopedModelsForDisplay = sessionOptions.scopedModels ?? scopedModels;
 		if (scopedModelsForDisplay.length > 0) {
@@ -803,7 +688,7 @@ export async function main(args: string[]) {
 			modelRegistry.getError(),
 			migratedProviders,
 			versionCheckPromise,
-			parsed.messages,
+			parsedArgs.messages,
 			setToolUIContext,
 			lspServers,
 			mcpManager,
@@ -813,7 +698,7 @@ export async function main(args: string[]) {
 	} else {
 		await runPrintMode(session, {
 			mode,
-			messages: parsed.messages,
+			messages: parsedArgs.messages,
 			initialMessage,
 			initialImages,
 		});
@@ -821,4 +706,9 @@ export async function main(args: string[]) {
 		stopThemeWatcher();
 		await postmortem.quit(0);
 	}
+}
+
+export async function main(args: string[]): Promise<void> {
+	const argv = args.length === 0 ? ["index"] : args;
+	await run(argv, import.meta.url);
 }

@@ -3,6 +3,17 @@
 ## [Unreleased]
 ### Added
 
+- Added `omp commit` command to generate commit messages and update changelogs with `--push`, `--dry-run`, `--no-changelog`, and model override flags
+- Added `omp config` command to manage configuration settings with actions: list, get, set, reset, path
+- Added `omp grep` command to test grep tool with pattern matching, glob filtering, context lines, and output modes
+- Added `omp jupyter` command to manage the shared Jupyter gateway with status and kill actions
+- Added `omp plugin` command to manage plugins with install, uninstall, list, link, doctor, features, config, enable, and disable actions
+- Added `omp setup` command to install dependencies for optional features like Python
+- Added `omp shell` command for interactive shell console with working directory and timeout configuration
+- Added `omp stats` command to view usage statistics with dashboard server, JSON output, and summary options
+- Added `omp update` command to check for and install updates with force and check-only modes
+- Added `omp web-search` command (alias `omp q`) to test web search providers with provider selection, recency filtering, and result limits
+- Migrated CLI from custom argument parser to oclif framework for improved command structure and help system
 - Added `omp q` CLI subcommand for testing web search providers with query, provider, recency, and limit options
 - Added web search provider information API with authentication requirements and provider metadata
 - Added support for `hour` recency filter option in Perplexity web search
@@ -11,6 +22,9 @@
 
 ### Changed
 
+- Refactored CLI entry point to use oclif command framework instead of custom subcommand routing
+- Reorganized subcommands into individual command files under `src/commands/` directory for better maintainability
+- Updated extension flag handling to parse raw arguments directly instead of using custom flag definitions
 - Refactored web search provider definitions into centralized provider-info module for better maintainability
 - Updated web search result rendering to support long-form answers with text wrapping in CLI mode
 - Removed related questions section from web search result rendering
@@ -59,6 +73,7 @@
 - Removed placeholder-based template rendering in favor of structured context/assignment model
 
 ## [11.0.3] - 2026-02-05
+
 ### Added
 
 - Added new subcommands to help text: `commit` for AI-assisted git commits, `stats` for AI usage statistics dashboard, and `jupyter` for managing the shared Jupyter gateway
@@ -124,7 +139,7 @@
 - Changed `venvPath` property in PythonRuntime from nullable to optional (returns `undefined` instead of `null`)
 - Simplified notification settings from protocol-specific options (bell, osc99, osc9) to simple on/off toggle for `completion.notify` and `ask.notify`
 - Moved notification protocol detection and sending to `TERMINAL` API from local utility functions
-- Changed task tool spawns configuration from "explore" to "*" to allow subagents to spawn any agent type
+- Changed task tool spawns configuration from "explore" to "\*" to allow subagents to spawn any agent type
 - Changed system prompt to enable parallel delegation guidance for all agents (removed coordinator-only restriction)
 - Changed task tool to automatically disable itself when maximum recursion depth is reached, preventing infinite nesting
 - Changed task concurrency from hardcoded constant to configurable setting via `task.maxConcurrency`
@@ -164,6 +179,7 @@
 - Removed support for `omp/` model role prefix; use `pi/` prefix instead
 
 ## [10.6.0] - 2026-02-04
+
 ### Breaking Changes
 
 - Removed `output_mode` parameter from grep tool—results now always use content mode with formatted match output
@@ -225,6 +241,7 @@
 - Fixed glob search returning no results when all files are ignored by gitignore by automatically retrying without gitignore filtering
 
 ## [10.3.2] - 2026-02-03
+
 ### Added
 
 - Added `renderCall` and `renderResult` methods to MCP tools for structured TUI display of tool calls and results
@@ -237,17 +254,20 @@
 - Fixed method binding in extension and hook tool wrappers to preserve `this` context for `renderCall` and `renderResult` methods
 
 ## [10.3.1] - 2026-02-03
+
 ### Fixed
 
 - Fixed timeout handling in LSP write-through operations to properly clear formatter and diagnostics results when operations exceed the 10-second timeout
 
 ## [10.3.0] - 2026-02-03
+
 ### Removed
 
 - Removed `shellForceBasic` setting that forced bash/sh shell selection
 - Removed `bash.persistentShell` experimental setting for shell session reuse
 
 ## [10.2.3] - 2026-02-02
+
 ### Added
 
 - Added `find.enabled`, `grep.enabled`, `ls.enabled`, `notebook.enabled`, `fetch.enabled`, `web_search.enabled`, `lsp.enabled`, and `calc.enabled` settings to control availability of individual tools
@@ -293,18 +313,21 @@
 - Fixed tool parameter schemas displaying internal TypeBox metadata fields in system prompt
 
 ## [10.2.1] - 2026-02-02
+
 ### Breaking Changes
 
 - Removed `strippedRedirect` field from `NormalizedCommand` interface returned by `normalizeBashCommand()`
 - Removed automatic stripping of `2>&1` stderr redirections from bash command normalization
 
 ## [10.1.0] - 2026-02-01
+
 ### Added
 
 - Added work scheduling profiler to debug menu for analyzing CPU scheduling patterns over the last 30 seconds
 - Added support for work profile data in report bundles including folded stacks, summary, and flamegraph visualization
 
 ## [10.0.0] - 2026-02-01
+
 ### Added
 
 - Added `shell` subcommand for interactive shell console testing with brush-core
@@ -317,6 +340,7 @@
 - `find` now returns a single match when given a file path instead of failing with "not a directory"
 
 ## [9.8.0] - 2026-02-01
+
 ### Breaking Changes
 
 - Removed persistent shell session support; bash execution now uses native bindings via brush-core for improved reliability
@@ -346,6 +370,7 @@
 - Removed shell session test suite for persistent execution patterns
 
 ## [9.6.2] - 2026-02-01
+
 ### Changed
 
 - Replaced hardcoded ellipsis strings with Unicode ellipsis character (…) throughout rendering code
@@ -366,6 +391,7 @@
 - Fixed bash command normalization to preserve newlines in heredocs and multiline commands
 
 ## [9.6.0] - 2026-02-01
+
 ### Breaking Changes
 
 - Replaced `SettingsManager` class with new `Settings` singleton providing sync get/set API with background persistence
@@ -410,6 +436,7 @@
 - Added new "Bash" settings tab grouping shell-related settings (force basic shell, persistent shell, interceptor, intercept ls)
 
 ## [9.5.0] - 2026-02-01
+
 ### Added
 
 - Added `head` and `tail` parameters to bash tool to limit output lines without breaking streaming
@@ -447,6 +474,7 @@
 - Fixed Python gateway spawning console window on Windows by using windowless Python interpreter (pythonw.exe)
 
 ## [9.4.0] - 2026-01-31
+
 ### Changed
 
 - Migrated environment variable handling to use centralized `getEnv()` and `getEnvApiKey()` utilities from pi-ai package for consistent API key resolution across web search providers and image tools
@@ -461,6 +489,7 @@
 - Removed environment variable denylist that blocked API keys from being passed to subprocesses; API keys are now controlled via allowlist only
 
 ## [9.3.1] - 2026-01-31
+
 ### Added
 
 - Added `getCompactContext()` API to retrieve parent conversation context for subagents, excluding system prompts and tool results
@@ -477,6 +506,7 @@
 - Removed schema override notification from task summary prompt
 
 ## [9.2.5] - 2026-01-31
+
 ### Changed
 
 - Clarified that user instructions about delegation override tool-use defaults
@@ -484,11 +514,13 @@
 - Enhanced `context` parameter documentation to require self-contained information for subagents, including file contents and user requirements
 
 ## [9.2.4] - 2026-01-31
+
 ### Fixed
 
 - Prevented interactive commands from blocking on stdin by redirecting from /dev/null in POSIX and Fish shell sessions
 
 ## [9.2.3] - 2026-01-31
+
 ### Added
 
 - Persistent shell session support for bash tool with environment variable preservation across commands
@@ -518,6 +550,7 @@
 ## [9.2.2] - 2026-01-31
 
 ### Added
+
 - Added grep CLI subcommand (`omp grep`) for testing pattern matching
 - Added fuzzy matching for model resolution with scoring and ranking fallback
 - Added 'Open: artifact folder' menu option to debug selector for quick access to session artifacts
@@ -548,6 +581,7 @@
 - Enhanced session compaction with dynamic token ratio adjustment and improved summary preservation
 
 ### Changed
+
 - Simplified find tool API by consolidating path and pattern parameters
 - Replaced bulk file loading with streaming for read tool to reduce memory overhead
 - Migrated grep and find tools to WASM-based implementation
@@ -558,6 +592,7 @@
 - Improved output preview logic: shows full output for ≤30 lines, truncates to 10 lines for larger output
 
 ### Fixed
+
 - Enhanced error reporting with debug stack trace when DEBUG env is set
 - Improved OAuth token refresh error handling to distinguish transient vs definitive failures
 - Added windowsHide option to child process spawn calls to prevent console windows on Windows
@@ -578,6 +613,7 @@
 ## [8.13.0] - 2026-01-29
 
 ### Added
+
 - Added `/debug` command with interactive menu for bug report generation:
   - `Report: performance issue` - CPU profiling with reproduction flow
   - `Report: dump session` - Immediate session bundle creation
@@ -587,43 +623,52 @@
   - `Clear: artifact cache` - Remove old session artifacts
 
 ### Fixed
+
 - Fixed LSP server errors not being visible in `/session` output or logs when startup fails
 
 ## [8.12.7] - 2026-01-29
 
 ### Fixed
+
 - Fixed LSP servers showing as "unknown" in status display when server warmup fails
 - Fixed Read tool loading entire file into memory when offset/limit was specified
 
 ## [8.12.2] - 2026-01-28
 
 ### Changed
+
 - Replaced ripgrep-based file listing with fs.glob for project scans and find/read tooling
 
 ## [8.11.14] - 2026-01-28
 
 ### Changed
+
 - Rendered /skill command messages as compact skill entries instead of full prompt text
 
 ## [8.8.8] - 2026-01-28
 
 ### Added
+
 - Added `/fork` command to create a new session with the exact same state (entries and artifacts) as the current session
 
 ### Changed
+
 - Renamed the `complete` tool to `submit_result` for subagent result submission
 
 ## [8.6.0] - 2026-01-27
 
 ### Added
+
 - Added `plan` model role for specifying the model used by the plan agent
 - Added `--plan` CLI flag and `OMP_PLAN_MODEL` environment variable for ephemeral plan model override
 - Added plan model selection in model selector UI with PLAN badge
 
 ### Changed
+
 - Task tool subagents now execute in-process instead of using worker threads
 
 ### Fixed
+
 - Queued skill commands as follow-ups when the agent is already streaming to avoid load failures
 - Deduplicated repeated review findings in subagent progress rendering
 - Restored MCP proxy tool timeout handling to prevent subagent hangs
@@ -631,64 +676,82 @@
 ## [8.5.0] - 2026-01-27
 
 ### Added
+
 - Added subagent support for preloading skill contents into the system prompt instead of listing available skills
 - Added session init entries to capture system prompt, task, tools, and output schema for subagent session logs
 
 ### Fixed
+
 - Reduced Task tool progress update overhead to keep the UI responsive during high-volume streaming output
 - Fixed subagent session logs dropping pre-assistant entries (user/task metadata) before the first assistant response
 
 ### Removed
+
 - Removed enter-plan-mode tool
+
 ## [8.4.5] - 2026-01-26
 
 ### Added
+
 - Model usage tracking to record and retrieve most recently used models
 - Model sorting in selector based on usage history
 
 ### Changed
+
 - Renamed `head_limit` parameter to `limit` in grep and find tools for consistency
 - Added `context` as an alias for the `c` context parameter in grep tool
 - Made hidden files inclusion configurable in find tool via `hidden` parameter (defaults to true)
 - Added support for reading ignore patterns from .gitignore and .ignore files in find tool
 
 ### Fixed
+
 - Respected .gitignore rules when filtering find tool results by glob pattern
+
 ## [8.4.2] - 2026-01-25
 
 ### Changed
+
 - Clarified and condensed plan mode prompts for improved clarity and consistency
+
 ## [8.4.1] - 2026-01-25
 
 ### Added
+
 - Added core plan mode with plan file approval workflow and tool gating
 - Added plan:// internal URLs for plan file access and subagent plan-mode system prompt
 - Added plan mode toggle shortcut with paused status indicator
 
 ### Fixed
+
 - Fixed plan reference injection and workflow prompt parameters for plan mode
 - Fixed tool downloads hanging on slow/blocked GitHub by adding timeouts and zip extraction fallback
 - Fixed missing UI notification when tools are downloaded or installed on demand
+
 ## [8.4.0] - 2026-01-25
 
 ### Added
+
 - Added extension API to set working/loading messages during streaming
 - Added task worker propagation of context files, skills, and prompt templates
 - Added subagent option to skip Python preflight checks when Python tooling is unused
 - Model field now accepts string arrays for fallback model prioritization
 
 ### Changed
+
 - Merged patch application warnings into edit tool diagnostics output
 - Cached Python prelude docs for subagent workers to avoid repeated warmups
 - Simplified image placeholders inserted on paste to match Claude-style markers
 
 ### Fixed
+
 - Rewrote empty or corrupted session files to restore valid headers
 - Improved patch applicator ambiguity errors with match previews and overlap detection
 - Fixed Task tool agent model resolution to honor comma-separated model lists
+
 ## [8.3.0] - 2026-01-25
 
 ### Changed
+
 - Added request parameter tracking to LSP tool rendering for better diagnostics visibility
 - Added async diff computation and Kitty protocol support to tool execution rendering
 - Refactored patch applicator with improved fuzzy matching (7-pass sequence matching with Levenshtein distance) and indentation adjustment
@@ -698,15 +761,20 @@
 - Added timeout validation and normalization for tool timeout parameters
 
 ### Fixed
+
 - Fixed output block border rendering (bottom-right corner was missing)
 - Added background control parameter to output block rendering
+
 ## [8.2.2] - 2026-01-24
 
 ### Removed
-- Removed git utility functions (_git, git_status, git_diff, git_log, git_show, git_file_at, git_branch, git_has_changes) from IPython prelude
+
+- Removed git utility functions (\_git, git_status, git_diff, git_log, git_show, git_file_at, git_branch, git_has_changes) from IPython prelude
+
 ## [8.2.0] - 2026-01-24
 
 ### Added
+
 - Added `omp commit` command to generate conventional commits with changelog updates
 - Added agentic commit mode with commit-specific tools and `--legacy` fallback
 - Added configurable settings for map-reduce analysis including concurrency, timeout, file thresholds, and token limits
@@ -756,6 +824,7 @@
 - Added tarball installation test Dockerfile to validate npm publish/install flow
 
 ### Changed
+
 - Changed changelog diff truncation limit to be configurable via settings
 - Changed tool result rendering to use new TUI component library across multiple tools (bash, calculator, fetch, find, grep, ls, notebook, python, read, ssh, write, lsp, web search) for consistent output formatting
 - Changed Bash tool output rendering to use renderOutputBlock with proper section handling and width-aware truncation
@@ -817,6 +886,7 @@
 - Changed model discovery to synchronous file operations for more immediate initialization
 
 ### Fixed
+
 - Fixed database busy errors during concurrent access by adding retry logic with exponential backoff when opening storage
 - Find tool now rejects searches from root directory and enforces a 5-second timeout on fd operations
 - Commit command now exits cleanly with exit code 0 on success
@@ -829,7 +899,9 @@
 - Fixed branch change callbacks in footer component to properly update state after git resolution
 - Added guard clause in plugin-settings to prevent null reference when settings list is undefined
 - Fixed agent task discovery to support symlinks and improved error handling for file access failures
+
 ## [8.0.0] - 2026-01-23
+
 ### Added
 
 - Added antigravity provider support for image generation with Google Cloud authentication
@@ -917,6 +989,7 @@
 - Fixed Python gateway coordination to use a single global gateway without ref counting
 
 ## [7.0.0] - 2026-01-21
+
 ### Added
 
 - Added usage report deduplication to prevent duplicate account entries
@@ -2026,7 +2099,7 @@
 - Added `git.enabled` setting to enable/disable the structured git tool
 - Added `offset` and `limit` parameters to Output tool for paginated reading of large outputs
 - Added provider fallback chain for web search that tries all configured providers before failing
-- Added `WebSearchProviderError` class with HTTP status for actionable provider error messages
+- Added `SearchProviderError` class with HTTP status for actionable provider error messages
 - Added bash interceptor rule to block git commands when structured git tool is enabled
 - Added validation requiring `message` parameter for git commit operations (prevents interactive editor)
 - Added output ID hints in multi-agent Task results pointing to Output tool for full logs
@@ -2869,14 +2942,14 @@ Total color count increased from 46 to 50. See [docs/theme.md](docs/theme.md) fo
 - **Credential storage refactored**: API keys and OAuth tokens are now stored in `~/.omp/agent/auth.json` instead of `oauth.json` and `settings.json`. Existing credentials are automatically migrated on first run. ([#296](https://github.com/badlogic/pi-mono/issues/296))
 
 - **SDK API changes** ([#296](https://github.com/badlogic/pi-mono/issues/296)):
-   - Added `AuthStorage` class for credential management (API keys and OAuth tokens)
-   - Added `ModelRegistry` class for model discovery and API key resolution
-   - Added `discoverAuthStorage()` and `discoverModels()` discovery functions
-   - `createAgentSession()` now accepts `authStorage` and `modelRegistry` options
-   - Removed `configureOAuthStorage()`, `defaultGetApiKey()`, `findModel()`, `discoverAvailableModels()`
-   - Removed `getApiKey` callback option (use `AuthStorage.setRuntimeApiKey()` for runtime overrides)
-   - Use `getModel()` from `@oh-my-pi/pi-ai` for built-in models, `modelRegistry.find()` for custom models + built-in models
-   - See updated [SDK documentation](docs/sdk.md) and [README](README.md)
+  - Added `AuthStorage` class for credential management (API keys and OAuth tokens)
+  - Added `ModelRegistry` class for model discovery and API key resolution
+  - Added `discoverAuthStorage()` and `discoverModels()` discovery functions
+  - `createAgentSession()` now accepts `authStorage` and `modelRegistry` options
+  - Removed `configureOAuthStorage()`, `defaultGetApiKey()`, `findModel()`, `discoverAvailableModels()`
+  - Removed `getApiKey` callback option (use `AuthStorage.setRuntimeApiKey()` for runtime overrides)
+  - Use `getModel()` from `@oh-my-pi/pi-ai` for built-in models, `modelRegistry.find()` for custom models + built-in models
+  - See updated [SDK documentation](docs/sdk.md) and [README](README.md)
 
 - **Settings changes**: Removed `apiKeys` from `settings.json`. Use `auth.json` instead. ([#296](https://github.com/badlogic/pi-mono/issues/296))
 
@@ -2907,15 +2980,15 @@ Total color count increased from 46 to 50. See [docs/theme.md](docs/theme.md) fo
 ### Added
 
 - **Compaction hook improvements**: The `before_compact` session event now includes:
-   - `previousSummary`: Summary from the last compaction (if any), so hooks can preserve accumulated context
-   - `messagesToKeep`: Messages that will be kept after the summary (recent turns), in addition to `messagesToSummarize`
-   - `resolveApiKey`: Function to resolve API keys for any model (checks settings, OAuth, env vars)
-   - Removed `apiKey` string in favor of `resolveApiKey` for more flexibility
+  - `previousSummary`: Summary from the last compaction (if any), so hooks can preserve accumulated context
+  - `messagesToKeep`: Messages that will be kept after the summary (recent turns), in addition to `messagesToSummarize`
+  - `resolveApiKey`: Function to resolve API keys for any model (checks settings, OAuth, env vars)
+  - Removed `apiKey` string in favor of `resolveApiKey` for more flexibility
 
 - **SessionManager API cleanup**:
-   - Renamed `loadSessionFromEntries()` to `buildSessionContext()` (builds LLM context from entries, handling compaction)
-   - Renamed `loadEntries()` to `getEntries()` (returns defensive copy of all session entries)
-   - Added `buildSessionContext()` method to SessionManager
+  - Renamed `loadSessionFromEntries()` to `buildSessionContext()` (builds LLM context from entries, handling compaction)
+  - Renamed `loadEntries()` to `getEntries()` (returns defensive copy of all session entries)
+  - Added `buildSessionContext()` method to SessionManager
 
 ## [0.27.5] - 2025-12-24
 
@@ -3134,13 +3207,13 @@ Total color count increased from 46 to 50. See [docs/theme.md](docs/theme.md) fo
 - **Custom tools now require `index.ts` entry point**: Auto-discovered custom tools must be in a subdirectory with an `index.ts` file. The old pattern `~/.omp/agent/tools/mytool.ts` must become `~/.omp/agent/tools/mytool/index.ts`. This allows multi-file tools to import helper modules. Explicit paths via `--tool` or `settings.json` still work with any `.ts` file.
 
 - **Hook `tool_result` event restructured**: The `ToolResultEvent` now exposes full tool result data instead of just text. ([#233](https://github.com/badlogic/pi-mono/pull/233))
-   - Removed: `result: string` field
-   - Added: `content: (TextContent | ImageContent)[]` - full content array
-   - Added: `details: unknown` - tool-specific details (typed per tool via discriminated union on `toolName`)
-   - `ToolResultEventResult.result` renamed to `ToolResultEventResult.text` (removed), use `content` instead
-   - Hook handlers returning `{ result: "..." }` must change to `{ content: [{ type: "text", text: "..." }] }`
-   - Built-in tool details types exported: `BashToolDetails`, `ReadToolDetails`, `GrepToolDetails`, `FindToolDetails`, `LsToolDetails`, `TruncationResult`
-   - Type guards exported for narrowing: `isBashToolResult`, `isReadToolResult`, `isEditToolResult`, `isWriteToolResult`, `isGrepToolResult`, `isFindToolResult`, `isLsToolResult`
+  - Removed: `result: string` field
+  - Added: `content: (TextContent | ImageContent)[]` - full content array
+  - Added: `details: unknown` - tool-specific details (typed per tool via discriminated union on `toolName`)
+  - `ToolResultEventResult.result` renamed to `ToolResultEventResult.text` (removed), use `content` instead
+  - Hook handlers returning `{ result: "..." }` must change to `{ content: [{ type: "text", text: "..." }] }`
+  - Built-in tool details types exported: `BashToolDetails`, `ReadToolDetails`, `GrepToolDetails`, `FindToolDetails`, `LsToolDetails`, `TruncationResult`
+  - Type guards exported for narrowing: `isBashToolResult`, `isReadToolResult`, `isEditToolResult`, `isWriteToolResult`, `isGrepToolResult`, `isFindToolResult`, `isLsToolResult`
 
 ## [0.23.4] - 2025-12-18
 
@@ -3169,12 +3242,12 @@ Total color count increased from 46 to 50. See [docs/theme.md](docs/theme.md) fo
 - Improved system prompt documentation section with clearer pointers to specific doc files for custom models, themes, skills, hooks, custom tools, and RPC.
 
 - Cleaned up documentation:
-   - `theme.md`: Added missing color tokens (`thinkingXhigh`, `bashMode`)
-   - `skills.md`: Rewrote with better framing and examples
-   - `hooks.md`: Fixed timeout/error handling docs, added import aliases section
-   - `custom-tools.md`: Added intro with use cases and comparison table
-   - `rpc.md`: Added missing `hook_error` event documentation
-   - `README.md`: Complete settings table, condensed philosophy section, standardized OAuth docs
+  - `theme.md`: Added missing color tokens (`thinkingXhigh`, `bashMode`)
+  - `skills.md`: Rewrote with better framing and examples
+  - `hooks.md`: Fixed timeout/error handling docs, added import aliases section
+  - `custom-tools.md`: Added intro with use cases and comparison table
+  - `rpc.md`: Added missing `hook_error` event documentation
+  - `README.md`: Complete settings table, condensed philosophy section, standardized OAuth docs
 
 - Hooks loader now supports same import aliases as custom tools (`@sinclair/typebox`, `@oh-my-pi/pi-ai`, `@oh-my-pi/pi-tui`, `@oh-my-pi/pi-coding-agent`).
 
@@ -3431,12 +3504,12 @@ _Dedicated to Peter's shoulder ([@steipete](https://twitter.com/steipete))_
 ### Changed
 
 - **Tool output truncation**: All tools now enforce consistent truncation limits with actionable notices for the LLM. ([#134](https://github.com/badlogic/pi-mono/issues/134))
-   - **Limits**: 2000 lines OR 50KB (whichever hits first), never partial lines
-   - **read**: Shows `[Showing lines X-Y of Z. Use offset=N to continue]`. If first line exceeds 50KB, suggests bash command
-   - **bash**: Tail truncation with temp file. Shows `[Showing lines X-Y of Z. Full output: /tmp/...]`
-   - **grep**: Pre-truncates match lines to 500 chars. Shows match limit and line truncation notices
-   - **find/ls**: Shows result/entry limit notices
-   - TUI displays truncation warnings in yellow at bottom of tool output (visible even when collapsed)
+  - **Limits**: 2000 lines OR 50KB (whichever hits first), never partial lines
+  - **read**: Shows `[Showing lines X-Y of Z. Use offset=N to continue]`. If first line exceeds 50KB, suggests bash command
+  - **bash**: Tail truncation with temp file. Shows `[Showing lines X-Y of Z. Full output: /tmp/...]`
+  - **grep**: Pre-truncates match lines to 500 chars. Shows match limit and line truncation notices
+  - **find/ls**: Shows result/entry limit notices
+  - TUI displays truncation warnings in yellow at bottom of tool output (visible even when collapsed)
 
 ## [0.13.1] - 2025-12-06
 
@@ -3523,13 +3596,13 @@ _Dedicated to Peter's shoulder ([@steipete](https://twitter.com/steipete))_
 ### Added
 
 - **Context Compaction**: Long sessions can now be compacted to reduce context usage while preserving recent conversation history. ([#92](https://github.com/badlogic/pi-mono/issues/92), [docs](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/README.md#context-compaction))
-   - `/compact [instructions]`: Manually compact context with optional custom instructions for the summary
-   - `/autocompact`: Toggle automatic compaction when context exceeds threshold
-   - Compaction summarizes older messages while keeping recent messages (default 20k tokens) verbatim
-   - Auto-compaction triggers when context reaches `contextWindow - reserveTokens` (default 16k reserve)
-   - Compacted sessions show a collapsible summary in the TUI (toggle with `o` key)
-   - HTML exports include compaction summaries as collapsible sections
-   - RPC mode supports `{"type":"compact"}` command and auto-compaction (emits compaction events)
+  - `/compact [instructions]`: Manually compact context with optional custom instructions for the summary
+  - `/autocompact`: Toggle automatic compaction when context exceeds threshold
+  - Compaction summarizes older messages while keeping recent messages (default 20k tokens) verbatim
+  - Auto-compaction triggers when context reaches `contextWindow - reserveTokens` (default 16k reserve)
+  - Compacted sessions show a collapsible summary in the TUI (toggle with `o` key)
+  - HTML exports include compaction summaries as collapsible sections
+  - RPC mode supports `{"type":"compact"}` command and auto-compaction (emits compaction events)
 - **Branch Source Tracking**: Branched sessions now store `branchedFrom` in the session header, containing the path to the original session file. Useful for tracing session lineage.
 
 ## [0.12.5] - 2025-12-03
@@ -3566,11 +3639,11 @@ _Dedicated to Peter's shoulder ([@steipete](https://twitter.com/steipete))_
 ### Added
 
 - **Models**: Added support for OpenAI's new models:
-   - `gpt-4.1` (128K context)
-   - `gpt-4.1-mini` (128K context)
-   - `gpt-4.1-nano` (128K context)
-   - `o3` (200K context, reasoning model)
-   - `o4-mini` (200K context, reasoning model)
+  - `gpt-4.1` (128K context)
+  - `gpt-4.1-mini` (128K context)
+  - `gpt-4.1-nano` (128K context)
+  - `o3` (200K context, reasoning model)
+  - `o4-mini` (200K context, reasoning model)
 
 ## [0.12.0] - 2025-12-02
 
