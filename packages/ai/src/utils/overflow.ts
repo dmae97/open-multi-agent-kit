@@ -19,6 +19,7 @@ import type { AssistantMessage } from "../types";
  * - GitHub Copilot: "prompt token count of X exceeds the limit of Y"
  * - MiniMax: "invalid params, context window exceeds limit"
  * - Kimi For Coding: "Your request exceeded model token limit: X (requested: Y)"
+ * - Anthropic 413: "request_too_large" / "Request exceeds the maximum size" (payload too large)
  * - Cerebras: Returns "400/413 status code (no body)" - handled separately below
  * - Mistral: Returns "400/413 status code (no body)" - handled separately below
  * - z.ai: Does NOT error, accepts overflow silently - handled via usage.input > contextWindow
@@ -40,6 +41,7 @@ const OVERFLOW_PATTERNS = [
 	/context[_ ]length[_ ]exceeded/i, // Generic fallback
 	/too many tokens/i, // Generic fallback
 	/token limit exceeded/i, // Generic fallback
+	/request_too_large/i, // Anthropic 413 (request body too large)
 ];
 
 /**
@@ -65,6 +67,7 @@ const OVERFLOW_PATTERNS = [
  * - llama.cpp: "exceeds the available context size"
  * - LM Studio: "greater than the context length"
  * - Kimi For Coding: "exceeded model token limit: X (requested: Y)"
+ * - Anthropic 413: "request_too_large" (request body exceeds size limit)
  *
  * **Unreliable detection:**
  * - z.ai: Sometimes accepts overflow silently (detectable via usage.input > contextWindow),
