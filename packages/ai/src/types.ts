@@ -105,16 +105,31 @@ export type ToolChoice =
 	| { type: "tool"; name: string };
 
 // Base options all providers share
+export type CacheRetention = "none" | "short" | "long";
+
 export interface StreamOptions {
 	temperature?: number;
 	maxTokens?: number;
 	signal?: AbortSignal;
 	apiKey?: string;
 	/**
+	 * Prompt cache retention preference. Providers map this to their supported values.
+	 * Default: "short".
+	 */
+	cacheRetention?: CacheRetention;
+	/**
 	 * Additional headers to include in provider requests.
 	 * These are merged on top of model-defined headers.
 	 */
 	headers?: Record<string, string>;
+	/**
+	 * Maximum delay in milliseconds to wait for a retry when the server requests a long wait.
+	 * If the server's requested delay exceeds this value, the request fails immediately
+	 * with an error containing the requested delay, allowing higher-level retry logic
+	 * to handle it with user visibility.
+	 * Default: 60000 (60 seconds). Set to 0 to disable the cap.
+	 */
+	maxRetryDelayMs?: number;
 	/**
 	 * Optional session identifier for providers that support session-based caching.
 	 * Providers can use this to enable prompt caching, request routing, or other
@@ -309,7 +324,8 @@ export interface OpenAICompat {
 	/** Whether tool call IDs must be normalized to Mistral format (exactly 9 alphanumeric chars). Default: auto-detected from URL. */
 	requiresMistralToolIds?: boolean;
 	/** Format for reasoning/thinking parameter. "openai" uses reasoning_effort, "zai" uses thinking: { type: "enabled" }. Default: "openai". */
-	thinkingFormat?: "openai" | "zai";
+	/** Format for reasoning/thinking parameter. "openai" uses reasoning_effort, "zai" uses thinking: { type: "enabled" }, "qwen" uses enable_thinking: boolean. Default: "openai". */
+	thinkingFormat?: "openai" | "zai" | "qwen";
 	/** Which reasoning content field to emit on assistant messages. Default: auto-detected. */
 	reasoningContentField?: "reasoning_content" | "reasoning" | "reasoning_text";
 	/** Whether assistant tool-call messages must include reasoning content. Default: false. */
@@ -322,6 +338,8 @@ export interface OpenAICompat {
 	openRouterRouting?: OpenRouterRouting;
 	/** Vercel AI Gateway routing preferences. Only used when baseUrl points to Vercel AI Gateway. */
 	vercelGatewayRouting?: VercelGatewayRouting;
+	/** Whether the provider supports the `strict` field in tool definitions. Default: true. */
+	supportsStrictMode?: boolean;
 }
 
 /**

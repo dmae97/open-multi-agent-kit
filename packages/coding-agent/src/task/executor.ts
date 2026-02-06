@@ -940,6 +940,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 						getActiveTools: () => session.getActiveToolNames(),
 						getAllTools: () => session.getAllToolNames(),
 						setActiveTools: (toolNames: string[]) => session.setActiveToolsByName(toolNames),
+						getCommands: () => [],
 						setModel: async model => {
 							const key = await session.modelRegistry.getApiKey(model);
 							if (!key) return false;
@@ -956,6 +957,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 						hasPendingMessages: () => session.queuedMessageCount > 0,
 						shutdown: () => {},
 						getContextUsage: () => session.getContextUsage(),
+						getSystemPrompt: () => session.systemPrompt,
 						compact: async instructionsOrOptions => {
 							const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
 							const options =

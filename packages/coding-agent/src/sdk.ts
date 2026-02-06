@@ -387,7 +387,7 @@ function customToolToDefinition(tool: CustomTool): ToolDefinition {
 		label: tool.label,
 		description: tool.description,
 		parameters: tool.parameters,
-		execute: (toolCallId, params, onUpdate, ctx, signal) =>
+		execute: (toolCallId, params, signal, onUpdate, ctx) =>
 			tool.execute(toolCallId, params, onUpdate, createCustomToolContext(ctx), signal),
 		onSession: tool.onSession ? (event, ctx) => tool.onSession?.(event, createCustomToolContext(ctx)) : undefined,
 		renderCall: tool.renderCall,
@@ -506,6 +506,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const existingSession = sessionManager.buildSessionContext();
 	time("loadSession");
 	const hasExistingSession = existingSession.messages.length > 0;
+	const hasThinkingEntry = sessionManager.getBranch().some(entry => entry.type === "thinking_level_change");
 
 	const hasExplicitModel = options.model !== undefined;
 	let model = options.model;
@@ -563,7 +564,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	// If session has data, restore thinking level from it
 	if (thinkingLevel === undefined && hasExistingSession) {
-		thinkingLevel = existingSession.thinkingLevel as ThinkingLevel;
+		thinkingLevel = hasThinkingEntry
+			? (existingSession.thinkingLevel as ThinkingLevel)
+			: ((settingsInstance.get("defaultThinkingLevel") ?? "off") as ThinkingLevel);
 	}
 
 	// Fall back to settings default
@@ -1016,14 +1019,12 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		thinkingBudgets: settingsInstance.getGroup("thinkingBudgets"),
 		kimiApiFormat: settingsInstance.get("providers.kimiApiFormat") ?? "anthropic",
 		getToolContext: tc => toolContextStore.getContext(tc),
-		getApiKey: async () => {
-			const currentModel = agent.state.model;
-			if (!currentModel) {
-				throw new Error("No model selected");
-			}
-			const key = await modelRegistry.getApiKey(currentModel, sessionId);
+		getApiKey: async provider => {
+			// Use the provider argument from the in-flight request;
+			// agent.state.model may already be switched mid-turn.
+			const key = await modelRegistry.getApiKeyForProvider(provider, sessionId);
 			if (!key) {
-				throw new Error(`No API key found for provider "${currentModel.provider}"`);
+				throw new Error(`No API key found for provider "${provider}"`);
 			}
 			return key;
 		},
@@ -1036,6 +1037,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	// Restore messages if session has existing data
 	if (hasExistingSession) {
 		agent.replaceMessages(existingSession.messages);
+		if (!hasThinkingEntry) {
+			sessionManager.appendThinkingLevelChange(thinkingLevel);
+		}
 	} else {
 		// Save initial model and thinking level for new sessions so they can be restored on resume
 		if (model) {

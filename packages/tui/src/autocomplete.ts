@@ -627,11 +627,16 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 				query,
 				path: this.basePath,
 				maxResults: 100,
-				hidden: false,
+				hidden: true,
 				gitignore: true,
 			});
 
-			const scoredEntries = result.matches
+			const filteredMatches = result.matches.filter(entry => {
+				const p = entry.path.endsWith("/") ? entry.path.slice(0, -1) : entry.path;
+				return p !== ".git" && !p.startsWith(".git/") && !p.includes("/.git/");
+			});
+
+			const scoredEntries = filteredMatches
 				.map(entry => ({
 					path: entry.path,
 					isDirectory: entry.isDirectory,

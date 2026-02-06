@@ -473,6 +473,10 @@
       display: block;
     }
 
+    .ansi-line {
+      white-space: pre-wrap;
+    }
+
     .tool-images {
     }
 
@@ -665,6 +669,9 @@
     .error-text {
       color: var(--error);
       padding: 0 var(--line-height);
+    }
+    .tool-error {
+      color: var(--error);
     }
 
     /* Images */

@@ -280,6 +280,26 @@ function mapAnthropicToolChoice(choice?: ToolChoice): AnthropicOptions["toolChoi
 	return undefined;
 }
 
+/**
+ * Map ThinkingLevel to Anthropic effort levels for adaptive thinking (Opus 4.6+)
+ */
+function mapThinkingLevelToAnthropicEffort(level: ThinkingLevel): AnthropicOptions["effort"] {
+	switch (level) {
+		case "minimal":
+			return "low";
+		case "low":
+			return "low";
+		case "medium":
+			return "medium";
+		case "high":
+			return "high";
+		case "xhigh":
+			return "max";
+		default:
+			return "high";
+	}
+}
+
 function mapGoogleToolChoice(
 	choice?: ToolChoice,
 ): GoogleOptions["toolChoice"] | GoogleGeminiCliOptions["toolChoice"] | GoogleVertexOptions["toolChoice"] {
@@ -319,7 +339,9 @@ function mapOptionsForApi<TApi extends Api>(
 		maxTokens: options?.maxTokens || Math.min(model.maxTokens, 32000),
 		signal: options?.signal,
 		apiKey: apiKey || options?.apiKey,
+		cacheRetention: options?.cacheRetention,
 		headers: options?.headers,
+		maxRetryDelayMs: options?.maxRetryDelayMs,
 		sessionId: options?.sessionId,
 		onPayload: options?.onPayload,
 		execHandlers: options?.execHandlers,
@@ -345,6 +367,18 @@ function mapOptionsForApi<TApi extends Api>(
 				return {
 					...base,
 					thinkingEnabled: false,
+					toolChoice: mapAnthropicToolChoice(options?.toolChoice),
+				} as OptionsForApi<TApi>;
+			}
+
+			// For Opus 4.6+: use adaptive thinking with effort level
+			// For older models: use budget-based thinking
+			if (model.id.includes("opus-4-6") || model.id.includes("opus-4.6")) {
+				const effort = mapThinkingLevelToAnthropicEffort(reasoning);
+				return {
+					...base,
+					thinkingEnabled: true,
+					effort,
 					toolChoice: mapAnthropicToolChoice(options?.toolChoice),
 				} as OptionsForApi<TApi>;
 			}

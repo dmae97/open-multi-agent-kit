@@ -35,6 +35,14 @@ const priorityList = [
  * Walk up from import.meta.dir until we find package.json, or fall back to cwd.
  */
 export function getPackageDir(): string {
+	// Allow override via environment variable (useful for Nix/Guix where store paths tokenize poorly)
+	const envDir = process.env.PI_PACKAGE_DIR;
+	if (envDir) {
+		if (envDir === "~") return os.homedir();
+		if (envDir.startsWith("~/")) return os.homedir() + envDir.slice(1);
+		return envDir;
+	}
+
 	let dir = import.meta.dir;
 	while (dir !== path.dirname(dir)) {
 		if (fs.existsSync(path.join(dir, "package.json"))) {

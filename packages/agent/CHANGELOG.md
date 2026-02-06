@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `maxRetryDelayMs` option to AgentOptions to cap server-requested retry delays, allowing higher-level retry logic to handle long waits with user visibility
+
+### Changed
+
+- Updated ThinkingLevel documentation to include support for gpt-5.3 and gpt-5.3-codex models with 'xhigh' thinking level
 
 ## [11.2.0] - 2026-02-05
 ### Fixed

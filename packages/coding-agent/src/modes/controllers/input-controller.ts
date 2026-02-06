@@ -97,6 +97,19 @@ export class InputController {
 			this.ctx.editor.setCustomKeyHandler(key, () => void this.ctx.handlePlanModeCommand());
 		}
 
+		for (const key of this.ctx.keybindings.getKeys("newSession")) {
+			this.ctx.editor.setCustomKeyHandler(key, () => this.ctx.handleClearCommand());
+		}
+		for (const key of this.ctx.keybindings.getKeys("tree")) {
+			this.ctx.editor.setCustomKeyHandler(key, () => this.ctx.showTreeSelector());
+		}
+		for (const key of this.ctx.keybindings.getKeys("fork")) {
+			this.ctx.editor.setCustomKeyHandler(key, () => this.ctx.showUserMessageSelector());
+		}
+		for (const key of this.ctx.keybindings.getKeys("resume")) {
+			this.ctx.editor.setCustomKeyHandler(key, () => this.ctx.showSessionSelector());
+		}
+
 		this.ctx.editor.onChange = (text: string) => {
 			const wasBashMode = this.ctx.isBashMode;
 			const wasPythonMode = this.ctx.isPythonMode;
@@ -681,10 +694,14 @@ export class InputController {
 	}
 
 	toggleToolOutputExpansion(): void {
-		this.ctx.toolOutputExpanded = !this.ctx.toolOutputExpanded;
+		this.setToolsExpanded(!this.ctx.toolOutputExpanded);
+	}
+
+	setToolsExpanded(expanded: boolean): void {
+		this.ctx.toolOutputExpanded = expanded;
 		for (const child of this.ctx.chatContainer.children) {
 			if (isExpandable(child)) {
-				child.setExpanded(this.ctx.toolOutputExpanded);
+				child.setExpanded(expanded);
 			}
 		}
 		this.ctx.ui.requestRender();

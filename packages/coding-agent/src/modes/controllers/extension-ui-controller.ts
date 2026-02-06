@@ -64,6 +64,8 @@ export class ExtensionUiController {
 			setFooter: () => {},
 			setHeader: () => {},
 			setEditorComponent: () => {},
+			getToolsExpanded: () => this.ctx.toolOutputExpanded,
+			setToolsExpanded: expanded => this.ctx.setToolsExpanded(expanded),
 		};
 		this.ctx.setToolUIContext(uiContext, true);
 
@@ -114,6 +116,7 @@ export class ExtensionUiController {
 			},
 			getThinkingLevel: () => this.ctx.session.thinkingLevel,
 			setThinkingLevel: level => this.ctx.session.setThinkingLevel(level),
+			getCommands: () => [],
 		};
 		const contextActions: ExtensionContextActions = {
 			getModel: () => this.ctx.session.model,
@@ -130,6 +133,7 @@ export class ExtensionUiController {
 					instructionsOrOptions && typeof instructionsOrOptions === "object" ? instructionsOrOptions : undefined;
 				await this.ctx.session.compact(instructions, options);
 			},
+			getSystemPrompt: () => this.ctx.session.systemPrompt,
 		};
 		const commandActions: ExtensionCommandContextActions = {
 			getContextUsage: () => this.ctx.session.getContextUsage(),
@@ -195,7 +199,7 @@ export class ExtensionUiController {
 				this.ctx.chatContainer.clear();
 				this.ctx.renderInitialMessages();
 				await this.ctx.reloadTodos();
-				if (result.editorText) {
+				if (result.editorText && !this.ctx.editor.getText().trim()) {
 					this.ctx.editor.setText(result.editorText);
 				}
 				this.ctx.showStatus("Navigated to selected point");
@@ -211,6 +215,16 @@ export class ExtensionUiController {
 					return;
 				}
 				await this.ctx.executeCompaction(instructionsOrOptions, false);
+			},
+			switchSession: async sessionPath => {
+				const result = await this.ctx.session.switchSession(sessionPath);
+				if (!result) {
+					return { cancelled: true };
+				}
+				this.ctx.chatContainer.clear();
+				this.ctx.renderInitialMessages();
+				await this.ctx.reloadTodos();
+				return { cancelled: false };
 			},
 		};
 
@@ -283,6 +297,7 @@ export class ExtensionUiController {
 			},
 			getThinkingLevel: () => this.ctx.session.thinkingLevel,
 			setThinkingLevel: (level, persist) => this.ctx.session.setThinkingLevel(level, persist),
+			getCommands: () => [],
 		};
 		const contextActions: ExtensionContextActions = {
 			getModel: () => this.ctx.session.model,
@@ -299,6 +314,7 @@ export class ExtensionUiController {
 					instructionsOrOptions && typeof instructionsOrOptions === "object" ? instructionsOrOptions : undefined;
 				await this.ctx.session.compact(instructions, options);
 			},
+			getSystemPrompt: () => this.ctx.session.systemPrompt,
 		};
 		const commandActions: ExtensionCommandContextActions = {
 			getContextUsage: () => this.ctx.session.getContextUsage(),
@@ -373,7 +389,7 @@ export class ExtensionUiController {
 				this.ctx.chatContainer.clear();
 				this.ctx.renderInitialMessages();
 				await this.ctx.reloadTodos();
-				if (result.editorText) {
+				if (result.editorText && !this.ctx.editor.getText().trim()) {
 					this.ctx.editor.setText(result.editorText);
 				}
 				this.ctx.showStatus("Navigated to selected point");
@@ -389,6 +405,19 @@ export class ExtensionUiController {
 					return;
 				}
 				await this.ctx.executeCompaction(instructionsOrOptions, false);
+			},
+			switchSession: async sessionPath => {
+				if (this.ctx.isBackgrounded) {
+					return { cancelled: true };
+				}
+				const result = await this.ctx.session.switchSession(sessionPath);
+				if (!result) {
+					return { cancelled: true };
+				}
+				this.ctx.chatContainer.clear();
+				this.ctx.renderInitialMessages();
+				await this.ctx.reloadTodos();
+				return { cancelled: false };
 			},
 		};
 
@@ -418,6 +447,8 @@ export class ExtensionUiController {
 			setFooter: () => {},
 			setHeader: () => {},
 			setEditorComponent: () => {},
+			getToolsExpanded: () => false,
+			setToolsExpanded: () => {},
 		};
 	}
 
@@ -461,6 +492,7 @@ export class ExtensionUiController {
 						shutdown: () => {
 							// Signal shutdown request
 						},
+						getSystemPrompt: () => this.ctx.session.systemPrompt,
 					});
 				} catch (err) {
 					this.showToolError(registeredTool.definition.name, err instanceof Error ? err.message : String(err));

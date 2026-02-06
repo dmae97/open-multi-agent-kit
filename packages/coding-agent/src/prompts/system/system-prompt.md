@@ -221,6 +221,7 @@ Main branch: {{git.mainBranch}}
 {{#if skills.length}}
 <skills>
 Scan descriptions vs domain. Skill covers output? Read `skill://<name>` first.
+When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.
 
 {{#list skills join="\n"}}
 <skill name="{{name}}">

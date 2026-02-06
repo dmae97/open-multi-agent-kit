@@ -63,6 +63,7 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 				getActiveTools: () => session.getActiveToolNames(),
 				getAllTools: () => session.getAllToolNames(),
 				setActiveTools: (toolNames: string[]) => session.setActiveToolsByName(toolNames),
+				getCommands: () => [],
 				setModel: async model => {
 					const key = await session.modelRegistry.getApiKey(model);
 					if (!key) return false;
@@ -80,6 +81,7 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 				hasPendingMessages: () => session.queuedMessageCount > 0,
 				shutdown: () => {},
 				getContextUsage: () => session.getContextUsage(),
+				getSystemPrompt: () => session.systemPrompt,
 				compact: async instructionsOrOptions => {
 					const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
 					const options =
@@ -107,6 +109,10 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 				navigateTree: async (targetId, options) => {
 					const result = await session.navigateTree(targetId, { summarize: options?.summarize });
 					return { cancelled: result.cancelled };
+				},
+				switchSession: async sessionPath => {
+					const success = await session.switchSession(sessionPath);
+					return { cancelled: !success };
 				},
 				compact: async instructionsOrOptions => {
 					const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;

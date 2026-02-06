@@ -1,13 +1,28 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added `cacheRetention` option to control prompt cache retention preference ('none', 'short', 'long') across providers
+- Added `maxRetryDelayMs` option to cap server-requested retry delays and fail fast when delays exceed the limit
+- Added `effort` option for Anthropic Opus 4.6+ models to control adaptive thinking effort levels ('low', 'medium', 'high', 'max')
+- Added support for Anthropic Opus 4.6+ adaptive thinking mode that lets Claude decide when and how much to think
+- Added `PI_AI_ANTIGRAVITY_VERSION` environment variable to customize Antigravity sandbox endpoint version
 - Exported `convertAnthropicMessages` function for converting message formats to Anthropic API
 - Automatic fallback for Anthropic assistant-prefill requests: appends synthetic user "Continue." message when conversation ends with assistant turn to maintain API compatibility
 
+### Changed
+
+- Changed Anthropic thinking mode to use adaptive thinking for Opus 4.6+ models instead of budget-based thinking
+- Changed `supportsXhigh()` to support GPT-5.2/5.3 and Anthropic Opus 4.6+ models with adaptive thinking
+- Changed prompt caching to respect `cacheRetention` option and support TTL configuration for Anthropic
+- Changed OpenAI tool definitions to conditionally include `strict` field only when provider supports it
+- Changed Qwen model support to use `enable_thinking` boolean parameter instead of OpenAI-style reasoning_effort
+
 ### Fixed
 
+- Fixed indentation and formatting in `convertAnthropicMessages` function
 - Fixed handling of conversations ending with assistant messages on Anthropic-routed models that reject assistant prefill requests
 
 ## [11.2.3] - 2026-02-05

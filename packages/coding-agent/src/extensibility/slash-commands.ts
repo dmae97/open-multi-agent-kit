@@ -1,3 +1,48 @@
+export type SlashCommandSource = "extension" | "prompt" | "skill";
+
+export type SlashCommandLocation = "user" | "project" | "path";
+
+export interface SlashCommandInfo {
+	name: string;
+	description?: string;
+	source: SlashCommandSource;
+	location?: SlashCommandLocation;
+	path?: string;
+}
+
+export interface BuiltinSlashCommand {
+	name: string;
+	description: string;
+}
+
+export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
+	{ name: "settings", description: "Open settings menu" },
+	{ name: "plan", description: "Toggle plan mode (agent plans before executing)" },
+	{ name: "model", description: "Select model (opens selector UI)" },
+	{ name: "export", description: "Export session to HTML file" },
+	{ name: "dump", description: "Copy session transcript to clipboard" },
+	{ name: "share", description: "Share session as a secret GitHub gist" },
+	{ name: "browser", description: "Toggle browser headless vs visible mode" },
+	{ name: "copy", description: "Copy last agent message to clipboard" },
+	{ name: "session", description: "Show session info and stats" },
+	{ name: "usage", description: "Show provider usage and limits" },
+	{ name: "changelog", description: "Show changelog entries" },
+	{ name: "hotkeys", description: "Show all keyboard shortcuts" },
+	{ name: "extensions", description: "Open Extension Control Center dashboard" },
+	{ name: "branch", description: "Create a new branch from a previous message" },
+	{ name: "fork", description: "Create a new fork from a previous message" },
+	{ name: "tree", description: "Navigate session tree (switch branches)" },
+	{ name: "login", description: "Login with OAuth provider" },
+	{ name: "logout", description: "Logout from OAuth provider" },
+	{ name: "new", description: "Start a new session" },
+	{ name: "compact", description: "Manually compact the session context" },
+	{ name: "handoff", description: "Hand off session context to a new session" },
+	{ name: "resume", description: "Resume a different session" },
+	{ name: "background", description: "Detach UI and continue running in background" },
+	{ name: "debug", description: "Write debug log (TUI state and messages)" },
+	{ name: "exit", description: "Exit the application" },
+];
+
 import { slashCommandCapability } from "../capability/slash-command";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import type { SlashCommand } from "../discovery";

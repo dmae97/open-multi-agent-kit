@@ -7,7 +7,7 @@ import { FileType, glob } from "@oh-my-pi/pi-natives";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import { ptree, untilAborted } from "@oh-my-pi/pi-utils";
-import { Type } from "@sinclair/typebox";
+import { type Static, Type } from "@sinclair/typebox";
 import { CONFIG_DIR_NAME } from "../config";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
@@ -515,6 +515,8 @@ const readSchema = Type.Object({
 	limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" })),
 	lines: Type.Optional(Type.Boolean({ description: "Prepend line numbers to output (default: false)" })),
 });
+
+export type ReadToolInput = Static<typeof readSchema>;
 
 export interface ReadToolDetails {
 	truncation?: TruncationResult;

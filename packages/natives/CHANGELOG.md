@@ -1,6 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- OSC 52 fallback for clipboard operations over SSH/mosh connections
+- Termux support with `termux-clipboard-set` integration
+- Headless environment guards to prevent clipboard errors when no display server is available
+- Async clipboard API with improved error handling and fallback strategies
+
+### Changed
+
+- Clipboard functions now return promises for better async handling
+- Native clipboard operations are now best-effort with graceful degradation
 
 ## [11.0.0] - 2026-02-05
 ### Removed

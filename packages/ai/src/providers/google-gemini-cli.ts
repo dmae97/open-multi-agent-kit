@@ -69,15 +69,20 @@ const GEMINI_CLI_HEADERS = {
 };
 
 // Headers for Antigravity (sandbox endpoint) - requires specific User-Agent
-const ANTIGRAVITY_HEADERS = {
-	"User-Agent": "antigravity/1.15.8 darwin/arm64",
-	"X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
-	"Client-Metadata": JSON.stringify({
-		ideType: "IDE_UNSPECIFIED",
-		platform: "PLATFORM_UNSPECIFIED",
-		pluginType: "GEMINI",
-	}),
-};
+const DEFAULT_ANTIGRAVITY_VERSION = "1.15.8";
+
+function getAntigravityHeaders() {
+	const version = process.env.PI_AI_ANTIGRAVITY_VERSION || DEFAULT_ANTIGRAVITY_VERSION;
+	return {
+		"User-Agent": `antigravity/${version} darwin/arm64`,
+		"X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
+		"Client-Metadata": JSON.stringify({
+			ideType: "IDE_UNSPECIFIED",
+			platform: "PLATFORM_UNSPECIFIED",
+			pluginType: "GEMINI",
+		}),
+	};
+}
 
 // Antigravity system instruction (ported from CLIProxyAPI v6.6.89).
 const ANTIGRAVITY_SYSTEM_INSTRUCTION = `<identity>
@@ -413,7 +418,7 @@ export const streamGoogleGeminiCli: StreamFunction<"google-gemini-cli"> = (
 
 			const requestBody = buildRequest(model, context, projectId, options, isAntigravity);
 			options?.onPayload?.(requestBody);
-			const headers = isAntigravity ? ANTIGRAVITY_HEADERS : GEMINI_CLI_HEADERS;
+			const headers = isAntigravity ? getAntigravityHeaders() : GEMINI_CLI_HEADERS;
 
 			const requestHeaders = {
 				Authorization: `Bearer ${accessToken}`,
@@ -456,6 +461,16 @@ export const streamGoogleGeminiCli: StreamFunction<"google-gemini-cli"> = (
 						// Use server-provided delay or exponential backoff
 						const serverDelay = extractRetryDelay(errorText, response);
 						const delayMs = serverDelay ?? BASE_DELAY_MS * 2 ** attempt;
+
+						// Check if server delay exceeds max allowed (default: 60s)
+						const maxDelayMs = options?.maxRetryDelayMs ?? 60000;
+						if (maxDelayMs > 0 && serverDelay && serverDelay > maxDelayMs) {
+							const delaySeconds = Math.ceil(serverDelay / 1000);
+							throw new Error(
+								`Server requested ${delaySeconds}s retry delay (max: ${Math.ceil(maxDelayMs / 1000)}s). ${extractErrorMessage(errorText)}`,
+							);
+						}
+
 						await abortableSleep(delayMs, options?.signal);
 						continue;
 					}

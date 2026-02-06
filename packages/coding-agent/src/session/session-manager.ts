@@ -184,6 +184,8 @@ export interface SessionInfo {
 	/** Working directory where the session was started. Empty string for old sessions. */
 	cwd: string;
 	title?: string;
+	/** Path to the parent session (if this session was forked). */
+	parentSessionPath?: string;
 	created: Date;
 	modified: Date;
 	messageCount: number;
@@ -933,6 +935,7 @@ async function collectSessionsFromFiles(files: string[], storage: SessionStorage
 						id: header.id,
 						cwd: typeof header.cwd === "string" ? header.cwd : "",
 						title: header.title ?? shortSummary,
+						parentSessionPath: (header as SessionHeader).parentSession,
 						created: new Date(header.timestamp),
 						modified: stats.mtime,
 						messageCount,
@@ -1294,7 +1297,11 @@ export class SessionManager {
 		if (this.persistError) throw this.persistError;
 
 		const hasAssistant = this.fileEntries.some(e => e.type === "message" && e.message.role === "assistant");
-		if (!hasAssistant && !this.flushed) return;
+		if (!hasAssistant) {
+			// Mark as not flushed so when assistant arrives, all entries get written
+			this.flushed = false;
+			return;
+		}
 
 		if (!this.flushed) {
 			this.flushed = true;
@@ -1776,6 +1783,7 @@ export class SessionManager {
 	 * Returns the new session file path, or undefined if not persisting.
 	 */
 	createBranchedSession(leafId: string): string | undefined {
+		const previousSessionFile = this.sessionFile;
 		const branchPath = this.getBranch(leafId);
 		if (branchPath.length === 0) {
 			throw new Error(`Entry ${leafId} not found`);
@@ -1795,7 +1803,7 @@ export class SessionManager {
 			id: newSessionId,
 			timestamp,
 			cwd: this.cwd,
-			parentSession: this.persist ? this.sessionFile : undefined,
+			parentSession: this.persist ? previousSessionFile : undefined,
 		};
 
 		// Collect labels for entries in the path
@@ -1834,6 +1842,8 @@ export class SessionManager {
 			this.storage.writeTextSync(newSessionFile, `${lines.join("\n")}\n`);
 			this.fileEntries = [header, ...pathWithoutLabels, ...labelEntries];
 			this.sessionId = newSessionId;
+			this.sessionFile = newSessionFile;
+			this.flushed = true;
 			this._buildIndex();
 			return newSessionFile;
 		}

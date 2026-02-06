@@ -432,7 +432,7 @@ function buildParams(model: Model<"openai-completions">, context: Context, optio
 	}
 
 	if (context.tools) {
-		params.tools = convertTools(context.tools);
+		params.tools = convertTools(context.tools, compat);
 	} else if (hasToolHistory(context.messages)) {
 		// Anthropic (via LiteLLM/proxy) requires tools param when conversation has tool_calls/tool_results
 		params.tools = [];
@@ -446,6 +446,9 @@ function buildParams(model: Model<"openai-completions">, context: Context, optio
 		// Z.ai uses binary thinking: { type: "enabled" | "disabled" }
 		// Must explicitly disable since z.ai defaults to thinking enabled
 		(params as any).thinking = { type: options?.reasoningEffort ? "enabled" : "disabled" };
+	} else if (compat.thinkingFormat === "qwen" && model.reasoning) {
+		// Qwen uses enable_thinking: boolean
+		(params as any).enable_thinking = !!options?.reasoningEffort;
 	} else if (options?.reasoningEffort && model.reasoning && compat.supportsReasoningEffort) {
 		// OpenAI-style reasoning_effort
 		params.reasoning_effort = options.reasoningEffort;
@@ -757,14 +760,15 @@ export function convertMessages(
 	return params;
 }
 
-function convertTools(tools: Tool[]): OpenAI.Chat.Completions.ChatCompletionTool[] {
+function convertTools(tools: Tool[], compat: ResolvedOpenAICompat): OpenAI.Chat.Completions.ChatCompletionTool[] {
 	return tools.map(tool => ({
 		type: "function",
 		function: {
 			name: tool.name,
 			description: tool.description,
 			parameters: tool.parameters as any, // TypeBox already generates JSON Schema
-			strict: false, // Disable strict mode to allow optional parameters without null unions
+			// Only include strict if provider supports it. Some reject unknown fields.
+			...(compat.supportsStrictMode !== false && { strict: false }),
 		},
 	}));
 }
@@ -836,6 +840,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAICompat 
 		requiresAssistantContentForToolCalls: isOpenRouterKimi,
 		openRouterRouting: undefined,
 		vercelGatewayRouting: undefined,
+		supportsStrictMode: true,
 	};
 }
 
@@ -867,5 +872,6 @@ function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompat {
 			model.compat.requiresAssistantContentForToolCalls ?? detected.requiresAssistantContentForToolCalls,
 		openRouterRouting: model.compat.openRouterRouting ?? detected.openRouterRouting,
 		vercelGatewayRouting: model.compat.vercelGatewayRouting ?? detected.vercelGatewayRouting,
+		supportsStrictMode: model.compat.supportsStrictMode ?? detected.supportsStrictMode,
 	};
 }

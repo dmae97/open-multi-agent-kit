@@ -27,6 +27,8 @@ const findSchema = Type.Object({
 	limit: Type.Optional(Type.Number({ description: "Max results (default: 1000)" })),
 });
 
+export type FindToolInput = Static<typeof findSchema>;
+
 const DEFAULT_LIMIT = 1000;
 const GLOB_TIMEOUT_MS = 5000;
 

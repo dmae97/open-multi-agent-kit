@@ -185,6 +185,10 @@ export class SelectorController {
 				this.ctx.updateEditorBorderColor();
 				break;
 
+			case "clearOnShrink":
+				this.ctx.ui.setClearOnShrink(value as boolean);
+				break;
+
 			// Settings with UI side effects
 			case "showImages":
 				for (const child of this.ctx.chatContainer.children) {
@@ -354,15 +358,6 @@ export class SelectorController {
 		const tree = this.ctx.sessionManager.getTree();
 		const realLeafId = this.ctx.sessionManager.getLeafId();
 
-		// Find the visible leaf for display (skip metadata entries like labels)
-		let visibleLeafId = realLeafId;
-		while (visibleLeafId) {
-			const entry = this.ctx.sessionManager.getEntry(visibleLeafId);
-			if (!entry) break;
-			if (entry.type !== "label" && entry.type !== "custom") break;
-			visibleLeafId = entry.parentId ?? null;
-		}
-
 		if (tree.length === 0) {
 			this.ctx.showStatus("No entries in session");
 			return;
@@ -371,11 +366,11 @@ export class SelectorController {
 		this.showSelector(done => {
 			const selector = new TreeSelectorComponent(
 				tree,
-				visibleLeafId,
+				realLeafId,
 				this.ctx.ui.terminal.rows,
 				async entryId => {
-					// Selecting the visible leaf is a no-op (already there)
-					if (entryId === visibleLeafId) {
+					// Selecting the current leaf is a no-op (already there)
+					if (entryId === realLeafId) {
 						done();
 						this.ctx.showStatus("Already at this point");
 						return;
@@ -458,7 +453,7 @@ export class SelectorController {
 						this.ctx.chatContainer.clear();
 						this.ctx.renderInitialMessages();
 						await this.ctx.reloadTodos();
-						if (result.editorText) {
+						if (result.editorText && !this.ctx.editor.getText().trim()) {
 							this.ctx.editor.setText(result.editorText);
 						}
 						this.ctx.showStatus("Navigated to selected point");

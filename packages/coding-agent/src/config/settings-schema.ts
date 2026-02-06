@@ -242,6 +242,15 @@ export const SETTINGS_SCHEMA = {
 		default: true, // will be computed based on platform if undefined
 		ui: { tab: "display", label: "Hardware cursor", description: "Show terminal cursor for IME support" },
 	},
+	clearOnShrink: {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "display",
+			label: "Clear on shrink",
+			description: "Clear empty rows when content shrinks (may cause flicker)",
+		},
+	},
 	extensions: { type: "array", default: [] as string[] },
 	enabledModels: { type: "array", default: [] as string[] },
 	disabledProviders: { type: "array", default: [] as string[] },

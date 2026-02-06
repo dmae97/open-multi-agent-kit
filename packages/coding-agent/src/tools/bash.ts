@@ -2,7 +2,7 @@ import * as path from "node:path";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
-import { Type } from "@sinclair/typebox";
+import { type Static, Type } from "@sinclair/typebox";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import { type BashExecutorOptions, executeBash } from "../exec/bash-executor";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
@@ -30,6 +30,8 @@ const bashSchema = Type.Object({
 	head: Type.Optional(Type.Number({ description: "Return only first N lines of output" })),
 	tail: Type.Optional(Type.Number({ description: "Return only last N lines of output" })),
 });
+
+export type BashToolInput = Static<typeof bashSchema>;
 
 export interface BashToolDetails {
 	meta?: OutputMeta;

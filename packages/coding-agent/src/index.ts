@@ -40,6 +40,9 @@ export type {
 export { CustomToolLoader, discoverAndLoadCustomTools, loadCustomTools } from "./extensibility/custom-tools";
 export type {
 	AppAction,
+	BashToolCallEvent,
+	CustomToolCallEvent,
+	EditToolCallEvent,
 	Extension,
 	ExtensionActions,
 	ExtensionAPI,
@@ -55,13 +58,17 @@ export type {
 	ExtensionShortcut,
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
+	FindToolCallEvent,
+	GrepToolCallEvent,
 	InputEvent,
 	InputEventResult,
 	KeybindingsManager,
 	LoadExtensionsResult,
 	MessageRenderer,
 	MessageRenderOptions,
+	ReadToolCallEvent,
 	RegisteredCommand,
+	ToolCallEvent,
 	ToolResultEvent,
 	TurnEndEvent,
 	TurnStartEvent,
@@ -69,12 +76,14 @@ export type {
 	UserBashEventResult,
 	UserPythonEvent,
 	UserPythonEventResult,
+	WriteToolCallEvent,
 } from "./extensibility/extensions";
 // Extension types and utilities
 export {
 	discoverAndLoadExtensions,
 	ExtensionRunner,
 	ExtensionRuntime,
+	isToolCallEventType,
 } from "./extensibility/extensions";
 // Hook system types (legacy re-export)
 export type * from "./extensibility/hooks";
@@ -238,22 +247,27 @@ export {
 // Tools (detail types and utilities)
 export {
 	type BashToolDetails,
+	type BashToolInput,
 	type BrowserToolDetails,
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,
 	type FindOperations,
 	type FindToolDetails,
+	type FindToolInput,
 	type FindToolOptions,
 	formatSize,
 	type GrepOperations,
 	type GrepToolDetails,
+	type GrepToolInput,
 	type GrepToolOptions,
 	type PythonToolDetails,
 	type ReadToolDetails,
+	type ReadToolInput,
 	type TruncationOptions,
 	type TruncationResult,
 	truncateHead,
 	truncateLine,
 	truncateTail,
 	type WriteToolDetails,
+	type WriteToolInput,
 } from "./tools";

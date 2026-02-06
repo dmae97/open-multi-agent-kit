@@ -67,17 +67,17 @@ export {
 	webSearchLinkedinTool,
 } from "../web/search";
 export { AskTool, type AskToolDetails } from "./ask";
-export { BashTool, type BashToolDetails, type BashToolOptions } from "./bash";
+export { BashTool, type BashToolDetails, type BashToolInput, type BashToolOptions } from "./bash";
 export { BrowserTool, type BrowserToolDetails } from "./browser";
 export { CalculatorTool, type CalculatorToolDetails } from "./calculator";
 export { type ExitPlanModeDetails, ExitPlanModeTool } from "./exit-plan-mode";
 export { FetchTool, type FetchToolDetails } from "./fetch";
-export { type FindOperations, FindTool, type FindToolDetails, type FindToolOptions } from "./find";
+export { type FindOperations, FindTool, type FindToolDetails, type FindToolInput, type FindToolOptions } from "./find";
 export { setPreferredImageProvider } from "./gemini-image";
-export { type GrepOperations, GrepTool, type GrepToolDetails, type GrepToolOptions } from "./grep";
+export { type GrepOperations, GrepTool, type GrepToolDetails, type GrepToolInput, type GrepToolOptions } from "./grep";
 export { NotebookTool, type NotebookToolDetails } from "./notebook";
 export { PythonTool, type PythonToolDetails, type PythonToolOptions } from "./python";
-export { ReadTool, type ReadToolDetails } from "./read";
+export { ReadTool, type ReadToolDetails, type ReadToolInput } from "./read";
 export { reportFindingTool, type SubmitReviewDetails } from "./review";
 export { loadSshTool, type SSHToolDetails, SshTool } from "./ssh";
 export { SubmitResultTool } from "./submit-result";
@@ -92,7 +92,7 @@ export {
 	truncateLine,
 	truncateTail,
 } from "./truncate";
-export { WriteTool, type WriteToolDetails } from "./write";
+export { WriteTool, type WriteToolDetails, type WriteToolInput } from "./write";
 
 /** Tool type (AgentTool from pi-ai) */
 export type Tool = AgentTool<any, any, any>;

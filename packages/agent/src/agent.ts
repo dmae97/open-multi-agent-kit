@@ -97,6 +97,14 @@ export interface AgentOptions {
 	thinkingBudgets?: ThinkingBudgets;
 
 	/**
+	 * Maximum delay in milliseconds to wait for a retry when the server requests a long wait.
+	 * If the server's requested delay exceeds this value, the request fails immediately,
+	 * allowing higher-level retry logic to handle it with user visibility.
+	 * Default: 60000 (60 seconds). Set to 0 to disable the cap.
+	 */
+	maxRetryDelayMs?: number;
+
+	/**
 	 * Provides tool execution context, resolved per tool call.
 	 * Use for late-bound UI or session state access.
 	 */
@@ -148,6 +156,7 @@ export class Agent {
 	public streamFn: StreamFn;
 	private _sessionId?: string;
 	private _thinkingBudgets?: ThinkingBudgets;
+	private _maxRetryDelayMs?: number;
 	public getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
 	private getToolContext?: (toolCall?: ToolCallContext) => AgentToolContext | undefined;
 	private cursorExecHandlers?: CursorExecHandlers;
@@ -169,6 +178,7 @@ export class Agent {
 		this.streamFn = opts.streamFn || streamSimple;
 		this._sessionId = opts.sessionId;
 		this._thinkingBudgets = opts.thinkingBudgets;
+		this._maxRetryDelayMs = opts.maxRetryDelayMs;
 		this.getApiKey = opts.getApiKey;
 		this.getToolContext = opts.getToolContext;
 		this.cursorExecHandlers = opts.cursorExecHandlers;
@@ -203,6 +213,21 @@ export class Agent {
 	 */
 	set thinkingBudgets(value: ThinkingBudgets | undefined) {
 		this._thinkingBudgets = value;
+	}
+
+	/**
+	 * Get the current max retry delay in milliseconds.
+	 */
+	get maxRetryDelayMs(): number | undefined {
+		return this._maxRetryDelayMs;
+	}
+
+	/**
+	 * Set the maximum delay to wait for server-requested retries.
+	 * Set to 0 to disable the cap.
+	 */
+	set maxRetryDelayMs(value: number | undefined) {
+		this._maxRetryDelayMs = value;
 	}
 
 	get state(): AgentState {
@@ -493,6 +518,7 @@ export class Agent {
 			interruptMode: this.interruptMode,
 			sessionId: this._sessionId,
 			thinkingBudgets: this._thinkingBudgets,
+			maxRetryDelayMs: this._maxRetryDelayMs,
 			kimiApiFormat: this.kimiApiFormat,
 			toolChoice: options?.toolChoice,
 			convertToLlm: this.convertToLlm,

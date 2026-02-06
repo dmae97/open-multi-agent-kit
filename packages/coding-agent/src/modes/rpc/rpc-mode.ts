@@ -286,6 +286,15 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 			return Promise.resolve({ success: false, error: "Theme switching not supported in RPC mode" });
 		}
 
+		getToolsExpanded() {
+			// Tool expansion not supported in RPC mode - no TUI
+			return false;
+		}
+
+		setToolsExpanded(_expanded: boolean) {
+			// Tool expansion not supported in RPC mode - no TUI
+		}
+
 		setEditorComponent(): void {
 			// Custom editor components not supported in RPC mode
 		}
@@ -316,6 +325,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 				getActiveTools: () => session.getActiveToolNames(),
 				getAllTools: () => session.getAllToolNames(),
 				setActiveTools: (toolNames: string[]) => session.setActiveToolsByName(toolNames),
+				getCommands: () => [],
 				setModel: async model => {
 					const key = await session.modelRegistry.getApiKey(model);
 					if (!key) return false;
@@ -335,6 +345,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 					shutdownState.requested = true;
 				},
 				getContextUsage: () => session.getContextUsage(),
+				getSystemPrompt: () => session.systemPrompt,
 				compact: async instructionsOrOptions => {
 					const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
 					const options =
@@ -363,6 +374,10 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 				navigateTree: async (targetId, options) => {
 					const result = await session.navigateTree(targetId, { summarize: options?.summarize });
 					return { cancelled: result.cancelled };
+				},
+				switchSession: async sessionPath => {
+					const success = await session.switchSession(sessionPath);
+					return { cancelled: !success };
 				},
 				compact: async instructionsOrOptions => {
 					const instructions = typeof instructionsOrOptions === "string" ? instructionsOrOptions : undefined;
@@ -412,12 +427,12 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 			}
 
 			case "steer": {
-				await session.steer(command.message);
+				await session.steer(command.message, command.images);
 				return success(id, "steer");
 			}
 
 			case "follow_up": {
-				await session.followUp(command.message);
+				await session.followUp(command.message, command.images);
 				return success(id, "follow_up");
 			}
 

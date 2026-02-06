@@ -45,6 +45,14 @@ export interface Terminal {
 	// Stop the terminal and restore state
 	stop(): void;
 
+	/**
+	 * Drain stdin before exiting to prevent Kitty key release events from
+	 * leaking to the parent shell over slow SSH connections.
+	 * @param maxMs - Maximum time to drain (default: 1000ms)
+	 * @param idleMs - Exit early if no input arrives within this time (default: 50ms)
+	 */
+	drainInput(maxMs?: number, idleMs?: number): Promise<void>;
+
 	// Write output to terminal
 	write(data: string): void;
 
@@ -187,6 +195,40 @@ export class ProcessTerminal implements Terminal {
 		this.safeWrite("\x1b[?u");
 	}
 
+	async drainInput(maxMs = 1000, idleMs = 50): Promise<void> {
+		if (this._kittyProtocolActive) {
+			// Disable Kitty keyboard protocol first so any late key releases
+			// do not generate new Kitty escape sequences.
+			process.stdout.write("\x1b[<u");
+			this._kittyProtocolActive = false;
+			setKittyProtocolActive(false);
+		}
+
+		const previousHandler = this.inputHandler;
+		this.inputHandler = undefined;
+
+		let lastDataTime = Date.now();
+		const onData = () => {
+			lastDataTime = Date.now();
+		};
+
+		process.stdin.on("data", onData);
+		const endTime = Date.now() + maxMs;
+
+		try {
+			while (true) {
+				const now = Date.now();
+				const timeLeft = endTime - now;
+				if (timeLeft <= 0) break;
+				if (now - lastDataTime >= idleMs) break;
+				await new Promise(resolve => setTimeout(resolve, Math.min(idleMs, timeLeft)));
+			}
+		} finally {
+			process.stdin.removeListener("data", onData);
+			this.inputHandler = previousHandler;
+		}
+	}
+
 	stop(): void {
 		// Unregister from emergency cleanup
 		if (activeTerminal === this) {
@@ -196,7 +238,7 @@ export class ProcessTerminal implements Terminal {
 		// Disable bracketed paste mode
 		this.safeWrite("\x1b[?2004l");
 
-		// Disable Kitty keyboard protocol (pop the flags we pushed) - only if we enabled it
+		// Disable Kitty keyboard protocol if not already done by drainInput()
 		if (this._kittyProtocolActive) {
 			this.safeWrite("\x1b[<u");
 			this._kittyProtocolActive = false;
@@ -220,13 +262,12 @@ export class ProcessTerminal implements Terminal {
 			this.resizeHandler = undefined;
 		}
 
-		// Restore raw mode state
-		// Pause stdin so Node.js stops reading from the terminal input queue.
-		// Without this, process.stdin stays in flowing mode and races with any
-		// external process (e.g. vim) for keystrokes on the same tty.
-		// start() calls resume() to counterpart this.
+		// Pause stdin to prevent any buffered input (e.g., Ctrl+D) from being
+		// re-interpreted after raw mode is disabled. This fixes a race condition
+		// where Ctrl+D could close the parent shell over SSH.
 		process.stdin.pause();
 
+		// Restore raw mode state
 		if (process.stdin.setRawMode) {
 			process.stdin.setRawMode(this.wasRaw);
 		}

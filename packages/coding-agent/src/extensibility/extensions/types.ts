@@ -28,8 +28,19 @@ import type {
 	SessionEntry,
 	SessionManager,
 } from "../../session/session-manager";
-import type { BashToolDetails, FindToolDetails, GrepToolDetails, ReadToolDetails } from "../../tools";
+import type {
+	BashToolDetails,
+	BashToolInput,
+	FindToolDetails,
+	FindToolInput,
+	GrepToolDetails,
+	GrepToolInput,
+	ReadToolDetails,
+	ReadToolInput,
+	WriteToolInput,
+} from "../../tools";
 import type { EventBus } from "../../utils/event-bus";
+import type { SlashCommandInfo } from "../slash-commands";
 
 export type { AppAction, KeybindingsManager } from "../../config/keybindings";
 export type { ExecOptions, ExecResult } from "../../exec/exec";
@@ -123,6 +134,12 @@ export interface ExtensionUIContext {
 
 	/** Set the current theme by name or Theme object. */
 	setTheme(theme: string | Theme): Promise<{ success: boolean; error?: string }>;
+
+	/** Get current tool output expansion state. */
+	getToolsExpanded(): boolean;
+
+	/** Set tool output expansion state. */
+	setToolsExpanded(expanded: boolean): void;
 }
 
 // ============================================================================
@@ -171,6 +188,8 @@ export interface ExtensionContext {
 	hasPendingMessages(): boolean;
 	/** Gracefully shutdown and exit. */
 	shutdown(): void;
+	/** Get the current effective system prompt. */
+	getSystemPrompt(): string;
 	/** @deprecated Use hasPendingMessages() instead */
 	hasQueuedMessages(): boolean;
 }
@@ -197,6 +216,9 @@ export interface ExtensionCommandContext extends ExtensionContext {
 
 	/** Navigate to a different point in the session tree. */
 	navigateTree(targetId: string, options?: { summarize?: boolean }): Promise<{ cancelled: boolean }>;
+
+	/** Switch to a different session file. */
+	switchSession(sessionPath: string): Promise<{ cancelled: boolean }>;
 
 	/** Compact the session context (interactive mode shows UI). */
 	compact(instructionsOrOptions?: string | CompactOptions): Promise<void>;
@@ -243,9 +265,9 @@ export interface ToolDefinition<TParams extends TSchema = TSchema, TDetails = un
 	execute(
 		toolCallId: string,
 		params: Static<TParams>,
+		signal: AbortSignal | undefined,
 		onUpdate: AgentToolUpdateCallback<TDetails> | undefined,
 		ctx: ExtensionContext,
-		signal?: AbortSignal,
 	): Promise<AgentToolResult<TDetails>>;
 
 	/** Called on session lifecycle events - use to reconstruct state or cleanup resources */
@@ -261,6 +283,24 @@ export interface ToolDefinition<TParams extends TSchema = TSchema, TDetails = un
 		theme: Theme,
 		args?: Static<TParams>,
 	) => Component;
+}
+
+// ============================================================================
+// Resource Events
+// ============================================================================
+
+/** Fired after session_start to allow extensions to provide additional resource paths. */
+export interface ResourcesDiscoverEvent {
+	type: "resources_discover";
+	cwd: string;
+	reason: "startup" | "reload";
+}
+
+/** Result from resources_discover event handler */
+export interface ResourcesDiscoverResult {
+	skillPaths?: string[];
+	promptPaths?: string[];
+	themePaths?: string[];
 }
 
 // ============================================================================
@@ -454,13 +494,55 @@ export interface InputEvent {
 // Tool Events
 // ============================================================================
 
-/** Fired before a tool executes. Can block. */
-export interface ToolCallEvent {
+interface ToolCallEventBase {
 	type: "tool_call";
-	toolName: string;
 	toolCallId: string;
+}
+
+export interface BashToolCallEvent extends ToolCallEventBase {
+	toolName: "bash";
+	input: BashToolInput;
+}
+
+export interface ReadToolCallEvent extends ToolCallEventBase {
+	toolName: "read";
+	input: ReadToolInput;
+}
+
+export interface EditToolCallEvent extends ToolCallEventBase {
+	toolName: "edit";
 	input: Record<string, unknown>;
 }
+
+export interface WriteToolCallEvent extends ToolCallEventBase {
+	toolName: "write";
+	input: WriteToolInput;
+}
+
+export interface GrepToolCallEvent extends ToolCallEventBase {
+	toolName: "grep";
+	input: GrepToolInput;
+}
+
+export interface FindToolCallEvent extends ToolCallEventBase {
+	toolName: "find";
+	input: FindToolInput;
+}
+
+export interface CustomToolCallEvent extends ToolCallEventBase {
+	toolName: string;
+	input: Record<string, unknown>;
+}
+
+/** Fired before a tool executes. Can block. */
+export type ToolCallEvent =
+	| BashToolCallEvent
+	| ReadToolCallEvent
+	| EditToolCallEvent
+	| WriteToolCallEvent
+	| GrepToolCallEvent
+	| FindToolCallEvent
+	| CustomToolCallEvent;
 
 interface ToolResultEventBase {
 	type: "tool_result";
@@ -515,8 +597,43 @@ export type ToolResultEvent =
 	| FindToolResultEvent
 	| CustomToolResultEvent;
 
+/**
+ * Type guard for narrowing ToolCallEvent by tool name.
+ *
+ * Built-in tools narrow automatically (no type params needed):
+ * ```ts
+ * if (isToolCallEventType("bash", event)) {
+ *   event.input.command;  // string
+ * }
+ * ```
+ *
+ * Custom tools require explicit type parameters:
+ * ```ts
+ * if (isToolCallEventType<"my_tool", MyToolInput>("my_tool", event)) {
+ *   event.input.action;  // typed
+ * }
+ * ```
+ *
+ * Note: Direct narrowing via `event.toolName === "bash"` doesn't work because
+ * CustomToolCallEvent.toolName is `string` which overlaps with all literals.
+ */
+export function isToolCallEventType(toolName: "bash", event: ToolCallEvent): event is BashToolCallEvent;
+export function isToolCallEventType(toolName: "read", event: ToolCallEvent): event is ReadToolCallEvent;
+export function isToolCallEventType(toolName: "edit", event: ToolCallEvent): event is EditToolCallEvent;
+export function isToolCallEventType(toolName: "write", event: ToolCallEvent): event is WriteToolCallEvent;
+export function isToolCallEventType(toolName: "grep", event: ToolCallEvent): event is GrepToolCallEvent;
+export function isToolCallEventType(toolName: "find", event: ToolCallEvent): event is FindToolCallEvent;
+export function isToolCallEventType<TName extends string, TInput extends Record<string, unknown>>(
+	toolName: TName,
+	event: ToolCallEvent,
+): event is ToolCallEvent & { toolName: TName; input: TInput };
+export function isToolCallEventType(toolName: string, event: ToolCallEvent): boolean {
+	return event.toolName === toolName;
+}
+
 /** Union of all event types */
 export type ExtensionEvent =
+	| ResourcesDiscoverEvent
 	| SessionEvent
 	| ContextEvent
 	| BeforeAgentStartEvent
@@ -659,6 +776,7 @@ export interface ExtensionAPI {
 	// Event Subscription
 	// =========================================================================
 
+	on(event: "resources_discover", handler: ExtensionHandler<ResourcesDiscoverEvent, ResourcesDiscoverResult>): void;
 	on(event: "session_start", handler: ExtensionHandler<SessionStartEvent>): void;
 	on(
 		event: "session_before_switch",
@@ -775,6 +893,9 @@ export interface ExtensionAPI {
 	/** Set the active tools by name. */
 	setActiveTools(toolNames: string[]): Promise<void>;
 
+	/** Get available slash commands in the current session. */
+	getCommands(): SlashCommandInfo[];
+
 	/** Set the current model. Returns false if no API key available. */
 	setModel(model: Model): Promise<boolean>;
 
@@ -833,6 +954,8 @@ export type GetActiveToolsHandler = () => string[];
 
 export type GetAllToolsHandler = () => string[];
 
+export type GetCommandsHandler = () => SlashCommandInfo[];
+
 export type SetActiveToolsHandler = (toolNames: string[]) => Promise<void>;
 
 export type SetModelHandler = (model: Model) => Promise<boolean>;
@@ -855,6 +978,7 @@ export interface ExtensionActions {
 	getActiveTools: GetActiveToolsHandler;
 	getAllTools: GetAllToolsHandler;
 	setActiveTools: SetActiveToolsHandler;
+	getCommands: GetCommandsHandler;
 	setModel: SetModelHandler;
 	getThinkingLevel: GetThinkingLevelHandler;
 	setThinkingLevel: SetThinkingLevelHandler;
@@ -869,6 +993,7 @@ export interface ExtensionContextActions {
 	shutdown: () => void;
 	getContextUsage: () => ContextUsage | undefined;
 	compact: (instructionsOrOptions?: string | CompactOptions) => Promise<void>;
+	getSystemPrompt: () => string;
 }
 
 /** Actions for ExtensionCommandContext (ctx.* in command handlers). */
@@ -882,6 +1007,7 @@ export interface ExtensionCommandContextActions {
 	branch: (entryId: string) => Promise<{ cancelled: boolean }>;
 	navigateTree: (targetId: string, options?: { summarize?: boolean }) => Promise<{ cancelled: boolean }>;
 	compact: (instructionsOrOptions?: string | CompactOptions) => Promise<void>;
+	switchSession: (sessionPath: string) => Promise<{ cancelled: boolean }>;
 }
 
 /** Full runtime = state + actions. */

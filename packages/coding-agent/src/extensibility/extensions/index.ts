@@ -2,6 +2,7 @@
  * Extension system for lifecycle events and custom tools.
  */
 
+export type { SlashCommandInfo, SlashCommandLocation, SlashCommandSource } from "../slash-commands";
 export { discoverAndLoadExtensions, ExtensionRuntime, loadExtensionFromFactory, loadExtensions } from "./loader";
 export type {
 	BranchHandler,
@@ -9,6 +10,7 @@ export type {
 	NavigateTreeHandler,
 	NewSessionHandler,
 	ShutdownHandler,
+	SwitchSessionHandler,
 } from "./runner";
 export { ExtensionRunner } from "./runner";
 export type {
@@ -19,6 +21,8 @@ export type {
 	AgentToolUpdateCallback,
 	AppAction,
 	AppendEntryHandler,
+	// Events - Tool (ToolCallEvent types)
+	BashToolCallEvent,
 	BashToolResultEvent,
 	BeforeAgentStartEvent,
 	BeforeAgentStartEventResult,
@@ -26,7 +30,10 @@ export type {
 	ContextEvent,
 	// Event Results
 	ContextEventResult,
+	ContextUsage,
+	CustomToolCallEvent,
 	CustomToolResultEvent,
+	EditToolCallEvent,
 	EditToolResultEvent,
 	ExecOptions,
 	ExecResult,
@@ -47,11 +54,15 @@ export type {
 	ExtensionShortcut,
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
+	FindToolCallEvent,
 	FindToolResultEvent,
 	GetActiveToolsHandler,
 	GetAllToolsHandler,
+	GetCommandsHandler,
 	GetThinkingLevelHandler,
+	GrepToolCallEvent,
 	GrepToolResultEvent,
+	// Events - Input
 	InputEvent,
 	InputEventResult,
 	KeybindingsManager,
@@ -59,10 +70,14 @@ export type {
 	// Message Rendering
 	MessageRenderer,
 	MessageRenderOptions,
+	ReadToolCallEvent,
 	ReadToolResultEvent,
 	// Commands
 	RegisteredCommand,
 	RegisteredTool,
+	// Events - Resources
+	ResourcesDiscoverEvent,
+	ResourcesDiscoverResult,
 	SendMessageHandler,
 	SendUserMessageHandler,
 	SessionBeforeBranchEvent,
@@ -101,6 +116,9 @@ export type {
 	UserBashEventResult,
 	UserPythonEvent,
 	UserPythonEventResult,
+	WriteToolCallEvent,
 	WriteToolResultEvent,
 } from "./types";
+// Type guards
+export { isToolCallEventType } from "./types";
 export { ExtensionToolWrapper, RegisteredToolAdapter, wrapRegisteredTool, wrapRegisteredTools } from "./wrapper";

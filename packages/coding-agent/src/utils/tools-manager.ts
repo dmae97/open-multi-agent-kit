@@ -269,6 +269,12 @@ async function installPythonPackage(pkg: string, signal?: AbortSignal): Promise<
 	return false;
 }
 
+// Termux package names for tools
+const TERMUX_PACKAGES: Partial<Record<ToolName, string>> = {
+	sd: "sd",
+	sg: "ast-grep",
+};
+
 // Ensure a tool is available, downloading if necessary
 // Returns the path to the tool, or null if unavailable
 type EnsureToolOptions = {
@@ -282,6 +288,16 @@ export async function ensureTool(tool: ToolName, silentOrOptions?: EnsureToolOpt
 	const existingPath = await getToolPath(tool);
 	if (existingPath) {
 		return existingPath;
+	}
+
+	// On Android/Termux, Linux binaries don't work due to Bionic libc incompatibility.
+	// Users must install via pkg.
+	if (os.platform() === "android") {
+		const pkgName = TERMUX_PACKAGES[tool] ?? tool;
+		if (!silent) {
+			logger.warn(`${TOOLS[tool]?.name ?? tool} not found. Install with: pkg install ${pkgName}`);
+		}
+		return undefined;
 	}
 
 	// Handle Python tools

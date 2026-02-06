@@ -32,6 +32,8 @@ const grepSchema = Type.Object({
 	offset: Type.Optional(Type.Number({ description: "Skip first N entries before applying limit (default: 0)" })),
 });
 
+export type GrepToolInput = Static<typeof grepSchema>;
+
 const DEFAULT_MATCH_LIMIT = 100;
 
 export interface GrepToolDetails {

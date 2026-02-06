@@ -1,6 +1,35 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added sticky column behavior for vertical cursor movement, preserving target column when navigating through lines of varying lengths
+- Added `drainInput()` method to Terminal interface to prevent Kitty key release events from leaking to parent shell over slow SSH connections
+- Added `setClearOnShrink()` method to control whether full re-render occurs when content shrinks below working area
+- Added support for hidden paths (e.g., `.pi`, `.github`) in autocomplete while excluding `.git` directories
+
+### Changed
+
+- Changed autocomplete to include hidden paths but filter out `.git` and its contents
+- Changed Input component to properly handle surrogate pairs in Unicode text, preventing cursor display corruption with emoji and multi-byte characters
+- Changed Editor to use `setCursorCol()` for all cursor column updates, enabling sticky column tracking
+- Changed Editor's vertical navigation to implement sticky column logic via `moveToVisualLine()` and `computeVerticalMoveColumn()`
+- Changed Editor's Enter key handling to extract submit logic into `submitValue()` method for better code organization
+- Changed SettingsList to truncate long lines to viewport width, preventing text overflow
+- Changed Terminal's `stop()` method to drain stdin before restoring raw mode, fixing race condition where Ctrl+D could close parent shell over SSH
+- Changed TUI rendering to add `clearOnShrink` option (controlled by `PI_CLEAR_ON_SHRINK` env var) for reducing redraws on slower terminals
+- Changed TUI rendering to detect when extra lines exceed viewport height and trigger full re-render instead of incremental updates
+
+### Fixed
+
+- Fixed cursor position corruption in Input component when displaying text with emoji and combining characters
+- Fixed `.git` directory appearing in autocomplete suggestions
+- Fixed race condition where Kitty key release events could leak to parent shell after TUI exit over slow SSH connections
+- Fixed Editor's word movement (Ctrl+Left/Right) to properly reset sticky column for subsequent vertical navigation
+- Fixed Editor's undo operation to reset sticky column state when restoring cursor position
+- Fixed Editor's right arrow key at end of last line to set sticky column for subsequent up/down navigation
+- Fixed TUI rendering to correctly detect viewport changes and avoid false full-redraws after content shrinks
+- Fixed Kitty protocol key parsing to prefer codepoint over base layout for Latin letters and symbols, fixing keyboard layout issues (e.g., Dvorak)
 
 ## [11.0.0] - 2026-02-05
 

@@ -1,5 +1,7 @@
 // Plugin system exports
+
 export { formatDoctorResults, runDoctorChecks } from "./doctor";
+export { type GitSource, parseGitUrl } from "./git-url";
 export {
 	getAllPluginCommandPaths,
 	getAllPluginHookPaths,

@@ -34,6 +34,7 @@ import {
 } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
 import { getAgentDbPath } from "../config";
+import { resolveConfigValue } from "../config/resolve-config-value";
 import { AgentStorage } from "./agent-storage";
 
 export type ApiKeyCredential = {
@@ -1294,7 +1295,7 @@ export class AuthStorage {
 		const apiKeySelection = this.selectCredentialByType(provider, "api_key", sessionId);
 		if (apiKeySelection) {
 			this.recordSessionCredential(provider, sessionId, "api_key", apiKeySelection.index);
-			return apiKeySelection.credential.key;
+			return resolveConfigValue(apiKeySelection.credential.key);
 		}
 
 		const oauthKey = await this.resolveOAuthApiKey(provider, sessionId, options);

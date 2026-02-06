@@ -113,7 +113,7 @@ export class SettingsList implements Component {
 				isSelected,
 			);
 
-			lines.push(prefix + labelText + separator + valueText);
+			lines.push(truncateToWidth(prefix + labelText + separator + valueText, width));
 		}
 
 		// Add scroll indicator if needed
@@ -134,7 +134,7 @@ export class SettingsList implements Component {
 
 		// Add hint
 		lines.push("");
-		lines.push(this.theme.hint("Enter/Space to change · Esc to cancel"));
+		lines.push(truncateToWidth(this.theme.hint("  Enter/Space to change · Esc to cancel"), width));
 
 		return lines;
 	}

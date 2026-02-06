@@ -87,9 +87,9 @@
 		"test": "bun test"
 	},
 	"dependencies": {
+		"@mozilla/readability": "0.6.0",
 		"@oclif/core": "^4.8.0",
 		"@oclif/plugin-autocomplete": "^3.2.40",
-		"@mozilla/readability": "0.6.0",
 		"@oh-my-pi/omp-stats": "workspace:*",
 		"@oh-my-pi/pi-agent-core": "workspace:*",
 		"@oh-my-pi/pi-ai": "workspace:*",

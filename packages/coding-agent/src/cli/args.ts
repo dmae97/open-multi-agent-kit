@@ -214,6 +214,7 @@ export function getExtraHelpText(): string {
 
   ${chalk.dim("# Configuration")}
   PI_CODING_AGENT_DIR        - Session storage directory (default: ~/${CONFIG_DIR_NAME}/agent)
+  PI_PACKAGE_DIR             - Override package directory (for Nix/Guix store paths)
   PI_SMOL_MODEL              - Override smol/fast model (see --smol)
   PI_SLOW_MODEL              - Override slow/reasoning model (see --slow)
   PI_PLAN_MODEL              - Override planning model (see --plan)

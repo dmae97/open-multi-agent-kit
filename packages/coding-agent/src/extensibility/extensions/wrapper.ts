@@ -32,7 +32,7 @@ export class RegisteredToolAdapter implements AgentTool<any, any, any> {
 		onUpdate?: AgentToolUpdateCallback<any>,
 		_context?: AgentToolContext,
 	) {
-		return this.registeredTool.definition.execute(toolCallId, params, onUpdate, this.runner.createContext(), signal);
+		return this.registeredTool.definition.execute(toolCallId, params, signal, onUpdate, this.runner.createContext());
 	}
 
 	renderCall?(args: any, theme: any) {

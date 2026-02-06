@@ -692,6 +692,157 @@ again, hello world`,
 		});
 	});
 
+	describe("Blockquotes with multiline content", () => {
+		it("should apply consistent styling to all lines in lazy continuation blockquote", () => {
+			// Markdown "lazy continuation" - second line without > is still part of the quote
+			const markdown = new Markdown(
+				`>Foo
+bar`,
+				0,
+				0,
+				defaultMarkdownTheme,
+				{
+					color: text => chalk.magenta(text), // This should NOT be applied to blockquotes
+				},
+			);
+
+			const lines = markdown.render(80);
+
+			// Both lines should have the quote border
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
+			const quotedLines = plainLines.filter(line => line.startsWith("│ "));
+			expect(quotedLines.length).toBe(2);
+
+			// Both lines should have italic (from theme.quote styling)
+			const fooLine = lines.find(line => line.includes("Foo"));
+			const barLine = lines.find(line => line.includes("bar"));
+			expect(fooLine).toBeTruthy();
+			expect(barLine).toBeTruthy();
+
+			// Check that both have italic (\x1b[3m) - blockquotes use theme styling, not default message color
+			expect(fooLine?.includes("\x1b[3m")).toBeTruthy();
+			expect(barLine?.includes("\x1b[3m")).toBeTruthy();
+
+			// Blockquotes should NOT have the default message color (magenta)
+			expect(fooLine?.includes("\x1b[35m")).toBeFalsy();
+			expect(barLine?.includes("\x1b[35m")).toBeFalsy();
+		});
+
+		it("should apply consistent styling to explicit multiline blockquote", () => {
+			const markdown = new Markdown(
+				`>Foo
+>bar`,
+				0,
+				0,
+				defaultMarkdownTheme,
+				{
+					color: text => chalk.cyan(text), // This should NOT be applied to blockquotes
+				},
+			);
+
+			const lines = markdown.render(80);
+
+			// Both lines should have the quote border
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
+			const quotedLines = plainLines.filter(line => line.startsWith("│ "));
+			expect(quotedLines.length).toBe(2);
+
+			// Both lines should have italic (from theme.quote styling)
+			const fooLine = lines.find(line => line.includes("Foo"));
+			const barLine = lines.find(line => line.includes("bar"));
+			expect(fooLine?.includes("\x1b[3m")).toBeTruthy();
+			expect(barLine?.includes("\x1b[3m")).toBeTruthy();
+
+			// Blockquotes should NOT have the default message color (cyan)
+			expect(fooLine?.includes("\x1b[36m")).toBeFalsy();
+			expect(barLine?.includes("\x1b[36m")).toBeFalsy();
+		});
+
+		it("should wrap long blockquote lines and add border to each wrapped line", () => {
+			const longText = "This is a very long blockquote line that should wrap to multiple lines when rendered";
+			const markdown = new Markdown(`> ${longText}`, 0, 0, defaultMarkdownTheme);
+
+			// Render at narrow width to force wrapping
+			const lines = markdown.render(30);
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+
+			// Filter to non-empty lines (exclude trailing blank line after blockquote)
+			const contentLines = plainLines.filter(line => line.length > 0);
+
+			// Should have multiple lines due to wrapping
+			expect(contentLines.length > 1).toBeTruthy();
+
+			// Every content line should start with the quote border
+			for (const line of contentLines) {
+				expect(line.startsWith("│ ")).toBeTruthy();
+			}
+
+			// All content should be preserved
+			const allText = contentLines.join(" ");
+			expect(allText.includes("very long")).toBeTruthy();
+			expect(allText.includes("blockquote")).toBeTruthy();
+			expect(allText.includes("multiple")).toBeTruthy();
+		});
+
+		it("should properly indent wrapped blockquote lines with styling", () => {
+			const markdown = new Markdown(
+				"> This is styled text that is long enough to wrap",
+				0,
+				0,
+				defaultMarkdownTheme,
+				{
+					color: text => chalk.yellow(text), // This should NOT be applied to blockquotes
+					italic: true,
+				},
+			);
+
+			const lines = markdown.render(25);
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+
+			// Filter to non-empty lines
+			const contentLines = plainLines.filter(line => line.length > 0);
+
+			// All lines should have the quote border
+			for (const line of contentLines) {
+				expect(line.startsWith("│ ")).toBeTruthy();
+			}
+
+			// Check that italic is applied (from theme.quote)
+			const allOutput = lines.join("\n");
+			expect(allOutput.includes("\x1b[3m")).toBeTruthy();
+
+			// Blockquotes should NOT have the default message color (yellow)
+			expect(allOutput.includes("\x1b[33m")).toBeFalsy();
+		});
+
+		it("should render inline formatting inside blockquotes and reapply quote styling after", () => {
+			const markdown = new Markdown("> Quote with **bold** and `code`", 0, 0, defaultMarkdownTheme);
+
+			const lines = markdown.render(80);
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
+
+			// Should have the quote border
+			expect(plainLines.some(line => line.startsWith("│ "))).toBeTruthy();
+
+			// Content should be preserved
+			const allPlain = plainLines.join(" ");
+			expect(allPlain.includes("Quote with")).toBeTruthy();
+			expect(allPlain.includes("bold")).toBeTruthy();
+			expect(allPlain.includes("code")).toBeTruthy();
+
+			const allOutput = lines.join("\n");
+
+			// Should have bold styling (\x1b[1m)
+			expect(allOutput.includes("\x1b[1m")).toBeTruthy();
+
+			// Should have code styling (yellow = \x1b[33m from defaultMarkdownTheme)
+			expect(allOutput.includes("\x1b[33m")).toBeTruthy();
+
+			// Should have italic from quote styling (\x1b[3m)
+			expect(allOutput.includes("\x1b[3m")).toBeTruthy();
+		});
+	});
+
 	describe("Links", () => {
 		it("should not duplicate URL for autolinked emails", () => {
 			const markdown = new Markdown("Contact user@example.com for help", 0, 0, defaultMarkdownTheme);

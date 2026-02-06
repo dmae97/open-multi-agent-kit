@@ -237,6 +237,8 @@ const noOpUIContext: ExtensionUIContext = {
 	setFooter: () => {},
 	setHeader: () => {},
 	setEditorComponent: () => {},
+	getToolsExpanded: () => false,
+	setToolsExpanded: () => {},
 };
 
 async function cleanupSshResources(): Promise<void> {
@@ -906,6 +908,11 @@ export class AgentSession {
 		return this.agent.state.isStreaming || this._promptInFlight;
 	}
 
+	/** Current effective system prompt (includes any per-turn extension modifications) */
+	get systemPrompt(): string {
+		return this.agent.state.systemPrompt;
+	}
+
 	/** Current retry attempt (0 if not retrying) */
 	get retryAttempt(): number {
 		return this._retryAttempt;
@@ -1426,6 +1433,11 @@ export class AgentSession {
 					instructionsOrOptions && typeof instructionsOrOptions === "object" ? instructionsOrOptions : undefined;
 				await this.compact(instructions, options);
 			},
+			switchSession: async sessionPath => {
+				const success = await this.switchSession(sessionPath);
+				return { cancelled: !success };
+			},
+			getSystemPrompt: () => this.systemPrompt,
 		};
 	}
 
@@ -1477,25 +1489,25 @@ export class AgentSession {
 	/**
 	 * Queue a steering message to interrupt the agent mid-run.
 	 */
-	async steer(text: string): Promise<void> {
+	async steer(text: string, images?: ImageContent[]): Promise<void> {
 		if (text.startsWith("/")) {
 			this._throwIfExtensionCommand(text);
 		}
 
 		const expandedText = expandPromptTemplate(text, [...this._promptTemplates]);
-		await this._queueSteer(expandedText);
+		await this._queueSteer(expandedText, images);
 	}
 
 	/**
 	 * Queue a follow-up message to process after the agent would otherwise stop.
 	 */
-	async followUp(text: string): Promise<void> {
+	async followUp(text: string, images?: ImageContent[]): Promise<void> {
 		if (text.startsWith("/")) {
 			this._throwIfExtensionCommand(text);
 		}
 
 		const expandedText = expandPromptTemplate(text, [...this._promptTemplates]);
-		await this._queueFollowUp(expandedText);
+		await this._queueFollowUp(expandedText, images);
 	}
 
 	/**
@@ -1733,6 +1745,9 @@ export class AgentSession {
 		this._steeringMessages = [];
 		this._followUpMessages = [];
 		this._pendingNextTurnMessages = [];
+
+		this.sessionManager.appendThinkingLevelChange(this.thinkingLevel);
+
 		this._todoReminderCount = 0;
 		this._planReferenceSent = false;
 		this._reconnectToAgent();
@@ -1934,22 +1949,39 @@ export class AgentSession {
 		return { model: next.model, thinkingLevel: this.thinkingLevel, role: next.role };
 	}
 
+	private async _getScopedModelsWithApiKey(): Promise<Array<{ model: Model; thinkingLevel: ThinkingLevel }>> {
+		const apiKeysByProvider = new Map<string, string | undefined>();
+		const result: Array<{ model: Model; thinkingLevel: ThinkingLevel }> = [];
+
+		for (const scoped of this._scopedModels) {
+			const provider = scoped.model.provider;
+			let apiKey: string | undefined;
+			if (apiKeysByProvider.has(provider)) {
+				apiKey = apiKeysByProvider.get(provider);
+			} else {
+				apiKey = await this._modelRegistry.getApiKeyForProvider(provider, this.sessionId);
+				apiKeysByProvider.set(provider, apiKey);
+			}
+
+			if (apiKey) {
+				result.push(scoped);
+			}
+		}
+
+		return result;
+	}
+
 	private async _cycleScopedModel(direction: "forward" | "backward"): Promise<ModelCycleResult | undefined> {
-		if (this._scopedModels.length <= 1) return undefined;
+		const scopedModels = await this._getScopedModelsWithApiKey();
+		if (scopedModels.length <= 1) return undefined;
 
 		const currentModel = this.model;
-		let currentIndex = this._scopedModels.findIndex(sm => modelsAreEqual(sm.model, currentModel));
+		let currentIndex = scopedModels.findIndex(sm => modelsAreEqual(sm.model, currentModel));
 
 		if (currentIndex === -1) currentIndex = 0;
-		const len = this._scopedModels.length;
+		const len = scopedModels.length;
 		const nextIndex = direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
-		const next = this._scopedModels[nextIndex];
-
-		// Validate API key
-		const apiKey = await this._modelRegistry.getApiKey(next.model, this.sessionId);
-		if (!apiKey) {
-			throw new Error(`No API key for ${next.model.provider}/${next.model.id}`);
-		}
+		const next = scopedModels[nextIndex];
 
 		// Apply model
 		this.agent.setModel(next.model);
@@ -2005,15 +2037,22 @@ export class AgentSession {
 	/**
 	 * Set thinking level.
 	 * Clamps to model capabilities based on available thinking levels.
-	 * Saves to session, with optional persistence to settings.
+	 * Saves to session and settings only if the level actually changes.
 	 */
 	setThinkingLevel(level: ThinkingLevel, persist: boolean = false): void {
 		const availableLevels = this.getAvailableThinkingLevels();
 		const effectiveLevel = availableLevels.includes(level) ? level : this._clampThinkingLevel(level, availableLevels);
+
+		// Only persist if actually changing
+		const isChanging = effectiveLevel !== this.agent.state.thinkingLevel;
+
 		this.agent.setThinkingLevel(effectiveLevel);
-		this.sessionManager.appendThinkingLevelChange(effectiveLevel);
-		if (persist) {
-			this.settings.set("defaultThinkingLevel", effectiveLevel);
+
+		if (isChanging) {
+			this.sessionManager.appendThinkingLevelChange(effectiveLevel);
+			if (persist) {
+				this.settings.set("defaultThinkingLevel", effectiveLevel);
+			}
 		}
 	}
 
@@ -2903,8 +2942,8 @@ Be thorough - include exact file paths, function names, error messages, and tech
 	}
 
 	private _isRetryableErrorMessage(errorMessage: string): boolean {
-		// Match: overloaded_error, rate limit, usage limit, 429, 500, 502, 503, 504, service unavailable, connection error, fetch failed
-		return /overloaded|rate.?limit|usage.?limit|too many requests|429|500|502|503|504|service.?unavailable|server error|internal error|connection.?error|fetch failed/i.test(
+		// Match: overloaded_error, rate limit, usage limit, 429, 500, 502, 503, 504, service unavailable, connection error, fetch failed, retry delay exceeded
+		return /overloaded|rate.?limit|usage.?limit|too many requests|429|500|502|503|504|service.?unavailable|server error|internal error|connection.?error|fetch failed|retry delay/i.test(
 			errorMessage,
 		);
 	}
@@ -3354,9 +3393,19 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			}
 		}
 
-		// Restore thinking level if saved (setThinkingLevel clamps to model capabilities)
-		if (sessionContext.thinkingLevel) {
+		const hasThinkingEntry = this.sessionManager.getBranch().some(entry => entry.type === "thinking_level_change");
+		const defaultThinkingLevel = (this.settings.get("defaultThinkingLevel") ?? "off") as ThinkingLevel;
+
+		if (hasThinkingEntry) {
+			// Restore thinking level if saved (setThinkingLevel clamps to model capabilities)
 			this.setThinkingLevel(sessionContext.thinkingLevel as ThinkingLevel);
+		} else {
+			const availableLevels = this.getAvailableThinkingLevels();
+			const effectiveLevel = availableLevels.includes(defaultThinkingLevel)
+				? defaultThinkingLevel
+				: this._clampThinkingLevel(defaultThinkingLevel, availableLevels);
+			this.agent.setThinkingLevel(effectiveLevel);
+			this.sessionManager.appendThinkingLevelChange(effectiveLevel);
 		}
 
 		this._reconnectToAgent();
@@ -3404,7 +3453,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 		await this.sessionManager.flush();
 
 		if (!selectedEntry.parentId) {
-			this.sessionManager.newSession();
+			this.sessionManager.newSession({ parentSession: previousSessionFile });
 		} else {
 			this.sessionManager.createBranchedSession(selectedEntry.parentId);
 		}

@@ -176,6 +176,7 @@ export interface InteractiveModeContext {
 	cycleThinkingLevel(): void;
 	cycleRoleModel(options?: { temporary?: boolean }): Promise<void>;
 	toggleToolOutputExpansion(): void;
+	setToolsExpanded(expanded: boolean): void;
 	toggleThinkingBlockVisibility(): void;
 	openExternalEditor(): void;
 	registerExtensionShortcuts(): void;

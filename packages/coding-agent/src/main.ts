@@ -495,26 +495,27 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 
 	if (parsedArgs.version) {
 		writeStdout(VERSION);
-		return;
+		process.exit(0);
 	}
 
 	if (parsedArgs.listModels !== undefined) {
 		const searchPattern = typeof parsedArgs.listModels === "string" ? parsedArgs.listModels : undefined;
 		await listModels(modelRegistry, searchPattern);
-		return;
+		process.exit(0);
 	}
 
 	if (parsedArgs.export) {
+		let result: string;
 		try {
 			const outputPath = parsedArgs.messages.length > 0 ? parsedArgs.messages[0] : undefined;
-			const result = await exportFromFile(parsedArgs.export, outputPath);
-			writeStdout(`Exported to: ${result}`);
-			return;
+			result = await exportFromFile(parsedArgs.export, outputPath);
 		} catch (error: unknown) {
 			const message = error instanceof Error ? error.message : "Failed to export session";
 			writeStderr(chalk.red(`Error: ${message}`));
 			process.exit(1);
 		}
+		writeStdout(`Exported to: ${result}`);
+		process.exit(0);
 	}
 
 	if (parsedArgs.mode === "rpc" && parsedArgs.fileArgs.length > 0) {

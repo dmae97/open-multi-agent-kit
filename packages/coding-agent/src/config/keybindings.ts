@@ -26,11 +26,16 @@ export type AppAction =
 	| "togglePlanMode"
 	| "expandTools"
 	| "toggleThinking"
+	| "toggleSessionNamedFilter"
 	| "externalEditor"
 	| "historySearch"
 	| "followUp"
 	| "dequeue"
-	| "pasteImage";
+	| "pasteImage"
+	| "newSession"
+	| "tree"
+	| "fork"
+	| "resume";
 
 /**
  * All configurable actions.
@@ -60,10 +65,15 @@ export const DEFAULT_APP_KEYBINDINGS: Record<AppAction, KeyId | KeyId[]> = {
 	historySearch: "ctrl+r",
 	expandTools: "ctrl+o",
 	toggleThinking: "ctrl+t",
+	toggleSessionNamedFilter: "ctrl+n",
 	externalEditor: "ctrl+g",
 	followUp: "ctrl+enter",
 	dequeue: "alt+up",
 	pasteImage: "ctrl+v",
+	newSession: [],
+	tree: [],
+	fork: [],
+	resume: [],
 };
 
 /**
@@ -88,10 +98,15 @@ const APP_ACTIONS: AppAction[] = [
 	"historySearch",
 	"expandTools",
 	"toggleThinking",
+	"toggleSessionNamedFilter",
 	"externalEditor",
 	"followUp",
 	"dequeue",
 	"pasteImage",
+	"newSession",
+	"tree",
+	"fork",
+	"resume",
 ];
 
 function isAppAction(action: string): action is AppAction {

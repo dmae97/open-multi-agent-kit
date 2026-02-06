@@ -1,8 +1,28 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Support for `PI_PACKAGE_DIR` environment variable to override package directory (useful for Nix/Guix store paths)
+- New keybindings for session management: `toggleSessionNamedFilter` (Ctrl+N), `newSession`, `tree`, `fork`, and `resume` actions
+- Support for shell command execution in configuration values (API keys, headers) using `!` prefix, with result caching
+- New `clearOnShrink` display setting to control whether empty rows are cleared when content shrinks
+- New `SlashCommandInfo`, `SlashCommandLocation`, and `SlashCommandSource` types for extension slash command discovery
+- New `getCommands()` method in ExtensionAPI to retrieve available slash commands
+- New `switchSession()` action in ExtensionCommandContext to switch between sessions
+- New `SwitchSessionHandler` type for extension session switching handlers
+- New `getSystemPrompt()` method in ExtensionUIContext to access current system prompt
+- New `getToolsExpanded()` and `setToolsExpanded()` methods in ExtensionUIContext for tool output expansion control
+- New `WriteToolCallEvent` type for write tool call events
+- New `isToolCallEventType()` type guard for tool call events
+- Support for image content in RPC `steer` and `followUp` commands
+- New `GitSource` type and `parseGitUrl()` function for parsing git URLs in plugin system
+- Tool input types exported: `BashToolInput`, `FindToolInput`, `GrepToolInput`, `ReadToolInput`, `WriteToolInput`
+- Support for `@` prefix normalization in file paths (strips leading `@` character)
+- New `parentSessionPath` field in SessionInfo to track forked session origins
+- Skill file relative path resolution against skill directory in system prompt
+- Support for Termux/Android package installation guidance for missing tools
 - Support for puppeteer query handlers (aria/, text/, xpath/, pierce/) in selector parameters across all browser actions
 - Automatic normalization of legacy p- prefixed selectors (p-aria/, p-text/, p-xpath/, p-pierce/) to modern puppeteer query handler syntax
 - Improved click action with intelligent element selection that prioritizes visible, actionable candidates and retries until timeout
@@ -10,14 +30,39 @@
 
 ### Changed
 
+- Updated default model IDs across providers: Claude Sonnet 4.5 → Claude Opus 4.6, Gemini 2.5 Pro → Gemini 3 Pro variants, and others
+- Made model definition fields optional with sensible defaults for local models (Ollama, LM Studio, etc.)
+- Modified custom tool execute signature to reorder parameters: `(toolCallId, params, signal, onUpdate, ctx)` instead of `(toolCallId, params, onUpdate, ctx, signal)`
+- Changed `--version` and `--list-models` flags to exit with `process.exit(0)` instead of returning
+- Improved `--export` flag to exit with `process.exit(0)` on success
+- Enhanced tree selector to preserve last selected ID across filter changes
+- Modified tree navigation to use real leaf ID instead of skipping metadata entries
+- Improved footer path truncation logic to prevent invalid truncation at boundary
+- Enhanced model selector to display selected model name when no matches found
+- Improved RPC client `steer()` and `followUp()` methods to accept optional image content
+- Updated extension loader to check for explicit extension entries in root directory before discovering subdirectories
+- Removed line limiting in custom message component when collapsed
+- Improved API key resolution to support shell command execution via `resolveConfigValue()`
+- Enhanced session branching to preserve parent session path reference
 - Updated selector parameter descriptions to document support for CSS selectors and puppeteer query handlers
 - Modified viewport handling in headless mode to respect custom viewport parameters while disabling viewport in headed mode for better window management
 - Improved click action to use specialized text query handler logic with retry mechanism for better reliability with dynamic content
 
 ### Fixed
 
+- Fixed HTML export template to safely handle invalid argument types in tool rendering
+- Fixed path shortening in HTML export to handle non-string paths
+- Fixed custom message rendering to properly display full content without artificial line limits
+- Fixed tree navigation to only restore editor text when editor is empty
+- Fixed session creation to properly track parent session when forking
+- Fixed thinking level initialization to only append change entry for new sessions without existing thinking entries
+- Fixed tool expansion state management to properly propagate through UI context
 - Fixed click action to properly handle text/ query handlers with timeout and retry logic instead of failing immediately
 - Fixed viewport application to only apply when in headless mode or when explicitly requested, preventing conflicts in headed browser mode
+
+### Security
+
+- Added support for shell command execution in configuration values with caching to enable secure credential resolution patterns
 
 ## [11.2.1] - 2026-02-05
 

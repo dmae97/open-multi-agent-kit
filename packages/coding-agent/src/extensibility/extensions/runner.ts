@@ -32,6 +32,8 @@ import type {
 	MessageRenderer,
 	RegisteredCommand,
 	RegisteredTool,
+	ResourcesDiscoverEvent,
+	ResourcesDiscoverResult,
 	SessionBeforeCompactResult,
 	SessionBeforeTreeResult,
 	SessionCompactingResult,
@@ -63,6 +65,8 @@ export type NavigateTreeHandler = (
 	targetId: string,
 	options?: { summarize?: boolean },
 ) => Promise<{ cancelled: boolean }>;
+
+export type SwitchSessionHandler = (sessionPath: string) => Promise<{ cancelled: boolean }>;
 
 export type ShutdownHandler = () => void;
 
@@ -102,6 +106,8 @@ const noOpUIContext: ExtensionUIContext = {
 	getAllThemes: () => Promise.resolve([]),
 	getTheme: () => Promise.resolve(undefined),
 	setTheme: (_theme: string | Theme) => Promise.resolve({ success: false, error: "UI not available" }),
+	getToolsExpanded: () => false,
+	setToolsExpanded: () => {},
 };
 
 export class ExtensionRunner {
@@ -114,10 +120,13 @@ export class ExtensionRunner {
 	private hasPendingMessagesFn: () => boolean = () => false;
 	private getContextUsageFn: () => ContextUsage | undefined = () => undefined;
 	private compactFn: (instructionsOrOptions?: string | CompactOptions) => Promise<void> = async () => {};
+	private getSystemPromptFn: () => string = () => "";
 	private newSessionHandler: NewSessionHandler = async () => ({ cancelled: false });
 	private branchHandler: BranchHandler = async () => ({ cancelled: false });
 	private navigateTreeHandler: NavigateTreeHandler = async () => ({ cancelled: false });
+	private switchSessionHandler: SwitchSessionHandler = async () => ({ cancelled: false });
 	private shutdownHandler: ShutdownHandler = () => {};
+	private commandDiagnostics: Array<{ type: string; message: string; path: string }> = [];
 
 	constructor(
 		private readonly extensions: Extension[],
@@ -142,6 +151,7 @@ export class ExtensionRunner {
 		this.runtime.getActiveTools = actions.getActiveTools;
 		this.runtime.getAllTools = actions.getAllTools;
 		this.runtime.setActiveTools = actions.setActiveTools;
+		this.runtime.getCommands = actions.getCommands;
 		this.runtime.setModel = actions.setModel;
 		this.runtime.getThinkingLevel = actions.getThinkingLevel;
 		this.runtime.setThinkingLevel = actions.setThinkingLevel;
@@ -152,6 +162,7 @@ export class ExtensionRunner {
 		this.abortFn = contextActions.abort;
 		this.hasPendingMessagesFn = contextActions.hasPendingMessages;
 		this.shutdownHandler = contextActions.shutdown;
+		this.getSystemPromptFn = contextActions.getSystemPrompt;
 
 		// Command context actions (optional, only for interactive mode)
 		if (commandContextActions) {
@@ -159,6 +170,7 @@ export class ExtensionRunner {
 			this.newSessionHandler = commandContextActions.newSession;
 			this.branchHandler = commandContextActions.branch;
 			this.navigateTreeHandler = commandContextActions.navigateTree;
+			this.switchSessionHandler = commandContextActions.switchSession;
 			this.getContextUsageFn = commandContextActions.getContextUsage;
 			this.compactFn = commandContextActions.compact;
 		}
@@ -279,14 +291,29 @@ export class ExtensionRunner {
 		return undefined;
 	}
 
-	getRegisteredCommands(): RegisteredCommand[] {
+	getRegisteredCommands(reserved?: Set<string>): RegisteredCommand[] {
+		this.commandDiagnostics = [];
+
 		const commands: RegisteredCommand[] = [];
 		for (const ext of this.extensions) {
 			for (const command of ext.commands.values()) {
+				if (reserved?.has(command.name)) {
+					const message = `Extension command '${command.name}' from ${ext.path} conflicts with built-in commands. Skipping.`;
+					this.commandDiagnostics.push({ type: "warning", message, path: ext.path });
+					if (!this.hasUI()) {
+						logger.warn(message);
+					}
+					continue;
+				}
+
 				commands.push(command);
 			}
 		}
 		return commands;
+	}
+
+	getCommandDiagnostics(): Array<{ type: string; message: string; path: string }> {
+		return this.commandDiagnostics;
 	}
 
 	getCommand(name: string): RegisteredCommand | undefined {
@@ -316,6 +343,7 @@ export class ExtensionRunner {
 			abort: () => this.abortFn(),
 			hasPendingMessages: () => this.hasPendingMessagesFn(),
 			shutdown: () => this.shutdownHandler(),
+			getSystemPrompt: () => this.getSystemPromptFn(),
 			hasQueuedMessages: () => this.hasPendingMessagesFn(), // deprecated alias
 		};
 	}
@@ -335,6 +363,7 @@ export class ExtensionRunner {
 			newSession: options => this.newSessionHandler(options),
 			branch: entryId => this.branchHandler(entryId),
 			navigateTree: (targetId, options) => this.navigateTreeHandler(targetId, options),
+			switchSession: sessionPath => this.switchSessionHandler(sessionPath),
 			compact: instructionsOrOptions => this.compactFn(instructionsOrOptions),
 		};
 	}
@@ -491,6 +520,54 @@ export class ExtensionRunner {
 		}
 
 		return undefined;
+	}
+
+	async emitResourcesDiscover(
+		cwd: string,
+		reason: ResourcesDiscoverEvent["reason"],
+	): Promise<{
+		skillPaths: Array<{ path: string; extensionPath: string }>;
+		promptPaths: Array<{ path: string; extensionPath: string }>;
+		themePaths: Array<{ path: string; extensionPath: string }>;
+	}> {
+		const ctx = this.createContext();
+		const skillPaths: Array<{ path: string; extensionPath: string }> = [];
+		const promptPaths: Array<{ path: string; extensionPath: string }> = [];
+		const themePaths: Array<{ path: string; extensionPath: string }> = [];
+
+		for (const ext of this.extensions) {
+			const handlers = ext.handlers.get("resources_discover");
+			if (!handlers || handlers.length === 0) continue;
+
+			for (const handler of handlers) {
+				try {
+					const event: ResourcesDiscoverEvent = { type: "resources_discover", cwd, reason };
+					const handlerResult = await handler(event, ctx);
+					const result = handlerResult as ResourcesDiscoverResult | undefined;
+
+					if (result?.skillPaths?.length) {
+						skillPaths.push(...result.skillPaths.map(path => ({ path, extensionPath: ext.path })));
+					}
+					if (result?.promptPaths?.length) {
+						promptPaths.push(...result.promptPaths.map(path => ({ path, extensionPath: ext.path })));
+					}
+					if (result?.themePaths?.length) {
+						themePaths.push(...result.themePaths.map(path => ({ path, extensionPath: ext.path })));
+					}
+				} catch (err) {
+					const message = err instanceof Error ? err.message : String(err);
+					const stack = err instanceof Error ? err.stack : undefined;
+					this.emitError({
+						extensionPath: ext.path,
+						event: "resources_discover",
+						error: message,
+						stack,
+					});
+				}
+			}
+		}
+
+		return { skillPaths, promptPaths, themePaths };
 	}
 
 	/** Emit input event. Transforms chain, "handled" short-circuits. */

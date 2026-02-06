@@ -9,6 +9,7 @@ import { getEnvApiKey, OUTPUT_FALLBACK_BUFFER } from "../stream";
 import type {
 	Api,
 	AssistantMessage,
+	CacheRetention,
 	Context,
 	ImageContent,
 	Message,
@@ -27,6 +28,35 @@ import { parseStreamingJson } from "../utils/json-parse";
 import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import { transformMessages } from "./transform-messages";
+
+/**
+ * Resolve cache retention preference.
+ * Defaults to "short" and uses PI_CACHE_RETENTION for backward compatibility.
+ */
+function resolveCacheRetention(cacheRetention?: CacheRetention): CacheRetention {
+	if (cacheRetention) {
+		return cacheRetention;
+	}
+	if (typeof process !== "undefined" && process.env.PI_CACHE_RETENTION === "long") {
+		return "long";
+	}
+	return "short";
+}
+
+function getCacheControl(
+	baseUrl: string,
+	cacheRetention?: CacheRetention,
+): { retention: CacheRetention; cacheControl?: { type: "ephemeral"; ttl?: "1h" } } {
+	const retention = resolveCacheRetention(cacheRetention);
+	if (retention === "none") {
+		return { retention };
+	}
+	const ttl = retention === "long" && baseUrl.includes("api.anthropic.com") ? "1h" : undefined;
+	return {
+		retention,
+		cacheControl: { type: "ephemeral", ...(ttl && { ttl }) },
+	};
+}
 
 // Stealth mode: Mimic Claude Code headers and tool prefixing.
 export const claudeCodeVersion = "1.0.83";
@@ -123,9 +153,30 @@ function convertContentBlocks(content: (TextContent | ImageContent)[]):
 	return blocks;
 }
 
+export type AnthropicEffort = "low" | "medium" | "high" | "max";
+
 export interface AnthropicOptions extends StreamOptions {
+	/**
+	 * Enable extended thinking.
+	 * For Opus 4.6+: uses adaptive thinking (Claude decides when/how much to think).
+	 * For older models: uses budget-based thinking with thinkingBudgetTokens.
+	 */
 	thinkingEnabled?: boolean;
+	/**
+	 * Token budget for extended thinking (older models only).
+	 * Ignored for Opus 4.6+ which uses adaptive thinking.
+	 */
 	thinkingBudgetTokens?: number;
+	/**
+	 * Effort level for adaptive thinking (Opus 4.6+ only).
+	 * Controls how much thinking Claude allocates:
+	 * - "max": Always thinks with no constraints
+	 * - "high": Always thinks, deep reasoning (default)
+	 * - "medium": Moderate thinking, may skip for simple queries
+	 * - "low": Minimal thinking, skips for simple tasks
+	 * Ignored for older models.
+	 */
+	effort?: AnthropicEffort;
 	interleavedThinking?: boolean;
 	toolChoice?: "auto" | "any" | "none" | { type: "tool"; name: string };
 	betas?: string[] | string;
@@ -487,11 +538,11 @@ function createClient(
 export type AnthropicSystemBlock = {
 	type: "text";
 	text: string;
-	cache_control?: { type: "ephemeral" };
+	cache_control?: { type: "ephemeral"; ttl?: "1h" };
 };
 
 type CacheControlBlock = {
-	cache_control?: { type: "ephemeral" } | null;
+	cache_control?: { type: "ephemeral"; ttl?: "1h" | "5m" } | null;
 };
 
 const cacheControlEphemeral = { type: "ephemeral" as const };
@@ -544,6 +595,14 @@ function disableThinkingIfToolChoiceForced(params: MessageCreateParamsStreaming)
 	}
 }
 
+/**
+ * Check if a model supports adaptive thinking (Opus 4.6+)
+ */
+function supportsAdaptiveThinking(modelId: string): boolean {
+	// Opus 4.6 model IDs (with or without date suffix)
+	return modelId.includes("opus-4-6") || modelId.includes("opus-4.6");
+}
+
 function ensureMaxTokensForThinking(params: MessageCreateParamsStreaming, model: Model<"anthropic-messages">): void {
 	const thinking = params.thinking;
 	if (!thinking || thinking.type !== "enabled") return;
@@ -566,7 +625,7 @@ function buildParams(
 ): MessageCreateParamsStreaming {
 	const params: MessageCreateParamsStreaming = {
 		model: model.id,
-			messages: convertAnthropicMessages(context.messages, model, isOAuthToken),
+		messages: convertAnthropicMessages(context.messages, model, isOAuthToken),
 		max_tokens: options?.maxTokens || (model.maxTokens / 3) | 0,
 		stream: true,
 	};
@@ -587,11 +646,21 @@ function buildParams(
 		params.tools = convertTools(context.tools, isOAuthToken);
 	}
 
+	// Configure thinking mode: adaptive (Opus 4.6+) or budget-based (older models)
 	if (options?.thinkingEnabled && model.reasoning) {
-		params.thinking = {
-			type: "enabled",
-			budget_tokens: options.thinkingBudgetTokens || 1024,
-		};
+		if (supportsAdaptiveThinking(model.id)) {
+			// Adaptive thinking: Claude decides when and how much to think
+			(params as any).thinking = { type: "adaptive" };
+			if (options.effort) {
+				(params as any).output_config = { effort: options.effort };
+			}
+		} else {
+			// Budget-based thinking for older models
+			params.thinking = {
+				type: "enabled",
+				budget_tokens: options.thinkingBudgetTokens || 1024,
+			};
+		}
 	}
 
 	if (options?.toolChoice) {
@@ -611,7 +680,10 @@ function buildParams(
 		ensureMaxTokensForThinking(params, model);
 	}
 
-	applyPromptCaching(params);
+	const { retention, cacheControl } = getCacheControl(model.baseUrl, options?.cacheRetention);
+	if (retention !== "none") {
+		applyPromptCaching(params, cacheControl);
+	}
 
 	return params;
 }
@@ -630,24 +702,33 @@ function stripCacheControl<T extends CacheControlBlock>(blocks: T[]): void {
 	}
 }
 
-function applyCacheControlToLastBlock<T extends CacheControlBlock>(blocks: T[]): void {
+function applyCacheControlToLastBlock<T extends CacheControlBlock>(
+	blocks: T[],
+	cc: CacheControlBlock["cache_control"] = cacheControlEphemeral,
+): void {
 	if (blocks.length === 0) return;
 	const lastIndex = blocks.length - 1;
-	blocks[lastIndex] = { ...blocks[lastIndex], cache_control: cacheControlEphemeral };
+	blocks[lastIndex] = { ...blocks[lastIndex], cache_control: cc };
 }
 
-function applyCacheControlToLastTextBlock(blocks: Array<ContentBlockParam & CacheControlBlock>): void {
+function applyCacheControlToLastTextBlock(
+	blocks: Array<ContentBlockParam & CacheControlBlock>,
+	cc: CacheControlBlock["cache_control"] = cacheControlEphemeral,
+): void {
 	if (blocks.length === 0) return;
 	for (let i = blocks.length - 1; i >= 0; i--) {
 		if (blocks[i].type === "text") {
-			blocks[i] = { ...blocks[i], cache_control: cacheControlEphemeral };
+			blocks[i] = { ...blocks[i], cache_control: cc };
 			return;
 		}
 	}
-	applyCacheControlToLastBlock(blocks);
+	applyCacheControlToLastBlock(blocks, cc);
 }
 
-function applyPromptCaching(params: MessageCreateParamsStreaming): void {
+function applyPromptCaching(
+	params: MessageCreateParamsStreaming,
+	cc: CacheControlBlock["cache_control"] = cacheControlEphemeral,
+): void {
 	// Anthropic allows max 4 cache breakpoints
 	const MAX_CACHE_BREAKPOINTS = 4;
 
@@ -675,7 +756,7 @@ function applyPromptCaching(params: MessageCreateParamsStreaming): void {
 
 	// 1. Cache tools - place breakpoint on last tool definition
 	if (params.tools && params.tools.length > 0) {
-		applyCacheControlToLastBlock(params.tools as Array<CacheControlBlock>);
+		applyCacheControlToLastBlock(params.tools as Array<CacheControlBlock>, cc);
 		cacheBreakpointsUsed++;
 	}
 
@@ -683,7 +764,7 @@ function applyPromptCaching(params: MessageCreateParamsStreaming): void {
 
 	// 2. Cache system prompt
 	if (params.system && Array.isArray(params.system) && params.system.length > 0) {
-		applyCacheControlToLastBlock(params.system);
+		applyCacheControlToLastBlock(params.system, cc);
 		cacheBreakpointsUsed++;
 	}
 
@@ -699,12 +780,13 @@ function applyPromptCaching(params: MessageCreateParamsStreaming): void {
 		const penultimateUser = params.messages[penultimateUserIndex];
 		if (penultimateUser) {
 			if (typeof penultimateUser.content === "string") {
-				penultimateUser.content = [
-					{ type: "text", text: penultimateUser.content, cache_control: cacheControlEphemeral },
-				];
+				penultimateUser.content = [{ type: "text", text: penultimateUser.content, cache_control: cc }];
 				cacheBreakpointsUsed++;
 			} else if (Array.isArray(penultimateUser.content) && penultimateUser.content.length > 0) {
-				applyCacheControlToLastTextBlock(penultimateUser.content as Array<ContentBlockParam & CacheControlBlock>);
+				applyCacheControlToLastTextBlock(
+					penultimateUser.content as Array<ContentBlockParam & CacheControlBlock>,
+					cc,
+				);
 				cacheBreakpointsUsed++;
 			}
 		}
@@ -718,9 +800,9 @@ function applyPromptCaching(params: MessageCreateParamsStreaming): void {
 		const lastUser = params.messages[lastUserIndex];
 		if (lastUser) {
 			if (typeof lastUser.content === "string") {
-				lastUser.content = [{ type: "text", text: lastUser.content, cache_control: cacheControlEphemeral }];
+				lastUser.content = [{ type: "text", text: lastUser.content, cache_control: cc }];
 			} else if (Array.isArray(lastUser.content) && lastUser.content.length > 0) {
-				applyCacheControlToLastTextBlock(lastUser.content as Array<ContentBlockParam & CacheControlBlock>);
+				applyCacheControlToLastTextBlock(lastUser.content as Array<ContentBlockParam & CacheControlBlock>, cc);
 			}
 		}
 	}
@@ -893,15 +975,15 @@ export function convertAnthropicMessages(
 		}
 	}
 
-		// If the conversation ends with an assistant message, Anthropic treats that
-		// as an assistant prefill. Many Anthropic-routed models reject this and
-		// require the conversation to end with a user message.
-		//
-		// Best-effort fallback: append a synthetic user "Continue." turn so the model
-		// can continue generation from the prior assistant content.
-		if (params.length > 0 && params[params.length - 1]?.role === "assistant") {
-			params.push({ role: "user", content: "Continue." });
-}
+	// If the conversation ends with an assistant message, Anthropic treats that
+	// as an assistant prefill. Many Anthropic-routed models reject this and
+	// require the conversation to end with a user message.
+	//
+	// Best-effort fallback: append a synthetic user "Continue." turn so the model
+	// can continue generation from the prior assistant content.
+	if (params.length > 0 && params[params.length - 1]?.role === "assistant") {
+		params.push({ role: "user", content: "Continue." });
+	}
 
 	// Final validation: filter out any messages with invalid content
 	return params.filter(msg => {

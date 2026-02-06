@@ -81,6 +81,10 @@ export class ExtensionRuntime implements IExtensionRuntime {
 		throw new ExtensionRuntimeNotInitializedError();
 	}
 
+	getCommands(): never {
+		throw new ExtensionRuntimeNotInitializedError();
+	}
+
 	setModel(): Promise<boolean> {
 		throw new ExtensionRuntimeNotInitializedError();
 	}
@@ -201,6 +205,10 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 
 	setActiveTools(toolNames: string[]): Promise<void> {
 		return this.runtime.setActiveTools(toolNames);
+	}
+
+	getCommands() {
+		return this.runtime.getCommands();
 	}
 
 	setModel(model: Model): Promise<boolean> {
@@ -396,6 +404,13 @@ async function resolveExtensionEntries(dir: string): Promise<string[] | null> {
 async function discoverExtensionsInDir(dir: string): Promise<string[]> {
 	const discovered: string[] = [];
 
+	// First check if this directory itself has explicit extension entries (package.json or index)
+	const rootEntries = await resolveExtensionEntries(dir);
+	if (rootEntries) {
+		return rootEntries;
+	}
+
+	// Otherwise, discover extensions from directory contents
 	let entries: fs1.Dirent[];
 	try {
 		entries = await fs.readdir(dir, { withFileTypes: true });

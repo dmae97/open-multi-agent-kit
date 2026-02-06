@@ -16,6 +16,7 @@ import { getEnvApiKey } from "../stream";
 import type {
 	Api,
 	AssistantMessage,
+	CacheRetention,
 	Context,
 	Model,
 	StopReason,
@@ -35,12 +36,28 @@ import { mapToOpenAIResponsesToolChoice } from "../utils/tool-choice";
 import { transformMessages } from "./transform-messages";
 
 /**
- * Get prompt cache retention based on PI_CACHE_RETENTION env var.
- * Only applies to direct OpenAI API calls (api.openai.com).
- * Returns '24h' for long retention, undefined for default (in-memory).
+ * Resolve cache retention preference.
+ * Defaults to "short" and uses PI_CACHE_RETENTION for backward compatibility.
  */
-function getPromptCacheRetention(baseUrl: string): "24h" | undefined {
-	if ($env.PI_CACHE_RETENTION === "long" && baseUrl.includes("api.openai.com")) {
+function resolveCacheRetention(cacheRetention?: CacheRetention): CacheRetention {
+	if (cacheRetention) {
+		return cacheRetention;
+	}
+	if ($env.PI_CACHE_RETENTION === "long") {
+		return "long";
+	}
+	return "short";
+}
+
+/**
+ * Get prompt cache retention based on cacheRetention and base URL.
+ * Only applies to direct OpenAI API calls (api.openai.com).
+ */
+function getPromptCacheRetention(baseUrl: string, cacheRetention: CacheRetention): "24h" | undefined {
+	if (cacheRetention !== "long") {
+		return undefined;
+	}
+	if (baseUrl.includes("api.openai.com")) {
 		return "24h";
 	}
 	return undefined;
@@ -403,12 +420,13 @@ function buildParams(model: Model<"openai-responses">, context: Context, options
 	const strictResponsesPairing = options?.strictResponsesPairing ?? isAzureOpenAIBaseUrl(model.baseUrl ?? "");
 	const messages = convertMessages(model, context, strictResponsesPairing);
 
+	const cacheRetention = resolveCacheRetention(options?.cacheRetention);
 	const params: ResponseCreateParamsStreaming = {
 		model: model.id,
 		input: messages,
 		stream: true,
-		prompt_cache_key: options?.sessionId,
-		prompt_cache_retention: getPromptCacheRetention(model.baseUrl),
+		prompt_cache_key: cacheRetention === "none" ? undefined : options?.sessionId,
+		prompt_cache_retention: getPromptCacheRetention(model.baseUrl, cacheRetention),
 	};
 
 	if (options?.maxTokens) {

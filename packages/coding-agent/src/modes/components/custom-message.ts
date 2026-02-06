@@ -82,14 +82,6 @@ export class CustomMessageComponent extends Container {
 				.join("\n");
 		}
 
-		// Limit lines when collapsed
-		if (!this._expanded) {
-			const lines = text.split("\n");
-			if (lines.length > 5) {
-				text = `${lines.slice(0, 5).join("\n")}\n…`;
-			}
-		}
-
 		this.box.addChild(
 			new Markdown(text, 0, 0, getMarkdownTheme(), {
 				color: (value: string) => theme.fg("customMessageText", value),

@@ -227,7 +227,64 @@ pub fn matches_kitty_sequence(
 		return false;
 	}
 
-	parsed.codepoint == expected_codepoint || parsed.base_layout_key == Some(expected_codepoint)
+	if parsed.codepoint == expected_codepoint {
+		return true;
+	}
+
+	// Only fall back to base layout key when the codepoint is NOT already a
+	// recognized Latin letter (a-z) or symbol. This prevents remapped layouts
+	// (Dvorak, Colemak) from causing false matches.
+	if let Some(base) = parsed.base_layout_key
+		&& base == expected_codepoint
+	{
+		let cp = parsed.codepoint;
+		let is_latin_letter = (97..=122).contains(&cp); // a-z
+		let is_known_symbol = is_symbol_key(cp);
+		if !is_latin_letter && !is_known_symbol {
+			return true;
+		}
+	}
+
+	false
+}
+
+/// Check if a codepoint corresponds to a known symbol key.
+#[inline]
+const fn is_symbol_key(cp: i32) -> bool {
+	matches!(
+		cp,
+		96  | // `
+		45  | // -
+		61  | // =
+		91  | // [
+		93  | // ]
+		92  | // \
+		59  | // ;
+		39  | // '
+		44  | // ,
+		46  | // .
+		47  | // /
+		33  | // !
+		64  | // @
+		35  | // #
+		36  | // $
+		37  | // %
+		94  | // ^
+		38  | // &
+		42  | // *
+		40  | // (
+		41  | // )
+		95  | // _
+		43  | // +
+		124 | // |
+		126 | // ~
+		123 | // {
+		125 | // }
+		58  | // :
+		60  | // <
+		62  | // >
+		63 // ?
+	)
 }
 
 /// Parse terminal input and return a normalized key identifier.
@@ -1104,7 +1161,16 @@ fn parse_functional(bytes: &[u8]) -> Option<ParsedKittySequence> {
 
 fn format_kitty_key(parsed: &ParsedKittySequence) -> Option<Cow<'static, str>> {
 	let effective_mod = parsed.modifier & !LOCK_MASK;
-	let effective_codepoint = parsed.base_layout_key.unwrap_or(parsed.codepoint);
+	let effective_codepoint = {
+		let cp = parsed.codepoint;
+		let is_latin_letter = (97..=122).contains(&cp); // a-z
+		let is_known_symbol = is_symbol_key(cp);
+		if is_latin_letter || is_known_symbol {
+			cp
+		} else {
+			parsed.base_layout_key.unwrap_or(cp)
+		}
+	};
 
 	// No modifiers - return static string
 	if effective_mod == 0 {
