@@ -677,11 +677,14 @@ export class TUI extends Container {
 			minLinesNeeded = Math.max(minLinesNeeded, row + overlayLines.length);
 		}
 
-		// Ensure result covers the terminal working area to keep overlay positioning stable across resizes.
-		// maxLinesRendered can exceed current content length after a shrink; pad to keep viewportStart consistent.
-		const workingHeight = Math.max(this.maxLinesRendered, minLinesNeeded);
+		// Ensure result is tall enough for overlay placement.
+		// NOTE: Do not pad to maxLinesRendered.
+		// maxLinesRendered tracks the terminal "working area" (max lines ever rendered) and can be much larger
+		// than the current content. Padding to it can cause the renderer to output hundreds/thousands of blank
+		// lines, effectively scrolling the terminal when an overlay is shown.
+		const workingHeight = Math.max(result.length, minLinesNeeded);
 
-		// Extend result with empty lines if content is too short for overlay placement or working area
+		// Extend result with empty lines if content is too short for overlay placement
 		while (result.length < workingHeight) {
 			result.push("");
 		}
@@ -888,8 +891,8 @@ export class TUI extends Container {
 			return;
 		}
 
-		// Content shrunk below the working area and no overlays - re-render to clear empty rows
-		// (overlays need the padding, so only do this when no overlays are active)
+		// Content shrunk below the working area and no overlays - re-render to clear empty rows.
+		// When an overlay is active, avoid clearing to reduce flicker and avoid resetting scrollback.
 		// Configurable via setClearOnShrink() or PI_CLEAR_ON_SHRINK=0 env var
 		if (this.clearOnShrink && newLines.length < this.maxLinesRendered && this.overlayStack.length === 0) {
 			logRedraw(`clearOnShrink (maxLinesRendered=${this.maxLinesRendered})`);
