@@ -406,6 +406,27 @@ logger.debug("LSP fallback triggered", { reason });
 
 Logs go to `~/.omp/logs/omp.YYYY-MM-DD.log` with automatic rotation.
 
+## TUI Rendering Sanitization
+
+All text displayed in tool renderers must be sanitized before output. Raw content (file contents, error messages, tool output) can contain characters that break terminal rendering — tabs cause visual holes, long lines overflow, and unsanitized paths leak home directories.
+
+### Rules
+
+- **Tabs → spaces**: Always pass displayed text through `replaceTabs()` before rendering. Tabs produce variable-width gaps in terminals and cause visual holes in the TUI. Import from `@oh-my-pi/pi-tui` or `../tools/render-utils`.
+- **Line truncation**: Truncate displayed lines with `truncateToWidth()` or `ui.truncate()` to prevent horizontal overflow. Use constants from `TRUNCATE_LENGTHS` for consistency.
+- **Path shortening**: Use `shortenPath()` for file paths shown to users — replaces home directory prefix with `~`.
+- **Content preview limits**: Use `PREVIEW_LIMITS` constants for collapsed/expanded line counts. Don't invent ad-hoc limits.
+
+### Where to apply
+
+Sanitization applies to **every** code path that renders text to the TUI, including:
+- Success output (file previews, command output, search results)
+- **Error messages** — these often embed file content (e.g., patch failure messages include the lines that failed to match)
+- Diff content (both added/removed lines)
+- Streaming previews
+
+A common mistake is sanitizing the happy path but forgetting error paths. If a message includes file content, it needs `replaceTabs()`.
+
 ## Commands
 
 | Command        | Description                      |

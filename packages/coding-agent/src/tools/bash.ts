@@ -17,7 +17,7 @@ import { applyHeadTail, normalizeBashCommand } from "./bash-normalize";
 import type { OutputMeta } from "./output-meta";
 import { allocateOutputArtifact, createTailBuffer } from "./output-utils";
 import { resolveToCwd } from "./path-utils";
-import { formatBytes, wrapBrackets } from "./render-utils";
+import { formatBytes, replaceTabs, wrapBrackets } from "./render-utils";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
 import { DEFAULT_MAX_BYTES } from "./truncate";
@@ -271,11 +271,13 @@ export const bashToolRenderer = {
 				const hasOutput = displayOutput.trim().length > 0;
 				if (hasOutput) {
 					if (expanded) {
-						outputLines.push(...displayOutput.split("\n").map(line => uiTheme.fg("toolOutput", line)));
+						outputLines.push(
+							...displayOutput.split("\n").map(line => uiTheme.fg("toolOutput", replaceTabs(line))),
+						);
 					} else {
 						const styledOutput = displayOutput
 							.split("\n")
-							.map(line => uiTheme.fg("toolOutput", line))
+							.map(line => uiTheme.fg("toolOutput", replaceTabs(line)))
 							.join("\n");
 						const textContent = styledOutput;
 						const result = truncateToVisualLines(textContent, previewLines, width);

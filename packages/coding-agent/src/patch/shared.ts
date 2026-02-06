@@ -265,13 +265,13 @@ export const editToolRenderer = {
 
 				if (result.isError) {
 					if (errorText) {
-						text += `\n\n${uiTheme.fg("error", errorText)}`;
+						text += `\n\n${uiTheme.fg("error", replaceTabs(errorText))}`;
 					}
 				} else if (result.details?.diff) {
 					text += renderDiffSection(result.details.diff, rawPath, expanded, uiTheme, ui, renderDiffFn);
 				} else if (editDiffPreview) {
 					if ("error" in editDiffPreview) {
-						text += `\n\n${uiTheme.fg("error", editDiffPreview.error)}`;
+						text += `\n\n${uiTheme.fg("error", replaceTabs(editDiffPreview.error))}`;
 					} else if (editDiffPreview.diff) {
 						text += renderDiffSection(editDiffPreview.diff, rawPath, expanded, uiTheme, ui, renderDiffFn);
 					}

@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed
+
+- Fixed tab character display in error messages and bash tool output by properly replacing tabs with spaces
 
 ## [11.4.0] - 2026-02-06
 
