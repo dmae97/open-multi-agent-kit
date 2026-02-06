@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - Added resumption hint printed to stderr on session exit showing command to resume the session (e.g., `Resume this session with claude --resume <session-id>`)
@@ -79,6 +78,7 @@
 
 ### Fixed
 
+- Fixed spurious ellipsis appended to output lines that were already padded to terminal width by trimming trailing spaces before truncation check
 - Fixed config file parsing to properly handle missing files instead of treating them as errors
 - Fixed truncation indicator in truncate tool to use ellipsis character (…) instead of verbose '[truncated]' suffix
 - Fixed concurrent shell command execution by de-duplicating in-flight requests for the same command

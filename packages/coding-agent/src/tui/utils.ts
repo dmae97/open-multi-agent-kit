@@ -27,6 +27,8 @@ export class Hasher {
 
 	/** Feed a string. */
 	str(s: string): this {
+		hashView.setUint32(0, s.length);
+		this.h = Bun.hash.xxHash64(hashBytes4, this.h);
 		this.h = Bun.hash.xxHash64(s, this.h);
 		return this;
 	}

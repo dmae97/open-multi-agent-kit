@@ -70,7 +70,10 @@ export function renderOutputBlock(options: OutputBlockOptions, theme: Theme): st
 		}
 		const allLines = section.lines.flatMap(l => l.split("\n"));
 		for (const line of allLines) {
-			const text = truncateToWidth(line, contentWidth);
+			// Sections may receive content that was already padded to terminal width
+			// (e.g. from Text.render()). Trailing spaces would trigger truncateToWidth()
+			// to append an ellipsis even when the *semantic* content fits.
+			const text = truncateToWidth(line.trimEnd(), contentWidth);
 			const innerPadding = padding(Math.max(0, contentWidth - visibleWidth(text)));
 			const fullLine = `${contentPrefix}${text}${innerPadding}${contentSuffix}`;
 			lines.push(padToWidth(fullLine, lineWidth, bgFn));
