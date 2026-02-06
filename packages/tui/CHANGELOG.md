@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [11.4.1] - 2026-02-06
 ### Fixed
 
 - Fixed terminal scrolling when displaying overlays after rendering large content, preventing hundreds of blank lines from being output
