@@ -1,56 +1,83 @@
 /**
  * Resolve configuration values that may be shell commands, environment variables, or literals.
- * Used by auth-storage.ts and model-registry.ts.
+ *
+ * Note: command execution is async to avoid blocking the TUI.
  */
 
-import * as childProcess from "node:child_process";
+import { executeShell } from "@oh-my-pi/pi-natives";
 
-/** Cache for shell command results (persists for process lifetime) */
-const commandResultCache = new Map<string, string | undefined>();
+/** Cache for successful shell command results (persists for process lifetime). */
+const commandResultCache = new Map<string, string>();
+
+/** De-duplicates concurrent executions for the same command. */
+const commandInFlight = new Map<string, Promise<string | undefined>>();
 
 /**
  * Resolve a config value (API key, header value, etc.) to an actual value.
  * - If starts with "!", executes the rest as a shell command and uses stdout (cached)
  * - Otherwise checks environment variable first, then treats as literal (not cached)
  */
-export function resolveConfigValue(config: string): string | undefined {
+export async function resolveConfigValue(config: string): Promise<string | undefined> {
 	if (config.startsWith("!")) {
-		return executeCommand(config);
+		return await executeCommand(config);
 	}
 	const envValue = process.env[config];
 	return envValue || config;
 }
 
-function executeCommand(commandConfig: string): string | undefined {
-	if (commandResultCache.has(commandConfig)) {
-		return commandResultCache.get(commandConfig);
+async function executeCommand(commandConfig: string): Promise<string | undefined> {
+	const cached = commandResultCache.get(commandConfig);
+	if (cached !== undefined) {
+		return cached;
+	}
+
+	const existing = commandInFlight.get(commandConfig);
+	if (existing) {
+		return await existing;
 	}
 
 	const command = commandConfig.slice(1);
-	let result: string | undefined;
-	try {
-		const output = childProcess.execSync(command, {
-			encoding: "utf-8",
-			timeout: 10000,
-			stdio: ["ignore", "pipe", "ignore"],
+	const promise = runShellCommand(command, 10_000)
+		.then(result => {
+			if (result !== undefined) {
+				commandResultCache.set(commandConfig, result);
+			}
+			return result;
+		})
+		.finally(() => {
+			commandInFlight.delete(commandConfig);
 		});
-		result = output.trim() || undefined;
-	} catch {
-		result = undefined;
-	}
 
-	commandResultCache.set(commandConfig, result);
-	return result;
+	commandInFlight.set(commandConfig, promise);
+	return await promise;
+}
+
+async function runShellCommand(command: string, timeoutMs: number): Promise<string | undefined> {
+	try {
+		let output = "";
+		const result = await executeShell({ command, timeoutMs }, chunk => {
+			output += chunk;
+		});
+		if (result.timedOut || result.exitCode !== 0) {
+			return undefined;
+		}
+		const trimmed = output.trim();
+		return trimmed.length > 0 ? trimmed : undefined;
+	} catch {
+		return undefined;
+	}
 }
 
 /**
  * Resolve all header values using the same resolution logic as API keys.
  */
-export function resolveHeaders(headers: Record<string, string> | undefined): Record<string, string> | undefined {
+export async function resolveHeaders(
+	headers: Record<string, string> | undefined,
+): Promise<Record<string, string> | undefined> {
 	if (!headers) return undefined;
 	const resolved: Record<string, string> = {};
 	for (const [key, value] of Object.entries(headers)) {
-		const resolvedValue = resolveConfigValue(value);
+		const resolvedValue = await resolveConfigValue(value);
 		if (resolvedValue) {
 			resolved[key] = resolvedValue;
 		}
@@ -61,4 +88,5 @@ export function resolveHeaders(headers: Record<string, string> | undefined): Rec
 /** Clear the config value command cache. Exported for testing. */
 export function clearConfigValueCache(): void {
 	commandResultCache.clear();
+	commandInFlight.clear();
 }

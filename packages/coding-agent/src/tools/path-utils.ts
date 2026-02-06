@@ -34,7 +34,28 @@ function fileExists(filePath: string): boolean {
 }
 
 function normalizeAtPrefix(filePath: string): string {
-	return filePath.startsWith("@") ? filePath.slice(1) : filePath;
+	if (!filePath.startsWith("@")) return filePath;
+
+	const withoutAt = filePath.slice(1);
+
+	// We only treat a leading "@" as a shorthand for a small set of well-known
+	// syntaxes. This avoids mangling literal paths like "@my-file.txt".
+	if (
+		withoutAt.startsWith("/") ||
+		withoutAt === "~" ||
+		withoutAt.startsWith("~/") ||
+		// Windows absolute paths (drive letters / UNC / root-relative)
+		path.win32.isAbsolute(withoutAt) ||
+		// Internal URL shorthands
+		withoutAt.startsWith("agent://") ||
+		withoutAt.startsWith("artifact://") ||
+		withoutAt.startsWith("skill://") ||
+		withoutAt.startsWith("rule://")
+	) {
+		return withoutAt;
+	}
+
+	return filePath;
 }
 
 export function expandPath(filePath: string): string {

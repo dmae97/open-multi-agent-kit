@@ -637,7 +637,10 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 
 			const filteredMatches = result.matches.filter(entry => {
 				const p = entry.path.endsWith("/") ? entry.path.slice(0, -1) : entry.path;
-				return p !== ".git" && !p.startsWith(".git/") && !p.includes("/.git/");
+				const normalized = p.replaceAll("\\", "/");
+				// Exclude the `.git` directory (including when the path ends with `/.git`).
+				// Must only match a full path segment to avoid excluding `.gitignore`, `foo.git`, etc.
+				return !/(^|\/)\.git(\/|$)/.test(normalized);
 			});
 
 			const scoredEntries = filteredMatches

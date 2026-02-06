@@ -910,133 +910,133 @@ export class TUI extends Container {
 		}
 	}
 
-		private doRenderImpl(): void {
-			// Capture terminal dimensions at start to ensure consistency throughout render
-			const width = this.terminal.columns;
-			const height = this.terminal.rows;
-			const previousRenderedLineCount = this.previousLines.length;
-			let viewportTop = Math.max(0, this.maxLinesRendered - height);
-			let prevViewportTop = this.previousViewportTop;
-			let hardwareCursorRow = this.hardwareCursorRow;
-			const computeLineDiff = (targetRow: number): number => {
-				const currentScreenRow = hardwareCursorRow - prevViewportTop;
-				const targetScreenRow = targetRow - viewportTop;
-				return targetScreenRow - currentScreenRow;
-			};
+	private doRenderImpl(): void {
+		// Capture terminal dimensions at start to ensure consistency throughout render
+		const width = this.terminal.columns;
+		const height = this.terminal.rows;
+		const previousRenderedLineCount = this.previousLines.length;
+		let viewportTop = Math.max(0, this.maxLinesRendered - height);
+		let prevViewportTop = this.previousViewportTop;
+		let hardwareCursorRow = this.hardwareCursorRow;
+		const computeLineDiff = (targetRow: number): number => {
+			const currentScreenRow = hardwareCursorRow - prevViewportTop;
+			const targetScreenRow = targetRow - viewportTop;
+			return targetScreenRow - currentScreenRow;
+		};
 
-			// Render all components to get new lines
-			let newLines = this.render(width);
+		// Render all components to get new lines
+		let newLines = this.render(width);
 
-			// Composite overlays into the rendered lines (before differential compare)
-			if (this.overlayStack.length > 0) {
-				newLines = this.compositeOverlays(newLines, width, height);
+		// Composite overlays into the rendered lines (before differential compare)
+		if (this.overlayStack.length > 0) {
+			newLines = this.compositeOverlays(newLines, width, height);
+		}
+
+		// Extract cursor position before applying line resets (marker must be found first)
+		const cursorPos = this.extractCursorPosition(newLines, height);
+
+		newLines = this.applyLineResets(newLines);
+
+		// Width changed - need full re-render (line wrapping changes)
+		const widthChanged = this.previousWidth !== 0 && this.previousWidth !== width;
+
+		const debugRedraw = process.env.PI_DEBUG_REDRAW === "1";
+		const logRedraw = (reason: string): void => {
+			if (!debugRedraw) return;
+			const logPath = path.join(os.homedir(), ".pi", "agent", "pi-debug.log");
+			const msg = `[${new Date().toISOString()}] fullRender: ${reason} (prev=${this.previousLines.length}, new=${newLines.length}, height=${height})\n`;
+			try {
+				fs.mkdirSync(path.dirname(logPath), { recursive: true });
+				fs.appendFileSync(logPath, msg);
+			} catch {
+				// Best-effort debug logging; must never break rendering.
 			}
+		};
 
-			// Extract cursor position before applying line resets (marker must be found first)
-			const cursorPos = this.extractCursorPosition(newLines, height);
-
-			newLines = this.applyLineResets(newLines);
-
-			// Width changed - need full re-render (line wrapping changes)
-			const widthChanged = this.previousWidth !== 0 && this.previousWidth !== width;
-
-			const debugRedraw = process.env.PI_DEBUG_REDRAW === "1";
-			const logRedraw = (reason: string): void => {
-				if (!debugRedraw) return;
-				const logPath = path.join(os.homedir(), ".pi", "agent", "pi-debug.log");
-				const msg = `[${new Date().toISOString()}] fullRender: ${reason} (prev=${this.previousLines.length}, new=${newLines.length}, height=${height})\n`;
-				try {
-					fs.mkdirSync(path.dirname(logPath), { recursive: true });
-					fs.appendFileSync(logPath, msg);
-				} catch {
-					// Best-effort debug logging; must never break rendering.
-				}
-			};
-
-			// First render - just output everything without clearing (assumes clean screen)
-			if (this.previousLines.length === 0 && !widthChanged) {
-				logRedraw("first render");
-				this.fullRedrawCount += 1;
-				let buffer = "\x1b[?2026h"; // Begin synchronized output
-				for (let i = 0; i < newLines.length; i++) {
-					if (i > 0) buffer += "\r\n";
-					buffer += newLines[i];
-				}
-				buffer += "\x1b[?2026l"; // End synchronized output
-				this.terminal.write(buffer);
-				// After rendering N lines, cursor is at end of last line (clamp to 0 for empty)
-				this.cursorRow = Math.max(0, newLines.length - 1);
-				this.hardwareCursorRow = this.cursorRow;
-				this.maxLinesRendered = Math.max(this.maxLinesRendered, newLines.length);
-				this.previousViewportTop = Math.max(0, this.maxLinesRendered - height);
-				this.positionHardwareCursor(cursorPos, newLines.length);
-				this.previousLines = newLines;
-				this.previousWidth = width;
-				return;
+		// First render - just output everything without clearing (assumes clean screen)
+		if (this.previousLines.length === 0 && !widthChanged) {
+			logRedraw("first render");
+			this.fullRedrawCount += 1;
+			let buffer = "\x1b[?2026h"; // Begin synchronized output
+			for (let i = 0; i < newLines.length; i++) {
+				if (i > 0) buffer += "\r\n";
+				buffer += newLines[i];
 			}
+			buffer += "\x1b[?2026l"; // End synchronized output
+			this.terminal.write(buffer);
+			// After rendering N lines, cursor is at end of last line (clamp to 0 for empty)
+			this.cursorRow = Math.max(0, newLines.length - 1);
+			this.hardwareCursorRow = this.cursorRow;
+			this.maxLinesRendered = Math.max(this.maxLinesRendered, newLines.length);
+			this.previousViewportTop = Math.max(0, this.maxLinesRendered - height);
+			this.positionHardwareCursor(cursorPos, newLines.length);
+			this.previousLines = newLines;
+			this.previousWidth = width;
+			return;
+		}
 
-			// Width changed - full re-render (line wrapping changes)
-			if (widthChanged) {
-				logRedraw(`width changed (${this.previousWidth} -> ${width})`);
-				this.fullRedrawCount += 1;
-				let buffer = "\x1b[?2026h"; // Begin synchronized output
-				buffer += "\x1b[2J\x1b[H"; // Clear screen and move cursor to home
-				for (let i = 0; i < newLines.length; i++) {
-					if (i > 0) buffer += "\r\n";
-					buffer += newLines[i];
-				}
-				buffer += "\x1b[?2026l"; // End synchronized output
-				this.terminal.write(buffer);
-				this.cursorRow = Math.max(0, newLines.length - 1);
-				this.hardwareCursorRow = this.cursorRow;
-				// Screen was cleared; reset working area to current render.
-				this.maxLinesRendered = newLines.length;
-				this.previousViewportTop = Math.max(0, this.maxLinesRendered - height);
-				this.positionHardwareCursor(cursorPos, newLines.length);
-				this.previousLines = newLines;
-				this.previousWidth = width;
-				return;
+		// Width changed - full re-render (line wrapping changes)
+		if (widthChanged) {
+			logRedraw(`width changed (${this.previousWidth} -> ${width})`);
+			this.fullRedrawCount += 1;
+			let buffer = "\x1b[?2026h"; // Begin synchronized output
+			buffer += "\x1b[2J\x1b[H"; // Clear screen and move cursor to home
+			for (let i = 0; i < newLines.length; i++) {
+				if (i > 0) buffer += "\r\n";
+				buffer += newLines[i];
 			}
+			buffer += "\x1b[?2026l"; // End synchronized output
+			this.terminal.write(buffer);
+			this.cursorRow = Math.max(0, newLines.length - 1);
+			this.hardwareCursorRow = this.cursorRow;
+			// Screen was cleared; reset working area to current render.
+			this.maxLinesRendered = newLines.length;
+			this.previousViewportTop = Math.max(0, this.maxLinesRendered - height);
+			this.positionHardwareCursor(cursorPos, newLines.length);
+			this.previousLines = newLines;
+			this.previousWidth = width;
+			return;
+		}
 
-			// Content shrunk below the working area and no overlays - re-render to clear empty rows
-			// (overlays need the padding, so only do this when no overlays are active)
-			// Configurable via setClearOnShrink() or PI_CLEAR_ON_SHRINK env var
-			if (this.clearOnShrink && newLines.length < previousRenderedLineCount && this.overlayStack.length === 0) {
-				logRedraw(`clearOnShrink (previousRenderedLineCount=${previousRenderedLineCount})`);
-				this.fullRedrawCount += 1;
-				let buffer = "\x1b[?2026h"; // Begin synchronized output
-				buffer += "\x1b[2J\x1b[H"; // Clear screen and move cursor to home
-				for (let i = 0; i < newLines.length; i++) {
-					if (i > 0) buffer += "\r\n";
-					buffer += newLines[i];
-				}
-				buffer += "\x1b[?2026l"; // End synchronized output
-				this.terminal.write(buffer);
-				this.cursorRow = Math.max(0, newLines.length - 1);
-				this.hardwareCursorRow = this.cursorRow;
-				// Screen was cleared; reset working area so we don't clear again next render.
-				this.maxLinesRendered = newLines.length;
-				this.previousViewportTop = Math.max(0, this.maxLinesRendered - height);
-				this.positionHardwareCursor(cursorPos, newLines.length);
-				this.previousLines = newLines;
-				this.previousWidth = width;
-				return;
+		// Content shrunk below the working area and no overlays - re-render to clear empty rows
+		// (overlays need the padding, so only do this when no overlays are active)
+		// Configurable via setClearOnShrink() or PI_CLEAR_ON_SHRINK env var
+		if (this.clearOnShrink && newLines.length < previousRenderedLineCount && this.overlayStack.length === 0) {
+			logRedraw(`clearOnShrink (previousRenderedLineCount=${previousRenderedLineCount})`);
+			this.fullRedrawCount += 1;
+			let buffer = "\x1b[?2026h"; // Begin synchronized output
+			buffer += "\x1b[2J\x1b[H"; // Clear screen and move cursor to home
+			for (let i = 0; i < newLines.length; i++) {
+				if (i > 0) buffer += "\r\n";
+				buffer += newLines[i];
 			}
-			// Find first and last changed lines
-			let firstChanged = -1;
-			let lastChanged = -1;
-			const maxLines = Math.max(newLines.length, this.previousLines.length);
-			for (let i = 0; i < maxLines; i++) {
-				const oldLine = i < this.previousLines.length ? this.previousLines[i] : "";
-				const newLine = i < newLines.length ? newLines[i] : "";
+			buffer += "\x1b[?2026l"; // End synchronized output
+			this.terminal.write(buffer);
+			this.cursorRow = Math.max(0, newLines.length - 1);
+			this.hardwareCursorRow = this.cursorRow;
+			// Screen was cleared; reset working area so we don't clear again next render.
+			this.maxLinesRendered = newLines.length;
+			this.previousViewportTop = Math.max(0, this.maxLinesRendered - height);
+			this.positionHardwareCursor(cursorPos, newLines.length);
+			this.previousLines = newLines;
+			this.previousWidth = width;
+			return;
+		}
+		// Find first and last changed lines
+		let firstChanged = -1;
+		let lastChanged = -1;
+		const maxLines = Math.max(newLines.length, this.previousLines.length);
+		for (let i = 0; i < maxLines; i++) {
+			const oldLine = i < this.previousLines.length ? this.previousLines[i] : "";
+			const newLine = i < newLines.length ? newLines[i] : "";
 
-				if (oldLine !== newLine) {
-					if (firstChanged === -1) {
-						firstChanged = i;
-					}
-					lastChanged = i;
+			if (oldLine !== newLine) {
+				if (firstChanged === -1) {
+					firstChanged = i;
 				}
+				lastChanged = i;
 			}
+		}
 		const appendedLines = newLines.length > this.previousLines.length;
 		if (appendedLines) {
 			if (firstChanged === -1) {

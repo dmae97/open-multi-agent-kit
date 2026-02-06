@@ -25,6 +25,20 @@ const KNOWN_HOSTS: Record<string, (pathname: string, hash: string) => { user: st
 	"codeberg.org": extractStandard,
 };
 
+function stripUrlCredentials(url: string): string {
+	if (!url.includes("://")) return url;
+	try {
+		const parsed = new URL(url);
+		if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return url;
+		if (!parsed.username && !parsed.password) return url;
+		parsed.username = "";
+		parsed.password = "";
+		return parsed.toString().replace(/\/$/, "");
+	} catch {
+		return url;
+	}
+}
+
 function extractStandard(pathname: string, _hash: string): { user: string; project: string } | null {
 	const [, user, project] = pathname.split("/", 3);
 	if (!user || !project) return null;
@@ -62,11 +76,20 @@ function tryKnownHost(candidate: string): { domain: string; user: string; projec
 	const segments = extractor(parsed.pathname, parsed.hash);
 	if (!segments) return null;
 
+	let committish = "";
+	if (parsed.hash) {
+		try {
+			committish = decodeURIComponent(parsed.hash.slice(1));
+		} catch {
+			return null;
+		}
+	}
+
 	return {
 		domain: hostname,
 		user: segments.user,
 		project: segments.project,
-		committish: parsed.hash ? decodeURIComponent(parsed.hash.slice(1)) : "",
+		committish,
 	};
 }
 
@@ -95,6 +118,10 @@ function splitRef(url: string): { repo: string; ref?: string } {
 			const ref = pathWithMaybeRef.slice(refSeparator + 1);
 			if (!repoPath || !ref) return { repo: url };
 			parsed.pathname = `/${repoPath}`;
+			if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+				parsed.username = "";
+				parsed.password = "";
+			}
 			return {
 				repo: parsed.toString().replace(/\/$/, ""),
 				ref,
@@ -127,7 +154,7 @@ function tryKnownHostSource(
 	if (split.ref && info.project.includes("@")) return null;
 	return {
 		type: "git",
-		repo: repoUrl,
+		repo: stripUrlCredentials(repoUrl),
 		host: info.domain,
 		path: `${info.user}/${info.project}`.replace(/\.git$/, ""),
 		ref: info.committish || split.ref || undefined,
@@ -148,18 +175,32 @@ function parseGenericGitUrl(url: string): GitSource | null {
 	} else if (/^https?:\/\/|^ssh:\/\//.test(repoWithoutRef)) {
 		try {
 			const parsed = new URL(repoWithoutRef);
+			if (parsed.hash) {
+				try {
+					decodeURIComponent(parsed.hash.slice(1));
+				} catch {
+					return null;
+				}
+			}
 			host = parsed.hostname;
 			repoPath = parsed.pathname.replace(/^\/+/, "");
+			repo = stripUrlCredentials(repoWithoutRef);
 		} catch {
 			return null;
 		}
 	} else {
 		const slashIndex = repoWithoutRef.indexOf("/");
 		if (slashIndex < 0) return null;
-		host = repoWithoutRef.slice(0, slashIndex);
-		repoPath = repoWithoutRef.slice(slashIndex + 1);
-		if (!host.includes(".") && host !== "localhost") return null;
 		repo = `https://${repoWithoutRef}`;
+		try {
+			const parsed = new URL(repo);
+			host = parsed.hostname;
+			repoPath = parsed.pathname.replace(/^\/+/, "");
+			repo = stripUrlCredentials(repo);
+		} catch {
+			return null;
+		}
+		if (!host.includes(".") && host !== "localhost") return null;
 	}
 
 	const normalizedPath = repoPath.replace(/\.git$/, "").replace(/^\/+/, "");
@@ -183,6 +224,17 @@ function parseGenericGitUrl(url: string): GitSource | null {
  */
 export function parseGitUrl(source: string): GitSource | null {
 	const url = source.startsWith("git:") ? source.slice(4).trim() : source;
+	const hashIndex = url.indexOf("#");
+	if (hashIndex >= 0) {
+		const hash = url.slice(hashIndex + 1);
+		if (hash) {
+			try {
+				decodeURIComponent(hash);
+			} catch {
+				return null;
+			}
+		}
+	}
 	const split = splitRef(url);
 
 	// SCP-like SSH URLs (git@host:user/repo) — convert to https for host matching

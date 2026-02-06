@@ -545,6 +545,18 @@ type CacheControlBlock = {
 	cache_control?: { type: "ephemeral"; ttl?: "1h" | "5m" } | null;
 };
 
+type AdaptiveThinkingConfigParam = { type: "adaptive" };
+
+type EffortOutputConfigParam = { effort: AnthropicEffort };
+
+type MessageCreateParamsStreamingWithAdaptiveThinking = Omit<
+	MessageCreateParamsStreaming,
+	"thinking" | "output_config"
+> & {
+	thinking?: MessageCreateParamsStreaming["thinking"] | AdaptiveThinkingConfigParam;
+	output_config?: MessageCreateParamsStreaming["output_config"] | EffortOutputConfigParam;
+};
+
 const cacheControlEphemeral = { type: "ephemeral" as const };
 
 type SystemBlockOptions = {
@@ -650,9 +662,13 @@ function buildParams(
 	if (options?.thinkingEnabled && model.reasoning) {
 		if (supportsAdaptiveThinking(model.id)) {
 			// Adaptive thinking: Claude decides when and how much to think
-			(params as any).thinking = { type: "adaptive" };
+			const paramsWithAdaptiveThinking: MessageCreateParamsStreamingWithAdaptiveThinking = params;
+			paramsWithAdaptiveThinking.thinking = { type: "adaptive" };
 			if (options.effort) {
-				(params as any).output_config = { effort: options.effort };
+				paramsWithAdaptiveThinking.output_config = {
+					...(params.output_config ?? {}),
+					effort: options.effort,
+				};
 			}
 		} else {
 			// Budget-based thinking for older models

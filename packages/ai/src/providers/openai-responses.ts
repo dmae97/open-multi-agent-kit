@@ -421,12 +421,13 @@ function buildParams(model: Model<"openai-responses">, context: Context, options
 	const messages = convertMessages(model, context, strictResponsesPairing);
 
 	const cacheRetention = resolveCacheRetention(options?.cacheRetention);
+	const promptCacheKey = cacheRetention === "none" ? undefined : options?.sessionId;
 	const params: ResponseCreateParamsStreaming = {
 		model: model.id,
 		input: messages,
 		stream: true,
-		prompt_cache_key: cacheRetention === "none" ? undefined : options?.sessionId,
-		prompt_cache_retention: getPromptCacheRetention(model.baseUrl, cacheRetention),
+		prompt_cache_key: promptCacheKey,
+		prompt_cache_retention: promptCacheKey ? getPromptCacheRetention(model.baseUrl, cacheRetention) : undefined,
 	};
 
 	if (options?.maxTokens) {

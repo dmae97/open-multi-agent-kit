@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Support for `PI_PACKAGE_DIR` environment variable to override package directory (useful for Nix/Guix store paths)
@@ -29,6 +30,9 @@
 
 ### Changed
 
+- Made shell command execution in configuration values asynchronous to prevent blocking the TUI
+- Improved `@` prefix normalization to only strip leading `@` for well-known path syntaxes (absolute paths, home directory, internal URL shorthands) to avoid mangling literal paths
+- Enhanced git URL parsing to strip credentials from repository URLs and validate URL-encoded hash fragments
 - Improved null data handling in task submission to preserve agent output when `submit_result` is called with null/undefined data, enabling fallback text extraction instead of discarding output
 - Updated default model IDs across providers: Claude Sonnet 4.5 → Claude Opus 4.6, Gemini 2.5 Pro → Gemini 3 Pro variants, and others
 - Made model definition fields optional with sensible defaults for local models (Ollama, LM Studio, etc.)
@@ -50,6 +54,8 @@
 
 ### Fixed
 
+- Fixed concurrent shell command execution by de-duplicating in-flight requests for the same command
+- Fixed git URL parsing to properly handle URL-encoded characters in hash fragments and reject invalid encodings
 - Fixed task executor to properly handle agents calling `submit_result` with null data by treating it as missing and attempting to extract output from conversation text rather than silently failing
 - Fixed HTML export template to safely handle invalid argument types in tool rendering
 - Fixed path shortening in HTML export to handle non-string paths
