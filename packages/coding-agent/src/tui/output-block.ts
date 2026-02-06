@@ -32,7 +32,18 @@ export function renderOutputBlock(options: OutputBlockOptions, theme: Theme): st
 					? "accent"
 					: "dim";
 	const border = (text: string) => theme.fg(borderColor, text);
-	const bgFn = state && applyBg ? (text: string) => theme.bg(getStateBgColor(state), text) : undefined;
+	const bgFn = (() => {
+		if (!state || !applyBg) return undefined;
+		const bgAnsi = theme.getBgAnsi(getStateBgColor(state));
+		// Keep block background stable even if inner content contains SGR resets (e.g. "\x1b[0m"),
+		// which would otherwise clear the outer background mid-line.
+		return (text: string) => {
+			const stabilized = text
+				.replace(/\x1b\[(?:0)?m/g, m => `${m}${bgAnsi}`)
+				.replace(/\x1b\[49m/g, m => `${m}${bgAnsi}`);
+			return `${bgAnsi}${stabilized}\x1b[49m`;
+		};
+	})();
 
 	const buildBarLine = (leftChar: string, rightChar: string, label?: string, meta?: string): string => {
 		const left = border(`${leftChar}${cap}`);
