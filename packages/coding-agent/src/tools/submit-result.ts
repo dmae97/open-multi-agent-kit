@@ -113,8 +113,8 @@ export class SubmitResultTool implements AgentTool<TObject, SubmitResultDetails>
 
 		// Skip validation when aborting - data is optional for aborts
 		if (status === "success") {
-			if (params.data === undefined) {
-				throw new Error("data is required when status is 'success'");
+			if (params.data === undefined || params.data === null) {
+				throw new Error("data is required when status is 'success' (got null/undefined)");
 			}
 			if (this.schemaError) {
 				throw new Error(`Invalid output schema: ${this.schemaError}`);

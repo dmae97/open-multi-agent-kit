@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - Support for `PI_PACKAGE_DIR` environment variable to override package directory (useful for Nix/Guix store paths)
@@ -30,6 +29,7 @@
 
 ### Changed
 
+- Improved null data handling in task submission to preserve agent output when `submit_result` is called with null/undefined data, enabling fallback text extraction instead of discarding output
 - Updated default model IDs across providers: Claude Sonnet 4.5 → Claude Opus 4.6, Gemini 2.5 Pro → Gemini 3 Pro variants, and others
 - Made model definition fields optional with sensible defaults for local models (Ollama, LM Studio, etc.)
 - Modified custom tool execute signature to reorder parameters: `(toolCallId, params, signal, onUpdate, ctx)` instead of `(toolCallId, params, onUpdate, ctx, signal)`
@@ -50,6 +50,7 @@
 
 ### Fixed
 
+- Fixed task executor to properly handle agents calling `submit_result` with null data by treating it as missing and attempting to extract output from conversation text rather than silently failing
 - Fixed HTML export template to safely handle invalid argument types in tool rendering
 - Fixed path shortening in HTML export to handle non-string paths
 - Fixed custom message rendering to properly display full content without artificial line limits

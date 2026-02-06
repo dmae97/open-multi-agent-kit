@@ -70,6 +70,10 @@ Run in isolated git worktree; returns patches. Use when tasks edit overlapping f
 ### `schema` (optional — recommended for structured output)
 
 JTD schema defining expected response structure. Use typed properties. If you care about parsing result, define here — **never describe output format in `context` or `assignment`**.
+
+<caution>
+**Schema vs agent mismatch causes null output.** Agents with `output="structured"` (e.g., `explore`) have a built-in schema. If you also pass `schema`, yours takes precedence — but if you describe output format in `context`/`assignment` instead, the agent's built-in schema wins. The agent gets confused trying to fit your requested format into its schema shape and submits `null`. Either: (1) use `schema` to override the built-in one, (2) use `task` agent which has no built-in schema, or (3) match your instructions to the agent's expected output shape.
+</caution>
 ---
 
 ## Writing an assignment
@@ -115,6 +119,8 @@ Use structure every assignment:
 - "No WASM."
 
 If tempted to write above, expand using templates.
+**Output format in prose instead of `schema`** — agent returns null:
+Structured agents (`explore`, `reviewer`) have built-in output schemas. Describing a different output format in `context`/`assignment` without overriding via `schema` creates a mismatch — the agent can't reconcile your prose instructions with its schema and submits null data. Always use `schema` for output structure, or pick an agent whose built-in schema matches your needs.
 **Test/lint commands in parallel tasks** — edit wars:
 Parallel agents share working tree. If two agents run `bun check` or `bun test` concurrently, they see each other's half-finished edits, "fix" phantom errors, loop. **Never tell parallel tasks run project-wide build/test/lint commands.** Each task edits, stops. Caller verifies after all tasks complete.
 **If you can’t specify scope yet**, create **Discovery task** first: enumerate files, find callsites, list candidates. Then fan out with explicit paths.

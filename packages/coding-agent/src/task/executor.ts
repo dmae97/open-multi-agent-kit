@@ -1102,15 +1102,23 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			}
 		} else {
 			// Normal successful completion
-			const completeData = normalizeCompleteData(lastSubmitResult?.data ?? null, reportFindings);
-			try {
-				rawOutput = JSON.stringify(completeData, null, 2) ?? "null";
-			} catch (err) {
-				const errorMessage = err instanceof Error ? err.message : String(err);
-				rawOutput = `{"error":"Failed to serialize submit_result data: ${errorMessage}"}`;
+			const submitData = lastSubmitResult?.data;
+			if (submitData === null || submitData === undefined) {
+				// Agent called submit_result but with null/undefined data — treat as missing
+				// so the fallback path can try to extract output from conversation text
+				const warning = "SYSTEM WARNING: Subagent called submit_result with null data.";
+				rawOutput = rawOutput ? `${warning}\n\n${rawOutput}` : warning;
+			} else {
+				const completeData = normalizeCompleteData(submitData, reportFindings);
+				try {
+					rawOutput = JSON.stringify(completeData, null, 2) ?? "null";
+				} catch (err) {
+					const errorMessage = err instanceof Error ? err.message : String(err);
+					rawOutput = `{"error":"Failed to serialize submit_result data: ${errorMessage}"}`;
+				}
+				exitCode = 0;
+				stderr = "";
 			}
-			exitCode = 0;
-			stderr = "";
 		}
 	} else {
 		const allowFallback = exitCode === 0 && !done.aborted && !signal?.aborted;
