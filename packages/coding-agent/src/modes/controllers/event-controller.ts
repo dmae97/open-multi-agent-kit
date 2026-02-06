@@ -97,6 +97,7 @@ export class EventController {
 					this.ctx.ui.requestRender();
 				} else if (event.message.role === "assistant") {
 					this.lastThinkingCount = 0;
+					this.resetReadGroup();
 					this.ctx.streamingComponent = new AssistantMessageComponent(undefined, this.ctx.hideThinkingBlock);
 					this.ctx.streamingMessage = event.message;
 					this.ctx.chatContainer.addChild(this.ctx.streamingComponent);
@@ -118,11 +119,26 @@ export class EventController {
 						this.lastThinkingCount = thinkingCount;
 					}
 
+					let seenNonToolContent = false;
 					for (const content of this.ctx.streamingMessage.content) {
-						if (content.type !== "toolCall") continue;
+						if (content.type !== "toolCall") {
+							// Track text/thinking blocks between tool calls so read groups
+							// don't coalesce across narrative boundaries.
+							if (
+								(content.type === "text" && content.text?.trim()) ||
+								(content.type === "thinking" && (content as any).thinking?.trim())
+							) {
+								seenNonToolContent = true;
+							}
+							continue;
+						}
 
 						if (!this.ctx.pendingTools.has(content.id)) {
 							if (content.name === "read") {
+								if (seenNonToolContent) {
+									this.resetReadGroup();
+									seenNonToolContent = false;
+								}
 								const group = this.getReadGroup();
 								group.updateArgs(content.arguments, content.id);
 								this.ctx.pendingTools.set(content.id, group);

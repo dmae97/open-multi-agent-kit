@@ -21,7 +21,8 @@ import {
 	TRUNCATE_LENGTHS,
 	truncateToWidth,
 } from "../../tools/render-utils";
-import { renderOutputBlock, renderStatusLine, renderTreeList } from "../../tui";
+import { renderStatusLine, renderTreeList } from "../../tui";
+import { CachedOutputBlock } from "../../tui/output-block";
 import type { SearchResponse } from "./types";
 
 const MAX_COLLAPSED_ANSWER_LINES = PREVIEW_LIMITS.COLLAPSED_LINES;
@@ -79,7 +80,6 @@ export function renderSearchResult(
 		maxAnswerLines?: number;
 	},
 ): Component {
-	const { expanded } = options;
 	const details = result.details;
 
 	// Handle error case
@@ -90,7 +90,7 @@ export function renderSearchResult(
 	const rawText = result.content?.find(block => block.type === "text")?.text?.trim() ?? "";
 	const response = details?.response;
 	if (!response) {
-		return renderFallbackText(rawText, expanded, theme);
+		return renderFallbackText(rawText, options.expanded, theme);
 	}
 
 	const sources = Array.isArray(response.sources) ? response.sources : [];
@@ -112,12 +112,6 @@ export function renderSearchResult(
 				.map(l => l.trim())
 		: [];
 	const totalAnswerLines = answerLines.length;
-	const answerLimit = expanded ? MAX_EXPANDED_ANSWER_LINES : MAX_COLLAPSED_ANSWER_LINES;
-	const answerPreview = contentText
-		? args?.allowLongAnswer
-			? answerLines.slice(0, args.maxAnswerLines ?? answerLines.length)
-			: getPreviewLines(contentText, answerLimit, MAX_ANSWER_LINE_LEN)
-		: [];
 
 	const providerLabel = provider !== "none" ? getSearchProvider(provider).label : "None";
 	const queryPreview = args?.query
@@ -131,46 +125,6 @@ export function renderSearchResult(
 			title: "Web Search",
 			description: providerLabel,
 			meta: [formatCount("source", sourceCount)],
-		},
-		theme,
-	);
-
-	const remainingAnswer = totalAnswerLines - answerPreview.length;
-
-	const sourceTree = renderTreeList(
-		{
-			items: sources,
-			expanded,
-			maxCollapsed: MAX_COLLAPSED_ITEMS,
-			itemType: "source",
-			renderItem: src => {
-				const titleText =
-					typeof src.title === "string" && src.title.trim()
-						? src.title
-						: typeof src.url === "string" && src.url.trim()
-							? src.url
-							: "Untitled";
-				const title = truncateToWidth(titleText, 70);
-				const url = typeof src.url === "string" ? src.url : "";
-				const domain = url ? getDomain(url) : "";
-				const age = formatAge(src.ageSeconds) || (typeof src.publishedDate === "string" ? src.publishedDate : "");
-				const metaParts: string[] = [];
-				if (domain) metaParts.push(theme.fg("dim", `(${domain})`));
-				if (typeof src.author === "string" && src.author.trim()) metaParts.push(theme.fg("muted", src.author));
-				if (age) metaParts.push(theme.fg("muted", age));
-				const metaSep = theme.fg("dim", theme.sep.dot);
-				const metaSuffix = metaParts.length > 0 ? ` ${metaParts.join(metaSep)}` : "";
-				const lines: string[] = [`${theme.fg("accent", title)}${metaSuffix}`];
-				const snippetText = typeof src.snippet === "string" ? src.snippet : "";
-				if (snippetText.trim()) {
-					const snippetLines = getPreviewLines(snippetText, MAX_SNIPPET_LINES, MAX_SNIPPET_LINE_LEN);
-					for (const snippetLine of snippetLines) {
-						lines.push(theme.fg("muted", `${theme.format.dash} ${snippetLine}`));
-					}
-				}
-				if (url) lines.push(theme.fg("mdLinkUrl", url));
-				return lines;
-			},
 		},
 		theme,
 	);
@@ -202,9 +156,94 @@ export function renderSearchResult(
 		metaLines.push(`${theme.fg("muted", "Queries:")} ${theme.fg("text", queryList.join("; "))}${suffix}`);
 	}
 
+	const outputBlock = new CachedOutputBlock();
+
 	return {
-		render: (width: number) =>
-			renderOutputBlock(
+		render(width: number): string[] {
+			// Read mutable state at render time
+			const { expanded } = options;
+
+			// Expanded-dependent computations
+			const answerLimit = expanded ? MAX_EXPANDED_ANSWER_LINES : MAX_COLLAPSED_ANSWER_LINES;
+			const answerPreview = contentText
+				? args?.allowLongAnswer
+					? answerLines.slice(0, args.maxAnswerLines ?? answerLines.length)
+					: getPreviewLines(contentText, answerLimit, MAX_ANSWER_LINE_LEN)
+				: [];
+			const remainingAnswer = totalAnswerLines - answerPreview.length;
+
+			const sourceTree = renderTreeList(
+				{
+					items: sources,
+					expanded,
+					maxCollapsed: MAX_COLLAPSED_ITEMS,
+					itemType: "source",
+					renderItem: src => {
+						const titleText =
+							typeof src.title === "string" && src.title.trim()
+								? src.title
+								: typeof src.url === "string" && src.url.trim()
+									? src.url
+									: "Untitled";
+						const title = truncateToWidth(titleText, 70);
+						const url = typeof src.url === "string" ? src.url : "";
+						const domain = url ? getDomain(url) : "";
+						const age =
+							formatAge(src.ageSeconds) || (typeof src.publishedDate === "string" ? src.publishedDate : "");
+						const metaParts: string[] = [];
+						if (domain) metaParts.push(theme.fg("dim", `(${domain})`));
+						if (typeof src.author === "string" && src.author.trim())
+							metaParts.push(theme.fg("muted", src.author));
+						if (age) metaParts.push(theme.fg("muted", age));
+						const metaSep = theme.fg("dim", theme.sep.dot);
+						const metaSuffix = metaParts.length > 0 ? ` ${metaParts.join(metaSep)}` : "";
+						const srcLines: string[] = [`${theme.fg("accent", title)}${metaSuffix}`];
+						const snippetText = typeof src.snippet === "string" ? src.snippet : "";
+						if (snippetText.trim()) {
+							const snippetLines = getPreviewLines(snippetText, MAX_SNIPPET_LINES, MAX_SNIPPET_LINE_LEN);
+							for (const snippetLine of snippetLines) {
+								srcLines.push(theme.fg("muted", `${theme.format.dash} ${snippetLine}`));
+							}
+						}
+						if (url) srcLines.push(theme.fg("mdLinkUrl", url));
+						return srcLines;
+					},
+				},
+				theme,
+			);
+
+			// Build answer section
+			const answerState = sourceCount > 0 ? "success" : "warning";
+			const borderColor: "warning" | "dim" = answerState === "warning" ? "warning" : "dim";
+			const border = (t: string) => theme.fg(borderColor, t);
+			const contentPrefix = border(`${theme.boxSharp.vertical} `);
+			const contentSuffix = border(theme.boxSharp.vertical);
+			const contentWidth = Math.max(0, width - visibleWidth(contentPrefix) - visibleWidth(contentSuffix));
+			const answerTreeLines = answerPreview.length > 0 ? answerPreview : ["No answer text returned"];
+			const answerTree = renderTreeList(
+				{
+					items: answerTreeLines,
+					expanded: true,
+					maxCollapsed: answerTreeLines.length,
+					itemType: "line",
+					renderItem: (line, context) => {
+						const coloredLine =
+							line === "No answer text returned" ? theme.fg("muted", line) : theme.fg("dim", line);
+						if (!args?.allowLongAnswer) {
+							return coloredLine;
+						}
+						const prefixWidth = visibleWidth(context.continuePrefix);
+						const wrapWidth = Math.max(10, contentWidth - prefixWidth);
+						return wrapTextWithAnsi(coloredLine, wrapWidth);
+					},
+				},
+				theme,
+			);
+			if (remainingAnswer > 0) {
+				answerTree.push(theme.fg("muted", formatMoreItems(remainingAnswer, "line")));
+			}
+
+			return outputBlock.render(
 				{
 					header,
 					state: sourceCount > 0 ? "success" : "warning",
@@ -218,43 +257,7 @@ export function renderSearchResult(
 							: []),
 						{
 							label: theme.fg("toolTitle", "Answer"),
-							lines: (() => {
-								const state = sourceCount > 0 ? "success" : "warning";
-								const borderColor: "warning" | "dim" = state === "warning" ? "warning" : "dim";
-								const border = (text: string) => theme.fg(borderColor, text);
-								const contentPrefix = border(`${theme.boxSharp.vertical} `);
-								const contentSuffix = border(theme.boxSharp.vertical);
-								const contentWidth = Math.max(
-									0,
-									width - visibleWidth(contentPrefix) - visibleWidth(contentSuffix),
-								);
-								const answerTreeLines = answerPreview.length > 0 ? answerPreview : ["No answer text returned"];
-								const answerTree = renderTreeList(
-									{
-										items: answerTreeLines,
-										expanded: true,
-										maxCollapsed: answerTreeLines.length,
-										itemType: "line",
-										renderItem: (line, context) => {
-											const coloredLine =
-												line === "No answer text returned"
-													? theme.fg("muted", line)
-													: theme.fg("dim", line);
-											if (!args?.allowLongAnswer) {
-												return coloredLine;
-											}
-											const prefixWidth = visibleWidth(context.continuePrefix);
-											const wrapWidth = Math.max(10, contentWidth - prefixWidth);
-											return wrapTextWithAnsi(coloredLine, wrapWidth);
-										},
-									},
-									theme,
-								);
-								if (remainingAnswer > 0) {
-									answerTree.push(theme.fg("muted", formatMoreItems(remainingAnswer, "line")));
-								}
-								return answerTree;
-							})(),
+							lines: answerTree,
 						},
 						{
 							label: theme.fg("toolTitle", "Sources"),
@@ -265,8 +268,11 @@ export function renderSearchResult(
 					width,
 				},
 				theme,
-			),
-		invalidate: () => {},
+			);
+		},
+		invalidate() {
+			outputBlock.invalidate();
+		},
 	};
 }
 

@@ -203,7 +203,16 @@ export class UiHelpers {
 
 				// Render tool call components
 				for (const content of message.content) {
-					if (content.type !== "toolCall") continue;
+					if (content.type !== "toolCall") {
+						// Text/thinking blocks between tool calls break read grouping
+						if (
+							(content.type === "text" && content.text?.trim()) ||
+							(content.type === "thinking" && (content as any).thinking?.trim())
+						) {
+							readGroup = null;
+						}
+						continue;
+					}
 
 					if (content.name === "read") {
 						if (!readGroup) {

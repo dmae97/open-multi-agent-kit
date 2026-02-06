@@ -7,7 +7,7 @@ import { type Static, Type } from "@sinclair/typebox";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
 import type { ToolSession } from "../sdk";
-import { renderCodeCell, renderStatusLine } from "../tui";
+import { Hasher, type RenderCache, renderCodeCell, renderStatusLine } from "../tui";
 import { resolveToCwd } from "./path-utils";
 import { formatCount, formatErrorMessage, PREVIEW_LIMITS } from "./render-utils";
 
@@ -221,7 +221,7 @@ export const notebookToolRenderer = {
 
 	renderResult(
 		result: { content: Array<{ type: string; text?: string }>; details?: NotebookToolDetails },
-		{ expanded }: RenderResultOptions,
+		options: RenderResultOptions,
 		uiTheme: Theme,
 		args?: NotebookRenderArgs,
 	): Component {
@@ -252,9 +252,16 @@ export const notebookToolRenderer = {
 
 		const notebookPath = args?.notebookPath ?? args?.notebook_path;
 		const notebookLabel = notebookPath ? `${actionLabel} ${notebookPath}` : "Notebook";
+		let cached: RenderCache | undefined;
+
 		return {
-			render: (width: number) =>
-				renderCodeCell(
+			render: (width: number): string[] => {
+				// REACTIVE: read mutable options at render time
+				const { expanded } = options;
+				const key = new Hasher().bool(expanded).u32(width).digest();
+				if (cached?.key === key) return cached.lines;
+
+				const lines = renderCodeCell(
 					{
 						code: codeText,
 						language,
@@ -266,8 +273,14 @@ export const notebookToolRenderer = {
 						width,
 					},
 					uiTheme,
-				),
-			invalidate: () => {},
+				);
+
+				cached = { key, lines };
+				return lines;
+			},
+			invalidate: () => {
+				cached = undefined;
+			},
 		};
 	},
 	mergeCallAndResult: true,

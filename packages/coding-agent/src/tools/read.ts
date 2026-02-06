@@ -14,7 +14,8 @@ import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { getLanguageFromPath, type Theme } from "../modes/theme/theme";
 import readDescription from "../prompts/tools/read.md" with { type: "text" };
 import type { ToolSession } from "../sdk";
-import { renderCodeCell, renderOutputBlock, renderStatusLine } from "../tui";
+import { renderCodeCell, renderStatusLine } from "../tui";
+import { CachedOutputBlock } from "../tui/output-block";
 import { formatDimensionNote, resizeImage } from "../utils/image-resize";
 import { detectSupportedImageMimeTypeFromFile } from "../utils/mime";
 import { ensureTool } from "../utils/tools-manager";
@@ -1115,9 +1116,10 @@ export const readToolRenderer = {
 			);
 			const detailLines = contentText ? contentText.split("\n").map(line => uiTheme.fg("toolOutput", line)) : [];
 			const lines = [...detailLines, ...warningLines];
+			const outputBlock = new CachedOutputBlock();
 			return {
 				render: (width: number) =>
-					renderOutputBlock(
+					outputBlock.render(
 						{
 							header,
 							state: "success",
@@ -1131,7 +1133,7 @@ export const readToolRenderer = {
 						},
 						uiTheme,
 					),
-				invalidate: () => {},
+				invalidate: () => outputBlock.invalidate(),
 			};
 		}
 
@@ -1141,9 +1143,12 @@ export const readToolRenderer = {
 			const endLine = args.limit !== undefined ? startLine + args.limit - 1 : "";
 			title += `:${startLine}${endLine ? `-${endLine}` : ""}`;
 		}
+		let cachedWidth: number | undefined;
+		let cachedLines: string[] | undefined;
 		return {
-			render: (width: number) =>
-				renderCodeCell(
+			render: (width: number) => {
+				if (cachedLines && cachedWidth === width) return cachedLines;
+				cachedLines = renderCodeCell(
 					{
 						code: contentText,
 						language: lang,
@@ -1154,8 +1159,14 @@ export const readToolRenderer = {
 						width,
 					},
 					uiTheme,
-				),
-			invalidate: () => {},
+				);
+				cachedWidth = width;
+				return cachedLines;
+			},
+			invalidate: () => {
+				cachedWidth = undefined;
+				cachedLines = undefined;
+			},
 		};
 	},
 	mergeCallAndResult: true,

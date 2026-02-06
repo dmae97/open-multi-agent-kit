@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - Support for `PI_PACKAGE_DIR` environment variable to override package directory (useful for Nix/Guix store paths)
@@ -30,6 +29,11 @@
 
 ### Changed
 
+- Improved render performance by introducing caching for tool output blocks and search results to avoid redundant text width and padding computations
+- Enhanced read tool grouping to reset when non-tool content (text/thinking blocks) appears between read calls, preventing unintended coalescing
+- Improved string preview formatting in scalar values to show line counts and truncation indicators for multi-line strings
+- Refactored tool execution component to use shared mutable render state for spinner frames and expansion state, reducing closure overhead
+- Enhanced error handling in tool renderers with logging for renderer failures instead of silent fallbacks
 - Made shell command execution in configuration values asynchronous to prevent blocking the TUI
 - Improved `@` prefix normalization to only strip leading `@` for well-known path syntaxes (absolute paths, home directory, internal URL shorthands) to avoid mangling literal paths
 - Enhanced git URL parsing to strip credentials from repository URLs and validate URL-encoded hash fragments
@@ -54,6 +58,7 @@
 
 ### Fixed
 
+- Fixed truncation indicator in truncate tool to use ellipsis character (…) instead of verbose '[truncated]' suffix
 - Fixed concurrent shell command execution by de-duplicating in-flight requests for the same command
 - Fixed git URL parsing to properly handle URL-encoded characters in hash fragments and reject invalid encodings
 - Fixed task executor to properly handle agents calling `submit_result` with null data by treating it as missing and attempting to extract output from conversation text rather than silently failing

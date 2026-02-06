@@ -7,7 +7,6 @@
 import * as os from "node:os";
 import { type Ellipsis, truncateToWidth } from "@oh-my-pi/pi-tui";
 import type { Theme } from "../modes/theme/theme";
-import { getTreeBranch } from "../tui/utils";
 
 export { Ellipsis, truncateToWidth } from "@oh-my-pi/pi-tui";
 
@@ -27,6 +26,10 @@ export const PREVIEW_LIMITS = {
 	OUTPUT_COLLAPSED: 3,
 	/** Output preview lines in expanded view */
 	OUTPUT_EXPANDED: 10,
+	/** Max hunks shown when collapsed (edit tool) */
+	DIFF_COLLAPSED_HUNKS: 8,
+	/** Max diff lines shown when collapsed (edit tool) */
+	DIFF_COLLAPSED_LINES: 40,
 } as const;
 
 /** Truncation lengths for different content types */
@@ -678,43 +681,4 @@ function pluralize(label: string, count: number): string {
 	if (/(?:ch|sh|s|x|z)$/i.test(label)) return `${label}es`;
 	if (/[^aeiou]y$/i.test(label)) return `${label.slice(0, -1)}ies`;
 	return `${label}s`;
-}
-
-// =============================================================================
-// Tree Rendering Utilities
-// =============================================================================
-/**
- * Render a list of items with tree branches, handling truncation.
- *
- * @param items - Full list of items to render
- * @param expanded - Whether view is expanded
- * @param maxCollapsed - Max items to show when collapsed
- * @param renderItem - Function to render a single item
- * @param itemType - Type name for "more X" message (e.g., "file", "entry")
- * @param theme - Theme instance
- * @returns Array of formatted lines
- */
-export function renderTreeList<T>(
-	items: T[],
-	expanded: boolean,
-	maxCollapsed: number,
-	renderItem: (item: T, branch: string, isLast: boolean, theme: Theme) => string,
-	itemType: string,
-	theme: Theme,
-): string[] {
-	const lines: string[] = [];
-	const maxItems = expanded ? items.length : Math.min(items.length, maxCollapsed);
-
-	for (let i = 0; i < maxItems; i++) {
-		const isLast = i === maxItems - 1 && (expanded || items.length <= maxCollapsed);
-		const branch = getTreeBranch(isLast, theme);
-		lines.push(renderItem(items[i], branch, isLast, theme));
-	}
-
-	if (!expanded && items.length > maxCollapsed) {
-		const remaining = items.length - maxCollapsed;
-		lines.push(` ${theme.fg("dim", theme.tree.last)} ${theme.fg("muted", formatMoreItems(remaining, itemType))}`);
-	}
-
-	return lines;
 }

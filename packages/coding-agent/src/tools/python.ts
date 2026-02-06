@@ -832,22 +832,20 @@ export const pythonToolRenderer = {
 		uiTheme: Theme,
 	): Component {
 		const ui = new ToolUIKit(uiTheme);
-		const { renderContext } = options;
 		const details = result.details;
 
-		const expanded = renderContext?.expanded ?? options.expanded;
-		const previewLines = renderContext?.previewLines ?? PYTHON_DEFAULT_PREVIEW_LINES;
-		const output = renderContext?.output ?? (result.content?.find(c => c.type === "text")?.text ?? "").trimEnd();
+		const output =
+			options.renderContext?.output ?? (result.content?.find(c => c.type === "text")?.text ?? "").trimEnd();
 
 		const jsonOutputs = details?.jsonOutputs ?? [];
 		const jsonLines = jsonOutputs.flatMap((value, index) => {
 			const header = `JSON output ${index + 1}`;
-			const treeLines = renderJsonTree(value, uiTheme, expanded);
+			const treeLines = renderJsonTree(value, uiTheme, options.renderContext?.expanded ?? options.expanded);
 			return [header, ...treeLines];
 		});
 
 		const truncation = details?.meta?.truncation;
-		const timeoutSeconds = renderContext?.timeout;
+		const timeoutSeconds = options.renderContext?.timeout;
 		const timeoutLine =
 			typeof timeoutSeconds === "number"
 				? uiTheme.fg("dim", ui.wrapBrackets(`Timeout: ${timeoutSeconds}s`))
@@ -875,13 +873,12 @@ export const pythonToolRenderer = {
 			// Cache state following Box pattern
 			let cached: { key: string; width: number; result: string[] } | undefined;
 
-			const buildCacheKey = (spinnerFrame: number | undefined): string => {
-				return `${expanded}|${previewLines}|${spinnerFrame}`;
-			};
-
 			return {
 				render: (width: number): string[] => {
-					const key = buildCacheKey(options.spinnerFrame);
+					// Read mutable state at render time
+					const expanded = options.renderContext?.expanded ?? options.expanded;
+					const previewLines = options.renderContext?.previewLines ?? PYTHON_DEFAULT_PREVIEW_LINES;
+					const key = `${expanded}|${previewLines}|${options.spinnerFrame}`;
 					if (cached && cached.key === key && cached.width === width) {
 						return cached.result;
 					}
@@ -951,7 +948,11 @@ export const pythonToolRenderer = {
 		const combinedOutput = [displayOutput, ...jsonLines].filter(Boolean).join("\n");
 
 		const statusEvents = details?.statusEvents ?? [];
-		const statusLines = renderStatusEvents(statusEvents, uiTheme, expanded);
+		const statusLines = renderStatusEvents(
+			statusEvents,
+			uiTheme,
+			options.renderContext?.expanded ?? options.expanded,
+		);
 
 		if (!combinedOutput && statusLines.length === 0) {
 			const lines = [timeoutLine, warningLine].filter(Boolean) as string[];
@@ -965,7 +966,7 @@ export const pythonToolRenderer = {
 			return new Text(lines.join("\n"), 0, 0);
 		}
 
-		if (expanded) {
+		if (options.renderContext?.expanded ?? options.expanded) {
 			const styledOutput = combinedOutput
 				.split("\n")
 				.map(line => uiTheme.fg("toolOutput", line))
@@ -988,14 +989,18 @@ export const pythonToolRenderer = {
 		let cachedWidth: number | undefined;
 		let cachedLines: string[] | undefined;
 		let cachedSkipped: number | undefined;
+		let cachedPreviewLines: number | undefined;
 
 		return {
 			render: (width: number): string[] => {
-				if (cachedLines === undefined || cachedWidth !== width) {
+				// Read mutable state at render time
+				const previewLines = options.renderContext?.previewLines ?? PYTHON_DEFAULT_PREVIEW_LINES;
+				if (cachedLines === undefined || cachedWidth !== width || cachedPreviewLines !== previewLines) {
 					const result = truncateToVisualLines(textContent, previewLines, width);
 					cachedLines = result.visualLines;
 					cachedSkipped = result.skippedCount;
 					cachedWidth = width;
+					cachedPreviewLines = previewLines;
 				}
 				const outputLines: string[] = [];
 				if (cachedSkipped && cachedSkipped > 0) {
@@ -1025,6 +1030,7 @@ export const pythonToolRenderer = {
 				cachedWidth = undefined;
 				cachedLines = undefined;
 				cachedSkipped = undefined;
+				cachedPreviewLines = undefined;
 			},
 		};
 	},

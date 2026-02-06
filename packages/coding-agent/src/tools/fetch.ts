@@ -10,7 +10,8 @@ import { renderPromptTemplate } from "../config/prompt-templates";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { type Theme, theme } from "../modes/theme/theme";
 import fetchDescription from "../prompts/tools/fetch.md" with { type: "text" };
-import { renderOutputBlock, renderStatusLine } from "../tui";
+import { renderStatusLine } from "../tui";
+import { CachedOutputBlock } from "../tui/output-block";
 import { ensureTool } from "../utils/tools-manager";
 import { specialHandlers } from "../web/scrapers";
 import type { RenderResult } from "../web/scrapers/types";
@@ -980,7 +981,6 @@ export function renderFetchResult(
 	options: RenderResultOptions,
 	uiTheme: Theme = theme,
 ): Component {
-	const { expanded } = options;
 	const details = result.details;
 
 	if (!details) {
@@ -1031,20 +1031,32 @@ export function renderFetchResult(
 		metadataLines.push(`${uiTheme.fg("muted", "Notes:")} ${details.notes.join("; ")}`);
 	}
 
-	const previewLimit = expanded ? 12 : 3;
-	const previewList = applyListLimit(contentLines, { headLimit: previewLimit });
-	const previewLines = previewList.items.map(line => truncate(line.trimEnd(), 120, "…"));
-	const remaining = Math.max(0, contentLines.length - previewLines.length);
-	const contentPreviewLines =
-		previewLines.length > 0 ? previewLines.map(line => uiTheme.fg("dim", line)) : [uiTheme.fg("dim", "(no content)")];
-	if (remaining > 0) {
-		const hint = formatExpandHint(uiTheme, expanded, true);
-		contentPreviewLines.push(uiTheme.fg("muted", `… ${remaining} more lines${hint ? ` ${hint}` : ""}`));
-	}
+	const outputBlock = new CachedOutputBlock();
+	let lastExpanded: boolean | undefined;
+	let contentPreviewLines: string[] | undefined;
 
 	return {
-		render: (width: number) =>
-			renderOutputBlock(
+		render: (width: number) => {
+			const { expanded } = options;
+
+			if (contentPreviewLines === undefined || lastExpanded !== expanded) {
+				const previewLimit = expanded ? 12 : 3;
+				const previewList = applyListLimit(contentLines, { headLimit: previewLimit });
+				const previewLines = previewList.items.map(line => truncate(line.trimEnd(), 120, "…"));
+				const remaining = Math.max(0, contentLines.length - previewLines.length);
+				contentPreviewLines =
+					previewLines.length > 0
+						? previewLines.map(line => uiTheme.fg("dim", line))
+						: [uiTheme.fg("dim", "(no content)")];
+				if (remaining > 0) {
+					const hint = formatExpandHint(uiTheme, expanded, true);
+					contentPreviewLines.push(uiTheme.fg("muted", `… ${remaining} more lines${hint ? ` ${hint}` : ""}`));
+				}
+				lastExpanded = expanded;
+				outputBlock.invalidate();
+			}
+
+			return outputBlock.render(
 				{
 					header,
 					state: truncated ? "warning" : "success",
@@ -1056,8 +1068,13 @@ export function renderFetchResult(
 					applyBg: false,
 				},
 				uiTheme,
-			),
-		invalidate: () => {},
+			);
+		},
+		invalidate: () => {
+			outputBlock.invalidate();
+			contentPreviewLines = undefined;
+			lastExpanded = undefined;
+		},
 	};
 }
 

@@ -11,7 +11,7 @@ import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
 import todoWriteDescription from "../prompts/tools/todo-write.md" with { type: "text" };
 import type { ToolSession } from "../sdk";
-import { renderStatusLine, renderTreeList } from "../tui";
+import { type RenderCache, renderStatusLine, renderTreeList } from "../tui";
 import { PREVIEW_LIMITS } from "./render-utils";
 
 const todoWriteSchema = Type.Object({
@@ -227,7 +227,6 @@ export const todoWriteToolRenderer = {
 		uiTheme: Theme,
 		_args?: TodoWriteRenderArgs,
 	): Component {
-		const { expanded } = options;
 		const todos = result.details?.todos ?? [];
 		const header = renderStatusLine(
 			{ icon: "success", title: "Todo Write", meta: [`${todos.length} items`] },
@@ -235,20 +234,39 @@ export const todoWriteToolRenderer = {
 		);
 		if (todos.length === 0) {
 			const fallback = result.content?.find(c => c.type === "text")?.text ?? "No todos";
-			return new Text([header, uiTheme.fg("dim", fallback)].join("\n"), 0, 0);
+			const renderedLines = [header, uiTheme.fg("dim", fallback)];
+			return {
+				render() {
+					return renderedLines;
+				},
+				invalidate() {},
+			};
 		}
-		const lines = renderTreeList(
-			{
-				items: todos,
-				expanded,
-				maxCollapsed: PREVIEW_LIMITS.COLLAPSED_ITEMS,
-				itemType: "todo",
-				renderItem: todo => formatTodoLine(todo, uiTheme, ""),
-			},
-			uiTheme,
-		);
+		let cached: RenderCache | undefined;
 
-		return new Text([header, ...lines].join("\n"), 0, 0);
+		return {
+			render(_width) {
+				const { expanded } = options;
+				const key = expanded ? 1n : 0n;
+				if (cached?.key === key) return cached.lines;
+				const treeLines = renderTreeList(
+					{
+						items: todos,
+						expanded,
+						maxCollapsed: PREVIEW_LIMITS.COLLAPSED_ITEMS,
+						itemType: "todo",
+						renderItem: todo => formatTodoLine(todo, uiTheme, ""),
+					},
+					uiTheme,
+				);
+				const lines = [header, ...treeLines];
+				cached = { key, lines };
+				return lines;
+			},
+			invalidate() {
+				cached = undefined;
+			},
+		};
 	},
 	mergeCallAndResult: true,
 };

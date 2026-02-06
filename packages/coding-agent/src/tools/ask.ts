@@ -446,7 +446,7 @@ export const askToolRenderer = {
 
 	renderResult(
 		result: { content: Array<{ type: string; text?: string }>; details?: AskToolDetails },
-		_opts: RenderResultOptions,
+		_options: RenderResultOptions,
 		uiTheme: Theme,
 	): Component {
 		const { details } = result;
@@ -454,7 +454,13 @@ export const askToolRenderer = {
 			const txt = result.content[0];
 			const fallback = txt?.type === "text" && txt.text ? txt.text : "";
 			const header = renderStatusLine({ icon: "warning", title: "Ask" }, uiTheme);
-			return new Text([header, uiTheme.fg("dim", fallback)].join("\n"), 0, 0);
+			const renderedLines = [header, uiTheme.fg("dim", fallback)];
+			return {
+				render() {
+					return renderedLines;
+				},
+				invalidate() {},
+			};
 		}
 
 		// Multi-part results
@@ -506,13 +512,24 @@ export const askToolRenderer = {
 				}
 			}
 
-			return new Text(lines.join("\n"), 0, 0);
+			return {
+				render() {
+					return lines;
+				},
+				invalidate() {},
+			};
 		}
 
 		// Single question result
 		if (!details.question) {
 			const txt = result.content[0];
-			return new Text(txt?.type === "text" && txt.text ? txt.text : "", 0, 0);
+			const renderedLines = txt?.type === "text" && txt.text ? txt.text.split("\n") : [""];
+			return {
+				render() {
+					return renderedLines;
+				},
+				invalidate() {},
+			};
 		}
 
 		const hasSelection = details.customInput || (details.selectedOptions && details.selectedOptions.length > 0);
@@ -535,6 +552,12 @@ export const askToolRenderer = {
 			text += `\n ${uiTheme.fg("dim", uiTheme.tree.last)} ${uiTheme.styledSymbol("status.warning", "warning")} ${uiTheme.fg("warning", "Cancelled")}`;
 		}
 
-		return new Text(text, 0, 0);
+		const renderedLines = text.split("\n");
+		return {
+			render() {
+				return renderedLines;
+			},
+			invalidate() {},
+		};
 	},
 };

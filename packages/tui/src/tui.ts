@@ -914,7 +914,9 @@ export class TUI extends Container {
 		// Capture terminal dimensions at start to ensure consistency throughout render
 		const width = this.terminal.columns;
 		const height = this.terminal.rows;
-		const previousRenderedLineCount = this.previousLines.length;
+		// NOTE: previousLines.length is the last frame's content length.
+		// We intentionally key clear-on-shrink logic off maxLinesRendered (working area),
+		// not previousLines.length.
 		let viewportTop = Math.max(0, this.maxLinesRendered - height);
 		let prevViewportTop = this.previousViewportTop;
 		let hardwareCursorRow = this.hardwareCursorRow;
@@ -998,11 +1000,12 @@ export class TUI extends Container {
 			return;
 		}
 
-		// Content shrunk below the working area and no overlays - re-render to clear empty rows
-		// (overlays need the padding, so only do this when no overlays are active)
-		// Configurable via setClearOnShrink() or PI_CLEAR_ON_SHRINK env var
-		if (this.clearOnShrink && newLines.length < previousRenderedLineCount && this.overlayStack.length === 0) {
-			logRedraw(`clearOnShrink (previousRenderedLineCount=${previousRenderedLineCount})`);
+		// Content shrunk below the working area and no overlays - re-render to clear empty rows.
+		// We compare against maxLinesRendered (working area), not previousLines.length, since
+		// previousLines will already reflect the shrunk content after one differential render.
+		// Configurable via setClearOnShrink() or PI_CLEAR_ON_SHRINK env var.
+		if (this.clearOnShrink && newLines.length < this.maxLinesRendered && this.overlayStack.length === 0) {
+			logRedraw(`clearOnShrink (maxLinesRendered=${this.maxLinesRendered})`);
 			this.fullRedrawCount += 1;
 			let buffer = "\x1b[?2026h"; // Begin synchronized output
 			buffer += "\x1b[2J\x1b[H"; // Clear screen and move cursor to home
@@ -1078,7 +1081,8 @@ export class TUI extends Container {
 					this.terminal.write(buffer2);
 					this.cursorRow = Math.max(0, newLines.length - 1);
 					this.hardwareCursorRow = this.cursorRow;
-					this.maxLinesRendered = Math.max(this.maxLinesRendered, newLines.length);
+					// Screen was cleared; reset working area to current render.
+					this.maxLinesRendered = newLines.length;
 					this.previousViewportTop = Math.max(0, this.maxLinesRendered - height);
 					this.positionHardwareCursor(cursorPos, newLines.length);
 					this.previousLines = newLines;

@@ -11,7 +11,7 @@ import { renderPromptTemplate } from "../config/prompt-templates";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
 import findDescription from "../prompts/tools/find.md" with { type: "text" };
-import { renderFileList, renderStatusLine, renderTreeList } from "../tui";
+import { type RenderCache, renderFileList, renderStatusLine, renderTreeList } from "../tui";
 import type { ToolSession } from ".";
 import { applyListLimit } from "./list-limit";
 import type { OutputMeta } from "./output-meta";
@@ -412,7 +412,7 @@ export const findToolRenderer = {
 
 	renderResult(
 		result: { content: Array<{ type: string; text?: string }>; details?: FindToolDetails; isError?: boolean },
-		{ expanded }: RenderResultOptions,
+		options: RenderResultOptions,
 		uiTheme: Theme,
 		args?: FindRenderArgs,
 	): Component {
@@ -446,17 +446,30 @@ export const findToolRenderer = {
 				},
 				uiTheme,
 			);
-			const listLines = renderTreeList(
-				{
-					items: lines,
-					expanded,
-					maxCollapsed: COLLAPSED_LIST_LIMIT,
-					itemType: "file",
-					renderItem: line => uiTheme.fg("accent", line),
+			let cached: RenderCache | undefined;
+			return {
+				render(_width: number): string[] {
+					const { expanded } = options;
+					const key = expanded ? 1n : 0n;
+					if (cached?.key === key) return cached.lines;
+					const listLines = renderTreeList(
+						{
+							items: lines,
+							expanded,
+							maxCollapsed: COLLAPSED_LIST_LIMIT,
+							itemType: "file",
+							renderItem: line => uiTheme.fg("accent", line),
+						},
+						uiTheme,
+					);
+					const result = [header, ...listLines];
+					cached = { key, lines: result };
+					return result;
 				},
-				uiTheme,
-			);
-			return new Text([header, ...listLines].join("\n"), 0, 0);
+				invalidate() {
+					cached = undefined;
+				},
+			};
 		}
 
 		const fileCount = details?.fileCount ?? 0;
@@ -480,15 +493,6 @@ export const findToolRenderer = {
 			uiTheme,
 		);
 
-		const fileLines = renderFileList(
-			{
-				files: files.map(entry => ({ path: entry, isDirectory: entry.endsWith("/") })),
-				expanded,
-				maxCollapsed: COLLAPSED_LIST_LIMIT,
-			},
-			uiTheme,
-		);
-
 		const truncationReasons: string[] = [];
 		if (details?.resultLimitReached) truncationReasons.push(`limit ${details.resultLimitReached} results`);
 		if (limits?.resultLimit) truncationReasons.push(`limit ${limits.resultLimit.reached} results`);
@@ -501,7 +505,28 @@ export const findToolRenderer = {
 			extraLines.push(uiTheme.fg("warning", `truncated: ${truncationReasons.join(", ")}`));
 		}
 
-		return new Text([header, ...fileLines, ...extraLines].join("\n"), 0, 0);
+		let cached: RenderCache | undefined;
+		return {
+			render(_width: number): string[] {
+				const { expanded } = options;
+				const key = expanded ? 1n : 0n;
+				if (cached?.key === key) return cached.lines;
+				const fileLines = renderFileList(
+					{
+						files: files.map(entry => ({ path: entry, isDirectory: entry.endsWith("/") })),
+						expanded,
+						maxCollapsed: COLLAPSED_LIST_LIMIT,
+					},
+					uiTheme,
+				);
+				const result = [header, ...fileLines, ...extraLines];
+				cached = { key, lines: result };
+				return result;
+			},
+			invalidate() {
+				cached = undefined;
+			},
+		};
 	},
 	mergeCallAndResult: true,
 };

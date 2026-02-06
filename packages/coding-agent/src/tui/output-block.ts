@@ -4,7 +4,8 @@
 import { padding, visibleWidth } from "@oh-my-pi/pi-tui";
 import type { Theme } from "../modes/theme/theme";
 import type { State } from "./types";
-import { getStateBgColor, padToWidth, truncateToWidth } from "./utils";
+import type { RenderCache } from "./utils";
+import { getStateBgColor, Hasher, padToWidth, truncateToWidth } from "./utils";
 
 export interface OutputBlockOptions {
 	header?: string;
@@ -83,4 +84,47 @@ export function renderOutputBlock(options: OutputBlockOptions, theme: Theme): st
 	lines.push(padToWidth(bottomLine, lineWidth, bgFn));
 
 	return lines;
+}
+
+/**
+ * Cached wrapper around `renderOutputBlock`.
+ *
+ * Since output blocks are re-rendered on every frame (via `render(width)` closures),
+ * but their content rarely changes, this cache avoids redundant `visibleWidth()` and
+ * `padding()` computations on ~99% of render calls.
+ */
+export class CachedOutputBlock {
+	private cache?: RenderCache;
+
+	/** Render with caching. Returns cached result if options haven't changed. */
+	render(options: OutputBlockOptions, theme: Theme): string[] {
+		const key = this.buildKey(options);
+		if (this.cache?.key === key) return this.cache.lines;
+		const lines = renderOutputBlock(options, theme);
+		this.cache = { key, lines };
+		return lines;
+	}
+
+	/** Invalidate the cache, forcing a rebuild on next render. */
+	invalidate(): void {
+		this.cache = undefined;
+	}
+
+	private buildKey(options: OutputBlockOptions): bigint {
+		const h = new Hasher();
+		h.u32(options.width);
+		h.optional(options.header);
+		h.optional(options.headerMeta);
+		h.optional(options.state);
+		h.bool(options.applyBg ?? true);
+		if (options.sections) {
+			for (const s of options.sections) {
+				h.optional(s.label);
+				for (const line of s.lines) {
+					h.str(line);
+				}
+			}
+		}
+		return h.digest();
+	}
 }

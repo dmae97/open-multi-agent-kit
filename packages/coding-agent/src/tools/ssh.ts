@@ -12,7 +12,8 @@ import sshDescriptionBase from "../prompts/tools/ssh.md" with { type: "text" };
 import type { SSHHostInfo } from "../ssh/connection-manager";
 import { ensureHostInfo, getHostInfoForHost } from "../ssh/connection-manager";
 import { executeSSH } from "../ssh/ssh-executor";
-import { renderOutputBlock, renderStatusLine } from "../tui";
+import { renderStatusLine } from "../tui";
+import { CachedOutputBlock } from "../tui/output-block";
 import type { ToolSession } from ".";
 import type { OutputMeta } from "./output-meta";
 import { allocateOutputArtifact, createTailBuffer } from "./output-utils";
@@ -249,7 +250,6 @@ export const sshToolRenderer = {
 		uiTheme: Theme,
 		args?: SshRenderArgs,
 	): Component {
-		const { expanded, renderContext } = options;
 		const details = result.details;
 		const host = args?.host || "…";
 		const command = args?.command || "…";
@@ -257,59 +257,62 @@ export const sshToolRenderer = {
 			{ icon: "success", title: "SSH", description: `[${host}] $ ${command}` },
 			uiTheme,
 		);
-		const outputLines: string[] = [];
-
 		const textContent = result.content?.find(c => c.type === "text")?.text ?? "";
-		const output = textContent.trimEnd();
-
-		if (output) {
-			if (expanded) {
-				outputLines.push(...output.split("\n").map(line => uiTheme.fg("toolOutput", line)));
-			} else if (renderContext?.visualLines) {
-				const { visualLines, skippedCount = 0, totalVisualLines = visualLines.length } = renderContext;
-				if (skippedCount > 0) {
-					outputLines.push(
-						uiTheme.fg(
-							"dim",
-							`… (${skippedCount} earlier lines, showing ${visualLines.length} of ${totalVisualLines}) (ctrl+o to expand)`,
-						),
-					);
-				}
-				const styledVisual = visualLines.map(line =>
-					line.includes("\x1b[") ? line : uiTheme.fg("toolOutput", line),
-				);
-				outputLines.push(...styledVisual);
-			} else {
-				const outputLinesRaw = output.split("\n");
-				const maxLines = 5;
-				const displayLines = outputLinesRaw.slice(0, maxLines);
-				const remaining = outputLinesRaw.length - maxLines;
-				outputLines.push(...displayLines.map(line => uiTheme.fg("toolOutput", line)));
-				if (remaining > 0) {
-					outputLines.push(uiTheme.fg("dim", `… (${remaining} more lines) (ctrl+o to expand)`));
-				}
-			}
-		}
-
 		const truncation = details?.meta?.truncation;
-		if (truncation) {
-			const warnings: string[] = [];
-			if (truncation.artifactId) {
-				warnings.push(`Full output: artifact://${truncation.artifactId}`);
-			}
-			if (truncation.truncatedBy === "lines") {
-				warnings.push(`Truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines`);
-			} else {
-				warnings.push(
-					`Truncated: ${truncation.outputLines} lines shown (${formatBytes(truncation.outputBytes)} limit)`,
-				);
-			}
-			outputLines.push(uiTheme.fg("warning", wrapBrackets(warnings.join(". "), uiTheme)));
-		}
+		const outputBlock = new CachedOutputBlock();
 
 		return {
-			render: (width: number) =>
-				renderOutputBlock(
+			render: (width: number): string[] => {
+				// REACTIVE: read mutable options at render time
+				const { expanded, renderContext } = options;
+				const output = textContent.trimEnd();
+				const outputLines: string[] = [];
+
+				if (output) {
+					if (expanded) {
+						outputLines.push(...output.split("\n").map(line => uiTheme.fg("toolOutput", line)));
+					} else if (renderContext?.visualLines) {
+						const { visualLines, skippedCount = 0, totalVisualLines = visualLines.length } = renderContext;
+						if (skippedCount > 0) {
+							outputLines.push(
+								uiTheme.fg(
+									"dim",
+									`… (${skippedCount} earlier lines, showing ${visualLines.length} of ${totalVisualLines}) (ctrl+o to expand)`,
+								),
+							);
+						}
+						const styledVisual = visualLines.map(line =>
+							line.includes("\x1b[") ? line : uiTheme.fg("toolOutput", line),
+						);
+						outputLines.push(...styledVisual);
+					} else {
+						const outputLinesRaw = output.split("\n");
+						const maxLines = 5;
+						const displayLines = outputLinesRaw.slice(0, maxLines);
+						const remaining = outputLinesRaw.length - maxLines;
+						outputLines.push(...displayLines.map(line => uiTheme.fg("toolOutput", line)));
+						if (remaining > 0) {
+							outputLines.push(uiTheme.fg("dim", `… (${remaining} more lines) (ctrl+o to expand)`));
+						}
+					}
+				}
+
+				if (truncation) {
+					const warnings: string[] = [];
+					if (truncation.artifactId) {
+						warnings.push(`Full output: artifact://${truncation.artifactId}`);
+					}
+					if (truncation.truncatedBy === "lines") {
+						warnings.push(`Truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines`);
+					} else {
+						warnings.push(
+							`Truncated: ${truncation.outputLines} lines shown (${formatBytes(truncation.outputBytes)} limit)`,
+						);
+					}
+					outputLines.push(uiTheme.fg("warning", wrapBrackets(warnings.join(". "), uiTheme)));
+				}
+
+				return outputBlock.render(
 					{
 						header,
 						state: "success",
@@ -317,8 +320,11 @@ export const sshToolRenderer = {
 						width,
 					},
 					uiTheme,
-				),
-			invalidate: () => {},
+				);
+			},
+			invalidate: () => {
+				outputBlock.invalidate();
+			},
 		};
 	},
 	mergeCallAndResult: true,

@@ -12,7 +12,7 @@ import {
 	Text,
 	type TUI,
 } from "@oh-my-pi/pi-tui";
-import { sanitizeText } from "@oh-my-pi/pi-utils";
+import { logger, sanitizeText } from "@oh-my-pi/pi-utils";
 import type { Theme } from "../../modes/theme/theme";
 import { theme } from "../../modes/theme/theme";
 import { computeEditDiff, computePatchDiff, type EditDiffError, type EditDiffResult } from "../../patch";
@@ -89,6 +89,16 @@ export class ToolExecutionComponent extends Container {
 	private spinnerInterval: ReturnType<typeof setInterval> | null = null;
 	// Track if args are still being streamed (for edit/write spinner)
 	private argsComplete = false;
+	private renderState: {
+		spinnerFrame: number;
+		expanded: boolean;
+		isPartial: boolean;
+		renderContext?: Record<string, unknown>;
+	} = {
+		spinnerFrame: 0,
+		expanded: false,
+		isPartial: true,
+	};
 
 	constructor(
 		toolName: string,
@@ -280,8 +290,9 @@ export class ToolExecutionComponent extends Container {
 				const frameCount = theme.spinnerFrames.length;
 				if (frameCount === 0) return;
 				this.spinnerFrame = (this.spinnerFrame + 1) % frameCount;
-				this.updateDisplay();
+				this.renderState.spinnerFrame = this.spinnerFrame;
 				this.ui.requestRender();
+				// NO updateDisplay() — existing component closures read from renderState
 			}, 80);
 		} else if (!needsSpinner && this.spinnerInterval) {
 			clearInterval(this.spinnerInterval);
@@ -322,6 +333,11 @@ export class ToolExecutionComponent extends Container {
 				? (text: string) => theme.bg("toolErrorBg", text)
 				: (text: string) => theme.bg("toolSuccessBg", text);
 
+		// Sync shared mutable render state for component closures
+		this.renderState.expanded = this.expanded;
+		this.renderState.isPartial = this.isPartial;
+		this.renderState.spinnerFrame = this.spinnerFrame;
+
 		// Check for custom tool rendering
 		if (this.tool && (this.tool.renderCall || this.tool.renderResult)) {
 			const tool = this.tool;
@@ -344,7 +360,8 @@ export class ToolExecutionComponent extends Container {
 						}
 						this.contentBox.addChild(component);
 					}
-				} catch {
+				} catch (err) {
+					logger.warn("Tool renderer failed", { tool: this.toolName, error: String(err) });
 					// Fall back to default on error
 					this.contentBox.addChild(new Text(theme.fg("toolTitle", theme.bold(this.toolLabel)), 0, 0));
 				}
@@ -364,7 +381,7 @@ export class ToolExecutionComponent extends Container {
 					) => Component;
 					const resultComponent = renderResult(
 						{ content: this.result.content as any, details: this.result.details, isError: this.result.isError },
-						{ expanded: this.expanded, isPartial: this.isPartial, spinnerFrame: this.spinnerFrame },
+						this.renderState,
 						theme,
 						this.args,
 					);
@@ -376,7 +393,8 @@ export class ToolExecutionComponent extends Container {
 						}
 						this.contentBox.addChild(component);
 					}
-				} catch {
+				} catch (err) {
+					logger.warn("Tool renderer failed", { tool: this.toolName, error: String(err) });
 					// Fall back to showing raw output on error
 					const output = this.getTextOutput();
 					if (output) {
@@ -401,9 +419,7 @@ export class ToolExecutionComponent extends Container {
 			if (shouldRenderCall) {
 				// Render call component
 				try {
-					const callComponent = renderer.renderCall(this.args, theme, {
-						spinnerFrame: this.spinnerFrame,
-					});
+					const callComponent = renderer.renderCall(this.args, theme, this.renderState);
 					if (callComponent) {
 						// Ensure component has invalidate() method for Component interface
 						const component = callComponent as any;
@@ -412,7 +428,8 @@ export class ToolExecutionComponent extends Container {
 						}
 						this.contentBox.addChild(component);
 					}
-				} catch {
+				} catch (err) {
+					logger.warn("Tool renderer failed", { tool: this.toolName, error: String(err) });
 					// Fall back to default on error
 					this.contentBox.addChild(new Text(theme.fg("toolTitle", theme.bold(this.toolLabel)), 0, 0));
 				}
@@ -423,15 +440,11 @@ export class ToolExecutionComponent extends Container {
 				try {
 					// Build render context for tools that need extra state
 					const renderContext = this.buildRenderContext();
+					this.renderState.renderContext = renderContext;
 
 					const resultComponent = renderer.renderResult(
 						{ content: this.result.content as any, details: this.result.details, isError: this.result.isError },
-						{
-							expanded: this.expanded,
-							isPartial: this.isPartial,
-							spinnerFrame: this.spinnerFrame,
-							renderContext,
-						},
+						this.renderState,
 						theme,
 						this.args, // Pass args for tools that need them
 					);
@@ -443,7 +456,8 @@ export class ToolExecutionComponent extends Container {
 						}
 						this.contentBox.addChild(component);
 					}
-				} catch {
+				} catch (err) {
+					logger.warn("Tool renderer failed", { tool: this.toolName, error: String(err) });
 					// Fall back to showing raw output on error
 					const output = this.getTextOutput();
 					if (output) {

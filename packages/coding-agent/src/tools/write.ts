@@ -15,7 +15,7 @@ import { createLspWritethrough, type FileDiagnosticsResult, type WritethroughCal
 import { getLanguageFromPath, type Theme } from "../modes/theme/theme";
 import writeDescription from "../prompts/tools/write.md" with { type: "text" };
 import type { ToolSession } from "../sdk";
-import { renderStatusLine } from "../tui";
+import { type RenderCache, renderStatusLine } from "../tui";
 import { type OutputMeta, outputMeta } from "./output-meta";
 import { enforcePlanModeWrite, resolvePlanPath } from "./plan-mode-guard";
 import {
@@ -210,7 +210,7 @@ export const writeToolRenderer = {
 
 	renderResult(
 		result: { content: Array<{ type: string; text?: string }>; details?: WriteToolDetails },
-		{ expanded }: RenderResultOptions,
+		options: RenderResultOptions,
 		uiTheme: Theme,
 		args?: WriteRenderArgs,
 	): Component {
@@ -232,29 +232,42 @@ export const writeToolRenderer = {
 			},
 			uiTheme,
 		);
-		let text = header;
+		const metadataLine = formatMetadataLine(lineCount, lang ?? "text", uiTheme);
+		const diagnostics = result.details?.diagnostics;
 
-		// Add metadata line
-		text += `\n${formatMetadataLine(lineCount, lang ?? "text", uiTheme)}`;
+		let cached: RenderCache | undefined;
 
-		// Show content preview (collapsed tail, expandable)
-		text += renderContentPreview(fileContent, expanded, uiTheme, ui);
+		return {
+			render(_width: number) {
+				const { expanded } = options;
+				const key = expanded ? 1n : 0n;
+				if (cached?.key === key) return cached.lines;
 
-		// Show diagnostics if available
-		if (result.details?.diagnostics) {
-			const diagText = formatDiagnostics(result.details.diagnostics, expanded, uiTheme, fp =>
-				uiTheme.getLangIcon(getLanguageFromPath(fp)),
-			);
-			if (diagText.trim()) {
-				const diagLines = diagText.split("\n");
-				const firstNonEmpty = diagLines.findIndex(line => line.trim());
-				if (firstNonEmpty >= 0) {
-					text += `\n${diagLines.slice(firstNonEmpty).join("\n")}`;
+				let text = header;
+				text += `\n${metadataLine}`;
+				text += renderContentPreview(fileContent, expanded, uiTheme, ui);
+
+				if (diagnostics) {
+					const diagText = formatDiagnostics(diagnostics, expanded, uiTheme, fp =>
+						uiTheme.getLangIcon(getLanguageFromPath(fp)),
+					);
+					if (diagText.trim()) {
+						const diagLines = diagText.split("\n");
+						const firstNonEmpty = diagLines.findIndex(line => line.trim());
+						if (firstNonEmpty >= 0) {
+							text += `\n${diagLines.slice(firstNonEmpty).join("\n")}`;
+						}
+					}
 				}
-			}
-		}
 
-		return new Text(text, 0, 0);
+				const lines = text.split("\n");
+				cached = { key, lines };
+				return lines;
+			},
+			invalidate() {
+				cached = undefined;
+			},
+		};
 	},
 	mergeCallAndResult: true,
 };

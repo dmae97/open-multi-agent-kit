@@ -24,7 +24,7 @@ import {
 	type ReportFindingDetails,
 	type SubmitReviewDetails,
 } from "../tools/review";
-import { renderStatusLine } from "../tui";
+import { Hasher, type RenderCache, renderStatusLine } from "../tui";
 import { subprocessToolRegistry } from "./subprocess-tool-registry";
 import type { AgentProgress, SingleResult, TaskParams, TaskToolDetails } from "./types";
 
@@ -382,7 +382,13 @@ function formatScalarInline(value: unknown, maxLen: number, _theme: Theme): stri
 	if (value === undefined) return "undefined";
 	if (typeof value === "boolean") return String(value);
 	if (typeof value === "number") return String(value);
-	if (typeof value === "string") return `"${truncateToWidth(value, maxLen)}"`;
+	if (typeof value === "string") {
+		const firstLine = value.split("\n")[0].trim();
+		if (firstLine.length === 0) return `"" (${value.split("\n").length} lines)`;
+		const preview = truncateToWidth(firstLine, maxLen);
+		if (value.includes("\n")) return `"${preview}…" (${value.split("\n").length} lines)`;
+		return `"${preview}"`;
+	}
 	if (Array.isArray(value)) return `[${value.length} items]`;
 	if (typeof value === "object") {
 		const keys = Object.keys(value);
@@ -845,74 +851,88 @@ export function renderResult(
 	options: RenderResultOptions,
 	theme: Theme,
 ): Component {
-	const { expanded, isPartial, spinnerFrame } = options;
 	const fallbackText = result.content.find(c => c.type === "text")?.text ?? "";
 	const details = result.details;
 
 	if (!details) {
-		// Fallback to simple text
 		const text = result.content.find(c => c.type === "text")?.text || "";
 		return new Text(theme.fg("dim", truncateToWidth(text, 100)), 0, 0);
 	}
 
-	const lines: string[] = [];
+	let cached: RenderCache | undefined;
 
-	if (isPartial && details.progress) {
-		// Streaming progress view
-		details.progress.forEach((progress, i) => {
-			const isLast = i === details.progress!.length - 1;
-			lines.push(...renderAgentProgress(progress, isLast, expanded, theme, spinnerFrame));
-		});
-	} else if (details.results.length > 0) {
-		// Final results view
-		details.results.forEach((res, i) => {
-			const isLast = i === details.results.length - 1;
-			lines.push(...renderAgentResult(res, isLast, expanded, theme));
-		});
+	return {
+		render(width) {
+			const { expanded, isPartial, spinnerFrame } = options;
+			const key = new Hasher()
+				.bool(expanded)
+				.bool(isPartial)
+				.u32(spinnerFrame ?? 0)
+				.u32(width)
+				.digest();
+			if (cached?.key === key) return cached.lines;
 
-		// Summary line
-		const abortedCount = details.results.filter(r => r.aborted).length;
-		const successCount = details.results.filter(r => !r.aborted && r.exitCode === 0).length;
-		const failCount = details.results.length - successCount - abortedCount;
-		let summary = `${theme.fg("dim", "Total:")} `;
-		if (abortedCount > 0) {
-			summary += theme.fg("error", `${abortedCount} aborted`);
-			if (successCount > 0 || failCount > 0) summary += theme.sep.dot;
-		}
-		if (successCount > 0) {
-			summary += theme.fg("success", `${successCount} succeeded`);
-			if (failCount > 0) summary += theme.sep.dot;
-		}
-		if (failCount > 0) {
-			summary += theme.fg("error", `${failCount} failed`);
-		}
-		summary += `${theme.sep.dot}${theme.fg("dim", formatDuration(details.totalDurationMs))}`;
-		lines.push(summary);
+			const lines: string[] = [];
 
-		// Artifacts suppressed from user view - available via session file
-	}
+			if (isPartial && details.progress) {
+				details.progress.forEach((progress, i) => {
+					const isLast = i === details.progress!.length - 1;
+					lines.push(...renderAgentProgress(progress, isLast, expanded, theme, spinnerFrame));
+				});
+			} else if (details.results.length > 0) {
+				details.results.forEach((res, i) => {
+					const isLast = i === details.results.length - 1;
+					lines.push(...renderAgentResult(res, isLast, expanded, theme));
+				});
 
-	if (lines.length === 0) {
-		const text = fallbackText.trim() ? fallbackText : "No results";
-		return new Text(theme.fg("dim", truncateToWidth(text, 140)), 0, 0);
-	}
-
-	if (fallbackText.trim()) {
-		const summaryLines = fallbackText.split("\n");
-		const markerIndex = summaryLines.findIndex(
-			line => line.includes("<system-notification>") || line.startsWith("Applied patches:"),
-		);
-		if (markerIndex >= 0) {
-			const extra = summaryLines.slice(markerIndex);
-			for (const line of extra) {
-				if (!line.trim()) continue;
-				lines.push(theme.fg("dim", line));
+				const abortedCount = details.results.filter(r => r.aborted).length;
+				const successCount = details.results.filter(r => !r.aborted && r.exitCode === 0).length;
+				const failCount = details.results.length - successCount - abortedCount;
+				let summary = `${theme.fg("dim", "Total:")} `;
+				if (abortedCount > 0) {
+					summary += theme.fg("error", `${abortedCount} aborted`);
+					if (successCount > 0 || failCount > 0) summary += theme.sep.dot;
+				}
+				if (successCount > 0) {
+					summary += theme.fg("success", `${successCount} succeeded`);
+					if (failCount > 0) summary += theme.sep.dot;
+				}
+				if (failCount > 0) {
+					summary += theme.fg("error", `${failCount} failed`);
+				}
+				summary += `${theme.sep.dot}${theme.fg("dim", formatDuration(details.totalDurationMs))}`;
+				lines.push(summary);
 			}
-		}
-	}
 
-	const indented = lines.map(line => (line.length > 0 ? `   ${line}` : ""));
-	return new Text(indented.join("\n"), 0, 0);
+			if (lines.length === 0) {
+				const text = fallbackText.trim() ? fallbackText : "No results";
+				const result = [theme.fg("dim", truncateToWidth(text, 140))];
+				cached = { key, lines: result };
+				return result;
+			}
+
+			if (fallbackText.trim()) {
+				const summaryLines = fallbackText.split("\n");
+				const markerIndex = summaryLines.findIndex(
+					line => line.includes("<system-notification>") || line.startsWith("Applied patches:"),
+				);
+				if (markerIndex >= 0) {
+					const extra = summaryLines.slice(markerIndex);
+					for (const line of extra) {
+						if (!line.trim()) continue;
+						lines.push(theme.fg("dim", line));
+					}
+				}
+			}
+
+			const indented = lines.map(line => (line.length > 0 ? `   ${line}` : ""));
+			cached = { key, lines: indented };
+			return indented;
+		},
+		invalidate() {
+			cached = undefined;
+		},
+	};
 }
 
 function isTaskToolDetails(value: unknown): value is TaskToolDetails {

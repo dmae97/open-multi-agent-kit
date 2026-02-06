@@ -10,7 +10,7 @@ import { renderPromptTemplate } from "../config/prompt-templates";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
 import grepDescription from "../prompts/tools/grep.md" with { type: "text" };
-import { renderStatusLine, renderTreeList } from "../tui";
+import { type RenderCache, renderStatusLine, renderTreeList } from "../tui";
 import type { ToolSession } from ".";
 import type { OutputMeta } from "./output-meta";
 import { resolveToCwd } from "./path-utils";
@@ -324,7 +324,7 @@ export const grepToolRenderer = {
 
 	renderResult(
 		result: { content: Array<{ type: string; text?: string }>; details?: GrepToolDetails; isError?: boolean },
-		{ expanded }: RenderResultOptions,
+		options: RenderResultOptions,
 		uiTheme: Theme,
 		args?: GrepRenderArgs,
 	): Component {
@@ -348,17 +348,30 @@ export const grepToolRenderer = {
 				{ icon: "success", title: "Grep", description, meta: [formatCount("item", lines.length)] },
 				uiTheme,
 			);
-			const listLines = renderTreeList(
-				{
-					items: lines,
-					expanded,
-					maxCollapsed: COLLAPSED_TEXT_LIMIT,
-					itemType: "item",
-					renderItem: line => uiTheme.fg("toolOutput", line),
+			let cached: RenderCache | undefined;
+			return {
+				render(_width: number): string[] {
+					const { expanded } = options;
+					const key = expanded ? 1n : 0n;
+					if (cached?.key === key) return cached.lines;
+					const listLines = renderTreeList(
+						{
+							items: lines,
+							expanded,
+							maxCollapsed: COLLAPSED_TEXT_LIMIT,
+							itemType: "item",
+							renderItem: line => uiTheme.fg("toolOutput", line),
+						},
+						uiTheme,
+					);
+					const result = [header, ...listLines];
+					cached = { key, lines: result };
+					return result;
 				},
-				uiTheme,
-			);
-			return new Text([header, ...listLines].join("\n"), 0, 0);
+				invalidate() {
+					cached = undefined;
+				},
+			};
 		}
 
 		const matchCount = details?.matchCount ?? 0;
@@ -424,18 +437,6 @@ export const grepToolRenderer = {
 			return count;
 		};
 
-		const maxCollapsed = expanded ? matchGroups.length : getCollapsedMatchLimit(matchGroups, COLLAPSED_TEXT_LIMIT);
-		const matchLines = renderTreeList(
-			{
-				items: matchGroups,
-				expanded,
-				maxCollapsed,
-				itemType: "match",
-				renderItem: group => group.map(line => uiTheme.fg("toolOutput", line)),
-			},
-			uiTheme,
-		);
-
 		const truncationReasons: string[] = [];
 		if (limits?.matchLimit) truncationReasons.push(`limit ${limits.matchLimit.reached} matches`);
 		if (limits?.resultLimit) truncationReasons.push(`limit ${limits.resultLimit.reached} results`);
@@ -446,7 +447,33 @@ export const grepToolRenderer = {
 		const extraLines =
 			truncationReasons.length > 0 ? [uiTheme.fg("warning", `truncated: ${truncationReasons.join(", ")}`)] : [];
 
-		return new Text([header, ...matchLines, ...extraLines].join("\n"), 0, 0);
+		let cached: RenderCache | undefined;
+		return {
+			render(_width: number): string[] {
+				const { expanded } = options;
+				const key = expanded ? 1n : 0n;
+				if (cached?.key === key) return cached.lines;
+				const maxCollapsed = expanded
+					? matchGroups.length
+					: getCollapsedMatchLimit(matchGroups, COLLAPSED_TEXT_LIMIT);
+				const matchLines = renderTreeList(
+					{
+						items: matchGroups,
+						expanded,
+						maxCollapsed,
+						itemType: "match",
+						renderItem: group => group.map(line => uiTheme.fg("toolOutput", line)),
+					},
+					uiTheme,
+				);
+				const result = [header, ...matchLines, ...extraLines];
+				cached = { key, lines: result };
+				return result;
+			},
+			invalidate() {
+				cached = undefined;
+			},
+		};
 	},
 	mergeCallAndResult: true,
 };

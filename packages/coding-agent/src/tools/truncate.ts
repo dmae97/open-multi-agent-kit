@@ -287,7 +287,7 @@ export function truncateLine(
 	if (line.length <= maxChars) {
 		return { text: line, wasTruncated: false };
 	}
-	return { text: `${line.slice(0, maxChars)}... [truncated]`, wasTruncated: true };
+	return { text: `${line.slice(0, maxChars)}…`, wasTruncated: true };
 }
 
 // =============================================================================

@@ -7,7 +7,7 @@ import { renderPromptTemplate } from "../config/prompt-templates";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
 import calculatorDescription from "../prompts/tools/calculator.md" with { type: "text" };
-import { renderStatusLine, renderTreeList } from "../tui";
+import { type RenderCache, renderStatusLine, renderTreeList } from "../tui";
 import type { ToolSession } from ".";
 import {
 	formatCount,
@@ -466,7 +466,7 @@ export const calculatorToolRenderer = {
 	 */
 	renderResult(
 		result: { content: Array<{ type: string; text?: string }>; details?: CalculatorToolDetails; isError?: boolean },
-		{ expanded }: RenderResultOptions,
+		options: RenderResultOptions,
 		uiTheme: Theme,
 		args?: CalculatorRenderArgs,
 	): Component {
@@ -474,7 +474,13 @@ export const calculatorToolRenderer = {
 		const textContent = result.content?.find(c => c.type === "text")?.text ?? "";
 		if (result.isError) {
 			const header = renderStatusLine({ icon: "error", title: "Calc" }, uiTheme);
-			return new Text([header, formatErrorMessage(textContent, uiTheme)].join("\n"), 0, 0);
+			const renderedLines = [header, formatErrorMessage(textContent, uiTheme)];
+			return {
+				render() {
+					return renderedLines;
+				},
+				invalidate() {},
+			};
 		}
 
 		// Prefer structured details; fall back to parsing text content
@@ -491,7 +497,13 @@ export const calculatorToolRenderer = {
 
 		if (outputs.length === 0) {
 			const header = renderStatusLine({ icon: "warning", title: "Calc" }, uiTheme);
-			return new Text([header, formatEmptyMessage("No results", uiTheme)].join("\n"), 0, 0);
+			const renderedLines = [header, formatEmptyMessage("No results", uiTheme)];
+			return {
+				render() {
+					return renderedLines;
+				},
+				invalidate() {},
+			};
 		}
 
 		const description = args?.calculations?.[0]?.expression
@@ -501,18 +513,32 @@ export const calculatorToolRenderer = {
 			{ icon: "success", title: "Calc", description, meta: [formatCount("result", outputs.length)] },
 			uiTheme,
 		);
-		const lines = renderTreeList(
-			{
-				items: outputs,
-				expanded,
-				maxCollapsed: COLLAPSED_LIST_LIMIT,
-				itemType: "result",
-				renderItem: output => uiTheme.fg("toolOutput", output),
-			},
-			uiTheme,
-		);
 
-		return new Text([header, ...lines].join("\n"), 0, 0);
+		let cached: RenderCache | undefined;
+
+		return {
+			render(_width) {
+				const { expanded } = options;
+				const key = expanded ? 1n : 0n;
+				if (cached?.key === key) return cached.lines;
+				const treeLines = renderTreeList(
+					{
+						items: outputs,
+						expanded,
+						maxCollapsed: COLLAPSED_LIST_LIMIT,
+						itemType: "result",
+						renderItem: output => uiTheme.fg("toolOutput", output),
+					},
+					uiTheme,
+				);
+				const lines = [header, ...treeLines];
+				cached = { key, lines };
+				return lines;
+			},
+			invalidate() {
+				cached = undefined;
+			},
+		};
 	},
 	mergeCallAndResult: true,
 };

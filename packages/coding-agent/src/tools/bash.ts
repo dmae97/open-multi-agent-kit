@@ -9,7 +9,8 @@ import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { truncateToVisualLines } from "../modes/components/visual-truncate";
 import type { Theme } from "../modes/theme/theme";
 import bashDescription from "../prompts/tools/bash.md" with { type: "text" };
-import { renderOutputBlock, renderStatusLine } from "../tui";
+import { renderStatusLine } from "../tui";
+import { CachedOutputBlock } from "../tui/output-block";
 import type { ToolSession } from ".";
 import { checkBashInterception } from "./bash-interceptor";
 import { applyHeadTail, normalizeBashCommand } from "./bash-normalize";
@@ -223,46 +224,49 @@ export const bashToolRenderer = {
 		const cmdText = args ? formatBashCommand(args, uiTheme) : undefined;
 		const isError = result.isError === true;
 		const header = renderStatusLine({ icon: isError ? "error" : "success", title: "Bash" }, uiTheme);
-		const { renderContext } = options;
 		const details = result.details;
-		const expanded = renderContext?.expanded ?? options.expanded;
-		const previewLines = renderContext?.previewLines ?? BASH_DEFAULT_PREVIEW_LINES;
-
-		// Get output from context (preferred) or fall back to result content
-		const output = renderContext?.output ?? result.content?.find(c => c.type === "text")?.text ?? "";
-		const displayOutput = output.trimEnd();
-		const showingFullOutput = expanded && renderContext?.isFullOutput === true;
-
-		// Build truncation warning lines (static, doesn't depend on width)
 		const truncation = details?.meta?.truncation;
-		const timeoutSeconds = renderContext?.timeout;
-		const timeoutLine =
-			typeof timeoutSeconds === "number"
-				? uiTheme.fg(
-						"dim",
-						`${uiTheme.format.bracketLeft}Timeout: ${timeoutSeconds}s${uiTheme.format.bracketRight}`,
-					)
-				: undefined;
-		let warningLine: string | undefined;
-		if (truncation && !showingFullOutput) {
-			const warnings: string[] = [];
-			if (truncation?.artifactId) {
-				warnings.push(`Full output: artifact://${truncation.artifactId}`);
-			}
-			if (truncation.truncatedBy === "lines") {
-				warnings.push(`Truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines`);
-			} else {
-				warnings.push(
-					`Truncated: ${truncation.outputLines} lines shown (${formatBytes(truncation.outputBytes)} limit)`,
-				);
-			}
-			if (warnings.length > 0) {
-				warningLine = uiTheme.fg("warning", wrapBrackets(warnings.join(". "), uiTheme));
-			}
-		}
+		const outputBlock = new CachedOutputBlock();
 
 		return {
 			render: (width: number): string[] => {
+				// REACTIVE: read mutable options at render time
+				const { renderContext } = options;
+				const expanded = renderContext?.expanded ?? options.expanded;
+				const previewLines = renderContext?.previewLines ?? BASH_DEFAULT_PREVIEW_LINES;
+
+				// Get output from context (preferred) or fall back to result content
+				const output = renderContext?.output ?? result.content?.find(c => c.type === "text")?.text ?? "";
+				const displayOutput = output.trimEnd();
+				const showingFullOutput = expanded && renderContext?.isFullOutput === true;
+
+				// Build truncation warning
+				const timeoutSeconds = renderContext?.timeout;
+				const timeoutLine =
+					typeof timeoutSeconds === "number"
+						? uiTheme.fg(
+								"dim",
+								`${uiTheme.format.bracketLeft}Timeout: ${timeoutSeconds}s${uiTheme.format.bracketRight}`,
+							)
+						: undefined;
+				let warningLine: string | undefined;
+				if (truncation && !showingFullOutput) {
+					const warnings: string[] = [];
+					if (truncation?.artifactId) {
+						warnings.push(`Full output: artifact://${truncation.artifactId}`);
+					}
+					if (truncation.truncatedBy === "lines") {
+						warnings.push(`Truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines`);
+					} else {
+						warnings.push(
+							`Truncated: ${truncation.outputLines} lines shown (${formatBytes(truncation.outputBytes)} limit)`,
+						);
+					}
+					if (warnings.length > 0) {
+						warningLine = uiTheme.fg("warning", wrapBrackets(warnings.join(". "), uiTheme));
+					}
+				}
+
 				const outputLines: string[] = [];
 				const hasOutput = displayOutput.trim().length > 0;
 				if (hasOutput) {
@@ -289,7 +293,7 @@ export const bashToolRenderer = {
 				if (timeoutLine) outputLines.push(timeoutLine);
 				if (warningLine) outputLines.push(warningLine);
 
-				return renderOutputBlock(
+				return outputBlock.render(
 					{
 						header,
 						state: isError ? "error" : "success",
@@ -302,7 +306,9 @@ export const bashToolRenderer = {
 					uiTheme,
 				);
 			},
-			invalidate: () => {},
+			invalidate: () => {
+				outputBlock.invalidate();
+			},
 		};
 	},
 	mergeCallAndResult: true,

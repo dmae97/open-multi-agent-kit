@@ -19,7 +19,8 @@ import {
 	TRUNCATE_LENGTHS,
 	truncateToWidth,
 } from "../tools/render-utils";
-import { renderOutputBlock, renderStatusLine } from "../tui";
+import { renderStatusLine } from "../tui";
+import { CachedOutputBlock } from "../tui/output-block";
 import type { LspParams, LspToolDetails } from "./types";
 
 // =============================================================================
@@ -114,43 +115,16 @@ export function renderResult(
 
 	const text = content.text;
 	const lines = text.split("\n");
-	const expanded = options.expanded;
 
-	let label = "Result";
-	let state: "success" | "warning" | "error" = "success";
-	let bodyLines: string[] = [];
-
+	// Static type detection (result content doesn't change between renders)
 	const codeBlockMatch = text.match(/```(\w*)\n([\s\S]*?)```/);
-	if (codeBlockMatch) {
-		label = "Hover";
-		bodyLines = renderHover(codeBlockMatch, text, lines, expanded, theme);
-	} else {
-		const errorMatch = text.match(/(\d+)\s+error\(s\)/);
-		const warningMatch = text.match(/(\d+)\s+warning\(s\)/);
-		if (errorMatch || warningMatch || text.includes(theme.status.error)) {
-			label = "Diagnostics";
-			const errorCount = errorMatch ? Number.parseInt(errorMatch[1], 10) : 0;
-			const warnCount = warningMatch ? Number.parseInt(warningMatch[1], 10) : 0;
-			state = errorCount > 0 ? "error" : warnCount > 0 ? "warning" : "success";
-			bodyLines = renderDiagnostics(errorMatch, warningMatch, lines, expanded, theme);
-		} else {
-			const refMatch = text.match(/(\d+)\s+reference\(s\)/);
-			if (refMatch) {
-				label = "References";
-				bodyLines = renderReferences(refMatch, lines, expanded, theme);
-			} else {
-				const symbolsMatch = text.match(/Symbols in (.+):/);
-				if (symbolsMatch) {
-					label = "Symbols";
-					bodyLines = renderSymbols(symbolsMatch, lines, expanded, theme);
-				} else {
-					label = "Response";
-					bodyLines = renderGeneric(text, lines, expanded, theme);
-				}
-			}
-		}
-	}
+	const errorMatch = text.match(/(\d+)\s+error\(s\)/);
+	const warningMatch = text.match(/(\d+)\s+warning\(s\)/);
+	const refMatch = text.match(/(\d+)\s+reference\(s\)/);
+	const symbolsMatch = text.match(/Symbols in (.+):/);
+	const hasStatusError = text.includes(theme.status.error);
 
+	// Static request info
 	const request = args ?? result.details?.request;
 	const requestLines: string[] = [];
 	if (request?.file) {
@@ -175,14 +149,44 @@ export function renderResult(
 		requestLines.push(theme.fg("dim", `include declaration: ${request.include_declaration ? "true" : "false"}`));
 	}
 
-	const actionLabel = (request?.action ?? result.details?.action ?? label.toLowerCase()).replace(/_/g, " ");
-	const status = options.isPartial ? "running" : result.isError ? "error" : "success";
-	const icon = formatStatusIcon(status, theme, options.spinnerFrame);
-	const header = `${icon} LSP ${actionLabel}`;
+	const outputBlock = new CachedOutputBlock();
 
 	return {
-		render: (width: number) =>
-			renderOutputBlock(
+		render(width: number): string[] {
+			// Read mutable state at render time
+			const { expanded, isPartial, spinnerFrame } = options;
+
+			// Determine label, state, bodyLines based on type + current expanded
+			let label = "Result";
+			let state: "success" | "warning" | "error" = "success";
+			let bodyLines: string[] = [];
+
+			if (codeBlockMatch) {
+				label = "Hover";
+				bodyLines = renderHover(codeBlockMatch, text, lines, expanded, theme);
+			} else if (errorMatch || warningMatch || hasStatusError) {
+				label = "Diagnostics";
+				const errorCount = errorMatch ? Number.parseInt(errorMatch[1], 10) : 0;
+				const warnCount = warningMatch ? Number.parseInt(warningMatch[1], 10) : 0;
+				state = errorCount > 0 ? "error" : warnCount > 0 ? "warning" : "success";
+				bodyLines = renderDiagnostics(errorMatch, warningMatch, lines, expanded, theme);
+			} else if (refMatch) {
+				label = "References";
+				bodyLines = renderReferences(refMatch, lines, expanded, theme);
+			} else if (symbolsMatch) {
+				label = "Symbols";
+				bodyLines = renderSymbols(symbolsMatch, lines, expanded, theme);
+			} else {
+				label = "Response";
+				bodyLines = renderGeneric(text, lines, expanded, theme);
+			}
+
+			const actionLabel = (request?.action ?? result.details?.action ?? label.toLowerCase()).replace(/_/g, " ");
+			const status = isPartial ? "running" : result.isError ? "error" : "success";
+			const icon = formatStatusIcon(status, theme, spinnerFrame);
+			const header = `${icon} LSP ${actionLabel}`;
+
+			return outputBlock.render(
 				{
 					header,
 					state,
@@ -194,8 +198,11 @@ export function renderResult(
 					applyBg: false,
 				},
 				theme,
-			),
-		invalidate: () => {},
+			);
+		},
+		invalidate() {
+			outputBlock.invalidate();
+		},
 	};
 }
 

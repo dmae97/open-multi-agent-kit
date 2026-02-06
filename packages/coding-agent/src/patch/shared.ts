@@ -13,12 +13,13 @@ import {
 	formatExpandHint,
 	formatStatusIcon,
 	getDiffStats,
+	PREVIEW_LIMITS,
 	shortenPath,
 	ToolUIKit,
 	truncateDiffByHunk,
 } from "../tools/render-utils";
 import type { RenderCallOptions } from "../tools/renderers";
-import { renderStatusLine } from "../tui";
+import { Hasher, type RenderCache, renderStatusLine, truncateToWidth } from "../tui";
 import type { DiffError, DiffResult, Operation } from "./types";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -85,8 +86,6 @@ export interface EditRenderContext {
 	renderDiff?: (diffText: string, options?: { filePath?: string }) => string;
 }
 
-const EDIT_DIFF_PREVIEW_HUNKS = 2;
-const EDIT_DIFF_PREVIEW_LINES = 24;
 const EDIT_STREAMING_PREVIEW_LINES = 12;
 
 function countLines(text: string): number {
@@ -140,7 +139,7 @@ function renderDiffSection(
 		hiddenLines,
 	} = expanded
 		? { text: diff, hiddenHunks: 0, hiddenLines: 0 }
-		: truncateDiffByHunk(diff, EDIT_DIFF_PREVIEW_HUNKS, EDIT_DIFF_PREVIEW_LINES);
+		: truncateDiffByHunk(diff, PREVIEW_LIMITS.DIFF_COLLAPSED_HUNKS, PREVIEW_LIMITS.DIFF_COLLAPSED_LINES);
 
 	text += `\n\n${renderDiffFn(truncatedDiff, { filePath: rawPath })}`;
 	if (!expanded && (hiddenHunks > 0 || hiddenLines > 0)) {
@@ -209,75 +208,88 @@ export const editToolRenderer = {
 		args?: EditRenderArgs,
 	): Component {
 		const ui = new ToolUIKit(uiTheme);
-		const { expanded, renderContext } = options;
 		const rawPath = args?.file_path || args?.path || "";
 		const filePath = shortenPath(rawPath);
 		const editLanguage = getLanguageFromPath(rawPath) ?? "text";
 		const editIcon = uiTheme.fg("muted", uiTheme.getLangIcon(editLanguage));
-		const editDiffPreview = renderContext?.editDiffPreview;
-		const renderDiffFn = renderContext?.renderDiff ?? ((t: string) => t);
 
-		// Get op and rename from args or details
 		const op = args?.op || result.details?.op;
 		const rename = args?.rename || result.details?.rename;
-
-		// Build path display with line number if available
-		let pathDisplay = filePath ? uiTheme.fg("accent", filePath) : uiTheme.fg("toolOutput", "…");
-		const firstChangedLine =
-			(editDiffPreview && "firstChangedLine" in editDiffPreview ? editDiffPreview.firstChangedLine : undefined) ||
-			(result.details && !result.isError ? result.details.firstChangedLine : undefined);
-		if (firstChangedLine) {
-			pathDisplay += uiTheme.fg("warning", `:${firstChangedLine}`);
-		}
-
-		// Add arrow for rename operations
-		if (rename) {
-			pathDisplay += ` ${uiTheme.fg("dim", "→")} ${uiTheme.fg("accent", shortenPath(rename))}`;
-		}
-
-		// Show operation type for patch mode
 		const opTitle = op === "create" ? "Create" : op === "delete" ? "Delete" : "Edit";
-		const header = renderStatusLine(
-			{
-				icon: result.isError ? "error" : "success",
-				title: opTitle,
-				description: `${editIcon} ${pathDisplay}`,
+
+		// Pre-compute metadata line (static across renders)
+		const metadataLine =
+			op !== "delete"
+				? `\n${formatMetadataLine(countLines(args?.newText ?? args?.oldText ?? args?.diff ?? args?.patch ?? ""), editLanguage, uiTheme)}`
+				: "";
+
+		// Pre-compute error text (static)
+		const errorText = result.isError ? (result.content?.find(c => c.type === "text")?.text ?? "") : "";
+
+		let cached: RenderCache | undefined;
+
+		return {
+			render(width) {
+				const { expanded, renderContext } = options;
+				const editDiffPreview = renderContext?.editDiffPreview;
+				const renderDiffFn = renderContext?.renderDiff ?? ((t: string) => t);
+				const key = new Hasher().bool(expanded).u32(width).digest();
+				if (cached?.key === key) return cached.lines;
+
+				// Build path display with line number
+				let pathDisplay = filePath ? uiTheme.fg("accent", filePath) : uiTheme.fg("toolOutput", "…");
+				const firstChangedLine =
+					(editDiffPreview && "firstChangedLine" in editDiffPreview
+						? editDiffPreview.firstChangedLine
+						: undefined) || (result.details && !result.isError ? result.details.firstChangedLine : undefined);
+				if (firstChangedLine) {
+					pathDisplay += uiTheme.fg("warning", `:${firstChangedLine}`);
+				}
+
+				// Add arrow for rename operations
+				if (rename) {
+					pathDisplay += ` ${uiTheme.fg("dim", "→")} ${uiTheme.fg("accent", shortenPath(rename))}`;
+				}
+
+				const header = renderStatusLine(
+					{
+						icon: result.isError ? "error" : "success",
+						title: opTitle,
+						description: `${editIcon} ${pathDisplay}`,
+					},
+					uiTheme,
+				);
+				let text = header;
+				text += metadataLine;
+
+				if (result.isError) {
+					if (errorText) {
+						text += `\n\n${uiTheme.fg("error", errorText)}`;
+					}
+				} else if (result.details?.diff) {
+					text += renderDiffSection(result.details.diff, rawPath, expanded, uiTheme, ui, renderDiffFn);
+				} else if (editDiffPreview) {
+					if ("error" in editDiffPreview) {
+						text += `\n\n${uiTheme.fg("error", editDiffPreview.error)}`;
+					} else if (editDiffPreview.diff) {
+						text += renderDiffSection(editDiffPreview.diff, rawPath, expanded, uiTheme, ui, renderDiffFn);
+					}
+				}
+
+				// Show LSP diagnostics if available
+				if (result.details?.diagnostics) {
+					text += ui.formatDiagnostics(result.details.diagnostics, expanded, (fp: string) =>
+						uiTheme.getLangIcon(getLanguageFromPath(fp)),
+					);
+				}
+
+				const lines = width > 0 ? text.split("\n").map(line => truncateToWidth(line, width)) : text.split("\n");
+				cached = { key, lines };
+				return lines;
 			},
-			uiTheme,
-		);
-		let text = header;
-
-		// Skip metadata line for delete operations
-		if (op !== "delete") {
-			const editLineCount = countLines(args?.newText ?? args?.oldText ?? args?.diff ?? args?.patch ?? "");
-			text += `\n${formatMetadataLine(editLineCount, editLanguage, uiTheme)}`;
-		}
-
-		if (result.isError) {
-			// Show error from result
-			const errorText = result.content?.find(c => c.type === "text")?.text ?? "";
-			if (errorText) {
-				text += `\n\n${uiTheme.fg("error", errorText)}`;
-			}
-		} else if (result.details?.diff) {
-			// Prefer actual diff after execution
-			text += renderDiffSection(result.details.diff, rawPath, expanded, uiTheme, ui, renderDiffFn);
-		} else if (editDiffPreview) {
-			// Use cached diff preview when no actual diff is available
-			if ("error" in editDiffPreview) {
-				text += `\n\n${uiTheme.fg("error", editDiffPreview.error)}`;
-			} else if (editDiffPreview.diff) {
-				text += renderDiffSection(editDiffPreview.diff, rawPath, expanded, uiTheme, ui, renderDiffFn);
-			}
-		}
-
-		// Show LSP diagnostics if available
-		if (result.details?.diagnostics) {
-			text += ui.formatDiagnostics(result.details.diagnostics, expanded, (fp: string) =>
-				uiTheme.getLangIcon(getLanguageFromPath(fp)),
-			);
-		}
-
-		return new Text(text, 0, 0);
+			invalidate() {
+				cached = undefined;
+			},
+		};
 	},
 };
