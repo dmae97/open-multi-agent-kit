@@ -17,6 +17,7 @@ import {
 } from "@oh-my-pi/pi-tui";
 import { $env, isEnoent, logger, postmortem } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
+import { APP_NAME } from "../config";
 import { KeybindingsManager } from "../config/keybindings";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import { type Settings, settings } from "../config/settings";
@@ -391,7 +392,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	}
 
 	updateEditorTopBorder(): void {
-		const width = this.ui.getWidth();
+		const width = this.ui.terminal.columns;
 		const topBorder = this.statusLine.getTopBorder(width);
 		this.editor.setTopBorder(topBorder);
 	}
@@ -726,14 +727,26 @@ export class InteractiveMode implements InteractiveModeContext {
 		await this.session.emitCustomToolSessionEvent("shutdown");
 
 		if (this.isInitialized) {
-			await this.ui.waitForRender();
+			this.ui.requestRender(true);
 		}
+
+		// Wait for any pending renders to complete
+		// requestRender() uses process.nextTick(), so we wait one tick
+		await new Promise(resolve => process.nextTick(resolve));
 
 		// Drain any in-flight Kitty key release events before stopping.
 		// This prevents escape sequences from leaking to the parent shell over slow SSH.
 		await this.ui.terminal.drainInput(1000);
 
 		this.stop();
+
+		// Print resumption hint if this is a persisted session
+		const sessionId = this.sessionManager.getSessionId();
+		const sessionFile = this.sessionManager.getSessionFile();
+		if (sessionId && sessionFile) {
+			process.stderr.write(`\n${chalk.dim(`Resume this session with ${APP_NAME} --resume ${sessionId}`)}\n`);
+		}
+
 		await postmortem.quit(0);
 	}
 

@@ -1,8 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added resumption hint printed to stderr on session exit showing command to resume the session (e.g., `Resume this session with claude --resume <session-id>`)
 - New `BlobStore` class for content-addressed storage of large binary data (images) externalized from session files
 - New `getBlobsDir()` function to get path to blob store directory
 - Support for externalizing large images to blob store during session persistence, reducing JSONL file size
@@ -37,6 +39,9 @@
 
 ### Changed
 
+- Modified `--resume` flag to accept optional session ID or path (e.g., `--resume abc123` or `--resume /path/to/session.jsonl`), with session picker shown when no value provided
+- Consolidated `--session` flag as an alias for `--resume` with value for improved CLI consistency
+- Removed read tool grouping reset logic that was breaking grouping when text or thinking blocks appeared between tool calls
 - Image persistence now externalizes images ≥1KB to content-addressed blob store instead of compressing inline
 - Session loading now automatically resolves blob references back to base64 image data
 - Session forking now resolves blob references in copied entries to ensure data integrity

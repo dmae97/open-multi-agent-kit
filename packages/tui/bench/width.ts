@@ -4,7 +4,7 @@
  * Run: bun packages/tui/bench/visible-width.ts
  */
 import { visibleWidth as nativeVisibleWidth } from "@oh-my-pi/pi-natives";
-import { visibleWidthRaw as hybridVisibleWidth } from "../src/utils";
+import { visibleWidthRaw as hybridVisibleWidth, replaceTabs } from "../src/utils";
 
 const ITERATIONS = 10_000;
 const WARMUP = 500;
@@ -52,12 +52,7 @@ const samples = {
 // Bun.stringWidth with ANSI stripping (what hybrid uses for short strings)
 function bunStringWidth(str: string): number {
 	if (str.length === 0) return 0;
-
-	let clean = str;
-	if (str.includes("\t")) {
-		clean = clean.replace(/\t/g, "   ");
-	}
-	return Bun.stringWidth(clean);
+	return Bun.stringWidth(replaceTabs(str));
 }
 
 interface BenchResult {

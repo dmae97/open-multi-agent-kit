@@ -235,8 +235,8 @@ async function createSessionManager(parsed: Args, cwd: string): Promise<SessionM
 	if (parsed.noSession) {
 		return SessionManager.inMemory();
 	}
-	if (parsed.session) {
-		const sessionArg = parsed.session;
+	if (typeof parsed.resume === "string") {
+		const sessionArg = parsed.resume;
 		if (sessionArg.includes("/") || sessionArg.includes("\\") || sessionArg.endsWith(".jsonl")) {
 			return await SessionManager.open(sessionArg, parsed.sessionDir);
 		}
@@ -258,7 +258,7 @@ async function createSessionManager(parsed: Args, cwd: string): Promise<SessionM
 	if (parsed.continue) {
 		return await SessionManager.continueRecent(cwd, parsed.sessionDir);
 	}
-	// --resume is handled separately (needs picker UI)
+	// --resume without value is handled separately (needs picker UI)
 	// If --session-dir provided without --continue/--resume, create new session there
 	if (parsed.sessionDir) {
 		return SessionManager.create(cwd, parsed.sessionDir);
@@ -572,8 +572,8 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 	debugStartup("main:createSessionManager");
 	time("createSessionManager");
 
-	// Handle --resume: show session picker
-	if (parsedArgs.resume) {
+	// Handle --resume (no value): show session picker
+	if (parsedArgs.resume === true) {
 		const sessions = await SessionManager.list(cwd, parsedArgs.sessionDir);
 		time("SessionManager.list");
 		if (sessions.length === 0) {

@@ -195,15 +195,4 @@ export class VirtualTerminal implements Terminal {
 	reset(): void {
 		this.xterm.reset();
 	}
-
-	/**
-	 * Get cursor position
-	 */
-	getCursorPosition(): { x: number; y: number } {
-		const buffer = this.xterm.buffer.active;
-		return {
-			x: buffer.cursorX,
-			y: buffer.cursorY,
-		};
-	}
 }

@@ -619,42 +619,6 @@ export class Editor implements Component, Focusable {
 		return result;
 	}
 
-	getCursorPosition(width: number): { row: number; col: number } | null {
-		if (!this.useTerminalCursor) return null;
-
-		const paddingX = this.getEditorPaddingX();
-		const borderWidth = paddingX + 1;
-		const layoutWidth = this.getLayoutWidth(width, paddingX);
-		if (layoutWidth <= 0) return null;
-
-		const layoutLines = this.layoutText(layoutWidth);
-		const visibleContentHeight = this.getVisibleContentHeight(layoutLines.length);
-		this.updateScrollOffset(layoutWidth, layoutLines, visibleContentHeight);
-
-		for (let i = 0; i < layoutLines.length; i++) {
-			if (i < this.scrollOffset || i >= this.scrollOffset + visibleContentHeight) continue;
-			const layoutLine = layoutLines[i];
-			if (!layoutLine || !layoutLine.hasCursor || layoutLine.cursorPos === undefined) continue;
-
-			const lineWidth = visibleWidth(layoutLine.text);
-			const isCursorAtLineEnd = layoutLine.cursorPos === layoutLine.text.length;
-
-			if (isCursorAtLineEnd && lineWidth >= layoutWidth && layoutLine.text.length > 0) {
-				const graphemes = [...segmenter.segment(layoutLine.text)];
-				const lastGrapheme = graphemes[graphemes.length - 1]?.segment || "";
-				const lastWidth = visibleWidth(lastGrapheme) || 1;
-				const colOffset = borderWidth + Math.max(0, lineWidth - lastWidth);
-				return { row: 1 + i - this.scrollOffset, col: colOffset };
-			}
-
-			const before = layoutLine.text.slice(0, layoutLine.cursorPos);
-			const colOffset = borderWidth + visibleWidth(before);
-			return { row: 1 + i - this.scrollOffset, col: colOffset };
-		}
-
-		return null;
-	}
-
 	handleInput(data: string): void {
 		const kb = getEditorKeybindings();
 

@@ -5,6 +5,13 @@ export { Ellipsis, extractSegments, sliceWithWidth, truncateToWidth, wrapTextWit
 // Pre-allocated space buffer for padding
 const SPACE_BUFFER = " ".repeat(512);
 
+/*
+ * Replace tabs with 3 spaces for consistent rendering.
+ */
+export function replaceTabs(text: string): string {
+	return text.replaceAll("\t", "   ");
+}
+
 /**
  * Returns a string of n spaces. Uses a pre-allocated buffer for efficiency.
  */

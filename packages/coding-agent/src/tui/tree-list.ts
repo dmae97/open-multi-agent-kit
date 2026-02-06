@@ -2,7 +2,7 @@
  * Hierarchical tree list rendering helper.
  */
 import type { Theme } from "../modes/theme/theme";
-import { formatMoreItems } from "../tools/render-utils";
+import { formatMoreItems, replaceTabs } from "../tools/render-utils";
 import type { TreeContext } from "./types";
 import { getTreeBranch, getTreeContinuePrefix } from "./utils";
 
@@ -35,14 +35,14 @@ export function renderTreeList<T>(options: TreeListOptions<T>, theme: Theme): st
 		const rendered = renderItem(items[i], context);
 		if (Array.isArray(rendered)) {
 			if (rendered.length === 0) continue;
-			lines.push(`${prefix}${rendered[0]}`);
+				lines.push(`${prefix}${replaceTabs(rendered[0])}`);
 			for (let j = 1; j < rendered.length; j++) {
-				lines.push(`${continuePrefix}${rendered[j]}`);
+					lines.push(`${continuePrefix}${replaceTabs(rendered[j])}`);
 			}
 		} else {
-			lines.push(`${prefix}${rendered}`);
+				lines.push(`${prefix}${replaceTabs(rendered)}`);
+			}
 		}
-	}
 
 	if (!expanded && items.length > maxItems) {
 		const remaining = items.length - maxItems;

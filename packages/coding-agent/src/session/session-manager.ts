@@ -1265,7 +1265,9 @@ export class SessionManager {
 		if (!this.persist || !this.sessionFile) return;
 		await this._queuePersistTask(async () => {
 			await this._closePersistWriterInternal();
-			const entries = await Promise.all(this.fileEntries.map(entry => prepareEntryForPersistence(entry, this.blobStore)));
+			const entries = await Promise.all(
+				this.fileEntries.map(entry => prepareEntryForPersistence(entry, this.blobStore)),
+			);
 			await this._writeEntriesAtomically(entries);
 			this.flushed = true;
 		});

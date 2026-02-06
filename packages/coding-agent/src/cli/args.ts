@@ -21,12 +21,11 @@ export interface Args {
 	appendSystemPrompt?: string;
 	thinking?: ThinkingLevel;
 	continue?: boolean;
-	resume?: boolean;
+	resume?: string | true;
 	help?: boolean;
 	version?: boolean;
 	mode?: Mode;
 	noSession?: boolean;
-	session?: string;
 	sessionDir?: string;
 	models?: string[];
 	tools?: string[];
@@ -76,8 +75,13 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 			}
 		} else if (arg === "--continue" || arg === "-c") {
 			result.continue = true;
-		} else if (arg === "--resume" || arg === "-r") {
-			result.resume = true;
+		} else if (arg === "--resume" || arg === "-r" || arg === "--session") {
+			const next = args[i + 1];
+			if (next && !next.startsWith("-")) {
+				result.resume = args[++i];
+			} else {
+				result.resume = true;
+			}
 		} else if (arg === "--provider" && i + 1 < args.length) {
 			result.provider = args[++i];
 		} else if (arg === "--model" && i + 1 < args.length) {
@@ -96,8 +100,6 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 			result.appendSystemPrompt = args[++i];
 		} else if (arg === "--no-session") {
 			result.noSession = true;
-		} else if (arg === "--session" && i + 1 < args.length) {
-			result.session = args[++i];
 		} else if (arg === "--session-dir" && i + 1 < args.length) {
 			result.sessionDir = args[++i];
 		} else if (arg === "--models" && i + 1 < args.length) {

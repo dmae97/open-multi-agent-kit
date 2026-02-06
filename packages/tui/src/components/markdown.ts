@@ -3,7 +3,7 @@ import type { MermaidImage } from "../mermaid";
 import type { SymbolTheme } from "../symbols";
 import { encodeITerm2, encodeKitty, getCellDimensions, ImageProtocol, TERMINAL } from "../terminal-capabilities";
 import type { Component } from "../tui";
-import { applyBackgroundToLine, padding, visibleWidth, wrapTextWithAnsi } from "../utils";
+import { applyBackgroundToLine, padding, replaceTabs, visibleWidth, wrapTextWithAnsi } from "../utils";
 
 /**
  * Default text styling for markdown content.
@@ -120,11 +120,7 @@ export class Markdown implements Component {
 		}
 
 		// Replace tabs with 3 spaces for consistent rendering
-		let normalizedText = this.text.replace(/\t/g, "   ");
-
-		// Fix inline code fences: text:```lang or text```lang should have newline before ```
-		// This handles malformed markdown from LLM thinking output
-		normalizedText = normalizedText.replace(/([^\n])```(\w*)\n/g, "$1\n```$2\n");
+		const normalizedText = replaceTabs(this.text);
 
 		// Parse markdown to HTML-like tokens
 		const tokens = marked.lexer(normalizedText);
@@ -168,8 +164,10 @@ export class Markdown implements Component {
 			if (bgFn) {
 				contentLines.push(applyBackgroundToLine(lineWithMargins, width, bgFn));
 			} else {
-				// No background - don't pad (avoids trailing spaces when copying)
-				contentLines.push(lineWithMargins);
+				// No background - just pad to width
+				const visibleLen = visibleWidth(lineWithMargins);
+				const paddingNeeded = Math.max(0, width - visibleLen);
+				contentLines.push(lineWithMargins + padding(paddingNeeded));
 			}
 		}
 

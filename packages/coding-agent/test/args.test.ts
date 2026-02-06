@@ -67,6 +67,22 @@ describe("parseArgs", () => {
 			const result = parseArgs(["-r"]);
 			expect(result.resume).toBe(true);
 		});
+
+		test("parses --resume with session ID", () => {
+			const result = parseArgs(["--resume", "abc123"]);
+			expect(result.resume).toBe("abc123");
+		});
+
+		test("parses -r with session path", () => {
+			const result = parseArgs(["-r", "/path/to/session.jsonl"]);
+			expect(result.resume).toBe("/path/to/session.jsonl");
+		});
+
+		test("--resume without value before another flag stays boolean", () => {
+			const result = parseArgs(["--resume", "--model", "opus"]);
+			expect(result.resume).toBe(true);
+			expect(result.model).toBe("opus");
+		});
 	});
 
 	describe("flags with values", () => {
@@ -105,9 +121,9 @@ describe("parseArgs", () => {
 			expect(result.mode).toBe("rpc");
 		});
 
-		test("parses --session", () => {
+		test("parses --session as alias for --resume", () => {
 			const result = parseArgs(["--session", "/path/to/session.jsonl"]);
-			expect(result.session).toBe("/path/to/session.jsonl");
+			expect(result.resume).toBe("/path/to/session.jsonl");
 		});
 
 		test("parses --export", () => {

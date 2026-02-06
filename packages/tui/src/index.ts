@@ -62,4 +62,4 @@ export { emergencyTerminalRestore, ProcessTerminal, type Terminal } from "./term
 export * from "./terminal-capabilities";
 export { type Component, Container, type OverlayHandle, type SizeValue, TUI } from "./tui";
 // Utilities
-export { Ellipsis, padding, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "./utils";
+export { Ellipsis, padding, replaceTabs, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "./utils";

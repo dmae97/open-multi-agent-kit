@@ -84,7 +84,7 @@ export class SelectorController {
 						},
 						getStatusLinePreview: () => {
 							// Return the rendered status line for inline preview
-							const width = this.ctx.ui.getWidth();
+							const width = this.ctx.ui.terminal.columns;
 							return this.ctx.statusLine.getTopBorder(width).content;
 						},
 						onPluginsChanged: () => {

@@ -40,9 +40,6 @@ export type {
 export { CustomToolLoader, discoverAndLoadCustomTools, loadCustomTools } from "./extensibility/custom-tools";
 export type {
 	AppAction,
-	BashToolCallEvent,
-	CustomToolCallEvent,
-	EditToolCallEvent,
 	Extension,
 	ExtensionActions,
 	ExtensionAPI,
@@ -58,15 +55,12 @@ export type {
 	ExtensionShortcut,
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
-	FindToolCallEvent,
-	GrepToolCallEvent,
 	InputEvent,
 	InputEventResult,
 	KeybindingsManager,
 	LoadExtensionsResult,
 	MessageRenderer,
 	MessageRenderOptions,
-	ReadToolCallEvent,
 	RegisteredCommand,
 	ToolCallEvent,
 	ToolResultEvent,
@@ -76,14 +70,12 @@ export type {
 	UserBashEventResult,
 	UserPythonEvent,
 	UserPythonEventResult,
-	WriteToolCallEvent,
 } from "./extensibility/extensions";
 // Extension types and utilities
 export {
 	discoverAndLoadExtensions,
 	ExtensionRunner,
 	ExtensionRuntime,
-	isToolCallEventType,
 } from "./extensibility/extensions";
 // Hook system types (legacy re-export)
 export type * from "./extensibility/hooks";

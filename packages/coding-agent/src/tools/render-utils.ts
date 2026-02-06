@@ -8,7 +8,7 @@ import * as os from "node:os";
 import { type Ellipsis, truncateToWidth } from "@oh-my-pi/pi-tui";
 import type { Theme } from "../modes/theme/theme";
 
-export { Ellipsis, truncateToWidth } from "@oh-my-pi/pi-tui";
+export { Ellipsis, replaceTabs, truncateToWidth } from "@oh-my-pi/pi-tui";
 
 // =============================================================================
 // Standardized Display Constants
@@ -670,10 +670,6 @@ export function shortenPath(filePath: string, homeDir?: string): string {
 
 export function wrapBrackets(text: string, theme: Theme): string {
 	return `${theme.format.bracketLeft}${text}${theme.format.bracketRight}`;
-}
-
-export function replaceTabs(text: string): string {
-	return text.replace(/\t/g, "   ");
 }
 
 function pluralize(label: string, count: number): string {

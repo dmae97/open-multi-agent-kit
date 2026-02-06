@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+
+### Breaking Changes
+
+- Removed `getCursorPosition()` method from Component interface and implementations, eliminating hardware cursor positioning support
+
 ### Added
 
 - Added sticky column behavior for vertical cursor movement, preserving target column when navigating through lines of varying lengths
@@ -10,6 +15,10 @@
 
 ### Changed
 
+- Changed default value of `PI_HARDWARE_CURSOR` environment variable from implicit true to explicit `"1"` for clarity
+- Changed default value of `PI_CLEAR_ON_SHRINK` environment variable from implicit false to explicit `"0"` for clarity
+- Changed TUI to clear screen on startup to prevent shell prompts and status messages from bleeding into the first rendered frame
+- Refactored full-render logic into reusable helper function to reduce code duplication across multiple render paths
 - Changed autocomplete to include hidden paths but filter out `.git` and its contents
 - Changed Input component to properly handle surrogate pairs in Unicode text, preventing cursor display corruption with emoji and multi-byte characters
 - Changed Editor to use `setCursorCol()` for all cursor column updates, enabling sticky column tracking
@@ -22,6 +31,7 @@
 
 ### Fixed
 
+- Fixed rendering of extra blank lines when content shrinks by improving cursor positioning logic during line deletion
 - Fixed cursor display position in Input component when scrolling horizontally through long text
 - Fixed Kitty keyboard protocol disable sequence to use safe write method, preventing potential output buffering issues
 - Fixed unnecessary full-screen redraws when changes occur in out-of-view components (e.g., spinners), reducing terminal scroll events and improving performance on slower connections

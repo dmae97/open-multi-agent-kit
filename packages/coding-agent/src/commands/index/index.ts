@@ -58,12 +58,9 @@ export default class Index extends Command {
 			char: "c",
 			description: "Continue previous session",
 		}),
-		resume: Flags.boolean({
+		resume: Flags.string({
 			char: "r",
-			description: "Select a session to resume",
-		}),
-		session: Flags.string({
-			description: "Use specific session file",
+			description: "Resume a session (by ID prefix, path, or picker if omitted)",
 		}),
 		"session-dir": Flags.string({
 			description: "Directory for session storage and lookup",

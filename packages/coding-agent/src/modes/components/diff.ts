@@ -1,5 +1,6 @@
 import * as Diff from "diff";
 import { theme } from "../../modes/theme/theme";
+import { replaceTabs } from "../../tools/render-utils";
 
 /**
  * Parse diff line to extract prefix, line number, and content.
@@ -9,13 +10,6 @@ function parseDiffLine(line: string): { prefix: string; lineNum: string; content
 	const match = line.match(/^([+-\s])(?:(\s*\d+)\s)?(.*)$/);
 	if (!match) return null;
 	return { prefix: match[1], lineNum: match[2] ?? "", content: match[3] };
-}
-
-/**
- * Replace tabs with spaces for consistent rendering.
- */
-function replaceTabs(text: string): string {
-	return text.replace(/\t/g, "   ");
 }
 
 /**
