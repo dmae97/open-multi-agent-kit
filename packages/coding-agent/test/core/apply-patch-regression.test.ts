@@ -1796,3 +1796,107 @@ describe("regression: trailing context lines don't delete file content", () => {
 		expect(result).toContain("return this._kittyProtocolActive;");
 	});
 });
+
+describe("regression: context-only hunks between @@ markers must not change indentation (agent-session.ts)", () => {
+	let tempDir: string;
+
+	beforeEach(() => {
+		tempDir = path.join(os.tmpdir(), `regression-ctx-noop-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		fs.mkdirSync(tempDir, { recursive: true });
+	});
+
+	afterEach(() => {
+		fs.rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	test("pure context hunk (no +/- lines) does not alter tab-indented file content", async () => {
+		const filePath = path.join(tempDir, "agent-session.ts");
+		// Actual file uses tab indentation (\t\t for method body).
+		// Pre-patch state: three callsites lack `await`.
+		const fileContent = [
+			"class AgentSession {",
+			"\tasync newSession(options?: NewSessionOptions): Promise<boolean> {",
+			"\t\tconst previousSessionFile = this.sessionFile;",
+			"",
+			"\t\tthis._disconnectFromAgent();",
+			"\t\tawait this.abort();",
+			"\t\tthis.agent.reset();",
+			"\t\tawait this.sessionManager.flush();",
+			"\t\tthis.sessionManager.newSession(options);",
+			"\t\tthis.agent.sessionId = this.sessionManager.getSessionId();",
+			"\t\tthis._steeringMessages = [];",
+			"\t\tthis._followUpMessages = [];",
+			"\t\tthis._pendingNextTurnMessages = [];",
+			"\t}",
+			"}",
+			"",
+		].join("\n");
+		await Bun.write(filePath, fileContent);
+
+		// Exact patch from the regression case (spaces in diff, tabs in file).
+		// The lines between the first @@ and second @@ are pure context.
+		const diff = [
+			"@@",
+			"         async newSession(options?: NewSessionOptions): Promise<boolean> {",
+			"             const previousSessionFile = this.sessionFile;",
+			"@@",
+			"             this._disconnectFromAgent();",
+			"             await this.abort();",
+			"             this.agent.reset();",
+			"             await this.sessionManager.flush();",
+			"-            this.sessionManager.newSession(options);",
+			"+            await this.sessionManager.newSession(options);",
+			"             this.agent.sessionId = this.sessionManager.getSessionId();",
+			"             this._steeringMessages = [];",
+			"             this._followUpMessages = [];",
+			"             this._pendingNextTurnMessages = [];",
+		].join("\n");
+
+		await applyPatch({ path: "agent-session.ts", op: "update", diff }, { cwd: tempDir });
+
+		const result = await Bun.file(filePath).text();
+		// The change should be applied
+		expect(result).toContain("\t\tawait this.sessionManager.newSession(options);");
+		// Lines covered by the pure-context hunk must keep their original tab indentation
+		expect(result).toContain("\tasync newSession(options?: NewSessionOptions): Promise<boolean> {");
+		expect(result).toContain("\t\tconst previousSessionFile = this.sessionFile;");
+		expect(result).toContain("\t\tthis._disconnectFromAgent();");
+	});
+
+	test("space-to-tab conversion with offset (ax+b model)", async () => {
+		const filePath = path.join(tempDir, "offset.ts");
+		// File uses tabs: 1 tab for class body, 2 tabs for method body, 3 for nested
+		const fileContent = [
+			"class Foo {",
+			"\tbar() {",
+			"\t\tif (true) {",
+			"\t\t\tthis.x = 1;",
+			"\t\t}",
+			"\t}",
+			"}",
+			"",
+		].join("\n");
+		await Bun.write(filePath, fileContent);
+
+		// Model rendered tabs as 3 cols with 1 extra offset:
+		// 1 tab -> 4 spaces, 2 tabs -> 7 spaces, 3 tabs -> 10 spaces
+		// => width=3, offset=1
+		const diff = [
+			"@@ class Foo {",
+			"     bar() {",
+			"-       if (true) {",
+			"-          this.x = 1;",
+			"+       if (ready) {",
+			"+          this.x = 42;",
+			"        }",
+		].join("\n");
+
+		await applyPatch({ path: "offset.ts", op: "update", diff }, { cwd: tempDir });
+
+		const result = await Bun.file(filePath).text();
+		expect(result).toContain("\t\tif (ready) {");
+		expect(result).toContain("\t\t\tthis.x = 42;");
+		// Unchanged lines must keep tabs
+		expect(result).toContain("\tbar() {");
+	});
+});

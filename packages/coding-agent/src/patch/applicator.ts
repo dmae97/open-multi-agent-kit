@@ -126,6 +126,8 @@ function adjustLinesIndentation(patternLines: string[], actualLines: string[], n
 
 	let patternTabOnly = true;
 	let actualSpaceOnly = true;
+	let patternSpaceOnly = true;
+	let actualTabOnly = true;
 	let patternMixed = false;
 	let actualMixed = false;
 
@@ -133,6 +135,7 @@ function adjustLinesIndentation(patternLines: string[], actualLines: string[], n
 		if (line.trim().length === 0) continue;
 		const ws = getLeadingWhitespace(line);
 		if (ws.includes(" ")) patternTabOnly = false;
+		if (ws.includes("\t")) patternSpaceOnly = false;
 		if (ws.includes(" ") && ws.includes("\t")) patternMixed = true;
 	}
 
@@ -140,6 +143,7 @@ function adjustLinesIndentation(patternLines: string[], actualLines: string[], n
 		if (line.trim().length === 0) continue;
 		const ws = getLeadingWhitespace(line);
 		if (ws.includes("\t")) actualSpaceOnly = false;
+		if (ws.includes(" ")) actualTabOnly = false;
 		if (ws.includes(" ") && ws.includes("\t")) actualMixed = true;
 	}
 
@@ -170,6 +174,88 @@ function adjustLinesIndentation(patternLines: string[], actualLines: string[], n
 		if (consistent && ratio) {
 			const converted = convertLeadingTabsToSpaces(newLines.join("\n"), ratio).split("\n");
 			return converted;
+		}
+	}
+
+	// Reverse: pattern uses spaces, actual uses tabs — infer spaces = tabs * width + offset
+	// Collect (tabs, spaces) pairs from matched lines to solve for the model's tab rendering.
+	// With one data point: spaces = tabs * width (offset=0).
+	// With two+: solve ax + b via pairs with distinct tab counts.
+	if (!patternMixed && !actualMixed && patternSpaceOnly && actualTabOnly) {
+		const samples = new Map<number, number>(); // tabs -> spaces
+		const lineCount = Math.min(patternLines.length, actualLines.length);
+		let consistent = true;
+		for (let i = 0; i < lineCount; i++) {
+			const patternLine = patternLines[i];
+			const actualLine = actualLines[i];
+			if (patternLine.trim().length === 0 || actualLine.trim().length === 0) continue;
+			const spaces = countLeadingWhitespace(patternLine);
+			const tabs = countLeadingWhitespace(actualLine);
+			if (tabs === 0) continue;
+			const existing = samples.get(tabs);
+			if (existing !== undefined && existing !== spaces) {
+				consistent = false;
+				break;
+			}
+			samples.set(tabs, spaces);
+		}
+
+		if (consistent && samples.size > 0) {
+			let tabWidth: number | undefined;
+			let offset = 0;
+
+			if (samples.size === 1) {
+				// One level: assume offset=0, width = spaces / tabs
+				const [[tabs, spaces]] = samples;
+				if (spaces % tabs === 0) {
+					tabWidth = spaces / tabs;
+				}
+			} else {
+				// Two+ levels: solve via any two distinct pairs
+				// spaces = tabs * width + offset  =>  width = (s2 - s1) / (t2 - t1)
+				const entries = [...samples.entries()];
+				const [t1, s1] = entries[0];
+				const [t2, s2] = entries[1];
+				if (t1 !== t2) {
+					const w = (s2 - s1) / (t2 - t1);
+					if (w > 0 && Number.isInteger(w)) {
+						const b = s1 - t1 * w;
+						// Validate all samples against this model
+						let valid = true;
+						for (const [t, s] of samples) {
+							if (t * w + b !== s) {
+								valid = false;
+								break;
+							}
+						}
+						if (valid) {
+							tabWidth = w;
+							offset = b;
+						}
+					}
+				}
+			}
+
+			if (tabWidth !== undefined && tabWidth > 0) {
+				const converted = newLines.map(line => {
+					if (line.trim().length === 0) return line;
+					const ws = countLeadingWhitespace(line);
+					if (ws === 0) return line;
+					// Reverse: tabs = (spaces - offset) / width
+					const adjusted = ws - offset;
+					if (adjusted >= 0 && adjusted % tabWidth! === 0) {
+						return "\t".repeat(adjusted / tabWidth!) + line.slice(ws);
+					}
+					// Partial tab — keep remainder as spaces
+					const tabCount = Math.floor(adjusted / tabWidth!);
+					const remainder = adjusted - tabCount * tabWidth!;
+					if (tabCount >= 0) {
+						return "\t".repeat(tabCount) + " ".repeat(remainder) + line.slice(ws);
+					}
+					return line;
+				});
+				return converted;
+			}
 		}
 	}
 
@@ -1118,8 +1204,25 @@ function computeReplacements(
 
 		// Adjust indentation if needed (handles fuzzy matches where indentation differs)
 		const actualMatchedLines = originalLines.slice(found, found + pattern.length);
-		const adjustedNewLines = adjustLinesIndentation(pattern, actualMatchedLines, newSlice);
 
+		// Skip pure-context hunks (no +/- lines — oldLines === newLines).
+		// They serve only to advance lineIndex for subsequent hunks.
+		let isNoOp = pattern.length === newSlice.length;
+		if (isNoOp) {
+			for (let i = 0; i < pattern.length; i++) {
+				if (pattern[i] !== newSlice[i]) {
+					isNoOp = false;
+					break;
+				}
+			}
+		}
+
+		if (isNoOp) {
+			lineIndex = found + pattern.length;
+			continue;
+		}
+
+		const adjustedNewLines = adjustLinesIndentation(pattern, actualMatchedLines, newSlice);
 		replacements.push({ startIndex: found, oldLen: pattern.length, newLines: adjustedNewLines });
 		lineIndex = found + pattern.length;
 	}
