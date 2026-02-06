@@ -10,7 +10,7 @@ function toError(value: unknown): Error {
 }
 
 function truncate(content: string, maxLength: number): string {
-	return content.length > maxLength ? `${content.slice(0, maxLength)}...` : content;
+	return content.length > maxLength ? `${content.slice(0, maxLength)}…` : content;
 }
 
 export class FrontmatterError extends Error {

@@ -434,8 +434,7 @@ function formatSequenceMatchPreview(lines: string[], startIdx: number): string {
 	return previewLines
 		.map((line, i) => {
 			const num = start + i + 1;
-			const truncated =
-				line.length > MATCH_PREVIEW_MAX_LEN ? `${line.slice(0, MATCH_PREVIEW_MAX_LEN - 3)}...` : line;
+			const truncated = line.length > MATCH_PREVIEW_MAX_LEN ? `${line.slice(0, MATCH_PREVIEW_MAX_LEN - 1)}…` : line;
 			return `  ${num} | ${truncated}`;
 		})
 		.join("\n");
@@ -1103,7 +1102,7 @@ function computeReplacements(
 					return lines
 						.map((line, i) => {
 							const num = start + i + 1;
-							const truncated = line.length > maxLineLength ? `${line.slice(0, maxLineLength - 3)}...` : line;
+							const truncated = line.length > maxLineLength ? `${line.slice(0, maxLineLength - 1)}…` : line;
 							return `  ${num} | ${truncated}`;
 						})
 						.join("\n");

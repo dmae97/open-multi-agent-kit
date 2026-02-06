@@ -261,7 +261,7 @@ Examples:
 			process.exit(1);
 		}
 
-		console.log(`Logging in to ${provider}...`);
+		console.log(`Logging in to ${provider}…`);
 		await login(provider);
 		return;
 	}

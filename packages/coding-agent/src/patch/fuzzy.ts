@@ -241,7 +241,7 @@ export function findMatch(
 				const preview = previewLines
 					.map((line, idx) => {
 						const num = start + idx + 1;
-						return `  ${num} | ${line.length > OCCURRENCE_PREVIEW_MAX_LEN ? `${line.slice(0, OCCURRENCE_PREVIEW_MAX_LEN - 3)}...` : line}`;
+						return `  ${num} | ${line.length > OCCURRENCE_PREVIEW_MAX_LEN ? `${line.slice(0, OCCURRENCE_PREVIEW_MAX_LEN - 1)}…` : line}`;
 					})
 					.join("\n");
 				occurrencePreviews.push(preview);

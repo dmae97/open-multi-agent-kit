@@ -175,7 +175,7 @@ function formatAttempt(attempt: EditAttempt, index: number, options: Options): s
 	if (options.context && attempt.thinkingContext) {
 		const truncated =
 			attempt.thinkingContext.length > 300
-				? `${attempt.thinkingContext.slice(0, 300)}...`
+				? `${attempt.thinkingContext.slice(0, 300)}…`
 				: attempt.thinkingContext;
 		lines.push(`${colorize("Thinking:", "dim")} ${truncated}`);
 	}
@@ -187,7 +187,7 @@ function formatAttempt(attempt: EditAttempt, index: number, options: Options): s
 
 	lines.push(``);
 	const resultPreview = attempt.resultText.slice(0, 200);
-	const truncatedResult = attempt.resultText.length > 200 ? `${resultPreview}...` : resultPreview;
+	const truncatedResult = attempt.resultText.length > 200 ? `${resultPreview}…` : resultPreview;
 	lines.push(`${colorize("Result:", "dim")} ${truncatedResult}`);
 	lines.push(colorize("-".repeat(80), "dim"));
 

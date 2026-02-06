@@ -79,7 +79,7 @@ function formatProviderError(error: unknown, provider: SearchProvider): string {
 /** Truncate text for tool output */
 function truncateText(text: string, maxLen: number): string {
 	if (text.length <= maxLen) return text;
-	return `${text.slice(0, Math.max(0, maxLen - 3))}...`;
+	return `${text.slice(0, Math.max(0, maxLen - 1))}…`;
 }
 
 function formatCount(label: string, count: number): string {

@@ -1,5 +1,5 @@
 import type { Component } from "../tui";
-import { applyBackgroundToLine, padding, visibleWidth } from "../utils";
+import { applyBackgroundToLine, padding, truncateToWidth, visibleWidth } from "../utils";
 
 type Cache = {
 	key: bigint;
@@ -79,7 +79,7 @@ export class Box implements Component {
 		for (const child of this.children) {
 			const lines = child.render(contentWidth);
 			for (const line of lines) {
-				childLines.push(leftPad + line);
+				childLines.push(leftPad + truncateToWidth(line, contentWidth));
 			}
 		}
 

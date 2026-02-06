@@ -757,7 +757,7 @@ function getString(value: unknown): string | undefined {
 
 function truncate(text: string, limit: number): string {
 	if (text.length <= limit) return text;
-	return `${text.slice(0, limit)}...[truncated ${text.length - limit}]`;
+	return `${text.slice(0, limit)}…[truncated ${text.length - limit}]`;
 }
 
 function formatCodexFailure(rawEvent: Record<string, unknown>): string | null {

@@ -110,7 +110,7 @@ async function ensureReactSource(reactDir: string): Promise<void> {
 		throw new Error(`Directory exists but missing packages/: ${reactDir}`);
 	}
 
-	console.log(`Cloning React repository to ${reactDir}...`);
+	console.log(`Cloning React repository to ${reactDir}…`);
 	fs.mkdirSync(dirname(reactDir), { recursive: true });
 	const result = await $`git clone --depth 1 ${REACT_REPO_URL} ${reactDir}`.quiet().nothrow();
 	if (result.exitCode !== 0) {

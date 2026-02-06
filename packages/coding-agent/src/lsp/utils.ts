@@ -371,7 +371,7 @@ export function formatTextEdit(edit: TextEdit, maxLength = 50): string {
 	const range = `${edit.range.start.line + 1}:${edit.range.start.character + 1}`;
 	const preview =
 		edit.newText.length > maxLength
-			? `${edit.newText.slice(0, maxLength).replace(/\n/g, "\\n")}...`
+			? `${edit.newText.slice(0, maxLength).replace(/\n/g, "\\n")}…`
 			: edit.newText.replace(/\n/g, "\\n");
 	return `line ${range} ${theme.nav.cursor} "${preview}"`;
 }
@@ -530,7 +530,7 @@ export function extractHoverText(
  */
 export function truncate(str: string, maxLength: number): string {
 	if (str.length <= maxLength) return str;
-	return `${str.slice(0, maxLength - 3)}...`;
+	return `${str.slice(0, maxLength - 1)}…`;
 }
 
 /**

@@ -54,7 +54,7 @@ export async function runChangelogFlow({
 
 	const updated: string[] = [];
 	for (const boundary of boundaries) {
-		onProgress?.(`Generating entries for ${boundary.changelogPath}...`);
+		onProgress?.(`Generating entries for ${boundary.changelogPath}…`);
 		const diff = await git.getDiffForFiles(boundary.files, true);
 		if (!diff.trim()) continue;
 		const stat = await git.getStatForFiles(boundary.files, true);
@@ -108,7 +108,7 @@ export async function applyChangelogProposals({
 			(!proposal.deletions || Object.keys(proposal.deletions).length === 0)
 		)
 			continue;
-		onProgress?.(`Applying entries for ${proposal.path}...`);
+		onProgress?.(`Applying entries for ${proposal.path}…`);
 		const exists = fs.existsSync(proposal.path);
 		if (!exists) {
 			logger.warn("commit changelog path missing", { path: proposal.path });

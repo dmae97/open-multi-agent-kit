@@ -18,7 +18,7 @@ export default function (pi: HookAPI) {
 		turnCount++;
 		const theme = ctx.ui.theme;
 		const spinner = theme.fg("accent", "●");
-		const text = theme.fg("dim", ` Turn ${turnCount}...`);
+		const text = theme.fg("dim", ` Turn ${turnCount}…`);
 		ctx.ui.setStatus("status-demo", spinner + text);
 	});
 

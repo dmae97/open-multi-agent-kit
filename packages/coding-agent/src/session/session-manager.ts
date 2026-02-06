@@ -515,7 +515,7 @@ class RecentSessionInfo {
 	get name(): string {
 		if (this.#name) return this.#name;
 		const fullName = this.fullName;
-		this.#name = fullName.length <= 40 ? fullName : `${fullName.slice(0, 37)}...`;
+		this.#name = fullName.length <= 40 ? fullName : `${fullName.slice(0, 39)}…`;
 		return this.#name;
 	}
 

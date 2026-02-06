@@ -162,7 +162,7 @@ function cleanStepText(text: string): string {
 
 	// Truncate if too long
 	if (cleaned.length > 50) {
-		cleaned = `${cleaned.slice(0, 47)}...`;
+		cleaned = `${cleaned.slice(0, 49)}…`;
 	}
 
 	return cleaned;

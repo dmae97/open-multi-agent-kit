@@ -361,7 +361,7 @@ export class ReviewCommand implements CustomCommand {
 					const stats = parseDiff(diffResult.stdout);
 					// Even if all files filtered, include the custom instructions
 					return `${buildReviewPrompt(
-						`Custom review: ${instructions.split("\n")[0].slice(0, 60)}...`,
+						`Custom review: ${instructions.split("\n")[0].slice(0, 60)}…`,
 						stats,
 						diffResult.stdout,
 					)}\n\n### Additional Instructions\n\n${instructions}`;

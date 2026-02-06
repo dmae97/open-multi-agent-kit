@@ -190,7 +190,7 @@ async function updateViaBinary(release: ReleaseInfo): Promise<void> {
 	const nativePath = path.join(execDir, nativeAddonName);
 	const nativeTempPath = `${nativePath}.new`;
 
-	console.log(chalk.dim(`Downloading ${binaryName}...`));
+	console.log(chalk.dim(`Downloading ${binaryName}…`));
 
 	// Download to temp file
 	const response = await fetch(asset.url, { redirect: "follow" });
@@ -202,7 +202,7 @@ async function updateViaBinary(release: ReleaseInfo): Promise<void> {
 	await pipeline(response.body, fileStream);
 
 	// Download native addon
-	console.log(chalk.dim(`Downloading ${nativeAddonName}...`));
+	console.log(chalk.dim(`Downloading ${nativeAddonName}…`));
 
 	const nativeResponse = await fetch(nativeAsset.url, { redirect: "follow" });
 	if (!nativeResponse.ok || !nativeResponse.body) {

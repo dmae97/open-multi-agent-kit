@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Support for `PI_PACKAGE_DIR` environment variable to override package directory (useful for Nix/Guix store paths)
@@ -29,6 +30,7 @@
 
 ### Changed
 
+- Replaced ellipsis string (`...`) with Unicode ellipsis character (`…`) throughout UI text and truncation logic for improved typography
 - Improved render performance by introducing caching for tool output blocks and search results to avoid redundant text width and padding computations
 - Enhanced read tool grouping to reset when non-tool content (text/thinking blocks) appears between read calls, preventing unintended coalescing
 - Improved string preview formatting in scalar values to show line counts and truncation indicators for multi-line strings

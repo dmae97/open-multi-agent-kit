@@ -71,7 +71,7 @@ export default function (pi: HookAPI) {
 
 			// Run extraction with loader UI
 			const result = await ctx.ui.custom<string | null>((tui, theme, done) => {
-				const loader = new BorderedLoader(tui, theme, `Extracting questions using ${ctx.model!.id}...`);
+				const loader = new BorderedLoader(tui, theme, `Extracting questions using ${ctx.model!.id}…`);
 				loader.onAbort = () => done(null);
 
 				// Do the work

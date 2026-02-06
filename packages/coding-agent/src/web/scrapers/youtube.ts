@@ -287,7 +287,7 @@ export const handleYouTube: SpecialHandler = async (
 
 	if (description) {
 		// Truncate long descriptions
-		const descPreview = description.length > 1000 ? `${description.slice(0, 1000)}...` : description;
+		const descPreview = description.length > 1000 ? `${description.slice(0, 1000)}…` : description;
 		md += `---\n\n## Description\n\n${descPreview}\n\n`;
 	}
 

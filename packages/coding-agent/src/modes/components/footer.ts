@@ -211,11 +211,11 @@ export class FooterComponent implements Component {
 
 		// Truncate path if too long to fit width
 		if (pwd.length > width) {
-			const half = Math.floor(width / 2) - 2;
+			const half = Math.floor(width / 2) - 1;
 			if (half > 1) {
 				const start = pwd.slice(0, half);
 				const end = pwd.slice(-(half - 1));
-				pwd = `${start}...${end}`;
+				pwd = `${start}…${end}`;
 			} else {
 				pwd = pwd.slice(0, Math.max(1, width));
 			}
@@ -269,7 +269,7 @@ export class FooterComponent implements Component {
 		if (statsLeftWidth > width) {
 			// Truncate statsLeft to fit width (no room for right side)
 			const plainStatsLeft = statsLeft.replace(/\x1b\[[0-9;]*m/g, "");
-			statsLeft = `${plainStatsLeft.substring(0, width - 3)}...`;
+			statsLeft = `${plainStatsLeft.substring(0, width - 1)}…`;
 			statsLeftWidth = visibleWidth(statsLeft);
 		}
 

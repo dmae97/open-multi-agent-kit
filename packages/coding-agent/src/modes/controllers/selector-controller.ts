@@ -547,7 +547,7 @@ export class SelectorController {
 					done();
 
 					if (mode === "login") {
-						this.ctx.showStatus(`Logging in to ${providerId}...`);
+						this.ctx.showStatus(`Logging in to ${providerId}…`);
 
 						try {
 							await this.ctx.session.modelRegistry.authStorage.login(providerId as OAuthProvider, {

@@ -270,7 +270,7 @@ function extractToolArgsPreview(args: Record<string, unknown>): string {
 	for (const key of previewKeys) {
 		if (args[key] && typeof args[key] === "string") {
 			const value = args[key] as string;
-			return value.length > 60 ? `${value.slice(0, 57)}...` : value;
+			return value.length > 60 ? `${value.slice(0, 59)}…` : value;
 		}
 	}
 

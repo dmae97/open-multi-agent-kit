@@ -145,8 +145,11 @@ export const handleOsv: SpecialHandler = async (
 				if (affected.versions?.length) {
 					const versions =
 						affected.versions.length > 10
-							? `${affected.versions.slice(0, 10).join(", ")}... (${affected.versions.length} total)`
+							? `${affected.versions.slice(0, 10).join(", ")}… (${affected.versions.length} total)`
 							: affected.versions.join(", ");
+					affected.versions.length > 10
+						? `${affected.versions.slice(0, 10).join(", ")}… (${affected.versions.length} total)`
+						: affected.versions.join(", ");
 					md += `- **Versions:** ${versions}\n`;
 				}
 

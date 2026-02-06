@@ -307,5 +307,5 @@ Call the missing tool(s) now.
 
 function truncateToolArg(value: string): string {
 	if (value.length <= 40) return value;
-	return `${value.slice(0, 37)}...`;
+	return `${value.slice(0, 39)}…`;
 }

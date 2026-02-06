@@ -701,7 +701,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			onConnecting: serverNames => {
 				if (options.hasUI && serverNames.length > 0) {
 					process.stderr.write(
-						chalk.gray(`Connecting to MCP servers: ${serverNames.join(", ")}...
+						chalk.gray(`Connecting to MCP servers: ${serverNames.join(", ")}…
 `),
 					);
 				}
@@ -1076,7 +1076,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			const result = await warmupLspServers(cwd, {
 				onConnecting: serverNames => {
 					if (options.hasUI && serverNames.length > 0) {
-						process.stderr.write(chalk.gray(`Starting LSP servers: ${serverNames.join(", ")}...\n`));
+						process.stderr.write(chalk.gray(`Starting LSP servers: ${serverNames.join(", ")}…\n`));
 					}
 				},
 			});

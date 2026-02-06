@@ -84,7 +84,7 @@ export async function generateSessionTitle(
 
 	// Truncate message if too long
 	const truncatedMessage =
-		firstMessage.length > MAX_INPUT_CHARS ? `${firstMessage.slice(0, MAX_INPUT_CHARS)}...` : firstMessage;
+		firstMessage.length > MAX_INPUT_CHARS ? `${firstMessage.slice(0, MAX_INPUT_CHARS)}…` : firstMessage;
 	const userMessage = `<user-message>\n${truncatedMessage}\n</user-message>`;
 
 	for (const model of candidates) {

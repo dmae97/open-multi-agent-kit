@@ -65,7 +65,7 @@ const cargoArgs = ["build"];
 if (!isDev) cargoArgs.push("--release");
 if (crossTarget) cargoArgs.push("--target", crossTarget);
 
-console.log(`Building pi-natives for ${targetPlatform}-${targetArch}${isDev ? " (debug)" : ""}...`);
+console.log(`Building pi-natives for ${targetPlatform}-${targetArch}${isDev ? " (debug)" : ""}…`);
 const buildResult = await $`cargo ${cargoArgs}`.cwd(rustDir).nothrow();
 if (buildResult.exitCode !== 0) {
 	const stderr =

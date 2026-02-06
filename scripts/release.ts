@@ -208,7 +208,7 @@ async function cmdRelease(version: string): Promise<void> {
 	console.log(`  Version ${version} > ${latestTag}\n`);
 
 	// 2. Update package versions
-	console.log(`Updating package versions to ${version}...`);
+	console.log(`Updating package versions to ${version}…`);
 	const pkgJsonPaths = await Array.fromAsync(packageJsonGlob.scan("."));
 
 	// Filter out private packages
@@ -233,7 +233,7 @@ async function cmdRelease(version: string): Promise<void> {
 	console.log();
 
 	// 3. Update Rust workspace version
-	console.log(`Updating Rust workspace version to ${version}...`);
+	console.log(`Updating Rust workspace version to ${version}…`);
 	await $`sd '^version = "[^"]+"' ${`version = "${version}"`} Cargo.toml`;
 
 	// Verify

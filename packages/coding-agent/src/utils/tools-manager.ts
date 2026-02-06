@@ -306,7 +306,7 @@ export async function ensureTool(tool: ToolName, silentOrOptions?: EnsureToolOpt
 		if (!silent) {
 			logger.debug(`${pythonConfig.name} not found. Installing via uv/pip...`);
 		}
-		notify?.(`Installing ${pythonConfig.name}...`);
+		notify?.(`Installing ${pythonConfig.name}…`);
 		const success = await installPythonPackage(pythonConfig.package, signal);
 		if (success) {
 			// Re-check for the command after installation
@@ -331,7 +331,7 @@ export async function ensureTool(tool: ToolName, silentOrOptions?: EnsureToolOpt
 	if (!silent) {
 		logger.debug(`${config.name} not found. Downloading...`);
 	}
-	notify?.(`Downloading ${config.name}...`);
+	notify?.(`Downloading ${config.name}…`);
 
 	try {
 		const path = await downloadTool(tool, signal);
