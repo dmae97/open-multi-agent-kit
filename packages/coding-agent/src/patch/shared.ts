@@ -14,6 +14,7 @@ import {
 	formatStatusIcon,
 	getDiffStats,
 	PREVIEW_LIMITS,
+	replaceTabs,
 	shortenPath,
 	ToolUIKit,
 	truncateDiffByHunk,
@@ -181,7 +182,7 @@ export const editToolRenderer = {
 			const maxLines = 6;
 			text += "\n\n";
 			for (const line of previewLines.slice(0, maxLines)) {
-				text += `${uiTheme.fg("toolOutput", ui.truncate(line, 80))}\n`;
+				text += `${uiTheme.fg("toolOutput", ui.truncate(replaceTabs(line), 80))}\n`;
 			}
 			if (previewLines.length > maxLines) {
 				text += uiTheme.fg("dim", `… ${previewLines.length - maxLines} more lines`);
@@ -191,7 +192,7 @@ export const editToolRenderer = {
 			const maxLines = 6;
 			text += "\n\n";
 			for (const line of previewLines.slice(0, maxLines)) {
-				text += `${uiTheme.fg("toolOutput", ui.truncate(line, 80))}\n`;
+				text += `${uiTheme.fg("toolOutput", ui.truncate(replaceTabs(line), 80))}\n`;
 			}
 			if (previewLines.length > maxLines) {
 				text += uiTheme.fg("dim", `… ${previewLines.length - maxLines} more lines`);

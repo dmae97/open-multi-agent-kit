@@ -23,6 +23,7 @@ import {
 	formatExpandHint,
 	formatMoreItems,
 	formatStatusIcon,
+	replaceTabs,
 	shortenPath,
 	ToolUIKit,
 } from "./render-utils";
@@ -160,7 +161,7 @@ function formatStreamingContent(content: string, uiTheme: Theme, ui: ToolUIKit):
 		text += uiTheme.fg("dim", `… (${hidden} earlier lines)\n`);
 	}
 	for (const line of displayLines) {
-		text += `${uiTheme.fg("toolOutput", ui.truncate(line, 80))}\n`;
+		text += `${uiTheme.fg("toolOutput", ui.truncate(replaceTabs(line), 80))}\n`;
 	}
 	text += uiTheme.fg("dim", `… (streaming)`);
 	return text;
@@ -175,7 +176,7 @@ function renderContentPreview(content: string, expanded: boolean, uiTheme: Theme
 
 	let text = "\n\n";
 	for (const line of displayLines) {
-		text += `${uiTheme.fg("toolOutput", ui.truncate(line, 80))}\n`;
+		text += `${uiTheme.fg("toolOutput", ui.truncate(replaceTabs(line), 80))}\n`;
 	}
 	if (!expanded && hidden > 0) {
 		const hint = formatExpandHint(uiTheme, expanded, hidden > 0);

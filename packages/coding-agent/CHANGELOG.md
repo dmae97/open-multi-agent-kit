@@ -1,8 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Fixed
 
+- Fixed tab character rendering in tool output previews and code cell displays, ensuring tabs are properly converted to spaces for consistent terminal display
 - Fixed `newSession()` to properly await session manager operations, ensuring new session is fully initialized before returning
 - Fixed session formatting to use XML structure for tools and tool invocations instead of YAML, improving compatibility with structured output parsing
 

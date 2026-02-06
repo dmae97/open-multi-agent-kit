@@ -90,7 +90,7 @@ export function renderCodeCell(options: CodeCellOptions, theme: Theme): string[]
 		const maxLines = expanded ? rawLines.length : Math.min(rawLines.length, outputMaxLines);
 		const displayLines = rawLines
 			.slice(0, maxLines)
-			.map(line => (line.includes("\x1b[") ? line : theme.fg("toolOutput", line)));
+			.map(line => (line.includes("\x1b[") ? replaceTabs(line) : theme.fg("toolOutput", replaceTabs(line))));
 		outputLines.push(...displayLines);
 		const remaining = rawLines.length - maxLines;
 		if (remaining > 0) {
