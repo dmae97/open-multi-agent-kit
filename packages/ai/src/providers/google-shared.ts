@@ -166,7 +166,7 @@ ${params}
 					const part: Part = {
 						functionCall: {
 							name: block.name,
-							args: block.arguments,
+							args: block.arguments ?? {},
 							...(requiresToolCallId(model.id) ? { id: block.id } : {}),
 						},
 					};
