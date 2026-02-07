@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [11.7.0] - 2026-02-07
 ### Changed
 
 - Enhanced error messages for failed Python cells to include full combined output context instead of just the error message
