@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 
+import * as os from "node:os";
+import * as path from "node:path";
 import { join } from "node:path";
 import { $env } from "@oh-my-pi/pi-utils";
 import type { Api, KnownProvider, Model } from "../src/types";
@@ -1091,7 +1093,7 @@ async function generateModels() {
 			input: ["text", "image"],
 			cost: { input: 0.5, output: 3, cacheRead: 0.5, cacheWrite: 0 },
 			contextWindow: 1048576,
-			maxTokens: 65535,
+			maxTokens: 65536,
 		},
 		{
 			id: "claude-sonnet-4-5",
@@ -1130,16 +1132,40 @@ async function generateModels() {
 			maxTokens: 64000,
 		},
 		{
+			id: "claude-opus-4-6-thinking",
+			name: "Claude Opus 4.6 Thinking (Antigravity)",
+			api: "google-gemini-cli",
+			provider: "google-antigravity",
+			baseUrl: ANTIGRAVITY_ENDPOINT,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+			contextWindow: 200000,
+			maxTokens: 64000,
+		},
+		{
 			id: "gpt-oss-120b-medium",
 			name: "GPT-OSS 120B Medium (Antigravity)",
 			api: "google-gemini-cli",
 			provider: "google-antigravity",
 			baseUrl: ANTIGRAVITY_ENDPOINT,
-			reasoning: false,
+			reasoning: true,
 			input: ["text"],
 			cost: { input: 0.09, output: 0.36, cacheRead: 0, cacheWrite: 0 },
 			contextWindow: 131072,
 			maxTokens: 32768,
+		},
+		{
+			id: "gemini-2.5-flash-thinking",
+			name: "Gemini 2.5 Flash Thinking (Antigravity)",
+			api: "google-gemini-cli",
+			provider: "google-antigravity",
+			baseUrl: ANTIGRAVITY_ENDPOINT,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 1048576,
+			maxTokens: 65535,
 		},
 	];
 	allModels.push(...antigravityModels);

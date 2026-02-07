@@ -1,6 +1,31 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added Claude Opus 4.6 Thinking model for Antigravity provider
+- Added Gemini 2.5 Flash, Gemini 2.5 Flash Thinking, and Gemini 2.5 Pro models for Antigravity provider
+- Added Pony Alpha model via OpenRouter
+
+### Changed
+
+- Updated Claude Opus 4.6 context window from 200,000 to 1,000,000 tokens across Bedrock regions
+- Updated Claude Opus 4.6 cache pricing from 1.5/18.75 to 0.5/6.25 for EU and US regions
+- Updated Antigravity model pricing to free tier (0 cost) for Claude Opus 4.5 Thinking, Claude Sonnet 4.5 Thinking, Gemini 3 Flash, Gemini 3 Pro variants, and GPT-OSS 120B Medium
+- Updated GPT-OSS 120B Medium reasoning capability from false to true
+- Updated Gemini 3 Flash max tokens from 65,535 to 65,536
+- Updated Claude Opus 4.5 Thinking display name formatting to include parentheses
+- Updated various model pricing and context window parameters across OpenRouter and other providers
+- Removed Claude Opus 4.6 20260205 model from Anthropic provider
+
+### Fixed
+
+- Fixed Claude Opus 4.6 model ID format by removing version suffix (:0) in Bedrock configurations
+- Fixed Llama 3.1 70B Instruct pricing and context window parameters
+- Fixed Mistral model pricing and cache read costs
+- Fixed DeepSeek and other model pricing inconsistencies
+- Fixed Qwen model pricing and token limits
+- Fixed GLM model pricing and context window specifications
 
 ## [11.6.0] - 2026-02-07
 
