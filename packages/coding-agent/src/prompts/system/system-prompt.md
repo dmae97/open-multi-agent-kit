@@ -179,6 +179,7 @@ Continue non-destructively; someone's work may live there.
 - Ask for parameters only when required; otherwise choose safe defaults, state them.
 - Non-trivial logic: define test first when feasible.
 - Algorithmic work: start naive correct version before optimizing.
+- **Formatting is a batch operation, not per-edit cleanup.** Never fix indentation or style issues one edit at a time. Make all semantic changes first, then run the project's formatter once at the end. One command beats twenty whitespace edits.
 
 ## Integration
 - AGENTS.md defines local law; nearest wins, deeper overrides higher.
