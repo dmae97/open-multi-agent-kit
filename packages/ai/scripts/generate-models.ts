@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 
-import * as os from "node:os";
-import * as path from "node:path";
 import { join } from "node:path";
 import { $env } from "@oh-my-pi/pi-utils";
+import { CliAuthStorage } from "../src/storage";
+import { getOAuthApiKey } from "../src/utils/oauth";
 import type { Api, KnownProvider, Model } from "../src/types";
 
 const packageRoot = join(import.meta.dir, "..");
@@ -777,6 +777,267 @@ async function loadModelsDevData(): Promise<Model[]> {
 	}
 }
 
+const ANTIGRAVITY_ENDPOINT = "https://daily-cloudcode-pa.sandbox.googleapis.com";
+
+interface AntigravityApiModel {
+	displayName?: string;
+	supportsImages?: boolean;
+	supportsThinking?: boolean;
+	thinkingBudget?: number;
+	recommended?: boolean;
+	maxTokens?: number;
+	maxOutputTokens?: number;
+	model?: string;
+	apiProvider?: string;
+	modelProvider?: string;
+	isInternal?: boolean;
+	supportsVideo?: boolean;
+}
+
+interface AntigravityApiResponse {
+	models: Record<string, AntigravityApiModel>;
+	agentModelSorts?: Array<{
+		groups?: Array<{ modelIds?: string[] }>;
+	}>;
+}
+
+/**
+ * Try to get a fresh Antigravity access token from agent.db credentials.
+ */
+async function getAntigravityToken(): Promise<{ token: string; storage: CliAuthStorage } | null> {
+	try {
+		const storage = await CliAuthStorage.create();
+		const creds = storage.getOAuth("google-antigravity");
+		if (!creds) {
+			storage.close();
+			return null;
+		}
+
+		const result = await getOAuthApiKey("google-antigravity", { "google-antigravity": creds });
+		if (!result) {
+			storage.close();
+			return null;
+		}
+
+		// Save refreshed credentials back
+		storage.saveOAuth("google-antigravity", result.newCredentials);
+		return { token: result.newCredentials.access, storage };
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Fetch available Antigravity models from the API.
+ * Falls back to hardcoded models if no auth is available.
+ */
+async function fetchAntigravityModels(): Promise<Model<"google-gemini-cli">[]> {
+	const auth = await getAntigravityToken();
+	if (auth) {
+		try {
+			console.log("Fetching models from Antigravity API...");
+			const response = await fetch(`${ANTIGRAVITY_ENDPOINT}/v1internal:fetchAvailableModels`, {
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${auth.token}`,
+					"Content-Type": "application/json",
+					"User-Agent": "antigravity/1.107.0 linux/amd64",
+				},
+				body: JSON.stringify({ project: "" }),
+			});
+
+			if (!response.ok) {
+				console.warn(`Antigravity API returned ${response.status}, using fallback models`);
+				return getAntigravityFallbackModels();
+			}
+
+			const data = (await response.json()) as AntigravityApiResponse;
+
+			// Collect recommended agent model IDs
+			const recommendedIds = new Set<string>();
+			for (const sort of data.agentModelSorts ?? []) {
+				for (const group of sort.groups ?? []) {
+					for (const id of group.modelIds ?? []) {
+						recommendedIds.add(id);
+					}
+				}
+			}
+
+			const models: Model<"google-gemini-cli">[] = [];
+			for (const [modelId, m] of Object.entries(data.models)) {
+				// Skip internal/non-recommended models (tab completion, embeddings, etc.)
+				if (m.isInternal) continue;
+				if (!m.recommended && !recommendedIds.has(modelId)) continue;
+
+				const supportsImages = m.supportsImages === true;
+				const reasoning = m.supportsThinking === true;
+
+				models.push({
+					id: modelId,
+					name: m.displayName ? `${m.displayName} (Antigravity)` : modelId,
+					api: "google-gemini-cli",
+					provider: "google-antigravity",
+					baseUrl: ANTIGRAVITY_ENDPOINT,
+					reasoning,
+					input: supportsImages ? ["text", "image"] : ["text"],
+					// Antigravity is free (quota-based), costs are for tracking only
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+					contextWindow: m.maxTokens || 200000,
+					maxTokens: m.maxOutputTokens || 64000,
+				});
+			}
+
+			console.log(`Fetched ${models.length} models from Antigravity API`);
+			return models;
+		} catch (error) {
+			console.error("Failed to fetch Antigravity models:", error);
+			return getAntigravityFallbackModels();
+		} finally {
+			auth.storage.close();
+		}
+	}
+
+	console.log("No Antigravity credentials found, using fallback models");
+	return getAntigravityFallbackModels();
+}
+
+function getAntigravityFallbackModels(): Model<"google-gemini-cli">[] {
+	return [
+		{
+			id: "gemini-3-pro-high",
+			name: "Gemini 3 Pro High (Antigravity)",
+			api: "google-gemini-cli",
+			provider: "google-antigravity",
+			baseUrl: ANTIGRAVITY_ENDPOINT,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 1048576,
+			maxTokens: 65535,
+		},
+		{
+			id: "gemini-3-pro-low",
+			name: "Gemini 3 Pro Low (Antigravity)",
+			api: "google-gemini-cli",
+			provider: "google-antigravity",
+			baseUrl: ANTIGRAVITY_ENDPOINT,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 1048576,
+			maxTokens: 65535,
+		},
+		{
+			id: "gemini-3-flash",
+			name: "Gemini 3 Flash (Antigravity)",
+			api: "google-gemini-cli",
+			provider: "google-antigravity",
+			baseUrl: ANTIGRAVITY_ENDPOINT,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 1048576,
+			maxTokens: 65536,
+		},
+		{
+			id: "claude-sonnet-4-5",
+			name: "Claude Sonnet 4.5 (Antigravity)",
+			api: "google-gemini-cli",
+			provider: "google-antigravity",
+			baseUrl: ANTIGRAVITY_ENDPOINT,
+			reasoning: false,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 200000,
+			maxTokens: 64000,
+		},
+		{
+			id: "claude-sonnet-4-5-thinking",
+			name: "Claude Sonnet 4.5 Thinking (Antigravity)",
+			api: "google-gemini-cli",
+			provider: "google-antigravity",
+			baseUrl: ANTIGRAVITY_ENDPOINT,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 200000,
+			maxTokens: 64000,
+		},
+		{
+			id: "claude-opus-4-5-thinking",
+			name: "Claude Opus 4.5 Thinking (Antigravity)",
+			api: "google-gemini-cli",
+			provider: "google-antigravity",
+			baseUrl: ANTIGRAVITY_ENDPOINT,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 200000,
+			maxTokens: 64000,
+		},
+		{
+			id: "claude-opus-4-6-thinking",
+			name: "Claude Opus 4.6 Thinking (Antigravity)",
+			api: "google-gemini-cli",
+			provider: "google-antigravity",
+			baseUrl: ANTIGRAVITY_ENDPOINT,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 200000,
+			maxTokens: 64000,
+		},
+		{
+			id: "gpt-oss-120b-medium",
+			name: "GPT-OSS 120B Medium (Antigravity)",
+			api: "google-gemini-cli",
+			provider: "google-antigravity",
+			baseUrl: ANTIGRAVITY_ENDPOINT,
+			reasoning: true,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 131072,
+			maxTokens: 32768,
+		},
+		{
+			id: "gemini-2.5-pro",
+			name: "Gemini 2.5 Pro (Antigravity)",
+			api: "google-gemini-cli",
+			provider: "google-antigravity",
+			baseUrl: ANTIGRAVITY_ENDPOINT,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 1048576,
+			maxTokens: 65535,
+		},
+		{
+			id: "gemini-2.5-flash",
+			name: "Gemini 2.5 Flash (Antigravity)",
+			api: "google-gemini-cli",
+			provider: "google-antigravity",
+			baseUrl: ANTIGRAVITY_ENDPOINT,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 1048576,
+			maxTokens: 65535,
+		},
+		{
+			id: "gemini-2.5-flash-thinking",
+			name: "Gemini 2.5 Flash Thinking (Antigravity)",
+			api: "google-gemini-cli",
+			provider: "google-antigravity",
+			baseUrl: ANTIGRAVITY_ENDPOINT,
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 1048576,
+			maxTokens: 65535,
+		},
+	];
+}
+
 async function generateModels() {
 	// Fetch models from both sources
 	// models.dev: Anthropic, Google, OpenAI, Groq, Cerebras
@@ -1054,120 +1315,8 @@ async function generateModels() {
 	allModels.push(...cloudCodeAssistModels);
 
 	// Antigravity models (Gemini 3, Claude, GPT-OSS via Google Cloud)
-	// Uses sandbox endpoint and different OAuth credentials for access to additional models
-	const ANTIGRAVITY_ENDPOINT = "https://daily-cloudcode-pa.sandbox.googleapis.com";
-	const antigravityModels: Model<"google-gemini-cli">[] = [
-		{
-			id: "gemini-3-pro-high",
-			name: "Gemini 3 Pro High (Antigravity)",
-			api: "google-gemini-cli",
-			provider: "google-antigravity",
-			baseUrl: ANTIGRAVITY_ENDPOINT,
-			reasoning: true,
-			input: ["text", "image"],
-			// the Model type doesn't seem to support having extended-context costs, so I'm just using the pricing for <200k input
-			cost: { input: 2, output: 12, cacheRead: 0.2, cacheWrite: 2.375 },
-			contextWindow: 1048576,
-			maxTokens: 65535,
-		},
-		{
-			id: "gemini-3-pro-low",
-			name: "Gemini 3 Pro Low (Antigravity)",
-			api: "google-gemini-cli",
-			provider: "google-antigravity",
-			baseUrl: ANTIGRAVITY_ENDPOINT,
-			reasoning: true,
-			input: ["text", "image"],
-			// the Model type doesn't seem to support having extended-context costs, so I'm just using the pricing for <200k input
-			cost: { input: 2, output: 12, cacheRead: 0.2, cacheWrite: 2.375 },
-			contextWindow: 1048576,
-			maxTokens: 65535,
-		},
-		{
-			id: "gemini-3-flash",
-			name: "Gemini 3 Flash (Antigravity)",
-			api: "google-gemini-cli",
-			provider: "google-antigravity",
-			baseUrl: ANTIGRAVITY_ENDPOINT,
-			reasoning: true,
-			input: ["text", "image"],
-			cost: { input: 0.5, output: 3, cacheRead: 0.5, cacheWrite: 0 },
-			contextWindow: 1048576,
-			maxTokens: 65536,
-		},
-		{
-			id: "claude-sonnet-4-5",
-			name: "Claude Sonnet 4.5 (Antigravity)",
-			api: "google-gemini-cli",
-			provider: "google-antigravity",
-			baseUrl: ANTIGRAVITY_ENDPOINT,
-			reasoning: false,
-			input: ["text", "image"],
-			cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-			contextWindow: 200000,
-			maxTokens: 64000,
-		},
-		{
-			id: "claude-sonnet-4-5-thinking",
-			name: "Claude Sonnet 4.5 Thinking (Antigravity)",
-			api: "google-gemini-cli",
-			provider: "google-antigravity",
-			baseUrl: ANTIGRAVITY_ENDPOINT,
-			reasoning: true,
-			input: ["text", "image"],
-			cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-			contextWindow: 200000,
-			maxTokens: 64000,
-		},
-		{
-			id: "claude-opus-4-5-thinking",
-			name: "Claude Opus 4.5 Thinking (Antigravity)",
-			api: "google-gemini-cli",
-			provider: "google-antigravity",
-			baseUrl: ANTIGRAVITY_ENDPOINT,
-			reasoning: true,
-			input: ["text", "image"],
-			cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
-			contextWindow: 200000,
-			maxTokens: 64000,
-		},
-		{
-			id: "claude-opus-4-6-thinking",
-			name: "Claude Opus 4.6 Thinking (Antigravity)",
-			api: "google-gemini-cli",
-			provider: "google-antigravity",
-			baseUrl: ANTIGRAVITY_ENDPOINT,
-			reasoning: true,
-			input: ["text", "image"],
-			cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
-			contextWindow: 200000,
-			maxTokens: 64000,
-		},
-		{
-			id: "gpt-oss-120b-medium",
-			name: "GPT-OSS 120B Medium (Antigravity)",
-			api: "google-gemini-cli",
-			provider: "google-antigravity",
-			baseUrl: ANTIGRAVITY_ENDPOINT,
-			reasoning: true,
-			input: ["text"],
-			cost: { input: 0.09, output: 0.36, cacheRead: 0, cacheWrite: 0 },
-			contextWindow: 131072,
-			maxTokens: 32768,
-		},
-		{
-			id: "gemini-2.5-flash-thinking",
-			name: "Gemini 2.5 Flash Thinking (Antigravity)",
-			api: "google-gemini-cli",
-			provider: "google-antigravity",
-			baseUrl: ANTIGRAVITY_ENDPOINT,
-			reasoning: true,
-			input: ["text", "image"],
-			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-			contextWindow: 1048576,
-			maxTokens: 65535,
-		},
-	];
+	// Fetched from API if credentials available, otherwise uses hardcoded fallback
+	const antigravityModels = await fetchAntigravityModels();
 	allModels.push(...antigravityModels);
 
 	const VERTEX_BASE_URL = "https://{location}-aiplatform.googleapis.com";

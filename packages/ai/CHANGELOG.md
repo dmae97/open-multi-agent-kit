@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added Claude Opus 4.6 Thinking model for Antigravity provider
@@ -9,6 +10,8 @@
 
 ### Changed
 
+- Updated Antigravity models to use free tier pricing (0 cost) across all models
+- Changed Antigravity model fetching to dynamically load from API when credentials are available, with hardcoded fallback models
 - Updated Claude Opus 4.6 context window from 200,000 to 1,000,000 tokens across Bedrock regions
 - Updated Claude Opus 4.6 cache pricing from 1.5/18.75 to 0.5/6.25 for EU and US regions
 - Updated Antigravity model pricing to free tier (0 cost) for Claude Opus 4.5 Thinking, Claude Sonnet 4.5 Thinking, Gemini 3 Flash, Gemini 3 Pro variants, and GPT-OSS 120B Medium
