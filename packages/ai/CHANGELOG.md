@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [11.6.0] - 2026-02-07
+
 ### Added
 
 - Added Bedrock cache retention support with `PI_CACHE_RETENTION` env var and per-request `cacheRetention` option

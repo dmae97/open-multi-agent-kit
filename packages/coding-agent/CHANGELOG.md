@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [11.6.0] - 2026-02-07
+
 ### Fixed
 
 - Fixed task tool renderer not sanitizing tabs, causing visual holes in TUI output

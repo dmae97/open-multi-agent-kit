@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [11.6.0] - 2026-02-07
+
 ### Added
 
 - Added `hasQueuedMessages()` method to check for pending steering/follow-up messages
