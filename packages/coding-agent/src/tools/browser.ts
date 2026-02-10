@@ -1,4 +1,4 @@
-import { tmpdir } from "node:os";
+import * as os from "node:os";
 import * as path from "node:path";
 import { Readability } from "@mozilla/readability";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
@@ -1289,7 +1289,7 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 						{ maxBytes: 0.75 * 1024 * 1024 },
 					);
 					const dimensionNote = formatDimensionNote(resized);
-					const tempFile = path.join(tmpdir(), `omp-sshots-${Snowflake.next()}.png`);
+					const tempFile = path.join(os.tmpdir(), `omp-sshots-${Snowflake.next()}.png`);
 					await Bun.write(tempFile, resized.buffer);
 					details.screenshotPath = tempFile;
 					details.mimeType = resized.mimeType;

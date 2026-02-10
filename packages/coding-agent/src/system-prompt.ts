@@ -4,9 +4,8 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import { getSystemInfo as getNativeSystemInfo, type SystemInfo } from "@oh-my-pi/pi-natives";
-import { $env } from "@oh-my-pi/pi-utils";
+import { $env, logger } from "@oh-my-pi/pi-utils";
 import { $ } from "bun";
-import chalk from "chalk";
 import { contextFileCapability } from "./capability/context-file";
 import { systemPromptCapability } from "./capability/system-prompt";
 import { renderPromptTemplate } from "./config/prompt-templates";
@@ -355,7 +354,7 @@ export async function resolvePromptInput(input: string | undefined, description:
 		try {
 			return await file.text();
 		} catch (error) {
-			console.error(chalk.yellow(`Warning: Could not read ${description} file ${input}: ${error}`));
+			logger.warn(`Could not read ${description} file`, { path: input, error: String(error) });
 			return input;
 		}
 	}

@@ -34,6 +34,14 @@ import { renderStatusLine } from "../../tui";
 import { convertToPng } from "../../utils/image-convert";
 import { renderDiff } from "./diff";
 
+function ensureInvalidate(component: unknown): Component {
+	const c = component as { render: Component["render"]; invalidate?: () => void };
+	if (!c.invalidate) {
+		c.invalidate = () => {};
+	}
+	return c as Component;
+}
+
 export interface ToolExecutionOptions {
 	showImages?: boolean; // default: true (only used if terminal supports images)
 	editFuzzyThreshold?: number;
@@ -353,12 +361,7 @@ export class ToolExecutionComponent extends Container {
 				try {
 					const callComponent = tool.renderCall(this.#args, theme);
 					if (callComponent) {
-						// Ensure component has invalidate() method for Component interface
-						const component = callComponent as any;
-						if (!component.invalidate) {
-							component.invalidate = () => {};
-						}
-						this.#contentBox.addChild(component);
+						this.#contentBox.addChild(ensureInvalidate(callComponent));
 					}
 				} catch (err) {
 					logger.warn("Tool renderer failed", { tool: this.#toolName, error: String(err) });
@@ -390,12 +393,7 @@ export class ToolExecutionComponent extends Container {
 						this.#args,
 					);
 					if (resultComponent) {
-						// Ensure component has invalidate() method for Component interface
-						const component = resultComponent as any;
-						if (!component.invalidate) {
-							component.invalidate = () => {};
-						}
-						this.#contentBox.addChild(component);
+						this.#contentBox.addChild(ensureInvalidate(resultComponent));
 					}
 				} catch (err) {
 					logger.warn("Tool renderer failed", { tool: this.#toolName, error: String(err) });
@@ -425,12 +423,7 @@ export class ToolExecutionComponent extends Container {
 				try {
 					const callComponent = renderer.renderCall(this.#args, theme, this.#renderState);
 					if (callComponent) {
-						// Ensure component has invalidate() method for Component interface
-						const component = callComponent as any;
-						if (!component.invalidate) {
-							component.invalidate = () => {};
-						}
-						this.#contentBox.addChild(component);
+						this.#contentBox.addChild(ensureInvalidate(callComponent));
 					}
 				} catch (err) {
 					logger.warn("Tool renderer failed", { tool: this.#toolName, error: String(err) });
@@ -457,12 +450,7 @@ export class ToolExecutionComponent extends Container {
 						this.#args, // Pass args for tools that need them
 					);
 					if (resultComponent) {
-						// Ensure component has invalidate() method for Component interface
-						const component = resultComponent as any;
-						if (!component.invalidate) {
-							component.invalidate = () => {};
-						}
-						this.#contentBox.addChild(component);
+						this.#contentBox.addChild(ensureInvalidate(resultComponent));
 					}
 				} catch (err) {
 					logger.warn("Tool renderer failed", { tool: this.#toolName, error: String(err) });

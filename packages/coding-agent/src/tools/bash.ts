@@ -1,8 +1,9 @@
-import type * as fs from "node:fs";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
+import { isEnoent } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import { type BashExecutorOptions, executeBash } from "../exec/bash-executor";
@@ -90,9 +91,12 @@ export class BashTool implements AgentTool<typeof bashSchema, BashToolDetails> {
 		const commandCwd = cwd ? resolveToCwd(cwd, this.session.cwd) : this.session.cwd;
 		let cwdStat: fs.Stats;
 		try {
-			cwdStat = await Bun.file(commandCwd).stat();
-		} catch {
-			throw new ToolError(`Working directory does not exist: ${commandCwd}`);
+			cwdStat = await fs.promises.stat(commandCwd);
+		} catch (err) {
+			if (isEnoent(err)) {
+				throw new ToolError(`Working directory does not exist: ${commandCwd}`);
+			}
+			throw err;
 		}
 		if (!cwdStat.isDirectory()) {
 			throw new ToolError(`Working directory is not a directory: ${commandCwd}`);

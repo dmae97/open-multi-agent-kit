@@ -74,7 +74,7 @@ export { type ExitPlanModeDetails, ExitPlanModeTool } from "./exit-plan-mode";
 export { FetchTool, type FetchToolDetails } from "./fetch";
 export { type FindOperations, FindTool, type FindToolDetails, type FindToolInput, type FindToolOptions } from "./find";
 export { setPreferredImageProvider } from "./gemini-image";
-export { type GrepOperations, GrepTool, type GrepToolDetails, type GrepToolInput, type GrepToolOptions } from "./grep";
+export { GrepTool, type GrepToolDetails, type GrepToolInput } from "./grep";
 export { NotebookTool, type NotebookToolDetails } from "./notebook";
 export { PythonTool, type PythonToolDetails, type PythonToolOptions } from "./python";
 export { ReadTool, type ReadToolDetails, type ReadToolInput } from "./read";

@@ -219,8 +219,8 @@ export class DeferredMCPTool implements CustomTool<TSchema, MCPToolDetails> {
 	readonly mcpToolName: string;
 	/** Server name */
 	readonly mcpServerName: string;
-	private readonly fallbackProvider: string | undefined;
-	private readonly fallbackProviderName: string | undefined;
+	readonly #fallbackProvider: string | undefined;
+	readonly #fallbackProviderName: string | undefined;
 
 	/** Create DeferredMCPTool instances for all tools from an MCP server */
 	static fromTools(
@@ -244,8 +244,8 @@ export class DeferredMCPTool implements CustomTool<TSchema, MCPToolDetails> {
 		this.parameters = convertSchema(tool.inputSchema);
 		this.mcpToolName = tool.name;
 		this.mcpServerName = serverName;
-		this.fallbackProvider = source?.provider;
-		this.fallbackProviderName = source?.providerName;
+		this.#fallbackProvider = source?.provider;
+		this.#fallbackProviderName = source?.providerName;
 	}
 
 	renderCall(args: unknown, theme: Theme) {
@@ -273,8 +273,8 @@ export class DeferredMCPTool implements CustomTool<TSchema, MCPToolDetails> {
 				mcpToolName: this.tool.name,
 				isError: result.isError,
 				rawContent: result.content,
-				provider: connection._source?.provider ?? this.fallbackProvider,
-				providerName: connection._source?.providerName ?? this.fallbackProviderName,
+				provider: connection._source?.provider ?? this.#fallbackProvider,
+				providerName: connection._source?.providerName ?? this.#fallbackProviderName,
 			};
 
 			if (result.isError) {
@@ -296,8 +296,8 @@ export class DeferredMCPTool implements CustomTool<TSchema, MCPToolDetails> {
 					serverName: this.serverName,
 					mcpToolName: this.tool.name,
 					isError: true,
-					provider: this.fallbackProvider,
-					providerName: this.fallbackProviderName,
+					provider: this.#fallbackProvider,
+					providerName: this.#fallbackProviderName,
 				},
 			};
 		}

@@ -1,6 +1,20 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Replaced `setTimeout` with `Bun.sleep()` for improved performance in file lock retry logic
+- Refactored component invalidation handling to use dedicated helper function for cleaner code
+- Improved error handling in worktree baseline application to use `isEnoent()` utility instead of file existence checks
+- Updated bash tool to use standard Node.js `fs.promises.stat()` with `isEnoent()` error handling
+- Replaced `tmpdir()` named import with `os` namespace import for consistency
+- Migrated logging from `chalk` and `console.error` to structured logger from `@oh-my-pi/pi-utils`
+
+### Removed
+
+- Removed `GrepOperations` interface from public API exports
+- Removed `GrepToolOptions` interface from public API exports
+- Removed unused `_options` parameter from `GrepTool` constructor
 
 ## [11.8.1] - 2026-02-10
 

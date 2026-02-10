@@ -51,15 +51,6 @@ export interface GrepToolDetails {
 	error?: string;
 }
 
-export interface GrepOperations {
-	isDirectory: (absolutePath: string) => Promise<boolean> | boolean;
-	readFile: (absolutePath: string) => Promise<string> | string;
-}
-
-export interface GrepToolOptions {
-	operations?: GrepOperations;
-}
-
 type GrepParams = Static<typeof grepSchema>;
 
 export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
@@ -68,10 +59,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 	readonly description: string;
 	readonly parameters = grepSchema;
 
-	constructor(
-		private readonly session: ToolSession,
-		_options?: GrepToolOptions,
-	) {
+	constructor(private readonly session: ToolSession) {
 		this.description = renderPromptTemplate(grepDescription);
 	}
 

@@ -71,47 +71,35 @@ function normalizeModelPatterns(value: string | string[] | undefined): string[] 
 }
 
 function withAbortTimeout<T>(promise: Promise<T>, timeoutMs: number, signal?: AbortSignal): Promise<T> {
-	return new Promise((resolve, reject) => {
-		let settled = false;
-		const timeoutId = setTimeout(() => {
-			if (settled) return;
-			settled = true;
-			reject(new Error(`MCP tool call timed out after ${timeoutMs}ms`));
-		}, timeoutMs);
+	if (signal?.aborted) {
+		return Promise.reject(new ToolAbortError());
+	}
 
-		const onAbort = () => {
-			if (settled) return;
-			settled = true;
-			clearTimeout(timeoutId);
-			reject(new ToolAbortError());
-		};
+	const { promise: wrappedPromise, resolve, reject } = Promise.withResolvers<T>();
+	let settled = false;
+	const timeoutId = setTimeout(() => {
+		if (settled) return;
+		settled = true;
+		reject(new Error(`MCP tool call timed out after ${timeoutMs}ms`));
+	}, timeoutMs);
 
-		if (signal) {
-			if (signal.aborted) {
-				clearTimeout(timeoutId);
-				reject(new ToolAbortError());
-				return;
-			}
-			signal.addEventListener("abort", onAbort, { once: true });
-		}
+	const onAbort = () => {
+		if (settled) return;
+		settled = true;
+		clearTimeout(timeoutId);
+		reject(new ToolAbortError());
+	};
 
-		promise.then(
-			value => {
-				if (settled) return;
-				settled = true;
-				clearTimeout(timeoutId);
-				if (signal) signal.removeEventListener("abort", onAbort);
-				resolve(value);
-			},
-			error => {
-				if (settled) return;
-				settled = true;
-				clearTimeout(timeoutId);
-				if (signal) signal.removeEventListener("abort", onAbort);
-				reject(error);
-			},
-		);
+	if (signal) {
+		signal.addEventListener("abort", onAbort, { once: true });
+	}
+
+	promise.then(resolve, reject).finally(() => {
+		if (signal) signal.removeEventListener("abort", onAbort);
+		clearTimeout(timeoutId);
 	});
+
+	return wrappedPromise;
 }
 
 function getReportFindingKey(value: unknown): string | null {

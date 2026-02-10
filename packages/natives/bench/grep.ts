@@ -29,18 +29,19 @@ for (const c of cases) {
 	const rgDefaultArgs = ["--hidden", "--no-ignore", "--no-ignore-vcs"];
 	const globArg = c.glob ? ["-g", c.glob] : [];
 
-	const runRg = (): Promise<string> =>
-		new Promise((resolve, reject) => {
-			const proc = spawn("rg", ["--json", ...rgDefaultArgs, ...globArg, c.pattern, c.path], {
-				stdio: ["ignore", "pipe", "ignore"],
-			});
-			let stdout = "";
-			proc.stdout.on("data", (data: Buffer) => {
-				stdout += data.toString();
-			});
-			proc.on("close", () => resolve(stdout));
-			proc.on("error", reject);
+	const runRg = (): Promise<string> => {
+		const { promise, resolve, reject } = Promise.withResolvers<string>();
+		const proc = spawn("rg", ["--json", ...rgDefaultArgs, ...globArg, c.pattern, c.path], {
+			stdio: ["ignore", "pipe", "ignore"],
 		});
+		let stdout = "";
+		proc.stdout.on("data", (data: Buffer) => {
+			stdout += data.toString();
+		});
+		proc.on("close", () => resolve(stdout));
+		proc.on("error", reject);
+		return promise;
+	};
 
 	const countMatches = (result: string): number => {
 		const lines = result.split("\n").filter((l) => l.trim());

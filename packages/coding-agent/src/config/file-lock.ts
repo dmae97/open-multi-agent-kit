@@ -101,7 +101,7 @@ async function acquireLock(filePath: string, options: FileLockOptions = {}): Pro
 			continue;
 		}
 
-		await new Promise(resolve => setTimeout(resolve, opts.retryDelayMs));
+		await Bun.sleep(opts.retryDelayMs);
 	}
 
 	throw new Error(`Failed to acquire lock for ${filePath} after ${opts.retries} attempts`);

@@ -1,3 +1,5 @@
+import { logger } from "@oh-my-pi/pi-utils";
+
 export class EventBus {
 	readonly #listeners = new Map<string, Set<(data: unknown) => void>>();
 
@@ -18,7 +20,7 @@ export class EventBus {
 			try {
 				await handler(data);
 			} catch (err) {
-				console.error(`Event handler error (${channel}):`, err);
+				logger.error("Event handler error", { channel, error: String(err) });
 			}
 		};
 		this.#listeners.get(channel)!.add(safeHandler);

@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import path from "node:path";
-import { Snowflake } from "@oh-my-pi/pi-utils";
+import { isEnoent, Snowflake } from "@oh-my-pi/pi-utils";
 import { $ } from "bun";
 
 export interface WorktreeBaseline {
@@ -88,10 +88,13 @@ export async function applyBaseline(worktreeDir: string, baseline: WorktreeBasel
 	for (const entry of baseline.untracked) {
 		const source = path.join(baseline.repoRoot, entry);
 		const destination = path.join(worktreeDir, entry);
-		const exists = await Bun.file(source).exists();
-		if (!exists) continue;
-		await fs.mkdir(path.dirname(destination), { recursive: true });
-		await fs.cp(source, destination, { recursive: true });
+		try {
+			await fs.mkdir(path.dirname(destination), { recursive: true });
+			await fs.cp(source, destination, { recursive: true });
+		} catch (err) {
+			if (isEnoent(err)) continue;
+			throw err;
+		}
 	}
 }
 
