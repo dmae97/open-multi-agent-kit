@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [11.10.1] - 2026-02-10
 ### Changed
 
 - Migrated CLI framework from oclif to lightweight pi-utils CLI runner
