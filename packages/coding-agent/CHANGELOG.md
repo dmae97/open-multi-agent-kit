@@ -1,8 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added subcommand definitions for `/mcp` command with 10 subcommands (add, list, remove, test, reauth, unauth, enable, disable, reload, help) including usage hints for argument completion
+- Added inline hint support for slash commands with simple arguments (`/export [path]`, `/compact [focus instructions]`, `/handoff [focus instructions]`)
+- Added subcommand dropdown completion for `/browser` command (headless, visible modes)
+- Added `SubcommandDef` interface for declarative subcommand definitions with name, description, and usage hints
+- Added `subcommands` and `inlineHint` properties to `BuiltinSlashCommand` interface for enhanced command metadata
+- Added `getArgumentCompletions` and `getInlineHint` functions to materialized slash commands for autocomplete and ghost text hints
 - Added `temperature` setting to control sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)
 - Added temperature option selector in settings UI with preset values (Default, 0, 0.2, 0.5, 0.7, 1)
 

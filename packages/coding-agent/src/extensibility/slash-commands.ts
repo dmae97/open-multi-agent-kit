@@ -1,3 +1,5 @@
+import type { AutocompleteItem } from "@oh-my-pi/pi-tui";
+
 export type SlashCommandSource = "extension" | "prompt" | "skill";
 
 export type SlashCommandLocation = "user" | "project" | "path";
@@ -10,19 +12,102 @@ export interface SlashCommandInfo {
 	path?: string;
 }
 
+/** Declarative subcommand definition for commands like /mcp */
+export interface SubcommandDef {
+	name: string;
+	description: string;
+	/** Usage hint shown as dim ghost text, e.g. "<name> [--scope project|user]" */
+	usage?: string;
+}
+
 export interface BuiltinSlashCommand {
 	name: string;
 	description: string;
+	/** Subcommands for dropdown completion (e.g. /mcp add, /mcp list) */
+	subcommands?: SubcommandDef[];
+	/** Static inline hint when command takes a simple argument (no subcommands) */
+	inlineHint?: string;
 }
 
-export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
+/**
+ * Build getArgumentCompletions from declarative subcommand definitions.
+ * Returns subcommand names filtered by prefix in the dropdown.
+ */
+function buildArgumentCompletions(subcommands: SubcommandDef[]): (prefix: string) => AutocompleteItem[] | null {
+	return (argumentPrefix: string) => {
+		if (argumentPrefix.includes(" ")) return null; // past the subcommand
+		const lower = argumentPrefix.toLowerCase();
+		const matches = subcommands
+			.filter(s => s.name.startsWith(lower))
+			.map(s => ({
+				value: `${s.name} `,
+				label: s.name,
+				description: s.description,
+				hint: s.usage,
+			}));
+		return matches.length > 0 ? matches : null;
+	};
+}
+
+/**
+ * Build getInlineHint from declarative subcommand definitions.
+ * Shows remaining completion + usage as dim ghost text after cursor.
+ */
+function buildSubcommandInlineHint(subcommands: SubcommandDef[]): (argumentText: string) => string | null {
+	return (argumentText: string) => {
+		const trimmed = argumentText.trimStart();
+		const spaceIndex = trimmed.indexOf(" ");
+
+		if (spaceIndex === -1) {
+			// Still typing subcommand name — show remaining chars + usage
+			const prefix = trimmed.toLowerCase();
+			if (prefix.length === 0) return null;
+			const match = subcommands.find(s => s.name.startsWith(prefix));
+			if (!match) return null;
+			const remaining = match.name.slice(prefix.length);
+			return remaining + (match.usage ? ` ${match.usage}` : "");
+		}
+
+		// Subcommand typed — show remaining usage params
+		const subName = trimmed.slice(0, spaceIndex).toLowerCase();
+		const afterSub = trimmed.slice(spaceIndex + 1);
+		const sub = subcommands.find(s => s.name === subName);
+		if (!sub?.usage) return null;
+
+		if (afterSub.length > 0) {
+			const usageParts = sub.usage.split(" ");
+			const inputParts = afterSub.trim().split(/\s+/);
+			const remaining = usageParts.slice(inputParts.length);
+			return remaining.length > 0 ? remaining.join(" ") : null;
+		}
+
+		return sub.usage;
+	};
+}
+
+/**
+ * Build getInlineHint for commands with a simple static hint string.
+ * Shows the hint only when no arguments have been typed yet.
+ */
+function buildStaticInlineHint(hint: string): (argumentText: string) => string | null {
+	return (argumentText: string) => (argumentText.trim().length === 0 ? hint : null);
+}
+
+const BUILTIN_SLASH_COMMAND_DEFS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "settings", description: "Open settings menu" },
 	{ name: "plan", description: "Toggle plan mode (agent plans before executing)" },
 	{ name: "model", description: "Select model (opens selector UI)" },
-	{ name: "export", description: "Export session to HTML file" },
+	{ name: "export", description: "Export session to HTML file", inlineHint: "[path]" },
 	{ name: "dump", description: "Copy session transcript to clipboard" },
 	{ name: "share", description: "Share session as a secret GitHub gist" },
-	{ name: "browser", description: "Toggle browser headless vs visible mode" },
+	{
+		name: "browser",
+		description: "Toggle browser headless vs visible mode",
+		subcommands: [
+			{ name: "headless", description: "Switch to headless mode" },
+			{ name: "visible", description: "Switch to visible mode" },
+		],
+	},
 	{ name: "copy", description: "Copy last agent message to clipboard" },
 	{ name: "session", description: "Show session info and stats" },
 	{ name: "usage", description: "Show provider usage and limits" },
@@ -34,16 +119,61 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "tree", description: "Navigate session tree (switch branches)" },
 	{ name: "login", description: "Login with OAuth provider" },
 	{ name: "logout", description: "Logout from OAuth provider" },
-	{ name: "mcp", description: "Manage MCP servers (add, list, remove, test)" },
+	{
+		name: "mcp",
+		description: "Manage MCP servers (add, list, remove, test)",
+		subcommands: [
+			{
+				name: "add",
+				description: "Add a new MCP server",
+				usage: "<name> [--scope project|user] [--url <url>] [-- <command...>]",
+			},
+			{ name: "list", description: "List all configured MCP servers" },
+			{ name: "remove", description: "Remove an MCP server", usage: "<name> [--scope project|user]" },
+			{ name: "test", description: "Test connection to a server", usage: "<name>" },
+			{ name: "reauth", description: "Reauthorize OAuth for a server", usage: "<name>" },
+			{ name: "unauth", description: "Remove OAuth auth from a server", usage: "<name>" },
+			{ name: "enable", description: "Enable an MCP server", usage: "<name>" },
+			{ name: "disable", description: "Disable an MCP server", usage: "<name>" },
+			{ name: "reload", description: "Force reload MCP runtime tools" },
+			{ name: "help", description: "Show help message" },
+		],
+	},
 	{ name: "new", description: "Start a new session" },
-	{ name: "compact", description: "Manually compact the session context" },
-	{ name: "handoff", description: "Hand off session context to a new session" },
+	{ name: "compact", description: "Manually compact the session context", inlineHint: "[focus instructions]" },
+	{ name: "handoff", description: "Hand off session context to a new session", inlineHint: "[focus instructions]" },
 	{ name: "resume", description: "Resume a different session" },
 	{ name: "background", description: "Detach UI and continue running in background" },
 	{ name: "debug", description: "Write debug log (TUI state and messages)" },
 	{ name: "exit", description: "Exit the application" },
 	{ name: "quit", description: "Quit the application" },
 ];
+
+/**
+ * Materialized builtin slash commands with completion functions derived from
+ * declarative subcommand/hint definitions.
+ */
+export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
+	BuiltinSlashCommand & {
+		getArgumentCompletions?: (prefix: string) => AutocompleteItem[] | null;
+		getInlineHint?: (argumentText: string) => string | null;
+	}
+> = BUILTIN_SLASH_COMMAND_DEFS.map(cmd => {
+	if (cmd.subcommands) {
+		return {
+			...cmd,
+			getArgumentCompletions: buildArgumentCompletions(cmd.subcommands),
+			getInlineHint: buildSubcommandInlineHint(cmd.subcommands),
+		};
+	}
+	if (cmd.inlineHint) {
+		return {
+			...cmd,
+			getInlineHint: buildStaticInlineHint(cmd.inlineHint),
+		};
+	}
+	return cmd;
+});
 
 import { slashCommandCapability } from "../capability/slash-command";
 import { renderPromptTemplate } from "../config/prompt-templates";

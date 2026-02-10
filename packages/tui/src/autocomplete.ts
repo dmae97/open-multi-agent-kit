@@ -130,6 +130,8 @@ export interface AutocompleteItem {
 	value: string;
 	label: string;
 	description?: string;
+	/** Dim hint text shown inline after cursor when this item is selected */
+	hint?: string;
 }
 
 export interface SlashCommand {
@@ -138,11 +140,12 @@ export interface SlashCommand {
 	// Function to get argument completions for this command
 	// Returns null if no argument completion is available
 	getArgumentCompletions?(argumentPrefix: string): AutocompleteItem[] | null;
+	/** Return inline hint text for the current argument state (shown as dim ghost text after cursor) */
+	getInlineHint?(argumentText: string): string | null;
 }
 
 export interface AutocompleteProvider {
-	// Get autocomplete suggestions for current text/cursor position
-	// Returns null if no suggestions available
+	/** Get autocomplete suggestions for current text/cursor position */
 	getSuggestions(
 		lines: string[],
 		cursorLine: number,
@@ -152,8 +155,7 @@ export interface AutocompleteProvider {
 		prefix: string; // What we're matching against (e.g., "/" or "src/")
 	} | null>;
 
-	// Apply the selected item
-	// Returns the new text and cursor position
+	/** Apply the selected item and return new text + cursor position */
 	applyCompletion(
 		lines: string[],
 		cursorLine: number,
@@ -165,6 +167,9 @@ export interface AutocompleteProvider {
 		cursorLine: number;
 		cursorCol: number;
 	};
+
+	/** Get inline hint text to show as dim ghost text after the cursor */
+	getInlineHint?(lines: string[], cursorLine: number, cursorCol: number): string | null;
 }
 
 // Combined provider that handles both slash commands and file paths
@@ -714,5 +719,30 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 		}
 
 		return true;
+	}
+
+	/** Get inline hint text for slash commands with subcommand hints */
+	getInlineHint(lines: string[], cursorLine: number, cursorCol: number): string | null {
+		const currentLine = lines[cursorLine] || "";
+		const textBeforeCursor = currentLine.slice(0, cursorCol);
+
+		if (!textBeforeCursor.startsWith("/")) return null;
+
+		const spaceIndex = textBeforeCursor.indexOf(" ");
+		if (spaceIndex === -1) return null;
+
+		const commandName = textBeforeCursor.slice(1, spaceIndex);
+		const argumentText = textBeforeCursor.slice(spaceIndex + 1);
+
+		const command = this.#commands.find(cmd => {
+			const name = "name" in cmd ? cmd.name : cmd.value;
+			return name === commandName;
+		});
+
+		if (!command || !("getInlineHint" in command) || !command.getInlineHint) {
+			return null;
+		}
+
+		return command.getInlineHint(argumentText);
 	}
 }

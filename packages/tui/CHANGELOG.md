@@ -1,6 +1,16 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `hint` property to autocomplete items to display dim ghost text after cursor when item is selected
+- Added `getInlineHint()` method to `SlashCommand` interface for providing inline hint text based on argument state
+- Added `getInlineHint()` method to `AutocompleteProvider` interface for displaying dim ghost text after cursor
+- Added `hintStyle` theme option to customize styling of inline hint/ghost text in editor
+
+### Changed
+
+- Updated editor to render inline hint text as dim ghost text after cursor when autocomplete suggestions are active or provider supplies hints
 
 ## [11.8.0] - 2026-02-10
 ### Added

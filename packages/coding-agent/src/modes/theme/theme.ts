@@ -2162,6 +2162,7 @@ export function getEditorTheme(): EditorTheme {
 		borderColor: (text: string) => theme.fg("borderMuted", text),
 		selectList: getSelectListTheme(),
 		symbols: getSymbolTheme(),
+		hintStyle: (text: string) => theme.fg("dim", text),
 	};
 }
 

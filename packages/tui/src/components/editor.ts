@@ -263,6 +263,8 @@ export interface EditorTheme {
 	selectList: SelectListTheme;
 	symbols: SymbolTheme;
 	editorPaddingX?: number;
+	/** Style function for inline hint/ghost text (dim text after cursor) */
+	hintStyle?: (text: string) => string;
 }
 
 export interface EditorTopBorder {
@@ -553,6 +555,10 @@ export class Editor implements Component, Focusable {
 		const emitCursorMarker = this.focused && !this.#autocompleteState;
 		const lineContentWidth = contentAreaWidth;
 
+		// Compute inline hint text (dim ghost text after cursor)
+		const inlineHint = this.#getInlineHint();
+		const hintStyle = this.#theme.hintStyle ?? ((t: string) => `\x1b[2m${t}\x1b[0m`);
+
 		for (const layoutLine of visibleLayoutLines) {
 			let displayText = layoutLine.text;
 			let displayWidth = visibleWidth(layoutLine.text);
@@ -566,7 +572,13 @@ export class Editor implements Component, Focusable {
 				if (marker) {
 					const before = displayText.slice(0, layoutLine.cursorPos);
 					const after = displayText.slice(layoutLine.cursorPos);
-					displayText = before + marker + after;
+					if (after.length === 0 && inlineHint) {
+						const hintText = hintStyle(truncateToWidth(inlineHint, Math.max(0, lineContentWidth - displayWidth)));
+						displayText = before + marker + hintText;
+						displayWidth += visibleWidth(inlineHint);
+					} else {
+						displayText = before + marker + after;
+					}
 				}
 			} else if (hasCursor && !this.#useTerminalCursor) {
 				const before = displayText.slice(0, layoutLine.cursorPos);
@@ -585,8 +597,15 @@ export class Editor implements Component, Focusable {
 					// Cursor is at the end - add thin cursor glyph
 					const cursorChar = this.#theme.symbols.inputCursor;
 					const cursor = `\x1b[5m${cursorChar}\x1b[0m`;
-					displayText = before + marker + cursor;
-					displayWidth += visibleWidth(cursorChar);
+					if (inlineHint) {
+						const availWidth = Math.max(0, lineContentWidth - displayWidth - visibleWidth(cursorChar));
+						const hintText = hintStyle(truncateToWidth(inlineHint, availWidth));
+						displayText = before + marker + cursor + hintText;
+						displayWidth += visibleWidth(cursorChar) + Math.min(visibleWidth(inlineHint), availWidth);
+					} else {
+						displayText = before + marker + cursor;
+						displayWidth += visibleWidth(cursorChar);
+					}
 					if (displayWidth > lineContentWidth && paddingX > 0) {
 						cursorInPadding = true;
 					}
@@ -2167,5 +2186,28 @@ https://github.com/EsotericSoftware/spine-runtimes/actions/runs/19536643416/job/
 			clearTimeout(this.#autocompleteTimeout);
 			this.#autocompleteTimeout = undefined;
 		}
+	}
+
+	/**
+	 * Get inline hint text to show as dim ghost text after the cursor.
+	 * Checks selected autocomplete item's hint first, then falls back to provider.
+	 */
+	#getInlineHint(): string | null {
+		// Check selected autocomplete item for a hint
+		if (this.#autocompleteState && this.#autocompleteList) {
+			const selected = this.#autocompleteList.getSelectedItem();
+			return selected?.hint ?? null;
+		}
+
+		// Fall back to provider's getInlineHint
+		if (this.#autocompleteProvider?.getInlineHint) {
+			return this.#autocompleteProvider.getInlineHint(
+				this.#state.lines,
+				this.#state.cursorLine,
+				this.#state.cursorCol,
+			);
+		}
+
+		return null;
 	}
 }

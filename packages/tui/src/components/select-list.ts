@@ -7,6 +7,8 @@ export interface SelectItem {
 	value: string;
 	label: string;
 	description?: string;
+	/** Dim hint text shown inline after cursor when this item is selected */
+	hint?: string;
 }
 
 export interface SelectListTheme {
