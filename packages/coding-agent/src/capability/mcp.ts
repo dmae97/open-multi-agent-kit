@@ -13,6 +13,10 @@ import type { SourceMeta } from "./types";
 export interface MCPServer {
 	/** Server name (unique key) */
 	name: string;
+	/** Whether this server is enabled (default: true) */
+	enabled?: boolean;
+	/** Connection timeout in milliseconds */
+	timeout?: number;
 	/** Command to run (for stdio transport) */
 	command?: string;
 	/** Command arguments */
@@ -23,6 +27,11 @@ export interface MCPServer {
 	url?: string;
 	/** HTTP headers (for HTTP transport) */
 	headers?: Record<string, string>;
+	/** Authentication configuration */
+	auth?: {
+		type: "oauth" | "apikey";
+		credentialId?: string;
+	};
 	/** Transport type */
 	transport?: "stdio" | "sse" | "http";
 	/** Source metadata (added by loader) */

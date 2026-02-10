@@ -159,22 +159,32 @@ export class StdioTransport implements MCPTransport {
 			params: params ?? {},
 		};
 
-		return new Promise<T>((resolve, reject) => {
-			this.#pendingRequests.set(id, {
-				resolve: resolve as (value: unknown) => void,
-				reject,
-			});
+		const timeout = this.config.timeout ?? 30000;
 
-			const message = `${JSON.stringify(request)}\n`;
-			try {
-				// Bun's FileSink has write() method directly
-				this.#process!.stdin.write(message);
-				this.#process!.stdin.flush();
-			} catch (error: unknown) {
-				this.#pendingRequests.delete(id);
-				reject(error);
-			}
-		});
+		return Promise.race([
+			new Promise<T>((resolve, reject) => {
+				this.#pendingRequests.set(id, {
+					resolve: resolve as (value: unknown) => void,
+					reject,
+				});
+
+				const message = `${JSON.stringify(request)}\n`;
+				try {
+					// Bun's FileSink has write() method directly
+					this.#process!.stdin.write(message);
+					this.#process!.stdin.flush();
+				} catch (error: unknown) {
+					this.#pendingRequests.delete(id);
+					reject(error);
+				}
+			}),
+			new Promise<never>((_, reject) =>
+				setTimeout(() => {
+					this.#pendingRequests.delete(id);
+					reject(new Error(`Request timeout after ${timeout}ms`));
+				}, timeout),
+			),
+		]);
 	}
 
 	async notify(method: string, params?: Record<string, unknown>): Promise<void> {

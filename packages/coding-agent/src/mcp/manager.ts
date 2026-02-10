@@ -6,15 +6,16 @@
  */
 import { logger } from "@oh-my-pi/pi-utils";
 import type { TSchema } from "@sinclair/typebox";
+import type { SourceMeta } from "../capability/types";
+import { resolveConfigValue } from "../config/resolve-config-value";
 import type { CustomTool } from "../extensibility/custom-tools/types";
+import type { AuthStorage } from "../session/auth-storage";
 import { connectToServer, disconnectServer, listTools } from "./client";
 import { loadAllMCPConfigs, validateServerConfig } from "./config";
 import type { MCPToolDetails } from "./tool-bridge";
 import { DeferredMCPTool, MCPTool } from "./tool-bridge";
 import type { MCPToolCache } from "./tool-cache";
 import type { MCPServerConfig, MCPServerConnection, MCPToolDefinition } from "./types";
-
-type SourceMeta = import("../capability/types").SourceMeta;
 
 type ToolLoadResult = {
 	connection: MCPServerConnection;
@@ -82,11 +83,19 @@ export class MCPManager {
 	#pendingConnections = new Map<string, Promise<MCPServerConnection>>();
 	#pendingToolLoads = new Map<string, Promise<ToolLoadResult>>();
 	#sources = new Map<string, SourceMeta>();
+	private authStorage: AuthStorage | null = null;
 
 	constructor(
 		private cwd: string,
 		private toolCache: MCPToolCache | null = null,
 	) {}
+
+	/**
+	 * Set the auth storage for resolving OAuth credentials.
+	 */
+	setAuthStorage(authStorage: AuthStorage): void {
+		this.authStorage = authStorage;
+	}
 
 	/**
 	 * Discover and connect to all MCP servers from .mcp.json files.
@@ -154,7 +163,10 @@ export class MCPManager {
 				continue;
 			}
 
-			const connectionPromise = connectToServer(name, config).then(
+			// Resolve auth config before connecting
+			const resolvedConfig = await this.resolveAuthConfig(config);
+
+			const connectionPromise = connectToServer(name, resolvedConfig).then(
 				connection => {
 					if (sources[name]) {
 						connection._source = sources[name];
@@ -287,6 +299,15 @@ export class MCPManager {
 	}
 
 	/**
+	 * Get current connection status for a server.
+	 */
+	getConnectionStatus(name: string): "connected" | "connecting" | "disconnected" {
+		if (this.#connections.has(name)) return "connected";
+		if (this.#pendingConnections.has(name) || this.#pendingToolLoads.has(name)) return "connecting";
+		return "disconnected";
+	}
+
+	/**
 	 * Get the source metadata for a server.
 	 */
 	getSource(name: string): SourceMeta | undefined {
@@ -302,6 +323,13 @@ export class MCPManager {
 		const pending = this.#pendingConnections.get(name);
 		if (pending) return pending;
 		throw new Error(`MCP server not connected: ${name}`);
+	}
+
+	/**
+	 * Resolve auth and shell-command substitutions in config before connecting.
+	 */
+	async prepareConfig(config: MCPServerConfig): Promise<MCPServerConfig> {
+		return this.resolveAuthConfig(config);
 	}
 
 	/**
@@ -368,6 +396,64 @@ export class MCPManager {
 	async refreshAllTools(): Promise<void> {
 		const promises = Array.from(this.#connections.keys()).map(name => this.refreshServerTools(name));
 		await Promise.allSettled(promises);
+	}
+
+	/**
+	 * Resolve OAuth credentials and shell commands in config.
+	 */
+	private async resolveAuthConfig(config: MCPServerConfig): Promise<MCPServerConfig> {
+		let resolved: MCPServerConfig = { ...config };
+
+		const auth = config.auth;
+		if (auth?.type === "oauth" && auth.credentialId && this.authStorage) {
+			const credentialId = auth.credentialId;
+			try {
+				const credential = this.authStorage.get(credentialId);
+				if (credential?.type === "oauth") {
+					if (resolved.type === "http" || resolved.type === "sse") {
+						resolved = {
+							...resolved,
+							headers: {
+								...resolved.headers,
+								Authorization: `Bearer ${credential.access}`,
+							},
+						};
+					} else {
+						resolved = {
+							...resolved,
+							env: {
+								...resolved.env,
+								OAUTH_ACCESS_TOKEN: credential.access,
+							},
+						};
+					}
+				}
+			} catch (error) {
+				logger.warn("Failed to resolve OAuth credential", { credentialId, error });
+			}
+		}
+
+		if (resolved.type !== "http" && resolved.type !== "sse") {
+			if (resolved.env) {
+				const nextEnv: Record<string, string> = {};
+				for (const [key, value] of Object.entries(resolved.env)) {
+					const resolvedValue = await resolveConfigValue(value);
+					if (resolvedValue) nextEnv[key] = resolvedValue;
+				}
+				resolved = { ...resolved, env: nextEnv };
+			}
+		} else {
+			if (resolved.headers) {
+				const nextHeaders: Record<string, string> = {};
+				for (const [key, value] of Object.entries(resolved.headers)) {
+					const resolvedValue = await resolveConfigValue(value);
+					if (resolvedValue) nextHeaders[key] = resolvedValue;
+				}
+				resolved = { ...resolved, headers: nextHeaders };
+			}
+		}
+
+		return resolved;
 	}
 }
 

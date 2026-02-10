@@ -1,0 +1,288 @@
+/**
+ * MCP OAuth Auto-Discovery
+ *
+ * Automatically detects OAuth requirements from MCP server responses
+ * and extracts authentication endpoints.
+ */
+
+export interface OAuthEndpoints {
+	authorizationUrl: string;
+	tokenUrl: string;
+	clientId?: string;
+	scopes?: string;
+}
+
+export interface AuthDetectionResult {
+	requiresAuth: boolean;
+	authType?: "oauth" | "apikey" | "unknown";
+	oauth?: OAuthEndpoints;
+	message?: string;
+}
+
+/**
+ * Detect if an error indicates authentication is required.
+ * Checks for common auth error patterns.
+ */
+export function detectAuthError(error: Error): boolean {
+	const errorMsg = error.message.toLowerCase();
+
+	// Check for HTTP auth status codes
+	if (
+		errorMsg.includes("401") ||
+		errorMsg.includes("403") ||
+		errorMsg.includes("unauthorized") ||
+		errorMsg.includes("forbidden") ||
+		errorMsg.includes("authentication required") ||
+		errorMsg.includes("authentication failed")
+	) {
+		return true;
+	}
+
+	return false;
+}
+
+/**
+ * Extract OAuth endpoints from error response.
+ * Looks for WWW-Authenticate header format or JSON error bodies.
+ */
+export function extractOAuthEndpoints(error: Error): OAuthEndpoints | null {
+	const errorMsg = error.message;
+
+	const readEndpointsFromObject = (obj: Record<string, unknown>): OAuthEndpoints | null => {
+		const authorizationUrl =
+			(obj.authorization_url as string | undefined) ||
+			(obj.authorizationUrl as string | undefined) ||
+			(obj.authorization_endpoint as string | undefined) ||
+			(obj.authorizationEndpoint as string | undefined) ||
+			(obj.authorization_uri as string | undefined) ||
+			(obj.authorizationUri as string | undefined);
+		const tokenUrl =
+			(obj.token_url as string | undefined) ||
+			(obj.tokenUrl as string | undefined) ||
+			(obj.token_endpoint as string | undefined) ||
+			(obj.tokenEndpoint as string | undefined) ||
+			(obj.token_uri as string | undefined) ||
+			(obj.tokenUri as string | undefined);
+
+		if (!authorizationUrl || !tokenUrl) return null;
+
+		const scopeFromArray = Array.isArray(obj.scopes_supported)
+			? (obj.scopes_supported as unknown[]).filter(v => typeof v === "string").join(" ")
+			: undefined;
+		const scopes = (obj.scopes as string | undefined) || (obj.scope as string | undefined) || scopeFromArray;
+		const clientId =
+			(obj.client_id as string | undefined) ||
+			(obj.clientId as string | undefined) ||
+			(obj.default_client_id as string | undefined) ||
+			(obj.public_client_id as string | undefined);
+
+		return { authorizationUrl, tokenUrl, clientId, scopes };
+	};
+
+	const clientIdFromAuthUrl = (authorizationUrl: string): string | undefined => {
+		try {
+			return new URL(authorizationUrl).searchParams.get("client_id") ?? undefined;
+		} catch {
+			return undefined;
+		}
+	};
+
+	const scopeFromAuthUrl = (authorizationUrl: string): string | undefined => {
+		try {
+			return new URL(authorizationUrl).searchParams.get("scope") ?? undefined;
+		} catch {
+			return undefined;
+		}
+	};
+
+	try {
+		// Try to parse as JSON error response
+		// Many MCP servers return JSON with OAuth endpoints in error body
+		const jsonMatch = errorMsg.match(/\{[\s\S]*\}/);
+		if (jsonMatch) {
+			const errorBody = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+
+			// Check for OAuth endpoints in error body
+			if (errorBody.oauth || errorBody.authorization || errorBody.auth) {
+				const oauthData = (errorBody.oauth || errorBody.authorization || errorBody.auth) as Record<string, unknown>;
+				const endpoints = readEndpointsFromObject(oauthData);
+				if (endpoints) {
+					return {
+						...endpoints,
+						clientId: endpoints.clientId || clientIdFromAuthUrl(endpoints.authorizationUrl),
+						scopes: endpoints.scopes || scopeFromAuthUrl(endpoints.authorizationUrl),
+					};
+				}
+			}
+
+			const topLevelEndpoints = readEndpointsFromObject(errorBody);
+			if (topLevelEndpoints) {
+				return {
+					...topLevelEndpoints,
+					clientId: topLevelEndpoints.clientId || clientIdFromAuthUrl(topLevelEndpoints.authorizationUrl),
+					scopes: topLevelEndpoints.scopes || scopeFromAuthUrl(topLevelEndpoints.authorizationUrl),
+				};
+			}
+		}
+	} catch {
+		// Not JSON, continue with other detection methods
+	}
+
+	const challengeEntries = Array.from(errorMsg.matchAll(/([a-zA-Z_][a-zA-Z0-9_-]*)="([^"]+)"/g));
+	if (challengeEntries.length > 0) {
+		const challengeValues = new Map<string, string>();
+		for (const [, rawKey, value] of challengeEntries) {
+			challengeValues.set(rawKey.toLowerCase(), value);
+		}
+
+		const authorizationUrl =
+			challengeValues.get("authorization_uri") ||
+			challengeValues.get("authorization_url") ||
+			challengeValues.get("authorization_endpoint") ||
+			challengeValues.get("authorize_url") ||
+			challengeValues.get("realm");
+		const tokenUrl =
+			challengeValues.get("token_url") || challengeValues.get("token_uri") || challengeValues.get("token_endpoint");
+
+		if (authorizationUrl && tokenUrl) {
+			return {
+				authorizationUrl,
+				tokenUrl,
+				clientId: challengeValues.get("client_id") || clientIdFromAuthUrl(authorizationUrl),
+				scopes: challengeValues.get("scope") || challengeValues.get("scopes") || scopeFromAuthUrl(authorizationUrl),
+			};
+		}
+	}
+
+	// Try to extract from WWW-Authenticate header format
+	// Example: Bearer realm="https://auth.example.com/oauth/authorize" token_url="https://auth.example.com/oauth/token"
+	const wwwAuthMatch = errorMsg.match(/realm="([^"]+)".*token_url="([^"]+)"/);
+	if (wwwAuthMatch) {
+		return {
+			authorizationUrl: wwwAuthMatch[1],
+			tokenUrl: wwwAuthMatch[2],
+			clientId: clientIdFromAuthUrl(wwwAuthMatch[1]),
+			scopes: scopeFromAuthUrl(wwwAuthMatch[1]),
+		};
+	}
+
+	// Try to extract URLs from error message
+	const urlPattern = /(https?:\/\/[^\s"'<>]+)/g;
+	const urls = errorMsg.match(urlPattern);
+
+	if (urls && urls.length >= 2) {
+		// Heuristic: First URL is likely auth, second is token
+		return {
+			authorizationUrl: urls[0],
+			tokenUrl: urls[1],
+			clientId: clientIdFromAuthUrl(urls[0]),
+			scopes: scopeFromAuthUrl(urls[0]),
+		};
+	}
+
+	return null;
+}
+
+/**
+ * Analyze an error to determine authentication requirements.
+ * Returns structured info about what auth is needed.
+ */
+export function analyzeAuthError(error: Error): AuthDetectionResult {
+	if (!detectAuthError(error)) {
+		return { requiresAuth: false };
+	}
+
+	// Try to extract OAuth endpoints
+	const oauth = extractOAuthEndpoints(error);
+
+	if (oauth) {
+		return {
+			requiresAuth: true,
+			authType: "oauth",
+			oauth,
+			message: "Server requires OAuth authentication. Launching authorization flow...",
+		};
+	}
+
+	// Check if it might be API key based
+	const errorMsg = error.message.toLowerCase();
+	if (
+		errorMsg.includes("api key") ||
+		errorMsg.includes("api_key") ||
+		errorMsg.includes("token") ||
+		errorMsg.includes("bearer")
+	) {
+		return {
+			requiresAuth: true,
+			authType: "apikey",
+			message: "Server requires API key authentication.",
+		};
+	}
+
+	// Unknown auth type
+	return {
+		requiresAuth: true,
+		authType: "unknown",
+		message: "Server requires authentication but type could not be determined.",
+	};
+}
+
+/**
+ * Try to discover OAuth endpoints by querying the server's well-known endpoints.
+ * This is a fallback when error responses don't include OAuth metadata.
+ */
+export async function discoverOAuthEndpoints(serverUrl: string): Promise<OAuthEndpoints | null> {
+	const wellKnownPaths = [
+		"/.well-known/oauth-authorization-server",
+		"/.well-known/openid-configuration",
+		"/oauth/metadata",
+		"/.mcp/auth",
+		"/authorize", // Some MCP servers expose OAuth config here
+	];
+
+	for (const path of wellKnownPaths) {
+		try {
+			const url = new URL(path, serverUrl);
+			const response = await fetch(url.toString(), {
+				method: "GET",
+				headers: { Accept: "application/json" },
+			});
+
+			if (response.ok) {
+				const metadata = await response.json();
+
+				// Check for standard OAuth discovery format
+				if (metadata.authorization_endpoint && metadata.token_endpoint) {
+					return {
+						authorizationUrl: metadata.authorization_endpoint,
+						tokenUrl: metadata.token_endpoint,
+						clientId:
+							metadata.client_id || metadata.clientId || metadata.default_client_id || metadata.public_client_id,
+						scopes: metadata.scopes_supported?.join(" ") || metadata.scopes || metadata.scope,
+					};
+				}
+
+				// Check for MCP-specific format
+				if (metadata.oauth || metadata.authorization || metadata.auth) {
+					const oauthData = metadata.oauth || metadata.authorization || metadata.auth;
+					if (oauthData.authorization_url && oauthData.token_url) {
+						return {
+							authorizationUrl: oauthData.authorization_url || oauthData.authorizationUrl,
+							tokenUrl: oauthData.token_url || oauthData.tokenUrl,
+							clientId:
+								oauthData.client_id ||
+								oauthData.clientId ||
+								oauthData.default_client_id ||
+								oauthData.public_client_id,
+							scopes: oauthData.scopes || oauthData.scope,
+						};
+					}
+				}
+			}
+		} catch {
+			// Ignore errors, try next path
+		}
+	}
+
+	return null;
+}

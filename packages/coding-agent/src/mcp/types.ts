@@ -9,6 +9,8 @@
 // JSON-RPC 2.0 Types
 // =============================================================================
 
+import type { SourceMeta } from "../capability/types";
+
 export interface JsonRpcRequest {
 	jsonrpc: "2.0";
 	id: string | number;
@@ -41,10 +43,22 @@ export type JsonRpcMessage = JsonRpcRequest | JsonRpcNotification | JsonRpcRespo
 // MCP Server Configuration (.mcp.json format)
 // =============================================================================
 
+/** Authentication configuration for MCP servers */
+export interface MCPAuthConfig {
+	/** Authentication type */
+	type: "oauth" | "apikey";
+	/** Credential ID for OAuth (references agent.db) */
+	credentialId?: string;
+}
+
 /** Base server config with shared options */
 interface MCPServerConfigBase {
+	/** Whether this server is enabled (default: true) */
+	enabled?: boolean;
 	/** Connection timeout in milliseconds (default: 30000) */
 	timeout?: number;
+	/** Authentication configuration (optional) */
+	auth?: MCPAuthConfig;
 }
 
 /** Stdio server configuration */
@@ -218,7 +232,7 @@ export interface MCPServerConnection {
 	/** Cached tools (populated on demand) */
 	tools?: MCPToolDefinition[];
 	/** Source metadata (for display) */
-	_source?: import("../capability/types").SourceMeta;
+	_source?: SourceMeta;
 }
 
 /** MCP tool with server context */

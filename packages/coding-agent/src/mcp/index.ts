@@ -16,6 +16,7 @@ export {
 	loadAllMCPConfigs,
 	validateServerConfig,
 } from "./config";
+export { validateServerName } from "./config-writer";
 // JSON-RPC (lightweight HTTP-based MCP calls)
 export type { JsonRpcResponse } from "./json-rpc";
 export { callMCP, parseSSE } from "./json-rpc";
@@ -25,6 +26,9 @@ export { discoverAndLoadMCPTools } from "./loader";
 // Manager
 export type { MCPDiscoverOptions, MCPLoadResult } from "./manager";
 export { createMCPManager, MCPManager } from "./manager";
+// OAuth Discovery
+export type { AuthDetectionResult, OAuthEndpoints } from "./oauth-discovery";
+export { analyzeAuthError, detectAuthError, discoverOAuthEndpoints, extractOAuthEndpoints } from "./oauth-discovery";
 // Tool bridge
 export type { MCPToolDetails } from "./tool-bridge";
 export { createMCPToolName, DeferredMCPTool, MCPTool, parseMCPToolName } from "./tool-bridge";

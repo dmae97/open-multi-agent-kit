@@ -4,6 +4,7 @@
  * Uses the capability system to load MCP servers from multiple sources.
  */
 import { mcpCapability } from "../capability/mcp";
+import type { SourceMeta } from "../capability/types";
 import type { MCPServer } from "../discovery";
 import { loadCapability } from "../discovery";
 import type { MCPServerConfig } from "./types";
@@ -23,7 +24,7 @@ export interface LoadMCPConfigsResult {
 	/** Extracted Exa API keys (if any were filtered) */
 	exaApiKeys: string[];
 	/** Source metadata for each server */
-	sources: Record<string, import("../capability/types").SourceMeta>;
+	sources: Record<string, SourceMeta>;
 }
 
 /**
@@ -32,9 +33,15 @@ export interface LoadMCPConfigsResult {
 function convertToLegacyConfig(server: MCPServer): MCPServerConfig {
 	// Determine transport type
 	const transport = server.transport ?? (server.command ? "stdio" : server.url ? "http" : "stdio");
+	const shared = {
+		enabled: server.enabled,
+		timeout: server.timeout,
+		auth: server.auth,
+	};
 
 	if (transport === "stdio") {
 		const config: MCPServerConfig = {
+			...shared,
 			type: "stdio" as const,
 			command: server.command ?? "",
 		};
@@ -45,6 +52,7 @@ function convertToLegacyConfig(server: MCPServer): MCPServerConfig {
 
 	if (transport === "http") {
 		const config: MCPServerConfig = {
+			...shared,
 			type: "http" as const,
 			url: server.url ?? "",
 		};
@@ -54,6 +62,7 @@ function convertToLegacyConfig(server: MCPServer): MCPServerConfig {
 
 	if (transport === "sse") {
 		const config: MCPServerConfig = {
+			...shared,
 			type: "sse" as const,
 			url: server.url ?? "",
 		};
@@ -63,6 +72,7 @@ function convertToLegacyConfig(server: MCPServer): MCPServerConfig {
 
 	// Fallback to stdio
 	return {
+		...shared,
 		type: "stdio" as const,
 		command: server.command ?? "",
 	};
@@ -89,9 +99,13 @@ export async function loadAllMCPConfigs(cwd: string, options?: LoadMCPConfigsOpt
 
 	// Convert to legacy format and preserve source metadata
 	const configs: Record<string, MCPServerConfig> = {};
-	const sources: Record<string, import("../capability/types").SourceMeta> = {};
+	const sources: Record<string, SourceMeta> = {};
 	for (const server of servers) {
-		configs[server.name] = convertToLegacyConfig(server);
+		const config = convertToLegacyConfig(server);
+		if (config.enabled === false) {
+			continue;
+		}
+		configs[server.name] = config;
 		sources[server.name] = server._source;
 	}
 
@@ -179,7 +193,7 @@ export interface ExaFilterResult {
 	/** Extracted Exa API keys (if any) */
 	exaApiKeys: string[];
 	/** Source metadata for remaining servers */
-	sources: Record<string, import("../capability/types").SourceMeta>;
+	sources: Record<string, SourceMeta>;
 }
 
 /**
@@ -188,10 +202,10 @@ export interface ExaFilterResult {
  */
 export function filterExaMCPServers(
 	configs: Record<string, MCPServerConfig>,
-	sources: Record<string, import("../capability/types").SourceMeta>,
+	sources: Record<string, SourceMeta>,
 ): ExaFilterResult {
 	const filtered: Record<string, MCPServerConfig> = {};
-	const filteredSources: Record<string, import("../capability/types").SourceMeta> = {};
+	const filteredSources: Record<string, SourceMeta> = {};
 	const exaApiKeys: string[] = [];
 
 	for (const [name, config] of Object.entries(configs)) {

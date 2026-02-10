@@ -125,38 +125,63 @@ export class HttpTransport implements MCPTransport {
 			headers["Mcp-Session-Id"] = this.#sessionId;
 		}
 
-		const response = await fetch(this.config.url, {
-			method: "POST",
-			headers,
-			body: JSON.stringify(body),
-		});
+		// Create AbortController for timeout
+		const timeout = this.config.timeout ?? 30000;
+		const abortController = new AbortController();
+		const timeoutId = setTimeout(() => abortController.abort(), timeout);
 
-		// Check for session ID in response
-		const newSessionId = response.headers.get("Mcp-Session-Id");
-		if (newSessionId) {
-			this.#sessionId = newSessionId;
+		try {
+			const response = await fetch(this.config.url, {
+				method: "POST",
+				headers,
+				body: JSON.stringify(body),
+				signal: abortController.signal,
+			});
+
+			clearTimeout(timeoutId);
+
+			// Check for session ID in response
+			const newSessionId = response.headers.get("Mcp-Session-Id");
+			if (newSessionId) {
+				this.#sessionId = newSessionId;
+			}
+
+			if (!response.ok) {
+				const text = await response.text();
+				const wwwAuthenticate = response.headers.get("WWW-Authenticate");
+				const mcpAuthServer = response.headers.get("Mcp-Auth-Server");
+				const authHints = [
+					wwwAuthenticate ? `WWW-Authenticate: ${wwwAuthenticate}` : null,
+					mcpAuthServer ? `Mcp-Auth-Server: ${mcpAuthServer}` : null,
+				]
+					.filter(Boolean)
+					.join("; ");
+				const suffix = authHints ? ` [${authHints}]` : "";
+				throw new Error(`HTTP ${response.status}: ${text}${suffix}`);
+			}
+
+			const contentType = response.headers.get("Content-Type") ?? "";
+
+			// Handle SSE response
+			if (contentType.includes("text/event-stream")) {
+				return this.#parseSSEResponse<T>(response, id);
+			}
+
+			// Handle JSON response
+			const result = (await response.json()) as JsonRpcResponse;
+
+			if (result.error) {
+				throw new Error(`MCP error ${result.error.code}: ${result.error.message}`);
+			}
+
+			return result.result as T;
+		} catch (error) {
+			clearTimeout(timeoutId);
+			if (error instanceof Error && error.name === "AbortError") {
+				throw new Error(`Request timeout after ${timeout}ms`);
+			}
+			throw error;
 		}
-
-		if (!response.ok) {
-			const text = await response.text();
-			throw new Error(`HTTP ${response.status}: ${text}`);
-		}
-
-		const contentType = response.headers.get("Content-Type") ?? "";
-
-		// Handle SSE response
-		if (contentType.includes("text/event-stream")) {
-			return this.#parseSSEResponse<T>(response, id);
-		}
-
-		// Handle JSON response
-		const result = (await response.json()) as JsonRpcResponse;
-
-		if (result.error) {
-			throw new Error(`MCP error ${result.error.code}: ${result.error.message}`);
-		}
-
-		return result.result as T;
 	}
 
 	async #parseSSEResponse<T>(response: Response, expectedId: string | number): Promise<T> {
@@ -211,16 +236,32 @@ export class HttpTransport implements MCPTransport {
 			headers["Mcp-Session-Id"] = this.#sessionId;
 		}
 
-		const response = await fetch(this.config.url, {
-			method: "POST",
-			headers,
-			body: JSON.stringify(body),
-		});
+		// Create AbortController for timeout
+		const timeout = this.config.timeout ?? 30000;
+		const abortController = new AbortController();
+		const timeoutId = setTimeout(() => abortController.abort(), timeout);
 
-		// 202 Accepted is success for notifications
-		if (!response.ok && response.status !== 202) {
-			const text = await response.text();
-			throw new Error(`HTTP ${response.status}: ${text}`);
+		try {
+			const response = await fetch(this.config.url, {
+				method: "POST",
+				headers,
+				body: JSON.stringify(body),
+				signal: abortController.signal,
+			});
+
+			clearTimeout(timeoutId);
+
+			// 202 Accepted is success for notifications
+			if (!response.ok && response.status !== 202) {
+				const text = await response.text();
+				throw new Error(`HTTP ${response.status}: ${text}`);
+			}
+		} catch (error) {
+			clearTimeout(timeoutId);
+			if (error instanceof Error && error.name === "AbortError") {
+				throw new Error(`Notify timeout after ${timeout}ms`);
+			}
+			throw error;
 		}
 	}
 

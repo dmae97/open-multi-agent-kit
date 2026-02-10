@@ -333,6 +333,14 @@ export class InputController {
 				return;
 			}
 
+			// Handle MCP server management commands
+			if (text.startsWith("/mcp")) {
+				this.ctx.editor.addToHistory(text);
+				this.ctx.editor.setText("");
+				await this.ctx.handleMCPCommand(text);
+				return;
+			}
+
 			// Handle skill commands (/skill:name [args])
 			if (text.startsWith("/skill:")) {
 				const spaceIndex = text.indexOf(" ");

@@ -81,11 +81,14 @@ async function loadMCPServers(ctx: LoadContext): Promise<LoadResult<MCPServer>> 
 			const serverConfig = config as Record<string, unknown>;
 			result.push({
 				name: serverName,
+				enabled: serverConfig.enabled as boolean | undefined,
+				timeout: serverConfig.timeout as number | undefined,
 				command: serverConfig.command as string | undefined,
 				args: serverConfig.args as string[] | undefined,
 				env: serverConfig.env as Record<string, string> | undefined,
 				url: serverConfig.url as string | undefined,
 				headers: serverConfig.headers as Record<string, string> | undefined,
+				auth: serverConfig.auth as { type: "oauth" | "apikey"; credentialId?: string } | undefined,
 				transport: serverConfig.type as "stdio" | "sse" | "http" | undefined,
 				_source: createSourceMeta(PROVIDER_ID, path, level),
 			});

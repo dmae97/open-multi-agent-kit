@@ -23,11 +23,17 @@ interface MCPConfigFile {
 	mcpServers?: Record<
 		string,
 		{
+			enabled?: boolean;
+			timeout?: number;
 			command?: string;
 			args?: string[];
 			env?: Record<string, string>;
 			url?: string;
 			headers?: Record<string, string>;
+			auth?: {
+				type: "oauth" | "apikey";
+				credentialId?: string;
+			};
 			type?: "stdio" | "sse" | "http";
 		}
 	>;
@@ -43,11 +49,14 @@ function transformMCPConfig(config: MCPConfigFile, source: SourceMeta): MCPServe
 		for (const [name, serverConfig] of Object.entries(config.mcpServers)) {
 			const server: MCPServer = {
 				name,
+				enabled: serverConfig.enabled,
+				timeout: serverConfig.timeout,
 				command: serverConfig.command,
 				args: serverConfig.args,
 				env: serverConfig.env,
 				url: serverConfig.url,
 				headers: serverConfig.headers,
+				auth: serverConfig.auth,
 				transport: serverConfig.type,
 				_source: source,
 			};

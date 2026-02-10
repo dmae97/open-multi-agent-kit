@@ -710,6 +710,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			// Always filter Exa - we have native integration
 			filterExa: true,
 			cacheStorage: settingsInstance.getStorage(),
+			authStorage,
 		});
 		time("discoverAndLoadMCPTools");
 		debugStartup("sdk:discoverAndLoadMCPTools");

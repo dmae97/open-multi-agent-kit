@@ -6,6 +6,7 @@
 import { logger } from "@oh-my-pi/pi-utils";
 import type { LoadedCustomTool } from "../extensibility/custom-tools/types";
 import { AgentStorage } from "../session/agent-storage";
+import type { AuthStorage } from "../session/auth-storage";
 import { type MCPLoadResult, MCPManager } from "./manager";
 import { MCPToolCache } from "./tool-cache";
 
@@ -33,6 +34,8 @@ export interface MCPToolsLoadOptions {
 	filterExa?: boolean;
 	/** SQLite storage for MCP tool cache (null disables cache) */
 	cacheStorage?: AgentStorage | null;
+	/** Auth storage used to resolve OAuth credentials before initial MCP connect */
+	authStorage?: AuthStorage;
 }
 
 async function resolveToolCache(storage: AgentStorage | null | undefined): Promise<MCPToolCache | null> {
@@ -56,6 +59,9 @@ async function resolveToolCache(storage: AgentStorage | null | undefined): Promi
 export async function discoverAndLoadMCPTools(cwd: string, options?: MCPToolsLoadOptions): Promise<MCPToolsLoadResult> {
 	const toolCache = await resolveToolCache(options?.cacheStorage);
 	const manager = new MCPManager(cwd, toolCache);
+	if (options?.authStorage) {
+		manager.setAuthStorage(options.authStorage);
+	}
 
 	let result: MCPLoadResult;
 	try {
