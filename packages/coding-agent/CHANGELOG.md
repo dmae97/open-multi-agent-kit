@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Clarified that subagents automatically inherit full system prompt including AGENTS.md, context files, and skills — do not repeat project rules or conventions in task context
+- Updated task context guidance to focus on session-specific information subagents lack, eliminating redundant documentation of project constraints already available to them
+- Refined constraints template to emphasize task-specific rules and session decisions rather than global project conventions
+- Expanded anti-patterns section to explicitly flag redundant context that wastes tokens by repeating AGENTS.md rules, project constraints, and tool preferences
 
 ## [11.8.0] - 2026-02-10
 ### Added

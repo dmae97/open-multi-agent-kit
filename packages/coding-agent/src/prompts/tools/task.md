@@ -1,13 +1,18 @@
 # Task
 
-Launch subagents to execute parallel, well-scoped tasks with shared, token-efficient context.
+Launch subagents to execute parallel, well-scoped tasks.
 
-Subagents have **zero implicit context** — they see only `context` + `assignment`. Treat every subagent as a senior engineer on day one: technically strong, but unfamiliar with every decision, convention, and file layout you've accumulated.
+## What subagents inherit automatically
+Subagents receive the **full system prompt**, including AGENTS.md, context files, and skills. Do NOT repeat project rules, coding conventions, or style guidelines in `context` — they already have them.
 
-Subagents CAN grep the parent conversation file for supplementary details, but CANNOT grep for:
+## What subagents do NOT have
+Subagents have no access to your conversation history. They don't know:
 - Decisions you made but didn't write down
-- Conventions that exist only in your head
-- Which of 50 possible approaches you want
+- Which approach you chose among alternatives
+- What you learned from reading files during this session
+- Requirements the user stated only in conversation
+
+Subagents CAN grep the parent conversation file for supplementary details.
 ---
 
 ## Parameters
@@ -18,9 +23,13 @@ Agent type for all tasks in this batch.
 
 ### `context` (optional — strongly recommended)
 
-Shared background prepended verbatim to every task `assignment`. Common info once; reduces token cost.
+Shared background prepended verbatim to every task `assignment`. Use only for session-specific information subagents lack.
 
-Use template; omit non-applicable sections.
+<critical>
+Do NOT include project rules, coding conventions, or style guidelines — subagents already have AGENTS.md and context files in their system prompt. Repeating them wastes tokens.
+</critical>
+
+Use template; omit non-applicable sections:
 
 ````
 ## Goal
@@ -30,9 +39,8 @@ One sentence: batch accomplishes together.
 Explicitly exclude tempting scope — what tasks must not touch/attempt.
 
 ## Constraints
-- MUST / MUST NOT rules (naming, error handling, banned approaches)
-- Language/framework version requirements
-- What exists vs what to create
+- Task-specific MUST / MUST NOT rules not already in AGENTS.md
+- Decisions made during this session that affect implementation
 
 ## Reference Files
 - `path/to/file.ext` — pattern demo
@@ -47,9 +55,9 @@ Explicitly exclude tempting scope — what tasks must not touch/attempt.
 - Definition of "done" for batch
 - Note: build/test/lint verification happens AFTER all tasks complete — not inside tasks (see below)
 ````
-**Belongs in `context`**: project goal, non-goals, constraints, conventions, reference paths, shared type definitions, API contracts, global acceptance commands — anything 2+ tasks need.
+**Belongs in `context`**: task-specific goal, non-goals, session decisions, reference paths, shared type definitions, API contracts, global acceptance commands — anything 2+ tasks need that isn't already in AGENTS.md.
 **Rule of thumb:** if repeat in 2+ tasks, belongs in `context`.
-**Does NOT belong in `context`**: per-task file lists, one-off requirements (go in `assignment`), structured output format (goes in `schema`).
+**Does NOT belong in `context`**: project rules already in AGENTS.md/context files, per-task file lists, one-off requirements (go in `assignment`), structured output format (goes in `schema`).
 
 ### `tasks` (required)
 
@@ -117,6 +125,10 @@ Use structure every assignment:
 - "Use existing patterns."
 - "Follow conventions."
 - "No WASM."
+**Redundant context** — wastes tokens repeating what subagents already have:
+- Restating AGENTS.md rules (coding style, import conventions, logger usage)
+- Repeating project constraints from context files
+- Listing tool/framework preferences already documented in the repo
 
 If tempted to write above, expand using templates.
 **Output format in prose instead of `schema`** — agent returns null:
@@ -252,7 +264,7 @@ Layered work with dependencies:
 ## Pre-flight checklist
 
 Before calling tool, verify:
-- [ ] `context` includes shared constraints, references, definition of done
+- [ ] `context` includes only session-specific info not already in AGENTS.md/context files
 - [ ] Each `assignment` follows assignment template — not one-liner
 - [ ] Each `assignment` includes edge cases / "don’t break" items
 - [ ] Tasks truly parallel (no hidden dependencies)
