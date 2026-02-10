@@ -195,16 +195,21 @@ export interface DiffError {
 // Hashline Types
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** A single edit operation in hashline mode */
+/** A single line reference in `"LINE:HASH"` format (e.g. `"5:a3f2"`). */
+export type LineRef = string;
+
+/** Structured source specification for a hashline edit operation. */
+export type SrcSpec =
+	| { kind: "single"; ref: LineRef }
+	| { kind: "range"; start: LineRef; end: LineRef }
+	| { kind: "insertAfter"; after: LineRef }
+	| { kind: "insertBefore"; before: LineRef }
+	| { kind: "substring"; needle: string };
+
+/** A single edit operation in hashline mode. */
 export interface HashlineEdit {
-	/**
-	 * Source line reference:
-	 * - `"5:ab"` (single)
-	 * - `"5:ab..9:ef"` (range)
-	 * - `"5:ab.."` (insert after)
-	 * - `"..5:ab"` (insert before)
-	 */
-	src: string;
+	/** Structured source specification identifying which lines to target. */
+	src: SrcSpec;
 	/** Replacement content (`\n`-separated) — `""` for delete */
 	dst: string;
 }

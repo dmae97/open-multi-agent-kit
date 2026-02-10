@@ -12,14 +12,10 @@
  * Reference format: `"LINENUM:HASH"` (e.g. `"5:a3f2"`)
  */
 
-import type { HashlineEdit, HashMismatch } from "./types";
+import type { HashlineEdit, HashMismatch, SrcSpec } from "./types";
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Source Spec Parsing
-// ═══════════════════════════════════════════════════════════════════════════
-
-/** Parsed representation of a `HashlineEdit.src` field. */
-type SrcSpec =
+/** Parsed representation of a {@link SrcSpec} with resolved line references. */
+type ParsedRefs =
 	| { kind: "single"; ref: { line: number; hash: string } }
 	| { kind: "range"; start: { line: number; hash: string }; end: { line: number; hash: string } }
 	| { kind: "insertAfter"; after: { line: number; hash: string } }
@@ -27,62 +23,31 @@ type SrcSpec =
 	| { kind: "substring"; needle: string };
 
 /**
- * Parse a `HashlineEdit.src` string into a structured spec.
+ * Convert a structured {@link SrcSpec} into parsed line references.
  *
- * Accepted forms:
- * - `"5:ab"` — single line reference
- * - `"5:ab..9:ef"` — inclusive range
- * - `"5:ab.."` — insert-after marker
- * - `"..5:ab"` — insert-before marker
- *
- * @throws Error on embedded newlines, commas, or invalid refs
+ * Calls {@link parseLineRef} on each string ref field to produce `{ line, hash }`.
+ * Collapses same-line ranges into single-line specs (models sometimes emit
+ * `347:aa..347:bb` which hashline mode doesn't support as sub-line addressing).
  */
-function parseSrc(src: string): SrcSpec {
-	if (src.includes("\n")) {
-		throw new Error(`src must not contain newlines: "${src}"`);
-	}
-
-	// Allow commas in `src` because some models accidentally paste file content
-	// after the line ref (e.g. `14:abexport function foo(a, b)`), which often
-	// contains commas. However, reject inputs that *look like* multiple refs.
-	if (/,\s*\d+:[0-9a-fA-F]/.test(src)) {
-		throw new Error(`Invalid src "${src}": appears to contain multiple line refs separated by commas`);
-	}
-
-	if (src.startsWith("..")) {
-		if (src.indexOf("..", 2) !== -1) {
-			throw new Error(`Invalid src "${src}": insert-before form must be exactly "..LINE:HASH"`);
+function parseSrcSpec(src: SrcSpec): ParsedRefs {
+	switch (src.kind) {
+		case "single":
+			return { kind: "single", ref: parseLineRef(src.ref) };
+		case "range": {
+			const start = parseLineRef(src.start);
+			const end = parseLineRef(src.end);
+			// Same-line range collapse: treat as single-line edit
+			if (start.line === end.line) {
+				return { kind: "single", ref: start };
+			}
+			return { kind: "range", start, end };
 		}
-		return { kind: "insertBefore", before: parseLineRef(src.slice(2)) };
-	}
-
-	const dotIdx = src.indexOf("..");
-	if (dotIdx !== -1) {
-		const lhs = src.slice(0, dotIdx);
-		const rhs = src.slice(dotIdx + 2);
-		if (rhs === "") {
-			return { kind: "insertAfter", after: parseLineRef(lhs) };
-		}
-		const start = parseLineRef(lhs);
-		const end = parseLineRef(rhs);
-		// Some models attempt sub-line ranges like `347:aa..347:bb`. Hashline mode
-		// does not support sub-line addressing; treat same-line ranges as single-line.
-		if (start.line === end.line) {
-			return { kind: "single", ref: start };
-		}
-		return { kind: "range", start, end };
-	}
-
-	// Default: try as a line ref; if that fails, fall back to a constrained
-	// substring match (needle must be unique within the file).
-	try {
-		return { kind: "single", ref: parseLineRef(src) };
-	} catch {
-		const needle = src.trim();
-		if (needle.length === 0) {
-			throw new Error(`Invalid src "${src}": empty`);
-		}
-		return { kind: "substring", needle };
+		case "insertAfter":
+			return { kind: "insertAfter", after: parseLineRef(src.after) };
+		case "insertBefore":
+			return { kind: "insertBefore", before: parseLineRef(src.before) };
+		case "substring":
+			return { kind: "substring", needle: src.needle };
 	}
 }
 
@@ -496,11 +461,9 @@ export function validateLineRef(ref: { line: number; hash: string }, fileLines: 
 /**
  * Apply an array of hashline edits to file content.
  *
- * Each edit's `src` field is parsed as one of:
- * - `"5:ab"` — replace exactly that line
- * - `"5:ab..9:ef"` — replace/delete the inclusive range
- * - `"5:ab.."` — insert after line 5 (line 5 unchanged)
- * - `"..5:ab"` — insert before line 5 (line 5 unchanged)
+ * Each edit's `src` is a structured {@link SrcSpec} identifying the target
+ * lines. Line references are resolved via {@link parseLineRef} and hashes
+ * validated before any mutation.
  *
  * Edits are sorted bottom-up (highest effective line first) so earlier
  * splices don't invalidate later line numbers.
@@ -520,7 +483,7 @@ export function applyHashlineEdits(
 
 	// Parse src specs and dst lines up front
 	const parsed = edits.map(e => ({
-		spec: parseSrc(e.src),
+		spec: parseSrcSpec(e.src),
 		dstLines: stripNewLinePrefixes(splitDstLines(e.dst)),
 	}));
 

@@ -1,9 +1,9 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Breaking Changes
 
+- Changed `HashlineEdit.src` from string format (e.g., `"5:ab"`, `"5:ab..9:ef"`) to structured `SrcSpec` object with discriminated union types (`{ kind: "single", ref: "..." }`, `{ kind: "range", start: "...", end: "..." }`, etc.)
 - Changed `HashlineEdit` API from `old: string | string[]` / `new: string | string[]` to `src: string` / `dst: string`; src uses range syntax `"5:ab"` (single), `"5:ab..9:ef"` (range), `"5:ab.."` (insert after), or `"..5:ab"` (insert before)
 - Removed support for comma and newline-separated line reference lists in hashline edits; use range syntax instead
 - Removed `after` field from `HashlineEdit`; insert-after is now expressed via open range syntax `src: "5:ab.."`

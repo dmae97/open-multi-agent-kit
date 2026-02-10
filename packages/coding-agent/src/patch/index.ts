@@ -87,6 +87,7 @@ export type {
 	Operation,
 	PatchInput,
 	SequenceSearchResult,
+	SrcSpec,
 } from "./types";
 // Types
 // Legacy aliases for backwards compatibility
@@ -118,11 +119,32 @@ export type ReplaceParams = { path: string; old_text: string; new_text: string; 
 export type PatchParams = { path: string; op?: string; rename?: string; diff?: string };
 export type HashlineParams = { path: string; edits: HashlineEdit[] };
 
-const hashlineEditItemSchema = Type.Object({
-	src: Type.String({
-		description:
-			'Line reference: "5:ab" (replace), "5:ab..9:ef" (range), "5:ab.." (insert after), "..5:ab" (insert before)',
+const srcSpecSchema = Type.Union([
+	Type.Object({
+		kind: Type.Literal("single"),
+		ref: Type.String({ description: 'Line reference "LINE:HASH"' }),
 	}),
+	Type.Object({
+		kind: Type.Literal("range"),
+		start: Type.String({ description: 'Start line ref "LINE:HASH"' }),
+		end: Type.String({ description: 'End line ref "LINE:HASH"' }),
+	}),
+	Type.Object({
+		kind: Type.Literal("insertAfter"),
+		after: Type.String({ description: 'Insert after this line "LINE:HASH"' }),
+	}),
+	Type.Object({
+		kind: Type.Literal("insertBefore"),
+		before: Type.String({ description: 'Insert before this line "LINE:HASH"' }),
+	}),
+	Type.Object({
+		kind: Type.Literal("substring"),
+		needle: Type.String({ description: "Unique substring to match" }),
+	}),
+]);
+
+const hashlineEditItemSchema = Type.Object({
+	src: srcSpecSchema,
 	dst: Type.String({ description: 'Replacement content (\\n-separated) — "" for delete' }),
 });
 
