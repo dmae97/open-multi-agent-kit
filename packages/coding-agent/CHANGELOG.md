@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `/mcp` slash command for runtime MCP server management (add, list, remove, enable, disable, test, reauth)
+- Added interactive multi-step wizard for adding MCP servers with transport auto-detection
+- Added OAuth auto-discovery and authentication flow for MCP servers requiring authorization
+- Added MCP config file writer for persisting server configurations at user and project level
+- Added `enabled` and `timeout` fields to MCP server configuration
+- Added runtime MCP manager reload and active tool registry rebind without restart
+- Added MCP command guide documentation
+
 ### Changed
 
 - Replaced `setTimeout` with `Bun.sleep()` for improved performance in file lock retry logic
@@ -11,15 +21,26 @@
 - Replaced `tmpdir()` named import with `os` namespace import for consistency
 - Migrated logging from `chalk` and `console.error` to structured logger from `@oh-my-pi/pi-utils`
 
+### Fixed
+
+- Improved browser script evaluation to handle both expression and statement forms, fixing evaluation failures for certain script types
+- Fixed unsafe OAuth endpoint extraction that could redirect token exchange to attacker-controlled URLs
+- Fixed PKCE code verifier stored via untyped property; now uses typed private field
+- Fixed refresh token fallback incorrectly using access token when no refresh token provided
+- Fixed MCP config files written with default permissions; now enforces 0o700/0o600 for secret protection
+- Fixed add wizard ignoring user-chosen environment variable name and auth header name
+- Fixed reauth endpoint discovery misclassifying non-OAuth servers as discovery failures
+- Fixed resolved OAuth tokens leaking into connection config, causing cache churn on token rotation
+- Fixed unvalidated type assertions for `enabled`/`timeout` config fields from user-controlled JSON
+- Fixed uncaught exceptions in `/mcp add` quick-add flow crashing the interactive loop
+- Fixed greedy `/mcp` prefix match routing `/mcpfoo` to MCP controller
+- Fixed stdio transport timeout timer leak keeping process alive after request completion
+
 ### Removed
 
 - Removed `GrepOperations` interface from public API exports
 - Removed `GrepToolOptions` interface from public API exports
 - Removed unused `_options` parameter from `GrepTool` constructor
-
-### Fixed
-
-- Improved browser script evaluation to handle both expression and statement forms, fixing evaluation failures for certain script types
 
 ## [11.8.1] - 2026-02-10
 
