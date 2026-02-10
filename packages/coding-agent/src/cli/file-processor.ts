@@ -7,13 +7,13 @@ import type { ImageContent } from "@oh-my-pi/pi-ai";
 import { isEnoent } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { resolveReadPath } from "../tools/path-utils";
-import { DEFAULT_MAX_BYTES, formatSize } from "../tools/truncate";
+import { formatSize } from "../tools/truncate";
 import { formatDimensionNote, resizeImage } from "../utils/image-resize";
 import { detectSupportedImageMimeTypeFromFile } from "../utils/mime";
 
 // Keep CLI startup responsive and avoid OOM when users pass huge files.
 // If a file exceeds these limits, we include it as a path-only <file/> block.
-const MAX_CLI_TEXT_BYTES = DEFAULT_MAX_BYTES * 100; // 5MB
+const MAX_CLI_TEXT_BYTES = 5 * 1024 * 1024; // 5MB
 const MAX_CLI_IMAGE_BYTES = 25 * 1024 * 1024; // 25MB
 
 export interface ProcessedFiles {
@@ -53,7 +53,7 @@ export async function processFileArguments(fileArgs: string[], options?: Process
 			console.error(
 				chalk.yellow(`Warning: Skipping file contents (too large: ${formatSize(stat.size)}): ${absolutePath}`),
 			);
-			text += `<file name="${absolutePath}"></file>\n`;
+			text += `<file name="${absolutePath}">(skipped: too large, ${formatSize(stat.size)})</file>\n`;
 			continue;
 		}
 

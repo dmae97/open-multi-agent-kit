@@ -24,7 +24,7 @@ const DEFAULT_DIR_LIMIT = 500;
 
 // Avoid OOM when users @mention very large files. Above these limits we skip
 // auto-reading and only include the path in the message.
-const MAX_AUTO_READ_TEXT_BYTES = DEFAULT_MAX_BYTES * 100; // 5MB
+const MAX_AUTO_READ_TEXT_BYTES = 5 * 1024 * 1024; // 5MB
 const MAX_AUTO_READ_IMAGE_BYTES = 25 * 1024 * 1024; // 25MB
 
 function isMentionBoundary(text: string, index: number): boolean {
@@ -191,7 +191,7 @@ export async function generateFileMentionMessages(
 				if (stat.size > MAX_AUTO_READ_IMAGE_BYTES) {
 					files.push({
 						path: filePath,
-						content: "",
+						content: `(skipped auto-read: too large, ${formatSize(stat.size)})`,
 						byteSize: stat.size,
 						skippedReason: "tooLarge",
 					});
@@ -227,7 +227,7 @@ export async function generateFileMentionMessages(
 			if (stat.size > MAX_AUTO_READ_TEXT_BYTES) {
 				files.push({
 					path: filePath,
-					content: "",
+					content: `(skipped auto-read: too large, ${formatSize(stat.size)})`,
 					byteSize: stat.size,
 					skippedReason: "tooLarge",
 				});

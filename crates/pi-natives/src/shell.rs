@@ -38,7 +38,11 @@ use clap::Parser;
 use napi::{
 	bindgen_prelude::*,
 	threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
-	tokio::{self, sync::Mutex as TokioMutex, time},
+	tokio::{
+		self,
+		sync::{Mutex as TokioMutex, mpsc},
+		time,
+	},
 };
 use napi_derive::napi;
 use tokio::io::AsyncReadExt as _;
@@ -550,10 +554,11 @@ async fn run_shell_command(
 	}
 
 	let reader_cancel = CancellationToken::new();
+	let (activity_tx, mut activity_rx) = mpsc::channel::<()>(1);
 	let mut reader_handle = tokio::spawn({
 		let reader_cancel = reader_cancel.clone();
 		async move {
-			read_output(reader_file, on_chunk, reader_cancel).await;
+			read_output(reader_file, on_chunk, reader_cancel, activity_tx).await;
 			Result::<()>::Ok(())
 		}
 	});
@@ -585,12 +590,34 @@ async fn run_shell_command(
 	drop(params);
 
 	// The foreground command can complete while background jobs keep the
-	// stdout/stderr pipe open. Don't hang forever waiting for EOF; drain briefly,
-	// then cancel.
-	if time::timeout(Duration::from_millis(200), &mut reader_handle)
-		.await
-		.is_err()
-	{
+	// stdout/stderr pipe open. Don't hang forever waiting for EOF; drain output
+	// for a short period, then cancel.
+	const POST_EXIT_IDLE: Duration = Duration::from_millis(250);
+	const POST_EXIT_MAX: Duration = Duration::from_secs(2);
+
+	let mut reader_finished = false;
+	let mut idle_timer = Box::pin(time::sleep(POST_EXIT_IDLE));
+	let mut max_timer = Box::pin(time::sleep(POST_EXIT_MAX));
+
+	loop {
+		tokio::select! {
+			res = &mut reader_handle => {
+				let _ = res;
+				reader_finished = true;
+				break;
+			}
+			msg = activity_rx.recv() => {
+				if msg.is_none() {
+					break;
+				}
+				idle_timer.as_mut().reset(time::Instant::now() + POST_EXIT_IDLE);
+			}
+			() = &mut idle_timer => break,
+			() = &mut max_timer => break,
+		}
+	}
+
+	if !reader_finished {
 		reader_cancel.cancel();
 		let _ = reader_handle.await;
 	}
@@ -730,6 +757,7 @@ async fn read_output(
 	reader: fs::File,
 	on_chunk: Option<ThreadsafeFunction<String>>,
 	cancel_token: CancellationToken,
+	activity: mpsc::Sender<()>,
 ) {
 	const REPLACEMENT: &str = "\u{FFFD}";
 	const BUF: usize = 4096;
@@ -751,6 +779,9 @@ async fn read_output(
 			Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
 			Err(_) => break,
 		};
+		if n > 0 {
+			let _ = activity.try_send(());
+		}
 		it += n;
 
 		// Consume as much of `pending` as is decodable *right now*.

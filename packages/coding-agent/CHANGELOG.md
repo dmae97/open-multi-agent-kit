@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added current date to system prompt context in YYYY-MM-DD format for date-aware agent reasoning
@@ -9,6 +10,7 @@
 
 ### Changed
 
+- Changed skipped file messages to include file size information for better visibility into why files were excluded
 - Changed file processing to skip reading files exceeding 5MB (text) or 25MB (images) and include them as path-only references instead
 - Changed @mention auto-reading to skip files exceeding 5MB (text) or 25MB (images) to prevent out-of-memory issues with large files
 - Clarified that subagents automatically inherit full system prompt including AGENTS.md, context files, and skills — do not repeat project rules or conventions in task context
@@ -19,8 +21,9 @@
 ### Fixed
 
 - Fixed bash tool hanging when commands spawn background jobs by properly detecting foreground process completion
-- Fixed crash when auto-reading @mentions for very large files by skipping content injection and referencing the path only
 - Fixed bash tool occasionally hanging after command completion when background jobs keep stdout/stderr open
+- Fixed crash when auto-reading @mentions for very large files by skipping content injection with an explicit "skipped" note
+- Improved bash tool output draining after foreground completion to reduce tail output truncation
 
 ## [11.8.0] - 2026-02-10
 ### Added
