@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [11.11.0] - 2026-02-10
+
 ### Breaking Changes
 
 - Replaced `./models.generated` export with `./models.json` - update imports from `import { MODELS } from './models.generated'` to `import MODELS from './models.json' with { type: 'json' }`
