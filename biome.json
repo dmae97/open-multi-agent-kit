@@ -42,7 +42,6 @@
 			"!**/vendor/**/*",
 			"!**/node_modules/**/*",
 			"!**/test-sessions.ts",
-			"!**/models.generated.ts",
 			"!**/template.generated.ts",
 			"!**/gen/agent_pb.ts"
 		]

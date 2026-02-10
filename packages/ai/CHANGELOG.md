@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+### Breaking Changes
+
+- Replaced `./models.generated` export with `./models.json` - update imports from `import { MODELS } from './models.generated'` to `import MODELS from './models.json' with { type: 'json' }`
+
+### Changed
+
+- Changed models export from TypeScript module to JSON format for improved performance and reduced bundle size
+- Updated `@anthropic-ai/sdk` dependency from ^0.72.1 to ^0.74.0
 
 ## [11.10.0] - 2026-02-10
 ### Added

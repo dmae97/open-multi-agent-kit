@@ -348,10 +348,10 @@ Our fork has architectural decisions that differ from upstream. **Do not port th
 
 ### Auth Storage
 
-| Upstream                        | Our Fork                                    | Notes                                                 |
-| ------------------------------- | ------------------------------------------- | ----------------------------------------------------- |
-| `proper-lockfile` + `auth.json` | `agent.db` (bun:sqlite)                     | Credentials stored exclusively in `agent.db`          |
-| Single credential per provider  | Multi-credential with round-robin selection | Session affinity and backoff logic preserved          |
+| Upstream                        | Our Fork                                    | Notes                                        |
+| ------------------------------- | ------------------------------------------- | -------------------------------------------- |
+| `proper-lockfile` + `auth.json` | `agent.db` (bun:sqlite)                     | Credentials stored exclusively in `agent.db` |
+| Single credential per provider  | Multi-credential with round-robin selection | Session affinity and backoff logic preserved |
 
 ### Extensions
 
@@ -367,7 +367,7 @@ When porting, **skip** these files/features entirely:
 - `footer-data-provider.ts` — we use StatusLineComponent
 - `clipboard-image.ts` — clipboard is in `@oh-my-pi/pi-natives` N-API module
 - GitHub workflow files — we have our own CI
-- `models.generated.ts` — auto-generated, regenerate locally
+- `models.generated.ts` — auto-generated, regenerate locally (as models.json instead)
 
 ### Features We Added (Preserve These)
 
