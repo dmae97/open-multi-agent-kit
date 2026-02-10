@@ -6,20 +6,6 @@
 import { type CommandEntry, run } from "@oh-my-pi/pi-utils/cli";
 import { APP_NAME, VERSION } from "./config";
 
-// Unwrap AggregateError in console.warn to surface real messages
-const originalWarn = console.warn;
-console.warn = (...args: unknown[]) => {
-	for (const arg of args) {
-		if (arg instanceof AggregateError) {
-			for (const err of arg.errors) {
-				originalWarn(err instanceof Error ? (err.stack ?? err.message) : String(err));
-			}
-			return;
-		}
-	}
-	originalWarn(...args);
-};
-
 process.title = APP_NAME;
 
 const commands: CommandEntry[] = [
@@ -46,14 +32,27 @@ async function showHelp(config: import("@oh-my-pi/pi-utils/cli").CliConfig): Pro
 	}
 }
 
+/**
+ * Determine whether argv[0] is a known subcommand name.
+ * If not, the entire argv is treated as args to the default "launch" command.
+ */
+function isSubcommand(first: string | undefined): boolean {
+	if (!first || first.startsWith("-") || first.startsWith("@")) return false;
+	return commands.some(e => e.name === first || e.aliases?.includes(first));
+}
+
 /** Run the CLI with the given argv (no `process.argv` prefix). */
 export function runCli(argv: string[]): Promise<void> {
-	const runArgv = argv.length === 0 || argv[0]?.startsWith("-") ? ["launch", ...argv] : argv;
+	// --help and --version are handled by run() directly, don't rewrite those.
+	// Everything else that isn't a known subcommand routes to "launch".
+	const first = argv[0];
+	const runArgv =
+		first === "--help" || first === "-h" || first === "--version" || first === "-v" || first === "help"
+			? argv
+			: isSubcommand(first)
+				? argv
+				: ["launch", ...argv];
 	return run({ bin: APP_NAME, version: VERSION, argv: runArgv, commands, help: showHelp });
 }
 
-runCli(process.argv.slice(2)).catch((error: unknown) => {
-	const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
-	process.stderr.write(`${message}\n`);
-	process.exit(1);
-});
+await runCli(process.argv.slice(2));

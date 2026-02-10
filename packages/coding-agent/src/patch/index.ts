@@ -55,6 +55,8 @@ export {
 	formatHashLines,
 	HashlineMismatchError,
 	parseLineRef,
+	streamHashLinesFromLines,
+	streamHashLinesFromUtf8,
 	validateLineRef,
 } from "./hashline";
 // Normalization

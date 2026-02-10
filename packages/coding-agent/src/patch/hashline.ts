@@ -1,15 +1,15 @@
 /**
  * Hashline edit mode — a line-addressable edit format using content hashes.
  *
- * Each line in a file is identified by its 1-indexed line number and a 4-character
- * hex hash derived from the line content and the line number (xxHash64 with the
- * line number as seed, truncated to 4 hex chars).
+ * Each line in a file is identified by its 1-indexed line number and a short
+ * hex hash derived from the normalized line content (xxHash64, truncated to 2
+ * hex chars).
  * The combined `LINE:HASH` reference acts as both an address and a staleness check:
  * if the file has changed since the caller last read it, hash mismatches are caught
  * before any mutation occurs.
  *
  * Displayed format: `LINENUM:HASH| CONTENT`
- * Reference format: `"LINENUM:HASH"` (e.g. `"5:a3f2"`)
+ * Reference format: `"LINENUM:HASH"` (e.g. `"5:a3"`)
  */
 
 import type { HashlineEdit, HashMismatch, SrcSpec } from "./types";
@@ -305,11 +305,11 @@ const HASH_MASK = BigInt((1 << (HASH_LEN * 4)) - 1);
 const HEX_DICT = Array.from({ length: Number(HASH_MASK) + 1 }, (_, i) => i.toString(16).padStart(HASH_LEN, "0"));
 
 /**
- * Compute the 4-character hex hash of a single line.
+ * Compute a short hex hash of a single line.
  *
- * Uses xxHash64 truncated to the first 4 hex characters.
- * The line number is included as a seed so the same content on different lines
- * produces different hashes.
+ * Uses xxHash64 on a whitespace-normalized line, truncated to {@link HASH_LEN}
+ * hex characters. The `idx` parameter is accepted for compatibility with older
+ * call sites, but is not currently mixed into the hash.
  * The line input should not include a trailing newline.
  */
 export function computeLineHash(idx: number, line: string): string {
@@ -333,7 +333,7 @@ export function computeLineHash(idx: number, line: string): string {
  * @example
  * ```
  * formatHashLines("function hi() {\n  return;\n}")
- * // "1:a3f2| function hi() {\n2:b1c0|   return;\n3:de45| }"
+ * // "1:HH| function hi() {\n2:HH|   return;\n3:HH| }"
  * ```
  */
 export function formatHashLines(content: string, startLine = 1): string {
@@ -345,6 +345,218 @@ export function formatHashLines(content: string, startLine = 1): string {
 			return `${num}:${hash}| ${line}`;
 		})
 		.join("\n");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Hashline streaming formatter
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface HashlineStreamOptions {
+	/** First line number to use when formatting (1-indexed). */
+	startLine?: number;
+	/** Maximum formatted lines per yielded chunk (default: 200). */
+	maxChunkLines?: number;
+	/** Maximum UTF-8 bytes per yielded chunk (default: 64 KiB). */
+	maxChunkBytes?: number;
+}
+
+function isReadableStream(value: unknown): value is ReadableStream<Uint8Array> {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"getReader" in value &&
+		typeof (value as { getReader?: unknown }).getReader === "function"
+	);
+}
+
+async function* bytesFromReadableStream(stream: ReadableStream<Uint8Array>): AsyncGenerator<Uint8Array> {
+	const reader = stream.getReader();
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) return;
+			if (value) yield value;
+		}
+	} finally {
+		reader.releaseLock();
+	}
+}
+
+/**
+ * Stream hashline-formatted output from a UTF-8 byte source.
+ *
+ * This is intended for large files where callers want incremental output
+ * (e.g. while reading from a file handle) rather than allocating a single
+ * large string.
+ */
+export async function* streamHashLinesFromUtf8(
+	source: ReadableStream<Uint8Array> | AsyncIterable<Uint8Array>,
+	options: HashlineStreamOptions = {},
+): AsyncGenerator<string> {
+	const startLine = options.startLine ?? 1;
+	const maxChunkLines = options.maxChunkLines ?? 200;
+	const maxChunkBytes = options.maxChunkBytes ?? 64 * 1024;
+	const decoder = new TextDecoder("utf-8");
+	const chunks = isReadableStream(source) ? bytesFromReadableStream(source) : source;
+	let lineNum = startLine;
+	let pending = "";
+	let sawAnyText = false;
+	let endedWithNewline = false;
+	let outLines: string[] = [];
+	let outBytes = 0;
+
+	const flush = (): string | undefined => {
+		if (outLines.length === 0) return undefined;
+		const chunk = outLines.join("\n");
+		outLines = [];
+		outBytes = 0;
+		return chunk;
+	};
+
+	const pushLine = (line: string): string[] => {
+		const formatted = `${lineNum}:${computeLineHash(lineNum, line)}| ${line}`;
+		lineNum++;
+
+		const chunksToYield: string[] = [];
+		const sepBytes = outLines.length === 0 ? 0 : 1; // "\n"
+		const lineBytes = Buffer.byteLength(formatted, "utf-8");
+
+		if (
+			outLines.length > 0 &&
+			(outLines.length >= maxChunkLines || outBytes + sepBytes + lineBytes > maxChunkBytes)
+		) {
+			const flushed = flush();
+			if (flushed) chunksToYield.push(flushed);
+		}
+
+		outLines.push(formatted);
+		outBytes += (outLines.length === 1 ? 0 : 1) + lineBytes;
+
+		if (outLines.length >= maxChunkLines || outBytes >= maxChunkBytes) {
+			const flushed = flush();
+			if (flushed) chunksToYield.push(flushed);
+		}
+
+		return chunksToYield;
+	};
+
+	const consumeText = (text: string): string[] => {
+		if (text.length === 0) return [];
+		sawAnyText = true;
+		pending += text;
+		const chunksToYield: string[] = [];
+		while (true) {
+			const idx = pending.indexOf("\n");
+			if (idx === -1) break;
+			const line = pending.slice(0, idx);
+			pending = pending.slice(idx + 1);
+			endedWithNewline = true;
+			chunksToYield.push(...pushLine(line));
+		}
+		if (pending.length > 0) endedWithNewline = false;
+		return chunksToYield;
+	};
+	for await (const chunk of chunks) {
+		for (const out of consumeText(decoder.decode(chunk, { stream: true }))) {
+			yield out;
+		}
+	}
+
+	for (const out of consumeText(decoder.decode())) {
+		yield out;
+	}
+	if (!sawAnyText) {
+		// Mirror `"".split("\n")` behavior: one empty line.
+		for (const out of pushLine("")) {
+			yield out;
+		}
+	} else if (pending.length > 0 || endedWithNewline) {
+		// Emit the final line (may be empty if the file ended with a newline).
+		for (const out of pushLine(pending)) {
+			yield out;
+		}
+	}
+
+	const last = flush();
+	if (last) yield last;
+}
+
+/**
+ * Stream hashline-formatted output from an (async) iterable of lines.
+ *
+ * Each yielded chunk is a `\n`-joined string of one or more formatted lines.
+ */
+export async function* streamHashLinesFromLines(
+	lines: Iterable<string> | AsyncIterable<string>,
+	options: HashlineStreamOptions = {},
+): AsyncGenerator<string> {
+	const startLine = options.startLine ?? 1;
+	const maxChunkLines = options.maxChunkLines ?? 200;
+	const maxChunkBytes = options.maxChunkBytes ?? 64 * 1024;
+
+	let lineNum = startLine;
+	let outLines: string[] = [];
+	let outBytes = 0;
+	let sawAnyLine = false;
+	const flush = (): string | undefined => {
+		if (outLines.length === 0) return undefined;
+		const chunk = outLines.join("\n");
+		outLines = [];
+		outBytes = 0;
+		return chunk;
+	};
+
+	const pushLine = (line: string): string[] => {
+		sawAnyLine = true;
+		const formatted = `${lineNum}:${computeLineHash(lineNum, line)}| ${line}`;
+		lineNum++;
+
+		const chunksToYield: string[] = [];
+		const sepBytes = outLines.length === 0 ? 0 : 1;
+		const lineBytes = Buffer.byteLength(formatted, "utf-8");
+
+		if (
+			outLines.length > 0 &&
+			(outLines.length >= maxChunkLines || outBytes + sepBytes + lineBytes > maxChunkBytes)
+		) {
+			const flushed = flush();
+			if (flushed) chunksToYield.push(flushed);
+		}
+
+		outLines.push(formatted);
+		outBytes += (outLines.length === 1 ? 0 : 1) + lineBytes;
+
+		if (outLines.length >= maxChunkLines || outBytes >= maxChunkBytes) {
+			const flushed = flush();
+			if (flushed) chunksToYield.push(flushed);
+		}
+
+		return chunksToYield;
+	};
+
+	const asyncIterator = (lines as AsyncIterable<string>)[Symbol.asyncIterator];
+	if (typeof asyncIterator === "function") {
+		for await (const line of lines as AsyncIterable<string>) {
+			for (const out of pushLine(line)) {
+				yield out;
+			}
+		}
+	} else {
+		for (const line of lines as Iterable<string>) {
+			for (const out of pushLine(line)) {
+				yield out;
+			}
+		}
+	}
+	if (!sawAnyLine) {
+		// Mirror `"".split("\n")` behavior: one empty line.
+		for (const out of pushLine("")) {
+			yield out;
+		}
+	}
+
+	const last = flush();
+	if (last) yield last;
 }
 
 /**
@@ -360,7 +572,7 @@ export function parseLineRef(ref: string): { line: number; hash: string } {
 	const prefixMatch = strictMatch ? null : cleaned.match(new RegExp(`^(\\d+):([0-9a-fA-F]{${HASH_LEN}})`));
 	const match = strictMatch ?? prefixMatch;
 	if (!match) {
-		throw new Error(`Invalid line reference "${ref}". Expected format "LINE:HASH" (e.g. "5:a3f2").`);
+		throw new Error(`Invalid line reference "${ref}". Expected format "LINE:HASH" (e.g. "5:aa").`);
 	}
 	const line = Number.parseInt(match[1], 10);
 	if (line < 1) {

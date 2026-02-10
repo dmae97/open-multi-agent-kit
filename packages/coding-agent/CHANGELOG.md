@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Added
+
+- Exported `streamHashLinesFromUtf8` and `streamHashLinesFromLines` functions for streaming hashline-formatted output with configurable chunking
+- Added `HashlineStreamOptions` interface to control streaming behavior (startLine, maxChunkLines, maxChunkBytes)
+- Added `streamHashLinesFromUtf8` function to incrementally format content with hash lines from a UTF-8 byte stream
+- Added `streamHashLinesFromLines` function to incrementally format content with hash lines from an iterable of lines
+
+### Changed
+
+- Updated hashline format to use 2-character hex hashes instead of 4-character hashes for more compact line references
+- Modified `computeLineHash` to normalize whitespace in line content and removed line number from hash seed for consistency
+- Improved CLI argument parsing to explicitly handle `--help`, `--version`, and subcommand detection instead of prefix-based routing
+
+### Removed
+
+- Removed `@types/diff` dev dependency
+- Removed AggregateError unwrapping from console.warn in CLI initialization
+
 ## [11.10.1] - 2026-02-10
 ### Changed
 

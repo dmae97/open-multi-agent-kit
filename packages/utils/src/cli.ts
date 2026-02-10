@@ -24,6 +24,7 @@ export interface FlagDescriptor<K extends "string" | "boolean" | "integer" = "st
 	options?: readonly string[];
 	required?: boolean;
 }
+
 export interface ArgDescriptor {
 	kind: "string";
 	description?: string;
@@ -31,6 +32,7 @@ export interface ArgDescriptor {
 	multiple?: boolean;
 	options?: readonly string[];
 }
+
 interface FlagInput {
 	description?: string;
 	char?: string;
@@ -39,12 +41,14 @@ interface FlagInput {
 	options?: readonly string[];
 	required?: boolean;
 }
+
 interface ArgInput {
 	description?: string;
 	required?: boolean;
 	multiple?: boolean;
 	options?: readonly string[];
 }
+
 /** Builders that match the `Flags.*()` / `Args.*()` API from oclif. */
 export const Flags = {
 	string<T extends FlagInput>(opts?: T): FlagDescriptor<"string"> & T {
@@ -57,6 +61,7 @@ export const Flags = {
 		return { kind: "integer" as const, ...opts } as FlagDescriptor<"integer"> & T;
 	},
 };
+
 export const Args = {
 	string<T extends ArgInput>(opts?: T): ArgDescriptor & T {
 		return { kind: "string" as const, ...opts } as ArgDescriptor & T;
@@ -147,7 +152,7 @@ export abstract class Command {
 		const Cmd = _Cmd as CommandCtor;
 		const flagDefs = (Cmd.flags ?? {}) as Record<string, FlagDescriptor>;
 		const argDefs = (Cmd.args ?? {}) as Record<string, ArgDescriptor>;
-		const strict = Cmd.strict ?? true;
+		const strict = Cmd.strict !== false;
 
 		// Build node:util parseArgs options from flag descriptors
 		const options: Record<
@@ -166,14 +171,16 @@ export abstract class Command {
 			options[name] = opt;
 		}
 
+		// strict=false when command declares args (positionals must pass through)
+		// or when the command itself opts out
 		const { values: rawValues, positionals } = nodeParseArgs({
 			args: this.argv,
 			options,
 			allowPositionals: true,
-			strict: strict && Object.keys(argDefs).length === 0,
+			strict,
 		});
 
-		// Convert raw values to proper types
+		// Convert raw values to proper types and validate
 		const flags: Record<string, unknown> = {};
 		for (const [name, desc] of Object.entries(flagDefs)) {
 			const raw = rawValues[name];
@@ -181,27 +188,55 @@ export abstract class Command {
 				if (raw === undefined || typeof raw === "boolean") {
 					flags[name] = desc.default ?? undefined;
 				} else {
-					flags[name] = Number.parseInt(raw as string, 10);
+					const n = Number.parseInt(raw as string, 10);
+					if (Number.isNaN(n)) {
+						throw new Error(`Expected integer for --${name}, got "${raw}"`);
+					}
+					flags[name] = n;
 				}
 			} else if (desc.kind === "boolean") {
 				flags[name] =
 					raw !== undefined ? Boolean(raw) : desc.default !== undefined ? Boolean(desc.default) : undefined;
 			} else {
 				// string
-				flags[name] = raw !== undefined && typeof raw !== "boolean" ? raw : (desc.default ?? undefined);
+				const val = raw !== undefined && typeof raw !== "boolean" ? raw : (desc.default ?? undefined);
+				// Validate options constraint
+				if (val !== undefined && desc.options && !Array.isArray(val)) {
+					if (!desc.options.includes(val as string)) {
+						throw new Error(`Expected --${name} to be one of: ${[...desc.options].join(", ")}; got "${val}"`);
+					}
+				}
+				flags[name] = val;
+			}
+			// Validate required
+			if (desc.required && flags[name] === undefined) {
+				throw new Error(`Missing required flag: --${name}`);
 			}
 		}
 
-		// Map positionals to named args in declaration order
+		// Map positionals to named args in declaration order and validate
 		const args: Record<string, unknown> = {};
 		let posIdx = 0;
 		for (const [argName, desc] of Object.entries(argDefs)) {
 			if (desc.multiple) {
-				args[argName] = positionals.slice(posIdx);
+				const val = positionals.slice(posIdx);
+				args[argName] = val.length > 0 ? val : undefined;
 				posIdx = positionals.length;
 			} else {
-				args[argName] = positionals[posIdx];
+				const val = positionals[posIdx];
+				args[argName] = val;
 				posIdx++;
+			}
+			// Validate required
+			if (desc.required && args[argName] === undefined) {
+				throw new Error(`Missing required argument: ${argName}`);
+			}
+			// Validate options constraint
+			const argVal = args[argName];
+			if (argVal !== undefined && desc.options && typeof argVal === "string") {
+				if (!desc.options.includes(argVal)) {
+					throw new Error(`Expected ${argName} to be one of: ${[...desc.options].join(", ")}; got "${argVal}"`);
+				}
 			}
 		}
 
@@ -213,7 +248,7 @@ export abstract class Command {
 // Help rendering
 // ---------------------------------------------------------------------------
 
-/** Render full root help: header, index command details, subcommand list. */
+/** Render full root help: header, default command details, subcommand list. */
 export function renderRootHelp(config: CliConfig): void {
 	const { bin, version, commands } = config;
 	const lines: string[] = [];
@@ -221,14 +256,15 @@ export function renderRootHelp(config: CliConfig): void {
 	lines.push("USAGE");
 	lines.push(`  $ ${bin} [COMMAND]\n`);
 
-	// Show the index command's flags/args/examples inline
-	const indexCmd = commands.get("index");
-	if (indexCmd) {
-		renderCommandBody(lines, indexCmd);
+	// Show the default command's flags/args/examples inline.
+	// The default command is the one marked hidden (it's the implicit entry point).
+	const defaultCmd = [...commands.values()].find(C => C.hidden);
+	if (defaultCmd) {
+		renderCommandBody(lines, defaultCmd);
 	}
 
 	// List visible subcommands
-	const visible = [...commands.entries()].filter(([name, C]) => !C.hidden && name !== "index");
+	const visible = [...commands.entries()].filter(([, C]) => !C.hidden);
 	if (visible.length > 0) {
 		lines.push("COMMANDS");
 		const maxLen = Math.max(...visible.map(([n]) => n.length));
@@ -322,6 +358,11 @@ export interface RunOptions {
 	help?: (config: CliConfig) => Promise<void> | void;
 }
 
+/** Find a command entry by exact name or alias. */
+function findEntry(commands: CommandEntry[], id: string): CommandEntry | undefined {
+	return commands.find(e => e.name === id) ?? commands.find(e => e.aliases?.includes(id));
+}
+
 /**
  * Main entry point — replaces `run()` from @oclif/core.
  *
@@ -331,11 +372,11 @@ export interface RunOptions {
 export async function run(opts: RunOptions): Promise<void> {
 	const { bin, version, argv } = opts;
 
-	const commandId = argv[0] ?? "index";
+	const commandId = argv[0] ?? "";
 	const commandArgv = argv.slice(1);
 
 	// Top-level help
-	if (commandId === "--help" || commandId === "-h" || commandId === "help") {
+	if (commandId === "--help" || commandId === "-h" || commandId === "help" || commandId === "") {
 		const config = await loadAllCommands(opts);
 		if (opts.help) {
 			await opts.help(config);
@@ -354,9 +395,11 @@ export async function run(opts: RunOptions): Promise<void> {
 	// Per-command help
 	if (commandArgv.includes("--help") || commandArgv.includes("-h")) {
 		const config = await loadAllCommands(opts);
-		const Cmd = config.commands.get(commandId);
+		// Resolve aliases for help too
+		const entry = findEntry(opts.commands, commandId);
+		const Cmd = entry ? config.commands.get(entry.name) : undefined;
 		if (Cmd) {
-			renderCommandHelp(bin, commandId, Cmd);
+			renderCommandHelp(bin, entry!.name, Cmd);
 		} else {
 			process.stderr.write(`Unknown command: ${commandId}\n`);
 		}
@@ -364,10 +407,7 @@ export async function run(opts: RunOptions): Promise<void> {
 	}
 
 	// Find command by name or alias
-	let entry = opts.commands.find(e => e.name === commandId);
-	if (!entry) {
-		entry = opts.commands.find(e => e.aliases?.includes(commandId));
-	}
+	const entry = findEntry(opts.commands, commandId);
 
 	if (!entry) {
 		process.stderr.write(`Error: command ${commandId} not found\n`);

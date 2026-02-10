@@ -6,6 +6,8 @@ import {
 	type HashlineEdit,
 	HashlineMismatchError,
 	parseLineRef,
+	streamHashLinesFromLines,
+	streamHashLinesFromUtf8,
 	validateLineRef,
 } from "@oh-my-pi/pi-coding-agent/patch";
 
@@ -84,6 +86,59 @@ describe("formatHashLines", () => {
 			const lineContent = match![3];
 			expect(computeLineHash(lineNum, lineContent)).toBe(hash);
 		}
+	});
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// streamHashLinesFromUtf8 / streamHashLinesFromLines
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("streamHashLinesFrom*", () => {
+	async function collectText(gen: AsyncIterable<string>): Promise<string> {
+		const parts: string[] = [];
+		for await (const part of gen) {
+			parts.push(part);
+		}
+		return parts.join("\n");
+	}
+
+	async function* utf8Chunks(text: string, chunkSize: number): AsyncGenerator<Uint8Array> {
+		const bytes = new TextEncoder().encode(text);
+		for (let i = 0; i < bytes.length; i += chunkSize) {
+			yield bytes.slice(i, i + chunkSize);
+		}
+	}
+
+	test("streamHashLinesFromUtf8 matches formatHashLines", async () => {
+		const content = "foo\nbar\nbaz";
+		const streamed = await collectText(streamHashLinesFromUtf8(utf8Chunks(content, 2), { maxChunkLines: 1 }));
+		expect(streamed).toBe(formatHashLines(content));
+	});
+
+	test("streamHashLinesFromUtf8 handles empty content", async () => {
+		const content = "";
+		const streamed = await collectText(streamHashLinesFromUtf8(utf8Chunks(content, 2), { maxChunkLines: 1 }));
+		expect(streamed).toBe(formatHashLines(content));
+	});
+
+	test("streamHashLinesFromLines matches formatHashLines (including trailing newline)", async () => {
+		const content = "foo\nbar\n";
+		const lines = ["foo", "bar", ""]; // match `content.split("\\n")`
+		const streamed = await collectText(streamHashLinesFromLines(lines, { maxChunkLines: 2 }));
+		expect(streamed).toBe(formatHashLines(content));
+	});
+
+	test("chunking respects maxChunkLines", async () => {
+		const content = "a\nb\nc";
+		const parts: string[] = [];
+		for await (const part of streamHashLinesFromUtf8(utf8Chunks(content, 1), {
+			maxChunkLines: 1,
+			maxChunkBytes: 1024,
+		})) {
+			parts.push(part);
+		}
+		expect(parts).toHaveLength(3);
+		expect(parts.join("\n")).toBe(formatHashLines(content));
 	});
 });
 
