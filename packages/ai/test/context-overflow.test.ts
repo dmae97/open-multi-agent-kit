@@ -165,8 +165,7 @@ describe("Context overflow error handling", () => {
 
 	describe.skipIf(!e2eApiKey("OPENAI_API_KEY"))("OpenAI Completions", () => {
 		it("gpt-4o-mini - should detect overflow via isContextOverflow", async () => {
-			const model = { ...getModel("openai", "gpt-4o-mini") };
-			model.api = "openai-completions" as any;
+			const model = { ...getModel("openai", "gpt-4o-mini"), api: "openai-completions" as const };
 			const result = await testContextOverflow(model, Bun.env.OPENAI_API_KEY!);
 			logResult(result);
 

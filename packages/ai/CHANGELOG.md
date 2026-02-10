@@ -1,12 +1,19 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Breaking Changes
 
 - Replaced `./models.generated` export with `./models.json` - update imports from `import { MODELS } from './models.generated'` to `import MODELS from './models.json' with { type: 'json' }`
 
+### Added
+
+- Added TypeScript type declarations for `models.json` to enable proper type inference when importing the JSON file
+
 ### Changed
 
+- Updated available models in google-antigravity provider with new model variants and updated context window/token limits
+- Simplified type signatures for `getModel()` and `getModels()` functions for improved usability
 - Changed models export from TypeScript module to JSON format for improved performance and reduced bundle size
 - Updated `@anthropic-ai/sdk` dependency from ^0.72.1 to ^0.74.0
 
