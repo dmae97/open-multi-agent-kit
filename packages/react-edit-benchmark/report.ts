@@ -112,7 +112,10 @@ export function generateReport(result: BenchmarkResult): string {
 	lines.push(
 		`| Edit Fuzzy Threshold | ${config.editFuzzyThreshold === undefined ? "auto" : config.editFuzzyThreshold} |`,
 	);
+	lines.push(`| Guided Mode | ${config.guided === false ? "no" : "yes"} |`);
+	lines.push(`| Max Attempts | ${config.maxAttempts ?? 1} |`);
 	lines.push(`| Require Edit Tool | ${config.requireEditToolCall ? "yes" : "no"} |`);
+	lines.push(`| Require Read Tool | ${config.requireReadToolCall ? "yes" : "no"} |`);
 	lines.push(`| No-Edit Baseline | ${config.noEditRequired ? "yes" : "no"} |`);
 	lines.push("");
 

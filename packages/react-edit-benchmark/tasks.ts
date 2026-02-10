@@ -36,6 +36,11 @@ export interface TaskMetadata {
 	mutationCategory?: string;
 	difficulty?: string;
 	difficultyScore?: number;
+	filePath?: string;
+	fileName?: string;
+	lineNumber?: number;
+	originalSnippet?: string;
+	mutatedSnippet?: string;
 }
 
 export const DEFAULT_TARBALL_PATH = join(import.meta.dir, "fixtures.tar.gz");
@@ -271,6 +276,24 @@ function parseTaskMetadata(raw: Record<string, unknown> | undefined): TaskMetada
 	}
 	if (typeof raw.difficultyScore === "number" && metadata.difficultyScore === undefined) {
 		metadata.difficultyScore = raw.difficultyScore;
+	}
+	if (typeof raw.file_path === "string") {
+		metadata.filePath = raw.file_path;
+	}
+	if (typeof raw.line_number === "number") {
+		metadata.lineNumber = raw.line_number;
+	}
+	if (typeof raw.original_snippet === "string") {
+		metadata.originalSnippet = raw.original_snippet;
+	}
+	if (typeof raw.mutated_snippet === "string") {
+		metadata.mutatedSnippet = raw.mutated_snippet;
+	}
+	if (typeof raw.fileName === "string") {
+		metadata.fileName = raw.fileName;
+	}
+	if (!metadata.fileName && typeof metadata.filePath === "string" && metadata.filePath.trim().length > 0) {
+		metadata.fileName = basename(metadata.filePath);
 	}
 	return Object.keys(metadata).length > 0 ? metadata : undefined;
 }

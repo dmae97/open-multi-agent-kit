@@ -54,10 +54,14 @@ Options:
   --edit-fuzzy <bool>       Fuzzy matching: true, false, auto (default: auto)
   --edit-fuzzy-threshold <n> Fuzzy threshold 0-1 or auto (default: auto)
   --auto-format             Auto-format output files after verify (debug only)
+  --guided                  Include an authoritative suggested edit payload (default: false)
+  --no-guided               Disable guided mode
+  --max-attempts <n>        Max prompt attempts per run (default: 1)
   --output <file>           Output file (default: run_<model>_<variant>_<fuzzy>_<threshold>_<timestamp>.md)
   --format <fmt>            Output format: markdown, json (default: markdown)
   --check-fixtures          Validate fixtures and exit
   --require-edit-tool-call  Require edit tool usage for success (default: false)
+  --require-read-tool-call  Require read tool usage for success (default: false)
   --no-edit-required        Remove "must edit" prompt requirement (default: false)
   --list                    List available tasks and exit
   --help                    Show this help message
@@ -146,7 +150,11 @@ async function main(): Promise<void> {
 			format: { type: "string", default: "markdown" },
 			"check-fixtures": { type: "boolean", default: false },
 			"auto-format": { type: "boolean", default: false },
+			guided: { type: "boolean", default: false },
+			"no-guided": { type: "boolean", default: false },
+			"max-attempts": { type: "string", default: "1" },
 			"require-edit-tool-call": { type: "boolean", default: false },
+			"require-read-tool-call": { type: "boolean", default: false },
 			"no-edit-required": { type: "boolean", default: false },
 			"edit-variant": { type: "string" },
 			"edit-fuzzy": { type: "string" },
@@ -223,6 +231,12 @@ async function main(): Promise<void> {
 		process.exit(1);
 	}
 
+	const maxAttempts = parseInt(values["max-attempts"] ?? "2", 10);
+	if (isNaN(maxAttempts) || maxAttempts < 1 || maxAttempts > 5) {
+			console.error(`Invalid max-attempts value: ${values["max-attempts"]}. Must be 1-5.`);
+		process.exit(1);
+	}
+
 	let tasksToRun = allTasks;
 	if (values.tasks) {
 		const taskIds = values.tasks.split(",").map((s) => s.trim());
@@ -272,6 +286,8 @@ async function main(): Promise<void> {
 		}
 	}
 
+	const guided = values["no-guided"] ? false : values.guided;
+
 	const config: BenchmarkConfig = {
 		provider,
 		model,
@@ -280,7 +296,10 @@ async function main(): Promise<void> {
 		timeout,
 		taskConcurrency,
 		autoFormat: values["auto-format"],
+			guided,
+			maxAttempts,
 		requireEditToolCall: values["require-edit-tool-call"],
+			requireReadToolCall: values["require-read-tool-call"],
 		noEditRequired: values["no-edit-required"],
 		editVariant,
 		editFuzzy,
@@ -300,8 +319,13 @@ async function main(): Promise<void> {
 	if (config.autoFormat) {
 		console.log("Auto-format: enabled");
 	}
+	console.log(`Guided mode: ${config.guided ? "enabled" : "disabled"}`);
+	console.log(`Max attempts: ${config.maxAttempts}`);
 	if (config.requireEditToolCall) {
 		console.log("Require edit tool call: yes");
+	}
+	if (config.requireReadToolCall) {
+			console.log("Require read tool call: yes");
 	}
 	if (config.noEditRequired) {
 		console.log("No-edit-required baseline: yes");

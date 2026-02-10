@@ -4,14 +4,20 @@
  * Orchestrates benchmark runs by launching RPC clients, sending prompts,
  * and verifying results. Supports parallel runs for reliability measurement.
  */
+/// <reference types="./bun-imports.d.ts" />
 import * as fs from "node:fs/promises";
 import { join } from "node:path";
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { RpcClient } from "@oh-my-pi/pi-coding-agent";
 import { TempDir } from "@oh-my-pi/pi-utils";
+import { renderPromptTemplate } from "../coding-agent/src/config/prompt-templates";
+import { computeLineHash } from "../coding-agent/src/patch/hashline";
+import { diffLines } from "diff";
 import { formatDirectory } from "./formatter";
 import { type EditTask, extractTaskFiles } from "./tasks";
 import { verifyExpectedFileSubset, verifyExpectedFiles } from "./verify";
+
+import benchmarkTaskPrompt from "./prompts/benchmark-task.md" with { type: "text" };
 
 const TMP_DIR = await TempDir.create("@reach-benchmark-");
 const TMP = TMP_DIR.path();
@@ -24,11 +30,150 @@ export interface BenchmarkConfig {
 	timeout: number;
 	taskConcurrency: number;
 	requireEditToolCall?: boolean;
+	requireReadToolCall?: boolean;
 	noEditRequired?: boolean;
 	autoFormat?: boolean;
 	editVariant?: "replace" | "patch" | "hashline" | "auto";
 	editFuzzy?: boolean | "auto";
 	editFuzzyThreshold?: number | "auto";
+	guided?: boolean;
+	maxAttempts?: number;
+}
+
+function splitLines(value: string): string[] {
+	return value.split("\n").filter((line, idx, arr) => idx < arr.length - 1 || line);
+}
+
+type GuidedHashlineEdit = { src: unknown; dst: string };
+
+function buildGuidedHashlineEdits(actual: string, expected: string): GuidedHashlineEdit[] {
+	const changes = diffLines(actual, expected);
+	const actualLines = actual.split("\n");
+
+	let line = 1;
+	let pendingStart = 1;
+	let pendingRemoved: string[] = [];
+	let pendingAdded: string[] = [];
+	const edits: GuidedHashlineEdit[] = [];
+
+	const flush = () => {
+		if (pendingRemoved.length === 0 && pendingAdded.length === 0) {
+			return;
+		}
+
+		if (pendingRemoved.length === 0) {
+			const insertLine = pendingStart;
+			if (pendingAdded.length === 0) return;
+			if (insertLine <= actualLines.length) {
+				const beforeLine = actualLines[insertLine - 1] ?? "";
+				const beforeRef = `${insertLine}:${computeLineHash(insertLine, beforeLine)}`;
+				edits.push({
+					src: { kind: "insertBefore", before: beforeRef },
+					dst: pendingAdded.join("\n"),
+				});
+			} else if (insertLine === actualLines.length + 1 && actualLines.length > 0) {
+				const afterLine = actualLines[actualLines.length - 1] ?? "";
+				const afterRef = `${actualLines.length}:${computeLineHash(actualLines.length, afterLine)}`;
+				edits.push({
+					src: { kind: "insertAfter", after: afterRef },
+					dst: pendingAdded.join("\n"),
+				});
+			}
+		} else {
+			const startLine = pendingStart;
+			const endLine = pendingStart + pendingRemoved.length - 1;
+			const startContent = actualLines[startLine - 1] ?? "";
+			const startRef = `${startLine}:${computeLineHash(startLine, startContent)}`;
+			if (startLine === endLine) {
+				edits.push({ src: { kind: "single", ref: startRef }, dst: pendingAdded.join("\n") });
+			} else {
+				const endContent = actualLines[endLine - 1] ?? "";
+				const endRef = `${endLine}:${computeLineHash(endLine, endContent)}`;
+				edits.push({
+					src: { kind: "range", start: startRef, end: endRef },
+					dst: pendingAdded.join("\n"),
+				});
+			}
+		}
+
+		pendingRemoved = [];
+		pendingAdded = [];
+	};
+
+	for (const change of changes) {
+		const lines = splitLines(change.value);
+		if (!change.added && !change.removed) {
+			flush();
+			line += lines.length;
+			continue;
+		}
+		if (pendingRemoved.length === 0 && pendingAdded.length === 0) {
+			pendingStart = line;
+		}
+		if (change.removed) {
+			pendingRemoved.push(...lines);
+			line += lines.length;
+		}
+		if (change.added) {
+			pendingAdded.push(...lines);
+		}
+	}
+	flush();
+
+	return edits;
+}
+
+async function buildGuidedContext(task: EditTask, cwd: string, expectedDir: string, config: BenchmarkConfig): Promise<string | null> {
+	if (!config.guided) return null;
+	if (config.editVariant !== "hashline") return null;
+
+	const file = task.metadata?.fileName ?? task.files[0];
+	if (!file) return null;
+
+	const actualPath = join(cwd, file);
+	const expectedPath = join(expectedDir, file);
+	const actual = await Bun.file(actualPath).text().catch(() => null);
+	const expected = await Bun.file(expectedPath).text().catch(() => null);
+	if (actual === null || expected === null) return null;
+
+	const edits = buildGuidedHashlineEdits(actual, expected);
+	if (edits.length === 0) return null;
+	if (edits.length > 25) return null;
+
+	const args = { path: file, edits };
+	const argsText = JSON.stringify(args, null, 2);
+	if (argsText.length > 20_000) return null;
+	const metaParts: string[] = [];
+	if (typeof task.metadata?.lineNumber === "number") metaParts.push(`Line: ${task.metadata.lineNumber}`);
+	if (typeof task.metadata?.mutationType === "string") metaParts.push(`Mutation: ${task.metadata.mutationType}`);
+
+	return [
+		`Target file: \`${file}\`${metaParts.length > 0 ? ` (${metaParts.join(", ")})` : ""}.`,
+		"Apply this edit tool call (single call; copy/paste args exactly):",
+		"```diff\n" + argsText + "\n```",
+	].join("\n\n");
+}
+
+function buildInstructions(config: BenchmarkConfig): string {
+	return config.noEditRequired
+		? "Read the relevant files first, then apply the fix."
+		: "Read the relevant files first, then use the edit tool to apply the fix.";
+}
+
+function buildBenchmarkPrompt(params: {
+	multiFile: boolean;
+	taskPrompt: string;
+	guidedContext?: string | null;
+	retryContext?: string | null;
+	config: BenchmarkConfig;
+}): string {
+	return renderPromptTemplate(benchmarkTaskPrompt, {
+		multiFile: params.multiFile,
+		task_prompt: params.taskPrompt,
+		guided_context: params.guidedContext ?? undefined,
+		retry_context: params.retryContext ?? undefined,
+		instructions: buildInstructions(params.config),
+	});
 }
 
 export interface TokenStats {
@@ -223,73 +368,40 @@ async function runSingleTask(
 			await client.setThinkingLevel(config.thinkingLevel);
 		}
 
-		const promptWithContext = `You are working in a repository with a single edit task.
+		const maxAttempts = Math.max(1, Math.floor(config.maxAttempts ?? 1));
+		let retryContext: string | null = null;
+		let allEvents: Array<{ type: string; [key: string]: unknown }> = [];
 
-${task.prompt}
-
-**Important constraints:**
-- Make the minimum change necessary. Do not refactor, improve, or "clean up" other code.
-- If you see multiple similar patterns, only change the ONE that is buggy.
-- Preserve exact code structure. Do not rearrange statements or change formatting.
-
-${
-	config.noEditRequired
-		? "Read the relevant files first, then apply the fix."
-		: "Read the relevant files first, then use the edit tool to apply the fix."
-}`;
-
-		await fs.appendFile(logFile, `{"type":"prompt","message":${JSON.stringify(promptWithContext)}}\n`);
-
-		// Collect events with logging
-		const events: Array<{ type: string; [key: string]: unknown }> = [];
-		const eventsPromise = new Promise<void>((resolve, reject) => {
-			const timer = setTimeout(() => {
-				reject(new Error("Timeout waiting for agent_end"));
-			}, config.timeout);
-
-			let pendingRetry = false;
-
-			client!.onEvent(async (event) => {
-				events.push(event);
-
-				// Only log tool calls and complete messages
-				if (
-					event.type === "tool_execution_start" ||
-					event.type === "tool_execution_end" ||
-					event.type === "message_end"
-				) {
-					await logEvent(event);
-				}
-
-				// Track retry state
-				if ((event.type as string) === "auto_retry_start") {
-					pendingRetry = true;
-				} else if (event.type === "turn_start" && pendingRetry) {
-					pendingRetry = false;
-				}
-
-				if (event.type === "agent_end") {
-					// If there's a pending retry, don't resolve yet
-					if (pendingRetry) {
-						return;
-					}
-					clearTimeout(timer);
-					resolve();
-				}
+		for (let attempt = 0; attempt < maxAttempts; attempt++) {
+			const guidedContext = await buildGuidedContext(task, cwd, expectedDir, config);
+			const promptWithContext = buildBenchmarkPrompt({
+				multiFile: false,
+				taskPrompt: task.prompt,
+				guidedContext,
+				retryContext,
+				config,
 			});
-		});
 
-		await client.prompt(promptWithContext);
-		await eventsPromise;
+			await fs.appendFile(
+				logFile,
+				`{"type":"prompt","attempt":${attempt + 1},"message":${JSON.stringify(promptWithContext)}}\n`,
+			);
 
-		const stats = await client.getSessionStats();
-		tokens = { input: stats.tokens.input, output: stats.tokens.output, total: stats.tokens.total };
-		await logEvent({ type: "stats", ...stats });
+			const statsBefore = await client.getSessionStats();
+			const events = await collectPromptEvents(client, promptWithContext, config, logEvent);
+			const statsAfter = await client.getSessionStats();
+			const attemptTokens = diffTokenStats(statsBefore, statsAfter);
+			tokens = {
+				input: tokens.input + attemptTokens.input,
+				output: tokens.output + attemptTokens.output,
+				total: tokens.total + attemptTokens.total,
+			};
+			await logEvent({ type: "stats", before: statsBefore, after: statsAfter, attempt: attempt + 1 });
+			allEvents = allEvents.concat(events);
 
 		agentResponse = (await client.getLastAssistantText()) ?? undefined;
-		await logEvent({ type: "response", text: agentResponse });
+			await logEvent({ type: "response", text: agentResponse, attempt: attempt + 1 });
 
-		// Count tool calls and track success/failure
 		const pendingEdits = new Map<string, unknown>();
 
 		for (const event of events) {
@@ -320,22 +432,30 @@ ${
 					}
 				}
 			}
-		}
+			}
 
-		patchApplied = toolStats.edit > 0;
+			patchApplied = toolStats.edit > 0;
+			const verification = await verifyExpectedFiles(expectedDir, cwd);
+			if (config.autoFormat) {
+				await formatDirectory(cwd);
+			}
 
-		const verification = await verifyExpectedFiles(expectedDir, cwd);
-		if (config.autoFormat) {
-			await formatDirectory(cwd);
-		}
+			verificationPassed = verification.success;
+			indentScore = verification.indentScore;
+			formattedEquivalent = verification.formattedEquivalent;
+			diffStats = verification.diffStats;
+			diff = verification.diff;
+			if (!verification.success && verification.error) {
+				error = verification.error;
+			}
 
-		verificationPassed = verification.success;
-		indentScore = verification.indentScore;
-		formattedEquivalent = verification.formattedEquivalent;
-		diffStats = verification.diffStats;
-		diff = verification.diff;
-		if (!verification.success && verification.error) {
-			error = verification.error;
+			if (verification.success) {
+				break;
+			}
+
+			retryContext = error
+				? `Verification failed: ${error}${diff ? `\n\nDiff (expected vs actual):\n\n\`\`\`diff\n${diff}\n\`\`\`` : ""}`
+				: "Previous attempt failed.";
 		}
 	} catch (err) {
 		error = err instanceof Error ? err.message : String(err);
@@ -352,7 +472,12 @@ ${
 
 	const duration = Date.now() - startTime;
 	const mustUseEditTool = Boolean(config.requireEditToolCall) && !config.noEditRequired;
-	const success = verificationPassed && (!mustUseEditTool || patchApplied);
+	const mustUseReadTool = Boolean(config.requireReadToolCall) && !config.noEditRequired;
+	const editSucceeded = toolStats.editSuccesses > 0;
+	const success =
+		verificationPassed &&
+		(!mustUseEditTool || editSucceeded) &&
+		(!mustUseReadTool || toolStats.read > 0);
 	const metadata = task.metadata;
 
 	await logEvent({ type: "result", success, patchApplied, verificationPassed, error, duration });
@@ -420,64 +545,91 @@ async function runBatchedTask(
 			`{"type":"meta","task":"${task.id}","run":${runIndex},"workDir":"${cwd}","batched":true}\n`,
 		);
 
-		const promptWithContext = buildPrompt(task, config);
-		await fs.appendFile(logFile, `{"type":"prompt","message":${JSON.stringify(promptWithContext)}}\n`);
+		const maxAttempts = Math.max(1, Math.floor(config.maxAttempts ?? 1));
+		let retryContext: string | null = null;
 
-		const statsBefore = await client.getSessionStats();
-		const events = await collectPromptEvents(client, promptWithContext, config, logEvent);
-		const statsAfter = await client.getSessionStats();
-		tokens = diffTokenStats(statsBefore, statsAfter);
-		await logEvent({ type: "stats", before: statsBefore, after: statsAfter });
+		for (let attempt = 0; attempt < maxAttempts; attempt++) {
+			const guidedContext = await buildGuidedContext(task, cwd, expectedDir, config);
+			const promptWithContext = buildBenchmarkPrompt({
+				multiFile: true,
+				taskPrompt: task.prompt,
+				guidedContext,
+				retryContext,
+				config,
+			});
+			await fs.appendFile(
+				logFile,
+				`{"type":"prompt","attempt":${attempt + 1},"message":${JSON.stringify(promptWithContext)}}\n`,
+			);
 
-		agentResponse = (await client.getLastAssistantText()) ?? undefined;
-		await logEvent({ type: "response", text: agentResponse });
+			const statsBefore = await client.getSessionStats();
+			const events = await collectPromptEvents(client, promptWithContext, config, logEvent);
+			const statsAfter = await client.getSessionStats();
+			const attemptTokens = diffTokenStats(statsBefore, statsAfter);
+			tokens = {
+				input: tokens.input + attemptTokens.input,
+				output: tokens.output + attemptTokens.output,
+				total: tokens.total + attemptTokens.total,
+			};
+			await logEvent({ type: "stats", before: statsBefore, after: statsAfter, attempt: attempt + 1 });
 
-		const pendingEdits = new Map<string, unknown>();
+			agentResponse = (await client.getLastAssistantText()) ?? undefined;
+			await logEvent({ type: "response", text: agentResponse, attempt: attempt + 1 });
 
-		for (const event of events) {
-			if (event.type === "tool_execution_start") {
-				const e = event as { toolName?: string; toolCallId?: string; args?: unknown };
-				const toolName = e.toolName;
-				if (toolName === "read") toolStats.read++;
-				else if (toolName === "edit") {
-					toolStats.edit++;
-					if (e.toolCallId) pendingEdits.set(e.toolCallId, e.args);
-				} else if (toolName === "write") toolStats.write++;
+			const pendingEdits = new Map<string, unknown>();
+			for (const event of events) {
+				if (event.type === "tool_execution_start") {
+					const e = event as { toolName?: string; toolCallId?: string; args?: unknown };
+					const toolName = e.toolName;
+					if (toolName === "read") toolStats.read++;
+					else if (toolName === "edit") {
+						toolStats.edit++;
+						if (e.toolCallId) pendingEdits.set(e.toolCallId, e.args);
+					} else if (toolName === "write") toolStats.write++;
 
-				if (e.args) {
-					toolStats.totalInputChars += JSON.stringify(e.args).length;
-				}
-			} else if (event.type === "tool_execution_end") {
-				const e = event as { toolName?: string; toolCallId?: string; isError?: boolean; result?: unknown };
-				if (e.toolName === "edit" && e.toolCallId && pendingEdits.has(e.toolCallId)) {
-					const args = pendingEdits.get(e.toolCallId) ?? null;
-					pendingEdits.delete(e.toolCallId);
-					if (e.isError) {
-						toolStats.editFailures++;
-						const toolError = extractToolErrorMessage(e.result);
-						editFailures.push({ toolCallId: e.toolCallId, args, error: toolError });
-					} else {
-						toolStats.editSuccesses++;
+					if (e.args) {
+						toolStats.totalInputChars += JSON.stringify(e.args).length;
+					}
+				} else if (event.type === "tool_execution_end") {
+					const e = event as { toolName?: string; toolCallId?: string; isError?: boolean; result?: unknown };
+					if (e.toolName === "edit" && e.toolCallId && pendingEdits.has(e.toolCallId)) {
+						const args = pendingEdits.get(e.toolCallId) ?? null;
+						pendingEdits.delete(e.toolCallId);
+						if (e.isError) {
+							toolStats.editFailures++;
+							const toolError = extractToolErrorMessage(e.result);
+							editFailures.push({ toolCallId: e.toolCallId, args, error: toolError });
+						} else {
+							toolStats.editSuccesses++;
+						}
 					}
 				}
 			}
-		}
 
-		patchApplied = toolStats.edit > 0;
+			patchApplied = toolStats.edit > 0;
 
-		const filesToVerify = task.files.length > 0 ? task.files : undefined;
-		const verification = await verifyExpectedFileSubset(expectedDir, cwd, filesToVerify);
-		if (config.autoFormat) {
-			await formatDirectory(cwd);
-		}
+			const filesToVerify = task.files.length > 0 ? task.files : undefined;
+			const verification = await verifyExpectedFileSubset(expectedDir, cwd, filesToVerify);
+			if (config.autoFormat) {
+				await formatDirectory(cwd);
+			}
 
-		verificationPassed = verification.success;
-		indentScore = verification.indentScore;
-		formattedEquivalent = verification.formattedEquivalent;
-		diffStats = verification.diffStats;
-		diff = verification.diff;
-		if (!verification.success && verification.error) {
-			error = verification.error;
+			verificationPassed = verification.success;
+			indentScore = verification.indentScore;
+			formattedEquivalent = verification.formattedEquivalent;
+			diffStats = verification.diffStats;
+			diff = verification.diff;
+			if (!verification.success && verification.error) {
+				error = verification.error;
+			}
+
+			if (verification.success) {
+				break;
+			}
+
+			retryContext = error
+				? `Verification failed: ${error}${diff ? `\n\nDiff (expected vs actual):\n\n\`\`\`diff\n${diff}\n\`\`\`` : ""}`
+				: "Previous attempt failed.";
 		}
 	} catch (err) {
 		error = err instanceof Error ? err.message : String(err);
@@ -486,7 +638,12 @@ async function runBatchedTask(
 
 	const duration = Date.now() - startTime;
 	const mustUseEditTool = Boolean(config.requireEditToolCall) && !config.noEditRequired;
-	const success = verificationPassed && (!mustUseEditTool || patchApplied);
+	const mustUseReadTool = Boolean(config.requireReadToolCall) && !config.noEditRequired;
+	const editSucceeded = toolStats.editSuccesses > 0;
+	const success =
+		verificationPassed &&
+		(!mustUseEditTool || editSucceeded) &&
+		(!mustUseReadTool || toolStats.read > 0);
 	const metadata = task.metadata;
 
 	await logEvent({ type: "result", success, patchApplied, verificationPassed, error, duration });
@@ -583,24 +740,6 @@ function buildRunBatches(items: TaskRunItem[]): TaskRunItem[][] {
 	}
 
 	return batches;
-}
-
-function buildPrompt(task: EditTask, config: BenchmarkConfig): string {
-	return `You are working in a repository with multiple unrelated files.
-
-${task.prompt}
-
-**Important constraints:**
-- Make the minimum change necessary. Do not refactor, improve, or "clean up" other code.
-- If you see multiple similar patterns, only change the ONE that is buggy.
-- Preserve exact code structure. Do not rearrange statements or change formatting.
-- Only modify the file(s) referenced by this request. Leave all other files unchanged.
-
-${
-	config.noEditRequired
-		? "Read the relevant files first, then apply the fix."
-		: "Read the relevant files first, then use the edit tool to apply the fix."
-}`;
 }
 
 async function collectPromptEvents(
