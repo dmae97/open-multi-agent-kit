@@ -20,6 +20,8 @@ concurrency:
 jobs:
   rust:
     runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -C target-cpu=x86-64-v3
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -41,6 +43,7 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             arch: x64
+            rustflags: "-C target-cpu=x86-64-v3"
           - os: ubuntu-latest
             platform: linux
             arch: arm64
@@ -48,12 +51,14 @@ jobs:
           - os: macos-15-intel
             platform: darwin
             arch: x64
+            rustflags: "-C target-cpu=x86-64-v3"
           - os: macos-14
             platform: darwin
             arch: arm64
           - os: windows-latest
             platform: win32
             arch: x64
+            rustflags: "-C target-cpu=x86-64-v3"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -79,6 +84,7 @@ jobs:
           TARGET_PLATFORM: ${{ matrix.platform }}
           TARGET_ARCH: ${{ matrix.arch }}
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          RUSTFLAGS: ${{ matrix.rustflags }}
         run: bun --cwd=packages/natives run build:native
       - name: Upload native addon
         uses: actions/upload-artifact@v4
@@ -89,6 +95,8 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -C target-cpu=x86-64-v3
     steps:
       - uses: actions/checkout@v4
         with:

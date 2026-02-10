@@ -15,6 +15,11 @@ const isCrossCompile =
 	targetPlatform !== process.platform ||
 	targetArch !== process.arch;
 
+// Default to native CPU optimization for local builds; CI overrides via RUSTFLAGS env
+if (!isCrossCompile && !Bun.env.RUSTFLAGS) {
+	Bun.env.RUSTFLAGS = "-C target-cpu=native";
+}
+
 async function cleanupStaleTemps(dir: string): Promise<void> {
 	try {
 		const entries = await fs.readdir(dir);
