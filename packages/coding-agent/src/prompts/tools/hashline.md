@@ -1,18 +1,20 @@
 # Edit (Replace lines)
 
-Line-addressed edits using hash-verified line references. Read file with hashes first, then edit by referencing `lineNumber:hash` pairs.
+Line-addressed edits using hash-verified line references. Read file with hashes first, then edit by referencing `LINE:HASH` pairs.
 
 <instruction>
 **Workflow:**
 1. Read target file (hashes are included automatically in output)
 2. Identify lines to change by their `LINE:HASH` prefix
-3. Submit edit with `old` (line refs to replace) and `new` (new content)
+3. Submit edit with `src` (line ref or range) and `dst` (new content)
 **Operations:**
-- **Replace**: `old: ["5:ab", "6:ef"], new: ["new line 1", "new line 2"]` — replaces lines 5-6
-- **Delete**: `old: ["5:ab", "6:ef"], new: []` — deletes lines 5-6
-- **Insert**: `old: [], new: ["inserted line"], after: "3:e7"` — inserts after line 3
+- **Replace single**: `src: "5:ab", dst: "new content"` — replaces line 5
+- **Replace range**: `src: "5:ab..9:ef", dst: "replacement"` — replaces lines 5-9 with replacement (fewer dst lines = net deletion)
+- **Delete range**: `src: "5:ab..9:ef", dst: ""` — deletes lines 5-9
+- **Insert after**: `src: "5:ab..", dst: "new line"` — inserts after line 5 (line 5 unchanged)
+- **Insert before**: `src: "..5:ab", dst: "new line"` — inserts before line 5 (line 5 unchanged)
 **Rules:**
-- `old` line refs must be consecutive (e.g., 5,6,7 — not 5,7,8)
+- `src` must be exactly one of: `"LINE:HASH"`, `"LINE:HASH..LINE:HASH"`, `"LINE:HASH.."`, or `"..LINE:HASH"`
 - Multiple edits in one call are applied bottom-up (safe for non-overlapping edits)
 - Hashes verify file hasn't changed since your last read — stale hashes produce clear errors
 - Hashes are derived from both line content and line number (copy them verbatim from read output)
@@ -21,9 +23,8 @@ Line-addressed edits using hash-verified line references. Read file with hashes 
 <input>
 - `path`: Path to the file to edit
 - `edits`: Array of edit operations
-  - `old`: Array of line references to replace (e.g., `["5:ab", "6:ef"]`)
-  - `new`: Array of new content lines (e.g., `["new line 1", "new line 2"]`)
-  - `after`: Line reference to insert after (e.g., `"3:e7"`)
+	  - `src`: Line reference — `"5:ab"` (single), `"5:ab..9:ef"` (range), `"5:ab.."` (insert after), or `"..5:ab"` (insert before)
+  - `dst`: Replacement content (`\n`-separated for multi-line, `""` for delete)
 </input>
 
 <output>
@@ -37,28 +38,36 @@ Returns success/failure; on failure, error message indicates:
 - Always read target file before editing — line hashes come from the read output
 - If edit fails with hash mismatch, re-read the file to get fresh hashes
 - Never fabricate hashes — always copy from read output
-- Each `old` entry is a line reference like `"5:abcd"`, each `new` entry is plain content (no prefix)
+- `src` refs use the format `LINE:HASH` exactly as shown in read output (e.g., `"5:ab"`)
+- `dst` contains plain content lines (no hash prefix)
 </critical>
 
-<example name="replace">
-edit {"path":"src/app.py","edits":[{"old":["2:9b"],"new":["  print('Hello')"]}]}
+<example name="replace single line">
+edit {"path":"src/app.py","edits":[{"src":"2:9b","dst":"  print('Hello')"}]}
 </example>
 
-<example name="delete">
-edit {"path":"src/app.py","edits":[{"old":["5:ab","6:ef"],"new":[]}]}
+<example name="replace range">
+edit {"path":"src/app.py","edits":[{"src":"5:ab..8:ef","dst":"  combined = True"}]}
 </example>
 
-<example name="insert">
-edit {"path":"src/app.py","edits":[{"old":[],"new":["  # new comment"],"after":"3:e7"}]}
+<example name="delete range">
+edit {"path":"src/app.py","edits":[{"src":"5:ab..6:ef","dst":""}]}
+</example>
+
+<example name="insert after">
+edit {"path":"src/app.py","edits":[{"src":"3:e7..","dst":"  # new comment"}]}
+</example>
+
+<example name="insert before">
+edit {"path":"src/app.py","edits":[{"src":"..3:e7","dst":"  # new comment"}]}
 </example>
 
 <example name="multiple edits">
-edit {"path":"src/app.py","edits":[{"old":["10:f1"],"new":["  return True"]},{"old":["3:c4"],"new":["  x = 42"]}]}
+edit {"path":"src/app.py","edits":[{"src":"10:f1","dst":"  return True"},{"src":"3:c4","dst":"  x = 42"}]}
 </example>
 
 <avoid>
 - Fabricating or guessing hash values
 - Using stale hashes after file has been modified
-- Non-consecutive old line refs in a single edit
 - Overlapping edits in the same call
 </avoid>

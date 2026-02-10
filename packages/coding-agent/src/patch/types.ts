@@ -197,12 +197,16 @@ export interface DiffError {
 
 /** A single edit operation in hashline mode */
 export interface HashlineEdit {
-	/** Line references to replace (e.g., ["5:abcd", "6:ef01"]) — empty for insert */
-	old: string | string[];
-	/** Replacement content lines — empty for delete */
-	new: string | string[];
-	/** Insert after this line ref (e.g., "3:e7c4") — only when old is empty */
-	after?: string;
+	/**
+	 * Source line reference:
+	 * - `"5:ab"` (single)
+	 * - `"5:ab..9:ef"` (range)
+	 * - `"5:ab.."` (insert after)
+	 * - `"..5:ab"` (insert before)
+	 */
+	src: string;
+	/** Replacement content (`\n`-separated) — `""` for delete */
+	dst: string;
 }
 
 /** Input for a hashline edit operation */

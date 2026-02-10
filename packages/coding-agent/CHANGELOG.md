@@ -1,9 +1,11 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Breaking Changes
 
+- Changed `HashlineEdit` API from `old: string | string[]` / `new: string | string[]` to `src: string` / `dst: string`; src uses range syntax `"5:ab"` (single), `"5:ab..9:ef"` (range), `"5:ab.."` (insert after), or `"..5:ab"` (insert before)
+- Removed support for comma and newline-separated line reference lists in hashline edits; use range syntax instead
+- Removed `after` field from `HashlineEdit`; insert-after is now expressed via open range syntax `src: "5:ab.."`
 - Changed `HashlineEdit` API from `old: string | string[]` / `new: string | string[]` to `src: string` / `dst: string`; multi-line content uses `\n`-separated strings, empty string `""` for insert/delete operations
 - Replaced `edit.patchMode` boolean setting with `edit.mode` enum; existing `edit.patchMode: true` configurations should use `edit.mode: patch`
 - Changed `getEditModelVariants()` return type from `Record<string, "patch" | "replace">` to `Record<string, EditMode | null>`
@@ -36,6 +38,9 @@
 
 ### Changed
 
+- Enhanced hashline edit robustness with heuristics to strip anchor line echoes and range boundary echoes that models may copy into replacement content
+- Improved whitespace preservation in hashline edits to handle mismatched line counts using loose matching strategy
+- Strengthened hashline edit validation to reject malformed src specs (embedded newlines, commas, invalid ranges)
 - Enhanced MCP connection timeout handling to properly respect abort signals and distinguish between timeout and user-initiated cancellation
 - Improved MCP test command UI to show cancellation hint (esc to cancel) and handle graceful cancellation without blocking cleanup
 - Updated HTTP transport session termination to use AbortSignal.timeout() for reliable cleanup with timeout protection

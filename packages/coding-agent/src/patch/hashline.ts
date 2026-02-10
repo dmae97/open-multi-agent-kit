@@ -14,17 +14,59 @@
 
 import type { HashlineEdit, HashMismatch } from "./types";
 
-/** Coerce `string | string[]` to `string[]` */
-function toArray(v: string | string[]): string[] {
-	if (typeof v !== "string") return v;
-	// Split comma-separated refs: "35:ab,36:cd" → ["35:ab", "36:cd"]
-	if (v.includes(",")) {
-		const parts = v.split(",").map(s => s.trim());
-		if (parts.every(p => /^\d+:[0-9a-fA-F]/.test(p))) {
-			return parts;
-		}
+// ═══════════════════════════════════════════════════════════════════════════
+// Source Spec Parsing
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Parsed representation of a `HashlineEdit.src` field. */
+type SrcSpec =
+	| { kind: "single"; ref: { line: number; hash: string } }
+	| { kind: "range"; start: { line: number; hash: string }; end: { line: number; hash: string } }
+	| { kind: "insertAfter"; after: { line: number; hash: string } }
+	| { kind: "insertBefore"; before: { line: number; hash: string } };
+
+/**
+ * Parse a `HashlineEdit.src` string into a structured spec.
+ *
+ * Accepted forms:
+ * - `"5:ab"` — single line reference
+ * - `"5:ab..9:ef"` — inclusive range
+ * - `"5:ab.."` — insert-after marker
+ * - `"..5:ab"` — insert-before marker
+ *
+ * @throws Error on embedded newlines, commas, or invalid refs
+ */
+function parseSrc(src: string): SrcSpec {
+	if (src.includes("\n")) {
+		throw new Error(`src must not contain newlines: "${src}"`);
 	}
-	return [v];
+	if (src.includes(",")) {
+		throw new Error(`src must not contain commas: "${src}"`);
+	}
+
+	if (src.startsWith("..")) {
+		if (src.indexOf("..", 2) !== -1) {
+			throw new Error(`Invalid src "${src}": insert-before form must be exactly "..LINE:HASH"`);
+		}
+		return { kind: "insertBefore", before: parseLineRef(src.slice(2)) };
+	}
+
+	const dotIdx = src.indexOf("..");
+	if (dotIdx !== -1) {
+		const lhs = src.slice(0, dotIdx);
+		const rhs = src.slice(dotIdx + 2);
+		if (rhs === "") {
+			return { kind: "insertAfter", after: parseLineRef(lhs) };
+		}
+		return { kind: "range", start: parseLineRef(lhs), end: parseLineRef(rhs) };
+	}
+
+	return { kind: "single", ref: parseLineRef(src) };
+}
+
+/** Split dst into lines; empty string means delete (no lines). */
+function splitDstLines(dst: string): string[] {
+	return dst === "" ? [] : dst.split("\n");
 }
 
 /** Pattern matching hashline display format: `LINE:HASH| CONTENT` */
@@ -44,6 +86,10 @@ function equalsIgnoringWhitespace(a: string, b: string): boolean {
 	if (a === b) return true;
 	// Compare with all whitespace removed
 	return a.replace(/\s+/g, "") === b.replace(/\s+/g, "");
+}
+
+function stripAllWhitespace(s: string): string {
+	return s.replace(/\s+/g, "");
 }
 
 /**
@@ -67,6 +113,77 @@ function preserveWhitespaceOnlyLines(oldLines: string[], newLines: string[]): st
 		}
 	}
 	return anyPreserved ? result : newLines;
+}
+
+/**
+ * A weaker variant of {@link preserveWhitespaceOnlyLines} that can preserve
+ * whitespace even when the replacement line counts don't match.
+ */
+function preserveWhitespaceOnlyLinesLoose(oldLines: string[], newLines: string[]): string[] {
+	const canonToOld = new Map<string, string[]>();
+	for (const oldLine of oldLines) {
+		const canon = stripAllWhitespace(oldLine);
+		const bucket = canonToOld.get(canon);
+		if (bucket) bucket.push(oldLine);
+		else canonToOld.set(canon, [oldLine]);
+	}
+
+	let anyPreserved = false;
+	const result = new Array<string>(newLines.length);
+	for (let i = 0; i < newLines.length; i++) {
+		const newLine = newLines[i];
+		const bucket = canonToOld.get(stripAllWhitespace(newLine));
+		if (bucket) {
+			const oldLine = bucket.find(l => l !== newLine && equalsIgnoringWhitespace(l, newLine));
+			if (oldLine) {
+				result[i] = oldLine;
+				anyPreserved = true;
+				continue;
+			}
+		}
+		result[i] = newLine;
+	}
+	return anyPreserved ? result : newLines;
+}
+
+function stripInsertAnchorEchoAfter(anchorLine: string, dstLines: string[]): string[] {
+	if (dstLines.length <= 1) return dstLines;
+	if (equalsIgnoringWhitespace(dstLines[0], anchorLine)) {
+		return dstLines.slice(1);
+	}
+	return dstLines;
+}
+
+function stripInsertAnchorEchoBefore(anchorLine: string, dstLines: string[]): string[] {
+	if (dstLines.length <= 1) return dstLines;
+	if (equalsIgnoringWhitespace(dstLines[dstLines.length - 1], anchorLine)) {
+		return dstLines.slice(0, -1);
+	}
+	return dstLines;
+}
+
+function stripRangeBoundaryEcho(fileLines: string[], startLine: number, endLine: number, dstLines: string[]): string[] {
+	// Only strip when the model replaced with multiple lines and grew the edit.
+	// This avoids turning a single-line replacement into a deletion.
+	const count = endLine - startLine + 1;
+	if (dstLines.length <= 1 || dstLines.length <= count) return dstLines;
+
+	let out = dstLines;
+	const beforeIdx = startLine - 2;
+	if (beforeIdx >= 0 && equalsIgnoringWhitespace(out[0], fileLines[beforeIdx])) {
+		out = out.slice(1);
+	}
+
+	const afterIdx = endLine;
+	if (
+		afterIdx < fileLines.length &&
+		out.length > 0 &&
+		equalsIgnoringWhitespace(out[out.length - 1], fileLines[afterIdx])
+	) {
+		out = out.slice(0, -1);
+	}
+
+	return out;
 }
 
 /**
@@ -262,13 +379,14 @@ export function validateLineRef(ref: { line: number; hash: string }, fileLines: 
 /**
  * Apply an array of hashline edits to file content.
  *
- * Edits are sorted bottom-up (highest line number first) before application
- * so that earlier edits don't invalidate line numbers for later ones.
+ * Each edit's `src` field is parsed as one of:
+ * - `"5:ab"` — replace exactly that line
+ * - `"5:ab..9:ef"` — replace/delete the inclusive range
+ * - `"5:ab.."` — insert after line 5 (line 5 unchanged)
+ * - `"..5:ab"` — insert before line 5 (line 5 unchanged)
  *
- * Supported operations:
- * - **Replace**: `old` has entries, `new` has entries — replace old lines with new
- * - **Delete**: `old` has entries, `new` is empty — delete the old lines
- * - **Insert**: `old` is empty, `new` has entries, `after` is set — insert after ref line
+ * Edits are sorted bottom-up (highest effective line first) so earlier
+ * splices don't invalidate later line numbers.
  *
  * @returns The modified content and the 1-indexed first changed line number
  */
@@ -283,21 +401,42 @@ export function applyHashlineEdits(
 	const fileLines = content.split("\n");
 	let firstChangedLine: number | undefined;
 
-	// Normalize string → string[] for old/new fields
-	const normalized = edits.map(e => ({
-		old: toArray(e.old),
-		new: stripNewLinePrefixes(toArray(e.new)),
-		after: e.after,
+	// Parse src specs and dst lines up front
+	const parsed = edits.map(e => ({
+		spec: parseSrc(e.src),
+		dstLines: stripNewLinePrefixes(splitDstLines(e.dst)),
 	}));
 
-	// Pre-validate all line refs and collect hash mismatches in one pass.
-	// Structural errors (out of range, malformed, non-consecutive) still throw immediately.
+	// Pre-validate: collect all hash mismatches before mutating
 	const mismatches: HashMismatch[] = [];
 
-	for (const edit of normalized) {
-		const refs: string[] = edit.old.length > 0 ? edit.old : edit.after ? [edit.after] : [];
-		for (const refStr of refs) {
-			const ref = parseLineRef(refStr);
+	for (const { spec, dstLines } of parsed) {
+		const refsToValidate: { line: number; hash: string }[] = [];
+		switch (spec.kind) {
+			case "single":
+				refsToValidate.push(spec.ref);
+				break;
+			case "range":
+				if (spec.start.line > spec.end.line) {
+					throw new Error(`Range start line ${spec.start.line} must be <= end line ${spec.end.line}`);
+				}
+				refsToValidate.push(spec.start, spec.end);
+				break;
+			case "insertAfter":
+				if (dstLines.length === 0) {
+					throw new Error('Insert-after edit (src "N:HH..") requires non-empty dst');
+				}
+				refsToValidate.push(spec.after);
+				break;
+			case "insertBefore":
+				if (dstLines.length === 0) {
+					throw new Error('Insert-before edit (src "..N:HH") requires non-empty dst');
+				}
+				refsToValidate.push(spec.before);
+				break;
+		}
+
+		for (const ref of refsToValidate) {
 			if (ref.line < 1 || ref.line > fileLines.length) {
 				throw new Error(`Line ${ref.line} does not exist (file has ${fileLines.length} lines)`);
 			}
@@ -312,53 +451,76 @@ export function applyHashlineEdits(
 		throw new HashlineMismatchError(mismatches, fileLines);
 	}
 
-	// Classify and annotate edits with their effective line number for sorting.
-	const annotated = normalized.map((edit, idx) => {
-		const sortLine = getSortLine(edit, idx);
-		return { edit, sortLine };
+	// Compute sort key (descending) — bottom-up application
+	const annotated = parsed.map((p, idx) => {
+		let sortLine: number;
+		let precedence: number;
+		switch (p.spec.kind) {
+			case "single":
+				sortLine = p.spec.ref.line;
+				precedence = 0;
+				break;
+			case "range":
+				sortLine = p.spec.end.line;
+				precedence = 0;
+				break;
+			case "insertAfter":
+				sortLine = p.spec.after.line;
+				precedence = 1;
+				break;
+			case "insertBefore":
+				sortLine = p.spec.before.line;
+				precedence = 2;
+				break;
+		}
+		return { ...p, idx, sortLine, precedence };
 	});
 
-	// Sort descending by line number so bottom edits apply first
-	annotated.sort((a, b) => b.sortLine - a.sortLine);
+	annotated.sort((a, b) => b.sortLine - a.sortLine || a.precedence - b.precedence || a.idx - b.idx);
 
-	for (const { edit } of annotated) {
-		const isInsert = edit.old.length === 0;
-
-		if (isInsert) {
-			// Insert after a referenced line
-			if (!edit.after) {
-				throw new Error("Insert edit (empty old) requires an 'after' line reference.");
+	// Apply edits bottom-up
+	for (const { spec, dstLines } of annotated) {
+		switch (spec.kind) {
+			case "single": {
+				const count = 1;
+				const origLines = fileLines.slice(spec.ref.line - 1, spec.ref.line);
+				const stripped = stripRangeBoundaryEcho(fileLines, spec.ref.line, spec.ref.line, dstLines);
+				const preserved =
+					stripped.length === count
+						? preserveWhitespaceOnlyLines(origLines, stripped)
+						: preserveWhitespaceOnlyLinesLoose(origLines, stripped);
+				const newLines = preserved;
+				fileLines.splice(spec.ref.line - 1, count, ...newLines);
+				trackFirstChanged(spec.ref.line);
+				break;
 			}
-			const afterRef = parseLineRef(edit.after);
-			validateLineRef(afterRef, fileLines);
-
-			// Insert new lines after the referenced line (0-indexed splice position)
-			const insertIdx = afterRef.line; // insert after this line = splice at this index
-			fileLines.splice(insertIdx, 0, ...edit.new);
-
-			trackFirstChanged(afterRef.line + 1);
-		} else {
-			// Replace or Delete
-			const refs = edit.old.map(parseLineRef);
-
-			// Validate all refs
-			for (const ref of refs) {
-				validateLineRef(ref, fileLines);
+			case "range": {
+				const count = spec.end.line - spec.start.line + 1;
+				const origLines = fileLines.slice(spec.start.line - 1, spec.start.line - 1 + count);
+				const stripped = stripRangeBoundaryEcho(fileLines, spec.start.line, spec.end.line, dstLines);
+				const preserved =
+					stripped.length === count
+						? preserveWhitespaceOnlyLines(origLines, stripped)
+						: preserveWhitespaceOnlyLinesLoose(origLines, stripped);
+				const newLines = preserved;
+				fileLines.splice(spec.start.line - 1, count, ...newLines);
+				trackFirstChanged(spec.start.line);
+				break;
 			}
-
-			// Validate consecutiveness
-			validateConsecutive(refs);
-
-			const startLine = refs[0].line;
-			const endLine = refs[refs.length - 1].line;
-			const count = endLine - startLine + 1;
-
-			// Splice: remove `count` lines starting at startLine-1, insert new
-			const origLines = fileLines.slice(startLine - 1, startLine - 1 + count);
-			const newLines = preserveWhitespaceOnlyLines(origLines, edit.new);
-			fileLines.splice(startLine - 1, count, ...newLines);
-
-			trackFirstChanged(startLine);
+			case "insertAfter": {
+				const anchorLine = fileLines[spec.after.line - 1];
+				const inserted = stripInsertAnchorEchoAfter(anchorLine, dstLines);
+				fileLines.splice(spec.after.line, 0, ...inserted);
+				trackFirstChanged(spec.after.line + 1);
+				break;
+			}
+			case "insertBefore": {
+				const anchorLine = fileLines[spec.before.line - 1];
+				const inserted = stripInsertAnchorEchoBefore(anchorLine, dstLines);
+				fileLines.splice(spec.before.line - 1, 0, ...inserted);
+				trackFirstChanged(spec.before.line);
+				break;
+			}
 		}
 	}
 
@@ -370,35 +532,6 @@ export function applyHashlineEdits(
 	function trackFirstChanged(line: number): void {
 		if (firstChangedLine === undefined || line < firstChangedLine) {
 			firstChangedLine = line;
-		}
-	}
-
-	/**
-	 * Determine the effective line number for sorting an edit (descending).
-	 * For replace/delete: use the first old line.
-	 * For insert: use the after line.
-	 */
-	function getSortLine(edit: { old: string[]; after?: string }, idx: number): number {
-		if (edit.old.length > 0) {
-			return parseLineRef(edit.old[0]).line;
-		}
-		if (edit.after) {
-			return parseLineRef(edit.after).line;
-		}
-		// Shouldn't happen — invalid edit. Place it at the end for now; validation will catch it.
-		return idx;
-	}
-}
-
-/**
- * Validate that parsed line refs are consecutive (e.g. 5,6,7 — not 5,7,8).
- *
- * @throws Error if lines are not consecutive
- */
-function validateConsecutive(refs: { line: number; hash: string }[]): void {
-	for (let i = 1; i < refs.length; i++) {
-		if (refs[i].line !== refs[i - 1].line + 1) {
-			throw new Error(`Source lines must be consecutive. Got line ${refs[i - 1].line} followed by ${refs[i].line}.`);
 		}
 	}
 }

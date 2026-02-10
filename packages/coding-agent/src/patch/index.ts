@@ -119,15 +119,11 @@ export type PatchParams = { path: string; op?: string; rename?: string; diff?: s
 export type HashlineParams = { path: string; edits: HashlineEdit[] };
 
 const hashlineEditItemSchema = Type.Object({
-	old: Type.Union([
-		Type.String({ description: 'Single line reference (e.g. "5:abcd")' }),
-		Type.Array(Type.String({ description: 'Line references to replace (e.g. "5:abcd")' })),
-	]),
-	new: Type.Union([
-		Type.String({ description: "Single replacement content line" }),
-		Type.Array(Type.String({ description: "Replacement content lines" })),
-	]),
-	after: Type.Optional(Type.String({ description: "Insert after this line ref (only when old is empty)" })),
+	src: Type.String({
+		description:
+			'Line reference: "5:ab" (replace), "5:ab..9:ef" (range), "5:ab.." (insert after), "..5:ab" (insert before)',
+	}),
+	dst: Type.String({ description: 'Replacement content (\\n-separated) — "" for delete' }),
 });
 
 const hashlineEditSchema = Type.Object({
