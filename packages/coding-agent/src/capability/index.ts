@@ -237,8 +237,8 @@ export async function loadCapability<T>(capabilityId: string, options: LoadOptio
  * Initialize capability system with settings manager for persistence.
  * Call this once on startup to enable persistent provider state.
  */
-export function initializeWithSettings(settingsInstance: Settings): void {
-	settings = settingsInstance;
+export function initializeWithSettings(activeSettings: Settings): void {
+	settings = activeSettings;
 	// Load disabled providers from settings
 	const disabled = settings.get("disabledProviders");
 	disabledProviders.clear();

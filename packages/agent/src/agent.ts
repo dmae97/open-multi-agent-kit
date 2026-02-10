@@ -97,6 +97,11 @@ export interface AgentOptions {
 	thinkingBudgets?: ThinkingBudgets;
 
 	/**
+	 * Sampling temperature for LLM calls. `undefined` uses provider default.
+	 */
+	temperature?: number;
+
+	/**
 	 * Maximum delay in milliseconds to wait for a retry when the server requests a long wait.
 	 * If the server's requested delay exceeds this value, the request fails immediately,
 	 * allowing higher-level retry logic to handle it with user visibility.
@@ -155,6 +160,7 @@ export class Agent {
 	#interruptMode: "immediate" | "wait";
 	#sessionId?: string;
 	#thinkingBudgets?: ThinkingBudgets;
+	#temperature?: number;
 	#maxRetryDelayMs?: number;
 	#getToolContext?: (toolCall?: ToolCallContext) => AgentToolContext | undefined;
 	#cursorExecHandlers?: CursorExecHandlers;
@@ -179,6 +185,7 @@ export class Agent {
 		this.streamFn = opts.streamFn || streamSimple;
 		this.#sessionId = opts.sessionId;
 		this.#thinkingBudgets = opts.thinkingBudgets;
+		this.#temperature = opts.temperature;
 		this.#maxRetryDelayMs = opts.maxRetryDelayMs;
 		this.getApiKey = opts.getApiKey;
 		this.#getToolContext = opts.getToolContext;
@@ -214,6 +221,20 @@ export class Agent {
 	 */
 	set thinkingBudgets(value: ThinkingBudgets | undefined) {
 		this.#thinkingBudgets = value;
+	}
+
+	/**
+	 * Get the current sampling temperature.
+	 */
+	get temperature(): number | undefined {
+		return this.#temperature;
+	}
+
+	/**
+	 * Set sampling temperature for LLM calls. `undefined` uses provider default.
+	 */
+	set temperature(value: number | undefined) {
+		this.#temperature = value;
 	}
 
 	/**
@@ -564,6 +585,7 @@ export class Agent {
 		const config: AgentLoopConfig = {
 			model,
 			reasoning,
+			temperature: this.#temperature,
 			interruptMode: this.#interruptMode,
 			sessionId: this.#sessionId,
 			thinkingBudgets: this.#thinkingBudgets,

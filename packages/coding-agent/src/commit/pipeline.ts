@@ -39,18 +39,18 @@ export async function runCommitCommand(args: CommitCommandArgs): Promise<void> {
 
 async function runLegacyCommitCommand(args: CommitCommandArgs): Promise<void> {
 	const cwd = process.cwd();
-	const settingsInstance = await Settings.init();
-	const commitSettings = settingsInstance.getGroup("commit");
+	const settings = await Settings.init();
+	const commitSettings = settings.getGroup("commit");
 	const authStorage = await discoverAuthStorage();
 	const modelRegistry = new ModelRegistry(authStorage);
 
 	const { model: primaryModel, apiKey: primaryApiKey } = await resolvePrimaryModel(
 		args.model,
-		settingsInstance,
+		settings,
 		modelRegistry,
 	);
 	const { model: smolModel, apiKey: smolApiKey } = await resolveSmolModel(
-		settingsInstance,
+		settings,
 		modelRegistry,
 		primaryModel,
 		primaryApiKey,

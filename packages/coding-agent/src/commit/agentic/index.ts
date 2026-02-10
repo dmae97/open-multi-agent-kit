@@ -28,8 +28,7 @@ interface CommitExecutionContext {
 export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 	const cwd = process.cwd();
 	const git = new ControlledGit(cwd);
-	const [settingsInstance, authStorage] = await Promise.all([Settings.init({ cwd }), discoverAuthStorage()]);
-	const settings = settingsInstance;
+	const [settings, authStorage] = await Promise.all([Settings.init({ cwd }), discoverAuthStorage()]);
 
 	writeStdout("● Resolving model...");
 	const modelRegistry = new ModelRegistry(authStorage);

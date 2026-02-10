@@ -159,7 +159,7 @@ export interface CreateAgentSessionOptions {
 	sessionManager?: SessionManager;
 
 	/** Settings instance. Default: Settings.init({ cwd, agentDir }) */
-	settingsInstance?: Settings;
+	settings?: Settings;
 
 	/** Whether UI is available (enables interactive tools like ask). Default: false */
 	hasUI?: boolean;
@@ -489,14 +489,14 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const modelRegistry = options.modelRegistry ?? new ModelRegistry(authStorage);
 	time("discoverModels");
 
-	const settingsInstance = options.settingsInstance ?? (await Settings.init({ cwd, agentDir }));
+	const settings = options.settings ?? (await Settings.init({ cwd, agentDir }));
 	time("settings");
-	initializeWithSettings(settingsInstance);
+	initializeWithSettings(settings);
 	time("initializeWithSettings");
 
 	// Initialize provider preferences from settings
-	setPreferredSearchProvider(settingsInstance.get("providers.webSearch") ?? "auto");
-	setPreferredImageProvider(settingsInstance.get("providers.image") ?? "auto");
+	setPreferredSearchProvider(settings.get("providers.webSearch") ?? "auto");
+	setPreferredImageProvider(settings.get("providers.image") ?? "auto");
 
 	const sessionManager = options.sessionManager ?? SessionManager.create(cwd);
 	time("sessionManager");
@@ -529,7 +529,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	// If still no model, try settings default
 	if (!model) {
-		const settingsDefaultModel = settingsInstance.getModelRole("default");
+		const settingsDefaultModel = settings.getModelRole("default");
 		if (settingsDefaultModel) {
 			const parsedModel = parseModelString(settingsDefaultModel);
 			if (parsedModel) {
@@ -566,12 +566,12 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	if (thinkingLevel === undefined && hasExistingSession) {
 		thinkingLevel = hasThinkingEntry
 			? (existingSession.thinkingLevel as ThinkingLevel)
-			: ((settingsInstance.get("defaultThinkingLevel") ?? "off") as ThinkingLevel);
+			: ((settings.get("defaultThinkingLevel") ?? "off") as ThinkingLevel);
 	}
 
 	// Fall back to settings default
 	if (thinkingLevel === undefined) {
-		thinkingLevel = settingsInstance.get("defaultThinkingLevel") ?? "off";
+		thinkingLevel = settings.get("defaultThinkingLevel") ?? "off";
 	}
 
 	// Clamp to model capabilities
@@ -587,7 +587,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		skills = options.skills;
 		skillWarnings = [];
 	} else {
-		const skillsSettings = settingsInstance.getGroup("skills") as SkillsSettings;
+		const skillsSettings = settings.getGroup("skills") as SkillsSettings;
 		const discovered = await discoverSkills(cwd, agentDir, skillsSettings);
 		skills = discovered.skills;
 		skillWarnings = discovered.warnings;
@@ -596,7 +596,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	debugStartup("sdk:discoverSkills");
 
 	// Discover rules
-	const ttsrSettings = settingsInstance.getGroup("ttsr");
+	const ttsrSettings = settings.getGroup("ttsr");
 	const ttsrManager = new TtsrManager(ttsrSettings);
 	const rulesResult = await loadCapability<Rule>(ruleCapability.id, { cwd });
 	for (const rule of rulesResult.items) {
@@ -648,7 +648,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		},
 		getPlanModeState: () => session.getPlanModeState(),
 		getCompactContext: () => session.formatCompactContext(),
-		settings: settingsInstance,
+		settings,
 		authStorage,
 		modelRegistry,
 	};
@@ -663,7 +663,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	internalRouter.register(new ArtifactProtocolHandler({ getArtifactsDir }));
 	internalRouter.register(
 		new PlanProtocolHandler({
-			getPlansDirectory: () => settingsInstance.getPlansDirectory(),
+			getPlansDirectory: () => settings.getPlansDirectory(),
 			cwd,
 		}),
 	);
@@ -706,10 +706,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 					);
 				}
 			},
-			enableProjectConfig: settingsInstance.get("mcp.enableProjectConfig") ?? true,
+			enableProjectConfig: settings.get("mcp.enableProjectConfig") ?? true,
 			// Always filter Exa - we have native integration
 			filterExa: true,
-			cacheStorage: settingsInstance.getStorage(),
+			cacheStorage: settings.getStorage(),
 			authStorage,
 		});
 		time("discoverAndLoadMCPTools");
@@ -742,7 +742,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	time("getGeminiImageTools");
 
 	// Add specialized Exa web search tools if EXA_API_KEY is available
-	const exaSettings = settingsInstance.getGroup("exa");
+	const exaSettings = settings.getGroup("exa");
 	if (exaSettings.enabled && exaSettings.enableSearch) {
 		const exaSearchTools = await getSearchTools({
 			enableLinkedin: exaSettings.enableLinkedin as boolean,
@@ -777,13 +777,13 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		// Merge CLI extension paths with settings extension paths
 		const configuredPaths = [
 			...(options.additionalExtensionPaths ?? []),
-			...((settingsInstance.get("extensions") as string[]) ?? []),
+			...((settings.get("extensions") as string[]) ?? []),
 		];
 		extensionsResult = await discoverAndLoadExtensions(
 			configuredPaths,
 			cwd,
 			eventBus,
-			(settingsInstance.get("disabledExtensions") as string[]) ?? [],
+			(settings.get("disabledExtensions") as string[]) ?? [],
 		);
 		time("discoverAndLoadExtensions");
 		debugStartup("sdk:discoverAndLoadExtensions");
@@ -906,7 +906,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			tools,
 			toolNames,
 			rules: rulebookRules,
-			skillsSettings: settingsInstance.getGroup("skills") as SkillsSettings,
+			skillsSettings: settings.getGroup("skills") as SkillsSettings,
 		});
 
 		if (options.systemPrompt === undefined) {
@@ -921,7 +921,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				tools,
 				toolNames,
 				rules: rulebookRules,
-				skillsSettings: settingsInstance.getGroup("skills") as SkillsSettings,
+				skillsSettings: settings.getGroup("skills") as SkillsSettings,
 				customPrompt: options.systemPrompt,
 			});
 		}
@@ -961,7 +961,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const convertToLlmWithBlockImages = (messages: AgentMessage[]): Message[] => {
 		const converted = convertToLlm(messages);
 		// Check setting dynamically so mid-session changes take effect
-		if (!settingsInstance.get("images.blockImages")) {
+		if (!settings.get("images.blockImages")) {
 			return converted;
 		}
 		// Filter out ImageContent from all messages, replacing with text placeholder
@@ -1014,11 +1014,12 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 					return extensionRunner.emitContext(messages);
 				}
 			: undefined,
-		steeringMode: settingsInstance.get("steeringMode") ?? "one-at-a-time",
-		followUpMode: settingsInstance.get("followUpMode") ?? "one-at-a-time",
-		interruptMode: settingsInstance.get("interruptMode") ?? "immediate",
-		thinkingBudgets: settingsInstance.getGroup("thinkingBudgets"),
-		kimiApiFormat: settingsInstance.get("providers.kimiApiFormat") ?? "anthropic",
+		steeringMode: settings.get("steeringMode") ?? "one-at-a-time",
+		followUpMode: settings.get("followUpMode") ?? "one-at-a-time",
+		interruptMode: settings.get("interruptMode") ?? "immediate",
+		thinkingBudgets: settings.getGroup("thinkingBudgets"),
+		temperature: settings.get("temperature") >= 0 ? settings.get("temperature") : undefined,
+		kimiApiFormat: settings.get("providers.kimiApiFormat") ?? "anthropic",
 		getToolContext: tc => toolContextStore.getContext(tc),
 		getApiKey: async provider => {
 			// Use the provider argument from the in-flight request;
@@ -1052,7 +1053,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	session = new AgentSession({
 		agent,
 		sessionManager,
-		settings: settingsInstance,
+		settings,
 		scopedModels: options.scopedModels,
 		promptTemplates,
 		slashCommands,
@@ -1060,7 +1061,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		customCommands: customCommandsResult.commands,
 		skills,
 		skillWarnings,
-		skillsSettings: settingsInstance.getGroup("skills") as Required<SkillsSettings>,
+		skillsSettings: settings.getGroup("skills") as Required<SkillsSettings>,
 		modelRegistry,
 		toolRegistry,
 		rebuildSystemPrompt,
@@ -1071,7 +1072,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	// Warm up LSP servers (connects to detected servers)
 	let lspServers: CreateAgentSessionResult["lspServers"];
-	if (enableLsp && settingsInstance.get("lsp.diagnosticsOnWrite")) {
+	if (enableLsp && settings.get("lsp.diagnosticsOnWrite")) {
 		try {
 			debugStartup("sdk:warmupLspServers:start");
 			const result = await warmupLspServers(cwd, {

@@ -172,6 +172,16 @@ export const SETTINGS_SCHEMA = {
 			submenu: true,
 		},
 	},
+	temperature: {
+		type: "number",
+		default: -1,
+		ui: {
+			tab: "agent",
+			label: "Temperature",
+			description: "Sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)",
+			submenu: true,
+		},
+	},
 	hideThinkingBlock: {
 		type: "boolean",
 		default: false,

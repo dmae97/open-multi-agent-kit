@@ -164,6 +164,15 @@ const OPTION_PROVIDERS: Partial<Record<SettingPath, OptionProvider>> = {
 		{ value: "high", label: "high", description: "Deep (~16k tokens)" },
 		{ value: "xhigh", label: "xhigh", description: "Maximum (~32k tokens)" },
 	],
+	// Temperature
+	temperature: [
+		{ value: "-1", label: "Default", description: "Use provider default" },
+		{ value: "0", label: "0", description: "Deterministic" },
+		{ value: "0.2", label: "0.2", description: "Focused" },
+		{ value: "0.5", label: "0.5", description: "Balanced" },
+		{ value: "0.7", label: "0.7", description: "Creative" },
+		{ value: "1", label: "1", description: "Maximum variety" },
+	],
 	// Symbol preset
 	symbolPreset: [
 		{ value: "unicode", label: "Unicode", description: "Standard symbols (default)" },

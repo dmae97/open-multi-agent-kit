@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `temperature` setting to control sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)
+- Added temperature option selector in settings UI with preset values (Default, 0, 0.2, 0.5, 0.7, 1)
+
+### Changed
+
+- Renamed `settingsInstance` parameter to `settings` in `CreateAgentSessionOptions` for consistency
+- Updated all internal references from `settingsInstance` to `settings` throughout SDK and components
 
 ## [11.9.0] - 2026-02-10
 

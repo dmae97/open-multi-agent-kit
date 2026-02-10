@@ -38,7 +38,7 @@ export class ExtensionDashboard extends Container {
 
 	private constructor(
 		private readonly cwd: string,
-		private readonly settingsInstance: Settings | null,
+		private readonly settings: Settings | null,
 		private readonly terminalHeight: number,
 	) {
 		super();
@@ -46,16 +46,16 @@ export class ExtensionDashboard extends Container {
 
 	static async create(
 		cwd: string,
-		settingsInstance: Settings | null = null,
+		settings: Settings | null = null,
 		terminalHeight?: number,
 	): Promise<ExtensionDashboard> {
-		const dashboard = new ExtensionDashboard(cwd, settingsInstance, terminalHeight ?? process.stdout.rows ?? 24);
+		const dashboard = new ExtensionDashboard(cwd, settings, terminalHeight ?? process.stdout.rows ?? 24);
 		await dashboard.#init();
 		return dashboard;
 	}
 
 	async #init(): Promise<void> {
-		const sm = this.settingsInstance ?? (await Settings.init());
+		const sm = this.settings ?? (await Settings.init());
 		const disabledIds = sm ? ((sm.get("disabledExtensions") as string[]) ?? []) : [];
 		this.#state = await createInitialState(this.cwd, disabledIds);
 
@@ -163,7 +163,7 @@ export class ExtensionDashboard extends Container {
 	}
 
 	#handleExtensionToggle(extensionId: string, enabled: boolean): void {
-		const sm = this.settingsInstance ?? Settings.instance;
+		const sm = this.settings ?? Settings.instance;
 		if (!sm) return;
 
 		const disabled = ((sm.get("disabledExtensions") as string[]) ?? []).slice();
@@ -187,7 +187,7 @@ export class ExtensionDashboard extends Container {
 		// Remember current tab ID before refresh
 		const currentTabId = this.#state.tabs[this.#state.activeTabIndex]?.id;
 
-		const sm = this.settingsInstance ?? Settings.instance;
+		const sm = this.settings ?? Settings.instance;
 		const disabledIds = sm ? ((sm.get("disabledExtensions") as string[]) ?? []) : [];
 		this.#state = await refreshState(this.#state, this.cwd, disabledIds);
 

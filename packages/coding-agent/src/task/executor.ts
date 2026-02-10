@@ -855,7 +855,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				cwd: worktree ?? cwd,
 				authStorage,
 				modelRegistry,
-				settingsInstance: settings,
+				settings,
 				model,
 				thinkingLevel: effectiveThinkingLevel,
 				toolNames,

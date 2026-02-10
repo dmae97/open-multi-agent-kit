@@ -90,7 +90,7 @@ export class ModelSelectorComponent extends Container {
 	constructor(
 		tui: TUI,
 		_currentModel: Model | undefined,
-		settings: Settings,
+		settings,
 		modelRegistry: ModelRegistry,
 		scopedModels: ReadonlyArray<ScopedModelItem>,
 		onSelect: (model: Model, role: ModelRole | null) => void,

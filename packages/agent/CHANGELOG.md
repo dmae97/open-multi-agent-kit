@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `temperature` option to `AgentOptions` to control LLM sampling temperature
+- Added `temperature` getter and setter to `Agent` class for runtime configuration
 
 ## [11.6.0] - 2026-02-07
 

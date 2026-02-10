@@ -272,7 +272,7 @@ const { session } = await createAgentSession({
 `agentDir` is used for:
 
 - Global settings (`config.yml` + `agent.db`)
- - Primary auth/models locations (`agent.db`, `models.yml`, `models.json`)
+- Primary auth/models locations (`agent.db`, `models.yml`, `models.json`)
 - Prompt templates (`prompts/`)
 - Custom TS commands (`commands/`)
 
@@ -328,13 +328,12 @@ API key resolution priority (handled by AuthStorage):
 3. Environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.)
 4. Fallback resolver (for custom provider keys from `models.yml`)
 
-
- `discoverAuthStorage` opens the `agent.db` SQLite database in the agent directory.
+`discoverAuthStorage` opens the `agent.db` SQLite database in the agent directory.
 
 ```typescript
 import { AuthStorage, ModelRegistry, discoverAuthStorage, discoverModels } from "@oh-my-pi/pi-coding-agent";
 
- // Default: uses agentDir/agent.db and agentDir/models.yml
+// Default: uses agentDir/agent.db and agentDir/models.yml
 const authStorage = await discoverAuthStorage();
 const modelRegistry = discoverModels(authStorage);
 
@@ -434,14 +433,14 @@ For advanced use cases, you can create tools directly using `createTools`:
 ```typescript
 import { createTools, Settings, type ToolSession } from "@oh-my-pi/pi-coding-agent";
 
-const settingsInstance = await Settings.init({ cwd: "/path/to/project" });
+const settings = await Settings.init({ cwd: "/path/to/project" });
 
 const session: ToolSession = {
 	cwd: "/path/to/project",
 	hasUI: false,
 	getSessionFile: () => null,
 	getSessionSpawns: () => "*",
-	settings: settingsInstance,
+	settings,
 };
 
 const tools = await createTools(session);
@@ -722,15 +721,15 @@ sm.createBranchedSession(leafId); // Extract path to new file
 import { createAgentSession, Settings, SessionManager } from "@oh-my-pi/pi-coding-agent";
 
 // Default: loads from files (global config.yml + project settings.json merged)
-const settingsInstance = await Settings.init();
+const settings = await Settings.init();
 
 const { session } = await createAgentSession({
-	settingsInstance,
+	settings,
 });
 
 // Read/write settings
-const enabled = settingsInstance.get("compaction.enabled");
-settingsInstance.set("compaction.enabled", false);
+const enabled = settings.get("compaction.enabled");
+settings.set("compaction.enabled", false);
 
 // In-memory (no file I/O, for testing)
 const isolated = Settings.isolated({
@@ -739,7 +738,7 @@ const isolated = Settings.isolated({
 });
 
 const { session } = await createAgentSession({
-	settingsInstance: isolated,
+	settings: isolated,
 	sessionManager: SessionManager.inMemory(),
 });
 
@@ -905,7 +904,7 @@ const model = getModel("anthropic", "claude-opus-4-5");
 if (!model) throw new Error("Model not found");
 
 // In-memory settings with overrides
-const settingsInstance = Settings.isolated({
+const settings = Settings.isolated({
 	"compaction.enabled": false,
 	"retry.enabled": true,
 });
@@ -929,7 +928,7 @@ const { session } = await createAgentSession({
 	slashCommands: [],
 
 	sessionManager: SessionManager.inMemory(),
-	settingsInstance,
+	settings,
 });
 
 session.subscribe((event) => {

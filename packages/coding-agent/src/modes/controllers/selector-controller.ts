@@ -232,6 +232,11 @@ export class SelectorController {
 				});
 				break;
 			}
+			case "temperature": {
+				const temp = typeof value === "number" ? value : Number(value);
+				this.ctx.session.agent.temperature = temp >= 0 ? temp : undefined;
+				break;
+			}
 			case "statusLinePreset":
 			case "statusLineSeparator":
 			case "statusLineShowHooks":
