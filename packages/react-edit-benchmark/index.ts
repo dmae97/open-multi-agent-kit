@@ -243,6 +243,9 @@ async function main(): Promise<void> {
 		process.exit(1);
 	}
 
+	const noOpRetryLimit = parseInt(values["no-op-retry-limit"] ?? "2", 10);
+	const mutationScopeWindow = parseInt(values["mutation-scope-window"] ?? "20", 10);
+
 	let tasksToRun = allTasks;
 	if (values.tasks) {
 		const taskIds = values.tasks.split(",").map(s => s.trim());
@@ -319,6 +322,8 @@ async function main(): Promise<void> {
 		editVariant,
 		editFuzzy,
 		editFuzzyThreshold,
+		noOpRetryLimit,
+		mutationScopeWindow,
 	};
 
 	console.log("Edit Benchmark");

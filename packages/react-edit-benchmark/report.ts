@@ -45,18 +45,6 @@ function truncateText(text: string, maxLength: number): string {
 	return `${text.slice(0, maxLength - 3)}...`;
 }
 
-function _formatEditArgs(args: unknown, maxLength: number): string {
-	if (!args || typeof args !== "object") return "—";
-	const diff = (args as { diff?: unknown }).diff;
-	if (typeof diff === "string") {
-		return truncateText(escapeMarkdown(diff.replace(/\n/g, " ")), maxLength);
-	}
-	try {
-		return truncateText(escapeMarkdown(JSON.stringify(args)), maxLength);
-	} catch {
-		return "—";
-	}
-}
 
 function formatEditArgsBlock(args: unknown): string {
 	if (!args || typeof args !== "object") return "—";
@@ -135,17 +123,6 @@ export function generateReport(result: BenchmarkResult): string {
 	lines.push(`| Timeout Runs | ${summary.timeoutRuns} |`);
 	if (typeof summary.mutationIntentMatchRate === "number") {
 		lines.push(`| Mutation Intent Match Rate | ${formatPercent(summary.mutationIntentMatchRate)} |`);
-	}
-	const preventableCounts = summary.preventableFailureCounts ?? {};
-	const preventableTotal = Object.values(preventableCounts).reduce((sum, count) => sum + (count ?? 0), 0);
-	if (preventableTotal > 0) {
-		lines.push(`| Preventable Diagnostics | ${preventableTotal} |`);
-		for (const kind of ["malformed_edit_payload", "stale_hash", "off_target_edit", "no_op_retry_loop", "timeout"]) {
-			const count = preventableCounts[kind as keyof typeof preventableCounts];
-			if (typeof count === "number" && count > 0) {
-				lines.push(`| - ${kind} | ${count} |`);
-			}
-		}
 	}
 	if (config.editVariant === "patch" || config.editVariant === "hashline") {
 		lines.push(`| Patch Failure Rate | ${formatRate(totalEditFailures, totalEditAttempts)} |`);

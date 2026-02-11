@@ -37,6 +37,8 @@ export interface BenchmarkConfig {
 	editFuzzyThreshold?: number | "auto";
 	guided?: boolean;
 	maxAttempts?: number;
+	noOpRetryLimit?: number;
+	mutationScopeWindow?: number;
 }
 
 function splitLines(value: string): string[] {
@@ -603,6 +605,8 @@ async function runSingleTask(
 
 		const maxAttempts = Math.max(1, Math.floor(config.maxAttempts ?? 1));
 		let timeoutRetriesUsed = 0;
+		let zeroToolRetries = 0;
+		const noOpRetryLimit = config.noOpRetryLimit ?? 2;
 		let retryContext: string | null = null;
 		let allEvents: Array<{ type: string; [key: string]: unknown }> = [];
 
@@ -690,6 +694,16 @@ async function runSingleTask(
 						}
 					}
 				}
+			}
+
+			// Retry if the model produced zero tool calls (didn't even try)
+			const totalToolCalls = toolStats.read + toolStats.edit + toolStats.write;
+			if (totalToolCalls === 0 && zeroToolRetries < noOpRetryLimit) {
+				zeroToolRetries++;
+				await logEvent({ type: "zero_tool_retry", attempt: attempt + 1, retryNumber: zeroToolRetries });
+				retryContext = `Previous attempt produced no tool calls — you must read the file and apply an edit. Retry ${zeroToolRetries}/${noOpRetryLimit}.`;
+				attempt--; // Don't consume a regular attempt slot
+				continue;
 			}
 
 			patchApplied = toolStats.edit > 0;
@@ -824,6 +838,8 @@ async function runBatchedTask(
 
 		const maxAttempts = Math.max(1, Math.floor(config.maxAttempts ?? 1));
 		let timeoutRetriesUsed = 0;
+		let zeroToolRetries = 0;
+		const noOpRetryLimit = config.noOpRetryLimit ?? 2;
 		let retryContext: string | null = null;
 
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -906,6 +922,16 @@ async function runBatchedTask(
 						}
 					}
 				}
+			}
+
+			// Retry if the model produced zero tool calls (didn't even try)
+			const totalToolCalls = toolStats.read + toolStats.edit + toolStats.write;
+			if (totalToolCalls === 0 && zeroToolRetries < noOpRetryLimit) {
+				zeroToolRetries++;
+				await logEvent({ type: "zero_tool_retry", attempt: attempt + 1, retryNumber: zeroToolRetries });
+				retryContext = `Previous attempt produced no tool calls — you must read the file and apply an edit. Retry ${zeroToolRetries}/${noOpRetryLimit}.`;
+				attempt--; // Don't consume a regular attempt slot
+				continue;
 			}
 
 			patchApplied = toolStats.edit > 0;
