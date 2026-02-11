@@ -272,6 +272,18 @@ Remote command execution with persistent connections:
 - **SSHFS mounts**: Optional automatic mounting of remote directories
 - **Compat mode**: Windows host support with automatic shell probing
 
+## + Browser Tool (Puppeteer with Stealth)
+
+Headless browser automation with 14 stealth scripts to evade bot detection:
+
+- **25+ actions**: Navigate, click, type, fill, scroll, drag, screenshot, evaluate JS, extract readable content
+- **Accessibility snapshots**: Observe interactive elements via the accessibility tree with numeric IDs for reliable targeting
+- **14 stealth plugins**: Custom scripts covering toString tampering, WebGL fingerprinting, audio context, screen dimensions, font enumeration, plugin/mime-type mocking, hardware concurrency, codec availability, iframe detection, locale spoofing, worker detection, and more
+- **User agent spoofing**: Removes `HeadlessChrome` identifier, generates proper Client Hints brand lists, applies overrides via CDP Network and Emulation domains
+- **Selector flexibility**: CSS, `aria/`, `text/`, `xpath/`, `pierce/` query handlers for Shadow DOM piercing
+- **Reader mode**: `extract_readable` action uses Mozilla Readability for clean article extraction
+- **Headless/visible toggle**: Switch modes at runtime via `/browser` command or `browser.headless` setting
+
 ## + Cursor Provider
 
 Use your Cursor Pro subscription for AI completions:
@@ -320,6 +332,28 @@ Handles whitespace and indentation variance automatically:
 - Fixes the #1 pain point: edits failing due to invisible whitespace differences
 - Configurable via `edit.fuzzyMatch` setting (enabled by default)
 
+## + Native Engine (Rust N-API)
+
+~7,500 lines of Rust compiled to a platform-tagged N-API addon, providing performance-critical operations without shelling out to external commands:
+
+| Module          |  Lines | What it does                                                                                                                                         | Powered by                                                        |
+| --------------- | -----: | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| **grep**        | ~1,300 | Regex search over files and in-memory content, parallel/sequential modes, glob/type filtering, context lines, fuzzy find for autocomplete            | `grep-regex`, `grep-searcher`, `grep-matcher` (ripgrep internals) |
+| **shell**       | ~1,025 | Embedded bash execution with persistent sessions, streaming output, timeout/abort, custom builtins                                                   | [brush-shell](https://github.com/reubeno/brush) (vendored)        |
+| **text**        | ~1,280 | ANSI-aware visible width, truncation with ellipsis, column slicing, text wrapping that preserves SGR codes across line breaks — all UTF-16 optimized | `unicode-width`, `unicode-segmentation`                           |
+| **keys**        | ~1,300 | Kitty keyboard protocol parser with legacy xterm/VT100 fallback, modifier support, PHF perfect-hash lookup                                           | `phf`                                                             |
+| **highlight**   |   ~475 | Syntax highlighting with 11 semantic color categories, 30+ language aliases                                                                          | `syntect`                                                         |
+| **glob**        |   ~340 | Filesystem discovery with glob patterns, type filtering, mtime sorting, `.gitignore` respect                                                         | `ignore`, `globset` (ripgrep internals)                           |
+| **task**        |   ~350 | Blocking work scheduler on libuv thread pool, cooperative/external cancellation, timeout, profiling hooks                                            | `tokio`, `napi`                                                   |
+| **ps**          |   ~290 | Cross-platform process tree kill and descendant listing — `/proc` on Linux, `libproc` on macOS, `CreateToolhelp32Snapshot` on Windows                | `libc`                                                            |
+| **prof**        |   ~250 | Always-on circular buffer profiler with folded-stack output and optional SVG flamegraph generation                                                   | `inferno`                                                         |
+| **system_info** |   ~170 | Distro, kernel, CPU, disk usage without shelling out                                                                                                 | `sysinfo`                                                         |
+| **image**       |   ~150 | Decode/encode PNG/JPEG/WebP/GIF, resize with 5 sampling filters                                                                                      | `image`                                                           |
+| **clipboard**   |    ~95 | Text copy and image read from system clipboard — no `xclip`/`pbcopy` needed                                                                          | `arboard`                                                         |
+| **html**        |    ~50 | HTML-to-Markdown conversion with optional content cleaning                                                                                           | `html-to-markdown-rs`                                             |
+
+Supported platforms: `linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`, `win32-x64`.
+
 ## ... and many more
 
 - **`omp config` subcommand**: Manage settings from CLI (`list`, `get`, `set`, `reset`, `path`)
@@ -347,14 +381,16 @@ Handles whitespace and indentation variance automatically:
 | **[@oh-my-pi/pi-agent-core](packages/agent)**          | Agent runtime with tool calling and state management                                   |
 | **[@oh-my-pi/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI                                                           |
 | **[@oh-my-pi/pi-tui](packages/tui)**                   | Terminal UI library with differential rendering                                        |
-| **[@oh-my-pi/pi-natives](packages/natives)**           | WASM bindings for native text, image, and grep operations                              |
+| **[@oh-my-pi/pi-natives](packages/natives)**           | N-API bindings for grep, shell, image, text, syntax highlighting, and more             |
 | **[@oh-my-pi/omp-stats](packages/stats)**              | Local observability dashboard for AI usage statistics                                  |
 
 ### Rust Crates
 
-| Crate                               | Description                                   |
-| ----------------------------------- | --------------------------------------------- |
-| **[pi-natives](crates/pi-natives)** | Rust N-API crate for performance-critical ops |
+| Crate                                                         | Description                                                                                                                 |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **[pi-natives](crates/pi-natives)**                           | N-API native addon — 13 modules, ~7,500 lines of Rust (see [feature section](#-native-performance-engine-rust-n-api) above) |
+| **[brush-core-vendored](crates/brush-core-vendored)**         | Vendored fork of [brush-shell](https://github.com/reubeno/brush) for embedded bash execution                                |
+| **[brush-builtins-vendored](crates/brush-builtins-vendored)** | Vendored bash builtins (cd, echo, test, printf, read, export, etc.)                                                         |
 
 ---
 
