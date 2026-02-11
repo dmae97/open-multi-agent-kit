@@ -2,79 +2,65 @@
 
 Line-addressed edits using hash-verified line references. Read file with hashes first, then edit by referencing `LINE:HASH` pairs.
 
+<critical>
+- Copy `LINE:HASH` refs verbatim from read output — never fabricate or guess hashes
+- `dst` contains plain content lines only — no `LINE:HASH|` prefix, no diff `+` markers
+- On hash mismatch: the error shows correct `LINE:HASH` refs with `>>>` markers — use those directly
+- Edit only the lines that need to change. Do not reformat, restyle, adjust whitespace, change brace spacing, or break/join lines you were not asked to modify.
+</critical>
+
 <instruction>
 **Workflow:**
-1. Read target file (hashes are included automatically in output)
+1. Read target file (output includes `LINE:HASH| content` on every line)
 2. Identify lines to change by their `LINE:HASH` prefix
-3. Submit edit with `src` (structured spec) and `dst` (new content)
+3. Submit edit with `src` (line reference) and `dst` (replacement content)
+
 **Operations:**
-- **Replace single**: `src: { kind: "single", ref: "5:ab" }` — replaces line 5
-- **Replace range**: `src: { kind: "range", start: "5:ab", end: "9:ef" }` — replaces lines 5-9 with replacement (fewer dst lines = net deletion)
-- **Delete range**: `src: { kind: "range", start: "5:ab", end: "9:ef" }, dst: ""` — deletes lines 5-9
-- **Insert after**: `src: { kind: "insertAfter", after: "5:ab" }` — inserts after line 5 (line 5 unchanged)
-- **Insert before**: `src: { kind: "insertBefore", before: "5:ab" }` — inserts before line 5 (line 5 unchanged)
-**Rules:**
-- `src` is an object with a `kind` field discriminating the operation type
-- Line refs use `"LINE:HASH"` format from read output (e.g. `"5:ab"`)
-- `dst` replaces the **entire line(s)** referenced by `src` — match the original indentation exactly in `dst`
-- Do not merge multiple lines into one `dst` when `src` targets a single line — use a range instead
-- Multiple edits in one call are applied bottom-up (safe for non-overlapping edits)
-- Hashes verify file hasn't changed since your last read — stale hashes produce clear errors
-- Hashes are derived from both line content and line number (copy them verbatim from read output)
+- **Replace single**: `src: { kind: "single", ref: "{{hashline 5 'old_value = True'}}" }` — replaces line 5
+- **Replace range**: `src: { kind: "range", start: "{{hashline 5 'old_value = True'}}", end: "{{hashline 9 'return result'}}" }` — replaces lines 5-9 (fewer dst lines = net deletion)
+- **Delete range**: same as replace range with `dst: ""`
+- **Insert after**: `src: { kind: "insertAfter", after: "{{hashline 5 'old_value = True'}}" }` — inserts after line 5
+- **Insert before**: `src: { kind: "insertBefore", before: "{{hashline 5 'old_value = True'}}" }` — inserts before line 5
+
+Multiple edits in one call are applied bottom-up (safe for non-overlapping edits).
+
+**`dst` rules — get this right:**
+- Write only the new content — no `LINE:HASH| ` prefixes, no `+` diff markers.
+- Preserve the original indentation of surrounding code.
+- Do not echo anchor/boundary lines into `dst` (for insertAfter, write only the new lines — not the anchor line followed by new lines).
 </instruction>
 
 <input>
-- `path`: Path to the file to edit
+- `path`: File path
 - `edits`: Array of edit operations
-	- `src`: Source spec object — one of:
-		- `{ kind: "single", ref: "LINE:HASH" }` — single line
-		- `{ kind: "range", start: "LINE:HASH", end: "LINE:HASH" }` — inclusive range
-		- `{ kind: "insertAfter", after: "LINE:HASH" }` — insert after line
-		- `{ kind: "insertBefore", before: "LINE:HASH" }` — insert before line
+	- `src`: Source spec — one of:
+		- `{ kind: "single", ref: "LINE:HASH" }`
+		- `{ kind: "range", start: "LINE:HASH", end: "LINE:HASH" }`
+		- `{ kind: "insertAfter", after: "LINE:HASH" }`
+		- `{ kind: "insertBefore", before: "LINE:HASH" }`
 	- `dst`: Replacement content (`\n`-separated for multi-line, `""` for delete)
 </input>
 
-<output>
-Returns success/failure; on failure, error message indicates:
-- "Line N has changed since last read" — file was modified, re-read it
-- "Line N does not exist" — line number out of range
-- Validation errors for malformed line refs
-</output>
-
-<critical>
-- Always read target file before editing — line hashes come from the read output
-- If edit fails with hash mismatch, re-read the file to get fresh hashes
-- Never fabricate hashes — always copy from read output
-- Line refs use the format `LINE:HASH` as shown in read output (e.g., `"5:ab"`)
-- `dst` contains plain content lines (no hash prefix)
-</critical>
-
 <example name="replace single line">
-edit {"path":"src/app.py","edits":[{"src":{"kind":"single","ref":"2:9b"},"dst":"  print('Hello')"}]}
+edit {"path":"src/app.py","edits":[{"src":{"kind":"single","ref":"{{hashline 2 'x = 42'}}"},"dst":"  x = 99"}]}
 </example>
 
 <example name="replace range">
-edit {"path":"src/app.py","edits":[{"src":{"kind":"range","start":"5:ab","end":"8:ef"},"dst":"  combined = True"}]}
+edit {"path":"src/app.py","edits":[{"src":{"kind":"range","start":"{{hashline 5 'old_value = True'}}","end":"{{hashline 8 'return result'}}"},"dst":"  combined = True"}]}
 </example>
 
-<example name="delete range">
-edit {"path":"src/app.py","edits":[{"src":{"kind":"range","start":"5:ab","end":"6:ef"},"dst":""}]}
+<example name="delete lines">
+edit {"path":"src/app.py","edits":[{"src":{"kind":"range","start":"{{hashline 5 'old_value = True'}}","end":"{{hashline 6 'unused = None'}}"},"dst":""}]}
 </example>
 
 <example name="insert after">
-edit {"path":"src/app.py","edits":[{"src":{"kind":"insertAfter","after":"3:e7"},"dst":"  # new comment"}]}
+edit {"path":"src/app.py","edits":[{"src":{"kind":"insertAfter","after":"{{hashline 3 'def hello'}}"},"dst":"  # new comment"}]}
 </example>
 
 <example name="insert before">
-edit {"path":"src/app.py","edits":[{"src":{"kind":"insertBefore","before":"3:e7"},"dst":"  # new comment"}]}
+edit {"path":"src/app.py","edits":[{"src":{"kind":"insertBefore","before":"{{hashline 3 'def hello'}}"},"dst":"  # new comment"}]}
 </example>
 
-<example name="multiple edits">
-edit {"path":"src/app.py","edits":[{"src":{"kind":"single","ref":"10:f1"},"dst":"  return True"},{"src":{"kind":"single","ref":"3:c4"},"dst":"  x = 42"}]}
+<example name="multiple edits (bottom-up safe)">
+edit {"path":"src/app.py","edits":[{"src":{"kind":"single","ref":"{{hashline 10 'return True'}}"},"dst":"  return False"},{"src":{"kind":"single","ref":"{{hashline 3 'def hello'}}"},"dst":"  x = 42"}]}
 </example>
-
-<avoid>
-- Fabricating or guessing hash values
-- Using stale hashes after file has been modified
-- Overlapping edits in the same call
-</avoid>

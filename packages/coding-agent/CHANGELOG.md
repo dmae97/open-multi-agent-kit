@@ -1,9 +1,24 @@
 # Changelog
 
 ## [Unreleased]
+
+### Added
+
+- Added `{{hashline}}` Handlebars helper to compute accurate `LINE:HASH` references for prompt examples and documentation
+
+### Changed
+
+- Changed hash algorithm from hexadecimal (base-16) to base-36 alphanumeric for shorter, more readable line references
+- Increased maximum wrapped-line restoration from 6 to 10 lines to handle longer reflowed statements
+- Updated prompt examples to use `{{hashline}}` Handlebars helper for generating correct line references in tool instructions
+
 ### Removed
 
 - Removed `substring` source specification kind from hashline edits—use line-hash references instead
+
+### Fixed
+
+- Fixed multi-edit application to use original file state for all anchor references, preventing incorrect line numbers when earlier edits change file length
 
 ## [11.10.4] - 2026-02-10
 

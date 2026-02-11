@@ -168,8 +168,6 @@ function formatStreamingHashlineEdits(edits: HashlineEdit[], uiTheme: Theme, ui:
 				return `• insertAfter ${src.after}..`;
 			case "insertBefore":
 				return `• insertBefore ..${src.before}`;
-			case "substring":
-				return `• substring ${JSON.stringify(src.needle)}`;
 		}
 	}
 }

@@ -16,9 +16,9 @@ import {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("computeLineHash", () => {
-	test("returns 4-character hex string", () => {
+	test("returns 2-4 character alphanumeric hash string", () => {
 		const hash = computeLineHash(1, "hello");
-		expect(hash).toMatch(/^[0-9a-f]{2}$/);
+		expect(hash).toMatch(/^[0-9a-z]{2,4}$/);
 	});
 
 	test("same content at same line produces same hash", () => {
@@ -35,7 +35,7 @@ describe("computeLineHash", () => {
 
 	test("empty line produces valid hash", () => {
 		const hash = computeLineHash(1, "");
-		expect(hash).toMatch(/^[0-9a-f]{2}$/);
+		expect(hash).toMatch(/^[0-9a-z]{2,4}$/);
 	});
 });
 
@@ -70,7 +70,7 @@ describe("formatHashLines", () => {
 		const result = formatHashLines("foo\n\nbar");
 		const lines = result.split("\n");
 		expect(lines).toHaveLength(3);
-		expect(lines[1]).toMatch(/^2:[0-9a-f]{2}\| $/);
+		expect(lines[1]).toMatch(/^2:[0-9a-z]{2,4}\| $/);
 	});
 
 	test("round-trips with computeLineHash", () => {
@@ -79,7 +79,7 @@ describe("formatHashLines", () => {
 		const lines = formatted.split("\n");
 
 		for (let i = 0; i < lines.length; i++) {
-			const match = lines[i].match(/^(\d+):([0-9a-f]+)\| (.*)$/);
+			const match = lines[i].match(/^(\d+):([0-9a-z]+)\| (.*)$/);
 			expect(match).not.toBeNull();
 			const lineNum = Number.parseInt(match![1], 10);
 			const hash = match![2];
@@ -170,8 +170,8 @@ describe("parseLineRef", () => {
 		expect(() => parseLineRef("abc:1234")).toThrow(/Invalid line reference/);
 	});
 
-	test("rejects non-hex hash", () => {
-		expect(() => parseLineRef("5:zzzz")).toThrow(/Invalid line reference/);
+	test("rejects non-alphanumeric hash", () => {
+		expect(() => parseLineRef("5:$$$$")).toThrow(/Invalid line reference/);
 	});
 
 	test("rejects line number 0", () => {
@@ -467,6 +467,32 @@ describe("applyHashlineEdits — heuristics", () => {
 		expect(outLines[3]).toBe("const x = 1;");
 	});
 
+	test("restores a long wrapped line when model reflows it across many lines", () => {
+		const longLine =
+			"const options = veryLongIdentifier + anotherLongIdentifier + thirdLongIdentifier + fourthLongIdentifier;";
+		const content = ["before();", longLine, "after();"].join("\n");
+		const edits: HashlineEdit[] = [
+			{
+				src: { kind: "single", ref: makeRef(2, longLine) },
+				dst: [
+					"const",
+					"options",
+					"=",
+					"veryLongIdentifier",
+					"+",
+					"anotherLongIdentifier",
+					"+",
+					"thirdLongIdentifier",
+					"+",
+					"fourthLongIdentifier;",
+				].join("\n"),
+			},
+		];
+
+		const result = applyHashlineEdits(content, edits);
+		expect(result.content).toBe(content);
+	});
+
 	test("repairs single-line replacement that absorbed the next line (prevents duplication)", () => {
 		const content = ["    typeof HOOK === 'undefined' &&", "    typeof HOOK.checkDCE !== 'function'", "tail();"].join(
 			"\n",
@@ -588,6 +614,17 @@ describe("applyHashlineEdits — multiple edits", () => {
 
 		const result = applyHashlineEdits(content, edits);
 		expect(result.content).toBe("aaa\nINSERTED\nbbb\nCCC");
+	});
+
+	test("applies non-overlapping edits against original anchors when line counts change", () => {
+		const content = "one\ntwo\nthree\nfour\nfive\nsix";
+		const edits: HashlineEdit[] = [
+			{ src: { kind: "range", start: makeRef(2, "two"), end: makeRef(3, "three") }, dst: "TWO_THREE" },
+			{ src: { kind: "single", ref: makeRef(6, "six") }, dst: "SIX" },
+		];
+
+		const result = applyHashlineEdits(content, edits);
+		expect(result.content).toBe("one\nTWO_THREE\nfour\nfive\nSIX");
 	});
 
 	test("empty edits array is a no-op", () => {

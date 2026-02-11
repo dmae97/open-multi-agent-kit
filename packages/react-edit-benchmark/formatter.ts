@@ -19,20 +19,21 @@ export const PRETTIER_OPTIONS: prettier.Options = {
 	proseWrap: "preserve",
 };
 
-const parsersByExtension: Record<string, prettier.BuiltInParserName[]> = {
-	".js": ["flow", "babel", "babel-ts"],
-	".jsx": ["flow", "babel", "babel-ts"],
-	".ts": ["typescript"],
-	".tsx": ["typescript"],
-	".json": ["json"],
-	".jsonc": ["json"],
-	".md": ["markdown"],
-	".mdx": ["mdx"],
-	".yml": ["yaml"],
-	".yaml": ["yaml"],
-	".css": ["css"],
-	".scss": ["scss"],
-	".html": ["html"],
+const parserByExtension: Partial<Record<string, prettier.BuiltInParserName>> = {
+	// Benchmark JS fixtures are Flow-typed; pin to flow to avoid parser-dependent formatting drift.
+	".js": "flow",
+	".jsx": "flow",
+	".ts": "typescript",
+	".tsx": "typescript",
+	".json": "json",
+	".jsonc": "json",
+	".md": "markdown",
+	".mdx": "mdx",
+	".yml": "yaml",
+	".yaml": "yaml",
+	".css": "css",
+	".scss": "scss",
+	".html": "html",
 };
 
 async function listFiles(rootDir: string, subPath = ""): Promise<string[]> {
@@ -57,22 +58,18 @@ export interface FormatResult {
 }
 
 export async function formatContent(filePath: string, content: string): Promise<FormatResult> {
-	const parsers = parsersByExtension[path.extname(filePath).toLowerCase()];
-	if (!parsers) {
-		return { formatted: content, didFormat: false };
-	}
+	const parser = parserByExtension[path.extname(filePath).toLowerCase()];
+	if (!parser) {
+	return { formatted: content, didFormat: false };
+		}
 
-	for (const parser of parsers) {
 		try {
 			const formatted = await prettier.format(content, { ...PRETTIER_OPTIONS, parser });
 			return { formatted, didFormat: true };
 		} catch {
-			// Try the next parser.
+	return { formatted: content, didFormat: false };
 		}
 	}
-
-	return { formatted: content, didFormat: false };
-}
 
 export async function formatDirectory(rootDir: string): Promise<void> {
 	const files = await listFiles(rootDir);

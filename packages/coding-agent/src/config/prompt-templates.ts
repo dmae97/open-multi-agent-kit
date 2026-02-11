@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { logger } from "@oh-my-pi/pi-utils";
 import Handlebars from "handlebars";
 import { CONFIG_DIR_NAME, getPromptsDir } from "../config";
+import { computeLineHash } from "../patch/hashline";
 import { jtdToTypeScript } from "../tools/jtd-to-typescript";
 import { parseFrontmatter } from "../utils/frontmatter";
 
@@ -227,6 +228,16 @@ handlebars.registerHelper("not", (value: unknown): boolean => !value);
 handlebars.registerHelper("jtdToTypeScript", (schema: unknown): string => jtdToTypeScript(schema));
 
 handlebars.registerHelper("jsonStringify", (value: unknown): string => JSON.stringify(value));
+
+/**
+ * {{hashline lineNum "content"}} — compute a real hashline ref for prompt examples.
+ * Returns `"lineNum:hash"` using the actual hash algorithm.
+ */
+handlebars.registerHelper("hashline", (lineNum: unknown, content: unknown): string => {
+	const num = typeof lineNum === "number" ? lineNum : Number.parseInt(String(lineNum), 10);
+	const str = typeof content === "string" ? content : String(content ?? "");
+	return `${num}:${computeLineHash(num, str)}`;
+});
 
 export function renderPromptTemplate(template: string, context: TemplateContext = {}): string {
 	const compiled = handlebars.compile(template, { noEscape: true, strict: false });

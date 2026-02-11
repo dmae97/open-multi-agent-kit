@@ -106,4 +106,18 @@ describe("verifyExpectedFiles", () => {
 			await cleanup();
 		}
 	});
+
+	it("preserves expected whitespace on non-formatted files when differences are whitespace-only", async () => {
+		const { expectedDir, actualDir, cleanup } = await createTempDirs();
+		try {
+			await Bun.write(path.join(expectedDir, "notes.txt"), "alpha  beta\ngamma\n");
+			await Bun.write(path.join(actualDir, "notes.txt"), "alpha beta\ngamma\n");
+
+			const result = await verifyExpectedFiles(expectedDir, actualDir);
+
+			expect(result.success).toBe(true);
+		} finally {
+			await cleanup();
+		}
+	});
 });

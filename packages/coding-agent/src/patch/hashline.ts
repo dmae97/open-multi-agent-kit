@@ -50,7 +50,7 @@ function splitDstLines(dst: string): string[] {
 }
 
 /** Pattern matching hashline display format: `LINE:HASH| CONTENT` */
-const HASHLINE_PREFIX_RE = /^\d+:[0-9a-fA-F]{1,16}\| /;
+const HASHLINE_PREFIX_RE = /^\d+:[0-9a-zA-Z]{1,16}\| /;
 
 /** Pattern matching a unified-diff `+` prefix (but not `++`) */
 const DIFF_PLUS_RE = /^\+(?!\+)/;
@@ -138,7 +138,7 @@ function restoreOldWrappedLines(oldLines: string[], newLines: string[]): string[
 
 	const candidates: { start: number; len: number; replacement: string; canon: string }[] = [];
 	for (let start = 0; start < newLines.length; start++) {
-		for (let len = 2; len <= 6 && start + len <= newLines.length; len++) {
+		for (let len = 2; len <= 10 && start + len <= newLines.length; len++) {
 			const canonSpan = stripAllWhitespace(newLines.slice(start, start + len).join(""));
 			const old = canonToOld.get(canonSpan);
 			if (old && old.count === 1 && canonSpan.length >= 6) {
@@ -293,9 +293,10 @@ function stripNewLinePrefixes(lines: string[]): string[] {
 }
 
 const HASH_LEN = 2;
-const HASH_MASK = BigInt((1 << (HASH_LEN * 4)) - 1);
+const RADIX = 36;
+const HASH_MOD = RADIX ** HASH_LEN;
 
-const HEX_DICT = Array.from({ length: Number(HASH_MASK) + 1 }, (_, i) => i.toString(16).padStart(HASH_LEN, "0"));
+const DICT = Array.from({ length: HASH_MOD }, (_, i) => i.toString(RADIX).padStart(HASH_LEN, "0"));
 
 /**
  * Compute a short hex hash of a single line.
@@ -311,7 +312,7 @@ export function computeLineHash(idx: number, line: string): string {
 	}
 	line = line.replace(/\s+/g, "");
 	void idx; // Might use line, but for now, let's not.
-	return HEX_DICT[Number(Bun.hash.xxHash64(line) & HASH_MASK)];
+	return DICT[Bun.hash.xxHash32(line) % HASH_MOD];
 }
 
 /**
@@ -561,8 +562,8 @@ export function parseLineRef(ref: string): { line: number; hash: string } {
 	// Strip display-format suffix: "5:ab| some content" → "5:ab"
 	// Models often copy the full display format from read output.
 	const cleaned = ref.replace(/\|.*$/, "").trim();
-	const strictMatch = cleaned.match(/^(\d+):([0-9a-fA-F]{1,16})$/);
-	const prefixMatch = strictMatch ? null : cleaned.match(new RegExp(`^(\\d+):([0-9a-fA-F]{${HASH_LEN}})`));
+	const strictMatch = cleaned.match(/^(\d+):([0-9a-zA-Z]{1,16})$/);
+	const prefixMatch = strictMatch ? null : cleaned.match(new RegExp(`^(\\d+):([0-9a-zA-Z]{${HASH_LEN}})`));
 	const match = strictMatch ?? prefixMatch;
 	if (!match) {
 		throw new Error(`Invalid line reference "${ref}". Expected format "LINE:HASH" (e.g. "5:aa").`);
@@ -686,6 +687,7 @@ export function applyHashlineEdits(
 	}
 
 	const fileLines = content.split("\n");
+	const originalFileLines = [...fileLines];
 	let firstChangedLine: number | undefined;
 
 	// Parse src specs and dst lines up front
@@ -789,7 +791,10 @@ export function applyHashlineEdits(
 			case "single": {
 				const merged = maybeExpandSingleLineMerge(spec.ref.line, dstLines);
 				if (merged) {
-					const origLines = fileLines.slice(merged.startLine - 1, merged.startLine - 1 + merged.deleteCount);
+					const origLines = originalFileLines.slice(
+						merged.startLine - 1,
+						merged.startLine - 1 + merged.deleteCount,
+					);
 					let nextLines = merged.newLines;
 					nextLines = restoreIndentForPairedReplacement([origLines[0] ?? ""], nextLines);
 					nextLines = preserveWhitespaceOnlyLinesLoose(origLines, nextLines);
@@ -805,8 +810,8 @@ export function applyHashlineEdits(
 				}
 
 				const count = 1;
-				const origLines = fileLines.slice(spec.ref.line - 1, spec.ref.line);
-				let stripped = stripRangeBoundaryEcho(fileLines, spec.ref.line, spec.ref.line, dstLines);
+				const origLines = originalFileLines.slice(spec.ref.line - 1, spec.ref.line);
+				let stripped = stripRangeBoundaryEcho(originalFileLines, spec.ref.line, spec.ref.line, dstLines);
 				stripped = restoreOldWrappedLines(origLines, stripped);
 				const preserved =
 					stripped.length === count
@@ -822,8 +827,8 @@ export function applyHashlineEdits(
 			}
 			case "range": {
 				const count = spec.end.line - spec.start.line + 1;
-				const origLines = fileLines.slice(spec.start.line - 1, spec.start.line - 1 + count);
-				let stripped = stripRangeBoundaryEcho(fileLines, spec.start.line, spec.end.line, dstLines);
+				const origLines = originalFileLines.slice(spec.start.line - 1, spec.start.line - 1 + count);
+				let stripped = stripRangeBoundaryEcho(originalFileLines, spec.start.line, spec.end.line, dstLines);
 				stripped = restoreOldWrappedLines(origLines, stripped);
 				const preserved =
 					stripped.length === count
@@ -838,14 +843,14 @@ export function applyHashlineEdits(
 				break;
 			}
 			case "insertAfter": {
-				const anchorLine = fileLines[spec.after.line - 1];
+				const anchorLine = originalFileLines[spec.after.line - 1];
 				const inserted = stripInsertAnchorEchoAfter(anchorLine, dstLines);
 				fileLines.splice(spec.after.line, 0, ...inserted);
 				trackFirstChanged(spec.after.line + 1);
 				break;
 			}
 			case "insertBefore": {
-				const anchorLine = fileLines[spec.before.line - 1];
+				const anchorLine = originalFileLines[spec.before.line - 1];
 				const inserted = stripInsertAnchorEchoBefore(anchorLine, dstLines);
 				fileLines.splice(spec.before.line - 1, 0, ...inserted);
 				trackFirstChanged(spec.before.line);

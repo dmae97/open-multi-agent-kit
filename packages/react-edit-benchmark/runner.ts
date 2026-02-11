@@ -44,6 +44,86 @@ function splitLines(value: string): string[] {
 	return value.split("\n").filter((line, idx, arr) => idx < arr.length - 1 || line);
 }
 
+function getEditPathFromArgs(args: unknown): string | null {
+	if (!args || typeof args !== "object") return null;
+	const pathValue = (args as { path?: unknown }).path;
+	return typeof pathValue === "string" && pathValue.length > 0 ? pathValue : null;
+}
+
+async function collectOriginalFileContents(cwd: string, files: string[]): Promise<Map<string, string>> {
+	const originals = new Map<string, string>();
+	for (const file of files) {
+		const fullPath = join(cwd, file);
+		try {
+			originals.set(fullPath, await Bun.file(fullPath).text());
+		} catch {
+			// Ignore missing files; not all tasks include all paths in every run.
+		}
+	}
+	return originals;
+}
+
+function buildMutationPreviewAgainstOriginal(original: string, current: string, maxLines = 8): string | null {
+	if (original === current) return null;
+
+	const changes = diffLines(original, current);
+	const preview: string[] = [];
+	let lineNum = 1;
+
+	for (const change of changes) {
+		const lines = splitLines(change.value);
+		if (!change.added && !change.removed) {
+			lineNum += lines.length;
+			continue;
+		}
+
+		if (change.removed) {
+			for (const line of lines) {
+				const hash = computeLineHash(lineNum, line);
+				preview.push(`${lineNum}:${hash}| -${line}`);
+				lineNum += 1;
+				if (preview.length >= maxLines) return preview.join("\n");
+			}
+			continue;
+		}
+
+		for (const line of lines) {
+			const hash = computeLineHash(lineNum, line);
+			preview.push(`${lineNum}:${hash}| +${line}`);
+			if (preview.length >= maxLines) return preview.join("\n");
+		}
+	}
+
+	return preview.length > 0 ? preview.join("\n") : null;
+}
+
+async function appendNoChangeMutationHint(
+	error: string,
+	args: unknown,
+	cwd: string,
+	originalFiles: Map<string, string>,
+): Promise<string> {
+	if (!error.includes("No changes made")) return error;
+	const editPath = getEditPathFromArgs(args);
+	if (!editPath) return error;
+
+	const fullPath = editPath.startsWith("/") ? editPath : join(cwd, editPath);
+	const original = originalFiles.get(fullPath);
+	if (original === undefined) return error;
+
+	let current: string;
+	try {
+		current = await Bun.file(fullPath).text();
+	} catch {
+		return error;
+	}
+
+	const preview = buildMutationPreviewAgainstOriginal(original, current);
+	if (!preview) return error;
+
+	return `${error}\nThe file differs from the original fixture at these lines:\n${preview}`;
+}
+
 type GuidedHashlineEdit = { src: unknown; dst: string };
 
 function buildGuidedHashlineEdits(actual: string, expected: string): GuidedHashlineEdit[] {
@@ -337,6 +417,7 @@ async function runSingleTask(
 	const logEvent = async (event: unknown) => {
 		await fs.appendFile(logFile, JSON.stringify(event) + "\n");
 	};
+	const originalFiles = await collectOriginalFileContents(cwd, task.files);
 
 	try {
 		await fs.appendFile(logFile, `{"type":"meta","task":"${task.id}","run":${runIndex},"workDir":"${cwd}"}\n`);
@@ -425,7 +506,7 @@ async function runSingleTask(
 					pendingEdits.delete(e.toolCallId);
 					if (e.isError) {
 						toolStats.editFailures++;
-						const error = extractToolErrorMessage(e.result);
+						const error = await appendNoChangeMutationHint(extractToolErrorMessage(e.result), args, cwd, originalFiles);
 						editFailures.push({ toolCallId: e.toolCallId, args, error });
 					} else {
 						toolStats.editSuccesses++;
@@ -538,6 +619,7 @@ async function runBatchedTask(
 	const logEvent = async (event: unknown) => {
 		await fs.appendFile(logFile, JSON.stringify(event) + "\n");
 	};
+	const originalFiles = await collectOriginalFileContents(cwd, task.files);
 
 	try {
 		await fs.appendFile(
@@ -597,7 +679,12 @@ async function runBatchedTask(
 						pendingEdits.delete(e.toolCallId);
 						if (e.isError) {
 							toolStats.editFailures++;
-							const toolError = extractToolErrorMessage(e.result);
+							const toolError = await appendNoChangeMutationHint(
+								extractToolErrorMessage(e.result),
+								args,
+								cwd,
+								originalFiles,
+							);
 							editFailures.push({ toolCallId: e.toolCallId, args, error: toolError });
 						} else {
 							toolStats.editSuccesses++;

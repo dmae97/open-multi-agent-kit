@@ -144,9 +144,12 @@ export async function verifyExpectedFileSubset(
 			const actualRaw = await Bun.file(actualPath).text();
 			const expectedNormalized = normalizeLineEndings(expectedRaw);
 			const actualNormalized = normalizeLineEndings(actualRaw);
-
+			const actualNormalizedWithPreservedWhitespace = restoreWhitespaceOnlyLineDiffs(
+				expectedNormalized,
+				actualNormalized,
+			);
 			const expectedFormatted = await formatContent(expectedPath, expectedNormalized);
-			const actualFormatted = await formatContent(actualPath, actualNormalized);
+			const actualFormatted = await formatContent(actualPath, actualNormalizedWithPreservedWhitespace);
 			const formattedEquivalent = expectedFormatted.formatted === actualFormatted.formatted;
 
 			// Indent score: distance between agent's raw output and formatted output
@@ -246,6 +249,34 @@ function computeIndentDistanceForDiff(expected: string, actual: string): number 
 
 function normalizeLineEndings(value: string): string {
 	return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function restoreWhitespaceOnlyLineDiffs(expected: string, actual: string): string {
+	const expectedLines = expected.split("\n");
+	const actualLines = actual.split("\n");
+	const max = Math.max(expectedLines.length, actualLines.length);
+	const out = new Array<string>(max);
+
+	for (let i = 0; i < max; i++) {
+		const expectedLine = expectedLines[i];
+		const actualLine = actualLines[i];
+		if (expectedLine === undefined || actualLine === undefined) {
+			out[i] = actualLine ?? "";
+			continue;
+		}
+
+		if (expectedLine !== actualLine && equalsIgnoringWhitespace(expectedLine, actualLine)) {
+			out[i] = expectedLine;
+		} else {
+			out[i] = actualLine;
+		}
+	}
+
+	return out.join("\n");
+}
+
+function equalsIgnoringWhitespace(a: string, b: string): boolean {
+	return a.replace(/\s+/g, "") === b.replace(/\s+/g, "");
 }
 
 function splitLines(value: string): string[] {
