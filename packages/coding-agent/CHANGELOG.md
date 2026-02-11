@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `openPath` utility function to centralize cross-platform URL and file path opening
+
+### Changed
+
+- Refactored browser/file opening across multiple modules to use unified `openPath` utility for improved maintainability
 
 ## [11.12.0] - 2026-02-11
 ### Added

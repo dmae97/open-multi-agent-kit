@@ -1,7 +1,7 @@
 import { getOAuthProviders } from "@oh-my-pi/pi-ai";
 import { Container, getEditorKeybindings, Input, Spacer, Text, type TUI } from "@oh-my-pi/pi-tui";
-import { $ } from "bun";
 import { theme } from "../../modes/theme/theme";
+import { openPath } from "../../utils/open";
 import { DynamicBorder } from "./dynamic-border";
 
 /**
@@ -84,21 +84,8 @@ export class LoginDialogComponent extends Container {
 			this.#contentContainer.addChild(new Text(theme.fg("warning", instructions), 1, 0));
 		}
 
-		// Try to open browser using $
-		const openArgs =
-			process.platform === "darwin"
-				? ["open", url]
-				: process.platform === "win32"
-					? ["cmd", "/c", "start", "", url]
-					: ["xdg-open", url];
-		const [openCmd, ...openRest] = openArgs;
-		void (async () => {
-			try {
-				await $`${openCmd} ${openRest}`.quiet().nothrow();
-			} catch {
-				// Best-effort: browser opening is non-critical
-			}
-		})();
+		// Open browser (best-effort)
+		openPath(url);
 
 		this.#tui.requestRender();
 	}

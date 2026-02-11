@@ -5,6 +5,7 @@
  */
 import chalk from "chalk";
 import { APP_NAME } from "../config";
+import { openPath } from "../utils/open";
 
 // =============================================================================
 // Types
@@ -110,12 +111,7 @@ export async function runStatsCommand(cmd: StatsCommandArgs): Promise<void> {
 
 	// Open browser
 	const url = `http://localhost:${port}`;
-	const openCommand = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
-	Bun.spawn(openCommand === "cmd" ? ["cmd", "/c", "start", url] : [openCommand, url], {
-		stdout: "ignore",
-		stderr: "ignore",
-		windowsHide: true,
-	}).unref();
+	openPath(url);
 
 	console.log("Press Ctrl+C to stop\n");
 

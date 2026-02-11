@@ -10,6 +10,7 @@ import { getSessionsDir } from "../config";
 import { DynamicBorder } from "../modes/components/dynamic-border";
 import { getSelectListTheme, getSymbolTheme, theme } from "../modes/theme/theme";
 import type { InteractiveModeContext } from "../modes/types";
+import { openPath } from "../utils/open";
 import { generateHeapSnapshotData, type ProfilerSession, startCpuProfile } from "./profiler";
 import { clearArtifactCache, createReportBundle, getArtifactCacheStats, getRecentLogs } from "./report-bundle";
 import { collectSystemInfo, formatSystemInfo } from "./system-info";
@@ -182,14 +183,7 @@ export class DebugSelectorComponent extends Container {
 			const tmpPath = `/tmp/work-profile-${Date.now()}.svg`;
 			await Bun.write(tmpPath, workProfile.svg);
 
-			const openCmd =
-				process.platform === "darwin"
-					? ["open", tmpPath]
-					: process.platform === "win32"
-						? ["cmd", "/c", "start", "", tmpPath]
-						: ["xdg-open", tmpPath];
-
-			Bun.spawn(openCmd, { stdout: "ignore", stderr: "ignore" }).unref();
+			openPath(tmpPath);
 
 			this.ctx.chatContainer.addChild(new Spacer(1));
 			this.ctx.chatContainer.addChild(
@@ -341,20 +335,8 @@ export class DebugSelectorComponent extends Container {
 			return;
 		}
 
-		const openArgs =
-			process.platform === "darwin"
-				? ["open", artifactsDir]
-				: process.platform === "win32"
-					? ["cmd", "/c", "start", "", artifactsDir]
-					: ["xdg-open", artifactsDir];
-		const [cmd, ...args] = openArgs;
-
-		try {
-			Bun.spawn([cmd, ...args], { stdout: "ignore", stderr: "ignore", windowsHide: true }).unref();
-			this.ctx.showStatus(`Opened: ${artifactsDir}`);
-		} catch (err) {
-			this.ctx.showError(`Failed to open artifact folder: ${err instanceof Error ? err.message : String(err)}`);
-		}
+		openPath(artifactsDir);
+		this.ctx.showStatus(`Opened: ${artifactsDir}`);
 	}
 
 	async #handleClearCache(): Promise<void> {

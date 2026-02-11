@@ -16,6 +16,7 @@ import {
 import { MCPOAuthFlow } from "../../mcp/oauth-flow";
 import type { MCPServerConfig, MCPServerConnection } from "../../mcp/types";
 import type { OAuthCredential } from "../../session/auth-storage";
+import { openPath } from "../../utils/open";
 import { DynamicBorder } from "../components/dynamic-border";
 import { MCPAddWizard } from "../components/mcp-add-wizard";
 import { theme } from "../theme/theme";
@@ -430,33 +431,10 @@ export class MCPCommandController {
 						);
 						this.ctx.ui.requestRender();
 						const isWindows = process.platform === "win32";
-						const isMac = process.platform === "darwin";
-						const isLinux = process.platform === "linux";
 
 						// Try to open browser automatically
 						try {
-							if (isWindows) {
-								// Windows: use URL protocol handler directly to avoid cmd quoting issues.
-								Bun.spawn(["rundll32.exe", "url.dll,FileProtocolHandler", info.url], {
-									stdout: "ignore",
-									stderr: "ignore",
-									stdin: "ignore",
-								});
-							} else if (isMac) {
-								// macOS: Use 'open' command
-								Bun.spawn(["open", info.url], {
-									stdout: "ignore",
-									stderr: "ignore",
-									stdin: "ignore",
-								});
-							} else if (isLinux) {
-								// Linux: Try xdg-open
-								Bun.spawn(["xdg-open", info.url], {
-									stdout: "ignore",
-									stderr: "ignore",
-									stdin: "ignore",
-								});
-							}
+							openPath(info.url);
 
 							// Show confirmation that browser should open
 							this.ctx.chatContainer.addChild(new Spacer(1));

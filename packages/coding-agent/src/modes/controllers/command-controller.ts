@@ -18,25 +18,13 @@ import type { InteractiveModeContext } from "../../modes/types";
 import { createCompactionSummaryMessage } from "../../session/messages";
 import { outputMeta } from "../../tools/output-meta";
 import { getChangelogPath, parseChangelog } from "../../utils/changelog";
+import { openPath } from "../../utils/open";
 
 export class CommandController {
 	constructor(private readonly ctx: InteractiveModeContext) {}
 
 	openInBrowser(urlOrPath: string): void {
-		const args =
-			process.platform === "darwin"
-				? ["open", urlOrPath]
-				: process.platform === "win32"
-					? ["cmd", "/c", "start", "", urlOrPath]
-					: ["xdg-open", urlOrPath];
-		const [cmd, ...cmdArgs] = args;
-		void (async () => {
-			try {
-				await $`${cmd} ${cmdArgs}`.quiet().nothrow();
-			} catch {
-				// Best-effort: browser opening is non-critical
-			}
-		})();
+		openPath(urlOrPath);
 	}
 
 	async handleExportCommand(text: string): Promise<void> {
