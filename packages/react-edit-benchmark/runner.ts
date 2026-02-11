@@ -597,7 +597,7 @@ async function runSingleTask(
 			cwd,
 			provider: config.provider,
 			model: config.model,
-			args: ["--tools", "read,edit,write,ls"],
+			args: ["--tools", "read,edit,write", "--no-skills"],
 			env,
 		});
 
@@ -1335,7 +1335,7 @@ async function runBatch(
 			cwd: workDir,
 			provider: config.provider,
 			model: config.model,
-			args: ["--tools", "read,edit,write,ls"],
+			args: ["--tools", "read,edit,write", "--no-skills"],
 			env,
 		});
 
