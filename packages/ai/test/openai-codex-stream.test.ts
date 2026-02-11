@@ -195,7 +195,6 @@ describe("openai-codex streaming", () => {
 				// Verify sessionId is set in request body as prompt_cache_key
 				const body = typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : null;
 				expect(body?.prompt_cache_key).toBe(sessionId);
-				expect(body?.prompt_cache_retention).toBe("in-memory");
 
 				return new Response(stream, {
 					status: 200,

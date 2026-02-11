@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - Added `resolveFileDisplayMode` utility to centralize file display mode resolution across tools (read, grep, file mentions)
@@ -22,6 +21,7 @@
 
 ### Changed
 
+- Reverted hashline display format from `LINE:HASH  content` (two spaces) back to `LINE:HASH|content` (pipe separator) for consistency with legacy format
 - Changed hashline display format from `LINE:HASH| content` to `LINE:HASH  content` (two spaces instead of pipe separator) for improved readability
 - Removed `lines` and `hashes` parameters from `read` tool—file display mode (line numbers, hashlines) now determined automatically by settings and edit mode
 - Simplified `read` tool prompt to reflect automatic display mode detection based on configuration

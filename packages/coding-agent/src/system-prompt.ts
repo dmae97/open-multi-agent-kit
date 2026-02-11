@@ -16,6 +16,9 @@ import customSystemPromptTemplate from "./prompts/system/custom-system-prompt.md
 import systemPromptTemplate from "./prompts/system/system-prompt.md" with { type: "text" };
 import type { ToolName } from "./tools";
 
+/** Conditional startup debug prints (stderr) when PI_DEBUG_STARTUP is set */
+const debugStartup = $env.PI_DEBUG_STARTUP ? (stage: string) => process.stderr.write(`[startup] ${stage}\n`) : () => {};
+
 interface GitContext {
 	isRepo: boolean;
 	currentBranch: string;
@@ -453,6 +456,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 
 	// Load SYSTEM.md customization (prepended to prompt)
 	const systemPromptCustomization = await loadSystemPromptFiles({ cwd: resolvedCwd });
+	debugStartup("system-prompt:loadSystemPromptFiles:done");
 
 	const now = new Date();
 	const date = now.toLocaleDateString("en-CA", {
@@ -501,10 +505,14 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		providedSkills ??
 		(skillsSettings?.enabled !== false ? (await loadSkills({ ...skillsSettings, cwd: resolvedCwd })).skills : []);
 	const preloadedSkills = providedPreloadedSkills;
+	debugStartup("system-prompt:loadPreloadedSkills:start");
 	const preloadedSkillContents = preloadedSkills ? await loadPreloadedSkillContents(preloadedSkills) : [];
+	debugStartup("system-prompt:loadPreloadedSkills:done");
 
 	// Get git context
+	debugStartup("system-prompt:loadGitContext:start");
 	const git = await loadGitContext(resolvedCwd);
+	debugStartup("system-prompt:loadGitContext:done");
 
 	// Filter skills to only include those with read tool
 	const hasRead = tools?.has("read");
@@ -527,10 +535,13 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		});
 	}
 
+	debugStartup("system-prompt:getEnvironmentInfo:start");
+	const environment = await getEnvironmentInfo();
+	debugStartup("system-prompt:getEnvironmentInfo:done");
 	return renderPromptTemplate(systemPromptTemplate, {
 		tools: toolNamesArray,
 		toolDescriptions,
-		environment: await getEnvironmentInfo(),
+		environment,
 		systemPromptCustomization: systemPromptCustomization ?? "",
 		contextFiles,
 		agentsMdSearch,

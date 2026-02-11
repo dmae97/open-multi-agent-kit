@@ -261,6 +261,7 @@ describe("Image Limits E2E Tests", () => {
 	let smallImage: string; // 100x100 for count tests
 
 	beforeAll(async () => {
+		if (!Bun.which("magick")) return;
 		// Create temp directory
 		fs.mkdirSync(TEMP_DIR, { recursive: true });
 

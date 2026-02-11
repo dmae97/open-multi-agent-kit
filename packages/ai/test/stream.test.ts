@@ -1385,22 +1385,15 @@ describe("Generate E2E Tests", () => {
 		);
 	});
 
-	// Check if ollama is installed and local LLM tests are enabled
-	let ollamaInstalled = false;
-	if (!Bun.env.PI_NO_LOCAL_LLM) {
-		try {
-			execSync("which ollama", { stdio: "ignore" });
-			ollamaInstalled = true;
-		} catch {
-			ollamaInstalled = false;
-		}
-	}
+	// Ollama tests require PI_LOCAL_LLM=1 and ollama installed
+	const ollamaInstalled = !!Bun.env.PI_LOCAL_LLM && !!Bun.which("ollama");
 
 	describe.skipIf(!ollamaInstalled)("Ollama Provider (gpt-oss-20b via OpenAI Completions)", () => {
 		let llm: Model<"openai-completions"> | undefined;
 		let ollamaProcess: ChildProcess | null = null;
 
 		beforeAll(async () => {
+			if (!ollamaInstalled) return;
 			// Check if model is available, if not pull it
 			try {
 				execSync("ollama list | grep -q 'gpt-oss:20b'", { stdio: "ignore" });

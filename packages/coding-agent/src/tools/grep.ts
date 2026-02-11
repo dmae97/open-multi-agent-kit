@@ -209,10 +209,10 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 				const formatLine = (lineNumber: number, line: string, isMatch: boolean): string => {
 					if (useHashLines) {
 						const ref = `${lineNumber}:${computeLineHash(lineNumber, line)}`;
-						return isMatch ? `>>${ref}  ${line}` : `  ${ref}  ${line}`;
+						return isMatch ? `>>${ref}|${line}` : `  ${ref}|${line}`;
 					}
 					const padded = lineNumber.toString().padStart(lineWidth, " ");
-					return isMatch ? `>>${padded} ${line}` : `  ${padded} ${line}`;
+					return isMatch ? `>>${padded}|${line}` : `  ${padded}|${line}`;
 				};
 
 				// Add context before

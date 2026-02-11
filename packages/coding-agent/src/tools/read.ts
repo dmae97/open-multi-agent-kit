@@ -766,14 +766,14 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 				return textLines
 					.map((line, i) => {
 						const lineNum = String(startNum + i).padStart(padWidth, " ");
-						return `${lineNum}\t${line}`;
+						return `${lineNum}|${line}`;
 					})
 					.join("\n");
 			};
 			const prependHashLines = (text: string, startNum: number): string => {
 				const textLines = text.split("\n");
 				return textLines
-					.map((line, i) => `${startNum + i}:${computeLineHash(startNum + i, line)}  ${line}`)
+					.map((line, i) => `${startNum + i}:${computeLineHash(startNum + i, line)}|${line}`)
 					.join("\n");
 			};
 			const formatText = (text: string, startNum: number): string => {
@@ -924,15 +924,13 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			return textLines
 				.map((line, i) => {
 					const lineNum = String(startNum + i).padStart(padWidth, " ");
-					return `${lineNum}\t${line}`;
+					return `${lineNum}|${line}`;
 				})
 				.join("\n");
 		};
 		const prependHashLines = (text: string, startNum: number): string => {
 			const textLines = text.split("\n");
-			return textLines
-				.map((line, i) => `${startNum + i}:${computeLineHash(startNum + i, line)}  ${line}`)
-				.join("\n");
+			return textLines.map((line, i) => `${startNum + i}:${computeLineHash(startNum + i, line)}|${line}`).join("\n");
 		};
 		const formatText = (text: string, startNum: number): string => {
 			if (shouldAddHashLines) return prependHashLines(text, startNum);
