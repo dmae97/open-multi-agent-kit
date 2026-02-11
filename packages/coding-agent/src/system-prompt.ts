@@ -191,7 +191,7 @@ async function getGpuModel(): Promise<string | null> {
 	}
 }
 
-function getTerminalName(): string {
+function getTerminalName(): string | undefined {
 	const termProgram = Bun.env.TERM_PROGRAM;
 	const termProgramVersion = Bun.env.TERM_PROGRAM_VERSION;
 	if (termProgram) {
@@ -201,12 +201,12 @@ function getTerminalName(): string {
 	if (Bun.env.WT_SESSION) return "Windows Terminal";
 
 	const term = firstNonEmpty(Bun.env.TERM, Bun.env.COLORTERM, Bun.env.TERMINAL_EMULATOR);
-	return term ?? "unknown";
+	return term ?? undefined;
 }
 
-function normalizeDesktopValue(value: string): string {
+function normalizeDesktopValue(value: string): string | undefined {
 	const trimmed = value.trim();
-	if (!trimmed) return "unknown";
+	if (!trimmed) return undefined;
 	const parts = trimmed
 		.split(":")
 		.map(part => part.trim())
@@ -214,7 +214,7 @@ function normalizeDesktopValue(value: string): string {
 	return parts[0] ?? trimmed;
 }
 
-function getDesktopEnvironment(): string {
+function getDesktopEnvironment(): string | undefined {
 	if (Bun.env.KDE_FULL_SESSION === "true") return "KDE";
 	const raw = firstNonEmpty(
 		Bun.env.XDG_CURRENT_DESKTOP,
@@ -222,7 +222,7 @@ function getDesktopEnvironment(): string {
 		Bun.env.XDG_SESSION_DESKTOP,
 		Bun.env.GDMSESSION,
 	);
-	return raw ? normalizeDesktopValue(raw) : "unknown";
+	return raw ? normalizeDesktopValue(raw) : undefined;
 }
 
 function matchKnownWindowManager(value: string): string | null {
@@ -250,7 +250,7 @@ function matchKnownWindowManager(value: string): string | null {
 	return null;
 }
 
-function getWindowManager(): string {
+function getWindowManager(): string | undefined {
 	const explicit = firstNonEmpty(Bun.env.WINDOWMANAGER);
 	if (explicit) return explicit;
 
@@ -260,37 +260,31 @@ function getWindowManager(): string {
 		if (matched) return matched;
 	}
 
-	return "unknown";
+	return undefined;
 }
 
 /** Cached system info structure */
-interface SystemInfoCache {
-	os: string;
-	distro: string;
-	kernel: string;
-	arch: string;
-	cpu: string;
+interface GpuCache {
 	gpu: string;
-	disk: string;
 }
 
 function getSystemInfoCachePath(): string {
-	return path.join(os.homedir(), ".omp", "system_info.json");
+	return path.join(os.homedir(), ".omp", "gpu_cache.json");
 }
 
-async function loadSystemInfoCache(): Promise<SystemInfoCache | null> {
+async function loadGpuCache(): Promise<GpuCache | null> {
 	try {
 		const cachePath = getSystemInfoCachePath();
 		const file = Bun.file(cachePath);
 		if (!(await file.exists())) return null;
 		const content = await file.json();
-		return content as SystemInfoCache;
+		return content as GpuCache;
 	} catch {
 		return null;
 	}
 }
 
-async function saveSystemInfoCache(info: SystemInfoCache): Promise<void> {
+async function saveGpuCache(info: GpuCache): Promise<void> {
 	try {
 		const cachePath = getSystemInfoCachePath();
 		await Bun.write(cachePath, JSON.stringify(info, null, "\t"));
@@ -299,7 +293,14 @@ async function saveSystemInfoCache(info: SystemInfoCache): Promise<void> {
 	}
 }
 
-async function collectSystemInfo(): Promise<SystemInfoCache> {
+async function getCachedGpu(): Promise<string | undefined> {
+	const cached = await loadGpuCache();
+	if (cached) return cached.gpu;
+	const gpu = await getGpuModel();
+	if (gpu) await saveGpuCache({ gpu });
+	return gpu ?? undefined;
+}
+async function getEnvironmentInfo(): Promise<Array<{ label: string; value: string }>> {
 	let nativeInfo: SystemInfo | null = null;
 	try {
 		nativeInfo = getNativeSystemInfo();
@@ -307,40 +308,22 @@ async function collectSystemInfo(): Promise<SystemInfoCache> {
 		nativeInfo = null;
 	}
 
-	const gpu = await getGpuModel();
+	const gpu = await getCachedGpu();
 	const cpus = os.cpus();
-
-	return {
-		os: `${os.platform()} ${os.release()}`,
-		arch: os.arch(),
-		distro: nativeInfo?.distro ?? os.type(),
-		kernel: nativeInfo?.kernel ?? os.version(),
-		cpu: `${cpus.length}x ${nativeInfo?.cpu ?? cpus[0]?.model}`,
-		gpu: gpu ?? "unknown",
-		disk: nativeInfo?.disk ?? "unknown",
-	};
-}
-
-async function getEnvironmentInfo(): Promise<Array<{ label: string; value: string }>> {
-	// Load cached system info or collect fresh
-	let sysInfo = await loadSystemInfoCache();
-	if (!sysInfo) {
-		sysInfo = await collectSystemInfo();
-		await saveSystemInfoCache(sysInfo);
-	}
-
-	return [
-		{ label: "OS", value: sysInfo.os },
-		{ label: "Distro", value: sysInfo.distro },
-		{ label: "Kernel", value: sysInfo.kernel },
-		{ label: "Arch", value: sysInfo.arch },
-		{ label: "CPU", value: sysInfo.cpu },
-		{ label: "GPU", value: sysInfo.gpu },
-		{ label: "Disk", value: sysInfo.disk },
+	const entries: Array<{ label: string; value: string | undefined }> = [
+		{ label: "OS", value: `${os.platform()} ${os.release()}` },
+		{ label: "Distro", value: nativeInfo?.distro ?? os.type() },
+		{ label: "Kernel", value: nativeInfo?.kernel ?? os.version() },
+		{ label: "Arch", value: os.arch() },
+		{ label: "CPU", value: `${cpus.length}x ${nativeInfo?.cpu ?? cpus[0]?.model}` },
+		{ label: "GPU", value: gpu },
+		{ label: "Disk", value: nativeInfo?.disk ?? undefined },
 		{ label: "Terminal", value: getTerminalName() },
 		{ label: "DE", value: getDesktopEnvironment() },
 		{ label: "WM", value: getWindowManager() },
 	];
+
+	return entries.filter((e): e is { label: string; value: string } => e.value != null && e.value !== "unknown");
 }
 
 /** Resolve input as file path or literal string */

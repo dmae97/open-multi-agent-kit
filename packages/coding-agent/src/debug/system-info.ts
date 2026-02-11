@@ -22,6 +22,21 @@ export interface SystemInfo {
 	terminal: string | undefined;
 }
 
+/** Map Darwin kernel major version to macOS marketing name. */
+function macosMarketingName(release: string): string | undefined {
+	const major = Number.parseInt(release.split(".")[0] ?? "", 10);
+	if (Number.isNaN(major)) return undefined;
+	const names: Record<number, string> = {
+		25: "Tahoe",
+		24: "Sequoia",
+		23: "Sonoma",
+		22: "Ventura",
+		21: "Monterey",
+		20: "Big Sur",
+	};
+	return names[major];
+}
+
 /** Collect system information */
 export async function collectSystemInfo(): Promise<SystemInfo> {
 	const cpus = os.cpus();
@@ -31,8 +46,14 @@ export async function collectSystemInfo(): Promise<SystemInfo> {
 	const shell = Bun.env.SHELL ?? Bun.env.ComSpec ?? "unknown";
 	const terminal = Bun.env.TERM_PROGRAM ?? Bun.env.TERM ?? undefined;
 
+	let osStr = `${os.type()} ${os.release()} (${os.platform()})`;
+	if (os.platform() === "darwin") {
+		const name = macosMarketingName(os.release());
+		if (name) osStr = `${osStr} ${name}`;
+	}
+
 	return {
-		os: `${os.type()} ${os.release()} (${os.platform()})`,
+		os: osStr,
 		arch: os.arch(),
 		cpu: cpuModel,
 		memory: {

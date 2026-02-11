@@ -51,9 +51,32 @@ fn get_os_distro(_system: &System) -> Option<String> {
 		return read_linux_distro();
 	}
 
-	sysinfo::System::long_os_version()
+	let base = sysinfo::System::long_os_version()
 		.or_else(sysinfo::System::name)
-		.filter(|value| !value.trim().is_empty())
+		.filter(|value| !value.trim().is_empty());
+
+	if cfg!(target_os = "macos") {
+		if let Some(name) = macos_marketing_name() {
+			return base.map(|b| format!("{b} {name}"));
+		}
+	}
+
+	base
+}
+
+/// Map macOS major version to its marketing name.
+fn macos_marketing_name() -> Option<&'static str> {
+	let version = sysinfo::System::os_version()?;
+	let major: u32 = version.split('.').next()?.parse().ok()?;
+	Some(match major {
+		26 => "Tahoe",
+		15 => "Sequoia",
+		14 => "Sonoma",
+		13 => "Ventura",
+		12 => "Monterey",
+		11 => "Big Sur",
+		_ => return None,
+	})
 }
 
 fn read_linux_distro() -> Option<String> {
