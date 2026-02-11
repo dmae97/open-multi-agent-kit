@@ -268,8 +268,8 @@ interface TaskRunItem {
 	runIndex: number;
 }
 
-const BATCH_MIN_SIZE = 3;
-const BATCH_MAX_SIZE = 5;
+const BATCH_MIN_SIZE = 1;
+const BATCH_MAX_SIZE = 1;
 
 async function copyFixtures(task: EditTask, destDir: string): Promise<void> {
 	if (task.tarballPath) {

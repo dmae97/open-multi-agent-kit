@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Removed
+
+- Removed `substring` source specification kind from hashline edits—use line-hash references instead
 
 ## [11.10.4] - 2026-02-10
 

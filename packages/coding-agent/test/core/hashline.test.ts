@@ -532,19 +532,6 @@ describe("applyHashlineEdits — heuristics", () => {
 		expect(result.content).toBe("aaa\nBBB\nccc");
 	});
 
-	test("supports substring src when it matches exactly one line", () => {
-		const content = "aaa\ndevtools–unsupported-bridge-protocol\nccc";
-		const edits: HashlineEdit[] = [
-			{
-				src: { kind: "substring", needle: "devtools–unsupported-bridge-protocol" },
-				dst: "devtools-unsupported-bridge-protocol",
-			},
-		];
-
-		const result = applyHashlineEdits(content, edits);
-		expect(result.content).toBe("aaa\ndevtools-unsupported-bridge-protocol\nccc");
-	});
-
 	test("normalizes unicode-confusable hyphens when an edit would otherwise be a no-op", () => {
 		const content = "aaa\ndevtools–unsupported-bridge-protocol\nccc";
 		// dst is byte-identical to original (en-dash), so this would normally be a no-op.
@@ -676,13 +663,6 @@ describe("applyHashlineEdits — errors", () => {
 		const edits: HashlineEdit[] = [{ src: { kind: "single", ref: "10:aa" }, dst: "X" }];
 
 		expect(() => applyHashlineEdits(content, edits)).toThrow(/does not exist/);
-	});
-
-	test("rejects substring src when not found", () => {
-		const content = "aaa\nbbb";
-		const edits: HashlineEdit[] = [{ src: { kind: "substring", needle: "garbage" }, dst: "X" }];
-
-		expect(() => applyHashlineEdits(content, edits)).toThrow(/Substring src not found/);
 	});
 
 	test("rejects range with start > end", () => {

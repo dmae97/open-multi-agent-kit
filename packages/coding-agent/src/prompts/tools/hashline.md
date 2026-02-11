@@ -31,7 +31,6 @@ Line-addressed edits using hash-verified line references. Read file with hashes 
 		- `{ kind: "range", start: "LINE:HASH", end: "LINE:HASH" }` — inclusive range
 		- `{ kind: "insertAfter", after: "LINE:HASH" }` — insert after line
 		- `{ kind: "insertBefore", before: "LINE:HASH" }` — insert before line
-		- `{ kind: "substring", needle: "text" }` — unique substring match
 	- `dst`: Replacement content (`\n`-separated for multi-line, `""` for delete)
 </input>
 

@@ -199,12 +199,11 @@ export interface DiffError {
 export type LineRef = string;
 
 /** Structured source specification for a hashline edit operation. */
-export type SrcSpec =
-	| { kind: "single"; ref: LineRef }
-	| { kind: "range"; start: LineRef; end: LineRef }
-	| { kind: "insertAfter"; after: LineRef }
-	| { kind: "insertBefore"; before: LineRef }
-	| { kind: "substring"; needle: string };
+export type SrcSpec<L = LineRef> =
+	| { kind: "single"; ref: L }
+	| { kind: "range"; start: L; end: L }
+	| { kind: "insertAfter"; after: L }
+	| { kind: "insertBefore"; before: L };
 
 /** A single edit operation in hashline mode. */
 export interface HashlineEdit {

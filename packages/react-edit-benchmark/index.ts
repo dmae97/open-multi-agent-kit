@@ -45,10 +45,11 @@ Options:
   --model <id>              Provider/model ID, e.g. anthropic/claude-sonnet-4-20250514 (default)
   --provider <id>           Override provider (auto-detected from model prefix if omitted)
   --thinking <level>        Thinking level: off, minimal, low, medium, high, xhigh
-  --runs <n>                Runs per task (default: 3)
+  --runs <n>                Runs per task (default: 1)
   --timeout <ms>            Timeout per run in ms (default: 120000)
   --task-concurrency <n>    Max tasks to run in parallel (default: 16)
   --tasks <ids>             Comma-separated task IDs to run (default: all)
+  --max-tasks <n>            Max tasks to sample (default: 80, 0 = all)
   --fixtures <path>         Fixtures directory or .tar.gz archive (default: built-in)
   --edit-variant <v>        Edit variant: replace, patch, hashline, auto (default: auto)
   --edit-fuzzy <bool>       Fuzzy matching: true, false, auto (default: auto)
@@ -141,7 +142,7 @@ async function main(): Promise<void> {
 			provider: { type: "string" },
 			model: { type: "string", default: "anthropic/claude-sonnet-4-20250514" },
 			thinking: { type: "string" },
-			runs: { type: "string", default: "3" },
+			runs: { type: "string", default: "1" },
 			timeout: { type: "string", default: "120000" },
 			"task-concurrency": { type: "string", default: "16" },
 			tasks: { type: "string" },
@@ -159,6 +160,7 @@ async function main(): Promise<void> {
 			"edit-variant": { type: "string" },
 			"edit-fuzzy": { type: "string" },
 			"edit-fuzzy-threshold": { type: "string" },
+			"max-tasks": { type: "string", default: "80" },
 			list: { type: "boolean", default: false },
 			help: { type: "boolean", default: false },
 		},
@@ -250,6 +252,15 @@ async function main(): Promise<void> {
 			}
 			tasksToRun.push(task);
 		}
+	}
+
+	// Apply --max-tasks sampling (deterministic by sorting on id)
+	const maxTasks = parseInt(values["max-tasks"] ?? "80", 10);
+	if (maxTasks > 0 && tasksToRun.length > maxTasks && !values.tasks) {
+		// Evenly sample across mutation categories for representative coverage
+		const sorted = tasksToRun.slice().sort((a, b) => a.id.localeCompare(b.id));
+		const step = sorted.length / maxTasks;
+		tasksToRun = Array.from({ length: maxTasks }, (_, i) => sorted[Math.floor(i * step)]!);
 	}
 
 	const editVariant = values["edit-variant"] as "replace" | "patch" | "hashline" | "auto" | undefined;
