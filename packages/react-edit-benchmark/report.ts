@@ -130,6 +130,10 @@ export function generateReport(result: BenchmarkResult): string {
 	lines.push(`| Verified Rate | ${formatRate(verifiedRuns, summary.totalRuns)} |`);
 	lines.push(`| Edit Tool Usage Rate | ${formatRate(editToolRuns, summary.totalRuns)} |`);
 	lines.push(`| **Edit Success Rate** | **${formatPercent(summary.editSuccessRate)}** |`);
+	lines.push(`| Timeout Runs | ${summary.timeoutRuns} |`);
+	if (typeof summary.mutationIntentMatchRate === "number") {
+		lines.push(`| Mutation Intent Match Rate | ${formatPercent(summary.mutationIntentMatchRate)} |`);
+	}
 	if (config.editVariant === "patch" || config.editVariant === "hashline") {
 		lines.push(`| Patch Failure Rate | ${formatRate(totalEditFailures, totalEditAttempts)} |`);
 	}

@@ -572,8 +572,9 @@ export function parseLineRef(ref: string): { line: number; hash: string } {
 	// Strip display-format suffix: "5:ab| some content" → "5:ab"
 	// Models often copy the full display format from read output.
 	const cleaned = ref.replace(/\|.*$/, "").trim();
-	const strictMatch = cleaned.match(/^(\d+):([0-9a-zA-Z]{1,16})$/);
-	const prefixMatch = strictMatch ? null : cleaned.match(new RegExp(`^(\\d+):([0-9a-zA-Z]{${HASH_LEN}})`));
+	const normalized = cleaned.replace(/\s*:\s*/, ":");
+	const strictMatch = normalized.match(/^(\d+):([0-9a-zA-Z]{1,16})$/);
+	const prefixMatch = strictMatch ? null : normalized.match(new RegExp(`^(\\d+):([0-9a-zA-Z]{${HASH_LEN}})`));
 	const match = strictMatch ?? prefixMatch;
 	if (!match) {
 		throw new Error(`Invalid line reference "${ref}". Expected format "LINE:HASH" (e.g. "5:aa").`);
@@ -599,12 +600,19 @@ const MISMATCH_CONTEXT = 2;
  * showing the correct `LINE:HASH` so the caller can fix all refs at once.
  */
 export class HashlineMismatchError extends Error {
+	readonly remaps: ReadonlyMap<string, string>;
 	constructor(
 		public readonly mismatches: HashMismatch[],
 		public readonly fileLines: string[],
 	) {
 		super(HashlineMismatchError.formatMessage(mismatches, fileLines));
 		this.name = "HashlineMismatchError";
+		const remaps = new Map<string, string>();
+		for (const m of mismatches) {
+			const actual = computeLineHash(m.line, fileLines[m.line - 1]);
+			remaps.set(`${m.line}:${m.expected}`, `${m.line}:${actual}`);
+		}
+		this.remaps = remaps;
 	}
 
 	static formatMessage(mismatches: HashMismatch[], fileLines: string[]): string {
@@ -650,6 +658,17 @@ export class HashlineMismatchError extends Error {
 			}
 		}
 
+		// Append quick-fix remap section
+		const remapEntries: string[] = [];
+		for (const m of mismatches) {
+			const actual = computeLineHash(m.line, fileLines[m.line - 1]);
+			remapEntries.push(`\t${m.line}:${m.expected} \u2192 ${m.line}:${actual}`);
+		}
+		if (remapEntries.length > 0) {
+			lines.push("");
+			lines.push("Quick fix \u2014 replace stale refs:");
+			lines.push(...remapEntries);
+		}
 		return lines.join("\n");
 	}
 }
@@ -691,7 +710,7 @@ export function validateLineRef(ref: { line: number; hash: string }, fileLines: 
 export function applyHashlineEdits(
 	content: string,
 	edits: HashlineEdit[],
-): { content: string; firstChangedLine: number | undefined } {
+): { content: string; firstChangedLine: number | undefined; warnings?: string[] } {
 	if (edits.length === 0) {
 		return { content, firstChangedLine: undefined };
 	}
@@ -732,26 +751,31 @@ export function applyHashlineEdits(
 		(p.spec as { resolvedLine?: number }).resolvedLine = indices[0] + 1;
 	}
 
-	const explicitlyTouchedLines = new Set<number>();
-	for (const { spec } of parsed) {
-		switch (spec.kind) {
-			case "single":
-				explicitlyTouchedLines.add(spec.ref.line);
-				break;
-			case "range":
-				for (let ln = spec.start.line; ln <= spec.end.line; ln++) explicitlyTouchedLines.add(ln);
-				break;
-			case "insertAfter":
-				explicitlyTouchedLines.add(spec.after.line);
-				break;
-			case "insertBefore":
-				explicitlyTouchedLines.add(spec.before.line);
-				break;
-			case "substr":
-				explicitlyTouchedLines.add(spec.resolvedLine!);
-				break;
+	function collectExplicitlyTouchedLines(): Set<number> {
+		const touched = new Set<number>();
+		for (const { spec } of parsed) {
+			switch (spec.kind) {
+				case "single":
+					touched.add(spec.ref.line);
+					break;
+				case "range":
+					for (let ln = spec.start.line; ln <= spec.end.line; ln++) touched.add(ln);
+					break;
+				case "insertAfter":
+					touched.add(spec.after.line);
+					break;
+				case "insertBefore":
+					touched.add(spec.before.line);
+					break;
+				case "substr":
+					touched.add(spec.resolvedLine!);
+					break;
+			}
 		}
+		return touched;
 	}
+
+	let explicitlyTouchedLines = collectExplicitlyTouchedLines();
 
 	// Pre-validate: collect all hash mismatches before mutating
 	const mismatches: HashMismatch[] = [];
@@ -820,6 +844,11 @@ export function applyHashlineEdits(
 	if (mismatches.length > 0) {
 		throw new HashlineMismatchError(mismatches, fileLines);
 	}
+
+	// Hash relocation may have rewritten reference line numbers.
+	// Recompute touched lines so merge heuristics don't treat now-targeted
+	// adjacent lines as safe merge candidates.
+	explicitlyTouchedLines = collectExplicitlyTouchedLines();
 
 	// Compute sort key (descending) — bottom-up application
 	const annotated = parsed.map((p, idx) => {
@@ -934,9 +963,20 @@ export function applyHashlineEdits(
 		}
 	}
 
+	const warnings: string[] = [];
+	let diffLineCount = Math.abs(fileLines.length - originalFileLines.length);
+	for (let i = 0; i < Math.min(fileLines.length, originalFileLines.length); i++) {
+		if (fileLines[i] !== originalFileLines[i]) diffLineCount++;
+	}
+	if (diffLineCount > edits.length * 4) {
+		warnings.push(
+			`Edit changed ${diffLineCount} lines across ${edits.length} operations — verify no unintended reformatting.`,
+		);
+	}
 	return {
 		content: fileLines.join("\n"),
 		firstChangedLine,
+		...(warnings.length > 0 ? { warnings } : {}),
 	};
 
 	function trackFirstChanged(line: number): void {

@@ -29,7 +29,7 @@ import { enforcePlanModeWrite, resolvePlanPath } from "../tools/plan-mode-guard"
 import { applyPatch } from "./applicator";
 import { generateDiffString, generateUnifiedDiffString, replaceText } from "./diff";
 import { findMatch } from "./fuzzy";
-import { applyHashlineEdits } from "./hashline";
+import { applyHashlineEdits, computeLineHash, parseLineRef } from "./hashline";
 import { detectLineEnding, normalizeToLF, restoreLineEndings, stripBom } from "./normalize";
 import { buildNormativeUpdateInput } from "./normative";
 import { type EditToolDetails, getLspBatchRequest } from "./shared";
@@ -419,7 +419,33 @@ export class EditTool implements AgentTool<TInput> {
 			const normalizedContent = normalizeToLF(content);
 			const result = applyHashlineEdits(normalizedContent, edits);
 			if (normalizedContent === result.content) {
-				throw new Error(`No changes made to ${path}. The edits produced identical content.`);
+				let diagnostic = `No changes made to ${path}. The edits produced identical content.`;
+				try {
+					const lines = normalizedContent.split("\n");
+					const targetLines: string[] = [];
+					for (const edit of edits) {
+						const refs: string[] = [];
+						if ("replaceLine" in edit) refs.push(edit.replaceLine.loc);
+						else if ("replaceLines" in edit) refs.push(edit.replaceLines.start, edit.replaceLines.end);
+						else if ("insertAfter" in edit) refs.push(edit.insertAfter.loc);
+						else if ("insertBefore" in edit) refs.push(edit.insertBefore.loc);
+						for (const ref of refs) {
+							const parsed = parseLineRef(ref);
+							if (parsed.line >= 1 && parsed.line <= lines.length) {
+								const lineContent = lines[parsed.line - 1];
+								const hash = computeLineHash(parsed.line, lineContent);
+								targetLines.push(`${parsed.line}:${hash}| ${lineContent}`);
+							}
+						}
+					}
+					if (targetLines.length > 0) {
+						const preview = [...new Set(targetLines)].slice(0, 3).join("\n");
+						diagnostic += `\nThe file currently contains these lines:\n${preview}\nRe-read the file and verify your replacement content differs from the current content.`;
+					}
+				} catch {
+					// Best-effort diagnostic — don't crash on malformed refs
+				}
+				throw new Error(diagnostic);
 			}
 
 			const finalContent = bom + restoreLineEndings(result.content, originalEnding);
@@ -437,7 +463,12 @@ export class EditTool implements AgentTool<TInput> {
 				.get();
 
 			return {
-				content: [{ type: "text", text: `Updated ${path}` }],
+				content: [
+					{
+						type: "text",
+						text: `Updated ${path}${result.warnings?.length ? `\n\nWarnings:\n${result.warnings.join("\n")}` : ""}`,
+					},
+				],
 				details: {
 					diff: diffResult.diff,
 					firstChangedLine: result.firstChangedLine ?? diffResult.firstChangedLine,

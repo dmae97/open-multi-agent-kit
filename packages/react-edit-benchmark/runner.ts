@@ -38,6 +38,7 @@ export interface BenchmarkConfig {
 	editFuzzyThreshold?: number | "auto";
 	guided?: boolean;
 	maxAttempts?: number;
+	timeoutRetryCount?: number;
 }
 
 function splitLines(value: string): string[] {
@@ -120,7 +121,7 @@ async function appendNoChangeMutationHint(
 	error: string,
 	args: unknown,
 	cwd: string,
-	originalFiles: Map<string, string>,
+	originalFiles: Map<string, string>
 ): Promise<string> {
 	if (!error.includes("No changes made")) return error;
 	const editPath = getEditPathFromArgs(args);
@@ -141,6 +142,115 @@ async function appendNoChangeMutationHint(
 	if (!preview) return error;
 
 	return `${error}\nThe file differs from the original fixture at these lines:\n${preview}`;
+}
+
+export interface PromptAttemptTelemetry {
+	elapsedMs: number;
+	eventCount: number;
+	toolExecutionStarts: number;
+	toolExecutionEnds: number;
+	messageEnds: number;
+	lastEventType?: string;
+	recentEventTypes: string[];
+	pendingRetry: boolean;
+}
+
+class PromptTimeoutError extends Error {
+	telemetry: PromptAttemptTelemetry;
+
+	constructor(telemetry: PromptAttemptTelemetry) {
+		super("Timeout waiting for agent_end");
+		this.name = "PromptTimeoutError";
+		this.telemetry = telemetry;
+	}
+}
+
+export interface MutationIntentValidation {
+	matched: boolean;
+	reason: string;
+	mutationType?: string;
+	file?: string;
+	lineNumber?: number;
+}
+
+function buildTimeoutRetryContext(telemetry: PromptAttemptTelemetry, retryNumber: number, retryLimit: number): string {
+	return [
+		`Previous attempt timed out waiting for agent_end after ${telemetry.elapsedMs}ms.`,
+		`Observed events=${telemetry.eventCount}, tool_starts=${telemetry.toolExecutionStarts}, tool_ends=${telemetry.toolExecutionEnds}, message_ends=${telemetry.messageEnds}.`,
+		telemetry.lastEventType
+			? `Last event type: ${telemetry.lastEventType}.`
+			: "No events were observed before timeout.",
+		`Timeout retry ${retryNumber}/${retryLimit}: emit one minimal, concrete edit attempt quickly and stop.`,
+	].join("\n");
+}
+
+async function evaluateMutationIntent(
+	task: EditTask,
+	cwd: string,
+	expectedDir: string
+): Promise<MutationIntentValidation | null> {
+	const metadata = task.metadata;
+	const file = metadata?.fileName ?? task.files[0];
+	const lineNumber = metadata?.lineNumber;
+	if (!file || typeof lineNumber !== "number" || lineNumber < 1) {
+		return null;
+	}
+
+	const currentPath = file.startsWith("/") ? file : join(cwd, file);
+	const expectedPath = file.startsWith("/") ? file : join(expectedDir, file);
+
+	let currentText: string;
+	let expectedText: string;
+	try {
+		currentText = await Bun.file(currentPath).text();
+		expectedText = await Bun.file(expectedPath).text();
+	} catch {
+		return {
+			matched: false,
+			reason: "Unable to read current/expected target file for mutation-intent check.",
+			mutationType: metadata?.mutationType,
+			file,
+			lineNumber,
+		};
+	}
+
+	const currentLine = currentText.split("\n")[lineNumber - 1] ?? "";
+	const expectedLine = expectedText.split("\n")[lineNumber - 1] ?? "";
+	const originalSnippet = metadata?.originalSnippet;
+	const mutatedSnippet = metadata?.mutatedSnippet;
+
+	if (currentLine === expectedLine && expectedLine.length > 0) {
+		return {
+			matched: true,
+			reason: "Target line exactly matches expected fixture.",
+			mutationType: metadata?.mutationType,
+			file,
+			lineNumber,
+		};
+	}
+
+	if (typeof originalSnippet === "string" && originalSnippet.length > 0) {
+		const hasOriginal = currentLine.includes(originalSnippet);
+		const stillHasMutated =
+			typeof mutatedSnippet === "string" && mutatedSnippet.length > 0 ? currentLine.includes(mutatedSnippet) : false;
+		if (hasOriginal && !stillHasMutated) {
+			return {
+				matched: true,
+				reason: "Target line contains original snippet and no longer contains mutated snippet.",
+				mutationType: metadata?.mutationType,
+				file,
+				lineNumber,
+			};
+		}
+	}
+
+	return {
+		matched: false,
+		reason: `Target line mismatch at ${file}:${lineNumber}.`,
+		mutationType: metadata?.mutationType,
+		file,
+		lineNumber,
+	};
 }
 
 type GuidedHashlineEdit = { src: unknown; dst: string };
@@ -222,7 +332,12 @@ function buildGuidedHashlineEdits(actual: string, expected: string): GuidedHashl
 	return edits;
 }
 
-async function buildGuidedContext(task: EditTask, cwd: string, expectedDir: string, config: BenchmarkConfig): Promise<string | null> {
+async function buildGuidedContext(
+	task: EditTask,
+	cwd: string,
+	expectedDir: string,
+	config: BenchmarkConfig
+): Promise<string | null> {
 	if (!config.guided) return null;
 	if (config.editVariant !== "hashline") return null;
 
@@ -231,8 +346,12 @@ async function buildGuidedContext(task: EditTask, cwd: string, expectedDir: stri
 
 	const actualPath = join(cwd, file);
 	const expectedPath = join(expectedDir, file);
-	const actual = await Bun.file(actualPath).text().catch(() => null);
-	const expected = await Bun.file(expectedPath).text().catch(() => null);
+	const actual = await Bun.file(actualPath)
+		.text()
+		.catch(() => null);
+	const expected = await Bun.file(expectedPath)
+		.text()
+		.catch(() => null);
 	if (actual === null || expected === null) return null;
 
 	const edits = buildGuidedHashlineEdits(actual, expected);
@@ -317,6 +436,9 @@ export interface TaskRunResult {
 	editFailures: EditFailure[];
 	/** Hashline edit subtype counts (replaceLine, replaceLines, etc.) — only when editVariant is hashline */
 	hashlineEditSubtypes?: Record<string, number>;
+	mutationIntentMatched?: boolean;
+	mutationIntentReason?: string;
+	timeoutTelemetry?: PromptAttemptTelemetry;
 }
 
 export interface ProgressEvent {
@@ -354,6 +476,8 @@ export interface BenchmarkSummary {
 	totalToolCalls: ToolCallStats;
 	avgToolCallsPerRun: ToolCallStats;
 	editSuccessRate: number;
+	timeoutRuns: number;
+	mutationIntentMatchRate?: number;
 	/** Hashline edit subtype totals — only when editVariant is hashline */
 	hashlineEditSubtypes?: Record<string, number>;
 }
@@ -380,9 +504,7 @@ async function copyFixtures(task: EditTask, destDir: string): Promise<void> {
 	} else if (task.inputDir) {
 		const entries = await fs.readdir(task.inputDir, { withFileTypes: true });
 		await Promise.all(
-			entries.map((entry) =>
-				fs.cp(join(task.inputDir!, entry.name), join(destDir, entry.name), { recursive: true }),
-			),
+			entries.map((entry) => fs.cp(join(task.inputDir!, entry.name), join(destDir, entry.name), { recursive: true }))
 		);
 	} else {
 		throw new Error(`Task ${task.id} has neither tarballPath nor inputDir`);
@@ -413,7 +535,7 @@ async function runSingleTask(
 	config: BenchmarkConfig,
 	cwd: string,
 	expectedDir: string,
-	cliPath: string,
+	cliPath: string
 ): Promise<TaskRunResult> {
 	const startTime = Date.now();
 	let client: RpcClient | null = null;
@@ -427,6 +549,8 @@ async function runSingleTask(
 	let agentResponse: string | undefined;
 	let diff: string | undefined;
 	let editFailures: EditFailure[] = [];
+	let timeoutTelemetry: PromptAttemptTelemetry | undefined;
+	let mutationIntentValidation: MutationIntentValidation | null = null;
 	let toolStats = {
 		read: 0,
 		edit: 0,
@@ -435,9 +559,7 @@ async function runSingleTask(
 		editFailures: 0,
 		totalInputChars: 0,
 	};
-	const hashlineSubtypes: Record<string, number> = Object.fromEntries(
-		HASHLINE_SUBTYPES.map((k) => [k, 0]),
-	);
+	const hashlineSubtypes: Record<string, number> = Object.fromEntries(HASHLINE_SUBTYPES.map((k) => [k, 0]));
 
 	const logFile = join(TMP, `run-${task.id}-${runIndex}.jsonl`);
 	const logEvent = async (event: unknown) => {
@@ -456,8 +578,7 @@ async function runSingleTask(
 			env.PI_EDIT_FUZZY = config.editFuzzy === "auto" ? "auto" : config.editFuzzy ? "1" : "0";
 		}
 		if (config.editFuzzyThreshold !== undefined) {
-			env.PI_EDIT_FUZZY_THRESHOLD =
-				config.editFuzzyThreshold === "auto" ? "auto" : String(config.editFuzzyThreshold);
+			env.PI_EDIT_FUZZY_THRESHOLD = config.editFuzzyThreshold === "auto" ? "auto" : String(config.editFuzzyThreshold);
 		}
 
 		client = new RpcClient({
@@ -476,6 +597,8 @@ async function runSingleTask(
 		}
 
 		const maxAttempts = Math.max(1, Math.floor(config.maxAttempts ?? 1));
+		const timeoutRetryLimit = Math.max(0, Math.floor(config.timeoutRetryCount ?? 1));
+		let timeoutRetriesUsed = 0;
 		let retryContext: string | null = null;
 		let allEvents: Array<{ type: string; [key: string]: unknown }> = [];
 
@@ -491,11 +614,25 @@ async function runSingleTask(
 
 			await fs.appendFile(
 				logFile,
-				`{"type":"prompt","attempt":${attempt + 1},"message":${JSON.stringify(promptWithContext)}}\n`,
+				`{"type":"prompt","attempt":${attempt + 1},"message":${JSON.stringify(promptWithContext)}}\n`
 			);
 
 			const statsBefore = await client.getSessionStats();
-			const events = await collectPromptEvents(client, promptWithContext, config, logEvent);
+			let events: Array<{ type: string; [key: string]: unknown }>;
+			try {
+				events = await collectPromptEvents(client, promptWithContext, config, logEvent);
+			} catch (err) {
+				if (err instanceof PromptTimeoutError) {
+					timeoutTelemetry = err.telemetry;
+					await logEvent({ type: "timeout", attempt: attempt + 1, telemetry: err.telemetry });
+					if (timeoutRetriesUsed < timeoutRetryLimit) {
+						timeoutRetriesUsed += 1;
+						retryContext = buildTimeoutRetryContext(err.telemetry, timeoutRetriesUsed, timeoutRetryLimit);
+						continue;
+					}
+				}
+				throw err;
+			}
 			const statsAfter = await client.getSessionStats();
 			const attemptTokens = diffTokenStats(statsBefore, statsAfter);
 			tokens = {
@@ -506,45 +643,50 @@ async function runSingleTask(
 			await logEvent({ type: "stats", before: statsBefore, after: statsAfter, attempt: attempt + 1 });
 			allEvents = allEvents.concat(events);
 
-		agentResponse = (await client.getLastAssistantText()) ?? undefined;
+			agentResponse = (await client.getLastAssistantText()) ?? undefined;
 			await logEvent({ type: "response", text: agentResponse, attempt: attempt + 1 });
 
-		const pendingEdits = new Map<string, unknown>();
+			const pendingEdits = new Map<string, unknown>();
 
-		for (const event of events) {
-			if (event.type === "tool_execution_start") {
-				const e = event as { toolName?: string; toolCallId?: string; args?: unknown };
-				const toolName = e.toolName;
-				if (toolName === "read") toolStats.read++;
-				else if (toolName === "edit") {
-					toolStats.edit++;
-					if (e.toolCallId) pendingEdits.set(e.toolCallId, e.args);
-				} else if (toolName === "write") toolStats.write++;
+			for (const event of events) {
+				if (event.type === "tool_execution_start") {
+					const e = event as { toolName?: string; toolCallId?: string; args?: unknown };
+					const toolName = e.toolName;
+					if (toolName === "read") toolStats.read++;
+					else if (toolName === "edit") {
+						toolStats.edit++;
+						if (e.toolCallId) pendingEdits.set(e.toolCallId, e.args);
+					} else if (toolName === "write") toolStats.write++;
 
-				// Count input chars from args
-				if (e.args) {
-					toolStats.totalInputChars += JSON.stringify(e.args).length;
-				}
-			} else if (event.type === "tool_execution_end") {
-				const e = event as { toolName?: string; toolCallId?: string; isError?: boolean; result?: unknown };
-				if (e.toolName === "edit" && e.toolCallId && pendingEdits.has(e.toolCallId)) {
-					const args = pendingEdits.get(e.toolCallId) ?? null;
-					pendingEdits.delete(e.toolCallId);
-					if (config.editVariant === "hashline" && args) {
-						const counts = countHashlineEditSubtypes(args);
-						for (const key of HASHLINE_SUBTYPES) {
-							hashlineSubtypes[key] += counts[key];
+					// Count input chars from args
+					if (e.args) {
+						toolStats.totalInputChars += JSON.stringify(e.args).length;
+					}
+				} else if (event.type === "tool_execution_end") {
+					const e = event as { toolName?: string; toolCallId?: string; isError?: boolean; result?: unknown };
+					if (e.toolName === "edit" && e.toolCallId && pendingEdits.has(e.toolCallId)) {
+						const args = pendingEdits.get(e.toolCallId) ?? null;
+						pendingEdits.delete(e.toolCallId);
+						if (config.editVariant === "hashline" && args) {
+							const counts = countHashlineEditSubtypes(args);
+							for (const key of HASHLINE_SUBTYPES) {
+								hashlineSubtypes[key] += counts[key];
+							}
+						}
+						if (e.isError) {
+							toolStats.editFailures++;
+							const error = await appendNoChangeMutationHint(
+								extractToolErrorMessage(e.result),
+								args,
+								cwd,
+								originalFiles
+							);
+							editFailures.push({ toolCallId: e.toolCallId, args, error });
+						} else {
+							toolStats.editSuccesses++;
 						}
 					}
-					if (e.isError) {
-						toolStats.editFailures++;
-						const error = await appendNoChangeMutationHint(extractToolErrorMessage(e.result), args, cwd, originalFiles);
-						editFailures.push({ toolCallId: e.toolCallId, args, error });
-					} else {
-						toolStats.editSuccesses++;
-					}
 				}
-			}
 			}
 
 			patchApplied = toolStats.edit > 0;
@@ -558,6 +700,7 @@ async function runSingleTask(
 			formattedEquivalent = verification.formattedEquivalent;
 			diffStats = verification.diffStats;
 			diff = verification.diff;
+			mutationIntentValidation = await evaluateMutationIntent(task, cwd, expectedDir);
 			if (!verification.success && verification.error) {
 				error = verification.error;
 			}
@@ -566,9 +709,12 @@ async function runSingleTask(
 				break;
 			}
 
+			const mutationIntentSuffix = mutationIntentValidation
+				? `\n\nMutation intent: ${mutationIntentValidation.matched ? "matched" : "not matched"} (${mutationIntentValidation.reason})`
+				: "";
 			retryContext = error
-				? `Verification failed: ${error}${diff ? `\n\nDiff (expected vs actual):\n\n\`\`\`diff\n${diff}\n\`\`\`` : ""}`
-				: "Previous attempt failed.";
+				? `Verification failed: ${error}${diff ? `\n\nDiff (expected vs actual):\n\n\`\`\`diff\n${diff}\n\`\`\`` : ""}${mutationIntentSuffix}`
+				: `Previous attempt failed.${mutationIntentSuffix}`;
 		}
 	} catch (err) {
 		error = err instanceof Error ? err.message : String(err);
@@ -587,13 +733,19 @@ async function runSingleTask(
 	const mustUseEditTool = Boolean(config.requireEditToolCall) && !config.noEditRequired;
 	const mustUseReadTool = Boolean(config.requireReadToolCall) && !config.noEditRequired;
 	const editSucceeded = toolStats.editSuccesses > 0;
-	const success =
-		verificationPassed &&
-		(!mustUseEditTool || editSucceeded) &&
-		(!mustUseReadTool || toolStats.read > 0);
+	const success = verificationPassed && (!mustUseEditTool || editSucceeded) && (!mustUseReadTool || toolStats.read > 0);
 	const metadata = task.metadata;
 
-	await logEvent({ type: "result", success, patchApplied, verificationPassed, error, duration });
+	await logEvent({
+		type: "result",
+		success,
+		patchApplied,
+		verificationPassed,
+		error,
+		duration,
+		timeoutTelemetry,
+		mutationIntentValidation,
+	});
 	console.log(`  Log: ${logFile}`);
 
 	return {
@@ -616,6 +768,9 @@ async function runSingleTask(
 		toolCalls: toolStats,
 		editFailures,
 		hashlineEditSubtypes: config.editVariant === "hashline" ? hashlineSubtypes : undefined,
+		mutationIntentMatched: mutationIntentValidation?.matched,
+		mutationIntentReason: mutationIntentValidation?.reason,
+		timeoutTelemetry,
 	};
 }
 
@@ -624,7 +779,7 @@ async function runBatchedTask(
 	config: BenchmarkConfig,
 	cwd: string,
 	expectedDir: string,
-	client: RpcClient,
+	client: RpcClient
 ): Promise<TaskRunResult> {
 	const startTime = Date.now();
 	const task = item.task;
@@ -639,6 +794,8 @@ async function runBatchedTask(
 	let agentResponse: string | undefined;
 	let diff: string | undefined;
 	let editFailures: EditFailure[] = [];
+	let timeoutTelemetry: PromptAttemptTelemetry | undefined;
+	let mutationIntentValidation: MutationIntentValidation | null = null;
 	let toolStats = {
 		read: 0,
 		edit: 0,
@@ -647,9 +804,7 @@ async function runBatchedTask(
 		editFailures: 0,
 		totalInputChars: 0,
 	};
-	const hashlineSubtypes: Record<string, number> = Object.fromEntries(
-		HASHLINE_SUBTYPES.map((k) => [k, 0]),
-	);
+	const hashlineSubtypes: Record<string, number> = Object.fromEntries(HASHLINE_SUBTYPES.map((k) => [k, 0]));
 
 	const logFile = join(TMP, `run-${task.id}-${runIndex}.jsonl`);
 	const logEvent = async (event: unknown) => {
@@ -660,10 +815,12 @@ async function runBatchedTask(
 	try {
 		await fs.appendFile(
 			logFile,
-			`{"type":"meta","task":"${task.id}","run":${runIndex},"workDir":"${cwd}","batched":true}\n`,
+			`{"type":"meta","task":"${task.id}","run":${runIndex},"workDir":"${cwd}","batched":true}\n`
 		);
 
 		const maxAttempts = Math.max(1, Math.floor(config.maxAttempts ?? 1));
+		const timeoutRetryLimit = Math.max(0, Math.floor(config.timeoutRetryCount ?? 1));
+		let timeoutRetriesUsed = 0;
 		let retryContext: string | null = null;
 
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -677,11 +834,25 @@ async function runBatchedTask(
 			});
 			await fs.appendFile(
 				logFile,
-				`{"type":"prompt","attempt":${attempt + 1},"message":${JSON.stringify(promptWithContext)}}\n`,
+				`{"type":"prompt","attempt":${attempt + 1},"message":${JSON.stringify(promptWithContext)}}\n`
 			);
 
 			const statsBefore = await client.getSessionStats();
-			const events = await collectPromptEvents(client, promptWithContext, config, logEvent);
+			let events: Array<{ type: string; [key: string]: unknown }>;
+			try {
+				events = await collectPromptEvents(client, promptWithContext, config, logEvent);
+			} catch (err) {
+				if (err instanceof PromptTimeoutError) {
+					timeoutTelemetry = err.telemetry;
+					await logEvent({ type: "timeout", attempt: attempt + 1, telemetry: err.telemetry });
+					if (timeoutRetriesUsed < timeoutRetryLimit) {
+						timeoutRetriesUsed += 1;
+						retryContext = buildTimeoutRetryContext(err.telemetry, timeoutRetriesUsed, timeoutRetryLimit);
+						continue;
+					}
+				}
+				throw err;
+			}
 			const statsAfter = await client.getSessionStats();
 			const attemptTokens = diffTokenStats(statsBefore, statsAfter);
 			tokens = {
@@ -725,7 +896,7 @@ async function runBatchedTask(
 								extractToolErrorMessage(e.result),
 								args,
 								cwd,
-								originalFiles,
+								originalFiles
 							);
 							editFailures.push({ toolCallId: e.toolCallId, args, error: toolError });
 						} else {
@@ -748,6 +919,7 @@ async function runBatchedTask(
 			formattedEquivalent = verification.formattedEquivalent;
 			diffStats = verification.diffStats;
 			diff = verification.diff;
+			mutationIntentValidation = await evaluateMutationIntent(task, cwd, expectedDir);
 			if (!verification.success && verification.error) {
 				error = verification.error;
 			}
@@ -756,9 +928,12 @@ async function runBatchedTask(
 				break;
 			}
 
+			const mutationIntentSuffix = mutationIntentValidation
+				? `\n\nMutation intent: ${mutationIntentValidation.matched ? "matched" : "not matched"} (${mutationIntentValidation.reason})`
+				: "";
 			retryContext = error
-				? `Verification failed: ${error}${diff ? `\n\nDiff (expected vs actual):\n\n\`\`\`diff\n${diff}\n\`\`\`` : ""}`
-				: "Previous attempt failed.";
+				? `Verification failed: ${error}${diff ? `\n\nDiff (expected vs actual):\n\n\`\`\`diff\n${diff}\n\`\`\`` : ""}${mutationIntentSuffix}`
+				: `Previous attempt failed.${mutationIntentSuffix}`;
 		}
 	} catch (err) {
 		error = err instanceof Error ? err.message : String(err);
@@ -769,13 +944,19 @@ async function runBatchedTask(
 	const mustUseEditTool = Boolean(config.requireEditToolCall) && !config.noEditRequired;
 	const mustUseReadTool = Boolean(config.requireReadToolCall) && !config.noEditRequired;
 	const editSucceeded = toolStats.editSuccesses > 0;
-	const success =
-		verificationPassed &&
-		(!mustUseEditTool || editSucceeded) &&
-		(!mustUseReadTool || toolStats.read > 0);
+	const success = verificationPassed && (!mustUseEditTool || editSucceeded) && (!mustUseReadTool || toolStats.read > 0);
 	const metadata = task.metadata;
 
-	await logEvent({ type: "result", success, patchApplied, verificationPassed, error, duration });
+	await logEvent({
+		type: "result",
+		success,
+		patchApplied,
+		verificationPassed,
+		error,
+		duration,
+		timeoutTelemetry,
+		mutationIntentValidation,
+	});
 	console.log(`  Log: ${logFile}`);
 
 	return {
@@ -798,6 +979,9 @@ async function runBatchedTask(
 		toolCalls: toolStats,
 		editFailures,
 		hashlineEditSubtypes: config.editVariant === "hashline" ? hashlineSubtypes : undefined,
+		mutationIntentMatched: mutationIntentValidation?.matched,
+		mutationIntentReason: mutationIntentValidation?.reason,
+		timeoutTelemetry,
 	};
 }
 
@@ -876,42 +1060,98 @@ async function collectPromptEvents(
 	client: RpcClient,
 	prompt: string,
 	config: BenchmarkConfig,
-	logEvent: (event: unknown) => Promise<void>,
+	logEvent: (event: unknown) => Promise<void>
 ): Promise<Array<{ type: string; [key: string]: unknown }>> {
 	const events: Array<{ type: string; [key: string]: unknown }> = [];
 	let unsubscribe: (() => void) | undefined;
+	const startedAt = Date.now();
+	let pendingRetry = false;
+	let toolExecutionStarts = 0;
+	let toolExecutionEnds = 0;
+	let messageEnds = 0;
+	let lastEventType: string | undefined;
+	const recentEventTypes: string[] = [];
+	let timer: NodeJS.Timeout | undefined;
+	let settled = false;
+
 	const eventsPromise = new Promise<void>((resolve, reject) => {
-		const timer = setTimeout(() => {
+		const resolveWait = () => {
+			if (settled) {
+				return;
+			}
+			settled = true;
+			if (timer) {
+				clearTimeout(timer);
+			}
 			unsubscribe?.();
-			reject(new Error("Timeout waiting for agent_end"));
+			resolve();
+		};
+
+		const rejectWait = (err: Error) => {
+			if (settled) {
+				return;
+			}
+			settled = true;
+			if (timer) {
+				clearTimeout(timer);
+			}
+			unsubscribe?.();
+			reject(err);
+		};
+
+		timer = setTimeout(() => {
+			rejectWait(
+				new PromptTimeoutError({
+					elapsedMs: Date.now() - startedAt,
+					eventCount: events.length,
+					toolExecutionStarts,
+					toolExecutionEnds,
+					messageEnds,
+					lastEventType,
+					recentEventTypes: [...recentEventTypes],
+					pendingRetry,
+				})
+			);
 		}, config.timeout);
 
-		let pendingRetry = false;
-
 		unsubscribe = client.onEvent(async (event) => {
-			events.push(event);
+			if (!event) {
+				return;
+			}
+			const typedEvent = event as { type: string; [key: string]: unknown };
+			events.push(typedEvent);
+			lastEventType = typedEvent.type;
+			recentEventTypes.push(typedEvent.type);
+			if (recentEventTypes.length > 8) {
+				recentEventTypes.shift();
+			}
+			if (typedEvent.type === "tool_execution_start") {
+				toolExecutionStarts += 1;
+			}
+			if (typedEvent.type === "tool_execution_end") {
+				toolExecutionEnds += 1;
+			}
+			if (typedEvent.type === "message_end") {
+				messageEnds += 1;
+			}
 
 			if (
-				event.type === "tool_execution_start" ||
-				event.type === "tool_execution_end" ||
-				event.type === "message_end"
+				typedEvent.type === "tool_execution_start" ||
+				typedEvent.type === "tool_execution_end" ||
+				typedEvent.type === "message_end"
 			) {
-				await logEvent(event);
+				await logEvent(typedEvent);
 			}
-
-			if ((event.type as string) === "auto_retry_start") {
+			if (typedEvent.type === "auto_retry_start") {
 				pendingRetry = true;
-			} else if (event.type === "turn_start" && pendingRetry) {
+			} else if (typedEvent.type === "turn_start" && pendingRetry) {
 				pendingRetry = false;
 			}
-
-			if (event.type === "agent_end") {
+			if (typedEvent.type === "agent_end") {
 				if (pendingRetry) {
 					return;
 				}
-				clearTimeout(timer);
-				unsubscribe?.();
-				resolve();
+				resolveWait();
 			}
 		});
 	});
@@ -919,6 +1159,9 @@ async function collectPromptEvents(
 	try {
 		await client.prompt(prompt);
 	} catch (err) {
+		if (timer) {
+			clearTimeout(timer);
+		}
 		unsubscribe?.();
 		throw err;
 	}
@@ -928,7 +1171,7 @@ async function collectPromptEvents(
 
 function diffTokenStats(
 	before: { tokens: { input: number; output: number; total: number } },
-	after: { tokens: { input: number; output: number; total: number } },
+	after: { tokens: { input: number; output: number; total: number } }
 ): TokenStats {
 	const input = Math.max(0, after.tokens.input - before.tokens.input);
 	const output = Math.max(0, after.tokens.output - before.tokens.output);
@@ -1013,7 +1256,7 @@ async function runBatch(
 	items: TaskRunItem[],
 	config: BenchmarkConfig,
 	cliPath: string,
-	onProgress?: (event: ProgressEvent) => void,
+	onProgress?: (event: ProgressEvent) => void
 ): Promise<Array<{ task: EditTask; result: TaskRunResult }>> {
 	const workDir = join(TMP, `batch-${crypto.randomUUID()}`);
 	await fs.mkdir(workDir, { recursive: true });
@@ -1029,7 +1272,7 @@ async function runBatch(
 			orderedItems.map(async (item) => {
 				const expected = await getExpectedDir(item.task);
 				expectedDirs.set(item.task.id, expected);
-			}),
+			})
 		);
 
 		await Promise.all(orderedItems.map((item) => copyFixtures(item.task, workDir)));
@@ -1042,8 +1285,7 @@ async function runBatch(
 			env.PI_EDIT_FUZZY = config.editFuzzy === "auto" ? "auto" : config.editFuzzy ? "1" : "0";
 		}
 		if (config.editFuzzyThreshold !== undefined) {
-			env.PI_EDIT_FUZZY_THRESHOLD =
-				config.editFuzzyThreshold === "auto" ? "auto" : String(config.editFuzzyThreshold);
+			env.PI_EDIT_FUZZY_THRESHOLD = config.editFuzzyThreshold === "auto" ? "auto" : String(config.editFuzzyThreshold);
 		}
 
 		client = new RpcClient({
@@ -1104,7 +1346,7 @@ async function runBatch(
 export async function runTask(
 	task: EditTask,
 	config: BenchmarkConfig,
-	onProgress?: (event: ProgressEvent) => void,
+	onProgress?: (event: ProgressEvent) => void
 ): Promise<TaskResult> {
 	const tempDirs: TempDir[] = [];
 	const { dir: expectedDir, cleanup: cleanupExpected } = await getExpectedDir(task);
@@ -1142,11 +1384,11 @@ export async function runTask(
 export async function runBenchmark(
 	tasks: EditTask[],
 	config: BenchmarkConfig,
-	onProgress?: (event: ProgressEvent) => void,
+	onProgress?: (event: ProgressEvent) => void
 ): Promise<BenchmarkResult> {
 	const startTime = new Date().toISOString();
 	const runItems: TaskRunItem[] = tasks.flatMap((task) =>
-		Array.from({ length: config.runsPerTask }, (_, runIndex) => ({ task, runIndex })),
+		Array.from({ length: config.runsPerTask }, (_, runIndex) => ({ task, runIndex }))
 	);
 
 	const batches = buildRunBatches(runItems);
@@ -1206,6 +1448,12 @@ export async function runBenchmark(
 	};
 
 	const editSuccessRate = totalToolCalls.edit > 0 ? totalToolCalls.editSuccesses / totalToolCalls.edit : 1;
+	const timeoutRuns = allRuns.filter((r) => r.error?.includes("Timeout waiting for agent_end")).length;
+	const runsWithMutationIntent = allRuns.filter((r) => typeof r.mutationIntentMatched === "boolean");
+	const mutationIntentMatchRate =
+		runsWithMutationIntent.length > 0
+			? runsWithMutationIntent.filter((r) => r.mutationIntentMatched).length / runsWithMutationIntent.length
+			: undefined;
 
 	const hashlineEditSubtypes: Record<string, number> | undefined =
 		config.editVariant === "hashline"
@@ -1213,7 +1461,7 @@ export async function runBenchmark(
 					HASHLINE_SUBTYPES.map((key) => [
 						key,
 						allRuns.reduce((sum, r) => sum + (r.hashlineEditSubtypes?.[key] ?? 0), 0),
-					]),
+					])
 				)
 			: undefined;
 
@@ -1243,6 +1491,8 @@ export async function runBenchmark(
 			totalInputChars: totalToolCalls.totalInputChars / totalRuns,
 		},
 		editSuccessRate,
+		timeoutRuns,
+		mutationIntentMatchRate,
 		hashlineEditSubtypes,
 	};
 

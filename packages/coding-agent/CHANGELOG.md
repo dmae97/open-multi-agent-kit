@@ -1,14 +1,20 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added whitespace normalization in line reference parsing to tolerate spaces around colons (e.g., `5 : ab` now parses as `5:ab`)
+- Added `remaps` property to `HashlineMismatchError` providing quick-fix mapping of stale line references to corrected hashes
+- Added warnings detection in `applyHashlineEdits` to alert users when edits affect significantly more lines than expected, indicating possible unintended reformatting
+- Added diagnostic output showing target line content when an edit produces no changes, helping users identify hash mismatches or incorrect replacement content
 - Added `{{hashline}}` Handlebars helper to compute accurate `LINE:HASH` references for prompt examples and documentation
 - Added `substr` edit variant to match and replace by unique substring when line-hash references are unavailable
 
 ### Changed
 
+- Changed `applyHashlineEdits` return type to include optional `warnings` array for reporting suspicious edit patterns
+- Improved hash relocation logic to recompute touched lines after hash-based line number adjustments, preventing incorrect merge heuristics
+- Enhanced error messages for no-op edits to include preview of target lines with their current hashes and content
 - Changed hashline edit format from `src`/`dst` object structure to direct operation schemas (`replaceLine`, `replaceLines`, `insertAfter`, `insertBefore`, `substr`)
 - Changed hash algorithm from 2-character hexadecimal to 3-character base-36 alphanumeric for improved readability and collision resistance
 - Improved hash mismatch handling to automatically relocate stale line references when the hash uniquely identifies a moved line

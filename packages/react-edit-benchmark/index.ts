@@ -47,6 +47,7 @@ Options:
   --thinking <level>        Thinking level: off, minimal, low, medium, high, xhigh
   --runs <n>                Runs per task (default: 1)
   --timeout <ms>            Timeout per run in ms (default: 120000)
+  --timeout-retries <n>    Retries after timeout waiting for agent_end (default: 1)
   --task-concurrency <n>    Max tasks to run in parallel (default: 16)
   --tasks <ids>             Comma-separated task IDs to run (default: all)
   --max-tasks <n>            Max tasks to sample (default: 80, 0 = all)
@@ -154,6 +155,7 @@ async function main(): Promise<void> {
 			guided: { type: "boolean", default: false },
 			"no-guided": { type: "boolean", default: false },
 			"max-attempts": { type: "string", default: "1" },
+			"timeout-retries": { type: "string", default: "1" },
 			"require-edit-tool-call": { type: "boolean", default: false },
 			"require-read-tool-call": { type: "boolean", default: false },
 			"no-edit-required": { type: "boolean", default: false },
@@ -239,6 +241,12 @@ async function main(): Promise<void> {
 		process.exit(1);
 	}
 
+	const timeoutRetryCount = parseInt(values["timeout-retries"] ?? "1", 10);
+	if (isNaN(timeoutRetryCount) || timeoutRetryCount < 0 || timeoutRetryCount > 3) {
+		console.error(`Invalid timeout-retries value: ${values["timeout-retries"]}. Must be 0-3.`);
+		process.exit(1);
+	}
+
 	let tasksToRun = allTasks;
 	if (values.tasks) {
 		const taskIds = values.tasks.split(",").map((s) => s.trim());
@@ -309,6 +317,7 @@ async function main(): Promise<void> {
 		autoFormat: values["auto-format"],
 			guided,
 			maxAttempts,
+		timeoutRetryCount,
 		requireEditToolCall: values["require-edit-tool-call"],
 			requireReadToolCall: values["require-read-tool-call"],
 		noEditRequired: values["no-edit-required"],
@@ -332,6 +341,7 @@ async function main(): Promise<void> {
 	}
 	console.log(`Guided mode: ${config.guided ? "enabled" : "disabled"}`);
 	console.log(`Max attempts: ${config.maxAttempts}`);
+	console.log(`Timeout retries: ${config.timeoutRetryCount ?? 0}`);
 	if (config.requireEditToolCall) {
 		console.log("Require edit tool call: yes");
 	}
