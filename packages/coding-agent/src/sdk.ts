@@ -560,6 +560,19 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		}
 	}
 
+	// For subagent sessions using GitHub Copilot, add X-Initiator header
+	// to ensure proper billing (agent-initiated vs user-initiated)
+	const taskDepth = options.taskDepth ?? 0;
+	if (taskDepth > 0 && model?.provider === "github-copilot") {
+		model = {
+			...model,
+			headers: {
+				...model.headers,
+				"X-Initiator": "agent",
+			},
+		};
+	}
+
 	let thinkingLevel = options.thinkingLevel;
 
 	// If session has data, restore thinking level from it
