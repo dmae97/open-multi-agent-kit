@@ -1,23 +1,25 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
-- Added `substr` source specification kind to match and replace lines by unique substring without requiring line-hash references
 - Added `{{hashline}}` Handlebars helper to compute accurate `LINE:HASH` references for prompt examples and documentation
+- Added `substr` edit variant to match and replace by unique substring when line-hash references are unavailable
 
 ### Changed
 
+- Changed hashline edit format from `src`/`dst` object structure to direct operation schemas (`replaceLine`, `replaceLines`, `insertAfter`, `insertBefore`, `substr`)
+- Changed hash algorithm from 2-character hexadecimal to 3-character base-36 alphanumeric for improved readability and collision resistance
+- Improved hash mismatch handling to automatically relocate stale line references when the hash uniquely identifies a moved line
+- Changed `HashlineEdit` from `src`/`dst` format to direct operation schemas: `replaceLine`, `replaceLines`, `insertAfter`, `insertBefore`, `substr`
 - Changed hash algorithm from hexadecimal (base-16) to base-36 alphanumeric for shorter, more readable line references
 - Increased maximum wrapped-line restoration from 6 to 10 lines to handle longer reflowed statements
 - Updated prompt examples to use `{{hashline}}` Handlebars helper for generating correct line references in tool instructions
 
-### Removed
-
-- Removed `substring` source specification kind from hashline edits—use line-hash references instead
-
 ### Fixed
 
+- Fixed substr operation to resolve line numbers during validation phase rather than mutation phase, preventing ambiguity errors from being raised too late
 - Fixed multi-edit application to use original file state for all anchor references, preventing incorrect line numbers when earlier edits change file length
 
 ## [11.10.4] - 2026-02-10

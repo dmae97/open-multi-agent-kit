@@ -195,32 +195,10 @@ export interface DiffError {
 // Hashline Types
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** A single line reference in `"LINE:HASH"` format (e.g. `"5:a3f2"`). */
-export type LineRef = string;
-
-/** Structured source specification for a hashline edit operation. */
-export type SrcSpec<L = LineRef> =
-	| { kind: "single"; ref: L }
-	| { kind: "range"; start: L; end: L }
-	| { kind: "insertAfter"; after: L }
-	| { kind: "insertBefore"; before: L }
-	| { type: "substr"; needle: string };
-
-/** A single edit operation in hashline mode. */
-export interface HashlineEdit {
-	/** Structured source specification identifying which lines to target. */
-	src: SrcSpec;
-	/** Replacement content (`\n`-separated) — `""` for delete */
-	dst: string;
-}
-
-/** Input for a hashline edit operation */
-export interface HashlineInput {
-	/** File path (relative or absolute) */
-	path: string;
-	/** Array of edit operations */
-	edits: HashlineEdit[];
-}
+/**
+ * Hashline edit operation/input types are schema-derived in `patch/index.ts`
+ * via `Static<typeof hashlineEditItemSchema>` and `Static<typeof hashlineEditSchema>`.
+ */
 
 /** A single hash mismatch found during validation */
 export interface HashMismatch {

@@ -50,6 +50,25 @@ function getEditPathFromArgs(args: unknown): string | null {
 	return typeof pathValue === "string" && pathValue.length > 0 ? pathValue : null;
 }
 
+const HASHLINE_SUBTYPES = ["replaceLine", "replaceLines", "insertAfter", "insertBefore", "substr"] as const;
+
+function countHashlineEditSubtypes(args: unknown): Record<string, number> {
+	const counts: Record<string, number> = Object.fromEntries(HASHLINE_SUBTYPES.map((k) => [k, 0]));
+	if (!args || typeof args !== "object") return counts;
+	const edits = (args as { edits?: unknown[] }).edits;
+	if (!Array.isArray(edits)) return counts;
+	for (const edit of edits) {
+		if (!edit || typeof edit !== "object") continue;
+		for (const key of HASHLINE_SUBTYPES) {
+			if (key in edit) {
+				counts[key]++;
+				break;
+			}
+		}
+	}
+	return counts;
+}
+
 async function collectOriginalFileContents(cwd: string, files: string[]): Promise<Map<string, string>> {
 	const originals = new Map<string, string>();
 	for (const file of files) {
@@ -296,6 +315,8 @@ export interface TaskRunResult {
 	diff?: string;
 	toolCalls: ToolCallStats;
 	editFailures: EditFailure[];
+	/** Hashline edit subtype counts (replaceLine, replaceLines, etc.) — only when editVariant is hashline */
+	hashlineEditSubtypes?: Record<string, number>;
 }
 
 export interface ProgressEvent {
@@ -333,6 +354,8 @@ export interface BenchmarkSummary {
 	totalToolCalls: ToolCallStats;
 	avgToolCallsPerRun: ToolCallStats;
 	editSuccessRate: number;
+	/** Hashline edit subtype totals — only when editVariant is hashline */
+	hashlineEditSubtypes?: Record<string, number>;
 }
 
 export interface BenchmarkResult {
@@ -412,6 +435,9 @@ async function runSingleTask(
 		editFailures: 0,
 		totalInputChars: 0,
 	};
+	const hashlineSubtypes: Record<string, number> = Object.fromEntries(
+		HASHLINE_SUBTYPES.map((k) => [k, 0]),
+	);
 
 	const logFile = join(TMP, `run-${task.id}-${runIndex}.jsonl`);
 	const logEvent = async (event: unknown) => {
@@ -504,6 +530,12 @@ async function runSingleTask(
 				if (e.toolName === "edit" && e.toolCallId && pendingEdits.has(e.toolCallId)) {
 					const args = pendingEdits.get(e.toolCallId) ?? null;
 					pendingEdits.delete(e.toolCallId);
+					if (config.editVariant === "hashline" && args) {
+						const counts = countHashlineEditSubtypes(args);
+						for (const key of HASHLINE_SUBTYPES) {
+							hashlineSubtypes[key] += counts[key];
+						}
+					}
 					if (e.isError) {
 						toolStats.editFailures++;
 						const error = await appendNoChangeMutationHint(extractToolErrorMessage(e.result), args, cwd, originalFiles);
@@ -583,6 +615,7 @@ async function runSingleTask(
 		diff,
 		toolCalls: toolStats,
 		editFailures,
+		hashlineEditSubtypes: config.editVariant === "hashline" ? hashlineSubtypes : undefined,
 	};
 }
 
@@ -614,6 +647,9 @@ async function runBatchedTask(
 		editFailures: 0,
 		totalInputChars: 0,
 	};
+	const hashlineSubtypes: Record<string, number> = Object.fromEntries(
+		HASHLINE_SUBTYPES.map((k) => [k, 0]),
+	);
 
 	const logFile = join(TMP, `run-${task.id}-${runIndex}.jsonl`);
 	const logEvent = async (event: unknown) => {
@@ -677,6 +713,12 @@ async function runBatchedTask(
 					if (e.toolName === "edit" && e.toolCallId && pendingEdits.has(e.toolCallId)) {
 						const args = pendingEdits.get(e.toolCallId) ?? null;
 						pendingEdits.delete(e.toolCallId);
+						if (config.editVariant === "hashline" && args) {
+							const counts = countHashlineEditSubtypes(args);
+							for (const key of HASHLINE_SUBTYPES) {
+								hashlineSubtypes[key] += counts[key];
+							}
+						}
 						if (e.isError) {
 							toolStats.editFailures++;
 							const toolError = await appendNoChangeMutationHint(
@@ -755,6 +797,7 @@ async function runBatchedTask(
 		diff,
 		toolCalls: toolStats,
 		editFailures,
+		hashlineEditSubtypes: config.editVariant === "hashline" ? hashlineSubtypes : undefined,
 	};
 }
 
@@ -1164,6 +1207,16 @@ export async function runBenchmark(
 
 	const editSuccessRate = totalToolCalls.edit > 0 ? totalToolCalls.editSuccesses / totalToolCalls.edit : 1;
 
+	const hashlineEditSubtypes: Record<string, number> | undefined =
+		config.editVariant === "hashline"
+			? Object.fromEntries(
+					HASHLINE_SUBTYPES.map((key) => [
+						key,
+						allRuns.reduce((sum, r) => sum + (r.hashlineEditSubtypes?.[key] ?? 0), 0),
+					]),
+				)
+			: undefined;
+
 	const summary: BenchmarkSummary = {
 		totalTasks: tasks.length,
 		totalRuns,
@@ -1190,6 +1243,7 @@ export async function runBenchmark(
 			totalInputChars: totalToolCalls.totalInputChars / totalRuns,
 		},
 		editSuccessRate,
+		hashlineEditSubtypes,
 	};
 
 	return {

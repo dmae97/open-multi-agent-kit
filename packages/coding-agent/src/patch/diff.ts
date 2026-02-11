@@ -9,8 +9,9 @@ import { resolveToCwd } from "../tools/path-utils";
 import { previewPatch } from "./applicator";
 import { DEFAULT_FUZZY_THRESHOLD, findMatch } from "./fuzzy";
 import { applyHashlineEdits } from "./hashline";
+import type { HashlineEdit } from "./index";
 import { adjustIndentation, normalizeToLF, stripBom } from "./normalize";
-import type { DiffError, DiffResult, HashlineEdit, PatchInput } from "./types";
+import type { DiffError, DiffResult, PatchInput } from "./types";
 import { EditMatchError } from "./types";
 
 // ═══════════════════════════════════════════════════════════════════════════

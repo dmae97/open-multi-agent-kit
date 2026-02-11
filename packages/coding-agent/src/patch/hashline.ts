@@ -2,49 +2,57 @@
  * Hashline edit mode — a line-addressable edit format using content hashes.
  *
  * Each line in a file is identified by its 1-indexed line number and a short
- * hex hash derived from the normalized line content (xxHash64, truncated to 2
- * hex chars).
+ * base36 hash derived from the normalized line content (xxHash32, truncated to 4
+ * base36 chars).
  * The combined `LINE:HASH` reference acts as both an address and a staleness check:
  * if the file has changed since the caller last read it, hash mismatches are caught
  * before any mutation occurs.
  *
  * Displayed format: `LINENUM:HASH| CONTENT`
- * Reference format: `"LINENUM:HASH"` (e.g. `"5:a3"`)
+ * Reference format: `"LINENUM:HASH"` (e.g. `"5:a3f2"`)
  */
 
-import type { HashlineEdit, HashMismatch, SrcSpec } from "./types";
+import type { HashlineEdit } from "./index";
+import type { HashMismatch } from "./types";
 
-/** Parsed representation of a {@link SrcSpec} with resolved line references. */
-type ParsedRefs = SrcSpec<{ line: number; hash: string }>;
+type ParsedRefs =
+	| { kind: "single"; ref: { line: number; hash: string } }
+	| { kind: "range"; start: { line: number; hash: string }; end: { line: number; hash: string } }
+	| { kind: "insertAfter"; after: { line: number; hash: string } }
+	| { kind: "insertBefore"; before: { line: number; hash: string } }
+	| { kind: "substr"; needle: string; resolvedLine?: number };
 
-/**
- * Convert a structured {@link SrcSpec} into parsed line references.
- *
- * Calls {@link parseLineRef} on each string ref field to produce `{ line, hash }`.
- * Collapses same-line ranges into single-line specs (models sometimes emit
- * `347:aa..347:bb` which hashline mode doesn't support as sub-line addressing).
- */
-function parseSrcSpec(src: SrcSpec): ParsedRefs {
-	if (!("kind" in src)) {
-		return { kind: "substr", needle: src.needle };
+function parseHashlineEdit(edit: HashlineEdit): { spec: ParsedRefs; dst: string } {
+	if ("replaceLine" in edit) {
+		return {
+			spec: { kind: "single", ref: parseLineRef(edit.replaceLine.loc) },
+			dst: edit.replaceLine.content,
+		};
 	}
-	switch (src.kind) {
-		case "single":
-			return { kind: "single", ref: parseLineRef(src.ref) };
-		case "range": {
-			const start = parseLineRef(src.start);
-			const end = parseLineRef(src.end);
-			// Same-line range collapse: treat as single-line edit
-			if (start.line === end.line) {
-				return { kind: "single", ref: start };
-			}
-			return { kind: "range", start, end };
-		}
-		case "insertAfter":
-			return { kind: "insertAfter", after: parseLineRef(src.after) };
-		case "insertBefore":
-			return { kind: "insertBefore", before: parseLineRef(src.before) };
+	if ("replaceLines" in edit) {
+		const start = parseLineRef(edit.replaceLines.start);
+		const end = parseLineRef(edit.replaceLines.end);
+		return {
+			spec: start.line === end.line ? { kind: "single", ref: start } : { kind: "range", start, end },
+			dst: edit.replaceLines.content,
+		};
 	}
+	if ("insertAfter" in edit) {
+		return {
+			spec: { kind: "insertAfter", after: parseLineRef(edit.insertAfter.loc) },
+			dst: edit.insertAfter.content,
+		};
+	}
+	if ("substr" in edit) {
+		return {
+			spec: { kind: "substr", needle: edit.substr.needle },
+			dst: edit.substr.content,
+		};
+	}
+	return {
+		spec: { kind: "insertBefore", before: parseLineRef(edit.insertBefore.loc) },
+		dst: edit.insertBefore.content,
+	};
 }
 /** Split dst into lines; empty string means delete (no lines). */
 function splitDstLines(dst: string): string[] {
@@ -294,17 +302,17 @@ function stripNewLinePrefixes(lines: string[]): string[] {
 	});
 }
 
-const HASH_LEN = 2;
+const HASH_LEN = 3;
 const RADIX = 36;
 const HASH_MOD = RADIX ** HASH_LEN;
 
 const DICT = Array.from({ length: HASH_MOD }, (_, i) => i.toString(RADIX).padStart(HASH_LEN, "0"));
 
 /**
- * Compute a short hex hash of a single line.
+ * Compute a short base36 hash of a single line.
  *
  * Uses xxHash64 on a whitespace-normalized line, truncated to {@link HASH_LEN}
- * hex characters. The `idx` parameter is accepted for compatibility with older
+ * base36 characters. The `idx` parameter is accepted for compatibility with older
  * call sites, but is not currently mixed into the hash.
  * The line input should not include a trailing newline.
  */
@@ -671,9 +679,9 @@ export function validateLineRef(ref: { line: number; hash: string }, fileLines: 
 /**
  * Apply an array of hashline edits to file content.
  *
- * Each edit's `src` is a structured {@link SrcSpec} identifying the target
- * lines. Line references are resolved via {@link parseLineRef} and hashes
- * validated before any mutation.
+ * Each edit operation identifies target lines directly (`replaceLine`, `replaceLines`,
+ * `insertAfter`, `insertBefore`). Line references are resolved via {@link parseLineRef}
+ * and hashes validated before any mutation.
  *
  * Edits are sorted bottom-up (highest effective line first) so earlier
  * splices don't invalidate later line numbers.
@@ -693,10 +701,36 @@ export function applyHashlineEdits(
 	let firstChangedLine: number | undefined;
 
 	// Parse src specs and dst lines up front
-	const parsed = edits.map(e => ({
-		spec: parseSrcSpec(e.src),
-		dstLines: stripNewLinePrefixes(splitDstLines(e.dst)),
-	}));
+	const parsed = edits.map(edit => {
+		const parsedEdit = parseHashlineEdit(edit);
+		return {
+			spec: parsedEdit.spec,
+			dstLines: stripNewLinePrefixes(splitDstLines(parsedEdit.dst)),
+		};
+	});
+
+	// Resolve substr specs to line numbers
+	for (const p of parsed) {
+		if (p.spec.kind !== "substr") continue;
+		const indices: number[] = [];
+		for (let i = 0; i < fileLines.length; i++) {
+			if (fileLines[i].includes(p.spec.needle)) indices.push(i);
+		}
+		if (indices.length === 0) {
+			throw new Error(`Substr needle not found in file: "${p.spec.needle}"`);
+		}
+		if (indices.length > 1) {
+			const previews = indices
+				.slice(0, 5)
+				.map(i => `${i + 1}: ${fileLines[i]}`)
+				.join("\n");
+			const more = indices.length > 5 ? `\n... (${indices.length - 5} more)` : "";
+			throw new Error(
+				`Substr needle is ambiguous (found ${indices.length} matches): "${p.spec.needle}"\n${previews}${more}`,
+			);
+		}
+		(p.spec as { resolvedLine?: number }).resolvedLine = indices[0] + 1;
+	}
 
 	const explicitlyTouchedLines = new Set<number>();
 	for (const { spec } of parsed) {
@@ -714,13 +748,26 @@ export function applyHashlineEdits(
 				explicitlyTouchedLines.add(spec.before.line);
 				break;
 			case "substr":
+				explicitlyTouchedLines.add(spec.resolvedLine!);
 				break;
 		}
 	}
 
 	// Pre-validate: collect all hash mismatches before mutating
 	const mismatches: HashMismatch[] = [];
-
+	const uniqueLineByHash = new Map<string, number>();
+	const seenDuplicateHashes = new Set<string>();
+	for (let i = 0; i < fileLines.length; i++) {
+		const lineNo = i + 1;
+		const hash = computeLineHash(lineNo, fileLines[i]);
+		if (seenDuplicateHashes.has(hash)) continue;
+		if (uniqueLineByHash.has(hash)) {
+			uniqueLineByHash.delete(hash);
+			seenDuplicateHashes.add(hash);
+			continue;
+		}
+		uniqueLineByHash.set(hash, lineNo);
+	}
 	for (const { spec, dstLines } of parsed) {
 		const refsToValidate: { line: number; hash: string }[] = [];
 		switch (spec.kind) {
@@ -747,7 +794,7 @@ export function applyHashlineEdits(
 				break;
 			case "substr":
 				if (dstLines.length !== 1) {
-					throw new Error(`Substr src requires single-line dst (got ${dstLines.length} lines)`);
+					throw new Error(`Substr edit requires single-line replacement (got ${dstLines.length} lines)`);
 				}
 				break;
 		}
@@ -757,9 +804,16 @@ export function applyHashlineEdits(
 				throw new Error(`Line ${ref.line} does not exist (file has ${fileLines.length} lines)`);
 			}
 			const actualHash = computeLineHash(ref.line, fileLines[ref.line - 1]);
-			if (actualHash !== ref.hash.toLowerCase()) {
-				mismatches.push({ line: ref.line, expected: ref.hash, actual: actualHash });
+			if (actualHash === ref.hash.toLowerCase()) {
+				continue;
 			}
+
+			const relocated = uniqueLineByHash.get(ref.hash.toLowerCase());
+			if (relocated !== undefined) {
+				ref.line = relocated;
+				continue;
+			}
+			mismatches.push({ line: ref.line, expected: ref.hash, actual: actualHash });
 		}
 	}
 
@@ -789,7 +843,7 @@ export function applyHashlineEdits(
 				precedence = 2;
 				break;
 			case "substr":
-				sortLine = 0;
+				sortLine = p.spec.resolvedLine ?? 0;
 				precedence = 3;
 				break;
 		}
@@ -870,29 +924,11 @@ export function applyHashlineEdits(
 				break;
 			}
 			case "substr": {
-				const indices: number[] = [];
-				for (let i = 0; i < fileLines.length; i++) {
-					if (fileLines[i].includes(spec.needle)) indices.push(i);
-				}
-				if (indices.length === 0) {
-					throw new Error(`Substr src not found in file: "${spec.needle}"`);
-				}
-				if (indices.length > 1) {
-					const previews = indices
-						.slice(0, 5)
-						.map(i => `${i + 1}: ${fileLines[i]}`)
-						.join("\n");
-					const more = indices.length > 5 ? `\n... (${indices.length - 5} more)` : "";
-					throw new Error(
-						`Substr src is ambiguous (found ${indices.length} matches): "${spec.needle}"\n${previews}${more}`,
-					);
-				}
-
-				const lineIdx = indices[0];
+				const lineIdx = spec.resolvedLine! - 1;
 				const original = fileLines[lineIdx];
 				const replaced = original.replace(spec.needle, dstLines[0]);
 				fileLines.splice(lineIdx, 1, replaced);
-				trackFirstChanged(lineIdx + 1);
+				trackFirstChanged(spec.resolvedLine!);
 				break;
 			}
 		}

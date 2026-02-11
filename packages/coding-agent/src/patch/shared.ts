@@ -21,7 +21,7 @@ import {
 } from "../tools/render-utils";
 import type { RenderCallOptions } from "../tools/renderers";
 import { Ellipsis, Hasher, type RenderCache, renderStatusLine, truncateToWidth } from "../tui";
-import type { DiffError, DiffResult, HashlineEdit, Operation } from "./types";
+import type { DiffError, DiffResult, Operation } from "./types";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LSP Batching
@@ -82,8 +82,15 @@ interface EditRenderArgs {
 	 */
 	previewDiff?: string;
 	// Hashline mode fields
-	edits?: HashlineEdit[];
+	edits?: HashlineEditPreview[];
 }
+
+type HashlineEditPreview =
+	| { replaceLine: { loc: string; content: string } }
+	| { replaceLines: { start: string; end: string; content: string } }
+	| { insertAfter: { loc: string; content: string } }
+	| { insertBefore: { loc: string; content: string } }
+	| { substr: { needle: string; content: string } };
 
 /** Extended context for edit tool rendering */
 export interface EditRenderContext {
@@ -115,32 +122,26 @@ function formatStreamingDiff(diff: string, rawPath: string, uiTheme: Theme, labe
 	return text;
 }
 
-function formatStreamingHashlineEdits(edits: HashlineEdit[], uiTheme: Theme, ui: ToolUIKit): string {
+function formatStreamingHashlineEdits(edits: HashlineEditPreview[], uiTheme: Theme, ui: ToolUIKit): string {
 	const MAX_EDITS = 4;
 	const MAX_DST_LINES = 8;
-
 	let text = "\n\n";
 	text += uiTheme.fg("dim", `[${edits.length} hashline edit${edits.length === 1 ? "" : "s"}]`);
 	text += "\n";
-
 	let shownEdits = 0;
 	let shownDstLines = 0;
-
 	for (const edit of edits) {
 		shownEdits++;
 		if (shownEdits > MAX_EDITS) break;
-
-		text += uiTheme.fg("toolOutput", ui.truncate(replaceTabs(formatHashlineSrc(edit.src)), 120));
+		const formatted = formatHashlineEdit(edit);
+		text += uiTheme.fg("toolOutput", ui.truncate(replaceTabs(formatted.srcLabel), 120));
 		text += "\n";
-
-		if (edit.dst === "") {
+		if (formatted.dst === "") {
 			text += uiTheme.fg("dim", ui.truncate("  (delete)", 120));
 			text += "\n";
 			continue;
 		}
-
-		const dstLines = edit.dst.split("\n");
-		for (const dstLine of dstLines) {
+		for (const dstLine of formatted.dst.split("\n")) {
 			shownDstLines++;
 			if (shownDstLines > MAX_DST_LINES) break;
 			text += uiTheme.fg("toolOutput", ui.truncate(replaceTabs(`+ ${dstLine}`), 120));
@@ -148,7 +149,6 @@ function formatStreamingHashlineEdits(edits: HashlineEdit[], uiTheme: Theme, ui:
 		}
 		if (shownDstLines > MAX_DST_LINES) break;
 	}
-
 	if (edits.length > MAX_EDITS) {
 		text += uiTheme.fg("dim", `… (${edits.length - MAX_EDITS} more edits)`);
 	}
@@ -157,24 +157,37 @@ function formatStreamingHashlineEdits(edits: HashlineEdit[], uiTheme: Theme, ui:
 	}
 
 	return text.trimEnd();
-
-	function formatHashlineSrc(src: HashlineEdit["src"]): string {
-		if (!("kind" in src)) {
-			return `• substr ${src.needle}`;
+	function formatHashlineEdit(edit: HashlineEditPreview): { srcLabel: string; dst: string } {
+		if ("replaceLine" in edit) {
+			return {
+				srcLabel: `• replaceLine ${edit.replaceLine.loc}`,
+				dst: edit.replaceLine.content,
+			};
 		}
-		switch (src.kind) {
-			case "single":
-				return `• single ${src.ref}`;
-			case "range":
-				return `• range ${src.start}..${src.end}`;
-			case "insertAfter":
-				return `• insertAfter ${src.after}..`;
-			case "insertBefore":
-				return `• insertBefore ..${src.before}`;
+		if ("replaceLines" in edit) {
+			return {
+				srcLabel: `• replaceLines ${edit.replaceLines.start}..${edit.replaceLines.end}`,
+				dst: edit.replaceLines.content,
+			};
 		}
+		if ("insertAfter" in edit) {
+			return {
+				srcLabel: `• insertAfter ${edit.insertAfter.loc}..`,
+				dst: edit.insertAfter.content,
+			};
+		}
+		if ("substr" in edit) {
+			return {
+				srcLabel: `• substr "${edit.substr.needle}"`,
+				dst: edit.substr.content,
+			};
+		}
+		return {
+			srcLabel: `• insertBefore ..${edit.insertBefore.loc}`,
+			dst: edit.insertBefore.content,
+		};
 	}
 }
-
 function formatMetadataLine(lineCount: number | null, language: string | undefined, uiTheme: Theme): string {
 	const icon = uiTheme.getLangIcon(language);
 	if (lineCount !== null) {

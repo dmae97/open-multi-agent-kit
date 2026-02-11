@@ -164,6 +164,24 @@ export function generateReport(result: BenchmarkResult): string {
 	lines.push(`| **Avg Indent Score** | — | **${formatScore(summary.avgIndentScore)}** |`);
 	lines.push("");
 
+	if (summary.hashlineEditSubtypes) {
+		const total = Object.values(summary.hashlineEditSubtypes).reduce((a, b) => a + b, 0);
+		if (total > 0) {
+			lines.push("### Hashline Edit Subtypes");
+			lines.push("");
+			lines.push("| Operation | Count | % |");
+			lines.push("|-----------|-------|---|");
+			const order = ["replaceLine", "replaceLines", "insertAfter", "insertBefore", "substr"];
+			for (const key of order) {
+				const count = summary.hashlineEditSubtypes[key] ?? 0;
+				const pct = formatPercent(count / total);
+				lines.push(`| ${key} | ${count} | ${pct} |`);
+			}
+			lines.push(`| **Total** | **${total}** | 100% |`);
+			lines.push("");
+		}
+	}
+
 	lines.push("## Task Results");
 	lines.push("");
 	lines.push("| Task | File | Success | Edit Hit | R/E/W | Tokens (In/Out) | Time | Indent |");

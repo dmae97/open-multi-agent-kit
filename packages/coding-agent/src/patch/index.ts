@@ -11,7 +11,7 @@
 import * as fs from "node:fs/promises";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { StringEnum } from "@oh-my-pi/pi-ai";
-import { Type } from "@sinclair/typebox";
+import { type Static, Type } from "@sinclair/typebox";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import {
 	createLspWritethrough,
@@ -34,7 +34,7 @@ import { detectLineEnding, normalizeToLF, restoreLineEndings, stripBom } from ".
 import { buildNormativeUpdateInput } from "./normative";
 import { type EditToolDetails, getLspBatchRequest } from "./shared";
 // Internal imports
-import type { FileSystem, HashlineEdit, Operation, PatchInput } from "./types";
+import type { FileSystem, Operation, PatchInput } from "./types";
 import { EditMatchError } from "./types";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -88,15 +88,12 @@ export type {
 	FileSystem,
 	FuzzyMatch as EditMatch,
 	FuzzyMatch,
-	HashlineEdit,
-	HashlineInput,
 	HashMismatch,
 	MatchOutcome as EditMatchOutcome,
 	MatchOutcome,
 	Operation,
 	PatchInput,
 	SequenceSearchResult,
-	SrcSpec,
 } from "./types";
 // Types
 // Legacy aliases for backwards compatibility
@@ -124,43 +121,55 @@ const patchEditSchema = Type.Object({
 	diff: Type.Optional(Type.String({ description: "Diff hunks (update) or full content (create)" })),
 });
 
-export type ReplaceParams = { path: string; old_text: string; new_text: string; all?: boolean };
-export type PatchParams = { path: string; op?: string; rename?: string; diff?: string };
-export type HashlineParams = { path: string; edits: HashlineEdit[] };
+export type ReplaceParams = Static<typeof replaceEditSchema>;
+export type PatchParams = Static<typeof patchEditSchema>;
 
-const srcSpecSchema = Type.Union([
-	Type.Object({
-		kind: Type.Literal("single"),
-		ref: Type.String({ description: 'Line reference "LINE:HASH"' }),
+const hashlineReplaceLineSchema = Type.Object({
+	replaceLine: Type.Object({
+		loc: Type.String({ description: 'Line reference "LINE:HASH"' }),
+		content: Type.String({ description: 'Replacement content (\\n-separated) — "" for delete' }),
 	}),
-	Type.Object({
-		kind: Type.Literal("range"),
-		start: Type.String({ description: 'Start line ref "LINE:HASH"' }),
-		end: Type.String({ description: 'End line ref "LINE:HASH"' }),
-	}),
-	Type.Object({
-		kind: Type.Literal("insertAfter"),
-		after: Type.String({ description: 'Insert after this line "LINE:HASH"' }),
-	}),
-	Type.Object({
-		kind: Type.Literal("insertBefore"),
-		before: Type.String({ description: 'Insert before this line "LINE:HASH"' }),
-	}),
-	Type.Object({
-		type: Type.Literal("substr"),
-		needle: Type.String({ description: "Unique substring to match" }),
-	}),
-]);
-
-const hashlineEditItemSchema = Type.Object({
-	src: srcSpecSchema,
-	dst: Type.String({ description: 'Replacement content (\\n-separated) — "" for delete' }),
 });
 
+const hashlineReplaceLinesSchema = Type.Object({
+	replaceLines: Type.Object({
+		start: Type.String({ description: 'Start line ref "LINE:HASH"' }),
+		end: Type.String({ description: 'End line ref "LINE:HASH"' }),
+		content: Type.String({ description: 'Replacement content (\\n-separated) — "" for delete' }),
+	}),
+});
+const hashlineInsertAfterSchema = Type.Object({
+	insertAfter: Type.Object({
+		loc: Type.String({ description: 'Insert after this line "LINE:HASH"' }),
+		content: Type.String({ description: "Content to insert (\\n-separated); must be non-empty" }),
+	}),
+});
+const hashlineInsertBeforeSchema = Type.Object({
+	insertBefore: Type.Object({
+		loc: Type.String({ description: 'Insert before this line "LINE:HASH"' }),
+		content: Type.String({ description: "Content to insert (\\n-separated); must be non-empty" }),
+	}),
+});
+const hashlineSubstrSchema = Type.Object({
+	substr: Type.Object({
+		needle: Type.String({ description: "Unique substring to find in the target line" }),
+		content: Type.String({ description: "Replacement for the needle (single-line only)" }),
+	}),
+});
+const hashlineEditItemSchema = Type.Union([
+	hashlineReplaceLineSchema,
+	hashlineReplaceLinesSchema,
+	hashlineInsertAfterSchema,
+	hashlineInsertBeforeSchema,
+	hashlineSubstrSchema,
+]);
 const hashlineEditSchema = Type.Object({
 	path: Type.String({ description: "File path (relative or absolute)" }),
 	edits: Type.Array(hashlineEditItemSchema, { description: "Array of edit operations" }),
 });
+
+export type HashlineEdit = Static<typeof hashlineEditItemSchema>;
+export type HashlineParams = Static<typeof hashlineEditSchema>;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LSP FileSystem for patch mode
@@ -408,9 +417,7 @@ export class EditTool implements AgentTool<TInput> {
 			const { bom, text: content } = stripBom(rawContent);
 			const originalEnding = detectLineEnding(content);
 			const normalizedContent = normalizeToLF(content);
-
 			const result = applyHashlineEdits(normalizedContent, edits);
-
 			if (normalizedContent === result.content) {
 				throw new Error(`No changes made to ${path}. The edits produced identical content.`);
 			}
