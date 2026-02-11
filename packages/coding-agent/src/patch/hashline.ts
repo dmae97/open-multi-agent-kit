@@ -161,60 +161,6 @@ function restoreOldWrappedLines(oldLines: string[], newLines: string[]): string[
 	return out;
 }
 
-/**
- * For replace edits (N old → N new), preserve original content on lines where
- * the only difference is whitespace.
- *
- * Models frequently reformat code (e.g., removing spaces inside import braces)
- * when making targeted edits. This detects lines that changed only in
- * whitespace and keeps the original, preventing spurious formatting diffs.
- */
-function preserveWhitespaceOnlyLines(oldLines: string[], newLines: string[]): string[] {
-	if (oldLines.length !== newLines.length) return newLines;
-	let anyPreserved = false;
-	const result = new Array<string>(newLines.length);
-	for (let i = 0; i < newLines.length; i++) {
-		if (oldLines[i] !== newLines[i] && equalsIgnoringWhitespace(oldLines[i], newLines[i])) {
-			result[i] = oldLines[i];
-			anyPreserved = true;
-		} else {
-			result[i] = newLines[i];
-		}
-	}
-	return anyPreserved ? result : newLines;
-}
-
-/**
- * A weaker variant of {@link preserveWhitespaceOnlyLines} that can preserve
- * whitespace even when the replacement line counts don't match.
- */
-function preserveWhitespaceOnlyLinesLoose(oldLines: string[], newLines: string[]): string[] {
-	const canonToOld = new Map<string, string[]>();
-	for (const oldLine of oldLines) {
-		const canon = stripAllWhitespace(oldLine);
-		const bucket = canonToOld.get(canon);
-		if (bucket) bucket.push(oldLine);
-		else canonToOld.set(canon, [oldLine]);
-	}
-
-	let anyPreserved = false;
-	const result = new Array<string>(newLines.length);
-	for (let i = 0; i < newLines.length; i++) {
-		const newLine = newLines[i];
-		const bucket = canonToOld.get(stripAllWhitespace(newLine));
-		if (bucket) {
-			const oldLine = bucket.find(l => l !== newLine && equalsIgnoringWhitespace(l, newLine));
-			if (oldLine) {
-				result[i] = oldLine;
-				anyPreserved = true;
-				continue;
-			}
-		}
-		result[i] = newLine;
-	}
-	return anyPreserved ? result : newLines;
-}
-
 function stripInsertAnchorEchoAfter(anchorLine: string, dstLines: string[]): string[] {
 	if (dstLines.length <= 1) return dstLines;
 	if (equalsIgnoringWhitespace(dstLines[0], anchorLine)) {
@@ -858,7 +804,6 @@ export function applyHashlineEdits(
 					);
 					let nextLines = merged.newLines;
 					nextLines = restoreIndentForPairedReplacement([origLines[0] ?? ""], nextLines);
-					nextLines = preserveWhitespaceOnlyLinesLoose(origLines, nextLines);
 					if (
 						origLines.join("\n") === nextLines.join("\n") &&
 						origLines.some(l => CONFUSABLE_HYPHENS_RE.test(l))
@@ -874,11 +819,7 @@ export function applyHashlineEdits(
 				const origLines = originalFileLines.slice(spec.ref.line - 1, spec.ref.line);
 				let stripped = stripRangeBoundaryEcho(originalFileLines, spec.ref.line, spec.ref.line, dstLines);
 				stripped = restoreOldWrappedLines(origLines, stripped);
-				const preserved =
-					stripped.length === count
-						? preserveWhitespaceOnlyLines(origLines, stripped)
-						: preserveWhitespaceOnlyLinesLoose(origLines, stripped);
-				let newLines = restoreIndentForPairedReplacement(origLines, preserved);
+				let newLines = restoreIndentForPairedReplacement(origLines, stripped);
 				if (origLines.join("\n") === newLines.join("\n") && origLines.some(l => CONFUSABLE_HYPHENS_RE.test(l))) {
 					newLines = normalizeConfusableHyphensInLines(newLines);
 				}
@@ -891,11 +832,7 @@ export function applyHashlineEdits(
 				const origLines = originalFileLines.slice(spec.start.line - 1, spec.start.line - 1 + count);
 				let stripped = stripRangeBoundaryEcho(originalFileLines, spec.start.line, spec.end.line, dstLines);
 				stripped = restoreOldWrappedLines(origLines, stripped);
-				const preserved =
-					stripped.length === count
-						? preserveWhitespaceOnlyLines(origLines, stripped)
-						: preserveWhitespaceOnlyLinesLoose(origLines, stripped);
-				let newLines = restoreIndentForPairedReplacement(origLines, preserved);
+				let newLines = restoreIndentForPairedReplacement(origLines, stripped);
 				if (origLines.join("\n") === newLines.join("\n") && origLines.some(l => CONFUSABLE_HYPHENS_RE.test(l))) {
 					newLines = normalizeConfusableHyphensInLines(newLines);
 				}

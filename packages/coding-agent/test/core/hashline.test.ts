@@ -411,9 +411,8 @@ describe("applyHashlineEdits — heuristics", () => {
 		expect(result.content).toBe(content);
 	});
 
-	test("preserves whitespace for unchanged lines even when range counts mismatch", () => {
+	test("does not override model whitespace choices in replacement content", () => {
 		const content = ["import { foo } from 'x';", "import { bar } from 'y';", "const x = 1;"].join("\n");
-
 		const edits: HashlineEdit[] = [
 			{
 				range: {
@@ -423,10 +422,10 @@ describe("applyHashlineEdits — heuristics", () => {
 				},
 			},
 		];
-
 		const result = applyHashlineEdits(content, edits);
 		const outLines = result.content.split("\n");
-		expect(outLines[0]).toBe("import { foo } from 'x';");
+		// Model's whitespace choice is respected -- no longer overridden
+		expect(outLines[0]).toBe("import {foo} from 'x';");
 		expect(outLines[1]).toBe("import { bar } from 'y';");
 		expect(outLines[2]).toBe("// added");
 		expect(outLines[3]).toBe("const x = 1;");
