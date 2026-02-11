@@ -164,6 +164,28 @@ CREATE INDEX IF NOT EXISTS idx_auth_provider ON auth_credentials(provider);
 	}
 
 	/**
+	 * Save API key for a provider (replaces existing).
+	 */
+	saveApiKey(provider: string, apiKey: string): void {
+		const credential: AuthCredential = { type: "api_key", key: apiKey };
+		this.#replaceForProvider(provider, credential);
+	}
+
+	/**
+	 * Get API key for a provider.
+	 */
+	getApiKey(provider: string): string | null {
+		const rows = this.#listByProviderStmt.all(provider) as AuthRow[];
+		for (const row of rows) {
+			const credential = deserializeCredential(row);
+			if (credential && credential.type === "api_key") {
+				return credential.key;
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * List all providers with credentials.
 	 */
 	listProviders(): string[] {

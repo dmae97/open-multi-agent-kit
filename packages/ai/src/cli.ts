@@ -10,6 +10,7 @@ import { loginGeminiCli } from "./utils/oauth/google-gemini-cli";
 import { loginKimi } from "./utils/oauth/kimi";
 import { loginOpenAICodex } from "./utils/oauth/openai-codex";
 import type { OAuthCredentials, OAuthProvider } from "./utils/oauth/types";
+import { loginZai } from "./utils/oauth/zai";
 
 const PROVIDERS = getOAuthProviders();
 
@@ -26,7 +27,7 @@ async function login(provider: OAuthProvider): Promise<void> {
 	const storage = await CliAuthStorage.create();
 
 	try {
-		let credentials: OAuthCredentials;
+		let credentials: OAuthCredentials | string;
 
 		switch (provider) {
 			case "anthropic":
@@ -111,6 +112,23 @@ async function login(provider: OAuthProvider): Promise<void> {
 				);
 				break;
 
+			case "zai": {
+				const apiKey = await loginZai({
+					onAuth(info) {
+						const { url, instructions } = info;
+						console.log(`\nOpen this URL in your browser:\n${url}`);
+						if (instructions) console.log(instructions);
+						console.log();
+					},
+					onPrompt(p) {
+						return promptFn(`${p.message}${p.placeholder ? ` (${p.placeholder})` : ""}:`);
+					},
+				});
+				storage.saveApiKey(provider, apiKey);
+				console.log(`\nAPI key saved to ~/.omp/agent/agent.db`);
+				return;
+			}
+
 			default:
 				throw new Error(`Unknown provider: ${provider}`);
 		}
@@ -144,6 +162,7 @@ Providers:
   google-antigravity Antigravity (Gemini 3, Claude, GPT-OSS)
   openai-codex      OpenAI Codex (ChatGPT Plus/Pro)
   kimi-code        Kimi Code
+  zai              Z.AI (GLM Coding Plan)
   cursor            Cursor (Claude, GPT, etc.)
 
 Examples:

@@ -18,6 +18,7 @@ import {
 	loginKimi,
 	loginOpenAICodex,
 	loginOpenCode,
+	loginZai,
 	type OAuthController,
 	type OAuthCredentials,
 	type OAuthProvider,
@@ -676,6 +677,11 @@ export class AuthStorage {
 				break;
 			case "opencode": {
 				const apiKey = await loginOpenCode(ctrl);
+				credentials = { access: apiKey, refresh: apiKey, expires: Number.MAX_SAFE_INTEGER };
+				break;
+			}
+			case "zai": {
+				const apiKey = await loginZai(ctrl);
 				credentials = { access: apiKey, refresh: apiKey, expires: Number.MAX_SAFE_INTEGER };
 				break;
 			}

@@ -51,8 +51,9 @@ export type { OpenAICodexLoginOptions } from "./openai-codex";
 export { loginOpenAICodex, refreshOpenAICodexToken } from "./openai-codex";
 // OpenCode (API key)
 export { loginOpenCode } from "./opencode";
-
 export * from "./types";
+// Z.AI (API key)
+export { loginZai } from "./zai";
 
 /**
  * Refresh token for any OAuth provider.
@@ -97,6 +98,10 @@ export async function refreshOAuthToken(
 			newCredentials = await refreshCursorToken(credentials.refresh);
 			break;
 		case "opencode":
+			// API keys don't expire, return as-is
+			newCredentials = credentials;
+			break;
+		case "zai":
 			// API keys don't expire, return as-is
 			newCredentials = credentials;
 			break;
@@ -183,6 +188,11 @@ export function getOAuthProviders(): OAuthProviderInfo[] {
 		{
 			id: "opencode",
 			name: "OpenCode Zen",
+			available: true,
+		},
+		{
+			id: "zai",
+			name: "Z.AI (GLM Coding Plan)",
 			available: true,
 		},
 	];

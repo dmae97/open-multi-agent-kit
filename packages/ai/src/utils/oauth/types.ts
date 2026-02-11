@@ -16,6 +16,7 @@ export type OAuthProvider =
 	| "kimi-code"
 	| "openai-codex"
 	| "opencode"
+	| "zai"
 	| "cursor";
 
 export type OAuthPrompt = {
