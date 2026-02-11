@@ -46,6 +46,8 @@ export { loginAntigravity, refreshAntigravityToken } from "./google-antigravity"
 export { loginGeminiCli, refreshGoogleCloudToken } from "./google-gemini-cli";
 // Kimi Code
 export { loginKimi, refreshKimiToken } from "./kimi";
+// MiniMax Coding Plan (API key)
+export { loginMiniMaxCode, loginMiniMaxCodeCn } from "./minimax-code";
 export type { OpenAICodexLoginOptions } from "./openai-codex";
 // OpenAI Codex (ChatGPT OAuth)
 export { loginOpenAICodex, refreshOpenAICodexToken } from "./openai-codex";
@@ -98,10 +100,9 @@ export async function refreshOAuthToken(
 			newCredentials = await refreshCursorToken(credentials.refresh);
 			break;
 		case "opencode":
-			// API keys don't expire, return as-is
-			newCredentials = credentials;
-			break;
 		case "zai":
+		case "minimax-code":
+		case "minimax-code-cn":
 			// API keys don't expire, return as-is
 			newCredentials = credentials;
 			break;
@@ -193,6 +194,16 @@ export function getOAuthProviders(): OAuthProviderInfo[] {
 		{
 			id: "zai",
 			name: "Z.AI (GLM Coding Plan)",
+			available: true,
+		},
+		{
+			id: "minimax-code",
+			name: "MiniMax Coding Plan (International)",
+			available: true,
+		},
+		{
+			id: "minimax-code-cn",
+			name: "MiniMax Coding Plan (China)",
 			available: true,
 		},
 	];

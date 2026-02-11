@@ -17,6 +17,8 @@ export type OAuthProvider =
 	| "openai-codex"
 	| "opencode"
 	| "zai"
+	| "minimax-code"
+	| "minimax-code-cn"
 	| "cursor";
 
 export type OAuthPrompt = {

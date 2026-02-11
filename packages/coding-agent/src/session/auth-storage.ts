@@ -16,6 +16,8 @@ import {
 	loginGeminiCli,
 	loginGitHubCopilot,
 	loginKimi,
+	loginMiniMaxCode,
+	loginMiniMaxCodeCn,
 	loginOpenAICodex,
 	loginOpenCode,
 	loginZai,
@@ -640,7 +642,15 @@ export class AuthStorage {
 		},
 	): Promise<void> {
 		let credentials: OAuthCredentials;
-
+		const saveApiKeyCredential = async (apiKey: string): Promise<void> => {
+			const newCredential: ApiKeyCredential = { type: "api_key", key: apiKey };
+			const existing = this.#getCredentialsForProvider(provider);
+			if (existing.length === 0) {
+				await this.set(provider, newCredential);
+				return;
+			}
+			await this.set(provider, [...existing, newCredential]);
+		};
 		switch (provider) {
 			case "anthropic":
 				credentials = await loginAnthropic({
@@ -677,25 +687,33 @@ export class AuthStorage {
 				break;
 			case "opencode": {
 				const apiKey = await loginOpenCode(ctrl);
-				credentials = { access: apiKey, refresh: apiKey, expires: Number.MAX_SAFE_INTEGER };
-				break;
+				await saveApiKeyCredential(apiKey);
+				return;
 			}
 			case "zai": {
 				const apiKey = await loginZai(ctrl);
-				credentials = { access: apiKey, refresh: apiKey, expires: Number.MAX_SAFE_INTEGER };
-				break;
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "minimax-code": {
+				const apiKey = await loginMiniMaxCode(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "minimax-code-cn": {
+				const apiKey = await loginMiniMaxCodeCn(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
 			}
 			default:
 				throw new Error(`Unknown OAuth provider: ${provider}`);
 		}
-
 		const newCredential: OAuthCredential = { type: "oauth", ...credentials };
 		const existing = this.#getCredentialsForProvider(provider);
 		if (existing.length === 0) {
 			await this.set(provider, newCredential);
 			return;
 		}
-
 		await this.set(provider, [...existing, newCredential]);
 	}
 
