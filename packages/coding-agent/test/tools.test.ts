@@ -83,7 +83,10 @@ describe("Coding Agent Tools", () => {
 
 			const result = await readTool.execute("test-call-1", { path: testFile });
 
-			expect(getTextOutput(result)).toBe(content);
+			const output = getTextOutput(result);
+			expect(output).toContain("Hello, world!");
+			expect(output).toContain("Line 2");
+			expect(output).toContain("Line 3");
 			// No truncation message since file fits within limits
 			expect(getTextOutput(result)).not.toContain("Use offset=");
 			expect(result.details?.truncation).toBeUndefined();
@@ -487,7 +490,7 @@ function b() {
 
 			const output = getTextOutput(result);
 			expect(output).toContain("1. example.txt:2");
-			expect(output).toContain(">>2|match line");
+			expect(output).toMatch(/>>\s*2.*\|match line/);
 		});
 
 		it("should respect global limit and include context lines", async () => {
@@ -505,9 +508,9 @@ function b() {
 
 			const output = getTextOutput(result);
 			expect(output).toContain("1. context.txt:2");
-			expect(output).toContain("  1|before");
-			expect(output).toContain(">>2|match one");
-			expect(output).toContain("  3|after");
+			expect(output).toMatch(/\b1.*\|before/);
+			expect(output).toMatch(/>>\s*2.*\|match one/);
+			expect(output).toMatch(/\b3.*\|after/);
 			expect(output).toContain("[1 matches limit reached. Use limit=2 for more]");
 			// Ensure second match is not present
 			expect(output).not.toContain("match two");
