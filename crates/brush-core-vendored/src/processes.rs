@@ -10,12 +10,14 @@ pub struct ChildProcess {
     pid: Option<sys::process::ProcessId>,
     /// Child process handle kept alive for cancellation/termination.
     child: sys::process::Child,
+    /// Tracks whether this process has already been reaped.
+    reaped: bool,
 }
 
 impl ChildProcess {
     /// Wraps a child process and its future.
     pub fn new(pid: Option<sys::process::ProcessId>, child: sys::process::Child) -> Self {
-        Self { pid, child }
+        Self { pid, child, reaped: false }
     }
 
     /// Returns the process's ID.
@@ -68,26 +70,55 @@ impl ChildProcess {
             };
 
             return match status {
-                Some(status) => Ok(ProcessWaitResult::Completed(output_from_status(status?))),
+                Some(status) => {
+                    let status = status?;
+                    self.reaped = true;
+                    Ok(ProcessWaitResult::Completed(output_from_status(status)))
+                }
                 None => {
-                    self.kill();
+                    if self.child.kill().await.is_ok() {
+                        self.reaped = true;
+                    } else if let Ok(Some(_)) = self.child.try_wait() {
+                        self.reaped = true;
+                    }
                     Ok(ProcessWaitResult::Cancelled)
                 }
             };
         }
     }
 
-    /// Terminates the process if we have a PID.
+    /// Sends a kill signal and attempts a synchronous reap if still running.
     fn kill(&mut self) {
+        if self.reaped {
+            return;
+        }
+
+        if let Ok(Some(_)) = self.child.try_wait() {
+            self.reaped = true;
+            return;
+        }
         let _ = self.child.start_kill();
+        if let Ok(Some(_)) = self.child.try_wait() {
+            self.reaped = true;
+    }
     }
 
     pub(crate) fn poll(&mut self) -> Option<Result<std::process::Output, error::Error>> {
         match self.child.try_wait() {
-            Ok(Some(status)) => Some(Ok(output_from_status(status))),
+            Ok(Some(status)) => {
+                self.reaped = true;
+                Some(Ok(output_from_status(status)))
+            }
             Ok(None) => None,
             Err(err) => Some(Err(err.into())),
         }
+    }
+}
+
+impl Drop for ChildProcess {
+    fn drop(&mut self) {
+        // Ensure we don't leak zombie processes.
+        self.kill();
     }
 }
 
