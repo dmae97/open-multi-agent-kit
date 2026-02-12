@@ -1,6 +1,23 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added prompt-caching-scope-2026-01-05 beta feature support
+
+### Changed
+
+- Updated Claude Code version header to 2.1.39
+- Updated runtime version header to v24.13.1 and package version to 0.73.0
+- Increased request timeout from 60s to 600s
+- Reordered Accept-Encoding header values for compression preference
+- Updated OAuth authorization and token endpoints to use platform.claude.com
+- Expanded OAuth scopes to include user:sessions:claude_code and user:mcp_servers
+
+### Removed
+
+- Removed claude-code-20250219 beta feature from default models
+- Removed fine-grained-tool-streaming-2025-05-14 beta feature
 
 ## [11.13.1] - 2026-02-12
 ### Added

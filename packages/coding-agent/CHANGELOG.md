@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Improved Bun binary detection to check `Bun.env.PI_COMPILED` environment variable
+- Enhanced Bun package manager update to install specific version instead of latest
+- Added post-update verification for Bun installations to warn if expected version was not installed
+
+### Fixed
+
+- Fixed Bun update process to properly handle version pinning and report installation mismatches
 
 ## [11.14.0] - 2026-02-12
 ### Added

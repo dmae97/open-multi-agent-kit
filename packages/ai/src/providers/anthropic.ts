@@ -59,19 +59,19 @@ function getCacheControl(
 }
 
 // Stealth mode: Mimic Claude Code headers and tool prefixing.
-export const claudeCodeVersion = "1.0.83";
+export const claudeCodeVersion = "2.1.39";
 export const claudeToolPrefix = "proxy_";
 export const claudeCodeSystemInstruction = "You are Claude Code, Anthropic's official CLI for Claude.";
 export const claudeCodeHeaders = {
 	"X-Stainless-Helper-Method": "stream",
 	"X-Stainless-Retry-Count": "0",
-	"X-Stainless-Runtime-Version": "v24.3.0",
-	"X-Stainless-Package-Version": "0.55.1",
+	"X-Stainless-Runtime-Version": "v24.13.1",
+	"X-Stainless-Package-Version": "0.73.0",
 	"X-Stainless-Runtime": "node",
 	"X-Stainless-Lang": "js",
 	"X-Stainless-Arch": "arm64",
 	"X-Stainless-Os": "MacOS",
-	"X-Stainless-Timeout": "60",
+	"X-Stainless-Timeout": "600",
 } as const;
 
 export const applyClaudeToolPrefix = (name: string) => {
@@ -89,10 +89,9 @@ export const stripClaudeToolPrefix = (name: string) => {
 };
 
 const claudeCodeBetaDefaults = [
-	"claude-code-20250219",
 	"oauth-2025-04-20",
 	"interleaved-thinking-2025-05-14",
-	"fine-grained-tool-streaming-2025-05-14",
+	"prompt-caching-scope-2026-01-05",
 ];
 
 // Prefix tool names for OAuth traffic.
@@ -465,7 +464,7 @@ export function buildAnthropicHeaders(options: AnthropicHeaderOptions): Record<s
 		...modelHeaders,
 		...claudeCodeHeaders,
 		Accept: acceptHeader,
-		"Accept-Encoding": "gzip, deflate, br, zstd",
+		"Accept-Encoding": "br, gzip, deflate",
 		Connection: "keep-alive",
 		"Content-Type": "application/json",
 		"Anthropic-Version": "2023-06-01",

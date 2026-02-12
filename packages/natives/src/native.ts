@@ -45,7 +45,10 @@ const legacyUserDataDir =
 		: path.join(os.homedir(), ".local", "bin");
 const downloadUrl = `https://github.com/can1357/oh-my-pi/releases/latest/download/${addonFilename}`;
 const isCompiledBinary =
-	import.meta.url.includes("$bunfs") || import.meta.url.includes("~BUN") || import.meta.url.includes("%7EBUN");
+	Bun.env.PI_COMPILED ||
+	import.meta.url.includes("$bunfs") ||
+	import.meta.url.includes("~BUN") ||
+	import.meta.url.includes("%7EBUN");
 
 const SUPPORTED_PLATFORMS = ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64", "win32-x64"];
 

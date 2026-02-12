@@ -17,7 +17,10 @@ import { theme } from "../modes/theme/theme";
  * Detect if we're running as a Bun compiled binary.
  */
 const isBunBinary =
-	import.meta.url.includes("$bunfs") || import.meta.url.includes("~BUN") || import.meta.url.includes("%7EBUN");
+	Bun.env.PI_COMPILED ||
+	import.meta.url.includes("$bunfs") ||
+	import.meta.url.includes("~BUN") ||
+	import.meta.url.includes("%7EBUN");
 
 const REPO = "can1357/oh-my-pi";
 const PACKAGE = "@oh-my-pi/pi-coding-agent";
@@ -155,15 +158,33 @@ function getNativeAddonName(): string {
 /**
  * Update via bun package manager.
  */
-async function updateViaBun(): Promise<void> {
+async function updateViaBun(expectedVersion: string): Promise<void> {
 	console.log(chalk.dim("Updating via bun..."));
-
 	try {
-		execSync(`bun update --latest -g ${PACKAGE}`, { stdio: "inherit" });
-		console.log(chalk.green(`\n${theme.status.success} Update complete`));
+		execSync(`bun install -g ${PACKAGE}@${expectedVersion}`, { stdio: "inherit" });
 	} catch (error) {
-		throw new Error("bun update failed", { cause: error });
+		throw new Error("bun install failed", { cause: error });
 	}
+
+	// Verify the update actually took effect
+	try {
+		const result = spawnSync("bun", ["pm", "ls", "-g"], { encoding: "utf-8", stdio: "pipe" });
+		const output = result.stdout || "";
+		const match = output.match(new RegExp(`${PACKAGE.replace("/", "\\/")}@(\\S+)`));
+		if (match) {
+			const installedVersion = match[1];
+			if (compareVersions(installedVersion, expectedVersion) < 0) {
+				console.log(
+					chalk.yellow(`\nWarning: bun reports ${installedVersion} installed, expected ${expectedVersion}`),
+				);
+				console.log(chalk.yellow(`Try: bun install -g ${PACKAGE}@latest`));
+				return;
+			}
+		}
+	} catch {
+		// Verification is best-effort, don't fail the update
+	}
+	console.log(chalk.green(`\n${theme.status.success} Update complete`));
 }
 
 /**
@@ -280,7 +301,7 @@ export async function runUpdateCommand(opts: { force: boolean; check: boolean })
 	// Choose update method
 	try {
 		if (!isBunBinary && hasBun()) {
-			await updateViaBun();
+			await updateViaBun(release.version);
 		} else {
 			await updateViaBinary(release);
 		}

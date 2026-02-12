@@ -7,11 +7,11 @@ import type { OAuthController, OAuthCredentials } from "./types";
 
 const decode = (s: string) => atob(s);
 const CLIENT_ID = decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl");
-const AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
-const TOKEN_URL = "https://console.anthropic.com/v1/oauth/token";
+const AUTHORIZE_URL = "https://platform.claude.com/oauth/authorize";
+const TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
 const CALLBACK_PORT = 54545;
 const CALLBACK_PATH = "/callback";
-const SCOPES = "org:create_api_key user:profile user:inference";
+const SCOPES = "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers";
 
 class AnthropicOAuthFlow extends OAuthCallbackFlow {
 	#verifier: string = "";
