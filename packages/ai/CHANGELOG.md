@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [11.13.1] - 2026-02-12
 ### Added
 
 - Added Perplexity (Pro/Max) OAuth login support via native macOS app extraction or email OTP authentication

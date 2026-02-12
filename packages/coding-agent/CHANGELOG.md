@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [11.13.1] - 2026-02-12
+
 ### Added
 
 - Added `/move` slash command to move session to a different working directory
