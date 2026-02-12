@@ -149,15 +149,11 @@
       "bin": {
         "omp-swarm": "src/cli.ts",
       },
-      "dependencies": {
-        "yaml": "^2.7.0",
-      },
       "devDependencies": {
-        "@oh-my-pi/pi-coding-agent": "workspace:*",
         "@types/bun": "^1.3.9",
       },
       "peerDependencies": {
-        "@oh-my-pi/pi-coding-agent": "*",
+        "@oh-my-pi/pi-coding-agent": "^11",
       },
     },
     "packages/tui": {
