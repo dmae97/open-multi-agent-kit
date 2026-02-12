@@ -937,7 +937,7 @@ async function fetchAntigravityModels(): Promise<Model<"google-gemini-cli">[]> {
 					maxTokens: m.maxOutputTokens || 64000,
 				});
 			}
-
+			models.sort((a, b) => a.name.localeCompare(b.name));
 			console.log(`Fetched ${models.length} models from Antigravity API`);
 			return models;
 		} catch (error) {
@@ -953,7 +953,7 @@ async function fetchAntigravityModels(): Promise<Model<"google-gemini-cli">[]> {
 }
 
 function getAntigravityFallbackModels(): Model<"google-gemini-cli">[] {
-	return [
+	const models: Model<"google-gemini-cli">[] = [
 		{
 			id: "gemini-3-pro-high",
 			name: "Gemini 3 Pro High (Antigravity)",
@@ -1087,6 +1087,8 @@ function getAntigravityFallbackModels(): Model<"google-gemini-cli">[] {
 			maxTokens: 65535,
 		},
 	];
+	models.sort((a, b) => a.name.localeCompare(b.name));
+	return models;
 }
 
 async function generateModels() {

@@ -5741,7 +5741,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 202752,
-			"maxTokens": 4096
+			"maxTokens": 202752
 		},
 		"qwen/qwen3-max-thinking": {
 			"id": "qwen/qwen3-max-thinking",
@@ -12956,9 +12956,9 @@
 		}
 	},
 	"google-antigravity": {
-		"claude-sonnet-4-5-thinking": {
-			"id": "claude-sonnet-4-5-thinking",
-			"name": "Claude Sonnet 4.5 (Thinking) (Antigravity)",
+		"claude-opus-4-5-thinking": {
+			"id": "claude-opus-4-5-thinking",
+			"name": "Claude Opus 4.5 (Thinking) (Antigravity)",
 			"api": "google-gemini-cli",
 			"provider": "google-antigravity",
 			"baseUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com",
@@ -12976,9 +12976,9 @@
 			"contextWindow": 200000,
 			"maxTokens": 64000
 		},
-		"gemini-2.5-flash-thinking": {
-			"id": "gemini-2.5-flash-thinking",
-			"name": "Gemini 2.5 Flash (Thinking) (Antigravity)",
+		"claude-opus-4-6-thinking": {
+			"id": "claude-opus-4-6-thinking",
+			"name": "Claude Opus 4.6 (Thinking) (Antigravity)",
 			"api": "google-gemini-cli",
 			"provider": "google-antigravity",
 			"baseUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com",
@@ -12993,48 +12993,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 1048576,
-			"maxTokens": 65535
-		},
-		"gemini-3-flash": {
-			"id": "gemini-3-flash",
-			"name": "Gemini 3 Flash (Antigravity)",
-			"api": "google-gemini-cli",
-			"provider": "google-antigravity",
-			"baseUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com",
-			"reasoning": true,
-			"input": [
-				"text",
-				"image"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 1048576,
-			"maxTokens": 65536
-		},
-		"gemini-3-pro-low": {
-			"id": "gemini-3-pro-low",
-			"name": "Gemini 3 Pro (Low) (Antigravity)",
-			"api": "google-gemini-cli",
-			"provider": "google-antigravity",
-			"baseUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com",
-			"reasoning": true,
-			"input": [
-				"text",
-				"image"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 1048576,
-			"maxTokens": 65535
+			"contextWindow": 200000,
+			"maxTokens": 64000
 		},
 		"claude-sonnet-4-5": {
 			"id": "claude-sonnet-4-5",
@@ -13056,9 +13016,9 @@
 			"contextWindow": 200000,
 			"maxTokens": 64000
 		},
-		"claude-opus-4-5-thinking": {
-			"id": "claude-opus-4-5-thinking",
-			"name": "Claude Opus 4.5 (Thinking) (Antigravity)",
+		"claude-sonnet-4-5-thinking": {
+			"id": "claude-sonnet-4-5-thinking",
+			"name": "Claude Sonnet 4.5 (Thinking) (Antigravity)",
 			"api": "google-gemini-cli",
 			"provider": "google-antigravity",
 			"baseUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com",
@@ -13096,9 +13056,9 @@
 			"contextWindow": 1048576,
 			"maxTokens": 65535
 		},
-		"claude-opus-4-6-thinking": {
-			"id": "claude-opus-4-6-thinking",
-			"name": "Claude Opus 4.6 (Thinking) (Antigravity)",
+		"gemini-2.5-flash-thinking": {
+			"id": "gemini-2.5-flash-thinking",
+			"name": "Gemini 2.5 Flash (Thinking) (Antigravity)",
 			"api": "google-gemini-cli",
 			"provider": "google-antigravity",
 			"baseUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com",
@@ -13113,27 +13073,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 200000,
-			"maxTokens": 64000
-		},
-		"gpt-oss-120b-medium": {
-			"id": "gpt-oss-120b-medium",
-			"name": "GPT-OSS 120B (Medium) (Antigravity)",
-			"api": "google-gemini-cli",
-			"provider": "google-antigravity",
-			"baseUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com",
-			"reasoning": true,
-			"input": [
-				"text"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 114000,
-			"maxTokens": 32768
+			"contextWindow": 1048576,
+			"maxTokens": 65535
 		},
 		"gemini-2.5-pro": {
 			"id": "gemini-2.5-pro",
@@ -13155,6 +13096,26 @@
 			"contextWindow": 1048576,
 			"maxTokens": 65535
 		},
+		"gemini-3-flash": {
+			"id": "gemini-3-flash",
+			"name": "Gemini 3 Flash (Antigravity)",
+			"api": "google-gemini-cli",
+			"provider": "google-antigravity",
+			"baseUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 65536
+		},
 		"gemini-3-pro-high": {
 			"id": "gemini-3-pro-high",
 			"name": "Gemini 3 Pro (High) (Antigravity)",
@@ -13174,6 +13135,45 @@
 			},
 			"contextWindow": 1048576,
 			"maxTokens": 65535
+		},
+		"gemini-3-pro-low": {
+			"id": "gemini-3-pro-low",
+			"name": "Gemini 3 Pro (Low) (Antigravity)",
+			"api": "google-gemini-cli",
+			"provider": "google-antigravity",
+			"baseUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 65535
+		},
+		"gpt-oss-120b-medium": {
+			"id": "gpt-oss-120b-medium",
+			"name": "GPT-OSS 120B (Medium) (Antigravity)",
+			"api": "google-gemini-cli",
+			"provider": "google-antigravity",
+			"baseUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 114000,
+			"maxTokens": 32768
 		}
 	},
 	"google-vertex": {
