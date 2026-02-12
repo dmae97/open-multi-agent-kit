@@ -3,16 +3,17 @@
  *
  * Usage: bun run-pipeline.ts <path-to-yaml>
  */
-import * as path from "node:path";
+
 import * as fs from "node:fs/promises";
-import { parseSwarmYaml, validateSwarmDefinition } from "./swarm/schema";
-import { buildDependencyGraph, detectCycles, buildExecutionWaves } from "./swarm/dag";
-import { StateTracker } from "./swarm/state";
-import { PipelineController } from "./swarm/pipeline";
-import { renderSwarmProgress } from "./swarm/render";
+import * as path from "node:path";
 import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "./swarm/dag";
+import { PipelineController } from "./swarm/pipeline";
+import { renderSwarmProgress } from "./swarm/render";
+import { parseSwarmYaml, validateSwarmDefinition } from "./swarm/schema";
+import { StateTracker } from "./swarm/state";
 
 const yamlPath = process.argv[2];
 if (!yamlPath) {

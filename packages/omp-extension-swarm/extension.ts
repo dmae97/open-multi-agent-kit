@@ -8,26 +8,25 @@
  * Usage: Add this extension's directory to your extensions config,
  * then use /swarm in any oh-my-pi session.
  */
-import * as path from "node:path";
+
 import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
-import { parseSwarmYaml, validateSwarmDefinition, type SwarmDefinition } from "./swarm/schema";
-import { buildDependencyGraph, detectCycles, buildExecutionWaves } from "./swarm/dag";
-import { StateTracker } from "./swarm/state";
+import { buildDependencyGraph, buildExecutionWaves, detectCycles } from "./swarm/dag";
 import { PipelineController } from "./swarm/pipeline";
 import { renderSwarmProgress } from "./swarm/render";
+import { parseSwarmYaml, type SwarmDefinition, validateSwarmDefinition } from "./swarm/schema";
+import { StateTracker } from "./swarm/state";
 
 export default function swarmExtension(pi: ExtensionAPI): void {
 	pi.setLabel("Swarm Orchestrator");
 
 	pi.registerCommand("swarm", {
 		description: "Run a multi-agent swarm pipeline from YAML",
-		getArgumentCompletions: (prefix) => {
+		getArgumentCompletions: prefix => {
 			const subcommands = ["run", "status", "help"];
-			if (!prefix) return subcommands.map((s) => ({ label: s, value: s }));
-			return subcommands
-				.filter((s) => s.startsWith(prefix))
-				.map((s) => ({ label: s, value: s }));
+			if (!prefix) return subcommands.map(s => ({ label: s, value: s }));
+			return subcommands.filter(s => s.startsWith(prefix)).map(s => ({ label: s, value: s }));
 		},
 		handler: async (args: string, ctx: ExtensionCommandContext) => {
 			const parts = args.trim().split(/\s+/);
@@ -47,7 +46,6 @@ export default function swarmExtension(pi: ExtensionAPI): void {
 					await handleStatus(parts[1], ctx);
 					return;
 				}
-				case "help":
 				default:
 					ctx.ui.notify(
 						[
@@ -93,7 +91,7 @@ async function handleRun(yamlPath: string, ctx: ExtensionCommandContext, pi: Ext
 	// 3. Validate
 	const validationErrors = validateSwarmDefinition(def);
 	if (validationErrors.length > 0) {
-		ctx.ui.notify(`Validation errors:\n${validationErrors.map((e) => `  - ${e}`).join("\n")}`, "error");
+		ctx.ui.notify(`Validation errors:\n${validationErrors.map(e => `  - ${e}`).join("\n")}`, "error");
 		return;
 	}
 
@@ -249,9 +247,7 @@ function buildSummaryMessage(
 	lines.push("");
 	for (const [name, agent] of Object.entries(stateTracker.state.agents)) {
 		const duration =
-			agent.startedAt && agent.completedAt
-				? formatDuration(agent.completedAt - agent.startedAt)
-				: "n/a";
+			agent.startedAt && agent.completedAt ? formatDuration(agent.completedAt - agent.startedAt) : "n/a";
 		lines.push(`- **${name}**: ${agent.status} (${duration})${agent.error ? ` — ${agent.error}` : ""}`);
 	}
 

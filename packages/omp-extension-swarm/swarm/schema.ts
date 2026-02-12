@@ -55,6 +55,7 @@ export interface SwarmDefinition {
 // ============================================================================
 
 const VALID_MODES = new Set<string>(["pipeline", "parallel", "sequential"]);
+const VALID_SWARM_NAME = /^[a-zA-Z0-9._-]+$/;
 
 export function parseSwarmYaml(content: string): SwarmDefinition {
 	const raw = YAML.parse(content) as { swarm?: RawSwarmConfig } | null;
@@ -65,6 +66,9 @@ export function parseSwarmYaml(content: string): SwarmDefinition {
 
 	if (!swarm.name || typeof swarm.name !== "string") {
 		throw new Error("swarm.name is required and must be a string");
+	}
+	if (!VALID_SWARM_NAME.test(swarm.name)) {
+		throw new Error("swarm.name may only contain letters, numbers, dot, underscore, and dash");
 	}
 	if (!swarm.workspace || typeof swarm.workspace !== "string") {
 		throw new Error("swarm.workspace is required and must be a string");
@@ -140,6 +144,9 @@ export function validateSwarmDefinition(def: SwarmDefinition): string[] {
 
 	if (def.targetCount < 1) {
 		errors.push("target_count must be at least 1");
+	}
+	if (def.mode !== "pipeline" && def.targetCount !== 1) {
+		errors.push("target_count is only supported in pipeline mode");
 	}
 
 	return errors;

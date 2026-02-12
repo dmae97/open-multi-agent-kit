@@ -8,9 +8,9 @@
 		"skipLibCheck": true,
 		"types": ["bun-types"],
 		"paths": {
-			"@oh-my-pi/pi-coding-agent": ["../../src/index.ts"],
-			"@oh-my-pi/pi-coding-agent/*": ["../../src/*.ts"]
+			"@oh-my-pi/pi-coding-agent": ["../coding-agent/src/index.ts"],
+			"@oh-my-pi/pi-coding-agent/*": ["../coding-agent/src/*.ts"]
 		}
 	},
-	"include": ["extension.ts", "swarm/**/*.ts"]
+	"include": ["extension.ts", "run-pipeline.ts", "swarm/**/*.ts"]
 }

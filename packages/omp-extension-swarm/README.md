@@ -9,7 +9,7 @@ Use it for anything: research pipelines, code generation, data processing, conte
 ## Setup
 
 ```bash
-cd packages/coding-agent/extensions/swarm
+cd packages/omp-extension-swarm
 bun install
 ```
 
@@ -19,10 +19,10 @@ bun install
 
 ```bash
 # Foreground — runs until complete, no timeout:
-bun packages/coding-agent/extensions/swarm/run-pipeline.ts path/to/swarm.yaml
+bun packages/omp-extension-swarm/run-pipeline.ts path/to/swarm.yaml
 
 # Background — survives terminal close:
-nohup bun packages/coding-agent/extensions/swarm/run-pipeline.ts path/to/swarm.yaml \
+nohup bun packages/omp-extension-swarm/run-pipeline.ts path/to/swarm.yaml \
   > pipeline.log 2>&1 & disown
 ```
 
@@ -34,7 +34,7 @@ Register the extension in your config (`~/.omp/config.json` or `.omp/config.json
 
 ```json
 {
-  "extensions": ["packages/coding-agent/extensions/swarm"]
+  "extensions": ["packages/omp-extension-swarm"]
 }
 ```
 
