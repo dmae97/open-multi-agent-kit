@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [11.14.0] - 2026-02-12
 ### Added
 
 - Added SwiftLint linter client with JSON reporter support for Swift file linting

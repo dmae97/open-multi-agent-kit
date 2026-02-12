@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [11.14.0] - 2026-02-12
 ### Added
 
 - Added `PtySession` class for PTY-backed interactive command execution with streaming output
