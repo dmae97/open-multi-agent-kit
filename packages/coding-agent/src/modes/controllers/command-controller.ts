@@ -388,6 +388,12 @@ export class CommandController {
 		}
 		this.ctx.statusContainer.clear();
 
+		if (this.ctx.session.isCompacting) {
+			this.ctx.session.abortCompaction();
+			while (this.ctx.session.isCompacting) {
+				await Bun.sleep(10);
+			}
+		}
 		await this.ctx.session.newSession();
 
 		this.ctx.statusLine.invalidate();
