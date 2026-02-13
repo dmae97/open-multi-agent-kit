@@ -594,18 +594,6 @@ export class HashlineMismatchError extends Error {
 				lines.push(`    ${prefix}|${content}`);
 			}
 		}
-
-		// Append quick-fix remap section
-		const remapEntries: string[] = [];
-		for (const m of mismatches) {
-			const actual = computeLineHash(m.line, fileLines[m.line - 1]);
-			remapEntries.push(`\t${m.line}:${m.expected} \u2192 ${m.line}:${actual}`);
-		}
-		if (remapEntries.length > 0) {
-			lines.push("");
-			lines.push("Quick fix \u2014 replace stale refs:");
-			lines.push(...remapEntries);
-		}
 		return lines.join("\n");
 	}
 }
