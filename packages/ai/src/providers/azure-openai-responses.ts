@@ -460,12 +460,17 @@ function buildParams(
 	}
 
 	if (model.reasoning) {
+		// Always request encrypted reasoning content so reasoning items can be
+		// replayed in multi-turn conversations when store is false (items aren't
+		// persisted server-side, so we must include the full content).
+		// See: https://github.com/can1357/oh-my-pi/issues/41
+		params.include = ["reasoning.encrypted_content"];
+
 		if (options?.reasoningEffort || options?.reasoningSummary) {
 			params.reasoning = {
 				effort: options?.reasoningEffort || "medium",
 				summary: options?.reasoningSummary || "auto",
 			};
-			params.include = ["reasoning.encrypted_content"];
 		} else {
 			if (model.name.toLowerCase().startsWith("gpt-5")) {
 				// Jesus Christ, see https://community.openai.com/t/need-reasoning-false-option-for-gpt-5/1351588/7
