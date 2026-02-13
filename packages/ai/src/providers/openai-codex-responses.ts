@@ -17,6 +17,7 @@ import type {
 	AssistantMessage,
 	Context,
 	Model,
+	ProviderSessionState,
 	StopReason,
 	StreamFunction,
 	StreamOptions,
@@ -53,6 +54,7 @@ export interface OpenAICodexResponsesOptions extends StreamOptions {
 	include?: string[];
 	codexMode?: boolean;
 	toolChoice?: ToolChoice;
+	preferWebsockets?: boolean;
 }
 
 export const CODEX_INSTRUCTIONS = `You are an expert coding assistant operating inside pi, a coding agent harness.`;
@@ -80,11 +82,45 @@ const CODEX_DEBUG = $env.PI_CODEX_DEBUG === "1" || $env.PI_CODEX_DEBUG === "true
 const CODEX_MAX_RETRIES = 5;
 const CODEX_RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 const CODEX_RETRY_DELAY_MS = 500;
+const CODEX_WEBSOCKET_CONNECT_TIMEOUT_MS = 10000;
+const CODEX_WEBSOCKET_IDLE_TIMEOUT_MS = 300000;
+const CODEX_WEBSOCKET_RETRY_BUDGET = CODEX_MAX_RETRIES;
+const CODEX_WEBSOCKET_TRANSPORT_ERROR_PREFIX = "Codex websocket transport error";
+
+function parseCodexNonNegativeInteger(value: string | undefined, fallback: number): number {
+	if (!value) return fallback;
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+	return Math.trunc(parsed);
+}
+
+function parseCodexPositiveInteger(value: string | undefined, fallback: number): number {
+	if (!value) return fallback;
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+	return Math.trunc(parsed);
+}
 
 function isCodexWebSocketEnvEnabled(): boolean {
 	return $env.PI_CODEX_WEBSOCKET === "1" || $env.PI_CODEX_WEBSOCKET === "true";
 }
-const CODEX_WEBSOCKET_V2_ENABLED = $env.PI_CODEX_WEBSOCKET_V2 === "1" || $env.PI_CODEX_WEBSOCKET_V2 === "true";
+
+function isCodexWebSocketV2Enabled(): boolean {
+	return $env.PI_CODEX_WEBSOCKET_V2 === "1" || $env.PI_CODEX_WEBSOCKET_V2 === "true";
+}
+
+function getCodexWebSocketRetryBudget(): number {
+	return parseCodexNonNegativeInteger($env.PI_CODEX_WEBSOCKET_RETRY_BUDGET, CODEX_WEBSOCKET_RETRY_BUDGET);
+}
+
+function getCodexWebSocketRetryDelayMs(retry: number): number {
+	const baseDelay = parseCodexPositiveInteger($env.PI_CODEX_WEBSOCKET_RETRY_DELAY_MS, CODEX_RETRY_DELAY_MS);
+	return baseDelay * Math.max(1, retry);
+}
+
+function getCodexWebSocketIdleTimeoutMs(): number {
+	return parseCodexPositiveInteger($env.PI_CODEX_WEBSOCKET_IDLE_TIMEOUT_MS, CODEX_WEBSOCKET_IDLE_TIMEOUT_MS);
+}
 
 type CodexWebSocketSessionState = {
 	disableWebsocket: boolean;
@@ -100,11 +136,115 @@ type CodexWebSocketSessionState = {
 	lastFallbackAt?: number;
 	prewarmed: boolean;
 };
-const codexWebSocketSessions = new Map<string, CodexWebSocketSessionState>();
-const codexWebSocketPublicToPrivate = new Map<string, string>();
+
+const CODEX_PROVIDER_SESSION_STATE_KEY = "openai-codex-responses";
+
+interface CodexProviderSessionState extends ProviderSessionState {
+	webSocketSessions: Map<string, CodexWebSocketSessionState>;
+	webSocketPublicToPrivate: Map<string, string>;
+}
+
+function createCodexProviderSessionState(): CodexProviderSessionState {
+	const state: CodexProviderSessionState = {
+		webSocketSessions: new Map(),
+		webSocketPublicToPrivate: new Map(),
+		close: () => {
+			for (const session of state.webSocketSessions.values()) {
+				session.connection?.close("session_disposed");
+			}
+			state.webSocketSessions.clear();
+			state.webSocketPublicToPrivate.clear();
+		},
+	};
+	return state;
+}
+
+function getCodexProviderSessionState(
+	providerSessionState: Map<string, ProviderSessionState> | undefined,
+): CodexProviderSessionState | undefined {
+	if (!providerSessionState) return undefined;
+	const existing = providerSessionState.get(CODEX_PROVIDER_SESSION_STATE_KEY) as CodexProviderSessionState | undefined;
+	if (existing) return existing;
+	const created = createCodexProviderSessionState();
+	providerSessionState.set(CODEX_PROVIDER_SESSION_STATE_KEY, created);
+	return created;
+}
 const X_CODEX_TURN_STATE_HEADER = "x-codex-turn-state";
 const X_MODELS_ETAG_HEADER = "x-models-etag";
 const X_REASONING_INCLUDED_HEADER = "x-reasoning-included";
+
+function createCodexWebSocketTransportError(message: string): Error {
+	return new Error(`${CODEX_WEBSOCKET_TRANSPORT_ERROR_PREFIX}: ${message}`);
+}
+
+function toCodexHeaderRecord(value: unknown): Record<string, string> | null {
+	if (!value || typeof value !== "object") return null;
+	const headers: Record<string, string> = {};
+	for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+		if (typeof entry === "string") {
+			headers[key] = entry;
+		} else if (Array.isArray(entry) && entry.every(item => typeof item === "string")) {
+			headers[key] = entry.join(",");
+		} else if (typeof entry === "number" || typeof entry === "boolean") {
+			headers[key] = String(entry);
+		}
+	}
+	return Object.keys(headers).length > 0 ? headers : null;
+}
+
+function toCodexHeaders(value: unknown): Headers | undefined {
+	if (!value) return undefined;
+	if (value instanceof Headers) return value;
+	if (Array.isArray(value)) {
+		try {
+			return new Headers(value as Array<[string, string]>);
+		} catch {
+			return undefined;
+		}
+	}
+	const record = toCodexHeaderRecord(value);
+	if (!record) return undefined;
+	return new Headers(record);
+}
+
+function updateCodexSessionMetadataFromHeaders(
+	state: CodexWebSocketSessionState | undefined,
+	headers: Headers | Record<string, string> | null | undefined,
+): void {
+	if (!state || !headers) return;
+	const resolvedHeaders = headers instanceof Headers ? headers : new Headers(headers);
+	const turnState = resolvedHeaders.get(X_CODEX_TURN_STATE_HEADER);
+	if (turnState && turnState.length > 0) {
+		state.turnState = turnState;
+	}
+	const modelsEtag = resolvedHeaders.get(X_MODELS_ETAG_HEADER);
+	if (modelsEtag && modelsEtag.length > 0) {
+		state.modelsEtag = modelsEtag;
+	}
+	const reasoningIncluded = resolvedHeaders.get(X_REASONING_INCLUDED_HEADER);
+	if (reasoningIncluded !== null) {
+		const normalized = reasoningIncluded.trim().toLowerCase();
+		state.reasoningIncluded = normalized.length === 0 ? true : normalized !== "false";
+	}
+}
+
+function extractCodexWebSocketHandshakeHeaders(socket: WebSocket, openEvent?: Event): Headers | undefined {
+	const eventRecord = openEvent as Record<string, unknown> | undefined;
+	const eventResponse = eventRecord?.response as Record<string, unknown> | undefined;
+	const socketRecord = socket as unknown as Record<string, unknown>;
+	const socketResponse = socketRecord.response as Record<string, unknown> | undefined;
+	const socketHandshake = socketRecord.handshake as Record<string, unknown> | undefined;
+	return (
+		toCodexHeaders(eventRecord?.responseHeaders) ??
+		toCodexHeaders(eventRecord?.headers) ??
+		toCodexHeaders(eventResponse?.headers) ??
+		toCodexHeaders(socketRecord.responseHeaders) ??
+		toCodexHeaders(socketRecord.handshakeHeaders) ??
+		toCodexHeaders(socketResponse?.headers) ??
+		toCodexHeaders(socketHandshake?.headers)
+	);
+}
+
 function normalizeResponsesToolCallId(id: string): { callId: string; itemId: string } {
 	const [callId, itemId] = id.split("|");
 	if (callId && itemId) {
@@ -159,6 +299,8 @@ export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"
 			stopReason: "stop",
 			timestamp: Date.now(),
 		};
+		let websocketState: CodexWebSocketSessionState | undefined;
+		let usingWebsocket = false;
 
 		try {
 			const apiKey = options?.apiKey || getEnvApiKey(model.provider) || "";
@@ -215,71 +357,82 @@ export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"
 
 			const reasoningEffort = transformedBody.reasoning?.effort ?? null;
 			const requestHeaders = { ...(model.headers ?? {}), ...(options?.headers ?? {}) };
+			const providerSessionState = getCodexProviderSessionState(options?.providerSessionState);
 			const sessionKey = getCodexWebSocketSessionKey(options?.sessionId, model, accountId, baseUrl);
 			const publicSessionKey = getCodexPublicSessionKey(options?.sessionId, model, baseUrl);
 			if (sessionKey && publicSessionKey) {
-				codexWebSocketPublicToPrivate.set(publicSessionKey, sessionKey);
+				providerSessionState?.webSocketPublicToPrivate.set(publicSessionKey, sessionKey);
 			}
-			const websocketState = sessionKey ? getCodexWebSocketSessionState(sessionKey) : undefined;
-			let usingWebsocket = false;
+			websocketState =
+				sessionKey && providerSessionState
+					? getCodexWebSocketSessionState(sessionKey, providerSessionState)
+					: undefined;
+			usingWebsocket = false;
 			let requestBodyForState = cloneRequestBody(transformedBody);
 			let eventStream: AsyncGenerator<Record<string, unknown>>;
 
 			if (websocketState && shouldUseCodexWebSocket(model, websocketState, options?.preferWebsockets)) {
-				const websocketHeaders = createCodexHeaders(
-					requestHeaders,
-					accountId,
-					apiKey,
-					options?.sessionId,
-					"websocket",
-					websocketState,
-				);
-				const websocketRequest = buildCodexWebSocketRequest(
-					transformedBody,
-					websocketState,
-					CODEX_WEBSOCKET_V2_ENABLED,
-				);
-				requestBodyForState = cloneRequestBody(transformedBody);
-				logCodexDebug("codex websocket request", {
-					url: toWebSocketUrl(url),
-					model: params.model,
-					reasoningEffort,
-					headers: redactHeaders(websocketHeaders),
-					requestType: websocketRequest.type,
-				});
-				try {
-					eventStream = await openCodexWebSocketEventStream(
-						toWebSocketUrl(url),
-						websocketHeaders,
-						websocketRequest,
-						websocketState,
-						options?.signal,
-					);
-					usingWebsocket = true;
-				} catch (error) {
-					if (websocketState) {
-						websocketState.disableWebsocket = true;
-						websocketState.fallbackCount += 1;
-						websocketState.lastFallbackAt = Date.now();
-						websocketState.canAppend = false;
-						websocketState.lastRequest = undefined;
-						websocketState.lastResponseId = undefined;
-						websocketState.connection?.close("fallback");
-						websocketState.connection = undefined;
-					}
-					logCodexDebug("codex websocket fallback", {
-						error: error instanceof Error ? error.message : String(error),
-					});
-					eventStream = await openCodexSseEventStream(
-						url,
+				const websocketRetryBudget = getCodexWebSocketRetryBudget();
+				const websocketV2Enabled = isCodexWebSocketV2Enabled();
+				let websocketRetries = 0;
+				while (true) {
+					const websocketHeaders = createCodexHeaders(
 						requestHeaders,
 						accountId,
 						apiKey,
 						options?.sessionId,
-						transformedBody,
+						"websocket",
 						websocketState,
-						options?.signal,
+						websocketV2Enabled,
 					);
+					const websocketRequest = buildCodexWebSocketRequest(transformedBody, websocketState, websocketV2Enabled);
+					requestBodyForState = cloneRequestBody(transformedBody);
+					logCodexDebug("codex websocket request", {
+						url: toWebSocketUrl(url),
+						model: params.model,
+						reasoningEffort,
+						headers: redactHeaders(websocketHeaders),
+						requestType: websocketRequest.type,
+						retry: websocketRetries,
+						retryBudget: websocketRetryBudget,
+					});
+					try {
+						eventStream = await openCodexWebSocketEventStream(
+							toWebSocketUrl(url),
+							websocketHeaders,
+							websocketRequest,
+							websocketState,
+							options?.signal,
+						);
+						usingWebsocket = true;
+						break;
+					} catch (error) {
+						const websocketError = error instanceof Error ? error : new Error(String(error));
+						const activateFallback = websocketRetries >= websocketRetryBudget;
+						recordCodexWebSocketFailure(websocketState, activateFallback);
+						logCodexDebug("codex websocket fallback", {
+							error: websocketError.message,
+							retry: websocketRetries,
+							retryBudget: websocketRetryBudget,
+							activated: activateFallback,
+						});
+						if (!activateFallback) {
+							websocketRetries += 1;
+							await abortableSleep(getCodexWebSocketRetryDelayMs(websocketRetries), options?.signal);
+							continue;
+						}
+						eventStream = await openCodexSseEventStream(
+							url,
+							requestHeaders,
+							accountId,
+							apiKey,
+							options?.sessionId,
+							transformedBody,
+							websocketState,
+							options?.signal,
+						);
+						break;
+					}
 				}
 			} else {
 				eventStream = await openCodexSseEventStream(
@@ -530,6 +683,9 @@ export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"
 			stream.end();
 		} catch (error) {
 			for (const block of output.content) delete (block as { index?: number }).index;
+			if (usingWebsocket && websocketState) {
+				resetCodexWebSocketAppendState(websocketState);
+			}
 			output.stopReason = options?.signal?.aborted ? "aborted" : "error";
 			output.errorMessage = formatErrorMessageWithRetryAfter(error);
 			output.duration = Date.now() - startTime;
@@ -544,7 +700,10 @@ export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"
 
 export async function prewarmOpenAICodexResponses(
 	model: Model<"openai-codex-responses">,
-	options?: Pick<OpenAICodexResponsesOptions, "apiKey" | "headers" | "sessionId" | "signal" | "preferWebsockets">,
+	options?: Pick<
+		OpenAICodexResponsesOptions,
+		"apiKey" | "headers" | "sessionId" | "signal" | "preferWebsockets" | "providerSessionState"
+	>,
 ): Promise<void> {
 	const apiKey = options?.apiKey || getEnvApiKey(model.provider) || "";
 	if (!apiKey) return;
@@ -552,13 +711,14 @@ export async function prewarmOpenAICodexResponses(
 	const baseUrl = model.baseUrl || CODEX_BASE_URL;
 	const baseWithSlash = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
 	const url = rewriteUrlForCodex(new URL(URL_PATHS.RESPONSES.slice(1), baseWithSlash).toString());
+	const providerSessionState = getCodexProviderSessionState(options?.providerSessionState);
 	const sessionKey = getCodexWebSocketSessionKey(options?.sessionId, model, accountId, baseUrl);
 	const publicSessionKey = getCodexPublicSessionKey(options?.sessionId, model, baseUrl);
 	if (publicSessionKey && sessionKey) {
-		codexWebSocketPublicToPrivate.set(publicSessionKey, sessionKey);
+		providerSessionState?.webSocketPublicToPrivate.set(publicSessionKey, sessionKey);
 	}
-	if (!sessionKey) return;
-	const state = getCodexWebSocketSessionState(sessionKey);
+	if (!sessionKey || !providerSessionState) return;
+	const state = getCodexWebSocketSessionState(sessionKey, providerSessionState);
 	if (!shouldUseCodexWebSocket(model, state, options?.preferWebsockets)) return;
 	const headers = createCodexHeaders(
 		{ ...(model.headers ?? {}), ...(options?.headers ?? {}) },
@@ -567,6 +727,7 @@ export async function prewarmOpenAICodexResponses(
 		options?.sessionId,
 		"websocket",
 		state,
+		isCodexWebSocketV2Enabled(),
 	);
 	await getOrCreateCodexWebSocketConnection(state, toWebSocketUrl(url), headers, options?.signal);
 	state.prewarmed = true;
@@ -595,12 +756,37 @@ function getCodexPublicSessionKey(
 	return `${baseUrl}:${model.id}:${sessionId}`;
 }
 
-function getCodexWebSocketSessionState(sessionKey: string): CodexWebSocketSessionState {
-	const existing = codexWebSocketSessions.get(sessionKey);
+function getCodexWebSocketSessionState(
+	sessionKey: string,
+	providerSessionState: CodexProviderSessionState,
+): CodexWebSocketSessionState {
+	const existing = providerSessionState.webSocketSessions.get(sessionKey);
 	if (existing) return existing;
-	const created: CodexWebSocketSessionState = { disableWebsocket: false, canAppend: false, fallbackCount: 0, prewarmed: false };
-	codexWebSocketSessions.set(sessionKey, created);
+	const created: CodexWebSocketSessionState = {
+		disableWebsocket: false,
+		canAppend: false,
+		fallbackCount: 0,
+		prewarmed: false,
+	};
+	providerSessionState.webSocketSessions.set(sessionKey, created);
 	return created;
+}
+
+function resetCodexWebSocketAppendState(state: CodexWebSocketSessionState): void {
+	state.canAppend = false;
+	state.lastRequest = undefined;
+	state.lastResponseId = undefined;
+}
+
+function recordCodexWebSocketFailure(state: CodexWebSocketSessionState, activateFallback: boolean): void {
+	resetCodexWebSocketAppendState(state);
+	state.connection?.close("fallback");
+	state.connection = undefined;
+	state.lastFallbackAt = Date.now();
+	if (activateFallback && !state.disableWebsocket) {
+		state.disableWebsocket = true;
+		state.fallbackCount += 1;
+	}
 }
 
 function shouldUseCodexWebSocket(
@@ -626,13 +812,22 @@ export interface OpenAICodexTransportDetails {
 
 export function getOpenAICodexTransportDetails(
 	model: Model<"openai-codex-responses">,
-	options?: { sessionId?: string; baseUrl?: string; preferWebsockets?: boolean },
+	options?: {
+		sessionId?: string;
+		baseUrl?: string;
+		preferWebsockets?: boolean;
+		providerSessionState?: Map<string, ProviderSessionState>;
+	},
 ): OpenAICodexTransportDetails {
 	const baseUrl = options?.baseUrl || model.baseUrl || CODEX_BASE_URL;
-	const websocketPreferred = isCodexWebSocketEnvEnabled() || options?.preferWebsockets === true || model.preferWebsockets === true;
+	const websocketPreferred =
+		isCodexWebSocketEnvEnabled() || options?.preferWebsockets === true || model.preferWebsockets === true;
+	const providerSessionState = getCodexProviderSessionState(options?.providerSessionState);
 	const publicSessionKey = getCodexPublicSessionKey(options?.sessionId, model, baseUrl);
-	const privateSessionKey = publicSessionKey ? codexWebSocketPublicToPrivate.get(publicSessionKey) : undefined;
-	const state = privateSessionKey ? codexWebSocketSessions.get(privateSessionKey) : undefined;
+	const privateSessionKey = publicSessionKey
+		? providerSessionState?.webSocketPublicToPrivate.get(publicSessionKey)
+		: undefined;
+	const state = privateSessionKey ? providerSessionState?.webSocketSessions.get(privateSessionKey) : undefined;
 
 	return {
 		websocketPreferred,
@@ -708,38 +903,45 @@ function headersToRecord(headers: Headers): Record<string, string> {
 	return result;
 }
 
+interface CodexWebSocketConnectionOptions {
+	idleTimeoutMs: number;
+	onHandshakeHeaders?: (headers: Headers) => void;
+}
 class CodexWebSocketConnection {
 	#url: string;
 	#headers: Record<string, string>;
+	#idleTimeoutMs: number;
+	#onHandshakeHeaders?: (headers: Headers) => void;
 	#socket: WebSocket | null = null;
 	#queue: Array<Record<string, unknown> | Error | null> = [];
 	#waiters: Array<() => void> = [];
 	#connectPromise?: Promise<void>;
 	#activeRequest = false;
-
-	constructor(url: string, headers: Record<string, string>) {
+	constructor(url: string, headers: Record<string, string>, options: CodexWebSocketConnectionOptions) {
 		this.#url = url;
 		this.#headers = headers;
+		this.#idleTimeoutMs = options.idleTimeoutMs;
+		this.#onHandshakeHeaders = options.onHandshakeHeaders;
 	}
-
 	isOpen(): boolean {
 		return this.#socket?.readyState === WebSocket.OPEN;
 	}
-
 	close(reason = "done"): void {
-		if (this.#socket && (this.#socket.readyState === WebSocket.OPEN || this.#socket.readyState === WebSocket.CONNECTING)) {
+		if (
+			this.#socket &&
+			(this.#socket.readyState === WebSocket.OPEN || this.#socket.readyState === WebSocket.CONNECTING)
+		) {
 			this.#socket.close(1000, reason);
 		}
 		this.#socket = null;
 	}
-
 	async connect(signal?: AbortSignal): Promise<void> {
 		if (this.isOpen()) return;
 		if (this.#connectPromise) {
 			await this.#connectPromise;
 			return;
 		}
-	const WebSocketWithHeaders = WebSocket as unknown as {
+		const WebSocketWithHeaders = WebSocket as unknown as {
 			new (url: string, options?: { headers?: Record<string, string> }): WebSocket;
 		};
 		const { promise, resolve, reject } = Promise.withResolvers<void>();
@@ -748,11 +950,11 @@ class CodexWebSocketConnection {
 		this.#socket = socket;
 		let settled = false;
 		let timeout: NodeJS.Timeout | undefined;
-	const onAbort = () => {
+		const onAbort = () => {
 			socket.close(1000, "aborted");
 			if (!settled) {
 				settled = true;
-				reject(new Error("Request was aborted"));
+				reject(createCodexWebSocketTransportError("request was aborted"));
 			}
 		};
 		if (signal) {
@@ -762,30 +964,28 @@ class CodexWebSocketConnection {
 				signal.addEventListener("abort", onAbort, { once: true });
 			}
 		}
-
 		const clearPending = () => {
 			if (timeout) clearTimeout(timeout);
 			if (signal) signal.removeEventListener("abort", onAbort);
 		};
-
 		timeout = setTimeout(() => {
 			socket.close(1000, "connect-timeout");
 			if (!settled) {
 				settled = true;
-				reject(new Error("WebSocket connection timeout"));
+				reject(createCodexWebSocketTransportError("connection timeout"));
 			}
-		}, 10000);
+		}, CODEX_WEBSOCKET_CONNECT_TIMEOUT_MS);
 
-		socket.addEventListener("open", () => {
+		socket.addEventListener("open", event => {
 			if (!settled) {
 				settled = true;
 				clearPending();
+				this.#captureHandshakeHeaders(socket, event);
 				resolve();
 			}
 		});
-
 		socket.addEventListener("error", event => {
-			const error = new Error(`WebSocket error: ${String(event.type)}`);
+			const error = createCodexWebSocketTransportError(`websocket error: ${String(event.type)}`);
 			if (!settled) {
 				settled = true;
 				clearPending();
@@ -794,19 +994,17 @@ class CodexWebSocketConnection {
 			}
 			this.#push(error);
 		});
-
 		socket.addEventListener("close", event => {
 			this.#socket = null;
 			if (!settled) {
 				settled = true;
 				clearPending();
-				reject(new Error(`WebSocket closed before open (${event.code})`));
+				reject(createCodexWebSocketTransportError(`websocket closed before open (${event.code})`));
 				return;
 			}
-			this.#push(new Error(`WebSocket closed (${event.code})`));
+			this.#push(createCodexWebSocketTransportError(`websocket closed (${event.code})`));
 			this.#push(null);
 		});
-
 		socket.addEventListener("message", event => {
 			if (typeof event.data !== "string") return;
 			try {
@@ -822,7 +1020,7 @@ class CodexWebSocketConnection {
 				}
 				this.#push(parsed);
 			} catch (error) {
-				this.#push(error instanceof Error ? error : new Error(String(error)));
+				this.#push(createCodexWebSocketTransportError(String(error)));
 			}
 		});
 
@@ -832,19 +1030,20 @@ class CodexWebSocketConnection {
 			this.#connectPromise = undefined;
 		}
 	}
-
-	async *streamRequest(request: Record<string, unknown>, signal?: AbortSignal): AsyncGenerator<Record<string, unknown>> {
+	async *streamRequest(
+		request: Record<string, unknown>,
+		signal?: AbortSignal,
+	): AsyncGenerator<Record<string, unknown>> {
 		if (!this.#socket || this.#socket.readyState !== WebSocket.OPEN) {
-			throw new Error("websocket connection is unavailable");
+			throw createCodexWebSocketTransportError("websocket connection is unavailable");
 		}
 		if (this.#activeRequest) {
-			throw new Error("websocket request already in progress");
+			throw createCodexWebSocketTransportError("websocket request already in progress");
 		}
-
 		this.#activeRequest = true;
 		const onAbort = () => {
 			this.close("aborted");
-			this.#push(new Error("Request was aborted"));
+			this.#push(createCodexWebSocketTransportError("request was aborted"));
 		};
 		if (signal) {
 			if (signal.aborted) {
@@ -857,12 +1056,12 @@ class CodexWebSocketConnection {
 		try {
 			this.#socket.send(JSON.stringify(request));
 			while (true) {
-				const next = await this.#nextMessage();
+				const next = await this.#nextMessage(this.#idleTimeoutMs);
 				if (next instanceof Error) {
 					throw next;
 				}
 				if (next === null) {
-					throw new Error("websocket closed before response completion");
+					throw createCodexWebSocketTransportError("websocket closed before response completion");
 				}
 				yield next;
 				const eventType = typeof next.type === "string" ? next.type : "";
@@ -883,22 +1082,43 @@ class CodexWebSocketConnection {
 		}
 	}
 
+	#captureHandshakeHeaders(socket: WebSocket, openEvent?: Event): void {
+		if (!this.#onHandshakeHeaders) return;
+		const headers = extractCodexWebSocketHandshakeHeaders(socket, openEvent);
+		if (!headers) return;
+		this.#onHandshakeHeaders(headers);
+	}
 	#push(item: Record<string, unknown> | Error | null): void {
 		this.#queue.push(item);
 		const waiter = this.#waiters.shift();
 		if (waiter) waiter();
 	}
 
-	async #nextMessage(): Promise<Record<string, unknown> | Error | null> {
+	async #nextMessage(timeoutMs: number): Promise<Record<string, unknown> | Error | null> {
 		while (this.#queue.length === 0) {
 			const { promise, resolve } = Promise.withResolvers<void>();
 			this.#waiters.push(resolve);
+			let timedOut = false;
+			let timeout: NodeJS.Timeout | undefined;
+			if (timeoutMs > 0) {
+				timeout = setTimeout(() => {
+					timedOut = true;
+					const waiterIndex = this.#waiters.indexOf(resolve);
+					if (waiterIndex >= 0) {
+						this.#waiters.splice(waiterIndex, 1);
+					}
+					resolve();
+				}, timeoutMs);
+			}
 			await promise;
+			if (timeout) clearTimeout(timeout);
+			if (timedOut && this.#queue.length === 0) {
+				return createCodexWebSocketTransportError("idle timeout waiting for websocket");
+			}
 		}
 		return this.#queue.shift() ?? null;
 	}
 }
-
 async function getOrCreateCodexWebSocketConnection(
 	state: CodexWebSocketSessionState,
 	url: string,
@@ -909,7 +1129,13 @@ async function getOrCreateCodexWebSocketConnection(
 		return state.connection;
 	}
 	state.connection?.close("reconnect");
-	state.connection = new CodexWebSocketConnection(url, headersToRecord(headers));
+	resetCodexWebSocketAppendState(state);
+	state.connection = new CodexWebSocketConnection(url, headersToRecord(headers), {
+		idleTimeoutMs: getCodexWebSocketIdleTimeoutMs(),
+		onHandshakeHeaders: handshakeHeaders => {
+			updateCodexSessionMetadataFromHeaders(state, handshakeHeaders);
+		},
+	});
 	await state.connection.connect(signal);
 	return state.connection;
 }
@@ -945,14 +1171,7 @@ async function openCodexSseEventStream(
 		contentType: response.headers.get("content-type") || null,
 		cfRay: response.headers.get("cf-ray") || null,
 	});
-	if (state) {
-		state.turnState = response.headers.get(X_CODEX_TURN_STATE_HEADER) ?? state.turnState;
-		state.modelsEtag = response.headers.get(X_MODELS_ETAG_HEADER) ?? state.modelsEtag;
-		const reasoningIncluded = response.headers.get(X_REASONING_INCLUDED_HEADER);
-		if (reasoningIncluded === "true" || reasoningIncluded === "false") {
-			state.reasoningIncluded = reasoningIncluded === "true";
-		}
-	}
+	updateCodexSessionMetadataFromHeaders(state, response.headers);
 	if (!response.ok) {
 		const info = await parseCodexError(response);
 		const error = new Error(info.friendlyMessage || info.message);
@@ -981,15 +1200,19 @@ function createCodexHeaders(
 	promptCacheKey?: string,
 	transport: "sse" | "websocket" = "sse",
 	state?: CodexWebSocketSessionState,
+	websocketV2Enabled = false,
 ): Headers {
 	const headers = new Headers(initHeaders ?? {});
 	headers.delete("x-api-key");
 	headers.set("Authorization", `Bearer ${accessToken}`);
 	headers.set(OPENAI_HEADERS.ACCOUNT_ID, accountId);
-	headers.set(
-		OPENAI_HEADERS.BETA,
-		transport === "websocket" ? OPENAI_HEADER_VALUES.BETA_RESPONSES_WEBSOCKETS : OPENAI_HEADER_VALUES.BETA_RESPONSES,
-	);
+	const betaHeader =
+		transport === "websocket"
+			? websocketV2Enabled
+				? OPENAI_HEADER_VALUES.BETA_RESPONSES_WEBSOCKETS_V2
+				: OPENAI_HEADER_VALUES.BETA_RESPONSES_WEBSOCKETS
+			: OPENAI_HEADER_VALUES.BETA_RESPONSES;
+	headers.set(OPENAI_HEADERS.BETA, betaHeader);
 	headers.set(OPENAI_HEADERS.ORIGINATOR, OPENAI_HEADER_VALUES.ORIGINATOR_CODEX);
 	headers.set("User-Agent", `pi/${packageJson.version} (${os.platform()} ${os.release()}; ${os.arch()})`);
 	if (promptCacheKey) {

@@ -26,6 +26,7 @@ import type {
 	ToolChoice,
 	Usage,
 	UsageReport,
+	ProviderSessionState,
 } from "@oh-my-pi/pi-ai";
 import { isContextOverflow, modelsAreEqual, supportsXhigh } from "@oh-my-pi/pi-ai";
 import { abortableSleep, isEnoent, logger } from "@oh-my-pi/pi-utils";
@@ -339,6 +340,7 @@ export class AgentSession {
 	#streamingEditCheckedLineCounts = new Map<string, number>();
 	#streamingEditFileCache = new Map<string, string>();
 	#promptInFlight = false;
+	#providerSessionState = new Map<string, ProviderSessionState>();
 
 	constructor(config: AgentSessionConfig) {
 		this.agent = config.agent;
@@ -358,6 +360,7 @@ export class AgentSession {
 		this.#baseSystemPrompt = this.agent.state.systemPrompt;
 		this.#ttsrManager = config.ttsrManager;
 		this.#forceCopilotAgentInitiator = config.forceCopilotAgentInitiator ?? false;
+		this.agent.providerSessionState = this.#providerSessionState;
 
 		// Always subscribe to agent events for internal handling
 		// (session persistence, hooks, auto-compaction, retry logic)
@@ -367,6 +370,11 @@ export class AgentSession {
 	/** Model registry for API key resolution and model discovery */
 	get modelRegistry(): ModelRegistry {
 		return this.#modelRegistry;
+	}
+
+	/** Provider-scoped mutable state store for transport/session caches. */
+	get providerSessionState(): Map<string, ProviderSessionState> {
+		return this.#providerSessionState;
 	}
 
 	/** TTSR manager for time-traveling stream rules */
@@ -888,6 +896,10 @@ export class AgentSession {
 	async dispose(): Promise<void> {
 		await this.sessionManager.flush();
 		await cleanupSshResources();
+		for (const state of this.#providerSessionState.values()) {
+			state.close();
+		}
+		this.#providerSessionState.clear();
 		this.#disconnectFromAgent();
 		this.#eventListeners = [];
 	}

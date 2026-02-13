@@ -1096,6 +1096,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				apiKey: await modelRegistry.getApiKey(model, sessionId),
 				sessionId,
 				preferWebsockets: settings.get("providers.openaiWebsockets") ?? false,
+				providerSessionState: session.providerSessionState,
 			});
 			debugStartup("sdk:prewarmCodexWebsocket:done");
 			time("prewarmCodexWebsocket");
@@ -1107,7 +1108,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			});
 		}
 	}
-
 
 	// Warm up LSP servers (connects to detected servers)
 	let lspServers: CreateAgentSessionResult["lspServers"];

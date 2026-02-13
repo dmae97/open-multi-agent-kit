@@ -1,8 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added `providerSessionState` property to AgentSession for managing provider-scoped transport and session caches
+- Added automatic cleanup of provider session state resources on session disposal
 - Added `providers.openaiWebsockets` setting to prefer websocket transport for OpenAI Codex models
 - Added provider details display in session info showing authentication mode, transport, and connection settings
 - Added automatic prewarm of OpenAI Codex websocket connections on session creation for improved performance
@@ -11,6 +14,7 @@
 
 ### Changed
 
+- Enhanced provider details display to include live provider session state information
 - Enhanced session info output to display active provider configuration and authentication details
 - Replaced `process.cwd()` with `getProjectDir()` throughout codebase for improved project directory detection and handling
 - Made `SessionManager.list()` async to support asynchronous session discovery operations

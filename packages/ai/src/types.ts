@@ -113,6 +113,10 @@ export type ToolChoice =
 // Base options all providers share
 export type CacheRetention = "none" | "short" | "long";
 
+export interface ProviderSessionState {
+	close(): void;
+}
+
 export interface StreamOptions {
 	temperature?: number;
 	maxTokens?: number;
@@ -142,6 +146,11 @@ export interface StreamOptions {
 	 * session-aware features. Ignored by providers that don't support it.
 	 */
 	sessionId?: string;
+	/**
+	 * Provider-scoped mutable state store for this agent session.
+	 * Providers can use this to persist transport/session state between turns.
+	 */
+	providerSessionState?: Map<string, ProviderSessionState>;
 	/**
 	 * Optional hook to observe the provider request payload before it is sent.
 	 * The payload format is provider-specific.

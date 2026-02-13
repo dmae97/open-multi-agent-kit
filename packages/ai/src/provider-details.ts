@@ -1,5 +1,5 @@
 import { getOpenAICodexTransportDetails, type OpenAICodexTransportDetails } from "./providers/openai-codex-responses";
-import type { Api, Model, Provider } from "./types";
+import type { Api, Model, Provider, ProviderSessionState } from "./types";
 
 export interface ProviderDetailField {
 	label: string;
@@ -17,6 +17,7 @@ export interface ProviderDetailsContext {
 	sessionId?: string;
 	authMode?: string;
 	preferWebsockets?: boolean;
+	providerSessionState?: Map<string, ProviderSessionState>;
 }
 
 export function getProviderDetails(context: ProviderDetailsContext): ProviderDetails {
@@ -33,6 +34,7 @@ export function getProviderDetails(context: ProviderDetailsContext): ProviderDet
 			sessionId: context.sessionId,
 			baseUrl: context.model.baseUrl,
 			preferWebsockets: context.preferWebsockets,
+			providerSessionState: context.providerSessionState,
 		});
 		fields.push({ label: "Transport", value: formatCodexTransport(codexDetails) });
 		fields.push({ label: "WebSocket", value: formatCodexWebSocket(codexDetails) });
@@ -73,10 +75,7 @@ function formatCodexWebSocket(details: OpenAICodexTransportDetails): string {
 	return details.hasSessionState ? "enabled" : "waiting for first request";
 }
 
-function formatCodexReuse(
-	details: OpenAICodexTransportDetails,
-	sessionId: string | undefined,
-): string {
+function formatCodexReuse(details: OpenAICodexTransportDetails, sessionId: string | undefined): string {
 	if (!sessionId) return "no session key";
 	return details.canAppend ? "append enabled" : "full request";
 }

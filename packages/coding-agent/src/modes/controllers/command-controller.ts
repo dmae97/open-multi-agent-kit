@@ -1,7 +1,13 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getEnvApiKey, getProviderDetails, type ProviderDetails, type UsageLimit, type UsageReport } from "@oh-my-pi/pi-ai";
+import {
+	getEnvApiKey,
+	getProviderDetails,
+	type ProviderDetails,
+	type UsageLimit,
+	type UsageReport,
+} from "@oh-my-pi/pi-ai";
 import { copyToClipboard } from "@oh-my-pi/pi-natives";
 import { Loader, Markdown, padding, Spacer, Text, visibleWidth } from "@oh-my-pi/pi-tui";
 import { Snowflake } from "@oh-my-pi/pi-utils";
@@ -219,6 +225,7 @@ export class CommandController {
 				sessionId: stats.sessionId,
 				authMode,
 				preferWebsockets: this.ctx.settings.get("providers.openaiWebsockets") ?? false,
+				providerSessionState: this.ctx.session.providerSessionState,
 			});
 			info += renderProviderSection(providerDetails, theme);
 		}
@@ -780,7 +787,6 @@ export function renderProviderSection(details: ProviderDetails, uiTheme: Pick<ty
 	}
 	return `${lines.join("\n")}\n`;
 }
-
 
 function resolveFraction(limit: UsageLimit): number | undefined {
 	const amount = limit.amount;

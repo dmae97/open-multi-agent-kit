@@ -12,6 +12,7 @@ import {
 	type Model,
 	streamSimple,
 	type TextContent,
+	type ProviderSessionState,
 	type ThinkingBudgets,
 	type ToolChoice,
 	type ToolResultMessage,
@@ -87,6 +88,10 @@ export interface AgentOptions {
 	 * Used by providers that support session-based caching (e.g., OpenAI Codex).
 	 */
 	sessionId?: string;
+	/**
+	 * Shared provider state map for session-scoped transport/session caches.
+	 */
+	providerSessionState?: Map<string, ProviderSessionState>;
 
 	/**
 	 * Resolves an API key dynamically for each LLM call.
@@ -162,6 +167,7 @@ export class Agent {
 	#followUpMode: "all" | "one-at-a-time";
 	#interruptMode: "immediate" | "wait";
 	#sessionId?: string;
+	#providerSessionState?: Map<string, ProviderSessionState>;
 	#thinkingBudgets?: ThinkingBudgets;
 	#temperature?: number;
 	#maxRetryDelayMs?: number;
@@ -188,6 +194,7 @@ export class Agent {
 		this.#interruptMode = opts.interruptMode || "immediate";
 		this.streamFn = opts.streamFn || streamSimple;
 		this.#sessionId = opts.sessionId;
+		this.#providerSessionState = opts.providerSessionState;
 		this.#thinkingBudgets = opts.thinkingBudgets;
 		this.#temperature = opts.temperature;
 		this.#maxRetryDelayMs = opts.maxRetryDelayMs;
@@ -212,6 +219,20 @@ export class Agent {
 	 */
 	set sessionId(value: string | undefined) {
 		this.#sessionId = value;
+	}
+
+	/**
+	 * Get provider-scoped mutable session state store.
+	 */
+	get providerSessionState(): Map<string, ProviderSessionState> | undefined {
+		return this.#providerSessionState;
+	}
+
+	/**
+	 * Set provider-scoped mutable session state store.
+	 */
+	set providerSessionState(value: Map<string, ProviderSessionState> | undefined) {
+		this.#providerSessionState = value;
 	}
 
 	/**
@@ -593,6 +614,7 @@ export class Agent {
 			temperature: this.#temperature,
 			interruptMode: this.#interruptMode,
 			sessionId: this.#sessionId,
+			providerSessionState: this.#providerSessionState,
 			thinkingBudgets: this.#thinkingBudgets,
 			maxRetryDelayMs: this.#maxRetryDelayMs,
 			kimiApiFormat: this.#kimiApiFormat,
