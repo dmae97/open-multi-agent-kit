@@ -1,6 +1,8 @@
 /**
  * Shared utilities for Google Generative AI and Google Cloud Code Assist providers.
  */
+import Ajv2020 from "ajv/dist/2020.js";
+import type { AnySchema } from "ajv";
 import { type Content, FinishReason, FunctionCallingConfigMode, type Part } from "@google/genai";
 import type { Context, ImageContent, Model, StopReason, TextContent, Tool } from "../types";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode";
@@ -282,6 +284,12 @@ interface SanitizeSchemaOptions {
 	stripNullableKeyword: boolean;
 }
 
+type JsonObject = Record<string, unknown>;
+
+function isJsonObject(value: unknown): value is JsonObject {
+	return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
 function sanitizeSchemaImpl(value: unknown, options: SanitizeSchemaOptions): unknown {
 	if (Array.isArray(value)) {
 		return value.map(entry => sanitizeSchemaImpl(entry, options));
@@ -382,6 +390,112 @@ export function sanitizeSchemaForCloudCodeAssistClaude(value: unknown): unknown 
 }
 
 /**
+ * Claude via Cloud Code Assist (`parameters` path) can reject schemas that keep
+ * object variant combiners, so flatten object-only unions into one object shape.
+ */
+function mergeObjectCombinerVariants(schema: JsonObject, combiner: "anyOf" | "oneOf"): JsonObject {
+	const variantsRaw = schema[combiner];
+	if (!Array.isArray(variantsRaw) || variantsRaw.length === 0) {
+		return schema;
+	}
+
+	const variants: JsonObject[] = [];
+	for (const entry of variantsRaw) {
+		if (!isJsonObject(entry)) {
+			return schema;
+		}
+		const variantType = entry.type;
+		if (variantType !== undefined && variantType !== "object") {
+			return schema;
+		}
+		if (entry.properties !== undefined && !isJsonObject(entry.properties)) {
+			return schema;
+		}
+		variants.push(entry);
+	}
+
+	const mergedProperties: JsonObject = {};
+	for (const variant of variants) {
+		const properties = isJsonObject(variant.properties) ? variant.properties : {};
+		for (const [name, propertySchema] of Object.entries(properties)) {
+			if (!(name in mergedProperties)) {
+				mergedProperties[name] = propertySchema;
+			}
+		}
+	}
+
+	const nextSchema: JsonObject = {};
+	for (const [key, entry] of Object.entries(schema)) {
+		if (key === combiner || key === "required") continue;
+		nextSchema[key] = entry;
+	}
+
+	nextSchema.type = "object";
+	nextSchema.properties = mergedProperties;
+	return nextSchema;
+}
+
+function normalizeSchemaForCloudCodeAssistClaude(value: unknown): unknown {
+	if (Array.isArray(value)) {
+		return value.map(entry => normalizeSchemaForCloudCodeAssistClaude(entry));
+	}
+	if (!isJsonObject(value)) {
+		return value;
+	}
+
+	const normalized: JsonObject = {};
+	for (const [key, entry] of Object.entries(value)) {
+		normalized[key] = normalizeSchemaForCloudCodeAssistClaude(entry);
+	}
+
+	const mergedAnyOf = mergeObjectCombinerVariants(normalized, "anyOf");
+	return mergeObjectCombinerVariants(mergedAnyOf, "oneOf");
+}
+
+let cloudCodeAssistSchemaValidator: Ajv2020 | null = null;
+function getCloudCodeAssistSchemaValidator(): Ajv2020 {
+	if (cloudCodeAssistSchemaValidator) {
+		return cloudCodeAssistSchemaValidator;
+	}
+
+	cloudCodeAssistSchemaValidator = new Ajv2020({
+		allErrors: true,
+		strict: false,
+		validateSchema: true,
+	});
+	return cloudCodeAssistSchemaValidator;
+}
+
+/**
+ * Keep validation synchronous in this request path.
+ */
+function isValidCloudCodeAssistClaudeSchema(schema: unknown): boolean {
+	const result = getCloudCodeAssistSchemaValidator().validateSchema(schema as AnySchema);
+	return typeof result === "boolean" ? result : false;
+}
+
+const CLOUD_CODE_ASSIST_CLAUDE_FALLBACK_SCHEMA = {
+	type: "object",
+	properties: {},
+} as const;
+
+/**
+ * Prepare schema for Claude on Cloud Code Assist:
+ * sanitize -> normalize union objects -> validate -> fallback.
+ *
+ * Fallback is per-tool and fail-open to avoid rejecting the entire request when
+ * one tool schema is invalid.
+ */
+export function prepareSchemaForCloudCodeAssistClaude(value: unknown): unknown {
+	const sanitized = sanitizeSchemaForCloudCodeAssistClaude(value);
+	const normalized = normalizeSchemaForCloudCodeAssistClaude(sanitized);
+	if (isValidCloudCodeAssistClaudeSchema(normalized)) {
+		return normalized;
+	}
+	return CLOUD_CODE_ASSIST_CLAUDE_FALLBACK_SCHEMA;
+}
+
+/**
  * Convert tools to Gemini function declarations format.
  *
  * We prefer `parametersJsonSchema` (full JSON Schema: anyOf/oneOf/const/etc.).
@@ -396,8 +510,10 @@ export function convertTools(
 ): { functionDeclarations: Record<string, unknown>[] }[] | undefined {
 	if (tools.length === 0) return undefined;
 
-	// Claude models on Cloud Code Assist need the legacy `parameters` field;
-	// the API translates it into Anthropic's `input_schema`.
+	/**
+	 * Claude models on Cloud Code Assist need the legacy `parameters` field;
+	 * the API translates it into Anthropic's `input_schema`.
+	 */
 	const useParameters = model.id.startsWith("claude-");
 
 	return [
@@ -406,7 +522,7 @@ export function convertTools(
 				name: tool.name,
 				description: tool.description,
 				...(useParameters
-					? { parameters: sanitizeSchemaForCloudCodeAssistClaude(tool.parameters) }
+					? { parameters: prepareSchemaForCloudCodeAssistClaude(tool.parameters) }
 					: { parametersJsonSchema: tool.parameters }),
 			})),
 		},
