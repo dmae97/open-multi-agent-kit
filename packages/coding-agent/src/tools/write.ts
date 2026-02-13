@@ -5,7 +5,6 @@ import type {
 	AgentToolUpdateCallback,
 	ToolCallContext,
 } from "@oh-my-pi/pi-agent-core";
-import { invalidateFsScanCache } from "@oh-my-pi/pi-natives";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import { untilAborted } from "@oh-my-pi/pi-utils";
@@ -17,6 +16,7 @@ import { getLanguageFromPath, type Theme } from "../modes/theme/theme";
 import writeDescription from "../prompts/tools/write.md" with { type: "text" };
 import type { ToolSession } from "../sdk";
 import { Ellipsis, Hasher, type RenderCache, renderStatusLine, truncateToWidth } from "../tui";
+import { invalidateFsScanAfterWrite } from "./fs-cache-invalidation";
 import { type OutputMeta, outputMeta } from "./output-meta";
 import { enforcePlanModeWrite, resolvePlanPath } from "./plan-mode-guard";
 import {
@@ -103,7 +103,7 @@ export class WriteTool implements AgentTool<typeof writeSchema, WriteToolDetails
 			const batchRequest = getLspBatchRequest(context?.toolCall);
 
 			const diagnostics = await this.#writethrough(absolutePath, content, signal, undefined, batchRequest);
-			invalidateFsScanCache(absolutePath);
+			invalidateFsScanAfterWrite(absolutePath);
 
 			const resultText = `Successfully wrote ${content.length} bytes to ${path}`;
 			if (!diagnostics) {

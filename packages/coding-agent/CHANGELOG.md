@@ -1,8 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Filesystem scan cache invalidation helpers (`invalidateFsScanAfterWrite`, `invalidateFsScanAfterDelete`, `invalidateFsScanAfterRename`) to properly invalidate shared caches after file mutations
+- Named discovery profile for file mention candidates to standardize cache visibility and ignore semantics across callers
 - Comprehensive `models.yml` provider integration guide documenting custom model registration, provider overrides, API adapters, merge behavior, and practical integration patterns for Ollama, vLLM, LM Studio, and proxy endpoints
 - Claude Code marketplace plugin discovery: automatically loads skills, commands, hooks, tools, and agents from `~/.claude/plugins/cache/` based on `installed_plugins.json` registry ([#48](https://github.com/can1357/oh-my-pi/issues/48))
 

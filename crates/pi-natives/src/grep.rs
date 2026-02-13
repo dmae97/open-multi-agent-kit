@@ -8,7 +8,6 @@
 //! global offsets, optional match limits, and per-file match summaries.
 
 use std::{
-	borrow::Cow,
 	fs::File,
 	io::{self, Cursor, Read},
 	path::{Path, PathBuf},
@@ -20,7 +19,6 @@ use grep_regex::RegexMatcherBuilder;
 use grep_searcher::{
 	BinaryDetection, Searcher, SearcherBuilder, Sink, SinkContext, SinkContextKind, SinkMatch,
 };
-use ignore::WalkBuilder;
 use napi::{
 	JsString,
 	bindgen_prelude::*,
@@ -30,7 +28,7 @@ use napi_derive::napi;
 use rayon::prelude::*;
 use smallvec::SmallVec;
 
-use crate::task;
+use crate::{fs_cache, task};
 
 const MAX_FILE_BYTES: u64 = 4 * 1024 * 1024;
 
@@ -486,20 +484,6 @@ fn matches_type_filter(path: &Path, filter: &TypeFilter) -> bool {
 	filter.match_ext(ext)
 }
 
-fn normalize_relative_path<'a>(root: &Path, path: &'a Path) -> Cow<'a, str> {
-	let relative = path.strip_prefix(root).unwrap_or(path);
-	if cfg!(windows) {
-		let relative = relative.to_string_lossy();
-		if relative.contains('\\') {
-			Cow::Owned(relative.replace('\\', "/"))
-		} else {
-			relative
-		}
-	} else {
-		relative.to_string_lossy()
-	}
-}
-
 fn resolve_context(
 	context: Option<u32>,
 	context_before: Option<u32>,
@@ -639,45 +623,27 @@ struct GrepConfig {
 
 fn collect_files(
 	root: &Path,
+	scanned_entries: &[fs_cache::GlobMatch],
 	glob_set: Option<&GlobSet>,
-	include_hidden: bool,
 	type_filter: Option<&TypeFilter>,
 ) -> Vec<FileEntry> {
-	let mut builder = WalkBuilder::new(root);
-	builder
-		.hidden(!include_hidden)
-		.git_ignore(true)
-		.git_exclude(true)
-		.git_global(true)
-		.ignore(true)
-		.parents(true)
-		.follow_links(false)
-		.sort_by_file_path(|a, b| a.cmp(b));
-
 	let mut entries = Vec::new();
-	// Skip .git directories entirely
-	builder.filter_entry(|entry| entry.file_name().to_str() != Some(".git"));
-
-	for entry in builder.build() {
-		let Ok(entry) = entry else { continue };
-		let file_type = entry.file_type();
-		if !file_type.is_some_and(|ft| ft.is_file()) {
+	for entry in scanned_entries {
+		if entry.file_type != fs_cache::FileType::File {
 			continue;
 		}
-		let path = entry.into_path();
-		if let Some(glob_set) = glob_set {
-			let relative = path.strip_prefix(root).unwrap_or(&path);
-			if !glob_set.is_match(relative) {
-				continue;
-			}
+		if let Some(glob_set) = glob_set
+			&& !glob_set.is_match(Path::new(&entry.path))
+		{
+			continue;
 		}
+		let path = root.join(&entry.path);
 		if let Some(filter) = type_filter
 			&& !matches_type_filter(&path, filter)
 		{
 			continue;
 		}
-		let relative_path = normalize_relative_path(root, &path).into_owned();
-		entries.push(FileEntry { path, relative_path });
+		entries.push(FileEntry { path, relative_path: entry.path.clone() });
 	}
 	entries
 }
@@ -931,12 +897,15 @@ fn grep_sync(
 		});
 	}
 
-	let entries =
-		collect_files(&search_path, glob_set.as_ref(), include_hidden, type_filter.as_ref());
-
+	let scan = fs_cache::get_or_scan(&search_path, include_hidden, true, &ct)?;
+	let mut entries =
+		collect_files(&search_path, &scan.entries, glob_set.as_ref(), type_filter.as_ref());
+	if entries.is_empty() && scan.cache_age_ms >= fs_cache::empty_recheck_ms() {
+		let fresh = fs_cache::force_rescan(&search_path, include_hidden, true, &ct)?;
+		entries = collect_files(&search_path, &fresh, glob_set.as_ref(), type_filter.as_ref());
+	}
 	// Check cancellation before heavy work
 	ct.heartbeat()?;
-
 	if entries.is_empty() {
 		return Ok(GrepResult {
 			matches:            Vec::new(),

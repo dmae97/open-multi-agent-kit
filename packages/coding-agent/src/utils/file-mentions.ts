@@ -28,6 +28,22 @@ const MIN_FUZZY_QUERY_LENGTH = 5;
 const MAX_RESOLUTION_CANDIDATES = 20_000;
 const PATH_SEPARATOR_REGEX = /[/._\-\s]+/g;
 
+type MentionDiscoveryProfile = {
+	hidden: boolean;
+	gitignore: boolean;
+	includeNodeModules: boolean;
+	maxResults: number;
+};
+
+function getMentionCandidateDiscoveryProfile(): MentionDiscoveryProfile {
+	return {
+		hidden: true,
+		gitignore: true,
+		includeNodeModules: true,
+		maxResults: MAX_RESOLUTION_CANDIDATES,
+	};
+}
+
 // Avoid OOM when users @mention very large files. Above these limits we skip
 // auto-reading and only include the path in the message.
 const MAX_AUTO_READ_TEXT_BYTES = 5 * 1024 * 1024; // 5MB
@@ -68,13 +84,11 @@ async function pathExists(filePath: string): Promise<boolean> {
 async function listMentionCandidates(cwd: string): Promise<MentionCandidate[]> {
 	let entries: string[];
 	try {
+		const discoveryProfile = getMentionCandidateDiscoveryProfile();
 		const result = await glob({
 			pattern: "**/*",
 			path: cwd,
-			hidden: true,
-			gitignore: true,
-			includeNodeModules: true,
-			maxResults: MAX_RESOLUTION_CANDIDATES,
+			...discoveryProfile,
 		});
 		entries = result.matches.map(match => match.path);
 	} catch {
