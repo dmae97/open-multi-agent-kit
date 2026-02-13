@@ -23,8 +23,8 @@ import { DynamicBorder } from "../../modes/components/dynamic-border";
 import { PythonExecutionComponent } from "../../modes/components/python-execution";
 import { getMarkdownTheme, getSymbolTheme, theme } from "../../modes/theme/theme";
 import type { InteractiveModeContext } from "../../modes/types";
-import { createCompactionSummaryMessage } from "../../session/messages";
 import type { AuthStorage } from "../../session/auth-storage";
+import { createCompactionSummaryMessage } from "../../session/messages";
 import { outputMeta } from "../../tools/output-meta";
 import { resolveToCwd } from "../../tools/path-utils";
 import { getChangelogPath, parseChangelog } from "../../utils/changelog";
@@ -220,11 +220,14 @@ export class CommandController {
 			info += `${theme.fg("dim", "No model selected")}\n`;
 		} else {
 			const authMode = resolveProviderAuthMode(this.ctx.session.modelRegistry.authStorage, model.provider);
+			const openaiWebsocketSetting = this.ctx.settings.get("providers.openaiWebsockets") ?? "auto";
+			const preferOpenAICodexWebsockets =
+				openaiWebsocketSetting === "on" ? true : openaiWebsocketSetting === "off" ? false : undefined;
 			const providerDetails = getProviderDetails({
 				model,
 				sessionId: stats.sessionId,
 				authMode,
-				preferWebsockets: this.ctx.settings.get("providers.openaiWebsockets") ?? false,
+				preferWebsockets: preferOpenAICodexWebsockets,
 				providerSessionState: this.ctx.session.providerSessionState,
 			});
 			info += renderProviderSection(providerDetails, theme);

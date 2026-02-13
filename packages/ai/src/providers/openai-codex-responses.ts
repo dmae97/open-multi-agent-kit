@@ -177,6 +177,17 @@ function createCodexWebSocketTransportError(message: string): Error {
 	return new Error(`${CODEX_WEBSOCKET_TRANSPORT_ERROR_PREFIX}: ${message}`);
 }
 
+function isCodexWebSocketTransportError(error: unknown): boolean {
+	if (!(error instanceof Error)) return false;
+	return error.message.startsWith(CODEX_WEBSOCKET_TRANSPORT_ERROR_PREFIX);
+}
+
+function isCodexWebSocketRetryableStreamError(error: unknown): boolean {
+	if (!(error instanceof Error) || !isCodexWebSocketTransportError(error)) return false;
+	const message = error.message.toLowerCase();
+	return message.includes("websocket closed (") || message.includes("websocket closed before response completion");
+}
+
 function toCodexHeaderRecord(value: unknown): Record<string, string> | null {
 	if (!value || typeof value !== "object") return null;
 	const headers: Record<string, string> = {};
@@ -455,217 +466,294 @@ export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"
 			let currentBlock: ThinkingContent | TextContent | (ToolCall & { partialJson: string }) | null = null;
 			const blocks = output.content;
 			const blockIndex = () => blocks.length - 1;
-			for await (const rawEvent of eventStream) {
-				const eventType = typeof rawEvent.type === "string" ? rawEvent.type : "";
-				if (!eventType) continue;
+			let websocketStreamRetries = 0;
+			while (true) {
+				try {
+					for await (const rawEvent of eventStream) {
+						const eventType = typeof rawEvent.type === "string" ? rawEvent.type : "";
+						if (!eventType) continue;
 
-				if (eventType === "response.output_item.added") {
-					if (!firstTokenTime) firstTokenTime = Date.now();
-					const item = rawEvent.item as ResponseReasoningItem | ResponseOutputMessage | ResponseFunctionToolCall;
-					if (item.type === "reasoning") {
-						currentItem = item;
-						currentBlock = { type: "thinking", thinking: "" };
-						output.content.push(currentBlock);
-						stream.push({ type: "thinking_start", contentIndex: blockIndex(), partial: output });
-					} else if (item.type === "message") {
-						currentItem = item;
-						currentBlock = { type: "text", text: "" };
-						output.content.push(currentBlock);
-						stream.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
-					} else if (item.type === "function_call") {
-						currentItem = item;
-						currentBlock = {
-							type: "toolCall",
-							id: `${item.call_id}|${item.id}`,
-							name: item.name,
-							arguments: {},
-							partialJson: item.arguments || "",
-						};
-						output.content.push(currentBlock);
-						stream.push({ type: "toolcall_start", contentIndex: blockIndex(), partial: output });
-					}
-				} else if (eventType === "response.reasoning_summary_part.added") {
-					if (currentItem && currentItem.type === "reasoning") {
-						currentItem.summary = currentItem.summary || [];
-						currentItem.summary.push((rawEvent as { part: ResponseReasoningItem["summary"][number] }).part);
-					}
-				} else if (eventType === "response.reasoning_summary_text.delta") {
-					if (currentItem && currentItem.type === "reasoning" && currentBlock?.type === "thinking") {
-						currentItem.summary = currentItem.summary || [];
-						const lastPart = currentItem.summary[currentItem.summary.length - 1];
-						if (lastPart) {
-							const delta = (rawEvent as { delta?: string }).delta || "";
-							currentBlock.thinking += delta;
-							lastPart.text += delta;
-							stream.push({
-								type: "thinking_delta",
-								contentIndex: blockIndex(),
-								delta,
-								partial: output,
-							});
-						}
-					}
-				} else if (eventType === "response.reasoning_summary_part.done") {
-					if (currentItem && currentItem.type === "reasoning" && currentBlock?.type === "thinking") {
-						currentItem.summary = currentItem.summary || [];
-						const lastPart = currentItem.summary[currentItem.summary.length - 1];
-						if (lastPart) {
-							currentBlock.thinking += "\n\n";
-							lastPart.text += "\n\n";
-							stream.push({
-								type: "thinking_delta",
-								contentIndex: blockIndex(),
-								delta: "\n\n",
-								partial: output,
-							});
-						}
-					}
-				} else if (eventType === "response.content_part.added") {
-					if (currentItem && currentItem.type === "message") {
-						currentItem.content = currentItem.content || [];
-						const part = (rawEvent as { part?: ResponseOutputMessage["content"][number] }).part;
-						if (part && (part.type === "output_text" || part.type === "refusal")) {
-							currentItem.content.push(part);
-						}
-					}
-				} else if (eventType === "response.output_text.delta") {
-					if (currentItem && currentItem.type === "message" && currentBlock?.type === "text") {
-						if (!currentItem.content || currentItem.content.length === 0) {
-							continue;
-						}
-						const lastPart = currentItem.content[currentItem.content.length - 1];
-						if (lastPart && lastPart.type === "output_text") {
-							const delta = (rawEvent as { delta?: string }).delta || "";
-							currentBlock.text += delta;
-							lastPart.text += delta;
-							stream.push({
-								type: "text_delta",
-								contentIndex: blockIndex(),
-								delta,
-								partial: output,
-							});
-						}
-					}
-				} else if (eventType === "response.refusal.delta") {
-					if (currentItem && currentItem.type === "message" && currentBlock?.type === "text") {
-						if (!currentItem.content || currentItem.content.length === 0) {
-							continue;
-						}
-						const lastPart = currentItem.content[currentItem.content.length - 1];
-						if (lastPart && lastPart.type === "refusal") {
-							const delta = (rawEvent as { delta?: string }).delta || "";
-							currentBlock.text += delta;
-							lastPart.refusal += delta;
-							stream.push({
-								type: "text_delta",
-								contentIndex: blockIndex(),
-								delta,
-								partial: output,
-							});
-						}
-					}
-				} else if (eventType === "response.function_call_arguments.delta") {
-					if (currentItem && currentItem.type === "function_call" && currentBlock?.type === "toolCall") {
-						const delta = (rawEvent as { delta?: string }).delta || "";
-						currentBlock.partialJson += delta;
-						currentBlock.arguments = parseStreamingJson(currentBlock.partialJson);
-						stream.push({
-							type: "toolcall_delta",
-							contentIndex: blockIndex(),
-							delta,
-							partial: output,
-						});
-					}
-				} else if (eventType === "response.function_call_arguments.done") {
-					if (currentItem?.type === "function_call" && currentBlock?.type === "toolCall") {
-						const args = (rawEvent as { arguments?: string }).arguments;
-						if (typeof args === "string") {
-							currentBlock.partialJson = args;
-							currentBlock.arguments = parseStreamingJson(currentBlock.partialJson);
-						}
-					}
-				} else if (eventType === "response.output_item.done") {
-					const item = rawEvent.item as ResponseReasoningItem | ResponseOutputMessage | ResponseFunctionToolCall;
-					if (item.type === "reasoning" && currentBlock?.type === "thinking") {
-						currentBlock.thinking = item.summary?.map(s => s.text).join("\n\n") || "";
-						currentBlock.thinkingSignature = JSON.stringify(item);
-						stream.push({
-							type: "thinking_end",
-							contentIndex: blockIndex(),
-							content: currentBlock.thinking,
-							partial: output,
-						});
-						currentBlock = null;
-					} else if (item.type === "message" && currentBlock?.type === "text") {
-						currentBlock.text = item.content.map(c => (c.type === "output_text" ? c.text : c.refusal)).join("");
-						currentBlock.textSignature = item.id;
-						stream.push({
-							type: "text_end",
-							contentIndex: blockIndex(),
-							content: currentBlock.text,
-							partial: output,
-						});
-						currentBlock = null;
-					} else if (item.type === "function_call") {
-						const toolCall: ToolCall = {
-							type: "toolCall",
-							id: `${item.call_id}|${item.id}`,
-							name: item.name,
-							arguments: JSON.parse(item.arguments),
-						};
-						stream.push({ type: "toolcall_end", contentIndex: blockIndex(), toolCall, partial: output });
-					}
-				} else if (eventType === "response.created") {
-					if (usingWebsocket && websocketState) {
-						const createdResponse = (rawEvent as { response?: { id?: string } }).response;
-						if (typeof createdResponse?.id === "string" && createdResponse.id.length > 0) {
-							websocketState.lastResponseId = createdResponse.id;
-						}
-					}
-				} else if (eventType === "response.completed" || eventType === "response.done") {
-					const response = (
-						rawEvent as {
-							response?: {
-								id?: string;
-								usage?: {
-									input_tokens?: number;
-									output_tokens?: number;
-									total_tokens?: number;
-									input_tokens_details?: { cached_tokens?: number };
+						if (eventType === "response.output_item.added") {
+							if (!firstTokenTime) firstTokenTime = Date.now();
+							const item = rawEvent.item as
+								| ResponseReasoningItem
+								| ResponseOutputMessage
+								| ResponseFunctionToolCall;
+							if (item.type === "reasoning") {
+								currentItem = item;
+								currentBlock = { type: "thinking", thinking: "" };
+								output.content.push(currentBlock);
+								stream.push({ type: "thinking_start", contentIndex: blockIndex(), partial: output });
+							} else if (item.type === "message") {
+								currentItem = item;
+								currentBlock = { type: "text", text: "" };
+								output.content.push(currentBlock);
+								stream.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
+							} else if (item.type === "function_call") {
+								currentItem = item;
+								currentBlock = {
+									type: "toolCall",
+									id: `${item.call_id}|${item.id}`,
+									name: item.name,
+									arguments: {},
+									partialJson: item.arguments || "",
 								};
-								status?: string;
-							};
+								output.content.push(currentBlock);
+								stream.push({ type: "toolcall_start", contentIndex: blockIndex(), partial: output });
+							}
+						} else if (eventType === "response.reasoning_summary_part.added") {
+							if (currentItem && currentItem.type === "reasoning") {
+								currentItem.summary = currentItem.summary || [];
+								currentItem.summary.push((rawEvent as { part: ResponseReasoningItem["summary"][number] }).part);
+							}
+						} else if (eventType === "response.reasoning_summary_text.delta") {
+							if (currentItem && currentItem.type === "reasoning" && currentBlock?.type === "thinking") {
+								currentItem.summary = currentItem.summary || [];
+								const lastPart = currentItem.summary[currentItem.summary.length - 1];
+								if (lastPart) {
+									const delta = (rawEvent as { delta?: string }).delta || "";
+									currentBlock.thinking += delta;
+									lastPart.text += delta;
+									stream.push({
+										type: "thinking_delta",
+										contentIndex: blockIndex(),
+										delta,
+										partial: output,
+									});
+								}
+							}
+						} else if (eventType === "response.reasoning_summary_part.done") {
+							if (currentItem && currentItem.type === "reasoning" && currentBlock?.type === "thinking") {
+								currentItem.summary = currentItem.summary || [];
+								const lastPart = currentItem.summary[currentItem.summary.length - 1];
+								if (lastPart) {
+									currentBlock.thinking += "\n\n";
+									lastPart.text += "\n\n";
+									stream.push({
+										type: "thinking_delta",
+										contentIndex: blockIndex(),
+										delta: "\n\n",
+										partial: output,
+									});
+								}
+							}
+						} else if (eventType === "response.content_part.added") {
+							if (currentItem && currentItem.type === "message") {
+								currentItem.content = currentItem.content || [];
+								const part = (rawEvent as { part?: ResponseOutputMessage["content"][number] }).part;
+								if (part && (part.type === "output_text" || part.type === "refusal")) {
+									currentItem.content.push(part);
+								}
+							}
+						} else if (eventType === "response.output_text.delta") {
+							if (currentItem && currentItem.type === "message" && currentBlock?.type === "text") {
+								if (!currentItem.content || currentItem.content.length === 0) {
+									continue;
+								}
+								const lastPart = currentItem.content[currentItem.content.length - 1];
+								if (lastPart && lastPart.type === "output_text") {
+									const delta = (rawEvent as { delta?: string }).delta || "";
+									currentBlock.text += delta;
+									lastPart.text += delta;
+									stream.push({
+										type: "text_delta",
+										contentIndex: blockIndex(),
+										delta,
+										partial: output,
+									});
+								}
+							}
+						} else if (eventType === "response.refusal.delta") {
+							if (currentItem && currentItem.type === "message" && currentBlock?.type === "text") {
+								if (!currentItem.content || currentItem.content.length === 0) {
+									continue;
+								}
+								const lastPart = currentItem.content[currentItem.content.length - 1];
+								if (lastPart && lastPart.type === "refusal") {
+									const delta = (rawEvent as { delta?: string }).delta || "";
+									currentBlock.text += delta;
+									lastPart.refusal += delta;
+									stream.push({
+										type: "text_delta",
+										contentIndex: blockIndex(),
+										delta,
+										partial: output,
+									});
+								}
+							}
+						} else if (eventType === "response.function_call_arguments.delta") {
+							if (currentItem && currentItem.type === "function_call" && currentBlock?.type === "toolCall") {
+								const delta = (rawEvent as { delta?: string }).delta || "";
+								currentBlock.partialJson += delta;
+								currentBlock.arguments = parseStreamingJson(currentBlock.partialJson);
+								stream.push({
+									type: "toolcall_delta",
+									contentIndex: blockIndex(),
+									delta,
+									partial: output,
+								});
+							}
+						} else if (eventType === "response.function_call_arguments.done") {
+							if (currentItem?.type === "function_call" && currentBlock?.type === "toolCall") {
+								const args = (rawEvent as { arguments?: string }).arguments;
+								if (typeof args === "string") {
+									currentBlock.partialJson = args;
+									currentBlock.arguments = parseStreamingJson(currentBlock.partialJson);
+								}
+							}
+						} else if (eventType === "response.output_item.done") {
+							const item = rawEvent.item as
+								| ResponseReasoningItem
+								| ResponseOutputMessage
+								| ResponseFunctionToolCall;
+							if (item.type === "reasoning" && currentBlock?.type === "thinking") {
+								currentBlock.thinking = item.summary?.map(s => s.text).join("\n\n") || "";
+								currentBlock.thinkingSignature = JSON.stringify(item);
+								stream.push({
+									type: "thinking_end",
+									contentIndex: blockIndex(),
+									content: currentBlock.thinking,
+									partial: output,
+								});
+								currentBlock = null;
+							} else if (item.type === "message" && currentBlock?.type === "text") {
+								currentBlock.text = item.content
+									.map(c => (c.type === "output_text" ? c.text : c.refusal))
+									.join("");
+								currentBlock.textSignature = item.id;
+								stream.push({
+									type: "text_end",
+									contentIndex: blockIndex(),
+									content: currentBlock.text,
+									partial: output,
+								});
+								currentBlock = null;
+							} else if (item.type === "function_call") {
+								const toolCall: ToolCall = {
+									type: "toolCall",
+									id: `${item.call_id}|${item.id}`,
+									name: item.name,
+									arguments: JSON.parse(item.arguments),
+								};
+								stream.push({ type: "toolcall_end", contentIndex: blockIndex(), toolCall, partial: output });
+							}
+						} else if (eventType === "response.created") {
+							if (usingWebsocket && websocketState) {
+								const createdResponse = (rawEvent as { response?: { id?: string } }).response;
+								if (typeof createdResponse?.id === "string" && createdResponse.id.length > 0) {
+									websocketState.lastResponseId = createdResponse.id;
+								}
+							}
+						} else if (eventType === "response.completed" || eventType === "response.done") {
+							const response = (
+								rawEvent as {
+									response?: {
+										id?: string;
+										usage?: {
+											input_tokens?: number;
+											output_tokens?: number;
+											total_tokens?: number;
+											input_tokens_details?: { cached_tokens?: number };
+										};
+										status?: string;
+									};
+								}
+							).response;
+							if (response?.usage) {
+								const cachedTokens = response.usage.input_tokens_details?.cached_tokens || 0;
+								output.usage = {
+									input: (response.usage.input_tokens || 0) - cachedTokens,
+									output: response.usage.output_tokens || 0,
+									cacheRead: cachedTokens,
+									cacheWrite: 0,
+									totalTokens: response.usage.total_tokens || 0,
+									cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+								};
+							}
+							if (usingWebsocket && websocketState) {
+								websocketState.lastRequest = cloneRequestBody(requestBodyForState);
+								if (typeof response?.id === "string" && response.id.length > 0) {
+									websocketState.lastResponseId = response.id;
+								}
+								websocketState.canAppend = eventType === "response.done";
+							}
+							calculateCost(model, output.usage);
+							output.stopReason = mapStopReason(response?.status);
+							if (output.content.some(b => b.type === "toolCall") && output.stopReason === "stop") {
+								output.stopReason = "toolUse";
+							}
+						} else if (eventType === "error") {
+							const code = (rawEvent as { code?: string }).code || "";
+							const message = (rawEvent as { message?: string }).message || "";
+							throw new Error(formatCodexErrorEvent(rawEvent, code, message));
+						} else if (eventType === "response.failed") {
+							throw new Error(formatCodexFailure(rawEvent) ?? "Codex response failed");
 						}
-					).response;
-					if (response?.usage) {
-						const cachedTokens = response.usage.input_tokens_details?.cached_tokens || 0;
-						output.usage = {
-							input: (response.usage.input_tokens || 0) - cachedTokens,
-							output: response.usage.output_tokens || 0,
-							cacheRead: cachedTokens,
-							cacheWrite: 0,
-							totalTokens: response.usage.total_tokens || 0,
-							cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-						};
 					}
-					if (usingWebsocket && websocketState) {
-						websocketState.lastRequest = cloneRequestBody(requestBodyForState);
-						if (typeof response?.id === "string" && response.id.length > 0) {
-							websocketState.lastResponseId = response.id;
+
+					break;
+				} catch (error) {
+					if (
+						usingWebsocket &&
+						websocketState &&
+						isCodexWebSocketRetryableStreamError(error) &&
+						output.content.length === 0 &&
+						!options?.signal?.aborted
+					) {
+						const activateFallback = websocketStreamRetries >= getCodexWebSocketRetryBudget();
+						recordCodexWebSocketFailure(websocketState, activateFallback);
+						logCodexDebug("codex websocket stream fallback", {
+							error: error instanceof Error ? error.message : String(error),
+							retry: websocketStreamRetries,
+							retryBudget: getCodexWebSocketRetryBudget(),
+							activated: activateFallback,
+						});
+						if (!activateFallback) {
+							websocketStreamRetries += 1;
+							await abortableSleep(getCodexWebSocketRetryDelayMs(websocketStreamRetries), options?.signal);
+							const websocketV2Enabled = isCodexWebSocketV2Enabled();
+							const websocketHeaders = createCodexHeaders(
+								requestHeaders,
+								accountId,
+								apiKey,
+								options?.sessionId,
+								"websocket",
+								websocketState,
+								websocketV2Enabled,
+							);
+							const websocketRequest = buildCodexWebSocketRequest(
+								transformedBody,
+								websocketState,
+								websocketV2Enabled,
+							);
+							requestBodyForState = cloneRequestBody(transformedBody);
+							eventStream = await openCodexWebSocketEventStream(
+								toWebSocketUrl(url),
+								websocketHeaders,
+								websocketRequest,
+								websocketState,
+								options?.signal,
+							);
+							usingWebsocket = true;
+							websocketState.lastTransport = "websocket";
+							continue;
 						}
-						websocketState.canAppend = eventType === "response.done";
+						eventStream = await openCodexSseEventStream(
+							url,
+							requestHeaders,
+							accountId,
+							apiKey,
+							options?.sessionId,
+							transformedBody,
+							websocketState,
+							options?.signal,
+						);
+						usingWebsocket = false;
+						websocketState.lastTransport = "sse";
+						requestBodyForState = cloneRequestBody(transformedBody);
+						continue;
 					}
-					calculateCost(model, output.usage);
-					output.stopReason = mapStopReason(response?.status);
-					if (output.content.some(b => b.type === "toolCall") && output.stopReason === "stop") {
-						output.stopReason = "toolUse";
-					}
-				} else if (eventType === "error") {
-					const code = (rawEvent as { code?: string }).code || "";
-					const message = (rawEvent as { message?: string }).message || "";
-					throw new Error(formatCodexErrorEvent(rawEvent, code, message));
-				} else if (eventType === "response.failed") {
-					throw new Error(formatCodexFailure(rawEvent) ?? "Codex response failed");
+					throw error;
 				}
 			}
 
@@ -795,6 +883,7 @@ function shouldUseCodexWebSocket(
 	preferWebsockets?: boolean,
 ): boolean {
 	if (!state || state.disableWebsocket) return false;
+	if (preferWebsockets === false) return false;
 	return isCodexWebSocketEnvEnabled() || preferWebsockets === true || model.preferWebsockets === true;
 }
 
@@ -821,7 +910,9 @@ export function getOpenAICodexTransportDetails(
 ): OpenAICodexTransportDetails {
 	const baseUrl = options?.baseUrl || model.baseUrl || CODEX_BASE_URL;
 	const websocketPreferred =
-		isCodexWebSocketEnvEnabled() || options?.preferWebsockets === true || model.preferWebsockets === true;
+		options?.preferWebsockets === false
+			? false
+			: isCodexWebSocketEnvEnabled() || options?.preferWebsockets === true || model.preferWebsockets === true;
 	const providerSessionState = getCodexProviderSessionState(options?.providerSessionState);
 	const publicSessionKey = getCodexPublicSessionKey(options?.sessionId, model, baseUrl);
 	const privateSessionKey = publicSessionKey

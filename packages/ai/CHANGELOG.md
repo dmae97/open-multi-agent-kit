@@ -1,8 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added automatic retry logic for WebSocket stream closures before response completion, with configurable retry budget to improve reliability on flaky connections
 - Added `providerSessionState` option to enable provider-scoped mutable state persistence across agent turns
 - Added WebSocket retry logic with configurable retry budget and delay via `PI_CODEX_WEBSOCKET_RETRY_BUDGET` and `PI_CODEX_WEBSOCKET_RETRY_DELAY_MS` environment variables
 - Added WebSocket idle timeout detection via `PI_CODEX_WEBSOCKET_IDLE_TIMEOUT_MS` environment variable to fail stalled connections
@@ -33,10 +35,12 @@
 
 ### Fixed
 
+- Fixed WebSocket stream retry logic to properly handle mid-stream connection closures and retry before falling back to SSE transport
+- Fixed `preferWebsockets` option handling to correctly respect explicit `false` values when determining transport preference
 - Fixed WebSocket append state not being reset after aborted requests, preventing stale state from affecting subsequent turns
 - Fixed WebSocket append state not being reset after stream errors, preventing failed append attempts from blocking future requests
-
 - Fixed Codex model context window metadata to use 272000 input tokens (instead of 400000 total budget) for non-Spark Codex variants
+
 ## [12.0.0] - 2026-02-12
 
 ### Added

@@ -2,7 +2,6 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getProjectDir } from "@oh-my-pi/pi-utils/dirs";
 import { FileType, fuzzyFind, type GlobMatch, glob, grep, htmlToMarkdown, invalidateFsScanCache } from "../src/index";
 
 let testDir: string;
@@ -136,7 +135,7 @@ describe("pi-natives", () => {
 			const newFile = path.join(testDir, "newly-added.ts");
 			await fs.writeFile(newFile, "export const newer = true;\n");
 
-			const relativePath = path.relative(getProjectDir(), newFile);
+			const relativePath = path.relative(process.cwd(), newFile);
 			invalidateFsScanCache(relativePath);
 
 			const result = await glob({ pattern: "newly-added.ts", path: testDir, cache: true });

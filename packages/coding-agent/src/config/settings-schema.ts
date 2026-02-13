@@ -593,12 +593,14 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 	"providers.openaiWebsockets": {
-		type: "boolean",
-		default: false,
+		type: "enum",
+		values: ["auto", "off", "on"] as const,
+		default: "auto",
 		ui: {
 			tab: "services",
 			label: "OpenAI websockets",
-			description: "Prefer websocket transport for OpenAI Codex models",
+			description: "Websocket policy for OpenAI Codex models (auto uses model defaults, on forces, off disables)",
+			submenu: true,
 		},
 	},
 

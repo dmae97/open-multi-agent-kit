@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added `providerSessionState` property to AgentSession for managing provider-scoped transport and session caches
@@ -13,6 +14,7 @@
 
 ### Changed
 
+- Changed `providers.openaiWebsockets` setting from boolean to enum with values "auto", "off", "on" for more granular websocket policy control (auto uses model defaults, on forces websocket, off disables it)
 - Enhanced provider details display to include live provider session state information
 - Enhanced session info output to display active provider configuration and authentication details
 - Replaced `process.cwd()` with `getProjectDir()` throughout codebase for improved project directory detection and handling

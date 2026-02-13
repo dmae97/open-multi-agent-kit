@@ -1017,6 +1017,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		.map(name => toolRegistry.get(name))
 		.filter((tool): tool is AgentTool => tool !== undefined);
 
+	const openaiWebsocketSetting = settings.get("providers.openaiWebsockets") ?? "auto";
+	const preferOpenAICodexWebsockets =
+		openaiWebsocketSetting === "on" ? true : openaiWebsocketSetting === "off" ? false : undefined;
+
 	agent = new Agent({
 		initialState: {
 			systemPrompt,
@@ -1037,7 +1041,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		thinkingBudgets: settings.getGroup("thinkingBudgets"),
 		temperature: settings.get("temperature") >= 0 ? settings.get("temperature") : undefined,
 		kimiApiFormat: settings.get("providers.kimiApiFormat") ?? "anthropic",
-		preferWebsockets: settings.get("providers.openaiWebsockets") ?? false,
+		preferWebsockets: preferOpenAICodexWebsockets,
 		getToolContext: tc => toolContextStore.getContext(tc),
 		getApiKey: async provider => {
 			// Use the provider argument from the in-flight request;
@@ -1095,7 +1099,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			await prewarmOpenAICodexResponses(model, {
 				apiKey: await modelRegistry.getApiKey(model, sessionId),
 				sessionId,
-				preferWebsockets: settings.get("providers.openaiWebsockets") ?? false,
+				preferWebsockets: preferOpenAICodexWebsockets,
 				providerSessionState: session.providerSessionState,
 			});
 			debugStartup("sdk:prewarmCodexWebsocket:done");
