@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [12.2.0] - 2026-02-13
+
 ### Added
 
 - Added `providerSessionState` property to AgentSession for managing provider-scoped transport and session caches

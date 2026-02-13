@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [12.2.0] - 2026-02-13
+
 ### Added
 
 - Added automatic retry logic for WebSocket stream closures before response completion, with configurable retry budget to improve reliability on flaky connections

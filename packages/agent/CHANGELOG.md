@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [12.2.0] - 2026-02-13
+
 ### Added
 
 - Added `providerSessionState` option to share provider state map for session-scoped transport and session caches
