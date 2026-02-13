@@ -28,9 +28,9 @@ export const defaultModelPerProvider: Record<KnownProvider, string> = {
 	cerebras: "zai-glm-4.6",
 	zai: "glm-4.6",
 	mistral: "devstral-medium-latest",
-	minimax: "MiniMax-M2.1",
-	"minimax-code": "MiniMax-M2.1",
-	"minimax-code-cn": "MiniMax-M2.1",
+	minimax: "MiniMax-M2.5",
+	"minimax-code": "MiniMax-M2.5",
+	"minimax-code-cn": "MiniMax-M2.5",
 	opencode: "claude-opus-4-6",
 	"kimi-code": "kimi-k2.5",
 };
