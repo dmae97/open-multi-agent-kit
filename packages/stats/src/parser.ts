@@ -72,12 +72,16 @@ export async function parseSessionFile(
 	for (const line of lines) {
 		const lineLength = line.length + 1; // +1 for newline
 		if (line.trim()) {
-			const entry = JSON.parse(line) as SessionEntry;
-			if (currentOffset >= fromOffset && entry && isAssistantMessage(entry)) {
-				const msgStats = extractStats(sessionPath, folder, entry);
-				if (msgStats) {
-					stats.push(msgStats);
+			try {
+				const entry = JSON.parse(line) as SessionEntry;
+				if (currentOffset >= fromOffset && entry && isAssistantMessage(entry)) {
+					const msgStats = extractStats(sessionPath, folder, entry);
+					if (msgStats) {
+						stats.push(msgStats);
+					}
 				}
+			} catch {
+				// Skip malformed JSONL lines
 			}
 		}
 		currentOffset += lineLength;
