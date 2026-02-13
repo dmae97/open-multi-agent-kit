@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [12.1.0] - 2026-02-13
 ### Added
 
 - Added `cache` option to `glob()`, `grep()`, and `fuzzyFind()` to enable shared filesystem scan caching

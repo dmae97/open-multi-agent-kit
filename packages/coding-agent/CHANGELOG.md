@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [12.1.0] - 2026-02-13
+
 ### Added
 
 - Filesystem scan cache invalidation helpers (`invalidateFsScanAfterWrite`, `invalidateFsScanAfterDelete`, `invalidateFsScanAfterRename`) to properly invalidate shared caches after file mutations
