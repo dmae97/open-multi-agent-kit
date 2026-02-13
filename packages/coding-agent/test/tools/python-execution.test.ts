@@ -9,7 +9,7 @@ function createSession(cwd: string): ToolSession {
 	return {
 		cwd,
 		hasUI: false,
-		getSessionFile: () => "session-file",
+		getSessionFile: () => `${cwd}/session-file.jsonl`,
 		getSessionSpawns: () => "*",
 		settings: Settings.isolated({
 			"lsp.formatOnWrite": true,
@@ -50,7 +50,7 @@ describe("python tool execution", () => {
 			expect.objectContaining({
 				cwd: tempDir.path(),
 				timeoutMs: 5000,
-				sessionId: `session:session-file:cwd:${tempDir.path()}`,
+				sessionId: `session:${tempDir.path()}/session-file.jsonl:cwd:${tempDir.path()}`,
 				kernelMode: "per-call",
 				reset: true,
 			}),
