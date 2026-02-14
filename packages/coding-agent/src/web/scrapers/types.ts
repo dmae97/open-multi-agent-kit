@@ -92,6 +92,7 @@ export async function loadPage(url: string, options: LoadPageOptions = {}): Prom
 					"User-Agent": userAgent,
 					Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 					"Accept-Language": "en-US,en;q=0.5",
+					"Accept-Encoding": "identity", // Cloudflare Markdown-for-Agents returns corrupted bytes when compression is negotiated
 					...headers,
 				},
 				redirect: "follow",

@@ -241,7 +241,7 @@ async function tryContentNegotiation(
 	if (!result.ok) return null;
 
 	const mime = normalizeMime(result.contentType);
-	if (mime.includes("markdown") || mime === "text/plain") {
+	if ((mime.includes("markdown") || mime === "text/plain") && !looksLikeHtml(result.content)) {
 		return { content: result.content, type: result.contentType };
 	}
 

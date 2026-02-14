@@ -21,6 +21,7 @@ export interface TruncationMeta {
 	totalBytes: number;
 	outputLines: number;
 	outputBytes: number;
+	maxBytes?: number;
 	/** Line range shown (1-indexed, inclusive) */
 	shownRange?: { start: number; end: number };
 	/** Artifact ID if full output was saved */
@@ -128,6 +129,7 @@ export class OutputMetaBuilder {
 			totalBytes: result.totalBytes,
 			outputLines: result.outputLines,
 			outputBytes: result.outputBytes,
+			maxBytes: result.maxBytes,
 			shownRange: { start: shownStart, end: shownEnd },
 			artifactId,
 			nextOffset: direction === "head" ? shownEnd + 1 : undefined,
@@ -212,6 +214,7 @@ export class OutputMetaBuilder {
 			totalBytes,
 			outputLines,
 			outputBytes,
+			maxBytes: options.maxBytes,
 			shownRange: { start: shownStart, end: shownEnd },
 			nextOffset: options.direction === "head" ? shownEnd + 1 : undefined,
 		};
@@ -319,14 +322,15 @@ export function formatOutputNotice(meta: OutputMeta | undefined): string {
 		const range = t.shownRange;
 		let notice: string;
 
-		if (range) {
+		if (range && range.end >= range.start) {
 			notice = `Showing lines ${range.start}-${range.end} of ${t.totalLines}`;
 		} else {
 			notice = `Showing ${t.outputLines} of ${t.totalLines} lines`;
 		}
 
 		if (t.truncatedBy === "bytes") {
-			notice += ` (${formatSize(t.outputBytes)} limit)`;
+			const maxBytes = t.maxBytes ?? t.outputBytes;
+			notice += ` (${formatSize(maxBytes)} limit)`;
 		}
 
 		if (t.nextOffset != null) {

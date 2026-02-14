@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed
+
+- Fixed fetch tool incorrectly treating HTML content as plain text or markdown
+- Fixed output truncation notice displaying incorrect byte limit when maxBytes differs from outputBytes
+- Fixed Cloudflare returning corrupted bytes when compression is negotiated in web scraper requests
 
 ## [12.3.0] - 2026-02-14
 ### Added
