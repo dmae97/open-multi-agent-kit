@@ -1,6 +1,19 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added autonomous memory extraction and consolidation system with configurable settings
+- Added `/memory` slash command with subcommands: `view`, `clear`, `reset`, `enqueue`, `rebuild`
+- Added memory injection payload that automatically includes learned context in system prompts
+- Added two-phase memory pipeline: Stage 1 extracts durable knowledge from session history, Phase 2 consolidates into reusable skills and guidance
+- Added memory storage layer with SQLite-backed job queue for distributed memory processing
+- Added configurable memory settings: concurrency limits, lease timeouts, token budgets, and rollout age constraints
+
+### Changed
+
+- Modified system prompt building to inject memory guidance when memories are enabled
+- Changed `resolvePromptInput` to handle multiline input and improve error handling for file reads
 
 ## [12.2.0] - 2026-02-13
 

@@ -42,6 +42,7 @@ export type {
 	ExaSettings,
 	GroupPrefix,
 	GroupTypeMap,
+	MemoriesSettings,
 	RetrySettings,
 	SettingPath,
 	SettingValue,

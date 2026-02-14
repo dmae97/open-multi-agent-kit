@@ -46,6 +46,7 @@ import {
 } from "./internal-urls";
 import { disposeAllKernelSessions } from "./ipy/executor";
 import { discoverAndLoadMCPTools, type MCPManager, type MCPToolsLoadResult } from "./mcp";
+import { buildMemoryToolDeveloperInstructions, startMemoryStartupTask } from "./memories";
 import { AgentSession } from "./session/agent-session";
 import { AuthStorage } from "./session/auth-storage";
 import { convertToLlm } from "./session/messages";
@@ -914,6 +915,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	const rebuildSystemPrompt = async (toolNames: string[], tools: Map<string, AgentTool>): Promise<string> => {
 		toolContextStore.setToolNames(toolNames);
+		const memoryInstructions = await buildMemoryToolDeveloperInstructions(agentDir, settings);
 		const defaultPrompt = await buildSystemPromptInternal({
 			cwd,
 			skills,
@@ -923,6 +925,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			toolNames,
 			rules: rulebookRules,
 			skillsSettings: settings.getGroup("skills") as SkillsSettings,
+			appendSystemPrompt: memoryInstructions,
 		});
 
 		if (options.systemPrompt === undefined) {
@@ -939,6 +942,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				rules: rulebookRules,
 				skillsSettings: settings.getGroup("skills") as SkillsSettings,
 				customPrompt: options.systemPrompt,
+				appendSystemPrompt: memoryInstructions,
 			});
 		}
 		return options.systemPrompt(defaultPrompt);
@@ -1132,6 +1136,14 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			logger.warn("LSP server warmup failed", { cwd, error: String(error) });
 		}
 	}
+
+	startMemoryStartupTask({
+		session,
+		settings,
+		modelRegistry,
+		agentDir,
+		taskDepth,
+	});
 
 	debugStartup("sdk:return");
 	return {

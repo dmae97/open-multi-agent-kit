@@ -145,6 +145,17 @@ const BUILTIN_SLASH_COMMAND_DEFS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "resume", description: "Resume a different session" },
 	{ name: "background", description: "Detach UI and continue running in background" },
 	{ name: "debug", description: "Write debug log (TUI state and messages)" },
+	{
+		name: "memory",
+		description: "Inspect and operate memory maintenance",
+		subcommands: [
+			{ name: "view", description: "Show current memory injection payload" },
+			{ name: "clear", description: "Clear persisted memory data and artifacts" },
+			{ name: "reset", description: "Alias for clear" },
+			{ name: "enqueue", description: "Enqueue memory consolidation maintenance" },
+			{ name: "rebuild", description: "Alias for enqueue" },
+		],
+	},
 	{ name: "move", description: "Move session to a different working directory", inlineHint: "<path>" },
 	{ name: "exit", description: "Exit the application" },
 	{ name: "quit", description: "Quit the application" },

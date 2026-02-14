@@ -919,6 +919,10 @@ export class InteractiveMode implements InteractiveModeContext {
 		return this.#commandController.handleMoveCommand(targetPath);
 	}
 
+	handleMemoryCommand(text: string): Promise<void> {
+		return this.#commandController.handleMemoryCommand(text);
+	}
+
 	showDebugSelector(): void {
 		this.#selectorController.showDebugSelector();
 	}

@@ -3,7 +3,7 @@
  */
 import * as os from "node:os";
 import { getSystemInfo as getNativeSystemInfo, type SystemInfo } from "@oh-my-pi/pi-natives";
-import { $env, logger } from "@oh-my-pi/pi-utils";
+import { $env, hasFsCode, isEnoent, logger } from "@oh-my-pi/pi-utils";
 import { getGpuCachePath, getProjectDir } from "@oh-my-pi/pi-utils/dirs";
 import { $ } from "bun";
 import { contextFileCapability } from "./capability/context-file";
@@ -346,19 +346,18 @@ async function getEnvironmentInfo(): Promise<Array<{ label: string; value: strin
 export async function resolvePromptInput(input: string | undefined, description: string): Promise<string | undefined> {
 	if (!input) {
 		return undefined;
+	} else if (input.includes("\n")) {
+		return input;
 	}
 
-	const file = Bun.file(input);
-	if (await file.exists()) {
-		try {
-			return await file.text();
-		} catch (error) {
+	try {
+		return await Bun.file(input).text();
+	} catch (error) {
+		if (!hasFsCode(error, "ENAMETOOLONG") && !isEnoent(error)) {
 			logger.warn(`Could not read ${description} file`, { path: input, error: String(error) });
-			return input;
 		}
+		return input;
 	}
-
-	return input;
 }
 
 export interface LoadContextFilesOptions {

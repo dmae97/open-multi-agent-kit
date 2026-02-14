@@ -998,6 +998,14 @@ export class AgentSession {
 		}
 	}
 
+	/** Rebuild the base system prompt using the current active tool set. */
+	async refreshBaseSystemPrompt(): Promise<void> {
+		if (!this.#rebuildSystemPrompt) return;
+		const activeToolNames = this.getActiveToolNames();
+		this.#baseSystemPrompt = await this.#rebuildSystemPrompt(activeToolNames, this.#toolRegistry);
+		this.agent.setSystemPrompt(this.#baseSystemPrompt);
+	}
+
 	/**
 	 * Replace MCP tools in the registry and activate the latest MCP tool set immediately.
 	 * This allows /mcp add/remove/reauth to take effect without restarting the session.

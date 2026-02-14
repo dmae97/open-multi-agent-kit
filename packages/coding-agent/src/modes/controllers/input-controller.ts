@@ -333,6 +333,11 @@ export class InputController {
 				this.ctx.editor.setText("");
 				return;
 			}
+			if (text === "/memory" || text.startsWith("/memory ")) {
+				this.ctx.editor.setText("");
+				await this.ctx.handleMemoryCommand(text);
+				return;
+			}
 			if (text === "/resume") {
 				this.ctx.showSessionSelector();
 				this.ctx.editor.setText("");

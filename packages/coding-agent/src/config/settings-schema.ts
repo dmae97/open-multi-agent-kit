@@ -304,6 +304,33 @@ export const SETTINGS_SCHEMA = {
 	"branchSummary.reserveTokens": { type: "number", default: 16384 },
 
 	// ─────────────────────────────────────────────────────────────────────────
+	// Memories settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"memories.enabled": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "agent",
+			label: "Memories",
+			description: "Enable autonomous memory extraction and consolidation",
+		},
+	},
+	"memories.maxRolloutsPerStartup": { type: "number", default: 64 },
+	"memories.maxRolloutAgeDays": { type: "number", default: 30 },
+	"memories.minRolloutIdleHours": { type: "number", default: 12 },
+	"memories.threadScanLimit": { type: "number", default: 300 },
+	"memories.maxRawMemoriesForGlobal": { type: "number", default: 200 },
+	"memories.stage1Concurrency": { type: "number", default: 8 },
+	"memories.stage1LeaseSeconds": { type: "number", default: 120 },
+	"memories.stage1RetryDelaySeconds": { type: "number", default: 120 },
+	"memories.phase2LeaseSeconds": { type: "number", default: 180 },
+	"memories.phase2RetryDelaySeconds": { type: "number", default: 180 },
+	"memories.phase2HeartbeatSeconds": { type: "number", default: 30 },
+	"memories.rolloutPayloadPercent": { type: "number", default: 0.7 },
+	"memories.fallbackTokenLimit": { type: "number", default: 16000 },
+	"memories.summaryInjectionTokenLimit": { type: "number", default: 5000 },
+
+	// ─────────────────────────────────────────────────────────────────────────
 	// Retry settings
 	// ─────────────────────────────────────────────────────────────────────────
 	"retry.enabled": { type: "boolean", default: true },
@@ -952,6 +979,24 @@ export interface RetrySettings {
 	baseDelayMs: number;
 }
 
+export interface MemoriesSettings {
+	enabled: boolean;
+	maxRolloutsPerStartup: number;
+	maxRolloutAgeDays: number;
+	minRolloutIdleHours: number;
+	threadScanLimit: number;
+	maxRawMemoriesForGlobal: number;
+	stage1Concurrency: number;
+	stage1LeaseSeconds: number;
+	stage1RetryDelaySeconds: number;
+	phase2LeaseSeconds: number;
+	phase2RetryDelaySeconds: number;
+	phase2HeartbeatSeconds: number;
+	rolloutPayloadPercent: number;
+	fallbackTokenLimit: number;
+	summaryInjectionTokenLimit: number;
+}
+
 export interface TodoCompletionSettings {
 	enabled: boolean;
 	maxReminders: number;
@@ -1028,6 +1073,7 @@ export interface BashInterceptorRule {
 export interface GroupTypeMap {
 	compaction: CompactionSettings;
 	retry: RetrySettings;
+	memories: MemoriesSettings;
 	branchSummary: BranchSummarySettings;
 	skills: SkillsSettings;
 	commit: CommitSettings;
