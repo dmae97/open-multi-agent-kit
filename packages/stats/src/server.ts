@@ -1,7 +1,9 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import * as os from "node:os";
 import postcss from "postcss";
 import tailwindcss from "tailwindcss";
+import { EMBEDDED_CLIENT_ARCHIVE_TAR_GZ_BASE64 } from "./embedded-client.generated";
 import {
 	getDashboardStats,
 	getRecentErrors,
@@ -13,6 +15,65 @@ import {
 
 const CLIENT_DIR = path.join(import.meta.dir, "client");
 const STATIC_DIR = path.join(import.meta.dir, "..", "dist", "client");
+const IS_BUN_COMPILED =
+	Bun.env.PI_COMPILED ||
+	import.meta.url.includes("$bunfs") ||
+	import.meta.url.includes("~BUN") ||
+	import.meta.url.includes("%7EBUN");
+
+const COMPILED_CLIENT_DIR_ROOT = path.join(os.tmpdir(), "omp-stats-client");
+let compiledClientDirPromise: Promise<string> | null = null;
+
+function sanitizeArchivePath(archivePath: string): string | null {
+	const normalized = archivePath.replaceAll("\\", "/").replace(/^\.\//, "");
+	if (!normalized || normalized === ".") return null;
+	if (normalized.includes("..") || path.isAbsolute(normalized)) return null;
+	return normalized;
+}
+
+async function extractEmbeddedClientArchive(outputDir: string): Promise<void> {
+	const archiveBytes = Buffer.from(EMBEDDED_CLIENT_ARCHIVE_TAR_GZ_BASE64, "base64");
+	const archive = new Bun.Archive(archiveBytes);
+	const files = await archive.files();
+	const extractRoot = path.resolve(outputDir);
+
+	for (const [archivePath, file] of files) {
+		const sanitizedPath = sanitizeArchivePath(archivePath);
+		if (!sanitizedPath) continue;
+		const destinationPath = path.resolve(extractRoot, sanitizedPath);
+		if (!destinationPath.startsWith(extractRoot + path.sep)) {
+			throw new Error(`Archive entry escapes extraction directory: ${archivePath}`);
+		}
+		await Bun.write(destinationPath, file);
+	}
+}
+
+async function getCompiledClientDir(): Promise<string> {
+	if (!IS_BUN_COMPILED) return STATIC_DIR;
+	if (!EMBEDDED_CLIENT_ARCHIVE_TAR_GZ_BASE64) {
+		throw new Error("Compiled stats client bundle missing. Rebuild binary with embedded stats assets.");
+	}
+	if (compiledClientDirPromise) return compiledClientDirPromise;
+
+	compiledClientDirPromise = (async () => {
+		const bundleHash = Bun.hash(EMBEDDED_CLIENT_ARCHIVE_TAR_GZ_BASE64).toString(16);
+		const outputDir = path.join(COMPILED_CLIENT_DIR_ROOT, bundleHash);
+		const markerPath = path.join(outputDir, "index.html");
+		try {
+			const marker = await fs.stat(markerPath);
+			if (marker.isFile()) return outputDir;
+		} catch {}
+
+		await fs.rm(outputDir, { recursive: true, force: true });
+		await fs.mkdir(outputDir, { recursive: true });
+		await extractEmbeddedClientArchive(outputDir);
+		return outputDir;
+	})();
+
+	return compiledClientDirPromise;
+}
+
+
 
 async function buildTailwindCss(inputPath: string, outputPath: string): Promise<void> {
 	const sourceCss = await Bun.file(inputPath).text();
@@ -43,6 +104,7 @@ async function getLatestMtime(dir: string): Promise<number> {
 }
 
 const ensureClientBuild = async () => {
+	if (IS_BUN_COMPILED) return;
 	const indexPath = path.join(STATIC_DIR, "index.html");
 	const cssPath = path.join(STATIC_DIR, "styles.css");
 	const clientSourceMtime = await getLatestMtime(CLIENT_DIR);
@@ -173,8 +235,9 @@ async function handleApi(req: Request): Promise<Response> {
  * Handle static file requests.
  */
 async function handleStatic(requestPath: string): Promise<Response> {
+	const staticDir = IS_BUN_COMPILED ? await getCompiledClientDir() : STATIC_DIR;
 	const filePath = requestPath === "/" ? "/index.html" : requestPath;
-	const fullPath = path.join(STATIC_DIR, filePath);
+	const fullPath = path.join(staticDir, filePath);
 
 	const file = Bun.file(fullPath);
 	if (await file.exists()) {
@@ -182,7 +245,7 @@ async function handleStatic(requestPath: string): Promise<Response> {
 	}
 
 	// SPA fallback
-	const index = Bun.file(path.join(STATIC_DIR, "index.html"));
+	const index = Bun.file(path.join(staticDir, "index.html"));
 	if (await index.exists()) {
 		return new Response(index);
 	}

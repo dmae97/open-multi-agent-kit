@@ -172,6 +172,7 @@ jobs:
 
       - name: Build binaries
         run: |
+          bun --cwd=packages/stats scripts/generate-client-bundle.ts
           mkdir -p packages/coding-agent/binaries
           ENTRYPOINT="./packages/coding-agent/src/cli.ts"
           DEFINES="--define PI_COMPILED=true --root ."
@@ -189,6 +190,7 @@ jobs:
           build_binary linux arm64 bun-linux-arm64 packages/coding-agent/binaries/omp-linux-arm64
           build_binary win32 x64 bun-windows-x64-modern packages/coding-agent/binaries/omp-windows-x64.exe
           bun --cwd=packages/natives run embed:native --reset
+          bun --cwd=packages/stats scripts/generate-client-bundle.ts --reset
       - name: Stage native addons for release
         run: cp packages/natives/native/*.node packages/coding-agent/binaries/
       - name: Create GitHub Release
