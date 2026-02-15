@@ -538,11 +538,13 @@ export class AgentSession {
 			}
 
 			if (event.message.role === "toolResult") {
-				const { toolName, $normative, toolCallId, details } = event.message as {
+				const { toolName, $normative, toolCallId, details, isError, content } = event.message as {
 					toolName?: string;
 					toolCallId?: string;
 					details?: { path?: string };
 					$normative?: Record<string, unknown>;
+					isError?: boolean;
+					content?: Array<TextContent | ImageContent>;
 				};
 				if ($normative && toolCallId && this.settings.get("normativeRewrite")) {
 					await this.#rewriteToolCallArgs(toolCallId, $normative);
@@ -550,6 +552,25 @@ export class AgentSession {
 				// Invalidate streaming edit cache when edit tool completes to prevent stale data
 				if (toolName === "edit" && details?.path) {
 					this.#invalidateFileCacheForPath(details.path);
+				}
+				if (toolName === "todo_write" && isError) {
+					const errorText = content?.find(part => part.type === "text")?.text;
+					const reminderText = [
+						"<system_reminder>",
+						"todo_write failed, so todo progress is not visible to the user.",
+						errorText ? `Failure: ${errorText}` : "Failure: todo_write returned an error.",
+						"Fix the todo payload and call todo_write again before continuing.",
+						"</system_reminder>",
+					].join("\n");
+					await this.sendCustomMessage(
+						{
+							customType: "todo-write-error-reminder",
+							content: reminderText,
+							display: false,
+							details: { toolName, errorText },
+						},
+						{ deliverAs: "nextTurn" },
+					);
 				}
 			}
 		}

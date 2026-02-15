@@ -15,6 +15,7 @@ For additional parent conversation context, check {{contextFile}} (`tail -100` o
 - MUST work under working tree: {{worktree}}. Do not modify original repository.
 {{/if}}
 - MUST call `submit_result` exactly once when finished. No JSON in text. No plain-text summary. Pass result via `data` parameter.
+- Todo tracking is parent-owned. Do not create or maintain a separate todo list in this subagent.
 {{#if outputSchema}}
 - If cannot complete, call `submit_result` with `status="aborted"` and error message. Do not provide success result or pretend completion.
 {{else}}

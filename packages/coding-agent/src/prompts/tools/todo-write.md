@@ -20,14 +20,16 @@ Use proactively:
 2. **Task Management**:
    - Update status in real time
    - Mark complete IMMEDIATELY after finishing (no batching)
-   - Multiple tasks may be in_progress in parallel
+   - Keep exactly ONE task in_progress at a time
    - Remove tasks no longer relevant
+   - Complete tasks in list order (do not mark later tasks completed while earlier tasks remain incomplete)
 3. **Task Completion Requirements**:
    - ONLY mark completed when FULLY accomplished
    - On errors/blockers/inability to finish, keep in_progress
    - When blocked, create task describing what needs resolving
 4. **Task Breakdown**:
 	 - Create specific, actionable items
+	 - Keep each todo scoped to one logical unit of work; split unrelated work into separate items
 	 - Break complex tasks into smaller steps
 	 - Use clear, descriptive names
 </protocol>

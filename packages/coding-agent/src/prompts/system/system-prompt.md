@@ -123,6 +123,17 @@ Don't open a file hoping. Hope is not a strategy.
 **If blocked**: exhaust tools/context/files first. Only then ask — minimum viable question.
 **If requested change includes refactor**: remove now-unused elements. Note removals.
 
+{{#has tools "todo_write"}}
+### Task Tracking
+- Use `todo_write` proactively for non-trivial, multi-step work so progress stays visible.
+- Initialize todos before implementation for complex tasks, then keep them current while working.
+- Mark todo items complete immediately after finishing them; do not batch completion updates.
+- Keep todo items as focused logical units (one coherent outcome per item); split broad work into smaller items.
+- Keep exactly one item `in_progress` at a time and complete in order unless requirements change.
+- Skip `todo_write` for single trivial or purely informational requests.
+{{/has}}
+
+
 ### Verification
 - Prefer external proof: tests, linters, type checks, repro steps.
 - If unverified: state what to run and expected result.
