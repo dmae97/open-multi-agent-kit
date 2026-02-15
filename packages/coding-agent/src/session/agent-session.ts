@@ -400,6 +400,11 @@ export class AgentSession {
 		}
 	}
 
+	async #emitSessionEvent(event: AgentSessionEvent): Promise<void> {
+		await this.#emitExtensionEvent(event);
+		this.#emit(event);
+	}
+
 	// Track last assistant message for auto-compaction check
 	#lastAssistantMessage: AssistantMessage | undefined = undefined;
 
@@ -424,11 +429,7 @@ export class AgentSession {
 			}
 		}
 
-		// Emit to extensions first
-		await this.#emitExtensionEvent(event);
-
-		// Notify all listeners
-		this.#emit(event);
+		await this.#emitSessionEvent(event);
 
 		if (event.type === "turn_start") {
 			this.#resetStreamingEditState();
@@ -455,7 +456,7 @@ export class AgentSession {
 					this.#pendingTtsrInjections.push(...matches);
 					// Emit TTSR event before aborting (so UI can handle it)
 					this.#ttsrAbortPending = true;
-					this.#emit({ type: "ttsr_triggered", rules: matches });
+					await this.#emitSessionEvent({ type: "ttsr_triggered", rules: matches });
 					// Abort the stream
 					this.agent.abort();
 					// Schedule retry after a short delay
@@ -526,7 +527,7 @@ export class AgentSession {
 				// This prevents accumulation across multiple LLM calls within a turn
 				const assistantMsg = event.message as AssistantMessage;
 				if (assistantMsg.stopReason !== "error" && this.#retryAttempt > 0) {
-					this.#emit({
+					await this.#emitSessionEvent({
 						type: "auto_retry_end",
 						success: true,
 						attempt: this.#retryAttempt,
@@ -823,10 +824,9 @@ export class AgentSession {
 		}
 	}
 
-	/** Emit extension events based on agent events */
-	async #emitExtensionEvent(event: AgentEvent): Promise<void> {
+	/** Emit extension events based on session events */
+	async #emitExtensionEvent(event: AgentSessionEvent): Promise<void> {
 		if (!this.#extensionRunner) return;
-
 		if (event.type === "agent_start") {
 			this.#turnIndex = 0;
 			await this.#extensionRunner.emit({ type: "agent_start" });
@@ -848,6 +848,40 @@ export class AgentSession {
 			};
 			await this.#extensionRunner.emit(hookEvent);
 			this.#turnIndex++;
+		} else if (event.type === "auto_compaction_start") {
+			await this.#extensionRunner.emit({ type: "auto_compaction_start", reason: event.reason });
+		} else if (event.type === "auto_compaction_end") {
+			await this.#extensionRunner.emit({
+				type: "auto_compaction_end",
+				result: event.result,
+				aborted: event.aborted,
+				willRetry: event.willRetry,
+				errorMessage: event.errorMessage,
+			});
+		} else if (event.type === "auto_retry_start") {
+			await this.#extensionRunner.emit({
+				type: "auto_retry_start",
+				attempt: event.attempt,
+				maxAttempts: event.maxAttempts,
+				delayMs: event.delayMs,
+				errorMessage: event.errorMessage,
+			});
+		} else if (event.type === "auto_retry_end") {
+			await this.#extensionRunner.emit({
+				type: "auto_retry_end",
+				success: event.success,
+				attempt: event.attempt,
+				finalError: event.finalError,
+			});
+		} else if (event.type === "ttsr_triggered") {
+			await this.#extensionRunner.emit({ type: "ttsr_triggered", rules: event.rules });
+		} else if (event.type === "todo_reminder") {
+			await this.#extensionRunner.emit({
+				type: "todo_reminder",
+				todos: event.todos,
+				attempt: event.attempt,
+				maxAttempts: event.maxAttempts,
+			});
 		}
 	}
 
@@ -2672,7 +2706,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 		});
 
 		// Emit event for UI to render notification
-		this.#emit({
+		await this.#emitSessionEvent({
 			type: "todo_reminder",
 			todos: incomplete,
 			attempt: this.#todoReminderCount,
@@ -2743,7 +2777,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 	async #runAutoCompaction(reason: "overflow" | "threshold", willRetry: boolean): Promise<void> {
 		const compactionSettings = this.settings.getGroup("compaction");
 
-		this.#emit({ type: "auto_compaction_start", reason });
+		await this.#emitSessionEvent({ type: "auto_compaction_start", reason });
 		// Properly abort and null existing controller before replacing
 		if (this.#autoCompactionAbortController) {
 			this.#autoCompactionAbortController.abort();
@@ -2752,13 +2786,23 @@ Be thorough - include exact file paths, function names, error messages, and tech
 
 		try {
 			if (!this.model) {
-				this.#emit({ type: "auto_compaction_end", result: undefined, aborted: false, willRetry: false });
+				await this.#emitSessionEvent({
+					type: "auto_compaction_end",
+					result: undefined,
+					aborted: false,
+					willRetry: false,
+				});
 				return;
 			}
 
 			const availableModels = this.#modelRegistry.getAvailable();
 			if (availableModels.length === 0) {
-				this.#emit({ type: "auto_compaction_end", result: undefined, aborted: false, willRetry: false });
+				await this.#emitSessionEvent({
+					type: "auto_compaction_end",
+					result: undefined,
+					aborted: false,
+					willRetry: false,
+				});
 				return;
 			}
 
@@ -2766,7 +2810,12 @@ Be thorough - include exact file paths, function names, error messages, and tech
 
 			const preparation = prepareCompaction(pathEntries, compactionSettings);
 			if (!preparation) {
-				this.#emit({ type: "auto_compaction_end", result: undefined, aborted: false, willRetry: false });
+				await this.#emitSessionEvent({
+					type: "auto_compaction_end",
+					result: undefined,
+					aborted: false,
+					willRetry: false,
+				});
 				return;
 			}
 
@@ -2786,7 +2835,12 @@ Be thorough - include exact file paths, function names, error messages, and tech
 				})) as SessionBeforeCompactResult | undefined;
 
 				if (hookResult?.cancel) {
-					this.#emit({ type: "auto_compaction_end", result: undefined, aborted: true, willRetry: false });
+					await this.#emitSessionEvent({
+						type: "auto_compaction_end",
+						result: undefined,
+						aborted: true,
+						willRetry: false,
+					});
 					return;
 				}
 
@@ -2914,7 +2968,12 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			}
 
 			if (this.#autoCompactionAbortController.signal.aborted) {
-				this.#emit({ type: "auto_compaction_end", result: undefined, aborted: true, willRetry: false });
+				await this.#emitSessionEvent({
+					type: "auto_compaction_end",
+					result: undefined,
+					aborted: true,
+					willRetry: false,
+				});
 				return;
 			}
 
@@ -2952,7 +3011,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 				details,
 				preserveData,
 			};
-			this.#emit({ type: "auto_compaction_end", result, aborted: false, willRetry });
+			await this.#emitSessionEvent({ type: "auto_compaction_end", result, aborted: false, willRetry });
 
 			if (!willRetry && compactionSettings.autoContinue !== false) {
 				await this.prompt("Continue if you have next steps.", {
@@ -2980,11 +3039,16 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			}
 		} catch (error) {
 			if (this.#autoCompactionAbortController?.signal.aborted) {
-				this.#emit({ type: "auto_compaction_end", result: undefined, aborted: true, willRetry: false });
+				await this.#emitSessionEvent({
+					type: "auto_compaction_end",
+					result: undefined,
+					aborted: true,
+					willRetry: false,
+				});
 				return;
 			}
 			const errorMessage = error instanceof Error ? error.message : "compaction failed";
-			this.#emit({
+			await this.#emitSessionEvent({
 				type: "auto_compaction_end",
 				result: undefined,
 				aborted: false,
@@ -3106,7 +3170,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 
 		if (this.#retryAttempt > retrySettings.maxRetries) {
 			// Max retries exceeded, emit final failure and reset
-			this.#emit({
+			await this.#emitSessionEvent({
 				type: "auto_retry_end",
 				success: false,
 				attempt: this.#retryAttempt - 1,
@@ -3135,7 +3199,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			}
 		}
 
-		this.#emit({
+		await this.#emitSessionEvent({
 			type: "auto_retry_start",
 			attempt: this.#retryAttempt,
 			maxAttempts: retrySettings.maxRetries,
@@ -3162,7 +3226,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			const attempt = this.#retryAttempt;
 			this.#retryAttempt = 0;
 			this.#retryAbortController = undefined;
-			this.#emit({
+			await this.#emitSessionEvent({
 				type: "auto_retry_end",
 				success: false,
 				attempt,
