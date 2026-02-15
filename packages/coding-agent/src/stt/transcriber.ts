@@ -25,11 +25,7 @@ export function resolvePython(): string | null {
  * resamples to 16 kHz mono, and passes the numpy array directly to whisper.
  */
 export async function transcribe(audioPath: string, options?: TranscribeOptions): Promise<string> {
-	// Validate audio file
 	const audioFile = Bun.file(audioPath);
-	if (!(await audioFile.exists())) {
-		throw new Error(`Audio file not found at ${audioPath}. Recording may have failed.`);
-	}
 	if (audioFile.size < 100) {
 		throw new Error(`Audio file is empty or too small (${audioFile.size} bytes). Check microphone.`);
 	}

@@ -47,7 +47,7 @@ async function startSoxRecording(outputPath: string): Promise<RecordingHandle> {
 
 	const proc = Bun.spawn(["sox", ...inputArgs, "-r", "16000", "-c", "1", "-b", "16", "-t", "wav", outputPath], {
 		stdout: "pipe",
-		stderr: "pipe",
+		stderr: "ignore",
 	});
 	await verifyProcessAlive(proc, "sox");
 	return {
@@ -98,7 +98,7 @@ async function startFFmpegRecording(outputPath: string): Promise<RecordingHandle
 	const proc = Bun.spawn(args, {
 		stdin: "pipe",
 		stdout: "pipe",
-		stderr: "pipe",
+		stderr: "ignore",
 	});
 	await verifyProcessAlive(proc, "ffmpeg");
 
@@ -120,7 +120,7 @@ async function startFFmpegRecording(outputPath: string): Promise<RecordingHandle
 async function startArecordRecording(outputPath: string): Promise<RecordingHandle> {
 	const proc = Bun.spawn(["arecord", "-f", "S16_LE", "-r", "16000", "-c", "1", outputPath], {
 		stdout: "pipe",
-		stderr: "pipe",
+		stderr: "ignore",
 	});
 	await verifyProcessAlive(proc, "arecord");
 	return {
@@ -198,7 +198,7 @@ async function startPowerShellRecording(outputPath: string): Promise<RecordingHa
 	const proc = Bun.spawn(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, outputPath], {
 		stdin: "pipe",
 		stdout: "pipe",
-		stderr: "pipe",
+		stderr: "ignore",
 	});
 
 	// Wait for "RECORDING" on stdout to confirm it started
