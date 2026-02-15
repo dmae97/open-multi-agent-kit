@@ -899,6 +899,30 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		}
 	}
 
+	// Process provider registrations queued during extension loading.
+	// This must happen before the runner is created so that models registered by
+	// extensions are available for model selection on session resume / fallback.
+	if (extensionsResult.runtime.pendingProviderRegistrations.length > 0) {
+		for (const { name, config } of extensionsResult.runtime.pendingProviderRegistrations) {
+			modelRegistry.registerProvider(name, config);
+		}
+		extensionsResult.runtime.pendingProviderRegistrations = [];
+
+		// Re-run model selection if no model was found earlier but extensions added models
+		if (!model) {
+			const allModels = modelRegistry.getAll();
+			for (const candidate of allModels) {
+				if (await hasModelApiKey(candidate)) {
+					model = candidate;
+					break;
+				}
+			}
+			if (model && modelFallbackMessage) {
+				modelFallbackMessage = undefined;
+			}
+		}
+	}
+
 	// Discover custom commands (TypeScript slash commands)
 	const customCommandsResult: CustomCommandsLoadResult = options.disableExtensionDiscovery
 		? { commands: [], errors: [] }
