@@ -1,81 +1,58 @@
-# Edit (Hash anchored)
+# Edit (Hash Anchored)
 
-Line-addressed edits using hash-verified line references. Read file in hashline mode, then use the exact text before `|` as your anchor (for example, in `{{hashline 42 "const x = 1"}}|const x = 1`, anchor is `{{hashline 42 "const x = 1"}}`).
+Line-addressed edits using hash-verified line references. Read files in hashline mode, collect exact `LINE:HASH` references, and submit edits that change only the targeted token or expression.
 
-<critical>
-- Copy `LINE:HASH` refs verbatim from read output — never fabricate or guess hashes
-- Anchors must be exactly `LINE:HASH` (for example `{{hashline 42 "const x = 1"}}`) — never `LINE:HASH|content`, never with trailing source text
-- `new_text` (set_line/replace_lines) or `text` (insert_after) contains plain replacement lines only — no `LINE:HASH` prefix, no diff `+` markers
-- On hash mismatch: use the updated `LINE:HASH` refs shown by `>>>` directly; only `read` again if you need additional lines/context
-- If you already edited a file in this turn, re-read that file before the next edit to it
-- For code-change requests, respond with tool calls, not prose
-- Edit only requested lines. Do not reformat unrelated code.
-- Direction-lock every mutation: replace the exact currently-present token/expression with the intended target token/expression; never reverse the change or "change something nearby".
-- `new_text` must differ from the current line content — sending identical content is rejected as a no-op
-- `set_line` with `new_text: ""` keeps the line but makes it blank. To actually delete lines, use `replace_lines` with `new_text: ""` over the target range.
-</critical>
+**CRITICAL: Copy `LINE:HASH` refs verbatim from read output. Use only the anchor prefix (e.g., `{{hashline 42 "const x = 1"}}`), never the trailing source text after `|`.**
 
-<instruction>
-**Workflow:**
-1. Read target file (`read`)
-2. Collect the exact `LINE:HASH` refs you need
-3. Submit one `edit` call with all known operations for that file
-4. If another change on same file is needed later: re-read first, then edit
-5. Direction-lock each operation before submitting (`exact source token/expression on target line` → `intended replacement`) and keep the mutation to one logical locus. Do not output prose; submit only the tool call.
-6. When adding a field/argument/import near existing lines, prefer `insert_after` over replacing a neighboring line to avoid accidental deletion
-**Atomicity:** All edits in one call are validated against the file as last read — line numbers and hashes refer to the original state, not after earlier edits in the same array. The applicator sorts and applies bottom-up automatically.
-**Edit variants:**
-- `{ set_line: { anchor: "LINE:HASH", new_text: "..." } }`
-- `{ replace_lines: { start_anchor: "LINE:HASH", end_anchor: "LINE:HASH", new_text: "..." } }`
-- `{ insert_after: { anchor: "LINE:HASH", text: "..." } }`
-- `{ replace: { old_text: "...", new_text: "...", all?: boolean } }` — substr-style fuzzy replace (no LINE:HASH; use when line refs unavailable)
+<workflow>
+1. Read the target file (`read`) to obtain `LINE:HASH` references
+2. Collect the exact `LINE:HASH` refs for lines you will change
+3. Direction-lock each mutation: identify the exact current token/expression → the intended replacement
+4. Submit one `edit` call containing all operations for that file
+5. If another edit is needed on the same file: re-read first, then edit (hashes change after every edit)
+6. Respond with tool calls only — no prose
+</workflow>
 
-`new_text: ""` on `replace_lines` deletes the selected range. On `set_line`, it leaves an empty line at that anchor.
-</instruction>
+<operations>
+Four edit variants are available:
 
-<caution>
-**Preserve original formatting.** When writing `new_text`/`text`, copy each line's exact whitespace, braces, and style from the read output — then change *only* the targeted token/expression. Do not:
-- Restyle braces: `import { foo }` → `import {foo}`
-- Reflow arguments onto multiple lines or collapse them onto one line
-- Change indentation style, trailing commas, or semicolons on lines you replace
-- Do NOT use `replace_lines` over a wide span when multiple `set_line` ops would work — wide ranges tempt reformatting everything in between
+- **`set_line`**: Replace a single line
+  `{ set_line: { anchor: "LINE:HASH", new_text: "..." } }`
+  `new_text: ""` keeps the line but makes it blank.
 
-**Common failure patterns to avoid:**
-- Replacing the wrong adjacent line when you meant to insert a new one
-- Copying anchors with extra text (`{{hashline 42 "const x = 1"}}|const x = 1`) instead of just `{{hashline 42 "const x = 1"}}`
-- Using wide `replace_lines` for a tiny change and unintentionally rewriting unrelated code
-If a change spans multiple non-adjacent lines, use separate `set_line` operations for each — not a single `replace_lines` that includes unchanged lines in `new_text`.
-- Each edit operation must target one logical change site with minimal scope. If a fix requires two locations, use two operations; never span unrelated lines in one `replace_lines`.
-- Self-check before submitting: if your edit touches lines unrelated to the stated fix, split or narrow it.
-- Do NOT reformat lines you are replacing — preserve exact whitespace, braces (`{ foo }` not `{foo}`), arrow style, and line breaks. Change ONLY the targeted token/expression. Reformatting causes hash verification failure even when the logic is correct.
-- For swaps (exchanging content between two locations), use two `set_line` operations in one call — the applicator handles ordering. Do not try to account for line number shifts between operations.
-</caution>
-<instruction>
-**Recovery:**
-- Hash mismatch (`>>>` error): copy the updated `LINE:HASH` refs from the error verbatim and retry with the same intended mutation. Do NOT re-read unless you need lines not shown in the error.
-- If hash mismatch repeats after applying updated refs, stop blind retries and re-read the relevant region before retrying.
-- After a successful edit, always re-read the file before making another edit to the same file (hashes have changed).
-- No-op error ("identical content"): your replacement text matches what the file already contains. STOP and re-read the file — you are likely targeting the wrong line or your replacement is not actually different. Do NOT retry with the same content. After 2 consecutive no-op errors on the same line, re-read the entire function/block to understand the current file state.
-</instruction>
+- **`replace_lines`**: Replace a contiguous range (use for deletions with `new_text: ""`)
+  `{ replace_lines: { start_anchor: "LINE:HASH", end_anchor: "LINE:HASH", new_text: "..." } }`
 
-<instruction>
-**Preflight schema and validation (required):**
-- Payload shape is `{"path": string, "edits": [operation, ...]}` with a non-empty `edits` array.
-- Each operation contains exactly one variant key: `set_line`, `replace_lines`, `insert_after`, or `replace`.
-- Required fields by variant:
-  - `set_line`: `anchor`, `new_text`
-  - `replace_lines`: `start_anchor`, `end_anchor`, `new_text`
-  - `insert_after`: `anchor`, `text` (non-empty)
-  - `replace`: `old_text`, `new_text` (fuzzy match; `all: true` for replace-all)
-- Each `anchor`/`start_anchor`/`end_anchor` ref must be copied exactly from the `LINE:HASH` prefix before `|` in read output (no spaces, no trailing source text).
-- `new_text`/`text` preserves original formatting and changes only the direction-locked target locus.
-</instruction>
+- **`insert_after`**: Add new content after an anchor line
+  `{ insert_after: { anchor: "LINE:HASH", text: "..." } }`
 
-<input>
-- `path`: File path
-- `edits`: Array of edit operations (one of the variants above)
-</input>
+- **`replace`**: Substring-style fuzzy match (when line refs are unavailable)
+  `{ replace: { old_text: "...", new_text: "...", all?: boolean } }`
 
+**Atomicity:** All edits in one call validate against the file as last read. Line numbers and hashes refer to the original state, not post-edit state. The applicator sorts and applies bottom-up automatically.
+</operations>
+
+<rules>
+1. **Scope each operation minimally.** One logical change site per operation. Use separate `set_line` ops for non-adjacent lines instead of a wide `replace_lines` that spans unchanged code.
+2. **Preserve original formatting exactly.** Copy each line's whitespace, braces, semicolons, trailing commas, and style — then change only the targeted token/expression. Keep `import { foo }` as-is; keep indentation and line breaks as-is.
+3. **Use `insert_after` for additions.** When adding a field, argument, or import near existing lines, prefer `insert_after` over replacing a neighboring line.
+4. **Ensure `new_text` differs from current content.** Identical content is rejected as a no-op.
+5. **Edit only requested lines.** Leave unrelated code untouched.
+6. **Lock mutation direction.** Replace the exact currently-present token with the intended target. For swaps between two locations, use two `set_line` ops in one call.
+</rules>
+
+<recovery>
+**Hash mismatch (`>>>` error):**
+→ Copy the updated `LINE:HASH` refs from the error output verbatim and retry with the same intended mutation.
+→ Re-read only if you need lines not shown in the error.
+→ If mismatch repeats after applying updated refs, stop and re-read the relevant region.
+
+**No-op error ("identical content"):**
+→ Stop. Re-read the file — you are targeting the wrong line or your replacement is not different.
+→ After 2 consecutive no-op errors on the same line, re-read the entire function/block.
+</recovery>
+
+<examples>
 <example name="replace single line">
 set_line: { anchor: "{{hashline 2 "  x"}}", new_text: "  x = 99" }
 </example>
@@ -93,9 +70,24 @@ insert_after: { anchor: "{{hashline 3 "anchor line content"}}", text: "  # new c
 </example>
 
 <example name="multiple edits (bottom-up safe)">
-edits: [{ set_line: { anchor: "{{hashline 10 "old line 10"}}", new_text: "  return False" } }, { set_line: { anchor: "{{hashline 3 "old line 3"}}", new_text: "  x = 42" } }]
+set_line: { anchor: "{{hashline 10 "old line 10"}}", new_text: "  return False" }
+set_line: { anchor: "{{hashline 3 "old line 3"}}", new_text: "  x = 42" }
 </example>
 
 <example name="content replace (substr-style, no hashes)">
 replace: { old_text: "x = 42", new_text: "x = 99" }
 </example>
+</examples>
+
+<validation>
+Before submitting, verify:
+- [ ] Payload shape: `{"path": string, "edits": [operation, ...]}`  with non-empty `edits` array
+- [ ] Each operation has exactly one variant key: `set_line` | `replace_lines` | `insert_after` | `replace`
+- [ ] Each anchor is copied exactly from the `LINE:HASH` prefix (no spaces, no trailing source text)
+- [ ] `new_text`/`text` contains plain replacement lines only — no `LINE:HASH` prefixes, no diff `+` markers
+- [ ] Each replacement differs from the current line content
+- [ ] Each operation targets one logical change site with minimal scope
+- [ ] Formatting of replaced lines matches the original exactly, except for the targeted change
+</validation>
+
+**REMINDER: Copy `LINE:HASH` refs verbatim. Anchors are `LINE:HASH` only — never `LINE:HASH|content`. Preserve exact formatting. Change only the targeted token.**
