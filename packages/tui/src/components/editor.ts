@@ -297,6 +297,11 @@ export class Editor implements Component, Focusable {
 	#theme: EditorTheme;
 	#useTerminalCursor = false;
 
+	/** When set, replaces the normal cursor glyph at end-of-text with this ANSI-styled string. */
+	cursorOverride: string | undefined;
+	/** Display width of the cursorOverride glyph (needed because override may contain ANSI escapes). */
+	cursorOverrideWidth: number | undefined;
+
 	// Store last layout width for cursor navigation
 	#lastLayoutWidth: number = 80;
 	#paddingXOverride: number | undefined;
@@ -376,6 +381,10 @@ export class Editor implements Component, Focusable {
 	 */
 	setUseTerminalCursor(useTerminalCursor: boolean): void {
 		this.#useTerminalCursor = useTerminalCursor;
+	}
+
+	getUseTerminalCursor(): boolean {
+		return this.#useTerminalCursor;
 	}
 
 	setMaxHeight(maxHeight: number | undefined): void {
@@ -594,6 +603,18 @@ export class Editor implements Component, Focusable {
 					const cursor = `\x1b[7m${firstGrapheme}\x1b[0m`;
 					displayText = before + marker + cursor + restAfter;
 					// displayWidth stays the same - we're replacing, not adding
+				} else if (this.cursorOverride) {
+					// Cursor override replaces the normal end-of-text cursor glyph
+					const overrideWidth = this.cursorOverrideWidth ?? 1;
+					if (inlineHint) {
+						const availWidth = Math.max(0, lineContentWidth - displayWidth - overrideWidth);
+						const hintText = hintStyle(truncateToWidth(inlineHint, availWidth));
+						displayText = before + marker + this.cursorOverride + hintText;
+						displayWidth += overrideWidth + Math.min(visibleWidth(inlineHint), availWidth);
+					} else {
+						displayText = before + marker + this.cursorOverride;
+						displayWidth += overrideWidth;
+					}
 				} else {
 					// Cursor is at the end - add thin cursor glyph
 					const cursorChar = this.#theme.symbols.inputCursor;

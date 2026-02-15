@@ -36,7 +36,6 @@ export interface SegmentContext {
 	contextWindow: number;
 	autoCompactEnabled: boolean;
 	subagentCount: number;
-	sttState: "idle" | "recording" | "transcribing";
 	sessionStartTime: number;
 	git: {
 		branch: string | null;

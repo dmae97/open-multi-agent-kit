@@ -1,21 +1,17 @@
 # Changelog
 
 ## [Unreleased]
-### Added
-
-- Added `abort_and_prompt` RPC command for atomic abort-and-reprompt without race conditions ([#357](https://github.com/can1357/oh-my-pi/pull/357))
-- Added automatic dark/light theme switching via SIGWINCH with separate `theme.dark`/`theme.light` settings, replacing the single `theme` setting ([#65](https://github.com/can1357/oh-my-pi/issues/65))
 
 ### Breaking Changes
 
 - Replaced `theme` setting with `theme.dark` and `theme.light` (auto-migrated)
 
-### Fixed
-
-- Fixed `session.abort()` not clearing `promptInFlight` flag due to microtask ordering, which blocked subsequent prompts
-
 ### Added
 
+- Added animated microphone icon with color cycling during voice recording
+- Added support for discovering skills via symbolic links in skill directories
+- Added `abort_and_prompt` RPC command for atomic abort-and-reprompt without race conditions ([#357](https://github.com/can1357/oh-my-pi/pull/357))
+- Added automatic dark/light theme switching via SIGWINCH with separate `theme.dark`/`theme.light` settings, replacing the single `theme` setting ([#65](https://github.com/can1357/oh-my-pi/issues/65))
 - Added speech-to-text (STT) feature with `Alt+H` keybinding and `/stt` slash command
 - Added cross-platform audio recording: SoX, FFmpeg, arecord (Linux), PowerShell mciSendString (Windows fallback)
 - Added recording tool fallback chain — automatically tries each available tool in order
@@ -25,17 +21,24 @@
 - Added STT status line segment showing recording/transcribing state
 - Added `/stt` command with `on`, `off`, `status`, `setup` subcommands
 - Added auto-download of recording tools (best-effort FFmpeg via winget on Windows)
-
-
-
-### Added
 - Added interactive debug log viewer with selection, copy, and expand/collapse controls
 - Added inline filtering and count display to the debug log viewer
 - Added pid filter toggle and load-older pagination controls to the debug log viewer
 - Enabled loading older debug logs from archived files in viewer
 - Added file hyperlinks for debug report paths in viewer
 
+### Changed
+
+- Changed STT status messages to display via state change callbacks instead of explicit status calls
+- Changed cursor visibility behavior during voice recording to hide hardware and terminal cursors
+
+### Removed
+
+- Removed dedicated STT status line segment in favor of animated cursor-based feedback
+
 ### Fixed
+
+- Fixed `session.abort()` not clearing `promptInFlight` flag due to microtask ordering, which blocked subsequent prompts
 - Sanitized debug log display to strip control codes, normalize tabs, and trim width
 
 ## [12.4.0] - 2026-02-14

@@ -243,7 +243,10 @@ export async function loadSkillsFromDir(
 
 	const entries = await readDirEntries(dir);
 	const skillDirs = entries.filter(
-		entry => entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules",
+		entry =>
+			(entry.isDirectory() || entry.isSymbolicLink()) &&
+			!entry.name.startsWith(".") &&
+			entry.name !== "node_modules",
 	);
 
 	const results = await Promise.all(

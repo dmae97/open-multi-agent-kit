@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `cursorOverride` and `cursorOverrideWidth` properties to customize the end-of-text cursor glyph with ANSI-styled strings
+- Added `getUseTerminalCursor()` method to query the terminal cursor mode setting
 
 ## [11.10.0] - 2026-02-10
 ### Added

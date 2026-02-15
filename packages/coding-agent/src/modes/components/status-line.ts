@@ -70,7 +70,6 @@ export class StatusLineComponent implements Component {
 	#subagentCount: number = 0;
 	#sessionStartTime: number = Date.now();
 	#planModeStatus: { enabled: boolean; paused: boolean } | null = null;
-	#sttState: "idle" | "recording" | "transcribing" = "idle";
 
 	// Git status caching (1s TTL)
 	#cachedGitStatus: { staged: number; unstaged: number; untracked: number } | null = null;
@@ -105,10 +104,6 @@ export class StatusLineComponent implements Component {
 
 	setPlanModeStatus(status: { enabled: boolean; paused: boolean } | undefined): void {
 		this.#planModeStatus = status ?? null;
-	}
-
-	setSttState(state: "idle" | "recording" | "transcribing"): void {
-		this.#sttState = state;
 	}
 
 	setHookStatus(key: string, text: string | undefined): void {
@@ -272,7 +267,6 @@ export class StatusLineComponent implements Component {
 			autoCompactEnabled: this.#autoCompactEnabled,
 			subagentCount: this.#subagentCount,
 			sessionStartTime: this.#sessionStartTime,
-			sttState: this.#sttState,
 			git: {
 				branch: this.#getCurrentBranch(),
 				status: this.#getGitStatus(),

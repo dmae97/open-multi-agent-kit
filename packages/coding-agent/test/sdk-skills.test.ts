@@ -30,6 +30,22 @@ description: A test skill for SDK tests.
 This is a test skill.
 `,
 		);
+
+		const externalSkillDir = path.join(tempDir, "external-symlinked-skill");
+		fs.mkdirSync(externalSkillDir, { recursive: true });
+		fs.writeFileSync(
+			path.join(externalSkillDir, "SKILL.md"),
+			`---
+name: symlinked-skill
+description: Skill loaded through a symlink.
+---
+
+# Symlinked Skill
+
+Loaded via symbolic link.
+`,
+		);
+		fs.symlinkSync(externalSkillDir, path.join(path.dirname(skillsDir), "symlinked-skill-link"), "dir");
 	});
 
 	afterEach(() => {
@@ -48,6 +64,16 @@ This is a test skill.
 		// Skills should be discovered and exposed on the session
 		expect(session.skills.length).toBeGreaterThan(0);
 		expect(session.skills.some((s: Skill) => s.name === "test-skill")).toBe(true);
+	});
+
+	it("should discover skills when skill directory is a symlink", async () => {
+		const { session } = await createAgentSession({
+			cwd: tempDir,
+			agentDir: tempDir,
+			sessionManager: SessionManager.inMemory(),
+		});
+
+		expect(session.skills.some((s: Skill) => s.name === "symlinked-skill")).toBe(true);
 	});
 
 	it("should have empty skills when options.skills is empty array (--no-skills)", async () => {

@@ -65,6 +65,7 @@ export class STTController {
 					modelName: settings.get("stt.modelName") as string | undefined,
 					onProgress: p => options.showStatus(p.stage + (p.percent != null ? ` (${p.percent}%)` : "")),
 				});
+				options.showStatus("");
 				this.#depsResolved = true;
 			} catch (err) {
 				const msg = err instanceof Error ? err.message : "Failed to setup STT dependencies";
@@ -79,7 +80,6 @@ export class STTController {
 		try {
 			this.#recordingHandle = await startRecording(this.#tempFile);
 			this.#setState("recording", options);
-			options.showStatus("Recording...");
 			logger.debug("STT recording started", { tempFile: this.#tempFile });
 		} catch (err) {
 			this.#tempFile = null;
@@ -104,7 +104,6 @@ export class STTController {
 			// Validate the recording produced a usable file
 			await verifyRecordingFile(tempFile);
 			this.#setState("transcribing", options);
-			options.showStatus("Transcribing...");
 
 			const sttSettings = {
 				modelName: settings.get("stt.modelName") as string | undefined,

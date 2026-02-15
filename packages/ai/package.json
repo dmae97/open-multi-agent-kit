@@ -66,7 +66,7 @@
 		"@oh-my-pi/pi-utils": "workspace:*",
 		"@sinclair/typebox": "^0.34.48",
 		"@smithy/node-http-handler": "^4.4.9",
-		"ajv": "^8.17.1",
+		"ajv": "^8.18.0",
 		"ajv-formats": "^3.0.1",
 		"chalk": "^5.6.2",
 		"openai": "^6.17.0",
