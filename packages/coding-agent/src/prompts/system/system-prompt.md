@@ -133,7 +133,6 @@ Don't open a file hoping. Hope is not a strategy.
 - Skip `todo_write` for single trivial or purely informational requests.
 {{/has}}
 
-
 ### Verification
 - Prefer external proof: tests, linters, type checks, repro steps.
 - If unverified: state what to run and expected result.

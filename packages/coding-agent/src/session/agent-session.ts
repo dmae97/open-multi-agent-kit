@@ -527,7 +527,11 @@ export class AgentSession {
 				// Reset retry counter immediately on successful assistant response
 				// This prevents accumulation across multiple LLM calls within a turn
 				const assistantMsg = event.message as AssistantMessage;
-				if (assistantMsg.stopReason !== "error" && assistantMsg.stopReason !== "aborted" && this.#retryAttempt > 0) {
+				if (
+					assistantMsg.stopReason !== "error" &&
+					assistantMsg.stopReason !== "aborted" &&
+					this.#retryAttempt > 0
+				) {
 					await this.#emitSessionEvent({
 						type: "auto_retry_end",
 						success: true,

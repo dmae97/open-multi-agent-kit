@@ -12,7 +12,7 @@ import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { logger, TempDir } from "@oh-my-pi/pi-utils";
 import { getProjectAgentDir } from "@oh-my-pi/pi-utils/dirs";
-import { filterUserExtensions, filterUserExtensionErrors } from "./utils/filter-user-extensions";
+import { filterUserExtensionErrors, filterUserExtensions } from "./utils/filter-user-extensions";
 
 describe("ExtensionRunner", () => {
 	let tempDir: TempDir;

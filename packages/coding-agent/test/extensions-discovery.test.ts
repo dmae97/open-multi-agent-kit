@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { discoverAndLoadExtensions, loadExtensions } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/loader";
 import { TempDir } from "@oh-my-pi/pi-utils";
 import { getProjectAgentDir } from "@oh-my-pi/pi-utils/dirs";
-import { filterUserExtensions, filterUserExtensionErrors } from "./utils/filter-user-extensions";
+import { filterUserExtensionErrors, filterUserExtensions } from "./utils/filter-user-extensions";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

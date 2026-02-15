@@ -935,7 +935,8 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 						},
 						getActiveTools: () => session.getActiveToolNames(),
 						getAllTools: () => session.getAllToolNames(),
-						setActiveTools: (toolNames: string[]) => session.setActiveToolsByName(toolNames.filter(name => !parentOwnedToolNames.has(name))),
+						setActiveTools: (toolNames: string[]) =>
+							session.setActiveToolsByName(toolNames.filter(name => !parentOwnedToolNames.has(name))),
 						getCommands: () => [],
 						setModel: async model => {
 							const key = await session.modelRegistry.getApiKey(model);
