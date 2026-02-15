@@ -4,6 +4,7 @@ import transcribeScript from "./transcribe.py" with { type: "text" };
 export interface TranscribeOptions {
 	modelName?: string;
 	language?: string;
+	signal?: AbortSignal;
 }
 
 const TRANSCRIBE_TIMEOUT_MS = 120_000;
@@ -45,6 +46,14 @@ export async function transcribe(audioPath: string, options?: TranscribeOptions)
 		stderr: "pipe",
 	});
 
+	if (options?.signal?.aborted) {
+		proc.kill();
+		options.signal.throwIfAborted();
+	}
+
+	const onAbort = () => proc.kill();
+	options?.signal?.addEventListener("abort", onAbort, { once: true });
+
 	const killTimer = setTimeout(() => {
 		logger.error("Python whisper transcription timed out, killing process");
 		proc.kill();
@@ -52,6 +61,9 @@ export async function transcribe(audioPath: string, options?: TranscribeOptions)
 
 	const exitCode = await proc.exited;
 	clearTimeout(killTimer);
+	options?.signal?.removeEventListener("abort", onAbort);
+
+	options?.signal?.throwIfAborted();
 
 	const stdout = await new Response(proc.stdout).text();
 	const stderr = await new Response(proc.stderr).text();

@@ -24,6 +24,9 @@ export class STTController {
 	#recordingHandle: RecordingHandle | null = null;
 	#tempFile: string | null = null;
 	#depsResolved = false;
+	#toggling = false;
+	#disposed = false;
+	#transcriptionAbort: AbortController | null = null;
 
 	get state(): SttState {
 		return this.#state;
@@ -35,16 +38,22 @@ export class STTController {
 	}
 
 	async toggle(editor: Editor, options: ToggleOptions): Promise<void> {
-		switch (this.#state) {
-			case "idle":
-				await this.#startRecording(options);
-				break;
-			case "recording":
-				await this.#stopAndTranscribe(editor, options);
-				break;
-			case "transcribing":
-				options.showStatus("Transcription in progress...");
-				break;
+		if (this.#toggling) return;
+		this.#toggling = true;
+		try {
+			switch (this.#state) {
+				case "idle":
+					await this.#startRecording(options);
+					break;
+				case "recording":
+					await this.#stopAndTranscribe(editor, options);
+					break;
+				case "transcribing":
+					options.showStatus("Transcription in progress...");
+					break;
+			}
+		} finally {
+			this.#toggling = false;
 		}
 	}
 
@@ -101,12 +110,20 @@ export class STTController {
 				modelName: settings.get("stt.modelName") as string | undefined,
 				language: settings.get("stt.language") as string | undefined,
 			};
-			const text = await transcribe(tempFile, sttSettings);
+			this.#transcriptionAbort = new AbortController();
+			const text = await transcribe(tempFile, { ...sttSettings, signal: this.#transcriptionAbort.signal });
+			this.#transcriptionAbort = null;
+			if (this.#disposed) return;
 			if (text) {
 				editor.insertText(text);
 			}
-			this.#setState("idle", options);
+			if (!this.#disposed) this.#setState("idle", options);
 		} catch (err) {
+			if (this.#disposed) return;
+			if (err instanceof DOMException && err.name === "AbortError") {
+				this.#setState("idle", options);
+				return;
+			}
 			const msg = err instanceof Error ? err.message : "Transcription failed";
 			options.showWarning(msg);
 			logger.error("STT transcription failed", { error: msg });
@@ -122,8 +139,12 @@ export class STTController {
 	}
 
 	dispose(): void {
+		this.#disposed = true;
+		if (this.#transcriptionAbort) {
+			this.#transcriptionAbort.abort();
+			this.#transcriptionAbort = null;
+		}
 		if (this.#recordingHandle) {
-			// Best-effort stop — fire and forget since dispose is sync
 			this.#recordingHandle.stop().catch(() => {});
 			this.#recordingHandle = null;
 		}
