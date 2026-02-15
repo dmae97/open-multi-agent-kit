@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [12.5.1] - 2026-02-15
 ### Added
 
 - Added `repeatToolDescriptions` setting to render full tool descriptions in the system prompt instead of a tool name list
