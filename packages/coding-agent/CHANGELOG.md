@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added secret obfuscation: env vars matching secret patterns and `secrets.json` entries are replaced with placeholders before sending to LLM providers, deobfuscated in tool call arguments
+- Added `secrets.enabled` setting to toggle secret obfuscation
+- Added full regex literal support for `secrets.json` entries (`"/pattern/flags"` syntax with escaped `/` handling, automatic `g` flag enforcement)
+
 ## [12.5.1] - 2026-02-15
 ### Added
 

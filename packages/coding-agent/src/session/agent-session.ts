@@ -72,6 +72,7 @@ import type { PlanModeState } from "../plan-mode/state";
 import planModeActivePrompt from "../prompts/system/plan-mode-active.md" with { type: "text" };
 import planModeReferencePrompt from "../prompts/system/plan-mode-reference.md" with { type: "text" };
 import ttsrInterruptTemplate from "../prompts/system/ttsr-interrupt.md" with { type: "text" };
+import type { SecretObfuscator } from "../secrets/obfuscator";
 import { closeAllConnections } from "../ssh/connection-manager";
 import { unmountAll } from "../ssh/sshfs-mount";
 import { outputMeta } from "../tools/output-meta";
@@ -155,6 +156,8 @@ export interface AgentSessionConfig {
 	ttsrManager?: TtsrManager;
 	/** Force X-Initiator: agent for GitHub Copilot model selections in this session. */
 	forceCopilotAgentInitiator?: boolean;
+	/** Secret obfuscator for deobfuscating streaming edit content */
+	obfuscator?: SecretObfuscator;
 }
 
 /** Options for AgentSession.prompt() */
@@ -340,6 +343,7 @@ export class AgentSession {
 	#streamingEditCheckedLineCounts = new Map<string, number>();
 	#streamingEditFileCache = new Map<string, string>();
 	#promptInFlight = false;
+	#obfuscator: SecretObfuscator | undefined;
 	#promptGeneration = 0;
 	#providerSessionState = new Map<string, ProviderSessionState>();
 
@@ -361,6 +365,7 @@ export class AgentSession {
 		this.#baseSystemPrompt = this.agent.state.systemPrompt;
 		this.#ttsrManager = config.ttsrManager;
 		this.#forceCopilotAgentInitiator = config.forceCopilotAgentInitiator ?? false;
+		this.#obfuscator = config.obfuscator;
 		this.agent.providerSessionState = this.#providerSessionState;
 
 		// Always subscribe to agent events for internal handling
@@ -721,7 +726,10 @@ export class AgentSession {
 		const diffForCheck = diff.endsWith("\n") ? diff : diff.slice(0, lastNewlineIndex + 1);
 		if (diffForCheck.trim().length === 0) return;
 
-		const normalizedDiff = normalizeDiff(diffForCheck.replace(/\r/g, ""));
+		let normalizedDiff = normalizeDiff(diffForCheck.replace(/\r/g, ""));
+		if (!normalizedDiff) return;
+		// Deobfuscate the diff so removed lines match real file content
+		if (this.#obfuscator) normalizedDiff = this.#obfuscator.deobfuscate(normalizedDiff);
 		if (!normalizedDiff) return;
 		const lines = normalizedDiff.split("\n");
 		const hasChangeLine = lines.some(line => line.startsWith("+") || line.startsWith("-"));

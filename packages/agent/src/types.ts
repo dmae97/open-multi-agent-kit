@@ -111,6 +111,12 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 	 * Use for late-bound UI or session state access.
 	 */
 	getToolContext?: (toolCall?: ToolCallContext) => AgentToolContext | undefined;
+
+	/**
+	 * Optional transform applied to tool call arguments before execution.
+	 * Use for deobfuscating secrets or rewriting arguments.
+	 */
+	transformToolCallArguments?: (args: Record<string, unknown>, toolName: string) => Record<string, unknown>;
 }
 
 export interface ToolCallContext {

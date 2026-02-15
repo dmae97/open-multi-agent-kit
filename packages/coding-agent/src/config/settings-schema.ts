@@ -301,6 +301,15 @@ export const SETTINGS_SCHEMA = {
 	modelRoles: { type: "record", default: {} as Record<string, string> },
 
 	// ─────────────────────────────────────────────────────────────────────────
+	// Secrets settings
+	// ─────────────────────────────────────────────────────────────────────────
+	"secrets.enabled": {
+		type: "boolean",
+		default: true,
+		ui: { tab: "config", label: "Hide secrets", description: "Obfuscate secrets before sending to AI providers" },
+	},
+
+	// ─────────────────────────────────────────────────────────────────────────
 	// Compaction settings
 	// ─────────────────────────────────────────────────────────────────────────
 	"compaction.enabled": {
