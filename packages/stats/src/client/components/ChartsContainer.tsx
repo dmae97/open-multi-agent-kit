@@ -60,7 +60,7 @@ export function ChartsContainer({ modelSeries }: ChartsContainerProps) {
 				position: "top" as const,
 				align: "start" as const,
 				labels: {
-					color: "var(--text-secondary)",
+					color: "#94a3b8",
 					usePointStyle: true,
 					padding: 16,
 					font: { size: 12 },
@@ -68,10 +68,10 @@ export function ChartsContainer({ modelSeries }: ChartsContainerProps) {
 				},
 			},
 			tooltip: {
-				backgroundColor: "var(--bg-elevated)",
-				titleColor: "var(--text-primary)",
-				bodyColor: "var(--text-secondary)",
-				borderColor: "var(--border-default)",
+				backgroundColor: "#16161e",
+				titleColor: "#f8fafc",
+				bodyColor: "#94a3b8",
+				borderColor: "rgba(255, 255, 255, 0.1)",
 				borderWidth: 1,
 				padding: 12,
 				cornerRadius: 8,
@@ -87,21 +87,21 @@ export function ChartsContainer({ modelSeries }: ChartsContainerProps) {
 		scales: {
 			x: {
 				grid: {
-					color: "var(--border-subtle)",
+					color: "rgba(255, 255, 255, 0.06)",
 					drawBorder: false,
 				},
 				ticks: {
-					color: "var(--text-muted)",
+					color: "#64748b",
 					font: { size: 11 },
 				},
 			},
 			y: {
 				grid: {
-					color: "var(--border-subtle)",
+					color: "rgba(255, 255, 255, 0.06)",
 					drawBorder: false,
 				},
 				ticks: {
-					color: "var(--text-muted)",
+					color: "#64748b",
 					font: { size: 11 },
 					callback: (value: number | string) => `${value}%`,
 				},
@@ -141,32 +141,44 @@ function buildModelPreferenceSeries(
 } {
 	if (points.length === 0) return { data: [], series: [] };
 
-	const totals = new Map<string, { label: string; total: number }>();
+	const totals = new Map<string, { model: string; provider: string; total: number }>();
 	for (const point of points) {
 		const key = `${point.model}::${point.provider}`;
-		const label = `${point.model} (${point.provider})`;
 		const existing = totals.get(key);
 		if (existing) {
 			existing.total += point.requests;
 		} else {
-			totals.set(key, { label, total: point.requests });
+			totals.set(key, { model: point.model, provider: point.provider, total: point.requests });
 		}
 	}
 
-	const sorted = [...totals.values()].sort((a, b) => b.total - a.total);
-	const topLabels = sorted.slice(0, topN).map(entry => entry.label);
+	const sorted = [...totals.entries()].map(([key, value]) => ({ key, ...value })).sort((a, b) => b.total - a.total);
+	const topEntries = sorted.slice(0, topN);
+	const topKeys = new Set(topEntries.map(entry => entry.key));
+
+	const topModelCounts = new Map<string, number>();
+	for (const entry of topEntries) {
+		topModelCounts.set(entry.model, (topModelCounts.get(entry.model) ?? 0) + 1);
+	}
+
+	const labelByKey = new Map<string, string>();
+	for (const entry of topEntries) {
+		const showProvider = (topModelCounts.get(entry.model) ?? 0) > 1;
+		labelByKey.set(entry.key, showProvider ? `${entry.model} (${entry.provider})` : entry.model);
+	}
+
 	const dataMap = new Map<number, Record<string, number>>();
 
 	for (const point of points) {
-		const label = `${point.model} (${point.provider})`;
+		const key = `${point.model}::${point.provider}`;
 		const bucket = dataMap.get(point.timestamp) ?? { timestamp: point.timestamp, total: 0 };
 		bucket.total += point.requests;
-		const key = topLabels.includes(label) ? label : "Other";
-		bucket[key] = (bucket[key] ?? 0) + point.requests;
+		const seriesLabel = topKeys.has(key) ? (labelByKey.get(key) ?? point.model) : "Other";
+		bucket[seriesLabel] = (bucket[seriesLabel] ?? 0) + point.requests;
 		dataMap.set(point.timestamp, bucket);
 	}
 
-	const series = [...topLabels];
+	const series = topEntries.map(entry => labelByKey.get(entry.key) ?? entry.model);
 	if ([...dataMap.values()].some(row => (row.Other ?? 0) > 0)) {
 		series.push("Other");
 	}

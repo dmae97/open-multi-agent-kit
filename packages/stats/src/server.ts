@@ -1,9 +1,8 @@
 import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import * as os from "node:os";
+import * as path from "node:path";
 import postcss from "postcss";
 import tailwindcss from "tailwindcss";
-import { EMBEDDED_CLIENT_ARCHIVE_TAR_GZ_BASE64 } from "./embedded-client.generated";
 import {
 	getDashboardStats,
 	getRecentErrors,
@@ -12,6 +11,7 @@ import {
 	getTotalMessageCount,
 	syncAllSessions,
 } from "./aggregator";
+import { EMBEDDED_CLIENT_ARCHIVE_TAR_GZ_BASE64 } from "./embedded-client.generated";
 
 const CLIENT_DIR = path.join(import.meta.dir, "client");
 const STATIC_DIR = path.join(import.meta.dir, "..", "dist", "client");
@@ -72,8 +72,6 @@ async function getCompiledClientDir(): Promise<string> {
 
 	return compiledClientDirPromise;
 }
-
-
 
 async function buildTailwindCss(inputPath: string, outputPath: string): Promise<void> {
 	const sourceCss = await Bun.file(inputPath).text();
