@@ -56,7 +56,7 @@ function splitDstLines(dst: string): string[] {
 }
 
 /** Pattern matching hashline display format: `LINE:HASH|CONTENT` */
-const HASHLINE_PREFIX_RE = /^\d+:[0-9a-zA-Z]{1,16}\|/;
+const HASHLINE_PREFIX_RE = /^\s*(?:>>>|>>)?\s*\d+:[0-9a-zA-Z]{1,16}\|/;
 
 /** Pattern matching a unified-diff `+` prefix (but not `++`) */
 const DIFF_PLUS_RE = /^\+(?!\+)/;
@@ -508,6 +508,7 @@ export function parseLineRef(ref: string): { line: number; hash: string } {
 	const cleaned = ref
 		.replace(/\|.*$/, "")
 		.replace(/ {2}.*$/, "")
+		.replace(/^>+\s*/, "")
 		.trim();
 	const normalized = cleaned.replace(/\s*:\s*/, ":");
 	const strictMatch = normalized.match(/^(\d+):([0-9a-zA-Z]{1,16})$/);

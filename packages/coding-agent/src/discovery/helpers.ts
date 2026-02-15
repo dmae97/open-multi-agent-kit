@@ -4,6 +4,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
+import { FileType, glob } from "@oh-my-pi/pi-natives";
 import { CONFIG_DIR_NAME } from "@oh-my-pi/pi-utils/dirs";
 import { readDirEntries, readFile } from "../capability/fs";
 import type { Skill, SkillFrontmatter } from "../capability/skill";
@@ -236,42 +237,41 @@ export async function loadSkillsFromDir(
 	const items: Skill[] = [];
 	const warnings: string[] = [];
 	const { dir, level, providerId, requireDescription = false } = options;
+	// Use native glob to find all SKILL.md files one level deep
+	// Pattern */SKILL.md matches <dir>/<subdir>/SKILL.md
+	let matches: Array<{ path: string }>;
+	try {
+		const result = await glob({
+			pattern: "*/SKILL.md",
+			path: dir,
+			gitignore: true,
+			hidden: false,
+			fileType: FileType.File,
+		});
+		matches = result.matches;
+	} catch {
+		// Directory doesn't exist or isn't readable
+		return { items, warnings };
+	}
 
-	// Initialize ignore matcher and read ignore rules from root
-	const ig = createIgnoreMatcher();
-	await addIgnoreRules(ig, dir, dir, readFile);
-
-	const entries = await readDirEntries(dir);
-	const skillDirs = entries.filter(
-		entry =>
-			(entry.isDirectory() || entry.isSymbolicLink()) &&
-			!entry.name.startsWith(".") &&
-			entry.name !== "node_modules",
-	);
-
+	// Read all skill files in parallel
 	const results = await Promise.all(
-		skillDirs.map(async entry => {
-			const entryPath = path.join(dir, entry.name);
-
-			// Check if this directory should be ignored
-			if (shouldIgnore(ig, dir, entryPath, true)) {
-				return { item: null as Skill | null, warning: null as string | null };
-			}
-
-			const skillFile = path.join(entryPath, "SKILL.md");
+		matches.map(async match => {
+			const skillFile = path.join(dir, match.path);
 			const content = await readFile(skillFile);
 			if (!content) {
 				return { item: null as Skill | null, warning: null as string | null };
 			}
-
 			const { frontmatter, body } = parseFrontmatter(content, { source: skillFile });
 			if (requireDescription && !frontmatter.description) {
 				return { item: null as Skill | null, warning: null as string | null };
 			}
 
+			// Extract skill name from path: "<skilldir>/SKILL.md" -> "<skilldir>"
+			const skillDirName = path.basename(path.dirname(skillFile));
 			return {
 				item: {
-					name: (frontmatter.name as string) || entry.name,
+					name: (frontmatter.name as string) || skillDirName,
 					path: skillFile,
 					content: body,
 					frontmatter: frontmatter as SkillFrontmatter,
@@ -282,12 +282,10 @@ export async function loadSkillsFromDir(
 			};
 		}),
 	);
-
 	for (const result of results) {
 		if (result.warning) warnings.push(result.warning);
 		if (result.item) items.push(result.item);
 	}
-
 	return { items, warnings };
 }
 

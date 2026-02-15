@@ -121,7 +121,7 @@ function formatStreamingDiff(diff: string, rawPath: string, uiTheme: Theme, labe
 	return text;
 }
 
-function formatStreamingHashlineEdits(edits: HashlineEditPreview[], uiTheme: Theme, ui: ToolUIKit): string {
+function formatStreamingHashlineEdits(edits: unknown[], uiTheme: Theme, ui: ToolUIKit): string {
 	const MAX_EDITS = 4;
 	const MAX_DST_LINES = 8;
 	let text = "\n\n";
@@ -156,28 +156,59 @@ function formatStreamingHashlineEdits(edits: HashlineEditPreview[], uiTheme: The
 	}
 
 	return text.trimEnd();
-	function formatHashlineEdit(edit: HashlineEditPreview): { srcLabel: string; dst: string } {
-		if ("set_line" in edit) {
+	function formatHashlineEdit(edit: unknown): { srcLabel: string; dst: string } {
+		const asRecord = (value: unknown): Record<string, unknown> | undefined => {
+			if (typeof value === "object" && value !== null) return value as Record<string, unknown>;
+			return undefined;
+		};
+		const editRecord = asRecord(edit);
+		if (!editRecord) {
 			return {
-				srcLabel: `• set_line ${edit.set_line.anchor}`,
-				dst: edit.set_line.new_text,
+				srcLabel: "• (incomplete edit)",
+				dst: "",
 			};
 		}
-		if ("replace_lines" in edit) {
+		if ("set_line" in editRecord) {
+			const setLine = asRecord(editRecord.set_line);
 			return {
-				srcLabel: `• replace_lines ${edit.replace_lines.start_anchor}..${edit.replace_lines.end_anchor}`,
-				dst: edit.replace_lines.new_text,
+				srcLabel: `• set_line ${typeof setLine?.anchor === "string" ? setLine.anchor : "…"}`,
+				dst: typeof setLine?.new_text === "string" ? setLine.new_text : "",
 			};
 		}
-		if ("replace" in edit) {
+		if ("replace_lines" in editRecord) {
+			const replaceLines = asRecord(editRecord.replace_lines);
+			const start = typeof replaceLines?.start_anchor === "string" ? replaceLines.start_anchor : "…";
+			const end = typeof replaceLines?.end_anchor === "string" ? replaceLines.end_anchor : "…";
 			return {
-				srcLabel: `• replace old_text→new_text${edit.replace.all ? " (all)" : ""}`,
-				dst: edit.replace.new_text,
+				srcLabel: `• replace_lines ${start}..${end}`,
+				dst: typeof replaceLines?.new_text === "string" ? replaceLines.new_text : "",
+			};
+		}
+		if ("replace" in editRecord) {
+			const replace = asRecord(editRecord.replace);
+			const all = typeof replace?.all === "boolean" ? replace.all : false;
+			return {
+				srcLabel: `• replace old_text→new_text${all ? " (all)" : ""}`,
+				dst: typeof replace?.new_text === "string" ? replace.new_text : "",
+			};
+		}
+		if ("insert_after" in editRecord) {
+			const insertAfter = asRecord(editRecord.insert_after);
+			const anchor = typeof insertAfter?.anchor === "string" ? insertAfter.anchor : "…";
+			const text =
+				typeof insertAfter?.text === "string"
+					? insertAfter.text
+					: typeof insertAfter?.content === "string"
+						? insertAfter.content
+						: "";
+			return {
+				srcLabel: `• insert_after ${anchor}..`,
+				dst: text,
 			};
 		}
 		return {
-			srcLabel: `• insert_after ${edit.insert_after.anchor}..`,
-			dst: edit.insert_after.text,
+			srcLabel: "• (incomplete edit)",
+			dst: "",
 		};
 	}
 }

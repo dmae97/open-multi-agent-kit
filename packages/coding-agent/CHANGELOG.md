@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Breaking Changes
 
 - Replaced `theme` setting with `theme.dark` and `theme.light` (auto-migrated)
@@ -29,6 +28,9 @@
 
 ### Changed
 
+- Improved skill discovery to use native glob for better performance and symlink support
+- Enhanced hashline reference parsing to handle prefixes like `>>>` and `>>` in line references
+- Strengthened type safety in hashline edit formatting with defensive null checks for incomplete edits
 - Changed STT status messages to display via state change callbacks instead of explicit status calls
 - Changed cursor visibility behavior during voice recording to hide hardware and terminal cursors
 
@@ -38,6 +40,7 @@
 
 ### Fixed
 
+- Fixed skill discovery to correctly extract skill names from directory paths when frontmatter name is missing
 - Fixed `session.abort()` not clearing `promptInFlight` flag due to microtask ordering, which blocked subsequent prompts
 - Sanitized debug log display to strip control codes, normalize tabs, and trim width
 
