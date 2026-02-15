@@ -125,8 +125,8 @@ describe("AgentSession auto-compaction queue resume", () => {
 		});
 	});
 
-	afterEach(() => {
-		session.dispose();
+	afterEach(async () => {
+		await session.dispose();
 		tempDir.removeSync();
 		vi.useRealTimers();
 		getRuntimeSignals().length = 0;
