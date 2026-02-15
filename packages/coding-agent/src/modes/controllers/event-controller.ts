@@ -249,6 +249,13 @@ export class EventController {
 					if (details?.todos) {
 						this.ctx.setTodos(details.todos);
 					}
+				} else if (event.toolName === "todo_write" && event.isError) {
+					const textContent = event.result.content.find(
+						(content: { type: string; text?: string }) => content.type === "text",
+					)?.text;
+					this.ctx.showWarning(
+						`Todo update failed${textContent ? `: ${textContent}` : ". Progress may be stale until todo_write succeeds."}`,
+					);
 				}
 				if (event.toolName === "exit_plan_mode" && !event.isError) {
 					const details = event.result.details as ExitPlanModeDetails | undefined;
