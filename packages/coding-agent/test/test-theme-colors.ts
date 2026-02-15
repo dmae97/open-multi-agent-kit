@@ -2,7 +2,7 @@ import { initTheme, theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
 
 // Initialize with dark theme explicitly
 Bun.env.COLORTERM = "truecolor";
-initTheme("dark");
+initTheme();
 
 console.log("\n=== Foreground Colors ===\n");
 

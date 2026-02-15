@@ -560,7 +560,13 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 		});
 	}
 
-	await initTheme(settings.get("theme"), isInteractive, settings.get("symbolPreset"), settings.get("colorBlindMode"));
+	await initTheme(
+		isInteractive,
+		settings.get("symbolPreset"),
+		settings.get("colorBlindMode"),
+		settings.get("theme.dark"),
+		settings.get("theme.light"),
+	);
 	debugStartup("main:initTheme2");
 	time("initTheme");
 

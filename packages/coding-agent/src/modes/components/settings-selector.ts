@@ -299,7 +299,7 @@ export class SettingsSelectorComponent extends Container {
 				const baseOpt = options.find(o => o.value === level);
 				return baseOpt || { value: level, label: level };
 			});
-		} else if (def.path === "theme") {
+		} else if (def.path === "theme.dark" || def.path === "theme.light") {
 			options = this.context.availableThemes.map(t => ({ value: t, label: t }));
 		}
 
@@ -307,9 +307,13 @@ export class SettingsSelectorComponent extends Container {
 		let onPreview: ((value: string) => void) | undefined;
 		let onPreviewCancel: (() => void) | undefined;
 
-		if (def.path === "theme") {
-			onPreview = this.callbacks.onThemePreview;
-			onPreviewCancel = () => this.callbacks.onThemePreview?.(currentValue);
+		if (def.path === "theme.dark" || def.path === "theme.light") {
+			onPreview = value => {
+				this.callbacks.onThemePreview?.(value);
+			};
+			onPreviewCancel = () => {
+				this.callbacks.onThemePreview?.(currentValue);
+			};
 		} else if (def.path === "statusLine.preset") {
 			onPreview = value => {
 				const presetDef = getPreset(
@@ -347,7 +351,8 @@ export class SettingsSelectorComponent extends Container {
 		}
 
 		// Provide status line preview for theme selection
-		const getPreview = def.path === "theme" ? this.callbacks.getStatusLinePreview : undefined;
+		const isThemeSetting = def.path === "theme.dark" || def.path === "theme.light";
+		const getPreview = isThemeSetting ? this.callbacks.getStatusLinePreview : undefined;
 
 		return new SelectSubmenu(
 			def.label,
@@ -355,9 +360,7 @@ export class SettingsSelectorComponent extends Container {
 			options,
 			currentValue,
 			value => {
-				// Persist
 				this.#setSettingValue(def.path, value);
-				// Notify
 				this.callbacks.onChange(def.path, value);
 				done(value);
 			},

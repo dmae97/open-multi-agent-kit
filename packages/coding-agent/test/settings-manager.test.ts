@@ -64,7 +64,7 @@ describe("Settings", () => {
 
 			// Simulate external edit (e.g., user modifying DB directly or another process)
 			await writeSettings({
-				theme: "dark",
+				theme: { dark: "anthracite" },
 				modelRoles: { default: "claude-sonnet" },
 				enabledModels: ["claude-opus-4-5", "gpt-5.2-codex"],
 			});
@@ -76,7 +76,7 @@ describe("Settings", () => {
 			const savedSettings = await readSettings();
 			expect(savedSettings.enabledModels).toEqual(["claude-opus-4-5", "gpt-5.2-codex"]);
 			expect(savedSettings.defaultThinkingLevel).toBe("high");
-			expect(savedSettings.theme).toBe("dark");
+			expect(savedSettings.theme).toEqual({ dark: "anthracite" });
 			expect((savedSettings.modelRoles as { default?: string } | undefined)?.default).toBe("claude-sonnet");
 		});
 
@@ -93,24 +93,24 @@ describe("Settings", () => {
 				extensions: ["/path/to/extension.ts"],
 			});
 
-			settings.set("theme", "light");
+			settings.set("theme.dark", "anthracite");
 			await settings.flush();
 
 			const savedSettings = await readSettings();
 			expect(savedSettings.shellPath).toBe("/bin/zsh");
 			expect(savedSettings.extensions).toEqual(["/path/to/extension.ts"]);
-			expect(savedSettings.theme).toBe("light");
+			expect(savedSettings.theme).toEqual({ dark: "anthracite" });
 		});
 
 		it("should let in-memory changes override file changes for same key", async () => {
 			await writeSettings({
-				theme: "dark",
+				theme: { dark: "anthracite" },
 			});
 
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
 
 			await writeSettings({
-				theme: "dark",
+				theme: { dark: "anthracite" },
 				defaultThinkingLevel: "low",
 			});
 

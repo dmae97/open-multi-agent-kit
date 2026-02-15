@@ -7,7 +7,7 @@
  *
  * The Settings singleton provides type-safe path-based access:
  *   settings.get("compaction.enabled")  // => boolean
- *   settings.set("theme", "dark")       // sync, saves in background
+ *   settings.set("theme.dark", "titanium")  // sync, saves in background
  */
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -141,10 +141,25 @@ export const SETTINGS_SCHEMA = {
 	// Top-level settings
 	// ─────────────────────────────────────────────────────────────────────────
 	lastChangelogVersion: { type: "string", default: undefined },
-	theme: {
+	"theme.dark": {
 		type: "string",
-		default: undefined,
-		ui: { tab: "display", label: "Theme", description: "Color theme for the interface", submenu: true },
+		default: "titanium",
+		ui: {
+			tab: "display",
+			label: "Dark theme",
+			description: "Theme used when terminal has dark background",
+			submenu: true,
+		},
+	},
+	"theme.light": {
+		type: "string",
+		default: "light",
+		ui: {
+			tab: "display",
+			label: "Light theme",
+			description: "Theme used when terminal has light background",
+			submenu: true,
+		},
 	},
 	symbolPreset: {
 		type: "enum",

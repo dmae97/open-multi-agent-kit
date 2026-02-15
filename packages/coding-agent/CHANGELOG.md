@@ -4,6 +4,11 @@
 ### Added
 
 - Added `abort_and_prompt` RPC command for atomic abort-and-reprompt without race conditions ([#357](https://github.com/can1357/oh-my-pi/pull/357))
+- Added automatic dark/light theme switching via SIGWINCH with separate `theme.dark`/`theme.light` settings, replacing the single `theme` setting ([#65](https://github.com/can1357/oh-my-pi/issues/65))
+
+### Breaking Changes
+
+- Replaced `theme` setting with `theme.dark` and `theme.light` (auto-migrated)
 
 ### Fixed
 

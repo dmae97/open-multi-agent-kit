@@ -48,4 +48,6 @@ __pycache__/
 
 target/
 
+.worktrees/
+
 *.node

@@ -66,7 +66,7 @@ import type { Skill, SkillWarning } from "../extensibility/skills";
 import { expandSlashCommand, type FileSlashCommand } from "../extensibility/slash-commands";
 import { resolvePlanUrlToPath } from "../internal-urls";
 import { executePython as executePythonCommand, type PythonResult } from "../ipy/executor";
-import { theme } from "../modes/theme/theme";
+import { getCurrentThemeName, theme } from "../modes/theme/theme";
 import { normalizeDiff, normalizeToLF, ParseError, previewPatch, stripBom } from "../patch";
 import type { PlanModeState } from "../plan-mode/state";
 import planModeActivePrompt from "../prompts/system/plan-mode-active.md" with { type: "text" };
@@ -4040,7 +4040,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 	 * @returns Path to exported file
 	 */
 	async exportToHtml(outputPath?: string): Promise<string> {
-		const themeName = this.settings.get("theme");
+		const themeName = getCurrentThemeName();
 		return exportSessionToHtml(this.sessionManager, this.state, { outputPath, themeName });
 	}
 

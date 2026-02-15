@@ -44,7 +44,8 @@
 			"!**/node_modules/**/*",
 			"!**/test-sessions.ts",
 			"!**/template.generated.ts",
-			"!**/gen/agent_pb.ts"
+			"!**/gen/agent_pb.ts",
+			"!.worktrees/**/*"
 		]
 	},
 	"assist": { "actions": { "source": { "organizeImports": "on" } } }
