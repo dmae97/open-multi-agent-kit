@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import { YAML } from "bun";
 import { isEnoent, logger } from "@oh-my-pi/pi-utils";
 import type { SecretEntry } from "./obfuscator";
 import { compileSecretRegex } from "./regex";
@@ -6,12 +7,12 @@ import { compileSecretRegex } from "./regex";
 export { obfuscateMessages, type SecretEntry, SecretObfuscator } from "./obfuscator";
 
 /**
- * Load secrets from project-local and global secrets.json files.
+ * Load secrets from project-local and global secrets.yml files.
  * Project-local entries override global entries with matching content.
  */
 export async function loadSecrets(cwd: string, agentDir: string): Promise<SecretEntry[]> {
-	const projectPath = path.join(cwd, ".omp", "secrets.json");
-	const globalPath = path.join(agentDir, "secrets.json");
+	const projectPath = path.join(cwd, ".omp", "secrets.yml");
+	const globalPath = path.join(agentDir, "secrets.yml");
 
 	const globalEntries = await loadSecretsFile(globalPath);
 	const projectEntries = await loadSecretsFile(projectPath);
@@ -47,9 +48,10 @@ export function collectEnvSecrets(): SecretEntry[] {
 
 async function loadSecretsFile(filePath: string): Promise<SecretEntry[]> {
 	try {
-		const raw = await Bun.file(filePath).json();
+		const text = await Bun.file(filePath).text();
+		const raw = YAML.parse(text);
 		if (!Array.isArray(raw)) {
-			logger.warn("secrets.json must be a JSON array", { path: filePath });
+			logger.warn("secrets.yml must be a YAML array", { path: filePath });
 			return [];
 		}
 		const entries: SecretEntry[] = [];
@@ -67,42 +69,42 @@ async function loadSecretsFile(filePath: string): Promise<SecretEntry[]> {
 		return entries;
 	} catch (err) {
 		if (isEnoent(err)) return [];
-		logger.warn("Failed to load secrets.json", { path: filePath, error: String(err) });
+		logger.warn("Failed to load secrets.yml", { path: filePath, error: String(err) });
 		return [];
 	}
 }
 
 function validateEntry(entry: unknown, filePath: string, index: number): entry is SecretEntry {
 	if (entry === null || typeof entry !== "object") {
-		logger.warn(`secrets.json[${index}]: entry must be an object`, { path: filePath });
+		logger.warn(`secrets.yml[${index}]: entry must be an object`, { path: filePath });
 		return false;
 	}
 	const e = entry as Record<string, unknown>;
 	if (e.type !== "plain" && e.type !== "regex") {
-		logger.warn(`secrets.json[${index}]: type must be "plain" or "regex"`, { path: filePath });
+		logger.warn(`secrets.yml[${index}]: type must be "plain" or "regex"`, { path: filePath });
 		return false;
 	}
 	if (typeof e.content !== "string" || e.content.length === 0) {
-		logger.warn(`secrets.json[${index}]: content must be a non-empty string`, { path: filePath });
+		logger.warn(`secrets.yml[${index}]: content must be a non-empty string`, { path: filePath });
 		return false;
 	}
 	if (e.mode !== undefined && e.mode !== "obfuscate" && e.mode !== "replace") {
-		logger.warn(`secrets.json[${index}]: mode must be "obfuscate" or "replace"`, { path: filePath });
+		logger.warn(`secrets.yml[${index}]: mode must be "obfuscate" or "replace"`, { path: filePath });
 		return false;
 	}
 	if (e.replacement !== undefined && typeof e.replacement !== "string") {
-		logger.warn(`secrets.json[${index}]: replacement must be a string`, { path: filePath });
+		logger.warn(`secrets.yml[${index}]: replacement must be a string`, { path: filePath });
 		return false;
 	}
 	if (e.flags !== undefined && typeof e.flags !== "string") {
-		logger.warn(`secrets.json[${index}]: flags must be a string`, { path: filePath });
+		logger.warn(`secrets.yml[${index}]: flags must be a string`, { path: filePath });
 		return false;
 	}
 	if (e.type === "regex") {
 		try {
 			compileSecretRegex(e.content as string, e.flags as string | undefined);
 		} catch (error) {
-			logger.warn(`secrets.json[${index}]: invalid regex pattern`, {
+			logger.warn(`secrets.yml[${index}]: invalid regex pattern`, {
 				path: filePath,
 				pattern: e.content,
 				error: String(error),
