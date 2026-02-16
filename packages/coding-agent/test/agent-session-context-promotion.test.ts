@@ -29,22 +29,23 @@ describe("AgentSession context promotion", () => {
 		tempDir.removeSync();
 	});
 
-	function createAssistantMessage(model: Model, contextTokens: number): AssistantMessage {
+	function createOverflowMessage(model: Model): AssistantMessage {
 		return {
 			role: "assistant",
-			content: [{ type: "text", text: "ok" }],
+			content: [{ type: "text", text: "" }],
 			api: model.api,
 			provider: model.provider,
 			model: model.id,
 			usage: {
-				input: contextTokens,
+				input: 0,
 				output: 0,
 				cacheRead: 0,
 				cacheWrite: 0,
-				totalTokens: contextTokens,
+				totalTokens: 0,
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 			},
-			stopReason: "stop",
+			stopReason: "error",
+			errorMessage: "context_length_exceeded: Your input exceeds the context window of this model.",
 			timestamp: Date.now(),
 		};
 	}
@@ -58,7 +59,7 @@ describe("AgentSession context promotion", () => {
 		throw new Error("Timed out waiting for condition");
 	}
 
-	it("promotes to a larger-context model and clears codex websocket session state", async () => {
+	it("promotes to a larger-context model on overflow and clears codex websocket session state", async () => {
 		const sparkModel = modelRegistry.find("openai-codex", "gpt-5.3-codex-spark");
 		const codexModel = modelRegistry.find("openai-codex", "gpt-5.3-codex");
 		if (!sparkModel || !codexModel) {
@@ -68,7 +69,6 @@ describe("AgentSession context promotion", () => {
 		const settings = Settings.isolated({
 			"compaction.enabled": false,
 			"contextPromotion.enabled": true,
-			"contextPromotion.thresholdPercent": 90,
 		});
 
 		const agent = new Agent({
@@ -92,9 +92,9 @@ describe("AgentSession context promotion", () => {
 			close: closeSpy,
 		} satisfies ProviderSessionState);
 
-		const assistantMessage = createAssistantMessage(sparkModel, 120_000);
-		session.agent.emitExternalEvent({ type: "message_end", message: assistantMessage });
-		session.agent.emitExternalEvent({ type: "agent_end", messages: [assistantMessage] });
+		const overflowMessage = createOverflowMessage(sparkModel);
+		session.agent.emitExternalEvent({ type: "message_end", message: overflowMessage });
+		session.agent.emitExternalEvent({ type: "agent_end", messages: [overflowMessage] });
 
 		await waitFor(() => session.model?.id === codexModel.id);
 
@@ -104,7 +104,7 @@ describe("AgentSession context promotion", () => {
 		expect(session.providerSessionState.size).toBe(0);
 	});
 
-	it("does not promote when context usage is below threshold", async () => {
+	it("does not promote when promotion is disabled", async () => {
 		const sparkModel = modelRegistry.find("openai-codex", "gpt-5.3-codex-spark");
 		if (!sparkModel) {
 			throw new Error("Expected codex spark model to exist");
@@ -112,8 +112,7 @@ describe("AgentSession context promotion", () => {
 
 		const settings = Settings.isolated({
 			"compaction.enabled": false,
-			"contextPromotion.enabled": true,
-			"contextPromotion.thresholdPercent": 90,
+			"contextPromotion.enabled": false,
 		});
 
 		const agent = new Agent({
@@ -137,9 +136,9 @@ describe("AgentSession context promotion", () => {
 			close: closeSpy,
 		} satisfies ProviderSessionState);
 
-		const assistantMessage = createAssistantMessage(sparkModel, 80_000);
-		session.agent.emitExternalEvent({ type: "message_end", message: assistantMessage });
-		session.agent.emitExternalEvent({ type: "agent_end", messages: [assistantMessage] });
+		const overflowMessage = createOverflowMessage(sparkModel);
+		session.agent.emitExternalEvent({ type: "message_end", message: overflowMessage });
+		session.agent.emitExternalEvent({ type: "agent_end", messages: [overflowMessage] });
 
 		await Bun.sleep(30);
 

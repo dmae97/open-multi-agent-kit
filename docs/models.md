@@ -245,18 +245,15 @@ Related settings:
 
 ## Context promotion (model-level fallback chains)
 
-Context promotion is a post-turn safety mechanism for small-context variants (for example `*-spark`) that should automatically promote to a larger-context sibling before hard overflow.
+Context promotion is an overflow recovery mechanism for small-context variants (for example `*-spark`) that automatically promotes to a larger-context sibling when the API rejects a request with a context length error.
 
 ### Trigger and order
 
-On `agent_end` after a successful assistant turn (`stopReason` not `error`/`aborted`), `AgentSession` computes:
+When a turn fails with a context overflow error (e.g. `context_length_exceeded`), `AgentSession` attempts promotion **before** falling back to compaction:
 
-- `contextTokens = calculateContextTokens(assistantMessage.usage)`
-- `contextPercent = contextTokens / currentModel.contextWindow * 100`
-
-If `contextPercent >= contextPromotion.thresholdPercent` (default `90`) and `contextPromotion.enabled` is true, promotion is attempted.
-
-Promotion check runs **before** threshold compaction check.
+1. If `contextPromotion.enabled` is true, resolve a promotion target (see below).
+2. If a target is found, switch to it and retry the request — no compaction needed.
+3. If no target is available, fall through to auto-compaction on the current model.
 
 ### Target selection
 
@@ -264,7 +261,6 @@ Selection is model-driven, not role-driven:
 
 1. `currentModel.contextPromotionTarget` (if configured)
 2. smallest larger-context model on the same provider + API
-3. smallest larger-context model globally
 
 Candidates are ignored unless credentials resolve (`ModelRegistry.getApiKey(...)`).
 

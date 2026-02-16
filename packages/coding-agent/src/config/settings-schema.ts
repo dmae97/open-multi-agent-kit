@@ -305,10 +305,9 @@ export const SETTINGS_SCHEMA = {
 		ui: {
 			tab: "agent",
 			label: "Auto-promote context",
-			description: "Temporarily promote to a larger-context model role before hitting context limits",
+			description: "Promote to a larger-context model on context overflow instead of compacting",
 		},
 	},
-	"contextPromotion.thresholdPercent": { type: "number", default: 90 },
 
 	// ─────────────────────────────────────────────────────────────────────────
 	// Compaction settings
@@ -1039,7 +1038,6 @@ export interface CompactionSettings {
 
 export interface ContextPromotionSettings {
 	enabled: boolean;
-	thresholdPercent: number;
 }
 export interface RetrySettings {
 	enabled: boolean;

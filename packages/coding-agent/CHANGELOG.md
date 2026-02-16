@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added abort signal support to LSP file operations (`ensureFileOpen`, `refreshFile`) for cancellable file synchronization
@@ -17,6 +18,8 @@
 
 ### Changed
 
+- Changed context promotion to trigger on context overflow instead of a configurable threshold, promoting to a larger model before attempting compaction
+- Changed context promotion behavior to retry immediately on the promoted model without compacting, providing faster recovery from context limits
 - Changed default grep context lines from 1 before/3 after to 0 before/0 after for more focused search results
 - Changed escape key handling in custom editor to allow bypassing autocomplete dismissal when specified by parent controller
 - Changed workspace diagnostics to support abort signals for cancellable diagnostic runs
@@ -29,6 +32,10 @@
 - Updated web search provider priority order to include Brave (Exa → Brave → Jina → Perplexity → Anthropic → Gemini → Codex → Z.AI)
 - Extended recency filter support to Brave provider alongside Perplexity
 - Changed GitHub issue comment fetching to use paginated API requests with 100 comments per page instead of single request with 50-comment limit
+
+### Removed
+
+- Removed `contextPromotion.thresholdPercent` setting as context promotion now triggers only on overflow
 
 ### Fixed
 

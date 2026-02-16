@@ -599,7 +599,6 @@ export class AgentSession {
 				if (didRetry) return; // Retry was initiated, don't proceed to compaction
 			}
 
-			await this.#checkContextPromotion(msg);
 			await this.#checkCompaction(msg);
 
 			// Check for incomplete todos (unless there was an error or abort)
@@ -2690,44 +2689,34 @@ Be thorough - include exact file paths, function names, error messages, and tech
 	}
 
 	/**
-	 * Check if compaction is needed and run it.
+	 * Check if compaction or context promotion is needed and run it.
 	 * Called after agent_end and before prompt submission.
 	 *
-	 * Two cases:
-	 * 1. Overflow: LLM returned context overflow error, remove error message from agent state, compact, auto-retry
-	 * 2. Threshold: Context over threshold, compact, NO auto-retry (user continues manually)
+	 * Three cases (in order):
+	 * 1. Overflow + promotion: promote to larger model, retry without compacting
+	 * 2. Overflow + no promotion target: compact, auto-retry on same model
+	 * 3. Threshold: Context over threshold, compact, NO auto-retry (user continues manually)
 	 *
 	 * @param assistantMessage The assistant message to check
 	 * @param skipAbortedCheck If false, include aborted messages (for pre-prompt check). Default: true
 	 */
 	async #checkCompaction(assistantMessage: AssistantMessage, skipAbortedCheck = true): Promise<void> {
-		const compactionSettings = this.settings.getGroup("compaction");
-		if (!compactionSettings.enabled) return;
-
-		const pruneResult = await this.#pruneToolOutputs();
-
 		// Skip if message was aborted (user cancelled) - unless skipAbortedCheck is false
 		if (skipAbortedCheck && assistantMessage.stopReason === "aborted") return;
-
 		const contextWindow = this.model?.contextWindow ?? 0;
-
 		// Skip overflow check if the message came from a different model.
 		// This handles the case where user switched from a smaller-context model (e.g. opus)
 		// to a larger-context model (e.g. codex) - the overflow error from the old model
 		// shouldn't trigger compaction for the new model.
 		const sameModel =
 			this.model && assistantMessage.provider === this.model.provider && assistantMessage.model === this.model.id;
-
-		// Skip overflow check if the error is from before a compaction in the current path.
 		// This handles the case where an error was kept after compaction (in the "kept" region).
 		// The error shouldn't trigger another compaction since we already compacted.
-		// Example: opus fails → switch to codex → compact → switch back to opus → opus error
+		// Example: opus fails \u2192 switch to codex \u2192 compact \u2192 switch back to opus \u2192 opus error
 		// is still in context but shouldn't trigger compaction again.
 		const compactionEntry = getLatestCompactionEntry(this.sessionManager.getBranch());
 		const errorIsFromBeforeCompaction =
 			compactionEntry !== null && assistantMessage.timestamp < new Date(compactionEntry.timestamp).getTime();
-
-		// Case 1: Overflow - LLM returned context overflow error
 		if (sameModel && !errorIsFromBeforeCompaction && isContextOverflow(assistantMessage, contextWindow)) {
 			// Remove the error message from agent state (it IS saved to session for history,
 			// but we don't want it in context for the retry)
@@ -2735,23 +2724,43 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			if (messages.length > 0 && messages[messages.length - 1].role === "assistant") {
 				this.agent.replaceMessages(messages.slice(0, -1));
 			}
-			await this.#runAutoCompaction("overflow", true);
+
+			// Try context promotion first \u2014 switch to a larger model and retry without compacting
+			const promoted = await this.#tryContextPromotion(assistantMessage);
+			if (promoted) {
+				// Retry on the promoted (larger) model without compacting
+				setTimeout(() => {
+					this.agent.continue().catch(() => {});
+				}, 100);
+				return;
+			}
+
+			// No promotion target available \u2014 fall through to compaction
+			const compactionSettings = this.settings.getGroup("compaction");
+			if (compactionSettings.enabled) {
+				await this.#runAutoCompaction("overflow", true);
+			}
 			return;
 		}
+		const compactionSettings = this.settings.getGroup("compaction");
+		if (!compactionSettings.enabled) return;
 
 		// Case 2: Threshold - turn succeeded but context is getting large
 		// Skip if this was an error (non-overflow errors don't have usage data)
 		if (assistantMessage.stopReason === "error") return;
-
+		const pruneResult = await this.#pruneToolOutputs();
 		let contextTokens = calculateContextTokens(assistantMessage.usage);
 		if (pruneResult) {
 			contextTokens = Math.max(0, contextTokens - pruneResult.tokensSaved);
 		}
 		if (shouldCompact(contextTokens, contextWindow, compactionSettings)) {
-			await this.#runAutoCompaction("threshold", false);
+			// Try promotion first — if a larger model is available, switch instead of compacting
+			const promoted = await this.#tryContextPromotion(assistantMessage);
+			if (!promoted) {
+				await this.#runAutoCompaction("threshold", false);
+			}
 		}
 	}
-
 	/**
 	 * Check if agent stopped with incomplete todos and prompt to continue.
 	 */
@@ -2825,43 +2834,37 @@ Be thorough - include exact file paths, function names, error messages, and tech
 		this.agent.continue().catch(() => {});
 	}
 
-	async #checkContextPromotion(assistantMessage: AssistantMessage): Promise<void> {
+	/**
+	 * Attempt context promotion to a larger model.
+	 * Returns true if promotion succeeded (caller should retry without compacting).
+	 */
+	async #tryContextPromotion(assistantMessage: AssistantMessage): Promise<boolean> {
 		const promotionSettings = this.settings.getGroup("contextPromotion");
-		if (!promotionSettings.enabled) return;
-		if (assistantMessage.stopReason === "error" || assistantMessage.stopReason === "aborted") return;
-
+		if (!promotionSettings.enabled) return false;
 		const currentModel = this.model;
-		if (!currentModel) return;
-		if (assistantMessage.provider !== currentModel.provider || assistantMessage.model !== currentModel.id) return;
-
+		if (!currentModel) return false;
+		if (assistantMessage.provider !== currentModel.provider || assistantMessage.model !== currentModel.id)
+			return false;
 		const contextWindow = currentModel.contextWindow ?? 0;
-		if (contextWindow <= 0) return;
-
-		const contextTokens = calculateContextTokens(assistantMessage.usage);
-		if (contextTokens <= 0) return;
-
-		const thresholdPercent = Math.max(1, Math.min(100, promotionSettings.thresholdPercent));
-		const contextPercent = (contextTokens / contextWindow) * 100;
-		if (contextPercent < thresholdPercent) return;
-
+		if (contextWindow <= 0) return false;
 		const targetModel = await this.#resolveContextPromotionTarget(currentModel, contextWindow);
-		if (!targetModel) return;
+		if (!targetModel) return false;
 
 		try {
 			this.#closeProviderSessionsForModelSwitch(currentModel, targetModel);
 			await this.setModelTemporary(targetModel);
-			logger.debug("Context promotion switched model", {
+			logger.debug("Context promotion switched model on overflow", {
 				from: `${currentModel.provider}/${currentModel.id}`,
 				to: `${targetModel.provider}/${targetModel.id}`,
-				contextPercent,
-				thresholdPercent,
 			});
+			return true;
 		} catch (error) {
 			logger.warn("Context promotion failed", {
 				from: `${currentModel.provider}/${currentModel.id}`,
 				to: `${targetModel.provider}/${targetModel.id}`,
 				error: String(error),
 			});
+			return false;
 		}
 	}
 
@@ -2892,14 +2895,11 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			.filter(m => m.contextWindow > contextWindow)
 			.sort((a, b) => a.contextWindow - b.contextWindow);
 		addCandidate(anyLarger[0]);
-
 		for (const candidate of candidates) {
 			if (modelsAreEqual(candidate, currentModel)) continue;
 			if (candidate.contextWindow <= contextWindow) continue;
-
 			const apiKey = await this.#modelRegistry.getApiKey(candidate, this.sessionId);
 			if (!apiKey) continue;
-
 			return candidate;
 		}
 
@@ -2935,7 +2935,8 @@ Be thorough - include exact file paths, function names, error messages, and tech
 
 		const parsed = parseModelString(configuredTarget);
 		if (parsed) {
-			return availableModels.find(m => m.provider === parsed.provider && m.id === parsed.id);
+			const explicitModel = availableModels.find(m => m.provider === parsed.provider && m.id === parsed.id);
+			if (explicitModel) return explicitModel;
 		}
 
 		return availableModels.find(m => m.provider === currentModel.provider && m.id === configuredTarget);

@@ -820,6 +820,7 @@ export class ModelRegistry {
 					maxTokens: modelDef.maxTokens,
 					headers,
 					compat: modelDef.compat,
+					contextPromotionTarget: modelDef.contextPromotionTarget,
 				} as Model<Api>);
 			}
 
