@@ -8,6 +8,7 @@
 //! global offsets, optional match limits, and per-file match summaries.
 
 use std::{
+	borrow::Cow,
 	fs::File,
 	io::{self, Cursor, Read},
 	path::{Path, PathBuf},
@@ -627,15 +628,107 @@ fn collect_files(
 	entries
 }
 
+/// Check if `bytes[start]` (which must be `b'{'`) begins a valid repetition
+/// quantifier: `{N}`, `{N,}`, or `{N,M}` where N and M are decimal digits.
+/// Returns the byte index of the closing `}` if valid.
+fn find_valid_repetition(bytes: &[u8], start: usize) -> Option<usize> {
+	let len = bytes.len();
+	let mut i = start + 1;
+	// Must start with at least one digit.
+	if i >= len || !bytes[i].is_ascii_digit() {
+		return None;
+	}
+	while i < len && bytes[i].is_ascii_digit() {
+		i += 1;
+	}
+	if i >= len {
+		return None;
+	}
+	if bytes[i] == b'}' {
+		return Some(i);
+	}
+	if bytes[i] != b',' {
+		return None;
+	}
+	i += 1;
+	if i >= len {
+		return None;
+	}
+	// After comma: optional digits then `}`.
+	while i < len && bytes[i].is_ascii_digit() {
+		i += 1;
+	}
+	if i < len && bytes[i] == b'}' {
+		return Some(i);
+	}
+	None
+}
+
+/// Escape `{` and `}` that don't form valid repetition quantifiers.
+///
+/// Patterns like `${platform}` or `a{b}` contain braces the regex engine
+/// rejects as malformed repetitions.  Since such braces can never be valid
+/// regex syntax, turning them into `\{` / `\}` is semantics-preserving
+/// and avoids confusing error messages for callers who pass literal text
+/// fragments (e.g. JS template strings).
+fn sanitize_braces(pattern: &str) -> Cow<'_, str> {
+	let bytes = pattern.as_bytes();
+	if !bytes.contains(&b'{') && !bytes.contains(&b'}') {
+		return Cow::Borrowed(pattern);
+	}
+
+	let len = bytes.len();
+	let mut result = String::with_capacity(len + 8);
+	let mut modified = false;
+	let mut i = 0;
+
+	while i < len {
+		// Pass escaped characters through unchanged.
+		if bytes[i] == b'\\' && i + 1 < len {
+			result.push('\\');
+			i += 1;
+			let ch = pattern[i..].chars().next().unwrap();
+			result.push(ch);
+			i += ch.len_utf8();
+			continue;
+		}
+
+		if bytes[i] == b'{' {
+			if let Some(end) = find_valid_repetition(bytes, i) {
+				result.push_str(&pattern[i..=end]);
+				i = end + 1;
+				continue;
+			}
+			result.push_str("\\{");
+			i += 1;
+			modified = true;
+			continue;
+		}
+
+		if bytes[i] == b'}' {
+			result.push_str("\\}");
+			i += 1;
+			modified = true;
+			continue;
+		}
+
+		let ch = pattern[i..].chars().next().unwrap();
+		result.push(ch);
+		i += ch.len_utf8();
+	}
+
+	if modified { Cow::Owned(result) } else { Cow::Borrowed(pattern) }
+}
 fn build_matcher(
 	pattern: &str,
 	ignore_case: bool,
 	multiline: bool,
 ) -> Result<grep_regex::RegexMatcher> {
+	let sanitized = sanitize_braces(pattern);
 	RegexMatcherBuilder::new()
 		.case_insensitive(ignore_case)
 		.multi_line(multiline)
-		.build(pattern)
+		.build(&sanitized)
 		.map_err(|err| Error::from_reason(format!("Regex error: {err}")))
 }
 
