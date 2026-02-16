@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - Added automatic context promotion feature that switches to a larger-context model when approaching context limits
@@ -14,6 +13,7 @@
 
 ### Changed
 
+- Improved session compaction to limit file operation summaries to 20 files per category, with indication of omitted files when exceeded
 - Updated CLI update mechanism to support multiple native addon variants per platform, enabling fallback to baseline versions when modern variants are unavailable
 - Updated web search provider priority order to include Brave (Exa → Brave → Jina → Perplexity → Anthropic → Gemini → Codex → Z.AI)
 - Extended recency filter support to Brave provider alongside Perplexity

@@ -21,9 +21,9 @@ import {
 	createFileOps,
 	extractFileOpsFromMessage,
 	type FileOperations,
-	formatFileOperations,
 	SUMMARIZATION_SYSTEM_PROMPT,
 	serializeConversation,
+	upsertFileOperations,
 } from "./utils";
 
 // ============================================================================
@@ -802,7 +802,7 @@ export async function compact(
 
 	// Compute file lists and append to summary
 	const { readFiles, modifiedFiles } = computeFileLists(fileOps);
-	summary += formatFileOperations(readFiles, modifiedFiles);
+	summary = upsertFileOperations(summary, readFiles, modifiedFiles);
 
 	if (!firstKeptEntryId) {
 		throw new Error("First kept entry has no ID - session may need migration");

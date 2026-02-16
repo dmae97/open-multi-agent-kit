@@ -71,9 +71,33 @@ export function computeFileLists(fileOps: FileOperations): { readFiles: string[]
 /**
  * Format file operations as XML tags for summary.
  */
+const FILE_OPERATION_SUMMARY_LIMIT = 20;
+
+function truncateFileList(files: string[]): string[] {
+	if (files.length <= FILE_OPERATION_SUMMARY_LIMIT) return files;
+	const omitted = files.length - FILE_OPERATION_SUMMARY_LIMIT;
+	return [...files.slice(0, FILE_OPERATION_SUMMARY_LIMIT), `… (${omitted} more files omitted)`];
+}
+
+function stripFileOperationTags(summary: string): string {
+	const withoutReadFiles = summary.replace(/<read-files>[\s\S]*?<\/read-files>\s*/g, "");
+	const withoutModifiedFiles = withoutReadFiles.replace(/<modified-files>[\s\S]*?<\/modified-files>\s*/g, "");
+	return withoutModifiedFiles.trimEnd();
+}
 export function formatFileOperations(readFiles: string[], modifiedFiles: string[]): string {
 	if (readFiles.length === 0 && modifiedFiles.length === 0) return "";
-	return renderPromptTemplate(fileOperationsTemplate, { readFiles, modifiedFiles });
+	return renderPromptTemplate(fileOperationsTemplate, {
+		readFiles: truncateFileList(readFiles),
+		modifiedFiles: truncateFileList(modifiedFiles),
+	});
+}
+
+export function upsertFileOperations(summary: string, readFiles: string[], modifiedFiles: string[]): string {
+	const baseSummary = stripFileOperationTags(summary);
+	const fileOperations = formatFileOperations(readFiles, modifiedFiles);
+	if (!fileOperations) return baseSummary;
+	if (!baseSummary) return fileOperations;
+	return `${baseSummary}\n\n${fileOperations}`;
 }
 
 // ============================================================================

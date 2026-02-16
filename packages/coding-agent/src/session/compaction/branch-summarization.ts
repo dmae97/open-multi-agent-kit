@@ -23,9 +23,9 @@ import {
 	createFileOps,
 	extractFileOpsFromMessage,
 	type FileOperations,
-	formatFileOperations,
 	SUMMARIZATION_SYSTEM_PROMPT,
 	serializeConversation,
+	upsertFileOperations,
 } from "./utils";
 
 // ============================================================================
@@ -305,7 +305,7 @@ export async function generateBranchSummary(
 
 	// Compute file lists and append to summary
 	const { readFiles, modifiedFiles } = computeFileLists(fileOps);
-	summary += formatFileOperations(readFiles, modifiedFiles);
+	summary = upsertFileOperations(summary, readFiles, modifiedFiles);
 
 	return {
 		summary: summary || "No summary generated",
