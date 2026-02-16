@@ -3,7 +3,6 @@
 ## [Unreleased]
 
 ### Added
-
 - Added abort signal support to LSP file operations (`ensureFileOpen`, `refreshFile`) for cancellable file synchronization
 - Added abort signal propagation through LSP request handlers (definition, references, hover, symbols, rename) enabling operation cancellation
 - Added `shouldBypassAutocompleteOnEscape` callback to custom editor for context-aware escape key handling during active operations
@@ -15,9 +14,10 @@
 - Added `BRAVE_API_KEY` environment variable support for Brave web search authentication
 - Added pagination support for fetching GitHub issue comments, allowing retrieval of all comments beyond the initial 50-comment limit
 - Added comment count display showing partial results when not all comments could be fetched (e.g., '5 of 10 comments')
-
+- Added secret obfuscation: env vars matching secret patterns and `secrets.json` entries are replaced with placeholders before sending to LLM providers, deobfuscated in tool call arguments
+- Added `secrets.enabled` setting to toggle secret obfuscation
+- Added full regex literal support for `secrets.json` entries (`"/pattern/flags"` syntax with escaped `/` handling, automatic `g` flag enforcement)
 ### Changed
-
 - Changed context promotion to trigger on context overflow instead of a configurable threshold, promoting to a larger model before attempting compaction
 - Changed context promotion behavior to retry immediately on the promoted model without compacting, providing faster recovery from context limits
 - Changed default grep context lines from 1 before/3 after to 0 before/0 after for more focused search results
@@ -32,62 +32,14 @@
 - Updated web search provider priority order to include Brave (Exa → Brave → Jina → Perplexity → Anthropic → Gemini → Codex → Z.AI)
 - Extended recency filter support to Brave provider alongside Perplexity
 - Changed GitHub issue comment fetching to use paginated API requests with 100 comments per page instead of single request with 50-comment limit
-
 ### Removed
 
 - Removed `contextPromotion.thresholdPercent` setting as context promotion now triggers only on overflow
 
 ### Fixed
-
 - Fixed LSP operations to properly respect abort signals and throw `ToolAbortError` when cancelled
 - Fixed workspace diagnostics process cleanup to remove abort event listeners in finally block
 - Fixed PTY-backed bash execution to enforce timeout completion when detached child processes keep the PTY stream open ([#88](https://github.com/can1357/oh-my-pi/issues/88))
-
-## [12.7.5] - 2026-02-16
-### Changed
-
-- Updated SMOL_MODEL_PRIORITY to include additional model variants (gpt-5.3-spark, cerebras/zai-glm-4.7, haiku-4-5, haiku-4.5) for improved fast model discovery
-- Updated SLOW_MODEL_PRIORITY to include additional model variants (gpt-5.3-codex, gpt-5.3, gpt-5.1-codex, gpt-5.1, opus-4.6, opus-4-6, opus-4.5, opus-4-5, opus-4.1, opus-4-1) for improved comprehensive model discovery
-
-## [12.7.3] - 2026-02-16
-
-### Fixed
-- Suppressed hashline output for subagents without the edit tool (e.g. explore agents)
-
-## [12.7.1] - 2026-02-16
-### Changed
-
-- Restructured execution procedure guidance to emphasize scope assessment and continuous tool-driven progress over planning-first approach
-- Updated task tracking instructions to prohibit metadata-only turns and require immediate completion marking of todo items
-- Clarified parallel execution guidance to distinguish between genuine parallelization and sequential work, with explicit criteria for Task tool usage
-- Modified output style requirements to mandate stating intent before tool calls and reordered style constraints for clarity
-- Reinforced requirement that every turn must include at least one tool call advancing the deliverable, with explicit failure condition for planning-only turns
-
-## [12.7.0] - 2026-02-16
-### Added
-
-- Added Z.AI web search provider support via remote MCP endpoint (webSearchPrime)
-- Added `zai` as a selectable web search provider option in settings
-- Added Z.AI to automatic provider fallback chain for web search
-
-## [12.6.0] - 2026-02-16
-### Added
-
-- Added runtime tests covering extension provider registration and deferred model pattern resolution behavior.
-
-### Changed
-
-- Improved welcome screen responsiveness to dynamically show or hide the right column based on available terminal width
-- Extended extension `registerProvider()` typing with OAuth provider support and source-aware registration metadata.
-
-### Fixed
-
-- Fixed welcome screen layout to gracefully handle small terminal widths and prevent rendering errors on narrow displays
-- Fixed welcome screen title truncation to prevent overflow when content exceeds available width
-- Fixed deferred `--model` resolution so extension-provided models are matched before fallback selection and unresolved explicit patterns no longer silently fallback.
-- Fixed CLI `--api-key` handling for deferred model resolution by applying runtime API key overrides after extension model selection.
-- Fixed extension provider registration cleanup to remove stale source-scoped custom API/OAuth providers across extension reloads.
-
 ## [12.5.1] - 2026-02-15
 ### Added
 

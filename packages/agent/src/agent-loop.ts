@@ -198,6 +198,7 @@ async function runLoop(
 					config.getSteeringMessages,
 					config.getToolContext,
 					config.interruptMode,
+					config.transformToolCallArguments,
 				);
 				toolResults.push(...toolExecution.toolResults);
 				steeringAfterTools = toolExecution.steeringMessages ?? null;
@@ -371,6 +372,7 @@ async function executeToolCalls(
 	getSteeringMessages?: AgentLoopConfig["getSteeringMessages"],
 	getToolContext?: AgentLoopConfig["getToolContext"],
 	interruptMode: AgentLoopConfig["interruptMode"] = "immediate",
+	transformToolCallArguments?: AgentLoopConfig["transformToolCallArguments"],
 ): Promise<{ toolResults: ToolResultMessage[]; steeringMessages?: AgentMessage[] }> {
 	type ToolCallContent = Extract<AssistantMessage["content"][number], { type: "toolCall" }>;
 	const toolCalls = assistantMessage.content.filter((c): c is ToolCallContent => c.type === "toolCall");
@@ -448,7 +450,7 @@ async function executeToolCalls(
 				: undefined;
 			result = await tool.execute(
 				toolCall.id,
-				validatedArgs,
+				transformToolCallArguments ? transformToolCallArguments(validatedArgs, toolCall.name) : validatedArgs,
 				tool.nonAbortable ? undefined : toolSignal,
 				partialResult => {
 					if (interruptState.triggered) return;

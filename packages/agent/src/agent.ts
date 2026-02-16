@@ -124,6 +124,12 @@ export interface AgentOptions {
 	getToolContext?: (toolCall?: ToolCallContext) => AgentToolContext | undefined;
 
 	/**
+	 * Optional transform applied to tool call arguments before execution.
+	 * Use for deobfuscating secrets or rewriting arguments.
+	 */
+	transformToolCallArguments?: (args: Record<string, unknown>, toolName: string) => Record<string, unknown>;
+
+	/**
 	 * Cursor exec handlers for local tool execution.
 	 */
 	cursorExecHandlers?: CursorExecHandlers;
@@ -178,6 +184,7 @@ export class Agent {
 	#resolveRunningPrompt?: () => void;
 	#kimiApiFormat?: "openai" | "anthropic";
 	#preferWebsockets?: boolean;
+	#transformToolCallArguments?: (args: Record<string, unknown>, toolName: string) => Record<string, unknown>;
 
 	/** Buffered Cursor tool results with text length at time of call (for correct ordering) */
 	#cursorToolResultBuffer: CursorToolResultEntry[] = [];
@@ -204,6 +211,7 @@ export class Agent {
 		this.#cursorOnToolResult = opts.cursorOnToolResult;
 		this.#kimiApiFormat = opts.kimiApiFormat;
 		this.#preferWebsockets = opts.preferWebsockets;
+		this.#transformToolCallArguments = opts.transformToolCallArguments;
 	}
 
 	/**
@@ -626,6 +634,7 @@ export class Agent {
 			getToolContext: this.#getToolContext,
 			cursorExecHandlers: this.#cursorExecHandlers,
 			cursorOnToolResult,
+			transformToolCallArguments: this.#transformToolCallArguments,
 			getSteeringMessages: async () => {
 				if (skipInitialSteeringPoll) {
 					skipInitialSteeringPoll = false;

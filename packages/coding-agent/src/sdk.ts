@@ -47,6 +47,7 @@ import {
 import { disposeAllKernelSessions } from "./ipy/executor";
 import { discoverAndLoadMCPTools, type MCPManager, type MCPToolsLoadResult } from "./mcp";
 import { buildMemoryToolDeveloperInstructions, startMemoryStartupTask } from "./memories";
+import { collectEnvSecrets, loadSecrets, obfuscateMessages, SecretObfuscator } from "./secrets";
 import { AgentSession } from "./session/agent-session";
 import { AuthStorage } from "./session/auth-storage";
 import { convertToLlm } from "./session/messages";
@@ -1127,6 +1128,25 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		});
 	};
 
+	// Load and create secret obfuscator if secrets are enabled
+	let obfuscator: SecretObfuscator | undefined;
+	if (settings.get("secrets.enabled")) {
+		const fileEntries = await loadSecrets(cwd, agentDir);
+		const envEntries = collectEnvSecrets();
+		const allEntries = [...envEntries, ...fileEntries];
+		if (allEntries.length > 0) {
+			obfuscator = new SecretObfuscator(allEntries);
+		}
+		time("loadSecrets");
+	}
+
+	// Final convertToLlm: chain block-images filter with secret obfuscation
+	const convertToLlmFinal = (messages: AgentMessage[]): Message[] => {
+		const converted = convertToLlmWithBlockImages(messages);
+		if (!obfuscator?.hasSecrets()) return converted;
+		return obfuscateMessages(obfuscator, converted);
+	};
+
 	const setToolUIContext = (uiContext: ExtensionUIContext, hasUI: boolean) => {
 		toolContextStore.setUIContext(uiContext, hasUI);
 	};
@@ -1146,7 +1166,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			thinkingLevel,
 			tools: initialTools,
 		},
-		convertToLlm: convertToLlmWithBlockImages,
+		convertToLlm: convertToLlmFinal,
 		sessionId: sessionManager.getSessionId(),
 		transformContext: extensionRunner
 			? async messages => {
@@ -1171,6 +1191,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			return key;
 		},
 		cursorExecHandlers,
+		transformToolCallArguments: obfuscator?.hasSecrets() ? args => obfuscator!.deobfuscateObject(args) : undefined,
 	});
 	cursorEventEmitter = event => agent.emitExternalEvent(event);
 	debugStartup("sdk:createAgent");
@@ -1207,6 +1228,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		rebuildSystemPrompt,
 		ttsrManager,
 		forceCopilotAgentInitiator,
+		obfuscator,
 	});
 	debugStartup("sdk:createAgentSession");
 	time("createAgentSession");
