@@ -68,6 +68,7 @@ const serviceProviderMap: Record<string, KeyResolver> = {
 	cursor: "CURSOR_ACCESS_TOKEN",
 	"azure-openai-responses": "AZURE_OPENAI_API_KEY",
 	exa: "EXA_API_KEY",
+	brave: "BRAVE_API_KEY",
 	perplexity: "PERPLEXITY_API_KEY",
 	// GitHub Copilot uses GitHub personal access token
 	"github-copilot": () => $env.COPILOT_GITHUB_TOKEN || $env.GH_TOKEN || $env.GITHUB_TOKEN,

@@ -146,6 +146,7 @@ OAuth host chain: `KIMI_CODE_OAUTH_HOST` → `KIMI_OAUTH_HOST` → `https://auth
 | Variable | Used by |
 |---|---|
 | `EXA_API_KEY` | Exa search provider and Exa MCP tools |
+| `BRAVE_API_KEY` | Brave search provider |
 | `PERPLEXITY_API_KEY` | Perplexity search provider API-key mode |
 | `ZAI_API_KEY` | z.ai search provider (also checks stored OAuth in `agent.db`) |
 | `OPENAI_API_KEY` / Codex OAuth in DB | Codex search provider availability/auth |
@@ -303,6 +304,6 @@ Treat these as secrets; do not log or commit them:
 
 - Provider/API keys and OAuth/bearer credentials (all `*_API_KEY`, `*_TOKEN`, OAuth access/refresh tokens)
 - Cloud credentials (`AWS_*`, `GOOGLE_APPLICATION_CREDENTIALS` path may expose service-account material)
-- Search/provider auth vars (`EXA_API_KEY`, `PERPLEXITY_API_KEY`, Anthropic search keys)
+- Search/provider auth vars (`EXA_API_KEY`, `BRAVE_API_KEY`, `PERPLEXITY_API_KEY`, Anthropic search keys)
 
 Python runtime also explicitly strips many common key vars before spawning kernel subprocesses (`packages/coding-agent/src/ipy/runtime.ts`).

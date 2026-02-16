@@ -10,6 +10,7 @@ const PROVIDERS: Array<SearchProviderId | "auto"> = [
 	"anthropic",
 	"perplexity",
 	"exa",
+	"brave",
 	"jina",
 	"zai",
 	"gemini",

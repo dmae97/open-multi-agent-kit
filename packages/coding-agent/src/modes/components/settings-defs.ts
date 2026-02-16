@@ -149,9 +149,10 @@ const OPTION_PROVIDERS: Partial<Record<SettingPath, OptionProvider>> = {
 		{
 			value: "auto",
 			label: "Auto",
-			description: "Priority: Exa > Jina > Perplexity > Anthropic > Gemini > Codex > Z.AI",
+			description: "Priority: Exa > Brave > Jina > Perplexity > Anthropic > Gemini > Codex > Z.AI",
 		},
 		{ value: "exa", label: "Exa", description: "Requires EXA_API_KEY" },
+		{ value: "brave", label: "Brave", description: "Requires BRAVE_API_KEY" },
 		{ value: "jina", label: "Jina", description: "Requires JINA_API_KEY" },
 		{ value: "perplexity", label: "Perplexity", description: "Requires PERPLEXITY_API_KEY" },
 		{ value: "anthropic", label: "Anthropic", description: "Uses Anthropic web search" },

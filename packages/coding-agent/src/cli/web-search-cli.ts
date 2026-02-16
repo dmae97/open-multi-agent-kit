@@ -24,6 +24,7 @@ const PROVIDERS: Array<SearchProviderId | "auto"> = [
 	"anthropic",
 	"perplexity",
 	"exa",
+	"brave",
 	"jina",
 	"zai",
 	"gemini",
@@ -131,14 +132,14 @@ ${chalk.bold("Arguments:")}
 
 ${chalk.bold("Options:")}
   --provider <name>   Provider: ${PROVIDERS.join(", ")}
-  --recency <value>   Recency filter (Perplexity only): ${RECENCY_OPTIONS.join(", ")}
+  --recency <value>   Recency filter (Brave/Perplexity): ${RECENCY_OPTIONS.join(", ")}
   -l, --limit <n>     Max results to return
   --compact           Render condensed output
   -h, --help          Show this help
 
 ${chalk.bold("Examples:")}
   ${APP_NAME} q --provider=exa "what's the color of the sky"
-  ${APP_NAME} q --provider=perplexity --recency=week "latest TypeScript 5.7 changes"
+  ${APP_NAME} q --provider=brave --recency=week "latest TypeScript 5.7 changes"
 `);
 }
 

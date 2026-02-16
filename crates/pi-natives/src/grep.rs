@@ -717,7 +717,11 @@ fn sanitize_braces(pattern: &str) -> Cow<'_, str> {
 		i += ch.len_utf8();
 	}
 
-	if modified { Cow::Owned(result) } else { Cow::Borrowed(pattern) }
+	if modified {
+		Cow::Owned(result)
+	} else {
+		Cow::Borrowed(pattern)
+	}
 }
 fn build_matcher(
 	pattern: &str,

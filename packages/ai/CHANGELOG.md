@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added support for Brave search provider with BRAVE_API_KEY environment variable
 
 ## [12.7.0] - 2026-02-16
 ### Added

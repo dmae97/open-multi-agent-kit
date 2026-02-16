@@ -1,13 +1,18 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added Brave web search provider as an alternative search option with recency filtering support
+- Added `BRAVE_API_KEY` environment variable support for Brave web search authentication
 - Added pagination support for fetching GitHub issue comments, allowing retrieval of all comments beyond the initial 50-comment limit
 - Added comment count display showing partial results when not all comments could be fetched (e.g., '5 of 10 comments')
 
 ### Changed
 
+- Updated web search provider priority order to include Brave (Exa → Brave → Jina → Perplexity → Anthropic → Gemini → Codex → Z.AI)
+- Extended recency filter support to Brave provider alongside Perplexity
 - Changed GitHub issue comment fetching to use paginated API requests with 100 comments per page instead of single request with 50-comment limit
 
 ## [12.7.5] - 2026-02-16
