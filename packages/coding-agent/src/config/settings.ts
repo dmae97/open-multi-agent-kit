@@ -39,6 +39,7 @@ export type {
 	BranchSummarySettings,
 	CommitSettings,
 	CompactionSettings,
+	ContextPromotionSettings,
 	ExaSettings,
 	GroupPrefix,
 	GroupTypeMap,

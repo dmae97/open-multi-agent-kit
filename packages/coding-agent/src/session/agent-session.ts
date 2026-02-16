@@ -599,6 +599,7 @@ export class AgentSession {
 				if (didRetry) return; // Retry was initiated, don't proceed to compaction
 			}
 
+			await this.#checkContextPromotion(msg);
 			await this.#checkCompaction(msg);
 
 			// Check for incomplete todos (unless there was an error or abort)
@@ -2822,6 +2823,107 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			timestamp: Date.now(),
 		});
 		this.agent.continue().catch(() => {});
+	}
+
+	async #checkContextPromotion(assistantMessage: AssistantMessage): Promise<void> {
+		const promotionSettings = this.settings.getGroup("contextPromotion");
+		if (!promotionSettings.enabled) return;
+		if (assistantMessage.stopReason === "error" || assistantMessage.stopReason === "aborted") return;
+
+		const currentModel = this.model;
+		if (!currentModel) return;
+		if (assistantMessage.provider !== currentModel.provider || assistantMessage.model !== currentModel.id) return;
+
+		const contextWindow = currentModel.contextWindow ?? 0;
+		if (contextWindow <= 0) return;
+
+		const contextTokens = calculateContextTokens(assistantMessage.usage);
+		if (contextTokens <= 0) return;
+
+		const thresholdPercent = Math.max(1, Math.min(100, promotionSettings.thresholdPercent));
+		const contextPercent = (contextTokens / contextWindow) * 100;
+		if (contextPercent < thresholdPercent) return;
+
+		const targetModel = await this.#resolveContextPromotionTarget(currentModel, contextWindow);
+		if (!targetModel) return;
+
+		try {
+			this.#closeProviderSessionsForModelSwitch(currentModel, targetModel);
+			await this.setModelTemporary(targetModel);
+			logger.debug("Context promotion switched model", {
+				from: `${currentModel.provider}/${currentModel.id}`,
+				to: `${targetModel.provider}/${targetModel.id}`,
+				contextPercent,
+				thresholdPercent,
+			});
+		} catch (error) {
+			logger.warn("Context promotion failed", {
+				from: `${currentModel.provider}/${currentModel.id}`,
+				to: `${targetModel.provider}/${targetModel.id}`,
+				error: String(error),
+			});
+		}
+	}
+
+	async #resolveContextPromotionTarget(currentModel: Model, contextWindow: number): Promise<Model | undefined> {
+		const availableModels = this.#modelRegistry.getAvailable();
+		if (availableModels.length === 0) return undefined;
+
+		const candidates: Model[] = [];
+		const seen = new Set<string>();
+		const addCandidate = (candidate: Model | undefined): void => {
+			if (!candidate) return;
+			const key = this.#getModelKey(candidate);
+			if (seen.has(key)) return;
+			seen.add(key);
+			candidates.push(candidate);
+		};
+
+		addCandidate(this.#resolveRoleModel("default", availableModels, currentModel));
+		addCandidate(this.#resolveRoleModel("slow", availableModels, currentModel));
+
+		const sameProviderLarger = [...availableModels]
+			.filter(
+				m => m.provider === currentModel.provider && m.api === currentModel.api && m.contextWindow > contextWindow,
+			)
+			.sort((a, b) => a.contextWindow - b.contextWindow);
+		addCandidate(sameProviderLarger[0]);
+
+		const anyLarger = [...availableModels]
+			.filter(m => m.contextWindow > contextWindow)
+			.sort((a, b) => a.contextWindow - b.contextWindow);
+		addCandidate(anyLarger[0]);
+
+		for (const candidate of candidates) {
+			if (modelsAreEqual(candidate, currentModel)) continue;
+			if (candidate.contextWindow <= contextWindow) continue;
+
+			const apiKey = await this.#modelRegistry.getApiKey(candidate, this.sessionId);
+			if (!apiKey) continue;
+
+			return candidate;
+		}
+
+		return undefined;
+	}
+
+	#closeProviderSessionsForModelSwitch(currentModel: Model, nextModel: Model): void {
+		if (currentModel.api !== "openai-codex-responses" && nextModel.api !== "openai-codex-responses") return;
+
+		const providerKey = "openai-codex-responses";
+		const state = this.#providerSessionState.get(providerKey);
+		if (!state) return;
+
+		try {
+			state.close();
+		} catch (error) {
+			logger.warn("Failed to close provider session state during model switch", {
+				providerKey,
+				error: String(error),
+			});
+		}
+
+		this.#providerSessionState.delete(providerKey);
 	}
 
 	#getModelKey(model: Model): string {

@@ -299,6 +299,16 @@ export const SETTINGS_SCHEMA = {
 	disabledProviders: { type: "array", default: [] as string[] },
 	disabledExtensions: { type: "array", default: [] as string[] },
 	modelRoles: { type: "record", default: {} as Record<string, string> },
+	"contextPromotion.enabled": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "agent",
+			label: "Auto-promote context",
+			description: "Temporarily promote to a larger-context model role before hitting context limits",
+		},
+	},
+	"contextPromotion.thresholdPercent": { type: "number", default: 90 },
 
 	// ─────────────────────────────────────────────────────────────────────────
 	// Compaction settings
@@ -1027,6 +1037,10 @@ export interface CompactionSettings {
 	remoteEndpoint: string | undefined;
 }
 
+export interface ContextPromotionSettings {
+	enabled: boolean;
+	thresholdPercent: number;
+}
 export interface RetrySettings {
 	enabled: boolean;
 	maxRetries: number;
@@ -1134,6 +1148,7 @@ export interface BashInterceptorRule {
 /** Map group prefix -> typed settings interface */
 export interface GroupTypeMap {
 	compaction: CompactionSettings;
+	contextPromotion: ContextPromotionSettings;
 	retry: RetrySettings;
 	memories: MemoriesSettings;
 	branchSummary: BranchSummarySettings;

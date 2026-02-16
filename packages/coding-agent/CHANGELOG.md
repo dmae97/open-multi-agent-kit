@@ -1,8 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added automatic context promotion feature that switches to a larger-context model when approaching context limits
+- Added `contextPromotion.enabled` setting to control automatic model promotion (enabled by default)
+- Added `contextPromotion.thresholdPercent` setting to configure the context usage threshold for triggering promotion (default 90%)
 - Added Brave web search provider as an alternative search option with recency filtering support
 - Added `BRAVE_API_KEY` environment variable support for Brave web search authentication
 - Added pagination support for fetching GitHub issue comments, allowing retrieval of all comments beyond the initial 50-comment limit
