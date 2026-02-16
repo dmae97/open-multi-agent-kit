@@ -197,6 +197,25 @@
 			"contextWindow": 163840,
 			"maxTokens": 81920
 		},
+		"deepseek.v3.2-v1:0": {
+			"id": "deepseek.v3.2-v1:0",
+			"name": "DeepSeek-V3.2",
+			"api": "bedrock-converse-stream",
+			"provider": "amazon-bedrock",
+			"baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0.62,
+				"output": 1.85,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 163840,
+			"maxTokens": 81920
+		},
 		"eu.anthropic.claude-haiku-4-5-20251001-v1:0": {
 			"id": "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
 			"name": "Claude Haiku 4.5 (EU)",
@@ -1607,6 +1626,25 @@
 			"contextWindow": 204800,
 			"maxTokens": 131072
 		},
+		"glm-5": {
+			"id": "glm-5",
+			"name": "GLM-5",
+			"api": "openai-completions",
+			"provider": "opencode",
+			"baseUrl": "https://opencode.ai/zen/v1",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 1,
+				"output": 3.2,
+				"cacheRead": 0.2,
+				"cacheWrite": 0
+			},
+			"contextWindow": 204800,
+			"maxTokens": 131072
+		},
 		"gpt-5": {
 			"id": "gpt-5",
 			"name": "GPT-5",
@@ -1879,6 +1917,25 @@
 				"input": 0.3,
 				"output": 1.2,
 				"cacheRead": 0.1,
+				"cacheWrite": 0
+			},
+			"contextWindow": 204800,
+			"maxTokens": 131072
+		},
+		"minimax-m2.5": {
+			"id": "minimax-m2.5",
+			"name": "MiniMax M2.5",
+			"api": "openai-completions",
+			"provider": "opencode",
+			"baseUrl": "https://opencode.ai/zen/v1",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0.3,
+				"output": 1.2,
+				"cacheRead": 0.06,
 				"cacheWrite": 0
 			},
 			"contextWindow": 204800,
@@ -4696,9 +4753,9 @@
 		"glm-4.5": {
 			"id": "glm-4.5",
 			"name": "GLM-4.5",
-			"api": "openai-completions",
+			"api": "anthropic-messages",
 			"provider": "zai",
-			"baseUrl": "https://api.z.ai/api/coding/paas/v4",
+			"baseUrl": "https://api.z.ai/api/anthropic",
 			"reasoning": true,
 			"input": [
 				"text"
@@ -4708,10 +4765,6 @@
 				"output": 0,
 				"cacheRead": 0,
 				"cacheWrite": 0
-			},
-			"compat": {
-				"supportsDeveloperRole": false,
-				"thinkingFormat": "zai"
 			},
 			"contextWindow": 131072,
 			"maxTokens": 98304
@@ -4719,9 +4772,9 @@
 		"glm-4.5-air": {
 			"id": "glm-4.5-air",
 			"name": "GLM-4.5-Air",
-			"api": "openai-completions",
+			"api": "anthropic-messages",
 			"provider": "zai",
-			"baseUrl": "https://api.z.ai/api/coding/paas/v4",
+			"baseUrl": "https://api.z.ai/api/anthropic",
 			"reasoning": true,
 			"input": [
 				"text"
@@ -4731,10 +4784,6 @@
 				"output": 0,
 				"cacheRead": 0,
 				"cacheWrite": 0
-			},
-			"compat": {
-				"supportsDeveloperRole": false,
-				"thinkingFormat": "zai"
 			},
 			"contextWindow": 131072,
 			"maxTokens": 98304
@@ -4742,9 +4791,9 @@
 		"glm-4.5-flash": {
 			"id": "glm-4.5-flash",
 			"name": "GLM-4.5-Flash",
-			"api": "openai-completions",
+			"api": "anthropic-messages",
 			"provider": "zai",
-			"baseUrl": "https://api.z.ai/api/coding/paas/v4",
+			"baseUrl": "https://api.z.ai/api/anthropic",
 			"reasoning": true,
 			"input": [
 				"text"
@@ -4754,10 +4803,6 @@
 				"output": 0,
 				"cacheRead": 0,
 				"cacheWrite": 0
-			},
-			"compat": {
-				"supportsDeveloperRole": false,
-				"thinkingFormat": "zai"
 			},
 			"contextWindow": 131072,
 			"maxTokens": 98304
@@ -4765,9 +4810,9 @@
 		"glm-4.5v": {
 			"id": "glm-4.5v",
 			"name": "GLM-4.5V",
-			"api": "openai-completions",
+			"api": "anthropic-messages",
 			"provider": "zai",
-			"baseUrl": "https://api.z.ai/api/coding/paas/v4",
+			"baseUrl": "https://api.z.ai/api/anthropic",
 			"reasoning": true,
 			"input": [
 				"text",
@@ -4778,10 +4823,6 @@
 				"output": 0,
 				"cacheRead": 0,
 				"cacheWrite": 0
-			},
-			"compat": {
-				"supportsDeveloperRole": false,
-				"thinkingFormat": "zai"
 			},
 			"contextWindow": 64000,
 			"maxTokens": 16384
@@ -4789,9 +4830,9 @@
 		"glm-4.6": {
 			"id": "glm-4.6",
 			"name": "GLM-4.6",
-			"api": "openai-completions",
+			"api": "anthropic-messages",
 			"provider": "zai",
-			"baseUrl": "https://api.z.ai/api/coding/paas/v4",
+			"baseUrl": "https://api.z.ai/api/anthropic",
 			"reasoning": true,
 			"input": [
 				"text"
@@ -4802,19 +4843,15 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"compat": {
-				"supportsDeveloperRole": false,
-				"thinkingFormat": "zai"
-			},
 			"contextWindow": 204800,
 			"maxTokens": 131072
 		},
 		"glm-4.6v": {
 			"id": "glm-4.6v",
 			"name": "GLM-4.6V",
-			"api": "openai-completions",
+			"api": "anthropic-messages",
 			"provider": "zai",
-			"baseUrl": "https://api.z.ai/api/coding/paas/v4",
+			"baseUrl": "https://api.z.ai/api/anthropic",
 			"reasoning": true,
 			"input": [
 				"text",
@@ -4826,19 +4863,15 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"compat": {
-				"supportsDeveloperRole": false,
-				"thinkingFormat": "zai"
-			},
 			"contextWindow": 128000,
 			"maxTokens": 32768
 		},
 		"glm-4.7": {
 			"id": "glm-4.7",
 			"name": "GLM-4.7",
-			"api": "openai-completions",
+			"api": "anthropic-messages",
 			"provider": "zai",
-			"baseUrl": "https://api.z.ai/api/coding/paas/v4",
+			"baseUrl": "https://api.z.ai/api/anthropic",
 			"reasoning": true,
 			"input": [
 				"text"
@@ -4848,10 +4881,6 @@
 				"output": 0,
 				"cacheRead": 0,
 				"cacheWrite": 0
-			},
-			"compat": {
-				"supportsDeveloperRole": false,
-				"thinkingFormat": "zai"
 			},
 			"contextWindow": 204800,
 			"maxTokens": 131072
@@ -4859,9 +4888,9 @@
 		"glm-4.7-flash": {
 			"id": "glm-4.7-flash",
 			"name": "GLM-4.7-Flash",
-			"api": "openai-completions",
+			"api": "anthropic-messages",
 			"provider": "zai",
-			"baseUrl": "https://api.z.ai/api/coding/paas/v4",
+			"baseUrl": "https://api.z.ai/api/anthropic",
 			"reasoning": true,
 			"input": [
 				"text"
@@ -4871,10 +4900,6 @@
 				"output": 0,
 				"cacheRead": 0,
 				"cacheWrite": 0
-			},
-			"compat": {
-				"supportsDeveloperRole": false,
-				"thinkingFormat": "zai"
 			},
 			"contextWindow": 200000,
 			"maxTokens": 131072
@@ -4882,9 +4907,9 @@
 		"glm-5": {
 			"id": "glm-5",
 			"name": "GLM-5",
-			"api": "openai-completions",
+			"api": "anthropic-messages",
 			"provider": "zai",
-			"baseUrl": "https://api.z.ai/api/coding/paas/v4",
+			"baseUrl": "https://api.z.ai/api/anthropic",
 			"reasoning": true,
 			"input": [
 				"text"
@@ -4894,10 +4919,6 @@
 				"output": 0,
 				"cacheRead": 0,
 				"cacheWrite": 0
-			},
-			"compat": {
-				"supportsDeveloperRole": false,
-				"thinkingFormat": "zai"
 			},
 			"contextWindow": 204800,
 			"maxTokens": 131072
@@ -4972,8 +4993,8 @@
 				"text"
 			],
 			"cost": {
-				"input": 0,
-				"output": 0,
+				"input": 2.25,
+				"output": 2.75,
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
@@ -7144,12 +7165,12 @@
 				"text"
 			],
 			"cost": {
-				"input": 0.3,
-				"output": 1.2,
-				"cacheRead": 0.03,
+				"input": 0.19999999999999998,
+				"output": 1,
+				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 204800,
+			"contextWindow": 196608,
 			"maxTokens": 131072
 		},
 		"mistralai/codestral-2508": {
@@ -7648,13 +7669,13 @@
 				"text"
 			],
 			"cost": {
-				"input": 0.39,
-				"output": 1.9,
-				"cacheRead": 0.195,
+				"input": 0.39999999999999997,
+				"output": 2,
+				"cacheRead": 0.15,
 				"cacheWrite": 0
 			},
-			"contextWindow": 262144,
-			"maxTokens": 262144
+			"contextWindow": 131072,
+			"maxTokens": 4096
 		},
 		"moonshotai/kimi-k2-0905:exacto": {
 			"id": "moonshotai/kimi-k2-0905:exacto",
@@ -7707,12 +7728,12 @@
 			],
 			"cost": {
 				"input": 0.44999999999999996,
-				"output": 2.25,
-				"cacheRead": 0.070000002,
+				"output": 2.2,
+				"cacheRead": 0.22499999999999998,
 				"cacheWrite": 0
 			},
 			"contextWindow": 262144,
-			"maxTokens": 4096
+			"maxTokens": 65535
 		},
 		"nex-agi/deepseek-v3.1-nex-n1": {
 			"id": "nex-agi/deepseek-v3.1-nex-n1",
@@ -10289,12 +10310,12 @@
 				"text"
 			],
 			"cost": {
-				"input": 0.7999999999999999,
-				"output": 2.56,
-				"cacheRead": 0.16,
+				"input": 0.75,
+				"output": 2.5500000000000003,
+				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 202752,
+			"contextWindow": 204800,
 			"maxTokens": 131072
 		}
 	},

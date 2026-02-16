@@ -1,6 +1,22 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added DeepSeek-V3.2 model support via Amazon Bedrock
+- Added GLM-5 model support via OpenCode
+- Added MiniMax M2.5 model support via OpenCode
+
+### Changed
+
+- Updated GLM-4.5, GLM-4.5-Air, GLM-4.5-Flash, GLM-4.5V, GLM-4.6, GLM-4.6V, GLM-4.7, GLM-4.7-Flash, and GLM-5 models to use anthropic-messages API instead of openai-completions
+- Updated GLM models base URL from https://api.z.ai/api/coding/paas/v4 to https://api.z.ai/api/anthropic
+- Updated pricing for multiple models including Mistral, Moonshot, and Qwen variants
+- Updated context window and max tokens for several models to reflect accurate specifications
+
+### Removed
+
+- Removed compat field with supportsDeveloperRole and thinkingFormat properties from GLM models
 
 ## [12.6.0] - 2026-02-16
 

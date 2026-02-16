@@ -615,9 +615,9 @@ async function loadModelsDevData(): Promise<Model[]> {
 				models.push({
 					id: modelId,
 					name: m.name || modelId,
-					api: "openai-completions",
+					api: "anthropic-messages",
 					provider: "zai",
-					baseUrl: "https://api.z.ai/api/coding/paas/v4",
+					baseUrl: "https://api.z.ai/api/anthropic",
 					reasoning: m.reasoning === true,
 					input: supportsImage ? ["text", "image"] : ["text"],
 					cost: {
@@ -625,10 +625,6 @@ async function loadModelsDevData(): Promise<Model[]> {
 						output: m.cost?.output || 0,
 						cacheRead: m.cost?.cache_read || 0,
 						cacheWrite: m.cost?.cache_write || 0,
-					},
-					compat: {
-						supportsDeveloperRole: false,
-						thinkingFormat: "zai",
 					},
 					contextWindow: m.limit?.context || 4096,
 					maxTokens: m.limit?.output || 4096,
