@@ -2898,11 +2898,6 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			)
 			.sort((a, b) => a.contextWindow - b.contextWindow);
 		addCandidate(sameProviderLarger[0]);
-
-		const anyLarger = [...availableModels]
-			.filter(m => m.contextWindow > contextWindow)
-			.sort((a, b) => a.contextWindow - b.contextWindow);
-		addCandidate(anyLarger[0]);
 		for (const candidate of candidates) {
 			if (modelsAreEqual(candidate, currentModel)) continue;
 			if (candidate.contextWindow <= contextWindow) continue;
