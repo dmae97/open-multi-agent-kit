@@ -214,13 +214,13 @@ For robust MCP authoring in this codebase:
 
 ## Implementation files
 
-- [`src/mcp/types.ts`](../src/mcp/types.ts)
-- [`src/mcp/config.ts`](../src/mcp/config.ts)
-- [`src/mcp/config-writer.ts`](../src/mcp/config-writer.ts)
-- [`src/mcp/tool-bridge.ts`](../src/mcp/tool-bridge.ts)
-- [`src/discovery/mcp-json.ts`](../src/discovery/mcp-json.ts)
-- [`src/modes/controllers/mcp-command-controller.ts`](../src/modes/controllers/mcp-command-controller.ts)
-- [`src/mcp/manager.ts`](../src/mcp/manager.ts)
-- [`src/capability/index.ts`](../src/capability/index.ts)
-- [`src/config/resolve-config-value.ts`](../src/config/resolve-config-value.ts)
-- [`src/mcp/loader.ts`](../src/mcp/loader.ts)
+- [`src/mcp/types.ts`](../packages/coding-agent/src/mcp/types.ts)
+- [`src/mcp/config.ts`](../packages/coding-agent/src/mcp/config.ts)
+- [`src/mcp/config-writer.ts`](../packages/coding-agent/src/mcp/config-writer.ts)
+- [`src/mcp/tool-bridge.ts`](../packages/coding-agent/src/mcp/tool-bridge.ts)
+- [`src/discovery/mcp-json.ts`](../packages/coding-agent/src/discovery/mcp-json.ts)
+- [`src/modes/controllers/mcp-command-controller.ts`](../packages/coding-agent/src/modes/controllers/mcp-command-controller.ts)
+- [`src/mcp/manager.ts`](../packages/coding-agent/src/mcp/manager.ts)
+- [`src/capability/index.ts`](../packages/coding-agent/src/capability/index.ts)
+- [`src/config/resolve-config-value.ts`](../packages/coding-agent/src/config/resolve-config-value.ts)
+- [`src/mcp/loader.ts`](../packages/coding-agent/src/mcp/loader.ts)

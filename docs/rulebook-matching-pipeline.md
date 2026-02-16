@@ -9,18 +9,18 @@ It reflects the current implementation, including partial semantics and metadata
 
 ## Implementation files
 
-- [`../src/capability/rule.ts`](../src/capability/rule.ts)
-- [`../src/capability/index.ts`](../src/capability/index.ts)
-- [`../src/discovery/index.ts`](../src/discovery/index.ts)
-- [`../src/discovery/helpers.ts`](../src/discovery/helpers.ts)
-- [`../src/discovery/builtin.ts`](../src/discovery/builtin.ts)
-- [`../src/discovery/cursor.ts`](../src/discovery/cursor.ts)
-- [`../src/discovery/windsurf.ts`](../src/discovery/windsurf.ts)
-- [`../src/discovery/cline.ts`](../src/discovery/cline.ts)
-- [`../src/sdk.ts`](../src/sdk.ts)
-- [`../src/system-prompt.ts`](../src/system-prompt.ts)
-- [`../src/internal-urls/rule-protocol.ts`](../src/internal-urls/rule-protocol.ts)
-- [`../src/utils/frontmatter.ts`](../src/utils/frontmatter.ts)
+- [`../src/capability/rule.ts`](../packages/coding-agent/src/capability/rule.ts)
+- [`../src/capability/index.ts`](../packages/coding-agent/src/capability/index.ts)
+- [`../src/discovery/index.ts`](../packages/coding-agent/src/discovery/index.ts)
+- [`../src/discovery/helpers.ts`](../packages/coding-agent/src/discovery/helpers.ts)
+- [`../src/discovery/builtin.ts`](../packages/coding-agent/src/discovery/builtin.ts)
+- [`../src/discovery/cursor.ts`](../packages/coding-agent/src/discovery/cursor.ts)
+- [`../src/discovery/windsurf.ts`](../packages/coding-agent/src/discovery/windsurf.ts)
+- [`../src/discovery/cline.ts`](../packages/coding-agent/src/discovery/cline.ts)
+- [`../src/sdk.ts`](../packages/coding-agent/src/sdk.ts)
+- [`../src/system-prompt.ts`](../packages/coding-agent/src/system-prompt.ts)
+- [`../src/internal-urls/rule-protocol.ts`](../packages/coding-agent/src/internal-urls/rule-protocol.ts)
+- [`../src/utils/frontmatter.ts`](../packages/coding-agent/src/utils/frontmatter.ts)
 
 ## 1. Canonical rule shape
 

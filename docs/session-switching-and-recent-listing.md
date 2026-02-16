@@ -6,15 +6,15 @@ It focuses on current implementation behavior, including fallback paths and cave
 
 ## Implementation files
 
-- [`../src/session/session-manager.ts`](../src/session/session-manager.ts)
-- [`../src/session/agent-session.ts`](../src/session/agent-session.ts)
-- [`../src/cli/session-picker.ts`](../src/cli/session-picker.ts)
-- [`../src/modes/components/session-selector.ts`](../src/modes/components/session-selector.ts)
-- [`../src/modes/controllers/selector-controller.ts`](../src/modes/controllers/selector-controller.ts)
-- [`../src/main.ts`](../src/main.ts)
-- [`../src/sdk.ts`](../src/sdk.ts)
-- [`../src/modes/interactive-mode.ts`](../src/modes/interactive-mode.ts)
-- [`../src/modes/utils/ui-helpers.ts`](../src/modes/utils/ui-helpers.ts)
+- [`../src/session/session-manager.ts`](../packages/coding-agent/src/session/session-manager.ts)
+- [`../src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts)
+- [`../src/cli/session-picker.ts`](../packages/coding-agent/src/cli/session-picker.ts)
+- [`../src/modes/components/session-selector.ts`](../packages/coding-agent/src/modes/components/session-selector.ts)
+- [`../src/modes/controllers/selector-controller.ts`](../packages/coding-agent/src/modes/controllers/selector-controller.ts)
+- [`../src/main.ts`](../packages/coding-agent/src/main.ts)
+- [`../src/sdk.ts`](../packages/coding-agent/src/sdk.ts)
+- [`../src/modes/interactive-mode.ts`](../packages/coding-agent/src/modes/interactive-mode.ts)
+- [`../src/modes/utils/ui-helpers.ts`](../packages/coding-agent/src/modes/utils/ui-helpers.ts)
 
 ## Recent-session discovery
 

@@ -6,16 +6,16 @@ It covers runtime behavior as implemented today, including precedence, invalid-d
 
 ## Implementation files
 
-- [`src/task/discovery.ts`](../src/task/discovery.ts)
-- [`src/task/agents.ts`](../src/task/agents.ts)
-- [`src/task/types.ts`](../src/task/types.ts)
-- [`src/task/index.ts`](../src/task/index.ts)
-- [`src/task/commands.ts`](../src/task/commands.ts)
-- [`src/prompts/agents/task.md`](../src/prompts/agents/task.md)
-- [`src/prompts/tools/task.md`](../src/prompts/tools/task.md)
-- [`src/discovery/helpers.ts`](../src/discovery/helpers.ts)
-- [`src/config.ts`](../src/config.ts)
-- [`src/task/executor.ts`](../src/task/executor.ts)
+- [`src/task/discovery.ts`](../packages/coding-agent/src/task/discovery.ts)
+- [`src/task/agents.ts`](../packages/coding-agent/src/task/agents.ts)
+- [`src/task/types.ts`](../packages/coding-agent/src/task/types.ts)
+- [`src/task/index.ts`](../packages/coding-agent/src/task/index.ts)
+- [`src/task/commands.ts`](../packages/coding-agent/src/task/commands.ts)
+- [`src/prompts/agents/task.md`](../packages/coding-agent/src/prompts/agents/task.md)
+- [`src/prompts/tools/task.md`](../packages/coding-agent/src/prompts/tools/task.md)
+- [`src/discovery/helpers.ts`](../packages/coding-agent/src/discovery/helpers.ts)
+- [`src/config.ts`](../packages/coding-agent/src/config.ts)
+- [`src/task/executor.ts`](../packages/coding-agent/src/task/executor.ts)
 
 ---
 

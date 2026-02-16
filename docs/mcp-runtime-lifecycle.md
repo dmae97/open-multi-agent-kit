@@ -198,13 +198,13 @@ In current wiring, explicit teardown is used in MCP command flows (for reload/re
 
 ## Implementation files
 
-- [`src/mcp/loader.ts`](../src/mcp/loader.ts) — loader facade, discovery error normalization, `LoadedCustomTool` conversion.
-- [`src/mcp/manager.ts`](../src/mcp/manager.ts) — lifecycle state registries, parallel connect/list flow, refresh/disconnect.
-- [`src/mcp/client.ts`](../src/mcp/client.ts) — transport setup, initialize handshake, list/call/disconnect.
-- [`src/mcp/index.ts`](../src/mcp/index.ts) — MCP module API exports.
-- [`src/sdk.ts`](../src/sdk.ts) — startup wiring into session/tool registry.
-- [`src/mcp/config.ts`](../src/mcp/config.ts) — config discovery/filtering/validation used by manager.
-- [`src/mcp/tool-bridge.ts`](../src/mcp/tool-bridge.ts) — `MCPTool` and `DeferredMCPTool` runtime behavior.
-- [`src/session/agent-session.ts`](../src/session/agent-session.ts) — `refreshMCPTools` live rebinding.
-- [`src/modes/controllers/mcp-command-controller.ts`](../src/modes/controllers/mcp-command-controller.ts) — interactive reload/reconnect flows.
-- [`src/task/executor.ts`](../src/task/executor.ts) — subagent MCP proxying via parent manager connections.
+- [`src/mcp/loader.ts`](../packages/coding-agent/src/mcp/loader.ts) — loader facade, discovery error normalization, `LoadedCustomTool` conversion.
+- [`src/mcp/manager.ts`](../packages/coding-agent/src/mcp/manager.ts) — lifecycle state registries, parallel connect/list flow, refresh/disconnect.
+- [`src/mcp/client.ts`](../packages/coding-agent/src/mcp/client.ts) — transport setup, initialize handshake, list/call/disconnect.
+- [`src/mcp/index.ts`](../packages/coding-agent/src/mcp/index.ts) — MCP module API exports.
+- [`src/sdk.ts`](../packages/coding-agent/src/sdk.ts) — startup wiring into session/tool registry.
+- [`src/mcp/config.ts`](../packages/coding-agent/src/mcp/config.ts) — config discovery/filtering/validation used by manager.
+- [`src/mcp/tool-bridge.ts`](../packages/coding-agent/src/mcp/tool-bridge.ts) — `MCPTool` and `DeferredMCPTool` runtime behavior.
+- [`src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts) — `refreshMCPTools` live rebinding.
+- [`src/modes/controllers/mcp-command-controller.ts`](../packages/coding-agent/src/modes/controllers/mcp-command-controller.ts) — interactive reload/reconnect flows.
+- [`src/task/executor.ts`](../packages/coding-agent/src/task/executor.ts) — subagent MCP proxying via parent manager connections.

@@ -19,11 +19,11 @@ Does not cover:
 
 ## Implementation files
 
-- [`../src/modes/controllers/input-controller.ts`](../src/modes/controllers/input-controller.ts)
-- [`../src/modes/controllers/command-controller.ts`](../src/modes/controllers/command-controller.ts)
-- [`../src/session/agent-session.ts`](../src/session/agent-session.ts)
-- [`../src/session/session-manager.ts`](../src/session/session-manager.ts)
-- [`../src/extensibility/slash-commands.ts`](../src/extensibility/slash-commands.ts)
+- [`../src/modes/controllers/input-controller.ts`](../packages/coding-agent/src/modes/controllers/input-controller.ts)
+- [`../src/modes/controllers/command-controller.ts`](../packages/coding-agent/src/modes/controllers/command-controller.ts)
+- [`../src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts)
+- [`../src/session/session-manager.ts`](../packages/coding-agent/src/session/session-manager.ts)
+- [`../src/extensibility/slash-commands.ts`](../packages/coding-agent/src/extensibility/slash-commands.ts)
 
 ## Trigger path
 

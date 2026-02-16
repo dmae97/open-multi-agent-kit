@@ -4,19 +4,19 @@ This document describes how slash commands are discovered, deduplicated, surface
 
 ## Implementation files
 
-- [`src/extensibility/slash-commands.ts`](../src/extensibility/slash-commands.ts)
-- [`src/capability/slash-command.ts`](../src/capability/slash-command.ts)
-- [`src/discovery/builtin.ts`](../src/discovery/builtin.ts)
-- [`src/discovery/claude.ts`](../src/discovery/claude.ts)
-- [`src/discovery/codex.ts`](../src/discovery/codex.ts)
-- [`src/discovery/claude-plugins.ts`](../src/discovery/claude-plugins.ts)
-- [`src/capability/index.ts`](../src/capability/index.ts)
-- [`src/discovery/helpers.ts`](../src/discovery/helpers.ts)
-- [`src/session/agent-session.ts`](../src/session/agent-session.ts)
-- [`src/modes/interactive-mode.ts`](../src/modes/interactive-mode.ts)
-- [`src/modes/controllers/input-controller.ts`](../src/modes/controllers/input-controller.ts)
-- [`src/modes/utils/ui-helpers.ts`](../src/modes/utils/ui-helpers.ts)
-- [`src/modes/controllers/command-controller.ts`](../src/modes/controllers/command-controller.ts)
+- [`src/extensibility/slash-commands.ts`](../packages/coding-agent/src/extensibility/slash-commands.ts)
+- [`src/capability/slash-command.ts`](../packages/coding-agent/src/capability/slash-command.ts)
+- [`src/discovery/builtin.ts`](../packages/coding-agent/src/discovery/builtin.ts)
+- [`src/discovery/claude.ts`](../packages/coding-agent/src/discovery/claude.ts)
+- [`src/discovery/codex.ts`](../packages/coding-agent/src/discovery/codex.ts)
+- [`src/discovery/claude-plugins.ts`](../packages/coding-agent/src/discovery/claude-plugins.ts)
+- [`src/capability/index.ts`](../packages/coding-agent/src/capability/index.ts)
+- [`src/discovery/helpers.ts`](../packages/coding-agent/src/discovery/helpers.ts)
+- [`src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts)
+- [`src/modes/interactive-mode.ts`](../packages/coding-agent/src/modes/interactive-mode.ts)
+- [`src/modes/controllers/input-controller.ts`](../packages/coding-agent/src/modes/controllers/input-controller.ts)
+- [`src/modes/utils/ui-helpers.ts`](../packages/coding-agent/src/modes/utils/ui-helpers.ts)
+- [`src/modes/controllers/command-controller.ts`](../packages/coding-agent/src/modes/controllers/command-controller.ts)
 
 ## 1) Discovery model
 

@@ -11,15 +11,15 @@ Boundary rule: the TUI engine is message-agnostic. It only knows `Component.rend
 
 ## Implementation files
 
-- [`../src/modes/interactive-mode.ts`](../src/modes/interactive-mode.ts)
-- [`../src/modes/controllers/event-controller.ts`](../src/modes/controllers/event-controller.ts)
-- [`../src/modes/controllers/input-controller.ts`](../src/modes/controllers/input-controller.ts)
-- [`../src/modes/components/custom-editor.ts`](../src/modes/components/custom-editor.ts)
-- [`../../tui/src/tui.ts`](../../tui/src/tui.ts)
-- [`../../tui/src/terminal.ts`](../../tui/src/terminal.ts)
-- [`../../tui/src/editor-component.ts`](../../tui/src/editor-component.ts)
-- [`../../tui/src/stdin-buffer.ts`](../../tui/src/stdin-buffer.ts)
-- [`../../tui/src/components/loader.ts`](../../tui/src/components/loader.ts)
+- [`../src/modes/interactive-mode.ts`](../packages/coding-agent/src/modes/interactive-mode.ts)
+- [`../src/modes/controllers/event-controller.ts`](../packages/coding-agent/src/modes/controllers/event-controller.ts)
+- [`../src/modes/controllers/input-controller.ts`](../packages/coding-agent/src/modes/controllers/input-controller.ts)
+- [`../src/modes/components/custom-editor.ts`](../packages/coding-agent/src/modes/components/custom-editor.ts)
+- [`../../tui/src/tui.ts`](../packages/tui/src/tui.ts)
+- [`../../tui/src/terminal.ts`](../packages/tui/src/terminal.ts)
+- [`../../tui/src/editor-component.ts`](../packages/tui/src/editor-component.ts)
+- [`../../tui/src/stdin-buffer.ts`](../packages/tui/src/stdin-buffer.ts)
+- [`../../tui/src/components/loader.ts`](../packages/tui/src/components/loader.ts)
 
 ## Boot and component tree assembly
 

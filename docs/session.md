@@ -17,11 +17,11 @@ Does not cover `/tree` UI rendering behavior beyond semantics that affect sessio
 
 ## Implementation Files
 
-- [`src/session/session-manager.ts`](../src/session/session-manager.ts)
-- [`src/session/messages.ts`](../src/session/messages.ts)
-- [`src/session/session-storage.ts`](../src/session/session-storage.ts)
-- [`src/session/history-storage.ts`](../src/session/history-storage.ts)
-- [`src/session/blob-store.ts`](../src/session/blob-store.ts)
+- [`src/session/session-manager.ts`](../packages/coding-agent/src/session/session-manager.ts)
+- [`src/session/messages.ts`](../packages/coding-agent/src/session/messages.ts)
+- [`src/session/session-storage.ts`](../packages/coding-agent/src/session/session-storage.ts)
+- [`src/session/history-storage.ts`](../packages/coding-agent/src/session/history-storage.ts)
+- [`src/session/blob-store.ts`](../packages/coding-agent/src/session/blob-store.ts)
 
 ## On-Disk Layout
 

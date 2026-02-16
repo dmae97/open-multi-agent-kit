@@ -207,12 +207,12 @@ Provider-specific (not fully abstracted):
 
 ## Implementation files
 
-- [`../../ai/src/stream.ts`](../../ai/src/stream.ts) — provider dispatch, option mapping, API key/session plumbing.
-- [`../../ai/src/utils/event-stream.ts`](../../ai/src/utils/event-stream.ts) — generic stream queue + assistant delta throttling.
-- [`../../ai/src/utils/json-parse.ts`](../../ai/src/utils/json-parse.ts) — partial JSON parsing for streamed tool arguments.
-- [`../../ai/src/providers/anthropic.ts`](../../ai/src/providers/anthropic.ts) — Anthropic event translation and tool JSON delta accumulation.
-- [`../../ai/src/providers/openai-responses.ts`](../../ai/src/providers/openai-responses.ts) — OpenAI Responses event translation and status mapping.
-- [`../../ai/src/providers/google.ts`](../../ai/src/providers/google.ts) — Gemini stream chunk-to-block translation.
-- [`../../ai/src/providers/google-shared.ts`](../../ai/src/providers/google-shared.ts) — Gemini finish-reason mapping and shared conversion rules.
-- [`../../agent/src/agent-loop.ts`](../../agent/src/agent-loop.ts) — provider stream consumption and `message_update` bridging.
-- [`../src/session/agent-session.ts`](../src/session/agent-session.ts) — session-level handling of streaming updates, abort, retry, and persistence.
+- [`../../ai/src/stream.ts`](../packages/ai/src/stream.ts) — provider dispatch, option mapping, API key/session plumbing.
+- [`../../ai/src/utils/event-stream.ts`](../packages/ai/src/utils/event-stream.ts) — generic stream queue + assistant delta throttling.
+- [`../../ai/src/utils/json-parse.ts`](../packages/ai/src/utils/json-parse.ts) — partial JSON parsing for streamed tool arguments.
+- [`../../ai/src/providers/anthropic.ts`](../packages/ai/src/providers/anthropic.ts) — Anthropic event translation and tool JSON delta accumulation.
+- [`../../ai/src/providers/openai-responses.ts`](../packages/ai/src/providers/openai-responses.ts) — OpenAI Responses event translation and status mapping.
+- [`../../ai/src/providers/google.ts`](../packages/ai/src/providers/google.ts) — Gemini stream chunk-to-block translation.
+- [`../../ai/src/providers/google-shared.ts`](../packages/ai/src/providers/google-shared.ts) — Gemini finish-reason mapping and shared conversion rules.
+- [`../../agent/src/agent-loop.ts`](../packages/agent/src/agent-loop.ts) — provider stream consumption and `message_update` bridging.
+- [`../src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts) — session-level handling of streaming updates, abort, retry, and persistence.

@@ -6,11 +6,11 @@ The critical distinction: **`notebook` is a JSON notebook editor, not a notebook
 
 ## Implementation files
 
-- [`src/tools/notebook.ts`](../src/tools/notebook.ts)
-- [`src/ipy/executor.ts`](../src/ipy/executor.ts)
-- [`src/ipy/kernel.ts`](../src/ipy/kernel.ts)
-- [`src/session/streaming-output.ts`](../src/session/streaming-output.ts)
-- [`src/tools/python.ts`](../src/tools/python.ts)
+- [`src/tools/notebook.ts`](../packages/coding-agent/src/tools/notebook.ts)
+- [`src/ipy/executor.ts`](../packages/coding-agent/src/ipy/executor.ts)
+- [`src/ipy/kernel.ts`](../packages/coding-agent/src/ipy/kernel.ts)
+- [`src/session/streaming-output.ts`](../packages/coding-agent/src/session/streaming-output.ts)
+- [`src/tools/python.ts`](../packages/coding-agent/src/tools/python.ts)
 
 ## 1) Runtime boundary: editing vs executing
 

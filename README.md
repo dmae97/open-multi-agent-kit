@@ -469,7 +469,7 @@ return config
 | OpenRouter | `OPENROUTER_API_KEY` |
 | Z.AI       | `ZAI_API_KEY`        |
 
-See [Environment Variables](packages/coding-agent/docs/environment-variables.md) for the full list.
+See [Environment Variables](docs/environment-variables.md) for the full list.
 
 **Option 2: OAuth / interactive auth (`/login`)**
 
@@ -670,7 +670,7 @@ Toggle inline images via `/settings` or set `terminal.showImages: false`.
 
 Sessions are stored as JSONL with a tree structure for branching and replay.
 
-See [packages/coding-agent/docs/session.md](packages/coding-agent/docs/session.md) for the file format and API.
+See [docs/session.md](docs/session.md) for the file format and API.
 
 ### Session Management
 
@@ -712,7 +712,7 @@ compaction:
   autoContinue: true
 ```
 
-See [packages/coding-agent/docs/compaction.md](packages/coding-agent/docs/compaction.md) for internals and hook integration.
+See [docs/compaction.md](docs/compaction.md) for internals and hook integration.
 
 ### Branching
 
@@ -758,7 +758,7 @@ Add custom providers/models via `~/.omp/agent/models.yml`.
 
 `models.json` is still supported for legacy configs, but `models.yml` is the modern format.
 
-> See [models.yml provider integration guide](packages/coding-agent/docs/models.md) for schema and merge behavior.
+> See [models.yml provider integration guide](docs/models.md) for schema and merge behavior.
 
 ```yaml
 providers:
@@ -858,7 +858,7 @@ theme:
 
 **Custom themes:** create `~/.omp/agent/themes/*.json`.
 
-> See [Theme Documentation](packages/coding-agent/docs/theme.md).
+> See [Theme Documentation](docs/theme.md).
 
 ### Custom Slash Commands
 
@@ -917,7 +917,7 @@ description: Web search via Brave Search API.
 
 Disable skills with `omp --no-skills` or `skills.enabled: false`.
 
-> See [Skills Documentation](packages/coding-agent/docs/skills.md).
+> See [Skills Documentation](docs/skills.md).
 
 ### Hooks
 
@@ -949,7 +949,7 @@ Inject messages from hooks with:
 omp.sendMessage(message, { triggerTurn: true });
 ```
 
-> See [Hooks Documentation](packages/coding-agent/docs/hooks.md) and [examples/hooks/](packages/coding-agent/examples/hooks/).
+> See [Hooks Documentation](docs/hooks.md) and [examples/hooks/](packages/coding-agent/examples/hooks/).
 
 ### Custom Tools
 
@@ -978,7 +978,7 @@ const factory: CustomToolFactory = () => ({
 export default factory;
 ```
 
-> See [Custom Tools Documentation](packages/coding-agent/docs/custom-tools.md) and [examples/custom-tools/](packages/coding-agent/examples/custom-tools/).
+> See [Custom Tools Documentation](docs/custom-tools.md) and [examples/custom-tools/](packages/coding-agent/examples/custom-tools/).
 
 ---
 
@@ -1084,7 +1084,7 @@ omp --export session.jsonl output.html
 | `PI_NO_PTY`                                       | Disable PTY-based bash execution                        |
 | `VISUAL`, `EDITOR`                                | External editor for Ctrl+G                              |
 
-See [Environment Variables](packages/coding-agent/docs/environment-variables.md) for the complete reference.
+See [Environment Variables](docs/environment-variables.md) for the complete reference.
 
 ---
 
@@ -1162,7 +1162,7 @@ The SDK provides control over:
 - Settings (`Settings`)
 - API key and OAuth resolution
 
-> See [SDK Documentation](packages/coding-agent/docs/sdk.md) and [examples/sdk/](packages/coding-agent/examples/sdk/).
+> See [SDK Documentation](docs/sdk.md) and [examples/sdk/](packages/coding-agent/examples/sdk/).
 
 ### RPC Mode
 
@@ -1181,7 +1181,7 @@ Send JSON commands on stdin:
 
 Responses are emitted as `type: "response"`; session events stream on stdout as they occur.
 
-> See [RPC Documentation](packages/coding-agent/docs/rpc.md) for the full protocol.
+> See [RPC Documentation](docs/rpc.md) for the full protocol.
 
 ### HTML Export
 

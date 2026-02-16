@@ -6,12 +6,12 @@ It does **not** cover TypeScript/JavaScript extension module loading (`extension
 
 ## Implementation files
 
-- [`../src/discovery/gemini.ts`](../src/discovery/gemini.ts)
-- [`../src/discovery/builtin.ts`](../src/discovery/builtin.ts)
-- [`../src/discovery/helpers.ts`](../src/discovery/helpers.ts)
-- [`../src/capability/extension.ts`](../src/capability/extension.ts)
-- [`../src/capability/index.ts`](../src/capability/index.ts)
-- [`../src/extensibility/extensions/loader.ts`](../src/extensibility/extensions/loader.ts)
+- [`../src/discovery/gemini.ts`](../packages/coding-agent/src/discovery/gemini.ts)
+- [`../src/discovery/builtin.ts`](../packages/coding-agent/src/discovery/builtin.ts)
+- [`../src/discovery/helpers.ts`](../packages/coding-agent/src/discovery/helpers.ts)
+- [`../src/capability/extension.ts`](../packages/coding-agent/src/capability/extension.ts)
+- [`../src/capability/index.ts`](../packages/coding-agent/src/capability/index.ts)
+- [`../src/extensibility/extensions/loader.ts`](../packages/coding-agent/src/extensibility/extensions/loader.ts)
 
 ---
 

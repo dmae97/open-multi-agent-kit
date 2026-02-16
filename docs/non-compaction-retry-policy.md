@@ -2,16 +2,16 @@
 
 This document describes the standard API-error retry path in `AgentSession`.
 
-It explicitly excludes context-overflow recovery via auto-compaction. Overflow is handled by compaction logic and is documented separately in [`compaction.md`](./compaction.md).
+It explicitly excludes context-overflow recovery via auto-compaction. Overflow is handled by compaction logic and is documented separately in [`compaction.md`](../docs/compaction.md).
 
 ## Implementation files
 
-- [`../src/session/agent-session.ts`](../src/session/agent-session.ts)
-- [`../src/config/settings-schema.ts`](../src/config/settings-schema.ts)
-- [`../src/modes/controllers/event-controller.ts`](../src/modes/controllers/event-controller.ts)
-- [`../src/modes/rpc/rpc-mode.ts`](../src/modes/rpc/rpc-mode.ts)
-- [`../src/modes/rpc/rpc-client.ts`](../src/modes/rpc/rpc-client.ts)
-- [`../src/modes/rpc/rpc-types.ts`](../src/modes/rpc/rpc-types.ts)
+- [`../src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts)
+- [`../src/config/settings-schema.ts`](../packages/coding-agent/src/config/settings-schema.ts)
+- [`../src/modes/controllers/event-controller.ts`](../packages/coding-agent/src/modes/controllers/event-controller.ts)
+- [`../src/modes/rpc/rpc-mode.ts`](../packages/coding-agent/src/modes/rpc/rpc-mode.ts)
+- [`../src/modes/rpc/rpc-client.ts`](../packages/coding-agent/src/modes/rpc/rpc-client.ts)
+- [`../src/modes/rpc/rpc-types.ts`](../packages/coding-agent/src/modes/rpc/rpc-types.ts)
 
 ## Scope boundary vs compaction
 

@@ -258,16 +258,16 @@ This component is wired by `CommandController.handleBashCommand()` and fed from 
 
 ## Implementation files
 
-- [`src/tools/bash.ts`](../src/tools/bash.ts) — tool entrypoint, normalization/interception, PTY/non-PTY selection, result/error mapping, bash tool renderer.
-- [`src/tools/bash-normalize.ts`](../src/tools/bash-normalize.ts) — command normalization and post-run head/tail filtering.
-- [`src/tools/bash-interceptor.ts`](../src/tools/bash-interceptor.ts) — interceptor rule matching and blocked-command messages.
-- [`src/exec/bash-executor.ts`](../src/exec/bash-executor.ts) — non-PTY executor, shell session reuse, cancellation wiring, output sink integration.
-- [`src/tools/bash-interactive.ts`](../src/tools/bash-interactive.ts) — PTY runtime, overlay UI, input normalization, non-interactive env defaults.
-- [`src/session/streaming-output.ts`](../src/session/streaming-output.ts) — `OutputSink` truncation/artifact spill and summary metadata.
-- [`src/tools/output-utils.ts`](../src/tools/output-utils.ts) — artifact allocation helpers and streaming tail buffer.
-- [`src/tools/output-meta.ts`](../src/tools/output-meta.ts) — truncation metadata shape + notice injection wrapper.
-- [`src/session/agent-session.ts`](../src/session/agent-session.ts) — session-level `executeBash`, message recording, abort lifecycle.
-- [`src/modes/components/bash-execution.ts`](../src/modes/components/bash-execution.ts) — interactive `!` command execution component.
-- [`src/modes/controllers/command-controller.ts`](../src/modes/controllers/command-controller.ts) — wiring for interactive `!` command UI stream/update completion.
-- [`src/modes/rpc/rpc-mode.ts`](../src/modes/rpc/rpc-mode.ts) — RPC `bash` and `abort_bash` command surface.
-- [`src/internal-urls/artifact-protocol.ts`](../src/internal-urls/artifact-protocol.ts) — `artifact://<id>` resolution.
+- [`src/tools/bash.ts`](../packages/coding-agent/src/tools/bash.ts) — tool entrypoint, normalization/interception, PTY/non-PTY selection, result/error mapping, bash tool renderer.
+- [`src/tools/bash-normalize.ts`](../packages/coding-agent/src/tools/bash-normalize.ts) — command normalization and post-run head/tail filtering.
+- [`src/tools/bash-interceptor.ts`](../packages/coding-agent/src/tools/bash-interceptor.ts) — interceptor rule matching and blocked-command messages.
+- [`src/exec/bash-executor.ts`](../packages/coding-agent/src/exec/bash-executor.ts) — non-PTY executor, shell session reuse, cancellation wiring, output sink integration.
+- [`src/tools/bash-interactive.ts`](../packages/coding-agent/src/tools/bash-interactive.ts) — PTY runtime, overlay UI, input normalization, non-interactive env defaults.
+- [`src/session/streaming-output.ts`](../packages/coding-agent/src/session/streaming-output.ts) — `OutputSink` truncation/artifact spill and summary metadata.
+- [`src/tools/output-utils.ts`](../packages/coding-agent/src/tools/output-utils.ts) — artifact allocation helpers and streaming tail buffer.
+- [`src/tools/output-meta.ts`](../packages/coding-agent/src/tools/output-meta.ts) — truncation metadata shape + notice injection wrapper.
+- [`src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts) — session-level `executeBash`, message recording, abort lifecycle.
+- [`src/modes/components/bash-execution.ts`](../packages/coding-agent/src/modes/components/bash-execution.ts) — interactive `!` command execution component.
+- [`src/modes/controllers/command-controller.ts`](../packages/coding-agent/src/modes/controllers/command-controller.ts) — wiring for interactive `!` command UI stream/update completion.
+- [`src/modes/rpc/rpc-mode.ts`](../packages/coding-agent/src/modes/rpc/rpc-mode.ts) — RPC `bash` and `abort_bash` command surface.
+- [`src/internal-urls/artifact-protocol.ts`](../packages/coding-agent/src/internal-urls/artifact-protocol.ts) — `artifact://<id>` resolution.

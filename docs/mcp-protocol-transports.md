@@ -17,13 +17,13 @@ Does not cover extension authoring UX or command UI.
 
 ## Implementation files
 
-- [`src/mcp/types.ts`](../src/mcp/types.ts)
-- [`src/mcp/transports/stdio.ts`](../src/mcp/transports/stdio.ts)
-- [`src/mcp/transports/http.ts`](../src/mcp/transports/http.ts)
-- [`src/mcp/transports/index.ts`](../src/mcp/transports/index.ts)
-- [`src/mcp/json-rpc.ts`](../src/mcp/json-rpc.ts)
-- [`src/mcp/client.ts`](../src/mcp/client.ts)
-- [`src/mcp/manager.ts`](../src/mcp/manager.ts)
+- [`src/mcp/types.ts`](../packages/coding-agent/src/mcp/types.ts)
+- [`src/mcp/transports/stdio.ts`](../packages/coding-agent/src/mcp/transports/stdio.ts)
+- [`src/mcp/transports/http.ts`](../packages/coding-agent/src/mcp/transports/http.ts)
+- [`src/mcp/transports/index.ts`](../packages/coding-agent/src/mcp/transports/index.ts)
+- [`src/mcp/json-rpc.ts`](../packages/coding-agent/src/mcp/json-rpc.ts)
+- [`src/mcp/client.ts`](../packages/coding-agent/src/mcp/client.ts)
+- [`src/mcp/manager.ts`](../packages/coding-agent/src/mcp/manager.ts)
 
 ## Layer boundaries
 
