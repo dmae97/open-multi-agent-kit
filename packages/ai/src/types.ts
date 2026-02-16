@@ -140,6 +140,12 @@ export interface StreamOptions {
 	 */
 	maxRetryDelayMs?: number;
 	/**
+	 * Optional metadata to include in API requests.
+	 * Providers extract the fields they understand and ignore the rest.
+	 * For example, Anthropic uses `user_id` for abuse tracking and rate limiting.
+	 */
+	metadata?: Record<string, unknown>;
+	/**
 	 * Optional session identifier for providers that support session-based caching.
 	 * Providers can use this to enable prompt caching, request routing, or other
 	 * session-aware features. Ignored by providers that don't support it.

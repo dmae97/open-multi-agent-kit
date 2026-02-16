@@ -172,7 +172,7 @@ function parseGenericGitUrl(url: string): GitSource | null {
 	if (scpLikeMatch) {
 		host = scpLikeMatch[1] ?? "";
 		repoPath = scpLikeMatch[2] ?? "";
-	} else if (/^https?:\/\/|^ssh:\/\//.test(repoWithoutRef)) {
+	} else if (/^https?:\/\/|^ssh:\/\/|^git:\/\//.test(repoWithoutRef)) {
 		try {
 			const parsed = new URL(repoWithoutRef);
 			if (parsed.hash) {
@@ -210,20 +210,30 @@ function parseGenericGitUrl(url: string): GitSource | null {
 }
 
 /**
- * Parse any git URL (SSH or HTTPS) into a GitSource.
+ * Parse git source into a GitSource.
+ *
+ * Rules:
+ * - With `git:` prefix, accept shorthand forms.
+ * - Without `git:` prefix, only accept explicit protocol URLs.
  *
  * Handles:
  * - `git:` prefixed URLs (`git:github.com/user/repo`)
- * - SSH SCP-like URLs (`git@github.com:user/repo`)
- * - HTTPS/HTTP/SSH protocol URLs
- * - Bare `host/user/repo` shorthand
+ * - SSH SCP-like URLs (`git:git@github.com:user/repo`)
+ * - HTTPS/HTTP/SSH/git protocol URLs
  * - Ref pinning via `@ref` suffix
  *
  * Recognizes GitHub, GitLab, Bitbucket, Sourcehut, and Codeberg natively.
  * Falls back to generic URL parsing for other hosts.
  */
 export function parseGitUrl(source: string): GitSource | null {
-	const url = source.startsWith("git:") ? source.slice(4).trim() : source;
+	const trimmed = source.trim();
+	const hasGitPrefix = /^git:(?!\/\/)/i.test(trimmed);
+	const url = hasGitPrefix ? trimmed.slice(4).trim() : trimmed;
+
+	if (!hasGitPrefix && !/^(https?|ssh|git):\/\//i.test(url)) {
+		return null;
+	}
+
 	const hashIndex = url.indexOf("#");
 	if (hashIndex >= 0) {
 		const hash = url.slice(hashIndex + 1);
@@ -244,7 +254,7 @@ export function parseGitUrl(source: string): GitSource | null {
 	const directCandidates: string[] = [];
 	if (scpMatch) {
 		directCandidates.push(`https://${scpMatch[1]}/${scpMatch[2]}`);
-	} else if (/^https?:\/\/|^ssh:\/\//.test(split.repo)) {
+	} else if (/^https?:\/\/|^ssh:\/\/|^git:\/\//.test(split.repo)) {
 		directCandidates.push(split.repo);
 	}
 
@@ -254,6 +264,7 @@ export function parseGitUrl(source: string): GitSource | null {
 			!split.repo.startsWith("http://") &&
 			!split.repo.startsWith("https://") &&
 			!split.repo.startsWith("ssh://") &&
+			!split.repo.startsWith("git://") &&
 			!split.repo.startsWith("git@");
 		const result = tryKnownHostSource(split, withRef, needsHttps ? `https://${split.repo}` : split.repo);
 		if (result) return result;

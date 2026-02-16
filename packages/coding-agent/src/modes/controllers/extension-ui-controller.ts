@@ -9,6 +9,7 @@ import type {
 	ExtensionError,
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
+	TerminalInputHandler,
 } from "../../extensibility/extensions";
 import { HookEditorComponent } from "../../modes/components/hook-editor";
 import { HookInputComponent } from "../../modes/components/hook-input";
@@ -20,6 +21,7 @@ import { setTerminalTitle } from "../../utils/title-generator";
 export class ExtensionUiController {
 	#hookSelectorOverlay: OverlayHandle | undefined;
 	#hookInputOverlay: OverlayHandle | undefined;
+	#extensionTerminalInputUnsubscribers = new Set<() => void>();
 
 	readonly #dialogOverlayOptions = {
 		anchor: "bottom-center",
@@ -41,6 +43,7 @@ export class ExtensionUiController {
 			confirm: (title, message, _dialogOptions) => this.showHookConfirm(title, message),
 			input: (title, placeholder, _dialogOptions) => this.showHookInput(title, placeholder),
 			notify: (message, type) => this.showHookNotify(message, type),
+			onTerminalInput: handler => this.addExtensionTerminalInputListener(handler),
 			setStatus: (key, text) => this.setHookStatus(key, text),
 			setWorkingMessage: message => this.ctx.setWorkingMessage(message),
 			setWidget: (key, content) => this.setHookWidget(key, content),
@@ -157,6 +160,7 @@ export class ExtensionUiController {
 				this.ctx.statusContainer.clear();
 
 				// Create new session
+				this.clearExtensionTerminalInputListeners();
 				const success = await this.ctx.session.newSession({ parentSession: options?.parentSession });
 				if (!success) {
 					return { cancelled: true };
@@ -351,6 +355,7 @@ export class ExtensionUiController {
 				this.ctx.statusContainer.clear();
 
 				// Create new session
+				this.clearExtensionTerminalInputListeners();
 				const success = await this.ctx.session.newSession({ parentSession: options?.parentSession });
 				if (!success) {
 					return { cancelled: true };
@@ -450,6 +455,7 @@ export class ExtensionUiController {
 			confirm: async (_title: string, _message: string, _dialogOptions) => false,
 			input: async (_title: string, _placeholder?: string, _dialogOptions?: unknown) => undefined,
 			notify: () => {},
+			onTerminalInput: () => () => {},
 			setStatus: () => {},
 			setWorkingMessage: () => {},
 			setWidget: () => {},
@@ -726,6 +732,22 @@ export class ExtensionUiController {
 	/**
 	 * Show an extension error in the UI.
 	 */
+	addExtensionTerminalInputListener(handler: TerminalInputHandler): () => void {
+		const unsubscribe = this.ctx.ui.addInputListener(handler);
+		this.#extensionTerminalInputUnsubscribers.add(unsubscribe);
+		return () => {
+			unsubscribe();
+			this.#extensionTerminalInputUnsubscribers.delete(unsubscribe);
+		};
+	}
+
+	clearExtensionTerminalInputListeners(): void {
+		for (const unsubscribe of this.#extensionTerminalInputUnsubscribers) {
+			unsubscribe();
+		}
+		this.#extensionTerminalInputUnsubscribers.clear();
+	}
+
 	showExtensionError(extensionPath: string, error: string): void {
 		const errorText = new Text(theme.fg("error", `Extension "${extensionPath}" error: ${error}`), 1, 0);
 		this.ctx.chatContainer.addChild(errorText);

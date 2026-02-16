@@ -27,6 +27,7 @@ import { AssistantMessageEventStream } from "../utils/event-stream";
 import { parseStreamingJson } from "../utils/json-parse";
 import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode";
+import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers";
 import { transformMessages } from "./transform-messages";
 
 /**
@@ -214,7 +215,24 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 		try {
 			const apiKey = options?.apiKey ?? getEnvApiKey(model.provider) ?? "";
 			const extraBetas = normalizeExtraBetas(options?.betas);
-			const { client, isOAuthToken } = createClient(model, apiKey, extraBetas, true, options?.headers);
+
+			let copilotDynamicHeaders: Record<string, string> | undefined;
+			if (model.provider === "github-copilot") {
+				const hasImages = hasCopilotVisionInput(context.messages);
+				copilotDynamicHeaders = buildCopilotDynamicHeaders({
+					messages: context.messages,
+					hasImages,
+				});
+			}
+
+			const { client, isOAuthToken } = createClient(
+				model,
+				apiKey,
+				extraBetas,
+				true,
+				options?.headers,
+				copilotDynamicHeaders,
+			);
 			const params = buildParams(model, context, isOAuthToken, options);
 			options?.onPayload?.(params);
 			const anthropicStream = client.messages.stream({ ...params, stream: true }, { signal: options?.signal });
@@ -482,15 +500,61 @@ export function buildAnthropicHeaders(options: AnthropicHeaderOptions): Record<s
 	return headers;
 }
 
-function createClient(
-	model: Model<"anthropic-messages">,
-	apiKey: string,
-	extraBetas: string[],
-	stream: boolean,
-	extraHeaders?: Record<string, string>,
-): { client: Anthropic; isOAuthToken: boolean } {
-	const oauthToken = isOAuthToken(apiKey);
+export interface BuildAnthropicClientOptionsParams {
+	model: Model<"anthropic-messages">;
+	apiKey: string;
+	extraBetas: string[];
+	stream: boolean;
+	dynamicHeaders?: Record<string, string>;
+	optionsHeaders?: Record<string, string>;
+}
 
+export interface AnthropicClientConfig {
+	apiKey: string | null;
+	authToken?: string;
+	baseURL: string;
+	defaultHeaders: Record<string, string>;
+	dangerouslyAllowBrowser: boolean;
+	isOAuthToken: boolean;
+}
+
+function mergeHeaders(...headerSets: Array<Record<string, string> | undefined>): Record<string, string> {
+	const merged: Record<string, string> = {};
+	for (const headers of headerSets) {
+		if (!headers) continue;
+		Object.assign(merged, headers);
+	}
+	return merged;
+}
+
+export function buildAnthropicClientOptions(params: BuildAnthropicClientOptionsParams): AnthropicClientConfig {
+	const { model, apiKey, extraBetas, stream, dynamicHeaders, optionsHeaders } = params;
+	const acceptHeader = stream ? "text/event-stream" : "application/json";
+
+	if (model.provider === "github-copilot") {
+		const betaFeatures = [...extraBetas];
+		const defaultHeaders = mergeHeaders(
+			{
+				accept: acceptHeader,
+				"anthropic-dangerous-direct-browser-access": "true",
+				...(betaFeatures.length > 0 ? { "anthropic-beta": betaFeatures.join(",") } : {}),
+				Authorization: `Bearer ${apiKey}`,
+			},
+			model.headers,
+			dynamicHeaders,
+			optionsHeaders,
+		);
+
+		return {
+			apiKey: null,
+			baseURL: model.baseUrl,
+			defaultHeaders,
+			dangerouslyAllowBrowser: true,
+			isOAuthToken: false,
+		};
+	}
+
+	const oauthToken = isOAuthToken(apiKey);
 	const mergedBetas: string[] = [];
 	const modelBeta = model.headers?.["anthropic-beta"];
 	if (modelBeta) {
@@ -500,39 +564,72 @@ function createClient(
 		mergedBetas.push(...extraBetas);
 	}
 
-	const defaultHeadersBase = buildAnthropicHeaders({
+	const defaultHeaders = buildAnthropicHeaders({
 		apiKey,
 		baseUrl: model.baseUrl,
 		isOAuth: oauthToken,
 		extraBetas: mergedBetas,
 		stream,
-		modelHeaders: { ...(model.headers ?? {}), ...(extraHeaders ?? {}) },
+		modelHeaders: mergeHeaders(model.headers ?? {}, dynamicHeaders, optionsHeaders),
 	});
 
-	const clientOptions: ConstructorParameters<typeof Anthropic>[0] = {
-		baseURL: model.baseUrl,
-		dangerouslyAllowBrowser: true,
-		defaultHeaders: defaultHeadersBase,
-	};
-
 	if (isAnthropicBaseUrl(model.baseUrl)) {
-		// For Anthropic API, let SDK handle auth
 		if (oauthToken) {
-			clientOptions.apiKey = null;
-			clientOptions.authToken = apiKey;
-		} else {
-			clientOptions.apiKey = apiKey;
+			return {
+				apiKey: null,
+				authToken: apiKey,
+				baseURL: model.baseUrl,
+				defaultHeaders,
+				dangerouslyAllowBrowser: true,
+				isOAuthToken: true,
+			};
 		}
-	} else {
-		// For non-Anthropic URLs (e.g., Kimi), use authToken
-		// The SDK will add Authorization: Bearer header, which is what we want
-		clientOptions.apiKey = null;
-		clientOptions.authToken = apiKey;
+
+		return {
+			apiKey,
+			baseURL: model.baseUrl,
+			defaultHeaders,
+			dangerouslyAllowBrowser: true,
+			isOAuthToken: false,
+		};
 	}
 
-	const client = new Anthropic(clientOptions);
+	return {
+		apiKey: null,
+		authToken: apiKey,
+		baseURL: model.baseUrl,
+		defaultHeaders,
+		dangerouslyAllowBrowser: true,
+		isOAuthToken: oauthToken,
+	};
+}
 
-	return { client, isOAuthToken: oauthToken };
+function createClient(
+	model: Model<"anthropic-messages">,
+	apiKey: string,
+	extraBetas: string[],
+	stream: boolean,
+	optionsHeaders?: Record<string, string>,
+	dynamicHeaders?: Record<string, string>,
+): { client: Anthropic; isOAuthToken: boolean } {
+	const config = buildAnthropicClientOptions({
+		model,
+		apiKey,
+		extraBetas,
+		stream,
+		dynamicHeaders,
+		optionsHeaders,
+	});
+
+	const client = new Anthropic({
+		apiKey: config.apiKey,
+		...(config.authToken ? { authToken: config.authToken } : {}),
+		baseURL: config.baseURL,
+		defaultHeaders: config.defaultHeaders,
+		dangerouslyAllowBrowser: config.dangerouslyAllowBrowser,
+	});
+
+	return { client, isOAuthToken: config.isOAuthToken };
 }
 
 export type AnthropicSystemBlock = {
@@ -656,6 +753,13 @@ function buildParams(
 
 	if (context.tools) {
 		params.tools = convertTools(context.tools, isOAuthToken);
+	}
+
+	if (options?.metadata) {
+		const userId = options.metadata.user_id;
+		if (typeof userId === "string") {
+			params.metadata = { user_id: userId };
+		}
 	}
 
 	// Configure thinking mode: adaptive (Opus 4.6+) or budget-based (older models)

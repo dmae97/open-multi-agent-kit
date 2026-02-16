@@ -130,6 +130,7 @@ const noOpUIContext: ExtensionUIContext = {
 	confirm: async (_title, _message, _dialogOptions) => false,
 	input: async (_title, _placeholder, _dialogOptions) => undefined,
 	notify: () => {},
+	onTerminalInput: () => () => {},
 	setStatus: () => {},
 	setWorkingMessage: () => {},
 	setWidget: () => {},

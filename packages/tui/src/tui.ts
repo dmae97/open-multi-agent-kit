@@ -11,6 +11,9 @@ import { extractSegments, sliceByColumn, sliceWithWidth, visibleWidth } from "./
 
 const SEGMENT_RESET = "\x1b[0m\x1b]8;;\x07";
 
+type InputListenerResult = { consume?: boolean; data?: string } | undefined;
+type InputListener = (data: string) => InputListenerResult;
+
 /**
  * Component interface - all components must implement this
  */
@@ -201,6 +204,7 @@ export class TUI extends Container {
 	#previousLines: string[] = [];
 	#previousWidth = 0;
 	#focusedComponent: Component | null = null;
+	#inputListeners = new Set<InputListener>();
 
 	/** Global callback for debug key (Shift+Ctrl+D). Called before input is forwarded to focused component. */
 	onDebug?: () => void;
@@ -378,6 +382,17 @@ export class TUI extends Container {
 		this.requestRender();
 	}
 
+	addInputListener(listener: InputListener): () => void {
+		this.#inputListeners.add(listener);
+		return () => {
+			this.#inputListeners.delete(listener);
+		};
+	}
+
+	removeInputListener(listener: InputListener): void {
+		this.#inputListeners.delete(listener);
+	}
+
 	#queryCellSize(): void {
 		// Only query if terminal supports images (cell size is only used for image rendering)
 		if (!TERMINAL.imageProtocol) {
@@ -425,6 +440,23 @@ export class TUI extends Container {
 	}
 
 	#handleInput(data: string): void {
+		if (this.#inputListeners.size > 0) {
+			let current = data;
+			for (const listener of this.#inputListeners) {
+				const result = listener(current);
+				if (result?.consume) {
+					return;
+				}
+				if (result?.data !== undefined) {
+					current = result.data;
+				}
+			}
+			if (current.length === 0) {
+				return;
+			}
+			data = current;
+		}
+
 		// If we're waiting for cell size response, buffer input and parse
 		if (this.#cellSizeQueryPending) {
 			this.#inputBuffer += data;

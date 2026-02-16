@@ -1,3 +1,4 @@
+import { dlopen, FFIType, ptr } from "bun:ffi";
 import * as fs from "node:fs";
 import { $env, logger } from "@oh-my-pi/pi-utils";
 import { setKittyProtocolActive } from "./keys";
@@ -12,6 +13,8 @@ let activeTerminal: ProcessTerminal | null = null;
 // Track if a terminal was ever started (for emergency restore logic)
 let terminalEverStarted = false;
 
+const STD_INPUT_HANDLE = -10;
+const ENABLE_VIRTUAL_TERMINAL_INPUT = 0x0200;
 /**
  * Emergency terminal restore - call this from signal/crash handlers
  * Resets terminal state without requiring access to the ProcessTerminal instance
@@ -91,6 +94,7 @@ export class ProcessTerminal implements Terminal {
 	#stdinDataHandler?: (data: string) => void;
 	#dead = false;
 	#writeLogPath = $env.PI_TUI_WRITE_LOG || "";
+	#windowsVTInputRestore?: () => void;
 
 	get kittyProtocolActive(): boolean {
 		return this.#kittyProtocolActive;
@@ -124,10 +128,65 @@ export class ProcessTerminal implements Terminal {
 			process.kill(process.pid, "SIGWINCH");
 		}
 
+		// On Windows, enable ENABLE_VIRTUAL_TERMINAL_INPUT so the console sends
+		// VT escape sequences (e.g. \x1b[Z for Shift+Tab) instead of raw console
+		// events that lose modifier information. Must run after setRawMode(true)
+		// since that resets console mode flags.
+		this.#enableWindowsVTInput();
 		// Query and enable Kitty keyboard protocol
 		// The query handler intercepts input temporarily, then installs the user's handler
 		// See: https://sw.kovidgoyal.net/kitty/keyboard-protocol/
 		this.#queryAndEnableKittyProtocol();
+	}
+
+	/**
+	 * On Windows, add ENABLE_VIRTUAL_TERMINAL_INPUT to the stdin console mode
+	 * so modified keys (for example Shift+Tab) arrive as VT escape sequences.
+	 */
+	#enableWindowsVTInput(): void {
+		if (process.platform !== "win32") return;
+		this.#restoreWindowsVTInput();
+		try {
+			const kernel32 = dlopen("kernel32.dll", {
+				GetStdHandle: { args: [FFIType.i32], returns: FFIType.ptr },
+				GetConsoleMode: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.bool },
+				SetConsoleMode: { args: [FFIType.ptr, FFIType.u32], returns: FFIType.bool },
+			});
+			const handle = kernel32.symbols.GetStdHandle(STD_INPUT_HANDLE);
+			const mode = new Uint32Array(1);
+			const modePtr = ptr(mode);
+			if (!modePtr || !kernel32.symbols.GetConsoleMode(handle, modePtr)) {
+				kernel32.close();
+				return;
+			}
+			const originalMode = mode[0]!;
+			const vtMode = originalMode | ENABLE_VIRTUAL_TERMINAL_INPUT;
+			if (vtMode !== originalMode && !kernel32.symbols.SetConsoleMode(handle, vtMode)) {
+				kernel32.close();
+				return;
+			}
+			this.#windowsVTInputRestore = () => {
+				try {
+					kernel32.symbols.SetConsoleMode(handle, originalMode);
+				} finally {
+					kernel32.close();
+				}
+			};
+		} catch {
+			// bun:ffi unavailable or console API unsupported; keep startup non-fatal.
+		}
+	}
+
+	#restoreWindowsVTInput(): void {
+		if (process.platform !== "win32") return;
+		const restore = this.#windowsVTInputRestore;
+		this.#windowsVTInputRestore = undefined;
+		if (!restore) return;
+		try {
+			restore();
+		} catch {
+			// Ignore restore errors during terminal teardown.
+		}
 	}
 
 	/**
@@ -245,6 +304,7 @@ export class ProcessTerminal implements Terminal {
 			setKittyProtocolActive(false);
 		}
 
+		this.#restoreWindowsVTInput();
 		// Clean up StdinBuffer
 		if (this.#stdinBuffer) {
 			this.#stdinBuffer.destroy();

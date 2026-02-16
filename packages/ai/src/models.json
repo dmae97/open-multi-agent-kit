@@ -2287,7 +2287,7 @@
 		"claude-haiku-4.5": {
 			"id": "claude-haiku-4.5",
 			"name": "Claude Haiku 4.5",
-			"api": "openai-completions",
+			"api": "anthropic-messages",
 			"provider": "github-copilot",
 			"baseUrl": "https://api.individual.githubcopilot.com",
 			"reasoning": true,
@@ -2308,17 +2308,12 @@
 				"Editor-Version": "vscode/1.107.0",
 				"Editor-Plugin-Version": "copilot-chat/0.35.0",
 				"Copilot-Integration-Id": "vscode-chat"
-			},
-			"compat": {
-				"supportsStore": false,
-				"supportsDeveloperRole": false,
-				"supportsReasoningEffort": false
 			}
 		},
 		"claude-opus-4.5": {
 			"id": "claude-opus-4.5",
 			"name": "Claude Opus 4.5",
-			"api": "openai-completions",
+			"api": "anthropic-messages",
 			"provider": "github-copilot",
 			"baseUrl": "https://api.individual.githubcopilot.com",
 			"reasoning": true,
@@ -2339,17 +2334,12 @@
 				"Editor-Version": "vscode/1.107.0",
 				"Editor-Plugin-Version": "copilot-chat/0.35.0",
 				"Copilot-Integration-Id": "vscode-chat"
-			},
-			"compat": {
-				"supportsStore": false,
-				"supportsDeveloperRole": false,
-				"supportsReasoningEffort": false
 			}
 		},
 		"claude-opus-4.6": {
 			"id": "claude-opus-4.6",
 			"name": "Claude Opus 4.6",
-			"api": "openai-completions",
+			"api": "anthropic-messages",
 			"provider": "github-copilot",
 			"baseUrl": "https://api.individual.githubcopilot.com",
 			"reasoning": true,
@@ -2370,17 +2360,12 @@
 				"Editor-Version": "vscode/1.107.0",
 				"Editor-Plugin-Version": "copilot-chat/0.35.0",
 				"Copilot-Integration-Id": "vscode-chat"
-			},
-			"compat": {
-				"supportsStore": false,
-				"supportsDeveloperRole": false,
-				"supportsReasoningEffort": false
 			}
 		},
 		"claude-sonnet-4": {
 			"id": "claude-sonnet-4",
 			"name": "Claude Sonnet 4",
-			"api": "openai-completions",
+			"api": "anthropic-messages",
 			"provider": "github-copilot",
 			"baseUrl": "https://api.individual.githubcopilot.com",
 			"reasoning": true,
@@ -2401,17 +2386,12 @@
 				"Editor-Version": "vscode/1.107.0",
 				"Editor-Plugin-Version": "copilot-chat/0.35.0",
 				"Copilot-Integration-Id": "vscode-chat"
-			},
-			"compat": {
-				"supportsStore": false,
-				"supportsDeveloperRole": false,
-				"supportsReasoningEffort": false
 			}
 		},
 		"claude-sonnet-4.5": {
 			"id": "claude-sonnet-4.5",
 			"name": "Claude Sonnet 4.5",
-			"api": "openai-completions",
+			"api": "anthropic-messages",
 			"provider": "github-copilot",
 			"baseUrl": "https://api.individual.githubcopilot.com",
 			"reasoning": true,
@@ -2432,11 +2412,6 @@
 				"Editor-Version": "vscode/1.107.0",
 				"Editor-Plugin-Version": "copilot-chat/0.35.0",
 				"Copilot-Integration-Id": "vscode-chat"
-			},
-			"compat": {
-				"supportsStore": false,
-				"supportsDeveloperRole": false,
-				"supportsReasoningEffort": false
 			}
 		},
 		"gemini-2.5-pro": {
@@ -7165,13 +7140,13 @@
 				"text"
 			],
 			"cost": {
-				"input": 0.19999999999999998,
-				"output": 1,
-				"cacheRead": 0,
+				"input": 0.3,
+				"output": 1.2,
+				"cacheRead": 0.029,
 				"cacheWrite": 0
 			},
 			"contextWindow": 196608,
-			"maxTokens": 131072
+			"maxTokens": 4096
 		},
 		"mistralai/codestral-2508": {
 			"id": "mistralai/codestral-2508",
@@ -7727,13 +7702,13 @@
 				"image"
 			],
 			"cost": {
-				"input": 0.44999999999999996,
-				"output": 2.2,
-				"cacheRead": 0.22499999999999998,
+				"input": 0.22999999999999998,
+				"output": 3,
+				"cacheRead": 0,
 				"cacheWrite": 0
 			},
 			"contextWindow": 262144,
-			"maxTokens": 65535
+			"maxTokens": 262144
 		},
 		"nex-agi/deepseek-v3.1-nex-n1": {
 			"id": "nex-agi/deepseek-v3.1-nex-n1",
@@ -9718,6 +9693,46 @@
 			"contextWindow": 131072,
 			"maxTokens": 32768
 		},
+		"qwen/qwen3.5-397b-a17b": {
+			"id": "qwen/qwen3.5-397b-a17b",
+			"name": "Qwen: Qwen3.5 397B A17B",
+			"api": "openai-completions",
+			"baseUrl": "https://openrouter.ai/api/v1",
+			"provider": "openrouter",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0.6,
+				"output": 3.5999999999999996,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 256000,
+			"maxTokens": 64000
+		},
+		"qwen/qwen3.5-plus-02-15": {
+			"id": "qwen/qwen3.5-plus-02-15",
+			"name": "Qwen: Qwen3.5 Plus 2026-02-15",
+			"api": "openai-completions",
+			"baseUrl": "https://openrouter.ai/api/v1",
+			"provider": "openrouter",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0.39999999999999997,
+				"output": 2.4,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1000000,
+			"maxTokens": 64000
+		},
 		"qwen/qwq-32b": {
 			"id": "qwen/qwq-32b",
 			"name": "Qwen: QwQ 32B",
@@ -10310,7 +10325,7 @@
 				"text"
 			],
 			"cost": {
-				"input": 0.75,
+				"input": 0.3,
 				"output": 2.5500000000000003,
 				"cacheRead": 0,
 				"cacheWrite": 0

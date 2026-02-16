@@ -258,6 +258,7 @@ function parseModelPatternWithContext(
 	pattern: string,
 	availableModels: Model<Api>[],
 	context: ModelPreferenceContext,
+	options?: { allowInvalidThinkingLevelFallback?: boolean },
 ): ParsedModelResult {
 	// Try exact match first
 	const exactMatch = tryMatchModel(pattern, availableModels, context);
@@ -277,7 +278,7 @@ function parseModelPatternWithContext(
 
 	if (isValidThinkingLevel(suffix)) {
 		// Valid thinking level - recurse on prefix and use this level
-		const result = parseModelPatternWithContext(prefix, availableModels, context);
+		const result = parseModelPatternWithContext(prefix, availableModels, context, options);
 		if (result.model) {
 			// Only use this thinking level if no warning from inner recursion
 			const explicitThinkingLevel = !result.warning;
@@ -291,8 +292,13 @@ function parseModelPatternWithContext(
 		return result;
 	}
 
+	const allowFallback = options?.allowInvalidThinkingLevelFallback ?? true;
+	if (!allowFallback) {
+		return { model: undefined, thinkingLevel: undefined, warning: undefined, explicitThinkingLevel: false };
+	}
+
 	// Invalid suffix - recurse on prefix and warn
-	const result = parseModelPatternWithContext(prefix, availableModels, context);
+	const result = parseModelPatternWithContext(prefix, availableModels, context, options);
 	if (result.model) {
 		return {
 			model: result.model,
@@ -308,9 +314,10 @@ export function parseModelPattern(
 	pattern: string,
 	availableModels: Model<Api>[],
 	preferences?: ModelMatchPreferences,
+	options?: { allowInvalidThinkingLevelFallback?: boolean },
 ): ParsedModelResult {
 	const context = buildPreferenceContext(availableModels, preferences);
-	return parseModelPatternWithContext(pattern, availableModels, context);
+	return parseModelPatternWithContext(pattern, availableModels, context, options);
 }
 
 const PREFIX_MODEL_ROLE = "pi/";
@@ -484,6 +491,98 @@ export async function resolveModelScope(
 	}
 
 	return scopedModels;
+}
+
+export interface ResolveCliModelResult {
+	model: Model<Api> | undefined;
+	thinkingLevel?: ThinkingLevel;
+	warning: string | undefined;
+	error: string | undefined;
+}
+
+/**
+ * Resolve a single model from CLI flags.
+ */
+export function resolveCliModel(options: {
+	cliProvider?: string;
+	cliModel?: string;
+	modelRegistry: ModelRegistry;
+	preferences?: ModelMatchPreferences;
+}): ResolveCliModelResult {
+	const { cliProvider, cliModel, modelRegistry, preferences } = options;
+
+	if (!cliModel) {
+		return { model: undefined, warning: undefined, error: undefined };
+	}
+
+	const availableModels = modelRegistry.getAll();
+	if (availableModels.length === 0) {
+		return {
+			model: undefined,
+			warning: undefined,
+			error: "No models available. Check your installation or add models to models.json.",
+		};
+	}
+
+	const providerMap = new Map<string, string>();
+	for (const model of availableModels) {
+		providerMap.set(model.provider.toLowerCase(), model.provider);
+	}
+
+	let provider = cliProvider ? providerMap.get(cliProvider.toLowerCase()) : undefined;
+	if (cliProvider && !provider) {
+		return {
+			model: undefined,
+			warning: undefined,
+			error: `Unknown provider "${cliProvider}". Use --list-models to see available providers/models.`,
+		};
+	}
+
+	if (!provider) {
+		const lower = cliModel.toLowerCase();
+		const exact = availableModels.find(
+			model => model.id.toLowerCase() === lower || `${model.provider}/${model.id}`.toLowerCase() === lower,
+		);
+		if (exact) {
+			return { model: exact, warning: undefined, thinkingLevel: undefined, error: undefined };
+		}
+	}
+
+	let pattern = cliModel;
+
+	if (!provider) {
+		const slashIndex = cliModel.indexOf("/");
+		if (slashIndex !== -1) {
+			const maybeProvider = cliModel.substring(0, slashIndex);
+			const canonical = providerMap.get(maybeProvider.toLowerCase());
+			if (canonical) {
+				provider = canonical;
+				pattern = cliModel.substring(slashIndex + 1);
+			}
+		}
+	} else {
+		const prefix = `${provider}/`;
+		if (cliModel.toLowerCase().startsWith(prefix.toLowerCase())) {
+			pattern = cliModel.substring(prefix.length);
+		}
+	}
+
+	const candidates = provider ? availableModels.filter(model => model.provider === provider) : availableModels;
+	const { model, thinkingLevel, warning } = parseModelPattern(pattern, candidates, preferences, {
+		allowInvalidThinkingLevelFallback: false,
+	});
+
+	if (!model) {
+		const display = provider ? `${provider}/${pattern}` : cliModel;
+		return {
+			model: undefined,
+			thinkingLevel: undefined,
+			warning,
+			error: `Model "${display}" not found. Use --list-models to see available models.`,
+		};
+	}
+
+	return { model, thinkingLevel, warning, error: undefined };
 }
 
 export interface InitialModelResult {

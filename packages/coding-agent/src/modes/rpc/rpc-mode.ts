@@ -164,6 +164,11 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 			);
 		}
 
+		onTerminalInput(): () => void {
+			// Raw terminal input not supported in RPC mode
+			return () => {};
+		}
+
 		notify(message: string, type?: "info" | "warning" | "error"): void {
 			// Fire and forget - no response needed
 			this.output({

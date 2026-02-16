@@ -51,10 +51,16 @@ import type {
 	ExtensionCommandContext,
 	ExtensionRunner,
 	ExtensionUIContext,
+	MessageEndEvent,
+	MessageStartEvent,
+	MessageUpdateEvent,
 	SessionBeforeBranchResult,
 	SessionBeforeCompactResult,
 	SessionBeforeSwitchResult,
 	SessionBeforeTreeResult,
+	ToolExecutionEndEvent,
+	ToolExecutionStartEvent,
+	ToolExecutionUpdateEvent,
 	TreePreparation,
 	TurnEndEvent,
 	TurnStartEvent,
@@ -102,6 +108,7 @@ import {
 	pythonExecutionToText,
 } from "./messages";
 import type { BranchSummaryEntry, CompactionEntry, NewSessionOptions, SessionManager } from "./session-manager";
+import { getLatestCompactionEntry } from "./session-manager";
 
 /** Session-specific events that extend the core AgentEvent */
 export type AgentSessionEvent =
@@ -226,6 +233,7 @@ const noOpUIContext: ExtensionUIContext = {
 	confirm: async (_title, _message, _dialogOptions) => false,
 	input: async (_title, _placeholder, _dialogOptions) => undefined,
 	notify: () => {},
+	onTerminalInput: () => () => {},
 	setStatus: () => {},
 	setWorkingMessage: () => {},
 	setWidget: () => {},
@@ -874,6 +882,51 @@ export class AgentSession {
 			};
 			await this.#extensionRunner.emit(hookEvent);
 			this.#turnIndex++;
+		} else if (event.type === "message_start") {
+			const extensionEvent: MessageStartEvent = {
+				type: "message_start",
+				message: event.message,
+			};
+			await this.#extensionRunner.emit(extensionEvent);
+		} else if (event.type === "message_update") {
+			const extensionEvent: MessageUpdateEvent = {
+				type: "message_update",
+				message: event.message,
+				assistantMessageEvent: event.assistantMessageEvent,
+			};
+			await this.#extensionRunner.emit(extensionEvent);
+		} else if (event.type === "message_end") {
+			const extensionEvent: MessageEndEvent = {
+				type: "message_end",
+				message: event.message,
+			};
+			await this.#extensionRunner.emit(extensionEvent);
+		} else if (event.type === "tool_execution_start") {
+			const extensionEvent: ToolExecutionStartEvent = {
+				type: "tool_execution_start",
+				toolCallId: event.toolCallId,
+				toolName: event.toolName,
+				args: event.args,
+			};
+			await this.#extensionRunner.emit(extensionEvent);
+		} else if (event.type === "tool_execution_update") {
+			const extensionEvent: ToolExecutionUpdateEvent = {
+				type: "tool_execution_update",
+				toolCallId: event.toolCallId,
+				toolName: event.toolName,
+				args: event.args,
+				partialResult: event.partialResult,
+			};
+			await this.#extensionRunner.emit(extensionEvent);
+		} else if (event.type === "tool_execution_end") {
+			const extensionEvent: ToolExecutionEndEvent = {
+				type: "tool_execution_end",
+				toolCallId: event.toolCallId,
+				toolName: event.toolName,
+				result: event.result,
+				isError: event.isError ?? false,
+			};
+			await this.#extensionRunner.emit(extensionEvent);
 		} else if (event.type === "auto_compaction_start") {
 			await this.#extensionRunner.emit({ type: "auto_compaction_start", reason: event.reason });
 		} else if (event.type === "auto_compaction_end") {
@@ -2664,9 +2717,9 @@ Be thorough - include exact file paths, function names, error messages, and tech
 		// The error shouldn't trigger another compaction since we already compacted.
 		// Example: opus fails → switch to codex → compact → switch back to opus → opus error
 		// is still in context but shouldn't trigger compaction again.
-		const compactionEntry = this.sessionManager.getBranch().find(e => e.type === "compaction");
+		const compactionEntry = getLatestCompactionEntry(this.sessionManager.getBranch());
 		const errorIsFromBeforeCompaction =
-			compactionEntry && assistantMessage.timestamp < new Date(compactionEntry.timestamp).getTime();
+			compactionEntry !== null && assistantMessage.timestamp < new Date(compactionEntry.timestamp).getTime();
 
 		// Case 1: Overflow - LLM returned context overflow error
 		if (sameModel && !errorIsFromBeforeCompaction && isContextOverflow(assistantMessage, contextWindow)) {
@@ -3959,6 +4012,35 @@ Be thorough - include exact file paths, function names, error messages, and tech
 		const contextWindow = model.contextWindow ?? 0;
 		if (contextWindow <= 0) return undefined;
 
+		// After compaction, the last assistant usage reflects pre-compaction context size.
+		// We can only trust usage from an assistant that responded after the latest compaction.
+		// If no such assistant exists, context token count is unknown until the next LLM response.
+		const branchEntries = this.sessionManager.getBranch();
+		const latestCompaction = getLatestCompactionEntry(branchEntries);
+
+		if (latestCompaction) {
+			// Check if there's a valid assistant usage after the compaction boundary
+			const compactionIndex = branchEntries.lastIndexOf(latestCompaction);
+			let hasPostCompactionUsage = false;
+			for (let i = branchEntries.length - 1; i > compactionIndex; i--) {
+				const entry = branchEntries[i];
+				if (entry.type === "message" && entry.message.role === "assistant") {
+					const assistant = entry.message;
+					if (assistant.stopReason !== "aborted" && assistant.stopReason !== "error") {
+						const contextTokens = calculateContextTokens(assistant.usage);
+						if (contextTokens > 0) {
+							hasPostCompactionUsage = true;
+						}
+						break;
+					}
+				}
+			}
+
+			if (!hasPostCompactionUsage) {
+				return { tokens: null, contextWindow, percent: null };
+			}
+		}
+
 		const estimate = this.#estimateContextTokens();
 		const percent = (estimate.tokens / contextWindow) * 100;
 
@@ -3966,9 +4048,6 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			tokens: estimate.tokens,
 			contextWindow,
 			percent,
-			usageTokens: estimate.usageTokens,
-			trailingTokens: estimate.trailingTokens,
-			lastUsageIndex: estimate.lastUsageIndex,
 		};
 	}
 
@@ -3985,9 +4064,6 @@ Be thorough - include exact file paths, function names, error messages, and tech
 	 */
 	#estimateContextTokens(): {
 		tokens: number;
-		usageTokens: number;
-		trailingTokens: number;
-		lastUsageIndex: number | null;
 	} {
 		const messages = this.messages;
 
@@ -4014,9 +4090,6 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			}
 			return {
 				tokens: estimated,
-				usageTokens: 0,
-				trailingTokens: estimated,
-				lastUsageIndex: null,
 			};
 		}
 
@@ -4028,9 +4101,6 @@ Be thorough - include exact file paths, function names, error messages, and tech
 
 		return {
 			tokens: usageTokens + trailingTokens,
-			usageTokens,
-			trailingTokens,
-			lastUsageIndex,
 		};
 	}
 

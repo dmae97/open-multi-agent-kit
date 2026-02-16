@@ -20,7 +20,7 @@ import { listModels } from "./cli/list-models";
 import { selectSession } from "./cli/session-picker";
 import { findConfigFile } from "./config";
 import { ModelRegistry, ModelsConfigFile } from "./config/model-registry";
-import { parseModelPattern, parseModelString, resolveModelScope, type ScopedModel } from "./config/model-resolver";
+import { parseModelString, resolveCliModel, resolveModelScope, type ScopedModel } from "./config/model-resolver";
 import { Settings, settings } from "./config/settings";
 import { initializeWithSettings } from "./discovery";
 import { exportFromFile } from "./export/html";
@@ -355,10 +355,11 @@ async function buildSessionOptions(
 	scopedModels: ScopedModel[],
 	sessionManager: SessionManager | undefined,
 	modelRegistry: ModelRegistry,
-): Promise<CreateAgentSessionOptions> {
+): Promise<{ options: CreateAgentSessionOptions; cliThinkingFromModel: boolean }> {
 	const options: CreateAgentSessionOptions = {
 		cwd: parsed.cwd ?? getProjectDir(),
 	};
+	let cliThinkingFromModel = false;
 
 	// Auto-discover SYSTEM.md if no CLI system prompt provided
 	const systemPromptSource = parsed.systemPrompt ?? discoverSystemPromptFile();
@@ -370,23 +371,38 @@ async function buildSessionOptions(
 		options.sessionManager = sessionManager;
 	}
 
-	// Model from CLI (--model) - uses same fuzzy matching as --models
+	// Model from CLI
+	// - supports --provider <name> --model <pattern>
+	// - supports --model <provider>/<pattern>
 	if (parsed.model) {
-		const available = modelRegistry.getAll();
 		const modelMatchPreferences = {
 			usageOrder: settings.getStorage()?.getModelUsageOrder(),
 		};
-		const { model, warning } = parseModelPattern(parsed.model, available, modelMatchPreferences);
-		if (warning) {
-			writeStderr(chalk.yellow(`Warning: ${warning}`));
+		const resolved = resolveCliModel({
+			cliProvider: parsed.provider,
+			cliModel: parsed.model,
+			modelRegistry,
+			preferences: modelMatchPreferences,
+		});
+		if (resolved.warning) {
+			writeStderr(chalk.yellow(`Warning: ${resolved.warning}`));
 		}
-		if (!model) {
-			// Model not found in built-in registry — defer resolution to after extensions load
-			// (extensions may register additional providers/models via registerProvider)
-			options.modelPattern = parsed.model;
-		} else {
-			options.model = model;
-			settings.overrideModelRoles({ default: `${model.provider}/${model.id}` });
+		if (resolved.error) {
+			if (!parsed.provider && !parsed.model.includes(":")) {
+				// Model not found in built-in registry — defer resolution to after extensions load
+				// (extensions may register additional providers/models via registerProvider)
+				options.modelPattern = parsed.model;
+			} else {
+				writeStderr(chalk.red(resolved.error));
+				process.exit(1);
+			}
+		} else if (resolved.model) {
+			options.model = resolved.model;
+			settings.overrideModelRoles({ default: `${resolved.model.provider}/${resolved.model.id}` });
+			if (!parsed.thinking && resolved.thinkingLevel) {
+				options.thinkingLevel = resolved.thinkingLevel;
+				cliThinkingFromModel = true;
+			}
 		}
 	} else if (scopedModels.length > 0 && !parsed.continue && !parsed.resume) {
 		const remembered = settings.getModelRole("default");
@@ -472,7 +488,7 @@ async function buildSessionOptions(
 		options.additionalExtensionPaths = [];
 	}
 
-	return options;
+	return { options, cliThinkingFromModel };
 }
 
 export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<void> {
@@ -604,7 +620,12 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 		sessionManager = await SessionManager.open(selectedPath);
 	}
 
-	const sessionOptions = await buildSessionOptions(parsedArgs, scopedModels, sessionManager, modelRegistry);
+	const { options: sessionOptions, cliThinkingFromModel } = await buildSessionOptions(
+		parsedArgs,
+		scopedModels,
+		sessionManager,
+		modelRegistry,
+	);
 	debugStartup("main:buildSessionOptions");
 	sessionOptions.authStorage = authStorage;
 	sessionOptions.modelRegistry = modelRegistry;
@@ -613,7 +634,9 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 	// Handle CLI --api-key as runtime override (not persisted)
 	if (parsedArgs.apiKey) {
 		if (!sessionOptions.model && !sessionOptions.modelPattern) {
-			writeStderr(chalk.red("--api-key requires a model to be specified via --provider/--model or -m/--models"));
+			writeStderr(
+				chalk.red("--api-key requires a model to be specified via --model, --provider/--model, or --models"),
+			);
 			process.exit(1);
 		}
 		if (sessionOptions.model) {
@@ -678,9 +701,11 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 		process.exit(1);
 	}
 
-	// Clamp thinking level to model capabilities (for CLI override case)
-	if (session.model && parsedArgs.thinking) {
-		let effectiveThinking = parsedArgs.thinking;
+	// Clamp thinking level to model capabilities for CLI-provided thinking levels.
+	// This covers both --thinking <level> and --model <pattern>:<thinking>.
+	const cliThinkingOverride = parsedArgs.thinking !== undefined || cliThinkingFromModel;
+	if (session.model && cliThinkingOverride) {
+		let effectiveThinking = session.thinkingLevel;
 		if (!session.model.reasoning) {
 			effectiveThinking = "off";
 		} else if (effectiveThinking === "xhigh" && !supportsXhigh(session.model)) {

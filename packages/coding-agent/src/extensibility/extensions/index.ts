@@ -67,9 +67,13 @@ export type {
 	InputEventResult,
 	KeybindingsManager,
 	LoadExtensionsResult,
+	// Events - Message
+	MessageEndEvent,
 	// Message Rendering
 	MessageRenderer,
 	MessageRenderOptions,
+	MessageStartEvent,
+	MessageUpdateEvent,
 	// Provider Registration
 	ProviderConfig,
 	ProviderModelConfig,
@@ -104,11 +108,16 @@ export type {
 	SetActiveToolsHandler,
 	SetModelHandler,
 	SetThinkingLevelHandler,
+	TerminalInputHandler,
 	// Events - Tool
 	ToolCallEvent,
 	ToolCallEventResult,
 	// Tools
 	ToolDefinition,
+	// Events - Tool Execution
+	ToolExecutionEndEvent,
+	ToolExecutionStartEvent,
+	ToolExecutionUpdateEvent,
 	ToolRenderResultOptions,
 	ToolResultEvent,
 	ToolResultEventResult,

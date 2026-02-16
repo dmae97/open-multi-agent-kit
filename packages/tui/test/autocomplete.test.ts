@@ -99,4 +99,40 @@ describe("CombinedAutocompleteProvider", () => {
 			expect(values.some(value => value === "@.git" || value.startsWith("@.git/"))).toBe(false);
 		});
 	});
+
+	describe("@ fuzzy search scoped paths", () => {
+		let rootDir: string;
+		let baseDir: string;
+		let outsideDir: string;
+
+		beforeEach(() => {
+			rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "autocomplete-scope-test-"));
+			baseDir = path.join(rootDir, "cwd");
+			outsideDir = path.join(rootDir, "outside");
+			fs.mkdirSync(baseDir, { recursive: true });
+			fs.mkdirSync(outsideDir, { recursive: true });
+		});
+
+		afterEach(() => {
+			fs.rmSync(rootDir, { recursive: true, force: true });
+		});
+
+		it("scopes @ fuzzy search to the typed relative path prefix", async () => {
+			fs.writeFileSync(path.join(baseDir, "alpha-local.ts"), "export const local = 1;\n");
+			fs.mkdirSync(path.join(outsideDir, "nested", "deeper"), { recursive: true });
+			fs.writeFileSync(path.join(outsideDir, "nested", "alpha.ts"), "export const alpha = 1;\n");
+			fs.writeFileSync(path.join(outsideDir, "nested", "deeper", "also-alpha.ts"), "export const also = 1;\n");
+			fs.writeFileSync(path.join(outsideDir, "nested", "deeper", "zzz.ts"), "export const zzz = 1;\n");
+
+			const provider = new CombinedAutocompleteProvider([], baseDir);
+			const line = "@../outside/a";
+			const result = await provider.getSuggestions([line], 0, line.length);
+
+			const values = result?.items.map(item => item.value) ?? [];
+			expect(values).toContain("@../outside/nested/alpha.ts");
+			expect(values).toContain("@../outside/nested/deeper/also-alpha.ts");
+			expect(values).not.toContain("@../outside/nested/deeper/zzz.ts");
+			expect(values.some(value => value.includes("alpha-local.ts"))).toBe(false);
+		});
+	});
 });

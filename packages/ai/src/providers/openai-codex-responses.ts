@@ -633,7 +633,7 @@ export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"
 									type: "toolCall",
 									id: `${item.call_id}|${item.id}`,
 									name: item.name,
-									arguments: JSON.parse(item.arguments),
+									arguments: parseStreamingJson(item.arguments || "{}"),
 								};
 								stream.push({ type: "toolcall_end", contentIndex: blockIndex(), toolCall, partial: output });
 							}

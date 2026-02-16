@@ -33,6 +33,7 @@ import { parseStreamingJson } from "../utils/json-parse";
 import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import { mapToOpenAIResponsesToolChoice } from "../utils/tool-choice";
+import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers";
 import { transformMessages } from "./transform-messages";
 
 /**
@@ -299,8 +300,8 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 					} else if (item.type === "function_call") {
 						const args =
 							currentBlock?.type === "toolCall" && currentBlock.partialJson
-								? JSON.parse(currentBlock.partialJson)
-								: JSON.parse(item.arguments);
+								? parseStreamingJson(currentBlock.partialJson)
+								: parseStreamingJson(item.arguments || "{}");
 						const toolCall: ToolCall = {
 							type: "toolCall",
 							id: `${item.call_id}|${item.id}`,
@@ -384,31 +385,12 @@ function createClient(
 
 	const headers = { ...(model.headers ?? {}), ...(extraHeaders ?? {}) };
 	if (model.provider === "github-copilot") {
-		// Copilot expects X-Initiator to indicate whether the request is user-initiated
-		// or agent-initiated (e.g. follow-up after assistant/tool messages). If there is
-		// no prior message, default to user-initiated.
-		const messages = context.messages || [];
-		const lastMessage = messages[messages.length - 1];
-		// Only set X-Initiator if not already specified in model headers (allows subagent override)
-		if (!("X-Initiator" in headers)) {
-			const isAgentCall = lastMessage ? lastMessage.role !== "user" : false;
-			headers["X-Initiator"] = isAgentCall ? "agent" : "user";
-		}
-		headers["Openai-Intent"] = "conversation-edits";
-
-		// Copilot requires this header when sending images
-		const hasImages = messages.some(msg => {
-			if (msg.role === "user" && Array.isArray(msg.content)) {
-				return msg.content.some(c => c.type === "image");
-			}
-			if (msg.role === "toolResult" && Array.isArray(msg.content)) {
-				return msg.content.some(c => c.type === "image");
-			}
-			return false;
+		const hasImages = hasCopilotVisionInput(context.messages);
+		const copilotHeaders = buildCopilotDynamicHeaders({
+			messages: context.messages,
+			hasImages,
 		});
-		if (hasImages) {
-			headers["Copilot-Vision-Request"] = "true";
-		}
+		Object.assign(headers, copilotHeaders);
 	}
 
 	return new OpenAI({

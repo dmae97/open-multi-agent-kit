@@ -720,6 +720,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.#sttController.dispose();
 			this.#sttController = undefined;
 		}
+		this.#extensionUiController.clearExtensionTerminalInputListeners();
 		this.statusLine.dispose();
 		if (this.unsubscribe) {
 			this.unsubscribe();
@@ -919,6 +920,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	}
 
 	handleClearCommand(): Promise<void> {
+		this.#extensionUiController.clearExtensionTerminalInputListeners();
 		return this.#commandController.handleClearCommand();
 	}
 

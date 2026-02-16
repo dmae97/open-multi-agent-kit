@@ -460,6 +460,44 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 		return filePath;
 	}
 
+	async #resolveScopedFuzzyQuery(
+		rawQuery: string,
+	): Promise<{ baseDir: string; query: string; displayBase: string } | null> {
+		const slashIndex = rawQuery.lastIndexOf("/");
+		if (slashIndex === -1) {
+			return null;
+		}
+
+		const displayBase = rawQuery.slice(0, slashIndex + 1);
+		const query = rawQuery.slice(slashIndex + 1);
+
+		let baseDir: string;
+		if (displayBase.startsWith("~/")) {
+			baseDir = this.#expandHomePath(displayBase);
+		} else if (displayBase.startsWith("/")) {
+			baseDir = displayBase;
+		} else {
+			baseDir = path.join(this.#basePath, displayBase);
+		}
+
+		try {
+			if (!(await fs.promises.stat(baseDir)).isDirectory()) {
+				return null;
+			}
+		} catch {
+			return null;
+		}
+
+		return { baseDir, query, displayBase };
+	}
+
+	#scopedPathForDisplay(displayBase: string, relativePath: string): string {
+		if (displayBase === "/") {
+			return `/${relativePath}`;
+		}
+		return `${displayBase}${relativePath}`;
+	}
+
 	async #getCachedDirEntries(searchDir: string): Promise<fs.Dirent[]> {
 		const now = Date.now();
 		const cached = this.#dirCache.get(searchDir);
@@ -630,7 +668,10 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 
 	async #getFuzzyFileSuggestions(query: string, options: { isQuotedPrefix: boolean }): Promise<AutocompleteItem[]> {
 		try {
-			const result = await fuzzyFind(buildAutocompleteFuzzyDiscoveryProfile(query, this.#basePath));
+			const scopedQuery = await this.#resolveScopedFuzzyQuery(query);
+			const searchPath = scopedQuery?.baseDir ?? this.#basePath;
+			const fuzzyQuery = scopedQuery?.query ?? query;
+			const result = await fuzzyFind(buildAutocompleteFuzzyDiscoveryProfile(fuzzyQuery, searchPath));
 			const filteredMatches = result.matches.filter(entry => {
 				const p = entry.path.endsWith("/") ? entry.path.slice(0, -1) : entry.path;
 				const normalized = p.replaceAll("\\", "/");
@@ -640,8 +681,12 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 			const suggestions: AutocompleteItem[] = [];
 			for (const { path: entryPath, isDirectory } of topEntries) {
 				const pathWithoutSlash = isDirectory ? entryPath.slice(0, -1) : entryPath;
+				const displayPath = scopedQuery
+					? this.#scopedPathForDisplay(scopedQuery.displayBase, pathWithoutSlash)
+					: pathWithoutSlash;
 				const entryName = path.basename(pathWithoutSlash);
-				const value = buildCompletionValue(entryPath, {
+				const completionPath = isDirectory ? `${displayPath}/` : displayPath;
+				const value = buildCompletionValue(completionPath, {
 					isDirectory,
 					isAtPrefix: true,
 					isQuotedPrefix: options.isQuotedPrefix,
@@ -649,7 +694,7 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 				suggestions.push({
 					value,
 					label: entryName + (isDirectory ? "/" : ""),
-					description: pathWithoutSlash,
+					description: displayPath,
 				});
 			}
 			return suggestions;
