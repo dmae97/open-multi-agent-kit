@@ -135,7 +135,7 @@ Provider defaults vs per-model overrides:
 
 - Provider `headers` are baseline.
 - Model `headers` override provider header keys.
-- `modelOverrides` can override model metadata (`name`, `reasoning`, `input`, `cost`, `contextWindow`, `maxTokens`, `headers`, `compat`).
+- `modelOverrides` can override model metadata (`name`, `reasoning`, `input`, `cost`, `contextWindow`, `maxTokens`, `headers`, `compat`, `contextPromotionTarget`).
 - `compat` is deep-merged for nested routing blocks (`openRouterRouting`, `vercelGatewayRouting`).
 
 ## Runtime discovery integration
@@ -243,6 +243,62 @@ Related settings:
 - `providers.kimiApiFormat` (`openai` or `anthropic` request format)
 - `providers.openaiWebsockets` (`auto|off|on` websocket preference for OpenAI Codex transport)
 
+## Context promotion (model-level fallback chains)
+
+Context promotion is a post-turn safety mechanism for small-context variants (for example `*-spark`) that should automatically promote to a larger-context sibling before hard overflow.
+
+### Trigger and order
+
+On `agent_end` after a successful assistant turn (`stopReason` not `error`/`aborted`), `AgentSession` computes:
+
+- `contextTokens = calculateContextTokens(assistantMessage.usage)`
+- `contextPercent = contextTokens / currentModel.contextWindow * 100`
+
+If `contextPercent >= contextPromotion.thresholdPercent` (default `90`) and `contextPromotion.enabled` is true, promotion is attempted.
+
+Promotion check runs **before** threshold compaction check.
+
+### Target selection
+
+Selection is model-driven, not role-driven:
+
+1. `currentModel.contextPromotionTarget` (if configured)
+2. smallest larger-context model on the same provider + API
+3. smallest larger-context model globally
+
+Candidates are ignored unless credentials resolve (`ModelRegistry.getApiKey(...)`).
+
+### OpenAI Codex websocket handoff
+
+If switching from/to `openai-codex-responses`, session provider state key `openai-codex-responses` is closed before model switch. This drops websocket transport state so the next turn starts clean on the promoted model.
+
+### Persistence behavior
+
+Promotion uses temporary switching (`setModelTemporary`):
+
+- recorded as a temporary `model_change` in session history
+- does not rewrite saved role mapping
+
+### Configuring explicit fallback chains
+
+Configure fallback directly in model metadata via `contextPromotionTarget`.
+
+`contextPromotionTarget` accepts either:
+
+- `provider/model-id` (explicit)
+- `model-id` (resolved within current provider)
+
+Example (`models.yml`) for Spark -> non-Spark on the same provider:
+
+```yaml
+providers:
+  openai-codex:
+    modelOverrides:
+      gpt-5.3-codex-spark:
+        contextPromotionTarget: openai-codex/gpt-5.3-codex
+```
+
+The built-in model generator also assigns this automatically for `*-spark` models when a same-provider base model exists.
 ## Compatibility and routing fields
 
 `models.yml` supports this `compat` subset:
