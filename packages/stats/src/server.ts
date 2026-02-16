@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { compile } from "@tailwindcss/node";
+import { $ } from "bun";
 import {
 	getDashboardStats,
 	getRecentErrors,
@@ -11,33 +11,6 @@ import {
 	syncAllSessions,
 } from "./aggregator";
 import { EMBEDDED_CLIENT_ARCHIVE_TAR_GZ_BASE64 } from "./embedded-client.generated";
-
-/**
- * Extract Tailwind class names from source files by scanning for className attributes.
- */
-async function extractTailwindClasses(dir: string): Promise<Set<string>> {
-	const classes = new Set<string>();
-	const classPattern = /className\s*=\s*["'`]([^"'`]+)["'`]/g;
-	async function scanDir(currentDir: string): Promise<void> {
-		const entries = await fs.readdir(currentDir, { withFileTypes: true });
-		for (const entry of entries) {
-			const fullPath = path.join(currentDir, entry.name);
-			if (entry.isDirectory()) {
-				await scanDir(fullPath);
-			} else if (entry.isFile() && /\.(tsx|ts|jsx|js)$/.test(entry.name)) {
-				const content = await Bun.file(fullPath).text();
-				const matches = content.matchAll(classPattern);
-				for (const match of matches) {
-					for (const cls of match[1].split(/\s+/)) {
-						if (cls) classes.add(cls);
-					}
-				}
-			}
-		}
-	}
-	await scanDir(dir);
-	return classes;
-}
 
 const CLIENT_DIR = path.join(import.meta.dir, "client");
 const STATIC_DIR = path.join(import.meta.dir, "..", "dist", "client");
@@ -99,18 +72,6 @@ async function getCompiledClientDir(): Promise<string> {
 	return compiledClientDirPromise;
 }
 
-async function buildTailwindCss(inputPath: string, outputPath: string): Promise<void> {
-	const sourceCss = await Bun.file(inputPath).text();
-	const clientDir = path.dirname(inputPath);
-	const candidates = await extractTailwindClasses(clientDir);
-	const compiler = await compile(sourceCss, {
-		base: clientDir,
-		onDependency: () => {},
-	});
-	const result = compiler.build([...candidates]);
-	await Bun.write(outputPath, result);
-}
-
 async function getLatestMtime(dir: string): Promise<number> {
 	let latest = 0;
 	const entries = await fs.readdir(dir, { withFileTypes: true });
@@ -159,25 +120,13 @@ const ensureClientBuild = async () => {
 
 	await fs.rm(STATIC_DIR, { recursive: true, force: true });
 
-	// Build Tailwind CSS with the library API
-	console.log("Building Tailwind CSS...");
-	try {
-		await buildTailwindCss(path.join(CLIENT_DIR, "styles.css"), path.join(STATIC_DIR, "styles.css"));
-	} catch (error) {
-		console.error("Tailwind build failed:", error);
-	}
-
-	console.log("Building React app...");
-	const result = await Bun.build({
-		entrypoints: [path.join(CLIENT_DIR, "index.tsx")],
-		outdir: STATIC_DIR,
-		minify: true,
-		naming: "[dir]/[name].[ext]",
-	});
-
-	if (!result.success) {
-		const errors = result.logs.map(log => log.message).join("\n");
-		throw new Error(`Failed to build stats client:\n${errors}`);
+	console.log("Building stats client...");
+	const packageRoot = path.join(import.meta.dir, "..");
+	const buildResult = await $`bun run build.ts`.cwd(packageRoot).quiet().nothrow();
+	if (buildResult.exitCode !== 0) {
+		const output = buildResult.text().trim();
+		const details = output ? `\n${output}` : "";
+		throw new Error(`Failed to build stats client (exit ${buildResult.exitCode})${details}`);
 	}
 
 	const indexHtml = `<!DOCTYPE html>
