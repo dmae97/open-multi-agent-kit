@@ -186,7 +186,7 @@ export async function listMCPServers(filePath: string): Promise<string[]> {
  */
 export async function readDisabledServers(filePath: string): Promise<string[]> {
 	const config = await readMCPConfigFile(filePath);
-	return config.disabledServers ?? [];
+	return Array.isArray(config.disabledServers) ? config.disabledServers : [];
 }
 
 /**

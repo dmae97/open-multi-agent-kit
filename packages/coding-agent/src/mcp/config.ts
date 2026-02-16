@@ -107,7 +107,7 @@ export async function loadAllMCPConfigs(cwd: string, options?: LoadMCPConfigsOpt
 	const sources: Record<string, SourceMeta> = {};
 	for (const server of servers) {
 		const config = convertToLegacyConfig(server);
-		if (config.enabled === false || disabledServers.has(server.name)) {
+		if (config.enabled === false || (server._source.level !== "user" && disabledServers.has(server.name))) {
 			continue;
 		}
 		configs[server.name] = config;

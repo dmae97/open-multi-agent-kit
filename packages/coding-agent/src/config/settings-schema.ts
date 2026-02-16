@@ -314,7 +314,7 @@ export const SETTINGS_SCHEMA = {
 	// ─────────────────────────────────────────────────────────────────────────
 	"secrets.enabled": {
 		type: "boolean",
-		default: true,
+		default: false,
 		ui: { tab: "config", label: "Hide secrets", description: "Obfuscate secrets before sending to AI providers" },
 	},
 

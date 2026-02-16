@@ -125,12 +125,12 @@ export class SecretObfuscator {
 		let result = text;
 
 		// 1. Process replace-mode plain secrets
-		for (const [secret, replacement] of this.#replaceMappings) {
+		for (const [secret, replacement] of [...this.#replaceMappings].sort((a, b) => b[0].length - a[0].length)) {
 			result = replaceAll(result, secret, replacement);
 		}
 
 		// 2. Process obfuscate-mode plain secrets
-		for (const [secret, index] of this.#plainMappings) {
+		for (const [secret, index] of [...this.#plainMappings].sort((a, b) => b[0].length - a[0].length)) {
 			const mapping = this.#obfuscateMappings.get(index)!;
 			result = replaceAll(result, secret, mapping.placeholder);
 		}
@@ -142,6 +142,10 @@ export class SecretObfuscator {
 			for (;;) {
 				const match = entry.regex.exec(result);
 				if (match === null) break;
+				if (match[0].length === 0) {
+					entry.regex.lastIndex++;
+					continue;
+				}
 				matches.add(match[0]);
 			}
 
