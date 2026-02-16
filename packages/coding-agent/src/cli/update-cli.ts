@@ -59,23 +59,28 @@ function hasBun(): boolean {
 }
 
 /**
- * Get the latest release info from GitHub.
+ * Get the latest release info from the npm registry.
+ * Uses npm instead of GitHub API to avoid unauthenticated rate limiting.
  */
 async function getLatestRelease(): Promise<ReleaseInfo> {
-	const response = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`);
+	const response = await fetch(`https://registry.npmjs.org/${PACKAGE}/latest`);
 	if (!response.ok) {
 		throw new Error(`Failed to fetch release info: ${response.statusText}`);
 	}
 
-	const data = (await response.json()) as {
-		tag_name: string;
-		assets: Array<{ name: string; browser_download_url: string }>;
-	};
+	const data = (await response.json()) as { version: string };
+	const version = data.version;
+	const tag = `v${version}`;
 
+	// Construct deterministic GitHub release download URLs for the current platform
+	const makeAsset = (name: string) => ({
+		name,
+		url: `https://github.com/${REPO}/releases/download/${tag}/${name}`,
+	});
 	return {
-		tag: data.tag_name,
-		version: data.tag_name.replace(/^v/, ""),
-		assets: data.assets.map(a => ({ name: a.name, url: a.browser_download_url })),
+		tag,
+		version,
+		assets: [makeAsset(getBinaryName()), makeAsset(getNativeAddonName())],
 	};
 }
 
