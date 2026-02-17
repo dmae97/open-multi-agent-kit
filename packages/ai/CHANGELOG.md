@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Added Synthetic provider
 
 ## [12.10.0] - 2026-02-18
 

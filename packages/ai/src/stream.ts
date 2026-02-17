@@ -16,10 +16,10 @@ import {
 } from "./providers/google-gemini-cli";
 import { type GoogleVertexOptions, streamGoogleVertex } from "./providers/google-vertex";
 import { isKimiModel, streamKimi } from "./providers/kimi";
-import { isSyntheticModel, streamSynthetic } from "./providers/synthetic";
 import { streamOpenAICodexResponses } from "./providers/openai-codex-responses";
 import { type OpenAICompletionsOptions, streamOpenAICompletions } from "./providers/openai-completions";
 import { streamOpenAIResponses } from "./providers/openai-responses";
+import { isSyntheticModel, streamSynthetic } from "./providers/synthetic";
 import type {
 	Api,
 	AssistantMessage,
