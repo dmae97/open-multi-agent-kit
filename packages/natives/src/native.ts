@@ -150,9 +150,9 @@ function getAddonFilenames(tag: string, variant: CpuVariant | null): string[] {
 	const baselineFilename = `pi_natives.${tag}-baseline.node`;
 	const modernFilename = `pi_natives.${tag}-modern.node`;
 	if (variant === "modern") {
-		return [modernFilename, baselineFilename];
+		return [modernFilename, baselineFilename, defaultFilename];
 	}
-	return [baselineFilename];
+	return [baselineFilename, defaultFilename];
 }
 
 function selectEmbeddedAddonFile(): { filename: string; filePath: string } | null {

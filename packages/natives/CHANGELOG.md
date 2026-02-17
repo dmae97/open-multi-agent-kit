@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Updated addon filename resolution to include default filename fallback in both modern and baseline variant paths
 
 ## [12.8.2] - 2026-02-17
 ### Breaking Changes
