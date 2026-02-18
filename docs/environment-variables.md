@@ -37,7 +37,16 @@ These are consumed via `getEnvApiKey()` (`packages/ai/src/stream.ts`) unless not
 | `GOOGLE_API_KEY` | Gemini image tool auth fallback | Using `gemini_image` tool without `GEMINI_API_KEY` | Used by coding-agent image tool fallback path |
 | `GROQ_API_KEY` | Groq auth | Using Groq models |  |
 | `CEREBRAS_API_KEY` | Cerebras auth | Using Cerebras models |  |
+| `TOGETHER_API_KEY` | Together auth | Using `together` provider |  |
+| `HUGGINGFACE_HUB_TOKEN` | Hugging Face auth | Using `huggingface` provider | Primary Hugging Face token env var |
+| `HF_TOKEN` | Hugging Face auth | Using `huggingface` provider | Fallback when `HUGGINGFACE_HUB_TOKEN` is unset |
 | `SYNTHETIC_API_KEY` | Synthetic auth | Using Synthetic models |  |
+| `NVIDIA_API_KEY` | NVIDIA auth | Using `nvidia` provider |  |
+| `VENICE_API_KEY` | Venice auth | Using `venice` provider |  |
+| `LITELLM_API_KEY` | LiteLLM auth | Using `litellm` provider | OpenAI-compatible LiteLLM proxy key |
+| `OLLAMA_API_KEY` | Ollama auth (optional) | Using `ollama` provider with authenticated hosts | Local Ollama usually runs without auth; any non-empty token works when a key is required |
+| `XIAOMI_API_KEY` | Xiaomi MiMo auth | Using `xiaomi` provider |  |
+| `MOONSHOT_API_KEY` | Moonshot auth | Using `moonshot` provider |  |
 | `XAI_API_KEY` | xAI auth | Using xAI models |  |
 | `OPENROUTER_API_KEY` | OpenRouter auth | Using OpenRouter models | Also used by image tool when preferred/auto provider is OpenRouter |
 | `MISTRAL_API_KEY` | Mistral auth | Using Mistral models |  |
@@ -46,8 +55,13 @@ These are consumed via `getEnvApiKey()` (`packages/ai/src/stream.ts`) unless not
 | `MINIMAX_CODE_API_KEY` | MiniMax Code auth | Using `minimax-code` provider |  |
 | `MINIMAX_CODE_CN_API_KEY` | MiniMax Code CN auth | Using `minimax-code-cn` provider |  |
 | `OPENCODE_API_KEY` | OpenCode auth | Using OpenCode models |  |
+| `QIANFAN_API_KEY` | Qianfan auth | Using `qianfan` provider |  |
+| `QWEN_OAUTH_TOKEN` | Qwen Portal auth | Using `qwen-portal` with OAuth token | Takes precedence over `QWEN_PORTAL_API_KEY` |
+| `QWEN_PORTAL_API_KEY` | Qwen Portal auth | Using `qwen-portal` with API key | Fallback after `QWEN_OAUTH_TOKEN` |
+| `VLLM_API_KEY` | vLLM auth/discovery opt-in | Using `vllm` provider (local OpenAI-compatible servers) | Any non-empty value works for no-auth local servers |
 | `CURSOR_ACCESS_TOKEN` | Cursor provider auth | Using Cursor provider |  |
 | `AI_GATEWAY_API_KEY` | Vercel AI Gateway auth | Using `vercel-ai-gateway` provider |  |
+| `CLOUDFLARE_AI_GATEWAY_API_KEY` | Cloudflare AI Gateway auth | Using `cloudflare-ai-gateway` provider | Base URL must be configured as `https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic` |
 
 ### GitHub/Copilot token chains
 

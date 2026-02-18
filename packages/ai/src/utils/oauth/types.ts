@@ -7,36 +7,54 @@ export type OAuthCredentials = {
 	email?: string;
 	accountId?: string;
 };
+
 export type OAuthProvider =
 	| "anthropic"
 	| "cerebras"
+	| "cloudflare-ai-gateway"
+	| "cursor"
 	| "github-copilot"
 	| "google-gemini-cli"
 	| "google-antigravity"
+	| "huggingface"
 	| "kimi-code"
-	| "openai-codex"
-	| "synthetic"
-	| "opencode"
-	| "zai"
+	| "litellm"
 	| "minimax-code"
 	| "minimax-code-cn"
-	| "cursor"
-	| "perplexity";
+	| "moonshot"
+	| "nvidia"
+	| "ollama"
+	| "openai-codex"
+	| "opencode"
+	| "perplexity"
+	| "qianfan"
+	| "qwen-portal"
+	| "synthetic"
+	| "together"
+	| "venice"
+	| "vllm"
+	| "xiaomi"
+	| "zai";
+
 export type OAuthProviderId = OAuthProvider | (string & {});
+
 export type OAuthPrompt = {
 	message: string;
 	placeholder?: string;
 	allowEmpty?: boolean;
 };
+
 export type OAuthAuthInfo = {
 	url: string;
 	instructions?: string;
 };
+
 export interface OAuthProviderInfo {
 	id: OAuthProviderId;
 	name: string;
 	available: boolean;
 }
+
 export interface OAuthController {
 	onAuth?(info: OAuthAuthInfo): void;
 	onProgress?(message: string): void;

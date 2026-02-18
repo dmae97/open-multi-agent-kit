@@ -1,6 +1,22 @@
 # Changelog
 
 ## [Unreleased]
+
+### Added
+
+- Support for Hugging Face model provider with API key authentication
+- Support for NVIDIA model provider with API key authentication
+- Support for Ollama model provider with optional API key authentication
+- Support for Cloudflare AI Gateway model provider with API key authentication
+- Support for Qwen Portal model provider with API key authentication
+- Support for LiteLLM model provider with API key authentication
+- Support for Moonshot model provider with API key authentication
+- Support for Qianfan model provider with API key authentication
+- Support for Together model provider with API key authentication
+- Support for Venice model provider with API key authentication
+- Support for vLLM model provider with API key authentication
+- Support for Xiaomi model provider with API key authentication
+
 ### Changed
 
 - Replaced generic error with AgentBusyError when attempting to send messages while agent is processing

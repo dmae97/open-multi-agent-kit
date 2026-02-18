@@ -79,10 +79,6 @@ export type KnownProvider =
 	| "minimax-code"
 	| "minimax-code-cn"
 	| "github-copilot"
-	| "minimax-code"
-	| "github-copilot"
-	| "kimi-code"
-	| "github-copilot"
 	| "cursor"
 	| "xai"
 	| "groq"
@@ -93,7 +89,19 @@ export type KnownProvider =
 	| "mistral"
 	| "minimax"
 	| "opencode"
-	| "synthetic";
+	| "synthetic"
+	| "cloudflare-ai-gateway"
+	| "huggingface"
+	| "litellm"
+	| "moonshot"
+	| "nvidia"
+	| "ollama"
+	| "qianfan"
+	| "qwen-portal"
+	| "together"
+	| "venice"
+	| "vllm"
+	| "xiaomi";
 export type Provider = KnownProvider | string;
 
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high" | "xhigh";

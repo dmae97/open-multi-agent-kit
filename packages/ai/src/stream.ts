@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { $env } from "@oh-my-pi/pi-utils";
+import { $env, $pickenv } from "@oh-my-pi/pi-utils";
 import { getCustomApi } from "./api-registry";
 import { supportsXhigh } from "./models";
 import { type BedrockOptions, streamBedrock } from "./providers/amazon-bedrock";
@@ -72,9 +72,9 @@ const serviceProviderMap: Record<string, KeyResolver> = {
 	brave: "BRAVE_API_KEY",
 	perplexity: "PERPLEXITY_API_KEY",
 	// GitHub Copilot uses GitHub personal access token
-	"github-copilot": () => $env.COPILOT_GITHUB_TOKEN || $env.GH_TOKEN || $env.GITHUB_TOKEN,
+	"github-copilot": () => $pickenv("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"),
 	// ANTHROPIC_OAUTH_TOKEN takes precedence over ANTHROPIC_API_KEY
-	anthropic: () => $env.ANTHROPIC_OAUTH_TOKEN || $env.ANTHROPIC_API_KEY,
+	anthropic: () => $pickenv("ANTHROPIC_OAUTH_TOKEN", "ANTHROPIC_API_KEY"),
 	// Vertex AI uses Application Default Credentials, not API keys.
 	// Auth is configured via `gcloud auth application-default login`.
 	"google-vertex": () => {
@@ -106,6 +106,18 @@ const serviceProviderMap: Record<string, KeyResolver> = {
 		}
 	},
 	synthetic: "SYNTHETIC_API_KEY",
+	"cloudflare-ai-gateway": "CLOUDFLARE_AI_GATEWAY_API_KEY",
+	huggingface: () => $pickenv("HUGGINGFACE_HUB_TOKEN", "HF_TOKEN"),
+	litellm: "LITELLM_API_KEY",
+	moonshot: "MOONSHOT_API_KEY",
+	nvidia: "NVIDIA_API_KEY",
+	ollama: "OLLAMA_API_KEY",
+	qianfan: "QIANFAN_API_KEY",
+	"qwen-portal": () => $pickenv("QWEN_OAUTH_TOKEN", "QWEN_PORTAL_API_KEY"),
+	together: "TOGETHER_API_KEY",
+	venice: "VENICE_API_KEY",
+	vllm: "VLLM_API_KEY",
+	xiaomi: "XIAOMI_API_KEY",
 };
 
 /**

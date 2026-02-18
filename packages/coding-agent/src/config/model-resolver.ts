@@ -10,6 +10,35 @@ import { fuzzyMatch } from "../utils/fuzzy";
 import { MODEL_ROLE_IDS, type ModelRegistry, type ModelRole } from "./model-registry";
 import type { Settings } from "./settings";
 
+/** Default model IDs for context providers added via provider integration */
+const defaultModelPerContextProvider: Record<
+	| "cloudflare-ai-gateway"
+	| "huggingface"
+	| "litellm"
+	| "moonshot"
+	| "nvidia"
+	| "ollama"
+	| "qianfan"
+	| "qwen-portal"
+	| "together"
+	| "venice"
+	| "vllm"
+	| "xiaomi",
+	string
+> = {
+	"cloudflare-ai-gateway": "claude-sonnet-4-5",
+	huggingface: "deepseek-ai/DeepSeek-R1",
+	litellm: "claude-opus-4-6",
+	moonshot: "kimi-k2.5",
+	nvidia: "nvidia/llama-3.1-nemotron-70b-instruct",
+	ollama: "gpt-oss:20b",
+	qianfan: "deepseek-v3.2",
+	"qwen-portal": "coder-model",
+	together: "moonshotai/Kimi-K2.5",
+	venice: "llama-3.3-70b",
+	vllm: "gpt-oss-20b",
+	xiaomi: "mimo-v2-flash",
+};
 /** Default model IDs for each known provider */
 export const defaultModelPerProvider: Record<KnownProvider, string> = {
 	"amazon-bedrock": "us.anthropic.claude-opus-4-6-v1",
@@ -35,6 +64,7 @@ export const defaultModelPerProvider: Record<KnownProvider, string> = {
 	opencode: "claude-sonnet-4-6",
 	"kimi-code": "kimi-k2.5",
 	synthetic: "hf:moonshotai/Kimi-K2.5",
+	...defaultModelPerContextProvider,
 };
 
 export interface ScopedModel {
@@ -772,7 +802,7 @@ export async function findSmolModel(
 	}
 
 	// 2. Try priority chain
-	for (const pattern of SMOL_MODEL_PRIORITY) {
+	for (const pattern of MODEL_PRIO.smol) {
 		// Try exact match with provider prefix
 		const providerMatch = availableModels.find(m => `${m.provider}/${m.id}`.toLowerCase() === pattern);
 		if (providerMatch) return providerMatch;
@@ -815,7 +845,7 @@ export async function findSlowModel(
 	}
 
 	// 2. Try priority chain
-	for (const pattern of SLOW_MODEL_PRIORITY) {
+	for (const pattern of MODEL_PRIO.slow) {
 		// Try exact match first
 		const exactMatch = availableModels.find(m => m.id.toLowerCase() === pattern.toLowerCase());
 		if (exactMatch) return exactMatch;

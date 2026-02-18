@@ -14,16 +14,28 @@ import {
 	loginAnthropic,
 	loginAntigravity,
 	loginCerebras,
+	loginCloudflareAiGateway,
 	loginCursor,
 	loginGeminiCli,
 	loginGitHubCopilot,
+	loginHuggingface,
 	loginKimi,
+	loginLiteLLM,
 	loginMiniMaxCode,
 	loginMiniMaxCodeCn,
+	loginMoonshot,
+	loginNvidia,
+	loginOllama,
 	loginOpenAICodex,
 	loginOpenCode,
 	loginPerplexity,
+	loginQianfan,
+	loginQwenPortal,
 	loginSynthetic,
+	loginTogether,
+	loginVenice,
+	loginVllm,
+	loginXiaomi,
 	loginZai,
 	type OAuthController,
 	type OAuthCredentials,
@@ -693,8 +705,21 @@ export class AuthStorage {
 			case "perplexity":
 				credentials = await loginPerplexity(ctrl);
 				break;
+			case "huggingface": {
+				const apiKey = await loginHuggingface(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
 			case "opencode": {
 				const apiKey = await loginOpenCode(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "ollama": {
+				const apiKey = await loginOllama(ctrl);
+				if (!apiKey) {
+					return;
+				}
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
@@ -705,6 +730,11 @@ export class AuthStorage {
 			}
 			case "zai": {
 				const apiKey = await loginZai(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "qianfan": {
+				const apiKey = await loginQianfan(ctrl);
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
@@ -720,6 +750,51 @@ export class AuthStorage {
 			}
 			case "synthetic": {
 				const apiKey = await loginSynthetic(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "venice": {
+				const apiKey = await loginVenice(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "litellm": {
+				const apiKey = await loginLiteLLM(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "moonshot": {
+				const apiKey = await loginMoonshot(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "together": {
+				const apiKey = await loginTogether(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "cloudflare-ai-gateway": {
+				const apiKey = await loginCloudflareAiGateway(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "vllm": {
+				const apiKey = await loginVllm(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "qwen-portal": {
+				const apiKey = await loginQwenPortal(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "nvidia": {
+				const apiKey = await loginNvidia(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "xiaomi": {
+				const apiKey = await loginXiaomi(ctrl);
 				await saveApiKeyCredential(apiKey);
 				return;
 			}

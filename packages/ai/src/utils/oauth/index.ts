@@ -27,13 +27,19 @@ import type {
  * - Antigravity (Gemini 3, Claude, GPT-OSS via Google Cloud)
  * - Kimi Code
  * - Cerebras
+ * - Hugging Face Inference
  * - Synthetic
  * - Perplexity (Pro/Max — desktop app extraction or manual cookie)
+ * - NVIDIA
+ * - Venice
+ * - vLLM
  */
 // Anthropic
 export { loginAnthropic, refreshAnthropicToken } from "./anthropic";
 // Cerebras (API key)
 export { loginCerebras } from "./cerebras";
+// Cloudflare AI Gateway (API key)
+export { loginCloudflareAiGateway } from "./cloudflare-ai-gateway";
 // Cursor
 export {
 	generateCursorAuthParams,
@@ -53,10 +59,20 @@ export {
 export { loginAntigravity, refreshAntigravityToken } from "./google-antigravity";
 // Google Gemini CLI
 export { loginGeminiCli, refreshGoogleCloudToken } from "./google-gemini-cli";
+// Hugging Face Inference (API key)
+export { loginHuggingface } from "./huggingface";
 // Kimi Code
 export { loginKimi, refreshKimiToken } from "./kimi";
+// LiteLLM (API key)
+export { loginLiteLLM } from "./litellm";
 // MiniMax Coding Plan (API key)
 export { loginMiniMaxCode, loginMiniMaxCodeCn } from "./minimax-code";
+// Moonshot (API key)
+export { loginMoonshot } from "./moonshot";
+// NVIDIA (API key)
+export { loginNvidia } from "./nvidia";
+// Ollama (optional API key)
+export { loginOllama } from "./ollama";
 export type { OpenAICodexLoginOptions } from "./openai-codex";
 // OpenAI Codex (ChatGPT OAuth)
 export { loginOpenAICodex, refreshOpenAICodexToken } from "./openai-codex";
@@ -64,9 +80,21 @@ export { loginOpenAICodex, refreshOpenAICodexToken } from "./openai-codex";
 export { loginOpenCode } from "./opencode";
 // Perplexity
 export { loginPerplexity } from "./perplexity";
+// Qianfan (API key)
+export { loginQianfan } from "./qianfan";
+// Qwen Portal (OAuth token/API key)
+export { loginQwenPortal } from "./qwen-portal";
 // Synthetic (API key)
 export { loginSynthetic } from "./synthetic";
+// Together (API key)
+export { loginTogether } from "./together";
 export * from "./types";
+// Venice (API key)
+export { loginVenice } from "./venice";
+// vLLM (API key)
+export { loginVllm } from "./vllm";
+// Xiaomi MiMo (API key)
+export { loginXiaomi } from "./xiaomi";
 // Z.AI (API key)
 export { loginZai } from "./zai";
 
@@ -112,8 +140,33 @@ const builtInOAuthProviders: OAuthProviderInfo[] = [
 		available: true,
 	},
 	{
+		id: "litellm",
+		name: "LiteLLM",
+		available: true,
+	},
+	{
+		id: "ollama",
+		name: "Ollama (Local OpenAI-compatible)",
+		available: true,
+	},
+	{
+		id: "huggingface",
+		name: "Hugging Face Inference",
+		available: true,
+	},
+	{
 		id: "synthetic",
 		name: "Synthetic",
+		available: true,
+	},
+	{
+		id: "together",
+		name: "Together",
+		available: true,
+	},
+	{
+		id: "xiaomi",
+		name: "Xiaomi MiMo",
 		available: true,
 	},
 	{
@@ -137,8 +190,43 @@ const builtInOAuthProviders: OAuthProviderInfo[] = [
 		available: true,
 	},
 	{
+		id: "moonshot",
+		name: "Moonshot (Kimi API)",
+		available: true,
+	},
+	{
 		id: "perplexity",
 		name: "Perplexity (Pro/Max)",
+		available: true,
+	},
+	{
+		id: "nvidia",
+		name: "NVIDIA",
+		available: true,
+	},
+	{
+		id: "qwen-portal",
+		name: "Qwen Portal",
+		available: true,
+	},
+	{
+		id: "qianfan",
+		name: "Qianfan",
+		available: true,
+	},
+	{
+		id: "venice",
+		name: "Venice",
+		available: true,
+	},
+	{
+		id: "vllm",
+		name: "vLLM (Local OpenAI-compatible)",
+		available: true,
+	},
+	{
+		id: "cloudflare-ai-gateway",
+		name: "Cloudflare AI Gateway",
 		available: true,
 	},
 ];
@@ -212,13 +300,25 @@ export async function refreshOAuthToken(
 			newCredentials = await refreshCursorToken(credentials.refresh);
 			break;
 		case "perplexity":
+		case "huggingface":
 		case "opencode":
 		case "cerebras":
+		case "nvidia":
 		case "synthetic":
+		case "together":
+		case "litellm":
+		case "ollama":
+		case "xiaomi":
 		case "zai":
+		case "qianfan":
+		case "venice":
 		case "minimax-code":
 		case "minimax-code-cn":
-			// API keys don't expire, return as-is
+		case "moonshot":
+		case "cloudflare-ai-gateway":
+		case "qwen-portal":
+		case "vllm":
+			// API keys / static bearer tokens don't expire, return as-is
 			newCredentials = credentials;
 			break;
 		default:

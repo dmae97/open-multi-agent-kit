@@ -464,16 +464,28 @@ return config
 | Mistral    | `MISTRAL_API_KEY`    |
 | Groq       | `GROQ_API_KEY`       |
 | Cerebras   | `CEREBRAS_API_KEY`   |
+| Hugging Face (`huggingface`) | `HUGGINGFACE_HUB_TOKEN` or `HF_TOKEN` |
 | Synthetic  | `SYNTHETIC_API_KEY`  |
+| NVIDIA (`nvidia`) | `NVIDIA_API_KEY` |
+| Together (`together`) | `TOGETHER_API_KEY` |
+| Ollama (`ollama`) | `OLLAMA_API_KEY` *(optional)* |
+| LiteLLM (`litellm`) | `LITELLM_API_KEY` |
+| Xiaomi MiMo (`xiaomi`) | `XIAOMI_API_KEY` |
+| Moonshot (`moonshot`) | `MOONSHOT_API_KEY` |
+| Venice (`venice`) | `VENICE_API_KEY` |
 | xAI        | `XAI_API_KEY`        |
 | OpenRouter | `OPENROUTER_API_KEY` |
 | Z.AI       | `ZAI_API_KEY`        |
+| Qwen Portal (`qwen-portal`) | `QWEN_OAUTH_TOKEN` or `QWEN_PORTAL_API_KEY` |
+| vLLM (`vllm`) | `VLLM_API_KEY` |
+| Cloudflare AI Gateway (`cloudflare-ai-gateway`) | `CLOUDFLARE_AI_GATEWAY_API_KEY` |
+| Qianfan (`qianfan`) | `QIANFAN_API_KEY` |
 
 See [Environment Variables](docs/environment-variables.md) for the full list.
 
-**Option 2: OAuth / interactive auth (`/login`)**
+**Option 2: `/login` (interactive auth / API key setup)**
 
-Use `/login` to authenticate with supported providers:
+Use `/login` with supported providers:
 
 - Anthropic (Claude Pro/Max)
 - ChatGPT Plus/Pro (Codex)
@@ -483,11 +495,28 @@ Use `/login` to authenticate with supported providers:
 - Cursor
 - Kimi Code
 - Perplexity
+- NVIDIA (`nvidia`)
+- Hugging Face Inference (`huggingface`)
 - OpenCode Zen
+- Qianfan (`qianfan`)
+- Ollama (local / self-hosted, `ollama`)
+- vLLM (local OpenAI-compatible, `vllm`)
 - Z.AI (GLM Coding Plan)
 - Synthetic
+- Together (`together`)
+- LiteLLM (`litellm`)
+- Xiaomi MiMo (`xiaomi`)
+- Moonshot (Kimi API, `moonshot`)
+- Venice (`venice`)
 - MiniMax Coding Plan (International / China)
+- Qwen Portal (`qwen-portal`)
+- Cloudflare AI Gateway (`cloudflare-ai-gateway`)
 
+For `ollama`, API key is optional. Leave it unset for local no-auth instances, or set `OLLAMA_API_KEY` for authenticated hosts.
+For `vllm`, paste your key in `/login` (or use `VLLM_API_KEY`). For local no-auth servers, any placeholder value works (for example `vllm-local`).
+For `cloudflare-ai-gateway`, set provider base URL to
+`https://gateway.ai.cloudflare.com/v1/<account_id>/<gateway_id>/anthropic`
+(for example in `~/.omp/agent/models.yml`).
 ```bash
 omp
 /login

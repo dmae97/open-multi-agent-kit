@@ -54,14 +54,26 @@ Unified LLM API with automatic model discovery, provider configuration, token an
 - **Mistral**
 - **Groq**
 - **Cerebras**
+- **Together**
+- **Moonshot** (requires `MOONSHOT_API_KEY`)
+- **Qianfan** (requires `QIANFAN_API_KEY`)
+- **NVIDIA** (requires `NVIDIA_API_KEY`)
+- **Hugging Face Inference**
 - **xAI**
+- **Venice** (requires `VENICE_API_KEY`)
 - **OpenRouter**
+- **LiteLLM** (requires `LITELLM_API_KEY`)
 - **zAI** (requires `ZAI_API_KEY`)
 - **MiniMax Coding Plan** (requires `MINIMAX_CODE_API_KEY` or `MINIMAX_CODE_CN_API_KEY`)
+- **Xiaomi MiMo** (requires `XIAOMI_API_KEY`)
+- **Qwen Portal** (supports `QWEN_OAUTH_TOKEN` or `QWEN_PORTAL_API_KEY`)
+- **Cloudflare AI Gateway** (requires `CLOUDFLARE_AI_GATEWAY_API_KEY` and provider-specific gateway base URL)
+- **Ollama** (local OpenAI-compatible runtime; optional `OLLAMA_API_KEY`)
+- **vLLM** (OpenAI-compatible server; `VLLM_API_KEY` for secured deployments)
 - **GitHub Copilot** (requires OAuth, see below)
 - **Google Gemini CLI** (requires OAuth, see below)
 - **Antigravity** (requires OAuth, see below)
-- **Any OpenAI-compatible API**: Ollama, vLLM, LM Studio, etc.
+- **Any OpenAI-compatible API**: LM Studio, custom proxies, etc.
 
 ## Installation
 
@@ -675,6 +687,7 @@ console.log(`Using ${model.name} via ${model.api} API`);
 ### Custom Models
 
 You can create custom models for local inference servers or custom endpoints:
+For Ollama, `OLLAMA_API_KEY` is optional and mainly needed for authenticated/self-hosted gateways.
 
 ```typescript
 import { Model, stream } from "@oh-my-pi/pi-ai";
@@ -730,7 +743,7 @@ const proxyModel: Model<"anthropic-messages"> = {
 
 // Use the custom model
 const response = await stream(ollamaModel, context, {
-	apiKey: "dummy", // Ollama doesn't need a real key
+	apiKey: process.env.OLLAMA_API_KEY, // Optional; local Ollama usually runs without auth
 });
 ```
 
@@ -898,13 +911,42 @@ In Node.js environments, you can set environment variables to avoid passing API 
 | Mistral        | `MISTRAL_API_KEY`                                                            |
 | Groq           | `GROQ_API_KEY`                                                               |
 | Cerebras       | `CEREBRAS_API_KEY`                                                           |
+| Together       | `TOGETHER_API_KEY`                                                           |
+| Qianfan        | `QIANFAN_API_KEY`                                                            |
+| Hugging Face   | `HUGGINGFACE_HUB_TOKEN` or `HF_TOKEN`                                        |
 | Synthetic      | `SYNTHETIC_API_KEY`                                                          |
+| NVIDIA         | `NVIDIA_API_KEY`                                                             |
+| Venice         | `VENICE_API_KEY`                                                             |
+| Moonshot       | `MOONSHOT_API_KEY`                                                           |
 | xAI            | `XAI_API_KEY`                                                                |
 | OpenRouter     | `OPENROUTER_API_KEY`                                                         |
+| LiteLLM        | `LITELLM_API_KEY`                                                            |
+| Ollama         | `OLLAMA_API_KEY` (optional for local deployments)                            |
+| Qwen Portal    | `QWEN_OAUTH_TOKEN` or `QWEN_PORTAL_API_KEY`                                  |
 | zAI            | `ZAI_API_KEY`                                                                |
-| MiniMax Code   | `MINIMAX_CODE_API_KEY` (international) or `MINIMAX_CODE_CN_API_KEY` (China)  |
-| GitHub Copilot | `COPILOT_GITHUB_TOKEN` or `GH_TOKEN` or `GITHUB_TOKEN`                       |
+| MiniMax Code   | `MINIMAX_CODE_API_KEY` (international) or `MINIMAX_CODE_CN_API_KEY` (China) |
+| Xiaomi MiMo    | `XIAOMI_API_KEY`                                                             |
+| vLLM           | `VLLM_API_KEY`                                                               |
+| Cloudflare AI Gateway | `CLOUDFLARE_AI_GATEWAY_API_KEY`                                      |
+| GitHub Copilot | `COPILOT_GITHUB_TOKEN` or `GH_TOKEN` or `GITHUB_TOKEN`                      |
 
+For Cloudflare AI Gateway models, use provider base URL format
+`https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic`.
+
+Provider endpoint defaults for the current OpenAI-compatible integrations:
+
+- Together: `https://api.together.xyz/v1`
+- Moonshot: `https://api.moonshot.ai/v1`
+- Qianfan: `https://qianfan.baidubce.com/v2`
+- NVIDIA: `https://integrate.api.nvidia.com/v1`
+- Hugging Face Inference: `https://router.huggingface.co/v1`
+- Venice: `https://api.venice.ai/api/v1`
+- Xiaomi MiMo: `https://api.xiaomimimo.com/anthropic`
+- vLLM: `http://127.0.0.1:8000/v1`
+- Ollama: local OpenAI-compatible runtime
+- LiteLLM: `http://localhost:4000/v1`
+- Cloudflare AI Gateway: `https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic`
+- Qwen Portal: `https://portal.qwen.ai/v1`
 When set, the library automatically uses these keys:
 
 ```typescript
@@ -929,13 +971,14 @@ const key = getEnvApiKey("openai"); // checks OPENAI_API_KEY
 
 ## OAuth Providers
 
-Several providers require OAuth authentication instead of static API keys:
+Several providers support OAuth authentication (some also support static API keys):
 
 - **Anthropic** (Claude Pro/Max subscription)
 - **OpenAI Codex** (ChatGPT Plus/Pro subscription, access to GPT-5.x Codex models)
 - **GitHub Copilot** (Copilot subscription)
 - **Google Gemini CLI** (Gemini 2.0/2.5 via Google Cloud Code Assist; free tier or paid subscription)
 - **Antigravity** (Free Gemini 3, Claude, GPT-OSS via Google Cloud)
+- **Qwen Portal** (Qwen OAuth token or API key)
 
 For paid Cloud Code Assist subscriptions, set `GOOGLE_CLOUD_PROJECT` or `GOOGLE_CLOUD_PROJECT_ID` to your project ID.
 
@@ -984,10 +1027,15 @@ The quickest way to authenticate:
 ```bash
 bunx @oh-my-pi/pi-ai login              # interactive provider selection
 bunx @oh-my-pi/pi-ai login anthropic    # login to specific provider
+bunx @oh-my-pi/pi-ai login vllm         # store vLLM API key (or placeholder for local no-auth)
 bunx @oh-my-pi/pi-ai list               # list available providers
 ```
 
-Credentials are saved to `agent.db` in the agent directory.
+Credentials are saved to `agent.db` in the agent directory. `/login qianfan` opens the Qianfan console and stores the pasted API key.
+
+`login` supports OAuth providers (Anthropic, OpenAI Codex, GitHub Copilot, Gemini CLI, Antigravity) and API-key onboarding flows.
+
+For the current OpenAI-compatible integrations, API-key onboarding covers Together, Moonshot, Qianfan, NVIDIA, Hugging Face, Venice, Xiaomi, vLLM, LiteLLM, Cloudflare AI Gateway, and Qwen Portal. Ollama is typically local and unauthenticated; set `OLLAMA_API_KEY` only when your Ollama deployment enforces bearer auth.
 
 ### Programmatic OAuth
 
@@ -1001,13 +1049,24 @@ import {
 	loginGitHubCopilot,
 	loginGeminiCli,
 	loginAntigravity,
+	loginCloudflareAiGateway,
+	loginHuggingface,
+	loginLiteLLM,
+	loginMoonshot,
+	loginNvidia,
+	loginQianfan,
+	loginQwenPortal,
+	loginTogether,
+	loginVenice,
+	loginVllm,
+	loginXiaomi,
 
 	// Token management
 	refreshOAuthToken, // (provider, credentials) => new credentials
 	getOAuthApiKey, // (provider, credentialsMap) => { newCredentials, apiKey } | null
 
 	// Types
-	type OAuthProvider, // 'anthropic' | 'openai-codex' | 'github-copilot' | 'google-gemini-cli' | 'google-antigravity'
+	type OAuthProvider, // includes 'anthropic', 'openai-codex', 'github-copilot', 'google-gemini-cli', 'google-antigravity', 'together', 'moonshot', 'qianfan', 'nvidia', 'huggingface', 'venice', 'xiaomi', 'vllm', 'litellm', 'cloudflare-ai-gateway', 'qwen-portal', ...
 	type OAuthCredentials,
 } from "@oh-my-pi/pi-ai";
 ```

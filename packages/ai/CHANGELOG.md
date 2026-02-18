@@ -1,6 +1,20 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Support for 11 new AI providers: Cloudflare AI Gateway, Hugging Face Inference, LiteLLM, Moonshot, NVIDIA, Ollama, Qianfan, Qwen Portal, Together, Venice, vLLM, and Xiaomi MiMo
+- Login flows for new providers with API key validation and OAuth token support
+- Extended `KnownProvider` type to include all newly supported providers
+- API key environment variable mappings for all new providers in service provider map
+- Model discovery and configuration for Cloudflare AI Gateway, Hugging Face, LiteLLM, Moonshot, NVIDIA, Ollama, Qianfan, Qwen Portal, Together, Venice, vLLM, and Xiaomi MiMo
+
+### Changed
+
+- Updated `OAuthProvider` type to include new provider identifiers
+- Expanded model registry (models.json) with thousands of new model entries across all new providers
+- Modified environment variable resolution to use `$pickenv` for providers with multiple possible env var names
+- Updated README documentation to list all newly supported providers and their authentication requirements
 
 ## [12.10.1] - 2026-02-18
 - Added Synthetic provider

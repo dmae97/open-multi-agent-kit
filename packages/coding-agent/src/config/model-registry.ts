@@ -4,6 +4,7 @@ import {
 	anthropicModelManagerOptions,
 	type Context,
 	cerebrasModelManagerOptions,
+	cloudflareAiGatewayModelManagerOptions,
 	createModelManager,
 	cursorModelManagerOptions,
 	getBundledModels,
@@ -14,25 +15,36 @@ import {
 	googleGeminiCliModelManagerOptions,
 	googleModelManagerOptions,
 	groqModelManagerOptions,
+	huggingfaceModelManagerOptions,
 	kimiCodeModelManagerOptions,
+	litellmModelManagerOptions,
 	type Model,
 	type ModelManagerOptions,
 	mistralModelManagerOptions,
+	moonshotModelManagerOptions,
 	normalizeDomain,
+	nvidiaModelManagerOptions,
 	type OAuthCredentials,
 	type OAuthLoginCallbacks,
+	ollamaModelManagerOptions,
 	openaiCodexModelManagerOptions,
 	openaiModelManagerOptions,
 	opencodeModelManagerOptions,
 	openrouterModelManagerOptions,
+	qianfanModelManagerOptions,
+	qwenPortalModelManagerOptions,
 	registerCustomApi,
 	registerOAuthProvider,
 	type SimpleStreamOptions,
 	syntheticModelManagerOptions,
+	togetherModelManagerOptions,
 	unregisterCustomApis,
 	unregisterOAuthProviders,
+	veniceModelManagerOptions,
 	vercelAiGatewayModelManagerOptions,
+	vllmModelManagerOptions,
 	xaiModelManagerOptions,
+	xiaomiModelManagerOptions,
 } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
@@ -633,14 +645,26 @@ export class ModelRegistry {
 			anthropicApiKey,
 			openaiApiKey,
 			groqApiKey,
+			huggingfaceApiKey,
 			cerebrasApiKey,
 			xaiApiKey,
 			mistralApiKey,
+			nvidiaApiKey,
 			opencodeApiKey,
 			openrouterApiKey,
 			vercelGatewayApiKey,
+			ollamaApiKey,
+			cloudflareAiGatewayApiKey,
 			kimiApiKey,
+			qwenPortalApiKey,
 			syntheticApiKey,
+			veniceApiKey,
+			litellmApiKey,
+			moonshotApiKey,
+			qianfanApiKey,
+			togetherApiKey,
+			vllmApiKey,
+			xiaomiApiKey,
 			githubCopilotApiKey,
 			googleApiKey,
 			cursorApiKey,
@@ -651,14 +675,26 @@ export class ModelRegistry {
 			this.getApiKeyForProvider("anthropic"),
 			this.getApiKeyForProvider("openai"),
 			this.getApiKeyForProvider("groq"),
+			this.getApiKeyForProvider("huggingface"),
 			this.getApiKeyForProvider("cerebras"),
 			this.getApiKeyForProvider("xai"),
 			this.getApiKeyForProvider("mistral"),
+			this.getApiKeyForProvider("nvidia"),
 			this.getApiKeyForProvider("opencode"),
 			this.getApiKeyForProvider("openrouter"),
 			this.getApiKeyForProvider("vercel-ai-gateway"),
+			this.getApiKeyForProvider("ollama"),
+			this.getApiKeyForProvider("cloudflare-ai-gateway"),
 			this.getApiKeyForProvider("kimi-code"),
+			this.getApiKeyForProvider("qwen-portal"),
 			this.getApiKeyForProvider("synthetic"),
+			this.getApiKeyForProvider("venice"),
+			this.getApiKeyForProvider("litellm"),
+			this.getApiKeyForProvider("moonshot"),
+			this.getApiKeyForProvider("qianfan"),
+			this.getApiKeyForProvider("together"),
+			this.getApiKeyForProvider("vllm"),
+			this.getApiKeyForProvider("xiaomi"),
 			this.getApiKeyForProvider("github-copilot"),
 			this.getApiKeyForProvider("google"),
 			this.getApiKeyForProvider("cursor"),
@@ -692,6 +728,14 @@ export class ModelRegistry {
 				}),
 			);
 		}
+		if (isAuthenticated(huggingfaceApiKey)) {
+			options.push(
+				huggingfaceModelManagerOptions({
+					apiKey: huggingfaceApiKey,
+					baseUrl: this.getProviderBaseUrl("huggingface"),
+				}),
+			);
+		}
 		if (isAuthenticated(cerebrasApiKey)) {
 			options.push(
 				cerebrasModelManagerOptions({
@@ -713,6 +757,14 @@ export class ModelRegistry {
 				mistralModelManagerOptions({
 					apiKey: mistralApiKey,
 					baseUrl: this.getProviderBaseUrl("mistral"),
+				}),
+			);
+		}
+		if (isAuthenticated(nvidiaApiKey)) {
+			options.push(
+				nvidiaModelManagerOptions({
+					apiKey: nvidiaApiKey,
+					baseUrl: this.getProviderBaseUrl("nvidia"),
 				}),
 			);
 		}
@@ -740,6 +792,22 @@ export class ModelRegistry {
 				}),
 			);
 		}
+		if (isAuthenticated(ollamaApiKey) || ollamaApiKey === kNoAuth) {
+			options.push(
+				ollamaModelManagerOptions({
+					apiKey: isAuthenticated(ollamaApiKey) ? ollamaApiKey : undefined,
+					baseUrl: this.getProviderBaseUrl("ollama"),
+				}),
+			);
+		}
+		if (isAuthenticated(cloudflareAiGatewayApiKey)) {
+			options.push(
+				cloudflareAiGatewayModelManagerOptions({
+					apiKey: cloudflareAiGatewayApiKey,
+					baseUrl: this.getProviderBaseUrl("cloudflare-ai-gateway"),
+				}),
+			);
+		}
 		if (isAuthenticated(kimiApiKey)) {
 			options.push(
 				kimiCodeModelManagerOptions({
@@ -748,11 +816,75 @@ export class ModelRegistry {
 				}),
 			);
 		}
+		if (isAuthenticated(qwenPortalApiKey)) {
+			options.push(
+				qwenPortalModelManagerOptions({
+					apiKey: qwenPortalApiKey,
+					baseUrl: this.getProviderBaseUrl("qwen-portal"),
+				}),
+			);
+		}
 		if (isAuthenticated(syntheticApiKey)) {
 			options.push(
 				syntheticModelManagerOptions({
 					apiKey: syntheticApiKey,
 					baseUrl: this.getProviderBaseUrl("synthetic"),
+				}),
+			);
+		}
+		if (isAuthenticated(litellmApiKey)) {
+			options.push(
+				litellmModelManagerOptions({
+					apiKey: litellmApiKey,
+					baseUrl: this.getProviderBaseUrl("litellm"),
+				}),
+			);
+		}
+		if (isAuthenticated(vllmApiKey)) {
+			options.push(
+				vllmModelManagerOptions({
+					apiKey: vllmApiKey,
+					baseUrl: this.getProviderBaseUrl("vllm"),
+				}),
+			);
+		}
+		if (isAuthenticated(moonshotApiKey)) {
+			options.push(
+				moonshotModelManagerOptions({
+					apiKey: moonshotApiKey,
+					baseUrl: this.getProviderBaseUrl("moonshot"),
+				}),
+			);
+		}
+		if (isAuthenticated(veniceApiKey)) {
+			options.push(
+				veniceModelManagerOptions({
+					apiKey: veniceApiKey,
+					baseUrl: this.getProviderBaseUrl("venice"),
+				}),
+			);
+		}
+		if (isAuthenticated(qianfanApiKey)) {
+			options.push(
+				qianfanModelManagerOptions({
+					apiKey: qianfanApiKey,
+					baseUrl: this.getProviderBaseUrl("qianfan"),
+				}),
+			);
+		}
+		if (isAuthenticated(togetherApiKey)) {
+			options.push(
+				togetherModelManagerOptions({
+					apiKey: togetherApiKey,
+					baseUrl: this.getProviderBaseUrl("together"),
+				}),
+			);
+		}
+		if (isAuthenticated(xiaomiApiKey)) {
+			options.push(
+				xiaomiModelManagerOptions({
+					apiKey: xiaomiApiKey,
+					baseUrl: this.getProviderBaseUrl("xiaomi"),
 				}),
 			);
 		}
@@ -811,7 +943,9 @@ export class ModelRegistry {
 		try {
 			const manager = createModelManager(options);
 			const result = await manager.refresh();
-			return result.models;
+			return result.models.map(model =>
+				model.provider === options.providerId ? model : { ...model, provider: options.providerId },
+			);
 		} catch (error) {
 			logger.warn("model discovery failed for provider", {
 				provider: options.providerId,

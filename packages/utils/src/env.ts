@@ -67,3 +67,18 @@ for (const file of [projectEnv, agentEnv, piEnv, homeEnv]) {
  * overrides (project, home) have been applied, so $env always reflects the correct values.
  */
 export const $env: Record<string, string> = Bun.env as Record<string, string>;
+
+/**
+ * Resolve the first environment variable value from the given keys.
+ * @param keys - The keys to resolve.
+ * @returns The first environment variable value, or undefined if no value is found.
+ */
+export function $pickenv(...keys: string[]): string | undefined {
+	for (const key of keys) {
+		const value = Bun.env[key]?.trim();
+		if (value) {
+			return value;
+		}
+	}
+	return undefined;
+}
