@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added `priority` field to Model interface for provider-assigned model prioritization
@@ -15,6 +16,12 @@
 
 ### Changed
 
+- Refactored OAuth credential retrieval to simplify storage lifecycle management in model generation script
+- Parallelized special model discovery sources (Antigravity, Codex) for improved generation performance
+- Reorganized model JSON structure to place `contextWindow` and `maxTokens` before `compat` field for consistency
+- Added `priority` field to OpenAI Codex models for provider-assigned model prioritization
+- Refactored provider descriptors to use helper functions (`descriptor`, `catalog`, `catalogDescriptor`) for reduced code duplication
+- Refactored models.dev provider descriptors to use helper functions (`simpleModelsDevDescriptor`, `openAiCompletionsDescriptor`, `anthropicMessagesDescriptor`) for improved maintainability
 - Unified provider descriptors into single source of truth in `descriptors.ts` for both runtime model discovery and catalog generation, improving maintainability
 - Refactored model generation script to use declarative `CatalogProviderDescriptor` interface instead of separate descriptor types, reducing code duplication
 - Reorganized models.dev provider descriptors into logical groups (Bedrock, Core, Coding Plans, Specialized) for better code organization

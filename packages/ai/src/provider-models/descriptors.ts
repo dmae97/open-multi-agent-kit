@@ -72,221 +72,167 @@ export function allowsUnauthenticatedCatalogDiscovery(descriptor: CatalogProvide
 	return descriptor.catalogDiscovery.allowUnauthenticated ?? descriptor.allowUnauthenticated ?? false;
 }
 
+function descriptor(
+	providerId: KnownProvider,
+	defaultModel: string,
+	createModelManagerOptions: ProviderDescriptor["createModelManagerOptions"],
+	options: Pick<ProviderDescriptor, "allowUnauthenticated"> = {},
+): ProviderDescriptor {
+	return {
+		providerId,
+		defaultModel,
+		createModelManagerOptions,
+		...options,
+	};
+}
+
+function catalog(
+	label: string,
+	envVars: string[],
+	options: Pick<CatalogDiscoveryConfig, "oauthProvider" | "allowUnauthenticated"> = {},
+): CatalogDiscoveryConfig {
+	return {
+		label,
+		envVars,
+		...options,
+	};
+}
+
+function catalogDescriptor(
+	providerId: KnownProvider,
+	defaultModel: string,
+	createModelManagerOptions: ProviderDescriptor["createModelManagerOptions"],
+	catalogDiscovery: CatalogDiscoveryConfig,
+	options: Pick<ProviderDescriptor, "allowUnauthenticated"> = {},
+): ProviderDescriptor {
+	return {
+		...descriptor(providerId, defaultModel, createModelManagerOptions, options),
+		catalogDiscovery,
+	};
+}
+
 /**
  * All standard providers. Special providers (google-antigravity, google-gemini-cli,
  * openai-codex) are handled separately because they require different config shapes.
  */
 export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
-	{
-		providerId: "anthropic",
-		defaultModel: "claude-sonnet-4-6",
-		createModelManagerOptions: config => anthropicModelManagerOptions(config),
-	},
-	{
-		providerId: "openai",
-		defaultModel: "gpt-5.1-codex",
-		createModelManagerOptions: config => openaiModelManagerOptions(config),
-	},
-	{
-		providerId: "groq",
-		defaultModel: "openai/gpt-oss-120b",
-		createModelManagerOptions: config => groqModelManagerOptions(config),
-	},
-	{
-		providerId: "huggingface",
-		defaultModel: "deepseek-ai/DeepSeek-R1",
-		createModelManagerOptions: config => huggingfaceModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "Hugging Face",
-			envVars: ["HUGGINGFACE_HUB_TOKEN", "HF_TOKEN"],
-		},
-	},
-	{
-		providerId: "cerebras",
-		defaultModel: "zai-glm-4.6",
-		createModelManagerOptions: config => cerebrasModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "Cerebras",
-			envVars: ["CEREBRAS_API_KEY"],
-		},
-	},
-	{
-		providerId: "xai",
-		defaultModel: "grok-4-fast-non-reasoning",
-		createModelManagerOptions: config => xaiModelManagerOptions(config),
-	},
-	{
-		providerId: "mistral",
-		defaultModel: "devstral-medium-latest",
-		createModelManagerOptions: config => mistralModelManagerOptions(config),
-	},
-	{
-		providerId: "nvidia",
-		defaultModel: "nvidia/llama-3.1-nemotron-70b-instruct",
-		createModelManagerOptions: config => nvidiaModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "NVIDIA",
-			envVars: ["NVIDIA_API_KEY"],
-		},
-	},
-	{
-		providerId: "opencode",
-		defaultModel: "claude-sonnet-4-6",
-		createModelManagerOptions: config => opencodeModelManagerOptions(config),
-	},
-	{
-		providerId: "openrouter",
-		defaultModel: "openai/gpt-5.1-codex",
-		createModelManagerOptions: config => openrouterModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "OpenRouter",
-			envVars: ["OPENROUTER_API_KEY"],
-			allowUnauthenticated: true,
-		},
-	},
-	{
-		providerId: "vercel-ai-gateway",
-		defaultModel: "anthropic/claude-sonnet-4-6",
-		createModelManagerOptions: config => vercelAiGatewayModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "Vercel AI Gateway",
-			envVars: ["VERCEL_AI_GATEWAY_API_KEY"],
-			allowUnauthenticated: true,
-		},
-	},
-	{
-		providerId: "ollama",
-		defaultModel: "gpt-oss:20b",
-		createModelManagerOptions: config => ollamaModelManagerOptions(config),
-		allowUnauthenticated: true,
-		catalogDiscovery: {
-			label: "Ollama",
-			envVars: ["OLLAMA_API_KEY"],
-		},
-	},
-	{
-		providerId: "cloudflare-ai-gateway",
-		defaultModel: "claude-sonnet-4-5",
-		createModelManagerOptions: config => cloudflareAiGatewayModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "Cloudflare AI Gateway",
-			envVars: ["CLOUDFLARE_AI_GATEWAY_API_KEY"],
-		},
-	},
-	{
-		providerId: "kimi-code",
-		defaultModel: "kimi-k2.5",
-		createModelManagerOptions: config => kimiCodeModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "Kimi Code",
-			envVars: ["KIMI_API_KEY"],
-		},
-	},
-	{
-		providerId: "qwen-portal",
-		defaultModel: "coder-model",
-		createModelManagerOptions: config => qwenPortalModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "Qwen Portal",
-			envVars: ["QWEN_OAUTH_TOKEN", "QWEN_PORTAL_API_KEY"],
-			oauthProvider: "qwen-portal",
-		},
-	},
-	{
-		providerId: "synthetic",
-		defaultModel: "hf:moonshotai/Kimi-K2.5",
-		createModelManagerOptions: config => syntheticModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "Synthetic",
-			envVars: ["SYNTHETIC_API_KEY"],
-		},
-	},
-	{
-		providerId: "venice",
-		defaultModel: "llama-3.3-70b",
-		createModelManagerOptions: config => veniceModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "Venice",
-			envVars: ["VENICE_API_KEY"],
-			allowUnauthenticated: true,
-		},
-	},
-	{
-		providerId: "litellm",
-		defaultModel: "claude-opus-4-6",
-		createModelManagerOptions: config => litellmModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "LiteLLM",
-			envVars: ["LITELLM_API_KEY"],
-			allowUnauthenticated: true,
-		},
-	},
-	{
-		providerId: "vllm",
-		defaultModel: "gpt-oss-20b",
-		createModelManagerOptions: config => vllmModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "vLLM",
-			envVars: ["VLLM_API_KEY"],
-			allowUnauthenticated: true,
-		},
-	},
-	{
-		providerId: "moonshot",
-		defaultModel: "kimi-k2.5",
-		createModelManagerOptions: config => moonshotModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "Moonshot",
-			envVars: ["MOONSHOT_API_KEY"],
-		},
-	},
-	{
-		providerId: "qianfan",
-		defaultModel: "deepseek-v3.2",
-		createModelManagerOptions: config => qianfanModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "Qianfan",
-			envVars: ["QIANFAN_API_KEY"],
-		},
-	},
-	{
-		providerId: "together",
-		defaultModel: "moonshotai/Kimi-K2.5",
-		createModelManagerOptions: config => togetherModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "Together",
-			envVars: ["TOGETHER_API_KEY"],
-		},
-	},
-	{
-		providerId: "xiaomi",
-		defaultModel: "mimo-v2-flash",
-		createModelManagerOptions: config => xiaomiModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "Xiaomi",
-			envVars: ["XIAOMI_API_KEY"],
-		},
-	},
-	{
-		providerId: "github-copilot",
-		defaultModel: "gpt-4o",
-		createModelManagerOptions: config => githubCopilotModelManagerOptions(config),
-	},
-	{
-		providerId: "google",
-		defaultModel: "gemini-2.5-pro",
-		createModelManagerOptions: config => googleModelManagerOptions(config),
-	},
-	{
-		providerId: "cursor",
-		defaultModel: "claude-sonnet-4-6",
-		createModelManagerOptions: config => cursorModelManagerOptions(config),
-		catalogDiscovery: {
-			label: "Cursor",
-			envVars: ["CURSOR_API_KEY"],
-			oauthProvider: "cursor",
-		},
-	},
+	descriptor("anthropic", "claude-sonnet-4-6", config => anthropicModelManagerOptions(config)),
+	descriptor("openai", "gpt-5.1-codex", config => openaiModelManagerOptions(config)),
+	descriptor("groq", "openai/gpt-oss-120b", config => groqModelManagerOptions(config)),
+	catalogDescriptor(
+		"huggingface",
+		"deepseek-ai/DeepSeek-R1",
+		config => huggingfaceModelManagerOptions(config),
+		catalog("Hugging Face", ["HUGGINGFACE_HUB_TOKEN", "HF_TOKEN"]),
+	),
+	catalogDescriptor(
+		"cerebras",
+		"zai-glm-4.6",
+		config => cerebrasModelManagerOptions(config),
+		catalog("Cerebras", ["CEREBRAS_API_KEY"]),
+	),
+	descriptor("xai", "grok-4-fast-non-reasoning", config => xaiModelManagerOptions(config)),
+	descriptor("mistral", "devstral-medium-latest", config => mistralModelManagerOptions(config)),
+	catalogDescriptor(
+		"nvidia",
+		"nvidia/llama-3.1-nemotron-70b-instruct",
+		config => nvidiaModelManagerOptions(config),
+		catalog("NVIDIA", ["NVIDIA_API_KEY"]),
+	),
+	descriptor("opencode", "claude-sonnet-4-6", config => opencodeModelManagerOptions(config)),
+	catalogDescriptor(
+		"openrouter",
+		"openai/gpt-5.1-codex",
+		config => openrouterModelManagerOptions(config),
+		catalog("OpenRouter", ["OPENROUTER_API_KEY"], { allowUnauthenticated: true }),
+	),
+	catalogDescriptor(
+		"vercel-ai-gateway",
+		"anthropic/claude-sonnet-4-6",
+		config => vercelAiGatewayModelManagerOptions(config),
+		catalog("Vercel AI Gateway", ["VERCEL_AI_GATEWAY_API_KEY"], { allowUnauthenticated: true }),
+	),
+	catalogDescriptor(
+		"ollama",
+		"gpt-oss:20b",
+		config => ollamaModelManagerOptions(config),
+		catalog("Ollama", ["OLLAMA_API_KEY"]),
+		{ allowUnauthenticated: true },
+	),
+	catalogDescriptor(
+		"cloudflare-ai-gateway",
+		"claude-sonnet-4-5",
+		config => cloudflareAiGatewayModelManagerOptions(config),
+		catalog("Cloudflare AI Gateway", ["CLOUDFLARE_AI_GATEWAY_API_KEY"]),
+	),
+	catalogDescriptor(
+		"kimi-code",
+		"kimi-k2.5",
+		config => kimiCodeModelManagerOptions(config),
+		catalog("Kimi Code", ["KIMI_API_KEY"]),
+	),
+	catalogDescriptor(
+		"qwen-portal",
+		"coder-model",
+		config => qwenPortalModelManagerOptions(config),
+		catalog("Qwen Portal", ["QWEN_OAUTH_TOKEN", "QWEN_PORTAL_API_KEY"], { oauthProvider: "qwen-portal" }),
+	),
+	catalogDescriptor(
+		"synthetic",
+		"hf:moonshotai/Kimi-K2.5",
+		config => syntheticModelManagerOptions(config),
+		catalog("Synthetic", ["SYNTHETIC_API_KEY"]),
+	),
+	catalogDescriptor(
+		"venice",
+		"llama-3.3-70b",
+		config => veniceModelManagerOptions(config),
+		catalog("Venice", ["VENICE_API_KEY"], { allowUnauthenticated: true }),
+	),
+	catalogDescriptor(
+		"litellm",
+		"claude-opus-4-6",
+		config => litellmModelManagerOptions(config),
+		catalog("LiteLLM", ["LITELLM_API_KEY"], { allowUnauthenticated: true }),
+	),
+	catalogDescriptor(
+		"vllm",
+		"gpt-oss-20b",
+		config => vllmModelManagerOptions(config),
+		catalog("vLLM", ["VLLM_API_KEY"], { allowUnauthenticated: true }),
+	),
+	catalogDescriptor(
+		"moonshot",
+		"kimi-k2.5",
+		config => moonshotModelManagerOptions(config),
+		catalog("Moonshot", ["MOONSHOT_API_KEY"]),
+	),
+	catalogDescriptor(
+		"qianfan",
+		"deepseek-v3.2",
+		config => qianfanModelManagerOptions(config),
+		catalog("Qianfan", ["QIANFAN_API_KEY"]),
+	),
+	catalogDescriptor(
+		"together",
+		"moonshotai/Kimi-K2.5",
+		config => togetherModelManagerOptions(config),
+		catalog("Together", ["TOGETHER_API_KEY"]),
+	),
+	catalogDescriptor(
+		"xiaomi",
+		"mimo-v2-flash",
+		config => xiaomiModelManagerOptions(config),
+		catalog("Xiaomi", ["XIAOMI_API_KEY"]),
+	),
+	descriptor("github-copilot", "gpt-4o", config => githubCopilotModelManagerOptions(config)),
+	descriptor("google", "gemini-2.5-pro", config => googleModelManagerOptions(config)),
+	catalogDescriptor(
+		"cursor",
+		"claude-sonnet-4-6",
+		config => cursorModelManagerOptions(config),
+		catalog("Cursor", ["CURSOR_API_KEY"], { oauthProvider: "cursor" }),
+	),
 ] as const;
 
 /** Default model IDs for all known providers, built from descriptors + special providers. */

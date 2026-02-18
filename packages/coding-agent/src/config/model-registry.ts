@@ -164,54 +164,103 @@ type ModelsConfig = Static<typeof ModelsConfigSchema>;
 type ProviderAuthMode = Static<typeof ProviderAuthSchema>;
 type ProviderDiscovery = Static<typeof ProviderDiscoverySchema>;
 
+type ProviderValidationMode = "models-config" | "runtime-register";
+
+interface ProviderValidationModel {
+	id: string;
+	api?: Api;
+	contextWindow?: number;
+	maxTokens?: number;
+}
+
+interface ProviderValidationConfig {
+	baseUrl?: string;
+	apiKey?: string;
+	api?: Api;
+	auth?: ProviderAuthMode;
+	oauthConfigured?: boolean;
+	discovery?: ProviderDiscovery;
+	modelOverrides?: Record<string, unknown>;
+	models: ProviderValidationModel[];
+}
+
+function validateProviderConfiguration(
+	providerName: string,
+	config: ProviderValidationConfig,
+	mode: ProviderValidationMode,
+): void {
+	const hasProviderApi = !!config.api;
+	const models = config.models;
+
+	if (models.length === 0) {
+		if (mode === "models-config") {
+			const hasModelOverrides = config.modelOverrides && Object.keys(config.modelOverrides).length > 0;
+			if (!config.baseUrl && !hasModelOverrides && !config.discovery) {
+				throw new Error(
+					`Provider ${providerName}: must specify "baseUrl", "modelOverrides", "discovery", or "models".`,
+				);
+			}
+		}
+	} else {
+		if (!config.baseUrl) {
+			throw new Error(`Provider ${providerName}: "baseUrl" is required when defining custom models.`);
+		}
+		const requiresAuth =
+			mode === "runtime-register"
+				? !config.apiKey && !config.oauthConfigured
+				: !config.apiKey && (config.auth ?? "apiKey") !== "none";
+		if (requiresAuth) {
+			throw new Error(
+				mode === "runtime-register"
+					? `Provider ${providerName}: "apiKey" or "oauth" is required when defining models.`
+					: `Provider ${providerName}: "apiKey" is required when defining custom models unless auth is "none".`,
+			);
+		}
+	}
+
+	if (mode === "models-config" && config.discovery && !config.api) {
+		throw new Error(`Provider ${providerName}: "api" is required when discovery is enabled at provider level.`);
+	}
+
+	for (const modelDef of models) {
+		if (!hasProviderApi && !modelDef.api) {
+			throw new Error(
+				mode === "runtime-register"
+					? `Provider ${providerName}, model ${modelDef.id}: no "api" specified.`
+					: `Provider ${providerName}, model ${modelDef.id}: no "api" specified. Set at provider or model level.`,
+			);
+		}
+		if (!modelDef.id) {
+			throw new Error(`Provider ${providerName}: model missing "id"`);
+		}
+		if (mode === "models-config") {
+			if (modelDef.contextWindow !== undefined && modelDef.contextWindow <= 0) {
+				throw new Error(`Provider ${providerName}, model ${modelDef.id}: invalid contextWindow`);
+			}
+			if (modelDef.maxTokens !== undefined && modelDef.maxTokens <= 0) {
+				throw new Error(`Provider ${providerName}, model ${modelDef.id}: invalid maxTokens`);
+			}
+		}
+	}
+}
+
 export const ModelsConfigFile = new ConfigFile<ModelsConfig>("models", ModelsConfigSchema).withValidation(
 	"models",
 	config => {
 		for (const [providerName, providerConfig] of Object.entries(config.providers)) {
-			const hasProviderApi = !!providerConfig.api;
-			const models = providerConfig.models ?? [];
-
-			if (models.length === 0) {
-				// Override-only config: needs baseUrl, modelOverrides, or discovery
-				const hasModelOverrides =
-					providerConfig.modelOverrides && Object.keys(providerConfig.modelOverrides).length > 0;
-				if (!providerConfig.baseUrl && !hasModelOverrides && !providerConfig.discovery) {
-					throw new Error(
-						`Provider ${providerName}: must specify "baseUrl", "modelOverrides", "discovery", or "models".`,
-					);
-				}
-			} else {
-				// Full replacement: needs baseUrl and apiKey unless auth is disabled
-				if (!providerConfig.baseUrl) {
-					throw new Error(`Provider ${providerName}: "baseUrl" is required when defining custom models.`);
-				}
-				if (!providerConfig.apiKey && providerConfig.auth !== "none") {
-					throw new Error(
-						`Provider ${providerName}: "apiKey" is required when defining custom models unless auth is "none".`,
-					);
-				}
-			}
-
-			if (providerConfig.discovery && !providerConfig.api) {
-				throw new Error(`Provider ${providerName}: "api" is required when discovery is enabled at provider level.`);
-			}
-
-			for (const modelDef of models) {
-				const hasModelApi = !!modelDef.api;
-
-				if (!hasProviderApi && !hasModelApi) {
-					throw new Error(
-						`Provider ${providerName}, model ${modelDef.id}: no "api" specified. Set at provider or model level.`,
-					);
-				}
-
-				if (!modelDef.id) throw new Error(`Provider ${providerName}: model missing "id"`);
-				// Validate contextWindow/maxTokens only if provided (they have defaults)
-				if (modelDef.contextWindow !== undefined && modelDef.contextWindow <= 0)
-					throw new Error(`Provider ${providerName}, model ${modelDef.id}: invalid contextWindow`);
-				if (modelDef.maxTokens !== undefined && modelDef.maxTokens <= 0)
-					throw new Error(`Provider ${providerName}, model ${modelDef.id}: invalid maxTokens`);
-			}
+			validateProviderConfiguration(
+				providerName,
+				{
+					baseUrl: providerConfig.baseUrl,
+					apiKey: providerConfig.apiKey,
+					api: providerConfig.api as Api | undefined,
+					auth: (providerConfig.auth ?? "apiKey") as ProviderAuthMode,
+					discovery: providerConfig.discovery as ProviderDiscovery | undefined,
+					modelOverrides: providerConfig.modelOverrides,
+					models: (providerConfig.models ?? []) as ProviderValidationModel[],
+				},
+				"models-config",
+			);
 		}
 	},
 );
@@ -963,20 +1012,17 @@ export class ModelRegistry {
 			throw new Error(`Provider ${providerName}: "api" is required when registering streamSimple.`);
 		}
 
-		if (config.models && config.models.length > 0) {
-			if (!config.baseUrl) {
-				throw new Error(`Provider ${providerName}: "baseUrl" is required when defining models.`);
-			}
-			if (!config.apiKey && !config.oauth) {
-				throw new Error(`Provider ${providerName}: "apiKey" or "oauth" is required when defining models.`);
-			}
-			for (const modelDef of config.models) {
-				const api = modelDef.api || config.api;
-				if (!api) {
-					throw new Error(`Provider ${providerName}, model ${modelDef.id}: no "api" specified.`);
-				}
-			}
-		}
+		validateProviderConfiguration(
+			providerName,
+			{
+				baseUrl: config.baseUrl,
+				apiKey: config.apiKey,
+				api: config.api,
+				oauthConfigured: Boolean(config.oauth),
+				models: (config.models ?? []) as ProviderValidationModel[],
+			},
+			"runtime-register",
+		);
 
 		if (config.streamSimple && config.api) {
 			const streamSimple = config.streamSimple;

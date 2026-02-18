@@ -104,23 +104,23 @@ async function loadModelsDevData(): Promise<Model[]> {
 
 const ANTIGRAVITY_ENDPOINT = "https://daily-cloudcode-pa.sandbox.googleapis.com";
 
-async function getOAuthCredentialsFromStorage(
-	provider: OAuthProvider,
-): Promise<{ credentials: OAuthCredentials; storage: CliAuthStorage } | null> {
+async function getOAuthCredentialsFromStorage(provider: OAuthProvider): Promise<OAuthCredentials | null> {
 	try {
 		const storage = await CliAuthStorage.create();
-		const creds = storage.getOAuth(provider);
-		if (!creds) {
+		try {
+			const creds = storage.getOAuth(provider);
+			if (!creds) {
+				return null;
+			}
+			const result = await getOAuthApiKey(provider, { [provider]: creds });
+			if (!result) {
+				return null;
+			}
+			storage.saveOAuth(provider, result.newCredentials);
+			return result.newCredentials;
+		} finally {
 			storage.close();
-			return null;
 		}
-		const result = await getOAuthApiKey(provider, { [provider]: creds });
-		if (!result) {
-			storage.close();
-			return null;
-		}
-		storage.saveOAuth(provider, result.newCredentials);
-		return { credentials: result.newCredentials, storage };
 	} catch {
 		return null;
 	}
@@ -131,15 +131,15 @@ async function getOAuthCredentialsFromStorage(
  * Returns empty array if no auth is available (previous models used as fallback).
  */
 async function fetchAntigravityModels(): Promise<Model<"google-gemini-cli">[]> {
-	const auth = await getOAuthCredentialsFromStorage("google-antigravity");
-	if (!auth) {
+	const credentials = await getOAuthCredentialsFromStorage("google-antigravity");
+	if (!credentials) {
 		console.log("No Antigravity credentials found, will use previous models");
 		return [];
 	}
 	try {
 		console.log("Fetching models from Antigravity API...");
 		const discovered = await fetchAntigravityDiscoveryModels({
-			token: auth.credentials.access,
+			token: credentials.access,
 			endpoint: ANTIGRAVITY_ENDPOINT,
 		});
 		if (discovered === null) {
@@ -155,8 +155,6 @@ async function fetchAntigravityModels(): Promise<Model<"google-gemini-cli">[]> {
 	} catch (error) {
 		console.error("Failed to fetch Antigravity models:", error);
 		return [];
-	} finally {
-		auth.storage.close();
 	}
 }
 
@@ -177,14 +175,14 @@ function extractCodexAccountId(accessToken: string): string | null {
 }
 
 async function fetchCodexDiscoveryModels(): Promise<Model<"openai-codex-responses">[]> {
-	const codexAuth = await getOAuthCredentialsFromStorage("openai-codex");
-	if (!codexAuth) {
+	const credentials = await getOAuthCredentialsFromStorage("openai-codex");
+	if (!credentials) {
 		return [];
 	}
 	try {
 		console.log("Fetching models from Codex API...");
-		const accessToken = codexAuth.credentials.access;
-		const accountId = codexAuth.credentials.accountId ?? extractCodexAccountId(accessToken);
+		const accessToken = credentials.access;
+		const accountId = credentials.accountId ?? extractCodexAccountId(accessToken);
 		const codexDiscovery = await fetchCodexModels({
 			accessToken,
 			accountId: accountId ?? undefined,
@@ -201,8 +199,6 @@ async function fetchCodexDiscoveryModels(): Promise<Model<"openai-codex-response
 	} catch (error) {
 		console.error("Failed to fetch Codex models:", error);
 		return [];
-	} finally {
-		codexAuth.storage.close();
 	}
 }
 
@@ -224,11 +220,16 @@ async function generateModels() {
 		{ label: "Antigravity", fetch: fetchAntigravityModels },
 		{ label: "Codex", fetch: fetchCodexDiscoveryModels },
 	] as const;
-	for (const source of specialDiscoverySources) {
-		const discoveredModels = await source.fetch();
-		if (discoveredModels.length > 0) {
-			console.log(`Added ${discoveredModels.length} models from ${source.label} discovery`);
-			allModels.push(...discoveredModels);
+	const specialDiscoveries = await Promise.all(
+		specialDiscoverySources.map(async source => ({
+			label: source.label,
+			models: await source.fetch(),
+		})),
+	);
+	for (const discovery of specialDiscoveries) {
+		if (discovery.models.length > 0) {
+			console.log(`Added ${discovery.models.length} models from ${discovery.label} discovery`);
+			allModels.push(...discovery.models);
 		}
 	}
 

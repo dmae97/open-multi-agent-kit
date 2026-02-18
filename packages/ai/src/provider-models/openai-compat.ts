@@ -1472,6 +1472,40 @@ const COPILOT_API_RESOLUTION_RULES: readonly ApiResolutionRule[] = [
 	},
 ];
 
+function simpleModelsDevDescriptor(
+	modelsDevKey: string,
+	providerId: string,
+	api: Api,
+	baseUrl: string,
+	options: Omit<ModelsDevProviderDescriptor, "modelsDevKey" | "providerId" | "api" | "baseUrl"> = {},
+): ModelsDevProviderDescriptor {
+	return {
+		modelsDevKey,
+		providerId,
+		api,
+		baseUrl,
+		...options,
+	};
+}
+
+function openAiCompletionsDescriptor(
+	modelsDevKey: string,
+	providerId: string,
+	baseUrl: string,
+	options: Omit<ModelsDevProviderDescriptor, "modelsDevKey" | "providerId" | "api" | "baseUrl"> = {},
+): ModelsDevProviderDescriptor {
+	return simpleModelsDevDescriptor(modelsDevKey, providerId, "openai-completions", baseUrl, options);
+}
+
+function anthropicMessagesDescriptor(
+	modelsDevKey: string,
+	providerId: string,
+	baseUrl: string,
+	options: Omit<ModelsDevProviderDescriptor, "modelsDevKey" | "providerId" | "api" | "baseUrl"> = {},
+): ModelsDevProviderDescriptor {
+	return simpleModelsDevDescriptor(modelsDevKey, providerId, "anthropic-messages", baseUrl, options);
+}
+
 const MODELS_DEV_PROVIDER_DESCRIPTORS_BEDROCK: readonly ModelsDevProviderDescriptor[] = [
 	// --- Amazon Bedrock ---
 	{
@@ -1511,11 +1545,7 @@ const MODELS_DEV_PROVIDER_DESCRIPTORS_BEDROCK: readonly ModelsDevProviderDescrip
 
 const MODELS_DEV_PROVIDER_DESCRIPTORS_CORE: readonly ModelsDevProviderDescriptor[] = [
 	// --- Anthropic ---
-	{
-		modelsDevKey: "anthropic",
-		providerId: "anthropic",
-		api: "anthropic-messages",
-		baseUrl: "https://api.anthropic.com",
+	anthropicMessagesDescriptor("anthropic", "anthropic", "https://api.anthropic.com", {
 		filterModel: (id, m) => {
 			if (m.tool_call !== true) return false;
 			if (
@@ -1527,122 +1557,66 @@ const MODELS_DEV_PROVIDER_DESCRIPTORS_CORE: readonly ModelsDevProviderDescriptor
 				return false;
 			return true;
 		},
-	},
+	}),
 	// --- Google ---
-	{
-		modelsDevKey: "google",
-		providerId: "google",
-		api: "google-generative-ai",
-		baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-	},
+	simpleModelsDevDescriptor(
+		"google",
+		"google",
+		"google-generative-ai",
+		"https://generativelanguage.googleapis.com/v1beta",
+	),
 	// --- OpenAI ---
-	{
-		modelsDevKey: "openai",
-		providerId: "openai",
-		api: "openai-responses",
-		baseUrl: "https://api.openai.com/v1",
-	},
+	simpleModelsDevDescriptor("openai", "openai", "openai-responses", "https://api.openai.com/v1"),
 	// --- Groq ---
-	{
-		modelsDevKey: "groq",
-		providerId: "groq",
-		api: "openai-completions",
-		baseUrl: "https://api.groq.com/openai/v1",
-	},
+	openAiCompletionsDescriptor("groq", "groq", "https://api.groq.com/openai/v1"),
 	// --- Cerebras ---
-	{
-		modelsDevKey: "cerebras",
-		providerId: "cerebras",
-		api: "openai-completions",
-		baseUrl: "https://api.cerebras.ai/v1",
-	},
+	openAiCompletionsDescriptor("cerebras", "cerebras", "https://api.cerebras.ai/v1"),
 	// --- Together ---
-	{
-		modelsDevKey: "together",
-		providerId: "together",
-		api: "openai-completions",
-		baseUrl: "https://api.together.xyz/v1",
-	},
+	openAiCompletionsDescriptor("together", "together", "https://api.together.xyz/v1"),
 	// --- NVIDIA ---
-	{
-		modelsDevKey: "nvidia",
-		providerId: "nvidia",
-		api: "openai-completions",
-		baseUrl: "https://integrate.api.nvidia.com/v1",
+	openAiCompletionsDescriptor("nvidia", "nvidia", "https://integrate.api.nvidia.com/v1", {
 		defaultContextWindow: 131072,
-	},
+	}),
 	// --- xAI ---
-	{
-		modelsDevKey: "xai",
-		providerId: "xai",
-		api: "openai-completions",
-		baseUrl: "https://api.x.ai/v1",
-	},
+	openAiCompletionsDescriptor("xai", "xai", "https://api.x.ai/v1"),
 ];
 
 const MODELS_DEV_PROVIDER_DESCRIPTORS_CODING_PLANS: readonly ModelsDevProviderDescriptor[] = [
 	// --- zAI ---
-	{
-		modelsDevKey: "zai-coding-plan",
-		providerId: "zai",
-		api: "anthropic-messages",
-		baseUrl: "https://api.z.ai/api/anthropic",
-	},
+	anthropicMessagesDescriptor("zai-coding-plan", "zai", "https://api.z.ai/api/anthropic"),
 	// --- Xiaomi ---
-	{
-		modelsDevKey: "xiaomi",
-		providerId: "xiaomi",
-		api: "anthropic-messages",
-		baseUrl: "https://api.xiaomimimo.com/anthropic",
+	anthropicMessagesDescriptor("xiaomi", "xiaomi", "https://api.xiaomimimo.com/anthropic", {
 		defaultContextWindow: 262144,
 		defaultMaxTokens: 8192,
-	},
+	}),
 	// --- MiniMax Coding Plan ---
-	{
-		modelsDevKey: "minimax-coding-plan",
-		providerId: "minimax-code",
-		api: "openai-completions",
-		baseUrl: "https://api.minimax.io/v1",
+	openAiCompletionsDescriptor("minimax-coding-plan", "minimax-code", "https://api.minimax.io/v1", {
 		compat: {
 			supportsDeveloperRole: false,
 			thinkingFormat: "zai",
 			reasoningContentField: "reasoning_content",
 		},
-	},
-	{
-		modelsDevKey: "minimax-cn-coding-plan",
-		providerId: "minimax-code-cn",
-		api: "openai-completions",
-		baseUrl: "https://api.minimaxi.com/v1",
+	}),
+	openAiCompletionsDescriptor("minimax-cn-coding-plan", "minimax-code-cn", "https://api.minimaxi.com/v1", {
 		compat: {
 			supportsDeveloperRole: false,
 			thinkingFormat: "zai",
 			reasoningContentField: "reasoning_content",
 		},
-	},
+	}),
 ];
 
 const MODELS_DEV_PROVIDER_DESCRIPTORS_SPECIALIZED: readonly ModelsDevProviderDescriptor[] = [
 	// --- Cloudflare AI Gateway ---
-	{
-		modelsDevKey: "cloudflare-ai-gateway",
-		providerId: "cloudflare-ai-gateway",
-		api: "anthropic-messages",
-		baseUrl: "https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic",
-	},
+	anthropicMessagesDescriptor(
+		"cloudflare-ai-gateway",
+		"cloudflare-ai-gateway",
+		"https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic",
+	),
 	// --- Mistral ---
-	{
-		modelsDevKey: "mistral",
-		providerId: "mistral",
-		api: "openai-completions",
-		baseUrl: "https://api.mistral.ai/v1",
-	},
+	openAiCompletionsDescriptor("mistral", "mistral", "https://api.mistral.ai/v1"),
 	// --- OpenCode ---
-	{
-		modelsDevKey: "opencode",
-		providerId: "opencode",
-		api: "openai-completions",
-		baseUrl: "https://opencode.ai/zen/v1",
+	openAiCompletionsDescriptor("opencode", "opencode", "https://opencode.ai/zen/v1", {
 		filterModel: (_id, m) => {
 			if (m.tool_call !== true) return false;
 			if (m.status === "deprecated") return false;
@@ -1650,13 +1624,9 @@ const MODELS_DEV_PROVIDER_DESCRIPTORS_SPECIALIZED: readonly ModelsDevProviderDes
 		},
 		resolveApi: (modelId, raw) =>
 			resolveApiByRules(modelId, raw, OPENCODE_API_RESOLUTION_RULES, OPENCODE_DEFAULT_RESOLUTION),
-	},
+	}),
 	// --- GitHub Copilot ---
-	{
-		modelsDevKey: "github-copilot",
-		providerId: "github-copilot",
-		api: "openai-completions",
-		baseUrl: COPILOT_BASE_URL,
+	openAiCompletionsDescriptor("github-copilot", "github-copilot", COPILOT_BASE_URL, {
 		defaultContextWindow: 128000,
 		defaultMaxTokens: 8192,
 		headers: { ...COPILOT_HEADERS },
@@ -1681,29 +1651,15 @@ const MODELS_DEV_PROVIDER_DESCRIPTORS_SPECIALIZED: readonly ModelsDevProviderDes
 			}
 			return model;
 		},
-	},
+	}),
 	// --- MiniMax (Anthropic) ---
-	{
-		modelsDevKey: "minimax",
-		providerId: "minimax",
-		api: "anthropic-messages",
-		baseUrl: "https://api.minimax.io/anthropic",
-	},
-	{
-		modelsDevKey: "minimax-cn",
-		providerId: "minimax-cn",
-		api: "anthropic-messages",
-		baseUrl: "https://api.minimaxi.com/anthropic",
-	},
+	anthropicMessagesDescriptor("minimax", "minimax", "https://api.minimax.io/anthropic"),
+	anthropicMessagesDescriptor("minimax-cn", "minimax-cn", "https://api.minimaxi.com/anthropic"),
 	// --- Qwen Portal ---
-	{
-		modelsDevKey: "qwen-portal",
-		providerId: "qwen-portal",
-		api: "openai-completions",
-		baseUrl: "https://portal.qwen.ai/v1",
+	openAiCompletionsDescriptor("qwen-portal", "qwen-portal", "https://portal.qwen.ai/v1", {
 		defaultContextWindow: 128000,
 		defaultMaxTokens: 8192,
-	},
+	}),
 ];
 /** All provider descriptors for models.dev data mapping in generate-models.ts. */
 export const MODELS_DEV_PROVIDER_DESCRIPTORS: readonly ModelsDevProviderDescriptor[] = [
