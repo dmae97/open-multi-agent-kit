@@ -6,7 +6,6 @@
  */
 import { execSync, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
-import * as path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { isEnoent } from "@oh-my-pi/pi-utils";
 import { APP_NAME, VERSION } from "@oh-my-pi/pi-utils/dirs";
@@ -80,7 +79,7 @@ async function getLatestRelease(): Promise<ReleaseInfo> {
 	return {
 		tag,
 		version,
-		assets: [makeAsset(getBinaryName()), ...getNativeAddonNames().map(makeAsset)],
+		assets: [makeAsset(getBinaryName())],
 	};
 }
 
@@ -143,27 +142,6 @@ function getBinaryName(): string {
 }
 
 /**
- * Get native addon names for this platform, ordered by preference.
- */
-function getNativeAddonNames(): string[] {
-	const platform = process.platform;
-	const arch = process.arch;
-	if (!["linux", "darwin", "win32"].includes(platform)) {
-		throw new Error(`Unsupported platform: ${platform}`);
-	}
-	if (!["x64", "arm64"].includes(arch)) {
-		throw new Error(`Unsupported architecture: ${arch}`);
-	}
-
-	const baseName = `pi_natives.${platform}-${arch}.node`;
-	if (arch !== "x64") {
-		return [baseName];
-	}
-
-	return [`pi_natives.${platform}-${arch}-modern.node`, `pi_natives.${platform}-${arch}-baseline.node`];
-}
-
-/**
  * Update via bun package manager.
  */
 async function updateViaBun(expectedVersion: string): Promise<void> {
@@ -200,44 +178,13 @@ async function updateViaBun(expectedVersion: string): Promise<void> {
  */
 async function updateViaBinary(release: ReleaseInfo): Promise<void> {
 	const binaryName = getBinaryName();
-	const nativeAddonNames = getNativeAddonNames();
 	const asset = release.assets.find(a => a.name === binaryName);
 	if (!asset) {
 		throw new Error(`No binary found for ${binaryName}`);
 	}
 	const execPath = process.execPath;
-	const execDir = path.dirname(execPath);
 	const tempPath = `${execPath}.new`;
 	const backupPath = `${execPath}.bak`;
-	const nativeDownloads: Array<{ name: string; tempPath: string; finalPath: string }> = [];
-
-	const downloadNativeAsset = async (name: string, required: boolean): Promise<boolean> => {
-		const nativeAsset = release.assets.find(assetEntry => assetEntry.name === name);
-		if (!nativeAsset) {
-			if (required) throw new Error(`No native addon found for ${name}`);
-			return false;
-		}
-
-		console.log(chalk.dim(`Downloading ${name}…`));
-		try {
-			const nativeResponse = await fetch(nativeAsset.url, { redirect: "follow" });
-			if (!nativeResponse.ok || !nativeResponse.body) {
-				if (required) throw new Error(`Native addon download failed for ${name}: ${nativeResponse.statusText}`);
-				return false;
-			}
-
-			const nativeFinalPath = path.join(execDir, name);
-			const nativeTempPath = `${nativeFinalPath}.new`;
-			const nativeFileStream = fs.createWriteStream(nativeTempPath, { mode: 0o755 });
-			await pipeline(nativeResponse.body, nativeFileStream);
-			nativeDownloads.push({ name, tempPath: nativeTempPath, finalPath: nativeFinalPath });
-			return true;
-		} catch (err) {
-			if (required) throw err;
-			return false;
-		}
-	};
-
 	console.log(chalk.dim(`Downloading ${binaryName}…`));
 
 	// Download binary to temp file
@@ -247,9 +194,6 @@ async function updateViaBinary(release: ReleaseInfo): Promise<void> {
 	}
 	const fileStream = fs.createWriteStream(tempPath, { mode: 0o755 });
 	await pipeline(response.body, fileStream);
-	for (const nativeAddonName of nativeAddonNames) {
-		await downloadNativeAsset(nativeAddonName, true);
-	}
 	// Replace current binary
 	console.log(chalk.dim("Installing update..."));
 	try {
@@ -262,11 +206,7 @@ async function updateViaBinary(release: ReleaseInfo): Promise<void> {
 		await fs.promises.rename(tempPath, execPath);
 		await fs.promises.unlink(backupPath);
 
-		for (const nativeDownload of nativeDownloads) {
-			await fs.promises.rename(nativeDownload.tempPath, nativeDownload.finalPath);
-		}
 		console.log(chalk.green(`\n${theme.status.success} Updated to ${release.version}`));
-		console.log(chalk.dim(`Installed ${nativeDownloads.length} native addon file(s)`));
 		console.log(chalk.dim(`Restart ${APP_NAME} to use the new version`));
 	} catch (err) {
 		if (fs.existsSync(backupPath) && !fs.existsSync(execPath)) {
@@ -274,11 +214,6 @@ async function updateViaBinary(release: ReleaseInfo): Promise<void> {
 		}
 		if (fs.existsSync(tempPath)) {
 			await fs.promises.unlink(tempPath);
-		}
-		for (const nativeDownload of nativeDownloads) {
-			if (fs.existsSync(nativeDownload.tempPath)) {
-				await fs.promises.unlink(nativeDownload.tempPath);
-			}
 		}
 		throw err;
 	}
