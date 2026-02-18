@@ -266,7 +266,7 @@ async function fetchKimiCodeModels(): Promise<Model<"openai-completions">[]> {
 	}
 }
 
-const SYNTHETIC_BASE_URL = "https://api.synthetic.new/v1";
+const SYNTHETIC_BASE_URL = "https://api.synthetic.new/openai/v1";
 
 interface SyntheticModelInfo {
 	id: string;
@@ -277,9 +277,22 @@ interface SyntheticModelInfo {
 }
 
 async function fetchSyntheticModels(): Promise<Model<"openai-completions">[]> {
-	// Synthetic.new /models endpoint requires authentication
-	// Use SYNTHETIC_API_KEY env var if available, otherwise return fallback models
-	const apiKey = $env.SYNTHETIC_API_KEY;
+	// Synthetic.new /models endpoint requires authentication.
+	// Prefer SYNTHETIC_API_KEY, then fall back to agent.db (/login synthetic).
+	let apiKey = $env.SYNTHETIC_API_KEY;
+	if (!apiKey) {
+		try {
+			const storage = await CliAuthStorage.create();
+			try {
+				const storedApiKey = storage.getApiKey("synthetic");
+				if (storedApiKey) apiKey = storedApiKey;
+			} finally {
+				storage.close();
+			}
+		} catch {
+			// Ignore missing/unreadable auth storage; fallback models will be used.
+		}
+	}
 	if (apiKey) {
 		try {
 			console.log("Fetching models from Synthetic.new API...");
@@ -329,26 +342,108 @@ async function fetchSyntheticModels(): Promise<Model<"openai-completions">[]> {
 		}
 	}
 
-	console.log("No Synthetic.new credentials found, using fallback models");
+	console.log("No Synthetic credentials found (env or agent.db), using fallback models");
 	return getSyntheticFallbackModels();
 }
 
 function getSyntheticFallbackModels(): Model<"openai-completions">[] {
 	return [
 		{
-			id: "default",
-			name: "Synthetic Default",
+			id: "hf:moonshotai/Kimi-K2.5",
+			name: "moonshotai/Kimi-K2.5",
 			api: "openai-completions",
 			provider: "synthetic",
 			baseUrl: SYNTHETIC_BASE_URL,
-			reasoning: true,
-			input: ["text", "image"],
+			reasoning: false,
+			input: ["text"],
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-			contextWindow: 200000,
+			contextWindow: 262144,
 			maxTokens: 8192,
 		},
 	];
 }
+
+const CEREBRAS_BASE_URL = "https://api.cerebras.ai/v1";
+
+interface CerebrasModelInfo {
+	id: string;
+	name?: string;
+	context_length?: number;
+	max_completion_tokens?: number;
+	max_tokens?: number;
+	reasoning?: boolean;
+	modalities?: {
+		input?: string[];
+	};
+}
+
+async function fetchCerebrasModels(): Promise<Model<"openai-completions">[]> {
+	// Cerebras /models endpoint requires authentication.
+	// Prefer CEREBRAS_API_KEY, then fall back to agent.db (/login cerebras).
+	let apiKey = $env.CEREBRAS_API_KEY;
+	if (!apiKey) {
+		try {
+			const storage = await CliAuthStorage.create();
+			try {
+				const storedApiKey = storage.getApiKey("cerebras");
+				if (storedApiKey) apiKey = storedApiKey;
+			} finally {
+				storage.close();
+			}
+		} catch {
+			// Ignore missing/unreadable auth storage; existing models will be used.
+		}
+	}
+
+	if (!apiKey) {
+		console.log("No Cerebras credentials found (env or agent.db), will use previous models");
+		return [];
+	}
+
+	try {
+		console.log("Fetching models from Cerebras API...");
+		const response = await fetch(`${CEREBRAS_BASE_URL}/models`, {
+			headers: { Authorization: `Bearer ${apiKey}` },
+		});
+
+		if (!response.ok) {
+			console.warn(`Cerebras API returned ${response.status}, will use previous models`);
+			return [];
+		}
+
+		const data = await response.json();
+		const items = Array.isArray(data.data) ? (data.data as CerebrasModelInfo[]) : [];
+		const models: Model<"openai-completions">[] = [];
+
+		for (const model of items) {
+			if (!model.id) continue;
+
+			const supportsImage = model.modalities?.input?.includes("image") ?? false;
+			const reasoning = model.reasoning === true || model.id.toLowerCase().includes("reasoning");
+
+			models.push({
+				id: model.id,
+				name: model.name || model.id,
+				api: "openai-completions",
+				provider: "cerebras",
+				baseUrl: CEREBRAS_BASE_URL,
+				reasoning,
+				input: supportsImage ? ["text", "image"] : ["text"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: model.context_length || 131072,
+				maxTokens: model.max_completion_tokens || model.max_tokens || 32768,
+			});
+		}
+
+		models.sort((a, b) => a.id.localeCompare(b.id));
+		console.log(`Fetched ${models.length} models from Cerebras API`);
+		return models;
+	} catch (error) {
+		console.error("Failed to fetch Cerebras models:", error);
+		return [];
+	}
+}
+
 
 async function loadModelsDevData(): Promise<Model[]> {
 	try {
@@ -984,9 +1079,10 @@ async function generateModels() {
 	const aiGatewayModels = await fetchAiGatewayModels();
 	const kimiCodeModels = await fetchKimiCodeModels();
 	const syntheticNewModels = await fetchSyntheticModels();
+	const cerebrasModels = await fetchCerebrasModels();
 
 	// Combine models (models.dev has priority)
-	const allModels = [...modelsDevModels, ...openRouterModels, ...aiGatewayModels, ...kimiCodeModels, ...syntheticNewModels];
+	const allModels = [...modelsDevModels, ...openRouterModels, ...aiGatewayModels, ...kimiCodeModels, ...syntheticNewModels, ...cerebrasModels];
 
 	// Fix incorrect cache pricing for Claude Opus 4.5 from models.dev
 	// models.dev has 3x the correct pricing (1.5/18.75 instead of 0.5/6.25)

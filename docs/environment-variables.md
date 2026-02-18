@@ -37,6 +37,7 @@ These are consumed via `getEnvApiKey()` (`packages/ai/src/stream.ts`) unless not
 | `GOOGLE_API_KEY` | Gemini image tool auth fallback | Using `gemini_image` tool without `GEMINI_API_KEY` | Used by coding-agent image tool fallback path |
 | `GROQ_API_KEY` | Groq auth | Using Groq models |  |
 | `CEREBRAS_API_KEY` | Cerebras auth | Using Cerebras models |  |
+| `SYNTHETIC_API_KEY` | Synthetic auth | Using Synthetic models |  |
 | `XAI_API_KEY` | xAI auth | Using xAI models |  |
 | `OPENROUTER_API_KEY` | OpenRouter auth | Using OpenRouter models | Also used by image tool when preferred/auto provider is OpenRouter |
 | `MISTRAL_API_KEY` | Mistral auth | Using Mistral models |  |

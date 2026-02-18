@@ -28,6 +28,7 @@ import {
 	registerCustomApi,
 	registerOAuthProvider,
 	type SimpleStreamOptions,
+	syntheticModelManagerOptions,
 	unregisterCustomApis,
 	unregisterOAuthProviders,
 	vercelAiGatewayModelManagerOptions,
@@ -639,6 +640,7 @@ export class ModelRegistry {
 			openrouterApiKey,
 			vercelGatewayApiKey,
 			kimiApiKey,
+			syntheticApiKey,
 			githubCopilotApiKey,
 			googleApiKey,
 			cursorApiKey,
@@ -656,6 +658,7 @@ export class ModelRegistry {
 			this.getApiKeyForProvider("openrouter"),
 			this.getApiKeyForProvider("vercel-ai-gateway"),
 			this.getApiKeyForProvider("kimi-code"),
+			this.getApiKeyForProvider("synthetic"),
 			this.getApiKeyForProvider("github-copilot"),
 			this.getApiKeyForProvider("google"),
 			this.getApiKeyForProvider("cursor"),
@@ -742,6 +745,14 @@ export class ModelRegistry {
 				kimiCodeModelManagerOptions({
 					apiKey: kimiApiKey,
 					baseUrl: this.getProviderBaseUrl("kimi-code"),
+				}),
+			);
+		}
+		if (isAuthenticated(syntheticApiKey)) {
+			options.push(
+				syntheticModelManagerOptions({
+					apiKey: syntheticApiKey,
+					baseUrl: this.getProviderBaseUrl("synthetic"),
 				}),
 			);
 		}

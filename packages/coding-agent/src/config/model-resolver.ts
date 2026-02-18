@@ -33,7 +33,7 @@ export const defaultModelPerProvider: Record<KnownProvider, string> = {
 	"minimax-code-cn": "MiniMax-M2.5",
 	opencode: "claude-sonnet-4-6",
 	"kimi-code": "kimi-k2.5",
-	"synthetic": "hf:moonshotai/Kimi-K2.5"
+	synthetic: "hf:moonshotai/Kimi-K2.5",
 };
 
 export interface ScopedModel {

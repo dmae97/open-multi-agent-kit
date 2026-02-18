@@ -2,8 +2,8 @@
  * Synthetic provider - wraps OpenAI or Anthropic API based on format setting.
  *
  * Synthetic offers both OpenAI-compatible and Anthropic-compatible APIs:
- * - OpenAI: https://api.synthetic.new/v1/chat/completions
- * - Anthropic: https://api.synthetic.new/v1/messages
+ * - OpenAI: https://api.synthetic.new/openai/v1/chat/completions
+ * - Anthropic: https://api.synthetic.new/anthropic/v1/messages
  *
  * @see https://dev.synthetic.new/docs/api/overview
  */
@@ -15,8 +15,8 @@ import { streamOpenAICompletions } from "./openai-completions";
 
 export type SyntheticApiFormat = "openai" | "anthropic";
 
-const SYNTHETIC_NEW_BASE_URL = "https://api.synthetic.new/v1";
-const SYNTHETIC_NEW_ANTHROPIC_BASE_URL = "https://api.synthetic.new";
+const SYNTHETIC_NEW_BASE_URL = "https://api.synthetic.new/openai/v1";
+const SYNTHETIC_NEW_ANTHROPIC_BASE_URL = "https://api.synthetic.new/anthropic";
 
 // Default thinking budgets for Anthropic format (matches stream.ts)
 const DEFAULT_THINKING_BUDGETS = {
@@ -28,7 +28,7 @@ const DEFAULT_THINKING_BUDGETS = {
 } as const;
 
 export interface SyntheticOptions extends SimpleStreamOptions {
-	/** API format: "openai" or "anthropic". Default: "anthropic" */
+	/** API format: "openai" or "anthropic". Default: "openai" */
 	format?: SyntheticApiFormat;
 }
 
@@ -42,7 +42,7 @@ export function streamSynthetic(
 	options?: SyntheticOptions,
 ): AssistantMessageEventStream {
 	const stream = new AssistantMessageEventStream();
-	const format = options?.format ?? "anthropic";
+	const format = options?.format ?? "openai";
 
 	// Async IIFE to handle stream piping
 	(async () => {

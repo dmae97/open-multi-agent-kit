@@ -898,6 +898,7 @@ In Node.js environments, you can set environment variables to avoid passing API 
 | Mistral        | `MISTRAL_API_KEY`                                                            |
 | Groq           | `GROQ_API_KEY`                                                               |
 | Cerebras       | `CEREBRAS_API_KEY`                                                           |
+| Synthetic      | `SYNTHETIC_API_KEY`                                                          |
 | xAI            | `XAI_API_KEY`                                                                |
 | OpenRouter     | `OPENROUTER_API_KEY`                                                         |
 | zAI            | `ZAI_API_KEY`                                                                |

@@ -586,7 +586,57 @@ export function kimiCodeModelManagerOptions(
 }
 
 // ---------------------------------------------------------------------------
-// 10. GitHub Copilot
+// 10. Synthetic
+// ---------------------------------------------------------------------------
+
+export interface SyntheticModelManagerConfig {
+	apiKey?: string;
+	baseUrl?: string;
+}
+
+export function syntheticModelManagerOptions(
+	config?: SyntheticModelManagerConfig,
+): ModelManagerOptions<"openai-completions"> {
+	const apiKey = config?.apiKey;
+	const baseUrl = config?.baseUrl ?? "https://api.synthetic.new/openai/v1";
+	const references = new Map(
+		(getBundledModels("synthetic") as Model<"openai-completions">[]).map(model => [model.id, model]),
+	);
+	return {
+		providerId: "synthetic",
+		...(apiKey && {
+			fetchDynamicModels: () =>
+				fetchOpenAICompatibleModels({
+					api: "openai-completions",
+					provider: "synthetic",
+					baseUrl,
+					apiKey,
+					mapModel: (
+						entry: OpenAICompatibleModelRecord,
+						defaults: Model<"openai-completions">,
+						_context: OpenAICompatibleModelMapperContext<"openai-completions">,
+					): Model<"openai-completions"> => {
+						const reference = references.get(defaults.id);
+						const referenceSupportsImage = reference?.input.includes("image") ?? false;
+						return {
+							...(reference ? { ...reference, id: defaults.id, baseUrl } : defaults),
+							name: toModelName(entry.name, reference?.name ?? defaults.name),
+							reasoning: entry.supports_reasoning === true || (reference?.reasoning ?? false),
+							input: entry.supports_vision === true || referenceSupportsImage ? ["text", "image"] : ["text"],
+							contextWindow: toPositiveNumber(
+								entry.context_length,
+								reference?.contextWindow ?? defaults.contextWindow,
+							),
+							maxTokens: toPositiveNumber(entry.max_tokens, reference?.maxTokens ?? 8192),
+						};
+					},
+				}),
+		}),
+	};
+}
+
+// ---------------------------------------------------------------------------
+// 11. GitHub Copilot
 // ---------------------------------------------------------------------------
 
 export interface GithubCopilotModelManagerConfig {
@@ -678,7 +728,7 @@ export function githubCopilotModelManagerOptions(config?: GithubCopilotModelMana
 }
 
 // ---------------------------------------------------------------------------
-// 11. Anthropic
+// 12. Anthropic
 // ---------------------------------------------------------------------------
 
 export interface AnthropicModelManagerConfig {

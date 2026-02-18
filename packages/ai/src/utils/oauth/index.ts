@@ -26,10 +26,14 @@ import type {
  * - Google Cloud Code Assist (Gemini CLI)
  * - Antigravity (Gemini 3, Claude, GPT-OSS via Google Cloud)
  * - Kimi Code
+ * - Cerebras
+ * - Synthetic
  * - Perplexity (Pro/Max — desktop app extraction or manual cookie)
  */
 // Anthropic
 export { loginAnthropic, refreshAnthropicToken } from "./anthropic";
+// Cerebras (API key)
+export { loginCerebras } from "./cerebras";
 // Cursor
 export {
 	generateCursorAuthParams,
@@ -60,6 +64,8 @@ export { loginOpenAICodex, refreshOpenAICodexToken } from "./openai-codex";
 export { loginOpenCode } from "./opencode";
 // Perplexity
 export { loginPerplexity } from "./perplexity";
+// Synthetic (API key)
+export { loginSynthetic } from "./synthetic";
 export * from "./types";
 // Z.AI (API key)
 export { loginZai } from "./zai";
@@ -81,6 +87,11 @@ const builtInOAuthProviders: OAuthProviderInfo[] = [
 		available: true,
 	},
 	{
+		id: "cerebras",
+		name: "Cerebras",
+		available: true,
+	},
+	{
 		id: "github-copilot",
 		name: "GitHub Copilot",
 		available: true,
@@ -98,6 +109,11 @@ const builtInOAuthProviders: OAuthProviderInfo[] = [
 	{
 		id: "cursor",
 		name: "Cursor (Claude, GPT, etc.)",
+		available: true,
+	},
+	{
+		id: "synthetic",
+		name: "Synthetic",
 		available: true,
 	},
 	{
@@ -197,6 +213,8 @@ export async function refreshOAuthToken(
 			break;
 		case "perplexity":
 		case "opencode":
+		case "cerebras":
+		case "synthetic":
 		case "zai":
 		case "minimax-code":
 		case "minimax-code-cn":
