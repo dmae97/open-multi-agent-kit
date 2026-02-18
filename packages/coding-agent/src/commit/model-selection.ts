@@ -5,9 +5,9 @@ import {
 	parseModelPattern,
 	resolveModelFromSettings,
 	resolveModelFromString,
-	SMOL_MODEL_PRIORITY,
 } from "../config/model-resolver";
 import type { Settings } from "../config/settings";
+import MODEL_PRIO from "../priority.json" with { type: "json" };
 
 export async function resolvePrimaryModel(
 	override: string | undefined,
@@ -58,7 +58,7 @@ export async function resolveSmolModel(
 		if (apiKey) return { model: roleModel, apiKey };
 	}
 
-	for (const pattern of SMOL_MODEL_PRIORITY) {
+	for (const pattern of MODEL_PRIO.smol) {
 		const candidate = parseModelPattern(pattern, available, matchPreferences).model;
 		if (!candidate) continue;
 		const apiKey = await modelRegistry.getApiKey(candidate);

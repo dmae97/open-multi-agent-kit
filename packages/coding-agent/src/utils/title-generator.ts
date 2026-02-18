@@ -5,8 +5,9 @@ import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { completeSimple } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { ModelRegistry } from "../config/model-registry";
-import { parseModelString, SMOL_MODEL_PRIORITY } from "../config/model-resolver";
+import { parseModelString } from "../config/model-resolver";
 import { renderPromptTemplate } from "../config/prompt-templates";
+import MODEL_PRIO from "../priority.json" with { type: "json" };
 import titleSystemPrompt from "../prompts/system/title-system.md" with { type: "text" };
 
 const TITLE_SYSTEM_PROMPT = renderPromptTemplate(titleSystemPrompt);
@@ -34,7 +35,7 @@ function getTitleModelCandidates(registry: ModelRegistry, savedSmolModel?: strin
 		}
 	}
 
-	for (const pattern of SMOL_MODEL_PRIORITY) {
+	for (const pattern of MODEL_PRIO.smol) {
 		const needle = pattern.toLowerCase();
 		const exactMatch = availableModels.find(model => model.id.toLowerCase() === needle);
 		addCandidate(exactMatch);

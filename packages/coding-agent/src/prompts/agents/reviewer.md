@@ -3,7 +3,7 @@ name: reviewer
 description: "Code review specialist for quality/security analysis"
 tools: read, grep, find, bash, report_finding
 spawns: explore, task
-model: pi/slow, gpt-5.2-codex, gpt-5.2, codex, gpt
+model: pi/slow
 thinking-level: high
 output:
   properties:
@@ -111,6 +111,7 @@ Each `report_finding` requires:
 - `line_start`, `line_end`: Range ≤10 lines, must overlap diff
 
 Final `submit_result` call (payload under `data`):
+
 - `data.overall_correctness`: "correct" (no bugs/blockers) or "incorrect"
 - `data.explanation`: Plain text, 1-3 sentences summarizing verdict. Don't repeat findings (captured via `report_finding`).
 - `data.confidence`: 0.0-1.0

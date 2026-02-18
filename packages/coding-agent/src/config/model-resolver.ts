@@ -5,6 +5,7 @@ import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { type Api, type KnownProvider, type Model, modelsAreEqual } from "@oh-my-pi/pi-ai";
 import chalk from "chalk";
 import { isValidThinkingLevel } from "../cli/args";
+import MODEL_PRIO from "../priority.json" with { type: "json" };
 import { fuzzyMatch } from "../utils/fuzzy";
 import { MODEL_ROLE_IDS, type ModelRegistry, type ModelRole } from "./model-registry";
 import type { Settings } from "./settings";
@@ -41,47 +42,6 @@ export interface ScopedModel {
 	thinkingLevel?: ThinkingLevel;
 	explicitThinkingLevel: boolean;
 }
-
-/** Priority chain for auto-discovering smol/fast models */
-export const SMOL_MODEL_PRIORITY = [
-	// any spark
-	"gpt-5.3-codex-spark",
-	"gpt-5.3-spark",
-	"spark",
-	// cerebras zai
-	"cerebras/zai-glm-4.7",
-	"cerebras/zai-glm-4.6",
-	"cerebras/zai-glm",
-	// any haiku
-	"haiku-4-5",
-	"haiku-4.5",
-	"haiku",
-	// any flash
-	"flash",
-	// any mini
-	"mini",
-];
-
-/** Priority chain for auto-discovering slow/comprehensive models (reasoning, codex) */
-export const SLOW_MODEL_PRIORITY = [
-	// any codex
-	"gpt-5.3-codex",
-	"gpt-5.3",
-	"gpt-5.2-codex",
-	"gpt-5.2",
-	"gpt-5.1-codex",
-	"gpt-5.1",
-	"codex",
-	// any opus
-	"opus-4.6",
-	"opus-4-6",
-	"opus-4.5",
-	"opus-4-5",
-	"opus-4.1",
-	"opus-4-1",
-	// whatever
-	"pro",
-];
 
 /**
  * Parse a model string in "provider/modelId" format.
