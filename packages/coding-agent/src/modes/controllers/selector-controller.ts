@@ -202,7 +202,7 @@ export class SelectorController {
 				break;
 
 			case "autocompleteMaxVisible":
-				this.ctx.editor.setAutocompleteMaxVisible(value as number);
+				this.ctx.editor.setAutocompleteMaxVisible(typeof value === "number" ? value : Number(value));
 				break;
 
 			// Settings with UI side effects
