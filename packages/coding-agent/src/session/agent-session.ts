@@ -312,6 +312,7 @@ export class AgentSession {
 
 	// Handoff state
 	#handoffAbortController: AbortController | undefined = undefined;
+	#skipPostTurnMaintenanceAssistantTimestamp: number | undefined = undefined;
 
 	// Retry state
 	#retryAbortController: AbortController | undefined = undefined;
@@ -587,6 +588,9 @@ export class AgentSession {
 				this.#lastAssistantMessage = event.message;
 				const assistantMsg = event.message as AssistantMessage;
 				this.#queueDeferredTtsrInjectionIfNeeded(assistantMsg);
+				if (this.#handoffAbortController) {
+					this.#skipPostTurnMaintenanceAssistantTimestamp = assistantMsg.timestamp;
+				}
 				if (
 					assistantMsg.stopReason !== "error" &&
 					assistantMsg.stopReason !== "aborted" &&
@@ -644,6 +648,11 @@ export class AgentSession {
 		if (event.type === "agent_end" && this.#lastAssistantMessage) {
 			const msg = this.#lastAssistantMessage;
 			this.#lastAssistantMessage = undefined;
+
+			if (this.#skipPostTurnMaintenanceAssistantTimestamp === msg.timestamp) {
+				this.#skipPostTurnMaintenanceAssistantTimestamp = undefined;
+				return;
+			}
 
 			// Check for retryable errors first (overloaded, rate limit, server errors)
 			if (this.#isRetryableError(msg)) {
@@ -2803,6 +2812,8 @@ export class AgentSession {
 		if (messageCount < 2) {
 			throw new Error("Nothing to hand off (no messages yet)");
 		}
+
+		this.#skipPostTurnMaintenanceAssistantTimestamp = undefined;
 
 		this.#handoffAbortController = new AbortController();
 
