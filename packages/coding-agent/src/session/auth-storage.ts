@@ -13,6 +13,7 @@ import {
 	kimiUsageProvider,
 	loginAnthropic,
 	loginAntigravity,
+	loginCerebras,
 	loginCursor,
 	loginGeminiCli,
 	loginGitHubCopilot,
@@ -22,6 +23,7 @@ import {
 	loginOpenAICodex,
 	loginOpenCode,
 	loginPerplexity,
+	loginSynthetic,
 	loginZai,
 	type OAuthController,
 	type OAuthCredentials,
@@ -696,6 +698,11 @@ export class AuthStorage {
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
+			case "cerebras": {
+				const apiKey = await loginCerebras(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
 			case "zai": {
 				const apiKey = await loginZai(ctrl);
 				await saveApiKeyCredential(apiKey);
@@ -708,6 +715,11 @@ export class AuthStorage {
 			}
 			case "minimax-code-cn": {
 				const apiKey = await loginMiniMaxCodeCn(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "synthetic": {
+				const apiKey = await loginSynthetic(ctrl);
 				await saveApiKeyCredential(apiKey);
 				return;
 			}

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `/login` support for Cerebras and Synthetic API-key providers
+
 ## [12.10.0] - 2026-02-18
 
 ### Breaking Changes

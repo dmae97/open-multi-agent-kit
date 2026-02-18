@@ -15,6 +15,7 @@ export * from "./providers/google-vertex";
 export * from "./providers/kimi";
 export * from "./providers/openai-completions";
 export * from "./providers/openai-responses";
+export * from "./providers/synthetic";
 export * from "./stream";
 export * from "./types";
 export * from "./usage";

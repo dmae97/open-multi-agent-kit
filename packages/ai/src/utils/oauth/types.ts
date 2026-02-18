@@ -9,11 +9,13 @@ export type OAuthCredentials = {
 };
 export type OAuthProvider =
 	| "anthropic"
+	| "cerebras"
 	| "github-copilot"
 	| "google-gemini-cli"
 	| "google-antigravity"
 	| "kimi-code"
 	| "openai-codex"
+	| "synthetic"
 	| "opencode"
 	| "zai"
 	| "minimax-code"

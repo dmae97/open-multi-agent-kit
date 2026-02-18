@@ -464,6 +464,7 @@ return config
 | Mistral    | `MISTRAL_API_KEY`    |
 | Groq       | `GROQ_API_KEY`       |
 | Cerebras   | `CEREBRAS_API_KEY`   |
+| Synthetic  | `SYNTHETIC_API_KEY`  |
 | xAI        | `XAI_API_KEY`        |
 | OpenRouter | `OPENROUTER_API_KEY` |
 | Z.AI       | `ZAI_API_KEY`        |
@@ -484,6 +485,7 @@ Use `/login` to authenticate with supported providers:
 - Perplexity
 - OpenCode Zen
 - Z.AI (GLM Coding Plan)
+- Synthetic
 - MiniMax Coding Plan (International / China)
 
 ```bash
