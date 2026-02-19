@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [12.12.0] - 2026-02-19
+
 ### Added
 
 - Added PageUp/PageDown navigation for editor content and autocomplete selection to jump across long wrapped inputs faster.

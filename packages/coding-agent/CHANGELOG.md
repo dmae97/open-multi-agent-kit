@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [12.12.0] - 2026-02-19
+
 ### Added
 
 - Display streaming text preview during agent specification generation to show real-time progress
