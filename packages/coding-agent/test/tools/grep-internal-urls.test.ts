@@ -1,12 +1,12 @@
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import { ArtifactProtocolHandler } from "@oh-my-pi/pi-coding-agent/internal-urls/artifact-protocol";
+import { InternalUrlRouter } from "@oh-my-pi/pi-coding-agent/internal-urls/router";
 import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 import { GrepTool } from "@oh-my-pi/pi-coding-agent/tools/grep";
-import { InternalUrlRouter } from "@oh-my-pi/pi-coding-agent/internal-urls/router";
-import { ArtifactProtocolHandler } from "@oh-my-pi/pi-coding-agent/internal-urls/artifact-protocol";
 
 function getResultText(result: { content: Array<{ type: string; text?: string }> }): string {
 	return result.content
@@ -99,9 +99,9 @@ describe("GrepTool internal URL resolution", () => {
 		const session = createSession({ internalRouter: router });
 		const tool = new GrepTool(session);
 
-		expect(
-			tool.execute("test-call", { pattern: "foo", path: "agent://0" }),
-		).rejects.toThrow("Cannot grep internal URL without a backing file");
+		expect(tool.execute("test-call", { pattern: "foo", path: "agent://0" })).rejects.toThrow(
+			"Cannot grep internal URL without a backing file",
+		);
 	});
 
 	it("falls back to normal path resolution when no internalRouter", async () => {
@@ -140,8 +140,8 @@ describe("GrepTool internal URL resolution", () => {
 		const session = createSession({ internalRouter: router });
 		const tool = new GrepTool(session);
 
-		expect(
-			tool.execute("test-call", { pattern: "foo", path: "artifact://999" }),
-		).rejects.toThrow("Artifact 999 not found");
+		expect(tool.execute("test-call", { pattern: "foo", path: "artifact://999" })).rejects.toThrow(
+			"Artifact 999 not found",
+		);
 	});
 });

@@ -55,7 +55,7 @@ Apply precise file edits using `LINE#ID` anchors from `read` output.
 - Never handcraft hashes.
 - For inserts, prefer `after+before` dual anchors when both boundaries are known.
 - Re-read after each successful edit call before issuing another on same file.
-  </anchor_hygiene>
+</anchor_hygiene>
 
 <recovery>
 **Hash mismatch (`>>>`)**
