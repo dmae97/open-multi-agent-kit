@@ -36,6 +36,7 @@ import { mapWithConcurrencyLimit } from "./parallel";
 import { renderCall, renderResult } from "./render";
 import { renderTemplate } from "./template";
 import {
+	type AgentDefinition,
 	type AgentProgress,
 	type SingleResult,
 	type TaskParams,
@@ -109,13 +110,17 @@ export type { AgentDefinition, AgentProgress, SingleResult, TaskParams, TaskTool
 export { taskSchema } from "./types";
 
 /**
- * Build dynamic tool description listing available agents.
+ * Render the tool description from a cached agent list and current settings.
  */
-async function buildDescription(cwd: string, maxConcurrency: number, isolationEnabled: boolean): Promise<string> {
-	const { agents } = await discoverAgents(cwd);
-
+function renderDescription(
+	agents: AgentDefinition[],
+	maxConcurrency: number,
+	isolationEnabled: boolean,
+	disabledAgents: string[],
+): string {
+	const filteredAgents = disabledAgents.length > 0 ? agents.filter(a => !disabledAgents.includes(a.name)) : agents;
 	return renderPromptTemplate(taskDescriptionTemplate, {
-		agents,
+		agents: filteredAgents,
 		MAX_CONCURRENCY: maxConcurrency,
 		isolationEnabled,
 	});
@@ -137,26 +142,33 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 	readonly parameters: TaskSchema;
 	readonly renderCall = renderCall;
 	readonly renderResult = renderResult;
-
+	readonly #discoveredAgents: AgentDefinition[];
 	readonly #blockedAgent: string | undefined;
 
+	/** Dynamic description that reflects current disabled-agent settings */
+	get description(): string {
+		const disabledAgents = this.session.settings.get("task.disabledAgents") as string[];
+		const maxConcurrency = this.session.settings.get("task.maxConcurrency");
+		const isolationEnabled = this.session.settings.get("task.isolation.enabled");
+		return renderDescription(this.#discoveredAgents, maxConcurrency, isolationEnabled, disabledAgents);
+	}
 	private constructor(
 		private readonly session: ToolSession,
-		public readonly description: string,
+		discoveredAgents: AgentDefinition[],
 		isolationEnabled: boolean,
 	) {
 		this.parameters = isolationEnabled ? taskSchema : taskSchemaNoIsolation;
 		this.#blockedAgent = $env.PI_BLOCKED_AGENT;
+		this.#discoveredAgents = discoveredAgents;
 	}
 
 	/**
 	 * Create a TaskTool instance with async agent discovery.
 	 */
 	static async create(session: ToolSession): Promise<TaskTool> {
-		const maxConcurrency = session.settings.get("task.maxConcurrency");
 		const isolationEnabled = session.settings.get("task.isolation.enabled");
-		const description = await buildDescription(session.cwd, maxConcurrency, isolationEnabled);
-		return new TaskTool(session, description, isolationEnabled);
+		const { agents } = await discoverAgents(session.cwd);
+		return new TaskTool(session, agents, isolationEnabled);
 	}
 
 	async execute(
@@ -209,6 +221,25 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 			};
 		}
 
+		// Check if agent is disabled in settings
+		const disabledAgents = this.session.settings.get("task.disabledAgents") as string[];
+		if (disabledAgents.length > 0 && disabledAgents.includes(agentName)) {
+			const enabled = agents.filter(a => !disabledAgents.includes(a.name)).map(a => a.name);
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Agent "${agentName}" is disabled in settings. Enable it via /agents, or use a different agent type.${enabled.length > 0 ? ` Available: ${enabled.join(", ")}` : ""}`,
+					},
+				],
+				details: {
+					projectAgentsDir,
+					results: [],
+					totalDurationMs: 0,
+				},
+			};
+		}
+
 		const planModeState = this.session.getPlanModeState?.();
 		const planModeTools = ["read", "grep", "find", "ls", "lsp", "fetch", "web_search"];
 		const effectiveAgent: typeof agent = planModeState?.enabled
@@ -220,9 +251,15 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 				}
 			: agent;
 
+		// Apply per-agent model override from settings (highest priority)
+		const agentModelOverrides = this.session.settings.get("task.agentModelOverrides") as Record<string, string>;
+		const settingsModelOverride = agentModelOverrides[agentName];
 		const effectiveAgentModel = isDefaultModelAlias(effectiveAgent.model) ? undefined : effectiveAgent.model;
 		const modelOverride =
-			effectiveAgentModel ?? this.session.getActiveModelString?.() ?? this.session.getModelString?.();
+			settingsModelOverride ??
+			effectiveAgentModel ??
+			this.session.getActiveModelString?.() ??
+			this.session.getModelString?.();
 		const thinkingLevelOverride = effectiveAgent.thinkingLevel;
 
 		// Output schema priority: agent frontmatter > params > inherited from parent session

@@ -536,6 +536,14 @@ export const SETTINGS_SCHEMA = {
 			submenu: true,
 		},
 	},
+	"task.disabledAgents": {
+		type: "array",
+		default: [] as string[],
+	},
+	"task.agentModelOverrides": {
+		type: "record",
+		default: {} as Record<string, string>,
+	},
 
 	// ─────────────────────────────────────────────────────────────────────────
 	// Startup settings
