@@ -19,6 +19,7 @@ import {
 	type CustomCommandsLoadResult,
 	loadCustomCommands as loadCustomCommandsInternal,
 } from "./extensibility/custom-commands";
+import { discoverAndLoadCustomTools } from "./extensibility/custom-tools";
 import type { CustomTool, CustomToolContext, CustomToolSessionEvent } from "./extensibility/custom-tools/types";
 import { CustomToolAdapter } from "./extensibility/custom-tools/wrapper";
 import {
@@ -39,6 +40,7 @@ import { type FileSlashCommand, loadSlashCommands as loadSlashCommandsInternal }
 import {
 	AgentProtocolHandler,
 	ArtifactProtocolHandler,
+	DocsProtocolHandler,
 	InternalUrlRouter,
 	MemoryProtocolHandler,
 	PlanProtocolHandler,
@@ -770,6 +772,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			getRules: () => rulebookRules,
 		}),
 	);
+	internalRouter.register(new DocsProtocolHandler());
 	toolSession.internalRouter = internalRouter;
 	toolSession.getArtifactsDir = getArtifactsDir;
 	toolSession.agentOutputManager = new AgentOutputManager(
@@ -847,6 +850,19 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		}
 		time("getSearchTools");
 	}
+
+	debugStartup("sdk:discoverCustomTools:start");
+	// Discover and load custom tools from .omp/tools/, .claude/tools/, etc.
+	const builtInToolNames = builtinTools.map(t => t.name);
+	const discoveredCustomTools = await discoverAndLoadCustomTools([], cwd, builtInToolNames);
+	for (const { path, error } of discoveredCustomTools.errors) {
+		logger.error("Custom tool load failed", { path, error });
+	}
+	if (discoveredCustomTools.tools.length > 0) {
+		customTools.push(...discoveredCustomTools.tools.map(loaded => loaded.tool));
+	}
+	time("discoverAndLoadCustomTools");
+	debugStartup("sdk:discoverCustomTools:done");
 
 	const inlineExtensions: ExtensionFactory[] = options.extensions ? [...options.extensions] : [];
 	if (customTools.length > 0) {

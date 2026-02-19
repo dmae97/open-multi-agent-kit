@@ -8,7 +8,7 @@ Executes bash command in shell session for terminal operations like git, bun, ca
 - `skill://` URIs are auto-resolved to filesystem paths before execution
 	- `python skill://my-skill/scripts/init.py` runs the script from the skill directory
 	- `skill://<name>/<relative-path>` resolves within the skill's base directory
-- `agent://`, `artifact://`, `plan://`, `memory://`, and `rule://` URIs are also auto-resolved to filesystem paths before execution
+- `agent://`, `artifact://`, `plan://`, `memory://`, `rule://`, and `docs://` URIs are also auto-resolved to filesystem paths before execution
 </instruction>
 
 <output>

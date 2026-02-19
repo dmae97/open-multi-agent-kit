@@ -23,6 +23,8 @@ Reads files from local filesystem or internal URLs.
   - `memory://root/<path>` - read relative path within project memory root
   - `agent://<id>` - read agent output artifact
   - `agent://<id>/<path>` or `agent://<id>?q=<query>` - extract JSON from agent output
+  - `docs://` - list available pi documentation files
+  - `docs://<file>.md` - read a specific pi documentation file
 </instruction>
 
 <output>

@@ -656,7 +656,7 @@ async function loadTools(ctx: LoadContext): Promise<LoadResult<CustomTool>> {
 
 		fileLoadPromises.push(
 			loadFilesFromDir<CustomTool>(ctx, toolsDir, PROVIDER_ID, level, {
-				extensions: ["json", "md"],
+				extensions: ["json", "md", "ts", "js", "sh", "bash", "py"],
 				transform: (name, content, path, source) => {
 					if (name.endsWith(".json")) {
 						const data = parseJSON<{ name?: string; description?: string }>(content);
@@ -668,11 +668,21 @@ async function loadTools(ctx: LoadContext): Promise<LoadResult<CustomTool>> {
 							_source: source,
 						};
 					}
-					const { frontmatter } = parseFrontmatter(content, { source: path });
+					if (name.endsWith(".md")) {
+						const { frontmatter } = parseFrontmatter(content, { source: path });
+						return {
+							name: (frontmatter.name as string) || name.replace(/\.md$/, ""),
+							path,
+							description: frontmatter.description as string | undefined,
+							level,
+							_source: source,
+						};
+					}
+					// Executable tool files (.ts, .js, .sh, .bash, .py)
+					const toolName = name.replace(/\.(ts|js|sh|bash|py)$/, "");
 					return {
-						name: (frontmatter.name as string) || name.replace(/\.md$/, ""),
+						name: toolName,
 						path,
-						description: frontmatter.description as string | undefined,
 						level,
 						_source: source,
 					};

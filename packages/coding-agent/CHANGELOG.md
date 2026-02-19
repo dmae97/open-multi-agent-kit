@@ -1,8 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Support for `docs://` internal URL protocol to access embedded documentation files (e.g., `docs://sdk.md`)
+- Added `generate-docs-index` npm script to automatically index and embed documentation files at build time
+- Support for executable tool files (.ts, .js, .sh, .bash, .py) in custom tools discovery alongside markdown files
 - Display streamed tool intent in working message during agent execution
 - Added `tools.intentTracing` setting to enable intent tracing, which asks the agent to describe the intent of each tool call before executing it
 - Support for file deletion in hashline edit mode via `delete: true` parameter
@@ -12,6 +16,9 @@
 
 ### Changed
 
+- System prompt now identifies agent as operating inside Oh My Pi harness and instructs reading docs:// URLs for omp/pi topics
+- Tool discovery now accepts executable script extensions (.ts, .js, .sh, .bash, .py) in addition to .json and .md files
+- Updated bash and read tool documentation to reference `docs://` URL support
 - Hashline format separator changed from pipe (`|`) to colon (`:`) for improved readability (e.g., `LINE#ID:content` instead of `LINE#ID|content`)
 - Hashline hash representation changed from 4-character base36 to 2-character hexadecimal for more compact line references
 - Hashline edit API: renamed `delete` parameter to `rm` for consistency with standard file operations

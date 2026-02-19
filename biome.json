@@ -44,6 +44,7 @@
 			"!**/node_modules/**/*",
 			"!**/test-sessions.ts",
 			"!**/template.generated.ts",
+			"!**/docs-index.generated.ts",
 			"!**/gen/agent_pb.ts",
 			"!.worktrees/**/*"
 		]

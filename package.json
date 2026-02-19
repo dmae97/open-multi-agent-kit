@@ -20,7 +20,7 @@
 		"fmt:ts": "biome format --write .",
 		"fmt:rs": "cargo fmt --all",
 		"fix": "bun run fix:ts && bun run fix:rs",
-		"fix:ts": "biome check --write --unsafe . && bun --cwd=packages/coding-agent run format-prompts",
+		"fix:ts": "biome check --write --unsafe . && bun --cwd=packages/coding-agent run format-prompts && bun --cwd=packages/coding-agent run generate-docs-index",
 		"fix:rs": "cargo clippy --fix --allow-dirty --all-targets --no-deps --allow-staged --broken-code --allow-no-vcs && cargo fmt --all",
 		"build:native": "bun --cwd=packages/natives run build:native",
 		"dev:native": "bun --cwd=packages/natives run dev:native",
@@ -34,7 +34,8 @@
 		"publish": "bun run prepublishOnly && npm publish -ws --access public",
 		"publish:dry": "bun run prepublishOnly && npm publish -ws --access public --dry-run",
 		"release": "bun scripts/release.ts",
-		"generate-models": "bun --cwd=packages/ai scripts/generate-models.ts"
+		"generate-models": "bun --cwd=packages/ai scripts/generate-models.ts",
+		"generate-docs-index": "bun --cwd=packages/coding-agent run generate-docs-index",
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.2",

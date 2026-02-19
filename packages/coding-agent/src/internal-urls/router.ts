@@ -1,5 +1,5 @@
 /**
- * Internal URL router for internal protocols (agent://, artifact://, plan://, memory://, skill://, rule://).
+ * Internal URL router for internal protocols (agent://, artifact://, plan://, memory://, skill://, rule://, docs://).
  */
 import type { InternalResource, InternalUrl, ProtocolHandler } from "./types";
 
