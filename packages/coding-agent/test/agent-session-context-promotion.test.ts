@@ -106,7 +106,7 @@ describe("AgentSession context promotion", () => {
 
 	it("clears codex provider session state on manual setModel switch away from codex", async () => {
 		const codexModel = modelRegistry.find("openai-codex", "gpt-5.3-codex");
-		const nonCodexModel = modelRegistry.getAvailable().find(model => model.api !== "openai-codex-responses");
+		const nonCodexModel = modelRegistry.getAll().find(model => model.api !== "openai-codex-responses");
 		if (!codexModel || !nonCodexModel) {
 			throw new Error("Expected codex and non-codex models to exist");
 		}
@@ -143,7 +143,7 @@ describe("AgentSession context promotion", () => {
 
 	it("clears codex provider session state on manual temporary switch into codex", async () => {
 		const codexModel = modelRegistry.find("openai-codex", "gpt-5.3-codex");
-		const nonCodexModel = modelRegistry.getAvailable().find(model => model.api !== "openai-codex-responses");
+		const nonCodexModel = modelRegistry.getAll().find(model => model.api !== "openai-codex-responses");
 		if (!codexModel || !nonCodexModel) {
 			throw new Error("Expected codex and non-codex models to exist");
 		}
