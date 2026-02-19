@@ -1,10 +1,11 @@
 /**
  * SSH JSON Provider
  *
- * Discovers SSH hosts from ssh.json or .ssh.json in the project root.
- * Priority: 5 (low, project-level only)
+ * Discovers SSH hosts from managed omp config paths and legacy root ssh.json files.
+ * Priority: 5 (low, project/user config discovery)
  */
 import * as path from "node:path";
+import { getSSHConfigPath } from "@oh-my-pi/pi-utils/dirs";
 import { registerProvider } from "../capability";
 import { readFile } from "../capability/fs";
 import { type SSHHost, sshCapability } from "../capability/ssh";
@@ -90,38 +91,39 @@ function normalizeHost(
 	};
 }
 
-async function loadSshJsonFile(_ctx: LoadContext, path: string): Promise<LoadResult<SSHHost>> {
+async function loadSshJsonFile(
+	ctx: LoadContext,
+	filePath: string,
+	level: "user" | "project",
+): Promise<LoadResult<SSHHost>> {
 	const items: SSHHost[] = [];
 	const warnings: string[] = [];
-
-	const content = await readFile(path);
+	const content = await readFile(filePath);
 	if (content === null) {
 		return { items, warnings };
 	}
-
 	const parsed = parseJSON<SSHConfigFile>(content);
 	if (!parsed) {
-		warnings.push(`Failed to parse JSON in ${path}`);
+		warnings.push(`Failed to parse JSON in ${filePath}`);
 		return { items, warnings };
 	}
-
 	const config = expandEnvVarsDeep(parsed);
 	if (!config.hosts || typeof config.hosts !== "object") {
-		warnings.push(`Missing hosts in ${path}`);
+		warnings.push(`Missing hosts in ${filePath}`);
 		return { items, warnings };
 	}
 
-	const source = createSourceMeta(PROVIDER_ID, path, "project");
+	const source = createSourceMeta(PROVIDER_ID, filePath, level);
 	for (const [name, rawHost] of Object.entries(config.hosts)) {
 		if (!name.trim()) {
-			warnings.push(`Invalid SSH host name in ${path}`);
+			warnings.push(`Invalid SSH host name in ${filePath}`);
 			continue;
 		}
 		if (!rawHost || typeof rawHost !== "object") {
-			warnings.push(`Invalid host entry in ${path}: ${name}`);
+			warnings.push(`Invalid host entry in ${filePath}: ${name}`);
 			continue;
 		}
-		const host = normalizeHost(name, rawHost, source, _ctx.home, warnings);
+		const host = normalizeHost(name, rawHost, source, ctx.home, warnings);
 		if (host) items.push(host);
 	}
 
@@ -130,14 +132,19 @@ async function loadSshJsonFile(_ctx: LoadContext, path: string): Promise<LoadRes
 		warnings: warnings.length > 0 ? warnings : undefined,
 	};
 }
-
 async function load(ctx: LoadContext): Promise<LoadResult<SSHHost>> {
-	const filenames = ["ssh.json", ".ssh.json"];
-	const results = await Promise.all(filenames.map(filename => loadSshJsonFile(ctx, path.join(ctx.cwd, filename))));
-
+	const candidateSources: Array<{ path: string; level: "user" | "project" }> = [
+		{ path: getSSHConfigPath("project", ctx.cwd), level: "project" },
+		{ path: getSSHConfigPath("user", ctx.cwd), level: "user" },
+		{ path: path.join(ctx.cwd, "ssh.json"), level: "project" },
+		{ path: path.join(ctx.cwd, ".ssh.json"), level: "project" },
+	];
+	const uniqueSources = candidateSources.filter(
+		(source, index, arr) => arr.findIndex(candidate => candidate.path === source.path) === index,
+	);
+	const results = await Promise.all(uniqueSources.map(source => loadSshJsonFile(ctx, source.path, source.level)));
 	const allItems = results.flatMap(r => r.items);
 	const allWarnings = results.flatMap(r => r.warnings ?? []);
-
 	return {
 		items: allItems,
 		warnings: allWarnings.length > 0 ? allWarnings : undefined,
@@ -147,7 +154,7 @@ async function load(ctx: LoadContext): Promise<LoadResult<SSHHost>> {
 registerProvider(sshCapability.id, {
 	id: PROVIDER_ID,
 	displayName: DISPLAY_NAME,
-	description: "Load SSH hosts from ssh.json or .ssh.json in the project root",
+	description: "Load SSH hosts from managed omp paths and legacy ssh.json/.ssh.json files",
 	priority: 5,
 	load,
 });
