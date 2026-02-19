@@ -12,6 +12,7 @@ import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
 import type { SearchParams } from "./base";
 import { SearchProvider } from "./base";
+
 const KIMI_SEARCH_URL = "https://api.kimi.com/coding/v1/search";
 
 const DEFAULT_NUM_RESULTS = 10;
@@ -49,7 +50,6 @@ function asTrimmed(value: string | undefined): string | undefined {
 function resolveBaseUrl(): string {
 	return asTrimmed($env.MOONSHOT_SEARCH_BASE_URL) ?? asTrimmed($env.KIMI_SEARCH_BASE_URL) ?? KIMI_SEARCH_URL;
 }
-
 
 function clampNumResults(value: number | undefined): number {
 	if (!value || Number.isNaN(value)) return DEFAULT_NUM_RESULTS;
@@ -99,7 +99,6 @@ async function findApiKey(): Promise<string | null> {
 
 	return null;
 }
-
 
 async function callKimiSearch(
 	apiKey: string,

@@ -33,9 +33,12 @@ import { SearchProviderError } from "./types";
 export const webSearchSchema = Type.Object({
 	query: Type.String({ description: "Search query" }),
 	provider: Type.Optional(
-		StringEnum(["auto", "exa", "brave", "jina", "kimi", "zai", "anthropic", "perplexity", "gemini", "codex", "synthetic"], {
-			description: "Search provider (default: auto)",
-		}),
+		StringEnum(
+			["auto", "exa", "brave", "jina", "kimi", "zai", "anthropic", "perplexity", "gemini", "codex", "synthetic"],
+			{
+				description: "Search provider (default: auto)",
+			},
+		),
 	),
 	recency: Type.Optional(
 		StringEnum(["day", "week", "month", "year"], {
@@ -47,7 +50,18 @@ export const webSearchSchema = Type.Object({
 
 export type SearchParams = {
 	query: string;
-	provider?: "auto" | "exa" | "brave" | "jina" | "kimi" | "zai" | "anthropic" | "perplexity" | "gemini" | "codex" | "synthetic";
+	provider?:
+		| "auto"
+		| "exa"
+		| "brave"
+		| "jina"
+		| "kimi"
+		| "zai"
+		| "anthropic"
+		| "perplexity"
+		| "gemini"
+		| "codex"
+		| "synthetic";
 	recency?: "day" | "week" | "month" | "year";
 	limit?: number;
 	/** Maximum output tokens. Defaults to 4096. */
