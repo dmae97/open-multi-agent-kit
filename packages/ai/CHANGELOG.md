@@ -1,10 +1,21 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added `gemini-3.1-pro` model to opencode provider with text and image input support
+- Added `trinity-large-preview-free` model to opencode provider
+- Added `google/gemini-3.1-pro-preview` model to nanogpt provider
+- Added `google/gemini-3.1-pro-preview` model to openrouter provider with text and image input support
+- Added `gemini-3.1-pro` model to cursor provider
 - Added optional `intent` field to `ToolCall` interface for harness-level intent metadata
+
+### Changed
+
+- Changed `big-pickle` model API from `openai-completions` to `anthropic-messages`
+- Changed `big-pickle` model baseUrl from `https://opencode.ai/zen/v1` to `https://opencode.ai/zen`
+- Changed `minimax-m2.5-free` model API from `openai-completions` to `anthropic-messages`
+- Changed `minimax-m2.5-free` model baseUrl from `https://opencode.ai/zen/v1` to `https://opencode.ai/zen`
 
 ### Fixed
 

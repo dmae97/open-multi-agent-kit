@@ -2172,9 +2172,9 @@
 		"big-pickle": {
 			"id": "big-pickle",
 			"name": "Big Pickle",
-			"api": "openai-completions",
+			"api": "anthropic-messages",
 			"provider": "opencode",
-			"baseUrl": "https://opencode.ai/zen/v1",
+			"baseUrl": "https://opencode.ai/zen",
 			"reasoning": true,
 			"input": [
 				"text"
@@ -2371,6 +2371,26 @@
 		"gemini-3-pro": {
 			"id": "gemini-3-pro",
 			"name": "Gemini 3 Pro",
+			"api": "google-generative-ai",
+			"provider": "opencode",
+			"baseUrl": "https://opencode.ai/zen/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 2,
+				"output": 12,
+				"cacheRead": 0.2,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 65536
+		},
+		"gemini-3.1-pro": {
+			"id": "gemini-3.1-pro",
+			"name": "Gemini 3.1 Pro",
 			"api": "google-generative-ai",
 			"provider": "opencode",
 			"baseUrl": "https://opencode.ai/zen/v1",
@@ -2763,9 +2783,9 @@
 		"minimax-m2.5-free": {
 			"id": "minimax-m2.5-free",
 			"name": "MiniMax M2.5 Free",
-			"api": "openai-completions",
+			"api": "anthropic-messages",
 			"provider": "opencode",
-			"baseUrl": "https://opencode.ai/zen/v1",
+			"baseUrl": "https://opencode.ai/zen",
 			"reasoning": true,
 			"input": [
 				"text"
@@ -2777,6 +2797,25 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 204800,
+			"maxTokens": 131072
+		},
+		"trinity-large-preview-free": {
+			"id": "trinity-large-preview-free",
+			"name": "Trinity Large Preview",
+			"api": "openai-completions",
+			"provider": "opencode",
+			"baseUrl": "https://opencode.ai/zen/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 131072,
 			"maxTokens": 131072
 		}
 	},
@@ -11748,6 +11787,25 @@
 			"contextWindow": 222222,
 			"maxTokens": 8888
 		},
+		"google/gemini-3.1-pro-preview": {
+			"id": "google/gemini-3.1-pro-preview",
+			"name": "google/gemini-3.1-pro-preview",
+			"api": "openai-completions",
+			"provider": "nanogpt",
+			"baseUrl": "https://nano-gpt.com/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
 		"google/gemini-flash-1.5": {
 			"id": "google/gemini-flash-1.5",
 			"name": "google/gemini-flash-1.5",
@@ -19395,6 +19453,26 @@
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 2,
+				"output": 12,
+				"cacheRead": 0.19999999999999998,
+				"cacheWrite": 0.375
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 65536
+		},
+		"google/gemini-3.1-pro-preview": {
+			"id": "google/gemini-3.1-pro-preview",
+			"name": "Google: Gemini 3.1 Pro Preview",
+			"api": "openai-completions",
+			"provider": "openrouter",
+			"baseUrl": "https://openrouter.ai/api/v1",
 			"reasoning": true,
 			"input": [
 				"text",
@@ -27789,6 +27867,25 @@
 			},
 			"contextWindow": 1048576,
 			"maxTokens": 65535
+		},
+		"gemini-3.1-pro": {
+			"id": "gemini-3.1-pro",
+			"name": "Gemini 3.1 Pro",
+			"api": "cursor-agent",
+			"provider": "cursor",
+			"baseUrl": "https://api2.cursor.sh",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 200000,
+			"maxTokens": 64000
 		},
 		"gpt-5.1-codex-max": {
 			"id": "gpt-5.1-codex-max",
