@@ -402,7 +402,9 @@ function createClient(
 }
 
 function buildParams(model: Model<"openai-responses">, context: Context, options?: OpenAIResponsesOptions) {
-	const strictResponsesPairing = options?.strictResponsesPairing ?? (isAzureOpenAIBaseUrl(model.baseUrl ?? "") || model.provider === "github-copilot");
+	const strictResponsesPairing =
+		options?.strictResponsesPairing ??
+		(isAzureOpenAIBaseUrl(model.baseUrl ?? "") || model.provider === "github-copilot");
 	const messages = convertMessages(model, context, strictResponsesPairing);
 
 	const cacheRetention = resolveCacheRetention(options?.cacheRetention);

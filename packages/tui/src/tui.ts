@@ -968,37 +968,33 @@ export class TUI extends Container {
 		// All changes are in deleted lines (nothing to render, just clear)
 		if (firstChanged >= newLines.length) {
 			const targetRow = Math.max(0, newLines.length - 1);
-			if (this.#previousLines.length > newLines.length) {
-				let buffer = "\x1b[?2026h";
-				const lineDiff = computeLineDiff(targetRow);
-				if (lineDiff > 0) buffer += `\x1b[${lineDiff}B`;
-				else if (lineDiff < 0) buffer += `\x1b[${-lineDiff}A`;
-				buffer += "\r";
-				// Clear extra lines without scrolling
-				const extraLines = this.#previousLines.length - newLines.length;
-				if (extraLines > height) {
-					logRedraw(`extraLines > height (${extraLines} > ${height})`);
-					fullRender(true);
-					return;
-				}
-				if (extraLines > 0) {
-					buffer += "\x1b[1B";
-				}
-				for (let i = 0; i < extraLines; i++) {
-					buffer += "\r\x1b[2K";
-					if (i < extraLines - 1) buffer += "\x1b[1B";
-				}
-				if (extraLines > 0) {
-					buffer += `\x1b[${extraLines}A`;
-				}
-				const cursorUpdate = this.#buildHardwareCursorSequence(cursorPos, newLines.length, targetRow);
-				buffer += cursorUpdate.sequence;
-				buffer += "\x1b[?2026l";
-				this.terminal.write(buffer);
-				this.#hardwareCursorRow = cursorUpdate.row;
-			} else {
-				this.#positionHardwareCursor(cursorPos, newLines.length);
+			let buffer = "\x1b[?2026h";
+			const lineDiff = computeLineDiff(targetRow);
+			if (lineDiff > 0) buffer += `\x1b[${lineDiff}B`;
+			else if (lineDiff < 0) buffer += `\x1b[${-lineDiff}A`;
+			buffer += "\r";
+			// Clear extra lines without scrolling
+			const extraLines = this.#previousLines.length - newLines.length;
+			if (extraLines > height) {
+				logRedraw(`extraLines > height (${extraLines} > ${height})`);
+				fullRender(true);
+				return;
 			}
+			if (extraLines > 0) {
+				buffer += "\x1b[1B";
+			}
+			for (let i = 0; i < extraLines; i++) {
+				buffer += "\r\x1b[2K";
+				if (i < extraLines - 1) buffer += "\x1b[1B";
+			}
+			if (extraLines > 0) {
+				buffer += `\x1b[${extraLines}A`;
+			}
+			const cursorUpdate = this.#buildHardwareCursorSequence(cursorPos, newLines.length, targetRow);
+			buffer += cursorUpdate.sequence;
+			buffer += "\x1b[?2026l";
+			this.terminal.write(buffer);
+			this.#hardwareCursorRow = cursorUpdate.row;
 			this.#cursorRow = targetRow;
 			this.#previousLines = newLines;
 			this.#previousWidth = width;

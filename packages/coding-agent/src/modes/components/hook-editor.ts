@@ -60,6 +60,12 @@ export class HookEditorComponent extends Container {
 			return;
 		}
 
+		// Plain Enter inserts a new line in hook editor
+		if (matchesKey(keyData, "enter") || matchesKey(keyData, "return") || keyData === "\n") {
+			this.#editor.handleInput("\n");
+			return;
+		}
+
 		// Escape to cancel
 		if (matchesKey(keyData, "escape") || matchesKey(keyData, "esc")) {
 			this.#onCancelCallback();
