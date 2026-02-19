@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added agent creation flow (press N in dashboard) to generate custom agents from natural language descriptions
+- Added ability to save generated agents to project or user scope with automatic identifier and system prompt generation
+- Added scope toggle (Tab) during agent creation to choose between project-level and user-level agent storage
+- Added agent regeneration (R key) to refine generated specifications without restarting the creation flow
+- Added model suggestions in model override editor to help users discover available models
+- Added success notices to confirm agent creation and model override updates
 
 ### Fixed
 

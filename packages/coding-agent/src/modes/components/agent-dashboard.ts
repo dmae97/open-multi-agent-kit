@@ -10,9 +10,13 @@
  * - Tab / Shift+Tab: switch source tab
  * - Space: enable/disable selected agent
  * - Enter: edit model override for selected agent
+ * - N: start agent creation flow
  * - Esc: clear search (if any) or close dashboard
  * - Ctrl+R: reload discovered agents
  */
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import {
 	type Component,
 	Container,
@@ -26,9 +30,16 @@ import {
 	visibleWidth,
 	wrapTextWithAnsi,
 } from "@oh-my-pi/pi-tui";
+import { isEnoent } from "@oh-my-pi/pi-utils";
+import { YAML } from "bun";
+import { getConfigDirs } from "../../config";
 import type { ModelRegistry } from "../../config/model-registry";
 import { formatModelString, isDefaultModelAlias, resolveModelOverride } from "../../config/model-resolver";
+import { renderPromptTemplate } from "../../config/prompt-templates";
 import { Settings } from "../../config/settings";
+import agentCreationArchitectPrompt from "../../prompts/system/agent-creation-architect.md" with { type: "text" };
+import agentCreationUserPrompt from "../../prompts/system/agent-creation-user.md" with { type: "text" };
+import { createAgentSession } from "../../sdk";
 import { discoverAgents } from "../../task/discovery";
 import type { AgentDefinition, AgentSource } from "../../task/types";
 import { shortenPath } from "../../tools/render-utils";
@@ -36,6 +47,7 @@ import { theme } from "../theme/theme";
 import { DynamicBorder } from "./dynamic-border";
 
 type SourceTabId = "all" | AgentSource;
+type AgentScope = "project" | "user";
 
 interface SourceTab {
 	id: SourceTabId;
@@ -51,6 +63,12 @@ interface DashboardAgent extends AgentDefinition {
 interface ModelResolution {
 	resolved: string;
 	thinkingLevel?: string;
+}
+
+interface GeneratedAgentSpec {
+	identifier: string;
+	whenToUse: string;
+	systemPrompt: string;
 }
 
 interface AgentDashboardModelContext {
@@ -70,6 +88,8 @@ const SOURCE_LABEL: Record<AgentSource, string> = {
 	user: "User",
 	bundled: "Bundled",
 };
+
+const IDENTIFIER_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+){1,5}$/;
 
 function normalizeModelPatterns(value: string | string[] | undefined): string[] {
 	if (Array.isArray(value)) {
@@ -96,6 +116,69 @@ function matchAgent(agent: DashboardAgent, query: string): boolean {
 	if (SOURCE_LABEL[agent.source].toLowerCase().includes(q)) return true;
 	if (agent.overrideModel?.toLowerCase().includes(q)) return true;
 	return false;
+}
+
+function extractAssistantText(messages: AgentMessage[]): string | null {
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const message = messages[i];
+		if (!message || message.role !== "assistant") continue;
+		const blocks = message.content;
+		if (!Array.isArray(blocks)) continue;
+		const text = blocks
+			.map(block => {
+				if (!block || typeof block !== "object") return "";
+				if (!("type" in block) || (block as { type?: unknown }).type !== "text") return "";
+				const value = (block as { text?: unknown }).text;
+				return typeof value === "string" ? value : "";
+			})
+			.join("\n")
+			.trim();
+		if (text.length > 0) return text;
+	}
+	return null;
+}
+
+function extractJsonObject(raw: string): string {
+	const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+	if (fenceMatch?.[1]) {
+		return fenceMatch[1].trim();
+	}
+	const start = raw.indexOf("{");
+	const end = raw.lastIndexOf("}");
+	if (start >= 0 && end >= start) {
+		return raw.slice(start, end + 1).trim();
+	}
+	return raw.trim();
+}
+
+function parseGeneratedAgentSpec(raw: string): GeneratedAgentSpec {
+	const parsed = JSON.parse(extractJsonObject(raw)) as Partial<GeneratedAgentSpec>;
+	if (!parsed || typeof parsed !== "object") {
+		throw new Error("Model output is not a JSON object");
+	}
+	if (
+		typeof parsed.identifier !== "string" ||
+		typeof parsed.whenToUse !== "string" ||
+		typeof parsed.systemPrompt !== "string"
+	) {
+		throw new Error("Model output is missing required fields (identifier, whenToUse, systemPrompt)");
+	}
+
+	const identifier = parsed.identifier.trim();
+	const whenToUse = parsed.whenToUse.trim();
+	const systemPrompt = parsed.systemPrompt.trim();
+
+	if (!IDENTIFIER_PATTERN.test(identifier)) {
+		throw new Error("Generated identifier is invalid (must be lowercase kebab-case, 2+ words)");
+	}
+	if (!whenToUse.toLowerCase().startsWith("use this agent when")) {
+		throw new Error("Generated whenToUse must start with 'Use this agent when...'");
+	}
+	if (!systemPrompt) {
+		throw new Error("Generated systemPrompt is empty");
+	}
+
+	return { identifier, whenToUse, systemPrompt };
 }
 
 class AgentListPane implements Component {
@@ -258,8 +341,17 @@ export class AgentDashboard extends Container {
 	#searchQuery = "";
 	#loading = true;
 	#loadError: string | null = null;
+	#notice: string | null = null;
+
 	#editInput: Input | null = null;
 	#editingAgentName: string | null = null;
+
+	#createInput: Input | null = null;
+	#createDescription = "";
+	#createScope: AgentScope = "project";
+	#createGenerating = false;
+	#createSpec: GeneratedAgentSpec | null = null;
+	#createError: string | null = null;
 
 	onClose?: () => void;
 
@@ -430,7 +522,7 @@ export class AgentDashboard extends Container {
 	#beginModelEdit(): void {
 		const selected = this.#selectedAgent();
 		if (!selected) return;
-
+		this.#createError = null;
 		this.#editingAgentName = selected.name;
 		this.#editInput = new Input();
 		if (selected.overrideModel) {
@@ -452,6 +544,7 @@ export class AgentDashboard extends Container {
 		this.#editingAgentName = null;
 		this.#editInput = null;
 		this.#applyFilters();
+		this.#notice = `Updated model override for ${selected.name}`;
 		this.#buildLayout();
 	}
 
@@ -459,6 +552,166 @@ export class AgentDashboard extends Container {
 		this.#editingAgentName = null;
 		this.#editInput = null;
 		this.#buildLayout();
+	}
+
+	#beginCreateFlow(): void {
+		if (this.#createGenerating) return;
+		this.#createError = null;
+		this.#createSpec = null;
+		this.#createDescription = "";
+		this.#createInput = new Input();
+		this.#createInput.onSubmit = value => {
+			void this.#generateAgentFromDescription(value);
+		};
+		this.#buildLayout();
+	}
+
+	#clearCreateFlow(): void {
+		this.#createInput = null;
+		this.#createDescription = "";
+		this.#createGenerating = false;
+		this.#createSpec = null;
+		this.#createError = null;
+	}
+
+	#toggleCreateScope(): void {
+		this.#createScope = this.#createScope === "project" ? "user" : "project";
+		this.#buildLayout();
+	}
+
+	async #generateAgentFromDescription(rawDescription: string): Promise<void> {
+		const description = rawDescription.trim();
+		this.#createDescription = description;
+		if (!description) {
+			this.#createError = "Description is required.";
+			this.#buildLayout();
+			return;
+		}
+
+		this.#createGenerating = true;
+		this.#createError = null;
+		this.#createSpec = null;
+		this.#buildLayout();
+
+		try {
+			const spec = await this.#runAgentCreationArchitect(description);
+			this.#createSpec = spec;
+			this.#notice = null;
+		} catch (error) {
+			this.#createError = error instanceof Error ? error.message : String(error);
+		} finally {
+			this.#createGenerating = false;
+			this.#buildLayout();
+		}
+	}
+
+	async #runAgentCreationArchitect(description: string): Promise<GeneratedAgentSpec> {
+		const modelRegistry = this.modelContext.modelRegistry;
+		if (!modelRegistry) {
+			throw new Error("Model registry unavailable in current session.");
+		}
+		await modelRegistry.refresh();
+
+		const settings = this.#settingsManager ?? undefined;
+		const modelPatterns = normalizeModelPatterns(
+			this.modelContext.activeModelPattern ??
+				this.modelContext.defaultModelPattern ??
+				settings?.getModelRole("default"),
+		);
+		const { model } = resolveModelOverride(modelPatterns, modelRegistry, settings);
+		const fallbackModel = modelRegistry.getAvailable()[0];
+		const selectedModel = model ?? fallbackModel;
+		if (!selectedModel) {
+			throw new Error("No available model to generate agent specification.");
+		}
+
+		const systemPrompt = renderPromptTemplate(agentCreationArchitectPrompt, { TASK_TOOL_NAME: "task" });
+		const userPrompt = renderPromptTemplate(agentCreationUserPrompt, { request: description });
+
+		const { session } = await createAgentSession({
+			cwd: this.cwd,
+			authStorage: modelRegistry.authStorage,
+			modelRegistry,
+			settings,
+			model: selectedModel,
+			systemPrompt,
+			hasUI: false,
+			enableLsp: false,
+			enableMCP: false,
+			disableExtensionDiscovery: true,
+			toolNames: ["__none__"],
+			customTools: [],
+			skills: [],
+			contextFiles: [],
+			promptTemplates: [],
+			slashCommands: [],
+		});
+
+		try {
+			await session.prompt(userPrompt, { expandPromptTemplates: false });
+			const raw = extractAssistantText(session.state.messages);
+			if (!raw) {
+				throw new Error("No response returned by agent creation architect.");
+			}
+			return parseGeneratedAgentSpec(raw);
+		} finally {
+			await session.dispose();
+		}
+	}
+
+	async #saveGeneratedAgent(): Promise<void> {
+		const spec = this.#createSpec;
+		if (!spec) return;
+
+		const dirs = getConfigDirs("agents", {
+			user: this.#createScope === "user",
+			project: this.#createScope === "project",
+			cwd: this.cwd,
+		});
+		const targetDir = dirs[0]?.path;
+		if (!targetDir) {
+			throw new Error(`Cannot resolve ${this.#createScope} agents directory.`);
+		}
+
+		const filePath = path.join(targetDir, `${spec.identifier}.md`);
+		try {
+			await fs.stat(filePath);
+			throw new Error(`Agent file already exists: ${shortenPath(filePath)}`);
+		} catch (error) {
+			if (!isEnoent(error)) {
+				throw error;
+			}
+		}
+
+		const frontmatter = YAML.stringify({
+			name: spec.identifier,
+			description: spec.whenToUse,
+		}).trimEnd();
+		const content = `---\n${frontmatter}\n---\n\n${spec.systemPrompt.trim()}\n`;
+		await Bun.write(filePath, content);
+		await this.#reloadData();
+		this.#clearCreateFlow();
+		this.#notice = `Created agent ${spec.identifier} at ${shortenPath(filePath)}`;
+		this.#buildLayout();
+	}
+
+	#getModelSuggestions(input: string): string[] {
+		const modelRegistry = this.modelContext.modelRegistry;
+		if (!modelRegistry) return [];
+		const query = input.trim().toLowerCase();
+		if (!query) return [];
+		const available = modelRegistry.getAvailable();
+		const seen = new Set<string>();
+		const matches: string[] = [];
+		for (const model of available) {
+			const full = `${model.provider}/${model.id}`;
+			if (seen.has(full)) continue;
+			if (!full.toLowerCase().includes(query)) continue;
+			seen.add(full);
+			matches.push(full);
+			if (matches.length >= 5) break;
+		}
+		return matches;
 	}
 
 	#switchTab(direction: 1 | -1): void {
@@ -529,6 +782,60 @@ export class AgentDashboard extends Container {
 		return parts.join("");
 	}
 
+	#renderCreateInput(): void {
+		this.addChild(new Text(theme.bold(theme.fg("accent", " Create New Agent")), 0, 0));
+		this.addChild(new Spacer(1));
+		this.addChild(new Text(theme.fg("muted", "Describe what the new agent should do:"), 0, 0));
+		this.addChild(new Spacer(1));
+		if (this.#createInput) {
+			this.addChild(this.#createInput);
+		}
+		this.addChild(new Spacer(1));
+		this.addChild(new Text(theme.fg("muted", `Scope: ${this.#createScope}`), 0, 0));
+		if (this.#createGenerating) {
+			this.addChild(new Text(theme.fg("muted", "Generating agent specification..."), 0, 0));
+		}
+		if (this.#createError) {
+			this.addChild(new Text(theme.fg("error", replaceTabs(this.#createError)), 0, 0));
+		}
+		this.addChild(new Spacer(1));
+		this.addChild(new Text(theme.fg("dim", " Enter: generate  Tab: toggle scope  Esc: cancel"), 0, 0));
+	}
+
+	#renderCreateReview(): void {
+		const spec = this.#createSpec;
+		if (!spec) return;
+
+		this.addChild(new Text(theme.bold(theme.fg("accent", " Review Generated Agent")), 0, 0));
+		this.addChild(new Spacer(1));
+		this.addChild(new Text(theme.fg("muted", `Identifier: ${spec.identifier}`), 0, 0));
+		this.addChild(new Text(theme.fg("muted", `Scope: ${this.#createScope}`), 0, 0));
+		this.addChild(new Spacer(1));
+		this.addChild(new Text(theme.fg("muted", "whenToUse:"), 0, 0));
+		for (const line of wrapTextWithAnsi(replaceTabs(spec.whenToUse), Math.max(20, this.#uiWidth() - 2)).slice(0, 8)) {
+			this.addChild(new Text(truncateToWidth(line, this.#uiWidth() - 2), 0, 0));
+		}
+		this.addChild(new Spacer(1));
+		this.addChild(new Text(theme.fg("muted", "systemPrompt preview:"), 0, 0));
+		const previewLines = spec.systemPrompt.split("\n").slice(0, 10);
+		for (const line of previewLines) {
+			this.addChild(new Text(truncateToWidth(replaceTabs(line), this.#uiWidth() - 2), 0, 0));
+		}
+		if (spec.systemPrompt.split("\n").length > previewLines.length) {
+			this.addChild(new Text(theme.fg("dim", "(truncated)"), 0, 0));
+		}
+		if (this.#createError) {
+			this.addChild(new Spacer(1));
+			this.addChild(new Text(theme.fg("error", replaceTabs(this.#createError)), 0, 0));
+		}
+		this.addChild(new Spacer(1));
+		this.addChild(new Text(theme.fg("dim", " Enter: save  Tab: toggle scope  R: regenerate  Esc: cancel"), 0, 0));
+	}
+
+	#uiWidth(): number {
+		return Math.max(40, process.stdout.columns ?? 100);
+	}
+
 	#buildLayout(): void {
 		this.clear();
 		this.addChild(new DynamicBorder());
@@ -536,12 +843,21 @@ export class AgentDashboard extends Container {
 		this.addChild(new Text(this.#renderTabBar(), 0, 0));
 		this.addChild(new Spacer(1));
 
+		if (this.#notice) {
+			this.addChild(new Text(theme.fg("success", replaceTabs(this.#notice)), 0, 0));
+			this.addChild(new Spacer(1));
+		}
+
 		if (this.#loading) {
 			this.addChild(new Text(theme.fg("muted", "Loading agents..."), 0, 0));
 			this.addChild(new Spacer(1));
 		} else if (this.#loadError) {
 			this.addChild(new Text(theme.fg("error", `Failed to load agents: ${replaceTabs(this.#loadError)}`), 0, 0));
 			this.addChild(new Spacer(1));
+		} else if (this.#createInput || this.#createGenerating) {
+			this.#renderCreateInput();
+		} else if (this.#createSpec) {
+			this.#renderCreateReview();
 		} else if (this.#editInput && this.#editingAgentName) {
 			const editingAgent = this.#allAgents.find(agent => agent.name === this.#editingAgentName) ?? null;
 			const draft = this.#editInput.getValue();
@@ -549,6 +865,7 @@ export class AgentDashboard extends Container {
 			const defaultResolution = editingAgent ? this.#resolvePatterns(defaultPatterns) : undefined;
 			const previewPatterns = editingAgent ? this.#effectivePatternsFor(editingAgent, draft) : [];
 			const previewResolution = editingAgent ? this.#resolvePatterns(previewPatterns) : undefined;
+			const suggestions = this.#getModelSuggestions(draft);
 
 			this.addChild(
 				new Text(theme.bold(theme.fg("accent", `Model override: ${replaceTabs(this.#editingAgentName)}`)), 0, 0),
@@ -582,6 +899,15 @@ export class AgentDashboard extends Container {
 					0,
 				),
 			);
+
+			if (suggestions.length > 0) {
+				this.addChild(new Spacer(1));
+				this.addChild(new Text(theme.fg("muted", "Suggestions:"), 0, 0));
+				for (const suggestion of suggestions) {
+					this.addChild(new Text(theme.fg("dim", `  ${suggestion}`), 0, 0));
+				}
+			}
+
 			this.addChild(new Spacer(1));
 			this.addChild(new Text(theme.fg("dim", " Enter: save  Esc: cancel"), 0, 0));
 		} else {
@@ -612,7 +938,7 @@ export class AgentDashboard extends Container {
 				new Text(
 					theme.fg(
 						"dim",
-						" ↑/↓: navigate  Space: toggle  Enter: model override  Tab: source  Ctrl+R: reload  Esc: close",
+						" ↑/↓: navigate  Space: toggle  Enter: model override  N: new agent  Tab: source  Ctrl+R: reload  Esc: close",
 					),
 					0,
 					0,
@@ -628,6 +954,50 @@ export class AgentDashboard extends Container {
 
 		if (matchesKey(data, "ctrl+c")) {
 			this.onClose?.();
+			return;
+		}
+
+		if (this.#createSpec) {
+			if (matchesKey(data, "escape") || matchesKey(data, "esc")) {
+				this.#clearCreateFlow();
+				this.#buildLayout();
+				return;
+			}
+			if (matchesKey(data, "tab") || matchesKey(data, "shift+tab")) {
+				this.#toggleCreateScope();
+				return;
+			}
+			if (data.toLowerCase() === "r") {
+				void this.#generateAgentFromDescription(this.#createDescription);
+				return;
+			}
+			if (matchesKey(data, "enter") || matchesKey(data, "return") || data === "\n") {
+				void this.#saveGeneratedAgent().catch(error => {
+					this.#createError = error instanceof Error ? error.message : String(error);
+					this.#buildLayout();
+				});
+				return;
+			}
+			return;
+		}
+
+		if (this.#createInput || this.#createGenerating) {
+			if (matchesKey(data, "escape") || matchesKey(data, "esc")) {
+				if (!this.#createGenerating) {
+					this.#clearCreateFlow();
+					this.#buildLayout();
+				}
+				return;
+			}
+			if (!this.#createGenerating && (matchesKey(data, "tab") || matchesKey(data, "shift+tab"))) {
+				this.#toggleCreateScope();
+				return;
+			}
+			if (!this.#createGenerating && this.#createInput) {
+				this.#createInput.handleInput(data);
+				this.#createDescription = this.#createInput.getValue();
+				this.#buildLayout();
+			}
 			return;
 		}
 
@@ -683,6 +1053,10 @@ export class AgentDashboard extends Container {
 		}
 		if (matchesKey(data, "enter") || matchesKey(data, "return") || data === "\n") {
 			this.#beginModelEdit();
+			return;
+		}
+		if (data.toLowerCase() === "n") {
+			this.#beginCreateFlow();
 			return;
 		}
 
