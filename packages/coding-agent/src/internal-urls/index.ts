@@ -22,6 +22,7 @@
 
 export { AgentProtocolHandler, type AgentProtocolOptions } from "./agent-protocol";
 export { ArtifactProtocolHandler, type ArtifactProtocolOptions } from "./artifact-protocol";
+export { DocsProtocolHandler } from "./docs-protocol";
 export { applyQuery, parseQuery, pathToQuery } from "./json-query";
 export { MemoryProtocolHandler, type MemoryProtocolOptions, resolveMemoryUrlToPath } from "./memory-protocol";
 export { PlanProtocolHandler, type PlanProtocolOptions, resolvePlanUrlToPath } from "./plan-protocol";

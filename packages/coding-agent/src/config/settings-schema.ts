@@ -287,7 +287,7 @@ export const SETTINGS_SCHEMA = {
 		ui: {
 			tab: "config",
 			label: "Read hash lines",
-			description: "Include line hashes in read output for hashline edit mode (LINE#ID|content)",
+			description: "Include line hashes in read output for hashline edit mode (LINE#ID:content)",
 		},
 	},
 	showHardwareCursor: {
@@ -500,6 +500,15 @@ export const SETTINGS_SCHEMA = {
 			tab: "tools",
 			label: "Browser headless",
 			description: "Launch browser in headless mode (disable to show browser UI)",
+		},
+	},
+	"tools.intentTracing": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tools",
+			label: "Intent tracing",
+			description: "Ask the agent to describe the intent of each tool call before executing it",
 		},
 	},
 

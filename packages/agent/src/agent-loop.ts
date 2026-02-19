@@ -123,6 +123,58 @@ function normalizeMessagesForProvider(
 	return changed ? normalized : messages;
 }
 
+export const INTENT_FIELD = "agent__intent";
+
+function injectIntentIntoSchema(schema: unknown): unknown {
+	if (!schema || typeof schema !== "object" || Array.isArray(schema)) return schema;
+	const schemaRecord = schema as Record<string, unknown>;
+	const propertiesValue = schemaRecord.properties;
+	const properties =
+		propertiesValue && typeof propertiesValue === "object" && !Array.isArray(propertiesValue)
+			? (propertiesValue as Record<string, unknown>)
+			: {};
+	const requiredValue = schemaRecord.required;
+	const required = Array.isArray(requiredValue)
+		? requiredValue.filter((item): item is string => typeof item === "string")
+		: [];
+	if (INTENT_FIELD in properties) {
+		if (required.includes(INTENT_FIELD)) return schema;
+		return {
+			...schemaRecord,
+			required: [...required, INTENT_FIELD],
+		};
+	}
+	return {
+		...schemaRecord,
+		properties: {
+			...properties,
+			[INTENT_FIELD]: {
+				type: "string",
+				description:
+					"Describe intent as one sentence in present participle form (e.g., Inserting comment before the function) with no trailing period",
+			},
+		},
+		required: [...required, INTENT_FIELD],
+	};
+}
+
+function injectIntentIntoTools(tools: Context["tools"]): Context["tools"] {
+	return tools?.map(tool => ({
+		...tool,
+		parameters: injectIntentIntoSchema(tool.parameters) as typeof tool.parameters,
+	}));
+}
+
+function extractIntent(args: Record<string, unknown>): { intent?: string; strippedArgs: Record<string, unknown> } {
+	const intent = args[INTENT_FIELD];
+	if (typeof intent !== "string") {
+		return { strippedArgs: args };
+	}
+	const { [INTENT_FIELD]: _ignored, ...strippedArgs } = args;
+	const trimmed = intent.trim();
+	return { intent: trimmed.length > 0 ? trimmed : undefined, strippedArgs };
+}
+
 /**
  * Main loop logic shared by agentLoop and agentLoopContinue.
  */
@@ -199,6 +251,7 @@ async function runLoop(
 					config.getToolContext,
 					config.interruptMode,
 					config.transformToolCallArguments,
+					config.intentTracing,
 				);
 				toolResults.push(...toolExecution.toolResults);
 				steeringAfterTools = toolExecution.steeringMessages ?? null;
@@ -261,7 +314,7 @@ async function streamAssistantResponse(
 	const llmContext: Context = {
 		systemPrompt: context.systemPrompt,
 		messages: normalizedMessages,
-		tools: context.tools,
+		tools: config.intentTracing ? injectIntentIntoTools(context.tools) : context.tools,
 	};
 
 	const streamFunction = streamFn || streamSimple;
@@ -373,6 +426,7 @@ async function executeToolCalls(
 	getToolContext?: AgentLoopConfig["getToolContext"],
 	interruptMode: AgentLoopConfig["interruptMode"] = "immediate",
 	transformToolCallArguments?: AgentLoopConfig["transformToolCallArguments"],
+	intentTracing?: AgentLoopConfig["intentTracing"],
 ): Promise<{ toolResults: ToolResultMessage[]; steeringMessages?: AgentMessage[] }> {
 	type ToolCallContent = Extract<AssistantMessage["content"][number], { type: "toolCall" }>;
 	const toolCalls = assistantMessage.content.filter((c): c is ToolCallContent => c.type === "toolCall");
@@ -412,6 +466,7 @@ async function executeToolCalls(
 	const records = toolCalls.map(toolCall => ({
 		toolCall,
 		tool: tools?.find(t => t.name === toolCall.name),
+		args: toolCall.arguments as Record<string, unknown>,
 		started: false,
 		result: undefined as AgentToolResult<any> | undefined,
 		isError: false,
@@ -425,12 +480,22 @@ async function executeToolCalls(
 		}
 
 		const { toolCall, tool } = record;
+		let argsForExecution = toolCall.arguments as Record<string, unknown>;
+		if (intentTracing) {
+			const { intent, strippedArgs } = extractIntent(toolCall.arguments);
+			argsForExecution = strippedArgs;
+			if (intent) {
+				toolCall.intent = intent;
+			}
+		}
+		record.args = argsForExecution;
 		record.started = true;
 		stream.push({
 			type: "tool_execution_start",
 			toolCallId: toolCall.id,
 			toolName: toolCall.name,
-			args: toolCall.arguments,
+			args: argsForExecution,
+			intent: toolCall.intent,
 		});
 
 		let result: AgentToolResult<any>;
@@ -439,7 +504,7 @@ async function executeToolCalls(
 		try {
 			if (!tool) throw new Error(`Tool ${toolCall.name} not found`);
 
-			const validatedArgs = validateToolArguments(tool, toolCall);
+			const validatedArgs = validateToolArguments(tool, { ...toolCall, arguments: argsForExecution });
 			const toolContext = getToolContext
 				? getToolContext({
 						batchId,
@@ -458,7 +523,7 @@ async function executeToolCalls(
 						type: "tool_execution_update",
 						toolCallId: toolCall.id,
 						toolName: toolCall.name,
-						args: toolCall.arguments,
+						args: argsForExecution,
 						partialResult,
 					});
 				},
@@ -512,7 +577,8 @@ async function executeToolCalls(
 				type: "tool_execution_start",
 				toolCallId: toolCall.id,
 				toolName: toolCall.name,
-				args: toolCall.arguments,
+				args: record.args,
+				intent: toolCall.intent,
 			});
 		}
 		stream.push({
@@ -568,6 +634,7 @@ function createAbortedToolResult(
 		toolCallId: toolCall.id,
 		toolName: toolCall.name,
 		args: toolCall.arguments,
+		intent: toolCall.intent,
 	});
 	stream.push({
 		type: "tool_execution_end",

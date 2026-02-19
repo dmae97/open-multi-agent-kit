@@ -247,11 +247,11 @@ handlebars.registerHelper("hlineref", (lineNum: unknown, content: unknown): stri
 
 /**
  * {{hlinefull lineNum "content"}} — format a full read-style line with prefix.
- * Returns `"lineNum#hash|content"`.
+ * Returns `"lineNum#hash:content"`.
  */
 handlebars.registerHelper("hlinefull", (lineNum: unknown, content: unknown): string => {
 	const { ref, text } = formatHashlineRef(lineNum, content);
-	return `${ref}|${text}`;
+	return `${ref}:${text}`;
 });
 
 export function renderPromptTemplate(template: string, context: TemplateContext = {}): string {

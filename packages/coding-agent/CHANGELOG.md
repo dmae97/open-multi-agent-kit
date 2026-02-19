@@ -6,7 +6,45 @@
 
 - Fixed `omp stats` failing on npm/bun installs by including required stats build files in published `@oh-my-pi/omp-stats` package ([#113](https://github.com/can1357/oh-my-pi/pull/113) by [@masonc15](https://github.com/masonc15))
 
+## [12.14.0] - 2026-02-19
+
+### Added
+
+- Support for `docs://` internal URL protocol to access embedded documentation files (e.g., `docs://sdk.md`)
+- Added `generate-docs-index` npm script to automatically index and embed documentation files at build time
+- Support for executable tool files (.ts, .js, .sh, .bash, .py) in custom tools discovery alongside markdown files
+- Display streamed tool intent in working message during agent execution
+- Added `tools.intentTracing` setting to enable intent tracing, which asks the agent to describe the intent of each tool call before executing it
+- Support for file deletion in hashline edit mode via `delete: true` parameter
+- Support for file renaming/moving in hashline edit mode via `rename` parameter
+- Optional content-replace edit variant in hashline mode (enabled via `PI_HL_REPLACETXT=1` environment variable)
+- Support for grepping internal URLs (artifact://) by resolving them to their backing files
+
+### Changed
+
+- System prompt now identifies agent as operating inside Oh My Pi harness and instructs reading docs:// URLs for omp/pi topics
+- Tool discovery now accepts executable script extensions (.ts, .js, .sh, .bash, .py) in addition to .json and .md files
+- Updated bash and read tool documentation to reference `docs://` URL support
+- Hashline format separator changed from pipe (`|`) to colon (`:`) for improved readability (e.g., `LINE#ID:content` instead of `LINE#ID|content`)
+- Hashline hash representation changed from 4-character base36 to 2-character hexadecimal for more compact line references
+- Hashline edit API: renamed `delete` parameter to `rm` for consistency with standard file operations
+- Hashline edit API: renamed `rename` parameter to `mv` for consistency with standard file operations
+- Hashline edit API: content-replace operations now require explicit `op: "replaceText"` field to distinguish from other edit types
+- Hashline documentation terminology updated: references to 'anchors' replaced with 'tags' for clearer semantics
+- Intent tracing now uses `_intent` field name in tool schemas
+- Hashline edit API: renamed `set` operation to `target`/`new_content` for clearer semantics
+- Hashline edit API: renamed `set_range` operation to `first`/`last`/`new_content`
+- Hashline edit API: renamed `insert` operation fields from `body` to `inserted_lines` and made `inserted_lines` required non-empty
+- Hashline edit API: flattened `replace` operation to top-level fields (`old_text`, `new_text`, `all`) when enabled
+- Hashline edit validation now provides more specific error messages indicating which variant is expected
+
+### Fixed
+
+- Grep tool now properly handles internal URL resolution when searching artifact paths
+- Working message intent updates now fall back to tool execution events when streamed tool arguments omit the intent field
+
 ## [12.13.0] - 2026-02-19
+
 ### Breaking Changes
 
 - Removed automatic line relocation when hash references become stale; edits with mismatched line hashes now fail with an error instead of silently relocating to matching lines elsewhere in the file
@@ -175,6 +213,7 @@
 - Refactored session directory naming to use single-dash format for home-relative paths and double-dash format for absolute paths, with automatic migration of legacy session directories on first access
 
 ## [12.8.2] - 2026-02-17
+
 ### Changed
 
 - Changed system environment context to use built-in `os` values for distro, kernel, and CPU model instead of native system-info data
@@ -187,11 +226,14 @@
 ## [12.8.0] - 2026-02-16
 
 ### Changed
+
 - Improved `/changelog` performance by displaying only the most recent 3 versions by default, with a `--full` flag for the complete history ([#85](https://github.com/can1357/oh-my-pi/pull/85) by [@tctev](https://github.com/tctev))
 - Centralized builtin slash command definitions and handlers into a shared registry, replacing the large input-controller if-chain dispatch
 
 ## [12.7.0] - 2026-02-16
+
 ### Added
+
 - Added abort signal support to LSP file operations (`ensureFileOpen`, `refreshFile`) for cancellable file synchronization
 - Added abort signal propagation through LSP request handlers (definition, references, hover, symbols, rename) enabling operation cancellation
 - Added `shouldBypassAutocompleteOnEscape` callback to custom editor for context-aware escape key handling during active operations
@@ -206,7 +248,9 @@
 - Added secret obfuscation: env vars matching secret patterns and `secrets.json` entries are replaced with placeholders before sending to LLM providers, deobfuscated in tool call arguments
 - Added `secrets.enabled` setting to toggle secret obfuscation
 - Added full regex literal support for `secrets.json` entries (`"/pattern/flags"` syntax with escaped `/` handling, automatic `g` flag enforcement)
+
 ### Changed
+
 - Changed context promotion to trigger on context overflow instead of a configurable threshold, promoting to a larger model before attempting compaction
 - Changed context promotion behavior to retry immediately on the promoted model without compacting, providing faster recovery from context limits
 - Changed default grep context lines from 1 before/3 after to 0 before/0 after for more focused search results
@@ -221,20 +265,25 @@
 - Updated web search provider priority order to include Brave (Exa → Brave → Jina → Perplexity → Anthropic → Gemini → Codex → Z.AI)
 - Extended recency filter support to Brave provider alongside Perplexity
 - Changed GitHub issue comment fetching to use paginated API requests with 100 comments per page instead of single request with 50-comment limit
+
 ### Removed
 
 - Removed `contextPromotion.thresholdPercent` setting as context promotion now triggers only on overflow
 
 ### Fixed
+
 - Fixed LSP operations to properly respect abort signals and throw `ToolAbortError` when cancelled
 - Fixed workspace diagnostics process cleanup to remove abort event listeners in finally block
 - Fixed PTY-backed bash execution to enforce timeout completion when detached child processes keep the PTY stream open ([#88](https://github.com/can1357/oh-my-pi/issues/88))
+
 ## [12.5.1] - 2026-02-15
+
 ### Added
 
 - Added `repeatToolDescriptions` setting to render full tool descriptions in the system prompt instead of a tool name list
 
 ## [12.5.0] - 2026-02-15
+
 ### Breaking Changes
 
 - Replaced `theme` setting with `theme.dark` and `theme.light` (auto-migrated)
@@ -285,6 +334,7 @@
 - Sanitized debug log display to strip control codes, normalize tabs, and trim width
 
 ## [12.4.0] - 2026-02-14
+
 ### Changed
 
 - Moved `sanitizeText` function from `@oh-my-pi/pi-utils` to `@oh-my-pi/pi-natives` for better code organization
@@ -300,6 +350,7 @@
 - Fixed Cloudflare returning corrupted bytes when compression is negotiated in web scraper requests
 
 ## [12.3.0] - 2026-02-14
+
 ### Added
 
 - Added autonomous memory extraction and consolidation system with configurable settings
@@ -345,6 +396,7 @@
 - Fixed fetch tool to preserve actual response metadata (finalUrl, contentType) instead of defaults when requests fail
 
 ||||||| parent of a70a34c8b (fix(coding-agent/debug): Sanitized debug log rendering)
+
 ## [12.1.0] - 2026-02-13
 
 ### Added
@@ -396,6 +448,7 @@
 - Removed @types/jsdom dependency
 
 ## [11.14.1] - 2026-02-12
+
 ### Changed
 
 - Improved Bun binary detection to check `Bun.env.PI_COMPILED` environment variable
@@ -407,6 +460,7 @@
 - Fixed Bun update process to properly handle version pinning and report installation mismatches
 
 ## [11.14.0] - 2026-02-12
+
 ### Added
 
 - Added SwiftLint linter client with JSON reporter support for Swift file linting
@@ -459,6 +513,7 @@
 - Refactored browser/file opening across multiple modules to use unified `openPath` utility for improved maintainability
 
 ## [11.12.0] - 2026-02-11
+
 ### Added
 
 - Added `resolveFileDisplayMode` utility to centralize file display mode resolution across tools (read, grep, file mentions)
@@ -547,6 +602,7 @@
 - Refactored hash line formatting to use async `streamHashLinesFromLines` for better performance
 
 ## [11.10.3] - 2026-02-10
+
 ### Added
 
 - Exported `./patch/*` subpath for direct access to patch utilities
@@ -572,6 +628,7 @@
 - Removed AggregateError unwrapping from console.warn in CLI initialization
 
 ## [11.10.1] - 2026-02-10
+
 ### Changed
 
 - Migrated CLI framework from oclif to lightweight pi-utils CLI runner
@@ -586,6 +643,7 @@
 - Removed custom oclif help renderer (oclif-help.ts)
 
 ## [11.10.0] - 2026-02-10
+
 ### Breaking Changes
 
 - Changed `HashlineEdit.src` from string format (e.g., `"5:ab"`, `"5:ab..9:ef"`) to structured `SrcSpec` object with discriminated union types (`{ kind: "single", ref: "..." }`, `{ kind: "range", start: "...", end: "..." }`, etc.)
@@ -736,6 +794,7 @@
 - Improved bash tool output draining after foreground completion to reduce tail output truncation
 
 ## [11.8.0] - 2026-02-10
+
 ### Added
 
 - Added `ctx.reload()` method to extension command context to reload extensions, skills, prompts, and themes from disk
@@ -758,6 +817,7 @@
 - Fixed archive extraction error handling to provide clear error messages on failure
 
 ## [11.7.0] - 2026-02-07
+
 ### Changed
 
 - Enhanced error messages for failed Python cells to include full combined output context instead of just the error message
@@ -769,6 +829,7 @@
 - Fixed tab character rendering in Python tool output display to properly format whitespace in cell output and status events
 
 ## [11.6.1] - 2026-02-07
+
 ### Fixed
 
 - Fixed potential crash when rendering results with undefined details.results
@@ -817,6 +878,7 @@
 - Removed ability to save screenshots to custom paths or artifacts directory
 
 ## [11.4.1] - 2026-02-06
+
 ### Fixed
 
 - Fixed tab character display in error messages and bash tool output by properly replacing tabs with spaces

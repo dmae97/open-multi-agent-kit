@@ -966,11 +966,12 @@ function countNonEmptyLines(text: string): number {
 
 /** Render fetch call (URL preview) */
 export function renderFetchCall(
-	args: { url: string; timeout?: number; raw?: boolean },
+	args: { url?: string; timeout?: number; raw?: boolean },
 	uiTheme: Theme = theme,
 ): Component {
-	const domain = getDomain(args.url);
-	const path = truncate(args.url.replace(/^https?:\/\/[^/]+/, ""), 50, "…");
+	const url = args.url ?? "";
+	const domain = getDomain(url);
+	const path = truncate(url.replace(/^https?:\/\/[^/]+/, ""), 50, "\u2026");
 	const description = `${domain}${path ? ` ${path}` : ""}`.trim();
 	const meta: string[] = [];
 	if (args.raw) meta.push("raw");
