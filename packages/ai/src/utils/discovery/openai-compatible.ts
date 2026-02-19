@@ -1,8 +1,7 @@
+import { UNK_CONTEXT_WINDOW, UNK_MAX_TOKENS } from "@oh-my-pi/pi-ai";
 import { z } from "zod";
 import type { Api, Model, Provider } from "../../types";
 
-const DEFAULT_CONTEXT_WINDOW = 4096;
-const DEFAULT_MAX_TOKENS = 4096;
 const MODELS_PATH = "/models";
 
 /**
@@ -166,8 +165,8 @@ export async function fetchOpenAICompatibleModels<TApi extends Api>(
 			reasoning: false,
 			input: ["text"],
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-			contextWindow: DEFAULT_CONTEXT_WINDOW,
-			maxTokens: DEFAULT_MAX_TOKENS,
+			contextWindow: UNK_CONTEXT_WINDOW,
+			maxTokens: UNK_MAX_TOKENS,
 		};
 
 		const mapped = options.mapModel?.(entry, defaults, context) ?? defaults;

@@ -1,3 +1,4 @@
+import { UNK_CONTEXT_WINDOW, UNK_MAX_TOKENS } from "@oh-my-pi/pi-ai";
 import { z } from "zod";
 import { getBundledModels } from "../../models";
 import type { Model } from "../../types";
@@ -5,8 +6,6 @@ import type { Model } from "../../types";
 const GOOGLE_GENERATIVE_AI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 const DEFAULT_PAGE_SIZE = 100;
 const DEFAULT_MAX_PAGES = 25;
-const DEFAULT_CONTEXT_WINDOW = 4096;
-const DEFAULT_MAX_TOKENS = 4096;
 
 const geminiModelListItemSchema = z.object({
 	name: z.string().optional().catch(undefined),
@@ -178,8 +177,8 @@ function normalizeModel(
 	}
 
 	const reference = bundledById.get(id);
-	const contextWindow = normalizePositiveInt(item.inputTokenLimit, reference?.contextWindow ?? DEFAULT_CONTEXT_WINDOW);
-	const maxTokens = normalizePositiveInt(item.outputTokenLimit, reference?.maxTokens ?? DEFAULT_MAX_TOKENS);
+	const contextWindow = normalizePositiveInt(item.inputTokenLimit, reference?.contextWindow ?? UNK_CONTEXT_WINDOW);
+	const maxTokens = normalizePositiveInt(item.outputTokenLimit, reference?.maxTokens ?? UNK_MAX_TOKENS);
 	const name = normalizeModelName(item.displayName, reference?.name ?? id);
 
 	if (reference) {

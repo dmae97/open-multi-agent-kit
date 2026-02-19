@@ -1,5 +1,5 @@
 import type { ModelManagerOptions } from "../model-manager";
-import { getBundledModels } from "../models";
+import { getBundledModels, getBundledProviders } from "../models";
 import type { Api, Model } from "../types";
 import {
 	fetchOpenAICompatibleModels,
@@ -117,8 +117,8 @@ function mapAnthropicModelsDev(payload: unknown, baseUrl: string): Model<"anthro
 				cacheRead: toNumber(model.cost?.cache_read),
 				cacheWrite: toNumber(model.cost?.cache_write),
 			},
-			contextWindow: toPositiveNumber(model.limit?.context, 4096),
-			maxTokens: toPositiveNumber(model.limit?.output, 4096),
+			contextWindow: toPositiveNumber(model.limit?.context, UNK_CONTEXT_WINDOW),
+			maxTokens: toPositiveNumber(model.limit?.output, UNK_MAX_TOKENS),
 		});
 	}
 
@@ -186,6 +186,20 @@ function createBundledReferenceMap<TApi extends Api>(
 	const references = new Map<string, Model<TApi>>();
 	for (const model of getBundledModels(provider)) {
 		references.set(model.id, model as Model<TApi>);
+	}
+	return references;
+}
+
+function createGlobalReferenceMap(): Map<string, Model<Api>> {
+	const references = new Map<string, Model<Api>>();
+	for (const provider of getBundledProviders()) {
+		for (const model of getBundledModels(provider as Parameters<typeof getBundledModels>[0])) {
+			const candidate = model as Model<Api>;
+			const existing = references.get(candidate.id);
+			if (!existing || candidate.contextWindow > existing.contextWindow) {
+				references.set(candidate.id, candidate);
+			}
+		}
 	}
 	return references;
 }
@@ -286,6 +300,27 @@ function isLikelyOpenAIResponsesModelId(id: string, references: Map<string, Mode
 		normalized.startsWith("o4") ||
 		normalized.startsWith("chatgpt")
 	);
+}
+
+const NANO_GPT_NON_TEXT_MODEL_TOKENS = [
+	"embedding",
+	"image",
+	"vision",
+	"audio",
+	"speech",
+	"transcribe",
+	"moderation",
+	"realtime",
+	"whisper",
+	"tts",
+] as const;
+
+function isLikelyNanoGptTextModelId(id: string): boolean {
+	const normalized = id.trim().toLowerCase();
+	if (!normalized) {
+		return false;
+	}
+	return !NANO_GPT_NON_TEXT_MODEL_TOKENS.some(token => normalized.includes(token));
 }
 
 // ---------------------------------------------------------------------------
@@ -1127,7 +1162,52 @@ export function vllmModelManagerOptions(config?: VllmModelManagerConfig): ModelM
 }
 
 // ---------------------------------------------------------------------------
-// 23. GitHub Copilot
+// 23. NanoGPT
+// ---------------------------------------------------------------------------
+
+export interface NanoGptModelManagerConfig {
+	apiKey?: string;
+	baseUrl?: string;
+}
+
+export function nanoGptModelManagerOptions(
+	config?: NanoGptModelManagerConfig,
+): ModelManagerOptions<"openai-completions"> {
+	const apiKey = config?.apiKey;
+	const baseUrl = config?.baseUrl ?? "https://nano-gpt.com/api/v1";
+	const references = createBundledReferenceMap<"openai-completions">(
+		"nanogpt" as Parameters<typeof getBundledModels>[0],
+	);
+	const globalReferences = createGlobalReferenceMap();
+	return {
+		providerId: "nanogpt",
+		...(apiKey && {
+			fetchDynamicModels: () =>
+				fetchOpenAICompatibleModels({
+					api: "openai-completions",
+					provider: "nanogpt",
+					baseUrl,
+					apiKey,
+					mapModel: (entry, defaults) => {
+						const providerReference = references.get(defaults.id);
+						const globalReference = globalReferences.get(defaults.id);
+						const reference =
+							providerReference && globalReference
+								? providerReference.contextWindow >= globalReference.contextWindow
+									? providerReference
+									: globalReference
+								: (providerReference ?? globalReference);
+						const mapped = mapWithBundledReference(entry, defaults, reference);
+						return { ...mapped, api: "openai-completions", provider: "nanogpt" };
+					},
+					filterModel: (_entry, model) => isLikelyNanoGptTextModelId(model.id),
+				}),
+		}),
+	};
+}
+
+// ---------------------------------------------------------------------------
+// 24. GitHub Copilot
 // ---------------------------------------------------------------------------
 
 export interface GithubCopilotModelManagerConfig {
@@ -1283,6 +1363,9 @@ export function anthropicModelManagerOptions(
 // Models.dev provider descriptors for generate-models.ts
 // ---------------------------------------------------------------------------
 
+export const UNK_CONTEXT_WINDOW = 222_222;
+export const UNK_MAX_TOKENS = 8_888;
+
 /** Describes how to map models.dev API data for a single provider. */
 export interface ModelsDevProviderDescriptor {
 	/** Key in the models.dev API response JSON (e.g., "anthropic", "amazon-bedrock") */
@@ -1293,9 +1376,9 @@ export interface ModelsDevProviderDescriptor {
 	api: Api;
 	/** Default base URL */
 	baseUrl: string;
-	/** Default context window fallback (default: 4096) */
+	/** Default context window fallback (default: UNKNNOWN_CONTEXT_WINDOW) */
 	defaultContextWindow?: number;
-	/** Default max tokens fallback (default: 4096) */
+	/** Default max tokens fallback (default: UNKNNOWN_MAX_TOKENS) */
 	defaultMaxTokens?: number;
 	/** Optional compat overrides applied to every model from this provider */
 	compat?: Model<Api>["compat"];
@@ -1358,8 +1441,8 @@ export function mapModelsDevToModels(
 					cacheRead: toNumber(m.cost?.cache_read),
 					cacheWrite: toNumber(m.cost?.cache_write),
 				},
-				contextWindow: toPositiveNumber(m.limit?.context, desc.defaultContextWindow ?? 4096),
-				maxTokens: toPositiveNumber(m.limit?.output, desc.defaultMaxTokens ?? 4096),
+				contextWindow: toPositiveNumber(m.limit?.context, desc.defaultContextWindow ?? UNK_CONTEXT_WINDOW),
+				maxTokens: toPositiveNumber(m.limit?.output, desc.defaultMaxTokens ?? UNK_MAX_TOKENS),
 				...(desc.compat && { compat: desc.compat }),
 				...(desc.headers && { headers: { ...desc.headers } }),
 			};

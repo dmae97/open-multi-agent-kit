@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added NanoGPT provider support with API-key login, dynamic model discovery from `https://nano-gpt.com/api/v1/models`, and text-model filtering for catalog/runtime discovery ([#111](https://github.com/can1357/oh-my-pi/issues/111))
+
 ## [12.12.3] - 2026-02-19
 ### Fixed
 

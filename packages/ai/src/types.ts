@@ -95,6 +95,7 @@ export type KnownProvider =
 	| "litellm"
 	| "moonshot"
 	| "nvidia"
+	| "nanogpt"
 	| "ollama"
 	| "qianfan"
 	| "qwen-portal"

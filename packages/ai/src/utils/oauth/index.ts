@@ -31,6 +31,7 @@ import type {
  * - Synthetic
  * - Perplexity (Pro/Max — desktop app extraction or manual cookie)
  * - NVIDIA
+ * - NanoGPT
  * - Venice
  * - vLLM
  */
@@ -69,6 +70,8 @@ export { loginLiteLLM } from "./litellm";
 export { loginMiniMaxCode, loginMiniMaxCodeCn } from "./minimax-code";
 // Moonshot (API key)
 export { loginMoonshot } from "./moonshot";
+// NanoGPT (API key)
+export { loginNanoGPT } from "./nanogpt";
 // NVIDIA (API key)
 export { loginNvidia } from "./nvidia";
 // Ollama (optional API key)
@@ -195,6 +198,11 @@ const builtInOAuthProviders: OAuthProviderInfo[] = [
 		available: true,
 	},
 	{
+		id: "nanogpt",
+		name: "NanoGPT",
+		available: true,
+	},
+	{
 		id: "perplexity",
 		name: "Perplexity (Pro/Max)",
 		available: true,
@@ -304,6 +312,7 @@ export async function refreshOAuthToken(
 		case "opencode":
 		case "cerebras":
 		case "nvidia":
+		case "nanogpt":
 		case "synthetic":
 		case "together":
 		case "litellm":

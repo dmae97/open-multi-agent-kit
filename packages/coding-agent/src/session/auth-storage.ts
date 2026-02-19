@@ -24,6 +24,7 @@ import {
 	loginMiniMaxCode,
 	loginMiniMaxCodeCn,
 	loginMoonshot,
+	loginNanoGPT,
 	loginNvidia,
 	loginOllama,
 	loginOpenAICodex,
@@ -765,6 +766,11 @@ export class AuthStorage {
 			}
 			case "moonshot": {
 				const apiKey = await loginMoonshot(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "nanogpt": {
+				const apiKey = await loginNanoGPT(ctrl);
 				await saveApiKeyCredential(apiKey);
 				return;
 			}

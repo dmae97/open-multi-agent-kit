@@ -23,6 +23,7 @@ export type OAuthProvider =
 	| "minimax-code-cn"
 	| "moonshot"
 	| "nvidia"
+	| "nanogpt"
 	| "ollama"
 	| "openai-codex"
 	| "opencode"

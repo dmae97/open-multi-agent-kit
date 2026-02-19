@@ -18,6 +18,7 @@ import {
 	litellmModelManagerOptions,
 	mistralModelManagerOptions,
 	moonshotModelManagerOptions,
+	nanoGptModelManagerOptions,
 	nvidiaModelManagerOptions,
 	ollamaModelManagerOptions,
 	openaiModelManagerOptions,
@@ -138,6 +139,12 @@ export const PROVIDER_DESCRIPTORS: readonly ProviderDescriptor[] = [
 		"nvidia/llama-3.1-nemotron-70b-instruct",
 		config => nvidiaModelManagerOptions(config),
 		catalog("NVIDIA", ["NVIDIA_API_KEY"]),
+	),
+	catalogDescriptor(
+		"nanogpt",
+		"openai/gpt-5.2",
+		config => nanoGptModelManagerOptions(config),
+		catalog("NanoGPT", ["NANO_GPT_API_KEY"]),
 	),
 	descriptor("opencode", "claude-sonnet-4-6", config => opencodeModelManagerOptions(config)),
 	catalogDescriptor(

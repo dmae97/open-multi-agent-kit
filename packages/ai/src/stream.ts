@@ -111,6 +111,7 @@ const serviceProviderMap: Record<string, KeyResolver> = {
 	litellm: "LITELLM_API_KEY",
 	moonshot: "MOONSHOT_API_KEY",
 	nvidia: "NVIDIA_API_KEY",
+	nanogpt: "NANO_GPT_API_KEY",
 	ollama: "OLLAMA_API_KEY",
 	qianfan: "QIANFAN_API_KEY",
 	"qwen-portal": () => $pickenv("QWEN_OAUTH_TOKEN", "QWEN_PORTAL_API_KEY"),

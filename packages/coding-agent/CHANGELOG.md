@@ -13,6 +13,7 @@
 - Added support for SSH host configuration at project and user scopes (.omp/ssh.json and ~/.omp/agent/ssh.json)
 - Added `--host`, `--user`, `--port`, `--key`, `--desc`, `--compat`, and `--scope` flags for SSH host configuration
 - Added discovery of SSH hosts from project configuration files alongside manually configured hosts
+- Added NanoGPT as a login provider (`/login nanogpt`) with API key prompt flow linking to `https://nano-gpt.com/api` ([#111](https://github.com/can1357/oh-my-pi/issues/111))
 
 ### Changed
 
