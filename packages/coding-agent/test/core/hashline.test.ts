@@ -679,13 +679,18 @@ describe("applyHashlineEdits — errors", () => {
 		}
 	});
 
-	test("relocates stale line refs when hash uniquely identifies a moved line", () => {
+	test("does not relocate stale line refs even when hash uniquely matches another line", () => {
 		const content = "aaa\nbbb\nccc";
 		const staleButUnique = `2:${computeLineHash(1, "ccc")}`;
 		const edits: HashlineEdit[] = [{ set_line: { anchor: staleButUnique, new_text: "CCC" } }];
-
-		const result = applyHashlineEdits(content, edits);
-		expect(result.content).toBe("aaa\nbbb\nCCC");
+		try {
+			applyHashlineEdits(content, edits);
+			expect.unreachable("should have thrown");
+		} catch (err) {
+			expect(err).toBeInstanceOf(HashlineMismatchError);
+			const e = err as HashlineMismatchError;
+			expect(e.mismatches[0].line).toBe(2);
+		}
 	});
 
 	test("does not relocate when expected hash is non-unique", () => {

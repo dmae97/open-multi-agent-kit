@@ -678,66 +678,31 @@ export function applyHashlineEdits(
 		return touched;
 	}
 
-	let explicitlyTouchedLines = collectExplicitlyTouchedLines();
-
+	const explicitlyTouchedLines = collectExplicitlyTouchedLines();
 	// Pre-validate: collect all hash mismatches before mutating
 	const mismatches: HashMismatch[] = [];
-	const uniqueLineByHash = new Map<string, number>();
-	const seenDuplicateHashes = new Set<string>();
-	for (let i = 0; i < fileLines.length; i++) {
-		const lineNo = i + 1;
-		const hash = computeLineHash(lineNo, fileLines[i]);
-		if (seenDuplicateHashes.has(hash)) continue;
-		if (uniqueLineByHash.has(hash)) {
-			uniqueLineByHash.delete(hash);
-			seenDuplicateHashes.add(hash);
-			continue;
-		}
-		uniqueLineByHash.set(hash, lineNo);
-	}
-
-	function buildMismatch(ref: { line: number; hash: string }, line = ref.line): HashMismatch {
-		return {
-			line,
-			expected: ref.hash,
-			actual: computeLineHash(line, fileLines[line - 1]),
-		};
-	}
-
-	function validateOrRelocateRef(ref: {
-		line: number;
-		hash: string;
-	}): { ok: true; relocated: boolean } | { ok: false } {
+	function validateRef(ref: { line: number; hash: string }): boolean {
 		if (ref.line < 1 || ref.line > fileLines.length) {
 			throw new Error(`Line ${ref.line} does not exist (file has ${fileLines.length} lines)`);
 		}
-		const expected = ref.hash.toLowerCase();
 		const actualHash = computeLineHash(ref.line, fileLines[ref.line - 1]);
-		if (actualHash === expected) {
-			return { ok: true, relocated: false };
+		if (actualHash === ref.hash.toLowerCase()) {
+			return true;
 		}
-
-		const relocated = uniqueLineByHash.get(expected);
-		if (relocated === undefined) {
-			mismatches.push({ line: ref.line, expected: ref.hash, actual: actualHash });
-			return { ok: false };
-		}
-		ref.line = relocated;
-		return { ok: true, relocated: true };
+		mismatches.push({ line: ref.line, expected: ref.hash, actual: actualHash });
+		return false;
 	}
 	for (const { spec, dstLines } of parsed) {
 		switch (spec.kind) {
 			case "single": {
-				const status = validateOrRelocateRef(spec.ref);
-				if (!status.ok) continue;
+				if (!validateRef(spec.ref)) continue;
 				break;
 			}
 			case "insertAfter": {
 				if (dstLines.length === 0) {
 					throw new Error('Insert-after edit (src "N:HH..") requires non-empty dst');
 				}
-				const status = validateOrRelocateRef(spec.after);
-				if (!status.ok) continue;
+				if (!validateRef(spec.after)) continue;
 				break;
 			}
 			case "range": {
@@ -745,38 +710,16 @@ export function applyHashlineEdits(
 					throw new Error(`Range start line ${spec.start.line} must be <= end line ${spec.end.line}`);
 				}
 
-				const originalStart = spec.start.line;
-				const originalEnd = spec.end.line;
-				const originalCount = originalEnd - originalStart + 1;
-
-				const startStatus = validateOrRelocateRef(spec.start);
-				const endStatus = validateOrRelocateRef(spec.end);
-				if (!startStatus.ok || !endStatus.ok) continue;
-
-				const relocatedCount = spec.end.line - spec.start.line + 1;
-				const changedByRelocation = startStatus.relocated || endStatus.relocated;
-				const invalidRange = spec.start.line > spec.end.line;
-				const scopeChanged = relocatedCount !== originalCount;
-
-				if (changedByRelocation && (invalidRange || scopeChanged)) {
-					spec.start.line = originalStart;
-					spec.end.line = originalEnd;
-					mismatches.push(buildMismatch(spec.start, originalStart), buildMismatch(spec.end, originalEnd));
-				}
+				const startValid = validateRef(spec.start);
+				const endValid = validateRef(spec.end);
+				if (!startValid || !endValid) continue;
 				break;
 			}
 		}
 	}
-
 	if (mismatches.length > 0) {
 		throw new HashlineMismatchError(mismatches, fileLines);
 	}
-
-	// Hash relocation may have rewritten reference line numbers.
-	// Recompute touched lines so merge heuristics don't treat now-targeted
-	// adjacent lines as safe merge candidates.
-	explicitlyTouchedLines = collectExplicitlyTouchedLines();
-
 	// Deduplicate identical edits targeting the same line(s)
 	const seenEditKeys = new Map<string, number>();
 	const dedupIndices = new Set<number>();

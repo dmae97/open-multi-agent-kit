@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+
+### Breaking Changes
+
+- Removed automatic line relocation when hash references become stale; edits with mismatched line hashes now fail with an error instead of silently relocating to matching lines elsewhere in the file
+
 ### Fixed
 
 - Fixed terminal output handling to properly queue and serialize writes, preventing dropped or corrupted output in interactive bash sessions

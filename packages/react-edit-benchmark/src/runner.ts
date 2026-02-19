@@ -188,6 +188,52 @@ function buildTimeoutRetryContext(telemetry: PromptAttemptTelemetry, retryNumber
 	].join("\n");
 }
 
+const AUTH_FAILURE_RE =
+	/\b(401|unauthorized|forbidden|invalid api key|invalid key|user not found|authentication|not authenticated|permission denied|access denied)\b/i;
+
+interface ProviderFailure {
+	kind: "auth" | "provider";
+	message: string;
+}
+
+function detectProviderFailure(events: Array<{ type: string; [key: string]: unknown }>): ProviderFailure | null {
+	for (const event of events) {
+		if (event.type !== "message_end") continue;
+		const message = (event as { message?: unknown }).message;
+		if (!message || typeof message !== "object") continue;
+		const role = (message as { role?: unknown }).role;
+		if (role !== "assistant") continue;
+		const errorMessage = (message as { errorMessage?: unknown }).errorMessage;
+		if (typeof errorMessage !== "string") continue;
+		const normalized = errorMessage.trim();
+		if (normalized.length === 0) continue;
+		return {
+			kind: AUTH_FAILURE_RE.test(normalized) ? "auth" : "provider",
+			message: normalized,
+		};
+	}
+	return null;
+}
+
+function getProviderFailureRetryDelayMs(retryNumber: number): number {
+	const safeRetryNumber = Math.max(1, retryNumber);
+	return Math.min(10_000, 1_000 * 2 ** (safeRetryNumber - 1));
+}
+
+function buildProviderFailureRetryContext(
+	failure: ProviderFailure,
+	retryNumber: number,
+	retryLimit: number,
+	delayMs: number,
+): string {
+	const category = failure.kind === "auth" ? "provider/auth" : "provider";
+	return [
+		`Previous attempt failed due to a ${category} error.`,
+		`Provider error: ${failure.message}`,
+		`Retry ${retryNumber}/${retryLimit} after ${delayMs}ms backoff. Resume the requested edit flow once the provider responds successfully.`,
+	].join("\n");
+}
+
 async function evaluateMutationIntent(
 	task: EditTask,
 	cwd: string,
@@ -598,6 +644,8 @@ async function runSingleTask(
 		const maxTimeoutRetries = 3;
 		let zeroToolRetries = 0;
 		const noOpRetryLimit = config.noOpRetryLimit ?? 2;
+		let providerFailureRetries = 0;
+		const maxProviderFailureRetries = 3;
 		let retryContext: string | null = null;
 		let allEvents: Array<{ type: string; [key: string]: unknown }> = [];
 
@@ -647,6 +695,51 @@ async function runSingleTask(
 			agentResponse = (await client.getLastAssistantText()) ?? undefined;
 			await logEvent({ type: "response", text: agentResponse, attempt: attempt + 1 });
 
+			const providerFailure = detectProviderFailure(events);
+			const hasMutationToolCall = events.some(
+				event =>
+					event.type === "tool_execution_start" &&
+					((event as { toolName?: unknown }).toolName === "edit" ||
+						(event as { toolName?: unknown }).toolName === "write"),
+			);
+			if (providerFailure && !hasMutationToolCall) {
+				await logEvent({
+					type: "provider_failure",
+					attempt: attempt + 1,
+					kind: providerFailure.kind,
+					error: providerFailure.message,
+				});
+				if (providerFailureRetries < maxProviderFailureRetries) {
+					providerFailureRetries += 1;
+					const delayMs = getProviderFailureRetryDelayMs(providerFailureRetries);
+					await logEvent({
+						type: "provider_failure_retry",
+						attempt: attempt + 1,
+						retryNumber: providerFailureRetries,
+						retryLimit: maxProviderFailureRetries,
+						delayMs,
+						kind: providerFailure.kind,
+					});
+					retryContext = buildProviderFailureRetryContext(
+						providerFailure,
+						providerFailureRetries,
+						maxProviderFailureRetries,
+						delayMs,
+					);
+					await Bun.sleep(delayMs);
+					attempt--; // Don't consume a regular attempt slot for provider/auth retries
+					continue;
+				}
+				error = `Provider ${providerFailure.kind} failure: ${providerFailure.message}`;
+				await logEvent({
+					type: "provider_failure_exhausted",
+					attempt: attempt + 1,
+					retriesUsed: providerFailureRetries,
+					kind: providerFailure.kind,
+					error: providerFailure.message,
+				});
+				break;
+			}
 			const pendingEdits = new Map<string, unknown>();
 
 			for (const event of events) {
@@ -828,6 +921,8 @@ async function runBatchedTask(
 		const maxTimeoutRetries = 3;
 		let zeroToolRetries = 0;
 		const noOpRetryLimit = config.noOpRetryLimit ?? 2;
+		let providerFailureRetries = 0;
+		const maxProviderFailureRetries = 3;
 		let retryContext: string | null = null;
 
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -874,6 +969,51 @@ async function runBatchedTask(
 			agentResponse = (await client.getLastAssistantText()) ?? undefined;
 			await logEvent({ type: "response", text: agentResponse, attempt: attempt + 1 });
 
+			const providerFailure = detectProviderFailure(events);
+			const hasMutationToolCall = events.some(
+				event =>
+					event.type === "tool_execution_start" &&
+					((event as { toolName?: unknown }).toolName === "edit" ||
+						(event as { toolName?: unknown }).toolName === "write"),
+			);
+			if (providerFailure && !hasMutationToolCall) {
+				await logEvent({
+					type: "provider_failure",
+					attempt: attempt + 1,
+					kind: providerFailure.kind,
+					error: providerFailure.message,
+				});
+				if (providerFailureRetries < maxProviderFailureRetries) {
+					providerFailureRetries += 1;
+					const delayMs = getProviderFailureRetryDelayMs(providerFailureRetries);
+					await logEvent({
+						type: "provider_failure_retry",
+						attempt: attempt + 1,
+						retryNumber: providerFailureRetries,
+						retryLimit: maxProviderFailureRetries,
+						delayMs,
+						kind: providerFailure.kind,
+					});
+					retryContext = buildProviderFailureRetryContext(
+						providerFailure,
+						providerFailureRetries,
+						maxProviderFailureRetries,
+						delayMs,
+					);
+					await Bun.sleep(delayMs);
+					attempt--; // Don't consume a regular attempt slot for provider/auth retries
+					continue;
+				}
+				error = `Provider ${providerFailure.kind} failure: ${providerFailure.message}`;
+				await logEvent({
+					type: "provider_failure_exhausted",
+					attempt: attempt + 1,
+					retriesUsed: providerFailureRetries,
+					kind: providerFailure.kind,
+					error: providerFailure.message,
+				});
+				break;
+			}
 			const pendingEdits = new Map<string, unknown>();
 			for (const event of events) {
 				if (event.type === "tool_execution_start") {
