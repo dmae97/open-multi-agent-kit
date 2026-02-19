@@ -1,12 +1,11 @@
 # Edit
 
-Apply precise file edits using `LINE#ID` anchors from `read` output.
-**CRITICAL:** anchors are `LINE#ID` only. Copy verbatim from the prefix (example: `{{hlineref 42 "const x = 1"}}`). Never include `|content`.
+Apply precise file edits using `LINE#ID` tags, anchoring to the file content.
 
 <workflow>
-1. `read` the target range to capture current `LINE#ID` anchors.
+1. `read` the target range to capture current `LINE#ID` tags.
 2. Pick the smallest operation per change site (line/range/insert/content-replace).
-3. Direction-lock every edit: exact current text -> intended text.
+3. Direction-lock every edit: exact current text → intended text.
 4. Submit one `edit` call per file containing all operations.
 5. If another edit is needed in that file, re-read first (hashes changed).
 6. Output tool calls only; no prose.
@@ -14,23 +13,22 @@ Apply precise file edits using `LINE#ID` anchors from `read` output.
 
 <operations>
 - **Single line replace/delete**
-  - `{ target: "LINE#ID", new_content: ["..."] }`
-  - `new_content: null` deletes the line; `new_content: [""]` keeps a blank line.
+  - `{ op: "set", tag: "N#ID", content: […] }`
+  - `content: null` deletes the line; `content: [""]` keeps a blank line.
 - **Range replace/delete**
-  - `{ first: "LINE#ID", last: "LINE#ID", new_content: ["..."] }`
-  - Use for swaps, block rewrites, or deleting a full span (`new_content: null`).
+  - `{ op: "replace", first: "N#ID", last: "N#ID", content: […] }`
+  - Use for swaps, block rewrites, or deleting a full span (`content: null`).
 - **Insert** (new content)
-  - `{ before: "LINE#ID", inserted_lines: ["..."] }`
-  - `{ after: "LINE#ID", inserted_lines: ["..."] }`
-  - `{ after: "LINE#ID", before: "LINE#ID", inserted_lines: ["..."] }` (between adjacent anchors; safest for blocks)
-  - `inserted_lines` must be non-empty.
+  - `{ op: "prepend", before: "N#ID", content: […] }` or `{ op: "prepend", content: […] }` (no `before` = insert at beginning of file)
+  - `{ op: "append", after: "N#ID", content: […] }` or `{ op: "append", content: […] }` (no `after` = insert at end of file)
+  - `{ op: "insert", after: "N#ID", before: "N#ID", content: […] }` (between adjacent anchors; safest for blocks)
 {{#if allowReplaceText}}
-- **Content replace** (fallback when anchors unavailable)
-  - `{ old_text: "...", new_text: "...", all?: boolean }`
+- **Content replace**
+  - `{ op: "replaceText", old_text: "…", new_text: "…", all?: boolean }`
 {{/if}}
 - **File-level controls**
   - `{ delete: true, edits: [] }` deletes the file (cannot be combined with `rename`).
-  - `{ rename: "new/path.ts", edits: [...] }` writes result to new path and removes old path.
+  - `{ rename: "new/path.ts", edits: […] }` writes result to new path and removes old path.
 **Atomicity:** all ops validate against the same pre-edit file snapshot; refs are interpreted against last `read`; applicator applies bottom-up.
 </operations>
 
@@ -44,61 +42,61 @@ Apply precise file edits using `LINE#ID` anchors from `read` output.
 7. **For swaps/moves:** prefer one range operation over multiple single-line operations.
 </rules>
 
-<selection_heuristics>
-- One wrong line -> `{ target, new_content }`
-- Adjacent block changed -> `{ first, last, new_content }`
-- Missing line/block -> insert with `before`/`after` + `inserted_lines`
-</selection_heuristics>
+<op_choice>
+- One wrong line → `set`
+- Adjacent block changed → `insert`
+- Missing line/block → insert with `append`/`prepend`
+</op_choice>
 
-<anchor_hygiene>
-- Copy anchor IDs exactly from `read` or error output.
-- Never handcraft hashes.
-- For inserts, prefer `after+before` dual anchors when both boundaries are known.
+<tag_choice>
+- Copy tags exactly from the prefix of the `read` or error output.
+- Never guess tags.
+- For inserts, prefer `insert` > `append`/`prepend` when both boundaries are known.
 - Re-read after each successful edit call before issuing another on same file.
-</anchor_hygiene>
+</tag_choice>
 
 <recovery>
-**Hash mismatch (`>>>`)**
-- Retry with the updated anchors shown in error output.
-- Re-read only if required anchors are missing from error snippet.
+**Tag mismatch (`>>>`)**
+- Retry with the updated tags shown in error output.
+- Re-read only if required tags are missing from error snippet.
 - If mismatch repeats, stop and re-read the exact block.
-**No-op / identical content**
-- Re-read immediately; target is stale or replacement equals current text.
-- After two no-ops on same area, re-read the full function/block before retry.
 </recovery>
 
-<example name="single line replace — fix a value or type">
+<example name="fix a value or type">
 ```ts
 {{hlinefull 23 "  const timeout: number = 5000;"}}
 ```
 ```
-target: "{{hlineref 23 "  const timeout: number = 5000;"}}"
-new_content: ["  const timeout: number = 30_000;"]
+op: "set"
+tag: "{{hlineref 23 "  const timeout: number = 5000;"}}"
+content: ["  const timeout: number = 30_000;"]
 ```
 </example>
 
-<example name="single line delete — remove a line entirely">
+<example name="remove a line entirely">
 ```ts
 {{hlinefull 7 "// @ts-ignore"}}
 {{hlinefull 8 "const data = fetchSync(url);"}}
 ```
 ```
-target: "{{hlineref 7 "// @ts-ignore"}}"
-new_content: null
+op: "set"
+tag: "{{hlineref 7 "// @ts-ignore"}}"
+content: null
 ```
 </example>
 
-<example name="single line blank — clear content but keep the line break">
+<example name="clear content but keep the line break">
 ```ts
 {{hlinefull 14 "  placeholder: \"DO NOT SHIP\","}}
 ```
 ```
-target: "{{hlineref 14 "  placeholder: \"DO NOT SHIP\","}}"
-new_content: [""]
+op: "set"
+tag: "{{hlineref 14 "  placeholder: \"DO NOT SHIP\","}}"
+content: [""]
 ```
 </example>
 
-<example name="range replace — rewrite a block of logic">
+<example name="rewrite a block of logic">
 ```ts
 {{hlinefull 60 "    } catch (err) {"}}
 {{hlinefull 61 "      console.error(err);"}}
@@ -106,13 +104,14 @@ new_content: [""]
 {{hlinefull 63 "    }"}}
 ```
 ```
+op: "replace"
 first: "{{hlineref 60 "    } catch (err) {"}}"
 last: "{{hlineref 63 "    }"}}"
-new_content: ["    } catch (err) {", "      if (isEnoent(err)) return null;", "      throw err;", "    }"]
+content: ["    } catch (err) {", "      if (isEnoent(err)) return null;", "      throw err;", "    }"]
 ```
 </example>
 
-<example name="range delete — remove a full block">
+<example name="remove a full block">
 ```ts
 {{hlinefull 80 "  // TODO: remove after migration"}}
 {{hlinefull 81 "  if (legacy) {"}}
@@ -120,49 +119,53 @@ new_content: ["    } catch (err) {", "      if (isEnoent(err)) return null;", " 
 {{hlinefull 83 "  }"}}
 ```
 ```
+op: "replace"
 first: "{{hlineref 80 "  // TODO: remove after migration"}}"
 last: "{{hlineref 83 "  }"}}"
-new_content: null
+content: null
 ```
 </example>
 
-<example name="insert with before — add an import above the first import">
+<example name="add an import above the first import">
 ```ts
 {{hlinefull 1 "import * as fs from \"node:fs/promises\";"}}
 {{hlinefull 2 "import * as path from \"node:path\";"}}
 ```
 ```
+op: "prepend"
 before: "{{hlineref 1 "import * as fs from \"node:fs/promises\";"}}"
-inserted_lines: ["import * as os from \"node:os\";"]
+content: ["import * as os from \"node:os\";"]
 ```
-Use `before` when prepending at the top of a block or file — there is no meaningful anchor above.
+Use `before` for anchored insertion before a specific line. Omit `before` to prepend at BOF.
 </example>
 
-<example name="insert with after — append at end of file">
+<example name="append at end of file">
 ```ts
 {{hlinefull 260 "export { serialize, deserialize };"}}
 ```
 ```
+op: "append"
 after: "{{hlineref 260 "export { serialize, deserialize };"}}"
-inserted_lines: ["export { validate };"]
+content: ["export { validate };"]
 ```
-Use `after` when appending at the bottom — there is no anchor below.
+Use `after` for anchored insertion after a specific line. Omit `after` to append at EOF.
 </example>
 
-<example name="insert with after + before (dual anchor) — add an entry between known siblings">
+<example name="add an entry between known siblings">
 ```ts
 {{hlinefull 44 "  \"build\": \"bun run compile\","}}
 {{hlinefull 45 "  \"test\": \"bun test\""}}
 ```
 ```
+op: "insert"
 after: "{{hlineref 44 "  \"build\": \"bun run compile\","}}"
 before: "{{hlineref 45 "  \"test\": \"bun test\""}}"
-inserted_lines: ["  \"lint\": \"biome check\","]
+content: ["  \"lint\": \"biome check\","]
 ```
 Dual anchors pin the insert to exactly one gap, preventing drift from edits elsewhere in the file. **Always prefer dual anchors when both boundaries are content lines.**
 </example>
 
-<example name="insert a function before another function — anchor to the target, not whitespace">
+<example name="insert a function before another function">
 ```ts
 {{hlinefull 100 "  return buf.toString(\"hex\");"}}
 {{hlinefull 101 "}"}}
@@ -170,18 +173,21 @@ Dual anchors pin the insert to exactly one gap, preventing drift from edits else
 {{hlinefull 103 "export function serialize(data: unknown): string {"}}
 ```
 ```
+op: "insert"
 before: "{{hlineref 103 "export function serialize(data: unknown): string {"}}"
-inserted_lines: ["function validate(data: unknown): boolean {", "  return data != null && typeof data === \"object\";", "}", ""]
+content: ["function validate(data: unknown): boolean {", "  return data != null && typeof data === \"object\";", "}", ""]
 ```
-The trailing `""` in `inserted_lines` preserves the blank-line separator. **Anchor to the structural line (`export function ...`), not the blank line above it** — blank lines are ambiguous and may be added or removed by other edits.
+The trailing `""` in `content` preserves the blank-line separator. **Anchor to the structural line (`export function ...`), not the blank line above it** — blank lines are ambiguous and may be added or removed by other edits.
 </example>
 
 {{#if allowReplaceText}}
-<example name="content replace (fallback) — when anchors are unavailable">
+<example name="content replace (rare)">
 ```
+op: "replaceText"
 old_text: "x = 42"
 new_text: "x = 99"
 ```
+
 Use only when line anchors aren't available. `old_text` must match exactly one location in the file (or set `"all": true` for all occurrences).
 </example>
 {{/if}}
@@ -193,34 +199,34 @@ delete: true
 ```
 </example>
 
-<example name="file rename with edits — move and modify in one atomic call">
+<example name="file rename with edits">
 ```
 path: "src/utils.ts"
 rename: "src/helpers/utils.ts"
-edits: [..]
+edits: […]
 ```
 </example>
 
 <example name="anti-pattern: anchoring to whitespace">
-Bad — anchors to a blank line; fragile if blank lines shift:
+Bad — tags to a blank line; fragile if blank lines shift:
 ```
 after: "{{hlineref 102 ""}}"
-inserted_lines: ["function validate() { ... }"]
+content: ["function validate() {", …, "}"]
 ```
 
 Good — anchors to the structural target:
+
 ```
 before: "{{hlineref 103 "export function serialize(data: unknown): string {"}}"
-inserted_lines: ["function validate() { ... }", ""]
+content: ["function validate() {", …, "}"]
 ```
 </example>
 
-<validation>
-- [ ] Payload shape is `{ "path": string, "edits": [operation, ...], "delete"?: true, "rename"?: string }`
-- [ ] Every operation matches exactly one variant
-- [ ] Every anchor is copied exactly as `LINE#ID` (no spaces, no `|content`)
-- [ ] `new_content` / `inserted_lines` lines are raw content only (no diff markers, no anchor prefixes)
-- [ ] Every replacement is meaningfully different from current content
-- [ ] Scope is minimal and formatting is preserved except targeted token changes
-</validation>
-**Final reminder:** anchors are immutable references to the last read snapshot. Re-read when state changes, then edit.
+<critical>
+Ensure:
+- Payload shape is `{ "path": string, "edits": [operation, …], "delete"?: boolean, "rename"?: string }`
+- Every edit matches exactly one variant
+- Every tag has been copied EXACTLY from a tool result as `N#ID`
+- Scope is minimal and formatting is preserved except targeted token changes
+</critical>
+**Final reminder:** tags are immutable references to the last read snapshot. Re-read when state changes, then edit.

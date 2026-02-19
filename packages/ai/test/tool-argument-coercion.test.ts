@@ -116,7 +116,10 @@ describe("Tool argument coercion", () => {
 			id: "call-7",
 			name: "t7",
 			arguments:
-				'{"path":"somefile.js","edits":"[{\\"target\\":\\"13#cf\\",\\"new_content\\":\\"...\\"}]"}' as unknown as Record<string, unknown>,
+				'{"path":"somefile.js","edits":"[{\\"target\\":\\"13#cf\\",\\"new_content\\":\\"...\\"}]"}' as unknown as Record<
+					string,
+					unknown
+				>,
 		};
 
 		const result = validateToolArguments(tool, toolCall);

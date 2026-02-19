@@ -6,7 +6,7 @@ Reads files from local filesystem or internal URLs.
 - Reads up to {{DEFAULT_MAX_LINES}} lines default
 - Use `offset` and `limit` for large files
 {{#if IS_HASHLINE_MODE}}
-- Text output is CID prefixed: `LINE#ID|content`
+- Text output is CID prefixed: `LINE#ID:content`
 {{else}}
 {{#if IS_LINE_NUMBER_MODE}}
 - Text output is line-number-prefixed

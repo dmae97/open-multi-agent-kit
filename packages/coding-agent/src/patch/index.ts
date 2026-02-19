@@ -34,7 +34,14 @@ import { enforcePlanModeWrite, resolvePlanPath } from "../tools/plan-mode-guard"
 import { applyPatch } from "./applicator";
 import { generateDiffString, generateUnifiedDiffString, replaceText } from "./diff";
 import { findMatch } from "./fuzzy";
-import { applyHashlineEdits, computeLineHash, parseLineRef } from "./hashline";
+import {
+	applyHashlineEdits,
+	computeLineHash,
+	type HashlineEdit,
+	type LineTag,
+	parseTag,
+	type ReplaceTextEdit,
+} from "./hashline";
 import { detectLineEnding, normalizeToLF, restoreLineEndings, stripBom } from "./normalize";
 import { buildNormativeUpdateInput } from "./normative";
 import { type EditToolDetails, getLspBatchRequest } from "./shared";
@@ -66,7 +73,7 @@ export {
 	computeLineHash,
 	formatHashLines,
 	HashlineMismatchError,
-	parseLineRef,
+	parseTag,
 	streamHashLinesFromLines,
 	streamHashLinesFromUtf8,
 	validateLineRef,
@@ -128,26 +135,68 @@ const patchEditSchema = Type.Object({
 
 export type ReplaceParams = Static<typeof replaceEditSchema>;
 export type PatchParams = Static<typeof patchEditSchema>;
-type HashlineEditUnion = Static<typeof hashlineEditItemSchemaWithReplace>;
 
-type HashlineReplaceEdit = { replace: { old_text: string; new_text: string; all?: boolean } };
-export type HashlineEdit =
-	| { set: { ref: string; body: string[] } }
-	| { set_range: { beg: string; end: string; body: string[] } }
-	| { insert: { before?: string; after?: string; body: string[] } }
-	| HashlineReplaceEdit;
+/** Pattern matching hashline display format: `LINE#ID:CONTENT` */
+const HASHLINE_PREFIX_RE = /^\s*(?:>>>|>>)?\s*\d+#[0-9a-zA-Z]{1,16}:/;
 
-const hashlineContentFormat = (kind: string) =>
+/** Pattern matching a unified-diff `+` prefix (but not `++`) */
+const DIFF_PLUS_RE = /^[+-](?![+-])/;
+
+/**
+ * Strip hashline display prefixes and diff `+` markers from replacement lines.
+ *
+ * Models frequently copy the `LINE#ID  ` prefix from read output into their
+ * replacement content, or include unified-diff `+` prefixes. Both corrupt the
+ * output file. This strips them heuristically before application.
+ */
+function stripNewLinePrefixes(lines: string[]): string[] {
+	// Detect whether the *majority* of non-empty lines carry a prefix —
+	// if only one line out of many has a match it's likely real content.
+	let hashPrefixCount = 0;
+	let diffPlusCount = 0;
+	let nonEmpty = 0;
+	for (const l of lines) {
+		if (l.length === 0) continue;
+		nonEmpty++;
+		if (HASHLINE_PREFIX_RE.test(l)) hashPrefixCount++;
+		if (DIFF_PLUS_RE.test(l)) diffPlusCount++;
+	}
+	if (nonEmpty === 0) return lines;
+
+	const stripHash = hashPrefixCount > 0 && hashPrefixCount >= nonEmpty * 0.5;
+	const stripPlus = !stripHash && diffPlusCount > 0 && diffPlusCount >= nonEmpty * 0.5;
+
+	if (!stripHash && !stripPlus) return lines;
+
+	return lines.map(l => {
+		if (stripHash) return l.replace(HASHLINE_PREFIX_RE, "");
+		if (stripPlus) return l.replace(DIFF_PLUS_RE, "");
+		return l;
+	});
+}
+
+const hashlineReplaceContentFormat = (kind: string) =>
 	Type.Union([
 		Type.Null(),
 		Type.Array(Type.String(), { description: `${kind} lines` }),
 		Type.String({ description: `${kind} line` }),
 	]);
 
+const hashlineInsertContentFormat = (kind: string) =>
+	Type.Union([
+		Type.Array(Type.String(), { description: `${kind} lines`, minItems: 1 }),
+		Type.String({ description: `${kind} line`, minLength: 1 }),
+	]);
+
+const hashlineTagFormat = (what: string) =>
+	Type.String({
+		description: `Tag identifying the ${what} in "LINE#ID" format`,
+	});
+
 function hashlineParseContent(edit: string | string[] | null): string[] {
 	if (edit === null) return [];
 	if (Array.isArray(edit)) return edit;
-	const lines = edit.split("\n");
+	const lines = stripNewLinePrefixes(edit.split("\n"));
 	if (lines.length === 0) return [];
 	if (lines[lines.length - 1].trim() === "") return lines.slice(0, -1);
 	return lines;
@@ -159,113 +208,89 @@ function hashlineParseContentString(edit: string | string[] | null): string {
 	return edit;
 }
 
-const hashlineTargetEditSchema = Type.Object({
-	target: Type.String({ description: 'Line reference "LINE#ID"' }),
-	new_content: hashlineContentFormat("Replacement"),
-});
+const hashlineTargetEditSchema = Type.Object(
+	{
+		op: Type.Literal("set"),
+		tag: hashlineTagFormat("line being replaced"),
+		content: hashlineReplaceContentFormat("Replacement"),
+	},
+	{ additionalProperties: false },
+);
 
-function hashlineParseTargetEdit(edit: HashlineEditUnion): HashlineEdit | null {
-	if ("target" in edit) {
-		return {
-			set: {
-				ref: edit.target,
-				body: hashlineParseContent(edit.new_content),
-			},
-		};
-	}
-	return null;
-}
+const hashlineAppendEditSchema = Type.Object(
+	{
+		op: Type.Literal("append"),
+		after: Type.Optional(hashlineTagFormat("line after which to append")),
+		content: hashlineInsertContentFormat("Appended"),
+	},
+	{ additionalProperties: false },
+);
 
-const hashlineRangeEditSchema = Type.Object({
-	first: Type.String({ description: 'Start line ref "LINE#ID"' }),
-	last: Type.String({ description: 'End line ref "LINE#ID"' }),
-	new_content: hashlineContentFormat("Replacement"),
-});
+const hashlinePrependEditSchema = Type.Object(
+	{
+		op: Type.Literal("prepend"),
+		before: Type.Optional(hashlineTagFormat("line before which to prepend")),
+		content: hashlineInsertContentFormat("Prepended"),
+	},
+	{ additionalProperties: false },
+);
 
-function hashlineParseRangeEdit(edit: HashlineEditUnion): HashlineEdit | null {
-	if ("first" in edit && "last" in edit) {
-		return {
-			set_range: {
-				beg: edit.first,
-				end: edit.last,
-				body: hashlineParseContent(edit.new_content),
-			},
-		};
-	}
-	return null;
-}
+const hashlineRangeEditSchema = Type.Object(
+	{
+		op: Type.Literal("replace"),
+		first: hashlineTagFormat("first line"),
+		last: hashlineTagFormat("last line"),
+		content: hashlineReplaceContentFormat("Replacement"),
+	},
+	{ additionalProperties: false },
+);
 
-const hashlineInsertEditSchema = Type.Object({
-	before: Type.Optional(Type.String({ description: 'Insert before this line "LINE#ID"' })),
-	after: Type.Optional(Type.String({ description: 'Insert after this line "LINE#ID"' })),
-	inserted_lines: hashlineContentFormat("Inserted"),
-});
+const hashlineInsertEditSchema = Type.Object(
+	{
+		op: Type.Literal("insert"),
+		before: Type.Optional(hashlineTagFormat("line before which to insert")),
+		after: Type.Optional(hashlineTagFormat("line after which to insert")),
+		content: hashlineInsertContentFormat("Inserted"),
+	},
+	{ additionalProperties: false },
+);
 
-function hashlineParseInsertEdit(edit: HashlineEditUnion): HashlineEdit | null {
-	if ("inserted_lines" in edit) {
-		const { before = "", after = "", inserted_lines } = edit;
-		return {
-			insert: {
-				before: before.length > 0 ? before : undefined,
-				after: after.length > 0 ? after : undefined,
-				body: hashlineParseContent(inserted_lines),
-			},
-		};
-	}
-	return null;
-}
+const hashlineReplaceTextEditSchema = Type.Object(
+	{
+		op: Type.Literal("replaceText"),
+		old_text: Type.String({ description: "Text to find", minLength: 1 }),
+		new_text: hashlineReplaceContentFormat("Replacement"),
+		all: Type.Optional(Type.Boolean({ description: "Replace all occurrences" })),
+	},
+	{ additionalProperties: false },
+);
 
-const hashlineReplaceTextEditSchema = Type.Object({
-	old_text: Type.String({ description: "Text to find (fuzzy whitespace matching enabled)" }),
-	new_text: hashlineContentFormat("Replacement"),
-	all: Type.Optional(Type.Boolean({ description: "Replace all occurrences (default: unique match required)" })),
-});
+const HL_REPLACE_ENABLED = Bun.env.PI_HL_REPLACETXT === "1";
 
-function hashlineParseReplaceTextEdit(edit: HashlineEditUnion): HashlineReplaceEdit | null {
-	if ("old_text" in edit && "new_text" in edit) {
-		const { old_text, new_text, all } = edit;
-		return {
-			replace: {
-				old_text: old_text,
-				new_text: hashlineParseContentString(new_text),
-				all: all,
-			},
-		};
-	}
-	return null;
-}
-
-const hashlineEditItemSchema = Type.Union([
+const hashlineEditSpecSchema = Type.Union([
 	hashlineTargetEditSchema,
 	hashlineRangeEditSchema,
+	hashlineAppendEditSchema,
+	hashlinePrependEditSchema,
 	hashlineInsertEditSchema,
-]);
-const hashlineEditItemSchemaWithReplace = Type.Union([
-	hashlineTargetEditSchema,
-	hashlineRangeEditSchema,
-	hashlineInsertEditSchema,
-	hashlineReplaceTextEditSchema,
+	...(HL_REPLACE_ENABLED ? [hashlineReplaceTextEditSchema] : []),
 ]);
 
-const hashlineEditSchema = Type.Object({
-	path: Type.String({ description: "File path (relative or absolute)" }),
-	edits: Type.Array(hashlineEditItemSchema, { description: "Array of edit operations" }),
-	delete: Type.Optional(Type.Literal(true, { description: "Delete the file" })),
-	rename: Type.Optional(Type.String({ description: "New path for move" })),
-});
-const hashlineEditSchemaWithReplace = Type.Object({
-	path: Type.String({ description: "File path (relative or absolute)" }),
-	edits: Type.Array(hashlineEditItemSchemaWithReplace, { description: "Array of edit operations" }),
-	delete: Type.Optional(Type.Literal(true, { description: "Delete the file" })),
-	rename: Type.Optional(Type.String({ description: "New path for move" })),
-});
+const hashlineEditSchema = Type.Object(
+	{
+		path: Type.String({ description: "File path (relative or absolute)" }),
+		edits: Type.Array(hashlineEditSpecSchema, {
+			description: "Changes to apply to the file at `path`",
+			minItems: 0,
+		}),
+		delete: Type.Optional(Type.Boolean({ description: "Delete the file when true" })),
+		rename: Type.Optional(Type.String({ description: "New path if moving" })),
+	},
+	{ additionalProperties: false },
+);
 
-export type HashlineToolEdit = Static<typeof hashlineEditItemSchemaWithReplace>;
-export type HashlineParams = Static<typeof hashlineEditSchemaWithReplace>;
-
-function isHashlineReplaceTextEnabled(): boolean {
-	return Bun.env.PI_HL_REPLACETXT === "1";
-}
+export type HashlineToolEdit = Static<typeof hashlineEditSpecSchema>;
+export type HashlineParams = Static<typeof hashlineEditSchema>;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LSP FileSystem for patch mode
@@ -355,11 +380,7 @@ function mergeDiagnosticsWithWarnings(
 // Tool Class
 // ═══════════════════════════════════════════════════════════════════════════
 
-type TInput =
-	| typeof replaceEditSchema
-	| typeof patchEditSchema
-	| typeof hashlineEditSchema
-	| typeof hashlineEditSchemaWithReplace;
+type TInput = typeof replaceEditSchema | typeof patchEditSchema | typeof hashlineEditSchema;
 
 export type EditMode = "replace" | "patch" | "hashline";
 
@@ -465,7 +486,7 @@ export class EditTool implements AgentTool<TInput> {
 			case "patch":
 				return renderPromptTemplate(patchDescription);
 			case "hashline":
-				return renderPromptTemplate(hashlineDescription, { allowReplaceText: isHashlineReplaceTextEnabled() });
+				return renderPromptTemplate(hashlineDescription, { allowReplaceText: HL_REPLACE_ENABLED });
 			default:
 				return renderPromptTemplate(replaceDescription);
 		}
@@ -479,7 +500,7 @@ export class EditTool implements AgentTool<TInput> {
 			case "patch":
 				return patchEditSchema;
 			case "hashline":
-				return isHashlineReplaceTextEnabled() ? hashlineEditSchemaWithReplace : hashlineEditSchema;
+				return hashlineEditSchema;
 			default:
 				return replaceEditSchema;
 		}
@@ -499,9 +520,8 @@ export class EditTool implements AgentTool<TInput> {
 		// ─────────────────────────────────────────────────────────────────
 		if (this.mode === "hashline") {
 			const { path, edits, delete: deleteFile, rename } = params as HashlineParams;
-			const op: Operation = deleteFile === true ? "delete" : "update";
 
-			enforcePlanModeWrite(this.session, path, { op, rename });
+			enforcePlanModeWrite(this.session, path, { op: deleteFile ? "delete" : "update", rename });
 
 			if (path.endsWith(".ipynb") && edits?.length > 0) {
 				throw new Error("Cannot edit Jupyter notebooks with the Edit tool. Use the NotebookEdit tool instead.");
@@ -511,7 +531,7 @@ export class EditTool implements AgentTool<TInput> {
 			const resolvedRename = rename ? resolvePlanPath(this.session, rename) : undefined;
 			const file = Bun.file(absolutePath);
 
-			if (deleteFile === true) {
+			if (deleteFile) {
 				if (await file.exists()) {
 					await file.unlink();
 				}
@@ -527,30 +547,115 @@ export class EditTool implements AgentTool<TInput> {
 			}
 
 			if (!(await file.exists())) {
-				throw new Error(`File not found: ${path}`);
-			}
-
-			const allowReplaceText = isHashlineReplaceTextEnabled();
-			const anchorEdits: HashlineEdit[] = [];
-			const replaceEdits: HashlineReplaceEdit[] = [];
-			for (let i = 0; i < edits.length; i++) {
-				const edit = edits[i] as HashlineEditUnion;
-
-				const anchorEdit =
-					hashlineParseTargetEdit(edit) ?? hashlineParseRangeEdit(edit) ?? hashlineParseInsertEdit(edit);
-				if (!anchorEdit) {
-					if (allowReplaceText) {
-						const replaceEdit = hashlineParseReplaceTextEdit(edit);
-						if (replaceEdit) {
-							replaceEdits.push(replaceEdit);
-							continue;
+				const content: string[] = [];
+				for (const edit of edits) {
+					switch (edit.op) {
+						case "append": {
+							if (edit.after) {
+								throw new Error(`File not found: ${path}`);
+							}
+							content.push(...hashlineParseContent(edit.content));
+							break;
+						}
+						case "prepend": {
+							if (edit.before) {
+								throw new Error(`File not found: ${path}`);
+							}
+							content.unshift(...hashlineParseContent(edit.content));
+							break;
+						}
+						default: {
+							throw new Error(`File not found: ${path}`);
 						}
 					}
-					throw new Error(
-						`edits[${i}] must match exactly one variant: {target,new_content} | {first,last,new_content} | {before/after,inserted_lines}${allowReplaceText ? " | {old_text,new_text}" : ""}. Got keys: [${Object.keys(edit).join(", ")}].`,
-					);
 				}
-				anchorEdits.push(anchorEdit);
+				await file.write(content.join("\n"));
+				return {
+					content: [{ type: "text", text: `Created ${path}` }],
+					details: {
+						diff: "",
+						op: "create",
+						meta: outputMeta().get(),
+					},
+				};
+			}
+
+			const anchorEdits: HashlineEdit[] = [];
+			const replaceEdits: ReplaceTextEdit[] = [];
+			for (const edit of edits) {
+				switch (edit.op) {
+					case "set": {
+						const { tag, content } = edit;
+						anchorEdits.push({ op: "set", tag: parseTag(tag), content: hashlineParseContent(content) });
+						break;
+					}
+					case "replace": {
+						const { first, last, content } = edit;
+						anchorEdits.push({
+							op: "replace",
+							first: parseTag(first),
+							last: parseTag(last),
+							content: hashlineParseContent(content),
+						});
+						break;
+					}
+					case "append": {
+						const { after, content } = edit;
+						anchorEdits.push({
+							op: "append",
+							...(after ? { after: parseTag(after) } : {}),
+							content: hashlineParseContent(content),
+						});
+						break;
+					}
+					case "prepend": {
+						const { before, content } = edit;
+						anchorEdits.push({
+							op: "prepend",
+							...(before ? { before: parseTag(before) } : {}),
+							content: hashlineParseContent(content),
+						});
+						break;
+					}
+					case "insert": {
+						const { before, after, content } = edit;
+						if (before && !after) {
+							anchorEdits.push({
+								op: "prepend",
+								before: parseTag(before),
+								content: hashlineParseContent(content),
+							});
+						} else if (after && !before) {
+							anchorEdits.push({
+								op: "append",
+								after: parseTag(after),
+								content: hashlineParseContent(content),
+							});
+						} else if (before && after) {
+							anchorEdits.push({
+								op: "insert",
+								before: parseTag(before),
+								after: parseTag(after),
+								content: hashlineParseContent(content),
+							});
+						} else {
+							throw new Error(`Insert must have both before and after tags.`);
+						}
+						break;
+					}
+					case "replaceText": {
+						const { old_text, new_text, all } = edit;
+						replaceEdits.push({
+							op: "replaceText",
+							old_text: old_text,
+							new_text: hashlineParseContentString(new_text),
+							all: all ?? false,
+						});
+						break;
+					}
+					default:
+						throw new Error(`Invalid edit operation: ${JSON.stringify(edit)}`);
+				}
 			}
 
 			const rawContent = await file.text();
@@ -565,12 +670,12 @@ export class EditTool implements AgentTool<TInput> {
 
 			// Apply content-replace edits (substr-style fuzzy replace)
 			for (const r of replaceEdits) {
-				if (r.replace.old_text.length === 0) {
-					throw new Error("replace.old_text must not be empty.");
+				if (r.old_text.length === 0) {
+					throw new Error("old_text must not be empty.");
 				}
-				const rep = replaceText(normalizedContent, r.replace.old_text, r.replace.new_text, {
+				const rep = replaceText(normalizedContent, r.old_text, r.new_text, {
 					fuzzy: this.#allowFuzzy,
-					all: r.replace.all ?? false,
+					all: r.all ?? false,
 					threshold: this.#fuzzyThreshold,
 				});
 				normalizedContent = rep.content;
@@ -598,21 +703,35 @@ export class EditTool implements AgentTool<TInput> {
 					// Edits were not literally identical but heuristics normalized them back
 					const lines = result.content.split("\n");
 					const targetLines: string[] = [];
+					const refs: LineTag[] = [];
 					for (const edit of anchorEdits) {
-						const refs: string[] = [];
-						if ("set" in edit) refs.push(edit.set.ref);
-						else if ("set_range" in edit) refs.push(edit.set_range.beg, edit.set_range.end);
-						else if ("insert" in edit) {
-							if (edit.insert.after) refs.push(edit.insert.after);
-							if (edit.insert.before) refs.push(edit.insert.before);
+						refs.length = 0;
+						switch (edit.op) {
+							case "set":
+								refs.push(edit.tag);
+								break;
+							case "replace":
+								refs.push(edit.first, edit.last);
+								break;
+							case "append":
+								if (edit.after) refs.push(edit.after);
+								break;
+							case "prepend":
+								if (edit.before) refs.push(edit.before);
+								break;
+							case "insert":
+								refs.push(edit.after, edit.before);
+								break;
+							default:
+								break;
 						}
+
 						for (const ref of refs) {
 							try {
-								const parsed = parseLineRef(ref);
-								if (parsed.line >= 1 && parsed.line <= lines.length) {
-									const lineContent = lines[parsed.line - 1];
-									const hash = computeLineHash(parsed.line, lineContent);
-									targetLines.push(`${parsed.line}#${hash}|${lineContent}`);
+								if (ref.line >= 1 && ref.line <= lines.length) {
+									const lineContent = lines[ref.line - 1];
+									const hash = computeLineHash(ref.line, lineContent);
+									targetLines.push(`${ref.line}#${hash}:${lineContent}`);
 								}
 							} catch {
 								/* skip malformed refs */
@@ -667,7 +786,7 @@ export class EditTool implements AgentTool<TInput> {
 					diff: diffResult.diff,
 					firstChangedLine: result.firstChangedLine ?? diffResult.firstChangedLine,
 					diagnostics,
-					op,
+					op: "update",
 					rename,
 					meta,
 				},
@@ -714,17 +833,10 @@ export class EditTool implements AgentTool<TInput> {
 
 			// Generate diff for display
 			let diffResult = { diff: "", firstChangedLine: undefined as number | undefined };
-			let normative: PatchInput | undefined;
 			if (result.change.type === "update" && result.change.oldContent && result.change.newContent) {
 				const normalizedOld = normalizeToLF(stripBom(result.change.oldContent).text);
 				const normalizedNew = normalizeToLF(stripBom(result.change.newContent).text);
 				diffResult = generateUnifiedDiffString(normalizedOld, normalizedNew);
-				normative = buildNormativeUpdateInput({
-					path,
-					rename: effRename,
-					oldContent: result.change.oldContent,
-					newContent: result.change.newContent,
-				});
 			}
 
 			let resultText: string;
@@ -762,7 +874,6 @@ export class EditTool implements AgentTool<TInput> {
 					rename: effRename,
 					meta,
 				},
-				$normative: normative,
 			};
 		}
 
