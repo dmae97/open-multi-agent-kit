@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [12.11.1] - 2026-02-19
 ### Added
 
 - Added support for Claude 4.6 Opus and Sonnet models via Cursor API
