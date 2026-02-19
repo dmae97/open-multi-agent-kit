@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed interactive-mode editor height to stay bounded and resize-aware, preventing off-screen cursor drift during long prompt/history navigation ([#99](https://github.com/can1357/oh-my-pi/issues/99)).
+
 ## [12.11.3] - 2026-02-19
 
 ### Fixed

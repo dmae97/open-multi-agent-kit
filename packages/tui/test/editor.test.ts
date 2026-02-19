@@ -188,60 +188,42 @@ describe("Editor component", () => {
 			expect(editor.getText()).toBe("prompt 5");
 		});
 
-		it("allows cursor movement within multi-line history entry with Down", () => {
+		it("anchors history entry at top when navigating with Up", () => {
 			const editor = new Editor(defaultEditorTheme);
 
 			editor.addToHistory("line1\nline2\nline3");
+			editor.handleInput("\x1b[A");
 
-			// Browse to the multi-line entry
-			editor.handleInput("\x1b[A"); // Up - shows entry, cursor at end of line3
 			expect(editor.getText()).toBe("line1\nline2\nline3");
-
-			// Down should exit history since cursor is on last line
-			editor.handleInput("\x1b[B"); // Down
-			expect(editor.getText()).toBe(""); // Exited to empty
+			expect(editor.getCursor()).toEqual({ line: 0, col: 0 });
 		});
 
-		it("allows cursor movement within multi-line history entry with Up", () => {
+		it("anchors history entry at bottom when navigating with Down", () => {
 			const editor = new Editor(defaultEditorTheme);
 
-			editor.addToHistory("older entry");
+			editor.addToHistory("older");
 			editor.addToHistory("line1\nline2\nline3");
 
-			// Browse to the multi-line entry
-			editor.handleInput("\x1b[A"); // Up - shows multi-line, cursor at end of line3
+			editor.handleInput("\x1b[A"); // latest, anchored at top
+			editor.handleInput("\x1b[A"); // older, anchored at top
+			expect(editor.getCursor()).toEqual({ line: 0, col: 0 });
 
-			// Up should move cursor within the entry (not on first line yet)
-			editor.handleInput("\x1b[A"); // Up - cursor moves to line2
-			expect(editor.getText()).toBe("line1\nline2\nline3"); // Still same entry
-
-			editor.handleInput("\x1b[A"); // Up - cursor moves to line1 (now on first visual line)
-			expect(editor.getText()).toBe("line1\nline2\nline3"); // Still same entry
-
-			// Now Up should navigate to older history entry
-			editor.handleInput("\x1b[A"); // Up - navigate to older
-			expect(editor.getText()).toBe("older entry");
+			editor.handleInput("\x1b[B"); // newer, anchored at bottom
+			expect(editor.getText()).toBe("line1\nline2\nline3");
+			expect(editor.getCursor()).toEqual({ line: 2, col: 5 });
 		});
 
-		it("navigates from multi-line entry back to newer via Down after cursor movement", () => {
+		it("still allows in-entry cursor movement while browsing history", () => {
 			const editor = new Editor(defaultEditorTheme);
 
 			editor.addToHistory("line1\nline2\nline3");
+			editor.handleInput("\x1b[A"); // top anchor
 
-			// Browse to entry and move cursor up
-			editor.handleInput("\x1b[A"); // Up - shows entry, cursor at end
-			editor.handleInput("\x1b[A"); // Up - cursor to line2
-			editor.handleInput("\x1b[A"); // Up - cursor to line1
+			editor.handleInput("\x1b[B"); // move within entry
+			expect(editor.getCursor()).toEqual({ line: 1, col: 0 });
 
-			// Now Down should move cursor down within the entry
-			editor.handleInput("\x1b[B"); // Down - cursor to line2
-			expect(editor.getText()).toBe("line1\nline2\nline3");
-
-			editor.handleInput("\x1b[B"); // Down - cursor to line3
-			expect(editor.getText()).toBe("line1\nline2\nline3");
-
-			// Now on last line, Down should exit history
-			editor.handleInput("\x1b[B"); // Down - exit to empty
+			editor.handleInput("\x1b[B");
+			editor.handleInput("\x1b[B"); // at bottom, exit history
 			expect(editor.getText()).toBe("");
 		});
 	});
@@ -1020,6 +1002,22 @@ describe("Editor component", () => {
 			editor.handleInput("\x1b[B"); // Down - line 3, col 2
 			editor.handleInput("\x1b[B"); // Down - line 4, col 7 (restored)
 			expect(editor.getCursor()).toEqual({ line: 4, col: 7 });
+		});
+
+		it("supports PageUp/PageDown for faster visual navigation", () => {
+			const editor = new Editor(defaultEditorTheme);
+
+			editor.setMaxHeight(6);
+			editor.setText("l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9");
+
+			editor.handleInput("\x1b[5~"); // PageUp
+			expect(editor.getCursor()).toEqual({ line: 6, col: 2 });
+
+			editor.handleInput("\x1b[5~"); // PageUp
+			expect(editor.getCursor()).toEqual({ line: 3, col: 2 });
+
+			editor.handleInput("\x1b[6~"); // PageDown
+			expect(editor.getCursor()).toEqual({ line: 6, col: 2 });
 		});
 
 		it("moves correctly through wrapped visual lines without getting stuck", () => {

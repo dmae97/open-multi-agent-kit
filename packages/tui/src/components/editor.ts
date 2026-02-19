@@ -246,6 +246,7 @@ function decodeKittyPrintable(data: string): string | undefined {
 		return undefined;
 	}
 }
+const DEFAULT_PAGE_SCROLL_LINES = 10;
 
 interface EditorState {
 	lines: string[];
@@ -283,6 +284,8 @@ interface HistoryStorage {
 	add(prompt: string, cwd?: string): void;
 	getRecent(limit: number): HistoryEntry[];
 }
+
+type HistoryCursorAnchor = "start" | "end";
 
 export class Editor implements Component, Focusable {
 	#state: EditorState = {
@@ -388,8 +391,9 @@ export class Editor implements Component, Focusable {
 	}
 
 	setMaxHeight(maxHeight: number | undefined): void {
+		if (this.#maxHeight === maxHeight) return;
 		this.#maxHeight = maxHeight;
-		this.#scrollOffset = 0;
+		// Don't reset scrollOffset — #updateScrollOffset will clamp it on next render
 	}
 
 	setPaddingX(paddingX: number): void {
@@ -451,28 +455,29 @@ export class Editor implements Component, Focusable {
 	#navigateHistory(direction: 1 | -1): void {
 		this.#resetKillSequence();
 		if (this.#history.length === 0) return;
-
 		const newIndex = this.#historyIndex - direction; // Up(-1) increases index, Down(1) decreases
 		if (newIndex < -1 || newIndex >= this.#history.length) return;
-
 		this.#historyIndex = newIndex;
-
 		if (this.#historyIndex === -1) {
 			// Returned to "current" state - clear editor
-			this.#setTextInternal("");
+			this.#setTextInternal("", "end");
 		} else {
-			this.#setTextInternal(this.#history[this.#historyIndex] || "");
+			const cursorAnchor: HistoryCursorAnchor = direction === -1 ? "start" : "end";
+			this.#setTextInternal(this.#history[this.#historyIndex] || "", cursorAnchor);
 		}
 	}
-
 	/** Internal setText that doesn't reset history state - used by navigateHistory */
-	#setTextInternal(text: string): void {
+	#setTextInternal(text: string, cursorAnchor: HistoryCursorAnchor = "end"): void {
 		this.#undoStack.length = 0;
 		const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
 		this.#state.lines = lines.length === 0 ? [""] : lines;
-		this.#state.cursorLine = this.#state.lines.length - 1;
-		this.#setCursorCol(this.#state.lines[this.#state.cursorLine]?.length || 0);
-
+		if (cursorAnchor === "start") {
+			this.#state.cursorLine = 0;
+			this.#setCursorCol(0);
+		} else {
+			this.#state.cursorLine = this.#state.lines.length - 1;
+			this.#setCursorCol(this.#state.lines[this.#state.cursorLine]?.length || 0);
+		}
 		if (this.onChange) {
 			this.onChange(this.getText());
 		}
@@ -499,6 +504,12 @@ export class Editor implements Component, Focusable {
 	#getVisibleContentHeight(contentLines: number): number {
 		if (this.#maxHeight === undefined) return contentLines;
 		return Math.max(1, this.#maxHeight - 2);
+	}
+
+	#getPageScrollStep(totalVisualLines: number): number {
+		const visibleHeight =
+			this.#maxHeight === undefined ? DEFAULT_PAGE_SCROLL_LINES : this.#getVisibleContentHeight(totalVisualLines);
+		return Math.max(1, visibleHeight - 1);
 	}
 
 	#updateScrollOffset(layoutWidth: number, layoutLines: LayoutLine[], visibleHeight: number): void {
@@ -751,13 +762,20 @@ export class Editor implements Component, Focusable {
 			else if (
 				matchesKey(data, "up") ||
 				matchesKey(data, "down") ||
+				matchesKey(data, "pageUp") ||
+				matchesKey(data, "pageDown") ||
 				matchesKey(data, "enter") ||
 				matchesKey(data, "return") ||
 				data === "\n" ||
 				matchesKey(data, "tab")
 			) {
-				// Only pass arrow keys to the list, not Enter/Tab (we handle those directly)
-				if (matchesKey(data, "up") || matchesKey(data, "down")) {
+				// Only pass navigation keys to the list, not Enter/Tab (we handle those directly)
+				if (
+					matchesKey(data, "up") ||
+					matchesKey(data, "down") ||
+					matchesKey(data, "pageUp") ||
+					matchesKey(data, "pageDown")
+				) {
 					this.#autocompleteList.handleInput(data);
 					this.onAutocompleteUpdate?.();
 					return;
@@ -934,6 +952,22 @@ export class Editor implements Component, Focusable {
 			this.#moveToLineStart();
 		} else if (matchesKey(data, "end")) {
 			this.#moveToLineEnd();
+		}
+		// Page navigation (PageUp/PageDown)
+		else if (matchesKey(data, "pageUp")) {
+			if (this.#isEditorEmpty()) {
+				this.#navigateHistory(-1);
+			} else if (this.#historyIndex > -1 && this.#isOnFirstVisualLine()) {
+				this.#navigateHistory(-1);
+			} else {
+				this.#pageScroll(-1);
+			}
+		} else if (matchesKey(data, "pageDown")) {
+			if (this.#historyIndex > -1 && this.#isOnLastVisualLine()) {
+				this.#navigateHistory(1);
+			} else {
+				this.#pageScroll(1);
+			}
 		}
 		// Forward delete (Fn+Backspace or Delete key, including Shift+Delete)
 		else if (matchesKey(data, "delete") || matchesKey(data, "shift+delete")) {
@@ -1894,6 +1928,16 @@ export class Editor implements Component, Focusable {
 				}
 			}
 		}
+	}
+
+	#pageScroll(direction: -1 | 1): void {
+		this.#resetKillSequence();
+		const visualLines = this.#buildVisualLineMap(this.#lastLayoutWidth);
+		const currentVisualLine = this.#findCurrentVisualLine(visualLines);
+		const step = this.#getPageScrollStep(visualLines.length);
+		const targetVisualLine = Math.max(0, Math.min(visualLines.length - 1, currentVisualLine + direction * step));
+		if (targetVisualLine === currentVisualLine) return;
+		this.#moveToVisualLine(visualLines, currentVisualLine, targetVisualLine);
 	}
 
 	#moveWordBackwards(): void {

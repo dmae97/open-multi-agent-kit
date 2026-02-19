@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added PageUp/PageDown navigation for editor content and autocomplete selection to jump across long wrapped inputs faster.
+
+### Fixed
+
+- Fixed history-entry navigation anchoring (Up opens at top, Down opens at bottom) and preserved editor scroll context when max-height changes to keep cursor movement visible in long prompts ([#99](https://github.com/can1357/oh-my-pi/issues/99)).
+
 ## [12.11.3] - 2026-02-19
 
 ### Fixed

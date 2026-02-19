@@ -60,6 +60,10 @@ import { UiHelpers } from "./utils/ui-helpers";
 const debugStartup = $env.PI_DEBUG_STARTUP ? (stage: string) => process.stderr.write(`[startup] ${stage}\n`) : () => {};
 
 const TODO_FILE_NAME = "todos.json";
+const EDITOR_MAX_HEIGHT_MIN = 6;
+const EDITOR_MAX_HEIGHT_MAX = 18;
+const EDITOR_RESERVED_ROWS = 12;
+const EDITOR_FALLBACK_ROWS = 24;
 
 /** Options for creating an InteractiveMode instance (for future API use) */
 export interface InteractiveModeOptions {
@@ -158,6 +162,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	#voiceHue = 0;
 	#voicePreviousShowHardwareCursor: boolean | null = null;
 	#voicePreviousUseTerminalCursor: boolean | null = null;
+	#resizeHandler?: () => void;
 
 	constructor(
 		session: AgentSession,
@@ -196,6 +201,11 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.editor.onAutocompleteUpdate = () => {
 			this.ui.requestRender(true);
 		};
+		this.#syncEditorMaxHeight();
+		this.#resizeHandler = () => {
+			this.#syncEditorMaxHeight();
+		};
+		process.stdout.on("resize", this.#resizeHandler);
 		try {
 			this.historyStorage = HistoryStorage.open();
 			this.editor.setHistoryStorage(this.historyStorage);
@@ -332,6 +342,7 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		// Start the UI
 		this.ui.start();
+		this.#syncEditorMaxHeight();
 		this.isInitialized = true;
 		this.ui.requestRender(true);
 
@@ -388,6 +399,17 @@ export class InteractiveMode implements InteractiveModeContext {
 			resolve(input);
 		};
 		return promise;
+	}
+
+	#computeEditorMaxHeight(): number {
+		const rows = this.ui.terminal.rows;
+		const terminalRows = Number.isFinite(rows) && rows > 0 ? rows : EDITOR_FALLBACK_ROWS;
+		const maxHeight = terminalRows - EDITOR_RESERVED_ROWS;
+		return Math.max(EDITOR_MAX_HEIGHT_MIN, Math.min(EDITOR_MAX_HEIGHT_MAX, maxHeight));
+	}
+
+	#syncEditorMaxHeight(): void {
+		this.editor.setMaxHeight(this.#computeEditorMaxHeight());
 	}
 
 	updateEditorBorderColor(): void {
@@ -723,6 +745,10 @@ export class InteractiveMode implements InteractiveModeContext {
 		}
 		this.#extensionUiController.clearExtensionTerminalInputListeners();
 		this.statusLine.dispose();
+		if (this.#resizeHandler) {
+			process.stdout.removeListener("resize", this.#resizeHandler);
+			this.#resizeHandler = undefined;
+		}
 		if (this.unsubscribe) {
 			this.unsubscribe();
 		}
