@@ -64,7 +64,7 @@ describe("ModelRegistry runtime provider registration", () => {
 		};
 
 		expect(() => registry.registerProvider("atomic-provider", invalidConfig, "ext://atomic")).toThrow(
-			'Provider atomic-provider: "baseUrl" is required when defining models.',
+			'Provider atomic-provider: "baseUrl" is required when defining custom models.',
 		);
 		expect(getCustomApi("custom-atomic-api")).toBeUndefined();
 
