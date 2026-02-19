@@ -352,8 +352,10 @@ export class AgentDashboard extends Container {
 	#createGenerating = false;
 	#createSpec: GeneratedAgentSpec | null = null;
 	#createError: string | null = null;
+	#createStreamingText = "";
 
 	onClose?: () => void;
+	onRequestRender?: () => void;
 
 	private constructor(
 		private readonly cwd: string,
@@ -429,7 +431,7 @@ export class AgentDashboard extends Container {
 			this.#loadError = error instanceof Error ? error.message : String(error);
 		} finally {
 			this.#loading = false;
-			this.#buildLayout();
+			this.#rebuildAndRender();
 		}
 	}
 
@@ -572,6 +574,7 @@ export class AgentDashboard extends Container {
 		this.#createGenerating = false;
 		this.#createSpec = null;
 		this.#createError = null;
+		this.#createStreamingText = "";
 	}
 
 	#toggleCreateScope(): void {
@@ -591,6 +594,7 @@ export class AgentDashboard extends Container {
 		this.#createGenerating = true;
 		this.#createError = null;
 		this.#createSpec = null;
+		this.#createStreamingText = "";
 		this.#buildLayout();
 
 		try {
@@ -601,7 +605,7 @@ export class AgentDashboard extends Container {
 			this.#createError = error instanceof Error ? error.message : String(error);
 		} finally {
 			this.#createGenerating = false;
-			this.#buildLayout();
+			this.#rebuildAndRender();
 		}
 	}
 
@@ -646,6 +650,15 @@ export class AgentDashboard extends Container {
 			promptTemplates: [],
 			slashCommands: [],
 		});
+		const unsubscribe = session.subscribe(event => {
+			if (event.type === "message_update" && "assistantMessageEvent" in event) {
+				const ame = event.assistantMessageEvent;
+				if (ame.type === "text_delta") {
+					this.#createStreamingText += ame.delta;
+					this.#rebuildAndRender();
+				}
+			}
+		});
 
 		try {
 			await session.prompt(userPrompt, { expandPromptTemplates: false });
@@ -655,6 +668,7 @@ export class AgentDashboard extends Container {
 			}
 			return parseGeneratedAgentSpec(raw);
 		} finally {
+			unsubscribe();
 			await session.dispose();
 		}
 	}
@@ -692,7 +706,7 @@ export class AgentDashboard extends Container {
 		await this.#reloadData();
 		this.#clearCreateFlow();
 		this.#notice = `Created agent ${spec.identifier} at ${shortenPath(filePath)}`;
-		this.#buildLayout();
+		this.#rebuildAndRender();
 	}
 
 	#getModelSuggestions(input: string): string[] {
@@ -793,13 +807,33 @@ export class AgentDashboard extends Container {
 		this.addChild(new Spacer(1));
 		this.addChild(new Text(theme.fg("muted", `Scope: ${this.#createScope}`), 0, 0));
 		if (this.#createGenerating) {
-			this.addChild(new Text(theme.fg("muted", "Generating agent specification..."), 0, 0));
+			this.addChild(new Spacer(1));
+			this.addChild(new Text(theme.fg("accent", "Generating agent specification..."), 0, 0));
+			if (this.#createStreamingText) {
+				this.addChild(new Spacer(1));
+				const maxPreview = Math.max(3, this.terminalHeight - 18);
+				const contentWidth = Math.max(20, this.#uiWidth() - 4);
+				const wrappedLines: string[] = [];
+				for (const raw of this.#createStreamingText.split("\n")) {
+					for (const w of wrapTextWithAnsi(replaceTabs(raw), contentWidth)) {
+						wrappedLines.push(w);
+					}
+				}
+				const tail = wrappedLines.slice(-maxPreview);
+				if (wrappedLines.length > maxPreview) {
+					this.addChild(new Text(theme.fg("dim", `  ... ${wrappedLines.length - maxPreview} lines above`), 0, 0));
+				}
+				for (const line of tail) {
+					this.addChild(new Text(theme.fg("dim", `  ${line}`), 0, 0));
+				}
+			}
 		}
 		if (this.#createError) {
 			this.addChild(new Text(theme.fg("error", replaceTabs(this.#createError)), 0, 0));
 		}
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("dim", " Enter: generate  Tab: toggle scope  Esc: cancel"), 0, 0));
+		const hints = this.#createGenerating ? " Generating..." : " Enter: generate  Tab: toggle scope  Esc: cancel";
+		this.addChild(new Text(theme.fg("dim", hints), 0, 0));
 	}
 
 	#renderCreateReview(): void {
@@ -817,12 +851,21 @@ export class AgentDashboard extends Container {
 		}
 		this.addChild(new Spacer(1));
 		this.addChild(new Text(theme.fg("muted", "systemPrompt preview:"), 0, 0));
-		const previewLines = spec.systemPrompt.split("\n").slice(0, 10);
-		for (const line of previewLines) {
-			this.addChild(new Text(truncateToWidth(replaceTabs(line), this.#uiWidth() - 2), 0, 0));
+		const promptWidth = Math.max(20, this.#uiWidth() - 4);
+		const wrappedPrompt: string[] = [];
+		for (const raw of spec.systemPrompt.split("\n")) {
+			for (const w of wrapTextWithAnsi(replaceTabs(raw), promptWidth)) {
+				wrappedPrompt.push(w);
+			}
 		}
-		if (spec.systemPrompt.split("\n").length > previewLines.length) {
-			this.addChild(new Text(theme.fg("dim", "(truncated)"), 0, 0));
+		const promptPreview = wrappedPrompt.slice(0, 10);
+		for (const line of promptPreview) {
+			this.addChild(new Text(`  ${line}`, 0, 0));
+		}
+		if (wrappedPrompt.length > promptPreview.length) {
+			this.addChild(
+				new Text(theme.fg("dim", `  ... ${wrappedPrompt.length - promptPreview.length} more lines`), 0, 0),
+			);
 		}
 		if (this.#createError) {
 			this.addChild(new Spacer(1));
@@ -834,6 +877,12 @@ export class AgentDashboard extends Container {
 
 	#uiWidth(): number {
 		return Math.max(40, process.stdout.columns ?? 100);
+	}
+
+	/** Rebuild layout and request a TUI render pass (for use after async state changes). */
+	#rebuildAndRender(): void {
+		this.#buildLayout();
+		this.onRequestRender?.();
 	}
 
 	#buildLayout(): void {
@@ -854,10 +903,10 @@ export class AgentDashboard extends Container {
 		} else if (this.#loadError) {
 			this.addChild(new Text(theme.fg("error", `Failed to load agents: ${replaceTabs(this.#loadError)}`), 0, 0));
 			this.addChild(new Spacer(1));
-		} else if (this.#createInput || this.#createGenerating) {
-			this.#renderCreateInput();
 		} else if (this.#createSpec) {
 			this.#renderCreateReview();
+		} else if (this.#createInput || this.#createGenerating) {
+			this.#renderCreateInput();
 		} else if (this.#editInput && this.#editingAgentName) {
 			const editingAgent = this.#allAgents.find(agent => agent.name === this.#editingAgentName) ?? null;
 			const draft = this.#editInput.getValue();
@@ -974,7 +1023,7 @@ export class AgentDashboard extends Container {
 			if (matchesKey(data, "enter") || matchesKey(data, "return") || data === "\n") {
 				void this.#saveGeneratedAgent().catch(error => {
 					this.#createError = error instanceof Error ? error.message : String(error);
-					this.#buildLayout();
+					this.#rebuildAndRender();
 				});
 				return;
 			}

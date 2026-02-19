@@ -176,6 +176,9 @@ export class SelectorController {
 				done();
 				this.ctx.ui.requestRender();
 			};
+			dashboard.onRequestRender = () => {
+				this.ctx.ui.requestRender();
+			};
 			return { component: dashboard, focus: dashboard };
 		});
 	}

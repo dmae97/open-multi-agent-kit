@@ -1,14 +1,23 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Display streaming text preview during agent specification generation to show real-time progress
+- Added `onRequestRender` callback to agent dashboard for triggering UI updates during async operations
 - Added agent creation flow (press N in dashboard) to generate custom agents from natural language descriptions
 - Added ability to save generated agents to project or user scope with automatic identifier and system prompt generation
 - Added scope toggle (Tab) during agent creation to choose between project-level and user-level agent storage
 - Added agent regeneration (R key) to refine generated specifications without restarting the creation flow
 - Added model suggestions in model override editor to help users discover available models
 - Added success notices to confirm agent creation and model override updates
+
+### Changed
+
+- Updated agent creation flow to show review screen before generation completes, improving UX feedback
+- Changed generation status hint to display "Generating..." while specification is being created
+- Improved system prompt preview formatting with text wrapping and line truncation indicators
 
 ### Fixed
 
