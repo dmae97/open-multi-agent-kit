@@ -886,11 +886,12 @@ export class TUI extends Container {
 				buffer += newLines[i];
 			}
 			const renderCursorRow = Math.max(0, newLines.length - 1);
+			const cursorUpdate = this.#buildHardwareCursorSequence(cursorPos, newLines.length, renderCursorRow);
+			buffer += cursorUpdate.sequence;
 			buffer += "\x1b[?2026l"; // End synchronized output
 			this.terminal.write(buffer);
 			this.#cursorRow = renderCursorRow;
-			this.#hardwareCursorRow = renderCursorRow;
-			this.#positionHardwareCursor(cursorPos, newLines.length);
+			this.#hardwareCursorRow = cursorUpdate.row;
 			// Reset max lines when clearing, otherwise track growth
 			if (clear) {
 				this.#maxLinesRendered = newLines.length;
@@ -968,7 +969,7 @@ export class TUI extends Container {
 		if (firstChanged >= newLines.length) {
 			const targetRow = Math.max(0, newLines.length - 1);
 			if (this.#previousLines.length > newLines.length) {
-				let buffer = "\x1b[?2026h\x1b7";
+				let buffer = "\x1b[?2026h";
 				const lineDiff = computeLineDiff(targetRow);
 				if (lineDiff > 0) buffer += `\x1b[${lineDiff}B`;
 				else if (lineDiff < 0) buffer += `\x1b[${-lineDiff}A`;
@@ -990,14 +991,17 @@ export class TUI extends Container {
 				if (extraLines > 0) {
 					buffer += `\x1b[${extraLines}A`;
 				}
-				buffer += "\x1b8\x1b[?2026l";
+				const cursorUpdate = this.#buildHardwareCursorSequence(cursorPos, newLines.length, targetRow);
+				buffer += cursorUpdate.sequence;
+				buffer += "\x1b[?2026l";
 				this.terminal.write(buffer);
-				// Cursor restored to pre-render position by \x1b8; keep tracked row unchanged here.
+				this.#hardwareCursorRow = cursorUpdate.row;
+			} else {
+				this.#positionHardwareCursor(cursorPos, newLines.length);
 			}
 			this.#cursorRow = targetRow;
 			this.#previousLines = newLines;
 			this.#previousWidth = width;
-			this.#positionHardwareCursor(cursorPos, newLines.length);
 			this.#previousViewportTop = Math.max(0, this.#maxLinesRendered - height);
 			return;
 		}
@@ -1014,7 +1018,7 @@ export class TUI extends Container {
 
 		// Render from first changed line to end
 		// Build buffer with all updates wrapped in synchronized output
-		let buffer = "\x1b[?2026h\x1b7"; // Begin synchronized output + save cursor
+		let buffer = "\x1b[?2026h"; // Begin synchronized output
 		const prevViewportBottom = prevViewportTop + height - 1;
 		const moveTargetRow = appendStart ? firstChanged - 1 : firstChanged;
 		if (moveTargetRow > prevViewportBottom) {
@@ -1098,7 +1102,9 @@ export class TUI extends Container {
 			buffer += `\x1b[${extraLines}A`;
 		}
 
-		buffer += "\x1b8\x1b[?2026l"; // Restore cursor, then end synchronized output
+		const cursorUpdate = this.#buildHardwareCursorSequence(cursorPos, newLines.length, finalCursorRow);
+		buffer += cursorUpdate.sequence;
+		buffer += "\x1b[?2026l"; // End synchronized output
 		if (process.env.PI_TUI_DEBUG === "1") {
 			const debugDir = "/tmp/tui";
 			fs.mkdirSync(debugDir, { recursive: true });
@@ -1132,7 +1138,7 @@ export class TUI extends Container {
 		// cursorRow tracks end of content (for viewport calculation)
 		// hardwareCursorRow tracks actual terminal cursor position (for movement)
 		this.#cursorRow = Math.max(0, newLines.length - 1);
-		this.#positionHardwareCursor(cursorPos, newLines.length);
+		this.#hardwareCursorRow = cursorUpdate.row;
 		// Track terminal's working area (grows but doesn't shrink unless cleared)
 		this.#maxLinesRendered = Math.max(this.#maxLinesRendered, newLines.length);
 		this.#previousViewportTop = Math.max(0, this.#maxLinesRendered - height);
