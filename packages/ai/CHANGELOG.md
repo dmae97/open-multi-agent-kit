@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [12.11.3] - 2026-02-19
+
 ### Fixed
 
 - Fixed OpenAI Codex streaming to fail truncated responses that end without a terminal completion event, preventing partial outputs from being treated as successful completions.

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [12.11.3] - 2026-02-19
+
 ### Fixed
 
 - Fixed model selector search initialization to apply the latest live query after asynchronous model loading.

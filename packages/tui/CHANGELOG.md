@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [12.11.3] - 2026-02-19
+
 ### Fixed
 
 - Fixed differential deleted-line rendering when content shrinks to empty so stale first-row content is cleared reliably.
