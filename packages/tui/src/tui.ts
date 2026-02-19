@@ -974,21 +974,23 @@ export class TUI extends Container {
 			else if (lineDiff < 0) buffer += `\x1b[${-lineDiff}A`;
 			buffer += "\r";
 			// Clear extra lines without scrolling
+			// For empty content we clear starting at targetRow; otherwise clear starts on the next line.
 			const extraLines = this.#previousLines.length - newLines.length;
 			if (extraLines > height) {
 				logRedraw(`extraLines > height (${extraLines} > ${height})`);
 				fullRender(true);
 				return;
 			}
-			if (extraLines > 0) {
+			if (extraLines > 0 && newLines.length > 0) {
 				buffer += "\x1b[1B";
 			}
 			for (let i = 0; i < extraLines; i++) {
 				buffer += "\r\x1b[2K";
 				if (i < extraLines - 1) buffer += "\x1b[1B";
 			}
-			if (extraLines > 0) {
-				buffer += `\x1b[${extraLines}A`;
+			const moveUpLines = newLines.length > 0 ? extraLines : Math.max(0, extraLines - 1);
+			if (moveUpLines > 0) {
+				buffer += `\x1b[${moveUpLines}A`;
 			}
 			const cursorUpdate = this.#buildHardwareCursorSequence(cursorPos, newLines.length, targetRow);
 			buffer += cursorUpdate.sequence;
@@ -1082,7 +1084,10 @@ export class TUI extends Container {
 		// Track where cursor ended up after rendering
 		let finalCursorRow = renderEnd;
 
-		// If we had more lines before, clear them and move cursor back
+		// If we had more lines before, clear everything below new content.
+		// Uses \x1b[J (erase-below) to atomically clear all stale rows in one
+		// operation instead of clearing line-by-line. This avoids cursor-tracking
+		// drift that can cause stale content to remain visible.
 		if (this.#previousLines.length > newLines.length) {
 			// Move to end of new content first if we stopped before it
 			if (renderEnd < newLines.length - 1) {
@@ -1090,12 +1095,8 @@ export class TUI extends Container {
 				buffer += `\x1b[${moveDown}B`;
 				finalCursorRow = newLines.length - 1;
 			}
-			const extraLines = this.#previousLines.length - newLines.length;
-			for (let i = newLines.length; i < this.#previousLines.length; i++) {
-				buffer += "\r\n\x1b[2K";
-			}
-			// Move cursor back to end of new content
-			buffer += `\x1b[${extraLines}A`;
+			// Move to the first stale line and erase from there to end of screen
+			buffer += "\r\n\x1b[J\x1b[A";
 		}
 
 		const cursorUpdate = this.#buildHardwareCursorSequence(cursorPos, newLines.length, finalCursorRow);
