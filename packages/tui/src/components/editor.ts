@@ -1156,9 +1156,19 @@ export class Editor implements Component, Focusable {
 		this.#setTextInternal(text);
 	}
 
+	#exitHistoryForEditing(): void {
+		if (this.#historyIndex === -1) return;
+		if (this.#state.cursorLine === 0 && this.#state.cursorCol === 0) {
+			this.#state.cursorLine = this.#state.lines.length - 1;
+			const line = this.#state.lines[this.#state.cursorLine] || "";
+			this.#setCursorCol(line.length);
+		}
+		this.#historyIndex = -1;
+	}
+
 	/** Insert text at the current cursor position */
 	insertText(text: string): void {
-		this.#historyIndex = -1;
+		this.#exitHistoryForEditing();
 		this.#resetKillSequence();
 		this.#recordUndoState();
 
@@ -1176,7 +1186,7 @@ export class Editor implements Component, Focusable {
 
 	// All the editor methods from before...
 	#insertCharacter(char: string): void {
-		this.#historyIndex = -1; // Exit history browsing mode
+		this.#exitHistoryForEditing();
 		this.#resetKillSequence();
 		this.#recordUndoState();
 
