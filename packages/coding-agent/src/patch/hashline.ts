@@ -664,9 +664,7 @@ export function applyHashlineEdits(
 					throw new Error('Insert-between edit (src "A#HH.. B#HH..") requires non-empty dst');
 				}
 				if (edit.before.line <= edit.after.line) {
-					throw new Error(
-						`insert requires after (${edit.after.line}) < before (${edit.before.line})`,
-					);
+					throw new Error(`insert requires after (${edit.after.line}) < before (${edit.before.line})`);
 				}
 				const afterValid = validateRef(edit.after);
 				const beforeValid = validateRef(edit.before);

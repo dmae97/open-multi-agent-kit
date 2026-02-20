@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Changed default value of `tools.intentTracing` setting from false to true
 
 ## [12.14.1] - 2026-02-19
 
