@@ -1,6 +1,19 @@
 # Changelog
 
 ## [Unreleased]
+
+### Added
+
+- Exported `finalizeSubprocessOutput` function to handle subprocess output finalization with submit_result validation
+- Exported `SubmitResultItem` interface for type-safe submit_result tool data extraction
+- Added automatic reminders when subagent stops without calling submit_result tool (up to 3 reminders before aborting)
+- Added system warnings when subagent calls submit_result with null/undefined data or exits without calling submit_result after reminders
+
+### Changed
+
+- Refactored subprocess output finalization logic into dedicated `finalizeSubprocessOutput` function for better testability and maintainability
+- Improved handling of missing submit_result calls by automatically aborting with exit code 1 after 3 reminder prompts
+
 ### Fixed
 
 - Fixed submit_result tool extraction to properly validate status field and only accept 'success' or 'aborted' results

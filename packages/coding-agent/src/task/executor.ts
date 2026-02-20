@@ -248,6 +248,98 @@ function resolveFallbackCompletion(rawOutput: string, outputSchema: unknown): { 
 	return { data: candidate };
 }
 
+export interface SubmitResultItem {
+	data?: unknown;
+	status?: "success" | "aborted";
+	error?: string;
+}
+
+interface FinalizeSubprocessOutputArgs {
+	rawOutput: string;
+	exitCode: number;
+	stderr: string;
+	doneAborted: boolean;
+	signalAborted: boolean;
+	submitResultItems?: SubmitResultItem[];
+	reportFindings?: ReviewFinding[];
+	outputSchema: unknown;
+}
+
+interface FinalizeSubprocessOutputResult {
+	rawOutput: string;
+	exitCode: number;
+	stderr: string;
+	abortedViaSubmitResult: boolean;
+	hasSubmitResult: boolean;
+}
+
+export const SUBAGENT_WARNING_NULL_SUBMIT_RESULT = "SYSTEM WARNING: Subagent called submit_result with null data.";
+export const SUBAGENT_WARNING_MISSING_SUBMIT_RESULT =
+	"SYSTEM WARNING: Subagent exited without calling submit_result tool after 3 reminders.";
+
+export function finalizeSubprocessOutput(args: FinalizeSubprocessOutputArgs): FinalizeSubprocessOutputResult {
+	let { rawOutput, exitCode, stderr } = args;
+	const { submitResultItems, reportFindings, doneAborted, signalAborted, outputSchema } = args;
+	let abortedViaSubmitResult = false;
+	const hasSubmitResult = Array.isArray(submitResultItems) && submitResultItems.length > 0;
+
+	if (hasSubmitResult) {
+		const lastSubmitResult = submitResultItems[submitResultItems.length - 1];
+		if (lastSubmitResult?.status === "aborted") {
+			abortedViaSubmitResult = true;
+			exitCode = 0;
+			stderr = lastSubmitResult.error || "Subagent aborted task";
+			try {
+				rawOutput = JSON.stringify({ aborted: true, error: lastSubmitResult.error }, null, 2);
+			} catch {
+				rawOutput = `{"aborted":true,"error":"${lastSubmitResult.error || "Unknown error"}"}`;
+			}
+		} else {
+			const submitData = lastSubmitResult?.data;
+			if (submitData === null || submitData === undefined) {
+				rawOutput = rawOutput
+					? `${SUBAGENT_WARNING_NULL_SUBMIT_RESULT}\n\n${rawOutput}`
+					: SUBAGENT_WARNING_NULL_SUBMIT_RESULT;
+			} else {
+				const completeData = normalizeCompleteData(submitData, reportFindings);
+				try {
+					rawOutput = JSON.stringify(completeData, null, 2) ?? "null";
+				} catch (err) {
+					const errorMessage = err instanceof Error ? err.message : String(err);
+					rawOutput = `{"error":"Failed to serialize submit_result data: ${errorMessage}"}`;
+				}
+				exitCode = 0;
+				stderr = "";
+			}
+		}
+	} else {
+		const allowFallback = exitCode === 0 && !doneAborted && !signalAborted;
+		const { normalized: normalizedSchema, error: schemaError } = normalizeOutputSchema(outputSchema);
+		const hasOutputSchema = normalizedSchema !== undefined && !schemaError;
+		const fallback = allowFallback ? resolveFallbackCompletion(rawOutput, outputSchema) : null;
+		if (fallback) {
+			const completeData = normalizeCompleteData(fallback.data, reportFindings);
+			try {
+				rawOutput = JSON.stringify(completeData, null, 2) ?? "null";
+			} catch (err) {
+				const errorMessage = err instanceof Error ? err.message : String(err);
+				rawOutput = `{"error":"Failed to serialize fallback completion: ${errorMessage}"}`;
+			}
+			exitCode = 0;
+			stderr = "";
+		} else if (!hasOutputSchema && allowFallback && rawOutput.trim().length > 0) {
+			exitCode = 0;
+			stderr = "";
+		} else if (exitCode === 0) {
+			rawOutput = rawOutput
+				? `${SUBAGENT_WARNING_MISSING_SUBMIT_RESULT}\n\n${rawOutput}`
+				: SUBAGENT_WARNING_MISSING_SUBMIT_RESULT;
+		}
+	}
+
+	return { rawOutput, exitCode, stderr, abortedViaSubmitResult, hasSubmitResult };
+}
+
 /**
  * Extract a short preview from tool args for display.
  */
@@ -982,11 +1074,10 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				if (event.type === "tool_execution_end" && event.toolName === "submit_result") {
 					const details = event.result?.details;
 					const status =
-						details && typeof details === "object"
-							? (details as { status?: unknown }).status
-							: undefined;
-					if (!event.isError && (status === "success" || status === "aborted")) {
+						details && typeof details === "object" ? (details as { status?: unknown }).status : undefined;
+					if (!event.isError && (status === undefined || status === "success" || status === "aborted")) {
 						submitResultCalled = true;
+						requestAbort("terminate");
 					}
 				}
 				if (isAgentEvent(event)) {
@@ -1006,25 +1097,26 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			const reminderToolChoice = buildSubmitResultToolChoice(session.model);
 
 			let retryCount = 0;
-			let previousTools: string[] | null = null;
-			try {
-				while (!submitResultCalled && retryCount < MAX_SUBMIT_RESULT_RETRIES && !abortSignal.aborted) {
+			while (!submitResultCalled && retryCount < MAX_SUBMIT_RESULT_RETRIES && !abortSignal.aborted) {
+				try {
 					retryCount++;
-					if (!previousTools) {
-						previousTools = session.getActiveToolNames();
-						await session.setActiveToolsByName(["submit_result"]);
-					}
 					const reminder = renderPromptTemplate(submitReminderTemplate, {
 						retryCount,
 						maxRetries: MAX_SUBMIT_RESULT_RETRIES,
 					});
 
 					await session.prompt(reminder, reminderToolChoice ? { toolChoice: reminderToolChoice } : undefined);
+				} catch (err) {
+					logger.error("Subagent prompt failed", {
+						error: err instanceof Error ? err.message : String(err),
+					});
 				}
-			} finally {
-				if (previousTools) {
-					await session.setActiveToolsByName(previousTools);
-				}
+			}
+
+			if (!submitResultCalled && !abortSignal.aborted) {
+				aborted = true;
+				exitCode = 1;
+				error ??= SUBAGENT_WARNING_MISSING_SUBMIT_RESULT;
 			}
 
 			const lastMessage = session.state.messages[session.state.messages.length - 1];
@@ -1092,67 +1184,22 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 
 	// Use final output if available, otherwise accumulated output
 	let rawOutput = finalOutputChunks.length > 0 ? finalOutputChunks.join("") : outputChunks.join("");
-	let abortedViaSubmitResult = false;
-	const submitResultItems = progress.extractedToolData?.submit_result as
-		| Array<{ data?: unknown; status?: "success" | "aborted"; error?: string }>
-		| undefined;
+	const submitResultItems = progress.extractedToolData?.submit_result as SubmitResultItem[] | undefined;
 	const reportFindings = progress.extractedToolData?.report_finding as ReviewFinding[] | undefined;
-	const hasSubmitResult = Array.isArray(submitResultItems) && submitResultItems.length > 0;
-	if (hasSubmitResult) {
-		const lastSubmitResult = submitResultItems[submitResultItems.length - 1];
-		if (lastSubmitResult?.status === "aborted") {
-			// Agent explicitly aborted via submit_result tool - clean exit with error info
-			abortedViaSubmitResult = true;
-			exitCode = 0;
-			stderr = lastSubmitResult.error || "Subagent aborted task";
-			try {
-				rawOutput = JSON.stringify({ aborted: true, error: lastSubmitResult.error }, null, 2);
-			} catch {
-				rawOutput = `{"aborted":true,"error":"${lastSubmitResult.error || "Unknown error"}"}`;
-			}
-		} else {
-			// Normal successful completion
-			const submitData = lastSubmitResult?.data;
-			if (submitData === null || submitData === undefined) {
-				// Agent called submit_result but with null/undefined data — treat as missing
-				// so the fallback path can try to extract output from conversation text
-				const warning = "SYSTEM WARNING: Subagent called submit_result with null data.";
-				rawOutput = rawOutput ? `${warning}\n\n${rawOutput}` : warning;
-			} else {
-				const completeData = normalizeCompleteData(submitData, reportFindings);
-				try {
-					rawOutput = JSON.stringify(completeData, null, 2) ?? "null";
-				} catch (err) {
-					const errorMessage = err instanceof Error ? err.message : String(err);
-					rawOutput = `{"error":"Failed to serialize submit_result data: ${errorMessage}"}`;
-				}
-				exitCode = 0;
-				stderr = "";
-			}
-		}
-	} else {
-		const allowFallback = exitCode === 0 && !done.aborted && !signal?.aborted;
-		const { normalized: normalizedSchema, error: schemaError } = normalizeOutputSchema(outputSchema);
-		const hasOutputSchema = normalizedSchema !== undefined && !schemaError;
-		const fallback = allowFallback ? resolveFallbackCompletion(rawOutput, outputSchema) : null;
-		if (fallback) {
-			const completeData = normalizeCompleteData(fallback.data, reportFindings);
-			try {
-				rawOutput = JSON.stringify(completeData, null, 2) ?? "null";
-			} catch (err) {
-				const errorMessage = err instanceof Error ? err.message : String(err);
-				rawOutput = `{"error":"Failed to serialize fallback completion: ${errorMessage}"}`;
-			}
-			exitCode = 0;
-			stderr = "";
-		} else if (!hasOutputSchema && allowFallback && rawOutput.trim().length > 0) {
-			exitCode = 0;
-			stderr = "";
-		} else if (exitCode === 0) {
-			const warning = "SYSTEM WARNING: Subagent exited without calling submit_result tool after 3 reminders.";
-			rawOutput = rawOutput ? `${warning}\n\n${rawOutput}` : warning;
-		}
-	}
+	const finalized = finalizeSubprocessOutput({
+		rawOutput,
+		exitCode,
+		stderr,
+		doneAborted: Boolean(done.aborted),
+		signalAborted: Boolean(signal?.aborted),
+		submitResultItems,
+		reportFindings,
+		outputSchema,
+	});
+	rawOutput = finalized.rawOutput;
+	exitCode = finalized.exitCode;
+	stderr = finalized.stderr;
+	const { abortedViaSubmitResult, hasSubmitResult } = finalized;
 	const { content: truncatedOutput, truncated } = truncateTail(rawOutput, {
 		maxBytes: MAX_OUTPUT_BYTES,
 		maxLines: MAX_OUTPUT_LINES,
