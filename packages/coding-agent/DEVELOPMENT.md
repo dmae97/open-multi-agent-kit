@@ -143,8 +143,13 @@ src/
 ├── internal-urls/            # Internal URL protocol handlers
 │   ├── index.ts              # Router and exports
 │   ├── rule-protocol.ts      # Rule protocol handler
+│   ├── memory-protocol.ts    # memory:// URL handler
 │   └── skill-protocol.ts     # Skill protocol handler
 
+
+├── memories/                 # Autonomous memory pipeline
+│   ├── index.ts              # Pipeline orchestration, injection, /memory command
+│   └── storage.ts            # SQLite-backed job queue and thread registry
 ├── ipy/                      # Python/Jupyter execution
 │   ├── executor.ts           # executePython(), kernel execution
 │   ├── gateway-coordinator.ts # Gateway coordination
@@ -722,7 +727,8 @@ See the `docs/` directory for detailed documentation:
 - `docs/extensions.md` - Extension system documentation
 - `docs/custom-tools.md` - Custom tool development
 - `docs/skills.md` - Skill system documentation
-- `docs/compaction.md` - Context compaction system
+ `docs/compaction.md` - Context compaction system
+ `docs/memory.md` - Autonomous memory system
 - `docs/session.md` - Session management
 - `docs/theme.md` - Theme customization
 - `docs/tui.md` - TUI architecture
