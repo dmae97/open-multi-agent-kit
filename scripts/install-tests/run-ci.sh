@@ -83,9 +83,25 @@ mkdir -p "$TARBALL_APP_DIR"
 (
 	cd "$TARBALL_APP_DIR"
 	bun init -y >/dev/null
+
+	# Write overrides so bun resolves inter-package deps from tarballs, not the registry
+	# (version 12.x.y hasn't been published yet when CI runs pre-release)
+	node -e "
+		const pkg = JSON.parse(require('fs').readFileSync('package.json', 'utf8'));
+		pkg.overrides = {
+			'@oh-my-pi/pi-utils': '$utils_tgz',
+			'@oh-my-pi/pi-natives': '$natives_tgz',
+			'@oh-my-pi/pi-ai': '$ai_tgz',
+			'@oh-my-pi/pi-agent-core': '$agent_tgz',
+			'@oh-my-pi/pi-tui': '$tui_tgz',
+			'@oh-my-pi/omp-stats': '$stats_tgz',
+			'@oh-my-pi/pi-coding-agent': '$coding_agent_tgz'
+		};
+		require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+	"
+
 	bun add "$utils_tgz" "$natives_tgz" "$ai_tgz" "$agent_tgz" "$tui_tgz" "$stats_tgz" "$coding_agent_tgz"
 	smoke_cli ./node_modules/.bin/omp
-)
 
 echo ""
 echo "All install method smoke tests passed"
