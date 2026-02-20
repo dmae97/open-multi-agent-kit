@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added support for Sonnet 4.6 models in adaptive thinking detection
 
 ## [12.15.0] - 2026-02-20
 ### Fixed

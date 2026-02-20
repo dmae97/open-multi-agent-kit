@@ -604,7 +604,23 @@ export function convertMessages(
 ): ChatCompletionMessageParam[] {
 	const params: ChatCompletionMessageParam[] = [];
 
-	const transformedMessages = transformMessages(context.messages, model);
+	const normalizeToolCallId = (id: string): string => {
+		if (compat.requiresMistralToolIds) return normalizeMistralToolId(id, true);
+
+		// Handle pipe-separated IDs from OpenAI Responses API
+		// Format: {call_id}|{id} where {id} can be 400+ chars with special chars (+, /, =)
+		// These come from providers like github-copilot, openai-codex, opencode
+		// Extract just the call_id part and normalize it
+		if (id.includes("|")) {
+			const [callId] = id.split("|");
+			// Sanitize to allowed chars and truncate to 40 chars (OpenAI limit)
+			return callId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+		}
+
+		if (model.provider === "openai") return id.length > 40 ? id.slice(0, 40) : id;
+		return id;
+	};
+	const transformedMessages = transformMessages(context.messages, model, id => normalizeToolCallId(id));
 
 	if (context.systemPrompt) {
 		const useDeveloperRole = model.reasoning && compat.supportsDeveloperRole;

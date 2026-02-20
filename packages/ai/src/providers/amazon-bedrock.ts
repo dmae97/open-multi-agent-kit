@@ -375,13 +375,18 @@ function buildSystemPrompt(
 	return blocks;
 }
 
+function normalizeToolCallId(id: string): string {
+	const sanitized = id.replace(/[^a-zA-Z0-9_-]/g, "_");
+	return sanitized.length > 64 ? sanitized.slice(0, 64) : sanitized;
+}
+
 function convertMessages(
 	context: Context,
 	model: Model<"bedrock-converse-stream">,
 	cacheRetention: CacheRetention,
 ): Message[] {
 	const result: Message[] = [];
-	const transformedMessages = transformMessages(context.messages, model);
+	const transformedMessages = transformMessages(context.messages, model, normalizeToolCallId);
 
 	for (let i = 0; i < transformedMessages.length; i++) {
 		const m = transformedMessages[i];

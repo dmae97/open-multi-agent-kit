@@ -5,151 +5,89 @@ import type { Api, AssistantMessage, Message, Model, ToolCall, ToolResultMessage
  * OpenAI Responses API generates IDs that are 450+ chars with special characters like `|`.
  * Anthropic APIs require IDs matching ^[a-zA-Z0-9_-]+$ (max 64 chars).
  */
-function normalizeToolCallId(id: string): string {
-	// Handle pipe-separated IDs from OpenAI Responses API
-	// Format: {call_id}|{item_id} where {item_id} can be 400+ chars with special chars (+, /, =)
-	// Extract just the call_id part and normalize it
-	if (id.includes("|")) {
-		const [callId] = id.split("|");
-		// Sanitize to allowed chars and truncate to 40 chars (OpenAI limit)
-		return callId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
-	}
-	return id.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40);
-}
-
-function normalizeResponsesToolCallId(id: string): string {
-	const [callId, itemId] = id.split("|");
-	if (callId && itemId) {
-		// Sanitize invalid characters and ensure proper format
-		const sanitizedCallId = callId.replace(/[^a-zA-Z0-9_-]/g, "_");
-		let sanitizedItemId = itemId.replace(/[^a-zA-Z0-9_-]/g, "_");
-		// OpenAI Responses API requires item id to start with "fc"
-		if (!sanitizedItemId.startsWith("fc")) {
-			sanitizedItemId = `fc_${sanitizedItemId}`;
-		}
-		// Truncate to 64 chars and strip trailing underscores (OpenAI Codex rejects them)
-		let normalizedCallId = sanitizedCallId.length > 64 ? sanitizedCallId.slice(0, 64) : sanitizedCallId;
-		let normalizedItemId = sanitizedItemId.length > 64 ? sanitizedItemId.slice(0, 64) : sanitizedItemId;
-		normalizedCallId = normalizedCallId.replace(/_+$/, "");
-		normalizedItemId = normalizedItemId.replace(/_+$/, "");
-		return `${normalizedCallId}|${normalizedItemId}`;
-	}
-	const hash = Bun.hash.xxHash64(id).toString(36);
-	return `call_${hash}|item_${hash}`;
-}
-
-export function transformMessages<TApi extends Api>(messages: Message[], model: Model<TApi>): Message[] {
-	// Build a map of original tool call IDs to normalized IDs for github-copilot cross-API switches
+export function transformMessages<TApi extends Api>(
+	messages: Message[],
+	model: Model<TApi>,
+	normalizeToolCallId?: (id: string, model: Model<TApi>, source: AssistantMessage) => string,
+): Message[] {
+	// Build a map of original tool call IDs to normalized IDs
 	const toolCallIdMap = new Map<string, string>();
-	const skippedToolCallIds = new Set<string>();
-	const needsResponsesToolCallIds =
-		model.api === "openai-responses" ||
-		model.api === "openai-codex-responses" ||
-		model.api === "azure-openai-responses";
 
 	// First pass: transform messages (thinking blocks, tool call ID normalization)
-	const transformed = messages.flatMap<Message>((msg): Message[] => {
+	const transformed = messages.map(msg => {
 		// User messages pass through unchanged
 		if (msg.role === "user") {
-			return [msg];
+			return msg;
 		}
 
 		// Handle toolResult messages - normalize toolCallId if we have a mapping
 		if (msg.role === "toolResult") {
-			if (skippedToolCallIds.has(msg.toolCallId)) {
-				return [];
-			}
 			const normalizedId = toolCallIdMap.get(msg.toolCallId);
 			if (normalizedId && normalizedId !== msg.toolCallId) {
-				return [{ ...msg, toolCallId: normalizedId }];
+				return { ...msg, toolCallId: normalizedId };
 			}
-			if (needsResponsesToolCallIds) {
-				return [{ ...msg, toolCallId: normalizeResponsesToolCallId(msg.toolCallId) }];
-			}
-			return [msg];
+			return msg;
 		}
 
 		// Assistant messages need transformation check
 		if (msg.role === "assistant") {
 			const assistantMsg = msg as AssistantMessage;
-			const isSameProviderApi = assistantMsg.provider === model.provider && assistantMsg.api === model.api;
-			const isErroredAssistant = assistantMsg.stopReason === "error" || assistantMsg.stopReason === "aborted";
-			if (!isSameProviderApi && isErroredAssistant) {
-				for (const block of assistantMsg.content) {
-					if (block.type === "toolCall") {
-						skippedToolCallIds.add(block.id);
-					}
-				}
-				return [];
-			}
+			const isSameModel =
+				assistantMsg.provider === model.provider &&
+				assistantMsg.api === model.api &&
+				assistantMsg.model === model.id;
 
-			// If message is from the same provider and API, keep as is
-			if (isSameProviderApi) {
-				if (
-					(assistantMsg.stopReason === "error" || assistantMsg.stopReason === "aborted") &&
-					assistantMsg.content.length === 0
-				) {
-					return [];
-				}
-				return [msg];
-			}
-
-			// Check if we need to normalize tool call IDs
-			// Anthropic APIs require IDs matching ^[a-zA-Z0-9_-]+$ (max 64 chars)
-			// OpenAI Responses API generates IDs with `|` and 450+ chars
-			// GitHub Copilot routes to Anthropic for Claude models
-			const targetRequiresStrictIds = model.api === "anthropic-messages" || model.provider === "github-copilot";
-			const crossProviderSwitch = assistantMsg.provider !== model.provider;
-			const copilotCrossApiSwitch =
-				assistantMsg.provider === "github-copilot" &&
-				model.provider === "github-copilot" &&
-				assistantMsg.api !== model.api;
-			const needsToolCallIdNormalization = targetRequiresStrictIds && (crossProviderSwitch || copilotCrossApiSwitch);
-
-			// Transform message from different provider/model
 			const transformedContent = assistantMsg.content.flatMap(block => {
 				if (block.type === "thinking") {
+					// For same model: keep thinking blocks with signatures (needed for replay)
+					// even if the thinking text is empty (OpenAI encrypted reasoning)
+					if (isSameModel && block.thinkingSignature) return block;
 					// Skip empty thinking blocks, convert others to plain text
 					if (!block.thinking || block.thinking.trim() === "") return [];
+					if (isSameModel) return block;
 					return {
 						type: "text" as const,
 						text: block.thinking,
 					};
 				}
-				// Normalize tool call IDs when target API requires strict format
+
+				if (block.type === "text") {
+					if (isSameModel) return block;
+					return {
+						type: "text" as const,
+						text: block.text,
+					};
+				}
+
 				if (block.type === "toolCall") {
 					const toolCall = block as ToolCall;
-					if (needsResponsesToolCallIds) {
-						const normalizedId = normalizeResponsesToolCallId(toolCall.id);
+					let normalizedToolCall: ToolCall = toolCall;
+
+					if (!isSameModel && toolCall.thoughtSignature) {
+						normalizedToolCall = { ...toolCall };
+						delete (normalizedToolCall as { thoughtSignature?: string }).thoughtSignature;
+					}
+
+					if (!isSameModel && normalizeToolCallId) {
+						const normalizedId = normalizeToolCallId(toolCall.id, model, assistantMsg);
 						if (normalizedId !== toolCall.id) {
 							toolCallIdMap.set(toolCall.id, normalizedId);
-							return { ...toolCall, id: normalizedId };
-						}
-					} else if (needsToolCallIdNormalization) {
-						const normalizedId = normalizeToolCallId(toolCall.id);
-						if (normalizedId !== toolCall.id) {
-							toolCallIdMap.set(toolCall.id, normalizedId);
-							return { ...toolCall, id: normalizedId };
+							normalizedToolCall = { ...normalizedToolCall, id: normalizedId };
 						}
 					}
+
+					return normalizedToolCall;
 				}
-				// All other blocks pass through unchanged
+
 				return block;
 			});
 
-			if (assistantMsg.stopReason === "error" && transformedContent.length === 0) {
-				return [];
-			}
-
-			// Return transformed assistant message
-			return [
-				{
-					...assistantMsg,
-					content: transformedContent,
-				},
-			];
+			return {
+				...assistantMsg,
+				content: transformedContent,
+			};
 		}
-		return [msg];
+		return msg;
 	});
 
 	// Second pass: insert synthetic empty tool results for orphaned tool calls
@@ -180,41 +118,24 @@ export function transformMessages<TApi extends Api>(messages: Message[], model: 
 				existingToolResultIds = new Set();
 			}
 
+			// Skip errored/aborted assistant messages entirely.
+			// These are incomplete turns that shouldn't be replayed:
+			// - May have partial content (reasoning without message, incomplete tool calls)
+			// - Replaying them can cause API errors (e.g., OpenAI "reasoning without following item")
+			// - The model should retry from the last valid state
 			const assistantMsg = msg as AssistantMessage;
-			const isErroredAssistant = assistantMsg.stopReason === "error" || assistantMsg.stopReason === "aborted";
+			if (assistantMsg.stopReason === "error" || assistantMsg.stopReason === "aborted") {
+				continue;
+			}
+
+			// Track tool calls from this assistant message
 			const toolCalls = assistantMsg.content.filter(b => b.type === "toolCall") as ToolCall[];
-
-			result.push(msg);
-
-			// For errored/aborted messages with tool calls, insert synthetic results immediately
-			// to maintain tool_use/tool_result pairing required by the API
-			// BUT only if there aren't already tool results for these calls later in the array
-			if (isErroredAssistant && toolCalls.length > 0) {
-				// Look ahead to find existing tool results
-				const existingResultIds = new Set<string>();
-				for (let j = i + 1; j < transformed.length; j++) {
-					if (transformed[j].role === "toolResult") {
-						existingResultIds.add((transformed[j] as ToolResultMessage).toolCallId);
-					}
-				}
-				// Only add synthetic results for tool calls that don't have results
-				for (const tc of toolCalls) {
-					if (!existingResultIds.has(tc.id)) {
-						result.push({
-							role: "toolResult",
-							toolCallId: tc.id,
-							toolName: tc.name,
-							content: [{ type: "text", text: "Tool execution was aborted" }],
-							isError: true,
-							timestamp: Date.now(),
-						} as ToolResultMessage);
-					}
-				}
-			} else if (!isErroredAssistant && toolCalls.length > 0) {
-				// Track tool calls to check for orphaned calls later
+			if (toolCalls.length > 0) {
 				pendingToolCalls = toolCalls;
 				existingToolResultIds = new Set();
 			}
+
+			result.push(msg);
 		} else if (msg.role === "toolResult") {
 			existingToolResultIds.add(msg.toolCallId);
 			result.push(msg);
@@ -239,23 +160,6 @@ export function transformMessages<TApi extends Api>(messages: Message[], model: 
 			result.push(msg);
 		} else {
 			result.push(msg);
-		}
-	}
-
-	// Handle orphaned tool calls at the end of the message array
-	// This can happen if the last message is an assistant with tool calls that never got results
-	if (pendingToolCalls.length > 0) {
-		for (const tc of pendingToolCalls) {
-			if (!existingToolResultIds.has(tc.id)) {
-				result.push({
-					role: "toolResult",
-					toolCallId: tc.id,
-					toolName: tc.name,
-					content: [{ type: "text", text: "No result provided" }],
-					isError: true,
-					timestamp: Date.now(),
-				} as ToolResultMessage);
-			}
 		}
 	}
 

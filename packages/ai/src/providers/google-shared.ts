@@ -75,7 +75,12 @@ function isGemini3Model(modelId: string): boolean {
  */
 export function convertMessages<T extends GoogleApiType>(model: Model<T>, context: Context): Content[] {
 	const contents: Content[] = [];
-	const transformedMessages = transformMessages(context.messages, model);
+	const normalizeToolCallId = (id: string): string => {
+		if (!requiresToolCallId(model.id)) return id;
+		return id.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+	};
+
+	const transformedMessages = transformMessages(context.messages, model, normalizeToolCallId);
 
 	for (const msg of transformedMessages) {
 		if (msg.role === "user") {
