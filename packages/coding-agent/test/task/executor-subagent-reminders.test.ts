@@ -5,7 +5,7 @@ import type { LoadExtensionsResult } from "../../src/extensibility/extensions/ty
 import * as sdkModule from "../../src/sdk";
 import type { AgentSession, AgentSessionEvent } from "../../src/session/agent-session";
 import type { AuthStorage } from "../../src/session/auth-storage";
-import { SUBAGENT_WARNING_MISSING_SUBMIT_RESULT, runSubprocess } from "../../src/task/executor";
+import { runSubprocess, SUBAGENT_WARNING_MISSING_SUBMIT_RESULT } from "../../src/task/executor";
 import type { AgentDefinition } from "../../src/task/types";
 
 vi.mock("../../src/sdk", () => ({
@@ -166,6 +166,49 @@ describe("runSubprocess submit_result reminders", () => {
 		expect(result.output).toContain("SYSTEM WARNING: Subagent called submit_result with null data.");
 	});
 
+	it("retries when submit_result tool returns an error before succeeding", async () => {
+		const prompts: string[] = [];
+		const session = createMockSession(({ text, promptIndex, emit, state }) => {
+			prompts.push(text);
+			if (promptIndex === 1) {
+				const assistant = createAssistantStopMessage("attempted submit_result");
+				state.messages.push(assistant);
+				emit({ type: "message_end", message: assistant });
+				emit({
+					type: "tool_execution_end",
+					toolCallId: "tool-error",
+					toolName: "submit_result",
+					result: {
+						content: [{ type: "text", text: "Output does not match schema" }],
+						details: { status: "error", error: "Output does not match schema" },
+					},
+					isError: true,
+				});
+				return;
+			}
+			emit({
+				type: "tool_execution_end",
+				toolCallId: "tool-success",
+				toolName: "submit_result",
+				result: {
+					content: [{ type: "text", text: "Result submitted." }],
+					details: { status: "success", data: { ok: true } },
+				},
+				isError: false,
+			});
+		});
+
+		(sdkModule.createAgentSession as unknown as { mockResolvedValue: (value: unknown) => void }).mockResolvedValue({
+			session,
+			extensionsResult: {} as unknown as LoadExtensionsResult,
+			setToolUIContext: () => {},
+		});
+
+		const result = await runSubprocess({ ...baseOptions, id: "subagent-err-then-success" });
+		expect(prompts).toHaveLength(2);
+		expect(result.exitCode).toBe(0);
+		expect(result.output).toContain('"ok": true');
+	});
 	it("aborts after 3 reminders when submit_result is never called", async () => {
 		const prompts: string[] = [];
 		const session = createMockSession(({ text, promptIndex, emit, state }) => {

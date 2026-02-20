@@ -148,5 +148,5 @@ subprocessToolRegistry.register<SubmitResultDetails>("submit_result", {
 			error: typeof record.error === "string" ? record.error : undefined,
 		};
 	},
-	shouldTerminate: () => true,
+	shouldTerminate: event => !event.isError,
 });

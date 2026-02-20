@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - Exported `finalizeSubprocessOutput` function to handle subprocess output finalization with submit_result validation
@@ -11,11 +10,14 @@
 
 ### Changed
 
+- Simplified submit_result termination logic to immediately abort on successful tool execution instead of waiting for message_end event
+- Updated submit_result tool to only terminate on successful execution (when isError is false), allowing retries on tool errors
 - Refactored subprocess output finalization logic into dedicated `finalizeSubprocessOutput` function for better testability and maintainability
 - Improved handling of missing submit_result calls by automatically aborting with exit code 1 after 3 reminder prompts
 
 ### Fixed
 
+- Fixed submit_result retry behavior to properly handle tool execution errors and allow the subagent to retry before aborting
 - Fixed submit_result tool extraction to properly validate status field and only accept 'success' or 'aborted' results
 
 ## [12.15.1] - 2026-02-20

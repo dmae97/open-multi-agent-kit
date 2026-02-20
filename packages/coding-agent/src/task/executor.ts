@@ -560,7 +560,6 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 	type AbortReason = "signal" | "terminate";
 	let abortSent = false;
 	let abortReason: AbortReason | undefined;
-	let pendingTerminationTimeoutId: NodeJS.Timeout | null = null;
 	const listenerController = new AbortController();
 	const listenerSignal = listenerController.signal;
 	const abortController = new AbortController();
@@ -593,24 +592,6 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		abortController.abort();
 		if (activeSession) {
 			void activeSession.abort();
-		}
-		cancelPendingTermination();
-	};
-
-	const schedulePendingTermination = () => {
-		if (pendingTerminationTimeoutId || abortSent || resolved) return;
-		pendingTerminationTimeoutId = setTimeout(() => {
-			pendingTerminationTimeoutId = null;
-			if (!resolved) {
-				requestAbort("terminate");
-			}
-		}, 2000);
-	};
-
-	const cancelPendingTermination = () => {
-		if (pendingTerminationTimeoutId) {
-			clearTimeout(pendingTerminationTimeoutId);
-			pendingTerminationTimeoutId = null;
 		}
 	};
 
@@ -796,6 +777,9 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 								existing.push(data);
 							}
 							progress.extractedToolData[event.toolName] = existing;
+							if (event.toolName === "submit_result") {
+								submitResultCalled = true;
+							}
 						}
 					}
 
@@ -809,8 +793,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 							isError: event.isError,
 						})
 					) {
-						// Don't terminate immediately - wait for message_end to get token counts
-						schedulePendingTermination();
+						requestAbort("terminate");
 					}
 				}
 				flushProgress = true;
@@ -876,11 +859,6 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 					}
 					// Accumulate tokens for progress display
 					progress.tokens += getUsageTokens(messageUsage);
-				}
-				// If pending termination, now we have tokens - terminate immediately
-				if (pendingTerminationTimeoutId) {
-					cancelPendingTermination();
-					requestAbort("terminate");
 				}
 				break;
 			}
@@ -1071,15 +1049,6 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 
 			const MAX_SUBMIT_RESULT_RETRIES = 3;
 			unsubscribe = session.subscribe(event => {
-				if (event.type === "tool_execution_end" && event.toolName === "submit_result") {
-					const details = event.result?.details;
-					const status =
-						details && typeof details === "object" ? (details as { status?: unknown }).status : undefined;
-					if (!event.isError && (status === undefined || status === "success" || status === "aborted")) {
-						submitResultCalled = true;
-						requestAbort("terminate");
-					}
-				}
 				if (isAgentEvent(event)) {
 					try {
 						processEvent(event);
@@ -1175,7 +1144,6 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		clearTimeout(progressTimeoutId);
 		progressTimeoutId = null;
 	}
-	cancelPendingTermination();
 
 	let exitCode = done.exitCode;
 	if (done.error) {
