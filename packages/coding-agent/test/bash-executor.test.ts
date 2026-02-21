@@ -131,6 +131,35 @@ describe("executeBash", () => {
 		expect(result.output).not.toContain("done");
 	});
 
+	it("resets persistent session state after abort", async () => {
+		if (process.platform === "win32") {
+			return;
+		}
+
+		const sessionKey = "reset-on-abort";
+		await executeBash("export PI_RESET_VAR=alive", { cwd: tempDir, timeout: 5000, sessionKey });
+		const beforeAbort = await executeBash("echo $PI_RESET_VAR", { cwd: tempDir, timeout: 5000, sessionKey });
+		expect(beforeAbort.output.trim()).toBe("alive");
+
+		const controller = new AbortController();
+		const abortPromise = executeBash("sleep 10", {
+			cwd: tempDir,
+			timeout: 5000,
+			signal: controller.signal,
+			sessionKey,
+		});
+		await Bun.sleep(50);
+		controller.abort();
+		const aborted = await abortPromise;
+		expect(aborted.cancelled).toBe(true);
+
+		const afterAbort = await executeBash("echo ${PI_RESET_VAR:-unset}", {
+			cwd: tempDir,
+			timeout: 5000,
+			sessionKey,
+		});
+		expect(afterAbort.output.trim()).toBe("unset");
+	});
 	it("streams output chunks", async () => {
 		const chunks: string[] = [];
 		const result = await executeBash("i=1; while [ $i -le 20 ]; do echo line$i; i=$((i+1)); done", {

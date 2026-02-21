@@ -1,3 +1,4 @@
+import { getAntigravityUserAgent } from "../providers/google-gemini-cli";
 import type {
 	UsageAmount,
 	UsageFetchContext,
@@ -9,7 +10,6 @@ import type {
 	UsageWindow,
 } from "../usage";
 import { refreshAntigravityToken } from "../utils/oauth/google-antigravity";
-import { getAntigravityUserAgent } from "../providers/google-gemini-cli";
 
 interface AntigravityQuotaInfo {
 	remainingFraction?: number;

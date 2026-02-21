@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Modified bash command normalization to only apply explicit head/tail parameters from tool input, removing automatic extraction from command pipes
+- Updated shell snapshot creation to use explicit timeout and kill signal configuration for more reliable process termination
+
+### Fixed
+
+- Fixed persistent shell session state not being reset after command abort or hard timeout, preventing stale environment variables from affecting subsequent commands
+- Fixed hard timeout handling to properly interrupt long-running commands that exceed the grace period beyond the configured timeout
 
 ## [12.17.1] - 2026-02-21
 ### Added

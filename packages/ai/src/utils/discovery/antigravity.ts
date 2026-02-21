@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { Model } from "../../types";
 import { getAntigravityUserAgent } from "../../providers/google-gemini-cli";
+import type { Model } from "../../types";
 
 const DEFAULT_ANTIGRAVITY_DISCOVERY_ENDPOINT = "https://daily-cloudcode-pa.sandbox.googleapis.com";
 const FETCH_AVAILABLE_MODELS_PATH = "/v1internal:fetchAvailableModels";

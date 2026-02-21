@@ -34,6 +34,8 @@ export interface BashResult {
 	artifactId?: string;
 }
 
+const HARD_TIMEOUT_GRACE_MS = 5_000;
+
 const shellSessions = new Map<string, Shell>();
 
 export async function executeBash(command: string, options?: BashExecutorOptions): Promise<BashResult> {
@@ -65,74 +67,106 @@ export async function executeBash(command: string, options?: BashExecutorOptions
 		};
 	}
 
+	const sessionKey = buildSessionKey(shell, prefix, snapshotPath, shellEnv, options?.sessionKey);
+	let shellSession = shellSessions.get(sessionKey);
+	if (!shellSession) {
+		shellSession = new Shell({ sessionEnv: shellEnv, snapshotPath: snapshotPath ?? undefined });
+		shellSessions.set(sessionKey, shellSession);
+	}
+	const signal = options?.signal;
+	const abortHandler = () => {
+		shellSession.abort(signal?.reason instanceof Error ? signal.reason.message : undefined);
+	};
+	if (signal) {
+		signal.addEventListener("abort", abortHandler, { once: true });
+	}
+
+	let hardTimeoutTimer: NodeJS.Timeout | undefined;
+	const hardTimeoutDeferred = Promise.withResolvers<"hard-timeout">();
+	const baseTimeoutMs = Math.max(1_000, options?.timeout ?? 300_000);
+	const hardTimeoutMs = baseTimeoutMs + HARD_TIMEOUT_GRACE_MS;
+	hardTimeoutTimer = setTimeout(() => {
+		shellSession.abort(`Hard timeout after ${Math.round(hardTimeoutMs / 1000)}s`);
+		hardTimeoutDeferred.resolve("hard-timeout");
+	}, hardTimeoutMs);
+
+	let resetSession = false;
+
 	try {
-		const sessionKey = buildSessionKey(shell, prefix, snapshotPath, shellEnv, options?.sessionKey);
-		let shellSession = shellSessions.get(sessionKey);
-		if (!shellSession) {
-			shellSession = new Shell({ sessionEnv: shellEnv, snapshotPath: snapshotPath ?? undefined });
-			shellSessions.set(sessionKey, shellSession);
-		}
+		const runPromise = shellSession.run(
+			{
+				command: finalCommand,
+				cwd: options?.cwd,
+				env: options?.env,
+				timeoutMs: options?.timeout,
+				signal,
+			},
+			(err, chunk) => {
+				if (!err) {
+					enqueueChunk(chunk);
+				}
+			},
+		);
 
-		const signal = options?.signal;
-		const abortHandler = () => {
-			shellSession.abort(signal?.reason instanceof Error ? signal.reason.message : undefined);
-		};
-		if (signal) {
-			signal.addEventListener("abort", abortHandler, { once: true });
-		}
+		const winner = await Promise.race([
+			runPromise.then(result => ({ kind: "result" as const, result })),
+			hardTimeoutDeferred.promise.then(() => ({ kind: "hard-timeout" as const })),
+		]);
 
-		try {
-			const result = await shellSession.run(
-				{
-					command: finalCommand,
-					cwd: options?.cwd,
-					env: options?.env,
-					timeoutMs: options?.timeout,
-					signal,
-				},
-				(err, chunk) => {
-					if (!err) {
-						enqueueChunk(chunk);
-					}
-				},
-			);
-
-			await pendingChunks;
-
-			// Handle timeout
-			if (result.timedOut) {
-				const annotation = options?.timeout
-					? `Command timed out after ${Math.round(options.timeout / 1000)} seconds`
-					: "Command timed out";
-				return {
-					exitCode: undefined,
-					cancelled: true,
-					...(await sink.dump(annotation)),
-				};
-			}
-
-			// Handle cancellation
-			if (result.cancelled) {
-				return {
-					exitCode: undefined,
-					cancelled: true,
-					...(await sink.dump("Command cancelled")),
-				};
-			}
-
-			// Normal completion
-			return {
-				exitCode: result.exitCode,
-				cancelled: false,
-				...(await sink.dump()),
-			};
-		} finally {
-			if (signal) {
-				signal.removeEventListener("abort", abortHandler);
-			}
-		}
-	} finally {
 		await pendingChunks;
+
+		if (winner.kind === "hard-timeout") {
+			resetSession = true;
+			return {
+				exitCode: undefined,
+				cancelled: true,
+				...(await sink.dump(`Command exceeded hard timeout after ${Math.round(hardTimeoutMs / 1000)} seconds`)),
+			};
+		}
+
+		// Handle timeout
+		if (winner.result.timedOut) {
+			const annotation = options?.timeout
+				? `Command timed out after ${Math.round(options.timeout / 1000)} seconds`
+				: "Command timed out";
+			resetSession = true;
+			return {
+				exitCode: undefined,
+				cancelled: true,
+				...(await sink.dump(annotation)),
+			};
+		}
+
+		// Handle cancellation
+		if (winner.result.cancelled) {
+			resetSession = true;
+			return {
+				exitCode: undefined,
+				cancelled: true,
+				...(await sink.dump("Command cancelled")),
+			};
+		}
+
+		// Normal completion
+		return {
+			exitCode: winner.result.exitCode,
+			cancelled: false,
+			...(await sink.dump()),
+		};
+	} catch (err) {
+		resetSession = true;
+		throw err;
+	} finally {
+		if (hardTimeoutTimer) {
+			clearTimeout(hardTimeoutTimer);
+		}
+		if (signal) {
+			signal.removeEventListener("abort", abortHandler);
+		}
+		await pendingChunks;
+		if (resetSession) {
+			shellSessions.delete(sessionKey);
+		}
 	}
 }
 

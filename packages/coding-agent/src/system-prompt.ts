@@ -61,6 +61,7 @@ export async function loadGitContext(cwd: string): Promise<GitContext | null> {
 			stdout: "pipe",
 			stderr: "ignore",
 			timeout: timeout,
+			killSignal: "SIGKILL",
 		});
 		return untilAborted(abortSignal, async () => {
 			const exitCode = await proc.exited;

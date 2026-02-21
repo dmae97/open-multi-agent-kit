@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Exported `getAntigravityUserAgent()` function for constructing Antigravity User-Agent headers
+
+### Changed
+
+- Updated default Antigravity version from 1.15.8 to 1.18.3
+- Unified User-Agent header generation across Antigravity API calls to use centralized `getAntigravityUserAgent()` function
 
 ## [12.17.1] - 2026-02-21
 ### Added

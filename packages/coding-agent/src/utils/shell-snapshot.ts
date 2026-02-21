@@ -9,9 +9,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { postmortem } from "@oh-my-pi/pi-utils";
-import { $ } from "bun";
 
 const cachedSnapshotPaths = new Map<string, string>();
+const SNAPSHOT_TIMEOUT_MS = 2_000;
 
 function sanitizeSnapshotEnv(env: Record<string, string | undefined>): Record<string, string | undefined> {
 	const sanitized = { ...env };
@@ -153,8 +153,23 @@ export async function getOrCreateSnapshot(
 
 	try {
 		const snapshotEnv = sanitizeSnapshotEnv(env);
-		await $`${shell} -c ${script}`.env(snapshotEnv).quiet().text();
-		if (fs.existsSync(snapshotPath)) {
+		const spawnEnv: Record<string, string> = {};
+		for (const [key, value] of Object.entries(snapshotEnv)) {
+			if (value !== undefined) {
+				spawnEnv[key] = value;
+			}
+		}
+		const child = Bun.spawn([shell, "-c", script], {
+			env: spawnEnv,
+			stdin: "ignore",
+			stdout: "ignore",
+			stderr: "ignore",
+			timeout: SNAPSHOT_TIMEOUT_MS,
+			killSignal: "SIGKILL",
+		});
+
+		await child.exited;
+		if (child.exitCode === 0 && fs.existsSync(snapshotPath)) {
 			cachedSnapshotPaths.set(cacheKey, snapshotPath);
 			return snapshotPath;
 		}
