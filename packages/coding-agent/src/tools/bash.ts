@@ -139,6 +139,7 @@ export class BashTool implements AgentTool<typeof bashSchema, BashToolDetails> {
 					artifactId,
 				})
 			: await executeBash(command, {
+					sessionKey: this.session.getSessionId?.() ?? undefined,
 					cwd: commandCwd,
 					timeout: timeoutMs,
 					signal,
