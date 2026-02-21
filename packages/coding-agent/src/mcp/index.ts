@@ -8,10 +8,12 @@
 // Client
 export { callTool, connectToServer, disconnectServer, listTools, serverSupportsTools } from "./client";
 // Config
-export type { ExaFilterResult, LoadMCPConfigsOptions, LoadMCPConfigsResult } from "./config";
+export type { BrowserFilterResult, ExaFilterResult, LoadMCPConfigsOptions, LoadMCPConfigsResult } from "./config";
 export {
 	extractExaApiKey,
+	filterBrowserMCPServers,
 	filterExaMCPServers,
+	isBrowserMCPServer,
 	isExaMCPServer,
 	loadAllMCPConfigs,
 	validateServerConfig,

@@ -18,6 +18,8 @@ export interface LoadMCPConfigsOptions {
 	enableProjectConfig?: boolean;
 	/** Whether to filter out Exa MCP servers (default: true) */
 	filterExa?: boolean;
+	/** Whether to filter out browser MCP servers when builtin browser tool is enabled (default: false) */
+	filterBrowser?: boolean;
 }
 
 /** Result of loading MCP configs */
@@ -91,6 +93,7 @@ function convertToLegacyConfig(server: MCPServer): MCPServerConfig {
 export async function loadAllMCPConfigs(cwd: string, options?: LoadMCPConfigsOptions): Promise<LoadMCPConfigsResult> {
 	const enableProjectConfig = options?.enableProjectConfig ?? true;
 	const filterExa = options?.filterExa ?? true;
+	const filterBrowser = options?.filterBrowser ?? false;
 
 	// Load MCP servers via capability system
 	const result = await loadCapability<MCPServer>(mcpCapability.id, { cwd });
@@ -103,8 +106,8 @@ export async function loadAllMCPConfigs(cwd: string, options?: LoadMCPConfigsOpt
 	// Load user-level disabled servers list
 	const disabledServers = new Set(await readDisabledServers(getMCPConfigPath("user", cwd)));
 	// Convert to legacy format and preserve source metadata
-	const configs: Record<string, MCPServerConfig> = {};
-	const sources: Record<string, SourceMeta> = {};
+	let configs: Record<string, MCPServerConfig> = {};
+	let sources: Record<string, SourceMeta> = {};
 	for (const server of servers) {
 		const config = convertToLegacyConfig(server);
 		if (config.enabled === false || (server._source.level !== "user" && disabledServers.has(server.name))) {
@@ -114,11 +117,19 @@ export async function loadAllMCPConfigs(cwd: string, options?: LoadMCPConfigsOpt
 		sources[server.name] = server._source;
 	}
 
-	const exaApiKeys: string[] = [];
+	let exaApiKeys: string[] = [];
 
 	if (filterExa) {
-		const filterResult = filterExaMCPServers(configs, sources);
-		return { configs: filterResult.configs, exaApiKeys: filterResult.exaApiKeys, sources: filterResult.sources };
+		const exaResult = filterExaMCPServers(configs, sources);
+		configs = exaResult.configs;
+		sources = exaResult.sources;
+		exaApiKeys = exaResult.exaApiKeys;
+	}
+
+	if (filterBrowser) {
+		const browserResult = filterBrowserMCPServers(configs, sources);
+		configs = browserResult.configs;
+		sources = browserResult.sources;
 	}
 
 	return { configs, exaApiKeys, sources };
@@ -263,4 +274,90 @@ export function validateServerConfig(name: string, config: MCPServerConfig): str
 	}
 
 	return errors;
+}
+
+/** Known browser automation MCP server names (lowercase) */
+const BROWSER_MCP_NAMES = new Set([
+	"puppeteer",
+	"playwright",
+	"browserbase",
+	"browser-tools",
+	"browser-use",
+	"browser",
+]);
+
+/** Patterns matching browser MCP package names in command/args */
+const BROWSER_MCP_PKG_PATTERN =
+	// Official packages
+	// - @modelcontextprotocol/server-puppeteer
+	// - @playwright/mcp
+	// - @browserbasehq/mcp-server-browserbase
+	// - @agentdeskai/browser-tools-mcp
+	// - @agent-infra/mcp-server-browser
+	// Community packages: puppeteer-mcp-server, playwright-mcp, pptr-mcp, etc.
+	/(?:@modelcontextprotocol\/server-puppeteer|@playwright\/mcp|@browserbasehq\/mcp-server-browserbase|@agentdeskai\/browser-tools-mcp|@agent-infra\/mcp-server-browser|puppeteer-mcp|playwright-mcp|pptr-mcp|browser-use-mcp|mcp-browser-use)/i;
+
+/** URL patterns for hosted browser MCP services */
+const BROWSER_MCP_URL_PATTERN = /browserbase\.com|browser-use\.com/i;
+
+/**
+ * Check if a server config is a browser automation MCP server.
+ */
+export function isBrowserMCPServer(name: string, config: MCPServerConfig): boolean {
+	// Check by server name
+	if (BROWSER_MCP_NAMES.has(name.toLowerCase())) {
+		return true;
+	}
+
+	// Check by URL for HTTP/SSE servers
+	if (config.type === "http" || config.type === "sse") {
+		const httpConfig = config as { url?: string };
+		if (httpConfig.url && BROWSER_MCP_URL_PATTERN.test(httpConfig.url)) {
+			return true;
+		}
+	}
+
+	// Check by command/args for stdio servers
+	if (!config.type || config.type === "stdio") {
+		const stdioConfig = config as { command?: string; args?: string[] };
+		if (stdioConfig.command && BROWSER_MCP_PKG_PATTERN.test(stdioConfig.command)) {
+			return true;
+		}
+		if (stdioConfig.args?.some(arg => BROWSER_MCP_PKG_PATTERN.test(arg))) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/** Result of filtering browser MCP servers */
+export interface BrowserFilterResult {
+	/** Configs with browser servers removed */
+	configs: Record<string, MCPServerConfig>;
+	/** Source metadata for remaining servers */
+	sources: Record<string, SourceMeta>;
+}
+
+/**
+ * Filter out browser automation MCP servers.
+ * Since we have a native browser tool, we don't need these MCP servers.
+ */
+export function filterBrowserMCPServers(
+	configs: Record<string, MCPServerConfig>,
+	sources: Record<string, SourceMeta>,
+): BrowserFilterResult {
+	const filtered: Record<string, MCPServerConfig> = {};
+	const filteredSources: Record<string, SourceMeta> = {};
+
+	for (const [name, config] of Object.entries(configs)) {
+		if (!isBrowserMCPServer(name, config)) {
+			filtered[name] = config;
+			if (sources[name]) {
+				filteredSources[name] = sources[name];
+			}
+		}
+	}
+
+	return { configs: filtered, sources: filteredSources };
 }

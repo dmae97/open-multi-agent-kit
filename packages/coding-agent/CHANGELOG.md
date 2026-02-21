@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `filterBrowser` option to filter out browser automation MCP servers when builtin browser tool is enabled
+- Added `isBrowserMCPServer()` function to detect browser automation MCP servers by name, URL, or command patterns
+- Added `filterBrowserMCPServers()` function to remove browser MCP servers from loaded configurations
+- Added `BrowserFilterResult` type for browser MCP server filtering results
 
 ## [12.17.0] - 2026-02-21
 ### Added
