@@ -3,6 +3,7 @@
  */
 import * as os from "node:os";
 import { $env, hasFsCode, isEnoent, logger } from "@oh-my-pi/pi-utils";
+import { untilAborted } from "@oh-my-pi/pi-utils/abortable";
 import { getGpuCachePath, getProjectDir } from "@oh-my-pi/pi-utils/dirs";
 import { $ } from "bun";
 import { contextFileCapability } from "./capability/context-file";
@@ -49,47 +50,38 @@ async function loadPreloadedSkillContents(preloadedSkills: Skill[]): Promise<Pre
  * Returns structured git data or null if not in a git repo.
  */
 export async function loadGitContext(cwd: string): Promise<GitContext | null> {
-	const runGit = async (args: string[], timeoutMs = 1500): Promise<string | null> => {
+	const timeout = 3000;
+	const abortSignal = AbortSignal.timeout(timeout);
+
+	const git = async (...args: string[]): Promise<string | null> => {
 		const proc = Bun.spawn(["git", ...args], {
 			cwd,
 			stdout: "pipe",
 			stderr: "ignore",
+			timeout: timeout,
 		});
-		const stdoutPromise = proc.stdout ? new Response(proc.stdout).text() : Promise.resolve("");
-		const race = await Promise.race([
-			proc.exited.then(() => "exited" as const),
-			Bun.sleep(timeoutMs).then(() => "timeout" as const),
-		]);
-
-		if (race === "timeout") {
-			proc.kill();
-			await stdoutPromise.catch(() => null);
-			logger.debug("Git context command timed out", { cwd, args, timeoutMs });
-			return null;
-		}
-
-		const exitCode = await proc.exited;
-		const stdout = await stdoutPromise.catch(() => "");
-		if (exitCode !== 0) return null;
-
-		const trimmed = stdout.trim();
-		return trimmed.length > 0 ? trimmed : "";
+		return untilAborted(abortSignal, async () => {
+			const exitCode = await proc.exited;
+			const stdout = await proc.stdout.text();
+			return exitCode === 0 ? stdout.trim() : null;
+		});
 	};
+
 	// Check if inside a git repo
-	const isGitRepo = await runGit(["rev-parse", "--is-inside-work-tree"]);
+	const isGitRepo = await git("rev-parse", "--is-inside-work-tree");
 	if (isGitRepo !== "true") return null;
-	const currentBranch = await runGit(["rev-parse", "--abbrev-ref", "HEAD"]);
+	const currentBranch = await git("rev-parse", "--abbrev-ref", "HEAD");
 	if (!currentBranch) return null;
 	let mainBranch = "main";
-	const mainExists = await runGit(["rev-parse", "--verify", "main"]);
+	const mainExists = await git("rev-parse", "--verify", "main");
 	if (mainExists === null) {
-		const masterExists = await runGit(["rev-parse", "--verify", "master"]);
+		const masterExists = await git("rev-parse", "--verify", "master");
 		if (masterExists !== null) mainBranch = "master";
 	}
 
 	const [status, commits] = await Promise.all([
-		runGit(["status", "--porcelain", "--untracked-files=no"], 2000),
-		runGit(["log", "--oneline", "-5"]),
+		git("status", "--porcelain", "--untracked-files=no"),
+		git("log", "--oneline", "-5"),
 	]);
 	return {
 		isRepo: true,
