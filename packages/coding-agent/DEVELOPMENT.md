@@ -1,728 +1,1168 @@
 # coding-agent Development Guide
 
-This document describes the architecture and development workflow for the coding-agent package.
+This guide reflects the current implementation in `packages/coding-agent/src/` and focuses on architecture, extension points, and development workflow.
 
-## Architecture Overview
+## Directory Tree (Current `src/` layout)
 
-The coding-agent is structured into distinct layers:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         CLI Layer                           │
-│  cli.ts → main.ts → cli/args.ts, cli/file-processor.ts     │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                       Mode Layer                            │
-│  modes/interactive-mode.ts   modes/print-mode.ts   modes/rpc/│
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                       Core Layer                            │
-│  session/agent-session.ts, sdk.ts (SDK wrapper)            │
-│  session/session-manager.ts, config/model-resolver.ts, etc.│
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   External Dependencies                     │
-│  @oh-my-pi/pi-agent-core (Agent core)                      │
-│  @oh-my-pi/pi-ai (models, providers)                   │
-│  @oh-my-pi/pi-tui (TUI components)                         │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## Directory Structure
-
-```
+```text
 src/
-├── cli.ts                    # CLI entry point (shebang, calls main)
-├── main.ts                   # Main orchestration, argument handling, mode routing
-├── index.ts                  # Public API exports (SDK)
-├── config.ts                 # APP_NAME, VERSION, paths (getAgentDir, etc.)
-├── migrations.ts             # Session/config migration logic
-├── sdk.ts                    # SDK wrapper for programmatic usage
-├── system-prompt.ts          # buildSystemPrompt(), loadProjectContextFiles()
-├── cursor.ts                 # Cursor exec bridge (flattened from execution/cursor/)
-
-├── cli/                      # CLI-specific utilities
-│   ├── args.ts               # parseArgs(), printHelp(), Args interface
-│   ├── file-processor.ts     # processFileArguments() for @file args
-│   ├── list-models.ts        # --list-models implementation
-│   ├── plugin-cli.ts         # Plugin management CLI
-│   ├── session-picker.ts     # selectSession() TUI for --resume
-│   └── update-cli.ts         # Self-update CLI
-
-├── capability/               # Capability system (extension types)
-│   ├── index.ts              # Main capability registry and discovery
-│   ├── context-file.ts       # Context file capability
-│   ├── extension.ts          # Extension capability
-│   ├── hook.ts               # Hook capability
-│   ├── instruction.ts        # Instruction capability
-│   ├── mcp.ts                # MCP capability
-│   ├── prompt.ts             # Prompt capability
-│   ├── rule.ts               # Rulebook rule capability
-│   ├── skill.ts              # Skill capability
-│   ├── slash-command.ts      # Slash command capability
-│   ├── system-prompt.ts      # System prompt capability
-│   └── tool.ts               # Tool capability
-
-├── config/                   # Configuration management
-│   ├── keybindings.ts        # Keybinding configuration
-│   ├── model-registry.ts     # Model registry and configuration
-│   ├── model-resolver.ts     # resolveModelScope(), restoreModelFromSession()
-│   ├── prompt-templates.ts   # Prompt template loading and rendering
-│   └── settings-manager.ts   # SettingsManager class - user preferences
-
-├── discovery/                # Extension discovery from multiple sources
-│   ├── index.ts              # Main discovery orchestration
-│   ├── builtin.ts            # Built-in extensions
-│   ├── claude.ts             # Claude.md discovery
-│   ├── cline.ts              # Cline .mcp.json discovery
-│   ├── codex.ts              # .codex discovery
-│   ├── cursor.ts             # Cursor .cursorrules discovery
-│   ├── gemini.ts             # Gemini .config discovery
-│   ├── github.ts             # GitHub extension discovery
-│   ├── mcp-json.ts           # MCP JSON discovery
-│   ├── vscode.ts             # VSCode extension discovery
-│   ├── windsurf.ts           # Windsurf discovery
-│   └── helpers.ts            # Discovery helper functions
-
-├── exa/                      # Exa MCP tools (22 tools)
-│   ├── index.ts              # Exa tools exports
-│   ├── company.ts            # Company search
-│   ├── linkedin.ts           # LinkedIn search
-│   ├── mcp-client.ts         # MCP client for Exa
-│   ├── render.ts             # Exa result rendering
-│   ├── researcher.ts         # Research tools
-│   ├── search.ts             # Search tools
-│   ├── types.ts              # Exa types
-│   └── websets.ts            # Websets tools
-
-├── exec/                     # Bash/shell execution
-│   ├── bash-executor.ts      # executeBash() with streaming, abort
-│   └── exec.ts               # Process execution utilities
-
-├── export/                   # Export functionality
-│   ├── custom-share.ts       # Custom sharing
-│   ├── ttsr.ts               # Text-to-speech/speech-to-text utilities
-│   └── html/                 # Session export to HTML
-│       └── index.ts          # HTML export logic
-
-├── extensibility/            # Extension and customization systems
-│   ├── skills.ts             # loadSkills(), skill discovery
-│   ├── slash-commands.ts     # loadSlashCommands()
-│   │
-│   ├── custom-commands/      # Custom command loading system
-│   │   └── types.ts          # CustomCommand types
-│   │
-│   ├── custom-tools/         # Custom tool loading system
-│   │   ├── index.ts          # Custom tool exports
-│   │   ├── types.ts          # CustomToolFactory, CustomToolDefinition
-│   │   ├── loader.ts         # loadCustomTools()
-│   │   └── wrapper.ts        # Tool wrapper utilities
-│   │
-│   ├── extensions/           # Extension system
-│   │   ├── index.ts          # Extension exports
-│   │   ├── types.ts          # Extension types
-│   │   ├── loader.ts         # Extension loading
-│   │   ├── runner.ts         # Extension event dispatch
-│   │   └── wrapper.ts        # Extension wrappers
-│   │
-│   ├── hooks/                # Hook system
-│   │   ├── index.ts          # Hook exports
-│   │   ├── types.ts          # HookAPI, HookContext, event types
-│   │   ├── loader.ts         # loadHooks()
-│   │   └── runner.ts         # runHook() event dispatch
-│   │
-│   └── plugins/              # Plugin system
-│       └── (plugin loading and management)
-
-├── internal-urls/            # Internal URL protocol handlers
-│   ├── index.ts              # Router and exports
-│   ├── rule-protocol.ts      # Rule protocol handler
-│   └── skill-protocol.ts     # Skill protocol handler
-
-├── ipy/                      # Python/Jupyter execution
-│   ├── executor.ts           # executePython(), kernel execution
-│   ├── gateway-coordinator.ts # Gateway coordination
-│   ├── kernel.ts             # PythonKernel class
-│   ├── modules.ts            # Python module discovery
-│   ├── prelude.ts            # Python prelude (TS bindings)
-│   └── prelude.py            # Python prelude script
-
-├── lsp/                      # LSP integration
-│   ├── index.ts              # LSP exports
-│   ├── client.ts             # LSP client
-│   ├── config.ts             # LSP configuration
-│   ├── render.ts             # LSP result rendering
-│   ├── utils.ts              # LSP utilities
-│   └── clients/              # Language-specific clients
-│       ├── index.ts          # Client exports
-│       ├── biome-client.ts   # Biome LSP
-│       └── lsp-linter-client.ts # Generic linter
-
-├── mcp/                      # MCP (Model Context Protocol) integration
-│   ├── index.ts              # MCP exports
-│   ├── config.ts             # MCP configuration
-│   ├── loader.ts             # MCP server loading
-│   ├── manager.ts            # MCPManager class
-│   ├── tool-bridge.ts        # Tool bridging
-│   ├── tool-cache.ts         # Tool caching
-│   ├── types.ts              # MCP types
-│   └── transports/           # MCP transports
-│       ├── http.ts           # HTTP transport
-│       └── stdio.ts          # Stdio transport
-
-├── modes/                    # Run mode implementations
-│   ├── index.ts              # Re-exports InteractiveMode, runPrintMode, runRpcMode
-│   ├── interactive-mode.ts   # InteractiveMode class (main TUI)
-│   ├── print-mode.ts         # Non-interactive mode
-│   ├── types.ts              # Mode types
-│   │
-│   ├── components/           # TUI components
-│   │   ├── index.ts          # Component exports
-│   │   ├── assistant-message.ts    # Agent response rendering
-│   │   ├── bash-execution.ts       # Bash output display
-│   │   ├── custom-editor.ts        # Multi-line input editor
-│   │   ├── dynamic-border.ts       # Adaptive border rendering
-│   │   ├── footer.ts               # Status bar / footer
-│   │   ├── hook-input.ts           # Hook input dialog
-│   │   ├── hook-selector.ts        # Hook selection UI
-│   │   ├── login-dialog.ts         # OAuth login dialog
-│   │   ├── model-selector.ts       # Model picker
-│   │   ├── session-selector.ts     # Session browser for --resume
-│   │   ├── theme-selector.ts       # Theme picker
-│   │   ├── thinking-selector.ts    # Thinking level picker
-│   │   ├── tool-execution.ts       # Tool call/result rendering
-│   │   ├── user-message.ts         # User message rendering
-│   │   ├── status-line/            # Status line components
-│   │   └── extensions/             # Extension UI components
-│   │
-│   ├── controllers/          # TUI controllers
-│   │   ├── command-controller.ts   # Command handling
-│   │   ├── event-controller.ts     # Event handling
-│   │   ├── input-controller.ts     # Input handling
-│   │   └── selector-controller.ts  # Selector handling
-│   │
-│   ├── theme/                # Theme system
-│   │   ├── theme.ts          # Theme loading, getEditorTheme()
-│   │   └── defaults/         # Default themes
-│   │
-│   ├── utils/                # Mode utilities
-│   │   └── ui-helpers.ts     # UI helper functions
-│   │
-│   └── rpc/                  # RPC mode for programmatic control
-│       ├── rpc-mode.ts       # runRpcMode() - JSON stdin/stdout protocol
-│       ├── rpc-types.ts      # RpcCommand, RpcResponse types
-│       └── rpc-client.ts     # RpcClient class
-
-├── patch/                    # File patching/editing
-│   ├── index.ts              # EditTool and exports
-│   ├── applicator.ts         # Patch application
-│   ├── diff.ts               # Diff utilities
-│   ├── shared.ts             # Shared utilities
-│   └── render.ts             # Patch rendering
-
-├── prompts/                  # Prompt templates
-│   ├── system/               # System prompts
-│   ├── agents/               # Agent-specific prompts
-│   ├── compaction/           # Compaction prompts
-│   └── tools/                # Tool-specific prompts
-
-├── session/                  # Session management
-│   ├── agent-session.ts      # AgentSession class - THE central abstraction
-│   ├── agent-storage.ts      # Agent storage utilities
-│   ├── auth-storage.ts       # AuthStorage class - API keys and OAuth
-│   ├── artifacts.ts          # Artifact management
-│   ├── history-storage.ts    # History storage
-│   ├── messages.ts           # Message types and transformers
-│   ├── session-manager.ts    # SessionManager class - JSONL persistence
-│   ├── session-storage.ts    # Session storage utilities
-│   ├── storage-migration.ts  # Storage migration
-│   ├── streaming-output.ts   # OutputSink with spill-to-disk for large outputs
-│   └── compaction/           # Context compaction system
-│       └── index.ts          # Compaction logic, summary generation
-
-├── ssh/                      # SSH execution
-│   ├── connection-manager.ts # SSH connection management
-│   ├── ssh-executor.ts       # executeSSH() with streaming
-│   └── sshfs-mount.ts        # SSHFS mounting
-
-├── task/                     # Task/subagent spawning
-│   ├── index.ts              # TaskTool exports
-│   ├── agents.ts             # Agent definitions
-│   ├── commands.ts           # Task commands
-│   ├── discovery.ts          # Task discovery
-│   ├── executor.ts           # In-process task execution
-│   ├── render.ts             # Task rendering
-│   ├── subprocess-tool-registry.ts # Subprocess tool registry
-│   ├── parallel.ts           # Task concurrency helpers
-│   └── template.ts           # Task templating
-
-├── tools/                    # Built-in tool implementations
-│   ├── index.ts              # Tool exports, BUILTIN_TOOLS, createTools
-│   ├── ask.ts                # User input tool
-│   ├── bash.ts               # Bash command execution
-│   ├── bash-interceptor.ts   # Bash command interception
-│   ├── calculator.ts         # Calculator tool
-│   ├── submit-result.ts      # Submit result tool
-│   ├── context.ts            # Tool context utilities
-│   ├── fetch.ts              # URL content fetching
-│   ├── find.ts               # File search by glob
-│   ├── gemini-image.ts       # Gemini image generation
-│   ├── grep.ts               # Content search (regex/literal)
-│   ├── ls.ts                 # Directory listing
-│   ├── notebook.ts           # Jupyter notebook editing
-│   ├── output-meta.ts        # OutputMetaBuilder, wrapToolWithMetaNotice
-│   ├── output-utils.ts       # TailBuffer, allocateOutputArtifact helpers
-│   ├── path-utils.ts         # Path resolution utilities
-│   ├── python.ts             # Python tool (delegates to ipy/)
-│   ├── read.ts               # File reading (text and images)
-│   ├── renderers.ts          # Tool output renderers
-│   ├── render-utils.ts       # Rendering utilities
-│   ├── review.ts             # Code review tools
-│   ├── ssh.ts                # SSH tool (delegates to ssh/)
-│   ├── todo-write.ts         # Todo management
-│   ├── tool-errors.ts        # Tool error types
-│   ├── tool-result.ts        # ToolResultBuilder fluent API
-│   ├── truncate.ts           # Output truncation utilities
-│   └── write.ts              # File writing
-
-├── utils/                    # Generic utilities
-│   ├── changelog.ts          # parseChangelog(), getNewEntries()
-│   ├── event-bus.ts          # Event bus for tool communication
-│   ├── file-mentions.ts      # File mention detection
-│   ├── frontmatter.ts        # Frontmatter parsing
-│   ├── image-convert.ts      # Image format conversion
-│   ├── image-resize.ts       # Image resizing utilities
-│   ├── mime.ts               # MIME type detection
-│   ├── shell.ts              # getShellConfig()
-│   ├── terminal-notify.ts    # Terminal notification utilities
-│   ├── timings.ts            # Performance timing utilities
-│   ├── title-generator.ts    # Session title generation
-│   ├── tools-manager.ts      # ensureTool() - download fd, etc.
-│   └── utils.ts              # Generic utilities
-
-├── vendor/                   # Vendored dependencies
-│   └── photon/               # Photon image processing
-
-└── web/                      # Web tools (merged web-scrapers + web-search)
-    ├── scrapers/             # Web scraping
-    │   ├── index.ts          # Scraper exports
-    │   ├── types.ts          # Scraper types
-    │   ├── utils.ts          # Scraper utilities
-    │   └── (domain-specific scrapers)
-    └── search/               # Web search
-        ├── index.ts          # SearchTool exports
-        ├── auth.ts           # Search auth
-        ├── render.ts         # Search result rendering
-        └── providers/        # Search providers
-            ├── anthropic.ts  # Anthropic search
-            ├── exa.ts        # Exa search
-            └── perplexity.ts # Perplexity search
+├── cli.ts, main.ts, index.ts, sdk.ts, config.ts
+├── cli/                 # command-line argument and command adapters
+├── commands/            # concrete command handlers (launch, shell, ssh, ...)
+├── modes/               # interactive, print, rpc runtimes + UI controllers/components
+├── session/             # AgentSession, persistence, storage, compaction, artifacts
+├── tools/               # built-in tool implementations and render/meta helpers
+├── task/                # subagent/task orchestration, concurrency, output management
+├── capability/          # capability definitions and schemas
+├── discovery/           # provider discovery modules (native/editor/MCP/etc.)
+├── extensibility/       # extensions, hooks, custom tools/commands, plugins, skills
+├── mcp/                 # MCP transport/manager/loader/tool bridge
+├── lsp/                 # language server client/runtime integration
+├── internal-urls/       # protocol router + handlers (agent://, docs://, rule://, ...)
+├── exec/ ipy/ ssh/      # execution backends (shell, python, ssh)
+├── web/                 # search providers + domain scrapers
+├── patch/               # edit/patch parser + applicator + diff utilities
+└── config/ utils/ tui/  # settings, helpers, low-level TUI primitives
 ```
 
-## Key Abstractions
+## Boot Sequence: CLI Entry, Main Orchestration, and Mode Dispatch
 
-### AgentSession (session/agent-session.ts)
+### ASCII overview
 
-The central abstraction that wraps the SDK Agent with:
-
-- Session persistence (via SessionManager)
-- Settings persistence (via SettingsManager)
-- Model cycling with scoped models
-- Context compaction
-- Bash command execution
-- Message queuing
-- Hook integration
-- Custom tool loading
-- Extension/capability system integration
-
-All three modes (interactive, print, rpc) use AgentSession.
-
-### SDK (sdk.ts)
-
-Wrapper around `@oh-my-pi/pi-agent-core` that provides a simplified interface for creating and managing agents programmatically. Used by AgentSession and available as a public API through index.ts exports.
-
-### InteractiveMode (modes/interactive-mode.ts)
-
-Handles TUI rendering and user interaction:
-
-- Subscribes to AgentSession events
-- Renders messages, tool executions, streaming
-- Manages editor, selectors, key handlers
-- Delegates all business logic to AgentSession
-
-### RPC Mode (modes/rpc/)
-
-Headless operation via JSON protocol over stdin/stdout:
-
-- **rpc-mode.ts**: `runRpcMode()` function that listens for JSON commands on stdin and emits responses/events on stdout
-- **rpc-types.ts**: Typed protocol definitions (`RpcCommand`, `RpcResponse`, `RpcSessionState`)
-- **rpc-client.ts**: `RpcClient` class for spawning the agent as a subprocess and controlling it programmatically
-
-The RPC mode exposes the full AgentSession API via JSON commands. See [docs/rpc.md](docs/rpc.md) for protocol documentation.
-
-### SessionManager (session/session-manager.ts)
-
-Handles session persistence:
-
-- JSONL format for append-only writes
-- Session file location management
-- Message loading/saving
-- Model/thinking level persistence
-
-### SettingsManager (config/settings-manager.ts)
-
-Handles user preferences:
-
-- Default model/provider
-- Theme selection
-- Queue mode
-- Thinking block visibility
-- Compaction settings
-- Hook/custom tool paths
-- Thinking budgets (`thinkingBudgets` setting for custom token budgets per level)
-- Image blocking (`blockImages` setting to prevent images from being sent to LLM)
-
-### Hook System (extensibility/hooks/)
-
-Extensibility layer for intercepting agent behavior:
-
-- **loader.ts**: Discovers and loads hooks from `~/.omp/agent/hooks/`, `.omp/hooks/`, and CLI
-- **runner.ts**: Dispatches events to registered hooks
-- **types.ts**: Event types (`session`, `tool_call`, `tool_result`, `message`, `error`, `user_bash`)
-
-See [docs/hooks.md](docs/hooks.md) for full documentation.
-
-### Extension System Architecture
-
-The extension system uses a shared runtime pattern:
-
-1. **ExtensionRuntime** (`extensibility/extensions/types.ts`): Shared state and action handlers for all extensions
-2. **Extension**: Per-extension registration data (handlers, tools, commands, shortcuts)
-3. **ExtensionAPI**: Per-extension API that writes registrations to Extension and delegates actions to runtime
-4. **ExtensionRunner**: Orchestrates event dispatch and provides context to handlers
-
-Key extension events:
-
-- `before_agent_start`: Receives `systemPrompt` and can return full replacement (not just append)
-- `user_bash`: Intercept `!`/`!!` commands for custom execution (e.g., remote SSH)
-- `session_shutdown`: Cleanup notification before exit
-
-### Custom Tools (extensibility/custom-tools/)
-
-System for adding LLM-callable tools:
-
-- **loader.ts**: Discovers and loads tools from `~/.omp/agent/tools/`, `.omp/tools/`, and CLI
-- **types.ts**: `CustomToolFactory`, `CustomToolDefinition`, `CustomToolResult`
-
-See [docs/custom-tools.md](docs/custom-tools.md) for full documentation.
-
-### Skills (extensibility/skills.ts)
-
-On-demand capability packages:
-
-- Discovers SKILL.md files from multiple locations
-- Provides specialized workflows and instructions
-- Loaded when task matches description
-
-See [docs/skills.md](docs/skills.md) for full documentation.
-
-### Capability System (capability/)
-
-Unified extension system that discovers and loads capabilities from multiple sources:
-
-- **Extension Discovery** (discovery/): Discovers extensions from Claude.md, .cursorrules, .codex, MCP servers, etc.
-- **Capability Types**: Hooks, tools, context files, rules, skills, slash commands, system prompts, etc.
-- **Multi-source**: Global (~/.omp/), project (.omp/), and built-in capabilities
-
-See [docs/extensions.md](docs/extensions.md) for full documentation.
-
-### Tool Output Infrastructure (tools/)
-
-Standardized system for handling tool outputs with truncation, streaming, and artifact storage.
-
-#### Core Components
-
-**OutputSink** (`session/streaming-output.ts`): Line-buffered output collector with automatic spill-to-disk.
-
-- Tracks total lines/bytes as data flows through
-- Spills to artifact file when memory threshold exceeded
-- Produces `OutputSummary` with truncation metadata
-- Used by executors (bash, python, ssh) for streaming command output
-
-**TailBuffer** (`tools/output-utils.ts`): Simple rolling buffer keeping the last N bytes.
-
-- Used for UI preview during streaming
-- Handles UTF-8 boundaries correctly
-- Lightweight alternative to OutputSink for non-spilling tools
-
-**ToolResultBuilder** (`tools/tool-result.ts`): Fluent builder for constructing `AgentToolResult`.
-
-- Chains `.text()`, `.truncation*()`, `.limits()`, `.sourcePath()` methods
-- Automatically populates `details.meta` with structured metadata
-- Produces well-formed result via `.done()`
-
-**OutputMetaBuilder** (`tools/output-meta.ts`): Fluent builder for `OutputMeta` structure.
-
-- Methods for truncation info, limits, source paths, diagnostics
-- Accepts `TruncationResult` (from truncate.ts) or `OutputSummary` (from OutputSink)
-- Returns `undefined` if no metadata to report (empty case)
-
-**wrapToolWithMetaNotice** (`tools/output-meta.ts`): Tool wrapper applied to all built-in tools.
-
-- Automatically appends truncation/limit notices from `details.meta`
-- Catches exceptions and renders them via `ToolError.render()`
-
-#### Standard Pattern for Streaming Tools
-
-Tools that produce potentially large streaming output (bash, python, ssh):
-
-```typescript
-async execute(...): Promise<AgentToolResult<MyDetails>> {
-  // 1. Allocate artifact path for full output storage
-  const { artifactPath, artifactId } = await allocateOutputArtifact(this.session, "toolname");
-
-  // 2. Create tail buffer for UI preview
-  const tailBuffer = createTailBuffer(DEFAULT_MAX_BYTES);
-
-  // 3. Execute with streaming callback
-  const result = await executeCommand({
-    artifactPath,
-    artifactId,
-    onChunk: (chunk) => {
-      tailBuffer.append(chunk);
-      onUpdate?.({
-        content: [{ type: "text", text: tailBuffer.text() }],
-        details: {},
-      });
-    },
-  });
-
-  // 4. Build result with truncation metadata
-  return toolResult<MyDetails>({})
-    .text(result.output)
-    .truncationFromSummary(result, { direction: "tail" })
-    .done();
-}
+```text
+process argv
+   │
+   ▼
+src/cli.ts (runCli)
+   │  normalize subcommand (default: launch)
+   ▼
+src/commands/*
+   │
+   ▼
+src/main.ts (runRootCommand)
+   │  init theme/settings/models/session
+   ▼
+createAgentSession(...)
+   │
+   ├── runInteractiveMode(...)  -> InteractiveMode
+   ├── runPrintMode(...)        -> one-shot output
+   └── runRpcMode(...)          -> JSONL stdin/stdout server
 ```
 
-#### Standard Pattern for Non-Streaming Tools
+### Runtime layers
 
-Tools that produce output in one shot (grep, find, ls):
+1. **Command router layer** (`packages/coding-agent/src/cli.ts`)
+   - Defines the root command table (`commands: CommandEntry[]`) and lazy-loads subcommands like `launch`, `commit`, `config`, `shell`, `stats`, and `search`.
+   - Performs an early Bun runtime guard (`Bun.stringWidth("\x1b[0m\x1b]8;;\x07") !== 0`) and exits on known errata.
+   - Exposes `runCli(argv: string[])`, which rewrites argv so non-subcommand invocations default to `launch`.
 
-```typescript
-async execute(...): Promise<AgentToolResult<MyDetails>> {
-  const { items, limitReached } = await doWork();
-  const output = formatItems(items);
+2. **Application orchestration layer** (`packages/coding-agent/src/main.ts`)
+   - `runRootCommand(parsed: Args, rawArgs: string[])` initializes theme/settings/model registry/session options, creates an `AgentSession`, then dispatches runtime mode.
+   - Handles early-exit utility paths before session creation (for example `version`, `listModels`, `export`).
+   - Builds `CreateAgentSessionOptions` via `buildSessionOptions(...)` and calls `createAgentSession(...)` from `./sdk`.
 
-  return toolResult<MyDetails>({})
-    .text(output)
-    .limits({ resultLimit: limitReached ? effectiveLimit : undefined })
-    .done();
-}
+3. **Mode runtime layer** (`packages/coding-agent/src/modes/index.ts`)
+   - Re-exports mode entrypoints:
+     - `InteractiveMode`
+     - `runPrintMode`
+     - `runRpcMode`
+     - `RpcClient` (+ RPC types)
+   - Registers a postmortem terminal recovery hook:
+     - `postmortem.register("terminal-restore", () => emergencyTerminalRestore())`
+
+4. **SDK/programmatic surface layer** (`packages/coding-agent/src/index.ts`)
+   - Re-exports SDK/session/mode/theme/tool/types for non-CLI consumers.
+   - Includes direct exports for `main`, `createAgentSession`, `runPrintMode`, `runRpcMode`, `InteractiveMode`, discovery helpers, and extension/custom-tool types.
+
+### Startup flow (CLI path)
+
+1. `packages/coding-agent/src/cli.ts` executes `await runCli(process.argv.slice(2))`.
+2. `runCli(...)` decides whether argv already starts with a known subcommand; otherwise prepends `"launch"`.
+3. The `launch` command eventually calls `runRootCommand(...)` in `packages/coding-agent/src/main.ts`.
+4. `runRootCommand(...)` sequence (high-level):
+   - `initTheme()` bootstrap, optional auto-chdir via `maybeAutoChdir(...)`.
+   - `discoverAuthStorage()` + `new ModelRegistry(authStorage)` + `modelRegistry.refresh()`.
+   - Initialize settings (`Settings.init({ cwd })`), collect piped input (`readPipedInput()`), preprocess `@file` inputs (`prepareInitialMessage(...)`).
+   - Build/open session management (`createSessionManager(...)`, resume handling via `selectSession(...)` when `--resume` has no value).
+   - Build options (`buildSessionOptions(...)`) and create runtime session (`createAgentSession(sessionOptions)`).
+   - Dispatch mode:
+     - `mode === "rpc"` -> `runRpcMode(session)`
+     - interactive -> `runInteractiveMode(...)` (wrapper around `new InteractiveMode(...)` loop)
+     - non-interactive text/json stream path -> `runPrintMode(session, ...)`
+
+### CLI vs programmatic usage
+
+- **CLI path**: starts at `src/cli.ts` (`#!/usr/bin/env bun`), uses command registry + argv normalization, and routes into command handlers.
+- **Programmatic path**: imports from `src/index.ts` directly (for example `createAgentSession`, `runPrintMode`, `runRpcMode`, `InteractiveMode`, `Settings`, `ModelRegistry`) without going through `runCli` or command alias logic.
+
+### What `index.ts` exposes for SDK consumers
+
+`packages/coding-agent/src/index.ts` acts as the package barrel and includes:
+
+- **Core runtime/session APIs**: `createAgentSession`, `AgentSession`, `SessionManager`, prompt/compaction/session types.
+- **Mode APIs**: `InteractiveMode`, `runPrintMode`, `runRpcMode`, `RpcClient` and RPC event/types.
+- **Discovery + tool constructors**: `discoverAuthStorage`, `discoverExtensions`, `discoverMCPServers`, `createTools`, built-in tool classes (`ReadTool`, `WriteTool`, `BashTool`, `PythonTool`, `FindTool`, `GrepTool`, `EditTool`).
+- **Extensibility interfaces**: extension/custom-command/custom-tool/skill/slash-command types and loaders.
+- **UI/theming helpers**: TUI components plus `initTheme`, `Theme`, and code-highlighting/theme utilities.
+- **CLI callable export**: `main` is re-exported for embedding/integration contexts that invoke root behavior explicitly.
+
+## Mode Implementations: Interactive, Print, and RPC
+
+### ASCII overview
+
+```text
+                    AgentSession
+                         │
+        ┌────────────────┼────────────────┐
+        ▼                ▼                ▼
+InteractiveMode      runPrintMode      runRpcMode
+(TUI event loop)     (non-TUI batch)   (JSONL protocol)
+        │                │                │
+controllers/components   stdout text/json  RpcCommand/RpcResponse
 ```
 
-#### Key Principles
+The coding agent exposes three execution styles in `packages/coding-agent/src/modes/`:
 
-1. **Always allocate artifact before execution** — ensures path exists for spill
-2. **Pass onChunk to OutputSink/executor** — required for live UI updates during streaming
-3. **Use ToolResultBuilder for all results** — ensures consistent metadata structure
-4. **Close file sinks on error** — prevent descriptor leaks in failure paths
-5. **Truncation direction matters** — `"tail"` for command output (show recent), `"head"` for file reads (show beginning)
+- Interactive TUI mode (`interactive-mode.ts`)
+- One-shot print mode (`print-mode.ts`)
+- Headless RPC mode (`rpc/rpc-mode.ts` + `rpc/rpc-types.ts` + `rpc/rpc-client.ts`)
 
-## Development Workflow
+### Interactive mode (`InteractiveMode`)
 
-### Running in Development
+`InteractiveMode` (class in `interactive-mode.ts`) is the long-lived TUI runtime. It wires `AgentSession` to terminal UI components and controller modules.
 
-Run the CLI directly with bun (this is a bun-based project):
+Core responsibilities:
 
-```bash
-# From monorepo root
-bun run dev
+- Build and own TUI objects (`TUI`, editor, chat/status/todo containers, status line).
+- Initialize keybindings, slash-command autocomplete (`refreshSlashCommandState()`), welcome/changelog rendering, and session history storage.
+- Subscribe to `AgentSession` events (`#subscribeToAgent()` via `EventController`) and keep UI state in sync.
+- Delegate command/input/selector/extension concerns to dedicated controllers (`CommandController`, `InputController`, `SelectorController`, `ExtensionUiController`).
+- Persist and render todos from session artifacts (`#loadTodoList()`, `#renderTodoList()`, `todos.json`).
+- Manage mode state transitions, including plan mode enter/exit/restore (`#enterPlanMode()`, `#exitPlanMode()`, `#restoreModeFromSession()`).
+- Handle lifecycle shutdown (`stop()`, `shutdown()`) including session flush and terminal cleanup.
 
-# Or run directly
-bun packages/coding-agent/src/cli.ts
+This file is orchestration-heavy: business logic mostly lives in session/controllers; `InteractiveMode` coordinates UI + lifecycle.
 
-# With arguments
-bun packages/coding-agent/src/cli.ts --help
-bun packages/coding-agent/src/cli.ts -p "Hello"
+### Print mode (`runPrintMode`)
 
-# RPC mode
-bun packages/coding-agent/src/cli.ts --mode rpc --no-session
+`runPrintMode(session, options)` in `print-mode.ts` is single-shot, non-interactive execution.
+
+Behavior by output mode:
+
+- `mode: "json"`
+  - Writes session header (`session.sessionManager.getHeader()`) first if available.
+  - Subscribes to session events and writes every event as one JSON line.
+- `mode: "text"`
+  - Sends prompts, then prints only text blocks from the final assistant message.
+  - If final assistant stop reason is `error` or `aborted`, writes error to stderr and exits with code 1.
+
+Additional responsibilities:
+
+- Initializes extension runner with non-UI action/context adapters (command list is empty; no UI context object).
+- Emits extension `session_start`.
+- Supports `initialMessage` + `initialImages`, then additional queued `messages`.
+- Flushes stdout before returning and disposes the session (`await session.dispose()`).
+
+### RPC mode server (`runRpcMode`)
+
+`runRpcMode(session)` in `rpc-mode.ts` is a stdin/stdout JSONL protocol server for embedding.
+
+Transport and framing:
+
+- Input: JSON lines from `readJsonl(Bun.stdin.stream())`.
+- Output: one JSON object per line via `process.stdout.write(JSON.stringify(obj) + "\n")`.
+- Startup handshake: immediately emits `{ "type": "ready" }`.
+
+Command handling:
+
+- Accepts `RpcCommand` unions (defined in `rpc-types.ts`).
+- Responds with `RpcResponse` objects: `type: "response"`, `command`, `success`, optional `data`, optional `error`.
+- Also streams raw `AgentSession` events through stdout via `session.subscribe(...)`.
+
+Extension UI bridge:
+
+- Implements `RpcExtensionUIContext` to translate extension UI calls into `extension_ui_request` output messages.
+- Tracks pending dialog requests by generated `id` and resolves them when matching `extension_ui_response` arrives on stdin.
+- Supports timeout/abort-aware dialog defaults for `select`, `confirm`, and `input`.
+- Fire-and-forget UI notifications (`notify`, `setStatus`, `setWidget`, `setTitle`, `set_editor_text`) are emitted as requests without expected responses.
+- TUI-specific operations are explicitly unsupported in RPC mode (`setFooter`, `setHeader`, theme switching, custom editor components).
+
+Shutdown behavior:
+
+- Extension `shutdown()` marks a deferred flag.
+- After each command, `checkShutdownRequested()` emits `session_shutdown` (if handlers exist) and exits.
+- EOF on stdin exits cleanly (`process.exit(0)`).
+
+### RPC protocol shape (`rpc-types.ts`)
+
+`RpcCommand` categories in source:
+
+- Prompting: `prompt`, `steer`, `follow_up`, `abort`, `abort_and_prompt`, `new_session`
+- State: `get_state`
+- Model: `set_model`, `cycle_model`, `get_available_models`
+- Thinking: `set_thinking_level`, `cycle_thinking_level`
+- Queue modes: `set_steering_mode`, `set_follow_up_mode`, `set_interrupt_mode`
+- Compaction/retry: `compact`, `set_auto_compaction`, `set_auto_retry`, `abort_retry`
+- Bash/session/messages: `bash`, `abort_bash`, `get_session_stats`, `export_html`, `switch_session`, `branch`, `get_branch_messages`, `get_last_assistant_text`, `set_session_name`, `get_messages`
+
+`RpcSessionState` (returned by `get_state`) includes model/thinking info, streaming/compaction flags, queue mode settings, session identity (`sessionFile`, `sessionId`, `sessionName`), and message queue counts.
+
+`RpcResponse` is a discriminated union:
+
+- Success variants are command-specific (many include typed `data` payloads).
+- Failure variant is generic: `{ type: "response", command: string, success: false, error: string }`.
+
+Extension protocol types:
+
+- Outbound UI requests: `RpcExtensionUIRequest` (`select`, `confirm`, `input`, `editor`, `notify`, `setStatus`, `setWidget`, `setTitle`, `set_editor_text`).
+- Inbound UI replies: `RpcExtensionUIResponse` (`value`, `confirmed`, or `cancelled`).
+
+### RPC client wrapper (`RpcClient`)
+
+`RpcClient` in `rpc-client.ts` is a typed process wrapper around `--mode rpc`.
+
+Key behaviors:
+
+- Spawns `bun <cliPath> --mode rpc` (default `dist/cli.js`) with optional provider/model/session args.
+- Waits for server ready signal (`type === "ready"`) with startup timeout (30s) and early-exit error propagation including captured stderr.
+- Sends commands with generated request IDs (`req_<n>`), correlates responses through `#pendingRequests`, and enforces per-request timeout (30s).
+- Exposes typed methods (`prompt`, `steer`, `setModel`, `bash`, `getState`, etc.) that map 1:1 to RPC commands.
+- Emits only `AgentEvent` values through `onEvent()`; `waitForIdle()`/`collectEvents()` resolve on `agent_end`.
+- Provides `stop()` and `[Symbol.dispose]()` for cleanup.
+
+Notable current limitation from implementation: `#handleLine()` handles `RpcResponse` and agent events only; `extension_ui_request` messages are not surfaced by `RpcClient` APIs.
+
+## Session Lifecycle, Persistence, and Settings Boundaries
+
+### ASCII overview
+
+```text
+@oh-my-pi/pi-agent-core Agent
+            │ events/messages
+            ▼
+       AgentSession
+       │    │    │
+       │    │    └── Settings (config/settings.ts)
+       │    │         global+project+override merge
+       │    │
+       │    └──── SessionManager (JSONL tree)
+       │             │
+       │             └── SessionStorage (file/memory backends)
+       │
+       └──── HistoryStorage (prompt recall SQLite)
 ```
 
-### Type Checking
+### `AgentSession` is the runtime coordinator
 
-```bash
-# From monorepo root (runs biome + tsgo type check)
-bun run check
+`packages/coding-agent/src/session/agent-session.ts` defines `AgentSession`, which sits between the core `Agent` runtime and durable storage (`SessionManager` + `Settings`).
 
-# From packages/coding-agent
-bun run check
+Key responsibilities in code:
+
+- Subscribes once to agent events in constructor (`this.agent.subscribe(this.#handleAgentEvent)`), then fans out to UI/extensions via `subscribe()` and `#emitSessionEvent()`.
+- Owns operational state not stored in model history (abort controllers, retry counters, queued steering/follow-up messages, plan mode state, provider session caches).
+- Persists conversation events as they complete:
+  - `message_end` with `user` / `assistant` / `toolResult` / `fileMention` -> `sessionManager.appendMessage(...)`
+  - `message_end` with `custom` / `hookMessage` -> `sessionManager.appendCustomMessageEntry(...)`
+  - TTSR injections -> `sessionManager.appendTtsrInjection(...)`
+- Flushes persistence on shutdown via `dispose()` -> `await sessionManager.flush()`.
+
+This keeps the agent loop and durable session log synchronized without requiring each caller mode to persist manually.
+
+### Session restore and switching behavior
+
+State restoration is explicit in `AgentSession.switchSession(sessionPath)`:
+
+1. Abort current work and flush current writer (`await this.sessionManager.flush()`).
+2. Load the target file (`await this.sessionManager.setSessionFile(sessionPath)`).
+3. Rebuild branch-resolved context (`const sessionContext = this.sessionManager.buildSessionContext()`).
+4. Replace in-memory conversation (`this.agent.replaceMessages(sessionContext.messages)`).
+5. Restore model from `sessionContext.models.default` if available in current `ModelRegistry`.
+6. Restore thinking level from session entries; if none exists, clamp `settings.defaultThinkingLevel` and append a new `thinking_level_change` entry.
+
+Related lifecycle methods:
+
+- `newSession(options)` resets agent messages and creates a fresh session file/header via `sessionManager.newSession(...)`.
+- `fork()` duplicates current persisted session file + artifact directory and keeps current in-memory conversation.
+- `branch(entryId)` creates a branched session path from a selected user message using `sessionManager.createBranchedSession(...)` / `newSession(...)` and then reloads context.
+- `navigateTree(...)` moves the session leaf inside one file (`sessionManager.branch(...)` / `resetLeaf()` / `branchWithSummary(...)`) and rebuilds context.
+
+### `SessionManager` file model: append-only tree in JSONL
+
+`packages/coding-agent/src/session/session-manager.ts` is the persistence engine.
+
+Storage model:
+
+- File format is NDJSON with a `SessionHeader` first entry and typed `SessionEntry` records after it.
+- `CURRENT_SESSION_VERSION = 3`; `migrateV1ToV2` and `migrateV2ToV3` run on load when needed.
+- Entries are tree-linked (`id`, `parentId`) with a mutable leaf pointer (`#leafId`) for branching.
+- Appends are type-specific (`appendMessage`, `appendThinkingLevelChange`, `appendModelChange`, `appendCompaction`, `appendCustomEntry`, `appendCustomMessageEntry`, `appendModeChange`, `appendTtsrInjection`, etc.).
+
+Context reconstruction:
+
+- `buildSessionContext(entries, leafId, byId)` resolves the active branch and emits the LLM-visible message stream.
+- Compaction entries are handled specially: emit compaction summary message first, then kept messages from `firstKeptEntryId`, then later messages.
+- `custom_message` participates in LLM context; `custom` does not (extension state persistence only).
+
+Persistence mechanics:
+
+- Incremental append writer: `NdjsonFileWriter`.
+- Serialized write queue: `#persistChain` (prevents concurrent write races).
+- Safe rewrites for migrations/edits: `#writeEntriesAtomically(...)` to temp file then rename.
+- Terminal breadcrumb (`terminal-sessions/<tty-id>`) supports `continueRecent(...)` to prefer per-terminal last session.
+
+### Session storage abstraction (`session-storage.ts`)
+
+`packages/coding-agent/src/session/session-storage.ts` abstracts filesystem access for session persistence.
+
+- `SessionStorage` interface defines sync/async primitives used by `SessionManager`.
+- `FileSessionStorage` is the real implementation (Bun + `node:fs`), including `FileSessionStorageWriter` with held file descriptor and `fsync()`.
+- `MemorySessionStorage` is an in-memory implementation used for tests/non-persistent flows.
+
+This separation keeps `SessionManager` logic independent from storage backend and enables deterministic tests.
+
+### Prompt history is separate from session history
+
+`packages/coding-agent/src/session/history-storage.ts` (`HistoryStorage`) is not conversation state restoration.
+
+- Stores prompt history in SQLite (`history.db`) with FTS5 index (`history_fts`).
+- APIs are `add(prompt, cwd?)`, `getRecent(limit)`, `search(query, limit)`.
+- Uses singleton `HistoryStorage.open(...)` and asynchronous insert (`setImmediate`) with duplicate-last-prompt suppression.
+
+This is command/input recall data; it does not rebuild agent message trees.
+
+### Settings responsibilities (`config/settings.ts`)
+
+`packages/coding-agent/src/config/settings.ts` (`Settings`) manages durable configuration, not conversation content.
+
+Source layers:
+
+- Global config: `<agentDir>/config.yml` (`#global`)
+- Project capability settings (`loadCapability(settingsCapability.id, { cwd })`) (`#project`)
+- Runtime overrides (`#overrides`, not persisted)
+- Effective merged view (`#merged`)
+
+Persistence behavior:
+
+- `set(path, value)` updates `#global`, tracks modified paths, debounces save (`#queueSave()`), then persists with `#saveNow()`.
+- `#saveNow()` uses `withFileLock(configPath, ...)`, re-reads current YAML, applies only modified paths, writes back via `Bun.write`.
+- `flush()` forces pending writes.
+- Startup migration (`#migrateFromLegacy`) imports old `settings.json` / `agent.db` values into `config.yml`.
+
+Runtime side effects are centralized in `SETTING_HOOKS` (theme mapping, symbol preset, color-blind mode), keeping call sites simple.
+
+### Boundary summary
+
+- `AgentSession`: live orchestration + event-driven persistence wiring.
+- `SessionManager`/`SessionStorage`: session tree durability and restoration (`messages`, model changes, thinking changes, compaction, branch topology).
+- `HistoryStorage`: prompt recall database only.
+- `Settings`: user/project configuration lifecycle (load/merge/override/save), separate from session transcript state.
+
+## Tool Registration, Output Metadata, and Streaming Result Flow
+
+### ASCII overview
+
+```text
+tool call from agent
+      │
+      ▼
+createTools(...) -> Tool instance
+      │ execute()
+      ▼
+executor / implementation
+      │ streaming chunks
+      ▼
+OutputSink + TailBuffer
+      │ summary (bytes/lines/truncation/artifactId)
+      ▼
+ToolResultBuilder + OutputMetaBuilder
+      │
+      ▼
+wrapToolWithMetaNotice(...) appends human/meta notices
 ```
 
-### Building
+### Tool registry and session-driven construction
 
-```bash
-# Type check and build (from packages/coding-agent)
-bun run build
+`packages/coding-agent/src/tools/index.ts` centralizes tool wiring through two registries:
 
-# Build standalone binary
-bun run build:binary
+- `BUILTIN_TOOLS: Record<string, ToolFactory>`
+- `HIDDEN_TOOLS: Record<string, ToolFactory>`
+
+A `ToolFactory` is `(session: ToolSession) => Tool | null | Promise<Tool | null>`, so tool creation can be async and conditional.
+
+`createTools(session, toolNames?)` is the entry point. It:
+
+1. Normalizes requested tool names (`toolNames`) and always injects `exit_plan_mode`.
+2. Resolves Python mode via `PI_PY` override (`getPythonModeFromEnv()`) or `session.settings.get("python.toolMode")`.
+3. Performs Python kernel preflight/warmup when applicable (`checkPythonKernelAvailability`, `warmPythonEnvironment`).
+4. Computes effective gating (`isToolAllowed`) from settings and runtime state:
+   - feature toggles (`find.enabled`, `grep.enabled`, etc.)
+   - recursion guard for `task` (`task.maxRecursionDepth` vs `session.taskDepth`)
+   - submit-result mode (`requireSubmitResultTool`) and `todo_write` suppression
+5. Instantiates tools in parallel with `Promise.all`, records slow factory timings when `PI_TIMING=1`.
+6. Wraps every tool with `wrapToolWithMetaNotice` before returning.
+
+The wrapper step is not cosmetic: it enforces uniform meta-notice behavior and normalized error rendering across all tools.
+
+### Output metadata model and notice formatting
+
+`packages/coding-agent/src/tools/output-meta.ts` defines `OutputMeta` and builder logic used by tools to attach machine-readable output annotations under `details.meta`.
+
+Key meta blocks:
+
+- `truncation?: TruncationMeta`
+- `source?: SourceMeta` (`path`, `url`, `internal`)
+- `diagnostics?: DiagnosticMeta`
+- `limits?: LimitsMeta`
+
+`OutputMetaBuilder` provides fluent helpers:
+
+- `truncation(result, options)` from `TruncationResult`
+- `truncationFromSummary(summary, options)` from `OutputSummary`
+- `truncationFromText(text, options)` for text-only truncation inference
+- `limits(...)`, `matchLimit(...)`, `resultLimit(...)`, `headLimit(...)`, `columnTruncated(...)`
+- `sourcePath(...)`, `sourceUrl(...)`, `sourceInternal(...)`
+- `diagnostics(summary, messages)`
+
+`formatOutputNotice(meta)` converts metadata into appended textual notices (for model visibility), including:
+
+- shown line range and total line count
+- byte-limit context via `formatSize(...)`
+- pagination hint (`nextOffset`) for head-truncated output
+- artifact recovery hint (`Full: artifact://<id>`)
+- limit and diagnostics notices
+
+### Tool-level result builder pattern
+
+`packages/coding-agent/src/tools/tool-result.ts` provides `toolResult(details?)` returning `ToolResultBuilder<TDetails>`.
+
+The builder is the common tool return path:
+
+- set content (`text(...)` / `content(...)`)
+- attach metadata (`truncation*`, `limits`, `source*`, `diagnostics`)
+- finalize with `done()`
+
+`done()` behavior matters:
+
+- calls `this.#meta.get()` and writes to `details.meta` only when non-empty
+- omits `details` entirely if all fields are `undefined`
+
+This keeps tool payloads compact while still enabling consistent metadata for truncation and provenance.
+
+### Automatic meta notice injection and error normalization
+
+Also in `output-meta.ts`, `wrapToolWithMetaNotice(tool)` patches `tool.execute` once (guarded by `kUnwrappedExecute`). Wrapped execution:
+
+1. calls the original execute
+2. reads `result.details?.meta`
+3. appends formatted notice to the last text content block (or creates a new text block)
+4. catches errors and rethrows `new Error(renderError(e))`
+
+Result: tools can focus on structured metadata; user/model-facing notice text is generated centrally.
+
+### Streaming output sink and truncation accounting
+
+`packages/coding-agent/src/session/streaming-output.ts` implements `OutputSink` for streamed command/notebook output with bounded in-memory tail and optional artifact spill.
+
+`OutputSummary` includes:
+
+- `output`, `truncated`
+- `totalLines`, `totalBytes`
+- `outputLines`, `outputBytes`
+- optional `artifactId`
+
+`OutputSink` flow:
+
+1. `push(chunk)` sanitizes chunk text via `sanitizeText(...)`.
+2. Updates global counters (`#totalBytes`, `#totalLines`, `#sawData`).
+3. Buffers in memory (`#buffer`) and enforces byte cap (`spillThreshold`, default `DEFAULT_MAX_BYTES`) by tail-trimming with UTF-8 boundary safety.
+4. If spilling is enabled (`artifactPath`), lazily opens a `Bun.FileSink`, writes full stream to disk, and marks truncated.
+5. `dump(notice?)` closes sink, prepends optional notice line, and returns `OutputSummary` with propagated `artifactId`.
+
+This is the canonical source for streamed truncation metadata used by bash/python/ssh-style tools.
+
+### Artifact allocation and propagation
+
+`packages/coding-agent/src/tools/output-utils.ts` handles artifact plumbing:
+
+- `getArtifactManager(session)` reuses or creates `ArtifactManager` from `session.getSessionFile()`
+- `allocateOutputArtifact(session, toolType)` returns `{ artifactPath?, artifactId? }`
+
+Tools that stream or truncate large output call `allocateOutputArtifact(...)` first, then pass IDs into execution/sink paths. Examples:
+
+- `bash.ts`: allocates artifact, streams via executor, then `.truncationFromSummary(result, { direction: "tail" })`
+- `fetch.ts`: writes full body to artifact on head truncation and uses `.truncation(truncation, { direction: "head", artifactId })`
+- `read.ts`: uses `toolResult(...).limits(...)` and `.truncation(...)` for directory/file limits
+
+Because summaries include `artifactId`, `OutputMetaBuilder.truncationFromSummary(...)` carries it into `details.meta.truncation.artifactId`, and wrapper-generated notices expose `artifact://...` retrieval hints consistently.
+
+## Capability Discovery and Extensibility Loading
+
+### ASCII overview
+
+```text
+discovery providers (native/editor/files/MCP/etc.)
+                    │
+                    ▼
+           capability registry
+     (defineCapability + registerProvider)
+                    │
+                    ▼
+             loadCapability(...)
+                    │
+     ┌──────────────┼──────────────┐
+     ▼              ▼              ▼
+extensions loader  hooks loader   skills loader
+     │              │              │
+     └────── runtime registrations ──────► AgentSession/modes
 ```
 
-### Testing
+### Discovery bootstrap and provider registration
 
-```bash
-# Run tests (from packages/coding-agent)
-bun test
+`packages/coding-agent/src/discovery/index.ts` is a side-effect bootstrap module:
 
-# Run specific test pattern
-bun test --testNamePattern="RPC"
+- It imports capability definitions first (`../capability/*`) so registry entries exist before providers register.
+- It then imports provider modules (`./builtin`, `./claude`, `./agents`, `./codex`, `./cursor`, `./gemini`, `./opencode`, `./github`, `./mcp-json`, `./ssh`, `./vscode`, `./windsurf`, etc.).
+- Providers self-register during module import.
+- It re-exports the runtime API from `../capability` (`loadCapability`, provider enable/disable, cache controls, introspection helpers).
 
-# Run RPC example interactively
-bun test/rpc-example.ts
+This file is the canonical "load everything" entrypoint for discovery.
+
+### Capability registry behavior (`src/capability/index.ts`)
+
+Core functions:
+
+- `defineCapability(def)`: declares a capability and initializes `providers: []`.
+- `registerProvider(capabilityId, provider)`: records provider metadata and inserts by descending `priority`.
+- `loadCapability(capabilityId, options)`: builds `LoadContext` (`cwd`, `home`), filters disabled/allowed providers, then delegates to `loadImpl`.
+
+`loadImpl` normalization/merge flow:
+
+1. Executes all selected `provider.load(ctx)` calls concurrently (`Promise.all`).
+2. Aggregates warnings with provider display-name prefixes.
+3. Requires `_source` metadata on each item; missing `_source` is warned and skipped.
+4. Deduplicates by `capability.key(item)` with **first win** semantics (effectively higher-priority provider wins because provider arrays are priority-sorted before loading).
+5. Marks duplicates as `_shadowed = true` in `all` results.
+6. Runs `capability.validate` (unless `includeInvalid`) and drops invalid deduped items with source-aware warnings.
+
+Provider state controls:
+
+- `initializeWithSettings(settings)` hydrates disabled provider IDs from `settings.get("disabledProviders")`.
+- `disableProvider` / `enableProvider` / `setDisabledProviders` mutate in-memory state and persist it.
+
+### Extension module loading (`src/extensibility/extensions/loader.ts`)
+
+Key entrypoint: `discoverAndLoadExtensions(configuredPaths, cwd, eventBus?, disabledExtensionIds?)`.
+
+Source collection order:
+
+1. Capability discovery: `loadCapability<ExtensionModule>(extensionModuleCapability.id, { cwd })`.
+2. Only extension-module items from `_source.provider === "native"` are auto-included here.
+3. Explicit configured paths are then resolved and added.
+
+Path normalization and filtering:
+
+- `resolvePath` expands `~` via `expandPath()` and resolves relative paths against `cwd`.
+- Disabled extension IDs are matched as `extension-module:<name>` where `<name>` is derived by `getExtensionNameFromPath()`.
+- De-dup uses `path.resolve(extPath)` in a `seen` set.
+
+Directory entry resolution:
+
+- `resolveExtensionEntries(dir)` checks, in order:
+  - `package.json` manifest (`omp` or `pi`) with `extensions[]` entries,
+  - `index.ts`, then `index.js` fallback.
+- `discoverExtensionsInDir(dir)` applies one-level rules when the directory itself has no root entry:
+  - direct `*.ts`/`*.js` files,
+  - child directories with manifest or index entry.
+
+Module loading:
+
+- `loadExtension(extPath, cwd, eventBus, runtime)` does dynamic `import(resolvedPath)`.
+- Accepts factory from `module.default ?? module`; must be a function.
+- Runs factory with `ConcreteExtensionAPI`, collecting handlers/tools/commands/flags/shortcuts/renderers.
+- Returns `{ extensions, errors, runtime }` from `loadExtensions`.
+
+### Hook loading (`src/extensibility/hooks/loader.ts`)
+
+Key entrypoint: `discoverAndLoadHooks(configuredPaths, cwd)`.
+
+Flow:
+
+1. Discover hook candidates via capability API:
+   `loadCapability<Hook>(hookCapability.id, { cwd })`.
+2. Add explicit configured paths (resolved through `resolveHookPath`).
+3. De-duplicate by absolute resolved path (`path.resolve(...)`).
+4. Load each hook with `loadHooks` / `loadHook`.
+
+`loadHook` specifics:
+
+- Uses dynamic `import(resolvedPath)`.
+- Requires a **default export function** (`HookFactory`); otherwise returns error.
+- Builds API via `createHookAPI(...)`, then calls `factory(api)` to register:
+  - event handlers (`api.on`),
+  - message renderers (`registerMessageRenderer`),
+  - commands (`registerCommand`).
+- Exposes deferred runtime wiring via `setSendMessageHandler` / `setAppendEntryHandler` on `LoadedHook`.
+
+### Skills loading points (`src/extensibility/skills.ts`)
+
+Primary entrypoint: `loadSkills(options)`.
+
+Provider-driven loading:
+
+- Calls `loadCapability<CapabilitySkill>(skillCapability.id, { cwd })`.
+- Applies source gating through `isSourceEnabled(source)`:
+  - explicit toggles for `codex:user`, `claude:user`, `claude:project`, `native:user`, `native:project`,
+  - other providers treated as built-in and allowed when any built-in source toggle is enabled.
+- Applies name filters using `includeSkills` / `ignoredSkills` (`Bun.Glob`).
+
+Normalization and collision handling:
+
+- Resolves real paths (`fs.realpath`) to collapse symlink duplicates.
+- Keeps first skill per name; later name collisions are reported as warnings.
+- Transforms capability skills to legacy `Skill` shape:
+  - `filePath = capSkill.path`,
+  - `baseDir` from `.../SKILL.md` trimming,
+  - `source = "<provider>:<level>",`
+  - preserves `_source`.
+
+Custom directory loading (separate path):
+
+- `customDirectories` are scanned directly via `scanDirectoryForSkills`, not via capability providers.
+- Recursive scan respects `.gitignore` / `.ignore` / `.fdignore` through `addIgnoreRules` + `shouldIgnore`.
+- Directory containing `SKILL.md` is treated as one skill root and is not recursed further.
+- Custom skills are stamped as `source: "custom:user"` with `_source.provider = "custom"`.
+
+Also exported: `loadSkillsFromDir({ dir, source })` for direct recursive loading of skill directories with ignore-file support.
+
+## MCP Manager, LSP Client Boundary, and Internal URL Routing
+
+### ASCII overview
+
+```text
+MCP configs ──► MCPManager ──► connect/list tools ──► bridged CustomTools
+                  │
+                  └── cache/deferred tool exposure
+
+LSP feature calls ──► lsp/client.ts ──► JSON-RPC transport ──► language server process
+
+internal URL input (rule://, docs://, ...)
+                  │
+                  ▼
+          InternalUrlRouter
+                  │
+                  ▼
+      protocol-specific handlers
 ```
 
-### Managed Binaries
+### MCP server lifecycle (`src/mcp/manager.ts`, `src/mcp/loader.ts`)
 
-Tools like `fd` and `rg` are auto-downloaded to `~/.omp/bin/` (migrated from `~/.omp/agent/tools/`).
+`MCPManager` is the lifecycle owner for MCP server connections and their exposed tools.
 
-## Adding New Features
+- Discovery entrypoint: `discoverAndConnect(options)` calls `loadAllMCPConfigs()` and then `connectServers()`.
+- Connection state is tracked in private maps:
+  - `#connections` (live `MCPServerConnection`)
+  - `#pendingConnections` (in-flight connection promises)
+  - `#pendingToolLoads` (in-flight `listTools()` promises)
+  - `#sources` (server `SourceMeta` provenance)
+- Config validation occurs per server via `validateServerConfig(name, config)` before any connect attempt.
+- Auth/config resolution happens in `#resolveAuthConfig()`:
+  - OAuth credentials from `AuthStorage` are injected into HTTP/SSE headers (`Authorization: Bearer ...`) or stdio env (`OAUTH_ACCESS_TOKEN`).
+  - Dynamic config values are resolved with `resolveConfigValue()` for env/header entries.
+- Connections and tool enumeration are parallelized in `connectServers()`:
+  - connect with `connectToServer()`
+  - list remote tools with `listTools()`
+  - convert to agent tools using `MCPTool.fromTools(connection, serverTools)`
+- Startup is bounded by `STARTUP_TIMEOUT_MS` (250ms). If tool loads are still pending, cached definitions may be used from `MCPToolCache` and exposed as deferred wrappers via `DeferredMCPTool.fromTools(...)`.
+- Lifecycle operations:
+  - `disconnectServer(name)` and `disconnectAll()` tear down connections via `disconnectServer(connection)` and remove associated `mcp_<server>_` tools.
+  - `refreshServerTools(name)` / `refreshAllTools()` re-run `listTools()` and replace server tool registrations.
 
-### Adding a New Slash Command
+`discoverAndLoadMCPTools()` in `src/mcp/loader.ts` is the adapter from manager internals to extensibility-facing output:
 
-1. If it's a UI-only command (e.g., `/theme`), add handler in `interactive-mode.ts` `setupEditorSubmitHandler()`
-2. If it needs session logic, add method to `AgentSession` and call from mode
+- Optionally creates `MCPToolCache` (`resolveToolCache()` via `AgentStorage`).
+- Creates/configures `MCPManager` (including optional `setAuthStorage()`).
+- Normalizes output into `MCPToolsLoadResult`:
+  - `tools: LoadedCustomTool[]`
+  - `errors: Array<{ path: string; error: string }>` using `mcp:<server>` paths
+  - `connectedServers` and `exaApiKeys`
 
-### Adding a New Tool
+### MCP tool bridge role
 
-1. Create tool factory in `tools/` following existing patterns (e.g., `createMyTool(session: ToolSession)`)
-2. Export factory and types from `tools/index.ts`
-3. Add to `BUILTIN_TOOLS` map in `tools/index.ts`
-4. Add tool prompt template to `prompts/tools/` if needed
-5. Tool will automatically be included in system prompt
-6. Use `ToolResultBuilder` for results and `OutputMeta` for truncation/limit metadata (see "Tool Output Infrastructure" section)
-7. For streaming tools: use `allocateOutputArtifact()` + `createTailBuffer()` pattern with `onChunk` callback
+`MCPManager` does not expose raw MCP protocol tool records directly. It bridges server tool definitions into the coding-agent custom-tool system:
 
-### Adding a New Hook Event
+- Core conversion points:
+  - eager: `MCPTool.fromTools(connection, serverTools)`
+  - deferred/cached: `DeferredMCPTool.fromTools(name, cached, () => this.waitForConnection(name), source)`
+- Internal tool registry is `#tools: CustomTool<TSchema, MCPToolDetails>[]`.
+- Manager consumers access bridged tools through `getTools()`; loader re-wraps those tools into `LoadedCustomTool` entries with resolved display paths (`mcp:<server> via <provider>` when provider metadata exists).
 
-1. Add event type to hook event types in `extensibility/hooks/types.ts`
-2. Add emission point in relevant code (AgentSession, tool wrapper, etc.)
-3. Update `docs/hooks.md` with the new event type
+### LSP client role and integration boundary (`src/lsp/client.ts`)
 
-### Adding a New RPC Command
+This module is a process-level JSON-RPC client/runtime for language servers. It is intentionally lower-level than feature tools.
 
-1. Add command type to `RpcCommand` union in `modes/rpc/rpc-types.ts`
-2. Add response type to `RpcResponse` union in `modes/rpc/rpc-types.ts`
-3. Add handler case in `handleCommand()` switch in `modes/rpc/rpc-mode.ts`
-4. Add client method in `RpcClient` class in `modes/rpc/rpc-client.ts`
-5. Update `docs/rpc.md` with the new command
+- Client acquisition boundary: `getOrCreateClient(config, cwd, initTimeoutMs?)`.
+  - Spawns server process (`ptree.spawn`) and optionally wraps command through lspmux (`isLspmuxSupported()`, `getLspmuxCommand()`).
+  - Sends `initialize` request with static `CLIENT_CAPABILITIES`, stores `serverCapabilities`, then sends `initialized` notification.
+- Message transport boundary:
+  - framing/parsing via `parseMessage()`, `findHeaderEnd()`, `writeMessage()`
+  - background reader `startMessageReader()` routes replies to `pendingRequests` and handles selected server-initiated requests (`workspace/configuration`, `workspace/applyEdit`).
+- File sync boundary (editor-like document state into LSP):
+  - `ensureFileOpen()`, `syncContent()`, `notifySaved()`, `refreshFile()`
+  - per-file operation serialization via `fileOperationLocks`
+- Request API boundary:
+  - `sendRequest()` handles request IDs, timeout (`DEFAULT_REQUEST_TIMEOUT_MS`), abort propagation (`$/cancelRequest`), and promise settlement.
+  - `sendNotification()` is fire-and-forget transport.
+- Lifecycle boundary:
+  - `shutdownClient()`, `shutdownAll()`, idle cleanup (`setIdleTimeout()`, periodic checker), and process-signal cleanup hooks.
 
-### Adding a New Selector
+In short, `src/lsp/client.ts` is the transport/session substrate; higher-level LSP feature modules call into it rather than reimplementing process or protocol handling.
 
-1. Create component in `modes/components/`
-2. Use `showSelector()` helper in `interactive-mode.ts`:
+### Internal URL routing responsibilities (`src/internal-urls/router.ts`, `src/internal-urls/index.ts`)
 
-```typescript
-private showMySelector(): void {
-    this.showSelector((done) => {
-        const selector = new MySelectorComponent(
-            // ... params
-            (result) => {
-                // Handle selection
-                done();
-                this.showStatus(`Selected: ${result}`);
-            },
-            () => {
-                done();
-                this.ui.requestRender();
-            },
-        );
-        return { component: selector, focus: selector.getSelectList() };
-    });
-}
+`InternalUrlRouter` is a protocol dispatcher for internal schemes (`<scheme>://...`).
+
+- Handler registration: `register(handler)` keyed by `handler.scheme`.
+- Fast capability check: `canHandle(input)` parses scheme and checks handler presence.
+- Resolution pipeline in `resolve(input)`:
+  1. Parse with `new URL(input)` (invalid URLs throw).
+  2. Preserve decoded host/path fidelity by attaching `rawHost` and `rawPathname` to `InternalUrl`.
+  3. Select handler by normalized scheme.
+  4. Delegate to `handler.resolve(parsedInternalUrl)`.
+  5. If scheme is unknown, throw with a supported-schemes list.
+
+`src/internal-urls/index.ts` defines the public integration surface for this subsystem by exporting:
+
+- Router + core types: `InternalUrlRouter`, `InternalResource`, `InternalUrl`, `ProtocolHandler`
+- Protocol handlers (agent/artifact/docs/memory/plan/rule/skill)
+- Query helpers (`applyQuery`, `parseQuery`, `pathToQuery`)
+
+This keeps URL protocol resolution centralized and pluggable while keeping protocol-specific logic in dedicated handler modules.
+
+## Execution Backends and Tool Adapters (Bash, Python, SSH)
+
+### ASCII overview
+
+```text
+Tool adapters (tools/bash.ts, tools/python.ts, tools/ssh.ts)
+                │ schema + validation + onUpdate + error policy
+                ▼
+Executors (exec/bash-executor.ts, ipy/executor.ts, ssh/ssh-executor.ts)
+                │ process/kernel/session lifecycle
+                ▼
+            OutputSink
+                │
+                ▼
+      result summary -> ToolResultBuilder
 ```
 
-### Adding a New Extension Source
+This subsystem is split into two layers:
 
-1. Create discovery module in `discovery/` (e.g., `my-source.ts`)
-2. Implement discovery functions that return capability objects
-3. Add to discovery chain in `discovery/index.ts`
-4. Update `docs/extension-loading.md` with the new source
+- **Core executors** (`src/exec/bash-executor.ts`, `src/ipy/executor.ts`, `src/ssh/ssh-executor.ts`) own process/kernel lifecycle and raw output capture.
+- **Tool adapters** (`src/tools/bash.ts`, `src/tools/python.ts`) own tool schemas, argument normalization, UX-facing updates, and error policy for agent tool calls.
 
-### Adding a New Capability Type
+### Core executor responsibilities
 
-1. Create capability module in `capability/` (e.g., `my-capability.ts`)
-2. Define capability type and schema
-3. Add to capability registry in `capability/index.ts`
-4. Add loader/handler in relevant core module
-5. Update `docs/extensions.md` with the new capability type
+#### Bash executor (`src/exec/bash-executor.ts`)
 
-### Adding a New Keybinding
+- Entry point: `executeBash(command, options)`.
+- Uses `Settings.getShellConfig()` and `Shell` from `@oh-my-pi/pi-natives`.
+- Reuses shell sessions via `shellSessions: Map<string, Shell>` keyed by `buildSessionKey(...)` (shell, prefix, snapshot path, env, optional `sessionKey`).
+- Applies shell snapshot support via `getOrCreateSnapshot(...)` when using bash.
+- Streams output into `OutputSink` (`onChunk`, artifact path/id support).
+- Serializes sink writes with `pendingChunks` to preserve chunk ordering.
+- Shapes terminal result into `BashResult`:
+  - `output`, `truncated`, `totalLines/totalBytes`, `outputLines/outputBytes`, optional `artifactId`
+  - `exitCode` / `cancelled` states for normal completion, timeout, and abort.
 
-1. Add the action name to `AppAction` type in `config/keybindings.ts`
-2. Add default binding to `DEFAULT_APP_KEYBINDINGS`
-3. Add to `APP_ACTIONS` array
-4. Handle the action in `CustomEditor` or `InteractiveMode`
+#### Python executor (`src/ipy/executor.ts`)
 
-Example: The `dequeue` action (`Alt+Up`) restores queued messages to the editor.
+- Entry points:
+  - `executePython(code, options)`
+  - `executePythonWithKernel(kernel, code, options)`
+  - warmup/session utilities (`warmPythonEnvironment`, `disposeAllKernelSessions`).
+- Manages kernel session lifecycle in `kernelSessions: Map<string, KernelSession>` with:
+  - bounded session count (`MAX_KERNEL_SESSIONS`), LRU eviction (`evictOldestSession`)
+  - idle cleanup timer (`cleanupIdleSessions`)
+  - heartbeat/dead detection and restart (`restartKernelSession`).
+- Supports two modes via `PythonKernelMode`:
+  - `"session"` (reuse kernel per `sessionId`)
+  - `"per-call"` (start/shutdown each execution).
+- Uses `OutputSink` in `executeWithKernel(...)` for streaming/truncation/artifact output.
+- Aggregates rich kernel outputs (`displayOutputs`) and stdin/timed-out/cancelled state into `PythonResult`.
+- Caches prelude helper docs in `pycache` under agent dir (`buildPreludeCacheState`, `readPreludeCache`, `writePreludeCache`) for faster startup.
 
-## Code Style
+#### SSH executor (`src/ssh/ssh-executor.ts`)
 
-- TypeScript with strict type checking (tsgo)
-- No `any` types unless absolutely necessary
-- No inline dynamic imports
-- Formatting via Biome (`bun run check` or `bun run fix`)
-- Keep InteractiveMode focused on UI, delegate logic to AgentSession
-- Use event bus for tool/extension communication
-- Components should override `invalidate()` to rebuild on theme changes
+- Entry point: `executeSSH(host, command, options)`.
+- Ensures remote connectivity/metadata through `ensureConnection(...)` and optional `ensureHostInfo(...)`.
+- Optional compat wrapping (`buildCompatCommand`) when `compatEnabled` and host advertises `compatShell`.
+- Optional SSHFS mount attempt (`mountRemote`) when available.
+- Runs SSH via `ptree.spawn(["ssh", ...buildRemoteCommand(...)])`.
+- Streams both stdout/stderr into `OutputSink` and returns `SSHResult` with same truncation/accounting shape (`output`, byte/line totals, optional artifact id, `exitCode`, `cancelled`).
 
-## Package Structure
+### Tool adapter responsibilities
 
-This is part of a monorepo with the following packages:
+#### Bash tool (`src/tools/bash.ts`)
 
-- `@oh-my-pi/pi-coding-agent` (this package) - Main CLI and TUI
-- `@oh-my-pi/pi-agent-core` - Core agent implementation
-- `@oh-my-pi/pi-tui` - TUI components
-- `@oh-my-pi/pi-ai` - External AI provider library
+- Adapter class: `BashTool implements AgentTool<typeof bashSchema, BashToolDetails>`.
+- Defines tool contract (`bashSchema`: `command`, `timeout`, `cwd`, `head`, `tail`) and prompt text import (`../prompts/tools/bash.md`).
+- Pre-execution adaptation:
+  - strips inline shell truncation patterns (`normalizeBashCommand`)
+  - applies explicit/derived head-tail params
+  - optional command interception (`checkBashInterception`) based on settings
+  - expands internal URLs (`expandInternalUrls`)
+  - resolves/validates working directory (`resolveToCwd`, `fs.promises.stat`).
+- Chooses backend:
+  - PTY path: `runInteractiveBashPty(...)`
+  - non-PTY path: `executeBash(...)`.
+- Streaming to UI is adapter-owned: updates `onUpdate` using `createTailBuffer(...)` while backend runs.
+- Post-execution shaping is adapter-owned:
+  - applies `applyHeadTail(...)`
+  - converts backend cancellation/timeout/exit status into `ToolAbortError` / `ToolError`
+  - returns `toolResult(...).text(...).truncationFromSummary(...)`.
 
-## CLI Flags
+#### Python tool (`src/tools/python.ts`)
 
-Key CLI flags for development:
+- Adapter class: `PythonTool implements AgentTool<typeof pythonSchema>`.
+- Defines schema (`cells[]`, `timeout`, `cwd`, `reset`) and dynamic description from prelude docs (`getPythonToolDescription`, `getPreludeDocs`).
+- Supports proxy mode via `PythonProxyExecutor`; otherwise executes locally.
+- Per-call adaptation:
+  - validates and resolves working dir
+  - clamps timeout and combines abort signals (`AbortSignal.any`)
+  - allocates artifact output and local `OutputSink`
+  - builds stable `sessionId` from session file + cwd.
+- Executes cells sequentially by repeatedly calling core `executePython(...)`; adapter tracks cell-level state (`PythonCellResult`) and emits progressive updates (`onUpdate`).
+- Adapter merges backend outputs into UI-facing shape:
+  - combined text output across cells
+  - JSON/image/status display outputs from `result.displayOutputs`
+  - cell status transitions (`pending/running/complete/error`), duration, exit code.
+- Adapter owns error messaging semantics for failed/aborted cells and final `toolResult(...).truncationFromSummary(...)` construction.
 
-- `--no-tools`: Disable all built-in tools (extension-only setups)
-- `--no-extensions`: Disable extension discovery (explicit `-e` paths still work)
-- `--no-skills`: Disable skill discovery
-- `--no-rules`: Disable rules discovery
-- `--session <id>`: Resume by session ID prefix (UUID match) or path
+### Streaming and result-shaping boundaries
 
-## SDK Exports
+- **Streaming transport + truncation accounting** is implemented in executors through `OutputSink`.
+- **Tool-progress rendering updates** (`onUpdate` with tail buffers and structured details) is implemented in adapters.
+- **Final agent-tool response text and failure policy** (what becomes `ToolError` vs success) is implemented in adapters.
+- **Executor return types** (`BashResult`, `PythonResult`, `SSHResult`) carry normalized low-level execution facts; adapters convert those into agent tool UX semantics.
 
-The SDK (`src/index.ts`) exports run modes for programmatic usage:
+## Task Tool: Agent Delegation, Selection, and Parallel Execution
 
-- `InteractiveMode`: Full TUI mode
-- `runPrintMode()`: Non-interactive, process messages and exit
-- `runRpcMode()`: JSON stdin/stdout protocol
+### ASCII overview
 
-Extension types and utilities are also exported for building custom extensions.
+```text
+task tool request
+      │
+      ▼
+TaskTool.execute(...)
+      │ validate agent/tasks/schema
+      ▼
+discoverAgents + AgentOutputManager
+      │
+      ▼
+mapWithConcurrencyLimit(...)
+      │
+      ├── runSubprocess(task A) -> child AgentSession
+      ├── runSubprocess(task B) -> child AgentSession
+      └── ...
+      │
+      ▼
+submit_result/fallback normalization
+      │
+      ▼
+aggregated task results (+ optional worktree patches)
+```
 
-## Documentation
+The task subsystem is centered in `packages/coding-agent/src/task/index.ts` via `TaskTool`, which implements the `task` tool contract and delegates each requested task item to `runSubprocess(...)` from `src/task/executor.ts`.
 
-See the `docs/` directory for detailed documentation:
+Key orchestration responsibilities in `TaskTool.execute(...)`:
+- Re-discover available agents on each call with `discoverAgents(this.session.cwd)`.
+- Validate agent existence (`getAgent(...)`), disabled-agent settings (`task.disabledAgents`), and task list integrity (non-empty IDs, case-insensitive duplicate detection).
+- Resolve model/thinking/output schema precedence:
+  - model: `task.agentModelOverrides[agentName]` → agent frontmatter model (if non-default alias) → parent active model
+  - output schema: agent frontmatter `output` → tool params `schema` → parent session schema
+- Prepare shared context (`context.md`) and unique per-task IDs via `AgentOutputManager.allocateBatch(...)`.
+- Execute all tasks with bounded concurrency using `mapWithConcurrencyLimit(...)` from `src/task/parallel.ts`.
 
-- `docs/sdk.md` - SDK usage and examples
-- `docs/rpc.md` - RPC protocol documentation
-- `docs/hooks.md` - Hook system documentation
-- `docs/extensions.md` - Extension system documentation
-- `docs/custom-tools.md` - Custom tool development
-- `docs/skills.md` - Skill system documentation
-- `docs/compaction.md` - Context compaction system
-- `docs/session.md` - Session management
-- `docs/theme.md` - Theme customization
-- `docs/tui.md` - TUI architecture
+### Agent Definitions and Selection
+
+Bundled agent definitions are implemented in `packages/coding-agent/src/task/agents.ts`:
+- Built-ins are embedded with `import ... with { type: "text" }` and parsed by `parseAgent(...)`.
+- `loadBundledAgents()` caches parsed `AgentDefinition[]`.
+- `task` and `quick_task` are injected from the same `task.md` body with different frontmatter defaults (`model`, `thinkingLevel`, `spawns`).
+
+`TaskTool` applies additional runtime constraints in `index.ts`:
+- `PI_BLOCKED_AGENT` prevents self-recursive spawn of a specific agent.
+- Parent spawn policy (`session.getSessionSpawns()`) gates whether a child can be launched.
+- In plan mode (`session.getPlanModeState?.().enabled`), effective subagent tools are replaced with a restricted set (`read`, `grep`, `find`, `ls`, `lsp`, `fetch`, `web_search`) and child spawning is disabled for that effective agent (`spawns: undefined`).
+
+## Execution Boundary: In-Process Session, Not OS Subprocess
+
+Despite the name `runSubprocess`, `packages/coding-agent/src/task/executor.ts` currently runs subagents in-process:
+- File header: `In-process execution for subagents`.
+- Execution path uses `createAgentSession(...)`, `SessionManager`, and direct event subscription (`session.subscribe(...)`).
+- There is no `child_process` spawn path in this module.
+
+What *is* isolated is execution context and artifacts, not process memory:
+- Optional git worktree isolation is handled by `TaskTool.execute(...)` in `index.ts` using `ensureWorktree(...)`, `applyBaseline(...)`, `captureDeltaPatch(...)`, `cleanupWorktree(...)`.
+- Child session JSONL/markdown outputs are written under the task artifacts directory (`<id>.jsonl`, `<id>.md`, and in isolated mode `<id>.patch`).
+
+### Tooling Surface in Child Sessions
+
+`runSubprocess(...)` computes active tools from agent frontmatter and runtime rules:
+- Adds `task` tool automatically when `agent.spawns` is set and recursion depth permits.
+- Removes `task` when max recursion depth is reached (`task.maxRecursionDepth`).
+- Expands legacy `exec` alias into `python` and/or `bash` based on `python.toolMode`.
+- Forces `requireSubmitResultTool: true` in `createAgentSession(...)`.
+- Filters parent-owned tools out of child tools (`todo_write` is removed).
+
+If parent MCP connections exist, executor creates in-process MCP proxy tools with `createMCPProxyTools(...)` so children reuse parent MCP connectivity rather than creating independent MCP sessions.
+
+## Submit/Result Contract and Completion Semantics
+
+`executor.ts` enforces structured completion around `submit_result`:
+- Tracks tool events and extracted data through `subprocessToolRegistry` handlers.
+- Retries reminder prompts up to 3 times (`MAX_SUBMIT_RESULT_RETRIES`) using `subagent-submit-reminder.md` if `submit_result` was not called.
+- Final output normalization is centralized in `finalizeSubprocessOutput(...)`:
+  - If `submit_result.status === "aborted"`, task is converted to an aborted result payload.
+  - If missing `submit_result`, fallback attempts JSON parse/validation against output schema.
+  - Emits warnings when `submit_result` is missing/null and fallback cannot safely validate.
+
+This module also accumulates token/cost usage from assistant `message_end` events and truncates returned output with `truncateTail(...)` using `MAX_OUTPUT_BYTES` and `MAX_OUTPUT_LINES`.
+
+## Parallelization Model
+
+`packages/coding-agent/src/task/parallel.ts` provides `mapWithConcurrencyLimit(...)`:
+- Worker-pool scheduling with ordered result slots (`results[index]`).
+- Concurrency normalization (`Math.floor`, bounded to `[1, items.length]`).
+- Parent abort signal stops scheduling new tasks; already running tasks finish their own abort path.
+- First non-abort worker error fails fast via internal abort controller + rejection promise.
+- Return shape is `{ results: (R | undefined)[], aborted: boolean }`; undefined entries represent tasks skipped before start.
+
+`TaskTool.execute(...)` post-processes these partial results into explicit failed/aborted placeholders so downstream rendering receives a complete `SingleResult[]`.
+
+## Subprocess Tool Registry Hooks
+
+`packages/coding-agent/src/task/subprocess-tool-registry.ts` defines a singleton registry (`subprocessToolRegistry`) used by executor event handling:
+- `register(toolName, handler)` attaches optional hooks:
+  - `extractData(event)` for structured extraction into `progress.extractedToolData[toolName][]`
+  - `shouldTerminate(event)` to request early child termination after tool completion
+  - `renderInline(...)` and `renderFinal(...)` for UI rendering integrations
+- Executor consumes these hooks inside `tool_execution_end` processing to build structured task outputs (not only plain text streams).
+
+This keeps tool-specific extraction/termination logic decoupled from generic task execution flow.
+
+## Web I/O and Retrieval Architecture (`fetch`, `puppeteer`, `web_search`, scrapers)
+
+### ASCII overview
+
+```text
+fetch tool
+  │
+  ├── specialHandlers (web/scrapers)
+  ├── generic fetch/convert/render pipeline
+  └── truncation/artifact metadata
+
+browser tool (puppeteer)
+  ├── stateful page/session control
+  ├── observe/interact/extract actions
+  └── screenshot/readability outputs
+
+web_search
+  ├── resolveProviderChain(...)
+  ├── provider attempts + fallback order
+  └── formatted response for LLM
+```
+
+### Responsibility boundaries
+
+- `packages/coding-agent/src/tools/fetch.ts` implements the **`fetch` tool** (`FetchTool`) for URL retrieval and content transformation into model-friendly text.
+- `packages/coding-agent/src/tools/browser.ts` implements the **`puppeteer` tool** (`BrowserTool`) for stateful browser automation (navigation, interaction, accessibility observation, screenshots).
+- `packages/coding-agent/src/web/search/index.ts` + `packages/coding-agent/src/web/search/provider.ts` implement **web search orchestration** and provider abstraction/fallback.
+- `packages/coding-agent/src/web/scrapers/index.ts` is the **special-handler registry** consumed by `fetch` for site-specific extraction before generic rendering.
+
+These are separate pipelines: `fetch` is HTTP/content extraction, `puppeteer` is interactive browser control, and `web_search` is answer synthesis over external search APIs.
+
+### `fetch` tool pipeline (`FetchTool.execute`)
+
+`FetchTool.execute` clamps timeout (`1..45s`), calls `renderUrl(...)`, then truncates output (`truncateHead`) and may persist full output via `allocateOutputArtifact(...)`.
+
+Core pipeline in `renderUrl(url, timeout, raw, signal)`:
+
+1. Normalize URL (`normalizeUrl`) and short-circuit `pi-internal://`.
+2. If not `raw`, run `handleSpecialUrls(...)` over `specialHandlers` from `../web/scrapers`.
+3. Fetch with `loadPage(...)`.
+4. Detect convertible binaries (`isConvertible`) and attempt `fetchBinary(...)` + `convertWithMarkitdown(...)`.
+5. Handle structured/non-HTML content directly:
+   - JSON: `formatJson`
+   - RSS/Atom/XML feed: `parseFeedToMarkdown`
+   - plain text/markdown passthrough
+6. For HTML (non-raw), progressively try higher-signal alternatives:
+   - `<link rel="alternate">` markdown/feed (`parseAlternateLinks`)
+   - `.md` suffix (`tryMdSuffix`)
+   - `/.well-known/llms.txt`, `/llms.txt`, `/llms.md` (`tryLlmEndpoints`)
+   - `Accept: text/markdown, text/plain...` negotiation (`tryContentNegotiation`)
+   - HTML-to-text conversion (`renderHtmlToText`)
+7. If HTML conversion is low-quality (`isLowQualityOutput`), try document-link extraction (`extractDocumentLinks`) + markitdown.
+
+`renderHtmlToText(...)` fallback order is explicit in code: Jina reader endpoint (`https://r.jina.ai/<url>`), then `trafilatura` (via `ensureTool`), then `lynx`, then native `htmlToMarkdown`.
+
+### Scraper registry role (`web/scrapers/index.ts`)
+
+`specialHandlers: SpecialHandler[]` is an ordered list of domain-specific handlers (for example GitHub/GitLab, social/news, package registries, academic/security/reference sources). `fetch.ts` calls them through `handleSpecialUrls(...)` and returns the first non-null `RenderResult`.
+
+Operationally, this means scraper ordering in `specialHandlers` is precedence: earlier handlers can short-circuit generic fetch/render behavior.
+
+### Browser automation tool (`BrowserTool`)
+
+`BrowserTool` is stateful and action-driven (`browserSchema.action`), with internal session state:
+
+- browser/page lifecycle: `#resetBrowser`, `#ensurePage`, `#closeBrowser`
+- element cache for `observe`→`*_id` workflows: `#elementCache`, `#resolveCachedHandle`, stale-element invalidation
+- stealth hardening: `#applyStealthPatches`, user-agent overrides via CDP, injected scripts from `src/tools/puppeteer/*.txt`
+
+Major action classes:
+
+- session/navigation: `open`, `goto`, `close`
+- structured page introspection: `observe` (accessibility snapshot + viewport/scroll metadata)
+- direct interaction: `click/type/fill/press/scroll/drag` and id-based variants
+- extraction: `get_text`, `get_html`, `get_attribute`, `extract_readable` (Mozilla Readability + `htmlToBasicMarkdown`)
+- capture: `screenshot` (PNG, resized/compressed before returning image content)
+
+This tool is intentionally distinct from `fetch`: it executes page interactions and DOM-level extraction rather than stateless HTTP retrieval.
+
+### Search abstraction and fallback (`web/search/index.ts`, `provider.ts`)
+
+Provider registry (`SEARCH_PROVIDERS`) and fallback order (`SEARCH_PROVIDER_ORDER`) are defined in `provider.ts`:
+
+`perplexity → exa → brave → jina → kimi → anthropic → gemini → codex → zai → synthetic`
+
+`resolveProviderChain(preferredProvider)` behavior:
+
+- If preferred is explicit (not `auto`) and `isAvailable()` is true, it is added first.
+- Remaining available providers are appended in fixed order, skipping duplicates.
+
+`executeSearch(...)` in `index.ts` then tries providers sequentially until one succeeds; it returns formatted text (`formatForLLM`) on first success. If all fail, it returns a synthesized error including provider list and last error.
+
+Explicit no-fallback path exists: if `params.provider !== "auto"` and `params.no_fallback` is true, only that provider is attempted (or none if unavailable).
+
+### Auth/availability signals represented in code
+
+Only code-backed auth behavior should be assumed:
+
+- Availability gating is provider-specific `isAvailable()` checks.
+- `formatProviderError(...)` maps `SearchProviderError` status codes:
+  - `401/403`: authorization failure message (special-case message passthrough for `zai`)
+  - Anthropic `404`: specific endpoint/model-not-found message
+
+No explicit rate-limit policy is encoded in these files beyond generic provider failure handling and fallback chaining.
+
+## Local development workflow, tools registry, RPC, and hooks
+
+### ASCII overview
+
+```text
+Change request
+   │
+   ├── built-in tool  -> tools/index.ts (imports/exports/BUILTIN_TOOLS)
+   ├── RPC command    -> modes/rpc/rpc-types.ts (+ rpc-mode handler/client)
+   └── hook event     -> extensibility/hooks/types.ts (+ emit sites)
+
+Validation loop:
+  bun --cwd=packages/coding-agent run check
+  bun --cwd=packages/coding-agent run test
+```
+
+This section covers the day-to-day commands and three common extension paths in `packages/coding-agent`:
+- add a built-in tool
+- add an RPC command
+- add a hook event
+
+### Canonical references
+
+- Package scripts: `packages/coding-agent/package.json` (`scripts`)
+- Package-level docs pointer: `packages/coding-agent/README.md`
+- Built-in tool registry: `packages/coding-agent/src/tools/index.ts`
+- RPC protocol types: `packages/coding-agent/src/modes/rpc/rpc-types.ts`
+- Hook event and API types: `packages/coding-agent/src/extensibility/hooks/types.ts`
+
+### Practical local command workflow
+
+Use only script names that exist in `packages/coding-agent/package.json`:
+
+- Typecheck package:
+  - `bun --cwd=packages/coding-agent run check`
+- Run package tests:
+  - `bun --cwd=packages/coding-agent run test`
+- Reformat prompt assets used by this package:
+  - `bun --cwd=packages/coding-agent run format-prompts`
+- Regenerate docs index files for package docs:
+  - `bun --cwd=packages/coding-agent run generate-docs-index`
+- Regenerate template artifacts:
+  - `bun --cwd=packages/coding-agent run generate-template`
+- Build compiled binary artifact (`dist/omp`):
+  - `bun --cwd=packages/coding-agent run build:binary`
+
+`packages/coding-agent/README.md` intentionally delegates install/config/CLI docs to the monorepo root README (`../../README.md`) and keeps package-specific references to `CHANGELOG.md`, `docs/`, and `DEVELOPMENT.md`.
+
+### Playbook: add a built-in tool
+
+Primary file: `packages/coding-agent/src/tools/index.ts`.
+
+1. Add imports for the tool implementation and any exported detail/input types.
+   - Example pattern: `import { ReadTool } from "./read";`
+2. Export the tool/type symbols from this module so they are reachable through the tools barrel.
+   - Example pattern: `export { ReadTool, type ReadToolDetails, type ReadToolInput } from "./read";`
+3. Register a factory in `BUILTIN_TOOLS`.
+   - `export const BUILTIN_TOOLS: Record<string, ToolFactory> = { ... }`
+   - Key is the external tool name (e.g. `"read"`, `"web_search"`).
+4. If it should be hidden/system-only, register under `HIDDEN_TOOLS` instead.
+   - Existing hidden names: `submit_result`, `report_finding`, `exit_plan_mode`.
+5. Wire feature gates in `isToolAllowed(name)` when the tool needs runtime enable/disable behavior.
+   - Existing gates use `session.settings.get("<tool>.enabled")` and recursion limits for `task`.
+6. If the tool should be selectable by type, update `ToolName = keyof typeof BUILTIN_TOOLS` consumers as needed.
+
+Notes from current behavior:
+- `createTools()` automatically injects `exit_plan_mode` when `toolNames` are specified.
+- `submit_result` is force-added when `session.requireSubmitResultTool === true`.
+- Python/Bash availability is mode-driven (`PI_PY`, `python.toolMode`) and can auto-fallback to bash.
+
+### Playbook: add an RPC command
+
+Primary file: `packages/coding-agent/src/modes/rpc/rpc-types.ts`.
+
+1. Add the new command shape to `RpcCommand` with a unique `type` literal.
+   - Pattern: `| { id?: string; type: "new_command"; ... }`
+2. Add success response variant(s) to `RpcResponse`.
+   - Pattern: `| { id?: string; type: "response"; command: "new_command"; success: true; data?: ... }`
+3. Ensure failure path remains covered by the generic error arm:
+   - `{ id?: string; type: "response"; command: string; success: false; error: string }`
+4. If command changes exposed runtime state, update `RpcSessionState` accordingly.
+5. `RpcCommandType` is derived (`RpcCommand["type"]`), so no separate enum update is needed.
+
+Keep command naming consistent with existing protocol literals such as:
+- prompting: `prompt`, `steer`, `follow_up`
+- session: `switch_session`, `branch`, `get_branch_messages`
+- execution: `bash`, `abort_bash`
+
+### Playbook: add a hook event
+
+Primary file: `packages/coding-agent/src/extensibility/hooks/types.ts`.
+
+1. Define a strongly typed event interface with a literal `type` field.
+   - Pattern: `export interface MyEvent { type: "my_event"; ... }`
+2. Add the event to `HookEvent` union.
+3. Add an overload to `HookAPI.on(...)` for the new event.
+   - Pattern: `on(event: "my_event", handler: HookHandler<MyEvent, MyEventResult>): void;`
+4. If handlers can influence execution, add a corresponding `...Result` interface.
+   - Existing examples: `ToolCallEventResult`, `SessionBeforeCompactResult`, `ContextEventResult`.
+5. Choose the right context type:
+   - event handlers use `HookContext`
+   - slash command handlers use `HookCommandContext` (adds `waitForIdle`, `newSession`, `branch`, `navigateTree`)
+
+Current event groups to align with:
+- session lifecycle (`session_start`, `session_before_switch`, `session_tree`, etc.)
+- agent/turn lifecycle (`before_agent_start`, `agent_start`, `turn_end`)
+- automation (`auto_compaction_start/end`, `auto_retry_start/end`, `todo_reminder`, `ttsr_triggered`)
+- tool hooks (`tool_call`, `tool_result`)
+
+If the event carries tool-specific post-execution details, follow the existing discriminated union pattern used by `ToolResultEvent` (`toolName` + typed `details`).
