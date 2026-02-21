@@ -13,16 +13,20 @@ import type { PreludeHelper, PythonStatusEvent } from "../ipy/kernel";
 import { truncateToVisualLines } from "../modes/components/visual-truncate";
 import type { Theme } from "../modes/theme/theme";
 import pythonDescription from "../prompts/tools/python.md" with { type: "text" };
-import { OutputSink, type OutputSummary } from "../session/streaming-output";
+import {
+	allocateOutputArtifact,
+	DEFAULT_MAX_BYTES,
+	OutputSink,
+	type OutputSummary,
+	TailBuffer,
+} from "../session/streaming-output";
 import { getTreeBranch, getTreeContinuePrefix, renderCodeCell } from "../tui";
 import type { ToolSession } from ".";
 import type { OutputMeta } from "./output-meta";
-import { allocateOutputArtifact, createTailBuffer } from "./output-utils";
 import { resolveToCwd } from "./path-utils";
 import { replaceTabs, shortenPath, ToolUIKit, truncateToWidth } from "./render-utils";
 import { ToolAbortError, ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
-import { DEFAULT_MAX_BYTES } from "./truncate";
 
 export const PYTHON_DEFAULT_PREVIEW_LINES = 10;
 
@@ -207,7 +211,7 @@ export class PythonTool implements AgentTool<typeof pythonSchema> {
 				throw new ToolError(`Working directory is not a directory: ${commandCwd}`);
 			}
 
-			const tailBuffer = createTailBuffer(DEFAULT_MAX_BYTES * 2);
+			const tailBuffer = new TailBuffer(DEFAULT_MAX_BYTES * 2);
 			const jsonOutputs: unknown[] = [];
 			const images: ImageContent[] = [];
 			const statusEvents: PythonStatusEvent[] = [];
@@ -255,7 +259,7 @@ export class PythonTool implements AgentTool<typeof pythonSchema> {
 
 			const sessionFile = this.session.getSessionFile?.() ?? undefined;
 			const artifactsDir = this.session.getArtifactsDir?.() ?? undefined;
-			const { artifactPath, artifactId } = await allocateOutputArtifact(this.session, "python");
+			const { path: artifactPath, id: artifactId } = await allocateOutputArtifact(this.session, "python");
 			outputSink = new OutputSink({
 				artifactPath,
 				artifactId,

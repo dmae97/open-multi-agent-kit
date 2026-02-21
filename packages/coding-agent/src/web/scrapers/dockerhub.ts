@@ -1,3 +1,4 @@
+import { formatBytes } from "../../tools/render-utils";
 import type { RenderResult, SpecialHandler } from "./types";
 import { finalizeOutput, formatCount, loadPage } from "./types";
 
@@ -27,13 +28,6 @@ interface DockerHubTag {
 
 interface DockerHubTagsResponse {
 	results?: DockerHubTag[];
-}
-
-function formatSize(bytes: number): string {
-	if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(1)}GB`;
-	if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)}MB`;
-	if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(1)}KB`;
-	return `${bytes}B`;
 }
 
 /**
@@ -131,7 +125,7 @@ export const handleDockerHub: SpecialHandler = async (
 			md += "|-----|------|---------------|--------|\n";
 
 			for (const tag of tags) {
-				const size = tag.full_size ? formatSize(tag.full_size) : "-";
+				const size = tag.full_size ? formatBytes(tag.full_size) : "-";
 				const archs =
 					tag.images
 						?.map(img => img.architecture)

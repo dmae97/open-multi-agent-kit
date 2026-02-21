@@ -11,6 +11,7 @@ import { getSessionsDir } from "@oh-my-pi/pi-utils/dirs";
 import { DynamicBorder } from "../modes/components/dynamic-border";
 import { getSelectListTheme, getSymbolTheme, theme } from "../modes/theme/theme";
 import type { InteractiveModeContext } from "../modes/types";
+import { formatBytes } from "../tools/render-utils";
 import { openPath } from "../utils/open";
 import { DebugLogViewerComponent } from "./log-viewer";
 import { generateHeapSnapshotData, type ProfilerSession, startCpuProfile } from "./profiler";
@@ -415,12 +416,6 @@ export class DebugSelectorComponent extends Container {
 			hideThinkingBlock: this.ctx.hideThinkingBlock,
 		};
 	}
-}
-
-function formatBytes(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /**

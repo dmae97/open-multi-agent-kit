@@ -8,7 +8,7 @@ import { isEnoent } from "@oh-my-pi/pi-utils";
 import { getProjectDir } from "@oh-my-pi/pi-utils/dirs";
 import chalk from "chalk";
 import { resolveReadPath } from "../tools/path-utils";
-import { formatSize } from "../tools/truncate";
+import { formatBytes } from "../tools/render-utils";
 import { formatDimensionNote, resizeImage } from "../utils/image-resize";
 import { detectSupportedImageMimeTypeFromFile } from "../utils/mime";
 
@@ -47,9 +47,9 @@ export async function processFileArguments(fileArgs: string[], options?: Process
 		const maxBytes = mimeType ? MAX_CLI_IMAGE_BYTES : MAX_CLI_TEXT_BYTES;
 		if (stat.size > maxBytes) {
 			console.error(
-				chalk.yellow(`Warning: Skipping file contents (too large: ${formatSize(stat.size)}): ${absolutePath}`),
+				chalk.yellow(`Warning: Skipping file contents (too large: ${formatBytes(stat.size)}): ${absolutePath}`),
 			);
-			text += `<file name="${absolutePath}">(skipped: too large, ${formatSize(stat.size)})</file>\n`;
+			text += `<file name="${absolutePath}">(skipped: too large, ${formatBytes(stat.size)})</file>\n`;
 			continue;
 		}
 

@@ -11,6 +11,7 @@ import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
 import { computeLineHash } from "../patch/hashline";
 import grepDescription from "../prompts/tools/grep.md" with { type: "text" };
+import { DEFAULT_MAX_COLUMN, type TruncationResult, truncateHead } from "../session/streaming-output";
 import { Ellipsis, Hasher, type RenderCache, renderStatusLine, renderTreeList, truncateToWidth } from "../tui";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
 import type { ToolSession } from ".";
@@ -19,7 +20,6 @@ import { resolveToCwd } from "./path-utils";
 import { formatCount, formatEmptyMessage, formatErrorMessage, PREVIEW_LIMITS } from "./render-utils";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
-import { DEFAULT_MAX_COLUMN, type TruncationResult, truncateHead } from "./truncate";
 
 const grepSchema = Type.Object({
 	pattern: Type.String({ description: "Regex pattern to search for" }),

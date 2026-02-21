@@ -12,6 +12,7 @@ import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { truncateToVisualLines } from "../modes/components/visual-truncate";
 import type { Theme } from "../modes/theme/theme";
 import bashDescription from "../prompts/tools/bash.md" with { type: "text" };
+import { allocateOutputArtifact, DEFAULT_MAX_BYTES, TailBuffer } from "../session/streaming-output";
 import { renderStatusLine } from "../tui";
 import { CachedOutputBlock } from "../tui/output-block";
 import type { ToolSession } from ".";
@@ -20,12 +21,10 @@ import { checkBashInterception } from "./bash-interceptor";
 import { applyHeadTail } from "./bash-normalize";
 import { expandInternalUrls } from "./bash-skill-urls";
 import type { OutputMeta } from "./output-meta";
-import { allocateOutputArtifact, createTailBuffer } from "./output-utils";
 import { resolveToCwd } from "./path-utils";
 import { formatBytes, replaceTabs, wrapBrackets } from "./render-utils";
 import { ToolAbortError, ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
-import { DEFAULT_MAX_BYTES } from "./truncate";
 
 export const BASH_DEFAULT_PREVIEW_LINES = 10;
 
@@ -114,12 +113,12 @@ export class BashTool implements AgentTool<typeof bashSchema, BashToolDetails> {
 		const timeoutMs = timeoutSec * 1000;
 
 		// Track output for streaming updates (tail only)
-		const tailBuffer = createTailBuffer(DEFAULT_MAX_BYTES);
+		const tailBuffer = new TailBuffer(DEFAULT_MAX_BYTES);
 
 		// Set up artifacts environment and allocation
 		const artifactsDir = this.session.getArtifactsDir?.();
 		const extraEnv = artifactsDir ? { ARTIFACTS: artifactsDir } : undefined;
-		const { artifactPath, artifactId } = await allocateOutputArtifact(this.session, "bash");
+		const { path: artifactPath, id: artifactId } = await allocateOutputArtifact(this.session, "bash");
 
 		const usePty =
 			this.session.settings.get("bash.virtualTerminal") === "on" &&

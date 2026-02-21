@@ -26,7 +26,7 @@ import type { Theme } from "../modes/theme/theme";
 import planModeSubagentPrompt from "../prompts/system/plan-mode-subagent.md" with { type: "text" };
 import taskDescriptionTemplate from "../prompts/tools/task.md" with { type: "text" };
 import taskSummaryTemplate from "../prompts/tools/task-summary.md" with { type: "text" };
-import { formatDuration } from "../tools/render-utils";
+import { formatBytes, formatDuration } from "../tools/render-utils";
 // Import review tools for side effects (registers subagent tool handlers)
 import "../tools/review";
 import { discoverAgents, getAgent } from "./discovery";
@@ -54,13 +54,6 @@ import {
 	getRepoRoot,
 	type WorktreeBaseline,
 } from "./worktree";
-
-/** Format byte count for display */
-function formatBytes(bytes: number): string {
-	if (bytes < 1024) return `${bytes}B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}K`;
-	return `${(bytes / (1024 * 1024)).toFixed(1)}M`;
-}
 
 function createUsageTotals(): Usage {
 	return {

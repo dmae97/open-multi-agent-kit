@@ -51,6 +51,15 @@ describe("ModelRegistry runtime provider registration", () => {
 	const streamSimple: NonNullable<ProviderConfigInput["streamSimple"]> = () =>
 		({}) as unknown as AssistantMessageEventStream;
 
+	test("loads built-in GitLab Duo models and OAuth provider metadata", () => {
+		const registry = new ModelRegistry(authStorage, modelsJsonPath);
+		const model = registry.find("gitlab-duo", "claude-sonnet-4-5-20250929");
+
+		expect(model).toBeDefined();
+		expect(model?.api).toBe("anthropic-messages");
+		expect(getOAuthProviders().some(provider => provider.id === "gitlab-duo")).toBe(true);
+	});
+
 	test("validates provider config before mutating custom API state", () => {
 		const registry = new ModelRegistry(authStorage, modelsJsonPath);
 		const beforeAnthropicCount = registry.getAll().filter(model => model.provider === "anthropic").length;

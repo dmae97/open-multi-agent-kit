@@ -48,23 +48,9 @@ export {
 	warmupLspServers,
 } from "../lsp";
 export { EditTool, type EditToolDetails } from "../patch";
+export * from "../session/streaming-output";
 export { BUNDLED_AGENTS, TaskTool } from "../task";
-export {
-	companySearchTools,
-	exaSearchTools,
-	getSearchTools,
-	type SearchProvider,
-	type SearchResponse,
-	SearchTool,
-	type SearchToolsOptions,
-	setPreferredSearchProvider,
-	webSearchCodeContextTool,
-	webSearchCompanyTool,
-	webSearchCrawlTool,
-	webSearchCustomTool,
-	webSearchDeepTool,
-	webSearchLinkedinTool,
-} from "../web/search";
+export * from "../web/search";
 export { AskTool, type AskToolDetails } from "./ask";
 export { BashTool, type BashToolDetails, type BashToolInput, type BashToolOptions } from "./bash";
 export { BrowserTool, type BrowserToolDetails } from "./browser";
@@ -81,16 +67,6 @@ export { reportFindingTool, type SubmitReviewDetails } from "./review";
 export { loadSshTool, type SSHToolDetails, SshTool } from "./ssh";
 export { SubmitResultTool } from "./submit-result";
 export { type TodoItem, TodoWriteTool, type TodoWriteToolDetails } from "./todo-write";
-export {
-	DEFAULT_MAX_BYTES,
-	DEFAULT_MAX_LINES,
-	formatSize,
-	type TruncationOptions,
-	type TruncationResult,
-	truncateHead,
-	truncateLine,
-	truncateTail,
-} from "./truncate";
 export { WriteTool, type WriteToolDetails, type WriteToolInput } from "./write";
 
 /** Tool type (AgentTool from pi-ai) */
@@ -132,8 +108,8 @@ export interface ToolSession {
 	getSessionFile: () => string | null;
 	/** Get session ID */
 	getSessionId?: () => string | null;
-	/** Cached artifact manager (allocated per ToolSession) */
-	artifactManager?: ArtifactManager;
+	/** Get artifact manager (allocated per ToolSession) */
+	getArtifactManager?: () => ArtifactManager | null;
 	/** Get artifacts directory for artifact:// URLs and $ARTIFACTS env var */
 	getArtifactsDir?: () => string | null;
 	/** Get session spawns */

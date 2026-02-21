@@ -1,6 +1,37 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Exported truncation utilities and streaming output types from `session/streaming-output` module for public use
+- Added `TailBuffer` class for efficient ring-style buffering with lazy joining and windowed truncation
+- Added `truncateTailBytes` and `truncateHeadBytes` functions for UTF-8-aware byte-level truncation
+- Added `formatTailTruncationNotice` and `formatHeadTruncationNotice` functions for consistent truncation notice formatting
+- Added `allocateOutputArtifact` function to allocate artifact paths for tool output spilling
+- Added `getArtifactManager()` method to `ToolSession` for lazy artifact manager access
+
+### Changed
+
+- Moved truncation logic from `tools/truncate.ts` to `session/streaming-output.ts` for better architectural separation
+- Renamed `formatSize()` to `formatBytes()` across codebase for consistency
+- Refactored `OutputSink` to use windowed byte truncation for memory efficiency when spilling to files
+- Changed `ToolSession.artifactManager` from cached property to `getArtifactManager()` method for lazy initialization
+- Updated `allocateOutputArtifact` return type to use `{ path, id }` instead of `{ artifactPath, artifactId }`
+- Optimized newline counting to use native `indexOf` for V8-optimized string scanning
+- Improved UTF-8 boundary detection in byte truncation with dedicated helper functions
+
+### Removed
+
+- Deleted `tools/truncate.ts` module (functionality moved to `session/streaming-output.ts`)
+- Deleted `tools/output-utils.ts` module (functionality moved to `session/streaming-output.ts`)
+- Removed `formatSize` export from public API (renamed to `formatBytes`)
+- Removed individual truncation function exports from `tools/index.ts` (now exported via `session/streaming-output`)
+
+### Fixed
+
+- Fixed UTF-8 boundary handling in byte truncation to prevent invalid character sequences
+- Fixed memory efficiency in `OutputSink` by using windowed truncation instead of full-buffer encoding
+- Fixed line counting to handle chunk boundaries correctly across multiple `push()` calls
 
 ## [12.18.1] - 2026-02-21
 ### Added

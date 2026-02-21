@@ -11,6 +11,7 @@ import { renderPromptTemplate } from "../config/prompt-templates";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
 import findDescription from "../prompts/tools/find.md" with { type: "text" };
+import { type TruncationResult, truncateHead } from "../session/streaming-output";
 import {
 	Ellipsis,
 	Hasher,
@@ -27,7 +28,6 @@ import { resolveToCwd } from "./path-utils";
 import { formatCount, formatEmptyMessage, formatErrorMessage, PREVIEW_LIMITS } from "./render-utils";
 import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";
-import { type TruncationResult, truncateHead } from "./truncate";
 
 const findSchema = Type.Object({
 	pattern: Type.String({ description: "Glob pattern, e.g. '*.ts', 'src/**/*.json', 'lib/*.tsx'" }),

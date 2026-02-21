@@ -9,6 +9,7 @@ import { loadCapability } from "../discovery";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
 import sshDescriptionBase from "../prompts/tools/ssh.md" with { type: "text" };
+import { allocateOutputArtifact, DEFAULT_MAX_BYTES, TailBuffer } from "../session/streaming-output";
 import type { SSHHostInfo } from "../ssh/connection-manager";
 import { ensureHostInfo, getHostInfoForHost } from "../ssh/connection-manager";
 import { executeSSH } from "../ssh/ssh-executor";
@@ -16,11 +17,9 @@ import { renderStatusLine } from "../tui";
 import { CachedOutputBlock } from "../tui/output-block";
 import type { ToolSession } from ".";
 import type { OutputMeta } from "./output-meta";
-import { allocateOutputArtifact, createTailBuffer } from "./output-utils";
 import { formatBytes, wrapBrackets } from "./render-utils";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
-import { DEFAULT_MAX_BYTES } from "./truncate";
 
 const sshSchema = Type.Object({
 	host: Type.String({ description: "Host name from managed SSH config or discovered ssh.json files" }),
@@ -159,8 +158,8 @@ export class SshTool implements AgentTool<typeof sshSchema, SSHToolDetails> {
 		const timeoutSec = Math.max(1, Math.min(3600, rawTimeout));
 		const timeoutMs = timeoutSec * 1000;
 
-		const tailBuffer = createTailBuffer(DEFAULT_MAX_BYTES);
-		const { artifactPath, artifactId } = await allocateOutputArtifact(this.session, "ssh");
+		const tailBuffer = new TailBuffer(DEFAULT_MAX_BYTES);
+		const { path: artifactPath, id: artifactId } = await allocateOutputArtifact(this.session, "ssh");
 
 		const result = await executeSSH(hostConfig, remoteCommand, {
 			timeout: timeoutMs,

@@ -10,6 +10,7 @@ import { renderPromptTemplate } from "../config/prompt-templates";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { type Theme, theme } from "../modes/theme/theme";
 import fetchDescription from "../prompts/tools/fetch.md" with { type: "text" };
+import { allocateOutputArtifact, DEFAULT_MAX_BYTES, truncateHead } from "../session/streaming-output";
 import { renderStatusLine } from "../tui";
 import { CachedOutputBlock } from "../tui/output-block";
 import { ensureTool } from "../utils/tools-manager";
@@ -20,11 +21,9 @@ import { convertWithMarkitdown, fetchBinary } from "../web/scrapers/utils";
 import type { ToolSession } from ".";
 import { applyListLimit } from "./list-limit";
 import type { OutputMeta } from "./output-meta";
-import { allocateOutputArtifact } from "./output-utils";
 import { formatExpandHint } from "./render-utils";
 import { ToolAbortError } from "./tool-errors";
 import { toolResult } from "./tool-result";
-import { DEFAULT_MAX_BYTES, truncateHead } from "./truncate";
 
 // =============================================================================
 // Types and Constants
@@ -900,10 +899,10 @@ export class FetchTool implements AgentTool<typeof fetchSchema, FetchToolDetails
 		};
 
 		if (needsArtifact) {
-			const { artifactPath, artifactId: allocatedId } = await allocateOutputArtifact(this.session, "fetch");
+			const { path: artifactPath, id } = await allocateOutputArtifact(this.session, "fetch");
 			if (artifactPath) {
 				await Bun.write(artifactPath, buildOutput(result.content));
-				artifactId = allocatedId;
+				artifactId = id;
 			}
 		}
 

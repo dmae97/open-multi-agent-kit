@@ -1,3 +1,4 @@
+import { formatBytes } from "../../tools/render-utils";
 import type { RenderResult, SpecialHandler } from "./types";
 import { finalizeOutput, loadPage } from "./types";
 
@@ -98,13 +99,6 @@ function extractTagsFromHtml(html: string, baseRef: string): string[] {
 	}
 
 	return Array.from(tags);
-}
-
-function formatSize(bytes: number): string {
-	if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(1)}GB`;
-	if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)}MB`;
-	if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(1)}KB`;
-	return `${bytes}B`;
 }
 
 function buildModelPath(parts: string[]): string {
@@ -227,11 +221,11 @@ export const handleOllama: SpecialHandler = async (
 		let sizeLine: string | null = null;
 
 		if (selectedTag?.size) {
-			sizeLine = formatSize(selectedTag.size);
+			sizeLine = formatBytes(selectedTag.size);
 		} else if (sizes.length > 0) {
 			const minSize = Math.min(...sizes);
 			const maxSize = Math.max(...sizes);
-			sizeLine = minSize === maxSize ? formatSize(minSize) : `${formatSize(minSize)} - ${formatSize(maxSize)}`;
+			sizeLine = minSize === maxSize ? formatBytes(minSize) : `${formatBytes(minSize)} - ${formatBytes(maxSize)}`;
 		}
 
 		let md = `# ${baseRef}\n\n`;

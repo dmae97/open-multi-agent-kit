@@ -13,7 +13,7 @@ export interface ConvertResult {
 }
 
 export interface BinaryFetchResult {
-	buffer: Buffer;
+	buffer: Uint8Array;
 	contentType: string;
 	contentDisposition?: string;
 	ok: boolean;
@@ -22,7 +22,7 @@ export interface BinaryFetchResult {
 }
 
 export async function convertWithMarkitdown(
-	content: Buffer,
+	content: Uint8Array,
 	extensionHint: string,
 	timeout: number,
 	userSignal?: AbortSignal,
@@ -68,7 +68,7 @@ export async function convertWithMarkitdown(
 	}
 }
 
-const kEmptyBuffer = Buffer.alloc(0);
+const kEmptyBuffer = new Uint8Array(0);
 
 export async function fetchBinary(url: string, timeout: number, userSignal?: AbortSignal): Promise<BinaryFetchResult> {
 	if (userSignal?.aborted) {
@@ -115,7 +115,7 @@ export async function fetchBinary(url: string, timeout: number, userSignal?: Abo
 			}
 		}
 
-		const buffer = Buffer.from(await response.arrayBuffer());
+		const buffer = await response.bytes();
 		if (buffer.length > MAX_BYTES) {
 			return {
 				buffer: kEmptyBuffer,

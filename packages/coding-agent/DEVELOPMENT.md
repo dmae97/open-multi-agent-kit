@@ -424,7 +424,7 @@ Key meta blocks:
 `formatOutputNotice(meta)` converts metadata into appended textual notices (for model visibility), including:
 
 - shown line range and total line count
-- byte-limit context via `formatSize(...)`
+- byte-limit context via `formatBytes(...)`
 - pagination hint (`nextOffset`) for head-truncated output
 - artifact recovery hint (`Full: artifact://<id>`)
 - limit and diagnostics notices

@@ -243,27 +243,4 @@ export {
 export { runSubprocess } from "./task/executor";
 export type { AgentDefinition, AgentProgress, AgentSource, SingleResult, TaskParams } from "./task/types";
 // Tools (detail types and utilities)
-export {
-	type BashToolDetails,
-	type BashToolInput,
-	type BrowserToolDetails,
-	DEFAULT_MAX_BYTES,
-	DEFAULT_MAX_LINES,
-	type FindOperations,
-	type FindToolDetails,
-	type FindToolInput,
-	type FindToolOptions,
-	formatSize,
-	type GrepToolDetails,
-	type GrepToolInput,
-	type PythonToolDetails,
-	type ReadToolDetails,
-	type ReadToolInput,
-	type TruncationOptions,
-	type TruncationResult,
-	truncateHead,
-	truncateLine,
-	truncateTail,
-	type WriteToolDetails,
-	type WriteToolInput,
-} from "./tools";
+export * from "./tools";

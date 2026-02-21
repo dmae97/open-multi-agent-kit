@@ -13,6 +13,7 @@ import { loadPromptTemplates as loadPromptTemplatesInternal, type PromptTemplate
 import { Settings, type SkillsSettings } from "./config/settings";
 import { CursorExecHandlers } from "./cursor";
 import "./discovery";
+import { ArtifactManager } from "@oh-my-pi/pi-coding-agent/session/artifacts";
 import { initializeWithSettings } from "./discovery";
 import { TtsrManager } from "./export/ttsr";
 import {
@@ -715,6 +716,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	const enableLsp = options.enableLsp ?? true;
 
+	let artifactManager: ArtifactManager | null = null;
 	const toolSession: ToolSession = {
 		cwd,
 		hasUI: options.hasUI ?? false,
@@ -742,6 +744,18 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		},
 		getPlanModeState: () => session.getPlanModeState(),
 		getCompactContext: () => session.formatCompactContext(),
+		getArtifactManager: () => {
+			if (artifactManager) {
+				return artifactManager;
+			}
+			const sessionFile = sessionManager.getSessionFile();
+			if (!sessionFile) {
+				return null;
+			}
+			const manager = new ArtifactManager(sessionFile);
+			artifactManager = manager;
+			return manager;
+		},
 		settings,
 		authStorage,
 		modelRegistry,

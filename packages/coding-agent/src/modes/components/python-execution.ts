@@ -7,7 +7,7 @@ import { sanitizeText } from "@oh-my-pi/pi-natives";
 import { Container, Loader, Spacer, Text, type TUI } from "@oh-my-pi/pi-tui";
 import { getSymbolTheme, highlightCode, theme } from "../../modes/theme/theme";
 import type { TruncationMeta } from "../../tools/output-meta";
-import { formatSize } from "../../tools/truncate";
+import { formatBytes } from "../../tools/render-utils";
 import { DynamicBorder } from "./dynamic-border";
 import { truncateToVisualLines } from "./visual-truncate";
 
@@ -161,7 +161,7 @@ export class PythonExecutionComponent extends Container {
 					);
 				} else {
 					warnings.push(
-						`Truncated: ${this.#truncation.outputLines} lines shown (${formatSize(this.#truncation.outputBytes)} limit)`,
+						`Truncated: ${this.#truncation.outputLines} lines shown (${formatBytes(this.#truncation.outputBytes)} limit)`,
 					);
 				}
 				statusParts.push(theme.fg("warning", warnings.join(". ")));

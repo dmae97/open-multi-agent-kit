@@ -14,6 +14,13 @@ import { getLanguageFromPath, type Theme } from "../modes/theme/theme";
 import { computeLineHash } from "../patch/hashline";
 import readDescription from "../prompts/tools/read.md" with { type: "text" };
 import type { ToolSession } from "../sdk";
+import {
+	DEFAULT_MAX_BYTES,
+	DEFAULT_MAX_LINES,
+	type TruncationResult,
+	truncateHead,
+	truncateHeadBytes,
+} from "../session/streaming-output";
 import { renderCodeCell, renderStatusLine } from "../tui";
 import { CachedOutputBlock } from "../tui/output-block";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
@@ -23,17 +30,9 @@ import { ensureTool } from "../utils/tools-manager";
 import { applyListLimit } from "./list-limit";
 import type { OutputMeta } from "./output-meta";
 import { resolveReadPath, resolveToCwd } from "./path-utils";
-import { formatAge, shortenPath, wrapBrackets } from "./render-utils";
+import { formatAge, formatBytes, shortenPath, wrapBrackets } from "./render-utils";
 import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";
-import {
-	DEFAULT_MAX_BYTES,
-	DEFAULT_MAX_LINES,
-	formatSize,
-	type TruncationResult,
-	truncateHead,
-	truncateStringToBytesFromStart,
-} from "./truncate";
 
 // Document types convertible via markitdown
 const CONVERTIBLE_EXTENSIONS = new Set([".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx", ".rtf", ".epub"]);
@@ -211,17 +210,8 @@ async function streamLinesFromFile(
 
 	let firstLinePreview: { text: string; bytes: number } | undefined;
 	if (firstLinePreviewBytes > 0) {
-		const buf = Buffer.concat(firstLinePreviewChunks, firstLinePreviewBytes);
-		let end = Math.min(buf.length, maxBytes);
-		while (end > 0 && (buf[end] & 0xc0) === 0x80) {
-			end--;
-		}
-		if (end > 0) {
-			const text = buf.slice(0, end).toString("utf-8");
-			firstLinePreview = { text, bytes: Buffer.byteLength(text, "utf-8") };
-		} else {
-			firstLinePreview = { text: "", bytes: 0 };
-		}
+		const { text, bytes } = truncateHeadBytes(Buffer.concat(firstLinePreviewChunks, firstLinePreviewBytes), maxBytes);
+		firstLinePreview = { text, bytes };
 	}
 
 	return {
@@ -623,8 +613,8 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 
 		if (mimeType) {
 			if (fileSize > MAX_IMAGE_SIZE) {
-				const sizeStr = formatSize(fileSize);
-				const maxStr = formatSize(MAX_IMAGE_SIZE);
+				const sizeStr = formatBytes(fileSize);
+				const maxStr = formatBytes(MAX_IMAGE_SIZE);
 				throw new ToolError(`Image file too large: ${sizeStr} exceeds ${maxStr} limit.`);
 			} else {
 				// Read as image (binary)
@@ -633,8 +623,8 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 
 				// Check actual buffer size after reading to prevent OOM during serialization
 				if (buffer.byteLength > MAX_IMAGE_SIZE) {
-					const sizeStr = formatSize(buffer.byteLength);
-					const maxStr = formatSize(MAX_IMAGE_SIZE);
+					const sizeStr = formatBytes(buffer.byteLength);
+					const maxStr = formatBytes(MAX_IMAGE_SIZE);
 					throw new ToolError(`Image file too large: ${sizeStr} exceeds ${maxStr} limit.`);
 				} else {
 					const base64 = new Uint8Array(buffer).toBase64();
@@ -788,16 +778,16 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 				const snippet = firstLinePreview ?? { text: "", bytes: 0 };
 
 				if (shouldAddHashLines) {
-					outputText = `[Line ${startLineDisplay} is ${formatSize(
+					outputText = `[Line ${startLineDisplay} is ${formatBytes(
 						firstLineBytes,
-					)}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Hashline output requires full lines; cannot compute hashes for a truncated preview.]`;
+					)}, exceeds ${formatBytes(DEFAULT_MAX_BYTES)} limit. Hashline output requires full lines; cannot compute hashes for a truncated preview.]`;
 				} else {
 					outputText = formatText(snippet.text, startLineDisplay);
 				}
 				if (snippet.text.length === 0) {
-					outputText = `[Line ${startLineDisplay} is ${formatSize(
+					outputText = `[Line ${startLineDisplay} is ${formatBytes(
 						firstLineBytes,
-					)}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Unable to display a valid UTF-8 snippet.]`;
+					)}, exceeds ${formatBytes(DEFAULT_MAX_BYTES)} limit. Unable to display a valid UTF-8 snippet.]`;
 				}
 				details = { truncation };
 				sourcePath = absolutePath;
@@ -946,19 +936,19 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		if (truncation.firstLineExceedsLimit) {
 			const firstLine = allLines[startLine] ?? "";
 			const firstLineBytes = Buffer.byteLength(firstLine, "utf-8");
-			const snippet = truncateStringToBytesFromStart(firstLine, DEFAULT_MAX_BYTES);
+			const snippet = truncateHeadBytes(firstLine, DEFAULT_MAX_BYTES);
 
 			if (shouldAddHashLines) {
-				outputText = `[Line ${startLineDisplay} is ${formatSize(
+				outputText = `[Line ${startLineDisplay} is ${formatBytes(
 					firstLineBytes,
-				)}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Hashline output requires full lines; cannot compute hashes for a truncated preview.]`;
+				)}, exceeds ${formatBytes(DEFAULT_MAX_BYTES)} limit. Hashline output requires full lines; cannot compute hashes for a truncated preview.]`;
 			} else {
 				outputText = formatText(snippet.text, startLineDisplay);
 			}
 			if (snippet.text.length === 0) {
-				outputText = `[Line ${startLineDisplay} is ${formatSize(
+				outputText = `[Line ${startLineDisplay} is ${formatBytes(
 					firstLineBytes,
-				)}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Unable to display a valid UTF-8 snippet.]`;
+				)}, exceeds ${formatBytes(DEFAULT_MAX_BYTES)} limit. Unable to display a valid UTF-8 snippet.]`;
 			}
 			details = { truncation };
 			truncationInfo = {
@@ -1116,12 +1106,12 @@ export const readToolRenderer = {
 		if (truncation) {
 			let warning: string;
 			if (fallback?.firstLineExceedsLimit) {
-				warning = `First line exceeds ${formatSize(fallback.maxBytes ?? DEFAULT_MAX_BYTES)} limit`;
+				warning = `First line exceeds ${formatBytes(fallback.maxBytes ?? DEFAULT_MAX_BYTES)} limit`;
 			} else if (truncation.truncatedBy === "lines") {
 				warning = `Truncated: ${truncation.outputLines} of ${truncation.totalLines} lines (${DEFAULT_MAX_LINES} line limit)`;
 			} else {
 				const maxBytes = fallback?.maxBytes ?? DEFAULT_MAX_BYTES;
-				warning = `Truncated: ${truncation.outputLines} lines (${formatSize(maxBytes)} limit)`;
+				warning = `Truncated: ${truncation.outputLines} lines (${formatBytes(maxBytes)} limit)`;
 			}
 			if (truncation.artifactId) {
 				warning += `. Full output: artifact://${truncation.artifactId}`;

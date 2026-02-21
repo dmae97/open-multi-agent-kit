@@ -11,9 +11,9 @@ import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import { glob } from "@oh-my-pi/pi-natives";
 import { formatHashLines } from "../patch/hashline";
 import type { FileMentionMessage } from "../session/messages";
+import { DEFAULT_MAX_BYTES, truncateHead, truncateHeadBytes } from "../session/streaming-output";
 import { resolveReadPath } from "../tools/path-utils";
-import { formatAge } from "../tools/render-utils";
-import { DEFAULT_MAX_BYTES, formatSize, truncateHead, truncateStringToBytesFromStart } from "../tools/truncate";
+import { formatAge, formatBytes } from "../tools/render-utils";
 import { fuzzyMatch } from "./fuzzy";
 import { formatDimensionNote, resizeImage } from "./image-resize";
 import { detectSupportedImageMimeTypeFromFile } from "./mime";
@@ -162,15 +162,15 @@ function buildTextOutput(textContent: string): { output: string; lineCount: numb
 	if (truncation.firstLineExceedsLimit) {
 		const firstLine = allLines[0] ?? "";
 		const firstLineBytes = Buffer.byteLength(firstLine, "utf-8");
-		const snippet = truncateStringToBytesFromStart(firstLine, DEFAULT_MAX_BYTES);
+		const snippet = truncateHeadBytes(firstLine, DEFAULT_MAX_BYTES);
 		let outputText = snippet.text;
 
 		if (outputText.length > 0) {
-			outputText += `\n\n[Line 1 is ${formatSize(firstLineBytes)}, exceeds ${formatSize(
+			outputText += `\n\n[Line 1 is ${formatBytes(firstLineBytes)}, exceeds ${formatBytes(
 				DEFAULT_MAX_BYTES,
-			)} limit. Showing first ${formatSize(snippet.bytes)} of the line.]`;
+			)} limit. Showing first ${formatBytes(snippet.bytes)} of the line.]`;
 		} else {
-			outputText = `[Line 1 is ${formatSize(firstLineBytes)}, exceeds ${formatSize(
+			outputText = `[Line 1 is ${formatBytes(firstLineBytes)}, exceeds ${formatBytes(
 				DEFAULT_MAX_BYTES,
 			)} limit. Unable to display a valid UTF-8 snippet.]`;
 		}
@@ -187,7 +187,7 @@ function buildTextOutput(textContent: string): { output: string; lineCount: numb
 		if (truncation.truncatedBy === "lines") {
 			outputText += `\n\n[Showing lines 1-${endLineDisplay} of ${totalFileLines}. Use offset=${nextOffset} to continue]`;
 		} else {
-			outputText += `\n\n[Showing lines 1-${endLineDisplay} of ${totalFileLines} (${formatSize(
+			outputText += `\n\n[Showing lines 1-${endLineDisplay} of ${totalFileLines} (${formatBytes(
 				DEFAULT_MAX_BYTES,
 			)} limit). Use offset=${nextOffset} to continue]`;
 		}
@@ -247,7 +247,7 @@ async function buildDirectoryListing(absolutePath: string): Promise<{ output: st
 		notices.push(`${DEFAULT_DIR_LIMIT} entries limit reached. Use limit=${DEFAULT_DIR_LIMIT * 2} for more`);
 	}
 	if (truncation.truncated) {
-		notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
+		notices.push(`${formatBytes(DEFAULT_MAX_BYTES)} limit reached`);
 	}
 	if (notices.length > 0) {
 		output += `\n\n[${notices.join(". ")}]`;
@@ -313,7 +313,7 @@ export async function generateFileMentionMessages(
 				if (stat.size > MAX_AUTO_READ_IMAGE_BYTES) {
 					files.push({
 						path: resolvedPath,
-						content: `(skipped auto-read: too large, ${formatSize(stat.size)})`,
+						content: `(skipped auto-read: too large, ${formatBytes(stat.size)})`,
 						byteSize: stat.size,
 						skippedReason: "tooLarge",
 					});
@@ -349,7 +349,7 @@ export async function generateFileMentionMessages(
 			if (stat.size > MAX_AUTO_READ_TEXT_BYTES) {
 				files.push({
 					path: resolvedPath,
-					content: `(skipped auto-read: too large, ${formatSize(stat.size)})`,
+					content: `(skipped auto-read: too large, ${formatBytes(stat.size)})`,
 					byteSize: stat.size,
 					skippedReason: "tooLarge",
 				});
