@@ -3,7 +3,6 @@
  * Replaces per-provider JSON files with a single cache.db.
  */
 import { Database } from "bun:sqlite";
-import * as fs from "node:fs";
 import * as path from "node:path";
 import { getAgentDir } from "@oh-my-pi/pi-utils/dirs";
 import type { Api, Model } from "./types";
