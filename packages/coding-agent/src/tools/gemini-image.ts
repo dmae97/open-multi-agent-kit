@@ -1,6 +1,6 @@
 import * as os from "node:os";
 import * as path from "node:path";
-import { getEnvApiKey, StringEnum } from "@oh-my-pi/pi-ai";
+import { getAntigravityUserAgent, getEnvApiKey, StringEnum } from "@oh-my-pi/pi-ai";
 import { $env, ptree, readSseJson, Snowflake, untilAborted } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import type { ModelRegistry } from "../config/model-registry";
@@ -18,7 +18,7 @@ const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
 
 const ANTIGRAVITY_ENDPOINT = "https://daily-cloudcode-pa.sandbox.googleapis.com";
 const ANTIGRAVITY_HEADERS = {
-	"User-Agent": "antigravity/1.11.5 darwin/arm64",
+	"User-Agent": getAntigravityUserAgent(),
 	"X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
 	"Client-Metadata": JSON.stringify({
 		ideType: "IDE_UNSPECIFIED",
