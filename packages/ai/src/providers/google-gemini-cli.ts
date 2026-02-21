@@ -70,12 +70,16 @@ const GEMINI_CLI_HEADERS = {
 };
 
 // Headers for Antigravity (sandbox endpoint) - requires specific User-Agent
-const DEFAULT_ANTIGRAVITY_VERSION = "1.15.8";
+const DEFAULT_ANTIGRAVITY_VERSION = "1.18.3";
+
+export function getAntigravityUserAgent() {
+	const version = process.env.PI_AI_ANTIGRAVITY_VERSION || DEFAULT_ANTIGRAVITY_VERSION;
+	return `antigravity/${version} darwin/arm64`;
+}
 
 function getAntigravityHeaders() {
-	const version = process.env.PI_AI_ANTIGRAVITY_VERSION || DEFAULT_ANTIGRAVITY_VERSION;
 	return {
-		"User-Agent": `antigravity/${version} darwin/arm64`,
+		"User-Agent": getAntigravityUserAgent(),
 		"X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
 		"Client-Metadata": JSON.stringify({
 			ideType: "IDE_UNSPECIFIED",

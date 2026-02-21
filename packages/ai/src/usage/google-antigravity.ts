@@ -9,6 +9,7 @@ import type {
 	UsageWindow,
 } from "../usage";
 import { refreshAntigravityToken } from "../utils/oauth/google-antigravity";
+import { getAntigravityUserAgent } from "../providers/google-gemini-cli";
 
 interface AntigravityQuotaInfo {
 	remainingFraction?: number;
@@ -31,7 +32,6 @@ interface AntigravityUsageResponse {
 
 const DEFAULT_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com";
 const FETCH_AVAILABLE_MODELS_PATH = "/v1internal:fetchAvailableModels";
-const USER_AGENT = "antigravity/1.11.9 windows/amd64";
 const DEFAULT_CACHE_TTL_MS = 60_000;
 
 function clampFraction(value: number | undefined): number | undefined {
@@ -146,7 +146,7 @@ async function fetchAntigravityUsage(params: UsageFetchParams, ctx: UsageFetchCo
 		headers: {
 			Authorization: `Bearer ${accessToken}`,
 			"Content-Type": "application/json",
-			"User-Agent": USER_AGENT,
+			"User-Agent": getAntigravityUserAgent(),
 		},
 		body: JSON.stringify({ project: credential.projectId }),
 		signal: params.signal,

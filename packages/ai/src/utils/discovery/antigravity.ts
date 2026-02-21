@@ -1,9 +1,9 @@
 import { z } from "zod";
 import type { Model } from "../../types";
+import { getAntigravityUserAgent } from "../../providers/google-gemini-cli";
 
 const DEFAULT_ANTIGRAVITY_DISCOVERY_ENDPOINT = "https://daily-cloudcode-pa.sandbox.googleapis.com";
 const FETCH_AVAILABLE_MODELS_PATH = "/v1internal:fetchAvailableModels";
-const DEFAULT_USER_AGENT = "antigravity/1.107.0 linux/amd64";
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 const DEFAULT_MAX_TOKENS = 64_000;
@@ -172,7 +172,7 @@ export async function fetchAntigravityDiscoveryModels(
 			headers: {
 				Authorization: `Bearer ${options.token}`,
 				"Content-Type": "application/json",
-				"User-Agent": options.userAgent ?? DEFAULT_USER_AGENT,
+				"User-Agent": options.userAgent ?? getAntigravityUserAgent(),
 			},
 			body: JSON.stringify({ project: options.project ?? "" }),
 			signal: options.signal,
