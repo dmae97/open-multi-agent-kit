@@ -1,5 +1,3 @@
-# coding-agent Development Guide
-
 This guide reflects the current implementation in `packages/coding-agent/src/` and focuses on architecture, extension points, and development workflow.
 
 ## Directory Tree (Current `src/` layout)
@@ -875,6 +873,7 @@ aggregated task results (+ optional worktree patches)
 The task subsystem is centered in `packages/coding-agent/src/task/index.ts` via `TaskTool`, which implements the `task` tool contract and delegates each requested task item to `runSubprocess(...)` from `src/task/executor.ts`.
 
 Key orchestration responsibilities in `TaskTool.execute(...)`:
+
 - Re-discover available agents on each call with `discoverAgents(this.session.cwd)`.
 - Validate agent existence (`getAgent(...)`), disabled-agent settings (`task.disabledAgents`), and task list integrity (non-empty IDs, case-insensitive duplicate detection).
 - Resolve model/thinking/output schema precedence:
@@ -886,11 +885,13 @@ Key orchestration responsibilities in `TaskTool.execute(...)`:
 ### Agent Definitions and Selection
 
 Bundled agent definitions are implemented in `packages/coding-agent/src/task/agents.ts`:
+
 - Built-ins are embedded with `import ... with { type: "text" }` and parsed by `parseAgent(...)`.
 - `loadBundledAgents()` caches parsed `AgentDefinition[]`.
 - `task` and `quick_task` are injected from the same `task.md` body with different frontmatter defaults (`model`, `thinkingLevel`, `spawns`).
 
 `TaskTool` applies additional runtime constraints in `index.ts`:
+
 - `PI_BLOCKED_AGENT` prevents self-recursive spawn of a specific agent.
 - Parent spawn policy (`session.getSessionSpawns()`) gates whether a child can be launched.
 - In plan mode (`session.getPlanModeState?.().enabled`), effective subagent tools are replaced with a restricted set (`read`, `grep`, `find`, `ls`, `lsp`, `fetch`, `web_search`) and child spawning is disabled for that effective agent (`spawns: undefined`).
@@ -898,17 +899,20 @@ Bundled agent definitions are implemented in `packages/coding-agent/src/task/age
 ## Execution Boundary: In-Process Session, Not OS Subprocess
 
 Despite the name `runSubprocess`, `packages/coding-agent/src/task/executor.ts` currently runs subagents in-process:
+
 - File header: `In-process execution for subagents`.
 - Execution path uses `createAgentSession(...)`, `SessionManager`, and direct event subscription (`session.subscribe(...)`).
 - There is no `child_process` spawn path in this module.
 
-What *is* isolated is execution context and artifacts, not process memory:
+What _is_ isolated is execution context and artifacts, not process memory:
+
 - Optional git worktree isolation is handled by `TaskTool.execute(...)` in `index.ts` using `ensureWorktree(...)`, `applyBaseline(...)`, `captureDeltaPatch(...)`, `cleanupWorktree(...)`.
 - Child session JSONL/markdown outputs are written under the task artifacts directory (`<id>.jsonl`, `<id>.md`, and in isolated mode `<id>.patch`).
 
 ### Tooling Surface in Child Sessions
 
 `runSubprocess(...)` computes active tools from agent frontmatter and runtime rules:
+
 - Adds `task` tool automatically when `agent.spawns` is set and recursion depth permits.
 - Removes `task` when max recursion depth is reached (`task.maxRecursionDepth`).
 - Expands legacy `exec` alias into `python` and/or `bash` based on `python.toolMode`.
@@ -920,6 +924,7 @@ If parent MCP connections exist, executor creates in-process MCP proxy tools wit
 ## Submit/Result Contract and Completion Semantics
 
 `executor.ts` enforces structured completion around `submit_result`:
+
 - Tracks tool events and extracted data through `subprocessToolRegistry` handlers.
 - Retries reminder prompts up to 3 times (`MAX_SUBMIT_RESULT_RETRIES`) using `subagent-submit-reminder.md` if `submit_result` was not called.
 - Final output normalization is centralized in `finalizeSubprocessOutput(...)`:
@@ -932,6 +937,7 @@ This module also accumulates token/cost usage from assistant `message_end` event
 ## Parallelization Model
 
 `packages/coding-agent/src/task/parallel.ts` provides `mapWithConcurrencyLimit(...)`:
+
 - Worker-pool scheduling with ordered result slots (`results[index]`).
 - Concurrency normalization (`Math.floor`, bounded to `[1, items.length]`).
 - Parent abort signal stops scheduling new tasks; already running tasks finish their own abort path.
@@ -943,6 +949,7 @@ This module also accumulates token/cost usage from assistant `message_end` event
 ## Subprocess Tool Registry Hooks
 
 `packages/coding-agent/src/task/subprocess-tool-registry.ts` defines a singleton registry (`subprocessToolRegistry`) used by executor event handling:
+
 - `register(toolName, handler)` attaches optional hooks:
   - `extractData(event)` for structured extraction into `progress.extractedToolData[toolName][]`
   - `shouldTerminate(event)` to request early child termination after tool completion
@@ -1073,6 +1080,7 @@ Validation loop:
 ```
 
 This section covers the day-to-day commands and three common extension paths in `packages/coding-agent`:
+
 - add a built-in tool
 - add an RPC command
 - add a hook event
@@ -1122,6 +1130,7 @@ Primary file: `packages/coding-agent/src/tools/index.ts`.
 6. If the tool should be selectable by type, update `ToolName = keyof typeof BUILTIN_TOOLS` consumers as needed.
 
 Notes from current behavior:
+
 - `createTools()` automatically injects `exit_plan_mode` when `toolNames` are specified.
 - `submit_result` is force-added when `session.requireSubmitResultTool === true`.
 - Python/Bash availability is mode-driven (`PI_PY`, `python.toolMode`) and can auto-fallback to bash.
@@ -1140,6 +1149,7 @@ Primary file: `packages/coding-agent/src/modes/rpc/rpc-types.ts`.
 5. `RpcCommandType` is derived (`RpcCommand["type"]`), so no separate enum update is needed.
 
 Keep command naming consistent with existing protocol literals such as:
+
 - prompting: `prompt`, `steer`, `follow_up`
 - session: `switch_session`, `branch`, `get_branch_messages`
 - execution: `bash`, `abort_bash`
@@ -1160,6 +1170,7 @@ Primary file: `packages/coding-agent/src/extensibility/hooks/types.ts`.
    - slash command handlers use `HookCommandContext` (adds `waitForIdle`, `newSession`, `branch`, `navigateTree`)
 
 Current event groups to align with:
+
 - session lifecycle (`session_start`, `session_before_switch`, `session_tree`, etc.)
 - agent/turn lifecycle (`before_agent_start`, `agent_start`, `turn_end`)
 - automation (`auto_compaction_start/end`, `auto_retry_start/end`, `todo_reminder`, `ttsr_triggered`)

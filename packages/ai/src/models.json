@@ -558,7 +558,7 @@
 		},
 		"global.anthropic.claude-opus-4-5-20251101-v1:0": {
 			"id": "global.anthropic.claude-opus-4-5-20251101-v1:0",
-			"name": "Claude Opus 4.5 (Global)",
+			"name": "Claude Opus 4.5",
 			"api": "bedrock-converse-stream",
 			"provider": "amazon-bedrock",
 			"baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
@@ -618,7 +618,7 @@
 		},
 		"global.anthropic.claude-sonnet-4-5-20250929-v1:0": {
 			"id": "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
-			"name": "Claude Sonnet 4.5",
+			"name": "Claude Sonnet 4.5 (Global)",
 			"api": "bedrock-converse-stream",
 			"provider": "amazon-bedrock",
 			"baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
@@ -1257,7 +1257,7 @@
 		},
 		"us.anthropic.claude-opus-4-1-20250805-v1:0": {
 			"id": "us.anthropic.claude-opus-4-1-20250805-v1:0",
-			"name": "Claude Opus 4.1",
+			"name": "Claude Opus 4.1 (US)",
 			"api": "bedrock-converse-stream",
 			"provider": "amazon-bedrock",
 			"baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
@@ -1277,7 +1277,7 @@
 		},
 		"us.anthropic.claude-opus-4-20250514-v1:0": {
 			"id": "us.anthropic.claude-opus-4-20250514-v1:0",
-			"name": "Claude Opus 4 (US)",
+			"name": "Claude Opus 4",
 			"api": "bedrock-converse-stream",
 			"provider": "amazon-bedrock",
 			"baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
@@ -1911,7 +1911,7 @@
 		},
 		"claude-sonnet-4-5": {
 			"id": "claude-sonnet-4-5",
-			"name": "Claude Sonnet 4.5",
+			"name": "Claude Sonnet 4.5 (latest)",
 			"api": "anthropic-messages",
 			"provider": "cloudflare-ai-gateway",
 			"baseUrl": "https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic",
@@ -2390,7 +2390,7 @@
 		},
 		"gemini-3.1-pro": {
 			"id": "gemini-3.1-pro",
-			"name": "Gemini 3.1 Pro",
+			"name": "Gemini 3.1 Pro Preview",
 			"api": "google-generative-ai",
 			"provider": "opencode",
 			"baseUrl": "https://opencode.ai/zen/v1",
@@ -2720,7 +2720,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 262144,
-			"maxTokens": 262144
+			"maxTokens": 65536
 		},
 		"kimi-k2.5-free": {
 			"id": "kimi-k2.5-free",
@@ -3383,6 +3383,37 @@
 		"gemini-3-pro-preview": {
 			"id": "gemini-3-pro-preview",
 			"name": "Gemini 3 Pro Preview",
+			"api": "openai-completions",
+			"provider": "github-copilot",
+			"baseUrl": "https://api.individual.githubcopilot.com",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 128000,
+			"maxTokens": 64000,
+			"headers": {
+				"User-Agent": "GitHubCopilotChat/0.35.0",
+				"Editor-Version": "vscode/1.107.0",
+				"Editor-Plugin-Version": "copilot-chat/0.35.0",
+				"Copilot-Integration-Id": "vscode-chat"
+			},
+			"compat": {
+				"supportsStore": false,
+				"supportsDeveloperRole": false,
+				"supportsReasoningEffort": false
+			}
+		},
+		"gemini-3.1-pro-preview": {
+			"id": "gemini-3.1-pro-preview",
+			"name": "Gemini 3.1 Pro Preview",
 			"api": "openai-completions",
 			"provider": "github-copilot",
 			"baseUrl": "https://api.individual.githubcopilot.com",
@@ -6651,6 +6682,46 @@
 			"contextWindow": 1000000,
 			"maxTokens": 64000
 		},
+		"gemini-3.1-pro-preview": {
+			"id": "gemini-3.1-pro-preview",
+			"name": "Gemini 3.1 Pro Preview",
+			"api": "google-generative-ai",
+			"provider": "google",
+			"baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 2,
+				"output": 12,
+				"cacheRead": 0.2,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 65536
+		},
+		"gemini-3.1-pro-preview-customtools": {
+			"id": "gemini-3.1-pro-preview-customtools",
+			"name": "Gemini 3.1 Pro Preview Custom Tools",
+			"api": "google-generative-ai",
+			"provider": "google",
+			"baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 2,
+				"output": 12,
+				"cacheRead": 0.2,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 65536
+		},
 		"gemini-flash-latest": {
 			"id": "gemini-flash-latest",
 			"name": "Gemini Flash Latest",
@@ -8849,13 +8920,14 @@
 		},
 		"claude-3-5-sonnet-20240620": {
 			"id": "claude-3-5-sonnet-20240620",
-			"name": "claude-3-5-sonnet-20240620",
+			"name": "Claude Sonnet 3.5",
 			"api": "openai-completions",
 			"provider": "nanogpt",
 			"baseUrl": "https://nano-gpt.com/api/v1",
 			"reasoning": false,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -8863,18 +8935,19 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 222222,
-			"maxTokens": 8888
+			"contextWindow": 200000,
+			"maxTokens": 8192
 		},
 		"claude-3-5-sonnet-20241022": {
 			"id": "claude-3-5-sonnet-20241022",
-			"name": "claude-3-5-sonnet-20241022",
+			"name": "Claude Sonnet 3.5 v2",
 			"api": "openai-completions",
 			"provider": "nanogpt",
 			"baseUrl": "https://nano-gpt.com/api/v1",
 			"reasoning": false,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -8882,8 +8955,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 222222,
-			"maxTokens": 8888
+			"contextWindow": 200000,
+			"maxTokens": 8192
 		},
 		"claude-3-7-sonnet-20250219": {
 			"id": "claude-3-7-sonnet-20250219",
@@ -11157,7 +11230,7 @@
 		},
 		"gemini-3-pro-preview": {
 			"id": "gemini-3-pro-preview",
-			"name": "Gemini 3 Pro Preview (Cloud Code Assist)",
+			"name": "Gemini 3 Pro Preview",
 			"api": "openai-completions",
 			"provider": "nanogpt",
 			"baseUrl": "https://nano-gpt.com/api/v1",
@@ -11172,8 +11245,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 1048576,
-			"maxTokens": 65535,
+			"contextWindow": 1000000,
+			"maxTokens": 64000,
 			"compat": {
 				"supportsUsageInStreaming": false
 			}
@@ -11789,7 +11862,46 @@
 		},
 		"google/gemini-3.1-pro-preview": {
 			"id": "google/gemini-3.1-pro-preview",
-			"name": "google/gemini-3.1-pro-preview",
+			"name": "Google: Gemini 3.1 Pro Preview",
+			"api": "openai-completions",
+			"provider": "nanogpt",
+			"baseUrl": "https://nano-gpt.com/api/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 2,
+				"output": 12,
+				"cacheRead": 0.19999999999999998,
+				"cacheWrite": 0.375
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 65536
+		},
+		"google/gemini-3.1-pro-preview-high": {
+			"id": "google/gemini-3.1-pro-preview-high",
+			"name": "google/gemini-3.1-pro-preview-high",
+			"api": "openai-completions",
+			"provider": "nanogpt",
+			"baseUrl": "https://nano-gpt.com/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
+		"google/gemini-3.1-pro-preview-low": {
+			"id": "google/gemini-3.1-pro-preview-low",
+			"name": "google/gemini-3.1-pro-preview-low",
 			"api": "openai-completions",
 			"provider": "nanogpt",
 			"baseUrl": "https://nano-gpt.com/api/v1",
@@ -14502,7 +14614,7 @@
 		},
 		"nvidia/nemotron-3-nano-30b-a3b": {
 			"id": "nvidia/nemotron-3-nano-30b-a3b",
-			"name": "NVIDIA: Nemotron 3 Nano 30B A3B",
+			"name": "nemotron-3-nano-30b-a3b",
 			"api": "openai-completions",
 			"baseUrl": "https://nano-gpt.com/api/v1",
 			"provider": "nanogpt",
@@ -14516,8 +14628,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 262144,
-			"maxTokens": 4096
+			"contextWindow": 131072,
+			"maxTokens": 131072
 		},
 		"nvidia/nvidia-nemotron-nano-9b-v2": {
 			"id": "nvidia/nvidia-nemotron-nano-9b-v2",
@@ -14578,7 +14690,7 @@
 		},
 		"openai/gpt-4-turbo": {
 			"id": "openai/gpt-4-turbo",
-			"name": "OpenAI: GPT-4 Turbo",
+			"name": "GPT-4 Turbo",
 			"api": "openai-completions",
 			"baseUrl": "https://nano-gpt.com/api/v1",
 			"provider": "nanogpt",
@@ -14677,7 +14789,7 @@
 		},
 		"openai/gpt-4o": {
 			"id": "openai/gpt-4o",
-			"name": "OpenAI: GPT-4o",
+			"name": "GPT-4o",
 			"api": "openai-completions",
 			"baseUrl": "https://nano-gpt.com/api/v1",
 			"provider": "nanogpt",
@@ -14737,7 +14849,7 @@
 		},
 		"openai/gpt-4o-mini": {
 			"id": "openai/gpt-4o-mini",
-			"name": "OpenAI: GPT-4o-mini",
+			"name": "GPT-4o mini",
 			"api": "openai-completions",
 			"baseUrl": "https://nano-gpt.com/api/v1",
 			"provider": "nanogpt",
@@ -14914,7 +15026,7 @@
 		},
 		"openai/gpt-5.1": {
 			"id": "openai/gpt-5.1",
-			"name": "OpenAI: GPT-5.1",
+			"name": "GPT-5.1",
 			"api": "openai-completions",
 			"baseUrl": "https://nano-gpt.com/api/v1",
 			"provider": "nanogpt",
@@ -14992,7 +15104,7 @@
 		},
 		"openai/gpt-5.1-codex": {
 			"id": "openai/gpt-5.1-codex",
-			"name": "OpenAI: GPT-5.1-Codex",
+			"name": "GPT-5.1 Codex",
 			"api": "openai-completions",
 			"baseUrl": "https://nano-gpt.com/api/v1",
 			"provider": "nanogpt",
@@ -15052,7 +15164,7 @@
 		},
 		"openai/gpt-5.2": {
 			"id": "openai/gpt-5.2",
-			"name": "OpenAI: GPT-5.2",
+			"name": "GPT-5.2",
 			"api": "openai-completions",
 			"baseUrl": "https://nano-gpt.com/api/v1",
 			"provider": "nanogpt",
@@ -15189,11 +15301,11 @@
 		},
 		"openai/o1": {
 			"id": "openai/o1",
-			"name": "OpenAI: o1",
+			"name": "o1",
 			"api": "openai-completions",
 			"baseUrl": "https://nano-gpt.com/api/v1",
 			"provider": "nanogpt",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
 				"text",
 				"image"
@@ -15247,7 +15359,7 @@
 		},
 		"openai/o3": {
 			"id": "openai/o3",
-			"name": "OpenAI: o3",
+			"name": "o3",
 			"api": "openai-completions",
 			"baseUrl": "https://nano-gpt.com/api/v1",
 			"provider": "nanogpt",
@@ -15287,11 +15399,11 @@
 		},
 		"openai/o3-mini": {
 			"id": "openai/o3-mini",
-			"name": "OpenAI: o3 Mini",
+			"name": "o3-mini",
 			"api": "openai-completions",
 			"baseUrl": "https://nano-gpt.com/api/v1",
 			"provider": "nanogpt",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
 				"text"
 			],
@@ -15363,7 +15475,7 @@
 		},
 		"openai/o4-mini": {
 			"id": "openai/o4-mini",
-			"name": "OpenAI: o4 Mini",
+			"name": "o4-mini",
 			"api": "openai-completions",
 			"baseUrl": "https://nano-gpt.com/api/v1",
 			"provider": "nanogpt",
@@ -18602,7 +18714,7 @@
 		},
 		"anthropic/claude-3-haiku": {
 			"id": "anthropic/claude-3-haiku",
-			"name": "Anthropic: Claude 3 Haiku",
+			"name": "Claude Haiku 3",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -18622,7 +18734,7 @@
 		},
 		"anthropic/claude-3.5-haiku": {
 			"id": "anthropic/claude-3.5-haiku",
-			"name": "Anthropic: Claude 3.5 Haiku",
+			"name": "Claude Haiku 3.5 (latest)",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -18642,7 +18754,7 @@
 		},
 		"anthropic/claude-3.5-sonnet": {
 			"id": "anthropic/claude-3.5-sonnet",
-			"name": "Anthropic: Claude 3.5 Sonnet",
+			"name": "Claude Sonnet 3.5 v2",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -18722,7 +18834,7 @@
 		},
 		"anthropic/claude-opus-4": {
 			"id": "anthropic/claude-opus-4",
-			"name": "Anthropic: Claude Opus 4",
+			"name": "Claude Opus 4 (latest)",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -18802,7 +18914,7 @@
 		},
 		"anthropic/claude-sonnet-4": {
 			"id": "anthropic/claude-sonnet-4",
-			"name": "Anthropic: Claude Sonnet 4",
+			"name": "Claude Sonnet 4 (latest)",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -18817,7 +18929,7 @@
 				"cacheRead": 0.3,
 				"cacheWrite": 3.75
 			},
-			"contextWindow": 1000000,
+			"contextWindow": 200000,
 			"maxTokens": 64000
 		},
 		"anthropic/claude-sonnet-4.5": {
@@ -19489,11 +19601,11 @@
 		},
 		"google/gemma-3-27b-it": {
 			"id": "google/gemma-3-27b-it",
-			"name": "Google: Gemma 3 27B",
+			"name": "Gemma-3-27B-IT",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
 				"text",
 				"image"
@@ -19504,8 +19616,8 @@
 				"cacheRead": 0.02,
 				"cacheWrite": 0
 			},
-			"contextWindow": 128000,
-			"maxTokens": 65536
+			"contextWindow": 131072,
+			"maxTokens": 8192
 		},
 		"google/gemma-3-27b-it:free": {
 			"id": "google/gemma-3-27b-it:free",
@@ -20339,7 +20451,7 @@
 		},
 		"moonshotai/kimi-k2-thinking": {
 			"id": "moonshotai/kimi-k2-thinking",
-			"name": "MoonshotAI: Kimi K2 Thinking",
+			"name": "Kimi K2 Thinking",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -20353,12 +20465,12 @@
 				"cacheRead": 0.14100000000000001,
 				"cacheWrite": 0
 			},
-			"contextWindow": 131072,
-			"maxTokens": 8888
+			"contextWindow": 262144,
+			"maxTokens": 262144
 		},
 		"moonshotai/kimi-k2.5": {
 			"id": "moonshotai/kimi-k2.5",
-			"name": "MoonshotAI: Kimi K2.5",
+			"name": "Kimi K2.5",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -20435,7 +20547,7 @@
 		},
 		"nvidia/llama-3.1-nemotron-70b-instruct": {
 			"id": "nvidia/llama-3.1-nemotron-70b-instruct",
-			"name": "NVIDIA: Llama 3.1 Nemotron 70B Instruct",
+			"name": "Llama 3.1 Nemotron 70b Instruct",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -20449,8 +20561,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 131072,
-			"maxTokens": 16384
+			"contextWindow": 128000,
+			"maxTokens": 4096
 		},
 		"nvidia/llama-3.3-nemotron-super-49b-v1.5": {
 			"id": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
@@ -20473,7 +20585,7 @@
 		},
 		"nvidia/nemotron-3-nano-30b-a3b": {
 			"id": "nvidia/nemotron-3-nano-30b-a3b",
-			"name": "NVIDIA: Nemotron 3 Nano 30B A3B",
+			"name": "nemotron-3-nano-30b-a3b",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -20487,8 +20599,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 262144,
-			"maxTokens": 8888
+			"contextWindow": 131072,
+			"maxTokens": 131072
 		},
 		"nvidia/nemotron-3-nano-30b-a3b:free": {
 			"id": "nvidia/nemotron-3-nano-30b-a3b:free",
@@ -20626,7 +20738,7 @@
 		},
 		"openai/gpt-4": {
 			"id": "openai/gpt-4",
-			"name": "OpenAI: GPT-4",
+			"name": "GPT-4",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -20640,8 +20752,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 8191,
-			"maxTokens": 4096
+			"contextWindow": 8192,
+			"maxTokens": 8192
 		},
 		"openai/gpt-4-0314": {
 			"id": "openai/gpt-4-0314",
@@ -20683,7 +20795,7 @@
 		},
 		"openai/gpt-4-turbo": {
 			"id": "openai/gpt-4-turbo",
-			"name": "OpenAI: GPT-4 Turbo",
+			"name": "GPT-4 Turbo",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -20782,7 +20894,7 @@
 		},
 		"openai/gpt-4o": {
 			"id": "openai/gpt-4o",
-			"name": "OpenAI: GPT-4o",
+			"name": "GPT-4o",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -20881,7 +20993,7 @@
 		},
 		"openai/gpt-4o-mini": {
 			"id": "openai/gpt-4o-mini",
-			"name": "OpenAI: GPT-4o-mini",
+			"name": "GPT-4o mini",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -21081,7 +21193,7 @@
 		},
 		"openai/gpt-5.1": {
 			"id": "openai/gpt-5.1",
-			"name": "OpenAI: GPT-5.1",
+			"name": "GPT-5.1",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -21121,7 +21233,7 @@
 		},
 		"openai/gpt-5.1-codex": {
 			"id": "openai/gpt-5.1-codex",
-			"name": "OpenAI: GPT-5.1-Codex",
+			"name": "GPT-5.1 Codex",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -21181,7 +21293,7 @@
 		},
 		"openai/gpt-5.2": {
 			"id": "openai/gpt-5.2",
-			"name": "OpenAI: GPT-5.2",
+			"name": "GPT-5.2",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -21261,7 +21373,7 @@
 		},
 		"openai/gpt-oss-120b": {
 			"id": "openai/gpt-oss-120b",
-			"name": "OpenAI: gpt-oss-120b",
+			"name": "GPT OSS 120B",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -21276,7 +21388,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 131072,
-			"maxTokens": 8888
+			"maxTokens": 65536
 		},
 		"openai/gpt-oss-120b:exacto": {
 			"id": "openai/gpt-oss-120b:exacto",
@@ -21318,7 +21430,7 @@
 		},
 		"openai/gpt-oss-20b": {
 			"id": "openai/gpt-oss-20b",
-			"name": "OpenAI: gpt-oss-20b",
+			"name": "GPT OSS 20B",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -21333,7 +21445,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 131072,
-			"maxTokens": 8888
+			"maxTokens": 65536
 		},
 		"openai/gpt-oss-20b:free": {
 			"id": "openai/gpt-oss-20b:free",
@@ -21375,11 +21487,11 @@
 		},
 		"openai/o1": {
 			"id": "openai/o1",
-			"name": "OpenAI: o1",
+			"name": "o1",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
 				"text",
 				"image"
@@ -21395,7 +21507,7 @@
 		},
 		"openai/o3": {
 			"id": "openai/o3",
-			"name": "OpenAI: o3",
+			"name": "o3",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -21435,11 +21547,11 @@
 		},
 		"openai/o3-mini": {
 			"id": "openai/o3-mini",
-			"name": "OpenAI: o3 Mini",
+			"name": "o3-mini",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
 				"text"
 			],
@@ -21473,7 +21585,7 @@
 		},
 		"openai/o3-pro": {
 			"id": "openai/o3-pro",
-			"name": "OpenAI: o3 Pro",
+			"name": "o3-pro",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -21493,7 +21605,7 @@
 		},
 		"openai/o4-mini": {
 			"id": "openai/o4-mini",
-			"name": "OpenAI: o4 Mini",
+			"name": "o4-mini",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -21803,7 +21915,7 @@
 		},
 		"qwen/qwen3-235b-a22b": {
 			"id": "qwen/qwen3-235b-a22b",
-			"name": "Qwen: Qwen3 235B A22B",
+			"name": "Qwen3-235B-A22B",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -21917,7 +22029,7 @@
 		},
 		"qwen/qwen3-32b": {
 			"id": "qwen/qwen3-32b",
-			"name": "Qwen: Qwen3 32B",
+			"name": "Qwen3 32B",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -21931,8 +22043,8 @@
 				"cacheRead": 0.04,
 				"cacheWrite": 0
 			},
-			"contextWindow": 40960,
-			"maxTokens": 40960
+			"contextWindow": 131072,
+			"maxTokens": 16384
 		},
 		"qwen/qwen3-4b": {
 			"id": "qwen/qwen3-4b",
@@ -22141,7 +22253,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 262144,
-			"maxTokens": 65536
+			"maxTokens": 32768
 		},
 		"qwen/qwen3-max-thinking": {
 			"id": "qwen/qwen3-max-thinking",
@@ -22160,11 +22272,11 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 262144,
-			"maxTokens": 65536
+			"maxTokens": 32768
 		},
 		"qwen/qwen3-next-80b-a3b-instruct": {
 			"id": "qwen/qwen3-next-80b-a3b-instruct",
-			"name": "Qwen: Qwen3 Next 80B A3B Instruct",
+			"name": "Qwen3-Next-80B-A3B-Instruct",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -22179,7 +22291,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 262144,
-			"maxTokens": 8888
+			"maxTokens": 16384
 		},
 		"qwen/qwen3-next-80b-a3b-instruct:free": {
 			"id": "qwen/qwen3-next-80b-a3b-instruct:free",
@@ -22202,7 +22314,7 @@
 		},
 		"qwen/qwen3-next-80b-a3b-thinking": {
 			"id": "qwen/qwen3-next-80b-a3b-thinking",
-			"name": "Qwen: Qwen3 Next 80B A3B Thinking",
+			"name": "Qwen3-Next-80B-A3B-Thinking",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -22216,8 +22328,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 128000,
-			"maxTokens": 8888
+			"contextWindow": 262144,
+			"maxTokens": 16384
 		},
 		"qwen/qwen3-vl-235b-a22b-instruct": {
 			"id": "qwen/qwen3-vl-235b-a22b-instruct",
@@ -22786,7 +22898,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 262144,
-			"maxTokens": 8888
+			"maxTokens": 65536
 		},
 		"z-ai/glm-4-32b": {
 			"id": "z-ai/glm-4-32b",
@@ -23253,7 +23365,7 @@
 		},
 		"anthropic/claude-3-haiku": {
 			"id": "anthropic/claude-3-haiku",
-			"name": "Claude 3 Haiku",
+			"name": "Claude Haiku 3",
 			"api": "anthropic-messages",
 			"baseUrl": "https://ai-gateway.vercel.sh",
 			"provider": "vercel-ai-gateway",
@@ -23273,7 +23385,7 @@
 		},
 		"anthropic/claude-3.5-haiku": {
 			"id": "anthropic/claude-3.5-haiku",
-			"name": "Claude 3.5 Haiku",
+			"name": "Claude Haiku 3.5 (latest)",
 			"api": "anthropic-messages",
 			"baseUrl": "https://ai-gateway.vercel.sh",
 			"provider": "vercel-ai-gateway",
@@ -23293,7 +23405,7 @@
 		},
 		"anthropic/claude-3.5-sonnet": {
 			"id": "anthropic/claude-3.5-sonnet",
-			"name": "Claude 3.5 Sonnet",
+			"name": "Claude Sonnet 3.5 v2",
 			"api": "anthropic-messages",
 			"baseUrl": "https://ai-gateway.vercel.sh",
 			"provider": "vercel-ai-gateway",
@@ -23373,7 +23485,7 @@
 		},
 		"anthropic/claude-opus-4": {
 			"id": "anthropic/claude-opus-4",
-			"name": "Claude Opus 4",
+			"name": "Claude Opus 4 (latest)",
 			"api": "anthropic-messages",
 			"baseUrl": "https://ai-gateway.vercel.sh",
 			"provider": "vercel-ai-gateway",
@@ -23453,7 +23565,7 @@
 		},
 		"anthropic/claude-sonnet-4": {
 			"id": "anthropic/claude-sonnet-4",
-			"name": "Claude Sonnet 4",
+			"name": "Claude Sonnet 4 (latest)",
 			"api": "anthropic-messages",
 			"baseUrl": "https://ai-gateway.vercel.sh",
 			"provider": "vercel-ai-gateway",
@@ -23468,7 +23580,7 @@
 				"cacheRead": 0.3,
 				"cacheWrite": 3.75
 			},
-			"contextWindow": 1000000,
+			"contextWindow": 200000,
 			"maxTokens": 64000
 		},
 		"anthropic/claude-sonnet-4.5": {
@@ -24300,8 +24412,8 @@
 				"cacheRead": 0.14100000000000001,
 				"cacheWrite": 0
 			},
-			"contextWindow": 216144,
-			"maxTokens": 216144
+			"contextWindow": 262144,
+			"maxTokens": 262144
 		},
 		"moonshotai/kimi-k2-thinking-turbo": {
 			"id": "moonshotai/kimi-k2-thinking-turbo",
@@ -24358,8 +24470,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 256000,
-			"maxTokens": 256000
+			"contextWindow": 262144,
+			"maxTokens": 262144
 		},
 		"nvidia/nemotron-nano-12b-v2-vl": {
 			"id": "nvidia/nemotron-nano-12b-v2-vl",
@@ -24662,7 +24774,7 @@
 		},
 		"openai/gpt-5.1-codex": {
 			"id": "openai/gpt-5.1-codex",
-			"name": "GPT-5.1-Codex",
+			"name": "GPT-5.1 Codex",
 			"api": "anthropic-messages",
 			"baseUrl": "https://ai-gateway.vercel.sh",
 			"provider": "vercel-ai-gateway",
@@ -24762,7 +24874,7 @@
 		},
 		"openai/gpt-5.2": {
 			"id": "openai/gpt-5.2",
-			"name": "GPT 5.2",
+			"name": "GPT-5.2",
 			"api": "anthropic-messages",
 			"baseUrl": "https://ai-gateway.vercel.sh",
 			"provider": "vercel-ai-gateway",
@@ -24842,7 +24954,7 @@
 		},
 		"openai/gpt-oss-120b": {
 			"id": "openai/gpt-oss-120b",
-			"name": "gpt-oss-120b",
+			"name": "GPT OSS 120B",
 			"api": "anthropic-messages",
 			"baseUrl": "https://ai-gateway.vercel.sh",
 			"provider": "vercel-ai-gateway",
@@ -24857,11 +24969,11 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 131072,
-			"maxTokens": 131072
+			"maxTokens": 65536
 		},
 		"openai/gpt-oss-20b": {
 			"id": "openai/gpt-oss-20b",
-			"name": "gpt-oss-20b",
+			"name": "GPT OSS 20B",
 			"api": "anthropic-messages",
 			"baseUrl": "https://ai-gateway.vercel.sh",
 			"provider": "vercel-ai-gateway",
@@ -24875,8 +24987,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 128000,
-			"maxTokens": 8192
+			"contextWindow": 131072,
+			"maxTokens": 65536
 		},
 		"openai/gpt-oss-safeguard-20b": {
 			"id": "openai/gpt-oss-safeguard-20b",
@@ -24978,7 +25090,7 @@
 		},
 		"openai/o3-pro": {
 			"id": "openai/o3-pro",
-			"name": "o3 Pro",
+			"name": "o3-pro",
 			"api": "anthropic-messages",
 			"baseUrl": "https://ai-gateway.vercel.sh",
 			"provider": "vercel-ai-gateway",
@@ -25560,7 +25672,7 @@
 				"User-Agent": "KimiCLI/1.0",
 				"X-Msh-Platform": "kimi_cli"
 			},
-			"reasoning": true,
+			"reasoning": false,
 			"input": [
 				"text"
 			],
@@ -25571,7 +25683,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 262144,
-			"maxTokens": 32000,
+			"maxTokens": 262144,
 			"compat": {
 				"thinkingFormat": "zai",
 				"reasoningContentField": "reasoning_content",
@@ -25628,7 +25740,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 262144,
-			"maxTokens": 32000,
+			"maxTokens": 65536,
 			"compat": {
 				"thinkingFormat": "zai",
 				"reasoningContentField": "reasoning_content",
@@ -25884,6 +25996,25 @@
 			"contextWindow": 262144,
 			"maxTokens": 8192
 		},
+		"hf:Qwen/Qwen3.5-397B-A17B": {
+			"id": "hf:Qwen/Qwen3.5-397B-A17B",
+			"name": "Qwen/Qwen3.5-397B-A17B",
+			"api": "openai-completions",
+			"provider": "synthetic",
+			"baseUrl": "https://api.synthetic.new/openai/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 262144,
+			"maxTokens": 8192
+		},
 		"hf:zai-org/GLM-4.7": {
 			"id": "hf:zai-org/GLM-4.7",
 			"name": "zai-org/GLM-4.7",
@@ -25923,7 +26054,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 200000,
-			"maxTokens": 8192,
+			"maxTokens": 128000,
 			"compat": {
 				"supportsUsageInStreaming": false
 			}
@@ -25969,7 +26100,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 200000,
-			"maxTokens": 8192,
+			"maxTokens": 64000,
 			"compat": {
 				"supportsUsageInStreaming": false
 			}
@@ -26019,6 +26150,28 @@
 				"supportsUsageInStreaming": false
 			}
 		},
+		"gemini-3-1-pro-preview": {
+			"id": "gemini-3-1-pro-preview",
+			"name": "gemini-3-1-pro-preview",
+			"api": "openai-completions",
+			"provider": "venice",
+			"baseUrl": "https://api.venice.ai/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888,
+			"compat": {
+				"supportsUsageInStreaming": false
+			}
+		},
 		"gemini-3-flash-preview": {
 			"id": "gemini-3-flash-preview",
 			"name": "Gemini 3 Flash Preview",
@@ -26036,8 +26189,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 256000,
-			"maxTokens": 8192,
+			"contextWindow": 1048576,
+			"maxTokens": 65536,
 			"compat": {
 				"supportsUsageInStreaming": false
 			}
@@ -26059,8 +26212,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 198000,
-			"maxTokens": 8192,
+			"contextWindow": 1000000,
+			"maxTokens": 64000,
 			"compat": {
 				"supportsUsageInStreaming": false
 			}
@@ -26128,7 +26281,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 256000,
-			"maxTokens": 8192,
+			"maxTokens": 10000,
 			"compat": {
 				"supportsUsageInStreaming": false
 			}
@@ -26194,8 +26347,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 256000,
-			"maxTokens": 8192,
+			"contextWindow": 262144,
+			"maxTokens": 262144,
 			"compat": {
 				"supportsUsageInStreaming": false
 			}
@@ -26625,13 +26778,14 @@
 	"litellm": {
 		"claude-3-5-haiku": {
 			"id": "claude-3-5-haiku",
-			"name": "claude-3-5-haiku",
+			"name": "Claude Haiku 3.5",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
 			"reasoning": false,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -26639,8 +26793,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 200000,
+			"maxTokens": 8192
 		},
 		"claude-3-5-haiku-20241022": {
 			"id": "claude-3-5-haiku-20241022",
@@ -26701,13 +26855,14 @@
 		},
 		"claude-haiku-4-5": {
 			"id": "claude-haiku-4-5",
-			"name": "claude-haiku-4-5",
+			"name": "Claude Haiku 4.5 (latest)",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -26715,18 +26870,19 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 200000,
+			"maxTokens": 64000
 		},
 		"claude-haiku-4-5-20251001": {
 			"id": "claude-haiku-4-5-20251001",
-			"name": "claude-haiku-4-5-20251001",
+			"name": "Claude Haiku 4.5",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -26734,8 +26890,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 200000,
+			"maxTokens": 64000
 		},
 		"claude-opus-4": {
 			"id": "claude-opus-4",
@@ -26758,13 +26914,14 @@
 		},
 		"claude-opus-4-1": {
 			"id": "claude-opus-4-1",
-			"name": "claude-opus-4-1",
+			"name": "Claude Opus 4.1 (latest)",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -26772,18 +26929,19 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 200000,
+			"maxTokens": 32000
 		},
 		"claude-opus-4-1-20250805": {
 			"id": "claude-opus-4-1-20250805",
-			"name": "claude-opus-4-1-20250805",
+			"name": "Claude Opus 4.1",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -26791,18 +26949,19 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 200000,
+			"maxTokens": 32000
 		},
 		"claude-opus-4-20250514": {
 			"id": "claude-opus-4-20250514",
-			"name": "claude-opus-4-20250514",
+			"name": "Claude Opus 4",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -26810,18 +26969,19 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 200000,
+			"maxTokens": 32000
 		},
 		"claude-opus-4-5": {
 			"id": "claude-opus-4-5",
-			"name": "claude-opus-4-5",
+			"name": "Claude Opus 4.5 (latest)",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -26829,18 +26989,19 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 200000,
+			"maxTokens": 64000
 		},
 		"claude-opus-4-5-20251101": {
 			"id": "claude-opus-4-5-20251101",
-			"name": "claude-opus-4-5-20251101",
+			"name": "Claude Opus 4.5",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -26848,18 +27009,19 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 200000,
+			"maxTokens": 64000
 		},
 		"claude-opus-4-6": {
 			"id": "claude-opus-4-6",
-			"name": "claude-opus-4-6",
+			"name": "Claude Opus 4.6",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -26868,93 +27030,18 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 200000,
-			"maxTokens": 4096
+			"maxTokens": 128000
 		},
 		"claude-sonnet-4": {
 			"id": "claude-sonnet-4",
-			"name": "claude-sonnet-4",
+			"name": "Claude Sonnet 4",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
-		},
-		"claude-sonnet-4-20250514": {
-			"id": "claude-sonnet-4-20250514",
-			"name": "claude-sonnet-4-20250514",
-			"api": "openai-completions",
-			"provider": "litellm",
-			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
-			"input": [
-				"text"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
-		},
-		"claude-sonnet-4-5": {
-			"id": "claude-sonnet-4-5",
-			"name": "claude-sonnet-4-5",
-			"api": "openai-completions",
-			"provider": "litellm",
-			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
-			"input": [
-				"text"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
-		},
-		"claude-sonnet-4-5-20250929": {
-			"id": "claude-sonnet-4-5-20250929",
-			"name": "claude-sonnet-4-5-20250929",
-			"api": "openai-completions",
-			"provider": "litellm",
-			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
-			"input": [
-				"text"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
-		},
-		"claude-sonnet-4-6": {
-			"id": "claude-sonnet-4-6",
-			"name": "claude-sonnet-4-6",
-			"api": "openai-completions",
-			"provider": "litellm",
-			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
-			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -26963,17 +27050,98 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 200000,
-			"maxTokens": 4096
+			"maxTokens": 64000
+		},
+		"claude-sonnet-4-20250514": {
+			"id": "claude-sonnet-4-20250514",
+			"name": "Claude Sonnet 4",
+			"api": "openai-completions",
+			"provider": "litellm",
+			"baseUrl": "http://localhost:4000/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 200000,
+			"maxTokens": 64000
+		},
+		"claude-sonnet-4-5": {
+			"id": "claude-sonnet-4-5",
+			"name": "Claude Sonnet 4.5 (latest)",
+			"api": "openai-completions",
+			"provider": "litellm",
+			"baseUrl": "http://localhost:4000/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 200000,
+			"maxTokens": 64000
+		},
+		"claude-sonnet-4-5-20250929": {
+			"id": "claude-sonnet-4-5-20250929",
+			"name": "Claude Sonnet 4.5",
+			"api": "openai-completions",
+			"provider": "litellm",
+			"baseUrl": "http://localhost:4000/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 200000,
+			"maxTokens": 64000
+		},
+		"claude-sonnet-4-6": {
+			"id": "claude-sonnet-4-6",
+			"name": "Claude Sonnet 4.6",
+			"api": "openai-completions",
+			"provider": "litellm",
+			"baseUrl": "http://localhost:4000/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 200000,
+			"maxTokens": 64000
 		},
 		"gemini-2.5-flash": {
 			"id": "gemini-2.5-flash",
-			"name": "gemini-2.5-flash",
+			"name": "Gemini 2.5 Flash",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -26981,18 +27149,19 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 1048576,
+			"maxTokens": 65536
 		},
 		"gemini-2.5-flash-lite": {
 			"id": "gemini-2.5-flash-lite",
-			"name": "gemini-2.5-flash-lite",
+			"name": "Gemini 2.5 Flash Lite",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -27000,18 +27169,19 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 1048576,
+			"maxTokens": 65536
 		},
 		"gemini-2.5-pro": {
 			"id": "gemini-2.5-pro",
-			"name": "gemini-2.5-pro",
+			"name": "Gemini 2.5 Pro",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -27019,18 +27189,19 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 1048576,
+			"maxTokens": 65536
 		},
 		"gemini-3-flash": {
 			"id": "gemini-3-flash",
-			"name": "gemini-3-flash",
+			"name": "Gemini 3 Flash",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -27038,18 +27209,19 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 1048576,
+			"maxTokens": 65536
 		},
 		"gemini-3-flash-preview": {
 			"id": "gemini-3-flash-preview",
-			"name": "gemini-3-flash-preview",
+			"name": "Gemini 3 Flash Preview",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -27057,18 +27229,19 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 1048576,
+			"maxTokens": 65536
 		},
 		"gemini-3-pro": {
 			"id": "gemini-3-pro",
-			"name": "gemini-3-pro",
+			"name": "Gemini 3 Pro",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -27076,18 +27249,19 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 1048576,
+			"maxTokens": 65536
 		},
 		"gemini-3-pro-preview": {
 			"id": "gemini-3-pro-preview",
-			"name": "gemini-3-pro-preview",
+			"name": "Gemini 3 Pro Preview",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -27095,16 +27269,16 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 1000000,
+			"maxTokens": 64000
 		},
 		"glm-4.5": {
 			"id": "glm-4.5",
-			"name": "glm-4.5",
+			"name": "GLM-4.5",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
 				"text"
 			],
@@ -27114,16 +27288,16 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 131072,
+			"maxTokens": 98304
 		},
 		"glm-4.5-air": {
 			"id": "glm-4.5-air",
-			"name": "glm-4.5-air",
+			"name": "GLM-4.5-Air",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
 				"text"
 			],
@@ -27133,16 +27307,16 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 131072,
+			"maxTokens": 98304
 		},
 		"glm-4.6": {
 			"id": "glm-4.6",
-			"name": "glm-4.6",
+			"name": "GLM-4.6",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
 				"text"
 			],
@@ -27152,16 +27326,16 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 204800,
+			"maxTokens": 131072
 		},
 		"glm-4.7": {
 			"id": "glm-4.7",
-			"name": "glm-4.7",
+			"name": "GLM-4.7",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
 				"text"
 			],
@@ -27171,16 +27345,16 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 204800,
+			"maxTokens": 131072
 		},
 		"glm-5": {
 			"id": "glm-5",
-			"name": "glm-5",
+			"name": "GLM-5",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
 				"text"
 			],
@@ -27190,18 +27364,19 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 204800,
+			"maxTokens": 131072
 		},
 		"gpt-5": {
 			"id": "gpt-5",
-			"name": "gpt-5",
+			"name": "GPT-5",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -27209,18 +27384,19 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 400000,
+			"maxTokens": 128000
 		},
 		"gpt-5-codex": {
 			"id": "gpt-5-codex",
-			"name": "gpt-5-codex",
+			"name": "GPT-5-Codex",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -27229,7 +27405,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 272000,
-			"maxTokens": 4096
+			"maxTokens": 128000
 		},
 		"gpt-5-codex-mini": {
 			"id": "gpt-5-codex-mini",
@@ -27252,166 +27428,14 @@
 		},
 		"gpt-5.1": {
 			"id": "gpt-5.1",
-			"name": "gpt-5.1",
-			"api": "openai-completions",
-			"provider": "litellm",
-			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
-			"input": [
-				"text"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
-		},
-		"gpt-5.1-codex": {
-			"id": "gpt-5.1-codex",
-			"name": "gpt-5.1-codex",
-			"api": "openai-completions",
-			"provider": "litellm",
-			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
-			"input": [
-				"text"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 272000,
-			"maxTokens": 4096
-		},
-		"gpt-5.1-codex-max": {
-			"id": "gpt-5.1-codex-max",
-			"name": "gpt-5.1-codex-max",
-			"api": "openai-completions",
-			"provider": "litellm",
-			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
-			"input": [
-				"text"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 272000,
-			"maxTokens": 4096
-		},
-		"gpt-5.1-codex-mini": {
-			"id": "gpt-5.1-codex-mini",
-			"name": "gpt-5.1-codex-mini",
-			"api": "openai-completions",
-			"provider": "litellm",
-			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
-			"input": [
-				"text"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 272000,
-			"maxTokens": 4096
-		},
-		"gpt-5.2": {
-			"id": "gpt-5.2",
-			"name": "gpt-5.2",
-			"api": "openai-completions",
-			"provider": "litellm",
-			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
-			"input": [
-				"text"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
-		},
-		"gpt-5.2-codex": {
-			"id": "gpt-5.2-codex",
-			"name": "gpt-5.2-codex",
-			"api": "openai-completions",
-			"provider": "litellm",
-			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
-			"input": [
-				"text"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 272000,
-			"maxTokens": 4096
-		},
-		"gpt-5.3-codex": {
-			"id": "gpt-5.3-codex",
-			"name": "gpt-5.3-codex",
-			"api": "openai-completions",
-			"provider": "litellm",
-			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
-			"input": [
-				"text"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 272000,
-			"maxTokens": 4096
-		},
-		"gpt-5.3-codex-spark": {
-			"id": "gpt-5.3-codex-spark",
-			"name": "gpt-5.3-codex-spark",
-			"api": "openai-completions",
-			"provider": "litellm",
-			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
-			"input": [
-				"text"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 4096,
-			"maxTokens": 4096,
-			"contextPromotionTarget": "litellm/gpt-5.3-codex"
-		},
-		"grok-4-1-fast-non-reasoning": {
-			"id": "grok-4-1-fast-non-reasoning",
-			"name": "grok-4-1-fast-non-reasoning",
+			"name": "GPT-5.1",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
 			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -27419,8 +27443,169 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 400000,
+			"maxTokens": 128000
+		},
+		"gpt-5.1-codex": {
+			"id": "gpt-5.1-codex",
+			"name": "GPT-5.1 Codex",
+			"api": "openai-completions",
+			"provider": "litellm",
+			"baseUrl": "http://localhost:4000/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 272000,
+			"maxTokens": 128000
+		},
+		"gpt-5.1-codex-max": {
+			"id": "gpt-5.1-codex-max",
+			"name": "GPT-5.1 Codex Max",
+			"api": "openai-completions",
+			"provider": "litellm",
+			"baseUrl": "http://localhost:4000/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 272000,
+			"maxTokens": 128000
+		},
+		"gpt-5.1-codex-mini": {
+			"id": "gpt-5.1-codex-mini",
+			"name": "GPT-5.1 Codex mini",
+			"api": "openai-completions",
+			"provider": "litellm",
+			"baseUrl": "http://localhost:4000/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 272000,
+			"maxTokens": 128000
+		},
+		"gpt-5.2": {
+			"id": "gpt-5.2",
+			"name": "GPT-5.2",
+			"api": "openai-completions",
+			"provider": "litellm",
+			"baseUrl": "http://localhost:4000/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 400000,
+			"maxTokens": 128000
+		},
+		"gpt-5.2-codex": {
+			"id": "gpt-5.2-codex",
+			"name": "GPT-5.2 Codex",
+			"api": "openai-completions",
+			"provider": "litellm",
+			"baseUrl": "http://localhost:4000/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 272000,
+			"maxTokens": 128000
+		},
+		"gpt-5.3-codex": {
+			"id": "gpt-5.3-codex",
+			"name": "GPT-5.3 Codex",
+			"api": "openai-completions",
+			"provider": "litellm",
+			"baseUrl": "http://localhost:4000/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 272000,
+			"maxTokens": 128000
+		},
+		"gpt-5.3-codex-spark": {
+			"id": "gpt-5.3-codex-spark",
+			"name": "GPT-5.3 Codex Spark",
+			"api": "openai-completions",
+			"provider": "litellm",
+			"baseUrl": "http://localhost:4000/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 128000,
+			"maxTokens": 32000,
+			"contextPromotionTarget": "litellm/gpt-5.3-codex"
+		},
+		"grok-4-1-fast-non-reasoning": {
+			"id": "grok-4-1-fast-non-reasoning",
+			"name": "Grok 4.1 Fast (Non-Reasoning)",
+			"api": "openai-completions",
+			"provider": "litellm",
+			"baseUrl": "http://localhost:4000/v1",
+			"reasoning": false,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 2000000,
+			"maxTokens": 30000
 		},
 		"grok-4-1-fast-reasoning": {
 			"id": "grok-4-1-fast-reasoning",
@@ -27443,13 +27628,14 @@
 		},
 		"grok-4-fast-non-reasoning": {
 			"id": "grok-4-fast-non-reasoning",
-			"name": "grok-4-fast-non-reasoning",
+			"name": "Grok 4 Fast (Non-Reasoning)",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": true,
+			"reasoning": false,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -27457,8 +27643,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 2000000,
+			"maxTokens": 30000
 		},
 		"grok-4-fast-reasoning": {
 			"id": "grok-4-fast-reasoning",
@@ -27481,11 +27667,11 @@
 		},
 		"grok-code-fast-1": {
 			"id": "grok-code-fast-1",
-			"name": "grok-code-fast-1",
+			"name": "Grok Code Fast 1",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
 				"text"
 			],
@@ -27495,8 +27681,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 256000,
+			"maxTokens": 10000
 		},
 		"grok-imagine-image": {
 			"id": "grok-imagine-image",
@@ -27538,7 +27724,7 @@
 		},
 		"kimi-k2": {
 			"id": "kimi-k2",
-			"name": "kimi-k2",
+			"name": "Kimi K2",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
@@ -27552,12 +27738,12 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 262144,
+			"maxTokens": 262144
 		},
 		"kimi-k2-thinking": {
 			"id": "kimi-k2-thinking",
-			"name": "kimi-k2-thinking",
+			"name": "Kimi K2 Thinking",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
@@ -27571,18 +27757,19 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 262144,
+			"maxTokens": 262144
 		},
 		"kimi-k2.5": {
 			"id": "kimi-k2.5",
-			"name": "kimi-k2.5",
+			"name": "Kimi K2.5",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -27590,12 +27777,12 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 262144,
+			"maxTokens": 65536
 		},
 		"zai-glm-4.7": {
 			"id": "zai-glm-4.7",
-			"name": "zai-glm-4.7",
+			"name": "Z.AI GLM-4.7",
 			"api": "openai-completions",
 			"provider": "litellm",
 			"baseUrl": "http://localhost:4000/v1",
@@ -27609,8 +27796,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 4096,
-			"maxTokens": 4096
+			"contextWindow": 131072,
+			"maxTokens": 40000
 		}
 	},
 	"cursor": {
@@ -27846,7 +28033,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 1048576,
-			"maxTokens": 65535
+			"maxTokens": 65536
 		},
 		"gemini-3-pro": {
 			"id": "gemini-3-pro",
@@ -27866,17 +28053,18 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 1048576,
-			"maxTokens": 65535
+			"maxTokens": 65536
 		},
 		"gemini-3.1-pro": {
 			"id": "gemini-3.1-pro",
-			"name": "Gemini 3.1 Pro",
+			"name": "Gemini 3.1 Pro Preview",
 			"api": "cursor-agent",
 			"provider": "cursor",
 			"baseUrl": "https://api2.cursor.sh",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -27884,8 +28072,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 200000,
-			"maxTokens": 64000
+			"contextWindow": 1048576,
+			"maxTokens": 65536
 		},
 		"gpt-5.1-codex-max": {
 			"id": "gpt-5.1-codex-max",
@@ -27929,13 +28117,14 @@
 		},
 		"gpt-5.1-codex-mini": {
 			"id": "gpt-5.1-codex-mini",
-			"name": "GPT-5.1 Codex Mini",
+			"name": "GPT-5.1 Codex mini",
 			"api": "cursor-agent",
 			"provider": "cursor",
 			"baseUrl": "https://api2.cursor.sh",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -27944,7 +28133,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 272000,
-			"maxTokens": 64000
+			"maxTokens": 128000
 		},
 		"gpt-5.1-high": {
 			"id": "gpt-5.1-high",
@@ -27991,9 +28180,10 @@
 			"api": "cursor-agent",
 			"provider": "cursor",
 			"baseUrl": "https://api2.cursor.sh",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -28002,7 +28192,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 272000,
-			"maxTokens": 64000
+			"maxTokens": 128000
 		},
 		"gpt-5.2-codex-fast": {
 			"id": "gpt-5.2-codex-fast",
@@ -28163,9 +28353,10 @@
 			"api": "cursor-agent",
 			"provider": "cursor",
 			"baseUrl": "https://api2.cursor.sh",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 0,
@@ -28174,7 +28365,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 272000,
-			"maxTokens": 64000
+			"maxTokens": 128000
 		},
 		"gpt-5.3-codex-fast": {
 			"id": "gpt-5.3-codex-fast",
@@ -28311,11 +28502,11 @@
 		},
 		"grok-code-fast-1": {
 			"id": "grok-code-fast-1",
-			"name": "Grok",
+			"name": "Grok Code Fast 1",
 			"api": "cursor-agent",
 			"provider": "cursor",
 			"baseUrl": "https://api2.cursor.sh",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
 				"text"
 			],
@@ -28325,14 +28516,14 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 32768,
-			"maxTokens": 8192
+			"contextWindow": 256000,
+			"maxTokens": 10000
 		}
 	},
 	"openai-codex": {
 		"gpt-5": {
 			"id": "gpt-5",
-			"name": "gpt-5",
+			"name": "GPT-5",
 			"api": "openai-codex-responses",
 			"provider": "openai-codex",
 			"baseUrl": "https://chatgpt.com/backend-api",
@@ -28347,13 +28538,13 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 272000,
+			"contextWindow": 400000,
 			"maxTokens": 128000,
 			"priority": 11
 		},
 		"gpt-5-codex": {
 			"id": "gpt-5-codex",
-			"name": "gpt-5-codex",
+			"name": "GPT-5-Codex",
 			"api": "openai-codex-responses",
 			"provider": "openai-codex",
 			"baseUrl": "https://chatgpt.com/backend-api",
@@ -28395,7 +28586,7 @@
 		},
 		"gpt-5.1": {
 			"id": "gpt-5.1",
-			"name": "gpt-5.1",
+			"name": "GPT-5.1",
 			"api": "openai-codex-responses",
 			"provider": "openai-codex",
 			"baseUrl": "https://chatgpt.com/backend-api",
@@ -28410,13 +28601,13 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 272000,
+			"contextWindow": 400000,
 			"maxTokens": 128000,
 			"priority": 7
 		},
 		"gpt-5.1-codex": {
 			"id": "gpt-5.1-codex",
-			"name": "gpt-5.1-codex",
+			"name": "GPT-5.1 Codex",
 			"api": "openai-codex-responses",
 			"provider": "openai-codex",
 			"baseUrl": "https://chatgpt.com/backend-api",
@@ -28437,7 +28628,7 @@
 		},
 		"gpt-5.1-codex-max": {
 			"id": "gpt-5.1-codex-max",
-			"name": "gpt-5.1-codex-max",
+			"name": "GPT-5.1 Codex Max",
 			"api": "openai-codex-responses",
 			"provider": "openai-codex",
 			"baseUrl": "https://chatgpt.com/backend-api",
@@ -28458,7 +28649,7 @@
 		},
 		"gpt-5.1-codex-mini": {
 			"id": "gpt-5.1-codex-mini",
-			"name": "gpt-5.1-codex-mini",
+			"name": "GPT-5.1 Codex mini",
 			"api": "openai-codex-responses",
 			"provider": "openai-codex",
 			"baseUrl": "https://chatgpt.com/backend-api",
@@ -28479,7 +28670,7 @@
 		},
 		"gpt-5.2": {
 			"id": "gpt-5.2",
-			"name": "gpt-5.2",
+			"name": "GPT-5.2",
 			"api": "openai-codex-responses",
 			"provider": "openai-codex",
 			"baseUrl": "https://chatgpt.com/backend-api",
@@ -28494,13 +28685,13 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 272000,
+			"contextWindow": 400000,
 			"maxTokens": 128000,
 			"priority": 6
 		},
 		"gpt-5.2-codex": {
 			"id": "gpt-5.2-codex",
-			"name": "gpt-5.2-codex",
+			"name": "GPT-5.2 Codex",
 			"api": "openai-codex-responses",
 			"provider": "openai-codex",
 			"baseUrl": "https://chatgpt.com/backend-api",
@@ -28521,7 +28712,7 @@
 		},
 		"gpt-5.3-codex": {
 			"id": "gpt-5.3-codex",
-			"name": "gpt-5.3-codex",
+			"name": "GPT-5.3 Codex",
 			"api": "openai-codex-responses",
 			"provider": "openai-codex",
 			"baseUrl": "https://chatgpt.com/backend-api",
@@ -28549,7 +28740,8 @@
 			"reasoning": true,
 			"preferWebsockets": true,
 			"input": [
-				"text"
+				"text",
+				"image"
 			],
 			"cost": {
 				"input": 1.75,
@@ -28558,7 +28750,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 128000,
-			"maxTokens": 128000,
+			"maxTokens": 32000,
 			"contextPromotionTarget": "openai-codex/gpt-5.3-codex"
 		}
 	},
@@ -28580,8 +28772,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 256000,
-			"maxTokens": 8192
+			"contextWindow": 262144,
+			"maxTokens": 65536
 		}
 	},
 	"qianfan": {
@@ -28806,7 +28998,7 @@
 	"google-gemini-cli": {
 		"gemini-2.0-flash": {
 			"id": "gemini-2.0-flash",
-			"name": "Gemini 2.0 Flash (Cloud Code Assist)",
+			"name": "Gemini 2.0 Flash",
 			"api": "google-gemini-cli",
 			"provider": "google-gemini-cli",
 			"baseUrl": "https://cloudcode-pa.googleapis.com",
@@ -28826,7 +29018,7 @@
 		},
 		"gemini-2.5-flash": {
 			"id": "gemini-2.5-flash",
-			"name": "Gemini 2.5 Flash (Cloud Code Assist)",
+			"name": "Gemini 2.5 Flash",
 			"api": "google-gemini-cli",
 			"provider": "google-gemini-cli",
 			"baseUrl": "https://cloudcode-pa.googleapis.com",
@@ -28842,11 +29034,11 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 1048576,
-			"maxTokens": 65535
+			"maxTokens": 65536
 		},
 		"gemini-2.5-pro": {
 			"id": "gemini-2.5-pro",
-			"name": "Gemini 2.5 Pro (Cloud Code Assist)",
+			"name": "Gemini 2.5 Pro",
 			"api": "google-gemini-cli",
 			"provider": "google-gemini-cli",
 			"baseUrl": "https://cloudcode-pa.googleapis.com",
@@ -28862,11 +29054,11 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 1048576,
-			"maxTokens": 65535
+			"maxTokens": 65536
 		},
 		"gemini-3-flash-preview": {
 			"id": "gemini-3-flash-preview",
-			"name": "Gemini 3 Flash Preview (Cloud Code Assist)",
+			"name": "Gemini 3 Flash Preview",
 			"api": "google-gemini-cli",
 			"provider": "google-gemini-cli",
 			"baseUrl": "https://cloudcode-pa.googleapis.com",
@@ -28882,11 +29074,11 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 1048576,
-			"maxTokens": 65535
+			"maxTokens": 65536
 		},
 		"gemini-3-pro-preview": {
 			"id": "gemini-3-pro-preview",
-			"name": "Gemini 3 Pro Preview (Cloud Code Assist)",
+			"name": "Gemini 3 Pro Preview",
 			"api": "google-gemini-cli",
 			"provider": "google-gemini-cli",
 			"baseUrl": "https://cloudcode-pa.googleapis.com",
@@ -28901,8 +29093,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 1048576,
-			"maxTokens": 65535
+			"contextWindow": 1000000,
+			"maxTokens": 64000
 		}
 	},
 	"google-antigravity": {
@@ -28948,11 +29140,11 @@
 		},
 		"claude-sonnet-4-5": {
 			"id": "claude-sonnet-4-5",
-			"name": "Claude Sonnet 4.5 (Antigravity)",
+			"name": "Claude Sonnet 4.5 (latest)",
 			"api": "google-gemini-cli",
 			"provider": "google-antigravity",
 			"baseUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
 				"text",
 				"image"
@@ -28988,11 +29180,11 @@
 		},
 		"claude-sonnet-4-6": {
 			"id": "claude-sonnet-4-6",
-			"name": "Claude Sonnet 4.6 (Antigravity)",
+			"name": "Claude Sonnet 4.6",
 			"api": "google-gemini-cli",
 			"provider": "google-antigravity",
 			"baseUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
 				"text",
 				"image"
@@ -29004,7 +29196,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 200000,
-			"maxTokens": 128000
+			"maxTokens": 64000
 		},
 		"claude-sonnet-4-6-thinking": {
 			"id": "claude-sonnet-4-6-thinking",
@@ -29028,7 +29220,7 @@
 		},
 		"gemini-2.5-flash": {
 			"id": "gemini-2.5-flash",
-			"name": "Gemini 2.5 Flash (Antigravity)",
+			"name": "Gemini 2.5 Flash",
 			"api": "google-gemini-cli",
 			"provider": "google-antigravity",
 			"baseUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com",
@@ -29044,7 +29236,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 1048576,
-			"maxTokens": 65535
+			"maxTokens": 65536
 		},
 		"gemini-2.5-flash-thinking": {
 			"id": "gemini-2.5-flash-thinking",
@@ -29068,7 +29260,7 @@
 		},
 		"gemini-2.5-pro": {
 			"id": "gemini-2.5-pro",
-			"name": "Gemini 2.5 Pro (Antigravity)",
+			"name": "Gemini 2.5 Pro",
 			"api": "google-gemini-cli",
 			"provider": "google-antigravity",
 			"baseUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com",
@@ -29084,11 +29276,11 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 1048576,
-			"maxTokens": 65535
+			"maxTokens": 65536
 		},
 		"gemini-3-flash": {
 			"id": "gemini-3-flash",
-			"name": "Gemini 3 Flash (Antigravity)",
+			"name": "Gemini 3 Flash",
 			"api": "google-gemini-cli",
 			"provider": "google-antigravity",
 			"baseUrl": "https://daily-cloudcode-pa.sandbox.googleapis.com",
@@ -29169,7 +29361,7 @@
 	"google-vertex": {
 		"gemini-1.5-flash": {
 			"id": "gemini-1.5-flash",
-			"name": "Gemini 1.5 Flash (Vertex)",
+			"name": "Gemini 1.5 Flash",
 			"api": "google-vertex",
 			"provider": "google-vertex",
 			"baseUrl": "https://{location}-aiplatform.googleapis.com",
@@ -29189,7 +29381,7 @@
 		},
 		"gemini-1.5-flash-8b": {
 			"id": "gemini-1.5-flash-8b",
-			"name": "Gemini 1.5 Flash-8B (Vertex)",
+			"name": "Gemini 1.5 Flash-8B",
 			"api": "google-vertex",
 			"provider": "google-vertex",
 			"baseUrl": "https://{location}-aiplatform.googleapis.com",
@@ -29209,7 +29401,7 @@
 		},
 		"gemini-1.5-pro": {
 			"id": "gemini-1.5-pro",
-			"name": "Gemini 1.5 Pro (Vertex)",
+			"name": "Gemini 1.5 Pro",
 			"api": "google-vertex",
 			"provider": "google-vertex",
 			"baseUrl": "https://{location}-aiplatform.googleapis.com",
@@ -29229,7 +29421,7 @@
 		},
 		"gemini-2.0-flash": {
 			"id": "gemini-2.0-flash",
-			"name": "Gemini 2.0 Flash (Vertex)",
+			"name": "Gemini 2.0 Flash",
 			"api": "google-vertex",
 			"provider": "google-vertex",
 			"baseUrl": "https://{location}-aiplatform.googleapis.com",
@@ -29249,11 +29441,11 @@
 		},
 		"gemini-2.0-flash-lite": {
 			"id": "gemini-2.0-flash-lite",
-			"name": "Gemini 2.0 Flash Lite (Vertex)",
+			"name": "Gemini 2.0 Flash Lite",
 			"api": "google-vertex",
 			"provider": "google-vertex",
 			"baseUrl": "https://{location}-aiplatform.googleapis.com",
-			"reasoning": true,
+			"reasoning": false,
 			"input": [
 				"text",
 				"image"
@@ -29265,11 +29457,11 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 1048576,
-			"maxTokens": 65536
+			"maxTokens": 8192
 		},
 		"gemini-2.5-flash": {
 			"id": "gemini-2.5-flash",
-			"name": "Gemini 2.5 Flash (Vertex)",
+			"name": "Gemini 2.5 Flash",
 			"api": "google-vertex",
 			"provider": "google-vertex",
 			"baseUrl": "https://{location}-aiplatform.googleapis.com",
@@ -29289,7 +29481,7 @@
 		},
 		"gemini-2.5-flash-lite": {
 			"id": "gemini-2.5-flash-lite",
-			"name": "Gemini 2.5 Flash Lite (Vertex)",
+			"name": "Gemini 2.5 Flash Lite",
 			"api": "google-vertex",
 			"provider": "google-vertex",
 			"baseUrl": "https://{location}-aiplatform.googleapis.com",
@@ -29309,7 +29501,7 @@
 		},
 		"gemini-2.5-flash-lite-preview-09-2025": {
 			"id": "gemini-2.5-flash-lite-preview-09-2025",
-			"name": "Gemini 2.5 Flash Lite Preview 09-25 (Vertex)",
+			"name": "Gemini 2.5 Flash Lite Preview 09-25",
 			"api": "google-vertex",
 			"provider": "google-vertex",
 			"baseUrl": "https://{location}-aiplatform.googleapis.com",
@@ -29329,7 +29521,7 @@
 		},
 		"gemini-2.5-pro": {
 			"id": "gemini-2.5-pro",
-			"name": "Gemini 2.5 Pro (Vertex)",
+			"name": "Gemini 2.5 Pro",
 			"api": "google-vertex",
 			"provider": "google-vertex",
 			"baseUrl": "https://{location}-aiplatform.googleapis.com",
@@ -29349,7 +29541,7 @@
 		},
 		"gemini-3-flash-preview": {
 			"id": "gemini-3-flash-preview",
-			"name": "Gemini 3 Flash Preview (Vertex)",
+			"name": "Gemini 3 Flash Preview",
 			"api": "google-vertex",
 			"provider": "google-vertex",
 			"baseUrl": "https://{location}-aiplatform.googleapis.com",
@@ -29369,7 +29561,7 @@
 		},
 		"gemini-3-pro-preview": {
 			"id": "gemini-3-pro-preview",
-			"name": "Gemini 3 Pro Preview (Vertex)",
+			"name": "Gemini 3 Pro Preview",
 			"api": "google-vertex",
 			"provider": "google-vertex",
 			"baseUrl": "https://{location}-aiplatform.googleapis.com",
@@ -29448,11 +29640,11 @@
 		},
 		"openai/gpt-oss-120b": {
 			"id": "openai/gpt-oss-120b",
-			"name": "GPT-OSS 120B",
+			"name": "GPT OSS 120B",
 			"api": "openai-completions",
 			"provider": "huggingface",
 			"baseUrl": "https://router.huggingface.co/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
 				"text"
 			],
@@ -29463,7 +29655,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 131072,
-			"maxTokens": 8192
+			"maxTokens": 65536
 		}
 	}
 }
