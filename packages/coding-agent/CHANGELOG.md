@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [12.17.2] - 2026-02-21
 ### Changed
 
 - Modified bash command normalization to only apply explicit head/tail parameters from tool input, removing automatic extraction from command pipes

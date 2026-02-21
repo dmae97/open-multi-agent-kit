@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [12.17.2] - 2026-02-21
 ### Added
 
 - Exported `getAntigravityUserAgent()` function for constructing Antigravity User-Agent headers
