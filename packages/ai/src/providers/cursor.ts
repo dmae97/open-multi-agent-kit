@@ -995,7 +995,8 @@ function sendExecClientMessage<T>(
 	log("execClientMessage", messageCase, value);
 }
 
-async function resolveExecHandler<TArgs, TResult>(
+/** Exported for tests: verifies handler is invoked with correct `this` when passed as bound. */
+export async function resolveExecHandler<TArgs, TResult>(
 	args: TArgs,
 	handler: ((args: TArgs) => Promise<CursorExecHandlerResult<TResult>>) | undefined,
 	onToolResult: CursorToolResultHandler | undefined,
