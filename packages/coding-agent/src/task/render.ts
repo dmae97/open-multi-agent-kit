@@ -518,13 +518,19 @@ function renderAgentProgress(
 			const taskPreview = truncateToWidth(progress.task, 40);
 			statusLine += ` ${theme.fg("muted", taskPreview)}`;
 		}
-		statusLine += `${theme.sep.dot}${theme.fg("dim", `${progress.toolCount} tools`)}`;
+		if (progress.toolCount > 0) {
+			statusLine += `${theme.sep.dot}${theme.fg("dim", `${progress.toolCount} tools`)}`;
+		}
 		if (progress.tokens > 0) {
 			statusLine += `${theme.sep.dot}${theme.fg("dim", `${formatNumber(progress.tokens)} tokens`)}`;
 		}
 	} else if (progress.status === "completed") {
-		statusLine += `${theme.sep.dot}${theme.fg("dim", `${progress.toolCount} tools`)}`;
-		statusLine += `${theme.sep.dot}${theme.fg("dim", `${formatNumber(progress.tokens)} tokens`)}`;
+		if (progress.toolCount > 0) {
+			statusLine += `${theme.sep.dot}${theme.fg("dim", `${progress.toolCount} tools`)}`;
+		}
+		if (progress.tokens > 0) {
+			statusLine += `${theme.sep.dot}${theme.fg("dim", `${formatNumber(progress.tokens)} tokens`)}`;
+		}
 	}
 
 	lines.push(statusLine);

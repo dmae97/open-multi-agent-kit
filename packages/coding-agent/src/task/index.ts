@@ -196,6 +196,9 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 			return this.#executeSync(_toolCallId, params, signal, onUpdate);
 		}
 
+		const outputManager =
+			this.session.agentOutputManager ?? new AgentOutputManager(this.session.getArtifactsDir ?? (() => null));
+		const uniqueIds = await outputManager.allocateBatch(taskItems.map(t => t.id));
 		const fallbackAgentSource =
 			this.#discoveredAgents.find(agent => agent.name === params.agent)?.source ?? "bundled";
 		const renderedTasks = taskItems.map(taskItem => renderTemplate(params.context, taskItem));
@@ -229,17 +232,19 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 				.map(progress => structuredClone(progress));
 		};
 
+		const buildAsyncDetails = (state: "running" | "completed" | "failed", jobId: string): TaskToolDetails => ({
+			projectAgentsDir: null,
+			results: [],
+			totalDurationMs: 0,
+			progress: getProgressSnapshot(),
+			async: { state, jobId, type: "task" },
+		});
+
 		const emitAsyncUpdate = (state: "running" | "completed" | "failed", text: string): void => {
 			const primaryJobId = startedJobs[0]?.jobId ?? "task";
 			onUpdate?.({
 				content: [{ type: "text", text }],
-				details: {
-					projectAgentsDir: null,
-					results: [],
-					totalDurationMs: 0,
-					progress: getProgressSnapshot(),
-					async: { state, jobId: primaryJobId, type: "task" },
-				},
+				details: buildAsyncDetails(state, primaryJobId),
 			});
 		};
 
@@ -254,21 +259,27 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 				continue;
 			}
 
+			const uniqueId = uniqueIds[i];
 			const singleParams: TaskParams = { ...params, tasks: [taskItem] };
-			const label = `${i}-${taskItem.id}`;
+			const label = uniqueId;
 			try {
 				const jobId = manager.register(
 					"task",
 					label,
-					async ({ signal: runSignal }) => {
+					async ({ signal: runSignal, reportProgress }) => {
 						const startedAt = Date.now();
 						const progress = progressByTaskId.get(taskItem.id);
 						if (progress) {
 							progress.status = "running";
 						}
-						emitAsyncUpdate("running", `Running background task ${taskItem.id}...`);
+						await reportProgress(
+							`Running background task ${taskItem.id}...`,
+							buildAsyncDetails("running", startedJobs[0]?.jobId ?? label) as unknown as Record<string, unknown>,
+						);
 						try {
-							const result = await this.#executeSync(_toolCallId, singleParams, runSignal);
+							const result = await this.#executeSync(_toolCallId, singleParams, runSignal, undefined, [
+								uniqueId,
+							]);
 							const finalText = result.content.find(part => part.type === "text")?.text ?? "(no output)";
 							const singleResult = result.details?.results[0];
 							if (progress) {
@@ -287,12 +298,21 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 							}
 							const remaining = taskItems.length - completedJobs;
 							const isDone = remaining === 0;
-							emitAsyncUpdate(
-								isDone ? (failedJobs > 0 || failedSchedules.length > 0 ? "failed" : "completed") : "running",
+							await reportProgress(
 								isDone
 									? `Background task batch complete: ${completedJobs}/${taskItems.length} finished.`
 									: `Background task batch progress: ${completedJobs}/${taskItems.length} finished (${remaining} running).`,
+								buildAsyncDetails(
+									isDone ? (failedJobs > 0 || failedSchedules.length > 0 ? "failed" : "completed") : "running",
+									startedJobs[0]?.jobId ?? label,
+								) as unknown as Record<string, unknown>,
 							);
+							if (isDone) {
+								emitAsyncUpdate(
+									failedJobs > 0 || failedSchedules.length > 0 ? "failed" : "completed",
+									`Background task batch complete: ${completedJobs}/${taskItems.length} finished.`,
+								);
+							}
 							return finalText;
 						} catch (error) {
 							if (progress) {
@@ -303,16 +323,33 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 							failedJobs += 1;
 							const remaining = taskItems.length - completedJobs;
 							const isDone = remaining === 0;
-							emitAsyncUpdate(
-								isDone ? "failed" : "running",
+							await reportProgress(
 								isDone
 									? `Background task batch complete with failures: ${failedJobs} failed.`
 									: `Background task batch progress: ${completedJobs}/${taskItems.length} finished (${remaining} running).`,
+								buildAsyncDetails(
+									isDone ? "failed" : "running",
+									startedJobs[0]?.jobId ?? label,
+								) as unknown as Record<string, unknown>,
 							);
+							if (isDone) {
+								emitAsyncUpdate(
+									"failed",
+									`Background task batch complete with failures: ${failedJobs} failed.`,
+								);
+							}
 							throw error;
 						}
 					},
-					{ id: label },
+					{
+						id: label,
+						onProgress: (text, details) => {
+							const progressDetails =
+								(details as TaskToolDetails | undefined) ??
+								buildAsyncDetails("running", startedJobs[0]?.jobId ?? label);
+							onUpdate?.({ content: [{ type: "text", text }], details: progressDetails });
+						},
+					},
 				);
 				startedJobs.push({ jobId, taskId: taskItem.id });
 			} catch (error) {
@@ -365,6 +402,7 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 		params: TaskParams,
 		signal?: AbortSignal,
 		onUpdate?: AgentToolUpdateCallback<TaskToolDetails>,
+		preAllocatedIds?: string[],
 	): Promise<AgentToolResult<TaskToolDetails>> {
 		const startTime = Date.now();
 		const { agents, projectAgentsDir } = await discoverAgents(this.session.cwd);
@@ -616,9 +654,14 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 
 			// Build full prompts with context prepended
 			// Allocate unique IDs across the session to prevent artifact collisions
-			const outputManager =
-				this.session.agentOutputManager ?? new AgentOutputManager(this.session.getArtifactsDir ?? (() => null));
-			const uniqueIds = await outputManager.allocateBatch(tasks.map(t => t.id));
+			let uniqueIds: string[];
+			if (preAllocatedIds && preAllocatedIds.length === tasks.length) {
+				uniqueIds = preAllocatedIds;
+			} else {
+				const outputManager =
+					this.session.agentOutputManager ?? new AgentOutputManager(this.session.getArtifactsDir ?? (() => null));
+				uniqueIds = await outputManager.allocateBatch(tasks.map(t => t.id));
+			}
 			const tasksWithUniqueIds = tasks.map((t, i) => ({ ...t, id: uniqueIds[i] }));
 
 			// Build full prompts with context prepended

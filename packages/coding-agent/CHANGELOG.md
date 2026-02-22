@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added support for rendering markdown output from Python cells with proper formatting and theme styling
@@ -38,6 +39,7 @@
 
 ### Fixed
 
+- Fixed task progress display to hide tool count and token metrics when zero, reducing visual clutter in status output
 - Fixed Lobsters scraper to correctly parse API responses where user fields are strings instead of objects, resolving undefined user display in story listings
 - Fixed artifact manager caching to properly invalidate when session file changes, preventing stale artifact references
 - Fixed truncation behavior around UTF-8 boundaries and chunked output accounting
