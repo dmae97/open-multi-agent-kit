@@ -180,7 +180,7 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
 			const jobId = manager.register(
 				"bash",
 				label,
-				async ({ signal: runSignal, reportProgress }) => {
+				async ({ jobId, signal: runSignal, reportProgress }) => {
 					const artifactsDir = this.session.getArtifactsDir?.();
 					const extraEnv = artifactsDir ? { ARTIFACTS: artifactsDir } : undefined;
 					const { path: artifactPath, id: artifactId } =

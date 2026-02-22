@@ -3,7 +3,7 @@
 Launch subagents to execute parallel, well-scoped tasks.
 {{#if asyncEnabled}}
 Use `read jobs://` to inspect background task state and `read jobs://<job_id>` for detailed status/output when needed.
-Do NOT `sleep` or poll in loops waiting for async completion. Results are delivered automatically; continue with other work or yield.
+When you need to wait for async results before continuing, call `poll_jobs` — it blocks until jobs complete. Do NOT poll `read jobs://` in a loop or yield and hope for delivery.
 {{/if}}
 
 ## What subagents inherit automatically

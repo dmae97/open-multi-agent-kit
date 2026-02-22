@@ -25,6 +25,7 @@ import { FindTool } from "./find";
 import { GrepTool } from "./grep";
 import { NotebookTool } from "./notebook";
 import { wrapToolWithMetaNotice } from "./output-meta";
+import { PollJobsTool } from "./poll-jobs";
 import { PythonTool } from "./python";
 import { ReadTool } from "./read";
 import { reportFindingTool } from "./review";
@@ -63,6 +64,7 @@ export { type FindOperations, FindTool, type FindToolDetails, type FindToolInput
 export { setPreferredImageProvider } from "./gemini-image";
 export { GrepTool, type GrepToolDetails, type GrepToolInput } from "./grep";
 export { NotebookTool, type NotebookToolDetails } from "./notebook";
+export { PollJobsTool, type PollJobsToolDetails } from "./poll-jobs";
 export { PythonTool, type PythonToolDetails, type PythonToolOptions } from "./python";
 export { ReadTool, type ReadToolDetails, type ReadToolInput } from "./read";
 export { reportFindingTool, type SubmitReviewDetails } from "./review";
@@ -157,6 +159,7 @@ export const BUILTIN_TOOLS: Record<string, ToolFactory> = {
 	browser: s => new BrowserTool(s),
 	task: TaskTool.create,
 	cancel_job: CancelJobTool.createIf,
+	poll_jobs: PollJobsTool.createIf,
 	todo_write: s => new TodoWriteTool(s),
 	fetch: s => new FetchTool(s),
 	web_search: s => new SearchTool(s),

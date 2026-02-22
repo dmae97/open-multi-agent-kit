@@ -82,3 +82,35 @@ export async function mapWithConcurrencyLimit<T, R>(
 
 	return { results, aborted: signal?.aborted ?? false };
 }
+
+/**
+ * Simple counting semaphore for limiting concurrency across independently-scheduled async work.
+ */
+export class Semaphore {
+	#max: number;
+	#current = 0;
+	#queue: Array<() => void> = [];
+
+	constructor(max: number) {
+		this.#max = Math.max(1, max);
+	}
+
+	async acquire(): Promise<void> {
+		if (this.#current < this.#max) {
+			this.#current++;
+			return;
+		}
+		const { promise, resolve } = Promise.withResolvers<void>();
+		this.#queue.push(resolve);
+		return promise;
+	}
+
+	release(): void {
+		const next = this.#queue.shift();
+		if (next) {
+			next();
+		} else {
+			this.#current--;
+		}
+	}
+}

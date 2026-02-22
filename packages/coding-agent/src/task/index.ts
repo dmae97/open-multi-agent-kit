@@ -32,7 +32,7 @@ import "../tools/review";
 import { discoverAgents, getAgent } from "./discovery";
 import { runSubprocess } from "./executor";
 import { AgentOutputManager } from "./output-manager";
-import { mapWithConcurrencyLimit } from "./parallel";
+import { mapWithConcurrencyLimit, Semaphore } from "./parallel";
 import { renderCall, renderResult } from "./render";
 import { renderTemplate } from "./template";
 import {
@@ -248,6 +248,9 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 			});
 		};
 
+		const maxConcurrency = this.session.settings.get("task.maxConcurrency");
+		const semaphore = new Semaphore(maxConcurrency);
+
 		for (let i = 0; i < taskItems.length; i++) {
 			const taskItem = taskItems[i];
 			if (signal?.aborted) {
@@ -269,6 +272,14 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 					async ({ signal: runSignal, reportProgress }) => {
 						const startedAt = Date.now();
 						const progress = progressByTaskId.get(taskItem.id);
+						await semaphore.acquire();
+						if (runSignal.aborted) {
+							semaphore.release();
+							if (progress) {
+								progress.status = "aborted";
+							}
+							throw new Error("Aborted before execution");
+						}
 						if (progress) {
 							progress.status = "running";
 						}
@@ -339,6 +350,8 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 								);
 							}
 							throw error;
+						} finally {
+							semaphore.release();
 						}
 					},
 					{

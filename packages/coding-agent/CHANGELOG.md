@@ -1,9 +1,10 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added `poll_jobs` tool to block until background jobs complete, providing an alternative to polling `read jobs://` in loops
+- Added `task.maxConcurrency` setting to limit the number of concurrently executing subagent tasks
 - Added support for rendering markdown output from Python cells with proper formatting and theme styling
 - Added async background job execution for bash commands and tasks with `async: true` parameter
 - Added `cancel_job` tool to cancel running background jobs
@@ -16,6 +17,7 @@
 
 ### Changed
 
+- Updated bash and task tool guidance to recommend `poll_jobs` instead of polling `read jobs://` in loops when waiting for async results
 - Improved parallel task execution to schedule multiple background jobs independently instead of batching all tasks into a single job, enabling true concurrent execution
 - Enhanced task progress tracking to report per-task status (pending, running, completed, failed, aborted) with individual timing and token metrics for each background task
 - Updated background task messaging to provide real-time progress counts (e.g., '2/5 finished') and distinguish between single and multiple task jobs

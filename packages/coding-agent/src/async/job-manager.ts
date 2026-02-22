@@ -64,6 +64,7 @@ export class AsyncJobManager {
 		type: "bash" | "task",
 		label: string,
 		run: (ctx: {
+			jobId: string;
 			signal: AbortSignal;
 			reportProgress: (text: string, details?: Record<string, unknown>) => Promise<void>;
 		}) => Promise<string>,
@@ -106,7 +107,7 @@ export class AsyncJobManager {
 		};
 		job.promise = (async () => {
 			try {
-				const text = await run({ signal: abortController.signal, reportProgress });
+				const text = await run({ jobId: id, signal: abortController.signal, reportProgress });
 				if (job.status === "cancelled") {
 					job.resultText = text;
 					this.#scheduleEviction(id);
