@@ -203,6 +203,7 @@ export class TUI extends Container {
 	terminal: Terminal;
 	#previousLines: string[] = [];
 	#previousWidth = 0;
+	#previousHeight = 0;
 	#focusedComponent: Component | null = null;
 	#inputListeners = new Set<InputListener>();
 
@@ -427,6 +428,7 @@ export class TUI extends Container {
 		if (force) {
 			this.#previousLines = [];
 			this.#previousWidth = -1; // -1 triggers widthChanged, forcing a full clear
+			this.#previousHeight = -1; // -1 triggers heightChanged, forcing a full clear
 			this.#cursorRow = 0;
 			this.#hardwareCursorRow = 0;
 			this.#maxLinesRendered = 0;
@@ -877,6 +879,7 @@ export class TUI extends Container {
 
 		// Width changed - need full re-render (line wrapping changes)
 		const widthChanged = this.#previousWidth !== 0 && this.#previousWidth !== width;
+		const heightChanged = this.#previousHeight !== 0 && this.#previousHeight !== height;
 
 		// Helper to clear scrollback and viewport and render all new lines
 		const fullRender = (clear: boolean): void => {
@@ -904,6 +907,7 @@ export class TUI extends Container {
 			this.#previousViewportTop = Math.max(0, this.#maxLinesRendered - height);
 			this.#previousLines = newLines;
 			this.#previousWidth = width;
+			this.#previousHeight = height;
 		};
 
 		const debugRedraw = process.env.PI_DEBUG_REDRAW === "1";
@@ -924,6 +928,13 @@ export class TUI extends Container {
 		// Width changed - full re-render (line wrapping changes)
 		if (widthChanged) {
 			logRedraw(`width changed (${this.#previousWidth} -> ${width})`);
+			fullRender(true);
+			return;
+		}
+
+		// Height changed - full re-render to clear newly revealed rows and avoid stale scrollback artifacts
+		if (heightChanged) {
+			logRedraw(`height changed (${this.#previousHeight} -> ${height})`);
 			fullRender(true);
 			return;
 		}
@@ -997,6 +1008,7 @@ export class TUI extends Container {
 			this.#cursorRow = targetRow;
 			this.#previousLines = newLines;
 			this.#previousWidth = width;
+			this.#previousHeight = height;
 			this.#previousViewportTop = Math.max(0, this.#maxLinesRendered - height);
 			return;
 		}
@@ -1140,6 +1152,7 @@ export class TUI extends Container {
 		this.#previousViewportTop = Math.max(0, this.#maxLinesRendered - height);
 		this.#previousLines = newLines;
 		this.#previousWidth = width;
+		this.#previousHeight = height;
 	}
 
 	/**

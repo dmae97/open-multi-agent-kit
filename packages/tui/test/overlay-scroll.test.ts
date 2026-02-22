@@ -110,6 +110,29 @@ describe("TUI overlays", () => {
 		tui.stop();
 	});
 
+
+	it("fully redraws on height increase to avoid stale viewport rows", async () => {
+		const term = new VirtualTerminal(40, 4);
+		term.write("shell-0\r\nshell-1\r\nshell-2\r\nshell-3\r\nshell-4\r\n");
+		await term.flush();
+
+		const tui = new TUI(term);
+		const component = new MutableContentComponent(["ui-0", "ui-1", "ui-2", "ui-3"]);
+		tui.addChild(component);
+
+		tui.start();
+		await Bun.sleep(0);
+		await term.flush();
+
+		term.resize(40, 8);
+		await Bun.sleep(0);
+		await term.flush();
+
+		const viewport = term.getViewport().join("\n");
+		expect(viewport.includes("shell-")).toBeFalsy();
+
+		tui.stop();
+	});
 	it("clears first row when shrinking to empty with clearOnShrink disabled", async () => {
 		const term = new VirtualTerminal(40, 10);
 		const tui = new TUI(term);

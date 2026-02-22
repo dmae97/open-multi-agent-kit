@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed
+
+- Fixed stale viewport rows appearing when terminal height increases by triggering full re-render on height changes
 
 ## [12.18.0] - 2026-02-21
 ### Fixed
