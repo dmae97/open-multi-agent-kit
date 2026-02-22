@@ -34,14 +34,7 @@ import { enforcePlanModeWrite, resolvePlanPath } from "../tools/plan-mode-guard"
 import { applyPatch } from "./applicator";
 import { generateDiffString, generateUnifiedDiffString, replaceText } from "./diff";
 import { findMatch } from "./fuzzy";
-import {
-	applyHashlineEdits,
-	computeLineHash,
-	type HashlineEdit,
-	type LineTag,
-	parseTag,
-	type ReplaceTextEdit,
-} from "./hashline";
+import { applyHashlineEdits, computeLineHash, type HashlineEdit, type LineTag, parseTag } from "./hashline";
 import { detectLineEnding, normalizeToLF, restoreLineEndings, stripBom } from "./normalize";
 import { buildNormativeUpdateInput } from "./normative";
 import { type EditToolDetails, getLspBatchRequest } from "./shared";
@@ -201,13 +194,6 @@ export function hashlineParseContent(edit: string | string[] | null): string[] {
 	if (lines[lines.length - 1].trim() === "") return lines.slice(0, -1);
 	return lines;
 }
-
-function hashlineParseContentString(edit: string | string[] | null): string {
-	if (edit === null) return "";
-	if (Array.isArray(edit)) return edit.join("\n");
-	return edit;
-}
-
 const hashlineTargetEditSchema = Type.Object(
 	{
 		op: Type.Literal("set"),
@@ -255,25 +241,12 @@ const hashlineInsertEditSchema = Type.Object(
 	{ additionalProperties: false },
 );
 
-const hashlineReplaceTextEditSchema = Type.Object(
-	{
-		op: Type.Literal("replaceText"),
-		old_text: Type.String({ description: "Text to find", minLength: 1 }),
-		new_text: hashlineReplaceContentFormat("Replacement"),
-		all: Type.Optional(Type.Boolean({ description: "Replace all occurrences" })),
-	},
-	{ additionalProperties: false },
-);
-
-const HL_REPLACE_ENABLED = Bun.env.PI_HL_REPLACETXT === "1";
-
 const hashlineEditSpecSchema = Type.Union([
 	hashlineTargetEditSchema,
 	hashlineRangeEditSchema,
 	hashlineAppendEditSchema,
 	hashlinePrependEditSchema,
 	hashlineInsertEditSchema,
-	...(HL_REPLACE_ENABLED ? [hashlineReplaceTextEditSchema] : []),
 ]);
 
 const hashlineEditSchema = Type.Object(
@@ -486,7 +459,7 @@ export class EditTool implements AgentTool<TInput> {
 			case "patch":
 				return renderPromptTemplate(patchDescription);
 			case "hashline":
-				return renderPromptTemplate(hashlineDescription, { allowReplaceText: HL_REPLACE_ENABLED });
+				return renderPromptTemplate(hashlineDescription);
 			default:
 				return renderPromptTemplate(replaceDescription);
 		}
@@ -581,7 +554,6 @@ export class EditTool implements AgentTool<TInput> {
 			}
 
 			const anchorEdits: HashlineEdit[] = [];
-			const replaceEdits: ReplaceTextEdit[] = [];
 			for (const edit of edits) {
 				switch (edit.op) {
 					case "set": {
@@ -643,16 +615,6 @@ export class EditTool implements AgentTool<TInput> {
 						}
 						break;
 					}
-					case "replaceText": {
-						const { old_text, new_text, all } = edit;
-						replaceEdits.push({
-							op: "replaceText",
-							old_text: old_text,
-							new_text: hashlineParseContentString(new_text),
-							all: all ?? false,
-						});
-						break;
-					}
 					default:
 						throw new Error(`Invalid edit operation: ${JSON.stringify(edit)}`);
 				}
@@ -667,19 +629,6 @@ export class EditTool implements AgentTool<TInput> {
 			// Apply anchor-based edits first (set, set_range, insert)
 			const anchorResult = applyHashlineEdits(normalizedContent, anchorEdits);
 			normalizedContent = anchorResult.content;
-
-			// Apply content-replace edits (substr-style fuzzy replace)
-			for (const r of replaceEdits) {
-				if (r.old_text.length === 0) {
-					throw new Error("old_text must not be empty.");
-				}
-				const rep = replaceText(normalizedContent, r.old_text, r.new_text, {
-					fuzzy: this.#allowFuzzy,
-					all: r.all ?? false,
-					threshold: this.#fuzzyThreshold,
-				});
-				normalizedContent = rep.content;
-			}
 
 			const result = {
 				content: normalizedContent,

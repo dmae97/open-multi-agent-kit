@@ -21,159 +21,6 @@ export type HashlineEdit =
 	| { op: "append"; after?: LineTag; content: string[] }
 	| { op: "prepend"; before?: LineTag; content: string[] }
 	| { op: "insert"; after: LineTag; before: LineTag; content: string[] };
-export type ReplaceTextEdit = { op: "replaceText"; old_text: string; new_text: string; all?: boolean };
-export type EditSpec = HashlineEdit | ReplaceTextEdit;
-
-/**
- * Compare two strings ignoring all whitespace differences.
- *
- * Returns true when the non-whitespace characters are identical — meaning
- * the only differences are in spaces, tabs, or other whitespace.
- */
-function equalsIgnoringWhitespace(a: string, b: string): boolean {
-	// Fast path: identical strings
-	if (a === b) return true;
-	// Compare with all whitespace removed
-	return a.replace(/\s+/g, "") === b.replace(/\s+/g, "");
-}
-
-function stripAllWhitespace(s: string): string {
-	return s.replace(/\s+/g, "");
-}
-
-function stripTrailingContinuationTokens(s: string): string {
-	// Heuristic: models often merge a continuation line into the prior line
-	// while also changing the trailing operator (e.g. `&&` → `||`).
-	// Strip common trailing continuation tokens so we can still detect merges.
-	return s.replace(/(?:&&|\|\||\?\?|\?|:|=|,|\+|-|\*|\/|\.|\()\s*$/u, "");
-}
-
-function stripMergeOperatorChars(s: string): string {
-	// Used for merge detection when the model changes a logical operator like
-	// `||` → `??` while also merging adjacent lines.
-	return s.replace(/[|&?]/g, "");
-}
-
-function leadingWhitespace(s: string): string {
-	const match = s.match(/^\s*/);
-	return match ? match[0] : "";
-}
-
-function restoreLeadingIndent(templateLine: string, line: string): string {
-	if (line.length === 0) return line;
-	const templateIndent = leadingWhitespace(templateLine);
-	if (templateIndent.length === 0) return line;
-	const indent = leadingWhitespace(line);
-	if (indent.length > 0) return line;
-	return templateIndent + line;
-}
-
-function restoreIndentForPairedReplacement(oldLines: string[], newLines: string[]): string[] {
-	if (oldLines.length !== newLines.length) return newLines;
-	let changed = false;
-	const out = new Array<string>(newLines.length);
-	for (let i = 0; i < newLines.length; i++) {
-		const restored = restoreLeadingIndent(oldLines[i], newLines[i]);
-		out[i] = restored;
-		if (restored !== newLines[i]) changed = true;
-	}
-	return changed ? out : newLines;
-}
-
-/**
- * Undo pure formatting rewrites where the model reflows a single logical line
- * into multiple lines (or similar), but the token stream is identical.
- */
-function restoreOldWrappedLines(oldLines: string[], newLines: string[]): string[] {
-	if (oldLines.length === 0 || newLines.length < 2) return newLines;
-
-	const canonToOld = new Map<string, { line: string; count: number }>();
-	for (const line of oldLines) {
-		const canon = stripAllWhitespace(line);
-		const bucket = canonToOld.get(canon);
-		if (bucket) bucket.count++;
-		else canonToOld.set(canon, { line, count: 1 });
-	}
-
-	const candidates: { start: number; len: number; replacement: string; canon: string }[] = [];
-	for (let start = 0; start < newLines.length; start++) {
-		for (let len = 2; len <= 10 && start + len <= newLines.length; len++) {
-			const canonSpan = stripAllWhitespace(newLines.slice(start, start + len).join(""));
-			const old = canonToOld.get(canonSpan);
-			if (old && old.count === 1 && canonSpan.length >= 6) {
-				candidates.push({ start, len, replacement: old.line, canon: canonSpan });
-			}
-		}
-	}
-	if (candidates.length === 0) return newLines;
-
-	// Keep only spans whose canonical match is unique in the new output.
-	const canonCounts = new Map<string, number>();
-	for (const c of candidates) {
-		canonCounts.set(c.canon, (canonCounts.get(c.canon) ?? 0) + 1);
-	}
-	const uniqueCandidates = candidates.filter(c => (canonCounts.get(c.canon) ?? 0) === 1);
-	if (uniqueCandidates.length === 0) return newLines;
-
-	// Apply replacements back-to-front so indices remain stable.
-	uniqueCandidates.sort((a, b) => b.start - a.start);
-	const out = [...newLines];
-	for (const c of uniqueCandidates) {
-		out.splice(c.start, c.len, c.replacement);
-	}
-	return out;
-}
-
-function stripInsertAnchorEchoAfter(anchorLine: string, dstLines: string[]): string[] {
-	if (dstLines.length <= 1) return dstLines;
-	if (equalsIgnoringWhitespace(dstLines[0], anchorLine)) {
-		return dstLines.slice(1);
-	}
-	return dstLines;
-}
-
-function stripInsertAnchorEchoBefore(anchorLine: string, dstLines: string[]): string[] {
-	if (dstLines.length <= 1) return dstLines;
-	if (equalsIgnoringWhitespace(dstLines[dstLines.length - 1], anchorLine)) {
-		return dstLines.slice(0, -1);
-	}
-	return dstLines;
-}
-
-function stripInsertBoundaryEcho(afterLine: string, beforeLine: string, dstLines: string[]): string[] {
-	let out = dstLines;
-	if (out.length > 1 && equalsIgnoringWhitespace(out[0], afterLine)) {
-		out = out.slice(1);
-	}
-	if (out.length > 1 && equalsIgnoringWhitespace(out[out.length - 1], beforeLine)) {
-		out = out.slice(0, -1);
-	}
-	return out;
-}
-
-function stripRangeBoundaryEcho(fileLines: string[], startLine: number, endLine: number, dstLines: string[]): string[] {
-	// Only strip when the model replaced with multiple lines and grew the edit.
-	// This avoids turning a single-line replacement into a deletion.
-	const count = endLine - startLine + 1;
-	if (dstLines.length <= 1 || dstLines.length <= count) return dstLines;
-
-	let out = dstLines;
-	const beforeIdx = startLine - 2;
-	if (beforeIdx >= 0 && equalsIgnoringWhitespace(out[0], fileLines[beforeIdx])) {
-		out = out.slice(1);
-	}
-
-	const afterIdx = endLine;
-	if (
-		afterIdx < fileLines.length &&
-		out.length > 0 &&
-		equalsIgnoringWhitespace(out[out.length - 1], fileLines[afterIdx])
-	) {
-		out = out.slice(0, -1);
-	}
-
-	return out;
-}
 
 const NIBBLE_STR = "ZPMQVRWSNKTXJBYH";
 
@@ -594,38 +441,6 @@ export function applyHashlineEdits(
 	let firstChangedLine: number | undefined;
 	const noopEdits: Array<{ editIndex: number; loc: string; currentContent: string }> = [];
 
-	const autocorrect = Bun.env.PI_HL_AUTOCORRECT === "1";
-
-	function collectExplicitlyTouchedLines(): Set<number> {
-		const touched = new Set<number>();
-		for (const edit of edits) {
-			switch (edit.op) {
-				case "set":
-					touched.add(edit.tag.line);
-					break;
-				case "replace":
-					for (let ln = edit.first.line; ln <= edit.last.line; ln++) touched.add(ln);
-					break;
-				case "append":
-					if (edit.after) {
-						touched.add(edit.after.line);
-					}
-					break;
-				case "prepend":
-					if (edit.before) {
-						touched.add(edit.before.line);
-					}
-					break;
-				case "insert":
-					touched.add(edit.after.line);
-					touched.add(edit.before.line);
-					break;
-			}
-		}
-		return touched;
-	}
-
-	const explicitlyTouchedLines = collectExplicitlyTouchedLines();
 	// Pre-validate: collect all hash mismatches before mutating
 	const mismatches: HashMismatch[] = [];
 	function validateRef(ref: { line: number; hash: string }): boolean {
@@ -765,35 +580,8 @@ export function applyHashlineEdits(
 	for (const { edit, idx } of annotated) {
 		switch (edit.op) {
 			case "set": {
-				const merged = autocorrect ? maybeExpandSingleLineMerge(edit.tag.line, edit.content) : null;
-				if (merged) {
-					const origLines = originalFileLines.slice(
-						merged.startLine - 1,
-						merged.startLine - 1 + merged.deleteCount,
-					);
-					let nextLines = merged.newLines;
-					nextLines = restoreIndentForPairedReplacement([origLines[0] ?? ""], nextLines);
-
-					if (origLines.every((line, i) => line === nextLines[i])) {
-						noopEdits.push({
-							editIndex: idx,
-							loc: `${edit.tag.line}#${edit.tag.hash}`,
-							currentContent: origLines.join("\n"),
-						});
-						break;
-					}
-					fileLines.splice(merged.startLine - 1, merged.deleteCount, ...nextLines);
-					trackFirstChanged(merged.startLine);
-					break;
-				}
-
-				const count = 1;
 				const origLines = originalFileLines.slice(edit.tag.line - 1, edit.tag.line);
-				let stripped = autocorrect
-					? stripRangeBoundaryEcho(originalFileLines, edit.tag.line, edit.tag.line, edit.content)
-					: edit.content;
-				stripped = autocorrect ? restoreOldWrappedLines(origLines, stripped) : stripped;
-				const newLines = autocorrect ? restoreIndentForPairedReplacement(origLines, stripped) : stripped;
+				const newLines = edit.content;
 				if (origLines.every((line, i) => line === newLines[i])) {
 					noopEdits.push({
 						editIndex: idx,
@@ -802,36 +590,19 @@ export function applyHashlineEdits(
 					});
 					break;
 				}
-				fileLines.splice(edit.tag.line - 1, count, ...newLines);
+				fileLines.splice(edit.tag.line - 1, 1, ...newLines);
 				trackFirstChanged(edit.tag.line);
 				break;
 			}
 			case "replace": {
 				const count = edit.last.line - edit.first.line + 1;
-				const origLines = originalFileLines.slice(edit.first.line - 1, edit.first.line - 1 + count);
-				let stripped = autocorrect
-					? stripRangeBoundaryEcho(originalFileLines, edit.first.line, edit.last.line, edit.content)
-					: edit.content;
-				stripped = autocorrect ? restoreOldWrappedLines(origLines, stripped) : stripped;
-				const newLines = autocorrect ? restoreIndentForPairedReplacement(origLines, stripped) : stripped;
-				if (autocorrect && origLines.every((line, i) => line === newLines[i])) {
-					noopEdits.push({
-						editIndex: idx,
-						loc: `${edit.first.line}#${edit.first.hash}`,
-						currentContent: origLines.join("\n"),
-					});
-					break;
-				}
+				const newLines = edit.content;
 				fileLines.splice(edit.first.line - 1, count, ...newLines);
 				trackFirstChanged(edit.first.line);
 				break;
 			}
 			case "append": {
-				const inserted = edit.after
-					? autocorrect
-						? stripInsertAnchorEchoAfter(originalFileLines[edit.after.line - 1], edit.content)
-						: edit.content
-					: edit.content;
+				const inserted = edit.content;
 				if (inserted.length === 0) {
 					noopEdits.push({
 						editIndex: idx,
@@ -855,11 +626,7 @@ export function applyHashlineEdits(
 				break;
 			}
 			case "prepend": {
-				const inserted = edit.before
-					? autocorrect
-						? stripInsertAnchorEchoBefore(originalFileLines[edit.before.line - 1], edit.content)
-						: edit.content
-					: edit.content;
+				const inserted = edit.content;
 				if (inserted.length === 0) {
 					noopEdits.push({
 						editIndex: idx,
@@ -884,7 +651,7 @@ export function applyHashlineEdits(
 			case "insert": {
 				const afterLine = originalFileLines[edit.after.line - 1];
 				const beforeLine = originalFileLines[edit.before.line - 1];
-				const inserted = autocorrect ? stripInsertBoundaryEcho(afterLine, beforeLine, edit.content) : edit.content;
+				const inserted = edit.content;
 				if (inserted.length === 0) {
 					noopEdits.push({
 						editIndex: idx,
@@ -910,52 +677,5 @@ export function applyHashlineEdits(
 		if (firstChangedLine === undefined || line < firstChangedLine) {
 			firstChangedLine = line;
 		}
-	}
-
-	function maybeExpandSingleLineMerge(
-		line: number,
-		content: string[],
-	): { startLine: number; deleteCount: number; newLines: string[] } | null {
-		if (content.length !== 1) return null;
-		if (line < 1 || line > fileLines.length) return null;
-
-		const newLine = content[0];
-		const newCanon = stripAllWhitespace(newLine);
-		const newCanonForMergeOps = stripMergeOperatorChars(newCanon);
-		if (newCanon.length === 0) return null;
-
-		const orig = fileLines[line - 1];
-		const origCanon = stripAllWhitespace(orig);
-		const origCanonForMatch = stripTrailingContinuationTokens(origCanon);
-		const origCanonForMergeOps = stripMergeOperatorChars(origCanon);
-		const origLooksLikeContinuation = origCanonForMatch.length < origCanon.length;
-		if (origCanon.length === 0) return null;
-		const nextIdx = line;
-		const prevIdx = line - 2;
-		// Case A: dst absorbed the next continuation line.
-		if (origLooksLikeContinuation && nextIdx < fileLines.length && !explicitlyTouchedLines.has(line + 1)) {
-			const next = fileLines[nextIdx];
-			const nextCanon = stripAllWhitespace(next);
-			const a = newCanon.indexOf(origCanonForMatch);
-			const b = newCanon.indexOf(nextCanon);
-			if (a !== -1 && b !== -1 && a < b && newCanon.length <= origCanon.length + nextCanon.length + 32) {
-				return { startLine: line, deleteCount: 2, newLines: [newLine] };
-			}
-		}
-		// Case B: dst absorbed the previous declaration/continuation line.
-		if (prevIdx >= 0 && !explicitlyTouchedLines.has(line - 1)) {
-			const prev = fileLines[prevIdx];
-			const prevCanon = stripAllWhitespace(prev);
-			const prevCanonForMatch = stripTrailingContinuationTokens(prevCanon);
-			const prevLooksLikeContinuation = prevCanonForMatch.length < prevCanon.length;
-			if (!prevLooksLikeContinuation) return null;
-			const a = newCanonForMergeOps.indexOf(stripMergeOperatorChars(prevCanonForMatch));
-			const b = newCanonForMergeOps.indexOf(origCanonForMergeOps);
-			if (a !== -1 && b !== -1 && a < b && newCanon.length <= prevCanon.length + origCanon.length + 32) {
-				return { startLine: line - 1, deleteCount: 2, newLines: [newLine] };
-			}
-		}
-
-		return null;
 	}
 }

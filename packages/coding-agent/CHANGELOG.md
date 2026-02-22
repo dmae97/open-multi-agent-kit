@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+### Removed
+
+- Removed `replaceText` edit operation from hashline mode (substring-based text replacement)
+- Removed autocorrect heuristics that attempted to detect and fix line merges and formatting rewrites in hashline edits
 
 ## [12.19.0] - 2026-02-22
 ### Added

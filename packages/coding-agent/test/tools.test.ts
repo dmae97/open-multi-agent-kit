@@ -661,37 +661,6 @@ describe("edit tool CRLF handling", () => {
 		).rejects.toThrow(/Found 2 occurrences/);
 	});
 
-	it("should apply hashline replace (substr-style) when edit variant is hashline", async () => {
-		const originalEditVariant = Bun.env.PI_EDIT_VARIANT;
-		const originalHashlineReplace = Bun.env.PI_HL_REPLACETXT;
-		Bun.env.PI_EDIT_VARIANT = "hashline";
-		Bun.env.PI_HL_REPLACETXT = "1";
-
-		const hashDir = path.join(os.tmpdir(), `coding-agent-hashline-replace-${Snowflake.next()}`);
-		fs.mkdirSync(hashDir, { recursive: true });
-		const testFile = path.join(hashDir, "app.txt");
-		fs.writeFileSync(testFile, "x = 42\ny = 10\n");
-
-		try {
-			const session = createTestToolSession(hashDir);
-			const hashlineEditTool = new EditTool(session);
-			const result = await hashlineEditTool.execute("hashline-replace-1", {
-				path: testFile,
-				edits: [{ op: "replaceText", old_text: "x = 42", new_text: "x = 99" }],
-			});
-
-			expect(getTextOutput(result)).toContain("Updated");
-			const content = await Bun.file(testFile).text();
-			expect(content).toBe("x = 99\ny = 10\n");
-		} finally {
-			fs.rmSync(hashDir, { recursive: true, force: true });
-			if (originalEditVariant === undefined) delete Bun.env.PI_EDIT_VARIANT;
-			else Bun.env.PI_EDIT_VARIANT = originalEditVariant;
-			if (originalHashlineReplace === undefined) delete Bun.env.PI_HL_REPLACETXT;
-			else Bun.env.PI_HL_REPLACETXT = originalHashlineReplace;
-		}
-	});
-
 	it("should delete file in hashline mode with delete:true", async () => {
 		const originalEditVariant = Bun.env.PI_EDIT_VARIANT;
 		Bun.env.PI_EDIT_VARIANT = "hashline";

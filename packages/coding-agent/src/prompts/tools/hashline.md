@@ -22,10 +22,6 @@ Apply precise file edits using `LINE#ID` tags, anchoring to the file content.
   - `{ op: "prepend", before: "N#ID", content: […] }` or `{ op: "prepend", content: […] }` (no `before` = insert at beginning of file)
   - `{ op: "append", after: "N#ID", content: […] }` or `{ op: "append", content: […] }` (no `after` = insert at end of file)
   - `{ op: "insert", after: "N#ID", before: "N#ID", content: […] }` (between adjacent anchors; safest for blocks)
-{{#if allowReplaceText}}
-- **Content replace**
-  - `{ op: "replaceText", old_text: "…", new_text: "…", all?: boolean }`
-{{/if}}
 - **File-level controls**
   - `{ delete: true, edits: [] }` deletes the file (cannot be combined with `rename`).
   - `{ rename: "new/path.ts", edits: […] }` writes result to new path and removes old path.
@@ -179,18 +175,6 @@ content: ["function validate(data: unknown): boolean {", "  return data != null 
 ```
 The trailing `""` in `content` preserves the blank-line separator. **Anchor to the structural line (`export function ...`), not the blank line above it** — blank lines are ambiguous and may be added or removed by other edits.
 </example>
-
-{{#if allowReplaceText}}
-<example name="content replace (rare)">
-```
-op: "replaceText"
-old_text: "x = 42"
-new_text: "x = 99"
-```
-
-Use only when line anchors aren't available. `old_text` must match exactly one location in the file (or set `"all": true` for all occurrences).
-</example>
-{{/if}}
 
 <example name="file delete">
 ```
