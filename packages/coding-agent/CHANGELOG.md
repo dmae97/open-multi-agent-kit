@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.0.1] - 2026-02-22
 ### Changed
 
 - Simplified hashline edit schema to use unified `first`/`last` anchor fields instead of operation-specific field names (`tag`, `before`, `after`)
