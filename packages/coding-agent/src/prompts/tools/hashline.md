@@ -22,20 +22,20 @@ Every edit has `op`, `pos`, and `lines`. Range replaces also have `end`. Both `p
 - `null` or `[]` — **delete** the line(s) entirely
 
 ### Line or range replace/delete
-- `{ file: "…", edits: [{ op: "replace", pos: "N#ID", lines: null }] }` — delete one line
-- `{ file: "…", edits: [{ op: "replace", pos: "N#ID", end: "M#ID", lines: null }] }` — delete a range
-- `{ file: "…", edits: [{ op: "replace", pos: "N#ID", lines: […] }] }` — replace one line
-- `{ file: "…", edits: [{ op: "replace", pos: "N#ID", end: "M#ID", lines: […] }] }` — replace a range
+- `{ path: "…", edits: [{ op: "replace", pos: "N#ID", lines: null }] }` — delete one line
+- `{ path: "…", edits: [{ op: "replace", pos: "N#ID", end: "M#ID", lines: null }] }` — delete a range
+- `{ path: "…", edits: [{ op: "replace", pos: "N#ID", lines: […] }] }` — replace one line
+- `{ path: "…", edits: [{ op: "replace", pos: "N#ID", end: "M#ID", lines: […] }] }` — replace a range
 
 ### Insert new lines
-- `{ file: "…", edits: [{ op: "prepend", pos: "N#ID", lines: […] }] }` — insert before tagged line
-- `{ file: "…", edits: [{ op: "prepend", lines: […] }] }` — insert at beginning of file (no tag)
-- `{ file: "…", edits: [{ op: "append", pos: "N#ID", lines: […] }] }` — insert after tagged line
-- `{ file: "…", edits: [{ op: "append", lines: […] }] }` — insert at end of file (no tag)
+- `{ path: "…", edits: [{ op: "prepend", pos: "N#ID", lines: […] }] }` — insert before tagged line
+- `{ path: "…", edits: [{ op: "prepend", lines: […] }] }` — insert at beginning of file (no tag)
+- `{ path: "…", edits: [{ op: "append", pos: "N#ID", lines: […] }] }` — insert after tagged line
+- `{ path: "…", edits: [{ op: "append", lines: […] }] }` — insert at end of file (no tag)
 
 ### File-level controls
-- `{ file: "…", delete: true, edits: [] }` — delete the file
-- `{ file: "…", move: "new/path.ts", edits: […] }` — move file to new path (edits applied first)
+- `{ path: "…", delete: true, edits: [] }` — delete the file
+- `{ path: "…", move: "new/path.ts", edits: […] }` — move file to new path (edits applied first)
 **Atomicity:** all ops in one call validate against the same pre-edit snapshot; tags reference the last `read`. Edits are applied bottom-up, so earlier tags stay valid even when later ops add or remove lines.
 </operations>
 
@@ -44,6 +44,7 @@ Every edit has `op`, `pos`, and `lines`. Range replaces also have `end`. Both `p
 2. **No no-ops:** replacement MUST differ from current.
 3. **Prefer insertion over neighbor rewrites:** You SHOULD anchor on structural boundaries (`}`, `]`, `},`), not interior lines.
 4. **For swaps/moves:** You SHOULD prefer one range op over multiple single-line ops.
+5. **Range end tag:** When replacing a block (e.g., an `if` body), the `end` tag MUST include the block's closing brace/bracket — not just the last interior line. Verify the `end` tag covers all lines being logically removed, including trailing `}`, `]`, or `)`. An off-by-one on `end` orphans a brace and breaks syntax.
 </rules>
 
 <recovery>
@@ -57,7 +58,7 @@ Every edit has `op`, `pos`, and `lines`. Range replaces also have `end`. Both `p
 ```
 ```
 {
-  file: "…",
+  path: "…",
   edits: [{
     op: "replace",
     pos: "{{hlineref 23 "  const timeout: number = 5000;"}}",
@@ -71,7 +72,7 @@ Every edit has `op`, `pos`, and `lines`. Range replaces also have `end`. Both `p
 Single line — `lines: null` deletes entirely:
 ```
 {
-  file: "…",
+  path: "…",
   edits: [{
     op: "replace",
     pos: "{{hlineref 7 "// @ts-ignore"}}",
@@ -82,7 +83,7 @@ Single line — `lines: null` deletes entirely:
 Range — add `end`:
 ```
 {
-  file: "…",
+  path: "…",
   edits: [{
     op: "replace",
     pos: "{{hlineref 80 "  // TODO: remove after migration"}}",
@@ -99,7 +100,7 @@ Range — add `end`:
 ```
 ```
 {
-  file: "…",
+  path: "…",
   edits: [{
     op: "replace",
     pos: "{{hlineref 14 "  placeholder: \"DO NOT SHIP\","}}",
@@ -118,7 +119,7 @@ Range — add `end`:
 ```
 ```
 {
-  file: "…",
+  path: "…",
   edits: [{
     op: "replace",
     pos: "{{hlineref 60 "    } catch (err) {"}}",
@@ -141,7 +142,7 @@ Range — add `end`:
 ```
 ```
 {
-  file: "…",
+  path: "…",
   edits: [{
     op: "prepend",
     pos: "{{hlineref 45 "  \"test\": \"bun test\""}}",
@@ -168,7 +169,7 @@ Bad — append after "}"
 Good — anchors to structural line:
 ```
 {
-  file: "…",
+  path: "…",
   edits: [{
     op: "prepend",
     pos: "{{hlineref 103 "export function serialize(data: unknown): string {"}}",
@@ -184,7 +185,7 @@ Good — anchors to structural line:
 </example>
 
 <critical>
-- Edit payload: `{ file, edits[] }`. Each entry: `op`, `lines`, optional `pos`/`end`. No extra keys.
+- Edit payload: `{ path, edits[] }`. Each entry: `op`, `lines`, optional `pos`/`end`. No extra keys.
 - Every tag MUST be copied exactly from fresh tool result as `N#ID`.
 - You MUST re-read after each edit call before issuing another on same file.
 </critical>

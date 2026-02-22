@@ -108,14 +108,14 @@ export { ApplyPatchError, EditMatchError, ParseError } from "./types";
 // ═══════════════════════════════════════════════════════════════════════════
 
 const replaceEditSchema = Type.Object({
-	file: Type.String({ description: "File path (relative or absolute)" }),
+	path: Type.String({ description: "File path (relative or absolute)" }),
 	old_text: Type.String({ description: "Text to find (fuzzy whitespace matching enabled)" }),
 	new_text: Type.String({ description: "Replacement text" }),
 	all: Type.Optional(Type.Boolean({ description: "Replace all occurrences (default: unique match required)" })),
 });
 
 const patchEditSchema = Type.Object({
-	file: Type.String({ description: "File path" }),
+	path: Type.String({ description: "File path" }),
 	op: Type.Optional(
 		StringEnum(["create", "delete", "update"], {
 			description: "Operation (default: update)",
@@ -192,10 +192,10 @@ const hashlineEditSchema = Type.Object(
 
 const hashlineEditParamsSchema = Type.Object(
 	{
-		file: Type.String({ description: "path" }),
-		edits: Type.Array(hashlineEditSchema, { description: "edits over $file" }),
-		delete: Type.Optional(Type.Boolean({ description: "If true, delete $file" })),
-		move: Type.Optional(Type.String({ description: "If set, move $file to $move" })),
+		path: Type.String({ description: "path" }),
+		edits: Type.Array(hashlineEditSchema, { description: "edits over $path" }),
+		delete: Type.Optional(Type.Boolean({ description: "If true, delete $path" })),
+		move: Type.Optional(Type.String({ description: "If set, move $path to $move" })),
 	},
 	{ additionalProperties: false },
 );
@@ -489,7 +489,7 @@ export class EditTool implements AgentTool<TInput> {
 		// Hashline mode execution
 		// ─────────────────────────────────────────────────────────────────
 		if (this.mode === "hashline") {
-			const { file: path, edits, delete: deleteFile, move } = params as HashlineParams;
+			const { path, edits, delete: deleteFile, move } = params as HashlineParams;
 
 			enforcePlanModeWrite(this.session, path, { op: deleteFile ? "delete" : "update", move });
 
@@ -659,7 +659,7 @@ export class EditTool implements AgentTool<TInput> {
 		// Patch mode execution
 		// ─────────────────────────────────────────────────────────────────
 		if (this.mode === "patch") {
-			const { file: path, op: rawOp, rename, diff } = params as PatchParams;
+			const { path, op: rawOp, rename, diff } = params as PatchParams;
 
 			// Normalize unrecognized operations to "update"
 			const op: Operation = rawOp === "create" || rawOp === "delete" ? rawOp : "update";
@@ -741,7 +741,7 @@ export class EditTool implements AgentTool<TInput> {
 		// ─────────────────────────────────────────────────────────────────
 		// Replace mode execution
 		// ─────────────────────────────────────────────────────────────────
-		const { file: path, old_text, new_text, all } = params as ReplaceParams;
+		const { path, old_text, new_text, all } = params as ReplaceParams;
 
 		enforcePlanModeWrite(this.session, path);
 

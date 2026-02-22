@@ -138,21 +138,25 @@ function injectIntentIntoSchema(schema: unknown): unknown {
 		? requiredValue.filter((item): item is string => typeof item === "string")
 		: [];
 	if (INTENT_FIELD in properties) {
-		if (required.includes(INTENT_FIELD)) return schema;
+		const { [INTENT_FIELD]: intentProp, ...rest } = properties;
+		const needsReorder = Object.keys(properties)[0] !== INTENT_FIELD;
+		const needsRequired = !required.includes(INTENT_FIELD);
+		if (!needsReorder && !needsRequired) return schema;
 		return {
 			...schemaRecord,
-			required: [...required, INTENT_FIELD],
+			...(needsReorder ? { properties: { [INTENT_FIELD]: intentProp, ...rest } } : {}),
+			...(needsRequired ? { required: [...required, INTENT_FIELD] } : {}),
 		};
 	}
 	return {
 		...schemaRecord,
 		properties: {
-			...properties,
 			[INTENT_FIELD]: {
 				type: "string",
 				description:
 					"Describe intent as one sentence in present participle form (e.g., Inserting comment before the function) with no trailing period",
 			},
+			...properties,
 		},
 		required: [...required, INTENT_FIELD],
 	};

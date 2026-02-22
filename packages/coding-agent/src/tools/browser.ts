@@ -380,7 +380,7 @@ const browserSchema = Type.Object({
 		Type.Object({
 			width: Type.Number({ description: "Viewport width in pixels" }),
 			height: Type.Number({ description: "Viewport height in pixels" }),
-			deviceScaleFactor: Type.Optional(Type.Number({ description: "Device scale factor" })),
+			device_scale_factor: Type.Optional(Type.Number({ description: "Device scale factor" })),
 		}),
 	),
 	delta_x: Type.Optional(Type.Number({ description: "Scroll delta X (scroll)" })),
@@ -515,7 +515,14 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 	async #resetBrowser(params?: BrowserParams): Promise<Page> {
 		await this.#closeBrowser();
 		this.#currentHeadless = this.session.settings.get("browser.headless");
-		const initialViewport = params?.viewport ?? DEFAULT_VIEWPORT;
+		const vp = params?.viewport;
+		const initialViewport = vp
+			? {
+					width: vp.width,
+					height: vp.height,
+					deviceScaleFactor: vp.device_scale_factor ?? DEFAULT_VIEWPORT.deviceScaleFactor,
+				}
+			: DEFAULT_VIEWPORT;
 		const puppeteer = await loadPuppeteer();
 		this.#browser = await puppeteer.launch({
 			headless: this.#currentHeadless,
@@ -556,8 +563,15 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 	}
 
 	async #applyViewport(page: Page, viewport?: BrowserParams["viewport"]): Promise<void> {
-		const target = viewport ?? DEFAULT_VIEWPORT;
-		await page.setViewport(target);
+		if (!viewport) {
+			await page.setViewport(DEFAULT_VIEWPORT);
+			return;
+		}
+		await page.setViewport({
+			width: viewport.width,
+			height: viewport.height,
+			deviceScaleFactor: viewport.device_scale_factor ?? DEFAULT_VIEWPORT.deviceScaleFactor,
+		});
 	}
 
 	async #clearElementCache(): Promise<void> {

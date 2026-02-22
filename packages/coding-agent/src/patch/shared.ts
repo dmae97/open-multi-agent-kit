@@ -71,7 +71,6 @@ export interface EditToolDetails {
 interface EditRenderArgs {
 	path?: string;
 	file_path?: string;
-	file?: string;
 	oldText?: string;
 	newText?: string;
 	patch?: string;
@@ -220,7 +219,7 @@ export const editToolRenderer = {
 	mergeCallAndResult: true,
 
 	renderCall(args: EditRenderArgs, options: RenderResultOptions, uiTheme: Theme): Component {
-		const rawPath = args.file_path || args.path || args.file || "";
+		const rawPath = args.file_path || args.path || "";
 		const filePath = shortenPath(rawPath);
 		const editLanguage = getLanguageFromPath(rawPath) ?? "text";
 		const editIcon = uiTheme.fg("muted", uiTheme.getLangIcon(editLanguage));
@@ -275,7 +274,7 @@ export const editToolRenderer = {
 		uiTheme: Theme,
 		args?: EditRenderArgs,
 	): Component {
-		const rawPath = args?.file_path || args?.path || args?.file || "";
+		const rawPath = args?.file_path || args?.path || "";
 		const filePath = shortenPath(rawPath);
 		const editLanguage = getLanguageFromPath(rawPath) ?? "text";
 		const editIcon = uiTheme.fg("muted", uiTheme.getLangIcon(editLanguage));

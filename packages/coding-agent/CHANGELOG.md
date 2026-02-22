@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- Renamed `file` parameter to `path` in replace, patch, and hashline edit operations
+
+### Added
+
+- Added clarification in hashline edit documentation that the `end` tag must include closing braces/brackets when replacing blocks to prevent syntax errors
+
+### Changed
+
+- Renamed `deviceScaleFactor` parameter to `device_scale_factor` in browser viewport configuration for consistency with snake_case naming convention
+
 ## [13.0.1] - 2026-02-22
 ### Changed
 
