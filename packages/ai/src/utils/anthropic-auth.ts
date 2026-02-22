@@ -1,11 +1,10 @@
 /**
  * Anthropic Authentication
  *
- * 4-tier auth resolution:
+ * 3-tier auth resolution:
  *   1. ANTHROPIC_SEARCH_API_KEY / ANTHROPIC_SEARCH_BASE_URL env vars
- *   2. Provider with api="anthropic-messages" in ~/.omp/agent/models.json
- *   3. OAuth credentials in ~/.omp/agent/agent.db (with expiry check)
- *   4. ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL fallback
+ *   2. OAuth credentials in ~/.omp/agent/agent.db (with expiry check)
+ *   3. ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL fallback
  */
 import { $env } from "@oh-my-pi/pi-utils";
 import { getAgentDbPath } from "@oh-my-pi/pi-utils/dirs";
@@ -18,18 +17,6 @@ export interface AnthropicAuthConfig {
 	apiKey: string;
 	baseUrl: string;
 	isOAuth: boolean;
-}
-
-/** models.json structure for provider resolution */
-export interface ModelsJson {
-	providers?: Record<
-		string,
-		{
-			baseUrl?: string;
-			apiKey?: string;
-			api?: string;
-		}
-	>;
 }
 
 /** OAuth credential for Anthropic API access */
@@ -95,11 +82,10 @@ async function readAnthropicOAuthCredentials(store?: AuthCredentialStore): Promi
 }
 
 /**
- * Finds Anthropic auth config using 4-tier priority:
+ * Finds Anthropic auth config using 3-tier priority:
  *   1. ANTHROPIC_SEARCH_API_KEY / ANTHROPIC_SEARCH_BASE_URL
- *   2. Provider with api="anthropic-messages" in models.json
- *   3. OAuth in agent.db (with 5-minute expiry buffer)
- *   4. ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL fallback
+ *   2. OAuth in agent.db (with 5-minute expiry buffer)
+ *   3. ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL fallback
  * @param store - Optional credential store (creates one from default db path if not provided)
  * @returns The first valid auth configuration found, or null if none available
  */

@@ -718,6 +718,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const enableLsp = options.enableLsp ?? true;
 
 	let artifactManager: ArtifactManager | null = null;
+	let artifactManagerSessionFile: string | null = null;
 	const toolSession: ToolSession = {
 		cwd,
 		hasUI: options.hasUI ?? false,
@@ -746,15 +747,18 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		getPlanModeState: () => session.getPlanModeState(),
 		getCompactContext: () => session.formatCompactContext(),
 		getArtifactManager: () => {
-			if (artifactManager) {
-				return artifactManager;
-			}
 			const sessionFile = sessionManager.getSessionFile();
 			if (!sessionFile) {
+				artifactManager = null;
+				artifactManagerSessionFile = null;
 				return null;
+			}
+			if (artifactManager && artifactManagerSessionFile === sessionFile) {
+				return artifactManager;
 			}
 			const manager = new ArtifactManager(sessionFile);
 			artifactManager = manager;
+			artifactManagerSessionFile = sessionFile;
 			return manager;
 		},
 		settings,

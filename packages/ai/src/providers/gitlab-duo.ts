@@ -137,7 +137,12 @@ export const MODEL_MAPPINGS: Record<string, GitLabModelMapping> = {
 };
 
 export function getModelMapping(modelId: string): GitLabModelMapping | undefined {
-	return MODEL_MAPPINGS[modelId];
+	const direct = MODEL_MAPPINGS[modelId];
+	if (direct) return direct;
+
+	// Support canonical model IDs (e.g. "gpt-5-codex", "claude-sonnet-4-5-20250929")
+	// in addition to Duo aliases (e.g. "duo-chat-gpt-5-codex").
+	return Object.values(MODEL_MAPPINGS).find(mapping => mapping.model === modelId);
 }
 
 export function getGitLabDuoModels(): Model<Api>[] {

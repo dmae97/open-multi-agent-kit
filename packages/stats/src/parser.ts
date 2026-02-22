@@ -56,9 +56,9 @@ export async function parseSessionFile(
 	sessionPath: string,
 	fromOffset = 0,
 ): Promise<{ stats: MessageStats[]; newOffset: number }> {
-	let text: string;
+	let bytes: Uint8Array;
 	try {
-		text = await Bun.file(sessionPath).text();
+		bytes = await Bun.file(sessionPath).bytes();
 	} catch (err) {
 		if (isEnoent(err)) return { stats: [], newOffset: fromOffset };
 		throw err;
@@ -66,8 +66,11 @@ export async function parseSessionFile(
 
 	const folder = extractFolderFromPath(sessionPath);
 	const stats: MessageStats[] = [];
-	const unprocessed = fromOffset > 0 ? text.slice(fromOffset) : text;
-	const entries = Bun.JSONL.parse(unprocessed) as SessionEntry[];
+	const start = Math.max(0, Math.min(fromOffset, bytes.length));
+	const unprocessed = bytes.subarray(start);
+	const { values, error, read } = Bun.JSONL.parseChunk(unprocessed);
+	if (error) throw error;
+	const entries = values as SessionEntry[];
 
 	for (const entry of entries) {
 		if (isAssistantMessage(entry)) {
@@ -76,7 +79,7 @@ export async function parseSessionFile(
 		}
 	}
 
-	return { stats, newOffset: text.length + 1 };
+	return { stats, newOffset: start + read };
 }
 
 /**

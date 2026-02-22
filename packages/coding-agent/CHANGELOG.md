@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added support for GitLab Duo authentication provider
@@ -58,6 +59,7 @@
 
 ### Fixed
 
+- Fixed artifact manager caching to properly invalidate when session file changes, preventing stale artifact references
 - Fixed truncation notice formatting consistency across all tool renderers by centralizing logic
 - Fixed UTF-8 boundary handling in byte truncation to prevent invalid character sequences
 - Fixed memory efficiency in `OutputSink` by using windowed truncation instead of full-buffer encoding
