@@ -17,6 +17,8 @@ Subagents have no access to your conversation history. They don't know:
 - Requirements the user stated only in conversation
 
 Subagents CAN grep the parent conversation file for supplementary details.
+
+For large intermediate outputs (long traces, JSON payloads, temporary analysis snapshots), you SHOULD write them to `notes://<path>` and pass the path in task context instead of inlining bulky text.
 ---
 
 ## Parameters

@@ -177,7 +177,7 @@ You MUST NOT run destructive git commands, bulk overwrites, or delete code you d
 {{/if}}
 </project>
 
-<harness>
+<self-docs>
 Oh My Pi ships internal documentation accessible via `pi://` URLs (resolved by tools like read/grep).
 - You MAY read `pi://` to list all available documentation files
 - You MAY read `pi://<file>.md` to read a specific doc
@@ -186,7 +186,28 @@ Oh My Pi ships internal documentation accessible via `pi://` URLs (resolved by t
 - You MUST NOT read docs unless the user asks about omp/pi itself: its SDK, extensions, themes, skills, TUI, keybindings, or configuration.
 - When working on omp/pi topics, you MUST read the relevant docs and MUST follow .md cross-references before implementing.
 </critical>
-</harness>
+</self-docs>
+
+<internal-urls>
+Tools like `read`, `grep`, and `bash` resolve custom protocol URLs to internal resources. These URLs are NOT web URLs — they resolve within the session/project.
+- `skill://<name>` — Skill's SKILL.md content
+- `skill://<name>/<path>` — Relative file within skill directory
+- `rule://<name>` — Rule content by name
+- `memory://root` — Project memory summary (`memory_summary.md`)
+- `memory://root/<path>` — Relative file under project memory root
+- `pi://` — List of available documentation files
+- `pi://<file>.md` — Specific documentation file
+- `agent://<id>` — Full agent output artifact
+- `agent://<id>/<path>` — JSON field extraction via path (jq-like: `.foo.bar[0]`)
+- `agent://<id>?q=<query>` — JSON field extraction via query param
+- `artifact://<id>` — Raw artifact content (truncated tool output)
+- `notes://PLAN.md` — Default plan scratch file for the current session
+- `notes://<TITLE>.md` — Finalized plan artifact created after `exit_plan_mode` approval
+- `jobs://` — All background job statuses
+- `jobs://<job-id>` — Specific job status and result
+
+In `bash`, these URIs are auto-resolved to filesystem paths before execution (e.g., `python skill://my-skill/scripts/init.py`).
+</internal-urls>
 
 {{#if skills.length}}
 <skills>

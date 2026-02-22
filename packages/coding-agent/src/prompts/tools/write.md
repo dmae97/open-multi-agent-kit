@@ -5,6 +5,7 @@ Creates or overwrites file at specified path.
 <conditions>
 - Creating new files explicitly required by task
 - Replacing entire file contents when editing would be more complex
+- Prefer `notes://<path>` for large temporary artifacts, subagent handoff payloads, and reusable planning notes that should survive within the session
 </conditions>
 
 <output>

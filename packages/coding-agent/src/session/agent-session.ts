@@ -75,7 +75,7 @@ import { ExtensionToolWrapper } from "../extensibility/extensions/wrapper";
 import type { HookCommandContext } from "../extensibility/hooks/types";
 import type { Skill, SkillWarning } from "../extensibility/skills";
 import { expandSlashCommand, type FileSlashCommand } from "../extensibility/slash-commands";
-import { resolvePlanUrlToPath } from "../internal-urls";
+import { resolveNotesUrlToPath } from "../internal-urls";
 import { executePython as executePythonCommand, type PythonResult } from "../ipy/executor";
 import { getCurrentThemeName, theme } from "../modes/theme/theme";
 import { normalizeDiff, normalizeToLF, ParseError, previewPatch, stripBom } from "../patch";
@@ -310,6 +310,7 @@ export class AgentSession {
 	#pendingNextTurnMessages: CustomMessage[] = [];
 	#planModeState: PlanModeState | undefined;
 	#planReferenceSent = false;
+	#planReferencePath = "notes://PLAN.md";
 
 	// Compaction state
 	#compactionAbortController: AbortController | undefined = undefined;
@@ -1491,11 +1492,16 @@ export class AgentSession {
 		this.#planModeState = state;
 		if (state?.enabled) {
 			this.#planReferenceSent = false;
+			this.#planReferencePath = state.planFilePath;
 		}
 	}
 
 	markPlanReferenceSent(): void {
 		this.#planReferenceSent = true;
+	}
+
+	setPlanReferencePath(path: string): void {
+		this.#planReferencePath = path;
 	}
 
 	/**
@@ -1546,10 +1552,10 @@ export class AgentSession {
 		if (this.#planModeState?.enabled) return null;
 		if (this.#planReferenceSent) return null;
 
-		const planFilePath = `plan://${this.sessionManager.getSessionId()}/plan.md`;
-		const resolvedPlanPath = resolvePlanUrlToPath(planFilePath, {
-			getPlansDirectory: () => this.settings.getPlansDirectory(),
-			cwd: this.sessionManager.getCwd(),
+		const planFilePath = this.#planReferencePath;
+		const resolvedPlanPath = resolveNotesUrlToPath(planFilePath, {
+			getArtifactsDir: () => this.sessionManager.getArtifactsDir(),
+			getSessionId: () => this.sessionManager.getSessionId(),
 		});
 		let planContent: string;
 		try {
@@ -1580,19 +1586,19 @@ export class AgentSession {
 	async #buildPlanModeMessage(): Promise<CustomMessage | null> {
 		const state = this.#planModeState;
 		if (!state?.enabled) return null;
-		const sessionPlanUrl = `plan://${this.sessionManager.getSessionId()}/plan.md`;
-		const resolvedPlanPath = state.planFilePath.startsWith("plan://")
-			? resolvePlanUrlToPath(state.planFilePath, {
-					getPlansDirectory: () => this.settings.getPlansDirectory(),
-					cwd: this.sessionManager.getCwd(),
+		const sessionPlanUrl = "notes://PLAN.md";
+		const resolvedPlanPath = state.planFilePath.startsWith("notes://")
+			? resolveNotesUrlToPath(state.planFilePath, {
+					getArtifactsDir: () => this.sessionManager.getArtifactsDir(),
+					getSessionId: () => this.sessionManager.getSessionId(),
 				})
 			: resolveToCwd(state.planFilePath, this.sessionManager.getCwd());
-		const resolvedSessionPlan = resolvePlanUrlToPath(sessionPlanUrl, {
-			getPlansDirectory: () => this.settings.getPlansDirectory(),
-			cwd: this.sessionManager.getCwd(),
+		const resolvedSessionPlan = resolveNotesUrlToPath(sessionPlanUrl, {
+			getArtifactsDir: () => this.sessionManager.getArtifactsDir(),
+			getSessionId: () => this.sessionManager.getSessionId(),
 		});
 		const displayPlanPath =
-			state.planFilePath.startsWith("plan://") || resolvedPlanPath !== resolvedSessionPlan
+			state.planFilePath.startsWith("notes://") || resolvedPlanPath !== resolvedSessionPlan
 				? state.planFilePath
 				: sessionPlanUrl;
 
@@ -2237,6 +2243,7 @@ export class AgentSession {
 
 		this.#todoReminderCount = 0;
 		this.#planReferenceSent = false;
+		this.#planReferencePath = "notes://PLAN.md";
 		this.#reconnectToAgent();
 
 		// Emit session_switch event with reason "new" to hooks

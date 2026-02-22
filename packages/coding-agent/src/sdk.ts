@@ -49,8 +49,8 @@ import {
 	InternalUrlRouter,
 	JobsProtocolHandler,
 	MemoryProtocolHandler,
+	NotesProtocolHandler,
 	PiProtocolHandler,
-	PlanProtocolHandler,
 	RuleProtocolHandler,
 	SkillProtocolHandler,
 } from "./internal-urls";
@@ -812,20 +812,20 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		asyncJobManager,
 	};
 
-	// Initialize internal URL router for internal protocols (agent://, artifact://, plan://, memory://, skill://, rule://)
+	// Initialize internal URL router for internal protocols (agent://, artifact://, memory://, skill://, rule://, notes://)
 	const internalRouter = new InternalUrlRouter();
 	const getArtifactsDir = () => sessionManager.getArtifactsDir();
 	internalRouter.register(new AgentProtocolHandler({ getArtifactsDir }));
 	internalRouter.register(new ArtifactProtocolHandler({ getArtifactsDir }));
 	internalRouter.register(
-		new PlanProtocolHandler({
-			getPlansDirectory: () => settings.getPlansDirectory(),
-			cwd,
+		new MemoryProtocolHandler({
+			getMemoryRoot: () => getMemoryRoot(agentDir, settings.getCwd()),
 		}),
 	);
 	internalRouter.register(
-		new MemoryProtocolHandler({
-			getMemoryRoot: () => getMemoryRoot(agentDir, settings.getCwd()),
+		new NotesProtocolHandler({
+			getArtifactsDir,
+			getSessionId: () => sessionManager.getSessionId(),
 		}),
 	);
 	internalRouter.register(

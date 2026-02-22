@@ -1,19 +1,19 @@
-import { resolvePlanUrlToPath } from "../internal-urls";
+import { resolveNotesUrlToPath } from "../internal-urls";
 import type { ToolSession } from ".";
 import { resolveToCwd } from "./path-utils";
 import { ToolError } from "./tool-errors";
 
-const PLAN_URL_PREFIX = "plan://";
+const NOTES_URL_PREFIX = "notes://";
 
 export function resolvePlanPath(session: ToolSession, targetPath: string): string {
-	if (!targetPath.startsWith(PLAN_URL_PREFIX)) {
-		return resolveToCwd(targetPath, session.cwd);
+	if (targetPath.startsWith(NOTES_URL_PREFIX)) {
+		return resolveNotesUrlToPath(targetPath, {
+			getArtifactsDir: session.getArtifactsDir,
+			getSessionId: session.getSessionId,
+		});
 	}
 
-	return resolvePlanUrlToPath(targetPath, {
-		getPlansDirectory: () => session.settings.getPlansDirectory(),
-		cwd: session.cwd,
-	});
+	return resolveToCwd(targetPath, session.cwd);
 }
 
 export function enforcePlanModeWrite(

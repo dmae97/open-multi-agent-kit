@@ -1,6 +1,6 @@
 # Read
 
-Reads files from local filesystem or internal URLs.
+Reads files from local filesystem or harness URLs.
 
 <instruction>
 - Reads up to {{DEFAULT_MAX_LINES}} lines default
@@ -15,16 +15,6 @@ Reads files from local filesystem or internal URLs.
 - Supports images (PNG, JPG) and PDFs
 - For directories, returns formatted listing with modification times
 - You SHOULD parallelize reads when exploring related files
-- Supports internal URLs:
-  - `skill://<name>` - read SKILL.md for a skill
-  - `skill://<name>/<path>` - read relative path within skill directory
-  - `rule://<name>` - read rule content
-  - `memory://root` - read memory summary (`memory_summary.md`)
-  - `memory://root/<path>` - read relative path within project memory root
-  - `agent://<id>` - read agent output artifact
-  - `agent://<id>/<path>` or `agent://<id>?q=<query>` - extract JSON from agent output
-  - `pi://` - list available pi documentation files
-  - `pi://<file>.md` - read a specific pi documentation file
 </instruction>
 
 <output>

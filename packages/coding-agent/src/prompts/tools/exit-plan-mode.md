@@ -1,8 +1,8 @@
-Signals plan completion, requests user approval to begin implementation.
+Signals plan completion, requests user approval, and provides the final plan title for handoff.
 
 <conditions>
 Use when:
-- Plan written to plan file
+- Plan written to `notes://PLAN.md`
 - No unresolved questions about requirements or approach
 - Ready for user review and approval
 </conditions>
@@ -10,16 +10,18 @@ Use when:
 <instruction>
 - You MUST write plan to plan file BEFORE calling this tool
 - Tool reads plan from file—does not take plan content as parameter
+- You MUST provide a `title` argument for the final plan artifact (example: `WP_MIGRATION_PLAN`)
+- `.md` is optional in `title`; it is appended automatically when omitted
 - User sees plan contents when reviewing
 </instruction>
 
 <output>
-Presents plan to user for approval. If approved, exits plan mode with full tool access restored.
+Presents plan to user for approval. If approved, plan mode exits with full tool access restored and the plan is renamed to `notes://<title>.md`.
 </output>
 
 <example name="ready">
-Plan complete at specified path, no open questions.
-→ Call `exit_plan_mode`
+Plan complete at notes://PLAN.md, no open questions.
+→ Call `exit_plan_mode` with `{ "title": "WP_MIGRATION_PLAN" }`
 </example>
 
 <example name="unclear">
@@ -29,6 +31,7 @@ Unsure about auth method (OAuth vs JWT).
 
 <avoid>
 - MUST NOT call before plan is written to file
+- MUST NOT omit `title`
 - MUST NOT use `ask` to request plan approval (this tool does that)
 - MUST NOT call after pure research tasks (no implementation planned)
 </avoid>

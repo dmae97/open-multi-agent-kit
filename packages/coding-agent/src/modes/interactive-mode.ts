@@ -24,7 +24,8 @@ import { type Settings, settings } from "../config/settings";
 import type { ExtensionUIContext, ExtensionUIDialogOptions } from "../extensibility/extensions";
 import type { CompactOptions } from "../extensibility/extensions/types";
 import { BUILTIN_SLASH_COMMANDS, loadSlashCommands } from "../extensibility/slash-commands";
-import { resolvePlanUrlToPath } from "../internal-urls";
+import { resolveNotesUrlToPath } from "../internal-urls";
+import { renameApprovedPlanFile } from "../plan-mode/approved-plan";
 import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" with { type: "text" };
 import type { AgentSession, AgentSessionEvent } from "../session/agent-session";
 import { HistoryStorage } from "../session/history-storage";
@@ -509,19 +510,18 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#renderTodoList();
 	}
 
-	#getPlanFilePath(): string {
-		const sessionId = this.sessionManager.getSessionId();
-		return `plan://${sessionId}/plan.md`;
+	async #getPlanFilePath(): Promise<string> {
+		return "notes://PLAN.md";
 	}
 
 	#resolvePlanFilePath(planFilePath: string): string {
-		if (planFilePath.startsWith("plan://")) {
-			return resolvePlanUrlToPath(planFilePath, {
-				getPlansDirectory: () => this.settings.getPlansDirectory(),
-				cwd: this.sessionManager.getCwd(),
+		if (planFilePath.startsWith("notes://")) {
+			return resolveNotesUrlToPath(planFilePath, {
+				getArtifactsDir: () => this.sessionManager.getArtifactsDir(),
+				getSessionId: () => this.sessionManager.getSessionId(),
 			});
 		}
-		return planFilePath;
+		return path.resolve(this.sessionManager.getCwd(), planFilePath);
 	}
 
 	#updatePlanModeStatus(): void {
@@ -592,7 +592,7 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		this.planModePaused = false;
 
-		const planFilePath = options?.planFilePath ?? this.#getPlanFilePath();
+		const planFilePath = options?.planFilePath ?? (await this.#getPlanFilePath());
 		const previousTools = this.session.getActiveToolNames();
 		const hasExitTool = this.session.getToolByName("exit_plan_mode") !== undefined;
 		const planTools = hasExitTool ? [...previousTools, "exit_plan_mode"] : previousTools;
@@ -672,15 +672,28 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.ui.requestRender();
 	}
 
-	async #approvePlan(planContent: string): Promise<void> {
+	async #approvePlan(
+		planContent: string,
+		options: { planFilePath: string; finalPlanFilePath: string },
+	): Promise<void> {
+		await renameApprovedPlanFile({
+			planFilePath: options.planFilePath,
+			finalPlanFilePath: options.finalPlanFilePath,
+			getArtifactsDir: () => this.sessionManager.getArtifactsDir(),
+			getSessionId: () => this.sessionManager.getSessionId(),
+		});
 		const previousTools = this.#planModePreviousTools ?? this.session.getActiveToolNames();
 		await this.#exitPlanMode({ silent: true, paused: false });
 		await this.handleClearCommand();
 		if (previousTools.length > 0) {
 			await this.session.setActiveToolsByName(previousTools);
 		}
+		this.session.setPlanReferencePath(options.finalPlanFilePath);
 		this.session.markPlanReferenceSent();
-		const prompt = renderPromptTemplate(planModeApprovedPrompt, { planContent });
+		const prompt = renderPromptTemplate(planModeApprovedPrompt, {
+			planContent,
+			finalPlanFilePath: options.finalPlanFilePath,
+		});
 		await this.session.prompt(prompt);
 	}
 
@@ -703,7 +716,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			return;
 		}
 
-		const planFilePath = details.planFilePath || this.planModePlanFilePath || this.#getPlanFilePath();
+		const planFilePath = details.planFilePath || this.planModePlanFilePath || (await this.#getPlanFilePath());
 		this.planModePlanFilePath = planFilePath;
 		const planContent = await this.#readPlanFile(planFilePath);
 		if (!planContent) {
@@ -719,7 +732,14 @@ export class InteractiveMode implements InteractiveModeContext {
 		]);
 
 		if (choice === "Approve and execute") {
-			await this.#approvePlan(planContent);
+			const finalPlanFilePath = details.finalPlanFilePath || planFilePath;
+			try {
+				await this.#approvePlan(planContent, { planFilePath, finalPlanFilePath });
+			} catch (error) {
+				this.showError(
+					`Failed to finalize approved plan: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
 			return;
 		}
 		if (choice === "Refine plan") {

@@ -8,13 +8,36 @@ import type { ToolSession } from ".";
 import { resolvePlanPath } from "./plan-mode-guard";
 import { ToolError } from "./tool-errors";
 
-const exitPlanModeSchema = Type.Object({});
+const exitPlanModeSchema = Type.Object({
+	title: Type.String({ description: "Final plan title, e.g. WP_MIGRATION_PLAN" }),
+});
 
 type ExitPlanModeParams = Static<typeof exitPlanModeSchema>;
+
+function normalizePlanTitle(title: string): { title: string; fileName: string } {
+	const trimmed = title.trim();
+	if (!trimmed) {
+		throw new ToolError("Title is required and must not be empty.");
+	}
+
+	if (trimmed.includes("/") || trimmed.includes("\\") || trimmed.includes("..")) {
+		throw new ToolError("Title must not contain path separators or '..'.");
+	}
+
+	const withExtension = trimmed.toLowerCase().endsWith(".md") ? trimmed : `${trimmed}.md`;
+	if (!/^[A-Za-z0-9_-]+\.md$/.test(withExtension)) {
+		throw new ToolError("Title may only contain letters, numbers, underscores, or hyphens.");
+	}
+
+	const normalizedTitle = withExtension.slice(0, -3);
+	return { title: normalizedTitle, fileName: withExtension };
+}
 
 export interface ExitPlanModeDetails {
 	planFilePath: string;
 	planExists: boolean;
+	title: string;
+	finalPlanFilePath: string;
 }
 
 export class ExitPlanModeTool implements AgentTool<typeof exitPlanModeSchema, ExitPlanModeDetails> {
@@ -29,7 +52,7 @@ export class ExitPlanModeTool implements AgentTool<typeof exitPlanModeSchema, Ex
 
 	async execute(
 		_toolCallId: string,
-		_params: ExitPlanModeParams,
+		params: ExitPlanModeParams,
 		_signal?: AbortSignal,
 		_onUpdate?: AgentToolUpdateCallback<ExitPlanModeDetails>,
 		_context?: AgentToolContext,
@@ -39,7 +62,10 @@ export class ExitPlanModeTool implements AgentTool<typeof exitPlanModeSchema, Ex
 			throw new ToolError("Plan mode is not active.");
 		}
 
+		const normalized = normalizePlanTitle(params.title);
+		const finalPlanFilePath = `notes://${normalized.fileName}`;
 		const resolvedPlanPath = resolvePlanPath(this.session, state.planFilePath);
+		resolvePlanPath(this.session, finalPlanFilePath);
 		let planExists = false;
 		try {
 			const stat = await fs.stat(resolvedPlanPath);
@@ -55,6 +81,8 @@ export class ExitPlanModeTool implements AgentTool<typeof exitPlanModeSchema, Ex
 			details: {
 				planFilePath: state.planFilePath,
 				planExists,
+				title: normalized.title,
+				finalPlanFilePath,
 			},
 		};
 	}
