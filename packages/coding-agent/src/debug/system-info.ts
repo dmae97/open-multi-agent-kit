@@ -1,7 +1,9 @@
 /**
  * System information collection for debug reports.
  */
+
 import * as os from "node:os";
+import { formatBytes } from "@oh-my-pi/pi-utils";
 import { getProjectDir, VERSION } from "@oh-my-pi/pi-utils/dirs";
 
 export interface SystemInfo {
@@ -69,12 +71,6 @@ export async function collectSystemInfo(): Promise<SystemInfo> {
 		shell,
 		terminal,
 	};
-}
-
-/** Format bytes to human-readable string */
-function formatBytes(bytes: number): string {
-	const gb = bytes / (1024 * 1024 * 1024);
-	return `${gb.toFixed(1)} GB`;
 }
 
 /** Format system info for display */

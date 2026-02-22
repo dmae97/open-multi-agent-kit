@@ -8,6 +8,7 @@ import type {
 	UsageStatus,
 	UsageWindow,
 } from "../usage";
+import { isRecord, toNumber } from "../utils";
 
 const DEFAULT_ENDPOINT = "https://api.z.ai";
 const QUOTA_PATH = "/api/monitor/usage/quota/limit";
@@ -40,19 +41,6 @@ interface ZaiQuotaPayload {
 	data?: {
 		limits?: ZaiUsageLimitItem[];
 	};
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function toNumber(value: unknown): number | undefined {
-	if (typeof value === "number" && Number.isFinite(value)) return value;
-	if (typeof value === "string" && value.trim()) {
-		const parsed = Number(value);
-		return Number.isFinite(parsed) ? parsed : undefined;
-	}
-	return undefined;
 }
 
 function parseMillis(value: unknown): number | undefined {

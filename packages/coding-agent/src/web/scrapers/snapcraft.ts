@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, loadPage, tryParseJson } from "./types";
 
 interface SnapcraftPublisher {
 	"display-name"?: string;
@@ -122,12 +122,8 @@ export const handleSnapcraft: SpecialHandler = async (
 		});
 		if (!result.ok) return null;
 
-		let data: SnapcraftResponse;
-		try {
-			data = JSON.parse(result.content) as SnapcraftResponse;
-		} catch {
-			return null;
-		}
+		const data = tryParseJson<SnapcraftResponse>(result.content);
+		if (!data) return null;
 
 		const snapInfo = data.snap ?? data;
 		const name = snapInfo.title ?? snapInfo.name ?? data.name ?? snapName;
@@ -183,17 +179,7 @@ export const handleSnapcraft: SpecialHandler = async (
 			md += `## Description\n\n${descriptionText}\n`;
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "snapcraft",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Snapcraft API"],
-		};
+		return buildResult(md, { url, method: "snapcraft", fetchedAt, notes: ["Fetched via Snapcraft API"] });
 	} catch {}
 
 	return null;

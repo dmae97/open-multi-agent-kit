@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, formatIsoDate, loadPage, tryParseJson } from "./types";
 
 interface NuGetCatalogEntry {
 	id: string;
@@ -60,12 +60,8 @@ export const handleNuGet: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let index: NuGetRegistrationIndex;
-		try {
-			index = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const index = tryParseJson<NuGetRegistrationIndex>(result.content);
+		if (!index) return null;
 
 		if (!index.items?.length) return null;
 
@@ -76,11 +72,9 @@ export const handleNuGet: SpecialHandler = async (
 		if (!latestPage.items && latestPage["@id"]) {
 			const pageResult = await loadPage(latestPage["@id"], { timeout, signal });
 			if (!pageResult.ok) return null;
-			try {
-				latestPage = JSON.parse(pageResult.content);
-			} catch {
-				return null;
-			}
+			const fetched = tryParseJson<NuGetRegistrationPage>(pageResult.content);
+			if (!fetched) return null;
+			latestPage = fetched;
 		}
 
 		if (!latestPage.items?.length) return null;
@@ -97,10 +91,8 @@ export const handleNuGet: SpecialHandler = async (
 				if (!pageItems && page["@id"]) {
 					const pageResult = await loadPage(page["@id"], { timeout: Math.min(timeout, 5), signal });
 					if (pageResult.ok) {
-						try {
-							const fetchedPage = JSON.parse(pageResult.content) as NuGetRegistrationPage;
-							pageItems = fetchedPage.items;
-						} catch {}
+						const fetchedPage = tryParseJson<NuGetRegistrationPage>(pageResult.content);
+						if (fetchedPage) pageItems = fetchedPage.items;
 					}
 				}
 
@@ -128,12 +120,8 @@ export const handleNuGet: SpecialHandler = async (
 		const searchResult = await loadPage(searchUrl, { timeout: Math.min(timeout, 5), signal });
 
 		if (searchResult.ok) {
-			try {
-				const searchData = JSON.parse(searchResult.content) as {
-					data?: Array<{ totalDownloads?: number }>;
-				};
-				totalDownloads = searchData.data?.[0]?.totalDownloads ?? null;
-			} catch {}
+			const searchData = tryParseJson<{ data?: Array<{ totalDownloads?: number }> }>(searchResult.content);
+			if (searchData) totalDownloads = searchData.data?.[0]?.totalDownloads ?? null;
 		}
 
 		// Format markdown output
@@ -156,8 +144,7 @@ export const handleNuGet: SpecialHandler = async (
 		if (targetEntry.projectUrl) md += `**Project URL:** ${targetEntry.projectUrl}\n`;
 		if (targetEntry.tags?.length) md += `**Tags:** ${targetEntry.tags.join(", ")}\n`;
 		if (targetEntry.published) {
-			const pubDate = targetEntry.published.split("T")[0];
-			md += `**Published:** ${pubDate}\n`;
+			md += `**Published:** ${formatIsoDate(targetEntry.published)}\n`;
 		}
 
 		// Show dependencies by target framework
@@ -183,22 +170,12 @@ export const handleNuGet: SpecialHandler = async (
 			const recentVersions = latestPage.items.slice(-5).reverse();
 			for (const item of recentVersions) {
 				const entry = item.catalogEntry;
-				const pubDate = entry.published?.split("T")[0] || "unknown";
+				const pubDate = formatIsoDate(entry.published) || "unknown";
 				md += `- **${entry.version}** (${pubDate})\n`;
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "nuget",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via NuGet API"],
-		};
+		return buildResult(md, { url, method: "nuget", fetchedAt, notes: ["Fetched via NuGet API"] });
 	} catch {}
 
 	return null;

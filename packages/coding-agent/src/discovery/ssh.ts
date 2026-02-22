@@ -10,6 +10,7 @@ import { registerProvider } from "../capability";
 import { readFile } from "../capability/fs";
 import { type SSHHost, sshCapability } from "../capability/ssh";
 import type { LoadContext, LoadResult, SourceMeta } from "../capability/types";
+import { expandTilde } from "../tools/path-utils";
 import { createSourceMeta, expandEnvVarsDeep, parseJSON } from "./helpers";
 
 const PROVIDER_ID = "ssh-json";
@@ -28,14 +29,6 @@ interface SSHConfigFile {
 			description?: string;
 		}
 	>;
-}
-
-function expandTilde(value: string, home: string): string {
-	if (value === "~") return home;
-	if (value.startsWith("~/") || value.startsWith("~\\")) {
-		return `${home}${value.slice(1)}`;
-	}
-	return value;
 }
 
 function parsePort(value: number | string | undefined): number | undefined {

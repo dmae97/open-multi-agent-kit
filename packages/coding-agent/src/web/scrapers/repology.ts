@@ -1,5 +1,4 @@
-import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage, type RenderResult, type SpecialHandler, tryParseJson } from "./types";
 
 interface RepologyPackage {
 	repo: string;
@@ -128,12 +127,8 @@ export const handleRepology: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let packages: RepologyPackage[];
-		try {
-			packages = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const packages = tryParseJson<RepologyPackage[]>(result.content);
+		if (!packages) return null;
 
 		// Empty response means package not found
 		if (!Array.isArray(packages) || packages.length === 0) return null;
@@ -245,17 +240,7 @@ export const handleRepology: SpecialHandler = async (
 
 		md += `\n---\n\n[View on Repology](${url})\n`;
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "repology",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Repology API"],
-		};
+		return buildResult(md, { url, method: "repology", fetchedAt, notes: ["Fetched via Repology API"] });
 	} catch {}
 
 	return null;

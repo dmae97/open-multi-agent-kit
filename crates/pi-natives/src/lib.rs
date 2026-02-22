@@ -37,3 +37,4 @@ pub mod pty;
 pub mod shell;
 pub mod task;
 pub mod text;
+pub(crate) mod utils;

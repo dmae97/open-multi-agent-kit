@@ -1,6 +1,7 @@
 import { readModelCache, writeModelCache } from "./model-cache";
 import { type GeneratedProvider, getBundledModels } from "./models";
 import type { Api, Model, Provider } from "./types";
+import { isRecord } from "./utils";
 
 const DEFAULT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const NON_AUTHORITATIVE_RETRY_MS = 5 * 60 * 1000;
@@ -318,10 +319,6 @@ function isModelLike(value: unknown): value is Model<Api> {
 		return false;
 	}
 	return true;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
 }
 
 function isModelInputArray(value: unknown): value is ("text" | "image")[] {

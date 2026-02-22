@@ -1,21 +1,12 @@
 import type { ModelManagerOptions } from "../model-manager";
 import { getBundledModels, getBundledProviders } from "../models";
 import type { Api, Model } from "../types";
+import { isAnthropicOAuthToken, isRecord, toNumber, toPositiveNumber } from "../utils";
 import {
 	fetchOpenAICompatibleModels,
 	type OpenAICompatibleModelMapperContext,
 	type OpenAICompatibleModelRecord,
 } from "../utils/discovery/openai-compatible";
-
-// ---------------------------------------------------------------------------
-// Shared helper
-// ---------------------------------------------------------------------------
-
-function toNumber(v: unknown): number {
-	if (typeof v === "number") return v;
-	if (typeof v === "string") return parseFloat(v) || 0;
-	return 0;
-}
 
 const MODELS_DEV_URL = "https://models.dev/api.json";
 const ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1";
@@ -41,17 +32,6 @@ export interface ModelsDevModel {
 	};
 	status?: string;
 	provider?: { npm?: string };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
-}
-
-function toPositiveNumber(value: unknown, fallback: number): number {
-	if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
-		return fallback;
-	}
-	return value;
 }
 
 function toModelName(value: unknown, fallback: string): string {
@@ -112,10 +92,10 @@ function mapAnthropicModelsDev(payload: unknown, baseUrl: string): Model<"anthro
 			reasoning: model.reasoning === true,
 			input: toInputCapabilities(model.modalities?.input),
 			cost: {
-				input: toNumber(model.cost?.input),
-				output: toNumber(model.cost?.output),
-				cacheRead: toNumber(model.cost?.cache_read),
-				cacheWrite: toNumber(model.cost?.cache_write),
+				input: toNumber(model.cost?.input) ?? 0,
+				output: toNumber(model.cost?.output) ?? 0,
+				cacheRead: toNumber(model.cost?.cache_read) ?? 0,
+				cacheWrite: toNumber(model.cost?.cache_write) ?? 0,
 			},
 			contextWindow: toPositiveNumber(model.limit?.context, UNK_CONTEXT_WINDOW),
 			maxTokens: toPositiveNumber(model.limit?.output, UNK_MAX_TOKENS),
@@ -124,10 +104,6 @@ function mapAnthropicModelsDev(payload: unknown, baseUrl: string): Model<"anthro
 
 	models.sort((left, right) => left.id.localeCompare(right.id));
 	return models;
-}
-
-function isAnthropicOAuthToken(apiKey: string): boolean {
-	return apiKey.includes("sk-ant-oat");
 }
 
 function buildAnthropicDiscoveryHeaders(apiKey: string): Record<string, string> {
@@ -729,10 +705,10 @@ export function vercelAiGatewayModelManagerOptions(
 						reasoning: tags.includes("reasoning"),
 						input: tags.includes("vision") ? ["text", "image"] : ["text"],
 						cost: {
-							input: toNumber(pricing?.input) * 1_000_000,
-							output: toNumber(pricing?.output) * 1_000_000,
-							cacheRead: toNumber(pricing?.input_cache_read) * 1_000_000,
-							cacheWrite: toNumber(pricing?.input_cache_write) * 1_000_000,
+							input: (toNumber(pricing?.input) ?? 0) * 1_000_000,
+							output: (toNumber(pricing?.output) ?? 0) * 1_000_000,
+							cacheRead: (toNumber(pricing?.input_cache_read) ?? 0) * 1_000_000,
+							cacheWrite: (toNumber(pricing?.input_cache_write) ?? 0) * 1_000_000,
 						},
 						contextWindow:
 							typeof entry.context_window === "number" ? entry.context_window : defaults.contextWindow,
@@ -1455,10 +1431,10 @@ export function mapModelsDevToModels(
 				reasoning: m.reasoning === true,
 				input: toInputCapabilities(m.modalities?.input),
 				cost: {
-					input: toNumber(m.cost?.input),
-					output: toNumber(m.cost?.output),
-					cacheRead: toNumber(m.cost?.cache_read),
-					cacheWrite: toNumber(m.cost?.cache_write),
+					input: toNumber(m.cost?.input) ?? 0,
+					output: toNumber(m.cost?.output) ?? 0,
+					cacheRead: toNumber(m.cost?.cache_read) ?? 0,
+					cacheWrite: toNumber(m.cost?.cache_write) ?? 0,
 				},
 				contextWindow: toPositiveNumber(m.limit?.context, desc.defaultContextWindow ?? UNK_CONTEXT_WINDOW),
 				maxTokens: toPositiveNumber(m.limit?.output, desc.defaultMaxTokens ?? UNK_MAX_TOKENS),

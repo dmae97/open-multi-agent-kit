@@ -26,8 +26,11 @@ async function findNearestChangelog(cwd: string, filePath: string): Promise<stri
 	const root = path.resolve(cwd);
 	while (true) {
 		const candidate = path.resolve(current, CHANGELOG_NAME);
-		if (fs.existsSync(candidate)) {
+		try {
+			await fs.promises.access(candidate);
 			return candidate;
+		} catch {
+			// not found, continue traversal
 		}
 		if (current === root) return null;
 		const parent = path.dirname(current);

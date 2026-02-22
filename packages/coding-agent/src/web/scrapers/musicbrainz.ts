@@ -2,7 +2,7 @@
  * MusicBrainz URL handler for artists, releases, and recordings
  */
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, formatMediaDuration, loadPage, tryParseJson } from "./types";
 
 type MusicBrainzEntity = "artist" | "release" | "recording";
 
@@ -92,11 +92,7 @@ async function fetchJson<T>(apiUrl: string, timeout: number, signal?: AbortSigna
 
 	if (!result.ok) return null;
 
-	try {
-		return JSON.parse(result.content) as T;
-	} catch {
-		return null;
-	}
+	return tryParseJson<T>(result.content);
 }
 
 function formatLifeSpan(life: MusicBrainzLifeSpan | undefined): string | null {
@@ -115,17 +111,7 @@ function formatLifeSpan(life: MusicBrainzLifeSpan | undefined): string | null {
 
 function formatDurationMs(lengthMs: number | undefined): string | null {
 	if (!lengthMs || lengthMs <= 0) return null;
-
-	const totalSeconds = Math.round(lengthMs / 1000);
-	const hours = Math.floor(totalSeconds / 3600);
-	const minutes = Math.floor((totalSeconds % 3600) / 60);
-	const seconds = totalSeconds % 60;
-
-	if (hours > 0) {
-		return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
-	}
-
-	return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+	return formatMediaDuration(Math.round(lengthMs / 1000));
 }
 
 function formatArtistCredits(credits: MusicBrainzArtistCredit[] | undefined): string | null {
@@ -255,17 +241,7 @@ export const handleMusicBrainz: SpecialHandler = async (
 			md = buildRecordingMarkdown(recording);
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "musicbrainz-api",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via MusicBrainz API"],
-		};
+		return buildResult(md, { url, method: "musicbrainz-api", fetchedAt, notes: ["Fetched via MusicBrainz API"] });
 	} catch {}
 
 	return null;

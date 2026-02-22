@@ -7,7 +7,7 @@
  */
 /// <reference types="./bun-imports.d.ts" />
 import * as fs from "node:fs/promises";
-import { basename, join } from "node:path";
+import * as path from "node:path";
 
 export interface EditTask {
 	id: string;
@@ -32,7 +32,7 @@ export interface TaskMetadata {
 	mutatedSnippet?: string;
 }
 
-export const DEFAULT_TARBALL_PATH = join(import.meta.dir, "../fixtures.tar.gz");
+export const DEFAULT_TARBALL_PATH = path.join(import.meta.dir, "../fixtures.tar.gz");
 
 function titleize(id: string): string {
 	return id
@@ -42,12 +42,12 @@ function titleize(id: string): string {
 }
 
 async function listFiles(rootDir: string, subPath = ""): Promise<string[]> {
-	const entries = await fs.readdir(join(rootDir, subPath), { withFileTypes: true });
+	const entries = await fs.readdir(path.join(rootDir, subPath), { withFileTypes: true });
 	const files: string[] = [];
 
 	for (const entry of entries) {
-		const relativePath = join(subPath, entry.name);
-		const absolutePath = join(rootDir, relativePath);
+		const relativePath = path.join(subPath, entry.name);
+		const absolutePath = path.join(rootDir, relativePath);
 		if (entry.isDirectory()) {
 			files.push(...(await listFiles(rootDir, relativePath)));
 		} else if (entry.isFile()) {
@@ -69,11 +69,11 @@ export async function loadTasksFromDir(fixturesDir: string): Promise<EditTask[]>
 
 	for (const entry of entries) {
 		if (!entry.isDirectory()) continue;
-		const challengeDir = join(fixturesDir, entry.name);
-		const promptPath = join(challengeDir, "prompt.md");
-		const inputDir = join(challengeDir, "input");
-		const expectedDir = join(challengeDir, "expected");
-		const metadataPath = join(challengeDir, "metadata.json");
+		const challengeDir = path.join(fixturesDir, entry.name);
+		const promptPath = path.join(challengeDir, "prompt.md");
+		const inputDir = path.join(challengeDir, "input");
+		const expectedDir = path.join(challengeDir, "expected");
+		const metadataPath = path.join(challengeDir, "metadata.json");
 
 		const promptFile = Bun.file(promptPath);
 		if (!(await promptFile.exists())) {
@@ -120,11 +120,11 @@ export async function validateFixturesFromDir(fixturesPath: string): Promise<Fix
 	for (const entry of entries) {
 		if (!entry.isDirectory()) continue;
 		const taskId = entry.name;
-		const challengeDir = join(fixturesPath, entry.name);
-		const promptPath = join(challengeDir, "prompt.md");
-		const inputDir = join(challengeDir, "input");
-		const expectedDir = join(challengeDir, "expected");
-		const metadataPath = join(challengeDir, "metadata.json");
+		const challengeDir = path.join(fixturesPath, entry.name);
+		const promptPath = path.join(challengeDir, "prompt.md");
+		const inputDir = path.join(challengeDir, "input");
+		const expectedDir = path.join(challengeDir, "expected");
+		const metadataPath = path.join(challengeDir, "metadata.json");
 
 		const promptFile = Bun.file(promptPath);
 		if (!(await promptFile.exists())) {
@@ -153,13 +153,13 @@ export async function validateFixturesFromDir(fixturesPath: string): Promise<Fix
 		}
 
 		for (const file of inputFiles) {
-			const content = await Bun.file(join(inputDir, file)).text();
+			const content = await Bun.file(path.join(inputDir, file)).text();
 			if (content.length === 0) {
 				issues.push({ taskId, message: `input/${file} is empty` });
 			}
 		}
 		for (const file of expectedFiles) {
-			const content = await Bun.file(join(expectedDir, file)).text();
+			const content = await Bun.file(path.join(expectedDir, file)).text();
 			if (content.length === 0) {
 				issues.push({ taskId, message: `expected/${file} is empty` });
 			}
@@ -183,14 +183,14 @@ export async function validateFixturesFromDir(fixturesPath: string): Promise<Fix
 			issues.push({ taskId, message: "metadata.json missing file_path" });
 			continue;
 		}
-		const fileName = basename(metadata.file_path);
-		if (!inputFiles.some(file => basename(file) === fileName)) {
+		const fileName = path.basename(metadata.file_path);
+		if (!inputFiles.some(file => path.basename(file) === fileName)) {
 			issues.push({
 				taskId,
 				message: `metadata file_path ${metadata.file_path} not found in input files`,
 			});
 		}
-		if (!expectedFiles.some(file => basename(file) === fileName)) {
+		if (!expectedFiles.some(file => path.basename(file) === fileName)) {
 			issues.push({
 				taskId,
 				message: `metadata file_path ${metadata.file_path} not found in expected files`,
@@ -259,7 +259,7 @@ function parseTaskMetadata(raw: Record<string, unknown> | undefined): TaskMetada
 		metadata.fileName = raw.fileName;
 	}
 	if (!metadata.fileName && typeof metadata.filePath === "string" && metadata.filePath.trim().length > 0) {
-		metadata.fileName = basename(metadata.filePath);
+		metadata.fileName = path.basename(metadata.filePath);
 	}
 	return Object.keys(metadata).length > 0 ? metadata : undefined;
 }

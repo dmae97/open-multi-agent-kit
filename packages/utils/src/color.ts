@@ -3,10 +3,9 @@
  *
  * @example
  * ```ts
- * import { shiftHue, hexToHsv, hsvToHex } from "@oh-my-pi/pi-utils";
+ * import { hexToHsv, hsvToHex } from "@oh-my-pi/pi-utils";
  *
- * // Shift green toward blue for colorblind accessibility
- * const blue = shiftHue("#4ade80", 90); // ~90° shift
+ * // Work with HSV directly
  *
  * // Or work with HSV directly
  * const hsv = hexToHsv("#4ade80");
@@ -160,16 +159,6 @@ export function hsvToHex(hsv: HSV): string {
 
 /**
  * Shift the hue of a hex color by a given number of degrees.
- *
- * @param hex - Hex color string (#RGB or #RRGGBB)
- * @param degrees - Degrees to shift (positive = toward blue, negative = toward red)
- * @returns New hex color string
- *
- * @example
- * ```ts
- * // Shift green 90° toward blue (for colorblind accessibility)
- * shiftHue("#4ade80", 90) // Returns a cyan/blue color
- * ```
  */
 export function shiftHue(hex: string, degrees: number): string {
 	const hsv = hexToHsv(hex);
@@ -177,7 +166,6 @@ export function shiftHue(hex: string, degrees: number): string {
 	if (hsv.h < 0) hsv.h += 360;
 	return hsvToHex(hsv);
 }
-
 export interface HSVAdjustment {
 	/** Hue shift in degrees (additive) */
 	h?: number;

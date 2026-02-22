@@ -3,7 +3,7 @@
  */
 import { padding, visibleWidth } from "@oh-my-pi/pi-tui";
 import type { Theme, ThemeBg } from "../modes/theme/theme";
-import type { IconType, State } from "./types";
+import type { State } from "./types";
 
 export { Ellipsis, truncateToWidth } from "@oh-my-pi/pi-tui";
 
@@ -100,17 +100,4 @@ export function getStateBgColor(state: State): ThemeBg {
 	if (state === "success") return "toolSuccessBg";
 	if (state === "error") return "toolErrorBg";
 	return "toolPendingBg";
-}
-
-export function getStateIcon(icon: IconType, theme: Theme, spinnerFrame?: number): string {
-	if (icon === "success") return theme.styledSymbol("status.success", "success");
-	if (icon === "error") return theme.styledSymbol("status.error", "error");
-	if (icon === "warning") return theme.styledSymbol("status.warning", "warning");
-	if (icon === "info") return theme.styledSymbol("status.info", "accent");
-	if (icon === "pending") return theme.styledSymbol("status.pending", "accent");
-	if (spinnerFrame !== undefined) {
-		const frames = theme.spinnerFrames;
-		return frames[spinnerFrame % frames.length];
-	}
-	return theme.styledSymbol("status.running", "accent");
 }

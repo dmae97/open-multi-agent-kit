@@ -1,6 +1,6 @@
 import { parse as parseHtml } from "node-html-parser";
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage } from "./types";
 import { convertWithMarkitdown, fetchBinary } from "./utils";
 
 /**
@@ -71,17 +71,12 @@ export const handleArxiv: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
+		return buildResult(md, {
 			url,
-			finalUrl: url,
-			contentType: "text/markdown",
 			method: "arxiv",
-			content: output.content,
 			fetchedAt,
-			truncated: output.truncated,
 			notes: notes.length ? notes : ["Fetched via arXiv API"],
-		};
+		});
 	} catch {}
 
 	return null;

@@ -1,11 +1,11 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
-import path from "node:path";
+import * as path from "node:path";
 import { ptree, Snowflake } from "@oh-my-pi/pi-utils";
 import { throwIfAborted } from "../../tools/tool-errors";
 import { ensureTool } from "../../utils/tools-manager";
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput } from "./types";
+import { buildResult, formatCount, formatMediaDuration } from "./types";
 
 interface YouTubeUrl {
 	videoId: string;
@@ -90,17 +90,6 @@ function cleanVttToText(vtt: string): string {
 	}
 
 	return textLines.join(" ").replace(/\s+/g, " ").trim();
-}
-
-/**
- * Format duration from seconds to human readable
- */
-function formatDuration(seconds: number): string {
-	const h = Math.floor(seconds / 3600);
-	const m = Math.floor((seconds % 3600) / 60);
-	const s = Math.floor(seconds % 60);
-	if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-	return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 /**
@@ -273,16 +262,8 @@ export const handleYouTube: SpecialHandler = async (
 	let md = `# ${title}\n\n`;
 	if (channel) md += `**Channel:** ${channel}\n`;
 	if (formattedDate) md += `**Uploaded:** ${formattedDate}\n`;
-	if (duration > 0) md += `**Duration:** ${formatDuration(duration)}\n`;
-	if (viewCount > 0) {
-		const formatted =
-			viewCount >= 1_000_000
-				? `${(viewCount / 1_000_000).toFixed(1)}M`
-				: viewCount >= 1_000
-					? `${(viewCount / 1_000).toFixed(1)}K`
-					: String(viewCount);
-		md += `**Views:** ${formatted}\n`;
-	}
+	if (duration > 0) md += `**Duration:** ${formatMediaDuration(duration)}\n`;
+	if (viewCount > 0) md += `**Views:** ${formatCount(viewCount)}\n`;
 	md += `**Video ID:** ${yt.videoId}\n\n`;
 
 	if (description) {
@@ -298,15 +279,5 @@ export const handleYouTube: SpecialHandler = async (
 		md += `---\n\n*No transcript available for this video.*\n`;
 	}
 
-	const output = finalizeOutput(md);
-	return {
-		url,
-		finalUrl: videoUrl,
-		contentType: "text/markdown",
-		method: "youtube",
-		content: output.content,
-		fetchedAt,
-		truncated: output.truncated,
-		notes,
-	};
+	return buildResult(md, { url, finalUrl: videoUrl, method: "youtube", fetchedAt, notes });
 };

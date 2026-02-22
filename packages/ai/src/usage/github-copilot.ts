@@ -14,6 +14,7 @@ import type {
 	UsageStatus,
 	UsageWindow,
 } from "../usage";
+import { isRecord, toBoolean, toNumber } from "../utils";
 
 const COPILOT_HEADERS = {
 	"User-Agent": "GitHubCopilotChat/0.35.0",
@@ -63,23 +64,6 @@ type BillingUsageResponse = {
 	user: string;
 	usageItems: BillingUsageItem[];
 };
-
-function toNumber(value: unknown): number | undefined {
-	if (typeof value === "number" && Number.isFinite(value)) return value;
-	if (typeof value === "string" && value.trim()) {
-		const parsed = Number(value);
-		return Number.isFinite(parsed) ? parsed : undefined;
-	}
-	return undefined;
-}
-
-function toBoolean(value: unknown): boolean | undefined {
-	return typeof value === "boolean" ? value : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return !!value && typeof value === "object" && !Array.isArray(value);
-}
 
 function resolveGitHubApiBaseUrl(params: UsageFetchParams): string {
 	const baseUrl = params.baseUrl?.replace(/\/$/, "");

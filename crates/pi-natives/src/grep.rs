@@ -369,13 +369,13 @@ impl Sink for MatchCollector {
 			SinkContextKind::Before => {
 				self
 					.context_before
-					.push(ContextLine { line_number: clamp_u32(line_number), line });
+					.push(ContextLine { line_number: crate::utils::clamp_u32(line_number), line });
 			},
 			SinkContextKind::After => {
 				if let Some(last_match) = self.matches.last_mut() {
 					last_match
 						.context_after
-						.push(ContextLine { line_number: clamp_u32(line_number), line });
+						.push(ContextLine { line_number: crate::utils::clamp_u32(line_number), line });
 				}
 			},
 			SinkContextKind::Other => {},
@@ -383,10 +383,6 @@ impl Sink for MatchCollector {
 
 		Ok(true)
 	}
-}
-
-fn clamp_u32(value: u64) -> u32 {
-	value.min(u32::MAX as u64) as u32
 }
 
 fn parse_output_mode(mode: Option<&str>) -> OutputMode {
@@ -548,7 +544,7 @@ fn to_public_match(matched: CollectedMatch) -> Match {
 		Some(matched.context_after.into_vec())
 	};
 	Match {
-		line_number: clamp_u32(matched.line_number),
+		line_number: crate::utils::clamp_u32(matched.line_number),
 		line: matched.line,
 		context_before,
 		context_after,
@@ -569,7 +565,7 @@ fn to_grep_match(path: &str, matched: CollectedMatch) -> GrepMatch {
 	};
 	GrepMatch {
 		path: path.to_string(),
-		line_number: clamp_u32(matched.line_number),
+		line_number: crate::utils::clamp_u32(matched.line_number),
 		line: matched.line,
 		context_before,
 		context_after,
@@ -875,7 +871,7 @@ fn run_sequential_search(
 					context_before: None,
 					context_after:  None,
 					truncated:      None,
-					match_count:    Some(clamp_u32(search.match_count)),
+					match_count:    Some(crate::utils::clamp_u32(search.match_count)),
 				});
 			},
 		}
@@ -912,7 +908,7 @@ fn search_sync(content: &[u8], options: SearchOptions) -> SearchResult {
 
 	SearchResult {
 		matches:       result.matches.into_iter().map(to_public_match).collect(),
-		match_count:   clamp_u32(result.match_count),
+		match_count:   crate::utils::clamp_u32(result.match_count),
 		limit_reached: result.limit_reached,
 		error:         None,
 	}
@@ -1007,7 +1003,7 @@ fn grep_sync(
 					context_before: None,
 					context_after:  None,
 					truncated:      None,
-					match_count:    Some(clamp_u32(search.match_count)),
+					match_count:    Some(crate::utils::clamp_u32(search.match_count)),
 				});
 			},
 		}
@@ -1017,7 +1013,7 @@ fn grep_sync(
 
 		return Ok(GrepResult {
 			matches,
-			total_matches: clamp_u32(search.match_count),
+			total_matches: crate::utils::clamp_u32(search.match_count),
 			files_with_matches: 1,
 			files_searched: 1,
 			limit_reached: if limit_reached { Some(true) } else { None },
@@ -1062,7 +1058,7 @@ fn grep_sync(
 		let mut matches = Vec::new();
 		let mut total_matches = 0u64;
 		let mut files_with_matches = 0u32;
-		let files_searched = clamp_u32(results.len() as u64);
+		let files_searched = crate::utils::clamp_u32(results.len() as u64);
 
 		for result in results {
 			if result.match_count == 0 {
@@ -1089,7 +1085,7 @@ fn grep_sync(
 						context_before: None,
 						context_after:  None,
 						truncated:      None,
-						match_count:    Some(clamp_u32(result.match_count)),
+						match_count:    Some(crate::utils::clamp_u32(result.match_count)),
 					};
 					if let Some(callback) = on_match {
 						callback.call(Ok(grep_match.clone()), ThreadsafeFunctionCallMode::NonBlocking);
@@ -1101,7 +1097,7 @@ fn grep_sync(
 
 		return Ok(GrepResult {
 			matches,
-			total_matches: clamp_u32(total_matches),
+			total_matches: crate::utils::clamp_u32(total_matches),
 			files_with_matches,
 			files_searched,
 			limit_reached: None,
@@ -1127,7 +1123,7 @@ fn grep_sync(
 
 	Ok(GrepResult {
 		matches,
-		total_matches: clamp_u32(total_matches),
+		total_matches: crate::utils::clamp_u32(total_matches),
 		files_with_matches,
 		files_searched,
 		limit_reached: if limit_reached { Some(true) } else { None },

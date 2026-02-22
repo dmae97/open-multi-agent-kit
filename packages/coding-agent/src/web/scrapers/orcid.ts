@@ -2,7 +2,7 @@
  * ORCID handler for web-fetch
  */
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage, tryParseJson } from "./types";
 
 const MAX_WORKS = 50;
 const ORCID_PATTERN = /\/(\d{4}-\d{4}-\d{4}-\d{3}[\dXx])(?:\/|$)/;
@@ -223,12 +223,8 @@ export const handleOrcid: SpecialHandler = async (
 
 		if (!result.ok || !result.content) return null;
 
-		let record: OrcidRecord;
-		try {
-			record = JSON.parse(result.content) as OrcidRecord;
-		} catch {
-			return null;
-		}
+		const record = tryParseJson<OrcidRecord>(result.content);
+		if (!record) return null;
 
 		const personName = formatName(record.person?.name);
 		const biography = record.person?.biography?.content?.trim();
@@ -281,17 +277,7 @@ export const handleOrcid: SpecialHandler = async (
 			md += "No works available.\n";
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "orcid-api",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via ORCID Public API"],
-		};
+		return buildResult(md, { url, method: "orcid-api", fetchedAt, notes: ["Fetched via ORCID Public API"] });
 	} catch {
 		return null;
 	}

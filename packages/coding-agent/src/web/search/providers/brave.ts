@@ -7,6 +7,7 @@
 import { getEnvApiKey } from "@oh-my-pi/pi-ai";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
+import { clampNumResults, dateToAgeSeconds } from "../utils";
 import type { SearchParams } from "./base";
 import { SearchProvider } from "./base";
 
@@ -47,22 +48,6 @@ export function findApiKey(): string | null {
 	return getEnvApiKey("brave") ?? null;
 }
 
-function clampNumResults(value: number | undefined): number {
-	if (!value || Number.isNaN(value)) return DEFAULT_NUM_RESULTS;
-	return Math.min(MAX_NUM_RESULTS, Math.max(1, value));
-}
-
-function dateToAgeSeconds(dateStr: string | null | undefined): number | undefined {
-	if (!dateStr) return undefined;
-	try {
-		const date = new Date(dateStr);
-		if (Number.isNaN(date.getTime())) return undefined;
-		return Math.floor((Date.now() - date.getTime()) / 1000);
-	} catch {
-		return undefined;
-	}
-}
-
 function buildSnippet(result: BraveSearchResult): string | undefined {
 	const snippets: string[] = [];
 
@@ -85,7 +70,7 @@ async function callBraveSearch(
 	apiKey: string,
 	params: BraveSearchParams,
 ): Promise<{ response: BraveSearchResponse; requestId?: string }> {
-	const numResults = clampNumResults(params.num_results);
+	const numResults = clampNumResults(params.num_results, DEFAULT_NUM_RESULTS, MAX_NUM_RESULTS);
 	const url = new URL(BRAVE_SEARCH_URL);
 	url.searchParams.set("q", params.query);
 	url.searchParams.set("count", String(numResults));
@@ -114,7 +99,7 @@ async function callBraveSearch(
 
 /** Execute Brave web search. */
 export async function searchBrave(params: BraveSearchParams): Promise<SearchResponse> {
-	const numResults = clampNumResults(params.num_results);
+	const numResults = clampNumResults(params.num_results, DEFAULT_NUM_RESULTS, MAX_NUM_RESULTS);
 	const apiKey = findApiKey();
 	if (!apiKey) {
 		throw new Error("BRAVE_API_KEY not found. Set it in environment or .env file.");

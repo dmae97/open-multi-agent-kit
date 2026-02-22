@@ -5,7 +5,7 @@
  * from Spotify URLs without requiring authentication.
  */
 import type { SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, formatMediaDuration, loadPage } from "./types";
 
 interface SpotifyOEmbedResponse {
 	title?: string;
@@ -71,21 +71,13 @@ function getContentType(url: string): string | null {
 }
 
 /**
- * Format duration from seconds
+ * Format duration from seconds string
  */
 function formatDuration(seconds: string | undefined): string | null {
 	if (!seconds) return null;
 	const num = parseInt(seconds, 10);
 	if (Number.isNaN(num)) return null;
-
-	const hours = Math.floor(num / 3600);
-	const minutes = Math.floor((num % 3600) / 60);
-	const secs = num % 60;
-
-	if (hours > 0) {
-		return `${hours}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-	}
-	return `${minutes}:${secs.toString().padStart(2, "0")}`;
+	return formatMediaDuration(num);
 }
 
 /**
@@ -202,16 +194,5 @@ export const handleSpotify: SpecialHandler = async (url: string, timeout: number
 
 	// Format output
 	const output = formatOutput(contentType, oEmbedData, ogData, url);
-	const { content, truncated } = finalizeOutput(output);
-
-	return {
-		url,
-		finalUrl: url,
-		contentType: "text/markdown",
-		method: "spotify",
-		content,
-		fetchedAt: new Date().toISOString(),
-		truncated,
-		notes,
-	};
+	return buildResult(output, { url, method: "spotify", fetchedAt: new Date().toISOString(), notes });
 };

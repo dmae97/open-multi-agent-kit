@@ -1,10 +1,11 @@
-import type { Api, AssistantMessage, Model, ToolCall } from "@oh-my-pi/pi-ai";
+import type { Api, AssistantMessage, Model } from "@oh-my-pi/pi-ai";
 import { completeSimple, validateToolCall } from "@oh-my-pi/pi-ai";
 import { Type } from "@sinclair/typebox";
 import changelogSystemPrompt from "../../commit/prompts/changelog-system.md" with { type: "text" };
 import changelogUserPrompt from "../../commit/prompts/changelog-user.md" with { type: "text" };
 import type { ChangelogGenerationResult } from "../../commit/types";
 import { renderPromptTemplate } from "../../config/prompt-templates";
+import { extractTextContent, extractToolCall, parseJsonPayload } from "../utils";
 
 const ChangelogTool = {
 	name: "create_changelog_entries",
@@ -64,30 +65,6 @@ function parseChangelogResponse(message: AssistantMessage): ChangelogGenerationR
 	const text = extractTextContent(message);
 	const parsed = parseJsonPayload(text) as ChangelogGenerationResult;
 	return { entries: parsed.entries ?? {} };
-}
-
-function extractToolCall(message: AssistantMessage, name: string): ToolCall | undefined {
-	return message.content.find(content => content.type === "toolCall" && content.name === name) as ToolCall | undefined;
-}
-
-function extractTextContent(message: AssistantMessage): string {
-	return message.content
-		.filter(content => content.type === "text")
-		.map(content => content.text)
-		.join("")
-		.trim();
-}
-
-function parseJsonPayload(text: string): unknown {
-	const trimmed = text.trim();
-	if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-		return JSON.parse(trimmed) as unknown;
-	}
-	const match = trimmed.match(/\{[\s\S]*\}/);
-	if (!match) {
-		throw new Error("No JSON payload found in changelog response");
-	}
-	return JSON.parse(match[0]) as unknown;
 }
 
 function dedupeEntries(entries: Record<string, string[]>): Record<string, string[]> {

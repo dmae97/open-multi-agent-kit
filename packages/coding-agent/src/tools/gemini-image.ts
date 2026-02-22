@@ -1,7 +1,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import { getAntigravityHeaders, getEnvApiKey, StringEnum } from "@oh-my-pi/pi-ai";
-import { $env, ptree, readSseJson, Snowflake, untilAborted } from "@oh-my-pi/pi-utils";
+import { $env, isEnoent, ptree, readSseJson, Snowflake, untilAborted } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import type { ModelRegistry } from "../config/model-registry";
 import { renderPromptTemplate } from "../config/prompt-templates";
@@ -428,21 +428,22 @@ async function findImageApiKey(modelRegistry?: ModelRegistry): Promise<ImageApiK
 
 async function loadImageFromPath(imagePath: string, cwd: string): Promise<InlineImageData> {
 	const resolved = resolveReadPath(imagePath, cwd);
-	const file = Bun.file(resolved);
-	if (!(await file.exists())) {
-		throw new Error(`Image file not found: ${imagePath}`);
-	}
-	if (file.size > MAX_IMAGE_SIZE) {
-		throw new Error(`Image file too large: ${imagePath}`);
-	}
+	try {
+		const buffer = await Bun.file(resolved).bytes();
+		if (buffer.length > MAX_IMAGE_SIZE) {
+			throw new Error(`Image file too large: ${imagePath}`);
+		}
 
-	const mimeType = await detectSupportedImageMimeTypeFromFile(resolved);
-	if (!mimeType) {
-		throw new Error(`Unsupported image type: ${imagePath}`);
-	}
+		const mimeType = await detectSupportedImageMimeTypeFromFile(resolved);
+		if (!mimeType) {
+			throw new Error(`Unsupported image type: ${imagePath}`);
+		}
 
-	const buffer = await file.bytes();
-	return { data: buffer.toBase64(), mimeType };
+		return { data: buffer.toBase64(), mimeType };
+	} catch (err) {
+		if (isEnoent(err)) throw new Error(`Image file not found: ${imagePath}`);
+		throw err;
+	}
 }
 
 async function resolveInputImage(input: ImageInput, cwd: string): Promise<InlineImageData> {

@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, loadPage, tryParseJson } from "./types";
 
 interface TerraformModule {
 	id: string;
@@ -113,12 +113,8 @@ async function handleModuleUrl(
 
 	if (!result.ok) return null;
 
-	let mod: TerraformModule;
-	try {
-		mod = JSON.parse(result.content);
-	} catch {
-		return null;
-	}
+	const mod = tryParseJson<TerraformModule>(result.content);
+	if (!mod) return null;
 
 	let md = `# ${mod.namespace}/${mod.name}/${mod.provider}\n\n`;
 
@@ -212,17 +208,7 @@ async function handleModuleUrl(
 		}
 	}
 
-	const output = finalizeOutput(md);
-	return {
-		url,
-		finalUrl: url,
-		contentType: "text/markdown",
-		method: "terraform",
-		content: output.content,
-		fetchedAt,
-		truncated: output.truncated,
-		notes: ["Fetched via Terraform Registry API"],
-	};
+	return buildResult(md, { url, method: "terraform", fetchedAt, notes: ["Fetched via Terraform Registry API"] });
 }
 
 async function handleProviderUrl(
@@ -242,12 +228,8 @@ async function handleProviderUrl(
 
 	if (!result.ok) return null;
 
-	let provider: TerraformProvider;
-	try {
-		provider = JSON.parse(result.content);
-	} catch {
-		return null;
-	}
+	const provider = tryParseJson<TerraformProvider>(result.content);
+	if (!provider) return null;
 
 	let md = `# ${provider.namespace}/${provider.name}\n\n`;
 
@@ -290,15 +272,5 @@ async function handleProviderUrl(
 		}
 	}
 
-	const output = finalizeOutput(md);
-	return {
-		url,
-		finalUrl: url,
-		contentType: "text/markdown",
-		method: "terraform",
-		content: output.content,
-		fetchedAt,
-		truncated: output.truncated,
-		notes: ["Fetched via Terraform Registry API"],
-	};
+	return buildResult(md, { url, method: "terraform", fetchedAt, notes: ["Fetched via Terraform Registry API"] });
 }

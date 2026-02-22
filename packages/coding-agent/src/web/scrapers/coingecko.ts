@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, loadPage, tryParseJson } from "./types";
 
 interface CoinGeckoResponse {
 	id: string;
@@ -55,12 +55,8 @@ export const handleCoinGecko: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let coin: CoinGeckoResponse;
-		try {
-			coin = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const coin = tryParseJson<CoinGeckoResponse>(result.content);
+		if (!coin) return null;
 
 		const market = coin.market_data;
 
@@ -78,11 +74,11 @@ export const handleCoinGecko: SpecialHandler = async (
 		}
 
 		if (market?.market_cap?.usd) {
-			md += `**Market Cap:** $${formatLargeNumber(market.market_cap.usd)}\n`;
+			md += `**Market Cap:** $${formatCount(market.market_cap.usd)}\n`;
 		}
 
 		if (market?.total_volume?.usd) {
-			md += `**24h Volume:** $${formatLargeNumber(market.total_volume.usd)}\n`;
+			md += `**24h Volume:** $${formatCount(market.total_volume.usd)}\n`;
 		}
 
 		if (market?.ath?.usd !== undefined) {
@@ -146,17 +142,7 @@ export const handleCoinGecko: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "coingecko",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via CoinGecko API"],
-		};
+		return buildResult(md, { url, method: "coingecko", fetchedAt, notes: ["Fetched via CoinGecko API"] });
 	} catch {}
 
 	return null;
@@ -171,14 +157,4 @@ function formatPrice(price: number): string {
 	if (price >= 0.01) return price.toFixed(4);
 	if (price >= 0.0001) return price.toFixed(6);
 	return price.toFixed(8);
-}
-
-/**
- * Format large numbers with B/M/K suffixes
- */
-function formatLargeNumber(n: number): string {
-	if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`;
-	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-	if (n >= 1_000) return `${(n / 1_000).toFixed(2)}K`;
-	return n.toFixed(2);
 }

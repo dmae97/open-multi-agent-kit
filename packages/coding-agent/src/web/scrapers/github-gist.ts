@@ -1,6 +1,6 @@
 import { fetchGitHubApi } from "./github";
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput } from "./types";
+import { buildResult } from "./types";
 
 /**
  * Handle GitHub Gist URLs via GitHub API
@@ -51,17 +51,7 @@ export const handleGitHubGist: SpecialHandler = async (
 			md += `\`\`\`${lang}\n${file.content}\n\`\`\`\n\n`;
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "github-gist",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via GitHub API"],
-		};
+		return buildResult(md, { url, method: "github-gist", fetchedAt, notes: ["Fetched via GitHub API"] });
 	} catch {}
 
 	return null;

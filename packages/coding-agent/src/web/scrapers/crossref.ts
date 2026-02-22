@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, htmlToBasicMarkdown, loadPage } from "./types";
+import { buildResult, htmlToBasicMarkdown, loadPage, tryParseJson } from "./types";
 
 interface CrossrefAuthor {
 	given?: string;
@@ -96,12 +96,8 @@ export const handleCrossref: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let data: CrossrefResponse;
-		try {
-			data = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const data = tryParseJson<CrossrefResponse>(result.content);
+		if (!data) return null;
 
 		const message = data.message;
 		if (!message) return null;
@@ -132,17 +128,7 @@ export const handleCrossref: SpecialHandler = async (
 		md += abstract || "No abstract available.";
 		md += "\n";
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "crossref",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via CrossRef API"],
-		};
+		return buildResult(md, { url, method: "crossref", fetchedAt, notes: ["Fetched via CrossRef API"] });
 	} catch {}
 
 	return null;

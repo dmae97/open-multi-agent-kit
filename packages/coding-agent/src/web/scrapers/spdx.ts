@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, htmlToBasicMarkdown, loadPage } from "./types";
+import { buildResult, htmlToBasicMarkdown, loadPage, tryParseJson } from "./types";
 
 interface SpdxCrossRef {
 	url?: string;
@@ -67,12 +67,8 @@ export const handleSpdx: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let license: SpdxLicense;
-		try {
-			license = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const license = tryParseJson<SpdxLicense>(result.content);
+		if (!license) return null;
 
 		const title = license.name || license.licenseId || licenseId;
 		let md = `# ${title}\n\n`;
@@ -104,17 +100,7 @@ export const handleSpdx: SpecialHandler = async (
 			md += `\n## License Text\n\n\`\`\`\n${licenseText}\n\`\`\`\n`;
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "spdx-api",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via SPDX license API"],
-		};
+		return buildResult(md, { url, method: "spdx-api", fetchedAt, notes: ["Fetched via SPDX license API"] });
 	} catch {}
 
 	return null;

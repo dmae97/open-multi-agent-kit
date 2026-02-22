@@ -1,3 +1,5 @@
+import { toNumber } from "../../utils";
+
 export type CodexRateLimit = {
 	used_percent?: number;
 	window_minutes?: number;
@@ -70,12 +72,6 @@ export async function parseCodexError(response: Response): Promise<CodexErrorInf
 		rateLimits,
 		raw: raw,
 	};
-}
-
-function toNumber(v: string | null): number | undefined {
-	if (v == null) return undefined;
-	const n = Number(v);
-	return Number.isFinite(n) ? n : undefined;
 }
 
 function toInt(v: string | null): number | undefined {

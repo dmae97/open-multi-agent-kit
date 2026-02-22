@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, loadPage, tryParseJson } from "./types";
 
 /**
  * Common Wikidata property IDs mapped to human-readable names
@@ -112,12 +112,8 @@ export const handleWikidata: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let data: { entities: Record<string, WikidataEntity> };
-		try {
-			data = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const data = tryParseJson<{ entities: Record<string, WikidataEntity> }>(result.content);
+		if (!data) return null;
 
 		const entity = data.entities[qid];
 		if (!entity) return null;
@@ -214,17 +210,7 @@ export const handleWikidata: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "wikidata",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Wikidata EntityData API"],
-		};
+		return buildResult(md, { url, method: "wikidata", fetchedAt, notes: ["Fetched via Wikidata EntityData API"] });
 	} catch {}
 
 	return null;

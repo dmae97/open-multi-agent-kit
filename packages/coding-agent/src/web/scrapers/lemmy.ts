@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage, tryParseJson } from "./types";
 
 interface LemmyCreator {
 	name: string;
@@ -54,14 +54,6 @@ interface LemmyCommentListResponse {
 
 interface LemmyCommentResponse {
 	comment_view?: LemmyCommentView;
-}
-
-function parseJson<T>(content: string): T | null {
-	try {
-		return JSON.parse(content) as T;
-	} catch {
-		return null;
-	}
 }
 
 function formatCommunity(community: LemmyCommunity): string {
@@ -155,7 +147,7 @@ export const handleLemmy: SpecialHandler = async (
 			const commentResult = await loadPage(commentUrl, { timeout, signal });
 			if (!commentResult.ok) return null;
 
-			const commentData = parseJson<LemmyCommentResponse>(commentResult.content);
+			const commentData = tryParseJson<LemmyCommentResponse>(commentResult.content);
 			const commentView = commentData?.comment_view;
 			const commentPostId = commentView?.comment?.post_id;
 			if (!commentPostId) return null;
@@ -172,11 +164,11 @@ export const handleLemmy: SpecialHandler = async (
 
 		if (!postResult.ok || !commentsResult.ok) return null;
 
-		const postData = parseJson<LemmyPostResponse>(postResult.content);
+		const postData = tryParseJson<LemmyPostResponse>(postResult.content);
 		const postView = postData?.post_view;
 		if (!postView) return null;
 
-		const commentsData = parseJson<LemmyCommentListResponse>(commentsResult.content);
+		const commentsData = tryParseJson<LemmyCommentListResponse>(commentsResult.content);
 		const comments = commentsData?.comments ?? [];
 
 		let md = `# ${postView.post.name}\n\n`;
@@ -203,17 +195,7 @@ export const handleLemmy: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "lemmy-api",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Lemmy API"],
-		};
+		return buildResult(md, { url, method: "lemmy-api", fetchedAt, notes: ["Fetched via Lemmy API"] });
 	} catch {}
 
 	return null;

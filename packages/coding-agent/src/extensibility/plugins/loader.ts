@@ -123,158 +123,70 @@ export async function getEnabledPlugins(cwd: string): Promise<InstalledPlugin[]>
 // =============================================================================
 
 /**
- * Resolve tool entry points for a plugin based on manifest and enabled features.
- * Returns absolute paths to tool modules.
+ * Generic path resolver for plugin manifest entries (tools, hooks, commands).
+ * Handles both single-string and string[] base entries, plus feature-specific entries.
  */
+function resolvePluginPaths(plugin: InstalledPlugin, key: "tools" | "hooks" | "commands"): string[] {
+	const paths: string[] = [];
+	const manifest = plugin.manifest;
+
+	// Base entry (always included if exists)
+	const base = manifest[key];
+	if (base) {
+		const entries = Array.isArray(base) ? base : [base];
+		for (const entry of entries) {
+			const resolved = path.join(plugin.path, entry);
+			if (fs.existsSync(resolved)) {
+				paths.push(resolved);
+			}
+		}
+	}
+
+	// Feature-specific entries
+	if (manifest.features && plugin.enabledFeatures) {
+		const enabledSet = new Set(plugin.enabledFeatures);
+
+		for (const [featName, feat] of Object.entries(manifest.features)) {
+			if (!enabledSet.has(featName)) continue;
+
+			if (feat[key]) {
+				for (const entry of feat[key]) {
+					const resolved = path.join(plugin.path, entry);
+					if (fs.existsSync(resolved)) {
+						paths.push(resolved);
+					}
+				}
+			}
+		}
+	} else if (manifest.features && plugin.enabledFeatures === null) {
+		// null means use defaults - enable features with default: true
+		for (const [_featName, feat] of Object.entries(manifest.features)) {
+			if (!feat.default) continue;
+
+			if (feat[key]) {
+				for (const entry of feat[key]) {
+					const resolved = path.join(plugin.path, entry);
+					if (fs.existsSync(resolved)) {
+						paths.push(resolved);
+					}
+				}
+			}
+		}
+	}
+
+	return paths;
+}
+
 export function resolvePluginToolPaths(plugin: InstalledPlugin): string[] {
-	const paths: string[] = [];
-	const manifest = plugin.manifest;
-
-	// Base tools entry (always included if exists)
-	if (manifest.tools) {
-		const toolPath = path.join(plugin.path, manifest.tools);
-		if (fs.existsSync(toolPath)) {
-			paths.push(toolPath);
-		}
-	}
-
-	// Feature-specific tools
-	if (manifest.features && plugin.enabledFeatures) {
-		const enabledSet = new Set(plugin.enabledFeatures);
-
-		for (const [featName, feat] of Object.entries(manifest.features)) {
-			if (!enabledSet.has(featName)) continue;
-
-			if (feat.tools) {
-				for (const toolEntry of feat.tools) {
-					const toolPath = path.join(plugin.path, toolEntry);
-					if (fs.existsSync(toolPath)) {
-						paths.push(toolPath);
-					}
-				}
-			}
-		}
-	} else if (manifest.features && plugin.enabledFeatures === null) {
-		// null means use defaults - enable features with default: true
-		for (const [_featName, feat] of Object.entries(manifest.features)) {
-			if (!feat.default) continue;
-
-			if (feat.tools) {
-				for (const toolEntry of feat.tools) {
-					const toolPath = path.join(plugin.path, toolEntry);
-					if (fs.existsSync(toolPath)) {
-						paths.push(toolPath);
-					}
-				}
-			}
-		}
-	}
-
-	return paths;
+	return resolvePluginPaths(plugin, "tools");
 }
 
-/**
- * Resolve hook entry points for a plugin based on manifest and enabled features.
- * Returns absolute paths to hook modules.
- */
 export function resolvePluginHookPaths(plugin: InstalledPlugin): string[] {
-	const paths: string[] = [];
-	const manifest = plugin.manifest;
-
-	// Base hooks entry (always included if exists)
-	if (manifest.hooks) {
-		const hookPath = path.join(plugin.path, manifest.hooks);
-		if (fs.existsSync(hookPath)) {
-			paths.push(hookPath);
-		}
-	}
-
-	// Feature-specific hooks
-	if (manifest.features && plugin.enabledFeatures) {
-		const enabledSet = new Set(plugin.enabledFeatures);
-
-		for (const [featName, feat] of Object.entries(manifest.features)) {
-			if (!enabledSet.has(featName)) continue;
-
-			if (feat.hooks) {
-				for (const hookEntry of feat.hooks) {
-					const hookPath = path.join(plugin.path, hookEntry);
-					if (fs.existsSync(hookPath)) {
-						paths.push(hookPath);
-					}
-				}
-			}
-		}
-	} else if (manifest.features && plugin.enabledFeatures === null) {
-		// null means use defaults - enable features with default: true
-		for (const [_featName, feat] of Object.entries(manifest.features)) {
-			if (!feat.default) continue;
-
-			if (feat.hooks) {
-				for (const hookEntry of feat.hooks) {
-					const hookPath = path.join(plugin.path, hookEntry);
-					if (fs.existsSync(hookPath)) {
-						paths.push(hookPath);
-					}
-				}
-			}
-		}
-	}
-
-	return paths;
+	return resolvePluginPaths(plugin, "hooks");
 }
 
-/**
- * Resolve command file paths for a plugin based on manifest and enabled features.
- * Returns absolute paths to command files (.md).
- */
 export function resolvePluginCommandPaths(plugin: InstalledPlugin): string[] {
-	const paths: string[] = [];
-	const manifest = plugin.manifest;
-
-	// Base commands (always included if exists)
-	if (manifest.commands) {
-		for (const cmdEntry of manifest.commands) {
-			const cmdPath = path.join(plugin.path, cmdEntry);
-			if (fs.existsSync(cmdPath)) {
-				paths.push(cmdPath);
-			}
-		}
-	}
-
-	// Feature-specific commands
-	if (manifest.features && plugin.enabledFeatures) {
-		const enabledSet = new Set(plugin.enabledFeatures);
-
-		for (const [featName, feat] of Object.entries(manifest.features)) {
-			if (!enabledSet.has(featName)) continue;
-
-			if (feat.commands) {
-				for (const cmdEntry of feat.commands) {
-					const cmdPath = path.join(plugin.path, cmdEntry);
-					if (fs.existsSync(cmdPath)) {
-						paths.push(cmdPath);
-					}
-				}
-			}
-		}
-	} else if (manifest.features && plugin.enabledFeatures === null) {
-		// null means use defaults - enable features with default: true
-		for (const [_featName, feat] of Object.entries(manifest.features)) {
-			if (!feat.default) continue;
-
-			if (feat.commands) {
-				for (const cmdEntry of feat.commands) {
-					const cmdPath = path.join(plugin.path, cmdEntry);
-					if (fs.existsSync(cmdPath)) {
-						paths.push(cmdPath);
-					}
-				}
-			}
-		}
-	}
-
-	return paths;
+	return resolvePluginPaths(plugin, "commands");
 }
 
 // =============================================================================

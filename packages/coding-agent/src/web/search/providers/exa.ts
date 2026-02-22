@@ -8,6 +8,7 @@ import { getEnvApiKey } from "@oh-my-pi/pi-ai";
 import { findApiKey as findExaKey } from "../../../exa/mcp-client";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
+import { dateToAgeSeconds } from "../utils";
 import type { SearchParams } from "./base";
 import { SearchProvider } from "./base";
 
@@ -86,18 +87,6 @@ async function callExaSearch(apiKey: string, params: ExaSearchParams): Promise<E
 	}
 
 	return response.json() as Promise<ExaSearchResponse>;
-}
-
-/** Calculate age in seconds from ISO date string */
-function dateToAgeSeconds(dateStr: string | null | undefined): number | undefined {
-	if (!dateStr) return undefined;
-	try {
-		const date = new Date(dateStr);
-		if (Number.isNaN(date.getTime())) return undefined;
-		return Math.floor((Date.now() - date.getTime()) / 1000);
-	} catch {
-		return undefined;
-	}
 }
 
 /** Execute Exa web search */

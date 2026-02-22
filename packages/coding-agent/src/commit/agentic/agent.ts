@@ -115,7 +115,7 @@ export async function runCommitAgentSession(input: CommitAgentInput): Promise<Co
 					clearThinkingLine();
 					const assistantMessage = event.message as { stopReason?: string; errorMessage?: string };
 					if (assistantMessage.stopReason === "error" && assistantMessage.errorMessage) {
-						writeStdout(`● Error: ${assistantMessage.errorMessage}`);
+						process.stdout.write(`● Error: ${assistantMessage.errorMessage}\n`);
 					}
 					const messageText = extractMessageText(event.message?.content ?? []);
 					if (messageText) {
@@ -130,10 +130,10 @@ export async function runCommitAgentSession(input: CommitAgentInput): Promise<Co
 				clearThinkingLine();
 				const toolLabel = formatToolLabel(stored.name);
 				const symbol = event.isError ? "" : "";
-				writeStdout(`${symbol} ${toolLabel}`);
+				process.stdout.write(`${symbol} ${toolLabel}\n`);
 				const argsLines = formatToolArgs(stored.args);
 				if (argsLines.length > 0) {
-					writeStdout(formatToolArgsBlock(argsLines));
+					process.stdout.write(`${formatToolArgsBlock(argsLines)}\n`);
 				}
 				break;
 			}
@@ -141,7 +141,7 @@ export async function runCommitAgentSession(input: CommitAgentInput): Promise<Co
 				if (isThinking) {
 					isThinking = false;
 				}
-				writeStdout(`● agent finished (${messageCount} messages, ${toolCalls} tools)`);
+				process.stdout.write(`● agent finished (${messageCount} messages, ${toolCalls} tools)\n`);
 				break;
 			default:
 				break;
@@ -172,10 +172,6 @@ export async function runCommitAgentSession(input: CommitAgentInput): Promise<Co
 	}
 }
 
-function writeStdout(message: string): void {
-	process.stdout.write(`${message}\n`);
-}
-
 function extractMessagePreview(content: Array<{ type: string; text?: string }>): string | null {
 	const textBlocks = content
 		.filter(block => block.type === "text" && typeof block.text === "string")
@@ -204,7 +200,7 @@ function writeAssistantMessage(message: string): void {
 	}
 	for (const [index, line] of lines.entries()) {
 		const prefix = index === firstContentIndex ? "● " : "  ";
-		writeStdout(`${prefix}${line}`.trimEnd());
+		process.stdout.write(`${`${prefix}${line}`.trimEnd()}\n`);
 	}
 }
 

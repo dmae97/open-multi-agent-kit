@@ -1,5 +1,5 @@
 import type { SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, loadPage, tryParseJson } from "./types";
 
 interface SemanticScholarAuthor {
 	name: string;
@@ -48,16 +48,13 @@ export const handleSemanticScholar: SpecialHandler = async (url: string, timeout
 
 	const paperId = extractPaperId(url);
 	if (!paperId) {
-		return {
+		return buildResult("Failed to extract paper ID from Semantic Scholar URL", {
 			url,
-			finalUrl: url,
-			contentType: "text/plain",
 			method: "semantic-scholar",
-			content: "Failed to extract paper ID from Semantic Scholar URL",
 			fetchedAt: new Date().toISOString(),
-			truncated: false,
 			notes: ["Invalid URL format"],
-		};
+			contentType: "text/plain",
+		});
 	}
 
 	const fields = [
@@ -80,32 +77,26 @@ export const handleSemanticScholar: SpecialHandler = async (url: string, timeout
 	const { content, ok, finalUrl } = await loadPage(apiUrl, { timeout, signal });
 
 	if (!ok || !content) {
-		return {
+		return buildResult("Failed to fetch paper from Semantic Scholar API", {
 			url,
 			finalUrl: apiUrl,
-			contentType: "text/plain",
 			method: "semantic-scholar",
-			content: "Failed to fetch paper from Semantic Scholar API",
 			fetchedAt: new Date().toISOString(),
-			truncated: false,
 			notes: ["API request failed"],
-		};
+			contentType: "text/plain",
+		});
 	}
 
-	let paper: SemanticScholarPaper;
-	try {
-		paper = JSON.parse(content);
-	} catch {
-		return {
+	const paper = tryParseJson<SemanticScholarPaper>(content);
+	if (!paper) {
+		return buildResult("Failed to parse response from Semantic Scholar API", {
 			url,
 			finalUrl: apiUrl,
-			contentType: "text/plain",
 			method: "semantic-scholar",
-			content: "Failed to parse response from Semantic Scholar API",
 			fetchedAt: new Date().toISOString(),
-			truncated: false,
 			notes: ["JSON parse error"],
-		};
+			contentType: "text/plain",
+		});
 	}
 
 	const sections: string[] = [];
@@ -175,16 +166,5 @@ export const handleSemanticScholar: SpecialHandler = async (url: string, timeout
 	}
 
 	const fullContent = sections.join("\n");
-	const { content: finalContent, truncated } = finalizeOutput(fullContent);
-
-	return {
-		url,
-		finalUrl,
-		contentType: "text/markdown",
-		method: "semantic-scholar",
-		content: finalContent,
-		fetchedAt: new Date().toISOString(),
-		truncated,
-		notes: [],
-	};
+	return buildResult(fullContent, { url, finalUrl, method: "semantic-scholar", fetchedAt: new Date().toISOString() });
 };

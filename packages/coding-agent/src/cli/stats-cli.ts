@@ -4,6 +4,7 @@
  * Handles `omp stats` subcommand for viewing AI usage statistics.
  */
 
+import { formatDuration, formatNumber, formatPercent } from "@oh-my-pi/pi-utils";
 import { APP_NAME } from "@oh-my-pi/pi-utils/dirs";
 import chalk from "chalk";
 import { openPath } from "../utils/open";
@@ -53,30 +54,10 @@ export function parseStatsArgs(args: string[]): StatsCommandArgs | undefined {
 	return result;
 }
 
-// =============================================================================
-// Formatting Helpers
-// =============================================================================
-
-function formatNumber(n: number): string {
-	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-	if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-	return n.toFixed(0);
-}
-
 function formatCost(n: number): string {
 	if (n < 0.01) return `$${n.toFixed(4)}`;
 	if (n < 1) return `$${n.toFixed(3)}`;
 	return `$${n.toFixed(2)}`;
-}
-
-function formatDuration(ms: number | null): string {
-	if (ms === null) return "-";
-	if (ms < 1000) return `${ms.toFixed(0)}ms`;
-	return `${(ms / 1000).toFixed(1)}s`;
-}
-
-function formatPercent(n: number): string {
-	return `${(n * 100).toFixed(1)}%`;
 }
 
 // =============================================================================
@@ -140,8 +121,8 @@ async function printStatsSummary(): Promise<void> {
 	console.log(`  Total Tokens: ${formatNumber(overall.totalInputTokens + overall.totalOutputTokens)}`);
 	console.log(`  Cache Rate: ${formatPercent(overall.cacheRate)}`);
 	console.log(`  Total Cost: ${formatCost(overall.totalCost)}`);
-	console.log(`  Avg Duration: ${formatDuration(overall.avgDuration)}`);
-	console.log(`  Avg TTFT: ${formatDuration(overall.avgTtft)}`);
+	console.log(`  Avg Duration: ${overall.avgDuration !== null ? formatDuration(overall.avgDuration) : "-"}`);
+	console.log(`  Avg TTFT: ${overall.avgTtft !== null ? formatDuration(overall.avgTtft) : "-"}`);
 	if (overall.avgTokensPerSecond !== null) {
 		console.log(`  Avg Tokens/s: ${overall.avgTokensPerSecond.toFixed(1)}`);
 	}

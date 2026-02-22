@@ -2,7 +2,7 @@ import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallb
 import { StringEnum } from "@oh-my-pi/pi-ai";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
-import { untilAborted } from "@oh-my-pi/pi-utils";
+import { isEnoent, untilAborted } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
@@ -80,17 +80,12 @@ export class NotebookTool implements AgentTool<typeof notebookSchema, NotebookTo
 		const absolutePath = resolveToCwd(notebook_path, this.session.cwd);
 
 		return untilAborted(signal, async () => {
-			// Check if file exists
-			const file = Bun.file(absolutePath);
-			if (!(await file.exists())) {
-				throw new Error(`Notebook not found: ${notebook_path}`);
-			}
-
 			// Read and parse notebook
 			let notebook: Notebook;
 			try {
-				notebook = await file.json();
-			} catch {
+				notebook = await Bun.file(absolutePath).json();
+			} catch (err) {
+				if (isEnoent(err)) throw new Error(`Notebook not found: ${notebook_path}`);
 				throw new Error(`Invalid JSON in notebook: ${notebook_path}`);
 			}
 

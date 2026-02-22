@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage, tryParseJson } from "./types";
 
 interface SecFiling {
 	accessionNumber: string;
@@ -184,12 +184,8 @@ export const handleSecEdgar: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let company: SecCompany;
-		try {
-			company = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const company = tryParseJson<SecCompany>(result.content);
+		if (!company) return null;
 
 		// Build markdown output
 		let md = `# ${company.name}\n\n`;
@@ -257,17 +253,7 @@ export const handleSecEdgar: SpecialHandler = async (
 		md += `- [SEC EDGAR Filings](https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}&type=&dateb=&owner=include&count=40)\n`;
 		md += `- [Company Search](https://www.sec.gov/cgi-bin/browse-edgar?company=${encodeURIComponent(company.name)}&CIK=&type=&owner=include&count=40&action=getcompany)\n`;
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "sec-edgar",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via SEC EDGAR API"],
-		};
+		return buildResult(md, { url, method: "sec-edgar", fetchedAt, notes: ["Fetched via SEC EDGAR API"] });
 	} catch {}
 
 	return null;

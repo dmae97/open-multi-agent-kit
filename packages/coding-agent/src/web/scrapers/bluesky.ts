@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, loadPage, tryParseJson } from "./types";
 
 const API_BASE = "https://public.api.bsky.app/xrpc";
 
@@ -64,12 +64,9 @@ async function resolveHandle(handle: string, timeout: number, signal?: AbortSign
 
 	if (!result.ok) return null;
 
-	try {
-		const data = JSON.parse(result.content) as BlueskyProfile;
-		return data.did;
-	} catch {
-		return null;
-	}
+	const data = tryParseJson<BlueskyProfile>(result.content);
+	if (!data) return null;
+	return data.did;
 }
 
 /**
@@ -218,17 +215,7 @@ export const handleBluesky: SpecialHandler = async (
 					}
 				}
 
-				const output = finalizeOutput(md);
-				return {
-					url,
-					finalUrl: url,
-					contentType: "text/markdown",
-					method: "bluesky-api",
-					content: output.content,
-					fetchedAt,
-					truncated: output.truncated,
-					notes: [`AT URI: ${atUri}`],
-				};
+				return buildResult(md, { url, method: "bluesky-api", fetchedAt, notes: [`AT URI: ${atUri}`] });
 			}
 
 			// Profile only
@@ -266,17 +253,7 @@ export const handleBluesky: SpecialHandler = async (
 
 			md += `\n**DID:** \`${profile.did}\`\n`;
 
-			const output = finalizeOutput(md);
-			return {
-				url,
-				finalUrl: url,
-				contentType: "text/markdown",
-				method: "bluesky-api",
-				content: output.content,
-				fetchedAt,
-				truncated: output.truncated,
-				notes: ["Fetched via AT Protocol API"],
-			};
+			return buildResult(md, { url, method: "bluesky-api", fetchedAt, notes: ["Fetched via AT Protocol API"] });
 		}
 	} catch {}
 

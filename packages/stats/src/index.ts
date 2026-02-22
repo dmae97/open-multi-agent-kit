@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { parseArgs } from "node:util";
+import { formatDuration, formatNumber, formatPercent } from "@oh-my-pi/pi-utils";
 import { getDashboardStats, getTotalMessageCount, syncAllSessions } from "./aggregator";
 import { closeDb } from "./db";
 import { startServer } from "./server";
@@ -20,37 +21,12 @@ export type {
 } from "./types";
 
 /**
- * Format a number with appropriate suffix (K, M, etc.)
- */
-function formatNumber(n: number): string {
-	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-	if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-	return n.toFixed(0);
-}
-
-/**
  * Format cost in dollars.
  */
 function formatCost(n: number): string {
 	if (n < 0.01) return `$${n.toFixed(4)}`;
 	if (n < 1) return `$${n.toFixed(3)}`;
 	return `$${n.toFixed(2)}`;
-}
-
-/**
- * Format duration in ms to human-readable.
- */
-function formatDuration(ms: number | null): string {
-	if (ms === null) return "-";
-	if (ms < 1000) return `${ms.toFixed(0)}ms`;
-	return `${(ms / 1000).toFixed(1)}s`;
-}
-
-/**
- * Format percentage.
- */
-function formatPercent(n: number): string {
-	return `${(n * 100).toFixed(1)}%`;
 }
 
 /**
@@ -68,8 +44,8 @@ async function printStats(): Promise<void> {
 	console.log(`  Total Tokens: ${formatNumber(overall.totalInputTokens + overall.totalOutputTokens)}`);
 	console.log(`  Cache Rate: ${formatPercent(overall.cacheRate)}`);
 	console.log(`  Total Cost: ${formatCost(overall.totalCost)}`);
-	console.log(`  Avg Duration: ${formatDuration(overall.avgDuration)}`);
-	console.log(`  Avg TTFT: ${formatDuration(overall.avgTtft)}`);
+	console.log(`  Avg Duration: ${overall.avgDuration !== null ? formatDuration(overall.avgDuration) : "-"}`);
+	console.log(`  Avg TTFT: ${overall.avgTtft !== null ? formatDuration(overall.avgTtft) : "-"}`);
 	if (overall.avgTokensPerSecond !== null) {
 		console.log(`  Avg Tokens/s: ${overall.avgTokensPerSecond.toFixed(1)}`);
 	}

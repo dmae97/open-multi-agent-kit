@@ -1,7 +1,7 @@
 import { parse as parseHtml } from "node-html-parser";
 import { ToolAbortError } from "../../tools/tool-errors";
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage } from "./types";
 
 const NITTER_INSTANCES = [
 	"nitter.privacyredirect.com",
@@ -58,17 +58,13 @@ export const handleTwitter: SpecialHandler = async (
 						}
 					}
 
-					const output = finalizeOutput(md);
-					return {
+					return buildResult(md, {
 						url,
 						finalUrl: nitterUrl,
-						contentType: "text/markdown",
 						method: "twitter-nitter",
-						content: output.content,
 						fetchedAt,
-						truncated: output.truncated,
 						notes: [`Via Nitter: ${instance}`],
-					};
+					});
 				}
 			}
 		}

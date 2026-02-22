@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, formatIsoDate, loadPage, tryParseJson } from "./types";
 
 interface ArtifactHubMaintainer {
 	name: string;
@@ -79,12 +79,8 @@ export const handleArtifactHub: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let pkg: ArtifactHubPackage;
-		try {
-			pkg = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const pkg = tryParseJson<ArtifactHubPackage>(result.content);
+		if (!pkg) return null;
 
 		const displayName = pkg.display_name || pkg.name;
 		const kindLabel = formatKindLabel(kind);
@@ -153,7 +149,7 @@ export const handleArtifactHub: SpecialHandler = async (
 		if (pkg.available_versions?.length) {
 			md += `\n## Recent Versions\n\n`;
 			for (const ver of pkg.available_versions.slice(0, 5)) {
-				const date = new Date(ver.ts * 1000).toISOString().split("T")[0];
+				const date = formatIsoDate(ver.ts * 1000);
 				md += `- **${ver.version}** (${date})\n`;
 			}
 		}
@@ -163,17 +159,12 @@ export const handleArtifactHub: SpecialHandler = async (
 			md += `\n---\n\n## README\n\n${pkg.readme}\n`;
 		}
 
-		const output = finalizeOutput(md);
-		return {
+		return buildResult(md, {
 			url,
-			finalUrl: url,
-			contentType: "text/markdown",
 			method: "artifacthub",
-			content: output.content,
 			fetchedAt,
-			truncated: output.truncated,
 			notes: [`Fetched via Artifact Hub API (${kindLabel})`],
-		};
+		});
 	} catch {}
 
 	return null;

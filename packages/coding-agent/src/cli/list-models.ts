@@ -2,23 +2,9 @@
  * List available models with optional fuzzy search
  */
 import type { Api, Model } from "@oh-my-pi/pi-ai";
+import { formatNumber } from "@oh-my-pi/pi-utils";
 import type { ModelRegistry } from "../config/model-registry";
 import { fuzzyFilter } from "../utils/fuzzy";
-
-/**
- * Format a number as human-readable (e.g., 200000 -> "200K", 1000000 -> "1M")
- */
-function formatTokenCount(count: number): string {
-	if (count >= 1_000_000) {
-		const millions = count / 1_000_000;
-		return millions % 1 === 0 ? `${millions}M` : `${millions.toFixed(1)}M`;
-	}
-	if (count >= 1_000) {
-		const thousands = count / 1_000;
-		return thousands % 1 === 0 ? `${thousands}K` : `${thousands.toFixed(1)}K`;
-	}
-	return count.toString();
-}
 
 /**
  * List available models, optionally filtered by search pattern
@@ -53,8 +39,8 @@ export async function listModels(modelRegistry: ModelRegistry, searchPattern?: s
 	const rows = filteredModels.map(m => ({
 		provider: m.provider,
 		model: m.id,
-		context: formatTokenCount(m.contextWindow),
-		maxOut: formatTokenCount(m.maxTokens),
+		context: formatNumber(m.contextWindow),
+		maxOut: formatNumber(m.maxTokens),
 		thinking: m.reasoning ? "yes" : "no",
 		images: m.input.includes("image") ? "yes" : "no",
 	}));

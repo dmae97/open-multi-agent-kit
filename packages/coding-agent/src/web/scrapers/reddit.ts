@@ -1,5 +1,4 @@
-import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, formatIsoDate, loadPage, type RenderResult, type SpecialHandler, tryParseJson } from "./types";
 
 interface RedditPost {
 	title: string;
@@ -44,7 +43,8 @@ export const handleReddit: SpecialHandler = async (
 		const result = await loadPage(jsonUrl, { timeout, signal });
 		if (!result.ok) return null;
 
-		const data = JSON.parse(result.content);
+		const data = tryParseJson<any>(result.content);
+		if (!data) return null;
 		let md = "";
 
 		// Handle different Reddit URL types
@@ -54,7 +54,7 @@ export const handleReddit: SpecialHandler = async (
 			if (postData) {
 				md = `# ${postData.title}\n\n`;
 				md += `**r/${postData.subreddit}** · u/${postData.author} · ${postData.score} points · ${postData.num_comments} comments\n`;
-				md += `*${new Date(postData.created_utc * 1000).toISOString().split("T")[0]}*\n\n`;
+				md += `*${formatIsoDate(postData.created_utc * 1000)}*\n\n`;
 
 				if (postData.is_self && postData.selftext) {
 					md += `---\n\n${postData.selftext}\n\n`;
@@ -87,17 +87,7 @@ export const handleReddit: SpecialHandler = async (
 
 		if (!md) return null;
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "reddit",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Reddit JSON API"],
-		};
+		return buildResult(md, { url, method: "reddit", fetchedAt, notes: ["Fetched via Reddit JSON API"] });
 	} catch {}
 
 	return null;

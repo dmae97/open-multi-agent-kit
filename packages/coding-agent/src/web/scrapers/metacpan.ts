@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, formatIsoDate, loadPage, tryParseJson } from "./types";
 
 interface ModuleResponse {
 	name: string;
@@ -89,12 +89,8 @@ async function fetchModule(
 
 	if (!result.ok) return null;
 
-	let module: ModuleResponse;
-	try {
-		module = JSON.parse(result.content);
-	} catch {
-		return null;
-	}
+	const module = tryParseJson<ModuleResponse>(result.content);
+	if (!module) return null;
 
 	// Fetch additional release info for dependencies and metadata
 	const releaseUrl = `https://fastapi.metacpan.org/v1/release/${module.distribution}`;
@@ -102,24 +98,11 @@ async function fetchModule(
 
 	let release: ReleaseResponse | null = null;
 	if (releaseResult.ok) {
-		try {
-			release = JSON.parse(releaseResult.content);
-		} catch {}
+		release = tryParseJson<ReleaseResponse>(releaseResult.content);
 	}
 
 	const md = formatModuleMarkdown(module, release);
-	const output = finalizeOutput(md);
-
-	return {
-		url,
-		finalUrl: url,
-		contentType: "text/markdown",
-		method: "metacpan",
-		content: output.content,
-		fetchedAt,
-		truncated: output.truncated,
-		notes: ["Fetched via MetaCPAN API"],
-	};
+	return buildResult(md, { url, method: "metacpan", fetchedAt, notes: ["Fetched via MetaCPAN API"] });
 }
 
 async function fetchRelease(
@@ -134,26 +117,11 @@ async function fetchRelease(
 
 	if (!result.ok) return null;
 
-	let release: ReleaseResponse;
-	try {
-		release = JSON.parse(result.content);
-	} catch {
-		return null;
-	}
+	const release = tryParseJson<ReleaseResponse>(result.content);
+	if (!release) return null;
 
 	const md = formatReleaseMarkdown(release);
-	const output = finalizeOutput(md);
-
-	return {
-		url,
-		finalUrl: url,
-		contentType: "text/markdown",
-		method: "metacpan",
-		content: output.content,
-		fetchedAt,
-		truncated: output.truncated,
-		notes: ["Fetched via MetaCPAN API"],
-	};
+	return buildResult(md, { url, method: "metacpan", fetchedAt, notes: ["Fetched via MetaCPAN API"] });
 }
 
 function formatModuleMarkdown(module: ModuleResponse, release: ReleaseResponse | null): string {
@@ -215,7 +183,7 @@ function formatReleaseMarkdown(release: ReleaseResponse): string {
 	}
 
 	if (release.stat?.mtime) {
-		const date = new Date(release.stat.mtime * 1000).toISOString().split("T")[0];
+		const date = formatIsoDate(release.stat.mtime * 1000);
 		md += `**Released:** ${date}\n`;
 	}
 

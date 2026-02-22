@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { CODEX_BASE_URL, OPENAI_HEADER_VALUES, OPENAI_HEADERS } from "../../providers/openai-codex/constants";
 import type { Model } from "../../types";
+import { isRecord } from "../../utils";
 
 const DEFAULT_MODEL_LIST_PATHS = ["/codex/models", "/models"] as const;
 const DEFAULT_CONTEXT_WINDOW = 272_000;
@@ -208,10 +209,6 @@ function normalizeClientVersion(value: unknown): string | undefined {
 		return undefined;
 	}
 	return trimmed;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
 }
 
 function isAbortError(error: unknown): error is Error {

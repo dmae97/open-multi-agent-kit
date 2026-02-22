@@ -160,15 +160,6 @@ export async function detectLspmux(): Promise<LspmuxState> {
 	return cachedState;
 }
 
-/**
- * Invalidate the cached lspmux state.
- * Call this if you know the server state has changed.
- */
-export function invalidateLspmuxCache(): void {
-	cachedState = null;
-	cacheTimestamp = 0;
-}
-
 // =============================================================================
 // Command Wrapping
 // =============================================================================
@@ -239,12 +230,4 @@ export function wrapWithLspmux(
 export async function getLspmuxCommand(command: string, args?: string[]): Promise<LspmuxWrappedCommand> {
 	const state = await detectLspmux();
 	return wrapWithLspmux(command, args, state);
-}
-
-/**
- * Check if lspmux is currently active and usable.
- */
-export async function isLspmuxActive(): Promise<boolean> {
-	const state = await detectLspmux();
-	return state.available && state.running;
 }

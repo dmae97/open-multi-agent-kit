@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage, tryParseJson } from "./types";
 
 interface HackagePackage {
 	name: string;
@@ -45,12 +45,8 @@ export const handleHackage: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let pkg: HackagePackage;
-		try {
-			pkg = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const pkg = tryParseJson<HackagePackage>(result.content);
+		if (!pkg) return null;
 
 		let md = `# ${pkg.name}\n\n`;
 		if (pkg.synopsis) md += `${pkg.synopsis}\n\n`;
@@ -77,17 +73,7 @@ export const handleHackage: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "hackage",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Hackage API"],
-		};
+		return buildResult(md, { url, method: "hackage", fetchedAt, notes: ["Fetched via Hackage API"] });
 	} catch {}
 
 	return null;

@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, loadPage, tryParseJson } from "./types";
 
 interface MarketplaceProperty {
 	key?: string;
@@ -135,12 +135,8 @@ export const handleVscodeMarketplace: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let data: MarketplaceResponse;
-		try {
-			data = JSON.parse(result.content) as MarketplaceResponse;
-		} catch {
-			return null;
-		}
+		const data = tryParseJson<MarketplaceResponse>(result.content);
+		if (!data) return null;
 
 		const extension = data.results?.[0]?.extensions?.[0];
 		if (!extension) return null;
@@ -178,17 +174,12 @@ export const handleVscodeMarketplace: SpecialHandler = async (
 		if (extension.tags?.length) md += `**Tags:** ${extension.tags.join(", ")}\n`;
 		if (repoLink) md += `**Repository:** ${repoLink}\n`;
 
-		const output = finalizeOutput(md);
-		return {
+		return buildResult(md, {
 			url,
-			finalUrl: url,
-			contentType: "text/markdown",
 			method: "vscode-marketplace",
-			content: output.content,
 			fetchedAt,
-			truncated: output.truncated,
 			notes: ["Fetched via VS Code Marketplace API"],
-		};
+		});
 	} catch {}
 
 	return null;

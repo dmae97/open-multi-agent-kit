@@ -8,6 +8,7 @@ import type {
 	UsageStatus,
 	UsageWindow,
 } from "../usage";
+import { isRecord, toNumber } from "../utils";
 
 const DEFAULT_ENDPOINT = "https://api.anthropic.com/api/oauth";
 const DEFAULT_CACHE_TTL_MS = 60_000;
@@ -67,19 +68,6 @@ type ClaudeUsagePayload = {
 	payload: ClaudeUsageResponse;
 	orgId?: string;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function toNumber(value: unknown): number | undefined {
-	if (typeof value === "number" && Number.isFinite(value)) return value;
-	if (typeof value === "string" && value.trim()) {
-		const parsed = Number(value);
-		return Number.isFinite(parsed) ? parsed : undefined;
-	}
-	return undefined;
-}
 
 function parseIsoTime(value: string | undefined): number | undefined {
 	if (!value) return undefined;

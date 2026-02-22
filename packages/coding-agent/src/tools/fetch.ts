@@ -3,7 +3,7 @@ import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallb
 import { htmlToMarkdown } from "@oh-my-pi/pi-natives";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
-import { ptree } from "@oh-my-pi/pi-utils";
+import { ptree, truncate } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import { parse as parseHtml } from "node-html-parser";
 import { renderPromptTemplate } from "../config/prompt-templates";
@@ -940,13 +940,6 @@ export class FetchTool implements AgentTool<typeof fetchSchema, FetchToolDetails
 // =============================================================================
 // TUI Rendering
 // =============================================================================
-
-/** Truncate text to max length with ellipsis */
-function truncate(text: string, maxLen: number, ellipsis: string): string {
-	if (text.length <= maxLen) return text;
-	const sliceLen = Math.max(0, maxLen - ellipsis.length);
-	return `${text.slice(0, sliceLen)}${ellipsis}`;
-}
 
 /** Count non-empty lines */
 function countNonEmptyLines(text: string): number {

@@ -50,7 +50,7 @@ function buildSpawnEnv(shell: string): Record<string, string> {
  */
 function getShellArgs(): string[] {
 	const noLogin = $env.PI_BASH_NO_LOGIN || $env.CLAUDE_BASH_NO_LOGIN;
-	return noLogin ? ["-l", "-c"] : ["-l", "-c"];
+	return noLogin ? ["-c"] : ["-l", "-c"];
 }
 
 /**

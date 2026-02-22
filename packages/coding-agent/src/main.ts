@@ -51,14 +51,6 @@ async function checkForNewVersion(currentVersion: string): Promise<string | unde
 	}
 }
 
-const writeStdout = (message: string): void => {
-	process.stdout.write(`${message}\n`);
-};
-
-const writeStderr = (message: string): void => {
-	process.stderr.write(`${message}\n`);
-};
-
 async function readPipedInput(): Promise<string | undefined> {
 	if (process.stdin.isTTY !== false) return undefined;
 	try {
@@ -381,7 +373,7 @@ async function buildSessionOptions(
 			preferences: modelMatchPreferences,
 		});
 		if (resolved.warning) {
-			writeStderr(chalk.yellow(`Warning: ${resolved.warning}`));
+			process.stderr.write(`${chalk.yellow(`Warning: ${resolved.warning}`)}\n`);
 		}
 		if (resolved.error) {
 			if (!parsed.provider && !parsed.model.includes(":")) {
@@ -389,7 +381,7 @@ async function buildSessionOptions(
 				// (extensions may register additional providers/models via registerProvider)
 				options.modelPattern = parsed.model;
 			} else {
-				writeStderr(chalk.red(resolved.error));
+				process.stderr.write(`${chalk.red(resolved.error)}\n`);
 				process.exit(1);
 			}
 		} else if (resolved.model) {
@@ -514,7 +506,7 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 	});
 
 	if (parsedArgs.version) {
-		writeStdout(VERSION);
+		process.stdout.write(`${VERSION}\n`);
 		process.exit(0);
 	}
 
@@ -531,15 +523,15 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 			result = await exportFromFile(parsedArgs.export, outputPath);
 		} catch (error: unknown) {
 			const message = error instanceof Error ? error.message : "Failed to export session";
-			writeStderr(chalk.red(`Error: ${message}`));
+			process.stderr.write(`${chalk.red(`Error: ${message}`)}\n`);
 			process.exit(1);
 		}
-		writeStdout(`Exported to: ${result}`);
+		process.stdout.write(`Exported to: ${result}\n`);
 		process.exit(0);
 	}
 
 	if (parsedArgs.mode === "rpc" && parsedArgs.fileArgs.length > 0) {
-		writeStderr(chalk.red("Error: @file arguments are not supported in RPC mode"));
+		process.stderr.write(`${chalk.red("Error: @file arguments are not supported in RPC mode")}\n`);
 		process.exit(1);
 	}
 
@@ -614,12 +606,12 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 			SessionManager.list(cwd, parsedArgs.sessionDir),
 		);
 		if (sessions.length === 0) {
-			writeStdout(chalk.dim("No sessions found"));
+			process.stdout.write(`${chalk.dim("No sessions found")}\n`);
 			return;
 		}
 		const selectedPath = await logger.timeAsync("selectSession", () => selectSession(sessions));
 		if (!selectedPath) {
-			writeStdout(chalk.dim("No session selected"));
+			process.stdout.write(`${chalk.dim("No session selected")}\n`);
 			return;
 		}
 		sessionManager = await SessionManager.open(selectedPath);
@@ -635,8 +627,8 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 	// Handle CLI --api-key as runtime override (not persisted)
 	if (parsedArgs.apiKey) {
 		if (!sessionOptions.model && !sessionOptions.modelPattern) {
-			writeStderr(
-				chalk.red("--api-key requires a model to be specified via --model, --provider/--model, or --models"),
+			process.stderr.write(
+				`${chalk.red("--api-key requires a model to be specified via --model, --provider/--model, or --models")}\n`,
 			);
 			process.exit(1);
 		}
@@ -689,13 +681,13 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 
 	if (!isInteractive && !session.model) {
 		if (modelFallbackMessage) {
-			writeStderr(chalk.red(modelFallbackMessage));
+			process.stderr.write(`${chalk.red(modelFallbackMessage)}\n`);
 		} else {
-			writeStderr(chalk.red("No models available."));
+			process.stderr.write(`${chalk.red("No models available.")}\n`);
 		}
-		writeStderr(chalk.yellow("\nSet an API key environment variable:"));
-		writeStderr("  ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, etc.");
-		writeStderr(chalk.yellow(`\nOr create ${ModelsConfigFile.path()}`));
+		process.stderr.write(`${chalk.yellow("\nSet an API key environment variable:")}\n`);
+		process.stderr.write("  ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, etc.\n");
+		process.stderr.write(`${chalk.yellow(`\nOr create ${ModelsConfigFile.path()}`)}\n`);
 		process.exit(1);
 	}
 
@@ -728,7 +720,7 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 					return `${scopedModel.model.id}${thinkingStr}`;
 				})
 				.join(", ");
-			writeStdout(chalk.dim(`Model scope: ${modelList} ${chalk.gray("(Ctrl+P to cycle)")}`));
+			process.stdout.write(`${chalk.dim(`Model scope: ${modelList} ${chalk.gray("(Ctrl+P to cycle)")}`)}\n`);
 		}
 
 		if ($env.PI_TIMING === "1") {

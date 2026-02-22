@@ -1,0 +1,52 @@
+import { $env } from "@oh-my-pi/pi-utils";
+import type { CacheRetention } from "./types";
+
+export { isRecord } from "@oh-my-pi/pi-utils";
+
+export function toNumber(value: unknown): number | undefined {
+	if (typeof value === "number" && Number.isFinite(value)) return value;
+	if (typeof value === "string" && value.trim()) {
+		const parsed = Number(value);
+		return Number.isFinite(parsed) ? parsed : undefined;
+	}
+	return undefined;
+}
+
+export function toPositiveNumber(value: unknown, fallback: number): number {
+	if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+		return fallback;
+	}
+	return value;
+}
+
+export function toBoolean(value: unknown): boolean | undefined {
+	return typeof value === "boolean" ? value : undefined;
+}
+
+export function normalizeToolCallId(id: string): string {
+	const sanitized = id.replace(/[^a-zA-Z0-9_-]/g, "_");
+	return sanitized.length > 64 ? sanitized.slice(0, 64) : sanitized;
+}
+
+export function normalizeResponsesToolCallId(id: string): { callId: string; itemId: string } {
+	const [callId, itemId] = id.split("|");
+	if (callId && itemId) {
+		return { callId, itemId };
+	}
+	const hash = Bun.hash.xxHash64(id).toString(36);
+	return { callId: `call_${hash}`, itemId: `item_${hash}` };
+}
+
+/**
+ * Resolve cache retention preference.
+ * Defaults to "short" and uses PI_CACHE_RETENTION for backward compatibility.
+ */
+export function resolveCacheRetention(cacheRetention?: CacheRetention): CacheRetention {
+	if (cacheRetention) return cacheRetention;
+	if ($env.PI_CACHE_RETENTION === "long") return "long";
+	return "short";
+}
+
+export function isAnthropicOAuthToken(key: string): boolean {
+	return key.includes("sk-ant-oat");
+}

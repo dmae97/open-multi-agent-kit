@@ -1,42 +1,11 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
 import { type Component, padding, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
-import { isEnoent } from "@oh-my-pi/pi-utils";
+import { formatNumber } from "@oh-my-pi/pi-utils";
 import { getProjectDir } from "@oh-my-pi/pi-utils/dirs";
 import { theme } from "../../modes/theme/theme";
 import type { AgentSession } from "../../session/agent-session";
 import { shortenPath } from "../../tools/render-utils";
-
-/**
- * Sanitize text for display in a single-line status.
- * Removes newlines, tabs, carriage returns, and other control characters.
- */
-function sanitizeStatusText(text: string): string {
-	// Replace newlines, tabs, carriage returns with space, then collapse multiple spaces
-	return text
-		.replace(/[\r\n\t]/g, " ")
-		.replace(/ +/g, " ")
-		.trim();
-}
-
-/** Find the git root by walking up from cwd. Returns path and content of .git/HEAD if found. */
-async function findGitHeadPath(): Promise<{ path: string; content: string } | null> {
-	let dir = getProjectDir();
-	while (true) {
-		const gitHeadPath = path.join(dir, ".git", "HEAD");
-		try {
-			const content = await Bun.file(gitHeadPath).text();
-			return { path: gitHeadPath, content };
-		} catch (err) {
-			if (!isEnoent(err)) throw err;
-		}
-		const parent = path.dirname(dir);
-		if (parent === dir) {
-			return null;
-		}
-		dir = parent;
-	}
-}
+import { findGitHeadPathAsync, sanitizeStatusText } from "../shared";
 
 /**
  * Footer component that shows pwd, token stats, and context usage
@@ -85,7 +54,7 @@ export class FooterComponent implements Component {
 			this.#gitWatcher = null;
 		}
 
-		findGitHeadPath().then(result => {
+		findGitHeadPathAsync().then(result => {
 			if (!result) {
 				return;
 			}
@@ -130,7 +99,7 @@ export class FooterComponent implements Component {
 
 		// Note: fire-and-forget async call - will return undefined on first call
 		// This is acceptable since it's a cached value that will update on next render
-		findGitHeadPath().then(result => {
+		findGitHeadPathAsync().then(result => {
 			if (!result) {
 				this.#cachedBranch = null;
 				if (this.#onBranchChange) {
@@ -181,15 +150,6 @@ export class FooterComponent implements Component {
 		const contextPercentValue = contextUsage?.percent ?? 0;
 		const contextPercent = contextUsage?.percent !== null ? contextPercentValue.toFixed(1) : "?";
 
-		// Format token counts (similar to web-ui)
-		const formatTokens = (count: number): string => {
-			if (count < 1000) return count.toString();
-			if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
-			if (count < 1000000) return `${Math.round(count / 1000)}k`;
-			if (count < 10000000) return `${(count / 1000000).toFixed(1)}M`;
-			return `${Math.round(count / 1000000)}M`;
-		};
-
 		// Replace home directory with ~
 		let pwd = shortenPath(getProjectDir());
 
@@ -213,10 +173,10 @@ export class FooterComponent implements Component {
 
 		// Build stats line
 		const statsParts = [];
-		if (totalInput) statsParts.push(`↑${formatTokens(totalInput)}`);
-		if (totalOutput) statsParts.push(`↓${formatTokens(totalOutput)}`);
-		if (totalCacheRead) statsParts.push(`R${formatTokens(totalCacheRead)}`);
-		if (totalCacheWrite) statsParts.push(`W${formatTokens(totalCacheWrite)}`);
+		if (totalInput) statsParts.push(`↑${formatNumber(totalInput)}`);
+		if (totalOutput) statsParts.push(`↓${formatNumber(totalOutput)}`);
+		if (totalCacheRead) statsParts.push(`R${formatNumber(totalCacheRead)}`);
+		if (totalCacheWrite) statsParts.push(`W${formatNumber(totalCacheWrite)}`);
 
 		// Show cost with "(sub)" indicator if using OAuth subscription
 		const usingSubscription = state.model ? this.session.modelRegistry.isUsingOAuth(state.model) : false;
@@ -230,8 +190,8 @@ export class FooterComponent implements Component {
 		const autoIndicator = this.#autoCompactEnabled ? " (auto)" : "";
 		const contextPercentDisplay =
 			contextPercent === "?"
-				? `?/${formatTokens(contextWindow)}${autoIndicator}`
-				: `${contextPercent}%/${formatTokens(contextWindow)}${autoIndicator}`;
+				? `?/${formatNumber(contextWindow)}${autoIndicator}`
+				: `${contextPercent}%/${formatNumber(contextWindow)}${autoIndicator}`;
 		if (contextPercentValue > 90) {
 			contextPercentStr = theme.fg("error", contextPercentDisplay);
 		} else if (contextPercentValue > 70) {

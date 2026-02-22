@@ -3,6 +3,7 @@
  *
  * Handles connection initialization, tool listing, and tool calling.
  */
+import { withTimeout } from "@oh-my-pi/pi-utils";
 import { createHttpTransport } from "./transports/http";
 import { createStdioTransport } from "./transports/stdio";
 import type {
@@ -33,52 +34,6 @@ const CLIENT_INFO = {
 	name: "omp-coding-agent",
 	version: "1.0.0",
 };
-
-/** Wrap a promise with a timeout and optional abort signal */
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string, signal?: AbortSignal): Promise<T> {
-	if (signal?.aborted) {
-		const reason = signal.reason instanceof Error ? signal.reason : new Error("Aborted");
-		return Promise.reject(reason);
-	}
-
-	const { promise: wrapped, resolve, reject } = Promise.withResolvers<T>();
-	let settled = false;
-	const timeoutId = setTimeout(() => {
-		if (settled) return;
-		settled = true;
-		reject(new Error(message));
-	}, ms);
-
-	const onAbort = () => {
-		if (settled) return;
-		settled = true;
-		clearTimeout(timeoutId);
-		reject(signal?.reason instanceof Error ? signal.reason : new Error("Aborted"));
-	};
-
-	if (signal) {
-		signal.addEventListener("abort", onAbort, { once: true });
-	}
-
-	promise.then(
-		value => {
-			if (settled) return;
-			settled = true;
-			clearTimeout(timeoutId);
-			if (signal) signal.removeEventListener("abort", onAbort);
-			resolve(value);
-		},
-		error => {
-			if (settled) return;
-			settled = true;
-			clearTimeout(timeoutId);
-			if (signal) signal.removeEventListener("abort", onAbort);
-			reject(error);
-		},
-	);
-
-	return wrapped;
-}
 
 /**
  * Create a transport for the given server config.

@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, formatIsoDate, loadPage, tryParseJson } from "./types";
 
 interface OsvSeverity {
 	type: string;
@@ -73,12 +73,8 @@ export const handleOsv: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let vuln: OsvVulnerability;
-		try {
-			vuln = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const vuln = tryParseJson<OsvVulnerability>(result.content);
+		if (!vuln) return null;
 
 		let md = `# ${vuln.id}\n\n`;
 
@@ -93,13 +89,13 @@ export const handleOsv: SpecialHandler = async (
 			md += `**Aliases:** ${vuln.aliases.join(", ")}\n`;
 		}
 		if (vuln.published) {
-			md += `**Published:** ${vuln.published.split("T")[0]}\n`;
+			md += `**Published:** ${formatIsoDate(vuln.published)}\n`;
 		}
 		if (vuln.modified) {
-			md += `**Modified:** ${vuln.modified.split("T")[0]}\n`;
+			md += `**Modified:** ${formatIsoDate(vuln.modified)}\n`;
 		}
 		if (vuln.withdrawn) {
-			md += `**Withdrawn:** ${vuln.withdrawn.split("T")[0]}\n`;
+			md += `**Withdrawn:** ${formatIsoDate(vuln.withdrawn)}\n`;
 		}
 
 		// Severity
@@ -147,9 +143,6 @@ export const handleOsv: SpecialHandler = async (
 						affected.versions.length > 10
 							? `${affected.versions.slice(0, 10).join(", ")}… (${affected.versions.length} total)`
 							: affected.versions.join(", ");
-					affected.versions.length > 10
-						? `${affected.versions.slice(0, 10).join(", ")}… (${affected.versions.length} total)`
-						: affected.versions.join(", ");
 					md += `- **Versions:** ${versions}\n`;
 				}
 
@@ -175,17 +168,7 @@ export const handleOsv: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "osv",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via OSV API"],
-		};
+		return buildResult(md, { url, method: "osv", fetchedAt, notes: ["Fetched via OSV API"] });
 	} catch {}
 
 	return null;

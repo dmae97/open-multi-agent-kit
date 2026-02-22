@@ -1,0 +1,64 @@
+/**
+ * Shared factory for creating Exa tools with consistent error handling and response formatting.
+ */
+import type { TObject, TProperties } from "@sinclair/typebox";
+import type { CustomTool } from "../extensibility/custom-tools/types";
+import { callExaTool, findApiKey, formatSearchResults, isSearchResponse } from "./mcp-client";
+import type { ExaRenderDetails } from "./types";
+
+/** Creates an Exa tool with standardized API key handling, error wrapping, and optional search response formatting. */
+export function createExaTool(
+	name: string,
+	label: string,
+	description: string,
+	parameters: TObject<TProperties>,
+	mcpToolName: string,
+	options?: {
+		/** When true, checks isSearchResponse and formats with formatSearchResults. Default: true */
+		formatResponse?: boolean;
+		/** Transform params before passing to callExaTool */
+		transformParams?: (params: Record<string, unknown>) => Record<string, unknown>;
+	},
+): CustomTool<any, ExaRenderDetails> {
+	const formatResponse = options?.formatResponse ?? true;
+	const transformParams = options?.transformParams;
+
+	return {
+		name,
+		label,
+		description,
+		parameters,
+		async execute(_toolCallId, params, _onUpdate, _ctx, _signal) {
+			try {
+				const apiKey = await findApiKey();
+				if (!apiKey) {
+					return {
+						content: [{ type: "text" as const, text: "Error: EXA_API_KEY not found" }],
+						details: { error: "EXA_API_KEY not found", toolName: name },
+					};
+				}
+				const args = transformParams ? transformParams(params as Record<string, unknown>) : params;
+				const response = await callExaTool(mcpToolName, args, apiKey);
+
+				if (formatResponse && isSearchResponse(response)) {
+					const formatted = formatSearchResults(response);
+					return {
+						content: [{ type: "text" as const, text: formatted }],
+						details: { response, toolName: name },
+					};
+				}
+
+				return {
+					content: [{ type: "text" as const, text: JSON.stringify(response, null, 2) }],
+					details: { raw: response, toolName: name },
+				};
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				return {
+					content: [{ type: "text" as const, text: `Error: ${message}` }],
+					details: { error: message, toolName: name },
+				};
+			}
+		},
+	};
+}

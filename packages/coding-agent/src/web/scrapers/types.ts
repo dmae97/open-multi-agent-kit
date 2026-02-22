@@ -4,6 +4,8 @@
 import { ptree } from "@oh-my-pi/pi-utils";
 import { ToolAbortError } from "../../tools/tool-errors";
 
+export { formatCount } from "@oh-my-pi/pi-utils";
+
 export interface RenderResult {
 	url: string;
 	finalUrl: string;
@@ -18,7 +20,7 @@ export interface RenderResult {
 export type SpecialHandler = (url: string, timeout: number, signal?: AbortSignal) => Promise<RenderResult | null>;
 
 export const MAX_OUTPUT_CHARS = 500_000;
-const MAX_BYTES = 50 * 1024 * 1024;
+export const MAX_BYTES = 50 * 1024 * 1024;
 
 const USER_AGENTS = [
 	"curl/8.0",
@@ -152,49 +154,125 @@ export async function loadPage(url: string, options: LoadPageOptions = {}): Prom
 }
 
 /**
- * Format large numbers (1000 -> 1K, 1000000 -> 1M)
- */
-export function formatCount(n: number): string {
-	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-	if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-	return String(n);
-}
-
-/**
  * Convert basic HTML to markdown
  */
 export function htmlToBasicMarkdown(html: string): string {
-	return html
-		.replace(/<pre><code[^>]*>/g, "\n```\n")
+	const stripped = html
+		.replace(/<pre[^>]*><code[^>]*>/g, "\n```\n")
 		.replace(/<\/code><\/pre>/g, "\n```\n")
-		.replace(/<code>/g, "`")
+		.replace(/<code[^>]*>/g, "`")
 		.replace(/<\/code>/g, "`")
-		.replace(/<strong>/g, "**")
+		.replace(/<strong[^>]*>/g, "**")
 		.replace(/<\/strong>/g, "**")
-		.replace(/<b>/g, "**")
+		.replace(/<b[^>]*>/g, "**")
 		.replace(/<\/b>/g, "**")
-		.replace(/<em>/g, "*")
+		.replace(/<em[^>]*>/g, "*")
 		.replace(/<\/em>/g, "*")
-		.replace(/<i>/g, "*")
+		.replace(/<i[^>]*>/g, "*")
 		.replace(/<\/i>/g, "*")
-		.replace(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g, "[$2]($1)")
-		.replace(/<p>/g, "\n\n")
+		.replace(
+			/<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g,
+			(_, href, text) => `[${text.replace(/<[^>]+>/g, "").trim()}](${href})`,
+		)
+		.replace(/<p[^>]*>/g, "\n\n")
 		.replace(/<\/p>/g, "")
 		.replace(/<br\s*\/?>/g, "\n")
-		.replace(/<li>/g, "- ")
+		.replace(/<li[^>]*>/g, "- ")
 		.replace(/<\/li>/g, "\n")
-		.replace(/<\/?[uo]l>/g, "\n")
-		.replace(/<h(\d)>/g, (_, n) => `\n${"#".repeat(parseInt(n, 10))} `)
+		.replace(/<\/?[uo]l[^>]*>/g, "\n")
+		.replace(/<h(\d)[^>]*>/g, (_, n) => `\n${"#".repeat(parseInt(n, 10))} `)
 		.replace(/<\/h\d>/g, "\n")
-		.replace(/<blockquote>/g, "\n> ")
+		.replace(/<blockquote[^>]*>/g, "\n> ")
 		.replace(/<\/blockquote>/g, "\n")
 		.replace(/<[^>]+>/g, "")
+		.replace(/\n{3,}/g, "\n\n")
+		.trim();
+	return decodeHtmlEntities(stripped);
+}
+
+/**
+ * Try to parse JSON, returning null on failure.
+ */
+export function tryParseJson<T = unknown>(content: string): T | null {
+	try {
+		return JSON.parse(content) as T;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Build a RenderResult from markdown content. Calls finalizeOutput internally.
+ */
+export function buildResult(
+	md: string,
+	opts: { url: string; finalUrl?: string; method: string; fetchedAt: string; notes?: string[]; contentType?: string },
+): RenderResult {
+	const output = finalizeOutput(md);
+	return {
+		url: opts.url,
+		finalUrl: opts.finalUrl ?? opts.url,
+		contentType: opts.contentType ?? "text/markdown",
+		method: opts.method,
+		content: output.content,
+		fetchedAt: opts.fetchedAt,
+		truncated: output.truncated,
+		notes: opts.notes ?? [],
+	};
+}
+
+/**
+ * Format a date value as YYYY-MM-DD. Returns empty string on invalid input.
+ */
+export function formatIsoDate(value?: string | number | Date): string {
+	if (value == null) return "";
+	if (typeof value === "string") {
+		const datePrefix = value.match(/^\d{4}-\d{2}-\d{2}/);
+		if (datePrefix) return datePrefix[0];
+	}
+	try {
+		return new Date(value).toISOString().split("T")[0];
+	} catch {
+		return "";
+	}
+}
+
+/**
+ * Decode common HTML entities.
+ */
+export function decodeHtmlEntities(text: string): string {
+	return text
 		.replace(/&lt;/g, "<")
 		.replace(/&gt;/g, ">")
 		.replace(/&amp;/g, "&")
 		.replace(/&quot;/g, '"')
-		.replace(/&#39;/g, "'")
-		.replace(/&nbsp;/g, " ")
-		.replace(/\n{3,}/g, "\n\n")
-		.trim();
+		.replace(/&#0?39;/g, "'")
+		.replace(/&#x27;/g, "'")
+		.replace(/&#x2F;/g, "/")
+		.replace(/&nbsp;/g, " ");
+}
+
+/**
+ * Format seconds into HH:MM:SS or MM:SS.
+ */
+export function formatMediaDuration(totalSeconds: number): string {
+	const hours = Math.floor(totalSeconds / 3600);
+	const minutes = Math.floor((totalSeconds % 3600) / 60);
+	const secs = Math.floor(totalSeconds % 60);
+	if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+	return `${minutes}:${String(secs).padStart(2, "0")}`;
+}
+
+/**
+ * Extract localized text, preferring en-US/en.
+ */
+export type LocalizedText = string | Record<string, string | null> | null | undefined;
+
+export function getLocalizedText(value: LocalizedText, defaultLocale?: string): string | undefined {
+	if (value == null) return undefined;
+	if (typeof value === "string") return value;
+	if (defaultLocale && value[defaultLocale]) return value[defaultLocale];
+	return (
+		value["en-US"] ?? value.en_US ?? value.en ?? Object.values(value).find(v => typeof v === "string") ?? undefined
+	);
 }

@@ -1,5 +1,4 @@
-import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage, type RenderResult, type SpecialHandler, tryParseJson } from "./types";
 
 interface RfcMetadata {
 	doc_id: string;
@@ -118,12 +117,8 @@ export const handleRfc: SpecialHandler = async (
 
 		let metadata: RfcMetadata | null = null;
 		if (metaResult.ok) {
-			try {
-				metadata = JSON.parse(metaResult.content);
-				notes.push("Metadata from RFC Editor JSON API");
-			} catch {
-				// JSON parse failed, continue without metadata
-			}
+			metadata = tryParseJson<RfcMetadata>(metaResult.content);
+			if (metadata) notes.push("Metadata from RFC Editor JSON API");
 		}
 
 		// Build markdown output
@@ -192,17 +187,13 @@ export const handleRfc: SpecialHandler = async (
 		md += cleanRfcText(textResult.content);
 		md += "\n```\n";
 
-		const output = finalizeOutput(md);
-		return {
+		return buildResult(md, {
 			url,
 			finalUrl: `https://www.rfc-editor.org/rfc/rfc${rfcNumber}`,
-			contentType: "text/markdown",
 			method: "rfc",
-			content: output.content,
 			fetchedAt,
-			truncated: output.truncated,
 			notes: notes.length ? notes : ["Fetched from RFC Editor"],
-		};
+		});
 	} catch {}
 
 	return null;

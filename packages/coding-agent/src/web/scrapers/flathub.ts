@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, htmlToBasicMarkdown, loadPage } from "./types";
+import { buildResult, formatCount, formatIsoDate, htmlToBasicMarkdown, loadPage, tryParseJson } from "./types";
 
 interface FlathubScreenshotSize {
 	src?: string;
@@ -129,15 +129,6 @@ function bestScreenshotUrl(sizes?: FlathubScreenshotSize[]): string | null {
 	return best.src ?? sizes[0].src ?? null;
 }
 
-function formatReleaseDate(timestamp?: string | null): string | null {
-	if (!timestamp) return null;
-	const seconds = Number(timestamp);
-	if (!Number.isFinite(seconds)) return null;
-	const date = new Date(seconds * 1000);
-	if (Number.isNaN(date.getTime())) return null;
-	return date.toISOString().split("T")[0] ?? null;
-}
-
 export const handleFlathub: SpecialHandler = async (
 	url: string,
 	timeout: number,
@@ -154,12 +145,8 @@ export const handleFlathub: SpecialHandler = async (
 		const result = await loadPage(apiUrl, { timeout, signal, headers: { Accept: "application/json" } });
 		if (!result.ok) return null;
 
-		let app: FlathubAppStream;
-		try {
-			app = JSON.parse(result.content) as FlathubAppStream;
-		} catch {
-			return null;
-		}
+		const app = tryParseJson<FlathubAppStream>(result.content);
+		if (!app) return null;
 
 		const fetchedAt = new Date().toISOString();
 		const name = app.name ?? app.id ?? appId;
@@ -209,7 +196,7 @@ export const handleFlathub: SpecialHandler = async (
 			for (const release of app.releases.slice(0, 5)) {
 				const version = release.version ?? "unknown";
 				let line = `- **${version}**`;
-				const date = formatReleaseDate(release.timestamp);
+				const date = release.timestamp ? formatIsoDate(Number(release.timestamp) * 1000) : "";
 				if (date) line += ` (${date})`;
 				if (release.type) line += ` · ${release.type}`;
 				if (release.url) line += ` · ${release.url}`;
@@ -222,17 +209,13 @@ export const handleFlathub: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
+		return buildResult(md, {
 			url,
 			finalUrl: result.finalUrl,
-			contentType: "text/markdown",
 			method: "flathub-appstream",
-			content: output.content,
 			fetchedAt,
-			truncated: output.truncated,
 			notes: ["Fetched via Flathub Appstream API"],
-		};
+		});
 	} catch {}
 
 	return null;

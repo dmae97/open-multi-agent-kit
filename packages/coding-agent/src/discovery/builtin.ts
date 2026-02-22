@@ -21,6 +21,7 @@ import { type SlashCommand, slashCommandCapability } from "../capability/slash-c
 import { type SystemPrompt, systemPromptCapability } from "../capability/system-prompt";
 import { type CustomTool, toolCapability } from "../capability/tool";
 import type { LoadContext, LoadResult } from "../capability/types";
+import { expandTilde } from "../tools/path-utils";
 import { parseFrontmatter } from "../utils/frontmatter";
 import {
 	buildRuleFromMarkdown,
@@ -363,16 +364,11 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 	const warnings: string[] = [];
 
 	const resolveExtensionPath = (rawPath: string): string => {
-		if (rawPath.startsWith("~/")) {
-			return path.join(ctx.home, rawPath.slice(2));
+		const expanded = expandTilde(rawPath, ctx.home);
+		if (path.isAbsolute(expanded)) {
+			return expanded;
 		}
-		if (rawPath.startsWith("~")) {
-			return path.join(ctx.home, rawPath.slice(1));
-		}
-		if (path.isAbsolute(rawPath)) {
-			return rawPath;
-		}
-		return path.resolve(ctx.cwd, rawPath);
+		return path.resolve(ctx.cwd, expanded);
 	};
 
 	const createExtensionModule = (extPath: string, level: "user" | "project"): ExtensionModule => ({

@@ -10,7 +10,7 @@ import {
 } from "@oh-my-pi/pi-ai";
 import { copyToClipboard } from "@oh-my-pi/pi-natives";
 import { Loader, Markdown, padding, Spacer, Text, visibleWidth } from "@oh-my-pi/pi-tui";
-import { Snowflake } from "@oh-my-pi/pi-utils";
+import { formatDuration, Snowflake } from "@oh-my-pi/pi-utils";
 import { setProjectDir } from "@oh-my-pi/pi-utils/dirs";
 import { $ } from "bun";
 import { reset as resetCapabilities } from "../../capability";
@@ -793,33 +793,6 @@ function formatUsedAccounts(value: number): string {
 	return `${value.toFixed(2)} used`;
 }
 
-function formatDuration(ms: number): string {
-	const totalSeconds = Math.max(0, Math.round(ms / 1000));
-	const minutes = Math.floor(totalSeconds / 60);
-	const seconds = totalSeconds % 60;
-	const hours = Math.floor(minutes / 60);
-	const mins = minutes % 60;
-	const days = Math.floor(hours / 24);
-	const hrs = hours % 24;
-	if (days > 0) return `${days}d ${hrs}h`;
-	if (hours > 0) return `${hours}h ${mins}m`;
-	if (minutes > 0) return `${minutes}m ${seconds}s`;
-	return `${seconds}s`;
-}
-
-function formatDurationShort(ms: number): string {
-	const totalSeconds = Math.max(0, Math.round(ms / 1000));
-	const minutes = Math.floor(totalSeconds / 60);
-	const hours = Math.floor(minutes / 60);
-	const mins = minutes % 60;
-	const days = Math.floor(hours / 24);
-	const hrs = hours % 24;
-	if (days > 0) return `${days}d${hrs > 0 ? ` ${hrs}h` : ""}`;
-	if (hours > 0) return `${hours}h${mins > 0 ? ` ${mins}m` : ""}`;
-	if (minutes > 0) return `${minutes}m`;
-	return `${totalSeconds}s`;
-}
-
 function resolveProviderAuthMode(authStorage: AuthStorage, provider: string): string {
 	if (authStorage.hasOAuth(provider)) {
 		return "oauth";
@@ -890,10 +863,10 @@ function formatAccountLabel(limit: UsageLimit, report: UsageReport, index: numbe
 
 function formatResetShort(limit: UsageLimit, nowMs: number): string | undefined {
 	if (limit.window?.resetInMs !== undefined) {
-		return formatDurationShort(limit.window.resetInMs);
+		return formatDuration(limit.window.resetInMs);
 	}
 	if (limit.window?.resetsAt !== undefined) {
-		return formatDurationShort(limit.window.resetsAt - nowMs);
+		return formatDuration(limit.window.resetsAt - nowMs);
 	}
 	return undefined;
 }

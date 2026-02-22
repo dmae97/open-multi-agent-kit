@@ -288,7 +288,7 @@ const MIN_OUTPUT_TOKENS = 1024;
 export const OUTPUT_FALLBACK_BUFFER = 4000;
 const ANTHROPIC_USE_INTERLEAVED_THINKING = true;
 
-const ANTHROPIC_THINKING: Record<ThinkingLevel, number> = {
+export const ANTHROPIC_THINKING: Record<ThinkingLevel, number> = {
 	minimal: 1024,
 	low: 4096,
 	medium: 8192,

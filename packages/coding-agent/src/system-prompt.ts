@@ -5,7 +5,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { $env, hasFsCode, isEnoent, logger, untilAborted } from "@oh-my-pi/pi-utils";
+import { $env, hasFsCode, isEnoent, logger } from "@oh-my-pi/pi-utils";
 import { getGpuCachePath, getProjectDir } from "@oh-my-pi/pi-utils/dirs";
 import { $ } from "bun";
 import { contextFileCapability } from "./capability/context-file";
@@ -277,9 +277,7 @@ function getSystemInfoCachePath(): string {
 async function loadGpuCache(): Promise<GpuCache | null> {
 	try {
 		const cachePath = getSystemInfoCachePath();
-		const file = Bun.file(cachePath);
-		if (!(await file.exists())) return null;
-		const content = await file.json();
+		const content = await Bun.file(cachePath).json();
 		return content as GpuCache;
 	} catch {
 		return null;

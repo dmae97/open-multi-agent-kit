@@ -1,19 +1,6 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
-}
-
-function asString(value: unknown): string | null {
-	if (typeof value !== "string") return null;
-	const trimmed = value.trim();
-	return trimmed.length > 0 ? trimmed : null;
-}
-
-function asNumber(value: unknown): number | null {
-	return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
+import { buildResult, formatCount, loadPage, tryParseJson } from "./types";
+import { asNumber, asString, isRecord } from "./utils";
 
 function formatLicenses(licenses: unknown): string[] {
 	if (!Array.isArray(licenses)) return [];
@@ -121,12 +108,8 @@ export const handleClojars: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let payload: unknown;
-		try {
-			payload = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const payload = tryParseJson(result.content);
+		if (!payload) return null;
 
 		const data = Array.isArray(payload) ? payload[0] : payload;
 		if (!isRecord(data)) return null;
@@ -163,17 +146,7 @@ export const handleClojars: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "clojars",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Clojars API"],
-		};
+		return buildResult(md, { url, method: "clojars", fetchedAt, notes: ["Fetched via Clojars API"] });
 	} catch {}
 
 	return null;

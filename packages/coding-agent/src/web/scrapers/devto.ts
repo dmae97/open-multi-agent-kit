@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, htmlToBasicMarkdown, loadPage } from "./types";
+import { buildResult, formatCount, formatIsoDate, htmlToBasicMarkdown, loadPage } from "./types";
 
 interface DevToArticle {
 	title: string;
@@ -61,24 +61,14 @@ export const handleDevTo: SpecialHandler = async (
 				md += `### ${article.title}\n\n`;
 				md += `by **${article.user?.name || "Unknown"}** (@${article.user?.username || "unknown"})`;
 				md += `${readTime}${reactStr}\n`;
-				md += `*${new Date(article.published_at || article.published_timestamp || "").toISOString().split("T")[0]}*\n`;
+				md += `*${formatIsoDate(article.published_at || article.published_timestamp || "")}*\n`;
 				if (tags.length > 0) md += `Tags: ${tags.map(t => `#${t}`).join(", ")}\n`;
 				if (article.description) md += `\n${article.description}\n`;
 				md += `\n---\n\n`;
 			}
 
 			notes.push("Fetched via dev.to API");
-			const output = finalizeOutput(md);
-			return {
-				url,
-				finalUrl: url,
-				contentType: "text/markdown",
-				method: "devto",
-				content: output.content,
-				fetchedAt,
-				truncated: output.truncated,
-				notes,
-			};
+			return buildResult(md, { url, method: "devto", fetchedAt, notes });
 		}
 
 		// User profile: /{username} (only if single path segment)
@@ -103,24 +93,14 @@ export const handleDevTo: SpecialHandler = async (
 
 				md += `### ${article.title}\n\n`;
 				md += `${readTime.substring(3)}${reactStr}\n`;
-				md += `*${new Date(article.published_at || article.published_timestamp || "").toISOString().split("T")[0]}*\n`;
+				md += `*${formatIsoDate(article.published_at || article.published_timestamp || "")}*\n`;
 				if (tags.length > 0) md += `Tags: ${tags.map(t => `#${t}`).join(", ")}\n`;
 				if (article.description) md += `\n${article.description}\n`;
 				md += `\n---\n\n`;
 			}
 
 			notes.push("Fetched via dev.to API");
-			const output = finalizeOutput(md);
-			return {
-				url,
-				finalUrl: url,
-				contentType: "text/markdown",
-				method: "devto",
-				content: output.content,
-				fetchedAt,
-				truncated: output.truncated,
-				notes,
-			};
+			return buildResult(md, { url, method: "devto", fetchedAt, notes });
 		}
 
 		// Article: /{username}/{slug}
@@ -142,7 +122,7 @@ export const handleDevTo: SpecialHandler = async (
 
 			let md = `# ${article.title}\n\n`;
 			md += `**Author:** ${article.user?.name || "Unknown"} (@${article.user?.username || username})\n`;
-			md += `**Published:** ${new Date(article.published_at || article.published_timestamp || "").toISOString().split("T")[0]}\n`;
+			md += `**Published:** ${formatIsoDate(article.published_at || article.published_timestamp || "")}\n`;
 			if (readTime > 0) md += `**Reading time:** ${readTime} min\n`;
 			if (reactions > 0) md += `**Reactions:** ${formatCount(reactions)}\n`;
 			if (comments > 0) md += `**Comments:** ${formatCount(comments)}\n`;
@@ -157,17 +137,7 @@ export const handleDevTo: SpecialHandler = async (
 			}
 
 			notes.push("Fetched via dev.to API");
-			const output = finalizeOutput(md);
-			return {
-				url,
-				finalUrl: url,
-				contentType: "text/markdown",
-				method: "devto",
-				content: output.content,
-				fetchedAt,
-				truncated: output.truncated,
-				notes,
-			};
+			return buildResult(md, { url, method: "devto", fetchedAt, notes });
 		}
 
 		return null;

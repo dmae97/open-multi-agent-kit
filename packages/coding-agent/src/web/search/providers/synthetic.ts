@@ -6,12 +6,11 @@
  */
 
 import { getEnvApiKey } from "@oh-my-pi/pi-ai";
-import { getAgentDbPath } from "@oh-my-pi/pi-utils/dirs";
-import { AgentStorage } from "../../../session/agent-storage";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
 import type { SearchParams } from "./base";
 import { SearchProvider } from "./base";
+import { findCredential } from "./utils";
 
 const SYNTHETIC_SEARCH_URL = "https://api.synthetic.new/v2/search";
 
@@ -26,31 +25,9 @@ interface SyntheticSearchResponse {
 	results: SyntheticSearchResult[];
 }
 
-/**
- * Find Synthetic API key from environment or agent.db credentials.
- * Priority: SYNTHETIC_API_KEY env var, then credentials stored under provider "synthetic".
- */
+/** Find Synthetic API key from environment or agent.db credentials. */
 export async function findApiKey(): Promise<string | null> {
-	const envKey = getEnvApiKey("synthetic");
-	if (envKey) return envKey;
-
-	try {
-		const storage = await AgentStorage.open(getAgentDbPath());
-		const records = storage.listAuthCredentials("synthetic");
-		for (const record of records) {
-			const credential = record.credential;
-			if (credential.type === "api_key" && credential.key.trim().length > 0) {
-				return credential.key;
-			}
-			if (credential.type === "oauth" && credential.access.trim().length > 0) {
-				return credential.access;
-			}
-		}
-	} catch {
-		return null;
-	}
-
-	return null;
+	return findCredential(getEnvApiKey("synthetic"), "synthetic");
 }
 
 /** Call Synthetic search API. */

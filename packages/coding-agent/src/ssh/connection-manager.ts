@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { isEnoent, logger } from "@oh-my-pi/pi-utils";
 import { getRemoteHostDir, getSshControlDir } from "@oh-my-pi/pi-utils/dirs";
 import { $ } from "bun";
+import { buildSshTarget, sanitizeHostName } from "./utils";
 
 export interface SSHConnectionTarget {
 	name: string;
@@ -42,11 +43,6 @@ function ensureControlDir() {
 	}
 }
 
-function sanitizeHostName(name: string): string {
-	const sanitized = name.replace(/[^a-zA-Z0-9._-]+/g, "_");
-	return sanitized.length > 0 ? sanitized : "host";
-}
-
 function getHostInfoPath(name: string): string {
 	return path.join(HOST_INFO_DIR, `${sanitizeHostName(name)}.json`);
 }
@@ -69,10 +65,6 @@ async function validateKeyPermissions(keyPath?: string): Promise<void> {
 	if ((mode & 0o077) !== 0) {
 		throw new Error(`SSH key permissions must be 600 or stricter: ${keyPath}`);
 	}
-}
-
-function buildSshTarget(host: SSHConnectionTarget): string {
-	return host.username ? `${host.username}@${host.host}` : host.host;
 }
 
 function buildCommonArgs(host: SSHConnectionTarget): string[] {
@@ -367,7 +359,7 @@ export async function ensureHostInfo(host: SSHConnectionTarget): Promise<SSHHost
 
 export async function buildRemoteCommand(host: SSHConnectionTarget, command: string): Promise<string[]> {
 	await validateKeyPermissions(host.keyPath);
-	return [...buildCommonArgs(host), buildSshTarget(host), command];
+	return [...buildCommonArgs(host), buildSshTarget(host.username, host.host), command];
 }
 
 export async function ensureConnection(host: SSHConnectionTarget): Promise<void> {
@@ -383,7 +375,7 @@ export async function ensureConnection(host: SSHConnectionTarget): Promise<void>
 		ensureControlDir();
 		await validateKeyPermissions(host.keyPath);
 
-		const target = buildSshTarget(host);
+		const target = buildSshTarget(host.username, host.host);
 		const check = await runSshSync(["-O", "check", ...buildCommonArgs(host), target]);
 		if (check.exitCode === 0) {
 			activeHosts.set(key, host);
@@ -414,7 +406,7 @@ export async function ensureConnection(host: SSHConnectionTarget): Promise<void>
 }
 
 async function closeConnectionInternal(host: SSHConnectionTarget): Promise<void> {
-	const target = buildSshTarget(host);
+	const target = buildSshTarget(host.username, host.host);
 	await runSshSync(["-O", "exit", ...buildCommonArgs(host), target]);
 }
 

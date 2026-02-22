@@ -1,12 +1,8 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, htmlToBasicMarkdown, loadPage } from "./types";
+import { buildResult, htmlToBasicMarkdown, loadPage, tryParseJson } from "./types";
+import { asRecord } from "./utils";
 
 type JsonRecord = Record<string, unknown>;
-
-function asRecord(value: unknown): JsonRecord | null {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-	return value as JsonRecord;
-}
 
 function getString(record: JsonRecord | null, key: string): string | undefined {
 	if (!record) return undefined;
@@ -96,8 +92,8 @@ export const handleW3c: SpecialHandler = async (
 
 		if (!specResult.ok || !latestResult.ok) return null;
 
-		const specPayload = asRecord(JSON.parse(specResult.content));
-		const latestPayload = asRecord(JSON.parse(latestResult.content));
+		const specPayload = tryParseJson<Record<string, unknown>>(specResult.content);
+		const latestPayload = tryParseJson<Record<string, unknown>>(latestResult.content);
 		if (!specPayload || !latestPayload) return null;
 
 		const title = getString(specPayload, "title");
@@ -146,17 +142,13 @@ export const handleW3c: SpecialHandler = async (
 		if (latestVersionUrl) md += `**Latest Version:** ${latestVersionUrl}\n`;
 		if (historyUrl) md += `**History:** ${historyUrl}\n`;
 
-		const output = finalizeOutput(md);
-		return {
+		return buildResult(md, {
 			url,
 			finalUrl: latestVersionUrl ?? url,
-			contentType: "text/markdown",
 			method: "w3c-api",
-			content: output.content,
 			fetchedAt,
-			truncated: output.truncated,
 			notes: ["Fetched via W3C API"],
-		};
+		});
 	} catch {}
 
 	return null;

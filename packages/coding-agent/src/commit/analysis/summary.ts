@@ -1,10 +1,11 @@
-import type { Api, AssistantMessage, Model, ToolCall } from "@oh-my-pi/pi-ai";
+import type { Api, AssistantMessage, Model } from "@oh-my-pi/pi-ai";
 import { completeSimple, validateToolCall } from "@oh-my-pi/pi-ai";
 import { Type } from "@sinclair/typebox";
 import summarySystemPrompt from "../../commit/prompts/summary-system.md" with { type: "text" };
 import summaryUserPrompt from "../../commit/prompts/summary-user.md" with { type: "text" };
 import type { CommitSummary } from "../../commit/types";
 import { renderPromptTemplate } from "../../config/prompt-templates";
+import { extractTextContent, extractToolCall } from "../utils";
 
 const SummaryTool = {
 	name: "create_commit_summary",
@@ -83,18 +84,6 @@ function parseSummaryFromResponse(message: AssistantMessage, commitType: string,
 	}
 	const text = extractTextContent(message);
 	return { summary: stripTypePrefix(text, commitType, scope) };
-}
-
-function extractToolCall(message: AssistantMessage, name: string): ToolCall | undefined {
-	return message.content.find(content => content.type === "toolCall" && content.name === name) as ToolCall | undefined;
-}
-
-function extractTextContent(message: AssistantMessage): string {
-	return message.content
-		.filter(content => content.type === "text")
-		.map(content => content.text)
-		.join("")
-		.trim();
 }
 
 export function stripTypePrefix(summary: string, commitType: string, scope: string | null): string {

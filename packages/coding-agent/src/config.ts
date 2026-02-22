@@ -7,6 +7,7 @@ import type { TSchema } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { Ajv, type ErrorObject, type ValidateFunction } from "ajv";
 import { JSONC, YAML } from "bun";
+import { expandTilde } from "./tools/path-utils";
 
 const priorityList = [
 	{ dir: CONFIG_DIR_NAME, globalAgentDir: `${CONFIG_DIR_NAME}/agent` },
@@ -27,9 +28,7 @@ export function getPackageDir(): string {
 	// Allow override via environment variable (useful for Nix/Guix where store paths tokenize poorly)
 	const envDir = process.env.PI_PACKAGE_DIR;
 	if (envDir) {
-		if (envDir === "~") return os.homedir();
-		if (envDir.startsWith("~/")) return os.homedir() + envDir.slice(1);
-		return envDir;
+		return expandTilde(envDir);
 	}
 
 	let dir = import.meta.dir;

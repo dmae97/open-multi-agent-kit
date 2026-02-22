@@ -1,6 +1,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import { extractHttpStatusFromError } from "./retry.js";
+import { formatErrorMessageWithRetryAfter } from "./retry-after.js";
 
 export type RawHttpRequestDump = {
 	provider: string;
@@ -38,6 +39,13 @@ export async function appendRawHttpRequestDumpFor400(
 		const writeMessage = writeError instanceof Error ? writeError.message : String(writeError);
 		return `${message}\nraw-http-request-save-failed=${writeMessage}`;
 	}
+}
+
+export async function finalizeErrorMessage(
+	error: unknown,
+	rawRequestDump: RawHttpRequestDump | undefined,
+): Promise<string> {
+	return appendRawHttpRequestDumpFor400(formatErrorMessageWithRetryAfter(error), error, rawRequestDump);
 }
 
 export function withHttpStatus(error: unknown, status: number): Error {

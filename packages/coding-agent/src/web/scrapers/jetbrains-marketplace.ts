@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, htmlToBasicMarkdown, loadPage } from "./types";
+import { buildResult, formatCount, htmlToBasicMarkdown, loadPage, tryParseJson } from "./types";
 
 interface PluginVendor {
 	name?: string;
@@ -98,15 +98,9 @@ export const handleJetBrainsMarketplace: SpecialHandler = async (
 
 		if (!pluginResult.ok || !updatesResult.ok) return null;
 
-		let plugin: PluginData;
-		let updates: UpdateData[];
-
-		try {
-			plugin = JSON.parse(pluginResult.content) as PluginData;
-			updates = JSON.parse(updatesResult.content) as UpdateData[];
-		} catch {
-			return null;
-		}
+		const plugin = tryParseJson<PluginData>(pluginResult.content);
+		const updates = tryParseJson<UpdateData[]>(updatesResult.content);
+		if (!plugin || !updates) return null;
 
 		const update = updates[0];
 		if (!plugin?.name) return null;
@@ -152,17 +146,12 @@ export const handleJetBrainsMarketplace: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
+		return buildResult(md, {
 			url,
-			finalUrl: url,
-			contentType: "text/markdown",
 			method: "jetbrains-marketplace",
-			content: output.content,
 			fetchedAt,
-			truncated: output.truncated,
 			notes: ["Fetched via JetBrains Marketplace API"],
-		};
+		});
 	} catch {}
 
 	return null;

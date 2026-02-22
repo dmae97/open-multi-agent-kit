@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, formatIsoDate, loadPage, tryParseJson } from "./types";
 
 interface NuGetODataEntry {
 	Id: string;
@@ -65,12 +65,8 @@ export const handleChocolatey: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let data: NuGetODataResponse;
-		try {
-			data = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const data = tryParseJson<NuGetODataResponse>(result.content);
+		if (!data) return null;
 
 		const pkg = data.d?.results?.[0];
 		if (!pkg) return null;
@@ -99,8 +95,8 @@ export const handleChocolatey: SpecialHandler = async (
 		}
 
 		if (pkg.Published) {
-			const date = new Date(pkg.Published);
-			md += `**Published:** ${date.toISOString().split("T")[0]}\n`;
+			const published = formatIsoDate(pkg.Published);
+			if (published) md += `**Published:** ${published}\n`;
 		}
 
 		md += "\n";
@@ -141,17 +137,7 @@ export const handleChocolatey: SpecialHandler = async (
 
 		md += `\n---\n**Install:** \`choco install ${packageName}\`\n`;
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "chocolatey",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Chocolatey NuGet API"],
-		};
+		return buildResult(md, { url, method: "chocolatey", fetchedAt, notes: ["Fetched via Chocolatey NuGet API"] });
 	} catch {}
 
 	return null;

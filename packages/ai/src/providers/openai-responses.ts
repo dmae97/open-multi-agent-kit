@@ -28,28 +28,14 @@ import type {
 	ToolCall,
 	ToolChoice,
 } from "../types";
+import { normalizeResponsesToolCallId, resolveCacheRetention } from "../utils";
 import { AssistantMessageEventStream } from "../utils/event-stream";
-import { appendRawHttpRequestDumpFor400, type RawHttpRequestDump } from "../utils/http-inspector";
+import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-inspector";
 import { parseStreamingJson } from "../utils/json-parse";
-import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import { mapToOpenAIResponsesToolChoice } from "../utils/tool-choice";
 import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers";
 import { transformMessages } from "./transform-messages";
-
-/**
- * Resolve cache retention preference.
- * Defaults to "short" and uses PI_CACHE_RETENTION for backward compatibility.
- */
-function resolveCacheRetention(cacheRetention?: CacheRetention): CacheRetention {
-	if (cacheRetention) {
-		return cacheRetention;
-	}
-	if ($env.PI_CACHE_RETENTION === "long") {
-		return "long";
-	}
-	return "short";
-}
 
 /**
  * Get prompt cache retention based on cacheRetention and base URL.
@@ -367,11 +353,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 		} catch (error) {
 			for (const block of output.content) delete (block as any).index;
 			output.stopReason = options?.signal?.aborted ? "aborted" : "error";
-			output.errorMessage = await appendRawHttpRequestDumpFor400(
-				formatErrorMessageWithRetryAfter(error),
-				error,
-				rawRequestDump,
-			);
+			output.errorMessage = await finalizeErrorMessage(error, rawRequestDump);
 			output.duration = Date.now() - startTime;
 			if (firstTokenTime) output.ttft = firstTokenTime - startTime;
 			stream.push({ type: "error", reason: output.stopReason, error: output });
@@ -481,15 +463,6 @@ function buildParams(model: Model<"openai-responses">, context: Context, options
 	}
 
 	return params;
-}
-
-function normalizeResponsesToolCallId(id: string): { callId: string; itemId: string } {
-	const [callId, itemId] = id.split("|");
-	if (callId && itemId) {
-		return { callId, itemId };
-	}
-	const hash = Bun.hash.xxHash64(id).toString(36);
-	return { callId: `call_${hash}`, itemId: `item_${hash}` };
 }
 
 function isAzureOpenAIBaseUrl(baseUrl: string): boolean {

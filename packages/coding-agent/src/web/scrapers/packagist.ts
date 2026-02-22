@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, loadPage, tryParseJson } from "./types";
 
 /**
  * Handle Packagist URLs via JSON API
@@ -27,7 +27,7 @@ export const handlePackagist: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let data: {
+		const data = tryParseJson<{
 			package: {
 				name: string;
 				description?: string;
@@ -65,13 +65,8 @@ export const handlePackagist: SpecialHandler = async (
 				};
 				favers?: number;
 			};
-		};
-
-		try {
-			data = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		}>(result.content);
+		if (!data) return null;
 
 		const pkg = data.package;
 		if (!pkg) return null;
@@ -157,17 +152,7 @@ export const handlePackagist: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "packagist",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Packagist API"],
-		};
+		return buildResult(md, { url, method: "packagist", fetchedAt, notes: ["Fetched via Packagist API"] });
 	} catch {}
 
 	return null;

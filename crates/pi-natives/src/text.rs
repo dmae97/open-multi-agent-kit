@@ -53,11 +53,6 @@ pub struct ExtractSegmentsResult {
 	pub after_width:  u32,
 }
 
-#[inline]
-fn clamp_u32(x: usize) -> u32 {
-	x.min(u32::MAX as usize) as u32
-}
-
 // ============================================================================
 // ANSI State Tracking - Zero Allocation
 // ============================================================================
@@ -1039,7 +1034,7 @@ pub fn slice_with_width(
 
 	let (out, w) = slice_with_width_impl(line, start_col as usize, length as usize, strict);
 
-	Ok(SliceResult { text: build_utf16_string(out), width: clamp_u32(w) })
+	Ok(SliceResult { text: build_utf16_string(out), width: crate::utils::clamp_u32(w as u64) })
 }
 
 // ============================================================================
@@ -1204,9 +1199,9 @@ pub fn extract_segments(
 
 	Ok(ExtractSegmentsResult {
 		before:       build_utf16_string(before),
-		before_width: clamp_u32(bw),
+		before_width: crate::utils::clamp_u32(bw as u64),
 		after:        build_utf16_string(after),
-		after_width:  clamp_u32(aw),
+		after_width:  crate::utils::clamp_u32(aw as u64),
 	})
 }
 
@@ -1303,7 +1298,7 @@ pub fn sanitize_text(text: JsString<'_>) -> Result<Either<JsString<'_>, Utf16Str
 #[napi(js_name = "visibleWidth")]
 pub fn visible_width_napi(text: JsString) -> Result<u32> {
 	let text_u16 = text.into_utf16()?;
-	Ok(clamp_u32(visible_width_u16(text_u16.as_slice())))
+	Ok(crate::utils::clamp_u32(visible_width_u16(text_u16.as_slice()) as u64))
 }
 
 #[cfg(test)]

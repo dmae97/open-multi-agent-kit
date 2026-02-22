@@ -1,5 +1,5 @@
 import type { SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, loadPage, tryParseJson } from "./types";
 
 interface HfModelData {
 	modelId: string;
@@ -126,12 +126,8 @@ export const handleHuggingFace: SpecialHandler = async (url: string, timeout: nu
 
 				if (!apiResult.ok) return null;
 
-				let model: HfModelData;
-				try {
-					model = JSON.parse(apiResult.content);
-				} catch {
-					return null;
-				}
+				const model = tryParseJson<HfModelData>(apiResult.content);
+				if (!model) return null;
 
 				let md = `# ${model.modelId}\n\n`;
 
@@ -168,17 +164,7 @@ export const handleHuggingFace: SpecialHandler = async (url: string, timeout: nu
 					md += `## Model Card\n\n${readmeResult.content}`;
 				}
 
-				const { content, truncated } = finalizeOutput(md);
-				return {
-					url,
-					finalUrl: apiResult.finalUrl,
-					contentType: "text/markdown",
-					method: "huggingface",
-					content,
-					fetchedAt,
-					truncated,
-					notes,
-				};
+				return buildResult(md, { url, finalUrl: apiResult.finalUrl, method: "huggingface", fetchedAt, notes });
 			}
 
 			case "dataset": {
@@ -192,12 +178,8 @@ export const handleHuggingFace: SpecialHandler = async (url: string, timeout: nu
 
 				if (!apiResult.ok) return null;
 
-				let dataset: HfDatasetData;
-				try {
-					dataset = JSON.parse(apiResult.content);
-				} catch {
-					return null;
-				}
+				const dataset = tryParseJson<HfDatasetData>(apiResult.content);
+				if (!dataset) return null;
 
 				let md = `# ${dataset.id}\n\n`;
 				if (dataset.description) md += `${dataset.description}\n\n`;
@@ -233,17 +215,7 @@ export const handleHuggingFace: SpecialHandler = async (url: string, timeout: nu
 					md += `## Dataset Card\n\n${readmeResult.content}`;
 				}
 
-				const { content, truncated } = finalizeOutput(md);
-				return {
-					url,
-					finalUrl: apiResult.finalUrl,
-					contentType: "text/markdown",
-					method: "huggingface",
-					content,
-					fetchedAt,
-					truncated,
-					notes,
-				};
+				return buildResult(md, { url, finalUrl: apiResult.finalUrl, method: "huggingface", fetchedAt, notes });
 			}
 
 			case "space": {
@@ -257,12 +229,8 @@ export const handleHuggingFace: SpecialHandler = async (url: string, timeout: nu
 
 				if (!apiResult.ok) return null;
 
-				let space: HfSpaceData;
-				try {
-					space = JSON.parse(apiResult.content);
-				} catch {
-					return null;
-				}
+				const space = tryParseJson<HfSpaceData>(apiResult.content);
+				if (!space) return null;
 
 				let md = `# ${space.id}\n\n`;
 				if (space.title) md += `${space.title}\n\n`;
@@ -287,17 +255,7 @@ export const handleHuggingFace: SpecialHandler = async (url: string, timeout: nu
 					md += `## Space Info\n\n${readmeResult.content}`;
 				}
 
-				const { content, truncated } = finalizeOutput(md);
-				return {
-					url,
-					finalUrl: apiResult.finalUrl,
-					contentType: "text/markdown",
-					method: "huggingface",
-					content,
-					fetchedAt,
-					truncated,
-					notes,
-				};
+				return buildResult(md, { url, finalUrl: apiResult.finalUrl, method: "huggingface", fetchedAt, notes });
 			}
 
 			case "model_or_user": {
@@ -306,12 +264,7 @@ export const handleHuggingFace: SpecialHandler = async (url: string, timeout: nu
 				const modelResult = await loadPage(modelApiUrl, { timeout, signal });
 
 				if (modelResult.ok) {
-					let model: HfModelData | null = null;
-					try {
-						model = JSON.parse(modelResult.content);
-					} catch {
-						// Fall through to user check
-					}
+					const model = tryParseJson<HfModelData>(modelResult.content);
 					if (model) {
 						const readmeUrl = `https://huggingface.co/${parsed.id}/raw/main/README.md`;
 						const readmeResult = await loadPage(readmeUrl, { timeout: Math.min(timeout, 5), signal });
@@ -327,17 +280,13 @@ export const handleHuggingFace: SpecialHandler = async (url: string, timeout: nu
 							md += `## Model Card\n\n${readmeResult.content}`;
 						}
 
-						const { content, truncated } = finalizeOutput(md);
-						return {
+						return buildResult(md, {
 							url,
 							finalUrl: modelResult.finalUrl,
-							contentType: "text/markdown",
 							method: "huggingface",
-							content,
 							fetchedAt,
-							truncated,
 							notes,
-						};
+						});
 					}
 				}
 
@@ -346,12 +295,8 @@ export const handleHuggingFace: SpecialHandler = async (url: string, timeout: nu
 				const userResult = await loadPage(userApiUrl, { timeout, signal });
 				if (!userResult.ok) return null;
 
-				let user: HfUserData;
-				try {
-					user = JSON.parse(userResult.content);
-				} catch {
-					return null;
-				}
+				const user = tryParseJson<HfUserData>(userResult.content);
+				if (!user) return null;
 
 				let md = `# ${user.user || parsed.id}\n\n`;
 				if (user.fullname) md += `**Name:** ${user.fullname}\n`;
@@ -363,17 +308,7 @@ export const handleHuggingFace: SpecialHandler = async (url: string, timeout: nu
 					md += `**Organizations:** ${user.orgs.map(o => o.name).join(", ")}\n`;
 				}
 
-				const { content, truncated } = finalizeOutput(md);
-				return {
-					url,
-					finalUrl: userResult.finalUrl,
-					contentType: "text/markdown",
-					method: "huggingface",
-					content,
-					fetchedAt,
-					truncated,
-					notes,
-				};
+				return buildResult(md, { url, finalUrl: userResult.finalUrl, method: "huggingface", fetchedAt, notes });
 			}
 
 			default:

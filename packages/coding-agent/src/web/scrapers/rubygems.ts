@@ -1,5 +1,4 @@
-import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, loadPage, type RenderResult, type SpecialHandler, tryParseJson } from "./types";
 
 interface RubyGemsDependency {
 	name: string;
@@ -56,12 +55,8 @@ export const handleRubyGems: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let gem: RubyGemsResponse;
-		try {
-			gem = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const gem = tryParseJson<RubyGemsResponse>(result.content);
+		if (!gem) return null;
 
 		let md = `# ${gem.name}\n\n`;
 		if (gem.info) md += `${gem.info}\n\n`;
@@ -100,17 +95,7 @@ export const handleRubyGems: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "rubygems",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via RubyGems API"],
-		};
+		return buildResult(md, { url, method: "rubygems", fetchedAt, notes: ["Fetched via RubyGems API"] });
 	} catch {}
 
 	return null;

@@ -10,6 +10,7 @@ import type {
 	UsageStatus,
 	UsageWindow,
 } from "../usage";
+import { isRecord } from "../utils";
 import { getKimiCommonHeaders, refreshKimiToken } from "../utils/oauth/kimi";
 
 const DEFAULT_BASE_URL = "https://api.kimi.com/coding/v1";
@@ -30,9 +31,6 @@ type KimiUsageRow = {
 	resetInMs?: number;
 	window?: UsageWindow;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === "object" && value !== null && !Array.isArray(value);
 
 const toNumber = (value: unknown): number | undefined => {
 	if (typeof value === "number" && Number.isFinite(value)) return value;

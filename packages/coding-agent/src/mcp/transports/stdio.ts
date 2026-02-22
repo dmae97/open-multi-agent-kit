@@ -5,15 +5,10 @@
  * Messages are newline-delimited JSON.
  */
 
-import { readJsonl } from "@oh-my-pi/pi-utils";
+import { readJsonl, Snowflake } from "@oh-my-pi/pi-utils";
 import { getProjectDir } from "@oh-my-pi/pi-utils/dirs";
 import { type Subprocess, spawn } from "bun";
 import type { JsonRpcResponse, MCPRequestOptions, MCPStdioServerConfig, MCPTransport } from "../../mcp/types";
-
-/** Generate unique request ID */
-function generateId(): string {
-	return Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
 
 /**
  * Stdio transport for MCP servers.
@@ -156,7 +151,7 @@ export class StdioTransport implements MCPTransport {
 			throw new Error("Transport not connected");
 		}
 
-		const id = generateId();
+		const id = Snowflake.next();
 		const request = {
 			jsonrpc: "2.0" as const,
 			id,

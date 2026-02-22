@@ -1,5 +1,4 @@
-import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, loadPage, type RenderResult, type SpecialHandler, tryParseJson } from "./types";
 
 /**
  * Handle PyPI URLs via JSON API
@@ -35,13 +34,11 @@ export const handlePyPI: SpecialHandler = async (
 		// Parse download stats
 		let weeklyDownloads: number | null = null;
 		if (downloadsResult.ok) {
-			try {
-				const dlData = JSON.parse(downloadsResult.content) as { data?: { last_week?: number } };
-				weeklyDownloads = dlData.data?.last_week ?? null;
-			} catch {}
+			const dlData = tryParseJson<{ data?: { last_week?: number } }>(downloadsResult.content);
+			if (dlData) weeklyDownloads = dlData.data?.last_week ?? null;
 		}
 
-		let pkg: {
+		const pkg = tryParseJson<{
 			info: {
 				name: string;
 				version: string;
@@ -59,13 +56,8 @@ export const handlePyPI: SpecialHandler = async (
 			urls?: Array<{ filename: string; size: number; upload_time: string }>;
 			releases?: Record<string, unknown>;
 			requires_dist?: string[];
-		};
-
-		try {
-			pkg = JSON.parse(result.content);
-		} catch {
-			return null; // JSON parse failed
-		}
+		}>(result.content);
+		if (!pkg) return null;
 
 		const info = pkg.info;
 		let md = `# ${info.name}\n\n`;
@@ -112,17 +104,7 @@ export const handlePyPI: SpecialHandler = async (
 			md += `\n---\n\n## Description\n\n${info.description}\n`;
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "pypi",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via PyPI JSON API"],
-		};
+		return buildResult(md, { url, method: "pypi", fetchedAt, notes: ["Fetched via PyPI JSON API"] });
 	} catch {}
 
 	return null;

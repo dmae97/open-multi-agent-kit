@@ -19,9 +19,11 @@ import {
 import { MCPOAuthFlow } from "../../mcp/oauth-flow";
 import type { MCPServerConfig, MCPServerConnection } from "../../mcp/types";
 import type { OAuthCredential } from "../../session/auth-storage";
+import { shortenPath } from "../../tools/render-utils";
 import { openPath } from "../../utils/open";
 import { DynamicBorder } from "../components/dynamic-border";
 import { MCPAddWizard } from "../components/mcp-add-wizard";
+import { parseCommandArgs } from "../shared";
 import { theme } from "../theme/theme";
 import type { InteractiveModeContext } from "../types";
 
@@ -29,39 +31,6 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
 	const { promise: timeoutPromise, reject } = Promise.withResolvers<T>();
 	const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
 	return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
-}
-
-function parseCommandArgs(argsString: string): string[] {
-	const args: string[] = [];
-	let current = "";
-	let inQuote: string | null = null;
-
-	for (let i = 0; i < argsString.length; i++) {
-		const char = argsString[i];
-
-		if (inQuote) {
-			if (char === inQuote) {
-				inQuote = null;
-			} else {
-				current += char;
-			}
-		} else if (char === '"' || char === "'") {
-			inQuote = char;
-		} else if (char === " " || char === "\t") {
-			if (current) {
-				args.push(current);
-				current = "";
-			}
-		} else {
-			current += char;
-		}
-	}
-
-	if (current) {
-		args.push(current);
-	}
-
-	return args;
 }
 
 type MCPAddScope = "user" | "project";
@@ -865,7 +834,7 @@ export class MCPCommandController {
 					const sepIdx = key.indexOf("|");
 					const providerName = key.slice(0, sepIdx);
 					const sourcePath = key.slice(sepIdx + 1);
-					const shortPath = sourcePath.replace(process.env.HOME ?? "", "~");
+					const shortPath = shortenPath(sourcePath);
 					lines.push(theme.fg("accent", providerName) + theme.fg("muted", ` (${shortPath}):`));
 					for (const { name } of entries) {
 						const state = this.ctx.mcpManager!.getConnectionStatus(name);

@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import { createInterface } from "node:readline/promises";
-import { $env } from "@oh-my-pi/pi-utils";
+import { $env, isEnoent } from "@oh-my-pi/pi-utils";
 import { getProjectDir } from "@oh-my-pi/pi-utils/dirs";
 import { applyChangelogProposals } from "../../commit/changelog";
 import { detectChangelogBoundaries } from "../../commit/changelog/detect";
@@ -31,13 +31,13 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 	const git = new ControlledGit(cwd);
 	const [settings, authStorage] = await Promise.all([Settings.init({ cwd }), discoverAuthStorage()]);
 
-	writeStdout("● Resolving model...");
+	process.stdout.write("● Resolving model...\n");
 	const modelRegistry = new ModelRegistry(authStorage);
 	await modelRegistry.refresh();
 	const stagedFilesPromise = (async () => {
 		let stagedFiles = await git.getStagedFiles();
 		if (stagedFiles.length === 0) {
-			writeStdout("No staged changes detected, staging all changes...");
+			process.stdout.write("No staged changes detected, staging all changes...\n");
 			await git.stageAll();
 			stagedFiles = await git.getStagedFiles();
 		}
@@ -47,17 +47,17 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 	const primaryModelPromise = resolvePrimaryModel(args.model, settings, modelRegistry);
 	const [primaryModelResult, stagedFiles] = await Promise.all([primaryModelPromise, stagedFilesPromise]);
 	const { model: primaryModel, apiKey: primaryApiKey } = primaryModelResult;
-	writeStdout(`  └─ ${primaryModel.name}`);
+	process.stdout.write(`  └─ ${primaryModel.name}\n`);
 
 	const { model: agentModel } = await resolveSmolModel(settings, modelRegistry, primaryModel, primaryApiKey);
 
 	if (stagedFiles.length === 0) {
-		writeStderr("No changes to commit.");
+		process.stderr.write("No changes to commit.\n");
 		return;
 	}
 
 	if (!args.noChangelog) {
-		writeStdout("● Detecting changelog targets...");
+		process.stdout.write("● Detecting changelog targets...\n");
 	}
 	const [changelogBoundaries, contextFiles, numstat, diff] = await Promise.all([
 		args.noChangelog ? [] : detectChangelogBoundaries(cwd, stagedFiles),
@@ -69,25 +69,25 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 	if (!args.noChangelog) {
 		if (changelogTargets.length > 0) {
 			for (const path of changelogTargets) {
-				writeStdout(`  └─ ${path}`);
+				process.stdout.write(`  └─ ${path}\n`);
 			}
 		} else {
-			writeStdout("  └─ (none found)");
+			process.stdout.write("  └─ (none found)\n");
 		}
 	}
 
-	writeStdout("● Discovering context files...");
+	process.stdout.write("● Discovering context files...\n");
 	const agentsMdFiles = contextFiles.filter(file => file.path.endsWith("AGENTS.md"));
 	if (agentsMdFiles.length > 0) {
 		for (const file of agentsMdFiles) {
-			writeStdout(`  └─ ${file.path}`);
+			process.stdout.write(`  └─ ${file.path}\n`);
 		}
 	} else {
-		writeStdout("  └─ (none found)");
+		process.stdout.write("  └─ (none found)\n");
 	}
 	const forceFallback = $env.PI_COMMIT_TEST_FALLBACK?.toLowerCase() === "true";
 	if (forceFallback) {
-		writeStdout("● Forcing fallback commit generation...");
+		process.stdout.write("● Forcing fallback commit generation...\n");
 		const fallbackProposal = generateFallbackProposal(numstat);
 		await runSingleCommit(fallbackProposal, { git, dryRun: args.dryRun, push: args.push });
 		return;
@@ -95,7 +95,7 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 
 	const trivialChange = detectTrivialChange(diff);
 	if (trivialChange) {
-		writeStdout(`● Detected trivial change: ${trivialChange.summary}`);
+		process.stdout.write(`● Detected trivial change: ${trivialChange.summary}\n`);
 		const trivialProposal: CommitProposal = {
 			analysis: {
 				type: trivialChange.type,
@@ -118,7 +118,7 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 		}
 	}
 
-	writeStdout("● Starting commit agent...");
+	process.stdout.write("● Starting commit agent...\n");
 	let commitState: CommitAgentState;
 	let usedFallback = false;
 
@@ -139,18 +139,18 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 		});
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
-		writeStderr(`Agent error: ${errorMessage}`);
+		process.stderr.write(`Agent error: ${errorMessage}\n`);
 		if (error instanceof Error && error.stack && $env.DEBUG) {
-			writeStderr(error.stack);
+			process.stderr.write(`${error.stack}\n`);
 		}
-		writeStdout("● Using fallback commit generation...");
+		process.stdout.write("● Using fallback commit generation...\n");
 		commitState = { proposal: generateFallbackProposal(numstat) };
 		usedFallback = true;
 	}
 
 	if (!usedFallback && !commitState.proposal && !commitState.splitProposal) {
 		if ($env.PI_COMMIT_NO_FALLBACK?.toLowerCase() !== "true") {
-			writeStdout("● Agent did not provide proposal, using fallback...");
+			process.stdout.write("● Agent did not provide proposal, using fallback...\n");
 			commitState.proposal = generateFallbackProposal(numstat);
 			usedFallback = true;
 		}
@@ -159,26 +159,26 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 	let updatedChangelogFiles: string[] = [];
 	if (!args.noChangelog && changelogTargets.length > 0 && !usedFallback) {
 		if (!commitState.changelogProposal) {
-			writeStderr("Commit agent did not provide changelog entries.");
+			process.stderr.write("Commit agent did not provide changelog entries.\n");
 			return;
 		}
-		writeStdout("● Applying changelog entries...");
+		process.stdout.write("● Applying changelog entries...\n");
 		const updated = await applyChangelogProposals({
 			git,
 			cwd,
 			proposals: commitState.changelogProposal.entries,
 			dryRun: args.dryRun,
 			onProgress: message => {
-				writeStdout(`  ├─ ${message}`);
+				process.stdout.write(`  ├─ ${message}\n`);
 			},
 		});
 		updatedChangelogFiles = updated.map(filePath => path.relative(cwd, filePath));
 		if (updated.length > 0) {
 			for (const filePath of updated) {
-				writeStdout(`  └─ ${filePath}`);
+				process.stdout.write(`  └─ ${filePath}\n`);
 			}
 		} else {
-			writeStdout("  └─ (no changes)");
+			process.stdout.write("  └─ (no changes)\n");
 		}
 	}
 
@@ -197,24 +197,24 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 		return;
 	}
 
-	writeStderr("Commit agent did not provide a proposal.");
+	process.stderr.write("Commit agent did not provide a proposal.\n");
 }
 
 async function runSingleCommit(proposal: CommitProposal, ctx: CommitExecutionContext): Promise<void> {
 	if (proposal.warnings.length > 0) {
-		writeStdout(formatWarnings(proposal.warnings));
+		process.stdout.write(formatWarnings(proposal.warnings));
 	}
 	const commitMessage = formatCommitMessage(proposal.analysis, proposal.summary);
 	if (ctx.dryRun) {
-		writeStdout("\nGenerated commit message:\n");
-		writeStdout(commitMessage);
+		process.stdout.write("\nGenerated commit message:\n");
+		process.stdout.write(`${commitMessage}\n`);
 		return;
 	}
 	await ctx.git.commit(commitMessage);
-	writeStdout("Commit created.");
+	process.stdout.write("Commit created.\n");
 	if (ctx.push) {
 		await ctx.git.push();
-		writeStdout("Pushed to remote.");
+		process.stdout.write("Pushed to remote.\n");
 	}
 }
 
@@ -223,7 +223,7 @@ async function runSplitCommit(
 	ctx: CommitExecutionContext & { additionalFiles?: string[] },
 ): Promise<void> {
 	if (plan.warnings.length > 0) {
-		writeStdout(formatWarnings(plan.warnings));
+		process.stdout.write(formatWarnings(plan.warnings));
 	}
 	if (ctx.additionalFiles && ctx.additionalFiles.length > 0) {
 		appendFilesToLastCommit(plan, ctx.additionalFiles);
@@ -232,12 +232,12 @@ async function runSplitCommit(
 	const plannedFiles = new Set(plan.commits.flatMap(commit => commit.changes.map(change => change.path)));
 	const missingFiles = stagedFiles.filter(file => !plannedFiles.has(file));
 	if (missingFiles.length > 0) {
-		writeStderr(`Split commit plan missing staged files: ${missingFiles.join(", ")}`);
+		process.stderr.write(`Split commit plan missing staged files: ${missingFiles.join(", ")}\n`);
 		return;
 	}
 
 	if (ctx.dryRun) {
-		writeStdout("\nSplit commit plan (dry run):\n");
+		process.stdout.write("\nSplit commit plan (dry run):\n");
 		for (const [index, commit] of plan.commits.entries()) {
 			const analysis: ConventionalAnalysis = {
 				type: commit.type,
@@ -246,17 +246,17 @@ async function runSplitCommit(
 				issueRefs: commit.issueRefs,
 			};
 			const message = formatCommitMessage(analysis, commit.summary);
-			writeStdout(`Commit ${index + 1}:\n${message}\n`);
+			process.stdout.write(`Commit ${index + 1}:\n${message}\n`);
 			const changeSummary = commit.changes
 				.map(change => formatFileChangeSummary(change.path, change.hunks))
 				.join(", ");
-			writeStdout(`Changes: ${changeSummary}\n`);
+			process.stdout.write(`Changes: ${changeSummary}\n`);
 		}
 		return;
 	}
 
 	if (!(await confirmSplitCommitPlan(plan))) {
-		writeStdout("Split commit aborted by user.");
+		process.stdout.write("Split commit aborted by user.\n");
 		return;
 	}
 
@@ -279,10 +279,10 @@ async function runSplitCommit(
 		await ctx.git.commit(message);
 		await ctx.git.resetStaging();
 	}
-	writeStdout("Split commits created.");
+	process.stdout.write("Split commits created.\n");
 	if (ctx.push) {
 		await ctx.git.push();
-		writeStdout("Pushed to remote.");
+		process.stdout.write("Pushed to remote.\n");
 	}
 }
 
@@ -312,15 +312,7 @@ async function confirmSplitCommitPlan(plan: SplitCommitPlan): Promise<boolean> {
 }
 
 function formatWarnings(warnings: string[]): string {
-	return `Warnings:\n${warnings.map(warning => `- ${warning}`).join("\n")}`;
-}
-
-function writeStdout(message: string): void {
-	process.stdout.write(`${message}\n`);
-}
-
-function writeStderr(message: string): void {
-	process.stderr.write(`${message}\n`);
+	return `Warnings:\n${warnings.map(warning => `- ${warning}`).join("\n")}\n`;
 }
 
 function formatFileChangeSummary(path: string, hunks: HunkSelector): string {
@@ -336,11 +328,13 @@ function formatFileChangeSummary(path: string, hunks: HunkSelector): string {
 async function loadExistingChangelogEntries(paths: string[]): Promise<ExistingChangelogEntries[]> {
 	const entries = await Promise.all(
 		paths.map(async path => {
-			const file = Bun.file(path);
-			if (!(await file.exists())) {
-				return null;
+			let content: string;
+			try {
+				content = await Bun.file(path).text();
+			} catch (err) {
+				if (isEnoent(err)) return null;
+				throw err;
 			}
-			const content = await file.text();
 			try {
 				const unreleased = parseUnreleasedSection(content);
 				const sections = Object.entries(unreleased.entries)

@@ -1,5 +1,5 @@
 import type { SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, formatIsoDate, loadPage, tryParseJson } from "./types";
 
 // =============================================================================
 // Lobste.rs Types
@@ -90,7 +90,8 @@ export const handleLobsters: SpecialHandler = async (url: string, timeout: numbe
 			const result = await loadPage(jsonUrl, { timeout, signal });
 			if (!result.ok) return null;
 
-			const story = JSON.parse(result.content) as LobstersStoryResponse;
+			const story = tryParseJson<LobstersStoryResponse>(result.content);
+			if (!story) return null;
 
 			md = `# ${story.title}\n\n`;
 			md += `**${story.submitter_user.username}** · ${story.score} points · ${story.comment_count} comments`;
@@ -98,7 +99,7 @@ export const handleLobsters: SpecialHandler = async (url: string, timeout: numbe
 				md += ` · [${story.tags.join(", ")}]`;
 			}
 			md += `\n`;
-			md += `*${new Date(story.created_at).toISOString().split("T")[0]}*\n\n`;
+			md += `*${formatIsoDate(story.created_at)}*\n\n`;
 
 			if (story.description) {
 				md += `---\n\n${story.description}\n\n`;
@@ -112,17 +113,13 @@ export const handleLobsters: SpecialHandler = async (url: string, timeout: numbe
 				md += renderComments(story.comments);
 			}
 
-			const output = finalizeOutput(md);
-			return {
+			return buildResult(md, {
 				url,
 				finalUrl: jsonUrl,
-				contentType: "text/markdown",
 				method: "lobsters",
-				content: output.content,
 				fetchedAt,
-				truncated: output.truncated,
 				notes: ["Fetched via Lobste.rs JSON API"],
-			};
+			});
 		}
 
 		// Front page, newest, or tag page
@@ -143,7 +140,8 @@ export const handleLobsters: SpecialHandler = async (url: string, timeout: numbe
 			const result = await loadPage(jsonUrl, { timeout, signal });
 			if (!result.ok) return null;
 
-			const stories = JSON.parse(result.content) as LobstersStory[];
+			const stories = tryParseJson<LobstersStory[]>(result.content);
+			if (!stories) return null;
 			const listingStories = stories.slice(0, 20);
 
 			const title =
@@ -168,17 +166,13 @@ export const handleLobsters: SpecialHandler = async (url: string, timeout: numbe
 				md += `  https://lobste.rs/s/${story.short_id}\n\n`;
 			}
 
-			const output = finalizeOutput(md);
-			return {
+			return buildResult(md, {
 				url,
 				finalUrl: jsonUrl,
-				contentType: "text/markdown",
 				method: "lobsters",
-				content: output.content,
 				fetchedAt,
-				truncated: output.truncated,
 				notes: ["Fetched via Lobste.rs JSON API"],
-			};
+			});
 		}
 	} catch {}
 

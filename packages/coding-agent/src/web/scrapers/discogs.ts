@@ -5,7 +5,7 @@
  * API docs: https://www.discogs.com/developers
  */
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage, tryParseJson } from "./types";
 
 interface DiscogsArtist {
 	name: string;
@@ -283,24 +283,21 @@ export const handleDiscogs: SpecialHandler = async (
 
 		let md: string;
 		if (isRelease) {
-			const release = JSON.parse(result.content) as DiscogsRelease;
+			const release = tryParseJson<DiscogsRelease>(result.content);
+			if (!release) return null;
 			md = buildReleaseMarkdown(release);
 		} else {
-			const master = JSON.parse(result.content) as DiscogsMaster;
+			const master = tryParseJson<DiscogsMaster>(result.content);
+			if (!master) return null;
 			md = buildMasterMarkdown(master);
 		}
 
-		const output = finalizeOutput(md);
-		return {
+		return buildResult(md, {
 			url,
-			finalUrl: url,
-			contentType: "text/markdown",
 			method: "discogs",
-			content: output.content,
 			fetchedAt,
-			truncated: output.truncated,
 			notes: [`Fetched via Discogs API (${isRelease ? "release" : "master"})`],
-		};
+		});
 	} catch {}
 
 	return null;

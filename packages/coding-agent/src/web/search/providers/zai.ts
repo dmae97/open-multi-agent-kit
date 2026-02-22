@@ -5,13 +5,13 @@
  * the unified SearchResponse shape used by the web search tool.
  */
 import { getEnvApiKey } from "@oh-my-pi/pi-ai";
-import { getAgentDbPath } from "@oh-my-pi/pi-utils/dirs";
-import { AgentStorage } from "../../../session/agent-storage";
-
+import { asRecord, asString } from "../../../web/scrapers/utils";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
+import { dateToAgeSeconds } from "../utils";
 import type { SearchParams } from "./base";
 import { SearchProvider } from "./base";
+import { findCredential } from "./utils";
 
 const ZAI_MCP_URL = "https://api.z.ai/api/mcp/web_search_prime/mcp";
 const ZAI_TOOL_NAME = "webSearchPrime";
@@ -50,50 +50,9 @@ interface JsonRpcPayload {
 	error?: JsonRpcError;
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-	return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
-}
-
-function asString(value: unknown): string | undefined {
-	return typeof value === "string" && value.trim().length > 0 ? value : undefined;
-}
-
-/**
- * Finds Z.AI API credentials from environment or saved auth storage.
- * Priority: ZAI_API_KEY env var, then credentials stored under provider "zai".
- */
+/** Find Z.AI API credentials from environment or saved auth storage. */
 export async function findApiKey(): Promise<string | null> {
-	const envKey = getEnvApiKey("zai");
-	if (envKey) return envKey;
-
-	try {
-		const storage = await AgentStorage.open(getAgentDbPath());
-		const records = storage.listAuthCredentials("zai");
-		for (const record of records) {
-			const credential = record.credential;
-			if (credential.type === "api_key" && credential.key.trim().length > 0) {
-				return credential.key;
-			}
-			if (credential.type === "oauth" && credential.access.trim().length > 0) {
-				return credential.access;
-			}
-		}
-	} catch {
-		return null;
-	}
-
-	return null;
-}
-
-function dateToAgeSeconds(dateStr: string | undefined): number | undefined {
-	if (!dateStr) return undefined;
-	try {
-		const date = new Date(dateStr);
-		if (Number.isNaN(date.getTime())) return undefined;
-		return Math.floor((Date.now() - date.getTime()) / 1000);
-	} catch {
-		return undefined;
-	}
+	return findCredential(getEnvApiKey("zai"), "zai");
 }
 
 async function callZaiTool(apiKey: string, args: Record<string, unknown>): Promise<unknown> {
@@ -172,7 +131,7 @@ async function callZaiTool(apiKey: string, args: Record<string, unknown>): Promi
 		const content = Array.isArray(resultRecord.content) ? resultRecord.content : [];
 		const errorText = content
 			.map(item => asString(asRecord(item)?.text))
-			.filter((text): text is string => text !== undefined)
+			.filter((text): text is string => text != null)
 			.join("\n")
 			.trim();
 		const statusMatch = errorText.match(/MCP error\s*(-?\d+)/i);
@@ -298,10 +257,10 @@ function toSources(results: ZaiSearchResult[]): SearchSource[] {
 		sources.push({
 			title: asString(result.title) ?? url,
 			url,
-			snippet: asString(result.content),
-			publishedDate,
+			snippet: asString(result.content) ?? undefined,
+			publishedDate: publishedDate ?? undefined,
 			ageSeconds: dateToAgeSeconds(publishedDate),
-			author: asString(result.media),
+			author: asString(result.media) ?? undefined,
 		});
 	}
 	return sources;

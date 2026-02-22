@@ -1,8 +1,7 @@
 /**
  * PubMed handler for web-fetch
  */
-import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage, type RenderResult, type SpecialHandler, tryParseJson } from "./types";
 
 /**
  * Handle PubMed URLs - fetch article metadata, abstract, MeSH terms
@@ -46,7 +45,7 @@ export const handlePubMed: SpecialHandler = async (
 
 		if (!summaryResult.ok) return null;
 
-		let summaryData: {
+		const summaryData = tryParseJson<{
 			result?: {
 				[pmid: string]: {
 					title?: string;
@@ -60,13 +59,8 @@ export const handlePubMed: SpecialHandler = async (
 					articleids?: Array<{ idtype: string; value: string }>;
 				};
 			};
-		};
-
-		try {
-			summaryData = JSON.parse(summaryResult.content);
-		} catch {
-			return null;
-		}
+		}>(summaryResult.content);
+		if (!summaryData) return null;
 
 		const article = summaryData.result?.[pmid];
 		if (!article) return null;
@@ -160,17 +154,12 @@ export const handlePubMed: SpecialHandler = async (
 			// MeSH terms are optional
 		}
 
-		const output = finalizeOutput(md);
-		return {
+		return buildResult(md, {
 			url,
-			finalUrl: url,
-			contentType: "text/markdown",
 			method: "pubmed",
-			content: output.content,
 			fetchedAt,
-			truncated: output.truncated,
 			notes: notes.length > 0 ? notes : ["Fetched via NCBI E-utilities"],
-		};
+		});
 	} catch {
 		return null;
 	}

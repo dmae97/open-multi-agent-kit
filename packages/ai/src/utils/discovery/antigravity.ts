@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getAntigravityUserAgent } from "../../providers/google-gemini-cli";
 import type { Model } from "../../types";
+import { toPositiveNumber } from "../../utils";
 
 const DEFAULT_ANTIGRAVITY_DISCOVERY_ENDPOINT = "https://daily-cloudcode-pa.sandbox.googleapis.com";
 const FETCH_AVAILABLE_MODELS_PATH = "/v1internal:fetchAvailableModels";
@@ -223,8 +224,8 @@ export async function fetchAntigravityDiscoveryModels(
 				cacheRead: 0,
 				cacheWrite: 0,
 			},
-			contextWindow: toPositiveNumberOr(model.maxTokens, DEFAULT_CONTEXT_WINDOW),
-			maxTokens: toPositiveNumberOr(model.maxOutputTokens, DEFAULT_MAX_TOKENS),
+			contextWindow: toPositiveNumber(model.maxTokens, DEFAULT_CONTEXT_WINDOW),
+			maxTokens: toPositiveNumber(model.maxOutputTokens, DEFAULT_MAX_TOKENS),
 		});
 	}
 
@@ -256,11 +257,4 @@ function parseAntigravityDiscoveryResponse(value: unknown): AntigravityDiscovery
 
 function trimTrailingSlashes(value: string): string {
 	return value.replace(/\/+$/, "");
-}
-
-function toPositiveNumberOr(value: number | undefined, fallback: number): number {
-	if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
-		return fallback;
-	}
-	return value;
 }

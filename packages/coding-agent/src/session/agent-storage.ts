@@ -2,7 +2,7 @@ import { Database, type Statement } from "bun:sqlite";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { type AuthCredential, AuthCredentialStore, type StoredAuthCredential } from "@oh-my-pi/pi-ai";
-import { logger } from "@oh-my-pi/pi-utils";
+import { isRecord, logger } from "@oh-my-pi/pi-utils";
 import { getAgentDbPath } from "@oh-my-pi/pi-utils/dirs";
 import type { RawSettings as Settings } from "../config/settings";
 
@@ -23,15 +23,6 @@ const SCHEMA_VERSION = 4;
 
 /** Singleton instances per database path */
 const instances = new Map<string, AgentStorage>();
-
-/**
- * Type guard for plain objects.
- * @param value - Value to check
- * @returns True if value is a non-null, non-array object
- */
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return !!value && typeof value === "object" && !Array.isArray(value);
-}
 
 /**
  * Unified SQLite storage for agent settings, model usage, and auth credentials.

@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, formatCount, loadPage, tryParseJson } from "./types";
 
 /**
  * Check if content looks like HTML
@@ -43,7 +43,7 @@ export const handleCratesIo: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let data: {
+		const data = tryParseJson<{
 			crate: {
 				name: string;
 				description: string | null;
@@ -65,20 +65,11 @@ export const handleCratesIo: SpecialHandler = async (
 				license: string | null;
 				rust_version: string | null;
 			}>;
-		};
-
-		try {
-			data = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		}>(result.content);
+		if (!data) return null;
 
 		const crate = data.crate;
 		const latestVersion = data.versions?.[0];
-
-		// Format download counts
-		const formatDownloads = (n: number): string =>
-			n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}K` : String(n);
 
 		let md = `# ${crate.name}\n\n`;
 		if (crate.description) md += `${crate.description}\n\n`;
@@ -87,7 +78,7 @@ export const handleCratesIo: SpecialHandler = async (
 		if (latestVersion?.license) md += ` · **License:** ${latestVersion.license}`;
 		if (latestVersion?.rust_version) md += ` · **MSRV:** ${latestVersion.rust_version}`;
 		md += "\n";
-		md += `**Downloads:** ${formatDownloads(crate.downloads)} total · ${formatDownloads(crate.recent_downloads)} recent\n\n`;
+		md += `**Downloads:** ${formatCount(crate.downloads)} total · ${formatCount(crate.recent_downloads)} recent\n\n`;
 
 		if (crate.repository) md += `**Repository:** ${crate.repository}\n`;
 		if (crate.homepage && crate.homepage !== crate.repository) md += `**Homepage:** ${crate.homepage}\n`;
@@ -100,7 +91,7 @@ export const handleCratesIo: SpecialHandler = async (
 			md += `\n## Recent Versions\n\n`;
 			for (const ver of data.versions.slice(0, 5)) {
 				const date = ver.created_at.split("T")[0];
-				md += `- **${ver.num}** (${date}) - ${formatDownloads(ver.downloads)} downloads\n`;
+				md += `- **${ver.num}** (${date}) - ${formatCount(ver.downloads)} downloads\n`;
 			}
 		}
 
@@ -111,17 +102,7 @@ export const handleCratesIo: SpecialHandler = async (
 			md += `\n---\n\n## README\n\n${readmeResult.content}\n`;
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "crates.io",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via crates.io API"],
-		};
+		return buildResult(md, { url, method: "crates.io", fetchedAt, notes: ["Fetched via crates.io API"] });
 	} catch {}
 
 	return null;

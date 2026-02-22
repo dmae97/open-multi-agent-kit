@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, loadPage } from "./types";
 
 interface BrewFormula {
 	name: string;
@@ -160,17 +160,12 @@ export const handleBrew: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
+		return buildResult(md, {
 			url,
-			finalUrl: url,
-			contentType: "text/markdown",
 			method: "brew",
-			content: output.content,
 			fetchedAt,
-			truncated: output.truncated,
 			notes: [`Fetched via Homebrew ${isFormula ? "formula" : "cask"} API`],
-		};
+		});
 	} catch {}
 
 	return null;

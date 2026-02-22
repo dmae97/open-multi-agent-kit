@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, formatIsoDate, loadPage, tryParseJson } from "./types";
 
 interface AurPackage {
 	Name: string;
@@ -57,12 +57,8 @@ export const handleAur: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let data: AurResponse;
-		try {
-			data = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const data = tryParseJson<AurResponse>(result.content);
+		if (!data) return null;
 
 		if (data.resultcount === 0 || !data.results[0]) return null;
 
@@ -74,7 +70,7 @@ export const handleAur: SpecialHandler = async (
 		// Package info
 		md += `**Version:** ${pkg.Version}`;
 		if (pkg.OutOfDate) {
-			const outOfDateDate = new Date(pkg.OutOfDate * 1000).toISOString().split("T")[0];
+			const outOfDateDate = formatIsoDate(pkg.OutOfDate * 1000);
 			md += ` (flagged out-of-date: ${outOfDateDate})`;
 		}
 		md += "\n";
@@ -88,8 +84,8 @@ export const handleAur: SpecialHandler = async (
 		md += `**Votes:** ${formatCount(pkg.NumVotes)} · **Popularity:** ${pkg.Popularity.toFixed(2)}\n`;
 
 		// Timestamps
-		const lastModified = new Date(pkg.LastModified * 1000).toISOString().split("T")[0];
-		const firstSubmitted = new Date(pkg.FirstSubmitted * 1000).toISOString().split("T")[0];
+		const lastModified = formatIsoDate(pkg.LastModified * 1000);
+		const firstSubmitted = formatIsoDate(pkg.FirstSubmitted * 1000);
 		md += `**Last Updated:** ${lastModified} · **First Submitted:** ${firstSubmitted}\n`;
 
 		if (pkg.License?.length) md += `**License:** ${pkg.License.join(", ")}\n`;
@@ -158,17 +154,7 @@ export const handleAur: SpecialHandler = async (
 		md += `makepkg -si\n`;
 		md += "```\n";
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "aur",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via AUR RPC API"],
-		};
+		return buildResult(md, { url, method: "aur", fetchedAt, notes: ["Fetched via AUR RPC API"] });
 	} catch {}
 
 	return null;

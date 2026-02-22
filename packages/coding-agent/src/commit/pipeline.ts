@@ -61,12 +61,12 @@ async function runLegacyCommitCommand(args: CommitCommandArgs): Promise<void> {
 	const git = new ControlledGit(cwd);
 	let stagedFiles = await git.getStagedFiles();
 	if (stagedFiles.length === 0) {
-		writeStdout("No staged changes detected, staging all changes...");
+		process.stdout.write("No staged changes detected, staging all changes...\n");
 		await git.stageAll();
 		stagedFiles = await git.getStagedFiles();
 	}
 	if (stagedFiles.length === 0) {
-		writeStderr("No changes to commit.");
+		process.stderr.write("No changes to commit.\n");
 		return;
 	}
 
@@ -123,16 +123,16 @@ async function runLegacyCommitCommand(args: CommitCommandArgs): Promise<void> {
 	const commitMessage = formatCommitMessage(analysis, summary.summary);
 
 	if (args.dryRun) {
-		writeStdout("\nGenerated commit message:\n");
-		writeStdout(commitMessage);
+		process.stdout.write("\nGenerated commit message:\n");
+		process.stdout.write(`${commitMessage}\n`);
 		return;
 	}
 
 	await git.commit(commitMessage);
-	writeStdout("Commit created.");
+	process.stdout.write("Commit created.\n");
 	if (args.push) {
 		await git.push();
-		writeStdout("Pushed to remote.");
+		process.stdout.write("Pushed to remote.\n");
 	}
 }
 
@@ -163,7 +163,7 @@ async function generateAnalysis(input: {
 			maxFileTokens: input.commitSettings.mapReduceMaxFileTokens,
 		})
 	) {
-		writeStdout("Large diff detected, using map-reduce analysis...");
+		process.stdout.write("Large diff detected, using map-reduce analysis...\n");
 		return runMapReduceAnalysis({
 			model: input.primaryModel,
 			apiKey: input.primaryApiKey,
@@ -232,12 +232,4 @@ function buildRetryContext(base: string | undefined, errors: string[]): string {
 		base_context: base,
 		errors: errors.join("; "),
 	});
-}
-
-function writeStdout(message: string): void {
-	process.stdout.write(`${message}\n`);
-}
-
-function writeStderr(message: string): void {
-	process.stderr.write(`${message}\n`);
 }

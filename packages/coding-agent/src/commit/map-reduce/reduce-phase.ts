@@ -1,10 +1,11 @@
-import type { Api, AssistantMessage, Model, ToolCall } from "@oh-my-pi/pi-ai";
+import type { Api, AssistantMessage, Model } from "@oh-my-pi/pi-ai";
 import { completeSimple, validateToolCall } from "@oh-my-pi/pi-ai";
 import { Type } from "@sinclair/typebox";
 import reduceSystemPrompt from "../../commit/prompts/reduce-system.md" with { type: "text" };
 import reduceUserPrompt from "../../commit/prompts/reduce-user.md" with { type: "text" };
 import type { ChangelogCategory, ConventionalAnalysis, FileObservation } from "../../commit/types";
 import { renderPromptTemplate } from "../../config/prompt-templates";
+import { extractTextContent, extractToolCall, normalizeAnalysis, parseJsonPayload } from "../utils";
 
 const ReduceTool = {
 	name: "create_conventional_analysis",
@@ -100,46 +101,4 @@ function parseAnalysisResponse(message: AssistantMessage): ConventionalAnalysis 
 		issue_refs: string[];
 	};
 	return normalizeAnalysis(parsed);
-}
-
-function parseJsonPayload(text: string): unknown {
-	const trimmed = text.trim();
-	if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-		return JSON.parse(trimmed) as unknown;
-	}
-	const match = trimmed.match(/\{[\s\S]*\}/);
-	if (!match) {
-		throw new Error("No JSON payload found in reduce response");
-	}
-	return JSON.parse(match[0]) as unknown;
-}
-
-function normalizeAnalysis(parsed: {
-	type: ConventionalAnalysis["type"];
-	scope: string | null;
-	details: Array<{ text: string; changelog_category?: ChangelogCategory; user_visible?: boolean }>;
-	issue_refs: string[];
-}): ConventionalAnalysis {
-	return {
-		type: parsed.type,
-		scope: parsed.scope?.trim() || null,
-		details: parsed.details.map(detail => ({
-			text: detail.text.trim(),
-			changelogCategory: detail.user_visible ? detail.changelog_category : undefined,
-			userVisible: detail.user_visible ?? false,
-		})),
-		issueRefs: parsed.issue_refs ?? [],
-	};
-}
-
-function extractToolCall(message: AssistantMessage, name: string): ToolCall | undefined {
-	return message.content.find(content => content.type === "toolCall" && content.name === name) as ToolCall | undefined;
-}
-
-function extractTextContent(message: AssistantMessage): string {
-	return message.content
-		.filter(content => content.type === "text")
-		.map(content => content.text)
-		.join("")
-		.trim();
 }

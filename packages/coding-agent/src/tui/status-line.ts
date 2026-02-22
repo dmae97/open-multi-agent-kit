@@ -2,11 +2,11 @@
  * Standardized status header rendering for tool output.
  */
 import type { Theme, ThemeColor } from "../modes/theme/theme";
-import type { IconType } from "./types";
-import { getStateIcon } from "./utils";
+import type { ToolUIStatus } from "../tools/render-utils";
+import { formatStatusIcon } from "../tools/render-utils";
 
 export interface StatusLineOptions {
-	icon?: IconType;
+	icon?: ToolUIStatus;
 	spinnerFrame?: number;
 	title: string;
 	titleColor?: ThemeColor;
@@ -16,7 +16,7 @@ export interface StatusLineOptions {
 }
 
 export function renderStatusLine(options: StatusLineOptions, theme: Theme): string {
-	const icon = options.icon ? getStateIcon(options.icon, theme, options.spinnerFrame) : "";
+	const icon = options.icon ? formatStatusIcon(options.icon, theme, options.spinnerFrame) : "";
 	const titleColor = options.titleColor ?? "accent";
 	const title = theme.fg(titleColor, options.title);
 	let line = icon ? `${icon} ${title}` : title;

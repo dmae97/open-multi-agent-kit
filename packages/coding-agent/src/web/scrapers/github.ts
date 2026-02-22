@@ -1,6 +1,6 @@
 import { $env, ptree } from "@oh-my-pi/pi-utils";
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage } from "./types";
 
 interface GitHubUrl {
 	type: "blob" | "tree" | "repo" | "issue" | "issues" | "pull" | "pulls" | "discussion" | "discussions" | "other";
@@ -392,17 +392,14 @@ export const handleGitHub: SpecialHandler = async (
 			notes.push(`Fetched raw: ${rawUrl}`);
 			const result = await loadPage(rawUrl, { timeout, signal });
 			if (result.ok) {
-				const output = finalizeOutput(result.content);
-				return {
+				return buildResult(result.content, {
 					url,
 					finalUrl: rawUrl,
-					contentType: "text/plain",
 					method: "github-raw",
-					content: output.content,
 					fetchedAt,
-					truncated: output.truncated,
 					notes,
-				};
+					contentType: "text/plain",
+				});
 			}
 			break;
 		}
@@ -411,17 +408,7 @@ export const handleGitHub: SpecialHandler = async (
 			notes.push(`Fetched via GitHub API`);
 			const result = await renderGitHubTree(gh, timeout, signal);
 			if (result.ok) {
-				const output = finalizeOutput(result.content);
-				return {
-					url,
-					finalUrl: url,
-					contentType: "text/markdown",
-					method: "github-tree",
-					content: output.content,
-					fetchedAt,
-					truncated: output.truncated,
-					notes,
-				};
+				return buildResult(result.content, { url, method: "github-tree", fetchedAt, notes });
 			}
 			break;
 		}
@@ -431,17 +418,12 @@ export const handleGitHub: SpecialHandler = async (
 			notes.push(`Fetched via GitHub API`);
 			const result = await renderGitHubIssue(gh, timeout, signal);
 			if (result.ok) {
-				const output = finalizeOutput(result.content);
-				return {
+				return buildResult(result.content, {
 					url,
-					finalUrl: url,
-					contentType: "text/markdown",
 					method: gh.type === "pull" ? "github-pr" : "github-issue",
-					content: output.content,
 					fetchedAt,
-					truncated: output.truncated,
 					notes,
-				};
+				});
 			}
 			break;
 		}
@@ -450,17 +432,7 @@ export const handleGitHub: SpecialHandler = async (
 			notes.push(`Fetched via GitHub API`);
 			const result = await renderGitHubIssuesList(gh, timeout, signal);
 			if (result.ok) {
-				const output = finalizeOutput(result.content);
-				return {
-					url,
-					finalUrl: url,
-					contentType: "text/markdown",
-					method: "github-issues",
-					content: output.content,
-					fetchedAt,
-					truncated: output.truncated,
-					notes,
-				};
+				return buildResult(result.content, { url, method: "github-issues", fetchedAt, notes });
 			}
 			break;
 		}
@@ -469,17 +441,7 @@ export const handleGitHub: SpecialHandler = async (
 			notes.push(`Fetched via GitHub API`);
 			const result = await renderGitHubRepo(gh, timeout, signal);
 			if (result.ok) {
-				const output = finalizeOutput(result.content);
-				return {
-					url,
-					finalUrl: url,
-					contentType: "text/markdown",
-					method: "github-repo",
-					content: output.content,
-					fetchedAt,
-					truncated: output.truncated,
-					notes,
-				};
+				return buildResult(result.content, { url, method: "github-repo", fetchedAt, notes });
 			}
 			break;
 		}

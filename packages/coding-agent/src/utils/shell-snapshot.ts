@@ -180,17 +180,6 @@ export async function getOrCreateSnapshot(
 	return null;
 }
 
-/**
- * Get the command prefix to source the snapshot.
- * Returns empty string if no snapshot available.
- */
-export function getSnapshotSourceCommand(snapshotPath: string | null): string {
-	if (!snapshotPath) return "";
-	// Escape for shell
-	const escaped = snapshotPath.replace(/'/g, "'\\''");
-	return `source '${escaped}' 2>/dev/null && `;
-}
-
 postmortem.register("shell-snapshot", () => {
 	for (const snapshotPath of cachedSnapshotPaths.values()) {
 		fs.unlinkSync(snapshotPath);

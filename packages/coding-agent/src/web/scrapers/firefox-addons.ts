@@ -1,7 +1,5 @@
-import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, htmlToBasicMarkdown, loadPage } from "./types";
-
-type LocalizedText = string | Record<string, string | null | undefined> | null | undefined;
+import type { LocalizedText, RenderResult, SpecialHandler } from "./types";
+import { buildResult, formatCount, getLocalizedText, htmlToBasicMarkdown, loadPage, tryParseJson } from "./types";
 
 type AddonFile = {
 	permissions?: string[];
@@ -41,21 +39,6 @@ type AddonData = {
 	homepage?: AddonHomepage;
 	url?: string;
 };
-
-function getLocalizedText(value: LocalizedText, defaultLocale?: string): string | undefined {
-	if (!value) return undefined;
-	if (typeof value === "string") return value;
-
-	const localized = value as Record<string, string | null | undefined>;
-	if (defaultLocale && localized[defaultLocale]) return localized[defaultLocale] ?? undefined;
-	if (localized["en-US"]) return localized["en-US"] ?? undefined;
-
-	for (const entry of Object.values(localized)) {
-		if (entry) return entry;
-	}
-
-	return undefined;
-}
 
 function normalizeCategories(categories?: string[] | Record<string, string[]>): string[] {
 	if (!categories) return [];
@@ -119,12 +102,8 @@ export const handleFirefoxAddons: SpecialHandler = async (
 		const result = await loadPage(apiUrl, { timeout, headers: { Accept: "application/json" }, signal });
 		if (!result.ok) return null;
 
-		let data: AddonData;
-		try {
-			data = JSON.parse(result.content) as AddonData;
-		} catch {
-			return null;
-		}
+		const data = tryParseJson<AddonData>(result.content);
+		if (!data) return null;
 
 		const fetchedAt = new Date().toISOString();
 		const defaultLocale = data.default_locale || "en-US";
@@ -197,17 +176,14 @@ export const handleFirefoxAddons: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
+		const finalUrl = data.url ?? result.finalUrl ?? url;
+		return buildResult(md, {
 			url,
-			finalUrl: data.url ?? result.finalUrl ?? url,
-			contentType: "text/markdown",
+			finalUrl,
 			method: "firefox-addons",
-			content: output.content,
 			fetchedAt,
-			truncated: output.truncated,
 			notes: ["Fetched via Firefox Add-ons API"],
-		};
+		});
 	} catch {}
 
 	return null;

@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { logger } from "@oh-my-pi/pi-utils";
+import { isRecord, logger } from "@oh-my-pi/pi-utils";
 import { YAML } from "bun";
 import { globSync } from "glob";
 import { getConfigDirPaths } from "../config";
@@ -25,10 +25,6 @@ const PID_TOKEN = "$PID";
 interface NormalizedConfig {
 	servers: Record<string, Partial<ServerConfig>>;
 	idleTimeoutMs?: number;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function parseConfigContent(content: string, filePath: string): unknown {

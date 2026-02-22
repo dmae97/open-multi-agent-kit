@@ -1,6 +1,6 @@
 import { parse as parseHtml } from "node-html-parser";
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, htmlToBasicMarkdown, loadPage } from "./types";
+import { buildResult, htmlToBasicMarkdown, loadPage, tryParseJson } from "./types";
 
 interface GoModuleInfo {
 	Version: string;
@@ -26,7 +26,6 @@ export const handleGoPkg: SpecialHandler = async (
 
 		let modulePath: string;
 		let version = "latest";
-		let _subpackage = "";
 
 		// Parse @version if present
 		const atIndex = pathname.indexOf("@");
@@ -38,9 +37,7 @@ export const handleGoPkg: SpecialHandler = async (
 			const slashIndex = afterAt.indexOf("/");
 			if (slashIndex !== -1) {
 				version = afterAt.slice(0, slashIndex);
-				const remainder = afterAt.slice(slashIndex + 1);
 				modulePath = beforeAt;
-				_subpackage = remainder;
 			} else {
 				version = afterAt;
 				modulePath = beforeAt;
@@ -65,8 +62,10 @@ export const handleGoPkg: SpecialHandler = async (
 				const proxyResult = await loadPage(proxyUrl, { timeout, signal });
 
 				if (proxyResult.ok) {
-					moduleInfo = JSON.parse(proxyResult.content) as GoModuleInfo;
-					version = moduleInfo.Version;
+					moduleInfo = tryParseJson<GoModuleInfo>(proxyResult.content);
+					if (moduleInfo) {
+						version = moduleInfo.Version;
+					}
 				}
 			} catch {
 				// If @latest fails, might be a subpackage - will extract from page
@@ -77,7 +76,7 @@ export const handleGoPkg: SpecialHandler = async (
 				const proxyResult = await loadPage(proxyUrl, { timeout, signal });
 
 				if (proxyResult.ok) {
-					moduleInfo = JSON.parse(proxyResult.content) as GoModuleInfo;
+					moduleInfo = tryParseJson<GoModuleInfo>(proxyResult.content);
 				}
 			} catch {
 				// Proxy lookup failed, will rely on page data
@@ -87,25 +86,20 @@ export const handleGoPkg: SpecialHandler = async (
 		// Fetch the pkg.go.dev page
 		const pageResult = await loadPage(url, { timeout, signal });
 		if (!pageResult.ok) {
-			return {
+			return buildResult(`Failed to fetch pkg.go.dev page (status: ${pageResult.status ?? "unknown"})`, {
 				url,
 				finalUrl: pageResult.finalUrl,
-				contentType: "text/plain",
 				method: "go-pkg",
-				content: `Failed to fetch pkg.go.dev page (status: ${pageResult.status ?? "unknown"})`,
 				fetchedAt: new Date().toISOString(),
-				truncated: false,
 				notes: ["error"],
-			};
+				contentType: "text/plain",
+			});
 		}
 
 		const doc = parseHtml(pageResult.content);
 
-		// Extract module/package information
-		const breadcrumb = doc.querySelector(".go-Breadcrumb");
-		const _headerDiv = doc.querySelector(".go-Main-header");
-
 		// Extract actual module path from breadcrumb or header
+		const breadcrumb = doc.querySelector(".go-Breadcrumb");
 		if (breadcrumb) {
 			const moduleLink = breadcrumb.querySelector("a[href^='/']");
 			if (moduleLink) {
@@ -257,18 +251,14 @@ export const handleGoPkg: SpecialHandler = async (
 		}
 
 		const content = sections.join("\n");
-		const { content: finalContent, truncated } = finalizeOutput(content);
 
-		return {
+		return buildResult(content, {
 			url,
 			finalUrl: pageResult.finalUrl,
-			contentType: "text/markdown",
 			method: "go-pkg",
-			content: finalContent,
 			fetchedAt: new Date().toISOString(),
-			truncated,
 			notes,
-		};
+		});
 	} catch {
 		return null;
 	}

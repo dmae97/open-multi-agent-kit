@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage, tryParseJson } from "./types";
 
 interface OpenLibraryAuthor {
 	name?: string;
@@ -96,17 +96,7 @@ export const handleOpenLibrary: SpecialHandler = async (
 
 		if (!md) return null;
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "openlibrary",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Open Library API"],
-		};
+		return buildResult(md, { url, method: "openlibrary", fetchedAt, notes: ["Fetched via Open Library API"] });
 	} catch {}
 
 	return null;
@@ -117,12 +107,8 @@ async function fetchWork(workId: string, timeout: number, signal?: AbortSignal):
 	const result = await loadPage(apiUrl, { timeout, signal });
 	if (!result.ok) return null;
 
-	let work: OpenLibraryWork;
-	try {
-		work = JSON.parse(result.content);
-	} catch {
-		return null;
-	}
+	const work = tryParseJson<OpenLibraryWork>(result.content);
+	if (!work) return null;
 
 	let md = `# ${work.title}\n\n`;
 
@@ -167,12 +153,8 @@ async function fetchEdition(editionId: string, timeout: number, signal?: AbortSi
 	const result = await loadPage(apiUrl, { timeout, signal });
 	if (!result.ok) return null;
 
-	let edition: OpenLibraryEdition;
-	try {
-		edition = JSON.parse(result.content);
-	} catch {
-		return null;
-	}
+	const edition = tryParseJson<OpenLibraryEdition>(result.content);
+	if (!edition) return null;
 
 	let md = `# ${edition.title}\n\n`;
 
@@ -236,12 +218,8 @@ async function fetchByIsbn(isbn: string, timeout: number, signal?: AbortSignal):
 	const result = await loadPage(apiUrl, { timeout, signal });
 	if (!result.ok) return null;
 
-	let data: OpenLibraryBooksApiResponse;
-	try {
-		data = JSON.parse(result.content);
-	} catch {
-		return null;
-	}
+	const data = tryParseJson<OpenLibraryBooksApiResponse>(result.content);
+	if (!data) return null;
 
 	const key = `ISBN:${isbn}`;
 	const book = data[key];

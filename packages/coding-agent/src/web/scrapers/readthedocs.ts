@@ -2,8 +2,7 @@
  * Read the Docs handler for web-fetch
  */
 import { parse as parseHtml } from "node-html-parser";
-import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, htmlToBasicMarkdown, loadPage } from "./types";
+import { buildResult, htmlToBasicMarkdown, loadPage, type RenderResult, type SpecialHandler } from "./types";
 
 export const handleReadTheDocs: SpecialHandler = async (
 	url: string,
@@ -110,16 +109,12 @@ export const handleReadTheDocs: SpecialHandler = async (
 		notes.push("Failed to extract content");
 	}
 
-	const { content: finalContent, truncated } = finalizeOutput(content);
-
-	return {
+	return buildResult(content, {
 		url,
 		finalUrl: result.finalUrl,
-		contentType: sourceUrl ? "text/plain" : "text/html",
 		method: "readthedocs",
-		content: finalContent,
 		fetchedAt,
-		truncated,
 		notes,
-	};
+		contentType: sourceUrl ? "text/plain" : "text/html",
+	});
 };

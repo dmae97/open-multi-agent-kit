@@ -5,7 +5,6 @@ import { callMCP } from "../mcp/json-rpc";
 import type {
 	ExaRenderDetails,
 	ExaSearchResponse,
-	ExaSearchResult,
 	MCPCallResponse,
 	MCPTool,
 	MCPToolsResponse,
@@ -77,69 +76,6 @@ export async function callWebsetsTool(
 	}
 
 	return response.result;
-}
-
-/** Parse Exa markdown format into SearchResponse */
-export function parseExaMarkdown(text: string): ExaSearchResponse | null {
-	const results: ExaSearchResult[] = [];
-	const lines = text.split("\n");
-	let currentResult: Partial<ExaSearchResult> | null = null;
-
-	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i].trim();
-
-		// Match result header: ## Title
-		if (line.startsWith("## ")) {
-			if (currentResult?.title) {
-				results.push(currentResult as ExaSearchResult);
-			}
-			currentResult = { title: line.slice(3).trim() };
-			continue;
-		}
-
-		if (!currentResult) continue;
-
-		// Match URL: **URL:** ...
-		if (line.startsWith("**URL:**")) {
-			currentResult.url = line.slice(8).trim();
-			continue;
-		}
-
-		// Match Author: **Author:** ...
-		if (line.startsWith("**Author:**")) {
-			currentResult.author = line.slice(11).trim();
-			continue;
-		}
-
-		// Match Published Date: **Published Date:** ...
-		if (line.startsWith("**Published Date:**")) {
-			currentResult.publishedDate = line.slice(19).trim();
-			continue;
-		}
-
-		// Match Text: **Text:** ...
-		if (line.startsWith("**Text:**")) {
-			currentResult.text = line.slice(9).trim();
-			continue;
-		}
-
-		// Accumulate text content
-		if (currentResult.text && line && !line.startsWith("**")) {
-			currentResult.text += ` ${line}`;
-		}
-	}
-
-	// Add last result
-	if (currentResult?.title) {
-		results.push(currentResult as ExaSearchResult);
-	}
-
-	if (results.length === 0) return null;
-
-	return {
-		results,
-		statuses: results.map((r, i) => ({ id: r.id ?? `result-${i}`, status: "success" })),
-	};
 }
 
 /** Format search results for LLM */

@@ -18,8 +18,7 @@ import type {
 	ToolCall,
 } from "../types";
 import { AssistantMessageEventStream } from "../utils/event-stream";
-import { appendRawHttpRequestDumpFor400, type RawHttpRequestDump } from "../utils/http-inspector";
-import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
+import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-inspector";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import type { GoogleThinkingLevel } from "./google-gemini-cli";
 import {
@@ -271,11 +270,7 @@ export const streamGoogle: StreamFunction<"google-generative-ai"> = (
 				}
 			}
 			output.stopReason = options?.signal?.aborted ? "aborted" : "error";
-			output.errorMessage = await appendRawHttpRequestDumpFor400(
-				formatErrorMessageWithRetryAfter(error),
-				error,
-				rawRequestDump,
-			);
+			output.errorMessage = await finalizeErrorMessage(error, rawRequestDump);
 			output.duration = Date.now() - startTime;
 			if (firstTokenTime) output.ttft = firstTokenTime - startTime;
 			stream.push({ type: "error", reason: output.stopReason, error: output });

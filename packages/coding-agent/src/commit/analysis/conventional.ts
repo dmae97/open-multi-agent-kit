@@ -1,10 +1,11 @@
-import type { Api, AssistantMessage, Model, ToolCall } from "@oh-my-pi/pi-ai";
+import type { Api, AssistantMessage, Model } from "@oh-my-pi/pi-ai";
 import { completeSimple, validateToolCall } from "@oh-my-pi/pi-ai";
 import { Type } from "@sinclair/typebox";
 import analysisSystemPrompt from "../../commit/prompts/analysis-system.md" with { type: "text" };
 import analysisUserPrompt from "../../commit/prompts/analysis-user.md" with { type: "text" };
-import type { ChangelogCategory, ConventionalAnalysis, ConventionalDetail } from "../../commit/types";
+import type { ChangelogCategory, ConventionalAnalysis } from "../../commit/types";
 import { renderPromptTemplate } from "../../config/prompt-templates";
+import { extractTextContent, extractToolCall, normalizeAnalysis, parseJsonPayload } from "../utils";
 
 const ConventionalAnalysisTool = {
 	name: "create_conventional_analysis",
@@ -114,52 +115,4 @@ function parseAnalysisFromResponse(message: AssistantMessage): ConventionalAnaly
 		issue_refs: string[];
 	};
 	return normalizeAnalysis(parsed);
-}
-
-function normalizeAnalysis(parsed: {
-	type: ConventionalAnalysis["type"];
-	scope: string | null;
-	details: Array<{ text: string; changelog_category?: ChangelogCategory; user_visible?: boolean }>;
-	issue_refs: string[];
-}): ConventionalAnalysis {
-	const details: ConventionalDetail[] = parsed.details.map(detail => ({
-		text: detail.text.trim(),
-		changelogCategory: detail.user_visible ? detail.changelog_category : undefined,
-		userVisible: detail.user_visible ?? false,
-	}));
-	return {
-		type: parsed.type,
-		scope: parsed.scope?.trim() || null,
-		details,
-		issueRefs: parsed.issue_refs ?? [],
-	};
-}
-
-function extractToolCall(message: AssistantMessage, name: string): ToolCall | undefined {
-	for (const content of message.content) {
-		if (content.type === "toolCall" && content.name === name) {
-			return content;
-		}
-	}
-	return undefined;
-}
-
-function extractTextContent(message: AssistantMessage): string {
-	return message.content
-		.filter(content => content.type === "text")
-		.map(content => content.text)
-		.join("")
-		.trim();
-}
-
-function parseJsonPayload(text: string): unknown {
-	const trimmed = text.trim();
-	if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-		return JSON.parse(trimmed) as unknown;
-	}
-	const match = trimmed.match(/\{[\s\S]*\}/);
-	if (!match) {
-		throw new Error("No JSON payload found in analysis response");
-	}
-	return JSON.parse(match[0]) as unknown;
 }

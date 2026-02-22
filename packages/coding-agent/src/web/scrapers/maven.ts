@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, formatIsoDate, loadPage, tryParseJson } from "./types";
 
 interface MavenDoc {
 	id: string;
@@ -74,12 +74,8 @@ export const handleMaven: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let data: MavenResponse;
-		try {
-			data = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const data = tryParseJson<MavenResponse>(result.content);
+		if (!data) return null;
 
 		if (data.response.numFound === 0) return null;
 
@@ -98,8 +94,7 @@ export const handleMaven: SpecialHandler = async (
 		if (doc.p) md += `**Packaging:** ${doc.p}\n`;
 		if (doc.versionCount) md += `**Versions:** ${formatCount(doc.versionCount)}\n`;
 		if (doc.timestamp) {
-			const date = new Date(doc.timestamp);
-			md += `**Last Updated:** ${date.toISOString().split("T")[0]}\n`;
+			md += `**Last Updated:** ${formatIsoDate(doc.timestamp)}\n`;
 		}
 
 		// Add dependency snippets
@@ -135,17 +130,7 @@ export const handleMaven: SpecialHandler = async (
 		md += `- [Maven Central](https://search.maven.org/artifact/${doc.g}/${doc.a}/${displayVersion}/jar)\n`;
 		md += `- [MVN Repository](https://mvnrepository.com/artifact/${doc.g}/${doc.a}/${displayVersion})\n`;
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "maven",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Maven Central API"],
-		};
+		return buildResult(md, { url, method: "maven", fetchedAt, notes: ["Fetched via Maven Central API"] });
 	} catch {}
 
 	return null;

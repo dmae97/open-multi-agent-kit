@@ -1,5 +1,5 @@
 import type { SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, formatMediaDuration, loadPage, tryParseJson } from "./types";
 
 interface VimeoOEmbed {
 	title: string;
@@ -34,17 +34,6 @@ interface VimeoVideoConfig {
 			}>;
 		};
 	};
-}
-
-/**
- * Format seconds into HH:MM:SS or MM:SS
- */
-function formatDuration(seconds: number): string {
-	const h = Math.floor(seconds / 3600);
-	const m = Math.floor((seconds % 3600) / 60);
-	const s = seconds % 60;
-	if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-	return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 /**
@@ -96,11 +85,12 @@ export const handleVimeo: SpecialHandler = async (url: string, timeout: number, 
 
 		if (!oembedResult.ok) return null;
 
-		const oembed = JSON.parse(oembedResult.content) as VimeoOEmbed;
+		const oembed = tryParseJson<VimeoOEmbed>(oembedResult.content);
+		if (!oembed) return null;
 
 		let md = `# ${oembed.title}\n\n`;
 		md += `**Author:** [${oembed.author_name}](${oembed.author_url})\n`;
-		md += `**Duration:** ${formatDuration(oembed.duration)}\n`;
+		md += `**Duration:** ${formatMediaDuration(oembed.duration)}\n`;
 
 		if (oembed.upload_date) {
 			md += `**Uploaded:** ${oembed.upload_date}\n`;
@@ -120,10 +110,10 @@ export const handleVimeo: SpecialHandler = async (url: string, timeout: number, 
 			const configResult = await loadPage(configUrl, { timeout: Math.min(timeout, 5), signal });
 
 			if (configResult.ok) {
-				const config = JSON.parse(configResult.content) as VimeoVideoConfig;
+				const config = tryParseJson<VimeoVideoConfig>(configResult.content);
 
 				// Add video quality info if available
-				const progressive = config.request?.files?.progressive;
+				const progressive = config?.request?.files?.progressive;
 				if (progressive && progressive.length > 0) {
 					md += `\n**Available Qualities:**\n`;
 					for (const quality of progressive.slice(0, 5)) {
@@ -135,17 +125,7 @@ export const handleVimeo: SpecialHandler = async (url: string, timeout: number, 
 			// Config fetch is optional - continue without it
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "vimeo",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Vimeo oEmbed API"],
-		};
+		return buildResult(md, { url, method: "vimeo", fetchedAt, notes: ["Fetched via Vimeo oEmbed API"] });
 	} catch {
 		return null;
 	}

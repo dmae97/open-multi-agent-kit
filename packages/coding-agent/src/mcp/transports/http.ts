@@ -4,7 +4,7 @@
  * Implements JSON-RPC 2.0 over HTTP POST with optional SSE streaming.
  * Based on MCP spec 2025-03-26.
  */
-import { readSseJson } from "@oh-my-pi/pi-utils";
+import { readSseJson, Snowflake } from "@oh-my-pi/pi-utils";
 import type {
 	JsonRpcMessage,
 	JsonRpcResponse,
@@ -13,11 +13,6 @@ import type {
 	MCPSseServerConfig,
 	MCPTransport,
 } from "../../mcp/types";
-
-/** Generate unique request ID */
-function generateId(): string {
-	return Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
 
 /**
  * HTTP transport for MCP servers.
@@ -112,7 +107,7 @@ export class HttpTransport implements MCPTransport {
 			throw new Error("Transport not connected");
 		}
 
-		const id = generateId();
+		const id = Snowflake.next();
 		const body = {
 			jsonrpc: "2.0" as const,
 			id,

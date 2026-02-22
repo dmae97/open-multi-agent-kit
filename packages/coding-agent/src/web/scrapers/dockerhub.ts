@@ -1,6 +1,6 @@
 import { formatBytes } from "../../tools/render-utils";
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, formatIsoDate, loadPage, tryParseJson } from "./types";
 
 interface DockerHubRepo {
 	name: string;
@@ -71,20 +71,14 @@ export const handleDockerHub: SpecialHandler = async (
 
 		if (!repoResult.ok) return null;
 
-		let repo: DockerHubRepo;
-		try {
-			repo = JSON.parse(repoResult.content);
-		} catch {
-			return null;
-		}
+		const repo = tryParseJson<DockerHubRepo>(repoResult.content);
+		if (!repo) return null;
 
 		// Parse tags
 		let tags: DockerHubTag[] = [];
 		if (tagsResult.ok) {
-			try {
-				const tagsData = JSON.parse(tagsResult.content) as DockerHubTagsResponse;
-				tags = tagsData.results ?? [];
-			} catch {}
+			const tagsData = tryParseJson<DockerHubTagsResponse>(tagsResult.content);
+			if (tagsData?.results) tags = tagsData.results;
 		}
 
 		// Build markdown output
@@ -106,8 +100,7 @@ export const handleDockerHub: SpecialHandler = async (
 		}
 
 		if (repo.last_updated) {
-			const date = new Date(repo.last_updated);
-			md += `**Last Updated:** ${date.toISOString().split("T")[0]}\n`;
+			md += `**Last Updated:** ${formatIsoDate(repo.last_updated)}\n`;
 		}
 
 		md += "\n";
@@ -131,23 +124,13 @@ export const handleDockerHub: SpecialHandler = async (
 						?.map(img => img.architecture)
 						.filter(Boolean)
 						.join(", ") || "-";
-				const updated = tag.last_updated ? new Date(tag.last_updated).toISOString().split("T")[0] : "-";
+				const updated = tag.last_updated ? formatIsoDate(tag.last_updated) : "-";
 				md += `| \`${tag.name}\` | ${size} | ${archs} | ${updated} |\n`;
 			}
 			md += "\n";
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "dockerhub",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Docker Hub API"],
-		};
+		return buildResult(md, { url, method: "dockerhub", fetchedAt, notes: ["Fetched via Docker Hub API"] });
 	} catch {}
 
 	return null;

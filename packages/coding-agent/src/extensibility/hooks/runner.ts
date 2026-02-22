@@ -4,8 +4,8 @@
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { Model } from "@oh-my-pi/pi-ai";
 import type { ModelRegistry } from "../../config/model-registry";
-import { theme } from "../../modes/theme/theme";
 import type { SessionManager } from "../../session/session-manager";
+import { createNoOpUIContext } from "../utils";
 import type {
 	AppendEntryHandler,
 	BranchHandler,
@@ -42,22 +42,6 @@ export type HookErrorListener = (error: HookError) => void;
 // Re-export execCommand for backward compatibility
 export { execCommand } from "../../exec/exec";
 
-/** No-op UI context used when no UI is available */
-const noOpUIContext: HookUIContext = {
-	select: async () => undefined,
-	confirm: async () => false,
-	input: async () => undefined,
-	notify: () => {},
-	setStatus: () => {},
-	custom: async () => undefined as never,
-	setEditorText: () => {},
-	getEditorText: () => "",
-	editor: async () => undefined,
-	get theme() {
-		return theme;
-	},
-};
-
 /**
  * HookRunner executes hooks and manages event emission.
  */
@@ -80,7 +64,7 @@ export class HookRunner {
 		private readonly sessionManager: SessionManager,
 		private readonly modelRegistry: ModelRegistry,
 	) {
-		this.#uiContext = noOpUIContext;
+		this.#uiContext = createNoOpUIContext();
 		this.#hasUI = false;
 	}
 
@@ -134,7 +118,7 @@ export class HookRunner {
 			hook.setSendMessageHandler(options.sendMessageHandler);
 			hook.setAppendEntryHandler(options.appendEntryHandler);
 		}
-		this.#uiContext = options.uiContext ?? noOpUIContext;
+		this.#uiContext = options.uiContext ?? createNoOpUIContext();
 		this.#hasUI = options.hasUI ?? false;
 	}
 

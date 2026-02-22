@@ -1,5 +1,6 @@
 import { getProjectDir } from "@oh-my-pi/pi-utils/dirs";
 import type { AutocompleteProvider, CombinedAutocompleteProvider } from "../autocomplete";
+import { BracketedPasteHandler } from "../bracketed-paste";
 import { type EditorKeybindingsManager, getEditorKeybindings } from "../keybindings";
 import { matchesKey } from "../keys";
 import { KillRing } from "../kill-ring";
@@ -338,8 +339,7 @@ export class Editor implements Component, Focusable {
 	#pasteCounter: number = 0;
 
 	// Bracketed paste mode buffering
-	#pasteBuffer: string = "";
-	#isInPaste: boolean = false;
+	#pasteHandler = new BracketedPasteHandler();
 
 	// Prompt history for up/down navigation
 	#history: string[] = [];
@@ -696,46 +696,15 @@ export class Editor implements Component, Focusable {
 		}
 
 		// Handle bracketed paste mode
-		// Start of paste: \x1b[200~
-		// End of paste: \x1b[201~
-
-		// Check if we're starting a bracketed paste
-		if (data.includes("\x1b[200~")) {
-			this.#isInPaste = true;
-			this.#pasteBuffer = "";
-			// Remove the start marker and keep the rest
-			data = data.replace("\x1b[200~", "");
-		}
-
-		// If we're in a paste, buffer the data
-		if (this.#isInPaste) {
-			// Append data to buffer first (end marker could be split across chunks)
-			this.#pasteBuffer += data;
-
-			// Check if the accumulated buffer contains the end marker
-			const endIndex = this.#pasteBuffer.indexOf("\x1b[201~");
-			if (endIndex !== -1) {
-				// Extract content before the end marker
-				const pasteContent = this.#pasteBuffer.substring(0, endIndex);
-
-				// Process the complete paste
-				this.#handlePaste(pasteContent);
-
-				// Reset paste state
-				this.#isInPaste = false;
-
-				// Process any remaining data after the end marker
-				const remaining = this.#pasteBuffer.substring(endIndex + 6); // 6 = length of \x1b[201~
-				this.#pasteBuffer = "";
-
-				if (remaining.length > 0) {
-					this.handleInput(remaining);
+		const paste = this.#pasteHandler.process(data);
+		if (paste.handled) {
+			if (paste.pasteContent !== undefined) {
+				this.#handlePaste(paste.pasteContent);
+				if (paste.remaining.length > 0) {
+					this.handleInput(paste.remaining);
 				}
-				return;
-			} else {
-				// Still accumulating, wait for more data
-				return;
 			}
+			return;
 		}
 
 		// Handle special key combinations first

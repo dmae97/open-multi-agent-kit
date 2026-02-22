@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage, tryParseJson } from "./types";
 
 const GRAPHQL_ENDPOINT = "https://sourcegraph.com/.api/graphql";
 const GRAPHQL_HEADERS = {
@@ -160,14 +160,6 @@ function parseSourcegraphUrl(url: string): SourcegraphTarget | null {
 	}
 }
 
-function safeParseJson<T>(content: string): T | null {
-	try {
-		return JSON.parse(content) as T;
-	} catch {
-		return null;
-	}
-}
-
 async function fetchGraphql<T>(
 	query: string,
 	variables: Record<string, unknown>,
@@ -184,7 +176,7 @@ async function fetchGraphql<T>(
 	});
 	if (!result.ok) return null;
 
-	const parsed = safeParseJson<{ data?: T; errors?: unknown }>(result.content);
+	const parsed = tryParseJson<{ data?: T; errors?: unknown }>(result.content);
 	if (!parsed?.data) return null;
 	if (Array.isArray(parsed.errors) && parsed.errors.length > 0) return null;
 	return parsed.data;
@@ -323,48 +315,18 @@ export const handleSourcegraph: SpecialHandler = async (
 			case "search": {
 				const result = await renderSearch(target.query, timeout, signal);
 				if (!result.ok) return null;
-				const output = finalizeOutput(result.content);
-				return {
-					url,
-					finalUrl: url,
-					contentType: "text/markdown",
-					method: "sourcegraph-search",
-					content: output.content,
-					fetchedAt,
-					truncated: output.truncated,
-					notes,
-				};
+				return buildResult(result.content, { url, method: "sourcegraph-search", fetchedAt, notes });
 			}
 			case "file": {
 				const rev = target.rev ?? "HEAD";
 				const result = await renderFile(target.repoName, target.filePath, rev, timeout, signal);
 				if (!result.ok) return null;
-				const output = finalizeOutput(result.content);
-				return {
-					url,
-					finalUrl: url,
-					contentType: "text/markdown",
-					method: "sourcegraph-file",
-					content: output.content,
-					fetchedAt,
-					truncated: output.truncated,
-					notes,
-				};
+				return buildResult(result.content, { url, method: "sourcegraph-file", fetchedAt, notes });
 			}
 			case "repo": {
 				const result = await renderRepo(target.repoName, timeout, signal);
 				if (!result.ok) return null;
-				const output = finalizeOutput(result.content);
-				return {
-					url,
-					finalUrl: url,
-					contentType: "text/markdown",
-					method: "sourcegraph-repo",
-					content: output.content,
-					fetchedAt,
-					truncated: output.truncated,
-					notes,
-				};
+				return buildResult(result.content, { url, method: "sourcegraph-repo", fetchedAt, notes });
 			}
 		}
 	} catch {}

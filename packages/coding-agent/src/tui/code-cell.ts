@@ -2,10 +2,15 @@
  * Render a code cell with optional output section.
  */
 import { highlightCode, type Theme } from "../modes/theme/theme";
-import { formatDuration, formatExpandHint, formatMoreItems, replaceTabs } from "../tools/render-utils";
+import {
+	formatDuration,
+	formatExpandHint,
+	formatMoreItems,
+	formatStatusIcon,
+	replaceTabs,
+} from "../tools/render-utils";
 import { renderOutputBlock } from "./output-block";
 import type { State } from "./types";
-import { getStateIcon } from "./utils";
 
 export interface CodeCellOptions {
 	code: string;
@@ -35,7 +40,7 @@ function formatHeader(options: CodeCellOptions, theme: Theme): { title: string; 
 	const { index, total, title, status, spinnerFrame, duration } = options;
 	const parts: string[] = [];
 	if (status) {
-		const icon = getStateIcon(
+		const icon = formatStatusIcon(
 			status === "complete"
 				? "success"
 				: status === "error"

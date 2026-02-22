@@ -27,8 +27,6 @@ const hasDisplay = process.platform !== "linux" || Boolean(process.env.DISPLAY |
  */
 export async function copyToClipboard(text: string): Promise<void> {
 	if (process.stdout.isTTY) {
-		const encoded = btoa(text);
-		const osc52 = `\x1b]52;c;${encoded}\x07`;
 		const onError = (err: unknown) => {
 			process.stdout.off("error", onError);
 			// Prevent unhandled 'error' from crashing the process when stdout is a closed pipe.
@@ -37,6 +35,8 @@ export async function copyToClipboard(text: string): Promise<void> {
 			}
 		};
 		try {
+			const encoded = Buffer.from(text).toString("base64");
+			const osc52 = `\x1b]52;c;${encoded}\x07`;
 			process.stdout.on("error", onError);
 			process.stdout.write(osc52, err => {
 				process.stdout.off("error", onError);

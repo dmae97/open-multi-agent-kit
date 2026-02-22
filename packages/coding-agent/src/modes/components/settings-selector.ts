@@ -9,7 +9,6 @@ import {
 	Spacer,
 	type Tab,
 	TabBar,
-	type TabBarTheme,
 	Text,
 } from "@oh-my-pi/pi-tui";
 import { type SettingPath, settings } from "../../config/settings";
@@ -21,19 +20,11 @@ import type {
 } from "../../config/settings-schema";
 import { SETTING_TABS, TAB_METADATA } from "../../config/settings-schema";
 import { getCurrentThemeName, getSelectListTheme, getSettingsListTheme, theme } from "../../modes/theme/theme";
+import { getTabBarTheme } from "../shared";
 import { DynamicBorder } from "./dynamic-border";
 import { PluginSettingsComponent } from "./plugin-settings";
 import { getSettingsForTab, type SettingDef } from "./settings-defs";
 import { getPreset } from "./status-line/presets";
-
-function getTabBarTheme(): TabBarTheme {
-	return {
-		label: text => theme.bold(theme.fg("accent", text)),
-		activeTab: text => theme.bold(theme.bg("selectedBg", theme.fg("text", text))),
-		inactiveTab: text => theme.fg("muted", text),
-		hint: text => theme.fg("dim", text),
-	};
-}
 
 /**
  * A submenu component for selecting from a list of options.

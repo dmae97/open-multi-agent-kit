@@ -40,6 +40,7 @@ import type {
 	ToolCall,
 	ToolResultMessage,
 } from "../types";
+import { normalizeToolCallId, resolveCacheRetention } from "../utils";
 import { AssistantMessageEventStream } from "../utils/event-stream";
 import { appendRawHttpRequestDumpFor400, type RawHttpRequestDump, withHttpStatus } from "../utils/http-inspector";
 import { parseStreamingJson } from "../utils/json-parse";
@@ -59,11 +60,6 @@ export interface BedrockOptions extends StreamOptions {
 }
 
 type Block = (TextContent | ThinkingContent | ToolCall) & { index?: number; partialJson?: string };
-
-function sanitizeToolCallId(id: string): string {
-	const sanitized = id.replace(/[^a-zA-Z0-9_-]/g, "_");
-	return sanitized.length > 64 ? sanitized.slice(0, 64) : sanitized;
-}
 
 export const streamBedrock: StreamFunction<"bedrock-converse-stream"> = (
 	model: Model<"bedrock-converse-stream">,
@@ -223,7 +219,7 @@ function handleContentBlockStart(
 	if (start?.toolUse) {
 		const block: Block = {
 			type: "toolCall",
-			id: sanitizeToolCallId(start.toolUse.toolUseId || ""),
+			id: normalizeToolCallId(start.toolUse.toolUseId || ""),
 			name: start.toolUse.name || "",
 			arguments: {},
 			partialJson: "",
@@ -334,16 +330,6 @@ function handleContentBlockStop(
 }
 
 /**
- * Resolve cache retention preference.
- * Defaults to "short" and uses PI_CACHE_RETENTION for backward compatibility.
- */
-function resolveCacheRetention(cacheRetention?: CacheRetention): CacheRetention {
-	if (cacheRetention) return cacheRetention;
-	if (typeof process !== "undefined" && process.env.PI_CACHE_RETENTION === "long") return "long";
-	return "short";
-}
-
-/**
  * Check if the model supports prompt caching.
  * Supported: Claude 3.5 Haiku, Claude 3.7 Sonnet, Claude 4.x+ models, Haiku 4.5+
  */
@@ -387,11 +373,6 @@ function buildSystemPrompt(
 	}
 
 	return blocks;
-}
-
-function normalizeToolCallId(id: string): string {
-	const sanitized = id.replace(/[^a-zA-Z0-9_-]/g, "_");
-	return sanitized.length > 64 ? sanitized.slice(0, 64) : sanitized;
 }
 
 function convertMessages(
@@ -458,7 +439,7 @@ function convertMessages(
 						case "toolCall":
 							contentBlocks.push({
 								toolUse: {
-									toolUseId: sanitizeToolCallId(c.id),
+									toolUseId: normalizeToolCallId(c.id),
 									name: c.name,
 									input: c.arguments,
 								},
@@ -506,7 +487,7 @@ function convertMessages(
 				// Add current tool result with all content blocks combined
 				toolResults.push({
 					toolResult: {
-						toolUseId: sanitizeToolCallId(m.toolCallId),
+						toolUseId: normalizeToolCallId(m.toolCallId),
 						content: m.content.map(c =>
 							c.type === "image"
 								? { image: createImageBlock(c.mimeType, c.data) }
@@ -522,7 +503,7 @@ function convertMessages(
 					const nextMsg = transformedMessages[j] as ToolResultMessage;
 					toolResults.push({
 						toolResult: {
-							toolUseId: sanitizeToolCallId(nextMsg.toolCallId),
+							toolUseId: normalizeToolCallId(nextMsg.toolCallId),
 							content: nextMsg.content.map(c =>
 								c.type === "image"
 									? { image: createImageBlock(c.mimeType, c.data) }

@@ -1,3 +1,5 @@
+export { truncate } from "@oh-my-pi/pi-utils";
+
 import path from "node:path";
 import { type Theme, theme } from "../modes/theme/theme";
 import type {
@@ -523,27 +525,3 @@ export function extractHoverText(
 
 // =============================================================================
 // General Utilities
-// =============================================================================
-
-/**
- * Truncate a string to a maximum length with ellipsis.
- */
-export function truncate(str: string, maxLength: number): string {
-	if (str.length <= maxLength) return str;
-	return `${str.slice(0, maxLength - 1)}…`;
-}
-
-/**
- * Group items by a key function.
- */
-export function groupBy<T, K extends string | number>(items: T[], keyFn: (item: T) => K): Record<K, T[]> {
-	const result = {} as Record<K, T[]>;
-	for (const item of items) {
-		const key = keyFn(item);
-		if (!result[key]) {
-			result[key] = [];
-		}
-		result[key].push(item);
-	}
-	return result;
-}

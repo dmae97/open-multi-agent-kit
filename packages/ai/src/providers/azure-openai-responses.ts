@@ -29,10 +29,10 @@ import type {
 	ToolCall,
 	ToolChoice,
 } from "../types";
+import { normalizeResponsesToolCallId } from "../utils";
 import { AssistantMessageEventStream } from "../utils/event-stream";
-import { appendRawHttpRequestDumpFor400, type RawHttpRequestDump } from "../utils/http-inspector";
+import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-inspector";
 import { parseStreamingJson } from "../utils/json-parse";
-import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import { mapToOpenAIResponsesToolChoice } from "../utils/tool-choice";
 import { transformMessages } from "./transform-messages";
@@ -361,11 +361,7 @@ export const streamAzureOpenAIResponses: StreamFunction<"azure-openai-responses"
 		} catch (error) {
 			for (const block of output.content) delete (block as { index?: number }).index;
 			output.stopReason = options?.signal?.aborted ? "aborted" : "error";
-			output.errorMessage = await appendRawHttpRequestDumpFor400(
-				formatErrorMessageWithRetryAfter(error),
-				error,
-				rawRequestDump,
-			);
+			output.errorMessage = await finalizeErrorMessage(error, rawRequestDump);
 			output.duration = Date.now() - startTime;
 			if (firstTokenTime) output.ttft = firstTokenTime - startTime;
 			stream.push({ type: "error", reason: output.stopReason, error: output });
@@ -503,15 +499,6 @@ function buildParams(
 	}
 
 	return params;
-}
-
-function normalizeResponsesToolCallId(id: string): { callId: string; itemId: string } {
-	const [callId, itemId] = id.split("|");
-	if (callId && itemId) {
-		return { callId, itemId };
-	}
-	const hash = Bun.hash.xxHash64(id).toString(36);
-	return { callId: `call_${hash}`, itemId: `item_${hash}` };
 }
 
 function convertMessages(

@@ -1,7 +1,5 @@
-import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
-
-type LocalizedText = string | Record<string, string>;
+import type { LocalizedText, RenderResult, SpecialHandler } from "./types";
+import { buildResult, getLocalizedText, loadPage, tryParseJson } from "./types";
 
 type FdroidPackage = {
 	packageName?: string;
@@ -24,15 +22,6 @@ type FdroidPackage = {
 	suggestedVersionCode?: number;
 	suggestedVersionName?: string;
 };
-
-function pickLocalizedText(value?: LocalizedText): string | undefined {
-	if (!value) return undefined;
-	if (typeof value === "string") return value;
-	const preferred = value["en-US"] ?? value.en_US ?? value.en;
-	if (preferred) return preferred;
-	const first = Object.values(value).find(entry => typeof entry === "string");
-	return first;
-}
 
 function normalizeAuthor(data: FdroidPackage): string | undefined {
 	if (data.authorName) return data.authorName;
@@ -95,16 +84,12 @@ export const handleFdroid: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let data: FdroidPackage;
-		try {
-			data = JSON.parse(result.content) as FdroidPackage;
-		} catch {
-			return null;
-		}
+		const data = tryParseJson<FdroidPackage>(result.content);
+		if (!data) return null;
 
-		const displayName = pickLocalizedText(data.name) ?? packageName;
-		const summary = pickLocalizedText(data.summary);
-		const description = pickLocalizedText(data.description);
+		const displayName = getLocalizedText(data.name) ?? packageName;
+		const summary = getLocalizedText(data.summary);
+		const description = getLocalizedText(data.description);
 		const author = normalizeAuthor(data);
 		const authorEmail = normalizeAuthorEmail(data);
 		const antiFeatures = collectAntiFeatures(data);
@@ -141,17 +126,7 @@ export const handleFdroid: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "fdroid",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via F-Droid API"],
-		};
+		return buildResult(md, { url, method: "fdroid", fetchedAt, notes: ["Fetched via F-Droid API"] });
 	} catch {}
 
 	return null;

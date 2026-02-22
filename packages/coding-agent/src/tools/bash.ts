@@ -231,9 +231,6 @@ function formatBashCommand(args: BashRenderArgs, _uiTheme: Theme): string {
 	return displayWorkdir ? `${prompt} cd ${displayWorkdir} && ${command}` : `${prompt} ${command}`;
 }
 
-// Preview line limit when not expanded (matches tool-execution behavior)
-export const BASH_PREVIEW_LINES = 10;
-
 export const bashToolRenderer = {
 	renderCall(args: BashRenderArgs, _options: RenderResultOptions, uiTheme: Theme): Component {
 		const cmdText = formatBashCommand(args, uiTheme);

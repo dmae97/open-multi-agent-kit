@@ -1,13 +1,12 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
 import type { AssistantMessage } from "@oh-my-pi/pi-ai";
 import { type Component, padding, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
-import { getProjectDir } from "@oh-my-pi/pi-utils/dirs";
 import { $ } from "bun";
 import { settings } from "../../config/settings";
 import type { StatusLinePreset, StatusLineSegmentId, StatusLineSeparatorStyle } from "../../config/settings-schema";
 import { theme } from "../../modes/theme/theme";
 import type { AgentSession } from "../../session/agent-session";
+import { findGitHeadPathSync, sanitizeStatusText } from "../shared";
 import { getPreset } from "./status-line/presets";
 import { renderSegment, type SegmentContext } from "./status-line/segments";
 import { getSeparator } from "./status-line/separators";
@@ -31,30 +30,6 @@ export interface StatusLineSettings {
 // ═══════════════════════════════════════════════════════════════════════════
 // Rendering Helpers
 // ═══════════════════════════════════════════════════════════════════════════
-
-/** Sanitize text for display in a single-line status */
-function sanitizeStatusText(text: string): string {
-	return text
-		.replace(/[\r\n\t]/g, " ")
-		.replace(/ +/g, " ")
-		.trim();
-}
-
-/** Find the git root directory by walking up from cwd */
-function findGitHeadPath(): string | null {
-	let dir = getProjectDir();
-	while (true) {
-		const gitHeadPath = path.join(dir, ".git", "HEAD");
-		if (fs.existsSync(gitHeadPath)) {
-			return gitHeadPath;
-		}
-		const parent = path.dirname(dir);
-		if (parent === dir) {
-			return null;
-		}
-		dir = parent;
-	}
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // StatusLineComponent
@@ -125,7 +100,7 @@ export class StatusLineComponent implements Component {
 			this.#gitWatcher = null;
 		}
 
-		const gitHeadPath = findGitHeadPath();
+		const gitHeadPath = findGitHeadPathSync();
 		if (!gitHeadPath) return;
 
 		try {
@@ -156,7 +131,7 @@ export class StatusLineComponent implements Component {
 			return this.#cachedBranch;
 		}
 
-		const gitHeadPath = findGitHeadPath();
+		const gitHeadPath = findGitHeadPathSync();
 		if (!gitHeadPath) {
 			this.#cachedBranch = null;
 			return null;

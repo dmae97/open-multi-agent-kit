@@ -6,7 +6,7 @@
  */
 /// <reference types="./bun-imports.d.ts" />
 import * as fs from "node:fs";
-import { join } from "node:path";
+import * as path from "node:path";
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { computeLineHash, RpcClient, renderPromptTemplate } from "@oh-my-pi/pi-coding-agent";
 import { Snowflake } from "@oh-my-pi/pi-utils";
@@ -22,7 +22,7 @@ const CLI_PATH = Bun.fileURLToPath(import.meta.resolve("@oh-my-pi/pi-coding-agen
 fs.mkdirSync(TMP);
 
 function makeTempDir(pre?: string): string {
-	const dir = join(TMP, `${pre ?? ""}${Snowflake.next()}`);
+	const dir = path.join(TMP, `${pre ?? ""}${Snowflake.next()}`);
 	fs.mkdirSync(dir);
 	return dir;
 }
@@ -80,7 +80,7 @@ function countHashlineEditSubtypes(args: unknown): Record<string, number> {
 async function collectOriginalFileContents(cwd: string, files: string[]): Promise<Map<string, string>> {
 	const originals = new Map<string, string>();
 	for (const file of files) {
-		const fullPath = join(cwd, file);
+		const fullPath = path.join(cwd, file);
 		try {
 			originals.set(fullPath, await Bun.file(fullPath).text());
 		} catch {
@@ -132,7 +132,7 @@ async function appendNoChangeMutationHint(
 	const editPath = getEditPathFromArgs(args);
 	if (!editPath) return error;
 
-	const fullPath = editPath.startsWith("/") ? editPath : join(cwd, editPath);
+	const fullPath = editPath.startsWith("/") ? editPath : path.join(cwd, editPath);
 	const original = originalFiles.get(fullPath);
 	if (original === undefined) return error;
 
@@ -268,8 +268,8 @@ async function evaluateMutationIntent(
 		return null;
 	}
 
-	const currentPath = file.startsWith("/") ? file : join(cwd, file);
-	const expectedPath = file.startsWith("/") ? file : join(expectedDir, file);
+	const currentPath = file.startsWith("/") ? file : path.join(cwd, file);
+	const expectedPath = file.startsWith("/") ? file : path.join(expectedDir, file);
 
 	let currentText: string;
 	let expectedText: string;
@@ -426,8 +426,8 @@ async function buildGuidedContext(
 	const file = task.metadata?.fileName ?? task.files[0];
 	if (!file) return null;
 
-	const actualPath = join(cwd, file);
-	const expectedPath = join(expectedDir, file);
+	const actualPath = path.join(cwd, file);
+	const expectedPath = path.join(expectedDir, file);
 	const actual = await Bun.file(actualPath)
 		.text()
 		.catch(() => null);
@@ -587,7 +587,7 @@ async function copyFixtures(task: EditTask, destDir: string): Promise<void> {
 	const entries = await fs.promises.readdir(task.inputDir, { withFileTypes: true });
 	await Promise.all(
 		entries.map(entry =>
-			fs.promises.cp(join(task.inputDir!, entry.name), join(destDir, entry.name), { recursive: true }),
+			fs.promises.cp(path.join(task.inputDir!, entry.name), path.join(destDir, entry.name), { recursive: true }),
 		),
 	);
 }
@@ -622,7 +622,7 @@ async function runSingleTask(
 	};
 	const hashlineSubtypes: Record<string, number> = Object.fromEntries(HASHLINE_SUBTYPES.map(k => [k, 0]));
 
-	const logFile = join(TMP, `run-${task.id}-${runIndex}.jsonl`);
+	const logFile = path.join(TMP, `run-${task.id}-${runIndex}.jsonl`);
 	const logEvent = async (event: unknown) => {
 		await fs.promises.appendFile(logFile, `${JSON.stringify(event)}\n`);
 	};
@@ -931,7 +931,7 @@ async function runBatchedTask(
 	};
 	const hashlineSubtypes: Record<string, number> = Object.fromEntries(HASHLINE_SUBTYPES.map(k => [k, 0]));
 
-	const logFile = join(sessionDir, `run-${task.id}-${runIndex}.jsonl`);
+	const logFile = path.join(sessionDir, `run-${task.id}-${runIndex}.jsonl`);
 	const logEvent = async (event: unknown) => {
 		await fs.promises.appendFile(logFile, `${JSON.stringify(event)}\n`);
 	};

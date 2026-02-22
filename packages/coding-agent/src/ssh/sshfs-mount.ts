@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { getRemoteDir } from "@oh-my-pi/pi-utils/dirs";
 import { $ } from "bun";
 import { getControlDir, getControlPathTemplate, type SSHConnectionTarget } from "./connection-manager";
+import { buildSshTarget, sanitizeHostName } from "./utils";
 
 const REMOTE_DIR = getRemoteDir();
 const CONTROL_DIR = getControlDir();
@@ -20,16 +21,11 @@ async function ensureDir(path: string, mode = 0o700): Promise<void> {
 
 function getMountName(host: SSHConnectionTarget): string {
 	const raw = (host.name ?? host.host).trim();
-	const sanitized = raw.replace(/[^a-zA-Z0-9._-]+/g, "_");
-	return sanitized.length > 0 ? sanitized : "remote";
+	return sanitizeHostName(raw);
 }
 
 function getMountPath(host: SSHConnectionTarget): string {
 	return path.join(REMOTE_DIR, getMountName(host));
-}
-
-function buildSshTarget(host: SSHConnectionTarget): string {
-	return host.username ? `${host.username}@${host.host}` : host.host;
 }
 
 function buildSshfsArgs(host: SSHConnectionTarget): string[] {
@@ -98,7 +94,7 @@ export async function mountRemote(host: SSHConnectionTarget, remotePath = "/"): 
 		return mountPath;
 	}
 
-	const target = `${buildSshTarget(host)}:${remotePath}`;
+	const target = `${buildSshTarget(host.username, host.host)}:${remotePath}`;
 	const args = buildSshfsArgs(host);
 	const result = await $`sshfs ${args} ${target} ${mountPath}`.nothrow();
 

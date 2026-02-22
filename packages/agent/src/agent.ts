@@ -585,9 +585,9 @@ export class Agent {
 
 		let skipInitialSteeringPoll = options?.skipInitialSteeringPoll === true;
 
-		this.#runningPrompt = new Promise<void>(resolve => {
-			this.#resolveRunningPrompt = resolve;
-		});
+		const { promise, resolve } = Promise.withResolvers<void>();
+		this.#runningPrompt = promise;
+		this.#resolveRunningPrompt = resolve;
 
 		this.#abortController = new AbortController();
 		this.#state.isStreaming = true;

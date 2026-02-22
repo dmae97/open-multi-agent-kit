@@ -1,4 +1,4 @@
-import { mapAnthropicToolChoice } from "../stream";
+import { ANTHROPIC_THINKING, mapAnthropicToolChoice } from "../stream";
 import type { Api, Context, Model, SimpleStreamOptions } from "../types";
 import { AssistantMessageEventStream } from "../utils/event-stream";
 import { streamAnthropic } from "./anthropic";
@@ -168,14 +168,6 @@ interface DirectAccessToken {
 
 const directAccessCache = new Map<string, DirectAccessToken>();
 
-const ANTHROPIC_THINKING_BUDGETS = {
-	minimal: 1024,
-	low: 4096,
-	medium: 8192,
-	high: 16384,
-	xhigh: 32768,
-} as const;
-
 async function getDirectAccessToken(gitlabAccessToken: string): Promise<DirectAccessToken> {
 	const cached = directAccessCache.get(gitlabAccessToken);
 	if (cached && cached.expiresAt > Date.now()) {
@@ -295,8 +287,7 @@ export function streamGitLabDuo(
 								onPayload: options.onPayload,
 								thinkingEnabled: Boolean(options.reasoning) && model.reasoning,
 								thinkingBudgetTokens: options.reasoning
-									? (options.thinkingBudgets?.[options.reasoning] ??
-										ANTHROPIC_THINKING_BUDGETS[options.reasoning])
+									? (options.thinkingBudgets?.[options.reasoning] ?? ANTHROPIC_THINKING[options.reasoning])
 									: undefined,
 								reasoning: options.reasoning,
 								toolChoice: mapAnthropicToolChoice(options.toolChoice),

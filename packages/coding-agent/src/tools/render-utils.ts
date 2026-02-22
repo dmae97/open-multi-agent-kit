@@ -6,6 +6,7 @@
  */
 import * as os from "node:os";
 import { type Ellipsis, truncateToWidth } from "@oh-my-pi/pi-tui";
+import { pluralize } from "@oh-my-pi/pi-utils";
 import type { Theme } from "../modes/theme/theme";
 
 export { Ellipsis, replaceTabs, truncateToWidth } from "@oh-my-pi/pi-tui";
@@ -81,60 +82,7 @@ export function getDomain(url: string): string {
 // Formatting Utilities
 // =============================================================================
 
-/**
- * Format byte count for display (e.g., "1.5KB", "2.3MB").
- */
-export function formatBytes(bytes: number): string {
-	if (bytes < 1024) return `${bytes}B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-	return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-}
-
-/**
- * Format token count for display (e.g., "1.5k", "25k").
- */
-export function formatTokens(tokens: number): string {
-	if (tokens >= 1000) {
-		return `${(tokens / 1000).toFixed(1)}k`;
-	}
-	return String(tokens);
-}
-
-/**
- * Format duration for display (e.g., "500ms", "2.5s", "1.2m").
- */
-export function formatDuration(ms: number): string {
-	if (ms < 1000) return `${ms}ms`;
-	if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-	return `${(ms / 60000).toFixed(1)}m`;
-}
-
-/**
- * Format count with pluralized label (e.g., "3 files", "1 error").
- */
-export function formatCount(label: string, count: number): string {
-	const safeCount = Number.isFinite(count) ? count : 0;
-	return `${safeCount} ${pluralize(label, safeCount)}`;
-}
-
-/**
- * Format age from seconds to human-readable string.
- */
-export function formatAge(ageSeconds: number | null | undefined): string {
-	if (!ageSeconds) return "";
-	const mins = Math.floor(ageSeconds / 60);
-	const hours = Math.floor(mins / 60);
-	const days = Math.floor(hours / 24);
-	const weeks = Math.floor(days / 7);
-	const months = Math.floor(days / 30);
-
-	if (months > 0) return `${months}mo ago`;
-	if (weeks > 0) return `${weeks}w ago`;
-	if (days > 0) return `${days}d ago`;
-	if (hours > 0) return `${hours}h ago`;
-	if (mins > 0) return `${mins}m ago`;
-	return "just now";
-}
+export { formatAge, formatBytes, formatCount, formatDuration, pluralize } from "@oh-my-pi/pi-utils";
 
 // =============================================================================
 // Theme Helper Utilities
@@ -197,14 +145,6 @@ export function formatMoreItems(remaining: number, itemType: string): string {
 
 export function formatMeta(meta: string[], theme: Theme): string {
 	return meta.length > 0 ? ` ${theme.fg("muted", meta.join(theme.sep.dot))}` : "";
-}
-
-export function formatScope(scopePath: string | undefined, theme: Theme): string {
-	return scopePath ? ` ${theme.fg("muted", `in ${scopePath}`)}` : "";
-}
-
-export function formatTruncationSuffix(truncated: boolean, theme: Theme): string {
-	return truncated ? theme.fg("warning", " (truncated)") : "";
 }
 
 export function formatErrorMessage(message: string | undefined, theme: Theme): string {
@@ -586,11 +526,4 @@ export function shortenPath(filePath: string, homeDir?: string): string {
 
 export function wrapBrackets(text: string, theme: Theme): string {
 	return `${theme.format.bracketLeft}${text}${theme.format.bracketRight}`;
-}
-
-function pluralize(label: string, count: number): string {
-	if (count === 1) return label;
-	if (/(?:ch|sh|s|x|z)$/i.test(label)) return `${label}es`;
-	if (/[^aeiou]y$/i.test(label)) return `${label.slice(0, -1)}ies`;
-	return `${label}s`;
 }

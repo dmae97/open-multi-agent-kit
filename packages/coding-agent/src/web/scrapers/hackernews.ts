@@ -1,5 +1,5 @@
 import type { SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, decodeHtmlEntities, formatIsoDate, loadPage, tryParseJson } from "./types";
 
 interface HNItem {
 	id: number;
@@ -25,7 +25,7 @@ async function fetchItem(id: number, timeout: number, signal?: AbortSignal): Pro
 	const url = `${API_BASE}/item/${id}.json`;
 	const { content, ok } = await loadPage(url, { timeout, signal });
 	if (!ok) return null;
-	return JSON.parse(content) as HNItem;
+	return tryParseJson<HNItem>(content);
 }
 
 async function fetchItems(ids: number[], timeout: number, limit = 20, signal?: AbortSignal): Promise<HNItem[]> {
@@ -35,24 +35,19 @@ async function fetchItems(ids: number[], timeout: number, limit = 20, signal?: A
 }
 
 function decodeHNText(html: string): string {
-	return html
-		.replace(/<p>/g, "\n\n")
-		.replace(/<\/p>/g, "")
-		.replace(/<pre><code>/g, "\n```\n")
-		.replace(/<\/code><\/pre>/g, "\n```\n")
-		.replace(/<code>/g, "`")
-		.replace(/<\/code>/g, "`")
-		.replace(/<i>/g, "*")
-		.replace(/<\/i>/g, "*")
-		.replace(/<a href="([^"]+)"[^>]*>([^<]*)<\/a>/g, "[$2]($1)")
-		.replace(/<[^>]+>/g, "")
-		.replace(/&quot;/g, '"')
-		.replace(/&#x27;/g, "'")
-		.replace(/&#x2F;/g, "/")
-		.replace(/&lt;/g, "<")
-		.replace(/&gt;/g, ">")
-		.replace(/&amp;/g, "&")
-		.trim();
+	return decodeHtmlEntities(
+		html
+			.replace(/<p>/g, "\n\n")
+			.replace(/<\/p>/g, "")
+			.replace(/<pre><code>/g, "\n```\n")
+			.replace(/<\/code><\/pre>/g, "\n```\n")
+			.replace(/<code>/g, "`")
+			.replace(/<\/code>/g, "`")
+			.replace(/<i>/g, "*")
+			.replace(/<\/i>/g, "*")
+			.replace(/<a href="([^"]+)"[^>]*>([^<]*)<\/a>/g, "[$2]($1)")
+			.replace(/<[^>]+>/g, ""),
+	).trim();
 }
 
 function formatTimestamp(unixTime: number): string {
@@ -62,7 +57,7 @@ function formatTimestamp(unixTime: number): string {
 	const hours = Math.floor(diff / (1000 * 60 * 60));
 	const days = Math.floor(hours / 24);
 
-	if (days > 7) return date.toISOString().split("T")[0];
+	if (days > 7) return formatIsoDate(unixTime * 1000);
 	if (days > 0) return `${days}d ago`;
 	if (hours > 0) return `${hours}h ago`;
 	const minutes = Math.floor(diff / (1000 * 60));
@@ -157,52 +152,37 @@ export const handleHackerNews: SpecialHandler = async (url, timeout, signal) => 
 		} else if (parsed.pathname === "/" || parsed.pathname === "/news") {
 			const { content: raw, ok } = await loadPage(`${API_BASE}/topstories.json`, { timeout, signal });
 			if (!ok) throw new Error("Failed to fetch top stories");
-			const ids = JSON.parse(raw) as number[];
+			const ids = tryParseJson<number[]>(raw);
+			if (!ids) throw new Error("Failed to parse top stories");
 			content = await renderListing(ids, timeout, "Hacker News - Top Stories", signal);
 			notes.push("Fetched top 20 stories from HN front page");
 		} else if (parsed.pathname === "/newest") {
 			const { content: raw, ok } = await loadPage(`${API_BASE}/newstories.json`, { timeout, signal });
 			if (!ok) throw new Error("Failed to fetch new stories");
-			const ids = JSON.parse(raw) as number[];
+			const ids = tryParseJson<number[]>(raw);
+			if (!ids) throw new Error("Failed to parse new stories");
 			content = await renderListing(ids, timeout, "Hacker News - New Stories", signal);
 			notes.push("Fetched top 20 new stories");
 		} else if (parsed.pathname === "/best") {
 			const { content: raw, ok } = await loadPage(`${API_BASE}/beststories.json`, { timeout, signal });
 			if (!ok) throw new Error("Failed to fetch best stories");
-			const ids = JSON.parse(raw) as number[];
+			const ids = tryParseJson<number[]>(raw);
+			if (!ids) throw new Error("Failed to parse best stories");
 			content = await renderListing(ids, timeout, "Hacker News - Best Stories", signal);
 			notes.push("Fetched top 20 best stories");
 		} else {
 			return null;
 		}
 
-		const { content: finalContent, truncated } = finalizeOutput(content);
-
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "hackernews",
-			content: finalContent,
-			fetchedAt,
-			truncated,
-			notes,
-		};
+		return buildResult(content, { url, method: "hackernews", fetchedAt, notes });
 	} catch (err) {
 		const errorMsg = err instanceof Error ? err.message : String(err);
 		notes.push(`Error: ${errorMsg}`);
-		const { content: finalContent, truncated } = finalizeOutput(
-			`# Error fetching Hacker News content\n\n${errorMsg}`,
-		);
-		return {
+		return buildResult(`# Error fetching Hacker News content\n\n${errorMsg}`, {
 			url,
-			finalUrl: url,
-			contentType: "text/markdown",
 			method: "hackernews",
-			content: finalContent,
 			fetchedAt,
-			truncated,
 			notes,
-		};
+		});
 	}
 };

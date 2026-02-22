@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, formatIsoDate, loadPage, tryParseJson } from "./types";
 
 interface CvssV31 {
 	baseScore: number;
@@ -99,12 +99,8 @@ export const handleNvd: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let data: NvdResponse;
-		try {
-			data = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const data = tryParseJson<NvdResponse>(result.content);
+		if (!data) return null;
 
 		const vuln = data.vulnerabilities?.[0]?.cve;
 		if (!vuln) return null;
@@ -115,8 +111,8 @@ export const handleNvd: SpecialHandler = async (
 		if (vuln.vulnStatus) {
 			md += `**Status:** ${vuln.vulnStatus}\n`;
 		}
-		md += `**Published:** ${formatDate(vuln.published)}`;
-		md += ` · **Modified:** ${formatDate(vuln.lastModified)}\n\n`;
+		md += `**Published:** ${formatIsoDate(vuln.published)}`;
+		md += ` · **Modified:** ${formatIsoDate(vuln.lastModified)}\n\n`;
 
 		// Description
 		const desc = vuln.descriptions.find(d => d.lang === "en")?.value;
@@ -202,29 +198,11 @@ export const handleNvd: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "nvd",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via NVD API"],
-		};
+		return buildResult(md, { url, method: "nvd", fetchedAt, notes: ["Fetched via NVD API"] });
 	} catch {}
 
 	return null;
 };
-
-function formatDate(iso: string): string {
-	try {
-		return new Date(iso).toISOString().split("T")[0];
-	} catch {
-		return iso;
-	}
-}
 
 function extractCpes(configurations?: Configuration[]): string[] {
 	if (!configurations) return [];

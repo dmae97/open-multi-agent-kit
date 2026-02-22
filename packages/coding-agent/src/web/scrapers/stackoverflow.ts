@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, htmlToBasicMarkdown, loadPage } from "./types";
+import { buildResult, formatIsoDate, htmlToBasicMarkdown, loadPage, tryParseJson } from "./types";
 
 interface SOQuestion {
 	title: string;
@@ -79,8 +79,8 @@ export const handleStackOverflow: SpecialHandler = async (
 
 		if (!qResult.ok) return null;
 
-		const qData = JSON.parse(qResult.content) as { items: SOQuestion[] };
-		if (!qData.items?.length) return null;
+		const qData = tryParseJson<{ items: SOQuestion[] }>(qResult.content);
+		if (!qData?.items?.length) return null;
 
 		const question = qData.items[0];
 
@@ -88,7 +88,7 @@ export const handleStackOverflow: SpecialHandler = async (
 		md += `**Score:** ${question.score} · **Answers:** ${question.answer_count}`;
 		md += question.is_answered ? " (Answered)" : "";
 		md += `\n**Tags:** ${question.tags.join(", ")}\n`;
-		md += `**Asked by:** ${question.owner.display_name} · ${new Date(question.creation_date * 1000).toISOString().split("T")[0]}\n\n`;
+		md += `**Asked by:** ${question.owner.display_name} · ${formatIsoDate(question.creation_date * 1000)}\n\n`;
 		md += `---\n\n## Question\n\n${htmlToBasicMarkdown(question.body)}\n\n`;
 
 		// Fetch answers
@@ -96,8 +96,8 @@ export const handleStackOverflow: SpecialHandler = async (
 		const aResult = await loadPage(aUrl, { timeout, signal });
 
 		if (aResult.ok) {
-			const aData = JSON.parse(aResult.content) as { items: SOAnswer[] };
-			if (aData.items?.length) {
+			const aData = tryParseJson<{ items: SOAnswer[] }>(aResult.content);
+			if (aData?.items?.length) {
 				md += `---\n\n## Answers\n\n`;
 				for (const answer of aData.items.slice(0, 5)) {
 					const accepted = answer.is_accepted ? " (Accepted)" : "";
@@ -107,17 +107,12 @@ export const handleStackOverflow: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
+		return buildResult(md, {
 			url,
-			finalUrl: url,
-			contentType: "text/markdown",
 			method: "stackexchange",
-			content: output.content,
 			fetchedAt,
-			truncated: output.truncated,
 			notes: [`Fetched via Stack Exchange API (site=${site})`],
-		};
+		});
 	} catch {}
 
 	return null;

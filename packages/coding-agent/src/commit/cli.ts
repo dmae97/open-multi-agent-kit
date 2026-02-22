@@ -36,7 +36,7 @@ export function parseCommitArgs(args: string[]): CommitCommandArgs | undefined {
 			case "--context": {
 				const value = args[i + 1];
 				if (!value || value.startsWith("-")) {
-					writeStderr(chalk.red("Error: --context requires a value"));
+					process.stderr.write(`${chalk.red("Error: --context requires a value")}\n`);
 					process.exit(1);
 				}
 				result.context = value;
@@ -46,7 +46,7 @@ export function parseCommitArgs(args: string[]): CommitCommandArgs | undefined {
 			case "--model": {
 				const value = args[i + 1];
 				if (!value || value.startsWith("-")) {
-					writeStderr(chalk.red("Error: --model requires a value"));
+					process.stderr.write(`${chalk.red("Error: --model requires a value")}\n`);
 					process.exit(1);
 				}
 				result.model = value;
@@ -58,7 +58,7 @@ export function parseCommitArgs(args: string[]): CommitCommandArgs | undefined {
 				break;
 			default:
 				if (flag.startsWith("-")) {
-					writeStderr(chalk.red(`Error: Unknown flag ${flag}`));
+					process.stderr.write(`${chalk.red(`Error: Unknown flag ${flag}`)}\n`);
 					process.exit(1);
 				}
 		}
@@ -81,13 +81,5 @@ export function printCommitHelp(): void {
 		"  --model, -m      Override model selection",
 		"  --help, -h       Show this help message",
 	];
-	writeStdout(lines.join("\n"));
-}
-
-function writeStdout(message: string): void {
-	process.stdout.write(`${message}\n`);
-}
-
-function writeStderr(message: string): void {
-	process.stderr.write(`${message}\n`);
+	process.stdout.write(`${lines.join("\n")}\n`);
 }

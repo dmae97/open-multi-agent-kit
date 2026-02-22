@@ -14,46 +14,8 @@ import type { ExecOptions } from "../../exec/exec";
 import { execCommand } from "../../exec/exec";
 import type { HookUIContext } from "../../extensibility/hooks/types";
 import { getAllPluginToolPaths } from "../../extensibility/plugins/loader";
-import { theme } from "../../modes/theme/theme";
-import { expandPath } from "../../tools/path-utils";
+import { createNoOpUIContext, resolvePath } from "../utils";
 import type { CustomToolAPI, CustomToolFactory, LoadedCustomTool, ToolLoadError } from "./types";
-
-/**
- * Resolve tool path.
- * - Absolute paths used as-is
- * - Paths starting with ~ expanded to home directory
- * - Relative paths resolved from cwd
- */
-function resolveToolPath(toolPath: string, cwd: string): string {
-	const expanded = expandPath(toolPath);
-
-	if (path.isAbsolute(expanded)) {
-		return expanded;
-	}
-
-	// Relative paths resolved from cwd
-	return path.resolve(cwd, expanded);
-}
-
-/**
- * Create a no-op UI context for headless modes.
- */
-function createNoOpUIContext(): HookUIContext {
-	return {
-		select: async () => undefined,
-		confirm: async () => false,
-		input: async () => undefined,
-		notify: () => {},
-		setStatus: () => {},
-		custom: async () => undefined as never,
-		setEditorText: () => {},
-		getEditorText: () => "",
-		editor: async () => undefined,
-		get theme() {
-			return theme;
-		},
-	};
-}
 
 /**
  * Load a single tool module using native Bun import.
@@ -64,7 +26,7 @@ async function loadTool(
 	sharedApi: CustomToolAPI,
 	source?: { provider: string; providerName: string; level: "user" | "project" },
 ): Promise<{ tools: LoadedCustomTool[] | null; error: ToolLoadError | null }> {
-	const resolvedPath = resolveToolPath(toolPath, cwd);
+	const resolvedPath = resolvePath(toolPath, cwd);
 
 	// Skip declarative tool files (.md, .json) - these are metadata only, not executable modules
 	if (resolvedPath.endsWith(".md") || resolvedPath.endsWith(".json")) {
@@ -228,7 +190,7 @@ export async function discoverAndLoadCustomTools(configuredPaths: string[], cwd:
 
 	// 3. Explicitly configured paths (can override/add)
 	for (const configPath of configuredPaths) {
-		addPath(resolveToolPath(configPath, cwd), { provider: "config", providerName: "Config", level: "project" });
+		addPath(resolvePath(configPath, cwd), { provider: "config", providerName: "Config", level: "project" });
 	}
 
 	return loadCustomTools(allPathsWithSources, cwd, builtInToolNames);

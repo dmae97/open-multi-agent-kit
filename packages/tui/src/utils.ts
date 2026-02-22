@@ -31,15 +31,11 @@ export function getSegmenter(): Intl.Segmenter {
 	return segmenter;
 }
 
-// Cache for non-ASCII strings
-//const WIDTH_CACHE_SIZE = 512;
-//const widthCache = new Map<string, number>();
-
 /**
  * Calculate the visible width of a string in terminal columns.
  */
 export function visibleWidthRaw(str: string): number {
-	if (str.length === 0) {
+	if (!str) {
 		return 0;
 	}
 
@@ -64,31 +60,8 @@ export function visibleWidthRaw(str: string): number {
  * Calculate the visible width of a string in terminal columns.
  */
 export function visibleWidth(str: string): number {
-	if (str.length === 0) {
-		return 0;
-	}
+	if (!str) return 0;
 	return visibleWidthRaw(str);
-
-	// === Disabled cache ===
-
-	/*
-	// Check cache
-	const cached = widthCache.get(str);
-	if (cached !== undefined) {
-		return cached;
-	}
-
-	const width = visibleWidthRaw(str);
-	if (widthCache.size >= WIDTH_CACHE_SIZE) {
-		const firstKey = widthCache.keys().next().value;
-		if (firstKey !== undefined) {
-			widthCache.delete(firstKey);
-		}
-	}
-	widthCache.set(str, width);
-
-	return width;
-	*/
 }
 
 const makeBoolArray = (chars: string): ReadonlyArray<boolean> => {

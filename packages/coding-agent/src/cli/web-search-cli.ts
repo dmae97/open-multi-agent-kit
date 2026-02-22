@@ -64,24 +64,24 @@ export function parseSearchArgs(args: string[]): SearchCommandArgs | undefined {
 
 export async function runSearchCommand(cmd: SearchCommandArgs): Promise<void> {
 	if (!cmd.query) {
-		writeStderr(chalk.red("Error: Query is required"));
+		process.stderr.write(`${chalk.red("Error: Query is required")}\n`);
 		process.exit(1);
 	}
 
 	if (cmd.provider && !PROVIDERS.includes(cmd.provider)) {
-		writeStderr(chalk.red(`Error: Unknown provider "${cmd.provider}"`));
-		writeStderr(chalk.dim(`Valid providers: ${PROVIDERS.join(", ")}`));
+		process.stderr.write(`${chalk.red(`Error: Unknown provider "${cmd.provider}"`)}\n`);
+		process.stderr.write(`${chalk.dim(`Valid providers: ${PROVIDERS.join(", ")}`)}\n`);
 		process.exit(1);
 	}
 
 	if (cmd.recency && !RECENCY_OPTIONS.includes(cmd.recency)) {
-		writeStderr(chalk.red(`Error: Invalid recency "${cmd.recency}"`));
-		writeStderr(chalk.dim(`Valid recency values: ${RECENCY_OPTIONS.join(", ")}`));
+		process.stderr.write(`${chalk.red(`Error: Invalid recency "${cmd.recency}"`)}\n`);
+		process.stderr.write(`${chalk.dim(`Valid recency values: ${RECENCY_OPTIONS.join(", ")}`)}\n`);
 		process.exit(1);
 	}
 
 	if (cmd.limit !== undefined && Number.isNaN(cmd.limit)) {
-		writeStderr(chalk.red("Error: --limit must be a number"));
+		process.stderr.write(`${chalk.red("Error: --limit must be a number")}\n`);
 		process.exit(1);
 	}
 
@@ -104,7 +104,7 @@ export async function runSearchCommand(cmd: SearchCommandArgs): Promise<void> {
 	});
 
 	const width = Math.max(60, process.stdout.columns ?? 100);
-	writeStdout(component.render(width).join("\n"));
+	process.stdout.write(`${component.render(width).join("\n")}\n`);
 
 	if (result.details?.error) {
 		process.exitCode = 1;
@@ -112,7 +112,7 @@ export async function runSearchCommand(cmd: SearchCommandArgs): Promise<void> {
 }
 
 export function printSearchHelp(): void {
-	writeStdout(`${chalk.bold(`${APP_NAME} q`)} - Test web search providers
+	process.stdout.write(`${chalk.bold(`${APP_NAME} q`)} - Test web search providers
 
 ${chalk.bold("Usage:")}
   ${APP_NAME} q [options] <query>
@@ -132,12 +132,4 @@ ${chalk.bold("Examples:")}
   ${APP_NAME} q --provider=exa "what's the color of the sky"
   ${APP_NAME} q --provider=brave --recency=week "latest TypeScript 5.7 changes"
 `);
-}
-
-function writeStdout(message: string): void {
-	process.stdout.write(`${message}\n`);
-}
-
-function writeStderr(message: string): void {
-	process.stderr.write(`${message}\n`);
 }

@@ -1,5 +1,5 @@
 import type { SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, formatIsoDate, loadPage, tryParseJson } from "./types";
 
 /**
  * Handle Hex.pm (Elixir package registry) URLs via API
@@ -22,7 +22,7 @@ export const handleHex: SpecialHandler = async (url, timeout, signal) => {
 
 		if (!result.ok) return null;
 
-		let data: {
+		const data = tryParseJson<{
 			name: string;
 			meta?: {
 				description?: string;
@@ -40,13 +40,8 @@ export const handleHex: SpecialHandler = async (url, timeout, signal) => {
 			};
 			latest_version?: string;
 			latest_stable_version?: string;
-		};
-
-		try {
-			data = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		}>(result.content);
+		if (!data) return null;
 
 		let md = `# ${data.name}\n\n`;
 		if (data.meta?.description) md += `${data.meta.description}\n\n`;
@@ -77,20 +72,18 @@ export const handleHex: SpecialHandler = async (url, timeout, signal) => {
 			const releaseResult = await loadPage(releasesUrl, { timeout: Math.min(timeout, 5), signal });
 
 			if (releaseResult.ok) {
-				try {
-					const releaseData = JSON.parse(releaseResult.content) as {
-						requirements?: Record<string, { app?: string; optional: boolean; requirement: string }>;
-					};
+				const releaseData = tryParseJson<{
+					requirements?: Record<string, { app?: string; optional: boolean; requirement: string }>;
+				}>(releaseResult.content);
 
-					if (releaseData.requirements && Object.keys(releaseData.requirements).length > 0) {
-						md += `## Dependencies (${version})\n\n`;
-						for (const [dep, info] of Object.entries(releaseData.requirements)) {
-							const optional = info.optional ? " (optional)" : "";
-							md += `- ${dep}: ${info.requirement}${optional}\n`;
-						}
-						md += "\n";
+				if (releaseData?.requirements && Object.keys(releaseData.requirements).length > 0) {
+					md += `## Dependencies (${version})\n\n`;
+					for (const [dep, info] of Object.entries(releaseData.requirements)) {
+						const optional = info.optional ? " (optional)" : "";
+						md += `- ${dep}: ${info.requirement}${optional}\n`;
 					}
-				} catch {}
+					md += "\n";
+				}
 			}
 
 			// Show recent releases
@@ -98,23 +91,13 @@ export const handleHex: SpecialHandler = async (url, timeout, signal) => {
 			if (recentReleases.length > 0) {
 				md += `## Recent Releases\n\n`;
 				for (const release of recentReleases) {
-					const date = new Date(release.inserted_at).toISOString().split("T")[0];
+					const date = formatIsoDate(release.inserted_at);
 					md += `- **${release.version}** (${date})\n`;
 				}
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "hex",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Hex.pm API"],
-		};
+		return buildResult(md, { url, method: "hex", fetchedAt, notes: ["Fetched via Hex.pm API"] });
 	} catch {}
 
 	return null;

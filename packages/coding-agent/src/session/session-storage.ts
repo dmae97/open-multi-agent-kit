@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { isEnoent } from "@oh-my-pi/pi-utils";
+import { isEnoent, toError } from "@oh-my-pi/pi-utils";
 
 export interface SessionStorageStat {
 	size: number;
@@ -30,10 +30,6 @@ export interface SessionStorage {
 	rename(path: string, nextPath: string): Promise<void>;
 	unlink(path: string): Promise<void>;
 	openWriter(path: string, options?: { flags?: "a" | "w"; onError?: (err: Error) => void }): SessionStorageWriter;
-}
-
-function toError(value: unknown): Error {
-	return value instanceof Error ? value : new Error(String(value));
 }
 
 // FinalizationRegistry to clean up leaked file descriptors

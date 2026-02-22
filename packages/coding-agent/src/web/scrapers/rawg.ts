@@ -1,5 +1,11 @@
-import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, htmlToBasicMarkdown, loadPage } from "./types";
+import {
+	buildResult,
+	htmlToBasicMarkdown,
+	loadPage,
+	type RenderResult,
+	type SpecialHandler,
+	tryParseJson,
+} from "./types";
 
 interface RawgPlatformEntry {
 	platform?: {
@@ -41,12 +47,8 @@ export const handleRawg: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let game: RawgGameResponse;
-		try {
-			game = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const game = tryParseJson<RawgGameResponse>(result.content);
+		if (!game) return null;
 
 		if (requiresApiKey(game)) return null;
 
@@ -72,17 +74,7 @@ export const handleRawg: SpecialHandler = async (
 			md += `## Description\n\n${description}\n`;
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "rawg",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via RAWG API"],
-		};
+		return buildResult(md, { url, method: "rawg", fetchedAt, notes: ["Fetched via RAWG API"] });
 	} catch {}
 
 	return null;

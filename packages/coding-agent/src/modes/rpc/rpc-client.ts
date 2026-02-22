@@ -5,7 +5,7 @@
  */
 import type { AgentEvent, AgentMessage, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent } from "@oh-my-pi/pi-ai";
-import { ptree, readJsonl } from "@oh-my-pi/pi-utils";
+import { isRecord, ptree, readJsonl } from "@oh-my-pi/pi-utils";
 import type { BashResult } from "../../exec/bash-executor";
 import type { SessionStats } from "../../session/agent-session";
 import type { CompactionResult } from "../../session/compaction";
@@ -55,10 +55,6 @@ const agentEventTypes = new Set<AgentEvent["type"]>([
 	"tool_execution_update",
 	"tool_execution_end",
 ]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function isRpcResponse(value: unknown): value is RpcResponse {
 	if (!isRecord(value)) return false;

@@ -1,16 +1,11 @@
 import { parseFrontmatter } from "../../utils/frontmatter";
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage } from "./types";
+import { asString } from "./utils";
 
 const ALLOWED_HOSTS = new Set(["choosealicense.com", "www.choosealicense.com"]);
 const LICENSE_PATH = /^\/licenses\/([^/]+)\/?$/i;
 const APPENDIX_PATH = /^\/appendix\/?$/i;
-
-function asString(value: unknown): string | undefined {
-	if (typeof value !== "string") return undefined;
-	const trimmed = value.trim();
-	return trimmed.length > 0 ? trimmed : undefined;
-}
 
 function normalizeList(value: unknown): string[] {
 	if (Array.isArray(value)) {
@@ -93,17 +88,7 @@ export const handleChooseALicense: SpecialHandler = async (
 			md += `---\n\n## License Text\n\n${licenseText}\n`;
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "choosealicense",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Choose a License"],
-		};
+		return buildResult(md, { url, method: "choosealicense", fetchedAt, notes: ["Fetched via Choose a License"] });
 	} catch {}
 
 	return null;

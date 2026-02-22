@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, loadPage, tryParseJson } from "./types";
 
 interface OpenVsxFileLinks {
 	readme?: string;
@@ -47,12 +47,8 @@ export const handleOpenVsx: SpecialHandler = async (
 		const result = await loadPage(apiUrl, { timeout, signal });
 		if (!result.ok) return null;
 
-		let data: OpenVsxExtension;
-		try {
-			data = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const data = tryParseJson<OpenVsxExtension>(result.content);
+		if (!data) return null;
 
 		let readme: string | null = null;
 		const readmeUrl = data.files?.readme;
@@ -102,17 +98,7 @@ export const handleOpenVsx: SpecialHandler = async (
 			md += `${readme}\n`;
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "open-vsx",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Open VSX API"],
-		};
+		return buildResult(md, { url, method: "open-vsx", fetchedAt, notes: ["Fetched via Open VSX API"] });
 	} catch {}
 
 	return null;

@@ -10,6 +10,7 @@ import type {
 	UsageReport,
 	UsageWindow,
 } from "../usage";
+import { isRecord } from "../utils";
 
 const CODEX_USAGE_PATH = "wham/usage";
 const DEFAULT_CACHE_TTL_MS = 60_000;
@@ -59,9 +60,6 @@ interface JwtPayload {
 		email?: string;
 	};
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === "object" && value !== null && !Array.isArray(value);
 
 const toNumber = (value: unknown): number | undefined => {
 	if (typeof value === "number" && Number.isFinite(value)) return value;

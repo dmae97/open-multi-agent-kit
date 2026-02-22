@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage } from "./types";
 
 /**
  * Handle cheat.sh / cht.sh URLs for command cheatsheets
@@ -61,17 +61,7 @@ export const handleCheatSh: SpecialHandler = async (
 			md += `\`\`\`\n${content}\n\`\`\`\n`;
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "cheat.sh",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via cheat.sh"],
-		};
+		return buildResult(md, { url, method: "cheat.sh", fetchedAt, notes: ["Fetched via cheat.sh"] });
 	} catch {}
 
 	return null;

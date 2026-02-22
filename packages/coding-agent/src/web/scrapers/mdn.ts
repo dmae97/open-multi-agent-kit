@@ -1,5 +1,5 @@
 import type { SpecialHandler } from "./types";
-import { finalizeOutput, htmlToBasicMarkdown, loadPage } from "./types";
+import { buildResult, htmlToBasicMarkdown, loadPage, tryParseJson } from "./types";
 
 interface MDNSection {
 	type: string;
@@ -129,13 +129,13 @@ export const handleMDN: SpecialHandler = async (url: string, timeout: number, si
 			return null;
 		}
 
-		const data: MDNDoc = JSON.parse(result.content);
-		const { doc } = data;
-
-		if (!doc || !doc.title) {
+		const data = tryParseJson<MDNDoc>(result.content);
+		if (!data?.doc?.title) {
 			notes.push("Invalid MDN JSON structure");
 			return null;
 		}
+
+		const { doc } = data;
 
 		// Build markdown content
 		const parts: string[] = [];
@@ -153,18 +153,14 @@ export const handleMDN: SpecialHandler = async (url: string, timeout: number, si
 		}
 
 		const rawContent = parts.join("\n\n");
-		const { content, truncated } = finalizeOutput(rawContent);
 
-		return {
+		return buildResult(rawContent, {
 			url,
 			finalUrl: doc.mdn_url || result.finalUrl,
-			contentType: "text/markdown",
 			method: "mdn",
-			content,
 			fetchedAt: new Date().toISOString(),
-			truncated,
 			notes,
-		};
+		});
 	} catch (err) {
 		notes.push(`MDN handler error: ${err instanceof Error ? err.message : String(err)}`);
 		return null;

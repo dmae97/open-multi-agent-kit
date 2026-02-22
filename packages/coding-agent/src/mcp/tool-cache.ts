@@ -3,7 +3,7 @@
  *
  * Stores tool definitions per server in agent.db for fast startup.
  */
-import { logger } from "@oh-my-pi/pi-utils";
+import { isRecord, logger } from "@oh-my-pi/pi-utils";
 import type { AgentStorage } from "../session/agent-storage";
 import type { MCPServerConfig, MCPToolDefinition } from "./types";
 
@@ -16,10 +16,6 @@ type MCPToolCachePayload = {
 	configHash: string;
 	tools: MCPToolDefinition[];
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return !!value && typeof value === "object" && !Array.isArray(value);
-}
 
 function stableClone(value: unknown): unknown {
 	if (Array.isArray(value)) {

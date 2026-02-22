@@ -52,18 +52,6 @@ function getTitleModelCandidates(registry: ModelRegistry, savedSmolModel?: strin
 }
 
 /**
- * Find the best available model for title generation.
- * Uses the configured smol model if set, otherwise auto-discovers using priority chain.
- *
- * @param registry Model registry
- * @param savedSmolModel Optional saved smol model from settings (provider/modelId format)
- */
-export async function findTitleModel(registry: ModelRegistry, savedSmolModel?: string): Promise<Model<Api> | null> {
-	const candidates = getTitleModelCandidates(registry, savedSmolModel);
-	return candidates[0] ?? null;
-}
-
-/**
  * Generate a title for a session based on the first user message.
  *
  * @param firstMessage The first user message

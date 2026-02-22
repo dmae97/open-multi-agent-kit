@@ -1,5 +1,5 @@
 import * as os from "node:os";
-import { $env, abortableSleep, readSseJson } from "@oh-my-pi/pi-utils";
+import { $env, abortableSleep, asRecord, readSseJson } from "@oh-my-pi/pi-utils";
 import type {
 	ResponseFunctionToolCall,
 	ResponseInput,
@@ -27,10 +27,10 @@ import type {
 	ToolCall,
 	ToolChoice,
 } from "../types";
+import { normalizeResponsesToolCallId } from "../utils";
 import { AssistantMessageEventStream } from "../utils/event-stream";
-import { appendRawHttpRequestDumpFor400, type RawHttpRequestDump } from "../utils/http-inspector";
+import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-inspector";
 import { parseStreamingJson } from "../utils/json-parse";
-import { formatErrorMessageWithRetryAfter } from "../utils/retry-after";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import {
 	CODEX_BASE_URL,
@@ -255,15 +255,6 @@ function extractCodexWebSocketHandshakeHeaders(socket: WebSocket, openEvent?: Ev
 		toCodexHeaders(socketResponse?.headers) ??
 		toCodexHeaders(socketHandshake?.headers)
 	);
-}
-
-function normalizeResponsesToolCallId(id: string): { callId: string; itemId: string } {
-	const [callId, itemId] = id.split("|");
-	if (callId && itemId) {
-		return { callId, itemId };
-	}
-	const hash = Bun.hash.xxHash64(id).toString(36);
-	return { callId: `call_${hash}`, itemId: `item_${hash}` };
 }
 
 function normalizeCodexToolChoice(choice: ToolChoice | undefined): string | Record<string, unknown> | undefined {
@@ -805,11 +796,7 @@ export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"
 				resetCodexSessionMetadata(websocketState);
 			}
 			output.stopReason = options?.signal?.aborted ? "aborted" : "error";
-			output.errorMessage = await appendRawHttpRequestDumpFor400(
-				formatErrorMessageWithRetryAfter(error),
-				error,
-				rawRequestDump,
-			);
+			output.errorMessage = await finalizeErrorMessage(error, rawRequestDump);
 			output.duration = Date.now() - startTime;
 			if (firstTokenTime) output.ttft = firstTokenTime - startTime;
 			stream.push({ type: "error", reason: output.stopReason, error: output });
@@ -1686,13 +1673,6 @@ function mapStopReason(status: string | undefined): StopReason {
 		default:
 			return "stop";
 	}
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-	if (value && typeof value === "object") {
-		return value as Record<string, unknown>;
-	}
-	return null;
 }
 
 function getString(value: unknown): string | undefined {

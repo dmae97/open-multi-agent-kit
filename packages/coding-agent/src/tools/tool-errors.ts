@@ -25,36 +25,6 @@ export class ToolError extends Error {
 }
 
 /**
- * Error entry for MultiError.
- */
-export interface ErrorEntry {
-	message: string;
-	context?: string;
-}
-
-/**
- * Error with multiple entries (e.g., multiple validation failures, batch errors).
- */
-export class MultiError extends ToolError {
-	constructor(readonly errors: ErrorEntry[]) {
-		super(errors.map(e => e.message).join("; "));
-		this.name = "MultiError";
-	}
-
-	render(): string {
-		if (this.errors.length === 1) {
-			const e = this.errors[0];
-			return e.context ? `${e.context}: ${e.message}` : e.message;
-		}
-		return this.errors.map(e => (e.context ? `${e.context}: ${e.message}` : e.message)).join("\n");
-	}
-
-	static from(errors: Array<string | ErrorEntry>): MultiError {
-		return new MultiError(errors.map(e => (typeof e === "string" ? { message: e } : e)));
-	}
-}
-
-/**
  * Error thrown when a tool operation is aborted (e.g., via AbortSignal).
  */
 export class ToolAbortError extends Error {

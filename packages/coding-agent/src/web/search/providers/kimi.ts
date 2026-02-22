@@ -6,12 +6,12 @@
  */
 import { getEnvApiKey } from "@oh-my-pi/pi-ai";
 import { $env } from "@oh-my-pi/pi-utils";
-import { getAgentDbPath } from "@oh-my-pi/pi-utils/dirs";
-import { AgentStorage } from "../../../session/agent-storage";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
+import { clampNumResults, dateToAgeSeconds } from "../utils";
 import type { SearchParams } from "./base";
 import { SearchProvider } from "./base";
+import { findCredential } from "./utils";
 
 const KIMI_SEARCH_URL = "https://api.kimi.com/coding/v1/search";
 
@@ -51,53 +51,14 @@ function resolveBaseUrl(): string {
 	return asTrimmed($env.MOONSHOT_SEARCH_BASE_URL) ?? asTrimmed($env.KIMI_SEARCH_BASE_URL) ?? KIMI_SEARCH_URL;
 }
 
-function clampNumResults(value: number | undefined): number {
-	if (!value || Number.isNaN(value)) return DEFAULT_NUM_RESULTS;
-	return Math.min(MAX_NUM_RESULTS, Math.max(1, value));
-}
-
-function dateToAgeSeconds(dateStr: string | undefined): number | undefined {
-	if (!dateStr) return undefined;
-	try {
-		const date = new Date(dateStr);
-		if (Number.isNaN(date.getTime())) return undefined;
-		return Math.floor((Date.now() - date.getTime()) / 1000);
-	} catch {
-		return undefined;
-	}
-}
-
-/**
- * Find Kimi search credentials from environment or agent.db credentials.
- * Priority: MOONSHOT_SEARCH_API_KEY / KIMI_SEARCH_API_KEY / MOONSHOT_API_KEY, then agent.db providers "moonshot" or "kimi-code".
- */
+/** Find Kimi search credentials from environment or agent.db credentials. */
 async function findApiKey(): Promise<string | null> {
 	const envKey =
 		asTrimmed($env.MOONSHOT_SEARCH_API_KEY) ??
 		asTrimmed($env.KIMI_SEARCH_API_KEY) ??
 		getEnvApiKey("moonshot") ??
 		null;
-	if (envKey) return envKey;
-
-	try {
-		const storage = await AgentStorage.open(getAgentDbPath());
-		for (const provider of ["moonshot", "kimi-code"] as const) {
-			const records = storage.listAuthCredentials(provider);
-			for (const record of records) {
-				const credential = record.credential;
-				if (credential.type === "api_key" && credential.key.trim().length > 0) {
-					return credential.key;
-				}
-				if (credential.type === "oauth" && credential.access.trim().length > 0) {
-					return credential.access;
-				}
-			}
-		}
-	} catch {
-		return null;
-	}
-
-	return null;
+	return findCredential(envKey, "moonshot", "kimi-code");
 }
 
 async function callKimiSearch(
@@ -143,7 +104,7 @@ export async function searchKimi(params: KimiSearchParams): Promise<SearchRespon
 		);
 	}
 
-	const limit = clampNumResults(params.num_results);
+	const limit = clampNumResults(params.num_results, DEFAULT_NUM_RESULTS, MAX_NUM_RESULTS);
 	const { response, requestId } = await callKimiSearch(apiKey, {
 		query: params.query,
 		limit,

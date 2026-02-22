@@ -1,24 +1,19 @@
 /**
  * Markdown report generator for edit benchmark results.
  */
+
+import { formatDuration, formatPercent, truncate } from "@oh-my-pi/pi-utils";
 import type { BenchmarkResult, TaskResult } from "./runner";
-
-function formatDuration(ms: number): string {
-	if (ms < 1000) {
-		return `${ms}ms`;
-	}
-	return `${(ms / 1000).toFixed(1)}s`;
-}
-
-function formatNumber(n: number): string {
-	return n.toLocaleString();
-}
 
 function getStatusEmoji(successRate: number, runsPerTask: number): string {
 	const passing = Math.round(successRate * runsPerTask);
 	if (passing === runsPerTask) return "✅";
 	if (passing === 0) return "❌";
 	return "⚠️";
+}
+
+function formatNumber(n: number): string {
+	return n.toLocaleString();
 }
 
 function formatPassRate(successRate: number, runsPerTask: number): string {
@@ -32,17 +27,8 @@ function formatRate(numerator: number, denominator: number): string {
 	return `${percent.toFixed(1)}% (${numerator}/${denominator})`;
 }
 
-function formatPercent(ratio: number): string {
-	return `${(ratio * 100).toFixed(1)}%`;
-}
-
 function escapeMarkdown(text: string): string {
 	return text.replace(/\|/g, "\\|").replace(/\n/g, " ");
-}
-
-function truncateText(text: string, maxLength: number): string {
-	if (text.length <= maxLength) return text;
-	return `${text.slice(0, maxLength - 3)}...`;
 }
 
 function formatEditArgsBlock(args: unknown): string {
@@ -69,7 +55,7 @@ function formatToolError(error: unknown): string {
 
 function formatFiles(files: string[]): string {
 	const joined = files.join(", ");
-	return truncateText(joined, 60);
+	return truncate(joined, 60);
 }
 
 export function generateReport(result: BenchmarkResult): string {
@@ -252,7 +238,7 @@ export function generateReport(result: BenchmarkResult): string {
 
 			for (const run of task.runs) {
 				const status = run.success ? "✅" : "❌";
-				const error = run.error ? truncateText(escapeMarkdown(run.error), 50) : "—";
+				const error = run.error ? truncate(escapeMarkdown(run.error), 50) : "—";
 				lines.push(
 					`| ${run.runIndex + 1} | ${status} | ${error} | ${formatNumber(run.tokens.input)} / ${formatNumber(run.tokens.output)} | ${formatDuration(run.duration)} |`,
 				);
@@ -280,7 +266,7 @@ export function generateReport(result: BenchmarkResult): string {
 				lines.push("|-----|--------|-------|-----------------|------|");
 
 				for (const run of task.runs) {
-					const error = run.error ? truncateText(escapeMarkdown(run.error), 50) : "—";
+					const error = run.error ? truncate(escapeMarkdown(run.error), 50) : "—";
 					lines.push(
 						`| ${run.runIndex + 1} | ❌ | ${error} | ${formatNumber(run.tokens.input)} / ${formatNumber(run.tokens.output)} | ${formatDuration(run.duration)} |`,
 					);
@@ -299,7 +285,7 @@ export function generateReport(result: BenchmarkResult): string {
 			if (sampleResponse) {
 				lines.push("**Sample agent response (run 1):**");
 				lines.push("```");
-				lines.push(truncateText(sampleResponse, 500));
+				lines.push(truncate(sampleResponse, 500));
 				lines.push("```");
 				lines.push("");
 			}
@@ -308,7 +294,7 @@ export function generateReport(result: BenchmarkResult): string {
 			if (sampleDiff) {
 				lines.push("**Diff (expected vs actual):**");
 				lines.push("```diff");
-				lines.push(truncateText(sampleDiff, 2000));
+				lines.push(truncate(sampleDiff, 2000));
 				lines.push("```");
 				lines.push("");
 			}

@@ -1,4 +1,5 @@
 import * as os from "node:os";
+import { formatDuration, formatNumber } from "@oh-my-pi/pi-utils";
 import { getProjectDir } from "@oh-my-pi/pi-utils/dirs";
 import { theme } from "../../../modes/theme/theme";
 import { shortenPath } from "../../../tools/render-utils";
@@ -12,24 +13,6 @@ export type { SegmentContext } from "./types";
 
 function withIcon(icon: string, text: string): string {
 	return icon ? `${icon} ${text}` : text;
-}
-
-function formatTokens(n: number): string {
-	if (n < 1000) return n.toString();
-	if (n < 10000) return `${(n / 1000).toFixed(1)}k`;
-	if (n < 1000000) return `${Math.round(n / 1000)}k`;
-	if (n < 10000000) return `${(n / 1000000).toFixed(1)}M`;
-	return `${Math.round(n / 1000000)}M`;
-}
-
-function formatDuration(ms: number): string {
-	const seconds = Math.floor(ms / 1000);
-	const minutes = Math.floor(seconds / 60);
-	const hours = Math.floor(minutes / 60);
-
-	if (hours > 0) return `${hours}h${minutes % 60}m`;
-	if (minutes > 0) return `${minutes}m${seconds % 60}s`;
-	return `${seconds}s`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -176,7 +159,7 @@ const tokenInSegment: StatusLineSegment = {
 		const { input } = ctx.usageStats;
 		if (!input) return { content: "", visible: false };
 
-		const content = withIcon(theme.icon.input, formatTokens(input));
+		const content = withIcon(theme.icon.input, formatNumber(input));
 		return { content: theme.fg("statusLineSpend", content), visible: true };
 	},
 };
@@ -187,7 +170,7 @@ const tokenOutSegment: StatusLineSegment = {
 		const { output } = ctx.usageStats;
 		if (!output) return { content: "", visible: false };
 
-		const content = withIcon(theme.icon.output, formatTokens(output));
+		const content = withIcon(theme.icon.output, formatNumber(output));
 		return { content: theme.fg("statusLineOutput", content), visible: true };
 	},
 };
@@ -199,7 +182,7 @@ const tokenTotalSegment: StatusLineSegment = {
 		const total = input + output + cacheRead + cacheWrite;
 		if (!total) return { content: "", visible: false };
 
-		const content = withIcon(theme.icon.tokens, formatTokens(total));
+		const content = withIcon(theme.icon.tokens, formatNumber(total));
 		return { content: theme.fg("statusLineSpend", content), visible: true };
 	},
 };
@@ -227,7 +210,7 @@ const contextPctSegment: StatusLineSegment = {
 		const window = ctx.contextWindow;
 
 		const autoIcon = ctx.autoCompactEnabled && theme.icon.auto ? ` ${theme.icon.auto}` : "";
-		const text = `${pct.toFixed(1)}%/${formatTokens(window)}${autoIcon}`;
+		const text = `${pct.toFixed(1)}%/${formatNumber(window)}${autoIcon}`;
 
 		let content: string;
 		if (pct > 90) {
@@ -249,7 +232,7 @@ const contextTotalSegment: StatusLineSegment = {
 		const window = ctx.contextWindow;
 		if (!window) return { content: "", visible: false };
 		return {
-			content: theme.fg("statusLineContext", withIcon(theme.icon.context, formatTokens(window))),
+			content: theme.fg("statusLineContext", withIcon(theme.icon.context, formatNumber(window))),
 			visible: true,
 		};
 	},
@@ -314,7 +297,7 @@ const cacheReadSegment: StatusLineSegment = {
 		const { cacheRead } = ctx.usageStats;
 		if (!cacheRead) return { content: "", visible: false };
 
-		const parts = [theme.icon.cache, theme.icon.input, formatTokens(cacheRead)].filter(Boolean);
+		const parts = [theme.icon.cache, theme.icon.input, formatNumber(cacheRead)].filter(Boolean);
 		const content = parts.join(" ");
 		return { content: theme.fg("statusLineSpend", content), visible: true };
 	},
@@ -326,7 +309,7 @@ const cacheWriteSegment: StatusLineSegment = {
 		const { cacheWrite } = ctx.usageStats;
 		if (!cacheWrite) return { content: "", visible: false };
 
-		const parts = [theme.icon.cache, theme.icon.output, formatTokens(cacheWrite)].filter(Boolean);
+		const parts = [theme.icon.cache, theme.icon.output, formatNumber(cacheWrite)].filter(Boolean);
 		const content = parts.join(" ");
 		return { content: theme.fg("statusLineOutput", content), visible: true };
 	},

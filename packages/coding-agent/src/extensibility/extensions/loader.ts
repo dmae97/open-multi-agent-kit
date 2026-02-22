@@ -17,8 +17,8 @@ import { getExtensionNameFromPath } from "../../discovery/helpers";
 import type { ExecOptions } from "../../exec/exec";
 import { execCommand } from "../../exec/exec";
 import type { CustomMessage } from "../../session/messages";
-import { expandPath } from "../../tools/path-utils";
 import { EventBus } from "../../utils/event-bus";
+import { resolvePath } from "../utils";
 import type {
 	Extension,
 	ExtensionAPI,
@@ -30,14 +30,6 @@ import type {
 	RegisteredCommand,
 	ToolDefinition,
 } from "./types";
-
-function resolvePath(extPath: string, cwd: string): string {
-	const expanded = expandPath(extPath);
-	if (path.isAbsolute(expanded)) {
-		return expanded;
-	}
-	return path.resolve(cwd, expanded);
-}
 
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
 

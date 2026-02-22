@@ -8,6 +8,7 @@
  * @see https://dev.synthetic.new/docs/api/overview
  */
 
+import { ANTHROPIC_THINKING } from "../stream";
 import type { Api, Context, Model, SimpleStreamOptions } from "../types";
 import { AssistantMessageEventStream } from "../utils/event-stream";
 import { streamAnthropic } from "./anthropic";
@@ -17,15 +18,6 @@ export type SyntheticApiFormat = "openai" | "anthropic";
 
 const SYNTHETIC_NEW_BASE_URL = "https://api.synthetic.new/openai/v1";
 const SYNTHETIC_NEW_ANTHROPIC_BASE_URL = "https://api.synthetic.new/anthropic";
-
-// Default thinking budgets for Anthropic format (matches stream.ts)
-const DEFAULT_THINKING_BUDGETS = {
-	minimal: 1024,
-	low: 4096,
-	medium: 8192,
-	high: 16384,
-	xhigh: 32768,
-} as const;
 
 export interface SyntheticOptions extends SimpleStreamOptions {
 	/** API format: "openai" or "anthropic". Default: "openai" */
@@ -69,7 +61,7 @@ export function streamSynthetic(
 				const reasoning = options?.reasoning;
 				const thinkingEnabled = !!reasoning && model.reasoning;
 				const thinkingBudget = reasoning
-					? (options?.thinkingBudgets?.[reasoning] ?? DEFAULT_THINKING_BUDGETS[reasoning])
+					? (options?.thinkingBudgets?.[reasoning] ?? ANTHROPIC_THINKING[reasoning])
 					: undefined;
 
 				const innerStream = streamAnthropic(anthropicModel, context, {

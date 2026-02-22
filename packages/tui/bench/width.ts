@@ -51,7 +51,7 @@ const samples = {
 
 // Bun.stringWidth with ANSI stripping (what hybrid uses for short strings)
 function bunStringWidth(str: string): number {
-	if (str.length === 0) return 0;
+	if (!str) return 0;
 	return Bun.stringWidth(replaceTabs(str));
 }
 

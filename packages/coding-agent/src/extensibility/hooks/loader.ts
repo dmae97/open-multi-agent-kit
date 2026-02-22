@@ -10,7 +10,7 @@ import type { Hook } from "../../discovery";
 import { loadCapability } from "../../discovery";
 import type { HookMessage } from "../../session/messages";
 import type { SessionManager } from "../../session/session-manager";
-import { expandPath } from "../../tools/path-utils";
+import { resolvePath } from "../utils";
 import { execCommand } from "./runner";
 import type { ExecOptions, HookAPI, HookFactory, HookMessageRenderer, RegisteredCommand } from "./types";
 
@@ -81,23 +81,6 @@ export interface LoadHooksResult {
 	hooks: LoadedHook[];
 	/** Errors encountered during loading */
 	errors: Array<{ path: string; error: string }>;
-}
-
-/**
- * Resolve hook path.
- * - Absolute paths used as-is
- * - Paths starting with ~ expanded to home directory
- * - Relative paths resolved from cwd
- */
-function resolveHookPath(hookPath: string, cwd: string): string {
-	const expanded = expandPath(hookPath);
-
-	if (path.isAbsolute(expanded)) {
-		return expanded;
-	}
-
-	// Relative paths resolved from cwd
-	return path.resolve(cwd, expanded);
 }
 
 /**
@@ -174,7 +157,7 @@ function createHookAPI(
  * Load a single hook module using native Bun import.
  */
 async function loadHook(hookPath: string, cwd: string): Promise<{ hook: LoadedHook | null; error: string | null }> {
-	const resolvedPath = resolveHookPath(hookPath, cwd);
+	const resolvedPath = resolvePath(hookPath, cwd);
 
 	try {
 		// Import the module using native Bun import
@@ -267,7 +250,7 @@ export async function discoverAndLoadHooks(configuredPaths: string[], cwd: strin
 	addPaths(discovered.items.map(hook => hook.path));
 
 	// 2. Explicitly configured paths (can override/add)
-	addPaths(configuredPaths.map(p => resolveHookPath(p, cwd)));
+	addPaths(configuredPaths.map(p => resolvePath(p, cwd)));
 
 	return loadHooks(allPaths, cwd);
 }

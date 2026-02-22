@@ -9,7 +9,7 @@
  *   bun run bench:edit --fixtures fixtures.tar.gz
  */
 import * as fs from "node:fs";
-import { join } from "node:path";
+import * as path from "node:path";
 import { parseArgs } from "node:util";
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { padding } from "@oh-my-pi/pi-tui";
@@ -97,7 +97,7 @@ async function resolveExtractedDir(tempDir: string): Promise<string> {
 	const dirs = entries.filter(entry => entry.isDirectory());
 	const files = entries.filter(entry => entry.isFile());
 	if (dirs.length === 1 && files.length === 0) {
-		return join(tempDir, dirs[0]!.name);
+		return path.join(tempDir, dirs[0]!.name);
 	}
 	return tempDir;
 }
@@ -110,8 +110,8 @@ async function extractTarGz(archivePath: string): Promise<{ dir: string; cleanup
 		const archive = new Bun.Archive(bytes);
 		const files = await archive.files();
 
-		for (const [path, file] of files) {
-			const destPath = join(tempDir, path);
+		for (const [filePath, file] of files) {
+			const destPath = path.join(tempDir, filePath);
 			await Bun.write(destPath, file);
 		}
 	} catch (error) {
@@ -124,7 +124,7 @@ async function extractTarGz(archivePath: string): Promise<{ dir: string; cleanup
 }
 
 async function resolveFixtures(fixturesArg?: string): Promise<{ tasks: EditTask[]; cleanup?: () => Promise<void> }> {
-	fixturesArg ??= join(import.meta.dir, "../fixtures.tar.gz");
+	fixturesArg ??= path.join(import.meta.dir, "../fixtures.tar.gz");
 
 	if (fixturesArg.endsWith(".tar.gz") || fixturesArg.endsWith(".tgz")) {
 		const extracted = await extractTarGz(fixturesArg);

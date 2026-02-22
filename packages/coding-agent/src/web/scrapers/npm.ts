@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, formatCount, loadPage } from "./types";
+import { buildResult, formatCount, loadPage, tryParseJson } from "./types";
 
 /**
  * Handle npm URLs via registry API
@@ -41,13 +41,11 @@ export const handleNpm: SpecialHandler = async (
 		// Parse download stats
 		let weeklyDownloads: number | null = null;
 		if (downloadsResult.ok) {
-			try {
-				const dlData = JSON.parse(downloadsResult.content) as { downloads?: number };
-				weeklyDownloads = dlData.downloads ?? null;
-			} catch {}
+			const dlData = tryParseJson<{ downloads?: number }>(downloadsResult.content);
+			if (dlData) weeklyDownloads = dlData.downloads ?? null;
 		}
 
-		let pkg: {
+		const pkg = tryParseJson<{
 			name: string;
 			version: string;
 			description?: string;
@@ -58,13 +56,8 @@ export const handleNpm: SpecialHandler = async (
 			maintainers?: Array<{ name: string }>;
 			dependencies?: Record<string, string>;
 			readme?: string;
-		};
-
-		try {
-			pkg = JSON.parse(result.content);
-		} catch {
-			return null; // JSON parse failed (truncated response)
-		}
+		}>(result.content);
+		if (!pkg) return null;
 
 		let md = `# ${pkg.name}\n\n`;
 		if (pkg.description) md += `${pkg.description}\n\n`;
@@ -97,17 +90,7 @@ export const handleNpm: SpecialHandler = async (
 			md += `\n---\n\n## README\n\n${pkg.readme}\n`;
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "npm",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via npm registry"],
-		};
+		return buildResult(md, { url, method: "npm", fetchedAt, notes: ["Fetched via npm registry"] });
 	} catch {}
 
 	return null;

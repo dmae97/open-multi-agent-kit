@@ -8,7 +8,6 @@
  * - 2 researcher tools (start, poll)
  * - 14 websets tools (CRUD, items, search, enrichment, monitor)
  */
-import type { ExaSettings } from "../config/settings";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import { companyTool } from "./company";
 import { linkedinTool } from "./linkedin";
@@ -25,21 +24,6 @@ export const exaTools: CustomTool<any, ExaRenderDetails>[] = [
 	...researcherTools,
 	...websetsTools,
 ];
-
-/** Get Exa tools filtered by settings */
-export function getExaTools(settings: Required<ExaSettings>): CustomTool<any, ExaRenderDetails>[] {
-	if (!settings.enabled) return [];
-
-	const tools: CustomTool<any, ExaRenderDetails>[] = [];
-
-	if (settings.enableSearch) tools.push(...searchTools);
-	if (settings.enableLinkedin) tools.push(linkedinTool);
-	if (settings.enableCompany) tools.push(companyTool);
-	if (settings.enableResearcher) tools.push(...researcherTools);
-	if (settings.enableWebsets) tools.push(...websetsTools);
-
-	return tools;
-}
 
 export { companyTool } from "./company";
 export { linkedinTool } from "./linkedin";

@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage } from "./types";
 
 const TLDR_BASE = "https://raw.githubusercontent.com/tldr-pages/tldr/main/pages";
 const PLATFORMS = ["common", "linux", "osx"] as const;
@@ -30,17 +30,13 @@ export const handleTldr: SpecialHandler = async (
 			const result = await loadPage(rawUrl, { timeout, signal });
 
 			if (result.ok && result.content.trim()) {
-				const output = finalizeOutput(result.content);
-				return {
+				return buildResult(result.content, {
 					url,
 					finalUrl: rawUrl,
-					contentType: "text/markdown",
 					method: "tldr",
-					content: output.content,
 					fetchedAt,
-					truncated: output.truncated,
 					notes: [`Fetched from tldr-pages (${platform})`],
-				};
+				});
 			}
 		}
 

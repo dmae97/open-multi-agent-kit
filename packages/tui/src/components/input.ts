@@ -1,3 +1,4 @@
+import { BracketedPasteHandler } from "../bracketed-paste";
 import { getEditorKeybindings } from "../keybindings";
 import { KillRing } from "../kill-ring";
 import { type Component, CURSOR_MARKER, type Focusable } from "../tui";
@@ -23,8 +24,7 @@ export class Input implements Component, Focusable {
 	focused: boolean = false;
 
 	// Bracketed paste mode buffering
-	#pasteBuffer: string = "";
-	#isInPaste: boolean = false;
+	#pasteHandler = new BracketedPasteHandler();
 
 	// Kill ring for Emacs-style kill/yank operations
 	#killRing = new KillRing();
@@ -44,37 +44,12 @@ export class Input implements Component, Focusable {
 
 	handleInput(data: string): void {
 		// Handle bracketed paste mode
-		// Start of paste: \x1b[200~
-		// End of paste: \x1b[201~
-
-		// Check if we're starting a bracketed paste
-		if (data.includes("\x1b[200~")) {
-			this.#isInPaste = true;
-			this.#pasteBuffer = "";
-			data = data.replace("\x1b[200~", "");
-		}
-
-		// If we're in a paste, buffer the data
-		if (this.#isInPaste) {
-			// Check if this chunk contains the end marker
-			this.#pasteBuffer += data;
-
-			const endIndex = this.#pasteBuffer.indexOf("\x1b[201~");
-			if (endIndex !== -1) {
-				// Extract the pasted content
-				const pasteContent = this.#pasteBuffer.substring(0, endIndex);
-
-				// Process the complete paste
-				this.#handlePaste(pasteContent);
-
-				// Reset paste state
-				this.#isInPaste = false;
-
-				// Handle any remaining input after the paste marker
-				const remaining = this.#pasteBuffer.substring(endIndex + 6); // 6 = length of \x1b[201~
-				this.#pasteBuffer = "";
-				if (remaining) {
-					this.handleInput(remaining);
+		const paste = this.#pasteHandler.process(data);
+		if (paste.handled) {
+			if (paste.pasteContent !== undefined) {
+				this.#handlePaste(paste.pasteContent);
+				if (paste.remaining.length > 0) {
+					this.handleInput(paste.remaining);
 				}
 			}
 			return;

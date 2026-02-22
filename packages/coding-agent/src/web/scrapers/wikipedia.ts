@@ -1,6 +1,6 @@
 import { parse as parseHtml } from "node-html-parser";
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage } from "./types";
 
 /**
  * Handle Wikipedia URLs via Wikipedia API
@@ -78,17 +78,7 @@ export const handleWikipedia: SpecialHandler = async (
 
 		if (!md) return null;
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "wikipedia",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Wikipedia API"],
-		};
+		return buildResult(md, { url, method: "wikipedia", fetchedAt, notes: ["Fetched via Wikipedia API"] });
 	} catch {}
 
 	return null;

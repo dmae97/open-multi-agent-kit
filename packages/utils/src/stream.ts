@@ -1,9 +1,6 @@
 import { createAbortableStream } from "./abortable";
 
 const LF = 0x0a;
-const CR = 0x0d;
-const decoder = new TextDecoder();
-
 type JsonlChunkResult = {
 	values: unknown[];
 	error: unknown;
@@ -11,107 +8,17 @@ type JsonlChunkResult = {
 	done: boolean;
 };
 
-function hasBunJsonlParseChunk(): boolean {
-	return typeof Bun !== "undefined" && typeof Bun.JSONL !== "undefined" && typeof Bun.JSONL.parseChunk === "function";
-}
-
-function parseJsonLine(lineBytes: Uint8Array): unknown {
-	let end = lineBytes.length;
-	if (end > 0 && lineBytes[end - 1] === CR) {
-		end--;
-	}
-	const text = decoder.decode(lineBytes.subarray(0, end)).trim();
-	if (text.length === 0) return undefined;
-	return JSON.parse(text);
-}
-
-function parseJsonlChunkFallbackBytes(bytes: Uint8Array, beg = 0, end = bytes.length): JsonlChunkResult {
-	const values: unknown[] = [];
-	let lineStart = beg;
-
-	for (let i = beg; i < end; i++) {
-		if (bytes[i] !== LF) continue;
-		const line = bytes.subarray(lineStart, i);
-		try {
-			const parsed = parseJsonLine(line);
-			if (parsed !== undefined) values.push(parsed);
-		} catch (error) {
-			return { values, error, read: lineStart, done: false };
-		}
-		lineStart = i + 1;
-	}
-
-	if (lineStart >= end) {
-		return { values, error: null, read: end, done: true };
-	}
-
-	const tail = bytes.subarray(lineStart, end);
-	const tailText = decoder.decode(tail).trim();
-	if (tailText.length === 0) {
-		return { values, error: null, read: end, done: true };
-	}
-	try {
-		values.push(JSON.parse(tailText));
-		return { values, error: null, read: end, done: true };
-	} catch {
-		// In streaming mode this is usually a partial line/object.
-		return { values, error: null, read: lineStart, done: false };
-	}
-}
-
-function parseJsonlChunkFallbackString(buffer: string): JsonlChunkResult {
-	const values: unknown[] = [];
-	let lineStart = 0;
-
-	for (let i = 0; i < buffer.length; i++) {
-		if (buffer.charCodeAt(i) !== LF) continue;
-		const rawLine = buffer.slice(lineStart, i);
-		const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
-		const trimmed = line.trim();
-		if (trimmed.length > 0) {
-			try {
-				values.push(JSON.parse(trimmed));
-			} catch (error) {
-				return { values, error, read: lineStart, done: false };
-			}
-		}
-		lineStart = i + 1;
-	}
-
-	if (lineStart >= buffer.length) {
-		return { values, error: null, read: buffer.length, done: true };
-	}
-
-	const tail = buffer.slice(lineStart).trim();
-	if (tail.length === 0) {
-		return { values, error: null, read: buffer.length, done: true };
-	}
-	try {
-		values.push(JSON.parse(tail));
-		return { values, error: null, read: buffer.length, done: true };
-	} catch {
-		return { values, error: null, read: lineStart, done: false };
-	}
-}
-
 function parseJsonlChunkCompat(input: Uint8Array, beg?: number, end?: number): JsonlChunkResult;
 function parseJsonlChunkCompat(input: string): JsonlChunkResult;
 function parseJsonlChunkCompat(input: Uint8Array | string, beg?: number, end?: number): JsonlChunkResult {
-	if (hasBunJsonlParseChunk()) {
-		if (typeof input === "string") {
-			const { values, error, read, done } = Bun.JSONL.parseChunk(input);
-			return { values, error, read, done };
-		}
-		const start = beg ?? 0;
-		const stop = end ?? input.length;
-		const { values, error, read, done } = Bun.JSONL.parseChunk(input, start, stop);
+	if (typeof input === "string") {
+		const { values, error, read, done } = Bun.JSONL.parseChunk(input);
 		return { values, error, read, done };
 	}
-
-	if (typeof input === "string") {
-		return parseJsonlChunkFallbackString(input);
-	}
-	return parseJsonlChunkFallbackBytes(input, beg, end);
+	const start = beg ?? 0;
+	const stop = end ?? input.length;
+	const { values, error, read, done } = Bun.JSONL.parseChunk(input, start, stop);
+	return { values, error, read, done };
 }
 
 export async function* readLines(stream: ReadableStream<Uint8Array>, signal?: AbortSignal): AsyncGenerator<Uint8Array> {

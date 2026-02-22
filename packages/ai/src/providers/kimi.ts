@@ -9,6 +9,7 @@
  * Note: Kimi calculates TPM rate limits based on max_tokens, not actual output.
  */
 
+import { ANTHROPIC_THINKING } from "../stream";
 import type { Api, Context, Model, SimpleStreamOptions } from "../types";
 import { AssistantMessageEventStream } from "../utils/event-stream";
 import { getKimiCommonHeaders } from "../utils/oauth/kimi";
@@ -19,15 +20,6 @@ export type KimiApiFormat = "openai" | "anthropic";
 
 // Note: Anthropic SDK appends /v1/messages, so base URL should not include /v1
 const KIMI_ANTHROPIC_BASE_URL = "https://api.kimi.com/coding";
-
-// Default thinking budgets for Anthropic format (matches stream.ts)
-const DEFAULT_THINKING_BUDGETS = {
-	minimal: 1024,
-	low: 4096,
-	medium: 8192,
-	high: 16384,
-	xhigh: 32768,
-} as const;
 
 export interface KimiOptions extends SimpleStreamOptions {
 	/** API format: "openai" or "anthropic". Default: "anthropic" */
@@ -72,7 +64,7 @@ export function streamKimi(
 				const reasoning = options?.reasoning;
 				const thinkingEnabled = !!reasoning && model.reasoning;
 				const thinkingBudget = reasoning
-					? (options?.thinkingBudgets?.[reasoning] ?? DEFAULT_THINKING_BUDGETS[reasoning])
+					? (options?.thinkingBudgets?.[reasoning] ?? ANTHROPIC_THINKING[reasoning])
 					: undefined;
 
 				const innerStream = streamAnthropic(anthropicModel, context, {

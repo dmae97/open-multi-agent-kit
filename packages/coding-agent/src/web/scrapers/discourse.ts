@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, htmlToBasicMarkdown, loadPage } from "./types";
+import { buildResult, formatIsoDate, htmlToBasicMarkdown, loadPage, tryParseJson } from "./types";
 
 interface DiscourseUser {
 	username?: string;
@@ -67,13 +67,6 @@ function formatAuthor(user?: DiscourseUser | null): string {
 	return "unknown";
 }
 
-function formatIsoDate(value?: string): string {
-	if (!value) return "unknown";
-	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) return value;
-	return date.toISOString().split("T")[0];
-}
-
 function formatCategory(topic: DiscourseTopic): string | null {
 	const parts: string[] = [];
 	const name = topic.category?.name ?? topic.category_slug;
@@ -127,12 +120,8 @@ export const handleDiscourse: SpecialHandler = async (
 			const postResult = await loadPage(buildPostUrl(baseUrl, postMatch.postId), { timeout, signal });
 			if (!postResult.ok) return null;
 
-			let postData: DiscoursePostResponse;
-			try {
-				postData = JSON.parse(postResult.content) as DiscoursePostResponse;
-			} catch {
-				return null;
-			}
+			const postData = tryParseJson<DiscoursePostResponse>(postResult.content);
+			if (!postData) return null;
 
 			if (!postData.topic_id) return null;
 			topicId = String(postData.topic_id);
@@ -144,12 +133,8 @@ export const handleDiscourse: SpecialHandler = async (
 		const topicResult = await loadPage(buildTopicUrl(baseUrl, topicId), { timeout, signal });
 		if (!topicResult.ok) return null;
 
-		let topic: DiscourseTopic;
-		try {
-			topic = JSON.parse(topicResult.content) as DiscourseTopic;
-		} catch {
-			return null;
-		}
+		const topic = tryParseJson<DiscourseTopic>(topicResult.content);
+		if (!topic) return null;
 
 		const title = topic.title || topic.fancy_title;
 		if (!title) return null;
@@ -204,17 +189,7 @@ export const handleDiscourse: SpecialHandler = async (
 			}
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "discourse-api",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via Discourse API"],
-		};
+		return buildResult(md, { url, method: "discourse-api", fetchedAt, notes: ["Fetched via Discourse API"] });
 	} catch {}
 
 	return null;

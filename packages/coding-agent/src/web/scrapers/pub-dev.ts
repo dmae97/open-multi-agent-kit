@@ -1,4 +1,4 @@
-import { finalizeOutput, formatCount, loadPage, type SpecialHandler } from "./types";
+import { buildResult, formatCount, htmlToBasicMarkdown, loadPage, type SpecialHandler, tryParseJson } from "./types";
 
 /**
  * Handle pub.dev URLs via API
@@ -21,7 +21,7 @@ export const handlePubDev: SpecialHandler = async (url: string, timeout: number,
 
 		if (!result.ok) return null;
 
-		let data: {
+		const data = tryParseJson<{
 			name: string;
 			latest: {
 				version: string;
@@ -44,13 +44,8 @@ export const handlePubDev: SpecialHandler = async (url: string, timeout: number,
 					popularityScore?: number;
 				};
 			};
-		};
-
-		try {
-			data = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		}>(result.content);
+		if (!data) return null;
 
 		const { name, latest, publisherId, metrics } = data;
 		const pubspec = latest.pubspec;
@@ -129,35 +124,7 @@ export const handlePubDev: SpecialHandler = async (url: string, timeout: number,
 					/<div[^>]*class="[^"]*markdown-body[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
 				);
 				if (readmeMatch) {
-					// Basic HTML to markdown conversion for README
-					const readme = readmeMatch[1]
-						.replace(/<h(\d)[^>]*>(.*?)<\/h\d>/gi, (_, level, text) => {
-							const stripped = text.replace(/<[^>]+>/g, "");
-							return `${"#".repeat(parseInt(level, 10))} ${stripped}\n\n`;
-						})
-						.replace(/<pre><code[^>]*>([\s\S]*?)<\/code><\/pre>/gi, (_, code) => {
-							const decoded = code
-								.replace(/&lt;/g, "<")
-								.replace(/&gt;/g, ">")
-								.replace(/&amp;/g, "&")
-								.replace(/&quot;/g, '"');
-							return `\n\`\`\`\n${decoded}\n\`\`\`\n\n`;
-						})
-						.replace(/<code[^>]*>(.*?)<\/code>/gi, "`$1`")
-						.replace(/<a[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gi, "[$2]($1)")
-						.replace(/<strong[^>]*>(.*?)<\/strong>/gi, "**$1**")
-						.replace(/<em[^>]*>(.*?)<\/em>/gi, "*$1*")
-						.replace(/<li[^>]*>(.*?)<\/li>/gi, "- $1\n")
-						.replace(/<\/?(ul|ol|p|br)[^>]*>/gi, "\n")
-						.replace(/<[^>]+>/g, "")
-						.replace(/&lt;/g, "<")
-						.replace(/&gt;/g, ">")
-						.replace(/&amp;/g, "&")
-						.replace(/&quot;/g, '"')
-						.replace(/&#39;/g, "'")
-						.replace(/&nbsp;/g, " ")
-						.replace(/\n{3,}/g, "\n\n")
-						.trim();
+					const readme = htmlToBasicMarkdown(readmeMatch[1]);
 
 					if (readme.length > 100) {
 						md += `## README\n\n${readme}\n`;
@@ -168,17 +135,7 @@ export const handlePubDev: SpecialHandler = async (url: string, timeout: number,
 			// README fetch failed, continue without it
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "pub.dev",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via pub.dev API"],
-		};
+		return buildResult(md, { url, method: "pub.dev", fetchedAt, notes: ["Fetched via pub.dev API"] });
 	} catch {}
 
 	return null;

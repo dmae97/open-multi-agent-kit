@@ -8,42 +8,11 @@ import { getProjectDir, getSSHConfigPath } from "@oh-my-pi/pi-utils/dirs";
 import { type SSHHost, sshCapability } from "../../capability/ssh";
 import { loadCapability } from "../../discovery";
 import { addSSHHost, readSSHConfigFile, removeSSHHost, type SSHHostConfig } from "../../ssh/config-writer";
+import { shortenPath } from "../../tools/render-utils";
 import { DynamicBorder } from "../components/dynamic-border";
+import { parseCommandArgs } from "../shared";
 import { theme } from "../theme/theme";
 import type { InteractiveModeContext } from "../types";
-
-function parseCommandArgs(argsString: string): string[] {
-	const args: string[] = [];
-	let current = "";
-	let inQuote: string | null = null;
-
-	for (let i = 0; i < argsString.length; i++) {
-		const char = argsString[i];
-
-		if (inQuote) {
-			if (char === inQuote) {
-				inQuote = null;
-			} else {
-				current += char;
-			}
-		} else if (char === '"' || char === "'") {
-			inQuote = char;
-		} else if (char === " " || char === "\t") {
-			if (current) {
-				args.push(current);
-				current = "";
-			}
-		} else {
-			current += char;
-		}
-	}
-
-	if (current) {
-		args.push(current);
-	}
-
-	return args;
-}
 
 type SSHAddScope = "user" | "project";
 
@@ -347,7 +316,7 @@ export class SSHCommandController {
 					const sepIdx = key.indexOf("|");
 					const providerName = key.slice(0, sepIdx);
 					const sourcePath = key.slice(sepIdx + 1);
-					const shortPath = sourcePath.replace(process.env.HOME ?? "", "~");
+					const shortPath = shortenPath(sourcePath);
 					lines.push(
 						theme.fg("accent", "Discovered") +
 							theme.fg("muted", ` (${providerName}: ${shortPath}):`) +

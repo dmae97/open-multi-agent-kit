@@ -2,6 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { isEnoent } from "@oh-my-pi/pi-utils";
 import { getAgentDir, getProjectDir } from "@oh-my-pi/pi-utils/dirs";
+import { extractPackageName } from "./parser";
 import type { InstalledPlugin } from "./types";
 
 const PLUGINS_DIR = path.join(getAgentDir(), "plugins");
@@ -60,7 +61,7 @@ export async function installPlugin(packageName: string): Promise<InstalledPlugi
 	}
 
 	// Extract the actual package name (without version specifier) for path lookup
-	const actualName = packageName.replace(/@[^/]+$/, "").replace(/^(@[^/]+\/[^@]+).*$/, "$1");
+	const actualName = extractPackageName(packageName);
 
 	// Read the installed package's package.json
 	const pkgPath = path.join(PLUGINS_DIR, "node_modules", actualName, "package.json");

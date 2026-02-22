@@ -19,6 +19,7 @@ import type {
 	SearchSource,
 } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
+import { dateToAgeSeconds } from "../utils";
 import type { SearchParams } from "./base";
 import { SearchProvider } from "./base";
 
@@ -381,18 +382,6 @@ async function callPerplexityOAuth(
 		model,
 		requestId: finalRequestId ?? requestId,
 	};
-}
-
-/** Calculate age in seconds from ISO date string */
-function dateToAgeSeconds(dateStr: string | null | undefined): number | undefined {
-	if (!dateStr) return undefined;
-	try {
-		const date = new Date(dateStr);
-		if (Number.isNaN(date.getTime())) return undefined;
-		return Math.floor((Date.now() - date.getTime()) / 1000);
-	} catch {
-		return undefined;
-	}
 }
 
 function messageContentToText(content: PerplexityMessageOutput["content"]): string {

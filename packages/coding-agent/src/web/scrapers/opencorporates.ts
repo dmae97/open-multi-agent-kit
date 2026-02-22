@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage, tryParseJson } from "./types";
 
 interface Officer {
 	id: number;
@@ -106,12 +106,8 @@ export const handleOpenCorporates: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let data: ApiResponse;
-		try {
-			data = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const data = tryParseJson<ApiResponse>(result.content);
+		if (!data) return null;
 
 		const company = data.results?.company;
 		if (!company) return null;
@@ -258,17 +254,13 @@ export const handleOpenCorporates: SpecialHandler = async (
 			md += `**Data Retrieved:** ${company.retrieved_at}\n`;
 		}
 
-		const output = finalizeOutput(md);
-		return {
+		return buildResult(md, {
 			url,
 			finalUrl: company.opencorporates_url || url,
-			contentType: "text/markdown",
 			method: "opencorporates",
-			content: output.content,
 			fetchedAt,
-			truncated: output.truncated,
 			notes: ["Fetched via OpenCorporates API"],
-		};
+		});
 	} catch {}
 
 	return null;

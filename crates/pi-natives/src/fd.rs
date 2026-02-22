@@ -161,10 +161,6 @@ struct FuzzyFindConfig {
 	cache:       Option<bool>,
 }
 
-fn clamp_u32(value: u64) -> u32 {
-	value.min(u32::MAX as u64) as u32
-}
-
 fn fuzzy_find_sync(config: FuzzyFindConfig, ct: task::CancelToken) -> Result<FuzzyFindResult> {
 	let root = fs_cache::resolve_search_path(&config.path)?;
 	let include_hidden = config.hidden.unwrap_or(false);
@@ -200,7 +196,7 @@ fn fuzzy_find_sync(config: FuzzyFindConfig, ct: task::CancelToken) -> Result<Fuz
 	};
 
 	scored.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| a.path.cmp(&b.path)));
-	let total_matches = clamp_u32(scored.len() as u64);
+	let total_matches = crate::utils::clamp_u32(scored.len() as u64);
 	let matches = scored.into_iter().take(max_results).collect();
 	Ok(FuzzyFindResult { matches, total_matches })
 }

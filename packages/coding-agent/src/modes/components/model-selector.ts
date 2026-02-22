@@ -1,21 +1,11 @@
 import { type Model, modelsAreEqual } from "@oh-my-pi/pi-ai";
-import {
-	Container,
-	Input,
-	matchesKey,
-	Spacer,
-	type Tab,
-	TabBar,
-	type TabBarTheme,
-	Text,
-	type TUI,
-	visibleWidth,
-} from "@oh-my-pi/pi-tui";
+import { Container, Input, matchesKey, Spacer, type Tab, TabBar, Text, type TUI, visibleWidth } from "@oh-my-pi/pi-tui";
 import { MODEL_ROLE_IDS, MODEL_ROLES, type ModelRegistry, type ModelRole } from "../../config/model-registry";
 import { parseModelString } from "../../config/model-resolver";
 import type { Settings } from "../../config/settings";
 import { type ThemeColor, theme } from "../../modes/theme/theme";
 import { fuzzyFilter } from "../../utils/fuzzy";
+import { getTabBarTheme } from "../shared";
 import { DynamicBorder } from "./dynamic-border";
 
 function makeInvertedBadge(label: string, color: ThemeColor): string {
@@ -43,15 +33,6 @@ interface MenuAction {
 const MENU_ACTIONS: MenuAction[] = MODEL_ROLE_IDS.map(role => ({ label: `Set as ${MODEL_ROLES[role].name}`, role }));
 
 const ALL_TAB = "ALL";
-
-function getTabBarTheme(): TabBarTheme {
-	return {
-		label: (text: string) => theme.bold(theme.fg("accent", text)),
-		activeTab: (text: string) => theme.bold(theme.bg("selectedBg", theme.fg("text", text))),
-		inactiveTab: (text: string) => theme.fg("muted", text),
-		hint: (text: string) => theme.fg("dim", text),
-	};
-}
 
 /**
  * Component that renders a model selector with provider tabs and context menu.

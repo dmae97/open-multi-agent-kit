@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage, tryParseJson } from "./types";
 
 interface KevEntry {
 	cveID: string;
@@ -53,12 +53,8 @@ export const handleCisaKev: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let data: KevCatalog;
-		try {
-			data = JSON.parse(result.content) as KevCatalog;
-		} catch {
-			return null;
-		}
+		const data = tryParseJson<KevCatalog>(result.content);
+		if (!data) return null;
 
 		const entry = data.vulnerabilities?.find(item => item.cveID?.toUpperCase() === cveId);
 		if (!entry) return null;
@@ -83,17 +79,7 @@ export const handleCisaKev: SpecialHandler = async (
 			md += `## Required Action\n\n${entry.requiredAction}\n\n`;
 		}
 
-		const output = finalizeOutput(md);
-		return {
-			url,
-			finalUrl: url,
-			contentType: "text/markdown",
-			method: "cisa-kev",
-			content: output.content,
-			fetchedAt,
-			truncated: output.truncated,
-			notes: ["Fetched via CISA KEV feed"],
-		};
+		return buildResult(md, { url, method: "cisa-kev", fetchedAt, notes: ["Fetched via CISA KEV feed"] });
 	} catch {}
 
 	return null;

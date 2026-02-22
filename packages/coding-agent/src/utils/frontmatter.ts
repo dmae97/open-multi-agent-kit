@@ -1,16 +1,8 @@
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger, truncate } from "@oh-my-pi/pi-utils";
 import { YAML } from "bun";
 
 function stripHtmlComments(content: string): string {
 	return content.replace(/<!--[\s\S]*?-->/g, "");
-}
-
-function toError(value: unknown): Error {
-	return value instanceof Error ? value : new Error(String(`YAML: ${value}`));
-}
-
-function truncate(content: string, maxLength: number): string {
-	return content.length > maxLength ? `${content.slice(0, maxLength)}…` : content;
 }
 
 export class FrontmatterError extends Error {
@@ -80,7 +72,10 @@ export function parseFrontmatter(
 		const loaded = YAML.parse(metadata.replaceAll("\t", "  ")) as Record<string, unknown> | null;
 		return { frontmatter: Object.assign(frontmatter, loaded), body: body };
 	} catch (error) {
-		const err = new FrontmatterError(toError(error), loc ?? `Inline '${truncate(content, 64)}'`);
+		const err = new FrontmatterError(
+			error instanceof Error ? error : new Error(`YAML: ${error}`),
+			loc ?? `Inline '${truncate(content, 64)}'`,
+		);
 		if (level === "warn" || level === "fatal") {
 			logger.warn("Failed to parse YAML frontmatter", { err: err.toString() });
 		}

@@ -1,5 +1,5 @@
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, loadPage, tryParseJson } from "./types";
 
 interface BiorxivPaper {
 	biorxiv_doi?: string;
@@ -63,12 +63,8 @@ export const handleBiorxiv: SpecialHandler = async (
 
 		if (!result.ok) return null;
 
-		let data: BiorxivResponse;
-		try {
-			data = JSON.parse(result.content);
-		} catch {
-			return null;
-		}
+		const data = tryParseJson<BiorxivResponse>(result.content);
+		if (!data) return null;
 
 		if (!data.collection || data.collection.length === 0) return null;
 
@@ -124,17 +120,12 @@ export const handleBiorxiv: SpecialHandler = async (
 			md += `- [JATS XML](${paper.jatsxml})\n`;
 		}
 
-		const output = finalizeOutput(md);
-		return {
+		return buildResult(md, {
 			url,
-			finalUrl: url,
-			contentType: "text/markdown",
 			method: server,
-			content: output.content,
 			fetchedAt: new Date().toISOString(),
-			truncated: output.truncated,
 			notes: [`Fetched via ${serverName} API`],
-		};
+		});
 	} catch {}
 
 	return null;

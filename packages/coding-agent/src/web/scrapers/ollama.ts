@@ -1,6 +1,6 @@
 import { formatBytes } from "../../tools/render-utils";
 import type { RenderResult, SpecialHandler } from "./types";
-import { finalizeOutput, loadPage } from "./types";
+import { buildResult, decodeHtmlEntities, loadPage, tryParseJson } from "./types";
 
 interface OllamaTagDetails {
 	parent_model?: string;
@@ -40,16 +40,6 @@ const RESERVED_ROOTS = new Set([
 	"license",
 	"settings",
 ]);
-
-function decodeHtmlEntities(value: string): string {
-	return value
-		.replace(/&amp;/g, "&")
-		.replace(/&lt;/g, "<")
-		.replace(/&gt;/g, ">")
-		.replace(/&quot;/g, '"')
-		.replace(/&#39;/g, "'")
-		.replace(/&nbsp;/g, " ");
-}
 
 function extractMetaDescription(html: string): string | null {
 	const patterns = [
@@ -183,14 +173,7 @@ export const handleOllama: SpecialHandler = async (
 			loadPage(pageUrl, { timeout, signal }),
 		]);
 
-		let tagsData: OllamaTagsResponse | null = null;
-		if (tagsResult.ok) {
-			try {
-				tagsData = JSON.parse(tagsResult.content) as OllamaTagsResponse;
-			} catch {
-				tagsData = null;
-			}
-		}
+		const tagsData = tagsResult.ok ? tryParseJson<OllamaTagsResponse>(tagsResult.content) : null;
 
 		const html = pageResult.ok ? pageResult.content : "";
 		const description = html ? extractMetaDescription(html) : null;
@@ -242,17 +225,13 @@ export const handleOllama: SpecialHandler = async (
 			md += `**Available Tags:** ${formatTagList(tagsToUse, 40)}\n`;
 		}
 
-		const output = finalizeOutput(md);
-		return {
+		return buildResult(md, {
 			url,
 			finalUrl: pageResult.ok ? pageResult.finalUrl : url,
-			contentType: "text/markdown",
 			method: "ollama",
-			content: output.content,
 			fetchedAt,
-			truncated: output.truncated,
 			notes: ["Fetched via Ollama API"],
-		};
+		});
 	} catch {}
 
 	return null;
