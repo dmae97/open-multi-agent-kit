@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [12.19.3] - 2026-02-22
 ### Added
 
 - Added `pty` parameter to bash tool to enable PTY mode for commands requiring a real terminal (e.g., sudo, ssh, top, less)
