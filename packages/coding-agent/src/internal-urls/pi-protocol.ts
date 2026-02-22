@@ -1,23 +1,23 @@
 /**
- * Protocol handler for docs:// URLs.
+ * Protocol handler for pi:// URLs.
  *
  * Serves statically embedded documentation files bundled at build time.
  *
  * URL forms:
- * - docs:// - Lists all available documentation files
- * - docs://<file>.md - Reads a specific documentation file
+ * - pi:// - Lists all available documentation files
+ * - pi://<file>.md - Reads a specific documentation file
  */
 import * as path from "node:path";
 import { EMBEDDED_DOC_FILENAMES, EMBEDDED_DOCS } from "./docs-index.generated";
 import type { InternalResource, InternalUrl, ProtocolHandler } from "./types";
 
 /**
- * Handler for docs:// URLs.
+ * Handler for pi:// URLs.
  *
  * Resolves documentation file names to their content, or lists available docs.
  */
-export class DocsProtocolHandler implements ProtocolHandler {
-	readonly scheme = "docs";
+export class PiProtocolHandler implements ProtocolHandler {
+	readonly scheme = "pi";
 
 	async resolve(url: InternalUrl): Promise<InternalResource> {
 		// Extract filename from host + path
@@ -37,7 +37,7 @@ export class DocsProtocolHandler implements ProtocolHandler {
 			throw new Error("No documentation files found");
 		}
 
-		const listing = EMBEDDED_DOC_FILENAMES.map(f => `- [${f}](docs://${f})`).join("\n");
+		const listing = EMBEDDED_DOC_FILENAMES.map(f => `- [${f}](pi://${f})`).join("\n");
 		const content = `# Documentation\n\n${EMBEDDED_DOC_FILENAMES.length} files available:\n\n${listing}\n`;
 
 		return {
@@ -45,19 +45,19 @@ export class DocsProtocolHandler implements ProtocolHandler {
 			content,
 			contentType: "text/markdown",
 			size: Buffer.byteLength(content, "utf-8"),
-			sourcePath: "docs://",
+			sourcePath: "pi://",
 		};
 	}
 
 	async #readDoc(filename: string, url: InternalUrl): Promise<InternalResource> {
 		// Validate: no traversal, no absolute paths
 		if (path.isAbsolute(filename)) {
-			throw new Error("Absolute paths are not allowed in docs:// URLs");
+			throw new Error("Absolute paths are not allowed in pi:// URLs");
 		}
 
 		const normalized = path.posix.normalize(filename.replaceAll("\\", "/"));
 		if (normalized === ".." || normalized.startsWith("../") || normalized.includes("/../")) {
-			throw new Error("Path traversal (..) is not allowed in docs:// URLs");
+			throw new Error("Path traversal (..) is not allowed in pi:// URLs");
 		}
 
 		const content = EMBEDDED_DOCS[normalized];
@@ -69,7 +69,7 @@ export class DocsProtocolHandler implements ProtocolHandler {
 			const suffix =
 				suggestions.length > 0
 					? `\nDid you mean: ${suggestions.join(", ")}`
-					: "\nUse docs:// to list available files.";
+					: "\nUse pi:// to list available files.";
 			throw new Error(`Documentation file not found: ${filename}${suffix}`);
 		}
 
@@ -78,7 +78,7 @@ export class DocsProtocolHandler implements ProtocolHandler {
 			content,
 			contentType: "text/markdown",
 			size: Buffer.byteLength(content, "utf-8"),
-			sourcePath: `docs://${normalized}`,
+			sourcePath: `pi://${normalized}`,
 		};
 	}
 }

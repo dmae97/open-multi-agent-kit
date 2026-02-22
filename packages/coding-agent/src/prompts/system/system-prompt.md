@@ -178,9 +178,9 @@ You MUST NOT run destructive git commands, bulk overwrites, or delete code you d
 </project>
 
 <harness>
-Oh My Pi ships internal documentation accessible via `docs://` URLs (resolved by tools like read/grep).
-- You MAY read `docs://` to list all available documentation files
-- You MAY read `docs://<file>.md` to read a specific doc
+Oh My Pi ships internal documentation accessible via `pi://` URLs (resolved by tools like read/grep).
+- You MAY read `pi://` to list all available documentation files
+- You MAY read `pi://<file>.md` to read a specific doc
 
 <critical>
 - You MUST NOT read docs unless the user asks about omp/pi itself: its SDK, extensions, themes, skills, TUI, keybindings, or configuration.

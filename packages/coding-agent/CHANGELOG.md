@@ -1,8 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Changed
 
+- Replaced `docs://` protocol with `pi://` for accessing embedded documentation files
+- Renamed `DocsProtocolHandler` to `PiProtocolHandler` for internal documentation URL resolution
 - Removed `artifactsDir` parameter from Python executor options; artifact storage now uses `artifactPath` only
 - Renamed prompt file from `read_path.md` to `read-path.md` for consistency
 - Updated system prompt XML tags to use kebab-case (e.g., `system-reminder`, `system-interrupt`) for consistency

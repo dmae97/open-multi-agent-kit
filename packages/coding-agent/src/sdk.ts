@@ -46,10 +46,10 @@ import { type FileSlashCommand, loadSlashCommands as loadSlashCommandsInternal }
 import {
 	AgentProtocolHandler,
 	ArtifactProtocolHandler,
-	DocsProtocolHandler,
 	InternalUrlRouter,
 	JobsProtocolHandler,
 	MemoryProtocolHandler,
+	PiProtocolHandler,
 	PlanProtocolHandler,
 	RuleProtocolHandler,
 	SkillProtocolHandler,
@@ -838,7 +838,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			getRules: () => rulebookRules,
 		}),
 	);
-	internalRouter.register(new DocsProtocolHandler());
+	internalRouter.register(new PiProtocolHandler());
 	internalRouter.register(new JobsProtocolHandler({ getAsyncJobManager: () => asyncJobManager }));
 	toolSession.internalRouter = internalRouter;
 	toolSession.getArtifactsDir = getArtifactsDir;
