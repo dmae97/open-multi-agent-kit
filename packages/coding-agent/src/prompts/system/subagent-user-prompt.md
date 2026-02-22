@@ -1,8 +1,8 @@
 {{#if context}}
-<swarm-context>{{context}}</swarm-context>
+<context>
+{{context}}
+</context>
+{{/if}}
 
 # Your Assignment
 {{assignment}}
-{{else}}
-{{assignment}}
-{{/if}}

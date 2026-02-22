@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added `notes://` protocol for session-scoped scratch space to store large intermediate artifacts, subagent handoffs, and reusable planning notes
@@ -10,6 +11,8 @@
 
 ### Changed
 
+- Changed XML tag from `<swarm-context>` to `<context>` in subagent prompts and task rendering
+- Changed system reminder XML tags from underscore to kebab-case format (`<system-reminder>`)
 - Changed plan storage from `plan://` protocol to `notes://PLAN.md` for draft plans and `notes://<title>.md` for finalized approved plans
 - Changed plan mode to use session artifacts directory for plan storage instead of separate plans directory
 - Updated system prompt to document `notes://` protocol and internal URL expansion behavior

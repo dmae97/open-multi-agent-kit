@@ -654,11 +654,11 @@ export class AgentSession {
 				if (toolName === "todo_write" && isError) {
 					const errorText = content?.find(part => part.type === "text")?.text;
 					const reminderText = [
-						"<system_reminder>",
+						"<system-reminder>",
 						"todo_write failed, so todo progress is not visible to the user.",
 						errorText ? `Failure: ${errorText}` : "Failure: todo_write returned an error.",
 						"Fix the todo payload and call todo_write again before continuing.",
-						"</system_reminder>",
+						"</system-reminder>",
 					].join("\n");
 					await this.sendCustomMessage(
 						{

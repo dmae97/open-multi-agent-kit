@@ -366,9 +366,9 @@ function renderTaskSection(
 	const trimmed = task.trimEnd();
 	if (!expanded || !trimmed) return lines;
 
-	// Strip the shared <swarm_context>...</swarm_context> block — it's the same
+	// Strip the shared <context>...</context> block — it's the same
 	// across all tasks and just adds noise when expanded.
-	const stripped = trimmed.replace(/<swarm_context>[\s\S]*?<\/swarm_context>\s*/, "").trimStart();
+	const stripped = trimmed.replace(/<context>[\s\S]*?<\/context>\s*/, "").trimStart();
 	if (!stripped) return lines;
 
 	lines.push(`${continuePrefix}${theme.fg("dim", "Task")}`);

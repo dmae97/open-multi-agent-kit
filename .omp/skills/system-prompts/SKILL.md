@@ -57,7 +57,7 @@ Tags encode enforcement level. Use consistently throughout:
 ### Special Tags
 
 ```
-<north_star>     Core values, ultimate objectives
+<north-star>     Core values, ultimate objectives
 <stance>         Communication style, attitude
 <commitment>     What the agent commits to doing
 <field>          Domain-specific mindset/context
@@ -242,9 +242,9 @@ External proof: tests, linters, type checks.
 3. State intent before each tool call
 </procedure>
 
-<north_star>
+<north-star>
 Core values. What ultimately matters.
-</north_star>
+</north-star>
 
 <prohibited>
 Actions that cause harm.
@@ -616,7 +616,7 @@ Structure:    <role> <context> <procedure> <directives> <parameters> <output>
 Capability:   <strengths> <tools> <operations>
 Examples:     <example name="kebab-case-name">
 Data:         <environment> <data> <documents>
-Special:      <north_star> <stance> <commitment> <field> <protocol>
+Special:      <north-star> <stance> <commitment> <field> <protocol>
 ```
 
 ### Example Name Patterns
