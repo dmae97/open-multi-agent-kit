@@ -414,11 +414,11 @@ export async function computeHashlineDiff(
 		const normalizedContent = normalizeToLF(content);
 
 		const result = applyHashlineEdits(normalizedContent, edits);
-		if (normalizedContent === result.text) {
+		if (normalizedContent === result.lines) {
 			return { error: `No changes would be made to ${path}. The edits produce identical content.` };
 		}
 
-		return generateDiffString(normalizedContent, result.text);
+		return generateDiffString(normalizedContent, result.lines);
 	} catch (err) {
 		return { error: err instanceof Error ? err.message : String(err) };
 	}
