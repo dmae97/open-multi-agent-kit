@@ -97,6 +97,27 @@ impl OpenFile {
             Self::PipeWriter(_) => false,
         }
     }
+
+    pub(crate) fn into_stdio(self) -> Result<Stdio, error::Error> {
+        #[cfg(unix)]
+        {
+            let owned_fd = self.into_owned_fd()?;
+            return Ok(Stdio::from(std::fs::File::from(owned_fd)));
+        }
+
+        #[cfg(not(unix))]
+        {
+            let stdio = match self {
+                Self::Stdin(_) => Stdio::inherit(),
+                Self::Stdout(_) => Stdio::inherit(),
+                Self::Stderr(_) => Stdio::inherit(),
+                Self::File(f) => f.into(),
+                Self::PipeReader(f) => f.into(),
+                Self::PipeWriter(f) => f.into(),
+            };
+            Ok(stdio)
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -131,18 +152,6 @@ impl From<std::io::PipeWriter> for OpenFile {
     }
 }
 
-impl From<OpenFile> for Stdio {
-    fn from(open_file: OpenFile) -> Self {
-        match open_file {
-            OpenFile::Stdin(_) => Self::inherit(),
-            OpenFile::Stdout(_) => Self::inherit(),
-            OpenFile::Stderr(_) => Self::inherit(),
-            OpenFile::File(f) => f.into(),
-            OpenFile::PipeReader(f) => f.into(),
-            OpenFile::PipeWriter(f) => f.into(),
-        }
-    }
-}
 
 impl std::io::Read for OpenFile {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {

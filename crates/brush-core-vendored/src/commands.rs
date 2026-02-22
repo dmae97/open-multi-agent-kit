@@ -1,6 +1,6 @@
 //! Command execution
 
-use std::{borrow::Cow, ffi::OsStr, fmt::Display, process::Stdio, sync::Arc};
+use std::{borrow::Cow, ffi::OsStr, fmt::Display, sync::Arc};
 
 use brush_parser::ast;
 use itertools::Itertools;
@@ -10,7 +10,7 @@ use crate::{
     ErrorKind, ExecutionControlFlow, ExecutionParameters, ExecutionResult, Shell, ShellFd,
     builtins, env, error, escape,
     interp::{self, Execute, ProcessGroupPolicy},
-    openfiles::{self, OpenFile, OpenFiles},
+    openfiles::{self, OpenFiles},
     pathsearch, processes,
     results::ExecutionSpawnResult,
     sys, trace_categories, traps, variables,
@@ -194,27 +194,27 @@ pub fn compose_std_command<S: AsRef<OsStr>>(
 
     // Redirect stdin, if applicable.
     match context.try_fd(OpenFiles::STDIN_FD) {
-        Some(OpenFile::Stdin(_)) | None => (),
+        None => (),
         Some(stdin_file) => {
-            let as_stdio: Stdio = stdin_file.into();
+            let as_stdio = stdin_file.into_stdio()?;
             cmd.stdin(as_stdio);
         }
     }
 
     // Redirect stdout, if applicable.
     match context.try_fd(OpenFiles::STDOUT_FD) {
-        Some(OpenFile::Stdout(_)) | None => (),
+        None => (),
         Some(stdout_file) => {
-            let as_stdio: Stdio = stdout_file.into();
+            let as_stdio = stdout_file.into_stdio()?;
             cmd.stdout(as_stdio);
         }
     }
 
     // Redirect stderr, if applicable.
     match context.try_fd(OpenFiles::STDERR_FD) {
-        Some(OpenFile::Stderr(_)) | None => {}
+        None => {}
         Some(stderr_file) => {
-            let as_stdio: Stdio = stderr_file.into();
+            let as_stdio = stderr_file.into_stdio()?;
             cmd.stderr(as_stdio);
         }
     }

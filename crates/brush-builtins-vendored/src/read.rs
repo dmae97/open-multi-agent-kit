@@ -96,7 +96,7 @@ impl builtins::Command for ReadCommand {
         // Retrieve effective value of IFS for splitting.
         let ifs = context.shell.ifs();
 
-        let input_line = self.read_line(input_stream, context.stdout())?;
+        let input_line = self.read_line(input_stream, context.stdout(), || context.is_cancelled())?;
         let result = if input_line.is_some() {
             brush_core::ExecutionResult::success()
         } else {
@@ -196,11 +196,15 @@ enum ReadTermination {
 }
 
 impl ReadCommand {
-    fn read_line(
+    fn read_line<F>(
         &self,
         mut input_file: brush_core::openfiles::OpenFile,
         mut output_file: impl std::io::Write,
-    ) -> Result<Option<String>, brush_core::Error> {
+        is_cancelled: F,
+    ) -> Result<Option<String>, brush_core::Error>
+    where
+        F: Fn() -> bool,
+    {
         let _term_mode = self.setup_terminal_settings(&input_file)?;
 
         let delimiter = if self.return_after_n_chars_no_delimiter.is_some() {
@@ -231,6 +235,9 @@ impl ReadCommand {
         let mut buffer = [0; 1]; // 1-byte buffer
 
         let reason = loop {
+            self.ensure_not_cancelled(&is_cancelled)?;
+            self.wait_for_input(&input_file, &is_cancelled)?;
+
             // TODO: Figure out how to restore terminal settings on error?
             let n = input_file.read(&mut buffer)?;
             if n == 0 {
@@ -248,10 +255,10 @@ impl ReadCommand {
             }
 
             // Check for a delimiter that indicates end-of-input.
-            if let Some(delimiter) = delimiter {
-                if ch == delimiter {
-                    break ReadTermination::Delimiter;
-                }
+            if let Some(delimiter) = delimiter
+                && ch == delimiter
+            {
+                break ReadTermination::Delimiter;
             }
 
             // Ignore other control characters without including them in the input.
@@ -262,10 +269,10 @@ impl ReadCommand {
             line.push(ch);
 
             // Check to see if we've hit a character limit.
-            if let Some(char_limit) = char_limit {
-                if line.len() >= char_limit {
-                    break ReadTermination::Limit;
-                }
+            if let Some(char_limit) = char_limit
+                && line.len() >= char_limit
+            {
+                break ReadTermination::Limit;
             }
         };
 
@@ -302,8 +309,77 @@ impl ReadCommand {
 
         Ok(mode)
     }
-}
 
+    fn ensure_not_cancelled<F>(&self, is_cancelled: &F) -> Result<(), brush_core::Error>
+    where
+        F: Fn() -> bool,
+    {
+        if is_cancelled() {
+            return Err(ErrorKind::Interrupted.into());
+        }
+
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    fn wait_for_input<F>(
+        &self,
+        input_file: &brush_core::openfiles::OpenFile,
+        is_cancelled: &F,
+    ) -> Result<(), brush_core::Error>
+    where
+        F: Fn() -> bool,
+    {
+        use std::os::fd::AsFd as _;
+
+        use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
+
+        const INPUT_POLL_INTERVAL_MS: u16 = 100;
+
+        loop {
+            self.ensure_not_cancelled(is_cancelled)?;
+
+            let mut poll_fds = [PollFd::new(input_file.as_fd(), PollFlags::POLLIN)];
+            let poll_result = match poll(&mut poll_fds, PollTimeout::from(INPUT_POLL_INTERVAL_MS)) {
+                Ok(result) => result,
+                Err(err) => {
+                    let io_err = std::io::Error::from(err);
+                    if io_err.kind() == std::io::ErrorKind::Interrupted {
+                        continue;
+                    }
+
+                    return Err(io_err.into());
+                }
+            };
+
+            if poll_result == 0 {
+                continue;
+            }
+
+            let Some(revents) = poll_fds[0].revents() else {
+                continue;
+            };
+
+            if revents.intersects(PollFlags::POLLERR | PollFlags::POLLHUP | PollFlags::POLLNVAL)
+                || revents.contains(PollFlags::POLLIN)
+            {
+                return Ok(());
+            }
+        }
+    }
+
+    #[cfg(not(unix))]
+    fn wait_for_input<F>(
+        &self,
+        _input_file: &brush_core::openfiles::OpenFile,
+        is_cancelled: &F,
+    ) -> Result<(), brush_core::Error>
+    where
+        F: Fn() -> bool,
+    {
+        self.ensure_not_cancelled(is_cancelled)
+    }
+}
 fn split_line_by_ifs(ifs: &str, line: &str, max_fields: Option<usize>) -> VecDeque<String> {
     // Separate out the chars to split by.
     let ifs_chars = ifs.chars().collect::<Vec<_>>();
@@ -392,5 +468,47 @@ mod tests {
     fn test_split_line_by_ifs_trailing_non_space_delimiter() {
         let result = split_line_by_ifs(",", "a,b,c,", None);
         assert_equal(result, VecDeque::from(vec!["a", "b", "c", ""]));
+    }
+
+    fn test_command() -> ReadCommand {
+        ReadCommand {
+            array_variable: None,
+            delimiter: None,
+            use_readline: false,
+            initial_text: None,
+            return_after_n_chars: None,
+            return_after_n_chars_no_delimiter: None,
+            prompt: None,
+            raw_mode: false,
+            silent: false,
+            timeout_in_seconds: None,
+            fd_num_to_read: None,
+            variable_names: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_ensure_not_cancelled_returns_interrupted() {
+        let command = test_command();
+        let is_cancelled = || true;
+
+        let err = command
+            .ensure_not_cancelled(&is_cancelled)
+            .expect_err("cancelled state must interrupt read builtin");
+        assert_eq!(err.to_string(), "interrupted");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_wait_for_input_returns_interrupted_when_cancelled() {
+        let command = test_command();
+        let (reader, _writer) = std::io::pipe().expect("pipe creation must succeed");
+        let input_file = brush_core::openfiles::OpenFile::from(reader);
+        let is_cancelled = || true;
+
+        let err = command
+            .wait_for_input(&input_file, &is_cancelled)
+            .expect_err("cancelled state must interrupt input wait");
+        assert_eq!(err.to_string(), "interrupted");
     }
 }
