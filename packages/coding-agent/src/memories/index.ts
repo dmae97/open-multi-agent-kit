@@ -11,7 +11,7 @@ import { parseModelString } from "../config/model-resolver";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import type { Settings } from "../config/settings";
 import consolidationTemplate from "../prompts/memories/consolidation.md" with { type: "text" };
-import readPathTemplate from "../prompts/memories/read_path.md" with { type: "text" };
+import readPathTemplate from "../prompts/memories/read-path.md" with { type: "text" };
 import stageOneInputTemplate from "../prompts/memories/stage_one_input.md" with { type: "text" };
 import stageOneSystemTemplate from "../prompts/memories/stage_one_system.md" with { type: "text" };
 import type { AgentSession } from "../session/agent-session";

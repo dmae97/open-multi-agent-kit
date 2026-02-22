@@ -3,9 +3,9 @@
 Generate or edit images using Gemini image models.
 
 <instruction>
-Provide structured parameters for best results. Tool assembles into optimized prompt.
+You SHOULD provide structured parameters for best results. Tool assembles into optimized prompt.
 
-When using multiple `input_images`, describe each image's role in `subject` or `scene` field:
+When using multiple `input_images`, you MUST describe each image's role in `subject` or `scene` field:
 - "Use Image 1 for the character's face and outfit, Image 2 for the pose, Image 3 for the background environment"
 - "Match the color palette from Image 1, apply the lighting style from Image 2"
 </instruction>
@@ -15,9 +15,9 @@ Returns generated image saved to disk. Response includes file path where image w
 </output>
 
 <caution>
-- For photoreal: add "ultra-detailed, realistic, natural skin texture" to style
-- For posters/cards: use 9:16 aspect ratio with negative space for text placement
-- For iteration: use `changes` for targeted adjustments rather than regenerating from scratch
-- For text: add "sharp, legible, correctly spelled" for important text; keep text short
-- For diagrams: include "scientifically accurate" in style and provide facts explicitly
+- For photoreal: you SHOULD add "ultra-detailed, realistic, natural skin texture" to style
+- For posters/cards: you SHOULD use 9:16 aspect ratio with negative space for text placement
+- For iteration: you SHOULD use `changes` for targeted adjustments rather than regenerating from scratch
+- For text: you SHOULD add "sharp, legible, correctly spelled" for important text; keep text short
+- For diagrams: you SHOULD include "scientifically accurate" in style and provide facts explicitly
 </caution>

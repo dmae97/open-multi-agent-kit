@@ -3,12 +3,12 @@
 Apply precise file edits using `LINE#ID` tags, anchoring to the file content.
 
 <workflow>
-1. `read` the target range to capture current `LINE#ID` tags.
-2. Pick the smallest operation per change site (line/range/insert/content-replace).
-3. Direction-lock every edit: exact current text → intended text.
-4. Submit one `edit` call per file containing all operations.
-5. If another edit is needed in that file, re-read first (hashes changed).
-6. Output tool calls only; no prose.
+1. You MUST `read` the target range to capture current `LINE#ID` tags.
+2. You MUST pick the smallest operation per change site (line/range/insert/content-replace).
+3. You MUST direction-lock every edit: exact current text → intended text.
+4. You MUST submit one `edit` call per file containing all operations.
+5. If another edit is needed in that file, you MUST re-read first (hashes changed).
+6. You MUST output tool calls only; no prose.
 </workflow>
 
 <operations>
@@ -29,33 +29,33 @@ Apply precise file edits using `LINE#ID` tags, anchoring to the file content.
 </operations>
 
 <rules>
-1. **Minimize scope:** one logical mutation site per operation.
-2. **Preserve formatting:** keep indentation, punctuation, line breaks, trailing commas, brace style.
-3. **Prefer insertion over neighbor rewrites:** anchor on structural boundaries (`}`, `]`, `},`) not interior property lines.
-4. **No no-ops:** replacement content must differ from current content.
-5. **Touch only requested code:** avoid incidental edits.
-6. **Use exact current tokens:** never rewrite approximately; mutate the token that exists now.
-7. **For swaps/moves:** prefer one range operation over multiple single-line operations.
+1. **Minimize scope:** You MUST use one logical mutation site per operation.
+2. **Preserve formatting:** You MUST keep indentation, punctuation, line breaks, trailing commas, brace style.
+3. **Prefer insertion over neighbor rewrites:** You SHOULD anchor on structural boundaries (`}`, `]`, `},`) not interior property lines.
+4. **No no-ops:** replacement content MUST differ from current content.
+5. **Touch only requested code:** You MUST NOT make incidental edits.
+6. **Use exact current tokens:** You MUST NOT rewrite approximately; mutate the token that exists now.
+7. **For swaps/moves:** You SHOULD prefer one range operation over multiple single-line operations.
 </rules>
 
-<op_choice>
-- One wrong line → `set`
-- Adjacent block changed → `insert`
-- Missing line/block → insert with `append`/`prepend`
-</op_choice>
+<op-choice>
+- One wrong line → MUST use `set`
+- Adjacent block changed → MUST use `insert`
+- Missing line/block → MUST use `append`/`prepend`
+</op-choice>
 
-<tag_choice>
-- Copy tags exactly from the prefix of the `read` or error output.
-- Never guess tags.
-- For inserts, prefer `insert` > `append`/`prepend` when both boundaries are known.
-- Re-read after each successful edit call before issuing another on same file.
-</tag_choice>
+<tag-choice>
+- You MUST copy tags exactly from the prefix of the `read` or error output.
+- You MUST NOT guess tags.
+- For inserts, you SHOULD prefer `insert` > `append`/`prepend` when both boundaries are known.
+- You MUST re-read after each successful edit call before issuing another on same file.
+</tag-choice>
 
 <recovery>
 **Tag mismatch (`>>>`)**
-- Retry with the updated tags shown in error output.
-- Re-read only if required tags are missing from error snippet.
-- If mismatch repeats, stop and re-read the exact block.
+- You MUST retry with the updated tags shown in error output.
+- You MUST re-read only if required tags are missing from error snippet.
+- If mismatch repeats, you MUST stop and re-read the exact block.
 </recovery>
 
 <example name="fix a value or type">
@@ -207,10 +207,10 @@ content: ["function validate() {", …, "}"]
 </example>
 
 <critical>
-Ensure:
+You MUST ensure:
 - Payload shape is `{ "path": string, "edits": [operation, …], "delete"?: boolean, "rename"?: string }`
-- Every edit matches exactly one variant
-- Every tag has been copied EXACTLY from a tool result as `N#ID`
-- Scope is minimal and formatting is preserved except targeted token changes
+- Every edit MUST match exactly one variant
+- Every tag MUST be copied EXACTLY from a tool result as `N#ID`
+- Scope MUST be minimal and formatting MUST be preserved except targeted token changes
 </critical>
-**Final reminder:** tags are immutable references to the last read snapshot. Re-read when state changes, then edit.
+**Final reminder:** tags are immutable references to the last read snapshot. You MUST re-read when state changes, then edit.

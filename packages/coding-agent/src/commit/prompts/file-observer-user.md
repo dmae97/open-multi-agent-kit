@@ -2,7 +2,7 @@
 {{ diff }}
 </file>
 {{#if context_header}}
-<related_files>
+<related-files>
 {{ context_header }}
-</related_files>
+</related-files>
 {{/if}}

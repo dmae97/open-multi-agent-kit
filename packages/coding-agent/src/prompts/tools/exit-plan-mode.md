@@ -8,7 +8,7 @@ Use when:
 </conditions>
 
 <instruction>
-- Write plan to plan file BEFORE calling this tool
+- You MUST write plan to plan file BEFORE calling this tool
 - Tool reads plan from file—does not take plan content as parameter
 - User sees plan contents when reviewing
 </instruction>
@@ -28,11 +28,11 @@ Unsure about auth method (OAuth vs JWT).
 </example>
 
 <avoid>
-- Calling before plan written to file
-- Using `ask` to request plan approval (this tool does that)
-- Calling after pure research tasks (no implementation planned)
+- MUST NOT call before plan is written to file
+- MUST NOT use `ask` to request plan approval (this tool does that)
+- MUST NOT call after pure research tasks (no implementation planned)
 </avoid>
 
 <critical>
-Only use when planning implementation steps. Research tasks (searching, reading, understanding) do not need this tool.
+You MUST only use when planning implementation steps. Research tasks (searching, reading, understanding) do not need this tool.
 </critical>

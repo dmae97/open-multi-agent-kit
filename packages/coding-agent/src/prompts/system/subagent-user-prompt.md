@@ -1,5 +1,5 @@
 {{#if context}}
-<swarm_context>{{context}}</swarm_context>
+<swarm-context>{{context}}</swarm-context>
 
 # Your Assignment
 {{assignment}}

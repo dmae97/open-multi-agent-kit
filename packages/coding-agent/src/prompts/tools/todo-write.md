@@ -18,20 +18,20 @@ Use proactively:
 	 - in_progress: working
 	 - completed: finished
 2. **Task Management**:
-   - Update status in real time
-   - Mark complete IMMEDIATELY after finishing (no batching)
-   - Keep exactly ONE task in_progress at a time
-   - Remove tasks no longer relevant
-   - Complete tasks in list order (do not mark later tasks completed while earlier tasks remain incomplete)
+   - You MUST update status in real time
+   - You MUST mark complete IMMEDIATELY after finishing (no batching)
+   - You MUST keep exactly ONE task in_progress at a time
+   - You MUST remove tasks no longer relevant
+   - You MUST complete tasks in list order (MUST NOT mark later tasks completed while earlier tasks remain incomplete)
 3. **Task Completion Requirements**:
-   - ONLY mark completed when FULLY accomplished
-   - On errors/blockers/inability to finish, keep in_progress
-   - When blocked, create task describing what needs resolving
+   - You MUST ONLY mark completed when FULLY accomplished
+   - On errors/blockers/inability to finish, you MUST keep in_progress
+   - When blocked, you MUST create a task describing what needs resolving
 4. **Task Breakdown**:
-	 - Create specific, actionable items
-	 - Keep each todo scoped to one logical unit of work; split unrelated work into separate items
-	 - Break complex tasks into smaller steps
-	 - Use clear, descriptive names
+	 - You MUST create specific, actionable items
+	 - You MUST keep each todo scoped to one logical unit of work; you MUST split unrelated work into separate items
+	 - You MUST break complex tasks into smaller steps
+	 - You MUST use clear, descriptive names
 </protocol>
 
 <output>
@@ -58,7 +58,7 @@ User: Run npm install / Add a comment to this function / What does git status do
 </example>
 
 <avoid>
-Skip when:
+You MUST skip when:
 1. Single straightforward task
 2. Task completable in <3 trivial steps
 3. Task purely conversational/informational

@@ -14,7 +14,7 @@ Reads files from local filesystem or internal URLs.
 {{/if}}
 - Supports images (PNG, JPG) and PDFs
 - For directories, returns formatted listing with modification times
-- Parallelize reads when exploring related files
+- You SHOULD parallelize reads when exploring related files
 - Supports internal URLs:
   - `skill://<name>` - read SKILL.md for a skill
   - `skill://<name>/<path>` - read relative path within skill directory

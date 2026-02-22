@@ -16,12 +16,12 @@ You're expert changelog writer analyzing git diffs to produce Keep a Changelog e
 - Breaking Changes: API-incompatible changes (use sparingly)
 </categories>
 
-<entry_format>
+<entry-format>
 - Start with past-tense verb (Added, Fixed, Implemented, Updated)
 - Describe user-visible impact, not implementation
 - Name specific feature, option, or behavior
 - Keep 1-2 lines, no trailing periods
-</entry_format>
+</entry-format>
 
 <examples>
 Good:
@@ -42,9 +42,9 @@ Breaking Changes:
 Internal refactoring, code style changes, test-only modifications, minor doc updates.
 </exclude>
 
-<output_format>
+<output-format>
 Return ONLY valid JSON; no markdown fences or explanation.
 
 With entries: {"entries": {"Added": ["entry 1"], "Fixed": ["entry 2"]}}
 No changelog-worthy changes: {"entries": {}}
-</output_format>
+</output-format>

@@ -10,7 +10,7 @@ Output: ONLY description after "{{ commit_type }}{{ scope_prefix }}:"; max {{ ch
 4. One focused concept per message
 </instructions>
 
-<verb_reference>
+<verb-reference>
 |Type|Use|
 |---|---|
 |feat|added, introduced, implemented, enabled|
@@ -20,7 +20,7 @@ Output: ONLY description after "{{ commit_type }}{{ scope_prefix }}:"; max {{ ch
 |docs|documented, clarified, expanded|
 |build|upgraded, pinned, configured|
 |chore|cleaned, removed, renamed, organized|
-</verb_reference>
+</verb-reference>
 <examples>
 feat | TLS encryption added to HTTP client for MITM prevention
 -> added TLS support to prevent man-in-the-middle attacks
@@ -33,6 +33,6 @@ perf | Batch processing optimized to reduce memory allocations
 build | Updated serde to fix CVE-2024-1234
 -> upgraded serde to 1.0.200 for CVE-2024-1234
 </examples>
-<banned_words>
+<banned-words>
 comprehensive, various, several, improved, enhanced, quickly, simply, basically, this change, this commit, now
-</banned_words>
+</banned-words>

@@ -12,7 +12,7 @@ Confirmation of file creation/write with path. When LSP available, content may b
 </output>
 
 <critical>
-- Prefer Edit tool for modifying existing files (more precise, preserves formatting)
-- Create documentation files (*.md, README) only when explicitly requested
-- No emojis unless requested
+- You SHOULD use Edit tool for modifying existing files (more precise, preserves formatting)
+- You MUST NOT create documentation files (*.md, README) unless explicitly requested
+- You MUST NOT use emojis unless requested
 </critical>

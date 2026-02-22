@@ -21,12 +21,12 @@ Returns selected option(s) as text. For multi-part questions, returns map of que
 </caution>
 
 <critical>
-**Default to action. Do NOT ask unless you are genuinely blocked and user preference is required to avoid a wrong outcome.**
-1. **Resolve ambiguity yourself** using repo conventions, existing patterns, and reasonable defaults.
-2. **Exhaust existing sources** (code, configs, docs, history) before asking anything.
-3. **If multiple choices are acceptable**, pick the most conservative/standard option and proceed; state the choice.
-4. **Only ask when options have materially different tradeoffs and the user must decide.**
-**Do NOT include "Other" option in your options array.** UI automatically adds "Other (type your own)" to every question; adding your own creates duplicates.
+**Default to action. You MUST NOT ask unless you are genuinely blocked and user preference is required to avoid a wrong outcome.**
+1. You MUST **resolve ambiguity yourself** using repo conventions, existing patterns, and reasonable defaults.
+2. You MUST **exhaust existing sources** (code, configs, docs, history) before asking anything.
+3. **If multiple choices are acceptable**, you MUST pick the most conservative/standard option and proceed; state the choice.
+4. You MUST **only ask when options have materially different tradeoffs and the user must decide.**
+**You MUST NOT include "Other" option in your options array.** UI automatically adds "Other (type your own)" to every question; adding your own creates duplicates.
 </critical>
 
 <example name="single">

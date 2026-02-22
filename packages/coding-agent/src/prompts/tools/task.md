@@ -2,12 +2,12 @@
 
 Launch subagents to execute parallel, well-scoped tasks.
 {{#if asyncEnabled}}
-Use `read jobs://` to inspect background task state and `read jobs://<job_id>` for detailed status/output when needed.
-When you need to wait for async results before continuing, call `poll_jobs` — it blocks until jobs complete. Do NOT poll `read jobs://` in a loop or yield and hope for delivery.
+Use `read jobs://` to inspect background task state and `read jobs://<job-id>` for detailed status/output when needed.
+When you need to wait for async results before continuing, call `poll_jobs` — it blocks until jobs complete. You MUST NOT poll `read jobs://` in a loop or yield and hope for delivery.
 {{/if}}
 
 ## What subagents inherit automatically
-Subagents receive the **full system prompt**, including AGENTS.md, context files, and skills. Do NOT repeat project rules, coding conventions, or style guidelines in `context` — they already have them.
+Subagents receive the **full system prompt**, including AGENTS.md, context files, and skills. You MUST NOT repeat project rules, coding conventions, or style guidelines in `context` — they already have them.
 
 ## What subagents do NOT have
 Subagents have no access to your conversation history. They don't know:
@@ -30,9 +30,9 @@ Agent type for all tasks in this batch.
 Shared background prepended verbatim to every task `assignment`. Use only for session-specific information subagents lack.
 
 <critical>
-Do NOT include project rules, coding conventions, or style guidelines — subagents already have AGENTS.md and context files in their system prompt. Repeating them wastes tokens and inflates context. Restating any rule from AGENTS.md in `context` is a bug — treat it like a lint error.
+You MUST NOT include project rules, coding conventions, or style guidelines — subagents already have AGENTS.md and context files in their system prompt. Repeating them wastes tokens and inflates context. Restating any rule from AGENTS.md in `context` is a bug — treat it like a lint error.
 </critical>
-**Before writing each line of context, ask:** "Would this sentence be true for ANY task in this repo, or only for THIS specific batch?" If it applies to any task → it's a project rule → the subagent already has it → delete the line.
+**Before writing each line of context, ask:** "Would this sentence be true for ANY task in this repo, or only for THIS specific batch?" If it applies to any task → it's a project rule → the subagent already has it → you MUST delete the line.
 
 WRONG — restating project rules the subagent already has:
 ```
@@ -42,7 +42,7 @@ WRONG — restating project rules the subagent already has:
 - Run the formatter after changes
 - Follow the logging convention
 ```
-Every line above restates a project convention. The subagent reads AGENTS.md. Delete them all.
+Every line above restates a project convention. The subagent reads AGENTS.md. You MUST delete them all.
 
 RIGHT — only session-specific decisions the subagent cannot infer from project files:
 ```
@@ -99,7 +99,7 @@ Run in isolated git worktree; returns patches. Use when tasks edit overlapping f
 {{/if}}
 ### `schema` (optional — recommended for structured output)
 
-JTD schema defining expected response structure. Use typed properties. If you care about parsing result, define here — **never describe output format in `context` or `assignment`**.
+JTD schema defining expected response structure. Use typed properties. If you care about parsing result, define here — you MUST NOT describe output format in `context` or `assignment`.
 
 <caution>
 **Schema vs agent mismatch causes null output.** Agents with `output="structured"` (e.g., `explore`) have a built-in schema. If you also pass `schema`, yours takes precedence — but if you describe output format in `context`/`assignment` instead, the agent's built-in schema wins. The agent gets confused trying to fit your requested format into its schema shape and submits `null`. Either: (1) use `schema` to override the built-in one, (2) use `task` agent which has no built-in schema, or (3) match your instructions to the agent's expected output shape.
@@ -110,7 +110,7 @@ JTD schema defining expected response structure. Use typed properties. If you ca
 
 <critical>## Task scope
 
-`assignment` must contain enough info for agent to act **without asking a clarifying question**.
+`assignment` MUST contain enough info for agent to act **without asking a clarifying question**.
 **Minimum bar:** assignment under ~8 lines or missing acceptance criteria = too vague. One-liners guaranteed failure.
 
 Use structure every assignment:
@@ -135,7 +135,7 @@ Use structure every assignment:
 - DO NOT include project-wide build/test/lint commands (see below)
 ```
 
-`context` carries shared background. `assignment` carries only delta: file-specific instructions, local edge cases, per-task acceptance checks. Never duplicate shared constraints across assignments.
+`context` carries shared background. `assignment` carries only delta: file-specific instructions, local edge cases, per-task acceptance checks. You MUST NOT duplicate shared constraints across assignments.
 
 ### Anti-patterns (ban these)
 **Vague assignments** — agent guesses wrong or stalls:
@@ -156,9 +156,9 @@ If a constraint appears in AGENTS.md, it MUST NOT appear in `context`. The subag
 
 If tempted to write above, expand using templates.
 **Output format in prose instead of `schema`** — agent returns null:
-Structured agents (`explore`, `reviewer`) have built-in output schemas. Describing a different output format in `context`/`assignment` without overriding via `schema` creates a mismatch — the agent can't reconcile your prose instructions with its schema and submits null data. Always use `schema` for output structure, or pick an agent whose built-in schema matches your needs.
+Structured agents (`explore`, `reviewer`) have built-in output schemas. Describing a different output format in `context`/`assignment` without overriding via `schema` creates a mismatch — the agent can't reconcile your prose instructions with its schema and submits null data. You MUST use `schema` for output structure, or pick an agent whose built-in schema matches your needs.
 **Test/lint commands in parallel tasks** — edit wars:
-Parallel agents share working tree. If two agents run `bun check` or `bun test` concurrently, they see each other's half-finished edits, "fix" phantom errors, loop. **Never tell parallel tasks run project-wide build/test/lint commands.** Each task edits, stops. Caller verifies after all tasks complete.
+Parallel agents share working tree. If two agents run `bun check` or `bun test` concurrently, they see each other's half-finished edits, "fix" phantom errors, loop. You MUST NOT tell parallel tasks to run project-wide build/test/lint commands. Each task edits, stops. Caller verifies after all tasks complete.
 **If you can't specify scope yet**, create **Discovery task** first: enumerate files, find callsites, list candidates. Then fan out with explicit paths.
 
 ### Delegate intent, not keystrokes
@@ -247,12 +247,12 @@ Do not touch TS bindings or downstream consumers — separate phase.
 
 ## Task scope
 
-Each task small, well-defined scope — **at most 3–5 files**.
+Each task MUST have small, well-defined scope — **at most 3–5 files**.
 **Signs task too broad:**
 - File paths use globs (`src/**/*.ts`) instead of explicit names
 - Assignment says "update all" / "migrate everything" / "refactor across"
 - Scope covers entire package or directory tree
-**Fix:** enumerate files first (grep/glob discovery), then fan out one task per file or small cluster.
+**Fix:** You MUST enumerate files first (grep/glob discovery), then fan out one task per file or small cluster.
 ---
 
 ## Parallelization
@@ -278,23 +278,32 @@ Each task small, well-defined scope — **at most 3–5 files**.
 
 ### Phased execution
 
+<caution>
+**Parallel agents share the working tree.** They see each other's half-finished edits in real time. This is why:
+- Parallel tasks MUST NOT run project-wide build/test/lint — they will collide on phantom errors
+- Tasks editing overlapping files MUST use `isolated: true` (worktree isolation) or be made sequential
+- The caller MUST run verification after all tasks complete, not inside any individual task
+</caution>
+
 Layered work with dependencies:
-**Phase 1 — Foundation** (do yourself or single task): define interfaces, create scaffolds, establish API shape. Never fan out until contract known.
+**Phase 1 — Foundation** (caller MUST do this, MUST NOT delegate): define interfaces, create scaffolds, establish API shape. You MUST NOT fan out until contract is known.
 **Phase 2 — Parallel implementation**: fan out tasks consuming same known interface. Include Phase 1 API contract in `context`.
-**Phase 3 — Integration** (do yourself): wire modules, fix mismatches, verify builds.
+**Phase 3 — Integration** (caller MUST do this, MUST NOT delegate): wire modules, fix mismatches, verify builds.
 **Phase 4 — Dependent layer**: fan out tasks consuming Phase 2 outputs.
 ---
 
 ## Pre-flight checklist
 
-Before calling tool, verify:
-- [ ] `context` includes only session-specific info not already in AGENTS.md/context files
-- [ ] Each `assignment` follows assignment template — not one-liner
-- [ ] Each `assignment` includes edge cases / "don’t break" items
-- [ ] Tasks truly parallel (no hidden dependencies)
-- [ ] Scope small, file paths explicit (no globs)
-- [ ] No task runs project-wide build/test/lint — you do after all tasks complete
-- [ ] `schema` used if you expect information
+<critical>
+Before calling tool, verify each item:
+- [ ] `context` MUST include only session-specific info not already in AGENTS.md/context files
+- [ ] Each `assignment` MUST follow the assignment template — one-liners are PROHIBITED
+- [ ] Each `assignment` MUST include edge cases / "don't break" items
+- [ ] Tasks MUST be truly parallel — you MUST be able to articulate why no task depends on another's output
+- [ ] Scope MUST be small; file paths MUST be explicit (no globs)
+- [ ] Tasks MUST NOT run project-wide build/test/lint — caller MUST verify after all tasks complete
+- [ ] `schema` MUST be used if you expect structured output
+</critical>
 ---
 
 ## Agents

@@ -87,16 +87,16 @@ After the 50ms timeout:
 2. read `ttsrManager.getSettings().contextMode`
 3. if `contextMode === "discard"`, drop partial assistant output with `agent.popMessage()`
 4. build injection content from pending rules using `ttsr-interrupt.md` template
-5. append a synthetic user message containing one `<system_interrupt ...>` block per rule
+5. append a synthetic user message containing one `<system-interrupt ...>` block per rule
 6. call `agent.continue()` to retry generation
 
 Template payload is:
 
 ```xml
-<system_interrupt reason="rule_violation" rule="{{name}}" path="{{path}}">
+<system-interrupt reason="rule_violation" rule="{{name}}" path="{{path}}">
 ...
 {{content}}
-</system_interrupt>
+</system-interrupt>
 ```
 
 Pending injections are cleared after content generation.

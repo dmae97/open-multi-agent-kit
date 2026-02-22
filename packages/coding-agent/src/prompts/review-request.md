@@ -30,15 +30,15 @@ Group files by locality, e.g.:
 - Related functionality → same agent
 - Tests with their implementation files → same agent
 
-Use Task tool with `agent: "reviewer"` and `tasks` array.
+You MUST use Task tool with `agent: "reviewer"` and `tasks` array.
 {{/if}}
 
 ### Reviewer Instructions
 
-Reviewer should:
+Reviewer MUST:
 1. Focus ONLY on assigned files
-2. {{#if skipDiff}}Run `git diff`/`git show` for assigned files{{else}}Use diff hunks below (don't re-run git diff){{/if}}
-3. Read full file context as needed via `read`
+2. {{#if skipDiff}}MUST run `git diff`/`git show` for assigned files{{else}}MUST use diff hunks below (MUST NOT re-run git diff){{/if}}
+3. MAY read full file context as needed via `read`
 4. Call `report_finding` per issue
 5. Call `submit_result` with verdict when done
 

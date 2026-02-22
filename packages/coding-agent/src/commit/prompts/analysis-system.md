@@ -14,7 +14,7 @@ Use null for: cross-cutting changes, project-wide refactoring.
 
 Forbidden scopes (use null): src, lib, include, tests, benches, examples, docs, project name, app, main, entire, all, misc.
 
-Prefer scopes from <common_scopes> over inventing new.
+Prefer scopes from <common-scopes> over inventing new.
 ## 2. Generate Details (0-6 items)
 
 Each detail:
@@ -55,7 +55,7 @@ user_visible: false for: internal refactoring, performance optimizations (unless
 Omit changelog_category when user_visible false.
 </instructions>
 
-<output_format>
+<output-format>
 Call create_conventional_analysis with:
 
 {
@@ -74,7 +74,7 @@ Call create_conventional_analysis with:
 ],
 "issue_refs": []
 }
-</output_format>
+</output-format>
 
 <example name="feature-with-api">
 {

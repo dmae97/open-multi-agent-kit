@@ -69,9 +69,9 @@ Default rule patterns (defined in code) target common misuses:
 
 Timeout is clamped to `[1, 3600]` seconds and converted to milliseconds.
 
-## 4) Artifact allocation + environment injection
+## 4) Artifact allocation
 
-Before execution, the tool allocates an artifact path/id (best-effort) and injects `$ARTIFACTS` env when session artifacts dir is available.
+Before execution, the tool allocates an artifact path/id (best-effort) for truncated output storage.
 
 - artifact allocation failure is non-fatal (execution continues without artifact spill file),
 - artifact id/path are passed into execution path for full-output persistence on truncation.

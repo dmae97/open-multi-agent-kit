@@ -20,8 +20,8 @@
 {{/ifAny}}
 {{#if skills.length}}
 Skills are specialized knowledge.
-Scan descriptions for your task domain.
-If skill covers your output, read `skill://<name>` before proceeding.
+You MUST scan descriptions for your task domain.
+If a skill covers your output, you MUST read `skill://<name>` before proceeding.
 <skills>
 {{#list skills join="\n"}}
 <skill name="{{name}}">
@@ -31,18 +31,18 @@ If skill covers your output, read `skill://<name>` before proceeding.
 </skills>
 {{/if}}
 {{#if preloadedSkills.length}}
-Following skills preloaded in full; apply instructions directly.
-<preloaded_skills>
+Following skills are preloaded in full; you MUST apply instructions directly.
+<preloaded-skills>
 {{#list preloadedSkills join="\n"}}
 <skill name="{{name}}">
 {{content}}
 </skill>
 {{/list}}
-</preloaded_skills>
+</preloaded-skills>
 {{/if}}
 {{#if rules.length}}
 Rules are local constraints.
-Read `rule://<name>` when working in that domain.
+You MUST read `rule://<name>` when working in that domain.
 <rules>
 {{#list rules join="\n"}}
 <rule name="{{name}}">

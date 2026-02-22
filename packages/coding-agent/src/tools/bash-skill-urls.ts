@@ -22,6 +22,7 @@ interface InternalUrlResolver {
 
 export interface InternalUrlExpansionOptions {
 	skills: readonly Skill[];
+	noEscape?: boolean;
 	internalRouter?: InternalUrlResolver;
 }
 
@@ -168,9 +169,11 @@ export async function expandInternalUrls(command: string, options: InternalUrlEx
 		if (index === undefined) continue;
 
 		const url = unquoteToken(token);
-		const resolvedPath = await resolveInternalUrlToPath(url, options.skills, options.internalRouter);
-		const replacement = shellEscape(resolvedPath);
-		expanded = `${expanded.slice(0, index)}${replacement}${expanded.slice(index + token.length)}`;
+		try {
+			const resolvedPath = await resolveInternalUrlToPath(url, options.skills, options.internalRouter);
+			const replacement = options.noEscape ? resolvedPath : shellEscape(resolvedPath);
+			expanded = `${expanded.slice(0, index)}${replacement}${expanded.slice(index + token.length)}`;
+		} catch {}
 	}
 
 	return expanded;

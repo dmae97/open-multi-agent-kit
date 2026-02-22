@@ -9,13 +9,13 @@ Determine:
 3. DETAILS: 3–4 summary points (max 6)
 4. CHANGELOG: Metadata for user-visible changes
 </instructions>
-<scope_rules>
+<scope-rules>
 - Component name if >=60% changes target it
 - null if spread across multiple components
 - scope_candidates as primary source
 - Valid: specific component names (api, parser, config, etc.)
-</scope_rules>
-<output_format>
+</scope-rules>
+<output-format>
 Each detail point:
 - Start with past-tense verb (added, fixed, moved, extracted)
 - Under 120 chars, ends with period
@@ -23,7 +23,7 @@ Each detail point:
 Priority: user-visible behavior > performance/security > architecture > internal implementation
 changelog_category: Added|Changed|Fixed|Deprecated|Removed|Security
 user_visible: true for features, user-facing bugs, breaking changes, security
-</output_format>
+</output-format>
 <example>
 Input observations:
 - api/client.ts: added token refresh guard to prevent duplicate refreshes

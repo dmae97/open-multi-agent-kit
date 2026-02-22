@@ -6,7 +6,7 @@ Fast file pattern matching that works with any codebase size.
 - Pattern includes the search path: `src/**/*.ts`, `lib/*.json`, `**/*.md`
 - Simple patterns like `*.ts` automatically search recursively from cwd
 - Includes hidden files by default (use `hidden: false` to exclude)
-- Speculatively perform multiple searches in parallel when potentially useful
+- You SHOULD perform multiple searches in parallel when potentially useful
 </instruction>
 
 <output>
@@ -14,5 +14,5 @@ Matching file paths sorted by modification time (most recent first). Results tru
 </output>
 
 <avoid>
-Open-ended searches requiring multiple rounds of globbing and grepping — use Task tool instead.
+For open-ended searches requiring multiple rounds of globbing and grepping, you MUST use Task tool instead.
 </avoid>

@@ -14,11 +14,11 @@ Include: functions, methods, types, API changes, behavior/logic changes, error h
 Exclude: import reordering, whitespace/formatting, comment-only changes, debug statements.
 </scope>
 
-<output_format>
+<output-format>
 Plain list, no preamble, no summary, no markdown formatting.
 - added 'parse_config()' function for TOML configuration loading
 - removed deprecated 'legacy_init()' and all callers
 - changed 'Connection::new()' to accept '&Config' instead of individual params
-</output_format>
+</output-format>
 
 Observations only. Classification in reduce phase.

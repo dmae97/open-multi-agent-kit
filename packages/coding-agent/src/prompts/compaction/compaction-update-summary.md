@@ -1,15 +1,15 @@
-Incorporate new messages above into existing handoff summary in <previous-summary> tags, used by another LLM to resume task.
+You MUST incorporate new messages above into the existing handoff summary in <previous-summary> tags, used by another LLM to resume task.
 RULES:
-- PRESERVE all information from previous summary
-- ADD new progress, decisions, and context from new messages
-- UPDATE Progress: move items from "In Progress" to "Done" when completed
-- UPDATE "Next Steps" based on what was accomplished
-- PRESERVE exact file paths, function names, and error messages
-- You may remove anything no longer relevant
+- MUST preserve all information from previous summary
+- MUST add new progress, decisions, and context from new messages
+- MUST update Progress: move items from "In Progress" to "Done" when completed
+- MUST update "Next Steps" based on what was accomplished
+- MUST preserve exact file paths, function names, and error messages
+- You MAY remove anything no longer relevant
 
-IMPORTANT: If new messages end with unanswered question or request to user, add it to Critical Context (replacing any previous pending question if answered).
+IMPORTANT: If new messages end with unanswered question or request to user, you MUST add it to Critical Context (replacing any previous pending question if answered).
 
-Use this format (omit sections if not applicable):
+You MUST use this format (omit sections if not applicable):
 
 ## Goal
 [Preserve existing goals; add new ones if task expanded]
@@ -40,6 +40,6 @@ Use this format (omit sections if not applicable):
 ## Additional Notes
 [Other important info not fitting above]
 
-Output only structured summary; no extra text.
+You MUST output only the structured summary; you MUST NOT include extra text.
 
-Keep sections concise. Preserve relevant tool outputs/command results. Include repository state changes (branch, uncommitted changes) if mentioned.
+Sections MUST be kept concise. You MUST preserve relevant tool outputs/command results. You MUST include repository state changes (branch, uncommitted changes) if mentioned.

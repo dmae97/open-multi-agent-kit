@@ -3075,11 +3075,11 @@ Be thorough - include exact file paths, function names, error messages, and tech
 		this.#todoReminderCount++;
 		const todoList = incomplete.map(t => `- ${t.content}`).join("\n");
 		const reminder =
-			`<system_reminder>\n` +
+			`<system-reminder>\n` +
 			`You stopped with ${incomplete.length} incomplete todo item(s):\n${todoList}\n\n` +
 			`Please continue working on these tasks or mark them complete if finished.\n` +
 			`(Reminder ${this.#todoReminderCount}/${remindersMax})\n` +
-			`</system_reminder>`;
+			`</system-reminder>`;
 
 		logger.debug("Todo completion: sending reminder", {
 			incomplete: incomplete.length,

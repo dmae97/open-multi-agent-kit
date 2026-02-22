@@ -16,10 +16,10 @@ import { DEFAULT_MAX_BYTES, TailBuffer } from "../session/streaming-output";
 import { renderStatusLine } from "../tui";
 import { CachedOutputBlock } from "../tui/output-block";
 import type { ToolSession } from ".";
-import { type BashInteractiveResult, runInteractiveBashPty } from "./bash-interactive";
+import { type BashInteractiveResult, NO_PAGER_ENV, runInteractiveBashPty } from "./bash-interactive";
 import { checkBashInterception } from "./bash-interceptor";
 import { applyHeadTail } from "./bash-normalize";
-import { expandInternalUrls } from "./bash-skill-urls";
+import { expandInternalUrls, type InternalUrlExpansionOptions } from "./bash-skill-urls";
 import { formatStyledTruncationWarning, type OutputMeta } from "./output-meta";
 import { resolveToCwd } from "./path-utils";
 import { replaceTabs } from "./render-utils";
@@ -144,6 +144,14 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
 	): Promise<AgentToolResult<BashToolDetails>> {
 		let command = rawCommand;
 
+		// Extract leading `cd <path> && ...` into cwd when the model ignores the cwd parameter.
+		if (!cwd) {
+			const cdMatch = command.match(/^cd\s+((?:[^&\\]|\\.)+?)\s*&&\s*/);
+			if (cdMatch) {
+				cwd = cdMatch[1].trim().replace(/^["']|["']$/g, "");
+				command = command.slice(cdMatch[0].length);
+			}
+		}
 		if (asyncRequested && !this.#asyncEnabled) {
 			throw new ToolError("Async bash execution is disabled. Enable async.enabled to use async mode.");
 		}
@@ -161,10 +169,16 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
 			}
 		}
 
-		command = await expandInternalUrls(command, {
+		const internalUrlOptions: InternalUrlExpansionOptions = {
 			skills: this.session.skills ?? [],
 			internalRouter: this.session.internalRouter,
-		});
+		};
+		command = await expandInternalUrls(command, internalUrlOptions);
+
+		// Resolve protocol URLs (skill://, agent://, etc.) in extracted cwd.
+		if (cwd?.includes("://")) {
+			cwd = await expandInternalUrls(cwd, { ...internalUrlOptions, noEscape: true });
+		}
 
 		const commandCwd = cwd ? resolveToCwd(cwd, this.session.cwd) : this.session.cwd;
 		let cwdStat: fs.Stats;
@@ -195,8 +209,6 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
 				"bash",
 				label,
 				async ({ jobId, signal: runSignal, reportProgress }) => {
-					const artifactsDir = this.session.getArtifactsDir?.();
-					const extraEnv = artifactsDir ? { ARTIFACTS: artifactsDir } : undefined;
 					const { path: artifactPath, id: artifactId } =
 						(await this.session.allocateOutputArtifact?.("bash")) ?? {};
 					try {
@@ -205,7 +217,7 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
 							sessionKey: `${this.session.getSessionId?.() ?? ""}:async:${jobId}`,
 							timeout: timeoutMs,
 							signal: runSignal,
-							env: extraEnv,
+							env: NO_PAGER_ENV,
 							artifactPath,
 							artifactId,
 							onChunk: chunk => {
@@ -238,9 +250,7 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
 		// Track output for streaming updates (tail only)
 		const tailBuffer = new TailBuffer(DEFAULT_MAX_BYTES);
 
-		// Set up artifacts environment and allocation
-		const artifactsDir = this.session.getArtifactsDir?.();
-		const extraEnv = artifactsDir ? { ARTIFACTS: artifactsDir } : undefined;
+		// Allocate artifact for truncated output storage
 		const { path: artifactPath, id: artifactId } = (await this.session.allocateOutputArtifact?.("bash")) ?? {};
 
 		const usePty = pty && $env.PI_NO_PTY !== "1" && ctx?.hasUI === true && ctx.ui !== undefined;
@@ -250,7 +260,6 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
 					cwd: commandCwd,
 					timeoutMs,
 					signal,
-					env: extraEnv,
 					artifactPath,
 					artifactId,
 				})
@@ -259,7 +268,7 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
 					sessionKey: this.session.getSessionId?.() ?? undefined,
 					timeout: timeoutMs,
 					signal,
-					env: extraEnv,
+					env: NO_PAGER_ENV,
 					artifactPath,
 					artifactId,
 					onChunk: chunk => {

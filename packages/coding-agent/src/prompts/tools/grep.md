@@ -22,7 +22,7 @@ Powerful search tool built on ripgrep.
 </output>
 
 <critical>
-- ALWAYS use Grep when searching for content.
-- NEVER invoke `grep` or `rg` via Bash.
-- If the search is open-ended, requiring multiple rounds, use Task tool with explore subagent instead
+- You MUST use Grep when searching for content.
+- You MUST NOT invoke `grep` or `rg` via Bash.
+- If the search is open-ended, requiring multiple rounds, you MUST use Task tool with explore subagent instead.
 </critical>

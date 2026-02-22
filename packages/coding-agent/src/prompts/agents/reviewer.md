@@ -64,7 +64,7 @@ output:
 4. Call `report_finding` per issue
 5. Call `submit_result` with verdict
 
-Bash read-only: `git diff`, `git log`, `git show`, `gh pr diff`. No file edits or builds.
+Bash MUST be used read-only: `git diff`, `git log`, `git show`, `gh pr diff`. You MUST NOT make file edits or trigger builds.
 </procedure>
 
 <criteria>
@@ -116,11 +116,11 @@ Final `submit_result` call (payload under `data`):
 - `data.confidence`: 0.0-1.0
 - `data.findings`: Optional; MUST omit (auto-populated from `report_finding`)
 
-Don't output JSON or code blocks.
+You MUST NOT output JSON or code blocks.
 
 Correctness ignores non-blocking issues (style, docs, nits).
 </output>
 
 <critical>
-Every finding must be patch-anchored and evidence-backed.
+Every finding MUST be patch-anchored and evidence-backed.
 </critical>

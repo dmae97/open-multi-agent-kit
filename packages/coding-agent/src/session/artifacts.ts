@@ -2,7 +2,7 @@
  * Session-scoped artifact storage for truncated tool outputs.
  *
  * Artifacts are stored in a directory alongside the session file,
- * accessible via artifact:// URLs or the $ARTIFACTS environment variable.
+ * accessible via artifact:// URLs.
  */
 import * as fs from "node:fs/promises";
 import * as path from "node:path";

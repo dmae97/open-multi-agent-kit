@@ -17,20 +17,20 @@ Analyze codebase, generate AGENTS.md documenting:
 </task>
 
 <parallel>
-Launch multiple `explore` agents in parallel (via `task` tool) scanning different areas (core src, tests, configs/build, scripts/docs), then synthesize.
+You MUST launch multiple `explore` agents in parallel (via `task` tool) scanning different areas (core src, tests, configs/build, scripts/docs), then synthesize.
 </parallel>
 
 <directives>
-- Title document "Repository Guidelines"
-- Use Markdown headings for structure
-- Be concise and practical
-- Focus on what AI assistant needs to help with codebase
-- Include examples where helpful (commands, paths, naming patterns)
-- Include file paths where relevant
-- Call out architecture and code patterns explicitly
-- Omit information obvious from code structure
+- You MUST title the document "Repository Guidelines"
+- You MUST use Markdown headings for structure
+- You MUST be concise and practical
+- You MUST focus on what an AI assistant needs to help with the codebase
+- You SHOULD include examples where helpful (commands, paths, naming patterns)
+- You SHOULD include file paths where relevant
+- You MUST call out architecture and code patterns explicitly
+- You SHOULD omit information obvious from code structure
 </directives>
 
 <output>
-After analysis, write AGENTS.md to project root.
+After analysis, you MUST write AGENTS.md to the project root.
 </output>

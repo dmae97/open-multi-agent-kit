@@ -3,7 +3,7 @@
 Run commands on remote hosts.
 
 <instruction>
-Build commands from reference below
+You MUST build commands from the reference below
 </instruction>
 
 <commands>
@@ -23,13 +23,8 @@ Build commands from reference below
 - Navigation: `cd`, `echo %CD%`
 </commands>
 
-<output>
-stdout/stderr combined, truncated at 50KB; exit code captured.
-If truncated, full output stored under $ARTIFACTS as `artifact://<id>`.
-</output>
-
 <critical>
-Verify shell type from "Available hosts", use matching commands.
+You MUST verify the shell type from "Available hosts" and use matching commands.
 </critical>
 
 <example name="linux">

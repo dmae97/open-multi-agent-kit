@@ -1,17 +1,17 @@
 {{#if types_description}}
-<type_definitions>
+<type-definitions>
 {{ types_description }}
-</type_definitions>
+</type-definitions>
 {{/if}}
 
 <observations>
 {{ observations }}
 </observations>
 
-<diff_statistics>
+<diff-statistics>
 {{ stat }}
-</diff_statistics>
+</diff-statistics>
 
-<scope_candidates>
+<scope-candidates>
 {{ scope_candidates }}
-</scope_candidates>
+</scope-candidates>

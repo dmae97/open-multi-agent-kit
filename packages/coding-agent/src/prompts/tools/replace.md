@@ -3,10 +3,10 @@
 String replacements in files with fuzzy whitespace matching.
 
 <instruction>
-- Use smallest edit that uniquely identifies change
-- If `old_text` not unique, expand to include more context or use `all: true` to replace all occurrences
+- You MUST use the smallest edit that uniquely identifies the change
+- If `old_text` not unique, you MUST expand to include more context or use `all: true` to replace all occurrences
 - Fuzzy matching handles minor whitespace/indentation differences automatically
-- Prefer editing existing files over creating new ones
+- You SHOULD prefer editing existing files over creating new ones
 </instruction>
 
 <output>
@@ -14,10 +14,10 @@ Returns success/failure status. On success, file modified in place with replacem
 </output>
 
 <critical>
-- Must read file at least once in conversation before editing. Tool errors if you attempt edit without reading file first.
+- You MUST read the file at least once in the conversation before editing. Tool errors if you attempt edit without reading file first.
 </critical>
 
-<bash*alternatives>
+<bash-alternatives>
 Replace for content-addressed changes—you identify \_what* to change by its text.
 
 For position-addressed or pattern-addressed changes, bash more efficient:
@@ -35,4 +35,4 @@ For position-addressed or pattern-addressed changes, bash more efficient:
 
 Use Replace when _content itself_ identifies location.
 Use bash when _position_ or _pattern_ identifies what to change.
-</bash_alternatives>
+</bash-alternatives>

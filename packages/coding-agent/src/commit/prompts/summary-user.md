@@ -1,13 +1,13 @@
 {{#if user_context}}
-<user_context>
+<user-context>
 {{ user_context }}
-</user_context>
+</user-context>
 {{/if}}
 
-<detail_points>
+<detail-points>
 {{ details }}
-</detail_points>
+</detail-points>
 
-<diff_stat>
+<diff-stat>
 {{ stat }}
-</diff_stat>
+</diff-stat>

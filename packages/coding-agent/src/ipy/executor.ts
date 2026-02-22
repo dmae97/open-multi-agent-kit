@@ -39,8 +39,6 @@ export interface PythonExecutorOptions {
 	useSharedGateway?: boolean;
 	/** Session file path for accessing task outputs */
 	sessionFile?: string;
-	/** Artifacts directory for $ARTIFACTS env var and artifact storage */
-	artifactsDir?: string;
 	/** Artifact path/id for full output storage */
 	artifactPath?: string;
 	artifactId?: string;
@@ -311,16 +309,9 @@ async function createKernelSession(
 	cwd: string,
 	useSharedGateway?: boolean,
 	sessionFile?: string,
-	artifactsDir?: string,
 	isRetry?: boolean,
 ): Promise<KernelSession> {
-	const env: Record<string, string> | undefined =
-		sessionFile || artifactsDir
-			? {
-					...(sessionFile ? { PI_SESSION_FILE: sessionFile } : {}),
-					...(artifactsDir ? { ARTIFACTS: artifactsDir } : {}),
-				}
-			: undefined;
+	const env: Record<string, string> | undefined = sessionFile ? { PI_SESSION_FILE: sessionFile } : undefined;
 
 	let kernel: PythonKernel;
 	try {
@@ -330,7 +321,7 @@ async function createKernelSession(
 	} catch (err) {
 		if (!isRetry && isResourceExhaustionError(err)) {
 			await recoverFromResourceExhaustion();
-			return createKernelSession(sessionId, cwd, useSharedGateway, sessionFile, artifactsDir, true);
+			return createKernelSession(sessionId, cwd, useSharedGateway, sessionFile, true);
 		}
 		throw err;
 	}
@@ -359,7 +350,6 @@ async function restartKernelSession(
 	cwd: string,
 	useSharedGateway?: boolean,
 	sessionFile?: string,
-	artifactsDir?: string,
 ): Promise<void> {
 	session.restartCount += 1;
 	if (session.restartCount > 1) {
@@ -370,13 +360,7 @@ async function restartKernelSession(
 	} catch (err) {
 		logger.warn("Failed to shutdown crashed kernel", { error: err instanceof Error ? err.message : String(err) });
 	}
-	const env: Record<string, string> | undefined =
-		sessionFile || artifactsDir
-			? {
-					...(sessionFile ? { PI_SESSION_FILE: sessionFile } : {}),
-					...(artifactsDir ? { ARTIFACTS: artifactsDir } : {}),
-				}
-			: undefined;
+	const env: Record<string, string> | undefined = sessionFile ? { PI_SESSION_FILE: sessionFile } : undefined;
 	const kernel = await PythonKernel.start({ cwd, useSharedGateway, env });
 	session.kernel = kernel;
 	session.dead = false;
@@ -401,7 +385,6 @@ async function withKernelSession<T>(
 	handler: (kernel: PythonKernel) => Promise<T>,
 	useSharedGateway?: boolean,
 	sessionFile?: string,
-	artifactsDir?: string,
 ): Promise<T> {
 	let session = kernelSessions.get(sessionId);
 	if (!session) {
@@ -416,7 +399,6 @@ async function withKernelSession<T>(
 			cwd,
 			useSharedGateway,
 			sessionFile,
-			artifactsDir,
 		);
 		kernelSessions.set(sessionId, session);
 		startCleanupTimer();
@@ -432,7 +414,6 @@ async function withKernelSession<T>(
 				cwd,
 				useSharedGateway,
 				sessionFile,
-				artifactsDir,
 			);
 		}
 		try {
@@ -450,7 +431,6 @@ async function withKernelSession<T>(
 				cwd,
 				useSharedGateway,
 				sessionFile,
-				artifactsDir,
 			);
 			const result = await logger.timeAsync("kernel:postRestart:handler", handler, session!.kernel);
 			session!.restartCount = 0;
@@ -539,16 +519,9 @@ export async function executePython(code: string, options?: PythonExecutorOption
 	const kernelMode = options?.kernelMode ?? "session";
 	const useSharedGateway = options?.useSharedGateway;
 	const sessionFile = options?.sessionFile;
-	const artifactsDir = options?.artifactsDir;
 
 	if (kernelMode === "per-call") {
-		const env: Record<string, string> | undefined =
-			sessionFile || artifactsDir
-				? {
-						...(sessionFile ? { PI_SESSION_FILE: sessionFile } : {}),
-						...(artifactsDir ? { ARTIFACTS: artifactsDir } : {}),
-					}
-				: undefined;
+		const env: Record<string, string> | undefined = sessionFile ? { PI_SESSION_FILE: sessionFile } : undefined;
 		const kernel = await PythonKernel.start({ cwd, useSharedGateway, env });
 		try {
 			return await executeWithKernel(kernel, code, options);
@@ -570,6 +543,5 @@ export async function executePython(code: string, options?: PythonExecutorOption
 		async kernel => executeWithKernel(kernel, code, options),
 		useSharedGateway,
 		sessionFile,
-		artifactsDir,
 	);
 }

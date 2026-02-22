@@ -1,6 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Removed `artifactsDir` parameter from Python executor options; artifact storage now uses `artifactPath` only
+- Renamed prompt file from `read_path.md` to `read-path.md` for consistency
+- Updated system prompt XML tags to use kebab-case (e.g., `system-reminder`, `system-interrupt`) for consistency
+- Refactored bash tool to use `NO_PAGER_ENV` constant for environment variable management
+- Updated internal URL expansion to support optional `noEscape` parameter for unescaped path resolution
+
+### Fixed
+
+- Fixed todo reminder XML tags from underscore to kebab-case format (`system-reminder`)
 
 ## [12.19.3] - 2026-02-22
 ### Added

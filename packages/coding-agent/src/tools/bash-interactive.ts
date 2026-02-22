@@ -275,7 +275,7 @@ class BashInteractiveOverlayComponent implements Component {
 	}
 }
 
-const NO_PAGER_ENV = {
+export const NO_PAGER_ENV = {
 	// Disable pagers so commands don't block on interactive views.
 	PAGER: "cat",
 	GIT_PAGER: "cat",

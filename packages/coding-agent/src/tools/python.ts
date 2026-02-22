@@ -253,7 +253,6 @@ export class PythonTool implements AgentTool<typeof pythonSchema> {
 			};
 
 			const sessionFile = this.session.getSessionFile?.() ?? undefined;
-			const artifactsDir = this.session.getArtifactsDir?.() ?? undefined;
 			const { path: artifactPath, id: artifactId } = (await this.session.allocateOutputArtifact?.("python")) ?? {};
 			outputSink = new OutputSink({
 				artifactPath,
@@ -272,7 +271,6 @@ export class PythonTool implements AgentTool<typeof pythonSchema> {
 				kernelMode: this.session.settings.get("python.kernelMode"),
 				useSharedGateway: this.session.settings.get("python.sharedGateway"),
 				sessionFile: sessionFile ?? undefined,
-				artifactsDir: artifactsDir ?? undefined,
 			};
 
 			for (let i = 0; i < cells.length; i++) {

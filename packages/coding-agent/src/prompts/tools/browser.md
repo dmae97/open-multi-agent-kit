@@ -6,10 +6,10 @@ Use this tool to navigate, click, type, scroll, drag, query DOM content, and cap
 - Use `action: "open"` to start a new headless browser session (or implicitly launch on first action)
 - Use `action: "goto"` with `url` to navigate
 - Use `action: "observe"` to capture a numbered accessibility snapshot with URL/title/viewport/scroll info
-	- Prefer `click_id`, `type_id`, or `fill_id` actions using the returned `element_id` values
+	- You SHOULD prefer `click_id`, `type_id`, or `fill_id` actions using the returned `element_id` values
 	- Optional flags: `include_all` to include non-interactive nodes, `viewport_only` to limit to visible elements
 - Use `action: "click"`, `"type"`, `"fill"`, `"press"`, `"scroll"`, or `"drag"` for selector-based interactions
-	- Prefer ARIA or text selectors (e.g. `p-aria/[name="Sign in"]`, `p-text/Continue`) over brittle CSS
+	- You SHOULD prefer ARIA or text selectors (e.g. `p-aria/[name="Sign in"]`, `p-text/Continue`) over brittle CSS
 - Use `action: "click_id"`, `"type_id"`, or `"fill_id"` to interact with observed elements without selectors
 - Use `action: "wait_for_selector"` before interacting when the page is dynamic
 - Use `action: "evaluate"` with `script` to run a JavaScript expression in the page context
@@ -22,10 +22,10 @@ Use this tool to navigate, click, type, scroll, drag, query DOM content, and cap
 </instruction>
 
 <critical>
-**Default to `observe`, not `screenshot`.**
+**You MUST default to `observe`, not `screenshot`.**
 - `observe` is cheaper, faster, and returns structured data — use it to understand page state, find elements, and plan interactions.
-- Only use `screenshot` when visual appearance matters (verifying layout, debugging CSS, capturing a visual artifact for the user).
-- Never screenshot just to "see what's on the page" — `observe` gives you that with element IDs you can act on immediately.
+- You SHOULD only use `screenshot` when visual appearance matters (verifying layout, debugging CSS, capturing a visual artifact for the user).
+- You MUST NOT screenshot just to "see what's on the page" — `observe` gives you that with element IDs you can act on immediately.
 </critical>
 
 <output>
