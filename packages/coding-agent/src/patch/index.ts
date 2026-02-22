@@ -168,24 +168,6 @@ export function stripNewLinePrefixes(lines: string[]): string[] {
 	});
 }
 
-const hashlineReplaceContentFormat = (kind: string) =>
-	Type.Union([
-		Type.Null(),
-		Type.Array(Type.String(), { description: `${kind} lines` }),
-		Type.String({ description: `${kind} line` }),
-	]);
-
-const hashlineInsertContentFormat = (kind: string) =>
-	Type.Union([
-		Type.Array(Type.String(), { description: `${kind} lines`, minItems: 1 }),
-		Type.String({ description: `${kind} line`, minLength: 1 }),
-	]);
-
-const hashlineTagFormat = (what: string) =>
-	Type.String({
-		description: `Tag identifying the ${what} in "LINE#ID" format`,
-	});
-
 export function hashlineParseContent(edit: string | string[] | null): string[] {
 	if (edit === null) return [];
 	if (Array.isArray(edit)) return edit;
@@ -194,60 +176,22 @@ export function hashlineParseContent(edit: string | string[] | null): string[] {
 	if (lines[lines.length - 1].trim() === "") return lines.slice(0, -1);
 	return lines;
 }
-const hashlineReplaceTagEditSchema = Type.Object(
+
+const hashlineEditSpecSchema = Type.Object(
 	{
-		op: Type.Literal("replace"),
-		tag: hashlineTagFormat("line being replaced"),
-		content: hashlineReplaceContentFormat("Replacement"),
+		op: StringEnum(["replace", "append", "prepend", "insert"], {
+			description: "Operation type",
+		}),
+		first: Type.Optional(Type.String({ description: 'First/start anchor tag in "LINE#ID" format' })),
+		last: Type.Optional(Type.String({ description: 'Last/end anchor tag in "LINE#ID" format' })),
+		content: Type.Union([
+			Type.Null(),
+			Type.Array(Type.String(), { description: "Content lines" }),
+			Type.String({ description: "Content line" }),
+		]),
 	},
 	{ additionalProperties: false },
 );
-
-const hashlineAppendEditSchema = Type.Object(
-	{
-		op: Type.Literal("append"),
-		after: Type.Optional(hashlineTagFormat("line after which to append")),
-		content: hashlineInsertContentFormat("Appended"),
-	},
-	{ additionalProperties: false },
-);
-
-const hashlinePrependEditSchema = Type.Object(
-	{
-		op: Type.Literal("prepend"),
-		before: Type.Optional(hashlineTagFormat("line before which to prepend")),
-		content: hashlineInsertContentFormat("Prepended"),
-	},
-	{ additionalProperties: false },
-);
-
-const hashlineReplaceRangeEditSchema = Type.Object(
-	{
-		op: Type.Literal("replace"),
-		first: hashlineTagFormat("first line"),
-		last: hashlineTagFormat("last line"),
-		content: hashlineReplaceContentFormat("Replacement"),
-	},
-	{ additionalProperties: false },
-);
-
-const hashlineInsertEditSchema = Type.Object(
-	{
-		op: Type.Literal("insert"),
-		before: Type.Optional(hashlineTagFormat("line before which to insert")),
-		after: Type.Optional(hashlineTagFormat("line after which to insert")),
-		content: hashlineInsertContentFormat("Inserted"),
-	},
-	{ additionalProperties: false },
-);
-
-const hashlineEditSpecSchema = Type.Union([
-	hashlineReplaceTagEditSchema,
-	hashlineReplaceRangeEditSchema,
-	hashlineAppendEditSchema,
-	hashlinePrependEditSchema,
-	hashlineInsertEditSchema,
-]);
 
 const hashlineEditSchema = Type.Object(
 	{
@@ -264,6 +208,88 @@ const hashlineEditSchema = Type.Object(
 
 export type HashlineToolEdit = Static<typeof hashlineEditSpecSchema>;
 export type HashlineParams = Static<typeof hashlineEditSchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Resilient anchor resolution
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Map flat tool-schema edits (first/last) into typed HashlineEdit objects.
+ *
+ * Resilient: as long as at least one anchor exists, we execute.
+ * - replace + first only → single-line replace (tag = first)
+ * - replace + first + last → range replace
+ * - append + first or last → append after that anchor
+ * - prepend + first or last → prepend before that anchor
+ * - insert + first + last → insert between them
+ * - insert + one anchor → degrade to append/prepend
+ * - no anchors → file-level append/prepend (only for those ops)
+ *
+ * Unknown ops default to "replace".
+ */
+function resolveEditAnchors(edits: HashlineToolEdit[]): HashlineEdit[] {
+	const result: HashlineEdit[] = [];
+	for (const edit of edits) {
+		const content = hashlineParseContent(edit.content);
+		const first = edit.first ? tryParseTag(edit.first) : undefined;
+		const last = edit.last ? tryParseTag(edit.last) : undefined;
+
+		// Normalize op — default unknown values to "replace"
+		const op = edit.op === "append" || edit.op === "prepend" || edit.op === "insert" ? edit.op : "replace";
+
+		switch (op) {
+			case "replace": {
+				if (first && last) {
+					result.push({ op: "replace", first, last, content });
+				} else if (first) {
+					result.push({ op: "replace", tag: first, content });
+				} else if (last) {
+					result.push({ op: "replace", tag: last, content });
+				} else {
+					throw new Error("Replace requires at least one anchor (first or last).");
+				}
+				break;
+			}
+			case "append": {
+				// Prefer first as the "after" anchor; fall back to last
+				const anchor = first ?? last;
+				result.push({ op: "append", ...(anchor ? { after: anchor } : {}), content });
+				break;
+			}
+			case "prepend": {
+				// Prefer last as the "before" anchor; fall back to first
+				const anchor = last ?? first;
+				result.push({ op: "prepend", ...(anchor ? { before: anchor } : {}), content });
+				break;
+			}
+			case "insert": {
+				if (first && last) {
+					result.push({ op: "insert", after: first, before: last, content });
+				} else if (first) {
+					// Degrade: insert after first
+					result.push({ op: "append", after: first, content });
+				} else if (last) {
+					// Degrade: insert before last
+					result.push({ op: "prepend", before: last, content });
+				} else {
+					// No anchors — append to end
+					result.push({ op: "append", content });
+				}
+				break;
+			}
+		}
+	}
+	return result;
+}
+
+/** Parse a tag, returning undefined instead of throwing on garbage. */
+function tryParseTag(raw: string): LineTag | undefined {
+	try {
+		return parseTag(raw);
+	} catch {
+		return undefined;
+	}
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LSP FileSystem for patch mode
@@ -522,24 +548,15 @@ export class EditTool implements AgentTool<TInput> {
 			if (!(await file.exists())) {
 				const content: string[] = [];
 				for (const edit of edits) {
-					switch (edit.op) {
-						case "append": {
-							if (edit.after) {
-								throw new Error(`File not found: ${path}`);
-							}
-							content.push(...hashlineParseContent(edit.content));
-							break;
-						}
-						case "prepend": {
-							if (edit.before) {
-								throw new Error(`File not found: ${path}`);
-							}
+					// For file creation, only anchorless appends/prepends are valid
+					if ((edit.op === "append" || edit.op === "prepend") && !edit.first && !edit.last) {
+						if (edit.op === "prepend") {
 							content.unshift(...hashlineParseContent(edit.content));
-							break;
+						} else {
+							content.push(...hashlineParseContent(edit.content));
 						}
-						default: {
-							throw new Error(`File not found: ${path}`);
-						}
+					} else {
+						throw new Error(`File not found: ${path}`);
 					}
 				}
 				await file.write(content.join("\n"));
@@ -553,74 +570,7 @@ export class EditTool implements AgentTool<TInput> {
 				};
 			}
 
-			const anchorEdits: HashlineEdit[] = [];
-			for (const edit of edits) {
-				switch (edit.op) {
-					case "replace": {
-						if ("tag" in edit) {
-							anchorEdits.push({
-								op: "replace",
-								tag: parseTag(edit.tag),
-								content: hashlineParseContent(edit.content),
-							});
-						} else {
-							anchorEdits.push({
-								op: "replace",
-								first: parseTag(edit.first),
-								last: parseTag(edit.last),
-								content: hashlineParseContent(edit.content),
-							});
-						}
-						break;
-					}
-					case "append": {
-						const { after, content } = edit;
-						anchorEdits.push({
-							op: "append",
-							...(after ? { after: parseTag(after) } : {}),
-							content: hashlineParseContent(content),
-						});
-						break;
-					}
-					case "prepend": {
-						const { before, content } = edit;
-						anchorEdits.push({
-							op: "prepend",
-							...(before ? { before: parseTag(before) } : {}),
-							content: hashlineParseContent(content),
-						});
-						break;
-					}
-					case "insert": {
-						const { before, after, content } = edit;
-						if (before && !after) {
-							anchorEdits.push({
-								op: "prepend",
-								before: parseTag(before),
-								content: hashlineParseContent(content),
-							});
-						} else if (after && !before) {
-							anchorEdits.push({
-								op: "append",
-								after: parseTag(after),
-								content: hashlineParseContent(content),
-							});
-						} else if (before && after) {
-							anchorEdits.push({
-								op: "insert",
-								before: parseTag(before),
-								after: parseTag(after),
-								content: hashlineParseContent(content),
-							});
-						} else {
-							throw new Error(`Insert must have both before and after tags.`);
-						}
-						break;
-					}
-					default:
-						throw new Error(`Invalid edit operation: ${JSON.stringify(edit)}`);
-				}
-			}
+			const anchorEdits = resolveEditAnchors(edits);
 
 			const rawContent = await file.text();
 			const { bom, text: content } = stripBom(rawContent);

@@ -36,8 +36,8 @@ All helpers auto-print results and return values for chaining.
 <output>
 User sees output like Jupyter notebook; rich displays render fully:
 - `display(JSON(data))` → interactive JSON tree
-- `display(HTML(...))` → rendered HTML
-- `display(Markdown(...))` → formatted markdown
+- `display(HTML(…))` → rendered HTML
+- `display(Markdown(…))` → formatted markdown
 - `plt.show()` → inline figures
   **You will see object repr** (e.g., `<IPython.core.display.JSON object>`). Trust `display()`; you MUST NOT assume user sees only repr.
 </output>

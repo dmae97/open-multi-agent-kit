@@ -12,14 +12,15 @@ Apply precise file edits using `LINE#ID` tags, anchoring to the file content.
 </workflow>
 
 <operations>
+Every edit has `op`, `first` (start anchor), `last` (end anchor), and `content`. All anchors use `"LINE#ID"` format.
 - **Line or range replace/delete**
-  - `{ op: "replace", tag: "N#ID", content: […] }`
-  - `{ op: "replace", first: "N#ID", last: "N#ID", content: […] }`
+  - `{ op: "replace", first: "N#ID", content: […] }` (single line)
+  - `{ op: "replace", first: "N#ID", last: "N#ID", content: […] }` (range)
   - Use for swaps, block rewrites, or deleting a full span (`content: null`).
 - **Insert** (new content)
-  - `{ op: "prepend", before: "N#ID", content: […] }` or `{ op: "prepend", content: […] }` (no `before` = insert at beginning of file)
-  - `{ op: "append", after: "N#ID", content: […] }` or `{ op: "append", content: […] }` (no `after` = insert at end of file)
-  - `{ op: "insert", after: "N#ID", before: "N#ID", content: […] }` (between adjacent anchors; safest for blocks)
+  - `{ op: "prepend", last: "N#ID", content: […] }` or `{ op: "prepend", content: […] }` (no anchor = insert at beginning of file)
+  - `{ op: "append", first: "N#ID", content: […] }` or `{ op: "append", content: […] }` (no anchor = insert at end of file)
+  - `{ op: "insert", first: "N#ID", last: "N#ID", content: […] }` (between adjacent anchors; safest for blocks)
 - **File-level controls**
   - `{ delete: true, edits: [] }` deletes the file (cannot be combined with `rename`).
   - `{ rename: "new/path.ts", edits: […] }` writes result to new path and removes old path.
@@ -62,7 +63,7 @@ Apply precise file edits using `LINE#ID` tags, anchoring to the file content.
 ```
 ```
 op: "replace"
-tag: "{{hlineref 23 "  const timeout: number = 5000;"}}"
+first: "{{hlineref 23 "  const timeout: number = 5000;"}}"
 content: ["  const timeout: number = 30_000;"]
 ```
 </example>
@@ -74,7 +75,7 @@ content: ["  const timeout: number = 30_000;"]
 ```
 ```
 op: "replace"
-tag: "{{hlineref 7 "// @ts-ignore"}}"
+first: "{{hlineref 7 "// @ts-ignore"}}"
 content: null
 ```
 </example>
@@ -85,7 +86,7 @@ content: null
 ```
 ```
 op: "replace"
-tag: "{{hlineref 14 "  placeholder: \"DO NOT SHIP\","}}"
+first: "{{hlineref 14 "  placeholder: \"DO NOT SHIP\","}}"
 content: [""]
 ```
 </example>
@@ -127,10 +128,10 @@ content: null
 ```
 ```
 op: "prepend"
-before: "{{hlineref 1 "import * as fs from \"node:fs/promises\";"}}"
+last: "{{hlineref 1 "import * as fs from \"node:fs/promises\";"}}"
 content: ["import * as os from \"node:os\";"]
 ```
-Use `before` for anchored insertion before a specific line. Omit `before` to prepend at BOF.
+Use `last` for anchored insertion before a specific line. Omit anchor to prepend at BOF.
 </example>
 
 <example name="append at end of file">
@@ -139,10 +140,10 @@ Use `before` for anchored insertion before a specific line. Omit `before` to pre
 ```
 ```
 op: "append"
-after: "{{hlineref 260 "export { serialize, deserialize };"}}"
+first: "{{hlineref 260 "export { serialize, deserialize };"}}"
 content: ["export { validate };"]
 ```
-Use `after` for anchored insertion after a specific line. Omit `after` to append at EOF.
+Use `first` for anchored insertion after a specific line. Omit anchor to append at EOF.
 </example>
 
 <example name="add an entry between known siblings">
@@ -152,8 +153,8 @@ Use `after` for anchored insertion after a specific line. Omit `after` to append
 ```
 ```
 op: "insert"
-after: "{{hlineref 44 "  \"build\": \"bun run compile\","}}"
-before: "{{hlineref 45 "  \"test\": \"bun test\""}}"
+first: "{{hlineref 44 "  \"build\": \"bun run compile\","}}"
+last: "{{hlineref 45 "  \"test\": \"bun test\""}}"
 content: ["  \"lint\": \"biome check\","]
 ```
 Dual anchors pin the insert to exactly one gap, preventing drift from edits elsewhere in the file. **Always prefer dual anchors when both boundaries are content lines.**
@@ -168,10 +169,10 @@ Dual anchors pin the insert to exactly one gap, preventing drift from edits else
 ```
 ```
 op: "insert"
-before: "{{hlineref 103 "export function serialize(data: unknown): string {"}}"
+last: "{{hlineref 103 "export function serialize(data: unknown): string {"}}"
 content: ["function validate(data: unknown): boolean {", "  return data != null && typeof data === \"object\";", "}", ""]
 ```
-The trailing `""` in `content` preserves the blank-line separator. **Anchor to the structural line (`export function ...`), not the blank line above it** — blank lines are ambiguous and may be added or removed by other edits.
+The trailing `""` in `content` preserves the blank-line separator. **Anchor to the structural line (`export function …`), not the blank line above it** — blank lines are ambiguous and may be added or removed by other edits.
 </example>
 
 <example name="file delete">
@@ -192,14 +193,14 @@ edits: […]
 <example name="anti-pattern: anchoring to whitespace">
 Bad — tags to a blank line; fragile if blank lines shift:
 ```
-after: "{{hlineref 102 ""}}"
+first: "{{hlineref 102 ""}}"
 content: ["function validate() {", …, "}"]
 ```
 
 Good — anchors to the structural target:
 
 ```
-before: "{{hlineref 103 "export function serialize(data: unknown): string {"}}"
+last: "{{hlineref 103 "export function serialize(data: unknown): string {"}}"
 content: ["function validate() {", …, "}"]
 ```
 </example>
@@ -207,7 +208,7 @@ content: ["function validate() {", …, "}"]
 <critical>
 You MUST ensure:
 - Payload shape is `{ "path": string, "edits": [operation, …], "delete"?: boolean, "rename"?: string }`
-- Every edit MUST match exactly one variant
+- Each edit has `op`, optional `first`/`last` anchors, and `content`
 - Every tag MUST be copied EXACTLY from a tool result as `N#ID`
 - Scope MUST be minimal and formatting MUST be preserved except targeted token changes
 </critical>

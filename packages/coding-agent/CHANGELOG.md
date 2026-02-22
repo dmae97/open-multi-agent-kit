@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Simplified hashline edit schema to use unified `first`/`last` anchor fields instead of operation-specific field names (`tag`, `before`, `after`)
+- Improved resilience of anchor resolution to degrade gracefully when anchors are missing or invalid, allowing edits to proceed with available anchors
+- Updated hashline tool documentation to reflect new unified anchor syntax across all operations (replace, append, prepend, insert)
 
 ## [13.0.0] - 2026-02-22
 ### Added

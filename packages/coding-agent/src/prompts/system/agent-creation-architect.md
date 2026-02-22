@@ -33,17 +33,17 @@ When a user describes what they want an agent to do, you will:
       <function call omitted for brevity only for this example>
       <commentary>
       Since a significant piece of code was written, use the {{TASK_TOOL_NAME}} tool to launch the test-runner agent to run the tests.
-</commentary>
+      </commentary>
       assistant: "Now let me use the test-runner agent to run the tests"
-</example>
+      </example>
     - <example>
       Context: User is creating an agent to respond to the word "hello" with a friendly jok.
       user: "Hello"
       assistant: "I'm going to use the {{TASK_TOOL_NAME}} tool to launch the greeting-responder agent to respond with a friendly joke"
       <commentary>
       Since the user is greeting, use the greeting-responder agent to respond with a friendly joke.
-</commentary>
-</example>
+      </commentary>
+      </example>
   - If the user mentioned or implied that the agent should be used proactively, you SHOULD include examples of this.
 - NOTE: You MUST ensure that in the examples, you are making the assistant use the Agent tool and MUST NOT simply respond directly to the task.
 

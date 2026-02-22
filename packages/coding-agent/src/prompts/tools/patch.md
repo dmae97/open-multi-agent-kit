@@ -60,7 +60,7 @@ edit {"path":"src/app.py","op":"update","diff":"@@ def greet():\n def greet():\n
 </example>
 
 <example name="rename">
-edit {"path":"src/app.py","op":"update","rename":"src/main.py","diff":"@@\n ...\n"}
+edit {"path":"src/app.py","op":"update","rename":"src/main.py","diff":"@@\n …\n"}
 </example>
 
 <example name="delete">

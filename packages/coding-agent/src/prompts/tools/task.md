@@ -19,7 +19,6 @@ Subagents have no access to your conversation history. They don't know:
 Subagents CAN grep the parent conversation file for supplementary details.
 
 For large intermediate outputs (long traces, JSON payloads, temporary analysis snapshots), you SHOULD write them to `local://<path>` and pass the path in task context instead of inlining bulky text.
----
 
 ## Parameters
 
@@ -128,9 +127,9 @@ Use structure every assignment:
 - Patterns/APIs to use; reference files if applicable
 
 ## Edge Cases / Don't Break
-- Tricky case 1: ...
-- Tricky case 2: ...
-- Existing behavior must survive: ...
+- Tricky case 1: …
+- Tricky case 2: …
+- Existing behavior must survive: …
 
 ## Acceptance (task-local)
 - Expected behavior or observable result
@@ -145,11 +144,11 @@ Use structure every assignment:
 - "Migrate to N-API."
 - "Fix the bug in streaming."
 - "Update all constructors in `src/**/*.ts`."
-**Vague context** — forces agent invent conventions:
+  **Vague context** — forces agent invent conventions:
 - "Use existing patterns."
 - "Follow conventions."
 - "No WASM."
-**Redundant context** — wastes tokens repeating what subagents already have:
+  **Redundant context** — wastes tokens repeating what subagents already have:
 - Restating AGENTS.md rules (coding style, import conventions, formatting commands, logger usage, etc.)
 - Repeating project constraints from context files
 - Listing tool/framework preferences already documented in the repo
@@ -192,9 +191,9 @@ First style wastes your time, brittle if code shifts. Second gives agent room to
 <example type="bad" label="Duplicated context inflates tokens">
 <tasks>
   <task name="Grep">
-    <description>Port grep module from WASM to N-API...</description>
-    <assignment>Port grep module from WASM to N-API... (same blob repeated)</assignment>
-</task>
+    <description>Port grep module from WASM to N-API…</description>
+    <assignment>Port grep module from WASM to N-API… (same blob repeated)</assignment>
+  </task>
 </tasks>
 </example>
 
@@ -210,7 +209,7 @@ Do not touch TS bindings or downstream consumers — separate phase.
 - MUST use `#[napi]` attribute macro on all exports
 - MUST return `napi::Result<T>` for fallible ops; never panic
 - MUST use `spawn_blocking` for filesystem I/O or >1ms work
-...
+  …
 
 ## Acceptance (global)
 - Caller verifies after all tasks: `cargo test -p pi-natives` and `cargo build -p pi-natives` with no warnings
@@ -232,17 +231,17 @@ Do not touch TS bindings or downstream consumers — separate phase.
 
 ## Acceptance (task-local)
 - Three functions exported with correct signatures (caller verifies build after all tasks)
-</assignment>
-</task>
+    </assignment>
+  </task>
 
   <task name="PortHighlight">
     <description>Port highlight module to N-API</description>
     <assignment>
 ## Target
 - Files: `src/highlight.rs`, `src/lib.rs` (registration only)
-...
-</assignment>
-</task>
+  …
+    </assignment>
+  </task>
 </tasks>
 </example>
 ---
@@ -254,7 +253,7 @@ Each task MUST have small, well-defined scope — **at most 3–5 files**.
 - File paths use globs (`src/**/*.ts`) instead of explicit names
 - Assignment says "update all" / "migrate everything" / "refactor across"
 - Scope covers entire package or directory tree
-**Fix:** You MUST enumerate files first (grep/glob discovery), then fan out one task per file or small cluster.
+  **Fix:** You MUST enumerate files first (grep/glob discovery), then fan out one task per file or small cluster.
 ---
 
 ## Parallelization

@@ -86,12 +86,12 @@ interface EditRenderArgs {
 	edits?: HashlineEditPreview[];
 }
 
-type HashlineEditPreview =
-	| { op: "replace"; tag: string; content: string[] }
-	| { op: "replace"; first: string; last: string; content: string[] }
-	| { op: "append"; after?: string; content: string[] }
-	| { op: "prepend"; before?: string; content: string[] }
-	| { op: "insert"; before: string; after: string; content: string[] };
+type HashlineEditPreview = {
+	op: string;
+	first?: string;
+	last?: string;
+	content: string | string[] | null;
+};
 
 /** Extended context for edit tool rendering */
 export interface EditRenderContext {
@@ -166,26 +166,18 @@ function formatStreamingHashlineEdits(edits: unknown[], uiTheme: Theme): string 
 
 		const contentLines = Array.isArray(editRecord.content) ? (editRecord.content as string[]).join("\n") : "";
 
-		// replace with tag (single line)
-		if ("tag" in editRecord && !("first" in editRecord)) {
-			const tag = typeof editRecord.tag === "string" ? editRecord.tag : "…";
-			return { srcLabel: `• line ${tag}`, dst: contentLines };
-		}
-		// replace with first..last (range)
-		if ("first" in editRecord || "last" in editRecord) {
-			const first = typeof editRecord.first === "string" ? editRecord.first : "…";
-			const last = typeof editRecord.last === "string" ? editRecord.last : "…";
-			return { srcLabel: `• range ${first}..${last}`, dst: contentLines };
-		}
-		// append/prepend/insert
-		if ("before" in editRecord || "after" in editRecord) {
-			const after = typeof editRecord.after === "string" ? editRecord.after : undefined;
-			const before = typeof editRecord.before === "string" ? editRecord.before : undefined;
-			const refs = [after, before].filter(Boolean).join("..") || "…";
-			return { srcLabel: `• insert ${refs}`, dst: contentLines };
-		}
+		const op = typeof editRecord.op === "string" ? editRecord.op : "?";
+		const first = typeof editRecord.first === "string" ? editRecord.first : undefined;
+		const last = typeof editRecord.last === "string" ? editRecord.last : undefined;
 
-		return { srcLabel: "• (incomplete edit)", dst: "" };
+		if (first && last && first !== last) {
+			return { srcLabel: `\u2022 ${op} ${first}..${last}`, dst: contentLines };
+		}
+		const anchor = first ?? last;
+		if (anchor) {
+			return { srcLabel: `\u2022 ${op} ${anchor}`, dst: contentLines };
+		}
+		return { srcLabel: `\u2022 ${op} (file-level)`, dst: contentLines };
 	}
 }
 function formatMetadataLine(lineCount: number | null, language: string | undefined, uiTheme: Theme): string {

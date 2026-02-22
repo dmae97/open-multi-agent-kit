@@ -24,7 +24,7 @@ For position-addressed or pattern-addressed changes, bash more efficient:
 
 |Operation|Command|
 |---|---|
-|Append to file|`cat >> file <<'EOF'`...`EOF`|
+|Append to file|`cat >> file <<'EOF'`…`EOF`|
 |Prepend to file|`{ cat - file; } <<'EOF' > tmp && mv tmp file`|
 |Delete lines N-M|`sed -i 'N,Md' file`|
 |Insert after line N|`sed -i 'Na\text' file`|
