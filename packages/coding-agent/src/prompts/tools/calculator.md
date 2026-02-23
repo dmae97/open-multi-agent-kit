@@ -1,6 +1,4 @@
-# Calculator
-
-Basic calculations.
+Performs basic calculations.
 
 <instruction>
 - Supports +, -, *, /, %, ** and parentheses

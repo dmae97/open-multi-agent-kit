@@ -1,5 +1,3 @@
-# Read
-
 Reads files from local filesystem or internal URLs.
 
 <instruction>

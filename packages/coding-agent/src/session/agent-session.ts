@@ -23,6 +23,7 @@ import {
 	type AgentMessage,
 	type AgentState,
 	type AgentTool,
+	INTENT_FIELD,
 	type ThinkingLevel,
 } from "@oh-my-pi/pi-agent-core";
 import type {
@@ -4609,7 +4610,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 		function formatArgsAsXml(args: Record<string, unknown>, indent = "\t"): string {
 			const parts: string[] = [];
 			for (const [key, value] of Object.entries(args)) {
-				if (key === "agent__intent") continue;
+				if (key === INTENT_FIELD) continue;
 				const text = typeof value === "string" ? value : JSON.stringify(value);
 				parts.push(`${indent}<parameter name="${key}">${text}</parameter>`);
 			}

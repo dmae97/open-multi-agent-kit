@@ -1,5 +1,3 @@
-# Fetch
-
 Retrieves content from a URL and returns it in a clean, readable format.
 
 <instruction>

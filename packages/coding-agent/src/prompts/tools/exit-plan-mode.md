@@ -8,9 +8,9 @@ Use when:
 </conditions>
 
 <instruction>
-- You MUST write plan to plan file BEFORE calling this tool
+- You **MUST** write plan to plan file BEFORE calling this tool
 - Tool reads plan from file—does not take plan content as parameter
-- You MUST provide a `title` argument for the final plan artifact (example: `WP_MIGRATION_PLAN`)
+- You **MUST** provide a `title` argument for the final plan artifact (example: `WP_MIGRATION_PLAN`)
 - `.md` is optional in `title`; it is appended automatically when omitted
 - User sees plan contents when reviewing
 </instruction>
@@ -30,12 +30,12 @@ Unsure about auth method (OAuth vs JWT).
 </example>
 
 <avoid>
-- MUST NOT call before plan is written to file
-- MUST NOT omit `title`
-- MUST NOT use `ask` to request plan approval (this tool does that)
-- MUST NOT call after pure research tasks (no implementation planned)
+- **MUST NOT** call before plan is written to file
+- **MUST NOT** omit `title`
+- **MUST NOT** use `ask` to request plan approval (this tool does that)
+- **MUST NOT** call after pure research tasks (no implementation planned)
 </avoid>
 
 <critical>
-You MUST only use when planning implementation steps. Research tasks (searching, reading, understanding) do not need this tool.
+You **MUST** only use when planning implementation steps. Research tasks (searching, reading, understanding) do not need this tool.
 </critical>

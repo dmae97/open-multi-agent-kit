@@ -1,3 +1,4 @@
+import { INTENT_FIELD } from "@oh-my-pi/pi-agent-core";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { Markdown } from "@oh-my-pi/pi-tui";
 import chalk from "chalk";
@@ -245,7 +246,7 @@ function formatToolArgs(args?: Record<string, unknown>): string[] {
 		}
 	};
 	for (const [key, value] of Object.entries(args)) {
-		if (key === "agent__intent") continue;
+		if (key === INTENT_FIELD) continue;
 		visit(value, key);
 	}
 	return lines;

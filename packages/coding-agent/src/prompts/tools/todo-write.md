@@ -1,14 +1,12 @@
-# Todo Write
-
-Manage a phased task list. Submit an `ops` array — each op mutates state incrementally.
+Manages a phased task list. Submit an `ops` array — each op mutates state incrementally.
 **Primary op: `update`.** Use it to mark tasks `in_progress` or `completed`. Only reach for other ops when the structure itself needs to change.
 
 <critical>
-You MUST call this tool twice per task:
+You **MUST** call this tool twice per task:
 1. Before beginning — `{op: "update", id: "task-N", status: "in_progress"}`
 2. Immediately after finishing — `{op: "update", id: "task-N", status: "completed"}`
 
-You MUST keep exactly one task `in_progress` at all times. Mark `completed` immediately — no batching.
+You **MUST** keep exactly one task `in_progress` at all times. Mark `completed` immediately — no batching.
 </critical>
 
 <conditions>
@@ -40,10 +38,10 @@ Create a todo list when:
 |`abandoned`|Dropped intentionally|
 
 ## Rules
-- You MUST mark `in_progress` **before** starting work, not after
-- You MUST mark `completed` **immediately** — never defer
-- You MUST keep exactly **one** task `in_progress`
-- You MUST complete phases in order — do not mark later tasks `completed` while earlier ones are `pending`
+- You **MUST** mark `in_progress` **before** starting work, not after
+- You **MUST** mark `completed` **immediately** — never defer
+- You **MUST** keep exactly **one** task `in_progress`
+- You **MUST** complete phases in order — do not mark later tasks `completed` while earlier ones are `pending`
 - On blockers: keep `in_progress`, add a new task describing the blocker
 - Multiple ops can be batched in one call (e.g., complete current + start next)
 </protocol>

@@ -230,6 +230,19 @@ handlebars.registerHelper("jtdToTypeScript", (schema: unknown): string => jtdToT
 handlebars.registerHelper("jsonStringify", (value: unknown): string => JSON.stringify(value));
 
 /**
+ * Renders a section separator:
+ *
+ * ═══════════════════════════════
+ *  Name
+ * ═══════════════════════════════
+ */
+export function sectionSeparator(name: string): string {
+	return `\n═══════════════════════════════\n ${name}\n═══════════════════════════════`;
+}
+
+handlebars.registerHelper("section", (name: unknown): string => sectionSeparator(String(name)));
+
+/**
  * {{hlineref lineNum "content"}} — compute a real hashline ref for prompt examples.
  * Returns `"lineNum#hash"` using the actual hash algorithm.
  */

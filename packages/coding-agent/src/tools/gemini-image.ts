@@ -13,8 +13,8 @@ import { resolveReadPath } from "./path-utils";
 const DEFAULT_MODEL = "gemini-3-pro-image-preview";
 const DEFAULT_OPENROUTER_MODEL = "google/gemini-3-pro-image-preview";
 const DEFAULT_ANTIGRAVITY_MODEL = "gemini-3-pro-image";
-const DEFAULT_TIMEOUT_SECONDS = 120;
-const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
+const IMAGE_TIMEOUT = 3 * 60 * 1000; // 3 minutes
+const MAX_IMAGE_SIZE = 35 * 1024 * 1024;
 
 const ANTIGRAVITY_ENDPOINT = "https://daily-cloudcode-pa.sandbox.googleapis.com";
 const IMAGE_SYSTEM_INSTRUCTION =
@@ -76,13 +76,7 @@ const baseImageSchema = Type.Object(
 		style: Type.Optional(
 			Type.String({
 				description:
-					"Artistic style, mood, color grading (e.g., 'film noir mood, cinematic color grading', 'Studio Ghibli watercolor', 'photorealistic').",
-			}),
-		),
-		camera: Type.Optional(
-			Type.String({
-				description:
-					"Lens and camera specs (e.g., 'Shot on 35mm, f/1.8', 'macro lens, extreme close-up', '85mm portrait lens').",
+					"Artistic style, mood, color grading, camera (e.g., 'film noir mood, cinematic color grading', 'Studio Ghibli watercolor', 'photorealistic').",
 			}),
 		),
 		text: Type.Optional(
@@ -94,23 +88,16 @@ const baseImageSchema = Type.Object(
 		changes: Type.Optional(
 			Type.Array(Type.String(), {
 				description:
-					"For edits: specific changes to make (e.g., ['Change the tie to green', 'Remove the car in background']). Use with input_images.",
-			}),
-		),
-		preserve: Type.Optional(
-			Type.String({
-				description:
-					"For edits: what to keep unchanged (e.g., 'identity, face, hairstyle, lighting'). Use with input_images and changes.",
+					"For edits: specific changes to make, as well as, what to keep unchanged (e.g., ['Change the tie to green', 'Remove the car in background']). Use with input_images.",
 			}),
 		),
 		aspect_ratio: Type.Optional(aspectRatioSchema),
 		image_size: Type.Optional(imageSizeSchema),
-		input_images: Type.Optional(
+		input: Type.Optional(
 			Type.Array(inputImageSchema, {
 				description: "Optional input images for edits or variations.",
 			}),
 		),
-		timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (default: 120)" })),
 	},
 	{ additionalProperties: false },
 );
@@ -136,7 +123,6 @@ function assemblePrompt(params: GeminiImageParams): string {
 	// Technical details as separate sentences
 	if (params.composition) parts.push(params.composition);
 	if (params.lighting) parts.push(params.lighting);
-	if (params.camera) parts.push(params.camera);
 	if (params.style) parts.push(params.style);
 
 	// Join with periods for sentence structure
@@ -150,9 +136,6 @@ function assemblePrompt(params: GeminiImageParams): string {
 	// Edit mode: changes and preserve directives
 	if (params.changes?.length) {
 		prompt += `\n\nChanges:\n${params.changes.map(c => `- ${c}`).join("\n")}`;
-		if (params.preserve) {
-			prompt += `\n\nPreserve: ${params.preserve}`;
-		}
 	}
 
 	return prompt;
@@ -638,16 +621,13 @@ export const geminiImageTool: CustomTool<typeof geminiImageSchema, GeminiImageTo
 			const cwd = ctx.sessionManager.getCwd();
 
 			const resolvedImages: InlineImageData[] = [];
-			if (params.input_images?.length) {
-				for (const input of params.input_images) {
+			if (params.input?.length) {
+				for (const input of params.input) {
 					resolvedImages.push(await resolveInputImage(input, cwd));
 				}
 			}
 
-			const { timeout: rawTimeout = DEFAULT_TIMEOUT_SECONDS } = params;
-			// Clamp to reasonable range: 1s - 600s (10 min)
-			const timeoutSeconds = Math.max(1, Math.min(600, rawTimeout));
-			const requestSignal = ptree.combineSignals(signal, timeoutSeconds * 1000);
+			const requestSignal = ptree.combineSignals(signal, IMAGE_TIMEOUT);
 
 			if (provider === "antigravity") {
 				if (!apiKey.projectId) {

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { sectionSeparator } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
 import { renderTemplate } from "@oh-my-pi/pi-coding-agent/task/template";
 
 describe("renderTemplate", () => {
@@ -20,7 +21,7 @@ describe("renderTemplate", () => {
 			assignment: "Full instructions for the agent.\nWith multiple lines.",
 		});
 		expect(result.task).toContain("Shared constraints here");
-		expect(result.task).toContain("<context>");
+		expect(result.task).toContain(sectionSeparator("Background"));
 		expect(result.task).toContain("Full instructions for the agent.\nWith multiple lines.");
 	});
 
@@ -30,7 +31,7 @@ describe("renderTemplate", () => {
 			description: "label",
 			assignment: "the real work",
 		});
-		expect(result.task).toStartWith("<context>context");
+		expect(result.task).toStartWith(`${sectionSeparator("Background")}\ncontext`);
 		expect(result.task).toContain("the real work");
 	});
 

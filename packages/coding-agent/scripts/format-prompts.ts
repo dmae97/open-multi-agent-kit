@@ -11,6 +11,7 @@
  * 6. Collapse 2+ blank lines to single blank line
  * 7. Trim trailing whitespace (preserve indentation)
  * 8. No trailing newline at EOF
+ * 9. Bold RFC 2119 keywords (MUST, SHOULD, MAY, etc.) in prompt content
  */
 import { Glob } from "bun";
 
@@ -36,6 +37,23 @@ const CODE_FENCE = /^```/;
 const TABLE_ROW = /^\|.*\|$/;
 // Table separator (|---|---|)
 const TABLE_SEP = /^\|[-:\s|]+\|$/;
+
+/** RFC 2119 keywords used in prompts. */
+const RFC2119_KEYWORDS = /\b(?:MUST NOT|SHOULD NOT|SHALL NOT|RECOMMENDED|REQUIRED|OPTIONAL|SHOULD|SHALL|MUST|MAY)\b/g;
+
+function boldRfc2119Keywords(line: string): string {
+	return line.replace(RFC2119_KEYWORDS, (match, offset, source) => {
+		const isAlreadyBold =
+			source[offset - 2] === "*" &&
+			source[offset - 1] === "*" &&
+			source[offset + match.length] === "*" &&
+			source[offset + match.length + 1] === "*";
+		if (isAlreadyBold) {
+			return match;
+		}
+		return `**${match}**`;
+	});
+}
 
 /** Compact a table row by trimming cell padding */
 function compactTableRow(line: string): string {
@@ -63,11 +81,7 @@ function compactTableSep(line: string): string {
 
 function formatPrompt(content: string): string {
 	// Replace common ascii ellipsis and arrow patterns with their unicode equivalents
-	content = content
-		.replace(/\.{3}/g, "…")
-		.replace(/->/g, "→")
-		.replace(/<-/g, "←")
-		.replace(/<->/g, "↔");
+	content = content.replace(/\.{3}/g, "…").replace(/->/g, "→").replace(/<-/g, "←").replace(/<->/g, "↔");
 	const lines = content.split("\n");
 	const result: string[] = [];
 	let inCodeBlock = false;
@@ -92,8 +106,7 @@ function formatPrompt(content: string): string {
 		}
 
 		// Track top-level XML opening tags for depth-aware indent stripping
-		const isOpeningXml =
-			OPENING_XML.test(trimmed) && !trimmed.endsWith("/>");
+		const isOpeningXml = OPENING_XML.test(trimmed) && !trimmed.endsWith("/>");
 		if (isOpeningXml && line.length === trimmed.length) {
 			// Opening tag at column 0 — track as top-level
 			const match = OPENING_XML.exec(trimmed);
@@ -104,10 +117,7 @@ function formatPrompt(content: string): string {
 		const closingMatch = CLOSING_XML.exec(trimmed);
 		if (closingMatch) {
 			const tagName = closingMatch[1];
-			if (
-				topLevelTags.length > 0 &&
-				topLevelTags[topLevelTags.length - 1] === tagName
-			) {
+			if (topLevelTags.length > 0 && topLevelTags[topLevelTags.length - 1] === tagName) {
 				// Closing tag matches a top-level opener — strip indent
 				line = trimmed;
 				topLevelTags.pop();
@@ -126,6 +136,7 @@ function formatPrompt(content: string): string {
 			// Trim trailing whitespace (preserve leading for non-closing-tags)
 			line = line.trimEnd();
 		}
+		line = boldRfc2119Keywords(line);
 
 		const isBlank = trimmed === "";
 

@@ -1,13 +1,11 @@
-# Task
-
 Launches subagents to parallelize workflows.
 
 {{#if asyncEnabled}}
 - Use `read jobs://` to inspect state; `read jobs://<job_id>` for detail.
-- Use the `await` tool to wait until completion. You MUST NOT poll `read jobs://` in a loop.
+- Use the `await` tool to wait until completion. You **MUST NOT** poll `read jobs://` in a loop.
 {{/if}}
 
-Subagents lack your conversation history. Every decision, file content, and user requirement they need MUST be explicit in `context` or `assignment`.
+Subagents lack your conversation history. Every decision, file content, and user requirement they need **MUST** be explicit in `context` or `assignment`.
 
 <parameters>
 - `agent`: Agent type for all tasks.
@@ -16,15 +14,15 @@ Subagents lack your conversation history. Every decision, file content, and user
   - `.assignment`: Complete self-contained instructions. One-liners PROHIBITED; missing acceptance criteria = too vague.
   - `.skills`: Skill names to preload
 - `context`: Shared background prepended to every assignment. Session-specific info only.
-- `schema`: JTD schema for expected output. Format lives here — MUST NOT be duplicated in assignments.
+- `schema`: JTD schema for expected output. Format lives here — **MUST NOT** be duplicated in assignments.
 - `tasks`: Tasks to execute in parallel.
 - `isolated`: Run in isolated git worktree; returns patches. Use when tasks edit overlapping files.
 </parameters>
 
 <critical>
-- MUST NOT include AGENTS.md rules, coding conventions, or style guidelines — subagents already have them.
-- MUST NOT duplicate shared constraints across assignments — put them in `context` once.
-- MUST NOT tell tasks to run project-wide build/test/lint. Parallel agents share the working tree; each task edits, stops. Caller verifies after all complete.
+- **MUST NOT** include AGENTS.md rules, coding conventions, or style guidelines — subagents already have them.
+- **MUST NOT** duplicate shared constraints across assignments — put them in `context` once.
+- **MUST NOT** tell tasks to run project-wide build/test/lint. Parallel agents share the working tree; each task edits, stops. Caller verifies after all complete.
 - For large payloads (traces, JSON blobs), write to `local://<path>` and pass the path in context.
 - If scope is unclear, run a **Discovery task** first to enumerate files and callsites, then fan out.
 </critical>

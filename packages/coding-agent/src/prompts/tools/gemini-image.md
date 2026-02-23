@@ -1,23 +1,7 @@
-# Gemini Image
+Generates or edits images using Gemini image models.
 
-Generate or edit images using Gemini image models.
-
-<instruction>
-You SHOULD provide structured parameters for best results. Tool assembles into optimized prompt.
-
-When using multiple `input_images`, you MUST describe each image's role in `subject` or `scene` field:
-- "Use Image 1 for the character's face and outfit, Image 2 for the pose, Image 3 for the background environment"
-- "Match the color palette from Image 1, apply the lighting style from Image 2"
-</instruction>
-
-<output>
-Returns generated image saved to disk. Response includes file path where image was written.
-</output>
-
-<caution>
-- For photoreal: you SHOULD add "ultra-detailed, realistic, natural skin texture" to style
-- For posters/cards: you SHOULD use 9:16 aspect ratio with negative space for text placement
-- For iteration: you SHOULD use `changes` for targeted adjustments rather than regenerating from scratch
-- For text: you SHOULD add "sharp, legible, correctly spelled" for important text; keep text short
-- For diagrams: you SHOULD include "scientifically accurate" in style and provide facts explicitly
-</caution>
+<instructions>
+- You **MUST** provide a single detailed `subject` prompt for image generation or editing.
+- When using multiple `input`, you **SHOULD** describe each image's role directly in `subject`, e.g. `Image 1` for composition reference, `Image 2` for lighting reference, `Image 3` for background.
+- For text: you **SHOULD** add "sharp, legible, correctly spelled" for important text; keep text short
+</instructions>

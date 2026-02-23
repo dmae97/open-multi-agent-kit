@@ -1,11 +1,9 @@
-# Edit
-
-Apply precise file edits using `LINE#ID` tags from `read` output.
+Applies precise file edits using `LINE#ID` tags from `read` output.
 
 <workflow>
-1. You SHOULD issue a `read` call before editing if you have no tagged context for a file.
-2. You MUST pick the smallest operation per change site.
-3. You MUST submit one `edit` call per file with all operations, think your changes through before submitting.
+1. You **SHOULD** issue a `read` call before editing if you have no tagged context for a file.
+2. You **MUST** pick the smallest operation per change site.
+3. You **MUST** submit one `edit` call per file with all operations, think your changes through before submitting.
 </workflow>
 
 <operations>
@@ -40,16 +38,16 @@ Every edit has `op`, `pos`, and `lines`. Range replaces also have `end`. Both `p
 </operations>
 
 <rules>
-1. **Minimize scope:** You MUST use one logical mutation per operation.
-2. **No no-ops:** replacement MUST differ from current.
-3. **Prefer insertion over neighbor rewrites:** You SHOULD anchor on structural boundaries (`}`, `]`, `},`), not interior lines.
-4. **For swaps/moves:** You SHOULD prefer one range op over multiple single-line ops.
-5. **Range end tag:** When replacing a block (e.g., an `if` body), the `end` tag MUST include the block's closing brace/bracket — not just the last interior line. Verify the `end` tag covers all lines being logically removed, including trailing `}`, `]`, or `)`. An off-by-one on `end` orphans a brace and breaks syntax.
+1. **Minimize scope:** You **MUST** use one logical mutation per operation.
+2. **No no-ops:** replacement **MUST** differ from current.
+3. **Prefer insertion over neighbor rewrites:** You **SHOULD** anchor on structural boundaries (`}`, `]`, `},`), not interior lines.
+4. **For swaps/moves:** You **SHOULD** prefer one range op over multiple single-line ops.
+5. **Range end tag:** When replacing a block (e.g., an `if` body), the `end` tag **MUST** include the block's closing brace/bracket — not just the last interior line. Verify the `end` tag covers all lines being logically removed, including trailing `}`, `]`, or `)`. An off-by-one on `end` orphans a brace and breaks syntax.
 </rules>
 
 <recovery>
-**Tag mismatch (`>>>`):** You MUST retry using fresh tags from the error snippet. Re-read only if snippet lacks context.
-**No-op (`identical`):** You MUST NOT resubmit. Re-read target lines and adjust the edit.
+**Tag mismatch (`>>>`):** You **MUST** retry using fresh tags from the error snippet. Re-read only if snippet lacks context.
+**No-op (`identical`):** You **MUST NOT** resubmit. Re-read target lines and adjust the edit.
 </recovery>
 
 <example name="single-line replace">
@@ -186,6 +184,6 @@ Good — anchors to structural line:
 
 <critical>
 - Edit payload: `{ path, edits[] }`. Each entry: `op`, `lines`, optional `pos`/`end`. No extra keys.
-- Every tag MUST be copied exactly from fresh tool result as `N#ID`.
-- You MUST re-read after each edit call before issuing another on same file.
+- Every tag **MUST** be copied exactly from fresh tool result as `N#ID`.
+- You **MUST** re-read after each edit call before issuing another on same file.
 </critical>

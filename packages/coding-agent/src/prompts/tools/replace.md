@@ -1,12 +1,10 @@
-# Edit (Replace)
-
-String replacements in files with fuzzy whitespace matching.
+Performs string replacements in files with fuzzy whitespace matching.
 
 <instruction>
-- You MUST use the smallest edit that uniquely identifies the change
-- If `old_text` not unique, you MUST expand to include more context or use `all: true` to replace all occurrences
+- You **MUST** use the smallest edit that uniquely identifies the change
+- If `old_text` not unique, you **MUST** expand to include more context or use `all: true` to replace all occurrences
 - Fuzzy matching handles minor whitespace/indentation differences automatically
-- You SHOULD prefer editing existing files over creating new ones
+- You **SHOULD** prefer editing existing files over creating new ones
 </instruction>
 
 <output>
@@ -14,7 +12,7 @@ Returns success/failure status. On success, file modified in place with replacem
 </output>
 
 <critical>
-- You MUST read the file at least once in the conversation before editing. Tool errors if you attempt edit without reading file first.
+- You **MUST** read the file at least once in the conversation before editing. Tool errors if you attempt edit without reading file first.
 </critical>
 
 <bash-alternatives>

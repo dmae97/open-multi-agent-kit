@@ -1,6 +1,4 @@
-# Ask
-
-Ask user when you need clarification or input during task execution.
+Asks user when you need clarification or input during task execution.
 
 <conditions>
 - Multiple approaches exist with significantly different tradeoffs user should weigh

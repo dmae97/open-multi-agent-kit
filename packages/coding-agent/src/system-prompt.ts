@@ -15,7 +15,6 @@ import { type ContextFile, loadCapability, type SystemPrompt as SystemPromptFile
 import { loadSkills, type Skill } from "./extensibility/skills";
 import customSystemPromptTemplate from "./prompts/system/custom-system-prompt.md" with { type: "text" };
 import systemPromptTemplate from "./prompts/system/system-prompt.md" with { type: "text" };
-import type { ToolName } from "./tools";
 
 type PreloadedSkill = { name: string; content: string };
 
@@ -205,65 +204,6 @@ function getTerminalName(): string | undefined {
 	return term ?? undefined;
 }
 
-function normalizeDesktopValue(value: string): string | undefined {
-	const trimmed = value.trim();
-	if (!trimmed) return undefined;
-	const parts = trimmed
-		.split(":")
-		.map(part => part.trim())
-		.filter(Boolean);
-	return parts[0] ?? trimmed;
-}
-
-function getDesktopEnvironment(): string | undefined {
-	if (Bun.env.KDE_FULL_SESSION === "true") return "KDE";
-	const raw = firstNonEmpty(
-		Bun.env.XDG_CURRENT_DESKTOP,
-		Bun.env.DESKTOP_SESSION,
-		Bun.env.XDG_SESSION_DESKTOP,
-		Bun.env.GDMSESSION,
-	);
-	return raw ? normalizeDesktopValue(raw) : undefined;
-}
-
-function matchKnownWindowManager(value: string): string | null {
-	const normalized = value.toLowerCase();
-	const candidates = [
-		"sway",
-		"i3",
-		"i3wm",
-		"bspwm",
-		"openbox",
-		"awesome",
-		"herbstluftwm",
-		"fluxbox",
-		"icewm",
-		"dwm",
-		"hyprland",
-		"wayfire",
-		"river",
-		"labwc",
-		"qtile",
-	];
-	for (const candidate of candidates) {
-		if (normalized.includes(candidate)) return candidate;
-	}
-	return null;
-}
-
-function getWindowManager(): string | undefined {
-	const explicit = firstNonEmpty(Bun.env.WINDOWMANAGER);
-	if (explicit) return explicit;
-
-	const desktop = firstNonEmpty(Bun.env.XDG_CURRENT_DESKTOP, Bun.env.DESKTOP_SESSION);
-	if (desktop) {
-		const matched = matchKnownWindowManager(desktop);
-		if (matched) return matched;
-	}
-
-	return undefined;
-}
-
 /** Cached system info structure */
 interface GpuCache {
 	gpu: string;
@@ -307,13 +247,11 @@ async function getEnvironmentInfo(): Promise<Array<{ label: string; value: strin
 		{ label: "Distro", value: os.type() },
 		{ label: "Kernel", value: os.version() },
 		{ label: "Arch", value: os.arch() },
-		{ label: "CPU", value: `${cpus.length}x ${cpus[0]?.model}` },
+		{ label: "CPU", value: `${cpus[0]?.model}` },
 		{ label: "GPU", value: gpu },
 		{ label: "Terminal", value: getTerminalName() },
-		{ label: "DE", value: getDesktopEnvironment() },
-		{ label: "WM", value: getWindowManager() },
 	];
-	return entries.filter((e): e is { label: string; value: string } => e.value != null && e.value !== "unknown");
+	return entries.filter((e): e is { label: string; value: string } => !!e.value);
 }
 
 /** Resolve input as file path or literal string */
@@ -434,7 +372,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		appendSystemPrompt,
 		repeatToolDescriptions = false,
 		skillsSettings,
-		toolNames,
+		toolNames: providedToolNames,
 		cwd,
 		contextFiles: providedContextFiles,
 		skills: providedSkills,
@@ -553,25 +491,24 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		timeZoneName: "short",
 	});
 
-	// Build tool descriptions array
-	// Priority: toolNames (explicit list) > tools (Map) > defaults
+	// Build tool metadata for system prompt rendering
+	// Priority: explicit list > tools map > defaults
 	// Default includes both bash and python; actual availability determined by settings in createTools
-	const defaultToolNames: ToolName[] = ["read", "bash", "python", "edit", "write"];
-	let toolNamesArray: string[];
-	if (toolNames !== undefined) {
-		// Explicit toolNames list provided (could be empty)
-		toolNamesArray = toolNames;
-	} else if (tools !== undefined) {
-		// Tools map provided
-		toolNamesArray = Array.from(tools.keys());
-	} else {
-		// Use defaults
-		toolNamesArray = defaultToolNames;
+	let toolNames = providedToolNames;
+	if (!toolNames) {
+		if (tools) {
+			// Tools map provided
+			toolNames = Array.from(tools.keys());
+		} else {
+			// Use defaults
+			toolNames = ["read", "bash", "python", "edit", "write"]; // TODO: Why?
+		}
 	}
 
 	// Build tool descriptions for system prompt rendering
-	const toolDescriptions = toolNamesArray.map(name => ({
+	const toolInfo = toolNames.map(name => ({
 		name,
+		label: tools?.get(name)?.label ?? "",
 		description: tools?.get(name)?.description ?? "",
 	}));
 
@@ -579,29 +516,15 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 	const hasRead = tools?.has("read");
 	const filteredSkills = preloadedSkills === undefined && hasRead ? skills : [];
 
-	if (resolvedCustomPrompt) {
-		return renderPromptTemplate(customSystemPromptTemplate, {
-			systemPromptCustomization: systemPromptCustomization ?? "",
-			customPrompt: resolvedCustomPrompt,
-			appendPrompt: resolvedAppendPrompt ?? "",
-			contextFiles,
-			agentsMdSearch,
-			skills: filteredSkills,
-			preloadedSkills: preloadedSkillContents,
-			rules: rules ?? [],
-			date,
-			dateTime,
-			cwd: resolvedCwd,
-		});
-	}
-
 	const environment = await logger.timeAsync("getEnvironmentInfo", getEnvironmentInfo);
-	return renderPromptTemplate(systemPromptTemplate, {
-		tools: toolNamesArray,
-		toolDescriptions,
+	const data = {
+		systemPromptCustomization: systemPromptCustomization ?? "",
+		customPrompt: resolvedCustomPrompt,
+		appendPrompt: resolvedAppendPrompt ?? "",
+		tools: toolNames,
+		toolInfo,
 		repeatToolDescriptions,
 		environment,
-		systemPromptCustomization: systemPromptCustomization ?? "",
 		contextFiles,
 		agentsMdSearch,
 		skills: filteredSkills,
@@ -610,8 +533,8 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		date,
 		dateTime,
 		cwd: resolvedCwd,
-		appendSystemPrompt: resolvedAppendPrompt ?? "",
 		intentTracing: !!intentField,
 		intentField: intentField ?? "",
-	});
+	};
+	return renderPromptTemplate(resolvedCustomPrompt ? customSystemPromptTemplate : systemPromptTemplate, data);
 }

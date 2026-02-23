@@ -1,6 +1,4 @@
-# Browser
-
-Navigate, click, type, scroll, drag, query DOM content, and capture screenshots.
+Navigates, clicks, types, scrolls, drags, queries DOM content, and captures screenshots.
 
 <instruction>
 - `"open"` starts a headless session (or implicitly on first action); `"goto"` navigates to `url`; `"close"` releases the browser
@@ -15,10 +13,10 @@ Navigate, click, type, scroll, drag, query DOM content, and capture screenshots.
 </instruction>
 
 <critical>
-**You MUST default to `observe`, not `screenshot`.**
+**You **MUST** default to `observe`, not `screenshot`.**
 - `observe` is cheaper, faster, and returns structured data — use it to understand page state, find elements, and plan interactions.
-- You SHOULD only use `screenshot` when visual appearance matters (verifying layout, debugging CSS, capturing a visual artifact for the user).
-- You MUST NOT screenshot just to "see what's on the page" — `observe` gives you that with element IDs you can act on immediately.
+- You **SHOULD** only use `screenshot` when visual appearance matters (verifying layout, debugging CSS, capturing a visual artifact for the user).
+- You **MUST NOT** screenshot just to "see what's on the page" — `observe` gives you that with element IDs you can act on immediately.
 </critical>
 
 <output>

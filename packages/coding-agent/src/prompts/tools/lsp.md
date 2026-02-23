@@ -1,6 +1,4 @@
-# LSP
-
-Interact with Language Server Protocol servers for code intelligence.
+Interacts with Language Server Protocol servers for code intelligence.
 
 <operations>
 - `definition`: Go to symbol definition → file path + position

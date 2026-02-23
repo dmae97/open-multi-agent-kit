@@ -1,6 +1,4 @@
-# Grep
-
-Powerful search tool built on ripgrep.
+Searches files using powerful regex matching built on ripgrep.
 
 <instruction>
 - Supports full regex syntax (e.g., `log.*Error`, `function\\s+\\w+`); literal braces need escaping (`interface\\{\\}` for `interface{}` in Go)
@@ -20,7 +18,7 @@ Powerful search tool built on ripgrep.
 </output>
 
 <critical>
-- You MUST use Grep when searching for content.
-- You MUST NOT invoke `grep` or `rg` via Bash.
-- If the search is open-ended, requiring multiple rounds, you MUST use Task tool with explore subagent instead.
+- You **MUST** use Grep when searching for content.
+- You **MUST NOT** invoke `grep` or `rg` via Bash.
+- If the search is open-ended, requiring multiple rounds, you **MUST** use Task tool with explore subagent instead.
 </critical>

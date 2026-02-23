@@ -1,9 +1,7 @@
-# SSH
-
-Run commands on remote hosts.
+Runs commands on remote hosts.
 
 <instruction>
-You MUST build commands from the reference below
+You **MUST** build commands from the reference below
 </instruction>
 
 <commands>
@@ -24,7 +22,7 @@ You MUST build commands from the reference below
 </commands>
 
 <critical>
-You MUST verify the shell type from "Available hosts" and use matching commands.
+You **MUST** verify the shell type from "Available hosts" and use matching commands.
 </critical>
 
 <example name="linux">

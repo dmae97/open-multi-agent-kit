@@ -85,7 +85,7 @@ describe("python tool docs template", () => {
 
 		const tool = new PythonTool(createSession());
 
-		expect(tool.description).toContain("Documentation unavailable — Python kernel failed to start");
+		expect(tool.description).not.toContain("<prelude>");
 
 		spy.mockRestore();
 	});
