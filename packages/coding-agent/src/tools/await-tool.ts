@@ -1,10 +1,10 @@
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { type Static, Type } from "@sinclair/typebox";
 import { renderPromptTemplate } from "../config/prompt-templates";
-import pollJobsDescription from "../prompts/tools/poll-jobs.md" with { type: "text" };
+import awaitDescription from "../prompts/tools/await.md" with { type: "text" };
 import type { ToolSession } from "./index";
 
-const pollJobsSchema = Type.Object({
+const awaitSchema = Type.Object({
 	job_ids: Type.Optional(
 		Type.Array(Type.String(), {
 			description: "Specific job IDs to wait for. If omitted, waits for any running job.",
@@ -17,9 +17,9 @@ const pollJobsSchema = Type.Object({
 	),
 });
 
-type PollJobsParams = Static<typeof pollJobsSchema>;
+type AwaitParams = Static<typeof awaitSchema>;
 
-interface PollJobResult {
+interface AwaitResult {
 	id: string;
 	type: "bash" | "task";
 	status: "running" | "completed" | "failed" | "cancelled";
@@ -29,34 +29,34 @@ interface PollJobResult {
 	errorText?: string;
 }
 
-export interface PollJobsToolDetails {
-	jobs: PollJobResult[];
+export interface AwaitToolDetails {
+	jobs: AwaitResult[];
 	timedOut: boolean;
 }
 
-export class PollJobsTool implements AgentTool<typeof pollJobsSchema, PollJobsToolDetails> {
-	readonly name = "poll_jobs";
-	readonly label = "PollJobs";
+export class AwaitTool implements AgentTool<typeof awaitSchema, AwaitToolDetails> {
+	readonly name = "await";
+	readonly label = "Await";
 	readonly description: string;
-	readonly parameters = pollJobsSchema;
+	readonly parameters = awaitSchema;
 	readonly strict = true;
 
 	constructor(private readonly session: ToolSession) {
-		this.description = renderPromptTemplate(pollJobsDescription);
+		this.description = renderPromptTemplate(awaitDescription);
 	}
 
-	static createIf(session: ToolSession): PollJobsTool | null {
+	static createIf(session: ToolSession): AwaitTool | null {
 		if (!session.settings.get("async.enabled")) return null;
-		return new PollJobsTool(session);
+		return new AwaitTool(session);
 	}
 
 	async execute(
 		_toolCallId: string,
-		params: PollJobsParams,
+		params: AwaitParams,
 		signal?: AbortSignal,
-		_onUpdate?: AgentToolUpdateCallback<PollJobsToolDetails>,
+		_onUpdate?: AgentToolUpdateCallback<AwaitToolDetails>,
 		_context?: AgentToolContext,
-	): Promise<AgentToolResult<PollJobsToolDetails>> {
+	): Promise<AgentToolResult<AwaitToolDetails>> {
 		const manager = this.session.asyncJobManager;
 		if (!manager) {
 			return {
@@ -129,12 +129,12 @@ export class PollJobsTool implements AgentTool<typeof pollJobsSchema, PollJobsTo
 			errorText?: string;
 		}[],
 		timedOut: boolean,
-	): AgentToolResult<PollJobsToolDetails> {
+	): AgentToolResult<AwaitToolDetails> {
 		const now = Date.now();
-		const jobResults: PollJobResult[] = jobs.map(j => ({
+		const jobResults: AwaitResult[] = jobs.map(j => ({
 			id: j.id,
 			type: j.type,
-			status: j.status as PollJobResult["status"],
+			status: j.status as AwaitResult["status"],
 			label: j.label,
 			durationMs: Math.max(0, now - j.startTime),
 			...(j.resultText ? { resultText: j.resultText } : {}),

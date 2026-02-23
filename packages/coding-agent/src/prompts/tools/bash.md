@@ -13,7 +13,7 @@ Executes bash command in shell session for terminal operations like git, bun, ca
 {{#if asyncEnabled}}
 - Use `async: true` for long-running commands when you don't need immediate output; the call returns a background job ID and the result is delivered automatically as a follow-up.
 - Use `read jobs://` to inspect all background jobs and `read jobs://<job-id>` for detailed status/output when needed.
-- When you need to wait for async results before continuing, call `poll_jobs` — it blocks until jobs complete. Do NOT poll `read jobs://` in a loop or yield and hope for delivery.
+- When you need to wait for async results before continuing, call `await` — it blocks until jobs complete. Do NOT poll `read jobs://` in a loop or yield and hope for delivery.
 {{/if}}
 </instruction>
 

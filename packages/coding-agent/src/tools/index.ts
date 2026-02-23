@@ -15,6 +15,7 @@ import type { AgentOutputManager } from "../task/output-manager";
 import type { EventBus } from "../utils/event-bus";
 import { SearchTool } from "../web/search";
 import { AskTool } from "./ask";
+import { AwaitTool } from "./await-tool";
 import { BashTool } from "./bash";
 import { BrowserTool } from "./browser";
 import { CalculatorTool } from "./calculator";
@@ -25,7 +26,6 @@ import { FindTool } from "./find";
 import { GrepTool } from "./grep";
 import { NotebookTool } from "./notebook";
 import { wrapToolWithMetaNotice } from "./output-meta";
-import { PollJobsTool } from "./poll-jobs";
 import { PythonTool } from "./python";
 import { ReadTool } from "./read";
 import { reportFindingTool } from "./review";
@@ -54,6 +54,7 @@ export * from "../session/streaming-output";
 export { BUNDLED_AGENTS, TaskTool } from "../task";
 export * from "../web/search";
 export { AskTool, type AskToolDetails } from "./ask";
+export { AwaitTool, type AwaitToolDetails } from "./await-tool";
 export { BashTool, type BashToolDetails, type BashToolInput, type BashToolOptions } from "./bash";
 export { BrowserTool, type BrowserToolDetails } from "./browser";
 export { CalculatorTool, type CalculatorToolDetails } from "./calculator";
@@ -64,7 +65,6 @@ export { type FindOperations, FindTool, type FindToolDetails, type FindToolInput
 export { setPreferredImageProvider } from "./gemini-image";
 export { GrepTool, type GrepToolDetails, type GrepToolInput } from "./grep";
 export { NotebookTool, type NotebookToolDetails } from "./notebook";
-export { PollJobsTool, type PollJobsToolDetails } from "./poll-jobs";
 export { PythonTool, type PythonToolDetails, type PythonToolOptions } from "./python";
 export { ReadTool, type ReadToolDetails, type ReadToolInput } from "./read";
 export { reportFindingTool, type SubmitReviewDetails } from "./review";
@@ -169,7 +169,7 @@ export const BUILTIN_TOOLS: Record<string, ToolFactory> = {
 	browser: s => new BrowserTool(s),
 	task: TaskTool.create,
 	cancel_job: CancelJobTool.createIf,
-	poll_jobs: PollJobsTool.createIf,
+	await: AwaitTool.createIf,
 	todo_write: s => new TodoWriteTool(s),
 	fetch: s => new FetchTool(s),
 	web_search: s => new SearchTool(s),
