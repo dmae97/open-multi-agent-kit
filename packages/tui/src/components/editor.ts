@@ -1,4 +1,4 @@
-import { getProjectDir } from "@oh-my-pi/pi-utils/dirs";
+import { getProjectDir } from "@oh-my-pi/pi-utils";
 import type { AutocompleteProvider, CombinedAutocompleteProvider } from "../autocomplete";
 import { BracketedPasteHandler } from "../bracketed-paste";
 import { type EditorKeybindingsManager, getEditorKeybindings } from "../keybindings";

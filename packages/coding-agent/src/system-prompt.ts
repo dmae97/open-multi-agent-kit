@@ -5,8 +5,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { $env, hasFsCode, isEnoent, logger } from "@oh-my-pi/pi-utils";
-import { getGpuCachePath, getProjectDir } from "@oh-my-pi/pi-utils/dirs";
+import { $env, getGpuCachePath, getProjectDir, hasFsCode, isEnoent, logger } from "@oh-my-pi/pi-utils";
 import { $ } from "bun";
 import { contextFileCapability } from "./capability/context-file";
 import { systemPromptCapability } from "./capability/system-prompt";

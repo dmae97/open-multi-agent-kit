@@ -1,4 +1,5 @@
-import { buildResult, formatIsoDate, loadPage, type RenderResult, type SpecialHandler, tryParseJson } from "./types";
+import { tryParseJson } from "@oh-my-pi/pi-utils";
+import { buildResult, formatIsoDate, loadPage, type RenderResult, type SpecialHandler } from "./types";
 
 interface RedditPost {
 	title: string;

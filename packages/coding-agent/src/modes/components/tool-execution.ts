@@ -13,17 +13,10 @@ import {
 	Text,
 	type TUI,
 } from "@oh-my-pi/pi-tui";
-import { logger } from "@oh-my-pi/pi-utils";
-import { getProjectDir } from "@oh-my-pi/pi-utils/dirs";
+import { getProjectDir, logger } from "@oh-my-pi/pi-utils";
 import type { Theme } from "../../modes/theme/theme";
 import { theme } from "../../modes/theme/theme";
-import {
-	computeEditDiff,
-	computeHashlineDiff,
-	computePatchDiff,
-	type EditDiffError,
-	type EditDiffResult,
-} from "../../patch";
+import { computeEditDiff, computeHashlineDiff, computePatchDiff, type DiffError, type DiffResult } from "../../patch";
 import { BASH_DEFAULT_PREVIEW_LINES } from "../../tools/bash";
 import {
 	formatArgsInline,
@@ -106,7 +99,7 @@ export class ToolExecutionComponent extends Container {
 		details?: any;
 	};
 	// Cached edit diff preview (computed when args arrive, before tool executes)
-	#editDiffPreview?: EditDiffResult | EditDiffError;
+	#editDiffPreview?: DiffResult | DiffError;
 	#editDiffArgsKey?: string; // Track which args the preview is for
 	// Cached converted images for Kitty protocol (which requires PNG), keyed by index
 	#convertedImages: Map<number, { data: string; mimeType: string }> = new Map();

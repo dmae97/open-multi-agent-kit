@@ -6,8 +6,7 @@ export { StringEnum } from "@oh-my-pi/pi-ai";
 // Re-export TUI components for custom tool rendering
 export { Container, Markdown, Spacer, Text } from "@oh-my-pi/pi-tui";
 // Logging
-export { logger } from "@oh-my-pi/pi-utils";
-export { getAgentDir, VERSION } from "@oh-my-pi/pi-utils/dirs";
+export { getAgentDir, logger, VERSION } from "@oh-my-pi/pi-utils";
 export { formatKeyHint, formatKeyHints } from "./config/keybindings";
 export { ModelRegistry } from "./config/model-registry";
 // Prompt templates
@@ -89,7 +88,6 @@ export {
 	loadSkills,
 	loadSkillsFromDir,
 	type Skill,
-	type SkillFrontmatter,
 	type SkillWarning,
 } from "./extensibility/skills";
 // Slash commands

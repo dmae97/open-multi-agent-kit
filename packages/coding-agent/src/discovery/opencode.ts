@@ -16,7 +16,7 @@
  * Priority: 55 (tool-specific provider)
  */
 import * as path from "node:path";
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger, tryParseJson } from "@oh-my-pi/pi-utils";
 import { registerProvider } from "../capability";
 import { type ContextFile, contextFileCapability } from "../capability/context-file";
 import { type ExtensionModule, extensionModuleCapability } from "../capability/extension-module";
@@ -35,8 +35,7 @@ import {
 	getProjectPath,
 	getUserPath,
 	loadFilesFromDir,
-	loadSkillsFromDir,
-	parseJSON,
+	scanSkillsFromDir,
 } from "./helpers";
 
 const PROVIDER_ID = "opencode";
@@ -51,7 +50,7 @@ async function loadJsonConfig(configPath: string): Promise<Record<string, unknow
 	const content = await readFile(configPath);
 	if (!content) return null;
 
-	const parsed = parseJSON<Record<string, unknown>>(content);
+	const parsed = tryParseJson<Record<string, unknown>>(content);
 	if (!parsed) {
 		logger.warn("Failed to parse OpenCode JSON config", { path: configPath });
 		return null;
@@ -190,7 +189,7 @@ async function loadSkills(ctx: LoadContext): Promise<LoadResult<Skill>> {
 
 	if (userSkillsDir) {
 		promises.push(
-			loadSkillsFromDir(ctx, {
+			scanSkillsFromDir(ctx, {
 				dir: userSkillsDir,
 				providerId: PROVIDER_ID,
 				level: "user",
@@ -200,7 +199,7 @@ async function loadSkills(ctx: LoadContext): Promise<LoadResult<Skill>> {
 
 	if (projectSkillsDir) {
 		promises.push(
-			loadSkillsFromDir(ctx, {
+			scanSkillsFromDir(ctx, {
 				dir: projectSkillsDir,
 				providerId: PROVIDER_ID,
 				level: "project",
@@ -307,7 +306,7 @@ async function loadSettings(ctx: LoadContext): Promise<LoadResult<Settings>> {
 	if (userConfigPath) {
 		const content = await readFile(userConfigPath);
 		if (content) {
-			const parsed = parseJSON<Record<string, unknown>>(content);
+			const parsed = tryParseJson<Record<string, unknown>>(content);
 			if (parsed) {
 				items.push({
 					path: userConfigPath,
@@ -325,7 +324,7 @@ async function loadSettings(ctx: LoadContext): Promise<LoadResult<Settings>> {
 	const projectConfigPath = path.join(ctx.cwd, "opencode.json");
 	const content = await readFile(projectConfigPath);
 	if (content) {
-		const parsed = parseJSON<Record<string, unknown>>(content);
+		const parsed = tryParseJson<Record<string, unknown>>(content);
 		if (parsed) {
 			items.push({
 				path: projectConfigPath,

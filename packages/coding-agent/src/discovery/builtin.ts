@@ -4,7 +4,7 @@
  * Primary provider for OMP native configs. Supports all capabilities.
  */
 import * as path from "node:path";
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger, tryParseJson } from "@oh-my-pi/pi-utils";
 import { registerProvider } from "../capability";
 import { type ContextFile, contextFileCapability } from "../capability/context-file";
 import { type Extension, type ExtensionManifest, extensionCapability } from "../capability/extension";
@@ -30,9 +30,8 @@ import {
 	expandEnvVarsDeep,
 	getExtensionNameFromPath,
 	loadFilesFromDir,
-	loadSkillsFromDir,
-	parseJSON,
 	SOURCE_PATHS,
+	scanSkillsFromDir,
 } from "./helpers";
 
 const PROVIDER_ID = "native";
@@ -98,7 +97,7 @@ async function loadMCPServers(ctx: LoadContext): Promise<LoadResult<MCPServer>> 
 
 	const parseMcpServers = (content: string, path: string, level: "user" | "project"): MCPServer[] => {
 		const result: MCPServer[] = [];
-		const data = parseJSON<{ mcpServers?: Record<string, unknown> }>(content);
+		const data = tryParseJson<{ mcpServers?: Record<string, unknown> }>(content);
 		if (!data?.mcpServers) return result;
 
 		const expanded = expandEnvVarsDeep(data.mcpServers);
@@ -245,7 +244,7 @@ async function loadSkills(ctx: LoadContext): Promise<LoadResult<Skill>> {
 	const configDirs = await getConfigDirs(ctx);
 	const results = await Promise.all(
 		configDirs.map(({ dir, level }) =>
-			loadSkillsFromDir(ctx, {
+			scanSkillsFromDir(ctx, {
 				dir: path.join(dir, "skills"),
 				providerId: PROVIDER_ID,
 				level,
@@ -404,7 +403,7 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 		if (!settingsContent) continue;
 
 		const settingsPath = path.join(dir, "settings.json");
-		const settingsData = parseJSON<{ extensions?: unknown }>(settingsContent);
+		const settingsData = tryParseJson<{ extensions?: unknown }>(settingsContent);
 		const extensions = settingsData?.extensions;
 		if (!Array.isArray(extensions)) continue;
 
@@ -508,7 +507,7 @@ async function loadExtensions(ctx: LoadContext): Promise<LoadResult<Extension>> 
 		if (!content) continue;
 
 		const { extDir, manifestPath, entryName, level } = manifestCandidates[i];
-		const manifest = parseJSON<ExtensionManifest>(content);
+		const manifest = tryParseJson<ExtensionManifest>(content);
 		if (!manifest) {
 			warnings.push(`Failed to parse ${manifestPath}`);
 			continue;
@@ -655,7 +654,7 @@ async function loadTools(ctx: LoadContext): Promise<LoadResult<CustomTool>> {
 				extensions: ["json", "md", "ts", "js", "sh", "bash", "py"],
 				transform: (name, content, path, source) => {
 					if (name.endsWith(".json")) {
-						const data = parseJSON<{ name?: string; description?: string }>(content);
+						const data = tryParseJson<{ name?: string; description?: string }>(content);
 						const toolName = data?.name || name.replace(/\.json$/, "");
 						const description =
 							typeof data?.description === "string" && data.description.trim()
@@ -754,7 +753,7 @@ async function loadSettings(ctx: LoadContext): Promise<LoadResult<Settings>> {
 		const content = await readFile(settingsPath);
 		if (!content) continue;
 
-		const data = parseJSON<Record<string, unknown>>(content);
+		const data = tryParseJson<Record<string, unknown>>(content);
 		if (!data) {
 			warnings.push(`Failed to parse ${settingsPath}`);
 			continue;

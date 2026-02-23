@@ -1,5 +1,6 @@
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import type { SpecialHandler } from "./types";
-import { buildResult, formatMediaDuration, loadPage, tryParseJson } from "./types";
+import { buildResult, formatMediaDuration, loadPage } from "./types";
 
 interface VimeoOEmbed {
 	title: string;

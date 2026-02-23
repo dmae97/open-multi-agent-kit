@@ -1,5 +1,6 @@
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import type { LocalizedText, RenderResult, SpecialHandler } from "./types";
-import { buildResult, formatNumber, getLocalizedText, htmlToBasicMarkdown, loadPage, tryParseJson } from "./types";
+import { buildResult, formatNumber, getLocalizedText, htmlToBasicMarkdown, loadPage } from "./types";
 
 type AddonFile = {
 	permissions?: string[];

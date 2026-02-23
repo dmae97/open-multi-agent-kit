@@ -1,3 +1,4 @@
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import {
 	buildResult,
 	formatIsoDate,
@@ -6,7 +7,6 @@ import {
 	loadPage,
 	type RenderResult,
 	type SpecialHandler,
-	tryParseJson,
 } from "./types";
 
 interface GitLabUrl {

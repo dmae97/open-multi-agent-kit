@@ -1,13 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { discoverAndLoadExtensions, loadExtensions } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/loader";
-import { TempDir } from "@oh-my-pi/pi-utils";
-import { getProjectAgentDir } from "@oh-my-pi/pi-utils/dirs";
+import { getProjectAgentDir, TempDir } from "@oh-my-pi/pi-utils";
 import { filterUserExtensionErrors, filterUserExtensions } from "./utils/filter-user-extensions";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 describe("extensions discovery", () => {
 	let tempDir: TempDir;
@@ -309,7 +305,7 @@ describe("extensions discovery", () => {
 
 	it("resolves 3rd party npm dependencies (chalk)", async () => {
 		// Load the real chalk-logger extension from examples
-		const chalkLoggerPath = path.resolve(__dirname, "../examples/extensions/chalk-logger.ts");
+		const chalkLoggerPath = path.resolve(import.meta.dirname, "../examples/extensions/chalk-logger.ts");
 
 		const result = await discoverForTest([chalkLoggerPath]);
 
@@ -322,7 +318,7 @@ describe("extensions discovery", () => {
 
 	it("resolves dependencies from extension's own node_modules", async () => {
 		// Load extension that has its own package.json and node_modules with 'ms' package
-		const extPath = path.resolve(__dirname, "../examples/extensions/with-deps");
+		const extPath = path.resolve(import.meta.dirname, "../examples/extensions/with-deps");
 
 		const result = await discoverForTest([extPath]);
 

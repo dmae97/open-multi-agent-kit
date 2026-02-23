@@ -1,5 +1,6 @@
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import type { RenderResult, SpecialHandler } from "./types";
-import { buildResult, formatIsoDate, formatNumber, htmlToBasicMarkdown, loadPage, tryParseJson } from "./types";
+import { buildResult, formatIsoDate, formatNumber, htmlToBasicMarkdown, loadPage } from "./types";
 
 interface FlathubScreenshotSize {
 	src?: string;

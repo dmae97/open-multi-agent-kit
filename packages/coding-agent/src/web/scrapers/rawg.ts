@@ -1,11 +1,5 @@
-import {
-	buildResult,
-	htmlToBasicMarkdown,
-	loadPage,
-	type RenderResult,
-	type SpecialHandler,
-	tryParseJson,
-} from "./types";
+import { tryParseJson } from "@oh-my-pi/pi-utils";
+import { buildResult, htmlToBasicMarkdown, loadPage, type RenderResult, type SpecialHandler } from "./types";
 
 interface RawgPlatformEntry {
 	platform?: {

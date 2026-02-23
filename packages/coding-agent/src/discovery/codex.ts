@@ -35,8 +35,8 @@ import {
 	discoverExtensionModulePaths,
 	getExtensionNameFromPath,
 	loadFilesFromDir,
-	loadSkillsFromDir,
 	SOURCE_PATHS,
+	scanSkillsFromDir,
 } from "./helpers";
 
 const PROVIDER_ID = "codex";
@@ -214,12 +214,12 @@ async function loadSkills(ctx: LoadContext): Promise<LoadResult<Skill>> {
 	const projectSkillsDir = path.join(codexDir, "skills");
 
 	const results = await Promise.all([
-		loadSkillsFromDir(ctx, {
+		scanSkillsFromDir(ctx, {
 			dir: userSkillsDir,
 			providerId: PROVIDER_ID,
 			level: "user",
 		}),
-		loadSkillsFromDir(ctx, {
+		scanSkillsFromDir(ctx, {
 			dir: projectSkillsDir,
 			providerId: PROVIDER_ID,
 			level: "project",

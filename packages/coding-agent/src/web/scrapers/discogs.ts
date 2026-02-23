@@ -4,8 +4,10 @@
  * Uses the Discogs API to extract structured metadata about releases.
  * API docs: https://www.discogs.com/developers
  */
+
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import type { RenderResult, SpecialHandler } from "./types";
-import { buildResult, loadPage, tryParseJson } from "./types";
+import { buildResult, loadPage } from "./types";
 
 interface DiscogsArtist {
 	name: string;

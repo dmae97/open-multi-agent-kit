@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { getRemoteDir } from "@oh-my-pi/pi-utils/dirs";
+import { getRemoteDir, postmortem } from "@oh-my-pi/pi-utils";
 import { $ } from "bun";
 import { getControlDir, getControlPathTemplate, type SSHConnectionTarget } from "./connection-manager";
 import { buildSshTarget, sanitizeHostName } from "./utils";
@@ -83,6 +83,8 @@ export async function isMounted(path: string): Promise<boolean> {
 	return result.exitCode === 0;
 }
 
+let registered = false;
+
 export async function mountRemote(host: SSHConnectionTarget, remotePath = "/"): Promise<string | undefined> {
 	if (!hasSshfs()) return undefined;
 
@@ -90,6 +92,10 @@ export async function mountRemote(host: SSHConnectionTarget, remotePath = "/"): 
 	await Promise.all([ensureDir(REMOTE_DIR), ensureDir(CONTROL_DIR), ensureDir(mountPath)]);
 
 	if (await isMounted(mountPath)) {
+		if (!registered) {
+			registered = true;
+			postmortem.register("sshfs-cleanup", unmountAll);
+		}
 		mountedPaths.add(mountPath);
 		return mountPath;
 	}

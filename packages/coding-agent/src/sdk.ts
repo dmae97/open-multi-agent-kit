@@ -9,8 +9,7 @@ import {
 import { type Message, type Model, supportsXhigh } from "@oh-my-pi/pi-ai";
 import { prewarmOpenAICodexResponses } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
 import type { Component } from "@oh-my-pi/pi-tui";
-import { $env, logger, postmortem } from "@oh-my-pi/pi-utils";
-import { getAgentDbPath, getAgentDir, getProjectDir } from "@oh-my-pi/pi-utils/dirs";
+import { $env, getAgentDbPath, getAgentDir, getProjectDir, logger, postmortem } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { AsyncJobManager } from "./async";
 import { loadCapability } from "./capability";

@@ -11,7 +11,7 @@ import { type Skill, skillCapability } from "../capability/skill";
 import { type SlashCommand, slashCommandCapability } from "../capability/slash-command";
 import { type CustomTool, toolCapability } from "../capability/tool";
 import type { LoadContext, LoadResult } from "../capability/types";
-import { type ClaudePluginRoot, listClaudePluginRoots, loadFilesFromDir, loadSkillsFromDir } from "./helpers";
+import { type ClaudePluginRoot, listClaudePluginRoots, loadFilesFromDir, scanSkillsFromDir } from "./helpers";
 
 const PROVIDER_ID = "claude-plugins";
 const DISPLAY_NAME = "Claude Code Marketplace";
@@ -31,7 +31,7 @@ async function loadSkills(ctx: LoadContext): Promise<LoadResult<Skill>> {
 	const results = await Promise.all(
 		roots.map(async root => {
 			const skillsDir = path.join(root.path, "skills");
-			return loadSkillsFromDir(ctx, {
+			return scanSkillsFromDir(ctx, {
 				dir: skillsDir,
 				providerId: PROVIDER_ID,
 				level: root.scope,

@@ -1,7 +1,8 @@
+import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { FileType, glob } from "@oh-my-pi/pi-natives";
-import { CONFIG_DIR_NAME } from "@oh-my-pi/pi-utils/dirs";
+import { CONFIG_DIR_NAME, tryParseJson } from "@oh-my-pi/pi-utils";
 import { readFile } from "../capability/fs";
 import { parseRuleConditionAndScope, type Rule, type RuleFrontmatter } from "../capability/rule";
 import type { Skill, SkillFrontmatter } from "../capability/skill";
@@ -268,68 +269,56 @@ async function globIf(
 	}
 }
 
-export async function loadSkillsFromDir(
+export interface ScanSkillsFromDirOptions {
+	dir: string;
+	providerId: string;
+	level: "user" | "project";
+	requireDescription?: boolean;
+}
+
+export async function scanSkillsFromDir(
 	_ctx: LoadContext,
-	options: {
-		dir: string;
-		providerId: string;
-		level: "user" | "project";
-		requireDescription?: boolean;
-	},
+	options: ScanSkillsFromDirOptions,
 ): Promise<LoadResult<Skill>> {
 	const items: Skill[] = [];
 	const warnings: string[] = [];
 	const { dir, level, providerId, requireDescription = false } = options;
-	// Use native glob to find all SKILL.md files one level deep
-	// Pattern */SKILL.md matches <dir>/<subdir>/SKILL.md
-	const discoveredMatches = new Set<string>();
-	for (const match of await globIf(dir, "*/SKILL.md", FileType.File)) {
-		discoveredMatches.add(match.path);
-	}
-	for (const match of await globIf(dir, "*", FileType.Dir, false)) {
-		const skillRelPath = `${match.path}/SKILL.md`;
-		const content = await readFile(path.join(dir, skillRelPath));
-		if (content !== null) {
-			discoveredMatches.add(skillRelPath);
+
+	const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+
+	const loadSkill = async (skillPath: string) => {
+		try {
+			const content = await readFile(skillPath);
+			if (!content) return;
+			const { frontmatter, body } = parseFrontmatter(content, { source: skillPath });
+			if (requireDescription && !frontmatter.description) {
+				return;
+			}
+			const skillDirName = path.basename(path.dirname(skillPath));
+			items.push({
+				name: (frontmatter.name as string) || skillDirName,
+				path: skillPath,
+				content: body,
+				frontmatter: frontmatter as SkillFrontmatter,
+				level,
+				_source: createSourceMeta(providerId, skillPath, level),
+			});
+		} catch {
+			warnings.push(`Failed to read skill file: ${skillPath}`);
+		}
+	};
+
+	const work = [];
+	for (const entry of entries) {
+		if (entry.name.startsWith(".")) continue;
+		if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+		const skillPath = path.join(dir, entry.name, "SKILL.md");
+		if (fs.existsSync(skillPath)) {
+			work.push(loadSkill(skillPath));
 		}
 	}
-	const matches = [...discoveredMatches].map(path => ({ path }));
-	if (matches.length === 0) {
-		return { items, warnings };
-	}
+	await Promise.all(work);
 
-	// Read all skill files in parallel
-	const results = await Promise.all(
-		matches.map(async match => {
-			const skillFile = path.join(dir, match.path);
-			const content = await readFile(skillFile);
-			if (!content) {
-				return { item: null as Skill | null, warning: null as string | null };
-			}
-			const { frontmatter, body } = parseFrontmatter(content, { source: skillFile });
-			if (requireDescription && !frontmatter.description) {
-				return { item: null as Skill | null, warning: null as string | null };
-			}
-
-			// Extract skill name from path: "<skilldir>/SKILL.md" -> "<skilldir>"
-			const skillDirName = path.basename(path.dirname(skillFile));
-			return {
-				item: {
-					name: (frontmatter.name as string) || skillDirName,
-					path: skillFile,
-					content: body,
-					frontmatter: frontmatter as SkillFrontmatter,
-					level,
-					_source: createSourceMeta(providerId, skillFile, level),
-				},
-				warning: null as string | null,
-			};
-		}),
-	);
-	for (const result of results) {
-		if (result.warning) warnings.push(result.warning);
-		if (result.item) items.push(result.item);
-	}
 	return { items, warnings };
 }
 
@@ -337,7 +326,7 @@ export async function loadSkillsFromDir(
  * Expand environment variables in a string.
  * Supports ${VAR} and ${VAR:-default} syntax.
  */
-export function expandEnvVars(value: string, extraEnv?: Record<string, string>): string {
+function expandEnvVars(value: string, extraEnv?: Record<string, string>): string {
 	return value.replace(/\$\{([^}:]+)(?::-([^}]*))?\}/g, (_, varName: string, defaultValue?: string) => {
 		const envValue = extraEnv?.[varName] ?? Bun.env[varName];
 		if (envValue !== undefined) return envValue;
@@ -448,17 +437,6 @@ export async function loadFilesFromDir<T>(
 }
 
 /**
- * Parse JSON safely.
- */
-export function parseJSON<T>(content: string): T | null {
-	try {
-		return JSON.parse(content) as T;
-	} catch {
-		return null;
-	}
-}
-
-/**
  * Calculate depth of target directory relative to current working directory.
  * Depth is the number of directory levels from cwd to target.
  * - Positive depth: target is above cwd (parent/ancestor)
@@ -480,7 +458,7 @@ async function readExtensionModuleManifest(
 	const content = await readFile(packageJsonPath);
 	if (!content) return null;
 
-	const pkg = parseJSON<{ omp?: ExtensionModuleManifest; pi?: ExtensionModuleManifest }>(content);
+	const pkg = tryParseJson<{ omp?: ExtensionModuleManifest; pi?: ExtensionModuleManifest }>(content);
 	const manifest = pkg?.omp ?? pkg?.pi;
 	if (manifest && typeof manifest === "object") {
 		return manifest;
@@ -506,9 +484,9 @@ export async function discoverExtensionModulePaths(_ctx: LoadContext, dir: strin
 		// 1. Direct *.ts or *.js files
 		globIf(dir, "*.{ts,js}", FileType.File, false),
 		// 2. Subdirectory index files
-		globIf(dir, "*/index.{ts,js}", FileType.File),
+		globIf(dir, "*/index.{ts,js}", FileType.File, false),
 		// 3. Subdirectory package.json files
-		globIf(dir, "*/package.json", FileType.File),
+		globIf(dir, "*/package.json", FileType.File, false),
 	]);
 
 	// Process direct files
@@ -617,7 +595,7 @@ export interface ClaudePluginRoot {
  * Parse Claude Code installed_plugins.json content.
  */
 export function parseClaudePluginsRegistry(content: string): ClaudePluginsRegistry | null {
-	const data = parseJSON<ClaudePluginsRegistry>(content);
+	const data = tryParseJson<ClaudePluginsRegistry>(content);
 	if (!data || typeof data !== "object") return null;
 	if (
 		typeof data.version !== "number" ||

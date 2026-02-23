@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
+import { APP_NAME, VERSION } from "@oh-my-pi/pi-utils";
 /**
  * CLI entry point — registers all commands explicitly and delegates to the
  * lightweight CLI runner from pi-utils.
  */
 import { type CommandEntry, run } from "@oh-my-pi/pi-utils/cli";
-import { APP_NAME, VERSION } from "@oh-my-pi/pi-utils/dirs";
 
 // Detect known Bun errata that cause TUI crashes (e.g. Bun.stringWidth mishandling OSC sequences).
 if (Bun.stringWidth("\x1b[0m\x1b]8;;\x07") !== 0) {

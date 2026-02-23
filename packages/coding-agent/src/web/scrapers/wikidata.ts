@@ -1,5 +1,6 @@
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import type { RenderResult, SpecialHandler } from "./types";
-import { buildResult, formatNumber, loadPage, tryParseJson } from "./types";
+import { buildResult, formatNumber, loadPage } from "./types";
 
 /**
  * Common Wikidata property IDs mapped to human-readable names

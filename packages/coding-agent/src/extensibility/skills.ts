@@ -1,18 +1,12 @@
 import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import { logger } from "@oh-my-pi/pi-utils";
-import { getProjectDir } from "@oh-my-pi/pi-utils/dirs";
+import * as os from "node:os";
+import { getProjectDir } from "@oh-my-pi/pi-utils";
 import { skillCapability } from "../capability/skill";
 import type { SourceMeta } from "../capability/types";
 import type { SkillsSettings } from "../config/settings";
-import type { Skill as CapabilitySkill, SkillFrontmatter as ImportedSkillFrontmatter } from "../discovery";
-import { loadCapability } from "../discovery";
+import { type Skill as CapabilitySkill, loadCapability } from "../discovery";
+import { scanSkillsFromDir } from "../discovery/helpers";
 import { expandTilde } from "../tools/path-utils";
-import { parseFrontmatter } from "../utils/frontmatter";
-import { addIgnoreRules, createIgnoreMatcher, type IgnoreMatcher, shouldIgnore } from "../utils/ignore-files";
-
-// Re-export SkillFrontmatter for backward compatibility
-export type { ImportedSkillFrontmatter as SkillFrontmatter };
 
 export interface Skill {
 	name: string;
@@ -41,91 +35,31 @@ export interface LoadSkillsFromDirOptions {
 	source: string;
 }
 
-async function readFileContent(filePath: string): Promise<string | null> {
-	try {
-		return await fs.readFile(filePath, "utf-8");
-	} catch {
-		return null;
-	}
-}
-
-/**
- * Load skills from a directory recursively.
- * Skills are directories containing a SKILL.md file with frontmatter including a description.
- * Respects .gitignore, .ignore, and .fdignore files.
- */
 export async function loadSkillsFromDir(options: LoadSkillsFromDirOptions): Promise<LoadSkillsResult> {
-	const skills: Skill[] = [];
-	const warnings: SkillWarning[] = [];
-	const seenPaths = new Set<string>();
-	const rootDir = options.dir;
+	const [rawProviderId, rawLevel] = options.source.split(":", 2);
+	const providerId = rawProviderId || "custom";
+	const level: "user" | "project" = rawLevel === "project" ? "project" : "user";
+	const result = await scanSkillsFromDir(
+		{ cwd: getProjectDir(), home: os.homedir() },
+		{
+			dir: options.dir,
+			providerId,
+			level,
+			requireDescription: true,
+		},
+	);
 
-	async function addSkill(skillFile: string, skillDir: string, dirName: string): Promise<void> {
-		if (seenPaths.has(skillFile)) return;
-		try {
-			const content = await fs.readFile(skillFile, "utf-8");
-			const { frontmatter } = parseFrontmatter(content, { source: skillFile });
-			const name = (frontmatter.name as string) || dirName;
-			const description = frontmatter.description as string;
-
-			if (description) {
-				seenPaths.add(skillFile);
-				skills.push({
-					name,
-					description,
-					filePath: skillFile,
-					baseDir: skillDir,
-					source: options.source,
-				});
-			}
-		} catch (error) {
-			logger.warn("Failed to load skill", { path: skillFile, error: String(error) });
-		}
-	}
-
-	async function scanDir(dir: string, ig: IgnoreMatcher): Promise<void> {
-		try {
-			// Add ignore rules from this directory
-			await addIgnoreRules(ig, dir, rootDir, readFileContent);
-
-			// First check if this directory itself is a skill
-			const selfSkillFile = path.join(dir, "SKILL.md");
-			try {
-				const s = await fs.stat(selfSkillFile);
-				if (s.isFile()) {
-					await addSkill(selfSkillFile, dir, path.basename(dir));
-					// This directory is a skill, don't recurse
-					return;
-				}
-			} catch {
-				// No SKILL.md in this directory
-			}
-
-			// Recurse into subdirectories
-			const entries = await fs.readdir(dir, { withFileTypes: true });
-
-			for (const entry of entries) {
-				if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
-
-				const fullPath = path.join(dir, entry.name);
-				const isDir = entry.isDirectory();
-
-				// Check if this entry should be ignored
-				if (shouldIgnore(ig, rootDir, fullPath, isDir)) continue;
-
-				if (isDir) {
-					await scanDir(fullPath, ig);
-				}
-			}
-		} catch (err) {
-			warnings.push({ skillPath: dir, message: `Failed to read directory: ${err}` });
-		}
-	}
-
-	const ig = createIgnoreMatcher();
-	await scanDir(options.dir, ig);
-
-	return { skills, warnings };
+	return {
+		skills: result.items.map(capSkill => ({
+			name: capSkill.name,
+			description: typeof capSkill.frontmatter?.description === "string" ? capSkill.frontmatter.description : "",
+			filePath: capSkill.path,
+			baseDir: capSkill.path.replace(/\/SKILL\.md$/, ""),
+			source: options.source,
+			_source: capSkill._source,
+		})),
+		warnings: (result.warnings ?? []).map(message => ({ skillPath: options.dir, message })),
+	};
 }
 
 export interface LoadSkillsOptions extends SkillsSettings {
@@ -225,45 +159,55 @@ export async function loadSkills(options: LoadSkillsOptions = {}): Promise<LoadS
 				message: `name collision: "${capSkill.name}" already loaded from ${existing.filePath}, skipping this one`,
 			});
 		} else {
-			// Transform capability skill to legacy format
-			const skill: Skill = {
+			skillMap.set(capSkill.name, {
 				name: capSkill.name,
-				description: capSkill.frontmatter?.description || "",
+				description: typeof capSkill.frontmatter?.description === "string" ? capSkill.frontmatter.description : "",
 				filePath: capSkill.path,
 				baseDir: capSkill.path.replace(/\/SKILL\.md$/, ""),
 				source: `${capSkill._source.provider}:${capSkill.level}`,
 				_source: capSkill._source,
-			};
-			skillMap.set(capSkill.name, skill);
+			});
 			realPathSet.add(resolvedPath);
 		}
 	}
 
-	// Process custom directories - scan directly without using full provider system
-	const allCustomSkills: Array<{ skill: Skill; path: string }> = [];
-	const customScanResults = await Promise.all(
-		customDirectories.map(dir => loadSkillsFromDir({ dir: expandTilde(dir), source: "custom" })),
+	const customDirectoryResults = await Promise.all(
+		customDirectories.map(async dir => {
+			const expandedDir = expandTilde(dir);
+			const scanResult = await scanSkillsFromDir(
+				{ cwd, home: os.homedir() },
+				{
+					dir: expandedDir,
+					providerId: "custom",
+					level: "user",
+					requireDescription: true,
+				},
+			);
+			return { expandedDir, scanResult };
+		}),
 	);
-	for (const customSkills of customScanResults) {
-		for (const s of customSkills.skills) {
-			if (matchesIgnorePatterns(s.name)) continue;
-			if (!matchesIncludePatterns(s.name)) continue;
+
+	const allCustomSkills: Array<{ skill: Skill; path: string }> = [];
+	for (const { expandedDir, scanResult } of customDirectoryResults) {
+		for (const capSkill of scanResult.items) {
+			if (matchesIgnorePatterns(capSkill.name)) continue;
+			if (!matchesIncludePatterns(capSkill.name)) continue;
 			allCustomSkills.push({
 				skill: {
-					name: s.name,
-					description: s.description,
-					filePath: s.filePath,
-					baseDir: s.filePath.replace(/\/SKILL\.md$/, ""),
+					name: capSkill.name,
+					description:
+						typeof capSkill.frontmatter?.description === "string" ? capSkill.frontmatter.description : "",
+					filePath: capSkill.path,
+					baseDir: capSkill.path.replace(/\/SKILL\.md$/, ""),
 					source: "custom:user",
-					_source: { provider: "custom", providerName: "Custom", path: s.filePath, level: "user" },
+					_source: { ...capSkill._source, providerName: "Custom" },
 				},
-				path: s.filePath,
+				path: capSkill.path,
 			});
 		}
-		collisionWarnings.push(...customSkills.warnings);
+		collisionWarnings.push(...(scanResult.warnings ?? []).map(message => ({ skillPath: expandedDir, message })));
 	}
 
-	// Batch resolve custom skill paths
 	const customRealPaths = await Promise.all(
 		allCustomSkills.map(async ({ path }) => {
 			try {
@@ -293,6 +237,6 @@ export async function loadSkills(options: LoadSkillsOptions = {}): Promise<LoadS
 
 	return {
 		skills: Array.from(skillMap.values()),
-		warnings: [...result.warnings.map(w => ({ skillPath: "", message: w })), ...collisionWarnings],
+		warnings: [...(result.warnings ?? []).map(w => ({ skillPath: "", message: w })), ...collisionWarnings],
 	};
 }

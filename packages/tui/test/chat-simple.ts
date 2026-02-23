@@ -8,7 +8,7 @@ import { Markdown } from "@oh-my-pi/pi-tui/components/markdown";
 import { Text } from "@oh-my-pi/pi-tui/components/text";
 import { ProcessTerminal } from "@oh-my-pi/pi-tui/terminal";
 import { TUI } from "@oh-my-pi/pi-tui/tui";
-import { getProjectDir } from "@oh-my-pi/pi-utils/dirs";
+import { getProjectDir } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { defaultEditorTheme, defaultMarkdownTheme } from "./test-themes";
 

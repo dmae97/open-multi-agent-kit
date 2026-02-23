@@ -5,8 +5,7 @@ import {
 	streamOpenAICodexResponses,
 } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
 import type { Context, Model, ProviderSessionState } from "@oh-my-pi/pi-ai/types";
-import { TempDir } from "@oh-my-pi/pi-utils";
-import { getAgentDir, setAgentDir } from "@oh-my-pi/pi-utils/dirs";
+import { getAgentDir, setAgentDir, TempDir } from "@oh-my-pi/pi-utils";
 
 const originalFetch = global.fetch;
 const originalAgentDir = getAgentDir();

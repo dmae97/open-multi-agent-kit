@@ -2,8 +2,7 @@
  * CLI argument parsing and help display
  */
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import { logger } from "@oh-my-pi/pi-utils";
-import { APP_NAME, CONFIG_DIR_NAME } from "@oh-my-pi/pi-utils/dirs";
+import { APP_NAME, CONFIG_DIR_NAME, logger } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { BUILTIN_TOOLS } from "../tools";
 

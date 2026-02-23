@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { isEnoent, logger } from "@oh-my-pi/pi-utils";
 import {
 	getPluginsDir,
 	getPluginsLockfile,
@@ -8,7 +7,9 @@ import {
 	getPluginsPackageJson,
 	getProjectDir,
 	getProjectPluginOverridesPath,
-} from "@oh-my-pi/pi-utils/dirs";
+	isEnoent,
+	logger,
+} from "@oh-my-pi/pi-utils";
 import { extractPackageName, parsePluginSpec } from "./parser";
 import type {
 	DoctorCheck,

@@ -1,7 +1,6 @@
 import * as path from "node:path";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
-import { logger } from "@oh-my-pi/pi-utils";
-import { getProjectDir } from "@oh-my-pi/pi-utils/dirs";
+import { getProjectDir, logger } from "@oh-my-pi/pi-utils";
 import { ModelRegistry } from "../config/model-registry";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import { Settings } from "../config/settings";

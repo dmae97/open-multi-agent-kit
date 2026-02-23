@@ -1,5 +1,6 @@
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import type { RenderResult, SpecialHandler } from "./types";
-import { buildResult, loadPage, tryParseJson } from "./types";
+import { buildResult, loadPage } from "./types";
 
 interface LemmyCreator {
 	name: string;

@@ -38,8 +38,7 @@ import type {
 	UsageReport,
 } from "@oh-my-pi/pi-ai";
 import { isContextOverflow, modelsAreEqual, supportsXhigh } from "@oh-my-pi/pi-ai";
-import { abortableSleep, isEnoent, logger } from "@oh-my-pi/pi-utils";
-import { getAgentDbPath } from "@oh-my-pi/pi-utils/dirs";
+import { abortableSleep, getAgentDbPath, isEnoent, logger } from "@oh-my-pi/pi-utils";
 import type { AsyncJob, AsyncJobManager } from "../async";
 import type { Rule } from "../capability/rule";
 import { MODEL_ROLE_IDS, type ModelRegistry, type ModelRole } from "../config/model-registry";
@@ -84,8 +83,6 @@ import planModeActivePrompt from "../prompts/system/plan-mode-active.md" with { 
 import planModeReferencePrompt from "../prompts/system/plan-mode-reference.md" with { type: "text" };
 import ttsrInterruptTemplate from "../prompts/system/ttsr-interrupt.md" with { type: "text" };
 import type { SecretObfuscator } from "../secrets/obfuscator";
-import { closeAllConnections } from "../ssh/connection-manager";
-import { unmountAll } from "../ssh/sshfs-mount";
 import { outputMeta } from "../tools/output-meta";
 import { resolveToCwd } from "../tools/path-utils";
 import { getLatestTodoPhasesFromEntries, type TodoItem, type TodoPhase } from "../tools/todo-write";
@@ -272,15 +269,6 @@ const noOpUIContext: ExtensionUIContext = {
 	getToolsExpanded: () => false,
 	setToolsExpanded: () => {},
 };
-
-async function cleanupSshResources(): Promise<void> {
-	const results = await Promise.allSettled([closeAllConnections(), unmountAll()]);
-	for (const result of results) {
-		if (result.status === "rejected") {
-			logger.warn("SSH cleanup failed", { error: String(result.reason) });
-		}
-	}
-}
 
 // ============================================================================
 // AgentSession Class
@@ -1275,13 +1263,19 @@ export class AgentSession {
 	 * Call this when completely done with the session.
 	 */
 	async dispose(): Promise<void> {
+		try {
+			if (this.#extensionRunner?.hasHandlers("session_shutdown")) {
+				await this.#extensionRunner.emit({ type: "session_shutdown" });
+			}
+		} catch (error) {
+			logger.warn("Failed to emit session_shutdown event", { error: String(error) });
+		}
 		const drained = await this.#asyncJobManager?.dispose({ timeoutMs: 3_000 });
 		const deliveryState = this.#asyncJobManager?.getDeliveryState();
 		if (drained === false && deliveryState) {
 			logger.warn("Async job completion deliveries still pending during dispose", { ...deliveryState });
 		}
 		await this.sessionManager.flush();
-		await cleanupSshResources();
 		for (const state of this.#providerSessionState.values()) {
 			state.close();
 		}
@@ -4860,16 +4854,5 @@ Be thorough - include exact file paths, function names, error messages, and tech
 	 */
 	get extensionRunner(): ExtensionRunner | undefined {
 		return this.#extensionRunner;
-	}
-
-	/**
-	 * Emit a custom tool session event (backwards compatibility for older callers).
-	 */
-	async emitCustomToolSessionEvent(reason: "start" | "switch" | "branch" | "tree" | "shutdown"): Promise<void> {
-		if (reason !== "shutdown") return;
-		if (this.#extensionRunner?.hasHandlers("session_shutdown")) {
-			await this.#extensionRunner.emit({ type: "session_shutdown" });
-		}
-		await cleanupSshResources();
 	}
 }

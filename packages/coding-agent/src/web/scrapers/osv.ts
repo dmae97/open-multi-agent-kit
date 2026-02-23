@@ -1,5 +1,6 @@
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import type { RenderResult, SpecialHandler } from "./types";
-import { buildResult, formatIsoDate, loadPage, tryParseJson } from "./types";
+import { buildResult, formatIsoDate, loadPage } from "./types";
 
 interface OsvSeverity {
 	type: string;

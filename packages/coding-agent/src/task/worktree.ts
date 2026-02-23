@@ -1,8 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import path from "node:path";
-import { isEnoent, Snowflake } from "@oh-my-pi/pi-utils";
-import { getWorktreeDir } from "@oh-my-pi/pi-utils/dirs";
+import { getWorktreeDir, isEnoent, Snowflake } from "@oh-my-pi/pi-utils";
 import { $ } from "bun";
 
 export interface WorktreeBaseline {

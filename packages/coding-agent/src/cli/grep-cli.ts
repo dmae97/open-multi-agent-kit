@@ -5,7 +5,7 @@
  */
 import * as path from "node:path";
 import { grep } from "@oh-my-pi/pi-natives";
-import { APP_NAME } from "@oh-my-pi/pi-utils/dirs";
+import { APP_NAME } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 
 export interface GrepCommandArgs {

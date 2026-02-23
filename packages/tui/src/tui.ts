@@ -3,7 +3,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { getCrashLogPath, getDebugLogPath } from "@oh-my-pi/pi-utils/dirs";
+import { getCrashLogPath, getDebugLogPath } from "@oh-my-pi/pi-utils";
 import { isKeyRelease, matchesKey } from "./keys";
 import type { Terminal } from "./terminal";
 import { setCellDimensions, TERMINAL } from "./terminal-capabilities";

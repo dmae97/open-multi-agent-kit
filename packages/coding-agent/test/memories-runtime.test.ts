@@ -7,8 +7,7 @@ import * as ai from "@oh-my-pi/pi-ai";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { buildMemoryToolDeveloperInstructions, startMemoryStartupTask } from "@oh-my-pi/pi-coding-agent/memories";
 import * as memoryStorage from "@oh-my-pi/pi-coding-agent/memories/storage";
-import { Snowflake } from "@oh-my-pi/pi-utils";
-import { getAgentDbPath } from "@oh-my-pi/pi-utils/dirs";
+import { getAgentDbPath, Snowflake } from "@oh-my-pi/pi-utils";
 
 interface SessionFixture {
 	agentDir: string;

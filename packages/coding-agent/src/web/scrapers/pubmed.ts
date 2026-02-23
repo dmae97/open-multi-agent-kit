@@ -1,7 +1,8 @@
 /**
  * PubMed handler for web-fetch
  */
-import { buildResult, loadPage, type RenderResult, type SpecialHandler, tryParseJson } from "./types";
+import { tryParseJson } from "@oh-my-pi/pi-utils";
+import { buildResult, loadPage, type RenderResult, type SpecialHandler } from "./types";
 
 const NCBI_HEADERS = {
 	Accept: "application/json, text/plain;q=0.9, */*;q=0.8",

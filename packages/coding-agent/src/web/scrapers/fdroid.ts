@@ -1,5 +1,6 @@
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import type { LocalizedText, RenderResult, SpecialHandler } from "./types";
-import { buildResult, getLocalizedText, loadPage, tryParseJson } from "./types";
+import { buildResult, getLocalizedText, loadPage } from "./types";
 
 type FdroidPackage = {
 	packageName?: string;

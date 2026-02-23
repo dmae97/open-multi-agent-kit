@@ -5,6 +5,7 @@
  * Priority: 80 (tool-specific, below builtin but above shared standards)
  */
 import * as path from "node:path";
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import { registerProvider } from "../capability";
 import { type ContextFile, contextFileCapability } from "../capability/context-file";
 import { type ExtensionModule, extensionModuleCapability } from "../capability/extension-module";
@@ -24,8 +25,7 @@ import {
 	expandEnvVarsDeep,
 	getExtensionNameFromPath,
 	loadFilesFromDir,
-	loadSkillsFromDir,
-	parseJSON,
+	scanSkillsFromDir,
 } from "./helpers";
 
 const PROVIDER_ID = "claude";
@@ -77,7 +77,7 @@ async function loadMCPServers(ctx: LoadContext): Promise<LoadResult<MCPServer>> 
 
 	const parseMcpServers = (content: string | null, path: string, level: "user" | "project"): MCPServer[] => {
 		if (!content) return [];
-		const json = parseJSON<{ mcpServers?: Record<string, unknown> }>(content);
+		const json = tryParseJson<{ mcpServers?: Record<string, unknown> }>(content);
 		if (!json?.mcpServers) return [];
 
 		const mcpServers = expandEnvVarsDeep(json.mcpServers);
@@ -163,8 +163,8 @@ async function loadSkills(ctx: LoadContext): Promise<LoadResult<Skill>> {
 	const projectSkillsDir = path.join(getProjectClaude(ctx), "skills");
 
 	const results = await Promise.all([
-		loadSkillsFromDir(ctx, { dir: userSkillsDir, providerId: PROVIDER_ID, level: "user" }),
-		loadSkillsFromDir(ctx, { dir: projectSkillsDir, providerId: PROVIDER_ID, level: "project" }),
+		scanSkillsFromDir(ctx, { dir: userSkillsDir, providerId: PROVIDER_ID, level: "user" }),
+		scanSkillsFromDir(ctx, { dir: projectSkillsDir, providerId: PROVIDER_ID, level: "project" }),
 	]);
 
 	return {
@@ -396,7 +396,7 @@ async function loadSettings(ctx: LoadContext): Promise<LoadResult<Settings>> {
 
 	const userContent = await readFile(userSettingsJson);
 	if (userContent) {
-		const data = parseJSON<Record<string, unknown>>(userContent);
+		const data = tryParseJson<Record<string, unknown>>(userContent);
 		if (data) {
 			items.push({
 				path: userSettingsJson,
@@ -413,7 +413,7 @@ async function loadSettings(ctx: LoadContext): Promise<LoadResult<Settings>> {
 	const projectSettingsJson = path.join(projectBase, "settings.json");
 	const projectContent = await readFile(projectSettingsJson);
 	if (projectContent) {
-		const data = parseJSON<Record<string, unknown>>(projectContent);
+		const data = tryParseJson<Record<string, unknown>>(projectContent);
 		if (data) {
 			items.push({
 				path: projectSettingsJson,

@@ -1,5 +1,6 @@
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import type { SpecialHandler } from "./types";
-import { buildResult, htmlToBasicMarkdown, loadPage, tryParseJson } from "./types";
+import { buildResult, htmlToBasicMarkdown, loadPage } from "./types";
 
 interface MDNSection {
 	type: string;

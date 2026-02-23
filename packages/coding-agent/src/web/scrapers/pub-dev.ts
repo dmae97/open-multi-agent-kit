@@ -1,4 +1,5 @@
-import { buildResult, formatNumber, htmlToBasicMarkdown, loadPage, type SpecialHandler, tryParseJson } from "./types";
+import { tryParseJson } from "@oh-my-pi/pi-utils";
+import { buildResult, formatNumber, htmlToBasicMarkdown, loadPage, type SpecialHandler } from "./types";
 
 /**
  * Handle pub.dev URLs via API

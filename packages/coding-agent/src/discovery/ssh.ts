@@ -5,13 +5,13 @@
  * Priority: 5 (low, project/user config discovery)
  */
 import * as path from "node:path";
-import { getSSHConfigPath } from "@oh-my-pi/pi-utils/dirs";
+import { getSSHConfigPath, tryParseJson } from "@oh-my-pi/pi-utils";
 import { registerProvider } from "../capability";
 import { readFile } from "../capability/fs";
 import { type SSHHost, sshCapability } from "../capability/ssh";
 import type { LoadContext, LoadResult, SourceMeta } from "../capability/types";
 import { expandTilde } from "../tools/path-utils";
-import { createSourceMeta, expandEnvVarsDeep, parseJSON } from "./helpers";
+import { createSourceMeta, expandEnvVarsDeep } from "./helpers";
 
 const PROVIDER_ID = "ssh-json";
 const DISPLAY_NAME = "SSH Config";
@@ -95,7 +95,7 @@ async function loadSshJsonFile(
 	if (content === null) {
 		return { items, warnings };
 	}
-	const parsed = parseJSON<SSHConfigFile>(content);
+	const parsed = tryParseJson<SSHConfigFile>(content);
 	if (!parsed) {
 		warnings.push(`Failed to parse JSON in ${filePath}`);
 		return { items, warnings };

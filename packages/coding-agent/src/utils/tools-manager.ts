@@ -1,8 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { logger, ptree, TempDir } from "@oh-my-pi/pi-utils";
-import { APP_NAME, getToolsDir } from "@oh-my-pi/pi-utils/dirs";
+import { APP_NAME, getToolsDir, logger, ptree, TempDir } from "@oh-my-pi/pi-utils";
 
 const TOOLS_DIR = getToolsDir();
 const TOOL_DOWNLOAD_TIMEOUT_MS = 15000;

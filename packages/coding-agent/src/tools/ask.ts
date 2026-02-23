@@ -59,7 +59,6 @@ export interface QuestionResult {
 }
 
 export interface AskToolDetails {
-	/** Single question mode (backwards compatible) */
 	question?: string;
 	options?: string[];
 	multi?: boolean;

@@ -1,7 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { isEnoent } from "@oh-my-pi/pi-utils";
-import { getAgentDir, getProjectDir } from "@oh-my-pi/pi-utils/dirs";
+import { getAgentDir, getProjectDir, isEnoent } from "@oh-my-pi/pi-utils";
 import { extractPackageName } from "./parser";
 import type { InstalledPlugin } from "./types";
 

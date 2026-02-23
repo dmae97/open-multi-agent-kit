@@ -15,8 +15,7 @@ import {
 	Text,
 	TUI,
 } from "@oh-my-pi/pi-tui";
-import { hsvToRgb, isEnoent, logger, postmortem } from "@oh-my-pi/pi-utils";
-import { APP_NAME, getProjectDir } from "@oh-my-pi/pi-utils/dirs";
+import { APP_NAME, getProjectDir, hsvToRgb, isEnoent, logger, postmortem } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { KeybindingsManager } from "../config/keybindings";
 import { renderPromptTemplate } from "../config/prompt-templates";
@@ -776,7 +775,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		await this.sessionManager.flush();
 
 		// Emit shutdown event to hooks
-		await this.session.emitCustomToolSessionEvent("shutdown");
+		await this.session.dispose();
 
 		if (this.isInitialized) {
 			this.ui.requestRender(true);

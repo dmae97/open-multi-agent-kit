@@ -77,31 +77,7 @@ export { normalizeCreateContent, normalizeDiff, parseHunks as parseDiffHunks } f
 export type { EditRenderContext, EditToolDetails } from "./shared";
 // Rendering
 export { editToolRenderer, getLspBatchRequest } from "./shared";
-export type {
-	ApplyPatchOptions,
-	ApplyPatchResult,
-	ContextLineResult,
-	DiffError,
-	DiffError as EditDiffError,
-	DiffHunk,
-	DiffHunk as UpdateChunk,
-	DiffHunk as UpdateFileChunk,
-	DiffResult,
-	DiffResult as EditDiffResult,
-	FileChange,
-	FileSystem,
-	FuzzyMatch as EditMatch,
-	FuzzyMatch,
-	HashMismatch,
-	MatchOutcome as EditMatchOutcome,
-	MatchOutcome,
-	Operation,
-	PatchInput,
-	SequenceSearchResult,
-} from "./types";
-// Types
-// Legacy aliases for backwards compatibility
-export { ApplyPatchError, EditMatchError, ParseError } from "./types";
+export * from "./types";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Schemas

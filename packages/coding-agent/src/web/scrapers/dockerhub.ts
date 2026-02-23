@@ -1,6 +1,7 @@
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import { formatBytes } from "../../tools/render-utils";
 import type { RenderResult, SpecialHandler } from "./types";
-import { buildResult, formatIsoDate, formatNumber, loadPage, tryParseJson } from "./types";
+import { buildResult, formatIsoDate, formatNumber, loadPage } from "./types";
 
 interface DockerHubRepo {
 	name: string;

@@ -1,7 +1,7 @@
 //! Shared glob-pattern helpers used by both [`crate::glob`] and
 //! [`crate::grep`].
 
-use globset::{Glob, GlobSet, GlobSetBuilder};
+use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use napi::bindgen_prelude::*;
 
 /// Normalize a raw glob string: fix path separators, optionally prepend `**/`
@@ -23,7 +23,9 @@ pub fn build_glob_pattern(glob: &str, recursive: bool) -> String {
 pub fn compile_glob(glob: &str, recursive: bool) -> Result<GlobSet> {
 	let mut builder = GlobSetBuilder::new();
 	let pattern = build_glob_pattern(glob, recursive);
-	let glob = Glob::new(&pattern)
+	let glob = GlobBuilder::new(&pattern)
+		.literal_separator(true)
+		.build()
 		.map_err(|err| Error::from_reason(format!("Invalid glob pattern: {err}")))?;
 	builder.add(glob);
 	builder

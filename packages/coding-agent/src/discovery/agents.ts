@@ -13,7 +13,7 @@ import { type Skill, skillCapability } from "../capability/skill";
 import { type SlashCommand, slashCommandCapability } from "../capability/slash-command";
 import { type SystemPrompt, systemPromptCapability } from "../capability/system-prompt";
 import type { LoadContext, LoadResult } from "../capability/types";
-import { buildRuleFromMarkdown, createSourceMeta, loadFilesFromDir, loadSkillsFromDir } from "./helpers";
+import { buildRuleFromMarkdown, createSourceMeta, loadFilesFromDir, scanSkillsFromDir } from "./helpers";
 
 const PROVIDER_ID = "agents";
 const DISPLAY_NAME = "Agents (standard)";
@@ -28,7 +28,7 @@ async function loadSkills(ctx: LoadContext): Promise<LoadResult<Skill>> {
 	const items: Skill[] = [];
 	const warnings: string[] = [];
 	for (const userSkillsDir of getUserAgentPathCandidates(ctx, "skills")) {
-		const result = await loadSkillsFromDir(ctx, {
+		const result = await scanSkillsFromDir(ctx, {
 			dir: userSkillsDir,
 			providerId: PROVIDER_ID,
 			level: "user",

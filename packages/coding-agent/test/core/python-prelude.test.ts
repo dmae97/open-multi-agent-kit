@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { resetPreludeDocsCache, warmPythonEnvironment } from "@oh-my-pi/pi-coding-agent/ipy/executor";
 import { getPythonToolDescription, PythonTool } from "@oh-my-pi/pi-coding-agent/tools/python";
-import { getProjectDir } from "@oh-my-pi/pi-utils/dirs";
+import { getProjectDir } from "@oh-my-pi/pi-utils";
 
 const resolvePythonPath = (): string | null => {
 	const venvPath = Bun.env.VIRTUAL_ENV;

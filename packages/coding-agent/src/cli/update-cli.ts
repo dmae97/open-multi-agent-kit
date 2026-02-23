@@ -7,8 +7,7 @@
 import { execSync, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import { pipeline } from "node:stream/promises";
-import { isEnoent } from "@oh-my-pi/pi-utils";
-import { APP_NAME, VERSION } from "@oh-my-pi/pi-utils/dirs";
+import { APP_NAME, isEnoent, VERSION } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { theme } from "../modes/theme/theme";
 

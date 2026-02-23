@@ -10,6 +10,8 @@
  * - Rules from .windsurf/rules/*.md and ~/.codeium/windsurf/memories/global_rules.md
  * - Legacy .windsurfrules file
  */
+
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import { registerProvider } from "../capability";
 import { readFile } from "../capability/fs";
 import { type MCPServer, mcpCapability } from "../capability/mcp";
@@ -22,7 +24,6 @@ import {
 	getProjectPath,
 	getUserPath,
 	loadFilesFromDir,
-	parseJSON,
 } from "./helpers";
 
 const PROVIDER_ID = "windsurf";
@@ -78,7 +79,7 @@ async function loadMCPServers(ctx: LoadContext): Promise<LoadResult<MCPServer>> 
 	for (const { content, path, scope } of configs) {
 		if (!content || !path) continue;
 
-		const config = parseJSON<{ mcpServers?: Record<string, unknown> }>(content);
+		const config = tryParseJson<{ mcpServers?: Record<string, unknown> }>(content);
 		if (!config?.mcpServers) continue;
 
 		for (const [name, serverConfig] of Object.entries(config.mcpServers)) {

@@ -1,5 +1,6 @@
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import type { SpecialHandler } from "./types";
-import { buildResult, formatIsoDate, formatNumber, loadPage, tryParseJson } from "./types";
+import { buildResult, formatIsoDate, formatNumber, loadPage } from "./types";
 
 /**
  * Handle Hex.pm (Elixir package registry) URLs via API

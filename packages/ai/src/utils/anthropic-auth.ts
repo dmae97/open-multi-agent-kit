@@ -6,8 +6,7 @@
  *   2. OAuth credentials in ~/.omp/agent/agent.db (with expiry check)
  *   3. ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL fallback
  */
-import { $env } from "@oh-my-pi/pi-utils";
-import { getAgentDbPath } from "@oh-my-pi/pi-utils/dirs";
+import { $env, getAgentDbPath } from "@oh-my-pi/pi-utils";
 import { type AuthCredential, AuthCredentialStore } from "../auth-storage";
 import { buildAnthropicHeaders as buildProviderAnthropicHeaders } from "../providers/anthropic";
 import { getEnvApiKey } from "../stream";

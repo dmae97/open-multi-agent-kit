@@ -16,6 +16,7 @@
  * - settings: From settings.json
  */
 import * as path from "node:path";
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import { registerProvider } from "../capability";
 import { type ContextFile, contextFileCapability } from "../capability/context-file";
 import { type Extension, type ExtensionManifest, extensionCapability } from "../capability/extension";
@@ -33,7 +34,6 @@ import {
 	getExtensionNameFromPath,
 	getProjectPath,
 	getUserPath,
-	parseJSON,
 } from "./helpers";
 
 const PROVIDER_ID = "gemini";
@@ -80,7 +80,7 @@ async function loadMCPFromSettings(
 		return { items, warnings };
 	}
 
-	const parsed = parseJSON<{ mcpServers?: Record<string, unknown> }>(content);
+	const parsed = tryParseJson<{ mcpServers?: Record<string, unknown> }>(content);
 	if (!parsed) {
 		warnings.push(`Invalid JSON in ${path}`);
 		return { items, warnings };
@@ -206,7 +206,7 @@ async function loadExtensionsFromDir(extensionsDir: string, level: "user" | "pro
 	for (const { entry, extPath, manifestPath, content } of results) {
 		if (!content) continue;
 
-		const manifest = parseJSON<ExtensionManifest>(content);
+		const manifest = tryParseJson<ExtensionManifest>(content);
 		if (!manifest) {
 			warnings.push(`Invalid JSON in ${manifestPath}`);
 			continue;
@@ -268,7 +268,7 @@ async function loadSettings(ctx: LoadContext): Promise<LoadResult<Settings>> {
 	if (userPath) {
 		const content = await readFile(userPath);
 		if (content) {
-			const parsed = parseJSON<Record<string, unknown>>(content);
+			const parsed = tryParseJson<Record<string, unknown>>(content);
 			if (parsed) {
 				items.push({
 					path: userPath,
@@ -287,7 +287,7 @@ async function loadSettings(ctx: LoadContext): Promise<LoadResult<Settings>> {
 	if (projectPath) {
 		const content = await readFile(projectPath);
 		if (content) {
-			const parsed = parseJSON<Record<string, unknown>>(content);
+			const parsed = tryParseJson<Record<string, unknown>>(content);
 			if (parsed) {
 				items.push({
 					path: projectPath,

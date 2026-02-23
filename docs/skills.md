@@ -30,7 +30,7 @@ For provider-based discovery (native/Claude/Codex/Agents/plugin providers), skil
 
 Nested patterns like `<skills-root>/group/<skill>/SKILL.md` are not discovered by provider loaders.
 
-For `skills.customDirectories`, scanning is recursive and treats any directory containing `SKILL.md` as a skill root.
+For `skills.customDirectories`, scanning uses the same non-recursive layout (`*/SKILL.md`).
 
 ```text
 Provider-discovered layout (non-recursive under skills/):
@@ -44,7 +44,7 @@ Provider-discovered layout (non-recursive under skills/):
       └─ internal/
           └─ SKILL.md  ❌ not discovered by provider loaders
 
-Custom-directory scanning is recursive, so the same nested path is valid when that parent is listed in `skills.customDirectories`.
+Custom-directory scanning is also non-recursive, so nested paths are ignored unless you point `customDirectories` at that nested parent.
 ```
 
 
@@ -63,15 +63,15 @@ Current runtime behavior:
 - `name` defaults to the skill directory name
 - `description` is required for:
   - native `.omp` provider skill discovery (`requireDescription: true`)
-  - `skills.customDirectories` scan in `extensibility/skills.ts`
+  - `skills.customDirectories` scans via `scanSkillsFromDir` in `src/discovery/helpers.ts` (non-recursive)
 - non-native providers can load skills without description
 
 ## Discovery pipeline
 
-`loadSkills()` in `src/extensibility/skills.ts` does two passes:
+`discoverSkills()` in `src/extensibility/skills.ts` does two passes:
 
 1. **Capability providers** via `loadCapability("skills")`
-2. **Custom directories** via recursive scan of `skills.customDirectories`
+2. **Custom directories** via `scanSkillsFromDir(..., { requireDescription: true })` (one-level directory enumeration)
 
 If `skills.enabled` is `false`, discovery returns no skills.
 
@@ -92,7 +92,7 @@ Dedup key is skill name. First item with a given name wins.
 
 ### Source toggles and filtering
 
-`loadSkills()` applies these controls:
+`discoverSkills()` applies these controls:
 
 - source toggles: `enableCodexUser`, `enableClaudeUser`, `enableClaudeProject`, `enablePiUser`, `enablePiProject`
 - glob filters on skill name:
@@ -113,6 +113,7 @@ For providers other than codex/claude/native (for example `agents`, `claude-plug
 - `extensibility/skills.ts` additionally:
   - de-duplicates identical files by `realpath` (symlink-safe)
   - emits collision warnings when a later skill name conflicts
+  - keeps the convenience `discoverSkillsFromDir({ dir, source })` API as a thin adapter over `scanSkillsFromDir`
 - Custom-directory skills are merged after provider skills and follow the same collision behavior
 
 ## Runtime usage behavior
@@ -214,5 +215,5 @@ No fallback search is performed for missing assets.
 - Put each skill in its own directory: `<skills-root>/<skill-name>/SKILL.md`
 - Always include explicit `name` and `description` frontmatter
 - Keep referenced assets under the same skill directory and access with `skill://<name>/...`
-- If you need nested taxonomy (`team/domain/skill`), use `skills.customDirectories` (recursive scanner), not provider `skills/` roots
+- For nested taxonomy (`team/domain/skill`), point `skills.customDirectories` to the nested parent directory; scanning itself remains non-recursive
 - Avoid duplicate skill names across sources; first match wins by provider precedence

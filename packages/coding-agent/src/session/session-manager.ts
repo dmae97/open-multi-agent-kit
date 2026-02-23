@@ -4,8 +4,16 @@ import * as path from "node:path";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent, Message, TextContent, Usage } from "@oh-my-pi/pi-ai";
 import { getTerminalId } from "@oh-my-pi/pi-tui";
-import { isEnoent, logger, parseJsonlLenient, Snowflake, toError } from "@oh-my-pi/pi-utils";
-import { getBlobsDir, getAgentDir as getDefaultAgentDir, getProjectDir } from "@oh-my-pi/pi-utils/dirs";
+import {
+	getBlobsDir,
+	getAgentDir as getDefaultAgentDir,
+	getProjectDir,
+	isEnoent,
+	logger,
+	parseJsonlLenient,
+	Snowflake,
+	toError,
+} from "@oh-my-pi/pi-utils";
 import { ArtifactManager } from "./artifacts";
 import { type BlobPutResult, BlobStore, externalizeImageData, isBlobRef, resolveImageData } from "./blob-store";
 import {

@@ -5,8 +5,7 @@ import * as path from "node:path";
 import { _resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { getDefault } from "@oh-my-pi/pi-coding-agent/config/settings-schema";
 import { SelectorController } from "@oh-my-pi/pi-coding-agent/modes/controllers/selector-controller";
-import { Snowflake } from "@oh-my-pi/pi-utils";
-import { getProjectAgentDir } from "@oh-my-pi/pi-utils/dirs";
+import { getProjectAgentDir, Snowflake } from "@oh-my-pi/pi-utils";
 import { YAML } from "bun";
 
 describe("autocompleteMaxVisible setting", () => {

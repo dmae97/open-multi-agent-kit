@@ -30,7 +30,7 @@ import { e2eApiKey } from "./utilities";
 // ============================================================================
 
 async function loadLargeSessionEntries(): Promise<SessionEntry[]> {
-	const sessionPath = path.join(__dirname, "fixtures/large-session.jsonl");
+	const sessionPath = path.join(import.meta.dirname, "fixtures/large-session.jsonl");
 	const content = await Bun.file(sessionPath).text();
 	const entries = parseSessionEntries(content);
 	migrateSessionEntries(entries); // Add id/parentId for v1 fixtures

@@ -2,20 +2,38 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import type { Skill } from "@oh-my-pi/pi-coding-agent/sdk";
 import { createAgentSession } from "@oh-my-pi/pi-coding-agent/sdk";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { getProjectAgentDir } from "@oh-my-pi/pi-utils/dirs";
+
+function createIsolatedSkillsSettings(): Settings {
+	return Settings.isolated({
+		"skills.enabled": true,
+		"skills.enableCodexUser": false,
+		"skills.enableClaudeUser": false,
+		"skills.enableClaudeProject": false,
+		"skills.enablePiUser": false,
+		"skills.enablePiProject": true,
+	});
+}
 
 describe("createAgentSession skills option", () => {
 	let tempDir: string;
 	let skillsDir: string;
+	let tempHomeDir = "";
+	let originalHome: string | undefined;
 
 	beforeEach(() => {
 		tempDir = path.join(os.tmpdir(), `pi-sdk-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		// Create skill in .omp/skills/ for native project-level discovery
-		skillsDir = path.join(getProjectAgentDir(tempDir), "skills", "test-skill");
+		skillsDir = path.join(tempDir, ".omp", "skills", "test-skill");
 		fs.mkdirSync(skillsDir, { recursive: true });
+		originalHome = process.env.HOME;
+		tempHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sdk-home-"));
+		process.env.HOME = tempHomeDir;
+		const nativeUserSkillsDir = path.join(tempHomeDir, ".omp", "agent", "skills");
+		fs.mkdirSync(nativeUserSkillsDir, { recursive: true });
 
 		// Create a test skill in the pi skills directory
 		fs.writeFileSync(
@@ -52,6 +70,14 @@ Loaded via symbolic link.
 		if (tempDir) {
 			fs.rmSync(tempDir, { recursive: true, force: true });
 		}
+		if (tempHomeDir) {
+			fs.rmSync(tempHomeDir, { recursive: true, force: true });
+		}
+		if (originalHome === undefined) {
+			delete process.env.HOME;
+		} else {
+			process.env.HOME = originalHome;
+		}
 	});
 
 	it("should discover skills by default and expose them on session.skills", async () => {
@@ -59,6 +85,7 @@ Loaded via symbolic link.
 			cwd: tempDir,
 			agentDir: tempDir,
 			sessionManager: SessionManager.inMemory(),
+			settings: createIsolatedSkillsSettings(),
 		});
 
 		// Skills should be discovered and exposed on the session
@@ -71,6 +98,7 @@ Loaded via symbolic link.
 			cwd: tempDir,
 			agentDir: tempDir,
 			sessionManager: SessionManager.inMemory(),
+			settings: createIsolatedSkillsSettings(),
 		});
 
 		expect(session.skills.some((s: Skill) => s.name === "symlinked-skill")).toBe(true);
@@ -82,6 +110,7 @@ Loaded via symbolic link.
 			agentDir: tempDir,
 			sessionManager: SessionManager.inMemory(),
 			skills: [], // Explicitly empty - like --no-skills
+			settings: createIsolatedSkillsSettings(),
 		});
 
 		// session.skills should be empty
@@ -104,6 +133,7 @@ Loaded via symbolic link.
 			agentDir: tempDir,
 			sessionManager: SessionManager.inMemory(),
 			skills: [customSkill],
+			settings: createIsolatedSkillsSettings(),
 		});
 
 		// session.skills should contain only the provided skill

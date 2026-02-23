@@ -1,5 +1,6 @@
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import type { RenderResult, SpecialHandler } from "./types";
-import { buildResult, formatNumber, loadPage, tryParseJson } from "./types";
+import { buildResult, formatNumber, loadPage } from "./types";
 
 /**
  * Handle Packagist URLs via JSON API

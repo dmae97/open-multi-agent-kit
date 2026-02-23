@@ -7,8 +7,7 @@
  */
 
 import { getEnvApiKey } from "@oh-my-pi/pi-ai";
-import { readSseJson } from "@oh-my-pi/pi-utils";
-import { getAgentDbPath } from "@oh-my-pi/pi-utils/dirs";
+import { getAgentDbPath, readSseJson } from "@oh-my-pi/pi-utils";
 import { AgentStorage } from "../../../session/agent-storage";
 import type {
 	PerplexityMessageOutput,

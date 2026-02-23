@@ -13,6 +13,8 @@
  * - rules: From rules/*.mdc files with MDC frontmatter (description, globs, alwaysApply)
  * - settings: From settings.json if present
  */
+
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import { registerProvider } from "../capability";
 import { readFile } from "../capability/fs";
 import { type MCPServer, mcpCapability } from "../capability/mcp";
@@ -28,7 +30,6 @@ import {
 	getProjectPath,
 	getUserPath,
 	loadFilesFromDir,
-	parseJSON,
 } from "./helpers";
 
 const PROVIDER_ID = "cursor";
@@ -46,7 +47,7 @@ function parseMCPServers(
 ): { items: MCPServer[]; warning?: string } {
 	const items: MCPServer[] = [];
 
-	const parsed = parseJSON<{ mcpServers?: Record<string, unknown> }>(content);
+	const parsed = tryParseJson<{ mcpServers?: Record<string, unknown> }>(content);
 	if (!parsed?.mcpServers) {
 		return { items, warning: `${path}: missing or invalid 'mcpServers' key` };
 	}
@@ -158,7 +159,7 @@ async function loadSettings(ctx: LoadContext): Promise<LoadResult<Settings>> {
 	const projectContentPromise = projectPath ? readFile(projectPath) : Promise.resolve(null);
 
 	if (userContent && userPath) {
-		const parsed = parseJSON<Record<string, unknown>>(userContent);
+		const parsed = tryParseJson<Record<string, unknown>>(userContent);
 		if (parsed) {
 			items.push({
 				path: userPath,
@@ -173,7 +174,7 @@ async function loadSettings(ctx: LoadContext): Promise<LoadResult<Settings>> {
 
 	const projectContent = await projectContentPromise;
 	if (projectContent && projectPath) {
-		const parsed = parseJSON<Record<string, unknown>>(projectContent);
+		const parsed = tryParseJson<Record<string, unknown>>(projectContent);
 		if (parsed) {
 			items.push({
 				path: projectPath,

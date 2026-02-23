@@ -1,5 +1,6 @@
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import type { SpecialHandler } from "./types";
-import { buildResult, formatNumber, loadPage, tryParseJson } from "./types";
+import { buildResult, formatNumber, loadPage } from "./types";
 
 interface SemanticScholarAuthor {
 	name: string;

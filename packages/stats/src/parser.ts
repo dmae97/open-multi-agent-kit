@@ -1,8 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import { isEnoent } from "@oh-my-pi/pi-utils";
-import { getSessionsDir } from "@oh-my-pi/pi-utils/dirs";
+import { getSessionsDir, isEnoent } from "@oh-my-pi/pi-utils";
 import type { MessageStats, SessionEntry, SessionMessageEntry } from "./types";
 
 /**

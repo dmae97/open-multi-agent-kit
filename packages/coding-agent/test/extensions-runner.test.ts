@@ -10,8 +10,7 @@ import { discoverAndLoadExtensions } from "@oh-my-pi/pi-coding-agent/extensibili
 import { ExtensionRunner } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/runner";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { logger, TempDir } from "@oh-my-pi/pi-utils";
-import { getProjectAgentDir } from "@oh-my-pi/pi-utils/dirs";
+import { getProjectAgentDir, logger, TempDir } from "@oh-my-pi/pi-utils";
 import { filterUserExtensionErrors, filterUserExtensions } from "./utils/filter-user-extensions";
 
 describe("ExtensionRunner", () => {

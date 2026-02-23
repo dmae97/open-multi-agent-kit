@@ -6,8 +6,7 @@ import {
 	supportsLanguage as nativeSupportsLanguage,
 } from "@oh-my-pi/pi-natives";
 import type { EditorTheme, MarkdownTheme, SelectListTheme, SymbolTheme } from "@oh-my-pi/pi-tui";
-import { adjustHsv, isEnoent, logger } from "@oh-my-pi/pi-utils";
-import { getCustomThemesDir } from "@oh-my-pi/pi-utils/dirs";
+import { adjustHsv, getCustomThemesDir, isEnoent, logger } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import { TypeCompiler } from "@sinclair/typebox/compiler";
 import chalk from "chalk";

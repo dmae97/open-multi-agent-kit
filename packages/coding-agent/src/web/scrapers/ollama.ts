@@ -1,6 +1,7 @@
+import { tryParseJson } from "@oh-my-pi/pi-utils";
 import { formatBytes } from "../../tools/render-utils";
 import type { RenderResult, SpecialHandler } from "./types";
-import { buildResult, decodeHtmlEntities, loadPage, tryParseJson } from "./types";
+import { buildResult, decodeHtmlEntities, loadPage } from "./types";
 
 interface OllamaTagDetails {
 	parent_model?: string;

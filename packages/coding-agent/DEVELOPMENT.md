@@ -623,14 +623,14 @@ Normalization and collision handling:
   - `source = "<provider>:<level>",`
   - preserves `_source`.
 
-Custom directory loading (separate path):
+Custom directory loading (delegated scanner):
 
-- `customDirectories` are scanned directly via `scanDirectoryForSkills`, not via capability providers.
-- Recursive scan respects `.gitignore` / `.ignore` / `.fdignore` through `addIgnoreRules` + `shouldIgnore`.
-- Directory containing `SKILL.md` is treated as one skill root and is not recursed further.
+- `customDirectories` are scanned via `scanSkillsFromDir` from `src/discovery/helpers.ts` (not ad-hoc traversal in `extensibility/skills.ts`).
+- Custom directory scans are non-recursive (`*/SKILL.md`).
+- Scan uses one-level `readdir` candidate enumeration (`*/SKILL.md`) without recursive descent.
 - Custom skills are stamped as `source: "custom:user"` with `_source.provider = "custom"`.
 
-Also exported: `loadSkillsFromDir({ dir, source })` for direct recursive loading of skill directories with ignore-file support.
+Also exported: `discoverSkillsFromDir({ dir, source })`, which delegates directly to `scanSkillsFromDir` with non-recursive scanning.
 
 ## MCP Manager, LSP Client Boundary, and Internal URL Routing
 

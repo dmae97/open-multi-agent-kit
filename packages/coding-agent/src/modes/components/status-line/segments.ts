@@ -1,6 +1,5 @@
 import * as os from "node:os";
-import { formatDuration, formatNumber } from "@oh-my-pi/pi-utils";
-import { getProjectDir } from "@oh-my-pi/pi-utils/dirs";
+import { formatDuration, formatNumber, getProjectDir } from "@oh-my-pi/pi-utils";
 import { theme } from "../../../modes/theme/theme";
 import { shortenPath } from "../../../tools/render-utils";
 import type { RenderedSegment, SegmentContext, StatusLineSegment, StatusLineSegmentId } from "./types";

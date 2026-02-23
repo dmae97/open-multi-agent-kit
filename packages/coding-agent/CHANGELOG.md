@@ -7,6 +7,22 @@
 
 - Made `description` field required in CustomTool interface
 
+### Changed
+
+- Reorganized imports from `@oh-my-pi/pi-utils/dirs` to consolidate with main `@oh-my-pi/pi-utils` exports for cleaner dependency management
+- Renamed `loadSkillsFromDir` to `scanSkillsFromDir` with updated interface for improved clarity on skill discovery behavior
+- Moved `tryParseJson` utility from local scrapers module to `@oh-my-pi/pi-utils` for centralized JSON parsing
+- Simplified patch module exports by consolidating type re-exports with `export * from './types'`
+- Removed `emitCustomToolSessionEvent` method from AgentSession for streamlined session lifecycle management
+- Changed skill discovery from recursive to non-recursive (one level deep only) for improved performance and clarity
+- Simplified skill loading logic by removing recursive directory traversal and consolidating ignore rule handling
+
+### Removed
+
+- Removed `parseJSON` helper function from discovery module (replaced by `tryParseJson` from pi-utils)
+- Removed backwards compatibility comment from `AskToolDetails.question` field
+- Removed unused SSH resource cleanup functions `closeAllConnections` and `unmountAll` from session imports
+
 ## [13.1.2] - 2026-02-23
 ### Breaking Changes
 

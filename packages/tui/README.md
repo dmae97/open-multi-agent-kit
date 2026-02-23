@@ -94,7 +94,7 @@ Container that applies padding and background color to all children.
 const box = new Box(
 	1, // paddingX (default: 1)
 	1, // paddingY (default: 1)
-	(text) => chalk.bgGray(text) // optional background function
+	(text) => chalk.bgGray(text), // optional background function
 );
 box.addChild(new Text("Content"));
 box.setBgFn((text) => chalk.bgBlue(text)); // Change background dynamically
@@ -109,7 +109,7 @@ const text = new Text(
 	"Hello World", // text content
 	1, // paddingX (default: 1)
 	1, // paddingY (default: 1)
-	(text) => chalk.bgGray(text) // optional background function
+	(text) => chalk.bgGray(text), // optional background function
 );
 text.setText("Updated text");
 text.setCustomBgFn((text) => chalk.bgBlue(text));
@@ -123,7 +123,7 @@ Single-line text that truncates to fit viewport width. Useful for status lines a
 const truncated = new TruncatedText(
 	"This is a very long line that will be truncated...",
 	0, // paddingX (default: 0)
-	0 // paddingY (default: 0)
+	0, // paddingY (default: 0)
 );
 ```
 
@@ -269,7 +269,7 @@ const md = new Markdown(
 	1, // paddingY
 	theme, // MarkdownTheme
 	defaultStyle, // optional DefaultTextStyle
-	2 // optional code block indent (spaces)
+	2, // optional code block indent (spaces)
 );
 md.setText("Updated markdown");
 ```
@@ -291,7 +291,7 @@ const loader = new Loader(
 	tui, // TUI instance for render updates
 	(s) => chalk.cyan(s), // spinner color function
 	(s) => chalk.gray(s), // message color function
-	"Loading..." // message (default: "Loading...")
+	"Loading...", // message (default: "Loading...")
 );
 loader.start();
 loader.setMessage("Still loading...");
@@ -307,7 +307,7 @@ const loader = new CancellableLoader(
 	tui, // TUI instance for render updates
 	(s) => chalk.cyan(s), // spinner color function
 	(s) => chalk.gray(s), // message color function
-	"Working..." // message
+	"Working...", // message
 );
 loader.onAbort = () => done(null); // Called when user presses Escape
 doAsyncWork(loader.signal).then(done);
@@ -345,7 +345,7 @@ const list = new SelectList(
 		{ value: "opt2", label: "Option 2", description: "Second option" },
 	],
 	5, // maxVisible
-	theme // SelectListTheme
+	theme, // SelectListTheme
 );
 
 list.onSelect = (item) => console.log("Selected:", item);
@@ -390,7 +390,7 @@ const settings = new SettingsList(
 	10, // maxVisible
 	theme, // SettingsListTheme
 	(id, newValue) => console.log(`${id} changed to ${newValue}`),
-	() => console.log("Cancelled")
+	() => console.log("Cancelled"),
 );
 settings.updateValue("theme", "light");
 ```
@@ -428,7 +428,7 @@ const image = new Image(
 	base64Data, // base64-encoded image data
 	"image/png", // MIME type
 	theme, // ImageTheme
-	options // optional ImageOptions
+	options, // optional ImageOptions
 );
 tui.addChild(image);
 ```
@@ -443,7 +443,7 @@ Supports both slash commands and file paths.
 
 ```typescript
 import { CombinedAutocompleteProvider } from "@oh-my-pi/pi-tui";
-import { getProjectDir } from "@oh-my-pi/pi-utils/dirs";
+import { getProjectDir } from "@oh-my-pi/pi-utils";
 
 const provider = new CombinedAutocompleteProvider(
 	[
@@ -451,7 +451,7 @@ const provider = new CombinedAutocompleteProvider(
 		{ name: "clear", description: "Clear screen" },
 		{ name: "delete", description: "Delete last message" },
 	],
-	getProjectDir() // base path for file completion
+	getProjectDir(), // base path for file completion
 );
 
 editor.setAutocompleteProvider(provider);

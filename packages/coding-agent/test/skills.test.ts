@@ -1,133 +1,114 @@
 import { describe, expect, it } from "bun:test";
+import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { loadSkills, loadSkillsFromDir, type Skill } from "@oh-my-pi/pi-coding-agent/extensibility/skills";
 
-const fixturesDir = path.resolve(__dirname, "fixtures/skills");
-const collisionFixturesDir = path.resolve(__dirname, "fixtures/skills-collision");
+const fixturesDir = path.resolve(import.meta.dirname, "fixtures/skills");
+const collisionFixturesDir = path.resolve(import.meta.dirname, "fixtures/skills-collision");
 
 describe("skills", () => {
 	describe("loadSkillsFromDir", () => {
-		it("should load a valid skill", async () => {
-			const { skills, warnings } = await loadSkillsFromDir({
-				dir: path.join(fixturesDir, "valid-skill"),
-				source: "test",
-			});
+		const loadFixtureRoot = () => loadSkillsFromDir({ dir: fixturesDir, source: "test" });
 
-			expect(skills).toHaveLength(1);
-			expect(skills[0].name).toBe("valid-skill");
-			expect(skills[0].description).toBe("A valid skill for testing purposes.");
-			expect(skills[0].source).toBe("test");
+		it("should load a valid skill from a skills root", async () => {
+			const { skills, warnings } = await loadFixtureRoot();
+			const validSkill = skills.find(skill => skill.name === "valid-skill");
+
+			expect(validSkill).toBeDefined();
+			expect(validSkill?.description).toBe("A valid skill for testing purposes.");
+			expect(validSkill?.source).toBe("test");
 			expect(warnings).toHaveLength(0);
 		});
 
 		it("should load skill when name doesn't match parent directory", async () => {
-			const { skills } = await loadSkillsFromDir({
-				dir: path.join(fixturesDir, "name-mismatch"),
-				source: "test",
-			});
+			const { skills } = await loadFixtureRoot();
 
-			expect(skills).toHaveLength(1);
-			expect(skills[0].name).toBe("different-name");
+			expect(skills.some(skill => skill.name === "different-name")).toBe(true);
 		});
 
 		it("should load skill with invalid name characters", async () => {
-			const { skills } = await loadSkillsFromDir({
-				dir: path.join(fixturesDir, "invalid-name-chars"),
-				source: "test",
-			});
+			const { skills } = await loadFixtureRoot();
 
-			expect(skills).toHaveLength(1);
+			expect(skills.some(skill => skill.name === "Invalid_Name")).toBe(true);
 		});
 
 		it("should load skill when name exceeds 64 characters", async () => {
-			const { skills } = await loadSkillsFromDir({
-				dir: path.join(fixturesDir, "long-name"),
-				source: "test",
-			});
+			const { skills } = await loadFixtureRoot();
 
-			expect(skills).toHaveLength(1);
+			expect(
+				skills.some(
+					skill =>
+						skill.name ===
+						"this-is-a-very-long-skill-name-that-exceeds-the-sixty-four-character-limit-set-by-the-standard",
+				),
+			).toBe(true);
 		});
 
 		it("should skip skill when description is missing", async () => {
-			const { skills } = await loadSkillsFromDir({
-				dir: path.join(fixturesDir, "missing-description"),
-				source: "test",
-			});
+			const { skills } = await loadFixtureRoot();
 
-			expect(skills).toHaveLength(0);
+			expect(skills.some(skill => skill.name === "missing-description")).toBe(false);
 		});
 
 		it("should load skill with unknown frontmatter fields", async () => {
-			const { skills } = await loadSkillsFromDir({
-				dir: path.join(fixturesDir, "unknown-field"),
-				source: "test",
-			});
+			const { skills } = await loadFixtureRoot();
 
-			expect(skills).toHaveLength(1);
+			expect(skills.some(skill => skill.name === "unknown-field")).toBe(true);
 		});
 
-		it("should load nested skills recursively", async () => {
-			const { skills } = await loadSkillsFromDir({
-				dir: path.join(fixturesDir, "nested"),
-				source: "test",
-			});
+		it("should not load nested skills recursively", async () => {
+			const { skills } = await loadFixtureRoot();
 
-			expect(skills).toHaveLength(1);
-			expect(skills[0].name).toBe("child-skill");
+			expect(skills.some(skill => skill.name === "child-skill")).toBe(false);
 		});
 
 		it("should skip files without frontmatter description", async () => {
-			const { skills } = await loadSkillsFromDir({
-				dir: path.join(fixturesDir, "no-frontmatter"),
-				source: "test",
-			});
+			const { skills } = await loadFixtureRoot();
 
-			// no-frontmatter has no description, so it should be skipped
-			expect(skills).toHaveLength(0);
+			expect(skills.some(skill => skill.name === "no-frontmatter")).toBe(false);
 		});
 
 		it("should load skill with consecutive hyphens in name", async () => {
-			const { skills } = await loadSkillsFromDir({
-				dir: path.join(fixturesDir, "consecutive-hyphens"),
-				source: "test",
-			});
+			const { skills } = await loadFixtureRoot();
 
-			expect(skills).toHaveLength(1);
+			expect(skills.some(skill => skill.name === "bad--name")).toBe(true);
 		});
 
-		it("should load all skills from fixture directory", async () => {
-			const { skills } = await loadSkillsFromDir({
-				dir: fixturesDir,
-				source: "test",
-			});
+		it("should load all directly nested skills from fixture directory", async () => {
+			const { skills } = await loadFixtureRoot();
+			const names = skills.map(skill => skill.name);
 
-			// Should load all skills that have descriptions (even with warnings)
-			// valid-skill, name-mismatch, invalid-name-chars, long-name, unknown-field, nested/child-skill, consecutive-hyphens
-			// NOT: missing-description, no-frontmatter (both missing descriptions)
-			expect(skills.length).toBeGreaterThanOrEqual(6);
+			expect(names).toEqual(
+				expect.arrayContaining([
+					"valid-skill",
+					"different-name",
+					"Invalid_Name",
+					"this-is-a-very-long-skill-name-that-exceeds-the-sixty-four-character-limit-set-by-the-standard",
+					"unknown-field",
+					"bad--name",
+				]),
+			);
+			expect(names).not.toContain("child-skill");
+			expect(skills).toHaveLength(6);
 		});
 
-		it("should return empty for non-existent directory", async () => {
-			const { skills } = await loadSkillsFromDir({
-				dir: "/non/existent/path",
-				source: "test",
-			});
-
-			expect(skills).toHaveLength(0);
+		it("should throw for non-existent directory", () => {
+			expect(
+				loadSkillsFromDir({
+					dir: "/non/existent/path",
+					source: "test",
+				}),
+			).rejects.toThrow("ENOENT");
 		});
 
-		it("should use parent directory name when name not in frontmatter", async () => {
-			// The no-frontmatter fixture has no name in frontmatter, so it should use "no-frontmatter"
-			// But it also has no description, so it won't load
-			// Let's test with a valid skill that relies on directory name
+		it("should return empty when scanning a single skill directory directly", async () => {
 			const { skills } = await loadSkillsFromDir({
 				dir: path.join(fixturesDir, "valid-skill"),
 				source: "test",
 			});
 
-			expect(skills).toHaveLength(1);
-			expect(skills[0].name).toBe("valid-skill");
+			expect(skills).toHaveLength(0);
 		});
 	});
 
@@ -153,10 +134,10 @@ describe("skills", () => {
 				enableClaudeProject: false,
 				enablePiUser: false,
 				enablePiProject: false,
-				customDirectories: [path.join(fixturesDir, "valid-skill")],
+				customDirectories: [fixturesDir],
 				ignoredSkills: ["valid-skill"],
 			});
-			expect(skills).toHaveLength(0);
+			expect(skills.some(s => s.name === "valid-skill")).toBe(false);
 		});
 
 		it("should support glob patterns in ignoredSkills", async () => {
@@ -188,24 +169,45 @@ describe("skills", () => {
 		});
 
 		it("should expand ~ in customDirectories", async () => {
-			const homeSkillsDir = path.join(os.homedir(), ".omp/agent/skills");
-			const { skills: withTilde } = await loadSkills({
-				enableCodexUser: false,
-				enableClaudeUser: false,
-				enableClaudeProject: false,
-				enablePiUser: false,
-				enablePiProject: false,
-				customDirectories: ["~/.omp/agent/skills"],
-			});
-			const { skills: withoutTilde } = await loadSkills({
-				enableCodexUser: false,
-				enableClaudeUser: false,
-				enableClaudeProject: false,
-				enablePiUser: false,
-				enablePiProject: false,
-				customDirectories: [homeSkillsDir],
-			});
-			expect(withTilde.length).toBe(withoutTilde.length);
+			const tempHomeSkillsDir = await fs.mkdtemp(path.join(os.homedir(), ".pi-skills-test-"));
+			const relativeToHome = path.relative(os.homedir(), tempHomeSkillsDir);
+			const tildeDir = `~/${relativeToHome.split(path.sep).join("/")}`;
+			const skillDir = path.join(tempHomeSkillsDir, "tilde-skill");
+			const skillPath = path.join(skillDir, "SKILL.md");
+			await fs.mkdir(skillDir, { recursive: true });
+			await fs.writeFile(
+				skillPath,
+				`---
+name: tilde-skill
+description: Skill loaded from a tilde-expanded custom directory.
+---
+
+# Tilde Skill
+`,
+			);
+
+			try {
+				const { skills: withTilde } = await loadSkills({
+					enableCodexUser: false,
+					enableClaudeUser: false,
+					enableClaudeProject: false,
+					enablePiUser: false,
+					enablePiProject: false,
+					customDirectories: [tildeDir],
+				});
+				const { skills: withoutTilde } = await loadSkills({
+					enableCodexUser: false,
+					enableClaudeUser: false,
+					enableClaudeProject: false,
+					enablePiUser: false,
+					enablePiProject: false,
+					customDirectories: [tempHomeSkillsDir],
+				});
+				expect(withTilde.length).toBe(withoutTilde.length);
+				expect(withTilde.some(skill => skill.name === "tilde-skill")).toBe(true);
+			} finally {
+				await fs.rm(tempHomeSkillsDir, { recursive: true, force: true });
+			}
 		});
 
 		it("should return empty when all sources disabled and no custom dirs", async () => {

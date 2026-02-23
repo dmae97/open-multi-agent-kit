@@ -10,8 +10,7 @@ import {
 } from "@oh-my-pi/pi-ai";
 import { copyToClipboard } from "@oh-my-pi/pi-natives";
 import { Loader, Markdown, padding, Spacer, Text, visibleWidth } from "@oh-my-pi/pi-tui";
-import { formatDuration, Snowflake } from "@oh-my-pi/pi-utils";
-import { setProjectDir } from "@oh-my-pi/pi-utils/dirs";
+import { formatDuration, Snowflake, setProjectDir } from "@oh-my-pi/pi-utils";
 import { $ } from "bun";
 import { reset as resetCapabilities } from "../../capability";
 import { loadCustomShare } from "../../export/custom-share";

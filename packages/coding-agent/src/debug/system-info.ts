@@ -3,8 +3,7 @@
  */
 
 import * as os from "node:os";
-import { formatBytes } from "@oh-my-pi/pi-utils";
-import { getProjectDir, VERSION } from "@oh-my-pi/pi-utils/dirs";
+import { formatBytes, getProjectDir, VERSION } from "@oh-my-pi/pi-utils";
 
 export interface SystemInfo {
 	os: string;

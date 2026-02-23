@@ -3,8 +3,7 @@ import * as path from "node:path";
 import { Readability } from "@mozilla/readability";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { StringEnum } from "@oh-my-pi/pi-ai";
-import { logger, Snowflake, untilAborted } from "@oh-my-pi/pi-utils";
-import { getPuppeteerDir } from "@oh-my-pi/pi-utils/dirs";
+import { getPuppeteerDir, logger, Snowflake, untilAborted } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import { type HTMLElement, parseHTML } from "linkedom";
 import type {
