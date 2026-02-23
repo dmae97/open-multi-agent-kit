@@ -1,6 +1,6 @@
 # Read
 
-Reads files from local filesystem or harness URLs.
+Reads files from local filesystem or internal URLs.
 
 <instruction>
 - Reads up to {{DEFAULT_MAX_LINES}} lines default
@@ -14,13 +14,10 @@ Reads files from local filesystem or harness URLs.
 {{/if}}
 - Supports images (PNG, JPG) and PDFs
 - For directories, returns formatted listing with modification times
-- You SHOULD parallelize reads when exploring related files
+- Parallelize reads when exploring related files
 </instruction>
 
 <output>
-- Returns file content as text
-- Images: returns visual content for analysis
-- PDFs: returns extracted text
+- Returns file content as text; images return visual content; PDFs return extracted text
 - Missing files: returns closest filename matches for correction
-- Internal URLs: returns resolved content with pagination support
 </output>

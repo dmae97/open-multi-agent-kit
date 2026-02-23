@@ -3,16 +3,13 @@
 Powerful search tool built on ripgrep.
 
 <instruction>
-- Supports full regex syntax (e.g., `log.*Error`, `function\\s+\\w+`)
+- Supports full regex syntax (e.g., `log.*Error`, `function\\s+\\w+`); literal braces need escaping (`interface\\{\\}` for `interface{}` in Go)
 - Filter files with `glob` (e.g., `*.js`, `**/*.tsx`) or `type` (e.g., `js`, `py`, `rust`)
-- Pattern syntax uses ripgrep—literal braces need escaping (`interface\\{\\}` to find `interface{}` in Go)
 - For cross-line patterns like `struct \\{[\\s\\S]*?field`, set `multiline: true` if needed
 - If the pattern contains a literal `\n`, multiline defaults to true
 </instruction>
 
 <output>
-- Results are always content mode.
-- Results grouped by directory (`# dir`) and file (`## └─ file`) headings
 {{#if IS_HASHLINE_MODE}}
 - Text output is CID prefixed: `LINE#ID:content`
 {{else}}
