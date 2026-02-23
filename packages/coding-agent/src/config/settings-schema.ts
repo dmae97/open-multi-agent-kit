@@ -566,6 +566,17 @@ export const SETTINGS_SCHEMA = {
 			submenu: true,
 		},
 	},
+	"task.isolation.commits": {
+		type: "enum",
+		values: ["generic", "ai"] as const,
+		default: "generic",
+		ui: {
+			tab: "tools",
+			label: "Task isolation commits",
+			description: "Commit message style for nested repo changes (generic or AI-generated)",
+			submenu: true,
+		},
+	},
 	"task.maxConcurrency": {
 		type: "number",
 		default: 32,

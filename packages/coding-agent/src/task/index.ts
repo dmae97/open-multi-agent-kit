@@ -29,6 +29,7 @@ import taskSummaryTemplate from "../prompts/tools/task-summary.md" with { type: 
 import { formatBytes, formatDuration } from "../tools/render-utils";
 // Import review tools for side effects (registers subagent tool handlers)
 import "../tools/review";
+import { generateCommitMessage } from "../utils/commit-message-generator";
 import { discoverAgents, getAgent } from "./discovery";
 import { runSubprocess } from "./executor";
 import { AgentOutputManager } from "./output-manager";
@@ -432,6 +433,7 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 		const isolationRequested = "isolated" in params ? params.isolated === true : false;
 		const isIsolated = isolationMode !== "none" && isolationRequested;
 		const mergeMode = this.session.settings.get("task.isolation.merge");
+		const commitStyle = this.session.settings.get("task.isolation.commits");
 		const maxConcurrency = this.session.settings.get("task.maxConcurrency");
 		const taskDepth = this.session.taskDepth ?? 0;
 
@@ -1043,7 +1045,19 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 					.flatMap(r => r.nestedPatches!);
 				if (allNestedPatches.length > 0) {
 					try {
-						await applyNestedPatches(repoRoot, allNestedPatches);
+						const commitMsg =
+							commitStyle === "ai" && this.session.modelRegistry
+								? async (diff: string) => {
+										const smolModel = this.session.settings.getModelRole("smol");
+										return generateCommitMessage(
+											diff,
+											this.session.modelRegistry!,
+											smolModel,
+											this.session.getSessionId?.() ?? undefined,
+										);
+									}
+								: undefined;
+						await applyNestedPatches(repoRoot, allNestedPatches, commitMsg);
 					} catch {
 						// Nested patch failures are non-fatal to the parent merge
 						mergeSummary +=

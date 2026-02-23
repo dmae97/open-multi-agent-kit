@@ -6,6 +6,12 @@ import { isEnoent, Snowflake } from "@oh-my-pi/pi-utils";
 import { getWorktreeDir } from "@oh-my-pi/pi-utils/dirs";
 import { $ } from "bun";
 
+async function gitAuthorFlags(cwd: string): Promise<string[]> {
+	const name = (await $`git config user.name`.cwd(cwd).quiet().nothrow().text()).trim() || "omp";
+	const email = (await $`git config user.email`.cwd(cwd).quiet().nothrow().text()).trim() || "omp@task";
+	return [`-c`, `user.name=${name}`, `-c`, `user.email=${email}`];
+}
+
 /** Baseline state for a single git repository. */
 export interface RepoBaseline {
 	repoRoot: string;
@@ -167,18 +173,33 @@ export async function applyBaseline(worktreeDir: string, baseline: WorktreeBasel
 	await applyRepoBaseline(worktreeDir, baseline.root, baseline.root.repoRoot);
 
 	// Restore nested repos into the worktree
-	for (const { relativePath, baseline: nb } of baseline.nested) {
-		const nestedDir = path.join(worktreeDir, relativePath);
+	for (const entry of baseline.nested) {
+		const nestedDir = path.join(worktreeDir, entry.relativePath);
 		// Copy the nested repo wholesale (it's not managed by root git)
-		const sourceDir = path.join(baseline.root.repoRoot, relativePath);
+		const sourceDir = path.join(baseline.root.repoRoot, entry.relativePath);
 		try {
 			await fs.cp(sourceDir, nestedDir, { recursive: true });
 		} catch (err) {
 			if (isEnoent(err)) continue;
 			throw err;
 		}
-		// Then apply any uncommitted changes from the nested baseline
-		await applyRepoBaseline(nestedDir, nb, nb.repoRoot);
+		// Apply any uncommitted changes from the nested baseline
+		await applyRepoBaseline(nestedDir, entry.baseline, entry.baseline.repoRoot);
+		// Commit baseline state so captureRepoDeltaPatch can cleanly subtract it.
+		// Without this, `git add -A && git commit` by the task would include
+		// baseline untracked files in the diff-tree output.
+		const hasChanges = (await $`git status --porcelain`.cwd(nestedDir).quiet().nothrow().text()).trim();
+		if (hasChanges) {
+			await $`git add -A`.cwd(nestedDir).quiet();
+			const flags = await gitAuthorFlags(nestedDir);
+			await $`git ${flags} commit -m omp-baseline --allow-empty`.cwd(nestedDir).quiet();
+			// Update baseline to reflect the committed state — prevents double-apply
+			// in captureRepoDeltaPatch's temp-index path
+			entry.baseline.headCommit = (await $`git rev-parse HEAD`.cwd(nestedDir).quiet().text()).trim();
+			entry.baseline.staged = "";
+			entry.baseline.unstaged = "";
+			entry.baseline.untracked = [];
+		}
 	}
 }
 
@@ -297,17 +318,46 @@ export async function captureDeltaPatch(isolationDir: string, baseline: Worktree
 	return { rootPatch, nestedPatches };
 }
 
-/** Apply nested repo patches directly to their working directories after parent merge. */
-export async function applyNestedPatches(repoRoot: string, patches: NestedRepoPatch[]): Promise<void> {
-	for (const { relativePath, patch } of patches) {
-		if (!patch.trim()) continue;
+/**
+ * Apply nested repo patches directly to their working directories after parent merge.
+ * @param commitMessage Optional async function to generate a commit message from the combined diff.
+ *                      If omitted or returns null, falls back to a generic message.
+ */
+export async function applyNestedPatches(
+	repoRoot: string,
+	patches: NestedRepoPatch[],
+	commitMessage?: (diff: string) => Promise<string | null>,
+): Promise<void> {
+	// Group patches by target repo to apply all at once and commit
+	const byRepo = new Map<string, NestedRepoPatch[]>();
+	for (const p of patches) {
+		if (!p.patch.trim()) continue;
+		const group = byRepo.get(p.relativePath) ?? [];
+		group.push(p);
+		byRepo.set(p.relativePath, group);
+	}
+
+	for (const [relativePath, repoPatches] of byRepo) {
 		const nestedDir = path.join(repoRoot, relativePath);
 		try {
 			await fs.access(path.join(nestedDir, ".git"));
 		} catch {
 			continue;
 		}
-		await applyPatch(nestedDir, patch);
+
+		const combinedDiff = repoPatches.map(p => p.patch).join("\n");
+		for (const { patch } of repoPatches) {
+			await applyPatch(nestedDir, patch);
+		}
+
+		// Commit so nested repo history reflects the task changes
+		const hasChanges = (await $`git status --porcelain`.cwd(nestedDir).quiet().nothrow().text()).trim();
+		if (hasChanges) {
+			const msg = (await commitMessage?.(combinedDiff)) ?? "changes from isolated task(s)";
+			await $`git add -A`.cwd(nestedDir).quiet();
+			const flags = await gitAuthorFlags(nestedDir);
+			await $`git ${flags} commit -m ${msg}`.cwd(nestedDir).quiet();
+		}
 	}
 }
 
@@ -422,7 +472,8 @@ export async function commitToBranch(
 				await fs.rm(patchPath, { force: true });
 			}
 			await $`git add -A`.cwd(tmpDir).quiet();
-			await $`git -c user.name=omp -c user.email=omp@task commit -m ${commitMessage}`.cwd(tmpDir).quiet();
+			const flags = await gitAuthorFlags(tmpDir);
+			await $`git ${flags} commit -m ${commitMessage}`.cwd(tmpDir).quiet();
 		} finally {
 			await $`git worktree remove -f ${tmpDir}`.cwd(repoRoot).quiet().nothrow();
 			await fs.rm(tmpDir, { recursive: true, force: true });
