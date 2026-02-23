@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.1.0] - 2026-02-23
 ### Breaking Changes
 
 - Renamed `file` parameter to `path` in replace, patch, and hashline edit operations
