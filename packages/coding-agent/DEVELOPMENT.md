@@ -907,11 +907,13 @@ Despite the name `runSubprocess`, `packages/coding-agent/src/task/executor.ts` c
 What _is_ isolated is execution context and artifacts, not process memory:
 
 - Optional filesystem isolation is controlled by the `task.isolation.mode` setting (`"none"`, `"worktree"`, or `"fuse-overlay"`).
-  - **worktree**: `ensureWorktree(...)`, `applyBaseline(...)`, `captureDeltaPatch(...)`, `cleanupWorktree(...)`.
-  - **fuse-overlay**: `ensureFuseOverlay(...)` (mounts a copy-on-write overlay via `fuse-overlayfs`), `captureDeltaPatch(...)`, `cleanupFuseOverlay(...)`. No baseline apply step needed since the overlay reflects the full working tree.
+  - **worktree**: `ensureWorktree(...)`, `applyBaseline(...)`, `captureDeltaPatch(...)`, `cleanupWorktree(...)`. Nested non-submodule git repos are discovered and handled independently.
+  - **fuse-overlay**: `ensureFuseOverlay(...)` (mounts a copy-on-write overlay via `fuse-overlayfs`), `captureDeltaPatch(...)`, `cleanupFuseOverlay(...)`. No baseline apply needed since the overlay reflects the full working tree. Fails outright if mount fails.
 - The `task.isolation.merge` setting controls how isolated changes are integrated back:
   - **patch** (default): captures a diff via `captureDeltaPatch(...)`, combines patches, and applies with `git apply`.
-  - **branch**: each task commits to a temp branch (`omp/task/<id>`) via `commitToBranch(...)`, then `mergeTaskBranches(...)` merges them sequentially with `--no-ff` merge commits.
+  - **branch**: each task commits to a temp branch (`omp/task/<id>`) via `commitToBranch(...)`, then `mergeTaskBranches(...)` cherry-picks them sequentially onto HEAD. If `git apply` fails inside `commitToBranch`, the error is non-fatal — the agent result is preserved with a `merge failed` status.
+- The `task.isolation.commits` setting (`generic` or `ai`) controls commit messages for branch commits and nested repo patches. `ai` mode uses a smol model to generate conventional commit messages from diffs.
+- Nested repo patches are applied via `applyNestedPatches(...)` after the parent merge, grouped by repo with one commit per repo.
 - Child session JSONL/markdown outputs are written under the task artifacts directory (`<id>.jsonl`, `<id>.md`, and in isolated mode `<id>.patch`).
 
 ### Tooling Surface in Child Sessions

@@ -806,7 +806,6 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 
 					if (isolationMode === "fuse-overlay") {
 						isolationDir = await ensureFuseOverlay(repoRoot, task.id);
-						// Overlay already reflects the full working tree state — no baseline apply needed
 					} else {
 						isolationDir = await ensureWorktree(repoRoot, task.id);
 						await applyBaseline(isolationDir, baseline);

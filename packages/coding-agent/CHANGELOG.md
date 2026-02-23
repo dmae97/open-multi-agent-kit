@@ -10,7 +10,7 @@
 
 - Added `fuse-overlay` isolation mode for subagents using `fuse-overlayfs` (copy-on-write overlay, no baseline patch apply needed)
 - Added `task.isolation.merge` setting (`patch` or `branch`) to control how isolated task changes are integrated back. `branch` mode commits each task to a temp branch and cherry-picks for clean commit history
-- Added `task.isolation.commits` setting (`generic` or `ai`) for nested repo commit messages. `ai` mode uses a smol model to generate conventional commit messages from diffs
+- Added `task.isolation.commits` setting (`generic` or `ai`) for commit messages on isolated task branches and nested repos. `ai` mode uses a smol model to generate conventional commit messages from diffs
 - Nested non-submodule git repos are now discovered and handled during task isolation (changes captured and applied independently from parent repo)
 - Added `task.eager` setting to encourage the agent to delegate work to subagents by default
 
@@ -20,6 +20,9 @@
 - Fixed nested repo patches conflicting when multiple tasks contribute to the same repo (baseline untracked files no longer leak into patches)
 - Nested repo changes are now committed after patch application (previously left as untracked files)
 - Failed tasks no longer create stale branches or capture garbage patches (gated on exit code)
+- Merge failures (e.g. conflicting patches) are now non-fatal — agent output is preserved with `merge failed` status instead of `failed`
+- Stale branches are cleaned up when `commitToBranch` fails
+- Commit message generator filters lock files from diffs before AI summarization
 
 ## [13.2.0] - 2026-02-23
 ### Breaking Changes

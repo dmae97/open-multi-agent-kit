@@ -14,19 +14,18 @@ import commitSystemPrompt from "../prompts/system/commit-message-system.md" with
 const COMMIT_SYSTEM_PROMPT = renderPromptTemplate(commitSystemPrompt);
 const MAX_DIFF_CHARS = 4000;
 
-/** Paths that should be excluded from commit message generation diffs. */
-const NOISE_PATH_PREFIXES = ["node_modules/", ".yarn/", ".pnp.", "dist/", "build/", ".next/", "coverage/"];
+/** File patterns that should be excluded from commit message generation diffs. */
+const NOISE_SUFFIXES = [".lock", ".lockb", "-lock.json", "-lock.yaml"];
 
-/** Strip diff hunks for noisy paths that drown out real changes. */
+/** Strip diff hunks for noisy files that drown out real changes. */
 function filterDiffNoise(diff: string): string {
 	const lines = diff.split("\n");
 	const filtered: string[] = [];
 	let skip = false;
 	for (const line of lines) {
 		if (line.startsWith("diff --git ")) {
-			// Extract b/ path from "diff --git a/... b/..."
 			const bPath = line.split(" b/")[1];
-			skip = bPath != null && NOISE_PATH_PREFIXES.some(p => bPath.startsWith(p));
+			skip = bPath != null && NOISE_SUFFIXES.some(s => bPath.endsWith(s));
 		}
 		if (!skip) filtered.push(line);
 	}
