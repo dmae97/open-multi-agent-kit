@@ -13,11 +13,11 @@ Workflow rules:
 6. Do not use read.
 
 Commit requirements:
-- Summary line: past-tense verb, <= 72 chars, no trailing period.
+- Summary line: past-tense verb, ≤ 72 chars, no trailing period.
 - Avoid filler words: comprehensive, various, several, improved, enhanced, better.
 - Avoid meta phrases: "this commit", "this change", "updated code", "modified files".
 - Scope: lowercase, max two segments; only letters, digits, hyphens, underscores.
-- Detail lines optional (0-6). Each sentence ending in period, <= 120 chars.
+- Detail lines optional (0-6). Each sentence ending in period, ≤ 120 chars.
 
 Conventional commit types:
 {{types_description}}

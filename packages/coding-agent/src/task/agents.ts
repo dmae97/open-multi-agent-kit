@@ -108,7 +108,7 @@ export function parseAgent(
 	});
 	const fields = parseAgentFields(frontmatter);
 	if (!fields) {
-		throw new AgentParsingError(new Error("Invalid agent fields"), filePath);
+		throw new AgentParsingError(new Error(`Invalid agent field: ${filePath}\n${content}`), filePath);
 	}
 	return {
 		...fields,

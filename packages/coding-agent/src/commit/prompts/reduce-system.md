@@ -10,7 +10,7 @@ Determine:
 4. CHANGELOG: Metadata for user-visible changes
 </instructions>
 <scope-rules>
-- Component name if >=60% changes target it
+- Component name if ≥60% changes target it
 - null if spread across multiple components
 - scope_candidates as primary source
 - Valid: specific component names (api, parser, config, etc.)

@@ -186,4 +186,5 @@ Good — anchors to structural line:
 - Edit payload: `{ path, edits[] }`. Each entry: `op`, `lines`, optional `pos`/`end`. No extra keys.
 - Every tag **MUST** be copied exactly from fresh tool result as `N#ID`.
 - You **MUST** re-read after each edit call before issuing another on same file.
+- Formatting is a batch operation. You **MUST** never use this tool for formatting.
 </critical>

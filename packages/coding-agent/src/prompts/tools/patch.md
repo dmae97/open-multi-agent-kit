@@ -46,7 +46,7 @@ Returns success/failure; on failure, error message indicates:
 - You **MUST NOT** use anchors as comments (no line numbers, location labels, placeholders like `@@ @@`)
 - You **MUST NOT** place new lines outside the intended block
 - If edit fails or breaks structure, you **MUST** re-read the file and produce a new patch from current content — you **MUST NOT** retry the same diff
-- **NEVER** use edit to fix indentation, whitespace, or reformat code. Formatting is a single command run once at the end (`bun fmt`, `cargo fmt`, `prettier --write`, etc.)—not N individual edits. If you see inconsistent indentation after an edit, leave it; the formatter will fix all of it in one pass.
+- **NEVER** use edit to fix indentation, whitespace, or reformat code. Formatting is a single command run once at the end (`bun fmt`, `cargo fmt`, `prettier —write`, etc.)—not N individual edits. If you see inconsistent indentation after an edit, leave it; the formatter will fix all of it in one pass.
 </critical>
 
 <example name="create">

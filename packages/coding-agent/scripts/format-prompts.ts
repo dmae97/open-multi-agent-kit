@@ -80,8 +80,6 @@ function compactTableSep(line: string): string {
 }
 
 function formatPrompt(content: string): string {
-	// Replace common ascii ellipsis and arrow patterns with their unicode equivalents
-	content = content.replace(/\.{3}/g, "…").replace(/->/g, "→").replace(/<-/g, "←").replace(/<->/g, "↔");
 	const lines = content.split("\n");
 	const result: string[] = [];
 	let inCodeBlock = false;
@@ -89,9 +87,9 @@ function formatPrompt(content: string): string {
 	const topLevelTags: string[] = [];
 
 	for (let i = 0; i < lines.length; i++) {
-		let line = lines[i];
+		let line = lines[i].trimEnd();
 
-		const trimmed = line.trim();
+		const trimmed = line.trimStart();
 
 		// Track code blocks - don't modify inside them
 		if (CODE_FENCE.test(trimmed)) {
@@ -105,6 +103,16 @@ function formatPrompt(content: string): string {
 			continue;
 		}
 
+		// Replace common ascii ellipsis and arrow patterns with their unicode equivalents
+		line = line
+			.replace(/\.{3}/g, "…")
+			.replace(/->/g, "→")
+			.replace(/<-/g, "←")
+			.replace(/<->/g, "↔")
+			.replace(/!=/g, "≠")
+			.replace(/<=/g, "≤")
+			.replace(/>=/g, "≥");
+			
 		// Track top-level XML opening tags for depth-aware indent stripping
 		const isOpeningXml = OPENING_XML.test(trimmed) && !trimmed.endsWith("/>");
 		if (isOpeningXml && line.length === trimmed.length) {

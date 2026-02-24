@@ -1,9 +1,9 @@
 {{base}}
 
-{{section "Acting as"}}
+{{SECTION_SEPERATOR "Acting as"}}
 {{agent}}
 
-{{section "Job"}}
+{{SECTION_SEPERATOR "Job"}}
 You are operating on a delegated sub-task.
 {{#if worktree}}
 You are working in an isolated working tree at `{{worktree}}` for this sub-task.
@@ -14,7 +14,7 @@ You **MUST NOT** modify files outside this tree or in the original repository.
 If you need additional information, you can find your conversation with the user in {{contextFile}} (`tail` or `grep` relevant terms).
 {{/if}}
 
-{{section "Closure"}}
+{{SECTION_SEPERATOR "Closure"}}
 No TODO tracking, no progress updates. Execute, call `submit_result`, done.
 
 When finished, you **MUST** call `submit_result` exactly once. This is like writing to a ticket, provide what is required, and close it.
@@ -28,7 +28,7 @@ Your result **MUST** match this TypeScript interface:
 ```
 {{/if}}
 
-{{section "Giving Up"}}
+{{SECTION_SEPERATOR "Giving Up"}}
 If you cannot complete the assignment, you **MUST** call `submit_result` exactly once with `status="aborted"` and an error message describing what you tried and the exact blocker.
 
 Aborting is a last resort.

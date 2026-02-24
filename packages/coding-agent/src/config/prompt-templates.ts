@@ -237,10 +237,10 @@ handlebars.registerHelper("jsonStringify", (value: unknown): string => JSON.stri
  * ═══════════════════════════════
  */
 export function sectionSeparator(name: string): string {
-	return `\n═══════════════════════════════\n ${name}\n═══════════════════════════════`;
+	return `\n\n═══════════${name}═══════════\n`;
 }
 
-handlebars.registerHelper("section", (name: unknown): string => sectionSeparator(String(name)));
+handlebars.registerHelper("SECTION_SEPERATOR", (name: unknown): string => sectionSeparator(String(name)));
 
 /**
  * {{hlineref lineNum "content"}} — compute a real hashline ref for prompt examples.

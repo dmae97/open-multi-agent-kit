@@ -1,9 +1,9 @@
 {{#if context}}
-{{section "Background"}}
+{{SECTION_SEPERATOR "Background"}}
 {{context}}
 {{/if}}
 
-{{section "Task"}}
+{{SECTION_SEPERATOR "Task"}}
 Your assignment is below. Your work begins now.
 <goal>
 {{assignment}}

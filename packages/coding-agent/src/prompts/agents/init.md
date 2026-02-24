@@ -32,5 +32,5 @@ You will likely need to document these sections, but only take it as a starting 
 </directives>
 
 <output>
-After analysis, you MUST write AGENTS.md to the project root.
+After analysis, you **MUST** write AGENTS.md to the project root.
 </output>

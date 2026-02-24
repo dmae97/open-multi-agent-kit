@@ -27,53 +27,75 @@ gh issue list --state open --search "created:>=${CUTOFF_DATE}" --json number,tit
 
 - Skip any issue older than the cutoff window; this command only triages new issues.
 - Skip issues with label `triaged` (already handled).
-- For remaining issues, if type + area + platform are already present, skip unless metadata is clearly missing.
+- For remaining issues, skip only when all required labels are already present:
+  - Exactly one primary label present (`bug`/`enhancement`/`question`/`proposal`/`documentation`/`invalid`/`duplicate`)
+  - If primary label is `bug`, exactly one `prio:*` label present
+  - At least one functional label present when applicable (`agent`/`tool`/`tui`/`cli`/`prompting`/`sdk`/`auth`/`setup`/`ux`/`providers`)
+  - If provider-specific, at least one matching `provider:*` label present
+  - If platform-specific, at least one matching `platform:*` label present
 
 ### 3. Classify Each Issue
 
-For each candidate issue, read the title, body, and **all comments** (comments often contain critical context). Apply labels from the categories below. An issue can receive multiple labels. For each category, skip it only if the issue already has a label in that category — always fill in missing categories.
+For each candidate issue, read the title, body, and **all comments** (comments often contain critical context). Apply labels from the categories below. Do not auto-apply provider/platform labels unless explicitly indicated by issue evidence.
 
-**Type labels** (pick exactly one):
+**Primary labels** (pick exactly one):
 | Label | Signals |
 |---|---|
-| `bug` | Crashes, errors, stack traces, regressions, "doesn't work", "broke" |
-| `enhancement` | Feature requests, integrations, "would be nice", "could we add" |
-| `question` | How-to, usage help, "is it possible", "how do I" |
-| `documentation` | Docs missing, incorrect, or outdated |
-| `invalid` | Spam, off-topic, not actionable |
-| `duplicate` | Clearly duplicates another open issue (note the original in a comment) |
+| `bug` | Existing behavior is broken: crashes, errors, regressions, "doesn't work" |
+| `enhancement` | Feature request or improvement to existing behavior |
+| `question` | How-to, clarification, or usage question |
+| `proposal` | Design/process proposal requiring maintainer decision |
+| `documentation` | Docs are missing, incorrect, or outdated |
+| `invalid` | Spam, off-topic, or not actionable |
+| `duplicate` | Clear duplicate of another issue (reference original in a comment) |
 
-**Area labels** (pick all that apply):
+**Priority labels** (required only for `bug`, pick exactly one):
 | Label | Signals |
 |---|---|
-| `auth` | OAuth, login, API keys, tokens, authentication, authorization |
-| `cli` | Slash commands, CLI arguments, flags, command parsing |
-| `providers` | LLM provider-specific (Google, OpenAI, Anthropic, Gemini, Ollama, etc.) |
-| `setup` | Installation, build errors, dependency issues, first-run problems |
-| `tui` | TUI rendering, display glitches, terminal width, color, layout |
-| `ux` | UX improvements that are not bugs — workflow, ergonomics, usability |
+| `prio:p0` | Critical blocker, data loss/security breakage, unusable workflow |
+| `prio:p1` | High impact, common workflow broken, should be fixed soon |
+| `prio:p2` | Medium impact, workaround exists, not blocking most users |
+| `prio:p3` | Low impact, edge case or minor issue |
 
-**Platform labels** (pick all that apply):
+**Functional labels** (pick all that apply):
 | Label | Signals |
 |---|---|
-| `platform:linux` | Mentions Linux, Docker, Ubuntu, Debian, Fedora, Arch |
-| `platform:macos` | Mentions macOS, Mac, Homebrew, Darwin |
-| `platform:windows` | Mentions Windows (native), PowerShell, cmd.exe |
-| `platform:wsl` | Mentions WSL or Windows Subsystem for Linux — distinct from both native Windows and Linux |
+| `agent` | Agent planning/execution loops, orchestration, runtime behavior |
+| `tool` | Tool contracts/behavior, tool call protocol, integration errors |
+| `tui` | Terminal UI rendering/layout/input/view state |
+| `cli` | CLI commands, args/flags, command routing |
+| `prompting` | System prompts/templates/prompt assembly behavior |
+| `sdk` | SDK or extension integration APIs/surfaces |
+| `auth` | Login, credentials, API keys, token/account management |
+| `setup` | Installation/bootstrap/environment setup issues |
+| `ux` | Workflow/ergonomics/usability improvements (non-rendering) |
+| `providers` | Provider-related behavior (generic provider scope) |
 
-**Meta labels** (use sparingly, only when clearly appropriate):
+**Provider labels** (apply only when a specific provider is explicitly involved):
+`provider:anthropic`, `provider:bedrock`, `provider:brave`, `provider:cerebras`, `provider:cloudflare`, `provider:codex`, `provider:copilot`, `provider:cursor`, `provider:exa`, `provider:gemini`, `provider:gitlab`, `provider:groq`, `provider:huggingface`, `provider:jina`, `provider:kimi`, `provider:litellm`, `provider:minimax`, `provider:mistral`, `provider:moonshot`, `provider:nanogpt`, `provider:nvidia`, `provider:openai`, `provider:opencode`, `provider:openrouter`, `provider:perplexity`, `provider:qianfan`, `provider:qwen`, `provider:synthetic`, `provider:together`, `provider:venice`, `provider:vercel`, `provider:xai`, `provider:xiaomi`, `provider:zai`
+
+**Platform labels** (apply only when platform materially affects reproduction/root cause):
+| Label | Signals |
+|---|---|
+| `platform:linux` | Linux-specific behavior, distro/toolchain differences, Linux-only reproduction |
+| `platform:macos` | macOS-specific behavior (Homebrew/Darwin-specific) |
+| `platform:windows` | Native Windows behavior (PowerShell/cmd/Win32 specifics) |
+| `platform:wsl` | WSL-specific behavior (do not also apply linux/windows unless separately confirmed) |
+
+**Meta labels** (manual judgment only):
 | Label | Signals |
 |---|---|
 | `good first issue` | Well-scoped, self-contained, good for new contributors |
 | `help wanted` | Maintainers want community help |
-| `wontfix` | Intentional behavior, out of scope |
+| `wontfix` | Intentional behavior or explicitly out of scope |
 
 ### 4. Apply Labels
 
-For each issue, apply the chosen labels and add `triaged`. **Never remove existing labels.**
+For each issue, apply the chosen labels. **Never remove existing labels.**
+Do not add provider or platform labels without explicit evidence from issue body/comments.
 
 ```bash
-gh issue edit <number> --add-label "bug,tui,platform:linux,triaged"
+gh issue edit <number> --add-label "bug,prio:p1,tool,providers,provider:openai"
 ```
 
 ### 5. Print Summary
@@ -85,18 +107,19 @@ After processing all issues, print a markdown summary table:
 
 | # | Title | Added Labels | Skipped |
 |---|-------|-------------|---------|
-| 42 | TUI crashes on resize | bug, tui | |
-| 38 | Add Ollama support | enhancement, providers | |
-| 35 | How to configure API key | question, auth | |
-| 30 | Dashboard colors | | Already labeled |
+| 42 | Tool call stalls after retry | bug, prio:p1, agent, tool | |
+| 38 | Add provider fallback routing | proposal, providers, provider:exa | |
+| 35 | How to configure API key rotation | question, auth, providers, provider:minimax | |
+| 30 | Existing labels complete | | Already labeled |
 ```
 
 Include counts at the end: `Processed: X | Labeled: Y | Skipped: Z`
 
 ## Classification Tips
 
-- When uncertain between `bug` and `enhancement`, check if existing behavior broke (bug) or new behavior is requested (enhancement).
-- If an issue mentions a specific provider AND another area (e.g., "OpenAI auth fails"), apply both `providers` and `auth`.
-- WSL issues get `platform:wsl` — not `platform:linux` or `platform:windows`.
+- Do not apply `platform:*` unless platform-specific behavior is explicit or reproduced as platform-bound.
+- Do not apply `providers` or any `provider:*` label unless provider scope is explicit.
+- If a specific provider is named, add both `providers` and the matching `provider:*` label.
+- WSL issues get `platform:wsl` — not `platform:linux` or `platform:windows` unless separately confirmed.
 - Don't apply `good first issue` or `help wanted` during automated triage — those require maintainer judgment.
-- If the body is empty or unclear, read the comments before skipping. Users often clarify in replies.
+- If body is sparse, comments decide classification; do not skip before reading them all.
