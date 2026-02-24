@@ -68,6 +68,7 @@ async function validateKeyPermissions(keyPath?: string): Promise<void> {
 
 function buildCommonArgs(host: SSHConnectionTarget): string[] {
 	const args = [
+		"-n",
 		"-o",
 		"ControlMaster=auto",
 		"-o",
