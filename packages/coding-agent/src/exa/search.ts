@@ -143,7 +143,7 @@ Similar parameters to exa_search, optimized for research depth.`,
 		),
 	}),
 	"web_search_exa",
-	{ transformParams: params => ({ ...params, type: "deep" }) },
+	{ transformParams: params => ({ ...params, type: "auto" }) },
 );
 
 /** exa_search_code - Code-focused search */

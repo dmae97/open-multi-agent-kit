@@ -402,7 +402,7 @@ Parameters:
 
 	async execute(_toolCallId, params, _onUpdate, _ctx, _signal) {
 		const { num_results, ...rest } = params as Record<string, unknown>;
-		const args = { ...rest, type: "deep", numResults: num_results ?? 10 };
+		const args = { ...rest, type: "auto", numResults: num_results ?? 10 };
 		return executeExaTool("web_search_exa", args, "web_search_deep");
 	},
 
