@@ -92,7 +92,7 @@ export class SubmitResultTool implements AgentTool<TObject, SubmitResultDetails>
 			: Type.Object({}, { additionalProperties: true, description: "Structured JSON output (no schema specified)" });
 
 		this.parameters = Type.Object({
-			data: Type.Optional(dataSchema),
+			data: dataSchema,
 			status: Type.Optional(
 				StringEnum(["success", "aborted"], {
 					description: "Use 'aborted' if the task cannot be completed, defaults to 'success'",
