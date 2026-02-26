@@ -5,7 +5,7 @@
  * Priority: 80 (tool-specific, below builtin but above shared standards)
  */
 import * as path from "node:path";
-import { tryParseJson } from "@oh-my-pi/pi-utils";
+import { hasFsCode, tryParseJson } from "@oh-my-pi/pi-utils";
 import { registerProvider } from "../capability";
 import { type ContextFile, contextFileCapability } from "../capability/context-file";
 import { type ExtensionModule, extensionModuleCapability } from "../capability/extension-module";
@@ -45,6 +45,10 @@ function getUserClaude(ctx: LoadContext): string {
  */
 function getProjectClaude(ctx: LoadContext): string {
 	return path.join(ctx.cwd, CONFIG_DIR);
+}
+
+function isMissingDirectoryError(error: unknown): boolean {
+	return hasFsCode(error, "ENOENT") || hasFsCode(error, "ENOTDIR");
 }
 
 // =============================================================================
@@ -162,15 +166,29 @@ async function loadSkills(ctx: LoadContext): Promise<LoadResult<Skill>> {
 	const userSkillsDir = path.join(getUserClaude(ctx), "skills");
 	const projectSkillsDir = path.join(getProjectClaude(ctx), "skills");
 
-	const results = await Promise.all([
+	const [userResult, projectResult] = await Promise.allSettled([
 		scanSkillsFromDir(ctx, { dir: userSkillsDir, providerId: PROVIDER_ID, level: "user" }),
 		scanSkillsFromDir(ctx, { dir: projectSkillsDir, providerId: PROVIDER_ID, level: "project" }),
 	]);
 
-	return {
-		items: results.flatMap(r => r.items),
-		warnings: results.flatMap(r => r.warnings ?? []),
-	};
+	const items: Skill[] = [];
+	const warnings: string[] = [];
+
+	if (userResult.status === "fulfilled") {
+		items.push(...userResult.value.items);
+		warnings.push(...(userResult.value.warnings ?? []));
+	} else if (!isMissingDirectoryError(userResult.reason)) {
+		warnings.push(`Failed to scan Claude user skills in ${userSkillsDir}: ${String(userResult.reason)}`);
+	}
+
+	if (projectResult.status === "fulfilled") {
+		items.push(...projectResult.value.items);
+		warnings.push(...(projectResult.value.warnings ?? []));
+	} else if (!isMissingDirectoryError(projectResult.reason)) {
+		warnings.push(`Failed to scan Claude project skills in ${projectSkillsDir}: ${String(projectResult.reason)}`);
+	}
+
+	return { items, warnings };
 }
 
 // =============================================================================

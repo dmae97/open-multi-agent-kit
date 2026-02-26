@@ -2,6 +2,8 @@ import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { type Skill as CapabilitySkill, skillCapability } from "@oh-my-pi/pi-coding-agent/capability/skill";
+import { getCapability } from "@oh-my-pi/pi-coding-agent/discovery";
 import { loadSkills, loadSkillsFromDir, type Skill } from "@oh-my-pi/pi-coding-agent/extensibility/skills";
 
 const fixturesDir = path.resolve(import.meta.dirname, "fixtures/skills");
@@ -125,6 +127,38 @@ describe("skills", () => {
 			expect(skills.length).toBeGreaterThan(0);
 			// Custom directory skills have source "custom:user"
 			expect(skills.every(s => s.source.startsWith("custom"))).toBe(true);
+		});
+
+		it("should keep user Claude skills when project .claude/skills is missing", async () => {
+			const tempHomeDir = await fs.mkdtemp(path.join(os.tmpdir(), "pi-claude-home-"));
+			const tempProjectDir = await fs.mkdtemp(path.join(os.tmpdir(), "pi-claude-project-"));
+
+			try {
+				const userSkillDir = path.join(tempHomeDir, ".claude", "skills", "user-only-skill");
+				await fs.mkdir(userSkillDir, { recursive: true });
+				await fs.writeFile(
+					path.join(userSkillDir, "SKILL.md"),
+					[
+						"---",
+						"name: user-only-skill",
+						"description: User-only Claude skill",
+						"---",
+						"",
+						"# User-only skill",
+					].join("\n"),
+				);
+
+				const capability = getCapability<CapabilitySkill>(skillCapability.id);
+				expect(capability).toBeDefined();
+				const claudeProvider = capability?.providers.find(provider => provider.id === "claude");
+				expect(claudeProvider).toBeDefined();
+
+				const result = await claudeProvider!.load({ cwd: tempProjectDir, home: tempHomeDir });
+				expect(result.items.some(skill => skill.name === "user-only-skill" && skill.level === "user")).toBe(true);
+			} finally {
+				await fs.rm(tempProjectDir, { recursive: true, force: true });
+				await fs.rm(tempHomeDir, { recursive: true, force: true });
+			}
 		});
 
 		it("should filter out ignoredSkills", async () => {
