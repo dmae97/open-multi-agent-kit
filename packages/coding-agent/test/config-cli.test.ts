@@ -39,4 +39,17 @@ describe("config CLI schema coverage", () => {
 		expect(parsed.type).toBe("array");
 		expect(parsed.description).toBe("");
 	});
+
+	it("renders record settings as JSON and with record type in text output", async () => {
+		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+		await runConfigCommand({ action: "list", flags: {} });
+
+		const lines = logSpy.mock.calls.map(call => String(call[0] ?? ""));
+		const modelRolesLine = lines.find(line => line.includes("modelRoles ="));
+		expect(modelRolesLine).toBeDefined();
+		expect(modelRolesLine).toContain("modelRoles = {}");
+		expect(modelRolesLine).toContain("(record)");
+		expect(modelRolesLine).not.toContain("[object Object]");
+	});
 });

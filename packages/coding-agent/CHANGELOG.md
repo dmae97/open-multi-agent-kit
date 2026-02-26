@@ -1,9 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Changed
 
 - Increased default async max jobs limit from 15 to 100 for improved concurrent task handling
+
+### Fixed
+
+- Improved config display formatting to properly render arrays and objects as JSON instead of `[object Object]`
+- Enhanced type display in config list output to show correct type indicators for number, array, and record settings
 
 ## [13.3.3] - 2026-02-26
 ### Added

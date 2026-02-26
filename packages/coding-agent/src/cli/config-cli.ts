@@ -134,18 +134,36 @@ function formatValue(value: unknown): string {
 	if (typeof value === "number") {
 		return chalk.cyan(String(value));
 	}
+	if (typeof value === "string") {
+		return chalk.yellow(value);
+	}
+	if (Array.isArray(value) || typeof value === "object") {
+		try {
+			return chalk.yellow(JSON.stringify(value));
+		} catch {
+			return chalk.yellow(String(value));
+		}
+	}
 	return chalk.yellow(String(value));
 }
 
 function getTypeDisplay(def: CliSettingDef): string {
-	if (def.type === "boolean") {
-		return "(boolean)";
-	}
 	const values = getSettingValues(def);
 	if (values && values.length > 0) {
 		return `(${values.join("|")})`;
 	}
-	return "(string)";
+	switch (def.type) {
+		case "boolean":
+			return "(boolean)";
+		case "number":
+			return "(number)";
+		case "array":
+			return "(array)";
+		case "record":
+			return "(record)";
+		default:
+			return "(string)";
+	}
 }
 
 // =============================================================================
