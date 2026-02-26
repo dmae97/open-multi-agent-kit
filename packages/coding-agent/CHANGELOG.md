@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.3.5] - 2026-02-26
 ### Added
 
 - Added support for setting array and record configuration values using JSON syntax
