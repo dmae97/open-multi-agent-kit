@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `topP`, `topK`, `minP`, `presencePenalty`, and `repetitionPenalty` options to `AgentOptions` for fine-grained sampling control
+- Added getter and setter properties for sampling parameters on the `Agent` class to allow runtime configuration
 
 ## [13.1.0] - 2026-02-23
 

@@ -197,16 +197,6 @@ export const SETTINGS_SCHEMA = {
 			submenu: true,
 		},
 	},
-	temperature: {
-		type: "number",
-		default: -1,
-		ui: {
-			tab: "agent",
-			label: "Temperature",
-			description: "Sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)",
-			submenu: true,
-		},
-	},
 	hideThinkingBlock: {
 		type: "boolean",
 		default: false,
@@ -1048,6 +1038,66 @@ export const SETTINGS_SCHEMA = {
 	"statusLine.leftSegments": { type: "array", default: [] as StatusLineSegmentId[] },
 	"statusLine.rightSegments": { type: "array", default: [] as StatusLineSegmentId[] },
 	"statusLine.segmentOptions": { type: "record", default: {} as Record<string, unknown> },
+	temperature: {
+		type: "number",
+		default: -1,
+		ui: {
+			tab: "agent",
+			label: "Temperature",
+			description: "Sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)",
+			submenu: true,
+		},
+	},
+	topP: {
+		type: "number",
+		default: -1,
+		ui: {
+			tab: "agent",
+			label: "Top P",
+			description: "Nucleus sampling cutoff (0-1, -1 = provider default)",
+			submenu: true,
+		},
+	},
+	topK: {
+		type: "number",
+		default: -1,
+		ui: {
+			tab: "agent",
+			label: "Top K",
+			description: "Sample from top-K tokens (-1 = provider default)",
+			submenu: true,
+		},
+	},
+	minP: {
+		type: "number",
+		default: -1,
+		ui: {
+			tab: "agent",
+			label: "Min P",
+			description: "Minimum probability threshold (0-1, -1 = provider default)",
+			submenu: true,
+		},
+	},
+	presencePenalty: {
+		type: "number",
+		default: -1,
+		ui: {
+			tab: "agent",
+			label: "Presence penalty",
+			description: "Penalty for introducing already-present tokens (-1 = provider default)",
+			submenu: true,
+		},
+	},
+	repetitionPenalty: {
+		type: "number",
+		default: -1,
+		ui: {
+			tab: "agent",
+			label: "Repetition penalty",
+			description: "Penalty for repeated tokens (-1 = provider default)",
+			submenu: true,
+		},
+	},
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════

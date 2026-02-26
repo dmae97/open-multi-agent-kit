@@ -11,9 +11,9 @@
 import path from "node:path";
 import type { AgentTool } from "@oh-my-pi/pi-agent-core";
 import { StringEnum } from "@oh-my-pi/pi-ai";
-import { isRecord } from "@oh-my-pi/pi-utils";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Container, Text } from "@oh-my-pi/pi-tui";
+import { isRecord } from "@oh-my-pi/pi-utils";
 import { Type } from "@sinclair/typebox";
 import type { Theme, ThemeColor } from "../modes/theme/theme";
 import { subprocessToolRegistry } from "../task/subprocess-tool-registry";
@@ -94,11 +94,15 @@ export function parseReportFindingDetails(value: unknown): ReportFindingDetails 
 	const body = typeof value.body === "string" ? value.body : undefined;
 	const priority = isFindingPriority(value.priority) ? value.priority : undefined;
 	const confidence =
-		typeof value.confidence === "number" && Number.isFinite(value.confidence) && value.confidence >= 0 && value.confidence <= 1
+		typeof value.confidence === "number" &&
+		Number.isFinite(value.confidence) &&
+		value.confidence >= 0 &&
+		value.confidence <= 1
 			? value.confidence
 			: undefined;
 	const filePath = typeof value.file_path === "string" && value.file_path.length > 0 ? value.file_path : undefined;
-	const lineStart = typeof value.line_start === "number" && Number.isFinite(value.line_start) ? value.line_start : undefined;
+	const lineStart =
+		typeof value.line_start === "number" && Number.isFinite(value.line_start) ? value.line_start : undefined;
 	const lineEnd = typeof value.line_end === "number" && Number.isFinite(value.line_end) ? value.line_end : undefined;
 
 	if (

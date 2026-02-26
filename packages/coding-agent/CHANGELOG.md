@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `topP` setting to control nucleus sampling cutoff for model output diversity
+- Added `topK` setting to sample from top-K tokens for controlled generation
+- Added `minP` setting to enforce minimum probability threshold for token selection
+- Added `presencePenalty` setting to penalize introduction of already-present tokens
+- Added `repetitionPenalty` setting to penalize repeated tokens in model output
 
 ## [13.3.0] - 2026-02-26
 

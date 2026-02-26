@@ -288,6 +288,31 @@ export class SelectorController {
 				this.ctx.session.agent.temperature = temp >= 0 ? temp : undefined;
 				break;
 			}
+			case "topP": {
+				const topP = typeof value === "number" ? value : Number(value);
+				this.ctx.session.agent.topP = topP >= 0 ? topP : undefined;
+				break;
+			}
+			case "topK": {
+				const topK = typeof value === "number" ? value : Number(value);
+				this.ctx.session.agent.topK = topK >= 0 ? topK : undefined;
+				break;
+			}
+			case "minP": {
+				const minP = typeof value === "number" ? value : Number(value);
+				this.ctx.session.agent.minP = minP >= 0 ? minP : undefined;
+				break;
+			}
+			case "presencePenalty": {
+				const presencePenalty = typeof value === "number" ? value : Number(value);
+				this.ctx.session.agent.presencePenalty = presencePenalty >= 0 ? presencePenalty : undefined;
+				break;
+			}
+			case "repetitionPenalty": {
+				const repetitionPenalty = typeof value === "number" ? value : Number(value);
+				this.ctx.session.agent.repetitionPenalty = repetitionPenalty >= 0 ? repetitionPenalty : undefined;
+				break;
+			}
 			case "statusLinePreset":
 			case "statusLineSeparator":
 			case "statusLineShowHooks":

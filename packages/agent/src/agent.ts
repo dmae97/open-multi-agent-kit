@@ -117,6 +117,13 @@ export interface AgentOptions {
 	 */
 	temperature?: number;
 
+	/** Additional sampling controls for providers that support them. */
+	topP?: number;
+	topK?: number;
+	minP?: number;
+	presencePenalty?: number;
+	repetitionPenalty?: number;
+
 	/**
 	 * Maximum delay in milliseconds to wait for a retry when the server requests a long wait.
 	 * If the server's requested delay exceeds this value, the request fails immediately,
@@ -187,6 +194,11 @@ export class Agent {
 	#providerSessionState?: Map<string, ProviderSessionState>;
 	#thinkingBudgets?: ThinkingBudgets;
 	#temperature?: number;
+	#topP?: number;
+	#topK?: number;
+	#minP?: number;
+	#presencePenalty?: number;
+	#repetitionPenalty?: number;
 	#maxRetryDelayMs?: number;
 	#getToolContext?: (toolCall?: ToolCallContext) => AgentToolContext | undefined;
 	#cursorExecHandlers?: CursorExecHandlers;
@@ -216,6 +228,11 @@ export class Agent {
 		this.#providerSessionState = opts.providerSessionState;
 		this.#thinkingBudgets = opts.thinkingBudgets;
 		this.#temperature = opts.temperature;
+		this.#topP = opts.topP;
+		this.#topK = opts.topK;
+		this.#minP = opts.minP;
+		this.#presencePenalty = opts.presencePenalty;
+		this.#repetitionPenalty = opts.repetitionPenalty;
 		this.#maxRetryDelayMs = opts.maxRetryDelayMs;
 		this.getApiKey = opts.getApiKey;
 		this.#getToolContext = opts.getToolContext;
@@ -282,6 +299,46 @@ export class Agent {
 	 */
 	set temperature(value: number | undefined) {
 		this.#temperature = value;
+	}
+
+	get topP(): number | undefined {
+		return this.#topP;
+	}
+
+	set topP(value: number | undefined) {
+		this.#topP = value;
+	}
+
+	get topK(): number | undefined {
+		return this.#topK;
+	}
+
+	set topK(value: number | undefined) {
+		this.#topK = value;
+	}
+
+	get minP(): number | undefined {
+		return this.#minP;
+	}
+
+	set minP(value: number | undefined) {
+		this.#minP = value;
+	}
+
+	get presencePenalty(): number | undefined {
+		return this.#presencePenalty;
+	}
+
+	set presencePenalty(value: number | undefined) {
+		this.#presencePenalty = value;
+	}
+
+	get repetitionPenalty(): number | undefined {
+		return this.#repetitionPenalty;
+	}
+
+	set repetitionPenalty(value: number | undefined) {
+		this.#repetitionPenalty = value;
 	}
 
 	/**
@@ -631,6 +688,11 @@ export class Agent {
 			model,
 			reasoning,
 			temperature: this.#temperature,
+			topP: this.#topP,
+			topK: this.#topK,
+			minP: this.#minP,
+			presencePenalty: this.#presencePenalty,
+			repetitionPenalty: this.#repetitionPenalty,
 			interruptMode: this.#interruptMode,
 			sessionId: this.#sessionId,
 			providerSessionState: this.#providerSessionState,

@@ -21,8 +21,8 @@ import {
 import {
 	type FindingPriority,
 	getPriorityInfo,
-	parseReportFindingDetails,
 	PRIORITY_LABELS,
+	parseReportFindingDetails,
 	type ReportFindingDetails,
 	type SubmitReviewDetails,
 } from "../tools/review";
