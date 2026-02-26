@@ -109,6 +109,12 @@ export interface OpenAICompletionsOptions extends StreamOptions {
 	reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
 }
 
+type OpenAICompletionsSamplingParams = OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming & {
+	top_k?: number;
+	min_p?: number;
+	repetition_penalty?: number;
+};
+
 // LIMITATION: The think tag parser uses naive string matching for <think>/<thinking> tags.
 // If MiniMax models output these literal strings in code blocks, XML examples, or explanations,
 // they will be incorrectly consumed as thinking delimiters, truncating visible output.
@@ -530,7 +536,7 @@ function buildParams(model: Model<"openai-completions">, context: Context, optio
 	const isKimi = model.id.includes("moonshotai/kimi");
 	const effectiveMaxTokens = options?.maxTokens ?? (isKimi ? model.maxTokens : undefined);
 
-	const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+	const params: OpenAICompletionsSamplingParams = {
 		model: model.id,
 		messages,
 		stream: true,
@@ -554,6 +560,21 @@ function buildParams(model: Model<"openai-completions">, context: Context, optio
 
 	if (options?.temperature !== undefined) {
 		params.temperature = options.temperature;
+	}
+	if (options?.topP !== undefined) {
+		params.top_p = options.topP;
+	}
+	if (options?.topK !== undefined) {
+		params.top_k = options.topK;
+	}
+	if (options?.minP !== undefined) {
+		params.min_p = options.minP;
+	}
+	if (options?.presencePenalty !== undefined) {
+		params.presence_penalty = options.presencePenalty;
+	}
+	if (options?.repetitionPenalty !== undefined) {
+		params.repetition_penalty = options.repetitionPenalty;
 	}
 
 	if (context.tools) {

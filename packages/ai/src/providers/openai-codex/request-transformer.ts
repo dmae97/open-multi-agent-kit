@@ -30,6 +30,11 @@ export interface RequestBody {
 	tools?: unknown;
 	tool_choice?: unknown;
 	temperature?: number;
+	top_p?: number;
+	top_k?: number;
+	min_p?: number;
+	presence_penalty?: number;
+	repetition_penalty?: number;
 	reasoning?: Partial<ReasoningConfig>;
 	text?: {
 		verbosity?: "low" | "medium" | "high";

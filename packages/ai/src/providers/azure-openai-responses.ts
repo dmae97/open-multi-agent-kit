@@ -71,6 +71,14 @@ export interface AzureOpenAIResponsesOptions extends StreamOptions {
 	toolChoice?: ToolChoice;
 }
 
+type AzureOpenAIResponsesSamplingParams = ResponseCreateParamsStreaming & {
+	top_p?: number;
+	top_k?: number;
+	min_p?: number;
+	presence_penalty?: number;
+	repetition_penalty?: number;
+};
+
 /**
  * Generate function for Azure OpenAI Responses API
  */
@@ -448,7 +456,7 @@ function buildParams(
 ) {
 	const messages = convertMessages(model, context, true);
 
-	const params: ResponseCreateParamsStreaming = {
+	const params: AzureOpenAIResponsesSamplingParams = {
 		model: deploymentName,
 		input: messages,
 		stream: true,
@@ -461,6 +469,21 @@ function buildParams(
 
 	if (options?.temperature !== undefined) {
 		params.temperature = options?.temperature;
+	}
+	if (options?.topP !== undefined) {
+		params.top_p = options.topP;
+	}
+	if (options?.topK !== undefined) {
+		params.top_k = options.topK;
+	}
+	if (options?.minP !== undefined) {
+		params.min_p = options.minP;
+	}
+	if (options?.presencePenalty !== undefined) {
+		params.presence_penalty = options.presencePenalty;
+	}
+	if (options?.repetitionPenalty !== undefined) {
+		params.repetition_penalty = options.repetitionPenalty;
 	}
 
 	if (context.tools) {

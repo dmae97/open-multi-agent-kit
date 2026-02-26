@@ -70,6 +70,11 @@ export function streamKimi(
 				const innerStream = streamAnthropic(anthropicModel, context, {
 					apiKey: options?.apiKey,
 					temperature: options?.temperature,
+					topP: options?.topP,
+					topK: options?.topK,
+					minP: options?.minP,
+					presencePenalty: options?.presencePenalty,
+					repetitionPenalty: options?.repetitionPenalty,
 					maxTokens: options?.maxTokens ?? Math.min(model.maxTokens, 32000),
 					signal: options?.signal,
 					headers: mergedHeaders,
@@ -87,6 +92,11 @@ export function streamKimi(
 				const innerStream = streamOpenAICompletions(model, context, {
 					apiKey: options?.apiKey,
 					temperature: options?.temperature,
+					topP: options?.topP,
+					topK: options?.topK,
+					minP: options?.minP,
+					presencePenalty: options?.presencePenalty,
+					repetitionPenalty: options?.repetitionPenalty,
 					maxTokens: options?.maxTokens ?? model.maxTokens,
 					signal: options?.signal,
 					headers: mergedHeaders,

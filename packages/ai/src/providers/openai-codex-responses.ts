@@ -333,6 +333,21 @@ export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"
 			if (options?.temperature !== undefined) {
 				params.temperature = options.temperature;
 			}
+			if (options?.topP !== undefined) {
+				params.top_p = options.topP;
+			}
+			if (options?.topK !== undefined) {
+				params.top_k = options.topK;
+			}
+			if (options?.minP !== undefined) {
+				params.min_p = options.minP;
+			}
+			if (options?.presencePenalty !== undefined) {
+				params.presence_penalty = options.presencePenalty;
+			}
+			if (options?.repetitionPenalty !== undefined) {
+				params.repetition_penalty = options.repetitionPenalty;
+			}
 
 			if (context.tools && context.tools.length > 0) {
 				params.tools = convertTools(context.tools);

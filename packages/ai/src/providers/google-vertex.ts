@@ -42,6 +42,14 @@ export interface GoogleVertexOptions extends StreamOptions {
 	location?: string;
 }
 
+interface GoogleVertexSamplingConfig extends GenerateContentConfig {
+	topP?: number;
+	topK?: number;
+	minP?: number;
+	presencePenalty?: number;
+	repetitionPenalty?: number;
+}
+
 const API_VERSION = "v1";
 
 const THINKING_LEVEL_MAP: Record<GoogleThinkingLevel, ThinkingLevel> = {
@@ -338,12 +346,27 @@ function buildParams(
 ): GenerateContentParameters {
 	const contents = convertMessages(model, context);
 
-	const generationConfig: GenerateContentConfig = {};
+	const generationConfig: GoogleVertexSamplingConfig = {};
 	if (options.temperature !== undefined) {
 		generationConfig.temperature = options.temperature;
 	}
 	if (options.maxTokens !== undefined) {
 		generationConfig.maxOutputTokens = options.maxTokens;
+	}
+	if (options.topP !== undefined) {
+		generationConfig.topP = options.topP;
+	}
+	if (options.topK !== undefined) {
+		generationConfig.topK = options.topK;
+	}
+	if (options.minP !== undefined) {
+		generationConfig.minP = options.minP;
+	}
+	if (options.presencePenalty !== undefined) {
+		generationConfig.presencePenalty = options.presencePenalty;
+	}
+	if (options.repetitionPenalty !== undefined) {
+		generationConfig.repetitionPenalty = options.repetitionPenalty;
 	}
 
 	const config: GenerateContentConfig = {
