@@ -1120,6 +1120,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	});
 
 	const repeatToolDescriptions = settings.get("repeatToolDescriptions");
+	const eagerTasks = settings.get("task.eager");
 	const intentField = settings.get("tools.intentTracing") || $env.PI_INTENT_TRACING === "1" ? INTENT_FIELD : undefined;
 	const rebuildSystemPrompt = async (toolNames: string[], tools: Map<string, AgentTool>): Promise<string> => {
 		toolContextStore.setToolNames(toolNames);
@@ -1135,6 +1136,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			skillsSettings: settings.getGroup("skills") as SkillsSettings,
 			appendSystemPrompt: memoryInstructions,
 			repeatToolDescriptions,
+			eagerTasks,
 			intentField,
 		});
 
@@ -1154,6 +1156,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				customPrompt: options.systemPrompt,
 				appendSystemPrompt: memoryInstructions,
 				repeatToolDescriptions,
+				eagerTasks,
 				intentField,
 			});
 		}

@@ -1,14 +1,24 @@
+import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import path from "node:path";
-import { getWorktreeDir, isEnoent, Snowflake } from "@oh-my-pi/pi-utils";
+import { getWorktreeDir, isEnoent, logger, Snowflake } from "@oh-my-pi/pi-utils";
 import { $ } from "bun";
 
-export interface WorktreeBaseline {
+/** Baseline state for a single git repository. */
+export interface RepoBaseline {
 	repoRoot: string;
+	headCommit: string;
 	staged: string;
 	unstaged: string;
 	untracked: string[];
+}
+
+/** Baseline state for the project, including any nested git repos. */
+export interface WorktreeBaseline {
+	root: RepoBaseline;
+	/** Nested git repos (path relative to root.repoRoot). */
+	nested: Array<{ relativePath: string; baseline: RepoBaseline }>;
 }
 
 export function getEncodedProjectName(cwd: string): string {
@@ -38,7 +48,56 @@ export async function ensureWorktree(baseCwd: string, id: string): Promise<strin
 	return worktreeDir;
 }
 
-export async function captureBaseline(repoRoot: string): Promise<WorktreeBaseline> {
+/** Find nested git repositories (non-submodule) under the given root. */
+async function discoverNestedRepos(repoRoot: string): Promise<string[]> {
+	// Get submodule paths so we can exclude them
+	const submoduleRaw = await $`git submodule --quiet foreach --recursive 'echo $sm_path'`
+		.cwd(repoRoot)
+		.quiet()
+		.nothrow()
+		.text();
+	const submodulePaths = new Set(
+		submoduleRaw
+			.split("\n")
+			.map(l => l.trim())
+			.filter(Boolean),
+	);
+
+	// Find all .git dirs/files that aren't the root or known submodules
+	const result: string[] = [];
+	async function walk(dir: string): Promise<void> {
+		let entries: Dirent[];
+		try {
+			entries = await fs.readdir(dir, { withFileTypes: true });
+		} catch {
+			return;
+		}
+		for (const entry of entries) {
+			if (entry.name === "node_modules" || entry.name === ".git") continue;
+			if (!entry.isDirectory()) continue;
+			const full = path.join(dir, entry.name);
+			const rel = path.relative(repoRoot, full);
+			// Check if this directory is itself a git repo
+			const gitDir = path.join(full, ".git");
+			let hasGit = false;
+			try {
+				await fs.access(gitDir);
+				hasGit = true;
+			} catch {}
+			if (hasGit && !submodulePaths.has(rel)) {
+				result.push(rel);
+				// Don't recurse into nested repos — they manage their own tree
+				continue;
+			}
+			await walk(full);
+		}
+	}
+	await walk(repoRoot);
+	return result;
+}
+
+async function captureRepoBaseline(repoRoot: string): Promise<RepoBaseline> {
+	const headCommit = (await $`git rev-parse HEAD`.cwd(repoRoot).quiet().text()).trim();
 	const staged = await $`git diff --cached --binary`.cwd(repoRoot).quiet().text();
 	const unstaged = await $`git diff --binary`.cwd(repoRoot).quiet().text();
 	const untrackedRaw = await $`git ls-files --others --exclude-standard`.cwd(repoRoot).quiet().text();
@@ -46,13 +105,18 @@ export async function captureBaseline(repoRoot: string): Promise<WorktreeBaselin
 		.split("\n")
 		.map(line => line.trim())
 		.filter(line => line.length > 0);
+	return { repoRoot, headCommit, staged, unstaged, untracked };
+}
 
-	return {
-		repoRoot,
-		staged,
-		unstaged,
-		untracked,
-	};
+export async function captureBaseline(repoRoot: string): Promise<WorktreeBaseline> {
+	const [root, nestedPaths] = await Promise.all([captureRepoBaseline(repoRoot), discoverNestedRepos(repoRoot)]);
+	const nested = await Promise.all(
+		nestedPaths.map(async relativePath => ({
+			relativePath,
+			baseline: await captureRepoBaseline(path.join(repoRoot, relativePath)),
+		})),
+	);
+	return { root, nested };
 }
 
 async function writeTempPatchFile(patch: string): Promise<string> {
@@ -80,13 +144,13 @@ async function applyPatch(
 	}
 }
 
-export async function applyBaseline(worktreeDir: string, baseline: WorktreeBaseline): Promise<void> {
-	await applyPatch(worktreeDir, baseline.staged, { cached: true });
-	await applyPatch(worktreeDir, baseline.staged);
-	await applyPatch(worktreeDir, baseline.unstaged);
+async function applyRepoBaseline(worktreeDir: string, rb: RepoBaseline, sourceRoot: string): Promise<void> {
+	await applyPatch(worktreeDir, rb.staged, { cached: true });
+	await applyPatch(worktreeDir, rb.staged);
+	await applyPatch(worktreeDir, rb.unstaged);
 
-	for (const entry of baseline.untracked) {
-		const source = path.join(baseline.repoRoot, entry);
+	for (const entry of rb.untracked) {
+		const source = path.join(sourceRoot, entry);
 		const destination = path.join(worktreeDir, entry);
 		try {
 			await fs.mkdir(path.dirname(destination), { recursive: true });
@@ -94,6 +158,39 @@ export async function applyBaseline(worktreeDir: string, baseline: WorktreeBasel
 		} catch (err) {
 			if (isEnoent(err)) continue;
 			throw err;
+		}
+	}
+}
+
+export async function applyBaseline(worktreeDir: string, baseline: WorktreeBaseline): Promise<void> {
+	await applyRepoBaseline(worktreeDir, baseline.root, baseline.root.repoRoot);
+
+	// Restore nested repos into the worktree
+	for (const entry of baseline.nested) {
+		const nestedDir = path.join(worktreeDir, entry.relativePath);
+		// Copy the nested repo wholesale (it's not managed by root git)
+		const sourceDir = path.join(baseline.root.repoRoot, entry.relativePath);
+		try {
+			await fs.cp(sourceDir, nestedDir, { recursive: true });
+		} catch (err) {
+			if (isEnoent(err)) continue;
+			throw err;
+		}
+		// Apply any uncommitted changes from the nested baseline
+		await applyRepoBaseline(nestedDir, entry.baseline, entry.baseline.repoRoot);
+		// Commit baseline state so captureRepoDeltaPatch can cleanly subtract it.
+		// Without this, `git add -A && git commit` by the task would include
+		// baseline untracked files in the diff-tree output.
+		const hasChanges = (await $`git status --porcelain`.cwd(nestedDir).quiet().nothrow().text()).trim();
+		if (hasChanges) {
+			await $`git add -A`.cwd(nestedDir).quiet();
+			await $`git commit -m omp-baseline --allow-empty`.cwd(nestedDir).quiet();
+			// Update baseline to reflect the committed state — prevents double-apply
+			// in captureRepoDeltaPatch's temp-index path
+			entry.baseline.headCommit = (await $`git rev-parse HEAD`.cwd(nestedDir).quiet().text()).trim();
+			entry.baseline.staged = "";
+			entry.baseline.unstaged = "";
+			entry.baseline.untracked = [];
 		}
 	}
 }
@@ -121,36 +218,137 @@ async function listUntracked(cwd: string): Promise<string[]> {
 		.filter(line => line.length > 0);
 }
 
-export async function captureDeltaPatch(worktreeDir: string, baseline: WorktreeBaseline): Promise<string> {
+async function captureRepoDeltaPatch(repoDir: string, rb: RepoBaseline): Promise<string> {
+	// Check if HEAD advanced (task committed changes)
+	const currentHead = (await $`git rev-parse HEAD`.cwd(repoDir).quiet().nothrow().text()).trim();
+	const headAdvanced = currentHead && currentHead !== rb.headCommit;
+
+	if (headAdvanced) {
+		// HEAD moved: use diff-tree to capture committed changes, plus any uncommitted on top
+		const parts: string[] = [];
+
+		// Committed changes since baseline
+		const committedDiff = await $`git diff-tree -r -p --binary ${rb.headCommit} ${currentHead}`
+			.cwd(repoDir)
+			.quiet()
+			.nothrow()
+			.text();
+		if (committedDiff.trim()) parts.push(committedDiff);
+
+		// Uncommitted changes on top of the new HEAD
+		const staged = await $`git diff --cached --binary`.cwd(repoDir).quiet().text();
+		const unstaged = await $`git diff --binary`.cwd(repoDir).quiet().text();
+		if (staged.trim()) parts.push(staged);
+		if (unstaged.trim()) parts.push(unstaged);
+
+		// New untracked files (relative to both baseline and current tracking)
+		const currentUntracked = await listUntracked(repoDir);
+		const baselineUntracked = new Set(rb.untracked);
+		const newUntracked = currentUntracked.filter(entry => !baselineUntracked.has(entry));
+		if (newUntracked.length > 0) {
+			const untrackedDiffs = await Promise.all(
+				newUntracked.map(entry =>
+					$`git diff --binary --no-index /dev/null ${entry}`.cwd(repoDir).quiet().nothrow().text(),
+				),
+			);
+			parts.push(...untrackedDiffs.filter(d => d.trim()));
+		}
+
+		return parts.join("\n");
+	}
+
+	// HEAD unchanged: use temp index approach (subtracts baseline from delta)
 	const tempIndex = path.join(os.tmpdir(), `omp-task-index-${Snowflake.next()}`);
 	try {
-		await $`git read-tree HEAD`.cwd(worktreeDir).env({
-			GIT_INDEX_FILE: tempIndex,
-		});
-		await applyPatchToIndex(worktreeDir, baseline.staged, tempIndex);
-		await applyPatchToIndex(worktreeDir, baseline.unstaged, tempIndex);
-		const diff = await $`git diff --binary`
-			.cwd(worktreeDir)
-			.env({
-				GIT_INDEX_FILE: tempIndex,
-			})
-			.quiet()
-			.text();
+		await $`git read-tree ${rb.headCommit}`.cwd(repoDir).env({ GIT_INDEX_FILE: tempIndex });
+		await applyPatchToIndex(repoDir, rb.staged, tempIndex);
+		await applyPatchToIndex(repoDir, rb.unstaged, tempIndex);
+		const diff = await $`git diff --binary`.cwd(repoDir).env({ GIT_INDEX_FILE: tempIndex }).quiet().text();
 
-		const currentUntracked = await listUntracked(worktreeDir);
-		const baselineUntracked = new Set(baseline.untracked);
+		const currentUntracked = await listUntracked(repoDir);
+		const baselineUntracked = new Set(rb.untracked);
 		const newUntracked = currentUntracked.filter(entry => !baselineUntracked.has(entry));
 
 		if (newUntracked.length === 0) return diff;
 
 		const untrackedDiffs = await Promise.all(
 			newUntracked.map(entry =>
-				$`git diff --binary --no-index /dev/null ${entry}`.cwd(worktreeDir).quiet().nothrow().text(),
+				$`git diff --binary --no-index /dev/null ${entry}`.cwd(repoDir).quiet().nothrow().text(),
 			),
 		);
 		return `${diff}${diff && !diff.endsWith("\n") ? "\n" : ""}${untrackedDiffs.join("\n")}`;
 	} finally {
 		await fs.rm(tempIndex, { force: true });
+	}
+}
+
+export interface NestedRepoPatch {
+	relativePath: string;
+	patch: string;
+}
+
+export interface DeltaPatchResult {
+	rootPatch: string;
+	nestedPatches: NestedRepoPatch[];
+}
+
+export async function captureDeltaPatch(isolationDir: string, baseline: WorktreeBaseline): Promise<DeltaPatchResult> {
+	const rootPatch = await captureRepoDeltaPatch(isolationDir, baseline.root);
+	const nestedPatches: NestedRepoPatch[] = [];
+
+	for (const { relativePath, baseline: nb } of baseline.nested) {
+		const nestedDir = path.join(isolationDir, relativePath);
+		try {
+			await fs.access(path.join(nestedDir, ".git"));
+		} catch {
+			continue;
+		}
+		const patch = await captureRepoDeltaPatch(nestedDir, nb);
+		if (patch.trim()) nestedPatches.push({ relativePath, patch });
+	}
+
+	return { rootPatch, nestedPatches };
+}
+
+/**
+ * Apply nested repo patches directly to their working directories after parent merge.
+ * @param commitMessage Optional async function to generate a commit message from the combined diff.
+ *                      If omitted or returns null, falls back to a generic message.
+ */
+export async function applyNestedPatches(
+	repoRoot: string,
+	patches: NestedRepoPatch[],
+	commitMessage?: (diff: string) => Promise<string | null>,
+): Promise<void> {
+	// Group patches by target repo to apply all at once and commit
+	const byRepo = new Map<string, NestedRepoPatch[]>();
+	for (const p of patches) {
+		if (!p.patch.trim()) continue;
+		const group = byRepo.get(p.relativePath) ?? [];
+		group.push(p);
+		byRepo.set(p.relativePath, group);
+	}
+
+	for (const [relativePath, repoPatches] of byRepo) {
+		const nestedDir = path.join(repoRoot, relativePath);
+		try {
+			await fs.access(path.join(nestedDir, ".git"));
+		} catch {
+			continue;
+		}
+
+		const combinedDiff = repoPatches.map(p => p.patch).join("\n");
+		for (const { patch } of repoPatches) {
+			await applyPatch(nestedDir, patch);
+		}
+
+		// Commit so nested repo history reflects the task changes
+		const hasChanges = (await $`git status --porcelain`.cwd(nestedDir).quiet().nothrow().text()).trim();
+		if (hasChanges) {
+			const msg = (await commitMessage?.(combinedDiff)) ?? "changes from isolated task(s)";
+			await $`git add -A`.cwd(nestedDir).quiet();
+			await $`git commit -m ${msg}`.cwd(nestedDir).quiet();
+		}
 	}
 }
 
@@ -165,5 +363,170 @@ export async function cleanupWorktree(dir: string): Promise<void> {
 		}
 	} finally {
 		await fs.rm(dir, { recursive: true, force: true });
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Fuse-overlay isolation
+// ═══════════════════════════════════════════════════════════════════════════
+
+export async function ensureFuseOverlay(baseCwd: string, id: string): Promise<string> {
+	const repoRoot = await getRepoRoot(baseCwd);
+	const encodedProject = getEncodedProjectName(repoRoot);
+	const baseDir = getWorktreeDir(encodedProject, id);
+	const upperDir = path.join(baseDir, "upper");
+	const workDir = path.join(baseDir, "work");
+	const mergedDir = path.join(baseDir, "merged");
+
+	// Clean up any stale mount at this path
+	const fusermount = Bun.which("fusermount3") ?? Bun.which("fusermount");
+	if (fusermount) {
+		await $`${fusermount} -u ${mergedDir}`.quiet().nothrow();
+	}
+	await fs.rm(baseDir, { recursive: true, force: true });
+
+	await fs.mkdir(upperDir, { recursive: true });
+	await fs.mkdir(workDir, { recursive: true });
+	await fs.mkdir(mergedDir, { recursive: true });
+
+	const binary = Bun.which("fuse-overlayfs");
+	if (!binary) {
+		await fs.rm(baseDir, { recursive: true, force: true });
+		throw new Error(
+			"fuse-overlayfs not found. Install it (e.g. `apt install fuse-overlayfs` or `pacman -S fuse-overlayfs`) to use fuse-overlay isolation.",
+		);
+	}
+
+	const result = await $`${binary} -o lowerdir=${repoRoot},upperdir=${upperDir},workdir=${workDir} ${mergedDir}`
+		.quiet()
+		.nothrow();
+	if (result.exitCode !== 0) {
+		const stderr = result.stderr.toString().trim();
+		await fs.rm(baseDir, { recursive: true, force: true });
+		throw new Error(`fuse-overlayfs mount failed (exit ${result.exitCode}): ${stderr}`);
+	}
+
+	return mergedDir;
+}
+
+export async function cleanupFuseOverlay(mergedDir: string): Promise<void> {
+	try {
+		const fusermount = Bun.which("fusermount3") ?? Bun.which("fusermount");
+		if (fusermount) {
+			await $`${fusermount} -u ${mergedDir}`.quiet().nothrow();
+		}
+	} finally {
+		// baseDir is the parent of the merged directory
+		const baseDir = path.dirname(mergedDir);
+		await fs.rm(baseDir, { recursive: true, force: true });
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Branch-mode isolation
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface CommitToBranchResult {
+	branchName?: string;
+	nestedPatches: NestedRepoPatch[];
+}
+
+/**
+ * Commit task-only changes to a new branch.
+ * Only root repo changes go on the branch. Nested repo patches are returned
+ * separately since the parent git can't track files inside gitlinks.
+ */
+export async function commitToBranch(
+	isolationDir: string,
+	baseline: WorktreeBaseline,
+	taskId: string,
+	description: string | undefined,
+	commitMessage?: (diff: string) => Promise<string | null>,
+): Promise<CommitToBranchResult | null> {
+	const { rootPatch, nestedPatches } = await captureDeltaPatch(isolationDir, baseline);
+	if (!rootPatch.trim() && nestedPatches.length === 0) return null;
+
+	const repoRoot = baseline.root.repoRoot;
+	const branchName = `omp/task/${taskId}`;
+	const fallbackMessage = description || taskId;
+
+	// Only create a branch if the root repo has changes
+	if (rootPatch.trim()) {
+		await $`git branch ${branchName} HEAD`.cwd(repoRoot).quiet();
+		const tmpDir = path.join(os.tmpdir(), `omp-branch-${Snowflake.next()}`);
+		try {
+			await $`git worktree add ${tmpDir} ${branchName}`.cwd(repoRoot).quiet();
+			const patchPath = path.join(os.tmpdir(), `omp-branch-patch-${Snowflake.next()}.patch`);
+			try {
+				await Bun.write(patchPath, rootPatch);
+				const applyResult = await $`git apply --binary ${patchPath}`.cwd(tmpDir).quiet().nothrow();
+				if (applyResult.exitCode !== 0) {
+					const stderr = applyResult.stderr.toString().slice(0, 2000);
+					logger.error("commitToBranch: git apply failed", {
+						taskId,
+						exitCode: applyResult.exitCode,
+						stderr,
+						patchSize: rootPatch.length,
+						patchHead: rootPatch.slice(0, 500),
+					});
+					throw new Error(`git apply failed for task ${taskId}: ${stderr}`);
+				}
+			} finally {
+				await fs.rm(patchPath, { force: true });
+			}
+			await $`git add -A`.cwd(tmpDir).quiet();
+			const msg = (commitMessage && (await commitMessage(rootPatch))) || fallbackMessage;
+			await $`git commit -m ${msg}`.cwd(tmpDir).quiet();
+		} finally {
+			await $`git worktree remove -f ${tmpDir}`.cwd(repoRoot).quiet().nothrow();
+			await fs.rm(tmpDir, { recursive: true, force: true });
+		}
+	}
+
+	return { branchName: rootPatch.trim() ? branchName : undefined, nestedPatches };
+}
+
+export interface MergeBranchResult {
+	merged: string[];
+	failed: string[];
+	conflict?: string;
+}
+
+/**
+ * Cherry-pick task branch commits sequentially onto HEAD.
+ * Each branch has a single commit that gets replayed cleanly.
+ * Stops on first conflict and reports which branches succeeded.
+ */
+export async function mergeTaskBranches(
+	repoRoot: string,
+	branches: Array<{ branchName: string; taskId: string; description?: string }>,
+): Promise<MergeBranchResult> {
+	const merged: string[] = [];
+	const failed: string[] = [];
+
+	for (const { branchName } of branches) {
+		const result = await $`git cherry-pick ${branchName}`.cwd(repoRoot).quiet().nothrow();
+
+		if (result.exitCode !== 0) {
+			await $`git cherry-pick --abort`.cwd(repoRoot).quiet().nothrow();
+			const stderr = result.stderr.toString().trim();
+			failed.push(branchName);
+			return {
+				merged,
+				failed: [...failed, ...branches.slice(merged.length + failed.length).map(b => b.branchName)],
+				conflict: `${branchName}: ${stderr}`,
+			};
+		}
+
+		merged.push(branchName);
+	}
+
+	return { merged, failed };
+}
+
+/** Clean up temporary task branches. */
+export async function cleanupTaskBranches(repoRoot: string, branches: string[]): Promise<void> {
+	for (const branch of branches) {
+		await $`git branch -D ${branch}`.cwd(repoRoot).quiet().nothrow();
 	}
 }

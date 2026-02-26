@@ -93,6 +93,22 @@ const OPTION_PROVIDERS: Partial<Record<SettingPath, OptionProvider>> = {
 		{ value: "2", label: "Double" },
 		{ value: "3", label: "Triple" },
 	],
+	// Task isolation mode
+	"task.isolation.mode": [
+		{ value: "none", label: "None", description: "No isolation" },
+		{ value: "worktree", label: "Worktree", description: "Git worktree isolation" },
+		{ value: "fuse-overlay", label: "Fuse Overlay", description: "COW overlay via fuse-overlayfs" },
+	],
+	// Task isolation merge strategy
+	"task.isolation.merge": [
+		{ value: "patch", label: "Patch", description: "Combine diffs and git apply" },
+		{ value: "branch", label: "Branch", description: "Commit per task, merge with --no-ff" },
+	],
+	// Task isolation commit messages
+	"task.isolation.commits": [
+		{ value: "generic", label: "Generic", description: "Static commit message" },
+		{ value: "ai", label: "AI", description: "AI-generated commit message from diff" },
+	],
 	// Todo max reminders
 	"todo.reminders.max": [
 		{ value: "1", label: "1 reminder" },

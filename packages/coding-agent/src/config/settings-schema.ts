@@ -544,14 +544,46 @@ export const SETTINGS_SCHEMA = {
 	// ─────────────────────────────────────────────────────────────────────────
 	// Task tool settings
 	// ─────────────────────────────────────────────────────────────────────────
-	"task.isolation.enabled": {
+	"task.isolation.mode": {
+		type: "enum",
+		values: ["none", "worktree", "fuse-overlay"] as const,
+		default: "none",
+		ui: {
+			tab: "tools",
+			label: "Task isolation",
+			description: "Isolation mode for subagents (none, git worktree, or fuse-overlay)",
+			submenu: true,
+		},
+	},
+	"task.isolation.merge": {
+		type: "enum",
+		values: ["patch", "branch"] as const,
+		default: "patch",
+		ui: {
+			tab: "tools",
+			label: "Task isolation merge",
+			description: "How isolated task changes are integrated (patch apply or branch merge)",
+			submenu: true,
+		},
+	},
+	"task.isolation.commits": {
+		type: "enum",
+		values: ["generic", "ai"] as const,
+		default: "generic",
+		ui: {
+			tab: "tools",
+			label: "Task isolation commits",
+			description: "Commit message style for nested repo changes (generic or AI-generated)",
+			submenu: true,
+		},
+	},
+	"task.eager": {
 		type: "boolean",
 		default: false,
 		ui: {
 			tab: "tools",
-			label: "Task isolation",
-			description: "Run subagents in isolated git worktrees",
-			submenu: true,
+			label: "Eager task delegation",
+			description: "Encourage the agent to delegate work to subagents unless changes are trivial",
 		},
 	},
 	"task.maxConcurrency": {

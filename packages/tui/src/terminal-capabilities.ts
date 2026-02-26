@@ -234,9 +234,12 @@ function calculateImageFit(
 	const fittedWidthPx = imageDimensions.widthPx * scale;
 	const fittedHeightPx = imageDimensions.heightPx * scale;
 
+	const columns = Math.max(1, Math.floor(fittedWidthPx / cellDims.widthPx));
+	const rows = Math.max(1, Math.ceil(fittedHeightPx / cellDims.heightPx));
+
 	return {
-		columns: Math.max(1, Math.floor(fittedWidthPx / cellDims.widthPx)),
-		rows: Math.max(1, Math.ceil(fittedHeightPx / cellDims.heightPx)),
+		columns: maxColumns !== undefined ? Math.min(columns, maxColumns) : columns,
+		rows: maxRows !== undefined ? Math.min(rows, maxRows) : rows,
 	};
 }
 

@@ -2,9 +2,28 @@
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- Renamed `task.isolation.enabled` (boolean) setting to `task.isolation.mode` (enum: `none`, `worktree`, `fuse-overlay`). Existing `true`/`false` values are auto-migrated to `worktree`/`none`.
+
 ### Added
 
 - Added `PERPLEXITY_COOKIES` env var for Perplexity web search via session cookies extracted from desktop app
+- Added `fuse-overlay` isolation mode for subagents using `fuse-overlayfs` (copy-on-write overlay, no baseline patch apply needed)
+- Added `task.isolation.merge` setting (`patch` or `branch`) to control how isolated task changes are integrated back. `branch` mode commits each task to a temp branch and cherry-picks for clean commit history
+- Added `task.isolation.commits` setting (`generic` or `ai`) for commit messages on isolated task branches and nested repos. `ai` mode uses a smol model to generate conventional commit messages from diffs
+- Nested non-submodule git repos are now discovered and handled during task isolation (changes captured and applied independently from parent repo)
+- Added `task.eager` setting to encourage the agent to delegate work to subagents by default
+
+### Fixed
+
+- Fixed nested repo changes being lost when tasks commit inside the isolation (baseline state is now committed before task runs, so delta correctly excludes it)
+- Fixed nested repo patches conflicting when multiple tasks contribute to the same repo (baseline untracked files no longer leak into patches)
+- Nested repo changes are now committed after patch application (previously left as untracked files)
+- Failed tasks no longer create stale branches or capture garbage patches (gated on exit code)
+- Merge failures (e.g. conflicting patches) are now non-fatal — agent output is preserved with `merge failed` status instead of `failed`
+- Stale branches are cleaned up when `commitToBranch` fails
+- Commit message generator filters lock files from diffs before AI summarization
 
 ## [13.2.1] - 2026-02-24
 
@@ -15,7 +34,6 @@
 ### Changed
 
 - Extracted non-interactive environment config from `bash-interactive.ts` into shared `non-interactive-env.ts` module, applied consistently to all bash execution paths
-
 ## [13.2.0] - 2026-02-23
 ### Breaking Changes
 
