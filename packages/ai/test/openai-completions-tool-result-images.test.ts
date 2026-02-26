@@ -90,4 +90,93 @@ describe("openai-completions convertMessages", () => {
 		const imageParts = (imageMessage.content as Array<{ type?: string }>).filter(part => part?.type === "image_url");
 		expect(imageParts.length).toBe(2);
 	});
+	it("uses generated tool_call_id values when assistant/tool IDs are empty", () => {
+		const baseModel = getBundledModel("openai", "gpt-4o-mini");
+		const model: Model<"openai-completions"> = {
+			...baseModel,
+			api: "openai-completions",
+			input: ["text"],
+		};
+
+		const now = Date.now();
+		const assistantMessage: AssistantMessage = {
+			role: "assistant",
+			content: [{ type: "toolCall", id: "", name: "read", arguments: { path: "README.md" } }],
+			api: model.api,
+			provider: model.provider,
+			model: model.id,
+			usage: emptyUsage,
+			stopReason: "toolUse",
+			timestamp: now,
+		};
+
+		const context: Context = {
+			messages: [
+				{ role: "user", content: "Read README", timestamp: now - 1 },
+				assistantMessage,
+				{
+					role: "toolResult",
+					toolCallId: "",
+					toolName: "read",
+					content: [{ type: "text", text: "done" }],
+					isError: false,
+					timestamp: now + 1,
+				},
+			],
+		};
+
+		const messages = convertMessages(model, context, compat);
+		const assistantParam = messages.find(message => message.role === "assistant") as
+			| { role: "assistant"; tool_calls?: Array<{ id: string }> }
+			| undefined;
+		expect(assistantParam).toBeDefined();
+		expect(assistantParam?.tool_calls).toBeDefined();
+		const generatedId = assistantParam!.tool_calls![0].id;
+		expect(generatedId.length).toBeGreaterThan(0);
+
+		const toolParam = messages.find(message => message.role === "tool") as { tool_call_id: string } | undefined;
+		expect(toolParam).toBeDefined();
+		expect(toolParam?.tool_call_id).toBe(generatedId);
+	});
+
+	it("serializes string tool arguments into valid JSON objects", () => {
+		const baseModel = getBundledModel("openai", "gpt-4o-mini");
+		const model: Model<"openai-completions"> = {
+			...baseModel,
+			api: "openai-completions",
+			input: ["text"],
+		};
+
+		const now = Date.now();
+		const assistantMessage: AssistantMessage = {
+			role: "assistant",
+			content: [
+				{
+					type: "toolCall",
+					id: "tool-1",
+					name: "read",
+					arguments: '{"path":"README.md"}' as unknown as Record<string, any>,
+				},
+			],
+			api: model.api,
+			provider: model.provider,
+			model: model.id,
+			usage: emptyUsage,
+			stopReason: "toolUse",
+			timestamp: now,
+		};
+
+		const context: Context = {
+			messages: [{ role: "user", content: "Read README", timestamp: now - 1 }, assistantMessage],
+		};
+
+		const messages = convertMessages(model, context, compat);
+		const assistantParam = messages.find(message => message.role === "assistant") as
+			| { role: "assistant"; tool_calls?: Array<{ function: { arguments: string } }> }
+			| undefined;
+		expect(assistantParam).toBeDefined();
+		expect(assistantParam?.tool_calls).toBeDefined();
+		const serializedArgs = assistantParam!.tool_calls![0].function.arguments;
+		expect(JSON.parse(serializedArgs)).toEqual({ path: "README.md" });
+	});
 });
