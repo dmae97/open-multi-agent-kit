@@ -95,13 +95,13 @@ describe("skills", () => {
 			expect(skills).toHaveLength(6);
 		});
 
-		it("should throw for non-existent directory", () => {
-			expect(
-				loadSkillsFromDir({
-					dir: "/non/existent/path",
-					source: "test",
-				}),
-			).rejects.toThrow("ENOENT");
+		it("should return empty for non-existent directory", async () => {
+			const { skills, warnings } = await loadSkillsFromDir({
+				dir: "/non/existent/path",
+				source: "test",
+			});
+			expect(skills).toHaveLength(0);
+			expect(warnings).toHaveLength(0);
 		});
 
 		it("should return empty when scanning a single skill directory directly", async () => {
