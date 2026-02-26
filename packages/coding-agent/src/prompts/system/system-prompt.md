@@ -161,7 +161,7 @@ Semantic questions **MUST** be answered with semantic tools.
 
 {{#if eagerTasks}}
 <eager-tasks>
-You SHOULD delegate work to subagents by default. Working alone is the exception, not the rule.
+You **SHOULD** delegate work to subagents by default. Working alone is the exception, not the rule.
 
 Use the Task tool unless the change is:
 - A single-file edit under ~30 lines
