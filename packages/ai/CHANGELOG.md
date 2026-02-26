@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed
+
+- Fixed `enforceStrictSchema` to properly handle malformed object schemas with required keys but missing properties
+- Fixed `enforceStrictSchema` to correctly process nested object schemas within `anyOf`, `allOf`, and `oneOf` combinators
 
 ## [13.3.1] - 2026-02-26
 ### Added

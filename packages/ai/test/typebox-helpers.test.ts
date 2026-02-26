@@ -34,4 +34,45 @@ describe("enforceStrictSchema", () => {
 		expect(serialized.includes('"undefined"')).toBe(false);
 		expect(serialized.includes('"null"')).toBe(true);
 	});
+
+	it("normalizes malformed object nodes that declare required keys without properties", () => {
+		const schema = {
+			type: "object",
+			required: ["data"],
+		} as Record<string, unknown>;
+
+		const strict = enforceStrictSchema(schema);
+
+		expect(strict.properties).toEqual({});
+		expect(strict.required).toEqual([]);
+		expect(strict.additionalProperties).toBe(false);
+	});
+
+	it("repairs malformed object branches nested under anyOf", () => {
+		const schema = {
+			type: "object",
+			properties: {
+				result: {
+					anyOf: [
+						{ type: "object", required: ["data"] },
+						{ type: "object", properties: { error: { type: "string" } }, required: ["error"] },
+					],
+				},
+			},
+			required: ["result"],
+		} as Record<string, unknown>;
+
+		const strict = enforceStrictSchema(schema);
+		const rootProps = strict.properties as Record<string, Record<string, unknown>>;
+		const resultSchema = rootProps.result;
+		const branches = resultSchema.anyOf as Array<Record<string, unknown>>;
+		const malformedBranch = branches[0];
+		const validBranch = branches[1];
+
+		expect(malformedBranch.properties).toEqual({});
+		expect(malformedBranch.required).toEqual([]);
+		expect(malformedBranch.additionalProperties).toBe(false);
+		expect(validBranch.required).toEqual(["error"]);
+		expect(validBranch.additionalProperties).toBe(false);
+	});
 });

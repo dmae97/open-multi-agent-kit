@@ -38,28 +38,42 @@ export function enforceStrictSchema(schema: Record<string, unknown>): Record<str
 	const result = { ...schema };
 	if (result.type === "object") {
 		result.additionalProperties = false;
-		if (result.properties != null && typeof result.properties === "object") {
-			const props = result.properties as Record<string, Record<string, unknown>>;
-			const required = new Set(Array.isArray(result.required) ? (result.required as string[]) : []);
-			result.properties = Object.fromEntries(
-				Object.entries(props).map(([k, v]) => {
-					const processed = enforceStrictSchema(v);
-					// Optional property — wrap as nullable so strict mode accepts it
-					if (!required.has(k)) {
-						return [k, { anyOf: [processed, { type: "null" }] }];
-					}
-					return [k, processed];
-				}),
-			);
-			result.required = Object.keys(props);
-		}
+		const propertiesValue = result.properties;
+		const props =
+			propertiesValue != null && typeof propertiesValue === "object" && !Array.isArray(propertiesValue)
+				? (propertiesValue as Record<string, unknown>)
+				: {};
+		const originalRequired = new Set(
+			Array.isArray(result.required)
+				? result.required.filter((value): value is string => typeof value === "string")
+				: [],
+		);
+		const strictProperties = Object.fromEntries(
+			Object.entries(props).map(([key, value]) => {
+				const processed =
+					value != null && typeof value === "object" && !Array.isArray(value)
+						? enforceStrictSchema(value as Record<string, unknown>)
+						: value;
+				// Optional property — wrap as nullable so strict mode accepts it
+				if (!originalRequired.has(key)) {
+					return [key, { anyOf: [processed, { type: "null" }] }];
+				}
+				return [key, processed];
+			}),
+		);
+		result.properties = strictProperties;
+		result.required = Object.keys(strictProperties);
 	}
 	if (result.items != null && typeof result.items === "object" && !Array.isArray(result.items)) {
 		result.items = enforceStrictSchema(result.items as Record<string, unknown>);
 	}
 	for (const key of ["anyOf", "allOf", "oneOf"] as const) {
 		if (Array.isArray(result[key])) {
-			result[key] = (result[key] as Record<string, unknown>[]).map(enforceStrictSchema);
+			result[key] = (result[key] as unknown[]).map(entry =>
+				entry != null && typeof entry === "object" && !Array.isArray(entry)
+					? enforceStrictSchema(entry as Record<string, unknown>)
+					: entry,
+			);
 		}
 	}
 	return result;
