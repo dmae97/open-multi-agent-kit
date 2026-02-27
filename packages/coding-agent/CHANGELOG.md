@@ -47,6 +47,7 @@
 - Fixed `code_actions` apply mode to execute command-based actions via `workspace/executeCommand`
 - Fixed diagnostics glob detection to recognize bracket character class patterns (e.g., `src/[ab].ts`)
 - Fixed LSP render metadata sanitization for `symbol` values to prevent tab/newline layout breakage
+- Fixed `todo_write` task normalization to auto-activate the first remaining task and include explicit remaining-items output in tool results, removing the need for an immediate follow-up start update
 
 ## [13.3.7] - 2026-02-27
 ### Breaking Changes

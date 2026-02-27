@@ -161,6 +161,23 @@ function clonePhases(phases: TodoPhase[]): TodoPhase[] {
 	return phases.map(phase => ({ ...phase, tasks: phase.tasks.map(task => ({ ...task })) }));
 }
 
+function normalizeInProgressTask(phases: TodoPhase[]): void {
+	const orderedTasks = phases.flatMap(phase => phase.tasks);
+	if (orderedTasks.length === 0) return;
+
+	const inProgressTasks = orderedTasks.filter(task => task.status === "in_progress");
+	if (inProgressTasks.length > 1) {
+		for (const task of inProgressTasks.slice(1)) {
+			task.status = "pending";
+		}
+	}
+
+	if (inProgressTasks.length > 0) return;
+
+	const firstPendingTask = orderedTasks.find(task => task.status === "pending");
+	if (firstPendingTask) firstPendingTask.status = "in_progress";
+}
+
 export function getLatestTodoPhasesFromEntries(entries: SessionEntry[]): TodoPhase[] {
 	for (let i = entries.length - 1; i >= 0; i--) {
 		const entry = entries[i];
@@ -246,12 +263,21 @@ function applyOps(file: TodoFile, ops: TodoWriteParams["ops"]): { file: TodoFile
 		}
 	}
 
+	normalizeInProgressTask(file.phases);
 	return { file, errors };
 }
 
 function formatSummary(phases: TodoPhase[], errors: string[]): string {
 	const tasks = phases.flatMap(p => p.tasks);
 	if (tasks.length === 0) return errors.length > 0 ? `Errors: ${errors.join("; ")}` : "Todo list cleared.";
+
+	const remainingByPhase = phases
+		.map(phase => ({
+			name: phase.name,
+			tasks: phase.tasks.filter(task => task.status === "pending" || task.status === "in_progress"),
+		}))
+		.filter(phase => phase.tasks.length > 0);
+	const remainingTasks = remainingByPhase.flatMap(phase => phase.tasks.map(task => ({ ...task, phase: phase.name })));
 
 	// Find current phase
 	let currentIdx = phases.findIndex(p => p.tasks.some(t => t.status === "pending" || t.status === "in_progress"));
@@ -261,6 +287,14 @@ function formatSummary(phases: TodoPhase[], errors: string[]): string {
 
 	const lines: string[] = [];
 	if (errors.length > 0) lines.push(`Errors: ${errors.join("; ")}`);
+	if (remainingTasks.length === 0) {
+		lines.push("Remaining items: none.");
+	} else {
+		lines.push(`Remaining items (${remainingTasks.length}):`);
+		for (const task of remainingTasks) {
+			lines.push(`  - ${task.id} ${task.content} [${task.status}] (${task.phase})`);
+		}
+	}
 	lines.push(
 		`Phase ${currentIdx + 1}/${phases.length} "${current.name}" — ${done}/${current.tasks.length} tasks complete`,
 	);
