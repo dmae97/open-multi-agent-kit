@@ -1440,7 +1440,7 @@ async function fetchWithRetry(url: string, init: RequestInit, signal?: AbortSign
 			}
 			if (signal?.aborted) return response;
 			// Read error body for retry delay parsing
-			const errorBody = await response.text();
+			const errorBody = await response.clone().text();
 			const { delay, serverProvided } = getRetryDelayMs(response, attempt, errorBody);
 			// For 429s with a server-provided delay, use a time budget instead of attempt count
 			if (response.status === 429 && serverProvided) {
