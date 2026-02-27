@@ -14,6 +14,7 @@
  * 9. Bold RFC 2119 keywords (MUST, SHOULD, MAY, etc.) in prompt content
  */
 import { Glob } from "bun";
+import { formatPromptContent } from "../src/utils/prompt-format";
 
 const PROMPTS_DIR = new URL("../src/prompts/", import.meta.url).pathname;
 const COMMIT_PROMPTS_DIR = new URL("../src/commit/prompts/", import.meta.url).pathname;
@@ -21,177 +22,11 @@ const AGENTIC_PROMPTS_DIR = new URL("../src/commit/agentic/prompts/", import.met
 
 const PROMPT_DIRS = [PROMPTS_DIR, COMMIT_PROMPTS_DIR, AGENTIC_PROMPTS_DIR];
 
-// Opening XML tag (not self-closing, not closing)
-const OPENING_XML = /^<([a-z_-]+)(?:\s+[^>]*)?>$/;
-// Closing XML tag
-const CLOSING_XML = /^<\/([a-z_-]+)>$/;
-// Handlebars block start: {{#if}}, {{#has}}, {{#list}}, etc.
-const OPENING_HBS = /^\{\{#/;
-// Handlebars block end: {{/if}}, {{/has}}, {{/list}}, etc.
-const CLOSING_HBS = /^\{\{\//;
-// List item (- or * or 1.)
-const LIST_ITEM = /^[-*]|\d+\.\s/;
-// Code fence
-const CODE_FENCE = /^```/;
-// Table row
-const TABLE_ROW = /^\|.*\|$/;
-// Table separator (|---|---|)
-const TABLE_SEP = /^\|[-:\s|]+\|$/;
-
-/** RFC 2119 keywords used in prompts. */
-const RFC2119_KEYWORDS = /\b(?:MUST NOT|SHOULD NOT|SHALL NOT|RECOMMENDED|REQUIRED|OPTIONAL|SHOULD|SHALL|MUST|MAY)\b/g;
-
-function boldRfc2119Keywords(line: string): string {
-	return line.replace(RFC2119_KEYWORDS, (match, offset, source) => {
-		const isAlreadyBold =
-			source[offset - 2] === "*" &&
-			source[offset - 1] === "*" &&
-			source[offset + match.length] === "*" &&
-			source[offset + match.length + 1] === "*";
-		if (isAlreadyBold) {
-			return match;
-		}
-		return `**${match}**`;
-	});
-}
-
-/** Compact a table row by trimming cell padding */
-function compactTableRow(line: string): string {
-	// Split by |, trim each cell, rejoin
-	const cells = line.split("|");
-	return cells.map((c) => c.trim()).join("|");
-}
-
-/** Compact a table separator row */
-function compactTableSep(line: string): string {
-	// Normalize to minimal |---|---|
-	const cells = line.split("|").filter((c) => c.trim());
-	const normalized = cells.map((c) => {
-		const trimmed = c.trim();
-		// Preserve alignment markers
-		const left = trimmed.startsWith(":");
-		const right = trimmed.endsWith(":");
-		if (left && right) return ":---:";
-		if (left) return ":---";
-		if (right) return "---:";
-		return "---";
-	});
-	return "|" + normalized.join("|") + "|";
-}
-
-function formatPrompt(content: string): string {
-	const lines = content.split("\n");
-	const result: string[] = [];
-	let inCodeBlock = false;
-	// Stack of tag names whose opening tag was at column 0 (top-level)
-	const topLevelTags: string[] = [];
-
-	for (let i = 0; i < lines.length; i++) {
-		let line = lines[i].trimEnd();
-
-		const trimmed = line.trimStart();
-
-		// Track code blocks - don't modify inside them
-		if (CODE_FENCE.test(trimmed)) {
-			inCodeBlock = !inCodeBlock;
-			result.push(line);
-			continue;
-		}
-
-		if (inCodeBlock) {
-			result.push(line);
-			continue;
-		}
-
-		// Replace common ascii ellipsis and arrow patterns with their unicode equivalents
-		line = line
-			.replace(/\.{3}/g, "…")
-			.replace(/->/g, "→")
-			.replace(/<-/g, "←")
-			.replace(/<->/g, "↔")
-			.replace(/!=/g, "≠")
-			.replace(/<=/g, "≤")
-			.replace(/>=/g, "≥");
-			
-		// Track top-level XML opening tags for depth-aware indent stripping
-		const isOpeningXml = OPENING_XML.test(trimmed) && !trimmed.endsWith("/>");
-		if (isOpeningXml && line.length === trimmed.length) {
-			// Opening tag at column 0 — track as top-level
-			const match = OPENING_XML.exec(trimmed);
-			if (match) topLevelTags.push(match[1]);
-		}
-
-		// Strip leading whitespace from top-level closing XML tags and Handlebars
-		const closingMatch = CLOSING_XML.exec(trimmed);
-		if (closingMatch) {
-			const tagName = closingMatch[1];
-			if (topLevelTags.length > 0 && topLevelTags[topLevelTags.length - 1] === tagName) {
-				// Closing tag matches a top-level opener — strip indent
-				line = trimmed;
-				topLevelTags.pop();
-			} else {
-				line = line.trimEnd();
-			}
-		} else if (trimmed.startsWith("{{")) {
-			line = trimmed;
-		} else if (TABLE_SEP.test(trimmed)) {
-			// Compact table separator
-			line = compactTableSep(trimmed);
-		} else if (TABLE_ROW.test(trimmed)) {
-			// Compact table row
-			line = compactTableRow(trimmed);
-		} else {
-			// Trim trailing whitespace (preserve leading for non-closing-tags)
-			line = line.trimEnd();
-		}
-		line = boldRfc2119Keywords(line);
-
-		const isBlank = trimmed === "";
-
-		// Skip blank lines that violate our rules
-		if (isBlank) {
-			const prevLine = result[result.length - 1]?.trim() ?? "";
-			const nextLine = lines[i + 1]?.trim() ?? "";
-
-			// Rule 1: No blank line before list items
-			if (LIST_ITEM.test(nextLine)) {
-				continue;
-			}
-
-			// Rule 2: No blank after opening XML tag or Handlebars block
-			if (OPENING_XML.test(prevLine) || OPENING_HBS.test(prevLine)) {
-				continue;
-			}
-
-			// Rule 3: No blank before closing XML tag or Handlebars block
-			if (CLOSING_XML.test(nextLine) || CLOSING_HBS.test(nextLine)) {
-				continue;
-			}
-
-			// Rule 4: Collapse multiple blank lines
-			const prevIsBlank = prevLine === "";
-			if (prevIsBlank) {
-				continue;
-			}
-		}
-
-		// Rule 3 (cleanup): Remove trailing blanks before closing tag
-		if (CLOSING_XML.test(trimmed) || CLOSING_HBS.test(trimmed)) {
-			while (result.length > 0 && result[result.length - 1].trim() === "") {
-				result.pop();
-			}
-		}
-
-		result.push(line);
-	}
-
-	// Rule 8: No trailing newline at EOF
-	while (result.length > 0 && result[result.length - 1].trim() === "") {
-		result.pop();
-	}
-
-	return result.join("\n");
-}
+const PROMPT_FORMAT_OPTIONS = {
+	renderPhase: "pre-render",
+	replaceAsciiSymbols: true,
+	boldRfc2119Keywords: true,
+} as const;
 
 async function main() {
 	const glob = new Glob("**/*.md");
@@ -207,7 +42,7 @@ async function main() {
 
 	for (const fullPath of files) {
 		const original = await Bun.file(fullPath).text();
-		const formatted = formatPrompt(original);
+		const formatted = formatPromptContent(original, PROMPT_FORMAT_OPTIONS);
 
 		if (original !== formatted) {
 			if (check) {

@@ -6,6 +6,7 @@ import { computeLineHash } from "../patch/hashline";
 import { jtdToTypeScript } from "../tools/jtd-to-typescript";
 import { parseCommandArgs, substituteArgs } from "../utils/command-args";
 import { parseFrontmatter } from "../utils/frontmatter";
+import { formatPromptContent } from "../utils/prompt-format";
 
 /**
  * Represents a prompt template loaded from a markdown file
@@ -276,60 +277,7 @@ handlebars.registerHelper("hlinefull", (lineNum: unknown, content: unknown): str
 export function renderPromptTemplate(template: string, context: TemplateContext = {}): string {
 	const compiled = handlebars.compile(template, { noEscape: true, strict: false });
 	const rendered = compiled(context ?? {});
-	return optimizePromptLayout(rendered);
-}
-
-function optimizePromptLayout(input: string): string {
-	// 1) strip CR / normalize line endings
-	let s = input.replace(/\r\n?/g, "\n");
-
-	// normalize NBSP -> space
-	s = s.replace(/\u00A0/g, " ");
-
-	const lines = s.split("\n").map(line => {
-		// 2) remove trailing whitespace (spaces/tabs) per line
-		let l = line.replace(/[ \t]+$/g, "");
-
-		// 3) lines with only whitespace -> empty line
-		if (/^[ \t]*$/.test(l)) return "";
-
-		// 4) normalize leading indentation: every 2 spaces -> \t (preserve leftover 1 space)
-		//    NOTE: This is intentionally *only* leading indentation to avoid mangling prose.
-		const m = l.match(/^[ \t]+/);
-		if (m) {
-			const indent = m[0];
-			const rest = l.slice(indent.length);
-
-			let out = "";
-			let spaces = 0;
-
-			for (const ch of indent) {
-				if (ch === "\t") {
-					// flush pending spaces before existing tab
-					out += "\t".repeat(Math.floor(spaces / 2));
-					if (spaces % 2) out += " ";
-					spaces = 0;
-					out += "\t";
-				} else {
-					spaces++;
-				}
-			}
-
-			out += "\t".repeat(Math.floor(spaces / 2));
-			if (spaces % 2) out += " ";
-
-			l = out + rest;
-		}
-
-		return l;
-	});
-
-	s = lines.join("\n");
-
-	// 5) collapse excessive blank lines
-	s = s.replace(/\n{3,}/g, "\n\n");
-
-	return s.trim();
+	return formatPromptContent(rendered, { renderPhase: "post-render" });
 }
 
 /**

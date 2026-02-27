@@ -31,7 +31,7 @@ describe("renderTemplate", () => {
 			description: "label",
 			assignment: "the real work",
 		});
-		expect(result.task).toStartWith(`${sectionSeparator("Background").trimStart()}\ncontext`);
+		expect(result.task).toStartWith(`${sectionSeparator("Background").trimStart()}\n<context>\ncontext`);
 		expect(result.task).toContain("the real work");
 	});
 

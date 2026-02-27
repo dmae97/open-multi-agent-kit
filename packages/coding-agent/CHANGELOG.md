@@ -1,9 +1,9 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Extracted prompt formatting logic into reusable `formatPromptContent()` utility with configurable render phases and formatting options
 - Added `type_definition` action to navigate to symbol type definitions with source context
 - Added `implementation` action to find concrete implementations of symbols with source context
 - Added `code_actions` action to list and apply language server code fixes, refactors, and import suggestions
@@ -19,6 +19,8 @@
 
 ### Changed
 
+- Refactored prompt template rendering to use unified `formatPromptContent()` function with phase-aware formatting (pre-render vs post-render)
+- Updated `format-prompts.ts` script to use centralized prompt formatting utility instead of inline implementation
 - Replaced `column` parameter with `symbol` parameter for more intuitive position specification
 - Removed `files` parameter; use glob patterns in `file` parameter instead
 - Removed `end_line` and `end_character` parameters; range operations now use single position
