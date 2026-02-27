@@ -15,6 +15,7 @@ import {
 	formatExpandHint,
 	formatMoreItems,
 	formatStatusIcon,
+	replaceTabs,
 	shortenPath,
 	TRUNCATE_LENGTHS,
 	truncateToWidth,
@@ -31,9 +32,16 @@ import type { LspParams, LspToolDetails } from "./types";
  * Render the LSP tool call in the TUI.
  * Shows: "lsp <operation> <file/filecount>"
  */
+function sanitizeInlineText(value: string): string {
+	return replaceTabs(value).replaceAll(/\r?\n/g, " ");
+}
+
 export function renderCall(args: LspParams, _options: RenderResultOptions, theme: Theme): Text {
 	const actionLabel = (args.action ?? "request").replace(/_/g, " ");
 	const queryPreview = args.query ? truncateToWidth(args.query, TRUNCATE_LENGTHS.SHORT) : undefined;
+	const symbolPreview = args.symbol
+		? truncateToWidth(sanitizeInlineText(args.symbol), TRUNCATE_LENGTHS.SHORT)
+		: undefined;
 
 	let target: string | undefined;
 	let hasFileTarget = false;
@@ -45,13 +53,13 @@ export function renderCall(args: LspParams, _options: RenderResultOptions, theme
 
 	if (hasFileTarget && args.line !== undefined) {
 		target += `:${args.line}`;
-		if (args.symbol) {
-			target += ` (${truncateToWidth(args.symbol, TRUNCATE_LENGTHS.SHORT)})`;
+		if (symbolPreview) {
+			target += ` (${symbolPreview})`;
 		}
 	} else if (!target && args.line !== undefined) {
 		target = `line ${args.line}`;
-		if (args.symbol) {
-			target += ` (${truncateToWidth(args.symbol, TRUNCATE_LENGTHS.SHORT)})`;
+		if (symbolPreview) {
+			target += ` (${symbolPreview})`;
 		}
 	}
 
@@ -122,7 +130,10 @@ export function renderResult(
 		requestLines.push(theme.fg("dim", `line ${request.line}`));
 	}
 	if (request?.symbol) {
-		requestLines.push(theme.fg("dim", `symbol: ${request.symbol}`));
+		requestLines.push(theme.fg("dim", `symbol: ${sanitizeInlineText(request.symbol)}`));
+		if (request.occurrence !== undefined) {
+			requestLines.push(theme.fg("dim", `occurrence: ${request.occurrence}`));
+		}
 	}
 	if (request?.query) requestLines.push(theme.fg("dim", `query: ${request.query}`));
 	if (request?.new_name) requestLines.push(theme.fg("dim", `new name: ${request.new_name}`));

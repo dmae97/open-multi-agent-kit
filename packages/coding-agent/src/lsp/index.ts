@@ -45,6 +45,7 @@ import {
 	type WorkspaceEdit,
 } from "./types";
 import {
+	applyCodeAction,
 	extractHoverText,
 	fileToUri,
 	formatCodeAction,
@@ -54,6 +55,7 @@ import {
 	formatLocation,
 	formatSymbolInformation,
 	formatWorkspaceEdit,
+	hasGlobPattern,
 	readLocationContext,
 	resolveSymbolColumn,
 	sortDiagnostics,
@@ -924,7 +926,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 		_onUpdate?: AgentToolUpdateCallback<LspToolDetails>,
 		_context?: AgentToolContext,
 	): Promise<AgentToolResult<LspToolDetails>> {
-		const { action, file, line, symbol, query, new_name, apply } = params;
+		const { action, file, line, symbol, occurrence, query, new_name, apply } = params;
 		throwIfAborted(signal);
 
 		const config = getConfig(this.session.cwd);
@@ -967,8 +969,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 				};
 			}
 
-			const isGlobFilePattern = /[*?{]/.test(file);
-			const targets = isGlobFilePattern
+			const targets = hasGlobPattern(file)
 				? await Array.fromAsync(new Bun.Glob(file).scan({ cwd: this.session.cwd }))
 				: [file];
 
@@ -1100,7 +1101,9 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 
 			const uri = targetFile ? fileToUri(targetFile) : "";
 			const resolvedLine = line ?? 1;
-			const resolvedCharacter = targetFile ? await resolveSymbolColumn(targetFile, resolvedLine, symbol) : 0;
+			const resolvedCharacter = targetFile
+				? await resolveSymbolColumn(targetFile, resolvedLine, symbol, occurrence)
+				: 0;
 			const position = { line: resolvedLine - 1, character: resolvedCharacter };
 
 			let output: string;
@@ -1258,45 +1261,57 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 					}
 
 					if (apply === true && query) {
-						const parsedIndex = Number.parseInt(query, 10);
+						const normalizedQuery = query.trim();
+						if (normalizedQuery.length === 0) {
+							output = "Error: query parameter required when apply=true for code_actions";
+							break;
+						}
+						const parsedIndex = /^\d+$/.test(normalizedQuery) ? Number.parseInt(normalizedQuery, 10) : null;
 						const selectedAction = result.find(
 							(actionItem, index) =>
-								(Number.isFinite(parsedIndex) && index === parsedIndex) ||
-								actionItem.title.toLowerCase().includes(query.toLowerCase()),
+								(parsedIndex !== null && index === parsedIndex) ||
+								actionItem.title.toLowerCase().includes(normalizedQuery.toLowerCase()),
 						);
 
 						if (!selectedAction) {
 							const actionLines = result.map((actionItem, index) => `  ${formatCodeAction(actionItem, index)}`);
-							output = `No code action matches "${query}". Available actions:\n${actionLines.join("\n")}`;
+							output = `No code action matches "${normalizedQuery}". Available actions:\n${actionLines.join("\n")}`;
 							break;
 						}
 
-						if ("command" in selectedAction && typeof selectedAction.command === "string") {
-							output = `Action "${selectedAction.title}" is command-only and cannot be applied as a workspace edit`;
-							break;
-						}
-
-						let resolvedAction = selectedAction as CodeAction;
-						if (!resolvedAction.edit) {
-							try {
-								resolvedAction = (await sendRequest(
+						const appliedAction = await applyCodeAction(selectedAction, {
+							resolveCodeAction: async actionItem =>
+								(await sendRequest(client, "codeAction/resolve", actionItem, signal)) as CodeAction,
+							applyWorkspaceEdit: async edit => applyWorkspaceEdit(edit, this.session.cwd),
+							executeCommand: async commandItem => {
+								await sendRequest(
 									client,
-									"codeAction/resolve",
-									selectedAction,
+									"workspace/executeCommand",
+									{
+										command: commandItem.command,
+										arguments: commandItem.arguments ?? [],
+									},
 									signal,
-								)) as CodeAction;
-							} catch {
-								// Resolution is optional; continue with unresolved action
-							}
-						}
+								);
+							},
+						});
 
-						if (!resolvedAction.edit) {
-							output = `Action "${resolvedAction.title}" has no workspace edit to apply`;
+						if (!appliedAction) {
+							output = `Action "${selectedAction.title}" has no workspace edit or command to apply`;
 							break;
 						}
 
-						const applied = await applyWorkspaceEdit(resolvedAction.edit, this.session.cwd);
-						output = `Applied "${resolvedAction.title}":\n${applied.map(item => `  ${item}`).join("\n")}`;
+						const summaryLines: string[] = [];
+						if (appliedAction.edits.length > 0) {
+							summaryLines.push("  Workspace edit:");
+							summaryLines.push(...appliedAction.edits.map(item => `    ${item}`));
+						}
+						if (appliedAction.executedCommands.length > 0) {
+							summaryLines.push("  Executed command(s):");
+							summaryLines.push(...appliedAction.executedCommands.map(commandName => `    ${commandName}`));
+						}
+
+						output = `Applied "${appliedAction.title}":\n${summaryLines.join("\n")}`;
 						break;
 					}
 

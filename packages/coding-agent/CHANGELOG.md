@@ -8,6 +8,7 @@
 - Added `implementation` action to find concrete implementations of symbols with source context
 - Added `code_actions` action to list and apply language server code fixes, refactors, and import suggestions
 - Added `symbol` parameter to automatically resolve column position by searching for substring on target line
+- Added `occurrence` parameter to disambiguate repeated `symbol` matches on the same line
 - Added source code context display (3 lines) for definition, type definition, and implementation results
 - Added context display for first 50 references with remaining references shown location-only to balance detail and performance
 - Added support for glob patterns in `file` parameter for diagnostics action (e.g., `src/**/*.ts`)
@@ -43,6 +44,9 @@
 - Fixed TTSR violations during subagent execution aborting the entire subagent run; `#waitForPostPromptRecovery()` now also awaits agent idle after TTSR/retry gates resolve, preventing `prompt()` from returning while a fire-and-forget `agent.continue()` is still streaming
 - Fixed deferred TTSR/context-promotion continuations still racing `prompt()` completion by tracking compaction checks and deferred `agent.continue()` tasks under a shared post-prompt recovery orchestrator
 - Fixed subagent reminder/finalization sequencing to await session-level idle recovery between prompts before determining terminal assistant stop state
+- Fixed `code_actions` apply mode to execute command-based actions via `workspace/executeCommand`
+- Fixed diagnostics glob detection to recognize bracket character class patterns (e.g., `src/[ab].ts`)
+- Fixed LSP render metadata sanitization for `symbol` values to prevent tab/newline layout breakage
 
 ## [13.3.7] - 2026-02-27
 ### Breaking Changes

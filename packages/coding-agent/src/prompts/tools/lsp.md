@@ -18,6 +18,7 @@ Interacts with Language Server Protocol servers for code intelligence.
 - `file`: File path; for diagnostics it may be a glob pattern (e.g., `src/**/*.ts`)
 - `line`: 1-indexed line number for position-based actions
 - `symbol`: Substring on the target line used to resolve column automatically
+- `occurrence`: 1-indexed match index when `symbol` appears multiple times on the same line
 - `query`: Symbol search query, code-action kind filter (list mode), or code-action selector (apply mode)
 - `new_name`: Required for rename
 - `apply`: Apply edits for rename/code_actions (default true for rename, list mode for code_actions unless explicitly true)

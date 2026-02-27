@@ -506,6 +506,60 @@ export function formatCodeAction(action: CodeAction | Command, index: number): s
 	const disabled = "disabled" in action && action.disabled ? ` (disabled: ${action.disabled.reason})` : "";
 	return `${index}: [${kind}] ${action.title}${preferred}${disabled}`;
 }
+
+export interface CodeActionApplyDependencies {
+	resolveCodeAction?: (action: CodeAction) => Promise<CodeAction>;
+	applyWorkspaceEdit: (edit: WorkspaceEdit) => Promise<string[]>;
+	executeCommand: (command: Command) => Promise<void>;
+}
+
+export interface AppliedCodeActionResult {
+	title: string;
+	edits: string[];
+	executedCommands: string[];
+}
+
+function isCommandItem(action: CodeAction | Command): action is Command {
+	return typeof action.command === "string";
+}
+
+export async function applyCodeAction(
+	action: CodeAction | Command,
+	dependencies: CodeActionApplyDependencies,
+): Promise<AppliedCodeActionResult | null> {
+	if (isCommandItem(action)) {
+		await dependencies.executeCommand(action);
+		return { title: action.title, edits: [], executedCommands: [action.command] };
+	}
+
+	let resolvedAction = action;
+	if (!resolvedAction.edit && dependencies.resolveCodeAction) {
+		try {
+			resolvedAction = await dependencies.resolveCodeAction(resolvedAction);
+		} catch {
+			// Resolve is optional; continue with unresolved action.
+		}
+	}
+
+	const edits = resolvedAction.edit ? await dependencies.applyWorkspaceEdit(resolvedAction.edit) : [];
+	const executedCommands: string[] = [];
+	if (resolvedAction.command) {
+		await dependencies.executeCommand(resolvedAction.command);
+		executedCommands.push(resolvedAction.command.command);
+	}
+
+	if (edits.length === 0 && executedCommands.length === 0) {
+		return null;
+	}
+
+	return { title: resolvedAction.title, edits, executedCommands };
+}
+
+const GLOB_PATTERN_CHARS = /[*?[{]/;
+
+export function hasGlobPattern(value: string): boolean {
+	return GLOB_PATTERN_CHARS.test(value);
+}
 // =============================================================================
 // Hover Content Extraction
 // =============================================================================
@@ -541,8 +595,34 @@ function firstNonWhitespaceColumn(lineText: string): number {
 	return match ? (match.index ?? 0) : 0;
 }
 
-export async function resolveSymbolColumn(filePath: string, line: number, symbol?: string): Promise<number> {
+function findSymbolMatchIndexes(lineText: string, symbol: string, caseInsensitive = false): number[] {
+	if (symbol.length === 0) return [];
+	const haystack = caseInsensitive ? lineText.toLowerCase() : lineText;
+	const needle = caseInsensitive ? symbol.toLowerCase() : symbol;
+	const indexes: number[] = [];
+	let fromIndex = 0;
+	while (fromIndex <= haystack.length - needle.length) {
+		const matchIndex = haystack.indexOf(needle, fromIndex);
+		if (matchIndex === -1) break;
+		indexes.push(matchIndex);
+		fromIndex = matchIndex + needle.length;
+	}
+	return indexes;
+}
+
+function normalizeOccurrence(occurrence?: number): number {
+	if (occurrence === undefined || !Number.isFinite(occurrence)) return 1;
+	return Math.max(1, Math.trunc(occurrence));
+}
+
+export async function resolveSymbolColumn(
+	filePath: string,
+	line: number,
+	symbol?: string,
+	occurrence?: number,
+): Promise<number> {
 	const lineNumber = Math.max(1, line);
+	const matchOccurrence = normalizeOccurrence(occurrence);
 	try {
 		const fileText = await Bun.file(filePath).text();
 		const lines = fileText.split("\n");
@@ -551,14 +631,14 @@ export async function resolveSymbolColumn(filePath: string, line: number, symbol
 			return firstNonWhitespaceColumn(targetLine);
 		}
 
-		const exactIndex = targetLine.indexOf(symbol);
-		if (exactIndex !== -1) {
-			return exactIndex;
+		const exactIndexes = findSymbolMatchIndexes(targetLine, symbol);
+		if (exactIndexes.length >= matchOccurrence) {
+			return exactIndexes[matchOccurrence - 1];
 		}
 
-		const lowerIndex = targetLine.toLowerCase().indexOf(symbol.toLowerCase());
-		if (lowerIndex !== -1) {
-			return lowerIndex;
+		const fallbackIndexes = findSymbolMatchIndexes(targetLine, symbol, true);
+		if (fallbackIndexes.length >= matchOccurrence) {
+			return fallbackIndexes[matchOccurrence - 1];
 		}
 
 		return firstNonWhitespaceColumn(targetLine);
