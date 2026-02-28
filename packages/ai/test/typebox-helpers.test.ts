@@ -34,6 +34,30 @@ describe("sanitizeSchemaForStrictMode", () => {
 		expect(tokenSchema.format).toBeUndefined();
 	});
 
+	it("strips unsupported object-key constraints like propertyNames", () => {
+		const schema = {
+			type: "object",
+			properties: {
+				metadata: {
+					type: "object",
+					properties: { value: { type: "string" } },
+					required: ["value"],
+					propertyNames: { type: "string" },
+					minProperties: 1,
+				},
+			},
+			required: ["metadata"],
+			propertyNames: { type: "string" },
+		} as Record<string, unknown>;
+
+		const sanitized = sanitizeSchemaForStrictMode(schema);
+		const properties = sanitized.properties as Record<string, Record<string, unknown>>;
+		const metadataSchema = properties.metadata;
+
+		expect(sanitized.propertyNames).toBeUndefined();
+		expect((metadataSchema as Record<string, unknown>).propertyNames).toBeUndefined();
+		expect((metadataSchema as Record<string, unknown>).minProperties).toBeUndefined();
+	});
 	it("normalizes type arrays into anyOf variants and cleans non-object branches", () => {
 		const schema = {
 			type: ["object", "null"],
@@ -192,6 +216,29 @@ describe("tryEnforceStrictSchema", () => {
 		expect(result.schema.format).toBeUndefined();
 		expect(properties.url.format).toBeUndefined();
 		expect(properties.url.type).toBe("string");
+	});
+	it("sanitizes propertyNames so strict mode stays enabled", () => {
+		const schema = {
+			type: "object",
+			properties: {
+				tags: {
+					type: "object",
+					properties: { key: { type: "string" } },
+					required: ["key"],
+					propertyNames: { type: "string" },
+				},
+			},
+			required: ["tags"],
+			propertyNames: { type: "string" },
+		} as Record<string, unknown>;
+
+		const result = tryEnforceStrictSchema(schema);
+		const properties = result.schema.properties as Record<string, Record<string, unknown>>;
+		const tagsSchema = properties.tags;
+
+		expect(result.strict).toBe(true);
+		expect(result.schema.propertyNames).toBeUndefined();
+		expect((tagsSchema as Record<string, unknown>).propertyNames).toBeUndefined();
 	});
 	it("downgrades to non-strict mode when strict enforcement throws", () => {
 		const circularSchema: Record<string, unknown> = {
