@@ -241,4 +241,111 @@ describe("AuthStorage codex oauth ranking", () => {
 		const apiKey = await authStorage.getApiKey("openai-codex", "session-exhausted");
 		expect(apiKey).toBe("api-acct-healthy");
 	});
+
+	test("falls back to earliest-unblocking account when all exhausted", async () => {
+		if (!authStorage) throw new Error("test setup failed");
+
+		await authStorage.set("openai-codex", [
+			{ type: "oauth", ...createCredential("acct-soon", "soon@example.com") },
+			{ type: "oauth", ...createCredential("acct-later", "later@example.com") },
+		]);
+
+		usageByAccount.set(
+			"acct-soon",
+			createCodexUsageReport({
+				accountId: "acct-soon",
+				primary: { usedFraction: 1, resetInMs: 5 * 60 * 1000 },
+				secondary: { usedFraction: 1, resetInMs: 5 * 60 * 1000 },
+			}),
+		);
+		usageByAccount.set(
+			"acct-later",
+			createCodexUsageReport({
+				accountId: "acct-later",
+				primary: { usedFraction: 1, resetInMs: 30 * 60 * 1000 },
+				secondary: { usedFraction: 1, resetInMs: 30 * 60 * 1000 },
+			}),
+		);
+
+		const apiKey = await authStorage.getApiKey("openai-codex", "session-all-exhausted");
+		expect(apiKey).toBe("api-acct-soon");
+	});
+
+	test("works with single credential (no ranking)", async () => {
+		if (!authStorage) throw new Error("test setup failed");
+
+		await authStorage.set("openai-codex", [{ type: "oauth", ...createCredential("acct-solo", "solo@example.com") }]);
+
+		usageByAccount.set(
+			"acct-solo",
+			createCodexUsageReport({
+				accountId: "acct-solo",
+				primary: { usedFraction: 0.3, resetInMs: 20 * 60 * 1000 },
+				secondary: { usedFraction: 0.2, resetInMs: 5 * 24 * 60 * 60 * 1000 },
+			}),
+		);
+
+		const apiKey = await authStorage.getApiKey("openai-codex", "session-single");
+		expect(apiKey).toBe("api-acct-solo");
+	});
+
+	test("sorts 3 accounts by weekly drain rate", async () => {
+		if (!authStorage) throw new Error("test setup failed");
+
+		await authStorage.set("openai-codex", [
+			{ type: "oauth", ...createCredential("acct-fast", "fast@example.com") },
+			{ type: "oauth", ...createCredential("acct-medium", "medium@example.com") },
+			{ type: "oauth", ...createCredential("acct-slow", "slow@example.com") },
+		]);
+
+		usageByAccount.set(
+			"acct-slow",
+			createCodexUsageReport({
+				accountId: "acct-slow",
+				primary: { usedFraction: 0.2, resetInMs: 30 * 60 * 1000 },
+				secondary: { usedFraction: 0.1, resetInMs: 6 * 24 * 60 * 60 * 1000 },
+			}),
+		);
+		usageByAccount.set(
+			"acct-medium",
+			createCodexUsageReport({
+				accountId: "acct-medium",
+				primary: { usedFraction: 0.2, resetInMs: 30 * 60 * 1000 },
+				secondary: { usedFraction: 0.3, resetInMs: 5 * 24 * 60 * 60 * 1000 },
+			}),
+		);
+		usageByAccount.set(
+			"acct-fast",
+			createCodexUsageReport({
+				accountId: "acct-fast",
+				primary: { usedFraction: 0.2, resetInMs: 30 * 60 * 1000 },
+				secondary: { usedFraction: 0.7, resetInMs: 3 * 24 * 60 * 60 * 1000 },
+			}),
+		);
+
+		const apiKey = await authStorage.getApiKey("openai-codex", "session-three-accounts");
+		expect(apiKey).toBe("api-acct-slow");
+	});
+
+	test("handles usage fetch failure gracefully (null report)", async () => {
+		if (!authStorage) throw new Error("test setup failed");
+
+		await authStorage.set("openai-codex", [
+			{ type: "oauth", ...createCredential("acct-null", "null@example.com") },
+			{ type: "oauth", ...createCredential("acct-known", "known@example.com") },
+		]);
+
+		// acct-null has no entry in usageByAccount — fetchUsage returns null
+		usageByAccount.set(
+			"acct-known",
+			createCodexUsageReport({
+				accountId: "acct-known",
+				primary: { usedFraction: 0.2, resetInMs: 30 * 60 * 1000 },
+				secondary: { usedFraction: 0.3, resetInMs: 5 * 24 * 60 * 60 * 1000 },
+			}),
+		);
+
+		const apiKey = await authStorage.getApiKey("openai-codex", "session-null-usage");
+		expect(apiKey).toBe("api-acct-known");
+	});
 });

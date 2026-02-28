@@ -442,7 +442,7 @@ function sanitizeSchemaImpl(value: unknown, options: SanitizeSchemaOptions): unk
 	if (options.normalizeTypeArrayToNullable && Array.isArray(result.type)) {
 		const types = result.type as string[];
 		const nonNull = types.filter(t => t !== "null");
-		if (types.includes("null")) {
+		if (types.includes("null") && !options.stripNullableKeyword) {
 			result.nullable = true;
 		}
 		result.type = nonNull[0] ?? types[0];
@@ -476,12 +476,27 @@ export function sanitizeSchemaForGoogle(value: unknown): unknown {
 	});
 }
 
+/**
+ * Sanitize schema for Cloud Code Assist Claude. Uses normalizeTypeArrayToNullable + stripNullableKeyword
+ * so `type: ["string", "null"]` becomes `type: "string"` with no nullable marker — intentional because
+ * CCA/Claude doesn't support nullable.
+ */
 export function sanitizeSchemaForCloudCodeAssistClaude(value: unknown): unknown {
 	return sanitizeSchemaImpl(value, {
 		insideProperties: false,
 		normalizeTypeArrayToNullable: true,
 		stripNullableKeyword: true,
 	});
+}
+
+/** Copy all keys from a schema except the specified combiner key. */
+function copySchemaWithout(schema: JsonObject, combiner: string): JsonObject {
+	const result: JsonObject = {};
+	for (const [key, entry] of Object.entries(schema)) {
+		if (key === combiner) continue;
+		result[key] = entry;
+	}
+	return result;
 }
 
 /**
@@ -524,11 +539,7 @@ function mergeObjectCombinerVariants(schema: JsonObject, combiner: "anyOf" | "on
 		}
 	}
 
-	const nextSchema: JsonObject = {};
-	for (const [key, entry] of Object.entries(schema)) {
-		if (key === combiner) continue;
-		nextSchema[key] = entry;
-	}
+	const nextSchema = copySchemaWithout(schema, combiner);
 
 	nextSchema.type = "object";
 	nextSchema.properties = mergedProperties;
@@ -576,6 +587,12 @@ const CLOUD_CODE_ASSIST_SHARED_SCHEMA_KEYS = new Set([
 	"writeOnly",
 	"$comment",
 ]);
+/**
+ * Collapse anyOf/oneOf with distinct typed variants into a single-type schema.
+ * Picks the first non-null type as a scalar. This is lossy for multi-type unions
+ * (e.g., string|number|null narrows to string), but CCA requires a scalar type field
+ * and an uncollapsed anyOf would be rejected by the CCA API at runtime.
+ */
 function collapseMixedTypeCombinerVariants(schema: JsonObject, combiner: "anyOf" | "oneOf"): JsonObject {
 	const variantsRaw = schema[combiner];
 	if (!Array.isArray(variantsRaw) || variantsRaw.length === 0) {
@@ -621,13 +638,11 @@ function collapseMixedTypeCombinerVariants(schema: JsonObject, combiner: "anyOf"
 		return schema;
 	}
 
-	const nextSchema: JsonObject = {};
-	for (const [key, entry] of Object.entries(schema)) {
-		if (key === combiner) continue;
-		nextSchema[key] = entry;
-	}
+	const nextSchema = copySchemaWithout(schema, combiner);
 
 	const nonNullTypes = variantTypes.filter(t => t !== "null");
+	// Lossy: when multiple non-null types exist we pick the first. CCA requires
+	// a scalar type and keeping the anyOf would cause an API rejection at runtime.
 	nextSchema.type = nonNullTypes[0] ?? variantTypes[0];
 	for (const [key, value] of Object.entries(mergedVariantFields)) {
 		const existingValue = nextSchema[key];
@@ -645,23 +660,23 @@ function collapseMixedTypeCombinerVariants(schema: JsonObject, combiner: "anyOf"
  * Collapse anyOf/oneOf where all variants share the same primitive type.
  * E.g. anyOf: [{type: "string", desc: "A"}, {type: "string", desc: "B"}] → {type: "string", desc: "A"}
  * Claude via CCA rejects any remaining anyOf/oneOf, so pick first variant.
+ * Note: constraints from non-first variants are silently dropped.
  */
 function collapseSameTypeCombinerVariants(schema: JsonObject, combiner: "anyOf" | "oneOf"): JsonObject {
 	const variantsRaw = schema[combiner];
 	if (!Array.isArray(variantsRaw) || variantsRaw.length === 0) return schema;
 	let commonType: string | undefined;
+	let firstEntry: JsonObject | undefined;
 	for (const entry of variantsRaw) {
 		if (!isJsonObject(entry) || typeof entry.type !== "string") return schema;
-		if (commonType === undefined) commonType = entry.type;
-		else if (entry.type !== commonType) return schema;
+		if (commonType === undefined) {
+			commonType = entry.type;
+			firstEntry = entry;
+		} else if (entry.type !== commonType) return schema;
 	}
-	const first = variantsRaw[0] as JsonObject;
-	const nextSchema: JsonObject = {};
-	for (const [key, entry] of Object.entries(schema)) {
-		if (key === combiner) continue;
-		nextSchema[key] = entry;
-	}
-	for (const [key, value] of Object.entries(first)) {
+	if (!firstEntry) return schema;
+	const nextSchema = copySchemaWithout(schema, combiner);
+	for (const [key, value] of Object.entries(firstEntry)) {
 		if (!(key in nextSchema)) nextSchema[key] = value;
 	}
 	return nextSchema;
@@ -680,8 +695,10 @@ function stripResidualCombiners(value: unknown): unknown {
 		result[key] = stripResidualCombiners(entry);
 	}
 	for (const combiner of ["anyOf", "oneOf"] as const) {
-		const collapsed = collapseSameTypeCombinerVariants(result, combiner);
-		if (collapsed !== result) return collapsed;
+		const sametype = collapseSameTypeCombinerVariants(result, combiner);
+		if (sametype !== result) return sametype;
+		const mixed = collapseMixedTypeCombinerVariants(result, combiner);
+		if (mixed !== result) return mixed;
 	}
 	return result;
 }

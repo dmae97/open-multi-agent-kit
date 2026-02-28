@@ -28,7 +28,7 @@ function createModel(id: string): Model<"google-gemini-cli"> {
 }
 
 describe("Cloud Code Assist Claude tool schema conversion", () => {
-	it("removes nullable keyword while preserving JSON Schema union types", () => {
+	it("strips nullable keyword and collapses type arrays for CCA Claude", () => {
 		const schema = {
 			type: "object",
 			properties: {
@@ -39,11 +39,13 @@ describe("Cloud Code Assist Claude tool schema conversion", () => {
 			},
 		} as unknown;
 
+		// normalizeTypeArrayToNullable converts type array to scalar + nullable,
+		// then stripNullableKeyword removes the nullable marker.
 		expect(sanitizeSchemaForCloudCodeAssistClaude(schema)).toEqual({
 			type: "object",
 			properties: {
 				value: {
-					type: ["string", "null"],
+					type: "string",
 				},
 			},
 		});
@@ -72,7 +74,7 @@ describe("Cloud Code Assist Claude tool schema conversion", () => {
 			type: "object",
 			properties: {
 				value: {
-					type: ["string", "null"],
+					type: "string",
 				},
 			},
 			required: ["value"],
@@ -80,7 +82,7 @@ describe("Cloud Code Assist Claude tool schema conversion", () => {
 		expect(declaration.parametersJsonSchema).toBeUndefined();
 	});
 
-	it("normalizes mixed-type anyOf for claude parameters without emitting combiners", () => {
+	it("collapses mixed-type anyOf to first non-null type for claude parameters", () => {
 		const parameters = {
 			type: "object",
 			properties: {
@@ -103,11 +105,12 @@ describe("Cloud Code Assist Claude tool schema conversion", () => {
 		>;
 
 		expect(claudeFirst).toEqual(claudeSecond);
+		// Lossy collapse: array|string|null narrows to array (first non-null type)
 		expect(claudeDeclaration.parameters).toEqual({
 			type: "object",
 			properties: {
 				lines: {
-					type: ["array", "string", "null"],
+					type: "array",
 					items: { type: "string" },
 				},
 			},
@@ -156,14 +159,14 @@ describe("Cloud Code Assist Claude tool schema conversion", () => {
 			}
 		)?.items?.properties?.lines ?? null) as Record<string, unknown> | null;
 
+		// Lossy collapse: array|string|null narrows to array (first non-null type)
 		expect(linesSchema).toEqual({
-			type: ["array", "string", "null"],
+			type: "array",
 			description: "content (preferred format)",
 			items: { type: "string" },
 		});
 		expect(JSON.stringify(declaration.parameters)).not.toContain('"anyOf"');
 	});
-
 	it("collapses mixed unions for todo_write-style nullable content fields", () => {
 		const parameters = {
 			type: "object",
@@ -191,8 +194,9 @@ describe("Cloud Code Assist Claude tool schema conversion", () => {
 			}
 		)?.items?.properties?.content ?? null) as Record<string, unknown> | null;
 
+		// string|null collapses cleanly to string (single non-null type)
 		expect(contentSchema).toEqual({
-			type: ["string", "null"],
+			type: "string",
 			description: "Updated task description",
 		});
 		expect(JSON.stringify(declaration.parameters)).not.toContain('"anyOf"');
