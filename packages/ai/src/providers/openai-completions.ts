@@ -31,7 +31,6 @@ import { AssistantMessageEventStream } from "../utils/event-stream";
 import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-inspector";
 import { parseStreamingJson } from "../utils/json-parse";
 import { getKimiCommonHeaders } from "../utils/oauth/kimi";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import { adaptSchemaForStrict, NO_STRICT } from "../utils/schema";
 import { mapToOpenAICompletionsToolChoice } from "../utils/tool-choice";
 import {
@@ -719,7 +718,7 @@ export function convertMessages(
 	if (context.systemPrompt) {
 		const useDeveloperRole = model.reasoning && compat.supportsDeveloperRole;
 		const role = useDeveloperRole ? "developer" : "system";
-		params.push({ role: role, content: sanitizeSurrogates(context.systemPrompt) });
+		params.push({ role: role, content: context.systemPrompt.toWellFormed() });
 	}
 
 	let lastRole: string | null = null;
@@ -743,7 +742,7 @@ export function convertMessages(
 		if (msg.role === "user" || msg.role === "developer") {
 			const role = !devAsUser && msg.role === "developer" ? "developer" : "user";
 			if (typeof msg.content === "string") {
-				const text = sanitizeSurrogates(msg.content);
+				const text = msg.content.toWellFormed();
 				if (text.trim().length === 0) continue;
 				params.push({
 					role: role,
@@ -753,7 +752,7 @@ export function convertMessages(
 				const content: ChatCompletionContentPart[] = [];
 				for (const item of msg.content) {
 					if (item.type === "text") {
-						const text = sanitizeSurrogates(item.text);
+						const text = item.text.toWellFormed();
 						if (text.trim().length === 0) continue;
 						content.push({
 							type: "text",
@@ -791,10 +790,10 @@ export function convertMessages(
 				// GitHub Copilot requires assistant content as a string, not an array.
 				// Sending as array causes Claude models to re-answer all previous prompts.
 				if (model.provider === "github-copilot") {
-					assistantMsg.content = nonEmptyTextBlocks.map(b => sanitizeSurrogates(b.text)).join("");
+					assistantMsg.content = nonEmptyTextBlocks.map(b => b.text.toWellFormed()).join("");
 				} else {
 					assistantMsg.content = nonEmptyTextBlocks.map(b => {
-						return { type: "text", text: sanitizeSurrogates(b.text) };
+						return { type: "text", text: b.text.toWellFormed() };
 					});
 				}
 			}
@@ -918,7 +917,7 @@ export function convertMessages(
 					remappedToolCallId ?? ensureToolCallId(toolMsg.toolCallId, `${j}:${toolMsg.toolName ?? "tool"}`);
 				const toolResultMsg: ChatCompletionToolMessageParam = {
 					role: "tool",
-					content: sanitizeSurrogates(hasText ? textResult : "(see attached image)"),
+					content: (hasText ? textResult : "(see attached image)").toWellFormed(),
 					tool_call_id: normalizeMistralToolId(resolvedToolCallId, compat.requiresMistralToolIds),
 				};
 				if (compat.requiresToolResultName && toolMsg.toolName) {

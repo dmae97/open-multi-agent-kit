@@ -31,7 +31,6 @@ import { normalizeResponsesToolCallId } from "../utils";
 import { AssistantMessageEventStream } from "../utils/event-stream";
 import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-inspector";
 import { parseStreamingJson } from "../utils/json-parse";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import { adaptSchemaForStrict, NO_STRICT } from "../utils/schema";
 import {
 	CODEX_BASE_URL,
@@ -1551,14 +1550,14 @@ function convertMessages(model: Model<"openai-codex-responses">, context: Contex
 				if (!msg.content || msg.content.trim() === "") continue;
 				messages.push({
 					role: "user",
-					content: [{ type: "input_text", text: sanitizeSurrogates(msg.content) }],
+					content: [{ type: "input_text", text: msg.content.toWellFormed() }],
 				});
 			} else {
 				const content: ResponseInputContent[] = msg.content.map((item): ResponseInputContent => {
 					if (item.type === "text") {
 						return {
 							type: "input_text",
-							text: sanitizeSurrogates(item.text),
+							text: item.text.toWellFormed(),
 						} satisfies ResponseInputText;
 					}
 					return {
@@ -1588,14 +1587,14 @@ function convertMessages(model: Model<"openai-codex-responses">, context: Contex
 				if (!msg.content || msg.content.trim() === "") continue;
 				messages.push({
 					role: "developer",
-					content: [{ type: "input_text", text: sanitizeSurrogates(msg.content) }],
+					content: [{ type: "input_text", text: msg.content.toWellFormed() }],
 				});
 			} else {
 				const content: ResponseInputContent[] = msg.content.map((item): ResponseInputContent => {
 					if (item.type === "text") {
 						return {
 							type: "input_text",
-							text: sanitizeSurrogates(item.text),
+							text: item.text.toWellFormed(),
 						} satisfies ResponseInputText;
 					}
 					return {
@@ -1639,7 +1638,7 @@ function convertMessages(model: Model<"openai-codex-responses">, context: Contex
 					output.push({
 						type: "message",
 						role: "assistant",
-						content: [{ type: "output_text", text: sanitizeSurrogates(textBlock.text), annotations: [] }],
+						content: [{ type: "output_text", text: textBlock.text.toWellFormed(), annotations: [] }],
 						status: "completed",
 						id: msgId,
 					} satisfies ResponseOutputMessage);
@@ -1669,7 +1668,7 @@ function convertMessages(model: Model<"openai-codex-responses">, context: Contex
 			messages.push({
 				type: "function_call_output",
 				call_id: normalized.callId,
-				output: sanitizeSurrogates(hasText ? textResult : "(see attached image)"),
+				output: (hasText ? textResult : "(see attached image)").toWellFormed(),
 			});
 
 			if (hasImages && model.input.includes("image")) {

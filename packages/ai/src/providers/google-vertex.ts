@@ -20,7 +20,6 @@ import type {
 } from "../types";
 import { AssistantMessageEventStream } from "../utils/event-stream";
 import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-inspector";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import type { GoogleThinkingLevel } from "./google-gemini-cli";
 import {
 	convertMessages,
@@ -371,7 +370,7 @@ function buildParams(
 
 	const config: GenerateContentConfig = {
 		...(Object.keys(generationConfig).length > 0 && generationConfig),
-		...(context.systemPrompt && { systemInstruction: sanitizeSurrogates(context.systemPrompt) }),
+		...(context.systemPrompt && { systemInstruction: context.systemPrompt.toWellFormed() }),
 		...(context.tools && context.tools.length > 0 && { tools: convertTools(context.tools, model) }),
 	};
 

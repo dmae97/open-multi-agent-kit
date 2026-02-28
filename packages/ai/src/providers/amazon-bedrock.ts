@@ -44,7 +44,6 @@ import { normalizeToolCallId, resolveCacheRetention } from "../utils";
 import { AssistantMessageEventStream } from "../utils/event-stream";
 import { appendRawHttpRequestDumpFor400, type RawHttpRequestDump, withHttpStatus } from "../utils/http-inspector";
 import { parseStreamingJson } from "../utils/json-parse";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import { transformMessages } from "./transform-messages";
 
 export interface BedrockOptions extends StreamOptions {
@@ -363,7 +362,7 @@ function buildSystemPrompt(
 ): SystemContentBlock[] | undefined {
 	if (!systemPrompt) return undefined;
 
-	const blocks: SystemContentBlock[] = [{ text: sanitizeSurrogates(systemPrompt) }];
+	const blocks: SystemContentBlock[] = [{ text: systemPrompt.toWellFormed() }];
 
 	// Add cache point for supported Claude models
 	if (cacheRetention !== "none" && supportsPromptCaching(model)) {
@@ -394,14 +393,14 @@ function convertMessages(
 					if (!m.content || m.content.trim() === "") continue;
 					result.push({
 						role: ConversationRole.USER,
-						content: [{ text: sanitizeSurrogates(m.content) }],
+						content: [{ text: m.content.toWellFormed() }],
 					});
 				} else {
 					const contentBlocks = m.content
 						.map(c => {
 							switch (c.type) {
 								case "text":
-									return { text: sanitizeSurrogates(c.text) };
+									return { text: c.text.toWellFormed() };
 								case "image":
 									return { image: createImageBlock(c.mimeType, c.data) };
 								default:
@@ -435,7 +434,7 @@ function convertMessages(
 						case "text":
 							// Skip empty text blocks
 							if (c.text.trim().length === 0) continue;
-							contentBlocks.push({ text: sanitizeSurrogates(c.text) });
+							contentBlocks.push({ text: c.text.toWellFormed() });
 							break;
 						case "toolCall":
 							contentBlocks.push({
@@ -455,13 +454,13 @@ function convertMessages(
 							if (supportsThinkingSignature(model)) {
 								contentBlocks.push({
 									reasoningContent: {
-										reasoningText: { text: sanitizeSurrogates(c.thinking), signature: c.thinkingSignature },
+										reasoningText: { text: c.thinking.toWellFormed(), signature: c.thinkingSignature },
 									},
 								});
 							} else {
 								contentBlocks.push({
 									reasoningContent: {
-										reasoningText: { text: sanitizeSurrogates(c.thinking) },
+										reasoningText: { text: c.thinking.toWellFormed() },
 									},
 								});
 							}
@@ -492,7 +491,7 @@ function convertMessages(
 						content: m.content.map(c =>
 							c.type === "image"
 								? { image: createImageBlock(c.mimeType, c.data) }
-								: { text: sanitizeSurrogates(c.text) },
+								: { text: c.text.toWellFormed() },
 						),
 						status: m.isError ? ToolResultStatus.ERROR : ToolResultStatus.SUCCESS,
 					},
@@ -508,7 +507,7 @@ function convertMessages(
 							content: nextMsg.content.map(c =>
 								c.type === "image"
 									? { image: createImageBlock(c.mimeType, c.data) }
-									: { text: sanitizeSurrogates(c.text) },
+									: { text: c.text.toWellFormed() },
 							),
 							status: nextMsg.isError ? ToolResultStatus.ERROR : ToolResultStatus.SUCCESS,
 						},

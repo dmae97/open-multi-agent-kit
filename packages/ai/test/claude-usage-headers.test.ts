@@ -14,7 +14,10 @@ function createMemoryCache(): UsageCache {
 	};
 }
 
-function getHeaderCaseInsensitive(headers: HeadersInit | undefined, name: string): string | undefined {
+function getHeaderCaseInsensitive(
+	headers: Headers | Record<string, string | ReadonlyArray<string>> | string[][] | undefined,
+	name: string,
+): string | undefined {
 	if (!headers) return undefined;
 	const target = name.toLowerCase();
 

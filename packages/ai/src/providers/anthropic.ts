@@ -31,7 +31,6 @@ import { isAnthropicOAuthToken, normalizeToolCallId, resolveCacheRetention } fro
 import { AssistantMessageEventStream } from "../utils/event-stream";
 import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-inspector";
 import { parseStreamingJson } from "../utils/json-parse";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import {
 	buildCopilotDynamicHeaders,
 	getCopilotInitiatorOverride,
@@ -286,7 +285,10 @@ function convertContentBlocks(content: (TextContent | ImageContent)[]):
 	// If only text blocks, return as concatenated string for simplicity
 	const hasImages = content.some(c => c.type === "image");
 	if (!hasImages) {
-		return sanitizeSurrogates(content.map(c => (c as TextContent).text).join("\n"));
+		return content
+			.map(c => (c as TextContent).text)
+			.join("\n")
+			.toWellFormed();
 	}
 
 	// If we have images, convert to content block array
@@ -294,7 +296,7 @@ function convertContentBlocks(content: (TextContent | ImageContent)[]):
 		if (block.type === "text") {
 			return {
 				type: "text" as const,
-				text: sanitizeSurrogates(block.text),
+				text: block.text.toWellFormed(),
 			};
 		}
 		return {
@@ -752,7 +754,7 @@ export function buildAnthropicSystemBlocks(
 ): AnthropicSystemBlock[] | undefined {
 	const { includeClaudeCodeInstruction = false, extraInstructions = [], billingPayload } = options;
 	const blocks: AnthropicSystemBlock[] = [];
-	const sanitizedPrompt = systemPrompt ? sanitizeSurrogates(systemPrompt) : "";
+	const sanitizedPrompt = systemPrompt ? systemPrompt.toWellFormed() : "";
 	const trimmedInstructions = extraInstructions.map(instruction => instruction.trim()).filter(Boolean);
 	const hasBillingHeader = sanitizedPrompt.includes(CLAUDE_BILLING_HEADER_PREFIX);
 	const claudeCodeSystemCacheControl: AnthropicCacheControl = { type: "ephemeral", ttl: "1h" };
@@ -1086,7 +1088,7 @@ function buildParams(
 	const billingPayload = shouldInjectClaudeCodeInstruction
 		? {
 				...params,
-				...(context.systemPrompt ? { system: sanitizeSurrogates(context.systemPrompt) } : {}),
+				...(context.systemPrompt ? { system: context.systemPrompt.toWellFormed() } : {}),
 			}
 		: undefined;
 	const systemBlocks = buildAnthropicSystemBlocks(context.systemPrompt, {
@@ -1122,7 +1124,7 @@ export function convertAnthropicMessages(
 				if (msg.content.trim().length > 0) {
 					params.push({
 						role: "user",
-						content: sanitizeSurrogates(msg.content),
+						content: msg.content.toWellFormed(),
 					});
 				}
 			} else {
@@ -1130,7 +1132,7 @@ export function convertAnthropicMessages(
 					if (item.type === "text") {
 						return {
 							type: "text",
-							text: sanitizeSurrogates(item.text),
+							text: item.text.toWellFormed(),
 						};
 					}
 					return {
@@ -1163,19 +1165,19 @@ export function convertAnthropicMessages(
 					if (block.text.trim().length === 0) continue;
 					blocks.push({
 						type: "text",
-						text: sanitizeSurrogates(block.text),
+						text: block.text.toWellFormed(),
 					});
 				} else if (block.type === "thinking") {
 					if (block.thinking.trim().length === 0) continue;
 					if (!block.thinkingSignature || block.thinkingSignature.trim().length === 0) {
 						blocks.push({
 							type: "text",
-							text: sanitizeSurrogates(block.thinking),
+							text: block.thinking.toWellFormed(),
 						});
 					} else {
 						blocks.push({
 							type: "thinking",
-							thinking: sanitizeSurrogates(block.thinking),
+							thinking: block.thinking.toWellFormed(),
 							signature: block.thinkingSignature,
 						});
 					}

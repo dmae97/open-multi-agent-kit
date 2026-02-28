@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - `hasUnrepresentableStrictObjectMap()` pre-flight check in `tryEnforceStrictSchema`: schemas with `patternProperties` or schema-valued `additionalProperties` now degrade gracefully to non-strict mode instead of throwing during enforcement
@@ -26,6 +25,7 @@
 
 ### Changed
 
+- Replaced `sanitizeSurrogates()` utility with native `String.prototype.toWellFormed()` for handling unpaired Unicode surrogates across all providers
 - Extended `ANTHROPIC_OAUTH_BETA` constant in the OpenAI-compat Anthropic route with `interleaved-thinking-2025-05-14`, `context-management-2025-06-27`, and `prompt-caching-scope-2026-01-05` beta flags
 - `claudeCodeVersion` bumped to `2.1.63`; `claudeCodeSystemInstruction` updated to identify as Claude Agent SDK
 - `claudeCodeHeaders`: removed `X-Stainless-Helper-Method`, updated package version to `0.74.0`, runtime version to `v24.3.0`
@@ -49,6 +49,10 @@
 - `VALIDATED` tool calling config applied to Antigravity requests with Claude models
 - `maxOutputTokens` removed from Antigravity generation config for non-Claude models
 - System instruction injection for Antigravity scoped to Claude and `gemini-3-pro-high` models only
+
+### Removed
+
+- Removed `sanitizeSurrogates()` utility function; use native `String.prototype.toWellFormed()` instead
 
 ## [13.3.14] - 2026-02-28
 

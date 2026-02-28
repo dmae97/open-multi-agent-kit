@@ -22,7 +22,6 @@ import { AssistantMessageEventStream } from "../utils/event-stream";
 import { appendRawHttpRequestDumpFor400, type RawHttpRequestDump, withHttpStatus } from "../utils/http-inspector";
 import { refreshAntigravityToken } from "../utils/oauth/google-antigravity";
 import { refreshGoogleCloudToken } from "../utils/oauth/google-gemini-cli";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import {
 	convertMessages,
 	convertTools,
@@ -1036,7 +1035,7 @@ export function buildRequest(
 	// System instruction must be object with parts, not plain string
 	if (context.systemPrompt) {
 		request.systemInstruction = {
-			parts: [{ text: sanitizeSurrogates(context.systemPrompt) }],
+			parts: [{ text: context.systemPrompt.toWellFormed() }],
 		};
 	}
 

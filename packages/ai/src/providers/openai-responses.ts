@@ -32,7 +32,6 @@ import { normalizeResponsesToolCallId, resolveCacheRetention } from "../utils";
 import { AssistantMessageEventStream } from "../utils/event-stream";
 import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-inspector";
 import { parseStreamingJson } from "../utils/json-parse";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import { adaptSchemaForStrict, NO_STRICT } from "../utils/schema";
 import { mapToOpenAIResponsesToolChoice } from "../utils/tool-choice";
 import {
@@ -539,7 +538,7 @@ function convertMessages(
 		const role = model.reasoning ? "developer" : "system";
 		messages.push({
 			role,
-			content: sanitizeSurrogates(context.systemPrompt),
+			content: context.systemPrompt.toWellFormed(),
 		});
 	}
 
@@ -551,14 +550,14 @@ function convertMessages(
 				if (!msg.content || msg.content.trim() === "") continue;
 				messages.push({
 					role: "user",
-					content: [{ type: "input_text", text: sanitizeSurrogates(msg.content) }],
+					content: [{ type: "input_text", text: msg.content.toWellFormed() }],
 				});
 			} else {
 				const content: ResponseInputContent[] = msg.content.map((item): ResponseInputContent => {
 					if (item.type === "text") {
 						return {
 							type: "input_text",
-							text: sanitizeSurrogates(item.text),
+							text: item.text.toWellFormed(),
 						} satisfies ResponseInputText;
 					} else {
 						return {
@@ -615,7 +614,7 @@ function convertMessages(
 					output.push({
 						type: "message",
 						role: "assistant",
-						content: [{ type: "output_text", text: sanitizeSurrogates(textBlock.text), annotations: [] }],
+						content: [{ type: "output_text", text: textBlock.text.toWellFormed(), annotations: [] }],
 						status: "completed",
 						id: msgId,
 					} satisfies ResponseOutputMessage);
@@ -660,7 +659,7 @@ function convertMessages(
 			messages.push({
 				type: "function_call_output",
 				call_id: normalized.callId,
-				output: sanitizeSurrogates(hasText ? textResult : "(see attached image)"),
+				output: (hasText ? textResult : "(see attached image)").toWellFormed(),
 			});
 
 			// If there are images and model supports them, send a follow-up user message with images

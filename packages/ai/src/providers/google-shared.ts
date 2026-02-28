@@ -3,7 +3,6 @@
  */
 import { type Content, FinishReason, FunctionCallingConfigMode, type Part } from "@google/genai";
 import type { Context, ImageContent, Model, StopReason, TextContent, Tool } from "../types";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode";
 import { prepareSchemaForCCA, sanitizeSchemaForGoogle } from "../utils/schema";
 import { transformMessages } from "./transform-messages";
 
@@ -89,12 +88,12 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 				if (!msg.content || msg.content.trim() === "") continue;
 				contents.push({
 					role: "user",
-					parts: [{ text: sanitizeSurrogates(msg.content) }],
+					parts: [{ text: msg.content.toWellFormed() }],
 				});
 			} else {
 				const parts: Part[] = msg.content.map(item => {
 					if (item.type === "text") {
-						return { text: sanitizeSurrogates(item.text) };
+						return { text: item.text.toWellFormed() };
 					} else {
 						return {
 							inlineData: {
@@ -129,7 +128,7 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 					if (!block.text || block.text.trim() === "") continue;
 					const thoughtSignature = resolveThoughtSignature(isSameProviderAndModel, block.textSignature);
 					parts.push({
-						text: sanitizeSurrogates(block.text),
+						text: block.text.toWellFormed(),
 						...(thoughtSignature && { thoughtSignature }),
 					});
 				} else if (block.type === "thinking") {
@@ -141,12 +140,12 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 						const thoughtSignature = resolveThoughtSignature(isSameProviderAndModel, block.thinkingSignature);
 						parts.push({
 							thought: true,
-							text: sanitizeSurrogates(block.thinking),
+							text: block.thinking.toWellFormed(),
 							...(thoughtSignature && { thoughtSignature }),
 						});
 					} else {
 						parts.push({
-							text: sanitizeSurrogates(block.thinking),
+							text: block.thinking.toWellFormed(),
 						});
 					}
 				} else if (block.type === "toolCall") {
@@ -160,12 +159,10 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 							.join("\n");
 
 						parts.push({
-							text: sanitizeSurrogates(
-								`<call_record tool="${block.name}">
+							text: `<call_record tool="${block.name}">
 <critical>Historical context only. You cannot invoke tools this way—use proper function calling.</critical>
 ${params}
-</call_record>`,
-							),
+</call_record>`.toWellFormed(),
 						});
 						continue;
 					}
@@ -209,7 +206,7 @@ ${params}
 			const supportsMultimodalFunctionResponse = model.id.includes("gemini-3");
 
 			// Use "output" key for success, "error" key for errors as per SDK documentation
-			const responseValue = hasText ? sanitizeSurrogates(textResult) : hasImages ? "(see attached image)" : "";
+			const responseValue = hasText ? textResult.toWellFormed() : hasImages ? "(see attached image)" : "";
 
 			const imageParts: Part[] = imageContent.map(imageBlock => ({
 				inlineData: {
