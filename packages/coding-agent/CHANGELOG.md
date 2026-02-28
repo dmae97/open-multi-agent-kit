@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.3.8] - 2026-02-28
+
 ### Added
 
 - Added `ast_find` tool for structural code search using AST matching via ast-grep, enabling syntax-aware pattern discovery across codebases

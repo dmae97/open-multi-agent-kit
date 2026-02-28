@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.3.8] - 2026-02-28
 ### Added
 
 - Added `astFind()` function for structural code search using AST patterns with support for language-specific matching, selectors, and meta-variable extraction

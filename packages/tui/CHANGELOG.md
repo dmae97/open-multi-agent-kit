@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.3.8] - 2026-02-28
 ### Breaking Changes
 
 - Changed mermaid hash type from string to bigint in `getMermaidImage` callback and `extractMermaidBlocks` return type

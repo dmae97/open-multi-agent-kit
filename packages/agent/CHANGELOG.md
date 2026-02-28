@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.3.8] - 2026-02-28
 ### Changed
 
 - Changed intent field name from `agent__intent` to `_i` in tool schemas
