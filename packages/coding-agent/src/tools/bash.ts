@@ -377,7 +377,8 @@ export const bashToolRenderer = {
 	): Component {
 		const cmdText = args ? formatBashCommand(args, uiTheme) : undefined;
 		const isError = result.isError === true;
-		const header = renderStatusLine({ icon: isError ? "error" : "success", title: "Bash" }, uiTheme);
+		const icon = options.isPartial ? "pending" : isError ? "error" : "success";
+		const header = renderStatusLine({ icon, title: "Bash" }, uiTheme);
 		const details = result.details;
 		const outputBlock = new CachedOutputBlock();
 
@@ -438,7 +439,7 @@ export const bashToolRenderer = {
 				return outputBlock.render(
 					{
 						header,
-						state: isError ? "error" : "success",
+						state: options.isPartial ? "pending" : isError ? "error" : "success",
 						sections: [
 							{ lines: cmdText ? [uiTheme.fg("dim", cmdText)] : [] },
 							{ label: uiTheme.fg("toolTitle", "Output"), lines: outputLines },
