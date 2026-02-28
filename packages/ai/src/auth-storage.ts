@@ -499,20 +499,25 @@ export class AuthStorage {
 		return order;
 	}
 
-	/** Checks if a credential is temporarily blocked due to usage limits. */
-	#isCredentialBlocked(providerKey: string, credentialIndex: number): boolean {
+	/** Returns block expiry timestamp for a credential, cleaning up expired entries. */
+	#getCredentialBlockedUntil(providerKey: string, credentialIndex: number): number | undefined {
 		const backoffMap = this.#credentialBackoff.get(providerKey);
-		if (!backoffMap) return false;
+		if (!backoffMap) return undefined;
 		const blockedUntil = backoffMap.get(credentialIndex);
-		if (!blockedUntil) return false;
+		if (!blockedUntil) return undefined;
 		if (blockedUntil <= Date.now()) {
 			backoffMap.delete(credentialIndex);
 			if (backoffMap.size === 0) {
 				this.#credentialBackoff.delete(providerKey);
 			}
-			return false;
+			return undefined;
 		}
-		return true;
+		return blockedUntil;
+	}
+
+	/** Checks if a credential is temporarily blocked due to usage limits. */
+	#isCredentialBlocked(providerKey: string, credentialIndex: number): boolean {
+		return this.#getCredentialBlockedUntil(providerKey, credentialIndex) !== undefined;
 	}
 
 	/** Marks a credential as blocked until the specified time. */
@@ -1298,6 +1303,130 @@ export class AuthStorage {
 		return remainingCredentials.some(candidate => !this.#isCredentialBlocked(providerKey, candidate.index));
 	}
 
+	#resolveWindowResetInMs(window: UsageLimit["window"], nowMs: number): number | undefined {
+		if (!window) return undefined;
+		if (typeof window.resetInMs === "number" && Number.isFinite(window.resetInMs)) {
+			return window.resetInMs;
+		}
+		if (typeof window.resetsAt === "number" && Number.isFinite(window.resetsAt)) {
+			return window.resetsAt - nowMs;
+		}
+		return undefined;
+	}
+
+	#normalizeUsageFraction(limit: UsageLimit | undefined): number {
+		const usedFraction = limit?.amount.usedFraction;
+		if (typeof usedFraction !== "number" || !Number.isFinite(usedFraction)) {
+			return 0.5;
+		}
+		return Math.min(Math.max(usedFraction, 0), 1);
+	}
+
+	#computeWindowPressure(limit: UsageLimit | undefined, nowMs: number, fallbackDurationMs: number): number {
+		const usedFraction = this.#normalizeUsageFraction(limit);
+		const durationMs = limit?.window?.durationMs ?? fallbackDurationMs;
+		if (!Number.isFinite(durationMs) || durationMs <= 0) {
+			return usedFraction;
+		}
+		const resetInMs = this.#resolveWindowResetInMs(limit?.window, nowMs);
+		if (!Number.isFinite(resetInMs)) {
+			return usedFraction;
+		}
+		const horizonWeight = Math.min(Math.max((resetInMs as number) / durationMs, 0), 1);
+		return usedFraction * horizonWeight;
+	}
+
+	#findCodexWindowLimit(report: UsageReport, key: "primary" | "secondary"): UsageLimit | undefined {
+		const direct = report.limits.find(limit => limit.id === `openai-codex:${key}`);
+		if (direct) return direct;
+		const byId = report.limits.find(limit => limit.id.toLowerCase().includes(key));
+		if (byId) return byId;
+		const windowId = key === "secondary" ? "7d" : "1h";
+		return report.limits.find(limit => limit.scope.windowId?.toLowerCase() === windowId);
+	}
+
+	async #rankCodexOAuthSelections(args: {
+		providerKey: string;
+		order: number[];
+		credentials: Array<{ credential: OAuthCredential; index: number }>;
+		options?: { baseUrl?: string };
+	}): Promise<
+		Array<{
+			selection: { credential: OAuthCredential; index: number };
+			usage: UsageReport | null;
+			usageChecked: boolean;
+		}>
+	> {
+		const nowMs = this.#usageNow();
+		const weeklyWindowMs = 7 * 24 * 60 * 60 * 1000;
+		const primaryWindowMs = 60 * 60 * 1000;
+		const ranked: Array<{
+			selection: { credential: OAuthCredential; index: number };
+			usage: UsageReport | null;
+			usageChecked: boolean;
+			blocked: boolean;
+			blockedUntil?: number;
+			weeklyUsed: number;
+			weeklyPressure: number;
+			primaryUsed: number;
+			primaryPressure: number;
+			orderPos: number;
+		}> = [];
+		for (let orderPos = 0; orderPos < args.order.length; orderPos += 1) {
+			const idx = args.order[orderPos];
+			const selection = args.credentials[idx];
+			if (!selection) continue;
+			let blockedUntil = this.#getCredentialBlockedUntil(args.providerKey, selection.index);
+			let blocked = blockedUntil !== undefined;
+			let usage: UsageReport | null = null;
+			let usageChecked = false;
+			if (!blocked) {
+				usage = await this.#getUsageReport("openai-codex", selection.credential, args.options);
+				usageChecked = true;
+				if (usage && this.#isUsageLimitReached(usage)) {
+					const resetAtMs = this.#getUsageResetAtMs(usage, nowMs);
+					blockedUntil = resetAtMs ?? nowMs + AuthStorage.#defaultBackoffMs;
+					this.#markCredentialBlocked(args.providerKey, selection.index, blockedUntil);
+					blocked = true;
+				}
+			}
+			const secondary = usage ? this.#findCodexWindowLimit(usage, "secondary") : undefined;
+			const primary = usage ? this.#findCodexWindowLimit(usage, "primary") : undefined;
+			const weeklyTarget = secondary ?? primary;
+			ranked.push({
+				selection,
+				usage,
+				usageChecked,
+				blocked,
+				blockedUntil,
+				weeklyUsed: this.#normalizeUsageFraction(weeklyTarget),
+				weeklyPressure: this.#computeWindowPressure(weeklyTarget, nowMs, weeklyWindowMs),
+				primaryUsed: this.#normalizeUsageFraction(primary),
+				primaryPressure: this.#computeWindowPressure(primary, nowMs, primaryWindowMs),
+				orderPos,
+			});
+		}
+		ranked.sort((left, right) => {
+			if (left.blocked !== right.blocked) return left.blocked ? 1 : -1;
+			if (left.blocked && right.blocked) {
+				const leftBlockedUntil = left.blockedUntil ?? Number.POSITIVE_INFINITY;
+				const rightBlockedUntil = right.blockedUntil ?? Number.POSITIVE_INFINITY;
+				if (leftBlockedUntil !== rightBlockedUntil) return leftBlockedUntil - rightBlockedUntil;
+				return left.orderPos - right.orderPos;
+			}
+			if (left.weeklyPressure !== right.weeklyPressure) return left.weeklyPressure - right.weeklyPressure;
+			if (left.weeklyUsed !== right.weeklyUsed) return left.weeklyUsed - right.weeklyUsed;
+			if (left.primaryPressure !== right.primaryPressure) return left.primaryPressure - right.primaryPressure;
+			if (left.primaryUsed !== right.primaryUsed) return left.primaryUsed - right.primaryUsed;
+			return left.orderPos - right.orderPos;
+		});
+		return ranked.map(candidate => ({
+			selection: candidate.selection,
+			usage: candidate.usage,
+			usageChecked: candidate.usageChecked,
+		}));
+	}
+
 	/**
 	 * Resolves an OAuth API key, trying credentials in priority order.
 	 * Skips blocked credentials and checks usage limits for providers with usage data.
@@ -1316,25 +1445,43 @@ export class AuthStorage {
 
 		const providerKey = this.#getProviderTypeKey(provider, "oauth");
 		const order = this.#getCredentialOrder(providerKey, sessionId, credentials.length);
-		const fallback = credentials[order[0]];
 		const checkUsage = provider === "openai-codex" && credentials.length > 1;
+		const candidates = checkUsage
+			? await this.#rankCodexOAuthSelections({ providerKey, order, credentials, options })
+			: order
+					.map(idx => credentials[idx])
+					.filter((selection): selection is { credential: OAuthCredential; index: number } => Boolean(selection))
+					.map(selection => ({ selection, usage: null, usageChecked: false }));
+		const fallbackSelection = candidates[0]?.selection;
 
-		for (const idx of order) {
-			const selection = credentials[idx];
+		for (const candidate of candidates) {
 			const apiKey = await this.#tryOAuthCredential(
 				provider,
-				selection,
+				candidate.selection,
 				providerKey,
 				sessionId,
 				options,
 				checkUsage,
 				false,
+				candidate.usage,
+				candidate.usageChecked,
 			);
 			if (apiKey) return apiKey;
 		}
 
-		if (fallback && this.#isCredentialBlocked(providerKey, fallback.index)) {
-			return this.#tryOAuthCredential(provider, fallback, providerKey, sessionId, options, checkUsage, true);
+		if (fallbackSelection && this.#isCredentialBlocked(providerKey, fallbackSelection.index)) {
+			const fallbackCandidate = candidates.find(candidate => candidate.selection.index === fallbackSelection.index);
+			return this.#tryOAuthCredential(
+				provider,
+				fallbackSelection,
+				providerKey,
+				sessionId,
+				options,
+				checkUsage,
+				true,
+				fallbackCandidate?.usage ?? null,
+				fallbackCandidate?.usageChecked ?? false,
+			);
 		}
 
 		return undefined;
@@ -1349,6 +1496,8 @@ export class AuthStorage {
 		options: { baseUrl?: string } | undefined,
 		checkUsage: boolean,
 		allowBlocked: boolean,
+		prefetchedUsage: UsageReport | null,
+		usagePrechecked: boolean,
 	): Promise<string | undefined> {
 		if (!allowBlocked && this.#isCredentialBlocked(providerKey, selection.index)) {
 			return undefined;
@@ -1358,8 +1507,13 @@ export class AuthStorage {
 		let usageChecked = false;
 
 		if (checkUsage && !allowBlocked) {
-			usage = await this.#getUsageReport(provider, selection.credential, options);
-			usageChecked = true;
+			if (usagePrechecked) {
+				usage = prefetchedUsage;
+				usageChecked = true;
+			} else {
+				usage = await this.#getUsageReport(provider as Provider, selection.credential, options);
+				usageChecked = true;
+			}
 			if (usage && this.#isUsageLimitReached(usage)) {
 				const resetAtMs = this.#getUsageResetAtMs(usage, this.#usageNow());
 				this.#markCredentialBlocked(
