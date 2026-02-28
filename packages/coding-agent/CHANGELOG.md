@@ -5,6 +5,17 @@
 ### Added
 
 - Added `gemini`, `codex`, and `synthetic` as supported values for the `providers.webSearch` setting
+- `ast_find` tool now accepts a `patterns` array (replaces single `pattern`); multiple patterns run in one native pass and results are merged before offset/limit
+- `ast_replace` tool now accepts an `ops` array of `{ pat, out }` entries (replaces `pattern` + `rewrite`); duplicate patterns are rejected upfront
+- AST find output now uses `>>` prefix on match-start lines and pads line numbers; directory-tree grouping with `# dir` / `## └─ file` headers for directory-scoped searches
+- AST replace output now renders diff-style (`-before` / `+after`) change previews grouped by directory
+- Both AST tools now report `scopePath`, `files`, and per-file match/replacement counts in tool details
+- Task item `id` max length raised from 32 to 48 characters
+
+### Breaking Changes
+
+- `ast_find` parameter `pattern` (string) replaced by `patterns` (string[])
+- `ast_replace` parameters `pattern` + `rewrite` replaced by `ops: Array<{ pat: string; out: string }>`
 
 ## [13.3.14] - 2026-02-28
 

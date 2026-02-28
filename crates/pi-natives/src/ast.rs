@@ -1,7 +1,7 @@
 //! AST-aware structural search and rewrite powered by ast-grep.
 
 use std::{
-	collections::{BTreeSet, HashMap},
+	collections::{BTreeMap, BTreeSet, HashMap},
 	path::{Path, PathBuf},
 };
 
@@ -14,6 +14,7 @@ use ast_grep_core::{
 use ast_grep_language::SupportLang;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
+use rayon::prelude::*;
 
 use crate::{fs_cache, glob_util, task};
 
@@ -21,7 +22,7 @@ const DEFAULT_FIND_LIMIT: u32 = 50;
 
 #[napi(object)]
 pub struct AstFindOptions<'env> {
-	pub pattern:      Option<String>,
+	pub patterns:     Option<Vec<String>>,
 	pub lang:         Option<String>,
 	pub path:         Option<String>,
 	pub glob:         Option<String>,
@@ -74,8 +75,7 @@ pub struct AstFindResult {
 
 #[napi(object)]
 pub struct AstReplaceOptions<'env> {
-	pub pattern:             Option<String>,
-	pub rewrite:             Option<String>,
+	pub rewrites:            Option<HashMap<String, String>>,
 	pub lang:                Option<String>,
 	pub path:                Option<String>,
 	pub glob:                Option<String>,
@@ -486,10 +486,157 @@ fn apply_edits(content: &str, edits: &[Edit<String>]) -> Result<String> {
 	Ok(output)
 }
 
+struct PatternFindResultData {
+	pattern:       String,
+	matches:       Vec<AstFindMatch>,
+	total_matches: u32,
+	parse_errors:  Vec<String>,
+}
+
+fn normalize_pattern_list(patterns: Option<Vec<String>>) -> Result<Vec<String>> {
+	let mut normalized = Vec::new();
+	let mut seen = BTreeSet::new();
+	for raw in patterns.unwrap_or_default() {
+		let pattern = raw.trim();
+		if pattern.is_empty() {
+			continue;
+		}
+		if seen.insert(pattern.to_string()) {
+			normalized.push(pattern.to_string());
+		}
+	}
+	if normalized.is_empty() {
+		return Err(Error::from_reason(
+			"`patterns` is required and must include at least one non-empty pattern".to_string(),
+		));
+	}
+	Ok(normalized)
+}
+
+fn normalize_rewrite_map(
+	rewrites: Option<HashMap<String, String>>,
+) -> Result<Vec<(String, String)>> {
+	let mut normalized = Vec::new();
+	for (raw_pattern, raw_rewrite) in rewrites.unwrap_or_default() {
+		let pattern = raw_pattern.trim();
+		if pattern.is_empty() {
+			return Err(Error::from_reason(
+				"`rewrites` keys must be non-empty pattern strings".to_string(),
+			));
+		}
+		let rewrite = raw_rewrite.trim();
+		if rewrite.is_empty() {
+			return Err(Error::from_reason(format!(
+				"`rewrites[{pattern}]` must be a non-empty rewrite template"
+			)));
+		}
+		normalized.push((pattern.to_string(), rewrite.to_string()));
+	}
+	if normalized.is_empty() {
+		return Err(Error::from_reason(
+			"`rewrites` is required and must include at least one pattern->rewrite mapping"
+				.to_string(),
+		));
+	}
+	normalized.sort_by(|left, right| left.0.cmp(&right.0));
+	Ok(normalized)
+}
+
+fn run_find_for_pattern(
+	pattern: &str,
+	candidates: &[FileCandidate],
+	lang: Option<&str>,
+	selector: Option<&str>,
+	strictness: &MatchStrictness,
+	include_meta: bool,
+	ct: &task::CancelToken,
+) -> Result<PatternFindResultData> {
+	let mut matches = Vec::new();
+	let mut parse_errors = Vec::new();
+	let mut total_matches = 0u32;
+	let mut compiled_cache: HashMap<String, Pattern> = HashMap::new();
+	let mut compile_errors: HashMap<String, String> = HashMap::new();
+
+	for candidate in candidates {
+		ct.heartbeat()?;
+		let source = match std::fs::read_to_string(&candidate.absolute_path) {
+			Ok(source) => source,
+			Err(err) => {
+				parse_errors.push(format!("{pattern}: {}: {err}", candidate.display_path));
+				continue;
+			},
+		};
+
+		let language = match resolve_language(lang, &candidate.absolute_path) {
+			Ok(language) => language,
+			Err(err) => {
+				parse_errors.push(format!("{pattern}: {}: {err}", candidate.display_path));
+				continue;
+			},
+		};
+
+		let lang_key = canonical_lang_name(language).to_string();
+		if let Some(error) = compile_errors.get(&lang_key) {
+			parse_errors.push(format!("{pattern}: {}: {error}", candidate.display_path));
+			continue;
+		}
+		let compiled = if let Some(existing) = compiled_cache.get(&lang_key) {
+			existing.clone()
+		} else {
+			match compile_pattern(pattern, selector, strictness, language) {
+				Ok(compiled) => {
+					compiled_cache.insert(lang_key.clone(), compiled.clone());
+					compiled
+				},
+				Err(err) => {
+					let message = err.to_string();
+					compile_errors.insert(lang_key, message.clone());
+					parse_errors.push(format!("{pattern}: {}: {message}", candidate.display_path));
+					continue;
+				},
+			}
+		};
+
+		let ast = language.ast_grep(source);
+		if has_syntax_error(&ast) {
+			parse_errors.push(format!(
+				"{pattern}: {}: parse error (syntax tree contains error nodes)",
+				candidate.display_path
+			));
+			continue;
+		}
+
+		for matched in ast.root().find_all(compiled.clone()) {
+			ct.heartbeat()?;
+			total_matches = total_matches.saturating_add(1);
+			let range = matched.range();
+			let start = matched.start_pos();
+			let end = matched.end_pos();
+			let meta_variables = if include_meta {
+				Some(HashMap::<String, String>::from(matched.get_env().clone()))
+			} else {
+				None
+			};
+			matches.push(AstFindMatch {
+				path: candidate.display_path.clone(),
+				text: matched.text().into_owned(),
+				byte_start: to_u32(range.start),
+				byte_end: to_u32(range.end),
+				start_line: to_u32(start.line().saturating_add(1)),
+				start_column: to_u32(start.column(matched.get_node()).saturating_add(1)),
+				end_line: to_u32(end.line().saturating_add(1)),
+				end_column: to_u32(end.column(matched.get_node()).saturating_add(1)),
+				meta_variables,
+			});
+		}
+	}
+
+	Ok(PatternFindResultData { pattern: pattern.to_string(), matches, total_matches, parse_errors })
+}
 #[napi(js_name = "astFind")]
 pub fn ast_find(options: AstFindOptions<'_>) -> task::Async<AstFindResult> {
 	let AstFindOptions {
-		pattern,
+		patterns,
 		lang,
 		path,
 		glob,
@@ -508,102 +655,70 @@ pub fn ast_find(options: AstFindOptions<'_>) -> task::Async<AstFindResult> {
 	let normalized_offset = offset.unwrap_or(0);
 
 	task::blocking("ast_find", ct, move |ct| {
-		let pattern = pattern
-			.as_deref()
-			.map(str::trim)
-			.filter(|value| !value.is_empty())
-			.ok_or_else(|| Error::from_reason("`pattern` is required".to_string()))?;
-
+		let patterns = normalize_pattern_list(patterns)?;
 		let strictness = parse_strictness(strictness.as_deref())?;
 		let include_meta = include_meta.unwrap_or(false);
 		let lang_str = lang.as_deref().map(str::trim).filter(|v| !v.is_empty());
 		let candidates: Vec<_> = collect_candidates(path, glob.as_deref(), &ct)?
 			.into_iter()
-			.filter(|c| is_supported_file(&c.absolute_path, lang_str))
+			.filter(|candidate| is_supported_file(&candidate.absolute_path, lang_str))
 			.collect();
 
-		let mut matches = Vec::new();
+		let mut pattern_results = patterns
+			.par_iter()
+			.map(|pattern| {
+				run_find_for_pattern(
+					pattern,
+					&candidates,
+					lang_str,
+					selector.as_deref(),
+					&strictness,
+					include_meta,
+					&ct,
+				)
+			})
+			.collect::<Result<Vec<_>>>()?;
+		pattern_results.sort_by(|left, right| left.pattern.cmp(&right.pattern));
+
+		let mut all_matches = Vec::new();
 		let mut parse_errors = Vec::new();
 		let mut total_matches = 0u32;
-		let mut skipped = 0u32;
-		let mut files_with_matches = 0u32;
-		let mut limit_reached = false;
-
-		'files: for candidate in &candidates {
-			ct.heartbeat()?;
-			let source = match std::fs::read_to_string(&candidate.absolute_path) {
-				Ok(source) => source,
-				Err(err) => {
-					parse_errors.push(format!("{}: {err}", candidate.display_path));
-					continue;
-				},
-			};
-
-			let language = match resolve_language(lang.as_deref(), &candidate.absolute_path) {
-				Ok(language) => language,
-				Err(err) => {
-					parse_errors.push(format!("{}: {}", candidate.display_path, err));
-					continue;
-				},
-			};
-			let compiled = match compile_pattern(pattern, selector.as_deref(), &strictness, language) {
-				Ok(compiled) => compiled,
-				Err(err) => {
-					parse_errors.push(format!("{}: {}", candidate.display_path, err));
-					continue;
-				},
-			};
-
-			let ast = language.ast_grep(source);
-			if has_syntax_error(&ast) {
-				parse_errors.push(format!(
-					"{}: parse error (syntax tree contains error nodes)",
-					candidate.display_path
-				));
-				continue;
-			}
-			let mut file_has_match = false;
-			for matched in ast.root().find_all(compiled.clone()) {
-				ct.heartbeat()?;
-				total_matches = total_matches.saturating_add(1);
-				file_has_match = true;
-				if skipped < normalized_offset {
-					skipped = skipped.saturating_add(1);
-					continue;
-				}
-				if matches.len() >= normalized_limit as usize {
-					limit_reached = true;
-					break 'files;
-				}
-				let range = matched.range();
-				let start = matched.start_pos();
-				let end = matched.end_pos();
-				let meta_variables = if include_meta {
-					Some(HashMap::<String, String>::from(matched.get_env().clone()))
-				} else {
-					None
-				};
-				matches.push(AstFindMatch {
-					path: candidate.display_path.clone(),
-					text: matched.text().into_owned(),
-					byte_start: to_u32(range.start),
-					byte_end: to_u32(range.end),
-					start_line: to_u32(start.line().saturating_add(1)),
-					start_column: to_u32(start.column(matched.get_node()).saturating_add(1)),
-					end_line: to_u32(end.line().saturating_add(1)),
-					end_column: to_u32(end.column(matched.get_node()).saturating_add(1)),
-					meta_variables,
-				});
-			}
-			if file_has_match {
-				files_with_matches = files_with_matches.saturating_add(1);
+		let mut files_with_matches = BTreeSet::new();
+		for pattern_result in pattern_results {
+			total_matches = total_matches.saturating_add(pattern_result.total_matches);
+			parse_errors.extend(pattern_result.parse_errors);
+			for matched in pattern_result.matches {
+				files_with_matches.insert(matched.path.clone());
+				all_matches.push(matched);
 			}
 		}
+
+		all_matches.sort_by(|left, right| {
+			left
+				.path
+				.cmp(&right.path)
+				.then(left.start_line.cmp(&right.start_line))
+				.then(left.start_column.cmp(&right.start_column))
+				.then(left.end_line.cmp(&right.end_line))
+				.then(left.end_column.cmp(&right.end_column))
+				.then(left.byte_start.cmp(&right.byte_start))
+				.then(left.byte_end.cmp(&right.byte_end))
+		});
+
+		let visible_matches = all_matches
+			.into_iter()
+			.skip(normalized_offset as usize)
+			.collect::<Vec<_>>();
+		let limit_reached = visible_matches.len() > normalized_limit as usize;
+		let matches = visible_matches
+			.into_iter()
+			.take(normalized_limit as usize)
+			.collect::<Vec<_>>();
 
 		Ok(AstFindResult {
 			matches,
 			total_matches,
-			files_with_matches,
+			files_with_matches: to_u32(files_with_matches.len()),
 			files_searched: to_u32(candidates.len()),
 			limit_reached,
 			parse_errors: (!parse_errors.is_empty()).then_some(parse_errors),
@@ -614,8 +729,7 @@ pub fn ast_find(options: AstFindOptions<'_>) -> task::Async<AstFindResult> {
 #[napi(js_name = "astReplace")]
 pub fn ast_replace(options: AstReplaceOptions<'_>) -> task::Async<AstReplaceResult> {
 	let AstReplaceOptions {
-		pattern,
-		rewrite,
+		rewrites,
 		lang,
 		path,
 		glob,
@@ -631,18 +745,7 @@ pub fn ast_replace(options: AstReplaceOptions<'_>) -> task::Async<AstReplaceResu
 
 	let ct = task::CancelToken::new(timeout_ms, signal);
 	task::blocking("ast_replace", ct, move |ct| {
-		let pattern = pattern
-			.as_deref()
-			.map(str::trim)
-			.filter(|value| !value.is_empty())
-			.ok_or_else(|| Error::from_reason("`pattern` is required".to_string()))?;
-
-		let rewrite = rewrite
-			.as_deref()
-			.map(str::trim)
-			.filter(|value| !value.is_empty())
-			.ok_or_else(|| Error::from_reason("`rewrite` is required in pattern mode".to_string()))?
-			.to_string();
+		let rewrite_rules = normalize_rewrite_map(rewrites)?;
 		let strictness = parse_strictness(strictness.as_deref())?;
 		let dry_run = dry_run.unwrap_or(true);
 		let max_replacements = max_replacements.unwrap_or(u32::MAX).max(1);
@@ -652,20 +755,47 @@ pub fn ast_replace(options: AstReplaceOptions<'_>) -> task::Async<AstReplaceResu
 		let lang_str = lang.as_deref().map(str::trim).filter(|v| !v.is_empty());
 		let candidates: Vec<_> = collect_candidates(path, glob.as_deref(), &ct)?
 			.into_iter()
-			.filter(|c| is_supported_file(&c.absolute_path, lang_str))
+			.filter(|candidate| is_supported_file(&candidate.absolute_path, lang_str))
 			.collect();
 		let effective_lang = if let Some(lang) = lang_str {
 			lang.to_string()
 		} else {
 			infer_single_replace_lang(&candidates, &ct)?
 		};
-		let mut changes = Vec::new();
+
+		let language = resolve_supported_lang(&effective_lang)?;
 		let mut parse_errors = Vec::new();
-		let mut file_counts: HashMap<String, u32> = HashMap::new();
+		let mut compiled_rules = Vec::new();
+		for (pattern, rewrite) in rewrite_rules {
+			match compile_pattern(&pattern, selector.as_deref(), &strictness, language) {
+				Ok(compiled) => compiled_rules.push((pattern, rewrite, compiled)),
+				Err(err) => {
+					if fail_on_parse_error {
+						return Err(err);
+					}
+					parse_errors.push(format!("{pattern}: {err}"));
+				},
+			}
+		}
+		if compiled_rules.is_empty() {
+			return Ok(AstReplaceResult {
+				file_changes:       vec![],
+				total_replacements: 0,
+				files_touched:      0,
+				files_searched:     to_u32(candidates.len()),
+				applied:            !dry_run,
+				limit_reached:      false,
+				parse_errors:       (!parse_errors.is_empty()).then_some(parse_errors),
+				changes:            vec![],
+			});
+		}
+
+		let mut changes = Vec::new();
+		let mut file_counts: BTreeMap<String, u32> = BTreeMap::new();
 		let mut files_touched = 0u32;
 		let mut limit_reached = false;
 
-		'files: for candidate in &candidates {
+		for candidate in &candidates {
 			ct.heartbeat()?;
 			let source = match std::fs::read_to_string(&candidate.absolute_path) {
 				Ok(source) => source,
@@ -674,27 +804,6 @@ pub fn ast_replace(options: AstReplaceOptions<'_>) -> task::Async<AstReplaceResu
 						return Err(Error::from_reason(format!("{}: {err}", candidate.display_path)));
 					}
 					parse_errors.push(format!("{}: {err}", candidate.display_path));
-					continue;
-				},
-			};
-			let language =
-				match resolve_language(Some(effective_lang.as_str()), &candidate.absolute_path) {
-					Ok(language) => language,
-					Err(err) => {
-						if fail_on_parse_error {
-							return Err(err);
-						}
-						parse_errors.push(format!("{}: {}", candidate.display_path, err));
-						continue;
-					},
-				};
-			let compiled = match compile_pattern(pattern, selector.as_deref(), &strictness, language) {
-				Ok(compiled) => compiled,
-				Err(err) => {
-					if fail_on_parse_error {
-						return Err(err);
-					}
-					parse_errors.push(format!("{}: {}", candidate.display_path, err));
 					continue;
 				},
 			};
@@ -711,41 +820,49 @@ pub fn ast_replace(options: AstReplaceOptions<'_>) -> task::Async<AstReplaceResu
 				parse_errors.push(parse_issue);
 				continue;
 			}
+
 			let mut file_changes = Vec::new();
-			for matched in ast.root().find_all(compiled.clone()) {
-				ct.heartbeat()?;
-				if changes.len() >= max_replacements as usize {
-					limit_reached = true;
-					break 'files;
+			let mut reached_max_replacements = false;
+			'patterns: for (_pattern, rewrite, compiled) in &compiled_rules {
+				for matched in ast.root().find_all(compiled.clone()) {
+					ct.heartbeat()?;
+					if changes.len() + file_changes.len() >= max_replacements as usize {
+						limit_reached = true;
+						reached_max_replacements = true;
+						break 'patterns;
+					}
+					let edit = matched.replace_by(rewrite.as_str());
+					let range = matched.range();
+					let start = matched.start_pos();
+					let end = matched.end_pos();
+					let after = String::from_utf8(edit.inserted_text.clone()).map_err(|err| {
+						Error::from_reason(format!(
+							"{}: replacement text is not valid UTF-8: {err}",
+							candidate.display_path
+						))
+					})?;
+					file_changes.push(PendingFileChange {
+						change: AstReplaceChange {
+							path: candidate.display_path.clone(),
+							before: matched.text().into_owned(),
+							after,
+							byte_start: to_u32(range.start),
+							byte_end: to_u32(range.end),
+							deleted_length: to_u32(edit.deleted_length),
+							start_line: to_u32(start.line().saturating_add(1)),
+							start_column: to_u32(start.column(matched.get_node()).saturating_add(1)),
+							end_line: to_u32(end.line().saturating_add(1)),
+							end_column: to_u32(end.column(matched.get_node()).saturating_add(1)),
+						},
+						edit,
+					});
 				}
-				let edit = matched.replace_by(rewrite.as_str());
-				let range = matched.range();
-				let start = matched.start_pos();
-				let end = matched.end_pos();
-				let after = String::from_utf8(edit.inserted_text.clone()).map_err(|err| {
-					Error::from_reason(format!(
-						"{}: replacement text is not valid UTF-8: {err}",
-						candidate.display_path
-					))
-				})?;
-				file_changes.push(PendingFileChange {
-					change: AstReplaceChange {
-						path: candidate.display_path.clone(),
-						before: matched.text().into_owned(),
-						after,
-						byte_start: to_u32(range.start),
-						byte_end: to_u32(range.end),
-						deleted_length: to_u32(edit.deleted_length),
-						start_line: to_u32(start.line().saturating_add(1)),
-						start_column: to_u32(start.column(matched.get_node()).saturating_add(1)),
-						end_line: to_u32(end.line().saturating_add(1)),
-						end_column: to_u32(end.column(matched.get_node()).saturating_add(1)),
-					},
-					edit,
-				});
 			}
 
 			if file_changes.is_empty() {
+				if reached_max_replacements {
+					break;
+				}
 				continue;
 			}
 			if files_touched >= max_files {
@@ -773,17 +890,15 @@ pub fn ast_replace(options: AstReplaceOptions<'_>) -> task::Async<AstReplaceResu
 			}
 
 			changes.extend(file_changes.into_iter().map(|entry| entry.change));
-			if changes.len() >= max_replacements as usize {
-				limit_reached = true;
+			if reached_max_replacements {
 				break;
 			}
 		}
 
-		let mut file_changes = file_counts
+		let file_changes = file_counts
 			.into_iter()
 			.map(|(path, count)| AstReplaceFileChange { path, count })
 			.collect::<Vec<_>>();
-		file_changes.sort_by(|a, b| a.path.cmp(&b.path));
 
 		Ok(AstReplaceResult {
 			file_changes,

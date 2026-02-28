@@ -7,7 +7,7 @@ import type { Cancellable } from "../bindings";
 export type AstStrictness = "cst" | "smart" | "ast" | "relaxed" | "signature";
 
 export interface AstFindOptions extends Cancellable {
-	pattern?: string;
+	patterns?: string[];
 	lang?: string;
 	path?: string;
 	glob?: string;
@@ -41,8 +41,7 @@ export interface AstFindResult {
 }
 
 export interface AstReplaceOptions extends Cancellable {
-	pattern?: string;
-	rewrite?: string;
+	rewrites?: Record<string, string>;
 	lang?: string;
 	path?: string;
 	glob?: string;

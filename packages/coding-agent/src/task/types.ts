@@ -34,8 +34,8 @@ export const TASK_SUBAGENT_PROGRESS_CHANNEL = "task:subagent:progress";
 /** Single task item for parallel execution */
 export const taskItemSchema = Type.Object({
 	id: Type.String({
-		description: "CamelCase identifier, max 32 chars",
-		maxLength: 32,
+		description: "CamelCase identifier, max 48 chars",
+		maxLength: 48,
 	}),
 	description: Type.String({
 		description: "Short one-liner for UI display only — not seen by the subagent",

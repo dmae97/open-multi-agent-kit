@@ -1,5 +1,6 @@
+import * as path from "node:path";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
-import { type AstFindResult, astFind } from "@oh-my-pi/pi-natives";
+import { type AstFindMatch, astFind } from "@oh-my-pi/pi-natives";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import { untilAborted } from "@oh-my-pi/pi-utils";
@@ -19,7 +20,7 @@ import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
 
 const astFindSchema = Type.Object({
-	pattern: Type.String({ description: "AST pattern, e.g. 'foo($A)'" }),
+	patterns: Type.Array(Type.String(), { minItems: 1, description: "AST patterns to match" }),
 	lang: Type.Optional(Type.String({ description: "Language override" })),
 	path: Type.Optional(Type.String({ description: "File, directory, or glob pattern to search (default: cwd)" })),
 	selector: Type.Optional(Type.String({ description: "Optional selector for contextual pattern mode" })),
@@ -35,6 +36,9 @@ export interface AstFindToolDetails {
 	filesSearched: number;
 	limitReached: boolean;
 	parseErrors?: string[];
+	scopePath?: string;
+	files?: string[];
+	fileMatches?: Array<{ path: string; count: number }>;
 	meta?: OutputMeta;
 }
 
@@ -57,9 +61,11 @@ export class AstFindTool implements AgentTool<typeof astFindSchema, AstFindToolD
 		_context?: AgentToolContext,
 	): Promise<AgentToolResult<AstFindToolDetails>> {
 		return untilAborted(signal, async () => {
-			const pattern = params.pattern?.trim();
-			if (!pattern) {
-				throw new ToolError("`pattern` is required");
+			const patterns = [
+				...new Set(params.patterns.map(pattern => pattern.trim()).filter(pattern => pattern.length > 0)),
+			];
+			if (patterns.length === 0) {
+				throw new ToolError("`patterns` must include at least one non-empty pattern");
 			}
 			const limit = params.limit === undefined ? 50 : Math.floor(params.limit);
 			if (!Number.isFinite(limit) || limit < 1) {
@@ -95,10 +101,23 @@ export class AstFindTool implements AgentTool<typeof astFindSchema, AstFindToolD
 				}
 			}
 
+			const resolvedSearchPath = searchPath ?? resolveToCwd(".", this.session.cwd);
+			const scopePath = (() => {
+				const relative = path.relative(this.session.cwd, resolvedSearchPath).replace(/\\/g, "/");
+				return relative.length === 0 ? "." : relative;
+			})();
+			let isDirectory: boolean;
+			try {
+				const stat = await Bun.file(resolvedSearchPath).stat();
+				isDirectory = stat.isDirectory();
+			} catch {
+				throw new ToolError(`Path not found: ${resolvedSearchPath}`);
+			}
+
 			const result = await astFind({
-				pattern,
+				patterns,
 				lang: params.lang?.trim(),
-				path: searchPath,
+				path: resolvedSearchPath,
 				glob: globFilter,
 				selector: params.selector?.trim(),
 				limit,
@@ -108,65 +127,131 @@ export class AstFindTool implements AgentTool<typeof astFindSchema, AstFindToolD
 				signal,
 			});
 
-			const details: AstFindToolDetails = {
+			const formatPath = (filePath: string): string => {
+				const cleanPath = filePath.startsWith("/") ? filePath.slice(1) : filePath;
+				if (isDirectory) {
+					return cleanPath.replace(/\\/g, "/");
+				}
+				return path.basename(cleanPath);
+			};
+
+			const files = new Set<string>();
+			const fileList: string[] = [];
+			const fileMatchCounts = new Map<string, number>();
+			const matchesByFile = new Map<string, AstFindMatch[]>();
+			const recordFile = (relativePath: string) => {
+				if (!files.has(relativePath)) {
+					files.add(relativePath);
+					fileList.push(relativePath);
+				}
+			};
+			for (const match of result.matches) {
+				const relativePath = formatPath(match.path);
+				recordFile(relativePath);
+				if (!matchesByFile.has(relativePath)) {
+					matchesByFile.set(relativePath, []);
+				}
+				matchesByFile.get(relativePath)!.push(match);
+			}
+
+			const baseDetails: AstFindToolDetails = {
 				matchCount: result.totalMatches,
 				fileCount: result.filesWithMatches,
 				filesSearched: result.filesSearched,
 				limitReached: result.limitReached,
 				parseErrors: result.parseErrors,
+				scopePath,
+				files: fileList,
+				fileMatches: [],
 			};
 
 			if (result.matches.length === 0) {
 				const parseMessage = result.parseErrors?.length
 					? `\nParse issues:\n${result.parseErrors.map(err => `- ${err}`).join("\n")}`
 					: "";
-				return toolResult(details).text(`No matches found${parseMessage}`).done();
+				return toolResult(baseDetails).text(`No matches found${parseMessage}`).done();
 			}
 
-			const lines: string[] = [
-				`${result.totalMatches} matches in ${result.filesWithMatches} files (searched ${result.filesSearched})`,
-			];
-			const grouped = new Map<string, AstFindResult["matches"]>();
-			for (const match of result.matches) {
-				const entry = grouped.get(match.path);
-				if (entry) {
-					entry.push(match);
-				} else {
-					grouped.set(match.path, [match]);
-				}
-			}
 			const useHashLines = resolveFileDisplayMode(this.session).hashLines;
-			for (const [filePath, matches] of grouped) {
-				lines.push("", `# ${filePath}`);
-				for (const match of matches) {
+			const outputLines: string[] = [];
+			const renderMatchesForFile = (relativePath: string) => {
+				const fileMatches = matchesByFile.get(relativePath) ?? [];
+				for (const match of fileMatches) {
 					const matchLines = match.text.split("\n");
-					for (let i = 0; i < matchLines.length; i++) {
-						const lineNum = match.startLine + i;
-						const line = matchLines[i];
+					const lineNumbers = matchLines.map((_, index) => match.startLine + index);
+					const lineWidth = Math.max(...lineNumbers.map(value => value.toString().length));
+					const formatLine = (lineNumber: number, line: string, isMatch: boolean): string => {
 						if (useHashLines) {
-							lines.push(`${lineNum}#${computeLineHash(lineNum, line)}:${line}`);
-						} else {
-							lines.push(`${lineNum}:${line}`);
+							const ref = `${lineNumber}#${computeLineHash(lineNumber, line)}`;
+							return isMatch ? `>>${ref}:${line}` : `  ${ref}:${line}`;
 						}
+						const padded = lineNumber.toString().padStart(lineWidth, " ");
+						return isMatch ? `>>${padded}:${line}` : `  ${padded}:${line}`;
+					};
+					for (let index = 0; index < matchLines.length; index++) {
+						outputLines.push(formatLine(match.startLine + index, matchLines[index], index === 0));
 					}
 					if (match.metaVariables && Object.keys(match.metaVariables).length > 0) {
 						const serializedMeta = Object.entries(match.metaVariables)
 							.sort(([left], [right]) => left.localeCompare(right))
 							.map(([key, value]) => `${key}=${value}`)
 							.join(", ");
-						lines.push(`  meta: ${serializedMeta}`);
+						outputLines.push(`  meta: ${serializedMeta}`);
+					}
+					fileMatchCounts.set(relativePath, (fileMatchCounts.get(relativePath) ?? 0) + 1);
+				}
+			};
+
+			if (isDirectory) {
+				const filesByDirectory = new Map<string, string[]>();
+				for (const relativePath of fileList) {
+					const directory = path.dirname(relativePath).replace(/\\/g, "/");
+					if (!filesByDirectory.has(directory)) {
+						filesByDirectory.set(directory, []);
+					}
+					filesByDirectory.get(directory)!.push(relativePath);
+				}
+				for (const [directory, directoryFiles] of filesByDirectory) {
+					if (directory === ".") {
+						for (const relativePath of directoryFiles) {
+							if (outputLines.length > 0) {
+								outputLines.push("");
+							}
+							outputLines.push(`# ${path.basename(relativePath)}`);
+							renderMatchesForFile(relativePath);
+						}
+						continue;
+					}
+					if (outputLines.length > 0) {
+						outputLines.push("");
+					}
+					outputLines.push(`# ${directory}`);
+					for (const relativePath of directoryFiles) {
+						outputLines.push(`## └─ ${path.basename(relativePath)}`);
+						renderMatchesForFile(relativePath);
 					}
 				}
-			}
-			if (result.limitReached) {
-				lines.push("", "Result limit reached; narrow path pattern or increase limit.");
-			}
-			if (result.parseErrors?.length) {
-				lines.push("", "Parse issues:", ...result.parseErrors.map(err => `- ${err}`));
+			} else {
+				for (const relativePath of fileList) {
+					renderMatchesForFile(relativePath);
+				}
 			}
 
-			const output = lines.join("\n");
-			return toolResult(details).text(output).done();
+			const details: AstFindToolDetails = {
+				...baseDetails,
+				fileMatches: fileList.map(filePath => ({
+					path: filePath,
+					count: fileMatchCounts.get(filePath) ?? 0,
+				})),
+			};
+			if (result.limitReached) {
+				outputLines.push("", "Result limit reached; narrow path pattern or increase limit.");
+			}
+			if (result.parseErrors?.length) {
+				outputLines.push("", "Parse issues:", ...result.parseErrors.map(err => `- ${err}`));
+			}
+
+			return toolResult(details).text(outputLines.join("\n")).done();
 		});
 	}
 }
@@ -176,7 +261,7 @@ export class AstFindTool implements AgentTool<typeof astFindSchema, AstFindToolD
 // =============================================================================
 
 interface AstFindRenderArgs {
-	pattern?: string;
+	patterns?: string[];
 	lang?: string;
 	path?: string;
 	selector?: string;
@@ -199,8 +284,10 @@ export const astFindToolRenderer = {
 		if (args.offset !== undefined && args.offset > 0) meta.push(`offset:${args.offset}`);
 		if (args.context !== undefined) meta.push(`context:${args.context}`);
 		if (args.include_meta) meta.push("meta");
+		if (args.patterns && args.patterns.length > 1) meta.push(`${args.patterns.length} patterns`);
 
-		const description = args.pattern || "?";
+		const description =
+			args.patterns?.length === 1 ? args.patterns[0] : args.patterns ? `${args.patterns.length} patterns` : "?";
 		const text = renderStatusLine({ icon: "pending", title: "AST Find", description, meta }, uiTheme);
 		return new Text(text, 0, 0);
 	},
@@ -224,8 +311,9 @@ export const astFindToolRenderer = {
 		const limitReached = details?.limitReached ?? false;
 
 		if (matchCount === 0) {
-			const description = args?.pattern;
+			const description = args?.patterns?.length === 1 ? args.patterns[0] : undefined;
 			const meta = ["0 matches"];
+			if (details?.scopePath) meta.push(`in ${details.scopePath}`);
 			if (filesSearched > 0) meta.push(`searched ${filesSearched}`);
 			const header = renderStatusLine({ icon: "warning", title: "AST Find", description, meta }, uiTheme);
 			const lines = [header, formatEmptyMessage("No matches found", uiTheme)];
@@ -238,35 +326,42 @@ export const astFindToolRenderer = {
 		}
 
 		const summaryParts = [formatCount("match", matchCount), formatCount("file", fileCount)];
-		const meta = [...summaryParts, `searched ${filesSearched}`];
+		const meta = [...summaryParts];
+		if (details?.scopePath) meta.push(`in ${details.scopePath}`);
+		meta.push(`searched ${filesSearched}`);
 		if (limitReached) meta.push(uiTheme.fg("warning", "limit reached"));
-		const description = args?.pattern;
+		const description = args?.patterns?.length === 1 ? args.patterns[0] : undefined;
 		const header = renderStatusLine(
 			{ icon: limitReached ? "warning" : "success", title: "AST Find", description, meta },
 			uiTheme,
 		);
 
-		// Parse text content into match groups (grouped by file, separated by blank lines)
 		const textContent = result.content?.find(c => c.type === "text")?.text ?? "";
 		const rawLines = textContent.split("\n");
-		// Skip the summary line and group by blank-line separators
-		const contentLines = rawLines.slice(1);
+		const hasSeparators = rawLines.some(line => line.trim().length === 0);
 		const allGroups: string[][] = [];
-		let current: string[] = [];
-		for (const line of contentLines) {
-			if (line.trim().length === 0) {
-				if (current.length > 0) {
-					allGroups.push(current);
-					current = [];
+		if (hasSeparators) {
+			let current: string[] = [];
+			for (const line of rawLines) {
+				if (line.trim().length === 0) {
+					if (current.length > 0) {
+						allGroups.push(current);
+						current = [];
+					}
+					continue;
 				}
-				continue;
+				current.push(line);
 			}
-			current.push(line);
+			if (current.length > 0) allGroups.push(current);
+		} else {
+			const nonEmpty = rawLines.filter(line => line.trim().length > 0);
+			if (nonEmpty.length > 0) {
+				allGroups.push(nonEmpty);
+			}
 		}
-		if (current.length > 0) allGroups.push(current);
-
-		// Keep only file match groups (starting with "# ")
-		const matchGroups = allGroups.filter(group => group[0]?.startsWith("# "));
+		const matchGroups = allGroups.filter(
+			group => !group[0]?.startsWith("Result limit reached") && !group[0]?.startsWith("Parse issues:"),
+		);
 
 		const getCollapsedMatchLimit = (groups: string[][], maxLines: number): number => {
 			if (groups.length === 0) return 0;
@@ -306,6 +401,7 @@ export const astFindToolRenderer = {
 						itemType: "match",
 						renderItem: group =>
 							group.map(line => {
+								if (line.startsWith("## ")) return uiTheme.fg("dim", line);
 								if (line.startsWith("# ")) return uiTheme.fg("accent", line);
 								if (line.startsWith("  meta:")) return uiTheme.fg("dim", line);
 								return uiTheme.fg("toolOutput", line);
@@ -313,9 +409,9 @@ export const astFindToolRenderer = {
 					},
 					uiTheme,
 				);
-				const result = [header, ...matchLines, ...extraLines].map(l => truncateToWidth(l, width, Ellipsis.Omit));
-				cached = { key, lines: result };
-				return result;
+				const rendered = [header, ...matchLines, ...extraLines].map(l => truncateToWidth(l, width, Ellipsis.Omit));
+				cached = { key, lines: rendered };
+				return rendered;
 			},
 			invalidate() {
 				cached = undefined;

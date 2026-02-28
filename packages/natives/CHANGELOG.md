@@ -1,6 +1,16 @@
 # Changelog
 
 ## [Unreleased]
+### Breaking Changes
+
+- Changed `AstFindOptions.pattern` to `patterns` (now accepts array of strings instead of single string)
+- Replaced `AstReplaceOptions.pattern` and `rewrite` with single `rewrites` option (Record<string, string>)
+
+### Added
+
+- `astFind` now accepts multiple patterns in a single call; results from all patterns are merged and sorted by file path then position before offset/limit are applied
+- `astReplace` now accepts a `rewrites` map (`Record<string, string>`) and applies all patterns per file in a single pass, compiling them once upfront
+- Result ordering in `astFind` is now deterministic: sorted by path, line, column using `BTreeSet`/`BTreeMap`
 
 ## [13.3.8] - 2026-02-28
 ### Added
