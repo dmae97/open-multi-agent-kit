@@ -4,7 +4,7 @@
  * Subagents must call this tool to finish and return structured JSON output.
  */
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
-import { enforceStrictSchema, sanitizeSchemaForStrictMode } from "@oh-my-pi/pi-ai/utils/typebox-helpers";
+import { sanitizeSchemaForStrictMode } from "@oh-my-pi/pi-ai/utils/typebox-helpers";
 import type { Static, TSchema } from "@sinclair/typebox";
 import { Type } from "@sinclair/typebox";
 import Ajv, { type ErrorObject, type ValidateFunction } from "ajv";
@@ -179,8 +179,7 @@ export class SubmitResultTool implements AgentTool<TSchema, SubmitResultDetails>
 				});
 			}
 			parameters = createParameters(dataSchema);
-			const strictParameters = enforceStrictSchema(parameters as unknown as Record<string, unknown>);
-			JSON.stringify(strictParameters);
+			JSON.stringify(parameters);
 			// Verify the final parameters compile with AJV (catches unresolved $ref, etc.)
 			ajv.compile(parameters as Record<string, unknown>);
 		} catch (err) {
