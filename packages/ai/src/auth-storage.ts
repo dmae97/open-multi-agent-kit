@@ -1322,7 +1322,7 @@ export class AuthStorage {
 		return Math.min(Math.max(usedFraction, 0), 1);
 	}
 
-	#computeWindowPressure(limit: UsageLimit | undefined, nowMs: number, fallbackDurationMs: number): number {
+	#computeWindowDrainRate(limit: UsageLimit | undefined, nowMs: number, fallbackDurationMs: number): number {
 		const usedFraction = this.#normalizeUsageFraction(limit);
 		const durationMs = limit?.window?.durationMs ?? fallbackDurationMs;
 		if (!Number.isFinite(durationMs) || durationMs <= 0) {
@@ -1332,8 +1332,16 @@ export class AuthStorage {
 		if (!Number.isFinite(resetInMs)) {
 			return usedFraction;
 		}
-		const horizonWeight = Math.min(Math.max((resetInMs as number) / durationMs, 0), 1);
-		return usedFraction * horizonWeight;
+		const clampedResetInMs = Math.min(Math.max(resetInMs as number, 0), durationMs);
+		const elapsedMs = durationMs - clampedResetInMs;
+		if (elapsedMs <= 0) {
+			return usedFraction === 0 ? 0 : usedFraction;
+		}
+		const elapsedHours = elapsedMs / (60 * 60 * 1000);
+		if (!Number.isFinite(elapsedHours) || elapsedHours <= 0) {
+			return usedFraction;
+		}
+		return usedFraction / elapsedHours;
 	}
 
 	#findCodexWindowLimit(report: UsageReport, key: "primary" | "secondary"): UsageLimit | undefined {
@@ -1367,9 +1375,9 @@ export class AuthStorage {
 			blocked: boolean;
 			blockedUntil?: number;
 			weeklyUsed: number;
-			weeklyPressure: number;
+			weeklyDrainRate: number;
 			primaryUsed: number;
-			primaryPressure: number;
+			primaryDrainRate: number;
 			orderPos: number;
 		}> = [];
 		for (let orderPos = 0; orderPos < args.order.length; orderPos += 1) {
@@ -1400,9 +1408,9 @@ export class AuthStorage {
 				blocked,
 				blockedUntil,
 				weeklyUsed: this.#normalizeUsageFraction(weeklyTarget),
-				weeklyPressure: this.#computeWindowPressure(weeklyTarget, nowMs, weeklyWindowMs),
+				weeklyDrainRate: this.#computeWindowDrainRate(weeklyTarget, nowMs, weeklyWindowMs),
 				primaryUsed: this.#normalizeUsageFraction(primary),
-				primaryPressure: this.#computeWindowPressure(primary, nowMs, primaryWindowMs),
+				primaryDrainRate: this.#computeWindowDrainRate(primary, nowMs, primaryWindowMs),
 				orderPos,
 			});
 		}
@@ -1414,9 +1422,9 @@ export class AuthStorage {
 				if (leftBlockedUntil !== rightBlockedUntil) return leftBlockedUntil - rightBlockedUntil;
 				return left.orderPos - right.orderPos;
 			}
-			if (left.weeklyPressure !== right.weeklyPressure) return left.weeklyPressure - right.weeklyPressure;
+			if (left.weeklyDrainRate !== right.weeklyDrainRate) return left.weeklyDrainRate - right.weeklyDrainRate;
 			if (left.weeklyUsed !== right.weeklyUsed) return left.weeklyUsed - right.weeklyUsed;
-			if (left.primaryPressure !== right.primaryPressure) return left.primaryPressure - right.primaryPressure;
+			if (left.primaryDrainRate !== right.primaryDrainRate) return left.primaryDrainRate - right.primaryDrainRate;
 			if (left.primaryUsed !== right.primaryUsed) return left.primaryUsed - right.primaryUsed;
 			return left.orderPos - right.orderPos;
 		});
