@@ -380,7 +380,13 @@ export class AuthStorage {
 		}
 	}
 
-	#dedupeOAuthCredentials(credentials: AuthCredential[]): AuthCredential[] {
+	#resolveOAuthDedupeIdentifiers(provider: string, credential: OAuthCredential): string[] {
+		const identifiers = this.#getOAuthIdentifiers(credential);
+		if (provider !== "openai-codex") return identifiers;
+		return identifiers.filter(identifier => identifier.startsWith("email:"));
+	}
+
+	#dedupeOAuthCredentials(provider: string, credentials: AuthCredential[]): AuthCredential[] {
 		const seen = new Set<string>();
 		const deduped: AuthCredential[] = [];
 		for (let index = credentials.length - 1; index >= 0; index -= 1) {
@@ -389,7 +395,7 @@ export class AuthStorage {
 				deduped.push(credential);
 				continue;
 			}
-			const identifiers = this.#getOAuthIdentifiers(credential);
+			const identifiers = this.#resolveOAuthDedupeIdentifiers(provider, credential);
 			if (identifiers.length === 0) {
 				deduped.push(credential);
 				continue;
@@ -416,7 +422,7 @@ export class AuthStorage {
 				kept.push(entry);
 				continue;
 			}
-			const identifiers = this.#getOAuthIdentifiers(credential);
+			const identifiers = this.#resolveOAuthDedupeIdentifiers(provider, credential);
 			if (identifiers.length === 0) {
 				kept.push(entry);
 				continue;
@@ -628,7 +634,7 @@ export class AuthStorage {
 	 */
 	async set(provider: string, credential: AuthCredentialEntry): Promise<void> {
 		const normalized = Array.isArray(credential) ? credential : [credential];
-		const deduped = this.#dedupeOAuthCredentials(normalized);
+		const deduped = this.#dedupeOAuthCredentials(provider, normalized);
 		const stored = this.#store.replaceAuthCredentialsForProvider(provider, deduped);
 		this.#setStoredCredentials(
 			provider,
@@ -959,6 +965,9 @@ export class AuthStorage {
 		const identifiers: string[] = [];
 		const email = this.#getUsageReportMetadataValue(report, "email");
 		if (email) identifiers.push(`email:${email.toLowerCase()}`);
+		if (report.provider === "openai-codex") {
+			return identifiers.map(identifier => `${report.provider}:${identifier.toLowerCase()}`);
+		}
 		const accountId = this.#getUsageReportMetadataValue(report, "accountId");
 		if (accountId) identifiers.push(`account:${accountId}`);
 		const account = this.#getUsageReportMetadataValue(report, "account");

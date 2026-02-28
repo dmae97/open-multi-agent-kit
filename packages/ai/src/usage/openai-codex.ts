@@ -95,6 +95,26 @@ function parseJwt(token: string): JwtPayload | null {
 	}
 }
 
+function normalizeEmail(email: string | undefined): string | undefined {
+	if (!email) return undefined;
+	const normalized = email.trim().toLowerCase();
+	return normalized || undefined;
+}
+
+function getTokenFingerprint(token: string): string {
+	return Bun.hash(token).toString(16);
+}
+
+function buildCacheIdentity(args: {
+	accountId: string | undefined;
+	email: string | undefined;
+	accessToken: string;
+}): string {
+	if (args.email) return `email:${args.email}`;
+	if (args.accountId) return `account:${args.accountId}:token:${getTokenFingerprint(args.accessToken)}`;
+	return `token:${getTokenFingerprint(args.accessToken)}`;
+}
+
 function extractAccountId(token: string | undefined): string | undefined {
 	if (!token) return undefined;
 	const payload = parseJwt(token);
@@ -104,7 +124,7 @@ function extractAccountId(token: string | undefined): string | undefined {
 function extractEmail(token: string | undefined): string | undefined {
 	if (!token) return undefined;
 	const payload = parseJwt(token);
-	return payload?.[JWT_PROFILE_CLAIM]?.email ?? undefined;
+	return normalizeEmail(payload?.[JWT_PROFILE_CLAIM]?.email);
 }
 
 function parseUsageWindow(payload: unknown): ParsedUsageWindow | undefined {
@@ -313,7 +333,9 @@ export const openaiCodexUsageProvider: UsageProvider = {
 
 		const baseUrl = normalizeCodexBaseUrl(params.baseUrl);
 		const accountId = credential.accountId ?? extractAccountId(accessToken);
-		const cacheKey = `usage:openai-codex:${accountId ?? "unknown"}:${baseUrl}`;
+		const email = normalizeEmail(credential.email ?? extractEmail(accessToken));
+		const cacheIdentity = buildCacheIdentity({ accountId, email, accessToken });
+		const cacheKey = `usage:openai-codex:${cacheIdentity}:${baseUrl}`;
 		const cached = await getCachedReport(ctx.cache, cacheKey, nowMs);
 		if (cached !== undefined) return cached;
 
@@ -379,7 +401,7 @@ export const openaiCodexUsageProvider: UsageProvider = {
 				planType: parsed.planType,
 				allowed: parsed.allowed,
 				limitReached: parsed.limitReached,
-				email: credential.email ?? extractEmail(accessToken),
+				email,
 			},
 			raw: parsed.raw,
 		};
