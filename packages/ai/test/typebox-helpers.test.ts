@@ -266,4 +266,18 @@ describe("tryEnforceStrictSchema", () => {
 		expect(result.schema.additionalProperties).toBe(false);
 		expect(result.schema.required).toEqual(["value"]);
 	});
+	it("degrades to non-strict when array items is an empty schema", () => {
+		const schema = {
+			type: "object",
+			properties: {
+				slide_instructions: { items: {}, type: "array" },
+			},
+			required: ["slide_instructions"],
+		} as Record<string, unknown>;
+
+		const result = tryEnforceStrictSchema(schema);
+
+		expect(result.strict).toBe(false);
+		expect(result.schema).toBe(schema);
+	});
 });

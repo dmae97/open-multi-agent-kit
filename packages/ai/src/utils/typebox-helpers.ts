@@ -183,6 +183,11 @@ export function sanitizeSchemaForStrictMode(schema: Record<string, unknown>): Re
  * Properties absent from the original `required` array were TypeBox-optional.
  * They are made nullable (`anyOf: [T, { type: "null" }]`) so the model can
  * signal omission by outputting null rather than omitting the key entirely.
+ *
+ * @throws {Error} When a schema node has no `type`, array-based combinator
+ *   (`anyOf`/`allOf`/`oneOf`), object-based combinator (`not`), or `$ref` —
+ *   i.e. the node is not representable in strict mode. Prefer
+ *   {@link tryEnforceStrictSchema} which catches this and degrades gracefully.
  */
 export function enforceStrictSchema(schema: Record<string, unknown>): Record<string, unknown> {
 	const result = { ...schema };
@@ -229,6 +234,16 @@ export function enforceStrictSchema(schema: Record<string, unknown>): Record<str
 					: entry,
 			);
 		}
+	}
+	// Strict mode requires every schema node to declare a concrete type (or combinator/$ref).
+	// Schemas like `{}` (match anything) or `{items: {}}` are not representable in strict mode.
+	if (
+		result.type === undefined &&
+		result.$ref === undefined &&
+		!COMBINATOR_KEYS.some(key => Array.isArray(result[key])) &&
+		!(isObjectRecord(result.not))
+	) {
+		throw new Error("Schema node has no type, combinator, or $ref — cannot enforce strict mode");
 	}
 	return result;
 }
