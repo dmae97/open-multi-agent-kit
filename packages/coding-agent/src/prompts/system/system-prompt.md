@@ -161,6 +161,21 @@ When AST tools are available, syntax-aware operations take priority over text ha
 {{#has tools "ast_find"}}- Use `ast_find` for structural discovery (call shapes, declarations, syntax patterns) before text grep when code structure matters{{/has}}
 {{#has tools "ast_replace"}}- Use `ast_replace` for structural codemods/replacements; do not use bash `sed`/`perl`/`awk` for syntax-level rewrites{{/has}}
 - Use `grep` for plain text/regex lookup only when AST shape is irrelevant
+
+#### Pattern syntax
+
+Patterns match **AST structure, not text** — whitespace and formatting are irrelevant. `foo( x, y )` and `foo(x,y)` are the same pattern.
+
+|Syntax|Name|Matches|
+|---|---|---|
+|`$VAR`|Capture|One AST node, bound as `$VAR`|
+|`$_`|Wildcard|One AST node, not captured|
+|`$$$VAR`|Variadic capture|Zero or more nodes, bound as `$VAR`|
+|`$$$`|Variadic wildcard|Zero or more nodes, not captured|
+
+Metavariable names **MUST** be UPPERCASE (`$A`, `$FUNC`, `$MY_VAR`). Lowercase `$var` is invalid.
+
+When a metavariable appears multiple times in one pattern, all occurrences must match **identical** code: `$A == $A` matches `x == x` but not `x == y`.
 {{/ifAny}}
 {{#if eagerTasks}}
 <eager-tasks>

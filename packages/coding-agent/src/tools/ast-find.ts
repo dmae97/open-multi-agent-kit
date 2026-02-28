@@ -7,8 +7,10 @@ import { type Static, Type } from "@sinclair/typebox";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
+import { computeLineHash } from "../patch/hashline";
 import astFindDescription from "../prompts/tools/ast-find.md" with { type: "text" };
 import { Ellipsis, Hasher, type RenderCache, renderStatusLine, renderTreeList, truncateToWidth } from "../tui";
+import { resolveFileDisplayMode } from "../utils/file-display-mode";
 import type { ToolSession } from ".";
 import type { OutputMeta } from "./output-meta";
 import { hasGlobPathChars, parseSearchPath, resolveToCwd } from "./path-utils";
@@ -133,12 +135,20 @@ export class AstFindTool implements AgentTool<typeof astFindSchema, AstFindToolD
 					grouped.set(match.path, [match]);
 				}
 			}
+			const useHashLines = resolveFileDisplayMode(this.session).hashLines;
 			for (const [filePath, matches] of grouped) {
 				lines.push("", `# ${filePath}`);
 				for (const match of matches) {
-					const firstLine = match.text.split("\n", 1)[0] ?? "";
-					const preview = firstLine.length > 140 ? `${firstLine.slice(0, 137)}...` : firstLine;
-					lines.push(`${match.startLine}:${match.startColumn}-${match.endLine}:${match.endColumn}: ${preview}`);
+					const matchLines = match.text.split("\n");
+					for (let i = 0; i < matchLines.length; i++) {
+						const lineNum = match.startLine + i;
+						const line = matchLines[i];
+						if (useHashLines) {
+							lines.push(`${lineNum}#${computeLineHash(lineNum, line)}:${line}`);
+						} else {
+							lines.push(`${lineNum}:${line}`);
+						}
+					}
 					if (match.metaVariables && Object.keys(match.metaVariables).length > 0) {
 						const serializedMeta = Object.entries(match.metaVariables)
 							.sort(([left], [right]) => left.localeCompare(right))

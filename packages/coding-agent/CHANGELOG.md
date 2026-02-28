@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- Expanded AST tool language support from 7 to all 25 ast-grep tree-sitter languages (Bash, C, C++, C#, CSS, Elixir, Go, Haskell, HCL, HTML, Java, JavaScript, JSON, Kotlin, Lua, Nix, PHP, Python, Ruby, Rust, Scala, Solidity, Swift, TSX, TypeScript, YAML)
+- AST find now emits all lines of multiline matches with hashline tags (LINE#HASH:content) consistent with read/grep output
+- Added AST pattern syntax reference (metavariables, wildcards, variadics) to system prompt
+- Added examples and scoping guidance to ast-find and ast-replace tool prompts
+
+### Fixed
+
+- Non-code files (.md, .zip, .bin, .gitignore, etc.) are now silently skipped by AST tools instead of producing misleading parse errors
+
 ## [13.3.11] - 2026-02-28
 
 ### Fixed

@@ -155,32 +155,83 @@ fn to_u32(value: usize) -> u32 {
 
 const fn supported_lang_aliases() -> &'static [&'static str] {
 	&[
-		"ts",
-		"typescript",
-		"tsx",
-		"js",
+		"bash",
+		"sh",
+		"c",
+		"cpp",
+		"c++",
+		"cc",
+		"cxx",
+		"csharp",
+		"c#",
+		"cs",
+		"css",
+		"elixir",
+		"ex",
+		"go",
+		"haskell",
+		"hs",
+		"hcl",
+		"tf",
+		"html",
+		"java",
 		"javascript",
+		"js",
 		"jsx",
 		"json",
-		"rs",
-		"rust",
-		"py",
+		"kotlin",
+		"kt",
+		"lua",
+		"nix",
+		"php",
 		"python",
-		"go",
+		"py",
+		"ruby",
+		"rb",
+		"rust",
+		"rs",
+		"scala",
+		"solidity",
+		"sol",
+		"swift",
+		"tsx",
+		"typescript",
+		"ts",
+		"yaml",
+		"yml",
 	]
 }
 
 fn resolve_supported_lang(value: &str) -> Result<SupportLang> {
 	match value.to_ascii_lowercase().as_str() {
-		"ts" | "typescript" => Ok(SupportLang::TypeScript),
-		"tsx" => Ok(SupportLang::Tsx),
-		"js" | "javascript" | "jsx" => Ok(SupportLang::JavaScript),
-		"json" => Ok(SupportLang::Json),
-		"rs" | "rust" => Ok(SupportLang::Rust),
-		"py" | "python" => Ok(SupportLang::Python),
+		"bash" | "sh" => Ok(SupportLang::Bash),
+		"c" => Ok(SupportLang::C),
+		"cpp" | "c++" | "cc" | "cxx" => Ok(SupportLang::Cpp),
+		"csharp" | "c#" | "cs" => Ok(SupportLang::CSharp),
+		"css" => Ok(SupportLang::Css),
+		"elixir" | "ex" => Ok(SupportLang::Elixir),
 		"go" => Ok(SupportLang::Go),
+		"haskell" | "hs" => Ok(SupportLang::Haskell),
+		"hcl" | "tf" => Ok(SupportLang::Hcl),
+		"html" => Ok(SupportLang::Html),
+		"java" => Ok(SupportLang::Java),
+		"javascript" | "js" | "jsx" => Ok(SupportLang::JavaScript),
+		"json" => Ok(SupportLang::Json),
+		"kotlin" | "kt" => Ok(SupportLang::Kotlin),
+		"lua" => Ok(SupportLang::Lua),
+		"nix" => Ok(SupportLang::Nix),
+		"php" => Ok(SupportLang::Php),
+		"python" | "py" => Ok(SupportLang::Python),
+		"ruby" | "rb" => Ok(SupportLang::Ruby),
+		"rust" | "rs" => Ok(SupportLang::Rust),
+		"scala" => Ok(SupportLang::Scala),
+		"solidity" | "sol" => Ok(SupportLang::Solidity),
+		"swift" => Ok(SupportLang::Swift),
+		"tsx" => Ok(SupportLang::Tsx),
+		"typescript" | "ts" => Ok(SupportLang::TypeScript),
+		"yaml" | "yml" => Ok(SupportLang::Yaml),
 		_ => Err(Error::from_reason(format!(
-			"Unsupported language '{value}'. Supported aliases: {}",
+			"Unsupported language '{value}'. Supported: {}",
 			supported_lang_aliases().join(", ")
 		))),
 	}
@@ -196,32 +247,58 @@ fn resolve_language(lang: Option<&str>, file_path: &Path) -> Result<SupportLang>
 			file_path.display()
 		)));
 	};
-	match guessed {
-		SupportLang::TypeScript
-		| SupportLang::Tsx
-		| SupportLang::JavaScript
-		| SupportLang::Json
-		| SupportLang::Rust
-		| SupportLang::Python
-		| SupportLang::Go => Ok(guessed),
-		_ => Err(Error::from_reason(format!(
-			"Unsupported inferred language for {}. Supported aliases: {}",
+	// Accept any language that ast-grep can infer from the extension,
+	// but only if we also support it in resolve_supported_lang.
+	let name = canonical_lang_name(guessed);
+	if name == "unknown" {
+		return Err(Error::from_reason(format!(
+			"Unsupported inferred language for {}. Supported: {}",
 			file_path.display(),
 			supported_lang_aliases().join(", ")
-		))),
+		)));
 	}
+	Ok(guessed)
+}
+
+/// Returns true if the file's extension resolves to a supported language.
+/// When `lang` is explicitly provided, all files are considered candidates
+/// (the user chose to treat them as that language). When `lang` is None,
+/// only files with recognizable code extensions are included.
+fn is_supported_file(file_path: &Path, explicit_lang: Option<&str>) -> bool {
+	if explicit_lang.is_some() {
+		return true;
+	}
+	resolve_language(None, file_path).is_ok()
 }
 
 const fn canonical_lang_name(lang: SupportLang) -> &'static str {
 	match lang {
-		SupportLang::TypeScript => "typescript",
-		SupportLang::Tsx => "tsx",
+		SupportLang::Bash => "bash",
+		SupportLang::C => "c",
+		SupportLang::Cpp => "cpp",
+		SupportLang::CSharp => "csharp",
+		SupportLang::Css => "css",
+		SupportLang::Elixir => "elixir",
+		SupportLang::Go => "go",
+		SupportLang::Haskell => "haskell",
+		SupportLang::Hcl => "hcl",
+		SupportLang::Html => "html",
+		SupportLang::Java => "java",
 		SupportLang::JavaScript => "javascript",
 		SupportLang::Json => "json",
-		SupportLang::Rust => "rust",
+		SupportLang::Kotlin => "kotlin",
+		SupportLang::Lua => "lua",
+		SupportLang::Nix => "nix",
+		SupportLang::Php => "php",
 		SupportLang::Python => "python",
-		SupportLang::Go => "go",
-		_ => "unknown",
+		SupportLang::Ruby => "ruby",
+		SupportLang::Rust => "rust",
+		SupportLang::Scala => "scala",
+		SupportLang::Solidity => "solidity",
+		SupportLang::Swift => "swift",
+		SupportLang::Tsx => "tsx",
+		SupportLang::TypeScript => "typescript",
+		SupportLang::Yaml => "yaml",
 	}
 }
 
@@ -439,7 +516,11 @@ pub fn ast_find(options: AstFindOptions<'_>) -> task::Async<AstFindResult> {
 
 		let strictness = parse_strictness(strictness.as_deref())?;
 		let include_meta = include_meta.unwrap_or(false);
-		let candidates = collect_candidates(path, glob.as_deref(), &ct)?;
+		let lang_str = lang.as_deref().map(str::trim).filter(|v| !v.is_empty());
+		let candidates: Vec<_> = collect_candidates(path, glob.as_deref(), &ct)?
+			.into_iter()
+			.filter(|c| is_supported_file(&c.absolute_path, lang_str))
+			.collect();
 
 		let mut matches = Vec::new();
 		let mut parse_errors = Vec::new();
@@ -568,12 +649,12 @@ pub fn ast_replace(options: AstReplaceOptions<'_>) -> task::Async<AstReplaceResu
 		let max_files = max_files.unwrap_or(u32::MAX).max(1);
 		let fail_on_parse_error = fail_on_parse_error.unwrap_or(false);
 
-		let candidates = collect_candidates(path, glob.as_deref(), &ct)?;
-		let effective_lang = if let Some(lang) = lang
-			.as_deref()
-			.map(str::trim)
-			.filter(|value| !value.is_empty())
-		{
+		let lang_str = lang.as_deref().map(str::trim).filter(|v| !v.is_empty());
+		let candidates: Vec<_> = collect_candidates(path, glob.as_deref(), &ct)?
+			.into_iter()
+			.filter(|c| is_supported_file(&c.absolute_path, lang_str))
+			.collect();
+		let effective_lang = if let Some(lang) = lang_str {
 			lang.to_string()
 		} else {
 			infer_single_replace_lang(&candidates, &ct)?
@@ -818,7 +899,11 @@ mod tests {
 		assert_eq!(resolve_supported_lang("ts").ok(), Some(SupportLang::TypeScript));
 		assert_eq!(resolve_supported_lang("jsx").ok(), Some(SupportLang::JavaScript));
 		assert_eq!(resolve_supported_lang("rs").ok(), Some(SupportLang::Rust));
-		assert!(resolve_supported_lang("kotlin").is_err());
+		assert_eq!(resolve_supported_lang("kotlin").ok(), Some(SupportLang::Kotlin));
+		assert_eq!(resolve_supported_lang("bash").ok(), Some(SupportLang::Bash));
+		assert_eq!(resolve_supported_lang("c").ok(), Some(SupportLang::C));
+		assert_eq!(resolve_supported_lang("cpp").ok(), Some(SupportLang::Cpp));
+		assert!(resolve_supported_lang("brainfuck").is_err());
 	}
 
 	#[test]

@@ -7,8 +7,10 @@ import { type Static, Type } from "@sinclair/typebox";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
+import { computeLineHash } from "../patch/hashline";
 import astReplaceDescription from "../prompts/tools/ast-replace.md" with { type: "text" };
 import { Ellipsis, Hasher, type RenderCache, renderStatusLine, renderTreeList, truncateToWidth } from "../tui";
+import { resolveFileDisplayMode } from "../utils/file-display-mode";
 import type { ToolSession } from ".";
 import type { OutputMeta } from "./output-meta";
 import { hasGlobPathChars, parseSearchPath, resolveToCwd } from "./path-utils";
@@ -129,11 +131,15 @@ export class AstReplaceTool implements AgentTool<typeof astReplaceSchema, AstRep
 				}
 			}
 			if (result.changes.length > 0) {
+				const useHashLines = resolveFileDisplayMode(this.session).hashLines;
 				lines.push("", "Preview:");
 				for (const change of result.changes.slice(0, 30)) {
+					const tag = useHashLines
+						? `${change.startLine}#${computeLineHash(change.startLine, change.before.split("\n", 1)[0] ?? "")}`
+						: `${change.startLine}:${change.startColumn}`;
 					const before = (change.before.split("\n", 1)[0] ?? "").slice(0, 80);
 					const after = (change.after.split("\n", 1)[0] ?? "").slice(0, 80);
-					lines.push(`${change.path}:${change.startLine}:${change.startColumn} ${before} -> ${after}`);
+					lines.push(`${change.path}:${tag} ${before} -> ${after}`);
 				}
 				if (result.changes.length > 30) {
 					lines.push(`... ${result.changes.length - 30} more changes`);
