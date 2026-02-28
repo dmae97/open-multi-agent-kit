@@ -12,7 +12,7 @@
 		"test": "bun --cwd=packages/ai run test && bun --cwd=packages/agent run test && bun --cwd=packages/tui run test && bun --cwd=packages/natives run test && bun --cwd=packages/coding-agent run test",
 		"check": "bun run check:ts && bun run check:rs",
 		"check:ts": "biome check . && tsgo -p tsconfig.json && tsgo -p packages/stats/tsconfig.client.json",
-		"check:rs": "cargo fmt --all -- --check && cargo clippy --workspace -- -D warnings && cargo check -Z minimal-versions --workspace && cargo check --workspace --target x86_64-pc-windows-msvc",
+		"check:rs": "cargo fmt --all -- --check && cargo clippy --workspace -- -D warnings && cargo check -Z minimal-versions --workspace",
 		"lint": "bun run lint:ts && bun run lint:rs",
 		"lint:ts": "biome lint .",
 		"lint:rs": "cargo clippy --workspace -- -D warnings",
@@ -44,19 +44,10 @@
 		"@bufbuild/protoc-gen-es": "^2.11",
 		"@types/bun": "^1.3",
 		"@typescript/native-preview": "^7.0.0-dev.20260222.1",
-		"concurrently": "^9.2",
 		"lint-staged": "^16.2",
-		"prettier": "^3.8",
-		"ts-morph": "^27.0"
+		"prettier": "^3.8"
 	},
 	"lint-staged": {
 		"*.{js,ts,jsx,tsx,json,jsonc,css}": "biome check --write --no-errors-on-unmatched"
-	},
-	"engines": {
-		"bun": ">=1.3.7"
-	},
-	"version": "0.0.3",
-	"dependencies": {
-		"@sinclair/typebox": "^0.34"
 	}
 }

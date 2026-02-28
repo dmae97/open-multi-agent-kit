@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+### Breaking Changes
+
+- Changed mermaid hash type from string to bigint in `getMermaidImage` callback and `extractMermaidBlocks` return type
+- Removed `mime-types` and `@types/mime-types` from dependencies
+- Removed `@xterm/xterm` from dependencies
+
+### Changed
+
+- Updated mermaid hash computation to use `Bun.hash.xxHash64()` instead of `Bun.hash().toString(16)`
 
 ## [12.19.0] - 2026-02-22
 

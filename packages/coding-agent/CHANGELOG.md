@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added `ast_find` tool for structural code search using AST matching via ast-grep, enabling syntax-aware pattern discovery across codebases
@@ -23,6 +24,10 @@
 
 ### Changed
 
+- Replaced `globSync` from `glob` package with native `Bun.Glob` API for glob pattern matching
+- Replaced `fileTypeFromBuffer` from `file-type` package with inline MIME type detection for JPEG, PNG, GIF, and WebP formats
+- Reduced MIME type sniffing buffer size from 4100 bytes to 12 bytes for improved performance
+- Changed mermaid cache key type from `string` to `bigint` for more efficient hashing
 - Replaced `smol-toml` dependency with native `Bun.TOML.parse()` for TOML parsing, reducing external dependencies
 - Replaced `node-html-parser` dependency with `linkedom` for HTML parsing, improving performance and reducing bundle size
 - Updated HTML parsing API calls from `node-html-parser` to `linkedom` across all web scrapers (arXiv, IACR, Go pkg, Read the Docs, Twitter, Wikipedia)
@@ -50,6 +55,13 @@
 
 ### Removed
 
+- Removed `file-type` dependency, reducing external dependencies
+- Removed `glob` dependency in favor of native `Bun.Glob` API
+- Removed `ignore` dependency and ignore file handling utilities
+- Removed `marked` dependency
+- Removed `zod` dependency
+- Removed `ms` and `@types/ms` dev dependencies
+- Removed `rootDir` and `ignoreMatcher` parameters from `loadFilesFromDir()` (kept for API compatibility)
 - Removed `smol-toml` dependency from package.json
 - Removed `node-html-parser` dependency from package.json
 - Removed `files` array parameter for batch file operations

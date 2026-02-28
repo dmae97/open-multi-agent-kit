@@ -8,7 +8,6 @@ import { parseRuleConditionAndScope, type Rule, type RuleFrontmatter } from "../
 import type { Skill, SkillFrontmatter } from "../capability/skill";
 import type { LoadContext, LoadResult, SourceMeta } from "../capability/types";
 import { parseFrontmatter } from "../utils/frontmatter";
-import type { IgnoreMatcher } from "../utils/ignore-files";
 
 const VALID_THINKING_LEVELS: readonly string[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
 
@@ -378,10 +377,6 @@ export async function loadFilesFromDir<T>(
 		transform: (name: string, content: string, path: string, source: SourceMeta) => T | null;
 		/** Whether to recurse into subdirectories (default: false) */
 		recursive?: boolean;
-		/** Root directory for ignore file handling (unused, kept for API compat) */
-		rootDir?: string;
-		/** Ignore matcher (unused, kept for API compat) */
-		ignoreMatcher?: IgnoreMatcher;
 	},
 ): Promise<LoadResult<T>> {
 	const items: T[] = [];

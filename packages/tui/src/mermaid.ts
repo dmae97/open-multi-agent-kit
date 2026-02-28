@@ -99,13 +99,13 @@ function parsePngDimensions(buffer: Uint8Array): { width: number; height: number
  * Extract mermaid code blocks from markdown text.
  * Returns array of { source, startIndex, endIndex } for each block.
  */
-export function extractMermaidBlocks(markdown: string): { source: string; hash: string }[] {
-	const blocks: { source: string; hash: string }[] = [];
+export function extractMermaidBlocks(markdown: string): { source: string; hash: bigint }[] {
+	const blocks: { source: string; hash: bigint }[] = [];
 	const regex = /```mermaid\s*\n([\s\S]*?)```/g;
 
 	for (let match = regex.exec(markdown); match !== null; match = regex.exec(markdown)) {
 		const source = match[1].trim();
-		const hash = Bun.hash(source).toString(16);
+		const hash = Bun.hash.xxHash64(source);
 		blocks.push({ source, hash });
 	}
 
@@ -119,9 +119,9 @@ export function extractMermaidBlocks(markdown: string): { source: string; hash: 
 export async function prerenderMermaidBlocks(
 	markdown: string,
 	options: MermaidRenderOptions = {},
-): Promise<Map<string, MermaidImage>> {
+): Promise<Map<bigint, MermaidImage>> {
 	const blocks = extractMermaidBlocks(markdown);
-	const cache = new Map<string, MermaidImage>();
+	const cache = new Map<bigint, MermaidImage>();
 
 	const results = await Promise.all(
 		blocks.map(async ({ source, hash }) => {

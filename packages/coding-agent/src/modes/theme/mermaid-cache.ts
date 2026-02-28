@@ -6,9 +6,9 @@ import {
 } from "@oh-my-pi/pi-tui";
 import { logger } from "@oh-my-pi/pi-utils";
 
-const cache = new Map<string, MermaidImage>();
-const pending = new Map<string, Promise<MermaidImage | null>>();
-const failed = new Set<string>();
+const cache = new Map<bigint, MermaidImage>();
+const pending = new Map<bigint, Promise<MermaidImage | null>>();
+const failed = new Set<bigint>();
 
 const defaultOptions: MermaidRenderOptions = {
 	theme: "dark",
@@ -28,7 +28,7 @@ export function setMermaidRenderCallback(callback: (() => void) | null): void {
  * Get a pre-rendered mermaid image by hash.
  * Returns null if not cached or rendering failed.
  */
-export function getMermaidImage(hash: string): MermaidImage | null {
+export function getMermaidImage(hash: bigint): MermaidImage | null {
 	return cache.get(hash) ?? null;
 }
 

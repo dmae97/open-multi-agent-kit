@@ -32,7 +32,6 @@
 	},
 	"dependencies": {
 		"@oh-my-pi/pi-ai": "workspace:*",
-		"@oh-my-pi/pi-tui": "workspace:*",
 		"@oh-my-pi/pi-utils": "workspace:*"
 	},
 	"devDependencies": {

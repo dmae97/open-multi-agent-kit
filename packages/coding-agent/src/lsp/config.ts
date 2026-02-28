@@ -3,7 +3,6 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { isRecord, logger } from "@oh-my-pi/pi-utils";
 import { YAML } from "bun";
-import { globSync } from "glob";
 import { getConfigDirPaths } from "../config";
 import { BiomeClient } from "./clients/biome-client";
 import { SwiftLintClient } from "./clients/swiftlint-client";
@@ -158,8 +157,8 @@ export function hasRootMarkers(cwd: string, markers: string[]): boolean {
 		// Handle glob-like patterns (e.g., "*.cabal")
 		if (marker.includes("*")) {
 			try {
-				const matches = globSync(path.join(cwd, marker));
-				if (matches.length > 0) {
+				const scan = new Bun.Glob(marker).scanSync({ cwd, onlyFiles: false });
+				for (const _ of scan) {
 					return true;
 				}
 			} catch {

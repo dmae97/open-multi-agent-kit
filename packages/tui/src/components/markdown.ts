@@ -46,10 +46,10 @@ export interface MarkdownTheme {
 	highlightCode?: (code: string, lang?: string) => string[];
 	/**
 	 * Lookup a pre-rendered mermaid image by source hash.
-	 * Hash is computed as `Bun.hash(source.trim()).toString(16)`.
+	 * Hash is computed as `Bun.hash.xxHash64(source.trim())`.
 	 * Return null to fall back to text rendering.
 	 */
-	getMermaidImage?: (sourceHash: string) => MermaidImage | null;
+	getMermaidImage?: (sourceHash: bigint) => MermaidImage | null;
 	symbols: SymbolTheme;
 }
 
@@ -322,7 +322,7 @@ export class Markdown implements Component {
 			case "code": {
 				// Handle mermaid diagrams with image rendering when available
 				if (token.lang === "mermaid" && this.#theme.getMermaidImage) {
-					const hash = Bun.hash(token.text.trim()).toString(16);
+					const hash = Bun.hash.xxHash64(token.text.trim());
 					const image = this.#theme.getMermaidImage(hash);
 
 					if (image && TERMINAL.imageProtocol) {
