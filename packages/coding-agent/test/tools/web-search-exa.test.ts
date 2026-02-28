@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
 	buildExaRequestBody,
 	normalizeSearchType,
@@ -215,7 +215,6 @@ function makeMockExaResponse(overrides: Record<string, unknown> = {}) {
 }
 
 describe("searchExa", () => {
-	const originalFetch = globalThis.fetch;
 	let capturedRequestBody: Record<string, unknown> | null = null;
 
 	beforeEach(() => {
@@ -224,12 +223,13 @@ describe("searchExa", () => {
 	});
 
 	afterEach(() => {
-		globalThis.fetch = originalFetch;
+		vi.restoreAllMocks();
 		delete process.env.EXA_API_KEY;
 	});
 
 	function mockFetch(responseBody: unknown, status = 200) {
-		globalThis.fetch = mock(async (_url: string | URL | Request, init?: RequestInit) => {
+		// @ts-expect-error - test mock doesn't need fetch.preconnect
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (_url: string | URL | Request, init?: RequestInit) => {
 			if (init?.body) {
 				capturedRequestBody = JSON.parse(init.body as string);
 			}
@@ -237,7 +237,7 @@ describe("searchExa", () => {
 				status,
 				headers: { "Content-Type": "application/json" },
 			});
-		}) as unknown as typeof fetch;
+		});
 	}
 
 	it("populates answer from per-result summaries", async () => {
@@ -372,21 +372,19 @@ describe("searchExa", () => {
 
 	it("uses Exa MCP when API key is missing", async () => {
 		delete process.env.EXA_API_KEY;
-		let calledUrl = "";
-		globalThis.fetch = mock(async (url: string | URL | Request) => {
-			calledUrl = String(url);
-			return new Response(
-				JSON.stringify({ jsonrpc: "2.0", id: "mcp-1", result: makeMockExaResponse() }),
-				{
-					status: 200,
-					headers: { "Content-Type": "application/json" },
-				},
-			);
-		}) as unknown as typeof fetch;
+		// @ts-expect-error - test mock doesn't need fetch.preconnect
+		const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+			return new Response(JSON.stringify({ jsonrpc: "2.0", id: "mcp-1", result: makeMockExaResponse() }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		});
 
 		const result = await searchExa({ query: "no key" });
 		expect(result.provider).toBe("exa");
 		expect(result.sources).toHaveLength(3);
+
+		const calledUrl = String(fetchSpy.mock.calls[0][0]);
 		expect(calledUrl).toContain("https://mcp.exa.ai/mcp");
 		expect(calledUrl).toContain("tools=web_search_exa");
 		expect(calledUrl).not.toContain("exaApiKey=");
