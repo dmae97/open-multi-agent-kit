@@ -856,6 +856,12 @@ export class TUI extends Container {
 		return null;
 	}
 
+	#moveToScreenPosition(row: number, col = 0): string {
+		const safeRow = Math.max(0, row);
+		const safeCol = Math.max(0, col);
+		return `\x1b[${safeRow + 1};${safeCol + 1}H`;
+	}
+
 	#doRender(): void {
 		if (this.#stopped) return;
 		const width = this.terminal.columns;
@@ -928,7 +934,7 @@ export class TUI extends Container {
 		// === write only the visible viewport lines.                           ===
 		// Used for height changes, content shrink, and all diff fallback paths.
 		// Key properties:
-		//   - Never uses \x1b[H (home) — avoids scroll-to-top flash
+		//   - Uses absolute screen addressing for stable cursor anchoring
 		//   - Never uses \x1b[3J — preserves scrollback history
 		//   - Writes only viewport-visible lines — no intermediate states
 		const viewportRepaint = (): void => {
@@ -938,11 +944,8 @@ export class TUI extends Container {
 
 			let buffer = "\x1b[?2026h"; // Begin synchronized output
 
-			// Move cursor from current position to screen row 0 (top of our owned area)
-			if (hardwareCursorRow > 0) {
-				buffer += `\x1b[${hardwareCursorRow}A`;
-			}
-			buffer += "\r"; // Column 0
+			// Move cursor to top-left of the viewport using absolute addressing.
+			buffer += this.#moveToScreenPosition(0, 0);
 
 			// Clear from here downward — erases old content and any stale rows below.
 			// Does NOT touch scrollback above us.
@@ -1076,15 +1079,7 @@ export class TUI extends Container {
 				return;
 			}
 			let buffer = "\x1b[?2026h";
-			const lineDiff = targetScreenRow - hardwareCursorRow;
-			if (!Number.isFinite(lineDiff) || Math.abs(lineDiff) > height * 2) {
-				logRedraw(`large deleted-line delta (${lineDiff})`);
-				viewportRepaint();
-				return;
-			}
-			if (lineDiff > 0) buffer += `\x1b[${lineDiff}B`;
-			else if (lineDiff < 0) buffer += `\x1b[${-lineDiff}A`;
-			buffer += "\r";
+			buffer += this.#moveToScreenPosition(targetScreenRow, 0);
 			// Erase stale rows below the new tail without scrolling.
 			if (newLines.length > 0) {
 				if (targetScreenRow < height - 1) {
@@ -1128,15 +1123,7 @@ export class TUI extends Container {
 		const moveTargetScreenRow = moveTargetRow - previousViewportTop;
 		if (appendStart && renderEnd > previousViewportBottom) {
 			let appendBuffer = "\x1b[?2026h";
-			const appendLineDiff = moveTargetScreenRow - hardwareCursorRow;
-			if (!Number.isFinite(appendLineDiff) || Math.abs(appendLineDiff) > height * 2) {
-				logRedraw(`append fallback due to large delta (${appendLineDiff})`);
-				viewportRepaint();
-				return;
-			}
-			if (appendLineDiff > 0) appendBuffer += `\x1b[${appendLineDiff}B`;
-			else if (appendLineDiff < 0) appendBuffer += `\x1b[${-appendLineDiff}A`;
-			appendBuffer += "\r";
+			appendBuffer += this.#moveToScreenPosition(moveTargetScreenRow, 0);
 			for (let i = firstChanged; i <= renderEnd; i++) {
 				appendBuffer += "\r\n\x1b[2K";
 				const line = newLines[i];
@@ -1178,20 +1165,10 @@ export class TUI extends Container {
 			return;
 		}
 
-		// Move cursor to first changed line (screen-relative)
+		// Move cursor to first changed line (screen-relative) using absolute coordinates.
 		const lineDiff = moveTargetScreenRow - hardwareCursorRow;
-		if (!Number.isFinite(lineDiff) || Math.abs(lineDiff) > height * 2) {
-			logRedraw(`large diff delta (${lineDiff})`);
-			viewportRepaint();
-			return;
-		}
-		if (lineDiff > 0) {
-			buffer += `\x1b[${lineDiff}B`; // Move down
-		} else if (lineDiff < 0) {
-			buffer += `\x1b[${-lineDiff}A`; // Move up
-		}
-
-		buffer += appendStart ? "\r\n" : "\r"; // Move to column 0
+		buffer += this.#moveToScreenPosition(moveTargetScreenRow, 0);
+		if (appendStart) buffer += "\r\n";
 
 		// Only render changed lines (firstChanged to lastChanged), not all lines to end
 		// This reduces flicker when only a single line changes (e.g., spinner animation)
@@ -1237,10 +1214,8 @@ export class TUI extends Container {
 		// If we had more lines before, clear stale rows below new content without scrolling.
 		if (this.#previousLines.length > newLines.length) {
 			if (newLines.length === 0) {
-				if (finalCursorRow > 0) {
-					buffer += `\x1b[${finalCursorRow}A`;
-				}
-				buffer += "\r\x1b[J";
+				buffer += this.#moveToScreenPosition(0, 0);
+				buffer += "\x1b[J";
 				finalCursorRow = 0;
 			} else {
 				const tailScreenRow = newLines.length - 1 - viewportTop;
@@ -1249,13 +1224,8 @@ export class TUI extends Container {
 					viewportRepaint();
 					return;
 				}
-				if (finalCursorRow < tailScreenRow) {
-					buffer += `\x1b[${tailScreenRow - finalCursorRow}B`;
-					finalCursorRow = tailScreenRow;
-				} else if (finalCursorRow > tailScreenRow) {
-					buffer += `\x1b[${finalCursorRow - tailScreenRow}A`;
-					finalCursorRow = tailScreenRow;
-				}
+				buffer += this.#moveToScreenPosition(tailScreenRow, 0);
+				finalCursorRow = tailScreenRow;
 				if (tailScreenRow < height - 1) {
 					buffer += "\x1b[1B\r\x1b[J\x1b[1A";
 				}
@@ -1297,7 +1267,7 @@ export class TUI extends Container {
 		// Write entire buffer at once
 		this.terminal.write(buffer);
 		// cursorRow tracks end of content (for viewport calculation)
-		// hardwareCursorRow tracks screen-relative cursor position used for relative movement
+		// hardwareCursorRow tracks last committed screen-relative cursor row
 		this.#cursorRow = Math.max(0, newLines.length - 1);
 		this.#hardwareCursorRow = cursorUpdate.row;
 		this.#lastCursorSequence = cursorUpdate.sequence;
@@ -1328,14 +1298,7 @@ export class TUI extends Container {
 		// Clamp cursor position to valid range
 		const targetRow = Math.max(0, Math.min(cursorPos.row, totalLines - 1));
 		const targetCol = Math.max(0, cursorPos.col);
-		let sequence = "";
-		const rowDelta = targetRow - currentRow;
-		if (rowDelta > 0) {
-			sequence += `\x1b[${rowDelta}B`; // Move down
-		} else if (rowDelta < 0) {
-			sequence += `\x1b[${-rowDelta}A`; // Move up
-		}
-		sequence += `\x1b[${targetCol + 1}G`; // Move to absolute column (1-indexed)
+		let sequence = this.#moveToScreenPosition(targetRow, targetCol);
 		sequence += this.#showHardwareCursor ? "\x1b[?25h" : "\x1b[?25l";
 
 		return { sequence, row: targetRow };
