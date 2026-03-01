@@ -167,6 +167,327 @@ describe("TUI terminal-state regressions", () => {
 			}
 		});
 
+		it("maintains exact viewport rows across repeated width reflow on sparse mixed content", async () => {
+			const term = new VirtualTerminal(80, 18);
+			const tui = new TUI(term);
+			const lines = [
+				"doesnt matter",
+				"",
+				"doesnt matter",
+				"",
+				"doesnt matter",
+				"",
+				"",
+				"",
+				"",
+				"doesnt matter",
+				"",
+				"doesnt matter",
+				"",
+				"",
+				"Operation aborted",
+				"",
+				"Operation aborted",
+				"",
+				"┌──────────────┐",
+				"",
+				"┌──────────────┐",
+				"│              │",
+				"┌──────────────┐",
+				"│              │",
+				"│ coding-agent │",
+				"│              │",
+				"│ coding-agent │",
+				"┌──────────────┐",
+				"│              │",
+				"│ coding-agent │",
+				"│              │",
+				"└───────┬──────┘",
+				"        │",
+				"        │",
+			];
+			tui.addChild(new MutableLinesComponent(lines));
+
+			const expectedViewport = (width: number, height: number): string[] => {
+				const rendered = lines.map(line => line.slice(0, width));
+				const top = Math.max(0, rendered.length - height);
+				const viewport = rendered.slice(top, top + height);
+				while (viewport.length < height) viewport.push("");
+				return viewport.map(line => line.trimEnd());
+			};
+
+			try {
+				tui.start();
+				await settle(term);
+				expect(visible(term)).toEqual(expectedViewport(80, 18));
+
+				const widths = [72, 64, 56, 68, 52, 80];
+				for (const width of widths) {
+					term.resize(width, 18);
+					await settle(term);
+					expect(visible(term)).toEqual(expectedViewport(width, 18));
+				}
+			} finally {
+				tui.stop();
+			}
+		});
+		it("aggressive resize storm does not duplicate viewport content", async () => {
+			const term = new VirtualTerminal(80, 18);
+			const tui = new TUI(term);
+			const lines = [
+				"doesnt matter",
+				"",
+				"doesnt matter",
+				"",
+				"doesnt matter",
+				"",
+				"",
+				"",
+				"",
+				"doesnt matter",
+				"",
+				"doesnt matter",
+				"",
+				"",
+				"Operation aborted",
+				"",
+				"Operation aborted",
+				"",
+				"┌──────────────┐",
+				"",
+				"┌──────────────┐",
+				"│              │",
+				"┌──────────────┐",
+				"│              │",
+				"│ coding-agent │",
+				"│              │",
+				"│ coding-agent │",
+				"┌──────────────┐",
+				"│              │",
+				"│ coding-agent │",
+				"│              │",
+				"└───────┬──────┘",
+				"        │",
+				"        │",
+			];
+			tui.addChild(new MutableLinesComponent(lines));
+
+			const expectedViewport = (width: number, height: number): string[] => {
+				const rendered = lines.map(line => line.slice(0, width));
+				const top = Math.max(0, rendered.length - height);
+				const viewport = rendered.slice(top, top + height);
+				while (viewport.length < height) viewport.push("");
+				return viewport.map(line => line.trimEnd());
+			};
+
+			try {
+				tui.start();
+				await settle(term);
+
+				const sizes: Array<[number, number]> = [];
+				for (let i = 0; i < 240; i++) {
+					sizes.push([i % 2 === 0 ? 79 : 80, i % 3 === 0 ? 17 : 18]);
+				}
+
+				for (const [w, h] of sizes) {
+					term.resize(w, h);
+				}
+				await settle(term);
+
+				const [finalWidth, finalHeight] = sizes[sizes.length - 1]!;
+				expect(visible(term)).toEqual(expectedViewport(finalWidth, finalHeight));
+			} finally {
+				tui.stop();
+			}
+		});
+		it("height-only resize recovers from cursor drift without duplicate rows", async () => {
+			const term = new VirtualTerminal(80, 18);
+			const tui = new TUI(term);
+			const lines = [
+				"doesnt matter",
+				"",
+				"doesnt matter",
+				"",
+				"doesnt matter",
+				"",
+				"",
+				"",
+				"",
+				"doesnt matter",
+				"",
+				"doesnt matter",
+				"",
+				"",
+				"Operation aborted",
+				"",
+				"Operation aborted",
+				"",
+				"┌──────────────┐",
+				"",
+				"┌──────────────┐",
+				"│              │",
+				"┌──────────────┐",
+				"│              │",
+				"│ coding-agent │",
+				"│              │",
+				"│ coding-agent │",
+				"┌──────────────┐",
+				"│              │",
+				"│ coding-agent │",
+				"│              │",
+				"└───────┬──────┘",
+				"        │",
+				"        │",
+			];
+			tui.addChild(new MutableLinesComponent(lines));
+
+			const expectedViewport = (width: number, height: number): string[] => {
+				const rendered = lines.map(line => line.slice(0, width));
+				const top = Math.max(0, rendered.length - height);
+				const viewport = rendered.slice(top, top + height);
+				while (viewport.length < height) viewport.push("");
+				return viewport.map(line => line.trimEnd());
+			};
+
+			try {
+				tui.start();
+				await settle(term);
+
+				// Simulate terminal-managed cursor relocation during aggressive UI changes/resizes.
+				// TUI's internal cursor row bookkeeping does not observe this external movement.
+				term.write("\x1b[18;1H");
+				await settle(term);
+
+				term.resize(80, 17);
+				await settle(term);
+
+				expect(visible(term)).toEqual(expectedViewport(80, 17));
+			} finally {
+				tui.stop();
+			}
+		});
+		it("streaming content under aggressive resize keeps a single consistent viewport", async () => {
+			const term = new VirtualTerminal(80, 18);
+			const tui = new TUI(term);
+			const source = [
+				"doesnt matter",
+				"",
+				"doesnt matter",
+				"",
+				"doesnt matter",
+				"",
+				"",
+				"",
+				"",
+				"doesnt matter",
+				"",
+				"doesnt matter",
+				"",
+				"",
+				"Operation aborted",
+				"",
+				"Operation aborted",
+				"",
+				"┌──────────────┐",
+				"",
+				"┌──────────────┐",
+				"│              │",
+				"┌──────────────┐",
+				"│              │",
+				"│ coding-agent │",
+				"│              │",
+				"│ coding-agent │",
+				"┌──────────────┐",
+				"│              │",
+				"│ coding-agent │",
+				"│              │",
+				"└───────┬──────┘",
+				"        │",
+				"        │",
+				"        ├─────────┬─────────┬────────┬──────┬──────────────┬──────────────┐",
+				"        │         │         │        │      │              │              │",
+				"        ▼         │         ▼        │      ▼              ▼              ▼",
+				"┌──────────────┐  │  ┌────────────┐  │  ┌───────┐     ┌─────────┐     ┌───────┐",
+				"│    agent     │  │  │    tui     │  │  │ utils │     │ natives │     │ stats │",
+				"└───────┬──────┘  │  └──────┬─────┘  │  └───────┘     └────┬────┘     └───────┘",
+				"        ├─────────┘         └────────┘                     │",
+				"        ▼                                                  │",
+				"┌──────────────┐     ┌────────────┐                        │",
+				"│      ai      │     │ pi-natives │◄───────────────────────┘",
+				"└──────────────┘     └────────────┘",
+			];
+			const working: string[] = [];
+			const component = new MutableLinesComponent(working);
+			tui.addChild(component);
+
+			const expectedViewport = (width: number, height: number): string[] => {
+				const rendered = working.map(line => line.slice(0, width));
+				const top = Math.max(0, rendered.length - height);
+				const viewport = rendered.slice(top, top + height);
+				while (viewport.length < height) viewport.push("");
+				return viewport.map(line => line.trimEnd());
+			};
+
+			try {
+				tui.start();
+				await settle(term);
+
+				let nextLine = 0;
+				let finalWidth = term.columns;
+				let finalHeight = term.rows;
+				for (let i = 0; i < 180; i++) {
+					if (i % 3 === 0 && nextLine < source.length) {
+						working.push(source[nextLine++]!);
+						component.setLines(working);
+					}
+
+					finalWidth = i % 2 === 0 ? 79 : 80;
+					finalHeight = i % 4 < 2 ? 17 : 18;
+					term.resize(finalWidth, finalHeight);
+					tui.requestRender();
+					await settle(term);
+				}
+
+				expect(visible(term)).toEqual(expectedViewport(finalWidth, finalHeight));
+			} finally {
+				tui.stop();
+			}
+		});
+		it("forced renders during resize storm stay stable under cursor relocation", async () => {
+			const term = new VirtualTerminal(80, 18);
+			const tui = new TUI(term);
+			const lines = Array.from({ length: 40 }, (_v, i) => `row-${i}`);
+			const component = new MutableLinesComponent(lines);
+			tui.addChild(component);
+
+			const expectedViewport = (width: number, height: number): string[] => {
+				const rendered = lines.map(line => line.slice(0, width));
+				const top = Math.max(0, rendered.length - height);
+				const viewport = rendered.slice(top, top + height);
+				while (viewport.length < height) viewport.push("");
+				return viewport.map(line => line.trimEnd());
+			};
+
+			try {
+				tui.start();
+				await settle(term);
+
+				let finalWidth = term.columns;
+				let finalHeight = term.rows;
+				for (let i = 0; i < 80; i++) {
+					finalWidth = i % 2 === 0 ? 79 : 80;
+					finalHeight = i % 3 === 0 ? 17 : 18;
+					term.resize(finalWidth, finalHeight);
+					term.write("\x1b[18;1H");
+					tui.requestRender(true);
+					await settle(term);
+				}
+
+				expect(visible(term)).toEqual(expectedViewport(finalWidth, finalHeight));
+			} finally {
+				tui.stop();
+			}
+		});
 		it("shrink then grow keeps tail anchored to latest rows", async () => {
 			const term = new VirtualTerminal(24, 6);
 			const tui = new TUI(term);
@@ -189,6 +510,74 @@ describe("TUI terminal-state regressions", () => {
 				expect(viewport).toHaveLength(6);
 				expect(viewport[0]?.trim()).toBe("row-18");
 				expect(viewport[5]?.trim()).toBe("row-23");
+			} finally {
+				tui.stop();
+			}
+		});
+		it("mixed width/height resize storm keeps scrollback bounded for static content", async () => {
+			const term = new VirtualTerminal(80, 18);
+			const tui = new TUI(term);
+			const lines = [
+				"doesnt matter",
+				"",
+				"doesnt matter",
+				"",
+				"doesnt matter",
+				"",
+				"",
+				"",
+				"",
+				"doesnt matter",
+				"",
+				"doesnt matter",
+				"",
+				"",
+				"Operation aborted",
+				"",
+				"Operation aborted",
+				"",
+				"┌──────────────┐",
+				"",
+				"┌──────────────┐",
+				"│              │",
+				"┌──────────────┐",
+				"│              │",
+				"│ coding-agent │",
+				"│              │",
+				"│ coding-agent │",
+				"┌──────────────┐",
+				"│              │",
+				"│ coding-agent │",
+				"│              │",
+				"└───────┬──────┘",
+				"        │",
+				"        │",
+				"        ├─────────┬─────────┬────────┬──────┬──────────────┬──────────────┐",
+				"        │         │         │        │      │              │              │",
+				"        ▼         │         ▼        │      ▼              ▼              ▼",
+				"┌──────────────┐  │  ┌────────────┐  │  ┌───────┐     ┌─────────┐     ┌───────┐",
+				"│    agent     │  │  │    tui     │  │  │ utils │     │ natives │     │ stats │",
+				"└───────┬──────┘  │  └──────┬─────┘  │  └───────┘     └────┬────┘     └───────┘",
+				"        ├─────────┘         └────────┘                     │",
+				"        ▼                                                  │",
+				"┌──────────────┐     ┌────────────┐                        │",
+				"│      ai      │     │ pi-natives │◄───────────────────────┘",
+				"└──────────────┘     └────────────┘",
+			];
+			tui.addChild(new MutableLinesComponent(lines));
+
+			try {
+				tui.start();
+				await settle(term);
+				const before = term.getScrollBuffer().length;
+
+				for (let i = 0; i < 220; i++) {
+					term.resize(i % 2 === 0 ? 79 : 80, i % 3 === 0 ? 17 : 18);
+					await settle(term);
+				}
+
+				const after = term.getScrollBuffer().length;
+				expect(after - before).toBeLessThan(120);
 			} finally {
 				tui.stop();
 			}
@@ -216,6 +605,40 @@ describe("TUI terminal-state regressions", () => {
 			}
 		});
 
+		it("appending lines during aggressive resize does not duplicate history rows", async () => {
+			const term = new VirtualTerminal(80, 18);
+			const tui = new TUI(term);
+			const lines: string[] = [];
+			const component = new MutableLinesComponent(lines);
+			tui.addChild(component);
+
+			try {
+				tui.start();
+				await settle(term);
+
+				for (let i = 0; i < 140; i++) {
+					lines.push(`line-${i}`);
+					component.setLines(lines);
+					term.resize(i % 2 === 0 ? 79 : 80, i % 3 === 0 ? 17 : 18);
+					tui.requestRender();
+					await settle(term);
+				}
+
+				const scrollback = term.getScrollBuffer();
+				const duplicated: number[] = [];
+				let presentCount = 0;
+				for (let i = 0; i < 140; i++) {
+					const pattern = new RegExp(`\\bline-${i}\\b`);
+					const count = countMatches(scrollback, pattern);
+					if (count > 0) presentCount += 1;
+					if (count > 1) duplicated.push(i);
+				}
+				expect(presentCount).toBeGreaterThan(30);
+				expect(duplicated).toEqual([]);
+			} finally {
+				tui.stop();
+			}
+		});
 		it("forced full redraws do not duplicate persistent content", async () => {
 			const term = new VirtualTerminal(40, 5);
 			const tui = new TUI(term);
