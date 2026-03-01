@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.5.2] - 2026-03-01
+
 ### Added
 
 - Added `checkpoint` tool to create context checkpoints before exploratory work, allowing you to investigate with many intermediate tool calls and minimize context cost afterward

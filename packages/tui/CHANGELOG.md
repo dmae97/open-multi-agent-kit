@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.5.2] - 2026-03-01
 ### Breaking Changes
 
 - Removed `getMermaidImage` callback from MarkdownTheme; replaced with `getMermaidAscii` that accepts ASCII string instead of image data
