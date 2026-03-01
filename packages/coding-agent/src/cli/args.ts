@@ -247,7 +247,10 @@ ${chalk.bold("Available Tools (all enabled by default):")}
   fetch      - Fetch and process URLs
   web_search - Search the web
   ask        - Ask user questions (interactive mode only)
-`;
+
+${chalk.bold("Useful Commands:")}
+  omp agents unpack         - Export bundled subagents into local .omp/agents
+  omp agents unpack --force - Overwrite existing local agent files`;
 }
 
 export function printHelp(): void {
