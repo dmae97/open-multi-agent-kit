@@ -5,10 +5,9 @@
  */
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { getProjectDir, isEnoent } from "@oh-my-pi/pi-utils";
+import { getAgentDir, getProjectDir, isEnoent } from "@oh-my-pi/pi-utils";
 import { YAML } from "bun";
 import chalk from "chalk";
-import { getConfigDirs } from "../config";
 import { theme } from "../modes/theme/theme";
 import { loadBundledAgents } from "../task/agents";
 import type { AgentDefinition } from "../task/types";
@@ -21,6 +20,8 @@ export interface AgentsCommandArgs {
 		force?: boolean;
 		json?: boolean;
 		dir?: string;
+		user?: boolean;
+		project?: boolean;
 	};
 }
 
@@ -35,22 +36,20 @@ function writeStdout(line: string): void {
 	process.stdout.write(`${line}\n`);
 }
 
-function resolveTargetDir(overrideDir?: string): string {
-	if (overrideDir && overrideDir.trim().length > 0) {
-		return path.resolve(getProjectDir(), overrideDir.trim());
+function resolveTargetDir(flags: AgentsCommandArgs["flags"]): string {
+	if (flags.dir && flags.dir.trim().length > 0) {
+		return path.resolve(getProjectDir(), flags.dir.trim());
 	}
 
-	const localAgentsDir = getConfigDirs("agents", {
-		user: false,
-		project: true,
-		cwd: getProjectDir(),
-	})[0]?.path;
-
-	if (!localAgentsDir) {
-		throw new Error("Cannot resolve local agents directory.");
+	if (flags.user && flags.project) {
+		throw new Error("Choose either --user or --project, not both.");
 	}
 
-	return localAgentsDir;
+	if (flags.project) {
+		return path.resolve(getProjectDir(), ".omp", "agents");
+	}
+
+	return path.join(getAgentDir(), "agents");
 }
 
 function toFrontmatter(agent: AgentDefinition): Record<string, unknown> {
@@ -76,7 +75,7 @@ function serializeAgent(agent: AgentDefinition): string {
 }
 
 async function unpackBundledAgents(flags: AgentsCommandArgs["flags"]): Promise<UnpackResult> {
-	const targetDir = resolveTargetDir(flags.dir);
+	const targetDir = resolveTargetDir(flags);
 	await fs.mkdir(targetDir, { recursive: true });
 
 	const bundledAgents = [...loadBundledAgents()].sort((a, b) => a.name.localeCompare(b.name));
@@ -120,7 +119,11 @@ export async function runAgentsCommand(cmd: AgentsCommandArgs): Promise<void> {
 			writeStdout(chalk.dim(`Target directory: ${result.targetDir}`));
 			writeStdout(chalk.green(`${theme.status.success} Written: ${result.written.length}`));
 			if (result.skipped.length > 0) {
-				writeStdout(chalk.yellow(`${theme.status.warning} Skipped existing: ${result.skipped.length} (use --force to overwrite)`));
+				writeStdout(
+					chalk.yellow(
+						`${theme.status.warning} Skipped existing: ${result.skipped.length} (use --force to overwrite)`,
+					),
+				);
 			}
 
 			for (const filePath of result.written) {

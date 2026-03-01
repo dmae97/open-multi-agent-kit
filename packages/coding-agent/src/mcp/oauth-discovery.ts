@@ -238,7 +238,10 @@ export function analyzeAuthError(error: Error): AuthDetectionResult {
  * Try to discover OAuth endpoints by querying the server's well-known endpoints.
  * This is a fallback when error responses don't include OAuth metadata.
  */
-export async function discoverOAuthEndpoints(serverUrl: string, authServerUrl?: string): Promise<OAuthEndpoints | null> {
+export async function discoverOAuthEndpoints(
+	serverUrl: string,
+	authServerUrl?: string,
+): Promise<OAuthEndpoints | null> {
 	const wellKnownPaths = [
 		"/.well-known/oauth-authorization-server",
 		"/.well-known/openid-configuration",

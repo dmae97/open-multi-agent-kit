@@ -21,13 +21,15 @@ export default class Agents extends Command {
 	static flags = {
 		force: Flags.boolean({ char: "f", description: "Overwrite existing agent files" }),
 		json: Flags.boolean({ description: "Output JSON" }),
-		dir: Flags.string({ description: "Output directory (defaults to local .omp/agents)" }),
+		dir: Flags.string({ description: "Output directory (overrides --user/--project)" }),
+		user: Flags.boolean({ description: "Write to ~/.omp/agent/agents (default)" }),
+		project: Flags.boolean({ description: "Write to ./.omp/agents" }),
 	};
 
-
 	static examples = [
-		"# Export bundled agents into local project config\n  omp agents unpack",
-		"# Overwrite existing local agent files\n  omp agents unpack --force",
+		"# Export bundled agents into user config (default)\n  omp agents unpack",
+		"# Export bundled agents into project config\n  omp agents unpack --project",
+		"# Overwrite existing local agent files\n  omp agents unpack --project --force",
 		"# Export into a custom directory\n  omp agents unpack --dir ./tmp/agents --json",
 	];
 
@@ -44,6 +46,8 @@ export default class Agents extends Command {
 				force: flags.force,
 				json: flags.json,
 				dir: flags.dir,
+				user: flags.user,
+				project: flags.project,
 			},
 		};
 

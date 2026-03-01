@@ -249,8 +249,8 @@ ${chalk.bold("Available Tools (all enabled by default):")}
   ask        - Ask user questions (interactive mode only)
 
 ${chalk.bold("Useful Commands:")}
-  omp agents unpack         - Export bundled subagents into local .omp/agents
-  omp agents unpack --force - Overwrite existing local agent files`;
+  omp agents unpack           - Export bundled subagents to ~/.omp/agent/agents (default)
+  omp agents unpack --project - Export bundled subagents to ./.omp/agents`;
 }
 
 export function printHelp(): void {
