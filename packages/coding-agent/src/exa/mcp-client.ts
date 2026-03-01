@@ -16,6 +16,61 @@ export function findApiKey(): string | null {
 	return $env.EXA_API_KEY;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+	if (typeof value !== "object" || value === null) return null;
+	return value as Record<string, unknown>;
+}
+
+function parseJsonContent(text: string): unknown | null {
+	try {
+		return JSON.parse(text);
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Normalize tools/call payloads across MCP servers.
+ *
+ * Exa currently returns different shapes depending on deployment/environment:
+ * - direct payload in result
+ * - structured payload under result.structuredContent / result.data / result.result
+ * - JSON payload embedded as text in result.content[]
+ */
+function normalizeMcpToolPayload(payload: unknown): unknown {
+	const candidates: unknown[] = [];
+	const root = asRecord(payload);
+
+	if (root) {
+		if (root.structuredContent !== undefined) candidates.push(root.structuredContent);
+		if (root.data !== undefined) candidates.push(root.data);
+		if (root.result !== undefined) candidates.push(root.result);
+		candidates.push(root);
+
+		const content = root.content;
+		if (Array.isArray(content)) {
+			for (const item of content) {
+				const part = asRecord(item);
+				if (!part) continue;
+				const text = part.text;
+				if (typeof text !== "string" || text.trim().length === 0) continue;
+				const parsed = parseJsonContent(text);
+				if (parsed !== null) candidates.push(parsed);
+			}
+		}
+	} else {
+		candidates.push(payload);
+	}
+
+	for (const candidate of candidates) {
+		if (isSearchResponse(candidate)) {
+			return candidate;
+		}
+	}
+
+	return payload;
+}
+
 /** Fetch available tools from Exa MCP */
 export async function fetchExaTools(apiKey: string | null, toolNames: string[]): Promise<MCPTool[]> {
 	const params = new URLSearchParams();
@@ -65,7 +120,7 @@ export async function callExaTool(
 		throw new Error(`MCP error: ${response.error.message}`);
 	}
 
-	return response.result;
+	return normalizeMcpToolPayload(response.result);
 }
 
 /** Call a tool on Websets MCP */
@@ -85,7 +140,7 @@ export async function callWebsetsTool(
 		throw new Error(`MCP error: ${response.error.message}`);
 	}
 
-	return response.result;
+	return normalizeMcpToolPayload(response.result);
 }
 
 /** Format search results for LLM */
