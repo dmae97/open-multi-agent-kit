@@ -1,14 +1,20 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Enforced tool decision in plan mode—agent now requires calling either `ask` or `exit_plan_mode` when a turn ends without a required tool call
 - Auto-correction of escaped tab indentation in edits (enabled by default, controllable via `PI_HASHLINE_AUTOCORRECT_ESCAPED_TABS` environment variable)
 - Warning when suspicious Unicode escape placeholder `\uDDDD` is detected in edit content
 
 ### Changed
 
 - Updated hashline documentation to clarify that `\t` in JSON represents a real tab character, not a literal backslash-t sequence
+
+### Fixed
+
+- Cancelling the `ask` tool now aborts the current turn instead of returning a normal cancelled selection, while timeout-driven auto-cancel still returns without aborting
 
 ## [13.5.2] - 2026-03-01
 

@@ -255,7 +255,8 @@ handlebars.registerHelper("SECTION_SEPERATOR", (name: unknown): string => sectio
  */
 function formatHashlineRef(lineNum: unknown, content: unknown): { num: number; text: string; ref: string } {
 	const num = typeof lineNum === "number" ? lineNum : Number.parseInt(String(lineNum), 10);
-	const text = typeof content === "string" ? content : String(content ?? "");
+	const raw = typeof content === "string" ? content : String(content ?? "");
+	const text = raw.replace(/\\t/g, "\t").replace(/\\n/g, "\n").replace(/\\r/g, "\r");
 	const ref = `${num}#${computeLineHash(num, text)}`;
 	return { num, text, ref };
 }

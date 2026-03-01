@@ -49,6 +49,7 @@ Every edit has `op`, `pos`, and `lines`. Range replaces also have `end`. Both `p
    - You **MUST NOT** set `end` to an interior line and then re-add the boundary token in `lines`; that duplicates the next surviving line.
    - To remove a line while keeping its neighbors, **delete** it (`lines: null`). You **MUST NOT** replace it with the content of an adjacent line — that line still exists and will be duplicated.
 4. **Match surrounding indentation:** Leading whitespace in `lines` **MUST** be copied verbatim from adjacent lines in the `read` output. Do not infer or reconstruct indentation from memory — count the actual leading spaces on the lines immediately above and below the insertion or replacement point.
+5. **Preserve idiomatic sibling spacing:** When inserting declarations between top-level siblings, you **MUST** preserve existing blank-line separators. If siblings are separated by one blank line, include a trailing `""` in `lines` so inserted code keeps the same spacing.
 </rules>
 
 <recovery>
@@ -121,18 +122,17 @@ Range — add `end`:
 {{hlinefull 62 "      return null;"}}
 {{hlinefull 63 "    }"}}
 ```
+Target only the inner lines that change — leave unchanged boundaries out of the range.
 ```
 {
   path: "…",
   edits: [{
     op: "replace",
-    pos: {{hlinejsonref 60 "    } catch (err) {"}},
-    end: {{hlinejsonref 63 "    }"}},
+    pos: {{hlinejsonref 61 "      console.error(err);"}},
+    end: {{hlinejsonref 62 "      return null;"}},
     lines: [
-      "    } catch (err) {",
       "      if (isEnoent(err)) return null;",
-      "      throw err;",
-      "    }"
+      "      throw err;"
     ]
   }]
 }
@@ -141,39 +141,24 @@ Range — add `end`:
 
 <example name="inclusive end avoids duplicate boundary">
 ```ts
-{{hlinefull 70 "if (ok) {"}}
-{{hlinefull 71 "  run();"}}
-{{hlinefull 72 "}"}}
-{{hlinefull 73 "after();"}}
+{{hlinefull 70 "\tif (user.isAdmin) {"}}
+{{hlinefull 71 "\t\tdeleteRecord(id);"}}
+{{hlinefull 72 "\t}"}}
+{{hlinefull 73 "\tafter();"}}
 ```
-Bad — `end` stops before `}` while `lines` already includes `}`:
-```
-{
-  path: "…",
-  edits: [{
-    op: "replace",
-    pos: {{hlinejsonref 70 "if (ok) {"}},
-    end: {{hlinejsonref 71 "  run();"}},
-    lines: [
-      "if (ok) {",
-      "  runSafe();",
-      "}"
-    ]
-  }]
-}
-```
-Good — include original `}` in the replaced range when replacement keeps `}`:
+The block grows by one line and the condition changes — two single-line ops would be needed otherwise. Since `}` appears in `lines`, `end` must include `72`:
 ```
 {
   path: "…",
   edits: [{
     op: "replace",
-    pos: {{hlinejsonref 70 "if (ok) {"}},
-    end: {{hlinejsonref 72 "}"}},
+    pos: {{hlinejsonref 70 "\tif (user.isAdmin) {"}},
+    end: {{hlinejsonref 72 "\t}"}},
     lines: [
-      "if (ok) {",
-      "  runSafe();",
-      "}"
+      "\tif (user.isAdmin && confirmed) {",
+      "\t\tauditLog(id);",
+      "\t\tdeleteRecord(id);",
+      "\t}"
     ]
   }]
 }
@@ -191,6 +176,7 @@ Also apply the same rule to `);`, `],`, and `},` closers: if replacement include
 {{hlinefull 49 "  runY();"}}
 {{hlinefull 50 "}"}}
 ```
+Use a trailing `""` to preserve the blank line between top-level sibling declarations.
 ```
 {
   path: "…",
@@ -205,20 +191,6 @@ Also apply the same rule to `);`, `],`, and `},` closers: if replacement include
     ]
   }]
 }
-```
-Result:
-```ts
-{{hlinefull 44 "function x() {"}}
-{{hlinefull 45 "  runX();"}}
-{{hlinefull 46 "}"}}
-{{hlinefull 47 ""}}
-{{hlinefull 48 "function z() {"}}
-{{hlinefull 49 "  runZ();"}}
-{{hlinefull 50 "}"}}
-{{hlinefull 51 ""}}
-{{hlinefull 52 "function y() {"}}
-{{hlinefull 53 "  runY();"}}
-{{hlinefull 54 "}"}}
 ```
 </example>
 
@@ -255,7 +227,7 @@ Leading whitespace in `lines` **MUST** be copied from the `read` output, not rec
 {{hlinefull 11 "\tbar() {"}}
 {{hlinefull 12 "\t\treturn 1;"}}
 {{hlinefull 13 "\t}"}}
-{{hlinefull 14 "}}"}}
+{{hlinefull 14 "}"}}
 ```
 Bad — indent guessed as spaces; `\\t` emits literal backslash-t:
 ```

@@ -86,9 +86,10 @@ export function formatPromptContent(content: string, options: PromptFormatOption
 
 	for (let i = 0; i < lines.length; i++) {
 		let line = lines[i].trimEnd();
-		const trimmed = line.trimStart();
+		const trimmed = line.trim();
+		const trimmedStart = line.trimStart();
 
-		if (CODE_FENCE.test(trimmed)) {
+		if (CODE_FENCE.test(trimmedStart)) {
 			inCodeBlock = !inCodeBlock;
 			result.push(line);
 			continue;
@@ -103,29 +104,26 @@ export function formatPromptContent(content: string, options: PromptFormatOption
 			line = replaceCommonAsciiSymbols(line);
 		}
 
-		const isOpeningXml = OPENING_XML.test(trimmed) && !trimmed.endsWith("/>");
-		if (isOpeningXml && line.length === trimmed.length) {
-			const match = OPENING_XML.exec(trimmed);
+		const isOpeningXml = OPENING_XML.test(trimmedStart) && !trimmedStart.endsWith("/>");
+		if (isOpeningXml && line.length === trimmedStart.length) {
+			const match = OPENING_XML.exec(trimmedStart);
 			if (match) topLevelTags.push(match[1]);
 		}
 
-		const closingMatch = CLOSING_XML.exec(trimmed);
+		const closingMatch = CLOSING_XML.exec(trimmedStart);
 		if (closingMatch) {
 			const tagName = closingMatch[1];
 			if (topLevelTags.length > 0 && topLevelTags[topLevelTags.length - 1] === tagName) {
-				line = trimmed;
 				topLevelTags.pop();
-			} else {
-				line = line.trimEnd();
 			}
-		} else if (isPreRender && trimmed.startsWith("{{")) {
-			line = trimmed;
-		} else if (TABLE_SEP.test(trimmed)) {
-			line = compactTableSep(trimmed);
-		} else if (TABLE_ROW.test(trimmed)) {
-			line = compactTableRow(trimmed);
-		} else {
-			line = line.trimEnd();
+		} else if (isPreRender && trimmedStart.startsWith("{{")) {
+			/* keep indentation as-is in pre-render for Handlebars markers */
+		} else if (TABLE_SEP.test(trimmedStart)) {
+			const leadingWhitespace = line.slice(0, line.length - trimmedStart.length);
+			line = `${leadingWhitespace}${compactTableSep(trimmedStart)}`;
+		} else if (TABLE_ROW.test(trimmedStart)) {
+			const leadingWhitespace = line.slice(0, line.length - trimmedStart.length);
+			line = `${leadingWhitespace}${compactTableRow(trimmedStart)}`;
 		}
 
 		if (shouldBoldRfc2119) {

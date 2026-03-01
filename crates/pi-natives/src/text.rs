@@ -1431,7 +1431,8 @@ mod tests {
 
 	#[test]
 	fn test_wrap_text_with_ansi_resets_strike_without_resetting_colors() {
-		let data = to_u16("\x1b[38;5;196m\x1b[48;5;236m\x1b[9mstrikethrough content wraps\x1b[29m\x1b[0m");
+		let data =
+			to_u16("\x1b[38;5;196m\x1b[48;5;236m\x1b[9mstrikethrough content wraps\x1b[29m\x1b[0m");
 		let lines = wrap_text_with_ansi_impl(&data, 12, DEFAULT_TAB_WIDTH);
 		assert!(lines.len() > 1);
 
