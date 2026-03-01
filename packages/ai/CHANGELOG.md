@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Anthropic Claude system-block cloaking now leaves the agent identity block uncached and applies `cache_control: { type: "ephemeral" }` to injected user system blocks without forcing `ttl: "1h"`
+
+### Fixed
+
+- Anthropic request payload construction now enforces a maximum of 4 `cache_control` breakpoints (tools/system/messages priority order) before dispatch
+- Anthropic cache-control normalization now removes later `ttl: "1h"` entries when a default/5m block has already appeared earlier in evaluation order
+
 ## [13.5.3] - 2026-03-01
 ### Fixed
 

@@ -106,17 +106,16 @@ describe("Anthropic request fingerprint alignment", () => {
 		expect(blocks?.[1]).toEqual({
 			type: "text",
 			text: claudeCodeSystemInstruction,
-			cache_control: { type: "ephemeral", ttl: "1h" },
 		});
 		expect(blocks?.[2]).toEqual({
 			type: "text",
 			text: "Use citations when possible",
-			cache_control: { type: "ephemeral", ttl: "1h" },
+			cache_control: { type: "ephemeral" },
 		});
 		expect(blocks?.[3]).toEqual({
 			type: "text",
 			text: "Stay concise.",
-			cache_control: { type: "ephemeral", ttl: "1h" },
+			cache_control: { type: "ephemeral" },
 		});
 	});
 
