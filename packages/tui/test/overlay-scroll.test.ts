@@ -153,7 +153,7 @@ describe("TUI overlays", () => {
 
 		tui.stop();
 	});
-	it("retains full content on resize when PI_TUI_RESIZE_CLEAR_STRATEGY=viewport", async () => {
+	it("renders viewport-only on resize when content size is stable", async () => {
 		const previous = process.env.PI_TUI_RESIZE_CLEAR_STRATEGY;
 		process.env.PI_TUI_RESIZE_CLEAR_STRATEGY = "viewport";
 		const term = new VirtualTerminal(60, 8);
@@ -164,6 +164,35 @@ describe("TUI overlays", () => {
 			tui.start();
 			await Bun.sleep(0);
 			await term.flush();
+			const before = term.getScrollBuffer().length;
+
+			for (let i = 0; i < 8; i++) {
+				term.resize(i % 2 === 0 ? 59 : 60, i % 2 === 0 ? 9 : 8);
+				await Bun.sleep(0);
+				await term.flush();
+			}
+
+			const after = term.getScrollBuffer().length;
+			expect(after - before).toBeLessThan(120);
+		} finally {
+			tui.stop();
+			if (previous === undefined) delete process.env.PI_TUI_RESIZE_CLEAR_STRATEGY;
+			else process.env.PI_TUI_RESIZE_CLEAR_STRATEGY = previous;
+		}
+	});
+
+	it("retains full content on resize when content grows before resize", async () => {
+		const previous = process.env.PI_TUI_RESIZE_CLEAR_STRATEGY;
+		process.env.PI_TUI_RESIZE_CLEAR_STRATEGY = "viewport";
+		const term = new VirtualTerminal(60, 8);
+		const tui = new TUI(term);
+		const component = new MutableContentComponent(Array.from({ length: 8 }, (_v, i) => `row-${i}`));
+		tui.addChild(component);
+		try {
+			tui.start();
+			await Bun.sleep(0);
+			await term.flush();
+			component.setLines(Array.from({ length: 140 }, (_v, i) => `row-${i}`));
 			term.resize(59, 9);
 			await Bun.sleep(0);
 			await term.flush();

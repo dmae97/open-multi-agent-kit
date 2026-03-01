@@ -892,6 +892,10 @@ export class TUI extends Container {
 		const fullRender = (clear: boolean): void => {
 			this.#fullRedrawCount += 1;
 			const isResizeRedraw = clear && (widthChanged || heightChanged);
+			const shouldRenderViewportOnly =
+				isResizeRedraw && this.#resizeClearStrategy === "viewport" && newLines.length <= this.#previousLines.length;
+			const renderFrom = shouldRenderViewportOnly ? Math.max(0, newLines.length - height) : 0;
+			const renderedLines = renderFrom > 0 ? newLines.slice(renderFrom) : newLines;
 			let buffer = "\x1b[?2026h"; // Begin synchronized output
 			if (clear) {
 				// Keep default home+erase-below semantics for non-resize redraws.
@@ -901,17 +905,20 @@ export class TUI extends Container {
 				else if (isResizeRedraw) buffer += "\x1b[2J\x1b[H";
 				else buffer += "\x1b[H\x1b[0J";
 			}
-			for (let i = 0; i < newLines.length; i++) {
+			for (let i = 0; i < renderedLines.length; i++) {
 				if (i > 0) buffer += "\r\n";
-				buffer += newLines[i];
+				buffer += renderedLines[i];
 			}
-			const renderCursorRow = Math.max(0, newLines.length - 1);
-			const cursorUpdate = this.#buildHardwareCursorSequence(cursorPos, newLines.length, renderCursorRow);
+			const renderCursorRow = Math.max(0, renderedLines.length - 1);
+			const renderCursorPos = cursorPos
+				? { row: Math.max(0, cursorPos.row - renderFrom), col: cursorPos.col }
+				: null;
+			const cursorUpdate = this.#buildHardwareCursorSequence(renderCursorPos, renderedLines.length, renderCursorRow);
 			buffer += cursorUpdate.sequence;
 			buffer += "\x1b[?2026l"; // End synchronized output
 			this.terminal.write(buffer);
-			this.#cursorRow = renderCursorRow;
-			this.#hardwareCursorRow = cursorUpdate.row;
+			this.#cursorRow = Math.max(0, newLines.length - 1);
+			this.#hardwareCursorRow = cursorUpdate.row + renderFrom;
 			// Reset max lines when clearing, otherwise track growth
 			if (clear) {
 				this.#maxLinesRendered = newLines.length;
