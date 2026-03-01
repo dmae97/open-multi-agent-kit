@@ -702,6 +702,9 @@ describe("TUI terminal-state regressions", () => {
 				for (let i = 0; i < 70; i++) {
 					expect(countMatches(scrollback, new RegExp(`\\bline-${i}\\b`))).toBe(1);
 				}
+				for (let i = 0; i <= tick; i++) {
+					expect(countMatches(scrollback, new RegExp(`\\bstatus-${i}\\b`))).toBeLessThanOrEqual(1);
+				}
 
 				const viewport = visible(term).map(line => line.trim());
 				expect(viewport.at(-1)).toBe("line-69");
@@ -733,8 +736,8 @@ describe("TUI terminal-state regressions", () => {
 					await settle(term);
 
 					const viewport = visible(term).map(line => line.trim());
-					expect(viewport.at(-1)).toBe(`new-${tick}`);
-					expect(viewport.at(-2)).toBe(`tail-${tick}`);
+					const expectedViewport = lines.slice(Math.max(0, lines.length - term.rows)).map(line => line.trim());
+					expect(viewport).toEqual(expectedViewport);
 				}
 			} finally {
 				tui.stop();
