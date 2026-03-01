@@ -511,7 +511,10 @@ export class ModelSelectorComponent extends Container {
 				});
 
 		const selectedRoleName = this.#menuSelectedRole ? MODEL_ROLES[this.#menuSelectedRole].name : "";
-		const headerText = showingThinking ? `  Thinking for: ${selectedRoleName}` : `  Action for: ${selectedModel.id}`;
+		const headerText =
+			showingThinking && this.#menuSelectedRole
+				? `  Thinking for: ${selectedRoleName} (${selectedModel.id})`
+				: `  Action for: ${selectedModel.id}`;
 		const hintText = showingThinking ? "  Enter: confirm  Esc: back" : "  Enter: continue  Esc: cancel";
 		const menuWidth = Math.max(
 			visibleWidth(headerText),
@@ -522,10 +525,9 @@ export class ModelSelectorComponent extends Container {
 		this.#menuContainer.addChild(new Spacer(1));
 		this.#menuContainer.addChild(new Text(theme.fg("border", theme.boxSharp.horizontal.repeat(menuWidth)), 0, 0));
 		if (showingThinking && this.#menuSelectedRole) {
-			const roleName = MODEL_ROLES[this.#menuSelectedRole].name;
 			this.#menuContainer.addChild(
 				new Text(
-					theme.fg("text", `  Thinking for: ${theme.bold(roleName)} (${theme.bold(selectedModel.id)})`),
+					theme.fg("text", `  Thinking for: ${theme.bold(selectedRoleName)} (${theme.bold(selectedModel.id)})`),
 					0,
 					0,
 				),
