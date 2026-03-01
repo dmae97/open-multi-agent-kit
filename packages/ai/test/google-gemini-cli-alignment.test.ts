@@ -1,8 +1,9 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import {
 	buildRequest,
 	parseGeminiCliCredentials,
 	shouldRefreshGeminiCliCredentials,
+	streamGoogleGeminiCli,
 } from "../src/providers/google-gemini-cli";
 import type { Context, Model } from "../src/types";
 import { getOAuthApiKey } from "../src/utils/oauth";
@@ -140,5 +141,36 @@ describe("Google Gemini CLI alignment", () => {
 		expect(payload.requestType).toBe("agent");
 		expect(payload.userAgent).toBe("antigravity");
 		expect(payload.requestId).toMatch(/^agent-/);
+	});
+
+	describe("retry guardrails", () => {
+		const originalFetch = globalThis.fetch;
+
+		afterEach(() => {
+			vi.restoreAllMocks();
+			globalThis.fetch = originalFetch;
+		});
+
+		it("does not treat explicit HTTP failures as network retry errors", async () => {
+			let fetchCalls = 0;
+			globalThis.fetch = vi.fn(async () => {
+				fetchCalls += 1;
+				return new Response('{"error":{"message":"busy"}}', {
+					status: 503,
+					headers: { "retry-after": "120" },
+				});
+			}) as unknown as typeof fetch;
+
+			const model = createModel("google-gemini-cli");
+			const stream = streamGoogleGeminiCli(model, createContext(), {
+				apiKey: JSON.stringify({ token: "token", projectId: "proj-123" }),
+				maxRetryDelayMs: 1000,
+			});
+
+			const result = await stream.result();
+			expect(fetchCalls).toBe(1);
+			expect(result.stopReason).toBe("error");
+			expect(result.errorMessage).toContain("Server requested 121s retry delay (max: 1s)");
+		});
 	});
 });

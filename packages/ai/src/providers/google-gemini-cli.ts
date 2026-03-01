@@ -22,6 +22,7 @@ import { AssistantMessageEventStream } from "../utils/event-stream";
 import { appendRawHttpRequestDumpFor400, type RawHttpRequestDump, withHttpStatus } from "../utils/http-inspector";
 import { refreshAntigravityToken } from "../utils/oauth/google-antigravity";
 import { refreshGoogleCloudToken } from "../utils/oauth/google-gemini-cli";
+import { extractHttpStatusFromError } from "../utils/retry";
 import {
 	convertMessages,
 	convertTools,
@@ -555,8 +556,11 @@ export const streamGoogleGeminiCli: StreamFunction<"google-gemini-cli"> = (
 						const maxDelayMs = options?.maxRetryDelayMs ?? 60000;
 						if (maxDelayMs > 0 && serverDelay && serverDelay > maxDelayMs) {
 							const delaySeconds = Math.ceil(serverDelay / 1000);
-							throw new Error(
-								`Server requested ${delaySeconds}s retry delay (max: ${Math.ceil(maxDelayMs / 1000)}s). ${extractErrorMessage(errorText)}`,
+							throw withHttpStatus(
+								new Error(
+									`Server requested ${delaySeconds}s retry delay (max: ${Math.ceil(maxDelayMs / 1000)}s). ${extractErrorMessage(errorText)}`,
+								),
+								response.status,
 							);
 						}
 
@@ -575,6 +579,12 @@ export const streamGoogleGeminiCli: StreamFunction<"google-gemini-cli"> = (
 						if (error.name === "AbortError" || error.message === "Request was aborted") {
 							throw new Error("Request was aborted");
 						}
+					}
+
+					// HTTP responses are handled inside the try block.
+					// If we intentionally throw with status metadata, don't convert it into a network retry.
+					if (extractHttpStatusFromError(error) !== undefined) {
+						throw error;
 					}
 					// Extract detailed error message from fetch errors (Node includes cause)
 					lastError = error instanceof Error ? error : new Error(String(error));

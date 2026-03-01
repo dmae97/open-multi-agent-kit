@@ -7,6 +7,7 @@
  */
 import {
 	ANTIGRAVITY_SYSTEM_INSTRUCTION,
+	extractRetryDelay,
 	getAntigravityHeaders,
 	getGeminiCliHeaders,
 	refreshGoogleCloudToken,
@@ -23,6 +24,9 @@ const ANTIGRAVITY_DAILY_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com";
 const ANTIGRAVITY_SANDBOX_ENDPOINT = "https://daily-cloudcode-pa.sandbox.googleapis.com";
 const ANTIGRAVITY_ENDPOINT_FALLBACKS = [ANTIGRAVITY_DAILY_ENDPOINT, ANTIGRAVITY_SANDBOX_ENDPOINT] as const;
 const DEFAULT_MODEL = "gemini-2.5-flash";
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 1000;
+const RATE_LIMIT_BUDGET_MS = 5 * 60 * 1000;
 
 interface GeminiToolParams {
 	google_search?: Record<string, unknown>;
@@ -270,46 +274,83 @@ async function callGeminiSearch(
 		(requestBody.request as Record<string, unknown>).generationConfig = generationConfig;
 	}
 	let response: Response | undefined;
+	let rateLimitTimeSpent = 0;
+	let lastError: Error | undefined;
+
 	for (let endpointIndex = 0; endpointIndex < endpoints.length; endpointIndex++) {
 		const url = `${endpoints[endpointIndex]}/v1internal:streamGenerateContent?alt=sse`;
-		try {
-			response = await fetch(url, {
-				method: "POST",
-				headers: {
-					Authorization: `Bearer ${auth.accessToken}`,
-					"Content-Type": "application/json",
-					Accept: "text/event-stream",
-					...headers,
-				},
-				body: JSON.stringify(requestBody),
-			});
-		} catch (error) {
-			if (auth.isAntigravity && endpointIndex < endpoints.length - 1) {
-				continue;
+
+		for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+			try {
+				response = await fetch(url, {
+					method: "POST",
+					headers: {
+						Authorization: `Bearer ${auth.accessToken}`,
+						"Content-Type": "application/json",
+						Accept: "text/event-stream",
+						...headers,
+					},
+					body: JSON.stringify(requestBody),
+				});
+			} catch (error) {
+				if (attempt < MAX_RETRIES) {
+					await Bun.sleep(BASE_DELAY_MS * 2 ** attempt);
+					continue;
+				}
+
+				if (auth.isAntigravity && endpointIndex < endpoints.length - 1) {
+					break;
+				}
+
+				throw error;
 			}
-			throw error;
+
+			if (response.ok) {
+				break;
+			}
+
+			const errorText = await response.text();
+			const isRetryableStatus =
+				response.status === 429 ||
+				response.status === 500 ||
+				response.status === 502 ||
+				response.status === 503 ||
+				response.status === 504;
+
+			if (isRetryableStatus && attempt < MAX_RETRIES) {
+				const serverDelay = extractRetryDelay(errorText, response);
+				if (response.status === 429) {
+					if (serverDelay && rateLimitTimeSpent + serverDelay <= RATE_LIMIT_BUDGET_MS) {
+						rateLimitTimeSpent += serverDelay;
+						await Bun.sleep(serverDelay);
+						continue;
+					}
+					if (!serverDelay) {
+						await Bun.sleep(BASE_DELAY_MS * 2 ** attempt);
+						continue;
+					}
+				} else {
+					await Bun.sleep(serverDelay ?? BASE_DELAY_MS * 2 ** attempt);
+					continue;
+				}
+			}
+
+			lastError = new SearchProviderError(
+				"gemini",
+				`Gemini Cloud Code API error (${response.status}): ${errorText}`,
+				response.status,
+			);
+
+			if (auth.isAntigravity && isRetryableStatus && endpointIndex < endpoints.length - 1) {
+				break;
+			}
+
+			throw lastError;
 		}
 
-		if (response.ok) {
+		if (response?.ok) {
 			break;
 		}
-
-		const errorText = await response.text();
-		const isRetryableStatus =
-			response.status === 429 ||
-			response.status === 500 ||
-			response.status === 502 ||
-			response.status === 503 ||
-			response.status === 504;
-		if (auth.isAntigravity && isRetryableStatus && endpointIndex < endpoints.length - 1) {
-			continue;
-		}
-
-		throw new SearchProviderError(
-			"gemini",
-			`Gemini Cloud Code API error (${response.status}): ${errorText}`,
-			response.status,
-		);
 	}
 
 	if (!response) {
