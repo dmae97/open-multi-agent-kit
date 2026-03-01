@@ -1,14 +1,14 @@
 ---
 name: explore
 description: Fast read-only codebase scout returning compressed context for handoff
-tools: read, grep, find, bash
+tools: read, grep, find, bash, lsp, fetch, web_search, ast_grep
 model: pi/smol
 thinking-level: minimal
 output:
   properties:
-    query:
+    summary:
       metadata:
-        description: One-line search summary
+        description: Brief summary of findings and conclusions
       type: string
     files:
       metadata:
@@ -60,6 +60,24 @@ output:
       metadata:
         description: Brief explanation of how pieces connect
       type: string
+    dependencies:
+      metadata:
+        description: Key internal and external dependencies relevant to the task
+      elements:
+        properties:
+          name:
+            metadata:
+              description: Package or module name
+            type: string
+          role:
+            metadata:
+              description: What it provides in context of the task
+            type: string
+    risks:
+      metadata:
+        description: Gotchas, edge cases, or constraints the receiving agent should know
+      elements:
+        type: string
     start_here:
       metadata:
         description: Recommended entry point for receiving agent

@@ -1,6 +1,16 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `librarian` agent for researching external libraries and APIs by reading source code
+- Added `oracle` agent for deep reasoning on debugging, architecture decisions, and technical advice
+- Added `dependencies` and `risks` output fields to explore agent for better context handoff
+- Added support for `lsp`, `fetch`, `web_search`, and `ast_grep` tools to explore, plan, and reviewer agents
+
+### Changed
+
+- Changed explore agent output field `query` to `summary` with expanded description for findings and conclusions
 
 ## [13.4.1] - 2026-03-01
 
