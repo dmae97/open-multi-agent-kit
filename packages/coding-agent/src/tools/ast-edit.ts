@@ -38,7 +38,6 @@ const astEditSchema = Type.Object({
 	lang: Type.Optional(Type.String({ description: "Language override" })),
 	path: Type.Optional(Type.String({ description: "File, directory, or glob pattern to rewrite (default: cwd)" })),
 	selector: Type.Optional(Type.String({ description: "Optional selector for contextual pattern mode" })),
-	preview: Type.Optional(Type.Boolean({ description: "Preview only (default: true)" })),
 	limit: Type.Optional(Type.Number({ description: "Max total replacements" })),
 });
 
@@ -134,7 +133,7 @@ export class AstEditTool implements AgentTool<typeof astEditSchema, AstEditToolD
 				path: resolvedSearchPath,
 				glob: globFilter,
 				selector: params.selector?.trim(),
-				dryRun: params.preview,
+				dryRun: true,
 				maxReplacements,
 				maxFiles,
 				failOnParseError: false,
@@ -266,6 +265,44 @@ export class AstEditTool implements AgentTool<typeof astEditSchema, AstEditToolD
 				outputLines.push("", ...formatParseErrors(result.parseErrors));
 			}
 
+			// Register pending action so `resolve` can apply or discard these previewed changes
+			if (!result.applied && result.totalReplacements > 0) {
+				const previewReplacementPlural = result.totalReplacements !== 1 ? "s" : "";
+				const previewFilePlural = result.filesTouched !== 1 ? "s" : "";
+				this.session.pendingActionStore?.set({
+					label: `AST Edit: ${result.totalReplacements} replacement${previewReplacementPlural} in ${result.filesTouched} file${previewFilePlural}`,
+					sourceToolName: this.name,
+					apply: async () => {
+						const applyResult = await astEdit({
+							rewrites: normalizedRewrites,
+							lang: params.lang?.trim(),
+							path: resolvedSearchPath,
+							glob: globFilter,
+							selector: params.selector?.trim(),
+							dryRun: false,
+							maxReplacements,
+							maxFiles,
+							failOnParseError: false,
+						});
+						const appliedDetails: AstEditToolDetails = {
+							totalReplacements: applyResult.totalReplacements,
+							filesTouched: applyResult.filesTouched,
+							filesSearched: applyResult.filesSearched,
+							applied: applyResult.applied,
+							limitReached: applyResult.limitReached,
+							parseErrors: applyResult.parseErrors,
+							scopePath,
+							files: fileList,
+							fileReplacements: details.fileReplacements,
+						};
+						const appliedReplacementPlural = applyResult.totalReplacements !== 1 ? "s" : "";
+						const appliedFilePlural = applyResult.filesTouched !== 1 ? "s" : "";
+						const text = `Applied ${applyResult.totalReplacements} replacement${appliedReplacementPlural} in ${applyResult.filesTouched} file${appliedFilePlural}.`;
+						return toolResult(appliedDetails).text(text).done();
+					},
+				});
+			}
+
 			return toolResult(details).text(outputLines.join("\n")).done();
 		});
 	}
@@ -280,7 +317,6 @@ interface AstEditRenderArgs {
 	lang?: string;
 	path?: string;
 	selector?: string;
-	preview?: boolean;
 	limit?: number;
 }
 
@@ -292,7 +328,6 @@ export const astEditToolRenderer = {
 		const meta: string[] = [];
 		if (args.lang) meta.push(`lang:${args.lang}`);
 		if (args.path) meta.push(`in ${args.path}`);
-		if (args.preview !== false) meta.push("preview");
 		if (args.limit !== undefined) meta.push(`limit:${args.limit}`);
 		const rewriteCount = args.ops?.length ?? 0;
 		if (rewriteCount > 1) meta.push(`${rewriteCount} rewrites`);
@@ -318,7 +353,6 @@ export const astEditToolRenderer = {
 		const totalReplacements = details?.totalReplacements ?? 0;
 		const filesTouched = details?.filesTouched ?? 0;
 		const filesSearched = details?.filesSearched ?? 0;
-		const applied = details?.applied ?? false;
 		const limitReached = details?.limitReached ?? false;
 
 		if (totalReplacements === 0) {
@@ -348,11 +382,8 @@ export const astEditToolRenderer = {
 		if (limitReached) meta.push(uiTheme.fg("warning", "limit reached"));
 		const rewriteCount = args?.ops?.length ?? 0;
 		const description = rewriteCount === 1 ? args?.ops?.[0]?.pat : undefined;
-		const badge = applied
-			? { label: "applied", color: "success" as const }
-			: { label: "preview", color: "warning" as const };
 		const header = renderStatusLine(
-			{ icon: limitReached ? "warning" : "success", title: "AST Edit", description, badge, meta },
+			{ icon: limitReached ? "warning" : "success", title: "AST Edit", description, meta },
 			uiTheme,
 		);
 

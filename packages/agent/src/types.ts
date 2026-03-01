@@ -8,6 +8,7 @@ import type {
 	streamSimple,
 	TextContent,
 	Tool,
+	ToolChoice,
 	ToolResultMessage,
 } from "@oh-my-pi/pi-ai";
 import type { Static, TSchema } from "@sinclair/typebox";
@@ -123,6 +124,12 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 	 * then strips `_i` from arguments before executing tools.
 	 */
 	intentTracing?: boolean;
+
+	/**
+	 * Dynamic tool choice override, resolved per LLM call.
+	 * When set and returns a value, overrides the static `toolChoice`.
+	 */
+	getToolChoice?: () => ToolChoice | undefined;
 }
 
 export interface ToolCallContext {

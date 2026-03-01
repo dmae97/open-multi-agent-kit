@@ -146,6 +146,8 @@ export interface AgentOptions {
 
 	/** Enable intent tracing schema injection/stripping in the harness. */
 	intentTracing?: boolean;
+	/** Dynamic tool choice override, resolved per LLM call. */
+	getToolChoice?: () => ToolChoice | undefined;
 
 	/**
 	 * Cursor exec handlers for local tool execution.
@@ -209,6 +211,7 @@ export class Agent {
 	#preferWebsockets?: boolean;
 	#transformToolCallArguments?: (args: Record<string, unknown>, toolName: string) => Record<string, unknown>;
 	#intentTracing: boolean;
+	#getToolChoice?: () => ToolChoice | undefined;
 
 	/** Buffered Cursor tool results with text length at time of call (for correct ordering) */
 	#cursorToolResultBuffer: CursorToolResultEntry[] = [];
@@ -242,6 +245,7 @@ export class Agent {
 		this.#preferWebsockets = opts.preferWebsockets;
 		this.#transformToolCallArguments = opts.transformToolCallArguments;
 		this.#intentTracing = opts.intentTracing === true;
+		this.#getToolChoice = opts.getToolChoice;
 	}
 
 	/**
@@ -709,6 +713,7 @@ export class Agent {
 			cursorOnToolResult,
 			transformToolCallArguments: this.#transformToolCallArguments,
 			intentTracing: this.#intentTracing,
+			getToolChoice: this.#getToolChoice,
 			getSteeringMessages: async () => {
 				if (skipInitialSteeringPoll) {
 					skipInitialSteeringPoll = false;

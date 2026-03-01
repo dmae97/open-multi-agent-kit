@@ -86,6 +86,7 @@ import ttsrInterruptTemplate from "../prompts/system/ttsr-interrupt.md" with { t
 import type { SecretObfuscator } from "../secrets/obfuscator";
 import { outputMeta } from "../tools/output-meta";
 import { resolveToCwd } from "../tools/path-utils";
+import type { PendingActionStore } from "../tools/pending-action";
 import { getLatestTodoPhasesFromEntries, type TodoItem, type TodoPhase } from "../tools/todo-write";
 import { parseCommandArgs } from "../utils/command-args";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
@@ -177,6 +178,8 @@ export interface AgentSessionConfig {
 	forceCopilotAgentInitiator?: boolean;
 	/** Secret obfuscator for deobfuscating streaming edit content */
 	obfuscator?: SecretObfuscator;
+	/** Pending action store for preview/apply workflows */
+	pendingActionStore?: PendingActionStore;
 }
 
 /** Options for AgentSession.prompt() */
@@ -368,6 +371,7 @@ export class AgentSession {
 	#streamingEditFileCache = new Map<string, string>();
 	#promptInFlight = false;
 	#obfuscator: SecretObfuscator | undefined;
+	#pendingActionStore: PendingActionStore | undefined;
 	#promptGeneration = 0;
 	#providerSessionState = new Map<string, ProviderSessionState>();
 
@@ -392,6 +396,7 @@ export class AgentSession {
 		this.#forceCopilotAgentInitiator = config.forceCopilotAgentInitiator ?? false;
 		this.#obfuscator = config.obfuscator;
 		this.agent.providerSessionState = this.#providerSessionState;
+		this.#pendingActionStore = config.pendingActionStore;
 		this.#syncTodoPhasesFromBranch();
 
 		// Always subscribe to agent events for internal handling
@@ -679,6 +684,22 @@ export class AgentSession {
 							content: reminderText,
 							display: false,
 							details: { toolName, errorText },
+						},
+						{ deliverAs: "nextTurn" },
+					);
+				}
+				if (!isError && this.#pendingActionStore?.hasPending) {
+					const reminderText = [
+						"<system-reminder>",
+						"This is a preview. Call the `resolve` tool to apply or discard these changes.",
+						"</system-reminder>",
+					].join("\n");
+					await this.sendCustomMessage(
+						{
+							customType: "resolve-reminder",
+							content: reminderText,
+							display: false,
+							details: { toolName },
 						},
 						{ deliverAs: "nextTurn" },
 					);

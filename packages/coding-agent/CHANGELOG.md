@@ -1,20 +1,16 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Breaking Changes
 
 - `ast_grep` parameter `pattern` (string) replaced by `patterns` (string[])
 - `ast_edit` parameters `pattern` + `rewrite` replaced by `ops: Array<{ pat: string; out: string }>`
 
-### Changed
-
-- `ast_grep`: `include_meta` parameter removed; metavariable captures are now always included in output
-- `ast_edit`: `dry_run` renamed to `preview`; `max_files` removed from schema and capped globally via `$PI_MAX_AST_FILES` (default 1000); `max_replacements` renamed to `limit`
-- `ast_grep` and `ast_edit`: parse errors in tool output are now capped at `PARSE_ERRORS_LIMIT` (20); excess errors are summarised as `N / total parse issues` rather than flooding the context
-- Updated `ast_grep` and `ast_edit` tool prompt examples to use concise, idiomatic patterns
-
 ### Added
 
+- Added `resolve` tool to apply or discard pending preview actions with required reasoning
+- AST edit now registers pending actions after preview, allowing explicit apply/discard workflow via `resolve` tool
 - Added `gemini`, `codex`, and `synthetic` as supported values for the `providers.webSearch` setting
 - `ast_grep` tool now accepts a `patterns` array (replaces single `pattern`); multiple patterns run in one native pass and results are merged before offset/limit
 - `ast_edit` tool now accepts an `ops` array of `{ pat, out }` entries (replaces `pattern` + `rewrite`); duplicate patterns are rejected upfront
@@ -28,6 +24,16 @@
 - `buildGeminiRequestTools()` helper for composable Gemini tool configuration (googleSearch, codeExecution, urlContext)
 - Web search schema exposes `max_tokens`, `temperature`, and `num_search_results` as tool parameters
 - Web search provider fallback: when an explicit provider is unavailable, resolves the auto chain instead of returning empty results
+
+### Changed
+
+- AST edit tool no longer accepts `preview` parameter; all AST edit calls now return previews by default
+- AST edit workflow changed: preview is always shown, then use `resolve` tool to apply or discard changes
+- Agent now suggests calling `resolve` tool after AST edit preview with system reminder
+- `ast_grep`: `include_meta` parameter removed; metavariable captures are now always included in output
+- `ast_edit`: `dry_run` renamed to `preview`; `max_files` removed from schema and capped globally via `$PI_MAX_AST_FILES` (default 1000); `max_replacements` renamed to `limit`
+- `ast_grep` and `ast_edit`: parse errors in tool output are now capped at `PARSE_ERRORS_LIMIT` (20); excess errors are summarised as `N / total parse issues` rather than flooding the context
+- Updated `ast_grep` and `ast_edit` tool prompt examples to use concise, idiomatic patterns
 
 ### Removed
 

@@ -1,0 +1,121 @@
+import { describe, expect, it } from "bun:test";
+import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import { getThemeByName } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
+import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
+import { PendingActionStore } from "@oh-my-pi/pi-coding-agent/tools/pending-action";
+import { ResolveTool, resolveToolRenderer } from "@oh-my-pi/pi-coding-agent/tools/resolve";
+import { sanitizeText } from "@oh-my-pi/pi-natives";
+
+function createSession(pendingActionStore?: PendingActionStore): ToolSession {
+	return {
+		cwd: "/tmp",
+		hasUI: false,
+		getSessionFile: () => null,
+		getSessionSpawns: () => "*",
+		settings: Settings.isolated(),
+		pendingActionStore,
+	};
+}
+
+function getText(result: { content: Array<{ type: string; text?: string }> }): string {
+	return result.content.find(part => part.type === "text")?.text ?? "";
+}
+
+describe("ResolveTool", () => {
+	it("requires action and reason in schema", () => {
+		const tool = new ResolveTool(createSession(new PendingActionStore()));
+		const schema = tool.parameters as { required?: string[] };
+		expect(schema.required).toEqual(["action", "reason"]);
+	});
+
+	it("errors when there is no pending action", async () => {
+		const tool = new ResolveTool(createSession(new PendingActionStore()));
+		await expect(tool.execute("call-none", { action: "apply", reason: "looks correct" })).rejects.toThrow(
+			"No pending action to resolve. Nothing to apply or discard.",
+		);
+	});
+
+	it("discards pending action and clears store", async () => {
+		const pendingActionStore = new PendingActionStore();
+		pendingActionStore.set({
+			label: "AST Edit: 2 replacements in 1 file",
+			sourceToolName: "ast_edit",
+			apply: async () => ({ content: [{ type: "text", text: "should not run" }] }),
+		});
+
+		const tool = new ResolveTool(createSession(pendingActionStore));
+		const result = await tool.execute("call-discard", {
+			action: "discard",
+			reason: "Preview changed wrong callsites",
+		});
+
+		expect(getText(result)).toContain("Discarded: AST Edit: 2 replacements in 1 file");
+		expect(pendingActionStore.hasPending).toBe(false);
+		expect(result.details).toEqual({
+			action: "discard",
+			reason: "Preview changed wrong callsites",
+			sourceToolName: "ast_edit",
+			label: "AST Edit: 2 replacements in 1 file",
+		});
+	});
+
+	it("applies pending action and clears store", async () => {
+		const pendingActionStore = new PendingActionStore();
+		let applied = false;
+		pendingActionStore.set({
+			label: "AST Edit: 1 replacement in 1 file",
+			sourceToolName: "ast_edit",
+			apply: async () => {
+				applied = true;
+				return { content: [{ type: "text", text: "Applied 1 replacement in 1 file." }] };
+			},
+		});
+
+		const tool = new ResolveTool(createSession(pendingActionStore));
+		const result = await tool.execute("call-apply", {
+			action: "apply",
+			reason: "Preview is correct",
+		});
+
+		expect(applied).toBe(true);
+		expect(pendingActionStore.hasPending).toBe(false);
+		expect(getText(result)).toContain("Applied 1 replacement in 1 file.");
+		expect(result.details).toEqual({
+			action: "apply",
+			reason: "Preview is correct",
+			sourceToolName: "ast_edit",
+			label: "AST Edit: 1 replacement in 1 file",
+		});
+	});
+});
+
+it("renders a boxed decision summary for apply actions", async () => {
+	const theme = await getThemeByName("dark");
+	expect(theme).toBeDefined();
+	const uiTheme = theme!;
+
+	const component = resolveToolRenderer.renderResult(
+		{
+			content: [{ type: "text", text: "Applied 2 replacements in 1 file." }],
+			details: {
+				action: "apply",
+				reason: "Preview matches expected replacements",
+				sourceToolName: "ast_edit",
+				label: "AST Edit: 2 replacements in 1 file",
+			},
+		},
+		{ expanded: false, isPartial: false },
+		uiTheme,
+	);
+
+	const rendered = sanitizeText(component.render(90).join("\n"));
+	expect(rendered).toContain("Resolve");
+	expect(rendered).toContain("Decision");
+	expect(rendered).toContain("Effect");
+	expect(rendered).toContain("Action:");
+	expect(rendered).toContain("apply");
+	expect(rendered).toContain("Target: AST Edit: 2 replacements in 1 file");
+	expect(rendered).toContain("Reason: Preview matches expected replacements");
+	expect(rendered).toContain("Applied 2 replacements in 1 file.");
+	expect(rendered).toContain("┌");
+});

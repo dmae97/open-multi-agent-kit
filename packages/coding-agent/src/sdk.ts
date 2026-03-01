@@ -96,6 +96,7 @@ import {
 } from "./tools";
 import { ToolContextStore } from "./tools/context";
 import { getGeminiImageTools } from "./tools/gemini-image";
+import { PendingActionStore } from "./tools/pending-action";
 import { EventBus } from "./utils/event-bus";
 
 // Types
@@ -770,6 +771,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			})
 		: undefined;
 
+	const pendingActionStore = new PendingActionStore();
 	const toolSession: ToolSession = {
 		cwd,
 		hasUI: options.hasUI ?? false,
@@ -810,6 +812,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		authStorage,
 		modelRegistry,
 		asyncJobManager,
+		pendingActionStore,
 	};
 
 	// Initialize internal URL router for internal protocols (agent://, artifact://, memory://, skill://, rule://, local://)
@@ -1301,6 +1304,12 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			return result;
 		},
 		intentTracing: !!intentField,
+		getToolChoice: () => {
+			if (pendingActionStore.hasPending) {
+				return { type: "function", name: "resolve" };
+			}
+			return undefined;
+		},
 	});
 	cursorEventEmitter = event => agent.emitExternalEvent(event);
 
@@ -1337,6 +1346,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		forceCopilotAgentInitiator,
 		obfuscator,
 		asyncJobManager,
+		pendingActionStore,
 	});
 
 	if (model?.api === "openai-codex-responses") {

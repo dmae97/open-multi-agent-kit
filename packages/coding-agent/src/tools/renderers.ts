@@ -21,6 +21,7 @@ import { grepToolRenderer } from "./grep";
 import { notebookToolRenderer } from "./notebook";
 import { pythonToolRenderer } from "./python";
 import { readToolRenderer } from "./read";
+import { resolveToolRenderer } from "./resolve";
 import { sshToolRenderer } from "./ssh";
 import { todoWriteToolRenderer } from "./todo-write";
 import { writeToolRenderer } from "./write";
@@ -51,6 +52,7 @@ export const toolRenderers: Record<string, ToolRenderer> = {
 	lsp: lspToolRenderer as ToolRenderer,
 	notebook: notebookToolRenderer as ToolRenderer,
 	read: readToolRenderer as ToolRenderer,
+	resolve: resolveToolRenderer as ToolRenderer,
 	ssh: sshToolRenderer as ToolRenderer,
 	task: taskToolRenderer as ToolRenderer,
 	todo_write: todoWriteToolRenderer as ToolRenderer,

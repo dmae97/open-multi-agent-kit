@@ -30,6 +30,7 @@ import { NotebookTool } from "./notebook";
 import { wrapToolWithMetaNotice } from "./output-meta";
 import { PythonTool } from "./python";
 import { ReadTool } from "./read";
+import { ResolveTool } from "./resolve";
 import { reportFindingTool } from "./review";
 import { loadSshTool } from "./ssh";
 import { SubmitResultTool } from "./submit-result";
@@ -59,8 +60,10 @@ export * from "./find";
 export * from "./gemini-image";
 export * from "./grep";
 export * from "./notebook";
+export * from "./pending-action";
 export * from "./python";
 export * from "./read";
+export * from "./resolve";
 export * from "./review";
 export * from "./ssh";
 export * from "./submit-result";
@@ -138,6 +141,8 @@ export interface ToolSession {
 	getTodoPhases?: () => TodoPhase[];
 	/** Replace cached todo phases for this session. */
 	setTodoPhases?: (phases: TodoPhase[]) => void;
+	/** Pending action store for preview/apply workflows */
+	pendingActionStore?: import("./pending-action").PendingActionStore;
 }
 
 type ToolFactory = (session: ToolSession) => Tool | null | Promise<Tool | null>;
@@ -170,6 +175,7 @@ export const HIDDEN_TOOLS: Record<string, ToolFactory> = {
 	submit_result: s => new SubmitResultTool(s),
 	report_finding: () => reportFindingTool,
 	exit_plan_mode: s => new ExitPlanModeTool(s),
+	resolve: s => new ResolveTool(s),
 };
 
 export type ToolName = keyof typeof BUILTIN_TOOLS;
@@ -213,6 +219,9 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 	const requestedTools = toolNames && toolNames.length > 0 ? [...new Set(toolNames)] : undefined;
 	if (requestedTools && !requestedTools.includes("exit_plan_mode")) {
 		requestedTools.push("exit_plan_mode");
+	}
+	if (requestedTools && !requestedTools.includes("resolve")) {
+		requestedTools.push("resolve");
 	}
 	const pythonMode = getPythonModeFromEnv() ?? session.settings.get("python.toolMode");
 	const skipPythonPreflight = session.skipPythonPreflight === true;
@@ -301,6 +310,7 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 					...Object.entries(BUILTIN_TOOLS).filter(([name]) => isToolAllowed(name)),
 					...(includeSubmitResult ? ([["submit_result", HIDDEN_TOOLS.submit_result]] as const) : []),
 					...([["exit_plan_mode", HIDDEN_TOOLS.exit_plan_mode]] as const),
+					...([["resolve", HIDDEN_TOOLS.resolve]] as const),
 				];
 
 	const results = await Promise.all(

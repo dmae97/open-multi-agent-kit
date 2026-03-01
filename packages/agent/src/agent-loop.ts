@@ -326,9 +326,11 @@ async function streamAssistantResponse(
 	const resolvedApiKey =
 		(config.getApiKey ? await config.getApiKey(config.model.provider) : undefined) || config.apiKey;
 
+	const dynamicToolChoice = config.getToolChoice?.();
 	const response = await streamFunction(config.model, llmContext, {
 		...config,
 		apiKey: resolvedApiKey,
+		toolChoice: dynamicToolChoice ?? config.toolChoice,
 		signal,
 	});
 
