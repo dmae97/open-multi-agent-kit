@@ -757,6 +757,7 @@ export const SETTINGS_SCHEMA = {
 			"anthropic",
 			"gemini",
 			"codex",
+			"kagi",
 			"synthetic",
 		] as const,
 		default: "auto",

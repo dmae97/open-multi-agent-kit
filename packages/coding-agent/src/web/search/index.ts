@@ -34,7 +34,20 @@ export const webSearchSchema = Type.Object({
 	query: Type.String({ description: "Search query" }),
 	provider: Type.Optional(
 		StringEnum(
-			["auto", "exa", "brave", "jina", "kimi", "zai", "anthropic", "perplexity", "gemini", "codex", "synthetic"],
+			[
+				"auto",
+				"exa",
+				"brave",
+				"jina",
+				"kimi",
+				"zai",
+				"anthropic",
+				"perplexity",
+				"gemini",
+				"codex",
+				"kagi",
+				"synthetic",
+			],
 			{
 				description: "Search provider (default: auto)",
 			},
@@ -64,6 +77,7 @@ export type SearchParams = {
 		| "perplexity"
 		| "gemini"
 		| "codex"
+		| "kagi"
 		| "synthetic";
 	recency?: "day" | "week" | "month" | "year";
 	limit?: number;

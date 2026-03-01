@@ -74,6 +74,7 @@ const serviceProviderMap: Record<string, KeyResolver> = {
 	jina: "JINA_API_KEY",
 	brave: "BRAVE_API_KEY",
 	perplexity: "PERPLEXITY_API_KEY",
+	kagi: "KAGI_API_KEY",
 	// GitHub Copilot uses GitHub personal access token
 	"github-copilot": () => $pickenv("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"),
 	// ANTHROPIC_OAUTH_TOKEN takes precedence over ANTHROPIC_API_KEY

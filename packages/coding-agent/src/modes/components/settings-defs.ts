@@ -194,6 +194,7 @@ const OPTION_PROVIDERS: Partial<Record<SettingPath, OptionProvider>> = {
 		{ value: "perplexity", label: "Perplexity", description: "Requires PERPLEXITY_COOKIES or PERPLEXITY_API_KEY" },
 		{ value: "anthropic", label: "Anthropic", description: "Uses Anthropic web search" },
 		{ value: "zai", label: "Z.AI", description: "Calls Z.AI webSearchPrime MCP" },
+		{ value: "kagi", label: "Kagi", description: "Requires KAGI_API_KEY" },
 		{ value: "synthetic", label: "Synthetic", description: "Requires SYNTHETIC_API_KEY" },
 	],
 	"providers.image": [
