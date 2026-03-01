@@ -1017,11 +1017,9 @@ export class TUI extends Container {
 			return;
 		}
 
-		// NOTE: We intentionally do NOT force a full repaint on every viewportTop shift.
-		// Doing so hurts hot-path performance for append-heavy/spinner workloads.
-		// Safety is maintained by the existing offscreen/overflow guards below, which
-		// repaint only when screen-row mapping cannot be updated incrementally.
-		// Find first and last changed lines
+		// Viewport-top shifts are only safe to patch incrementally for pure append-scroll.
+		// Mixed updates can remap screen rows and leave stale content behind.
+		// We detect and fall back to viewportRepaint() below after computing the diff span.
 		let firstChanged = -1;
 		let lastChanged = -1;
 		const maxLines = Math.max(newLines.length, this.#previousLines.length);
@@ -1049,6 +1047,16 @@ export class TUI extends Container {
 		if (firstChanged === -1) {
 			this.#positionHardwareCursor(cursorPos, viewportTop, height);
 			this.#viewportTopRow = viewportTop;
+			return;
+		}
+		const renderEnd = Math.min(lastChanged, newLines.length - 1);
+		const viewportShifted = viewportTop !== previousViewportTop;
+		const simpleAppendScroll = appendStart && renderEnd > previousViewportBottom;
+		if (viewportShifted && !simpleAppendScroll) {
+			logRedraw(
+				`viewport shift fallback (prevTop=${previousViewportTop}, top=${viewportTop}, first=${firstChanged}, end=${renderEnd}, appendStart=${appendStart})`,
+			);
+			viewportRepaint();
 			return;
 		}
 
@@ -1118,7 +1126,6 @@ export class TUI extends Container {
 		let buffer = "\x1b[?2026h"; // Begin synchronized output
 		const moveTargetRow = appendStart ? firstChanged - 1 : firstChanged;
 		const moveTargetScreenRow = moveTargetRow - previousViewportTop;
-		const renderEnd = Math.min(lastChanged, newLines.length - 1);
 		if (appendStart && renderEnd > previousViewportBottom) {
 			let appendBuffer = "\x1b[?2026h";
 			const appendLineDiff = moveTargetScreenRow - hardwareCursorRow;

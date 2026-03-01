@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed
+
+- Fixed viewport shift handling to prevent stale content when mixed updates remap screen rows
 
 ## [13.5.0] - 2026-03-01
 
