@@ -1,8 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Fixed
 
+- Fixed append rendering logic to correctly handle offscreen header changes during content overflow growth, preserving scroll history integrity
+- Fixed visible tail line updates when appending new content during viewport overflow conditions
 - Fixed cursor positioning instability when appending content under external cursor relocation by using absolute screen addressing instead of relative cursor movement
 
 ## [13.5.2] - 2026-03-01

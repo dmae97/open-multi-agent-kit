@@ -1037,14 +1037,28 @@ export class TUI extends Container {
 				lastChanged = i;
 			}
 		}
-		const appendedLines = newLines.length > this.#previousLines.length;
+		const previousLineCount = this.#previousLines.length;
+		const appendedLines = newLines.length > previousLineCount;
 		if (appendedLines) {
 			if (firstChanged === -1) {
-				firstChanged = this.#previousLines.length;
+				firstChanged = previousLineCount;
 			}
 			lastChanged = newLines.length - 1;
 		}
-		const appendStart = appendedLines && firstChanged === this.#previousLines.length && firstChanged > 0;
+
+		const pureAppendStart = appendedLines && firstChanged === previousLineCount && firstChanged > 0;
+		let canAppendWithOffscreenChanges = false;
+		if (appendedLines && firstChanged >= 0 && firstChanged < previousViewportTop && previousViewportTop > 0) {
+			canAppendWithOffscreenChanges = true;
+			for (let i = previousViewportTop; i < previousLineCount; i++) {
+				if (this.#previousLines[i] !== newLines[i]) {
+					canAppendWithOffscreenChanges = false;
+					break;
+				}
+			}
+		}
+		const appendCandidate = pureAppendStart || canAppendWithOffscreenChanges;
+		const appendFrom = appendCandidate && !pureAppendStart ? previousLineCount : firstChanged;
 
 		// No changes - but still need to update hardware cursor position if it moved
 		if (firstChanged === -1) {
@@ -1054,10 +1068,10 @@ export class TUI extends Container {
 		}
 		const renderEnd = Math.min(lastChanged, newLines.length - 1);
 		const viewportShifted = viewportTop !== previousViewportTop;
-		const simpleAppendScroll = appendStart && renderEnd > previousViewportBottom;
-		if (viewportShifted && !simpleAppendScroll) {
+		const appendScroll = appendCandidate && renderEnd >= appendFrom && renderEnd > previousViewportBottom;
+		if (viewportShifted && !appendScroll) {
 			logRedraw(
-				`viewport shift fallback (prevTop=${previousViewportTop}, top=${viewportTop}, first=${firstChanged}, end=${renderEnd}, appendStart=${appendStart})`,
+				`viewport shift fallback (prevTop=${previousViewportTop}, top=${viewportTop}, first=${firstChanged}, end=${renderEnd}, appendScroll=${appendScroll}, appendFrom=${appendFrom})`,
 			);
 			viewportRepaint();
 			return;
@@ -1109,7 +1123,7 @@ export class TUI extends Container {
 		// Check if firstChanged is above what was previously visible
 		// Use previousLines.length (not maxLinesRendered) to avoid false positives after content shrinks
 		const previousContentViewportTop = previousViewportTop;
-		if (firstChanged < previousContentViewportTop) {
+		if (!appendScroll && firstChanged < previousContentViewportTop) {
 			// First change is above previous viewport - force a viewport-anchored full re-render.
 			logRedraw(`firstChanged < viewportTop (${firstChanged} < ${previousContentViewportTop})`);
 			viewportRepaint();
@@ -1119,12 +1133,12 @@ export class TUI extends Container {
 		// Render from first changed line to end
 		// Build buffer with all updates wrapped in synchronized output
 		let buffer = "\x1b[?2026h"; // Begin synchronized output
-		const moveTargetRow = appendStart ? firstChanged - 1 : firstChanged;
+		const moveTargetRow = appendScroll ? appendFrom - 1 : firstChanged;
 		const moveTargetScreenRow = moveTargetRow - previousViewportTop;
-		if (appendStart && renderEnd > previousViewportBottom) {
+		if (appendScroll) {
 			let appendBuffer = "\x1b[?2026h";
 			appendBuffer += this.#moveToScreenPosition(moveTargetScreenRow, 0);
-			for (let i = firstChanged; i <= renderEnd; i++) {
+			for (let i = appendFrom; i <= renderEnd; i++) {
 				appendBuffer += "\r\n\x1b[2K";
 				const line = newLines[i];
 				const isImage = TERMINAL.isImageLine(line);
@@ -1135,7 +1149,7 @@ export class TUI extends Container {
 				}
 				appendBuffer += line;
 			}
-			const appendEndScreenRow = Math.min(height - 1, moveTargetScreenRow + (renderEnd - firstChanged + 1));
+			const appendEndScreenRow = Math.min(height - 1, moveTargetScreenRow + (renderEnd - appendFrom + 1));
 			const cursorPosScreen = cursorPos
 				? { row: Math.max(0, cursorPos.row - viewportTop), col: cursorPos.col }
 				: null;
@@ -1156,7 +1170,7 @@ export class TUI extends Container {
 		if (
 			moveTargetScreenRow < 0 ||
 			moveTargetScreenRow >= height ||
-			(!appendStart && renderEnd > previousViewportBottom)
+			(!appendScroll && renderEnd > previousViewportBottom)
 		) {
 			logRedraw(
 				`offscreen diff fallback (move=${moveTargetScreenRow}, renderEnd=${renderEnd}, viewportBottom=${previousViewportBottom})`,
@@ -1168,7 +1182,7 @@ export class TUI extends Container {
 		// Move cursor to first changed line (screen-relative) using absolute coordinates.
 		const lineDiff = moveTargetScreenRow - hardwareCursorRow;
 		buffer += this.#moveToScreenPosition(moveTargetScreenRow, 0);
-		if (appendStart) buffer += "\r\n";
+		if (appendScroll) buffer += "\r\n";
 
 		// Only render changed lines (firstChanged to lastChanged), not all lines to end
 		// This reduces flicker when only a single line changes (e.g., spinner animation)
@@ -1209,7 +1223,10 @@ export class TUI extends Container {
 		}
 
 		// Track where cursor ended up after rendering (screen-relative).
-		let finalCursorRow = moveTargetScreenRow + (appendStart ? 1 : 0) + Math.max(0, renderEnd - firstChanged);
+		let finalCursorRow =
+			moveTargetScreenRow +
+			(appendScroll ? 1 : 0) +
+			Math.max(0, renderEnd - (appendScroll ? appendFrom : firstChanged));
 
 		// If we had more lines before, clear stale rows below new content without scrolling.
 		if (this.#previousLines.length > newLines.length) {

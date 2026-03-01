@@ -677,6 +677,69 @@ describe("TUI terminal-state regressions", () => {
 				tui.stop();
 			}
 		});
+
+		it("retains append history when offscreen header changes during overflow growth", async () => {
+			const term = new VirtualTerminal(32, 6);
+			const tui = new TUI(term);
+			const logLines = rows("line-", 6);
+			let tick = 0;
+			const component = new MutableLinesComponent([`status-${tick}`, ...logLines]);
+			tui.addChild(component);
+
+			try {
+				tui.start();
+				await settle(term);
+
+				for (let i = 6; i < 70; i++) {
+					tick += 1;
+					logLines.push(`line-${i}`);
+					component.setLines([`status-${tick}`, ...logLines]);
+					tui.requestRender();
+					await settle(term);
+				}
+
+				const scrollback = term.getScrollBuffer();
+				for (let i = 0; i < 70; i++) {
+					expect(countMatches(scrollback, new RegExp(`\\bline-${i}\\b`))).toBe(1);
+				}
+
+				const viewport = visible(term).map(line => line.trim());
+				expect(viewport.at(-1)).toBe("line-69");
+				for (let i = 1; i < viewport.length; i++) {
+					const prev = Number.parseInt(viewport[i - 1]!.slice(5), 10);
+					const next = Number.parseInt(viewport[i]!.slice(5), 10);
+					expect(next - prev).toBe(1);
+				}
+			} finally {
+				tui.stop();
+			}
+		});
+		it("updates visible tail line when appending during overflow", async () => {
+			const term = new VirtualTerminal(32, 5);
+			const tui = new TUI(term);
+			const lines = [...rows("line-", 7), "tail-0"];
+			const component = new MutableLinesComponent(lines);
+			tui.addChild(component);
+
+			try {
+				tui.start();
+				await settle(term);
+
+				for (let tick = 1; tick <= 30; tick++) {
+					lines[lines.length - 1] = `tail-${tick}`;
+					lines.push(`new-${tick}`);
+					component.setLines(lines);
+					tui.requestRender();
+					await settle(term);
+
+					const viewport = visible(term).map(line => line.trim());
+					expect(viewport.at(-1)).toBe(`new-${tick}`);
+					expect(viewport.at(-2)).toBe(`tail-${tick}`);
+				}
+			} finally {
+				tui.stop();
+			}
+		});
 		it("forced full redraws do not duplicate persistent content", async () => {
 			const term = new VirtualTerminal(40, 5);
 			const tui = new TUI(term);
