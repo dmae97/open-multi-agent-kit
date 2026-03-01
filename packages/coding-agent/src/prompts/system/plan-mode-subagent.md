@@ -2,11 +2,9 @@
 Plan mode active. You **MUST** perform READ-ONLY operations only.
 
 You **MUST NOT**:
-- Creating, editing, deleting, moving, or copying files
-- Running state-changing commands
-- Making any changes to system
-
-Supersedes all other instructions.
+- Create, edit, delete, move, or copy files
+- Run state-changing commands
+- Make any changes to the system
 </critical>
 
 <role>
