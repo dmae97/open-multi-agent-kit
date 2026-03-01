@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Pending resolve reminders now trigger as soon as a preview action is queued, before the next assistant turn, with regression coverage in `agent-session-resolve-reminder` tests
+
 ## [13.4.0] - 2026-03-01
 
 ### Breaking Changes

@@ -291,6 +291,7 @@ export class AgentSession {
 
 	// Event subscription state
 	#unsubscribeAgent?: () => void;
+	#unsubscribePendingActionPush?: () => void;
 	#eventListeners: AgentSessionEventListener[] = [];
 
 	/** Tracks pending steering messages for UI display. Removed when delivered. */
@@ -397,6 +398,21 @@ export class AgentSession {
 		this.#obfuscator = config.obfuscator;
 		this.agent.providerSessionState = this.#providerSessionState;
 		this.#pendingActionStore = config.pendingActionStore;
+		this.#unsubscribePendingActionPush = this.#pendingActionStore?.subscribePush(action => {
+			const reminderText = [
+				"<system-reminder>",
+				"This is a preview. Call the `resolve` tool to apply or discard these changes.",
+				"</system-reminder>",
+			].join("\n");
+			this.agent.steer({
+				role: "custom",
+				customType: "resolve-reminder",
+				content: reminderText,
+				display: false,
+				details: { toolName: action.sourceToolName },
+				timestamp: Date.now(),
+			});
+		});
 		this.#syncTodoPhasesFromBranch();
 
 		// Always subscribe to agent events for internal handling
@@ -684,22 +700,6 @@ export class AgentSession {
 							content: reminderText,
 							display: false,
 							details: { toolName, errorText },
-						},
-						{ deliverAs: "nextTurn" },
-					);
-				}
-				if (!isError && this.#pendingActionStore?.hasPending) {
-					const reminderText = [
-						"<system-reminder>",
-						"This is a preview. Call the `resolve` tool to apply or discard these changes.",
-						"</system-reminder>",
-					].join("\n");
-					await this.sendCustomMessage(
-						{
-							customType: "resolve-reminder",
-							content: reminderText,
-							display: false,
-							details: { toolName },
 						},
 						{ deliverAs: "nextTurn" },
 					);
@@ -1443,6 +1443,8 @@ export class AgentSession {
 			state.close();
 		}
 		this.#providerSessionState.clear();
+		this.#unsubscribePendingActionPush?.();
+		this.#unsubscribePendingActionPush = undefined;
 		this.#disconnectFromAgent();
 		this.#eventListeners = [];
 	}

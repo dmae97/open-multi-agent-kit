@@ -10,9 +10,14 @@ export interface PendingAction {
 
 export class PendingActionStore {
 	#actions: PendingAction[] = [];
+	#pushListeners = new Set<(action: PendingAction, count: number) => void>();
 
 	push(action: PendingAction): void {
 		this.#actions.push(action);
+		const count = this.#actions.length;
+		for (const listener of this.#pushListeners) {
+			listener(action, count);
+		}
 	}
 
 	peek(): PendingAction | null {
@@ -23,8 +28,19 @@ export class PendingActionStore {
 		return this.#actions.pop() ?? null;
 	}
 
+	subscribePush(listener: (action: PendingAction, count: number) => void): () => void {
+		this.#pushListeners.add(listener);
+		return () => {
+			this.#pushListeners.delete(listener);
+		};
+	}
+
 	clear(): void {
 		this.#actions = [];
+	}
+
+	get count(): number {
+		return this.#actions.length;
 	}
 
 	get hasPending(): boolean {
