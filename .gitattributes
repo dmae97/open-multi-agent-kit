@@ -33,6 +33,16 @@
 *.class -text
 *.jar -text
 
+# Lock files are binary (machine-generated, should not be manually edited)
+*.lock -text
+Cargo.lock -text
+package-lock.json -text
+bun.lock -text
+bun.lockb -text
+yarn.lock -text
+pnpm-lock.yaml -text
+poetry.lock -text
+
 # Executed by Linux
 *.sh text eol=lf
 *.py text eol=lf
