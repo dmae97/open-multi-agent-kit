@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import type { TSchema } from "@sinclair/typebox";
 import {
 	buildRequest,
 	parseGeminiCliCredentials,
@@ -143,6 +144,37 @@ describe("Google Gemini CLI alignment", () => {
 		expect(payload.requestId).toMatch(/^agent-/);
 	});
 
+	it("strips patternProperties when antigravity rewrites tools to legacy parameters", () => {
+		const model = createModel("google-antigravity");
+		const toolContext: Context = {
+			messages: [{ role: "user", content: "rewrite files", timestamp: Date.now() }],
+			tools: [
+				{
+					name: "rewrite_rules",
+					description: "Map rewrite regex to replacement",
+					parameters: {
+						type: "object",
+						properties: {
+							rules: {
+								type: "object",
+								patternProperties: {
+									"^(.*)$": { type: "string" },
+								},
+							},
+						},
+						required: ["rules"],
+					} as unknown as TSchema,
+				},
+			],
+		};
+		const payload = buildRequest(model, toolContext, "proj-123", {}, true) as {
+			request: { tools?: Array<{ functionDeclarations: Array<{ parameters?: unknown }> }> };
+		};
+
+		const parameters = payload.request.tools?.[0]?.functionDeclarations[0]?.parameters;
+		expect(parameters).toBeDefined();
+		expect(JSON.stringify(parameters)).not.toContain('"patternProperties"');
+	});
 	describe("retry guardrails", () => {
 		const originalFetch = globalThis.fetch;
 

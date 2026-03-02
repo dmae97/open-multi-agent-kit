@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed
+
+- Fixed schema compatibility issue where patternProperties in tool parameters caused failures when converting to legacy Antigravity format
 
 ## [13.5.5] - 2026-03-01
 

@@ -23,6 +23,7 @@ import { appendRawHttpRequestDumpFor400, type RawHttpRequestDump, withHttpStatus
 import { refreshAntigravityToken } from "../utils/oauth/google-antigravity";
 import { refreshGoogleCloudToken } from "../utils/oauth/google-gemini-cli";
 import { extractHttpStatusFromError } from "../utils/retry";
+import { sanitizeSchemaForCCA } from "../utils/schema";
 import {
 	convertMessages,
 	convertTools,
@@ -981,14 +982,14 @@ function normalizeAntigravityTools(
 	return tools?.map(tool => ({
 		...tool,
 		functionDeclarations: tool.functionDeclarations.map(declaration => {
-			if (!("parametersJsonSchema" in declaration)) {
+			if ("parameters" in declaration) {
 				return declaration;
 			}
 
 			const { parametersJsonSchema, ...rest } = declaration;
 			return {
 				...rest,
-				parameters: parametersJsonSchema,
+				parameters: sanitizeSchemaForCCA(parametersJsonSchema),
 			};
 		}),
 	}));

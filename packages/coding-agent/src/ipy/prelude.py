@@ -1,3 +1,4 @@
+from __future__ import annotations
 # OMP IPython prelude helpers
 if "__omp_prelude_loaded__" not in globals():
     __omp_prelude_loaded__ = True
