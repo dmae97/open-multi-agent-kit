@@ -1,0 +1,161 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as path from "node:path";
+import { Agent, type AgentMessage } from "@oh-my-pi/pi-agent-core";
+import { type AssistantMessage, getBundledModel, type Message } from "@oh-my-pi/pi-ai";
+import { inferCopilotInitiator } from "@oh-my-pi/pi-ai/providers/github-copilot-headers";
+import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
+import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
+import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import type { ExtensionRunner } from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
+import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
+import { convertToLlm } from "@oh-my-pi/pi-coding-agent/session/messages";
+import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
+import { TempDir } from "@oh-my-pi/pi-utils";
+
+class MockAssistantStream extends AssistantMessageEventStream {}
+
+function createAssistantMessage(text: string): AssistantMessage {
+	return {
+		role: "assistant",
+		content: [{ type: "text", text }],
+		api: "anthropic-messages",
+		provider: "anthropic",
+		model: "mock",
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		stopReason: "stop",
+		timestamp: Date.now(),
+	};
+}
+
+describe("AgentSession before_agent_start attribution fallback", () => {
+	let tempDir: TempDir;
+	let session: AgentSession;
+	let modelRegistry: ModelRegistry;
+
+	const injectedText = "before-agent-start injected message";
+
+	beforeEach(async () => {
+		tempDir = TempDir.createSync("@pi-before-agent-start-attribution-");
+		const authStorage = await AuthStorage.create(path.join(tempDir.path(), "testauth.db"));
+		authStorage.setRuntimeApiKey("anthropic", "test-key");
+		modelRegistry = new ModelRegistry(authStorage);
+	});
+
+	afterEach(async () => {
+		vi.restoreAllMocks();
+		if (session) {
+			await session.dispose();
+		}
+		tempDir.removeSync();
+	});
+
+	function createSession() {
+		const emitBeforeAgentStart = vi.fn().mockResolvedValue({
+			messages: [
+				{
+					customType: "before-start",
+					content: injectedText,
+					display: false,
+				},
+			],
+		});
+		const extensionRunner = {
+			emitBeforeAgentStart,
+			emit: vi.fn().mockResolvedValue(undefined),
+		} as unknown as ExtensionRunner;
+
+		const model = getBundledModel("anthropic", "claude-sonnet-4-5");
+		if (!model) throw new Error("Expected claude-sonnet-4-5 model to exist");
+
+		const agent = new Agent({
+			getApiKey: () => "test-key",
+			initialState: {
+				model,
+				systemPrompt: "Test",
+				tools: [],
+				messages: [],
+			},
+			streamFn: () => {
+				const stream = new MockAssistantStream();
+				queueMicrotask(() => {
+					stream.push({ type: "start", partial: createAssistantMessage("") });
+					stream.push({ type: "done", reason: "stop", message: createAssistantMessage("Done") });
+				});
+				return stream;
+			},
+		});
+
+		session = new AgentSession({
+			agent,
+			sessionManager: SessionManager.inMemory(),
+			settings: Settings.isolated({ "compaction.enabled": false }),
+			modelRegistry,
+			extensionRunner,
+		});
+
+		return { emitBeforeAgentStart };
+	}
+
+	function findBeforeStartInjection(messages: AgentMessage[]): AgentMessage | undefined {
+		return messages.find(message => message.role === "custom" && message.customType === "before-start");
+	}
+
+	function findBeforeStartInjectionLlm(messages: Message[]): Message | undefined {
+		return messages.find(message => {
+			if (message.role === "assistant") return false;
+			if (typeof message.content === "string") return message.content === injectedText;
+			return message.content.some(block => block.type === "text" && block.text === injectedText);
+		});
+	}
+	it("defaults before_agent_start message attribution to user for user prompts", async () => {
+		const { emitBeforeAgentStart } = createSession();
+
+		await session.prompt("hello from user");
+
+		expect(emitBeforeAgentStart).toHaveBeenCalledTimes(1);
+		const injectedMessage = findBeforeStartInjection(session.messages);
+		expect(injectedMessage).toBeDefined();
+		if (!injectedMessage || injectedMessage.role !== "custom") {
+			throw new Error("Expected injected custom message in session state");
+		}
+
+		const llmMessages = convertToLlm(session.messages.filter(message => message.role !== "assistant"));
+		const llmInjected = findBeforeStartInjectionLlm(llmMessages);
+		expect(llmInjected).toBeDefined();
+		if (!llmInjected || llmInjected.role === "assistant") {
+			throw new Error("Expected injected message in converted LLM context");
+		}
+		expect(llmInjected.attribution).toBe("user");
+		expect(inferCopilotInitiator(llmMessages)).toBe("user");
+	});
+
+	it("defaults before_agent_start message attribution to agent for synthetic prompts", async () => {
+		const { emitBeforeAgentStart } = createSession();
+
+		await session.prompt("internal reminder", { synthetic: true });
+
+		expect(emitBeforeAgentStart).toHaveBeenCalledTimes(1);
+		const injectedMessage = findBeforeStartInjection(session.messages);
+		expect(injectedMessage).toBeDefined();
+		if (!injectedMessage || injectedMessage.role !== "custom") {
+			throw new Error("Expected injected custom message in session state");
+		}
+
+		const llmMessages = convertToLlm(session.messages.filter(message => message.role !== "assistant"));
+		const llmInjected = findBeforeStartInjectionLlm(llmMessages);
+		expect(llmInjected).toBeDefined();
+		if (!llmInjected || llmInjected.role === "assistant") {
+			throw new Error("Expected injected message in converted LLM context");
+		}
+		expect(llmInjected.attribution).toBe("agent");
+		expect(inferCopilotInitiator(llmMessages)).toBe("agent");
+	});
+});

@@ -23,7 +23,7 @@ type HandlerFn = (...args: unknown[]) => Promise<unknown>;
  * Send message handler type for pi.sendMessage().
  */
 export type SendMessageHandler = <T = unknown>(
-	message: Pick<HookMessage<T>, "customType" | "content" | "display" | "details">,
+	message: Pick<HookMessage<T>, "customType" | "content" | "display" | "details" | "attribution">,
 	options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" },
 ) => void;
 

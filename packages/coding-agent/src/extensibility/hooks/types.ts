@@ -585,7 +585,7 @@ export interface ToolResultEventResult {
  */
 export interface BeforeAgentStartEventResult {
 	/** Message to inject into context (persisted to session, visible in TUI) */
-	message?: Pick<HookMessage, "customType" | "content" | "display" | "details">;
+	message?: Pick<HookMessage, "customType" | "content" | "display" | "details" | "attribution">;
 }
 
 /** Return type for session_before_switch handlers */
@@ -733,12 +733,13 @@ export interface HookAPI {
 	 * @param message.content - Message content (string or TextContent/ImageContent array)
 	 * @param message.display - Whether to show in TUI (true = styled display, false = hidden)
 	 * @param message.details - Optional hook-specific metadata (not sent to LLM)
+	 * @param message.attribution - Who initiated the message for billing/attribution semantics ("user" | "agent")
 	 * @param options.triggerTurn - If true and agent is idle, triggers a new LLM turn. Default: false.
 	 *                              If agent is streaming, message is queued and triggerTurn is ignored.
 	 * @param options.deliverAs - How to deliver the message: "steer" or "followUp".
 	 */
 	sendMessage<T = unknown>(
-		message: Pick<HookMessage<T>, "customType" | "content" | "display" | "details">,
+		message: Pick<HookMessage<T>, "customType" | "content" | "display" | "details" | "attribution">,
 		options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" },
 	): void;
 

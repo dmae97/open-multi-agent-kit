@@ -8,6 +8,14 @@ export function inferCopilotInitiator(messages: unknown[]): "user" | "agent" {
 	if (messages.length === 0) return "user";
 
 	const last = messages[messages.length - 1] as Record<string, unknown>;
+	const attribution = last.attribution;
+	if (typeof attribution === "string") {
+		const normalizedAttribution = attribution.trim().toLowerCase();
+		if (normalizedAttribution === "user" || normalizedAttribution === "agent") {
+			return normalizedAttribution;
+		}
+	}
+
 	const role = last.role as string | undefined;
 	if (!role) return "user";
 

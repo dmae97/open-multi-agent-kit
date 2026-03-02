@@ -5,7 +5,7 @@
  * and provides a transformer to convert them to LLM-compatible messages.
  */
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { ImageContent, Message, TextContent, ToolResultMessage } from "@oh-my-pi/pi-ai";
+import type { ImageContent, Message, MessageAttribution, TextContent, ToolResultMessage } from "@oh-my-pi/pi-ai";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import branchSummaryContextPrompt from "../prompts/compaction/branch-summary-context.md" with { type: "text" };
 import compactionSummaryContextPrompt from "../prompts/compaction/compaction-summary-context.md" with { type: "text" };
@@ -75,6 +75,8 @@ export interface CustomMessage<T = unknown> {
 	content: string | (TextContent | ImageContent)[];
 	display: boolean;
 	details?: T;
+	/** Who initiated this message for billing/attribution semantics. */
+	attribution?: MessageAttribution;
 	timestamp: number;
 }
 
@@ -87,6 +89,8 @@ export interface HookMessage<T = unknown> {
 	content: string | (TextContent | ImageContent)[];
 	display: boolean;
 	details?: T;
+	/** Who initiated this message for billing/attribution semantics. */
+	attribution?: MessageAttribution;
 	timestamp: number;
 }
 
@@ -206,6 +210,7 @@ export function createCustomMessage(
 	display: boolean,
 	details: unknown | undefined,
 	timestamp: string,
+	attribution?: MessageAttribution,
 ): CustomMessage {
 	return {
 		role: "custom",
@@ -213,6 +218,7 @@ export function createCustomMessage(
 		content,
 		display,
 		details,
+		attribution,
 		timestamp: new Date(timestamp).getTime(),
 	};
 }
@@ -236,6 +242,7 @@ export function convertToLlm(messages: AgentMessage[]): Message[] {
 					return {
 						role: "user",
 						content: [{ type: "text", text: bashExecutionToText(m) }],
+						attribution: "user",
 						timestamp: m.timestamp,
 					};
 				case "pythonExecution":
@@ -245,14 +252,18 @@ export function convertToLlm(messages: AgentMessage[]): Message[] {
 					return {
 						role: "user",
 						content: [{ type: "text", text: pythonExecutionToText(m) }],
+						attribution: "user",
 						timestamp: m.timestamp,
 					};
 				case "custom":
 				case "hookMessage": {
 					const content = typeof m.content === "string" ? [{ type: "text" as const, text: m.content }] : m.content;
+					const role = "user";
+					const attribution = m.attribution;
 					return {
-						role: "user",
+						role,
 						content,
+						attribution,
 						timestamp: m.timestamp,
 					};
 				}
@@ -265,6 +276,7 @@ export function convertToLlm(messages: AgentMessage[]): Message[] {
 								text: renderPromptTemplate(BRANCH_SUMMARY_TEMPLATE, { summary: m.summary }),
 							},
 						],
+						attribution: "agent",
 						timestamp: m.timestamp,
 					};
 				case "compactionSummary":
@@ -276,6 +288,7 @@ export function convertToLlm(messages: AgentMessage[]): Message[] {
 								text: renderPromptTemplate(COMPACTION_SUMMARY_TEMPLATE, { summary: m.summary }),
 							},
 						],
+						attribution: "agent",
 						timestamp: m.timestamp,
 					};
 				case "fileMention": {
@@ -296,17 +309,21 @@ export function convertToLlm(messages: AgentMessage[]): Message[] {
 					return {
 						role: "user",
 						content,
+						attribution: "user",
 						timestamp: m.timestamp,
 					};
 				}
 				case "user":
+					return { ...m, attribution: m.attribution ?? "user" };
 				case "developer":
+					return { ...m, attribution: m.attribution ?? "agent" };
 				case "assistant":
 					return m;
 				case "toolResult":
 					return {
 						...m,
 						content: getPrunedToolResultContent(m as ToolResultMessage),
+						attribution: m.attribution ?? "agent",
 					};
 				default:
 					// biome-ignore lint/correctness/noSwitchDeclarations: fine

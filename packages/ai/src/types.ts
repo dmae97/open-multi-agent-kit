@@ -112,6 +112,8 @@ export type ThinkingLevel = "minimal" | "low" | "medium" | "high" | "xhigh";
 /** Token budgets for each thinking level (token-based providers only) */
 export type ThinkingBudgets = { [key in ThinkingLevel]?: number };
 
+export type MessageAttribution = "user" | "agent";
+
 export type ToolChoice =
 	| "auto"
 	| "none"
@@ -257,12 +259,16 @@ export interface UserMessage {
 	content: string | (TextContent | ImageContent)[];
 	/** True if the message was injected by the system (e.g., auto-continue). */
 	synthetic?: boolean;
+	/** Who initiated this message for billing/attribution semantics. */
+	attribution?: MessageAttribution;
 	timestamp: number; // Unix timestamp in milliseconds
 }
 
 export interface DeveloperMessage {
 	role: "developer";
 	content: string | (TextContent | ImageContent)[];
+	/** Who initiated this message for billing/attribution semantics. */
+	attribution?: MessageAttribution;
 	timestamp: number; // Unix timestamp in milliseconds
 }
 
@@ -287,6 +293,8 @@ export interface ToolResultMessage<TDetails = any> {
 	content: (TextContent | ImageContent)[]; // Supports text and images
 	details?: TDetails;
 	isError: boolean;
+	/** Who initiated this message for billing/attribution semantics. */
+	attribution?: MessageAttribution;
 	/** Timestamp when output was pruned (ms since epoch). Undefined if unpruned. */
 	prunedAt?: number;
 	timestamp: number; // Unix timestamp in milliseconds

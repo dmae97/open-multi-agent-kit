@@ -66,6 +66,19 @@ describe("inferCopilotInitiator", () => {
 		expect(inferCopilotInitiator(messages)).toBe("user");
 	});
 
+	it("prefers explicit attribution over role when attribution is agent", () => {
+		const messages: Message[] = [
+			{ role: "user", content: "internal reminder", attribution: "agent", timestamp: Date.now() },
+		];
+		expect(inferCopilotInitiator(messages)).toBe("agent");
+	});
+
+	it("prefers explicit attribution over role when attribution is user", () => {
+		const messages: Message[] = [
+			{ role: "developer", content: "forward user note", attribution: "user", timestamp: Date.now() },
+		];
+		expect(inferCopilotInitiator(messages)).toBe("user");
+	});
 	it("returns 'agent' when last message is user but last content block is tool_result", () => {
 		const messages: unknown[] = [
 			{

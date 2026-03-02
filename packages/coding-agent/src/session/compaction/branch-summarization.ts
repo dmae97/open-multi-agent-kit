@@ -149,7 +149,14 @@ function getMessageFromEntry(entry: SessionEntry): AgentMessage | undefined {
 			return entry.message;
 
 		case "custom_message":
-			return createCustomMessage(entry.customType, entry.content, entry.display, entry.details, entry.timestamp);
+			return createCustomMessage(
+				entry.customType,
+				entry.content,
+				entry.display,
+				entry.details,
+				entry.timestamp,
+				entry.attribution,
+			);
 
 		case "branch_summary":
 			return createBranchSummaryMessage(entry.summary, entry.fromId, entry.timestamp);

@@ -763,6 +763,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 							customType: "async-result",
 							content: message,
 							display: true,
+							attribution: "agent",
 							details: {
 								jobId,
 								type: job?.type,

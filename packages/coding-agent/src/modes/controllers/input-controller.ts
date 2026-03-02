@@ -225,6 +225,7 @@ export class InputController {
 								content: message,
 								display: true,
 								details,
+								attribution: "user",
 							},
 							{ streamingBehavior: "followUp" },
 						);

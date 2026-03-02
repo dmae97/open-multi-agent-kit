@@ -824,7 +824,7 @@ export interface ToolResultEventResult {
 }
 
 export interface BeforeAgentStartEventResult {
-	message?: Pick<CustomMessage, "customType" | "content" | "display" | "details">;
+	message?: Pick<CustomMessage, "customType" | "content" | "display" | "details" | "attribution">;
 	/** Replace the system prompt for this turn. If multiple extensions return this, they are chained. */
 	systemPrompt?: string;
 }
@@ -1015,7 +1015,7 @@ export interface ExtensionAPI {
 
 	/** Send a custom message to the session. */
 	sendMessage<T = unknown>(
-		message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details">,
+		message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details" | "attribution">,
 		options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
 	): void;
 
@@ -1184,7 +1184,7 @@ export interface ExtensionShortcut {
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
 
 export type SendMessageHandler = <T = unknown>(
-	message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details">,
+	message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details" | "attribution">,
 	options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
 ) => void;
 

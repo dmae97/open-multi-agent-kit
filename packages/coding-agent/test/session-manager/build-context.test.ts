@@ -76,6 +76,45 @@ describe("buildSessionContext", () => {
 			expect(ctx.messages[0].role).toBe("user");
 		});
 
+		it("rehydrates custom_message attribution from entries", () => {
+			const entries: SessionEntry[] = [
+				{
+					type: "custom_message",
+					id: "1",
+					parentId: null,
+					timestamp: "2025-01-01T00:00:00Z",
+					customType: "skill-prompt",
+					content: "Summarize this file",
+					display: true,
+					attribution: "user",
+				},
+			];
+			const ctx = buildSessionContext(entries);
+			expect(ctx.messages).toHaveLength(1);
+			const customMessage = ctx.messages[0];
+			expect(customMessage?.role).toBe("custom");
+			if (customMessage?.role !== "custom") throw new Error("Expected custom message");
+			expect(customMessage.attribution).toBe("user");
+		});
+		it("preserves missing custom_message attribution on rehydration", () => {
+			const entries: SessionEntry[] = [
+				{
+					type: "custom_message",
+					id: "1",
+					parentId: null,
+					timestamp: "2025-01-01T00:00:00Z",
+					customType: "skill-prompt",
+					content: "Summarize this file",
+					display: true,
+				},
+			];
+			const ctx = buildSessionContext(entries);
+			expect(ctx.messages).toHaveLength(1);
+			const customMessage = ctx.messages[0];
+			expect(customMessage?.role).toBe("custom");
+			if (customMessage?.role !== "custom") throw new Error("Expected custom message");
+			expect(customMessage.attribution).toBeUndefined();
+		});
 		it("simple conversation", () => {
 			const entries: SessionEntry[] = [
 				msg("1", null, "user", "hello"),
