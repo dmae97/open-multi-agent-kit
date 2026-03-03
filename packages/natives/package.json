@@ -60,6 +60,14 @@
 			"types": "./src/*.ts",
 			"import": "./src/*.ts"
 		},
+		"./appearance": {
+			"types": "./src/appearance/index.ts",
+			"import": "./src/appearance/index.ts"
+		},
+		"./appearance/*": {
+			"types": "./src/appearance/*.ts",
+			"import": "./src/appearance/*.ts"
+		},
 		"./ast": {
 			"types": "./src/ast/index.ts",
 			"import": "./src/ast/index.ts"
@@ -123,6 +131,14 @@
 		"./keys/*": {
 			"types": "./src/keys/*.ts",
 			"import": "./src/keys/*.ts"
+		},
+		"./projfs": {
+			"types": "./src/projfs/index.ts",
+			"import": "./src/projfs/index.ts"
+		},
+		"./projfs/*": {
+			"types": "./src/projfs/*.ts",
+			"import": "./src/projfs/*.ts"
 		},
 		"./ps": {
 			"types": "./src/ps/index.ts",

@@ -1,5 +1,13 @@
 #!/usr/bin/env bun
 
+// Copilot model premium request multipliers by model identifier.
+const COPILOT_PREMIUM_MULTIPLIERS: Record<string, number> = {
+	"github-copilot/claude-haiku-4.5": 0.33,
+	"github-copilot/claude-opus-4.6": 3,
+	"github-copilot/gpt-4o": 0,
+	"github-copilot/grok-code-fast-1": 0.25,
+};
+
 import * as path from "node:path";
 import { $env } from "@oh-my-pi/pi-utils";
 import { createModelManager } from "../src/model-manager";
@@ -144,6 +152,22 @@ function applyGlobalModelsDevFallback(models: readonly Model[], modelsDevModels:
 	});
 }
 
+
+function applyPremiumMultiplierOverrides(models: readonly Model[]): Model[] {
+	return models.map(model => {
+		const premiumMultiplier = COPILOT_PREMIUM_MULTIPLIERS[`${model.provider}/${model.id}`];
+		if (premiumMultiplier === undefined) {
+			return model;
+		}
+		if (model.premiumMultiplier === premiumMultiplier) {
+			return model;
+		}
+		return {
+			...model,
+			premiumMultiplier,
+		};
+	});
+	}
 const ANTIGRAVITY_ENDPOINT = "https://daily-cloudcode-pa.sandbox.googleapis.com";
 
 async function getOAuthCredentialsFromStorage(provider: OAuthProvider): Promise<OAuthCredentials | null> {
@@ -299,6 +323,7 @@ async function generateModels() {
 	}
 
 	allModels = applyGlobalModelsDevFallback(allModels, modelsDevModels);
+	allModels = applyPremiumMultiplierOverrides(allModels);
 
 	// Group by provider and sort each provider's models
 	const providers: Record<string, Record<string, Model>> = {};

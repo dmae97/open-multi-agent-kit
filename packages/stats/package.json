@@ -35,10 +35,10 @@
 	"dependencies": {
 		"@oh-my-pi/pi-ai": "workspace:*",
 		"@oh-my-pi/pi-utils": "workspace:*",
-		"@tailwindcss/node": "4",
+		"@tailwindcss/node": "^4.2",
 		"chart.js": "^4.5",
 		"date-fns": "^4.1",
-		"lucide-react": "^0.575",
+		"lucide-react": "^0.576",
 		"react": "^19.2",
 		"react-chartjs-2": "^5.3",
 		"react-dom": "^19.2"
@@ -48,7 +48,7 @@
 		"@types/react": "^19.2",
 		"@types/react-dom": "^19.2",
 		"postcss": "^8.5",
-		"tailwindcss": "4"
+		"tailwindcss": "^4.2"
 	},
 	"engines": {
 		"bun": ">=1.3.7"
