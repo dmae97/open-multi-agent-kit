@@ -10,9 +10,11 @@ import type { MessageStats, SessionEntry, SessionMessageEntry } from "./types";
  * The folder part uses -- as path separator.
  */
 function extractFolderFromPath(sessionPath: string): string {
-	const dir = path.basename(sessionPath.replace(/\/[^/]+\.jsonl$/, ""));
+	const sessionsDir = getSessionsDir();
+	const rel = path.relative(sessionsDir, sessionPath);
+	const projectDir = rel.split(path.sep)[0];
 	// Convert --work--pi-- to /work/pi
-	return dir.replace(/^--/, "/").replace(/--/g, "/");
+	return projectDir.replace(/^--/, "/").replace(/--/g, "/");
 }
 
 /**
@@ -99,8 +101,8 @@ export async function listSessionFolders(): Promise<string[]> {
  */
 export async function listSessionFiles(folderPath: string): Promise<string[]> {
 	try {
-		const entries = await fs.readdir(folderPath, { withFileTypes: true });
-		return entries.filter(e => e.isFile() && e.name.endsWith(".jsonl")).map(e => path.join(folderPath, e.name));
+		const entries = await fs.readdir(folderPath, { recursive: true, withFileTypes: true });
+		return entries.filter(e => e.isFile() && e.name.endsWith(".jsonl")).map(e => path.join(e.parentPath, e.name));
 	} catch {
 		return [];
 	}
