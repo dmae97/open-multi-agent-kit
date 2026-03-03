@@ -74,6 +74,15 @@ function delay(ms: number): Promise<void> {
 	return Bun.sleep(ms);
 }
 
+export function resolveSubscriptionPostAction(
+	notificationsEnabled: boolean,
+	currentEpoch: number,
+	subscriptionEpoch: number,
+): "rollback" | "ignore" | "apply" {
+	if (!notificationsEnabled) return "rollback";
+	if (currentEpoch !== subscriptionEpoch) return "ignore";
+	return "apply";
+}
 /** Result of loading MCP tools */
 export interface MCPLoadResult {
 	/** Loaded tools as CustomTool instances */
@@ -173,7 +182,12 @@ export class MCPManager {
 					const uris = connection.resources.map(r => r.uri);
 					void subscribeToResources(connection, uris)
 						.then(() => {
-							if (!this.#notificationsEnabled) {
+							const action = resolveSubscriptionPostAction(
+								this.#notificationsEnabled,
+								this.#notificationsEpoch,
+								notificationEpoch,
+							);
+							if (action === "rollback") {
 								void unsubscribeFromResources(connection, uris).catch(error => {
 									logger.debug("Failed to rollback stale MCP resource subscription", {
 										path: `mcp:${name}`,
@@ -182,7 +196,7 @@ export class MCPManager {
 								});
 								return;
 							}
-							if (this.#notificationsEpoch !== notificationEpoch) {
+							if (action === "ignore") {
 								return;
 							}
 							this.#subscribedResources.set(name, new Set(uris));
@@ -343,7 +357,12 @@ export class MCPManager {
 								const notificationEpoch = this.#notificationsEpoch;
 								void subscribeToResources(connection, uris)
 									.then(() => {
-										if (!this.#notificationsEnabled) {
+										const action = resolveSubscriptionPostAction(
+											this.#notificationsEnabled,
+											this.#notificationsEpoch,
+											notificationEpoch,
+										);
+										if (action === "rollback") {
 											void unsubscribeFromResources(connection, uris).catch(error => {
 												logger.debug("Failed to rollback stale MCP resource subscription", {
 													path: `mcp:${name}`,
@@ -352,7 +371,7 @@ export class MCPManager {
 											});
 											return;
 										}
-										if (this.#notificationsEpoch !== notificationEpoch) {
+										if (action === "ignore") {
 											return;
 										}
 										this.#subscribedResources.set(name, new Set(uris));
@@ -675,13 +694,18 @@ export class MCPManager {
 				try {
 					const allUris = [...newUris];
 					await subscribeToResources(connection, allUris);
-					if (!this.#notificationsEnabled) {
+					const action = resolveSubscriptionPostAction(
+						this.#notificationsEnabled,
+						this.#notificationsEpoch,
+						notificationEpoch,
+					);
+					if (action === "rollback") {
 						await unsubscribeFromResources(connection, allUris).catch(error => {
 							logger.debug("Failed to rollback stale MCP resource subscription", { path: `mcp:${name}`, error });
 						});
 						return;
 					}
-					if (this.#notificationsEpoch !== notificationEpoch) {
+					if (action === "ignore") {
 						return;
 					}
 					this.#subscribedResources.set(name, newUris);
