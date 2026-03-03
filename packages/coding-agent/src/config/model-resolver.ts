@@ -4,12 +4,17 @@
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { type Api, DEFAULT_MODEL_PER_PROVIDER, type KnownProvider, type Model, modelsAreEqual } from "@oh-my-pi/pi-ai";
 import chalk from "chalk";
-import { isValidThinkingLevel } from "../cli/args";
 import MODEL_PRIO from "../priority.json" with { type: "json" };
 import { fuzzyMatch } from "../utils/fuzzy";
 import { MODEL_ROLE_IDS, type ModelRegistry, type ModelRole } from "./model-registry";
 import type { Settings } from "./settings";
 
+
+const VALID_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+
+function isValidThinkingLevel(level: string): level is ThinkingLevel {
+	return VALID_THINKING_LEVELS.includes(level as ThinkingLevel);
+}
 /** Default model IDs for each known provider */
 export const defaultModelPerProvider: Record<KnownProvider, string> = DEFAULT_MODEL_PER_PROVIDER;
 
