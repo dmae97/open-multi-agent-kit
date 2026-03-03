@@ -53,6 +53,13 @@ function hasVertexAdcCredentials(): boolean {
 
 type KeyResolver = string | (() => string | undefined);
 
+function isFoundryEnabled(): boolean {
+	const value = $env.CLAUDE_CODE_USE_FOUNDRY;
+	if (!value) return false;
+	const normalized = value.trim().toLowerCase();
+	return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
 const serviceProviderMap: Record<string, KeyResolver> = {
 	openai: "OPENAI_API_KEY",
 	google: "GEMINI_API_KEY",
@@ -77,8 +84,11 @@ const serviceProviderMap: Record<string, KeyResolver> = {
 	kagi: "KAGI_API_KEY",
 	// GitHub Copilot uses GitHub personal access token
 	"github-copilot": () => $pickenv("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"),
-	// ANTHROPIC_OAUTH_TOKEN takes precedence over ANTHROPIC_API_KEY
-	anthropic: () => $pickenv("ANTHROPIC_OAUTH_TOKEN", "ANTHROPIC_API_KEY"),
+	// Foundry mode optionally switches Anthropic auth to enterprise gateway credentials.
+	anthropic: () =>
+		isFoundryEnabled()
+			? $pickenv("ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
+			: $pickenv("ANTHROPIC_OAUTH_TOKEN", "ANTHROPIC_API_KEY"),
 	"gitlab-duo": "GITLAB_TOKEN",
 	// Vertex AI uses Application Default Credentials, not API keys.
 	// Auth is configured via `gcloud auth application-default login`.

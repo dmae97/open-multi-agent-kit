@@ -1,4 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import * as tls from "node:tls";
 import {
 	applyClaudeToolPrefix,
@@ -16,6 +19,7 @@ import {
 	stripClaudeToolPrefix,
 } from "@oh-my-pi/pi-ai/providers/anthropic";
 import type { Context, Model } from "@oh-my-pi/pi-ai/types";
+import { getEnvApiKey } from "@oh-my-pi/pi-ai/stream";
 
 const ANTHROPIC_MODEL: Model<"anthropic-messages"> = {
 	id: "claude-sonnet-4-5",
@@ -34,6 +38,34 @@ function createAbortedSignal(): AbortSignal {
 	const controller = new AbortController();
 	controller.abort();
 	return controller.signal;
+}
+
+async function withEnv(
+	overrides: Record<string, string | undefined>,
+	fn: () => void | Promise<void>,
+): Promise<void> {
+	const previous = new Map<string, string | undefined>();
+	for (const key of Object.keys(overrides)) {
+		previous.set(key, Bun.env[key]);
+	}
+	try {
+		for (const [key, value] of Object.entries(overrides)) {
+			if (value === undefined) {
+				delete Bun.env[key];
+			} else {
+				Bun.env[key] = value;
+			}
+		}
+		await fn();
+	} finally {
+		for (const [key, value] of previous.entries()) {
+			if (value === undefined) {
+				delete Bun.env[key];
+			} else {
+				Bun.env[key] = value;
+			}
+		}
+	}
 }
 
 function captureAnthropicPayload(
@@ -298,6 +330,98 @@ describe("Anthropic request fingerprint alignment", () => {
 		expect(tlsOptions?.rejectUnauthorized).toBe(true);
 		expect(tlsOptions?.serverName).toBe("api.anthropic.com");
 		expect(tlsOptions?.ciphers).toBe(tls.DEFAULT_CIPHERS);
+	});
+
+	it("uses Foundry base URL, Bearer auth, and custom headers when enabled", async () => {
+		await withEnv(
+			{
+				CLAUDE_CODE_USE_FOUNDRY: "true",
+				FOUNDRY_BASE_URL: "https://foundry.example.com/anthropic/",
+				ANTHROPIC_CUSTOM_HEADERS: "user-id: alice, x-route: engineering",
+			},
+			() => {
+				const options = buildAnthropicClientOptions({
+					model: ANTHROPIC_MODEL,
+					apiKey: "foundry-token",
+					extraBetas: [],
+					stream: true,
+					interleavedThinking: false,
+					dynamicHeaders: {},
+				});
+
+				expect(options.baseURL).toBe("https://foundry.example.com/anthropic");
+				expect(options.defaultHeaders.Authorization).toBe("Bearer foundry-token");
+				expect(options.defaultHeaders["X-Api-Key"]).toBeUndefined();
+				expect(options.defaultHeaders["user-id"]).toBe("alice");
+				expect(options.defaultHeaders["x-route"]).toBe("engineering");
+			},
+		);
+	});
+
+	it("loads Foundry mTLS and CA material from file paths", async () => {
+		const tmpDir = path.join(os.tmpdir(), `pi-ai-foundry-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+		fs.mkdirSync(tmpDir, { recursive: true });
+		const caPath = path.join(tmpDir, "ca.pem");
+		const certPath = path.join(tmpDir, "client-cert.pem");
+		const keyPath = path.join(tmpDir, "client-key.pem");
+		fs.writeFileSync(caPath, "-----BEGIN CERTIFICATE-----\nCA\n-----END CERTIFICATE-----\n", "utf8");
+		fs.writeFileSync(certPath, "-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----\n", "utf8");
+		fs.writeFileSync(keyPath, "-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----\n", "utf8");
+
+		try {
+			await withEnv(
+				{
+					CLAUDE_CODE_USE_FOUNDRY: "1",
+					FOUNDRY_BASE_URL: "https://foundry.example.com",
+					NODE_EXTRA_CA_CERTS: caPath,
+					CLAUDE_CODE_CLIENT_CERT: certPath,
+					CLAUDE_CODE_CLIENT_KEY: keyPath,
+				},
+				() => {
+					const options = buildAnthropicClientOptions({
+						model: ANTHROPIC_MODEL,
+						apiKey: "foundry-token",
+						extraBetas: [],
+						stream: true,
+						interleavedThinking: false,
+						dynamicHeaders: {},
+					});
+
+					const tlsOptions = (
+						options.fetchOptions as
+							| {
+									tls?: {
+										serverName?: string;
+										ca?: string;
+										cert?: string;
+										key?: string;
+									};
+							  }
+							| undefined
+					)?.tls;
+					expect(tlsOptions?.serverName).toBe("foundry.example.com");
+					expect(tlsOptions?.ca).toContain("BEGIN CERTIFICATE");
+					expect(tlsOptions?.cert).toContain("BEGIN CERTIFICATE");
+					expect(tlsOptions?.key).toContain("BEGIN PRIVATE KEY");
+				},
+			);
+		} finally {
+			fs.rmSync(tmpDir, { recursive: true, force: true });
+		}
+	});
+
+	it("resolves Anthropic Foundry API key when Foundry mode is enabled", async () => {
+		await withEnv(
+			{
+				CLAUDE_CODE_USE_FOUNDRY: "true",
+				ANTHROPIC_FOUNDRY_API_KEY: "foundry-env-token",
+				ANTHROPIC_OAUTH_TOKEN: "sk-ant-oat-should-not-win",
+				ANTHROPIC_API_KEY: "sk-ant-api-should-not-win",
+			},
+			() => {
+				expect(getEnvApiKey("anthropic")).toBe("foundry-env-token");
+			},
+		);
 	});
 
 	it("treats tool prefix helpers as no-ops when prefix is empty", () => {

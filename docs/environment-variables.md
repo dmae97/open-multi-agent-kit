@@ -32,6 +32,7 @@ These are consumed via `getEnvApiKey()` (`packages/ai/src/stream.ts`) unless not
 |---|---|---|---|
 | `ANTHROPIC_OAUTH_TOKEN` | Anthropic API auth | Using Anthropic with OAuth token auth | Takes precedence over `ANTHROPIC_API_KEY` for provider auth resolution |
 | `ANTHROPIC_API_KEY` | Anthropic API auth | Using Anthropic without OAuth token | Fallback after `ANTHROPIC_OAUTH_TOKEN` |
+| `ANTHROPIC_FOUNDRY_API_KEY` | Anthropic via Azure Foundry / enterprise gateway | `CLAUDE_CODE_USE_FOUNDRY` enabled | Takes precedence over `ANTHROPIC_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` when Foundry mode is enabled |
 | `OPENAI_API_KEY` | OpenAI auth | Using OpenAI-family providers without explicit apiKey argument | Used by OpenAI Completions/Responses providers |
 | `GEMINI_API_KEY` | Google Gemini auth | Using `google` provider models | Primary key for Gemini provider mapping |
 | `GOOGLE_API_KEY` | Gemini image tool auth fallback | Using `gemini_image` tool without `GEMINI_API_KEY` | Used by coding-agent image tool fallback path |
@@ -75,6 +76,30 @@ These are consumed via `getEnvApiKey()` (`packages/ai/src/stream.ts`) unless not
 ---
 
 ## 2) Provider-specific runtime configuration
+
+### Anthropic Foundry Gateway (Azure / enterprise proxy)
+
+When `CLAUDE_CODE_USE_FOUNDRY` is enabled, Anthropic requests switch to Foundry mode:
+
+- Base URL resolves from `FOUNDRY_BASE_URL` (fallback remains model/default base URL if unset).
+- API key resolution for provider `anthropic` becomes:
+  `ANTHROPIC_FOUNDRY_API_KEY` → `ANTHROPIC_OAUTH_TOKEN` → `ANTHROPIC_API_KEY`.
+- `ANTHROPIC_CUSTOM_HEADERS` is parsed as comma/newline-separated `key: value` pairs and merged into request headers.
+- TLS client/server material can be injected from env values:
+  `NODE_EXTRA_CA_CERTS`, `CLAUDE_CODE_CLIENT_CERT`, `CLAUDE_CODE_CLIENT_KEY`.
+  Each accepts either:
+  - a filesystem path to PEM content, or
+  - inline PEM (including escaped `\n` sequences).
+
+| Variable | Value type | Behavior |
+|---|---|---|
+| `CLAUDE_CODE_USE_FOUNDRY` | Boolean-like string (`1`, `true`, `yes`, `on`) | Enables Foundry mode for Anthropic provider |
+| `FOUNDRY_BASE_URL` | URL string | Anthropic endpoint base URL in Foundry mode |
+| `ANTHROPIC_FOUNDRY_API_KEY` | Token string | Used for `Authorization: Bearer <token>` |
+| `ANTHROPIC_CUSTOM_HEADERS` | Header list string | Extra headers; format `header-a: value, header-b: value` or newline-separated |
+| `NODE_EXTRA_CA_CERTS` | PEM path or inline PEM | Extra CA chain for server certificate validation |
+| `CLAUDE_CODE_CLIENT_CERT` | PEM path or inline PEM | mTLS client certificate |
+| `CLAUDE_CODE_CLIENT_KEY` | PEM path or inline PEM | mTLS client private key (must be paired with cert) |
 
 ### Amazon Bedrock
 
@@ -174,7 +199,7 @@ OAuth host chain: `KIMI_CODE_OAUTH_HOST` → `KIMI_OAUTH_HOST` → `https://auth
 1. `ANTHROPIC_SEARCH_API_KEY` (+ optional `ANTHROPIC_SEARCH_BASE_URL`)
 2. `models.json` provider entry with `api: "anthropic-messages"`
 3. Anthropic OAuth credentials from `agent.db` (must not expire within 5-minute buffer)
-4. Generic Anthropic env fallback: provider key (`ANTHROPIC_OAUTH_TOKEN`/`ANTHROPIC_API_KEY`) + optional `ANTHROPIC_BASE_URL`
+4. Generic Anthropic env fallback: provider key (`ANTHROPIC_FOUNDRY_API_KEY`/`ANTHROPIC_OAUTH_TOKEN`/`ANTHROPIC_API_KEY`) + optional `ANTHROPIC_BASE_URL` (`FOUNDRY_BASE_URL` when Foundry mode is enabled)
 
 Related vars:
 
@@ -321,5 +346,6 @@ Treat these as secrets; do not log or commit them:
 - Provider/API keys and OAuth/bearer credentials (all `*_API_KEY`, `*_TOKEN`, OAuth access/refresh tokens)
 - Cloud credentials (`AWS_*`, `GOOGLE_APPLICATION_CREDENTIALS` path may expose service-account material)
 - Search/provider auth vars (`EXA_API_KEY`, `BRAVE_API_KEY`, `PERPLEXITY_API_KEY`, Anthropic search keys)
+- Foundry mTLS material (`CLAUDE_CODE_CLIENT_CERT`, `CLAUDE_CODE_CLIENT_KEY`, `NODE_EXTRA_CA_CERTS` when it points to private CA bundles)
 
 Python runtime also explicitly strips many common key vars before spawning kernel subprocesses (`packages/coding-agent/src/ipy/runtime.ts`).

@@ -4,7 +4,7 @@
  * 3-tier auth resolution:
  *   1. ANTHROPIC_SEARCH_API_KEY / ANTHROPIC_SEARCH_BASE_URL env vars
  *   2. OAuth credentials in ~/.omp/agent/agent.db (with expiry check)
- *   3. ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL fallback
+ *   3. Generic Anthropic fallback (Foundry-aware key/base URL resolution)
  */
 import { $env, getAgentDbPath } from "@oh-my-pi/pi-utils";
 import { type AuthCredential, AuthCredentialStore } from "../auth-storage";
@@ -28,6 +28,22 @@ export interface AnthropicOAuthCredential {
 }
 
 const DEFAULT_BASE_URL = "https://api.anthropic.com";
+
+function isFoundryEnabled(): boolean {
+	const value = $env.CLAUDE_CODE_USE_FOUNDRY;
+	if (!value) return false;
+	const normalized = value.trim().toLowerCase();
+	return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
+function resolveAnthropicBaseUrlFromEnv(): string | undefined {
+	if (isFoundryEnabled()) {
+		const foundryBaseUrl = $env.FOUNDRY_BASE_URL?.trim();
+		if (foundryBaseUrl) return foundryBaseUrl;
+	}
+	const anthropicBaseUrl = $env.ANTHROPIC_BASE_URL?.trim();
+	return anthropicBaseUrl || undefined;
+}
 
 /**
  * Checks if a token is an OAuth token by looking for sk-ant-oat prefix.
@@ -117,7 +133,7 @@ export async function findAnthropicAuth(store?: AuthCredentialStore): Promise<An
 
 	// 3. Generic ANTHROPIC_API_KEY fallback
 	const apiKey = getEnvApiKey("anthropic");
-	const baseUrl = $env.ANTHROPIC_BASE_URL;
+	const baseUrl = resolveAnthropicBaseUrlFromEnv();
 	if (apiKey) {
 		return {
 			apiKey,

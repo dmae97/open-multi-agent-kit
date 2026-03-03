@@ -907,7 +907,7 @@ In Node.js environments, you can set environment variables to avoid passing API 
 | Provider       | Environment Variable(s)                                                      |
 | -------------- | ---------------------------------------------------------------------------- |
 | OpenAI         | `OPENAI_API_KEY`                                                             |
-| Anthropic      | `ANTHROPIC_API_KEY` or `ANTHROPIC_OAUTH_TOKEN`                               |
+| Anthropic      | `ANTHROPIC_API_KEY` or `ANTHROPIC_OAUTH_TOKEN` (or `ANTHROPIC_FOUNDRY_API_KEY` when `CLAUDE_CODE_USE_FOUNDRY=true`) |
 | Google         | `GEMINI_API_KEY`                                                             |
 | Vertex AI      | `GOOGLE_CLOUD_PROJECT` (or `GCLOUD_PROJECT`) + `GOOGLE_CLOUD_LOCATION` + ADC |
 | Mistral        | `MISTRAL_API_KEY`                                                            |
@@ -935,6 +935,10 @@ In Node.js environments, you can set environment variables to avoid passing API 
 
 For Cloudflare AI Gateway models, use provider base URL format
 `https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic`.
+
+For Anthropic Foundry routing, set `CLAUDE_CODE_USE_FOUNDRY=true` plus:
+`FOUNDRY_BASE_URL`, `ANTHROPIC_FOUNDRY_API_KEY`, optional `ANTHROPIC_CUSTOM_HEADERS`,
+and optional mTLS material (`CLAUDE_CODE_CLIENT_CERT`, `CLAUDE_CODE_CLIENT_KEY`, `NODE_EXTRA_CA_CERTS`).
 
 Provider endpoint defaults for the current OpenAI-compatible integrations:
 
