@@ -56,7 +56,8 @@ function normalizeAtPrefix(filePath: string): string {
 		withoutAt.startsWith("artifact://") ||
 		withoutAt.startsWith("skill://") ||
 		withoutAt.startsWith("rule://") ||
-		withoutAt.startsWith("local://")
+		withoutAt.startsWith("local://") ||
+		withoutAt.startsWith("mcp://")
 	) {
 		return withoutAt;
 	}

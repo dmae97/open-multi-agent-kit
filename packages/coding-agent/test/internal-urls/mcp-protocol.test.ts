@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import type { MCPManager } from "../src/mcp/manager";
-import type { MCPResource, MCPResourceReadResult, MCPResourceTemplate } from "../src/mcp/types";
-import { McpReadResourceTool } from "../src/tools/mcp-read-resource";
+import { InternalUrlRouter, McpProtocolHandler } from "../../src/internal-urls";
+import type { MCPManager } from "../../src/mcp/manager";
+import type { MCPResource, MCPResourceReadResult, MCPResourceTemplate } from "../../src/mcp/types";
 
 function createMockManager(opts: {
 	servers?: string[];
@@ -19,15 +19,26 @@ function createMockManager(opts: {
 	} as unknown as MCPManager;
 }
 
-describe("McpReadResourceTool", () => {
-	it("returns error when no MCP manager is available", async () => {
-		const tool = new McpReadResourceTool(() => undefined);
-		const result = await tool.execute("call-1", { uri: "test://resource" });
+function createRouter(manager?: MCPManager): InternalUrlRouter {
+	const router = new InternalUrlRouter();
+	router.register(
+		new McpProtocolHandler({
+			getMcpManager: () => manager,
+		}),
+	);
+	return router;
+}
 
-		const text = (result.content[0] as { type: string; text: string }).text;
-		expect(text).toContain("No MCP manager");
-		expect(result.details?.isError).toBe(true);
-		expect(result.details?.uri).toBe("test://resource");
+describe("McpProtocolHandler", () => {
+	it("returns error when no MCP manager is available", async () => {
+		const router = createRouter();
+		await expect(router.resolve("mcp://test://resource")).rejects.toThrow("No MCP manager");
+	});
+
+	it("requires resource URI in mcp URL", async () => {
+		const manager = createMockManager({ servers: ["server-a"] });
+		const router = createRouter(manager);
+		await expect(router.resolve("mcp://")).rejects.toThrow("mcp:// URL requires a resource URI");
 	});
 
 	it("returns error listing available resources when no server matches", async () => {
@@ -37,14 +48,11 @@ describe("McpReadResourceTool", () => {
 			templates: [],
 		});
 		const manager = createMockManager({ servers: ["server-a"], resources });
-		const tool = new McpReadResourceTool(() => manager);
-		const result = await tool.execute("call-1", { uri: "test://missing" });
+		const router = createRouter(manager);
 
-		const text = (result.content[0] as { type: string; text: string }).text;
-		expect(text).toContain("No MCP server has resource");
-		expect(text).toContain("file://known");
-		expect(text).toContain("server-a");
-		expect(result.details?.isError).toBe(true);
+		await expect(router.resolve("mcp://test://missing")).rejects.toThrow("No MCP server has resource");
+		await expect(router.resolve("mcp://test://missing")).rejects.toThrow("file://known");
+		await expect(router.resolve("mcp://test://missing")).rejects.toThrow("server-a");
 	});
 
 	it("reads resource by exact URI match", async () => {
@@ -58,13 +66,28 @@ describe("McpReadResourceTool", () => {
 			resources,
 			readResult: { contents: [{ uri: "test://doc", text: "hello world" }] },
 		});
-		const tool = new McpReadResourceTool(() => manager);
-		const result = await tool.execute("call-1", { uri: "test://doc" });
+		const router = createRouter(manager);
 
-		const text = (result.content[0] as { type: string; text: string }).text;
-		expect(text).toBe("hello world");
-		expect(result.details?.serverName).toBe("my-server");
-		expect(result.details?.isError).toBeUndefined();
+		const resource = await router.resolve("mcp://test://doc");
+		expect(resource.content).toBe("hello world");
+		expect(resource.notes).toEqual(["MCP server: my-server"]);
+	});
+
+	it("preserves query parameters in MCP resource URI", async () => {
+		const resources = new Map<string, { resources: MCPResource[]; templates: MCPResourceTemplate[] }>();
+		resources.set("query-server", {
+			resources: [{ uri: "test://doc?q=1", name: "doc" }],
+			templates: [],
+		});
+		const manager = createMockManager({
+			servers: ["query-server"],
+			resources,
+			readResult: { contents: [{ uri: "test://doc?q=1", text: "query resource" }] },
+		});
+		const router = createRouter(manager);
+
+		const resource = await router.resolve("mcp://test://doc?q=1");
+		expect(resource.content).toBe("query resource");
 	});
 
 	it("matches URI templates when no exact URI exists", async () => {
@@ -78,12 +101,10 @@ describe("McpReadResourceTool", () => {
 			resources,
 			readResult: { contents: [{ uri: "test://docs/foo/raw", text: "from template" }] },
 		});
-		const tool = new McpReadResourceTool(() => manager);
-		const result = await tool.execute("call-1", { uri: "test://docs/foo/raw" });
+		const router = createRouter(manager);
 
-		const text = (result.content[0] as { type: string; text: string }).text;
-		expect(text).toBe("from template");
-		expect(result.details?.serverName).toBe("tmpl-server");
+		const resource = await router.resolve("mcp://test://docs/foo/raw");
+		expect(resource.content).toBe("from template");
 	});
 
 	it("matches templates when an expression expands to an empty string", async () => {
@@ -97,12 +118,10 @@ describe("McpReadResourceTool", () => {
 			resources,
 			readResult: { contents: [{ uri: "test://docs", text: "empty expansion" }] },
 		});
-		const tool = new McpReadResourceTool(() => manager);
-		const result = await tool.execute("call-1", { uri: "test://docs" });
+		const router = createRouter(manager);
 
-		const text = (result.content[0] as { type: string; text: string }).text;
-		expect(text).toBe("empty expansion");
-		expect(result.details?.serverName).toBe("query-template-server");
+		const resource = await router.resolve("mcp://test://docs");
+		expect(resource.content).toBe("empty expansion");
 	});
 
 	it("picks the most specific matching template across overlapping schemes", async () => {
@@ -120,10 +139,10 @@ describe("McpReadResourceTool", () => {
 			resources,
 			readResult: { contents: [{ uri: "test://foo/123", text: "from specific" }] },
 		});
-		const tool = new McpReadResourceTool(() => manager);
-		const result = await tool.execute("call-1", { uri: "test://foo/123" });
+		const router = createRouter(manager);
 
-		expect(result.details?.serverName).toBe("specific-server");
+		const resource = await router.resolve("mcp://test://foo/123");
+		expect(resource.notes).toEqual(["MCP server: specific-server"]);
 	});
 
 	it("uses connected server order when matching templates are equally specific", async () => {
@@ -141,10 +160,10 @@ describe("McpReadResourceTool", () => {
 			resources,
 			readResult: { contents: [{ uri: "test://foo", text: "from first" }] },
 		});
-		const tool = new McpReadResourceTool(() => manager);
-		const result = await tool.execute("call-1", { uri: "test://foo" });
+		const router = createRouter(manager);
 
-		expect(result.details?.serverName).toBe("first");
+		const resource = await router.resolve("mcp://test://foo");
+		expect(resource.notes).toEqual(["MCP server: first"]);
 	});
 
 	it("does not match template with different scheme prefix", async () => {
@@ -154,12 +173,9 @@ describe("McpReadResourceTool", () => {
 			templates: [{ uriTemplate: "testing://{id}", name: "testing-template" }],
 		});
 		const manager = createMockManager({ servers: ["tmpl-server"], resources });
-		const tool = new McpReadResourceTool(() => manager);
-		const result = await tool.execute("call-1", { uri: "test://foo" });
+		const router = createRouter(manager);
 
-		const text = (result.content[0] as { type: string; text: string }).text;
-		expect(text).toContain("No MCP server has resource");
-		expect(result.details?.isError).toBe(true);
+		await expect(router.resolve("mcp://test://foo")).rejects.toThrow("No MCP server has resource");
 	});
 
 	it("returns error when readServerResource returns undefined", async () => {
@@ -173,13 +189,10 @@ describe("McpReadResourceTool", () => {
 			resources,
 			readResult: undefined,
 		});
-		const tool = new McpReadResourceTool(() => manager);
-		const result = await tool.execute("call-1", { uri: "test://empty" });
+		const router = createRouter(manager);
 
-		const text = (result.content[0] as { type: string; text: string }).text;
-		expect(text).toContain("returned no content");
-		expect(text).toContain("null-server");
-		expect(result.details?.isError).toBe(true);
+		await expect(router.resolve("mcp://test://empty")).rejects.toThrow("returned no content");
+		await expect(router.resolve("mcp://test://empty")).rejects.toThrow("null-server");
 	});
 
 	it("formats binary content with mime type and base64 length", async () => {
@@ -196,13 +209,12 @@ describe("McpReadResourceTool", () => {
 				contents: [{ uri: "test://image", mimeType: "image/png", blob: blobData }],
 			},
 		});
-		const tool = new McpReadResourceTool(() => manager);
-		const result = await tool.execute("call-1", { uri: "test://image" });
+		const router = createRouter(manager);
 
-		const text = (result.content[0] as { type: string; text: string }).text;
-		expect(text).toContain("[Binary content:");
-		expect(text).toContain("image/png");
-		expect(text).toContain(`base64 length ${blobData.length}`);
+		const resource = await router.resolve("mcp://test://image");
+		expect(resource.content).toContain("[Binary content:");
+		expect(resource.content).toContain("image/png");
+		expect(resource.content).toContain(`base64 length ${blobData.length}`);
 	});
 
 	it("joins mixed text and binary content with --- separator", async () => {
@@ -221,13 +233,12 @@ describe("McpReadResourceTool", () => {
 				],
 			},
 		});
-		const tool = new McpReadResourceTool(() => manager);
-		const result = await tool.execute("call-1", { uri: "test://mixed" });
+		const router = createRouter(manager);
 
-		const text = (result.content[0] as { type: string; text: string }).text;
-		expect(text).toContain("part one");
-		expect(text).toContain("\n---\n");
-		expect(text).toContain("[Binary content:");
+		const resource = await router.resolve("mcp://test://mixed");
+		expect(resource.content).toContain("part one");
+		expect(resource.content).toContain("\n---\n");
+		expect(resource.content).toContain("[Binary content:");
 	});
 
 	it("returns (empty resource) when content items have neither text nor blob", async () => {
@@ -243,12 +254,10 @@ describe("McpReadResourceTool", () => {
 				contents: [{ uri: "test://blank" }],
 			},
 		});
-		const tool = new McpReadResourceTool(() => manager);
-		const result = await tool.execute("call-1", { uri: "test://blank" });
+		const router = createRouter(manager);
 
-		const text = (result.content[0] as { type: string; text: string }).text;
-		expect(text).toBe("(empty resource)");
-		expect(result.details?.isError).toBeUndefined();
+		const resource = await router.resolve("mcp://test://blank");
+		expect(resource.content).toBe("(empty resource)");
 	});
 
 	it("returns error with message when readServerResource throws", async () => {
@@ -262,14 +271,10 @@ describe("McpReadResourceTool", () => {
 			resources,
 			readError: new Error("connection refused"),
 		});
-		const tool = new McpReadResourceTool(() => manager);
-		const result = await tool.execute("call-1", { uri: "test://fail" });
+		const router = createRouter(manager);
 
-		const text = (result.content[0] as { type: string; text: string }).text;
-		expect(text).toContain("MCP resource read error:");
-		expect(text).toContain("connection refused");
-		expect(result.details?.isError).toBe(true);
-		expect(result.details?.serverName).toBe("err-server");
+		await expect(router.resolve("mcp://test://fail")).rejects.toThrow("MCP resource read error:");
+		await expect(router.resolve("mcp://test://fail")).rejects.toThrow("connection refused");
 	});
 
 	it("picks the first server with a matching resource", async () => {
@@ -287,20 +292,17 @@ describe("McpReadResourceTool", () => {
 			resources,
 			readResult: { contents: [{ uri: "test://shared", text: "from first" }] },
 		});
-		const tool = new McpReadResourceTool(() => manager);
-		const result = await tool.execute("call-1", { uri: "test://shared" });
+		const router = createRouter(manager);
 
-		expect(result.details?.serverName).toBe("first");
+		const resource = await router.resolve("mcp://test://shared");
+		expect(resource.notes).toEqual(["MCP server: first"]);
 	});
 
 	it("shows (none) when no servers have any resources", async () => {
 		const manager = createMockManager({ servers: ["lonely-server"] });
-		const tool = new McpReadResourceTool(() => manager);
-		const result = await tool.execute("call-1", { uri: "test://anything" });
+		const router = createRouter(manager);
 
-		const text = (result.content[0] as { type: string; text: string }).text;
-		expect(text).toContain("(none)");
-		expect(result.details?.isError).toBe(true);
+		await expect(router.resolve("mcp://test://anything")).rejects.toThrow("(none)");
 	});
 
 	it("uses unknown for binary content without mimeType", async () => {
@@ -316,10 +318,9 @@ describe("McpReadResourceTool", () => {
 				contents: [{ uri: "test://bin", blob: "data" }],
 			},
 		});
-		const tool = new McpReadResourceTool(() => manager);
-		const result = await tool.execute("call-1", { uri: "test://bin" });
+		const router = createRouter(manager);
 
-		const text = (result.content[0] as { type: string; text: string }).text;
-		expect(text).toContain("[Binary content: unknown,");
+		const resource = await router.resolve("mcp://test://bin");
+		expect(resource.content).toContain("[Binary content: unknown,");
 	});
 });

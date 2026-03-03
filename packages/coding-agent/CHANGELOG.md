@@ -1,9 +1,9 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added `mcp://` internal URL protocol for reading MCP server resources directly via the read tool (e.g., `read(path="mcp://resource-uri")`)
 - Added LM Studio integration to the model registry and discovery flow.
 - Added support for authenticating with LM Studio using the `/login lm-studio` command.
 - Added `fuse-projfs` task isolation mode for Windows ProjFS-backed overlays.
@@ -13,17 +13,23 @@
 
 ### Changed
 
+- Updated MCP resource update notifications to recommend using `read(path="mcp://<uri>")` instead of the deprecated `read_resource` tool
 - Updated Anthropic Foundry environment variable documentation and CLI help text to the canonical names: `CLAUDE_CODE_USE_FOUNDRY`, `CLAUDE_CODE_CLIENT_CERT`, and `CLAUDE_CODE_CLIENT_KEY`
 - Documented Foundry-specific Anthropic runtime configuration (`FOUNDRY_BASE_URL`, `ANTHROPIC_FOUNDRY_API_KEY`, `ANTHROPIC_CUSTOM_HEADERS`, `NODE_EXTRA_CA_CERTS`) in environment variable reference docs
 - `fuse-overlay` task isolation now targets `fuse-overlayfs` on Unix hosts only; on Windows it falls back to `worktree` with a `<system-notification>` suggesting `fuse-projfs`.
 - `fuse-projfs` now performs Windows ProjFS preflight checks and falls back to `worktree` when host or repository prerequisites are unavailable.
 - Cross-repo patch capture now uses the platform null device (`NUL` on Windows, `/dev/null` elsewhere) for `git diff --no-index`.
 
+### Removed
+
+- Removed `read_resource` tool; MCP resource reading is now integrated into the `read` tool via `mcp://` URLs
+
 ### Fixed
 
 - Fixed MCP resource subscription handling to prevent unsubscribing when notifications are re-enabled after being disabled
 - Fixed LM Studio base URL validation to preserve invalid configured URLs instead of silently falling back to localhost
 - Fixed URI template matching to correctly handle expressions that expand to empty strings
+
 ## [13.5.6] - 2026-03-01
 ### Changed
 

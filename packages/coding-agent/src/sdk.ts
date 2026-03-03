@@ -56,6 +56,7 @@ import {
 	InternalUrlRouter,
 	JobsProtocolHandler,
 	LocalProtocolHandler,
+	McpProtocolHandler,
 	MemoryProtocolHandler,
 	PiProtocolHandler,
 	RuleProtocolHandler,
@@ -872,7 +873,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		pendingActionStore,
 	};
 
-	// Initialize internal URL router for internal protocols (agent://, artifact://, memory://, skill://, rule://, local://)
+	// Initialize internal URL router for internal protocols (agent://, artifact://, memory://, skill://, rule://, mcp://, local://)
 	const internalRouter = new InternalUrlRouter();
 	const getArtifactsDir = () => sessionManager.getArtifactsDir();
 	internalRouter.register(new AgentProtocolHandler({ getArtifactsDir }));
@@ -900,6 +901,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	);
 	internalRouter.register(new PiProtocolHandler());
 	internalRouter.register(new JobsProtocolHandler({ getAsyncJobManager: () => asyncJobManager }));
+	internalRouter.register(new McpProtocolHandler({ getMcpManager: () => mcpManager }));
 	toolSession.internalRouter = internalRouter;
 	toolSession.getArtifactsDir = getArtifactsDir;
 	toolSession.agentOutputManager = new AgentOutputManager(
@@ -1513,7 +1515,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 					// Re-check: user may have disabled notifications during the debounce window
 					if (!settings.get("mcp.notifications")) return;
 					void session.followUp(
-						`[MCP notification] Server "${serverName}" reports resource \`${uri}\` was updated. Use read_resource to inspect if relevant.`,
+						`[MCP notification] Server "${serverName}" reports resource \`${uri}\` was updated. Use read(path="mcp://${uri}") to inspect if relevant.`,
 					);
 				}, debounceMs),
 			);

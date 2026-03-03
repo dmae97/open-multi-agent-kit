@@ -582,7 +582,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 
 		const displayMode = resolveFileDisplayMode(this.session);
 
-		// Handle internal URLs (agent://, artifact://, memory://, skill://, rule://, local://)
+		// Handle internal URLs (agent://, artifact://, memory://, skill://, rule://, local://, mcp://)
 		const internalRouter = this.session.internalRouter;
 		if (internalRouter?.canHandle(readPath)) {
 			return this.#handleInternalUrl(readPath, offset, limit);
@@ -841,7 +841,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 	}
 
 	/**
-	 * Handle internal URLs (agent://, artifact://, memory://, skill://, rule://, local://).
+	 * Handle internal URLs (agent://, artifact://, memory://, skill://, rule://, local://, mcp://).
 	 * Supports pagination via offset/limit but rejects them when query extraction is used.
 	 */
 	async #handleInternalUrl(url: string, offset?: number, limit?: number): Promise<AgentToolResult<ReadToolDetails>> {
@@ -859,12 +859,8 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		const scheme = parsed.protocol.replace(/:$/, "").toLowerCase();
 		const hasPathExtraction = parsed.pathname && parsed.pathname !== "/" && parsed.pathname !== "";
 		const queryParam = parsed.searchParams.get("q");
-		const hasQueryExtraction = queryParam !== null && queryParam !== "";
+		const hasQueryExtraction = scheme === "agent" && queryParam !== null && queryParam !== "";
 		const hasExtraction = scheme === "agent" && (hasPathExtraction || hasQueryExtraction);
-
-		if (scheme !== "agent" && hasQueryExtraction) {
-			throw new ToolError("Only agent:// URLs support ?q= query extraction");
-		}
 
 		// Reject offset/limit with query extraction
 		if (hasExtraction && (offset !== undefined || limit !== undefined)) {

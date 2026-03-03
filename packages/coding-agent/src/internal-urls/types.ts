@@ -1,8 +1,8 @@
 /**
  * Types for the internal URL routing system.
  *
- * Internal URLs (agent://, artifact://, memory://, skill://, rule://, pi://, local://) are resolved by tools like fetch and read,
- * providing access to agent outputs and skill files without exposing filesystem paths.
+ * Internal URLs (agent://, artifact://, memory://, skill://, rule://, mcp://, pi://, local://) are resolved by tools like fetch and read,
+ * providing access to agent outputs and server resources without exposing filesystem paths.
  */
 
 /**
@@ -38,7 +38,7 @@ export interface InternalUrl extends URL {
 }
 
 /**
- * Handler for a specific internal URL scheme (e.g., agent://, memory://, skill://).
+ * Handler for a specific internal URL scheme (e.g., agent://, memory://, skill://, mcp://).
  */
 export interface ProtocolHandler {
 	/** The scheme this handler processes (without trailing ://) */
