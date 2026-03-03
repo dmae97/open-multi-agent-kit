@@ -254,7 +254,7 @@ export class StatusLineComponent implements Component {
 		const currentContext = branch ? createPrCacheContext(branch, this.#cachedBranchRepoId ?? null) : null;
 
 		if (canReuseCachedPr(this.#cachedPr, this.#cachedPrContext, currentContext)) {
-			return this.#cachedPr;
+			return this.#cachedPr ?? null;
 		}
 
 		if (this.#cachedPr !== undefined) {

@@ -19,18 +19,7 @@ import type { InteractiveModeContext } from "../../modes/types";
 import { setTerminalTitle } from "../../utils/title-generator";
 
 export class ExtensionUiController {
-	#hookSelectorOverlay: OverlayHandle | undefined;
-	#hookInputOverlay: OverlayHandle | undefined;
 	#extensionTerminalInputUnsubscribers = new Set<() => void>();
-
-	readonly #dialogOverlayOptions = {
-		anchor: "bottom-center",
-		width: "80%",
-		minWidth: 40,
-		maxHeight: "70%",
-		margin: 1,
-	} as const;
-
 	constructor(private ctx: InteractiveModeContext) {}
 
 	/**
@@ -575,8 +564,6 @@ export class ExtensionUiController {
 			dialogOptions?.signal?.removeEventListener("abort", onAbort);
 			resolve(value);
 		};
-		this.#hookSelectorOverlay?.hide();
-		this.#hookSelectorOverlay = undefined;
 		const maxVisible = Math.max(4, Math.min(15, this.ctx.ui.terminal.rows - 12));
 		this.ctx.hookSelector = new HookSelectorComponent(
 			title,
@@ -597,7 +584,10 @@ export class ExtensionUiController {
 				maxVisible,
 			},
 		);
-		this.#hookSelectorOverlay = this.ctx.ui.showOverlay(this.ctx.hookSelector, this.#dialogOverlayOptions);
+		this.ctx.editorContainer.clear();
+		this.ctx.editorContainer.addChild(this.ctx.hookSelector);
+		this.ctx.ui.setFocus(this.ctx.hookSelector);
+		this.ctx.ui.requestRender();
 		if (dialogOptions?.signal) {
 			if (dialogOptions.signal.aborted) {
 				onAbort();
@@ -612,8 +602,8 @@ export class ExtensionUiController {
 	 */
 	hideHookSelector(): void {
 		this.ctx.hookSelector?.dispose();
-		this.#hookSelectorOverlay?.hide();
-		this.#hookSelectorOverlay = undefined;
+		this.ctx.editorContainer.clear();
+		this.ctx.editorContainer.addChild(this.ctx.editor);
 		this.ctx.hookSelector = undefined;
 		this.ctx.ui.setFocus(this.ctx.editor);
 		this.ctx.ui.requestRender();
@@ -650,8 +640,6 @@ export class ExtensionUiController {
 			dialogOptions?.signal?.removeEventListener("abort", onAbort);
 			resolve(value);
 		};
-		this.#hookInputOverlay?.hide();
-		this.#hookInputOverlay = undefined;
 		this.ctx.hookInput = new HookInputComponent(
 			title,
 			placeholder,
@@ -664,7 +652,10 @@ export class ExtensionUiController {
 				finish(undefined);
 			},
 		);
-		this.#hookInputOverlay = this.ctx.ui.showOverlay(this.ctx.hookInput, this.#dialogOverlayOptions);
+		this.ctx.editorContainer.clear();
+		this.ctx.editorContainer.addChild(this.ctx.hookInput);
+		this.ctx.ui.setFocus(this.ctx.hookInput);
+		this.ctx.ui.requestRender();
 		if (dialogOptions?.signal) {
 			if (dialogOptions.signal.aborted) {
 				onAbort();
@@ -680,8 +671,8 @@ export class ExtensionUiController {
 	 */
 	hideHookInput(): void {
 		this.ctx.hookInput?.dispose();
-		this.#hookInputOverlay?.hide();
-		this.#hookInputOverlay = undefined;
+		this.ctx.editorContainer.clear();
+		this.ctx.editorContainer.addChild(this.ctx.editor);
 		this.ctx.hookInput = undefined;
 		this.ctx.ui.setFocus(this.ctx.editor);
 		this.ctx.ui.requestRender();

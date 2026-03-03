@@ -400,7 +400,7 @@ describe("Anthropic request fingerprint alignment", () => {
 					expect(Array.isArray(tlsOptions?.ca)).toBe(true);
 					const caValues = (tlsOptions?.ca ?? []) as string[];
 					expect(caValues.length).toBeGreaterThanOrEqual(tls.rootCertificates.length + 1);
-					expect(caValues.slice(0, tls.rootCertificates.length)).toEqual(tls.rootCertificates);
+					expect(caValues.slice(0, tls.rootCertificates.length)).toEqual([...tls.rootCertificates]);
 					expect(caValues.at(-1)).toContain("BEGIN CERTIFICATE");
 					expect(tlsOptions?.cert).toContain("BEGIN CERTIFICATE");
 					expect(tlsOptions?.key).toContain("BEGIN PRIVATE KEY");
