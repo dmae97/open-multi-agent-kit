@@ -1,3 +1,4 @@
+import { dereferenceJsonSchema } from "./dereference";
 import { areJsonValuesEqual } from "./equality";
 import { UNSUPPORTED_SCHEMA_FIELDS } from "./fields";
 
@@ -197,7 +198,11 @@ const MCP_UNSUPPORTED_SCHEMA_FIELDS = new Set(["$schema"]);
  * (`pattern`, `format`, `additionalProperties`, etc.) and `$ref`/`$defs`.
  */
 export function sanitizeSchemaForMCP(value: unknown): unknown {
-	return sanitizeSchemaImpl(value, {
+	// Dereference $ref/$defs first — MCP servers emit standard JSON Schema
+	// with $defs, but providers (Anthropic, Google) only forward `properties`
+	// and `required`, dropping $defs and leaving dangling $ref pointers.
+	const dereferenced = dereferenceJsonSchema(value);
+	return sanitizeSchemaImpl(dereferenced, {
 		insideProperties: false,
 		normalizeTypeArrayToNullable: false,
 		stripNullableKeyword: true,

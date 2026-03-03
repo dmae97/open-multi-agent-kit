@@ -41,7 +41,7 @@ import {
 } from "./types";
 
 const MCP_CALL_TIMEOUT_MS = 60_000;
-const ajv = new Ajv({ allErrors: true, strict: false });
+const ajv = new Ajv({ allErrors: true, strict: false, logger: false });
 
 /** Agent event types to forward for progress tracking. */
 const agentEventTypes = new Set<AgentEvent["type"]>([

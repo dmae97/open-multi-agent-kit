@@ -4,7 +4,7 @@
  * Subagents must call this tool to finish and return structured JSON output.
  */
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
-import { sanitizeSchemaForStrictMode } from "@oh-my-pi/pi-ai/utils/schema";
+import { dereferenceJsonSchema, sanitizeSchemaForStrictMode } from "@oh-my-pi/pi-ai/utils/schema";
 import type { Static, TSchema } from "@sinclair/typebox";
 import { Type } from "@sinclair/typebox";
 import Ajv, { type ErrorObject, type ValidateFunction } from "ajv";
@@ -18,7 +18,7 @@ export interface SubmitResultDetails {
 	error?: string;
 }
 
-const ajv = new Ajv({ allErrors: true, strict: false });
+const ajv = new Ajv({ allErrors: true, strict: false, logger: false });
 
 function normalizeSchema(schema: unknown): { normalized?: unknown; error?: string } {
 	if (schema === undefined || schema === null) return {};
@@ -50,53 +50,6 @@ function formatAjvErrors(errors: ErrorObject[] | null | undefined): string {
 			return `${path}${err.message ?? "invalid"}`;
 		})
 		.join("; ");
-}
-
-/**
- * Resolve all $ref references in a JSON Schema by inlining definitions.
- * Handles $defs and definitions at any nesting level.
- * Removes $defs/definitions from the output since all refs are inlined.
- */
-function resolveSchemaRefs(schema: Record<string, unknown>): Record<string, unknown> {
-	const defs: Record<string, Record<string, unknown>> = {};
-	const defsObj = schema.$defs ?? schema.definitions;
-	if (defsObj && typeof defsObj === "object" && !Array.isArray(defsObj)) {
-		for (const [name, def] of Object.entries(defsObj as Record<string, unknown>)) {
-			if (def && typeof def === "object" && !Array.isArray(def)) {
-				defs[name] = def as Record<string, unknown>;
-			}
-		}
-	}
-	if (Object.keys(defs).length === 0) return schema;
-
-	const inlining = new Set<string>();
-	function inline(node: unknown): unknown {
-		if (node === null || typeof node !== "object") return node;
-		if (Array.isArray(node)) return node.map(inline);
-		const obj = node as Record<string, unknown>;
-		const ref = obj.$ref;
-		if (typeof ref === "string") {
-			const match = ref.match(/^#\/(?:\$defs|definitions)\/(.+)$/);
-			if (match) {
-				const name = match[1];
-				const def = defs[name];
-				if (def) {
-					if (inlining.has(name)) return {};
-					inlining.add(name);
-					const resolved = inline(def);
-					inlining.delete(name);
-					return resolved;
-				}
-			}
-		}
-		const result: Record<string, unknown> = {};
-		for (const [key, value] of Object.entries(obj)) {
-			if (key === "$defs" || key === "definitions") continue;
-			result[key] = inline(value);
-		}
-		return result;
-	}
-	return inline(schema) as Record<string, unknown>;
 }
 
 export class SubmitResultTool implements AgentTool<TSchema, SubmitResultDetails> {
@@ -168,11 +121,11 @@ export class SubmitResultTool implements AgentTool<TSchema, SubmitResultDetails>
 						: undefined;
 
 			if (sanitizedSchema !== undefined) {
-				const resolved = resolveSchemaRefs({
+				const resolved = dereferenceJsonSchema({
 					...sanitizedSchema,
 					description: schemaDescription,
 				});
-				dataSchema = Type.Unsafe(resolved);
+				dataSchema = Type.Unsafe(resolved as Record<string, unknown>);
 			} else {
 				dataSchema = Type.Record(Type.String(), Type.Any(), {
 					description: schemaError ? schemaDescription : "Structured JSON output (no schema specified)",

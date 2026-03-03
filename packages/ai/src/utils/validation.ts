@@ -451,11 +451,27 @@ function coerceArgsFromErrors(
 
 // Create a singleton AJV instance with formats (only if not in browser extension)
 // AJV requires 'unsafe-eval' CSP which is not allowed in Manifest V3
+//
+// Silent logger: MCP servers may declare non-standard format keywords (e.g. "uint")
+// which cause Ajv to emit console.warn() with strict:false — corrupting TUI output.
 const ajv = new Ajv({
 	allErrors: true,
 	strict: false,
+	logger: false,
 });
 addFormats(ajv);
+
+// Cache compiled validators by schema object identity to avoid
+// re-compiling the same tool schema on every call.
+const compiledSchemaCache = new WeakMap<object, import("ajv").ValidateFunction>();
+function compileSchema(schema: object): import("ajv").ValidateFunction {
+	let validate = compiledSchemaCache.get(schema);
+	if (!validate) {
+		validate = ajv.compile(schema);
+		compiledSchemaCache.set(schema, validate);
+	}
+	return validate;
+}
 
 const MAX_TYPE_COERCION_PASSES = 5;
 
@@ -484,8 +500,7 @@ export function validateToolCall(tools: Tool[], toolCall: ToolCall): any {
 export function validateToolArguments(tool: Tool, toolCall: ToolCall): any {
 	const originalArgs = toolCall.arguments;
 
-	// Compile the schema
-	const validate = ajv.compile(tool.parameters);
+	const validate = compileSchema(tool.parameters);
 
 	// Validate the arguments
 	if (validate(originalArgs)) {

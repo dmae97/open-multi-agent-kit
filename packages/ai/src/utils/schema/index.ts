@@ -1,5 +1,6 @@
 export * from "./adapt";
 export * from "./compatibility";
+export * from "./dereference";
 export * from "./equality";
 export * from "./fields";
 export * from "./normalize-cca";
