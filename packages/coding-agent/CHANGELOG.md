@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.6.0] - 2026-03-03
 ### Added
 
 - Added `mcp://` internal URL protocol for reading MCP server resources directly via the read tool (e.g., `read(path="mcp://resource-uri")`)
