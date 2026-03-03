@@ -122,17 +122,18 @@ Range — add `end`:
 {{hlinefull 62 "      return null;"}}
 {{hlinefull 63 "    }"}}
 ```
-Target only the inner lines that change — leave unchanged boundaries out of the range.
+Include the closing `}` in the replaced range — stopping one line short orphans the brace or duplicates it.
 ```
 {
   path: "…",
   edits: [{
     op: "replace",
     pos: {{hlinejsonref 61 "      console.error(err);"}},
-    end: {{hlinejsonref 62 "      return null;"}},
+    end: {{hlinejsonref 63 "    }"}},
     lines: [
       "      if (isEnoent(err)) return null;",
-      "      throw err;"
+      "      throw err;",
+      "    }"
     ]
   }]
 }
