@@ -44,6 +44,19 @@ describe("Anthropic Copilot auth config", () => {
 		expect(options.defaultHeaders.Authorization).toBe(`Bearer ${token}`);
 	});
 
+	it("derives baseURL from proxy endpoint token", () => {
+		const model = makeCopilotClaudeModel();
+		const token = "tid=2;proxy-ep=proxy.enterprise.githubcopilot.com;exp=9999999999";
+		const options = buildAnthropicClientOptions({
+			model,
+			apiKey: token,
+			extraBetas: [],
+			stream: true,
+			dynamicHeaders: {},
+		});
+
+		expect(options.baseURL).toBe("https://api.enterprise.githubcopilot.com");
+	});
 	it("includes Copilot static headers from model.headers", () => {
 		const model = makeCopilotClaudeModel();
 		const options = buildAnthropicClientOptions({

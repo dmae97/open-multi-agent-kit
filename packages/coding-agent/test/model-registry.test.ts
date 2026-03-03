@@ -550,6 +550,36 @@ describe("ModelRegistry", () => {
 		});
 	});
 
+	describe("github-copilot oauth endpoint alignment", () => {
+		test("getApiKey does not mutate bundled github-copilot baseUrl", async () => {
+			await authStorage.set("github-copilot", [
+				{
+					type: "oauth",
+					access: "tid=1;proxy-ep=proxy.individual.githubcopilot.com;exp=9999999999",
+					refresh: "refresh-individual",
+					expires: Date.now() + 60_000,
+				},
+				{
+					type: "oauth",
+					access: "tid=2;proxy-ep=proxy.enterprise.githubcopilot.com;exp=9999999999",
+					refresh: "refresh-enterprise",
+					expires: Date.now() + 60_000,
+				},
+			]);
+
+			const registry = new ModelRegistry(authStorage, modelsJsonPath);
+			const model = registry.find("github-copilot", "gpt-4o");
+			expect(model).toBeDefined();
+			if (!model) throw new Error("Expected github-copilot/gpt-4o model");
+
+			const initialBaseUrl = model.baseUrl;
+			const firstApiKey = await registry.getApiKey(model);
+			expect(firstApiKey).toContain("proxy.individual.githubcopilot.com");
+			const secondApiKey = await registry.getApiKey(model);
+			expect(secondApiKey).toContain("proxy.enterprise.githubcopilot.com");
+			expect(model.baseUrl).toBe(initialBaseUrl);
+		});
+	});
 	describe("runtime discovery", () => {
 		test("auto-discovers ollama models without provider config", async () => {
 			const originalFetch = globalThis.fetch;

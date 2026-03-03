@@ -33,12 +33,16 @@ function getHeaderValue(headers: unknown, key: string): string | undefined {
 	return undefined;
 }
 
-async function discoverCopilotModels(payload: unknown) {
+async function discoverCopilotModels(
+	payload: unknown,
+	apiKey = "copilot-test-key",
+	expectedBaseUrl = "https://api.individual.githubcopilot.com",
+) {
 	const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
 		const url = typeof input === "string" ? input : input.toString();
-		expect(url).toBe("https://api.individual.githubcopilot.com/models");
+		expect(url).toBe(`${expectedBaseUrl}/models`);
 		expect(init?.method).toBe("GET");
-		expect(getHeaderValue(init?.headers, "Authorization")).toBe("Bearer copilot-test-key");
+		expect(getHeaderValue(init?.headers, "Authorization")).toBe(`Bearer ${apiKey}`);
 		return new Response(JSON.stringify(payload), {
 			status: 200,
 			headers: { "Content-Type": "application/json" },
@@ -46,7 +50,7 @@ async function discoverCopilotModels(payload: unknown) {
 	});
 	global.fetch = fetchMock as unknown as typeof fetch;
 
-	const options = githubCopilotModelManagerOptions({ apiKey: "copilot-test-key" });
+	const options = githubCopilotModelManagerOptions({ apiKey });
 	expect(options.fetchDynamicModels).toBeDefined();
 	const models = await options.fetchDynamicModels?.();
 	expect(models).not.toBeNull();
@@ -54,6 +58,15 @@ async function discoverCopilotModels(payload: unknown) {
 }
 
 describe("github copilot model limits mapping", () => {
+	it("uses proxy endpoint from token for discovery base URL", async () => {
+		const enterpriseToken = "tid=2;proxy-ep=proxy.enterprise.githubcopilot.com;exp=9999999999";
+		const { fetchMock } = await discoverCopilotModels(
+			{ data: [] },
+			enterpriseToken,
+			"https://api.enterprise.githubcopilot.com",
+		);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
 	it("uses capabilities.limits max_prompt_tokens as context window when context_length is absent", async () => {
 		const { models, fetchMock } = await discoverCopilotModels({
 			data: [

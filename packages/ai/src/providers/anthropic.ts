@@ -32,7 +32,11 @@ import { isAnthropicOAuthToken, normalizeToolCallId, resolveCacheRetention } fro
 import { AssistantMessageEventStream } from "../utils/event-stream";
 import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-inspector";
 import { parseStreamingJson } from "../utils/json-parse";
-import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers";
+import {
+	buildCopilotDynamicHeaders,
+	hasCopilotVisionInput,
+	resolveGitHubCopilotBaseUrl,
+} from "./github-copilot-headers";
 import { transformMessages } from "./transform-messages";
 
 export type AnthropicHeaderOptions = {
@@ -396,7 +400,10 @@ function normalizeBaseUrl(baseUrl: string | undefined): string | undefined {
 	return trimmed ? trimmed.replace(/\/+$/, "") : undefined;
 }
 
-function resolveAnthropicBaseUrl(model: Model<"anthropic-messages">): string | undefined {
+function resolveAnthropicBaseUrl(model: Model<"anthropic-messages">, apiKey?: string): string | undefined {
+	if (model.provider === "github-copilot") {
+		return normalizeBaseUrl(resolveGitHubCopilotBaseUrl(model.baseUrl, apiKey) ?? model.baseUrl);
+	}
 	if (model.provider === "anthropic" && isFoundryEnabled()) {
 		const foundryBaseUrl = normalizeBaseUrl($env.FOUNDRY_BASE_URL);
 		if (foundryBaseUrl) {
@@ -583,7 +590,7 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 
 		try {
 			const apiKey = options?.apiKey ?? getEnvApiKey(model.provider) ?? "";
-			const baseUrl = resolveAnthropicBaseUrl(model) ?? "https://api.anthropic.com";
+			const baseUrl = resolveAnthropicBaseUrl(model, apiKey) ?? "https://api.anthropic.com";
 
 			const { client, isOAuthToken } = createClient(model, {
 				model,
@@ -932,7 +939,7 @@ export function buildAnthropicClientOptions(args: AnthropicClientOptionsArgs): A
 		isOAuth,
 	} = args;
 	const oauthToken = isOAuth ?? isAnthropicOAuthToken(apiKey);
-	const baseUrl = resolveAnthropicBaseUrl(model);
+	const baseUrl = resolveAnthropicBaseUrl(model, apiKey);
 	const foundryCustomHeaders = resolveAnthropicCustomHeaders(model);
 	const tlsFetchOptions = buildClaudeCodeTlsFetchOptions(model, baseUrl);
 	if (model.provider === "github-copilot") {

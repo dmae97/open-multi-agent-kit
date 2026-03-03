@@ -34,7 +34,11 @@ import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-ins
 import { parseStreamingJson } from "../utils/json-parse";
 import { adaptSchemaForStrict, NO_STRICT } from "../utils/schema";
 import { mapToOpenAIResponsesToolChoice } from "../utils/tool-choice";
-import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers";
+import {
+	buildCopilotDynamicHeaders,
+	hasCopilotVisionInput,
+	resolveGitHubCopilotBaseUrl,
+} from "./github-copilot-headers";
 import { transformMessages } from "./transform-messages";
 
 /**
@@ -109,7 +113,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 		try {
 			// Create OpenAI client
 			const apiKey = options?.apiKey || getEnvApiKey(model.provider) || "";
-			const { client, copilotPremiumRequests } = createClient(model, context, apiKey, options?.headers);
+			const { client, copilotPremiumRequests, baseUrl } = createClient(model, context, apiKey, options?.headers);
 			const params = buildParams(model, context, options);
 			options?.onPayload?.(params);
 			rawRequestDump = {
@@ -117,7 +121,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 				api: output.api,
 				model: model.id,
 				method: "POST",
-				url: `${model.baseUrl ?? "https://api.openai.com/v1"}/responses`,
+				url: `${baseUrl ?? "https://api.openai.com/v1"}/responses`,
 				body: params,
 			};
 			const openaiStream = await client.responses.create(
@@ -391,6 +395,8 @@ function createClient(
 
 	const headers = { ...(model.headers ?? {}), ...(extraHeaders ?? {}) };
 	let copilotPremiumRequests: number | undefined;
+
+	let baseUrl = model.baseUrl;
 	if (model.provider === "github-copilot") {
 		const hasImages = hasCopilotVisionInput(context.messages);
 		const copilot = buildCopilotDynamicHeaders({
@@ -401,17 +407,18 @@ function createClient(
 		});
 		Object.assign(headers, copilot.headers);
 		copilotPremiumRequests = copilot.premiumRequests;
+		baseUrl = resolveGitHubCopilotBaseUrl(model.baseUrl, apiKey) ?? model.baseUrl;
 	}
-
 	return {
 		client: new OpenAI({
 			apiKey,
-			baseURL: model.baseUrl,
+			baseURL: baseUrl,
 			dangerouslyAllowBrowser: true,
 			maxRetries: 5,
 			defaultHeaders: headers,
 		}),
 		copilotPremiumRequests,
+		baseUrl,
 	};
 }
 

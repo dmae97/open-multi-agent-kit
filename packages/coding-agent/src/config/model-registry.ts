@@ -6,13 +6,11 @@ import {
 	DEFAULT_LOCAL_TOKEN,
 	getBundledModels,
 	getBundledProviders,
-	getGitHubCopilotBaseUrl,
 	googleAntigravityModelManagerOptions,
 	googleGeminiCliModelManagerOptions,
 	type Model,
 	type ModelManagerOptions,
 	type ModelRefreshStrategy,
-	normalizeDomain,
 	type OAuthCredentials,
 	type OAuthLoginCallbacks,
 	openaiCodexModelManagerOptions,
@@ -539,17 +537,7 @@ export class ModelRegistry {
 		const builtInModels = this.#loadBuiltInModels(overrides, modelOverrides);
 		const combined = this.#mergeCustomModels(builtInModels, customModels);
 
-		// Update github-copilot base URL based on OAuth credentials
-		const copilotCred = this.authStorage.getOAuthCredential("github-copilot");
-		if (copilotCred) {
-			const domain = copilotCred.enterpriseUrl
-				? (normalizeDomain(copilotCred.enterpriseUrl) ?? undefined)
-				: undefined;
-			const baseUrl = getGitHubCopilotBaseUrl(copilotCred.access, domain);
-			this.#models = combined.map(m => (m.provider === "github-copilot" ? { ...m, baseUrl } : m));
-		} else {
-			this.#models = combined;
-		}
+		this.#models = combined;
 	}
 
 	/** Load built-in models, applying provider and per-model overrides */

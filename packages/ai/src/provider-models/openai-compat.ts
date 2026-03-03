@@ -7,6 +7,7 @@ import {
 	type OpenAICompatibleModelMapperContext,
 	type OpenAICompatibleModelRecord,
 } from "../utils/discovery/openai-compatible";
+import { getGitHubCopilotBaseUrl } from "../utils/oauth/github-copilot";
 
 const MODELS_DEV_URL = "https://models.dev/api.json";
 const ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1";
@@ -1286,7 +1287,11 @@ function extractCopilotLimits(entry: OpenAICompatibleModelRecord): {
 
 export function githubCopilotModelManagerOptions(config?: GithubCopilotModelManagerConfig): ModelManagerOptions<Api> {
 	const apiKey = config?.apiKey;
-	const baseUrl = config?.baseUrl ?? "https://api.individual.githubcopilot.com";
+	const configuredBaseUrl = config?.baseUrl ?? "https://api.individual.githubcopilot.com";
+	const baseUrl =
+		apiKey?.includes("proxy-ep=") && configuredBaseUrl.includes("githubcopilot.com")
+			? getGitHubCopilotBaseUrl(apiKey)
+			: configuredBaseUrl;
 	const references = createBundledReferenceMap<Api>("github-copilot");
 	const globalReferences = createGlobalReferenceMap();
 	return {
