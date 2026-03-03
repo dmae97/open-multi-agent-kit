@@ -88,6 +88,8 @@ pub struct GrepOptions<'env> {
 	pub multiline:      Option<bool>,
 	/// Include hidden files (default: true).
 	pub hidden:         Option<bool>,
+	/// Respect .gitignore files (default: true).
+	pub gitignore:      Option<bool>,
 	/// Enable shared filesystem scan cache (default: false).
 	pub cache:          Option<bool>,
 	/// Maximum number of matches to return.
@@ -587,6 +589,7 @@ struct GrepConfig {
 	ignore_case:    Option<bool>,
 	multiline:      Option<bool>,
 	hidden:         Option<bool>,
+	gitignore:      Option<bool>,
 	cache:          Option<bool>,
 	max_count:      Option<u32>,
 	offset:         Option<u32>,
@@ -938,6 +941,7 @@ fn grep_sync(
 	let max_count = options.max_count.map(u64::from);
 	let offset = options.offset.unwrap_or(0) as u64;
 	let include_hidden = options.hidden.unwrap_or(true);
+	let use_gitignore = options.gitignore.unwrap_or(true);
 	let use_cache = options.cache.unwrap_or(false);
 	let glob_set = glob_util::try_compile_glob(options.glob.as_deref(), true)?;
 	let type_filter = resolve_type_filter(options.type_filter.as_deref());
@@ -1021,16 +1025,16 @@ fn grep_sync(
 	}
 
 	let entries = if use_cache {
-		let scan = fs_cache::get_or_scan(&search_path, include_hidden, true, &ct)?;
+		let scan = fs_cache::get_or_scan(&search_path, include_hidden, use_gitignore, &ct)?;
 		let mut entries =
 			collect_files(&search_path, &scan.entries, glob_set.as_ref(), type_filter.as_ref());
 		if entries.is_empty() && scan.cache_age_ms >= fs_cache::empty_recheck_ms() {
-			let fresh = fs_cache::force_rescan(&search_path, include_hidden, true, true, &ct)?;
+			let fresh = fs_cache::force_rescan(&search_path, include_hidden, use_gitignore, true, &ct)?;
 			entries = collect_files(&search_path, &fresh, glob_set.as_ref(), type_filter.as_ref());
 		}
 		entries
 	} else {
-		let fresh = fs_cache::force_rescan(&search_path, include_hidden, true, false, &ct)?;
+		let fresh = fs_cache::force_rescan(&search_path, include_hidden, use_gitignore, false, &ct)?;
 		collect_files(&search_path, &fresh, glob_set.as_ref(), type_filter.as_ref())
 	};
 	// Check cancellation before heavy work
@@ -1222,6 +1226,7 @@ pub fn grep(
 		ignore_case,
 		multiline,
 		hidden,
+		gitignore,
 		cache,
 		max_count,
 		offset,
@@ -1242,6 +1247,7 @@ pub fn grep(
 		ignore_case,
 		multiline,
 		hidden,
+		gitignore,
 		cache,
 		max_count,
 		offset,

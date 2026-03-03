@@ -20,6 +20,8 @@ export interface GrepOptions extends Cancellable {
 	multiline?: boolean;
 	/** Include hidden files (default: true) */
 	hidden?: boolean;
+	/** Respect .gitignore files (default: true) */
+	gitignore?: boolean;
 	/** Enable shared filesystem scan cache (default: false). */
 	cache?: boolean;
 	/** Maximum number of matches to return */

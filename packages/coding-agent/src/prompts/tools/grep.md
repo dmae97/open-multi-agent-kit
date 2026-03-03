@@ -3,6 +3,7 @@ Searches files using powerful regex matching built on ripgrep.
 <instruction>
 - Supports full regex syntax (e.g., `log.*Error`, `function\\s+\\w+`); literal braces need escaping (`interface\\{\\}` for `interface{}` in Go)
 - Filter files with `glob` (e.g., `*.js`, `**/*.tsx`) or `type` (e.g., `js`, `py`, `rust`)
+- Respects `.gitignore` by default; set `gitignore: false` to include ignored files
 - For cross-line patterns like `struct \\{[\\s\\S]*?field`, set `multiline: true` if needed
 - If the pattern contains a literal `\n`, multiline defaults to true
 </instruction>

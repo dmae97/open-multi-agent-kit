@@ -30,6 +30,7 @@ const grepSchema = Type.Object({
 	pre: Type.Optional(Type.Number({ description: "Lines of context before matches" })),
 	post: Type.Optional(Type.Number({ description: "Lines of context after matches" })),
 	multiline: Type.Optional(Type.Boolean({ description: "Enable multiline matching" })),
+	gitignore: Type.Optional(Type.Boolean({ description: "Respect .gitignore files during search (default: true)" })),
 	limit: Type.Optional(Type.Number({ description: "Limit output to first N matches (default: 20)" })),
 	offset: Type.Optional(Type.Number({ description: "Skip first N entries before applying limit (default: 0)" })),
 });
@@ -77,7 +78,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 		_onUpdate?: AgentToolUpdateCallback<GrepToolDetails>,
 		_toolContext?: AgentToolContext,
 	): Promise<AgentToolResult<GrepToolDetails>> {
-		const { pattern, path: searchDir, glob, type, i, pre, post, multiline, limit, offset } = params;
+		const { pattern, path: searchDir, glob, type, i, gitignore, pre, post, multiline, limit, offset } = params;
 
 		return untilAborted(signal, async () => {
 			const normalizedPattern = pattern.trim();
@@ -101,6 +102,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 			const normalizedContextBefore = pre ?? defaultContextBefore;
 			const normalizedContextAfter = post ?? defaultContextAfter;
 			const ignoreCase = i ?? false;
+			const useGitignore = gitignore ?? true;
 			const patternHasNewline = normalizedPattern.includes("\n") || normalizedPattern.includes("\\n");
 			const effectiveMultiline = multiline ?? patternHasNewline;
 
@@ -162,6 +164,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 					ignoreCase,
 					multiline: effectiveMultiline,
 					hidden: true,
+					gitignore: useGitignore,
 					cache: false,
 					maxCount: internalLimit,
 					offset: normalizedOffset > 0 ? normalizedOffset : undefined,
@@ -368,6 +371,7 @@ interface GrepRenderArgs {
 	glob?: string;
 	type?: string;
 	i?: boolean;
+	gitignore?: boolean;
 	pre?: number;
 	post?: number;
 	multiline?: boolean;
@@ -385,6 +389,7 @@ export const grepToolRenderer = {
 		if (args.glob) meta.push(`glob:${args.glob}`);
 		if (args.type) meta.push(`type:${args.type}`);
 		if (args.i) meta.push("case:insensitive");
+		if (args.gitignore === false) meta.push("gitignore:false");
 		if (args.pre !== undefined && args.pre > 0) {
 			meta.push(`pre:${args.pre}`);
 		}

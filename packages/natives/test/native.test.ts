@@ -106,8 +106,62 @@ describe("pi-natives", () => {
 			expect(result.totalMatches).toBe(0);
 			expect(result.filesWithMatches).toBe(0);
 		});
-	});
 
+		it("should respect .gitignore by default and allow opting out", async () => {
+			const scopedDir = path.join(testDir, "grep-gitignore-case");
+			await fs.mkdir(scopedDir, { recursive: true });
+			await fs.mkdir(path.join(scopedDir, ".git"), { recursive: true });
+			await fs.writeFile(path.join(scopedDir, ".gitignore"), "ignored.ts\n");
+			await fs.writeFile(path.join(scopedDir, "ignored.ts"), 'export const ignoredToken = "IGNORE_ME_TOKEN";\n');
+
+			const defaultResult = await grep({
+				pattern: "IGNORE_ME_TOKEN",
+				path: scopedDir,
+			});
+
+			expect(defaultResult.totalMatches).toBe(0);
+			expect(defaultResult.filesWithMatches).toBe(0);
+
+			const includeIgnoredResult = await grep({
+				pattern: "IGNORE_ME_TOKEN",
+				path: scopedDir,
+				gitignore: false,
+			});
+
+			expect(includeIgnoredResult.totalMatches).toBe(1);
+			expect(includeIgnoredResult.matches.some(match => match.path.endsWith("ignored.ts"))).toBe(true);
+		});
+
+		it("should keep hidden filtering when gitignore is disabled", async () => {
+			const scopedDir = path.join(testDir, "grep-hidden-gitignore-case");
+			await fs.mkdir(scopedDir, { recursive: true });
+			await fs.mkdir(path.join(scopedDir, ".git"), { recursive: true });
+			await fs.writeFile(path.join(scopedDir, ".gitignore"), ".hidden-ignored.ts\n");
+			await fs.writeFile(
+				path.join(scopedDir, ".hidden-ignored.ts"),
+				'export const hiddenIgnoredToken = "HIDDEN_IGNORE_TOKEN";\n',
+			);
+
+			const hiddenExcluded = await grep({
+				pattern: "HIDDEN_IGNORE_TOKEN",
+				path: scopedDir,
+				gitignore: false,
+				hidden: false,
+			});
+
+			expect(hiddenExcluded.totalMatches).toBe(0);
+
+			const hiddenIncluded = await grep({
+				pattern: "HIDDEN_IGNORE_TOKEN",
+				path: scopedDir,
+				gitignore: false,
+				hidden: true,
+			});
+
+			expect(hiddenIncluded.totalMatches).toBe(1);
+			expect(hiddenIncluded.matches.some(match => match.path.endsWith(".hidden-ignored.ts"))).toBe(true);
+		});
+	});
 	describe("fuzzyFind", () => {
 		it("should match abbreviated fuzzy queries across separators", async () => {
 			const result = await fuzzyFind({

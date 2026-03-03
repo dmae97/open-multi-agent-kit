@@ -627,6 +627,42 @@ function b() {
 			expect(result.details?.fileCount).toBeGreaterThanOrEqual(2);
 		});
 
+		it("should respect .gitignore by default", async () => {
+			const scenarioDir = path.join(testDir, "grep-gitignore-default");
+			fs.mkdirSync(path.join(scenarioDir, ".git"), { recursive: true });
+			fs.writeFileSync(path.join(scenarioDir, ".gitignore"), "ignored.txt\n");
+			fs.writeFileSync(path.join(scenarioDir, "ignored.txt"), "needle ignored\n");
+			fs.writeFileSync(path.join(scenarioDir, "kept.txt"), "needle kept\n");
+
+			const result = await grepTool.execute("test-call-15-gitignore-default", {
+				pattern: "needle",
+				path: scenarioDir,
+			});
+
+			const output = getTextOutput(result);
+			expect(output).toContain("kept.txt");
+			expect(output).not.toContain("ignored.txt");
+			expect(result.details?.fileCount).toBe(1);
+			expect(result.details?.matchCount).toBe(1);
+		});
+
+		it("should include ignored files when gitignore is false", async () => {
+			const scenarioDir = path.join(testDir, "grep-gitignore-off");
+			fs.mkdirSync(path.join(scenarioDir, ".git"), { recursive: true });
+			fs.writeFileSync(path.join(scenarioDir, ".gitignore"), "ignored.txt\n");
+			fs.writeFileSync(path.join(scenarioDir, "ignored.txt"), "needle ignored\n");
+
+			const result = await grepTool.execute("test-call-16-gitignore-off", {
+				pattern: "needle",
+				path: scenarioDir,
+				gitignore: false,
+			});
+
+			const output = getTextOutput(result);
+			expect(output).toContain("ignored.txt");
+			expect(result.details?.fileCount).toBe(1);
+			expect(result.details?.matchCount).toBe(1);
+		});
 		it("should apply default limit of 20 when limit is not provided", async () => {
 			const lines = Array.from({ length: 60 }, (_, i) => `needle ${i + 1}`);
 			fs.writeFileSync(path.join(testDir, "default-limit.txt"), lines.join("\n"));

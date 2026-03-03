@@ -15,6 +15,7 @@ export interface GrepCommandArgs {
 	limit: number;
 	context: number;
 	mode: "content" | "filesWithMatches" | "count";
+	gitignore: boolean;
 }
 
 /**
@@ -32,6 +33,7 @@ export function parseGrepArgs(args: string[]): GrepCommandArgs | undefined {
 		limit: 20,
 		context: 2,
 		mode: "content",
+		gitignore: true,
 	};
 
 	const positional: string[] = [];
@@ -48,6 +50,8 @@ export function parseGrepArgs(args: string[]): GrepCommandArgs | undefined {
 			result.mode = "filesWithMatches";
 		} else if (arg === "--count" || arg === "-c") {
 			result.mode = "count";
+		} else if (arg === "--no-gitignore") {
+			result.gitignore = false;
 		} else if (!arg.startsWith("-")) {
 			positional.push(arg);
 		}
@@ -72,7 +76,9 @@ export async function runGrepCommand(cmd: GrepCommandArgs): Promise<void> {
 	const searchPath = path.resolve(cmd.path);
 	console.log(chalk.dim(`Searching in: ${searchPath}`));
 	console.log(chalk.dim(`Pattern: ${cmd.pattern}`));
-	console.log(chalk.dim(`Mode: ${cmd.mode}, Limit: ${cmd.limit}, Context: ${cmd.context}`));
+	console.log(
+		chalk.dim(`Mode: ${cmd.mode}, Limit: ${cmd.limit}, Context: ${cmd.context}, Gitignore: ${cmd.gitignore}`),
+	);
 
 	console.log("");
 
@@ -85,6 +91,7 @@ export async function runGrepCommand(cmd: GrepCommandArgs): Promise<void> {
 			maxCount: cmd.limit,
 			context: cmd.mode === "content" ? cmd.context : undefined,
 			hidden: true,
+			gitignore: cmd.gitignore,
 		});
 
 		console.log(chalk.green(`Total matches: ${result.totalMatches}`));
@@ -140,6 +147,7 @@ ${chalk.bold("Options:")}
   -f, --files           Output file names only
   -c, --count           Output match counts per file
   -h, --help            Show this help
+  --no-gitignore        Include files excluded by .gitignore
 
 ${chalk.bold("Environment:")}
   PI_GREP_WORKERS=0    Disable worker pool (use single-threaded mode)
