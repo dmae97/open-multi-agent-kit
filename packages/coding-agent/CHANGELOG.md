@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.8.0] - 2026-03-04
 ### Added
 
 - Added `buildCompactHashlineDiffPreview()` function to generate compact diff previews for model-visible tool responses, collapsing long unchanged runs and consecutive additions/removals to show edit shape without full file content
