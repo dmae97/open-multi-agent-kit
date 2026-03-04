@@ -6,7 +6,15 @@ import { matchesKey } from "../keys";
 import { KillRing } from "../kill-ring";
 import type { SymbolTheme } from "../symbols";
 import { type Component, CURSOR_MARKER, type Focusable } from "../tui";
-import { getSegmenter, isPunctuationChar, isWhitespaceChar, padding, truncateToWidth, visibleWidth } from "../utils";
+import {
+	getSegmenter,
+	getWordNavKind,
+	isWhitespaceChar,
+	isWordNavJoiner,
+	padding,
+	truncateToWidth,
+	visibleWidth,
+} from "../utils";
 import { SelectList, type SelectListTheme } from "./select-list";
 
 const segmenter = getSegmenter();
@@ -89,6 +97,27 @@ function wordWrapLine(line: string, maxWidth: number): TextChunk[] {
 	let chunkStartIndex = 0;
 	let atLineStart = true; // Track if we're at the start of a line (for skipping whitespace)
 
+	function consumePrefixToWidth(text: string, availableWidth: number): { text: string; len: number } {
+		let prefix = "";
+		let prefixWidth = 0;
+		let len = 0;
+		for (const seg of segmenter.segment(text)) {
+			const grapheme = seg.segment;
+			const graphemeWidth = visibleWidth(grapheme);
+			if (prefixWidth + graphemeWidth > availableWidth) break;
+			prefix += grapheme;
+			prefixWidth += graphemeWidth;
+			len += grapheme.length;
+			if (prefixWidth === availableWidth) break;
+		}
+		return { text: prefix, len };
+	}
+	function hasWideGrapheme(text: string): boolean {
+		for (const seg of segmenter.segment(text)) {
+			if (visibleWidth(seg.segment) > 1) return true;
+		}
+		return false;
+	}
 	for (const token of tokens) {
 		const tokenWidth = visibleWidth(token.text);
 
@@ -101,28 +130,46 @@ function wordWrapLine(line: string, maxWidth: number): TextChunk[] {
 
 		// If this single token is wider than maxWidth, we need to break it
 		if (tokenWidth > maxWidth) {
-			// First, push any accumulated chunk
-			if (currentChunk) {
-				chunks.push({
-					text: currentChunk,
-					startIndex: chunkStartIndex,
-					endIndex: token.startIndex,
-				});
-				currentChunk = "";
-				currentWidth = 0;
-				chunkStartIndex = token.startIndex;
+			// If we're mid-line, try to use the remaining width by consuming a prefix of this long token.
+			let consumedPrefix = "";
+			let consumedPrefixLen = 0; // JS string index (code units) consumed from token.text
+			if (currentChunk && currentWidth < maxWidth) {
+				const remainingWidth = maxWidth - currentWidth;
+				const consumed = consumePrefixToWidth(token.text, remainingWidth);
+				consumedPrefix = consumed.text;
+				consumedPrefixLen = consumed.len;
 			}
-
-			// Break the long token by grapheme
+			// First, push any accumulated chunk (optionally filled with the prefix).
+			if (currentChunk) {
+				if (consumedPrefix) {
+					chunks.push({
+						text: currentChunk + consumedPrefix,
+						startIndex: chunkStartIndex,
+						endIndex: token.startIndex + consumedPrefixLen,
+					});
+					currentChunk = "";
+					currentWidth = 0;
+					chunkStartIndex = token.startIndex + consumedPrefixLen;
+				} else {
+					chunks.push({
+						text: currentChunk,
+						startIndex: chunkStartIndex,
+						endIndex: token.startIndex,
+					});
+					currentChunk = "";
+					currentWidth = 0;
+					chunkStartIndex = token.startIndex;
+				}
+			}
+			// Break the remaining long token by grapheme
+			const remainingText = consumedPrefixLen > 0 ? token.text.slice(consumedPrefixLen) : token.text;
 			let tokenChunk = "";
 			let tokenChunkWidth = 0;
-			let tokenChunkStart = token.startIndex;
-			let tokenCharIndex = token.startIndex;
-
-			for (const seg of segmenter.segment(token.text)) {
+			let tokenChunkStart = token.startIndex + consumedPrefixLen;
+			let tokenCharIndex = token.startIndex + consumedPrefixLen;
+			for (const seg of segmenter.segment(remainingText)) {
 				const grapheme = seg.segment;
 				const graphemeWidth = visibleWidth(grapheme);
-
 				if (tokenChunkWidth + graphemeWidth > maxWidth && tokenChunk) {
 					chunks.push({
 						text: tokenChunk,
@@ -138,7 +185,6 @@ function wordWrapLine(line: string, maxWidth: number): TextChunk[] {
 				}
 				tokenCharIndex += grapheme.length;
 			}
-
 			// Keep remainder as start of next chunk
 			if (tokenChunk) {
 				currentChunk = tokenChunk;
@@ -150,6 +196,25 @@ function wordWrapLine(line: string, maxWidth: number): TextChunk[] {
 
 		// Check if adding this token would exceed width
 		if (currentWidth + tokenWidth > maxWidth) {
+			// For wide-character tokens (e.g., CJK runs), prefer using remaining width before wrapping
+			// the whole token to the next line. This avoids leaving a short ASCII word alone.
+			if (currentChunk && !token.isWhitespace && currentWidth < maxWidth && hasWideGrapheme(token.text)) {
+				const remainingWidth = maxWidth - currentWidth;
+				const consumed = consumePrefixToWidth(token.text, remainingWidth);
+				if (consumed.text) {
+					chunks.push({
+						text: currentChunk + consumed.text,
+						startIndex: chunkStartIndex,
+						endIndex: token.startIndex + consumed.len,
+					});
+					const remainder = token.text.slice(consumed.len);
+					currentChunk = remainder;
+					currentWidth = visibleWidth(remainder);
+					chunkStartIndex = token.startIndex + consumed.len;
+					atLineStart = false;
+					continue;
+				}
+			}
 			// Push current chunk (trimming trailing whitespace for display)
 			const trimmedChunk = currentChunk.trimEnd();
 			if (trimmedChunk || chunks.length === 0) {
@@ -159,7 +224,6 @@ function wordWrapLine(line: string, maxWidth: number): TextChunk[] {
 					endIndex: chunkStartIndex + currentChunk.length,
 				});
 			}
-
 			// Start new line - skip leading whitespace
 			atLineStart = true;
 			if (token.isWhitespace) {
@@ -1947,26 +2011,49 @@ export class Editor implements Component, Focusable {
 		let newCol = this.#state.cursorCol;
 
 		// Skip trailing whitespace
-		while (graphemes.length > 0 && isWhitespaceChar(graphemes[graphemes.length - 1]?.segment || "")) {
+		while (graphemes.length > 0 && getWordNavKind(graphemes[graphemes.length - 1]?.segment || "") === "whitespace") {
 			newCol -= graphemes.pop()?.segment.length || 0;
 		}
 
 		if (graphemes.length > 0) {
-			const lastGrapheme = graphemes[graphemes.length - 1]?.segment || "";
-			if (isPunctuationChar(lastGrapheme)) {
-				// Skip punctuation run
-				while (graphemes.length > 0 && isPunctuationChar(graphemes[graphemes.length - 1]?.segment || "")) {
-					newCol -= graphemes.pop()?.segment.length || 0;
-				}
-			} else {
-				// Skip word run
+			const last = graphemes[graphemes.length - 1]?.segment || "";
+			const kind = getWordNavKind(last);
+			if (kind === "delimiter") {
+				// Skip delimiter run (punctuation/symbols)
 				while (
 					graphemes.length > 0 &&
-					!isWhitespaceChar(graphemes[graphemes.length - 1]?.segment || "") &&
-					!isPunctuationChar(graphemes[graphemes.length - 1]?.segment || "")
+					getWordNavKind(graphemes[graphemes.length - 1]?.segment || "") === "delimiter"
 				) {
 					newCol -= graphemes.pop()?.segment.length || 0;
 				}
+			} else if (kind === "cjk") {
+				// Skip CJK run (Han/Hiragana/Katakana/Hangul)
+				while (graphemes.length > 0 && getWordNavKind(graphemes[graphemes.length - 1]?.segment || "") === "cjk") {
+					newCol -= graphemes.pop()?.segment.length || 0;
+				}
+			} else if (kind === "word") {
+				// Skip word run (letters/numbers/underscore), keeping common joiners inside words.
+				let hasRightWord = false;
+				while (graphemes.length > 0) {
+					const g = graphemes[graphemes.length - 1]?.segment || "";
+					const k = getWordNavKind(g);
+					if (k === "word") {
+						hasRightWord = true;
+						newCol -= graphemes.pop()?.segment.length || 0;
+						continue;
+					}
+					if (hasRightWord && k === "delimiter" && isWordNavJoiner(g)) {
+						const left = graphemes[graphemes.length - 2]?.segment || "";
+						if (getWordNavKind(left) === "word") {
+							newCol -= graphemes.pop()?.segment.length || 0;
+							continue;
+						}
+					}
+					break;
+				}
+			} else {
+				// Fallback: move by one grapheme
+				newCol -= graphemes.pop()?.segment.length || 0;
 			}
 		}
 
@@ -2020,31 +2107,55 @@ export class Editor implements Component, Focusable {
 		}
 
 		const textAfterCursor = currentLine.slice(this.#state.cursorCol);
-		const segments = segmenter.segment(textAfterCursor);
-		const iterator = segments[Symbol.iterator]();
-		let next = iterator.next();
+		const graphemes = [...segmenter.segment(textAfterCursor)];
+		let i = 0;
 		let newCol = this.#state.cursorCol;
 
 		// Skip leading whitespace
-		while (!next.done && isWhitespaceChar(next.value.segment)) {
-			newCol += next.value.segment.length;
-			next = iterator.next();
+		while (i < graphemes.length && getWordNavKind(graphemes[i]?.segment || "") === "whitespace") {
+			newCol += graphemes[i]?.segment.length || 0;
+			i++;
 		}
 
-		if (!next.done) {
-			const firstGrapheme = next.value.segment;
-			if (isPunctuationChar(firstGrapheme)) {
-				// Skip punctuation run
-				while (!next.done && isPunctuationChar(next.value.segment)) {
-					newCol += next.value.segment.length;
-					next = iterator.next();
+		if (i < graphemes.length) {
+			const kind = getWordNavKind(graphemes[i]?.segment || "");
+			if (kind === "delimiter") {
+				// Skip delimiter run (punctuation/symbols)
+				while (i < graphemes.length && getWordNavKind(graphemes[i]?.segment || "") === "delimiter") {
+					newCol += graphemes[i]?.segment.length || 0;
+					i++;
+				}
+			} else if (kind === "cjk") {
+				// Skip CJK run (Han/Hiragana/Katakana/Hangul)
+				while (i < graphemes.length && getWordNavKind(graphemes[i]?.segment || "") === "cjk") {
+					newCol += graphemes[i]?.segment.length || 0;
+					i++;
+				}
+			} else if (kind === "word") {
+				// Skip word run (letters/numbers/underscore), keeping common joiners inside words.
+				let hasLeftWord = false;
+				while (i < graphemes.length) {
+					const g = graphemes[i]?.segment || "";
+					const k = getWordNavKind(g);
+					if (k === "word") {
+						hasLeftWord = true;
+						newCol += g.length;
+						i++;
+						continue;
+					}
+					if (hasLeftWord && k === "delimiter" && isWordNavJoiner(g)) {
+						const right = graphemes[i + 1]?.segment || "";
+						if (getWordNavKind(right) === "word") {
+							newCol += g.length;
+							i++;
+							continue;
+						}
+					}
+					break;
 				}
 			} else {
-				// Skip word run
-				while (!next.done && !isWhitespaceChar(next.value.segment) && !isPunctuationChar(next.value.segment)) {
-					newCol += next.value.segment.length;
-					next = iterator.next();
-				}
+				// Fallback: move by one grapheme
+				newCol += graphemes[i]?.segment.length || 0;
 			}
 		}
 

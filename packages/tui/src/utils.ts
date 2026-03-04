@@ -97,6 +97,53 @@ export function isPunctuationChar(char: string): boolean {
 	return ASCII_PUNCTUATION[code] ?? false;
 }
 
+export type WordNavKind = "whitespace" | "delimiter" | "cjk" | "word" | "other";
+
+const WORD_NAV_RE_WHITESPACE = /^\p{White_Space}$/u;
+const WORD_NAV_RE_PUNCT = /^\p{P}$/u;
+const WORD_NAV_RE_SYMBOL = /^\p{S}$/u;
+const WORD_NAV_RE_LETTER = /^\p{L}$/u;
+const WORD_NAV_RE_NUMBER = /^\p{N}$/u;
+const WORD_NAV_RE_HAN = /^\p{Script=Han}$/u;
+const WORD_NAV_RE_HIRAGANA = /^\p{Script=Hiragana}$/u;
+const WORD_NAV_RE_KATAKANA = /^\p{Script=Katakana}$/u;
+const WORD_NAV_RE_HANGUL = /^\p{Script=Hangul}$/u;
+
+function firstCodePointChar(str: string): string {
+	const cp = str.codePointAt(0);
+	if (cp === undefined) return "";
+	return String.fromCodePoint(cp);
+}
+
+/**
+ * Coarse Unicode-aware character classification for word navigation (Option/Alt + Left/Right).
+ * This intentionally avoids language-specific word segmentation for predictability across scripts.
+ */
+export function getWordNavKind(grapheme: string): WordNavKind {
+	if (!grapheme) return "other";
+	const ch = firstCodePointChar(grapheme);
+	if (!ch) return "other";
+	if (WORD_NAV_RE_WHITESPACE.test(ch)) return "whitespace";
+	if (WORD_NAV_RE_PUNCT.test(ch) || WORD_NAV_RE_SYMBOL.test(ch)) return "delimiter";
+	if (
+		WORD_NAV_RE_HAN.test(ch) ||
+		WORD_NAV_RE_HIRAGANA.test(ch) ||
+		WORD_NAV_RE_KATAKANA.test(ch) ||
+		WORD_NAV_RE_HANGUL.test(ch)
+	) {
+		return "cjk";
+	}
+	if (ch === "_" || WORD_NAV_RE_LETTER.test(ch) || WORD_NAV_RE_NUMBER.test(ch)) return "word";
+	return "other";
+}
+
+const WORD_NAV_JOINERS = new Set(["'", "’", "-", "‐", "‑"]);
+
+export function isWordNavJoiner(grapheme: string): boolean {
+	const ch = firstCodePointChar(grapheme);
+	return WORD_NAV_JOINERS.has(ch);
+}
+
 /**
  * Apply background color to a line, padding to full width.
  *

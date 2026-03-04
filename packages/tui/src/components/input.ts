@@ -2,7 +2,7 @@ import { BracketedPasteHandler } from "../bracketed-paste";
 import { getEditorKeybindings } from "../keybindings";
 import { KillRing } from "../kill-ring";
 import { type Component, CURSOR_MARKER, type Focusable } from "../tui";
-import { getSegmenter, isPunctuationChar, isWhitespaceChar, padding, visibleWidth } from "../utils";
+import { getSegmenter, getWordNavKind, isWordNavJoiner, padding, sliceWithWidth, visibleWidth } from "../utils";
 
 const segmenter = getSegmenter();
 
@@ -173,7 +173,7 @@ export class Input implements Component, Focusable {
 	}
 
 	#insertCharacter(text: string): void {
-		const isWordChunk = [...text].every(ch => !isWhitespaceChar(ch));
+		const isWordChunk = [...segmenter.segment(text)].every(seg => getWordNavKind(seg.segment) !== "whitespace");
 		// Undo coalescing: consecutive word typing coalesces into one undo unit.
 		if (!isWordChunk || this.#lastAction !== "type-word") {
 			this.#pushUndo();
@@ -341,26 +341,49 @@ export class Input implements Component, Focusable {
 		const graphemes = [...segmenter.segment(textBeforeCursor)];
 
 		// Skip trailing whitespace
-		while (graphemes.length > 0 && isWhitespaceChar(graphemes[graphemes.length - 1]?.segment || "")) {
+		while (graphemes.length > 0 && getWordNavKind(graphemes[graphemes.length - 1]?.segment || "") === "whitespace") {
 			this.#cursor -= graphemes.pop()?.segment.length || 0;
 		}
 
 		if (graphemes.length > 0) {
-			const lastGrapheme = graphemes[graphemes.length - 1]?.segment || "";
-			if (isPunctuationChar(lastGrapheme)) {
-				// Skip punctuation run
-				while (graphemes.length > 0 && isPunctuationChar(graphemes[graphemes.length - 1]?.segment || "")) {
-					this.#cursor -= graphemes.pop()?.segment.length || 0;
-				}
-			} else {
-				// Skip word run
+			const last = graphemes[graphemes.length - 1]?.segment || "";
+			const kind = getWordNavKind(last);
+			if (kind === "delimiter") {
+				// Skip delimiter run (punctuation/symbols)
 				while (
 					graphemes.length > 0 &&
-					!isWhitespaceChar(graphemes[graphemes.length - 1]?.segment || "") &&
-					!isPunctuationChar(graphemes[graphemes.length - 1]?.segment || "")
+					getWordNavKind(graphemes[graphemes.length - 1]?.segment || "") === "delimiter"
 				) {
 					this.#cursor -= graphemes.pop()?.segment.length || 0;
 				}
+			} else if (kind === "cjk") {
+				// Skip CJK run (Han/Hiragana/Katakana/Hangul)
+				while (graphemes.length > 0 && getWordNavKind(graphemes[graphemes.length - 1]?.segment || "") === "cjk") {
+					this.#cursor -= graphemes.pop()?.segment.length || 0;
+				}
+			} else if (kind === "word") {
+				// Skip word run (letters/numbers/underscore), keeping common joiners inside words.
+				let hasRightWord = false;
+				while (graphemes.length > 0) {
+					const g = graphemes[graphemes.length - 1]?.segment || "";
+					const k = getWordNavKind(g);
+					if (k === "word") {
+						hasRightWord = true;
+						this.#cursor -= graphemes.pop()?.segment.length || 0;
+						continue;
+					}
+					if (hasRightWord && k === "delimiter" && isWordNavJoiner(g)) {
+						const left = graphemes[graphemes.length - 2]?.segment || "";
+						if (getWordNavKind(left) === "word") {
+							this.#cursor -= graphemes.pop()?.segment.length || 0;
+							continue;
+						}
+					}
+					break;
+				}
+			} else {
+				// Fallback: move by one grapheme
+				this.#cursor -= graphemes.pop()?.segment.length || 0;
 			}
 		}
 	}
@@ -372,30 +395,54 @@ export class Input implements Component, Focusable {
 
 		this.#lastAction = null;
 		const textAfterCursor = this.#value.slice(this.#cursor);
-		const segments = segmenter.segment(textAfterCursor);
-		const iterator = segments[Symbol.iterator]();
-		let next = iterator.next();
+		const graphemes = [...segmenter.segment(textAfterCursor)];
+		let i = 0;
 
 		// Skip leading whitespace
-		while (!next.done && isWhitespaceChar(next.value.segment)) {
-			this.#cursor += next.value.segment.length;
-			next = iterator.next();
+		while (i < graphemes.length && getWordNavKind(graphemes[i]?.segment || "") === "whitespace") {
+			this.#cursor += graphemes[i]?.segment.length || 0;
+			i++;
 		}
 
-		if (!next.done) {
-			const firstGrapheme = next.value.segment;
-			if (isPunctuationChar(firstGrapheme)) {
-				// Skip punctuation run
-				while (!next.done && isPunctuationChar(next.value.segment)) {
-					this.#cursor += next.value.segment.length;
-					next = iterator.next();
+		if (i < graphemes.length) {
+			const kind = getWordNavKind(graphemes[i]?.segment || "");
+			if (kind === "delimiter") {
+				// Skip delimiter run (punctuation/symbols)
+				while (i < graphemes.length && getWordNavKind(graphemes[i]?.segment || "") === "delimiter") {
+					this.#cursor += graphemes[i]?.segment.length || 0;
+					i++;
+				}
+			} else if (kind === "cjk") {
+				// Skip CJK run (Han/Hiragana/Katakana/Hangul)
+				while (i < graphemes.length && getWordNavKind(graphemes[i]?.segment || "") === "cjk") {
+					this.#cursor += graphemes[i]?.segment.length || 0;
+					i++;
+				}
+			} else if (kind === "word") {
+				// Skip word run (letters/numbers/underscore), keeping common joiners inside words.
+				let hasLeftWord = false;
+				while (i < graphemes.length) {
+					const g = graphemes[i]?.segment || "";
+					const k = getWordNavKind(g);
+					if (k === "word") {
+						hasLeftWord = true;
+						this.#cursor += g.length;
+						i++;
+						continue;
+					}
+					if (hasLeftWord && k === "delimiter" && isWordNavJoiner(g)) {
+						const right = graphemes[i + 1]?.segment || "";
+						if (getWordNavKind(right) === "word") {
+							this.#cursor += g.length;
+							i++;
+							continue;
+						}
+					}
+					break;
 				}
 			} else {
-				// Skip word run
-				while (!next.done && !isWhitespaceChar(next.value.segment) && !isPunctuationChar(next.value.segment)) {
-					this.#cursor += next.value.segment.length;
-					next = iterator.next();
-				}
+				// Fallback: move by one grapheme
+				this.#cursor += graphemes[i]?.segment.length || 0;
 			}
 		}
 	}
@@ -425,60 +472,36 @@ export class Input implements Component, Focusable {
 			return [prompt];
 		}
 
-		let visibleText = "";
-		let cursorDisplay = this.#cursor;
+		const cursorIndex = this.#cursor;
+		// Ensure we always have a grapheme to invert at the cursor (space at end).
+		const displayValue = cursorIndex >= this.#value.length ? `${this.#value} ` : this.#value;
 
-		if (this.#value.length < availableWidth) {
-			// Everything fits (leave room for cursor at end)
-			visibleText = this.#value;
-		} else {
-			// Need horizontal scrolling
-			// Reserve one character for cursor if it's at the end
-			const scrollWidth = this.#cursor === this.#value.length ? availableWidth - 1 : availableWidth;
-			const halfWidth = Math.floor(scrollWidth / 2);
+		const totalCols = visibleWidth(displayValue);
+		const cursorCols = visibleWidth(displayValue.slice(0, cursorIndex));
 
-			const findValidStart = (start: number) => {
-				while (start < this.#value.length) {
-					const charCode = this.#value.charCodeAt(start);
-					// this is low surrogate, not a valid start
-					if (charCode >= 0xdc00 && charCode < 0xe000) {
-						start++;
-						continue;
-					}
-					break;
-				}
-				return start;
-			};
+		// Width of the grapheme at the cursor, for ensuring it fits in the viewport.
+		const cursorIter = segmenter.segment(displayValue.slice(cursorIndex))[Symbol.iterator]();
+		const cursorG = cursorIter.next().value?.segment ?? " ";
+		const cursorGWidth = visibleWidth(cursorG);
 
-			const findValidEnd = (end: number) => {
-				while (end > 0) {
-					const charCode = this.#value.charCodeAt(end - 1);
-					// this is high surrogate, might be split.
-					if (charCode >= 0xd800 && charCode < 0xdc00) {
-						end--;
-						continue;
-					}
-					break;
-				}
-				return end;
-			};
+		const maxStart = Math.max(0, totalCols - availableWidth);
+		let startCol = 0;
+		if (totalCols > availableWidth) {
+			const half = Math.floor(availableWidth / 2);
+			startCol = Math.max(0, Math.min(maxStart, cursorCols - half));
 
-			if (this.#cursor < halfWidth) {
-				// Cursor near start
-				visibleText = this.#value.slice(0, findValidEnd(scrollWidth));
-				cursorDisplay = this.#cursor;
-			} else if (this.#cursor > this.#value.length - halfWidth) {
-				// Cursor near end
-				const start = findValidStart(this.#value.length - scrollWidth);
-				visibleText = this.#value.slice(start);
-				cursorDisplay = this.#cursor - start;
-			} else {
-				// Cursor in middle
-				const start = findValidStart(this.#cursor - halfWidth);
-				visibleText = this.#value.slice(start, findValidEnd(start + scrollWidth));
-				cursorDisplay = this.#cursor - start;
+			// Ensure the cursor grapheme is inside the viewport (and fits fully if wide).
+			const maxCursorRel = Math.max(0, availableWidth - cursorGWidth);
+			const cursorRel = cursorCols - startCol;
+			if (cursorRel > maxCursorRel) {
+				startCol = Math.max(0, Math.min(maxStart, cursorCols - maxCursorRel));
 			}
 		}
+
+		const visibleText = sliceWithWidth(displayValue, startCol, availableWidth, true).text;
+		const prefixText = sliceWithWidth(displayValue, startCol, Math.max(0, cursorCols - startCol), true).text;
+		let cursorDisplay = prefixText.length;
+		cursorDisplay = Math.max(0, Math.min(cursorDisplay, visibleText.length));
 
 		// Build line with fake cursor
 		// Insert cursor character at cursor position
@@ -491,16 +514,20 @@ export class Input implements Component, Focusable {
 
 		// Hardware cursor marker (zero-width, emitted before fake cursor for IME positioning)
 		const marker = this.focused ? CURSOR_MARKER : "";
-
 		// Use inverse video to show cursor
 		const cursorChar = `\x1b[7m${atCursor}\x1b[27m`; // ESC[7m = reverse video, ESC[27m = normal
-		const textWithCursor = beforeCursor + marker + cursorChar + afterCursor;
 
-		// Calculate visual width
-		const visualLength = visibleWidth(textWithCursor);
+		// Clamp only the trailing text (measured in terminal cells), keeping the cursor marker intact.
+		const beforeWidth = visibleWidth(beforeCursor);
+		const cursorWidth = visibleWidth(atCursor);
+		const remainingAfterWidth = Math.max(0, availableWidth - beforeWidth - cursorWidth);
+		const clampedAfterCursor = sliceWithWidth(afterCursor, 0, remainingAfterWidth, true).text;
+		const renderedNoMarker = beforeCursor + cursorChar + clampedAfterCursor;
+		const textWithCursor = beforeCursor + marker + cursorChar + clampedAfterCursor;
+
+		const visualLength = visibleWidth(renderedNoMarker);
 		const pad = padding(Math.max(0, availableWidth - visualLength));
 		const line = prompt + textWithCursor + pad;
-
 		return [line];
 	}
 }
