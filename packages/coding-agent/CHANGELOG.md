@@ -1,10 +1,14 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added `buildCompactHashlineDiffPreview()` function to generate compact diff previews for model-visible tool responses, collapsing long unchanged runs and consecutive additions/removals to show edit shape without full file content
 - Added project-level discovery for `.agent/` and `.agents/` directories, walking up from cwd to repo root (matching behavior of other providers like `.omp`, `.claude`, `.codex`). Applies to skills, rules, prompts, commands, context files (AGENTS.md), and system prompts (SYSTEM.md)
+
+### Changed
+
+- Changed edit tool response to include diff summary with line counts (+added -removed) and a compact diff preview instead of warnings-only output
 
 ### Fixed
 

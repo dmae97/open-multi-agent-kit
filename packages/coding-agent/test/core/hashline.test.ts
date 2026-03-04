@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
 	applyHashlineEdits,
+	buildCompactHashlineDiffPreview,
 	computeLineHash,
 	formatHashLines,
 	HashlineMismatchError,
@@ -803,6 +804,48 @@ describe("applyHashlineEdits — errors", () => {
 
 		const prependEdits: HashlineEdit[] = [{ op: "prepend", pos: makeTag(1, "aaa"), lines: [] }];
 		expect(applyHashlineEdits(content, prependEdits).lines).toBe("\naaa\nbbb");
+	});
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// buildCompactHashlineDiffPreview
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("buildCompactHashlineDiffPreview", () => {
+	it("keeps trailing context for first unchanged run", () => {
+		const diff = [" 1|ctx-a", " 2|ctx-b", " 3|ctx-c", " 4|ctx-d", "+5|added"].join("\n");
+
+		const preview = buildCompactHashlineDiffPreview(diff);
+
+		expect(preview.preview).not.toContain(" 1|ctx-a");
+		expect(preview.preview).not.toContain(" 2|ctx-b");
+		expect(preview.preview).toContain(" 3|ctx-c");
+		expect(preview.preview).toContain(" 4|ctx-d");
+		expect(preview.preview).toContain(" ... 2 more unchanged lines");
+		expect(preview.preview).toContain("+5|added");
+	});
+
+	it("collapses long addition runs and tracks line counts", () => {
+		const diff = [" 1|head", "+2|one", "+3|two", "+4|three", "+5|four", "-2|old"].join("\n");
+
+		const preview = buildCompactHashlineDiffPreview(diff);
+
+		expect(preview.preview).toContain("+2|one");
+		expect(preview.preview).toContain("+3|two");
+		expect(preview.preview).toContain(" ... 2 more added lines");
+		expect(preview.addedLines).toBe(4);
+		expect(preview.removedLines).toBe(1);
+	});
+	it("keeps leading context for last unchanged run", () => {
+		const diff = ["-10|old", "+10|new", " 11|ctx-a", " 12|ctx-b", " 13|ctx-c", " 14|ctx-d"].join("\n");
+
+		const preview = buildCompactHashlineDiffPreview(diff);
+
+		expect(preview.preview).toContain(" 11|ctx-a");
+		expect(preview.preview).toContain(" 12|ctx-b");
+		expect(preview.preview).not.toContain(" 13|ctx-c");
+		expect(preview.preview).not.toContain(" 14|ctx-d");
+		expect(preview.preview).toContain(" ... 2 more unchanged lines");
 	});
 });
 

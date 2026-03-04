@@ -34,7 +34,14 @@ import { enforcePlanModeWrite, resolvePlanPath } from "../tools/plan-mode-guard"
 import { applyPatch } from "./applicator";
 import { generateDiffString, generateUnifiedDiffString, replaceText } from "./diff";
 import { findMatch } from "./fuzzy";
-import { type Anchor, applyHashlineEdits, computeLineHash, type HashlineEdit, parseTag } from "./hashline";
+import {
+	type Anchor,
+	applyHashlineEdits,
+	buildCompactHashlineDiffPreview,
+	computeLineHash,
+	type HashlineEdit,
+	parseTag,
+} from "./hashline";
 import { detectLineEnding, normalizeToLF, restoreLineEndings, stripBom } from "./normalize";
 import { type EditToolDetails, getLspBatchRequest } from "./shared";
 // Internal imports
@@ -597,11 +604,15 @@ export class EditTool implements AgentTool<TInput> {
 				.get();
 
 			const resultText = move ? `Moved ${path} to ${move}` : `Updated ${path}`;
+			const preview = buildCompactHashlineDiffPreview(diffResult.diff);
+			const summaryLine = `Changes: +${preview.addedLines} -${preview.removedLines}${preview.preview ? "" : " (no textual diff preview)"}`;
+			const warningsBlock = result.warnings?.length ? `\n\nWarnings:\n${result.warnings.join("\n")}` : "";
+			const previewBlock = preview.preview ? `\n\nDiff preview:\n${preview.preview}` : "";
 			return {
 				content: [
 					{
 						type: "text",
-						text: `${resultText}${result.warnings?.length ? `\n\nWarnings:\n${result.warnings.join("\n")}` : ""}`,
+						text: `${resultText}\n${summaryLine}${previewBlock}${warningsBlock}`,
 					},
 				],
 				details: {
