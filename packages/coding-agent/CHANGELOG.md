@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.7.6] - 2026-03-04
 ### Added
 
 - Exported `dedupeParseErrors` utility function to deduplicate parse error messages while preserving order
