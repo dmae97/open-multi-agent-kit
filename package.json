@@ -21,7 +21,7 @@
 		"fmt:rs": "cargo fmt --all",
 		"fix": "bun run --parallel fix:ts fix:rs",
 		"fix:ts": "biome check --write --unsafe . && bun --cwd=packages/coding-agent run format-prompts && bun --cwd=packages/coding-agent run generate-docs-index",
-		"fix:rs": "cargo clippy --fix --allow-dirty --all-targets --no-deps --allow-staged --broken-code --allow-no-vcs && cargo fmt --all",
+		"fix:rs": "cargo fmt --all && cargo clippy --fix --allow-dirty --all-targets --no-deps --allow-staged --broken-code --allow-no-vcs",
 		"build:native": "bun --cwd=packages/natives run build:native",
 		"dev:native": "bun --cwd=packages/natives run dev:native",
 		"bench:gen-fixtures": "bun --cwd=packages/react-edit-benchmark run src/generate.ts --react-dir /tmp/react-source --count-per-type 8",

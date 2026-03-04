@@ -878,7 +878,7 @@ export class DebugLogViewerComponent implements Component {
 		return `${theme.boxSharp.vertical}${truncated}${padding(remaining)}${theme.boxSharp.vertical}`;
 	}
 
-	async #copySelected(): Promise<void> {
+	#copySelected() {
 		const selectedPayload = buildLogCopyPayload(this.#model.getSelectedRawLines());
 		const selected = selectedPayload.length === 0 ? [] : selectedPayload.split("\n");
 
@@ -890,7 +890,7 @@ export class DebugLogViewerComponent implements Component {
 		}
 
 		try {
-			await copyToClipboard(selectedPayload);
+			copyToClipboard(selectedPayload);
 			const message = `Copied ${selected.length} log ${selected.length === 1 ? "entry" : "entries"}`;
 			this.#statusMessage = message;
 			this.#onStatus?.(message);

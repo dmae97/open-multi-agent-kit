@@ -510,15 +510,14 @@ export class InputController {
 			this.ctx.showStatus("Nothing to copy");
 			return;
 		}
-		copyToClipboard(text)
-			.then(() => {
-				const sanitized = sanitizeText(text);
-				const preview = sanitized.length > 30 ? `${sanitized.slice(0, 30)}...` : sanitized;
-				this.ctx.showStatus(`Copied: ${preview}`);
-			})
-			.catch(() => {
-				this.ctx.showWarning("Failed to copy to clipboard");
-			});
+		try {
+			copyToClipboard(text);
+			const sanitized = sanitizeText(text);
+			const preview = sanitized.length > 30 ? `${sanitized.slice(0, 30)}...` : sanitized;
+			this.ctx.showStatus(`Copied: ${preview}`);
+		} catch {
+			this.ctx.showWarning("Failed to copy to clipboard");
+		}
 	}
 
 	cycleThinkingLevel(): void {

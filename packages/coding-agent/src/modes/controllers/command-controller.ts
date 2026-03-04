@@ -57,14 +57,14 @@ export class CommandController {
 		}
 	}
 
-	async handleDumpCommand(): Promise<void> {
+	handleDumpCommand() {
 		try {
 			const formatted = this.ctx.session.formatSessionAsText();
 			if (!formatted) {
 				this.ctx.showError("No messages to dump yet.");
 				return;
 			}
-			await copyToClipboard(formatted);
+			copyToClipboard(formatted);
 			this.ctx.showStatus("Session copied to clipboard");
 		} catch (error: unknown) {
 			this.ctx.showError(`Failed to copy session: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -214,7 +214,7 @@ export class CommandController {
 		}
 	}
 
-	async handleCopyCommand(): Promise<void> {
+	handleCopyCommand() {
 		const text = this.ctx.session.getLastAssistantText();
 		if (!text) {
 			this.ctx.showError("No agent messages to copy yet.");
@@ -222,7 +222,7 @@ export class CommandController {
 		}
 
 		try {
-			await copyToClipboard(text);
+			copyToClipboard(text);
 			this.ctx.showStatus("Copied last agent message to clipboard");
 		} catch (error) {
 			this.ctx.showError(error instanceof Error ? error.message : String(error));

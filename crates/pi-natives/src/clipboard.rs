@@ -1,18 +1,8 @@
 //! Clipboard utilities backed by arboard.
 //!
-//! # Overview
-//! Provides text copy and image read support across Linux, macOS, and Windows
-//! without shelling out to platform-specific commands.
-//!
-//! # Example
-//! ```ignore
-//! use pi_natives::clipboard::copy_to_clipboard;
-//!
-//! # async fn demo() -> napi::Result<()> {
-//! copy_to_clipboard("hello".to_string()).await?;
-//! # Ok(())
-//! # }
-//! ```
+//! Provides text copy and image read support across Linux, macOS, and Windows.
+//! Performs text copy synchronously so macOS writes run on the caller thread.
+//! This avoids worker-thread `AppKit` pasteboard warnings in CLI contexts.
 
 use std::io::Cursor;
 
@@ -57,15 +47,13 @@ fn encode_png(image: ImageData<'_>) -> Result<Vec<u8>> {
 /// # Errors
 /// Returns an error if clipboard access fails.
 #[napi(js_name = "copyToClipboard")]
-pub fn copy_to_clipboard(text: String) -> task::Async<()> {
-	task::blocking("clipboard.copy", (), move |_| -> Result<()> {
-		let mut clipboard = Clipboard::new()
-			.map_err(|err| Error::from_reason(format!("Failed to access clipboard: {err}")))?;
-		clipboard
-			.set_text(text)
-			.map_err(|err| Error::from_reason(format!("Failed to copy to clipboard: {err}")))?;
-		Ok(())
-	})
+pub fn copy_to_clipboard(text: String) -> Result<()> {
+	let mut clipboard = Clipboard::new()
+		.map_err(|err| Error::from_reason(format!("Failed to access clipboard: {err}")))?;
+	clipboard
+		.set_text(text)
+		.map_err(|err| Error::from_reason(format!("Failed to copy to clipboard: {err}")))?;
+	Ok(())
 }
 
 /// Read an image from the system clipboard.
