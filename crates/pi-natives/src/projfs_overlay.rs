@@ -353,31 +353,23 @@ mod imp {
 			api_handle: api,
 		};
 
-		let mut sessions = PROJFS_SESSIONS.lock();
-		match sessions.entry(projection_key) {
-			Entry::Occupied(mut entry) => {
-				if matches!(entry.get(), ProjfsSessionState::Starting) {
+		let error_message = {
+			let mut sessions = PROJFS_SESSIONS.lock();
+			match sessions.entry(projection_key) {
+				Entry::Occupied(mut entry) if matches!(entry.get(), ProjfsSessionState::Starting) => {
 					entry.insert(ProjfsSessionState::Active(started_session));
-					Ok(())
-				} else {
-					drop(entry);
-					drop(sessions);
-					stop_projfs_session(started_session);
-					Err(Error::from_reason(format!(
-						"ProjFS overlay is already active for {}",
-						projection_root_path.display()
-					)))
-				}
-			},
-			Entry::Vacant(_) => {
-				drop(sessions);
-				stop_projfs_session(started_session);
-				Err(Error::from_reason(format!(
-					"ProjFS overlay start was canceled for {}",
-					projection_root_path.display()
-				)))
-			},
-		}
+					return Ok(());
+				},
+				Entry::Occupied(_) => {
+					format!("ProjFS overlay is already active for {}", projection_root_path.display())
+				},
+				Entry::Vacant(_) => {
+					format!("ProjFS overlay start was canceled for {}", projection_root_path.display())
+				},
+			}
+		};
+		stop_projfs_session(started_session);
+		Err(Error::from_reason(error_message))
 	}
 
 	pub fn stop(projection_root: &str) {

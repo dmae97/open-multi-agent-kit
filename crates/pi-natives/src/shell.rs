@@ -368,13 +368,13 @@ fn merge_path_values(existing: &str, incoming: &str) -> String {
 	push_unique_paths(&mut merged, &mut seen, incoming);
 
 	std::env::join_paths(merged.iter())
-		.map_or_else(|_| merged.join(";"), |paths| paths.to_string_lossy().to_string())
+		.map_or_else(|_| merged.join(";"), |paths| paths.to_string_lossy().into_owned())
 }
 
 #[cfg(windows)]
 fn push_unique_paths(merged: &mut Vec<String>, seen: &mut HashSet<String>, value: &str) {
 	for segment in std::env::split_paths(value) {
-		let segment_str = segment.to_string_lossy().to_string();
+		let segment_str = segment.to_string_lossy().into_owned();
 		let normalized = normalize_path_segment(&segment_str);
 		if normalized.is_empty() {
 			continue;
@@ -454,7 +454,7 @@ async fn create_session(config: &ShellConfig) -> Result<ShellSessionCore> {
 	if merged_path.is_none()
 		&& let Some(value) = std::env::var_os("Path").or_else(|| std::env::var_os("PATH"))
 	{
-		merged_path = Some(value.to_string_lossy().to_string());
+		merged_path = Some(value.to_string_lossy().into_owned());
 	}
 
 	if let Some(path_value) = merged_path {

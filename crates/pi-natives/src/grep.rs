@@ -991,7 +991,7 @@ fn grep_sync(
 			});
 		}
 
-		let path_string = search_path.to_string_lossy().to_string();
+		let path_string = search_path.to_string_lossy().into_owned();
 		let mut matches = Vec::new();
 		match output_mode {
 			OutputMode::Content => {

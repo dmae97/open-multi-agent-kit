@@ -398,7 +398,7 @@ impl MacAppearanceObserver {
 		}
 		#[cfg(not(target_os = "macos"))]
 		{
-			drop(callback);
+			let _ = callback;
 			Ok(Self {})
 		}
 	}

@@ -401,7 +401,7 @@ fn collect_candidates(
 			.file_name()
 			.and_then(|name| name.to_str())
 			.map_or_else(
-				|| search_path.to_string_lossy().to_string(),
+				|| search_path.to_string_lossy().into_owned(),
 				std::string::ToString::to_string,
 			);
 		return Ok(vec![FileCandidate { absolute_path: search_path, display_path }]);
@@ -991,7 +991,7 @@ mod tests {
 		let tree = make_temp_tree();
 		let ct = task::CancelToken::default();
 		let candidates =
-			collect_candidates(Some(tree.root.to_string_lossy().to_string()), Some("*.ts"), &ct)
+			collect_candidates(Some(tree.root.to_string_lossy().into_owned()), Some("*.ts"), &ct)
 				.expect("candidate collection should succeed");
 		let paths = candidates
 			.into_iter()
@@ -1005,7 +1005,7 @@ mod tests {
 		let tree = make_temp_tree();
 		let ct = task::CancelToken::default();
 		let candidates =
-			collect_candidates(Some(tree.root.to_string_lossy().to_string()), Some("**/*.ts"), &ct)
+			collect_candidates(Some(tree.root.to_string_lossy().into_owned()), Some("**/*.ts"), &ct)
 				.expect("candidate collection should succeed");
 		let paths = candidates
 			.into_iter()
@@ -1030,7 +1030,7 @@ mod tests {
 		let tree = make_temp_tree();
 		let ct = task::CancelToken::default();
 		let candidates =
-			collect_candidates(Some(tree.root.to_string_lossy().to_string()), Some("**/*.ts"), &ct)
+			collect_candidates(Some(tree.root.to_string_lossy().into_owned()), Some("**/*.ts"), &ct)
 				.expect("candidate collection should succeed");
 		let inferred =
 			infer_single_replace_lang(&candidates, &ct).expect("language should be inferred");
@@ -1041,8 +1041,9 @@ mod tests {
 	fn rejects_mixed_replace_lang_inference() {
 		let tree = make_mixed_temp_tree();
 		let ct = task::CancelToken::default();
-		let candidates = collect_candidates(Some(tree.root.to_string_lossy().to_string()), None, &ct)
-			.expect("candidate collection should succeed");
+		let candidates =
+			collect_candidates(Some(tree.root.to_string_lossy().into_owned()), None, &ct)
+				.expect("candidate collection should succeed");
 		let err = infer_single_replace_lang(&candidates, &ct)
 			.expect_err("mixed language inference should fail");
 		assert!(err.to_string().contains("multiple languages"));

@@ -74,7 +74,7 @@ fn normalize_path(path: &Path) -> String {
 
 	let path = Path::new(unquoted);
 	if let Ok(canonical) = path.canonicalize() {
-		return canonical.to_string_lossy().to_string();
+		return canonical.to_string_lossy().into_owned();
 	}
 
 	let mut normalized = PathBuf::new();
@@ -82,7 +82,7 @@ fn normalize_path(path: &Path) -> String {
 		normalized.push(component.as_os_str());
 	}
 
-	normalized.to_string_lossy().to_string()
+	normalized.to_string_lossy().into_owned()
 }
 
 fn find_git_paths() -> Vec<String> {
@@ -137,7 +137,7 @@ fn query_git_install_path_from_where() -> Option<String> {
 
 	let git_path = Path::new(line);
 	let install_root = git_install_root_from_path(git_path)?;
-	Some(install_root.to_string_lossy().to_string())
+	Some(install_root.to_string_lossy().into_owned())
 }
 
 fn git_install_root_from_path(git_path: &Path) -> Option<PathBuf> {
@@ -171,17 +171,17 @@ fn git_paths_for_install_root(install_root: &str) -> Vec<String> {
 
 	let cmd = root.join("cmd");
 	if has_git_command(&cmd) {
-		paths.push(cmd.to_string_lossy().to_string());
+		paths.push(cmd.to_string_lossy().into_owned());
 	}
 
 	let bin = root.join("bin");
 	if has_git_command(&bin) {
-		paths.push(bin.to_string_lossy().to_string());
+		paths.push(bin.to_string_lossy().into_owned());
 	}
 
 	let usr_bin = root.join("usr").join("bin");
 	if has_git_command(&usr_bin) || usr_bin.join("ls.exe").is_file() {
-		paths.push(usr_bin.to_string_lossy().to_string());
+		paths.push(usr_bin.to_string_lossy().into_owned());
 	}
 
 	paths
