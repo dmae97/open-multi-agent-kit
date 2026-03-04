@@ -322,18 +322,10 @@ export type EditMode = "replace" | "patch" | "hashline";
 
 export const DEFAULT_EDIT_MODE: EditMode = "hashline";
 
-export function normalizeEditMode(mode?: string | null): EditMode | null {
-	switch (mode) {
-		case "replace":
-			return "replace";
-		case "patch":
-			return "patch";
-		case "hashline":
-			return "hashline";
-		default:
-			return null;
-	}
-}
+const EDIT_ID: Record<string, EditMode> = Object.fromEntries(
+	["replace", "patch", "hashline"].map(mode => [mode, mode as EditMode]),
+);
+export const normalizeEditMode = (mode?: string | null): EditMode | undefined => EDIT_ID[mode ?? ""];
 
 /**
  * Edit tool implementation.
@@ -412,7 +404,13 @@ export class EditTool implements AgentTool<TInput> {
 		const editVariant =
 			this.session.settings.getEditVariantForModel(activeModel) ??
 			normalizeEditMode(this.session.settings.get("edit.mode"));
-		return editVariant ?? DEFAULT_EDIT_MODE;
+		if (editVariant) {
+			return editVariant;
+		}
+		if (activeModel?.includes("-spark")) {
+			return "replace";
+		}
+		return DEFAULT_EDIT_MODE;
 	}
 
 	/**

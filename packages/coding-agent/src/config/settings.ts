@@ -319,21 +319,6 @@ export class Settings {
 	}
 
 	/**
-	 * Get edit model variants (typed accessor for complex nested config).
-	 */
-	getEditModelVariants(): Record<string, EditMode | null> {
-		const variants = (this.#merged.edit as { modelVariants?: Record<string, string> })?.modelVariants ?? {};
-		const result: Record<string, EditMode | null> = {};
-		for (const pattern in variants) {
-			const value = normalizeEditMode(variants[pattern]);
-			if (value) {
-				result[pattern] = value;
-			}
-		}
-		return result;
-	}
-
-	/**
 	 * Get the edit variant for a specific model.
 	 * Returns "patch", "replace", "hashline", or null (use global default).
 	 */
@@ -341,9 +326,8 @@ export class Settings {
 		if (!model) return null;
 		const variants = (this.#merged.edit as { modelVariants?: Record<string, string> })?.modelVariants;
 		if (!variants) return null;
-		const modelLower = model.toLowerCase();
 		for (const pattern in variants) {
-			if (modelLower.includes(pattern)) {
+			if (model.includes(pattern)) {
 				const value = normalizeEditMode(variants[pattern]);
 				if (value) {
 					return value;
