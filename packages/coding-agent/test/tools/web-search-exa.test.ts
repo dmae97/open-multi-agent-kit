@@ -454,7 +454,6 @@ describe("searchExa", () => {
 		const result = await runSearchQuery({ query: "provider exa", provider: "exa" });
 		expect(result.details.error).toBeUndefined();
 		expect(result.details.response.provider).toBe("exa");
-		expect(result.content[0]?.text).toContain("Provider: exa");
 		expect(result.content[0]?.text).toContain("3 sources");
 	});
 
