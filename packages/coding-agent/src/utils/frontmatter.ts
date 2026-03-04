@@ -5,6 +5,27 @@ function stripHtmlComments(content: string): string {
 	return content.replace(/<!--[\s\S]*?-->/g, "");
 }
 
+/** Convert kebab-case to camelCase (e.g. "thinking-level" -> "thinkingLevel") */
+function kebabToCamel(key: string): string {
+	return key.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+}
+
+/** Recursively normalize object keys from kebab-case to camelCase */
+function normalizeKeys<T>(obj: T): T {
+	if (obj === null || typeof obj !== "object") {
+		return obj;
+	}
+	if (Array.isArray(obj)) {
+		return obj.map(normalizeKeys) as T;
+	}
+	const result: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+		const normalizedKey = kebabToCamel(key);
+		result[normalizedKey] = normalizeKeys(value);
+	}
+	return result as T;
+}
+
 export class FrontmatterError extends Error {
 	constructor(
 		error: Error,
@@ -52,7 +73,7 @@ export function parseFrontmatter(
 ): { frontmatter: Record<string, unknown>; body: string } {
 	const { location, source, fallback, normalize = true, level = "warn" } = options ?? {};
 	const loc = location ?? source;
-	const frontmatter: Record<string, unknown> = Object.assign({}, fallback);
+	const frontmatter: Record<string, unknown> = { ...fallback };
 
 	const normalized = normalize ? stripHtmlComments(content.replace(/\r\n/g, "\n").replace(/\r/g, "\n")) : content;
 	if (!normalized.startsWith("---")) {
@@ -70,7 +91,7 @@ export function parseFrontmatter(
 	try {
 		// Replace tabs with spaces for YAML compatibility, use failsafe mode for robustness
 		const loaded = YAML.parse(metadata.replaceAll("\t", "  ")) as Record<string, unknown> | null;
-		return { frontmatter: Object.assign(frontmatter, loaded), body: body };
+		return { frontmatter: normalizeKeys({ ...frontmatter, ...loaded }), body };
 	} catch (error) {
 		const err = new FrontmatterError(
 			error instanceof Error ? error : new Error(`YAML: ${error}`),
@@ -85,12 +106,12 @@ export function parseFrontmatter(
 
 		// Simple YAML parsing - just key: value pairs
 		for (const line of metadata.split("\n")) {
-			const match = line.match(/^(\w+):\s*(.*)$/);
+			const match = line.match(/^([\w-]+):\s*(.*)$/);
 			if (match) {
 				frontmatter[match[1]] = match[2].trim();
 			}
 		}
 
-		return { frontmatter, body: body };
+		return { frontmatter: normalizeKeys(frontmatter) as Record<string, unknown>, body };
 	}
 }

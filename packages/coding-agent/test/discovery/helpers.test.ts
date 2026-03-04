@@ -128,4 +128,22 @@ Body content`;
 		expect(result.frontmatter).toEqual({});
 		expect(result.body).toBe("Body content");
 	});
+
+	test("normalizes kebab-case keys to camelCase", () => {
+		const content = `---
+thinking-level: medium
+output-schema: json
+nested-field:
+  inner-key: value
+---
+Body content`;
+
+		const result = parse(content);
+		expect(result.frontmatter).toEqual({
+			thinkingLevel: "medium",
+			outputSchema: "json",
+			nestedField: { innerKey: "value" },
+		});
+		expect(result.body).toBe("Body content");
+	});
 });
