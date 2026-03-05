@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Support for redacted thinking blocks in Anthropic messages, enabling secure handling of encrypted reasoning content
@@ -10,6 +11,10 @@
 
 - Assistant message content now includes `RedactedThinkingContent` type alongside existing text, thinking, and tool call blocks
 - Message transformation logic now preserves signed thinking blocks and redacted thinking for the latest assistant message in Anthropic conversations
+
+### Fixed
+
+- Fixed Unicode normalization to consistently apply `toWellFormed()` to all text content, including thinking blocks, ensuring proper handling of malformed UTF-16 sequences
 
 ## [13.9.1] - 2026-03-05
 ### Breaking Changes

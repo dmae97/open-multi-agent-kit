@@ -1423,10 +1423,10 @@ export function convertAnthropicMessages(
 
 			for (const block of msg.content) {
 				if (block.type === "text") {
-					if (!hasSignedThinking && block.text.trim().length === 0) continue;
+					if (block.text.trim().length === 0) continue;
 					blocks.push({
 						type: "text",
-						text: hasSignedThinking ? block.text : block.text.toWellFormed(),
+						text: block.text.toWellFormed(),
 					});
 				} else if (block.type === "thinking") {
 					if (hasSignedThinking) {
@@ -1434,7 +1434,7 @@ export function convertAnthropicMessages(
 							if (block.thinking.trim().length === 0) continue;
 							blocks.push({
 								type: "text",
-								text: block.thinking,
+								text: block.thinking.toWellFormed(),
 							});
 							continue;
 						}
@@ -1459,7 +1459,7 @@ export function convertAnthropicMessages(
 						});
 					}
 				} else if (block.type === "redactedThinking") {
-					if (!hasSignedThinking && block.data.trim().length === 0) continue;
+					if (block.data.trim().length === 0) continue;
 					blocks.push({
 						type: "redacted_thinking",
 						data: block.data,

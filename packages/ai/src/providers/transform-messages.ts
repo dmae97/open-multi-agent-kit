@@ -4,7 +4,6 @@ import type {
 	DeveloperMessage,
 	Message,
 	Model,
-	RedactedThinkingContent,
 	ToolCall,
 	ToolResultMessage,
 } from "../types";
@@ -88,8 +87,6 @@ export function transformMessages<TApi extends Api>(
 				if (block.type === "redactedThinking") {
 					if (mustPreserveLatestAnthropicThinking) return block;
 					if (isSameModel) return block;
-					const redacted = block as RedactedThinkingContent;
-					if (!redacted.data || redacted.data.trim() === "") return [];
 					return [];
 				}
 

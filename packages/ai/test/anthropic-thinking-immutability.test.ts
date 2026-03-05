@@ -16,7 +16,7 @@ const model: Model<"anthropic-messages"> = {
 };
 
 describe("Anthropic thinking replay immutability", () => {
-	it("does not normalize signed-thinking assistant content", () => {
+	it("preserves signed-thinking blocks while normalizing non-thinking content", () => {
 		const malformed = String.fromCharCode(0xd800);
 		const user: UserMessage = {
 			role: "user",
@@ -51,8 +51,7 @@ describe("Anthropic thinking replay immutability", () => {
 		expect(assistantParam).toBeDefined();
 		expect(assistantParam?.content).toEqual([
 			{ type: "thinking", thinking: `analysis ${malformed}`, signature: "sig_thinking" },
-			{ type: "redacted_thinking", data: "" },
-			{ type: "text", text: `text ${malformed}` },
+			{ type: "text", text: `text ${malformed.toWellFormed()}` },
 			{ type: "tool_use", id: "toolu_123", name: "read", input: { path: "README.md", _i: "Reading file" } },
 		]);
 	});
