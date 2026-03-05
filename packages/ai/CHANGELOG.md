@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.9.2] - 2026-03-05
+
 ### Added
 
 - Support for redacted thinking blocks in Anthropic messages, enabling secure handling of encrypted reasoning content

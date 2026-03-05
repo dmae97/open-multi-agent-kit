@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.9.2] - 2026-03-05
+
 ### Added
 
 - Support for Python code execution messages with output display and error handling
