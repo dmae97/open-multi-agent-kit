@@ -580,6 +580,42 @@ describe("applyHashlineEdits — heuristics", () => {
 		expect(result.lines).toBe("ALPHA\n\n\ngamma");
 		expect(result.warnings).toBeUndefined();
 	});
+
+	it("auto-corrects off-by-one range start that would duplicate a preceding line", () => {
+		// Reproduces the failure from assistant history: model anchors at line N+1 but
+		// opens the replacement block with the same content as line N, duplicating it.
+		const content = "if (x) {\n  oldBody();\n}\nafter();";
+		const edits: HashlineEdit[] = [
+			{
+				op: "replace",
+				pos: makeTag(2, "  oldBody();"),
+				end: makeTag(3, "}"),
+				lines: ["if (x) {", "  newBody();", "}"],
+			},
+		];
+		const result = applyHashlineEdits(content, edits);
+		expect(result.lines).toBe("if (x) {\n  newBody();\n}\nafter();");
+		expect(result.warnings).toHaveLength(1);
+		expect(result.warnings?.[0]).toContain("Auto-corrected range replace");
+		expect(result.warnings?.[0]).toContain('"if (x) {"');
+	});
+
+	it("does not auto-correct leading line when pos already includes the boundary line", () => {
+		// Safety guard: the first replacement line equals the line before pos, but pos itself
+		// already has the same content — coincidence, not off-by-one.
+		const content = "}\n}\nafter();";
+		const edits: HashlineEdit[] = [
+			{
+				op: "replace",
+				pos: makeTag(2, "}"),
+				end: makeTag(2, "}"),
+				lines: ["}", "// inserted"],
+			},
+		];
+		const result = applyHashlineEdits(content, edits);
+		expect(result.lines).toBe("}\n}\n// inserted\nafter();");
+		expect(result.warnings).toBeUndefined();
+	});
 	it("auto-corrects leading escaped tab indentation by default", () => {
 		const previous = Bun.env.PI_HASHLINE_AUTOCORRECT_ESCAPED_TABS;
 		delete Bun.env.PI_HASHLINE_AUTOCORRECT_ESCAPED_TABS;

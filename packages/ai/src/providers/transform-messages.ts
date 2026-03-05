@@ -1,18 +1,5 @@
-import type {
-	Api,
-	AssistantMessage,
-	DeveloperMessage,
-	Message,
-	Model,
-	ToolCall,
-	ToolResultMessage,
-} from "../types";
-
-const TURN_ABORTED_GUIDANCE =
-	"<turn-aborted>\n" +
-	"The previous turn was aborted. Any running tools/commands were terminated. " +
-	"If tools were aborted, they may have partially executed; verify current state before retrying.\n" +
-	"</turn-aborted>";
+import turnAbortedGuidance from "../prompts/turn-aborted-guidance.md" with { type: "text" };
+import type { Api, AssistantMessage, DeveloperMessage, Message, Model, ToolCall, ToolResultMessage } from "../types";
 
 const enum ToolCallStatus {
 	/** Tool call has received a result (real or synthetic for orphan) */
@@ -184,7 +171,7 @@ export function transformMessages<TApi extends Api>(
 				// Inject turn_aborted guidance marker as developer message
 				result.push({
 					role: "developer",
-					content: TURN_ABORTED_GUIDANCE,
+					content: turnAbortedGuidance,
 					timestamp: assistantMsg.timestamp + 1,
 				} as DeveloperMessage);
 

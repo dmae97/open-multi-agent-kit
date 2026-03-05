@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Support for Python code execution messages with output display and error handling
@@ -18,6 +19,10 @@
 
 - Removed `codexInjectionInfo` from session data destructuring
 - Removed OpenAI Codex-specific bridge prompt UI from model change entries
+
+### Fixed
+
+- Auto-corrected off-by-one range start errors in hashline edits that would duplicate preceding lines
 
 ## [13.9.0] - 2026-03-05
 ### Added
