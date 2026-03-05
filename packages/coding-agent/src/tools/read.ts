@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import path from "node:path";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { ImageContent, TextContent } from "@oh-my-pi/pi-ai";
-import { FileType, glob } from "@oh-my-pi/pi-natives";
+import { glob } from "@oh-my-pi/pi-natives";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import { getRemoteDir, ptree, untilAborted } from "@oh-my-pi/pi-utils";
@@ -28,7 +28,7 @@ import { detectSupportedImageMimeTypeFromFile } from "../utils/mime";
 import { ensureTool } from "../utils/tools-manager";
 import { applyListLimit } from "./list-limit";
 import { formatFullOutputReference, formatStyledTruncationWarning, type OutputMeta } from "./output-meta";
-import { resolveReadPath, resolveToCwd } from "./path-utils";
+import { resolveReadPath } from "./path-utils";
 import { formatAge, formatBytes, shortenPath, wrapBrackets } from "./render-utils";
 import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";
@@ -254,19 +254,7 @@ async function streamLinesFromFile(
 
 // Maximum image file size (20MB) - larger images will be rejected to prevent OOM during serialization
 const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
-const MAX_FUZZY_RESULTS = 5;
-const MAX_FUZZY_CANDIDATES = 20000;
-const MIN_BASE_SIMILARITY = 0.5;
-const MIN_FULL_SIMILARITY = 0.6;
 const GLOB_TIMEOUT_MS = 5000;
-
-function normalizePathForMatch(value: string): string {
-	return value
-		.replace(/\\/g, "/")
-		.replace(/^\.\/+/, "")
-		.replace(/\/+$/, "")
-		.toLowerCase();
-}
 
 function isNotFoundError(error: unknown): boolean {
 	if (!error || typeof error !== "object") return false;
@@ -274,231 +262,47 @@ function isNotFoundError(error: unknown): boolean {
 	return code === "ENOENT" || code === "ENOTDIR";
 }
 
-function isPathWithin(basePath: string, targetPath: string): boolean {
-	const relativePath = path.relative(basePath, targetPath);
-	return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
-}
-
-async function findExistingDirectory(startDir: string, signal?: AbortSignal): Promise<string | null> {
-	let current = startDir;
-	const root = path.parse(startDir).root;
-
-	while (true) {
-		throwIfAborted(signal);
-		try {
-			const stat = await Bun.file(current).stat();
-			if (stat.isDirectory()) {
-				return current;
-			}
-		} catch {
-			// Keep walking up.
-		}
-
-		if (current === root) {
-			break;
-		}
-		current = path.dirname(current);
-	}
-
-	return null;
-}
-
-function formatScopeLabel(searchRoot: string, cwd: string): string {
-	const relative = path.relative(cwd, searchRoot).replace(/\\/g, "/");
-	if (relative === "" || relative === ".") {
-		return ".";
-	}
-	if (!relative.startsWith("..") && !path.isAbsolute(relative)) {
-		return relative;
-	}
-	return searchRoot;
-}
-
-function buildDisplayPath(searchRoot: string, cwd: string, relativePath: string): string {
-	const scopeLabel = formatScopeLabel(searchRoot, cwd);
-	const normalized = relativePath.replace(/\\/g, "/");
-	if (scopeLabel === ".") {
-		return normalized;
-	}
-	if (scopeLabel.startsWith("..") || path.isAbsolute(scopeLabel)) {
-		return path.join(searchRoot, normalized).replace(/\\/g, "/");
-	}
-	return `${scopeLabel}/${normalized}`;
-}
-
-function levenshteinDistance(a: string, b: string): number {
-	if (a === b) return 0;
-	const aLen = a.length;
-	const bLen = b.length;
-	if (aLen === 0) return bLen;
-	if (bLen === 0) return aLen;
-
-	let prev = new Array<number>(bLen + 1);
-	let curr = new Array<number>(bLen + 1);
-	for (let j = 0; j <= bLen; j++) {
-		prev[j] = j;
-	}
-
-	for (let i = 1; i <= aLen; i++) {
-		curr[0] = i;
-		const aCode = a.charCodeAt(i - 1);
-		for (let j = 1; j <= bLen; j++) {
-			const cost = aCode === b.charCodeAt(j - 1) ? 0 : 1;
-			const deletion = prev[j] + 1;
-			const insertion = curr[j - 1] + 1;
-			const substitution = prev[j - 1] + cost;
-			curr[j] = Math.min(deletion, insertion, substitution);
-		}
-		const tmp = prev;
-		prev = curr;
-		curr = tmp;
-	}
-
-	return prev[bLen];
-}
-
-function similarityScore(a: string, b: string): number {
-	if (a.length === 0 && b.length === 0) {
-		return 1;
-	}
-	const maxLen = Math.max(a.length, b.length);
-	if (maxLen === 0) {
-		return 1;
-	}
-	const distance = levenshteinDistance(a, b);
-	return 1 - distance / maxLen;
-}
-
-async function listCandidateFiles(
-	searchRoot: string,
-	signal?: AbortSignal,
-	_notify?: (message: string) => void,
-): Promise<{ files: string[]; truncated: boolean; error?: string }> {
-	let files: string[];
-	const timeoutSignal = AbortSignal.timeout(GLOB_TIMEOUT_MS);
-	const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
-	try {
-		const result = await untilAborted(combinedSignal, () =>
-			glob({
-				pattern: "**/*",
-				path: searchRoot,
-				fileType: FileType.File,
-				hidden: true,
-			}),
-		);
-		files = result.matches.map(match => match.path);
-	} catch (error) {
-		if (error instanceof Error && error.name === "AbortError") {
-			if (timeoutSignal.aborted && !signal?.aborted) {
-				const timeoutSeconds = Math.max(1, Math.round(GLOB_TIMEOUT_MS / 1000));
-				return { files: [], truncated: false, error: `find timed out after ${timeoutSeconds}s` };
-			}
-			throw new ToolAbortError();
-		}
-		const message = error instanceof Error ? error.message : String(error);
-		return { files: [], truncated: false, error: message };
-	}
-
-	const normalizedFiles = files.filter(line => line.length > 0);
-	const truncated = normalizedFiles.length > MAX_FUZZY_CANDIDATES;
-	const limited = truncated ? normalizedFiles.slice(0, MAX_FUZZY_CANDIDATES) : normalizedFiles;
-
-	return { files: limited, truncated };
-}
-
-async function findReadPathSuggestions(
+/**
+ * Attempt to resolve a non-existent path by finding a unique suffix match within the workspace.
+ * Uses a glob suffix pattern so the native engine handles matching directly.
+ * Returns null when 0 or >1 candidates match (ambiguous = no auto-resolution).
+ */
+async function findUniqueSuffixMatch(
 	rawPath: string,
 	cwd: string,
 	signal?: AbortSignal,
-	notify?: (message: string) => void,
-): Promise<{ suggestions: string[]; scopeLabel?: string; truncated?: boolean; error?: string } | null> {
-	const resolvedPath = resolveToCwd(rawPath, cwd);
-	const searchRoot = await findExistingDirectory(path.dirname(resolvedPath), signal);
-	if (!searchRoot) {
+): Promise<{ absolutePath: string; displayPath: string } | null> {
+	const normalized = rawPath.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/, "");
+	if (!normalized) return null;
+
+	const timeoutSignal = AbortSignal.timeout(GLOB_TIMEOUT_MS);
+	const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+
+	let matches: string[];
+	try {
+		const result = await untilAborted(combinedSignal, () =>
+			glob({
+				pattern: `**/${normalized}`,
+				path: cwd,
+				// No fileType filter: matches both files and directories
+				hidden: true,
+			}),
+		);
+		matches = result.matches.map(m => m.path);
+	} catch (error) {
+		if (error instanceof Error && error.name === "AbortError") {
+			if (!signal?.aborted) return null; // timeout — give up silently
+			throw new ToolAbortError();
+		}
 		return null;
 	}
 
-	if (!isPathWithin(cwd, resolvedPath)) {
-		const root = path.parse(searchRoot).root;
-		if (searchRoot === root) {
-			return null;
-		}
-	}
+	if (matches.length !== 1) return null;
 
-	const { files, truncated, error } = await listCandidateFiles(searchRoot, signal, notify);
-	const scopeLabel = formatScopeLabel(searchRoot, cwd);
-
-	if (error && files.length === 0) {
-		return { suggestions: [], scopeLabel, truncated, error };
-	}
-
-	if (files.length === 0) {
-		return null;
-	}
-
-	const queryPath = (() => {
-		if (path.isAbsolute(rawPath)) {
-			const relative = path.relative(cwd, resolvedPath).replace(/\\/g, "/");
-			if (relative && !relative.startsWith("..") && !path.isAbsolute(relative)) {
-				return normalizePathForMatch(relative);
-			}
-		}
-		return normalizePathForMatch(rawPath);
-	})();
-	const baseQuery = path.posix.basename(queryPath);
-
-	const matches: Array<{ path: string; score: number; baseScore: number; fullScore: number }> = [];
-	const seen = new Set<string>();
-
-	for (const file of files) {
-		throwIfAborted(signal);
-		const cleaned = file.replace(/\r$/, "").trim();
-		if (!cleaned) continue;
-
-		const relativePath = cleaned;
-
-		if (!relativePath || relativePath.startsWith("..")) {
-			continue;
-		}
-
-		const displayPath = buildDisplayPath(searchRoot, cwd, relativePath);
-		if (seen.has(displayPath)) {
-			continue;
-		}
-		seen.add(displayPath);
-
-		const normalizedDisplay = normalizePathForMatch(displayPath);
-		const baseCandidate = path.posix.basename(normalizedDisplay);
-
-		const fullScore = similarityScore(queryPath, normalizedDisplay);
-		const baseScore = baseQuery ? similarityScore(baseQuery, baseCandidate) : 0;
-
-		if (baseQuery) {
-			if (baseScore < MIN_BASE_SIMILARITY && fullScore < MIN_FULL_SIMILARITY) {
-				continue;
-			}
-		} else if (fullScore < MIN_FULL_SIMILARITY) {
-			continue;
-		}
-
-		const score = baseQuery ? baseScore * 0.75 + fullScore * 0.25 : fullScore;
-		matches.push({ path: displayPath, score, baseScore, fullScore });
-	}
-
-	if (matches.length === 0) {
-		return { suggestions: [], scopeLabel, truncated };
-	}
-
-	matches.sort((a, b) => {
-		if (b.score !== a.score) return b.score - a.score;
-		if (b.baseScore !== a.baseScore) return b.baseScore - a.baseScore;
-		return a.path.localeCompare(b.path);
-	});
-
-	const listLimit = applyListLimit(matches, { limit: MAX_FUZZY_RESULTS });
-	const suggestions = listLimit.items.map(match => match.path);
-
-	return { suggestions, scopeLabel, truncated };
+	return {
+		absolutePath: path.resolve(cwd, matches[0]),
+		displayPath: matches[0],
+	};
 }
 
 async function convertWithMarkitdown(
@@ -540,6 +344,7 @@ export interface ReadToolDetails {
 	truncation?: TruncationResult;
 	isDirectory?: boolean;
 	resolvedPath?: string;
+	suffixResolution?: { from: string; to: string };
 	meta?: OutputMeta;
 }
 
@@ -576,7 +381,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		params: ReadParams,
 		signal?: AbortSignal,
 		_onUpdate?: AgentToolUpdateCallback<ReadToolDetails>,
-		toolContext?: AgentToolContext,
+		_toolContext?: AgentToolContext,
 	): Promise<AgentToolResult<ReadToolDetails>> {
 		const { path: readPath, offset, limit } = params;
 
@@ -588,7 +393,8 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			return this.#handleInternalUrl(readPath, offset, limit);
 		}
 
-		const absolutePath = resolveReadPath(readPath, this.session.cwd);
+		let absolutePath = resolveReadPath(readPath, this.session.cwd);
+		let suffixResolution: { from: string; to: string } | undefined;
 
 		let isDirectory = false;
 		let fileSize = 0;
@@ -598,34 +404,37 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			isDirectory = stat.isDirectory();
 		} catch (error) {
 			if (isNotFoundError(error)) {
-				let message = `File not found: ${readPath}`;
-
-				// Skip fuzzy matching for remote mounts (sshfs) to avoid hangs
+				// Attempt unique suffix resolution before falling back to fuzzy suggestions
 				if (!isRemoteMountPath(absolutePath)) {
-					const suggestions = await findReadPathSuggestions(readPath, this.session.cwd, signal, message =>
-						toolContext?.ui?.notify(message, "info"),
-					);
-
-					if (suggestions?.suggestions.length) {
-						const scopeLabel = suggestions.scopeLabel ? ` in ${suggestions.scopeLabel}` : "";
-						message += `\n\nClosest matches${scopeLabel}:\n${suggestions.suggestions.map(match => `- ${match}`).join("\n")}`;
-						if (suggestions.truncated) {
-							message += `\n[Search truncated to first ${MAX_FUZZY_CANDIDATES} paths. Refine the path if the match isn't listed.]`;
+					const suffixMatch = await findUniqueSuffixMatch(readPath, this.session.cwd, signal);
+					if (suffixMatch) {
+						try {
+							const retryStat = await Bun.file(suffixMatch.absolutePath).stat();
+							absolutePath = suffixMatch.absolutePath;
+							fileSize = retryStat.size;
+							isDirectory = retryStat.isDirectory();
+							suffixResolution = { from: readPath, to: suffixMatch.displayPath };
+						} catch {
+							// Suffix match candidate no longer stats — fall through to error path
 						}
-					} else if (suggestions?.error) {
-						message += `\n\nFuzzy match failed: ${suggestions.error}`;
-					} else if (suggestions?.scopeLabel) {
-						message += `\n\nNo similar paths found in ${suggestions.scopeLabel}.`;
 					}
 				}
 
-				throw new ToolError(message);
+				if (!suffixResolution) {
+					throw new ToolError(`Path '${readPath}' not found`);
+				}
+			} else {
+				throw error;
 			}
-			throw error;
 		}
 
 		if (isDirectory) {
-			return this.#readDirectory(absolutePath, limit, signal);
+			const dirResult = await this.#readDirectory(absolutePath, limit, signal);
+			if (suffixResolution) {
+				dirResult.details ??= {};
+				dirResult.details.suffixResolution = suffixResolution;
+			}
+			return dirResult;
 		}
 
 		const mimeType = await detectSupportedImageMimeTypeFromFile(absolutePath);
@@ -747,7 +556,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 					totalFileLines === 0
 						? "The file is empty."
 						: `Use offset=1 to read from the start, or offset=${totalFileLines} to read the last line.`;
-				return toolResult<ReadToolDetails>()
+				return toolResult<ReadToolDetails>({ resolvedPath: absolutePath, suffixResolution })
 					.text(`Offset ${offset} is beyond end of file (${totalFileLines} lines total). ${suggestion}`)
 					.done();
 			}
@@ -830,6 +639,17 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			content = [{ type: "text", text: outputText }];
 		}
 
+		if (suffixResolution) {
+			details.suffixResolution = suffixResolution;
+			// Inline resolution notice into first text block so the model sees the actual path
+			const notice = `[Path '${suffixResolution.from}' not found; resolved to '${suffixResolution.to}' via suffix match]`;
+			const firstText = content.find((c): c is TextContent => c.type === "text");
+			if (firstText) {
+				firstText.text = `${notice}\n${firstText.text}`;
+			} else {
+				content = [{ type: "text", text: notice }, ...content];
+			}
+		}
 		const resultBuilder = toolResult(details).content(content);
 		if (sourcePath) {
 			resultBuilder.sourcePath(sourcePath);
@@ -869,13 +689,10 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 
 		// Resolve the internal URL
 		const resource = await internalRouter.resolve(url);
+		const details: ReadToolDetails = { resolvedPath: resource.sourcePath };
 
 		// If extraction was used, return directly (no pagination)
 		if (hasExtraction) {
-			const details: ReadToolDetails = {};
-			if (resource.sourcePath) {
-				details.resolvedPath = resource.sourcePath;
-			}
 			return toolResult(details).text(resource.content).sourceInternal(url).done();
 		}
 
@@ -891,7 +708,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 				allLines.length === 0
 					? "The resource is empty."
 					: `Use offset=1 to read from the start, or offset=${allLines.length} to read the last line.`;
-			return toolResult<ReadToolDetails>()
+			return toolResult<ReadToolDetails>(details)
 				.text(`Offset ${offset} is beyond end of resource (${allLines.length} lines total). ${suggestion}`)
 				.done();
 		}
@@ -916,7 +733,6 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		};
 
 		let outputText: string;
-		let details: ReadToolDetails = {};
 		let truncationInfo:
 			| { result: TruncationResult; options: { direction: "head"; startLine?: number; totalFileLines?: number } }
 			| undefined;
@@ -938,14 +754,14 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 					firstLineBytes,
 				)}, exceeds ${formatBytes(DEFAULT_MAX_BYTES)} limit. Unable to display a valid UTF-8 snippet.]`;
 			}
-			details = { truncation };
+			details.truncation = truncation;
 			truncationInfo = {
 				result: truncation,
 				options: { direction: "head", startLine: startLineDisplay, totalFileLines: totalLines },
 			};
 		} else if (truncation.truncated) {
 			outputText = formatText(truncation.content, startLineDisplay);
-			details = { truncation };
+			details.truncation = truncation;
 			truncationInfo = {
 				result: truncation,
 				options: { direction: "head", startLine: startLineDisplay, totalFileLines: totalLines },
@@ -956,14 +772,9 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 
 			outputText = formatText(truncation.content, startLineDisplay);
 			outputText += `\n\n[${remaining} more lines in resource. Use offset=${nextOffset} to continue]`;
-			details = {};
+			details.truncation = truncation;
 		} else {
 			outputText = formatText(truncation.content, startLineDisplay);
-			details = {};
-		}
-
-		if (resource.sourcePath) {
-			details.resolvedPath = resource.sourcePath;
 		}
 
 		const resultBuilder = toolResult(details).text(outputText).sourceInternal(url);
@@ -1105,8 +916,11 @@ export const readToolRenderer = {
 		}
 
 		if (imageContent) {
+			const suffix = details?.suffixResolution;
+			const displayPath = suffix ? shortenPath(suffix.to) : filePath || rawPath || "image";
+			const correction = suffix ? ` ${uiTheme.fg("dim", `(corrected from ${shortenPath(suffix.from)})`)}` : "";
 			const header = renderStatusLine(
-				{ icon: "success", title: "Read", description: filePath || rawPath || "image" },
+				{ icon: suffix ? "warning" : "success", title: "Read", description: `${displayPath}${correction}` },
 				uiTheme,
 			);
 			const detailLines = contentText ? contentText.split("\n").map(line => uiTheme.fg("toolOutput", line)) : [];
@@ -1132,7 +946,10 @@ export const readToolRenderer = {
 			};
 		}
 
-		let title = filePath ? `Read ${filePath}` : "Read";
+		const suffix = details?.suffixResolution;
+		const displayPath = suffix ? shortenPath(suffix.to) : filePath;
+		const correction = suffix ? ` ${uiTheme.fg("dim", `(corrected from ${shortenPath(suffix.from)})`)}` : "";
+		let title = displayPath ? `Read ${displayPath}${correction}` : "Read";
 		if (args?.offset !== undefined || args?.limit !== undefined) {
 			const startLine = args.offset ?? 1;
 			const endLine = args.limit !== undefined ? startLine + args.limit - 1 : "";

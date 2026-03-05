@@ -20,10 +20,6 @@ export interface RuleFrontmatter {
 	condition?: string | string[];
 	/** New key for TTSR stream scope. */
 	scope?: string | string[];
-	/** Legacy key accepted for backward compatibility with existing rules. */
-	ttsr_trigger?: string | string[];
-	/** Legacy camelCase key accepted for backward compatibility with existing rules. */
-	ttsrTrigger?: string | string[];
 	[key: string]: unknown;
 }
 

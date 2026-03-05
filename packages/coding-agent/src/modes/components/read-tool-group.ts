@@ -11,12 +11,32 @@ type ReadRenderArgs = {
 	limit?: number;
 };
 
+type ReadToolSuffixResolution = {
+	from: string;
+	to: string;
+};
+
+type ReadToolResultDetails = {
+	suffixResolution?: {
+		from?: string;
+		to?: string;
+	};
+};
+
+function getSuffixResolution(details: ReadToolResultDetails | undefined): ReadToolSuffixResolution | undefined {
+	if (typeof details?.suffixResolution?.from !== "string" || typeof details.suffixResolution.to !== "string") {
+		return undefined;
+	}
+	return { from: details.suffixResolution.from, to: details.suffixResolution.to };
+}
+
 type ReadEntry = {
 	toolCallId: string;
 	path: string;
 	offset?: number;
 	limit?: number;
-	status: "pending" | "success" | "error";
+	status: "pending" | "success" | "warning" | "error";
+	correctedFrom?: string;
 };
 
 export class ReadToolGroupComponent extends Container implements ToolExecutionHandle {
@@ -56,7 +76,15 @@ export class ReadToolGroupComponent extends Container implements ToolExecutionHa
 		const entry = this.#entries.get(toolCallId);
 		if (!entry) return;
 		if (isPartial) return;
-		entry.status = result.isError ? "error" : "success";
+		const details = result.details as ReadToolResultDetails | undefined;
+		const suffixResolution = getSuffixResolution(details);
+		if (suffixResolution) {
+			entry.path = suffixResolution.to;
+			entry.correctedFrom = suffixResolution.from;
+		} else {
+			entry.correctedFrom = undefined;
+		}
+		entry.status = result.isError ? "error" : suffixResolution ? "warning" : "success";
 		this.#updateDisplay();
 	}
 
@@ -109,12 +137,18 @@ export class ReadToolGroupComponent extends Container implements ToolExecutionHa
 			const endLine = entry.limit !== undefined ? startLine + entry.limit - 1 : "";
 			pathDisplay += theme.fg("warning", `:${startLine}${endLine ? `-${endLine}` : ""}`);
 		}
+		if (entry.correctedFrom) {
+			pathDisplay += theme.fg("dim", ` (corrected from ${shortenPath(entry.correctedFrom)})`);
+		}
 		return pathDisplay;
 	}
 
 	#formatStatus(status: ReadEntry["status"]): string {
 		if (status === "success") {
 			return theme.fg("success", theme.status.success);
+		}
+		if (status === "warning") {
+			return theme.fg("warning", theme.status.warning);
 		}
 		if (status === "error") {
 			return theme.fg("error", theme.status.error);
