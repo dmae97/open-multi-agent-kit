@@ -1,9 +1,26 @@
 import { describe, expect, it } from "bun:test";
+import { enrichModelThinking } from "@oh-my-pi/pi-ai/model-thinking";
 import { type RequestBody, transformRequestBody } from "@oh-my-pi/pi-ai/providers/openai-codex/request-transformer";
 import { parseCodexError } from "@oh-my-pi/pi-ai/providers/openai-codex/response-handler";
+import type { Model } from "@oh-my-pi/pi-ai/types";
 
 const DEFAULT_PROMPT_PREFIX =
 	"You are an expert coding assistant. You help users with coding tasks by reading files, executing commands";
+
+function createCodexModel(id: string): Model<"openai-codex-responses"> {
+	return enrichModelThinking({
+		id,
+		name: id,
+		api: "openai-codex-responses",
+		provider: "openai-codex",
+		baseUrl: "https://api.openai.com/v1",
+		reasoning: true,
+		input: ["text"],
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		contextWindow: 272000,
+		maxTokens: 128000,
+	});
+}
 
 describe("openai-codex request transformer", () => {
 	it("filters item_reference and strips ids", async () => {
@@ -28,7 +45,7 @@ describe("openai-codex request transformer", () => {
 			tools: [{ type: "function", name: "tool", description: "", parameters: {} }],
 		};
 
-		const transformed = await transformRequestBody(body, {});
+		const transformed = await transformRequestBody(body, createCodexModel(body.model), {});
 
 		expect(transformed.store).toBe(false);
 		expect(transformed.stream).toBe(true);
@@ -47,21 +64,24 @@ describe("openai-codex request transformer", () => {
 	});
 });
 
-describe("openai-codex reasoning effort clamping", () => {
-	it("clamps gpt-5.1 xhigh to high", async () => {
+describe("openai-codex reasoning effort validation", () => {
+	it("rejects gpt-5.1 xhigh when metadata does not list it", async () => {
 		const body: RequestBody = { model: "gpt-5.1", input: [] };
-		const transformed = await transformRequestBody(body, { reasoningEffort: "xhigh" });
-		expect(transformed.reasoning?.effort).toBe("high");
+		await expect(
+			transformRequestBody(body, createCodexModel(body.model), { reasoningEffort: "xhigh" }),
+		).rejects.toThrow(/Supported efforts: minimal, low, medium, high/);
 	});
 
-	it("clamps gpt-5.1-codex-mini to medium/high only", async () => {
+	it("rejects unsupported Codex mini efforts instead of clamping", async () => {
 		const body: RequestBody = { model: "gpt-5.1-codex-mini", input: [] };
 
-		const low = await transformRequestBody({ ...body }, { reasoningEffort: "low" });
-		expect(low.reasoning?.effort).toBe("medium");
+		await expect(
+			transformRequestBody({ ...body }, createCodexModel(body.model), { reasoningEffort: "low" }),
+		).rejects.toThrow(/Supported efforts: medium, high/);
 
-		const xhigh = await transformRequestBody({ ...body }, { reasoningEffort: "xhigh" });
-		expect(xhigh.reasoning?.effort).toBe("high");
+		await expect(
+			transformRequestBody({ ...body }, createCodexModel(body.model), { reasoningEffort: "xhigh" }),
+		).rejects.toThrow(/Supported efforts: medium, high/);
 	});
 });
 

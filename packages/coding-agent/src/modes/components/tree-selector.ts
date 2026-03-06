@@ -1,3 +1,4 @@
+import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import {
 	type Component,
 	Container,
@@ -382,7 +383,7 @@ class TreeList implements Component {
 				parts.push("model", entry.model);
 				break;
 			case "thinking_level_change":
-				parts.push("thinking", entry.thinkingLevel);
+				parts.push("thinking", entry.thinkingLevel ?? ThinkingLevel.Off);
 				break;
 			case "custom":
 				parts.push("custom", entry.customType);
@@ -585,7 +586,7 @@ class TreeList implements Component {
 				result = theme.fg("dim", `[model: ${entry.model}]`);
 				break;
 			case "thinking_level_change":
-				result = theme.fg("dim", `[thinking: ${entry.thinkingLevel}]`);
+				result = theme.fg("dim", `[thinking: ${entry.thinkingLevel ?? ThinkingLevel.Off}]`);
 				break;
 			case "custom":
 				result = theme.fg("dim", `[custom: ${entry.customType}]`);

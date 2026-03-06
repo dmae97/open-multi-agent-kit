@@ -1,13 +1,13 @@
 import type {
 	AssistantMessageEvent,
 	AssistantMessageEventStream,
+	Effort,
 	ImageContent,
 	Message,
 	Model,
 	SimpleStreamOptions,
 	streamSimple,
 	TextContent,
-	ThinkingLevel,
 	Tool,
 	ToolChoice,
 	ToolResultMessage,
@@ -171,7 +171,7 @@ export type AgentMessage = Message | CustomAgentMessages[keyof CustomAgentMessag
 export interface AgentState {
 	systemPrompt: string;
 	model: Model;
-	thinkingLevel: ThinkingLevel;
+	thinkingLevel?: Effort;
 	tools: AgentTool<any>[];
 	messages: AgentMessage[]; // Can include attachments + custom message types
 	isStreaming: boolean;

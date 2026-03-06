@@ -1,13 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { ThinkingLevel } from "@oh-my-pi/pi-ai";
-import { parseThinkingLevel } from "@oh-my-pi/pi-ai";
+import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { FileType, glob } from "@oh-my-pi/pi-natives";
 import { CONFIG_DIR_NAME, tryParseJson } from "@oh-my-pi/pi-utils";
 import { readFile } from "../capability/fs";
 import { parseRuleConditionAndScope, type Rule, type RuleFrontmatter } from "../capability/rule";
 import type { Skill, SkillFrontmatter } from "../capability/skill";
 import type { LoadContext, LoadResult, SourceMeta } from "../capability/types";
+import { parseThinkingLevel } from "../thinking";
 import { parseFrontmatter } from "../utils/frontmatter";
 
 /**

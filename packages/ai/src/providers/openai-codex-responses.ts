@@ -383,7 +383,7 @@ export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"
 				include: options?.include,
 			};
 
-			const transformedBody = await transformRequestBody(params, codexOptions, systemPrompt);
+			const transformedBody = await transformRequestBody(params, model, codexOptions, systemPrompt);
 			options?.onPayload?.(transformedBody);
 
 			const reasoningEffort = transformedBody.reasoning?.effort ?? null;

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Effort } from "@oh-my-pi/pi-ai";
 import { parseArgs } from "@oh-my-pi/pi-coding-agent/cli/args";
 
 describe("parseArgs", () => {
@@ -133,7 +134,7 @@ describe("parseArgs", () => {
 
 		test("parses --thinking", () => {
 			const result = parseArgs(["--thinking", "high"]);
-			expect(result.thinking).toBe("high");
+			expect(result.thinking).toBe(Effort.High);
 		});
 
 		test("parses --models as comma-separated list", () => {
@@ -247,7 +248,7 @@ describe("parseArgs", () => {
 			expect(result.provider).toBe("anthropic");
 			expect(result.model).toBe("claude-sonnet");
 			expect(result.print).toBe(true);
-			expect(result.thinking).toBe("high");
+			expect(result.thinking).toBe(Effort.High);
 			expect(result.fileArgs).toEqual(["prompt.md"]);
 			expect(result.messages).toEqual(["Do the task"]);
 		});

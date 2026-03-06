@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Effort } from "@oh-my-pi/pi-ai";
 import { parseAgentFields } from "../../src/discovery/helpers";
 
 describe("parseAgentFields", () => {
@@ -42,7 +43,7 @@ describe("parseAgentFields", () => {
 		});
 
 		expect(fields).toBeDefined();
-		expect(fields?.thinkingLevel).toBe("medium");
+		expect(fields?.thinkingLevel).toBe(Effort.Medium);
 	});
 
 	test("prefers thinking-level over legacy thinking", () => {
@@ -50,9 +51,9 @@ describe("parseAgentFields", () => {
 			name: "reviewer",
 			description: "desc",
 			thinking: "minimal",
-			thinkingLevel: "high",
+			thinkingLevel: Effort.High,
 		});
 
-		expect(fields?.thinkingLevel).toBe("high");
+		expect(fields?.thinkingLevel).toBe(Effort.High);
 	});
 });

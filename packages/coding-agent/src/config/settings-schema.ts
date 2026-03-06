@@ -1,4 +1,4 @@
-import { getAvailableThinkingLevels } from "@oh-my-pi/pi-ai";
+import { THINKING_EFFORTS } from "@oh-my-pi/pi-ai";
 
 /** Unified settings schema - single source of truth for all settings.
  * Unified settings schema - single source of truth for all settings.
@@ -192,7 +192,7 @@ export const SETTINGS_SCHEMA = {
 	},
 	defaultThinkingLevel: {
 		type: "enum",
-		values: getAvailableThinkingLevels(),
+		values: THINKING_EFFORTS,
 		default: "high",
 		ui: {
 			tab: "agent",

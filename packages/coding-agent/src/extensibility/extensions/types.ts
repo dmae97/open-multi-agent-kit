@@ -7,7 +7,7 @@
  * - Register commands, keyboard shortcuts, and CLI flags
  * - Interact with the user via UI primitives
  */
-import type { AgentMessage, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
+import type { AgentMessage, AgentToolResult, AgentToolUpdateCallback, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type {
 	Api,
 	AssistantMessageEvent,
@@ -19,7 +19,6 @@ import type {
 	OAuthLoginCallbacks,
 	SimpleStreamOptions,
 	TextContent,
-	ThinkingLevel,
 	ToolResultMessage,
 } from "@oh-my-pi/pi-ai";
 import type * as piCodingAgent from "@oh-my-pi/pi-coding-agent";
@@ -1058,9 +1057,9 @@ export interface ExtensionAPI {
 	setModel(model: Model): Promise<boolean>;
 
 	/** Get current thinking level. */
-	getThinkingLevel(): ThinkingLevel;
+	getThinkingLevel(): ThinkingLevel | undefined;
 
-	/** Set thinking level (clamped to model capabilities). */
+	/** Set thinking level for the current session. */
 	setThinkingLevel(level: ThinkingLevel): void;
 
 	// =========================================================================
@@ -1086,11 +1085,11 @@ export interface ExtensionAPI {
 	 *       id: "claude-sonnet-4@20250514",
 	 *       name: "Claude Sonnet 4 (Vertex)",
 	 *       reasoning: true,
+	 *       thinking: { mode: "anthropic-adaptive", minLevel: "minimal", maxLevel: "high" },
 	 *       input: ["text", "image"],
 	 *       cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
 	 *       contextWindow: 200000,
 	 *       maxTokens: 64000,
-	 *     }
 	 *   ]
 	 * });
 	 *
@@ -1149,8 +1148,10 @@ export interface ProviderModelConfig {
 	name: string;
 	/** API type override for this model. */
 	api?: Api;
-	/** Whether the model supports extended thinking. */
+	/** Whether the model supports extended thinking at all. */
 	reasoning: boolean;
+	/** Optional canonical thinking capability metadata for per-model effort support. */
+	thinking?: Model["thinking"];
 	/** Supported input types. */
 	input: ("text" | "image")[];
 	/** Cost per million tokens. */
@@ -1218,7 +1219,7 @@ export type SetActiveToolsHandler = (toolNames: string[]) => Promise<void>;
 
 export type SetModelHandler = (model: Model) => Promise<boolean>;
 
-export type GetThinkingLevelHandler = () => ThinkingLevel;
+export type GetThinkingLevelHandler = () => ThinkingLevel | undefined;
 
 export type SetThinkingLevelHandler = (level: ThinkingLevel, persist?: boolean) => void;
 

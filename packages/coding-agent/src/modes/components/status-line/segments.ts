@@ -1,4 +1,5 @@
 import * as os from "node:os";
+import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { TERMINAL } from "@oh-my-pi/pi-tui";
 import { formatDuration, formatNumber, getProjectDir } from "@oh-my-pi/pi-utils";
 import { theme } from "../../../modes/theme/theme";
@@ -50,9 +51,9 @@ const modelSegment: StatusLineSegment = {
 		}
 
 		// Add thinking level with dot separator
-		if (opts.showThinkingLevel !== false && state.model?.reasoning) {
-			const level = state.thinkingLevel || "off";
-			if (level !== "off") {
+		if (opts.showThinkingLevel !== false && state.model?.thinking) {
+			const level = state.thinkingLevel ?? ThinkingLevel.Off;
+			if (level !== ThinkingLevel.Off) {
 				const thinkingText = theme.thinking[level as keyof typeof theme.thinking];
 				if (thinkingText) {
 					content += `${theme.sep.dot}${thinkingText}`;

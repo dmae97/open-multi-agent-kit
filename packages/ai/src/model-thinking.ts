@@ -1,0 +1,526 @@
+import type { Api, Model as ApiModel, ThinkingConfig } from "./types";
+
+/** User-facing thinking levels, ordered least to most intensive. */
+export const enum Effort {
+	Minimal = "minimal",
+	Low = "low",
+	Medium = "medium",
+	High = "high",
+	XHigh = "xhigh",
+}
+
+export const THINKING_EFFORTS: readonly Effort[] = [
+	Effort.Minimal,
+	Effort.Low,
+	Effort.Medium,
+	Effort.High,
+	Effort.XHigh,
+];
+
+const DEFAULT_REASONING_EFFORTS: readonly Effort[] = [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High];
+const DEFAULT_REASONING_EFFORTS_WITH_XHIGH: readonly Effort[] = [
+	Effort.Minimal,
+	Effort.Low,
+	Effort.Medium,
+	Effort.High,
+	Effort.XHigh,
+];
+const GEMINI_3_PRO_EFFORTS: readonly Effort[] = [Effort.Low, Effort.High];
+const GEMINI_3_FLASH_EFFORTS: readonly Effort[] = [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High];
+const GPT_5_2_PLUS_EFFORTS: readonly Effort[] = [Effort.Low, Effort.Medium, Effort.High, Effort.XHigh];
+const GPT_5_1_CODEX_MINI_EFFORTS: readonly Effort[] = [Effort.Medium, Effort.High];
+const CLOUDFLARE_AI_GATEWAY_BASE_URL = "https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic";
+
+type SemVer = {
+	major: number;
+	minor: number;
+	patch: number;
+};
+
+type GeminiKind = "pro" | "flash";
+type AnthropicKind = "opus" | "sonnet";
+type OpenAIVariant = "base" | "codex" | "codex-max" | "codex-mini" | "codex-spark" | "max" | "nano";
+
+interface GeminiModel {
+	family: "gemini";
+	kind: GeminiKind;
+	version: SemVer;
+}
+
+interface AnthropicModel {
+	family: "anthropic";
+	kind: AnthropicKind;
+	version: SemVer;
+}
+
+interface OpenAIModel {
+	family: "openai";
+	variant: OpenAIVariant;
+	version: SemVer;
+}
+
+interface UnknownModel {
+	family: "unknown";
+	id: string;
+}
+
+type ParsedModel = GeminiModel | AnthropicModel | OpenAIModel | UnknownModel;
+
+/**
+ * Static fallback model injected when Cloudflare AI Gateway discovery
+ * returns no results. Ensures the provider always has at least one usable
+ * model entry in the catalog.
+ */
+export const CLOUDFLARE_FALLBACK_MODEL: ApiModel<"anthropic-messages"> = {
+	id: "claude-sonnet-4-5",
+	name: "Claude Sonnet 4.5",
+	api: "anthropic-messages",
+	provider: "cloudflare-ai-gateway",
+	baseUrl: CLOUDFLARE_AI_GATEWAY_BASE_URL,
+	reasoning: true,
+	input: ["text", "image"],
+	cost: {
+		input: 3,
+		output: 15,
+		cacheRead: 0.3,
+		cacheWrite: 3.75,
+	},
+	contextWindow: 200000,
+	maxTokens: 64000,
+};
+
+/**
+ * Returns a copy of the model with canonical thinking metadata attached.
+ *
+ * This helper belongs to catalog enrichment only. Runtime consumers should
+ * trust `model.thinking` and avoid inferring capabilities on demand.
+ */
+export function enrichModelThinking<TApi extends Api>(model: ApiModel<TApi>): ApiModel<TApi> {
+	const normalizedThinking = normalizeThinkingConfig(model.thinking);
+	if (!model.reasoning) {
+		return normalizedThinking === undefined && model.thinking === undefined
+			? model
+			: { ...model, thinking: undefined };
+	}
+
+	const thinking = normalizedThinking ?? inferModelThinking(model);
+	if (thinkingsEqual(normalizedThinking, thinking)) {
+		return model;
+	}
+	return { ...model, thinking };
+}
+
+/**
+ * Returns a copy of the model with thinking metadata recomputed from the
+ * canonical rules, replacing any existing `thinking`.
+ */
+export function refreshModelThinking<TApi extends Api>(model: ApiModel<TApi>): ApiModel<TApi> {
+	if (!model.reasoning) {
+		const normalizedThinking = normalizeThinkingConfig(model.thinking);
+		return normalizedThinking === undefined && model.thinking === undefined
+			? model
+			: { ...model, thinking: undefined };
+	}
+	return { ...model, thinking: inferModelThinking(model) };
+}
+
+/**
+ * Apply upstream metadata corrections to a mutable array of models.
+ *
+ * Each model is first normalized through `refreshModelThinking()` so generated
+ * catalogs keep canonical thinking metadata and policy fixes in one pass.
+ */
+export function applyGeneratedModelPolicies(models: ApiModel<Api>[]): void {
+	for (let index = 0; index < models.length; index++) {
+		const model = refreshModelThinking(models[index]!);
+		applyGeneratedModelPolicy(model);
+		models[index] = model;
+	}
+}
+
+/**
+ * Link `-spark` model variants to their base models for context promotion.
+ *
+ * When a spark model's context is exhausted, the agent can promote to the
+ * corresponding full model. This sets `contextPromotionTarget` on each
+ * spark variant that has a matching base model.
+ */
+export function linkSparkPromotionTargets(models: ApiModel<Api>[]): void {
+	for (const candidate of models) {
+		const parsedCandidate = parseKnownModel(candidate.id);
+		if (parsedCandidate.family !== "openai" || parsedCandidate.variant !== "codex-spark") continue;
+		const baseId = candidate.id.slice(0, -"-spark".length);
+		const fallback = models.find(
+			model => model.provider === candidate.provider && model.api === candidate.api && model.id === baseId,
+		);
+		if (!fallback) continue;
+		candidate.contextPromotionTarget = `${fallback.provider}/${fallback.id}`;
+	}
+}
+
+/**
+ * Returns supported thinking efforts from canonical model rules constrained by
+ * explicit model metadata.
+ *
+ * @throws Error when a reasoning-capable model is missing thinking metadata
+ */
+export function getSupportedEfforts<TApi extends Api>(model: ApiModel<TApi>): readonly Effort[] {
+	if (!model.reasoning) {
+		return [];
+	}
+	if (!model.thinking) {
+		throw new Error(`Model ${model.provider}/${model.id} is missing thinking metadata`);
+	}
+	const configuredEfforts = expandEffortRange(model.thinking);
+	const parsedModel = parseKnownModel(model.id);
+	if (parsedModel.family === "unknown") {
+		return configuredEfforts;
+	}
+	return intersectEfforts(configuredEfforts, inferSupportedEfforts(parsedModel, model));
+}
+
+/**
+ * Clamps a requested thinking level against explicit model metadata.
+ *
+ * Non-reasoning models always resolve to `undefined`.
+ */
+export function clampThinkingLevelForModel<TApi extends Api>(
+	model: ApiModel<TApi> | undefined,
+	requested: Effort | undefined,
+): Effort | undefined {
+	if (!model) {
+		return requested;
+	}
+	if (!model.reasoning || requested === undefined) {
+		return undefined;
+	}
+
+	const levels = getSupportedEfforts(model);
+	if (levels.includes(requested)) {
+		return requested;
+	}
+
+	const requestedIndex = THINKING_EFFORTS.indexOf(requested);
+	if (requestedIndex === -1) {
+		return undefined;
+	}
+
+	let clamped: Effort | undefined;
+	for (const effort of levels) {
+		if (THINKING_EFFORTS.indexOf(effort) > requestedIndex) {
+			break;
+		}
+		clamped = effort;
+	}
+
+	return clamped ?? levels[0];
+}
+
+export function requireSupportedEffort<TApi extends Api>(model: ApiModel<TApi>, effort: Effort): Effort {
+	if (!model.reasoning) {
+		throw new Error(`Model ${model.provider}/${model.id} does not support thinking`);
+	}
+	const levels = getSupportedEfforts(model);
+	if (!levels.includes(effort)) {
+		throw new Error(
+			`Thinking effort ${effort} is not supported by ${model.provider}/${model.id}. Supported efforts: ${levels.join(", ")}`,
+		);
+	}
+	return effort;
+}
+
+/** Maps a normalized thinking effort to Google's `thinkingLevel` enum values. */
+export function mapEffortToGoogleThinkingLevel<TApi extends Api>(
+	model: ApiModel<TApi>,
+	effort: Effort,
+): "MINIMAL" | "LOW" | "MEDIUM" | "HIGH" {
+	switch (requireSupportedEffort(model, effort)) {
+		case Effort.Minimal:
+			return "MINIMAL";
+		case Effort.Low:
+			return "LOW";
+		case Effort.Medium:
+			return "MEDIUM";
+		case Effort.High:
+		case Effort.XHigh:
+			return "HIGH";
+	}
+}
+
+/** Maps a normalized thinking effort to Anthropic adaptive effort values. */
+export function mapEffortToAnthropicAdaptiveEffort<TApi extends Api>(
+	model: ApiModel<TApi>,
+	effort: Effort,
+): "low" | "medium" | "high" | "max" {
+	switch (requireSupportedEffort(model, effort)) {
+		case Effort.Minimal:
+		case Effort.Low:
+			return "low";
+		case Effort.Medium:
+			return "medium";
+		case Effort.High:
+			return "high";
+		case Effort.XHigh:
+			return "max";
+	}
+}
+
+function applyGeneratedModelPolicy(model: ApiModel<Api>): void {
+	const parsedModel = parseKnownModel(model.id);
+	if (parsedModel.family === "anthropic") {
+		applyAnthropicCatalogPolicy(model, parsedModel);
+	}
+	if (parsedModel.family === "openai") {
+		applyOpenAICatalogPolicy(model, parsedModel);
+	}
+}
+
+function applyAnthropicCatalogPolicy(model: ApiModel<Api>, parsedModel: AnthropicModel): void {
+	// Claude Opus 4.5: models.dev reports 3x the correct cache pricing.
+	if (model.provider === "anthropic" && parsedModel.kind === "opus" && semverEqual(parsedModel.version, "4.5")) {
+		model.cost.cacheRead = 0.5;
+		model.cost.cacheWrite = 6.25;
+	}
+
+	// Bedrock Opus 4.6: upstream cache pricing is incorrect.
+	if (model.provider === "amazon-bedrock" && parsedModel.kind === "opus" && semverEqual(parsedModel.version, "4.6")) {
+		model.cost.cacheRead = 0.5;
+		model.cost.cacheWrite = 6.25;
+	}
+
+	// Opus 4.6 / Sonnet 4.6: 1M context is beta; clamp to 200K.
+	if (semverEqual(parsedModel.version, "4.6")) {
+		model.contextWindow = 200000;
+	}
+
+	// OpenCode variants: Claude Sonnet 4/4.5 listed with 1M context, actual limit is 200K.
+	if (
+		(model.provider === "opencode-zen" || model.provider === "opencode-go") &&
+		parsedModel.kind === "sonnet" &&
+		(semverEqual(parsedModel.version, "4.0") || semverEqual(parsedModel.version, "4.5"))
+	) {
+		model.contextWindow = 200000;
+	}
+}
+
+function applyOpenAICatalogPolicy(model: ApiModel<Api>, parsedModel: OpenAIModel): void {
+	// Codex models: 400K figure includes output budget; input window is 272K.
+	if (parsedModel.variant.startsWith("codex") && parsedModel.variant !== "codex-spark") {
+		model.contextWindow = 272000;
+	}
+}
+
+function inferModelThinking<TApi extends Api>(model: ApiModel<TApi>): ThinkingConfig {
+	const parsedModel = parseKnownModel(model.id);
+	const efforts = inferSupportedEfforts(parsedModel, model);
+	const minLevel = efforts[0];
+	const maxLevel = efforts.at(-1);
+	if (!minLevel || !maxLevel) {
+		throw new Error(`Model ${model.provider}/${model.id} resolved to an empty thinking range`);
+	}
+	return {
+		mode: inferThinkingControlMode(model, parsedModel),
+		minLevel,
+		maxLevel,
+	};
+}
+
+function normalizeThinkingConfig(thinking: ThinkingConfig | undefined): ThinkingConfig | undefined {
+	if (!thinking || expandEffortRange(thinking).length === 0) {
+		return undefined;
+	}
+	return thinking;
+}
+
+function thinkingsEqual(left: ThinkingConfig | undefined, right: ThinkingConfig | undefined): boolean {
+	if (left === right) return true;
+	if (!left || !right) return false;
+	return left.mode === right.mode && left.minLevel === right.minLevel && left.maxLevel === right.maxLevel;
+}
+
+function expandEffortRange(thinking: ThinkingConfig): readonly Effort[] {
+	const minIndex = THINKING_EFFORTS.indexOf(thinking.minLevel);
+	const maxIndex = THINKING_EFFORTS.indexOf(thinking.maxLevel);
+	if (minIndex === -1 || maxIndex === -1 || minIndex > maxIndex) {
+		return [];
+	}
+	return THINKING_EFFORTS.slice(minIndex, maxIndex + 1);
+}
+
+function intersectEfforts(left: readonly Effort[], right: readonly Effort[]): readonly Effort[] {
+	return left.filter(effort => right.includes(effort));
+}
+
+function inferSupportedEfforts<TApi extends Api>(parsedModel: ParsedModel, model: ApiModel<TApi>): readonly Effort[] {
+	switch (parsedModel.family) {
+		case "openai":
+			return inferOpenAISupportedEfforts(parsedModel);
+		case "gemini":
+			return inferGeminiSupportedEfforts(parsedModel);
+		case "anthropic":
+			return inferAnthropicSupportedEfforts(parsedModel, model);
+		case "unknown":
+			return inferFallbackEfforts(model);
+	}
+}
+
+function inferOpenAISupportedEfforts(model: OpenAIModel): readonly Effort[] {
+	if (model.variant === "codex-mini" && semverEqual(model.version, "5.1")) {
+		return GPT_5_1_CODEX_MINI_EFFORTS;
+	}
+	if (semverGte(model.version, "5.2")) {
+		return GPT_5_2_PLUS_EFFORTS;
+	}
+	return DEFAULT_REASONING_EFFORTS;
+}
+
+function inferGeminiSupportedEfforts(model: GeminiModel): readonly Effort[] {
+	if (!semverGte(model.version, "3.0")) {
+		return DEFAULT_REASONING_EFFORTS;
+	}
+	return model.kind === "pro" ? GEMINI_3_PRO_EFFORTS : GEMINI_3_FLASH_EFFORTS;
+}
+
+function inferAnthropicSupportedEfforts<TApi extends Api>(
+	parsedModel: AnthropicModel,
+	model: ApiModel<TApi>,
+): readonly Effort[] {
+	if (model.api === "anthropic-messages" && semverGte(parsedModel.version, "4.6")) {
+		return parsedModel.kind === "opus" ? DEFAULT_REASONING_EFFORTS_WITH_XHIGH : DEFAULT_REASONING_EFFORTS;
+	}
+	return inferFallbackEfforts(model);
+}
+
+function inferFallbackEfforts<TApi extends Api>(model: ApiModel<TApi>): readonly Effort[] {
+	if (model.api === "anthropic-messages") {
+		return DEFAULT_REASONING_EFFORTS_WITH_XHIGH;
+	}
+	if (model.api === "bedrock-converse-stream") {
+		return DEFAULT_REASONING_EFFORTS;
+	}
+	return DEFAULT_REASONING_EFFORTS;
+}
+
+function inferThinkingControlMode<TApi extends Api>(
+	model: ApiModel<TApi>,
+	parsedModel: ParsedModel,
+): ThinkingConfig["mode"] {
+	switch (model.api) {
+		case "google-generative-ai":
+		case "google-gemini-cli":
+		case "google-vertex":
+			return parsedModel.family === "gemini" &&
+				semverGte(parsedModel.version, "3.0") &&
+				parsedModel.version.major === 3
+				? "google-level"
+				: "budget";
+
+		case "anthropic-messages":
+			if (parsedModel.family === "anthropic") {
+				if (semverGte(parsedModel.version, "4.6")) {
+					return "anthropic-adaptive";
+				}
+				if (semverGte(parsedModel.version, "4.5")) {
+					return "anthropic-budget-effort";
+				}
+			}
+			return "budget";
+
+		case "bedrock-converse-stream":
+			return "budget";
+
+		default:
+			return "effort";
+	}
+}
+
+function parseKnownModel(modelId: string): ParsedModel {
+	const canonicalId = getCanonicalModelId(modelId);
+	return (
+		parseGeminiModel(canonicalId) ??
+		parseAnthropicModel(canonicalId) ??
+		parseOpenAIModel(canonicalId) ?? { family: "unknown", id: canonicalId }
+	);
+}
+
+function parseGeminiModel(modelId: string): GeminiModel | null {
+	const match = /gemini-(\d+(?:\.\d+){0,2})-(pro|flash)\b/.exec(modelId);
+	if (!match) {
+		return null;
+	}
+	const version = parseSemVer(match[1]);
+	if (!version) {
+		return null;
+	}
+	return { family: "gemini", kind: match[2] as GeminiKind, version };
+}
+
+function parseAnthropicModel(modelId: string): AnthropicModel | null {
+	const match = /claude-(opus|sonnet)-(\d+(?:[.-]\d+){0,2})\b/.exec(modelId);
+	if (!match) {
+		return null;
+	}
+	const version = parseSemVer(match[2]);
+	if (!version) {
+		return null;
+	}
+	return { family: "anthropic", kind: match[1] as AnthropicKind, version };
+}
+
+function parseOpenAIModel(modelId: string): OpenAIModel | null {
+	const match = /gpt-(\d+(?:\.\d+){0,2})(?:-(codex-spark|codex-mini|codex-max|codex|max|nano))?\b/.exec(modelId);
+	if (!match) {
+		return null;
+	}
+	const version = parseSemVer(match[1]);
+	if (!version) {
+		return null;
+	}
+	return { family: "openai", variant: (match[2] as OpenAIVariant | undefined) ?? "base", version };
+}
+
+function createSemVer(major: number, minor: number, patch = 0): SemVer {
+	return { major, minor, patch };
+}
+
+// extend this table if we need anything more than 9.10
+const precomputeTable: Record<string, SemVer> = {};
+for (let major = 0; major <= 9; major++) {
+	for (let minor = 0; minor <= 10; minor++) {
+		const version = createSemVer(major, minor, 0);
+		precomputeTable[`${major}.${minor}`] = version;
+		precomputeTable[`${major}-${minor}`] = version;
+	}
+	precomputeTable[`${major}`] = createSemVer(major, 0, 0);
+}
+
+function parseSemVer(version: string): SemVer | null {
+	return precomputeTable[version] ?? null;
+}
+
+function semverGte(left: SemVer | string, right: SemVer | string): boolean {
+	return compareSemVer(left, right) >= 0;
+}
+
+function semverEqual(left: SemVer | string, right: SemVer | string): boolean {
+	return compareSemVer(left, right) === 0;
+}
+
+function compareSemVer(left: SemVer | string | null, right: SemVer | string | null): number {
+	left = typeof left === "string" ? parseSemVer(left) : left;
+	right = typeof right === "string" ? parseSemVer(right) : right;
+	if (!left || !right) return (left ? 1 : 0) - (right ? 1 : 0);
+
+	if (left.major !== right.major) {
+		return left.major - right.major;
+	}
+	if (left.minor !== right.minor) {
+		return left.minor - right.minor;
+	}
+	return left.patch - right.patch;
+}
+
+function getCanonicalModelId(modelId: string): string {
+	const p = modelId.lastIndexOf("/");
+	return p !== -1 ? modelId.slice(p + 1) : modelId;
+}

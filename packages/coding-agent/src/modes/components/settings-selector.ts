@@ -1,4 +1,5 @@
-import type { ThinkingLevel } from "@oh-my-pi/pi-ai";
+import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
+import type { Effort } from "@oh-my-pi/pi-ai";
 import {
 	Container,
 	matchesKey,
@@ -134,9 +135,9 @@ function getSettingsTabs(): Tab[] {
  */
 export interface SettingsRuntimeContext {
 	/** Available thinking levels (from session) */
-	availableThinkingLevels: ThinkingLevel[];
+	availableThinkingLevels: Effort[];
 	/** Current thinking level (from session) */
-	thinkingLevel: ThinkingLevel;
+	thinkingLevel: ThinkingLevel | undefined;
 	/** Available themes */
 	availableThemes: string[];
 	/** Working directory for plugins tab */

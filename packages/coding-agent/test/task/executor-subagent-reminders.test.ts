@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
+import { type AssistantMessage, Effort } from "@oh-my-pi/pi-ai";
 import { Settings } from "../../src/config/settings";
 import type { LoadExtensionsResult } from "../../src/extensibility/extensions/types";
 import * as sdkModule from "../../src/sdk";
@@ -241,7 +241,7 @@ describe("runSubprocess submit_result reminders", () => {
 			...baseOptions,
 			id: "subagent-thinking-fallback",
 			modelOverride: "openai/gpt-4o",
-			thinkingLevel: "high",
+			thinkingLevel: Effort.High,
 			modelRegistry,
 		});
 
@@ -260,7 +260,7 @@ describe("runSubprocess submit_result reminders", () => {
 		} as unknown as import("../../src/config/model-registry").ModelRegistry;
 
 		const cases = [
-			{ modelOverride: "openai/gpt-4o:low", expectedThinkingLevel: "low" },
+			{ modelOverride: "openai/gpt-4o:low", expectedThinkingLevel: Effort.Low },
 			{ modelOverride: "openai/gpt-4o:off", expectedThinkingLevel: "off" },
 		] as const;
 
@@ -290,7 +290,7 @@ describe("runSubprocess submit_result reminders", () => {
 				...baseOptions,
 				id: `subagent-thinking-override-${index}`,
 				modelOverride: testCase.modelOverride,
-				thinkingLevel: "high",
+				thinkingLevel: Effort.High,
 				modelRegistry,
 			});
 		}

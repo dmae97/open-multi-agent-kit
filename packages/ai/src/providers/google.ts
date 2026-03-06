@@ -348,14 +348,14 @@ function buildParams(
 	}
 
 	if (options.thinking?.enabled && model.reasoning) {
-		const thinkingConfig: ThinkingConfig = { includeThoughts: true };
+		const cfg: ThinkingConfig = { includeThoughts: true };
 		if (options.thinking.level !== undefined) {
 			// Cast to any since our GoogleThinkingLevel mirrors Google's ThinkingLevel enum values
-			thinkingConfig.thinkingLevel = options.thinking.level as any;
+			cfg.thinkingLevel = options.thinking.level as any;
 		} else if (options.thinking.budgetTokens !== undefined) {
-			thinkingConfig.thinkingBudget = options.thinking.budgetTokens;
+			cfg.thinkingBudget = options.thinking.budgetTokens;
 		}
-		config.thinkingConfig = thinkingConfig;
+		config.thinkingConfig = cfg;
 	}
 
 	if (options.signal) {

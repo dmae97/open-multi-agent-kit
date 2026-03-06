@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import { Effort } from "@oh-my-pi/pi-ai";
 import { getBundledModel } from "../src/models";
 import { streamSimple } from "../src/stream";
 import type { Context, Model } from "../src/types";
@@ -11,7 +12,7 @@ interface GeminiCliThinkingConfig {
 interface CapturedRequestBody {
 	request?: {
 		generationConfig?: {
-			thinkingConfig?: GeminiCliThinkingConfig;
+			thinking?: GeminiCliThinkingConfig;
 		};
 	};
 }
@@ -35,10 +36,10 @@ const context: Context = {
 	messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
 };
 
-function extractThinkingConfig(bodyText: string | undefined): GeminiCliThinkingConfig | undefined {
+function extractThinking(bodyText: string | undefined): GeminiCliThinkingConfig | undefined {
 	if (!bodyText) return undefined;
 	const parsed = JSON.parse(bodyText) as CapturedRequestBody;
-	return parsed.request?.generationConfig?.thinkingConfig;
+	return parsed.request?.generationConfig?.thinking;
 }
 
 describe("google-gemini-cli Gemini 3.x thinking mapping", () => {
@@ -52,7 +53,7 @@ describe("google-gemini-cli Gemini 3.x thinking mapping", () => {
 	it("includes gemini-3.1-pro-preview in bundled google-gemini-cli models", () => {
 		expect(getBundledModel("google-gemini-cli", "gemini-3.1-pro-preview")?.id).toBe("gemini-3.1-pro-preview");
 	});
-	it("uses thinkingLevel for gemini-3.1-pro-preview", async () => {
+	it("uses thinkingLevel for gemini-3.1-pro-preview when the effort is supported", async () => {
 		let requestBody: string | undefined;
 		globalThis.fetch = vi.fn(async (_input, init) => {
 			requestBody = typeof init?.body === "string" ? init.body : undefined;
@@ -61,13 +62,29 @@ describe("google-gemini-cli Gemini 3.x thinking mapping", () => {
 
 		const stream = streamSimple(createModel("gemini-3.1-pro-preview"), context, {
 			apiKey: JSON.stringify({ token: "token", projectId: "proj-123" }),
-			reasoning: "medium",
+			reasoning: Effort.High,
 		});
 		await stream.result();
 
-		const thinkingConfig = extractThinkingConfig(requestBody);
-		expect(thinkingConfig?.thinkingLevel).toBe("HIGH");
-		expect(thinkingConfig?.thinkingBudget).toBeUndefined();
+		const thinking = extractThinking(requestBody);
+		expect(thinking?.thinkingLevel).toBe("HIGH");
+		expect(thinking?.thinkingBudget).toBeUndefined();
+	});
+
+	it("rejects unsupported gemini-3.1-pro-preview efforts instead of promoting them", () => {
+		let requestBody: string | undefined;
+		globalThis.fetch = vi.fn(async (_input, init) => {
+			requestBody = typeof init?.body === "string" ? init.body : undefined;
+			return new Response('{"error":{"message":"bad request"}}', { status: 400 });
+		}) as unknown as typeof fetch;
+
+		expect(() =>
+			streamSimple(createModel("gemini-3.1-pro-preview"), context, {
+				apiKey: JSON.stringify({ token: "token", projectId: "proj-123" }),
+				reasoning: Effort.Medium,
+			}),
+		).toThrow(/Supported efforts: low, high/);
+		expect(requestBody).toBeUndefined();
 	});
 
 	it("uses thinkingLevel for gemini-3.1-flash-preview", async () => {
@@ -79,13 +96,13 @@ describe("google-gemini-cli Gemini 3.x thinking mapping", () => {
 
 		const stream = streamSimple(createModel("gemini-3.1-flash-preview"), context, {
 			apiKey: JSON.stringify({ token: "token", projectId: "proj-123" }),
-			reasoning: "medium",
+			reasoning: Effort.Medium,
 		});
 		await stream.result();
 
-		const thinkingConfig = extractThinkingConfig(requestBody);
-		expect(thinkingConfig?.thinkingLevel).toBe("MEDIUM");
-		expect(thinkingConfig?.thinkingBudget).toBeUndefined();
+		const thinking = extractThinking(requestBody);
+		expect(thinking?.thinkingLevel).toBe("MEDIUM");
+		expect(thinking?.thinkingBudget).toBeUndefined();
 	});
 
 	it("keeps thinkingBudget for gemini-2.5-pro", async () => {
@@ -97,12 +114,12 @@ describe("google-gemini-cli Gemini 3.x thinking mapping", () => {
 
 		const stream = streamSimple(createModel("gemini-2.5-pro"), context, {
 			apiKey: JSON.stringify({ token: "token", projectId: "proj-123" }),
-			reasoning: "medium",
+			reasoning: Effort.Medium,
 		});
 		await stream.result();
 
-		const thinkingConfig = extractThinkingConfig(requestBody);
-		expect(thinkingConfig?.thinkingLevel).toBeUndefined();
-		expect(thinkingConfig?.thinkingBudget).toBeDefined();
+		const thinking = extractThinking(requestBody);
+		expect(thinking?.thinkingLevel).toBeUndefined();
+		expect(thinking?.thinkingBudget).toBeDefined();
 	});
 });

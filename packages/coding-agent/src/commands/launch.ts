@@ -2,7 +2,7 @@
  * Root command for the coding agent CLI.
  */
 
-import { getAvailableThinkingLevels } from "@oh-my-pi/pi-ai";
+import { THINKING_EFFORTS } from "@oh-my-pi/pi-ai";
 import { APP_NAME } from "@oh-my-pi/pi-utils";
 import { Args, Command, Flags } from "@oh-my-pi/pi-utils/cli";
 import { parseArgs } from "../cli/args";
@@ -86,8 +86,8 @@ export default class Index extends Command {
 			description: "Comma-separated list of tools to enable (default: all)",
 		}),
 		thinking: Flags.string({
-			description: `Set thinking level: ${getAvailableThinkingLevels().join(", ")}`,
-			options: getAvailableThinkingLevels(),
+			description: `Set thinking level: ${THINKING_EFFORTS.join(", ")}`,
+			options: [...THINKING_EFFORTS],
 		}),
 		hook: Flags.string({
 			description: "Load a hook/extension file (can be used multiple times)",

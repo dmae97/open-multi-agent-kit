@@ -67,7 +67,7 @@ export interface SessionMessageEntry extends SessionEntryBase {
 
 export interface ThinkingLevelChangeEntry extends SessionEntryBase {
 	type: "thinking_level_change";
-	thinkingLevel: string;
+	thinkingLevel?: string | null;
 }
 
 export interface ModelChangeEntry extends SessionEntryBase {
@@ -209,7 +209,7 @@ export interface SessionTreeNode {
 
 export interface SessionContext {
 	messages: AgentMessage[];
-	thinkingLevel: string;
+	thinkingLevel?: string;
 	serviceTier?: ServiceTier;
 	/** Model roles: { default: "provider/modelId", small: "provider/modelId", ... } */
 	models: Record<string, string>;
@@ -433,7 +433,7 @@ export function buildSessionContext(
 		// Explicitly null - return no messages (navigated to before first entry)
 		return {
 			messages: [],
-			thinkingLevel: "off",
+			thinkingLevel: undefined,
 			serviceTier: undefined,
 			models: {},
 			injectedTtsrRules: [],
@@ -451,7 +451,7 @@ export function buildSessionContext(
 	if (!leaf) {
 		return {
 			messages: [],
-			thinkingLevel: "off",
+			thinkingLevel: undefined,
 			serviceTier: undefined,
 			models: {},
 			injectedTtsrRules: [],
@@ -468,7 +468,7 @@ export function buildSessionContext(
 	}
 
 	// Extract settings and find compaction
-	let thinkingLevel = "off";
+	let thinkingLevel: string | undefined;
 	let serviceTier: ServiceTier | undefined;
 	const models: Record<string, string> = {};
 	let compaction: CompactionEntry | null = null;
@@ -478,7 +478,7 @@ export function buildSessionContext(
 
 	for (const entry of path) {
 		if (entry.type === "thinking_level_change") {
-			thinkingLevel = entry.thinkingLevel;
+			thinkingLevel = entry.thinkingLevel ?? undefined;
 		} else if (entry.type === "model_change") {
 			// New format: { model: "provider/id", role?: string }
 			if (entry.model) {
@@ -1829,13 +1829,13 @@ export class SessionManager {
 	}
 
 	/** Append a thinking level change as child of current leaf, then advance leaf. Returns entry id. */
-	appendThinkingLevelChange(thinkingLevel: string): string {
+	appendThinkingLevelChange(thinkingLevel?: string): string {
 		const entry: ThinkingLevelChangeEntry = {
 			type: "thinking_level_change",
 			id: generateId(this.#byId),
 			parentId: this.#leafId,
 			timestamp: new Date().toISOString(),
-			thinkingLevel,
+			thinkingLevel: thinkingLevel ?? null,
 		};
 		this.#appendEntry(entry);
 		return entry.id;

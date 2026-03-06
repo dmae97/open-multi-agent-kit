@@ -13,7 +13,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Agent } from "@oh-my-pi/pi-agent-core";
-import { getBundledModel, type Model, type ThinkingLevel } from "@oh-my-pi/pi-ai";
+import { Effort, getBundledModel, type Model, type Effort as ThinkingLevelType } from "@oh-my-pi/pi-ai";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
@@ -47,7 +47,7 @@ describe.skipIf(!HAS_ANTIGRAVITY_AUTH)("Compaction with thinking models (Antigra
 
 	async function createSession(
 		modelId: "claude-opus-4-5-thinking" | "claude-sonnet-4-5",
-		thinkingLevel: ThinkingLevel = "high",
+		thinkingLevel: ThinkingLevelType = Effort.High,
 	) {
 		const toolSession: ToolSession = {
 			cwd: tempDir,
@@ -92,7 +92,7 @@ describe.skipIf(!HAS_ANTIGRAVITY_AUTH)("Compaction with thinking models (Antigra
 	}
 
 	it("should compact successfully with claude-opus-4-5-thinking and thinking level high", async () => {
-		createSession("claude-opus-4-5-thinking", "high");
+		createSession("claude-opus-4-5-thinking", Effort.High);
 
 		// Send a simple prompt
 		await session.prompt("Write down the first 10 prime numbers.");
@@ -119,7 +119,7 @@ describe.skipIf(!HAS_ANTIGRAVITY_AUTH)("Compaction with thinking models (Antigra
 	}, 180000);
 
 	it("should compact successfully with claude-sonnet-4-5 (non-thinking) for comparison", async () => {
-		createSession("claude-sonnet-4-5", "off");
+		createSession("claude-sonnet-4-5");
 
 		await session.prompt("Write down the first 10 prime numbers.");
 		await session.agent.waitForIdle();
@@ -156,7 +156,7 @@ describe.skipIf(!HAS_ANTHROPIC_AUTH)("Compaction with thinking models (Anthropic
 		}
 	});
 
-	async function createSession(model: Model, thinkingLevel: ThinkingLevel = "high") {
+	async function createSession(model: Model, thinkingLevel: ThinkingLevelType = Effort.High) {
 		const toolSession: ToolSession = {
 			cwd: tempDir,
 			hasUI: false,
@@ -196,7 +196,7 @@ describe.skipIf(!HAS_ANTHROPIC_AUTH)("Compaction with thinking models (Anthropic
 
 	it("should compact successfully with claude-3-7-sonnet and thinking level high", async () => {
 		const model = getBundledModel("anthropic", "claude-3-7-sonnet-latest")!;
-		createSession(model, "high");
+		createSession(model, Effort.High);
 
 		// Send a simple prompt
 		await session.prompt("Write down the first 10 prime numbers.");

@@ -66,6 +66,24 @@ export type OptionsForApi<TApi extends Api> =
 	| StreamOptions
 	| (TApi extends keyof ApiOptionsMap ? ApiOptionsMap[TApi] : never);
 
+/** Canonical thinking transport used by a model. */
+export type ThinkingControlMode =
+	| "effort"
+	| "budget"
+	| "google-level"
+	| "anthropic-adaptive"
+	| "anthropic-budget-effort";
+
+/** Per-model thinking capabilities used to clamp and map user-facing effort levels. */
+export interface ThinkingConfig {
+	/** Least intensive supported user-facing effort level. */
+	minLevel: Effort;
+	/** Most intensive supported user-facing effort level. */
+	maxLevel: Effort;
+	/** Provider-specific transport used to encode the selected effort. */
+	mode: ThinkingControlMode;
+}
+
 export type KnownProvider =
 	| "amazon-bedrock"
 	| "anthropic"
@@ -110,10 +128,10 @@ export type KnownProvider =
 	| "lm-studio";
 export type Provider = KnownProvider | string;
 
-import type { ThinkingEffort, ThinkingLevel } from "./thinking";
+import type { Effort } from "./model-thinking";
 
 /** Token budgets for each thinking level (token-based providers only) */
-export type ThinkingBudgets = { [key in ThinkingEffort]?: number };
+export type ThinkingBudgets = { [key in Effort]?: number };
 
 export type MessageAttribution = "user" | "agent";
 
@@ -192,7 +210,7 @@ export interface StreamOptions {
 
 // Unified options with reasoning passed to streamSimple() and completeSimple()
 export interface SimpleStreamOptions extends StreamOptions {
-	reasoning?: ThinkingLevel;
+	reasoning?: Effort;
 	/** Custom token budgets for thinking levels (token-based providers only) */
 	thinkingBudgets?: ThinkingBudgets;
 	/** Cursor exec handlers for local tool execution */
@@ -476,6 +494,8 @@ export interface Model<TApi extends Api = any> {
 	contextPromotionTarget?: string;
 	/** Provider-assigned priority value (lower = higher priority). */
 	priority?: number;
+	/** Canonical thinking capability metadata for this model. */
+	thinking?: ThinkingConfig;
 	/** Compatibility overrides for openai-completions API. If not set, auto-detected from baseUrl. */
 	compat?: TApi extends "openai-completions" ? OpenAICompat : never;
 }

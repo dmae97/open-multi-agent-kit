@@ -5,6 +5,7 @@ import {
 	type AssistantMessage,
 	type CursorExecHandlers,
 	type CursorToolResultHandler,
+	type Effort,
 	getBundledModel,
 	type ImageContent,
 	type Message,
@@ -14,7 +15,6 @@ import {
 	streamSimple,
 	type TextContent,
 	type ThinkingBudgets,
-	type ThinkingLevel,
 	type ToolChoice,
 	type ToolResultMessage,
 } from "@oh-my-pi/pi-ai";
@@ -175,7 +175,7 @@ export class Agent {
 	#state: AgentState = {
 		systemPrompt: "",
 		model: getBundledModel("google", "gemini-2.5-flash-lite-preview-06-17"),
-		thinkingLevel: "off",
+		thinkingLevel: undefined,
 		tools: [],
 		messages: [],
 		isStreaming: false,
@@ -416,7 +416,7 @@ export class Agent {
 		this.#state.model = m;
 	}
 
-	setThinkingLevel(l: ThinkingLevel) {
+	setThinkingLevel(l: Effort | undefined) {
 		this.#state.thinkingLevel = l;
 	}
 
@@ -669,7 +669,7 @@ export class Agent {
 		// Clear Cursor tool result buffer at start of each run
 		this.#cursorToolResultBuffer = [];
 
-		const reasoning = this.#state.thinkingLevel === "off" ? undefined : this.#state.thinkingLevel;
+		const reasoning = this.#state.thinkingLevel;
 
 		const context: AgentContext = {
 			systemPrompt: this.#state.systemPrompt,

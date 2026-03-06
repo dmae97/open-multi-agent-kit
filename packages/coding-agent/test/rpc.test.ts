@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentEvent, AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, TextContent } from "@oh-my-pi/pi-ai";
+import { type AssistantMessage, Effort, type TextContent } from "@oh-my-pi/pi-ai";
 import {
 	type CompactionEntry,
 	type FileEntry,
@@ -198,11 +198,11 @@ describe.skipIf(!e2eApiKey("ANTHROPIC_API_KEY"))("RPC mode", () => {
 		await client.start();
 
 		// Set thinking level
-		await client.setThinkingLevel("high");
+		await client.setThinkingLevel(Effort.High);
 
 		// Verify via state
 		const state = await client.getState();
-		expect(state.thinkingLevel).toBe("high");
+		expect(state.thinkingLevel).toBe(Effort.High);
 	}, 30000);
 
 	test("should cycle thinking level", async () => {

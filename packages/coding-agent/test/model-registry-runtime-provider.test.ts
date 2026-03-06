@@ -5,6 +5,7 @@ import * as path from "node:path";
 import {
 	type AssistantMessageEventStream,
 	clearCustomApis,
+	Effort,
 	getCustomApi,
 	getOAuthProviders,
 	type OAuthCredentials,
@@ -100,6 +101,36 @@ describe("ModelRegistry runtime provider registration", () => {
 		expect(model?.headers?.Authorization).toBe("Bearer RUNTIME_KEY");
 		expect(model?.headers?.["X-Provider"]).toBe("provider-header");
 		expect(model?.headers?.["X-Model"]).toBe("model-header");
+	});
+
+	test("registerProvider preserves explicit thinking on runtime models", () => {
+		const registry = new ModelRegistry(authStorage, modelsJsonPath);
+		const config: ProviderConfigInput = {
+			baseUrl: "https://runtime.example.com/v1",
+			apiKey: "RUNTIME_KEY",
+			api: "anthropic-messages",
+			models: [
+				{
+					...baseModel,
+					id: "runtime-thinking-model",
+					reasoning: true,
+					thinking: {
+						mode: "anthropic-adaptive",
+						minLevel: Effort.Minimal,
+						maxLevel: Effort.High,
+					},
+				},
+			],
+		};
+
+		registry.registerProvider("runtime-provider", config, "ext://runtime");
+		const model = registry.find("runtime-provider", "runtime-thinking-model");
+
+		expect(model?.thinking).toEqual({
+			mode: "anthropic-adaptive",
+			minLevel: Effort.Minimal,
+			maxLevel: Effort.High,
+		});
 	});
 
 	test("clearSourceRegistrations and syncExtensionSources remove source-scoped API and OAuth providers", () => {

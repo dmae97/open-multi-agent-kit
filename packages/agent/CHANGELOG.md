@@ -1,9 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Exported `ThinkingLevel` selector constants and types for configuring agent reasoning behavior
+- Added `inherit` thinking level option to defer reasoning configuration to higher-level selectors
 - Added `serviceTier` option to configure service tier for agent requests
+
+### Changed
+
+- Changed `thinkingLevel` from required string to optional `Effort` type, allowing undefined state
+- Updated `setThinkingLevel()` method to accept `Effort | undefined` instead of `ThinkingLevel` string
 
 ## [13.4.0] - 2026-03-01
 ### Added

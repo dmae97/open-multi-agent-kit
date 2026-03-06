@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import { enrichModelThinking } from "@oh-my-pi/pi-ai/model-thinking";
 import {
 	getOpenAICodexTransportDetails,
 	prewarmOpenAICodexResponses,
@@ -484,7 +485,7 @@ describe("openai-codex streaming", () => {
 		await streamResult.result();
 	});
 
-	it("clamps gpt-5.3-codex minimal reasoning effort to low", async () => {
+	it("rejects gpt-5.3-codex minimal reasoning effort instead of clamping", async () => {
 		const tempDir = TempDir.createSync("@pi-codex-stream-");
 		setAgentDir(tempDir.path());
 
@@ -555,7 +556,7 @@ describe("openai-codex streaming", () => {
 
 		global.fetch = fetchMock as unknown as typeof fetch;
 
-		const model: Model<"openai-codex-responses"> = {
+		const model = enrichModelThinking({
 			id: "gpt-5.3-codex",
 			name: "GPT-5.3 Codex",
 			api: "openai-codex-responses",
@@ -566,7 +567,7 @@ describe("openai-codex streaming", () => {
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 			contextWindow: 400000,
 			maxTokens: 128000,
-		};
+		});
 
 		const context: Context = {
 			systemPrompt: "You are a helpful assistant.",
@@ -577,7 +578,9 @@ describe("openai-codex streaming", () => {
 			apiKey: token,
 			reasoning: "minimal",
 		});
-		await streamResult.result();
+		const response = await streamResult.result();
+		expect(response.stopReason).toBe("error");
+		expect(response.errorMessage).toContain("Supported efforts: low, medium, high, xhigh");
 	});
 
 	it("does not set conversation_id/session_id headers when sessionId is not provided", async () => {

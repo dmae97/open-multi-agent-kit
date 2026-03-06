@@ -1,5 +1,12 @@
-import { Agent, type AgentEvent, type AgentMessage, type AgentTool, INTENT_FIELD } from "@oh-my-pi/pi-agent-core";
-import { type Message, type Model, supportsXhigh, type ThinkingLevel } from "@oh-my-pi/pi-ai";
+import {
+	Agent,
+	type AgentEvent,
+	type AgentMessage,
+	type AgentTool,
+	INTENT_FIELD,
+	type ThinkingLevel,
+} from "@oh-my-pi/pi-agent-core";
+import type { Message, Model } from "@oh-my-pi/pi-ai";
 
 import { prewarmOpenAICodexResponses } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
 import type { Component } from "@oh-my-pi/pi-tui";
@@ -72,6 +79,7 @@ import {
 	loadProjectContextFiles as loadContextFilesInternal,
 } from "./system-prompt";
 import { AgentOutputManager } from "./task/output-manager";
+import { resolveThinkingLevelForModel, toReasoningEffort } from "./thinking";
 import {
 	BashTool,
 	BUILTIN_TOOLS,
@@ -117,10 +125,10 @@ export interface CreateAgentSessionOptions {
 	/** Raw model pattern string (e.g. from --model CLI flag) to resolve after extensions load.
 	 * Used when model lookup is deferred because extension-provided models aren't registered yet. */
 	modelPattern?: string;
-	/** Thinking level. Default: from settings, else 'off' (clamped to model capabilities) */
+	/** Thinking selector. Default: from settings, else unset */
 	thinkingLevel?: ThinkingLevel;
 	/** Models available for cycling (Ctrl+P in interactive mode) */
-	scopedModels?: Array<{ model: Model; thinkingLevel: ThinkingLevel }>;
+	scopedModels?: Array<{ model: Model; thinkingLevel?: ThinkingLevel }>;
 
 	/** System prompt. String replaces default, function receives default and returns final. */
 	systemPrompt?: string | ((defaultPrompt: string) => string);
@@ -697,7 +705,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	// If session has data and includes a thinking entry, restore it
 	if (thinkingLevel === undefined && hasExistingSession && hasThinkingEntry) {
-		thinkingLevel = existingSession.thinkingLevel as ThinkingLevel;
+		thinkingLevel = existingSession.thinkingLevel as ThinkingLevel | undefined;
 	}
 
 	if (thinkingLevel === undefined && !hasExplicitModel && !hasThinkingEntry && defaultRoleSpec.explicitThinkingLevel) {
@@ -706,14 +714,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	// Fall back to settings default
 	if (thinkingLevel === undefined) {
-		thinkingLevel = settings.get("defaultThinkingLevel") ?? "off";
+		thinkingLevel = settings.get("defaultThinkingLevel");
 	}
-
-	// Clamp to model capabilities
-	if (!model || !model.reasoning) {
-		thinkingLevel = "off";
-	} else if (thinkingLevel === "xhigh" && !supportsXhigh(model)) {
-		thinkingLevel = "high";
+	if (model) {
+		thinkingLevel = resolveThinkingLevelForModel(model, thinkingLevel);
 	}
 
 	let skills: Skill[];
@@ -1350,7 +1354,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		initialState: {
 			systemPrompt,
 			model,
-			thinkingLevel,
+			thinkingLevel: toReasoningEffort(thinkingLevel),
 			tools: initialTools,
 		},
 		convertToLlm: convertToLlmFinal,
@@ -1421,6 +1425,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	session = new AgentSession({
 		agent,
+		thinkingLevel,
 		sessionManager,
 		settings,
 		scopedModels: options.scopedModels,

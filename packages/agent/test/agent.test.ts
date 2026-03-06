@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { Agent } from "@oh-my-pi/pi-agent-core";
+import { Agent, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { type AssistantMessage, getBundledModel, type ThinkingBudgets, type Usage } from "@oh-my-pi/pi-ai";
 import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
 
@@ -39,7 +39,7 @@ describe("Agent", () => {
 		expect(agent.state).toBeDefined();
 		expect(agent.state.systemPrompt).toBe("");
 		expect(agent.state.model).toBeDefined();
-		expect(agent.state.thinkingLevel).toBe("off");
+		expect(agent.state.thinkingLevel).toBeUndefined();
 		expect(agent.state.tools).toEqual([]);
 		expect(agent.state.messages).toEqual([]);
 		expect(agent.state.isStreaming).toBe(false);
@@ -54,13 +54,13 @@ describe("Agent", () => {
 			initialState: {
 				systemPrompt: "You are a helpful assistant.",
 				model: customModel,
-				thinkingLevel: "low",
+				thinkingLevel: ThinkingLevel.Low,
 			},
 		});
 
 		expect(agent.state.systemPrompt).toBe("You are a helpful assistant.");
 		expect(agent.state.model).toBe(customModel);
-		expect(agent.state.thinkingLevel).toBe("low");
+		expect(agent.state.thinkingLevel).toBe(ThinkingLevel.Low);
 	});
 
 	it("should subscribe to events", () => {
@@ -98,8 +98,8 @@ describe("Agent", () => {
 		expect(agent.state.model).toBe(newModel);
 
 		// Test setThinkingLevel
-		agent.setThinkingLevel("high");
-		expect(agent.state.thinkingLevel).toBe("high");
+		agent.setThinkingLevel(ThinkingLevel.High);
+		expect(agent.state.thinkingLevel).toBe(ThinkingLevel.High);
 
 		// Test setTools
 		const tools = [{ name: "test", description: "test tool" } as any];

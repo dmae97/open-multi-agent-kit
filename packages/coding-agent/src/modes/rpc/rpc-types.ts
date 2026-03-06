@@ -4,8 +4,8 @@
  * Commands are sent as JSON lines on stdin.
  * Responses and events are emitted as JSON lines on stdout.
  */
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { ImageContent, Model, ThinkingLevel } from "@oh-my-pi/pi-ai";
+import type { AgentMessage, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
+import type { Effort, ImageContent, Model } from "@oh-my-pi/pi-ai";
 import type { BashResult } from "../../exec/bash-executor";
 import type { SessionStats } from "../../session/agent-session";
 import type { CompactionResult } from "../../session/compaction";
@@ -70,7 +70,7 @@ export type RpcCommand =
 
 export interface RpcSessionState {
 	model?: Model;
-	thinkingLevel: ThinkingLevel;
+	thinkingLevel: ThinkingLevel | undefined;
 	isStreaming: boolean;
 	isCompacting: boolean;
 	steeringMode: "all" | "one-at-a-time";
@@ -114,7 +114,7 @@ export type RpcResponse =
 			type: "response";
 			command: "cycle_model";
 			success: true;
-			data: { model: Model; thinkingLevel: ThinkingLevel; isScoped: boolean } | null;
+			data: { model: Model; thinkingLevel: ThinkingLevel | undefined; isScoped: boolean } | null;
 	  }
 	| {
 			id?: string;
@@ -131,7 +131,7 @@ export type RpcResponse =
 			type: "response";
 			command: "cycle_thinking_level";
 			success: true;
-			data: { level: ThinkingLevel } | null;
+			data: { level: Effort } | null;
 	  }
 
 	// Queue modes

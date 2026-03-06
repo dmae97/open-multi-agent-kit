@@ -1,8 +1,23 @@
 # Changelog
 
 ## [Unreleased]
+
+### Breaking Changes
+
+- Changed `ThinkingLevel` type to be imported from `@oh-my-pi/pi-agent-core` instead of `@oh-my-pi/pi-ai`
+- Changed thinking level representation from string literals to `Effort` enum values (e.g., `Effort.High` instead of `"high"`)
+- Changed `getThinkingLevel()` return type to `ThinkingLevel | undefined` to support models without thinking support
+- Changed model `reasoning` property to `thinking` property with `ThinkingConfig` for explicit effort level configuration
+- Changed `thinkingLevel` in session context to be optional (`ThinkingLevel | undefined`) instead of always present
+
 ### Added
 
+- Added `thinking.ts` module with `getThinkingLevelMetadata()` and `resolveThinkingLevelForModel()` utilities for thinking level handling
+- Added `ThinkingConfig` support to model definitions for specifying supported thinking effort levels per model
+- Added `enrichModelThinking()` function to apply thinking configuration to models during registry initialization
+- Added `clampThinkingLevelForModel()` function to constrain thinking levels to model-supported ranges
+- Added `getSupportedEfforts()` function to retrieve available thinking efforts for a model
+- Added `Effort` enum import from `@oh-my-pi/pi-ai` for type-safe thinking level representation
 - Added `/fast` slash command to toggle OpenAI service tier priority mode for faster response processing
 - Added `serviceTier` setting to control OpenAI processing priority (none, auto, default, flex, scale, priority)
 - Added `compaction.remoteEnabled` setting to control use of remote compaction endpoints
@@ -13,6 +28,14 @@
 
 ### Changed
 
+- Changed thinking level parsing to use `parseEffort()` from local thinking module instead of `parseThinkingLevel()` from pi-ai
+- Changed model list display to show supported thinking efforts (e.g., "low,medium,high") instead of yes/no reasoning indicator
+- Changed footer and status line to check `model.thinking` instead of `model.reasoning` for thinking level display
+- Changed thinking selector to work with `Effort` type instead of `ThinkingLevel` for available levels
+- Changed model resolver to return `undefined` for thinking level instead of `"off"` when no thinking is specified
+- Changed compaction reasoning parameters to use `Effort` enum values instead of string literals
+- Changed RPC types to use `Effort` for cycling thinking levels and `ThinkingLevel | undefined` for session state
+- Changed theme thinking border color function to accept both `ThinkingLevel` and `Effort` types
 - Changed context usage coloring in footer and status line to use token-aware thresholds instead of fixed percentages
 - Changed compaction to preserve OpenAI remote compaction state and encrypted reasoning across sessions
 - Changed compaction to skip emitting kept messages when using OpenAI remote compaction with preserved history
@@ -22,6 +45,8 @@
 
 ### Fixed
 
+- Fixed thinking level display logic in main.ts to correctly check for undefined instead of "off"
+- Fixed model registry to preserve explicit thinking configuration on runtime-registered models
 - Fixed usage limit reset time calculation to use absolute `resetsAt` timestamps instead of deprecated `resetInMs` field
 - Fixed compaction summary message creation to no longer be automatically added to chat during compaction (now handled by session manager)
 

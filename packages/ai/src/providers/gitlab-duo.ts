@@ -267,10 +267,7 @@ export function streamGitLabDuo(
 				...options.headers,
 			};
 
-			const reasoningEffort =
-				options.reasoning === "off"
-					? undefined
-					: (options.reasoning as "minimal" | "low" | "medium" | "high" | "xhigh" | undefined);
+			const reasoningEffort = options.reasoning;
 
 			const inner =
 				mapping.provider === "anthropic"

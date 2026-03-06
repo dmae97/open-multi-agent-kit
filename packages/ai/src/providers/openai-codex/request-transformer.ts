@@ -1,3 +1,7 @@
+import type { Effort } from "../../model-thinking";
+import { requireSupportedEffort } from "../../model-thinking";
+import type { Api, Model } from "../../types";
+
 export interface ReasoningConfig {
 	effort: "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
 	summary: "auto" | "concise" | "detailed" | null;
@@ -47,30 +51,10 @@ export interface RequestBody {
 	[key: string]: unknown;
 }
 
-function clampReasoningEffort(model: string, effort: ReasoningConfig["effort"]): ReasoningConfig["effort"] {
-	// Codex backend expects exact model IDs. Do not normalize model names here.
-	const modelId = model.includes("/") ? model.split("/").pop()! : model;
-
-	// gpt-5.1 does not support xhigh.
-	if (modelId === "gpt-5.1" && effort === "xhigh") {
-		return "high";
-	}
-
-	if ((modelId.startsWith("gpt-5.2") || modelId.startsWith("gpt-5.3")) && effort === "minimal") {
-		return "low";
-	}
-
-	// gpt-5.1-codex-mini only supports medium/high.
-	if (modelId === "gpt-5.1-codex-mini") {
-		return effort === "high" || effort === "xhigh" ? "high" : "medium";
-	}
-
-	return effort;
-}
-
-function getReasoningConfig(model: string, options: CodexRequestOptions): ReasoningConfig {
+function getReasoningConfig(model: Model<Api>, options: CodexRequestOptions): ReasoningConfig {
 	return {
-		effort: clampReasoningEffort(model, options.reasoningEffort as ReasoningConfig["effort"]),
+		effort:
+			options.reasoningEffort === "none" ? "none" : requireSupportedEffort(model, options.reasoningEffort as Effort),
 		summary: options.reasoningSummary ?? "detailed",
 	};
 }
@@ -91,6 +75,7 @@ function filterInput(input: InputItem[] | undefined): InputItem[] | undefined {
 
 export async function transformRequestBody(
 	body: RequestBody,
+	model: Model<Api>,
 	options: CodexRequestOptions = {},
 	prompt?: { instructions: string; developerMessages: string[] },
 ): Promise<RequestBody> {
@@ -148,7 +133,7 @@ export async function transformRequestBody(
 	}
 
 	if (options.reasoningEffort !== undefined) {
-		const reasoningConfig = getReasoningConfig(body.model, options);
+		const reasoningConfig = getReasoningConfig(model, options);
 		body.reasoning = {
 			...body.reasoning,
 			...reasoningConfig,

@@ -12,6 +12,11 @@ import * as path from "node:path";
 import { $env } from "@oh-my-pi/pi-utils";
 import { AuthCredentialStore } from "../src/auth-storage";
 import { createModelManager } from "../src/model-manager";
+import {
+	applyGeneratedModelPolicies,
+	CLOUDFLARE_FALLBACK_MODEL,
+	linkSparkPromotionTargets,
+} from "../src/model-thinking";
 import prevModelsJson from "../src/models.json" with { type: "json" };
 import {
 	allowsUnauthenticatedCatalogDiscovery,
@@ -20,11 +25,6 @@ import {
 	isCatalogDescriptor,
 	PROVIDER_DESCRIPTORS,
 } from "../src/provider-models/descriptors";
-import {
-	applyGeneratedModelPolicies,
-	CLOUDFLARE_FALLBACK_MODEL,
-	linkSparkPromotionTargets,
-} from "../src/provider-models/model-policies";
 import { MODELS_DEV_PROVIDER_DESCRIPTORS, mapModelsDevToModels } from "../src/provider-models/openai-compat";
 import { getGitLabDuoModels } from "../src/providers/gitlab-duo";
 import { JWT_CLAIM_PATH } from "../src/providers/openai-codex/constants";

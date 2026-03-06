@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Model } from "@oh-my-pi/pi-ai";
+import { Effort, type Model } from "@oh-my-pi/pi-ai";
 import {
 	parseModelPattern,
 	parseModelString,
@@ -18,6 +18,11 @@ const mockModels: Model<"anthropic-messages">[] = [
 		provider: "anthropic",
 		baseUrl: "https://api.anthropic.com",
 		reasoning: true,
+		thinking: {
+			mode: "budget",
+			minLevel: Effort.Minimal,
+			maxLevel: Effort.High,
+		},
 		input: ["text", "image"],
 		cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
 		contextWindow: 200000,
@@ -46,6 +51,11 @@ const mockOpenRouterModels: Model<"anthropic-messages">[] = [
 		provider: "openrouter",
 		baseUrl: "https://openrouter.ai/api/v1",
 		reasoning: true,
+		thinking: {
+			mode: "budget",
+			minLevel: Effort.Minimal,
+			maxLevel: Effort.High,
+		},
 		input: ["text"],
 		cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 1 },
 		contextWindow: 128000,
@@ -100,6 +110,11 @@ const mockCodexOverlapModels: Model<"anthropic-messages">[] = [
 		provider: "openai-codex",
 		baseUrl: "https://api.openai.com",
 		reasoning: true,
+		thinking: {
+			mode: "effort",
+			minLevel: Effort.Low,
+			maxLevel: Effort.XHigh,
+		},
 		input: ["text"],
 		cost: { input: 1.5, output: 6, cacheRead: 0.15, cacheWrite: 1.5 },
 		contextWindow: 200000,
@@ -112,6 +127,11 @@ const mockCodexOverlapModels: Model<"anthropic-messages">[] = [
 		provider: "openai-codex",
 		baseUrl: "https://api.openai.com",
 		reasoning: true,
+		thinking: {
+			mode: "effort",
+			minLevel: Effort.Low,
+			maxLevel: Effort.XHigh,
+		},
 		input: ["text"],
 		cost: { input: 1, output: 4, cacheRead: 0.1, cacheWrite: 1 },
 		contextWindow: 200000,
@@ -152,19 +172,19 @@ describe("parseModelPattern", () => {
 		test("sonnet:high returns sonnet with high thinking level", () => {
 			const result = parseModelPattern("sonnet:high", allModels);
 			expect(result.model?.id).toBe("claude-sonnet-4-5");
-			expect(result.thinkingLevel).toBe("high");
+			expect(result.thinkingLevel).toBe(Effort.High);
 			expect(result.warning).toBeUndefined();
 		});
 
 		test("gpt-4o:medium returns gpt-4o with medium thinking level", () => {
 			const result = parseModelPattern("gpt-4o:medium", allModels);
 			expect(result.model?.id).toBe("gpt-4o");
-			expect(result.thinkingLevel).toBe("medium");
+			expect(result.thinkingLevel).toBe(Effort.Medium);
 			expect(result.warning).toBeUndefined();
 		});
 
 		test("all valid thinking levels work", () => {
-			const levels = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+			const levels = ["off", Effort.Minimal, Effort.Low, Effort.Medium, Effort.High, Effort.XHigh] as const;
 			for (const level of levels) {
 				const result = parseModelPattern(`sonnet:${level}`, allModels);
 				expect(result.model?.id).toBe("claude-sonnet-4-5");
@@ -214,7 +234,7 @@ describe("parseModelPattern", () => {
 		test("qwen3-coder:exacto:high matches model with high thinking level", () => {
 			const result = parseModelPattern("qwen/qwen3-coder:exacto:high", allModels);
 			expect(result.model?.id).toBe("qwen/qwen3-coder:exacto");
-			expect(result.thinkingLevel).toBe("high");
+			expect(result.thinkingLevel).toBe(Effort.High);
 			expect(result.explicitThinkingLevel).toBe(true);
 			expect(result.warning).toBeUndefined();
 		});
@@ -223,7 +243,7 @@ describe("parseModelPattern", () => {
 			const result = parseModelPattern("openrouter/qwen/qwen3-coder:exacto:high", allModels);
 			expect(result.model?.id).toBe("qwen/qwen3-coder:exacto");
 			expect(result.model?.provider).toBe("openrouter");
-			expect(result.thinkingLevel).toBe("high");
+			expect(result.thinkingLevel).toBe(Effort.High);
 			expect(result.explicitThinkingLevel).toBe(true);
 			expect(result.warning).toBeUndefined();
 		});
@@ -308,7 +328,7 @@ describe("resolveModelRoleValue", () => {
 
 		expect(result.model?.provider).toBe("openrouter");
 		expect(result.model?.id).toBe("qwen/qwen3-coder:exacto");
-		expect(result.thinkingLevel).toBe("high");
+		expect(result.thinkingLevel).toBe(Effort.High);
 		expect(result.explicitThinkingLevel).toBe(true);
 	});
 
@@ -330,14 +350,23 @@ describe("resolveModelRoleValue", () => {
 		const providerQualified = resolveModelRoleValue("openai-codex/gpt-5.3-codex:xhigh", allModels);
 		expect(providerQualified.model?.provider).toBe("openai-codex");
 		expect(providerQualified.model?.id).toBe("gpt-5.3-codex");
-		expect(providerQualified.thinkingLevel).toBe("xhigh");
+		expect(providerQualified.thinkingLevel).toBe(Effort.XHigh);
 		expect(providerQualified.explicitThinkingLevel).toBe(true);
 
 		const idOnly = resolveModelRoleValue("gpt-5.3-codex:xhigh", allModels);
 		expect(idOnly.model?.provider).toBe("openai-codex");
 		expect(idOnly.model?.id).toBe("gpt-5.3-codex");
-		expect(idOnly.thinkingLevel).toBe("xhigh");
+		expect(idOnly.thinkingLevel).toBe(Effort.XHigh);
 		expect(idOnly.explicitThinkingLevel).toBe(true);
+	});
+
+	test("clamps explicit thinking selectors from model metadata", () => {
+		const result = resolveModelRoleValue("anthropic/claude-sonnet-4-5:xhigh", allModels);
+
+		expect(result.model?.provider).toBe("anthropic");
+		expect(result.model?.id).toBe("claude-sonnet-4-5");
+		expect(result.thinkingLevel).toBe(Effort.High);
+		expect(result.explicitThinkingLevel).toBe(true);
 	});
 });
 describe("resolveModelFromString", () => {
@@ -376,7 +405,7 @@ describe("resolveModelOverride", () => {
 
 		expect(result.model?.provider).toBe("openrouter");
 		expect(result.model?.id).toBe("qwen/qwen3-coder:exacto");
-		expect(result.thinkingLevel).toBe("high");
+		expect(result.thinkingLevel).toBe(Effort.High);
 		expect(result.explicitThinkingLevel).toBe(true);
 	});
 });
@@ -424,7 +453,7 @@ describe("resolveCliModel", () => {
 
 		expect(result.error).toBeUndefined();
 		expect(result.model?.id).toBe("claude-sonnet-4-5");
-		expect(result.thinkingLevel).toBe("high");
+		expect(result.thinkingLevel).toBe(Effort.High);
 	});
 
 	test("prefers exact model id match over provider inference (OpenRouter-style ids)", () => {
@@ -507,11 +536,11 @@ describe("parseModelString", () => {
 	describe("thinking level suffix extraction", () => {
 		test("extracts valid thinking level from provider/id:level", () => {
 			const result = parseModelString("anthropic/claude-sonnet-4-5:high");
-			expect(result).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5", thinkingLevel: "high" });
+			expect(result).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5", thinkingLevel: Effort.High });
 		});
 
 		test("extracts all valid thinking levels", () => {
-			const levels = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+			const levels = ["off", Effort.Minimal, Effort.Low, Effort.Medium, Effort.High, Effort.XHigh] as const;
 			for (const level of levels) {
 				const result = parseModelString(`anthropic/claude-sonnet-4-5:${level}`);
 				expect(result?.id).toBe("claude-sonnet-4-5");
@@ -527,7 +556,11 @@ describe("parseModelString", () => {
 		test("handles model ID with colon followed by valid thinking level", () => {
 			// e.g. "openrouter/qwen/qwen3-coder:exacto:high" — last colon is thinking level
 			const result = parseModelString("openrouter/qwen/qwen3-coder:exacto:high");
-			expect(result).toEqual({ provider: "openrouter", id: "qwen/qwen3-coder:exacto", thinkingLevel: "high" });
+			expect(result).toEqual({
+				provider: "openrouter",
+				id: "qwen/qwen3-coder:exacto",
+				thinkingLevel: Effort.High,
+			});
 		});
 
 		test("does not extract thinking level from model ID with invalid suffix", () => {

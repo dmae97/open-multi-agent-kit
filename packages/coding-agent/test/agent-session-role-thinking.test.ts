@@ -1,13 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import { Agent } from "@oh-my-pi/pi-agent-core";
-import {
-	getBundledModel,
-	getBundledModels,
-	getBundledProviders,
-	supportsXhigh,
-	type ThinkingLevel,
-} from "@oh-my-pi/pi-ai";
+import { Effort, getBundledModel } from "@oh-my-pi/pi-ai";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
@@ -37,18 +31,9 @@ describe("AgentSession role model thinking behavior", () => {
 		return model;
 	}
 
-	function getReasoningModelWithoutXhighOrThrow() {
-		for (const provider of getBundledProviders()) {
-			for (const model of getBundledModels(provider as Parameters<typeof getBundledModels>[0])) {
-				if (model.reasoning && !supportsXhigh(model)) return model;
-			}
-		}
-		throw new Error("Expected at least one bundled reasoning model without xhigh support");
-	}
-
 	async function createSession(options: {
 		initialModelId: string;
-		initialThinkingLevel: ThinkingLevel;
+		initialThinkingLevel: Effort;
 		modelRoles: Record<string, string>;
 	}) {
 		const model = getAnthropicModelOrThrow(options.initialModelId);
@@ -83,7 +68,7 @@ describe("AgentSession role model thinking behavior", () => {
 
 		await createSession({
 			initialModelId: defaultModel.id,
-			initialThinkingLevel: "high",
+			initialThinkingLevel: Effort.High,
 			modelRoles: {
 				default: `${defaultModel.provider}/${defaultModel.id}`,
 				slow: `${slowModel.provider}/${slowModel.id}:off`,
@@ -96,13 +81,13 @@ describe("AgentSession role model thinking behavior", () => {
 		expect(firstSwitch?.thinkingLevel).toBe("off");
 		expect(session.thinkingLevel).toBe("off");
 
-		session.setThinkingLevel("high");
-		expect(session.thinkingLevel).toBe("high");
+		session.setThinkingLevel(Effort.High);
+		expect(session.thinkingLevel).toBe(Effort.High);
 
 		const secondSwitch = await session.cycleRoleModels(["default", "slow"]);
 		expect(secondSwitch?.role).toBe("default");
 		expect(secondSwitch?.model.id).toBe(defaultModel.id);
-		expect(session.thinkingLevel).toBe("high");
+		expect(session.thinkingLevel).toBe(Effort.High);
 
 		const thirdSwitch = await session.cycleRoleModels(["default", "slow"]);
 		expect(thirdSwitch?.role).toBe("slow");
@@ -117,7 +102,7 @@ describe("AgentSession role model thinking behavior", () => {
 
 		await createSession({
 			initialModelId: defaultModel.id,
-			initialThinkingLevel: "low",
+			initialThinkingLevel: Effort.Low,
 			modelRoles: {
 				default: `${defaultModel.provider}/${defaultModel.id}`,
 				slow: `${slowModel.provider}/${slowModel.id}:high`,
@@ -126,17 +111,17 @@ describe("AgentSession role model thinking behavior", () => {
 
 		const toSlow = await session.cycleRoleModels(["default", "slow"]);
 		expect(toSlow?.role).toBe("slow");
-		expect(toSlow?.thinkingLevel).toBe("high");
-		expect(session.thinkingLevel).toBe("high");
+		expect(toSlow?.thinkingLevel).toBe(Effort.High);
+		expect(session.thinkingLevel).toBe(Effort.High);
 
-		session.setThinkingLevel("minimal");
-		expect(session.thinkingLevel).toBe("minimal");
+		session.setThinkingLevel(Effort.Minimal);
+		expect(session.thinkingLevel).toBe(Effort.Minimal);
 
 		const toDefault = await session.cycleRoleModels(["default", "slow"]);
 		expect(toDefault?.role).toBe("default");
 		expect(toDefault?.model.id).toBe(defaultModel.id);
-		expect(toDefault?.thinkingLevel).toBe("minimal");
-		expect(session.thinkingLevel).toBe("minimal");
+		expect(toDefault?.thinkingLevel).toBe(Effort.Minimal);
+		expect(session.thinkingLevel).toBe(Effort.Minimal);
 	});
 
 	it("applies slow role thinking even when plan shares the same model", async () => {
@@ -146,7 +131,7 @@ describe("AgentSession role model thinking behavior", () => {
 
 		await createSession({
 			initialModelId: defaultModel.id,
-			initialThinkingLevel: "medium",
+			initialThinkingLevel: Effort.Medium,
 			modelRoles: {
 				default: `${defaultModel.provider}/${defaultModel.id}`,
 				smol: `${smolModel.provider}/${smolModel.id}:low`,
@@ -157,14 +142,14 @@ describe("AgentSession role model thinking behavior", () => {
 
 		const toSmol = await session.cycleRoleModels(["slow", "default", "smol"]);
 		expect(toSmol?.role).toBe("smol");
-		expect(toSmol?.thinkingLevel).toBe("low");
-		expect(session.thinkingLevel).toBe("low");
+		expect(toSmol?.thinkingLevel).toBe(Effort.Low);
+		expect(session.thinkingLevel).toBe(Effort.Low);
 
 		const toSlow = await session.cycleRoleModels(["slow", "default", "smol"]);
 		expect(toSlow?.role).toBe("slow");
 		expect(toSlow?.model.id).toBe(slowPlanModel.id);
-		expect(toSlow?.thinkingLevel).toBe("high");
-		expect(session.thinkingLevel).toBe("high");
+		expect(toSlow?.thinkingLevel).toBe(Effort.High);
+		expect(session.thinkingLevel).toBe(Effort.High);
 	});
 
 	it("preserves explicit role thinking when updating default model despite unresolved previous model", async () => {
@@ -173,7 +158,7 @@ describe("AgentSession role model thinking behavior", () => {
 
 		await createSession({
 			initialModelId: defaultModel.id,
-			initialThinkingLevel: "high",
+			initialThinkingLevel: Effort.High,
 			modelRoles: {
 				default: "anthropic/nonexistent-model:off",
 			},
@@ -184,15 +169,15 @@ describe("AgentSession role model thinking behavior", () => {
 		expect(sessionSettings.getModelRole("default")).toBe(`${slowModel.provider}/${slowModel.id}:off`);
 	});
 
-	it("clamps unsupported xhigh to highest supported level instead of off", async () => {
-		const model = getReasoningModelWithoutXhighOrThrow();
+	it("clamps unsupported selections from model metadata", async () => {
+		const model = getAnthropicModelOrThrow("claude-sonnet-4-6");
 		const agent = new Agent({
 			initialState: {
 				model,
 				systemPrompt: "Test",
 				tools: [],
 				messages: [],
-				thinkingLevel: "off",
+				thinkingLevel: undefined,
 			},
 		});
 		const authStorage = await AuthStorage.create(path.join(tempDir.path(), "testauth-non-xhigh.db"));
@@ -207,7 +192,8 @@ describe("AgentSession role model thinking behavior", () => {
 			modelRegistry,
 		});
 
-		session.setThinkingLevel("xhigh");
-		expect(session.thinkingLevel).toBe("high");
+		session.setThinkingLevel(Effort.XHigh);
+		expect(session.thinkingLevel).toBe(Effort.High);
+		expect(session.getAvailableThinkingLevels()).not.toContain("xhigh");
 	});
 });

@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { type Component, padding, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
 import { formatNumber, getProjectDir } from "@oh-my-pi/pi-utils";
 import { theme } from "../../modes/theme/theme";
@@ -212,11 +213,11 @@ export class FooterComponent implements Component {
 		// Add model name on the right side, plus thinking level if model supports it
 		const modelName = state.model?.id || "no-model";
 
-		// Add thinking level hint if model supports reasoning and thinking is enabled
+		// Add thinking level hint when the current model advertises supported efforts
 		let rightSide = modelName;
-		if (state.model?.reasoning) {
-			const thinkingLevel = state.thinkingLevel || "off";
-			if (thinkingLevel !== "off") {
+		if (state.model?.thinking) {
+			const thinkingLevel = state.thinkingLevel ?? ThinkingLevel.Off;
+			if (thinkingLevel !== ThinkingLevel.Off) {
 				rightSide = `${modelName} • ${thinkingLevel}`;
 			}
 		}

@@ -1,4 +1,5 @@
 import { readModelCache, writeModelCache } from "./model-cache";
+import { enrichModelThinking } from "./model-thinking";
 import { type GeneratedProvider, getBundledModels } from "./models";
 import type { Api, Model, Provider } from "./types";
 import { isRecord } from "./utils";
@@ -108,7 +109,7 @@ export async function resolveProviderModels<TApi extends Api = Api, TModelsDevPa
 	const shouldUseFreshCacheAsAuthoritative =
 		strategy === "online-if-uncached" && (cache?.fresh ?? false) && hasAuthoritativeCache;
 	const dynamicFetchSucceeded = fetchedDynamicModels !== null;
-	const cacheModels = dynamicFetchSucceeded ? [] : (cache?.models ?? []);
+	const cacheModels = dynamicFetchSucceeded ? [] : normalizeModelList<TApi>(cache?.models ?? []);
 	const dynamicModels = fetchedDynamicModels ?? [];
 	const mergedWithoutDynamic = mergeModelSources(staticModels, modelsDevModels, cacheModels);
 	const models = mergeDynamicModels(mergedWithoutDynamic, dynamicModels);
@@ -223,7 +224,7 @@ function mergeDynamicModels<TApi extends Api>(
 
 function mergeDynamicModel<TApi extends Api>(existingModel: Model<TApi>, dynamicModel: Model<TApi>): Model<TApi> {
 	const supportsImage = existingModel.input.includes("image") || dynamicModel.input.includes("image");
-	return {
+	return enrichModelThinking({
 		...existingModel,
 		...dynamicModel,
 		name: preferDiscoveryName(dynamicModel.name, existingModel.name, dynamicModel.id),
@@ -240,7 +241,7 @@ function mergeDynamicModel<TApi extends Api>(existingModel: Model<TApi>, dynamic
 		headers: dynamicModel.headers ? { ...existingModel.headers, ...dynamicModel.headers } : existingModel.headers,
 		compat: dynamicModel.compat ?? existingModel.compat,
 		contextPromotionTarget: dynamicModel.contextPromotionTarget ?? existingModel.contextPromotionTarget,
-	};
+	});
 }
 
 function preferDiscoveryCost(discoveryCost: number, fallbackCost: number): number {
@@ -278,7 +279,7 @@ function normalizeModelList<TApi extends Api>(value: unknown): Model<TApi>[] {
 	const models: Model<TApi>[] = [];
 	for (const item of value) {
 		if (isModelLike(item)) {
-			models.push(item as Model<TApi>);
+			models.push(enrichModelThinking(item as Model<TApi>));
 		}
 	}
 	return models;

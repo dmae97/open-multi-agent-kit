@@ -3,25 +3,25 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { $env, $pickenv } from "@oh-my-pi/pi-utils";
 import { getCustomApi } from "./api-registry";
-import { supportsXhigh } from "./models";
+import type { Effort } from "./model-thinking";
+import {
+	mapEffortToAnthropicAdaptiveEffort,
+	mapEffortToGoogleThinkingLevel,
+	requireSupportedEffort,
+} from "./model-thinking";
 import { type BedrockOptions, streamBedrock } from "./providers/amazon-bedrock";
 import { type AnthropicOptions, streamAnthropic } from "./providers/anthropic";
 import { streamAzureOpenAIResponses } from "./providers/azure-openai-responses";
 import { type CursorOptions, streamCursor } from "./providers/cursor";
 import { isGitLabDuoModel, streamGitLabDuo } from "./providers/gitlab-duo";
 import { type GoogleOptions, streamGoogle } from "./providers/google";
-import {
-	type GoogleGeminiCliOptions,
-	type GoogleThinkingLevel,
-	streamGoogleGeminiCli,
-} from "./providers/google-gemini-cli";
+import { type GoogleGeminiCliOptions, streamGoogleGeminiCli } from "./providers/google-gemini-cli";
 import { type GoogleVertexOptions, streamGoogleVertex } from "./providers/google-vertex";
 import { isKimiModel, streamKimi } from "./providers/kimi";
 import { streamOpenAICodexResponses } from "./providers/openai-codex-responses";
 import { type OpenAICompletionsOptions, streamOpenAICompletions } from "./providers/openai-completions";
 import { streamOpenAIResponses } from "./providers/openai-responses";
 import { isSyntheticModel, streamSynthetic } from "./providers/synthetic";
-import type { ThinkingEffort } from "./thinking";
 import type {
 	Api,
 	AssistantMessage,
@@ -304,7 +304,7 @@ const MIN_OUTPUT_TOKENS = 1024;
 export const OUTPUT_FALLBACK_BUFFER = 4000;
 const ANTHROPIC_USE_INTERLEAVED_THINKING = Bun.env.PI_NO_INTERLEAVED_THINKING !== "1";
 
-export const ANTHROPIC_THINKING: Record<ThinkingEffort, number> = {
+export const ANTHROPIC_THINKING: Record<Effort, number> = {
 	minimal: 1024,
 	low: 4096,
 	medium: 8192,
@@ -312,7 +312,7 @@ export const ANTHROPIC_THINKING: Record<ThinkingEffort, number> = {
 	xhigh: 32768,
 };
 
-const GOOGLE_THINKING: Record<ThinkingEffort, number> = {
+const GOOGLE_THINKING: Record<Effort, number> = {
 	minimal: 1024,
 	low: 4096,
 	medium: 8192,
@@ -320,7 +320,7 @@ const GOOGLE_THINKING: Record<ThinkingEffort, number> = {
 	xhigh: 24575,
 };
 
-const BEDROCK_CLAUDE_THINKING: Record<ThinkingEffort, number> = {
+const BEDROCK_CLAUDE_THINKING: Record<Effort, number> = {
 	minimal: 1024,
 	low: 2048,
 	medium: 8192,
@@ -331,10 +331,9 @@ const BEDROCK_CLAUDE_THINKING: Record<ThinkingEffort, number> = {
 function resolveBedrockThinkingBudget(
 	model: Model<"bedrock-converse-stream">,
 	options?: SimpleStreamOptions,
-): { budget: number; level: ThinkingEffort } | null {
-	if (!options?.reasoning || !model.reasoning || options.reasoning === "off") return null;
-	if (!model.id.includes("anthropic.claude")) return null;
-	const level = options.reasoning === "xhigh" ? "high" : options.reasoning;
+): { budget: number; level: Effort } | null {
+	if (!options?.reasoning || !model.reasoning) return null;
+	const level = requireSupportedEffort(model, options.reasoning);
 	const budget = options.thinkingBudgets?.[level] ?? BEDROCK_CLAUDE_THINKING[level];
 	return { budget, level };
 }
@@ -354,26 +353,6 @@ export function mapAnthropicToolChoice(choice?: ToolChoice): AnthropicOptions["t
 		return name ? { type: "tool", name } : undefined;
 	}
 	return undefined;
-}
-
-/**
- * Map ThinkingLevel to Anthropic effort levels for adaptive thinking (Opus 4.6+)
- */
-function mapThinkingLevelToAnthropicEffort(level: ThinkingEffort, supportsXhigh: boolean): AnthropicOptions["effort"] {
-	switch (level) {
-		case "minimal":
-			return "low";
-		case "low":
-			return "low";
-		case "medium":
-			return "medium";
-		case "high":
-			return "high";
-		case "xhigh":
-			return supportsXhigh ? "max" : "high";
-		default:
-			return "high";
-	}
 }
 
 function mapGoogleToolChoice(
@@ -408,11 +387,10 @@ function mapOpenAiToolChoice(choice?: ToolChoice): OpenAICompletionsOptions["too
 function resolveOpenAiReasoningEffort<TApi extends Api>(
 	model: Model<TApi>,
 	options?: SimpleStreamOptions,
-): ThinkingEffort | undefined {
+): Effort | undefined {
 	const reasoning = options?.reasoning;
-	if (!reasoning || reasoning === "off") return undefined;
-	if (reasoning === "xhigh" && !supportsXhigh(model)) return "high";
-	return reasoning;
+	if (!reasoning) return undefined;
+	return requireSupportedEffort(model, reasoning);
 }
 
 const castApi = <TApi extends Api>(api: OptionsForApi<TApi>): OptionsForApi<Api> => api as OptionsForApi<Api>;
@@ -446,7 +424,7 @@ function mapOptionsForApi<TApi extends Api>(
 		case "anthropic-messages": {
 			// Explicitly disable thinking when reasoning is not specified
 			const reasoning = options?.reasoning;
-			if (!reasoning || reasoning === "off") {
+			if (!reasoning) {
 				return castApi<"anthropic-messages">({
 					...base,
 					thinkingEnabled: false,
@@ -465,14 +443,8 @@ function mapOptionsForApi<TApi extends Api>(
 
 			// For Opus 4.6+ and Sonnet 4.6+: use adaptive thinking with effort level
 			// For older models: use budget-based thinking
-			if (
-				model.id.includes("opus-4-6") ||
-				model.id.includes("opus-4.6") ||
-				model.id.includes("sonnet-4-6") ||
-				model.id.includes("sonnet-4.6")
-			) {
-				const supportsMaxEffort = model.id.includes("opus-4-6") || model.id.includes("opus-4.6");
-				const effort = mapThinkingLevelToAnthropicEffort(reasoning, supportsMaxEffort);
+			if (model.thinking?.mode === "anthropic-adaptive") {
+				const effort = mapEffortToAnthropicAdaptiveEffort(model, reasoning);
 				return castApi<"anthropic-messages">({
 					...base,
 					thinkingEnabled: true,
@@ -577,7 +549,7 @@ function mapOptionsForApi<TApi extends Api>(
 			// Explicitly disable thinking when reasoning is not specified
 			// This is needed because Gemini has "dynamic thinking" enabled by default
 			const reasoning = options?.reasoning;
-			if (!reasoning || reasoning === "off") {
+			if (!reasoning) {
 				return castApi<"google-generative-ai">({
 					...base,
 					thinking: { enabled: false },
@@ -586,16 +558,16 @@ function mapOptionsForApi<TApi extends Api>(
 			}
 
 			const googleModel = model as Model<"google-generative-ai">;
-			const effort = reasoning === "xhigh" ? "high" : reasoning;
+			const effort = requireSupportedEffort(googleModel, reasoning);
 
 			// Gemini 3+ models use thinkingLevel exclusively instead of thinkingBudget.
 			// https://ai.google.dev/gemini-api/docs/thinking#set-budget
-			if (isGemini3ProModel(googleModel) || isGemini3FlashModel(googleModel)) {
+			if (googleModel.thinking?.mode === "google-level") {
 				return castApi<"google-generative-ai">({
 					...base,
 					thinking: {
 						enabled: true,
-						level: getGemini3ThinkingLevel(effort, googleModel),
+						level: mapEffortToGoogleThinkingLevel(googleModel, effort),
 					},
 					toolChoice: mapGoogleToolChoice(options?.toolChoice),
 				});
@@ -613,7 +585,7 @@ function mapOptionsForApi<TApi extends Api>(
 
 		case "google-gemini-cli": {
 			const reasoning = options?.reasoning;
-			if (!reasoning || reasoning === "off") {
+			if (!reasoning) {
 				return castApi<"google-gemini-cli">({
 					...base,
 					thinking: { enabled: false },
@@ -621,15 +593,15 @@ function mapOptionsForApi<TApi extends Api>(
 				});
 			}
 
-			const effort = reasoning === "xhigh" ? "high" : reasoning;
+			const effort = requireSupportedEffort(model, reasoning);
 
 			// Gemini 3+ models use thinkingLevel instead of thinkingBudget
-			if (isGemini3ProModelId(model.id) || isGemini3FlashModelId(model.id)) {
-				return castApi<"google-vertex">({
+			if (model.thinking?.mode === "google-level") {
+				return castApi<"google-gemini-cli">({
 					...base,
 					thinking: {
 						enabled: true,
-						level: getGeminiCliThinkingLevel(effort, model.id),
+						level: mapEffortToGoogleThinkingLevel(model, effort),
 					},
 					toolChoice: mapGoogleToolChoice(options?.toolChoice),
 				});
@@ -665,7 +637,7 @@ function mapOptionsForApi<TApi extends Api>(
 		case "google-vertex": {
 			// Explicitly disable thinking when reasoning is not specified
 			const reasoning = options?.reasoning;
-			if (!reasoning || reasoning === "off") {
+			if (!reasoning) {
 				return castApi<"google-vertex">({
 					...base,
 					thinking: { enabled: false },
@@ -674,15 +646,15 @@ function mapOptionsForApi<TApi extends Api>(
 			}
 
 			const vertexModel = model as Model<"google-vertex">;
-			const effort = reasoning === "xhigh" ? "high" : reasoning;
+			const effort = requireSupportedEffort(vertexModel, reasoning);
 			const geminiModel = vertexModel as unknown as Model<"google-generative-ai">;
 
-			if (isGemini3ProModel(geminiModel) || isGemini3FlashModel(geminiModel)) {
+			if (geminiModel.thinking?.mode === "google-level") {
 				return castApi<"google-vertex">({
 					...base,
 					thinking: {
 						enabled: true,
-						level: getGemini3ThinkingLevel(effort, geminiModel),
+						level: mapEffortToGoogleThinkingLevel(geminiModel, effort),
 					},
 					toolChoice: mapGoogleToolChoice(options?.toolChoice),
 				});
@@ -713,78 +685,12 @@ function mapOptionsForApi<TApi extends Api>(
 	}
 }
 
-function isGemini3ProModelId(modelId: string): boolean {
-	return /3(?:\.\d+)?-pro/.test(modelId);
-}
-
-function isGemini3FlashModelId(modelId: string): boolean {
-	return /3(?:\.\d+)?-flash/.test(modelId);
-}
-
-function isGemini3ProModel(model: Model<"google-generative-ai">): boolean {
-	// Covers gemini-3-pro, gemini-3-pro-preview, gemini-3.1-pro-preview, and future 3.x variants
-	return isGemini3ProModelId(model.id);
-}
-
-function isGemini3FlashModel(model: Model<"google-generative-ai">): boolean {
-	// Covers gemini-3-flash, gemini-3-flash-preview, gemini-3.1-flash, and future 3.x variants
-	return isGemini3FlashModelId(model.id);
-}
-
-function getGemini3ThinkingLevel(effort: ThinkingEffort, model: Model<"google-generative-ai">): GoogleThinkingLevel {
-	if (isGemini3ProModel(model)) {
-		// Gemini 3 Pro only supports LOW/HIGH (for now)
-		switch (effort) {
-			case "minimal":
-			case "low":
-				return "LOW";
-			default:
-				return "HIGH";
-		}
-	}
-	// Gemini 3 Flash supports all four levels
-	switch (effort) {
-		case "minimal":
-			return "MINIMAL";
-		case "low":
-			return "LOW";
-		case "medium":
-			return "MEDIUM";
-		default:
-			return "HIGH";
-	}
-}
-
-function getGeminiCliThinkingLevel(effort: ThinkingEffort, modelId: string): GoogleThinkingLevel {
-	if (isGemini3ProModelId(modelId)) {
-		// Gemini 3 Pro only supports LOW/HIGH (for now)
-		switch (effort) {
-			case "minimal":
-			case "low":
-				return "LOW";
-			default:
-				return "HIGH";
-		}
-	}
-	// Gemini 3 Flash supports all four levels
-	switch (effort) {
-		case "minimal":
-			return "MINIMAL";
-		case "low":
-			return "LOW";
-		case "medium":
-			return "MEDIUM";
-		default:
-			return "HIGH";
-	}
-}
-
 function getGoogleBudget(
 	model: Model<"google-generative-ai">,
-	effort: ThinkingEffort,
+	effort: Effort,
 	customBudgets?: ThinkingBudgets,
 ): number {
-	effort = effort === "xhigh" ? "high" : effort;
+	requireSupportedEffort(model, effort);
 
 	// Custom budgets take precedence if provided for this level
 	if (customBudgets?.[effort] !== undefined) {

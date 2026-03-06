@@ -8,6 +8,7 @@ import type {
 	MessageParam,
 } from "@anthropic-ai/sdk/resources/messages";
 import { $env, abortableSleep, isEnoent } from "@oh-my-pi/pi-utils";
+import { mapEffortToAnthropicAdaptiveEffort } from "../model-thinking";
 import { calculateCost } from "../models";
 import { getEnvApiKey, OUTPUT_FALLBACK_BUFFER } from "../stream";
 import type {
@@ -846,19 +847,6 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 	return stream;
 };
 
-/**
- * Check if a model supports adaptive thinking (Opus 4.6+)
- */
-function supportsAdaptiveThinking(modelId: string): boolean {
-	// Opus/Sonnet 4.6 model IDs (with or without date suffix)
-	return (
-		modelId.includes("opus-4-6") ||
-		modelId.includes("opus-4.6") ||
-		modelId.includes("sonnet-4-6") ||
-		modelId.includes("sonnet-4.6")
-	);
-}
-
 export type AnthropicSystemBlock = {
 	type: "text";
 	text: string;
@@ -912,26 +900,6 @@ export function buildAnthropicSystemBlocks(
 	}
 
 	return blocks.length > 0 ? blocks : undefined;
-}
-
-/**
- * Map ThinkingLevel to Anthropic effort levels for adaptive thinking
- */
-function mapThinkingLevelToEffort(level: SimpleStreamOptions["reasoning"]): AnthropicEffort {
-	switch (level) {
-		case "minimal":
-			return "low";
-		case "low":
-			return "low";
-		case "medium":
-			return "medium";
-		case "high":
-			return "high";
-		case "xhigh":
-			return "max";
-		default:
-			return "high";
-	}
 }
 
 export function normalizeExtraBetas(betas?: string[] | string): string[] {
@@ -1303,9 +1271,13 @@ function buildParams(
 	}
 
 	if (options?.thinkingEnabled && model.reasoning) {
-		if (supportsAdaptiveThinking(model.id)) {
+		const mode = model.thinking?.mode;
+		const requestedEffort = options.reasoning;
+		const effort =
+			options.effort ?? (requestedEffort ? mapEffortToAnthropicAdaptiveEffort(model, requestedEffort) : undefined);
+
+		if (mode === "anthropic-adaptive") {
 			params.thinking = { type: "adaptive" };
-			const effort = options.effort ?? mapThinkingLevelToEffort(options.reasoning);
 			if (effort) {
 				params.output_config = { effort };
 			}
@@ -1314,12 +1286,8 @@ function buildParams(
 				type: "enabled",
 				budget_tokens: options.thinkingBudgetTokens || 1024,
 			};
-			// Opus 4.5 supports effort alongside budget-based thinking
-			if (model.id.includes("opus-4-5") || model.id.includes("opus-4.5")) {
-				const effort = options.effort ?? mapThinkingLevelToEffort(options.reasoning);
-				if (effort) {
-					params.output_config = { effort };
-				}
+			if (mode === "anthropic-budget-effort" && effort) {
+				params.output_config = { effort };
 			}
 		}
 	}

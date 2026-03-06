@@ -3,6 +3,7 @@
  *
  * Shows how to select a specific model and thinking level.
  */
+import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { getModel } from "@oh-my-pi/pi-ai";
 import { createAgentSession, discoverAuthStorage, discoverModels } from "@oh-my-pi/pi-coding-agent";
 
@@ -32,7 +33,7 @@ console.log(
 if (available.length > 0) {
 	const { session } = await createAgentSession({
 		model: available[0],
-		thinkingLevel: "medium", // off, low, medium, high
+		thinkingLevel: ThinkingLevel.Medium, // off, low, medium, high
 		authStorage,
 		modelRegistry,
 	});

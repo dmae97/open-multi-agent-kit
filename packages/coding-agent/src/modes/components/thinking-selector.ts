@@ -1,7 +1,7 @@
-import { getThinkingMetadata, type ThinkingLevel } from "@oh-my-pi/pi-ai";
-
+import type { Effort } from "@oh-my-pi/pi-ai";
 import { Container, type SelectItem, SelectList } from "@oh-my-pi/pi-tui";
 import { getSelectListTheme } from "../../modes/theme/theme";
+import { getThinkingLevelMetadata } from "../../thinking";
 import { DynamicBorder } from "./dynamic-border";
 
 /**
@@ -11,14 +11,14 @@ export class ThinkingSelectorComponent extends Container {
 	#selectList: SelectList;
 
 	constructor(
-		currentLevel: ThinkingLevel,
-		availableLevels: ThinkingLevel[],
-		onSelect: (level: ThinkingLevel) => void,
+		currentLevel: Effort,
+		availableLevels: Effort[],
+		onSelect: (level: Effort) => void,
 		onCancel: () => void,
 	) {
 		super();
 
-		const thinkingLevels: SelectItem[] = availableLevels.map(getThinkingMetadata);
+		const thinkingLevels: SelectItem[] = availableLevels.map(getThinkingLevelMetadata);
 
 		// Add top border
 		this.addChild(new DynamicBorder());
@@ -33,7 +33,7 @@ export class ThinkingSelectorComponent extends Container {
 		}
 
 		this.#selectList.onSelect = item => {
-			onSelect(item.value as ThinkingLevel);
+			onSelect(item.value as Effort);
 		};
 
 		this.#selectList.onCancel = () => {

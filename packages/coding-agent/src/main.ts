@@ -10,7 +10,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { createInterface } from "node:readline/promises";
-import { type ImageContent, supportsXhigh } from "@oh-my-pi/pi-ai";
+import type { ImageContent } from "@oh-my-pi/pi-ai";
 import { $env, getProjectDir, logger, postmortem, setProjectDir, VERSION } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import type { Args } from "./cli/args";
@@ -334,11 +334,10 @@ async function buildSessionOptions(
 	scopedModels: ScopedModel[],
 	sessionManager: SessionManager | undefined,
 	modelRegistry: ModelRegistry,
-): Promise<{ options: CreateAgentSessionOptions; cliThinkingFromModel: boolean }> {
+): Promise<{ options: CreateAgentSessionOptions }> {
 	const options: CreateAgentSessionOptions = {
 		cwd: parsed.cwd ?? getProjectDir(),
 	};
-	let cliThinkingFromModel = false;
 
 	// Auto-discover SYSTEM.md if no CLI system prompt provided
 	const systemPromptSource = parsed.systemPrompt ?? discoverSystemPromptFile();
@@ -380,7 +379,6 @@ async function buildSessionOptions(
 			settings.overrideModelRoles({ default: `${resolved.model.provider}/${resolved.model.id}` });
 			if (!parsed.thinking && resolved.thinkingLevel) {
 				options.thinkingLevel = resolved.thinkingLevel;
-				cliThinkingFromModel = true;
 			}
 		}
 	} else if (scopedModels.length > 0 && !parsed.continue && !parsed.resume) {
@@ -483,7 +481,7 @@ async function buildSessionOptions(
 		options.additionalExtensionPaths = [];
 	}
 
-	return { options, cliThinkingFromModel };
+	return { options };
 }
 
 export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<void> {
@@ -618,7 +616,7 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 		sessionManager = await SessionManager.open(selectedPath);
 	}
 
-	const { options: sessionOptions, cliThinkingFromModel } = await logger.timeAsync("buildSessionOptions", () =>
+	const { options: sessionOptions } = await logger.timeAsync("buildSessionOptions", () =>
 		buildSessionOptions(parsedArgs, scopedModels, sessionManager, modelRegistry),
 	);
 	sessionOptions.authStorage = authStorage;
@@ -692,21 +690,6 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 		process.exit(1);
 	}
 
-	// Clamp thinking level to model capabilities for CLI-provided thinking levels.
-	// This covers both --thinking <level> and --model <pattern>:<thinking>.
-	const cliThinkingOverride = parsedArgs.thinking !== undefined || cliThinkingFromModel;
-	if (session.model && cliThinkingOverride) {
-		let effectiveThinking = session.thinkingLevel;
-		if (!session.model.reasoning) {
-			effectiveThinking = "off";
-		} else if (effectiveThinking === "xhigh" && !supportsXhigh(session.model)) {
-			effectiveThinking = "high";
-		}
-		if (effectiveThinking !== session.thinkingLevel) {
-			session.setThinkingLevel(effectiveThinking);
-		}
-	}
-
 	if (mode === "rpc") {
 		await runRpcMode(session);
 	} else if (isInteractive) {
@@ -717,7 +700,7 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 		if (scopedModelsForDisplay.length > 0) {
 			const modelList = scopedModelsForDisplay
 				.map(scopedModel => {
-					const thinkingStr = scopedModel.thinkingLevel !== "off" ? `:${scopedModel.thinkingLevel}` : "";
+					const thinkingStr = !scopedModel.thinkingLevel ? `:${scopedModel.thinkingLevel}` : "";
 					return `${scopedModel.model.id}${thinkingStr}`;
 				})
 				.join(", ");

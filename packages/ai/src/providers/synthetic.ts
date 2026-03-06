@@ -59,7 +59,7 @@ export function streamSynthetic(
 
 				// Calculate thinking budget from reasoning level
 				const reasoning = options?.reasoning;
-				const reasoningEffort = reasoning === "off" ? undefined : reasoning;
+				const reasoningEffort = reasoning;
 				const thinkingEnabled = !!reasoningEffort && model.reasoning;
 				const thinkingBudget = reasoningEffort
 					? (options?.thinkingBudgets?.[reasoningEffort] ?? ANTHROPIC_THINKING[reasoningEffort])
@@ -93,7 +93,7 @@ export function streamSynthetic(
 					headers: mergedHeaders,
 				};
 
-				const reasoningEffort = options?.reasoning === "off" ? undefined : options?.reasoning;
+				const reasoningEffort = options?.reasoning;
 				const innerStream = streamOpenAICompletions(syntheticModel, context, {
 					apiKey: options?.apiKey,
 					temperature: options?.temperature,

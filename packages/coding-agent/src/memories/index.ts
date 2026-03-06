@@ -3,7 +3,7 @@ import type * as fsNode from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import { completeSimple, type Model } from "@oh-my-pi/pi-ai";
+import { completeSimple, Effort, type Model } from "@oh-my-pi/pi-ai";
 import { getAgentDbPath, logger, parseJsonlLenient } from "@oh-my-pi/pi-utils";
 import type { ModelRegistry } from "../config/model-registry";
 import { parseModelString } from "../config/model-resolver";
@@ -583,7 +583,11 @@ async function runStage1Job(options: {
 				systemPrompt: stageOneSystemTemplate,
 				messages: [{ role: "user", content: [{ type: "text", text: inputPrompt }], timestamp: Date.now() }],
 			},
-			{ apiKey, maxTokens: Math.max(1024, Math.min(4096, Math.floor(modelMaxTokens * 0.2))), reasoning: "low" },
+			{
+				apiKey,
+				maxTokens: Math.max(1024, Math.min(4096, Math.floor(modelMaxTokens * 0.2))),
+				reasoning: Effort.Low,
+			},
 		);
 
 		if (response.stopReason === "error") {
@@ -709,7 +713,7 @@ async function runConsolidationModel(options: { memoryRoot: string; model: Model
 		{
 			messages: [{ role: "user", content: [{ type: "text", text: input }], timestamp: Date.now() }],
 		},
-		{ apiKey, maxTokens: 8192, reasoning: "medium" },
+		{ apiKey, maxTokens: 8192, reasoning: Effort.Medium },
 	);
 	if (response.stopReason === "error") {
 		throw new Error(response.errorMessage || "phase2 model error");

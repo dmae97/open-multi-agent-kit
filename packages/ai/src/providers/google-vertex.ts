@@ -385,13 +385,13 @@ function buildParams(
 	}
 
 	if (options.thinking?.enabled && model.reasoning) {
-		const thinkingConfig: ThinkingConfig = { includeThoughts: true };
+		const cfg: ThinkingConfig = { includeThoughts: true };
 		if (options.thinking.level !== undefined) {
-			thinkingConfig.thinkingLevel = THINKING_LEVEL_MAP[options.thinking.level];
+			cfg.thinkingLevel = THINKING_LEVEL_MAP[options.thinking.level];
 		} else if (options.thinking.budgetTokens !== undefined) {
-			thinkingConfig.thinkingBudget = options.thinking.budgetTokens;
+			cfg.thinkingBudget = options.thinking.budgetTokens;
 		}
-		config.thinkingConfig = thinkingConfig;
+		config.thinkingConfig = cfg;
 	}
 
 	if (options.signal) {

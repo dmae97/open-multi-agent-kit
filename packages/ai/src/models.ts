@@ -1,3 +1,4 @@
+import { enrichModelThinking } from "./model-thinking";
 import MODELS from "./models.json" with { type: "json" };
 import type { Api, KnownProvider, Model, Usage } from "./types";
 
@@ -13,7 +14,7 @@ const modelRegistry: Map<string, Map<string, Model<Api>>> = new Map();
 for (const [provider, models] of Object.entries(MODELS)) {
 	const providerModels = new Map<string, Model<Api>>();
 	for (const [id, model] of Object.entries(models)) {
-		providerModels.set(id, model as Model<Api>);
+		providerModels.set(id, enrichModelThinking(model as Model<Api>));
 	}
 	modelRegistry.set(provider, providerModels);
 }
@@ -42,22 +43,6 @@ export function calculateCost<TApi extends Api>(model: Model<TApi>, usage: Usage
 	usage.cost.total = usage.cost.input + usage.cost.output + usage.cost.cacheRead + usage.cost.cacheWrite;
 	return usage.cost;
 }
-
-/**
- * Check if a model supports xhigh thinking level.
- *
- * Supported today:
- * - GPT-5.1 Codex Max
- * - GPT-5.2 / GPT-5.3 model families
- * - Anthropic Messages API Opus 4.6 models (xhigh maps to adaptive effort "max"), or other models that support budget-based thinking
- */
-export function supportsXhigh<TApi extends Api>(model: Model<TApi>): boolean {
-	if (model.id.includes("gpt-5.2") || model.id.includes("gpt-5.3") || model.id.includes("gpt-5.1-codex-max")) {
-		return true;
-	}
-	return model.api === "anthropic-messages";
-}
-
 /**
  * Check if two models are equal by comparing both their id and provider.
  * Returns false if either model is null or undefined.

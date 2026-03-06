@@ -1,16 +1,11 @@
-import {
-	getAvailableThinkingLevels,
-	getThinkingMetadata,
-	type Model,
-	modelsAreEqual,
-	supportsXhigh,
-	type ThinkingMode,
-} from "@oh-my-pi/pi-ai";
+import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
+import { getSupportedEfforts, type Model, modelsAreEqual } from "@oh-my-pi/pi-ai";
 import { Container, Input, matchesKey, Spacer, type Tab, TabBar, Text, type TUI, visibleWidth } from "@oh-my-pi/pi-tui";
 import { MODEL_ROLE_IDS, MODEL_ROLES, type ModelRegistry, type ModelRole } from "../../config/model-registry";
 import { resolveModelRoleValue } from "../../config/model-resolver";
 import type { Settings } from "../../config/settings";
 import { type ThemeColor, theme } from "../../modes/theme/theme";
+import { getThinkingLevelMetadata } from "../../thinking";
 import { fuzzyFilter } from "../../utils/fuzzy";
 import { getTabBarTheme } from "../shared";
 import { DynamicBorder } from "./dynamic-border";
@@ -29,15 +24,15 @@ interface ModelItem {
 
 interface ScopedModelItem {
 	model: Model;
-	thinkingLevel: string;
+	thinkingLevel?: string;
 }
 
 interface RoleAssignment {
 	model: Model;
-	thinkingMode: ThinkingMode;
+	thinkingLevel: ThinkingLevel;
 }
 
-type RoleSelectCallback = (model: Model, role: ModelRole | null, thinkingMode?: ThinkingMode) => void;
+type RoleSelectCallback = (model: Model, role: ModelRole | null, thinkingLevel?: ThinkingLevel) => void;
 type CancelCallback = () => void;
 interface MenuRoleAction {
 	label: string;
@@ -97,7 +92,7 @@ export class ModelSelectorComponent extends Container {
 		settings: Settings,
 		modelRegistry: ModelRegistry,
 		scopedModels: ReadonlyArray<ScopedModelItem>,
-		onSelect: (model: Model, role: ModelRole | null, thinkingMode?: ThinkingMode) => void,
+		onSelect: (model: Model, role: ModelRole | null, thinkingLevel?: ThinkingLevel) => void,
 		onCancel: () => void,
 		options?: { temporaryOnly?: boolean; initialSearchInput?: string },
 	) {
@@ -192,7 +187,8 @@ export class ModelSelectorComponent extends Container {
 			if (model) {
 				this.#roles[role] = {
 					model,
-					thinkingMode: explicitThinkingLevel && thinkingLevel !== undefined ? thinkingLevel : "inherit",
+					thinkingLevel:
+						explicitThinkingLevel && thinkingLevel !== undefined ? thinkingLevel : ThinkingLevel.Inherit,
 				};
 			}
 		}
@@ -409,7 +405,7 @@ export class ModelSelectorComponent extends Container {
 				if (!tag || !assigned || !modelsAreEqual(assigned.model, item.model)) continue;
 
 				const badge = makeInvertedBadge(tag, color ?? "success");
-				const thinkingLabel = getThinkingMetadata(assigned.thinkingMode).label;
+				const thinkingLabel = getThinkingLevelMetadata(assigned.thinkingLevel).label;
 				roleBadgeTokens.push(`${badge} ${theme.fg("dim", `(${thinkingLabel})`)}`);
 			}
 			const badgeText = roleBadgeTokens.length > 0 ? ` ${roleBadgeTokens.join(" ")}` : "";
@@ -456,19 +452,18 @@ export class ModelSelectorComponent extends Container {
 			this.#listContainer.addChild(new Text(theme.fg("muted", `  Model Name: ${selected.model.name}`), 0, 0));
 		}
 	}
-	#getThinkingModesForModel(model: Model): ReadonlyArray<ThinkingMode> {
-		return ["inherit", ...getAvailableThinkingLevels(supportsXhigh(model))];
+	#getThinkingLevelsForModel(model: Model): ReadonlyArray<ThinkingLevel> {
+		return [ThinkingLevel.Inherit, ThinkingLevel.Off, ...getSupportedEfforts(model)];
 	}
 
-	#getCurrentRoleThinkingMode(role: ModelRole): ThinkingMode {
-		return this.#roles[role]?.thinkingMode ?? "inherit";
+	#getCurrentRoleThinkingLevel(role: ModelRole): ThinkingLevel {
+		return this.#roles[role]?.thinkingLevel ?? ThinkingLevel.Inherit;
 	}
 
 	#getThinkingPreselectIndex(role: ModelRole, model: Model): number {
-		const options = this.#getThinkingModesForModel(model);
-		const currentMode = this.#getCurrentRoleThinkingMode(role);
-		const preferredMode = currentMode === "xhigh" && !options.includes("xhigh") ? "high" : currentMode;
-		const foundIndex = options.indexOf(preferredMode);
+		const options = this.#getThinkingLevelsForModel(model);
+		const currentLevel = this.#getCurrentRoleThinkingLevel(role);
+		const foundIndex = options.indexOf(currentLevel);
 		return foundIndex >= 0 ? foundIndex : 0;
 	}
 
@@ -496,11 +491,11 @@ export class ModelSelectorComponent extends Container {
 		if (!selectedModel) return;
 
 		const showingThinking = this.#menuStep === "thinking" && this.#menuSelectedRole !== null;
-		const thinkingOptions = showingThinking ? this.#getThinkingModesForModel(selectedModel.model) : [];
+		const thinkingOptions = showingThinking ? this.#getThinkingLevelsForModel(selectedModel.model) : [];
 		const optionLines = showingThinking
-			? thinkingOptions.map((thinkingMode, index) => {
+			? thinkingOptions.map((thinkingLevel, index) => {
 					const prefix = index === this.#menuSelectedIndex ? `  ${theme.nav.cursor} ` : "    ";
-					const label = getThinkingMetadata(thinkingMode).label;
+					const label = getThinkingLevelMetadata(thinkingLevel).label;
 					return `${prefix}${label}`;
 				})
 			: MENU_ROLE_ACTIONS.map((action, index) => {
@@ -607,7 +602,7 @@ export class ModelSelectorComponent extends Container {
 
 		const optionCount =
 			this.#menuStep === "thinking" && this.#menuSelectedRole !== null
-				? this.#getThinkingModesForModel(selectedModel.model).length
+				? this.#getThinkingLevelsForModel(selectedModel.model).length
 				: MENU_ROLE_ACTIONS.length;
 		if (optionCount === 0) return;
 
@@ -635,10 +630,10 @@ export class ModelSelectorComponent extends Container {
 			}
 
 			if (!this.#menuSelectedRole) return;
-			const thinkingOptions = this.#getThinkingModesForModel(selectedModel.model);
-			const thinkingMode = thinkingOptions[this.#menuSelectedIndex];
-			if (!thinkingMode) return;
-			this.#handleSelect(selectedModel.model, this.#menuSelectedRole, thinkingMode);
+			const thinkingOptions = this.#getThinkingLevelsForModel(selectedModel.model);
+			const thinkingLevel = thinkingOptions[this.#menuSelectedIndex];
+			if (!thinkingLevel) return;
+			this.#handleSelect(selectedModel.model, this.#menuSelectedRole, thinkingLevel);
 			this.#closeMenu();
 			return;
 		}
@@ -657,28 +652,28 @@ export class ModelSelectorComponent extends Container {
 		}
 	}
 
-	#formatRoleModelValue(model: Model, thinkingMode: ThinkingMode): string {
+	#formatRoleModelValue(model: Model, thinkingLevel: ThinkingLevel): string {
 		const modelKey = `${model.provider}/${model.id}`;
-		if (thinkingMode === "inherit") return modelKey;
-		return `${modelKey}:${thinkingMode}`;
+		if (thinkingLevel === ThinkingLevel.Inherit) return modelKey;
+		return `${modelKey}:${thinkingLevel}`;
 	}
-	#handleSelect(model: Model, role: ModelRole | null, thinkingMode?: ThinkingMode): void {
+	#handleSelect(model: Model, role: ModelRole | null, thinkingLevel?: ThinkingLevel): void {
 		// For temporary role, don't save to settings - just notify caller
 		if (role === null) {
 			this.#onSelectCallback(model, null);
 			return;
 		}
 
-		const selectedThinkingMode = thinkingMode ?? this.#getCurrentRoleThinkingMode(role);
+		const selectedThinkingLevel = thinkingLevel ?? this.#getCurrentRoleThinkingLevel(role);
 
 		// Save to settings
-		this.#settings.setModelRole(role, this.#formatRoleModelValue(model, selectedThinkingMode));
+		this.#settings.setModelRole(role, this.#formatRoleModelValue(model, selectedThinkingLevel));
 
 		// Update local state for UI
-		this.#roles[role] = { model, thinkingMode: selectedThinkingMode };
+		this.#roles[role] = { model, thinkingLevel: selectedThinkingLevel };
 
 		// Notify caller (for updating agent state if needed)
-		this.#onSelectCallback(model, role, selectedThinkingMode);
+		this.#onSelectCallback(model, role, selectedThinkingLevel);
 
 		// Update list to show new badges
 		this.#updateList();

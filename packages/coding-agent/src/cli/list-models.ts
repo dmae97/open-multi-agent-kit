@@ -1,7 +1,7 @@
 /**
  * List available models with optional fuzzy search
  */
-import type { Api, Model } from "@oh-my-pi/pi-ai";
+import { type Api, getSupportedEfforts, type Model } from "@oh-my-pi/pi-ai";
 import { formatNumber } from "@oh-my-pi/pi-utils";
 import type { ModelRegistry } from "../config/model-registry";
 import { fuzzyFilter } from "../utils/fuzzy";
@@ -41,7 +41,7 @@ export async function listModels(modelRegistry: ModelRegistry, searchPattern?: s
 		model: m.id,
 		context: formatNumber(m.contextWindow),
 		maxOut: formatNumber(m.maxTokens),
-		thinking: m.reasoning ? "yes" : "no",
+		thinking: m.thinking ? getSupportedEfforts(m).join(",") : m.reasoning ? "yes" : "-",
 		images: m.input.includes("image") ? "yes" : "no",
 	}));
 

@@ -4,7 +4,8 @@
 import type * as fs1 from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { ImageContent, Model, TextContent, ThinkingLevel } from "@oh-my-pi/pi-ai";
+import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
+import type { ImageContent, Model, TextContent } from "@oh-my-pi/pi-ai";
 import * as piCodingAgent from "@oh-my-pi/pi-coding-agent";
 import type { KeyId } from "@oh-my-pi/pi-tui";
 import { hasFsCode, isEacces, isEnoent, logger } from "@oh-my-pi/pi-utils";
@@ -214,7 +215,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		return this.runtime.setModel(model);
 	}
 
-	getThinkingLevel(): ThinkingLevel {
+	getThinkingLevel(): ThinkingLevel | undefined {
 		return this.runtime.getThinkingLevel();
 	}
 

@@ -5,8 +5,7 @@
  * and after compaction the session is reloaded.
  */
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, Model, Usage } from "@oh-my-pi/pi-ai";
-import { completeSimple } from "@oh-my-pi/pi-ai";
+import { type AssistantMessage, completeSimple, Effort, type Model, type Usage } from "@oh-my-pi/pi-ai";
 import {
 	CODEX_BASE_URL,
 	getCodexAccountId,
@@ -985,7 +984,7 @@ export async function generateSummary(
 	const response = await completeSimple(
 		model,
 		{ systemPrompt: SUMMARIZATION_SYSTEM_PROMPT, messages: summarizationMessages },
-		{ maxTokens, signal, apiKey, reasoning: "high" },
+		{ maxTokens, signal, apiKey, reasoning: Effort.High },
 	);
 
 	if (response.stopReason === "error") {
@@ -1034,7 +1033,7 @@ async function generateShortSummary(
 			systemPrompt: SUMMARIZATION_SYSTEM_PROMPT,
 			messages: [{ role: "user", content: [{ type: "text", text: promptText }], timestamp: Date.now() }],
 		},
-		{ maxTokens, signal, apiKey, reasoning: "high" },
+		{ maxTokens, signal, apiKey, reasoning: Effort.High },
 	);
 
 	if (response.stopReason === "error") {
@@ -1335,7 +1334,7 @@ async function generateTurnPrefixSummary(
 	const response = await completeSimple(
 		model,
 		{ systemPrompt: SUMMARIZATION_SYSTEM_PROMPT, messages: summarizationMessages },
-		{ maxTokens, signal, apiKey, reasoning: "high" },
+		{ maxTokens, signal, apiKey, reasoning: Effort.High },
 	);
 
 	if (response.stopReason === "error") {

@@ -21,15 +21,15 @@ import {
 } from "@aws-sdk/client-bedrock-runtime";
 import { $env } from "@oh-my-pi/pi-utils";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
+import type { Effort } from "../model-thinking";
+import { mapEffortToAnthropicAdaptiveEffort, requireSupportedEffort } from "../model-thinking";
 import { calculateCost } from "../models";
-import type { ThinkingEffort, ThinkingLevel } from "../thinking";
 import type {
 	Api,
 	AssistantMessage,
 	CacheRetention,
 	Context,
 	Model,
-	SimpleStreamOptions,
 	StopReason,
 	StreamFunction,
 	StreamOptions,
@@ -51,7 +51,7 @@ export interface BedrockOptions extends StreamOptions {
 	profile?: string;
 	toolChoice?: "auto" | "any" | "none" | { type: "tool"; name: string };
 	/* See https://docs.aws.amazon.com/bedrock/latest/userguide/inference-reasoning.html for supported models. */
-	reasoning?: ThinkingLevel;
+	reasoning?: Effort;
 	/* Custom token budgets per thinking level. Overrides default budgets. */
 	thinkingBudgets?: ThinkingBudgets;
 	/* Only supported by Claude 4.x models, see https://docs.aws.amazon.com/bedrock/latest/userguide/claude-messages-extended-thinking.html#claude-messages-extended-thinking-tool-use-interleaved */
@@ -591,85 +591,46 @@ function mapStopReason(reason: string | undefined): StopReason {
 	}
 }
 
-/** Check if the model supports adaptive thinking (Opus 4.6+ / Sonnet 4.6+). */
-function supportsAdaptiveThinking(modelId: string): boolean {
-	return (
-		modelId.includes("opus-4-6") ||
-		modelId.includes("opus-4.6") ||
-		modelId.includes("sonnet-4-6") ||
-		modelId.includes("sonnet-4.6")
-	);
-}
-
-/** Map a thinking level to an adaptive effort value. */
-function mapThinkingLevelToEffort(level: SimpleStreamOptions["reasoning"]): "low" | "medium" | "high" | "max" {
-	switch (level) {
-		case "minimal":
-		case "low":
-			return "low";
-		case "medium":
-			return "medium";
-		case "high":
-			return "high";
-		case "xhigh":
-			return "max";
-		default:
-			return "high";
-	}
-}
-
 function buildAdditionalModelRequestFields(
 	model: Model<"bedrock-converse-stream">,
 	options: BedrockOptions,
 ): Record<string, any> | undefined {
 	const reasoning = options.reasoning;
-	if (!reasoning || !model.reasoning || reasoning === "off") {
+	if (!reasoning || !model.reasoning) {
 		return undefined;
 	}
 
-	if (model.id.includes("anthropic.claude")) {
-		// Opus 4.6+ / Sonnet 4.6+ uses adaptive thinking with effort levels
-		if (supportsAdaptiveThinking(model.id)) {
-			let effort = mapThinkingLevelToEffort(reasoning);
-			// "max" effort is only supported on Opus 4.6; clamp to "high" for Sonnet 4.6
-			const supportsMax = model.id.includes("opus-4-6") || model.id.includes("opus-4.6");
-			if (effort === "max" && !supportsMax) {
-				effort = "high";
-			}
-			const result: Record<string, any> = {
-				thinking: { type: "adaptive" },
-				output_config: { effort },
-			};
-			return result;
-		}
-
-		const defaultBudgets: Record<ThinkingEffort, number> = {
-			minimal: 1024,
-			low: 2048,
-			medium: 8192,
-			high: 16384,
-			xhigh: 16384, // Claude doesn't support xhigh, clamp to high
+	const mode = model.thinking?.mode;
+	if (mode === "anthropic-adaptive") {
+		const effort = mapEffortToAnthropicAdaptiveEffort(model, reasoning);
+		return {
+			thinking: { type: "adaptive" },
+			output_config: { effort },
 		};
-
-		// Custom budgets override defaults (xhigh not in ThinkingBudgets, use high)
-		const level = reasoning === "xhigh" ? "high" : reasoning;
-		const budget = options.thinkingBudgets?.[level] ?? defaultBudgets[level];
-
-		const result: Record<string, any> = {
-			thinking: {
-				type: "enabled",
-				budget_tokens: budget,
-			},
-		};
-
-		if (options.interleavedThinking && !supportsAdaptiveThinking(model.id)) {
-			result.anthropic_beta = ["interleaved-thinking-2025-05-14"];
-		}
-
-		return result;
 	}
 
-	return undefined;
+	const level = requireSupportedEffort(model, reasoning);
+	const defaultBudgets: Record<Effort, number> = {
+		minimal: 1024,
+		low: 2048,
+		medium: 8192,
+		high: 16384,
+		xhigh: 32768,
+	};
+	const budget = options.thinkingBudgets?.[level] ?? defaultBudgets[level];
+
+	const result: Record<string, any> = {
+		thinking: {
+			type: "enabled",
+			budget_tokens: budget,
+		},
+	};
+
+	if (options.interleavedThinking) {
+		result.anthropic_beta = ["interleaved-thinking-2025-05-14"];
+	}
+
+	return result;
 }
 
 function createImageBlock(mimeType: string, data: string) {

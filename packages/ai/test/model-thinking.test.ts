@@ -1,0 +1,278 @@
+import { describe, expect, it } from "bun:test";
+import {
+	applyGeneratedModelPolicies,
+	clampThinkingLevelForModel,
+	Effort,
+	enrichModelThinking,
+	linkSparkPromotionTargets,
+	mapEffortToAnthropicAdaptiveEffort,
+	mapEffortToGoogleThinkingLevel,
+	requireSupportedEffort,
+} from "@oh-my-pi/pi-ai/model-thinking";
+import type { Api, Model, Provider } from "@oh-my-pi/pi-ai/types";
+
+function createModel<TApi extends Api>(overrides: {
+	id: string;
+	api: TApi;
+	provider: Provider;
+	reasoning?: boolean;
+}): Model<TApi> {
+	return enrichModelThinking({
+		id: overrides.id,
+		name: overrides.id,
+		api: overrides.api,
+		provider: overrides.provider,
+		baseUrl: "",
+		reasoning: overrides.reasoning ?? true,
+		input: ["text"],
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		contextWindow: 200000,
+		maxTokens: 32000,
+	});
+}
+
+describe("model thinking metadata", () => {
+	it("stores supported efforts for Codex mini in model metadata", () => {
+		const model = createModel({
+			id: "gpt-5.1-codex-mini",
+			api: "openai-codex-responses",
+			provider: "openai-codex",
+		});
+
+		expect(model.thinking).toEqual({
+			mode: "effort",
+			minLevel: Effort.Medium,
+			maxLevel: Effort.High,
+		});
+		expect(() => requireSupportedEffort(model, Effort.Low)).toThrow(/Supported efforts: medium, high/);
+		expect(() => requireSupportedEffort(model, Effort.XHigh)).toThrow(/Supported efforts: medium, high/);
+	});
+
+	it("stores xhigh support directly in metadata for GPT-5.2", () => {
+		const model = createModel({
+			id: "gpt-5.2-codex",
+			api: "openai-codex-responses",
+			provider: "openai-codex",
+		});
+
+		expect(model.thinking).toEqual({
+			mode: "effort",
+			minLevel: Effort.Low,
+			maxLevel: Effort.XHigh,
+		});
+		expect(requireSupportedEffort(model, Effort.XHigh)).toBe(Effort.XHigh);
+	});
+
+	it("maps Gemini 3 Pro only for supported levels", () => {
+		const model = createModel({
+			id: "gemini-3-pro-preview",
+			api: "google-generative-ai",
+			provider: "google",
+		});
+
+		expect(model.thinking).toEqual({
+			mode: "google-level",
+			minLevel: Effort.Low,
+			maxLevel: Effort.High,
+		});
+		expect(mapEffortToGoogleThinkingLevel(model, Effort.Low)).toBe("LOW");
+		expect(mapEffortToGoogleThinkingLevel(model, Effort.High)).toBe("HIGH");
+		expect(() => mapEffortToGoogleThinkingLevel(model, Effort.Medium)).toThrow(/not supported/);
+	});
+
+	it("encodes anthropic transport mode in metadata", () => {
+		const opus45 = createModel({
+			id: "claude-opus-4-5",
+			api: "anthropic-messages",
+			provider: "anthropic",
+		});
+		const opus46 = createModel({
+			id: "claude-opus-4.6",
+			api: "anthropic-messages",
+			provider: "anthropic",
+		});
+		const sonnet46 = createModel({
+			id: "claude-sonnet-4.6",
+			api: "anthropic-messages",
+			provider: "anthropic",
+		});
+
+		expect(opus45.thinking?.mode).toBe("anthropic-budget-effort");
+		expect(opus46.thinking?.mode).toBe("anthropic-adaptive");
+		expect(sonnet46.thinking?.mode).toBe("anthropic-adaptive");
+		expect(opus46.thinking).toEqual({
+			mode: "anthropic-adaptive",
+			minLevel: Effort.Minimal,
+			maxLevel: Effort.XHigh,
+		});
+		expect(sonnet46.thinking).toEqual({
+			mode: "anthropic-adaptive",
+			minLevel: Effort.Minimal,
+			maxLevel: Effort.High,
+		});
+		expect(mapEffortToAnthropicAdaptiveEffort(opus46, Effort.XHigh)).toBe("max");
+		expect(() => mapEffortToAnthropicAdaptiveEffort(sonnet46, Effort.XHigh)).toThrow(/not supported/);
+	});
+});
+
+describe("generated model policies", () => {
+	it("refreshes thinking metadata and applies parsed catalog corrections", () => {
+		const models: Model<Api>[] = [
+			{
+				id: "claude-opus-4-5",
+				name: "Claude Opus 4.5",
+				api: "anthropic-messages",
+				provider: "anthropic",
+				baseUrl: "https://example.com",
+				reasoning: true,
+				thinking: {
+					mode: "budget",
+					minLevel: Effort.High,
+					maxLevel: Effort.High,
+				},
+				input: ["text"],
+				cost: { input: 0, output: 0, cacheRead: 1.5, cacheWrite: 18.75 },
+				contextWindow: 1000000,
+				maxTokens: 32000,
+			},
+			{
+				id: "anthropic.claude-opus-4-6-v1:0",
+				name: "Claude Opus 4.6",
+				api: "bedrock-converse-stream",
+				provider: "amazon-bedrock",
+				baseUrl: "https://example.com",
+				reasoning: true,
+				input: ["text"],
+				cost: { input: 0, output: 0, cacheRead: 1.5, cacheWrite: 18.75 },
+				contextWindow: 1000000,
+				maxTokens: 32000,
+			},
+			{
+				id: "gpt-5.2-codex",
+				name: "GPT-5.2 Codex",
+				api: "openai-codex-responses",
+				provider: "openai-codex",
+				baseUrl: "https://example.com",
+				reasoning: true,
+				input: ["text"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 400000,
+				maxTokens: 32000,
+			},
+		];
+
+		applyGeneratedModelPolicies(models);
+
+		expect(models[0]?.thinking).toEqual({
+			mode: "anthropic-budget-effort",
+			minLevel: Effort.Minimal,
+			maxLevel: Effort.XHigh,
+		});
+		expect(models[0]?.cost.cacheRead).toBe(0.5);
+		expect(models[0]?.cost.cacheWrite).toBe(6.25);
+		expect(models[1]?.thinking).toEqual({
+			mode: "budget",
+			minLevel: Effort.Minimal,
+			maxLevel: Effort.High,
+		});
+		expect(models[1]?.cost.cacheRead).toBe(0.5);
+		expect(models[1]?.cost.cacheWrite).toBe(6.25);
+		expect(models[1]?.contextWindow).toBe(200000);
+		expect(models[2]?.contextWindow).toBe(272000);
+	});
+
+	it("links spark variants to their base models", () => {
+		const models = [
+			createModel({
+				id: "gpt-5.2-codex-spark",
+				api: "openai-codex-responses",
+				provider: "openai-codex",
+			}),
+			createModel({
+				id: "gpt-5.2-codex",
+				api: "openai-codex-responses",
+				provider: "openai-codex",
+			}),
+		];
+
+		linkSparkPromotionTargets(models);
+
+		expect(models[0]?.contextPromotionTarget).toBe("openai-codex/gpt-5.2-codex");
+	});
+});
+
+describe("model thinking runtime helpers", () => {
+	it("clamps from explicit metadata instead of inferring from model id", () => {
+		const model: Model<"openai-codex-responses"> = {
+			id: "custom-reasoner",
+			name: "Custom Reasoner",
+			api: "openai-codex-responses",
+			provider: "custom",
+			baseUrl: "https://example.com",
+			reasoning: true,
+			thinking: {
+				mode: "effort",
+				minLevel: Effort.Medium,
+				maxLevel: Effort.High,
+			},
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 200000,
+			maxTokens: 32000,
+		};
+
+		expect(clampThinkingLevelForModel(model, Effort.Minimal)).toBe(Effort.Medium);
+		expect(clampThinkingLevelForModel(model, Effort.XHigh)).toBe(Effort.High);
+		expect(clampThinkingLevelForModel(model, Effort.High)).toBe(Effort.High);
+	});
+
+	it('forces "off" for non-reasoning models', () => {
+		const model = createModel({
+			id: "plain-model",
+			api: "openai-responses",
+			provider: "openai",
+			reasoning: false,
+		});
+
+		expect(clampThinkingLevelForModel(model, Effort.High)).toBeUndefined();
+	});
+
+	it("rejects reasoning models that are missing thinking metadata at runtime", () => {
+		const model = {
+			id: "broken-reasoner",
+			name: "Broken Reasoner",
+			api: "openai-responses",
+			provider: "custom",
+			baseUrl: "https://example.com",
+			reasoning: true,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 200000,
+			maxTokens: 32000,
+		} as Model<"openai-responses">;
+
+		expect(() => requireSupportedEffort(model, Effort.High)).toThrow(/missing thinking metadata/);
+	});
+
+	it("drops empty thinking metadata so presence checks stay meaningful", () => {
+		const model = enrichModelThinking({
+			id: "plain-model",
+			name: "Plain Model",
+			api: "openai-responses",
+			provider: "custom",
+			baseUrl: "https://example.com",
+			reasoning: false,
+			thinking: {
+				mode: "effort",
+				minLevel: Effort.High,
+				maxLevel: Effort.Low,
+			},
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 200000,
+			maxTokens: 32000,
+		} satisfies Model<"openai-responses">);
+
+		expect(model.thinking).toBeUndefined();
+	});
+});

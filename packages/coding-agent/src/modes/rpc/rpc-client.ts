@@ -3,8 +3,8 @@
  *
  * Spawns the agent in RPC mode and provides a typed API for all operations.
  */
-import type { AgentEvent, AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { ImageContent, ThinkingLevel } from "@oh-my-pi/pi-ai";
+import type { AgentEvent, AgentMessage, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
+import type { Effort, ImageContent, Model } from "@oh-my-pi/pi-ai";
 import { isRecord, ptree, readJsonl } from "@oh-my-pi/pi-utils";
 import type { BashResult } from "../../exec/bash-executor";
 import type { SessionStats } from "../../session/agent-session";
@@ -34,12 +34,7 @@ export interface RpcClientOptions {
 	args?: string[];
 }
 
-export interface ModelInfo {
-	provider: string;
-	id: string;
-	contextWindow: number;
-	reasoning: boolean;
-}
+export type ModelInfo = Pick<Model, "provider" | "id" | "contextWindow" | "reasoning" | "thinking">;
 
 export type RpcEventListener = (event: AgentEvent) => void;
 
@@ -284,7 +279,7 @@ export class RpcClient {
 	 */
 	async cycleModel(): Promise<{
 		model: { provider: string; id: string };
-		thinkingLevel: ThinkingLevel;
+		thinkingLevel: ThinkingLevel | undefined;
 		isScoped: boolean;
 	} | null> {
 		const response = await this.#send({ type: "cycle_model" });
@@ -309,7 +304,7 @@ export class RpcClient {
 	/**
 	 * Cycle thinking level.
 	 */
-	async cycleThinkingLevel(): Promise<{ level: ThinkingLevel } | null> {
+	async cycleThinkingLevel(): Promise<{ level: Effort } | null> {
 		const response = await this.#send({ type: "cycle_thinking_level" });
 		return this.#getData(response);
 	}

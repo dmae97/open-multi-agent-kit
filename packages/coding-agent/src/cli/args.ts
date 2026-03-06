@@ -1,9 +1,10 @@
 /**
  * CLI argument parsing and help display
  */
-import { getAvailableThinkingLevels, parseThinkingLevel, type ThinkingLevel } from "@oh-my-pi/pi-ai";
+import { type Effort, THINKING_EFFORTS } from "@oh-my-pi/pi-ai";
 import { APP_NAME, CONFIG_DIR_NAME, logger } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
+import { parseEffort } from "../thinking";
 import { BUILTIN_TOOLS } from "../tools";
 
 export type Mode = "text" | "json" | "rpc";
@@ -19,7 +20,7 @@ export interface Args {
 	apiKey?: string;
 	systemPrompt?: string;
 	appendSystemPrompt?: string;
-	thinking?: ThinkingLevel;
+	thinking?: Effort;
 	continue?: boolean;
 	resume?: string | true;
 	help?: boolean;
@@ -122,13 +123,13 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 			result.tools = validTools;
 		} else if (arg === "--thinking" && i + 1 < args.length) {
 			const rawThinking = args[++i];
-			const thinking = parseThinkingLevel(rawThinking);
+			const thinking = parseEffort(rawThinking);
 			if (thinking !== undefined) {
 				result.thinking = thinking;
 			} else {
 				logger.warn("Invalid thinking level passed to --thinking", {
 					level: rawThinking,
-					validThinkingLevels: getAvailableThinkingLevels(),
+					validThinkingLevels: THINKING_EFFORTS,
 				});
 			}
 		} else if (arg === "--print" || arg === "-p") {

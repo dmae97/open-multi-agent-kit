@@ -1,8 +1,26 @@
 # Changelog
 
 ## [Unreleased]
+### Breaking Changes
+
+- Changed `reasoning` parameter from `ThinkingLevel | undefined` to `Effort | undefined` in `SimpleStreamOptions`; 'off' is no longer valid (omit the field instead)
+- Removed `supportsXhigh()` function; check `model.thinking?.maxLevel` instead
+- Removed `ThinkingLevel` and `ThinkingEffort` types; use `Effort` enum
+- Removed `getAvailableThinkingLevels()` and `getAvailableThinkingEfforts()` functions
+- Changed `transformRequestBody()` signature to require `Model` parameter as second argument for effort validation
+- Removed `thinking.ts` module export; import from `model-thinking.ts` instead
+
 ### Added
 
+- Added `ThinkingConfig` interface to models for canonical thinking transport metadata with min/max effort levels and provider-specific mode
+- Added `thinking` field to `Model` type containing per-model thinking capabilities used to clamp and map user-facing effort levels
+- Added `Effort` enum (minimal, low, medium, high, xhigh) as canonical user-facing thinking levels replacing `ThinkingLevel`
+- Added `enrichModelThinking()` function to automatically populate thinking metadata on models based on their capabilities
+- Added `mapEffortToAnthropicAdaptiveEffort()` function to map user effort levels to Anthropic adaptive thinking effort
+- Added `mapEffortToGoogleThinkingLevel()` function to map user effort levels to Google thinking levels
+- Added `requireSupportedEffort()` function to validate and clamp effort levels per model, throwing errors for unsupported combinations
+- Added `clampThinkingLevelForModel()` function to clamp thinking levels to model-supported range
+- Added `applyGeneratedModelPolicies()` and `linkSparkPromotionTargets()` exports from model-thinking module
 - Added `serviceTier` option to control OpenAI processing priority and cost (auto, default, flex, scale, priority)
 - Added `providerPayload` field to messages and responses for reconstructing transport-native history
 - Added Gemini usage provider for tracking quota and tier information
@@ -11,6 +29,14 @@
 
 ### Changed
 
+- Changed `reasoning` parameter type from `ThinkingLevel` to `Effort` in `SimpleStreamOptions`, removing 'off' value (callers should omit the field instead)
+- Changed thinking configuration to use model-specific metadata instead of hardcoded provider logic for effort mapping
+- Changed OpenAI Codex request transformer to accept `Model` parameter for effort validation instead of string model ID
+- Changed Anthropic provider to use model thinking metadata for determining adaptive thinking support instead of model ID pattern matching
+- Changed Google Vertex and Google providers to use shorter variable names for thinking config construction
+- Moved thinking-related utilities from `thinking.ts` to new `model-thinking.ts` module with expanded functionality
+- Moved model policy functions from `provider-models/model-policies.ts` to `model-thinking.ts`
+- Moved `googleGeminiCliUsageProvider` from `providers/google-gemini-cli-usage.ts` to `usage/gemini.ts`
 - Changed default OpenAI model from gpt-5.1-codex to gpt-5.4 across all providers
 - Changed `UsageFetchContext` to remove cache and now() dependencies—usage fetchers now use Date.now() directly
 - Removed `resetInMs` field from usage windows; consumers should calculate from `resetsAt` timestamp
@@ -19,6 +45,13 @@
 
 ### Removed
 
+- Removed `thinking.ts` module; use `model-thinking.ts` instead
+- Removed `provider-models/model-policies.ts` module; functionality moved to `model-thinking.ts`
+- Removed `supportsXhigh()` function from models.ts; use model.thinking metadata instead
+- Removed `ThinkingLevel` and `ThinkingEffort` types; use `Effort` enum instead
+- Removed `getAvailableThinkingLevels()` and `getAvailableThinkingEfforts()` functions
+- Removed `model-policies` export from `provider-models/index.ts`
+- Removed hardcoded thinking level clamping logic from OpenAI Codex request transformer; now uses model metadata
 - Removed `UsageCache` and `UsageCacheEntry` interfaces—caching is now handled internally by AuthStorage
 - Removed `google-gemini-cli-usage` export; use new `gemini` usage provider instead
 - Removed `resetInMs` computation from all usage providers
@@ -26,6 +59,9 @@
 
 ### Fixed
 
+- Fixed OpenAI Codex to reject unsupported effort levels instead of silently clamping them, providing clear error messages about supported efforts
+- Fixed model cache normalization to properly apply thinking enrichment when loading cached models
+- Fixed dynamic model merging to apply thinking enrichment to merged model results
 - Fixed OpenAI Codex streaming to properly include service_tier in SSE payloads
 - Fixed type safety in OpenAI responses by removing unsafe type casts on image content blocks
 - Fixed credential purging to respect disabled credentials when deduplicating by email
@@ -47,31 +83,33 @@
 - Fixed Unicode normalization to consistently apply `toWellFormed()` to all text content, including thinking blocks, ensuring proper handling of malformed UTF-16 sequences
 
 ## [13.9.1] - 2026-03-05
+
 ### Breaking Changes
 
 - Removed `THINKING_LEVELS`, `ALL_THINKING_LEVELS`, `ALL_THINKING_MODES`, `THINKING_MODE_DESCRIPTIONS`, and `THINKING_MODE_LABELS` exports
 - Renamed `formatThinking()` to `getThinkingMetadata()` with changed return type from string to `ThinkingMetadata` object
 - Renamed `getAvailableThinkingLevel()` to `getAvailableThinkingLevels()` and added default parameter
-- Renamed `getAvailableThinkingEffort()` to `getAvailableThinkingEfforts()` and added default parameter
+- Renamed `getAvailableEffort()` to `getAvailableEfforts()` and added default parameter
 
 ### Added
 
 - Added `ThinkingMetadata` type to provide structured access to thinking mode information (value, label, description)
 
 ## [13.9.0] - 2026-03-05
+
 ### Added
 
-- Exported new thinking module with `ThinkingEffort`, `ThinkingLevel`, and `ThinkingMode` types for managing reasoning effort levels
-- Added `getAvailableThinkingEffort()` function to determine supported thinking effort levels based on model capabilities
-- Added `parseThinkingEffort()`, `parseThinkingLevel()`, and `parseThinkingMode()` functions for parsing thinking configuration strings
+- Exported new thinking module with `Effort`, `ThinkingLevel`, and `ThinkingMode` types for managing reasoning effort levels
+- Added `getAvailableEffort()` function to determine supported thinking effort levels based on model capabilities
+- Added `parseEffort()`, `parseThinkingLevel()`, and `parseThinkingMode()` functions for parsing thinking configuration strings
 - Added `THINKING_LEVELS`, `ALL_THINKING_LEVELS`, and `ALL_THINKING_MODES` constants for iterating over available thinking options
 - Added `THINKING_MODE_DESCRIPTIONS` and `THINKING_MODE_LABELS` for displaying thinking modes in user interfaces
 - Added `formatThinking()` function to format thinking modes as compact display labels
 
 ### Changed
 
-- Refactored thinking level handling to distinguish between `ThinkingEffort` (provider-level, no "off") and `ThinkingLevel` (user-facing, includes "off")
-- Updated `ThinkingBudgets` type to use `ThinkingEffort` instead of `ThinkingLevel` for more precise token budget configuration
+- Refactored thinking level handling to distinguish between `Effort` (provider-level, no "off") and `ThinkingLevel` (user-facing, includes "off")
+- Updated `ThinkingBudgets` type to use `Effort` instead of `ThinkingLevel` for more precise token budget configuration
 - Improved reasoning option handling to explicitly support "off" value for disabling reasoning across all providers
 - Simplified thinking effort mapping logic by centralizing provider-specific clamping behavior
 

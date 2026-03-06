@@ -1,4 +1,5 @@
-import { getOAuthProviders, type OAuthProvider, type ThinkingLevel } from "@oh-my-pi/pi-ai";
+import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
+import { getOAuthProviders, type OAuthProvider } from "@oh-my-pi/pi-ai";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Input, Loader, Spacer, Text } from "@oh-my-pi/pi-tui";
 import { getAgentDbPath, getProjectDir } from "@oh-my-pi/pi-utils";
@@ -380,7 +381,7 @@ export class SelectorController {
 				this.ctx.settings,
 				this.ctx.session.modelRegistry,
 				this.ctx.session.scopedModels,
-				async (model, role, thinkingMode) => {
+				async (model, role, thinkingLevel) => {
 					try {
 						if (role === null) {
 							// Temporary: update agent state but don't persist to settings
@@ -393,8 +394,8 @@ export class SelectorController {
 						} else if (role === "default") {
 							// Default: update agent state and persist
 							await this.ctx.session.setModel(model, role);
-							if (thinkingMode && thinkingMode !== "inherit") {
-								this.ctx.session.setThinkingLevel(thinkingMode as ThinkingLevel);
+							if (thinkingLevel && thinkingLevel !== ThinkingLevel.Inherit) {
+								this.ctx.session.setThinkingLevel(thinkingLevel);
 							}
 							this.ctx.statusLine.invalidate();
 							this.ctx.updateEditorBorderColor();

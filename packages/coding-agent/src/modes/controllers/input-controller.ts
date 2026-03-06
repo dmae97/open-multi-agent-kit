@@ -1,5 +1,5 @@
 import * as fs from "node:fs/promises";
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
+import { type AgentMessage, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { copyToClipboard, readImageFromClipboard, sanitizeText } from "@oh-my-pi/pi-natives";
 import { $env } from "@oh-my-pi/pi-utils";
 import { settings } from "../../config/settings";
@@ -544,7 +544,9 @@ export class InputController {
 			const roleLabel = result.role === "default" ? "default" : result.role;
 			const roleLabelStyled = theme.bold(theme.fg("accent", roleLabel));
 			const thinkingStr =
-				result.model.reasoning && result.thinkingLevel !== "off" ? ` (thinking: ${result.thinkingLevel})` : "";
+				result.model.thinking && result.thinkingLevel !== ThinkingLevel.Off
+					? ` (thinking: ${result.thinkingLevel})`
+					: "";
 			const tempLabel = options?.temporary ? " (temporary)" : "";
 			const cycleSeparator = theme.fg("dim", " > ");
 			const cycleLabel = roleOrder
