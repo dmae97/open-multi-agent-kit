@@ -26626,12 +26626,12 @@
 			"contextPromotionTarget": "openai-codex/gpt-5.3-codex"
 		}
 	},
-	"opencode": {
+	"opencode-zen": {
 		"big-pickle": {
 			"id": "big-pickle",
 			"name": "Big Pickle",
 			"api": "anthropic-messages",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen",
 			"reasoning": true,
 			"input": [
@@ -26650,7 +26650,7 @@
 			"id": "claude-3-5-haiku",
 			"name": "Claude Haiku 3.5",
 			"api": "anthropic-messages",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen",
 			"reasoning": false,
 			"input": [
@@ -26670,7 +26670,7 @@
 			"id": "claude-haiku-4-5",
 			"name": "Claude Haiku 4.5",
 			"api": "anthropic-messages",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen",
 			"reasoning": true,
 			"input": [
@@ -26690,7 +26690,7 @@
 			"id": "claude-opus-4-1",
 			"name": "Claude Opus 4.1",
 			"api": "anthropic-messages",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen",
 			"reasoning": true,
 			"input": [
@@ -26710,7 +26710,7 @@
 			"id": "claude-opus-4-5",
 			"name": "Claude Opus 4.5",
 			"api": "anthropic-messages",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen",
 			"reasoning": true,
 			"input": [
@@ -26730,7 +26730,7 @@
 			"id": "claude-opus-4-6",
 			"name": "Claude Opus 4.6",
 			"api": "anthropic-messages",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen",
 			"reasoning": true,
 			"input": [
@@ -26750,7 +26750,7 @@
 			"id": "claude-sonnet-4",
 			"name": "Claude Sonnet 4",
 			"api": "anthropic-messages",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen",
 			"reasoning": true,
 			"input": [
@@ -26770,7 +26770,7 @@
 			"id": "claude-sonnet-4-5",
 			"name": "Claude Sonnet 4.5",
 			"api": "anthropic-messages",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen",
 			"reasoning": true,
 			"input": [
@@ -26790,7 +26790,7 @@
 			"id": "claude-sonnet-4-6",
 			"name": "Claude Sonnet 4.6",
 			"api": "anthropic-messages",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen",
 			"reasoning": true,
 			"input": [
@@ -26810,7 +26810,7 @@
 			"id": "gemini-3-flash",
 			"name": "Gemini 3 Flash",
 			"api": "google-generative-ai",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -26830,7 +26830,7 @@
 			"id": "gemini-3-pro",
 			"name": "Gemini 3 Pro",
 			"api": "google-generative-ai",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -26850,7 +26850,7 @@
 			"id": "gemini-3.1-pro",
 			"name": "Gemini 3.1 Pro Preview",
 			"api": "google-generative-ai",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -26870,7 +26870,7 @@
 			"id": "glm-4.6",
 			"name": "GLM-4.6",
 			"api": "openai-completions",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -26889,7 +26889,7 @@
 			"id": "glm-4.7",
 			"name": "GLM-4.7",
 			"api": "openai-completions",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -26908,7 +26908,7 @@
 			"id": "glm-5",
 			"name": "GLM-5",
 			"api": "openai-completions",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -26923,30 +26923,11 @@
 			"contextWindow": 204800,
 			"maxTokens": 131072
 		},
-		"glm-5-free": {
-			"id": "glm-5-free",
-			"name": "GLM-5 Free",
-			"api": "openai-completions",
-			"provider": "opencode",
-			"baseUrl": "https://opencode.ai/zen/v1",
-			"reasoning": true,
-			"input": [
-				"text"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 204800,
-			"maxTokens": 131072
-		},
 		"gpt-5": {
 			"id": "gpt-5",
 			"name": "GPT-5",
 			"api": "openai-responses",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -26966,7 +26947,7 @@
 			"id": "gpt-5-codex",
 			"name": "GPT-5 Codex",
 			"api": "openai-responses",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -26986,7 +26967,7 @@
 			"id": "gpt-5-nano",
 			"name": "GPT-5 Nano",
 			"api": "openai-responses",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -27006,7 +26987,7 @@
 			"id": "gpt-5.1",
 			"name": "GPT-5.1",
 			"api": "openai-responses",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -27026,7 +27007,7 @@
 			"id": "gpt-5.1-codex",
 			"name": "GPT-5.1 Codex",
 			"api": "openai-responses",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -27046,7 +27027,7 @@
 			"id": "gpt-5.1-codex-max",
 			"name": "GPT-5.1 Codex Max",
 			"api": "openai-responses",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -27066,7 +27047,7 @@
 			"id": "gpt-5.1-codex-mini",
 			"name": "GPT-5.1 Codex Mini",
 			"api": "openai-responses",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -27086,7 +27067,7 @@
 			"id": "gpt-5.2",
 			"name": "GPT-5.2",
 			"api": "openai-responses",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -27106,7 +27087,7 @@
 			"id": "gpt-5.2-codex",
 			"name": "GPT-5.2 Codex",
 			"api": "openai-responses",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -27126,7 +27107,7 @@
 			"id": "gpt-5.3-codex",
 			"name": "GPT-5.3 Codex",
 			"api": "openai-responses",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -27146,7 +27127,7 @@
 			"id": "kimi-k2",
 			"name": "Kimi K2",
 			"api": "openai-completions",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": false,
 			"input": [
@@ -27165,7 +27146,7 @@
 			"id": "kimi-k2-thinking",
 			"name": "Kimi K2 Thinking",
 			"api": "openai-completions",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -27184,7 +27165,7 @@
 			"id": "kimi-k2.5",
 			"name": "Kimi K2.5",
 			"api": "openai-completions",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -27200,31 +27181,11 @@
 			"contextWindow": 262144,
 			"maxTokens": 65536
 		},
-		"kimi-k2.5-free": {
-			"id": "kimi-k2.5-free",
-			"name": "Kimi K2.5 Free",
-			"api": "openai-completions",
-			"provider": "opencode",
-			"baseUrl": "https://opencode.ai/zen/v1",
-			"reasoning": true,
-			"input": [
-				"text",
-				"image"
-			],
-			"cost": {
-				"input": 0,
-				"output": 0,
-				"cacheRead": 0,
-				"cacheWrite": 0
-			},
-			"contextWindow": 262144,
-			"maxTokens": 262144
-		},
 		"minimax-m2.1": {
 			"id": "minimax-m2.1",
 			"name": "MiniMax M2.1",
 			"api": "openai-completions",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -27243,7 +27204,7 @@
 			"id": "minimax-m2.5",
 			"name": "MiniMax M2.5",
 			"api": "openai-completions",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": true,
 			"input": [
@@ -27262,7 +27223,7 @@
 			"id": "minimax-m2.5-free",
 			"name": "MiniMax M2.5 Free",
 			"api": "anthropic-messages",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen",
 			"reasoning": true,
 			"input": [
@@ -27281,7 +27242,7 @@
 			"id": "trinity-large-preview-free",
 			"name": "Trinity Large Preview",
 			"api": "openai-completions",
-			"provider": "opencode",
+			"provider": "opencode-zen",
 			"baseUrl": "https://opencode.ai/zen/v1",
 			"reasoning": false,
 			"input": [
@@ -27294,6 +27255,66 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 131072,
+			"maxTokens": 131072
+		}
+	},
+	"opencode-go": {
+		"glm-5": {
+			"id": "glm-5",
+			"name": "GLM-5",
+			"api": "openai-completions",
+			"provider": "opencode-go",
+			"baseUrl": "https://opencode.ai/zen/go/v1",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 1,
+				"output": 3.2,
+				"cacheRead": 0.2,
+				"cacheWrite": 0
+			},
+			"contextWindow": 204800,
+			"maxTokens": 131072
+		},
+		"kimi-k2.5": {
+			"id": "kimi-k2.5",
+			"name": "Kimi K2.5",
+			"api": "openai-completions",
+			"provider": "opencode-go",
+			"baseUrl": "https://opencode.ai/zen/go/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0.6,
+				"output": 3,
+				"cacheRead": 0.1,
+				"cacheWrite": 0
+			},
+			"contextWindow": 262144,
+			"maxTokens": 65536
+		},
+		"minimax-m2.5": {
+			"id": "minimax-m2.5",
+			"name": "MiniMax M2.5",
+			"api": "anthropic-messages",
+			"provider": "opencode-go",
+			"baseUrl": "https://opencode.ai/zen/go",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0.3,
+				"output": 1.2,
+				"cacheRead": 0.03,
+				"cacheWrite": 0
+			},
+			"contextWindow": 204800,
 			"maxTokens": 131072
 		}
 	},

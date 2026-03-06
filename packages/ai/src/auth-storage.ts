@@ -813,7 +813,8 @@ export class AuthStorage {
 				await saveApiKeyCredential(apiKey);
 				return;
 			}
-			case "opencode": {
+			case "opencode-zen":
+			case "opencode-go": {
 				const apiKey = await loginOpenCode(ctrl);
 				await saveApiKeyCredential(apiKey);
 				return;

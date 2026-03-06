@@ -88,6 +88,7 @@ const ModelDefinitionSchema = Type.Object({
 			Type.Literal("google-vertex"),
 		]),
 	),
+	baseUrl: Type.Optional(Type.String({ minLength: 1 })),
 	reasoning: Type.Optional(Type.Boolean()),
 	input: Type.Optional(Type.Array(Type.Union([Type.Literal("text"), Type.Literal("image")]))),
 	cost: Type.Optional(
@@ -399,6 +400,7 @@ interface CustomModelDefinitionLike {
 	id: string;
 	name?: string;
 	api?: Api;
+	baseUrl?: string;
 	reasoning?: boolean;
 	input?: ("text" | "image")[];
 	cost?: { input: number; output: number; cacheRead: number; cacheWrite: number };
@@ -450,7 +452,7 @@ function buildCustomModel(
 		name: modelDef.name ?? (withDefaults ? modelDef.id : undefined),
 		api,
 		provider: providerName,
-		baseUrl: providerBaseUrl,
+		baseUrl: modelDef.baseUrl ?? providerBaseUrl,
 		reasoning: modelDef.reasoning ?? (withDefaults ? false : undefined),
 		input: input as ("text" | "image")[],
 		cost,
@@ -1205,6 +1207,7 @@ export interface ProviderConfigInput {
 		id: string;
 		name: string;
 		api?: Api;
+		baseUrl?: string;
 		reasoning: boolean;
 		input: ("text" | "image")[];
 		cost: { input: number; output: number; cacheRead: number; cacheWrite: number };

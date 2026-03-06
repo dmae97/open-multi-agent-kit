@@ -207,7 +207,7 @@ export function getExtraHelpText(): string {
   MISTRAL_API_KEY            - Mistral models
   ZAI_API_KEY                - z.ai models (ZhipuAI/GLM)
   MINIMAX_API_KEY            - MiniMax models
-  OPENCODE_API_KEY           - OpenCode models
+  OPENCODE_API_KEY           - OpenCode Zen/OpenCode Go models
   CURSOR_ACCESS_TOKEN        - Cursor AI models
   AI_GATEWAY_API_KEY         - Vercel AI Gateway
 

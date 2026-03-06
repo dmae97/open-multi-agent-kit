@@ -542,23 +542,37 @@ export interface OpenCodeModelManagerConfig {
 	baseUrl?: string;
 }
 
-export function opencodeModelManagerOptions(
+function openCodeModelManagerOptions(
+	providerId: "opencode-go" | "opencode-zen",
+	defaultBaseUrl: string,
 	config?: OpenCodeModelManagerConfig,
 ): ModelManagerOptions<"openai-completions"> {
 	const apiKey = config?.apiKey;
-	const baseUrl = config?.baseUrl ?? "https://opencode.ai/zen/v1";
+	const baseUrl = config?.baseUrl ?? defaultBaseUrl;
 	return {
-		providerId: "opencode",
+		providerId,
 		...(apiKey && {
 			fetchDynamicModels: () =>
 				fetchOpenAICompatibleModels({
 					api: "openai-completions",
-					provider: "opencode",
+					provider: providerId,
 					baseUrl,
 					apiKey,
 				}),
 		}),
 	};
+}
+
+export function opencodeZenModelManagerOptions(
+	config?: OpenCodeModelManagerConfig,
+): ModelManagerOptions<"openai-completions"> {
+	return openCodeModelManagerOptions("opencode-zen", "https://opencode.ai/zen/v1", config);
+}
+
+export function opencodeGoModelManagerOptions(
+	config?: OpenCodeModelManagerConfig,
+): ModelManagerOptions<"openai-completions"> {
+	return openCodeModelManagerOptions("opencode-go", "https://opencode.ai/zen/go/v1", config);
 }
 
 // ---------------------------------------------------------------------------
@@ -1742,25 +1756,32 @@ function resolveApiByRules(
 	return fallback;
 }
 
-const OPENCODE_DEFAULT_RESOLUTION = {
-	api: "openai-completions",
-	baseUrl: "https://opencode.ai/zen/v1",
-} as const satisfies { api: Api; baseUrl: string };
+function createOpenCodeApiResolution(basePath: string): {
+	defaultResolution: { api: Api; baseUrl: string };
+	rules: ApiResolutionRule[];
+} {
+	const completionsBaseUrl = `${basePath}/v1`;
+	return {
+		defaultResolution: { api: "openai-completions", baseUrl: completionsBaseUrl },
+		rules: [
+			{
+				matches: (_modelId, raw) => raw.provider?.npm === "@ai-sdk/openai",
+				resolved: { api: "openai-responses", baseUrl: completionsBaseUrl },
+			},
+			{
+				matches: (_modelId, raw) => raw.provider?.npm === "@ai-sdk/anthropic",
+				resolved: { api: "anthropic-messages", baseUrl: basePath },
+			},
+			{
+				matches: (_modelId, raw) => raw.provider?.npm === "@ai-sdk/google",
+				resolved: { api: "google-generative-ai", baseUrl: completionsBaseUrl },
+			},
+		],
+	};
+}
 
-const OPENCODE_API_RESOLUTION_RULES: readonly ApiResolutionRule[] = [
-	{
-		matches: (_modelId, raw) => raw.provider?.npm === "@ai-sdk/openai",
-		resolved: { api: "openai-responses", baseUrl: "https://opencode.ai/zen/v1" },
-	},
-	{
-		matches: (_modelId, raw) => raw.provider?.npm === "@ai-sdk/anthropic",
-		resolved: { api: "anthropic-messages", baseUrl: "https://opencode.ai/zen" },
-	},
-	{
-		matches: (_modelId, raw) => raw.provider?.npm === "@ai-sdk/google",
-		resolved: { api: "google-generative-ai", baseUrl: "https://opencode.ai/zen/v1" },
-	},
-];
+const OPENCODE_ZEN_API_RESOLUTION = createOpenCodeApiResolution("https://opencode.ai/zen");
+const OPENCODE_GO_API_RESOLUTION = createOpenCodeApiResolution("https://opencode.ai/zen/go");
 
 const COPILOT_BASE_URL = "https://api.individual.githubcopilot.com";
 
@@ -1925,15 +1946,35 @@ const MODELS_DEV_PROVIDER_DESCRIPTORS_SPECIALIZED: readonly ModelsDevProviderDes
 	),
 	// --- Mistral ---
 	openAiCompletionsDescriptor("mistral", "mistral", "https://api.mistral.ai/v1"),
-	// --- OpenCode ---
-	openAiCompletionsDescriptor("opencode", "opencode", "https://opencode.ai/zen/v1", {
+	// --- OpenCode Zen ---
+	openAiCompletionsDescriptor("opencode", "opencode-zen", "https://opencode.ai/zen/v1", {
 		filterModel: (_id, m) => {
 			if (m.tool_call !== true) return false;
 			if (m.status === "deprecated") return false;
 			return true;
 		},
 		resolveApi: (modelId, raw) =>
-			resolveApiByRules(modelId, raw, OPENCODE_API_RESOLUTION_RULES, OPENCODE_DEFAULT_RESOLUTION),
+			resolveApiByRules(
+				modelId,
+				raw,
+				OPENCODE_ZEN_API_RESOLUTION.rules,
+				OPENCODE_ZEN_API_RESOLUTION.defaultResolution,
+			),
+	}),
+	// --- OpenCode Go ---
+	openAiCompletionsDescriptor("opencode-go", "opencode-go", "https://opencode.ai/zen/go/v1", {
+		filterModel: (_id, m) => {
+			if (m.tool_call !== true) return false;
+			if (m.status === "deprecated") return false;
+			return true;
+		},
+		resolveApi: (modelId, raw) =>
+			resolveApiByRules(
+				modelId,
+				raw,
+				OPENCODE_GO_API_RESOLUTION.rules,
+				OPENCODE_GO_API_RESOLUTION.defaultResolution,
+			),
 	}),
 	// --- GitHub Copilot ---
 	openAiCompletionsDescriptor("github-copilot", "github-copilot", COPILOT_BASE_URL, {

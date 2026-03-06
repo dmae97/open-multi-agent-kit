@@ -62,8 +62,11 @@ export function applyGeneratedModelPolicies(models: Model<Api>[]): void {
 			model.contextWindow = 200000;
 		}
 
-		// OpenCode: Claude Sonnet 4/4.5 listed with 1M context, actual limit is 200K
-		if (model.provider === "opencode" && (model.id === "claude-sonnet-4-5" || model.id === "claude-sonnet-4")) {
+		// OpenCode variants: Claude Sonnet 4/4.5 listed with 1M context, actual limit is 200K
+		if (
+			(model.provider === "opencode-zen" || model.provider === "opencode-go") &&
+			(model.id === "claude-sonnet-4-5" || model.id === "claude-sonnet-4")
+		) {
 			model.contextWindow = 200000;
 		}
 

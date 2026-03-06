@@ -91,7 +91,7 @@ export { loginOllama } from "./ollama";
 export type { OpenAICodexLoginOptions } from "./openai-codex";
 // OpenAI Codex (ChatGPT OAuth)
 export { loginOpenAICodex, refreshOpenAICodexToken } from "./openai-codex";
-// OpenCode (API key)
+// OpenCode Zen / OpenCode Go (API key)
 export { loginOpenCode } from "./opencode";
 // Perplexity
 export { loginPerplexity } from "./perplexity";
@@ -207,8 +207,13 @@ const builtInOAuthProviders: OAuthProviderInfo[] = [
 		available: true,
 	},
 	{
-		id: "opencode",
+		id: "opencode-zen",
 		name: "OpenCode Zen",
+		available: true,
+	},
+	{
+		id: "opencode-go",
+		name: "OpenCode Go",
 		available: true,
 	},
 	{
@@ -354,7 +359,8 @@ export async function refreshOAuthToken(
 			break;
 		case "perplexity":
 		case "huggingface":
-		case "opencode":
+		case "opencode-zen":
+		case "opencode-go":
 		case "cerebras":
 		case "nvidia":
 		case "nanogpt":
