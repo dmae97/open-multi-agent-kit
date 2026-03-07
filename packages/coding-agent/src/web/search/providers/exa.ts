@@ -48,6 +48,72 @@ interface ExaSearchResponse {
 	searchTime?: number;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+	if (typeof value !== "object" || value === null) return null;
+	return value as Record<string, unknown>;
+}
+
+function parseOptionalField(section: string, label: string): string | null | undefined {
+	const regex = new RegExp(`(?:^|\\n)${label}:\\s*([^\\n]*)`);
+	const match = section.match(regex);
+	if (!match) return undefined;
+	const value = match[1].trim();
+	return value.length > 0 ? value : null;
+}
+
+function parseTextField(section: string): string | null | undefined {
+	const match = section.match(/(?:^|\n)Text:\s*([\s\S]*)$/);
+	if (!match) return undefined;
+	const value = match[1].trim();
+	return value.length > 0 ? value : null;
+}
+
+function parseExaMcpTextPayload(payload: unknown): ExaSearchResponse | null {
+	const root = asRecord(payload);
+	if (!root) return null;
+
+	const content = root.content;
+	if (!Array.isArray(content)) return null;
+
+	const textBlocks = content
+		.map(item => {
+			const part = asRecord(item);
+			const text = typeof part?.text === "string" ? part.text : "";
+			return text.replace(/\r\n?/g, "\n").trim();
+		})
+		.filter(text => text.length > 0);
+
+	if (textBlocks.length === 0) return null;
+
+	const sections = textBlocks
+		.join("\n\n")
+		.split(/\n{2,}(?=Title:\s*[^\n]*(?:\n(?:URL|Author|Published Date|Text):))/)
+		.map(section => section.trim())
+		.filter(section => section.startsWith("Title:"));
+
+	const results: ExaSearchResult[] = [];
+	for (const section of sections) {
+		const title = parseOptionalField(section, "Title");
+		const url = parseOptionalField(section, "URL");
+		const author = parseOptionalField(section, "Author");
+		const publishedDate = parseOptionalField(section, "Published Date");
+		const text = parseTextField(section);
+
+		if (!title && !url && !text) continue;
+
+		results.push({
+			title: title ?? undefined,
+			url: url ?? undefined,
+			author: author ?? undefined,
+			publishedDate: publishedDate ?? undefined,
+			text: text ?? undefined,
+		});
+	}
+
+	if (results.length === 0) return null;
+	return { results };
+}
+
 export function normalizeSearchType(type: ExaSearchParamType | undefined): ExaSearchType {
 	if (!type) return "auto";
 	if (type === "keyword") return "fast";
@@ -124,11 +190,16 @@ async function callExaSearch(apiKey: string, params: ExaSearchParams): Promise<E
 
 async function callExaMcpSearch(params: ExaSearchParams): Promise<ExaSearchResponse> {
 	const response = await callExaTool("web_search_exa", { ...params }, findApiKey());
-	if (!isSearchResponse(response)) {
-		throw new Error("Exa MCP search returned unexpected response shape.");
+	if (isSearchResponse(response)) {
+		return response as ExaSearchResponse;
 	}
 
-	return response as ExaSearchResponse;
+	const parsed = parseExaMcpTextPayload(response);
+	if (parsed) {
+		return parsed;
+	}
+
+	throw new Error("Exa MCP search returned unexpected response shape.");
 }
 
 /** Execute Exa web search */

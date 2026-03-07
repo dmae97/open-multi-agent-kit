@@ -437,6 +437,143 @@ describe("searchExa", () => {
 		expect(calledUrl).not.toContain("exaApiKey=");
 	});
 
+	it("accepts MCP text content plain-text payloads when API key is missing", async () => {
+		delete process.env.EXA_API_KEY;
+		const payloadText = [
+			"Title: Plain Alpha",
+			"URL: https://plain-alpha.com",
+			"Author: Alpha Author",
+			"Published Date: 2024-01-02",
+			"Text: Alpha snippet",
+			"",
+			"Title: Plain Beta",
+			"URL: https://plain-beta.com",
+			"Text: Beta snippet",
+		].join("\n");
+		// @ts-expect-error - test mock doesn't need fetch.preconnect
+		const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+			return new Response(
+				JSON.stringify({
+					jsonrpc: "2.0",
+					id: "mcp-content-plain-text",
+					result: { content: [{ type: "text", text: payloadText }] },
+				}),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			);
+		});
+
+		const result = await searchExa({ query: "plain text content payload" });
+		expect(result.provider).toBe("exa");
+		expect(result.sources).toHaveLength(2);
+		expect(result.sources[0]).toMatchObject({
+			title: "Plain Alpha",
+			url: "https://plain-alpha.com",
+			author: "Alpha Author",
+			snippet: "Alpha snippet",
+			publishedDate: "2024-01-02",
+		});
+		expect(result.sources[1]).toMatchObject({
+			title: "Plain Beta",
+			url: "https://plain-beta.com",
+			snippet: "Beta snippet",
+		});
+		expect(result.answer).toBeUndefined();
+
+		const calledUrl = String(fetchSpy.mock.calls[0][0]);
+		expect(calledUrl).not.toContain("exaApiKey=");
+	});
+
+	it("splits MCP plain-text records with CRLF line endings", async () => {
+		delete process.env.EXA_API_KEY;
+		const payloadText = [
+			"Title: CRLF Alpha",
+			"URL: https://crlf-alpha.com",
+			"Text: First result",
+			"",
+			"Title: CRLF Beta",
+			"URL: https://crlf-beta.com",
+			"Text: Second result",
+		].join("\r\n");
+		// @ts-expect-error - test mock doesn't need fetch.preconnect
+		vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+			return new Response(
+				JSON.stringify({
+					jsonrpc: "2.0",
+					id: "mcp-content-crlf",
+					result: { content: [{ type: "text", text: payloadText }] },
+				}),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			);
+		});
+
+		const result = await searchExa({ query: "crlf payload" });
+		expect(result.provider).toBe("exa");
+		expect(result.sources).toHaveLength(2);
+		expect(result.sources[0]?.url).toBe("https://crlf-alpha.com");
+		expect(result.sources[1]?.url).toBe("https://crlf-beta.com");
+	});
+
+	it("keeps 'Title:' lines inside Text body when parsing MCP plain-text content", async () => {
+		delete process.env.EXA_API_KEY;
+		const payloadText = [
+			"Title: Plain Alpha",
+			"URL: https://plain-alpha.com",
+			"Text: Alpha line 1",
+			"Title: heading inside body",
+			"Alpha line 2",
+			"",
+			"Title: Plain Beta",
+			"URL: https://plain-beta.com",
+			"Text: Beta snippet",
+		].join("\n");
+		// @ts-expect-error - test mock doesn't need fetch.preconnect
+		vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+			return new Response(
+				JSON.stringify({
+					jsonrpc: "2.0",
+					id: "mcp-content-embedded-title",
+					result: { content: [{ type: "text", text: payloadText }] },
+				}),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			);
+		});
+
+		const result = await searchExa({ query: "embedded title line" });
+		expect(result.provider).toBe("exa");
+		expect(result.sources).toHaveLength(2);
+		expect(result.sources[0]?.snippet).toContain("Title: heading inside body");
+		expect(result.sources[0]?.snippet).toContain("Alpha line 2");
+	});
+
+	it("runSearchQuery with provider=exa succeeds without EXA_API_KEY for MCP plain text content", async () => {
+		delete process.env.EXA_API_KEY;
+		const payloadText = [
+			"Title: Result One",
+			"URL: https://result-one.com",
+			"Text: First plain-text result",
+			"",
+			"Title: Result Two",
+			"URL: https://result-two.com",
+			"Text: Second plain-text result",
+		].join("\n");
+		// @ts-expect-error - test mock doesn't need fetch.preconnect
+		vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+			return new Response(
+				JSON.stringify({
+					jsonrpc: "2.0",
+					id: "mcp-tool-plain-text",
+					result: { content: [{ type: "text", text: payloadText }] },
+				}),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			);
+		});
+
+		const result = await runSearchQuery({ query: "provider exa plain text", provider: "exa" });
+		expect(result.details.error).toBeUndefined();
+		expect(result.details.response.provider).toBe("exa");
+		expect(result.details.response.sources).toHaveLength(2);
+	});
+
 	it("runSearchQuery with provider=exa succeeds without EXA_API_KEY for MCP structuredContent", async () => {
 		delete process.env.EXA_API_KEY;
 		// @ts-expect-error - test mock doesn't need fetch.preconnect
