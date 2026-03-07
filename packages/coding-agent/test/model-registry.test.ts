@@ -665,11 +665,20 @@ describe("ModelRegistry", () => {
 		test("auto-discovers ollama models without provider config", async () => {
 			const originalFetch = globalThis.fetch;
 			globalThis.fetch = (async (input: string | URL | Request) => {
-				expect(String(input)).toBe("http://127.0.0.1:11434/api/tags");
-				return new Response(JSON.stringify({ models: [{ name: "phi4-mini" }] }), {
-					status: 200,
-					headers: { "Content-Type": "application/json" },
-				});
+				const url = String(input);
+				if (url === "http://127.0.0.1:11434/api/tags") {
+					return new Response(JSON.stringify({ models: [{ name: "phi4-mini" }] }), {
+						status: 200,
+						headers: { "Content-Type": "application/json" },
+					});
+				}
+				if (url === "http://127.0.0.1:11434/api/show") {
+					return new Response(JSON.stringify({ capabilities: ["completion"] }), {
+						status: 200,
+						headers: { "Content-Type": "application/json" },
+					});
+				}
+				throw new Error(`Unexpected URL: ${url}`);
 			}) as unknown as typeof fetch;
 
 			try {
@@ -696,13 +705,22 @@ describe("ModelRegistry", () => {
 
 			const originalFetch = globalThis.fetch;
 			globalThis.fetch = (async (input: string | URL | Request) => {
-				expect(String(input)).toBe("http://127.0.0.1:11434/api/tags");
-				return new Response(
-					JSON.stringify({
-						models: [{ name: "qwen2.5-coder:7b" }, { model: "llama3.2:3b", name: "llama3.2:3b" }],
-					}),
-					{ status: 200, headers: { "Content-Type": "application/json" } },
-				);
+				const url = String(input);
+				if (url === "http://127.0.0.1:11434/api/tags") {
+					return new Response(
+						JSON.stringify({
+							models: [{ name: "qwen2.5-coder:7b" }, { model: "llama3.2:3b", name: "llama3.2:3b" }],
+						}),
+						{ status: 200, headers: { "Content-Type": "application/json" } },
+					);
+				}
+				if (url === "http://127.0.0.1:11434/api/show") {
+					return new Response(JSON.stringify({ capabilities: ["completion"] }), {
+						status: 200,
+						headers: { "Content-Type": "application/json" },
+					});
+				}
+				throw new Error(`Unexpected URL: ${url}`);
 			}) as unknown as typeof fetch;
 
 			try {
@@ -716,6 +734,64 @@ describe("ModelRegistry", () => {
 				const available = registry.getAvailable().filter(m => m.provider === "ollama");
 				expect(available.length).toBe(2);
 				expect(await registry.getApiKey(available[0])).toBe(kNoAuth);
+			} finally {
+				globalThis.fetch = originalFetch;
+			}
+		});
+
+		test("discovers ollama thinking capabilities from show metadata", async () => {
+			writeRawModelsJson({
+				ollama: {
+					baseUrl: "http://127.0.0.1:11434/v1",
+					api: "openai-completions",
+					auth: "none",
+					discovery: { type: "ollama" },
+				},
+			});
+
+			const originalFetch = globalThis.fetch;
+			globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+				const url = String(input);
+				if (url === "http://127.0.0.1:11434/api/tags") {
+					return new Response(
+						JSON.stringify({
+							models: [{ name: "qwen3.5:397b-cloud" }, { name: "llama3.2:3b" }],
+						}),
+						{ status: 200, headers: { "Content-Type": "application/json" } },
+					);
+				}
+				if (url === "http://127.0.0.1:11434/api/show") {
+					const body = JSON.parse(String(init?.body ?? "{}")) as { model?: string };
+					if (body.model === "qwen3.5:397b-cloud") {
+						return new Response(JSON.stringify({ capabilities: ["completion", "thinking"] }), {
+							status: 200,
+							headers: { "Content-Type": "application/json" },
+						});
+					}
+					if (body.model === "llama3.2:3b") {
+						return new Response(JSON.stringify({ capabilities: ["completion"] }), {
+							status: 200,
+							headers: { "Content-Type": "application/json" },
+						});
+					}
+				}
+				throw new Error(`Unexpected request: ${url}`);
+			}) as unknown as typeof fetch;
+
+			try {
+				const registry = new ModelRegistry(authStorage, modelsJsonPath);
+				await registry.refresh();
+
+				const qwen = registry.find("ollama", "qwen3.5:397b-cloud");
+				expect(qwen?.reasoning).toBe(true);
+				expect(qwen?.thinking).toEqual({
+					mode: "effort",
+					minLevel: Effort.Minimal,
+					maxLevel: Effort.High,
+				});
+
+				const llama = registry.find("ollama", "llama3.2:3b");
+				expect(llama?.reasoning).toBe(false);
 			} finally {
 				globalThis.fetch = originalFetch;
 			}

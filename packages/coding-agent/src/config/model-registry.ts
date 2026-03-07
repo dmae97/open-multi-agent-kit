@@ -23,7 +23,7 @@ import {
 	unregisterCustomApis,
 	unregisterOAuthProviders,
 } from "@oh-my-pi/pi-ai";
-import { logger } from "@oh-my-pi/pi-utils";
+import { isRecord, logger } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import { type ConfigError, ConfigFile } from "../config";
 import type { ThemeColor } from "../modes/theme/theme";
@@ -862,12 +862,57 @@ export class ModelRegistry {
 		}
 	}
 
+	async #discoverOllamaModelMetadata(
+		endpoint: string,
+		modelId: string,
+		headers: Record<string, string> | undefined,
+	): Promise<{ reasoning: boolean; input: ("text" | "image")[] } | null> {
+		const showUrl = `${endpoint}/api/show`;
+		try {
+			const response = await fetch(showUrl, {
+				method: "POST",
+				headers: { ...(headers ?? {}), "Content-Type": "application/json" },
+				body: JSON.stringify({ model: modelId }),
+				signal: AbortSignal.timeout(1500),
+			});
+			if (!response.ok) {
+				return null;
+			}
+			const payload = (await response.json()) as unknown;
+			if (!isRecord(payload)) {
+				return null;
+			}
+			const capabilities = payload.capabilities;
+			if (Array.isArray(capabilities)) {
+				const normalized = new Set(
+					capabilities.flatMap(capability => (typeof capability === "string" ? [capability.toLowerCase()] : [])),
+				);
+				const supportsVision = normalized.has("vision") || normalized.has("image");
+				return {
+					reasoning: normalized.has("thinking"),
+					input: supportsVision ? ["text", "image"] : ["text"],
+				};
+			}
+			if (!isRecord(capabilities)) {
+				return null;
+			}
+			const supportsVision = capabilities.vision === true || capabilities.image === true;
+			return {
+				reasoning: capabilities.thinking === true,
+				input: supportsVision ? ["text", "image"] : ["text"],
+			};
+		} catch {
+			return null;
+		}
+	}
+
 	async #discoverOllamaModels(providerConfig: DiscoveryProviderConfig): Promise<Model<Api>[]> {
 		const endpoint = this.#normalizeOllamaBaseUrl(providerConfig.baseUrl);
 		const tagsUrl = `${endpoint}/api/tags`;
+		const headers = { ...(providerConfig.headers ?? {}) };
 		try {
 			const response = await fetch(tagsUrl, {
-				headers: { ...(providerConfig.headers ?? {}) },
+				headers,
 				signal: AbortSignal.timeout(3000),
 			});
 			if (!response.ok) {
@@ -879,27 +924,34 @@ export class ModelRegistry {
 				return [];
 			}
 			const payload = (await response.json()) as { models?: Array<{ name?: string; model?: string }> };
-			const models = payload.models ?? [];
-			const discovered: Model<Api>[] = [];
-			for (const item of models) {
+			const entries = (payload.models ?? []).flatMap(item => {
 				const id = item.model || item.name;
-				if (!id) continue;
-				discovered.push(
-					enrichModelThinking({
-						id,
-						name: item.name || id,
-						api: providerConfig.api,
-						provider: providerConfig.provider,
-						baseUrl: `${endpoint}/v1`,
-						reasoning: false,
-						input: ["text"],
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-						contextWindow: 128000,
-						maxTokens: 8192,
-						headers: providerConfig.headers,
-					}),
-				);
-			}
+				return id ? [{ id, name: item.name || id }] : [];
+			});
+			const metadataById = new Map(
+				await Promise.all(
+					entries.map(
+						async entry =>
+							[entry.id, await this.#discoverOllamaModelMetadata(endpoint, entry.id, headers)] as const,
+					),
+				),
+			);
+			const discovered = entries.map(entry => {
+				const metadata = metadataById.get(entry.id);
+				return enrichModelThinking({
+					id: entry.id,
+					name: entry.name,
+					api: providerConfig.api,
+					provider: providerConfig.provider,
+					baseUrl: `${endpoint}/v1`,
+					reasoning: metadata?.reasoning ?? false,
+					input: metadata?.input ?? ["text"],
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+					contextWindow: 128000,
+					maxTokens: 8192,
+					headers: providerConfig.headers,
+				});
+			});
 			return this.#applyProviderModelOverrides(providerConfig.provider, discovered);
 		} catch (error) {
 			logger.warn("model discovery failed for provider", {

@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Automatic detection of Ollama model capabilities including reasoning/thinking support and vision input via the `/api/show` endpoint
+- Improved Kagi API error handling with extraction of detailed error messages from JSON and plain text responses
+
+### Changed
+
+- Updated Kagi provider description to clarify requirement for Kagi Search API beta access
 
 ## [13.9.3] - 2026-03-07
 
@@ -54,6 +62,7 @@
 - Fixed model registry to preserve explicit thinking configuration on runtime-registered models
 - Fixed usage limit reset time calculation to use absolute `resetsAt` timestamps instead of deprecated `resetInMs` field
 - Fixed compaction summary message creation to no longer be automatically added to chat during compaction (now handled by session manager)
+- Fixed Kagi web search errors to surface the provider's beta-access message and clarified that Kagi search requires Search API beta access
 
 ## [13.9.2] - 2026-03-05
 

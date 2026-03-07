@@ -91,6 +91,15 @@ describe("OpenAI tool strict mode", () => {
 		};
 		expect(payload.tools?.[0]?.function?.strict).toBe(true);
 	});
+	it("omits stream_options usage requests for Cerebras chat completions", async () => {
+		const model = getBundledModel("cerebras", "gpt-oss-120b") as Model<"openai-completions">;
+
+		const payload = (await captureCompletionsPayload(model)) as {
+			stream_options?: { include_usage?: boolean };
+		};
+		expect(payload.stream_options).toBeUndefined();
+	});
+
 	it("sends strict=true for openai-responses tool schemas on OpenAI", async () => {
 		const model = getBundledModel("openai", "gpt-5-mini") as Model<"openai-responses">;
 

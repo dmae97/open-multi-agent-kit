@@ -16,15 +16,17 @@ describe("kagi login", () => {
 			onPrompt: async prompt => {
 				promptMessage = prompt.message;
 				promptPlaceholder = prompt.placeholder;
-				return "kagi_test_key";
+				return "  KG_test_key  ";
 			},
 		});
 
 		expect(authUrl).toBe("https://kagi.com/settings/api");
-		expect(authInstructions).toContain("Copy your API key");
+		expect(authInstructions).toContain("Kagi Search API key");
+		expect(authInstructions).toContain("beta-only");
+		expect(authInstructions).toContain("support@kagi.com");
 		expect(promptMessage).toBe("Paste your Kagi API key");
-		expect(promptPlaceholder).toBe("kagi_...");
-		expect(apiKey).toBe("kagi_test_key");
+		expect(promptPlaceholder).toBe("KG_...");
+		expect(apiKey).toBe("KG_test_key");
 	});
 
 	it("rejects empty keys", async () => {

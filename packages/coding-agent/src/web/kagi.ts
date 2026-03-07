@@ -28,15 +28,23 @@ interface KagiRelatedSearchesObject {
 
 type KagiSearchObject = KagiSearchResultObject | KagiRelatedSearchesObject;
 
+interface KagiErrorEntry {
+	code?: number;
+	msg?: string;
+}
+
 interface KagiSearchResponse {
 	meta: {
 		id: string;
 	};
 	data: KagiSearchObject[];
-	error?: Array<{
-		code: number;
-		msg: string;
-	}>;
+	error?: KagiErrorEntry[];
+}
+
+interface KagiErrorResponse {
+	error?: string | KagiErrorEntry[];
+	message?: string;
+	detail?: string;
 }
 
 export class KagiApiError extends Error {
@@ -46,6 +54,54 @@ export class KagiApiError extends Error {
 		super(message);
 		this.name = "KagiApiError";
 		this.statusCode = statusCode;
+	}
+}
+
+function extractKagiErrorMessage(payload: unknown): string | null {
+	if (!payload || typeof payload !== "object") return null;
+	const record = payload as Record<string, unknown>;
+
+	for (const value of [record.message, record.detail]) {
+		if (typeof value === "string" && value.trim().length > 0) {
+			return value.trim();
+		}
+	}
+
+	if (typeof record.error === "string" && record.error.trim().length > 0) {
+		return record.error.trim();
+	}
+
+	if (Array.isArray(record.error)) {
+		for (const entry of record.error) {
+			if (!entry || typeof entry !== "object") continue;
+			const message = (entry as Record<string, unknown>).msg;
+			if (typeof message === "string" && message.trim().length > 0) {
+				return message.trim();
+			}
+		}
+	}
+
+	return null;
+}
+
+function createKagiApiError(statusCode: number, detail?: string): KagiApiError {
+	return new KagiApiError(
+		detail ? `Kagi API error (${statusCode}): ${detail}` : `Kagi API error (${statusCode})`,
+		statusCode,
+	);
+}
+
+function parseKagiErrorResponse(statusCode: number, responseText: string): KagiApiError {
+	const trimmedResponseText = responseText.trim();
+	if (trimmedResponseText.length === 0) {
+		return createKagiApiError(statusCode);
+	}
+
+	try {
+		const payload = JSON.parse(trimmedResponseText) as KagiErrorResponse;
+		return createKagiApiError(statusCode, extractKagiErrorMessage(payload) ?? trimmedResponseText);
+	} catch {
+		return createKagiApiError(statusCode, trimmedResponseText);
 	}
 }
 
@@ -127,14 +183,13 @@ export async function searchWithKagi(query: string, options: KagiSearchOptions =
 		signal: options.signal,
 	});
 	if (!response.ok) {
-		const errorText = await response.text();
-		throw new KagiApiError(`Kagi API error (${response.status}): ${errorText}`, response.status);
+		throw parseKagiErrorResponse(response.status, await response.text());
 	}
 
 	const payload = (await response.json()) as KagiSearchResponse;
 	if (payload.error && payload.error.length > 0) {
 		const firstError = payload.error[0];
-		throw new KagiApiError(`Kagi API error: ${firstError.msg}`, firstError.code);
+		throw createKagiApiError(firstError.code ?? response.status, extractKagiErrorMessage(payload) ?? undefined);
 	}
 
 	const sources: KagiSearchSource[] = [];

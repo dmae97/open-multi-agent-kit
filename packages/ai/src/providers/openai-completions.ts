@@ -1067,13 +1067,13 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAICompat 
 	const provider = model.provider;
 	const baseUrl = model.baseUrl;
 
+	const isCerebras = provider === "cerebras" || baseUrl.includes("cerebras.ai");
 	const isZai = provider === "zai" || baseUrl.includes("api.z.ai");
 	const isOpenRouterKimi = provider === "openrouter" && model.id.includes("moonshotai/kimi");
 	const isAlibaba = provider === "alibaba-coding-plan" || baseUrl.includes("dashscope");
 
 	const isNonStandard =
-		provider === "cerebras" ||
-		baseUrl.includes("cerebras.ai") ||
+		isCerebras ||
 		provider === "xai" ||
 		baseUrl.includes("api.x.ai") ||
 		provider === "mistral" ||
@@ -1096,7 +1096,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAICompat 
 		supportsStore: !isNonStandard,
 		supportsDeveloperRole: !isNonStandard,
 		supportsReasoningEffort: !isGrok && !isZai,
-		supportsUsageInStreaming: true,
+		supportsUsageInStreaming: !isCerebras,
 		supportsToolChoice: true,
 		maxTokensField: useMaxTokens ? "max_tokens" : "max_completion_tokens",
 		requiresToolResultName: isMistral,
