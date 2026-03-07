@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.9.4] - 2026-03-07
 ### Added
 
 - Automatic detection of Ollama model capabilities including reasoning/thinking support and vision input via the `/api/show` endpoint

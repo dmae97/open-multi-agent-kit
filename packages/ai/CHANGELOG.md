@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.9.4] - 2026-03-07
 ### Changed
 
 - Simplified API key credential storage to always replace existing credentials on re-login instead of accumulating multiple keys
