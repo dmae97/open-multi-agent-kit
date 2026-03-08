@@ -425,7 +425,9 @@ describe("fetch tool Kagi summarization toggle", () => {
 					content: "",
 				};
 			});
-			vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("blocked", { status: 500, statusText: "Blocked" }));
+			vi.spyOn(globalThis, "fetch").mockResolvedValue(
+				new Response("blocked", { status: 500, statusText: "Blocked" }),
+			);
 			vi.spyOn(toolsManager, "ensureTool").mockResolvedValue(undefined);
 			vi.spyOn(natives, "htmlToMarkdown").mockResolvedValue(renderedMarkdown);
 
@@ -466,7 +468,14 @@ describe("fetch tool Kagi summarization toggle", () => {
 					};
 				}
 
-				if ([`${pageUrl}.md`, "https://example.com/docs/reference/llms.txt", "https://example.com/docs/reference/llms.md", "https://example.com/docs/llms.md"].includes(requestedUrl)) {
+				if (
+					[
+						`${pageUrl}.md`,
+						"https://example.com/docs/reference/llms.txt",
+						"https://example.com/docs/reference/llms.md",
+						"https://example.com/docs/llms.md",
+					].includes(requestedUrl)
+				) {
 					return {
 						ok: false,
 						status: 404,
@@ -504,7 +513,9 @@ describe("fetch tool Kagi summarization toggle", () => {
 					content: "",
 				};
 			});
-			vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("blocked", { status: 500, statusText: "Blocked" }));
+			vi.spyOn(globalThis, "fetch").mockResolvedValue(
+				new Response("blocked", { status: 500, statusText: "Blocked" }),
+			);
 			vi.spyOn(toolsManager, "ensureTool").mockResolvedValue("/usr/bin/trafilatura");
 
 			const result = await tool.execute("fetch-section-llms", { url: pageUrl });
@@ -524,6 +535,4 @@ describe("fetch tool Kagi summarization toggle", () => {
 			execSpy.mockRestore();
 		}
 	});
-
-
 });

@@ -3199,7 +3199,6 @@ export class AgentSession {
 			additionalFocus: customInstructions,
 		});
 
-
 		// Create a promise that resolves when the agent completes
 		let handoffText: string | undefined;
 		const { promise: completionPromise, resolve: resolveCompletion } = Promise.withResolvers<void>();
@@ -3705,11 +3704,7 @@ export class AgentSession {
 	/**
 	 * Internal: Run auto-compaction with events.
 	 */
-	async #runAutoCompaction(
-		reason: "overflow" | "threshold",
-		willRetry: boolean,
-		deferred = false,
-	): Promise<void> {
+	async #runAutoCompaction(reason: "overflow" | "threshold", willRetry: boolean, deferred = false): Promise<void> {
 		const compactionSettings = this.settings.getGroup("compaction");
 		if (!compactionSettings.enabled || compactionSettings.strategy === "off") return;
 		const generation = this.#promptGeneration;
@@ -3724,7 +3719,6 @@ export class AgentSession {
 			);
 			return;
 		}
-
 
 		let action: "context-full" | "handoff" =
 			compactionSettings.strategy === "handoff" && reason !== "overflow" ? "handoff" : "context-full";

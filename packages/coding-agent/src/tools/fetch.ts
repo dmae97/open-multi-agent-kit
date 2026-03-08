@@ -105,17 +105,17 @@ function buildLlmEndpointCandidates(url: string): string[] {
 		if (parsed.pathname === "/") {
 			return [`${parsed.origin}/.well-known/llms.txt`, `${parsed.origin}/llms.txt`, `${parsed.origin}/llms.md`];
 		}
-	
+
 		const trimmedPath = parsed.pathname.replace(/\/+$/, "");
 		const segments = trimmedPath.split("/").filter(Boolean);
 		const scopeDepth = parsed.pathname.endsWith("/") ? segments.length : Math.max(segments.length - 1, 1);
 		const endpoints: string[] = [];
-	
+
 		for (let depth = scopeDepth; depth >= 1; depth--) {
 			const scope = `/${segments.slice(0, depth).join("/")}/`;
 			endpoints.push(`${parsed.origin}${scope}llms.txt`, `${parsed.origin}${scope}llms.md`);
 		}
-	
+
 		return endpoints;
 	} catch {
 		return [];
