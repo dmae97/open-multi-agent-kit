@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.9.10] - 2026-03-08
+
 ### Added
 
 - Added `identity_key` column to auth credentials storage for improved credential deduplication

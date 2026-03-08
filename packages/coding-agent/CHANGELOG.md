@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.9.10] - 2026-03-08
 ### Added
 
 - Added `env` parameter to bash tool to pass environment variables safely without shell re-parsing, preventing quote and special character bugs with multiline or untrusted values
