@@ -8,7 +8,8 @@ Performs structural AST-aware rewrites via native ast-grep.
 - Metavariables captured in each rewrite pattern (`$A`, `$$$ARGS`) are substituted into that entry's rewrite template
 - For variadic captures, use `$$$NAME` (not `$$NAME`)
 - Rewrite patterns must parse as valid AST for the target language; if a method or declaration does not parse standalone, wrap it in valid context or switch to a contextual `sel`
-- For TypeScript declarations, prefer patterns that tolerate annotations you do not care about, e.g. `async function $NAME($$$ARGS): $_ { $$$BODY }`
+- When using contextual `sel`, the match and replacement target the selected node, not the outer wrapper you used to make the pattern parse
+- For TypeScript declarations and methods, prefer patterns that tolerate annotations you do not care about, e.g. `async function $NAME($$$ARGS): $_ { $$$BODY }` or `class $_ { method($$$ARGS): $_ { $$$BODY } }`
 - Metavariables must be the sole content of an AST node; partial-text metavariables like `prefix$VAR` or `"hello $NAME"` do NOT work in patterns or rewrites
 - To delete matched code, use an empty `out` string: `{"pat":"console.log($$$)","out":""}`
 - Each matched rewrite is a 1:1 structural substitution; you cannot split one capture into multiple nodes or merge multiple captures into one node
@@ -32,8 +33,6 @@ Performs structural AST-aware rewrites via native ast-grep.
   `{"ops":[{"pat":"assertEqual($A, $B)","out":"assertEqual($B, $A)"}],"lang":"typescript","path":"tests/"}`
 - Rename a TypeScript function declaration while tolerating any return type annotation:
   `{"ops":[{"pat":"async function fetchData($$$ARGS): $_ { $$$BODY }","out":"async function loadData($$$ARGS): $_ { $$$BODY }"}],"sel":"function_declaration","lang":"typescript","path":"src/api.ts"}`
-- Rewrite a class method by matching it through valid class context:
-  `{"ops":[{"pat":"class $_ { execute($$$ARGS) { $$$BODY } }","out":"class $_ { run($$$ARGS) { $$$BODY } }"}],"sel":"method_definition","lang":"typescript","path":"src/runner.ts"}`
 - Convert Python print calls to logging:
   `{"ops":[{"pat":"print($$$ARGS)","out":"logger.info($$$ARGS)"}],"lang":"python","path":"src/"}`
 </examples>
