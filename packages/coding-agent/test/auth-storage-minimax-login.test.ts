@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { Snowflake } from "@oh-my-pi/pi-utils";
+import { hookFetch, Snowflake } from "@oh-my-pi/pi-utils";
 
 describe("AuthStorage MiniMax login", () => {
 	let tempDir: string;
@@ -14,13 +14,6 @@ describe("AuthStorage MiniMax login", () => {
 		tempDir = path.join(os.tmpdir(), `pi-test-auth-minimax-${Snowflake.next()}`);
 		fs.mkdirSync(tempDir, { recursive: true });
 		authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"));
-
-		vi.spyOn(globalThis, "fetch").mockResolvedValue(
-			new Response("{}", {
-				status: 200,
-				headers: { "Content-Type": "application/json" },
-			}),
-		);
 	});
 
 	afterEach(() => {
@@ -31,6 +24,10 @@ describe("AuthStorage MiniMax login", () => {
 	});
 
 	test("replaces existing MiniMax Coding Plan API key on relogin", async () => {
+		using _hook = hookFetch(
+			() => new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }),
+		);
+
 		const loginCallbacks = {
 			onAuth: () => {},
 			onPrompt: async () => currentApiKey,

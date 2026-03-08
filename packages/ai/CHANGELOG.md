@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added `identity_key` column to auth credentials storage for improved credential deduplication
@@ -15,7 +16,10 @@
 
 ### Fixed
 
+- Fixed API key credential matching to correctly identify when the same key is re-stored, preventing unnecessary row duplication on re-login
 - Fixed credential deduplication to correctly handle OAuth accounts with matching emails but different account IDs
+- Fixed API key replacement to reuse existing stored rows instead of accumulating disabled duplicates
+- Fixed auth storage to preserve newer recorded schema versions when opened by older binaries
 
 ## [13.9.8] - 2026-03-08
 ### Fixed

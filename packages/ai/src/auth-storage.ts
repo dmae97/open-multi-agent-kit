@@ -1972,6 +1972,20 @@ function resolveRowCredentialIdentityKey(provider: string, row: AuthRow): string
 	return credential?.type === "oauth" ? resolveCredentialIdentityKey(provider, credential) : null;
 }
 
+function matchesReplacementCredential(
+	provider: string,
+	existing: AuthCredential | null,
+	existingIdentityKey: string | null,
+	incoming: AuthCredential,
+): boolean {
+	if (!existing || existing.type !== incoming.type) return false;
+	if (incoming.type === "api_key") {
+		return existing.type === "api_key" && existing.key === incoming.key;
+	}
+	const incomingIdentityKey = resolveCredentialIdentityKey(provider, incoming);
+	return incomingIdentityKey !== null && incomingIdentityKey === existingIdentityKey;
+}
+
 function extractOAuthCredentialIdentifiers(credential: OAuthCredential): string[] {
 	const identifiers = new Set<string>();
 	const accountId = normalizeStoredAccountId(credential.accountId);
@@ -2135,6 +2149,7 @@ export class AuthCredentialStore {
 		}
 
 		const schemaVersion = this.#readAuthSchemaVersion() ?? this.#inferAuthSchemaVersion();
+		const shouldWriteSchemaVersion = schemaVersion <= AUTH_SCHEMA_VERSION;
 		if (schemaVersion > AUTH_SCHEMA_VERSION) {
 			logger.warn("AuthCredentialStore schema version mismatch", {
 				current: schemaVersion,
@@ -2146,7 +2161,9 @@ export class AuthCredentialStore {
 
 		this.#createAuthCredentialIndexes();
 		this.#backfillCredentialIdentityKeys();
-		this.#writeAuthSchemaVersion(AUTH_SCHEMA_VERSION);
+		if (shouldWriteSchemaVersion) {
+			this.#writeAuthSchemaVersion(AUTH_SCHEMA_VERSION);
+		}
 	}
 
 	#authCredentialsTableExists(): boolean {
@@ -2301,6 +2318,7 @@ export class AuthCredentialStore {
 			const existingRows = this.#listActiveByProviderStmt.all(providerName) as AuthRow[];
 			const existing = existingRows.map(row => ({
 				id: row.id,
+				credential: deserializeCredential(row),
 				identityKey: resolveRowCredentialIdentityKey(providerName, row),
 			}));
 
@@ -2310,10 +2328,11 @@ export class AuthCredentialStore {
 			for (const credential of items) {
 				const serialized = serializeCredential(credential);
 				if (!serialized) continue;
-				const identityKey = resolveCredentialIdentityKey(providerName, credential);
-				const match = identityKey
-					? existing.find(entry => !matchedExistingIds.has(entry.id) && entry.identityKey === identityKey)
-					: null;
+				const match = existing.find(
+					entry =>
+						!matchedExistingIds.has(entry.id) &&
+						matchesReplacementCredential(providerName, entry.credential, entry.identityKey, credential),
+				);
 				if (match) {
 					matchedExistingIds.add(match.id);
 					this.#updateStmt.run(serialized.credentialType, serialized.data, serialized.identityKey, match.id);

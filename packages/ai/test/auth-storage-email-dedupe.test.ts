@@ -76,6 +76,18 @@ function readStoredIdentityRows(
 	}
 }
 
+function readAuthSchemaVersion(dbPath: string): number | null {
+	const db = new Database(dbPath, { readonly: true });
+	try {
+		const row = db.prepare("SELECT version FROM auth_schema_version WHERE id = 1").get() as
+			| { version?: number }
+			| undefined;
+		return typeof row?.version === "number" ? row.version : null;
+	} finally {
+		db.close();
+	}
+}
+
 describe("AuthStorage openai-codex email dedupe", () => {
 	let tempDir = "";
 	let dbPath = "";
@@ -235,6 +247,38 @@ describe("AuthStorage openai-codex email dedupe", () => {
 
 		expect(store.listAuthCredentials("openai-codex")).toHaveLength(0);
 		expect(readDisabledCauses(dbPath, "openai-codex")).toEqual([disabledCause]);
+	});
+
+	it("preserves newer auth schema versions instead of downgrading them", async () => {
+		if (!tempDir) throw new Error("test setup failed");
+
+		const futureDbPath = path.join(tempDir, "future-schema-agent.db");
+		const futureDb = new Database(futureDbPath);
+		futureDb.exec(`
+			CREATE TABLE auth_schema_version (
+				id INTEGER PRIMARY KEY CHECK (id = 1),
+				version INTEGER NOT NULL
+			);
+			INSERT INTO auth_schema_version(id, version) VALUES (1, 4);
+			CREATE TABLE auth_credentials (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				provider TEXT NOT NULL,
+				credential_type TEXT NOT NULL,
+				data TEXT NOT NULL,
+				disabled_cause TEXT DEFAULT NULL,
+				identity_key TEXT DEFAULT NULL,
+				created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+				updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+			);
+		`);
+		futureDb.close();
+
+		const reopenedStore = await AuthCredentialStore.open(futureDbPath);
+		try {
+			expect(readAuthSchemaVersion(futureDbPath)).toBe(4);
+		} finally {
+			reopenedStore.close();
+		}
 	});
 
 	it("backfills identity_key when migrating v1 auth schema", async () => {

@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
@@ -17,14 +18,28 @@ type MockedApiKeyLogin = {
 
 const mockedLoginKagi = loginKagi as typeof loginKagi & MockedApiKeyLogin;
 
+function countCredentialRows(dbPath: string, provider: string): number {
+	const db = new Database(dbPath, { readonly: true });
+	try {
+		const row = db.prepare("SELECT COUNT(*) AS count FROM auth_credentials WHERE provider = ?").get(provider) as
+			| { count?: number }
+			| undefined;
+		return row?.count ?? 0;
+	} finally {
+		db.close();
+	}
+}
+
 describe("AuthStorage api-key login replacement", () => {
 	let tempDir = "";
+	let dbPath = "";
 	let store: AuthCredentialStore | null = null;
 	let authStorage: AuthStorage | null = null;
 
 	beforeEach(async () => {
 		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pi-ai-auth-api-key-login-"));
-		store = await AuthCredentialStore.open(path.join(tempDir, "agent.db"));
+		dbPath = path.join(tempDir, "agent.db");
+		store = await AuthCredentialStore.open(dbPath);
 		authStorage = new AuthStorage(store);
 		mockedLoginKagi.mockReset();
 	});
@@ -34,16 +49,17 @@ describe("AuthStorage api-key login replacement", () => {
 		store?.close();
 		store = null;
 		authStorage = null;
+		dbPath = "";
 		if (tempDir) {
 			await fs.rm(tempDir, { recursive: true, force: true });
 			tempDir = "";
 		}
 	});
 
-	it("replaces the active api-key credential on re-login", async () => {
-		if (!store || !authStorage) throw new Error("test setup failed");
+	it("reuses the stored api-key row when re-login returns the same key", async () => {
+		if (!store || !authStorage || !dbPath) throw new Error("test setup failed");
 
-		mockedLoginKagi.mockResolvedValueOnce("first-kagi-key").mockResolvedValueOnce("second-kagi-key");
+		mockedLoginKagi.mockResolvedValueOnce("same-kagi-key").mockResolvedValueOnce("same-kagi-key");
 
 		const controller = {
 			onAuth: () => {},
@@ -53,6 +69,7 @@ describe("AuthStorage api-key login replacement", () => {
 		await authStorage.login("kagi", controller);
 		await authStorage.login("kagi", controller);
 
+		expect(countCredentialRows(dbPath, "kagi")).toBe(1);
 		const credentials = store.listAuthCredentials("kagi");
 		expect(credentials).toHaveLength(1);
 		const [stored] = credentials;
@@ -60,8 +77,8 @@ describe("AuthStorage api-key login replacement", () => {
 		if (!stored || stored.credential.type !== "api_key") {
 			throw new Error("expected stored api-key credential");
 		}
-		expect(stored.credential.key).toBe("second-kagi-key");
-		expect(store.getApiKey("kagi")).toBe("second-kagi-key");
-		expect(await authStorage.getApiKey("kagi", "session-kagi-relogin")).toBe("second-kagi-key");
+		expect(stored.credential.key).toBe("same-kagi-key");
+		expect(store.getApiKey("kagi")).toBe("same-kagi-key");
+		expect(await authStorage.getApiKey("kagi", "session-kagi-relogin")).toBe("same-kagi-key");
 	});
 });
