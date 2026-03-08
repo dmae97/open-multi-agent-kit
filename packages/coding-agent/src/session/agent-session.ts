@@ -89,6 +89,7 @@ import { getCurrentThemeName, theme } from "../modes/theme/theme";
 import { normalizeDiff, normalizeToLF, ParseError, previewPatch, stripBom } from "../patch";
 import type { PlanModeState } from "../plan-mode/state";
 import autoHandoffThresholdFocusPrompt from "../prompts/system/auto-handoff-threshold-focus.md" with { type: "text" };
+import handoffDocumentPrompt from "../prompts/system/handoff-document.md" with { type: "text" };
 import planModeActivePrompt from "../prompts/system/plan-mode-active.md" with { type: "text" };
 import planModeReferencePrompt from "../prompts/system/plan-mode-reference.md" with { type: "text" };
 import planModeToolDecisionReminderPrompt from "../prompts/system/plan-mode-tool-decision-reminder.md" with {
@@ -260,6 +261,7 @@ export interface HandoffResult {
 interface HandoffOptions {
 	autoTriggered?: boolean;
 	signal?: AbortSignal;
+	skipPostPromptRecoveryWait?: boolean;
 }
 
 /** Internal marker for hook messages queued through the agent loop */
@@ -397,7 +399,7 @@ export class AgentSession {
 	#streamingEditAbortTriggered = false;
 	#streamingEditCheckedLineCounts = new Map<string, number>();
 	#streamingEditFileCache = new Map<string, string>();
-	#promptInFlight = false;
+	#promptInFlightCount = 0;
 	#obfuscator: SecretObfuscator | undefined;
 	#pendingActionStore: PendingActionStore | undefined;
 	#checkpointState: CheckpointState | undefined = undefined;
@@ -1560,7 +1562,7 @@ export class AgentSession {
 
 	/** Whether agent is currently streaming a response */
 	get isStreaming(): boolean {
-		return this.agent.state.isStreaming || this.#promptInFlight;
+		return this.agent.state.isStreaming || this.#promptInFlightCount > 0;
 	}
 
 	/** Wait until streaming and deferred recovery work are fully settled. */
@@ -1999,7 +2001,7 @@ export class AgentSession {
 			skipPostPromptRecoveryWait?: boolean;
 		},
 	): Promise<void> {
-		this.#promptInFlight = true;
+		this.#promptInFlightCount++;
 		const generation = this.#promptGeneration;
 		try {
 			// Flush any pending bash messages before the new prompt
@@ -2109,7 +2111,7 @@ export class AgentSession {
 				await this.#waitForPostPromptRecovery();
 			}
 		} finally {
-			this.#promptInFlight = false;
+			this.#promptInFlightCount = Math.max(0, this.#promptInFlightCount - 1);
 		}
 	}
 
@@ -2508,11 +2510,10 @@ export class AgentSession {
 		this.#cancelPostPromptTasks();
 		this.agent.abort();
 		await this.agent.waitForIdle();
-		// Clear promptInFlight: waitForIdle resolves when the agent loop's finally
-		// block runs (#resolveRunningPrompt), but #promptWithMessage's finally
-		// (#promptInFlight = false) fires on a later microtask. Without this,
-		// isStreaming stays true and a subsequent prompt() throws.
-		this.#promptInFlight = false;
+		// Clear prompt-in-flight state: waitForIdle resolves when the agent loop's finally
+		// block runs, but nested prompt setup/finalizers may still be unwinding. Without this,
+		// a subsequent prompt() can incorrectly observe the session as busy after an abort.
+		this.#promptInFlightCount = 0;
 	}
 
 	/**
@@ -3194,41 +3195,10 @@ export class AgentSession {
 		}
 
 		// Build the handoff prompt
-		let handoffPrompt = `Write a comprehensive handoff document that will allow another instance of yourself to seamlessly continue this work. The document should capture everything needed to resume without access to this conversation.
+		const handoffPrompt = renderPromptTemplate(handoffDocumentPrompt, {
+			additionalFocus: customInstructions,
+		});
 
-Use this format:
-
-## Goal
-[What the user is trying to accomplish]
-
-## Constraints & Preferences
-- [Any constraints, preferences, or requirements mentioned]
-
-## Progress
-### Done
-- [x] [Completed tasks with specifics]
-
-### In Progress
-- [ ] [Current work if any]
-
-### Pending
-- [ ] [Tasks mentioned but not started]
-
-## Key Decisions
-- **[Decision]**: [Rationale]
-
-## Critical Context
-- [Code snippets, file paths, error messages, or data essential to continue]
-- [Repository state if relevant]
-
-## Next Steps
-1. [What should happen next]
-
-Be thorough - include exact file paths, function names, error messages, and technical details. Output ONLY the handoff document, no other text.`;
-
-		if (customInstructions) {
-			handoffPrompt += `\n\nAdditional focus: ${customInstructions}`;
-		}
 
 		// Create a promise that resolves when the agent completes
 		let handoffText: string | undefined;
@@ -3273,11 +3243,16 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			if (handoffSignal.aborted) {
 				throw new Error("Handoff cancelled");
 			}
-			await this.prompt(handoffPrompt, {
-				expandPromptTemplates: false,
-				synthetic: true,
-				skipCompactionCheck: true,
-			});
+			await this.#promptWithMessage(
+				{
+					role: "developer",
+					content: [{ type: "text", text: handoffPrompt }],
+					attribution: "agent",
+					timestamp: Date.now(),
+				},
+				handoffPrompt,
+				{ skipCompactionCheck: true, skipPostPromptRecoveryWait: options?.skipPostPromptRecoveryWait },
+			);
 			await completionPromise;
 
 			if (handoffCancelled || handoffSignal.aborted) {
@@ -3730,11 +3705,27 @@ Be thorough - include exact file paths, function names, error messages, and tech
 	/**
 	 * Internal: Run auto-compaction with events.
 	 */
-	async #runAutoCompaction(reason: "overflow" | "threshold", willRetry: boolean): Promise<void> {
+	async #runAutoCompaction(
+		reason: "overflow" | "threshold",
+		willRetry: boolean,
+		deferred = false,
+	): Promise<void> {
 		const compactionSettings = this.settings.getGroup("compaction");
-
 		if (!compactionSettings.enabled || compactionSettings.strategy === "off") return;
 		const generation = this.#promptGeneration;
+		if (!deferred && reason !== "overflow" && compactionSettings.strategy === "handoff") {
+			this.#schedulePostPromptTask(
+				async signal => {
+					await Promise.resolve();
+					if (signal.aborted) return;
+					await this.#runAutoCompaction(reason, willRetry, true);
+				},
+				{ generation },
+			);
+			return;
+		}
+
+
 		let action: "context-full" | "handoff" =
 			compactionSettings.strategy === "handoff" && reason !== "overflow" ? "handoff" : "context-full";
 		await this.#emitSessionEvent({ type: "auto_compaction_start", reason, action });
@@ -3750,6 +3741,7 @@ Be thorough - include exact file paths, function names, error messages, and tech
 				const handoffResult = await this.handoff(handoffFocus, {
 					autoTriggered: true,
 					signal: this.#autoCompactionAbortController.signal,
+					skipPostPromptRecoveryWait: true,
 				});
 				if (!handoffResult) {
 					const aborted = this.#autoCompactionAbortController.signal.aborted;
@@ -4028,15 +4020,25 @@ Be thorough - include exact file paths, function names, error messages, and tech
 			await this.#emitSessionEvent({ type: "auto_compaction_end", action, result, aborted: false, willRetry });
 
 			if (!willRetry && compactionSettings.autoContinue !== false) {
-				await this.#promptWithMessage(
-					{
-						role: "developer",
-						content: [{ type: "text", text: "Continue if you have next steps." }],
-						attribution: "agent",
-						timestamp: Date.now(),
+				const continuePrompt = async () => {
+					await this.#promptWithMessage(
+						{
+							role: "developer",
+							content: [{ type: "text", text: "Continue if you have next steps." }],
+							attribution: "agent",
+							timestamp: Date.now(),
+						},
+						"Continue if you have next steps.",
+						{ skipPostPromptRecoveryWait: true },
+					);
+				};
+				this.#schedulePostPromptTask(
+					async signal => {
+						await Promise.resolve();
+						if (signal.aborted) return;
+						await continuePrompt();
 					},
-					"Continue if you have next steps.",
-					{ skipPostPromptRecoveryWait: true },
+					{ generation },
 				);
 			}
 

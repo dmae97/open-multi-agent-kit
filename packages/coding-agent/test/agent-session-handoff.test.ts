@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
 import { Agent } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage } from "@oh-my-pi/pi-ai";
+import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
 import { getBundledModel } from "@oh-my-pi/pi-ai/models";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
@@ -9,6 +10,9 @@ import { AgentSession, type AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { TempDir } from "@oh-my-pi/pi-utils";
+
+class MockAssistantStream extends AssistantMessageEventStream {}
+
 
 describe("AgentSession handoff", () => {
 	let tempDir: TempDir;
@@ -112,7 +116,7 @@ describe("AgentSession handoff", () => {
 			timestamp: Date.now(),
 		};
 
-		const promptSpy = vi.spyOn(session, "prompt").mockImplementation(async () => {
+		const promptSpy = vi.spyOn(session.agent, "prompt").mockImplementation(async () => {
 			session.agent.replaceMessages([handoffAssistant]);
 			session.agent.emitExternalEvent({ type: "message_end", message: handoffAssistant });
 			session.agent.emitExternalEvent({ type: "agent_end", messages: [handoffAssistant] });
@@ -122,10 +126,6 @@ describe("AgentSession handoff", () => {
 		await Bun.sleep(20);
 
 		expect(promptSpy).toHaveBeenCalledTimes(1);
-		expect(promptSpy).toHaveBeenCalledWith(
-			expect.any(String),
-			expect.objectContaining({ skipCompactionCheck: true }),
-		);
 		expect(result?.document).toBe(handoffText);
 		expect(events.filter(event => event.type === "auto_compaction_start")).toHaveLength(0);
 		expect(events.filter(event => event.type === "auto_compaction_end")).toHaveLength(0);
@@ -261,13 +261,131 @@ describe("AgentSession handoff", () => {
 		expect(handoffSpy).toHaveBeenCalledTimes(1);
 		expect(handoffSpy).toHaveBeenCalledWith(expect.stringContaining("Threshold-triggered maintenance"), {
 			autoTriggered: true,
-			signal: expect.any(AbortSignal),
+			signal: expect.anything(),
+			skipPostPromptRecoveryWait: true,
 		});
 		expect(events.filter(event => event.type === "auto_compaction_start")).toHaveLength(1);
 		const endEvents = events.filter(event => event.type === "auto_compaction_end");
 		expect(endEvents).toHaveLength(1);
 		expect(endEvents[0]).toMatchObject({ type: "auto_compaction_end", aborted: false, willRetry: false });
 	});
+
+	it("completes threshold-triggered auto-handoff while the original prompt is still unwinding", async () => {
+		authStorage.setRuntimeApiKey("anthropic", "test-key");
+		const model = getBundledModel("anthropic", "claude-sonnet-4-5");
+		if (!model) {
+			throw new Error("Expected built-in anthropic model to exist");
+		}
+
+		await session.dispose();
+		sessionManager = SessionManager.create(tempDir.path());
+		events = [];
+		let streamCallCount = 0;
+
+		sessionManager.appendMessage({
+			role: "user",
+			content: [{ type: "text", text: "seed" }],
+			timestamp: Date.now() - 2,
+		});
+		sessionManager.appendMessage({
+			role: "assistant",
+			content: [{ type: "text", text: "seed response" }],
+			api: model.api,
+			provider: model.provider,
+			model: model.id,
+			stopReason: "stop",
+			usage: {
+				input: 16,
+				output: 8,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 24,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			timestamp: Date.now() - 1,
+		});
+
+		const thresholdAssistant: AssistantMessage = {
+			role: "assistant",
+			content: [{ type: "text", text: "maintenance trigger" }],
+			api: model.api,
+			provider: model.provider,
+			model: model.id,
+			stopReason: "stop",
+			usage: {
+				input: 190_000,
+				output: 1_000,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 191_000,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			timestamp: Date.now(),
+		};
+		const handoffAssistant: AssistantMessage = {
+			role: "assistant",
+			content: [{ type: "text", text: "## Goal\nContinue from here" }],
+			api: model.api,
+			provider: model.provider,
+			model: model.id,
+			stopReason: "stop",
+			usage: {
+				input: 8_000,
+				output: 500,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 8_500,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			timestamp: Date.now() + 1,
+		};
+
+		const agent = new Agent({
+			getApiKey: () => "test-key",
+			initialState: {
+				model,
+				systemPrompt: "Test",
+				tools: [],
+				messages: [],
+			},
+			streamFn: () => {
+				streamCallCount++;
+				const stream = new MockAssistantStream();
+				queueMicrotask(() => {
+					const message = streamCallCount === 1 ? thresholdAssistant : handoffAssistant;
+					stream.push({ type: "start", partial: message });
+					stream.push({ type: "done", reason: "stop", message });
+				});
+				return stream;
+			},
+		});
+
+		session = new AgentSession({
+			agent,
+			sessionManager,
+			settings: Settings.isolated({
+				"compaction.enabled": true,
+				"compaction.autoContinue": false,
+				"compaction.strategy": "handoff",
+				"compaction.thresholdPercent": 1,
+				"contextPromotion.enabled": false,
+			}),
+			modelRegistry,
+		});
+		session.subscribe(event => {
+			events.push(event);
+		});
+
+		await session.prompt("Trigger threshold handoff");
+
+		expect(streamCallCount).toBe(2);
+		const endEvents = events.filter(event => event.type === "auto_compaction_end");
+		expect(endEvents).toHaveLength(1);
+		expect(endEvents[0]).toMatchObject({ type: "auto_compaction_end", action: "handoff", aborted: false });
+		expect(endEvents[0]).not.toMatchObject({ errorMessage: expect.any(String) });
+		expect(sessionManager.getEntries().filter(entry => entry.type === "compaction")).toHaveLength(0);
+	});
+
 
 	it("falls back to context-full when handoff strategy returns no document", async () => {
 		session.settings.set("compaction.strategy", "handoff");
@@ -344,7 +462,7 @@ describe("AgentSession handoff", () => {
 			timestamp: Date.now(),
 		};
 
-		vi.spyOn(session, "prompt").mockImplementation(async () => {
+		vi.spyOn(session.agent, "prompt").mockImplementation(async () => {
 			session.agent.replaceMessages([handoffAssistant]);
 			session.agent.emitExternalEvent({ type: "message_end", message: handoffAssistant });
 			session.agent.emitExternalEvent({ type: "agent_end", messages: [handoffAssistant] });
@@ -384,7 +502,7 @@ describe("AgentSession handoff", () => {
 			timestamp: Date.now(),
 		};
 
-		vi.spyOn(session, "prompt").mockImplementation(async () => {
+		vi.spyOn(session.agent, "prompt").mockImplementation(async () => {
 			session.agent.replaceMessages([handoffAssistant]);
 			session.agent.emitExternalEvent({ type: "message_end", message: handoffAssistant });
 			session.agent.emitExternalEvent({ type: "agent_end", messages: [handoffAssistant] });
@@ -398,7 +516,7 @@ describe("AgentSession handoff", () => {
 		const controller = new AbortController();
 		controller.abort();
 
-		const promptSpy = vi.spyOn(session, "prompt");
+		const promptSpy = vi.spyOn(session.agent, "prompt");
 		const abortSpy = vi.spyOn(session.agent, "abort");
 
 		await expect(session.handoff(undefined, { signal: controller.signal })).rejects.toThrow("Handoff cancelled");
@@ -409,7 +527,7 @@ describe("AgentSession handoff", () => {
 	it("aborts handoff generation when provided signal is cancelled", async () => {
 		const controller = new AbortController();
 		const { promise: promptPromise, resolve: resolvePrompt } = Promise.withResolvers<void>();
-		const promptSpy = vi.spyOn(session, "prompt").mockImplementation(async () => {
+		const promptSpy = vi.spyOn(session.agent, "prompt").mockImplementation(async () => {
 			await promptPromise;
 		});
 		const abortSpy = vi.spyOn(session.agent, "abort").mockImplementation(() => {

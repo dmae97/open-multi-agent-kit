@@ -1,8 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+
+### Added
+
+- Added `skipPostPromptRecoveryWait` option to handoff operations to defer recovery work until after handoff completion
+- Added deferred auto-compaction scheduling to allow threshold-triggered handoffs to complete while the original prompt is still unwinding
+
 ### Changed
 
+- Extracted handoff document template to dedicated prompt file for improved maintainability and template variable support
+- Changed handoff prompt generation to use template rendering with support for custom focus instructions
+- Refactored internal prompt-in-flight tracking from boolean flag to counter to properly handle nested prompt operations
 - Moved llms.txt endpoint discovery to fallback strategy when rendered page content is low quality, prioritizing page-specific content over site-wide files
 - Enhanced llms.txt endpoint detection to scope candidates to the requested URL path, searching section-specific files before site-wide ones
 
