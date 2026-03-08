@@ -141,7 +141,9 @@ describe("ast_edit tool schema", () => {
 			});
 
 			const text = previewResult.content.find(content => content.type === "text")?.text ?? "";
-			const details = previewResult.details as { totalReplacements?: number; fileReplacements?: Array<{ path: string; count: number }> } | undefined;
+			const details = previewResult.details as
+				| { totalReplacements?: number; fileReplacements?: Array<{ path: string; count: number }> }
+				| undefined;
 
 			expect(text).toContain("## └─ root.ts (1 replacement)");
 			expect(text).toContain("## └─ child.ts (1 replacement)");
@@ -162,8 +164,12 @@ describe("ast_edit tool schema", () => {
 
 			expect(await Bun.file(path.join(sourceDir, "root.ts")).text()).toContain("modernWrap(rootValue, rootArg)");
 			expect(await Bun.file(path.join(nestedDir, "child.ts")).text()).toContain("modernWrap(childValue, childArg)");
-			expect(await Bun.file(path.join(sourceDir, "ignore.js")).text()).toContain("legacyWrap(ignoreValue, ignoreArg)");
-			expect(await Bun.file(path.join(tempDir, "outside.ts")).text()).toContain("legacyWrap(outsideValue, outsideArg)");
+			expect(await Bun.file(path.join(sourceDir, "ignore.js")).text()).toContain(
+				"legacyWrap(ignoreValue, ignoreArg)",
+			);
+			expect(await Bun.file(path.join(tempDir, "outside.ts")).text()).toContain(
+				"legacyWrap(outsideValue, outsideArg)",
+			);
 		} finally {
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}

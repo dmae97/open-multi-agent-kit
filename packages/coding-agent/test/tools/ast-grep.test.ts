@@ -28,7 +28,7 @@ describe("ast_grep parse errors", () => {
 			expect(tool).toBeDefined();
 
 			const result = await tool!.execute("ast-grep-parse", {
-				patterns: ["someUnlikelyCall($A)", "anotherUnlikelyCall($A)"],
+				pat: ["someUnlikelyCall($A)", "anotherUnlikelyCall($A)"],
 				lang: "typescript",
 				path: filePath,
 			});
@@ -64,8 +64,8 @@ describe("ast_grep parse errors", () => {
 			expect(tool).toBeDefined();
 
 			const result = await tool!.execute("ast-grep-glob", {
-				patterns: ["providerOptions"],
-				selector: "identifier",
+				pat: ["providerOptions"],
+				sel: "identifier",
 				lang: "typescript",
 				path: `${packagesDir}/pkg-*/src`,
 				glob: "**/*.ts",
@@ -84,5 +84,4 @@ describe("ast_grep parse errors", () => {
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}
 	});
-
 });

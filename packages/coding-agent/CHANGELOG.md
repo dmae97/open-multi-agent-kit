@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added `glob` parameter to `ast_grep` and `ast_edit` tools for additional glob filtering relative to the `path` parameter
@@ -8,6 +9,9 @@
 
 ### Changed
 
+- Renamed `patterns` parameter to `pat` in `ast_grep` tool for consistency
+- Renamed `selector` parameter to `sel` in `ast_grep` and `ast_edit` tools for brevity
+- Updated tool documentation with expanded guidance on AST pattern syntax, metavariable usage, and contextual matching strategies
 - Updated `grep` tool to combine glob patterns from `path` and `glob` parameters instead of throwing an error when both are provided
 
 ## [13.9.4] - 2026-03-07

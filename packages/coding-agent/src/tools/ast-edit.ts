@@ -39,7 +39,7 @@ const astEditSchema = Type.Object({
 	lang: Type.Optional(Type.String({ description: "Language override" })),
 	path: Type.Optional(Type.String({ description: "File, directory, or glob pattern to rewrite (default: cwd)" })),
 	glob: Type.Optional(Type.String({ description: "Optional glob filter relative to path" })),
-	selector: Type.Optional(Type.String({ description: "Optional selector for contextual pattern mode" })),
+	sel: Type.Optional(Type.String({ description: "Optional selector for contextual pattern mode" })),
 	limit: Type.Optional(Type.Number({ description: "Max total replacements" })),
 });
 
@@ -134,7 +134,7 @@ export class AstEditTool implements AgentTool<typeof astEditSchema, AstEditToolD
 				lang: params.lang?.trim(),
 				path: resolvedSearchPath,
 				glob: globFilter,
-				selector: params.selector?.trim(),
+				selector: params.sel?.trim(),
 				dryRun: true,
 				maxReplacements,
 				maxFiles,
@@ -278,7 +278,7 @@ export class AstEditTool implements AgentTool<typeof astEditSchema, AstEditToolD
 							lang: params.lang?.trim(),
 							path: resolvedSearchPath,
 							glob: globFilter,
-							selector: params.selector?.trim(),
+							selector: params.sel?.trim(),
 							dryRun: false,
 							maxReplacements,
 							maxFiles,
@@ -321,7 +321,7 @@ interface AstEditRenderArgs {
 	ops?: Array<{ pat?: string; out?: string }>;
 	lang?: string;
 	path?: string;
-	selector?: string;
+	sel?: string;
 	limit?: number;
 }
 
