@@ -132,6 +132,16 @@ describe("Input component", () => {
 		setKittyProtocolActive(false);
 	});
 
+	it("inserts NumLock keypad digits from Kitty CSI-u input", () => {
+		setKittyProtocolActive(true);
+		const input = setupAtEnd("a");
+
+		input.handleInput("\x1b[57407;129u");
+		expect(input.getValue()).toBe("a8");
+
+		setKittyProtocolActive(false);
+	});
+
 	it("never renders a line wider than the terminal width (wide chars)", () => {
 		const input = new Input();
 		input.focused = true;

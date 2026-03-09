@@ -78,6 +78,8 @@ type Letter =
 	| "y"
 	| "z";
 
+type Digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
+
 type SymbolKey =
 	| "`"
 	| "-"
@@ -143,7 +145,7 @@ type SpecialKey =
 	| "f11"
 	| "f12";
 
-type BaseKey = Letter | SymbolKey | SpecialKey;
+type BaseKey = Letter | Digit | SymbolKey | SpecialKey;
 
 /**
  * Union type of all valid key identifiers.
@@ -184,6 +186,24 @@ interface ParsedKittySequence {
 // Format: \x1b[...;modifier:event_type<terminator> where terminator is u, ~, or A-F/H
 const KITTY_RELEASE_PATTERN = /^\x1b\[[\d:;]*:3[u~ABCDHF]$/;
 const KITTY_REPEAT_PATTERN = /^\x1b\[[\d:;]*:2[u~ABCDHF]$/;
+const KITTY_CSI_U_PATTERN = /^\x1b\[(\d+)(?::(\d*))?(?::(\d+))?(?:;(\d+))?(?::(\d+))?(?:;([\d:]*))?u$/;
+const KITTY_MOD_SHIFT = 1;
+const KITTY_MOD_ALT = 2;
+const KITTY_MOD_CTRL = 4;
+const KITTY_MOD_NUM_LOCK = 128;
+const KITTY_NUMPAD_TEXT: Record<number, string> = {
+	57399: "0",
+	57400: "1",
+	57401: "2",
+	57402: "3",
+	57403: "4",
+	57404: "5",
+	57405: "6",
+	57406: "7",
+	57407: "8",
+	57408: "9",
+	57409: ".",
+};
 
 /**
  * Check if the input is a key release event.
@@ -235,6 +255,81 @@ export function parseKittySequence(data: string): ParsedKittySequence | null {
 		modifier: result.modifier,
 		eventType: result.eventType,
 	};
+}
+
+function hasControlChars(data: string): boolean {
+	return [...data].some(ch => {
+		const code = ch.charCodeAt(0);
+		return code < 32 || code === 0x7f || (code >= 0x80 && code <= 0x9f);
+	});
+}
+
+function decodeKittyPrintable(data: string): string | undefined {
+	const match = data.match(KITTY_CSI_U_PATTERN);
+	if (!match) return undefined;
+
+	const codepoint = Number.parseInt(match[1] ?? "", 10);
+	if (!Number.isFinite(codepoint)) return undefined;
+
+	if (match[5] === "3") return undefined;
+
+	const shiftedKey = match[2] && match[2].length > 0 ? Number.parseInt(match[2], 10) : undefined;
+	const modValue = match[4] ? Number.parseInt(match[4], 10) : 1;
+	const modifier = Number.isFinite(modValue) ? modValue - 1 : 0;
+	const effectiveMod = modifier & ~(64 + 128);
+
+	if (effectiveMod & (KITTY_MOD_ALT | KITTY_MOD_CTRL)) return undefined;
+
+	const textField = match[6];
+	if (textField && textField.length > 0) {
+		const codepoints = textField
+			.split(":")
+			.filter(Boolean)
+			.map(value => Number.parseInt(value, 10))
+			.filter(value => Number.isFinite(value) && value >= 32);
+		if (codepoints.length > 0) {
+			try {
+				return String.fromCodePoint(...codepoints);
+			} catch {
+				return undefined;
+			}
+		}
+	}
+
+	if (effectiveMod === 0 && modifier & KITTY_MOD_NUM_LOCK) {
+		const numpadText = KITTY_NUMPAD_TEXT[codepoint];
+		if (numpadText) return numpadText;
+	}
+
+	let effectiveCodepoint = codepoint;
+	if (effectiveMod & KITTY_MOD_SHIFT && typeof shiftedKey === "number") {
+		effectiveCodepoint = shiftedKey;
+	}
+
+	if (effectiveCodepoint >= 0xe000 && effectiveCodepoint <= 0xf8ff) {
+		return undefined;
+	}
+
+	if (!Number.isFinite(effectiveCodepoint) || effectiveCodepoint < 32) return undefined;
+
+	try {
+		return String.fromCodePoint(effectiveCodepoint);
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Extract printable text from raw terminal input.
+ *
+ * Handles Kitty CSI-u text-producing keys so text-entry components can treat
+ * keypad digits and shifted symbols the same as direct character input.
+ */
+export function extractPrintableText(data: string): string | undefined {
+	const kittyText = decodeKittyPrintable(data);
+	if (kittyText) return kittyText;
+	if (data.length === 0 || hasControlChars(data)) return undefined;
+	return data;
 }
 
 /**

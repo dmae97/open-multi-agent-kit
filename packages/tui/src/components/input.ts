@@ -1,5 +1,6 @@
 import { BracketedPasteHandler } from "../bracketed-paste";
 import { getEditorKeybindings } from "../keybindings";
+import { extractPrintableText } from "../keys";
 import { KillRing } from "../kill-ring";
 import { type Component, CURSOR_MARKER, type Focusable } from "../tui";
 import {
@@ -169,14 +170,10 @@ export class Input implements Component, Focusable {
 			return;
 		}
 
-		// Regular character input - accept printable characters including Unicode,
-		// but reject control characters (C0: 0x00-0x1F, DEL: 0x7F, C1: 0x80-0x9F)
-		const hasControlChars = [...data].some(ch => {
-			const code = ch.charCodeAt(0);
-			return code < 32 || code === 0x7f || (code >= 0x80 && code <= 0x9f);
-		});
-		if (!hasControlChars) {
-			this.#insertCharacter(data);
+		// Regular character input, including Kitty CSI-u text-producing sequences.
+		const printableText = extractPrintableText(data);
+		if (printableText) {
+			this.#insertCharacter(printableText);
 		}
 	}
 

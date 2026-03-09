@@ -1,5 +1,12 @@
 import { copyToClipboard, sanitizeText } from "@oh-my-pi/pi-natives";
-import { type Component, matchesKey, padding, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
+import {
+	type Component,
+	extractPrintableText,
+	matchesKey,
+	padding,
+	truncateToWidth,
+	visibleWidth,
+} from "@oh-my-pi/pi-tui";
 import { theme } from "../modes/theme/theme";
 import { replaceTabs } from "../tools/render-utils";
 import {
@@ -582,13 +589,10 @@ export class DebugLogViewerComponent implements Component {
 			return;
 		}
 
-		const hasControlChars = [...keyData].some(ch => {
-			const code = ch.charCodeAt(0);
-			return code < 32 || code === 0x7f || (code >= 0x80 && code <= 0x9f);
-		});
-		if (!hasControlChars && keyData.length > 0) {
+		const printableText = extractPrintableText(keyData);
+		if (printableText) {
 			this.#statusMessage = undefined;
-			this.#model.setFilterQuery(this.#model.filterQuery + keyData);
+			this.#model.setFilterQuery(this.#model.filterQuery + printableText);
 			this.#ensureCursorVisible();
 		}
 	}

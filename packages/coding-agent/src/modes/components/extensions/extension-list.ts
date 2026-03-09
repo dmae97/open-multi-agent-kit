@@ -5,7 +5,14 @@
  * that toggles the entire provider. All items below are dimmed when the
  * master switch is off.
  */
-import { type Component, matchesKey, padding, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
+import {
+	type Component,
+	extractPrintableText,
+	matchesKey,
+	padding,
+	truncateToWidth,
+	visibleWidth,
+} from "@oh-my-pi/pi-tui";
 import { isProviderEnabled } from "../../../discovery";
 import { theme } from "../../../modes/theme/theme";
 import { applyFilter } from "./state-manager";
@@ -392,8 +399,6 @@ export class ExtensionList implements Component {
 	}
 
 	handleInput(data: string): void {
-		const charCode = data.length === 1 ? data.charCodeAt(0) : -1;
-
 		// Navigation
 		if (matchesKey(data, "up") || data === "k") {
 			this.#moveSelectionUp();
@@ -447,13 +452,16 @@ export class ExtensionList implements Component {
 		}
 
 		// Printable characters -> search
-		if (data.length === 1 && charCode > 32 && charCode < 127) {
-			// Skip j/k as they're navigation
-			if (data === "j" || data === "k") {
+		const printableText = extractPrintableText(data);
+		if (printableText && printableText.length === 1) {
+			const printableCharCode = printableText.charCodeAt(0);
+			if (printableCharCode > 32 && printableCharCode < 127) {
+				if (printableText === "j" || printableText === "k") {
+					return;
+				}
+				this.setSearchQuery(this.#searchQuery + printableText);
 				return;
 			}
-			this.setSearchQuery(this.#searchQuery + data);
-			return;
 		}
 	}
 

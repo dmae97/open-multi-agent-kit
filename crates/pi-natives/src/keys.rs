@@ -65,6 +65,7 @@ const CP_KP_DECIMAL: i32 = 57409;
 const MOD_SHIFT: u32 = 1;
 const MOD_ALT: u32 = 2;
 const MOD_CTRL: u32 = 4;
+const MOD_NUM_LOCK: u32 = 128;
 
 #[inline]
 const fn map_keypad_nav(codepoint: i32) -> Option<i32> {
@@ -80,6 +81,24 @@ const fn map_keypad_nav(codepoint: i32) -> Option<i32> {
 		CP_KP_8 => Some(ARROW_UP),
 		CP_KP_9 => Some(FUNC_PAGE_UP),
 		CP_KP_DECIMAL => Some(FUNC_DELETE),
+		_ => None,
+	}
+}
+
+#[inline]
+const fn keypad_num_lock_text(codepoint: i32) -> Option<&'static str> {
+	match codepoint {
+		CP_KP_0 => Some("0"),
+		CP_KP_1 => Some("1"),
+		CP_KP_2 => Some("2"),
+		CP_KP_3 => Some("3"),
+		CP_KP_4 => Some("4"),
+		CP_KP_5 => Some("5"),
+		CP_KP_6 => Some("6"),
+		CP_KP_7 => Some("7"),
+		CP_KP_8 => Some("8"),
+		CP_KP_9 => Some("9"),
+		CP_KP_DECIMAL => Some("."),
 		_ => None,
 	}
 }
@@ -471,13 +490,32 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 		let mut parsed_codepoint = p.codepoint;
 		let mut parsed_base = p.base_layout_key;
 		if p.text_codepoint.is_none() {
-			if let Some(mapped) = map_keypad_nav(parsed_codepoint) {
-				parsed_codepoint = mapped;
-			}
-			if let Some(base) = parsed_base
-				&& let Some(mapped) = map_keypad_nav(base)
-			{
-				parsed_base = Some(mapped);
+			if p.modifier & MOD_NUM_LOCK != 0 {
+				if actual_mod == 0
+					&& let Some(text) = keypad_num_lock_text(parsed_codepoint)
+					&& let Some(byte) = text.as_bytes().first()
+				{
+					parsed_codepoint = i32::from(*byte);
+					parsed_base = None;
+				} else {
+					if let Some(mapped) = map_keypad_nav(parsed_codepoint) {
+						parsed_codepoint = mapped;
+					}
+					if let Some(base) = parsed_base
+						&& let Some(mapped) = map_keypad_nav(base)
+					{
+						parsed_base = Some(mapped);
+					}
+				}
+			} else {
+				if let Some(mapped) = map_keypad_nav(parsed_codepoint) {
+					parsed_codepoint = mapped;
+				}
+				if let Some(base) = parsed_base
+					&& let Some(mapped) = map_keypad_nav(base)
+				{
+					parsed_base = Some(mapped);
+				}
 			}
 		}
 		if parsed_codepoint == codepoint {
@@ -1198,6 +1236,11 @@ fn format_kitty_key(parsed: &ParsedKittySequence) -> Option<Cow<'static, str>> {
 		{
 			return Some(Cow::Borrowed(key_name));
 		}
+		if parsed.modifier & MOD_NUM_LOCK != 0
+			&& let Some(text) = keypad_num_lock_text(parsed.codepoint)
+		{
+			return Some(Cow::Borrowed(text));
+		}
 		return format_key_name(effective_codepoint).map(Cow::Borrowed);
 	}
 
@@ -1318,5 +1361,19 @@ mod tests {
 		assert_eq!(parse_key_inner(b"\x1b[127u", true).as_deref(), Some("backspace"));
 		assert_eq!(parse_key_inner(b"\x1b[127;1:2u", true).as_deref(), Some("backspace"));
 		assert_eq!(parse_key_inner(b"\x1b[127;1:3u", true).as_deref(), None);
+	}
+
+	#[test]
+	fn num_lock_keypad_digits_stay_text() {
+		assert_eq!(parse_key_inner(b"\x1b[57400;129u", true).as_deref(), Some("1"));
+		assert!(matches_key_inner(b"\x1b[57400;129u", "1", true));
+		assert!(!matches_key_inner(b"\x1b[57400;129u", "end", true));
+	}
+
+	#[test]
+	fn modified_num_lock_keypad_keys_still_match_navigation() {
+		assert_eq!(parse_key_inner(b"\x1b[57400;133u", true).as_deref(), Some("ctrl+end"));
+		assert!(matches_key_inner(b"\x1b[57400;133u", "ctrl+end", true));
+		assert!(!matches_key_inner(b"\x1b[57400;133u", "1", true));
 	}
 }

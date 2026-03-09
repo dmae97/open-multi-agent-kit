@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { matchesKey, parseKey, setKittyProtocolActive } from "@oh-my-pi/pi-tui/keys";
+import { extractPrintableText, matchesKey, parseKey, setKittyProtocolActive } from "@oh-my-pi/pi-tui/keys";
 
 describe("matchesKey", () => {
 	it("matches ctrl+letter sequences", () => {
@@ -42,6 +42,20 @@ describe("matchesKey", () => {
 		expect(matchesKey("\x1b[127;1:3u", "backspace")).toBe(false);
 		setKittyProtocolActive(false);
 	});
+
+	it("keeps NumLock keypad digits as text instead of navigation keys", () => {
+		setKittyProtocolActive(true);
+		expect(matchesKey("\x1b[57400;129u", "1")).toBe(true);
+		expect(matchesKey("\x1b[57400;129u", "end")).toBe(false);
+		setKittyProtocolActive(false);
+	});
+
+	it("preserves keypad navigation matches when NumLock is on but modifiers are held", () => {
+		setKittyProtocolActive(true);
+		expect(matchesKey("\x1b[57400;133u", "ctrl+end")).toBe(true);
+		expect(matchesKey("\x1b[57400;133u", "1")).toBe(false);
+		setKittyProtocolActive(false);
+	});
 });
 
 describe("parseKey", () => {
@@ -65,5 +79,27 @@ describe("parseKey", () => {
 		const dvorakCtrlSlash = "\x1b[47::91;5u";
 		expect(parseKey(dvorakCtrlSlash)).toBe("ctrl+/");
 		setKittyProtocolActive(false);
+	});
+
+	it("parses NumLock keypad digits as digits", () => {
+		setKittyProtocolActive(true);
+		expect(parseKey("\x1b[57400;129u")).toBe("1");
+		setKittyProtocolActive(false);
+	});
+
+	it("parses modified NumLock keypad navigation keys consistently", () => {
+		setKittyProtocolActive(true);
+		expect(parseKey("\x1b[57400;133u")).toBe("ctrl+end");
+		setKittyProtocolActive(false);
+	});
+});
+
+describe("extractPrintableText", () => {
+	it("extracts NumLock keypad digits from Kitty CSI-u sequences", () => {
+		expect(extractPrintableText("\x1b[57407;129u")).toBe("8");
+	});
+
+	it("does not treat modified NumLock keypad navigation keys as text", () => {
+		expect(extractPrintableText("\x1b[57400;133u")).toBeUndefined();
 	});
 });

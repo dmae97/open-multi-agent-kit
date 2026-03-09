@@ -2,6 +2,7 @@ import type { AgentToolContext } from "@oh-my-pi/pi-agent-core";
 import { type PtyRunResult, PtySession, sanitizeText } from "@oh-my-pi/pi-natives";
 import {
 	type Component,
+	extractPrintableText,
 	matchesKey,
 	padding,
 	parseKey,
@@ -32,11 +33,15 @@ const XtermTerminal = xterm.Terminal;
 
 function normalizeInputForPty(data: string, applicationCursorKeysMode: boolean): string {
 	const kitty = parseKittySequence(data);
+	if (kitty?.eventType === 3) {
+		return "";
+	}
+	const printableText = extractPrintableText(data);
+	if (printableText) {
+		return printableText;
+	}
 	if (!kitty) {
 		return data;
-	}
-	if (kitty.eventType === 3) {
-		return "";
 	}
 	const keyId = parseKey(data);
 	if (!keyId) {

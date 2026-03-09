@@ -256,6 +256,48 @@ describe("Editor component", () => {
 		});
 	});
 
+	describe("autocomplete triggers", () => {
+		it("triggers slash-command autocomplete when typing slash", async () => {
+			const editor = new Editor(defaultEditorTheme);
+			const { promise, resolve } = Promise.withResolvers<string>();
+
+			editor.setAutocompleteProvider({
+				async getSuggestions(lines, cursorLine, cursorCol) {
+					const currentLine = lines[cursorLine] ?? "";
+					resolve(currentLine.slice(0, cursorCol));
+					return { items: [{ label: "/help", value: "/help" }], prefix: "/" };
+				},
+				applyCompletion(lines, cursorLine, cursorCol) {
+					return { lines, cursorLine, cursorCol };
+				},
+			});
+
+			editor.handleInput("/");
+
+			await expect(promise).resolves.toBe("/");
+		});
+
+		it("triggers file-reference autocomplete when typing at-sign", async () => {
+			const editor = new Editor(defaultEditorTheme);
+			const { promise, resolve } = Promise.withResolvers<string>();
+
+			editor.setAutocompleteProvider({
+				async getSuggestions(lines, cursorLine, cursorCol) {
+					const currentLine = lines[cursorLine] ?? "";
+					resolve(currentLine.slice(0, cursorCol));
+					return { items: [{ label: "src/", value: "src/" }], prefix: "@" };
+				},
+				applyCompletion(lines, cursorLine, cursorCol) {
+					return { lines, cursorLine, cursorCol };
+				},
+			});
+
+			editor.handleInput("@");
+
+			await expect(promise).resolves.toBe("@");
+		});
+	});
+
 	describe("Unicode text editing behavior", () => {
 		it("inserts mixed ASCII, umlauts, and emojis as literal text", () => {
 			const editor = new Editor(defaultEditorTheme);
@@ -274,6 +316,15 @@ describe("Editor component", () => {
 
 			const text = editor.getText();
 			expect(text).toBe("Hello äöü 😀");
+		});
+
+		it("inserts NumLock keypad digits instead of treating them as navigation", () => {
+			const editor = new Editor(defaultEditorTheme);
+
+			editor.handleInput("a");
+			editor.handleInput("\x1b[57400;129u");
+
+			expect(editor.getText()).toBe("a1");
 		});
 
 		it("deletes single-code-unit unicode characters (umlauts) with Backspace", () => {

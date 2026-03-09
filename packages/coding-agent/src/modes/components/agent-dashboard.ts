@@ -20,6 +20,7 @@ import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import {
 	type Component,
 	Container,
+	extractPrintableText,
 	Input,
 	matchesKey,
 	padding,
@@ -998,8 +999,6 @@ export class AgentDashboard extends Container {
 	}
 
 	handleInput(data: string): void {
-		const charCode = data.length === 1 ? data.charCodeAt(0) : -1;
-
 		if (matchesKey(data, "ctrl+c")) {
 			this.onClose?.();
 			return;
@@ -1117,13 +1116,17 @@ export class AgentDashboard extends Container {
 			return;
 		}
 
-		if (data.length === 1 && charCode > 32 && charCode < 127) {
-			if (data === "j" || data === "k") {
-				return;
+		const printableText = extractPrintableText(data);
+		if (printableText && printableText.length === 1) {
+			const printableCharCode = printableText.charCodeAt(0);
+			if (printableCharCode > 32 && printableCharCode < 127) {
+				if (printableText === "j" || printableText === "k") {
+					return;
+				}
+				this.#searchQuery += printableText;
+				this.#applyFilters();
+				this.#buildLayout();
 			}
-			this.#searchQuery += data;
-			this.#applyFilters();
-			this.#buildLayout();
 		}
 	}
 }

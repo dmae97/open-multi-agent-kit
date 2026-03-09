@@ -2,6 +2,7 @@ import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import {
 	type Component,
 	Container,
+	extractPrintableText,
 	Input,
 	matchesKey,
 	Spacer,
@@ -745,12 +746,9 @@ class TreeList implements Component {
 				this.onLabelEdit(selected.node.entry.id, selected.node.label);
 			}
 		} else {
-			const hasControlChars = [...keyData].some(ch => {
-				const code = ch.charCodeAt(0);
-				return code < 32 || code === 0x7f || (code >= 0x80 && code <= 0x9f);
-			});
-			if (!hasControlChars && keyData.length > 0) {
-				this.#searchQuery += keyData;
+			const printableText = extractPrintableText(keyData);
+			if (printableText) {
+				this.#searchQuery += printableText;
 				this.#applyFilter();
 			}
 		}
