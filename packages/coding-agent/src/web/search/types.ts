@@ -15,6 +15,7 @@ export type SearchProviderId =
 	| "perplexity"
 	| "gemini"
 	| "codex"
+	| "tavily"
 	| "kagi"
 	| "synthetic";
 

@@ -57,6 +57,7 @@ import { loginPerplexity } from "./utils/oauth/perplexity";
 import { loginQianfan } from "./utils/oauth/qianfan";
 import { loginQwenPortal } from "./utils/oauth/qwen-portal";
 import { loginSynthetic } from "./utils/oauth/synthetic";
+import { loginTavily } from "./utils/oauth/tavily";
 import { loginTogether } from "./utils/oauth/together";
 import type { OAuthController, OAuthCredentials, OAuthProvider, OAuthProviderId } from "./utils/oauth/types";
 import { loginVenice } from "./utils/oauth/venice";
@@ -815,6 +816,11 @@ export class AuthStorage {
 			}
 			case "synthetic": {
 				const apiKey = await loginSynthetic(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "tavily": {
+				const apiKey = await loginTavily(ctrl);
 				await saveApiKeyCredential(apiKey);
 				return;
 			}

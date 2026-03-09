@@ -1,10 +1,11 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added Tavily as a supported web search provider with `TAVILY_API_KEY` credential discovery and provider fallback support
 - Added `#`-triggered prompt action suggestions in the editor, with keybinding hints for line navigation and prompt copy actions
+- Added Tavily as a supported web search provider with `TAVILY_API_KEY` credential discovery and provider fallback support ([#313](https://github.com/can1357/oh-my-pi/issues/313))
 
 ### Removed
 

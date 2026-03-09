@@ -104,6 +104,8 @@ export { loginQianfan } from "./qianfan";
 export { loginQwenPortal } from "./qwen-portal";
 // Synthetic (API key)
 export { loginSynthetic } from "./synthetic";
+// Tavily (API key)
+export { loginTavily } from "./tavily";
 // Together (API key)
 export { loginTogether } from "./together";
 export * from "./types";
@@ -202,6 +204,11 @@ const builtInOAuthProviders: OAuthProviderInfo[] = [
 	{
 		id: "synthetic",
 		name: "Synthetic",
+		available: true,
+	},
+	{
+		id: "tavily",
+		name: "Tavily",
 		available: true,
 	},
 	{

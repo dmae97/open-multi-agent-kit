@@ -224,8 +224,7 @@ const OPTION_PROVIDERS: Partial<Record<SettingPath, OptionProvider>> = {
 		{
 			value: "auto",
 			label: "Auto",
-			description:
-				"Priority: Perplexity > Exa > Brave > Jina > Kimi > Anthropic > Gemini > Codex > Z.AI > Synthetic",
+			description: "Preferred web-search provider",
 		},
 		{ value: "exa", label: "Exa", description: "Requires EXA_API_KEY" },
 		{ value: "brave", label: "Brave", description: "Requires BRAVE_API_KEY" },
@@ -234,6 +233,7 @@ const OPTION_PROVIDERS: Partial<Record<SettingPath, OptionProvider>> = {
 		{ value: "perplexity", label: "Perplexity", description: "Requires PERPLEXITY_COOKIES or PERPLEXITY_API_KEY" },
 		{ value: "anthropic", label: "Anthropic", description: "Uses Anthropic web search" },
 		{ value: "zai", label: "Z.AI", description: "Calls Z.AI webSearchPrime MCP" },
+		{ value: "tavily", label: "Tavily", description: "Requires TAVILY_API_KEY" },
 		{ value: "kagi", label: "Kagi", description: "Requires KAGI_API_KEY and Kagi Search API beta access" },
 		{ value: "synthetic", label: "Synthetic", description: "Requires SYNTHETIC_API_KEY" },
 	],

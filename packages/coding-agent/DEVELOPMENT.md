@@ -1049,7 +1049,7 @@ This tool is intentionally distinct from `fetch`: it executes page interactions 
 
 Provider registry (`SEARCH_PROVIDERS`) and fallback order (`SEARCH_PROVIDER_ORDER`) are defined in `provider.ts`:
 
-`perplexity → exa → brave → jina → kimi → anthropic → gemini → codex → zai → synthetic`
+`perplexity → brave → jina → kimi → anthropic → gemini → codex → zai → exa → tavily → kagi → synthetic`
 
 `resolveProviderChain(preferredProvider)` behavior:
 

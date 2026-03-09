@@ -225,6 +225,7 @@ export function getExtraHelpText(): string {
   BRAVE_API_KEY              - Brave web search
   PERPLEXITY_API_KEY         - Perplexity web search (API)
   PERPLEXITY_COOKIES         - Perplexity web search (session cookie)
+  TAVILY_API_KEY             - Tavily web search
   ANTHROPIC_SEARCH_API_KEY   - Anthropic search provider
 
   ${chalk.dim("# Configuration")}

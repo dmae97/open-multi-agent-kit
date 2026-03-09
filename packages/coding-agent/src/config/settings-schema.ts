@@ -811,6 +811,7 @@ export const SETTINGS_SCHEMA = {
 			"anthropic",
 			"gemini",
 			"codex",
+			"tavily",
 			"kagi",
 			"synthetic",
 		] as const,

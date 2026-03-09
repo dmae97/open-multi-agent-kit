@@ -191,6 +191,7 @@ OAuth host chain: `KIMI_CODE_OAUTH_HOST` → `KIMI_OAUTH_HOST` → `https://auth
 | `EXA_API_KEY` | Exa search provider and Exa MCP tools |
 | `BRAVE_API_KEY` | Brave search provider |
 | `PERPLEXITY_API_KEY` | Perplexity search provider API-key mode |
+| `TAVILY_API_KEY` | Tavily search provider |
 | `ZAI_API_KEY` | z.ai search provider (also checks stored OAuth in `agent.db`) |
 | `OPENAI_API_KEY` / Codex OAuth in DB | Codex search provider availability/auth |
 

@@ -37,6 +37,7 @@ export type OAuthProvider =
 	| "qianfan"
 	| "qwen-portal"
 	| "synthetic"
+	| "tavily"
 	| "together"
 	| "venice"
 	| "vllm"

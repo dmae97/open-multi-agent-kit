@@ -1,7 +1,7 @@
 /**
  * Unified Web Search Tool
  *
- * Single tool supporting Anthropic, Perplexity, Exa, Brave, Jina, Kimi, Gemini, Codex, Z.AI, and Synthetic
+ * Single tool supporting Anthropic, Perplexity, Exa, Brave, Jina, Kimi, Gemini, Codex, Tavily, Kagi, Z.AI, and Synthetic
  * providers with provider-specific parameters exposed conditionally.
  *
  * When EXA_API_KEY is available, additional specialized tools are exposed:
@@ -45,6 +45,7 @@ export const webSearchSchema = Type.Object({
 				"perplexity",
 				"gemini",
 				"codex",
+				"tavily",
 				"kagi",
 				"synthetic",
 			],
@@ -77,6 +78,7 @@ export type SearchParams = {
 		| "perplexity"
 		| "gemini"
 		| "codex"
+		| "tavily"
 		| "kagi"
 		| "synthetic";
 	recency?: "day" | "week" | "month" | "year";

@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added Tavily web search provider support with API key authentication
 
 ### Fixed
 
