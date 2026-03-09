@@ -3243,6 +3243,7 @@ export class AgentSession {
 			}
 			this.#promptInFlightCount++;
 			try {
+				this.agent.setSystemPrompt(this.#baseSystemPrompt);
 				await this.#promptAgentWithIdleRetry([
 					{
 						role: "developer",

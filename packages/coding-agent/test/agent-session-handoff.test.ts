@@ -6,6 +6,7 @@ import { getBundledModel } from "@oh-my-pi/pi-ai/models";
 import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import type { ExtensionRunner } from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
 import { AgentSession, type AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
@@ -431,6 +432,101 @@ describe("AgentSession handoff", () => {
 		expect(endEvents[0]).not.toMatchObject({
 			errorMessage: "Auto-handoff failed: no handoff document was generated",
 		});
+	});
+
+	it("resets to the base system prompt before generating a handoff", async () => {
+		const model = session.model;
+		if (!model) {
+			throw new Error("Expected model to be set");
+		}
+		await session.dispose();
+		sessionManager = SessionManager.create(tempDir.path());
+
+		const emitBeforeAgentStart = vi.fn().mockResolvedValueOnce({ systemPrompt: "Hook override" });
+		const extensionRunner = {
+			emitBeforeAgentStart,
+			emit: vi.fn().mockResolvedValue(undefined),
+		} as unknown as ExtensionRunner;
+
+		const observedSystemPrompts: string[] = [];
+		let streamCallCount = 0;
+		const agent = new Agent({
+			getApiKey: () => "test-key",
+			initialState: {
+				model,
+				systemPrompt: "Test",
+				tools: [],
+				messages: [],
+			},
+			streamFn: (_model, context) => {
+				observedSystemPrompts.push(context.systemPrompt ?? "");
+				streamCallCount++;
+				const stream = new MockAssistantStream();
+				queueMicrotask(() => {
+					const message: AssistantMessage = {
+						role: "assistant",
+						content: [
+							{
+								type: "text",
+								text: streamCallCount === 1 ? "normal response" : "## Goal\nContinue from here",
+							},
+						],
+						api: model.api,
+						provider: model.provider,
+						model: model.id,
+						stopReason: "stop",
+						usage: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							totalTokens: 0,
+							cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+						},
+						timestamp: Date.now(),
+					};
+					stream.push({ type: "start", partial: message });
+					stream.push({ type: "done", reason: "stop", message });
+				});
+				return stream;
+			},
+		});
+
+		session = new AgentSession({
+			agent,
+			sessionManager,
+			settings: Settings.isolated({ "compaction.enabled": false }),
+			modelRegistry,
+			extensionRunner,
+		});
+		sessionManager.appendMessage({
+			role: "user",
+			content: [{ type: "text", text: "seed" }],
+			timestamp: Date.now() - 2,
+		});
+		sessionManager.appendMessage({
+			role: "assistant",
+			content: [{ type: "text", text: "seed response" }],
+			api: model.api,
+			provider: model.provider,
+			model: model.id,
+			stopReason: "stop",
+			usage: {
+				input: 16,
+				output: 8,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 24,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			timestamp: Date.now() - 1,
+		});
+
+		await session.prompt("hello from user");
+		await session.handoff();
+
+		expect(emitBeforeAgentStart).toHaveBeenCalledTimes(1);
+		expect(observedSystemPrompts).toEqual(["Hook override", "Test"]);
 	});
 
 	it("saves auto-handoff document to disk when enabled", async () => {
