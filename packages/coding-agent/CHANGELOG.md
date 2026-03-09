@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.9.12] - 2026-03-09
 ### Added
 
 - Added Tavily as a supported web search provider with `TAVILY_API_KEY` credential discovery and provider fallback support
