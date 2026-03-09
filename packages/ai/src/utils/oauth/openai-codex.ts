@@ -13,6 +13,7 @@ const CALLBACK_PATH = "/auth/callback";
 const SCOPE = "openid profile email offline_access";
 const JWT_CLAIM_PATH = "https://api.openai.com/auth";
 const JWT_PROFILE_CLAIM = "https://api.openai.com/profile";
+const TOKEN_REQUEST_TIMEOUT_MS = 15_000;
 
 type JwtPayload = {
 	[JWT_CLAIM_PATH]?: {
@@ -95,6 +96,7 @@ async function exchangeCodeForToken(code: string, verifier: string, redirectUri:
 			code_verifier: verifier,
 			redirect_uri: redirectUri,
 		}),
+		signal: AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS),
 	});
 
 	if (!tokenResponse.ok) {
@@ -153,6 +155,7 @@ export async function refreshOpenAICodexToken(refreshToken: string): Promise<OAu
 			refresh_token: refreshToken,
 			client_id: CLIENT_ID,
 		}),
+		signal: AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS),
 	});
 
 	if (!response.ok) {

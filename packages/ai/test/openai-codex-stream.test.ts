@@ -14,6 +14,7 @@ const originalWebSocket = global.WebSocket;
 const originalCodexWebSocketRetryBudget = Bun.env.PI_CODEX_WEBSOCKET_RETRY_BUDGET;
 const originalCodexWebSocketRetryDelayMs = Bun.env.PI_CODEX_WEBSOCKET_RETRY_DELAY_MS;
 const originalCodexWebSocketIdleTimeoutMs = Bun.env.PI_CODEX_WEBSOCKET_IDLE_TIMEOUT_MS;
+const originalCodexWebSocketFirstEventTimeoutMs = Bun.env.PI_CODEX_WEBSOCKET_FIRST_EVENT_TIMEOUT_MS;
 const originalCodexWebSocketV2 = Bun.env.PI_CODEX_WEBSOCKET_V2;
 
 function restoreEnv(name: string, value: string | undefined): void {
@@ -31,6 +32,7 @@ afterEach(() => {
 	restoreEnv("PI_CODEX_WEBSOCKET_RETRY_BUDGET", originalCodexWebSocketRetryBudget);
 	restoreEnv("PI_CODEX_WEBSOCKET_RETRY_DELAY_MS", originalCodexWebSocketRetryDelayMs);
 	restoreEnv("PI_CODEX_WEBSOCKET_IDLE_TIMEOUT_MS", originalCodexWebSocketIdleTimeoutMs);
+	restoreEnv("PI_CODEX_WEBSOCKET_FIRST_EVENT_TIMEOUT_MS", originalCodexWebSocketFirstEventTimeoutMs);
 	restoreEnv("PI_CODEX_WEBSOCKET_V2", originalCodexWebSocketV2);
 	vi.restoreAllMocks();
 });
@@ -1303,10 +1305,11 @@ describe("openai-codex streaming", () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
-	it("fails websocket streams with an idle-timeout transport error", async () => {
+	it("falls back to SSE when a prewarmed websocket never produces a first event", async () => {
 		const tempDir = TempDir.createSync("@pi-codex-stream-");
 		setAgentDir(tempDir.path());
-		Bun.env.PI_CODEX_WEBSOCKET_IDLE_TIMEOUT_MS = "10";
+		Bun.env.PI_CODEX_WEBSOCKET_FIRST_EVENT_TIMEOUT_MS = "10";
+		Bun.env.PI_CODEX_WEBSOCKET_RETRY_BUDGET = "0";
 
 		const payload = Buffer.from(
 			JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "acc_test" } }),
@@ -1314,12 +1317,20 @@ describe("openai-codex streaming", () => {
 		).toBase64();
 		const token = `aaa.${payload}.bbb`;
 
+		const sse = `${[
+			`data: ${JSON.stringify({ type: "response.output_item.added", item: { type: "message", id: "msg_sse_first_event", role: "assistant", status: "in_progress", content: [] } })}`,
+			`data: ${JSON.stringify({ type: "response.content_part.added", part: { type: "output_text", text: "" } })}`,
+			`data: ${JSON.stringify({ type: "response.output_text.delta", delta: "Hello fallback" })}`,
+			`data: ${JSON.stringify({ type: "response.output_item.done", item: { type: "message", id: "msg_sse_first_event", role: "assistant", status: "completed", content: [{ type: "output_text", text: "Hello fallback" }] } })}`,
+			`data: ${JSON.stringify({ type: "response.done", response: { id: "resp_sse_first_event", status: "completed", usage: { input_tokens: 5, output_tokens: 3, total_tokens: 8, input_tokens_details: { cached_tokens: 0 } } } })}`,
+		].join("\n\n")}\n\n`;
 		const fetchMock = vi.fn(async () => {
-			throw new Error("SSE fallback should not be called for websocket idle timeout");
+			return new Response(sse, { headers: { "content-type": "text/event-stream" } });
 		});
 		global.fetch = fetchMock as unknown as typeof fetch;
 
 		type WsListener = (event: Event) => void;
+		let sendCount = 0;
 		class IdleWebSocket {
 			static readonly CONNECTING = 0;
 			static readonly OPEN = 1;
@@ -1348,7 +1359,9 @@ describe("openai-codex streaming", () => {
 				listeners?.delete(listener as WsListener);
 			}
 
-			send(): void {}
+			send(): void {
+				sendCount += 1;
+			}
 
 			close(): void {
 				this.readyState = IdleWebSocket.CLOSED;
@@ -1383,14 +1396,27 @@ describe("openai-codex streaming", () => {
 			messages: [{ role: "user", content: "Say hello", timestamp: Date.now() }],
 		};
 		const providerSessionState = new Map<string, ProviderSessionState>();
+		await prewarmOpenAICodexResponses(model, {
+			apiKey: token,
+			sessionId: "ws-idle-timeout-session",
+			providerSessionState,
+		});
 		const result = await streamOpenAICodexResponses(model, context, {
 			apiKey: token,
 			sessionId: "ws-idle-timeout-session",
 			providerSessionState,
 		}).result();
-		expect(result.stopReason).toBe("error");
-		expect(result.errorMessage).toContain("idle timeout waiting for websocket");
-		expect(fetchMock).not.toHaveBeenCalled();
+		expect(sendCount).toBeGreaterThanOrEqual(1);
+		expect(result.stopReason).toBe("stop");
+		expect(result.errorMessage).toBeUndefined();
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		const transportDetails = getOpenAICodexTransportDetails(model, {
+			sessionId: "ws-idle-timeout-session",
+			providerSessionState,
+		});
+		expect(transportDetails.lastTransport).toBe("sse");
+		expect(transportDetails.websocketDisabled).toBe(true);
+		expect(transportDetails.fallbackCount).toBe(1);
 	});
 
 	it("retries websocket stream closes before surfacing transport errors", async () => {

@@ -212,15 +212,16 @@ it("strips invalid thinking signatures from aborted Anthropic replay messages", 
 		timestamp: Date.now(),
 	};
 
-	const transformed = transformMessages([
-		{ role: "user", content: "continue", timestamp: Date.now() },
-		assistant,
-	], model);
+	const transformed = transformMessages(
+		[{ role: "user", content: "continue", timestamp: Date.now() }, assistant],
+		model,
+	);
 	const transformedAssistant = transformed.find(m => m.role === "assistant") as AssistantMessage | undefined;
 
 	expect(transformedAssistant).toBeDefined();
 	const thinkingBlock = transformedAssistant?.content[0];
 	expect(thinkingBlock).toMatchObject({ type: "thinking", thinking: "partial reasoning" });
-	expect(thinkingBlock && "thinkingSignature" in thinkingBlock ? thinkingBlock.thinkingSignature : undefined).toBeUndefined();
+	expect(
+		thinkingBlock && "thinkingSignature" in thinkingBlock ? thinkingBlock.thinkingSignature : undefined,
+	).toBeUndefined();
 });
-

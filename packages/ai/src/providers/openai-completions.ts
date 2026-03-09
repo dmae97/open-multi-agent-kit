@@ -30,6 +30,7 @@ import type {
 } from "../types";
 import { AssistantMessageEventStream } from "../utils/event-stream";
 import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-inspector";
+import { getOpenAIStreamIdleTimeoutMs, iterateWithIdleTimeout } from "../utils/idle-iterator";
 import { parseStreamingJson } from "../utils/json-parse";
 import { getKimiCommonHeaders } from "../utils/oauth/kimi";
 import { adaptSchemaForStrict, NO_STRICT } from "../utils/schema";
@@ -190,6 +191,10 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 
 		try {
 			const apiKey = options?.apiKey || getEnvApiKey(model.provider) || "";
+			const requestAbortController = new AbortController();
+			const requestSignal = options?.signal
+				? AbortSignal.any([options.signal, requestAbortController.signal])
+				: requestAbortController.signal;
 			const { client, copilotPremiumRequests, baseUrl } = await createClient(
 				model,
 				context,
@@ -206,7 +211,7 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 				url: `${baseUrl ?? "https://api.openai.com/v1"}/chat/completions`,
 				body: params,
 			};
-			const openaiStream = await client.chat.completions.create(params, { signal: options?.signal });
+			const openaiStream = await client.chat.completions.create(params, { signal: requestSignal });
 			if (copilotPremiumRequests !== undefined) output.usage.premiumRequests = copilotPremiumRequests;
 			stream.push({ type: "start", partial: output });
 
@@ -329,7 +334,11 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 				}
 			};
 
-			for await (const chunk of openaiStream) {
+			for await (const chunk of iterateWithIdleTimeout(openaiStream, {
+				idleTimeoutMs: getOpenAIStreamIdleTimeoutMs(),
+				errorMessage: "OpenAI completions stream stalled while waiting for the next event",
+				onIdle: () => requestAbortController.abort(),
+			})) {
 				if (chunk.usage) {
 					// Check for cached_tokens at root level (Kimi) or in prompt_tokens_details (OpenAI)
 					const cachedTokens =

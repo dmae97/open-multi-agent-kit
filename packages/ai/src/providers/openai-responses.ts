@@ -32,6 +32,7 @@ import type {
 import { normalizeResponsesToolCallId, resolveCacheRetention } from "../utils";
 import { AssistantMessageEventStream } from "../utils/event-stream";
 import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-inspector";
+import { getOpenAIStreamIdleTimeoutMs, iterateWithIdleTimeout } from "../utils/idle-iterator";
 import { parseStreamingJson } from "../utils/json-parse";
 import { adaptSchemaForStrict, NO_STRICT } from "../utils/schema";
 import { mapToOpenAIResponsesToolChoice } from "../utils/tool-choice";
@@ -116,6 +117,10 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 			const apiKey = options?.apiKey || getEnvApiKey(model.provider) || "";
 			const { client, copilotPremiumRequests, baseUrl } = createClient(model, context, apiKey, options?.headers);
 			const { params } = buildParams(model, context, options);
+			const requestAbortController = new AbortController();
+			const requestSignal = options?.signal
+				? AbortSignal.any([options.signal, requestAbortController.signal])
+				: requestAbortController.signal;
 			options?.onPayload?.(params);
 			rawRequestDump = {
 				provider: model.provider,
@@ -125,10 +130,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 				url: `${baseUrl ?? "https://api.openai.com/v1"}/responses`,
 				body: params,
 			};
-			const openaiStream = await client.responses.create(
-				params,
-				options?.signal ? { signal: options.signal } : undefined,
-			);
+			const openaiStream = await client.responses.create(params, { signal: requestSignal });
 			if (copilotPremiumRequests !== undefined) output.usage.premiumRequests = copilotPremiumRequests;
 			stream.push({ type: "start", partial: output });
 
@@ -138,7 +140,11 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 			const blockIndex = () => blocks.length - 1;
 			const nativeOutputItems: Array<Record<string, unknown>> = [];
 
-			for await (const event of openaiStream) {
+			for await (const event of iterateWithIdleTimeout(openaiStream, {
+				idleTimeoutMs: getOpenAIStreamIdleTimeoutMs(),
+				errorMessage: "OpenAI responses stream stalled while waiting for the next event",
+				onIdle: () => requestAbortController.abort(),
+			})) {
 				// Handle output item start
 				if (event.type === "response.output_item.added") {
 					if (!firstTokenTime) firstTokenTime = Date.now();

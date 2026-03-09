@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed OpenAI-family streaming transports to fail with an explicit idle-timeout error instead of hanging indefinitely when the provider stops sending events mid-response
+- Fixed OpenAI Codex OAuth refresh and usage-limit lookups to respect request timeouts instead of waiting indefinitely during account selection or rotation
+- Fixed OpenAI Codex prewarmed websocket requests to fall back quickly when the socket connects but never starts the response stream
+
 ## [13.9.10] - 2026-03-08
 
 ### Added

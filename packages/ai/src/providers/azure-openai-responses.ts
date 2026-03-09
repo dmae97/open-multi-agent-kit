@@ -33,6 +33,7 @@ import type {
 import { normalizeResponsesToolCallId } from "../utils";
 import { AssistantMessageEventStream } from "../utils/event-stream";
 import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-inspector";
+import { getOpenAIStreamIdleTimeoutMs, iterateWithIdleTimeout } from "../utils/idle-iterator";
 import { parseStreamingJson } from "../utils/json-parse";
 import { mapToOpenAIResponsesToolChoice } from "../utils/tool-choice";
 import { transformMessages } from "./transform-messages";
@@ -120,6 +121,10 @@ export const streamAzureOpenAIResponses: StreamFunction<"azure-openai-responses"
 			const apiKey = options?.apiKey || getEnvApiKey(model.provider) || "";
 			const client = createClient(model, apiKey, options);
 			const params = buildParams(model, context, options, deploymentName);
+			const requestAbortController = new AbortController();
+			const requestSignal = options?.signal
+				? AbortSignal.any([options.signal, requestAbortController.signal])
+				: requestAbortController.signal;
 			options?.onPayload?.(params);
 			rawRequestDump = {
 				provider: model.provider,
@@ -129,10 +134,7 @@ export const streamAzureOpenAIResponses: StreamFunction<"azure-openai-responses"
 				url: `${resolveAzureConfig(model, options).baseUrl}/responses`,
 				body: params,
 			};
-			const openaiStream = await client.responses.create(
-				params,
-				options?.signal ? { signal: options.signal } : undefined,
-			);
+			const openaiStream = await client.responses.create(params, { signal: requestSignal });
 			stream.push({ type: "start", partial: output });
 
 			let currentItem: ResponseReasoningItem | ResponseOutputMessage | ResponseFunctionToolCall | null = null;
@@ -140,7 +142,11 @@ export const streamAzureOpenAIResponses: StreamFunction<"azure-openai-responses"
 			const blocks = output.content;
 			const blockIndex = () => blocks.length - 1;
 
-			for await (const event of openaiStream) {
+			for await (const event of iterateWithIdleTimeout(openaiStream, {
+				idleTimeoutMs: getOpenAIStreamIdleTimeoutMs(),
+				errorMessage: "Azure OpenAI responses stream stalled while waiting for the next event",
+				onIdle: () => requestAbortController.abort(),
+			})) {
 				// Handle output item start
 				if (event.type === "response.output_item.added") {
 					if (!firstTokenTime) firstTokenTime = Date.now();

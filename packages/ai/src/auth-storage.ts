@@ -164,6 +164,7 @@ const DEFAULT_USAGE_PROVIDER_MAP = new Map<Provider, UsageProvider>(
 const USAGE_CACHE_PREFIX = "usage_cache:";
 const USAGE_REPORT_TTL_MS = 30_000;
 const DEFAULT_USAGE_REQUEST_TIMEOUT_MS = 3_000;
+const DEFAULT_OAUTH_REFRESH_TIMEOUT_MS = 10_000;
 
 type UsageCacheEntry<T> = {
 	value: T;
@@ -941,11 +942,17 @@ export class AuthStorage {
 		if (projectId) parts.push(`project:${projectId}`);
 		const enterpriseUrl = credential.enterpriseUrl?.trim().toLowerCase();
 		if (enterpriseUrl) parts.push(`enterprise:${enterpriseUrl}`);
-		const secret = credential.apiKey?.trim() || credential.refreshToken?.trim() || credential.accessToken?.trim();
-		if (secret) {
-			parts.push(`secret:${Bun.hash(secret).toString(16)}`);
-		} else if (parts.length === 1) {
-			parts.push("anonymous");
+		// Only fall back to a secret-derived key when a stable account identifier is unavailable.
+		// Including the token hash when accountId/email are present causes cache misses on
+		// every OAuth refresh — usage data is per-account, not per-token.
+		const hasStableIdentifier = Boolean(accountId || email);
+		if (!hasStableIdentifier) {
+			const secret = credential.apiKey?.trim() || credential.refreshToken?.trim() || credential.accessToken?.trim();
+			if (secret) {
+				parts.push(`secret:${Bun.hash(secret).toString(16)}`);
+			} else {
+				parts.push("anonymous");
+			}
 		}
 		return parts.join("|");
 	}
@@ -1315,7 +1322,7 @@ export class AuthStorage {
 	): Promise<UsageReport | null> {
 		return this.#fetchUsageCached(
 			this.#buildUsageRequestForOauth(provider, credential, options?.baseUrl),
-			options?.timeoutMs,
+			options?.timeoutMs ?? this.#usageRequestTimeoutMs,
 		);
 	}
 
@@ -1667,13 +1674,28 @@ export class AuthStorage {
 	async #refreshOAuthCredential(provider: Provider, credential: OAuthCredential): Promise<OAuthCredentials> {
 		if (Date.now() < credential.expires) return credential;
 		const customProvider = getOAuthProvider(provider);
+		let refreshPromise: Promise<OAuthCredentials>;
 		if (customProvider) {
 			if (!customProvider.refreshToken) {
 				throw new Error(`OAuth provider "${provider}" does not support token refresh`);
 			}
-			return customProvider.refreshToken(credential);
+			refreshPromise = customProvider.refreshToken(credential);
+		} else {
+			refreshPromise = refreshOAuthToken(provider as OAuthProvider, credential);
 		}
-		return refreshOAuthToken(provider as OAuthProvider, credential);
+		// Bound the refresh so a slow/hanging token endpoint cannot stall credential selection.
+		let timeout: NodeJS.Timeout | undefined;
+		const timeoutPromise = new Promise<never>((_, reject) => {
+			timeout = setTimeout(
+				() => reject(new Error(`OAuth token refresh timed out for provider: ${provider}`)),
+				DEFAULT_OAUTH_REFRESH_TIMEOUT_MS,
+			);
+		});
+		try {
+			return await Promise.race([refreshPromise, timeoutPromise]);
+		} finally {
+			if (timeout) clearTimeout(timeout);
+		}
 	}
 
 	/** Attempts to use a single OAuth credential, checking usage and refreshing token. */
