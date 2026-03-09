@@ -177,3 +177,50 @@ it("preserves latest Anthropic thinking blocks even when model id changes", () =
 	expect(transformedAssistant?.content[0]).toEqual(assistant.content[0]);
 	expect(transformedAssistant?.content[1]).toEqual(assistant.content[1]);
 });
+
+it("strips invalid thinking signatures from aborted Anthropic replay messages", () => {
+	const model: Model<"anthropic-messages"> = {
+		api: "anthropic-messages",
+		provider: "anthropic",
+		id: "claude-3-5-sonnet-20241022",
+		name: "Claude 3.5 Sonnet",
+		baseUrl: "https://api.anthropic.com",
+		input: ["text"],
+		cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+		maxTokens: 8192,
+		contextWindow: 200000,
+		reasoning: true,
+	};
+	const assistant: AssistantMessage = {
+		role: "assistant",
+		content: [
+			{ type: "thinking", thinking: "partial reasoning", thinkingSignature: "sig_partial" },
+			{ type: "text", text: "partial answer" },
+		],
+		api: "anthropic-messages",
+		provider: "anthropic",
+		model: model.id,
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		stopReason: "aborted",
+		timestamp: Date.now(),
+	};
+
+	const transformed = transformMessages([
+		{ role: "user", content: "continue", timestamp: Date.now() },
+		assistant,
+	], model);
+	const transformedAssistant = transformed.find(m => m.role === "assistant") as AssistantMessage | undefined;
+
+	expect(transformedAssistant).toBeDefined();
+	const thinkingBlock = transformedAssistant?.content[0];
+	expect(thinkingBlock).toMatchObject({ type: "thinking", thinking: "partial reasoning" });
+	expect(thinkingBlock && "thinkingSignature" in thinkingBlock ? thinkingBlock.thinkingSignature : undefined).toBeUndefined();
+});
+
