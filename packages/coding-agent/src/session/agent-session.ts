@@ -3884,18 +3884,11 @@ export class AgentSession {
 					let attempt = 0;
 					while (true) {
 						try {
-							compactResult = await compact(
-								preparation,
-								candidate,
-								apiKey,
-								undefined,
-								autoCompactionSignal,
-								{
-									promptOverride: hookPrompt,
-									extraContext: hookContext,
-									remoteInstructions: this.#baseSystemPrompt,
-								},
-							);
+							compactResult = await compact(preparation, candidate, apiKey, undefined, autoCompactionSignal, {
+								promptOverride: hookPrompt,
+								extraContext: hookContext,
+								remoteInstructions: this.#baseSystemPrompt,
+							});
 							break;
 						} catch (error) {
 							if (autoCompactionSignal.aborted) {

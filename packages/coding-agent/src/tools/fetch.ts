@@ -15,7 +15,6 @@ import { renderStatusLine } from "../tui";
 import { CachedOutputBlock } from "../tui/output-block";
 import { formatDimensionNote, resizeImage } from "../utils/image-resize";
 import { ensureTool } from "../utils/tools-manager";
-import { summarizeUrlWithKagi } from "../web/kagi";
 import { specialHandlers } from "../web/scrapers";
 import type { RenderResult } from "../web/scrapers/types";
 import { finalizeOutput, loadPage, MAX_OUTPUT_CHARS } from "../web/scrapers/types";
@@ -466,13 +465,12 @@ function parseFeedToMarkdown(content: string, maxItems = 10): string {
 }
 
 /**
- * Render HTML to markdown using kagi, jina, trafilatura, lynx (in order of preference)
+ * Render HTML to markdown using jina, trafilatura, lynx (in order of preference)
  */
 async function renderHtmlToText(
 	url: string,
 	html: string,
 	timeout: number,
-	useKagiSummarizer: boolean,
 	userSignal?: AbortSignal,
 ): Promise<{ content: string; ok: boolean; method: string }> {
 	const signal = ptree.combineSignals(userSignal, timeout * 1000);
@@ -484,20 +482,7 @@ async function renderHtmlToText(
 		signal,
 	};
 
-	// Try Kagi Universal Summarizer first (if enabled and KAGI_API_KEY is configured)
-	if (useKagiSummarizer) {
-		try {
-			const kagiSummary = await summarizeUrlWithKagi(url, { signal });
-			if (kagiSummary && kagiSummary.length > 100 && !isLowQualityOutput(kagiSummary)) {
-				return { content: kagiSummary, ok: true, method: "kagi" };
-			}
-		} catch {
-			// Kagi failed, continue to next method
-			signal?.throwIfAborted();
-		}
-	}
-
-	// Try jina next (reader API)
+	// Try jina first (reader API)
 	try {
 		const jinaUrl = `https://r.jina.ai/${url}`;
 		const response = await fetch(jinaUrl, {
@@ -623,13 +608,7 @@ async function handleSpecialUrls(
 /**
  * Main render function implementing the full pipeline
  */
-async function renderUrl(
-	url: string,
-	timeout: number,
-	raw: boolean,
-	useKagiSummarizer: boolean,
-	signal?: AbortSignal,
-): Promise<FetchRenderResult> {
+async function renderUrl(url: string, timeout: number, raw: boolean, signal?: AbortSignal): Promise<FetchRenderResult> {
 	const notes: string[] = [];
 	const fetchedAt = new Date().toISOString();
 	if (signal?.aborted) {
@@ -973,7 +952,7 @@ async function renderUrl(
 		}
 
 		// 5E: Render HTML with lynx or html2text
-		const htmlResult = await renderHtmlToText(finalUrl, rawContent, timeout, useKagiSummarizer, signal);
+		const htmlResult = await renderHtmlToText(finalUrl, rawContent, timeout, signal);
 		if (!htmlResult.ok) {
 			notes.push("html rendering failed (lynx/html2text unavailable)");
 			const output = finalizeOutput(rawContent);
@@ -1113,8 +1092,7 @@ export class FetchTool implements AgentTool<typeof fetchSchema, FetchToolDetails
 			throw new ToolAbortError();
 		}
 
-		const useKagiSummarizer = this.session.settings.get("fetch.useKagiSummarizer");
-		const result = await renderUrl(url, effectiveTimeout, raw, useKagiSummarizer, signal);
+		const result = await renderUrl(url, effectiveTimeout, raw, signal);
 		const truncation = truncateHead(result.content, {
 			maxBytes: DEFAULT_MAX_BYTES,
 			maxLines: FETCH_DEFAULT_MAX_LINES,

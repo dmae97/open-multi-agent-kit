@@ -1,17 +1,7 @@
 import { getEnvApiKey } from "@oh-my-pi/pi-ai";
 import { findCredential } from "./search/providers/utils";
 
-const KAGI_SUMMARIZE_URL = "https://kagi.com/api/v0/summarize";
 const KAGI_SEARCH_URL = "https://kagi.com/api/v0/search";
-
-interface KagiSummarizeResponse {
-	data?: {
-		output?: string;
-	};
-	error?: Array<{
-		msg?: string;
-	}>;
-}
 
 interface KagiSearchResultObject {
 	t: 0;
@@ -105,14 +95,6 @@ function parseKagiErrorResponse(statusCode: number, responseText: string): KagiA
 	}
 }
 
-export interface KagiSummarizeOptions {
-	engine?: string;
-	summaryType?: string;
-	targetLanguage?: string;
-	cache?: boolean;
-	signal?: AbortSignal;
-}
-
 export interface KagiSearchOptions {
 	limit?: number;
 	signal?: AbortSignal;
@@ -140,30 +122,6 @@ function getAuthHeaders(apiKey: string): Record<string, string> {
 		Authorization: `Bot ${apiKey}`,
 		Accept: "application/json",
 	};
-}
-
-export async function summarizeUrlWithKagi(url: string, options: KagiSummarizeOptions = {}): Promise<string | null> {
-	const apiKey = await findKagiApiKey();
-	if (!apiKey) return null;
-
-	const requestUrl = new URL(KAGI_SUMMARIZE_URL);
-	requestUrl.searchParams.set("url", url);
-	requestUrl.searchParams.set("summary_type", options.summaryType ?? "summary");
-	if (options.engine) requestUrl.searchParams.set("engine", options.engine);
-	if (options.targetLanguage) requestUrl.searchParams.set("target_language", options.targetLanguage);
-	if (options.cache !== undefined) requestUrl.searchParams.set("cache", String(options.cache));
-
-	const response = await fetch(requestUrl, {
-		headers: getAuthHeaders(apiKey),
-		signal: options.signal,
-	});
-	if (!response.ok) return null;
-
-	const payload = (await response.json()) as KagiSummarizeResponse;
-	if (payload.error && payload.error.length > 0) return null;
-
-	const output = payload.data?.output?.trim();
-	return output && output.length > 0 ? output : null;
 }
 
 export async function searchWithKagi(query: string, options: KagiSearchOptions = {}): Promise<KagiSearchResult> {

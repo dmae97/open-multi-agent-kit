@@ -4,7 +4,6 @@ import * as path from "node:path";
 import { ptree, Snowflake } from "@oh-my-pi/pi-utils";
 import { throwIfAborted } from "../../tools/tool-errors";
 import { ensureTool } from "../../utils/tools-manager";
-import { summarizeUrlWithKagi } from "../kagi";
 import type { RenderResult, SpecialHandler } from "./types";
 import { buildResult, formatMediaDuration, formatNumber } from "./types";
 
@@ -109,22 +108,6 @@ export const handleYouTube: SpecialHandler = async (
 	const fetchedAt = new Date().toISOString();
 	const notes: string[] = [];
 	const videoUrl = `https://www.youtube.com/watch?v=${yt.videoId}`;
-
-	// Prefer Kagi Universal Summarizer when credentials are available
-	try {
-		const kagiSummary = await summarizeUrlWithKagi(videoUrl, { signal });
-		if (kagiSummary && kagiSummary.length > 100) {
-			return buildResult(kagiSummary, {
-				url,
-				finalUrl: videoUrl,
-				method: "kagi",
-				fetchedAt,
-				notes: ["Used Kagi Universal Summarizer for YouTube"],
-			});
-		}
-	} catch {
-		throwIfAborted(signal);
-	}
 
 	// Ensure yt-dlp is available (auto-download if missing)
 	const ytdlp = await ensureTool("yt-dlp", { signal, silent: true });

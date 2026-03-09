@@ -1,13 +1,20 @@
 # Changelog
 
 ## [Unreleased]
-### Fixed
-
-- Canonicalized bash executor working directories before handing them to brush so `pwd` stays aligned with canonical Git worktree paths in symlinked workspaces
 
 ### Added
 
 - Added `#`-triggered prompt action suggestions in the editor, with keybinding hints for line navigation and prompt copy actions
+
+### Removed
+
+- Removed Kagi Universal Summarizer integration from fetch tool—HTML rendering now uses jina, trafilatura, and lynx only
+- Removed `fetch.useKagiSummarizer` setting
+- Removed Kagi summarization from YouTube video handling
+
+### Fixed
+
+- Canonicalized bash executor working directories before handing them to brush so `pwd` stays aligned with canonical Git worktree paths in symlinked workspaces
 
 ## [13.9.10] - 2026-03-08
 ### Added
