@@ -1,3 +1,4 @@
+import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, AssistantMessage, Model } from "@oh-my-pi/pi-ai";
 import { completeSimple, validateToolCall } from "@oh-my-pi/pi-ai";
 import { Type } from "@sinclair/typebox";
@@ -5,6 +6,7 @@ import summarySystemPrompt from "../../commit/prompts/summary-system.md" with { 
 import summaryUserPrompt from "../../commit/prompts/summary-user.md" with { type: "text" };
 import type { CommitSummary } from "../../commit/types";
 import { renderPromptTemplate } from "../../config/prompt-templates";
+import { toReasoningEffort } from "../../thinking";
 import { extractTextContent, extractToolCall } from "../utils";
 
 const SummaryTool = {
@@ -18,6 +20,7 @@ const SummaryTool = {
 export interface SummaryInput {
 	model: Model<Api>;
 	apiKey: string;
+	thinkingLevel?: ThinkingLevel;
 	commitType: string;
 	scope: string | null;
 	details: string[];
@@ -32,6 +35,7 @@ export interface SummaryInput {
 export async function generateSummary({
 	model,
 	apiKey,
+	thinkingLevel,
 	commitType,
 	scope,
 	details,
@@ -53,7 +57,7 @@ export async function generateSummary({
 			messages: [{ role: "user", content: userPrompt, timestamp: Date.now() }],
 			tools: [SummaryTool],
 		},
-		{ apiKey, maxTokens: 200 },
+		{ apiKey, maxTokens: 200, reasoning: toReasoningEffort(thinkingLevel) },
 	);
 
 	return parseSummaryFromResponse(response, commitType, scope);

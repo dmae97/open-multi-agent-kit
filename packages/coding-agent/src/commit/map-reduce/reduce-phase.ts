@@ -1,3 +1,4 @@
+import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, AssistantMessage, Model } from "@oh-my-pi/pi-ai";
 import { completeSimple, validateToolCall } from "@oh-my-pi/pi-ai";
 import { Type } from "@sinclair/typebox";
@@ -5,6 +6,7 @@ import reduceSystemPrompt from "../../commit/prompts/reduce-system.md" with { ty
 import reduceUserPrompt from "../../commit/prompts/reduce-user.md" with { type: "text" };
 import type { ChangelogCategory, ConventionalAnalysis, FileObservation } from "../../commit/types";
 import { renderPromptTemplate } from "../../config/prompt-templates";
+import { toReasoningEffort } from "../../thinking";
 import { extractTextContent, extractToolCall, normalizeAnalysis, parseJsonPayload } from "../utils";
 
 const ReduceTool = {
@@ -49,6 +51,7 @@ const ReduceTool = {
 export interface ReducePhaseInput {
 	model: Model<Api>;
 	apiKey: string;
+	thinkingLevel?: ThinkingLevel;
 	observations: FileObservation[];
 	stat: string;
 	scopeCandidates: string;
@@ -58,6 +61,7 @@ export interface ReducePhaseInput {
 export async function runReducePhase({
 	model,
 	apiKey,
+	thinkingLevel,
 	observations,
 	stat,
 	scopeCandidates,
@@ -76,7 +80,7 @@ export async function runReducePhase({
 			messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
 			tools: [ReduceTool],
 		},
-		{ apiKey, maxTokens: 2400 },
+		{ apiKey, maxTokens: 2400, reasoning: toReasoningEffort(thinkingLevel) },
 	);
 
 	return parseAnalysisResponse(response);

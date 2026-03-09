@@ -1,4 +1,4 @@
-import { INTENT_FIELD } from "@oh-my-pi/pi-agent-core";
+import { INTENT_FIELD, type ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { Markdown } from "@oh-my-pi/pi-tui";
 import chalk from "chalk";
@@ -20,6 +20,7 @@ export interface CommitAgentInput {
 	cwd: string;
 	git: ControlledGit;
 	model: Model<Api>;
+	thinkingLevel?: ThinkingLevel;
 	settings: Settings;
 	modelRegistry: ModelRegistry;
 	authStorage: AuthStorage;
@@ -61,6 +62,7 @@ export async function runCommitAgentSession(input: CommitAgentInput): Promise<Co
 		modelRegistry: input.modelRegistry,
 		settings: input.settings,
 		model: input.model,
+		thinkingLevel: input.thinkingLevel,
 		systemPrompt,
 		customTools: tools,
 		enableLsp: false,

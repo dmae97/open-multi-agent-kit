@@ -834,11 +834,10 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 							const commitMsg =
 								commitStyle === "ai" && this.session.modelRegistry
 									? async (diff: string) => {
-											const smolModel = this.session.settings.getModelRole("smol");
 											return generateCommitMessage(
 												diff,
 												this.session.modelRegistry!,
-												smolModel,
+												this.session.settings,
 												this.session.getSessionId?.() ?? undefined,
 											);
 										}
@@ -1081,11 +1080,10 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 						const commitMsg =
 							commitStyle === "ai" && this.session.modelRegistry
 								? async (diff: string) => {
-										const smolModel = this.session.settings.getModelRole("smol");
 										return generateCommitMessage(
 											diff,
 											this.session.modelRegistry!,
-											smolModel,
+											this.session.settings,
 											this.session.getSessionId?.() ?? undefined,
 										);
 									}

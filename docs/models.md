@@ -245,7 +245,9 @@ Supported model roles:
 
 - `default`, `smol`, `slow`, `plan`, `commit`
 
-Role aliases like `pi/smol` expand through `settings.modelRoles`.
+Role aliases like `pi/smol` expand through `settings.modelRoles`. Each role value can also append a thinking selector such as `:minimal`, `:low`, `:medium`, or `:high`.
+
+If a role points at another role, the target model still inherits normally and any explicit suffix on the referring role wins for that role-specific use.
 
 Related settings:
 

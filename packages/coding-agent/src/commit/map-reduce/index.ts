@@ -1,3 +1,4 @@
+import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { $env } from "@oh-my-pi/pi-utils";
 import { parseFileDiffs } from "../../commit/git/diff";
@@ -21,8 +22,10 @@ export interface MapReduceSettings {
 export interface MapReduceInput {
 	model: Model<Api>;
 	apiKey: string;
+	thinkingLevel?: ThinkingLevel;
 	smolModel: Model<Api>;
 	smolApiKey: string;
+	smolThinkingLevel?: ThinkingLevel;
 	diff: string;
 	stat: string;
 	scopeCandidates: string;
@@ -50,12 +53,14 @@ export async function runMapReduceAnalysis(input: MapReduceInput): Promise<Conve
 	const observations = await runMapPhase({
 		model: input.smolModel,
 		apiKey: input.smolApiKey,
+		thinkingLevel: input.smolThinkingLevel,
 		files: fileDiffs,
 		config: input.settings,
 	});
 	return runReducePhase({
 		model: input.model,
 		apiKey: input.apiKey,
+		thinkingLevel: input.thinkingLevel,
 		observations,
 		stat: input.stat,
 		scopeCandidates: input.scopeCandidates,

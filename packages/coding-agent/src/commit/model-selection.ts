@@ -1,13 +1,33 @@
+import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { MODEL_ROLE_IDS } from "../config/model-registry";
-import {
-	expandRoleAlias,
-	parseModelPattern,
-	resolveModelFromSettings,
-	resolveModelFromString,
-} from "../config/model-resolver";
+import { expandRoleAlias, parseModelPattern, resolveModelRoleValue } from "../config/model-resolver";
 import type { Settings } from "../config/settings";
 import MODEL_PRIO from "../priority.json" with { type: "json" };
+
+export interface ResolvedCommitModel {
+	model: Model<Api>;
+	apiKey: string;
+	thinkingLevel?: ThinkingLevel;
+}
+
+function resolveRoleSelection(
+	roles: readonly string[],
+	settings: Settings,
+	availableModels: Model<Api>[],
+): { model: Model<Api>; thinkingLevel?: ThinkingLevel } | undefined {
+	const matchPreferences = { usageOrder: settings.getStorage()?.getModelUsageOrder() };
+	for (const role of roles) {
+		const resolved = resolveModelRoleValue(settings.getModelRole(role), availableModels, {
+			settings,
+			matchPreferences,
+		});
+		if (resolved.model) {
+			return { model: resolved.model, thinkingLevel: resolved.thinkingLevel };
+		}
+	}
+	return undefined;
+}
 
 export async function resolvePrimaryModel(
 	override: string | undefined,
@@ -16,18 +36,13 @@ export async function resolvePrimaryModel(
 		getAvailable: () => Model<Api>[];
 		getApiKey: (model: Model<Api>) => Promise<string | undefined>;
 	},
-): Promise<{ model: Model<Api>; apiKey: string }> {
+): Promise<ResolvedCommitModel> {
 	const available = modelRegistry.getAvailable();
 	const matchPreferences = { usageOrder: settings.getStorage()?.getModelUsageOrder() };
-	const roleOrder = ["commit", "smol", ...MODEL_ROLE_IDS] as const;
-	const model = override
-		? resolveModelFromString(expandRoleAlias(override, settings), available, matchPreferences)
-		: resolveModelFromSettings({
-				settings,
-				availableModels: available,
-				matchPreferences,
-				roleOrder,
-			});
+	const resolved = override
+		? resolveModelRoleValue(override, available, { settings, matchPreferences })
+		: resolveRoleSelection(["commit", "smol", ...MODEL_ROLE_IDS], settings, available);
+	const model = resolved?.model;
 	if (!model) {
 		throw new Error("No model available for commit generation");
 	}
@@ -35,7 +50,7 @@ export async function resolvePrimaryModel(
 	if (!apiKey) {
 		throw new Error(`No API key available for model ${model.provider}/${model.id}`);
 	}
-	return { model, apiKey };
+	return { model, apiKey, thinkingLevel: resolved?.thinkingLevel };
 }
 
 export async function resolveSmolModel(
@@ -46,18 +61,15 @@ export async function resolveSmolModel(
 	},
 	fallbackModel: Model<Api>,
 	fallbackApiKey: string,
-): Promise<{ model: Model<Api>; apiKey: string }> {
+): Promise<ResolvedCommitModel> {
 	const available = modelRegistry.getAvailable();
-	const matchPreferences = { usageOrder: settings.getStorage()?.getModelUsageOrder() };
-	const role = settings.getModelRole("smol");
-	const roleModel = role
-		? resolveModelFromString(expandRoleAlias(role, settings), available, matchPreferences)
-		: undefined;
-	if (roleModel) {
-		const apiKey = await modelRegistry.getApiKey(roleModel);
-		if (apiKey) return { model: roleModel, apiKey };
+	const resolvedSmol = resolveRoleSelection(["smol"], settings, available);
+	if (resolvedSmol?.model) {
+		const apiKey = await modelRegistry.getApiKey(resolvedSmol.model);
+		if (apiKey) return { model: resolvedSmol.model, apiKey, thinkingLevel: resolvedSmol.thinkingLevel };
 	}
 
+	const matchPreferences = { usageOrder: settings.getStorage()?.getModelUsageOrder() };
 	for (const pattern of MODEL_PRIO.smol) {
 		const candidate = parseModelPattern(pattern, available, matchPreferences).model;
 		if (!candidate) continue;

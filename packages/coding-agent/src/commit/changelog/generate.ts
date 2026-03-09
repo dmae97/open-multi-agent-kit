@@ -1,3 +1,4 @@
+import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, AssistantMessage, Model } from "@oh-my-pi/pi-ai";
 import { completeSimple, validateToolCall } from "@oh-my-pi/pi-ai";
 import { type TSchema, Type } from "@sinclair/typebox";
@@ -5,6 +6,7 @@ import changelogSystemPrompt from "../../commit/prompts/changelog-system.md" wit
 import changelogUserPrompt from "../../commit/prompts/changelog-user.md" with { type: "text" };
 import { CHANGELOG_CATEGORIES, type ChangelogCategory, type ChangelogGenerationResult } from "../../commit/types";
 import { renderPromptTemplate } from "../../config/prompt-templates";
+import { toReasoningEffort } from "../../thinking";
 import { extractTextContent, extractToolCall, parseJsonPayload } from "../utils";
 
 const changelogEntryProperties = CHANGELOG_CATEGORIES.reduce<Record<ChangelogCategory, TSchema>>(
@@ -28,6 +30,7 @@ export const changelogTool = {
 export interface ChangelogPromptInput {
 	model: Model<Api>;
 	apiKey: string;
+	thinkingLevel?: ThinkingLevel;
 	changelogPath: string;
 	isPackageChangelog: boolean;
 	existingEntries?: string;
@@ -38,6 +41,7 @@ export interface ChangelogPromptInput {
 export async function generateChangelogEntries({
 	model,
 	apiKey,
+	thinkingLevel,
 	changelogPath,
 	isPackageChangelog,
 	existingEntries,
@@ -58,7 +62,7 @@ export async function generateChangelogEntries({
 			messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
 			tools: [changelogTool],
 		},
-		{ apiKey, maxTokens: 1200 },
+		{ apiKey, maxTokens: 1200, reasoning: toReasoningEffort(thinkingLevel) },
 	);
 
 	const parsed = parseChangelogResponse(response);

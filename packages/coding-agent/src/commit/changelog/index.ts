@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { ControlledGit } from "../../commit/git";
@@ -16,6 +17,7 @@ export interface ChangelogFlowInput {
 	cwd: string;
 	model: Model<Api>;
 	apiKey: string;
+	thinkingLevel?: ThinkingLevel;
 	stagedFiles: string[];
 	dryRun: boolean;
 	maxDiffChars?: number;
@@ -42,6 +44,7 @@ export async function runChangelogFlow({
 	cwd,
 	model,
 	apiKey,
+	thinkingLevel,
 	stagedFiles,
 	dryRun,
 	maxDiffChars,
@@ -72,6 +75,7 @@ export async function runChangelogFlow({
 		const generated = await generateChangelogEntries({
 			model,
 			apiKey,
+			thinkingLevel,
 			changelogPath: boundary.changelogPath,
 			isPackageChangelog,
 			existingEntries: existingEntries || undefined,

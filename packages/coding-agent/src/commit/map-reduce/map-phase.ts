@@ -1,3 +1,4 @@
+import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, AssistantMessage, Message, Model } from "@oh-my-pi/pi-ai";
 import { completeSimple } from "@oh-my-pi/pi-ai";
 import fileObserverSystemPrompt from "../../commit/prompts/file-observer-system.md" with { type: "text" };
@@ -5,6 +6,7 @@ import fileObserverUserPrompt from "../../commit/prompts/file-observer-user.md" 
 import type { FileDiff, FileObservation } from "../../commit/types";
 import { isExcludedFile } from "../../commit/utils/exclusions";
 import { renderPromptTemplate } from "../../config/prompt-templates";
+import { toReasoningEffort } from "../../thinking";
 import { truncateToTokenLimit } from "./utils";
 
 const MAX_FILE_TOKENS = 50_000;
@@ -17,6 +19,7 @@ const RETRY_BACKOFF_MS = 1000;
 export interface MapPhaseInput {
 	model: Model<Api>;
 	apiKey: string;
+	thinkingLevel?: ThinkingLevel;
 	files: FileDiff[];
 	config?: {
 		maxFileTokens?: number;
@@ -27,7 +30,7 @@ export interface MapPhaseInput {
 	};
 }
 
-export async function runMapPhase({ model, apiKey, files, config }: MapPhaseInput): Promise<FileObservation[]> {
+export async function runMapPhase({ model, apiKey, thinkingLevel, files, config }: MapPhaseInput): Promise<FileObservation[]> {
 	const filtered = files.filter(file => !isExcludedFile(file.filename));
 	const systemPrompt = renderPromptTemplate(fileObserverSystemPrompt);
 	const maxFileTokens = config?.maxFileTokens ?? MAX_FILE_TOKENS;
@@ -58,7 +61,7 @@ export async function runMapPhase({ model, apiKey, files, config }: MapPhaseInpu
 		};
 
 		const response = await withRetry(
-			() => completeSimple(model, request, { apiKey, maxTokens: 400, signal: AbortSignal.timeout(timeoutMs) }),
+			() => completeSimple(model, request, { apiKey, maxTokens: 400, reasoning: toReasoningEffort(thinkingLevel), signal: AbortSignal.timeout(timeoutMs) }),
 			maxRetries,
 			retryBackoffMs,
 		);

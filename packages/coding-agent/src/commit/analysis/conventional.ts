@@ -1,3 +1,4 @@
+import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, AssistantMessage, Model } from "@oh-my-pi/pi-ai";
 import { completeSimple, validateToolCall } from "@oh-my-pi/pi-ai";
 import { Type } from "@sinclair/typebox";
@@ -5,6 +6,7 @@ import analysisSystemPrompt from "../../commit/prompts/analysis-system.md" with 
 import analysisUserPrompt from "../../commit/prompts/analysis-user.md" with { type: "text" };
 import type { ChangelogCategory, ConventionalAnalysis } from "../../commit/types";
 import { renderPromptTemplate } from "../../config/prompt-templates";
+import { toReasoningEffort } from "../../thinking";
 import { extractTextContent, extractToolCall, normalizeAnalysis, parseJsonPayload } from "../utils";
 
 const ConventionalAnalysisTool = {
@@ -49,6 +51,7 @@ const ConventionalAnalysisTool = {
 export interface ConventionalAnalysisInput {
 	model: Model<Api>;
 	apiKey: string;
+	thinkingLevel?: ThinkingLevel;
 	contextFiles?: Array<{ path: string; content: string }>;
 	userContext?: string;
 	typesDescription?: string;
@@ -64,6 +67,7 @@ export interface ConventionalAnalysisInput {
 export async function generateConventionalAnalysis({
 	model,
 	apiKey,
+	thinkingLevel,
 	contextFiles,
 	userContext,
 	typesDescription,
@@ -89,7 +93,7 @@ export async function generateConventionalAnalysis({
 			messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
 			tools: [ConventionalAnalysisTool],
 		},
-		{ apiKey, maxTokens: 2400 },
+		{ apiKey, maxTokens: 2400, reasoning: toReasoningEffort(thinkingLevel) },
 	);
 
 	return parseAnalysisFromResponse(response);

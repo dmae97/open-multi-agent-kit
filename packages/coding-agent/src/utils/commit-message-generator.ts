@@ -2,12 +2,15 @@
  * Generate commit messages from diffs using a smol, fast model.
  * Follows the same pattern as title-generator.ts.
  */
+import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { completeSimple } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { ModelRegistry } from "../config/model-registry";
-import { parseModelString } from "../config/model-resolver";
+import { resolveModelRoleValue } from "../config/model-resolver";
 import { renderPromptTemplate } from "../config/prompt-templates";
+import { toReasoningEffort } from "../thinking";
+import type { Settings } from "../config/settings";
 import MODEL_PRIO from "../priority.json" with { type: "json" };
 import commitSystemPrompt from "../prompts/system/commit-message-system.md" with { type: "text" };
 
@@ -32,24 +35,26 @@ function filterDiffNoise(diff: string): string {
 	return filtered.join("\n");
 }
 
-function getSmolModelCandidates(registry: ModelRegistry, savedSmolModel?: string): Model<Api>[] {
+function getSmolModelCandidates(
+	registry: ModelRegistry,
+	settings: Settings,
+): Array<{ model: Model<Api>; thinkingLevel?: ThinkingLevel }> {
 	const availableModels = registry.getAvailable();
 	if (availableModels.length === 0) return [];
 
-	const candidates: Model<Api>[] = [];
-	const addCandidate = (model?: Model<Api>): void => {
+	const candidates: Array<{ model: Model<Api>; thinkingLevel?: ThinkingLevel }> = [];
+	const addCandidate = (model?: Model<Api>, thinkingLevel?: ThinkingLevel): void => {
 		if (!model) return;
-		if (candidates.some(c => c.provider === model.provider && c.id === model.id)) return;
-		candidates.push(model);
+		if (candidates.some(c => c.model.provider === model.provider && c.model.id === model.id)) return;
+		candidates.push({ model, thinkingLevel });
 	};
 
-	if (savedSmolModel) {
-		const parsed = parseModelString(savedSmolModel);
-		if (parsed) {
-			const match = availableModels.find(m => m.provider === parsed.provider && m.id === parsed.id);
-			addCandidate(match);
-		}
-	}
+	const matchPreferences = { usageOrder: settings.getStorage()?.getModelUsageOrder() };
+	const configuredSmol = resolveModelRoleValue(settings.getModelRole("smol"), availableModels, {
+		settings,
+		matchPreferences,
+	});
+	addCandidate(configuredSmol.model, configuredSmol.thinkingLevel);
 
 	for (const pattern of MODEL_PRIO.smol) {
 		const needle = pattern.toLowerCase();
@@ -71,10 +76,10 @@ function getSmolModelCandidates(registry: ModelRegistry, savedSmolModel?: string
 export async function generateCommitMessage(
 	diff: string,
 	registry: ModelRegistry,
-	savedSmolModel?: string,
+	settings: Settings,
 	sessionId?: string,
 ): Promise<string | null> {
-	const candidates = getSmolModelCandidates(registry, savedSmolModel);
+	const candidates = getSmolModelCandidates(registry, settings);
 	if (candidates.length === 0) {
 		logger.debug("commit-msg-generator: no smol model found");
 		return null;
@@ -89,22 +94,22 @@ export async function generateCommitMessage(
 	}
 	const userMessage = `<diff>\n${truncatedDiff}\n</diff>`;
 
-	for (const model of candidates) {
-		const apiKey = await registry.getApiKey(model, sessionId);
+	for (const candidate of candidates) {
+		const apiKey = await registry.getApiKey(candidate.model, sessionId);
 		if (!apiKey) continue;
 
 		try {
 			const response = await completeSimple(
-				model,
+				candidate.model,
 				{
 					systemPrompt: COMMIT_SYSTEM_PROMPT,
 					messages: [{ role: "user", content: userMessage, timestamp: Date.now() }],
 				},
-				{ apiKey, maxTokens: 60 },
+				{ apiKey, maxTokens: 60, reasoning: toReasoningEffort(candidate.thinkingLevel) },
 			);
 
 			if (response.stopReason === "error") {
-				logger.debug("commit-msg-generator: error", { model: model.id, error: response.errorMessage });
+				logger.debug("commit-msg-generator: error", { model: candidate.model.id, error: response.errorMessage });
 				continue;
 			}
 
@@ -118,11 +123,11 @@ export async function generateCommitMessage(
 			// Clean up: remove wrapping quotes, backticks, trailing period
 			msg = msg.replace(/^[`"']|[`"']$/g, "").replace(/\.$/, "");
 
-			logger.debug("commit-msg-generator: generated", { model: model.id, msg });
+			logger.debug("commit-msg-generator: generated", { model: candidate.model.id, msg });
 			return msg;
 		} catch (err) {
 			logger.debug("commit-msg-generator: error", {
-				model: model.id,
+				model: candidate.model.id,
 				error: err instanceof Error ? err.message : String(err),
 			});
 		}
