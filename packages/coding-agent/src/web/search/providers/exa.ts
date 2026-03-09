@@ -10,6 +10,7 @@ import { getEnvApiKey } from "@oh-my-pi/pi-ai";
 import { callExaTool, findApiKey, isSearchResponse } from "../../../exa/mcp-client";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
+import { settings } from "../../../config/settings";
 import { dateToAgeSeconds } from "../utils";
 import type { SearchParams } from "./base";
 import { SearchProvider } from "./base";
@@ -244,7 +245,14 @@ export class ExaProvider extends SearchProvider {
 	readonly label = "Exa";
 
 	isAvailable(): boolean {
-		return true;
+		try {
+			if (settings.get("exa.enabled") === false || settings.get("exa.enableSearch") === false) {
+				return false;
+			}
+		} catch {
+			// Settings not initialized; fall through to credential check
+		}
+		return !!getEnvApiKey("exa") || !!findApiKey();
 	}
 
 	search(params: SearchParams): Promise<SearchResponse> {
