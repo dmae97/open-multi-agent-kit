@@ -629,15 +629,11 @@ function writeTerminalBreadcrumb(cwd: string, sessionFile: string): void {
 	const terminalId = getTerminalId();
 	if (!terminalId) return;
 
-	try {
-		const breadcrumbDir = path.join(getDefaultAgentDir(), TERMINAL_SESSIONS_DIR);
-		const breadcrumbFile = path.join(breadcrumbDir, terminalId);
-		const content = `${cwd}\n${sessionFile}\n`;
-		// Bun.write auto-creates parent dirs
-		void Bun.write(breadcrumbFile, content);
-	} catch {
-		// Best-effort — don't break session creation if breadcrumb fails
-	}
+	const breadcrumbDir = path.join(getDefaultAgentDir(), TERMINAL_SESSIONS_DIR);
+	const breadcrumbFile = path.join(breadcrumbDir, terminalId);
+	const content = `${cwd}\n${sessionFile}\n`;
+	// Best-effort — don't break session creation if breadcrumb fails
+	Bun.write(breadcrumbFile, content).catch(() => {});
 }
 
 /**
