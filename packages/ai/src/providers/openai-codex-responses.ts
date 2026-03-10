@@ -1,5 +1,6 @@
 import * as os from "node:os";
 import { $env, abortableSleep, asRecord, logger, readSseJson } from "@oh-my-pi/pi-utils";
+import type OpenAI from "openai";
 import type {
 	ResponseFunctionToolCall,
 	ResponseInput,
@@ -20,7 +21,6 @@ import {
 	type Model,
 	type ProviderSessionState,
 	type ServiceTier,
-	type StopReason,
 	type StreamFunction,
 	type StreamOptions,
 	type TextContent,
@@ -54,6 +54,7 @@ import {
 	transformRequestBody,
 } from "./openai-codex/request-transformer";
 import { parseCodexError } from "./openai-codex/response-handler";
+import { encodeTextSignatureV1, mapOpenAIResponsesStopReason, parseTextSignature } from "./openai-responses-shared";
 import { transformMessages } from "./transform-messages";
 
 export interface OpenAICodexResponsesOptions extends StreamOptions {
@@ -975,7 +976,8 @@ function handleOutputItemDone(
 		runtime.currentBlock.text = item.content
 			.map(content => (content.type === "output_text" ? content.text : content.refusal))
 			.join("");
-		runtime.currentBlock.textSignature = item.id;
+		const phase = item.phase === "commentary" || item.phase === "final_answer" ? item.phase : undefined;
+		runtime.currentBlock.textSignature = encodeTextSignatureV1(item.id, phase);
 		stream.push({
 			type: "text_end",
 			contentIndex: blockIndex(),
@@ -1054,7 +1056,7 @@ function handleResponseCompleted(
 	}
 
 	calculateCost(model, output.usage);
-	output.stopReason = mapStopReason(response?.status);
+	output.stopReason = mapOpenAIResponsesStopReason(response?.status as OpenAI.Responses.ResponseStatus | undefined);
 	if (output.content.some(block => block.type === "toolCall") && output.stopReason === "stop") {
 		output.stopReason = "toolUse";
 	}
@@ -2063,7 +2065,8 @@ function convertMessages(model: Model<"openai-codex-responses">, context: Contex
 				}
 				if (block.type === "text") {
 					const textBlock = block as TextContent;
-					let msgId = textBlock.textSignature;
+					const parsedSignature = parseTextSignature(textBlock.textSignature);
+					let msgId = parsedSignature?.id;
 					if (!msgId) {
 						msgId = `msg_${msgIndex}`;
 					} else if (msgId.length > 64) {
@@ -2075,6 +2078,7 @@ function convertMessages(model: Model<"openai-codex-responses">, context: Contex
 						content: [{ type: "output_text", text: textBlock.text.toWellFormed(), annotations: [] }],
 						status: "completed",
 						id: msgId,
+						phase: parsedSignature?.phase,
 					} satisfies ResponseOutputMessage);
 					continue;
 				}
@@ -2177,24 +2181,6 @@ function convertTools(tools: Tool[]): Array<{
 			...(effectiveStrict && { strict: true }),
 		};
 	});
-}
-
-function mapStopReason(status: string | undefined): StopReason {
-	if (!status) return "stop";
-	switch (status) {
-		case "completed":
-			return "stop";
-		case "incomplete":
-			return "length";
-		case "failed":
-		case "cancelled":
-			return "error";
-		case "in_progress":
-		case "queued":
-			return "stop";
-		default:
-			return "stop";
-	}
 }
 
 function getString(value: unknown): string | undefined {
