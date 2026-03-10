@@ -75,7 +75,6 @@ export function renderSearchResult(
 	theme: Theme,
 	args?: {
 		query?: string;
-		provider?: string;
 		allowLongAnswer?: boolean;
 		maxAnswerLines?: number;
 	},
@@ -282,13 +281,12 @@ export function renderSearchResult(
 
 /** Render web search call (query preview) */
 export function renderSearchCall(
-	args: { query?: string; provider?: string; [key: string]: unknown },
+	args: { query?: string; [key: string]: unknown },
 	_options: RenderResultOptions,
 	theme: Theme,
 ): Component {
-	const provider = args.provider ?? "auto";
 	const query = truncateToWidth(args.query ?? "", 80);
-	const text = renderStatusLine({ icon: "pending", title: "Web Search", description: query, meta: [provider] }, theme);
+	const text = renderStatusLine({ icon: "pending", title: "Web Search", description: query }, theme);
 	return new Text(text, 0, 0);
 }
 

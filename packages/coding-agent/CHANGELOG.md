@@ -1,6 +1,16 @@
 # Changelog
 
 ## [Unreleased]
+### Breaking Changes
+
+- Web search tool no longer accepts `provider` parameter in tool calls; use internal provider resolution instead
+- Removed `no_fallback` option from search parameters
+
+### Changed
+
+- Removed `provider` parameter from web search tool schema; provider selection now handled internally
+- Removed `no_fallback` parameter from web search parameters; fallback behavior now automatic based on provider availability
+- Renamed `SearchParams` type to `SearchToolParams` for tool execution; introduced `SearchQueryParams` for CLI queries with optional provider selection
 
 ## [13.9.15] - 2026-03-10
 ### Added

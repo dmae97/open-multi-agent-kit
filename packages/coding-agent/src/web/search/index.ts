@@ -26,34 +26,12 @@ import type { ToolSession } from "../../tools";
 import { formatAge } from "../../tools/render-utils";
 import { getSearchProvider, resolveProviderChain, type SearchProvider } from "./provider";
 import { renderSearchCall, renderSearchResult, type SearchRenderDetails } from "./render";
-import type { SearchResponse } from "./types";
+import type { SearchProviderId, SearchResponse } from "./types";
 import { SearchProviderError } from "./types";
 
-/** Web search parameters schema */
+/** Web search tool parameters schema */
 export const webSearchSchema = Type.Object({
 	query: Type.String({ description: "Search query" }),
-	provider: Type.Optional(
-		StringEnum(
-			[
-				"auto",
-				"exa",
-				"brave",
-				"jina",
-				"kimi",
-				"zai",
-				"anthropic",
-				"perplexity",
-				"gemini",
-				"codex",
-				"tavily",
-				"kagi",
-				"synthetic",
-			],
-			{
-				description: "Search provider (default: auto)",
-			},
-		),
-	),
 	recency: Type.Optional(
 		StringEnum(["day", "week", "month", "year"], {
 			description: "Recency filter (Brave, Perplexity)",
@@ -65,22 +43,8 @@ export const webSearchSchema = Type.Object({
 	num_search_results: Type.Optional(Type.Number({ description: "Number of search results to retrieve" })),
 });
 
-export type SearchParams = {
+export type SearchToolParams = {
 	query: string;
-	provider?:
-		| "auto"
-		| "exa"
-		| "brave"
-		| "jina"
-		| "kimi"
-		| "zai"
-		| "anthropic"
-		| "perplexity"
-		| "gemini"
-		| "codex"
-		| "tavily"
-		| "kagi"
-		| "synthetic";
 	recency?: "day" | "week" | "month" | "year";
 	limit?: number;
 	/** Maximum output tokens. Defaults to 4096. */
@@ -89,9 +53,11 @@ export type SearchParams = {
 	temperature?: number;
 	/** Number of search results to retrieve. Defaults to 10. */
 	num_search_results?: number;
-	/** Deprecated CLI flag; explicit provider fallback now happens only when provider is unavailable. */
-	no_fallback?: boolean;
 };
+
+export interface SearchQueryParams extends SearchToolParams {
+	provider?: SearchProviderId | "auto";
+}
 
 function formatProviderList(providers: SearchProvider[]): string {
 	return providers.map(provider => provider.label).join(", ");
@@ -178,14 +144,14 @@ function formatForLLM(response: SearchResponse): string {
 /** Execute web search */
 async function executeSearch(
 	_toolCallId: string,
-	params: SearchParams,
+	params: SearchQueryParams,
 ): Promise<{ content: Array<{ type: "text"; text: string }>; details: SearchRenderDetails }> {
 	const providers =
 		params.provider && params.provider !== "auto"
 			? (await getSearchProvider(params.provider).isAvailable())
 				? [getSearchProvider(params.provider)]
 				: await resolveProviderChain("auto")
-			: await resolveProviderChain(params.provider);
+			: await resolveProviderChain();
 	if (providers.length === 0) {
 		const message = "No web search provider configured.";
 		return {
@@ -237,7 +203,7 @@ async function executeSearch(
  * Execute a web search query for CLI/testing workflows.
  */
 export async function runSearchQuery(
-	params: SearchParams,
+	params: SearchQueryParams,
 ): Promise<{ content: Array<{ type: "text"; text: string }>; details: SearchRenderDetails }> {
 	return executeSearch("cli-web-search", params);
 }
@@ -261,7 +227,7 @@ export class SearchTool implements AgentTool<typeof webSearchSchema, SearchRende
 
 	async execute(
 		_toolCallId: string,
-		params: SearchParams,
+		params: SearchToolParams,
 		_signal?: AbortSignal,
 		_onUpdate?: AgentToolUpdateCallback<SearchRenderDetails>,
 		_context?: AgentToolContext,
@@ -277,11 +243,17 @@ export const webSearchCustomTool: CustomTool<typeof webSearchSchema, SearchRende
 	description: renderPromptTemplate(webSearchDescription),
 	parameters: webSearchSchema,
 
-	async execute(toolCallId: string, params: SearchParams, _onUpdate, _ctx: CustomToolContext, _signal?: AbortSignal) {
+	async execute(
+		toolCallId: string,
+		params: SearchToolParams,
+		_onUpdate,
+		_ctx: CustomToolContext,
+		_signal?: AbortSignal,
+	) {
 		return executeSearch(toolCallId, params);
 	},
 
-	renderCall(args: SearchParams, options: RenderResultOptions, theme: Theme) {
+	renderCall(args: SearchToolParams, options: RenderResultOptions, theme: Theme) {
 		return renderSearchCall(args, options, theme);
 	},
 

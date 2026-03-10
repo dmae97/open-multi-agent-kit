@@ -7,7 +7,7 @@
 import { APP_NAME } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { initTheme, theme } from "../modes/theme/theme";
-import { runSearchQuery, type SearchParams } from "../web/search/index";
+import { runSearchQuery, type SearchQueryParams } from "../web/search/index";
 import { SEARCH_PROVIDER_ORDER } from "../web/search/provider";
 import { renderSearchResult } from "../web/search/render";
 import type { SearchProviderId } from "../web/search/types";
@@ -87,18 +87,16 @@ export async function runSearchCommand(cmd: SearchCommandArgs): Promise<void> {
 
 	await initTheme();
 
-	const params: SearchParams = {
+	const params: SearchQueryParams = {
 		query: cmd.query,
 		provider: cmd.provider,
 		recency: cmd.recency,
 		limit: cmd.limit,
-		no_fallback: cmd.provider !== undefined && cmd.provider !== "auto",
 	};
 
 	const result = await runSearchQuery(params);
 	const component = renderSearchResult(result, { expanded: cmd.expanded, isPartial: false }, theme, {
 		query: cmd.query,
-		provider: cmd.provider,
 		allowLongAnswer: true,
 		maxAnswerLines: cmd.expanded ? undefined : 6,
 	});
