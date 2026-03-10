@@ -41,6 +41,9 @@ export class InputController {
 			);
 		this.ctx.editor.onEscape = () => {
 			if (this.ctx.loadingAnimation) {
+				if (this.ctx.cancelPendingSubmission()) {
+					return;
+				}
 				this.restoreQueuedMessagesToEditor({ abort: true });
 			} else if (this.ctx.session.isBashRunning) {
 				this.ctx.session.abortBash();
@@ -54,6 +57,8 @@ export class InputController {
 				this.ctx.editor.setText("");
 				this.ctx.isPythonMode = false;
 				this.ctx.updateEditorBorderColor();
+			} else if (this.ctx.session.isStreaming) {
+				void this.ctx.session.abort();
 			} else if (!this.ctx.editor.getText().trim()) {
 				// Double-escape with empty editor triggers /tree, /branch, or nothing based on setting
 				const action = settings.get("doubleEscapeAction");
@@ -170,7 +175,7 @@ export class InputController {
 				if (this.ctx.onInputCallback) {
 					this.ctx.editor.setText("");
 					this.ctx.pendingImages = [];
-					this.ctx.onInputCallback({ text: "" });
+					this.ctx.onInputCallback({ text: "", cancelled: false, started: true });
 				}
 				return;
 			}
@@ -330,19 +335,9 @@ export class InputController {
 				this.ctx.pendingImages = [];
 
 				// Render user message immediately, then let session events catch up
-				this.ctx.optimisticUserMessageSignature = `${text}\u0000${images?.length ?? 0}`;
-				const optimisticMessage: AgentMessage = {
-					role: "user",
-					content: [{ type: "text", text }, ...(images ?? [])],
-					attribution: "user",
-					timestamp: Date.now(),
-				};
-				this.ctx.addMessageToChat(optimisticMessage);
-				this.ctx.editor.setText("");
-				this.ctx.ensureLoadingAnimation();
-				this.ctx.ui.requestRender();
+				const submission = this.ctx.startPendingSubmission({ text, images });
 
-				this.ctx.onInputCallback({ text, images });
+				this.ctx.onInputCallback(submission);
 			}
 			this.ctx.editor.addToHistory(text);
 		};

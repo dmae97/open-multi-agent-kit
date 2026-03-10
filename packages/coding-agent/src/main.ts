@@ -125,12 +125,20 @@ async function runInteractiveMode(
 	}
 
 	while (true) {
-		const { text, images } = await mode.getUserInput();
+		const input = await mode.getUserInput();
+		if (input.cancelled) {
+			continue;
+		}
 		try {
-			await session.prompt(text, { images });
+			if (!mode.markPendingSubmissionStarted(input)) {
+				continue;
+			}
+			await session.prompt(input.text, { images: input.images });
 		} catch (error: unknown) {
 			const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
 			mode.showError(errorMessage);
+		} finally {
+			mode.finishPendingSubmission(input);
 		}
 	}
 }

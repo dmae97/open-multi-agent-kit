@@ -27,6 +27,13 @@ export type CompactionQueuedMessage = {
 	mode: "steer" | "followUp";
 };
 
+export type SubmittedUserInput = {
+	text: string;
+	images?: ImageContent[];
+	cancelled: boolean;
+	started: boolean;
+};
+
 export type TodoStatus = "pending" | "in_progress" | "completed" | "abandoned";
 
 export type TodoItem = {
@@ -87,7 +94,7 @@ export interface InteractiveModeContext {
 	autoCompactionEscapeHandler?: () => void;
 	retryEscapeHandler?: () => void;
 	unsubscribe?: () => void;
-	onInputCallback?: (input: { text: string; images?: ImageContent[] }) => void;
+	onInputCallback?: (input: SubmittedUserInput) => void;
 	optimisticUserMessageSignature: string | undefined;
 	lastSigintTime: number;
 	lastEscapeTime: number;
@@ -129,6 +136,10 @@ export interface InteractiveModeContext {
 	setWorkingMessage(message?: string): void;
 	applyPendingWorkingMessage(): void;
 	ensureLoadingAnimation(): void;
+	startPendingSubmission(input: { text: string; images?: ImageContent[] }): SubmittedUserInput;
+	cancelPendingSubmission(): boolean;
+	markPendingSubmissionStarted(input: SubmittedUserInput): boolean;
+	finishPendingSubmission(input: SubmittedUserInput): void;
 	isKnownSlashCommand(text: string): boolean;
 	addMessageToChat(message: AgentMessage, options?: { populateHistory?: boolean }): void;
 	renderSessionContext(

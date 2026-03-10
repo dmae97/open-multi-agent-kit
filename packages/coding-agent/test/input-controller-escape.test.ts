@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "bun:test";
 import { InputController } from "@oh-my-pi/pi-coding-agent/modes/controllers/input-controller";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
+import type { InteractiveModeContext, SubmittedUserInput } from "@oh-my-pi/pi-coding-agent/modes/types";
 
 type FakeEditor = {
 	onEscape?: () => void;
@@ -26,24 +26,47 @@ type FakeEditor = {
 	setCustomKeyHandler(key: string, handler: () => void): void;
 };
 
+function createSubmission(input: {
+	text: string;
+	images?: InteractiveModeContext["pendingImages"];
+}): SubmittedUserInput {
+	return {
+		text: input.text,
+		images: input.images,
+		cancelled: false,
+		started: false,
+	};
+}
+
 function createContext(): {
 	ctx: InteractiveModeContext;
 	editor: FakeEditor;
 	spies: {
 		abort: ReturnType<typeof vi.fn>;
+		abortBash: ReturnType<typeof vi.fn>;
+		abortPython: ReturnType<typeof vi.fn>;
 		addMessageToChat: ReturnType<typeof vi.fn>;
+		cancelPendingSubmission: ReturnType<typeof vi.fn>;
 		clearQueue: ReturnType<typeof vi.fn>;
 		ensureLoadingAnimation: ReturnType<typeof vi.fn>;
 		onInputCallback: ReturnType<typeof vi.fn>;
 		requestRender: ReturnType<typeof vi.fn>;
+		startPendingSubmission: ReturnType<typeof vi.fn>;
 	};
 } {
 	let editorText = "";
 	const abort = vi.fn();
+	const abortBash = vi.fn();
+	const abortPython = vi.fn();
 	const addMessageToChat = vi.fn();
+	const cancelPendingSubmission = vi.fn(() => false);
 	const clearQueue = vi.fn(() => ({ steering: [], followUp: [] }));
 	const onInputCallback = vi.fn();
 	const requestRender = vi.fn();
+	const startPendingSubmission = vi.fn((input: { text: string; images?: InteractiveModeContext["pendingImages"] }) => {
+		ensureLoadingAnimation();
+		return createSubmission(input);
+	});
 	const editor: FakeEditor = {
 		setText(text: string) {
 			editorText = text;
@@ -78,6 +101,8 @@ function createContext(): {
 			messages: [],
 			extensionRunner: undefined,
 			abort,
+			abortBash,
+			abortPython,
 			clearQueue,
 		} as unknown as InteractiveModeContext["session"],
 		sessionManager: {
@@ -92,8 +117,12 @@ function createContext(): {
 		optimisticUserMessageSignature: undefined,
 		onInputCallback,
 		addMessageToChat,
+		cancelPendingSubmission,
 		ensureLoadingAnimation,
+		finishPendingSubmission: vi.fn(),
 		flushPendingBashComponents: vi.fn(),
+		markPendingSubmissionStarted: vi.fn(() => true),
+		startPendingSubmission,
 		updatePendingMessagesDisplay: vi.fn(),
 		updateEditorBorderColor: vi.fn(),
 		showDebugSelector: vi.fn(),
@@ -110,40 +139,91 @@ function createContext(): {
 		editor,
 		spies: {
 			abort,
+			abortBash,
+			abortPython,
 			addMessageToChat,
+			cancelPendingSubmission,
 			clearQueue,
 			ensureLoadingAnimation,
 			onInputCallback,
 			requestRender,
+			startPendingSubmission,
 		},
 	};
 }
 
 describe("InputController escape behavior", () => {
-	it("arms escape immediately for optimistic submissions", async () => {
+	it("prefers canceling a pending optimistic submission before aborting the session", async () => {
 		const { ctx, editor, spies } = createContext();
+		const submission = createSubmission({ text: "hello" });
+		spies.startPendingSubmission.mockReturnValue(submission);
+		spies.cancelPendingSubmission.mockReturnValue(true);
+		ctx.loadingAnimation = {} as InteractiveModeContext["loadingAnimation"];
 		const controller = new InputController(ctx);
 
 		controller.setupKeyHandlers();
 		controller.setupEditorSubmitHandler();
 		await editor.onSubmit?.("hello");
 
-		expect(spies.ensureLoadingAnimation).toHaveBeenCalledTimes(1);
-		expect(spies.addMessageToChat).toHaveBeenCalledWith(
-			expect.objectContaining({
-				role: "user",
-				attribution: "user",
-				content: [{ type: "text", text: "hello" }],
-			}),
-		);
-		expect(spies.onInputCallback).toHaveBeenCalledWith({ text: "hello", images: undefined });
-		expect(spies.requestRender).toHaveBeenCalledTimes(1);
-		expect(ctx.optimisticUserMessageSignature).toBe("hello\u00000");
-		expect(editor.getText()).toBe("");
+		expect(spies.startPendingSubmission).toHaveBeenCalledWith({ text: "hello", images: undefined });
+		expect(spies.onInputCallback).toHaveBeenCalledWith(submission);
 		expect(editor.shouldBypassAutocompleteOnEscape?.()).toBe(true);
 
 		editor.onEscape?.();
+		expect(spies.cancelPendingSubmission).toHaveBeenCalledTimes(1);
+		expect(spies.clearQueue).not.toHaveBeenCalled();
+		expect(spies.abort).not.toHaveBeenCalled();
+	});
+
+	it("falls back to aborting the active session when no pending optimistic submission exists", () => {
+		const { ctx, editor, spies } = createContext();
+		ctx.loadingAnimation = {} as InteractiveModeContext["loadingAnimation"];
+		const controller = new InputController(ctx);
+
+		controller.setupKeyHandlers();
+		editor.onEscape?.();
+
+		expect(spies.cancelPendingSubmission).toHaveBeenCalledTimes(1);
 		expect(spies.clearQueue).toHaveBeenCalledTimes(1);
+		expect(spies.abort).toHaveBeenCalledTimes(1);
+	});
+
+	it("prefers aborting bash before aborting an overlapping stream", () => {
+		const { ctx, editor, spies } = createContext();
+		(ctx.session as { isStreaming: boolean; isBashRunning: boolean }).isStreaming = true;
+		(ctx.session as { isStreaming: boolean; isBashRunning: boolean }).isBashRunning = true;
+		const controller = new InputController(ctx);
+
+		controller.setupKeyHandlers();
+		editor.onEscape?.();
+
+		expect(spies.abortBash).toHaveBeenCalledTimes(1);
+		expect(spies.abort).not.toHaveBeenCalled();
+	});
+
+	it("prefers aborting python before aborting an overlapping stream", () => {
+		const { ctx, editor, spies } = createContext();
+		(ctx.session as { isStreaming: boolean; isPythonRunning: boolean }).isStreaming = true;
+		(ctx.session as { isStreaming: boolean; isPythonRunning: boolean }).isPythonRunning = true;
+		const controller = new InputController(ctx);
+
+		controller.setupKeyHandlers();
+		editor.onEscape?.();
+
+		expect(spies.abortPython).toHaveBeenCalledTimes(1);
+		expect(spies.abort).not.toHaveBeenCalled();
+	});
+
+	it("aborts streaming even when the working loader is no longer present", () => {
+		const { ctx, editor, spies } = createContext();
+		(ctx.session as { isStreaming: boolean }).isStreaming = true;
+		const controller = new InputController(ctx);
+
+		controller.setupKeyHandlers();
+		editor.onEscape?.();
+
+		expect(spies.cancelPendingSubmission).not.toHaveBeenCalled();
+		expect(spies.clearQueue).not.toHaveBeenCalled();
 		expect(spies.abort).toHaveBeenCalledTimes(1);
 	});
 });

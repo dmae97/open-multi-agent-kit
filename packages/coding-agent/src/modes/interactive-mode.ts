@@ -54,7 +54,7 @@ import {
 	onThemeChange,
 	theme,
 } from "./theme/theme";
-import type { CompactionQueuedMessage, InteractiveModeContext, TodoItem, TodoPhase } from "./types";
+import type { CompactionQueuedMessage, InteractiveModeContext, SubmittedUserInput, TodoItem, TodoPhase } from "./types";
 import { UiHelpers } from "./utils/ui-helpers";
 
 const EDITOR_MAX_HEIGHT_MIN = 6;
@@ -121,8 +121,9 @@ export class InteractiveMode implements InteractiveModeContext {
 	autoCompactionEscapeHandler?: () => void;
 	retryEscapeHandler?: () => void;
 	unsubscribe?: () => void;
-	onInputCallback?: (input: { text: string; images?: ImageContent[] }) => void;
+	onInputCallback?: (input: SubmittedUserInput) => void;
 	optimisticUserMessageSignature: string | undefined = undefined;
+	#pendingSubmittedInput: SubmittedUserInput | undefined;
 	lastSigintTime = 0;
 	lastEscapeTime = 0;
 	shutdownRequested = false;
@@ -397,13 +398,71 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.session.setSlashCommands(fileCommands);
 	}
 
-	async getUserInput(): Promise<{ text: string; images?: ImageContent[] }> {
-		const { promise, resolve } = Promise.withResolvers<{ text: string; images?: ImageContent[] }>();
+	async getUserInput(): Promise<SubmittedUserInput> {
+		const { promise, resolve } = Promise.withResolvers<SubmittedUserInput>();
 		this.onInputCallback = input => {
 			this.onInputCallback = undefined;
 			resolve(input);
 		};
 		return promise;
+	}
+
+	startPendingSubmission(input: { text: string; images?: ImageContent[] }): SubmittedUserInput {
+		const submission: SubmittedUserInput = {
+			text: input.text,
+			images: input.images,
+			cancelled: false,
+			started: false,
+		};
+		this.#pendingSubmittedInput = submission;
+		this.optimisticUserMessageSignature = `${submission.text}\u0000${submission.images?.length ?? 0}`;
+		this.addMessageToChat({
+			role: "user",
+			content: [{ type: "text", text: submission.text }, ...(submission.images ?? [])],
+			attribution: "user",
+			timestamp: Date.now(),
+		});
+		this.editor.setText("");
+		this.ensureLoadingAnimation();
+		this.ui.requestRender();
+		return submission;
+	}
+
+	cancelPendingSubmission(): boolean {
+		const submission = this.#pendingSubmittedInput;
+		if (!submission || submission.started) {
+			return false;
+		}
+
+		submission.cancelled = true;
+		this.#pendingSubmittedInput = undefined;
+		this.optimisticUserMessageSignature = undefined;
+		this.#pendingWorkingMessage = undefined;
+		if (this.loadingAnimation) {
+			this.loadingAnimation.stop();
+			this.loadingAnimation = undefined;
+			this.statusContainer.clear();
+		}
+		this.pendingImages = submission.images ? [...submission.images] : [];
+		this.rebuildChatFromMessages();
+		this.editor.setText(submission.text);
+		this.updateEditorBorderColor();
+		this.ui.requestRender();
+		return true;
+	}
+
+	markPendingSubmissionStarted(input: SubmittedUserInput): boolean {
+		if (this.#pendingSubmittedInput !== input || input.cancelled) {
+			return false;
+		}
+		input.started = true;
+		return true;
+	}
+
+	finishPendingSubmission(input: SubmittedUserInput): void {
+		if (this.#pendingSubmittedInput === input) {
+			this.#pendingSubmittedInput = undefined;
+		}
 	}
 
 	#computeEditorMaxHeight(): number {
@@ -713,8 +772,8 @@ export class InteractiveMode implements InteractiveModeContext {
 			return;
 		}
 		await this.#enterPlanMode();
-		if (initialPrompt) {
-			this.onInputCallback?.({ text: initialPrompt });
+		if (initialPrompt && this.onInputCallback) {
+			this.onInputCallback(this.startPendingSubmission({ text: initialPrompt }));
 		}
 	}
 
@@ -855,6 +914,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	}
 
 	showError(message: string): void {
+		this.#pendingSubmittedInput = undefined;
 		this.optimisticUserMessageSignature = undefined;
 		this.#pendingWorkingMessage = undefined;
 		if (this.loadingAnimation) {
