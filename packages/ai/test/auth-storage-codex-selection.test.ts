@@ -287,6 +287,37 @@ describe("AuthStorage codex oauth ranking", () => {
 		expect(apiKey).toBe("api-acct-solo");
 	});
 
+	test("prefers Pro accounts for codex spark models over Plus accounts", async () => {
+		if (!authStorage) throw new Error("test setup failed");
+
+		await authStorage.set("openai-codex", [
+			{ type: "oauth", ...createCredential("acct-plus", "plus@example.com") },
+			{ type: "oauth", ...createCredential("acct-pro", "pro@example.com") },
+		]);
+
+		const plusReport = createCodexUsageReport({
+			accountId: "acct-plus",
+			primary: { usedFraction: 0.05, resetInMs: 30 * 60 * 1000 },
+			secondary: { usedFraction: 0.05, resetInMs: 6 * 24 * 60 * 60 * 1000 },
+		});
+		plusReport.metadata = { ...plusReport.metadata, planType: "plus" };
+		usageByAccount.set("acct-plus", plusReport);
+
+		const proReport = createCodexUsageReport({
+			accountId: "acct-pro",
+			primary: { usedFraction: 0.2, resetInMs: 30 * 60 * 1000 },
+			secondary: { usedFraction: 0.2, resetInMs: 6 * 24 * 60 * 60 * 1000 },
+		});
+		proReport.metadata = { ...proReport.metadata, planType: "pro" };
+		usageByAccount.set("acct-pro", proReport);
+
+		const apiKey = await authStorage.getApiKey("openai-codex", "session-spark-prefers-pro", {
+			modelId: "gpt-5.3-codex-spark",
+		});
+		expect(apiKey).toBe("api-acct-pro");
+	});
+
+
 	test("times out slow usage ranking instead of blocking first account selection", async () => {
 		if (!store) throw new Error("test setup failed");
 

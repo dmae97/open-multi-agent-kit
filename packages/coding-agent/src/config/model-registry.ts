@@ -1276,7 +1276,7 @@ export class ModelRegistry {
 		if (this.#keylessProviders.has(model.provider)) {
 			return kNoAuth;
 		}
-		return this.authStorage.getApiKey(model.provider, sessionId, { baseUrl: model.baseUrl });
+		return this.authStorage.getApiKey(model.provider, sessionId, { baseUrl: model.baseUrl, modelId: model.id });
 	}
 
 	/**

@@ -184,6 +184,28 @@ type UsageRequestDescriptor = {
 	baseUrl?: string;
 };
 
+type AuthApiKeyOptions = {
+	baseUrl?: string;
+	modelId?: string;
+};
+
+function requiresOpenAICodexProModel(provider: string, modelId: string | undefined): boolean {
+	return provider === "openai-codex" && typeof modelId === "string" && modelId.includes("-spark");
+}
+
+function getUsagePlanType(report: UsageReport | null): string | undefined {
+	const metadata = report?.metadata;
+	if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
+	const planType = (metadata as { planType?: unknown }).planType;
+	return typeof planType === "string" ? planType.toLowerCase() : undefined;
+}
+
+function getOpenAICodexPlanPriority(report: UsageReport | null): number {
+	const planType = getUsagePlanType(report);
+	if (!planType) return 1;
+	return planType.includes("pro") ? 0 : 2;
+}
+
 function resolveDefaultUsageProvider(provider: Provider): UsageProvider | undefined {
 	return DEFAULT_USAGE_PROVIDER_MAP.get(provider);
 }
@@ -1486,7 +1508,7 @@ export class AuthStorage {
 		provider: string;
 		order: number[];
 		credentials: Array<{ credential: OAuthCredential; index: number }>;
-		options?: { baseUrl?: string };
+		options?: AuthApiKeyOptions;
 		strategy: CredentialRankingStrategy;
 	}): Promise<
 		Array<{
@@ -1567,11 +1589,13 @@ export class AuthStorage {
 				if (leftBlockedUntil !== rightBlockedUntil) return leftBlockedUntil - rightBlockedUntil;
 				return left.orderPos - right.orderPos;
 			}
-			if (left.hasPriorityBoost !== right.hasPriorityBoost) {
-				return left.hasPriorityBoost ? -1 : 1;
+			if (requiresOpenAICodexProModel(args.provider, args.options?.modelId)) {
+				const leftPlanPriority = getOpenAICodexPlanPriority(left.usage);
+				const rightPlanPriority = getOpenAICodexPlanPriority(right.usage);
+				if (leftPlanPriority !== rightPlanPriority) return leftPlanPriority - rightPlanPriority;
 			}
-			if (left.secondaryDrainRate !== right.secondaryDrainRate)
-				return left.secondaryDrainRate - right.secondaryDrainRate;
+			if (left.hasPriorityBoost !== right.hasPriorityBoost) return left.hasPriorityBoost ? -1 : 1;
+			if (left.secondaryDrainRate !== right.secondaryDrainRate) return left.secondaryDrainRate - right.secondaryDrainRate;
 			if (left.secondaryUsed !== right.secondaryUsed) return left.secondaryUsed - right.secondaryUsed;
 			if (left.primaryDrainRate !== right.primaryDrainRate) return left.primaryDrainRate - right.primaryDrainRate;
 			if (left.primaryUsed !== right.primaryUsed) return left.primaryUsed - right.primaryUsed;
@@ -1592,7 +1616,7 @@ export class AuthStorage {
 	async #resolveOAuthApiKey(
 		provider: string,
 		sessionId?: string,
-		options?: { baseUrl?: string },
+		options?: AuthApiKeyOptions,
 	): Promise<string | undefined> {
 		const credentials = this.#getCredentialsForProvider(provider)
 			.map((credential, index) => ({ credential, index }))
@@ -1610,9 +1634,11 @@ export class AuthStorage {
 		// mid-session causes account switches that cold-start the server-side prompt cache. New sessions
 		// (no preference) and sessions whose preferred is blocked still rank, so we pick the account
 		// with the most headroom proactively and fall back intelligently when rate-limited.
+		const requiresProModel = requiresOpenAICodexProModel(provider, options?.modelId);
 		const sessionPreferredIsAvailable =
+
 			sessionPreferredIndex !== undefined && !this.#isCredentialBlocked(providerKey, sessionPreferredIndex);
-		const shouldRank = checkUsage && !sessionPreferredIsAvailable;
+		const shouldRank = checkUsage && (!sessionPreferredIsAvailable || requiresProModel);
 		const candidates = shouldRank
 			? await this.#rankOAuthSelections({ providerKey, provider, order, credentials, options, strategy: strategy! })
 			: order
@@ -1620,7 +1646,7 @@ export class AuthStorage {
 					.filter((selection): selection is { credential: OAuthCredential; index: number } => Boolean(selection))
 					.map(selection => ({ selection, usage: null, usageChecked: false }));
 
-		if (sessionPreferredIndex !== undefined) {
+		if (sessionPreferredIndex !== undefined && !requiresProModel) {
 			const sessionPreferredCandidate = candidates.findIndex(
 				candidate =>
 					!this.#isCredentialBlocked(providerKey, candidate.selection.index) &&
@@ -1710,7 +1736,7 @@ export class AuthStorage {
 		selection: { credential: OAuthCredential; index: number },
 		providerKey: string,
 		sessionId: string | undefined,
-		options: { baseUrl?: string } | undefined,
+		options: AuthApiKeyOptions | undefined,
 		usageOptions: {
 			checkUsage: boolean;
 			allowBlocked: boolean;
@@ -1866,7 +1892,7 @@ export class AuthStorage {
 	 * 4. Environment variable
 	 * 5. Fallback resolver (models.json custom providers)
 	 */
-	async getApiKey(provider: string, sessionId?: string, options?: { baseUrl?: string }): Promise<string | undefined> {
+	async getApiKey(provider: string, sessionId?: string, options?: AuthApiKeyOptions): Promise<string | undefined> {
 		// Runtime override takes highest priority
 		const runtimeKey = this.#runtimeOverrides.get(provider);
 		if (runtimeKey) {

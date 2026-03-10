@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Support for OpenAI Codex Spark model selection with plan-based account prioritization
+- Added `modelId` option to `getApiKey()` to enable model-specific credential ranking
+
+### Changed
+
+- Updated credential ranking strategy to prioritize Pro plan accounts when requesting OpenAI Codex Spark models
 
 ## [13.9.13] - 2026-03-10
 ### Added
