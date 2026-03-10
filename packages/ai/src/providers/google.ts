@@ -80,7 +80,7 @@ export const streamGoogle: StreamFunction<"google-generative-ai"> = (
 		let rawRequestDump: RawHttpRequestDump | undefined;
 
 		try {
-			const apiKey = options?.apiKey || getEnvApiKey(model.provider) || "";
+			const apiKey = options?.apiKey || getEnvApiKey(model.provider);
 			const client = createClient(model, apiKey);
 			const params = buildParams(model, context, options);
 			options?.onPayload?.(params);
