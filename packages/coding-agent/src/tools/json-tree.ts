@@ -14,7 +14,7 @@ export const JSON_TREE_SCALAR_LEN_COLLAPSED = 60;
 export const JSON_TREE_SCALAR_LEN_EXPANDED = 2000;
 
 /** Keys injected by the harness that should not be displayed to users */
-const HIDDEN_ARG_KEYS = new Set([INTENT_FIELD]);
+const HIDDEN_ARG_KEYS = new Set([INTENT_FIELD, "__partialJson"]);
 
 /** Strip harness-internal keys from tool args for display */
 export function stripInternalArgs(args: Record<string, unknown>): Record<string, unknown> {
