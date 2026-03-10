@@ -484,15 +484,7 @@ export class EventController {
 						isHandoffAction ? "Auto-handoff cancelled" : "Auto context-full maintenance cancelled",
 					);
 				} else if (event.result) {
-					this.ctx.chatContainer.clear();
 					this.ctx.rebuildChatFromMessages();
-					this.ctx.addMessageToChat({
-						role: "compactionSummary",
-						tokensBefore: event.result.tokensBefore,
-						summary: event.result.summary,
-						shortSummary: event.result.shortSummary,
-						timestamp: Date.now(),
-					});
 					this.ctx.statusLine.invalidate();
 					this.ctx.updateEditorTopBorder();
 				} else if (event.errorMessage) {

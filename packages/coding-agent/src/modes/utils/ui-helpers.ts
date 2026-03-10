@@ -220,7 +220,13 @@ export class UiHelpers {
 		let readGroup: ReadToolGroupComponent | null = null;
 		const readToolCallArgs = new Map<string, Record<string, unknown>>();
 		const readToolCallAssistantComponents = new Map<string, AssistantMessageComponent>();
+		const deferredMessages: AgentMessage[] = [];
 		for (const message of sessionContext.messages) {
+			// Defer compaction summaries so they render at the bottom (visible after scroll)
+			if (message.role === "compactionSummary") {
+				deferredMessages.push(message);
+				continue;
+			}
 			// Assistant messages need special handling for tool calls
 			if (message.role === "assistant") {
 				this.ctx.addMessageToChat(message);
@@ -348,6 +354,11 @@ export class UiHelpers {
 				// All other messages use standard rendering
 				this.ctx.addMessageToChat(message, options);
 			}
+		}
+
+		// Render deferred messages (compaction summaries) at the bottom so they're visible
+		for (const message of deferredMessages) {
+			this.ctx.addMessageToChat(message, options);
 		}
 
 		this.ctx.pendingTools.clear();
