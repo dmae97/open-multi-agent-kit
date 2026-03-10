@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Effort, type Model } from "@oh-my-pi/pi-ai";
 import {
+	expandRoleAlias,
 	parseModelPattern,
 	parseModelString,
 	resolveCliModel,
@@ -8,6 +9,7 @@ import {
 	resolveModelOverride,
 	resolveModelRoleValue,
 } from "@oh-my-pi/pi-coding-agent/config/model-resolver";
+import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 
 // Mock models for testing
 const mockModels: Model<"anthropic-messages">[] = [
@@ -574,5 +576,21 @@ describe("parseModelString", () => {
 			// Empty string is not a valid thinking level, so colon stays as part of ID
 			expect(result).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5:" });
 		});
+	});
+});
+
+describe("expandRoleAlias", () => {
+	test("expands pi/vision to configured vision role", () => {
+		const settings = Settings.isolated();
+		settings.setModelRole("vision", "openai/gpt-4o");
+
+		expect(expandRoleAlias("pi/vision", settings)).toBe("openai/gpt-4o");
+	});
+
+	test("keeps pi/vision alias when vision role is unset", () => {
+		const settings = Settings.isolated();
+		settings.setModelRole("default", "anthropic/claude-sonnet-4-5");
+
+		expect(expandRoleAlias("pi/vision", settings)).toBe("pi/vision");
 	});
 });

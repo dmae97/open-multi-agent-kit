@@ -11,13 +11,13 @@ import { ReadTool } from "@oh-my-pi/pi-coding-agent/tools/read";
 const TINY_PNG_BASE64 =
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
 
-function createTestToolSession(cwd: string): ToolSession {
+function createTestToolSession(cwd: string, settings: Settings = Settings.isolated()): ToolSession {
 	return {
 		cwd,
 		hasUI: false,
 		getSessionFile: () => null,
 		getSessionSpawns: () => "*",
-		settings: Settings.isolated(),
+		settings,
 	};
 }
 
@@ -66,12 +66,14 @@ describe("blockImages setting", () => {
 			fs.rmSync(testDir, { recursive: true, force: true });
 		});
 
-		it("should always read images (filtering happens at convertToLlm layer)", async () => {
+		it("should include image blocks when inspect_image is disabled", async () => {
 			// Create test image
 			const imagePath = path.join(testDir, "test.png");
 			fs.writeFileSync(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
 
-			const tool = new ReadTool(createTestToolSession(testDir));
+			const tool = new ReadTool(
+				createTestToolSession(testDir, Settings.isolated({ "inspect_image.enabled": false })),
+			);
 			const result = await tool.execute("test-1", { path: imagePath });
 
 			// Should have text note + image content

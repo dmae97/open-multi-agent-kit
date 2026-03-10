@@ -18,6 +18,7 @@ import { calculatorToolRenderer } from "./calculator";
 import { fetchToolRenderer } from "./fetch";
 import { findToolRenderer } from "./find";
 import { grepToolRenderer } from "./grep";
+import { inspectImageToolRenderer } from "./inspect-image-renderer";
 import { notebookToolRenderer } from "./notebook";
 import { pythonToolRenderer } from "./python";
 import { readToolRenderer } from "./read";
@@ -51,6 +52,7 @@ export const toolRenderers: Record<string, ToolRenderer> = {
 	grep: grepToolRenderer as ToolRenderer,
 	lsp: lspToolRenderer as ToolRenderer,
 	notebook: notebookToolRenderer as ToolRenderer,
+	inspect_image: inspectImageToolRenderer as ToolRenderer,
 	read: readToolRenderer as ToolRenderer,
 	resolve: resolveToolRenderer as ToolRenderer,
 	ssh: sshToolRenderer as ToolRenderer,

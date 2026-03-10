@@ -206,6 +206,12 @@ You **MUST NOT** open a file hoping. Hope is not a strategy.
 {{#has tools "read"}}- Known location → `read` with offset/limit, not whole file{{/has}}
 {{/ifAny}}
 
+{{#if (includes tools "inspect_image")}}
+### Image inspection
+- For image understanding tasks: **MUST** use `inspect_image` over `read` to avoid overloading main session context.
+- Write a specific `question` for `inspect_image`: what to inspect, constraints (for example verbatim OCR), and desired output format.
+{{/if}}
+
 {{SECTION_SEPERATOR "Rules"}}
 
 # Contract

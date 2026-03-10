@@ -527,6 +527,15 @@ export const SETTINGS_SCHEMA = {
 		default: true,
 		ui: { tab: "tools", label: "Enable Notebook", description: "Enable the notebook tool for notebook editing" },
 	},
+	"inspect_image.enabled": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "tools",
+			label: "Enable Inspect Image",
+			description: "Enable the inspect_image tool, delegating image understanding to a vision-capable model",
+		},
+	},
 	"checkpoint.enabled": {
 		type: "boolean",
 		default: false,

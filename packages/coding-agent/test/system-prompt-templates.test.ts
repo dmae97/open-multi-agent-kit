@@ -124,4 +124,24 @@ describe("system Handlebars prompt templates", () => {
 		expect(neither).not.toContain("## Context");
 		expect(neither).not.toContain("## Version Control");
 	});
+
+	test("system-prompt conditionally renders inspect_image guidance", async () => {
+		const templatePath = path.join(systemPromptsDir, "system-prompt.md");
+		const template = await Bun.file(templatePath).text();
+
+		const baseTools = baseRenderContext.tools as string[];
+		const withInspectImage = renderPromptTemplate(template, {
+			...baseRenderContext,
+			tools: [...baseTools, "inspect_image"],
+		});
+		expect(withInspectImage).toContain("### Image inspection");
+		expect(withInspectImage).toContain("**MUST** use `inspect_image` over `read`");
+		expect(withInspectImage).toContain("Write a specific `question` for `inspect_image`");
+
+		const withoutInspectImage = renderPromptTemplate(template, {
+			...baseRenderContext,
+			tools: baseTools.filter((tool: string) => tool !== "inspect_image"),
+		});
+		expect(withoutInspectImage).not.toContain("### Image inspection");
+	});
 });

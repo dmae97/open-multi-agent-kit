@@ -238,22 +238,23 @@ export function getExtraHelpText(): string {
 
   For complete environment variable reference, see:
   ${chalk.dim("docs/environment-variables.md")}
-${chalk.bold("Available Tools (all enabled by default):")}
-  read       - Read file contents
-  bash       - Execute bash commands
-  edit       - Edit files with find/replace
-  write      - Write files (creates/overwrites)
-  grep       - Search file contents
-  find       - Find files by glob pattern
-  lsp        - Language server protocol (code intelligence)
-  python     - Execute Python code (requires: ${APP_NAME} setup python)
-  notebook   - Edit Jupyter notebooks
-  browser    - Browser automation (Puppeteer)
-  task       - Launch sub-agents for parallel tasks
-  todo_write - Manage todo/task lists
-  fetch      - Fetch and process URLs
-  web_search - Search the web
-  ask        - Ask user questions (interactive mode only)
+${chalk.bold("Available Tools (default-enabled unless noted):")}
+  read          - Read file contents
+  bash          - Execute bash commands
+  edit          - Edit files with find/replace
+  write         - Write files (creates/overwrites)
+  grep          - Search file contents
+  find          - Find files by glob pattern
+  lsp           - Language server protocol (code intelligence)
+  python        - Execute Python code (requires: ${APP_NAME} setup python)
+  notebook      - Edit Jupyter notebooks
+  inspect_image - Analyze images with a vision model
+  browser       - Browser automation (Puppeteer)
+  task          - Launch sub-agents for parallel tasks
+  todo_write    - Manage todo/task lists
+  fetch         - Fetch and process URLs
+  web_search    - Search the web
+  ask           - Ask user questions (interactive mode only)
 
 ${chalk.bold("Useful Commands:")}
   omp agents unpack           - Export bundled subagents to ~/.omp/agent/agents (default)
