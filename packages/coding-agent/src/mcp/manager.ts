@@ -321,7 +321,7 @@ export class MCPManager {
 					// Wire auth refresh for HTTP transports so 401s trigger token refresh
 					if (connection.transport instanceof HttpTransport && config.auth?.type === "oauth") {
 						connection.transport.onAuthError = async () => {
-							const refreshed = await this.#resolveAuthConfig(config);
+							const refreshed = await this.#resolveAuthConfig(config, true);
 							if (refreshed.type === "http" || refreshed.type === "sse") {
 								return refreshed.headers ?? null;
 							}
@@ -828,7 +828,7 @@ export class MCPManager {
 	/**
 	 * Resolve OAuth credentials and shell commands in config.
 	 */
-	async #resolveAuthConfig(config: MCPServerConfig): Promise<MCPServerConfig> {
+	async #resolveAuthConfig(config: MCPServerConfig, forceRefresh = false): Promise<MCPServerConfig> {
 		let resolved: MCPServerConfig = { ...config };
 
 		const auth = config.auth;
@@ -838,10 +838,11 @@ export class MCPManager {
 				let credential = this.#authStorage.get(credentialId);
 				if (credential?.type === "oauth") {
 					// Proactive refresh: 5-minute buffer before expiry
+					// Force refresh: on 401/403 auth errors (revoked tokens, clock skew, missing expires)
 					const REFRESH_BUFFER_MS = 5 * 60_000;
+					const shouldRefresh = forceRefresh || (credential.expires && Date.now() >= credential.expires - REFRESH_BUFFER_MS);
 					if (
-						credential.expires &&
-						Date.now() >= credential.expires - REFRESH_BUFFER_MS &&
+						shouldRefresh &&
 						credential.refresh &&
 						auth.tokenUrl
 					) {
