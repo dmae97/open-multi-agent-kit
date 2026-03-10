@@ -349,7 +349,13 @@ async function areDelimitedTokensResolvable(
 		}
 
 		if (!allowBareExistingTokens && !looksLikeDelimitedPathToken(token)) {
-			return false;
+			// Bare names like "packages" don't look like path tokens syntactically,
+			// but may still be valid directory names. Check existence before rejecting.
+			const resolvedExactPath = resolveToCwd(token, cwd);
+			if (!(await pathExists(resolvedExactPath))) {
+				return false;
+			}
+			continue;
 		}
 
 		const basePath = parseBasePath(token);

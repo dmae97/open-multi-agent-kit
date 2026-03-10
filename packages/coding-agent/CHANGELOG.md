@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - Added `todo.eager` setting to automatically create a comprehensive todo list after the first user message
@@ -17,6 +16,7 @@
 
 ### Fixed
 
+- Fixed path resolution to accept bare directory names without trailing slashes in comma/space-separated path lists (e.g., `apps packages phases`)
 - Per-role `modelRoles` thinking selectors now propagate through commit/title helper model selection, legacy commit analysis, and agentic commit sessions while preserving default thinking inheritance when no role override is configured
 
 ## [13.10.1] - 2026-03-10

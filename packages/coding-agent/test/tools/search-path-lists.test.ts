@@ -194,4 +194,25 @@ describe("search tool path lists", () => {
 		expect(details?.fileCount).toBe(6);
 		expect(details?.scopePath).toBe("apps/, packages/, phases/");
 	});
+
+	it("grep accepts bare space-separated directory names (no trailing slash)", async () => {
+		const tools = await createTools(createTestSession(tempDir));
+		const tool = tools.find(entry => entry.name === "grep");
+		expect(tool).toBeDefined();
+		if (!tool) throw new Error("Missing grep tool");
+
+		const result = await tool.execute("grep-bare-space-paths", {
+			pattern: "shared-needle",
+			path: "apps packages phases",
+		});
+		const text = getText(result);
+		const details = result.details as { fileCount?: number; scopePath?: string } | undefined;
+
+		expect(text).toContain("# apps");
+		expect(text).toContain("# packages");
+		expect(text).toContain("# phases");
+		expect(text).not.toContain("# other");
+		expect(details?.fileCount).toBe(3);
+		expect(details?.scopePath).toBe("apps, packages, phases");
+	});
 });
