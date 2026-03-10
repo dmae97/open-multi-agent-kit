@@ -197,6 +197,7 @@ describe("buildSessionContext", () => {
 				...compaction("3", "2", "Remote summary", "1"),
 				preserveData: {
 					openaiRemoteCompaction: {
+						provider: "openai",
 						replacementHistory: [
 							{ type: "message", role: "user", content: [{ type: "input_text", text: "Preserved user" }] },
 							{ type: "compaction", encrypted_content: "enc_123" },
@@ -217,6 +218,7 @@ describe("buildSessionContext", () => {
 			if (ctx.messages[0]?.role !== "compactionSummary") throw new Error("Expected compaction summary message");
 			expect(ctx.messages[0].providerPayload).toEqual({
 				type: "openaiResponsesHistory",
+				provider: "openai",
 				items: [
 					{ type: "message", role: "user", content: [{ type: "input_text", text: "Preserved user" }] },
 					{ type: "compaction", encrypted_content: "enc_123" },

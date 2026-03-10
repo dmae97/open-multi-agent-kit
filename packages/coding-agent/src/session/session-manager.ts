@@ -532,16 +532,19 @@ export function buildSessionContext(
 	};
 
 	if (compaction) {
-		const remoteReplacementHistory = (() => {
+		const providerPayload: ProviderPayload | undefined = (() => {
 			const candidate = compaction.preserveData?.openaiRemoteCompaction;
 			if (!candidate || typeof candidate !== "object") return undefined;
-			const replacementHistory = (candidate as { replacementHistory?: unknown }).replacementHistory;
-			if (!Array.isArray(replacementHistory)) return undefined;
-			return replacementHistory as Array<Record<string, unknown>>;
+			const remote = candidate as { provider?: unknown; replacementHistory?: unknown };
+			if (typeof remote.provider !== "string" || remote.provider.length === 0) return undefined;
+			if (!Array.isArray(remote.replacementHistory)) return undefined;
+			return {
+				type: "openaiResponsesHistory",
+				provider: remote.provider,
+				items: remote.replacementHistory as Array<Record<string, unknown>>,
+			};
 		})();
-		const providerPayload: ProviderPayload | undefined = remoteReplacementHistory
-			? { type: "openaiResponsesHistory", items: remoteReplacementHistory }
-			: undefined;
+		const remoteReplacementHistory = providerPayload?.items;
 
 		// Emit summary first
 		messages.push(

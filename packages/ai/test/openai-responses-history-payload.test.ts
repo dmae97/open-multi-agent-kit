@@ -3,6 +3,7 @@ import { getBundledModel } from "@oh-my-pi/pi-ai/models";
 import { streamOpenAICodexResponses } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
 import { streamOpenAIResponses } from "@oh-my-pi/pi-ai/providers/openai-responses";
 import type { Context, Model } from "@oh-my-pi/pi-ai/types";
+import { createOpenAIResponsesHistoryPayload } from "../src/utils";
 
 function createAbortedSignal(): AbortSignal {
 	const controller = new AbortController();
@@ -33,7 +34,7 @@ const preservedHistoryContext: Context = {
 		{
 			role: "user",
 			content: "summary that should be ignored",
-			providerPayload: { type: "openaiResponsesHistory", items: preservedHistoryItems },
+			providerPayload: createOpenAIResponsesHistoryPayload("openai", preservedHistoryItems, false),
 			timestamp: Date.now(),
 		},
 	],
@@ -42,23 +43,29 @@ const preservedHistoryContext: Context = {
 const assistantSnapshotContext: Context = {
 	messages: [
 		{ role: "user", content: "generic history that should be replaced", timestamp: Date.now() },
+		makeAssistantMessage(snapshotHistoryItems),
+		{ role: "user", content: "follow-up user", timestamp: Date.now() },
+	],
+};
+
+const codexAssistantSnapshotContext: Context = {
+	messages: [
+		{ role: "user", content: "generic history that should be replaced", timestamp: Date.now() },
+		makeAssistantMessage(snapshotHistoryItems, false, "openai-codex", "gpt-5.2-codex"),
+		{ role: "user", content: "follow-up user", timestamp: Date.now() },
+	],
+};
+
+const codexToCopilotContext: Context = {
+	messages: [
+		{ role: "user", content: "generic user before switch", timestamp: Date.now() },
 		{
-			role: "assistant",
-			content: [{ type: "text", text: "generic assistant that should be replaced" }],
-			api: "openai-responses",
-			provider: "openai",
-			model: "gpt-5-mini",
-			usage: {
-				input: 0,
-				output: 0,
-				cacheRead: 0,
-				cacheWrite: 0,
-				totalTokens: 0,
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-			},
-			stopReason: "stop",
-			providerPayload: { type: "openaiResponsesHistory", items: snapshotHistoryItems },
-			timestamp: Date.now(),
+			...makeAssistantMessage([], false, "openai-codex", "gpt-5.2-codex"),
+			content: [{ type: "text", text: "generic assistant that should be rebuilt" }],
+			providerPayload: createOpenAIResponsesHistoryPayload("openai-codex", [
+				{ type: "reasoning", encrypted_content: "enc_123" },
+				...snapshotHistoryItems,
+			]),
 		},
 		{ role: "user", content: "follow-up user", timestamp: Date.now() },
 	],
@@ -104,13 +111,18 @@ const incrementalItems2 = [
 	},
 ];
 
-function makeAssistantMessage(items: Record<string, unknown>[], incremental?: boolean) {
+function makeAssistantMessage(
+	items: Record<string, unknown>[],
+	incremental = false,
+	provider: "openai" | "openai-codex" = "openai",
+	model = provider === "openai" ? "gpt-5-mini" : "gpt-5.2-codex",
+) {
 	return {
 		role: "assistant" as const,
 		content: [{ type: "text" as const, text: "ignored" }],
-		api: "openai-responses" as const,
-		provider: "openai" as const,
-		model: "gpt-5-mini",
+		api: provider === "openai" ? ("openai-responses" as const) : ("openai-codex-responses" as const),
+		provider,
+		model,
 		usage: {
 			input: 0,
 			output: 0,
@@ -120,11 +132,7 @@ function makeAssistantMessage(items: Record<string, unknown>[], incremental?: bo
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 		},
 		stopReason: "stop" as const,
-		providerPayload: {
-			type: "openaiResponsesHistory" as const,
-			...(incremental ? { dt: true } : {}),
-			items,
-		},
+		providerPayload: createOpenAIResponsesHistoryPayload(provider, items, incremental),
 		timestamp: Date.now(),
 	};
 }
@@ -138,6 +146,28 @@ const incrementalContext: Context = {
 		{ role: "user", content: "third question", timestamp: Date.now() },
 	],
 };
+
+function containsAssistantOutputText(input: unknown[] | undefined, text: string): boolean {
+	return (input ?? []).some(item => {
+		if (!item || typeof item !== "object") return false;
+		const candidate = item as { type?: unknown; role?: unknown; content?: unknown };
+		if (candidate.type !== "message" || candidate.role !== "assistant" || !Array.isArray(candidate.content))
+			return false;
+		return candidate.content.some(part => {
+			if (!part || typeof part !== "object") return false;
+			const content = part as { type?: unknown; text?: unknown };
+			return content.type === "output_text" && content.text === text;
+		});
+	});
+}
+
+function containsEncryptedReasoning(input: unknown[] | undefined): boolean {
+	return (input ?? []).some(item => {
+		if (!item || typeof item !== "object") return false;
+		const candidate = item as { encrypted_content?: unknown };
+		return typeof candidate.encrypted_content === "string";
+	});
+}
 
 describe("OpenAI responses history payload", () => {
 	it("inlines preserved replacement history for openai-responses", async () => {
@@ -157,11 +187,18 @@ describe("OpenAI responses history payload", () => {
 
 	it("prefers assistant native history snapshots for openai-codex-responses", async () => {
 		const model = getBundledModel("openai-codex", "gpt-5.2-codex") as Model<"openai-codex-responses">;
-		const payload = (await captureCodexPayload(model, assistantSnapshotContext)) as { input?: unknown[] };
+		const payload = (await captureCodexPayload(model, codexAssistantSnapshotContext)) as { input?: unknown[] };
 		expect(payload.input).toEqual([
 			...snapshotHistoryItems,
 			{ role: "user", content: [{ type: "input_text", text: "follow-up user" }] },
 		]);
+	});
+
+	it("ignores incompatible native history snapshots across providers", async () => {
+		const model = getBundledModel("github-copilot", "gpt-5.4") as Model<"openai-responses">;
+		const payload = (await captureResponsesPayload(model, codexToCopilotContext)) as { input?: unknown[] };
+		expect(containsEncryptedReasoning(payload.input)).toBe(false);
+		expect(containsAssistantOutputText(payload.input, "generic assistant that should be rebuilt")).toBe(true);
 	});
 
 	it("builds up history incrementally from multiple assistant messages", async () => {
@@ -176,7 +213,7 @@ describe("OpenAI responses history payload", () => {
 		]);
 	});
 
-	it("backward compat: old full-snapshot payloads still replace history", async () => {
+	it("backward compat: old full-snapshot payloads still replace history for legacy same-provider assistant turns", async () => {
 		const fullSnapshotItems = [
 			{ type: "message", role: "user", content: [{ type: "input_text", text: "Canonical user" }] },
 			{ type: "message", role: "assistant", content: [{ type: "output_text", text: "Canonical assistant" }] },
@@ -186,14 +223,13 @@ describe("OpenAI responses history payload", () => {
 				{ role: "user", content: "old user message that gets replaced", timestamp: Date.now() },
 				{
 					...makeAssistantMessage(fullSnapshotItems, false),
-					// no incremental flag — old format
+					providerPayload: { type: "openaiResponsesHistory", items: fullSnapshotItems },
 				},
 				{ role: "user", content: "follow-up", timestamp: Date.now() },
 			],
 		};
 		const model = getBundledModel("openai", "gpt-5-mini") as Model<"openai-responses">;
 		const payload = (await captureResponsesPayload(model, context)) as { input?: unknown[] };
-		// Old full-snapshot should replace all prior history
 		expect(payload.input).toEqual([
 			...fullSnapshotItems,
 			{ role: "user", content: [{ type: "input_text", text: "follow-up" }] },

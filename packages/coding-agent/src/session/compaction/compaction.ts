@@ -13,7 +13,11 @@ import {
 	OPENAI_HEADERS,
 } from "@oh-my-pi/pi-ai/providers/openai-codex/constants";
 import { transformMessages } from "@oh-my-pi/pi-ai/providers/transform-messages";
-import { normalizeResponsesToolCallId } from "@oh-my-pi/pi-ai/utils";
+import {
+	getOpenAIResponsesHistoryItems,
+	getOpenAIResponsesHistoryPayload,
+	normalizeResponsesToolCallId,
+} from "@oh-my-pi/pi-ai/utils";
 import { logger } from "@oh-my-pi/pi-utils";
 import { renderPromptTemplate } from "../../config/prompt-templates";
 import compactionShortSummaryPrompt from "../../prompts/compaction/compaction-short-summary.md" with { type: "text" };
@@ -473,6 +477,7 @@ type OpenAiRemoteCompactionItem = {
 };
 
 interface OpenAiRemoteCompactionPreserveData {
+	provider?: string;
 	replacementHistory: Array<Record<string, unknown>>;
 	compactionItem: OpenAiRemoteCompactionItem;
 }
@@ -523,7 +528,7 @@ function getPreservedOpenAiRemoteCompactionData(
 ): OpenAiRemoteCompactionPreserveData | undefined {
 	const candidate = preserveData?.[OPENAI_REMOTE_COMPACTION_PRESERVE_KEY];
 	if (!candidate || typeof candidate !== "object") return undefined;
-	const maybeData = candidate as { replacementHistory?: unknown; compactionItem?: unknown };
+	const maybeData = candidate as { provider?: unknown; replacementHistory?: unknown; compactionItem?: unknown };
 	if (!Array.isArray(maybeData.replacementHistory)) return undefined;
 	const maybeItem = maybeData.compactionItem;
 	if (!maybeItem || typeof maybeItem !== "object") return undefined;
@@ -535,6 +540,7 @@ function getPreservedOpenAiRemoteCompactionData(
 		return undefined;
 	}
 	return {
+		provider: typeof maybeData.provider === "string" ? maybeData.provider : undefined,
 		replacementHistory: maybeData.replacementHistory as Array<Record<string, unknown>>,
 		compactionItem: compactionItem as unknown as OpenAiRemoteCompactionItem,
 	};
@@ -634,15 +640,6 @@ function trimOpenAiCompactInput(
 	return trimmed;
 }
 
-function getOpenAIResponsesHistoryItems(
-	providerPayload: { type?: string; items?: unknown } | undefined,
-): Array<Record<string, unknown>> | undefined {
-	if (providerPayload?.type !== "openaiResponsesHistory" || !Array.isArray(providerPayload.items)) {
-		return undefined;
-	}
-	return providerPayload.items as Array<Record<string, unknown>>;
-}
-
 function collectKnownOpenAiCallIds(items: Array<Record<string, unknown>>): Set<string> {
 	const knownCallIds = new Set<string>();
 	for (const item of items) {
@@ -667,8 +664,8 @@ function buildOpenAiNativeHistory(
 	let knownCallIds = collectKnownOpenAiCallIds(input);
 	for (const message of transformedMessages) {
 		if (message.role === "user" || message.role === "developer") {
-			const providerPayload = (message as { providerPayload?: { type?: string; items?: unknown } }).providerPayload;
-			const historyItems = getOpenAIResponsesHistoryItems(providerPayload);
+			const providerPayload = (message as { providerPayload?: AssistantMessage["providerPayload"] }).providerPayload;
+			const historyItems = getOpenAIResponsesHistoryItems(providerPayload, model.provider);
 			if (historyItems) {
 				input.push(...historyItems);
 				knownCallIds = collectKnownOpenAiCallIds(input);
@@ -705,22 +702,22 @@ function buildOpenAiNativeHistory(
 		}
 
 		if (message.role === "assistant") {
-			const providerPayload = (
-				message as { providerPayload?: { type?: string; incremental?: boolean; items?: unknown } }
-			).providerPayload;
-			const historyItems = getOpenAIResponsesHistoryItems(providerPayload);
-			if (historyItems) {
-				if (providerPayload?.incremental) {
-					input.push(...historyItems);
+			const assistant = message as AssistantMessage;
+			const providerPayload = getOpenAIResponsesHistoryPayload(
+				assistant.providerPayload,
+				model.provider,
+				assistant.provider,
+			);
+			if (providerPayload) {
+				if (providerPayload.dt) {
+					input.push(...providerPayload.items);
 				} else {
-					input.splice(0, input.length, ...historyItems);
+					input.splice(0, input.length, ...providerPayload.items);
 				}
 				knownCallIds = collectKnownOpenAiCallIds(input);
 				msgIndex++;
 				continue;
 			}
-
-			const assistant = message as AssistantMessage;
 			const isDifferentModel =
 				assistant.model !== model.id && assistant.provider === model.provider && assistant.api === model.api;
 
@@ -889,7 +886,7 @@ async function requestOpenAiRemoteCompaction(
 		});
 		throw new Error("Remote compaction response missing compaction item");
 	}
-	return { replacementHistory, compactionItem };
+	return { provider: model.provider, replacementHistory, compactionItem };
 }
 
 interface RemoteCompactionRequest {
@@ -1224,11 +1221,11 @@ export async function compact(
 	if (settings.remoteEnabled !== false && shouldUseOpenAiRemoteCompaction(model)) {
 		const previousRemoteCompaction = getPreservedOpenAiRemoteCompactionData(previousPreserveData);
 		const remoteMessages = [...messagesToSummarize, ...turnPrefixMessages, ...recentMessages];
-		const remoteHistory = buildOpenAiNativeHistory(
-			remoteMessages,
-			model,
-			previousRemoteCompaction?.replacementHistory,
-		);
+		const previousReplacementHistory =
+			previousRemoteCompaction?.provider === model.provider
+				? previousRemoteCompaction.replacementHistory
+				: undefined;
+		const remoteHistory = buildOpenAiNativeHistory(remoteMessages, model, previousReplacementHistory);
 		if (remoteHistory.length > 0) {
 			try {
 				const remote = await requestOpenAiRemoteCompaction(

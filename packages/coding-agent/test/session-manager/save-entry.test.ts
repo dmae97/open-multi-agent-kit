@@ -19,9 +19,9 @@ describe("SessionManager.saveCustomEntry", () => {
 		const msg2Id = session.appendMessage({
 			role: "assistant",
 			content: [{ type: "text", text: "hi" }],
-			api: "anthropic-messages",
-			provider: "anthropic",
-			model: "test",
+			api: "openai-responses",
+			provider: "openai",
+			model: "gpt-5-mini",
 			usage: {
 				input: 1,
 				output: 1,
@@ -31,7 +31,7 @@ describe("SessionManager.saveCustomEntry", () => {
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 			},
 			stopReason: "stop",
-			providerPayload: { type: "openaiResponsesHistory", items: nativeHistory },
+			providerPayload: { type: "openaiResponsesHistory", provider: "openai", items: nativeHistory },
 			timestamp: 2,
 		});
 
@@ -57,6 +57,10 @@ describe("SessionManager.saveCustomEntry", () => {
 		const ctx = session.buildSessionContext();
 		expect(ctx.messages).toHaveLength(2); // only message entries
 		if (ctx.messages[1]?.role !== "assistant") throw new Error("Expected assistant message");
-		expect(ctx.messages[1].providerPayload).toEqual({ type: "openaiResponsesHistory", items: nativeHistory });
+		expect(ctx.messages[1].providerPayload).toEqual({
+			type: "openaiResponsesHistory",
+			provider: "openai",
+			items: nativeHistory,
+		});
 	});
 });

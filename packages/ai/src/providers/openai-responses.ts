@@ -30,7 +30,13 @@ import {
 	type ToolCall,
 	type ToolChoice,
 } from "../types";
-import { normalizeResponsesToolCallId, resolveCacheRetention } from "../utils";
+import {
+	createOpenAIResponsesHistoryPayload,
+	getOpenAIResponsesHistoryItems,
+	getOpenAIResponsesHistoryPayload,
+	normalizeResponsesToolCallId,
+	resolveCacheRetention,
+} from "../utils";
 import { AssistantMessageEventStream } from "../utils/event-stream";
 import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-inspector";
 import { getOpenAIStreamIdleTimeoutMs, iterateWithIdleTimeout } from "../utils/idle-iterator";
@@ -375,11 +381,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 				throw new Error("An unknown error occurred");
 			}
 
-			output.providerPayload = {
-				type: "openaiResponsesHistory",
-				dt: true,
-				items: nativeOutputItems,
-			};
+			output.providerPayload = createOpenAIResponsesHistoryPayload(model.provider, nativeOutputItems);
 
 			output.duration = Date.now() - startTime;
 			if (firstTokenTime) output.ttft = firstTokenTime - startTime;
@@ -550,15 +552,6 @@ function supportsStrictMode(model: Model<"openai-responses">): boolean {
 	);
 }
 
-function getOpenAIResponsesHistoryItems(
-	providerPayload: { type?: string; items?: unknown } | undefined,
-): ResponseInput | undefined {
-	if (providerPayload?.type !== "openaiResponsesHistory" || !Array.isArray(providerPayload.items)) {
-		return undefined;
-	}
-	return providerPayload.items as ResponseInput;
-}
-
 function collectKnownCallIds(messages: ResponseInput): Set<string> {
 	const knownCallIds = new Set<string>();
 	for (const item of messages) {
@@ -598,8 +591,10 @@ function convertConversationMessages(
 	let msgIndex = 0;
 	for (const msg of transformedMessages) {
 		if (msg.role === "user" || msg.role === "developer") {
-			const providerPayload = (msg as { providerPayload?: { type?: string; items?: unknown } }).providerPayload;
-			const historyItems = getOpenAIResponsesHistoryItems(providerPayload);
+			const providerPayload = (msg as { providerPayload?: AssistantMessage["providerPayload"] }).providerPayload;
+			const historyItems = getOpenAIResponsesHistoryItems(providerPayload, model.provider) as
+				| Array<ResponseInput[number]>
+				| undefined;
 			if (historyItems) {
 				messages.push(...historyItems);
 				knownCallIds = collectKnownCallIds(messages);
@@ -644,9 +639,13 @@ function convertConversationMessages(
 				});
 			}
 		} else if (msg.role === "assistant") {
-			const providerPayload = (msg as { providerPayload?: { type?: string; dt?: boolean; items?: unknown } })
-				.providerPayload;
-			const historyItems = getOpenAIResponsesHistoryItems(providerPayload);
+			const assistantMsg = msg as AssistantMessage;
+			const providerPayload = getOpenAIResponsesHistoryPayload(
+				assistantMsg.providerPayload,
+				model.provider,
+				assistantMsg.provider,
+			);
+			const historyItems = providerPayload?.items as Array<ResponseInput[number]> | undefined;
 			if (historyItems) {
 				if (providerPayload?.dt) {
 					messages.push(...historyItems);
@@ -659,7 +658,6 @@ function convertConversationMessages(
 			}
 
 			const output: ResponseInput = [];
-			const assistantMsg = msg as AssistantMessage;
 
 			// Check if this message is from a different model (same provider, different model ID).
 			// For such messages, tool call IDs with fc_ prefix need to be stripped to avoid

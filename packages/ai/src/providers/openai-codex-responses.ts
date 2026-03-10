@@ -29,7 +29,12 @@ import {
 	type ToolCall,
 	type ToolChoice,
 } from "../types";
-import { normalizeResponsesToolCallId } from "../utils";
+import {
+	createOpenAIResponsesHistoryPayload,
+	getOpenAIResponsesHistoryItems,
+	getOpenAIResponsesHistoryPayload,
+	normalizeResponsesToolCallId,
+} from "../utils";
 import { AssistantMessageEventStream } from "../utils/event-stream";
 import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-inspector";
 import { getOpenAIStreamIdleTimeoutMs, iterateWithIdleTimeout } from "../utils/idle-iterator";
@@ -933,11 +938,7 @@ export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"
 				throw new Error("Codex response failed");
 			}
 
-			output.providerPayload = {
-				type: "openaiResponsesHistory",
-				dt: true,
-				items: nativeOutputItems,
-			};
+			output.providerPayload = createOpenAIResponsesHistoryPayload(model.provider, nativeOutputItems);
 
 			output.duration = Date.now() - startTime;
 			if (firstTokenTime) output.ttft = firstTokenTime - startTime;
@@ -1653,15 +1654,6 @@ function getAccountId(accessToken: string): string {
 	return accountId;
 }
 
-function getOpenAIResponsesHistoryItems(
-	providerPayload: { type?: string; items?: unknown } | undefined,
-): ResponseInput | undefined {
-	if (providerPayload?.type !== "openaiResponsesHistory" || !Array.isArray(providerPayload.items)) {
-		return undefined;
-	}
-	return providerPayload.items as ResponseInput;
-}
-
 function convertMessages(model: Model<"openai-codex-responses">, context: Context): ResponseInput {
 	const messages: ResponseInput = [];
 
@@ -1686,8 +1678,10 @@ function convertMessages(model: Model<"openai-codex-responses">, context: Contex
 	let msgIndex = 0;
 	for (const msg of transformedMessages) {
 		if (msg.role === "user") {
-			const providerPayload = (msg as { providerPayload?: { type?: string; items?: unknown } }).providerPayload;
-			const historyItems = getOpenAIResponsesHistoryItems(providerPayload);
+			const providerPayload = (msg as { providerPayload?: AssistantMessage["providerPayload"] }).providerPayload;
+			const historyItems = getOpenAIResponsesHistoryItems(providerPayload, model.provider) as
+				| Array<ResponseInput[number]>
+				| undefined;
 			if (historyItems) {
 				messages.push(...historyItems);
 				msgIndex++;
@@ -1731,8 +1725,10 @@ function convertMessages(model: Model<"openai-codex-responses">, context: Contex
 				});
 			}
 		} else if (msg.role === "developer") {
-			const providerPayload = (msg as { providerPayload?: { type?: string; items?: unknown } }).providerPayload;
-			const historyItems = getOpenAIResponsesHistoryItems(providerPayload);
+			const providerPayload = (msg as { providerPayload?: AssistantMessage["providerPayload"] }).providerPayload;
+			const historyItems = getOpenAIResponsesHistoryItems(providerPayload, model.provider) as
+				| Array<ResponseInput[number]>
+				| undefined;
 			if (historyItems) {
 				messages.push(...historyItems);
 				msgIndex++;
@@ -1774,9 +1770,13 @@ function convertMessages(model: Model<"openai-codex-responses">, context: Contex
 				});
 			}
 		} else if (msg.role === "assistant") {
-			const providerPayload = (msg as { providerPayload?: { type?: string; dt?: boolean; items?: unknown } })
-				.providerPayload;
-			const historyItems = getOpenAIResponsesHistoryItems(providerPayload);
+			const assistantMsg = msg as AssistantMessage;
+			const providerPayload = getOpenAIResponsesHistoryPayload(
+				assistantMsg.providerPayload,
+				model.provider,
+				assistantMsg.provider,
+			);
+			const historyItems = providerPayload?.items as Array<ResponseInput[number]> | undefined;
 			if (historyItems) {
 				if (providerPayload?.dt) {
 					messages.push(...historyItems);

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, mock, vi } from "bun:test"
 import * as path from "node:path";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import { getBundledModel } from "@oh-my-pi/pi-ai/models";
-import type { AssistantMessage, Model, Usage } from "@oh-my-pi/pi-ai/types";
+import type { AssistantMessage, Model, ProviderPayload, Usage } from "@oh-my-pi/pi-ai/types";
 import { hookFetch } from "@oh-my-pi/pi-utils";
 
 const completeSimpleMock = vi.fn();
@@ -78,7 +78,7 @@ function createOpenAiAssistantMessage(
 	model: Model,
 	usage?: Usage,
 	encryptedReasoning: string = "encrypted-reasoning",
-	providerPayload?: { type: "openaiResponsesHistory"; items: Array<Record<string, unknown>> },
+	providerPayload?: ProviderPayload,
 ): AssistantMessage {
 	return {
 		role: "assistant",
@@ -351,6 +351,7 @@ describe("remote compaction setting", () => {
 		const previousCompaction = createCompactionEntry("Previous summary", oldAssistant.id);
 		previousCompaction.preserveData = {
 			openaiRemoteCompaction: {
+				provider: "openai",
 				replacementHistory: [
 					{ type: "message", role: "user", content: [{ type: "input_text", text: "Previous preserved user" }] },
 					{ type: "compaction", encrypted_content: "prior_encrypted" },
@@ -430,6 +431,7 @@ describe("remote compaction setting", () => {
 		expect(result.summary).toContain("History summary");
 		expect(result.preserveData).toEqual({
 			openaiRemoteCompaction: {
+				provider: "openai",
 				replacementHistory: remoteOutput,
 				compactionItem: { type: "compaction", encrypted_content: "new_encrypted" },
 			},
@@ -451,7 +453,7 @@ describe("remote compaction setting", () => {
 					model,
 					createMockUsage(0, 100, 9000, 0),
 					"encrypted_reasoning_turn_1",
-					{ type: "openaiResponsesHistory", items: assistantHistory },
+					{ type: "openaiResponsesHistory", provider: "openai", items: assistantHistory },
 				),
 			),
 			createMessageEntry(createUserMessage("follow-up user")),
@@ -570,6 +572,7 @@ describe("remote compaction setting", () => {
 		expect(requestBody.instructions).toBe("BASE INSTRUCTIONS");
 		expect(result.preserveData).toEqual({
 			openaiRemoteCompaction: {
+				provider: "openai",
 				replacementHistory: [
 					{ type: "message", role: "user", content: [{ type: "input_text", text: "Real preserved user" }] },
 					{ type: "message", role: "assistant", content: [{ type: "output_text", text: "Kept assistant" }] },
