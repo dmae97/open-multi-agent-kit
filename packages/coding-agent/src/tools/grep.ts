@@ -16,7 +16,13 @@ import { Ellipsis, Hasher, type RenderCache, renderStatusLine, renderTreeList, t
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
 import type { ToolSession } from ".";
 import { formatFullOutputReference, type OutputMeta } from "./output-meta";
-import { combineSearchGlobs, hasGlobPathChars, parseSearchPath, resolveToCwd } from "./path-utils";
+import {
+	combineSearchGlobs,
+	hasGlobPathChars,
+	parseSearchPath,
+	resolveMultiSearchPath,
+	resolveToCwd,
+} from "./path-utils";
 import { formatCount, formatEmptyMessage, formatErrorMessage, PREVIEW_LIMITS } from "./render-utils";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
@@ -107,7 +113,12 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 			const effectiveMultiline = multiline ?? patternHasNewline;
 
 			const useHashLines = resolveFileDisplayMode(this.session).hashLines;
+			const formatScopePath = (targetPath: string): string => {
+				const relative = path.relative(this.session.cwd, targetPath).replace(/\\/g, "/");
+				return relative.length === 0 ? "." : relative;
+			};
 			let searchPath: string;
+			let scopePath: string;
 			let globFilter = glob?.trim() || undefined;
 			const internalRouter = this.session.internalRouter;
 			if (searchDir?.trim()) {
@@ -121,20 +132,26 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 						throw new ToolError(`Cannot grep internal URL without a backing file: ${rawPath}`);
 					}
 					searchPath = resource.sourcePath;
+					scopePath = formatScopePath(searchPath);
 				} else {
-					const parsedPath = parseSearchPath(rawPath);
-					searchPath = resolveToCwd(parsedPath.basePath, this.session.cwd);
-					if (parsedPath.glob) {
-						globFilter = combineSearchGlobs(parsedPath.glob, globFilter);
+					const multiSearchPath = await resolveMultiSearchPath(rawPath, this.session.cwd, globFilter);
+					if (multiSearchPath) {
+						searchPath = multiSearchPath.basePath;
+						globFilter = multiSearchPath.glob;
+						scopePath = multiSearchPath.scopePath;
+					} else {
+						const parsedPath = parseSearchPath(rawPath);
+						searchPath = resolveToCwd(parsedPath.basePath, this.session.cwd);
+						if (parsedPath.glob) {
+							globFilter = combineSearchGlobs(parsedPath.glob, globFilter);
+						}
+						scopePath = formatScopePath(searchPath);
 					}
 				}
 			} else {
 				searchPath = resolveToCwd(".", this.session.cwd);
+				scopePath = ".";
 			}
-			const scopePath = (() => {
-				const relative = path.relative(this.session.cwd, searchPath).replace(/\\/g, "/");
-				return relative.length === 0 ? "." : relative;
-			})();
 
 			let isDirectory: boolean;
 			try {

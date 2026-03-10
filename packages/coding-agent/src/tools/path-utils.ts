@@ -4,6 +4,14 @@ import * as path from "node:path";
 
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
 const NARROW_NO_BREAK_SPACE = "\u202F";
+const TOP_LEVEL_INTERNAL_URL_PREFIXES = [
+	"agent://",
+	"artifact://",
+	"skill://",
+	"rule://",
+	"local://",
+	"mcp://",
+] as const;
 
 function normalizeUnicodeSpaces(str: string): string {
 	return str.replace(UNICODE_SPACES, " ");
@@ -32,6 +40,15 @@ function tryShellEscapedPath(filePath: string): string {
 function fileExists(filePath: string): boolean {
 	try {
 		fs.accessSync(filePath, fs.constants.F_OK);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+	try {
+		await fs.promises.access(filePath, fs.constants.F_OK);
 		return true;
 	} catch {
 		return false;
@@ -105,6 +122,24 @@ export interface ParsedSearchPath {
 	glob?: string;
 }
 
+export interface ParsedFindPattern {
+	basePath: string;
+	globPattern: string;
+	hasGlob: boolean;
+}
+
+export interface ResolvedMultiSearchPath {
+	basePath: string;
+	glob?: string;
+	scopePath: string;
+}
+
+export interface ResolvedMultiFindPattern {
+	basePath: string;
+	globPattern: string;
+	scopePath: string;
+}
+
 /**
  * Split a user path into a base path + glob pattern for tools that delegate to
  * APIs accepting separate `path` and `glob` arguments.
@@ -128,6 +163,44 @@ export function parseSearchPath(filePath: string): ParsedSearchPath {
 	};
 }
 
+// Parse a find pattern into a base directory path and a glob pattern.
+// Examples:
+//   src/app/**/\*.tsx -> { basePath: "src/app", globPattern: "**/*.tsx", hasGlob: true }
+//   src/app/\*.tsx -> { basePath: "src/app", globPattern: "*.tsx", hasGlob: true }
+//   \*.ts -> { basePath: ".", globPattern: "**/*.ts", hasGlob: true }
+//   **/\*.json -> { basePath: ".", globPattern: "**/*.json", hasGlob: true }
+//   /abs/path/**/\*.ts -> { basePath: "/abs/path", globPattern: "**/*.ts", hasGlob: true }
+//   src/app -> { basePath: "src/app", globPattern: "**/*", hasGlob: false }
+export function parseFindPattern(pattern: string): ParsedFindPattern {
+	const segments = pattern.split("/");
+	let firstGlobIndex = -1;
+	for (let i = 0; i < segments.length; i++) {
+		if (hasGlobPathChars(segments[i])) {
+			firstGlobIndex = i;
+			break;
+		}
+	}
+
+	if (firstGlobIndex === -1) {
+		return { basePath: pattern, globPattern: "**/*", hasGlob: false };
+	}
+
+	if (firstGlobIndex === 0) {
+		const needsRecursive = !pattern.startsWith("**/");
+		return {
+			basePath: ".",
+			globPattern: needsRecursive ? `**/${pattern}` : pattern,
+			hasGlob: true,
+		};
+	}
+
+	return {
+		basePath: segments.slice(0, firstGlobIndex).join("/"),
+		globPattern: segments.slice(firstGlobIndex).join("/"),
+		hasGlob: true,
+	};
+}
+
 export function combineSearchGlobs(prefixGlob?: string, suffixGlob?: string): string | undefined {
 	if (!prefixGlob) return suffixGlob;
 	if (!suffixGlob) return prefixGlob;
@@ -136,6 +209,275 @@ export function combineSearchGlobs(prefixGlob?: string, suffixGlob?: string): st
 	const normalizedSuffix = suffixGlob.replace(/^\/+/, "");
 
 	return `${normalizedPrefix}/${normalizedSuffix}`;
+}
+
+type TopLevelSeparator = "comma" | "whitespace";
+
+function splitTopLevel(value: string, separator: TopLevelSeparator): string[] {
+	const parts: string[] = [];
+	let current = "";
+	let braceDepth = 0;
+	let bracketDepth = 0;
+	let parenDepth = 0;
+	let quote: '"' | "'" | undefined;
+	let escaped = false;
+
+	const pushCurrent = () => {
+		const normalized = current.trim();
+		if (normalized.length > 0) {
+			parts.push(normalized);
+		}
+		current = "";
+	};
+
+	for (const char of value) {
+		if (escaped) {
+			current += char;
+			escaped = false;
+			continue;
+		}
+
+		if (char === "\\") {
+			current += char;
+			escaped = true;
+			continue;
+		}
+
+		if (quote) {
+			current += char;
+			if (char === quote) {
+				quote = undefined;
+			}
+			continue;
+		}
+
+		if (char === '"' || char === "'") {
+			quote = char;
+			current += char;
+			continue;
+		}
+
+		if (char === "{") braceDepth += 1;
+		else if (char === "}" && braceDepth > 0) braceDepth -= 1;
+		else if (char === "[") bracketDepth += 1;
+		else if (char === "]" && bracketDepth > 0) bracketDepth -= 1;
+		else if (char === "(") parenDepth += 1;
+		else if (char === ")" && parenDepth > 0) parenDepth -= 1;
+
+		const topLevel = braceDepth === 0 && bracketDepth === 0 && parenDepth === 0;
+		const isWhitespace = /\s/.test(char);
+		if (topLevel && separator === "comma" && char === ",") {
+			pushCurrent();
+			continue;
+		}
+		if (topLevel && separator === "whitespace" && isWhitespace) {
+			pushCurrent();
+			continue;
+		}
+
+		current += char;
+	}
+
+	pushCurrent();
+	return parts.length > 1 ? parts : [value.trim()];
+}
+
+function normalizePosixPath(filePath: string): string {
+	return filePath.replace(/\\/g, "/");
+}
+
+function joinRelativeGlob(basePath: string | undefined, globPattern: string): string {
+	if (!basePath || basePath === ".") return normalizePosixPath(globPattern).replace(/^\/+/, "");
+	const normalizedBase = normalizePosixPath(basePath).replace(/\/+$/, "");
+	const normalizedGlob = normalizePosixPath(globPattern).replace(/^\/+/, "");
+	return `${normalizedBase}/${normalizedGlob}`;
+}
+
+function buildBraceUnion(patterns: string[]): string | undefined {
+	const uniquePatterns = [...new Set(patterns.map(pattern => normalizePosixPath(pattern).trim()).filter(Boolean))];
+	if (uniquePatterns.length === 0) return undefined;
+	if (uniquePatterns.length === 1) return uniquePatterns[0];
+	return `{${uniquePatterns.join(",")}}`;
+}
+
+function findCommonBasePath(paths: string[]): string {
+	if (paths.length === 0) return ".";
+	let commonParts = path.resolve(paths[0]).split(path.sep);
+	for (const candidatePath of paths.slice(1)) {
+		const candidateParts = path.resolve(candidatePath).split(path.sep);
+		let sharedCount = 0;
+		const maxShared = Math.min(commonParts.length, candidateParts.length);
+		while (sharedCount < maxShared && commonParts[sharedCount] === candidateParts[sharedCount]) {
+			sharedCount += 1;
+		}
+		commonParts = commonParts.slice(0, sharedCount);
+	}
+	if (commonParts.length === 0) {
+		return path.parse(path.resolve(paths[0])).root;
+	}
+	const joined = commonParts.join(path.sep);
+	return joined || path.parse(path.resolve(paths[0])).root;
+}
+
+function toScopeDisplay(items: string[]): string {
+	return items.map(item => normalizePosixPath(item)).join(", ");
+}
+
+function looksLikeDelimitedPathToken(token: string): boolean {
+	return (
+		TOP_LEVEL_INTERNAL_URL_PREFIXES.some(prefix => token.startsWith(prefix)) ||
+		token.startsWith(".") ||
+		token.startsWith("/") ||
+		token.startsWith("~") ||
+		token.startsWith("@") ||
+		token.includes("/") ||
+		token.includes("\\") ||
+		hasGlobPathChars(token) ||
+		/\.[^./\\]+$/.test(token)
+	);
+}
+
+async function areDelimitedTokensResolvable(
+	tokens: string[],
+	cwd: string,
+	parseBasePath: (value: string) => string,
+	allowBareExistingTokens: boolean,
+): Promise<boolean> {
+	for (const token of tokens) {
+		if (TOP_LEVEL_INTERNAL_URL_PREFIXES.some(prefix => token.startsWith(prefix))) {
+			return false;
+		}
+
+		if (!allowBareExistingTokens && !looksLikeDelimitedPathToken(token)) {
+			return false;
+		}
+
+		const basePath = parseBasePath(token);
+		const resolvedBasePath = resolveToCwd(basePath, cwd);
+		if (await pathExists(resolvedBasePath)) {
+			continue;
+		}
+
+		if (!allowBareExistingTokens) {
+			return false;
+		}
+
+		const resolvedExactPath = resolveToCwd(token, cwd);
+		if (!(await pathExists(resolvedExactPath))) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+async function splitDelimitedSearchInput(
+	rawInput: string,
+	cwd: string,
+	parseBasePath: (value: string) => string,
+): Promise<string[] | undefined> {
+	const trimmed = rawInput.trim();
+	if (!trimmed) return undefined;
+
+	const resolvedExactPath = resolveToCwd(trimmed, cwd);
+	if (await pathExists(resolvedExactPath)) {
+		return undefined;
+	}
+
+	const commaSeparated = splitTopLevel(trimmed, "comma");
+	if (commaSeparated.length > 1 && (await areDelimitedTokensResolvable(commaSeparated, cwd, parseBasePath, true))) {
+		return [...new Set(commaSeparated)];
+	}
+
+	const whitespaceSeparated = splitTopLevel(trimmed, "whitespace");
+	if (
+		whitespaceSeparated.length > 1 &&
+		(await areDelimitedTokensResolvable(whitespaceSeparated, cwd, parseBasePath, false))
+	) {
+		return [...new Set(whitespaceSeparated)];
+	}
+
+	return undefined;
+}
+
+export async function resolveMultiSearchPath(
+	rawPath: string,
+	cwd: string,
+	suffixGlob?: string,
+): Promise<ResolvedMultiSearchPath | undefined> {
+	const pathItems = await splitDelimitedSearchInput(rawPath, cwd, value => parseSearchPath(value).basePath);
+	if (!pathItems || pathItems.length <= 1) {
+		return undefined;
+	}
+
+	const parsedItems = await Promise.all(
+		pathItems.map(async item => {
+			const parsedPath = parseSearchPath(item);
+			const absoluteBasePath = resolveToCwd(parsedPath.basePath, cwd);
+			const stat = await fs.promises.stat(absoluteBasePath);
+			return { raw: item, parsedPath, absoluteBasePath, stat };
+		}),
+	);
+
+	const commonBasePath = findCommonBasePath(parsedItems.map(item => item.absoluteBasePath));
+	const combinedPatterns = parsedItems.map(item => {
+		const relativeBasePath = normalizePosixPath(path.relative(commonBasePath, item.absoluteBasePath)) || ".";
+		if (item.parsedPath.glob) {
+			const pathGlob = joinRelativeGlob(relativeBasePath, item.parsedPath.glob);
+			return combineSearchGlobs(pathGlob, suffixGlob) ?? pathGlob;
+		}
+		if (suffixGlob) {
+			const pathPrefix = relativeBasePath === "." ? undefined : relativeBasePath;
+			return combineSearchGlobs(pathPrefix, suffixGlob) ?? suffixGlob;
+		}
+		if (item.stat.isDirectory()) {
+			return joinRelativeGlob(relativeBasePath, "**/*");
+		}
+		return relativeBasePath === "." ? path.basename(item.absoluteBasePath) : relativeBasePath;
+	});
+
+	return {
+		basePath: commonBasePath,
+		glob: buildBraceUnion(combinedPatterns),
+		scopePath: toScopeDisplay(pathItems),
+	};
+}
+
+export async function resolveMultiFindPattern(
+	rawPattern: string,
+	cwd: string,
+): Promise<ResolvedMultiFindPattern | undefined> {
+	const patternItems = await splitDelimitedSearchInput(rawPattern, cwd, value => parseFindPattern(value).basePath);
+	if (!patternItems || patternItems.length <= 1) {
+		return undefined;
+	}
+
+	const parsedItems = await Promise.all(
+		patternItems.map(async item => {
+			const parsedPattern = parseFindPattern(item);
+			const absoluteBasePath = resolveToCwd(parsedPattern.basePath, cwd);
+			const stat = await fs.promises.stat(absoluteBasePath);
+			return { raw: item, parsedPattern, absoluteBasePath, stat };
+		}),
+	);
+
+	const commonBasePath = findCommonBasePath(parsedItems.map(item => item.absoluteBasePath));
+	const combinedPatterns = parsedItems.map(item => {
+		const relativeBasePath = normalizePosixPath(path.relative(commonBasePath, item.absoluteBasePath)) || ".";
+		if (item.parsedPattern.hasGlob) {
+			return joinRelativeGlob(relativeBasePath, item.parsedPattern.globPattern);
+		}
+		if (item.stat.isDirectory()) {
+			return joinRelativeGlob(relativeBasePath, "**/*");
+		}
+		return relativeBasePath === "." ? path.basename(item.absoluteBasePath) : relativeBasePath;
+	});
+
+	return {
+		basePath: commonBasePath,
+		globPattern: buildBraceUnion(combinedPatterns) ?? "**/*",
+		scopePath: toScopeDisplay(patternItems),
+	};
 }
 
 export function resolveReadPath(filePath: string, cwd: string): string {

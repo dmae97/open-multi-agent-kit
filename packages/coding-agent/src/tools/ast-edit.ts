@@ -14,7 +14,13 @@ import { Ellipsis, Hasher, type RenderCache, renderStatusLine, renderTreeList, t
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
 import type { ToolSession } from ".";
 import type { OutputMeta } from "./output-meta";
-import { combineSearchGlobs, hasGlobPathChars, parseSearchPath, resolveToCwd } from "./path-utils";
+import {
+	combineSearchGlobs,
+	hasGlobPathChars,
+	parseSearchPath,
+	resolveMultiSearchPath,
+	resolveToCwd,
+} from "./path-utils";
 import {
 	dedupeParseErrors,
 	formatCount,
@@ -98,7 +104,12 @@ export class AstEditTool implements AgentTool<typeof astEditSchema, AstEditToolD
 			}
 			const maxFiles = parseInt(process.env.PI_MAX_AST_FILES ?? "", 10) || 1000;
 
+			const formatScopePath = (targetPath: string): string => {
+				const relative = path.relative(this.session.cwd, targetPath).replace(/\\/g, "/");
+				return relative.length === 0 ? "." : relative;
+			};
 			let searchPath: string | undefined;
+			let scopePath: string | undefined;
 			let globFilter = params.glob?.trim() || undefined;
 			const rawPath = params.path?.trim();
 			if (rawPath) {
@@ -112,15 +123,23 @@ export class AstEditTool implements AgentTool<typeof astEditSchema, AstEditToolD
 						throw new ToolError(`Cannot rewrite internal URL without backing file: ${rawPath}`);
 					}
 					searchPath = resource.sourcePath;
+					scopePath = formatScopePath(searchPath);
 				} else {
-					const parsedPath = parseSearchPath(rawPath);
-					searchPath = resolveToCwd(parsedPath.basePath, this.session.cwd);
-					globFilter = combineSearchGlobs(parsedPath.glob, globFilter);
+					const multiSearchPath = await resolveMultiSearchPath(rawPath, this.session.cwd, globFilter);
+					if (multiSearchPath) {
+						searchPath = multiSearchPath.basePath;
+						globFilter = multiSearchPath.glob;
+						scopePath = multiSearchPath.scopePath;
+					} else {
+						const parsedPath = parseSearchPath(rawPath);
+						searchPath = resolveToCwd(parsedPath.basePath, this.session.cwd);
+						globFilter = combineSearchGlobs(parsedPath.glob, globFilter);
+						scopePath = formatScopePath(searchPath);
+					}
 				}
 			}
-
 			const resolvedSearchPath = searchPath ?? resolveToCwd(".", this.session.cwd);
-			const scopePath = path.relative(this.session.cwd, resolvedSearchPath).replace(/\\/g, "/") || ".";
+			scopePath = scopePath ?? formatScopePath(resolvedSearchPath);
 			let isDirectory: boolean;
 			try {
 				const stat = await Bun.file(resolvedSearchPath).stat();

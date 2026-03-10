@@ -24,7 +24,7 @@ import {
 import type { ToolSession } from ".";
 import { applyListLimit } from "./list-limit";
 import { formatFullOutputReference, type OutputMeta } from "./output-meta";
-import { resolveToCwd } from "./path-utils";
+import { parseFindPattern, resolveMultiFindPattern, resolveToCwd } from "./path-utils";
 import { formatCount, formatEmptyMessage, formatErrorMessage, PREVIEW_LIMITS } from "./render-utils";
 import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";
@@ -39,56 +39,6 @@ export type FindToolInput = Static<typeof findSchema>;
 
 const DEFAULT_LIMIT = 1000;
 const GLOB_TIMEOUT_MS = 5000;
-
-/**
- * Parse a pattern to extract the base directory path and glob pattern.
- * Examples:
- *   "src/app/**\/*.tsx" → { basePath: "src/app", globPattern: "**\/*.tsx" }
- *   "src/app/*.tsx" → { basePath: "src/app", globPattern: "*.tsx" }
- *   "*.ts" → { basePath: ".", globPattern: "**\/*.ts" }
- *   "**\/*.json" → { basePath: ".", globPattern: "**\/*.json" }
- *   "/abs/path/**\/*.ts" → { basePath: "/abs/path", globPattern: "**\/*.ts" }
- */
-function parsePatternPath(pattern: string): { basePath: string; globPattern: string } {
-	// Find the first segment containing glob characters
-	const segments = pattern.split("/");
-	const globChars = ["*", "?", "[", "{"];
-
-	let firstGlobIndex = -1;
-	for (let i = 0; i < segments.length; i++) {
-		if (globChars.some(c => segments[i].includes(c))) {
-			firstGlobIndex = i;
-			break;
-		}
-	}
-
-	// No glob characters found - treat as literal path with implicit **/*
-	if (firstGlobIndex === -1) {
-		// Pattern is a directory path like "src/app" - search recursively in it
-		return { basePath: pattern, globPattern: "**/*" };
-	}
-
-	// Glob starts at first segment - no base path
-	if (firstGlobIndex === 0) {
-		// Simple pattern like "*.ts" needs **/ prefix for recursive search
-		const needsRecursive = !pattern.startsWith("**/");
-		return {
-			basePath: ".",
-			globPattern: needsRecursive ? `**/${pattern}` : pattern,
-		};
-	}
-
-	// Split at the glob boundary
-	const basePath = segments.slice(0, firstGlobIndex).join("/");
-	const globPattern = segments.slice(firstGlobIndex).join("/");
-
-	return { basePath, globPattern };
-}
-
-function hasGlobChars(pattern: string): boolean {
-	const globChars = ["*", "?", "[", "{"];
-	return globChars.some(char => pattern.includes(char));
-}
 
 export interface FindToolDetails {
 	truncation?: TruncationResult;
@@ -149,26 +99,25 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 		const { pattern, limit, hidden } = params;
 
 		return untilAborted(signal, async () => {
-			// Parse pattern to extract base directory and glob pattern
-			// e.g., "src/app/**/*.tsx" → basePath: "src/app", globPattern: "**/*.tsx"
-			// e.g., "*.ts" → basePath: ".", globPattern: "**/*.ts"
+			const formatScopePath = (targetPath: string): string => {
+				const relative = path.relative(this.session.cwd, targetPath).replace(/\\/g, "/");
+				return relative.length === 0 ? "." : relative;
+			};
 			const normalizedPattern = pattern.trim().replace(/\\/g, "/");
 			if (!normalizedPattern) {
 				throw new ToolError("Pattern must not be empty");
 			}
 
-			const hasGlob = hasGlobChars(normalizedPattern);
-			const { basePath, globPattern } = parsePatternPath(normalizedPattern);
-			const searchPath = resolveToCwd(basePath, this.session.cwd);
+			const multiPattern = await resolveMultiFindPattern(normalizedPattern, this.session.cwd);
+			const parsedPattern = multiPattern ? null : parseFindPattern(normalizedPattern);
+			const hasGlob = multiPattern ? true : (parsedPattern?.hasGlob ?? false);
+			const globPattern = multiPattern?.globPattern ?? parsedPattern?.globPattern ?? "**/*";
+			const searchPath = resolveToCwd(multiPattern?.basePath ?? parsedPattern?.basePath ?? ".", this.session.cwd);
+			const scopePath = multiPattern?.scopePath ?? formatScopePath(searchPath);
 
 			if (searchPath === "/") {
 				throw new ToolError("Searching from root directory '/' is not allowed");
 			}
-
-			const scopePath = (() => {
-				const relative = path.relative(this.session.cwd, searchPath).replace(/\\/g, "/");
-				return relative.length === 0 ? "." : relative;
-			})();
 
 			const rawLimit = limit ?? DEFAULT_LIMIT;
 			const effectiveLimit = Number.isFinite(rawLimit) ? Math.floor(rawLimit) : Number.NaN;
