@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.9.15] - 2026-03-10
 ### Added
 
 - Added `ensureLoadingAnimation()` method to manage loading animation lifecycle and prevent duplicate spinners
