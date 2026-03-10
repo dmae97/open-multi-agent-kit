@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `ensureLoadingAnimation()` method to manage loading animation lifecycle and prevent duplicate spinners
+
+### Changed
+
+- Refactored loading animation initialization to use centralized `ensureLoadingAnimation()` method in event and input controllers
+- Updated `showError()` to properly clean up loading animation state when errors occur
 
 ## [13.9.12] - 2026-03-09
 ### Added

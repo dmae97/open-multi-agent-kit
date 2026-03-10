@@ -339,6 +339,7 @@ export class InputController {
 				};
 				this.ctx.addMessageToChat(optimisticMessage);
 				this.ctx.editor.setText("");
+				this.ctx.ensureLoadingAnimation();
 				this.ctx.ui.requestRender();
 
 				this.ctx.onInputCallback({ text, images });

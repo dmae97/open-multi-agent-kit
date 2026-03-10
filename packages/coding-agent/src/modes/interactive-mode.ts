@@ -5,8 +5,8 @@
 import * as path from "node:path";
 import { type Agent, type AgentMessage, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage, ImageContent, Message, Model, UsageReport } from "@oh-my-pi/pi-ai";
-import type { Component, Loader, SlashCommand } from "@oh-my-pi/pi-tui";
-import { Container, Markdown, ProcessTerminal, Spacer, Text, TUI } from "@oh-my-pi/pi-tui";
+import type { Component, SlashCommand } from "@oh-my-pi/pi-tui";
+import { Container, Loader, Markdown, ProcessTerminal, Spacer, Text, TUI } from "@oh-my-pi/pi-tui";
 import { APP_NAME, getProjectDir, hsvToRgb, isEnoent, logger, postmortem } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { KeybindingsManager } from "../config/keybindings";
@@ -46,7 +46,14 @@ import { SSHCommandController } from "./controllers/ssh-command-controller";
 import { OAuthManualInputManager } from "./oauth-manual-input";
 import { setMermaidRenderCallback } from "./theme/mermaid-cache";
 import type { Theme } from "./theme/theme";
-import { getEditorTheme, getMarkdownTheme, onTerminalAppearanceChange, onThemeChange, theme } from "./theme/theme";
+import {
+	getEditorTheme,
+	getMarkdownTheme,
+	getSymbolTheme,
+	onTerminalAppearanceChange,
+	onThemeChange,
+	theme,
+} from "./theme/theme";
 import type { CompactionQueuedMessage, InteractiveModeContext, TodoItem, TodoPhase } from "./types";
 import { UiHelpers } from "./utils/ui-helpers";
 
@@ -849,11 +856,33 @@ export class InteractiveMode implements InteractiveModeContext {
 
 	showError(message: string): void {
 		this.optimisticUserMessageSignature = undefined;
+		this.#pendingWorkingMessage = undefined;
+		if (this.loadingAnimation) {
+			this.loadingAnimation.stop();
+			this.loadingAnimation = undefined;
+			this.statusContainer.clear();
+		}
 		this.#uiHelpers.showError(message);
 	}
 
 	showWarning(message: string): void {
 		this.#uiHelpers.showWarning(message);
+	}
+
+	ensureLoadingAnimation(): void {
+		if (!this.loadingAnimation) {
+			this.statusContainer.clear();
+			this.loadingAnimation = new Loader(
+				this.ui,
+				spinner => theme.fg("accent", spinner),
+				text => theme.fg("muted", text),
+				this.#defaultWorkingMessage,
+				getSymbolTheme().spinnerFrames,
+			);
+			this.statusContainer.addChild(this.loadingAnimation);
+		}
+
+		this.applyPendingWorkingMessage();
 	}
 
 	setWorkingMessage(message?: string): void {

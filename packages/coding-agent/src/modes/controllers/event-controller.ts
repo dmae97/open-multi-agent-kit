@@ -107,19 +107,7 @@ export class EventController {
 					this.ctx.retryLoader = undefined;
 					this.ctx.statusContainer.clear();
 				}
-				if (this.ctx.loadingAnimation) {
-					this.ctx.loadingAnimation.stop();
-				}
-				this.ctx.statusContainer.clear();
-				this.ctx.loadingAnimation = new Loader(
-					this.ctx.ui,
-					spinner => theme.fg("accent", spinner),
-					text => theme.fg("muted", text),
-					`Working… (esc to interrupt)`,
-					getSymbolTheme().spinnerFrames,
-				);
-				this.ctx.statusContainer.addChild(this.ctx.loadingAnimation);
-				this.ctx.applyPendingWorkingMessage();
+				this.ctx.ensureLoadingAnimation();
 				this.ctx.ui.requestRender();
 				break;
 
