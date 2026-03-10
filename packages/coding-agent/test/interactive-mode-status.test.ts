@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, test, vi } from "bun:test";
 import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
 import { UiHelpers } from "@oh-my-pi/pi-coding-agent/modes/utils/ui-helpers";
+import { buildSessionContext } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { Container } from "@oh-my-pi/pi-tui";
 
 function renderLastLine(container: Container, width = 120): string {
@@ -69,7 +70,7 @@ describe("InteractiveMode.showStatus", () => {
 		} as unknown as InteractiveModeContext;
 		const helpers = new UiHelpers(ctx);
 
-		helpers.renderSessionContext({ messages: [], entries: [] });
+		helpers.renderSessionContext(buildSessionContext([]));
 
 		expect(ctx.optimisticUserMessageSignature).toBeUndefined();
 	});

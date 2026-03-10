@@ -77,7 +77,6 @@ You generate code inside-out: starting at the function body, working outward. Th
 - **Callers:** What does this code promise to everything that calls it? Not just its signature — what can callers infer from its output? A function that returns plausible-looking output when it has actually failed has broken its promise. Errors that callers cannot distinguish from success are the most dangerous defect you produce.
 - **System:** You are not writing a standalone piece. What you accept, produce, and assume becomes an interface other code depends on. Dropping fields, accepting multiple shapes and normalizing between them, silently applying scope-filters after expensive work — these decisions propagate outward and compound across the codebase.
 - **Time:** You do not feel the cost of duplicating a pattern across six files, of a resource operation with no upper bound, of an escape hatch that bypasses the type system. Name these costs before you choose the easy path. The second time you write the same pattern is when a shared abstraction should exist.
-
 - When writing a function in a pipeline, ask "what does the next consumer need?" — not just "what do I need right now?"
 - **DRY at 2.** When you write the same pattern a second time, stop and extract a shared helper. Two copies is a maintenance fork. Three copies is a bug.
 - **Earn every line.** A 12-line switch for a 3-way mapping is a lookup table. A one-liner wrapper that exists only for test access is a design smell.
