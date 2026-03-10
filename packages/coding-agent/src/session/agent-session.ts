@@ -89,6 +89,7 @@ import { getCurrentThemeName, theme } from "../modes/theme/theme";
 import { normalizeDiff, normalizeToLF, ParseError, previewPatch, stripBom } from "../patch";
 import type { PlanModeState } from "../plan-mode/state";
 import autoHandoffThresholdFocusPrompt from "../prompts/system/auto-handoff-threshold-focus.md" with { type: "text" };
+import eagerTodoPrompt from "../prompts/system/eager-todo.md" with { type: "text" };
 import handoffDocumentPrompt from "../prompts/system/handoff-document.md" with { type: "text" };
 import planModeActivePrompt from "../prompts/system/plan-mode-active.md" with { type: "text" };
 import planModeReferencePrompt from "../prompts/system/plan-mode-reference.md" with { type: "text" };
@@ -106,6 +107,7 @@ import { getLatestTodoPhasesFromEntries, type TodoItem, type TodoPhase } from ".
 import { parseCommandArgs } from "../utils/command-args";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
 import { extractFileMentions, generateFileMentionMessages } from "../utils/file-mentions";
+import { buildNamedToolChoice } from "../utils/tool-choice";
 import {
 	type CompactionResult,
 	calculateContextTokens,
@@ -350,6 +352,9 @@ export class AgentSession {
 	// Todo completion reminder state
 	#todoReminderCount = 0;
 	#todoPhases: TodoPhase[] = [];
+	#eagerTodoInjected = false;
+	#skipNextTodoCompletionReminder = false;
+	#nextToolChoiceOverride: ToolChoice | undefined = undefined;
 
 	// Bash execution state
 	#bashAbortController: AbortController | undefined = undefined;
@@ -455,6 +460,12 @@ export class AgentSession {
 	/** Model registry for API key resolution and model discovery */
 	get modelRegistry(): ModelRegistry {
 		return this.#modelRegistry;
+	}
+
+	consumeNextToolChoiceOverride(): ToolChoice | undefined {
+		const toolChoice = this.#nextToolChoiceOverride;
+		this.#nextToolChoiceOverride = undefined;
+		return toolChoice;
 	}
 
 	/** Provider-scoped mutable state store for transport/session caches. */
@@ -791,7 +802,15 @@ export class AgentSession {
 			const compactionTask = this.#checkCompaction(msg);
 			this.#trackPostPromptTask(compactionTask);
 			await compactionTask;
-			// Check for incomplete todos (unless there was an error or abort)
+			// Check for incomplete todos only after a final assistant stop, not intermediate tool-use turns.
+			const hasToolCalls = msg.content.some(content => content.type === "toolCall");
+			if (hasToolCalls) {
+				return;
+			}
+			if (this.#skipNextTodoCompletionReminder) {
+				this.#skipNextTodoCompletionReminder = false;
+				return;
+			}
 			if (msg.stopReason !== "error" && msg.stopReason !== "aborted") {
 				if (this.#enforceRewindBeforeYield()) {
 					return;
@@ -1349,6 +1368,9 @@ export class AgentSession {
 		if (!this.#extensionRunner) return;
 		if (event.type === "agent_start") {
 			this.#turnIndex = 0;
+			this.#eagerTodoInjected = false;
+			this.#skipNextTodoCompletionReminder = false;
+			this.#nextToolChoiceOverride = undefined;
 			await this.#extensionRunner.emit({ type: "agent_start" });
 		} else if (event.type === "agent_end") {
 			await this.#extensionRunner.emit({ type: "agent_end", messages: event.messages });
@@ -1943,6 +1965,10 @@ export class AgentSession {
 				await this.#queueSteer(expandedText, options?.images);
 			}
 			return;
+		}
+
+		if (!options?.synthetic) {
+			await this.#enforceEagerTodo(expandedText);
 		}
 
 		const userContent: (TextContent | ImageContent)[] = [{ type: "text", text: expandedText }];
@@ -3479,6 +3505,57 @@ export class AgentSession {
 			});
 		} finally {
 			this.agent.setTools(previousTools);
+		}
+	}
+
+	async #enforceEagerTodo(userRequest: string): Promise<void> {
+		if (this.#eagerTodoInjected) {
+			return;
+		}
+		const eagerTodosEnabled = this.settings.get("todo.eager");
+		const todosEnabled = this.settings.get("todo.enabled");
+		if (!eagerTodosEnabled || !todosEnabled) {
+			return;
+		}
+
+		this.#eagerTodoInjected = true;
+
+		if (this.#planModeState?.enabled) {
+			return;
+		}
+		if (this.getTodoPhases().length > 0) {
+			return;
+		}
+
+		if (!this.#toolRegistry.has("todo_write")) {
+			logger.warn("Eager todo enforcement skipped because todo_write is unavailable", {
+				activeToolNames: this.agent.state.tools.map(tool => tool.name),
+			});
+			return;
+		}
+
+		const todoWriteToolChoice = buildNamedToolChoice("todo_write", this.model);
+		if (!todoWriteToolChoice) {
+			logger.warn("Eager todo enforcement skipped because the current model does not support forcing todo_write", {
+				modelApi: this.model?.api,
+				modelId: this.model?.id,
+			});
+			return;
+		}
+
+		const eagerTodoReminder = renderPromptTemplate(eagerTodoPrompt, {
+			userRequest,
+		});
+
+		this.#nextToolChoiceOverride = todoWriteToolChoice;
+		this.#skipNextTodoCompletionReminder = true;
+		try {
+			await this.prompt(eagerTodoReminder, {
+				synthetic: true,
+				expandPromptTemplates: false,
+			});
+		} finally {
+			this.#nextToolChoiceOverride = undefined;
 		}
 	}
 	/**
@@ -5191,8 +5268,8 @@ export class AgentSession {
 		}
 
 		for (const msg of this.messages) {
-			if (msg.role === "user") {
-				lines.push("## User\n");
+			if (msg.role === "user" || msg.role === "developer") {
+				lines.push(msg.role === "developer" ? "## Developer\n" : "## User\n");
 				if (typeof msg.content === "string") {
 					lines.push(msg.content);
 				} else {
@@ -5316,8 +5393,8 @@ export class AgentSession {
 		lines.push("");
 
 		for (const msg of this.messages) {
-			if (msg.role === "user") {
-				lines.push("## User");
+			if (msg.role === "user" || msg.role === "developer") {
+				lines.push(msg.role === "developer" ? "## Developer" : "## User");
 				lines.push("");
 				if (typeof msg.content === "string") {
 					lines.push(msg.content);

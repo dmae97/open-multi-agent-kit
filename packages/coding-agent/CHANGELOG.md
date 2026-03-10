@@ -1,13 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added `todo.eager` setting to automatically create a comprehensive todo list after the first user message
+- Added `buildNamedToolChoice` utility function to build provider-aware tool choice constraints for named tools
 - Support for comma/space-separated path lists in `find`, `grep`, `ast_grep`, and `ast_edit` tools (e.g., `apps/,packages/,phases/` or `apps/ packages/ phases/`)
 - New `resolveMultiSearchPath` and `resolveMultiFindPattern` functions to handle multi-path search inputs with automatic common base path detection
 
 ### Changed
 
+- Modified tool choice resolution to support per-turn tool choice overrides via `consumeNextToolChoiceOverride()`
 - Updated tool documentation to clarify that `path` parameter accepts files, directories, glob patterns, or comma/space-separated path lists
 - Refactored path resolution logic in `find`, `grep`, `ast_grep`, and `ast_edit` tools to use unified multi-path handling
 

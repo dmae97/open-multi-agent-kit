@@ -470,6 +470,15 @@ export const SETTINGS_SCHEMA = {
 			submenu: true,
 		},
 	},
+	"todo.eager": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "agent",
+			label: "Eager todos",
+			description: "Automatically create a comprehensive todo list after the first message",
+		},
+	},
 
 	// ─────────────────────────────────────────────────────────────────────────
 	// Optional tools

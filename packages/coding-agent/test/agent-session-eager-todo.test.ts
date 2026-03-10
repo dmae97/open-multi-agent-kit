@@ -1,0 +1,262 @@
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import * as path from "node:path";
+import { Agent, type AgentMessage, type AgentTool } from "@oh-my-pi/pi-agent-core";
+import { type AssistantMessage, getBundledModel, type TextContent, type ToolCall } from "@oh-my-pi/pi-ai";
+import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
+import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
+import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
+import { convertToLlm } from "@oh-my-pi/pi-coding-agent/session/messages";
+import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
+import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
+import { TodoWriteTool } from "@oh-my-pi/pi-coding-agent/tools";
+import { TempDir } from "@oh-my-pi/pi-utils";
+import { Type } from "@sinclair/typebox";
+
+class MockAssistantStream extends AssistantMessageEventStream {}
+
+type ObservedPromptCall = {
+	toolChoice: string | undefined;
+	toolNames: string[];
+	lastMessageRole: AgentMessage["role"];
+	lastMessageText: string;
+};
+
+function isTextContentBlock(value: unknown): value is TextContent {
+	if (!value || typeof value !== "object") return false;
+	return (value as TextContent).type === "text" && typeof (value as TextContent).text === "string";
+}
+
+function getToolChoiceName(choice: unknown): string | undefined {
+	if (!choice) return undefined;
+	if (typeof choice === "string") return choice;
+	if (typeof choice !== "object" || !("type" in choice)) return undefined;
+	const toolChoice = choice as { type?: string; name?: string; function?: { name?: string } };
+	if (toolChoice.type === "tool") return toolChoice.name;
+	if (toolChoice.type === "function") return toolChoice.name ?? toolChoice.function?.name;
+	return undefined;
+}
+
+function createAssistantMessage(text: string): AssistantMessage {
+	return {
+		role: "assistant",
+		content: [{ type: "text", text }],
+		api: "anthropic-messages",
+		provider: "anthropic",
+		model: "mock",
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		stopReason: "stop",
+		timestamp: Date.now(),
+	};
+}
+
+function createToolCallAssistantMessage(name: string, args: Record<string, unknown>): AssistantMessage {
+	const toolCall: ToolCall = {
+		type: "toolCall",
+		id: `call_${name}`,
+		name,
+		arguments: args,
+	};
+	return {
+		role: "assistant",
+		content: [toolCall],
+		api: "anthropic-messages",
+		provider: "anthropic",
+		model: "mock",
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		stopReason: "toolUse",
+		timestamp: Date.now(),
+	};
+}
+
+function getMessageText(message: AgentMessage): string {
+	if (!("content" in message)) {
+		return "";
+	}
+	if (typeof message.content === "string") {
+		return message.content;
+	}
+	if (!Array.isArray(message.content)) {
+		return "";
+	}
+	return message.content
+		.filter(isTextContentBlock)
+		.map(content => content.text)
+		.join("\n");
+}
+
+describe("AgentSession eager todo enforcement", () => {
+	let tempDir: TempDir;
+	let session: AgentSession;
+	let streamCallCount = 0;
+	let scriptedResponses: AssistantMessage[] = [];
+	const observedCalls: ObservedPromptCall[] = [];
+
+	beforeEach(async () => {
+		tempDir = TempDir.createSync("@pi-agent-session-eager-todo-");
+		streamCallCount = 0;
+		scriptedResponses = [];
+		observedCalls.length = 0;
+
+		const model = getBundledModel("anthropic", "claude-sonnet-4-5");
+		if (!model) throw new Error("Expected claude-sonnet-4-5 model to exist");
+
+		const authStorage = await AuthStorage.create(path.join(tempDir.path(), "testauth.db"));
+		authStorage.setRuntimeApiKey("anthropic", "test-key");
+		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir.path(), "models.yml"));
+		const settings = Settings.isolated({
+			"compaction.enabled": false,
+			"todo.enabled": true,
+			"todo.eager": true,
+		});
+		const sessionManager = SessionManager.inMemory(tempDir.path());
+
+		const toolSession: ToolSession = {
+			cwd: tempDir.path(),
+			hasUI: false,
+			getSessionFile: () => sessionManager.getSessionFile() ?? null,
+			getSessionSpawns: () => "*",
+			settings,
+		};
+		const todoWriteTool = new TodoWriteTool(toolSession);
+		const mockBashTool: AgentTool = {
+			name: "bash",
+			label: "Bash",
+			description: "Mock bash tool",
+			parameters: Type.Object({}),
+			execute: async () => ({ content: [{ type: "text" as const, text: "ok" }] }),
+		};
+
+		const agent = new Agent({
+			getApiKey: () => "test-key",
+			initialState: {
+				model,
+				systemPrompt: "Test",
+				tools: [todoWriteTool, mockBashTool],
+				messages: [],
+			},
+			convertToLlm,
+			getToolChoice: () => session?.consumeNextToolChoiceOverride(),
+			streamFn: (_model, context, options) => {
+				streamCallCount++;
+				const lastMessage = context.messages.at(-1);
+				if (!lastMessage) {
+					throw new Error("Expected prompt context to include a message");
+				}
+				observedCalls.push({
+					toolChoice: getToolChoiceName(options?.toolChoice),
+					toolNames: (context.tools ?? []).map(tool => tool.name),
+					lastMessageRole: lastMessage.role,
+					lastMessageText: getMessageText(lastMessage),
+				});
+				const response = scriptedResponses.shift() ?? createAssistantMessage("done");
+				const stream = new MockAssistantStream();
+				queueMicrotask(() => {
+					stream.push({ type: "start", partial: response });
+					const reason = response.stopReason === "toolUse" || response.stopReason === "length" ? response.stopReason : "stop";
+					stream.push({ type: "done", reason, message: response });
+				});
+				return stream;
+			},
+		});
+
+		const toolRegistry = new Map<string, AgentTool>([
+			[todoWriteTool.name, todoWriteTool as unknown as AgentTool],
+			[mockBashTool.name, mockBashTool],
+		]);
+
+		session = new AgentSession({
+			agent,
+			sessionManager,
+			settings,
+			modelRegistry,
+			toolRegistry,
+		});
+	});
+
+	afterEach(async () => {
+		if (session) {
+			await session.dispose();
+		}
+		tempDir.removeSync();
+	});
+
+	it("forces a synthetic todo-only turn before the first real user prompt", async () => {
+		await session.prompt("list all work trees");
+
+		const dumpText = session.formatSessionAsText();
+
+		expect(observedCalls).toHaveLength(2);
+		expect(observedCalls[0]).toEqual({
+			toolChoice: "todo_write",
+			toolNames: ["todo_write", "bash"],
+			lastMessageRole: "developer",
+			lastMessageText: expect.stringContaining("list all work trees"),
+		});
+		expect(observedCalls[1]).toEqual({
+			toolChoice: undefined,
+			toolNames: ["todo_write", "bash"],
+			lastMessageRole: "user",
+			lastMessageText: "list all work trees",
+		});
+		expect(dumpText).toContain("## Developer");
+		expect(dumpText).toContain("Create a comprehensive phased todo for the upcoming user request now.");
+	});
+
+	it("initializes todos once, then continues to the real user turn without looping todo_write", async () => {
+		scriptedResponses = [
+			createToolCallAssistantMessage("todo_write", {
+				ops: [
+					{
+						op: "replace",
+						phases: [
+							{
+								name: "List worktrees",
+								tasks: [
+									{ content: "List all git worktrees in the current repository", status: "in_progress" },
+								],
+							},
+						],
+					},
+				],
+			}),
+			createAssistantMessage("todo initialized"),
+			createAssistantMessage("real user turn handled"),
+		];
+
+		await session.prompt("list all work trees");
+
+		expect(streamCallCount).toBe(3);
+		expect(observedCalls).toHaveLength(3);
+		expect(observedCalls[0]).toEqual({
+			toolChoice: "todo_write",
+			toolNames: ["todo_write", "bash"],
+			lastMessageRole: "developer",
+			lastMessageText: expect.stringContaining("list all work trees"),
+		});
+		expect(observedCalls[1]?.lastMessageRole).toBe("toolResult");
+		expect(observedCalls[1]?.toolChoice).toBeUndefined();
+		expect(observedCalls[2]).toEqual({
+			toolChoice: undefined,
+			toolNames: ["todo_write", "bash"],
+			lastMessageRole: "user",
+			lastMessageText: "list all work trees",		});
+		expect(session.getTodoPhases()).toHaveLength(1);
+		expect(session.getTodoPhases()[0]?.tasks[0]?.content).toBe("List all git worktrees in the current repository");
+	});
+});

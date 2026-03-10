@@ -5,7 +5,6 @@
  */
 import path from "node:path";
 import type { AgentEvent, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { Api, Model, ToolChoice } from "@oh-my-pi/pi-ai";
 import { logger, untilAborted } from "@oh-my-pi/pi-utils";
 import type { TSchema } from "@sinclair/typebox";
 import Ajv, { type ValidateFunction } from "ajv";
@@ -28,6 +27,7 @@ import { type ContextFileEntry, truncateTail } from "../tools";
 import { jtdToJsonSchema } from "../tools/jtd-to-json-schema";
 import { ToolAbortError } from "../tools/tool-errors";
 import type { EventBus } from "../utils/event-bus";
+import { buildNamedToolChoice } from "../utils/tool-choice";
 import { subprocessToolRegistry } from "./subprocess-tool-registry";
 import {
 	type AgentDefinition,
@@ -115,22 +115,6 @@ function getReportFindingKey(value: unknown): string | null {
 		return null;
 	}
 	return `${filePath}:${lineStart}:${lineEnd}:${priority ?? ""}:${title}`;
-}
-
-function buildSubmitResultToolChoice(model?: Model<Api>): ToolChoice | undefined {
-	if (!model) return undefined;
-	if (
-		model.api === "openai-codex-responses" ||
-		model.api === "openai-responses" ||
-		model.api === "openai-completions" ||
-		model.api === "azure-openai-responses"
-	) {
-		return { type: "function", name: "submit_result" };
-	}
-	if (model.api === "anthropic-messages" || model.api === "bedrock-converse-stream") {
-		return { type: "tool", name: "submit_result" };
-	}
-	return undefined;
 }
 
 /** Options for subagent execution */
@@ -1091,7 +1075,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			await session.prompt(task);
 			await session.waitForIdle();
 
-			const reminderToolChoice = buildSubmitResultToolChoice(session.model);
+			const reminderToolChoice = buildNamedToolChoice("submit_result", session.model);
 
 			let retryCount = 0;
 			while (!submitResultCalled && retryCount < MAX_SUBMIT_RESULT_RETRIES && !abortSignal.aborted) {
