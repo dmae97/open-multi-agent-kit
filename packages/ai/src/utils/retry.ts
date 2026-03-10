@@ -8,7 +8,7 @@ type ErrorLike = {
 };
 
 const TRANSIENT_MESSAGE_PATTERN =
-	/overloaded|rate.?limit|usage.?limit|too many requests|service.?unavailable|server error|internal error|connection.?error|unable to connect|fetch failed/i;
+	/overloaded|rate.?limit|usage.?limit|too many requests|service.?unavailable|server error|internal error|connection.?error|unable to connect|fetch failed|stream stall/i;
 
 const VALIDATION_MESSAGE_PATTERN =
 	/invalid|validation|bad request|unsupported|schema|missing required|not found|unauthorized|forbidden/i;
