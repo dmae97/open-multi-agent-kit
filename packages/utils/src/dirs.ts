@@ -54,9 +54,19 @@ export function setProjectDir(dir: string): void {
 	process.chdir(projectDir);
 }
 
+/** Get the config directory name relative to home (e.g. ".omp" or PI_CONFIG_DIR override). */
+export function getConfigDirName(): string {
+	return process.env.PI_CONFIG_DIR || CONFIG_DIR_NAME;
+}
+
+/** Get the config agent directory name relative to home (e.g. ".omp/agent" or PI_CONFIG_DIR + "/agent"). */
+export function getConfigAgentDirName(): string {
+	return `${getConfigDirName()}/agent`;
+}
+
 /** Get the config root directory (~/.omp). */
 export function getConfigRootDir(): string {
-	return path.join(os.homedir(), process.env.PI_CONFIG_DIR || CONFIG_DIR_NAME);
+	return path.join(os.homedir(), getConfigDirName());
 }
 
 let agentDir = process.env.PI_CODING_AGENT_DIR || path.join(getConfigRootDir(), "agent");

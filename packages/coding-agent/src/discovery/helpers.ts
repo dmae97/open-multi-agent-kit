@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { FileType, glob } from "@oh-my-pi/pi-natives";
-import { CONFIG_DIR_NAME, tryParseJson } from "@oh-my-pi/pi-utils";
+import { CONFIG_DIR_NAME, getConfigAgentDirName, getConfigDirName, tryParseJson } from "@oh-my-pi/pi-utils";
 import { readFile } from "../capability/fs";
 import { parseRuleConditionAndScope, type Rule, type RuleFrontmatter } from "../capability/rule";
 import type { Skill, SkillFrontmatter } from "../capability/skill";
@@ -15,8 +15,12 @@ import { parseFrontmatter } from "../utils/frontmatter";
  */
 export const SOURCE_PATHS = {
 	native: {
-		userBase: CONFIG_DIR_NAME,
-		userAgent: `${CONFIG_DIR_NAME}/agent`,
+		get userBase() {
+			return getConfigDirName();
+		},
+		get userAgent() {
+			return getConfigAgentDirName();
+		},
 		projectDir: CONFIG_DIR_NAME,
 	},
 	claude: {
