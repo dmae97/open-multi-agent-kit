@@ -21,18 +21,19 @@ Before choosing the payload, answer these questions in order:
 **`delete`** — if true, delete the file.
 
 **`edits[n].pos`** — the anchor line. Meaning depends on `op`:
-  - if `replace`: line to rewrite
+  - if `replace`: first line to rewrite
   - if `prepend`: line to insert new lines **before**; omit for beginning of file
   - if `append`: line to insert new lines **after**; omit for end of file
 **`edits[n].end`** — range replace only. The last line of the range (inclusive). Omit for single-line replace.
 **`edits[n].lines`** — the replacement content:
-  - `["line1", "line2"]` — insert `line1` and `line2`
+  - for `replace`: the exact lines that will replace `[pos, end??pos]` inclusively (or the single `pos` line when `end` is omitted)
+  - for `prepend`/`append`: the new lines to insert
   - `[""]` — blank line
-  - `null` or `[]` — delete if replace, no-op if append or prepend
+  - `null` or `[]` — delete if replace
 
-`replace` substitutes **exactly** the `pos..end` range (inclusive). Everything before `pos` and after `end` is preserved untouched. If `lines` contains content that already exists after `end`, those lines **will be duplicated** in the output. Keep `lines` to exactly what belongs inside the consumed range.
-
-Ops are applied bottom-up. Tags **MUST** be referenced from the most recent `read` output.
+- If `lines` contains content that already exists after `end`, those lines **will be duplicated** in the output. 
+- Keep `lines` to exactly what belongs inside the consumed range.
+- Ops are applied bottom-up. Tags **MUST** be referenced from the most recent `read` output.
 </operations>
 
 <rules>
@@ -119,39 +120,6 @@ Blank out a line without removing it:
 ```
 </example>
 
-<example name="delete a single line from a block">
-Remove just the TODO comment (line 10) from `beta()` without touching anything else:
-```
-{
-  path: "util.ts",
-  edits: [{
-    op: "replace",
-    pos: {{hlineref 10 "\t// TODO: remove after migration"}},
-    lines: null
-  }]
-}
-```
-Do **not** widen the range and re-emit surrounding lines when a single-line delete suffices.
-</example>
-
-<example name="rewrite a block body — shape (a)">
-Replace the catch body with smarter error handling. Shape (a): `pos` is the first body line, `end` is the last body line. The catch header (line 14) and its closer (line 17) are outside the range and stay untouched.
-```
-{
-  path: "util.ts",
-  edits: [{
-    op: "replace",
-    pos: {{hlineref 15 "\t\tconsole.error(err);"}},
-    end: {{hlineref 16 "\t\treturn null;"}},
-    lines: [
-      "\t\tif (isEnoent(err)) return null;",
-      "\t\tthrow err;"
-    ]
-  }]
-}
-```
-</example>
-
 <example name="span the full body, not a single line">
 When changing body content, replace the entire body span — not just one line inside it. Patching one line leaves the rest of the body stale.
 
@@ -179,43 +147,6 @@ Good — shape (a): replace the full body span. Header and closer stay untouched
     lines: [
       "\t\tif (isEnoent(err)) return null;",
       "\t\treturn fallback;"
-    ]
-  }]
-}
-```
-</example>
-
-<example name="replace whole block — shape (b)">
-Simplify `beta()` to a one-liner. Shape (b): `pos`=header, `end`=closer, re-emit all in `lines`.
-
-Bad — `end` stops at the inner `\t}` on line 17, so the outer `}` on line 18 survives. Result: two consecutive `}` lines.
-```
-{
-  path: "util.ts",
-  edits: [{
-    op: "replace",
-    pos: {{hlineref 9 "function beta() {"}},
-    end: {{hlineref 17 "\t}"}},
-    lines: [
-      "function beta() {",
-      "\treturn parse(data);",
-      "}"
-    ]
-  }]
-}
-```
-Good — `end` includes the function's own `}` on line 18, so the old closer is consumed:
-```
-{
-  path: "util.ts",
-  edits: [{
-    op: "replace",
-    pos: {{hlineref 9 "function beta() {"}},
-    end: {{hlineref 18 "}"}},
-    lines: [
-      "function beta() {",
-      "\treturn parse(data);",
-      "}"
     ]
   }]
 }
