@@ -104,6 +104,7 @@ async function waitFor(assertion: () => Promise<void> | void, timeoutMs = 3000):
 
 describe("memories runtime", () => {
 	beforeEach(() => {
+		vi.clearAllMocks();
 		vi.restoreAllMocks();
 	});
 

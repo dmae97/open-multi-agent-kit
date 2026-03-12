@@ -142,6 +142,16 @@ Good — `end` includes the function's own `}` on line 18, so the old closer is 
 ```
 </example>
 
+<example name="avoid shared boundary lines">
+Do not anchor `replace` on a mixed boundary line such as `} catch (err) {`, `} else {`, `}),`, or `},{`. Those lines belong to two adjacent structures at once.
+
+Bad — if you need to change code on both sides of that line, replacing just the boundary span will usually leave one side's syntax behind.
+
+Good — choose one of two safe shapes instead:
+- move inward and replace only body-owned lines
+- expand outward and replace one whole owned block, consuming its real closer/separator too
+</example>
+
 <example name="insert between sibling declarations">
 Add a `gamma()` function between `alpha()` and `beta()`. Use `prepend` on the next declaration — not `append` on the previous block's closing brace — so the anchor is a stable declaration boundary.
 ```
@@ -171,6 +181,7 @@ Use a trailing `""` to preserve the blank line between sibling declarations.
 - When changing existing code near a block tail or closing delimiter, default to `replace` over the owned span instead of inserting around the boundary.
 - When adding a sibling declaration, default to `prepend` on the next sibling declaration instead of `append` on the previous block's closing brace.
 - **Block boundaries travel together.** For a block `{ header / body / closer }`, there are exactly two valid replace shapes: (a) replace only the body — `pos`=first body line, `end`=last body line, leave the header and closer untouched; or (b) replace the whole block — `pos`=header, `end`=closer, re-emit all three in `lines`. Never split them: do not set `end` to the closer while omitting it from `lines` (deletes it), and do not emit the closer in `lines` without including it in `end` (duplicates it). This applies to every block terminator: `}`, `continue`, `break`, `return`, `throw`.
+- **Never target shared boundary lines.** Do not use `replace` spans that start, end, or pivot on a line that closes one construct and opens/separates another, such as `},{`, `}),`, `} else {`, or `} catch (err) {`. Those lines are not owned by a single block. Move the range inward to body-only lines, or widen it to consume one whole owned construct including its true trailing delimiter.
 - **`lines` must not extend past `end`.** `lines` replaces exactly `pos..end`. Content after `end` survives. If you include lines in `lines` that exist after `end`, they will appear twice. Either extend `end` to cover all lines you are re-emitting, or remove the extra lines from `lines`.
 - `lines` entries **MUST** be literal file content with indentation copied exactly from the `read` output. If the file uses tabs, use a real tab character.
 </critical>

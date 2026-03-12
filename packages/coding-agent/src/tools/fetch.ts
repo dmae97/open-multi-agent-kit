@@ -7,7 +7,7 @@ import { ptree, truncate } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import { parseHTML } from "linkedom";
 import { renderPromptTemplate } from "../config/prompt-templates";
-import { settings } from "../config/settings";
+import type { Settings } from "../config/settings";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { type Theme, theme } from "../modes/theme/theme";
 import fetchDescription from "../prompts/tools/fetch.md" with { type: "text" };
@@ -473,6 +473,7 @@ async function renderHtmlToText(
 	url: string,
 	html: string,
 	timeout: number,
+	settings: Settings,
 	userSignal?: AbortSignal,
 ): Promise<{ content: string; ok: boolean; method: string }> {
 	const signal = ptree.combineSignals(userSignal, timeout * 1000);
@@ -632,7 +633,13 @@ async function handleSpecialUrls(
 /**
  * Main render function implementing the full pipeline
  */
-async function renderUrl(url: string, timeout: number, raw: boolean, signal?: AbortSignal): Promise<FetchRenderResult> {
+async function renderUrl(
+	url: string,
+	timeout: number,
+	raw: boolean,
+	settings: Settings,
+	signal?: AbortSignal,
+): Promise<FetchRenderResult> {
 	const notes: string[] = [];
 	const fetchedAt = new Date().toISOString();
 	if (signal?.aborted) {
@@ -976,7 +983,7 @@ async function renderUrl(url: string, timeout: number, raw: boolean, signal?: Ab
 		}
 
 		// 5E: Render HTML with lynx or html2text
-		const htmlResult = await renderHtmlToText(finalUrl, rawContent, timeout, signal);
+		const htmlResult = await renderHtmlToText(finalUrl, rawContent, timeout, settings, signal);
 		if (!htmlResult.ok) {
 			notes.push("html rendering failed (lynx/html2text unavailable)");
 			const output = finalizeOutput(rawContent);
@@ -1116,7 +1123,7 @@ export class FetchTool implements AgentTool<typeof fetchSchema, FetchToolDetails
 			throw new ToolAbortError();
 		}
 
-		const result = await renderUrl(url, effectiveTimeout, raw, signal);
+		const result = await renderUrl(url, effectiveTimeout, raw, this.session.settings, signal);
 		const truncation = truncateHead(result.content, {
 			maxBytes: DEFAULT_MAX_BYTES,
 			maxLines: FETCH_DEFAULT_MAX_LINES,

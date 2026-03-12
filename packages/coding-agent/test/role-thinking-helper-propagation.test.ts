@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as ai from "@oh-my-pi/pi-ai";
 import { Effort, getBundledModel } from "@oh-my-pi/pi-ai";
 import { generateCommitMessage } from "../src/utils/commit-message-generator";
@@ -20,6 +20,10 @@ function createSettings(modelRoles: Record<string, string>) {
 		},
 	} as never;
 }
+
+beforeEach(() => {
+	vi.clearAllMocks();
+});
 
 afterEach(() => {
 	vi.restoreAllMocks();
