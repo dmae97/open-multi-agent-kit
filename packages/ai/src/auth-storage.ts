@@ -53,6 +53,7 @@ import { loginNvidia } from "./utils/oauth/nvidia";
 import { loginOllama } from "./utils/oauth/ollama";
 import { loginOpenAICodex } from "./utils/oauth/openai-codex";
 import { loginOpenCode } from "./utils/oauth/opencode";
+import { loginParallel } from "./utils/oauth/parallel";
 import { loginPerplexity } from "./utils/oauth/perplexity";
 import { loginQianfan } from "./utils/oauth/qianfan";
 import { loginQwenPortal } from "./utils/oauth/qwen-portal";
@@ -883,6 +884,11 @@ export class AuthStorage {
 			}
 			case "vllm": {
 				const apiKey = await loginVllm(ctrl);
+				await saveApiKeyCredential(apiKey);
+				return;
+			}
+			case "parallel": {
+				const apiKey = await loginParallel(ctrl);
 				await saveApiKeyCredential(apiKey);
 				return;
 			}

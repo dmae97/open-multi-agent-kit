@@ -842,6 +842,7 @@ export const SETTINGS_SCHEMA = {
 			"tavily",
 			"kagi",
 			"synthetic",
+			"parallel",
 		] as const,
 		default: "auto",
 		ui: { tab: "services", label: "Web search provider", description: "Provider for web search tool", submenu: true },
@@ -877,6 +878,16 @@ export const SETTINGS_SCHEMA = {
 			label: "OpenAI websockets",
 			description: "Websocket policy for OpenAI Codex models (auto uses model defaults, on forces, off disables)",
 			submenu: true,
+		},
+	},
+
+	"providers.parallelFetch": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "services",
+			label: "Parallel fetch",
+			description: "Use Parallel extract API for URL fetching when credentials are available",
 		},
 	},
 

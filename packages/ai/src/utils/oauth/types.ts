@@ -33,6 +33,7 @@ export type OAuthProvider =
 	| "openai-codex"
 	| "opencode-go"
 	| "opencode-zen"
+	| "parallel"
 	| "perplexity"
 	| "qianfan"
 	| "qwen-portal"

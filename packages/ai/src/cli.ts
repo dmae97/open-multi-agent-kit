@@ -13,6 +13,7 @@ import { loginKimi } from "./utils/oauth/kimi";
 import { loginMiniMaxCode, loginMiniMaxCodeCn } from "./utils/oauth/minimax-code";
 import { loginNanoGPT } from "./utils/oauth/nanogpt";
 import { loginOpenAICodex } from "./utils/oauth/openai-codex";
+import { loginParallel } from "./utils/oauth/parallel";
 import { loginTavily } from "./utils/oauth/tavily";
 import type { OAuthCredentials, OAuthProvider } from "./utils/oauth/types";
 import { loginZai } from "./utils/oauth/zai";
@@ -178,6 +179,22 @@ async function login(provider: OAuthProvider): Promise<void> {
 			}
 			case "tavily": {
 				const apiKey = await loginTavily({
+					onAuth(info) {
+						const { url, instructions } = info;
+						console.log(`\nOpen this URL in your browser:\n${url}`);
+						if (instructions) console.log(instructions);
+						console.log();
+					},
+					onPrompt(p) {
+						return promptFn(`${p.message}${p.placeholder ? ` (${p.placeholder})` : ""}:`);
+					},
+				});
+				storage.saveApiKey(provider, apiKey);
+				console.log(`\nAPI key saved to ~/.omp/agent/agent.db`);
+				return;
+			}
+			case "parallel": {
+				const apiKey = await loginParallel({
 					onAuth(info) {
 						const { url, instructions } = info;
 						console.log(`\nOpen this URL in your browser:\n${url}`);

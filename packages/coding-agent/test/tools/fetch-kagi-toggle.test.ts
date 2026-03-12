@@ -22,6 +22,7 @@ describe("fetch tool", () => {
 
 	afterEach(() => {
 		vi.restoreAllMocks();
+		delete process.env.PARALLEL_API_KEY;
 		fs.rmSync(testDir, { recursive: true, force: true });
 	});
 
@@ -472,5 +473,80 @@ describe("fetch tool", () => {
 			Bun.which = originalWhich;
 			execSpy.mockRestore();
 		}
+	});
+	it("prefers Parallel extract before other HTML renderers when configured", async () => {
+		process.env.PARALLEL_API_KEY = "test-parallel-key";
+		const session = createSession();
+		const tool = new FetchTool(session);
+		const pageUrl = "https://example.com/parallel-page";
+		const pageHtml = "<html><body><main><h1>Parallel Page</h1></main></body></html>";
+		const ensureToolSpy = vi.spyOn(toolsManager, "ensureTool");
+		const htmlToMarkdownSpy = vi.spyOn(natives, "htmlToMarkdown");
+		vi.spyOn(scrapers, "loadPage").mockImplementation(async requestedUrl => {
+			if (requestedUrl === pageUrl) {
+				return {
+					ok: true,
+					status: 200,
+					contentType: "text/html",
+					finalUrl: pageUrl,
+					content: pageHtml,
+				};
+			}
+
+			if (requestedUrl === `${pageUrl}.md`) {
+				return {
+					ok: false,
+					status: 404,
+					contentType: "text/plain",
+					finalUrl: requestedUrl,
+					content: "",
+				};
+			}
+
+			return {
+				ok: false,
+				status: 404,
+				contentType: "text/plain",
+				finalUrl: requestedUrl,
+				content: "",
+			};
+		});
+		using _hook = hookFetch(input => {
+			const requestedUrl = String(input);
+			if (requestedUrl === "https://api.parallel.ai/v1beta/extract") {
+				return new Response(
+					JSON.stringify({
+						extract_id: "extract-fetch-1",
+						results: [
+							{
+								url: pageUrl,
+								title: "Parallel Page",
+								excerpts: [
+									"Parallel-rendered content that is comfortably longer than one hundred characters. ".repeat(
+										2,
+									),
+								],
+								full_content: null,
+							},
+						],
+						errors: [],
+						warnings: null,
+						usage: null,
+					}),
+					{ status: 200, headers: { "Content-Type": "application/json" } },
+				);
+			}
+
+			return new Response("blocked", { status: 500, statusText: "Blocked" });
+		});
+
+		const result = await tool.execute("fetch-parallel-html", { url: pageUrl });
+		const textBlock = result.content.find(content => content.type === "text");
+
+		expect(result.details?.method).toBe("parallel");
+		expect(textBlock?.type).toBe("text");
+		expect(textBlock?.text).toContain("Parallel-rendered content");
+		expect(ensureToolSpy).not.toHaveBeenCalled();
+		expect(htmlToMarkdownSpy).not.toHaveBeenCalled();
 	});
 });

@@ -1,9 +1,12 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added Parallel as a web search provider with support for fast and research modes
+- Added Parallel extract API integration for URL content fetching and YouTube video extraction
+- Added `providers.parallelFetch` setting to enable/disable Parallel extract for URL fetching
+- Added `/login parallel` command support for Parallel API authentication
 - Added subcommands to `/copy` command: `code` (copy last code block), `all` (copy all code blocks), `cmd` (copy last bash/python command), and `last` (copy full message)
 - Added support for copying last executed bash or python command via `/copy cmd` subcommand
 - Added `assignment` field to task progress and result objects to track the raw per-task assignment text separately from the full templated task
@@ -16,6 +19,9 @@
 
 ### Changed
 
+- Updated HTML-to-text rendering to prefer Parallel extract when credentials are available, before falling back to jina, trafilatura, or lynx
+- Updated YouTube scraper to prefer Parallel extract when credentials are available, before falling back to yt-dlp
+- Updated web search provider priority order to include Parallel between Exa and Kagi
 - Updated hashline tool documentation with explicit guidance on `replace` operation semantics, clarifying that `lines` must not extend past `end` to avoid unintended line duplication
 - Improved diagnostic message formatting to group errors by file path with indented details for better readability
 - Modified eager todo prelude to use hidden custom message type instead of visible developer message, preventing duplicate prompt text in session history

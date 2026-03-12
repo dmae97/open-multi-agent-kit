@@ -17,7 +17,6 @@ Read the file first to get fresh tags. Submit one `edit` call per file with all 
   - for `prepend`/`append`: the new lines to insert
   - `[""]` — blank line
   - `null` or `[]` — delete if replace
-
 - If `lines` contains content that already exists after `end`, those lines **will be duplicated** in the output.
 - Keep `lines` to exactly what belongs inside the consumed range.
 - Ops are applied bottom-up. Tags **MUST** be referenced from the most recent `read` output.

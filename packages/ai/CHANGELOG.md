@@ -1,9 +1,10 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added support for Parallel AI provider with API key authentication
+- Added `PARALLEL_API_KEY` environment variable support for Parallel provider configuration
 - Added automatic websocket reconnection handling for connection limit errors, with fallback to SSE replay when content has already been emitted
 
 ### Changed

@@ -96,6 +96,8 @@ export type { OpenAICodexLoginOptions } from "./openai-codex";
 export { loginOpenAICodex, refreshOpenAICodexToken } from "./openai-codex";
 // OpenCode Zen / OpenCode Go (API key)
 export { loginOpenCode } from "./opencode";
+// Parallel (API key)
+export { loginParallel } from "./parallel";
 // Perplexity
 export { loginPerplexity } from "./perplexity";
 // Qianfan (API key)
@@ -254,6 +256,11 @@ const builtInOAuthProviders: OAuthProviderInfo[] = [
 	{
 		id: "nanogpt",
 		name: "NanoGPT",
+		available: true,
+	},
+	{
+		id: "parallel",
+		name: "Parallel",
 		available: true,
 	},
 	{

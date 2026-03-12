@@ -7,6 +7,7 @@ import { ptree, truncate } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import { parseHTML } from "linkedom";
 import { renderPromptTemplate } from "../config/prompt-templates";
+import { settings } from "../config/settings";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { type Theme, theme } from "../modes/theme/theme";
 import fetchDescription from "../prompts/tools/fetch.md" with { type: "text" };
@@ -15,6 +16,7 @@ import { renderStatusLine } from "../tui";
 import { CachedOutputBlock } from "../tui/output-block";
 import { formatDimensionNote, resizeImage } from "../utils/image-resize";
 import { ensureTool } from "../utils/tools-manager";
+import { extractWithParallel, findParallelApiKey, getParallelExtractContent } from "../web/parallel";
 import { specialHandlers } from "../web/scrapers";
 import type { RenderResult } from "../web/scrapers/types";
 import { finalizeOutput, loadPage, MAX_OUTPUT_CHARS } from "../web/scrapers/types";
@@ -465,7 +467,7 @@ function parseFeedToMarkdown(content: string, maxItems = 10): string {
 }
 
 /**
- * Render HTML to markdown using jina, trafilatura, lynx (in order of preference)
+ * Render HTML to markdown using Parallel, jina, trafilatura, lynx (in order of preference)
  */
 async function renderHtmlToText(
 	url: string,
@@ -481,6 +483,28 @@ async function renderHtmlToText(
 		stderr: "full" as const,
 		signal,
 	};
+
+	// Try Parallel extract first when credentials are configured
+	if (settings.get("providers.parallelFetch") && (await findParallelApiKey())) {
+		try {
+			const parallelResult = await extractWithParallel([url], {
+				objective: "Extract the main content",
+				excerpts: true,
+				fullContent: false,
+				signal,
+			});
+			const firstDocument = parallelResult.results[0];
+			if (firstDocument) {
+				const content = getParallelExtractContent(firstDocument);
+				if (content.trim().length > 100 && !isLowQualityOutput(content)) {
+					return { content, ok: true, method: "parallel" };
+				}
+			}
+		} catch {
+			// Parallel extract failed, continue to next method
+			signal?.throwIfAborted();
+		}
+	}
 
 	// Try jina first (reader API)
 	try {

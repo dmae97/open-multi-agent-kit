@@ -17,47 +17,68 @@ describe.skipIf(SKIP)("handleYouTube", () => {
 	it("handles youtube.com/watch?v= format", async () => {
 		// Use Rick Astley's "Never Gonna Give You Up" - a stable, well-known video
 		const result = await handleYouTube("https://www.youtube.com/watch?v=dQw4w9WgXcQ", 30);
-		expect(result).not.toBeNull();
-		expect(result?.method).toMatch(/^youtube/);
-		expect(result?.contentType).toBe("text/markdown");
-		expect(result?.content).toContain("Video ID");
-		expect(result?.content).toContain("dQw4w9WgXcQ");
+		if (!result) throw new Error("expected YouTube result");
+		const method = result.method;
+		expect(["parallel", "youtube", "youtube-no-ytdlp"]).toContain(method);
+		if (method === "parallel") {
+			expect(result.contentType).toBe("text/markdown");
+			expect(result.finalUrl).toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+		} else if (method === "youtube") {
+			expect(result.contentType).toBe("text/markdown");
+			expect(result.content).toContain("Video ID");
+			expect(result.content).toContain("dQw4w9WgXcQ");
+		} else {
+			expect(result.content).toContain("yt-dlp could not be installed");
+		}
 	}, 30000);
 
 	it("handles youtu.be/ short format", async () => {
 		const result = await handleYouTube("https://youtu.be/dQw4w9WgXcQ", 30);
-		expect(result).not.toBeNull();
-		expect(result?.method).toMatch(/^youtube/);
-		expect(result?.content).toContain("dQw4w9WgXcQ");
+		if (!result) throw new Error("expected YouTube result");
+		const method = result.method;
+		expect(["parallel", "youtube", "youtube-no-ytdlp"]).toContain(method);
+		if (method === "youtube") {
+			expect(result.content).toContain("dQw4w9WgXcQ");
+		} else if (method === "parallel") {
+			expect(result.finalUrl).toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+		}
 	}, 30000);
 
 	it("handles youtube.com/shorts/ format", async () => {
 		// Use a stable YouTube Shorts video
 		const result = await handleYouTube("https://www.youtube.com/shorts/jNQXAC9IVRw", 30);
-		expect(result).not.toBeNull();
-		expect(result?.method).toMatch(/^youtube/);
-		expect(result?.content).toContain("jNQXAC9IVRw");
+		if (!result) throw new Error("expected YouTube result");
+		expect(["parallel", "youtube", "youtube-no-ytdlp"]).toContain(result.method);
+		if (result.method === "youtube") {
+			expect(result.content).toContain("jNQXAC9IVRw");
+		}
 	}, 30000);
 
 	it("handles youtube.com/embed/ format", async () => {
 		const result = await handleYouTube("https://www.youtube.com/embed/dQw4w9WgXcQ", 30);
-		expect(result).not.toBeNull();
-		expect(result?.method).toMatch(/^youtube/);
-		expect(result?.content).toContain("dQw4w9WgXcQ");
+		if (!result) throw new Error("expected YouTube result");
+		expect(["parallel", "youtube", "youtube-no-ytdlp"]).toContain(result.method);
+		if (result.method === "youtube") {
+			expect(result.content).toContain("dQw4w9WgXcQ");
+		}
 	}, 30000);
 
 	it("handles youtube.com/v/ format", async () => {
 		const result = await handleYouTube("https://www.youtube.com/v/dQw4w9WgXcQ", 30);
-		expect(result).not.toBeNull();
-		expect(result?.method).toMatch(/^youtube/);
-		expect(result?.content).toContain("dQw4w9WgXcQ");
+		if (!result) throw new Error("expected YouTube result");
+		expect(["parallel", "youtube", "youtube-no-ytdlp"]).toContain(result.method);
+		if (result.method === "youtube") {
+			expect(result.content).toContain("dQw4w9WgXcQ");
+		}
 	}, 30000);
 
 	it("handles m.youtube.com mobile URLs", async () => {
 		const result = await handleYouTube("https://m.youtube.com/watch?v=dQw4w9WgXcQ", 30);
-		expect(result).not.toBeNull();
-		expect(result?.method).toMatch(/^youtube/);
-		expect(result?.content).toContain("dQw4w9WgXcQ");
+		if (!result) throw new Error("expected YouTube result");
+		expect(["parallel", "youtube", "youtube-no-ytdlp"]).toContain(result.method);
+		if (result.method === "youtube") {
+			expect(result.content).toContain("dQw4w9WgXcQ");
+		}
 	}, 30000);
 
 	it("extracts video metadata when yt-dlp is available", async () => {
@@ -107,17 +128,17 @@ describe.skipIf(SKIP)("handleYouTube", () => {
 		// We can't force yt-dlp to be unavailable in tests, but we can verify
 		// the return structure matches expectations for both cases
 		const result = await handleYouTube("https://www.youtube.com/watch?v=dQw4w9WgXcQ", 30);
-		expect(result).not.toBeNull();
+		if (!result) throw new Error("expected YouTube result");
 
-		// Should have one of these two methods
-		expect(["youtube", "youtube-no-ytdlp"]).toContain(result!.method);
+		// Should have one of these methods
+		expect(["parallel", "youtube", "youtube-no-ytdlp"]).toContain(result.method);
 
 		// Both should have required fields
-		expect(result?.url).toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
-		expect(result?.finalUrl).toContain("youtube.com");
-		expect(result?.fetchedAt).toBeTruthy();
-		expect(typeof result?.truncated).toBe("boolean");
-		expect(Array.isArray(result?.notes)).toBe(true);
+		expect(result.url).toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+		expect(result.finalUrl).toContain("youtube.com");
+		expect(result.fetchedAt).toBeTruthy();
+		expect(typeof result.truncated).toBe("boolean");
+		expect(Array.isArray(result.notes)).toBe(true);
 	}, 30000);
 
 	it("normalizes video URLs to canonical format", async () => {
@@ -132,8 +153,12 @@ describe.skipIf(SKIP)("handleYouTube", () => {
 			"https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf",
 			30,
 		);
-		expect(result).not.toBeNull();
-		expect(result?.content).toContain("dQw4w9WgXcQ");
+		if (!result) throw new Error("expected YouTube result");
+		if (result.method === "youtube") {
+			expect(result.content).toContain("dQw4w9WgXcQ");
+		} else {
+			expect(result.finalUrl).toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+		}
 	}, 30000);
 
 	it("includes subtitle source information when available", async () => {
