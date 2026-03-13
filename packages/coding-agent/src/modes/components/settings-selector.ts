@@ -2,6 +2,7 @@ import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Effort } from "@oh-my-pi/pi-ai";
 import {
 	Container,
+	Input,
 	matchesKey,
 	type SelectItem,
 	SelectList,
@@ -30,6 +31,50 @@ import { getPreset } from "./status-line/presets";
 /**
  * A submenu component for selecting from a list of options.
  */
+/**
+ * Submenu component for free-text string settings.
+ * Mirrors the ConfigInputSubmenu pattern from plugin-settings.ts.
+ */
+class TextInputSubmenu extends Container {
+	#input: Input;
+
+	constructor(
+		label: string,
+		description: string,
+		currentValue: string,
+		private readonly onSubmit: (value: string) => void,
+		private readonly onCancel: () => void,
+	) {
+		super();
+
+		this.addChild(new Text(theme.bold(theme.fg("accent", label)), 0, 0));
+		if (description) {
+			this.addChild(new Spacer(1));
+			this.addChild(new Text(theme.fg("muted", description), 0, 0));
+		}
+		this.addChild(new Spacer(1));
+
+		this.#input = new Input();
+		if (currentValue) {
+			this.#input.setValue(currentValue);
+		}
+		this.#input.onSubmit = value => {
+			this.onSubmit(value); // empty string clears the setting
+		};
+		this.addChild(this.#input);
+		this.addChild(new Spacer(1));
+		this.addChild(new Text(theme.fg("dim", "  Enter to save · Esc to cancel · Clear field to unset"), 0, 0));
+	}
+
+	handleInput(data: string): void {
+		if (data === "\x1b" || data === "\x1b\x1b") {
+			this.onCancel();
+			return;
+		}
+		this.#input.handleInput(data);
+	}
+}
+
 class SelectSubmenu extends Container {
 	#selectList: SelectList;
 	#previewText: Text | null = null;
@@ -276,6 +321,15 @@ export class SettingsSelectorComponent extends Container {
 					currentValue: this.#getSubmenuCurrentValue(def.path, currentValue),
 					submenu: (cv, done) => this.#createSubmenu(def, cv, done),
 				};
+
+			case "text":
+				return {
+					id: def.path,
+					label: def.label,
+					description: def.description,
+					currentValue: (currentValue as string) ?? "",
+					submenu: (cv, done) => this.#createTextInput(def, cv, done),
+				};
 		}
 	}
 
@@ -385,6 +439,29 @@ export class SettingsSelectorComponent extends Container {
 			},
 			onPreview,
 			getPreview,
+		);
+	}
+
+	/**
+	 * Create a text input submenu for a plain string setting.
+	 */
+	#createTextInput(
+		def: SettingDef & { type: "text" },
+		currentValue: string,
+		done: (value?: string) => void,
+	): Container {
+		return new TextInputSubmenu(
+			def.label,
+			def.description,
+			currentValue,
+			value => {
+				// Empty string clears the setting; undefined-typed string settings
+				// store "" which the browser.ts expandHome ignores (no-op fallback).
+				this.#setSettingValue(def.path, value);
+				this.callbacks.onChange(def.path, value);
+				done(value);
+			},
+			() => done(),
 		);
 	}
 
