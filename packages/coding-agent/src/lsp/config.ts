@@ -332,6 +332,7 @@ export function loadConfig(cwd: string): LspConfig {
 
 	for (const [name, config] of Object.entries(mergedWithRuntime)) {
 		if (config.disabled) continue;
+		if (!hasRootMarkers(cwd, config.rootMarkers)) continue;
 		const resolved = resolveCommand(config.command, cwd);
 		if (!resolved) continue;
 		available[name] = { ...config, resolvedCommand: resolved };
