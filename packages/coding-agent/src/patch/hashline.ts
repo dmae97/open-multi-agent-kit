@@ -811,10 +811,7 @@ function formatCompactRemovedLine(lineNumber: number, width: number, content: st
 	return `-${padded}${HASHLINE_PREVIEW_PLACEHOLDER}|${content}`;
 }
 
-function formatCompactPreviewLine(
-	line: string,
-	counters: CompactPreviewCounters,
-): { kind: DiffRunKind; text: string } {
+function formatCompactPreviewLine(line: string, counters: CompactPreviewCounters): { kind: DiffRunKind; text: string } {
 	const parsed = parseNumberedDiffLine(line);
 	if (!parsed) return { kind: "meta", text: line };
 
