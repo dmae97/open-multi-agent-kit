@@ -744,10 +744,132 @@ export interface CompactHashlineDiffOptions {
 	maxOutputLines?: number;
 }
 
-const NUMBERED_DIFF_LINE_RE = /^([ +-])(\d+)\|(.*)$/;
+const NUMBERED_DIFF_LINE_RE = /^([ +-])(\s*\d+)\|(.*)$/;
+const HASHLINE_PREVIEW_PLACEHOLDER = "   ";
 
 type DiffRunKind = " " | "+" | "-" | "meta";
 type DiffRun = { kind: DiffRunKind; lines: string[] };
+
+interface ParsedNumberedDiffLine {
+	kind: " " | "+" | "-";
+	lineNumber: number;
+	lineWidth: number;
+	content: string;
+	raw: string;
+}
+
+interface CompactPreviewCounters {
+	oldLine?: number;
+	newLine?: number;
+}
+
+function parseNumberedDiffLine(line: string): ParsedNumberedDiffLine | undefined {
+	const match = NUMBERED_DIFF_LINE_RE.exec(line);
+	if (!match) return undefined;
+
+	const kind = match[1];
+	if (kind !== " " && kind !== "+" && kind !== "-") return undefined;
+
+	const lineField = match[2];
+	const lineNumber = Number(lineField.trim());
+	if (!Number.isInteger(lineNumber)) return undefined;
+
+	return { kind, lineNumber, lineWidth: lineField.length, content: match[3], raw: line };
+}
+
+function syncOldLineCounters(counters: CompactPreviewCounters, lineNumber: number): void {
+	if (counters.oldLine === undefined || counters.newLine === undefined) {
+		counters.oldLine = lineNumber;
+		counters.newLine = lineNumber;
+		return;
+	}
+
+	const delta = lineNumber - counters.oldLine;
+	counters.oldLine = lineNumber;
+	counters.newLine += delta;
+}
+
+function syncNewLineCounters(counters: CompactPreviewCounters, lineNumber: number): void {
+	if (counters.oldLine === undefined || counters.newLine === undefined) {
+		counters.oldLine = lineNumber;
+		counters.newLine = lineNumber;
+		return;
+	}
+
+	const delta = lineNumber - counters.newLine;
+	counters.oldLine += delta;
+	counters.newLine = lineNumber;
+}
+
+function formatCompactHashlineLine(kind: " " | "+", lineNumber: number, width: number, content: string): string {
+	const padded = String(lineNumber).padStart(width, " ");
+	return `${kind}${padded}#${computeLineHash(lineNumber, content)}|${content}`;
+}
+
+function formatCompactRemovedLine(lineNumber: number, width: number, content: string): string {
+	const padded = String(lineNumber).padStart(width, " ");
+	return `-${padded}${HASHLINE_PREVIEW_PLACEHOLDER}|${content}`;
+}
+
+function formatCompactPreviewLine(
+	line: string,
+	counters: CompactPreviewCounters,
+): { kind: DiffRunKind; text: string } {
+	const parsed = parseNumberedDiffLine(line);
+	if (!parsed) return { kind: "meta", text: line };
+
+	if (parsed.content === "...") {
+		if (parsed.kind === "+") {
+			syncNewLineCounters(counters, parsed.lineNumber);
+		} else {
+			syncOldLineCounters(counters, parsed.lineNumber);
+		}
+		return { kind: parsed.kind, text: parsed.raw };
+	}
+
+	switch (parsed.kind) {
+		case "+": {
+			syncNewLineCounters(counters, parsed.lineNumber);
+			const newLine = counters.newLine;
+			if (newLine === undefined) return { kind: "+", text: parsed.raw };
+			const text = formatCompactHashlineLine("+", newLine, parsed.lineWidth, parsed.content);
+			counters.newLine = newLine + 1;
+			return { kind: "+", text };
+		}
+		case "-": {
+			syncOldLineCounters(counters, parsed.lineNumber);
+			const text = formatCompactRemovedLine(parsed.lineNumber, parsed.lineWidth, parsed.content);
+			counters.oldLine = parsed.lineNumber + 1;
+			return { kind: "-", text };
+		}
+		case " ": {
+			syncOldLineCounters(counters, parsed.lineNumber);
+			const newLine = counters.newLine;
+			if (newLine === undefined) return { kind: " ", text: parsed.raw };
+			const text = formatCompactHashlineLine(" ", newLine, parsed.lineWidth, parsed.content);
+			counters.oldLine = parsed.lineNumber + 1;
+			counters.newLine = newLine + 1;
+			return { kind: " ", text };
+		}
+	}
+}
+
+function splitDiffRuns(lines: string[]): DiffRun[] {
+	const runs: DiffRun[] = [];
+	const counters: CompactPreviewCounters = {};
+
+	for (const line of lines) {
+		const formatted = formatCompactPreviewLine(line, counters);
+		const prev = runs[runs.length - 1];
+		if (prev && prev.kind === formatted.kind) {
+			prev.lines.push(formatted.text);
+			continue;
+		}
+		runs.push({ kind: formatted.kind, lines: [formatted.text] });
+	}
+
+	return runs;
+}
 
 function collapseFromStart(lines: string[], maxLines: number, label: string): string[] {
 	if (lines.length <= maxLines) return lines;
@@ -765,21 +887,6 @@ function collapseFromMiddle(lines: string[], maxLines: number, label: string): s
 	if (lines.length <= maxLines * 2) return lines;
 	const hidden = lines.length - maxLines * 2;
 	return [...lines.slice(0, maxLines), ` ... ${hidden} more ${label} lines`, ...lines.slice(-maxLines)];
-}
-
-function splitDiffRuns(lines: string[]): DiffRun[] {
-	const runs: DiffRun[] = [];
-	for (const line of lines) {
-		const match = NUMBERED_DIFF_LINE_RE.exec(line);
-		const kind = (match?.[1] as " " | "+" | "-" | undefined) ?? "meta";
-		const prev = runs[runs.length - 1];
-		if (prev && prev.kind === kind) {
-			prev.lines.push(line);
-			continue;
-		}
-		runs.push({ kind, lines: [line] });
-	}
-	return runs;
 }
 
 /**

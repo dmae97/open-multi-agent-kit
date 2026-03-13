@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added `code_search` tool supporting both Exa and grep.app providers for code snippet and documentation search
@@ -9,6 +10,8 @@
 
 ### Changed
 
+- Updated compact diff preview to include line hashes for visibility and integrity verification of unchanged and added lines
+- Modified compact diff preview to track line number synchronization between old and new files when processing insertions and deletions
 - Simplified web search tools: removed `web_search_deep`, `web_search_crawl`, `web_search_linkedin`, and `web_search_company` tools
 - Removed `exa.enableLinkedin` and `exa.enableCompany` settings; LinkedIn and company research are no longer available
 - Refactored code search to use pluggable provider system instead of Exa-only implementation
@@ -19,6 +22,10 @@
 - Removed Exa company research tool (`exa_company`)
 - Removed Exa deep search tool (`exa_search_deep`)
 - Removed Exa URL crawl tool (`exa_crawl`)
+
+### Fixed
+
+- Fixed line number parsing in compact diff preview to handle variable-width line number fields with leading whitespace
 
 ## [13.11.0] - 2026-03-12
 ### Added
