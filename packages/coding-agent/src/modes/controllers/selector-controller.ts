@@ -18,7 +18,13 @@ import {
 } from "../../modes/theme/theme";
 import type { InteractiveModeContext } from "../../modes/types";
 import { SessionManager } from "../../session/session-manager";
-import { setPreferredImageProvider, setPreferredSearchProvider } from "../../tools";
+import {
+	isCodeSearchProviderId,
+	isSearchProviderPreference,
+	setPreferredCodeSearchProvider,
+	setPreferredImageProvider,
+	setPreferredSearchProvider,
+} from "../../tools";
 import { AgentDashboard } from "../components/agent-dashboard";
 import { AssistantMessageComponent } from "../components/assistant-message";
 import { ExtensionDashboard } from "../components/extensions";
@@ -343,24 +349,19 @@ export class SelectorController {
 
 			// Provider settings - update runtime preferences
 			case "providers.webSearch":
-				setPreferredSearchProvider(
-					value as
-						| "auto"
-						| "exa"
-						| "brave"
-						| "jina"
-						| "kimi"
-						| "zai"
-						| "perplexity"
-						| "anthropic"
-						| "gemini"
-						| "codex"
-						| "kagi"
-						| "synthetic",
-				);
+				if (typeof value === "string" && isSearchProviderPreference(value)) {
+					setPreferredSearchProvider(value);
+				}
+				break;
+			case "providers.codeSearch":
+				if (typeof value === "string" && isCodeSearchProviderId(value)) {
+					setPreferredCodeSearchProvider(value);
+				}
 				break;
 			case "providers.image":
-				setPreferredImageProvider(value as "auto" | "gemini" | "openrouter");
+				if (value === "auto" || value === "gemini" || value === "openrouter") {
+					setPreferredImageProvider(value);
+				}
 				break;
 
 			// MCP update injection - live subscribe/unsubscribe

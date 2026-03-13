@@ -20,6 +20,34 @@ export type SearchProviderId =
 	| "kagi"
 	| "synthetic";
 
+export type CodeSearchProviderId = "grep" | "exa";
+
+export function isSearchProviderId(value: string): value is SearchProviderId {
+	return [
+		"exa",
+		"brave",
+		"jina",
+		"kimi",
+		"zai",
+		"anthropic",
+		"perplexity",
+		"gemini",
+		"codex",
+		"tavily",
+		"parallel",
+		"kagi",
+		"synthetic",
+	].includes(value);
+}
+
+export function isSearchProviderPreference(value: string): value is SearchProviderId | "auto" {
+	return value === "auto" || isSearchProviderId(value);
+}
+
+export function isCodeSearchProviderId(value: string): value is CodeSearchProviderId {
+	return value === "grep" || value === "exa";
+}
+
 /** Source returned by search (all providers) */
 export interface SearchSource {
 	title: string;

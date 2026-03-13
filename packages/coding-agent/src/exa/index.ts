@@ -9,24 +9,14 @@
  * - 14 websets tools (CRUD, items, search, enrichment, monitor)
  */
 import type { CustomTool } from "../extensibility/custom-tools/types";
-import { companyTool } from "./company";
-import { linkedinTool } from "./linkedin";
 import { researcherTools } from "./researcher";
 import { searchTools } from "./search";
 import type { ExaRenderDetails } from "./types";
 import { websetsTools } from "./websets";
 
 /** All Exa tools (22 total) - static export for backward compatibility */
-export const exaTools: CustomTool<any, ExaRenderDetails>[] = [
-	...searchTools,
-	linkedinTool,
-	companyTool,
-	...researcherTools,
-	...websetsTools,
-];
+export const exaTools: CustomTool<any, ExaRenderDetails>[] = [...searchTools, ...researcherTools, ...websetsTools];
 
-export { companyTool } from "./company";
-export { linkedinTool } from "./linkedin";
 export * from "./mcp-client";
 export { renderExaCall, renderExaResult } from "./render";
 export { researcherTools } from "./researcher";

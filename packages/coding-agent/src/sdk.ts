@@ -89,10 +89,13 @@ import {
 	GrepTool,
 	getSearchTools,
 	HIDDEN_TOOLS,
+	isCodeSearchProviderId,
+	isSearchProviderPreference,
 	loadSshTool,
 	PythonTool,
 	ReadTool,
 	ResolveTool,
+	setPreferredCodeSearchProvider,
 	setPreferredImageProvider,
 	setPreferredSearchProvider,
 	type Tool,
@@ -628,8 +631,20 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		options.skills === undefined ? discoverSkills(cwd, agentDir, skillsSettings) : undefined;
 
 	// Initialize provider preferences from settings
-	setPreferredSearchProvider(settings.get("providers.webSearch") ?? "auto");
-	setPreferredImageProvider(settings.get("providers.image") ?? "auto");
+	const webSearchProvider = settings.get("providers.webSearch");
+	if (typeof webSearchProvider === "string" && isSearchProviderPreference(webSearchProvider)) {
+		setPreferredSearchProvider(webSearchProvider);
+	}
+
+	const codeSearchProvider = settings.get("providers.codeSearch");
+	if (typeof codeSearchProvider === "string" && isCodeSearchProviderId(codeSearchProvider)) {
+		setPreferredCodeSearchProvider(codeSearchProvider);
+	}
+
+	const imageProvider = settings.get("providers.image");
+	if (imageProvider === "auto" || imageProvider === "gemini" || imageProvider === "openrouter") {
+		setPreferredImageProvider(imageProvider);
+	}
 
 	const sessionManager = options.sessionManager ?? logger.time("sessionManager", SessionManager.create, cwd);
 	const sessionId = sessionManager.getSessionId();
@@ -962,19 +977,8 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		customTools.push(...(geminiImageTools as unknown as CustomTool[]));
 	}
 
-	// Add specialized Exa web search tools if EXA_API_KEY is available
-	const exaSettings = settings.getGroup("exa");
-	if (exaSettings.enabled && exaSettings.enableSearch) {
-		const exaSearchTools = await logger.timeAsync("getSearchTools", getSearchTools, {
-			enableLinkedin: exaSettings.enableLinkedin as boolean,
-			enableCompany: exaSettings.enableCompany as boolean,
-		});
-		// Filter out the base web_search (already in built-in tools), add specialized Exa tools
-		const specializedTools = exaSearchTools.filter(t => t.name !== "web_search");
-		if (specializedTools.length > 0) {
-			customTools.push(...specializedTools);
-		}
-	}
+	// Add web search tools
+	customTools.push(...getSearchTools());
 
 	// Discover and load custom tools from .omp/tools/, .claude/tools/, etc.
 	const builtInToolNames = builtinTools.map(t => t.name);

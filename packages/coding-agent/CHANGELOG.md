@@ -1,6 +1,24 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `code_search` tool supporting both Exa and grep.app providers for code snippet and documentation search
+- Added `providers.codeSearch` setting to configure code search provider (exa or grep)
+- Added grep.app integration for public code search with result ranking by context relevance
+
+### Changed
+
+- Simplified web search tools: removed `web_search_deep`, `web_search_crawl`, `web_search_linkedin`, and `web_search_company` tools
+- Removed `exa.enableLinkedin` and `exa.enableCompany` settings; LinkedIn and company research are no longer available
+- Refactored code search to use pluggable provider system instead of Exa-only implementation
+
+### Removed
+
+- Removed Exa LinkedIn search tool (`exa_linkedin`)
+- Removed Exa company research tool (`exa_company`)
+- Removed Exa deep search tool (`exa_search_deep`)
+- Removed Exa URL crawl tool (`exa_crawl`)
 
 ## [13.11.0] - 2026-03-12
 ### Added

@@ -1029,19 +1029,13 @@ Hook locations:
 import type { HookAPI } from "@oh-my-pi/pi-coding-agent/hooks";
 
 export default function (omp: HookAPI) {
-  omp.on("tool_call", async (event, ctx) => {
-    if (
-      event.toolName === "bash" &&
-      /sudo/.test(event.input.command as string)
-    ) {
-      const ok = await ctx.ui.confirm(
-        "Allow sudo?",
-        event.input.command as string,
-      );
-      if (!ok) return { block: true, reason: "Blocked by user" };
-    }
-    return undefined;
-  });
+	omp.on("tool_call", async (event, ctx) => {
+		if (event.toolName === "bash" && /sudo/.test(event.input.command as string)) {
+			const ok = await ctx.ui.confirm("Allow sudo?", event.input.command as string);
+			if (!ok) return { block: true, reason: "Blocked by user" };
+		}
+		return undefined;
+	});
 }
 ```
 
@@ -1066,16 +1060,16 @@ Auto-discovered locations:
 import { Type } from "@sinclair/typebox";
 import type { CustomToolFactory } from "@oh-my-pi/pi-coding-agent";
 const factory: CustomToolFactory = () => ({
-  name: "greet",
-  label: "Greeting",
-  description: "Generate a greeting",
-  parameters: Type.Object({
-    name: Type.String({ description: "Name to greet" }),
-  }),
-  async execute(_toolCallId, params) {
-    const { name } = params as { name: string };
-    return { content: [{ type: "text", text: `Hello, ${name}!` }] };
-  },
+	name: "greet",
+	label: "Greeting",
+	description: "Generate a greeting",
+	parameters: Type.Object({
+		name: Type.String({ description: "Name to greet" }),
+	}),
+	async execute(_toolCallId, params) {
+		const { name } = params as { name: string };
+		return { content: [{ type: "text", text: `Hello, ${name}!` }] };
+	},
 });
 export default factory;
 ```
@@ -1245,27 +1239,19 @@ For adding new tools, see [Custom Tools](#custom-tools).
 For embedding omp in Node.js/TypeScript applications, use the SDK:
 
 ```typescript
-import {
-  ModelRegistry,
-  SessionManager,
-  createAgentSession,
-  discoverAuthStorage,
-} from "@oh-my-pi/pi-coding-agent";
+import { ModelRegistry, SessionManager, createAgentSession, discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
 const authStorage = await discoverAuthStorage();
 const modelRegistry = new ModelRegistry(authStorage);
 await modelRegistry.refresh();
 const { session } = await createAgentSession({
-  sessionManager: SessionManager.inMemory(),
-  authStorage,
-  modelRegistry,
+	sessionManager: SessionManager.inMemory(),
+	authStorage,
+	modelRegistry,
 });
 session.subscribe((event) => {
-  if (
-    event.type === "message_update" &&
-    event.assistantMessageEvent.type === "text_delta"
-  ) {
-    process.stdout.write(event.assistantMessageEvent.delta);
-  }
+	if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
+		process.stdout.write(event.assistantMessageEvent.delta);
+	}
 });
 await session.prompt("What files are in the current directory?");
 ```

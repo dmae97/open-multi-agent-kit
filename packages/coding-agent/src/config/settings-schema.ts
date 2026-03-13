@@ -847,6 +847,17 @@ export const SETTINGS_SCHEMA = {
 		default: "auto",
 		ui: { tab: "services", label: "Web search provider", description: "Provider for web search tool", submenu: true },
 	},
+	"providers.codeSearch": {
+		type: "enum",
+		values: ["grep", "exa"] as const,
+		default: "grep",
+		ui: {
+			tab: "services",
+			label: "Code search provider",
+			description: "Provider for code search tool",
+			submenu: true,
+		},
+	},
 	"providers.image": {
 		type: "enum",
 		values: ["auto", "gemini", "openrouter"] as const,
@@ -903,16 +914,6 @@ export const SETTINGS_SCHEMA = {
 		type: "boolean",
 		default: true,
 		ui: { tab: "services", label: "Exa search", description: "Basic search, deep search, code search, crawl" },
-	},
-	"exa.enableLinkedin": {
-		type: "boolean",
-		default: false,
-		ui: { tab: "services", label: "Exa LinkedIn", description: "Search LinkedIn for people and companies" },
-	},
-	"exa.enableCompany": {
-		type: "boolean",
-		default: false,
-		ui: { tab: "services", label: "Exa company", description: "Comprehensive company research tool" },
 	},
 	"exa.enableResearcher": {
 		type: "boolean",
@@ -1429,8 +1430,6 @@ export interface TtsrSettings {
 export interface ExaSettings {
 	enabled: boolean;
 	enableSearch: boolean;
-	enableLinkedin: boolean;
-	enableCompany: boolean;
 	enableResearcher: boolean;
 	enableWebsets: boolean;
 }
