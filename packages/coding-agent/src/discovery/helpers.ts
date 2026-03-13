@@ -304,6 +304,9 @@ export async function scanSkillsFromDir(
 			const content = await readFile(skillPath);
 			if (!content) return;
 			const { frontmatter, body } = parseFrontmatter(content, { source: skillPath });
+			if (frontmatter.enabled === false) {
+				return;
+			}
 			if (requireDescription && !frontmatter.description) {
 				return;
 			}

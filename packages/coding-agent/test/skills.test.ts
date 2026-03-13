@@ -217,6 +217,37 @@ describe("skills", () => {
 			expect(skills.every(s => !s.name.startsWith("valid-"))).toBe(true);
 		});
 
+		it("should skip skills disabled via frontmatter", async () => {
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-disabled-skill-"));
+			const skillDir = path.join(tempDir, "disabled-skill");
+			await fs.mkdir(skillDir, { recursive: true });
+			await fs.writeFile(
+				path.join(skillDir, "SKILL.md"),
+				`---
+name: disabled-skill
+description: Should not be discovered.
+enabled: false
+---
+
+# Disabled Skill
+`,
+			);
+
+			try {
+				const { skills } = await loadSkills({
+					enableCodexUser: false,
+					enableClaudeUser: false,
+					enableClaudeProject: false,
+					enablePiUser: false,
+					enablePiProject: false,
+					customDirectories: [tempDir],
+				});
+				expect(skills.some(s => s.name === "disabled-skill")).toBe(false);
+			} finally {
+				await fs.rm(tempDir, { recursive: true, force: true });
+			}
+		});
+
 		it("should have ignoredSkills take precedence over includeSkills", async () => {
 			const { skills } = await loadSkills({
 				enableCodexUser: false,
