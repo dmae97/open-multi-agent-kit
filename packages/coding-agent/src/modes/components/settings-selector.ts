@@ -57,6 +57,8 @@ class TextInputSubmenu extends Container {
 		this.#input = new Input();
 		if (currentValue) {
 			this.#input.setValue(currentValue);
+			// Move cursor to end of pre-filled value (ctrl+e = cursorLineEnd).
+			this.#input.handleInput("\x05");
 		}
 		this.#input.onSubmit = value => {
 			this.onSubmit(value); // empty string clears the setting
@@ -450,6 +452,11 @@ export class SettingsSelectorComponent extends Container {
 		currentValue: string,
 		done: (value?: string) => void,
 	): Container {
+		this.#textInputActive = true;
+		const wrappedDone = (value?: string) => {
+			this.#textInputActive = false;
+			done(value);
+		};
 		return new TextInputSubmenu(
 			def.label,
 			def.description,
@@ -459,9 +466,9 @@ export class SettingsSelectorComponent extends Container {
 				// store "" which the browser.ts expandHome ignores (no-op fallback).
 				this.#setSettingValue(def.path, value);
 				this.callbacks.onChange(def.path, value);
-				done(value);
+				wrappedDone(value);
 			},
-			() => done(),
+			() => wrappedDone(),
 		);
 	}
 
@@ -586,12 +593,15 @@ export class SettingsSelectorComponent extends Container {
 	}
 
 	handleInput(data: string): void {
-		// Handle tab switching first (tab, shift+tab, or left/right arrows)
+		// Handle tab switching — but NOT when a text input is active, since
+		// arrow keys must reach the cursor and Tab must not switch tabs.
 		if (
-			matchesKey(data, "tab") ||
-			matchesKey(data, "shift+tab") ||
-			matchesKey(data, "left") ||
-			matchesKey(data, "right")
+			!this.#textInputActive && (
+				matchesKey(data, "tab") ||
+				matchesKey(data, "shift+tab") ||
+				matchesKey(data, "left") ||
+				matchesKey(data, "right")
+			)
 		) {
 			this.#tabBar.handleInput(data);
 			return;
