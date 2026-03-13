@@ -1159,7 +1159,7 @@ export class FetchTool implements AgentTool<typeof fetchSchema, FetchToolDetails
 			finalUrl: result.finalUrl,
 			contentType: result.contentType,
 			method: result.method,
-			truncated: result.truncated || needsArtifact,
+			truncated: Boolean(result.truncated || needsArtifact),
 			notes: result.notes,
 		};
 

@@ -93,9 +93,9 @@ describe("truncateHead", () => {
 	test("returns unmodified content when within limits", () => {
 		const content = "a\nb";
 		const result = truncateHead(content, { maxLines: 10, maxBytes: 20 });
-		expect(result.truncated).toBe(false);
+		expect(result.truncated).toBeUndefined();
 		expect(result.content).toBe(content);
-		expect(result.truncatedBy).toBe(null);
+		expect(result.truncatedBy).toBeUndefined();
 	});
 
 	test("handles first line exceeding byte limit", () => {
@@ -134,9 +134,9 @@ describe("truncateTail", () => {
 	test("returns unmodified content when within limits", () => {
 		const content = "a\nb";
 		const result = truncateTail(content, { maxLines: 10, maxBytes: 20 });
-		expect(result.truncated).toBe(false);
+		expect(result.truncated).toBeUndefined();
 		expect(result.content).toBe(content);
-		expect(result.truncatedBy).toBe(null);
+		expect(result.truncatedBy).toBeUndefined();
 	});
 
 	test("truncates by line count", () => {
@@ -310,22 +310,22 @@ describe("truncation notice formatting", () => {
 		expect(formatTailTruncationNotice(truncation)).toBe("");
 	});
 
-	test("formatTailTruncationNotice supports partial-line notices", () => {
-		const truncation = truncateTail("abcdefghij", { maxLines: 10, maxBytes: 4 });
-		const notice = formatTailTruncationNotice(truncation, {
+	test("formatTailTruncationNotice supports partial-line and complete-line notices", () => {
+		const partialLineTruncation = truncateTail("abcdefghij", { maxLines: 10, maxBytes: 4 });
+		const partialLineNotice = formatTailTruncationNotice(partialLineTruncation, {
 			fullOutputPath: "/tmp/full.log",
 			originalContent: "abcdefghij",
 			suffix: " [suffix]",
 		});
-		expect(notice).toBe("\n\n[Showing last 4B of line 1 (line is 10B). Full output: /tmp/full.log [suffix]]");
-	});
+		expect(partialLineNotice).toBe(
+			"\n\n[Showing last 4B of line 1 (line is 10B). Full output: /tmp/full.log [suffix]]",
+		);
 
-	test("formatTailTruncationNotice supports line-based and byte-based notices", () => {
 		const lineTruncation = truncateTail("l1\nl2\nl3", { maxLines: 2, maxBytes: 100 });
 		expect(formatTailTruncationNotice(lineTruncation)).toBe("\n\n[Showing lines 2-3 of 3]");
 
 		const byteTruncation = truncateTail("aaa\nbbbb\ncc", { maxLines: 10, maxBytes: 6 });
-		expect(formatTailTruncationNotice(byteTruncation)).toBe("\n\n[Showing lines 3-3 of 3 (6B limit)]");
+		expect(formatTailTruncationNotice(byteTruncation)).toBe("\n\n[Showing lines 3-3 of 3]");
 	});
 
 	test("formatHeadTruncationNotice returns empty string for non-truncated results", () => {
@@ -333,7 +333,7 @@ describe("truncation notice formatting", () => {
 		expect(formatHeadTruncationNotice(truncation)).toBe("");
 	});
 
-	test("formatHeadTruncationNotice supports line and byte truncation", () => {
+	test("formatHeadTruncationNotice formats head truncation range", () => {
 		const lineTruncation = truncateHead("l1\nl2\nl3", { maxLines: 2, maxBytes: 100 });
 		expect(formatHeadTruncationNotice(lineTruncation)).toBe("\n\n[Showing lines 1-2 of 3. Use offset=3 to continue]");
 
@@ -343,6 +343,6 @@ describe("truncation notice formatting", () => {
 				startLine: 100,
 				totalFileLines: 500,
 			}),
-		).toBe("\n\n[Showing lines 100-100 of 500 (7B limit). Use offset=101 to continue]");
+		).toBe("\n\n[Showing lines 100-100 of 500. Use offset=101 to continue]");
 	});
 });

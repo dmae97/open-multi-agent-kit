@@ -1243,7 +1243,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		exitCode,
 		output: truncatedOutput,
 		stderr,
-		truncated,
+		truncated: Boolean(truncated),
 		durationMs: Date.now() - startTime,
 		tokens: progress.tokens,
 		modelOverride,

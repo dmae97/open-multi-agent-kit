@@ -59,24 +59,29 @@ describe("code_search", () => {
 		});
 
 		expect(requestedUrl).toContain("https://grep.app/api/search?q=Promise.withResolvers");
-		expect(result).toMatchObject({
-			provider: "grep",
-			query: "Promise.withResolvers",
-			totalResults: 42,
-			sources: [
-				{
-					title: "oven-sh/bun/src/runtime.ts",
-					url: "https://github.com/oven-sh/bun/blob/main/src/runtime.ts",
-					repository: "oven-sh/bun",
-					path: "src/runtime.ts",
-					branch: "main",
-					totalMatches: "12",
-				},
-			],
+		expect(result.provider).toBe("grep");
+		expect(result.query).toBe("Promise.withResolvers");
+		expect(result.totalResults).toBe(42);
+		expect(result.sources).toHaveLength(2);
+		expect(result.sources[0]).toMatchObject({
+			title: "oven-sh/bun/src/runtime.ts",
+			url: "https://github.com/oven-sh/bun/blob/main/src/runtime.ts",
+			repository: "oven-sh/bun",
+			path: "src/runtime.ts",
+			branch: "main",
+			totalMatches: "12",
 		});
 		expect(result.sources[0]?.snippet).toContain("12: const Promise.withResolvers();");
 		expect(result.sources[0]?.snippet).toContain("13: return pair;");
-		expect(result.sources[0]?.repository).toBe("oven-sh/bun");
+		expect(result.sources[1]).toMatchObject({
+			title: "misc/example/src/other.ts",
+			url: "https://github.com/misc/example/blob/main/src/other.ts",
+			repository: "misc/example",
+			path: "src/other.ts",
+			branch: "main",
+			totalMatches: "2",
+		});
+		expect(result.sources[1]?.snippet).toContain('2: const withResolvers = "polyfill"');
 	});
 
 	it("does not append code_context to grep.app q", async () => {

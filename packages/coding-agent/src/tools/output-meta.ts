@@ -117,26 +117,28 @@ export class OutputMetaBuilder {
 		if (!result.truncated) return this;
 
 		const { direction, startLine = 1, totalFileLines, artifactId } = options;
+		const outputLines = result.outputLines ?? result.totalLines;
+		const outputBytes = result.outputBytes ?? result.totalBytes;
+		const truncatedBy: "lines" | "bytes" = result.truncatedBy === "lines" ? "lines" : "bytes";
 
 		let shownStart: number;
 		let shownEnd: number;
 
 		if (direction === "tail") {
-			shownStart = result.totalLines - result.outputLines + 1;
+			shownStart = result.totalLines - outputLines + 1;
 			shownEnd = result.totalLines;
 		} else {
 			shownStart = startLine;
-			shownEnd = startLine + result.outputLines - 1;
+			shownEnd = startLine + outputLines - 1;
 		}
 
 		this.#meta.truncation = {
 			direction,
-			truncatedBy: result.truncatedBy!,
+			truncatedBy,
 			totalLines: totalFileLines ?? result.totalLines,
 			totalBytes: result.totalBytes,
-			outputLines: result.outputLines,
-			outputBytes: result.outputBytes,
-			maxBytes: result.maxBytes,
+			outputLines,
+			outputBytes,
 			shownRange: { start: shownStart, end: shownEnd },
 			artifactId,
 			nextOffset: direction === "head" ? shownEnd + 1 : undefined,
