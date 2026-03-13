@@ -1368,7 +1368,8 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 					const dimensionNote = formatDimensionNote(resized);
 					// Resolve destination: user-defined path > screenshotDir (auto-named) > temp file.
 					// Expand leading '~' to the home directory.
-					const expandHome = (p: string) => p.startsWith("~/") || p === "~" ? path.join(os.homedir(), p.slice(1)) : p;
+					const expandHome = (p: string) =>
+						p === "~" || p.startsWith("~/") || p.startsWith("~\\") ? path.join(os.homedir(), p.slice(1)) : p;
 					const screenshotDir = (() => {
 						const v = this.session.settings.get("browser.screenshotDir") as string | undefined;
 						return v ? expandHome(v) : undefined;
