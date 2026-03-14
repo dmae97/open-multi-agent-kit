@@ -7,6 +7,7 @@ import { prepareSchemaForCCA, sanitizeSchemaForGoogle } from "../utils/schema";
 import { transformMessages } from "./transform-messages";
 
 export { sanitizeSchemaForGoogle };
+
 type GoogleApiType = "google-generative-ai" | "google-gemini-cli" | "google-vertex";
 
 /**

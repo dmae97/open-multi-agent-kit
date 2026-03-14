@@ -20,11 +20,10 @@ import type { TodoItem } from "../../tools/todo-write";
 /** Alias for clarity */
 export type CustomToolUIContext = HookUIContext;
 
-/** Re-export for custom tools to use in execute signature */
-export type { AgentToolResult, AgentToolUpdateCallback };
-
 // Re-export for backward compatibility
 export type { ExecOptions, ExecResult } from "../../exec/exec";
+/** Re-export for custom tools to use in execute signature */
+export type { AgentToolResult, AgentToolUpdateCallback };
 
 /** Pending action entry consumed by the hidden resolve tool */
 export interface CustomToolPendingAction {

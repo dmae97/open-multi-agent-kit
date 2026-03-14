@@ -34,12 +34,6 @@ export type * from "./lsp";
 export * from "./main";
 // Run modes for programmatic SDK usage
 export * from "./modes";
-// UI components for extensions
-export {
-	HookEditorComponent as ExtensionEditorComponent,
-	HookInputComponent as ExtensionInputComponent,
-	HookSelectorComponent as ExtensionSelectorComponent,
-};
 export * from "./modes/components";
 // Theme utilities for custom tools
 export * from "./modes/theme/theme";
@@ -57,3 +51,9 @@ export * from "./task/executor";
 export type * from "./task/types";
 // Tools (detail types and utilities)
 export * from "./tools";
+// UI components for extensions
+export {
+	HookEditorComponent as ExtensionEditorComponent,
+	HookInputComponent as ExtensionInputComponent,
+	HookSelectorComponent as ExtensionSelectorComponent,
+};

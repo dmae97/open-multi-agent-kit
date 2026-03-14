@@ -29,7 +29,7 @@ export abstract class Exception extends Error {
 		super(message);
 		this.name = this.constructor.name;
 	}
-	abstract get aborted(): boolean;
+	abstract readonly aborted: boolean;
 }
 
 /** Exception for nonzero exit codes (not cancellation). */
