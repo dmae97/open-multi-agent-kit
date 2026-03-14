@@ -322,7 +322,7 @@ export class InputController {
 			const hasUserMessages = this.ctx.session.messages.some((m: AgentMessage) => m.role === "user");
 			if (!hasUserMessages && !this.ctx.sessionManager.getSessionName() && !$env.PI_NO_TITLE) {
 				const registry = this.ctx.session.modelRegistry;
-				generateSessionTitle(text, registry, this.ctx.settings, this.ctx.session.sessionId)
+				generateSessionTitle(text, registry, this.ctx.settings, this.ctx.session.sessionId, this.ctx.session.model)
 					.then(async title => {
 						if (title) {
 							await this.ctx.sessionManager.setSessionName(title);
