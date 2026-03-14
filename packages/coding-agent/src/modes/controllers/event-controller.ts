@@ -484,6 +484,9 @@ export class EventController {
 					this.ctx.updateEditorTopBorder();
 					await this.ctx.reloadTodos();
 					this.ctx.showStatus("Auto-handoff completed");
+				} else if (event.skipped) {
+					// Benign skip: no model selected, no candidate models available, or nothing
+					// to compact yet. Not a failure — suppress the warning.
 				} else {
 					this.ctx.showWarning("Auto context-full maintenance failed; continuing without maintenance");
 				}

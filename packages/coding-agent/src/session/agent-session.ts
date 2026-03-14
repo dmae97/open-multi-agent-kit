@@ -147,6 +147,8 @@ export type AgentSessionEvent =
 			aborted: boolean;
 			willRetry: boolean;
 			errorMessage?: string;
+			/** True when compaction was skipped for a benign reason (no model, no candidates, nothing to compact). */
+			skipped?: boolean;
 	  }
 	| { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
 	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
@@ -1452,6 +1454,7 @@ export class AgentSession {
 				aborted: event.aborted,
 				willRetry: event.willRetry,
 				errorMessage: event.errorMessage,
+				skipped: event.skipped,
 			});
 		} else if (event.type === "auto_retry_start") {
 			await this.#extensionRunner.emit({
@@ -3873,6 +3876,7 @@ export class AgentSession {
 					result: undefined,
 					aborted: false,
 					willRetry: false,
+					skipped: true,
 				});
 				return;
 			}
@@ -3885,6 +3889,7 @@ export class AgentSession {
 					result: undefined,
 					aborted: false,
 					willRetry: false,
+					skipped: true,
 				});
 				return;
 			}
@@ -3899,6 +3904,7 @@ export class AgentSession {
 					result: undefined,
 					aborted: false,
 					willRetry: false,
+					skipped: true,
 				});
 				if (!willRetry && this.agent.hasQueuedMessages()) {
 					this.#scheduleAgentContinue({
