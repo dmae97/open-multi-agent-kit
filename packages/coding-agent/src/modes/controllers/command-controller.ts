@@ -598,7 +598,7 @@ export class CommandController {
 
 		if (action === "enqueue" || action === "rebuild") {
 			try {
-				enqueueMemoryConsolidation(agentDir);
+				enqueueMemoryConsolidation(agentDir, this.ctx.sessionManager.getCwd());
 				this.ctx.showStatus("Memory consolidation enqueued.");
 			} catch (error) {
 				this.ctx.showError(`Memory enqueue failed: ${error instanceof Error ? error.message : String(error)}`);
