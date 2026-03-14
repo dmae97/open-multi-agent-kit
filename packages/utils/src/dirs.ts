@@ -107,9 +107,21 @@ class DirResolver {
 		let xdgState: string | undefined;
 		let xdgCache: string | undefined;
 		if (process.platform === "linux" && isDefault) {
-			xdgData = process.env.XDG_DATA_HOME ? path.join(process.env.XDG_DATA_HOME, APP_NAME) : undefined;
-			xdgState = process.env.XDG_STATE_HOME ? path.join(process.env.XDG_STATE_HOME, APP_NAME) : undefined;
-			xdgCache = process.env.XDG_CACHE_HOME ? path.join(process.env.XDG_CACHE_HOME, APP_NAME) : undefined;
+			const resolveIf = (envVar: string) => {
+				const value = process.env[envVar];
+				if (value) {
+					try {
+						const joined = path.join(value, APP_NAME);
+						if (fs.existsSync(joined)) {
+							return joined;
+						}
+					} catch {}
+				}
+				return undefined;
+			};
+			xdgData = resolveIf("XDG_DATA_HOME");
+			xdgState = resolveIf("XDG_STATE_HOME");
+			xdgCache = resolveIf("XDG_CACHE_HOME");
 		}
 
 		this.#rootDirs = {
@@ -327,11 +339,6 @@ export function getMemoriesDir(agentDir?: string): string {
 /** Get the terminal sessions directory (~/.omp/agent/terminal-sessions). */
 export function getTerminalSessionsDir(agentDir?: string): string {
 	return dirs.agentSubdir(agentDir, "terminal-sessions", "state");
-}
-
-/** Get the test auth database path (~/.omp/agent/testauth.db). */
-export function getTestAuthPath(agentDir?: string): string {
-	return dirs.agentSubdir(agentDir, "testauth.db");
 }
 
 /** Get the crash log path (~/.omp/agent/omp-crash.log). */
