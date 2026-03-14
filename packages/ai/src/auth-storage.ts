@@ -10,7 +10,7 @@
 import { Database, type Statement } from "bun:sqlite";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { getAgentDir, logger } from "@oh-my-pi/pi-utils";
+import { getAgentDbPath, logger } from "@oh-my-pi/pi-utils";
 import { getEnvApiKey } from "./stream";
 import type { Provider } from "./types";
 import type {
@@ -2118,14 +2118,6 @@ function extractOAuthTokenIdentifiers(token: string | undefined): string[] | und
 		return undefined;
 	}
 }
-
-/**
- * Get default path to agent.db
- */
-function getAgentDbPath(): string {
-	return path.join(getAgentDir(), "agent.db");
-}
-
 /**
  * Standalone SQLite-backed implementation of AuthCredentialStore interface.
  * Used by the pi-ai CLI and as the default store for AuthStorage.create().

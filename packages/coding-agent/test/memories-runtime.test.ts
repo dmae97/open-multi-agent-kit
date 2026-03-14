@@ -5,7 +5,11 @@ import * as path from "node:path";
 import type { Model } from "@oh-my-pi/pi-ai";
 import * as ai from "@oh-my-pi/pi-ai";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { buildMemoryToolDeveloperInstructions, startMemoryStartupTask } from "@oh-my-pi/pi-coding-agent/memories";
+import {
+	buildMemoryToolDeveloperInstructions,
+	getMemoryRoot,
+	startMemoryStartupTask,
+} from "@oh-my-pi/pi-coding-agent/memories";
 import * as memoryStorage from "@oh-my-pi/pi-coding-agent/memories/storage";
 import { getAgentDbPath, Snowflake } from "@oh-my-pi/pi-utils";
 
@@ -79,14 +83,6 @@ async function createFixture(overrides?: Partial<Record<string, unknown>>): Prom
 	return { agentDir, sessionDir, sessionFile, settings, session, modelRegistry, model };
 }
 
-function encodeProjectPath(cwd: string): string {
-	return `--${cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
-}
-
-function getMemoryRoot(agentDir: string, cwd: string): string {
-	return path.join(agentDir, "memories", encodeProjectPath(cwd));
-}
-
 async function waitFor(assertion: () => Promise<void> | void, timeoutMs = 3000): Promise<void> {
 	const start = Date.now();
 	let lastError: unknown;
@@ -103,13 +99,23 @@ async function waitFor(assertion: () => Promise<void> | void, timeoutMs = 3000):
 }
 
 describe("memories runtime", () => {
+	let savedXdgData: string | undefined;
+	let savedXdgState: string | undefined;
+
 	beforeEach(() => {
 		vi.clearAllMocks();
 		vi.restoreAllMocks();
+		// Prevent getXdgDataPath/getXdgStatePath from resolving to real user data
+		savedXdgData = process.env.XDG_DATA_HOME;
+		savedXdgState = process.env.XDG_STATE_HOME;
+		process.env.XDG_DATA_HOME = "/nonexistent-xdg-data";
+		process.env.XDG_STATE_HOME = "/nonexistent-xdg-state";
 	});
 
 	afterEach(async () => {
 		vi.restoreAllMocks();
+		process.env.XDG_DATA_HOME = savedXdgData;
+		process.env.XDG_STATE_HOME = savedXdgState;
 		for (const dir of createdDirs) {
 			await fs.rm(dir, { recursive: true, force: true });
 		}
@@ -321,8 +327,20 @@ describe("memories runtime", () => {
 });
 
 describe("buildMemoryToolDeveloperInstructions", () => {
+	let savedXdgData: string | undefined;
+	let savedXdgState: string | undefined;
+
+	beforeEach(() => {
+		savedXdgData = process.env.XDG_DATA_HOME;
+		savedXdgState = process.env.XDG_STATE_HOME;
+		process.env.XDG_DATA_HOME = "/nonexistent-xdg-data";
+		process.env.XDG_STATE_HOME = "/nonexistent-xdg-state";
+	});
+
 	afterEach(async () => {
 		vi.restoreAllMocks();
+		process.env.XDG_DATA_HOME = savedXdgData;
+		process.env.XDG_STATE_HOME = savedXdgState;
 		for (const dir of createdDirs) {
 			await fs.rm(dir, { recursive: true, force: true });
 		}

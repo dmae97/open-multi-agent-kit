@@ -5,7 +5,7 @@ import { Args, Command, Flags } from "@oh-my-pi/pi-utils/cli";
 import { type ConfigAction, type ConfigCommandArgs, runConfigCommand } from "../cli/config-cli";
 import { initTheme } from "../modes/theme/theme";
 
-const ACTIONS: ConfigAction[] = ["list", "get", "set", "reset", "path"];
+const ACTIONS: ConfigAction[] = ["list", "get", "set", "reset", "path", "init-xdg"];
 
 export default class Config extends Command {
 	static description = "Manage configuration settings";

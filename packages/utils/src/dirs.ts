@@ -3,6 +3,12 @@
  *
  * Uses PI_CONFIG_DIR (default ".omp") for the config root and
  * PI_CODING_AGENT_DIR to override the agent directory.
+ *
+ * On Linux, if XDG_DATA_HOME / XDG_STATE_HOME / XDG_CACHE_HOME environment
+ * variables are set, paths are redirected to XDG-compliant locations under
+ * $XDG_*_HOME/omp/. This requires running `omp config migrate` first to
+ * move data to the new locations. No filesystem existence checks are performed
+ * — if the env var is set, omp trusts that the migration has been done.
  */
 
 import * as fs from "node:fs";
@@ -23,7 +29,7 @@ export const VERSION: string = version;
 export const MIN_BUN_VERSION: string = engines.bun.replace(/[^0-9.]/g, "");
 
 // =============================================================================
-// Root directories
+// Project directory
 // =============================================================================
 
 /**
@@ -64,23 +70,105 @@ export function getConfigAgentDirName(): string {
 	return `${getConfigDirName()}/agent`;
 }
 
-/** Get the config root directory (~/.omp). */
-export function getConfigRootDir(): string {
-	return path.join(os.homedir(), getConfigDirName());
+// =============================================================================
+// DirResolver — cached, XDG-aware path resolution
+// =============================================================================
+
+type XdgCategory = "data" | "state" | "cache";
+
+/**
+ * Resolves and caches all omp directory paths. On Linux, when XDG environment
+ * variables are set, paths are redirected under $XDG_*_HOME/omp/. A new
+ * instance is created whenever the agent directory changes, which naturally
+ * invalidates all cached paths.
+ */
+class DirResolver {
+	readonly configRoot: string;
+	readonly agentDir: string;
+
+	// Per-category base dirs. Without XDG, all three equal configRoot / agentDir.
+	// With XDG on Linux, they point to $XDG_*_HOME/omp/.
+	readonly #rootDirs: Record<XdgCategory, string>;
+	readonly #agentDirs: Record<XdgCategory, string>;
+
+	readonly #rootCache = new Map<string, string>();
+	readonly #agentCache = new Map<string, string>();
+
+	constructor(agentDirOverride?: string) {
+		this.configRoot = path.join(os.homedir(), getConfigDirName());
+
+		const defaultAgent = path.join(this.configRoot, "agent");
+		this.agentDir = agentDirOverride ? path.resolve(agentDirOverride) : defaultAgent;
+		const isDefault = this.agentDir === defaultAgent;
+
+		// XDG is a Linux convention. On other platforms, or for non-default
+		// profiles, all categories resolve to the legacy paths.
+		let xdgData: string | undefined;
+		let xdgState: string | undefined;
+		let xdgCache: string | undefined;
+		if (process.platform === "linux" && isDefault) {
+			xdgData = process.env.XDG_DATA_HOME ? path.join(process.env.XDG_DATA_HOME, APP_NAME) : undefined;
+			xdgState = process.env.XDG_STATE_HOME ? path.join(process.env.XDG_STATE_HOME, APP_NAME) : undefined;
+			xdgCache = process.env.XDG_CACHE_HOME ? path.join(process.env.XDG_CACHE_HOME, APP_NAME) : undefined;
+		}
+
+		this.#rootDirs = {
+			data: xdgData ?? this.configRoot,
+			state: xdgState ?? this.configRoot,
+			cache: xdgCache ?? this.configRoot,
+		};
+		// XDG flattens the agent/ prefix: ~/.omp/agent/sessions → $XDG_DATA_HOME/omp/sessions
+		this.#agentDirs = {
+			data: xdgData ?? this.agentDir,
+			state: xdgState ?? this.agentDir,
+			cache: xdgCache ?? this.agentDir,
+		};
+	}
+
+	/** Config-root subdirectory, with optional XDG override. */
+	rootSubdir(subdir: string, xdg?: XdgCategory): string {
+		const cached = this.#rootCache.get(subdir);
+		if (cached) return cached;
+		const base = xdg ? this.#rootDirs[xdg] : this.configRoot;
+		const result = path.join(base, subdir);
+		this.#rootCache.set(subdir, result);
+		return result;
+	}
+
+	/** Agent subdirectory, with optional XDG override. */
+	agentSubdir(userAgentDir: string | undefined, subdir: string, xdg?: XdgCategory): string {
+		if (!userAgentDir || userAgentDir === this.agentDir) {
+			const cached = this.#agentCache.get(subdir);
+			if (cached) return cached;
+			const base = xdg ? this.#agentDirs[xdg] : this.agentDir;
+			const result = path.join(base, subdir);
+			this.#agentCache.set(subdir, result);
+			return result;
+		}
+		return path.join(userAgentDir, subdir);
+	}
 }
 
-let agentDir = process.env.PI_CODING_AGENT_DIR || path.join(getConfigRootDir(), "agent");
+let dirs = new DirResolver(process.env.PI_CODING_AGENT_DIR);
 
-/** Set the coding agent directory. */
+// =============================================================================
+// Root directories
+// =============================================================================
+
+/** Get the config root directory (~/.omp). */
+export function getConfigRootDir(): string {
+	return dirs.configRoot;
+}
+
+/** Set the coding agent directory. Creates a fresh resolver, invalidating all cached paths. */
 export function setAgentDir(dir: string): void {
-	agentDir = dir;
-	agentCache.clear();
+	dirs = new DirResolver(dir);
 	process.env.PI_CODING_AGENT_DIR = dir;
 }
 
 /** Get the agent config directory (~/.omp/agent). */
 export function getAgentDir(): string {
-	return agentDir;
+	return dirs.agentDir;
 }
 
 /** Get the project-local config directory (.omp). */
@@ -89,48 +177,17 @@ export function getProjectAgentDir(cwd: string = getProjectDir()): string {
 }
 
 // =============================================================================
-// Caching utilities
-// =============================================================================
-
-const rootCache = new Map<string, any>();
-
-function getRootSubdir(subdir: string): string {
-	if (rootCache.has(subdir)) {
-		return rootCache.get(subdir);
-	}
-	const result = path.join(getConfigRootDir(), subdir);
-	rootCache.set(subdir, result);
-	return result;
-}
-
-const agentCache = new Map<string, any>();
-
-function getAgentSubdir(userAgentDir: string | undefined, subdir: string): string {
-	if (!userAgentDir || userAgentDir === agentDir) {
-		if (agentCache.has(subdir)) {
-			return agentCache.get(subdir);
-		} else {
-			const result = path.join(agentDir, subdir);
-			agentCache.set(subdir, result);
-			return result;
-		}
-	} else {
-		return path.join(userAgentDir, subdir);
-	}
-}
-
-// =============================================================================
 // Config-root subdirectories (~/.omp/*)
 // =============================================================================
 
 /** Get the reports directory (~/.omp/reports). */
 export function getReportsDir(): string {
-	return getRootSubdir("reports");
+	return dirs.rootSubdir("reports", "state");
 }
 
 /** Get the logs directory (~/.omp/logs). */
 export function getLogsDir(): string {
-	return getRootSubdir("logs");
+	return dirs.rootSubdir("logs", "state");
 }
 
 /** Get the path to a dated log file (~/.omp/logs/omp.YYYY-MM-DD.log). */
@@ -140,52 +197,52 @@ export function getLogPath(date = new Date()): string {
 
 /** Get the plugins directory (~/.omp/plugins). */
 export function getPluginsDir(): string {
-	return getRootSubdir("plugins");
+	return dirs.rootSubdir("plugins", "data");
 }
 
 /** Where npm installs packages (~/.omp/plugins/node_modules). */
 export function getPluginsNodeModules(): string {
-	return getRootSubdir("plugins/node_modules");
+	return path.join(getPluginsDir(), "node_modules");
 }
 
 /** Plugin manifest (~/.omp/plugins/package.json). */
 export function getPluginsPackageJson(): string {
-	return getRootSubdir("plugins/package.json");
+	return path.join(getPluginsDir(), "package.json");
 }
 
 /** Plugin lock file (~/.omp/plugins/omp-plugins.lock.json). */
 export function getPluginsLockfile(): string {
-	return getRootSubdir("plugins/omp-plugins.lock.json");
+	return path.join(getPluginsDir(), "omp-plugins.lock.json");
 }
 
 /** Get the remote mount directory (~/.omp/remote). */
 export function getRemoteDir(): string {
-	return getRootSubdir("remote");
+	return dirs.rootSubdir("remote", "data");
 }
 
 /** Get the SSH control socket directory (~/.omp/ssh-control). */
 export function getSshControlDir(): string {
-	return getRootSubdir("ssh-control");
+	return dirs.rootSubdir("ssh-control", "state");
 }
 
 /** Get the remote host info directory (~/.omp/remote-host). */
 export function getRemoteHostDir(): string {
-	return getRootSubdir("remote-host");
+	return dirs.rootSubdir("remote-host", "data");
 }
 
 /** Get the managed Python venv directory (~/.omp/python-env). */
 export function getPythonEnvDir(): string {
-	return getRootSubdir("python-env");
+	return dirs.rootSubdir("python-env", "data");
 }
 
 /** Get the puppeteer sandbox directory (~/.omp/puppeteer). */
 export function getPuppeteerDir(): string {
-	return getRootSubdir("puppeteer");
+	return dirs.rootSubdir("puppeteer", "cache");
 }
 
 /** Get the worktree base directory (~/.omp/wt). */
 export function getWorktreeBaseDir(): string {
-	return getRootSubdir("wt");
+	return dirs.rootSubdir("wt", "data");
 }
 
 /** Get the path to a worktree directory (~/.omp/wt/<project>/<id>). */
@@ -195,17 +252,17 @@ export function getWorktreeDir(encodedProject: string, id: string): string {
 
 /** Get the GPU cache path (~/.omp/gpu_cache.json). */
 export function getGpuCachePath(): string {
-	return getRootSubdir("gpu_cache.json");
+	return dirs.rootSubdir("gpu_cache.json", "cache");
 }
 
 /** Get the natives directory (~/.omp/natives). */
 export function getNativesDir(): string {
-	return getRootSubdir("natives");
+	return dirs.rootSubdir("natives", "cache");
 }
 
 /** Get the stats database path (~/.omp/stats.db). */
 export function getStatsDbPath(): string {
-	return getRootSubdir("stats.db");
+	return dirs.rootSubdir("stats.db", "data");
 }
 
 // =============================================================================
@@ -214,57 +271,77 @@ export function getStatsDbPath(): string {
 
 /** Get the path to agent.db (SQLite database for settings and auth storage). */
 export function getAgentDbPath(agentDir?: string): string {
-	return getAgentSubdir(agentDir, "agent.db");
+	return dirs.agentSubdir(agentDir, "agent.db", "data");
+}
+
+/** Get the path to history.db (SQLite database for session history). */
+export function getHistoryDbPath(agentDir?: string): string {
+	return dirs.agentSubdir(agentDir, "history.db", "data");
+}
+
+/** Get the path to models.db (model cache database). */
+export function getModelDbPath(agentDir?: string): string {
+	return dirs.agentSubdir(agentDir, "models.db", "data");
 }
 
 /** Get the sessions directory (~/.omp/agent/sessions). */
 export function getSessionsDir(agentDir?: string): string {
-	return getAgentSubdir(agentDir, "sessions");
+	return dirs.agentSubdir(agentDir, "sessions", "data");
 }
 
 /** Get the content-addressed blob store directory (~/.omp/agent/blobs). */
 export function getBlobsDir(agentDir?: string): string {
-	return getAgentSubdir(agentDir, "blobs");
+	return dirs.agentSubdir(agentDir, "blobs", "data");
 }
 
 /** Get the custom themes directory (~/.omp/agent/themes). */
 export function getCustomThemesDir(agentDir?: string): string {
-	return getAgentSubdir(agentDir, "themes");
+	return dirs.agentSubdir(agentDir, "themes");
 }
 
 /** Get the tools directory (~/.omp/agent/tools). */
 export function getToolsDir(agentDir?: string): string {
-	return getAgentSubdir(agentDir, "tools");
+	return dirs.agentSubdir(agentDir, "tools");
 }
 
 /** Get the slash commands directory (~/.omp/agent/commands). */
 export function getCommandsDir(agentDir?: string): string {
-	return getAgentSubdir(agentDir, "commands");
+	return dirs.agentSubdir(agentDir, "commands");
 }
 
 /** Get the prompts directory (~/.omp/agent/prompts). */
 export function getPromptsDir(agentDir?: string): string {
-	return getAgentSubdir(agentDir, "prompts");
+	return dirs.agentSubdir(agentDir, "prompts");
 }
 
 /** Get the user-level Python modules directory (~/.omp/agent/modules). */
 export function getAgentModulesDir(agentDir?: string): string {
-	return getAgentSubdir(agentDir, "modules");
+	return dirs.agentSubdir(agentDir, "modules");
+}
+
+/** Get the memories directory (~/.omp/agent/memories). */
+export function getMemoriesDir(agentDir?: string): string {
+	return dirs.agentSubdir(agentDir, "memories", "state");
+}
+
+/** Get the terminal sessions directory (~/.omp/agent/terminal-sessions). */
+export function getTerminalSessionsDir(agentDir?: string): string {
+	return dirs.agentSubdir(agentDir, "terminal-sessions", "state");
 }
 
 /** Get the test auth database path (~/.omp/agent/testauth.db). */
 export function getTestAuthPath(agentDir?: string): string {
-	return getAgentSubdir(agentDir, "testauth.db");
+	return dirs.agentSubdir(agentDir, "testauth.db");
 }
 
 /** Get the crash log path (~/.omp/agent/omp-crash.log). */
 export function getCrashLogPath(agentDir?: string): string {
-	return getAgentSubdir(agentDir, "omp-crash.log");
+	return dirs.agentSubdir(agentDir, "omp-crash.log", "state");
 }
 
 /** Get the debug log path (~/.omp/agent/omp-debug.log). */
 export function getDebugLogPath(agentDir?: string): string {
-	return getAgentSubdir(agentDir, `${APP_NAME}-debug.log`);
+	return dirs.agentSubdir(agentDir, `${APP_NAME}-debug.log`, "state");
 }
 
 // =============================================================================

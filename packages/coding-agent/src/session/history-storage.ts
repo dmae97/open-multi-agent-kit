@@ -1,7 +1,7 @@
 import { Database, type Statement } from "bun:sqlite";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { getAgentDir, logger } from "@oh-my-pi/pi-utils";
+import { getHistoryDbPath, logger } from "@oh-my-pi/pi-utils";
 
 export interface HistoryEntry {
 	id: number;
@@ -78,7 +78,7 @@ END;
 		this.#lastPromptCache = last?.prompt ?? null;
 	}
 
-	static open(dbPath: string = path.join(getAgentDir(), "history.db")): HistoryStorage {
+	static open(dbPath: string = getHistoryDbPath()): HistoryStorage {
 		if (!HistoryStorage.#instance) {
 			HistoryStorage.#instance = new HistoryStorage(dbPath);
 		}

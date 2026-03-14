@@ -3,8 +3,7 @@
  * Replaces per-provider JSON files with a single cache.db.
  */
 import { Database } from "bun:sqlite";
-import * as path from "node:path";
-import { getAgentDir } from "@oh-my-pi/pi-utils";
+import { getModelDbPath } from "@oh-my-pi/pi-utils";
 import type { Api, Model } from "./types";
 
 const CACHE_SCHEMA_VERSION = 2;
@@ -27,12 +26,8 @@ interface CacheEntry<TApi extends Api = Api> {
 let sharedDb: Database | null = null;
 let sharedDbPath: string | null = null;
 
-function getDefaultDbPath(): string {
-	return path.join(getAgentDir(), "models.db");
-}
-
 function getDb(dbPath?: string): Database {
-	const resolvedPath = dbPath ?? getDefaultDbPath();
+	const resolvedPath = dbPath ?? getModelDbPath();
 	if (sharedDb && sharedDbPath === resolvedPath) {
 		return sharedDb;
 	}

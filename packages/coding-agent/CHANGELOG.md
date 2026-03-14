@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added per-rule TTSR interrupt mode override via `interruptMode` field in rule frontmatter to allow fine-grained control over when TTSR interrupts stream processing
@@ -11,6 +12,12 @@
 - Added support for `supportsUsageInStreaming`, `requiresToolResultName`, `requiresAssistantAfterToolResult`, `requiresThinkingAsText`, `thinkingFormat`, and `supportsStrictMode` OpenAI compatibility options
 - Added support for provider-configurable `OpenAICompat.extraBody` to inject request-body fields for custom gateway/proxy routing
 - Added `close()` method to SessionManager for properly closing persistent writers after flushing pending data
+- Added `omp config init-xdg` command to initialize XDG Base Directory structure on Linux
+- Added `getHistoryDbPath()`, `getModelDbPath()`, `getMemoriesDir()`, `getTerminalSessionsDir()` path helpers
+
+### Changed
+
+- Path resolution on Linux redirects to XDG locations when `XDG_DATA_HOME` / `XDG_STATE_HOME` / `XDG_CACHE_HOME` environment variables are set
 
 ### Changed
 
@@ -48,6 +55,7 @@
 - Fixed bash execution to fall back to one-shot shell runs after a persistent session hard timeout, preventing later commands from hanging until restart
 - Fixed timeout handling in RpcClient to properly clear timeouts and prevent resource leaks
 - Fixed AgentSession disposal to call SessionManager's `close()` method when available, ensuring proper cleanup of persistent writers
+- Removed redundant `path.join()` call wrapping `getHistoryDbPath()` in history-storage.ts
 
 ## [13.11.1] - 2026-03-13
 

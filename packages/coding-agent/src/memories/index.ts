@@ -4,7 +4,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import { completeSimple, Effort, type Model } from "@oh-my-pi/pi-ai";
-import { getAgentDbPath, logger, parseJsonlLenient } from "@oh-my-pi/pi-utils";
+import { getAgentDbPath, getMemoriesDir, logger, parseJsonlLenient } from "@oh-my-pi/pi-utils";
 import type { ModelRegistry } from "../config/model-registry";
 import { parseModelString } from "../config/model-resolver";
 import { renderPromptTemplate } from "../config/prompt-templates";
@@ -1087,7 +1087,7 @@ function loadMemoryConfig(settings: Settings): MemoryRuntimeConfig {
 }
 
 export function getMemoryRoot(agentDir: string, cwd: string): string {
-	return path.join(agentDir, "memories", encodeProjectPath(cwd));
+	return path.join(getMemoriesDir(agentDir), encodeProjectPath(cwd));
 }
 
 function encodeProjectPath(cwd: string): string {

@@ -16,6 +16,8 @@ import {
 	getBlobsDir,
 	getAgentDir as getDefaultAgentDir,
 	getProjectDir,
+	getSessionsDir,
+	getTerminalSessionsDir,
 	isEnoent,
 	logger,
 	parseJsonlLenient,
@@ -357,7 +359,7 @@ function migrateHomeSessionDirs(): void {
 	const homeEncoded = home.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-");
 	const oldPrefix = `--${homeEncoded}-`;
 	const oldExact = `--${homeEncoded}--`;
-	const sessionsRoot = path.join(getDefaultAgentDir(), "sessions");
+	const sessionsRoot = getSessionsDir();
 
 	let entries: string[];
 	try {
@@ -617,8 +619,7 @@ function encodeSessionDirName(cwd: string): string {
  */
 function getDefaultSessionDir(cwd: string, storage: SessionStorage): string {
 	migrateHomeSessionDirs();
-	const dirName = encodeSessionDirName(cwd);
-	const sessionDir = path.join(getDefaultAgentDir(), "sessions", dirName);
+	const sessionDir = path.join(getSessionsDir(), encodeSessionDirName(cwd));
 	storage.ensureDirSync(sessionDir);
 	return sessionDir;
 }
@@ -626,8 +627,6 @@ function getDefaultSessionDir(cwd: string, storage: SessionStorage): string {
 // =============================================================================
 // Terminal breadcrumbs: maps terminal (TTY) -> last session file for --continue
 // =============================================================================
-
-const TERMINAL_SESSIONS_DIR = "terminal-sessions";
 
 /**
  * Write a breadcrumb linking the current terminal to a session file.
@@ -638,7 +637,7 @@ function writeTerminalBreadcrumb(cwd: string, sessionFile: string): void {
 	const terminalId = getTerminalId();
 	if (!terminalId) return;
 
-	const breadcrumbDir = path.join(getDefaultAgentDir(), TERMINAL_SESSIONS_DIR);
+	const breadcrumbDir = getTerminalSessionsDir();
 	const breadcrumbFile = path.join(breadcrumbDir, terminalId);
 	const content = `${cwd}\n${sessionFile}\n`;
 	// Best-effort — don't break session creation if breadcrumb fails
@@ -654,7 +653,7 @@ async function readTerminalBreadcrumb(cwd: string): Promise<string | null> {
 	if (!terminalId) return null;
 
 	try {
-		const breadcrumbFile = path.join(getDefaultAgentDir(), TERMINAL_SESSIONS_DIR, terminalId);
+		const breadcrumbFile = path.join(getTerminalSessionsDir(), terminalId);
 		const content = await Bun.file(breadcrumbFile).text();
 		const lines = content.trim().split("\n");
 		if (lines.length < 2) return null;
