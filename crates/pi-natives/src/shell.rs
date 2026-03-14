@@ -53,8 +53,27 @@ use windows::configure_windows_path;
 use crate::task;
 
 struct ShellSessionCore {
-	shell:         BrushShell,
-	current_abort: Option<task::AbortToken>,
+	shell: BrushShell,
+}
+
+#[derive(Clone, Default)]
+struct ShellAbortState(Arc<TokioMutex<Option<task::AbortToken>>>);
+
+impl ShellAbortState {
+	async fn set(&self, abort_token: task::AbortToken) {
+		*self.0.lock().await = Some(abort_token);
+	}
+
+	async fn clear(&self) {
+		*self.0.lock().await = None;
+	}
+
+	async fn abort(&self) {
+		let abort_token = self.0.lock().await.clone();
+		if let Some(abort_token) = abort_token {
+			abort_token.abort(task::AbortReason::Signal);
+		}
+	}
 }
 
 #[derive(Clone)]
@@ -112,8 +131,9 @@ pub struct ShellRunResult {
 /// Persistent brush-core shell session.
 #[napi]
 pub struct Shell {
-	session: Arc<TokioMutex<Option<ShellSessionCore>>>,
-	config:  ShellConfig,
+	session:     Arc<TokioMutex<Option<ShellSessionCore>>>,
+	abort_state: ShellAbortState,
+	config:      ShellConfig,
 }
 
 #[napi]
@@ -127,7 +147,11 @@ impl Shell {
 			|| ShellConfig { session_env: None, snapshot_path: None },
 			|opt| ShellConfig { session_env: opt.session_env, snapshot_path: opt.snapshot_path },
 		);
-		Self { session: Arc::new(TokioMutex::new(None)), config }
+		Self {
+			session: Arc::new(TokioMutex::new(None)),
+			abort_state: ShellAbortState::default(),
+			config,
+		}
 	}
 
 	/// Run a shell command using the provided options.
@@ -146,13 +170,14 @@ impl Shell {
 	) -> Result<PromiseRaw<'e, ShellRunResult>> {
 		let ct = task::CancelToken::new(options.timeout_ms, options.signal);
 		let session = self.session.clone();
+		let abort_state = self.abort_state.clone();
 		let config = self.config.clone();
 
 		let run_config =
 			ShellRunConfig { command: options.command, cwd: options.cwd, env: options.env };
 
 		task::future(env, "shell.run", async move {
-			run_shell_session(session, config, run_config, on_chunk, ct).await
+			run_shell_session(session, abort_state, config, run_config, on_chunk, ct).await
 		})
 	}
 
@@ -161,11 +186,7 @@ impl Shell {
 	/// Returns `Ok(())` even when no commands are running.
 	#[napi]
 	pub async fn abort(&self) -> Result<()> {
-		if let Some(session) = self.session.lock().await.as_ref()
-			&& let Some(at) = &session.current_abort
-		{
-			at.abort(task::AbortReason::Signal);
-		}
+		self.abort_state.abort().await;
 		Ok(())
 	}
 }
@@ -173,6 +194,7 @@ impl Shell {
 /// Run a shell command within a persistent session.
 async fn run_shell_session(
 	session: Arc<TokioMutex<Option<ShellSessionCore>>>,
+	abort_state: ShellAbortState,
 	config: ShellConfig,
 	run_config: ShellRunConfig,
 	on_chunk: Option<ThreadsafeFunction<String>>,
@@ -182,6 +204,7 @@ async fn run_shell_session(
 
 	let mut run_task = tokio::spawn({
 		let session = session.clone();
+		let abort_state = abort_state.clone();
 		let tokio_cancel = tokio_cancel.clone();
 		let at = ct.emplace_abort_token();
 		async move {
@@ -191,7 +214,7 @@ async fn run_shell_session(
 				Some(session) => session,
 				None => session_guard.insert(create_session(&config).await?),
 			};
-			session.current_abort = Some(at);
+			abort_state.set(at).await;
 			run_shell_command(session, &run_config, on_chunk, tokio_cancel).await
 		}
 	});
@@ -205,6 +228,7 @@ async fn run_shell_session(
 				run_task.abort();
 				let _ = run_task.await;
 			}
+			abort_state.clear().await;
 			// Use try_lock to avoid deadlocking if another task holds the session.
 			// If we can't acquire the lock, the session will be cleaned up when the
 			// holding task finishes.
@@ -220,14 +244,10 @@ async fn run_shell_session(
 	};
 	let res =
 		res.unwrap_or_else(|e| Err(Error::from_reason(format!("Shell execution task failed: {e}"))));
+	abort_state.clear().await;
 
 	let keepalive = res.as_ref().is_ok_and(session_keepalive);
-	if keepalive {
-		// Clear abort token when command completes
-		if let Some(session_core) = session.lock().await.as_mut() {
-			session_core.current_abort = None;
-		}
-	} else {
+	if !keepalive {
 		*session.lock().await = None;
 	}
 	Ok(ShellRunResult { exit_code: Some(exit_code(&res?)), cancelled: false, timed_out: false })
@@ -488,7 +508,7 @@ async fn create_session(config: &ShellConfig) -> Result<ShellSessionCore> {
 		source_snapshot(&mut shell, snapshot_path).await?;
 	}
 
-	Ok(ShellSessionCore { shell, current_abort: None })
+	Ok(ShellSessionCore { shell })
 }
 
 async fn source_snapshot(shell: &mut BrushShell, snapshot_path: &str) -> Result<()> {
@@ -1031,4 +1051,24 @@ fn quote_arg(arg: &str) -> String {
 	}
 	let escaped = arg.replace('\'', "'\"'\"'");
 	format!("'{escaped}'")
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[tokio::test]
+	async fn abort_state_signals_cancel_token() {
+		let abort_state = ShellAbortState::default();
+		let mut cancel_token = task::CancelToken::default();
+		let abort_token = cancel_token.emplace_abort_token();
+
+		abort_state.set(abort_token).await;
+		abort_state.abort().await;
+
+		let reason = time::timeout(Duration::from_millis(100), cancel_token.wait())
+			.await
+			.expect("cancel token should be signalled");
+		assert!(matches!(reason, task::AbortReason::Signal));
+	}
 }

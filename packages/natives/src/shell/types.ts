@@ -69,9 +69,8 @@ export interface Shell {
 	run(options: ShellRunOptions, onChunk?: TsFunc<string>): Promise<ShellRunResult>;
 	/**
 	 * Abort all running commands in this session.
-	 * @param reason Optional reason for the abort.
 	 */
-	abort(reason?: string): void;
+	abort(): Promise<void>;
 }
 
 /** Native Shell class constructor. */

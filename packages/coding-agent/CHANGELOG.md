@@ -1,12 +1,18 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added `close()` method to SessionManager for properly closing persistent writers after flushing pending data
 
+### Changed
+
+- Modified bash executor to fall back to one-shot shell execution after a persistent session hard timeout, preventing subsequent commands from hanging
+
 ### Fixed
 
+- Fixed bash execution to fall back to one-shot shell runs after a persistent session hard timeout, preventing later commands from hanging until restart
 - Fixed timeout handling in RpcClient to properly clear timeouts and prevent resource leaks
 - Fixed AgentSession disposal to call SessionManager's `close()` method when available, ensuring proper cleanup of persistent writers
 

@@ -85,7 +85,7 @@ export async function runShellCommand(cmd: ShellCommandArgs): Promise<void> {
 
 	const interruptHandler = () => {
 		if (active) {
-			shellSession.abort();
+			void shellSession.abort();
 			return;
 		}
 		rl.close();

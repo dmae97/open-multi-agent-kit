@@ -105,6 +105,7 @@ import { outputMeta } from "../tools/output-meta";
 import { resolveToCwd } from "../tools/path-utils";
 import type { PendingActionStore } from "../tools/pending-action";
 import { getLatestTodoPhasesFromEntries, type TodoItem, type TodoPhase } from "../tools/todo-write";
+import { clampTimeout } from "../tools/tool-timeouts";
 import { parseCommandArgs } from "../utils/command-args";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
 import { extractFileMentions, generateFileMentionMessages } from "../utils/file-mentions";
@@ -4456,6 +4457,7 @@ export class AgentSession {
 				onChunk,
 				signal: this.#bashAbortController.signal,
 				sessionKey: this.sessionId,
+				timeout: clampTimeout("bash") * 1000,
 			});
 
 			this.recordBashResult(command, result, options);
