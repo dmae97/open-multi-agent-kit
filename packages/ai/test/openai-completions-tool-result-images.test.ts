@@ -30,6 +30,7 @@ const compat: Required<OpenAICompat> = {
 	requiresAssistantContentForToolCalls: false,
 	openRouterRouting: {},
 	vercelGatewayRouting: {},
+	extraBody: {},
 	supportsStrictMode: true,
 };
 
