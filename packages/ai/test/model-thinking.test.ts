@@ -177,7 +177,7 @@ describe("generated model policies", () => {
 		});
 		expect(models[1]?.cost.cacheRead).toBe(0.5);
 		expect(models[1]?.cost.cacheWrite).toBe(6.25);
-		expect(models[1]?.contextWindow).toBe(200000);
+		expect(models[1]?.contextWindow).toBe(1000000);
 		expect(models[2]?.contextWindow).toBe(272000);
 	});
 

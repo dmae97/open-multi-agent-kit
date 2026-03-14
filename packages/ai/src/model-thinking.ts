@@ -288,11 +288,6 @@ function applyAnthropicCatalogPolicy(model: ApiModel<Api>, parsedModel: Anthropi
 		model.cost.cacheWrite = 6.25;
 	}
 
-	// Opus 4.6 / Sonnet 4.6: 1M context is beta; clamp to 200K.
-	if (semverEqual(parsedModel.version, "4.6")) {
-		model.contextWindow = 200000;
-	}
-
 	// OpenCode variants: Claude Sonnet 4/4.5 listed with 1M context, actual limit is 200K.
 	if (
 		(model.provider === "opencode-zen" || model.provider === "opencode-go") &&
