@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock, vi } from "bun:test";
 import * as path from "node:path";
 import { TempDir } from "@oh-my-pi/pi-utils";
+import type { AgentSession } from "../src/session/agent-session";
 
 const compactMock = vi.fn();
 
@@ -133,10 +134,7 @@ describe("AgentSession compaction Copilot initiator attribution", async () => {
 	}
 
 	async function triggerAutoCompaction(
-		session: {
-			agent: { emitExternalEvent: (event: unknown) => void };
-			subscribe: (listener: (event: { type: string }) => void) => () => void;
-		},
+		session: Pick<AgentSession, "agent" | "subscribe">,
 		model: { api: string; provider: string; id: string; contextWindow: number },
 	) {
 		const { promise, resolve } = Promise.withResolvers<void>();

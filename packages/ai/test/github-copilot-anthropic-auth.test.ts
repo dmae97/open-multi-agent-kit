@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { buildAnthropicClientOptions, streamAnthropic } from "../src/providers/anthropic";
-import type { Model } from "../src/types";
+import type { Context, Model } from "../src/types";
 
 const originalFetch = global.fetch;
 
@@ -32,9 +32,9 @@ function makeCopilotClaudeModel(): Model<"anthropic-messages"> {
 	};
 }
 
-const testContext = {
+const testContext: Context = {
 	messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
-} as const;
+};
 
 function getRequestHeader(
 	input: string | URL | Request,
