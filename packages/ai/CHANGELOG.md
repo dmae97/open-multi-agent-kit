@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.12.0] - 2026-03-14
+
 ### Added
 
 - Added support for `qwen-chat-template` thinking format to enable reasoning via `chat_template_kwargs.enable_thinking`

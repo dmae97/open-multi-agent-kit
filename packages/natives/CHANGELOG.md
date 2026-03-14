@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.12.0] - 2026-03-14
 ### Breaking Changes
 
 - Changed `abort()` method signature: removed optional `reason` parameter and changed return type from `void` to `Promise<void>`

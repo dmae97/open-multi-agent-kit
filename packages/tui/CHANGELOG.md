@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.12.0] - 2026-03-14
+
 ### Added
 
 - Added `moveToMessageStart()` and `moveToMessageEnd()` methods to move cursor to the beginning and end of the entire message

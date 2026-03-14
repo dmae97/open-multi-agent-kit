@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.12.0] - 2026-03-14
+
 ### Added
 
 - Added per-rule TTSR interrupt mode override via `interruptMode` field in rule frontmatter to allow fine-grained control over when TTSR interrupts stream processing
