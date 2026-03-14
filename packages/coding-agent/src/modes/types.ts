@@ -56,6 +56,7 @@ export interface InteractiveModeContext {
 	pendingMessagesContainer: Container;
 	statusContainer: Container;
 	todoContainer: Container;
+	btwContainer: Container;
 	editor: CustomEditor;
 	editorContainer: Container;
 	statusLine: StatusLineComponent;
@@ -205,6 +206,9 @@ export interface InteractiveModeContext {
 	handleDequeue(): void;
 	handleBackgroundCommand(): void;
 	handleImagePaste(): Promise<boolean>;
+	handleBtwCommand(question: string): Promise<void>;
+	hasActiveBtw(): boolean;
+	handleBtwEscape(): boolean;
 	cycleThinkingLevel(): void;
 	cycleRoleModel(options?: { temporary?: boolean }): Promise<void>;
 	toggleToolOutputExpansion(): void;

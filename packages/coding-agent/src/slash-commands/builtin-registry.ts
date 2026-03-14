@@ -466,6 +466,17 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<BuiltinSlashCommandSpec> = [
 		},
 	},
 	{
+		name: "btw",
+		description: "Ask an ephemeral side question using the current session context",
+		inlineHint: "<question>",
+		allowArgs: true,
+		handle: async (command, runtime) => {
+			const question = command.text.slice(`/${command.name}`.length).trim();
+			runtime.ctx.editor.setText("");
+			await runtime.ctx.handleBtwCommand(question);
+		},
+	},
+	{
 		name: "background",
 		aliases: ["bg"],
 		description: "Detach UI and continue running in background",

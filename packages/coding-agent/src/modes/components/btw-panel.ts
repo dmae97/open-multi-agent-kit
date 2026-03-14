@@ -1,0 +1,104 @@
+import { type Component, Container, Markdown, Spacer, Text, type TUI } from "@oh-my-pi/pi-tui";
+import { replaceTabs } from "../../tools/render-utils";
+import { getMarkdownTheme, theme } from "../theme/theme";
+import { DynamicBorder } from "./dynamic-border";
+
+type BtwPanelState = "running" | "complete" | "aborted" | "error";
+
+interface BtwPanelComponentOptions {
+	question: string;
+	tui: TUI;
+}
+
+export class BtwPanelComponent extends Container {
+	#question: string;
+	#tui: TUI;
+	#state: BtwPanelState = "running";
+	#answer = "";
+	#errorMessage: string | undefined;
+	#closed = false;
+
+	constructor(options: BtwPanelComponentOptions) {
+		super();
+		this.#question = options.question;
+		this.#tui = options.tui;
+		this.#rebuild();
+	}
+
+	appendText(delta: string): void {
+		if (!delta || this.#closed) return;
+		this.#answer += delta;
+		this.#rebuild();
+	}
+
+	setAnswer(text: string): void {
+		if (this.#closed) return;
+		this.#answer = text;
+		this.#rebuild();
+	}
+
+	markComplete(): void {
+		if (this.#closed) return;
+		this.#state = "complete";
+		this.#errorMessage = undefined;
+		this.#rebuild();
+	}
+
+	markAborted(): void {
+		if (this.#closed) return;
+		this.#state = "aborted";
+		this.#errorMessage = undefined;
+		this.#rebuild();
+	}
+
+	markError(message: string): void {
+		if (this.#closed) return;
+		this.#state = "error";
+		this.#errorMessage = message;
+		this.#rebuild();
+	}
+
+	close(): void {
+		this.#closed = true;
+	}
+
+	#rebuild(): void {
+		this.clear();
+		this.addChild(new DynamicBorder(str => theme.fg("dim", str)));
+		this.addChild(new Spacer(1));
+		this.addChild(new Text(theme.fg("accent", replaceTabs(this.#question)), 1, 0));
+		this.addChild(new Spacer(1));
+		this.addChild(this.#contentComponent());
+		this.addChild(new Spacer(1));
+		this.addChild(new Text(this.#footerLine(), 1, 0));
+		this.addChild(new Spacer(1));
+		this.addChild(new DynamicBorder(str => theme.fg("dim", str)));
+		this.#tui.requestRender();
+	}
+
+	#footerLine(): string {
+		switch (this.#state) {
+			case "running":
+				return theme.fg("muted", "Esc cancel /btw");
+			case "complete":
+				return theme.fg("muted", "Esc dismiss");
+			case "aborted":
+				return theme.fg("warning", `${theme.status.warning} Cancelled · Esc dismiss`);
+			case "error":
+				return theme.fg("error", `${theme.status.error} Error · Esc dismiss`);
+		}
+	}
+
+	#contentComponent(): Component {
+		if (this.#state === "error") {
+			return new Text(theme.fg("error", replaceTabs(this.#errorMessage ?? "Unknown error")), 1, 0);
+		}
+		const text = replaceTabs(this.#answer).trim();
+		if (!text) {
+			const waiting =
+				this.#state === "running" ? `${theme.status.pending} Waiting for response…` : "No text returned.";
+			return new Text(theme.fg("dim", waiting), 1, 0);
+		}
+		return new Markdown(text, 1, 0, getMarkdownTheme());
+	}
+}

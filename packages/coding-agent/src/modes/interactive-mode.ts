@@ -36,6 +36,7 @@ import type { PythonExecutionComponent } from "./components/python-execution";
 import { StatusLineComponent } from "./components/status-line";
 import type { ToolExecutionHandle } from "./components/tool-execution";
 import { WelcomeComponent } from "./components/welcome";
+import { BtwController } from "./controllers/btw-controller";
 import { CommandController } from "./controllers/command-controller";
 import { EventController } from "./controllers/event-controller";
 import { ExtensionUiController } from "./controllers/extension-ui-controller";
@@ -89,6 +90,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	pendingMessagesContainer: Container;
 	statusContainer: Container;
 	todoContainer: Container;
+	btwContainer: Container;
 	editor: CustomEditor;
 	editorContainer: Container;
 	statusLine: StatusLineComponent;
@@ -151,6 +153,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	mcpManager?: import("../mcp").MCPManager;
 	readonly #toolUiContextSetter: (uiContext: ExtensionUIContext, hasUI: boolean) => void;
 
+	readonly #btwController: BtwController;
 	readonly #commandController: CommandController;
 	readonly #eventController: EventController;
 	readonly #extensionUiController: ExtensionUiController;
@@ -192,6 +195,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.pendingMessagesContainer = new Container();
 		this.statusContainer = new Container();
 		this.todoContainer = new Container();
+		this.btwContainer = new Container();
 		this.editor = new CustomEditor(getEditorTheme());
 		this.editor.setUseTerminalCursor(this.ui.getShowHardwareCursor());
 		this.editor.setAutocompleteMaxVisible(settings.get("autocompleteMaxVisible"));
@@ -248,6 +252,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#pendingSlashCommands = [...BUILTIN_SLASH_COMMANDS, ...hookCommands, ...customCommands, ...skillCommandList];
 
 		this.#uiHelpers = new UiHelpers(this);
+		this.#btwController = new BtwController(this);
 		this.#extensionUiController = new ExtensionUiController(this);
 		this.#eventController = new EventController(this);
 		this.#commandController = new CommandController(this);
@@ -328,6 +333,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.ui.addChild(this.pendingMessagesContainer);
 		this.ui.addChild(this.statusContainer);
 		this.ui.addChild(this.todoContainer);
+		this.ui.addChild(this.btwContainer);
 		this.ui.addChild(this.statusLine); // Only renders hook statuses (main status in editor border)
 		this.ui.addChild(new Spacer(1));
 		this.ui.addChild(this.editorContainer);
@@ -861,6 +867,7 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		// Flush pending session writes before shutdown
 		await this.sessionManager.flush();
+		this.#btwController.dispose();
 
 		// Emit shutdown event to hooks
 		await this.session.dispose();
@@ -1073,11 +1080,13 @@ export class InteractiveMode implements InteractiveModeContext {
 	}
 
 	handleClearCommand(): Promise<void> {
+		this.#btwController.dispose();
 		this.#extensionUiController.clearExtensionTerminalInputListeners();
 		return this.#commandController.handleClearCommand();
 	}
 
 	handleForkCommand(): Promise<void> {
+		this.#btwController.dispose();
 		return this.#commandController.handleForkCommand();
 	}
 
@@ -1233,6 +1242,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	}
 
 	handleResumeSession(sessionPath: string): Promise<void> {
+		this.#btwController.dispose();
 		return this.#selectorController.handleResumeSession(sessionPath);
 	}
 
@@ -1267,6 +1277,18 @@ export class InteractiveMode implements InteractiveModeContext {
 
 	handleImagePaste(): Promise<boolean> {
 		return this.#inputController.handleImagePaste();
+	}
+
+	handleBtwCommand(question: string): Promise<void> {
+		return this.#btwController.start(question);
+	}
+
+	hasActiveBtw(): boolean {
+		return this.#btwController.hasActiveRequest();
+	}
+
+	handleBtwEscape(): boolean {
+		return this.#btwController.handleEscape();
 	}
 
 	cycleThinkingLevel(): void {

@@ -29,6 +29,7 @@ export class InputController {
 		this.ctx.editor.shouldBypassAutocompleteOnEscape = () =>
 			Boolean(
 				this.ctx.loadingAnimation ||
+					this.ctx.hasActiveBtw() ||
 					this.ctx.session.isStreaming ||
 					this.ctx.session.isCompacting ||
 					this.ctx.session.isGeneratingHandoff ||
@@ -40,6 +41,9 @@ export class InputController {
 					this.ctx.retryEscapeHandler,
 			);
 		this.ctx.editor.onEscape = () => {
+			if (this.ctx.hasActiveBtw() && this.ctx.handleBtwEscape()) {
+				return;
+			}
 			if (this.ctx.loadingAnimation) {
 				if (this.ctx.cancelPendingSubmission()) {
 					return;
@@ -434,6 +438,9 @@ export class InputController {
 		if (!this.ctx.session.isStreaming && this.ctx.session.queuedMessageCount === 0) {
 			this.ctx.showWarning("Agent is idle; nothing to background");
 			return;
+		}
+		if (this.ctx.hasActiveBtw()) {
+			this.ctx.handleBtwEscape();
 		}
 
 		this.ctx.isBackgrounded = true;

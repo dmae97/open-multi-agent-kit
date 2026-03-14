@@ -34,6 +34,7 @@ import type {
 	Model,
 	ProviderSessionState,
 	ServiceTier,
+	SimpleStreamOptions,
 	TextContent,
 	ToolCall,
 	ToolChoice,
@@ -126,6 +127,7 @@ import {
 	bashExecutionToText,
 	type CompactionSummaryMessage,
 	type CustomMessage,
+	convertToLlm,
 	type FileMentionMessage,
 	type HookMessage,
 	type PythonExecutionMessage,
@@ -191,6 +193,12 @@ export interface AgentSessionConfig {
 	modelRegistry: ModelRegistry;
 	/** Tool registry for LSP and settings */
 	toolRegistry?: Map<string, AgentTool>;
+	/** Current session pre-LLM message transform pipeline */
+	transformContext?: (messages: AgentMessage[], signal?: AbortSignal) => AgentMessage[] | Promise<AgentMessage[]>;
+	/** Provider payload hook used by the active session request path */
+	onPayload?: SimpleStreamOptions["onPayload"];
+	/** Current session message-to-LLM conversion pipeline */
+	convertToLlm?: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
 	/** System prompt builder that can consider tool availability */
 	rebuildSystemPrompt?: (toolNames: string[], tools: Map<string, AgentTool>) => Promise<string>;
 	/** TTSR manager for time-traveling stream rules */
@@ -381,6 +389,9 @@ export class AgentSession {
 
 	// Tool registry and prompt builder for extensions
 	#toolRegistry: Map<string, AgentTool>;
+	#transformContext: (messages: AgentMessage[], signal?: AbortSignal) => AgentMessage[] | Promise<AgentMessage[]>;
+	#onPayload: SimpleStreamOptions["onPayload"] | undefined;
+	#convertToLlm: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
 	#rebuildSystemPrompt: ((toolNames: string[], tools: Map<string, AgentTool>) => Promise<string>) | undefined;
 	#baseSystemPrompt: string;
 	#forceCopilotAgentInitiator = false;
@@ -425,6 +436,9 @@ export class AgentSession {
 		this.#skillsSettings = config.skillsSettings;
 		this.#modelRegistry = config.modelRegistry;
 		this.#toolRegistry = config.toolRegistry ?? new Map();
+		this.#transformContext = config.transformContext ?? (messages => messages);
+		this.#onPayload = config.onPayload;
+		this.#convertToLlm = config.convertToLlm ?? convertToLlm;
 		this.#rebuildSystemPrompt = config.rebuildSystemPrompt;
 		this.#baseSystemPrompt = this.agent.state.systemPrompt;
 		this.#ttsrManager = config.ttsrManager;
@@ -1712,6 +1726,31 @@ export class AgentSession {
 	/** All messages including custom types like BashExecutionMessage */
 	get messages(): AgentMessage[] {
 		return this.agent.state.messages;
+	}
+
+	/** Convert session messages using the same pre-LLM pipeline as the active session. */
+	async convertMessagesToLlm(messages: AgentMessage[], signal?: AbortSignal): Promise<Message[]> {
+		const transformedMessages = await this.#transformContext(messages, signal);
+		return await this.#convertToLlm(transformedMessages);
+	}
+
+	/** Apply session-level stream hooks to a direct side request. */
+	prepareSimpleStreamOptions(options: SimpleStreamOptions): SimpleStreamOptions {
+		if (!this.#onPayload) return options;
+		if (!options.onPayload) {
+			return { ...options, onPayload: this.#onPayload };
+		}
+		const sessionOnPayload = this.#onPayload;
+		const requestOnPayload = options.onPayload;
+		return {
+			...options,
+			onPayload: async (payload, model) => {
+				const sessionPayload = await sessionOnPayload(payload, model);
+				const sessionResolvedPayload = sessionPayload ?? payload;
+				const requestPayload = await requestOnPayload(sessionResolvedPayload, model);
+				return requestPayload ?? sessionResolvedPayload;
+			},
+		};
 	}
 
 	/** Current steering mode */

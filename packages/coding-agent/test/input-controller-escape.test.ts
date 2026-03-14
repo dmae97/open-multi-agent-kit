@@ -49,7 +49,11 @@ function createContext(): {
 		cancelPendingSubmission: ReturnType<typeof vi.fn>;
 		clearQueue: ReturnType<typeof vi.fn>;
 		ensureLoadingAnimation: ReturnType<typeof vi.fn>;
+		handleBtwCommand: ReturnType<typeof vi.fn>;
+		handleBtwEscape: ReturnType<typeof vi.fn>;
+		hasActiveBtw: ReturnType<typeof vi.fn>;
 		onInputCallback: ReturnType<typeof vi.fn>;
+		prompt: ReturnType<typeof vi.fn>;
 		requestRender: ReturnType<typeof vi.fn>;
 		startPendingSubmission: ReturnType<typeof vi.fn>;
 	};
@@ -62,7 +66,11 @@ function createContext(): {
 	const cancelPendingSubmission = vi.fn(() => false);
 	const clearQueue = vi.fn(() => ({ steering: [], followUp: [] }));
 	const onInputCallback = vi.fn();
+	const prompt = vi.fn();
 	const requestRender = vi.fn();
+	const handleBtwCommand = vi.fn(async () => {});
+	const handleBtwEscape = vi.fn(() => true);
+	const hasActiveBtw = vi.fn(() => false);
 	const startPendingSubmission = vi.fn((input: { text: string; images?: InteractiveModeContext["pendingImages"] }) => {
 		ensureLoadingAnimation();
 		return createSubmission(input);
@@ -104,6 +112,7 @@ function createContext(): {
 			abortBash,
 			abortPython,
 			clearQueue,
+			prompt,
 		} as unknown as InteractiveModeContext["session"],
 		sessionManager: {
 			getSessionName: () => "existing session",
@@ -129,6 +138,9 @@ function createContext(): {
 		toggleTodoExpansion: vi.fn(),
 		handleHotkeysCommand: vi.fn(),
 		handleSTTToggle: vi.fn(),
+		handleBtwEscape,
+		handleBtwCommand,
+		hasActiveBtw,
 		showTreeSelector: vi.fn(),
 		showUserMessageSelector: vi.fn(),
 		showSessionSelector: vi.fn(),
@@ -145,7 +157,11 @@ function createContext(): {
 			cancelPendingSubmission,
 			clearQueue,
 			ensureLoadingAnimation,
+			handleBtwCommand,
+			handleBtwEscape,
+			hasActiveBtw,
 			onInputCallback,
+			prompt,
 			requestRender,
 			startPendingSubmission,
 		},
@@ -173,6 +189,21 @@ describe("InputController escape behavior", () => {
 		expect(spies.cancelPendingSubmission).toHaveBeenCalledTimes(1);
 		expect(spies.clearQueue).not.toHaveBeenCalled();
 		expect(spies.abort).not.toHaveBeenCalled();
+	});
+
+	it("runs /btw as a builtin side request instead of steering the active stream", async () => {
+		const { ctx, editor, spies } = createContext();
+		(ctx.session as { isStreaming: boolean }).isStreaming = true;
+		const controller = new InputController(ctx);
+
+		controller.setupEditorSubmitHandler();
+		editor.setText("/btw why is it doing that?");
+		await editor.onSubmit?.("/btw why is it doing that?");
+
+		expect(spies.handleBtwCommand).toHaveBeenCalledWith("why is it doing that?");
+		expect(spies.prompt).not.toHaveBeenCalled();
+		expect(editor.addToHistory).not.toHaveBeenCalled();
+		expect(editor.getText()).toBe("");
 	});
 
 	it("falls back to aborting the active session when no pending optimistic submission exists", () => {
@@ -211,6 +242,51 @@ describe("InputController escape behavior", () => {
 		editor.onEscape?.();
 
 		expect(spies.abortPython).toHaveBeenCalledTimes(1);
+		expect(spies.abort).not.toHaveBeenCalled();
+	});
+
+	it("dismisses an active /btw panel before aborting the main stream", () => {
+		const { ctx, editor, spies } = createContext();
+		(ctx.session as { isStreaming: boolean }).isStreaming = true;
+		spies.hasActiveBtw.mockReturnValue(true);
+		const controller = new InputController(ctx);
+
+		controller.setupKeyHandlers();
+		expect(editor.shouldBypassAutocompleteOnEscape?.()).toBe(true);
+		editor.onEscape?.();
+
+		expect(spies.handleBtwEscape).toHaveBeenCalledTimes(1);
+		expect(spies.abort).not.toHaveBeenCalled();
+	});
+
+	it("dismisses an active /btw panel before canceling a pending optimistic submission", () => {
+		const { ctx, editor, spies } = createContext();
+		ctx.loadingAnimation = {} as InteractiveModeContext["loadingAnimation"];
+		spies.hasActiveBtw.mockReturnValue(true);
+		const controller = new InputController(ctx);
+
+		controller.setupKeyHandlers();
+		expect(editor.shouldBypassAutocompleteOnEscape?.()).toBe(true);
+		editor.onEscape?.();
+
+		expect(spies.handleBtwEscape).toHaveBeenCalledTimes(1);
+		expect(spies.cancelPendingSubmission).not.toHaveBeenCalled();
+		expect(spies.clearQueue).not.toHaveBeenCalled();
+		expect(spies.abort).not.toHaveBeenCalled();
+	});
+
+	it("dismisses an active /btw panel before aborting bash", () => {
+		const { ctx, editor, spies } = createContext();
+		(ctx.session as { isBashRunning: boolean }).isBashRunning = true;
+		spies.hasActiveBtw.mockReturnValue(true);
+		const controller = new InputController(ctx);
+
+		controller.setupKeyHandlers();
+		expect(editor.shouldBypassAutocompleteOnEscape?.()).toBe(true);
+		editor.onEscape?.();
+
+		expect(spies.handleBtwEscape).toHaveBeenCalledTimes(1);
+		expect(spies.abortBash).not.toHaveBeenCalled();
 		expect(spies.abort).not.toHaveBeenCalled();
 	});
 
