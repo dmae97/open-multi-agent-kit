@@ -366,6 +366,12 @@ interface CustomModelsResult {
 	found: boolean;
 }
 
+type OllamaDiscoveredModelMetadata = {
+	reasoning: boolean;
+	input: ("text" | "image")[];
+	contextWindow?: number;
+};
+
 /**
  * Resolve an API key config value to an actual key.
  * Checks environment variable first, then treats as literal.
@@ -374,6 +380,40 @@ function resolveApiKeyConfig(keyConfig: string): string | undefined {
 	const envValue = Bun.env[keyConfig];
 	if (envValue) return envValue;
 	return keyConfig;
+}
+
+function toPositiveNumberOrUndefined(value: unknown): number | undefined {
+	if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+		return value;
+	}
+	if (typeof value === "string" && value.trim()) {
+		const parsed = Number(value);
+		if (Number.isFinite(parsed) && parsed > 0) {
+			return parsed;
+		}
+	}
+	return undefined;
+}
+
+function extractOllamaContextWindow(payload: Record<string, unknown>): number | undefined {
+	const modelInfo = payload.model_info;
+	if (isRecord(modelInfo)) {
+		for (const [key, value] of Object.entries(modelInfo)) {
+			if (key === "context_length" || key.endsWith(".context_length")) {
+				const contextWindow = toPositiveNumberOrUndefined(value);
+				if (contextWindow !== undefined) {
+					return contextWindow;
+				}
+			}
+		}
+	}
+
+	const parameters = payload.parameters;
+	if (typeof parameters !== "string") {
+		return undefined;
+	}
+	const match = parameters.match(/(?:^|\n)\s*num_ctx\s+(\d+)\s*(?:$|\n)/m);
+	return match ? toPositiveNumberOrUndefined(match[1]) : undefined;
 }
 
 function extractGoogleOAuthToken(value: string | undefined): string | undefined {
@@ -1096,7 +1136,7 @@ export class ModelRegistry {
 		endpoint: string,
 		modelId: string,
 		headers: Record<string, string> | undefined,
-	): Promise<{ reasoning: boolean; input: ("text" | "image")[] } | null> {
+	): Promise<OllamaDiscoveredModelMetadata | null> {
 		const showUrl = `${endpoint}/api/show`;
 		try {
 			const response = await fetch(showUrl, {
@@ -1112,6 +1152,7 @@ export class ModelRegistry {
 			if (!isRecord(payload)) {
 				return null;
 			}
+			const contextWindow = extractOllamaContextWindow(payload);
 			const capabilities = payload.capabilities;
 			if (Array.isArray(capabilities)) {
 				const normalized = new Set(
@@ -1121,15 +1162,21 @@ export class ModelRegistry {
 				return {
 					reasoning: normalized.has("thinking"),
 					input: supportsVision ? ["text", "image"] : ["text"],
+					contextWindow,
 				};
 			}
 			if (!isRecord(capabilities)) {
-				return null;
+				return {
+					reasoning: false,
+					input: ["text"],
+					contextWindow,
+				};
 			}
 			const supportsVision = capabilities.vision === true || capabilities.image === true;
 			return {
 				reasoning: capabilities.thinking === true,
 				input: supportsVision ? ["text", "image"] : ["text"],
+				contextWindow,
 			};
 		} catch {
 			return null;
@@ -1170,8 +1217,8 @@ export class ModelRegistry {
 				reasoning: metadata?.reasoning ?? false,
 				input: metadata?.input ?? ["text"],
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-				contextWindow: 128000,
-				maxTokens: 8192,
+				contextWindow: metadata?.contextWindow ?? 128000,
+				maxTokens: Math.min(metadata?.contextWindow ?? Number.POSITIVE_INFINITY, 8192),
 				headers: providerConfig.headers,
 			});
 		});

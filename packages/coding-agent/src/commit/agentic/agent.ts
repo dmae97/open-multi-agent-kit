@@ -161,11 +161,17 @@ export async function runCommitAgentSession(input: CommitAgentInput): Promise<Co
 		let retryCount = 0;
 		const needsChangelog = input.requireChangelog && input.changelogTargets.length > 0;
 
-		await session.prompt(prompt, { expandPromptTemplates: false });
+		await session.prompt(prompt, {
+			attribution: "agent",
+			expandPromptTemplates: false,
+		});
 		while (retryCount < MAX_RETRIES && !isProposalComplete(state, needsChangelog)) {
 			retryCount += 1;
 			const reminder = buildReminderMessage(state, needsChangelog, retryCount, MAX_RETRIES);
-			await session.prompt(reminder, { expandPromptTemplates: false });
+			await session.prompt(reminder, {
+				attribution: "agent",
+				expandPromptTemplates: false,
+			});
 		}
 
 		return state;

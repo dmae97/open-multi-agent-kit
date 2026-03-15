@@ -1,13 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Automatic discovery of Ollama model context window from model metadata, enabling accurate token limit configuration
 - Added `attribution` option to `PromptOptions` to explicitly control billing/initiator attribution for prompts
 - Added automatic clearing of completed and abandoned todo tasks after ~1 minute
 
 ### Changed
 
+- Ollama model registration now uses discovered context window instead of hardcoded 128000 token default
+- Ollama model maxTokens now respects discovered context window constraints
 - Improved session directory migration to handle legacy absolute paths with double-dash format, automatically relocating them to new canonical locations
 - Enhanced session directory encoding to use `-tmp-` prefix for temporary directories instead of legacy double-dash format for better clarity
 - Updated `SessionManager.create()` to require both `cwd` and `sessionDir` parameters for explicit session directory control

@@ -909,6 +909,44 @@ describe("ModelRegistry", () => {
 			expect(llama?.reasoning).toBe(false);
 		});
 
+		test("discovers ollama context window from show model_info", async () => {
+			using _hook = hookFetch((input, init) => {
+				const url = String(input);
+				if (url === "http://127.0.0.1:11434/api/tags") {
+					return new Response(JSON.stringify({ models: [{ name: "gemma3:4b" }] }), {
+						status: 200,
+						headers: { "Content-Type": "application/json" },
+					});
+				}
+				if (url === "http://127.0.0.1:11434/api/show") {
+					const body = JSON.parse(String(init?.body ?? "{}")) as { model?: string };
+					if (body.model === "gemma3:4b") {
+						return new Response(
+							JSON.stringify({
+								model_info: {
+									"gemma3.context_length": 131072,
+								},
+							}),
+							{
+								status: 200,
+								headers: { "Content-Type": "application/json" },
+							},
+						);
+					}
+				}
+				throw new Error(`Unexpected request: ${url}`);
+			});
+
+			const registry = new ModelRegistry(authStorage, modelsJsonPath);
+			await registry.refresh();
+
+			const gemma = registry.find("ollama", "gemma3:4b");
+			expect(gemma?.contextWindow).toBe(131072);
+			expect(gemma?.maxTokens).toBe(8192);
+			expect(gemma?.input).toEqual(["text"]);
+			expect(gemma?.reasoning).toBe(false);
+		});
+
 		test("discovery failure does not fail model registry refresh", async () => {
 			writeRawModelsJson({
 				ollama: {
