@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.12.4] - 2026-03-15
 ### Added
 
 - Exposed `settings` instance in `CustomToolContext` for session-specific configuration access
