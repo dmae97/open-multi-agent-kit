@@ -274,13 +274,12 @@ export function serializeWebSocketMessage(msg: JupyterMessage): ArrayBuffer {
 		metadata: msg.metadata,
 		content: msg.content,
 	});
-	const msgBytes = TEXT_ENCODER.encode(msgText);
 
 	const buffers = msg.buffers ?? [];
 	const offsetCount = 1 + buffers.length;
 	const headerSize = 4 + offsetCount * 4;
-
-	let totalSize = headerSize + msgBytes.length;
+	const msgBytes = Buffer.byteLength(msgText);
+	let totalSize = headerSize + msgBytes;
 	for (const buf of buffers) {
 		totalSize += buf.length;
 	}
@@ -293,8 +292,8 @@ export function serializeWebSocketMessage(msg: JupyterMessage): ArrayBuffer {
 
 	let offset = headerSize;
 	view.setUint32(4, offset, true);
-	bytes.set(msgBytes, offset);
-	offset += msgBytes.length;
+	TEXT_ENCODER.encodeInto(msgText, bytes.subarray(offset));
+	offset += msgBytes;
 
 	for (let i = 0; i < buffers.length; i++) {
 		view.setUint32(4 + (i + 1) * 4, offset, true);
