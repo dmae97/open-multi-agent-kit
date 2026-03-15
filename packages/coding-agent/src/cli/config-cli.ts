@@ -397,7 +397,7 @@ ${chalk.bold("Commands:")}
   set <key> <value>  Set a setting value
   reset <key>        Reset a setting to its default value
   path               Print the config directory path
-  init-xdg           Initialize XDG Base Directory structure (Linux only)
+  init-xdg           Initialize XDG Base Directory structure
 
 ${chalk.bold("Options:")}
   --json             Output as JSON
