@@ -191,6 +191,13 @@ const KITTY_MOD_SHIFT = 1;
 const KITTY_MOD_ALT = 2;
 const KITTY_MOD_CTRL = 4;
 const KITTY_MOD_NUM_LOCK = 128;
+const KITTY_KEYPAD_OPERATOR_TEXT: Record<number, string> = {
+	57410: "/",
+	57411: "*",
+	57412: "-",
+	57413: "+",
+	57415: "=",
+};
 const KITTY_NUMPAD_TEXT: Record<number, string> = {
 	57399: "0",
 	57400: "1",
@@ -297,6 +304,8 @@ function decodeKittyPrintable(data: string): string | undefined {
 			}
 		}
 	}
+	const keypadOperatorText = KITTY_KEYPAD_OPERATOR_TEXT[codepoint];
+	if (keypadOperatorText) return keypadOperatorText;
 
 	if (effectiveMod === 0 && modifier & KITTY_MOD_NUM_LOCK) {
 		const numpadText = KITTY_NUMPAD_TEXT[codepoint];
@@ -325,7 +334,7 @@ function decodeKittyPrintable(data: string): string | undefined {
  * Extract printable text from raw terminal input.
  *
  * Handles Kitty CSI-u text-producing keys so text-entry components can treat
- * keypad digits and shifted symbols the same as direct character input.
+ * keypad digits, keypad operators, and shifted symbols the same as direct character input.
  */
 export function extractPrintableText(data: string): string | undefined {
 	const kittyText = decodeKittyPrintable(data);

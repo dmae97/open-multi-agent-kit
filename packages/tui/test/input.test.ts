@@ -143,6 +143,16 @@ describe("Input component", () => {
 		setKittyProtocolActive(false);
 	});
 
+	it("inserts keypad operators from Kitty CSI-u input", () => {
+		setKittyProtocolActive(true);
+		const input = setupAtEnd("a");
+
+		input.handleInput("\x1b[57410u");
+		expect(input.getValue()).toBe("a/");
+
+		setKittyProtocolActive(false);
+	});
+
 	it("normalizes tabs in buffered bracketed paste using configured indentation", () => {
 		const input = setupAtEnd("");
 

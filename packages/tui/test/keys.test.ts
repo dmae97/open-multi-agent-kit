@@ -50,6 +50,13 @@ describe("matchesKey", () => {
 		setKittyProtocolActive(false);
 	});
 
+	it("matches keypad operators as their printable symbols", () => {
+		setKittyProtocolActive(true);
+		expect(matchesKey("\x1b[57410u", "/")).toBe(true);
+		expect(matchesKey("\x1b[57413;5u", "ctrl++")).toBe(true);
+		setKittyProtocolActive(false);
+	});
+
 	it("preserves keypad navigation matches when NumLock is on but modifiers are held", () => {
 		setKittyProtocolActive(true);
 		expect(matchesKey("\x1b[57400;133u", "ctrl+end")).toBe(true);
@@ -87,6 +94,13 @@ describe("parseKey", () => {
 		setKittyProtocolActive(false);
 	});
 
+	it("parses keypad operators as printable keys", () => {
+		setKittyProtocolActive(true);
+		expect(parseKey("\x1b[57410u")).toBe("/");
+		expect(parseKey("\x1b[57413;5u")).toBe("ctrl++");
+		setKittyProtocolActive(false);
+	});
+
 	it("parses modified NumLock keypad navigation keys consistently", () => {
 		setKittyProtocolActive(true);
 		expect(parseKey("\x1b[57400;133u")).toBe("ctrl+end");
@@ -103,6 +117,11 @@ describe("parseKey", () => {
 describe("extractPrintableText", () => {
 	it("extracts NumLock keypad digits from Kitty CSI-u sequences", () => {
 		expect(extractPrintableText("\x1b[57407;129u")).toBe("8");
+	});
+
+	it("extracts keypad operators from Kitty CSI-u sequences", () => {
+		expect(extractPrintableText("\x1b[57410u")).toBe("/");
+		expect(extractPrintableText("\x1b[57413u")).toBe("+");
 	});
 
 	it("does not treat modified NumLock keypad navigation keys as text", () => {
