@@ -248,6 +248,17 @@ const OPTION_PROVIDERS: Partial<Record<SettingPath, OptionProvider>> = {
 		{ value: "1000", label: "1000 lines" },
 		{ value: "5000", label: "5000 lines" },
 	],
+	// Todo auto-clear delay
+	"tasks.todoClearDelay": [
+		{ value: "0", label: "Instant" },
+		{ value: "60", label: "1 minute", description: "Default" },
+		{ value: "300", label: "5 minutes" },
+		{ value: "900", label: "15 minutes" },
+		{ value: "1800", label: "30 minutes" },
+		{ value: "3600", label: "1 hour" },
+		{ value: "-1", label: "Never" },
+	],
+
 	// Edit fuzzy threshold
 	"edit.fuzzyThreshold": [
 		{ value: "0.85", label: "0.85", description: "Lenient" },

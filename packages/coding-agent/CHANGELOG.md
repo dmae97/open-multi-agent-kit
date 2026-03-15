@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added automatic clearing of completed and abandoned todo tasks after ~1 minute
+
+### Changed
+
+- Strip already-completed tasks when restoring session from branch history
+
 ## [13.12.4] - 2026-03-15
 ### Added
 

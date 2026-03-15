@@ -548,6 +548,10 @@ export class EventController {
 				this.ctx.ui.requestRender();
 				break;
 			}
+
+			case "todo_auto_clear":
+				await this.ctx.reloadTodos();
+				break;
 		}
 	}
 

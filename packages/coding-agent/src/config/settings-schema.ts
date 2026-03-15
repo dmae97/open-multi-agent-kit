@@ -1292,6 +1292,17 @@ export const SETTINGS_SCHEMA = {
 		default: {} as Record<string, string>,
 	},
 
+	"tasks.todoClearDelay": {
+		type: "number",
+		default: 60,
+		ui: {
+			tab: "tasks",
+			label: "Todo auto-clear delay",
+			description: "How long to wait before removing completed/abandoned tasks from the list",
+			submenu: true,
+		},
+	},
+
 	// Skills
 	"skills.enabled": { type: "boolean", default: true },
 

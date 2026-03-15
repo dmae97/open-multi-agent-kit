@@ -154,7 +154,8 @@ export type AgentSessionEvent =
 	| { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
 	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
 	| { type: "ttsr_triggered"; rules: Rule[] }
-	| { type: "todo_reminder"; todos: TodoItem[]; attempt: number; maxAttempts: number };
+	| { type: "todo_reminder"; todos: TodoItem[]; attempt: number; maxAttempts: number }
+	| { type: "todo_auto_clear" };
 
 /** Listener function for agent session events */
 export type AgentSessionEventListener = (event: AgentSessionEvent) => void;
@@ -361,6 +362,7 @@ export class AgentSession {
 	// Todo completion reminder state
 	#todoReminderCount = 0;
 	#todoPhases: TodoPhase[] = [];
+	#todoClearTimers = new Map<string, Timer>();
 	#nextToolChoiceOverride: ToolChoice | undefined = undefined;
 
 	// Bash execution state
@@ -1534,6 +1536,7 @@ export class AgentSession {
 			logger.warn("Failed to emit session_shutdown event", { error: String(error) });
 		}
 		this.#cancelPostPromptTasks();
+		this.#clearTodoClearTimers();
 		const drained = await this.#asyncJobManager?.dispose({ timeoutMs: 3_000 });
 		const deliveryState = this.#asyncJobManager?.getDeliveryState();
 		if (drained === false && deliveryState) {
@@ -2538,10 +2541,17 @@ export class AgentSession {
 
 	setTodoPhases(phases: TodoPhase[]): void {
 		this.#todoPhases = this.#cloneTodoPhases(phases);
+		this.#scheduleTodoAutoClear(phases);
 	}
 
 	#syncTodoPhasesFromBranch(): void {
-		this.setTodoPhases(getLatestTodoPhasesFromEntries(this.sessionManager.getBranch()));
+		const phases = getLatestTodoPhasesFromEntries(this.sessionManager.getBranch());
+		// Strip completed/abandoned tasks — they were done in a previous run,
+		// so the auto-clear grace period has already elapsed.
+		for (const phase of phases) {
+			phase.tasks = phase.tasks.filter(t => t.status !== "completed" && t.status !== "abandoned");
+		}
+		this.setTodoPhases(phases.filter(p => p.tasks.length > 0));
 	}
 
 	#cloneTodoPhases(phases: TodoPhase[]): TodoPhase[] {
@@ -2555,6 +2565,68 @@ export class AgentSession {
 				notes: task.notes,
 			})),
 		}));
+	}
+
+	/** Schedule auto-removal of completed/abandoned tasks after a delay. */
+	#scheduleTodoAutoClear(phases: TodoPhase[]): void {
+		const delaySec = this.settings.get("tasks.todoClearDelay") ?? 60;
+		if (delaySec < 0) return; // "Never" — no auto-clear
+		const delayMs = delaySec * 1000;
+		const doneTaskIds = new Set<string>();
+		for (const phase of phases) {
+			for (const task of phase.tasks) {
+				if (task.status === "completed" || task.status === "abandoned") {
+					doneTaskIds.add(task.id);
+				}
+			}
+		}
+
+		// Cancel timers for tasks that are no longer done (e.g. status was reverted)
+		for (const [id, timer] of this.#todoClearTimers) {
+			if (!doneTaskIds.has(id)) {
+				clearTimeout(timer);
+				this.#todoClearTimers.delete(id);
+			}
+		}
+
+		// Schedule new timers for newly-done tasks
+		for (const id of doneTaskIds) {
+			if (this.#todoClearTimers.has(id)) continue;
+			if (delayMs === 0) {
+				// Instant — run synchronously on next microtask to batch removals
+				const timer = setTimeout(() => this.#runTodoAutoClear(id), 0);
+				this.#todoClearTimers.set(id, timer);
+			} else {
+				const timer = setTimeout(() => this.#runTodoAutoClear(id), delayMs);
+				this.#todoClearTimers.set(id, timer);
+			}
+		}
+	}
+
+	/** Remove a single completed task and notify the UI. */
+	#runTodoAutoClear(taskId: string): void {
+		this.#todoClearTimers.delete(taskId);
+		let removed = false;
+		for (const phase of this.#todoPhases) {
+			const idx = phase.tasks.findIndex(t => t.id === taskId);
+			if (idx !== -1 && (phase.tasks[idx].status === "completed" || phase.tasks[idx].status === "abandoned")) {
+				phase.tasks.splice(idx, 1);
+				removed = true;
+				break;
+			}
+		}
+		if (!removed) return;
+
+		// Remove empty phases
+		this.#todoPhases = this.#todoPhases.filter(p => p.tasks.length > 0);
+		this.#emit({ type: "todo_auto_clear" });
+	}
+
+	#clearTodoClearTimers(): void {
+		for (const timer of this.#todoClearTimers.values()) {
+			clearTimeout(timer);
+		}
+		this.#todoClearTimers.clear();
 	}
 
 	/**
