@@ -3,22 +3,24 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { discoverAndLoadExtensions } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/loader";
-import { getAgentDir, setAgentDir, TempDir } from "@oh-my-pi/pi-utils";
+import { getAgentDir, getPluginsDir, setAgentDir, TempDir } from "@oh-my-pi/pi-utils";
 
 describe("plugin extension discovery", () => {
 	let projectDir: TempDir;
-	let tempHomeDir = "";
-	let originalHome: string | undefined;
+	let tempXdgDataHome = "";
+	let originalXdgDataHome: string | undefined;
 	const originalAgentDir = getAgentDir();
 
 	beforeEach(() => {
 		projectDir = TempDir.createSync("@pi-plugin-ext-");
-		originalHome = process.env.HOME;
-		tempHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-plugin-home-"));
-		process.env.HOME = tempHomeDir;
-		setAgentDir(path.join(tempHomeDir, ".omp", "agent"));
+		originalXdgDataHome = process.env.XDG_DATA_HOME;
+		tempXdgDataHome = fs.mkdtempSync(path.join(os.tmpdir(), "pi-plugin-data-"));
+		fs.mkdirSync(path.join(tempXdgDataHome, "omp"), { recursive: true });
+		process.env.XDG_DATA_HOME = tempXdgDataHome;
+		// Rebuild path caches after changing XDG env so plugin discovery resolves into the temp root.
+		setAgentDir(originalAgentDir);
 
-		const pluginsDir = path.join(tempHomeDir, ".omp", "plugins");
+		const pluginsDir = getPluginsDir();
 		const pluginDir = path.join(pluginsDir, "node_modules", "@demo", "plugin");
 		fs.mkdirSync(path.join(pluginDir, "dist"), { recursive: true });
 		fs.writeFileSync(
@@ -53,11 +55,11 @@ describe("plugin extension discovery", () => {
 
 	afterEach(() => {
 		projectDir.removeSync();
-		fs.rmSync(tempHomeDir, { recursive: true, force: true });
-		if (originalHome === undefined) {
-			delete process.env.HOME;
+		fs.rmSync(tempXdgDataHome, { recursive: true, force: true });
+		if (originalXdgDataHome === undefined) {
+			delete process.env.XDG_DATA_HOME;
 		} else {
-			process.env.HOME = originalHome;
+			process.env.XDG_DATA_HOME = originalXdgDataHome;
 		}
 		setAgentDir(originalAgentDir);
 	});
