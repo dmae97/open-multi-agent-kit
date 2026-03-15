@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.12.1] - 2026-03-15
 ### Added
 
 - Support for move-only operations that preserve exact bytes including binary files
