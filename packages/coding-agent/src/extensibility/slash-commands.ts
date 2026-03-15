@@ -1,6 +1,10 @@
 import type { AutocompleteItem } from "@oh-my-pi/pi-tui";
 import { slashCommandCapability } from "../capability/slash-command";
-import { renderPromptTemplate } from "../config/prompt-templates";
+import {
+	appendInlineArgsFallback,
+	renderPromptTemplate,
+	templateUsesInlineArgPlaceholders,
+} from "../config/prompt-templates";
 import type { SlashCommand } from "../discovery";
 import { loadCapability } from "../discovery";
 import {
@@ -217,8 +221,10 @@ export function expandSlashCommand(text: string, fileCommands: FileSlashCommand[
 	if (fileCommand) {
 		const args = parseCommandArgs(argsString);
 		const argsText = args.join(" ");
+		const usesInlineArgPlaceholders = templateUsesInlineArgPlaceholders(fileCommand.content);
 		const substituted = substituteArgs(fileCommand.content, args);
-		return renderPromptTemplate(substituted, { args, ARGUMENTS: argsText, arguments: argsText });
+		const rendered = renderPromptTemplate(substituted, { args, ARGUMENTS: argsText, arguments: argsText });
+		return appendInlineArgsFallback(rendered, argsText, usesInlineArgPlaceholders);
 	}
 
 	return text;

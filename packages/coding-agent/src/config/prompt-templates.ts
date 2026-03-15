@@ -275,6 +275,28 @@ handlebars.registerHelper("hlinefull", (lineNum: unknown, content: unknown): str
 	return `${ref}:${text}`;
 });
 
+const INLINE_ARG_SHELL_PATTERN = /\$(?:ARGUMENTS|@(?:\[\d+(?::\d*)?\])?|\d+)/;
+const INLINE_ARG_TEMPLATE_PATTERN = /\{\{[\s\S]*?(?:\b(?:arguments|ARGUMENTS|args)\b|\barg\s+[^}]+)[\s\S]*?\}\}/;
+
+/**
+ * Keep the check source-level and cheap: if the template text contains any explicit
+ * inline-arg placeholder syntax, do not append the fallback text again.
+ */
+export function templateUsesInlineArgPlaceholders(templateSource: string): boolean {
+	return INLINE_ARG_SHELL_PATTERN.test(templateSource) || INLINE_ARG_TEMPLATE_PATTERN.test(templateSource);
+}
+
+export function appendInlineArgsFallback(
+	rendered: string,
+	argsText: string,
+	usesInlineArgPlaceholders: boolean,
+): string {
+	if (argsText.length === 0 || usesInlineArgPlaceholders) return rendered;
+	if (rendered.length === 0) return argsText;
+
+	return `${rendered}\n\n${argsText}`;
+}
+
 export function renderPromptTemplate(template: string, context: TemplateContext = {}): string {
 	const compiled = handlebars.compile(template, { noEscape: true, strict: false });
 	const rendered = compiled(context ?? {});
@@ -405,8 +427,10 @@ export function expandPromptTemplate(text: string, templates: PromptTemplate[]):
 	if (template) {
 		const args = parseCommandArgs(argsString);
 		const argsText = args.join(" ");
+		const usesInlineArgPlaceholders = templateUsesInlineArgPlaceholders(template.content);
 		const substituted = substituteArgs(template.content, args);
-		return renderPromptTemplate(substituted, { args, ARGUMENTS: argsText, arguments: argsText });
+		const rendered = renderPromptTemplate(substituted, { args, ARGUMENTS: argsText, arguments: argsText });
+		return appendInlineArgsFallback(rendered, argsText, usesInlineArgPlaceholders);
 	}
 
 	return text;
