@@ -4,7 +4,7 @@ import { type GeneratedProvider, getBundledModels } from "./models";
 import type { Api, Model, Provider } from "./types";
 import { isRecord } from "./utils";
 
-const DEFAULT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
 const NON_AUTHORITATIVE_RETRY_MS = 5 * 60 * 1000;
 
 /**
