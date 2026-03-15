@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.12.6] - 2026-03-15
 ### Changed
 
 - Updated llama.cpp model discovery to read context window from the `/props` endpoint's `default_generation_settings.n_ctx` field instead of using hardcoded 128000 default
