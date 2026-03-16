@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.12.8] - 2026-03-16
+
 ### Breaking Changes
 
 - Changed `SessionManager.create()` to require explicit `sessionDir` parameter instead of optional—callers must now pass `SessionManager.getDefaultSessionDir(cwd)` to use default behavior
