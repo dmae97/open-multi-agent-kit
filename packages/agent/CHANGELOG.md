@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.12.7] - 2026-03-16
+
 ### Added
 
 - Added overload for `prompt()` method accepting a string input with optional options parameter

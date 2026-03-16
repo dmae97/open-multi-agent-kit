@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.12.7] - 2026-03-16
 ### Changed
 
 - Modified `getSelectedMCPToolNames()` to return only active MCP tools in non-discovery sessions, filtering by tool registry availability
