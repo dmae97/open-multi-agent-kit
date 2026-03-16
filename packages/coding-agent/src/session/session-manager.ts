@@ -21,6 +21,8 @@ import {
 	isEnoent,
 	logger,
 	parseJsonlLenient,
+	pathIsWithin,
+	resolveEquivalentPath,
 	Snowflake,
 	toError,
 } from "@oh-my-pi/pi-utils";
@@ -375,16 +377,6 @@ function encodeLegacyAbsoluteSessionDirName(cwd: string): string {
 	return `--${resolvedCwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
 }
 
-function pathIsWithin(root: string, candidate: string): boolean {
-	const relative = path.relative(root, candidate);
-	return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
-
-function encodeRelativeSessionDirName(prefix: string, root: string, cwd: string): string {
-	const relative = path.relative(root, cwd).replace(/[/\\:]/g, "-");
-	return relative ? `${prefix}-${relative}` : prefix;
-}
-
 /**
  * Migrate old `--<home-encoded>-*--` session dirs to the new `-*` format.
  * Runs once on first access, best-effort.
@@ -634,32 +626,28 @@ export function buildSessionContext(
 }
 
 /**
- * Encode a cwd into a safe directory name for session storage.
- * Home-relative paths use single-dash format: `/Users/x/Projects/pi` → `-Projects-pi`
- * Temp-root paths use `-tmp-` prefixes: `/tmp/foo` → `-tmp-foo`
- * Other absolute paths keep the legacy double-dash format for compatibility.
- */
-function encodeSessionDirName(cwd: string): string {
-	const resolvedCwd = path.resolve(cwd);
-	const home = path.resolve(os.homedir());
-	if (pathIsWithin(home, resolvedCwd)) {
-		return encodeRelativeSessionDirName("-", home, resolvedCwd);
-	}
-	const tempRoot = path.resolve(os.tmpdir());
-	if (pathIsWithin(tempRoot, resolvedCwd)) {
-		return encodeRelativeSessionDirName("-tmp", tempRoot, resolvedCwd);
-	}
-	return encodeLegacyAbsoluteSessionDirName(resolvedCwd);
-}
-
-/**
  * Compute the default session directory for a cwd.
- * Encodes cwd into a safe directory name under ~/.omp/agent/sessions/.
+ * Classifies cwd by canonical location so symlink/alias paths resolve to the
+ * same home-relative or temp-root directory names as their real targets.
  */
 function getDefaultSessionDir(cwd: string, storage: SessionStorage): string {
 	const resolvedCwd = path.resolve(cwd);
+	const canonicalCwd = resolveEquivalentPath(resolvedCwd);
+	const home = resolveEquivalentPath(os.homedir());
+	const tempRoot = resolveEquivalentPath(os.tmpdir());
+	let encodedDirName: string;
+	if (pathIsWithin(home, canonicalCwd)) {
+		const relative = path.relative(home, canonicalCwd).replace(/[/\\:]/g, "-");
+		encodedDirName = relative ? `-${relative}` : "-";
+	} else if (pathIsWithin(tempRoot, canonicalCwd)) {
+		const relative = path.relative(tempRoot, canonicalCwd).replace(/[/\\:]/g, "-");
+		encodedDirName = relative ? `-tmp-${relative}` : "-tmp";
+	} else {
+		encodedDirName = encodeLegacyAbsoluteSessionDirName(canonicalCwd);
+	}
+
 	migrateHomeSessionDirs();
-	const sessionDir = path.join(getSessionsDir(), encodeSessionDirName(resolvedCwd));
+	const sessionDir = path.join(getSessionsDir(), encodedDirName);
 	migrateLegacyAbsoluteSessionDir(resolvedCwd, sessionDir);
 	storage.ensureDirSync(sessionDir);
 	return sessionDir;

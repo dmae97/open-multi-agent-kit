@@ -232,6 +232,36 @@ describe("SessionManager temp cwd session dirs", () => {
 		fs.rmSync(testAgentDir, { recursive: true, force: true });
 	});
 
+	it("stores symlink-equivalent home cwd sessions under home-relative directories", () => {
+		if (process.platform === "win32") return;
+
+		const projectsRoot = path.join(os.homedir(), "Projects");
+		fs.mkdirSync(projectsRoot, { recursive: true });
+		const realProjectDir = fs.mkdtempSync(path.join(projectsRoot, "omp-session-home-"));
+		const nestedDir = path.join(realProjectDir, "nested");
+		const aliasRoot = fs.mkdtempSync(path.join(os.tmpdir(), "omp-session-home-alias-"));
+		const homeAlias = path.join(aliasRoot, "home-link");
+
+		try {
+			fs.mkdirSync(nestedDir, { recursive: true });
+			fs.symlinkSync(os.homedir(), homeAlias, "dir");
+
+			const aliasedCwd = path.join(homeAlias, "Projects", path.basename(realProjectDir), "nested");
+			const session = SessionManager.create(aliasedCwd);
+			const sessionFile = session.getSessionFile();
+			if (!sessionFile) throw new Error("Expected session file path");
+
+			const expectedDir = path.join(
+				getSessionsDir(),
+				`-${path.relative(os.homedir(), fs.realpathSync(aliasedCwd)).replace(/[/\\:]/g, "-")}`,
+			);
+			expect(path.dirname(sessionFile)).toBe(expectedDir);
+		} finally {
+			fs.rmSync(aliasRoot, { recursive: true, force: true });
+			fs.rmSync(realProjectDir, { recursive: true, force: true });
+		}
+	});
+
 	it("stores temp-root cwd sessions under -tmp-prefixed directories", () => {
 		const tempCwd = path.join(testAgentDir, `temp-cwd-${Snowflake.next()}`);
 		fs.mkdirSync(tempCwd, { recursive: true });

@@ -1,7 +1,8 @@
 import * as os from "node:os";
+import * as path from "node:path";
 import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { TERMINAL } from "@oh-my-pi/pi-tui";
-import { formatDuration, formatNumber, getProjectDir } from "@oh-my-pi/pi-utils";
+import { formatDuration, formatNumber, getProjectDir, relativePathWithinRoot } from "@oh-my-pi/pi-utils";
 import { theme } from "../../../modes/theme/theme";
 import { shortenPath } from "../../../tools/render-utils";
 import { getContextUsageLevel, getContextUsageThemeColor } from "./context-thresholds";
@@ -15,6 +16,14 @@ export type { SegmentContext } from "./types";
 
 function withIcon(icon: string, text: string): string {
 	return icon ? `${icon} ${text}` : text;
+}
+
+function stripDisplayRoot(pwd: string): string {
+	for (const root of ["/work", path.join(os.homedir(), "Projects")]) {
+		const relative = relativePathWithinRoot(root, pwd);
+		if (relative) return relative;
+	}
+	return pwd;
 }
 
 function normalizePremiumRequests(value: number): number {
@@ -87,12 +96,11 @@ const pathSegment: StatusLineSegment = {
 
 		let pwd = getProjectDir();
 
+		if (opts.stripWorkPrefix !== false) {
+			pwd = stripDisplayRoot(pwd);
+		}
 		if (opts.abbreviate !== false) {
 			pwd = shortenPath(pwd);
-		}
-		if (opts.stripWorkPrefix !== false) {
-			if (pwd.startsWith("/work/")) pwd = pwd.slice(6);
-			else if (pwd.startsWith("~/Projects/")) pwd = pwd.slice(11);
 		}
 
 		const maxLen = opts.maxLength ?? 40;

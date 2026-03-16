@@ -47,6 +47,35 @@ function standardizeMacOSPath(p: string): string {
 	return p;
 }
 
+export function resolveEquivalentPath(inputPath: string): string {
+	const resolvedPath = path.resolve(inputPath);
+	try {
+		return fs.realpathSync(resolvedPath);
+	} catch {
+		return resolvedPath;
+	}
+}
+
+export function normalizePathForComparison(inputPath: string): string {
+	const resolvedPath = resolveEquivalentPath(inputPath);
+	return process.platform === "win32" ? resolvedPath.toLowerCase() : resolvedPath;
+}
+
+export function pathIsWithin(root: string, candidate: string): boolean {
+	const normalizedRoot = normalizePathForComparison(root);
+	const normalizedCandidate = normalizePathForComparison(candidate);
+	const relative = path.relative(normalizedRoot, normalizedCandidate);
+	return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+export function relativePathWithinRoot(root: string, candidate: string): string | null {
+	if (!pathIsWithin(root, candidate)) return null;
+	const normalizedRoot = normalizePathForComparison(root);
+	const normalizedCandidate = normalizePathForComparison(candidate);
+	const relative = path.relative(normalizedRoot, normalizedCandidate);
+	return relative || null;
+}
+
 let projectDir = standardizeMacOSPath(process.cwd());
 
 /** Get the project directory. */

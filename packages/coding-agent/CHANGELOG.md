@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added support for quoted paths in grep, ast_grep, and find tools to handle directory names with spaces
@@ -8,7 +9,12 @@
 
 ### Changed
 
+- Improved status line path display to strip display roots using canonical path resolution, correctly handling symlink aliases to home and Projects directories
 - Improved error messaging in ast_grep when no matches are found with parse errors, now suggests narrowing `path`/`glob` or setting `lang` to resolve mis-scoped queries
+
+### Fixed
+
+- Fixed session directory resolution to correctly handle symlink-equivalent paths, ensuring aliased home and temp directories resolve to the same session storage location as their real targets
 
 ## [13.12.7] - 2026-03-16
 ### Changed
