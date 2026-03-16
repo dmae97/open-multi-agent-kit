@@ -5,6 +5,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import type { AgentTool } from "@oh-my-pi/pi-agent-core";
 import { $env, getGpuCachePath, getProjectDir, hasFsCode, isEnoent, logger } from "@oh-my-pi/pi-utils";
 import { $ } from "bun";
 import { contextFileCapability } from "./capability/context-file";
@@ -315,11 +316,36 @@ export async function loadSystemPromptFiles(options: LoadContextFilesOptions = {
 	return parts.join("\n\n");
 }
 
+export interface SystemPromptToolMetadata {
+	label: string;
+	description: string;
+}
+
+export function buildSystemPromptToolMetadata(
+	tools: Map<string, AgentTool>,
+	overrides: Partial<Record<string, Partial<SystemPromptToolMetadata>>> = {},
+): Map<string, SystemPromptToolMetadata> {
+	return new Map(
+		Array.from(tools.entries(), ([name, tool]) => {
+			const toolRecord = tool as AgentTool & { label?: string; description?: string };
+			const override = overrides[name];
+			return [
+				name,
+				{
+					label: override?.label ?? (typeof toolRecord.label === "string" ? toolRecord.label : ""),
+					description:
+						override?.description ?? (typeof toolRecord.description === "string" ? toolRecord.description : ""),
+				},
+			] as const;
+		}),
+	);
+}
+
 export interface BuildSystemPromptOptions {
 	/** Custom system prompt (replaces default). */
 	customPrompt?: string;
 	/** Tools to include in prompt. */
-	tools?: Map<string, { description: string; label: string }>;
+	tools?: Map<string, SystemPromptToolMetadata>;
 	/** Tool names to include in prompt. */
 	toolNames?: string[];
 	/** Text to append to system prompt. */
@@ -338,6 +364,10 @@ export interface BuildSystemPromptOptions {
 	rules?: Array<{ name: string; description?: string; path: string; globs?: string[] }>;
 	/** Intent field name injected into every tool schema. If set, explains the field in the prompt. */
 	intentField?: string;
+	/** Whether MCP tool discovery is active for this prompt build. */
+	mcpDiscoveryMode?: boolean;
+	/** Discoverable MCP server summaries to advertise when discovery mode is active. */
+	mcpDiscoveryServerSummaries?: string[];
 	/** Encourage the agent to delegate via tasks unless changes are trivial. */
 	eagerTasks?: boolean;
 }
@@ -360,6 +390,8 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		skills: providedSkills,
 		rules,
 		intentField,
+		mcpDiscoveryMode = false,
+		mcpDiscoveryServerSummaries = [],
 		eagerTasks = false,
 	} = options;
 	const resolvedCwd = cwd ?? getProjectDir();
@@ -494,6 +526,9 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		cwd: promptCwd,
 		intentTracing: !!intentField,
 		intentField: intentField ?? "",
+		mcpDiscoveryMode,
+		hasMCPDiscoveryServers: mcpDiscoveryServerSummaries.length > 0,
+		mcpDiscoveryServerSummaries,
 		eagerTasks,
 	};
 	return renderPromptTemplate(resolvedCustomPrompt ? customSystemPromptTemplate : systemPromptTemplate, data);

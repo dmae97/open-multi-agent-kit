@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Modified `getSelectedMCPToolNames()` to return only active MCP tools in non-discovery sessions, filtering by tool registry availability
+- Updated `search_tool_bm25` tool instantiation to conditionally create the tool only when MCP discovery mode is enabled and execution hooks are available
+- Changed search results to exclude already-selected MCP tools before applying the limit parameter, allowing discovery of additional tools in subsequent searches
+
+### Fixed
+
+- Fixed MCP tool selection tracking to properly distinguish between discovery-enabled and non-discovery sessions, preventing orphaned tool selections after manual deactivation
 
 ## [13.12.6] - 2026-03-15
 ### Changed

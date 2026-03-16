@@ -155,6 +155,13 @@ You **MUST** use the following tools, as effectively as possible, to complete th
 {{/each}}
 {{/if}}
 
+{{#if mcpDiscoveryMode}}
+### MCP tool discovery
+
+Some MCP tools are intentionally hidden from the initial tool list.
+{{#if hasMCPDiscoveryServers}}Discoverable MCP servers in this session: {{#list mcpDiscoveryServerSummaries join=", "}}{{this}}{{/list}}.{{/if}}
+If the task may involve external systems, SaaS APIs, chat, tickets, databases, deployments, or other non-local integrations, you **SHOULD** call `search_tool_bm25` before concluding no such tool exists.
+{{/if}}
 ## Precedence
 {{#ifAny (includes tools "python") (includes tools "bash")}}
 Pick the right tool for the job:

@@ -217,6 +217,11 @@ async function runLoop(
 				pendingMessages = [];
 			}
 
+			// Refresh prompt/tool context from live state before each model call
+			if (config.syncContextBeforeModelCall) {
+				await config.syncContextBeforeModelCall(currentContext);
+			}
+
 			// Stream assistant response
 			const message = await streamAssistantResponse(currentContext, config, signal, stream, streamFn);
 			newMessages.push(message);

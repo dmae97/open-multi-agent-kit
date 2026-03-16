@@ -1188,6 +1188,16 @@ export const SETTINGS_SCHEMA = {
 		ui: { tab: "tools", label: "MCP Project Config", description: "Load .mcp.json/mcp.json from project root" },
 	},
 
+	"mcp.discoveryMode": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tools",
+			label: "MCP Tool Discovery",
+			description: "Hide MCP tools by default and expose them through a tool discovery tool",
+		},
+	},
+
 	"mcp.notifications": {
 		type: "boolean",
 		default: false,
@@ -1463,9 +1473,6 @@ export const SETTINGS_SCHEMA = {
 		ui: { tab: "providers", label: "Exa Websets", description: "Webset management and enrichment tools" },
 	},
 
-	// ────────────────────────────────────────────────────────────────────────
-	// Advanced settings (no UI)
-	// ────────────────────────────────────────────────────────────────────────
 	"commit.mapReduceEnabled": { type: "boolean", default: true },
 
 	"commit.mapReduceMinFiles": { type: "number", default: 4 },

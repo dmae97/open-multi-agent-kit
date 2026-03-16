@@ -23,6 +23,25 @@ function createSettingsWithOverrides(overrides: Partial<Record<SettingPath, unkn
 	});
 }
 
+function createDiscoverySessionHooks(): Partial<ToolSession> {
+	const selected: string[] = [];
+	return {
+		isMCPDiscoveryEnabled: () => true,
+		getDiscoverableMCPTools: () => [],
+		getSelectedMCPToolNames: () => [...selected],
+		activateDiscoveredMCPTools: async toolNames => {
+			const activated: string[] = [];
+			for (const name of toolNames) {
+				if (!selected.includes(name)) {
+					selected.push(name);
+					activated.push(name);
+				}
+			}
+			return activated;
+		},
+	};
+}
+
 describe("createTools", () => {
 	it("creates all builtin tools by default", async () => {
 		const session = createTestSession();
@@ -177,6 +196,40 @@ describe("createTools", () => {
 
 		expect(names).toContain("inspect_image");
 	});
+
+	it("excludes search_tool_bm25 by default", async () => {
+		const session = createTestSession();
+		const tools = await createTools(session);
+		const names = tools.map(t => t.name);
+
+		expect(names).not.toContain("search_tool_bm25");
+	});
+
+	it("excludes search_tool_bm25 when MCP tool discovery lacks execution hooks", async () => {
+		const session = createTestSession({
+			settings: createSettingsWithOverrides({
+				"mcp.discoveryMode": true,
+			}),
+		});
+		const tools = await createTools(session);
+		const names = tools.map(t => t.name);
+
+		expect(names).not.toContain("search_tool_bm25");
+	});
+
+	it("includes search_tool_bm25 when MCP tool discovery is enabled and executable", async () => {
+		const session = createTestSession({
+			settings: createSettingsWithOverrides({
+				"mcp.discoveryMode": true,
+			}),
+			...createDiscoverySessionHooks(),
+		});
+		const tools = await createTools(session);
+		const names = tools.map(t => t.name);
+
+		expect(names).toContain("search_tool_bm25");
+	});
+
 	it("HIDDEN_TOOLS contains review tools", () => {
 		expect(Object.keys(HIDDEN_TOOLS).sort()).toEqual([
 			"exit_plan_mode",

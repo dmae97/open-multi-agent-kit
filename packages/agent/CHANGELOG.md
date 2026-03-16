@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed
+
+- Fixed stale forced toolChoice being passed to provider after tools are refreshed mid-turn
 
 ## [13.9.16] - 2026-03-10
 ### Added

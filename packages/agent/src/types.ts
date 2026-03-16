@@ -115,6 +115,12 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 	getToolContext?: (toolCall?: ToolCallContext) => AgentToolContext | undefined;
 
 	/**
+	 * Refreshes prompt/tool context from live session state before each model call.
+	 * Use this when tool availability or the system prompt can change mid-turn.
+	 */
+	syncContextBeforeModelCall?: (context: AgentContext) => void | Promise<void>;
+
+	/**
 	 * Optional transform applied to tool call arguments before execution.
 	 * Use for deobfuscating secrets or rewriting arguments.
 	 */

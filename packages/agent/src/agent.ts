@@ -39,6 +39,24 @@ function defaultConvertToLlm(messages: AgentMessage[]): Message[] {
 	return messages.filter(m => m.role === "user" || m.role === "assistant" || m.role === "toolResult");
 }
 
+function refreshToolChoiceForActiveTools(
+	toolChoice: ToolChoice | undefined,
+	tools: AgentContext["tools"],
+): ToolChoice | undefined {
+	if (!toolChoice || typeof toolChoice === "string") {
+		return toolChoice;
+	}
+
+	const toolName =
+		toolChoice.type === "tool"
+			? toolChoice.name
+			: "function" in toolChoice
+				? toolChoice.function.name
+				: toolChoice.name;
+
+	return tools.some(tool => tool.name === toolName) ? toolChoice : undefined;
+}
+
 export class AgentBusyError extends Error {
 	constructor(
 		message: string = "Agent is already processing. Use steer() or followUp() to queue messages, or wait for completion.",
@@ -707,6 +725,9 @@ export class Agent {
 					}
 				: undefined;
 
+		const getToolChoice = () =>
+			this.#getToolChoice?.() ?? refreshToolChoiceForActiveTools(options?.toolChoice, this.#state.tools);
+
 		const config: AgentLoopConfig = {
 			model,
 			reasoning,
@@ -724,17 +745,23 @@ export class Agent {
 			maxRetryDelayMs: this.#maxRetryDelayMs,
 			kimiApiFormat: this.#kimiApiFormat,
 			preferWebsockets: this.#preferWebsockets,
-			toolChoice: options?.toolChoice,
 			convertToLlm: this.#convertToLlm,
 			transformContext: this.#transformContext,
 			onPayload: this.#onPayload,
 			getApiKey: this.getApiKey,
 			getToolContext: this.#getToolContext,
+			syncContextBeforeModelCall: async context => {
+				if (this.#listeners.size > 0) {
+					await Bun.sleep(0);
+				}
+				context.systemPrompt = this.#state.systemPrompt;
+				context.tools = this.#state.tools;
+			},
 			cursorExecHandlers: this.#cursorExecHandlers,
 			cursorOnToolResult,
 			transformToolCallArguments: this.#transformToolCallArguments,
 			intentTracing: this.#intentTracing,
-			getToolChoice: this.#getToolChoice,
+			getToolChoice,
 			getSteeringMessages: async () => {
 				if (skipInitialSteeringPoll) {
 					skipInitialSteeringPoll = false;
