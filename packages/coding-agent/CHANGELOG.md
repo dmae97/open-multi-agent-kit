@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added support for quoted paths in grep, ast_grep, and find tools to handle directory names with spaces
+- Added `normalizePathLikeInput` utility function to consistently handle quoted and whitespace-trimmed path inputs
+
+### Changed
+
+- Improved error messaging in ast_grep when no matches are found with parse errors, now suggests narrowing `path`/`glob` or setting `lang` to resolve mis-scoped queries
 
 ## [13.12.7] - 2026-03-16
 ### Changed

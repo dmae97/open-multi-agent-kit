@@ -17,6 +17,7 @@ import type { OutputMeta } from "./output-meta";
 import {
 	combineSearchGlobs,
 	hasGlobPathChars,
+	normalizePathLikeInput,
 	parseSearchPath,
 	resolveMultiSearchPath,
 	resolveToCwd,
@@ -110,8 +111,8 @@ export class AstEditTool implements AgentTool<typeof astEditSchema, AstEditToolD
 			};
 			let searchPath: string | undefined;
 			let scopePath: string | undefined;
-			let globFilter = params.glob?.trim() || undefined;
-			const rawPath = params.path?.trim();
+			let globFilter = params.glob ? normalizePathLikeInput(params.glob) || undefined : undefined;
+			const rawPath = params.path ? normalizePathLikeInput(params.path) || undefined : undefined;
 			if (rawPath) {
 				const internalRouter = this.session.internalRouter;
 				if (internalRouter?.canHandle(rawPath)) {

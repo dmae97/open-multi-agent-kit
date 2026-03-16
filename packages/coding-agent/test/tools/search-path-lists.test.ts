@@ -108,6 +108,47 @@ describe("search tool path lists", () => {
 		expect(details?.scopePath).toBe("folder with spaces");
 	});
 
+	it("grep accepts quoted directory paths", async () => {
+		const tools = await createTools(createTestSession(tempDir));
+		const tool = tools.find(entry => entry.name === "grep");
+		expect(tool).toBeDefined();
+		if (!tool) throw new Error("Missing grep tool");
+
+		const result = await tool.execute("grep-quoted-path", {
+			pattern: "shared-needle",
+			path: '"packages/"',
+		});
+		const text = getText(result);
+		const details = result.details as { fileCount?: number; scopePath?: string } | undefined;
+
+		expect(text).toContain("grep.txt");
+		expect(text).not.toContain("other");
+		expect(details?.fileCount).toBe(1);
+		expect(details?.scopePath).toBe("packages");
+	});
+
+	it("ast_grep accepts quoted path and glob filters", async () => {
+		const tools = await createTools(createTestSession(tempDir));
+		const tool = tools.find(entry => entry.name === "ast_grep");
+		expect(tool).toBeDefined();
+		if (!tool) throw new Error("Missing ast_grep tool");
+
+		const result = await tool.execute("ast-grep-quoted-path", {
+			pat: ["providerOptions"],
+			sel: "identifier",
+			lang: "typescript",
+			path: '"packages/"',
+			glob: '"**/*.ts"',
+		});
+		const text = getText(result);
+		const details = result.details as { fileCount?: number; scopePath?: string } | undefined;
+
+		expect(text).toContain("ast.ts");
+		expect(text).not.toContain("other");
+		expect(details?.fileCount).toBe(1);
+		expect(details?.scopePath).toBe("packages");
+	});
+
 	it("ast_grep accepts comma-separated path lists", async () => {
 		const tools = await createTools(createTestSession(tempDir));
 		const tool = tools.find(entry => entry.name === "ast_grep");
@@ -193,6 +234,25 @@ describe("search tool path lists", () => {
 		expect(text).not.toContain("other/ast.ts");
 		expect(details?.fileCount).toBe(6);
 		expect(details?.scopePath).toBe("apps/, packages/, phases/");
+	});
+
+	it("find accepts quoted directory patterns", async () => {
+		const tools = await createTools(createTestSession(tempDir));
+		const tool = tools.find(entry => entry.name === "find");
+		expect(tool).toBeDefined();
+		if (!tool) throw new Error("Missing find tool");
+
+		const result = await tool.execute("find-quoted-pattern", {
+			pattern: '"packages/"',
+		});
+		const text = getText(result);
+		const details = result.details as { fileCount?: number; scopePath?: string } | undefined;
+
+		expect(text).toContain("ast.ts");
+		expect(text).toContain("grep.txt");
+		expect(text).not.toContain("other/ast.ts");
+		expect(details?.fileCount).toBe(2);
+		expect(details?.scopePath).toBe("packages");
 	});
 
 	it("grep accepts bare space-separated directory names (no trailing slash)", async () => {

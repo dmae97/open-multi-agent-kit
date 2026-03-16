@@ -17,6 +17,7 @@ import type { OutputMeta } from "./output-meta";
 import {
 	combineSearchGlobs,
 	hasGlobPathChars,
+	normalizePathLikeInput,
 	parseSearchPath,
 	resolveMultiSearchPath,
 	resolveToCwd,
@@ -98,8 +99,8 @@ export class AstGrepTool implements AgentTool<typeof astGrepSchema, AstGrepToolD
 			};
 			let searchPath: string | undefined;
 			let scopePath: string | undefined;
-			let globFilter = params.glob?.trim() || undefined;
-			const rawPath = params.path?.trim();
+			let globFilter = params.glob ? normalizePathLikeInput(params.glob) || undefined : undefined;
+			const rawPath = params.path ? normalizePathLikeInput(params.path) || undefined : undefined;
 			if (rawPath) {
 				const internalRouter = this.session.internalRouter;
 				if (internalRouter?.canHandle(rawPath)) {
@@ -194,10 +195,13 @@ export class AstGrepTool implements AgentTool<typeof astGrepSchema, AstGrepToolD
 			};
 
 			if (result.matches.length === 0) {
+				const noMatchMessage = dedupedParseErrors.length
+					? "No matches found. Parse issues mean the query may be mis-scoped; narrow `path`/`glob` or set `lang` before concluding absence."
+					: "No matches found";
 				const parseMessage = dedupedParseErrors.length
 					? `\n${formatParseErrors(dedupedParseErrors).join("\n")}`
 					: "";
-				return toolResult(baseDetails).text(`No matches found${parseMessage}`).done();
+				return toolResult(baseDetails).text(`${noMatchMessage}${parseMessage}`).done();
 			}
 
 			const useHashLines = resolveFileDisplayMode(this.session).hashLines;
@@ -343,6 +347,12 @@ export const astGrepToolRenderer = {
 			const header = renderStatusLine({ icon: "warning", title: "AST Grep", description, meta }, uiTheme);
 			const lines = [header, formatEmptyMessage("No matches found", uiTheme)];
 			if (details?.parseErrors?.length) {
+				lines.push(
+					uiTheme.fg(
+						"warning",
+						"Query may be mis-scoped; narrow `path`/`glob` or set `lang` before concluding absence",
+					),
+				);
 				const capped = details.parseErrors.slice(0, PARSE_ERRORS_LIMIT);
 				for (const err of capped) {
 					lines.push(uiTheme.fg("warning", `  - ${err}`));

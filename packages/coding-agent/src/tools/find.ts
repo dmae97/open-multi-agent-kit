@@ -24,7 +24,7 @@ import {
 import type { ToolSession } from ".";
 import { applyListLimit } from "./list-limit";
 import { formatFullOutputReference, type OutputMeta } from "./output-meta";
-import { parseFindPattern, resolveMultiFindPattern, resolveToCwd } from "./path-utils";
+import { normalizePathLikeInput, parseFindPattern, resolveMultiFindPattern, resolveToCwd } from "./path-utils";
 import { formatCount, formatEmptyMessage, formatErrorMessage, PREVIEW_LIMITS } from "./render-utils";
 import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";
@@ -103,7 +103,7 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 				const relative = path.relative(this.session.cwd, targetPath).replace(/\\/g, "/");
 				return relative.length === 0 ? "." : relative;
 			};
-			const normalizedPattern = pattern.trim().replace(/\\/g, "/");
+			const normalizedPattern = normalizePathLikeInput(pattern).replace(/\\/g, "/");
 			if (!normalizedPattern) {
 				throw new ToolError("Pattern must not be empty");
 			}

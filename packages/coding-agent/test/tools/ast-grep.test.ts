@@ -38,6 +38,7 @@ describe("ast_grep parse errors", () => {
 
 			expect(details?.matchCount).toBe(0);
 			expect(text).toContain("No matches found");
+			expect(text).toContain("Parse issues mean the query may be mis-scoped");
 			expect(details?.parseErrors).toHaveLength(1);
 			expect(details?.parseErrors?.[0]).toContain("broken.ts: parse error (syntax tree contains error nodes)");
 			expect(details?.parseErrors?.[0]).not.toContain("someUnlikelyCall($A):");

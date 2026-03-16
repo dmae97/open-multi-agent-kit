@@ -19,6 +19,7 @@ import { formatFullOutputReference, type OutputMeta } from "./output-meta";
 import {
 	combineSearchGlobs,
 	hasGlobPathChars,
+	normalizePathLikeInput,
 	parseSearchPath,
 	resolveMultiSearchPath,
 	resolveToCwd,
@@ -119,10 +120,10 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 			};
 			let searchPath: string;
 			let scopePath: string;
-			let globFilter = glob?.trim() || undefined;
+			let globFilter = glob ? normalizePathLikeInput(glob) || undefined : undefined;
 			const internalRouter = this.session.internalRouter;
 			if (searchDir?.trim()) {
-				const rawPath = searchDir.trim();
+				const rawPath = normalizePathLikeInput(searchDir);
 				if (internalRouter?.canHandle(rawPath)) {
 					if (hasGlobPathChars(rawPath)) {
 						throw new ToolError(`Glob patterns are not supported for internal URLs: ${rawPath}`);

@@ -122,6 +122,10 @@ export function stripOuterDoubleQuotes(input: string): string {
 	return input.startsWith('"') && input.endsWith('"') && input.length > 1 ? input.slice(1, -1) : input;
 }
 
+export function normalizePathLikeInput(input: string): string {
+	return stripOuterDoubleQuotes(input.trim());
+}
+
 const GLOB_PATH_CHARS = ["*", "?", "[", "{"] as const;
 
 export function hasGlobPathChars(filePath: string): boolean {
