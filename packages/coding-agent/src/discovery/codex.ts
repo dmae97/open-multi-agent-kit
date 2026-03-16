@@ -197,6 +197,10 @@ function extractMCPServersFromToml(toml: Record<string, unknown>): Record<string
 		}
 		// Note: validation of transport vs endpoint is handled by mcpCapability.validate()
 
+		// Map Codex tool_timeout_sec (seconds) to MCPServer timeout (milliseconds)
+		if (typeof config.tool_timeout_sec === "number" && config.tool_timeout_sec > 0) {
+			server.timeout = config.tool_timeout_sec * 1000;
+		}
 		result[name] = server;
 	}
 

@@ -54,6 +54,7 @@ function parseServerConfig(
 			url: server.url as string | undefined,
 			headers: server.headers as Record<string, string> | undefined,
 			transport: server.type as "stdio" | "sse" | "http" | undefined,
+			timeout: typeof server.timeout === "number" ? server.timeout : undefined,
 			_source: createSourceMeta(PROVIDER_ID, path, scope),
 		},
 	};

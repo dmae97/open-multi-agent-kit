@@ -110,6 +110,7 @@ async function loadMCPFromSettings(
 			transport: ["stdio", "sse", "http"].includes(raw.type as string)
 				? (raw.type as "stdio" | "sse" | "http")
 				: undefined,
+			timeout: typeof raw.timeout === "number" ? raw.timeout : undefined,
 			_source: createSourceMeta(PROVIDER_ID, path, level),
 		} as MCPServer);
 	}

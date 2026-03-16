@@ -89,6 +89,7 @@ async function loadMCPServers(ctx: LoadContext): Promise<LoadResult<MCPServer>> 
 			const serverConfig = config as Record<string, unknown>;
 			return {
 				name,
+				timeout: typeof serverConfig.timeout === "number" ? serverConfig.timeout : undefined,
 				command: serverConfig.command as string | undefined,
 				args: serverConfig.args as string[] | undefined,
 				env: serverConfig.env as Record<string, string> | undefined,

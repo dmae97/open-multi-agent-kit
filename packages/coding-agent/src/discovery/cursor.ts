@@ -65,6 +65,7 @@ function parseMCPServers(
 			transport: ["stdio", "sse", "http"].includes(serverConfig.type as string)
 				? (serverConfig.type as "stdio" | "sse" | "http")
 				: undefined,
+			timeout: typeof serverConfig.timeout === "number" ? serverConfig.timeout : undefined,
 			_source: createSourceMeta(PROVIDER_ID, path, level),
 		});
 	}

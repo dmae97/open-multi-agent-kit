@@ -94,6 +94,7 @@ async function loadMCPConfig(
 			transport: ["stdio", "sse", "http"].includes(expanded.transport as string)
 				? (expanded.transport as "stdio" | "sse" | "http")
 				: undefined,
+			timeout: typeof expanded.timeout === "number" ? expanded.timeout : undefined,
 			_source: createSourceMeta(PROVIDER_ID, path, level),
 		};
 
