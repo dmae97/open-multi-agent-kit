@@ -13,6 +13,10 @@ async function loadStandaloneMcpConfig(cwd: string): Promise<MCPServer[]> {
 	return result.items;
 }
 
+function envPlaceholder(name: string): string {
+	return `\${${name}}`;
+}
+
 describe("standalone mcp.json oauth env expansion", () => {
 	let tempDir = "";
 	const originalEnv = {
@@ -55,21 +59,21 @@ describe("standalone mcp.json oauth env expansion", () => {
 			JSON.stringify({
 				mcpServers: {
 					figma: {
-						url: "${PI_MCP_URL}/mcp",
-						headers: { Authorization: "${PI_MCP_HEADER}" },
-						env: { MCP_VALUE: "${PI_MCP_ENV}" },
+						url: `${envPlaceholder("PI_MCP_URL")}/mcp`,
+						headers: { Authorization: envPlaceholder("PI_MCP_HEADER") },
+						env: { MCP_VALUE: envPlaceholder("PI_MCP_ENV") },
 						auth: {
 							type: "oauth",
-							tokenUrl: "${PI_OAUTH_TOKEN_URL}",
-							clientId: "${PI_OAUTH_CLIENT_ID}",
-							clientSecret: "${PI_OAUTH_CLIENT_SECRET}",
+							tokenUrl: envPlaceholder("PI_OAUTH_TOKEN_URL"),
+							clientId: envPlaceholder("PI_OAUTH_CLIENT_ID"),
+							clientSecret: envPlaceholder("PI_OAUTH_CLIENT_SECRET"),
 						},
 						oauth: {
-							clientId: "${PI_OAUTH_CLIENT_ID}",
-							clientSecret: "${PI_OAUTH_CLIENT_SECRET}",
-							redirectUri: "${PI_OAUTH_REDIRECT_URI}",
+							clientId: envPlaceholder("PI_OAUTH_CLIENT_ID"),
+							clientSecret: envPlaceholder("PI_OAUTH_CLIENT_SECRET"),
+							redirectUri: envPlaceholder("PI_OAUTH_REDIRECT_URI"),
 							callbackPort: 4317,
-							callbackPath: "${PI_OAUTH_CALLBACK_PATH}",
+							callbackPath: envPlaceholder("PI_OAUTH_CALLBACK_PATH"),
 						},
 					},
 				},
@@ -104,8 +108,8 @@ describe("standalone mcp.json oauth env expansion", () => {
 					slack: {
 						url: "https://slack.example.com/mcp",
 						oauth: {
-							redirectUri: "${PI_OAUTH_REDIRECT_URI}",
-							callbackPath: "${PI_OAUTH_CALLBACK_PATH}",
+							redirectUri: envPlaceholder("PI_OAUTH_REDIRECT_URI"),
+							callbackPath: envPlaceholder("PI_OAUTH_CALLBACK_PATH"),
 						},
 					},
 				},
