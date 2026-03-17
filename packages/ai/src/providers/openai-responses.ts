@@ -25,6 +25,7 @@ import {
 	getOpenAIResponsesHistoryItems,
 	getOpenAIResponsesHistoryPayload,
 	resolveCacheRetention,
+	sanitizeOpenAIResponsesHistoryItemsForReplay,
 } from "../utils";
 import { AssistantMessageEventStream } from "../utils/event-stream";
 import { finalizeErrorMessage, type RawHttpRequestDump } from "../utils/http-inspector";
@@ -362,11 +363,9 @@ function convertConversationMessages(
 	for (const msg of transformedMessages) {
 		if (msg.role === "user" || msg.role === "developer") {
 			const providerPayload = (msg as { providerPayload?: AssistantMessage["providerPayload"] }).providerPayload;
-			const historyItems = getOpenAIResponsesHistoryItems(providerPayload, model.provider) as
-				| Array<ResponseInput[number]>
-				| undefined;
+			const historyItems = getOpenAIResponsesHistoryItems(providerPayload, model.provider);
 			if (historyItems) {
-				messages.push(...historyItems);
+				messages.push(...sanitizeOpenAIResponsesHistoryItemsForReplay(historyItems));
 				knownCallIds = collectKnownCallIds(messages);
 				msgIndex++;
 				continue;
@@ -381,12 +380,13 @@ function convertConversationMessages(
 				model.provider,
 				assistantMsg.provider,
 			);
-			const historyItems = providerPayload?.items as Array<ResponseInput[number]> | undefined;
+			const historyItems = providerPayload?.items;
 			if (historyItems) {
+				const sanitizedHistoryItems = sanitizeOpenAIResponsesHistoryItemsForReplay(historyItems);
 				if (providerPayload?.dt) {
-					messages.push(...historyItems);
+					messages.push(...sanitizedHistoryItems);
 				} else {
-					messages.splice(0, messages.length, ...historyItems);
+					messages.splice(0, messages.length, ...sanitizedHistoryItems);
 				}
 				knownCallIds = collectKnownCallIds(messages);
 				msgIndex++;

@@ -3,7 +3,7 @@ import { getBundledModel } from "@oh-my-pi/pi-ai/models";
 import { streamOpenAICodexResponses } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
 import { streamOpenAIResponses } from "@oh-my-pi/pi-ai/providers/openai-responses";
 import type { Context, Model } from "@oh-my-pi/pi-ai/types";
-import { createOpenAIResponsesHistoryPayload } from "../src/utils";
+import { createOpenAIResponsesHistoryPayload, truncateResponseItemId } from "../src/utils";
 
 function createAbortedSignal(): AbortSignal {
 	const controller = new AbortController();
@@ -169,6 +169,13 @@ function containsEncryptedReasoning(input: unknown[] | undefined): boolean {
 	});
 }
 
+function findResponsesInputItem(input: unknown[] | undefined, type: string): Record<string, unknown> | undefined {
+	return input?.find(item => {
+		if (!item || typeof item !== "object") return false;
+		return (item as { type?: unknown }).type === type;
+	}) as Record<string, unknown> | undefined;
+}
+
 describe("OpenAI responses history payload", () => {
 	it("inlines preserved replacement history for openai-responses", async () => {
 		const model = getBundledModel("openai", "gpt-5-mini") as Model<"openai-responses">;
@@ -206,9 +213,9 @@ describe("OpenAI responses history payload", () => {
 		const payload = (await captureResponsesPayload(model, incrementalContext)) as { input?: unknown[] };
 		expect(payload.input).toEqual([
 			{ role: "user", content: [{ type: "input_text", text: "first question" }] },
-			...incrementalItems1,
+			...incrementalItems1.map(({ id: _id, ...item }) => item),
 			{ role: "user", content: [{ type: "input_text", text: "second question" }] },
-			...incrementalItems2,
+			...incrementalItems2.map(({ id: _id, ...item }) => item),
 			{ role: "user", content: [{ type: "input_text", text: "third question" }] },
 		]);
 	});
@@ -296,6 +303,75 @@ describe("OpenAI responses history payload", () => {
 			},
 			{ role: "user", content: [{ type: "input_text", text: "follow-up" }] },
 		]);
+	});
+
+	it("strips replay-only ids and item references while preserving paired call_id values", async () => {
+		const opaqueReasoningId = `item_${"copilot/reasoning+token=".repeat(8)}`;
+		const opaqueMessageId = `item_${"copilot/message+opaque=".repeat(8)}`;
+		const opaqueCallId = `call_${"copilot/tool-call+opaque/=".repeat(8)}`;
+		const opaqueFunctionItemId = `item_${"copilot/function-item+opaque/=".repeat(8)}`;
+		const replayHistoryItems: Array<Record<string, unknown>> = [
+			{ type: "reasoning", id: opaqueReasoningId, encrypted_content: "enc_opaque" },
+			{
+				type: "message",
+				role: "assistant",
+				id: opaqueMessageId,
+				status: "completed",
+				content: [{ type: "output_text", text: "Sanitized assistant answer", annotations: [] }],
+			},
+			{
+				type: "function_call",
+				id: opaqueFunctionItemId,
+				call_id: opaqueCallId,
+				name: "lookup_weather",
+				arguments: '{"city":"Oslo"}',
+				status: "completed",
+			},
+			{ type: "function_call_output", id: "fco_should_be_removed", call_id: opaqueCallId, output: "72F" },
+			{ type: "item_reference", id: opaqueMessageId },
+		];
+		const context: Context = {
+			messages: [
+				makeAssistantMessage(replayHistoryItems, false),
+				{ role: "user", content: "follow-up user", timestamp: Date.now() },
+			],
+		};
+
+		const model = getBundledModel("openai", "gpt-5-mini") as Model<"openai-responses">;
+		const payload = (await captureResponsesPayload(model, context)) as { input?: unknown[] };
+		const reasoningItem = findResponsesInputItem(payload.input, "reasoning");
+		const messageItem = findResponsesInputItem(payload.input, "message");
+		const functionCallItem = findResponsesInputItem(payload.input, "function_call");
+		const functionCallOutputItem = findResponsesInputItem(payload.input, "function_call_output");
+		const itemReference = findResponsesInputItem(payload.input, "item_reference");
+		const expectedCallId = truncateResponseItemId(opaqueCallId, "call");
+
+		expect(reasoningItem).toBeDefined();
+		expect(messageItem).toBeDefined();
+		expect(functionCallItem).toBeDefined();
+		expect(functionCallOutputItem).toBeDefined();
+		expect(reasoningItem?.id).toBeUndefined();
+		expect(messageItem?.id).toBeUndefined();
+		expect(functionCallItem?.id).toBeUndefined();
+		expect(functionCallOutputItem?.id).toBeUndefined();
+		expect(itemReference).toBeUndefined();
+		expect(
+			(payload.input ?? []).some(
+				item => item && typeof item === "object" && "id" in (item as Record<string, unknown>),
+			),
+		).toBe(false);
+		expect(reasoningItem?.encrypted_content).toBe("enc_opaque");
+		expect(functionCallItem?.call_id).toBe(expectedCallId);
+		expect(functionCallOutputItem?.call_id).toBe(expectedCallId);
+		expect((functionCallItem?.call_id as string).length).toBeLessThanOrEqual(64);
+		expect(containsAssistantOutputText(payload.input, "Sanitized assistant answer")).toBe(true);
+		expect(replayHistoryItems[0]?.id).toBe(opaqueReasoningId);
+		expect(replayHistoryItems[1]?.id).toBe(opaqueMessageId);
+		expect(replayHistoryItems[2]?.id).toBe(opaqueFunctionItemId);
+		expect(replayHistoryItems[2]?.call_id).toBe(opaqueCallId);
+		expect(replayHistoryItems[3]?.id).toBe("fco_should_be_removed");
+		expect(replayHistoryItems[3]?.call_id).toBe(opaqueCallId);
+		expect(replayHistoryItems[4]?.id).toBe(opaqueMessageId);
 	});
 
 	it("backward compat: old full-snapshot payloads still replace history for legacy same-provider assistant turns", async () => {
