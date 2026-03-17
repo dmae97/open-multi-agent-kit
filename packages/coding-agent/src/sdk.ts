@@ -1284,10 +1284,22 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const explicitlyRequestedMCPToolNames = options.toolNames
 		? requestedActiveToolNames.filter(name => name.startsWith("mcp_"))
 		: [];
-	const initialToolNames = mcpDiscoveryEnabled
-		? [...requestedActiveToolNames.filter(name => !name.startsWith("mcp_")), ...explicitlyRequestedMCPToolNames]
-		: [...requestedActiveToolNames];
-	const initialSelectedMCPToolNames = mcpDiscoveryEnabled ? [...explicitlyRequestedMCPToolNames] : [];
+	let initialSelectedMCPToolNames: string[] = [];
+	let defaultSelectedMCPToolNames: string[] = [];
+	let initialToolNames = [...requestedActiveToolNames];
+	if (mcpDiscoveryEnabled) {
+		const restoredSelectedMCPToolNames = existingSession.selectedMCPToolNames.filter(name => toolRegistry.has(name));
+		initialSelectedMCPToolNames = existingSession.hasPersistedMCPToolSelection
+			? restoredSelectedMCPToolNames
+			: [...new Set([...restoredSelectedMCPToolNames, ...explicitlyRequestedMCPToolNames])];
+		defaultSelectedMCPToolNames = [...explicitlyRequestedMCPToolNames];
+		initialToolNames = [
+			...new Set([
+				...requestedActiveToolNames.filter(name => !name.startsWith("mcp_")),
+				...initialSelectedMCPToolNames,
+			]),
+		];
+	}
 
 	// Custom tools and extension-registered tools are always included regardless of toolNames filter
 	const alwaysInclude: string[] = [
@@ -1480,6 +1492,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		rebuildSystemPrompt,
 		mcpDiscoveryEnabled,
 		initialSelectedMCPToolNames,
+		defaultSelectedMCPToolNames,
 		ttsrManager,
 		obfuscator,
 		asyncJobManager,
