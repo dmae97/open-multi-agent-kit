@@ -126,7 +126,9 @@ CREATE TABLE settings (
 );
 `);
 				if (settings) {
-					const insert = this.#db.prepare(`INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ${SQLITE_NOW_EPOCH})`);
+					const insert = this.#db.prepare(
+						`INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ${SQLITE_NOW_EPOCH})`,
+					);
 					for (const [key, value] of Object.entries(settings)) {
 						if (value === undefined) continue;
 						const serialized = JSON.stringify(value);

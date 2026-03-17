@@ -34,9 +34,11 @@ function readSchemaVersion(dbPath: string): number | null {
 function readSettingsRows(dbPath: string): Array<{ key: string; value: string; updated_at: number }> {
 	const db = new Database(dbPath, { readonly: true });
 	try {
-		return db
-			.prepare("SELECT key, value, updated_at FROM settings ORDER BY key ASC")
-			.all() as Array<{ key: string; value: string; updated_at: number }>;
+		return db.prepare("SELECT key, value, updated_at FROM settings ORDER BY key ASC").all() as Array<{
+			key: string;
+			value: string;
+			updated_at: number;
+		}>;
 	} finally {
 		db.close();
 	}
@@ -84,11 +86,12 @@ describe("AgentStorage SQLite compatibility", () => {
 				last_used_at INTEGER NOT NULL DEFAULT (unixepoch())
 			);
 		`);
-		legacyDb.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run("theme", "\"dark\"", LEGACY_TIMESTAMP);
-		legacyDb.prepare("INSERT INTO model_usage (model_key, last_used_at) VALUES (?, ?)").run(
-			"anthropic/claude-sonnet-4-5",
-			LEGACY_TIMESTAMP,
-		);
+		legacyDb
+			.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)")
+			.run("theme", '"dark"', LEGACY_TIMESTAMP);
+		legacyDb
+			.prepare("INSERT INTO model_usage (model_key, last_used_at) VALUES (?, ?)")
+			.run("anthropic/claude-sonnet-4-5", LEGACY_TIMESTAMP);
 		legacyDb.close();
 
 		const storage = await AgentStorage.open(dbPath);
@@ -100,6 +103,6 @@ describe("AgentStorage SQLite compatibility", () => {
 		expect(readTableSql(dbPath, "model_usage")).toContain("strftime('%s','now')");
 		expect(storage.getSettings()).toEqual({ theme: "dark" });
 		expect(storage.getModelUsageOrder()).toEqual(["anthropic/claude-sonnet-4-5"]);
-		expect(readSettingsRows(dbPath)).toEqual([{ key: "theme", value: "\"dark\"", updated_at: LEGACY_TIMESTAMP }]);
+		expect(readSettingsRows(dbPath)).toEqual([{ key: "theme", value: '"dark"', updated_at: LEGACY_TIMESTAMP }]);
 	});
 });

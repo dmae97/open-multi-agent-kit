@@ -424,7 +424,13 @@ describe("AuthStorage openai-codex email dedupe", () => {
 			.run(
 				"openai-codex",
 				"oauth",
-				JSON.stringify(createCredential({ suffix: "legacy-v3", accountId: "legacy-v3-account", email: "legacy-v3@example.com" })),
+				JSON.stringify(
+					createCredential({
+						suffix: "legacy-v3",
+						accountId: "legacy-v3-account",
+						email: "legacy-v3@example.com",
+					}),
+				),
 				null,
 				"email:legacy-v3@example.com",
 				LEGACY_TIMESTAMP,
@@ -519,7 +525,9 @@ describe("AuthStorage openai-codex email dedupe", () => {
 			.run(
 				"openai-codex",
 				"oauth",
-				JSON.stringify(createCredential({ suffix: "legacy", accountId: "legacy-account", email: "legacy@example.com" })),
+				JSON.stringify(
+					createCredential({ suffix: "legacy", accountId: "legacy-account", email: "legacy@example.com" }),
+				),
 				1,
 				LEGACY_TIMESTAMP,
 				LEGACY_TIMESTAMP,

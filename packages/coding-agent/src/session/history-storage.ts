@@ -142,9 +142,9 @@ CREATE TRIGGER IF NOT EXISTS history_ai AFTER INSERT ON history BEGIN
 	}
 
 	#historySchemaUsesUnixEpoch(): boolean {
-		const row = this.#db
-			.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'history'")
-			.get() as { sql?: string | null } | undefined;
+		const row = this.#db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'history'").get() as
+			| { sql?: string | null }
+			| undefined;
 		return row?.sql?.includes("unixepoch(") ?? false;
 	}
 

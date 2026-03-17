@@ -133,10 +133,9 @@ function createContext(currentSessionFile: string): {
 	};
 }
 
-	beforeAll(() => {
-		initTheme();
-	});
-
+beforeAll(() => {
+	initTheme();
+});
 
 describe("SelectorController session deletion", () => {
 	beforeEach(() => {
@@ -170,7 +169,6 @@ describe("SelectorController session deletion", () => {
 		sessionList.onDeleteRequest?.(activeSession);
 		selector.handleInput("\n");
 		await Bun.sleep(0);
-
 
 		expect(deleteSessionWithArtifacts).toHaveBeenCalledWith(activeSession.path);
 		expect(calls).toEqual([

@@ -17,7 +17,7 @@ import {
 	theme,
 } from "../../modes/theme/theme";
 import type { InteractiveModeContext } from "../../modes/types";
-import { SessionManager, type SessionInfo } from "../../session/session-manager";
+import { type SessionInfo, SessionManager } from "../../session/session-manager";
 import { FileSessionStorage } from "../../session/session-storage";
 import {
 	isCodeSearchProviderId,
@@ -624,7 +624,6 @@ export class SelectorController {
 		});
 	}
 
-
 	#clearTransientSessionUi(): void {
 		if (this.ctx.loadingAnimation) {
 			this.ctx.loadingAnimation.stop();
@@ -638,19 +637,16 @@ export class SelectorController {
 		this.ctx.pendingTools.clear();
 	}
 
-
 	async #detachActiveSessionBeforeDeletion(sessionPath: string): Promise<boolean> {
 		const currentSessionFile = this.ctx.sessionManager.getSessionFile();
 		if (currentSessionFile !== sessionPath) {
 			return true;
 		}
 
-
 		const detached = await this.ctx.session.newSession();
 		if (!detached) {
 			return false;
 		}
-
 
 		this.#clearTransientSessionUi();
 		this.ctx.statusLine.invalidate();
@@ -662,14 +658,11 @@ export class SelectorController {
 		return true;
 	}
 
-
 	async handleResumeSession(sessionPath: string): Promise<void> {
 		this.#clearTransientSessionUi();
 
-
 		// Switch session via AgentSession (emits hook and tool session events)
 		await this.ctx.session.switchSession(sessionPath);
-
 
 		// Clear and re-render the chat
 		this.ctx.chatContainer.clear();
@@ -678,14 +671,12 @@ export class SelectorController {
 		this.ctx.showStatus("Resumed session");
 	}
 
-
 	async handleSessionDeleteCommand(): Promise<void> {
 		const sessionFile = this.ctx.sessionManager.getSessionFile();
 		if (!sessionFile) {
 			this.ctx.showError("No session file to delete (in-memory session)");
 			return;
 		}
-
 
 		// Check if session file exists (may not exist for brand new sessions)
 		const storage = new FileSessionStorage();
@@ -695,28 +686,23 @@ export class SelectorController {
 			return;
 		}
 
-
 		const confirmed = await this.ctx.showHookConfirm(
 			"Delete Session",
 			"This will permanently delete the current session.\nYou will be returned to the session selector.",
 		);
-
 
 		if (!confirmed) {
 			this.ctx.showStatus("Delete cancelled");
 			return;
 		}
 
-
 		if (!(await this.#detachActiveSessionBeforeDeletion(sessionFile))) {
 			this.ctx.showStatus("Delete cancelled");
 			return;
 		}
 
-
 		// Delete the session file and artifacts directory
 		await storage.deleteSessionWithArtifacts(sessionFile);
-
 
 		// Show session selector
 		this.ctx.showStatus("Session deleted");

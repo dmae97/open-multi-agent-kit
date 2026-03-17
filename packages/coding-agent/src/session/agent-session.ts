@@ -484,7 +484,10 @@ export class AgentSession {
 		) {
 			this.sessionManager.appendMCPToolSelection(currentSelectedMCPToolNames);
 		}
-		this.#rememberSessionDefaultSelectedMCPToolNames(this.sessionManager.getSessionFile(), this.#defaultSelectedMCPToolNames);
+		this.#rememberSessionDefaultSelectedMCPToolNames(
+			this.sessionManager.getSessionFile(),
+			this.#defaultSelectedMCPToolNames,
+		);
 		this.#ttsrManager = config.ttsrManager;
 		this.#obfuscator = config.obfuscator;
 		this.agent.providerSessionState = this.#providerSessionState;
@@ -1664,7 +1667,10 @@ export class AgentSession {
 		return left.length === right.length && left.every((name, index) => name === right[index]);
 	}
 
-	#rememberSessionDefaultSelectedMCPToolNames(sessionFile: string | null | undefined, toolNames: Iterable<string>): void {
+	#rememberSessionDefaultSelectedMCPToolNames(
+		sessionFile: string | null | undefined,
+		toolNames: Iterable<string>,
+	): void {
 		if (!sessionFile) return;
 		this.#sessionDefaultSelectedMCPToolNames.set(
 			path.resolve(sessionFile),

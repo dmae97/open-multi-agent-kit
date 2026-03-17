@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { MCPOAuthFlow } from "../src/mcp/oauth-flow";
 import { hookFetch } from "../../utils/src/hook-fetch";
+import { MCPOAuthFlow } from "../src/mcp/oauth-flow";
 
 const originalFetch = global.fetch;
 
@@ -270,7 +270,6 @@ describe("mcp oauth flow", () => {
 		);
 		expect(serveSpy).toHaveBeenCalledTimes(1);
 	});
-
 
 	it("fails instead of falling back to a random port when redirectUri is exact", async () => {
 		vi.spyOn(Bun, "serve").mockImplementation(() => {
