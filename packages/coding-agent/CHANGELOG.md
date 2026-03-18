@@ -2214,7 +2214,7 @@
 - New `appendModeChange()` method in SessionManager to record mode transitions
 - New `mode` and `modeData` fields in SessionContext to track active agent mode
 - Support for `PI_PACKAGE_DIR` environment variable to override package directory (useful for Nix/Guix store paths)
-- New keybindings for session management: `toggleSessionNamedFilter` (Ctrl+N), `newSession`, `tree`, `fork`, and `resume` actions
+- New keybindings for session management: `newSession`, `tree`, `fork`, and `resume` actions
 - Support for shell command execution in configuration values (API keys, headers) using `!` prefix, with result caching
 - New `clearOnShrink` display setting to control whether empty rows are cleared when content shrinks
 - New `SlashCommandInfo`, `SlashCommandLocation`, and `SlashCommandSource` types for extension slash command discovery

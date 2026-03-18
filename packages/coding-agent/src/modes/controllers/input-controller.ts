@@ -26,6 +26,7 @@ export class InputController {
 	constructor(private ctx: InteractiveModeContext) {}
 
 	setupKeyHandlers(): void {
+		this.ctx.editor.setActionKeys("interrupt", this.ctx.keybindings.getKeys("interrupt"));
 		this.ctx.editor.shouldBypassAutocompleteOnEscape = () =>
 			Boolean(
 				this.ctx.loadingAnimation ||
@@ -64,7 +65,7 @@ export class InputController {
 			} else if (this.ctx.session.isStreaming) {
 				void this.ctx.session.abort();
 			} else if (!this.ctx.editor.getText().trim()) {
-				// Double-escape with empty editor triggers /tree, /branch, or nothing based on setting
+				// Double-interrupt with empty editor triggers /tree, /branch, or nothing based on setting
 				const action = settings.get("doubleEscapeAction");
 				if (action !== "none") {
 					const now = Date.now();
@@ -82,41 +83,43 @@ export class InputController {
 			}
 		};
 
-		this.ctx.editor.onCtrlC = () => this.handleCtrlC();
-		this.ctx.editor.onCtrlD = () => this.handleCtrlD();
-		this.ctx.editor.onCtrlZ = () => this.handleCtrlZ();
-		this.ctx.editor.onShiftTab = () => this.cycleThinkingLevel();
-		this.ctx.editor.onCtrlP = () => this.cycleRoleModel();
-		this.ctx.editor.onShiftCtrlP = () => this.cycleRoleModel({ temporary: true });
-		this.ctx.editor.onAltP = () => this.ctx.showModelSelector({ temporaryOnly: true });
+		this.ctx.editor.setActionKeys("clear", this.ctx.keybindings.getKeys("clear"));
+		this.ctx.editor.onClear = () => this.handleCtrlC();
+		this.ctx.editor.setActionKeys("exit", this.ctx.keybindings.getKeys("exit"));
+		this.ctx.editor.onExit = () => this.handleCtrlD();
+		this.ctx.editor.setActionKeys("suspend", this.ctx.keybindings.getKeys("suspend"));
+		this.ctx.editor.onSuspend = () => this.handleCtrlZ();
+		this.ctx.editor.setActionKeys("cycleThinkingLevel", this.ctx.keybindings.getKeys("cycleThinkingLevel"));
+		this.ctx.editor.onCycleThinkingLevel = () => this.cycleThinkingLevel();
+		this.ctx.editor.setActionKeys("cycleModelForward", this.ctx.keybindings.getKeys("cycleModelForward"));
+		this.ctx.editor.onCycleModelForward = () => this.cycleRoleModel();
+		this.ctx.editor.setActionKeys("cycleModelBackward", this.ctx.keybindings.getKeys("cycleModelBackward"));
+		this.ctx.editor.onCycleModelBackward = () => this.cycleRoleModel({ temporary: true });
+		this.ctx.editor.onQuickSelectModel = () => this.ctx.showModelSelector({ temporaryOnly: true });
 
 		// Global debug handler on TUI (works regardless of focus)
 		this.ctx.ui.onDebug = () => this.ctx.showDebugSelector();
-		this.ctx.editor.onCtrlL = () => this.ctx.showModelSelector();
-		this.ctx.editor.onCtrlR = () => this.ctx.showHistorySearch();
-		this.ctx.editor.onCtrlT = () => this.ctx.toggleTodoExpansion();
-		this.ctx.editor.onCtrlG = () => void this.openExternalEditor();
-		this.ctx.editor.onQuestionMark = () => this.ctx.handleHotkeysCommand();
-		this.ctx.editor.onCtrlV = () => this.handleImagePaste();
-		const copyPromptKeys = this.ctx.keybindings.getKeys("copyPrompt");
-		this.ctx.editor.onCopyPrompt = copyPromptKeys.includes("alt+shift+c") ? () => this.handleCopyPrompt() : undefined;
+		this.ctx.editor.setActionKeys("selectModel", this.ctx.keybindings.getKeys("selectModel"));
+		this.ctx.editor.onSelectModel = () => this.ctx.showModelSelector();
+		this.ctx.editor.setActionKeys("historySearch", this.ctx.keybindings.getKeys("historySearch"));
+		this.ctx.editor.onHistorySearch = () => this.ctx.showHistorySearch();
+		this.ctx.editor.setActionKeys("toggleThinking", this.ctx.keybindings.getKeys("toggleThinking"));
+		this.ctx.editor.onToggleThinking = () => this.ctx.toggleThinkingBlockVisibility();
+		this.ctx.editor.setActionKeys("externalEditor", this.ctx.keybindings.getKeys("externalEditor"));
+		this.ctx.editor.onExternalEditor = () => void this.openExternalEditor();
+		this.ctx.editor.onShowHotkeys = () => this.ctx.handleHotkeysCommand();
+		this.ctx.editor.setActionKeys("pasteImage", this.ctx.keybindings.getKeys("pasteImage"));
+		this.ctx.editor.onPasteImage = () => this.handleImagePaste();
+		this.ctx.editor.setActionKeys("copyPrompt", this.ctx.keybindings.getKeys("copyPrompt"));
+		this.ctx.editor.onCopyPrompt = () => this.handleCopyPrompt();
+		this.ctx.editor.setActionKeys("expandTools", this.ctx.keybindings.getKeys("expandTools"));
+		this.ctx.editor.onExpandTools = () => this.toggleToolOutputExpansion();
+		this.ctx.editor.setActionKeys("dequeue", this.ctx.keybindings.getKeys("dequeue"));
+		this.ctx.editor.onDequeue = () => this.handleDequeue();
 
+		this.ctx.editor.clearCustomKeyHandlers();
 		// Wire up extension shortcuts
 		this.registerExtensionShortcuts();
-
-		const expandToolsKeys = this.ctx.keybindings.getKeys("expandTools");
-		this.ctx.editor.onCtrlO = expandToolsKeys.includes("ctrl+o") ? () => this.toggleToolOutputExpansion() : undefined;
-		for (const key of expandToolsKeys) {
-			if (key === "ctrl+o") continue;
-			this.ctx.editor.setCustomKeyHandler(key, () => this.toggleToolOutputExpansion());
-		}
-
-		const dequeueKeys = this.ctx.keybindings.getKeys("dequeue");
-		this.ctx.editor.onAltUp = dequeueKeys.includes("alt+up") ? () => this.handleDequeue() : undefined;
-		for (const key of dequeueKeys) {
-			if (key === "alt+up") continue;
-			this.ctx.editor.setCustomKeyHandler(key, () => this.handleDequeue());
-		}
 
 		const planModeKeys = this.ctx.keybindings.getKeys("togglePlanMode");
 		for (const key of planModeKeys) {
@@ -143,10 +146,6 @@ export class InputController {
 		}
 		for (const key of this.ctx.keybindings.getKeys("copyLine")) {
 			this.ctx.editor.setCustomKeyHandler(key, () => this.handleCopyCurrentLine());
-		}
-		for (const key of copyPromptKeys) {
-			if (key === "alt+shift+c") continue;
-			this.ctx.editor.setCustomKeyHandler(key, () => this.handleCopyPrompt());
 		}
 
 		this.ctx.editor.onChange = (text: string) => {

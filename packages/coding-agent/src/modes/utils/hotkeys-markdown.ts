@@ -1,13 +1,14 @@
+import type { AppAction, KeybindingsManager } from "../../config/keybindings";
+
 export interface HotkeysMarkdownBindings {
-	expandToolsKey: string;
-	planModeKey: string;
-	sttKey: string;
-	copyLineKey: string;
-	copyPromptKey: string;
+	keybindings: Pick<KeybindingsManager, "getDisplayString">;
+}
+
+function appKey(bindings: HotkeysMarkdownBindings, action: AppAction): string {
+	return bindings.keybindings.getDisplayString(action) || "Disabled";
 }
 
 export function buildHotkeysMarkdown(bindings: HotkeysMarkdownBindings): string {
-	const { expandToolsKey, planModeKey, sttKey, copyLineKey, copyPromptKey } = bindings;
 	return [
 		"**Navigation**",
 		"| Key | Action |",
@@ -25,28 +26,29 @@ export function buildHotkeysMarkdown(bindings: HotkeysMarkdownBindings): string 
 		"| `Ctrl+W` / `Option+Backspace` | Delete word backwards |",
 		"| `Ctrl+U` | Delete to start of line |",
 		"| `Ctrl+K` | Delete to end of line |",
-		`| \`${copyLineKey}\` | Copy current line |`,
-		`| \`${copyPromptKey}\` | Copy whole prompt |`,
+		`| \`${appKey(bindings, "copyLine")}\` | Copy current line |`,
+		`| \`${appKey(bindings, "copyPrompt")}\` | Copy whole prompt |`,
 		"",
 		"**Other**",
 		"| Key | Action |",
 		"|-----|--------|",
 		"| `Tab` | Path completion / accept autocomplete |",
-		"| `Escape` | Cancel autocomplete / abort streaming |",
-		"| `Ctrl+C` | Clear editor (first) / exit (second) |",
-		"| `Ctrl+D` | Exit (when editor is empty) |",
-		"| `Ctrl+Z` | Suspend to background |",
-		"| `Shift+Tab` | Cycle thinking level |",
-		"| `Ctrl+P` | Cycle role models (slow/default/smol) |",
-		"| `Shift+Ctrl+P` | Cycle role models (temporary) |",
+		`| \`${appKey(bindings, "interrupt")}\` | Cancel autocomplete / interrupt active work |`,
+		`| \`${appKey(bindings, "clear")}\` | Clear editor (first) / exit (second) |`,
+		`| \`${appKey(bindings, "exit")}\` | Exit (when editor is empty) |`,
+		`| \`${appKey(bindings, "suspend")}\` | Suspend to background |`,
+		`| \`${appKey(bindings, "cycleThinkingLevel")}\` | Cycle thinking level |`,
+		`| \`${appKey(bindings, "cycleModelForward")}\` | Cycle role models (slow/default/smol) |`,
+		`| \`${appKey(bindings, "cycleModelBackward")}\` | Cycle role models (temporary) |`,
 		"| `Alt+P` | Select model (temporary) |",
-		"| `Ctrl+L` | Select model (set roles) |",
-		`| \`${planModeKey}\` | Toggle plan mode |`,
-		"| `Ctrl+R` | Search prompt history |",
-		`| \`${expandToolsKey}\` | Toggle tool output expansion |`,
-		"| `Ctrl+T` | Toggle todo list expansion |",
-		"| `Ctrl+G` | Edit message in external editor |",
-		`| \`${sttKey}\` | Toggle speech-to-text recording |`,
+		`| \`${appKey(bindings, "selectModel")}\` | Select model (set roles) |`,
+		`| \`${appKey(bindings, "togglePlanMode")}\` | Toggle plan mode |`,
+		`| \`${appKey(bindings, "historySearch")}\` | Search prompt history |`,
+		`| \`${appKey(bindings, "expandTools")}\` | Toggle tool output expansion |`,
+		`| \`${appKey(bindings, "toggleThinking")}\` | Toggle thinking block visibility |`,
+		`| \`${appKey(bindings, "externalEditor")}\` | Edit message in external editor |`,
+		`| \`${appKey(bindings, "pasteImage")}\` | Paste image from clipboard |`,
+		`| \`${appKey(bindings, "toggleSTT")}\` | Toggle speech-to-text recording |`,
 		"| `#` | Open prompt actions |",
 		"| `/` | Slash commands |",
 		"| `!` | Run bash command |",

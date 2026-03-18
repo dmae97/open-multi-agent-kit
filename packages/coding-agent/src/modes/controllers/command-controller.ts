@@ -505,18 +505,7 @@ export class CommandController {
 	}
 
 	handleHotkeysCommand(): void {
-		const expandToolsKey = this.ctx.keybindings.getDisplayString("expandTools") || "Ctrl+O";
-		const planModeKey = this.ctx.keybindings.getDisplayString("togglePlanMode") || "Alt+Shift+P";
-		const sttKey = this.ctx.keybindings.getDisplayString("toggleSTT") || "Alt+H";
-		const copyLineKey = this.ctx.keybindings.getDisplayString("copyLine") || "Alt+Shift+L";
-		const copyPromptKey = this.ctx.keybindings.getDisplayString("copyPrompt") || "Alt+Shift+C";
-		const hotkeys = buildHotkeysMarkdown({
-			expandToolsKey,
-			planModeKey,
-			sttKey,
-			copyLineKey,
-			copyPromptKey,
-		});
+		const hotkeys = buildHotkeysMarkdown({ keybindings: this.ctx.keybindings });
 		this.ctx.chatContainer.addChild(new Spacer(1));
 		this.ctx.chatContainer.addChild(new DynamicBorder());
 		this.ctx.chatContainer.addChild(new Text(theme.bold(theme.fg("accent", "Keyboard Shortcuts")), 1, 0));

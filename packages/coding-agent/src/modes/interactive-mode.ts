@@ -555,7 +555,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			});
 			if (visibleTasks.length < activePhase.tasks.length) {
 				const remaining = activePhase.tasks.length - visibleTasks.length;
-				lines.push(theme.fg("muted", `${indent}  ${hook} +${remaining} more (Ctrl+T to expand)`));
+				lines.push(theme.fg("muted", `${indent}  ${hook} +${remaining} more`));
 			}
 			this.todoContainer.addChild(new Text(lines.join("\n"), 1, 0));
 			return;

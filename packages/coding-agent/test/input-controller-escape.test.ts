@@ -6,24 +6,29 @@ type FakeEditor = {
 	onEscape?: () => void;
 	onSubmit?: (text: string) => Promise<void>;
 	shouldBypassAutocompleteOnEscape?: () => boolean;
-	onCtrlC?: () => void;
-	onCtrlD?: () => void;
-	onCtrlZ?: () => void;
-	onShiftTab?: () => void;
-	onCtrlP?: () => void;
-	onShiftCtrlP?: () => void;
-	onAltP?: () => void;
-	onCtrlL?: () => void;
-	onCtrlR?: () => void;
-	onQuestionMark?: () => void;
-	onCtrlV?: () => void;
+	onClear?: () => void;
+	onExit?: () => void;
+	onSuspend?: () => void;
+	onCycleThinkingLevel?: () => void;
+	onCycleModelForward?: () => void;
+	onCycleModelBackward?: () => void;
+	onQuickSelectModel?: () => void;
+	onSelectModel?: () => void;
+	onHistorySearch?: () => void;
+	onShowHotkeys?: () => void;
+	onPasteImage?: () => void;
 	onCopyPrompt?: () => void;
-	onAltUp?: () => void;
+	onExpandTools?: () => void;
+	onToggleThinking?: () => void;
+	onExternalEditor?: () => void;
+	onDequeue?: () => void;
 	onChange?: (text: string) => void;
 	setText(text: string): void;
 	getText(): string;
 	addToHistory(text: string): void;
+	setActionKeys(action: string, keys: string[]): void;
 	setCustomKeyHandler(key: string, handler: () => void): void;
+	clearCustomKeyHandlers(): void;
 };
 
 function createSubmission(input: {
@@ -83,7 +88,9 @@ function createContext(): {
 			return editorText;
 		},
 		addToHistory: vi.fn(),
+		setActionKeys: vi.fn(),
 		setCustomKeyHandler: vi.fn(),
+		clearCustomKeyHandlers: vi.fn(),
 	};
 
 	let ctx!: InteractiveModeContext;
