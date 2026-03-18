@@ -7,7 +7,16 @@
 
 import { getProjectDir, readJsonl, Snowflake } from "@oh-my-pi/pi-utils";
 import { type Subprocess, spawn } from "bun";
-import type { JsonRpcResponse, MCPRequestOptions, MCPStdioServerConfig, MCPTransport } from "../../mcp/types";
+import type {
+	JsonRpcError,
+	JsonRpcMessage,
+	JsonRpcRequest,
+	JsonRpcResponse,
+	MCPRequestOptions,
+	MCPStdioServerConfig,
+	MCPTransport,
+} from "../../mcp/types";
+import { toJsonRpcError } from "../../mcp/types";
 
 /**
  * Stdio transport for MCP servers.
@@ -28,6 +37,7 @@ export class StdioTransport implements MCPTransport {
 	onClose?: () => void;
 	onError?: (error: Error) => void;
 	onNotification?: (method: string, params: unknown) => void;
+	onRequest?: (method: string, params: unknown) => Promise<unknown>;
 
 	constructor(private config: MCPStdioServerConfig) {}
 
@@ -71,7 +81,7 @@ export class StdioTransport implements MCPTransport {
 			for await (const line of readJsonl(this.#process.stdout)) {
 				if (!this.#connected) break;
 				try {
-					this.#handleMessage(line as JsonRpcResponse);
+					this.#handleMessage(line as JsonRpcMessage);
 				} catch {
 					// Skip malformed lines
 				}
@@ -109,23 +119,63 @@ export class StdioTransport implements MCPTransport {
 		}
 	}
 
-	#handleMessage(message: JsonRpcResponse): void {
-		// Check if it's a response (has id)
-		if ("id" in message && message.id !== null) {
-			const pending = this.#pendingRequests.get(message.id);
+	#handleMessage(message: JsonRpcMessage | JsonRpcMessage[]): void {
+		if (Array.isArray(message)) {
+			for (const m of message) this.#handleMessage(m);
+			return;
+		}
+		// Server-to-client request: has both method and id
+		if ("method" in message && "id" in message && message.id != null) {
+			void this.#handleServerRequest(message as JsonRpcRequest);
+			return;
+		}
+
+		// Response to our request: has id
+		if ("id" in message && message.id != null) {
+			const response = message as JsonRpcResponse;
+			const pending = this.#pendingRequests.get(response.id);
 			if (pending) {
-				this.#pendingRequests.delete(message.id);
-				if (message.error) {
-					pending.reject(new Error(`MCP error ${message.error.code}: ${message.error.message}`));
+				this.#pendingRequests.delete(response.id);
+				if (response.error) {
+					pending.reject(new Error(`MCP error ${response.error.code}: ${response.error.message}`));
 				} else {
-					pending.resolve(message.result);
+					pending.resolve(response.result);
 				}
 			}
-		} else if ("method" in message) {
-			// It's a notification from server
+			return;
+		}
+
+		// Notification: has method but no id
+		if ("method" in message) {
 			const notification = message as { method: string; params?: unknown };
 			this.onNotification?.(notification.method, notification.params);
 		}
+	}
+
+	async #handleServerRequest(request: JsonRpcRequest): Promise<void> {
+		try {
+			if (!this.onRequest) {
+				this.#sendResponse(request.id, undefined, { code: -32601, message: "Method not found" });
+				return;
+			}
+			const result = await this.onRequest(request.method, request.params);
+			this.#sendResponse(request.id, result);
+		} catch (error) {
+			try {
+				this.#sendResponse(request.id, undefined, toJsonRpcError(error));
+			} catch {
+				// Best-effort — process may have exited
+			}
+		}
+	}
+
+	#sendResponse(id: string | number, result?: unknown, error?: JsonRpcError): void {
+		if (!this.#connected || !this.#process?.stdin) return;
+		const response = error
+			? { jsonrpc: "2.0" as const, id, error }
+			: { jsonrpc: "2.0" as const, id, result: result ?? {} };
+		this.#process.stdin.write(`${JSON.stringify(response)}\n`);
+		this.#process.stdin.flush();
 	}
 
 	#handleClose(): void {

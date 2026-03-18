@@ -6,13 +6,16 @@
  */
 import { readSseJson, Snowflake } from "@oh-my-pi/pi-utils";
 import type {
+	JsonRpcError,
 	JsonRpcMessage,
+	JsonRpcRequest,
 	JsonRpcResponse,
 	MCPHttpServerConfig,
 	MCPRequestOptions,
 	MCPSseServerConfig,
 	MCPTransport,
 } from "../../mcp/types";
+import { toJsonRpcError } from "../../mcp/types";
 
 /**
  * HTTP transport for MCP servers.
@@ -26,6 +29,7 @@ export class HttpTransport implements MCPTransport {
 	onClose?: () => void;
 	onError?: (error: Error) => void;
 	onNotification?: (method: string, params: unknown) => void;
+	onRequest?: (method: string, params: unknown) => Promise<unknown>;
 	/** Called on 401/403 to attempt token refresh. Returns updated headers or null. */
 	onAuthError?: () => Promise<Record<string, string> | null>;
 
@@ -50,7 +54,8 @@ export class HttpTransport implements MCPTransport {
 
 	/**
 	 * Start SSE listener for server-initiated messages.
-	 * Optional - only needed if server sends notifications.
+	 * Resolves once the SSE connection is established (or fails/unsupported).
+	 * Message reading continues in the background.
 	 */
 	async startSSEListener(): Promise<void> {
 		if (!this.#connected) return;
@@ -66,37 +71,60 @@ export class HttpTransport implements MCPTransport {
 			headers["Mcp-Session-Id"] = this.#sessionId;
 		}
 
+		let response: Response;
 		try {
-			const response = await fetch(this.config.url, {
+			response = await fetch(this.config.url, {
 				method: "GET",
 				headers,
 				signal: this.#sseConnection.signal,
 			});
-
-			if (response.status === 405) {
-				// Server doesn't support SSE listening, that's OK
-				this.#sseConnection = null;
-				return;
+		} catch (error) {
+			this.#sseConnection = null;
+			if (error instanceof Error && error.name !== "AbortError") {
+				this.onError?.(error);
 			}
+			return;
+		}
 
-			if (!response.ok || !response.body) {
-				this.#sseConnection = null;
-				return;
-			}
+		if (response.status === 405 || !response.ok || !response.body) {
+			this.#sseConnection = null;
+			return;
+		}
 
-			// Read SSE stream
-			for await (const message of readSseJson<JsonRpcMessage>(response.body, this.#sseConnection.signal)) {
+		// Connection established — read messages in background, reset sseConnection when done
+		const signal = this.#sseConnection.signal;
+		void this.#readSSEStream(response.body!, signal).finally(() => {
+			this.#sseConnection = null;
+		});
+	}
+
+	async #readSSEStream(body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<void> {
+		try {
+			for await (const message of readSseJson<JsonRpcMessage>(body, signal)) {
 				if (!this.#connected) break;
-				if ("method" in message && !("id" in message)) {
-					this.onNotification?.(message.method, message.params);
-				}
+				this.#dispatchSSEMessage(message);
 			}
 		} catch (error) {
 			if (error instanceof Error && error.name !== "AbortError") {
 				this.onError?.(error);
 			}
-		} finally {
-			this.#sseConnection = null;
+		}
+	}
+
+	/** Route an SSE message (or batch) to the appropriate handler. */
+	#dispatchSSEMessage(message: JsonRpcMessage | JsonRpcMessage[]): void {
+		if (Array.isArray(message)) {
+			for (const m of message) this.#dispatchSSEMessage(m);
+			return;
+		}
+		// Server-to-client request: has both method and id
+		if ("method" in message && "id" in message && message.id != null) {
+			void this.#handleServerRequest(message as JsonRpcRequest);
+			return;
+		}
+		// Notification: has method but no id
+		if ("method" in message && !("id" in message)) {
+			this.onNotification?.(message.method, message.params);
 		}
 	}
 
@@ -230,19 +258,37 @@ export class HttpTransport implements MCPTransport {
 			: abortController.signal;
 
 		try {
-			for await (const message of readSseJson<JsonRpcMessage>(response.body, operationSignal)) {
-				if ("id" in message && message.id === expectedId && ("result" in message || "error" in message)) {
-					if (message.error) {
-						throw new Error(`MCP error ${message.error.code}: ${message.error.message}`);
+			let result: T | undefined;
+			let captured = false;
+			for await (const raw of readSseJson<JsonRpcMessage | JsonRpcMessage[]>(response.body, operationSignal)) {
+				// Flatten batches (JSON-RPC 2.0 section 6) into individual messages.
+				const messages = Array.isArray(raw) ? raw : [raw];
+				for (const message of messages) {
+					if (
+						!captured &&
+						"id" in message &&
+						message.id === expectedId &&
+						("result" in message || "error" in message)
+					) {
+						clearTimeout(timeoutId);
+						if (message.error) {
+							throw new Error(`MCP error ${message.error.code}: ${message.error.message}`);
+						}
+						result = message.result as T;
+						captured = true;
+						continue;
 					}
-					return message.result as T;
+					this.#dispatchSSEMessage(message);
 				}
-
-				if ("method" in message && !("id" in message)) {
-					this.onNotification?.(message.method, message.params);
-				}
+				if (captured) break;
 			}
-			throw new Error(`No response received for request ID ${expectedId}`);
+			if (!captured) {
+				throw new Error(`No response received for request ID ${expectedId}`);
+			}
+			// Reader released after break — safe to start a background drain
+			// for piggybacked notifications/requests on the same stream.
+			this.#drainSSEBackground(response.body, operationSignal);
+			return result as T;
 		} catch (error) {
 			if (error instanceof Error && error.name === "AbortError") {
 				if (options?.signal?.aborted) {
@@ -253,6 +299,69 @@ export class HttpTransport implements MCPTransport {
 			throw error;
 		} finally {
 			clearTimeout(timeoutId);
+		}
+	}
+
+	/** Continue reading SSE messages in the background after the primary response is captured. */
+	#drainSSEBackground(body: ReadableStream<Uint8Array>, signal: AbortSignal): void {
+		void this.#readSSEStream(body, signal);
+	}
+
+	async #handleServerRequest(request: JsonRpcRequest): Promise<void> {
+		if (!this.onRequest) {
+			await this.#sendServerResponse(request.id, undefined, { code: -32601, message: "Method not found" });
+			return;
+		}
+		try {
+			const result = await this.onRequest(request.method, request.params);
+			await this.#sendServerResponse(request.id, result);
+		} catch (error) {
+			await this.#sendServerResponse(request.id, undefined, toJsonRpcError(error));
+		}
+	}
+
+	/** POST a JSON-RPC response back to the server (for server-to-client requests received via SSE). */
+	async #sendServerResponse(id: string | number, result?: unknown, error?: JsonRpcError): Promise<void> {
+		if (!this.#connected) return;
+		const body = error
+			? { jsonrpc: "2.0" as const, id, error }
+			: { jsonrpc: "2.0" as const, id, result: result ?? {} };
+		const headers: Record<string, string> = {
+			"Content-Type": "application/json",
+			Accept: "application/json, text/event-stream",
+			...this.config.headers,
+		};
+		if (this.#sessionId) {
+			headers["Mcp-Session-Id"] = this.#sessionId;
+		}
+		try {
+			const resp = await fetch(this.config.url, {
+				method: "POST",
+				headers,
+				body: JSON.stringify(body),
+				signal: AbortSignal.timeout(this.config.timeout ?? 30000),
+			});
+			// Retry once on auth failure if onAuthError is wired
+			if (this.onAuthError && (resp.status === 401 || resp.status === 403)) {
+				await resp.body?.cancel();
+				const newHeaders = await this.onAuthError();
+				if (newHeaders) {
+					this.config.headers ??= {};
+					Object.assign(this.config.headers, newHeaders);
+					Object.assign(headers, newHeaders);
+					const retry = await fetch(this.config.url, {
+						method: "POST",
+						headers,
+						body: JSON.stringify(body),
+						signal: AbortSignal.timeout(this.config.timeout ?? 30000),
+					});
+					await retry.body?.cancel();
+					return;
+				}
+			}
+			await resp.body?.cancel();
+		} catch {
+			// Best-effort response delivery — server may have disconnected
 		}
 	}
 
@@ -296,6 +405,17 @@ export class HttpTransport implements MCPTransport {
 			if (!response.ok && response.status !== 202) {
 				const text = await response.text();
 				throw new Error(`HTTP ${response.status}: ${text}`);
+			}
+
+			// The server may piggyback server-to-client requests or notifications
+			// on the notification response (MCP Streamable HTTP spec). Read them.
+			const contentType = response.headers.get("Content-Type") ?? "";
+			if (contentType.includes("text/event-stream") && response.body) {
+				// Use the SSE connection's signal if available, otherwise read until stream ends
+				const signal = this.#sseConnection?.signal ?? AbortSignal.timeout(this.config.timeout ?? 30000);
+				void this.#readSSEStream(response.body, signal);
+			} else {
+				await response.body?.cancel();
 			}
 		} catch (error) {
 			clearTimeout(timeoutId);

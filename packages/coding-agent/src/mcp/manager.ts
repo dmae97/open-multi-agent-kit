@@ -4,6 +4,8 @@
  * Discovers, connects to, and manages MCP servers.
  * Handles tool loading and lifecycle.
  */
+import * as path from "node:path";
+import * as url from "node:url";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { TSchema } from "@sinclair/typebox";
 import type { SourceMeta } from "../capability/types";
@@ -304,6 +306,9 @@ export class MCPManager {
 					onNotification: (method, params) => {
 						this.#handleServerNotification(name, method, params);
 					},
+					onRequest: (method, params) => {
+						return this.#handleServerRequest(method, params);
+					},
 				});
 			})().then(
 				connection => {
@@ -531,6 +536,29 @@ export class MCPManager {
 		}
 
 		this.#onNotification?.(serverName, method, params);
+	}
+
+	/** Handle server-to-client JSON-RPC requests (e.g. ping, roots/list). */
+	async #handleServerRequest(method: string, _params: unknown): Promise<unknown> {
+		switch (method) {
+			case "ping":
+				return {};
+			case "roots/list":
+				return this.#getRoots();
+			default:
+				throw Object.assign(new Error(`Unsupported server request: ${method}`), { code: -32601 });
+		}
+	}
+
+	#getRoots(): { roots: Array<{ uri: string; name: string }> } {
+		return {
+			roots: [
+				{
+					uri: url.pathToFileURL(this.cwd).href,
+					name: path.basename(this.cwd),
+				},
+			],
+		};
 	}
 
 	/**
