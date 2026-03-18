@@ -136,6 +136,27 @@ export function stripNewLinePrefixes(lines: string[]): string[] {
 	});
 }
 
+/**
+ * Strip hashline display prefixes only (no diff markers).
+ *
+ * Unlike {@link stripNewLinePrefixes} which also handles `+` diff markers,
+ * this only strips `LINE#ID:` / `#ID:` prefixes. Used by the write tool
+ * where diff markers are not applicable.
+ *
+ * Returns the original array reference when no stripping is needed.
+ */
+export function stripHashlinePrefixes(lines: string[]): string[] {
+	let hashPrefixCount = 0;
+	let nonEmpty = 0;
+	for (const l of lines) {
+		if (l.length === 0) continue;
+		nonEmpty++;
+		if (HASHLINE_PREFIX_RE.test(l)) hashPrefixCount++;
+	}
+	if (nonEmpty === 0 || hashPrefixCount !== nonEmpty) return lines;
+	return lines.map(l => l.replace(HASHLINE_PREFIX_RE, ""));
+}
+
 export function hashlineParseText(edit: string[] | string | null): string[] {
 	if (edit === null) return [];
 	if (typeof edit === "string") {

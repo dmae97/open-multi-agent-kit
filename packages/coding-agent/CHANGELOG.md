@@ -1,8 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added automatic stripping of hashline display prefixes (LINE#ID:) from write tool content when hashline edit mode is enabled, preventing the model from accidentally copying display markers into files
 - Added `mcpServerName` and `mcpToolName` optional properties to custom tools for MCP server discovery and search metadata
 
 ## [13.13.1] - 2026-03-18
