@@ -294,8 +294,8 @@ export async function loadProjectContextFiles(
 }
 
 /**
- * Load system prompt customization files (SYSTEM.md).
- * Returns combined content from all discovered SYSTEM.md files.
+ * Load the effective system prompt customization from SYSTEM.md.
+ * Project-level SYSTEM.md overrides user-level SYSTEM.md.
  */
 export async function loadSystemPromptFiles(options: LoadContextFilesOptions = {}): Promise<string | null> {
 	const resolvedCwd = options.cwd ?? getProjectDir();
@@ -304,16 +304,13 @@ export async function loadSystemPromptFiles(options: LoadContextFilesOptions = {
 
 	if (result.items.length === 0) return null;
 
-	// Combine all SYSTEM.md contents (user-level first, then project-level)
-	const userLevel = result.items.filter(item => item.level === "user");
-	const projectLevel = result.items.filter(item => item.level === "project");
-
-	const parts: string[] = [];
-	for (const item of [...userLevel, ...projectLevel]) {
-		parts.push(item.content);
+	const projectLevel = result.items.find(item => item.level === "project");
+	if (projectLevel) {
+		return projectLevel.content;
 	}
 
-	return parts.join("\n\n");
+	const userLevel = result.items.find(item => item.level === "user");
+	return userLevel?.content ?? null;
 }
 
 export interface SystemPromptToolMetadata {
@@ -510,7 +507,8 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 
 	const environment = await logger.timeAsync("getEnvironmentInfo", getEnvironmentInfo);
 	const data = {
-		systemPromptCustomization: systemPromptCustomization ?? "",
+		// Explicit custom prompts replace discovered SYSTEM.md content rather than layering it twice.
+		systemPromptCustomization: resolvedCustomPrompt ? "" : (systemPromptCustomization ?? ""),
 		customPrompt: resolvedCustomPrompt,
 		appendPrompt: resolvedAppendPrompt ?? "",
 		tools: toolNames,
