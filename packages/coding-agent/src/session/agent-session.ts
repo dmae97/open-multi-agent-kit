@@ -3791,33 +3791,24 @@ export class AgentSession {
 		if (calledRequiredTool) {
 			return;
 		}
-
-		const askTool = this.#toolRegistry.get("ask");
-		const exitPlanModeTool = this.#toolRegistry.get("exit_plan_mode");
-		if (!askTool || !exitPlanModeTool) {
+		const hasRequiredTools = this.#toolRegistry.has("ask") && this.#toolRegistry.has("exit_plan_mode");
+		if (!hasRequiredTools) {
 			logger.warn("Plan mode enforcement skipped because ask/exit tools are unavailable", {
 				activeToolNames: this.agent.state.tools.map(tool => tool.name),
 			});
 			return;
 		}
-		const forcedTools = [askTool, exitPlanModeTool];
 
 		const reminder = renderPromptTemplate(planModeToolDecisionReminderPrompt, {
 			askToolName: "ask",
 			exitToolName: "exit_plan_mode",
 		});
 
-		const previousTools = this.agent.state.tools;
-		this.agent.setTools(forcedTools);
-		try {
-			await this.prompt(reminder, {
-				synthetic: true,
-				expandPromptTemplates: false,
-				toolChoice: "required",
-			});
-		} finally {
-			this.agent.setTools(previousTools);
-		}
+		await this.prompt(reminder, {
+			synthetic: true,
+			expandPromptTemplates: false,
+			toolChoice: "required",
+		});
 	}
 
 	#createEagerTodoPrelude(): { message: AgentMessage; toolChoice: ToolChoice } | undefined {
