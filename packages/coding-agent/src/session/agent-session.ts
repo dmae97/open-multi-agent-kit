@@ -5547,7 +5547,7 @@ export class AgentSession {
 		const model = this.agent.state.model;
 		const thinkingLevel = this.#thinkingLevel;
 		lines.push("## Configuration\n");
-		lines.push(`Model: ${model.provider}/${model.id}`);
+		lines.push(`Model: ${model ? `${model.provider}/${model.id}` : "(not selected)"}`);
 		lines.push(`Thinking Level: ${thinkingLevel}`);
 		lines.push("\n");
 
