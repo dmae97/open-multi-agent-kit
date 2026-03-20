@@ -226,6 +226,7 @@ export class SettingsSelectorComponent extends Container {
 	#statusPreviewContainer: Container | null = null;
 	#statusPreviewText: Text | null = null;
 	#currentTabId: SettingTab | "plugins" = "appearance";
+	#textInputActive = false;
 
 	constructor(
 		private readonly context: SettingsRuntimeContext,

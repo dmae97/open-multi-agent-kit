@@ -1157,6 +1157,7 @@ export const SETTINGS_SCHEMA = {
 	},
 	"browser.screenshotDir": {
 		type: "string",
+		default: undefined,
 		ui: {
 			tab: "tools",
 			label: "Screenshot directory",
