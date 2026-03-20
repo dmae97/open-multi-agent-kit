@@ -114,6 +114,69 @@ describe("MCPTool.execute retry on connection error", () => {
 		expect(result.content[0]).toEqual({ type: "text", text: "ok" });
 	});
 
+	it("retries on transport closed and rebinding succeeds", async () => {
+		let oldCalls = 0;
+		let newCalls = 0;
+		let reconnects = 0;
+		const closedTransport = mockTransport(async () => {
+			oldCalls++;
+			throw new Error("Transport closed");
+		});
+		const reopenedTransport = mockTransport(async () => {
+			newCalls++;
+			return toolCallResult("ok");
+		});
+
+		const oldConn = makeConnection(closedTransport);
+		const newConn = makeConnection(reopenedTransport, "test-server-transport-closed");
+		const reconnect: MCPReconnect = async () => {
+			reconnects++;
+			return newConn;
+		};
+
+		const tool = new MCPTool(oldConn, TOOL_DEF, reconnect);
+		const result = await tool.execute("call-1", {}, noop, noCtx);
+
+		expect(reconnects).toBe(1);
+		expect(oldCalls).toBe(1);
+		expect(newCalls).toBe(1);
+		expect(result.details?.isError).toBeFalsy();
+		expect(result.content[0]).toEqual({ type: "text", text: "ok" });
+	});
+
+	it("reuses refreshed connection on later call", async () => {
+		let oldCalls = 0;
+		let newCalls = 0;
+		let reconnects = 0;
+		const oldTransport = mockTransport(async () => {
+			oldCalls++;
+			throw new Error("ECONNREFUSED");
+		});
+		const newTransport = mockTransport(async () => {
+			newCalls++;
+			return toolCallResult("ok");
+		});
+
+		const oldConn = makeConnection(oldTransport);
+		const newConn = makeConnection(newTransport, "test-server-rebound");
+		const reconnect: MCPReconnect = async () => {
+			reconnects++;
+			return newConn;
+		};
+
+		const tool = new MCPTool(oldConn, TOOL_DEF, reconnect);
+		const first = await tool.execute("call-1", {}, noop, noCtx);
+		const second = await tool.execute("call-2", {}, noop, noCtx);
+
+		expect(oldCalls).toBe(1);
+		expect(newCalls).toBe(2);
+		expect(reconnects).toBe(1);
+		expect(first.details?.isError).toBeFalsy();
+		expect(second.details?.isError).toBeFalsy();
+		expect(first.content[0]).toEqual({ type: "text", text: "ok" });
+		expect(second.content[0]).toEqual({ type: "text", text: "ok" });
+	});
+
 	it("returns error result when reconnect returns null", async () => {
 		const failTransport = mockTransport(async () => {
 			throw new Error("ECONNRESET");

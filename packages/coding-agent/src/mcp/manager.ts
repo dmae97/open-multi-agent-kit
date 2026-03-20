@@ -337,24 +337,23 @@ export class MCPManager {
 						this.#connections.set(name, connection);
 					}
 
-					// Wire auth refresh for HTTP transports so 401s trigger token refresh
-					if (connection.transport instanceof HttpTransport) {
-						if (config.auth?.type === "oauth") {
-							connection.transport.onAuthError = async () => {
-								const refreshed = await this.#resolveAuthConfig(config, true);
-								if (refreshed.type === "http" || refreshed.type === "sse") {
-									return refreshed.headers ?? null;
-								}
-								return null;
-							};
-						}
-						// Re-establish connection when the SSE stream drops
-						// (server restart, network interruption).
-						connection.transport.onClose = () => {
-							logger.debug("MCP SSE stream lost, triggering reconnect", { path: `mcp:${name}` });
-							void this.reconnectServer(name);
+					// Wire auth refresh for HTTP transports so 401s trigger token refresh.
+					if (connection.transport instanceof HttpTransport && config.auth?.type === "oauth") {
+						connection.transport.onAuthError = async () => {
+							const refreshed = await this.#resolveAuthConfig(config, true);
+							if (refreshed.type === "http" || refreshed.type === "sse") {
+								return refreshed.headers ?? null;
+							}
+							return null;
 						};
 					}
+
+					// Re-establish connection if the transport closes (server restart,
+					// network interruption).
+					connection.transport.onClose = () => {
+						logger.debug("MCP transport lost, triggering reconnect", { path: `mcp:${name}` });
+						void this.reconnectServer(name);
+					};
 
 					return connection;
 				},
@@ -635,9 +634,7 @@ export class MCPManager {
 
 		if (connection) {
 			// Detach onClose to prevent spurious reconnect from close()
-			if (connection.transport instanceof HttpTransport) {
-				connection.transport.onClose = undefined;
-			}
+			connection.transport.onClose = undefined;
 			await disconnectServer(connection);
 			this.#connections.delete(name);
 		}
@@ -660,9 +657,7 @@ export class MCPManager {
 		this.#epoch++;
 		// Detach onClose before closing to prevent spurious reconnect attempts
 		for (const conn of this.#connections.values()) {
-			if (conn.transport instanceof HttpTransport) {
-				conn.transport.onClose = undefined;
-			}
+			conn.transport.onClose = undefined;
 		}
 		const promises = Array.from(this.#connections.values()).map(conn => disconnectServer(conn));
 		await Promise.allSettled(promises);
@@ -707,11 +702,10 @@ export class MCPManager {
 		// Fire-and-forget: don't await the close — HttpTransport.close() sends a
 		// DELETE with config.timeout (30s default), and blocking here delays the
 		// reconnect loop by that amount on every server restart.
+		const reconnectEpoch = this.#epoch;
 		if (oldConnection) {
 			// Detach onClose to prevent re-entrant reconnect from the close itself
-			if (oldConnection.transport instanceof HttpTransport) {
-				oldConnection.transport.onClose = undefined;
-			}
+			oldConnection.transport.onClose = undefined;
 			void oldConnection.transport.close().catch(() => {});
 			this.#connections.delete(name);
 		}
@@ -722,10 +716,19 @@ export class MCPManager {
 		const delays = [500, 1000, 2000, 4000];
 		for (let attempt = 0; attempt <= delays.length; attempt++) {
 			try {
-				const connection = await this.#connectAndWireServer(name, config, source);
+				const connection = await this.#connectAndWireServer(name, config, source, reconnectEpoch);
 				logger.debug("MCP reconnected", { path: `mcp:${name}`, tools: connection.tools?.length ?? 0 });
 				return connection;
 			} catch (error) {
+				if (this.#epoch !== reconnectEpoch) {
+					logger.debug("MCP reconnect aborted after configuration changed", {
+						path: `mcp:${name}`,
+						storedEpoch: reconnectEpoch,
+						currentEpoch: this.#epoch,
+					});
+					return null;
+				}
+
 				const msg = error instanceof Error ? error.message : String(error);
 				if (attempt < delays.length) {
 					logger.debug("MCP reconnect attempt failed, retrying", {
@@ -751,8 +754,8 @@ export class MCPManager {
 		name: string,
 		config: MCPServerConfig,
 		source: SourceMeta | undefined,
+		reconnectEpoch: number,
 	): Promise<MCPServerConnection> {
-		const epoch = this.#epoch;
 		const resolvedConfig = await this.#resolveAuthConfig(config);
 		const connection = await connectToServer(name, resolvedConfig, {
 			onNotification: (method, params) => {
@@ -768,7 +771,7 @@ export class MCPManager {
 
 		// Bail out if the server was disconnected or the manager was reset
 		// while we were connecting (e.g. /mcp reload called disconnectAll).
-		if (!this.#serverConfigs.has(name) || this.#epoch !== epoch) {
+		if (!this.#serverConfigs.has(name) || this.#epoch !== reconnectEpoch) {
 			await connection.transport.close().catch(() => {});
 			throw new Error(`Server "${name}" was disconnected during reconnection`);
 		}

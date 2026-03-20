@@ -44,22 +44,22 @@ export type MCPReconnect = () => Promise<MCPServerConnection | null>;
  * connection object is stale (dead SSE, expired session, refused after restart).
  */
 const RETRIABLE_PATTERNS = [
-	"ECONNREFUSED",
-	"ECONNRESET",
-	"EPIPE",
-	"ENETUNREACH",
-	"EHOSTUNREACH",
+	"econnrefused",
+	"econnreset",
+	"epipe",
+	"enetunreach",
+	"ehostunreach",
 	"fetch failed",
-	"Transport not connected",
-	"Transport closed",
+	"transport not connected",
+	"transport closed",
 	"network error",
 ];
 
 export function isRetriableConnectionError(error: unknown): boolean {
 	if (!(error instanceof Error)) return false;
-	const msg = error.message;
+	const msg = error.message.toLowerCase();
 	// Stale session (server restarted, old session ID is gone)
-	if (/^HTTP (404|502|503):/.test(msg)) return true;
+	if (/^http (404|502|503):/.test(msg)) return true;
 	return RETRIABLE_PATTERNS.some(p => msg.includes(p));
 }
 
@@ -263,18 +263,20 @@ export class MCPTool implements CustomTool<TSchema, MCPToolDetails> {
 				if (newConn) {
 					// Rebind so subsequent calls on this instance use the fresh connection
 					this.connection = newConn;
+					const retryProvider = newConn._source?.provider ?? provider;
+					const retryProviderName = newConn._source?.providerName ?? providerName;
 					try {
 						const result = await callTool(newConn, this.tool.name, args, { signal });
-						return buildResult(
-							result,
-							newConn.name,
-							this.tool.name,
-							newConn._source?.provider ?? provider,
-							newConn._source?.providerName ?? providerName,
-						);
+						return buildResult(result, newConn.name, this.tool.name, retryProvider, retryProviderName);
 					} catch (retryError) {
 						rethrowIfAborted(retryError, signal);
-						return buildErrorResult(retryError, this.connection.name, this.tool.name, provider, providerName);
+						return buildErrorResult(
+							retryError,
+							this.connection.name,
+							this.tool.name,
+							retryProvider,
+							retryProviderName,
+						);
 					}
 				}
 			}
@@ -363,18 +365,20 @@ export class DeferredMCPTool implements CustomTool<TSchema, MCPToolDetails> {
 				if (this.reconnect && isRetriableConnectionError(callError)) {
 					const newConn = await withAbort(this.reconnect(), signal).catch(() => null);
 					if (newConn) {
+						const retryProvider = newConn._source?.provider ?? provider;
+						const retryProviderName = newConn._source?.providerName ?? providerName;
 						try {
 							const result = await callTool(newConn, this.tool.name, args, { signal });
-							return buildResult(
-								result,
-								this.serverName,
-								this.tool.name,
-								newConn._source?.provider ?? provider,
-								newConn._source?.providerName ?? providerName,
-							);
+							return buildResult(result, this.serverName, this.tool.name, retryProvider, retryProviderName);
 						} catch (retryError) {
 							rethrowIfAborted(retryError, signal);
-							return buildErrorResult(retryError, this.serverName, this.tool.name, provider, providerName);
+							return buildErrorResult(
+								retryError,
+								this.serverName,
+								this.tool.name,
+								retryProvider,
+								retryProviderName,
+							);
 						}
 					}
 				}

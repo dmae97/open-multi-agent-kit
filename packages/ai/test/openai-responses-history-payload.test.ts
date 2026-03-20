@@ -145,7 +145,9 @@ const resumedSameProviderWithStaleThinkingContext: Context = {
 				},
 				{ type: "text", text: "generic assistant that should be rebuilt" },
 			],
-			providerPayload: createOpenAIResponsesHistoryPayload("openai", [{ type: "reasoning", encrypted_content: "enc_snapshot" }]),
+			providerPayload: createOpenAIResponsesHistoryPayload("openai", [
+				{ type: "reasoning", encrypted_content: "enc_snapshot" },
+			]),
 		},
 		{ role: "user", content: "follow-up user", timestamp: Date.now() },
 	],
@@ -313,7 +315,11 @@ describe("OpenAI responses history payload", () => {
 	it("does not replay stale thinking signatures when native replay is cold", async () => {
 		const model = getBundledModel("openai", "gpt-5-mini") as Model<"openai-responses">;
 		const providerSessionState = new Map<string, ProviderSessionState>();
-		const payload = (await captureResponsesPayload(model, resumedSameProviderWithStaleThinkingContext, providerSessionState)) as {
+		const payload = (await captureResponsesPayload(
+			model,
+			resumedSameProviderWithStaleThinkingContext,
+			providerSessionState,
+		)) as {
 			input?: unknown[];
 		};
 
@@ -325,7 +331,11 @@ describe("OpenAI responses history payload", () => {
 	it("preserves remote replacement history on cold openai session state", async () => {
 		const model = getBundledModel("openai", "gpt-5-mini") as Model<"openai-responses">;
 		const providerSessionState = new Map<string, ProviderSessionState>();
-		const payload = (await captureResponsesPayload(model, resumedSameProviderWithRemoteCompactionPayloadContext, providerSessionState)) as {
+		const payload = (await captureResponsesPayload(
+			model,
+			resumedSameProviderWithRemoteCompactionPayloadContext,
+			providerSessionState,
+		)) as {
 			input?: unknown[];
 		};
 
