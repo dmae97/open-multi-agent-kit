@@ -380,7 +380,10 @@ function inferAnthropicSupportedEfforts<TApi extends Api>(
 	parsedModel: AnthropicModel,
 	model: ApiModel<TApi>,
 ): readonly Effort[] {
-	if (model.api === "anthropic-messages" && semverGte(parsedModel.version, "4.6")) {
+	if (
+		(model.api === "anthropic-messages" || model.api === "bedrock-converse-stream") &&
+		semverGte(parsedModel.version, "4.6")
+	) {
 		return parsedModel.kind === "opus" ? DEFAULT_REASONING_EFFORTS_WITH_XHIGH : DEFAULT_REASONING_EFFORTS;
 	}
 	return inferFallbackEfforts(model);
@@ -433,6 +436,14 @@ function inferThinkingControlMode<TApi extends Api>(
 			return "budget";
 
 		case "bedrock-converse-stream":
+			if (parsedModel.family === "anthropic") {
+				if (semverGte(parsedModel.version, "4.6") && parsedModel.kind === "opus") {
+					return "anthropic-adaptive";
+				}
+				if (semverGte(parsedModel.version, "4.5")) {
+					return "anthropic-budget-effort";
+				}
+			}
 			return "budget";
 
 		default:
@@ -466,7 +477,7 @@ function parseGeminiModel(modelId: string): GeminiModel | null {
 }
 
 function parseAnthropicModel(modelId: string): AnthropicModel | null {
-	const match = /claude-(opus|sonnet)-(\d+(?:[.-]\d+){0,2})\b/.exec(modelId);
+	const match = /claude-(opus|sonnet)-(\d{1,2}(?:[.-]\d{1,2}){0,2})\b/.exec(modelId);
 	if (!match) {
 		return null;
 	}

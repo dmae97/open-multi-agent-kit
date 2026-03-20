@@ -502,6 +502,10 @@ function mapOptionsForApi<TApi extends Api>(
 				thinkingBudgets: options?.thinkingBudgets,
 				toolChoice: mapAnthropicToolChoice(options?.toolChoice),
 			};
+			// Adaptive mode sends effort directly, no budget_tokens — skip budget inflation.
+			if (model.thinking?.mode === "anthropic-adaptive") {
+				return castApi<"bedrock-converse-stream">(bedrockBase);
+			}
 			const budgetInfo = resolveBedrockThinkingBudget(model as Model<"bedrock-converse-stream">, options);
 			if (!budgetInfo) return bedrockBase as OptionsForApi<TApi>;
 			let maxTokens = bedrockBase.maxTokens ?? model.maxTokens;

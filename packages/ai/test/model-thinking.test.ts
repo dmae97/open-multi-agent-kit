@@ -219,9 +219,9 @@ describe("generated model policies", () => {
 		expect(models[0]?.cost.cacheRead).toBe(0.5);
 		expect(models[0]?.cost.cacheWrite).toBe(6.25);
 		expect(models[1]?.thinking).toEqual({
-			mode: "budget",
+			mode: "anthropic-adaptive",
 			minLevel: Effort.Minimal,
-			maxLevel: Effort.High,
+			maxLevel: Effort.XHigh,
 		});
 		expect(models[1]?.cost.cacheRead).toBe(0.5);
 		expect(models[1]?.cost.cacheWrite).toBe(6.25);

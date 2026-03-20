@@ -1521,6 +1521,8 @@ export const SETTINGS_SCHEMA = {
 	"thinkingBudgets.medium": { type: "number", default: 8192 },
 
 	"thinkingBudgets.high": { type: "number", default: 16384 },
+
+	"thinkingBudgets.xhigh": { type: "number", default: 32768 },
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1703,6 +1705,7 @@ export interface ThinkingBudgetsSettings {
 	low: number;
 	medium: number;
 	high: number;
+	xhigh: number;
 }
 
 export interface SttSettings {
