@@ -1375,7 +1375,7 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 					const paramPath = params.path ? expandPath(params.path as string) : undefined;
 					let dest: string;
 					if (paramPath) {
-						dest = path.isAbsolute(paramPath) ? paramPath : path.join(screenshotDir ?? process.cwd(), paramPath);
+						dest = path.isAbsolute(paramPath) ? paramPath : path.join(process.cwd(), paramPath);
 					} else if (screenshotDir) {
 						const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, -1);
 						dest = path.join(screenshotDir, `screenshot-${ts}.png`);
