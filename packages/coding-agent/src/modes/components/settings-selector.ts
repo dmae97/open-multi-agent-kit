@@ -596,12 +596,11 @@ export class SettingsSelectorComponent extends Container {
 		// Handle tab switching — but NOT when a text input is active, since
 		// arrow keys must reach the cursor and Tab must not switch tabs.
 		if (
-			!this.#textInputActive && (
-				matchesKey(data, "tab") ||
+			!this.#textInputActive &&
+			(matchesKey(data, "tab") ||
 				matchesKey(data, "shift+tab") ||
 				matchesKey(data, "left") ||
-				matchesKey(data, "right")
-			)
+				matchesKey(data, "right"))
 		) {
 			this.#tabBar.handleInput(data);
 			return;
