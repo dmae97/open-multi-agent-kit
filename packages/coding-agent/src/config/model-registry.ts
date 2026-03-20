@@ -1441,7 +1441,8 @@ export class ModelRegistry {
 	#applyHardcodedModelPolicies(models: Model<Api>[]): Model<Api>[] {
 		return models.map(model => {
 			if (model.id === "gpt-5.4" && model.provider !== "github-copilot") {
-				return { ...model, contextWindow: 1_000_000 };
+				const overrides = this.#modelOverrides.get(model.provider)?.get(model.id);
+				return { ...model, contextWindow: 1_000_000, ...overrides };
 			}
 			return model;
 		});
