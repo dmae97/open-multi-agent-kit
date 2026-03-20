@@ -20,6 +20,7 @@
 
 - `roots/list` timeout on MCP server initialization: `connectToServer` now always installs a default handler for `ping` and `roots/list`
 - Fixed resumed GitHub Copilot conversations that could fail with `401 input item does not belong to this connection` on the first follow-up after process restart ([#488](https://github.com/can1357/oh-my-pi/issues/488))
+- Fixed STT Alt+H mic cursor rendering to measure the actual microphone glyph width, preventing one-column TUI overflow crashes when the active symbol preset uses a wide icon ([#484](https://github.com/can1357/oh-my-pi/issues/484))
 
 ## [13.13.2] - 2026-03-18
 

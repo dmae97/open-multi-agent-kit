@@ -6,7 +6,7 @@ import * as path from "node:path";
 import { type Agent, type AgentMessage, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage, ImageContent, Message, Model, UsageReport } from "@oh-my-pi/pi-ai";
 import type { Component, SlashCommand } from "@oh-my-pi/pi-tui";
-import { Container, Loader, Markdown, ProcessTerminal, Spacer, Text, TUI } from "@oh-my-pi/pi-tui";
+import { Container, Loader, Markdown, ProcessTerminal, Spacer, Text, TUI, visibleWidth } from "@oh-my-pi/pi-tui";
 import { APP_NAME, getProjectDir, hsvToRgb, isEnoent, logger, postmortem } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { KeybindingsManager } from "../config/keybindings";
@@ -1111,8 +1111,7 @@ export class InteractiveMode implements InteractiveModeContext {
 					this.#startMicAnimation();
 				} else if (state === "transcribing") {
 					this.#stopMicAnimation();
-					this.editor.cursorOverride = `\x1b[38;2;200;200;200m${theme.icon.mic}\x1b[0m`;
-					this.editor.cursorOverrideWidth = 1;
+					this.#setMicCursor({ r: 200, g: 200, b: 200 });
 				} else {
 					this.#cleanupMicAnimation();
 				}
@@ -1122,10 +1121,15 @@ export class InteractiveMode implements InteractiveModeContext {
 		});
 	}
 
+	#setMicCursor(color: { r: number; g: number; b: number }): void {
+		this.editor.cursorOverride = `\x1b[38;2;${color.r};${color.g};${color.b}m${theme.icon.mic}\x1b[0m`;
+		// Theme symbols can be wide (for example, 🎤), so measure the rendered override.
+		this.editor.cursorOverrideWidth = visibleWidth(this.editor.cursorOverride);
+	}
+
 	#updateMicIcon(): void {
 		const { r, g, b } = hsvToRgb({ h: this.#voiceHue, s: 0.9, v: 1.0 });
-		this.editor.cursorOverride = `\x1b[38;2;${r};${g};${b}m${theme.icon.mic}\x1b[0m`;
-		this.editor.cursorOverrideWidth = 1;
+		this.#setMicCursor({ r, g, b });
 	}
 
 	#startMicAnimation(): void {
