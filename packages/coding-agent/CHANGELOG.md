@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `browser.screenshotDir` setting to configure screenshot save directory with path expansion
+
 ## [13.13.2] - 2026-03-18
 
 ### Added

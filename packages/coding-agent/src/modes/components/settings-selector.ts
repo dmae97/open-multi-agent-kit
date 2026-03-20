@@ -463,7 +463,7 @@ export class SettingsSelectorComponent extends Container {
 			currentValue,
 			value => {
 				// Empty string clears the setting; undefined-typed string settings
-				// store "" which the browser.ts expandHome ignores (no-op fallback).
+				// store "" which the browser.ts expandPath ignores (no-op fallback).
 				this.#setSettingValue(def.path, value);
 				this.callbacks.onChange(def.path, value);
 				wrappedDone(value);
