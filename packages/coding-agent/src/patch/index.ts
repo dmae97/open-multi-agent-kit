@@ -176,7 +176,7 @@ export function hashlineParseText(edit: string[] | string | null): string[] {
 
 const hashlineEditSchema = Type.Object(
 	{
-		op: StringEnum(["replace", "append", "prepend"]),
+		op: StringEnum(["replace_line", "replace_range", "append", "prepend", "append_eof", "prepend_bof"]),
 		pos: Type.Optional(Type.String({ description: "anchor" })),
 		end: Type.Optional(Type.String({ description: "limit position" })),
 		lines: Type.Union([
@@ -209,13 +209,14 @@ export type HashlineParams = Static<typeof hashlineEditParamsSchema>;
  * Map flat tool-schema edits (tag/end) into typed HashlineEdit objects.
  *
  * Resilient: as long as at least one anchor exists, we execute.
- * - replace + tag only → single-line replace
- * - replace + tag + end → range replace
+ * - replace_line + tag → single-line replace
+ * - replace_range + tag + end → range replace
  * - append + tag or end → append after that anchor
  * - prepend + tag or end → prepend before that anchor
- * - no anchors → file-level append/prepend (only for those ops)
+ * - append_eof → file-level append (no anchors needed)
+ * - prepend_bof → file-level prepend (no anchors needed)
  *
- * Unknown ops default to "replace".
+ * Unknown ops default to replace_line/replace_range based on available anchors.
  */
 function resolveEditAnchors(edits: HashlineToolEdit[]): HashlineEdit[] {
 	const result: HashlineEdit[] = [];
@@ -224,25 +225,47 @@ function resolveEditAnchors(edits: HashlineToolEdit[]): HashlineEdit[] {
 		const tag = edit.pos ? tryParseTag(edit.pos) : undefined;
 		const end = edit.end ? tryParseTag(edit.end) : undefined;
 
-		// Normalize op — default unknown values to "replace"
-		const op = edit.op === "append" || edit.op === "prepend" ? edit.op : "replace";
-		switch (op) {
-			case "replace": {
-				if (tag && end) {
-					result.push({ op: "replace", pos: tag, end, lines });
-				} else if (tag || end) {
-					result.push({ op: "replace", pos: tag || end!, lines });
-				} else {
-					throw new Error("Replace requires at least one anchor (tag or end).");
-				}
+		switch (edit.op) {
+			case "replace_line": {
+				const anchor = tag ?? end;
+				if (!anchor) throw new Error("replace_line requires an anchor (pos).");
+				result.push({ op: "replace_line", pos: anchor, lines });
+				break;
+			}
+			case "replace_range": {
+				if (!tag || !end) throw new Error("replace_range requires both pos and end anchors.");
+				result.push({ op: "replace_range", pos: tag, end, lines });
 				break;
 			}
 			case "append": {
-				result.push({ op: "append", pos: tag ?? end, lines });
+				const anchor = tag ?? end;
+				if (!anchor) throw new Error("append requires an anchor (pos).");
+				result.push({ op: "append", pos: anchor, lines });
 				break;
 			}
 			case "prepend": {
-				result.push({ op: "prepend", pos: end ?? tag, lines });
+				const anchor = end ?? tag;
+				if (!anchor) throw new Error("prepend requires an anchor (pos).");
+				result.push({ op: "prepend", pos: anchor, lines });
+				break;
+			}
+			case "append_eof": {
+				result.push({ op: "append_eof", lines });
+				break;
+			}
+			case "prepend_bof": {
+				result.push({ op: "prepend_bof", lines });
+				break;
+			}
+			default: {
+				// Backward compat for stale model output: infer op from available anchors
+				if (tag && end) {
+					result.push({ op: "replace_range", pos: tag, end, lines });
+				} else if (tag || end) {
+					result.push({ op: "replace_line", pos: (tag ?? end)!, lines });
+				} else {
+					throw new Error("Unknown op requires at least one anchor (pos or end).");
+				}
 				break;
 			}
 		}
@@ -552,8 +575,8 @@ export class EditTool implements AgentTool<TInput> {
 				const lines: string[] = [];
 				for (const edit of edits) {
 					// For file creation, only anchorless appends/prepends are valid
-					if ((edit.op === "append" || edit.op === "prepend") && !edit.pos && !edit.end) {
-						if (edit.op === "prepend") {
+					if (edit.op === "append_eof" || edit.op === "prepend_bof") {
+						if (edit.op === "prepend_bof") {
 							lines.unshift(...hashlineParseText(edit.lines));
 						} else {
 							lines.push(...hashlineParseText(edit.lines));
@@ -612,20 +635,18 @@ export class EditTool implements AgentTool<TInput> {
 					for (const edit of anchorEdits) {
 						refs.length = 0;
 						switch (edit.op) {
-							case "replace":
-								if (edit.end) {
-									refs.push(edit.end, edit.pos);
-								} else {
-									refs.push(edit.pos);
-								}
+							case "replace_line":
+								refs.push(edit.pos);
+								break;
+							case "replace_range":
+								refs.push(edit.end, edit.pos);
 								break;
 							case "append":
-								if (edit.pos) refs.push(edit.pos);
-								break;
 							case "prepend":
-								if (edit.pos) refs.push(edit.pos);
+								refs.push(edit.pos);
 								break;
-							default:
+							case "append_eof":
+							case "prepend_bof":
 								break;
 						}
 

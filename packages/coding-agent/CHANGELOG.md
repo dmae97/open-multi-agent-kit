@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+### Breaking Changes
+
+- Changed hashline edit operation types from `replace` (with optional `end`) to explicit `replace_line` and `replace_range` operations
+- Added required `append_eof` and `prepend_bof` operations for file-level edits; `append` and `prepend` now require an anchor position
+- Made `pos` parameter required for `replace_line`, `append`, and `prepend` operations; `append_eof` and `prepend_bof` no longer accept anchors
 
 ### Added
 
@@ -25,6 +30,8 @@
 
 ### Changed
 
+- Refactored hashline edit validation to enforce stricter anchor requirements per operation type
+- Updated edit application logic to handle explicit file-level operations (`append_eof`, `prepend_bof`) separately from anchor-based operations
 - Changed `setWidget` API to accept `ExtensionWidgetOptions` parameter for placement control
 - Changed widget placement logic to manage widgets above and below editor separately
 - Changed hashline edit application to preserve duplicated boundary lines exactly as provided instead of auto-correcting them

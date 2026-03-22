@@ -8,15 +8,17 @@ Read the file first to get fresh tags. Submit one `edit` call per file with all 
 **`delete`** — if true, delete the file.
 
 **`edits[n].pos`** — the anchor line. Meaning depends on `op`:
-  - if `replace`: first line to rewrite
-  - if `prepend`: line to insert new lines **before**; omit for beginning of file
-  - if `append`: line to insert new lines **after**; omit for end of file
-**`edits[n].end`** — range replace only. The last line of the range (inclusive). Omit for single-line replace.
+  - if `replace_line`: the line to rewrite
+  - if `replace_range`: first line of the range to rewrite
+  - if `prepend`: line to insert new lines **before**
+  - if `append`: line to insert new lines **after**
+  - Not used by `append_eof` or `prepend_bof`.
+**`edits[n].end`** — only used by `replace_range`: the last line of the range (inclusive).
 **`edits[n].lines`** — the replacement content:
-  - for `replace`: the exact lines that will replace `[pos, end??pos]` inclusively (or the single `pos` line when `end` is omitted)
-  - for `prepend`/`append`: the new lines to insert
+  - for `replace_line`/`replace_range`: the exact lines that will replace the target line(s)
+  - for `append`/`prepend`/`append_eof`/`prepend_bof`: the new lines to insert
   - `[""]` — blank line
-  - `null` or `[]` — delete if replace
+  - `null` or `[]` — delete if `replace_line`/`replace_range`
 - If `lines` contains content that already exists after `end`, those lines **will be duplicated** in the output.
 - Keep `lines` to exactly what belongs inside the consumed range.
 - Ops are applied bottom-up. Tags **MUST** be referenced from the most recent `read` output.
@@ -51,7 +53,7 @@ Change the timeout from `5000` to `30_000`:
 {
   path: "util.ts",
   edits: [{
-    op: "replace",
+    op: "replace_line",
     pos: {{hlineref 2 "const timeout = 5000;"}},
     lines: ["const timeout = 30_000;"]
   }]
@@ -65,7 +67,7 @@ Single line — `lines: null` deletes entirely:
 {
   path: "util.ts",
   edits: [{
-    op: "replace",
+    op: "replace_line",
     pos: {{hlineref 1 "// @ts-ignore"}},
     lines: null
   }]
@@ -76,7 +78,7 @@ Range — remove the legacy block (lines 10–11):
 {
   path: "util.ts",
   edits: [{
-    op: "replace",
+    op: "replace_range",
     pos: {{hlineref 10 "\t// TODO: remove after migration"}},
     end: {{hlineref 11 "\tlegacy();"}},
     lines: null
@@ -93,7 +95,7 @@ When changing body content, replace the **entire** body span — not just one li
 {
   path: "util.ts",
   edits: [{
-    op: "replace",
+    op: "replace_range",
     pos: {{hlineref 15 "\t\tconsole.error(err);"}},
     end: {{hlineref 16 "\t\treturn null;"}},
     lines: [
@@ -113,7 +115,7 @@ Bad — `end` stops at the inner `\t}` on line 17, so the outer `}` on line 18 s
 {
   path: "util.ts",
   edits: [{
-    op: "replace",
+    op: "replace_range",
     pos: {{hlineref 9 "function beta() {"}},
     end: {{hlineref 17 "\t}"}},
     lines: [
@@ -129,7 +131,7 @@ Good — `end` includes the function's own `}` on line 18, so the old closer is 
 {
   path: "util.ts",
   edits: [{
-    op: "replace",
+    op: "replace_range",
     pos: {{hlineref 9 "function beta() {"}},
     end: {{hlineref 18 "}"}},
     lines: [
@@ -143,7 +145,7 @@ Good — `end` includes the function's own `}` on line 18, so the old closer is 
 </example>
 
 <example name="avoid shared boundary lines">
-Do not anchor `replace` on a mixed boundary line such as `} catch (err) {`, `} else {`, `}),`, or `},{`. Those lines belong to two adjacent structures at once.
+Do not anchor `replace_range` on a mixed boundary line such as `} catch (err) {`, `} else {`, `}),`, or `},{`. Those lines belong to two adjacent structures at once.
 
 Bad — if you need to change code on both sides of that line, replacing just the boundary span will usually leave one side's syntax behind.
 
@@ -176,12 +178,12 @@ Use a trailing `""` to preserve the blank line between sibling declarations.
 <critical>
 - You **MUST NOT** use this tool to reformat, reindent, or adjust whitespace — run the project's formatter instead.
 - Every tag **MUST** be copied exactly from your most recent `read` output as `N#ID`. Stale or mistyped tags cause mismatches.
-- Edit payload: `{ path, edits[] }`. Each entry: `op`, `lines`, optional `pos`/`end`. No extra keys.
-- For `append`/`prepend`, `lines` **MUST** contain only the newly introduced content. Do not re-emit surrounding content, or terminators that already exist.
-- When changing existing code near a block tail or closing delimiter, default to `replace` over the owned span instead of inserting around the boundary.
+- Edit payload: `{ path, edits[] }`. Each entry: `op`, `lines`, plus `pos` and/or `end` depending on op. `replace_line`/`append`/`prepend` require `pos`. `replace_range` requires both `pos` and `end`. `append_eof`/`prepend_bof` require neither. No extra keys.
+- For `append`/`prepend`/`append_eof`/`prepend_bof`, `lines` **MUST** contain only the newly introduced content. Do not re-emit surrounding content, or terminators that already exist.
+- When changing existing code near a block tail or closing delimiter, default to `replace_range` over the owned span instead of inserting around the boundary.
 - When adding a sibling declaration, default to `prepend` on the next sibling declaration instead of `append` on the previous block's closing brace.
 - **Block boundaries travel together.** For a block `{ header / body / closer }`, there are exactly two valid replace shapes: (a) replace only the body — `pos`=first body line, `end`=last body line, leave the header and closer untouched; or (b) replace the whole block — `pos`=header, `end`=closer, re-emit all three in `lines`. Never split them: do not set `end` to the closer while omitting it from `lines` (deletes it), and do not emit the closer in `lines` without including it in `end` (duplicates it). This applies to every block terminator: `}`, `continue`, `break`, `return`, `throw`.
-- **Never target shared boundary lines.** Do not use `replace` spans that start, end, or pivot on a line that closes one construct and opens/separates another, such as `},{`, `}),`, `} else {`, or `} catch (err) {`. Those lines are not owned by a single block. Move the range inward to body-only lines, or widen it to consume one whole owned construct including its true trailing delimiter.
+- **Never target shared boundary lines.** Do not use `replace_range` spans that start, end, or pivot on a line that closes one construct and opens/separates another, such as `},{`, `}),`, `} else {`, or `} catch (err) {`. Those lines are not owned by a single block. Move the range inward to body-only lines, or widen it to consume one whole owned construct including its true trailing delimiter.
 - **`lines` must not extend past `end`.** `lines` replaces exactly `pos..end`. Content after `end` survives. If you include lines in `lines` that exist after `end`, they will appear twice. Either extend `end` to cover all lines you are re-emitting, or remove the extra lines from `lines`.
 - `lines` entries **MUST** be literal file content with indentation copied exactly from the `read` output. If the file uses tabs, use a real tab character.
 - After any successful `edit` call on a file, the next change to that same file **MUST** start with a fresh `read`. Do not chain a second `edit` call off stale mental state, even if the intended range is nearby.
