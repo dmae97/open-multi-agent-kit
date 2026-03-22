@@ -1,12 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added `isUsageLimitError()` to `rate-limit-utils` as a single source of truth for detecting usage/quota limit errors across all providers
 
 ### Fixed
 
+- Fixed lazy stream forwarding to properly handle final results from source streams with `result()` methods
+- Fixed lazy stream error handling to convert iterator failures into terminal error results instead of silently failing
 - Fixed `parseRateLimitReason` to recognize "usage limit" in error messages and correctly classify them as `QUOTA_EXHAUSTED`
 - Fixed Codex `fetchWithRetry` retrying 429 responses for `usage_limit_reached` errors for up to 5 minutes instead of returning immediately for credential switching
 - Removed `usage.?limit` from `TRANSIENT_MESSAGE_PATTERN` in retry utils since usage limits are not transient and require credential rotation

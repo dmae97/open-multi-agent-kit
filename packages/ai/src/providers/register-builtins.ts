@@ -147,12 +147,32 @@ export function setBedrockProviderModule(module: BedrockProviderModule): void {
 // Stream forwarding / error helpers
 // ---------------------------------------------------------------------------
 
-function forwardStream(target: EventStreamImpl, source: AsyncIterable<AssistantMessageEvent>): void {
+function hasFinalResult(
+	source: AsyncIterable<AssistantMessageEvent>,
+): source is AsyncIterable<AssistantMessageEvent> & { result(): Promise<AssistantMessage> } {
+	return typeof (source as { result?: unknown }).result === "function";
+}
+
+function forwardStream<TApi extends Api>(
+	target: EventStreamImpl,
+	source: AsyncIterable<AssistantMessageEvent>,
+	model: Model<TApi>,
+): void {
 	(async () => {
-		for await (const event of source) {
-			target.push(event);
+		try {
+			for await (const event of source) {
+				target.push(event);
+			}
+			if (hasFinalResult(source)) {
+				target.end(await source.result());
+			} else {
+				target.end();
+			}
+		} catch (error) {
+			const message = createLazyLoadErrorMessage(model, error);
+			target.push({ type: "error", reason: "error", error: message });
+			target.end(message);
 		}
-		target.end();
 	})();
 }
 
@@ -190,7 +210,7 @@ function createLazyStream<TApi extends Api>(
 		loadModule()
 			.then(module => {
 				const inner = module.stream(model, context, options);
-				forwardStream(outer, inner);
+				forwardStream(outer, inner, model);
 			})
 			.catch(error => {
 				const message = createLazyLoadErrorMessage(model, error);
