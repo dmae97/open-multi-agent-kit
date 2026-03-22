@@ -103,6 +103,13 @@ export function generateReport(result: BenchmarkResult): string {
 	lines.push(`| Total Runs | ${summary.totalRuns} |`);
 	lines.push(`| Successful Runs | ${summary.successfulRuns} |`);
 	lines.push(`| **Task Success Rate** | **${formatRate(successRuns, summary.totalRuns)}** |`);
+	if (config.editVariant === "hashline") {
+		lines.push(
+			`| **Autocorrect-Free Success Rate** | **${formatRate(summary.autocorrectFreeSuccessfulRuns, summary.totalRuns)}** |`,
+		);
+		lines.push(`| Autocorrected Runs | ${formatRate(summary.autocorrectedRuns, summary.totalRuns)} |`);
+		lines.push(`| Edit Autocorrect Rate | ${formatPercent(summary.editAutocorrectRate)} |`);
+	}
 	lines.push(`| Verified Rate | ${formatRate(verifiedRuns, summary.totalRuns)} |`);
 	lines.push(`| Edit Tool Usage Rate | ${formatRate(editToolRuns, summary.totalRuns)} |`);
 	lines.push(`| **Edit Success Rate** | **${formatPercent(summary.editSuccessRate)}** |`);

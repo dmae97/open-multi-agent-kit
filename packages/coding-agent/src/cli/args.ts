@@ -28,6 +28,7 @@ export interface Args {
 	mode?: Mode;
 	noSession?: boolean;
 	sessionDir?: string;
+	providerSessionId?: string;
 	fork?: string;
 	models?: string[];
 	tools?: string[];
@@ -98,6 +99,8 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 			result.systemPrompt = args[++i];
 		} else if (arg === "--append-system-prompt" && i + 1 < args.length) {
 			result.appendSystemPrompt = args[++i];
+		} else if (arg === "--provider-session-id" && i + 1 < args.length) {
+			result.providerSessionId = args[++i];
 		} else if (arg === "--no-session") {
 			result.noSession = true;
 		} else if (arg === "--session-dir" && i + 1 < args.length) {

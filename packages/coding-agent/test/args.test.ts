@@ -119,6 +119,11 @@ describe("parseArgs", () => {
 			expect(result.appendSystemPrompt).toBe("Additional context");
 		});
 
+		test("parses --provider-session-id", () => {
+			const result = parseArgs(["--provider-session-id", "reb_cache_key"]);
+			expect(result.providerSessionId).toBe("reb_cache_key");
+		});
+
 		test("parses --mode", () => {
 			const result = parseArgs(["--mode", "json"]);
 			expect(result.mode).toBe("json");

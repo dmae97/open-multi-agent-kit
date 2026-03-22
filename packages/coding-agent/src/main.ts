@@ -363,6 +363,9 @@ async function buildSessionOptions(
 	if (sessionManager) {
 		options.sessionManager = sessionManager;
 	}
+	if (parsed.providerSessionId) {
+		options.providerSessionId = parsed.providerSessionId;
+	}
 
 	// Model from CLI
 	// - supports --provider <name> --model <pattern>
