@@ -3,7 +3,12 @@ import type { AssistantMessage, ImageContent, Message, UsageReport } from "@oh-m
 import type { Component, Container, Loader, Spacer, Text, TUI } from "@oh-my-pi/pi-tui";
 import type { KeybindingsManager } from "../config/keybindings";
 import type { Settings } from "../config/settings";
-import type { ExtensionUIContext, ExtensionUIDialogOptions } from "../extensibility/extensions";
+import type {
+	ExtensionUIContext,
+	ExtensionUIDialogOptions,
+	ExtensionWidgetContent,
+	ExtensionWidgetOptions,
+} from "../extensibility/extensions";
 import type { CompactOptions } from "../extensibility/extensions/types";
 import type { MCPManager } from "../mcp";
 import type { AgentSession, AgentSessionEvent } from "../session/agent-session";
@@ -59,6 +64,8 @@ export interface InteractiveModeContext {
 	btwContainer: Container;
 	editor: CustomEditor;
 	editorContainer: Container;
+	hookWidgetContainerAbove: Container;
+	hookWidgetContainerBelow: Container;
 	statusLine: StatusLineComponent;
 
 	// Session access
@@ -226,7 +233,7 @@ export interface InteractiveModeContext {
 		reason: "start" | "switch" | "branch" | "tree" | "shutdown",
 		previousSessionFile?: string,
 	): Promise<void>;
-	setHookWidget(key: string, content: unknown): void;
+	setHookWidget(key: string, content: ExtensionWidgetContent, options?: ExtensionWidgetOptions): void;
 	setHookStatus(key: string, text: string | undefined): void;
 	showHookSelector(
 		title: string,

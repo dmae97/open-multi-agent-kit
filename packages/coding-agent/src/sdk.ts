@@ -13,6 +13,7 @@ import type { Component } from "@oh-my-pi/pi-tui";
 import { $env, getAgentDbPath, getAgentDir, getProjectDir, logger, postmortem } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { AsyncJobManager } from "./async";
+import { createAutoresearchExtension } from "./autoresearch";
 import { loadCapability } from "./capability";
 import { type Rule, ruleCapability } from "./capability/rule";
 import { ModelRegistry } from "./config/model-registry";
@@ -1010,6 +1011,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	}
 
 	const inlineExtensions: ExtensionFactory[] = options.extensions ? [...options.extensions] : [];
+	inlineExtensions.push(createAutoresearchExtension);
 	if (customTools.length > 0) {
 		inlineExtensions.push(createCustomToolsExtension(customTools));
 	}

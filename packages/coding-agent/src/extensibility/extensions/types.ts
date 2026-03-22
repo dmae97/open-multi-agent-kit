@@ -87,6 +87,16 @@ export interface ExtensionUIDialogOptions {
 /** Raw terminal input listener for extensions. */
 export type TerminalInputHandler = (data: string) => { consume?: boolean; data?: string } | undefined;
 
+export type WidgetPlacement = "aboveEditor" | "belowEditor";
+
+export interface ExtensionWidgetOptions {
+	placement?: WidgetPlacement;
+}
+
+export type ExtensionUiComponent = Component & { dispose?(): void };
+export type ExtensionUiComponentFactory = (tui: TUI, theme: Theme) => ExtensionUiComponent;
+export type ExtensionWidgetContent = string[] | ExtensionUiComponentFactory | undefined;
+
 /**
  * UI context for extensions to request interactive UI.
  * Each mode (interactive, RPC, print) provides its own implementation.
@@ -113,15 +123,14 @@ export interface ExtensionUIContext {
 	/** Set the working/loading message shown during streaming. Call with no argument to restore default. */
 	setWorkingMessage(message?: string): void;
 
-	/** Set a widget to display above the editor. Accepts string array or component factory. */
-	setWidget(key: string, content: string[] | undefined): void;
-	setWidget(key: string, content: ((tui: TUI, theme: Theme) => Component & { dispose?(): void }) | undefined): void;
+	/** Set a widget to display above or below the editor. Accepts string array or component factory. */
+	setWidget(key: string, content: ExtensionWidgetContent, options?: ExtensionWidgetOptions): void;
 
 	/** Set a custom footer component, or undefined to restore the built-in footer. */
-	setFooter(factory: ((tui: TUI, theme: Theme) => Component & { dispose?(): void }) | undefined): void;
+	setFooter(factory: ExtensionUiComponentFactory | undefined): void;
 
 	/** Set a custom header component, or undefined to restore the built-in header. */
-	setHeader(factory: ((tui: TUI, theme: Theme) => Component & { dispose?(): void }) | undefined): void;
+	setHeader(factory: ExtensionUiComponentFactory | undefined): void;
 
 	/** Set the terminal window/tab title. */
 	setTitle(title: string): void;
@@ -133,7 +142,7 @@ export interface ExtensionUIContext {
 			theme: Theme,
 			keybindings: KeybindingsManager,
 			done: (result: T) => void,
-		) => (Component & { dispose?(): void }) | Promise<Component & { dispose?(): void }>,
+		) => ExtensionUiComponent | Promise<ExtensionUiComponent>,
 		options?: { overlay?: boolean },
 	): Promise<T>;
 

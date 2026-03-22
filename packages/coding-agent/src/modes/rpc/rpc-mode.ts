@@ -11,7 +11,11 @@
  * - Extension UI: Extension UI requests are emitted, client responds with extension_ui_response
  */
 import { readJsonl, Snowflake } from "@oh-my-pi/pi-utils";
-import type { ExtensionUIContext, ExtensionUIDialogOptions } from "../../extensibility/extensions";
+import type {
+	ExtensionUIContext,
+	ExtensionUIDialogOptions,
+	ExtensionWidgetOptions,
+} from "../../extensibility/extensions";
 import { type Theme, theme } from "../../modes/theme/theme";
 import type { AgentSession } from "../../session/agent-session";
 import type {
@@ -198,7 +202,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 			// Not supported in RPC mode
 		}
 
-		setWidget(key: string, content: unknown): void {
+		setWidget(key: string, content: unknown, options?: ExtensionWidgetOptions): void {
 			// Only support string arrays in RPC mode - factory functions are ignored
 			if (content === undefined || Array.isArray(content)) {
 				this.output({
@@ -207,6 +211,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 					method: "setWidget",
 					widgetKey: key,
 					widgetLines: content as string[] | undefined,
+					widgetPlacement: options?.placement,
 				} as RpcExtensionUIRequest);
 			}
 			// Component factories are not supported in RPC mode - would need TUI access

@@ -4,17 +4,45 @@
 
 ### Added
 
+- Added autoresearch extension with autonomous experiment loop capabilities
+- Added `init_experiment` tool to initialize and reset autoresearch sessions with configurable metrics
+- Added `log_experiment` tool to record experiment results with metric parsing and confidence tracking
+- Added `run_experiment` tool to execute commands and capture metrics with timeout and crash detection
+- Added autoresearch dashboard controller for displaying experiment results and optimization progress
+- Added support for secondary metrics tracking alongside primary metric
+- Added `ExtensionWidgetContent` and `ExtensionUiComponentFactory` types for flexible widget configuration
+- Added `ExtensionWidgetOptions` interface with `placement` parameter to position widgets above or below editor
+- Added `WidgetPlacement` type supporting 'aboveEditor' and 'belowEditor' placement options
+- Added `hookWidgetContainerAbove` and `hookWidgetContainerBelow` containers to InteractiveMode for separate widget management
+- Added autoresearch mode for autonomous experiment loops with init_experiment, log_experiment, and run_experiment tools
+- Added autoresearch dashboard widget displaying experiment results, metrics, and optimization progress
+- Added support for metric tracking with configurable direction (lower/higher is better) and secondary metrics
+- Added widget placement options to position extensions above or below the editor via `placement` parameter
+- Added `ExtensionWidgetContent` and `ExtensionWidgetOptions` types for flexible widget configuration
 - Added ACP (Agent Client Protocol) mode for headless agent operation via `--mode acp`
 - Added support for Agent Client Protocol SDK integration with session management, MCP server configuration, and streaming communication
 - Added `ensureOnDisk()` method to SessionManager to persist sessions immediately for ACP discovery
 
 ### Changed
 
+- Changed `setWidget` API to accept `ExtensionWidgetOptions` parameter for placement control
+- Changed widget placement logic to manage widgets above and below editor separately
+- Changed hashline edit application to preserve duplicated boundary lines exactly as provided instead of auto-correcting them
+- Updated RPC mode to support widget placement option in `setWidget` requests
+- Changed hashline edit application to preserve duplicated boundary lines exactly as provided instead of auto-correcting them
+- Changed widget API to support placement options and component factories in addition to string arrays
+- Updated extension UI controller to manage widgets above and below the editor separately
 - Updated ask tool rendering to support markdown formatting in questions and option labels
 - Refactored hook input and selector components to render titles as markdown for richer text formatting
 - Changed session collection to include sessions with zero messages, enabling ACP mode to create discoverable sessions immediately
 - Changed session persistence logic to use atomic file rewrite when flushing unflushed sessions to prevent duplication
 - Removed hashline edit autocorrection for duplicated boundary lines; escaped-tab autocorrection remains available for leading `\\t` sequences
+
+### Removed
+
+- Removed auto-correction of off-by-one range edits that duplicated closing braces or boundary lines
+- Removed `shouldAutocorrect` function and related boundary line deduplication logic from hashline editor
+- Removed auto-correction of off-by-one range edits that duplicated closing braces or boundary lines
 
 ## [13.14.0] - 2026-03-20
 

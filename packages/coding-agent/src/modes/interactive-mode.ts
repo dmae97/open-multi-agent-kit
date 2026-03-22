@@ -12,7 +12,12 @@ import chalk from "chalk";
 import { KeybindingsManager } from "../config/keybindings";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import { type Settings, settings } from "../config/settings";
-import type { ExtensionUIContext, ExtensionUIDialogOptions } from "../extensibility/extensions";
+import type {
+	ExtensionUIContext,
+	ExtensionUIDialogOptions,
+	ExtensionWidgetContent,
+	ExtensionWidgetOptions,
+} from "../extensibility/extensions";
 import type { CompactOptions } from "../extensibility/extensions/types";
 import { BUILTIN_SLASH_COMMANDS, loadSlashCommands } from "../extensibility/slash-commands";
 import { resolveLocalUrlToPath } from "../internal-urls";
@@ -93,6 +98,8 @@ export class InteractiveMode implements InteractiveModeContext {
 	btwContainer: Container;
 	editor: CustomEditor;
 	editorContainer: Container;
+	hookWidgetContainerAbove: Container;
+	hookWidgetContainerBelow: Container;
 	statusLine: StatusLineComponent;
 
 	isInitialized = false;
@@ -216,6 +223,9 @@ export class InteractiveMode implements InteractiveModeContext {
 		} catch (error) {
 			logger.warn("History storage unavailable", { error: String(error) });
 		}
+		this.hookWidgetContainerAbove = new Container();
+		this.hookWidgetContainerAbove.addChild(new Spacer(1));
+		this.hookWidgetContainerBelow = new Container();
 		this.editorContainer = new Container();
 		this.editorContainer.addChild(this.editor);
 		this.statusLine = new StatusLineComponent(session);
@@ -329,8 +339,9 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.ui.addChild(this.todoContainer);
 		this.ui.addChild(this.btwContainer);
 		this.ui.addChild(this.statusLine); // Only renders hook statuses (main status in editor border)
-		this.ui.addChild(new Spacer(1));
+		this.ui.addChild(this.hookWidgetContainerAbove);
 		this.ui.addChild(this.editorContainer);
+		this.ui.addChild(this.hookWidgetContainerBelow);
 		this.ui.setFocus(this.editor);
 
 		this.#inputController.setupKeyHandlers();
@@ -837,6 +848,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.#sttController = undefined;
 		}
 		this.#extensionUiController.clearExtensionTerminalInputListeners();
+		this.#extensionUiController.clearHookWidgets();
 		this.statusLine.dispose();
 		if (this.#resizeHandler) {
 			process.stdout.removeListener("resize", this.#resizeHandler);
@@ -1359,8 +1371,8 @@ export class InteractiveMode implements InteractiveModeContext {
 		return this.#extensionUiController.emitCustomToolSessionEvent(reason, previousSessionFile);
 	}
 
-	setHookWidget(key: string, content: unknown): void {
-		this.#extensionUiController.setHookWidget(key, content);
+	setHookWidget(key: string, content: ExtensionWidgetContent, options?: ExtensionWidgetOptions): void {
+		this.#extensionUiController.setHookWidget(key, content, options);
 	}
 
 	setHookStatus(key: string, text: string | undefined): void {

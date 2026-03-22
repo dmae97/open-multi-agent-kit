@@ -455,18 +455,6 @@ function maybeWarnSuspiciousUnicodeEscapePlaceholder(edits: HashlineEdit[], warn
 // Edit Application
 // ═══════════════════════════════════════════════════════════════════════════
 
-const MIN_AUTOCORRECT_LENGTH = 2;
-
-function shouldAutocorrect(line: string, otherLine: string): boolean {
-	if (!line || line !== otherLine) return false;
-	line = line.trim();
-	if (line.length < MIN_AUTOCORRECT_LENGTH) {
-		// if brace, we allow
-		return line.endsWith("}") || line.endsWith(")");
-	}
-	return true;
-}
-
 /**
  * Apply an array of hashline edits to file content.
  *
@@ -635,34 +623,7 @@ export function applyHashlineEdits(
 					trackFirstChanged(edit.pos.line);
 				} else {
 					const count = edit.end.line - edit.pos.line + 1;
-					const newLines = [...edit.lines];
-					const trailingReplacementLine = newLines[newLines.length - 1]?.trimEnd();
-					const nextSurvivingLine = fileLines[edit.end.line]?.trimEnd();
-					if (
-						shouldAutocorrect(trailingReplacementLine, nextSurvivingLine) &&
-						// Safety: only correct when end-line content differs from the duplicate.
-						// If end already points to the boundary, matching next line is coincidence.
-						fileLines[edit.end.line - 1]?.trimEnd() !== trailingReplacementLine
-					) {
-						newLines.pop();
-						warnings.push(
-							`Auto-corrected range replace ${edit.pos.line}#${edit.pos.hash}-${edit.end.line}#${edit.end.hash}: removed trailing replacement line "${trailingReplacementLine}" that duplicated next surviving line`,
-						);
-					}
-					const leadingReplacementLine = newLines[0]?.trimEnd();
-					const prevSurvivingLine = fileLines[edit.pos.line - 2]?.trimEnd();
-					if (
-						shouldAutocorrect(leadingReplacementLine, prevSurvivingLine) &&
-						// Safety: only correct when pos-line content differs from the duplicate.
-						// If pos already points to the boundary, matching prev line is coincidence.
-						fileLines[edit.pos.line - 1]?.trimEnd() !== leadingReplacementLine
-					) {
-						newLines.shift();
-						warnings.push(
-							`Auto-corrected range replace ${edit.pos.line}#${edit.pos.hash}-${edit.end.line}#${edit.end.hash}: removed leading replacement line "${leadingReplacementLine}" that duplicated preceding surviving line`,
-						);
-					}
-					fileLines.splice(edit.pos.line - 1, count, ...newLines);
+					fileLines.splice(edit.pos.line - 1, count, ...edit.lines);
 					trackFirstChanged(edit.pos.line);
 				}
 				break;
