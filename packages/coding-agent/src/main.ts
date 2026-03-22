@@ -15,6 +15,7 @@ import { $env, getProjectDir, logger, postmortem, setProjectDir, VERSION } from 
 import chalk from "chalk";
 import type { Args } from "./cli/args";
 import { processFileArguments } from "./cli/file-processor";
+import { buildInitialMessage } from "./cli/initial-message";
 import { listModels } from "./cli/list-models";
 import { selectSession } from "./cli/session-picker";
 import { findConfigFile } from "./config";
@@ -137,7 +138,7 @@ async function runInteractiveMode(
 		}
 	}
 
-	if (initialMessage) {
+	if (initialMessage !== undefined) {
 		try {
 			await session.prompt(initialMessage, { images: initialImages });
 		} catch (error: unknown) {
@@ -159,33 +160,6 @@ async function runInteractiveMode(
 		const input = await mode.getUserInput();
 		await submitInteractiveInput(mode, session, input);
 	}
-}
-
-async function prepareInitialMessage(
-	parsed: Args,
-	autoResizeImages: boolean,
-): Promise<{
-	initialMessage?: string;
-	initialImages?: ImageContent[];
-}> {
-	if (parsed.fileArgs.length === 0) {
-		return {};
-	}
-
-	const { text, images } = await processFileArguments(parsed.fileArgs, { autoResizeImages });
-
-	let initialMessage: string;
-	if (parsed.messages.length > 0) {
-		initialMessage = text + parsed.messages[0];
-		parsed.messages.shift();
-	} else {
-		initialMessage = text;
-	}
-
-	return {
-		initialMessage,
-		initialImages: images.length > 0 ? images : undefined,
-	};
 }
 
 function normalizePathForComparison(value: string): string {
@@ -237,6 +211,21 @@ async function getChangelogForDisplay(parsed: Args): Promise<string | undefined>
 }
 
 async function createSessionManager(parsed: Args, cwd: string): Promise<SessionManager | undefined> {
+	if (parsed.fork) {
+		if (parsed.noSession) {
+			throw new Error("--fork requires session persistence");
+		}
+		const forkSource = parsed.fork;
+		if (forkSource.includes("/") || forkSource.includes("\\") || forkSource.endsWith(".jsonl")) {
+			return await SessionManager.forkFrom(forkSource, cwd, parsed.sessionDir);
+		}
+		const match = await resolveResumableSession(forkSource, cwd, parsed.sessionDir);
+		if (!match) {
+			throw new Error(`Session "${forkSource}" not found.`);
+		}
+		return await SessionManager.forkFrom(match.session.path, cwd, parsed.sessionDir);
+	}
+
 	if (parsed.noSession) {
 		return SessionManager.inMemory();
 	}
@@ -565,22 +554,27 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 	if (parsedArgs.noPty) {
 		Bun.env.PI_NO_PTY = "1";
 	}
-	const {
-		pipedInput,
-		initialMessage: initMsg,
-		initialImages,
-	} = await logger.timeAsync("prepareInitialMessage", async () => {
+	const { pipedInput, fileText, fileImages } = await logger.timeAsync("prepareInitialMessage", async () => {
 		const pipedInput = await readPipedInput();
-		let { initialMessage, initialImages } = await prepareInitialMessage(
-			parsedArgs,
-			settings.get("images.autoResize"),
-		);
-		if (pipedInput) {
-			initialMessage = initialMessage ? `${initialMessage}\n${pipedInput}` : pipedInput;
+		if (parsedArgs.fileArgs.length === 0) {
+			return { pipedInput };
 		}
-		return { pipedInput, initialMessage, initialImages };
+
+		const { text, images } = await processFileArguments(parsedArgs.fileArgs, {
+			autoResizeImages: settings.get("images.autoResize"),
+		});
+		return {
+			pipedInput,
+			fileText: text,
+			fileImages: images,
+		};
 	});
-	const initialMessage = initMsg;
+	const { initialMessage, initialImages } = buildInitialMessage({
+		parsed: parsedArgs,
+		fileText,
+		fileImages,
+		stdinContent: pipedInput,
+	});
 	const autoPrint = pipedInput !== undefined && !parsedArgs.print && parsedArgs.mode === undefined;
 	const isInteractive = !parsedArgs.print && !autoPrint && parsedArgs.mode === undefined;
 	const mode = parsedArgs.mode || "text";
@@ -626,7 +620,7 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 	let sessionManager = await logger.timeAsync("createSessionManager", () => createSessionManager(parsedArgs, cwd));
 
 	// Handle --resume (no value): show session picker
-	if (parsedArgs.resume === true) {
+	if (parsedArgs.resume === true && !parsedArgs.fork) {
 		const sessions = await logger.timeAsync("SessionManager.list", () =>
 			SessionManager.list(cwd, parsedArgs.sessionDir),
 		);

@@ -89,7 +89,13 @@ export function detectOpenAICompat(model: Model<"openai-completions">): Resolved
 		requiresAssistantAfterToolResult: false,
 		requiresThinkingAsText: isMistral,
 		requiresMistralToolIds: isMistral,
-		thinkingFormat: isZai ? "zai" : isAlibaba || isQwen ? "qwen" : "openai",
+		thinkingFormat: isZai
+			? "zai"
+			: provider === "openrouter" || baseUrl.includes("openrouter.ai")
+				? "openrouter"
+				: isAlibaba || isQwen
+					? "qwen"
+					: "openai",
 		reasoningContentField: "reasoning_content",
 		requiresReasoningContentForToolCalls: isKimiModel,
 		requiresAssistantContentForToolCalls: isKimiModel,

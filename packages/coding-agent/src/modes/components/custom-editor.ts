@@ -1,41 +1,41 @@
 import { Editor, type KeyId, matchesKey, parseKittySequence } from "@oh-my-pi/pi-tui";
-import type { AppAction } from "../../config/keybindings";
+import type { AppKeybinding } from "../../config/keybindings";
 
 type ConfigurableEditorAction = Extract<
-	AppAction,
-	| "interrupt"
-	| "clear"
-	| "exit"
-	| "suspend"
-	| "cycleThinkingLevel"
-	| "cycleModelForward"
-	| "cycleModelBackward"
-	| "selectModel"
-	| "expandTools"
-	| "toggleThinking"
-	| "externalEditor"
-	| "historySearch"
-	| "dequeue"
-	| "pasteImage"
-	| "copyPrompt"
+	AppKeybinding,
+	| "app.interrupt"
+	| "app.clear"
+	| "app.exit"
+	| "app.suspend"
+	| "app.thinking.cycle"
+	| "app.model.cycleForward"
+	| "app.model.cycleBackward"
+	| "app.model.select"
+	| "app.tools.expand"
+	| "app.thinking.toggle"
+	| "app.editor.external"
+	| "app.history.search"
+	| "app.message.dequeue"
+	| "app.clipboard.pasteImage"
+	| "app.clipboard.copyPrompt"
 >;
 
 const DEFAULT_ACTION_KEYS: Record<ConfigurableEditorAction, KeyId[]> = {
-	interrupt: ["escape"],
-	clear: ["ctrl+c"],
-	exit: ["ctrl+d"],
-	suspend: ["ctrl+z"],
-	cycleThinkingLevel: ["shift+tab"],
-	cycleModelForward: ["ctrl+p"],
-	cycleModelBackward: ["shift+ctrl+p"],
-	selectModel: ["ctrl+l"],
-	expandTools: ["ctrl+o"],
-	toggleThinking: ["ctrl+t"],
-	externalEditor: ["ctrl+g"],
-	historySearch: ["ctrl+r"],
-	dequeue: ["alt+up"],
-	pasteImage: ["ctrl+v"],
-	copyPrompt: ["alt+shift+c"],
+	"app.interrupt": ["escape"],
+	"app.clear": ["ctrl+c"],
+	"app.exit": ["ctrl+d"],
+	"app.suspend": ["ctrl+z"],
+	"app.thinking.cycle": ["shift+tab"],
+	"app.model.cycleForward": ["ctrl+p"],
+	"app.model.cycleBackward": ["shift+ctrl+p"],
+	"app.model.select": ["ctrl+l"],
+	"app.tools.expand": ["ctrl+o"],
+	"app.thinking.toggle": ["ctrl+t"],
+	"app.editor.external": ["ctrl+g"],
+	"app.history.search": ["ctrl+r"],
+	"app.message.dequeue": ["alt+up"],
+	"app.clipboard.pasteImage": ["ctrl+v"],
+	"app.clipboard.copyPrompt": ["alt+shift+c"],
 };
 
 /**
@@ -115,13 +115,13 @@ export class CustomEditor extends Editor {
 		}
 
 		// Intercept configured image paste (async - fires and handles result)
-		if (this.#matchesAction(data, "pasteImage") && this.onPasteImage) {
+		if (this.#matchesAction(data, "app.clipboard.pasteImage") && this.onPasteImage) {
 			void this.onPasteImage();
 			return;
 		}
 
 		// Intercept configured external editor shortcut
-		if (this.#matchesAction(data, "externalEditor") && this.onExternalEditor) {
+		if (this.#matchesAction(data, "app.editor.external") && this.onExternalEditor) {
 			this.onExternalEditor();
 			return;
 		}
@@ -133,56 +133,56 @@ export class CustomEditor extends Editor {
 		}
 
 		// Intercept configured suspend shortcut
-		if (this.#matchesAction(data, "suspend") && this.onSuspend) {
+		if (this.#matchesAction(data, "app.suspend") && this.onSuspend) {
 			this.onSuspend();
 			return;
 		}
 
 		// Intercept configured thinking block visibility toggle
-		if (this.#matchesAction(data, "toggleThinking") && this.onToggleThinking) {
+		if (this.#matchesAction(data, "app.thinking.toggle") && this.onToggleThinking) {
 			this.onToggleThinking();
 			return;
 		}
 
 		// Intercept configured model selector shortcut
-		if (this.#matchesAction(data, "selectModel") && this.onSelectModel) {
+		if (this.#matchesAction(data, "app.model.select") && this.onSelectModel) {
 			this.onSelectModel();
 			return;
 		}
 
 		// Intercept configured history search shortcut
-		if (this.#matchesAction(data, "historySearch") && this.onHistorySearch) {
+		if (this.#matchesAction(data, "app.history.search") && this.onHistorySearch) {
 			this.onHistorySearch();
 			return;
 		}
 
 		// Intercept configured tool output expansion shortcut
-		if (this.#matchesAction(data, "expandTools") && this.onExpandTools) {
+		if (this.#matchesAction(data, "app.tools.expand") && this.onExpandTools) {
 			this.onExpandTools();
 			return;
 		}
 
 		// Intercept configured backward model cycling (check before forward cycling)
-		if (this.#matchesAction(data, "cycleModelBackward") && this.onCycleModelBackward) {
+		if (this.#matchesAction(data, "app.model.cycleBackward") && this.onCycleModelBackward) {
 			this.onCycleModelBackward();
 			return;
 		}
 
 		// Intercept configured forward model cycling
-		if (this.#matchesAction(data, "cycleModelForward") && this.onCycleModelForward) {
+		if (this.#matchesAction(data, "app.model.cycleForward") && this.onCycleModelForward) {
 			this.onCycleModelForward();
 			return;
 		}
 
 		// Intercept configured thinking level cycling
-		if (this.#matchesAction(data, "cycleThinkingLevel") && this.onCycleThinkingLevel) {
+		if (this.#matchesAction(data, "app.thinking.cycle") && this.onCycleThinkingLevel) {
 			this.onCycleThinkingLevel();
 			return;
 		}
 
 		// Intercept configured interrupt shortcut.
 		// Default behavior keeps autocomplete dismissal, but parent can prioritize global interrupt handling.
-		if (this.#matchesAction(data, "interrupt") && this.onEscape) {
+		if (this.#matchesAction(data, "app.interrupt") && this.onEscape) {
 			if (!this.isShowingAutocomplete() || this.shouldBypassAutocompleteOnEscape?.()) {
 				this.onEscape();
 				return;
@@ -190,13 +190,13 @@ export class CustomEditor extends Editor {
 		}
 
 		// Intercept configured clear shortcut
-		if (this.#matchesAction(data, "clear") && this.onClear) {
+		if (this.#matchesAction(data, "app.clear") && this.onClear) {
 			this.onClear();
 			return;
 		}
 
 		// Intercept configured exit shortcut (only when editor is empty)
-		if (this.#matchesAction(data, "exit")) {
+		if (this.#matchesAction(data, "app.exit")) {
 			if (this.getText().length === 0 && this.onExit) {
 				this.onExit();
 			}
@@ -205,13 +205,13 @@ export class CustomEditor extends Editor {
 		}
 
 		// Intercept configured dequeue shortcut (restore queued message to editor)
-		if (this.#matchesAction(data, "dequeue") && this.onDequeue) {
+		if (this.#matchesAction(data, "app.message.dequeue") && this.onDequeue) {
 			this.onDequeue();
 			return;
 		}
 
 		// Intercept configured copy-prompt shortcut
-		if (this.#matchesAction(data, "copyPrompt") && this.onCopyPrompt) {
+		if (this.#matchesAction(data, "app.clipboard.copyPrompt") && this.onCopyPrompt) {
 			this.onCopyPrompt();
 			return;
 		}

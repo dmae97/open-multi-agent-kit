@@ -35,15 +35,25 @@ export function getSegmenter(): Intl.Segmenter {
 /**
  * Calculate the visible width of a string in terminal columns.
  */
+function _isPrintableAscii(str: string): boolean {
+	for (let i = 0; i < str.length; i++) {
+		const code = str.charCodeAt(i);
+		if (code < 0x20 || code > 0x7e) {
+			return false;
+		}
+	}
+	return true;
+}
+
 export function visibleWidthRaw(str: string): number {
 	if (!str) {
 		return 0;
 	}
 
 	// Fast path: pure ASCII printable
-	let isPureAscii = true;
 	let tabLength = 0;
 	const tabWidth = getDefaultTabWidth();
+	let isPureAscii = true;
 	for (let i = 0; i < str.length; i++) {
 		const code = str.charCodeAt(i);
 		if (code === 9) {

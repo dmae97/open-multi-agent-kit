@@ -1,7 +1,7 @@
 import { getProjectDir } from "@oh-my-pi/pi-utils";
 import type { AutocompleteProvider, CombinedAutocompleteProvider } from "../autocomplete";
 import { BracketedPasteHandler } from "../bracketed-paste";
-import { type EditorKeybindingsManager, getEditorKeybindings } from "../keybindings";
+import { getKeybindings, type KeybindingsManager } from "../keybindings";
 import { extractPrintableText, matchesKey } from "../keys";
 import { KillRing } from "../kill-ring";
 import type { SymbolTheme } from "../symbols";
@@ -15,7 +15,12 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "../utils";
-import { SelectList, type SelectListTheme } from "./select-list";
+import { SelectList, type SelectListLayoutOptions, type SelectListTheme } from "./select-list";
+
+const SLASH_COMMAND_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
+	minPrimaryColumnWidth: 12,
+	maxPrimaryColumnWidth: 32,
+};
 
 const segmenter = getSegmenter();
 
@@ -691,12 +696,12 @@ export class Editor implements Component, Focusable {
 	}
 
 	handleInput(data: string): void {
-		const kb = getEditorKeybindings();
+		const kb = getKeybindings();
 
 		// Handle character jump mode (awaiting next character to jump to)
 		if (this.#jumpMode !== null) {
 			// Cancel if the hotkey is pressed again
-			if (kb.matches(data, "jumpForward") || kb.matches(data, "jumpBackward")) {
+			if (kb.matches(data, "tui.editor.jumpForward") || kb.matches(data, "tui.editor.jumpBackward")) {
 				this.#jumpMode = null;
 				return;
 			}
@@ -728,12 +733,12 @@ export class Editor implements Component, Focusable {
 		// Handle special key combinations first
 
 		// Ctrl+C - Exit (let parent handle this)
-		if (matchesKey(data, "ctrl+c")) {
+		if (kb.matches(data, "tui.input.copy")) {
 			return;
 		}
 
 		// Undo
-		if (kb.matches(data, "undo")) {
+		if (kb.matches(data, "tui.editor.undo")) {
 			this.#applyUndo();
 			return;
 		}
@@ -741,27 +746,26 @@ export class Editor implements Component, Focusable {
 		// Handle autocomplete special keys first (but don't block other input)
 		if (this.#autocompleteState && this.#autocompleteList) {
 			// Escape - cancel autocomplete
-			if (matchesKey(data, "escape") || matchesKey(data, "esc")) {
+			if (kb.matches(data, "tui.select.cancel")) {
 				this.#cancelAutocomplete(true);
 				return;
 			}
 			// Let the autocomplete list handle navigation and selection
 			else if (
-				matchesKey(data, "up") ||
-				matchesKey(data, "down") ||
-				matchesKey(data, "pageUp") ||
-				matchesKey(data, "pageDown") ||
-				matchesKey(data, "enter") ||
-				matchesKey(data, "return") ||
+				kb.matches(data, "tui.select.up") ||
+				kb.matches(data, "tui.select.down") ||
+				kb.matches(data, "tui.select.pageUp") ||
+				kb.matches(data, "tui.select.pageDown") ||
+				kb.matches(data, "tui.input.submit") ||
 				data === "\n" ||
-				matchesKey(data, "tab")
+				kb.matches(data, "tui.input.tab")
 			) {
 				// Only pass navigation keys to the list, not Enter/Tab (we handle those directly)
 				if (
-					matchesKey(data, "up") ||
-					matchesKey(data, "down") ||
-					matchesKey(data, "pageUp") ||
-					matchesKey(data, "pageDown")
+					kb.matches(data, "tui.select.up") ||
+					kb.matches(data, "tui.select.down") ||
+					kb.matches(data, "tui.select.pageUp") ||
+					kb.matches(data, "tui.select.pageDown")
 				) {
 					this.#autocompleteList.handleInput(data);
 					this.onAutocompleteUpdate?.();
@@ -769,7 +773,7 @@ export class Editor implements Component, Focusable {
 				}
 
 				// If Tab was pressed, always apply the selection
-				if (matchesKey(data, "tab")) {
+				if (kb.matches(data, "tui.input.tab")) {
 					const selected = this.#autocompleteList.getSelectedItem();
 					if (selected && this.#autocompleteProvider) {
 						const shouldChainSlashCommandAutocomplete = this.#isSlashCommandNameAutocompleteSelection();
@@ -801,10 +805,7 @@ export class Editor implements Component, Focusable {
 				}
 
 				// If Enter was pressed on a slash command, apply completion and submit
-				if (
-					(matchesKey(data, "enter") || matchesKey(data, "return") || data === "\n") &&
-					this.#autocompletePrefix.startsWith("/")
-				) {
+				if ((kb.matches(data, "tui.input.submit") || data === "\n") && this.#autocompletePrefix.startsWith("/")) {
 					// Check for stale autocomplete state due to debounce
 					const currentLine = this.#state.lines[this.#state.cursorLine] ?? "";
 					const currentTextBeforeCursor = currentLine.slice(0, this.#state.cursorCol);
@@ -832,7 +833,7 @@ export class Editor implements Component, Focusable {
 					// Don't return - fall through to submission logic
 				}
 				// If Enter was pressed on a file path, apply completion
-				else if (matchesKey(data, "enter") || matchesKey(data, "return") || data === "\n") {
+				else if (kb.matches(data, "tui.input.submit") || data === "\n") {
 					const selected = this.#autocompleteList.getSelectedItem();
 					if (selected && this.#autocompleteProvider) {
 						const result = this.#autocompleteProvider.applyCompletion(
@@ -863,7 +864,7 @@ export class Editor implements Component, Focusable {
 		}
 
 		// Tab key - context-aware completion (but not when already autocompleting)
-		if (matchesKey(data, "tab") && !this.#autocompleteState) {
+		if (kb.matches(data, "tui.input.tab") && !this.#autocompleteState) {
 			this.#handleTabCompletion();
 			return;
 		}
@@ -920,7 +921,7 @@ export class Editor implements Component, Focusable {
 			data === "\x1b[27;5;13~" || // Ctrl+Enter (legacy format)
 			data === "\x1b\r" || // Option+Enter in some terminals (legacy)
 			data === "\x1b[13;2~" || // Shift+Enter in some terminals (legacy format)
-			matchesKey(data, "shift+enter") || // Shift+Enter (Kitty protocol, handles lock bits)
+			kb.matches(data, "tui.input.newLine") || // Shift+Enter (Kitty protocol, handles lock bits)
 			(data.length > 1 && data.includes("\x1b") && data.includes("\r")) ||
 			(data === "\n" && data.length === 1) // Shift+Enter from iTerm2 mapping
 		) {
@@ -932,7 +933,7 @@ export class Editor implements Component, Focusable {
 			this.#addNewLine();
 		}
 		// Plain Enter - submit (handles both legacy \r and Kitty protocol with lock bits)
-		else if (matchesKey(data, "enter") || matchesKey(data, "return") || data === "\n") {
+		else if (kb.matches(data, "tui.input.submit") || data === "\n") {
 			// If submit is disabled, do nothing
 			if (this.disableSubmit) {
 				return;
@@ -941,17 +942,17 @@ export class Editor implements Component, Focusable {
 			this.#submitValue();
 		}
 		// Backspace (including Shift+Backspace)
-		else if (matchesKey(data, "backspace") || matchesKey(data, "shift+backspace")) {
+		else if (kb.matches(data, "tui.editor.deleteCharBackward") || matchesKey(data, "shift+backspace")) {
 			this.#handleBackspace();
 		}
 		// Line navigation shortcuts (Home/End keys)
-		else if (matchesKey(data, "home")) {
+		else if (kb.matches(data, "tui.editor.cursorLineStart")) {
 			this.#moveToLineStart();
-		} else if (matchesKey(data, "end")) {
+		} else if (kb.matches(data, "tui.editor.cursorLineEnd")) {
 			this.#moveToLineEnd();
 		}
 		// Page navigation (PageUp/PageDown)
-		else if (matchesKey(data, "pageUp")) {
+		else if (kb.matches(data, "tui.editor.pageUp")) {
 			if (this.#isEditorEmpty()) {
 				this.#navigateHistory(-1);
 			} else if (this.#historyIndex > -1 && this.#isOnFirstVisualLine()) {
@@ -959,7 +960,7 @@ export class Editor implements Component, Focusable {
 			} else {
 				this.#pageScroll(-1);
 			}
-		} else if (matchesKey(data, "pageDown")) {
+		} else if (kb.matches(data, "tui.editor.pageDown")) {
 			if (this.#historyIndex > -1 && this.#isOnLastVisualLine()) {
 				this.#navigateHistory(1);
 			} else {
@@ -967,21 +968,21 @@ export class Editor implements Component, Focusable {
 			}
 		}
 		// Forward delete (Fn+Backspace or Delete key, including Shift+Delete)
-		else if (matchesKey(data, "delete") || matchesKey(data, "shift+delete")) {
+		else if (kb.matches(data, "tui.editor.deleteCharForward") || matchesKey(data, "shift+delete")) {
 			this.#handleForwardDelete();
 		}
 		// Word navigation (Option/Alt + Arrow or Ctrl + Arrow)
-		else if (matchesKey(data, "alt+left") || matchesKey(data, "ctrl+left")) {
+		else if (kb.matches(data, "tui.editor.cursorWordLeft")) {
 			// Word left
 			this.#resetKillSequence();
 			this.#moveWordBackwards();
-		} else if (matchesKey(data, "alt+right") || matchesKey(data, "ctrl+right")) {
+		} else if (kb.matches(data, "tui.editor.cursorWordRight")) {
 			// Word right
 			this.#resetKillSequence();
 			this.#moveWordForwards();
 		}
 		// Arrow keys
-		else if (matchesKey(data, "up")) {
+		else if (kb.matches(data, "tui.editor.cursorUp")) {
 			// Up - history navigation or cursor movement
 			if (this.#isEditorEmpty()) {
 				this.#navigateHistory(-1); // Start browsing history
@@ -993,7 +994,7 @@ export class Editor implements Component, Focusable {
 			} else {
 				this.#moveCursor(-1, 0); // Cursor movement (within text or history entry)
 			}
-		} else if (matchesKey(data, "down")) {
+		} else if (kb.matches(data, "tui.editor.cursorDown")) {
 			// Down - history navigation or cursor movement
 			if (this.#historyIndex > -1 && this.#isOnLastVisualLine()) {
 				this.#navigateHistory(1); // Navigate to newer history entry or clear
@@ -1003,10 +1004,10 @@ export class Editor implements Component, Focusable {
 			} else {
 				this.#moveCursor(1, 0); // Cursor movement (within text or history entry)
 			}
-		} else if (matchesKey(data, "right")) {
+		} else if (kb.matches(data, "tui.editor.cursorRight")) {
 			// Right
 			this.#moveCursor(0, 1);
-		} else if (matchesKey(data, "left")) {
+		} else if (kb.matches(data, "tui.editor.cursorLeft")) {
 			// Left
 			this.#moveCursor(0, -1);
 		}
@@ -1015,9 +1016,9 @@ export class Editor implements Component, Focusable {
 			this.#insertCharacter(" ");
 		}
 		// Character jump mode triggers
-		else if (kb.matches(data, "jumpForward")) {
+		else if (kb.matches(data, "tui.editor.jumpForward")) {
 			this.#jumpMode = "forward";
-		} else if (kb.matches(data, "jumpBackward")) {
+		} else if (kb.matches(data, "tui.editor.jumpBackward")) {
 			this.#jumpMode = "backward";
 		}
 		// Printable keystrokes, including Kitty CSI-u text-producing sequences.
@@ -1393,10 +1394,10 @@ export class Editor implements Component, Focusable {
 		}
 	}
 
-	#shouldSubmitOnBackslashEnter(data: string, kb: EditorKeybindingsManager): boolean {
+	#shouldSubmitOnBackslashEnter(data: string, kb: KeybindingsManager): boolean {
 		if (this.disableSubmit) return false;
 		if (!matchesKey(data, "enter")) return false;
-		const submitKeys = kb.getKeys("submit");
+		const submitKeys = kb.getKeys("tui.input.submit");
 		const hasShiftEnter = submitKeys.includes("shift+enter") || submitKeys.includes("shift+return");
 		if (!hasShiftEnter) return false;
 
@@ -2184,17 +2185,23 @@ export class Editor implements Component, Focusable {
 
 		if (suggestions && suggestions.items.length > 0) {
 			this.#autocompletePrefix = suggestions.prefix;
-			this.#autocompleteList = new SelectList(
-				suggestions.items,
-				this.#autocompleteMaxVisible,
-				this.#theme.selectList,
-			);
+			this.#autocompleteList = this.#createAutocompleteList(suggestions.prefix, suggestions.items);
 			this.#autocompleteState = "regular";
 			this.onAutocompleteUpdate?.();
 		} else {
 			this.#cancelAutocomplete();
 			this.onAutocompleteUpdate?.();
 		}
+	}
+	#createAutocompleteList(
+		prefix: string,
+		items: Array<{ value: string; label: string; description?: string }>,
+	): SelectList {
+		// Layout options prepared for future SelectList enhancements (e.g., for slash commands)
+		const layout = prefix.startsWith("/") ? SLASH_COMMAND_SELECT_LIST_LAYOUT : undefined;
+		// TODO: Pass layout to SelectList when constructor is updated to support it
+		void layout; // Use layout variable to avoid lint warnings
+		return new SelectList(items, this.#autocompleteMaxVisible, this.#theme.selectList);
 	}
 
 	#handleTabCompletion(): void {
@@ -2263,11 +2270,7 @@ https://github.com/EsotericSoftware/spine-runtimes/actions/runs/19536643416/job/
 			}
 
 			this.#autocompletePrefix = suggestions.prefix;
-			this.#autocompleteList = new SelectList(
-				suggestions.items,
-				this.#autocompleteMaxVisible,
-				this.#theme.selectList,
-			);
+			this.#autocompleteList = this.#createAutocompleteList(suggestions.prefix, suggestions.items);
 			this.#autocompleteState = "force";
 			this.onAutocompleteUpdate?.();
 		} else {
@@ -2313,11 +2316,7 @@ https://github.com/EsotericSoftware/spine-runtimes/actions/runs/19536643416/job/
 		if (suggestions && suggestions.items.length > 0) {
 			this.#autocompletePrefix = suggestions.prefix;
 			// Always create new SelectList to ensure update
-			this.#autocompleteList = new SelectList(
-				suggestions.items,
-				this.#autocompleteMaxVisible,
-				this.#theme.selectList,
-			);
+			this.#autocompleteList = this.#createAutocompleteList(suggestions.prefix, suggestions.items);
 			this.onAutocompleteUpdate?.();
 		} else {
 			this.#cancelAutocomplete();

@@ -52,8 +52,26 @@ export function parseTextSignature(
 	return { id: signature };
 }
 
-export function normalizeResponsesToolCallIdForTransform(id: string): string {
+export function normalizeResponsesToolCallIdForTransform(
+	id: string,
+	model?: Model<Api>,
+	source?: AssistantMessage,
+): string {
 	if (!id.includes("|")) return id;
+	const isForeignToolCall =
+		source != null && model != null && (source.provider !== model.provider || source.api !== model.api);
+	if (isForeignToolCall) {
+		const [callId, itemId] = id.split("|");
+		const normalizeIdPart = (part: string): string => {
+			const sanitized = part.replace(/[^a-zA-Z0-9_-]/g, "_");
+			const truncated = sanitized.length > 64 ? sanitized.slice(0, 64) : sanitized;
+			return truncated.replace(/_+$/, "");
+		};
+		const normalizedCallId = normalizeIdPart(callId);
+		let normalizedItemId = `fc_${Bun.hash(itemId).toString(36)}`;
+		if (normalizedItemId.length > 64) normalizedItemId = normalizedItemId.slice(0, 64);
+		return `${normalizedCallId}|${normalizedItemId}`;
+	}
 	const normalized = normalizeResponsesToolCallId(id);
 	return `${normalized.callId}|${normalized.itemId}`;
 }
@@ -221,7 +239,9 @@ export async function processResponsesStream<TApi extends Api>(
 	let sawFirstToken = false;
 
 	for await (const event of openaiStream) {
-		if (event.type === "response.output_item.added") {
+		if (event.type === "response.created") {
+			output.responseId = event.response.id;
+		} else if (event.type === "response.output_item.added") {
 			if (!sawFirstToken) {
 				sawFirstToken = true;
 				options?.onFirstToken?.();
@@ -376,6 +396,9 @@ export async function processResponsesStream<TApi extends Api>(
 			}
 		} else if (event.type === "response.completed") {
 			const response = event.response;
+			if (response?.id) {
+				output.responseId = response.id;
+			}
 			if (response?.usage) {
 				const cachedTokens = response.usage.input_tokens_details?.cached_tokens || 0;
 				output.usage = {

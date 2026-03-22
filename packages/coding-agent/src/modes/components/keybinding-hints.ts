@@ -1,8 +1,8 @@
 /**
  * Utilities for formatting keybinding hints in the UI.
  */
-import { type EditorAction, getEditorKeybindings, type KeyId } from "@oh-my-pi/pi-tui";
-import type { AppAction, KeybindingsManager } from "../../config/keybindings";
+import { getKeybindings, type Keybinding, type KeyId } from "@oh-my-pi/pi-tui";
+import type { AppKeybinding, KeybindingsManager } from "../../config/keybindings";
 import { theme } from "../../modes/theme/theme";
 
 /**
@@ -17,14 +17,14 @@ function formatKeys(keys: KeyId[]): string {
 /**
  * Get display string for an editor action.
  */
-export function editorKey(action: EditorAction): string {
-	return formatKeys(getEditorKeybindings().getKeys(action));
+export function editorKey(action: Keybinding): string {
+	return formatKeys(getKeybindings().getKeys(action));
 }
 
 /**
  * Get display string for an app action.
  */
-export function appKey(keybindings: KeybindingsManager, action: AppAction): string {
+export function appKey(keybindings: KeybindingsManager, action: AppKeybinding): string {
 	return formatKeys(keybindings.getKeys(action));
 }
 
@@ -32,11 +32,11 @@ export function appKey(keybindings: KeybindingsManager, action: AppAction): stri
  * Format a keybinding hint with consistent styling: dim key, muted description.
  * Looks up the key from editor keybindings automatically.
  *
- * @param action - Editor action name (e.g., "selectConfirm", "expandTools")
+ * @param action - Keybinding action name (e.g., "tui.select.confirm", "app.tools.expand")
  * @param description - Description text (e.g., "to expand", "cancel")
  * @returns Formatted string with dim key and muted description
  */
-export function keyHint(action: EditorAction, description: string): string {
+export function keyHint(action: Keybinding, description: string): string {
 	return theme.fg("dim", editorKey(action)) + theme.fg("muted", ` ${description}`);
 }
 
@@ -45,11 +45,11 @@ export function keyHint(action: EditorAction, description: string): string {
  * Requires the KeybindingsManager instance.
  *
  * @param keybindings - KeybindingsManager instance
- * @param action - App action name (e.g., "interrupt", "externalEditor")
+ * @param action - App keybinding name (e.g., "app.interrupt", "app.editor.external")
  * @param description - Description text
  * @returns Formatted string with dim key and muted description
  */
-export function appKeyHint(keybindings: KeybindingsManager, action: AppAction, description: string): string {
+export function appKeyHint(keybindings: KeybindingsManager, action: AppKeybinding, description: string): string {
 	return theme.fg("dim", appKey(keybindings, action)) + theme.fg("muted", ` ${description}`);
 }
 

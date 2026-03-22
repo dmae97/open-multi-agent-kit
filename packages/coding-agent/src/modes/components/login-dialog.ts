@@ -1,5 +1,5 @@
 import { getOAuthProviders } from "@oh-my-pi/pi-ai";
-import { Container, getEditorKeybindings, Input, Spacer, Text, type TUI } from "@oh-my-pi/pi-tui";
+import { Container, getKeybindings, Input, Spacer, Text, type TUI } from "@oh-my-pi/pi-tui";
 import { theme } from "../../modes/theme/theme";
 import { openPath } from "../../utils/open";
 import { DynamicBorder } from "./dynamic-border";
@@ -151,9 +151,9 @@ export class LoginDialogComponent extends Container {
 	}
 
 	handleInput(data: string): void {
-		const kb = getEditorKeybindings();
+		const kb = getKeybindings();
 
-		if (kb.matches(data, "selectCancel")) {
+		if (kb.matches(data, "tui.select.cancel")) {
 			this.#cancel();
 			return;
 		}

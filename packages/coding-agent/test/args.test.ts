@@ -86,6 +86,13 @@ describe("parseArgs", () => {
 		});
 	});
 
+	describe("--fork flag", () => {
+		test("parses --fork with session ID", () => {
+			const result = parseArgs(["--fork", "abc123"]);
+			expect(result.fork).toBe("abc123");
+		});
+	});
+
 	describe("flags with values", () => {
 		test("parses --provider", () => {
 			const result = parseArgs(["--provider", "openai"]);

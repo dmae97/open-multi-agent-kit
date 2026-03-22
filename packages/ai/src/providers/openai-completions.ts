@@ -337,11 +337,17 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 				errorMessage: "OpenAI completions stream stalled while waiting for the next event",
 				onIdle: () => requestAbortController.abort(),
 			})) {
+				if (!chunk || typeof chunk !== "object") continue;
+
+				// OpenAI documents ChatCompletionChunk.id as the unique chat completion identifier,
+				// and each chunk in a streamed completion carries the same id.
+				output.responseId ||= chunk.id;
+
 				if (chunk.usage) {
 					output.usage = parseChunkUsage(chunk.usage, model, copilotPremiumRequests);
 				}
 
-				const choice = chunk.choices[0];
+				const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : undefined;
 				if (!choice) continue;
 
 				if (!chunk.usage) {
@@ -352,7 +358,11 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 				}
 
 				if (choice.finish_reason) {
-					output.stopReason = mapStopReason(choice.finish_reason);
+					const finishReasonResult = mapStopReason(choice.finish_reason);
+					output.stopReason = finishReasonResult.stopReason;
+					if (finishReasonResult.errorMessage) {
+						output.errorMessage = finishReasonResult.errorMessage;
+					}
 				}
 
 				if (choice.delta) {
@@ -463,8 +473,11 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 				throw new Error("Request was aborted");
 			}
 
-			if (output.stopReason === "aborted" || output.stopReason === "error") {
-				throw new Error("An unknown error occurred");
+			if (output.stopReason === "aborted") {
+				throw new Error("Request was aborted");
+			}
+			if (output.stopReason === "error") {
+				throw new Error(output.errorMessage || "Provider returned an error stop reason");
 			}
 
 			output.duration = Date.now() - startTime;
@@ -616,6 +629,12 @@ function buildParams(model: Model<"openai-completions">, context: Context, optio
 		Reflect.set(params, "enable_thinking", !!options?.reasoning);
 	} else if (compat.thinkingFormat === "qwen-chat-template" && model.reasoning) {
 		Reflect.set(params, "chat_template_kwargs", { enable_thinking: !!options?.reasoning });
+	} else if (compat.thinkingFormat === "openrouter" && options?.reasoning && model.reasoning) {
+		// OpenRouter normalizes reasoning across providers via a nested reasoning object.
+		const openRouterParams = params as typeof params & { reasoning?: { effort?: string } };
+		openRouterParams.reasoning = {
+			effort: mapReasoningEffort(options.reasoning, compat.reasoningEffortMap),
+		};
 	} else if (options?.reasoning && model.reasoning && compat.supportsReasoningEffort) {
 		// OpenAI-style reasoning_effort
 		Reflect.set(params, "reasoning_effort", mapReasoningEffort(options.reasoning, compat.reasoningEffortMap));
@@ -1061,21 +1080,29 @@ function convertTools(tools: Tool[], compat: ResolvedOpenAICompat): OpenAI.Chat.
 	});
 }
 
-function mapStopReason(reason: ChatCompletionChunk.Choice["finish_reason"] | string): StopReason {
-	if (reason === null) return "stop";
+function mapStopReason(reason: ChatCompletionChunk.Choice["finish_reason"] | string): {
+	stopReason: StopReason;
+	errorMessage?: string;
+} {
+	if (reason === null) return { stopReason: "stop" };
 	switch (reason) {
 		case "stop":
 		case "end":
-			return "stop";
+			return { stopReason: "stop" };
 		case "length":
-			return "length";
+			return { stopReason: "length" };
 		case "function_call":
 		case "tool_calls":
-			return "toolUse";
+			return { stopReason: "toolUse" };
 		case "content_filter":
-			return "error";
+			return { stopReason: "error", errorMessage: "Provider finish_reason: content_filter" };
+		case "network_error":
+			return { stopReason: "error", errorMessage: "Provider finish_reason: network_error" };
 		default:
-			throw new Error(`Unhandled stop reason: ${reason}`);
+			return {
+				stopReason: "error",
+				errorMessage: `Provider finish_reason: ${reason}`,
+			};
 	}
 }
 

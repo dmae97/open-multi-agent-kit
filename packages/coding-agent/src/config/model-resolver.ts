@@ -142,6 +142,55 @@ function isAlias(id: string): boolean {
 }
 
 /**
+ * Find an exact model reference match.
+ * Supports either a bare model id or a canonical provider/modelId reference.
+ * When matching by bare id, ambiguous matches across providers are rejected.
+ */
+export function findExactModelReferenceMatch(
+	modelReference: string,
+	availableModels: Model<Api>[],
+): Model<Api> | undefined {
+	const trimmedReference = modelReference.trim();
+	if (!trimmedReference) {
+		return undefined;
+	}
+
+	const normalizedReference = trimmedReference.toLowerCase();
+
+	const canonicalMatches = availableModels.filter(
+		model => `${model.provider}/${model.id}`.toLowerCase() === normalizedReference,
+	);
+	if (canonicalMatches.length === 1) {
+		return canonicalMatches[0];
+	}
+	if (canonicalMatches.length > 1) {
+		return undefined;
+	}
+
+	const slashIndex = trimmedReference.indexOf("/");
+	if (slashIndex !== -1) {
+		const provider = trimmedReference.substring(0, slashIndex).trim();
+		const modelId = trimmedReference.substring(slashIndex + 1).trim();
+		if (provider && modelId) {
+			const providerMatches = availableModels.filter(
+				model =>
+					model.provider.toLowerCase() === provider.toLowerCase() &&
+					model.id.toLowerCase() === modelId.toLowerCase(),
+			);
+			if (providerMatches.length === 1) {
+				return providerMatches[0];
+			}
+			if (providerMatches.length > 1) {
+				return undefined;
+			}
+		}
+	}
+
+	const idMatches = availableModels.filter(model => model.id.toLowerCase() === normalizedReference);
+	return idMatches.length === 1 ? idMatches[0] : undefined;
+}
+
+/**
  * Try to match a pattern to a model from the available models list.
  * Returns the matched model or undefined if no match found.
  */
@@ -150,17 +199,17 @@ function tryMatchModel(
 	availableModels: Model<Api>[],
 	context: ModelPreferenceContext,
 ): Model<Api> | undefined {
-	// Check for provider/modelId format (provider is everything before the first /)
+	// Try exact reference match first (handles provider/modelId and bare id with ambiguity rejection)
+	const exactRefMatch = findExactModelReferenceMatch(modelPattern, availableModels);
+	if (exactRefMatch) {
+		return exactRefMatch;
+	}
+
+	// Check for provider/modelId format — fuzzy match within provider
 	const slashIndex = modelPattern.indexOf("/");
 	if (slashIndex !== -1) {
 		const provider = modelPattern.substring(0, slashIndex);
 		const modelId = modelPattern.substring(slashIndex + 1);
-		const providerMatch = availableModels.find(
-			m => m.provider.toLowerCase() === provider.toLowerCase() && m.id.toLowerCase() === modelId.toLowerCase(),
-		);
-		if (providerMatch) {
-			return providerMatch;
-		}
 
 		const providerModels = availableModels.filter(m => m.provider.toLowerCase() === provider.toLowerCase());
 		if (providerModels.length > 0) {
@@ -187,10 +236,9 @@ function tryMatchModel(
 				return scored[0]?.model;
 			}
 		}
-		// No exact provider/model match - fall through to other matching
 	}
 
-	// Check for exact ID match (case-insensitive)
+	// Exact ID match (case-insensitive) — with ambiguity across providers handled by preference
 	const exactMatches = availableModels.filter(m => m.id.toLowerCase() === modelPattern.toLowerCase());
 	if (exactMatches.length > 0) {
 		return pickPreferredModel(exactMatches, context);

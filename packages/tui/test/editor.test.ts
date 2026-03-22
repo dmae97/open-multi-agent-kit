@@ -3,12 +3,12 @@ import { stripVTControlCharacters } from "node:util";
 import { CombinedAutocompleteProvider } from "@oh-my-pi/pi-tui/autocomplete";
 import { Editor } from "@oh-my-pi/pi-tui/components/editor";
 import { visibleWidth } from "@oh-my-pi/pi-tui/utils";
-import { EditorKeybindingsManager, setEditorKeybindings } from "../src/keybindings";
+import { KeybindingsManager, setKeybindings, TUI_KEYBINDINGS } from "../src/keybindings";
 import { defaultEditorTheme } from "./test-themes";
 
 describe("Editor component", () => {
 	afterEach(() => {
-		setEditorKeybindings(new EditorKeybindingsManager());
+		setKeybindings(new KeybindingsManager(TUI_KEYBINDINGS));
 	});
 
 	describe("Prompt history navigation", () => {
@@ -1340,9 +1340,9 @@ describe("Editor component", () => {
 		});
 
 		it("uses the configured undo binding", () => {
-			setEditorKeybindings(
-				new EditorKeybindingsManager({
-					undo: "f8",
+			setKeybindings(
+				new KeybindingsManager(TUI_KEYBINDINGS, {
+					"tui.editor.undo": "f8",
 				}),
 			);
 

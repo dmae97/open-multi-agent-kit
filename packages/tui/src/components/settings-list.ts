@@ -1,4 +1,4 @@
-import { matchesKey } from "../keys";
+import { getKeybindings } from "../keybindings";
 import type { Component } from "../tui";
 import { Ellipsis, padding, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "../utils";
 
@@ -148,13 +148,14 @@ export class SettingsList implements Component {
 		}
 
 		// Main list input handling
-		if (matchesKey(data, "up")) {
+		const kb = getKeybindings();
+		if (kb.matches(data, "tui.select.up")) {
 			this.#selectedIndex = this.#selectedIndex === 0 ? this.#items.length - 1 : this.#selectedIndex - 1;
-		} else if (matchesKey(data, "down")) {
+		} else if (kb.matches(data, "tui.select.down")) {
 			this.#selectedIndex = this.#selectedIndex === this.#items.length - 1 ? 0 : this.#selectedIndex + 1;
-		} else if (matchesKey(data, "enter") || matchesKey(data, "return") || data === "\n" || data === " ") {
+		} else if (kb.matches(data, "tui.select.confirm") || data === " " || data === "\n") {
 			this.#activateItem();
-		} else if (matchesKey(data, "escape") || matchesKey(data, "esc") || matchesKey(data, "ctrl+c")) {
+		} else if (kb.matches(data, "tui.select.cancel")) {
 			this.#onCancel();
 		}
 	}

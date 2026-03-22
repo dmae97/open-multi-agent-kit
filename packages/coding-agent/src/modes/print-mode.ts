@@ -146,7 +146,7 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 	});
 
 	// Send initial message with attachments
-	if (initialMessage) {
+	if (initialMessage !== undefined) {
 		await session.prompt(initialMessage, { images: initialImages });
 	}
 

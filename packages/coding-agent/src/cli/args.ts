@@ -28,6 +28,7 @@ export interface Args {
 	mode?: Mode;
 	noSession?: boolean;
 	sessionDir?: string;
+	fork?: string;
 	models?: string[];
 	tools?: string[];
 	noTools?: boolean;
@@ -79,6 +80,8 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 			} else {
 				result.resume = true;
 			}
+		} else if (arg === "--fork" && i + 1 < args.length) {
+			result.fork = args[++i];
 		} else if (arg === "--provider" && i + 1 < args.length) {
 			result.provider = args[++i];
 		} else if (arg === "--model" && i + 1 < args.length) {

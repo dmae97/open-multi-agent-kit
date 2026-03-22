@@ -26,6 +26,34 @@ import {
 } from "@oh-my-pi/pi-natives";
 
 // =============================================================================
+// Platform Detection
+// =============================================================================
+
+function isWindowsTerminalSession(): boolean {
+	return (
+		Boolean(process.env.WT_SESSION) && !process.env.SSH_CONNECTION && !process.env.SSH_CLIENT && !process.env.SSH_TTY
+	);
+}
+
+/**
+ * Raw 0x08 (BS) is ambiguous in legacy terminals.
+ *
+ * - Windows Terminal uses it for Ctrl+Backspace.
+ * - Some legacy terminals and tmux setups send it for plain Backspace.
+ *
+ * Prefer explicit Kitty / CSI-u / modifyOtherKeys sequences whenever they are
+ * available. Fall back to a Windows Terminal heuristic only for raw BS bytes.
+ */
+function matchesRawBackspace(data: string, expectedModifier: number): boolean {
+	if (data === "\x7f") return expectedModifier === 0;
+	if (data !== "\x08") return false;
+	// On Windows Terminal, 0x08 = Ctrl+Backspace. On others, it's plain Backspace.
+	return isWindowsTerminalSession() ? expectedModifier === 4 : expectedModifier === 0;
+}
+
+export { isWindowsTerminalSession, matchesRawBackspace };
+
+// =============================================================================
 // Global Kitty Protocol State
 // =============================================================================
 

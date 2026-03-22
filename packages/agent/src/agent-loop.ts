@@ -196,7 +196,6 @@ async function runLoop(
 	// Outer loop: continues when queued follow-up messages arrive after agent would stop
 	while (true) {
 		let hasMoreToolCalls = true;
-		let steeringAfterTools: AgentMessage[] | null = null;
 
 		// Inner loop: process tool calls and steering messages
 		while (hasMoreToolCalls || pendingMessages.length > 0) {
@@ -225,6 +224,7 @@ async function runLoop(
 			// Stream assistant response
 			const message = await streamAssistantResponse(currentContext, config, signal, stream, streamFn);
 			newMessages.push(message);
+			let steeringMessagesFromExecution: AgentMessage[] | undefined;
 
 			if (message.stopReason === "error" || message.stopReason === "aborted") {
 				// Create placeholder tool results for any tool calls in the aborted message
@@ -250,19 +250,20 @@ async function runLoop(
 
 			const toolResults: ToolResultMessage[] = [];
 			if (hasMoreToolCalls) {
-				const toolExecution = await executeToolCalls(
+				const executionResult = await executeToolCalls(
 					currentContext.tools,
 					message,
 					signal,
 					stream,
 					config.getSteeringMessages,
-					config.getToolContext,
 					config.interruptMode,
+					config.getToolContext,
 					config.transformToolCallArguments,
 					config.intentTracing,
 				);
-				toolResults.push(...toolExecution.toolResults);
-				steeringAfterTools = toolExecution.steeringMessages ?? null;
+
+				toolResults.push(...executionResult.toolResults);
+				steeringMessagesFromExecution = executionResult.steeringMessages;
 
 				for (const result of toolResults) {
 					currentContext.messages.push(result);
@@ -272,13 +273,7 @@ async function runLoop(
 
 			stream.push({ type: "turn_end", message, toolResults });
 
-			// Get steering messages after turn completes
-			if (steeringAfterTools && steeringAfterTools.length > 0) {
-				pendingMessages = steeringAfterTools;
-				steeringAfterTools = null;
-			} else {
-				pendingMessages = (await config.getSteeringMessages?.()) || [];
-			}
+			pendingMessages = steeringMessagesFromExecution ?? ((await config.getSteeringMessages?.()) || []);
 		}
 
 		// Agent would stop here. Check for follow-up messages.
@@ -433,24 +428,36 @@ async function executeToolCalls(
 	signal: AbortSignal | undefined,
 	stream: EventStream<AgentEvent, AgentMessage[]>,
 	getSteeringMessages?: AgentLoopConfig["getSteeringMessages"],
-	getToolContext?: AgentLoopConfig["getToolContext"],
 	interruptMode: AgentLoopConfig["interruptMode"] = "immediate",
+	getToolContext?: AgentLoopConfig["getToolContext"],
 	transformToolCallArguments?: AgentLoopConfig["transformToolCallArguments"],
 	intentTracing?: AgentLoopConfig["intentTracing"],
 ): Promise<{ toolResults: ToolResultMessage[]; steeringMessages?: AgentMessage[] }> {
 	type ToolCallContent = Extract<AssistantMessage["content"][number], { type: "toolCall" }>;
 	const toolCalls = assistantMessage.content.filter((c): c is ToolCallContent => c.type === "toolCall");
 	const emittedToolResults: ToolResultMessage[] = [];
-	let steeringMessages: AgentMessage[] | undefined;
-	const shouldInterruptImmediately = interruptMode !== "wait";
 	const toolCallInfos = toolCalls.map(call => ({ id: call.id, name: call.name }));
 	const batchId = `${assistantMessage.timestamp ?? Date.now()}_${toolCalls[0]?.id ?? "batch"}`;
+	const shouldInterruptImmediately = interruptMode !== "wait";
 	const steeringAbortController = new AbortController();
 	const toolSignal = signal
 		? AbortSignal.any([signal, steeringAbortController.signal])
 		: steeringAbortController.signal;
 	const interruptState = { triggered: false };
+	let steeringMessages: AgentMessage[] | undefined;
 	let steeringCheck: Promise<void> | null = null;
+
+	const records = toolCalls.map(toolCall => ({
+		toolCall,
+		tool: tools?.find(t => t.name === toolCall.name),
+		args: toolCall.arguments as Record<string, unknown>,
+		started: false,
+		result: undefined as AgentToolResult<any> | undefined,
+		isError: false,
+		skipped: false,
+		toolResultMessage: undefined as ToolResultMessage | undefined,
+		resultEmitted: false,
+	}));
 
 	const checkSteering = async (): Promise<void> => {
 		if (!shouldInterruptImmediately || !getSteeringMessages || interruptState.triggered) {
@@ -472,18 +479,6 @@ async function executeToolCalls(
 		});
 		await steeringCheck;
 	};
-
-	const records = toolCalls.map(toolCall => ({
-		toolCall,
-		tool: tools?.find(t => t.name === toolCall.name),
-		args: toolCall.arguments as Record<string, unknown>,
-		started: false,
-		result: undefined as AgentToolResult<any> | undefined,
-		isError: false,
-		skipped: false,
-		toolResultMessage: undefined as ToolResultMessage | undefined,
-		resultEmitted: false,
-	}));
 
 	const emitToolResult = (record: (typeof records)[number], result: AgentToolResult<any>, isError: boolean): void => {
 		if (record.resultEmitted) return;
@@ -578,7 +573,6 @@ async function executeToolCalls(
 				transformToolCallArguments ? transformToolCallArguments(effectiveArgs, toolCall.name) : effectiveArgs,
 				tool.nonAbortable ? undefined : toolSignal,
 				partialResult => {
-					if (interruptState.triggered) return;
 					stream.push({
 						type: "tool_execution_update",
 						toolCallId: toolCall.id,
@@ -637,13 +631,6 @@ async function executeToolCalls(
 	return { toolResults: emittedToolResults, steeringMessages };
 }
 
-function createSkippedToolResult(): AgentToolResult<any> {
-	return {
-		content: [{ type: "text", text: "Skipped due to queued user message." }],
-		details: {},
-	};
-}
-
 /**
  * Create a tool result for a tool call that was aborted or errored before execution.
  * Maintains the tool_use/tool_result pairing required by the API.
@@ -689,4 +676,11 @@ function createAbortedToolResult(
 	stream.push({ type: "message_end", message: toolResultMessage });
 
 	return toolResultMessage;
+}
+
+function createSkippedToolResult(): AgentToolResult<any> {
+	return {
+		content: [{ type: "text", text: "Skipped due to queued user message." }],
+		details: {},
+	};
 }
