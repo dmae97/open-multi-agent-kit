@@ -12,6 +12,7 @@ import type {
 } from "openai/resources/responses/responses";
 import packageJson from "../../package.json" with { type: "json" };
 import { calculateCost } from "../models";
+import { isUsageLimitError } from "../rate-limit-utils";
 import { getEnvApiKey } from "../stream";
 import {
 	type Api,
@@ -1994,6 +1995,12 @@ async function fetchWithRetry(url: string, init: RequestInit, signal?: AbortSign
 			}
 			if (signal?.aborted) return response;
 			const errorBody = await response.clone().text();
+			// Usage-limit errors are persistent (account allocation exhausted) — retrying with the
+			// same credential is futile. Bail out immediately so the error propagates to the agent
+			// session layer where credential switching happens.
+			if (response.status === 429 && isUsageLimitError(errorBody)) {
+				return response;
+			}
 			const { delay, serverProvided } = getRetryDelayMs(response, attempt, errorBody);
 			if (response.status === 429 && serverProvided) {
 				if (rateLimitTimeSpent + delay > CODEX_RATE_LIMIT_BUDGET_MS) {

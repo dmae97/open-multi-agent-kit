@@ -1,6 +1,16 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `isUsageLimitError()` to `rate-limit-utils` as a single source of truth for detecting usage/quota limit errors across all providers
+
+### Fixed
+
+- Fixed `parseRateLimitReason` to recognize "usage limit" in error messages and correctly classify them as `QUOTA_EXHAUSTED`
+- Fixed Codex `fetchWithRetry` retrying 429 responses for `usage_limit_reached` errors for up to 5 minutes instead of returning immediately for credential switching
+- Removed `usage.?limit` from `TRANSIENT_MESSAGE_PATTERN` in retry utils since usage limits are not transient and require credential rotation
+- Fixed `parseRateLimitReason` not recognizing "usage limit" in Codex error messages, causing incorrect fallback to `UNKNOWN` classification instead of `QUOTA_EXHAUSTED`
 
 ## [13.14.2] - 2026-03-21
 ### Changed

@@ -4279,7 +4279,9 @@ export class AgentSession {
 							const shouldRetry =
 								retrySettings.enabled &&
 								attempt < retrySettings.maxRetries &&
-								(retryAfterMs !== undefined || this.#isRetryableErrorMessage(message));
+								(retryAfterMs !== undefined ||
+									this.#isTransientErrorMessage(message) ||
+									isUsageLimitError(message));
 							if (!shouldRetry) {
 								lastError = error;
 								break;
@@ -4579,7 +4581,7 @@ export class AgentSession {
 		const errorMessage = message.errorMessage || "Unknown error";
 		let delayMs = retrySettings.baseDelayMs * 2 ** (this.#retryAttempt - 1);
 
-		if (this.model && this.#isUsageLimitErrorMessage(errorMessage)) {
+		if (this.model && isUsageLimitError(errorMessage)) {
 			const retryAfterMs =
 				this.#parseRetryAfterMsFromError(errorMessage) ??
 				calculateRateLimitBackoffMs(parseRateLimitReason(errorMessage));

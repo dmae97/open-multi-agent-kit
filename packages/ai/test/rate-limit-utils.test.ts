@@ -39,6 +39,12 @@ describe("parseRateLimitReason", () => {
 	it("returns UNKNOWN for unrecognised messages", () => {
 		expect(parseRateLimitReason("Something completely unexpected happened")).toBe("UNKNOWN");
 	});
+
+	it("classifies Codex usage limit error as QUOTA_EXHAUSTED", () => {
+		expect(
+			parseRateLimitReason("Codex error event: The usage limit has been reached (code=usage_limit_reached)"),
+		).toBe("QUOTA_EXHAUSTED");
+	});
 });
 
 describe("calculateRateLimitBackoffMs", () => {
