@@ -2,35 +2,24 @@ Applies precise file edits using `LINE#ID` anchors from `read` output.
 
 Read the file first. Copy anchors exactly from the latest `read` output. In one `edit` call, batch all edits for one file. After any successful edit, re-read before editing that file again.
 
-This matters: your output is checked against the real file state. Invalid anchors, invalid op/field combinations, duplicated boundary lines, or semantically equivalent rewrites will fail.
+This matters: your output is checked against the real file state. Invalid anchors, duplicated boundary lines, or semantically equivalent rewrites will fail.
 
 <operations>
 **Top level**
 - `path` — file path
 - `move` — optional rename target
 - `delete` — optional whole-file delete
-- `edits` — array of edit entries
+- `edits` — array of `{ loc, content }` entries
 
-**Edit entry shape**
-Each entry is:
-- `op` — one of `replace_line`, `replace_range`, `append_at`, `prepend_at`, `append_file`, `prepend_file`
-- `lines` — replacement/inserted content
-- `pos` — required for `replace_line`, `replace_range`, `append_at`, `prepend_at`
-- `end` — required only for `replace_range`
+**Edit entry**: `{ loc, content }`
+- `loc` — where to apply the edit (see below)
+- `content` — replacement/inserted lines (array of strings preferred, `null` to delete)
 
-**Meaning**
-- `replace_line`: replace exactly one anchored line
-- `replace_range`: replace inclusive `pos..end`
-- `append_at`: insert after `pos`
-- `prepend_at`: insert before `pos`
-- `append_file`: insert at end of file
-- `prepend_file`: insert at beginning of file
-
-**`lines`**
-- Array of literal file lines is preferred
-- `""` means a blank line
-- `null` or `[]` deletes for `replace_line` / `replace_range`
-- For insert ops, `lines` must contain only the new content
+**`loc` values**
+- `"append"` / `"prepend"` — insert at end/start of file
+- `{ append: "N#ID" }` / `{ prepend: "N#ID" }` — insert after/before anchored line
+- `{ line: "N#ID" }` — replace exactly one anchored line
+- `{ block: { pos: "N#ID", end: "N#ID" } }` — replace inclusive `pos..end`
 </operations>
 
 <examples>
@@ -56,14 +45,29 @@ All examples below reference the same file, `util.ts`:
 {{hlinefull 18 "}"}}
 ```
 
+<example name="replace a block body">
+Replace only the catch body. Do not target the shared boundary line `} catch (err) {`.
+```
+{
+  path: "util.ts",
+  edits: [{
+    loc: { block: { pos: {{hlineref 15 "\t\tconsole.error(err);"}}, end: {{hlineref 16 "\t\treturn null;"}} } },
+    content: [
+      "\t\tif (isEnoent(err)) return null;",
+      "\t\tthrow err;"
+    ]
+  }]
+}
+```
+</example>
+
 <example name="replace one line">
 ```
 {
   path: "util.ts",
   edits: [{
-    op: "replace_line",
-    pos: {{hlineref 2 "const timeout = 5000;"}},
-    lines: ["const timeout = 30_000;"]
+    loc: { line: {{hlineref 2 "const timeout = 5000;"}} },
+    content: ["const timeout = 30_000;"]
   }]
 }
 ```
@@ -74,42 +78,21 @@ All examples below reference the same file, `util.ts`:
 {
   path: "util.ts",
   edits: [{
-    op: "replace_range",
-    pos: {{hlineref 10 "\t// TODO: remove after migration"}},
-    end: {{hlineref 11 "\tlegacy();"}},
-    lines: null
-  }]
-}
-```
-</example>
-
-<example name="replace a block body">
-Replace only the catch body. Do not target the shared boundary line `} catch (err) {`.
-```
-{
-  path: "util.ts",
-  edits: [{
-    op: "replace_range",
-    pos: {{hlineref 15 "\t\tconsole.error(err);"}},
-    end: {{hlineref 16 "\t\treturn null;"}},
-    lines: [
-      "\t\tif (isEnoent(err)) return null;",
-      "\t\tthrow err;"
-    ]
+    loc: { block: { pos: {{hlineref 10 "\t// TODO: remove after migration"}}, end: {{hlineref 11 "\tlegacy();"}} } },
+    content: null
   }]
 }
 ```
 </example>
 
 <example name="insert before sibling">
-When adding a sibling declaration, prefer `prepend_at` on the next declaration.
+When adding a sibling declaration, prefer `prepend` on the next declaration.
 ```
 {
   path: "util.ts",
   edits: [{
-    op: "prepend_at",
-    pos: {{hlineref 9 "function beta() {"}},
-    lines: [
+    loc: { prepend: {{hlineref 9 "function beta() {"}} },
+    content: [
       "function gamma() {",
       "\tvalidate();",
       "}",
@@ -124,12 +107,11 @@ When adding a sibling declaration, prefer `prepend_at` on the next declaration.
 <critical>
 - Make the minimum exact edit. Do not rewrite nearby code unless the consumed range requires it.
 - Use anchors exactly as `N#ID` from the latest `read` output.
-- `replace_range` requires both `pos` and `end`. All other anchored ops require `pos` only.
-- `append_file` and `prepend_file` do not take anchors.
-- Replace exactly the owned span. If `lines` re-emits content beyond `end`, it will duplicate.
+- `block` requires both `pos` and `end`. Other anchored ops require one anchor.
+- Replace exactly the owned span. If `content` re-emits content beyond `end`, it will duplicate.
 - **Boundary duplication trap**: when replacing a block, `end` must be the **last line of the block** (e.g. the closing `}`), not the last *content* line before it. Otherwise the closing delimiter survives and your replacement adds a second copy.
 - Do not target shared boundary lines such as `} else {`, `} catch (…) {`, `}),`, or `},{`.
 - For a block, either replace only the body or replace the whole block. Do not split block boundaries.
-- `lines` must be literal file content with matching indentation. If the file uses tabs, use real tabs.
+- `content` must be literal file content with matching indentation. If the file uses tabs, use real tabs.
 - Do not use this tool to reformat or clean up unrelated code.
 </critical>

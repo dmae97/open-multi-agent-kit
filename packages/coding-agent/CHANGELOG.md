@@ -1,8 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Breaking Changes
 
+- Changed hashline edit schema from flat `op`/`pos`/`end`/`lines` fields to structured `loc`/`content` format with location-specific objects
+- Renamed hashline edit operations: `replace_line` → `{ line: anchor }`, `replace_range` → `{ block: { pos, end } }`, `append_at` → `{ append: anchor }`, `prepend_at` → `{ prepend: anchor }`, `append_file` → `"append"`, `prepend_file` → `"prepend"`
+- Changed `lines` parameter to `content` in hashline edit entries
 - Renamed hashline edit operation types: `append` → `append_at`, `prepend` → `prepend_at`, `append_eof` → `append_file`, `prepend_bof` → `prepend_file`
 - Changed hashline edit operation types from `replace` (with optional `end`) to explicit `replace_line` and `replace_range` operations
 - Added required `append_eof` and `prepend_bof` operations for file-level edits; `append` and `prepend` now require an anchor position

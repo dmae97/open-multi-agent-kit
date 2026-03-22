@@ -174,16 +174,35 @@ export function hashlineParseText(edit: string[] | string | null): string[] {
 	return stripNewLinePrefixes(edit);
 }
 
+const linesSchema = Type.Union([
+	Type.Array(Type.String(), { description: "content (preferred format)" }),
+	Type.String(),
+	Type.Null(),
+]);
+
+const locSchema = Type.Union(
+	[
+		Type.Literal("append"),
+		Type.Literal("prepend"),
+		Type.Object({ append: Type.String({ description: "anchor" }) }),
+		Type.Object({ prepend: Type.String({ description: "anchor" }) }),
+		Type.Object({
+			line: Type.String({ description: "anchor" }),
+		}),
+		Type.Object({
+			block: Type.Object({
+				pos: Type.String({ description: "anchor" }),
+				end: Type.String({ description: "limit position" }),
+			}),
+		}),
+	],
+	{ description: "insert location" },
+);
+
 const hashlineEditSchema = Type.Object(
 	{
-		op: StringEnum(["replace_line", "replace_range", "append_at", "prepend_at", "append_file", "prepend_file"]),
-		pos: Type.Optional(Type.String({ description: "anchor" })),
-		end: Type.Optional(Type.String({ description: "limit position" })),
-		lines: Type.Union([
-			Type.Array(Type.String(), { description: "content (preferred format)" }),
-			Type.String(),
-			Type.Null(),
-		]),
+		loc: locSchema,
+		content: linesSchema,
 	},
 	{ additionalProperties: false },
 );
@@ -206,68 +225,48 @@ export type HashlineParams = Static<typeof hashlineEditParamsSchema>;
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Map flat tool-schema edits (tag/end) into typed HashlineEdit objects.
+ * Map loc/content tool-schema edits into typed HashlineEdit objects.
  *
- * Resilient: as long as at least one anchor exists, we execute.
- * - replace_line + tag → single-line replace
- * - replace_range + tag + end → range replace
- * - append_at + tag or end → append after that anchor
- * - prepend_at + tag or end → prepend before that anchor
- * - append_file → file-level append (no anchors needed)
- * - prepend_file → file-level prepend (no anchors needed)
- *
- * Unknown ops default to replace_line/replace_range based on available anchors.
+ * Each edit entry has a `loc` (where to edit) and `content` (what to insert/replace).
+ * loc can be:
+ *   - "append" / "prepend" — file-level insert
+ *   - { append: anchor } / { prepend: anchor } — insert relative to anchor
+ *   - { replace_line: anchor } — replace one line
+ *   - { replace_block: { pos, end } } — replace inclusive range
  */
 function resolveEditAnchors(edits: HashlineToolEdit[]): HashlineEdit[] {
 	const result: HashlineEdit[] = [];
 	for (const edit of edits) {
-		const lines = hashlineParseText(edit.lines);
-		const tag = edit.pos ? tryParseTag(edit.pos) : undefined;
-		const end = edit.end ? tryParseTag(edit.end) : undefined;
+		const lines = hashlineParseText(edit.content);
+		const loc = edit.loc;
 
-		switch (edit.op) {
-			case "replace_line": {
-				const anchor = tag ?? end;
-				if (!anchor) throw new Error("replace_line requires an anchor (pos).");
-				result.push({ op: "replace_line", pos: anchor, lines });
-				break;
-			}
-			case "replace_range": {
-				if (!tag || !end) throw new Error("replace_range requires both pos and end anchors.");
-				result.push({ op: "replace_range", pos: tag, end, lines });
-				break;
-			}
-			case "append_at": {
-				const anchor = tag ?? end;
-				if (!anchor) throw new Error("append_at requires an anchor (pos).");
+		if (loc === "append") {
+			result.push({ op: "append_file", lines });
+		} else if (loc === "prepend") {
+			result.push({ op: "prepend_file", lines });
+		} else if (typeof loc === "object") {
+			if ("append" in loc) {
+				const anchor = tryParseTag(loc.append);
+				if (!anchor) throw new Error("append requires a valid anchor.");
 				result.push({ op: "append_at", pos: anchor, lines });
-				break;
-			}
-			case "prepend_at": {
-				const anchor = end ?? tag;
-				if (!anchor) throw new Error("prepend_at requires an anchor (pos).");
+			} else if ("prepend" in loc) {
+				const anchor = tryParseTag(loc.prepend);
+				if (!anchor) throw new Error("prepend requires a valid anchor.");
 				result.push({ op: "prepend_at", pos: anchor, lines });
-				break;
+			} else if ("line" in loc) {
+				const anchor = tryParseTag(loc.line);
+				if (!anchor) throw new Error("line requires a valid anchor.");
+				result.push({ op: "replace_line", pos: anchor, lines });
+			} else if ("block" in loc) {
+				const posAnchor = tryParseTag(loc.block.pos);
+				const endAnchor = tryParseTag(loc.block.end);
+				if (!posAnchor || !endAnchor) throw new Error("block requires valid pos and end anchors.");
+				result.push({ op: "replace_range", pos: posAnchor, end: endAnchor, lines });
+			} else {
+				throw new Error("Unknown loc shape. Expected append, prepend, line, or block.");
 			}
-			case "append_file": {
-				result.push({ op: "append_file", lines });
-				break;
-			}
-			case "prepend_file": {
-				result.push({ op: "prepend_file", lines });
-				break;
-			}
-			default: {
-				// Backward compat for stale model output: infer op from available anchors
-				if (tag && end) {
-					result.push({ op: "replace_range", pos: tag, end, lines });
-				} else if (tag || end) {
-					result.push({ op: "replace_line", pos: (tag ?? end)!, lines });
-				} else {
-					throw new Error("Unknown op requires at least one anchor (pos or end).");
-				}
-				break;
-			}
+		} else {
+			throw new Error(`Invalid loc value: ${JSON.stringify(loc)}`);
 		}
 	}
 	return result;
@@ -575,12 +574,10 @@ export class EditTool implements AgentTool<TInput> {
 				const lines: string[] = [];
 				for (const edit of edits) {
 					// For file creation, only anchorless appends/prepends are valid
-					if (edit.op === "append_file" || edit.op === "prepend_file") {
-						if (edit.op === "prepend_file") {
-							lines.unshift(...hashlineParseText(edit.lines));
-						} else {
-							lines.push(...hashlineParseText(edit.lines));
-						}
+					if (edit.loc === "append") {
+						lines.push(...hashlineParseText(edit.content));
+					} else if (edit.loc === "prepend") {
+						lines.unshift(...hashlineParseText(edit.content));
 					} else {
 						throw new Error(`File not found: ${path}`);
 					}
