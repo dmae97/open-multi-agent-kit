@@ -732,8 +732,10 @@ export class Editor implements Component, Focusable {
 
 		// Handle special key combinations first
 
-		// Ctrl+C - Exit (let parent handle this)
-		if (kb.matches(data, "tui.input.copy")) {
+		// Ctrl+C is reserved by parent components for app-level handling.
+		// Do not consume arbitrary user-bound "copy" keys here, since the editor
+		// has no copy implementation and would make those keys disappear.
+		if (matchesKey(data, "ctrl+c")) {
 			return;
 		}
 
