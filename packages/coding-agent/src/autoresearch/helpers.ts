@@ -9,6 +9,13 @@ export const METRIC_LINE_PREFIX = "METRIC";
 export const ASI_LINE_PREFIX = "ASI";
 export const EXPERIMENT_MAX_LINES = 10;
 export const EXPERIMENT_MAX_BYTES = 4 * 1024;
+export const PROTECTED_AUTORESEARCH_FILES = [
+	"autoresearch.jsonl",
+	"autoresearch.md",
+	"autoresearch.ideas.md",
+	"autoresearch.sh",
+	"autoresearch.checks.sh",
+] as const;
 
 const DENIED_KEY_NAMES = new Set(["__proto__", "constructor", "prototype"]);
 

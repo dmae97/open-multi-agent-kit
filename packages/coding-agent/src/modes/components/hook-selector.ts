@@ -16,6 +16,7 @@ import {
 	visibleWidth,
 } from "@oh-my-pi/pi-tui";
 import { getMarkdownTheme, theme } from "../../modes/theme/theme";
+import { matchesSelectCancel } from "../../modes/utils/keybinding-matchers";
 import { CountdownTimer } from "./countdown-timer";
 import { DynamicBorder } from "./dynamic-border";
 
@@ -173,7 +174,7 @@ export class HookSelectorComponent extends Container {
 			this.#onLeftCallback?.();
 		} else if (matchesKey(keyData, "right")) {
 			this.#onRightCallback?.();
-		} else if (matchesKey(keyData, "escape") || matchesKey(keyData, "esc") || matchesKey(keyData, "ctrl+c")) {
+		} else if (matchesSelectCancel(keyData)) {
 			this.#onCancelCallback();
 		}
 	}

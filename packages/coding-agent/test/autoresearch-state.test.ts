@@ -6,6 +6,7 @@ import { Snowflake } from "@oh-my-pi/pi-utils";
 import { isAutoresearchShCommand } from "../src/autoresearch/helpers";
 import { createAutoresearchExtension } from "../src/autoresearch/index";
 import { reconstructStateFromJsonl } from "../src/autoresearch/state";
+import { validateAsiRequirements } from "../src/autoresearch/tools/log-experiment";
 import type {
 	ExtensionAPI,
 	ExtensionCommandContext,
@@ -118,12 +119,18 @@ describe("autoresearch command guard", () => {
 interface AutoresearchCommandHarness {
 	command: RegisteredCommand;
 	ctx: ExtensionCommandContext;
+	execCalls: Array<{ args: string[]; command: string }>;
 	sentMessages: string[];
 	inputCalls: Array<{ title: string; placeholder: string | undefined }>;
 	notifications: Array<{ message: string; type: "info" | "warning" | "error" | undefined }>;
 }
 
-function createAutoresearchCommandHarness(cwd: string, inputResult: string | undefined): AutoresearchCommandHarness {
+function createAutoresearchCommandHarness(
+	cwd: string,
+	inputResult: string | undefined,
+	execImpl?: (command: string, args: string[]) => Promise<{ code: number; stderr: string; stdout: string }>,
+): AutoresearchCommandHarness {
+	const execCalls: Array<{ args: string[]; command: string }> = [];
 	const sentMessages: string[] = [];
 	const inputCalls: Array<{ title: string; placeholder: string | undefined }> = [];
 	const notifications: Array<{ message: string; type: "info" | "warning" | "error" | undefined }> = [];
@@ -131,6 +138,13 @@ function createAutoresearchCommandHarness(cwd: string, inputResult: string | und
 
 	const api = {
 		appendEntry(_customType: string, _data?: unknown): void {},
+		exec: async (commandName: string, args: string[]) => {
+			execCalls.push({ args: [...args], command: commandName });
+			if (execImpl) {
+				return execImpl(commandName, args);
+			}
+			return { code: 0, stderr: "", stdout: "" };
+		},
 		on(): void {},
 		registerCommand(name: string, options: Omit<RegisteredCommand, "name">): void {
 			command = { name, ...options };
@@ -191,7 +205,7 @@ function createAutoresearchCommandHarness(cwd: string, inputResult: string | und
 		waitForIdle: async () => {},
 	} as unknown as ExtensionCommandContext;
 
-	return { command, ctx, sentMessages, inputCalls, notifications };
+	return { command, ctx, execCalls, sentMessages, inputCalls, notifications };
 }
 
 interface AutoresearchLifecycleHarness {
@@ -289,7 +303,30 @@ describe("autoresearch command startup", () => {
 	it("asks for intent and sends an initialization prompt when no autoresearch.md exists", async () => {
 		const dir = makeTempDir();
 		tempDirs.push(dir);
-		const harness = createAutoresearchCommandHarness(dir, "reduce edit benchmark runtime variance");
+		let currentBranch = "main";
+		const branches = new Set<string>();
+		const harness = createAutoresearchCommandHarness(
+			dir,
+			"reduce edit benchmark runtime variance",
+			async (command, args) => {
+				if (command !== "git") return { code: 1, stderr: "unexpected command", stdout: "" };
+				if (args[0] === "rev-parse") return { code: 0, stderr: "", stdout: `${dir}\n` };
+				if (args[0] === "branch" && args[1] === "--show-current") {
+					return { code: 0, stderr: "", stdout: `${currentBranch}\n` };
+				}
+				if (args[0] === "status") return { code: 0, stderr: "", stdout: "" };
+				if (args[0] === "show-ref") {
+					const branchName = args[args.length - 1]?.replace("refs/heads/", "") ?? "";
+					return { code: branches.has(branchName) ? 0 : 1, stderr: "", stdout: "" };
+				}
+				if (args[0] === "checkout" && args[1] === "-b") {
+					currentBranch = args[2] ?? currentBranch;
+					branches.add(currentBranch);
+					return { code: 0, stderr: "", stdout: "" };
+				}
+				return { code: 1, stderr: `unexpected git args: ${args.join(" ")}`, stdout: "" };
+			},
+		);
 
 		await harness.command.handler("", harness.ctx);
 
@@ -299,8 +336,12 @@ describe("autoresearch command startup", () => {
 		expect(harness.sentMessages).toHaveLength(1);
 		expect(harness.sentMessages[0]).toContain("Set up autoresearch for this intent:");
 		expect(harness.sentMessages[0]).toContain("reduce edit benchmark runtime variance");
+		expect(harness.sentMessages[0]).toContain("Created and checked out dedicated git branch");
 		expect(harness.sentMessages[0]).toContain("Explain briefly what autoresearch will do in this repository");
+		expect(harness.sentMessages[0]).toContain("Files in Scope");
 		expect(harness.notifications).toEqual([]);
+		const checkoutCall = harness.execCalls.find(call => call.command === "git" && call.args[0] === "checkout");
+		expect(checkoutCall?.args[2]).toMatch(/^autoresearch\/reduce-edit-benchmark-runtime-variance-\d{8}$/);
 	});
 
 	it("resumes from autoresearch.md without asking for intent when notes already exist", async () => {
@@ -308,7 +349,14 @@ describe("autoresearch command startup", () => {
 		tempDirs.push(dir);
 		const autoresearchMdPath = path.join(dir, "autoresearch.md");
 		fs.writeFileSync(autoresearchMdPath, "# Autoresearch\n\nExisting notes\n");
-		const harness = createAutoresearchCommandHarness(dir, "ignored");
+		const harness = createAutoresearchCommandHarness(dir, "ignored", async (command, args) => {
+			if (command !== "git") return { code: 1, stderr: "unexpected command", stdout: "" };
+			if (args[0] === "rev-parse") return { code: 0, stderr: "", stdout: `${dir}\n` };
+			if (args[0] === "branch" && args[1] === "--show-current") {
+				return { code: 0, stderr: "", stdout: "autoresearch/existing-20260322\n" };
+			}
+			return { code: 1, stderr: `unexpected git args: ${args.join(" ")}`, stdout: "" };
+		});
 
 		await harness.command.handler("", harness.ctx);
 
@@ -319,7 +367,9 @@ describe("autoresearch command startup", () => {
 				"",
 				`@${autoresearchMdPath}`,
 				"",
-				"Use the notes as the source of truth for the current direction.",
+				"Using dedicated git branch `autoresearch/existing-20260322`.",
+				"",
+				"Use the notes as the source of truth for the current direction, scope, and constraints.",
 				"- inspect recent git history for context",
 				"- inspect `autoresearch.jsonl` if it exists",
 				"- continue the most promising unfinished branch",
@@ -337,6 +387,37 @@ describe("autoresearch command startup", () => {
 
 		expect(harness.sentMessages).toEqual([]);
 		expect(harness.notifications).toEqual([{ message: "Autoresearch intent is required", type: "info" }]);
+	});
+
+	it("refuses to start when non-autoresearch files are dirty on a non-autoresearch branch", async () => {
+		const dir = makeTempDir();
+		tempDirs.push(dir);
+		const harness = createAutoresearchCommandHarness(
+			dir,
+			"reduce edit benchmark runtime variance",
+			async (command, args) => {
+				if (command !== "git") return { code: 1, stderr: "unexpected command", stdout: "" };
+				if (args[0] === "rev-parse") return { code: 0, stderr: "", stdout: `${dir}\n` };
+				if (args[0] === "branch" && args[1] === "--show-current") {
+					return { code: 0, stderr: "", stdout: "main\n" };
+				}
+				if (args[0] === "status") {
+					return { code: 0, stderr: "", stdout: " M packages/coding-agent/src/sdk.ts\n" };
+				}
+				return { code: 1, stderr: `unexpected git args: ${args.join(" ")}`, stdout: "" };
+			},
+		);
+
+		await harness.command.handler("", harness.ctx);
+
+		expect(harness.sentMessages).toEqual([]);
+		expect(harness.notifications).toEqual([
+			{
+				message:
+					"Autoresearch needs a clean git worktree before it can create an isolated branch. Commit or stash these paths first: packages/coding-agent/src/sdk.ts",
+				type: "error",
+			},
+		]);
 	});
 });
 
@@ -367,5 +448,36 @@ describe("autoresearch lifecycle tool activation", () => {
 		);
 
 		expect(harness.setActiveToolsCalls).toEqual([["read"]]);
+	});
+});
+
+describe("autoresearch ASI requirements", () => {
+	it("requires a hypothesis for every run", () => {
+		expect(validateAsiRequirements(undefined, "keep")).toBe(
+			"asi is required. Include at minimum a non-empty hypothesis.",
+		);
+		expect(validateAsiRequirements({}, "keep")).toBe("asi.hypothesis is required and must be a non-empty string.");
+	});
+
+	it("requires rollback metadata for failed runs", () => {
+		expect(validateAsiRequirements({ hypothesis: "try a smaller cache" }, "discard")).toBe(
+			"asi.rollback_reason is required for discard, crash, and checks_failed results.",
+		);
+		expect(
+			validateAsiRequirements(
+				{ hypothesis: "try a smaller cache", rollback_reason: "metric regressed" },
+				"checks_failed",
+			),
+		).toBe("asi.next_action_hint is required for discard, crash, and checks_failed results.");
+		expect(
+			validateAsiRequirements(
+				{
+					hypothesis: "try a smaller cache",
+					next_action_hint: "re-run with lower batch size",
+					rollback_reason: "metric regressed",
+				},
+				"crash",
+			),
+		).toBeNull();
 	});
 });

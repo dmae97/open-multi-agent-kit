@@ -11,6 +11,7 @@ import {
 	visibleWidth,
 } from "@oh-my-pi/pi-tui";
 import { theme } from "../../modes/theme/theme";
+import { matchesAppInterrupt } from "../../modes/utils/keybinding-matchers";
 import type { HistoryEntry, HistoryStorage } from "../../session/history-storage";
 import { DynamicBorder } from "./dynamic-border";
 
@@ -137,7 +138,7 @@ export class HistorySearchComponent extends Container {
 			return;
 		}
 
-		if (matchesKey(keyData, "escape") || matchesKey(keyData, "esc")) {
+		if (matchesAppInterrupt(keyData)) {
 			this.#onCancel();
 			return;
 		}

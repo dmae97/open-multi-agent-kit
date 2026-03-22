@@ -1,6 +1,17 @@
 import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { getSupportedEfforts, type Model, modelsAreEqual } from "@oh-my-pi/pi-ai";
-import { Container, Input, matchesKey, Spacer, type Tab, TabBar, Text, type TUI, visibleWidth } from "@oh-my-pi/pi-tui";
+import {
+	Container,
+	getKeybindings,
+	Input,
+	matchesKey,
+	Spacer,
+	type Tab,
+	TabBar,
+	Text,
+	type TUI,
+	visibleWidth,
+} from "@oh-my-pi/pi-tui";
 import { MODEL_ROLE_IDS, MODEL_ROLES, type ModelRegistry, type ModelRole } from "../../config/model-registry";
 import { resolveModelRoleValue } from "../../config/model-resolver";
 import type { Settings } from "../../config/settings";
@@ -647,7 +658,7 @@ export class ModelSelectorComponent extends Container {
 		}
 
 		// Escape or Ctrl+C - close selector
-		if (matchesKey(keyData, "escape") || matchesKey(keyData, "esc") || matchesKey(keyData, "ctrl+c")) {
+		if (getKeybindings().matches(keyData, "tui.select.cancel")) {
 			this.#onCancelCallback();
 			return;
 		}
@@ -698,7 +709,7 @@ export class ModelSelectorComponent extends Container {
 			return;
 		}
 
-		if (matchesKey(keyData, "escape") || matchesKey(keyData, "esc") || matchesKey(keyData, "ctrl+c")) {
+		if (getKeybindings().matches(keyData, "tui.select.cancel")) {
 			if (this.#menuStep === "thinking" && this.#menuSelectedRole !== null) {
 				this.#menuStep = "role";
 				const roleIndex = MENU_ROLE_ACTIONS.findIndex(action => action.role === this.#menuSelectedRole);

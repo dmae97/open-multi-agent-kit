@@ -6,6 +6,7 @@ import type { ExtensionContext, ExtensionFactory } from "../extensibility/extens
 import commandInitializeTemplate from "./command-initialize.md" with { type: "text" };
 import commandResumeTemplate from "./command-resume.md" with { type: "text" };
 import { createDashboardController } from "./dashboard";
+import { ensureAutoresearchBranch } from "./git";
 import { readMaxExperiments, resolveWorkDir, validateWorkDir } from "./helpers";
 import promptTemplate from "./prompt.md" with { type: "text" };
 import resumeMessageTemplate from "./resume-message.md" with { type: "text" };
@@ -131,6 +132,12 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 			const hasAutoresearchMd = fs.existsSync(autoresearchMdPath);
 
 			if (hasAutoresearchMd) {
+				const branchResult = await ensureAutoresearchBranch(api, workDir, runtime.goal);
+				if (!branchResult.ok) {
+					ctx.ui.notify(branchResult.error, "error");
+					return;
+				}
+
 				setMode(ctx, true, runtime.goal, "on");
 				runtime.experimentsThisSession = 0;
 				runtime.autoResumeTurns = 0;
@@ -139,6 +146,9 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 				api.sendUserMessage(
 					renderPromptTemplate(commandResumeTemplate, {
 						autoresearch_md_path: autoresearchMdPath,
+						branch_status_line: branchResult.created
+							? `Created and checked out dedicated git branch \`${branchResult.branchName}\` before resuming.`
+							: `Using dedicated git branch \`${branchResult.branchName}\`.`,
 					}),
 				);
 				return;
@@ -156,12 +166,25 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 				return;
 			}
 
+			const branchResult = await ensureAutoresearchBranch(api, workDir, intent);
+			if (!branchResult.ok) {
+				ctx.ui.notify(branchResult.error, "error");
+				return;
+			}
+
 			setMode(ctx, true, intent, "on");
 			runtime.experimentsThisSession = 0;
 			runtime.autoResumeTurns = 0;
 			dashboard.updateWidget(ctx, runtime);
 			await api.setActiveTools([...new Set([...api.getActiveTools(), ...EXPERIMENT_TOOL_NAMES])]);
-			api.sendUserMessage(renderPromptTemplate(commandInitializeTemplate, { intent }));
+			api.sendUserMessage(
+				renderPromptTemplate(commandInitializeTemplate, {
+					branch_status_line: branchResult.created
+						? `Created and checked out dedicated git branch \`${branchResult.branchName}\`.`
+						: `Using dedicated git branch \`${branchResult.branchName}\`.`,
+					intent,
+				}),
+			);
 		},
 	});
 

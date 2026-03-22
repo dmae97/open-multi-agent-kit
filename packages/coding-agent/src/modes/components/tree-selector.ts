@@ -12,6 +12,7 @@ import {
 } from "@oh-my-pi/pi-tui";
 import type { TreeFilterMode } from "../../config/settings-schema";
 import { theme } from "../../modes/theme/theme";
+import { matchesAppInterrupt } from "../../modes/utils/keybinding-matchers";
 import type { SessionTreeNode } from "../../session/session-manager";
 import { shortenPath } from "../../tools/render-utils";
 import { DynamicBorder } from "./dynamic-border";
@@ -702,7 +703,7 @@ class TreeList implements Component {
 			if (selected && this.onSelect) {
 				this.onSelect(selected.node.entry.id);
 			}
-		} else if (matchesKey(keyData, "escape") || matchesKey(keyData, "esc")) {
+		} else if (matchesAppInterrupt(keyData)) {
 			if (this.#searchQuery) {
 				this.#searchQuery = "";
 				this.#applyFilter();
@@ -807,7 +808,7 @@ class LabelInput implements Component {
 		if (matchesKey(keyData, "enter") || matchesKey(keyData, "return") || keyData === "\n") {
 			const value = this.#input.getValue().trim();
 			this.onSubmit?.(this.entryId, value || undefined);
-		} else if (matchesKey(keyData, "escape") || matchesKey(keyData, "esc")) {
+		} else if (matchesAppInterrupt(keyData)) {
 			this.onCancel?.();
 		} else {
 			this.#input.handleInput(keyData);

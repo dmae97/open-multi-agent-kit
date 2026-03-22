@@ -1,5 +1,6 @@
 import { type Component, Container, matchesKey, Spacer, Text, truncateToWidth } from "@oh-my-pi/pi-tui";
 import { theme } from "../../modes/theme/theme";
+import { matchesSelectCancel } from "../../modes/utils/keybinding-matchers";
 import { DynamicBorder } from "./dynamic-border";
 
 interface UserMessageItem {
@@ -91,14 +92,8 @@ class UserMessageList implements Component {
 				this.onSelect(selected.id);
 			}
 		}
-		// Escape - cancel
-		else if (matchesKey(keyData, "escape") || matchesKey(keyData, "esc")) {
-			if (this.onCancel) {
-				this.onCancel();
-			}
-		}
-		// Ctrl+C - cancel
-		else if (matchesKey(keyData, "ctrl+c")) {
+		// Escape / cancel
+		else if (matchesSelectCancel(keyData)) {
 			if (this.onCancel) {
 				this.onCancel();
 			}

@@ -50,6 +50,7 @@ import { discoverAgents } from "../../task/discovery";
 import type { AgentDefinition, AgentSource } from "../../task/types";
 import { shortenPath } from "../../tools/render-utils";
 import { theme } from "../theme/theme";
+import { matchesAppInterrupt } from "../utils/keybinding-matchers";
 import { DynamicBorder } from "./dynamic-border";
 
 type SourceTabId = "all" | AgentSource;
@@ -993,7 +994,7 @@ export class AgentDashboard extends Container {
 		}
 
 		if (this.#createSpec) {
-			if (matchesKey(data, "escape") || matchesKey(data, "esc")) {
+			if (matchesAppInterrupt(data)) {
 				this.#clearCreateFlow();
 				this.#buildLayout();
 				return;
@@ -1017,7 +1018,7 @@ export class AgentDashboard extends Container {
 		}
 
 		if (this.#createInput || this.#createGenerating) {
-			if (matchesKey(data, "escape") || matchesKey(data, "esc")) {
+			if (matchesAppInterrupt(data)) {
 				if (!this.#createGenerating) {
 					this.#clearCreateFlow();
 					this.#buildLayout();
@@ -1037,7 +1038,7 @@ export class AgentDashboard extends Container {
 		}
 
 		if (this.#editInput) {
-			if (matchesKey(data, "escape") || matchesKey(data, "esc")) {
+			if (matchesAppInterrupt(data)) {
 				this.#cancelModelEdit();
 				return;
 			}
@@ -1048,7 +1049,7 @@ export class AgentDashboard extends Container {
 			return;
 		}
 
-		if (matchesKey(data, "escape") || matchesKey(data, "esc")) {
+		if (matchesAppInterrupt(data)) {
 			if (this.#searchQuery.length > 0) {
 				this.#searchQuery = "";
 				this.#applyFilters();

@@ -5,7 +5,14 @@ import { Text } from "@oh-my-pi/pi-tui";
 import { Type } from "@sinclair/typebox";
 import type { ToolDefinition } from "../../extensibility/extensions";
 import type { Theme } from "../../modes/theme/theme";
-import { formatNum, inferMetricUnitFromName, mergeAsi, resolveWorkDir, validateWorkDir } from "../helpers";
+import {
+	formatNum,
+	inferMetricUnitFromName,
+	mergeAsi,
+	PROTECTED_AUTORESEARCH_FILES,
+	resolveWorkDir,
+	validateWorkDir,
+} from "../helpers";
 import {
 	cloneExperimentState,
 	computeConfidence,
@@ -51,14 +58,6 @@ const logExperimentSchema = Type.Object({
 		}),
 	),
 });
-
-const PROTECTED_AUTORESEARCH_FILES = [
-	"autoresearch.jsonl",
-	"autoresearch.md",
-	"autoresearch.ideas.md",
-	"autoresearch.sh",
-	"autoresearch.checks.sh",
-] as const;
 
 interface PreservedFile {
 	content: Buffer;
@@ -107,6 +106,12 @@ export function createLogExperimentTool(
 			}
 
 			const mergedAsi = mergeAsi(runtime.lastRunAsi, sanitizeAsi(params.asi));
+			const asiValidationError = validateAsiRequirements(mergedAsi, params.status);
+			if (asiValidationError) {
+				return {
+					content: [{ type: "text", text: `Error: ${asiValidationError}` }],
+				};
+			}
 			const experiment: ExperimentResult = {
 				commit: params.commit.slice(0, 7),
 				metric: params.metric,
@@ -218,6 +223,23 @@ function sanitizeAsiValue(value: unknown): ASIData[string] | undefined {
 		return result;
 	}
 	return undefined;
+}
+
+export function validateAsiRequirements(asi: ASIData | undefined, status: ExperimentResult["status"]): string | null {
+	if (!asi) {
+		return "asi is required. Include at minimum a non-empty hypothesis.";
+	}
+	if (typeof asi.hypothesis !== "string" || asi.hypothesis.trim().length === 0) {
+		return "asi.hypothesis is required and must be a non-empty string.";
+	}
+	if (status === "keep") return null;
+	if (typeof asi.rollback_reason !== "string" || asi.rollback_reason.trim().length === 0) {
+		return "asi.rollback_reason is required for discard, crash, and checks_failed results.";
+	}
+	if (typeof asi.next_action_hint !== "string" || asi.next_action_hint.trim().length === 0) {
+		return "asi.next_action_hint is required for discard, crash, and checks_failed results.";
+	}
+	return null;
 }
 
 function validateSecondaryMetrics(state: ExperimentState, metrics: NumericMetricMap, force: boolean): string | null {

@@ -1,6 +1,7 @@
 The autoresearch loop ended unexpectedly. Resume it now.
 
 - Read `autoresearch.md` and `autoresearch.jsonl`.
+- Treat `autoresearch.md` as the source of truth for the current direction, scope, and constraints.
 - Inspect recent git history for context.
 - Continue from the most promising unfinished direction.
 {{#if has_ideas}}

@@ -4,6 +4,7 @@
  */
 import { Container, Editor, matchesKey, Spacer, Text, type TUI } from "@oh-my-pi/pi-tui";
 import { getEditorTheme, theme } from "../../modes/theme/theme";
+import { matchesAppInterrupt } from "../../modes/utils/keybinding-matchers";
 import { getEditorCommand, openInEditor } from "../../utils/external-editor";
 import { DynamicBorder } from "./dynamic-border";
 
@@ -67,7 +68,7 @@ export class HookEditorComponent extends Container {
 		}
 
 		// Escape to cancel
-		if (matchesKey(keyData, "escape") || matchesKey(keyData, "esc")) {
+		if (matchesAppInterrupt(keyData)) {
 			this.#onCancelCallback();
 			return;
 		}

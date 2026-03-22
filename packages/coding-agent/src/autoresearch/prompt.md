@@ -25,7 +25,7 @@ You are running an autonomous experiment loop. Keep iterating until the user int
    - Identify the true bottleneck or quality constraint.
    - Check existing scripts, benchmark harnesses, and config files.
 2. Keep your notes in `autoresearch.md`.
-   - Record the goal, the benchmark command, the primary metric, important secondary metrics, and the running ideas backlog.
+   - Record the goal, the benchmark command, the primary metric, important secondary metrics, the files in scope, hard constraints, and the running ideas backlog.
    - Update the notes whenever the strategy changes.
 3. Use `autoresearch.sh` as the canonical benchmark entrypoint.
    - If it does not exist yet, create it.
@@ -87,6 +87,15 @@ Suggested structure:
 - primary metric:
 - secondary metrics:
 
+## Files in Scope
+- path:
+
+## Off Limits
+- path:
+
+## Constraints
+- rule:
+
 ## Baseline
 - metric:
 - notes:
@@ -104,6 +113,7 @@ Suggested structure:
 - Do not game the benchmark.
 - Do not overfit to synthetic inputs if the real workload is broader.
 - Preserve correctness.
+- Only modify files that are explicitly in scope for the current session.
 - If you create `autoresearch.checks.sh`, treat it as a hard gate for `keep`.
 - If the user sends another message while a run is in progress, finish the current run and logging cycle first, then address the new input in the next iteration.
 

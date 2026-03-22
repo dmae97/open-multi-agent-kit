@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Breaking Changes
 
 - Renamed hashline edit operation types: `append` → `append_at`, `prepend` → `prepend_at`, `append_eof` → `append_file`, `prepend_bof` → `prepend_file`
@@ -10,6 +11,12 @@
 
 ### Added
 
+- Added git branch isolation for autoresearch sessions via `ensureAutoresearchBranch()` to safely revert failed experiments
+- Added branch status line to autoresearch initialization and resume prompts showing created or reused branch name
+- Added `Files in Scope`, `Off Limits`, and `Constraints` sections to autoresearch.md template for explicit scope definition
+- Added validation of ASI metadata requirements in `log_experiment` tool, requiring hypothesis for all runs and rollback context for failed runs
+- Added keybinding matcher utilities `matchesAppInterrupt()` and `matchesSelectCancel()` for consistent escape key handling across components
+- Added support for customizable `app.interrupt` and `tui.select.cancel` keybindings in interactive components
 - Added `defaultInactive` property to `ToolDefinition` to allow tools to be registered but excluded from the initial active set, with extension responsibility for activation/deactivation
 - Added dynamic tool activation/deactivation in autoresearch mode via `setActiveTools()` API
 - Added separate initialization and resume workflows for autoresearch with `command-initialize.md` and `command-resume.md` prompts
@@ -36,10 +43,17 @@
 
 ### Changed
 
+- Changed autoresearch startup to create or reuse a dedicated `autoresearch/...` git branch before enabling the experiment loop
+- Changed autoresearch to refuse startup when unrelated worktree changes would make auto-reverts unsafe
+- Changed autoresearch prompts to emphasize scope and constraints as source of truth for session direction
+- Changed component escape key handling to use keybinding manager for `app.interrupt` and `tui.select.cancel` with fallback to raw Escape matching
+- Updated autoresearch prompt guidance to require explicit files in scope, off-limits paths, and session constraints
 - Changed autoresearch command to use intent-based initialization instead of goal parameter, with user input dialog for new sessions
+- Changed autoresearch startup to create or reuse a dedicated `autoresearch/...` git branch before enabling the experiment loop, and to refuse startup when unrelated worktree changes would make auto-reverts unsafe
 - Changed autoresearch startup to activate experiment tools (`init_experiment`, `run_experiment`, `log_experiment`) only when autoresearch mode is enabled
 - Changed autoresearch shutdown to deactivate experiment tools when mode is disabled or cleared
 - Changed autoresearch session rehydration to dynamically manage experiment tool activation based on session state
+- Changed autoresearch prompts and notes guidance to require explicit files in scope, off-limits paths, and session constraints
 - Refactored hashline edit validation to enforce stricter anchor requirements per operation type
 - Updated edit application logic to handle explicit file-level operations (`append_eof`, `prepend_bof`) separately from anchor-based operations
 - Changed `setWidget` API to accept `ExtensionWidgetOptions` parameter for placement control
@@ -61,6 +75,11 @@
 - Removed auto-correction of off-by-one range edits that duplicated closing braces or boundary lines
 - Removed `shouldAutocorrect` function and related boundary line deduplication logic from hashline editor
 - Removed auto-correction of off-by-one range edits that duplicated closing braces or boundary lines
+
+### Fixed
+
+- Fixed autoresearch logging to require durable ASI metadata (hypothesis, rollback_reason, next_action_hint) for every run including rollback context for discarded, crashed, and checks-failed experiments
+- Fixed autoresearch logging to require durable ASI metadata for every run, including rollback context for discarded, crashed, and checks-failed experiments
 
 ## [13.14.0] - 2026-03-20
 

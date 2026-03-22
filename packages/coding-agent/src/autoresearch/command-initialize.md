@@ -2,10 +2,13 @@ Set up autoresearch for this intent:
 
 {{intent}}
 
+{{branch_status_line}}
+
 Explain briefly what autoresearch will do in this repository, then initialize the workspace.
 
 Your first actions:
 - write `autoresearch.md`
+- define `Files in Scope`, `Off Limits`, and `Constraints` in `autoresearch.md`
 - define the benchmark entrypoint in `autoresearch.sh`
 - optionally add `autoresearch.checks.sh` if correctness or quality needs a hard gate
 - run `init_experiment`
