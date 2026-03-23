@@ -1054,7 +1054,13 @@ export interface ExtensionAPI {
 	// Actions
 	// =========================================================================
 
-	/** Send a custom message to the session. */
+	/**
+	 * Send a custom message to the session.
+	 *
+	 * `deliverAs: "nextTurn"` keeps the message hidden from the editable pending-message UI.
+	 * If `triggerTurn` is also true while the current turn is still unwinding, the session schedules
+	 * an internal continuation that consumes the message on the next turn.
+	 */
 	sendMessage<T = unknown>(
 		message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details" | "attribution">,
 		options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
@@ -1230,6 +1236,11 @@ type HandlerFn = (...args: unknown[]) => Promise<unknown>;
 
 export type SendMessageHandler = <T = unknown>(
 	message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details" | "attribution">,
+	/**
+	 * `deliverAs: "nextTurn"` queues hidden custom context for the next turn.
+	 * When paired with `triggerTurn: true` during prompt teardown, the session schedules
+	 * an internal continuation without surfacing the message in the editable pending queue.
+	 */
 	options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
 ) => void;
 

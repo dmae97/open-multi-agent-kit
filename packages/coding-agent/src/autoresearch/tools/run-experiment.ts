@@ -7,16 +7,20 @@ import { Type } from "@sinclair/typebox";
 import type { ToolDefinition } from "../../extensibility/extensions";
 import type { Theme } from "../../modes/theme/theme";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, truncateTail } from "../../session/streaming-output";
+import { replaceTabs, shortenPath, truncateToWidth } from "../../tools/render-utils";
+import { getAutoresearchFingerprintMismatchError } from "../contract";
 import {
-	createTempFileAllocator,
 	EXPERIMENT_MAX_BYTES,
 	EXPERIMENT_MAX_LINES,
 	formatElapsed,
 	formatNum,
+	getAutoresearchRunDirectory,
+	getNextAutoresearchRunNumber,
 	isAutoresearchShCommand,
 	killTree,
 	parseAsiLines,
 	parseMetricLines,
+	readPendingRunSummary,
 	resolveWorkDir,
 	validateWorkDir,
 } from "../helpers";
@@ -39,17 +43,25 @@ const runExperimentSchema = Type.Object({
 });
 
 interface ProcessExecutionResult {
-	actualTotalBytes: number;
 	exitCode: number | null;
 	killed: boolean;
+	logPath: string;
 	output: string;
-	tempFilePath?: string;
 }
 
 interface ChecksExecutionResult {
 	code: number | null;
 	killed: boolean;
+	logPath: string;
 	output: string;
+}
+
+interface ProgressSnapshot {
+	elapsed: string;
+	runDirectory: string;
+	fullOutputPath: string;
+	tailOutput: string;
+	truncation?: RunExperimentProgressDetails["truncation"];
 }
 
 export function createRunExperimentTool(
@@ -59,7 +71,7 @@ export function createRunExperimentTool(
 		name: "run_experiment",
 		label: "Run Experiment",
 		description:
-			"Run an experiment command with timing, tail capture, structured metric parsing, and optional autoresearch.checks.sh validation.",
+			"Run an experiment command with timing, output capture, structured metric parsing, durable run artifacts, and optional autoresearch.checks.sh validation.",
 		parameters: runExperimentSchema,
 		defaultInactive: true,
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
@@ -75,6 +87,25 @@ export function createRunExperimentTool(
 			const workDir = resolveWorkDir(ctx.cwd);
 			const checksPath = path.join(workDir, "autoresearch.checks.sh");
 			const autoresearchScriptPath = path.join(workDir, "autoresearch.sh");
+			const fingerprintError = getAutoresearchFingerprintMismatchError(state.segmentFingerprint, workDir);
+			if (fingerprintError) {
+				return {
+					content: [{ type: "text", text: `Error: ${fingerprintError}` }],
+				};
+			}
+
+			if (state.benchmarkCommand && params.command.trim() !== state.benchmarkCommand) {
+				return {
+					content: [
+						{
+							type: "text",
+							text:
+								"Error: command does not match the benchmark command recorded for this segment.\n" +
+								`Expected: ${state.benchmarkCommand}\nReceived: ${params.command}`,
+						},
+					],
+				};
+			}
 
 			if (fs.existsSync(autoresearchScriptPath) && !isAutoresearchShCommand(params.command)) {
 				return {
@@ -104,9 +135,54 @@ export function createRunExperimentTool(
 				}
 			}
 
+			const pendingRun =
+				runtime.lastRunSummary ?? (await readPendingRunSummary(workDir, collectLoggedRunNumbers(state.results)));
+			if (pendingRun) {
+				return {
+					content: [
+						{
+							type: "text",
+							text:
+								`Error: run #${pendingRun.runNumber} has not been logged yet. ` +
+								"Call log_experiment before starting another benchmark run.",
+						},
+					],
+				};
+			}
+
+			const runNumber = getNextAutoresearchRunNumber(workDir, runtime.lastRunNumber);
+			const runDirectory = getAutoresearchRunDirectory(workDir, runNumber);
+			const benchmarkLogPath = path.join(runDirectory, "benchmark.log");
+			const checksLogPath = path.join(runDirectory, "checks.log");
+			const runJsonPath = path.join(runDirectory, "run.json");
+			await fs.promises.mkdir(runDirectory, { recursive: true });
+			runtime.lastRunChecks = null;
+			runtime.lastRunDuration = null;
+			runtime.lastRunAsi = null;
+			runtime.lastRunArtifactDir = runDirectory;
+			runtime.lastRunNumber = runNumber;
+			runtime.lastRunSummary = null;
+			await Bun.write(
+				runJsonPath,
+				JSON.stringify(
+					{
+						runNumber,
+						runDirectory,
+						benchmarkLogPath,
+						checksLogPath,
+						command: params.command,
+						startedAt: new Date().toISOString(),
+					},
+					null,
+					2,
+				),
+			);
+
 			runtime.runningExperiment = {
 				startedAt: Date.now(),
 				command: params.command,
+				runDirectory,
+				runNumber,
 			};
 			options.dashboard.updateWidget(ctx, runtime);
 			options.dashboard.requestRender();
@@ -116,8 +192,9 @@ export function createRunExperimentTool(
 			let execution: ProcessExecutionResult;
 			try {
 				execution = await executeProcess({
-					command: params.command,
+					command: ["bash", "-lc", params.command],
 					cwd: workDir,
+					logPath: benchmarkLogPath,
 					timeoutMs,
 					signal,
 					onProgress: details => {
@@ -128,6 +205,7 @@ export function createRunExperimentTool(
 								elapsed: details.elapsed,
 								truncation: details.truncation,
 								fullOutputPath: details.fullOutputPath,
+								runDirectory: details.runDirectory,
 							},
 						});
 					},
@@ -146,12 +224,14 @@ export function createRunExperimentTool(
 			let checksTimedOut = false;
 			let checksOutput = "";
 			let checksDuration = 0;
+			let checksLogPathValue: string | undefined;
 
 			if (benchmarkPassed && fs.existsSync(checksPath)) {
 				const checksStartedAt = Date.now();
-				const checksResult = runChecks({
+				const checksResult = await runChecks({
 					cwd: workDir,
 					pathToChecks: checksPath,
+					logPath: checksLogPath,
 					timeoutMs: Math.max(0, Math.floor((params.checks_timeout_seconds ?? 300) * 1000)),
 					signal,
 				});
@@ -159,6 +239,7 @@ export function createRunExperimentTool(
 				checksTimedOut = checksResult.killed;
 				checksPass = checksResult.code === 0 && !checksResult.killed;
 				checksOutput = checksResult.output;
+				checksLogPathValue = checksResult.logPath;
 			}
 
 			runtime.lastRunChecks =
@@ -179,12 +260,6 @@ export function createRunExperimentTool(
 				maxLines: DEFAULT_MAX_LINES,
 			});
 
-			let fullOutputPath = execution.tempFilePath;
-			if (!fullOutputPath && llmTruncation.truncated) {
-				fullOutputPath = createTempFileAllocator()();
-				fs.writeFileSync(fullOutputPath, execution.output);
-			}
-
 			const parsedMetricsMap = parseMetricLines(execution.output);
 			const parsedMetrics = parsedMetricsMap.size > 0 ? Object.fromEntries(parsedMetricsMap.entries()) : null;
 			const parsedPrimary = parsedMetricsMap.get(state.metricName) ?? null;
@@ -192,6 +267,10 @@ export function createRunExperimentTool(
 			runtime.lastRunAsi = parsedAsi;
 
 			const resultDetails: RunDetails = {
+				runNumber,
+				runDirectory,
+				benchmarkLogPath,
+				checksLogPath: checksLogPathValue,
 				command: params.command,
 				exitCode: execution.exitCode,
 				durationSeconds,
@@ -209,8 +288,50 @@ export function createRunExperimentTool(
 				metricName: state.metricName,
 				metricUnit: state.metricUnit,
 				truncation: llmTruncation.truncated ? llmTruncation : undefined,
-				fullOutputPath,
+				fullOutputPath: execution.logPath,
 			};
+			runtime.lastRunSummary = {
+				checksDurationSeconds: checksDuration,
+				checksPass,
+				checksTimedOut,
+				command: params.command,
+				durationSeconds,
+				parsedAsi,
+				parsedMetrics,
+				parsedPrimary,
+				passed: resultDetails.passed,
+				runDirectory,
+				runNumber,
+			};
+
+			await Bun.write(
+				runJsonPath,
+				JSON.stringify(
+					{
+						runNumber,
+						runDirectory,
+						benchmarkLogPath,
+						checksLogPath: checksLogPathValue,
+						command: params.command,
+						completedAt: new Date().toISOString(),
+						durationSeconds,
+						exitCode: execution.exitCode,
+						timedOut: execution.killed,
+						checks: {
+							durationSeconds: checksDuration,
+							passed: checksPass,
+							timedOut: checksTimedOut,
+						},
+						parsedMetrics,
+						parsedPrimary,
+						parsedAsi,
+						truncation: resultDetails.truncation,
+						fullOutputPath: resultDetails.fullOutputPath,
+					},
+					null,
+					2,
+				),
+			);
 
 			return {
 				content: [{ type: "text", text: buildRunText(resultDetails, llmTruncation.content, state.bestMetric) }],
@@ -218,8 +339,9 @@ export function createRunExperimentTool(
 			};
 		},
 		renderCall(args, _options, theme): Text {
+			const commandPreview = truncateToWidth(replaceTabs(args.command), 100);
 			return new Text(
-				`${theme.fg("toolTitle", theme.bold("run_experiment"))} ${theme.fg("muted", args.command)}`,
+				`${theme.fg("toolTitle", theme.bold("run_experiment"))} ${theme.fg("muted", commandPreview)}`,
 				0,
 				0,
 			);
@@ -227,13 +349,13 @@ export function createRunExperimentTool(
 		renderResult(result, options, theme): Text {
 			if (isProgressDetails(result.details)) {
 				const header = theme.fg("warning", `Running ${result.details.elapsed}...`);
-				const preview = result.content.find(part => part.type === "text")?.text ?? "";
+				const preview = replaceTabs(result.content.find(part => part.type === "text")?.text ?? "");
 				return new Text(preview ? `${header}\n${theme.fg("dim", preview)}` : header, 0, 0);
 			}
 
 			const details = result.details;
 			if (!details || !isRunDetails(details)) {
-				return new Text(result.content.find(part => part.type === "text")?.text ?? "", 0, 0);
+				return new Text(replaceTabs(result.content.find(part => part.type === "text")?.text ?? ""), 0, 0);
 			}
 
 			const statusText = renderStatus(details, theme);
@@ -241,54 +363,60 @@ export function createRunExperimentTool(
 				return new Text(statusText, 0, 0);
 			}
 
-			const preview = options.expanded ? details.tailOutput : details.tailOutput.split("\n").slice(-5).join("\n");
+			const preview = replaceTabs(
+				options.expanded ? details.tailOutput : details.tailOutput.split("\n").slice(-5).join("\n"),
+			);
 			const suffix =
 				options.expanded && details.truncation && details.fullOutputPath
-					? `\n${theme.fg("warning", `Full output: ${details.fullOutputPath}`)}`
+					? `\n${theme.fg("warning", `Full output: ${shortenPath(details.fullOutputPath)}`)}`
 					: "";
 			return new Text(preview ? `${statusText}\n${theme.fg("dim", preview)}${suffix}` : statusText, 0, 0);
 		},
 	};
 }
 
-interface ProgressSnapshot {
-	elapsed: string;
-	fullOutputPath?: string;
-	tailOutput: string;
-	truncation?: RunExperimentProgressDetails["truncation"];
-}
-
 async function executeProcess(options: {
-	command: string;
+	command: string[];
 	cwd: string;
+	logPath: string;
 	timeoutMs: number;
 	signal?: AbortSignal;
-	onProgress(details: ProgressSnapshot): void;
+	onProgress?(details: ProgressSnapshot): void;
 }): Promise<ProcessExecutionResult> {
 	const { promise, resolve, reject } = Promise.withResolvers<ProcessExecutionResult>();
-	const child = childProcess.spawn("bash", ["-lc", options.command], {
+	const child = childProcess.spawn(options.command[0] ?? "bash", options.command.slice(1), {
 		cwd: options.cwd,
 		detached: true,
 		stdio: ["ignore", "pipe", "pipe"],
 	});
 
-	const getTempFile = createTempFileAllocator();
-	const chunks: Buffer[] = [];
+	const tailChunks: Buffer[] = [];
 	let chunksBytes = 0;
-	let totalBytes = 0;
 	let killedByTimeout = false;
 	let resolved = false;
-	let fullOutputPath: string | undefined;
-	let writeStream: fs.WriteStream | undefined;
+	let writeStream: fs.WriteStream | undefined = fs.createWriteStream(options.logPath);
+	let forceKillTimeout: NodeJS.Timeout | undefined;
+
+	const closeWriteStream = (): Promise<void> => {
+		if (!writeStream) return Promise.resolve();
+		const stream = writeStream;
+		writeStream = undefined;
+		return new Promise<void>((resolveClose, rejectClose) => {
+			stream.end((error?: Error | null) => {
+				if (error) {
+					rejectClose(error);
+					return;
+				}
+				resolveClose();
+			});
+		});
+	};
 
 	const cleanup = (): void => {
 		if (progressTimer) clearInterval(progressTimer);
 		if (timeoutHandle) clearTimeout(timeoutHandle);
+		if (forceKillTimeout) clearTimeout(forceKillTimeout);
 		options.signal?.removeEventListener("abort", abortHandler);
-		if (writeStream) {
-			writeStream.end();
-			writeStream = undefined;
-		}
 	};
 
 	const finish = (callback: () => void): void => {
@@ -299,50 +427,54 @@ async function executeProcess(options: {
 	};
 
 	const appendChunk = (data: Buffer): void => {
-		totalBytes += data.length;
-		if (!fullOutputPath && totalBytes > DEFAULT_MAX_BYTES) {
-			fullOutputPath = getTempFile();
-			writeStream = fs.createWriteStream(fullOutputPath);
-			for (const chunk of chunks) {
-				writeStream.write(chunk);
-			}
-		}
 		writeStream?.write(data);
-		chunks.push(data);
+		tailChunks.push(data);
 		chunksBytes += data.length;
-		while (chunksBytes > DEFAULT_MAX_BYTES * 2 && chunks.length > 1) {
-			const removed = chunks.shift();
+		while (chunksBytes > DEFAULT_MAX_BYTES * 2 && tailChunks.length > 1) {
+			const removed = tailChunks.shift();
 			if (removed) chunksBytes -= removed.length;
 		}
 	};
 
 	const snapshot = (): ProgressSnapshot => {
-		const tail = truncateTail(Buffer.concat(chunks).toString("utf8"), {
+		const tail = truncateTail(Buffer.concat(tailChunks).toString("utf8"), {
 			maxBytes: DEFAULT_MAX_BYTES,
 			maxLines: DEFAULT_MAX_LINES,
 		});
 		return {
 			elapsed: formatElapsed(Date.now() - startedAt),
-			fullOutputPath,
+			runDirectory: path.dirname(options.logPath),
+			fullOutputPath: options.logPath,
 			tailOutput: tail.content,
 			truncation: tail.truncated ? tail : undefined,
 		};
 	};
 
+	const killTreeWithEscalation = (): void => {
+		if (!child.pid) return;
+		killTree(child.pid);
+		forceKillTimeout = setTimeout(() => {
+			if (child.pid) killTree(child.pid, "SIGKILL");
+		}, 1_000);
+		forceKillTimeout.unref?.();
+	};
+
 	const startedAt = Date.now();
-	const progressTimer = setInterval(() => {
-		options.onProgress(snapshot());
-	}, 1000);
+	const progressTimer = options.onProgress
+		? setInterval(() => {
+				options.onProgress?.(snapshot());
+			}, 1000)
+		: undefined;
 	const timeoutHandle =
 		options.timeoutMs > 0
 			? setTimeout(() => {
 					killedByTimeout = true;
-					if (child.pid) killTree(child.pid);
+					killTreeWithEscalation();
 				}, options.timeoutMs)
 			: undefined;
 
 	const abortHandler = (): void => {
-		if (child.pid) killTree(child.pid);
+		killTreeWithEscalation();
 	};
 	if (options.signal?.aborted) {
 		abortHandler();
@@ -357,50 +489,59 @@ async function executeProcess(options: {
 		appendChunk(data);
 	});
 	child.on("error", error => {
-		finish(() => reject(error));
+		void closeWriteStream().finally(() => {
+			finish(() => reject(error));
+		});
 	});
-	child.on("close", code => {
-		if (options.signal?.aborted) {
-			finish(() => reject(new Error("aborted")));
-			return;
+	child.on("close", async code => {
+		try {
+			await closeWriteStream();
+			if (options.signal?.aborted) {
+				finish(() => reject(new Error("aborted")));
+				return;
+			}
+			const output = await fs.promises.readFile(options.logPath, "utf8");
+			finish(() =>
+				resolve({
+					exitCode: code,
+					killed: killedByTimeout,
+					logPath: options.logPath,
+					output,
+				}),
+			);
+		} catch (error) {
+			finish(() => reject(error));
 		}
-		const output = Buffer.concat(chunks).toString("utf8");
-		finish(() =>
-			resolve({
-				actualTotalBytes: totalBytes,
-				exitCode: code,
-				killed: killedByTimeout,
-				output,
-				tempFilePath: fullOutputPath,
-			}),
-		);
 	});
 
 	return promise;
 }
 
-function runChecks(options: {
+async function runChecks(options: {
 	cwd: string;
 	pathToChecks: string;
+	logPath: string;
 	timeoutMs: number;
 	signal?: AbortSignal;
-	// signal currently unused because spawnSync does not support AbortSignal directly.
-}): ChecksExecutionResult {
-	const result = childProcess.spawnSync("bash", [options.pathToChecks], {
+}): Promise<ChecksExecutionResult> {
+	const result = await executeProcess({
+		command: ["bash", options.pathToChecks],
 		cwd: options.cwd,
-		timeout: options.timeoutMs,
-		encoding: "utf8",
-		maxBuffer: DEFAULT_MAX_BYTES,
+		logPath: options.logPath,
+		timeoutMs: options.timeoutMs,
+		signal: options.signal,
 	});
 	return {
-		code: result.status,
-		killed: result.signal === "SIGTERM" || result.signal === "SIGKILL" || Boolean(result.error),
-		output: `${result.stdout ?? ""}${result.stderr ?? ""}`.trim(),
+		code: result.exitCode,
+		killed: result.killed,
+		logPath: result.logPath,
+		output: result.output.trim(),
 	};
 }
 
 function buildRunText(details: RunDetails, outputPreview: string, bestMetric: number | null): string {
 	const lines: string[] = [];
+	lines.push(`Run directory: ${details.runDirectory}`);
 	if (details.timedOut) {
 		lines.push(`TIMEOUT after ${details.durationSeconds.toFixed(1)}s`);
 	} else if (details.exitCode !== 0) {
@@ -420,13 +561,16 @@ function buildRunText(details: RunDetails, outputPreview: string, bestMetric: nu
 	}
 	if (details.parsedPrimary !== null) {
 		lines.push(`Parsed ${details.metricName}: ${details.parsedPrimary}`);
+		lines.push(`Next log_experiment metric: ${details.parsedPrimary}`);
 	}
 	if (details.parsedMetrics) {
-		const secondary = Object.entries(details.parsedMetrics)
+		const secondaryEntries = Object.entries(details.parsedMetrics)
 			.filter(([name]) => name !== details.metricName)
-			.map(([name, value]) => `${name}=${value}`);
+			.map(([name, value]) => [name, value] as const);
+		const secondary = secondaryEntries.map(([name, value]) => `${name}=${value}`);
 		if (secondary.length > 0) {
 			lines.push(`Parsed metrics: ${secondary.join(", ")}`);
+			lines.push(`Next log_experiment metrics: ${JSON.stringify(Object.fromEntries(secondaryEntries))}`);
 		}
 	}
 	if (details.parsedAsi) {
@@ -439,6 +583,9 @@ function buildRunText(details: RunDetails, outputPreview: string, bestMetric: nu
 		lines.push(
 			`Output truncated (${formatBytes(EXPERIMENT_MAX_BYTES)} limit). Full output: ${details.fullOutputPath}`,
 		);
+	}
+	if (details.checksLogPath) {
+		lines.push(`Checks log: ${details.checksLogPath}`);
 	}
 	if (details.checksPass === false && details.checksOutput.length > 0) {
 		lines.push("");
@@ -476,4 +623,14 @@ function isRunDetails(value: unknown): value is RunDetails {
 function isProgressDetails(value: unknown): value is RunExperimentProgressDetails {
 	if (typeof value !== "object" || value === null) return false;
 	return "phase" in value && value.phase === "running";
+}
+
+function collectLoggedRunNumbers(results: Array<{ runNumber: number | null }>): Set<number> {
+	const runNumbers = new Set<number>();
+	for (const result of results) {
+		if (result.runNumber !== null) {
+			runNumbers.add(result.runNumber);
+		}
+	}
+	return runNumbers;
 }

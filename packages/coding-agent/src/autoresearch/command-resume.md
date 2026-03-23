@@ -3,6 +3,12 @@ Resume autoresearch from the attached notes.
 @{{autoresearch_md_path}}
 
 {{branch_status_line}}
+{{#if has_resume_context}}
+
+Additional context from the user:
+
+{{resume_context}}
+{{/if}}
 
 Use the notes as the source of truth for the current direction, scope, and constraints.
 - inspect recent git history for context

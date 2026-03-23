@@ -21,7 +21,23 @@ export interface MetricDef {
 	unit: string;
 }
 
+export interface AutoresearchBenchmarkContract {
+	command: string | null;
+	primaryMetric: string | null;
+	metricUnit: string;
+	direction: MetricDirection | null;
+	secondaryMetrics: string[];
+}
+
+export interface AutoresearchContract {
+	benchmark: AutoresearchBenchmarkContract;
+	scopePaths: string[];
+	offLimits: string[];
+	constraints: string[];
+}
+
 export interface ExperimentResult {
+	runNumber: number | null;
 	commit: string;
 	metric: number;
 	metrics: NumericMetricMap;
@@ -44,6 +60,11 @@ export interface ExperimentState {
 	currentSegment: number;
 	maxExperiments: number | null;
 	confidence: number | null;
+	benchmarkCommand: string | null;
+	scopePaths: string[];
+	offLimits: string[];
+	constraints: string[];
+	segmentFingerprint: string | null;
 }
 
 export interface RunExperimentProgressDetails {
@@ -51,9 +72,14 @@ export interface RunExperimentProgressDetails {
 	elapsed: string;
 	truncation?: TruncationResult;
 	fullOutputPath?: string;
+	runDirectory?: string;
 }
 
 export interface RunDetails {
+	runNumber: number;
+	runDirectory: string;
+	benchmarkLogPath: string;
+	checksLogPath?: string;
 	command: string;
 	exitCode: number | null;
 	durationSeconds: number;
@@ -86,20 +112,36 @@ export interface ChecksResult {
 	duration: number;
 }
 
+export interface PendingRunSummary {
+	checksDurationSeconds: number | null;
+	checksPass: boolean | null;
+	checksTimedOut: boolean;
+	command: string;
+	durationSeconds: number | null;
+	parsedAsi: ASIData | null;
+	parsedMetrics: NumericMetricMap | null;
+	parsedPrimary: number | null;
+	passed: boolean;
+	runDirectory: string;
+	runNumber: number;
+}
+
 export interface RunningExperiment {
 	startedAt: number;
 	command: string;
+	runDirectory: string;
+	runNumber: number;
 }
 
 export interface AutoresearchRuntime {
 	autoresearchMode: boolean;
 	dashboardExpanded: boolean;
-	lastAutoResumeTime: number;
-	experimentsThisSession: number;
-	autoResumeTurns: number;
 	lastRunChecks: ChecksResult | null;
 	lastRunDuration: number | null;
 	lastRunAsi: ASIData | null;
+	lastRunArtifactDir: string | null;
+	lastRunNumber: number | null;
+	lastRunSummary: PendingRunSummary | null;
 	runningExperiment: RunningExperiment | null;
 	state: ExperimentState;
 	goal: string | null;
@@ -116,6 +158,12 @@ export interface AutoresearchJsonConfigEntry {
 	metricName?: string;
 	metricUnit?: string;
 	bestDirection?: MetricDirection;
+	benchmarkCommand?: string;
+	secondaryMetrics?: string[];
+	scopePaths?: string[];
+	offLimits?: string[];
+	constraints?: string[];
+	segmentFingerprint?: string;
 }
 
 export interface AutoresearchJsonRunEntry {
@@ -143,6 +191,7 @@ export interface AutoresearchControlEntryData {
 export interface ReconstructedControlState {
 	autoresearchMode: boolean;
 	goal: string | null;
+	lastMode: AutoresearchControlEntryData["mode"] | null;
 }
 
 export interface RuntimeStore {

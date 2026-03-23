@@ -4,13 +4,60 @@
 
 Autoresearch mode is active.
 
+{{#if has_goal}}
 Primary goal:
 {{goal}}
+{{else}}
+Primary goal is documented in `autoresearch.md` for this session.
+{{/if}}
 
 Working directory:
 `{{working_dir}}`
 
 You are running an autonomous experiment loop. Keep iterating until the user interrupts you or the configured maximum iteration count is reached.
+{{#if has_program}}
+
+### Local Playbook
+
+`autoresearch.program.md` exists at `{{program_path}}`.
+
+Use it as a repo-local strategy overlay for this session. `autoresearch.md` remains the source of truth for benchmark, scope, and constraints.
+{{/if}}
+{{#if has_recent_results}}
+
+### Current Segment Snapshot
+
+- segment: `{{current_segment}}`
+- runs in current segment: `{{current_segment_run_count}}`
+{{#if has_baseline_metric}}
+- baseline `{{metric_name}}`: `{{baseline_metric_display}}`
+{{/if}}
+{{#if has_best_result}}
+- best kept `{{metric_name}}`: `{{best_metric_display}}`{{#if best_run_number}} from run `#{{best_run_number}}`{{/if}}
+{{/if}}
+
+Recent runs:
+{{#each recent_results}}
+- run `#{{run_number}}`: `{{status}}` `{{metric_display}}` — {{description}}
+{{#if has_asi_summary}}
+  ASI: {{asi_summary}}
+{{/if}}
+{{/each}}
+{{/if}}
+{{#if has_pending_run}}
+
+### Pending Run
+
+An unlogged run artifact exists at `{{pending_run_directory}}`.
+
+- run: `#{{pending_run_number}}`
+- command: `{{pending_run_command}}`
+{{#if has_pending_run_metric}}
+- parsed `{{metric_name}}`: `{{pending_run_metric_display}}`
+{{/if}}
+- result status: {{#if pending_run_passed}}passed{{else}}failed{{/if}}
+- finish the `log_experiment` step before starting another benchmark
+{{/if}}
 
 ### Available tools
 
@@ -80,12 +127,18 @@ Suggested structure:
 # Autoresearch
 
 ## Goal
+{{#if has_goal}}
 - {{goal}}
+{{else}}
+- document the active target here before the first benchmark
+{{/if}}
 
 ## Benchmark
-- command:
-- primary metric:
-- secondary metrics:
+ - command:
+ - primary metric:
+ - metric unit:
+ - direction:
+ - secondary metrics: memory_mb, rss_mb
 
 ## Files in Scope
 - path:
@@ -104,8 +157,9 @@ Suggested structure:
 - metric:
 - why it won:
 
-## Ideas
-- item
+## What's Been Tried
+- experiment:
+- lesson:
 ```
 
 ### Guardrails
@@ -114,6 +168,7 @@ Suggested structure:
 - Do not overfit to synthetic inputs if the real workload is broader.
 - Preserve correctness.
 - Only modify files that are explicitly in scope for the current session.
+- Do not use the general shell tool for file mutations during autoresearch. Use `write`, `edit`, or `ast_edit` for scoped code changes and `run_experiment` for benchmark execution.
 - If you create `autoresearch.checks.sh`, treat it as a hard gate for `keep`.
 - If the user sends another message while a run is in progress, finish the current run and logging cycle first, then address the new input in the next iteration.
 

@@ -1,21 +1,28 @@
-import * as crypto from "node:crypto";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { isEnoent } from "@oh-my-pi/pi-utils";
-import type { ASIData, ASIValue, AutoresearchConfig, MetricDirection } from "./types";
+import type {
+	ASIData,
+	ASIValue,
+	AutoresearchConfig,
+	MetricDirection,
+	NumericMetricMap,
+	PendingRunSummary,
+} from "./types";
 
 export const METRIC_LINE_PREFIX = "METRIC";
 export const ASI_LINE_PREFIX = "ASI";
 export const EXPERIMENT_MAX_LINES = 10;
 export const EXPERIMENT_MAX_BYTES = 4 * 1024;
-export const PROTECTED_AUTORESEARCH_FILES = [
-	"autoresearch.jsonl",
+export const AUTORESEARCH_COMMITTABLE_FILES = [
 	"autoresearch.md",
-	"autoresearch.ideas.md",
+	"autoresearch.program.md",
 	"autoresearch.sh",
 	"autoresearch.checks.sh",
+	"autoresearch.ideas.md",
 ] as const;
+export const AUTORESEARCH_LOCAL_STATE_FILES = ["autoresearch.jsonl"] as const;
+export const AUTORESEARCH_LOCAL_STATE_DIRECTORIES = [".autoresearch"] as const;
 
 const DENIED_KEY_NAMES = new Set(["__proto__", "constructor", "prototype"]);
 
@@ -112,21 +119,57 @@ export function formatElapsed(milliseconds: number): string {
 	return `${seconds}s`;
 }
 
-export function createTempFileAllocator(): () => string {
-	let tempPath: string | undefined;
-	return () => {
-		if (tempPath) return tempPath;
-		tempPath = path.join(os.tmpdir(), `pi-autoresearch-${crypto.randomUUID()}.log`);
-		return tempPath;
-	};
+export function getAutoresearchRunDirectory(workDir: string, runNumber: number): string {
+	return path.join(workDir, ".autoresearch", "runs", String(runNumber).padStart(4, "0"));
 }
 
-export function killTree(pid: number): void {
+export function getNextAutoresearchRunNumber(workDir: string, lastRunNumber: number | null): number {
+	const runsDirectory = path.join(workDir, ".autoresearch", "runs");
+	let maxRunNumber = lastRunNumber ?? 0;
 	try {
-		process.kill(-pid, "SIGTERM");
+		for (const entry of fs.readdirSync(runsDirectory, { withFileTypes: true })) {
+			if (!entry.isDirectory()) continue;
+			const runNumber = Number.parseInt(entry.name, 10);
+			if (Number.isFinite(runNumber)) {
+				maxRunNumber = Math.max(maxRunNumber, runNumber);
+			}
+		}
+	} catch (error) {
+		if (!isEnoent(error)) {
+			throw error;
+		}
+	}
+	return maxRunNumber + 1;
+}
+
+export function normalizeAutoresearchPath(relativePath: string): string {
+	const normalized = relativePath.replaceAll("\\", "/").trim();
+	if (normalized === "." || normalized === "./") return ".";
+	return normalized.replace(/^\.\/+/, "").replace(/\/+$/, "");
+}
+
+export function isAutoresearchCommittableFile(relativePath: string): boolean {
+	const normalized = normalizeAutoresearchPath(relativePath);
+	return AUTORESEARCH_COMMITTABLE_FILES.some(candidate => candidate === normalized);
+}
+
+export function isAutoresearchLocalStatePath(relativePath: string): boolean {
+	const normalized = normalizeAutoresearchPath(relativePath);
+	if (AUTORESEARCH_LOCAL_STATE_FILES.some(candidate => candidate === normalized)) {
+		return true;
+	}
+	return AUTORESEARCH_LOCAL_STATE_DIRECTORIES.some(candidate => {
+		const normalizedCandidate = normalizeAutoresearchPath(candidate);
+		return normalized === normalizedCandidate || normalized.startsWith(`${normalizedCandidate}/`);
+	});
+}
+
+export function killTree(pid: number, signal: NodeJS.Signals | number = "SIGTERM"): void {
+	try {
+		process.kill(-pid, signal);
 	} catch {
 		try {
-			process.kill(pid, "SIGTERM");
+			process.kill(pid, signal);
 		} catch {
 			// Process already exited.
 		}
@@ -157,6 +200,44 @@ export function inferMetricUnitFromName(name: string): string {
 	if (name.endsWith("_kb") || name.endsWith("kb")) return "kb";
 	if (name.endsWith("_mb") || name.endsWith("mb")) return "mb";
 	return "";
+}
+
+export async function readPendingRunSummary(
+	workDir: string,
+	loggedRunNumbers: ReadonlySet<number> = new Set<number>(),
+): Promise<PendingRunSummary | null> {
+	const runsDir = path.join(workDir, ".autoresearch", "runs");
+	let entries: fs.Dirent[];
+	try {
+		entries = await fs.promises.readdir(runsDir, { withFileTypes: true });
+	} catch (error) {
+		if (isEnoent(error)) return null;
+		throw error;
+	}
+
+	const runDirectories = entries
+		.filter(entry => entry.isDirectory())
+		.map(entry => entry.name)
+		.sort((left, right) => right.localeCompare(left));
+
+	for (const directoryName of runDirectories) {
+		const runDirectory = path.join(runsDir, directoryName);
+		const runJsonPath = path.join(runDirectory, "run.json");
+		let parsed: unknown;
+		try {
+			parsed = await Bun.file(runJsonPath).json();
+		} catch (error) {
+			if (isEnoent(error)) continue;
+			throw error;
+		}
+
+		const pendingRun = parsePendingRunSummary(parsed, runDirectory, directoryName, loggedRunNumbers);
+		if (pendingRun) {
+			return pendingRun;
+		}
+	}
+
+	return null;
 }
 
 export function readConfig(cwd: string): AutoresearchConfig {
@@ -206,4 +287,140 @@ export function validateWorkDir(cwd: string): string | null {
 		}
 		return `workingDir ${workDir} is unavailable.`;
 	}
+}
+
+function parsePendingRunSummary(
+	value: unknown,
+	runDirectory: string,
+	directoryName: string,
+	loggedRunNumbers: ReadonlySet<number>,
+): PendingRunSummary | null {
+	if (typeof value !== "object" || value === null) return null;
+	const candidate = value as {
+		checks?: { durationSeconds?: unknown; passed?: unknown; timedOut?: unknown };
+		completedAt?: unknown;
+		command?: unknown;
+		durationSeconds?: unknown;
+		exitCode?: unknown;
+		loggedAt?: unknown;
+		parsedAsi?: unknown;
+		parsedMetrics?: unknown;
+		parsedPrimary?: unknown;
+		runNumber?: unknown;
+		status?: unknown;
+		timedOut?: unknown;
+	};
+	if (candidate.loggedAt !== undefined || candidate.status !== undefined) {
+		return null;
+	}
+
+	const command = typeof candidate.command === "string" ? candidate.command : "";
+	const runNumber =
+		typeof candidate.runNumber === "number" && Number.isFinite(candidate.runNumber)
+			? candidate.runNumber
+			: parseInt(directoryName, 10);
+	if (!Number.isFinite(runNumber)) return null;
+	if (loggedRunNumbers.has(runNumber)) return null;
+
+	const hasCompletedMetadata =
+		typeof candidate.completedAt === "string" ||
+		candidate.exitCode !== undefined ||
+		candidate.timedOut !== undefined ||
+		candidate.durationSeconds !== undefined ||
+		candidate.checks !== undefined ||
+		candidate.parsedPrimary !== undefined ||
+		candidate.parsedMetrics !== undefined ||
+		candidate.parsedAsi !== undefined;
+	if (!hasCompletedMetadata) {
+		return null;
+	}
+
+	const checksPass =
+		typeof candidate.checks?.passed === "boolean"
+			? candidate.checks.passed
+			: typeof candidate.checks?.timedOut === "boolean" && candidate.checks.timedOut
+				? false
+				: null;
+	const exitCode =
+		typeof candidate.exitCode === "number" && Number.isFinite(candidate.exitCode) ? candidate.exitCode : null;
+	const timedOut = candidate.timedOut === true;
+	const durationSeconds =
+		typeof candidate.durationSeconds === "number" && Number.isFinite(candidate.durationSeconds)
+			? candidate.durationSeconds
+			: null;
+	const parsedPrimary =
+		typeof candidate.parsedPrimary === "number" && Number.isFinite(candidate.parsedPrimary)
+			? candidate.parsedPrimary
+			: null;
+	const parsedAsi = cloneAsiData(candidate.parsedAsi);
+	const parsedMetrics = cloneNumericMetricMap(candidate.parsedMetrics);
+	const checksDurationSeconds =
+		typeof candidate.checks?.durationSeconds === "number" && Number.isFinite(candidate.checks.durationSeconds)
+			? candidate.checks.durationSeconds
+			: null;
+	const checksTimedOut = candidate.checks?.timedOut === true;
+
+	return {
+		checksDurationSeconds,
+		checksPass,
+		checksTimedOut,
+		command,
+		durationSeconds,
+		parsedAsi,
+		parsedMetrics,
+		parsedPrimary,
+		passed: exitCode === 0 && !timedOut && checksPass !== false,
+		runDirectory,
+		runNumber,
+	};
+}
+
+function cloneNumericMetricMap(value: unknown): NumericMetricMap | null {
+	if (typeof value !== "object" || value === null) return null;
+	const metrics = value as { [key: string]: unknown };
+	const clone: NumericMetricMap = {};
+	for (const [key, entryValue] of Object.entries(metrics)) {
+		if (typeof entryValue === "number" && Number.isFinite(entryValue)) {
+			clone[key] = entryValue;
+		}
+	}
+	return Object.keys(clone).length > 0 ? clone : null;
+}
+
+function cloneAsiData(value: unknown): ASIData | null {
+	if (typeof value !== "object" || value === null) return null;
+	const candidate = value as { [key: string]: unknown };
+	const clone: ASIData = {};
+	for (const [key, entryValue] of Object.entries(candidate)) {
+		const sanitized = clonePendingAsiValue(entryValue);
+		if (sanitized !== undefined) {
+			clone[key] = sanitized;
+		}
+	}
+	return Object.keys(clone).length > 0 ? clone : null;
+}
+
+function clonePendingAsiValue(value: unknown): ASIValue | undefined {
+	if (value === null) return null;
+	if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+		return value;
+	}
+	if (Array.isArray(value)) {
+		const items = value
+			.map(entry => clonePendingAsiValue(entry))
+			.filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);
+		return items;
+	}
+	if (typeof value === "object") {
+		const candidate = value as { [key: string]: unknown };
+		const clone: { [key: string]: ASIValue } = {};
+		for (const [key, entryValue] of Object.entries(candidate)) {
+			const sanitized = clonePendingAsiValue(entryValue);
+			if (sanitized !== undefined) {
+				clone[key] = sanitized;
+			}
+		}
+		return clone;
+	}
+	return undefined;
 }

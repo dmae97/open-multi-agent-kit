@@ -1,5 +1,6 @@
 import { matchesKey, Text, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
 import type { Theme } from "../modes/theme/theme";
+import { replaceTabs } from "../tools/render-utils";
 import { formatElapsed, formatNum, isBetter } from "./helpers";
 import { currentResults, findBaselineMetric, findBaselineRunNumber, findBaselineSecondary } from "./state";
 import type { AutoresearchRuntime, DashboardController, ExperimentResult, ExperimentState } from "./types";
@@ -32,7 +33,7 @@ export function createDashboardController(): DashboardController {
 		updateWidget(ctx, runtime): void {
 			if (!ctx.hasUI) return;
 			const state = runtime.state;
-			if (state.results.length === 0 && !runtime.runningExperiment) {
+			if (!shouldShowDashboard(runtime, state)) {
 				ctx.ui.setWidget("autoresearch", undefined);
 				return;
 			}
@@ -44,8 +45,8 @@ export function createDashboardController(): DashboardController {
 				if (runtime.dashboardExpanded) {
 					const width = process.stdout.columns ?? 120;
 					const lines = [
-						renderExpandedHeader(state, width, theme),
-						...renderDashboardLines(state, width, theme, 8),
+						renderExpandedHeader(runtime, width, theme),
+						...renderDashboardLines(runtime, width, theme, 8),
 					];
 					return new Text(lines.join("\n"), 0, 0);
 				}
@@ -53,7 +54,7 @@ export function createDashboardController(): DashboardController {
 			});
 		},
 		async showOverlay(ctx, runtime): Promise<void> {
-			if (!ctx.hasUI || runtime.state.results.length === 0) return;
+			if (!ctx.hasUI || !shouldShowDashboard(runtime, runtime.state)) return;
 			await ctx.ui.custom<void>(
 				(tui, theme, _keybindings, done) => {
 					overlayTui = tui;
@@ -68,8 +69,8 @@ export function createDashboardController(): DashboardController {
 					return {
 						render(width: number): string[] {
 							const terminalRows = process.stdout.rows ?? 40;
-							const header = renderExpandedHeader(runtime.state, width, theme);
-							const body = renderDashboardLines(runtime.state, width, theme, 0);
+							const header = renderExpandedHeader(runtime, width, theme);
+							const body = renderDashboardLines(runtime, width, theme, 0);
 							if (runtime.runningExperiment) {
 								body.push(renderOverlayRunningLine(runtime, theme, width, spinnerFrame));
 							}
@@ -87,7 +88,7 @@ export function createDashboardController(): DashboardController {
 						},
 						handleInput(data: string): void {
 							const totalRows =
-								renderDashboardLines(runtime.state, process.stdout.columns ?? 120, theme, 0).length +
+								renderDashboardLines(runtime, process.stdout.columns ?? 120, theme, 0).length +
 								(runtime.runningExperiment ? 1 : 0);
 							const viewportRows = Math.max(4, (process.stdout.rows ?? 40) - 4);
 							const maxScroll = Math.max(0, totalRows - viewportRows);
@@ -125,41 +126,87 @@ export function createDashboardController(): DashboardController {
 function renderRunningOnly(runtime: AutoresearchRuntime, state: ExperimentState, theme: Theme): string {
 	const parts = [theme.fg("accent", "autoresearch"), theme.fg("warning", " running...")];
 	if (state.name) {
-		parts.push(theme.fg("dim", ` | ${state.name}`));
+		parts.push(theme.fg("dim", ` | ${replaceTabs(state.name)}`));
 	}
 	if (runtime.runningExperiment) {
-		parts.push(theme.fg("dim", ` | ${runtime.runningExperiment.command}`));
+		parts.push(theme.fg("dim", ` | ${replaceTabs(runtime.runningExperiment.command)}`));
 	}
 	return parts.join("");
 }
 
-function renderExpandedHeader(state: ExperimentState, width: number, theme: Theme): string {
-	const label = state.name ? ` autoresearch: ${state.name} ` : " autoresearch ";
-	const hint = theme.fg("dim", " ctrl+x collapse  ctrl+shift+x fullscreen ");
+function shouldShowDashboard(runtime: AutoresearchRuntime, state: ExperimentState): boolean {
+	return (
+		runtime.autoresearchMode ||
+		state.results.length > 0 ||
+		runtime.runningExperiment !== null ||
+		runtime.lastRunSummary !== null
+	);
+}
+
+function renderExpandedHeader(runtime: AutoresearchRuntime, width: number, theme: Theme): string {
+	const state = runtime.state;
+	const status = renderModeStatus(runtime, state);
+	const label = state.name ? ` autoresearch: ${replaceTabs(state.name)} ` : " autoresearch ";
+	const hint = theme.fg("dim", ` ctrl+x collapse  ctrl+shift+x overlay${status ? `  ${status}` : ""} `);
 	const fillWidth = Math.max(0, width - visibleWidth(label) - visibleWidth(hint));
 	return truncateToWidth(theme.fg("accent", label) + theme.fg("borderMuted", "-".repeat(fillWidth)) + hint, width);
 }
 
 function renderCollapsedLine(runtime: AutoresearchRuntime, state: ExperimentState, theme: Theme): string {
+	if (runtime.lastRunSummary) {
+		const parts = [
+			theme.fg("accent", "autoresearch"),
+			theme.fg("warning", ` pending run #${runtime.lastRunSummary.runNumber}`),
+			theme.fg("dim", runtime.lastRunSummary.passed ? " pass" : " fail"),
+		];
+		if (runtime.lastRunSummary.parsedPrimary !== null) {
+			parts.push(
+				theme.fg(
+					"muted",
+					` | ${state.metricName}=${formatNum(runtime.lastRunSummary.parsedPrimary, state.metricUnit)}`,
+				),
+			);
+		}
+		parts.push(theme.fg("warning", " | log_experiment required"));
+		if (!runtime.autoresearchMode) {
+			parts.push(theme.fg("dim", " | mode off"));
+		}
+		return parts.join("");
+	}
+	if (state.results.length === 0) {
+		const modeStatus = runtime.autoresearchMode ? "baseline pending" : "mode off";
+		const parts = [theme.fg("accent", "autoresearch"), theme.fg("warning", ` ${modeStatus}`)];
+		if (state.name) {
+			parts.push(theme.fg("dim", ` | ${replaceTabs(state.name)}`));
+		}
+		if (runtime.autoresearchMode) {
+			parts.push(theme.fg("dim", " | run the baseline"));
+		}
+		return parts.join("");
+	}
 	const current = currentResults(state.results, state.currentSegment);
 	const kept = current.filter(result => result.status === "keep").length;
 	const crashed = current.filter(result => result.status === "crash").length;
 	const checksFailed = current.filter(result => result.status === "checks_failed").length;
 	const best = findBestResult(state);
+	const archivedRuns = Math.max(0, state.results.length - current.length);
 	const parts = [
 		theme.fg("accent", "autoresearch"),
-		theme.fg("muted", ` ${state.results.length} runs`),
+		theme.fg("muted", ` ${current.length} runs`),
 		theme.fg("success", ` ${kept} kept`),
 	];
+	if (archivedRuns > 0) parts.push(theme.fg("dim", ` +${archivedRuns} archived`));
 	if (crashed > 0) parts.push(theme.fg("error", ` ${crashed} crash`));
 	if (checksFailed > 0) parts.push(theme.fg("error", ` ${checksFailed} checks_failed`));
 	parts.push(theme.fg("dim", " | "));
-	parts.push(
-		theme.fg(
-			"warning",
-			`${state.metricName}: ${formatNum(best?.result.metric ?? state.bestMetric, state.metricUnit)}`,
-		),
-	);
+	if (best && state.bestMetric !== null && best.result.metric !== state.bestMetric) {
+		parts.push(theme.fg("warning", `best ${formatNum(best.result.metric, state.metricUnit)}`));
+		parts.push(theme.fg("dim", ` baseline ${formatNum(state.bestMetric, state.metricUnit)}`));
+	} else if (state.bestMetric !== null) {
+		parts.push(theme.fg("warning", `baseline ${formatNum(state.bestMetric, state.metricUnit)}`));
+	} else {
+		parts.push(theme.fg("warning", `no kept runs yet`));
+	}
 	if (state.confidence !== null) {
 		const confidenceColor = state.confidence >= 2 ? "success" : state.confidence >= 1 ? "warning" : "error";
 		parts.push(theme.fg("dim", " | "));
@@ -167,13 +214,42 @@ function renderCollapsedLine(runtime: AutoresearchRuntime, state: ExperimentStat
 	}
 	if (runtime.runningExperiment) {
 		parts.push(theme.fg("dim", ` | running ${formatElapsed(Date.now() - runtime.runningExperiment.startedAt)}`));
+	} else if (!runtime.autoresearchMode) {
+		parts.push(theme.fg("dim", ` | ${renderModeStatus(runtime, state)}`));
 	}
 	parts.push(theme.fg("dim", " | ctrl+x expand"));
 	return parts.join("");
 }
 
-export function renderDashboardLines(state: ExperimentState, width: number, theme: Theme, maxRows: number): string[] {
+export function renderDashboardLines(
+	runtime: AutoresearchRuntime,
+	width: number,
+	theme: Theme,
+	maxRows: number,
+): string[] {
+	const state = runtime.state;
 	if (state.results.length === 0) {
+		if (runtime.lastRunSummary) {
+			const lines = [
+				truncateToWidth(`Pending run: #${runtime.lastRunSummary.runNumber}`, width),
+				truncateToWidth(
+					`Result: ${runtime.lastRunSummary.passed ? "passed" : "failed"}${runtime.lastRunSummary.parsedPrimary !== null ? `  ${state.metricName} ${formatNum(runtime.lastRunSummary.parsedPrimary, state.metricUnit)}` : ""}`,
+					width,
+				),
+				truncateToWidth("Next action: finish log_experiment before starting another run.", width),
+			];
+			if (!runtime.autoresearchMode) {
+				lines.push(truncateToWidth("Mode: off", width));
+			}
+			return lines;
+		}
+		if (runtime.autoresearchMode) {
+			return [
+				truncateToWidth("Current segment: 0 runs", width),
+				truncateToWidth("Baseline: pending", width),
+				truncateToWidth("Next action: run and log the baseline experiment.", width),
+			];
+		}
 		return [theme.fg("dim", "No experiments logged yet.")];
 	}
 
@@ -188,7 +264,7 @@ export function renderDashboardLines(state: ExperimentState, width: number, them
 	const best = findBestResult(state);
 	const lines = [
 		truncateToWidth(
-			`Runs: ${state.results.length}  ${kept} kept  ${discarded} discarded  ${crashed} crashed  ${checksFailed} checks_failed`,
+			`Current segment: ${current.length} runs  ${kept} kept  ${discarded} discarded  ${crashed} crashed  ${checksFailed} checks_failed`,
 			width,
 		),
 		truncateToWidth(
@@ -196,8 +272,25 @@ export function renderDashboardLines(state: ExperimentState, width: number, them
 			width,
 		),
 	];
+	if (state.results.length > current.length) {
+		lines.push(
+			truncateToWidth(`Archived from earlier segments: ${state.results.length - current.length} runs`, width),
+		);
+	}
+	if (runtime.lastRunSummary) {
+		lines.push(
+			truncateToWidth(
+				`Pending run: #${runtime.lastRunSummary.runNumber} (${runtime.lastRunSummary.passed ? "passed" : "failed"}) — log_experiment required`,
+				width,
+			),
+		);
+	}
+	if (!runtime.autoresearchMode) {
+		lines.push(truncateToWidth(`Mode: ${renderModeStatus(runtime, state)}`, width));
+	}
 	if (best) {
-		let progress = `Best: ${formatNum(best.result.metric, state.metricUnit)} (#${best.index + 1})`;
+		const bestRunNumber = best.result.runNumber ?? best.index + 1;
+		let progress = `Best: ${formatNum(best.result.metric, state.metricUnit)} (#${bestRunNumber})`;
 		if (baseline !== null && baseline !== 0 && best.result.metric !== baseline) {
 			const delta = ((best.result.metric - baseline) / baseline) * 100;
 			const sign = delta > 0 ? "+" : "";
@@ -227,9 +320,9 @@ export function renderDashboardLines(state: ExperimentState, width: number, them
 	lines.push(renderTableHeader(state, width, theme));
 	lines.push(theme.fg("borderMuted", "-".repeat(Math.max(0, width - 1))));
 
-	const visible = maxRows > 0 ? state.results.slice(-maxRows) : state.results;
-	if (visible.length < state.results.length) {
-		lines.push(theme.fg("dim", `... ${state.results.length - visible.length} earlier runs hidden ...`));
+	const visible = maxRows > 0 ? current.slice(-maxRows) : current;
+	if (visible.length < current.length) {
+		lines.push(theme.fg("dim", `... ${current.length - visible.length} earlier runs hidden ...`));
 	}
 	for (const result of visible) {
 		lines.push(renderResultRow(result, state, baselineSecondary, width, theme));
@@ -252,7 +345,7 @@ function renderResultRow(
 	width: number,
 	theme: Theme,
 ): string {
-	const runNumber = state.results.indexOf(result) + 1;
+	const runNumber = result.runNumber ?? state.results.indexOf(result) + 1;
 	const secondary = state.secondaryMetrics
 		.map(metric =>
 			truncateToWidth(
@@ -268,7 +361,7 @@ function renderResultRow(
 		`${theme.fg(statusColor, formatNum(result.metric, state.metricUnit).padEnd(12))}` +
 		`${secondary}` +
 		`${theme.fg(statusColor, result.status.padEnd(14))}` +
-		`${theme.fg("muted", result.description)}`;
+		`${theme.fg("muted", replaceTabs(result.description))}`;
 	return truncateToWidth(line, width);
 }
 
@@ -306,7 +399,9 @@ function renderOverlayRunningLine(
 	return truncateToWidth(
 		theme.fg(
 			"warning",
-			`${spinner} running ${formatElapsed(Date.now() - (runtime.runningExperiment?.startedAt ?? Date.now()))} ${runtime.runningExperiment?.command ?? ""}`,
+			`${spinner} running ${formatElapsed(Date.now() - (runtime.runningExperiment?.startedAt ?? Date.now()))} ${replaceTabs(
+				runtime.runningExperiment?.command ?? "",
+			)}`,
 		),
 		width,
 	);
@@ -326,6 +421,17 @@ function renderOverlayFooter(
 	const hint = theme.fg("dim", ` up/down j/k pageup pagedown g G esc${position} `);
 	const fill = Math.max(0, width - visibleWidth(hint));
 	return theme.fg("borderMuted", "-".repeat(fill)) + hint;
+}
+
+function renderModeStatus(runtime: AutoresearchRuntime, state: ExperimentState): string {
+	if (runtime.autoresearchMode) {
+		return state.results.length === 0 ? "baseline pending" : "mode on";
+	}
+	const current = currentResults(state.results, state.currentSegment);
+	if (state.maxExperiments !== null && current.length >= state.maxExperiments) {
+		return "segment complete";
+	}
+	return "mode off";
 }
 
 function findBestResult(state: ExperimentState): { index: number; result: ExperimentResult } | null {

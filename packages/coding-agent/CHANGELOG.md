@@ -14,6 +14,21 @@
 
 ### Added
 
+- Added autoresearch contract system for validating benchmark commands, metrics, scope paths, off-limits paths, and constraints with fingerprint tracking to detect configuration drift
+- Added `autoresearch.program.md` support for repo-local playbook overlays that guide session strategy while preserving `autoresearch.md` as source of truth
+- Added pending run artifact tracking and recovery to resume incomplete experiments from `.autoresearch/runs/` directory with run numbers and benchmark logs
+- Added run directory organization with numbered run artifacts, benchmark logs, and optional checks logs for experiment traceability
+- Added segment fingerprinting to detect when benchmark configuration changes between runs and warn about potential incomparability
+- Added support for secondary metrics tracking alongside primary metric with configurable direction (lower/higher is better)
+- Added `getCurrentAutoresearchBranch()` helper to detect and validate existing autoresearch branches for session resumption
+- Added `PendingRunSummary` type to track unlogged run state including parsed metrics, ASI data, and pass/fail status
+- Added hidden next-turn message delivery via `deliverAs: 'nextTurn'` with optional `triggerTurn` to queue context for next LLM call without exposing in editable queue
+- Added `#queueHiddenNextTurnMessage()` and `#promptQueuedHiddenNextTurnMessages()` to AgentSession for autonomous tool reactions
+- Added resume context support in `command-resume.md` template for user-provided guidance when resuming sessions
+- Added current segment snapshot display in autoresearch prompt showing recent runs, baseline metrics, and best results
+- Added pending run indicator in autoresearch prompt to guide users to complete unlogged experiments before starting new benchmarks
+- Added local playbook section in autoresearch prompt when `autoresearch.program.md` exists
+- Added tab replacement in dashboard and tool output rendering to prevent display corruption from shell commands with tabs
 - Added boundary duplication warning when replace_range or replace_line operations include a last inserted line that matches the next surviving line, helping detect off-by-one range errors
 - Added git branch isolation for autoresearch sessions via `ensureAutoresearchBranch()` to safely revert failed experiments
 - Added branch status line to autoresearch initialization and resume prompts showing created or reused branch name
@@ -47,6 +62,20 @@
 
 ### Changed
 
+- Changed autoresearch initialization to collect and validate benchmark command, metric definition, scope paths, off-limits list, and constraints before `init_experiment`
+- Changed `init_experiment` to require exact benchmark command, metric definition, scope, off-limits, and constraints matching collected contract
+- Changed `log_experiment` to record run number, benchmark command, scope paths, off-limits list, constraints, and segment fingerprint with each result
+- Changed `run_experiment` to organize output in numbered run directories with separate benchmark and checks logs for artifact preservation
+- Changed autoresearch dashboard to show pending run indicator when unlogged experiment exists
+- Changed autoresearch resume workflow to detect and offer recovery of pending run artifacts before continuing experiment loop
+- Changed `ExperimentResult` to include `runNumber`, `benchmarkCommand`, `scopePaths`, `offLimits`, `constraints`, and `segmentFingerprint` fields
+- Changed `RunningExperiment` to track `runDirectory` and `runNumber` for artifact organization
+- Changed `AutoresearchRuntime` to include `lastRunArtifactDir`, `lastRunNumber`, `lastRunSummary`, `benchmarkCommand`, `secondaryMetrics`, `scopePaths`, `offLimits`, `constraints`, and `segmentFingerprint`
+- Changed autoresearch prompts to emphasize `autoresearch.md` as source of truth for benchmark, scope, and constraints
+- Changed `command-initialize.md` to display collected setup (benchmark command, metric, direction, scope, off-limits, constraints) before initialization
+- Changed `resume-message.md` to reference pending run artifacts and guide completion of unlogged experiments
+- Changed `sendMessage()` API documentation to clarify `deliverAs: 'nextTurn'` behavior for hidden context delivery
+- Changed `SendMessageHandler` type documentation to explain hidden next-turn message queuing during prompt teardown
 - Changed autoresearch startup to create or reuse a dedicated `autoresearch/...` git branch before enabling the experiment loop
 - Changed autoresearch to refuse startup when unrelated worktree changes would make auto-reverts unsafe
 - Changed autoresearch prompts to emphasize scope and constraints as source of truth for session direction
@@ -82,6 +111,9 @@
 
 ### Fixed
 
+- Fixed autoresearch resume to detect and recover pending run artifacts that were left unlogged from previous sessions
+- Fixed dashboard overlay to display when running experiment even with zero completed results
+- Fixed tab character rendering in dashboard command display and tool output summaries
 - Fixed autoresearch logging to require durable ASI metadata (hypothesis, rollback_reason, next_action_hint) for every run including rollback context for discarded, crashed, and checks-failed experiments
 - Fixed autoresearch logging to require durable ASI metadata for every run, including rollback context for discarded, crashed, and checks-failed experiments
 

@@ -2,11 +2,11 @@
  * Tests for AgentSession concurrent prompt guard.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Agent, AgentBusyError, type AgentTool } from "@oh-my-pi/pi-agent-core";
+import { Agent, AgentBusyError, type AgentMessage, type AgentTool } from "@oh-my-pi/pi-agent-core";
 import { type AssistantMessage, getBundledModel, type ToolCall } from "@oh-my-pi/pi-ai";
 import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
 import type { Rule } from "@oh-my-pi/pi-coding-agent/capability/rule";
@@ -62,6 +62,7 @@ describe("AgentSession concurrent prompt guard", () => {
 		if (tempDir && fs.existsSync(tempDir)) {
 			fs.rmSync(tempDir, { recursive: true });
 		}
+		vi.restoreAllMocks();
 	});
 
 	async function createSession() {
@@ -161,6 +162,76 @@ describe("AgentSession concurrent prompt guard", () => {
 		// Cleanup
 		await session.abort();
 		await firstPrompt.catch(() => {});
+	});
+
+	it("delivers hidden nextTurn stop reactions through the next LLM call without exposing them in the visible queue", async () => {
+		const model = getBundledModel("anthropic", "claude-sonnet-4-5")!;
+		let firstStream: MockAssistantStream | undefined;
+		const callMessages: AgentMessage[][] = [];
+
+		const agent = new Agent({
+			getApiKey: () => "test-key",
+			initialState: {
+				model,
+				systemPrompt: "Test",
+				tools: [],
+			},
+			streamFn: (_model, context) => {
+				callMessages.push([...context.messages]);
+				const stream = new MockAssistantStream();
+				queueMicrotask(() => {
+					stream.push({ type: "start", partial: createAssistantMessage("") });
+					if (callMessages.length > 1) {
+						stream.push({ type: "done", reason: "stop", message: createAssistantMessage("Resumed") });
+						return;
+					}
+				});
+				firstStream = stream;
+				return stream;
+			},
+		});
+
+		const sessionManager = SessionManager.inMemory();
+		const settings = Settings.isolated();
+		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"));
+		authStorages.push(authStorage);
+		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
+		authStorage.setRuntimeApiKey("anthropic", "test-key");
+
+		session = new AgentSession({
+			agent,
+			sessionManager,
+			settings,
+			modelRegistry,
+		});
+
+		const firstPrompt = session.prompt("First message");
+		await Bun.sleep(10);
+
+		await session.sendCustomMessage(
+			{
+				customType: "autoresearch-resume",
+				content: "Hidden stop reaction",
+				display: false,
+				attribution: "agent",
+			},
+			{ deliverAs: "nextTurn", triggerTurn: true },
+		);
+
+		expect(session.queuedMessageCount).toBe(0);
+		expect(session.getQueuedMessages()).toEqual({ steering: [], followUp: [] });
+
+		firstStream?.push({ type: "done", reason: "stop", message: createAssistantMessage("Done") });
+		await firstPrompt;
+		await session.waitForIdle();
+
+		expect(callMessages).toHaveLength(2);
+		expect(
+			callMessages[1]?.some(
+				message =>
+					message.role === "custom" && "customType" in message && message.customType === "autoresearch-resume",
+			),
+		).toBe(true);
 	});
 
 	it("should allow prompt() after previous completes", async () => {
