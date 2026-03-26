@@ -43,7 +43,8 @@ export class ExtensionUiController {
 				this.ctx.editor.handleInput(`\x1b[200~${text}\x1b[201~`);
 			},
 			getEditorText: () => this.ctx.editor.getText(),
-			editor: (title, prefill, dialogOptions) => this.showHookEditor(title, prefill, dialogOptions),
+			editor: (title, prefill, dialogOptions, editorOptions) =>
+				this.showHookEditor(title, prefill, dialogOptions, editorOptions),
 			get theme() {
 				return theme;
 			},
@@ -714,6 +715,7 @@ export class ExtensionUiController {
 		title: string,
 		prefill?: string,
 		dialogOptions?: ExtensionUIDialogOptions,
+		editorOptions?: { promptStyle?: boolean },
 	): Promise<string | undefined> {
 		const { promise, resolve } = Promise.withResolvers<string | undefined>();
 		let settled = false;
@@ -742,6 +744,7 @@ export class ExtensionUiController {
 				this.hideHookEditor();
 				finish(undefined);
 			},
+			editorOptions,
 		);
 
 		this.ctx.editorContainer.clear();

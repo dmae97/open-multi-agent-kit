@@ -42,7 +42,6 @@ const QuestionItem = Type.Object({
 	question: Type.String({ description: "Question text" }),
 	options: Type.Array(OptionItem, { description: "Available options" }),
 	multi: Type.Optional(Type.Boolean({ description: "Allow multiple selections" })),
-	multiline: Type.Optional(Type.Boolean({ description: "Open multiline editor for custom input" })),
 	recommended: Type.Optional(Type.Number({ description: "Index of recommended option (0-indexed)" })),
 });
 
@@ -132,7 +131,6 @@ interface AskSingleQuestionOptions {
 	signal?: AbortSignal;
 	initialSelection?: Pick<SelectionResult, "selectedOptions" | "customInput">;
 	navigation?: NavigationControls;
-	multiline?: boolean;
 }
 
 interface UIContext {
@@ -150,11 +148,12 @@ interface UIContext {
 			helpText?: string;
 		},
 	): Promise<string | undefined>;
-	input(
-		prompt: string,
-		options_?: { signal?: AbortSignal; timeout?: number; onTimeout?: () => void },
+	editor(
+		title: string,
+		prefill?: string,
+		dialogOptions?: { signal?: AbortSignal },
+		editorOptions?: { promptStyle?: boolean },
 	): Promise<string | undefined>;
-	editor(title: string, prefill?: string): Promise<string | undefined>;
 }
 
 async function askSingleQuestion(
@@ -164,7 +163,7 @@ async function askSingleQuestion(
 	multi: boolean,
 	options: AskSingleQuestionOptions = {},
 ): Promise<SelectionResult> {
-	const { recommended, timeout, signal, initialSelection, navigation, multiline = false } = options;
+	const { recommended, timeout, signal, initialSelection, navigation } = options;
 	const doneLabel = getDoneOptionLabel();
 	let selectedOptions = [...(initialSelection?.selectedOptions ?? [])];
 	let customInput = initialSelection?.customInput;
@@ -211,12 +210,9 @@ async function askSingleQuestion(
 		return { choice, timedOut: timeoutTriggered, navigation: navigationAction };
 	};
 
-	const promptForCustomInput = async (
-		multiline: boolean,
-	): Promise<{ input: string | undefined }> => {
-		const showCustomInput = multiline
-			? () => ui.editor("Enter your response:")
-			: () => ui.input("Enter your response:", { signal });
+	const promptForCustomInput = async (): Promise<{ input: string | undefined }> => {
+		const dialogOptions = signal ? { signal } : undefined;
+		const showCustomInput = () => ui.editor("Enter your response:", undefined, dialogOptions, { promptStyle: true });
 		const input = signal ? await untilAborted(signal, showCustomInput) : await showCustomInput();
 		return { input };
 	};
@@ -267,7 +263,7 @@ async function askSingleQuestion(
 					timedOut = true;
 					break;
 				}
-				const customResult = await promptForCustomInput(multiline);
+				const customResult = await promptForCustomInput();
 				if (customResult.input === undefined) {
 					return { selectedOptions: Array.from(selected), customInput, timedOut, cancelled: true };
 				}
@@ -335,7 +331,7 @@ async function askSingleQuestion(
 			}
 		} else if (choice === OTHER_OPTION) {
 			if (!selectTimedOut) {
-				const customResult = await promptForCustomInput(multiline);
+				const customResult = await promptForCustomInput();
 				if (customResult.input === undefined) {
 					return { selectedOptions, customInput, timedOut, cancelled: true };
 				}
@@ -421,8 +417,8 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 		const extensionUi = context.ui;
 		const ui: UIContext = {
 			select: (prompt, options, dialogOptions) => extensionUi.select(prompt, options, dialogOptions),
-			input: (prompt, dialogOptions) => extensionUi.input(prompt, undefined, dialogOptions),
-			editor: (title, prefill) => extensionUi.editor(title, prefill),
+			editor: (title, prefill, dialogOptions, editorOptions) =>
+				extensionUi.editor(title, prefill, dialogOptions, editorOptions),
 		};
 
 		// Determine timeout based on settings and plan mode
@@ -459,7 +455,6 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 						signal,
 						initialSelection: options?.previous,
 						navigation: options?.navigation,
-						multiline: q.multiline ?? false,
 					},
 				);
 				return { optionLabels, selectedOptions, customInput, navigation, cancelled, timedOut };
@@ -487,16 +482,23 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 				customInput,
 			};
 
-			let responseText: string;
-			if (customInput !== undefined) {
-				responseText = `User provided custom input: ${customInput}`;
-			} else if (selectedOptions.length > 0) {
-				responseText = q.multi
-					? `User selected: ${selectedOptions.join(", ")}`
-					: `User selected: ${selectedOptions[0]}`;
-			} else {
-				responseText = "User cancelled the selection";
+			const responseParts: string[] = [];
+			if (selectedOptions.length > 0) {
+				responseParts.push(
+					q.multi ? `User selected: ${selectedOptions.join(", ")}` : `User selected: ${selectedOptions[0]}`,
+				);
 			}
+			if (customInput !== undefined) {
+				responseParts.push(
+					customInput.includes("\n")
+						? `User provided custom input:\n${customInput
+								.split("\n")
+								.map(line => `  ${line}`)
+								.join("\n")}`
+						: `User provided custom input: ${customInput}`,
+				);
+			}
+			const responseText = responseParts.length > 0 ? responseParts.join("\n") : "User cancelled the selection";
 
 			return { content: [{ type: "text" as const, text: responseText }], details };
 		}
@@ -570,30 +572,25 @@ interface AskRenderArgs {
 	question?: string;
 	options?: Array<{ label: string }>;
 	multi?: boolean;
-	multiline?: boolean;
 	questions?: Array<{
 		id: string;
 		question: string;
 		options: Array<{ label: string }>;
 		multi?: boolean;
-		multiline?: boolean;
 	}>;
 }
 
-function renderCustomInputLines(
-	uiTheme: Theme,
-	prefix: string,
-	customInput: string,
-	isLastEntry: boolean,
-): string {
+/** Render custom input as a single block with continuation lines (not one entry per line) */
+function renderCustomInput(uiTheme: Theme, prefix: string, customInput: string, isLastEntry: boolean): string {
 	const lines = customInput.split("\n");
-	return lines
-		.map((line, index) => {
-			const isLastLine = index === lines.length - 1 && isLastEntry;
-			const branch = isLastLine ? uiTheme.tree.last : uiTheme.tree.branch;
-			return `\n${prefix}${uiTheme.fg("dim", branch)} ${uiTheme.styledSymbol("status.success", "success")} ${uiTheme.fg("toolOutput", line)}`;
-		})
-		.join("");
+	const branch = isLastEntry ? uiTheme.tree.last : uiTheme.tree.branch;
+	const firstLine = lines[0] ?? "";
+	let text = `\n${prefix}${uiTheme.fg("dim", branch)} ${uiTheme.styledSymbol("status.success", "success")} ${uiTheme.fg("toolOutput", firstLine)}`;
+	const continuationIndent = isLastEntry ? "   " : `${uiTheme.fg("dim", uiTheme.tree.vertical)}  `;
+	for (let i = 1; i < lines.length; i++) {
+		text += `\n${prefix}${continuationIndent}   ${uiTheme.fg("toolOutput", lines[i])}`;
+	}
+	return text;
 }
 
 export const askToolRenderer = {
@@ -613,7 +610,6 @@ export const askToolRenderer = {
 				// Question line with metadata
 				const meta: string[] = [];
 				if (q.multi) meta.push("multi");
-				if (q.multiline) meta.push("multiline");
 				if (q.options?.length) meta.push(`options:${q.options.length}`);
 				const metaStr = meta.length > 0 ? uiTheme.fg("dim", ` · ${meta.join(" · ")}`) : "";
 
@@ -640,7 +636,6 @@ export const askToolRenderer = {
 		let text = `${label} ${uiTheme.fg("accent", args.question)}`;
 		const meta: string[] = [];
 		if (args.multi) meta.push("multi");
-		if (args.multiline) meta.push("multiline");
 		if (args.options?.length) meta.push(`options:${args.options.length}`);
 		text += formatMeta(meta, uiTheme);
 
@@ -704,7 +699,7 @@ export const askToolRenderer = {
 					}
 				}
 				if (r.customInput !== undefined) {
-					text += renderCustomInputLines(uiTheme, continuation, r.customInput, true);
+					text += renderCustomInput(uiTheme, continuation, r.customInput, true);
 				} else if (r.selectedOptions.length === 0) {
 					text += `\n${continuation}${uiTheme.fg("dim", uiTheme.tree.last)} ${uiTheme.styledSymbol("status.warning", "warning")} ${uiTheme.fg("warning", "Cancelled")}`;
 				}
@@ -720,7 +715,8 @@ export const askToolRenderer = {
 			return new Text(fallback, 0, 0);
 		}
 
-		const hasSelection = details.customInput !== undefined || (details.selectedOptions && details.selectedOptions.length > 0);
+		const hasSelection =
+			details.customInput !== undefined || (details.selectedOptions && details.selectedOptions.length > 0);
 		const header = renderStatusLine(
 			{ icon: hasSelection ? "success" : "warning", title: "Ask", description: details.question },
 			uiTheme,
@@ -736,7 +732,7 @@ export const askToolRenderer = {
 			}
 		}
 		if (details.customInput !== undefined) {
-			text += renderCustomInputLines(uiTheme, " ", details.customInput, true);
+			text += renderCustomInput(uiTheme, " ", details.customInput, true);
 		} else if (!details.selectedOptions || details.selectedOptions.length === 0) {
 			text += `\n ${uiTheme.fg("dim", uiTheme.tree.last)} ${uiTheme.styledSymbol("status.warning", "warning")} ${uiTheme.fg("warning", "Cancelled")}`;
 		}
