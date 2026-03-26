@@ -16,9 +16,12 @@ import type { HashMismatch } from "./types";
 
 export type Anchor = { line: number; hash: string };
 export type HashlineEdit =
-	| { op: "replace"; pos: Anchor; end?: Anchor; lines: string[] }
-	| { op: "append"; pos?: Anchor; lines: string[] }
-	| { op: "prepend"; pos?: Anchor; lines: string[] };
+	| { op: "replace_line"; pos: Anchor; lines: string[] }
+	| { op: "replace_range"; pos: Anchor; end: Anchor; lines: string[] }
+	| { op: "append_at"; pos: Anchor; lines: string[] }
+	| { op: "prepend_at"; pos: Anchor; lines: string[] }
+	| { op: "append_file"; lines: string[] }
+	| { op: "prepend_file"; lines: string[] };
 
 const NIBBLE_STR = "ZPMQVRWSNKTXJBYH";
 
@@ -455,18 +458,6 @@ function maybeWarnSuspiciousUnicodeEscapePlaceholder(edits: HashlineEdit[], warn
 // Edit Application
 // ═══════════════════════════════════════════════════════════════════════════
 
-const MIN_AUTOCORRECT_LENGTH = 2;
-
-function shouldAutocorrect(line: string, otherLine: string): boolean {
-	if (!line || line !== otherLine) return false;
-	line = line.trim();
-	if (line.length < MIN_AUTOCORRECT_LENGTH) {
-		// if brace, we allow
-		return line.endsWith("}") || line.endsWith(")");
-	}
-	return true;
-}
-
 /**
  * Apply an array of hashline edits to file content.
  *
@@ -513,28 +504,29 @@ export function applyHashlineEdits(
 	}
 	for (const edit of edits) {
 		switch (edit.op) {
-			case "replace": {
-				if (edit.end) {
-					const startValid = validateRef(edit.pos);
-					const endValid = validateRef(edit.end);
-					if (!startValid || !endValid) continue;
-					if (edit.pos.line > edit.end.line) {
-						throw new Error(`Range start line ${edit.pos.line} must be <= end line ${edit.end.line}`);
-					}
-				} else {
-					if (!validateRef(edit.pos)) continue;
+			case "replace_line": {
+				if (!validateRef(edit.pos)) continue;
+				break;
+			}
+			case "replace_range": {
+				const startValid = validateRef(edit.pos);
+				const endValid = validateRef(edit.end);
+				if (!startValid || !endValid) continue;
+				if (edit.pos.line > edit.end.line) {
+					throw new Error(`Range start line ${edit.pos.line} must be <= end line ${edit.end.line}`);
 				}
 				break;
 			}
-			case "append": {
-				if (edit.pos && !validateRef(edit.pos)) continue;
+			case "append_at":
+			case "prepend_at": {
+				if (!validateRef(edit.pos)) continue;
 				if (edit.lines.length === 0) {
 					edit.lines = [""]; // insert an empty line
 				}
 				break;
 			}
-			case "prepend": {
-				if (edit.pos && !validateRef(edit.pos)) continue;
+			case "append_file":
+			case "prepend_file": {
 				if (edit.lines.length === 0) {
 					edit.lines = [""]; // insert an empty line
 				}
@@ -547,6 +539,38 @@ export function applyHashlineEdits(
 	}
 	maybeAutocorrectEscapedTabIndentation(edits, warnings);
 	maybeWarnSuspiciousUnicodeEscapePlaceholder(edits, warnings);
+
+	// Warn when a replace_range/replace_line's last inserted line duplicates the next surviving line.
+	// This catches the common boundary-overreach pattern where the agent includes a closing delimiter
+	// in the replacement but sets `end` to the line before the delimiter, causing duplication.
+	for (const edit of edits) {
+		let endLine: number;
+		switch (edit.op) {
+			case "replace_line":
+				endLine = edit.pos.line;
+				break;
+			case "replace_range":
+				endLine = edit.end.line;
+				break;
+			default:
+				continue;
+		}
+		if (edit.lines.length === 0) continue;
+		const nextSurvivingIdx = endLine; // 0-indexed: endLine (1-indexed) is the next line after `end`
+		if (nextSurvivingIdx >= originalFileLines.length) continue;
+		const nextSurvivingLine = originalFileLines[nextSurvivingIdx];
+		const lastInsertedLine = edit.lines[edit.lines.length - 1];
+		const trimmedNext = nextSurvivingLine.trim();
+		const trimmedLast = lastInsertedLine.trim();
+		// Only warn for non-trivial lines to avoid false positives on blank lines or bare punctuation
+		if (trimmedLast.length > 0 && trimmedLast === trimmedNext) {
+			const tag = formatLineTag(endLine + 1, nextSurvivingLine);
+			warnings.push(
+				`Possible boundary duplication: your last replacement line \`${trimmedLast}\` is identical to the next surviving line ${tag}. ` +
+					`If you meant to replace the entire block, set \`end\` to ${tag} instead.`,
+			);
+		}
+	}
 	// Deduplicate identical edits targeting the same line(s)
 	const seenEditKeys = new Map<string, number>();
 	const dedupIndices = new Set<number>();
@@ -554,25 +578,22 @@ export function applyHashlineEdits(
 		const edit = edits[i];
 		let lineKey: string;
 		switch (edit.op) {
-			case "replace":
-				if (!edit.end) {
-					lineKey = `s:${edit.pos.line}`;
-				} else {
-					lineKey = `r:${edit.pos.line}:${edit.end.line}`;
-				}
+			case "replace_line":
+				lineKey = `s:${edit.pos.line}`;
 				break;
-			case "append":
-				if (edit.pos) {
-					lineKey = `i:${edit.pos.line}`;
-					break;
-				}
+			case "replace_range":
+				lineKey = `r:${edit.pos.line}:${edit.end.line}`;
+				break;
+			case "append_at":
+				lineKey = `i:${edit.pos.line}`;
+				break;
+			case "prepend_at":
+				lineKey = `ib:${edit.pos.line}`;
+				break;
+			case "append_file":
 				lineKey = "ieof";
 				break;
-			case "prepend":
-				if (edit.pos) {
-					lineKey = `ib:${edit.pos.line}`;
-					break;
-				}
+			case "prepend_file":
 				lineKey = "ibef";
 				break;
 		}
@@ -594,20 +615,28 @@ export function applyHashlineEdits(
 		let sortLine: number;
 		let precedence: number;
 		switch (edit.op) {
-			case "replace":
-				if (!edit.end) {
-					sortLine = edit.pos.line;
-				} else {
-					sortLine = edit.end.line;
-				}
+			case "replace_line":
+				sortLine = edit.pos.line;
 				precedence = 0;
 				break;
-			case "append":
-				sortLine = edit.pos ? edit.pos.line : fileLines.length + 1;
+			case "replace_range":
+				sortLine = edit.end.line;
+				precedence = 0;
+				break;
+			case "append_at":
+				sortLine = edit.pos.line;
 				precedence = 1;
 				break;
-			case "prepend":
-				sortLine = edit.pos ? edit.pos.line : 0;
+			case "prepend_at":
+				sortLine = edit.pos.line;
+				precedence = 2;
+				break;
+			case "append_file":
+				sortLine = fileLines.length + 1;
+				precedence = 1;
+				break;
+			case "prepend_file":
+				sortLine = 0;
 				precedence = 2;
 				break;
 		}
@@ -619,99 +648,82 @@ export function applyHashlineEdits(
 	// Apply edits bottom-up
 	for (const { edit, idx } of annotated) {
 		switch (edit.op) {
-			case "replace": {
-				if (!edit.end) {
-					const origLines = originalFileLines.slice(edit.pos.line - 1, edit.pos.line);
-					const newLines = edit.lines;
-					if (origLines.length === newLines.length && origLines.every((line, i) => line === newLines[i])) {
-						noopEdits.push({
-							editIndex: idx,
-							loc: `${edit.pos.line}#${edit.pos.hash}`,
-							current: origLines.join("\n"),
-						});
-						break;
-					}
-					fileLines.splice(edit.pos.line - 1, 1, ...newLines);
-					trackFirstChanged(edit.pos.line);
-				} else {
-					const count = edit.end.line - edit.pos.line + 1;
-					const newLines = [...edit.lines];
-					const trailingReplacementLine = newLines[newLines.length - 1]?.trimEnd();
-					const nextSurvivingLine = fileLines[edit.end.line]?.trimEnd();
-					if (
-						shouldAutocorrect(trailingReplacementLine, nextSurvivingLine) &&
-						// Safety: only correct when end-line content differs from the duplicate.
-						// If end already points to the boundary, matching next line is coincidence.
-						fileLines[edit.end.line - 1]?.trimEnd() !== trailingReplacementLine
-					) {
-						newLines.pop();
-						warnings.push(
-							`Auto-corrected range replace ${edit.pos.line}#${edit.pos.hash}-${edit.end.line}#${edit.end.hash}: removed trailing replacement line "${trailingReplacementLine}" that duplicated next surviving line`,
-						);
-					}
-					const leadingReplacementLine = newLines[0]?.trimEnd();
-					const prevSurvivingLine = fileLines[edit.pos.line - 2]?.trimEnd();
-					if (
-						shouldAutocorrect(leadingReplacementLine, prevSurvivingLine) &&
-						// Safety: only correct when pos-line content differs from the duplicate.
-						// If pos already points to the boundary, matching prev line is coincidence.
-						fileLines[edit.pos.line - 1]?.trimEnd() !== leadingReplacementLine
-					) {
-						newLines.shift();
-						warnings.push(
-							`Auto-corrected range replace ${edit.pos.line}#${edit.pos.hash}-${edit.end.line}#${edit.end.hash}: removed leading replacement line "${leadingReplacementLine}" that duplicated preceding surviving line`,
-						);
-					}
-					fileLines.splice(edit.pos.line - 1, count, ...newLines);
-					trackFirstChanged(edit.pos.line);
+			case "replace_line": {
+				const origLines = originalFileLines.slice(edit.pos.line - 1, edit.pos.line);
+				const newLines = edit.lines;
+				if (origLines.length === newLines.length && origLines.every((line, i) => line === newLines[i])) {
+					noopEdits.push({
+						editIndex: idx,
+						loc: `${edit.pos.line}#${edit.pos.hash}`,
+						current: origLines.join("\n"),
+					});
+					break;
 				}
+				fileLines.splice(edit.pos.line - 1, 1, ...newLines);
+				trackFirstChanged(edit.pos.line);
 				break;
 			}
-			case "append": {
+			case "replace_range": {
+				const count = edit.end.line - edit.pos.line + 1;
+				fileLines.splice(edit.pos.line - 1, count, ...edit.lines);
+				trackFirstChanged(edit.pos.line);
+				break;
+			}
+			case "append_at": {
 				const inserted = edit.lines;
 				if (inserted.length === 0) {
 					noopEdits.push({
 						editIndex: idx,
-						loc: edit.pos ? `${edit.pos.line}#${edit.pos.hash}` : "EOF",
-						current: edit.pos ? originalFileLines[edit.pos.line - 1] : "",
+						loc: `${edit.pos.line}#${edit.pos.hash}`,
+						current: originalFileLines[edit.pos.line - 1],
 					});
 					break;
 				}
-				if (edit.pos) {
-					fileLines.splice(edit.pos.line, 0, ...inserted);
-					trackFirstChanged(edit.pos.line + 1);
-				} else {
-					if (fileLines.length === 1 && fileLines[0] === "") {
-						fileLines.splice(0, 1, ...inserted);
-						trackFirstChanged(1);
-					} else {
-						fileLines.splice(fileLines.length, 0, ...inserted);
-						trackFirstChanged(fileLines.length - inserted.length + 1);
-					}
-				}
+				fileLines.splice(edit.pos.line, 0, ...inserted);
+				trackFirstChanged(edit.pos.line + 1);
 				break;
 			}
-			case "prepend": {
+			case "prepend_at": {
 				const inserted = edit.lines;
 				if (inserted.length === 0) {
 					noopEdits.push({
 						editIndex: idx,
-						loc: edit.pos ? `${edit.pos.line}#${edit.pos.hash}` : "BOF",
-						current: edit.pos ? originalFileLines[edit.pos.line - 1] : "",
+						loc: `${edit.pos.line}#${edit.pos.hash}`,
+						current: originalFileLines[edit.pos.line - 1],
 					});
 					break;
 				}
-				if (edit.pos) {
-					fileLines.splice(edit.pos.line - 1, 0, ...inserted);
-					trackFirstChanged(edit.pos.line);
-				} else {
-					if (fileLines.length === 1 && fileLines[0] === "") {
-						fileLines.splice(0, 1, ...inserted);
-					} else {
-						fileLines.splice(0, 0, ...inserted);
-					}
+				fileLines.splice(edit.pos.line - 1, 0, ...inserted);
+				trackFirstChanged(edit.pos.line);
+				break;
+			}
+			case "append_file": {
+				const inserted = edit.lines;
+				if (inserted.length === 0) {
+					noopEdits.push({ editIndex: idx, loc: "EOF", current: "" });
+					break;
+				}
+				if (fileLines.length === 1 && fileLines[0] === "") {
+					fileLines.splice(0, 1, ...inserted);
 					trackFirstChanged(1);
+				} else {
+					fileLines.splice(fileLines.length, 0, ...inserted);
+					trackFirstChanged(fileLines.length - inserted.length + 1);
 				}
+				break;
+			}
+			case "prepend_file": {
+				const inserted = edit.lines;
+				if (inserted.length === 0) {
+					noopEdits.push({ editIndex: idx, loc: "BOF", current: "" });
+					break;
+				}
+				if (fileLines.length === 1 && fileLines[0] === "") {
+					fileLines.splice(0, 1, ...inserted);
+				} else {
+					fileLines.splice(0, 0, ...inserted);
+				}
+				trackFirstChanged(1);
 				break;
 			}
 		}

@@ -11,6 +11,7 @@ import {
 	visibleWidth,
 } from "@oh-my-pi/pi-tui";
 import { theme } from "../../modes/theme/theme";
+import { matchesAppInterrupt } from "../../modes/utils/keybinding-matchers";
 import type { SessionInfo } from "../../session/session-manager";
 import { fuzzyFilter } from "../../utils/fuzzy";
 import { DynamicBorder } from "./dynamic-border";
@@ -219,7 +220,7 @@ class SessionList implements Component {
 			return;
 		}
 		// Escape - cancel
-		if (matchesKey(keyData, "escape") || matchesKey(keyData, "esc")) {
+		if (matchesAppInterrupt(keyData)) {
 			if (this.onCancel) {
 				this.onCancel();
 			}

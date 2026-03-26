@@ -174,16 +174,35 @@ export function hashlineParseText(edit: string[] | string | null): string[] {
 	return stripNewLinePrefixes(edit);
 }
 
+const linesSchema = Type.Union([
+	Type.Array(Type.String(), { description: "content (preferred format)" }),
+	Type.String(),
+	Type.Null(),
+]);
+
+const locSchema = Type.Union(
+	[
+		Type.Literal("append"),
+		Type.Literal("prepend"),
+		Type.Object({ append: Type.String({ description: "anchor" }) }),
+		Type.Object({ prepend: Type.String({ description: "anchor" }) }),
+		Type.Object({
+			line: Type.String({ description: "anchor" }),
+		}),
+		Type.Object({
+			block: Type.Object({
+				pos: Type.String({ description: "anchor" }),
+				end: Type.String({ description: "limit position" }),
+			}),
+		}),
+	],
+	{ description: "insert location" },
+);
+
 const hashlineEditSchema = Type.Object(
 	{
-		op: StringEnum(["replace", "append", "prepend"]),
-		pos: Type.Optional(Type.String({ description: "anchor" })),
-		end: Type.Optional(Type.String({ description: "limit position" })),
-		lines: Type.Union([
-			Type.Array(Type.String(), { description: "content (preferred format)" }),
-			Type.String(),
-			Type.Null(),
-		]),
+		loc: locSchema,
+		content: linesSchema,
 	},
 	{ additionalProperties: false },
 );
@@ -206,45 +225,48 @@ export type HashlineParams = Static<typeof hashlineEditParamsSchema>;
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Map flat tool-schema edits (tag/end) into typed HashlineEdit objects.
+ * Map loc/content tool-schema edits into typed HashlineEdit objects.
  *
- * Resilient: as long as at least one anchor exists, we execute.
- * - replace + tag only → single-line replace
- * - replace + tag + end → range replace
- * - append + tag or end → append after that anchor
- * - prepend + tag or end → prepend before that anchor
- * - no anchors → file-level append/prepend (only for those ops)
- *
- * Unknown ops default to "replace".
+ * Each edit entry has a `loc` (where to edit) and `content` (what to insert/replace).
+ * loc can be:
+ *   - "append" / "prepend" — file-level insert
+ *   - { append: anchor } / { prepend: anchor } — insert relative to anchor
+ *   - { replace_line: anchor } — replace one line
+ *   - { replace_block: { pos, end } } — replace inclusive range
  */
 function resolveEditAnchors(edits: HashlineToolEdit[]): HashlineEdit[] {
 	const result: HashlineEdit[] = [];
 	for (const edit of edits) {
-		const lines = hashlineParseText(edit.lines);
-		const tag = edit.pos ? tryParseTag(edit.pos) : undefined;
-		const end = edit.end ? tryParseTag(edit.end) : undefined;
+		const lines = hashlineParseText(edit.content);
+		const loc = edit.loc;
 
-		// Normalize op — default unknown values to "replace"
-		const op = edit.op === "append" || edit.op === "prepend" ? edit.op : "replace";
-		switch (op) {
-			case "replace": {
-				if (tag && end) {
-					result.push({ op: "replace", pos: tag, end, lines });
-				} else if (tag || end) {
-					result.push({ op: "replace", pos: tag || end!, lines });
-				} else {
-					throw new Error("Replace requires at least one anchor (tag or end).");
-				}
-				break;
+		if (loc === "append") {
+			result.push({ op: "append_file", lines });
+		} else if (loc === "prepend") {
+			result.push({ op: "prepend_file", lines });
+		} else if (typeof loc === "object") {
+			if ("append" in loc) {
+				const anchor = tryParseTag(loc.append);
+				if (!anchor) throw new Error("append requires a valid anchor.");
+				result.push({ op: "append_at", pos: anchor, lines });
+			} else if ("prepend" in loc) {
+				const anchor = tryParseTag(loc.prepend);
+				if (!anchor) throw new Error("prepend requires a valid anchor.");
+				result.push({ op: "prepend_at", pos: anchor, lines });
+			} else if ("line" in loc) {
+				const anchor = tryParseTag(loc.line);
+				if (!anchor) throw new Error("line requires a valid anchor.");
+				result.push({ op: "replace_line", pos: anchor, lines });
+			} else if ("block" in loc) {
+				const posAnchor = tryParseTag(loc.block.pos);
+				const endAnchor = tryParseTag(loc.block.end);
+				if (!posAnchor || !endAnchor) throw new Error("block requires valid pos and end anchors.");
+				result.push({ op: "replace_range", pos: posAnchor, end: endAnchor, lines });
+			} else {
+				throw new Error("Unknown loc shape. Expected append, prepend, line, or block.");
 			}
-			case "append": {
-				result.push({ op: "append", pos: tag ?? end, lines });
-				break;
-			}
-			case "prepend": {
-				result.push({ op: "prepend", pos: end ?? tag, lines });
-				break;
-			}
+		} else {
+			throw new Error(`Invalid loc value: ${JSON.stringify(loc)}`);
 		}
 	}
 	return result;
@@ -552,12 +574,10 @@ export class EditTool implements AgentTool<TInput> {
 				const lines: string[] = [];
 				for (const edit of edits) {
 					// For file creation, only anchorless appends/prepends are valid
-					if ((edit.op === "append" || edit.op === "prepend") && !edit.pos && !edit.end) {
-						if (edit.op === "prepend") {
-							lines.unshift(...hashlineParseText(edit.lines));
-						} else {
-							lines.push(...hashlineParseText(edit.lines));
-						}
+					if (edit.loc === "append") {
+						lines.push(...hashlineParseText(edit.content));
+					} else if (edit.loc === "prepend") {
+						lines.unshift(...hashlineParseText(edit.content));
 					} else {
 						throw new Error(`File not found: ${path}`);
 					}
@@ -582,7 +602,7 @@ export class EditTool implements AgentTool<TInput> {
 			const originalNormalized = normalizeToLF(text);
 			let normalizedText = originalNormalized;
 
-			// Apply anchor-based edits first (replace, append, prepend)
+			// Apply anchor-based edits first (replace, append_at, prepend_at)
 			const anchorResult = applyHashlineEdits(normalizedText, anchorEdits);
 			normalizedText = anchorResult.lines;
 
@@ -612,20 +632,18 @@ export class EditTool implements AgentTool<TInput> {
 					for (const edit of anchorEdits) {
 						refs.length = 0;
 						switch (edit.op) {
-							case "replace":
-								if (edit.end) {
-									refs.push(edit.end, edit.pos);
-								} else {
-									refs.push(edit.pos);
-								}
+							case "replace_line":
+								refs.push(edit.pos);
 								break;
-							case "append":
-								if (edit.pos) refs.push(edit.pos);
+							case "replace_range":
+								refs.push(edit.end, edit.pos);
 								break;
-							case "prepend":
-								if (edit.pos) refs.push(edit.pos);
+							case "append_at":
+							case "prepend_at":
+								refs.push(edit.pos);
 								break;
-							default:
+							case "append_file":
+							case "prepend_file":
 								break;
 						}
 

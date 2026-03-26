@@ -360,6 +360,13 @@ function handleContentBlockStop(
 /**
  * Check if the model supports prompt caching.
  * Supported: Claude 3.5 Haiku, Claude 3.7 Sonnet, Claude 4.x+ models, Haiku 4.5+
+ *
+ * For base models and system-defined inference profiles the model ID / ARN
+ * contains the model name, so we can decide locally.
+ *
+ * For application inference profiles (whose ARNs don't contain the model name),
+ * set AWS_BEDROCK_FORCE_CACHE=1 to enable cache points.  Amazon Nova models
+ * have automatic caching and don't need explicit cache points.
  */
 function supportsPromptCaching(model: Model<"bedrock-converse-stream">): boolean {
 	if (model.cost.cacheRead || model.cost.cacheWrite) return true;
@@ -370,6 +377,9 @@ function supportsPromptCaching(model: Model<"bedrock-converse-stream">): boolean
 	if (id.includes("claude-3-7-sonnet") || id.includes("claude-3-5-haiku")) return true;
 	// Claude Haiku 4.5+ (new naming)
 	if (id.includes("claude-haiku")) return true;
+	// Application inference profiles don't contain the model name in the ARN.
+	// Allow users to force cache points via environment variable.
+	if (typeof process !== "undefined" && process.env.AWS_BEDROCK_FORCE_CACHE === "1") return true;
 	return false;
 }
 

@@ -1,4 +1,4 @@
-import { matchesKey } from "../keys";
+import { getKeybindings } from "../keybindings";
 import { Loader } from "./loader";
 
 /**
@@ -27,7 +27,8 @@ export class CancellableLoader extends Loader {
 	}
 
 	handleInput(data: string): void {
-		if (matchesKey(data, "escape") || matchesKey(data, "esc")) {
+		const kb = getKeybindings();
+		if (kb.matches(data, "tui.select.cancel")) {
 			this.#abortController.abort();
 			this.onAbort?.();
 		}

@@ -21,6 +21,7 @@ import type {
 } from "../../config/settings-schema";
 import { SETTING_TABS, TAB_METADATA } from "../../config/settings-schema";
 import { getCurrentThemeName, getSelectListTheme, getSettingsListTheme, theme } from "../../modes/theme/theme";
+import { matchesAppInterrupt } from "../../modes/utils/keybinding-matchers";
 import { getTabBarTheme } from "../shared";
 import { DynamicBorder } from "./dynamic-border";
 import { PluginSettingsComponent } from "./plugin-settings";
@@ -521,7 +522,7 @@ export class SettingsSelectorComponent extends Container {
 		}
 
 		// Escape at top level cancels
-		if ((matchesKey(data, "escape") || matchesKey(data, "esc")) && !this.#currentSubmenu) {
+		if (matchesAppInterrupt(data) && !this.#currentSubmenu) {
 			this.callbacks.onCancel();
 			return;
 		}

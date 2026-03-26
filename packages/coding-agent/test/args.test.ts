@@ -86,6 +86,13 @@ describe("parseArgs", () => {
 		});
 	});
 
+	describe("--fork flag", () => {
+		test("parses --fork with session ID", () => {
+			const result = parseArgs(["--fork", "abc123"]);
+			expect(result.fork).toBe("abc123");
+		});
+	});
+
 	describe("flags with values", () => {
 		test("parses --provider", () => {
 			const result = parseArgs(["--provider", "openai"]);
@@ -110,6 +117,11 @@ describe("parseArgs", () => {
 		test("parses --append-system-prompt", () => {
 			const result = parseArgs(["--append-system-prompt", "Additional context"]);
 			expect(result.appendSystemPrompt).toBe("Additional context");
+		});
+
+		test("parses --provider-session-id", () => {
+			const result = parseArgs(["--provider-session-id", "reb_cache_key"]);
+			expect(result.providerSessionId).toBe("reb_cache_key");
 		});
 
 		test("parses --mode", () => {

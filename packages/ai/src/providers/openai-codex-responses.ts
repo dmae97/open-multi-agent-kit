@@ -811,7 +811,7 @@ function handleCodexStreamEvent(args: {
 		return handleResponseCreated(runtime, rawEvent);
 	}
 
-	if (eventType === "response.completed" || eventType === "response.done") {
+	if (eventType === "response.completed" || eventType === "response.done" || eventType === "response.incomplete") {
 		handleResponseCompleted(model, output, runtime, rawEvent);
 		return firstTokenTime;
 	}
@@ -1045,6 +1045,9 @@ function handleResponseCompleted(
 			totalTokens: response.usage.total_tokens || 0,
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 		};
+	}
+	if (typeof response?.id === "string" && response.id.length > 0) {
+		output.responseId = response.id;
 	}
 
 	const state = runtime.websocketState;
@@ -1764,6 +1767,7 @@ class CodexWebSocketConnection {
 				if (
 					eventType === "response.completed" ||
 					eventType === "response.done" ||
+					eventType === "response.incomplete" ||
 					eventType === "response.failed" ||
 					eventType === "error"
 				) {

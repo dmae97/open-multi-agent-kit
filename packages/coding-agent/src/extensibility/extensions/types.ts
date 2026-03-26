@@ -56,7 +56,7 @@ import type { TodoItem } from "../../tools/todo-write";
 import type { EventBus } from "../../utils/event-bus";
 import type { SlashCommandInfo } from "../slash-commands";
 
-export type { AppAction, KeybindingsManager } from "../../config/keybindings";
+export type { AppKeybinding, KeybindingsManager } from "../../config/keybindings";
 export type { ExecOptions, ExecResult } from "../../exec/exec";
 export type { AgentToolResult, AgentToolUpdateCallback };
 
@@ -87,6 +87,16 @@ export interface ExtensionUIDialogOptions {
 /** Raw terminal input listener for extensions. */
 export type TerminalInputHandler = (data: string) => { consume?: boolean; data?: string } | undefined;
 
+export type WidgetPlacement = "aboveEditor" | "belowEditor";
+
+export interface ExtensionWidgetOptions {
+	placement?: WidgetPlacement;
+}
+
+export type ExtensionUiComponent = Component & { dispose?(): void };
+export type ExtensionUiComponentFactory = (tui: TUI, theme: Theme) => ExtensionUiComponent;
+export type ExtensionWidgetContent = string[] | ExtensionUiComponentFactory | undefined;
+
 /**
  * UI context for extensions to request interactive UI.
  * Each mode (interactive, RPC, print) provides its own implementation.
@@ -113,15 +123,14 @@ export interface ExtensionUIContext {
 	/** Set the working/loading message shown during streaming. Call with no argument to restore default. */
 	setWorkingMessage(message?: string): void;
 
-	/** Set a widget to display above the editor. Accepts string array or component factory. */
-	setWidget(key: string, content: string[] | undefined): void;
-	setWidget(key: string, content: ((tui: TUI, theme: Theme) => Component & { dispose?(): void }) | undefined): void;
+	/** Set a widget to display above or below the editor. Accepts string array or component factory. */
+	setWidget(key: string, content: ExtensionWidgetContent, options?: ExtensionWidgetOptions): void;
 
 	/** Set a custom footer component, or undefined to restore the built-in footer. */
-	setFooter(factory: ((tui: TUI, theme: Theme) => Component & { dispose?(): void }) | undefined): void;
+	setFooter(factory: ExtensionUiComponentFactory | undefined): void;
 
 	/** Set a custom header component, or undefined to restore the built-in header. */
-	setHeader(factory: ((tui: TUI, theme: Theme) => Component & { dispose?(): void }) | undefined): void;
+	setHeader(factory: ExtensionUiComponentFactory | undefined): void;
 
 	/** Set the terminal window/tab title. */
 	setTitle(title: string): void;
@@ -133,7 +142,7 @@ export interface ExtensionUIContext {
 			theme: Theme,
 			keybindings: KeybindingsManager,
 			done: (result: T) => void,
-		) => (Component & { dispose?(): void }) | Promise<Component & { dispose?(): void }>,
+		) => ExtensionUiComponent | Promise<ExtensionUiComponent>,
 		options?: { overlay?: boolean },
 	): Promise<T>;
 
@@ -303,6 +312,9 @@ export interface ToolDefinition<TParams extends TSchema = TSchema, TDetails = un
 	parameters: TParams;
 	/** If true, tool is excluded unless explicitly listed in --tools or agent's tools field */
 	hidden?: boolean;
+	/** If true, tool is registered but not auto-included in the initial active set.
+	 *  The registering extension is responsible for activating/deactivating it via setActiveTools(). */
+	defaultInactive?: boolean;
 	/** If true, tool may stage deferred changes that require explicit resolve/discard. */
 	deferrable?: boolean;
 	/** MCP server name for discovery/search metadata when this tool fronts an MCP server. */
@@ -1047,7 +1059,13 @@ export interface ExtensionAPI {
 	// Actions
 	// =========================================================================
 
-	/** Send a custom message to the session. */
+	/**
+	 * Send a custom message to the session.
+	 *
+	 * `deliverAs: "nextTurn"` keeps the message hidden from the editable pending-message UI.
+	 * If `triggerTurn` is also true while the current turn is still unwinding, the session schedules
+	 * an internal continuation that consumes the message on the next turn.
+	 */
 	sendMessage<T = unknown>(
 		message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details" | "attribution">,
 		options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
@@ -1223,6 +1241,11 @@ type HandlerFn = (...args: unknown[]) => Promise<unknown>;
 
 export type SendMessageHandler = <T = unknown>(
 	message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details" | "attribution">,
+	/**
+	 * `deliverAs: "nextTurn"` queues hidden custom context for the next turn.
+	 * When paired with `triggerTurn: true` during prompt teardown, the session schedules
+	 * an internal continuation without surfacing the message in the editable pending queue.
+	 */
 	options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
 ) => void;
 

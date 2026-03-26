@@ -4,12 +4,12 @@ import { CURSOR_MARKER } from "@oh-my-pi/pi-tui";
 import { CombinedAutocompleteProvider } from "@oh-my-pi/pi-tui/autocomplete";
 import { Editor } from "@oh-my-pi/pi-tui/components/editor";
 import { visibleWidth } from "@oh-my-pi/pi-tui/utils";
-import { EditorKeybindingsManager, setEditorKeybindings } from "../src/keybindings";
+import { KeybindingsManager, setKeybindings, TUI_KEYBINDINGS } from "../src/keybindings";
 import { defaultEditorTheme } from "./test-themes";
 
 describe("Editor component", () => {
 	afterEach(() => {
-		setEditorKeybindings(new EditorKeybindingsManager());
+		setKeybindings(new KeybindingsManager(TUI_KEYBINDINGS));
 	});
 
 	describe("Prompt history navigation", () => {
@@ -1714,9 +1714,9 @@ describe("Editor component", () => {
 		});
 
 		it("uses the configured undo binding", () => {
-			setEditorKeybindings(
-				new EditorKeybindingsManager({
-					undo: "f8",
+			setKeybindings(
+				new KeybindingsManager(TUI_KEYBINDINGS, {
+					"tui.editor.undo": "f8",
 				}),
 			);
 
@@ -1728,6 +1728,23 @@ describe("Editor component", () => {
 			editor.handleInput("\x1b[19~"); // F8
 			expect(editor.getText()).toBe("");
 			expect(editor.getCursor()).toEqual({ line: 0, col: 0 });
+		});
+
+		it("does not swallow keys rebound to copy", () => {
+			setKeybindings(
+				new KeybindingsManager(TUI_KEYBINDINGS, {
+					"tui.input.copy": "left",
+				}),
+			);
+
+			const editor = new Editor(defaultEditorTheme);
+			editor.setText("ab");
+
+			editor.handleInput("\x1b[D"); // Left arrow
+			editor.handleInput("X");
+
+			expect(editor.getText()).toBe("aXb");
+			expect(editor.getCursor()).toEqual({ line: 0, col: 2 });
 		});
 
 		it("undoes the last paste when a transient #undo trigger is executed", () => {

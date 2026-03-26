@@ -1,30 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { EditorKeybindingsManager, setEditorKeybindings } from "../../tui/src/keybindings";
-import { KeybindingsManager } from "../src/config/keybindings";
+import { KeybindingsManager, setKeybindings, TUI_KEYBINDINGS } from "@oh-my-pi/pi-tui";
+import { KeybindingsManager as AppKeybindingsManager } from "../src/config/keybindings";
 import { createPromptActionAutocompleteProvider } from "../src/modes/prompt-action-autocomplete";
 
 describe("prompt action autocomplete", () => {
 	beforeEach(() => {
-		setEditorKeybindings(
-			new EditorKeybindingsManager({
-				cursorLineStart: ["home", "f6"],
-				cursorLineEnd: "f7",
-				undo: "f8",
+		setKeybindings(
+			new KeybindingsManager({
+				"tui.editor.cursorLineStart": { defaultKeys: ["home", "f6"], description: "Move cursor to line start" },
+				"tui.editor.cursorLineEnd": { defaultKeys: "f7", description: "Move cursor to line end" },
+				"tui.editor.undo": { defaultKeys: "f8", description: "Undo" },
 			}),
 		);
 	});
 
 	afterEach(() => {
-		setEditorKeybindings(new EditorKeybindingsManager());
+		setKeybindings(new KeybindingsManager(TUI_KEYBINDINGS));
 	});
 
 	it("shows prompt actions with configured shortcut hints", async () => {
 		const provider = createPromptActionAutocompleteProvider({
 			commands: [],
 			basePath: "/tmp",
-			keybindings: KeybindingsManager.inMemory({
-				copyLine: "ctrl+shift+l",
-				copyPrompt: ["alt+shift+c", "ctrl+shift+c"],
+			keybindings: AppKeybindingsManager.inMemory({
+				"app.clipboard.copyLine": "ctrl+shift+l",
+				"app.clipboard.copyPrompt": ["alt+shift+c", "ctrl+shift+c"],
 			}),
 			copyCurrentLine: () => {},
 			copyPrompt: () => {},
@@ -64,7 +64,7 @@ describe("prompt action autocomplete", () => {
 		const provider = createPromptActionAutocompleteProvider({
 			commands: [],
 			basePath: "/tmp",
-			keybindings: KeybindingsManager.inMemory(),
+			keybindings: AppKeybindingsManager.inMemory(),
 			copyCurrentLine: () => {},
 			copyPrompt: () => {},
 			undo: prefix => {
@@ -97,7 +97,7 @@ describe("prompt action autocomplete", () => {
 		const provider = createPromptActionAutocompleteProvider({
 			commands: [],
 			basePath: "/tmp",
-			keybindings: KeybindingsManager.inMemory(),
+			keybindings: AppKeybindingsManager.inMemory(),
 			copyCurrentLine: () => {},
 			copyPrompt: () => {},
 			undo: () => {},

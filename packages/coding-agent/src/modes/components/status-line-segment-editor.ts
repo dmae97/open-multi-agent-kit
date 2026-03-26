@@ -11,6 +11,7 @@
 import { Container, matchesKey, padding } from "@oh-my-pi/pi-tui";
 import type { StatusLineSegmentId } from "../../config/settings-schema";
 import { theme } from "../../modes/theme/theme";
+import { matchesAppInterrupt } from "../../modes/utils/keybinding-matchers";
 import { ALL_SEGMENT_IDS } from "./status-line/segments";
 
 // Segment display names and short descriptions
@@ -239,7 +240,7 @@ export class StatusLineSegmentEditorComponent extends Container {
 			const left = this.#getSegmentsForColumn("left").map(s => s.id);
 			const right = this.#getSegmentsForColumn("right").map(s => s.id);
 			this.callbacks.onSave(left, right);
-		} else if (matchesKey(data, "escape") || matchesKey(data, "esc")) {
+		} else if (matchesAppInterrupt(data)) {
 			this.callbacks.onCancel();
 		}
 	}

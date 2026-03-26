@@ -157,20 +157,28 @@ function formatStreamingHashlineEdits(edits: Partial<HashlineToolEdit>[], uiThem
 			return { srcLabel: "• (incomplete edit)", dst: "" };
 		}
 
-		const contentLines = Array.isArray(edit.lines) ? (edit.lines as string[]).join("\n") : "";
+		const contentLines = Array.isArray(edit.content) ? (edit.content as string[]).join("\n") : "";
+		const loc = edit.loc;
 
-		const op = typeof edit.op === "string" ? edit.op : "?";
-		const pos = typeof edit.pos === "string" ? edit.pos : undefined;
-		const end = typeof edit.end === "string" ? edit.end : undefined;
-
-		if (pos && end && pos !== end) {
-			return { srcLabel: `• ${op} ${pos}…${end}`, dst: contentLines };
+		if (loc === "append" || loc === "prepend") {
+			return { srcLabel: `• ${loc} (file-level)`, dst: contentLines };
 		}
-		const anchor = pos ?? end;
-		if (anchor) {
-			return { srcLabel: `\u2022 ${op} ${anchor}`, dst: contentLines };
+		if (typeof loc === "object" && loc) {
+			if ("block" in loc && typeof loc.block === "object" && loc.block) {
+				const rb = loc.block as { pos?: string; end?: string };
+				return { srcLabel: `• block ${rb.pos ?? "?"}…${rb.end ?? "?"}`, dst: contentLines };
+			}
+			if ("line" in loc) {
+				return { srcLabel: `• line ${(loc as { line: string }).line}`, dst: contentLines };
+			}
+			if ("append" in loc) {
+				return { srcLabel: `• append ${(loc as { append: string }).append}`, dst: contentLines };
+			}
+			if ("prepend" in loc) {
+				return { srcLabel: `• prepend ${(loc as { prepend: string }).prepend}`, dst: contentLines };
+			}
 		}
-		return { srcLabel: `\u2022 ${op} (file-level)`, dst: contentLines };
+		return { srcLabel: "• (unknown edit)", dst: contentLines };
 	}
 }
 function formatMetadataLine(lineCount: number | null, language: string | undefined, uiTheme: Theme): string {

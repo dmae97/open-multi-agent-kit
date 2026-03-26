@@ -108,6 +108,10 @@ function parseSizeValue(value: SizeValue | undefined, referenceSize: number): nu
 	return undefined;
 }
 
+function isTermuxSession(): boolean {
+	return Boolean(process.env.TERMUX_VERSION);
+}
+
 /**
  * Options for overlay positioning and sizing.
  * Values can be absolute numbers or percentage strings (e.g., "50%").
@@ -204,6 +208,7 @@ export class TUI extends Container {
 	terminal: Terminal;
 	#previousLines: string[] = [];
 	#previousWidth = 0;
+	#previousHeight = 0;
 	#focusedComponent: Component | null = null;
 	#inputListeners = new Set<InputListener>();
 
@@ -559,6 +564,7 @@ export class TUI extends Container {
 		if (force) {
 			this.#previousLines = [];
 			this.#previousWidth = -1; // -1 triggers widthChanged, forcing a full clear
+			this.#previousHeight = -1; // -1 triggers heightChanged, forcing a full clear
 			this.#cursorRow = 0;
 			this.#hardwareCursorRow = 0;
 			this.#viewportTopRow = 0;
@@ -995,12 +1001,13 @@ export class TUI extends Container {
 
 		// Width changed - need full re-render (line wrapping changes)
 		const widthChanged = this.#previousWidth !== 0 && this.#previousWidth !== width;
+		const heightChanged = this.#previousHeight !== 0 && this.#previousHeight !== height;
 
 		// Helper to clear scrollback and viewport and render all new lines
 		const fullRender = (clear: boolean): void => {
 			this.#fullRedrawCount += 1;
 			let buffer = "\x1b[?2026h"; // Begin synchronized output
-			if (clear) buffer += "\x1b[3J\x1b[2J\x1b[H"; // Clear scrollback, screen, and home
+			if (clear) buffer += "\x1b[2J\x1b[H\x1b[3J"; // Clear screen, home, then clear scrollback
 			const reset = SEGMENT_RESET;
 			for (let i = 0; i < newLines.length; i++) {
 				if (i > 0) buffer += "\r\n";
@@ -1021,6 +1028,7 @@ export class TUI extends Container {
 			this.#positionHardwareCursor(cursorPos, newLines.length);
 			this.#previousLines = newLines;
 			this.#previousWidth = width;
+			this.#previousHeight = height;
 		};
 
 		const debugRedraw = process.env.PI_DEBUG_REDRAW === "1";
@@ -1032,15 +1040,24 @@ export class TUI extends Container {
 		};
 
 		// First render - just output everything without clearing (assumes clean screen)
-		if (this.#previousLines.length === 0 && !widthChanged) {
+		if (this.#previousLines.length === 0 && !widthChanged && !heightChanged) {
 			logRedraw("first render");
 			fullRender(false);
 			return;
 		}
 
-		// Width changed - full re-render (line wrapping changes)
+		// Width changes always need a full re-render because wrapping changes.
 		if (widthChanged) {
-			logRedraw(`width changed (${this.#previousWidth} -> ${width})`);
+			logRedraw(`terminal width changed (${this.#previousWidth} -> ${width})`);
+			fullRender(true);
+			return;
+		}
+
+		// Height changes normally need a full re-render to keep the visible viewport aligned,
+		// but Termux changes height when the software keyboard shows or hides.
+		// In that environment, a full redraw causes the entire history to replay on every toggle.
+		if (heightChanged && !isTermuxSession()) {
+			logRedraw(`terminal height changed (${this.#previousHeight} -> ${height})`);
 			fullRender(true);
 			return;
 		}
@@ -1122,6 +1139,7 @@ export class TUI extends Container {
 			this.#positionHardwareCursor(cursorPos, newLines.length);
 			this.#previousLines = newLines;
 			this.#previousWidth = width;
+			this.#previousHeight = height;
 			this.#viewportTopRow = Math.max(0, this.#maxLinesRendered - height);
 			return;
 		}
@@ -1270,6 +1288,7 @@ export class TUI extends Container {
 
 		this.#previousLines = newLines;
 		this.#previousWidth = width;
+		this.#previousHeight = height;
 	}
 
 	/**

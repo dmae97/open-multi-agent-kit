@@ -1,8 +1,70 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.15.0] - 2026-03-23
+### Breaking Changes
+
+- Changed hashline edit schema from flat `op`/`pos`/`end`/`lines` fields to structured `loc`/`content` format with location-specific objects
+- Renamed hashline edit operations: `replace_line` → `{ line: anchor }`, `replace_range` → `{ block: { pos, end } }`, `append_at` → `{ append: anchor }`, `prepend_at` → `{ prepend: anchor }`, `append_file` → `"append"`, `prepend_file` → `"prepend"`
+- Changed `lines` parameter to `content` in hashline edit entries
+- Renamed hashline edit operation types: `append` → `append_at`, `prepend` → `prepend_at`, `append_eof` → `append_file`, `prepend_bof` → `prepend_file`
+- Changed hashline edit operation types from `replace` (with optional `end`) to explicit `replace_line` and `replace_range` operations
+- Added required `append_eof` and `prepend_bof` operations for file-level edits; `append` and `prepend` now require an anchor position
+- Made `pos` parameter required for `replace_line`, `append`, and `prepend` operations; `append_eof` and `prepend_bof` no longer accept anchors
+
 ### Added
 
+- Added prompt for tradeoff metrics during autoresearch setup to collect secondary metrics alongside primary metric
+- Added validation of contract path specifications to reject absolute paths and parent directory references
+- Added stricter benchmark command validation in `isAutoresearchShCommand()` to reject chained commands, pipes, and redirects
+- Added protection against prototype pollution in ASI data and metric cloning by filtering `__proto__`, `constructor`, and `prototype` keys
+- Added `autoResumeArmed` flag to track when autoresearch should automatically resume pending runs
+- Added `lastAutoResumePendingRunNumber` to prevent duplicate auto-resume prompts for the same pending run
+- Added `git clean -X` invocation during failed experiment rollback to remove ignored build artifacts
+- Added validation to reject `init_experiment` when a previous run is still pending and unlogged
+- Added autoresearch contract system for validating benchmark commands, metrics, scope paths, off-limits paths, and constraints with fingerprint tracking to detect configuration drift
+- Added `autoresearch.program.md` support for repo-local playbook overlays that guide session strategy while preserving `autoresearch.md` as source of truth
+- Added pending run artifact tracking and recovery to resume incomplete experiments from `.autoresearch/runs/` directory with run numbers and benchmark logs
+- Added run directory organization with numbered run artifacts, benchmark logs, and optional checks logs for experiment traceability
+- Added segment fingerprinting to detect when benchmark configuration changes between runs and warn about potential incomparability
+- Added support for secondary metrics tracking alongside primary metric with configurable direction (lower/higher is better)
+- Added `getCurrentAutoresearchBranch()` helper to detect and validate existing autoresearch branches for session resumption
+- Added `PendingRunSummary` type to track unlogged run state including parsed metrics, ASI data, and pass/fail status
+- Added hidden next-turn message delivery via `deliverAs: 'nextTurn'` with optional `triggerTurn` to queue context for next LLM call without exposing in editable queue
+- Added `#queueHiddenNextTurnMessage()` and `#promptQueuedHiddenNextTurnMessages()` to AgentSession for autonomous tool reactions
+- Added resume context support in `command-resume.md` template for user-provided guidance when resuming sessions
+- Added current segment snapshot display in autoresearch prompt showing recent runs, baseline metrics, and best results
+- Added pending run indicator in autoresearch prompt to guide users to complete unlogged experiments before starting new benchmarks
+- Added local playbook section in autoresearch prompt when `autoresearch.program.md` exists
+- Added tab replacement in dashboard and tool output rendering to prevent display corruption from shell commands with tabs
+- Added boundary duplication warning when replace_range or replace_line operations include a last inserted line that matches the next surviving line, helping detect off-by-one range errors
+- Added git branch isolation for autoresearch sessions via `ensureAutoresearchBranch()` to safely revert failed experiments
+- Added branch status line to autoresearch initialization and resume prompts showing created or reused branch name
+- Added `Files in Scope`, `Off Limits`, and `Constraints` sections to autoresearch.md template for explicit scope definition
+- Added validation of ASI metadata requirements in `log_experiment` tool, requiring hypothesis for all runs and rollback context for failed runs
+- Added keybinding matcher utilities `matchesAppInterrupt()` and `matchesSelectCancel()` for consistent escape key handling across components
+- Added support for customizable `app.interrupt` and `tui.select.cancel` keybindings in interactive components
+- Added `defaultInactive` property to `ToolDefinition` to allow tools to be registered but excluded from the initial active set, with extension responsibility for activation/deactivation
+- Added dynamic tool activation/deactivation in autoresearch mode via `setActiveTools()` API
+- Added separate initialization and resume workflows for autoresearch with `command-initialize.md` and `command-resume.md` prompts
+- Added intent dialog to prompt users for autoresearch optimization goals when starting fresh
+- Added automatic detection of existing `autoresearch.md` to resume from previous sessions without re-prompting for intent
+- Added autoresearch extension with autonomous experiment loop capabilities
+- Added `init_experiment` tool to initialize and reset autoresearch sessions with configurable metrics
+- Added `log_experiment` tool to record experiment results with metric parsing and confidence tracking
+- Added `run_experiment` tool to execute commands and capture metrics with timeout and crash detection
+- Added autoresearch dashboard controller for displaying experiment results and optimization progress
+- Added support for secondary metrics tracking alongside primary metric
+- Added `ExtensionWidgetContent` and `ExtensionUiComponentFactory` types for flexible widget configuration
+- Added `ExtensionWidgetOptions` interface with `placement` parameter to position widgets above or below editor
+- Added `WidgetPlacement` type supporting 'aboveEditor' and 'belowEditor' placement options
+- Added `hookWidgetContainerAbove` and `hookWidgetContainerBelow` containers to InteractiveMode for separate widget management
+- Added autoresearch mode for autonomous experiment loops with init_experiment, log_experiment, and run_experiment tools
+- Added autoresearch dashboard widget displaying experiment results, metrics, and optimization progress
+- Added support for metric tracking with configurable direction (lower/higher is better) and secondary metrics
+- Added widget placement options to position extensions above or below the editor via `placement` parameter
+- Added `ExtensionWidgetContent` and `ExtensionWidgetOptions` types for flexible widget configuration
 - Added ACP (Agent Client Protocol) mode for headless agent operation via `--mode acp`
 - Added support for Agent Client Protocol SDK integration with session management, MCP server configuration, and streaming communication
 - Added `ensureOnDisk()` method to SessionManager to persist sessions immediately for ACP discovery
@@ -10,8 +72,76 @@
 
 ### Changed
 
+- Changed `isAutoresearchShCommand()` to use proper command-line argument parsing instead of regex, improving accuracy for complex shell invocations
+- Changed autoresearch initialization prompt to display collected tradeoff metrics in the setup summary
+- Changed `command-initialize.md` template to include guidance on preflight requirements, comparability invariants, and marking measurement-critical files as off-limits
+- Changed `command-initialize.md` to instruct users to write or update `autoresearch.program.md` with durable heuristics and repo-specific strategy
+- Changed autoresearch resume guidance to emphasize continuing on the current protected branch rather than switching branches
+- Changed autoresearch prompt to clarify that `autoresearch.md` holds durable conclusions while `autoresearch.ideas.md` is the scratch backlog
+- Changed autoresearch prompt guidance to require stable measurement harness and fixed benchmark inputs unless intentionally starting a new segment
+- Changed autoresearch prompt to recommend keeping equal or near-equal results when they materially simplify implementation
+- Changed `init_experiment` to reset pending run state (checks, duration, ASI, artifact directory) when initializing a new segment
+- Changed `log_experiment` to set `autoResumeArmed` flag after successfully logging a run to enable auto-resume on next agent turn
+- Changed `run_experiment` to set `autoResumeArmed` flag and update dashboard after completing a run
+- Changed auto-resume logic to only prompt when a new pending run exists or when `autoResumeArmed` is explicitly set, preventing duplicate prompts
+- Changed path normalization in contract validation to use `path.posix.normalize()` for consistent path handling
+- Changed autoresearch initialization to collect and validate benchmark command, metric definition, scope paths, off-limits list, and constraints before `init_experiment`
+- Changed `init_experiment` to require exact benchmark command, metric definition, scope, off-limits, and constraints matching collected contract
+- Changed `log_experiment` to record run number, benchmark command, scope paths, off-limits list, constraints, and segment fingerprint with each result
+- Changed `run_experiment` to organize output in numbered run directories with separate benchmark and checks logs for artifact preservation
+- Changed autoresearch dashboard to show pending run indicator when unlogged experiment exists
+- Changed autoresearch resume workflow to detect and offer recovery of pending run artifacts before continuing experiment loop
+- Changed `ExperimentResult` to include `runNumber`, `benchmarkCommand`, `scopePaths`, `offLimits`, `constraints`, and `segmentFingerprint` fields
+- Changed `RunningExperiment` to track `runDirectory` and `runNumber` for artifact organization
+- Changed `AutoresearchRuntime` to include `lastRunArtifactDir`, `lastRunNumber`, `lastRunSummary`, `benchmarkCommand`, `secondaryMetrics`, `scopePaths`, `offLimits`, `constraints`, and `segmentFingerprint`
+- Changed autoresearch prompts to emphasize `autoresearch.md` as source of truth for benchmark, scope, and constraints
+- Changed `command-initialize.md` to display collected setup (benchmark command, metric, direction, scope, off-limits, constraints) before initialization
+- Changed `resume-message.md` to reference pending run artifacts and guide completion of unlogged experiments
+- Changed `sendMessage()` API documentation to clarify `deliverAs: 'nextTurn'` behavior for hidden context delivery
+- Changed `SendMessageHandler` type documentation to explain hidden next-turn message queuing during prompt teardown
+- Changed autoresearch startup to create or reuse a dedicated `autoresearch/...` git branch before enabling the experiment loop
+- Changed autoresearch to refuse startup when unrelated worktree changes would make auto-reverts unsafe
+- Changed autoresearch prompts to emphasize scope and constraints as source of truth for session direction
+- Changed component escape key handling to use keybinding manager for `app.interrupt` and `tui.select.cancel` with fallback to raw Escape matching
+- Updated autoresearch prompt guidance to require explicit files in scope, off-limits paths, and session constraints
+- Changed autoresearch command to use intent-based initialization instead of goal parameter, with user input dialog for new sessions
+- Changed autoresearch startup to create or reuse a dedicated `autoresearch/...` git branch before enabling the experiment loop, and to refuse startup when unrelated worktree changes would make auto-reverts unsafe
+- Changed autoresearch startup to activate experiment tools (`init_experiment`, `run_experiment`, `log_experiment`) only when autoresearch mode is enabled
+- Changed autoresearch shutdown to deactivate experiment tools when mode is disabled or cleared
+- Changed autoresearch session rehydration to dynamically manage experiment tool activation based on session state
+- Changed autoresearch prompts and notes guidance to require explicit files in scope, off-limits paths, and session constraints
+- Refactored hashline edit validation to enforce stricter anchor requirements per operation type
+- Updated edit application logic to handle explicit file-level operations (`append_eof`, `prepend_bof`) separately from anchor-based operations
+- Changed `setWidget` API to accept `ExtensionWidgetOptions` parameter for placement control
+- Changed widget placement logic to manage widgets above and below editor separately
+- Changed hashline edit application to preserve duplicated boundary lines exactly as provided instead of auto-correcting them
+- Updated RPC mode to support widget placement option in `setWidget` requests
+- Changed hashline edit application to preserve duplicated boundary lines exactly as provided instead of auto-correcting them
+- Changed widget API to support placement options and component factories in addition to string arrays
+- Updated extension UI controller to manage widgets above and below the editor separately
+- Updated ask tool rendering to support markdown formatting in questions and option labels
+- Refactored hook input and selector components to render titles as markdown for richer text formatting
 - Changed session collection to include sessions with zero messages, enabling ACP mode to create discoverable sessions immediately
 - Changed session persistence logic to use atomic file rewrite when flushing unflushed sessions to prevent duplication
+- Removed hashline edit autocorrection for duplicated boundary lines; escaped-tab autocorrection remains available for leading `\\t` sequences
+
+### Removed
+
+- Removed `command-start.md` prompt template in favor of separate initialize and resume workflows
+- Removed auto-correction of off-by-one range edits that duplicated closing braces or boundary lines
+- Removed `shouldAutocorrect` function and related boundary line deduplication logic from hashline editor
+- Removed auto-correction of off-by-one range edits that duplicated closing braces or boundary lines
+
+### Fixed
+
+- Fixed boundary duplication warnings to always display when replacement lines match the next surviving line, even when auto-correction is disabled
+- Fixed secondary metrics validation to properly reject missing configured metrics and new metrics without force flag
+- Fixed ASI data cloning to prevent prototype pollution attacks by filtering reserved property names
+- Fixed autoresearch resume to detect and recover pending run artifacts that were left unlogged from previous sessions
+- Fixed dashboard overlay to display when running experiment even with zero completed results
+- Fixed tab character rendering in dashboard command display and tool output summaries
+- Fixed autoresearch logging to require durable ASI metadata (hypothesis, rollback_reason, next_action_hint) for every run including rollback context for discarded, crashed, and checks-failed experiments
+- Fixed autoresearch logging to require durable ASI metadata for every run, including rollback context for discarded, crashed, and checks-failed experiments
 
 ## [13.14.0] - 2026-03-20
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { Terminal as XtermTerminalType } from "@xterm/headless";
 import { Chalk } from "chalk";
-import { Markdown } from "../src/components/markdown.js";
+import { Markdown, renderInlineMarkdown } from "../src/components/markdown.js";
 import { type Component, TUI } from "../src/tui.js";
 import { defaultMarkdownTheme } from "./test-themes.js";
 import { VirtualTerminal } from "./virtual-terminal.js";
@@ -18,6 +18,15 @@ function getCellItalic(terminal: VirtualTerminal, row: number, col: number): num
 	expect(cell, `Missing cell at row ${row} col ${col}`).toBeTruthy();
 	return cell!.isItalic();
 }
+
+describe("renderInlineMarkdown", () => {
+	it("preserves ordered list items as visible inline text", () => {
+		const rendered = renderInlineMarkdown("1. Review against a base branch (PR Style)", defaultMarkdownTheme);
+		const plain = rendered.replace(/\x1b\[[0-9;]*m/g, "");
+
+		expect(plain).toBe("1. Review against a base branch (PR Style)");
+	});
+});
 
 describe("Markdown component", () => {
 	describe("Nested lists", () => {
@@ -462,6 +471,22 @@ describe("Markdown component", () => {
 			const tableRow = plainLines.find(line => line.includes("|"));
 			expect(tableRow?.startsWith("  "), "Table should have left padding").toBeTruthy();
 		});
+
+		it("should not add a trailing blank line when table is the last rendered block", () => {
+			const markdown = new Markdown(
+				`| Name |
+| --- |
+| Alice |`,
+				0,
+				0,
+				defaultMarkdownTheme,
+			);
+
+			const lines = markdown.render(80);
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+
+			expect(plainLines.at(-1)).not.toBe("");
+		});
 	});
 
 	describe("Combined features", () => {
@@ -615,6 +640,44 @@ again, hello world`,
 				`Expected 1 empty line after code block, but found ${emptyLineCount}. Lines after backticks: ${JSON.stringify(afterBackticks.slice(0, 5))}`,
 			).toBe(1);
 		});
+
+		it("should normalize paragraph and code block spacing to one blank line", () => {
+			const cases = [
+				`hello this is text
+\`\`\`
+code block
+\`\`\`
+more text`,
+				`hello this is text
+
+\`\`\`
+code block
+\`\`\`
+
+more text`,
+			];
+			const expectedLines = ["hello this is text", "", "```", "  code block", "```", "", "more text"];
+
+			for (const text of cases) {
+				const markdown = new Markdown(text, 0, 0, defaultMarkdownTheme);
+				const lines = markdown.render(80);
+				const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+
+				expect(plainLines).toEqual(expectedLines);
+			}
+		});
+
+		it("should not add a trailing blank line when code block is the last rendered block", () => {
+			const cases = ["```js\nconst hello = 'world';\n```", "hello world\n\n```js\nconst hello = 'world';\n```"];
+
+			for (const text of cases) {
+				const markdown = new Markdown(text, 0, 0, defaultMarkdownTheme);
+				const lines = markdown.render(80);
+				const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+
+				expect(plainLines.at(-1)).not.toBe("");
+			}
+		});
 	});
 
 	describe("Spacing after dividers", () => {
@@ -644,6 +707,14 @@ again, hello world`,
 				`Expected 1 empty line after divider, but found ${emptyLineCount}. Lines after divider: ${JSON.stringify(afterDivider.slice(0, 5))}`,
 			).toBe(1);
 		});
+
+		it("should not add a trailing blank line when divider is the last rendered block", () => {
+			const markdown = new Markdown("---", 0, 0, defaultMarkdownTheme);
+			const lines = markdown.render(80);
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+
+			expect(plainLines.at(-1)).not.toBe("");
+		});
 	});
 
 	describe("Spacing after headings", () => {
@@ -670,6 +741,14 @@ This is a paragraph`,
 				emptyLineCount,
 				`Expected 1 empty line after heading, but found ${emptyLineCount}. Lines after heading: ${JSON.stringify(afterHeading.slice(0, 5))}`,
 			).toBe(1);
+		});
+
+		it("should not add a trailing blank line when heading is the last rendered block", () => {
+			const markdown = new Markdown("# Hello", 0, 0, defaultMarkdownTheme);
+			const lines = markdown.render(80);
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+
+			expect(plainLines.at(-1)).not.toBe("");
 		});
 	});
 
@@ -699,6 +778,14 @@ again, hello world`,
 				emptyLineCount,
 				`Expected 1 empty line after blockquote, but found ${emptyLineCount}. Lines after quote: ${JSON.stringify(afterQuote.slice(0, 5))}`,
 			).toBe(1);
+		});
+
+		it("should not add a trailing blank line when blockquote is the last rendered block", () => {
+			const markdown = new Markdown("> This is a quote", 0, 0, defaultMarkdownTheme);
+			const lines = markdown.render(80);
+			const plainLines = lines.map(line => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+
+			expect(plainLines.at(-1)).not.toBe("");
 		});
 	});
 

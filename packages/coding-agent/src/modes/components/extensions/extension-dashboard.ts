@@ -24,6 +24,7 @@ import {
 import { Settings } from "../../../config/settings";
 import { DynamicBorder } from "../../../modes/components/dynamic-border";
 import { theme } from "../../../modes/theme/theme";
+import { matchesAppInterrupt } from "../../../modes/utils/keybinding-matchers";
 import { ExtensionList } from "./extension-list";
 import { InspectorPanel } from "./inspector-panel";
 import { applyFilter, createInitialState, filterByProvider, refreshState, toggleProvider } from "./state-manager";
@@ -251,7 +252,7 @@ export class ExtensionDashboard extends Container {
 		}
 
 		// Escape - clear search first, then close
-		if (matchesKey(data, "escape") || matchesKey(data, "esc")) {
+		if (matchesAppInterrupt(data)) {
 			if (this.#state.searchQuery.length > 0) {
 				this.#state.searchQuery = "";
 				this.#state.searchFiltered = this.#state.tabFiltered;

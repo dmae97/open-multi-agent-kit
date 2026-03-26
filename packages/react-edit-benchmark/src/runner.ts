@@ -13,6 +13,8 @@ import { computeLineHash, RpcClient, renderPromptTemplate } from "@oh-my-pi/pi-c
 import { Snowflake } from "@oh-my-pi/pi-utils";
 import { diffLines } from "diff";
 import { formatDirectory } from "./formatter";
+import benchmarkRetryPrompt from "./prompts/benchmark-retry.md" with { type: "text" };
+import benchmarkSystemPrompt from "./prompts/benchmark-system.md" with { type: "text" };
 import benchmarkTaskPrompt from "./prompts/benchmark-task.md" with { type: "text" };
 import type { EditTask } from "./tasks";
 import { verifyExpectedFileSubset, verifyExpectedFiles } from "./verify";
@@ -461,20 +463,108 @@ function buildInstructions(config: BenchmarkConfig): string {
 		: "Read the relevant files first, then use the edit tool to apply the fix.";
 }
 
-function buildBenchmarkPrompt(params: {
-	multiFile: boolean;
+type BenchmarkPromptDelivery = {
+	kind: "prompt" | "followUp";
+	message: string;
+};
+
+function buildBenchmarkSystemPrompt(params: { multiFile: boolean; config: BenchmarkConfig }): string {
+	return renderPromptTemplate(benchmarkSystemPrompt, {
+		multiFile: params.multiFile,
+		instructions: buildInstructions(params.config),
+	});
+}
+
+function buildInitialBenchmarkPrompt(params: { taskPrompt: string; guidedContext?: string | null }): string {
+	return renderPromptTemplate(benchmarkTaskPrompt, {
+		task_prompt: params.taskPrompt,
+		guided_context: params.guidedContext ?? undefined,
+	});
+}
+
+function buildRetryBenchmarkPrompt(params: { retryContext: string; guidedContext?: string | null }): string {
+	return renderPromptTemplate(benchmarkRetryPrompt, {
+		retry_context: params.retryContext,
+		guided_context: params.guidedContext ?? undefined,
+	});
+}
+
+function buildBenchmarkPromptDelivery(params: {
 	taskPrompt: string;
 	guidedContext?: string | null;
 	retryContext?: string | null;
+}): BenchmarkPromptDelivery {
+	if (params.retryContext) {
+		return {
+			kind: "followUp",
+			message: buildRetryBenchmarkPrompt({
+				retryContext: params.retryContext,
+				guidedContext: params.guidedContext,
+			}),
+		};
+	}
+
+	return {
+		kind: "prompt",
+		message: buildInitialBenchmarkPrompt({
+			taskPrompt: params.taskPrompt,
+			guidedContext: params.guidedContext,
+		}),
+	};
+}
+
+const BENCHMARK_PROVIDER_SESSION_VERSION = 1;
+
+function buildBenchmarkProviderSessionId(params: {
 	config: BenchmarkConfig;
+	task: EditTask;
+	multiFile: boolean;
+	initialGuidedContext?: string | null;
 }): string {
-	return renderPromptTemplate(benchmarkTaskPrompt, {
+	const keyMaterial = [
+		`version:${BENCHMARK_PROVIDER_SESSION_VERSION}`,
+		`provider:${params.config.provider}`,
+		`model:${params.config.model}`,
+		`task:${params.task.id}`,
+		`system:${buildBenchmarkSystemPrompt({ multiFile: params.multiFile, config: params.config })}`,
+		`initial:${buildInitialBenchmarkPrompt({ taskPrompt: params.task.prompt, guidedContext: params.initialGuidedContext })}`,
+	].join("\n");
+	return `reb_${Bun.hash.xxHash64(keyMaterial).toString(36)}`;
+}
+
+async function prepareBenchmarkSessionSetup(params: {
+	config: BenchmarkConfig;
+	task: EditTask;
+	cwd: string;
+	expectedDir: string;
+	multiFile: boolean;
+}): Promise<{ initialGuidedContext: string | null; providerSessionId: string; rpcArgs: string[] }> {
+	const initialGuidedContext = await buildGuidedContext(params.task, params.cwd, params.expectedDir, params.config);
+	const providerSessionId = buildBenchmarkProviderSessionId({
+		config: params.config,
+		task: params.task,
 		multiFile: params.multiFile,
-		task_prompt: params.taskPrompt,
-		guided_context: params.guidedContext ?? undefined,
-		retry_context: params.retryContext ?? undefined,
-		instructions: buildInstructions(params.config),
+		initialGuidedContext,
 	});
+	return {
+		initialGuidedContext,
+		providerSessionId,
+		rpcArgs: buildBenchmarkRpcArgs(params.config, params.multiFile, providerSessionId),
+	};
+}
+
+function buildBenchmarkRpcArgs(config: BenchmarkConfig, multiFile: boolean, providerSessionId: string): string[] {
+	return [
+		"--provider-session-id",
+		providerSessionId,
+		"--append-system-prompt",
+		buildBenchmarkSystemPrompt({ multiFile, config }),
+		"--tools",
+		"read,edit,write",
+		"--no-skills",
+		"--no-title",
+		"--no-rules",
+	];
 }
 
 export interface TokenStats {
@@ -489,6 +579,8 @@ export interface ToolCallStats {
 	write: number;
 	editSuccesses: number;
 	editFailures: number;
+	editWarnings: number;
+	editAutocorrects: number;
 	totalInputChars: number;
 }
 
@@ -517,6 +609,8 @@ export interface TaskRunResult {
 	diff?: string;
 	toolCalls: ToolCallStats;
 	editFailures: EditFailure[];
+	editWarnings: string[];
+	editAutocorrectCount: number;
 	/** Hashline edit subtype counts (replaceLine, replaceLines, etc.) — only when editVariant is hashline */
 	hashlineEditSubtypes?: Record<string, number>;
 	mutationIntentMatched?: boolean;
@@ -542,6 +636,7 @@ export interface TaskResult {
 	avgIndentScore: number;
 	avgToolCalls: ToolCallStats;
 	editSuccessRate: number;
+	autocorrectFreeSuccessRate: number;
 }
 
 export interface BenchmarkSummary {
@@ -559,6 +654,10 @@ export interface BenchmarkSummary {
 	totalToolCalls: ToolCallStats;
 	avgToolCallsPerRun: ToolCallStats;
 	editSuccessRate: number;
+	autocorrectFreeSuccessfulRuns: number;
+	autocorrectFreeSuccessRate: number;
+	autocorrectedRuns: number;
+	editAutocorrectRate: number;
 	timeoutRuns: number;
 	mutationIntentMatchRate?: number;
 	/** Hashline edit subtype totals — only when editVariant is hashline */
@@ -611,6 +710,8 @@ async function runSingleTask(
 	let agentResponse: string | undefined;
 	let diff: string | undefined;
 	const editFailures: EditFailure[] = [];
+	const editWarnings: string[] = [];
+	let editAutocorrectCount = 0;
 	let timeoutTelemetry: PromptAttemptTelemetry | undefined;
 	let mutationIntentValidation: MutationIntentValidation | null = null;
 	const toolStats = {
@@ -619,6 +720,8 @@ async function runSingleTask(
 		write: 0,
 		editSuccesses: 0,
 		editFailures: 0,
+		editWarnings: 0,
+		editAutocorrects: 0,
 		totalInputChars: 0,
 	};
 	const hashlineSubtypes: Record<string, number> = Object.fromEntries(HASHLINE_SUBTYPES.map(k => [k, 0]));
@@ -630,9 +733,16 @@ async function runSingleTask(
 	const originalFiles = await collectOriginalFileContents(cwd, task.files);
 
 	try {
+		const sessionSetup = await prepareBenchmarkSessionSetup({
+			config,
+			task,
+			cwd,
+			expectedDir,
+			multiFile: false,
+		});
 		await fs.promises.appendFile(
 			logFile,
-			`{"type":"meta","task":"${task.id}","run":${runIndex},"workDir":"${cwd}"}\n`,
+			`{"type":"meta","task":"${task.id}","run":${runIndex},"workDir":"${cwd}","providerSessionId":${JSON.stringify(sessionSetup.providerSessionId)}}\n`,
 		);
 
 		const env: Record<string, string> = { PI_NO_TITLE: "1" };
@@ -652,7 +762,7 @@ async function runSingleTask(
 			cwd,
 			provider: config.provider,
 			model: config.model,
-			args: ["--tools", "read,edit,write", "--no-skills", "--no-title", "--no-rules"],
+			args: sessionSetup.rpcArgs,
 			env,
 		});
 
@@ -673,24 +783,25 @@ async function runSingleTask(
 		let allEvents: Array<{ type: string; [key: string]: unknown }> = [];
 
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
-			const guidedContext = await buildGuidedContext(task, cwd, expectedDir, config);
-			const promptWithContext = buildBenchmarkPrompt({
-				multiFile: false,
+			const guidedContext =
+				attempt === 0
+					? sessionSetup.initialGuidedContext
+					: await buildGuidedContext(task, cwd, expectedDir, config);
+			const delivery = buildBenchmarkPromptDelivery({
 				taskPrompt: task.prompt,
 				guidedContext,
 				retryContext,
-				config,
 			});
 
 			await fs.promises.appendFile(
 				logFile,
-				`{"type":"prompt","attempt":${attempt + 1},"message":${JSON.stringify(promptWithContext)}}\n`,
+				`{"type":"prompt","attempt":${attempt + 1},"delivery":${JSON.stringify(delivery.kind)},"message":${JSON.stringify(delivery.message)}}\n`,
 			);
 
 			const statsBefore = await client.getSessionStats();
 			let events: Array<{ type: string; [key: string]: unknown }>;
 			try {
-				events = await collectPromptEvents(client, promptWithContext, config, logEvent);
+				events = await collectPromptEvents(client, delivery, config, logEvent);
 			} catch (err) {
 				if (err instanceof PromptTurnLimitError) {
 					error = err.message;
@@ -806,6 +917,15 @@ async function runSingleTask(
 							editFailures.push({ toolCallId: e.toolCallId, args, error });
 						} else {
 							toolStats.editSuccesses++;
+							const warningMessages = extractHashlineWarnings(e.result);
+							if (warningMessages.length > 0) {
+								editWarnings.push(...warningMessages);
+								toolStats.editWarnings += warningMessages.length;
+								if (hasHashlineAutocorrectWarning(warningMessages)) {
+									editAutocorrectCount++;
+									toolStats.editAutocorrects++;
+								}
+							}
 						}
 					}
 				}
@@ -892,6 +1012,8 @@ async function runSingleTask(
 		diff,
 		toolCalls: toolStats,
 		editFailures,
+		editWarnings,
+		editAutocorrectCount,
 		hashlineEditSubtypes: config.editVariant === "hashline" ? hashlineSubtypes : undefined,
 		mutationIntentMatched: mutationIntentValidation?.matched,
 		mutationIntentReason: mutationIntentValidation?.reason,
@@ -920,6 +1042,8 @@ async function runBatchedTask(
 	let agentResponse: string | undefined;
 	let diff: string | undefined;
 	const editFailures: EditFailure[] = [];
+	const editWarnings: string[] = [];
+	let editAutocorrectCount = 0;
 	let timeoutTelemetry: PromptAttemptTelemetry | undefined;
 	let mutationIntentValidation: MutationIntentValidation | null = null;
 	const toolStats = {
@@ -928,6 +1052,8 @@ async function runBatchedTask(
 		write: 0,
 		editSuccesses: 0,
 		editFailures: 0,
+		editWarnings: 0,
+		editAutocorrects: 0,
 		totalInputChars: 0,
 	};
 	const hashlineSubtypes: Record<string, number> = Object.fromEntries(HASHLINE_SUBTYPES.map(k => [k, 0]));
@@ -955,22 +1081,21 @@ async function runBatchedTask(
 
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
 			const guidedContext = await buildGuidedContext(task, cwd, expectedDir, config);
-			const promptWithContext = buildBenchmarkPrompt({
-				multiFile: true,
+			const delivery = buildBenchmarkPromptDelivery({
 				taskPrompt: task.prompt,
 				guidedContext,
 				retryContext,
-				config,
 			});
+
 			await fs.promises.appendFile(
 				logFile,
-				`{"type":"prompt","attempt":${attempt + 1},"message":${JSON.stringify(promptWithContext)}}\n`,
+				`{"type":"prompt","attempt":${attempt + 1},"delivery":${JSON.stringify(delivery.kind)},"message":${JSON.stringify(delivery.message)}}\n`,
 			);
 
 			const statsBefore = await client.getSessionStats();
 			let events: Array<{ type: string; [key: string]: unknown }>;
 			try {
-				events = await collectPromptEvents(client, promptWithContext, config, logEvent);
+				events = await collectPromptEvents(client, delivery, config, logEvent);
 			} catch (err) {
 				if (err instanceof PromptTurnLimitError) {
 					error = err.message;
@@ -1083,6 +1208,15 @@ async function runBatchedTask(
 							editFailures.push({ toolCallId: e.toolCallId, args, error: toolError });
 						} else {
 							toolStats.editSuccesses++;
+							const warningMessages = extractHashlineWarnings(e.result);
+							if (warningMessages.length > 0) {
+								editWarnings.push(...warningMessages);
+								toolStats.editWarnings += warningMessages.length;
+								if (hasHashlineAutocorrectWarning(warningMessages)) {
+									editAutocorrectCount++;
+									toolStats.editAutocorrects++;
+								}
+							}
 						}
 					}
 				}
@@ -1171,6 +1305,8 @@ async function runBatchedTask(
 		diff,
 		toolCalls: toolStats,
 		editFailures,
+		editWarnings,
+		editAutocorrectCount,
 		hashlineEditSubtypes: config.editVariant === "hashline" ? hashlineSubtypes : undefined,
 		mutationIntentMatched: mutationIntentValidation?.matched,
 		mutationIntentReason: mutationIntentValidation?.reason,
@@ -1178,18 +1314,40 @@ async function runBatchedTask(
 	};
 }
 
-function extractToolErrorMessage(result: unknown): string {
+function extractToolText(result: unknown): string | null {
 	if (typeof result === "string") return result;
-	if (!result || typeof result !== "object") return "Unknown error";
+	if (!result || typeof result !== "object") return null;
 	const content = (result as { content?: unknown }).content;
-	if (Array.isArray(content)) {
-		for (const entry of content) {
-			if (!entry || typeof entry !== "object") continue;
-			if (!("text" in entry)) continue;
-			const text = (entry as { text?: unknown }).text;
-			if (typeof text === "string") return text;
-		}
+	if (!Array.isArray(content)) return null;
+	for (const entry of content) {
+		if (!entry || typeof entry !== "object") continue;
+		if (!("text" in entry)) continue;
+		const text = (entry as { text?: unknown }).text;
+		if (typeof text === "string") return text;
 	}
+	return null;
+}
+
+function extractHashlineWarnings(result: unknown): string[] {
+	const text = extractToolText(result);
+	if (!text) return [];
+	const marker = "Warnings:\n";
+	const markerIndex = text.indexOf(marker);
+	if (markerIndex === -1) return [];
+	return text
+		.slice(markerIndex + marker.length)
+		.split("\n")
+		.map(line => line.trim())
+		.filter(Boolean);
+}
+
+function hasHashlineAutocorrectWarning(warnings: string[]): boolean {
+	return warnings.some(warning => warning.startsWith("Auto-corrected "));
+}
+
+function extractToolErrorMessage(result: unknown): string {
+	const text = extractToolText(result);
+	if (text) return text;
 	try {
 		return JSON.stringify(result);
 	} catch {
@@ -1251,7 +1409,7 @@ function buildRunBatches(items: TaskRunItem[]): TaskRunItem[][] {
 
 async function collectPromptEvents(
 	client: RpcClient,
-	prompt: string,
+	delivery: BenchmarkPromptDelivery,
 	config: BenchmarkConfig,
 	logEvent: (event: unknown) => Promise<void>,
 ): Promise<Array<{ type: string; [key: string]: unknown }>> {
@@ -1367,7 +1525,11 @@ async function collectPromptEvents(
 	});
 
 	try {
-		await client.prompt(prompt);
+		if (delivery.kind === "followUp") {
+			await client.followUp(delivery.message);
+		} else {
+			await client.prompt(delivery.message);
+		}
 	} catch (err) {
 		if (timer) {
 			clearTimeout(timer);
@@ -1419,13 +1581,26 @@ function summarizeTaskRuns(task: EditTask, runs: TaskRunResult[]): TaskResult {
 					write: orderedRuns.reduce((sum, r) => sum + r.toolCalls.write, 0) / n,
 					editSuccesses: orderedRuns.reduce((sum, r) => sum + r.toolCalls.editSuccesses, 0) / n,
 					editFailures: orderedRuns.reduce((sum, r) => sum + r.toolCalls.editFailures, 0) / n,
+					editWarnings: orderedRuns.reduce((sum, r) => sum + r.toolCalls.editWarnings, 0) / n,
+					editAutocorrects: orderedRuns.reduce((sum, r) => sum + r.toolCalls.editAutocorrects, 0) / n,
 					totalInputChars: orderedRuns.reduce((sum, r) => sum + r.toolCalls.totalInputChars, 0) / n,
 				}
-			: { read: 0, edit: 0, write: 0, editSuccesses: 0, editFailures: 0, totalInputChars: 0 };
+			: {
+					read: 0,
+					edit: 0,
+					write: 0,
+					editSuccesses: 0,
+					editFailures: 0,
+					editWarnings: 0,
+					editAutocorrects: 0,
+					totalInputChars: 0,
+				};
 
 	const totalEditAttempts = orderedRuns.reduce((sum, r) => sum + r.toolCalls.edit, 0);
 	const totalEditSuccesses = orderedRuns.reduce((sum, r) => sum + r.toolCalls.editSuccesses, 0);
 	const editSuccessRate = totalEditAttempts > 0 ? totalEditSuccesses / totalEditAttempts : 1;
+	const autocorrectFreeSuccesses = orderedRuns.filter(run => run.success && run.editAutocorrectCount === 0).length;
+	const autocorrectFreeSuccessRate = n > 0 ? autocorrectFreeSuccesses / n : 0;
 
 	return {
 		id: task.id,
@@ -1438,6 +1613,7 @@ function summarizeTaskRuns(task: EditTask, runs: TaskRunResult[]): TaskResult {
 		avgIndentScore,
 		avgToolCalls,
 		editSuccessRate,
+		autocorrectFreeSuccessRate,
 	};
 }
 
@@ -1456,9 +1632,13 @@ function buildFailureResult(item: TaskRunItem, error: string): TaskRunResult {
 			write: 0,
 			editSuccesses: 0,
 			editFailures: 0,
+			editWarnings: 0,
+			editAutocorrects: 0,
 			totalInputChars: 0,
 		},
 		editFailures: [],
+		editWarnings: [],
+		editAutocorrectCount: 0,
 	};
 }
 
@@ -1488,13 +1668,21 @@ async function runBatch(
 			env.PI_EDIT_FUZZY_THRESHOLD =
 				config.editFuzzyThreshold === "auto" ? "auto" : String(config.editFuzzyThreshold);
 		}
+		// Batches are intentionally size 1, so the provider cache key stays task-scoped.
+		const sessionSetup = await prepareBenchmarkSessionSetup({
+			config,
+			task: orderedItems[0]!.task,
+			cwd: workDir,
+			expectedDir: orderedItems[0]!.task.expectedDir,
+			multiFile: true,
+		});
 
 		using client = new RpcClient({
 			cliPath: CLI_PATH,
 			cwd: workDir,
 			provider: config.provider,
 			model: config.model,
-			args: ["--tools", "read,edit,write", "--no-skills", "--no-title", "--no-rules"],
+			args: sessionSetup.rpcArgs,
 			sessionDir,
 			env,
 		});
@@ -1604,10 +1792,16 @@ export async function runBenchmark(
 		write: allRuns.reduce((sum, r) => sum + r.toolCalls.write, 0),
 		editSuccesses: allRuns.reduce((sum, r) => sum + r.toolCalls.editSuccesses, 0),
 		editFailures: allRuns.reduce((sum, r) => sum + r.toolCalls.editFailures, 0),
+		editWarnings: allRuns.reduce((sum, r) => sum + r.toolCalls.editWarnings, 0),
+		editAutocorrects: allRuns.reduce((sum, r) => sum + r.toolCalls.editAutocorrects, 0),
 		totalInputChars: allRuns.reduce((sum, r) => sum + r.toolCalls.totalInputChars, 0),
 	};
 
 	const editSuccessRate = totalToolCalls.edit > 0 ? totalToolCalls.editSuccesses / totalToolCalls.edit : 1;
+	const autocorrectFreeSuccessfulRuns = allRuns.filter(run => run.success && run.editAutocorrectCount === 0).length;
+	const autocorrectedRuns = allRuns.filter(run => run.editAutocorrectCount > 0).length;
+	const editAutocorrectRate =
+		totalToolCalls.editSuccesses > 0 ? totalToolCalls.editAutocorrects / totalToolCalls.editSuccesses : 0;
 	const timeoutRuns = allRuns.filter(r => r.error?.includes("Timeout waiting for agent_end")).length;
 	const runsWithMutationIntent = allRuns.filter(r => typeof r.mutationIntentMatched === "boolean");
 	const mutationIntentMatchRate =
@@ -1648,9 +1842,15 @@ export async function runBenchmark(
 			write: totalToolCalls.write / totalRuns,
 			editSuccesses: totalToolCalls.editSuccesses / totalRuns,
 			editFailures: totalToolCalls.editFailures / totalRuns,
+			editWarnings: totalToolCalls.editWarnings / totalRuns,
+			editAutocorrects: totalToolCalls.editAutocorrects / totalRuns,
 			totalInputChars: totalToolCalls.totalInputChars / totalRuns,
 		},
 		editSuccessRate,
+		autocorrectFreeSuccessfulRuns,
+		autocorrectFreeSuccessRate: autocorrectFreeSuccessfulRuns / totalRuns,
+		autocorrectedRuns,
+		editAutocorrectRate,
 		timeoutRuns,
 		mutationIntentMatchRate,
 		hashlineEditSubtypes,

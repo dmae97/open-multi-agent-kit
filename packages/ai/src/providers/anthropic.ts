@@ -376,6 +376,12 @@ export interface AnthropicOptions extends StreamOptions {
 	betas?: string[] | string;
 	/** Force OAuth bearer auth mode for proxy tokens that don't match Anthropic token prefixes. */
 	isOAuth?: boolean;
+	/**
+	 * Pre-built Anthropic client instance. When provided, skips internal client
+	 * construction entirely. Use this to inject alternative SDK clients such as
+	 * `AnthropicVertex` that shares the same messaging API.
+	 */
+	client?: Anthropic;
 }
 
 export type AnthropicClientOptionsArgs = {
@@ -611,19 +617,31 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 		let rawRequestDump: RawHttpRequestDump | undefined;
 
 		try {
-			const apiKey = options?.apiKey ?? getEnvApiKey(model.provider) ?? "";
-			const baseUrl = resolveAnthropicBaseUrl(model, apiKey) ?? "https://api.anthropic.com";
+			let client: Anthropic;
+			let isOAuthToken: boolean;
 
-			const { client, isOAuthToken } = createClient(model, {
-				model,
-				apiKey,
-				extraBetas: normalizeExtraBetas(options?.betas),
-				stream: true,
-				interleavedThinking: options?.interleavedThinking ?? true,
-				headers: options?.headers,
-				dynamicHeaders: copilotDynamicHeaders?.headers,
-				isOAuth: options?.isOAuth,
-			});
+			if (options?.client) {
+				client = options.client;
+				isOAuthToken = false;
+			} else {
+				const apiKey = options?.apiKey ?? getEnvApiKey(model.provider) ?? "";
+
+				const created = createClient(model, {
+					model,
+					apiKey,
+					extraBetas: normalizeExtraBetas(options?.betas),
+					stream: true,
+					interleavedThinking: options?.interleavedThinking ?? true,
+					headers: options?.headers,
+					dynamicHeaders: copilotDynamicHeaders?.headers,
+					isOAuth: options?.isOAuth,
+				});
+				client = created.client;
+				isOAuthToken = created.isOAuthToken;
+			}
+			const baseUrl =
+				resolveAnthropicBaseUrl(model, options?.apiKey ?? getEnvApiKey(model.provider) ?? "") ??
+				"https://api.anthropic.com";
 			let params = buildParams(model, baseUrl, context, isOAuthToken, options);
 			const replacementPayload = await options?.onPayload?.(params, model);
 			if (replacementPayload !== undefined) {
@@ -661,6 +679,7 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 					for await (const event of anthropicStream) {
 						started = true;
 						if (event.type === "message_start") {
+							output.responseId = event.message.id;
 							// Capture initial token usage from message_start event
 							// This ensures we have input token counts even if the stream is aborted early
 							output.usage.input = event.message.usage.input_tokens || 0;

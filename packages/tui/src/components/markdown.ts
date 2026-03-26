@@ -1,4 +1,4 @@
-import { marked, type Token } from "marked";
+import { marked, type Token, type Tokens } from "marked";
 import type { SymbolTheme } from "../symbols";
 import { TERMINAL } from "../terminal-capabilities";
 import type { Component } from "../tui";
@@ -306,7 +306,7 @@ export class Markdown implements Component {
 					styledHeading = this.#theme.heading(this.#theme.bold(headingPrefix + headingText));
 				}
 				lines.push(styledHeading);
-				if (nextTokenType !== "space") {
+				if (nextTokenType && nextTokenType !== "space") {
 					lines.push(""); // Add spacing after headings (unless space token follows)
 				}
 				break;
@@ -332,7 +332,7 @@ export class Markdown implements Component {
 						for (const asciiLine of Bun.stripANSI(ascii).split("\n")) {
 							lines.push(asciiLine);
 						}
-						if (nextTokenType !== "space") {
+						if (nextTokenType && nextTokenType !== "space") {
 							lines.push("");
 						}
 						break;
@@ -354,7 +354,7 @@ export class Markdown implements Component {
 					}
 				}
 				lines.push(this.#theme.codeBlockBorder("```"));
-				if (nextTokenType !== "space") {
+				if (nextTokenType && nextTokenType !== "space") {
 					lines.push(""); // Add spacing after code blocks (unless space token follows)
 				}
 				break;
@@ -369,7 +369,7 @@ export class Markdown implements Component {
 			}
 
 			case "table": {
-				const tableLines = this.#renderTable(token as TableToken, width, styleContext);
+				const tableLines = this.#renderTable(token as TableToken, width, nextTokenType, styleContext);
 				lines.push(...tableLines);
 				break;
 			}
@@ -415,7 +415,7 @@ export class Markdown implements Component {
 						lines.push(this.#theme.quoteBorder(`${this.#theme.symbols.quoteBorder} `) + wrappedLine);
 					}
 				}
-				if (nextTokenType !== "space") {
+				if (nextTokenType && nextTokenType !== "space") {
 					lines.push(""); // Add spacing after blockquotes (unless space token follows)
 				}
 				break;
@@ -423,7 +423,7 @@ export class Markdown implements Component {
 
 			case "hr":
 				lines.push(this.#theme.hr(this.#theme.symbols.hrChar.repeat(Math.min(width, 80))));
-				if (nextTokenType !== "space") {
+				if (nextTokenType && nextTokenType !== "space") {
 					lines.push(""); // Add spacing after horizontal rules (unless space token follows)
 				}
 				break;
@@ -669,7 +669,12 @@ export class Markdown implements Component {
 	 * Render a table with width-aware cell wrapping.
 	 * Cells that don't fit are wrapped to multiple lines.
 	 */
-	#renderTable(token: TableToken, availableWidth: number, styleContext?: InlineStyleContext): string[] {
+	#renderTable(
+		token: TableToken,
+		availableWidth: number,
+		nextTokenType?: string,
+		styleContext?: InlineStyleContext,
+	): string[] {
 		const lines: string[] = [];
 		const numCols = token.header.length;
 
@@ -684,7 +689,9 @@ export class Markdown implements Component {
 		if (availableForCells < numCols) {
 			// Too narrow to render a stable table. Fall back to raw markdown.
 			const fallbackLines = token.raw ? wrapTextWithAnsi(token.raw, availableWidth) : [];
-			fallbackLines.push("");
+			if (nextTokenType && nextTokenType !== "space") {
+				fallbackLines.push("");
+			}
 			return fallbackLines;
 		}
 
@@ -834,7 +841,74 @@ export class Markdown implements Component {
 		const bottomBorderCells = columnWidths.map(w => h.repeat(w));
 		lines.push(`${t.bottomLeft}${h}${bottomBorderCells.join(`${h}${t.teeUp}${h}`)}${h}${t.bottomRight}`);
 
-		lines.push(""); // Add spacing after table
+		if (nextTokenType && nextTokenType !== "space") {
+			lines.push(""); // Add spacing after table
+		}
 		return lines;
 	}
+}
+
+/**
+ * Render inline markdown (bold, italic, code, links, strikethrough) to a styled string.
+ * Unlike the full Markdown component, this produces a single line with no block-level elements.
+ */
+export function renderInlineMarkdown(text: string, mdTheme: MarkdownTheme, baseColor?: (t: string) => string): string {
+	const tokens = marked.lexer(text);
+	const applyText = baseColor ?? ((t: string) => t);
+	let result = "";
+	for (const token of tokens) {
+		if (token.type === "paragraph" && token.tokens) {
+			result += renderInlineTokens(token.tokens, mdTheme, applyText);
+		} else if (token.type === "list") {
+			result += token.items
+				.map((item: Tokens.ListItem, index: number) => {
+					const prefix = token.ordered ? `${(token.start || 1) + index}. ` : "• ";
+					const content = item.tokens ? renderInlineTokens(item.tokens, mdTheme, applyText) : applyText(item.text);
+					return `${applyText(prefix)}${content}`;
+				})
+				.join(applyText(" "));
+		} else if ("text" in token && typeof token.text === "string") {
+			result += applyText(token.text);
+		}
+	}
+	return result;
+}
+
+function renderInlineTokens(tokens: Token[], mdTheme: MarkdownTheme, applyText: (t: string) => string): string {
+	let result = "";
+	const styleReset = applyText("");
+	for (const token of tokens) {
+		switch (token.type) {
+			case "text":
+				if (token.tokens && token.tokens.length > 0) {
+					result += renderInlineTokens(token.tokens, mdTheme, applyText);
+				} else {
+					result += applyText(token.text);
+				}
+				break;
+			case "strong":
+				result += mdTheme.bold(renderInlineTokens(token.tokens || [], mdTheme, applyText)) + styleReset;
+				break;
+			case "em":
+				result += mdTheme.italic(renderInlineTokens(token.tokens || [], mdTheme, applyText)) + styleReset;
+				break;
+			case "codespan":
+				result += mdTheme.code(token.text) + styleReset;
+				break;
+			case "del":
+				result += mdTheme.strikethrough(renderInlineTokens(token.tokens || [], mdTheme, applyText)) + styleReset;
+				break;
+			case "link": {
+				const linkText = renderInlineTokens(token.tokens || [], mdTheme, applyText);
+				result += mdTheme.link(mdTheme.underline(linkText)) + styleReset;
+				break;
+			}
+			default:
+				if ("text" in token && typeof token.text === "string") {
+					result += applyText(token.text);
+				}
+				break;
+		}
+	}
+	return result;
 }

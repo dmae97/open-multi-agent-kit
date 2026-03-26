@@ -1,6 +1,7 @@
 import { getOAuthProviders, type OAuthProviderInfo } from "@oh-my-pi/pi-ai";
 import { Container, matchesKey, Spacer, TruncatedText } from "@oh-my-pi/pi-tui";
 import { theme } from "../../modes/theme/theme";
+import { matchesSelectCancel } from "../../modes/utils/keybinding-matchers";
 import type { AuthStorage } from "../../session/auth-storage";
 import { DynamicBorder } from "./dynamic-border";
 /**
@@ -202,7 +203,7 @@ export class OAuthSelectorComponent extends Container {
 			}
 		}
 		// Escape or Ctrl+C
-		else if (matchesKey(keyData, "escape") || matchesKey(keyData, "esc") || matchesKey(keyData, "ctrl+c")) {
+		else if (matchesSelectCancel(keyData)) {
 			this.stopValidation();
 			this.#onCancelCallback();
 		}

@@ -26,7 +26,7 @@ export class InputController {
 	constructor(private ctx: InteractiveModeContext) {}
 
 	setupKeyHandlers(): void {
-		this.ctx.editor.setActionKeys("interrupt", this.ctx.keybindings.getKeys("interrupt"));
+		this.ctx.editor.setActionKeys("app.interrupt", this.ctx.keybindings.getKeys("app.interrupt"));
 		this.ctx.editor.shouldBypassAutocompleteOnEscape = () =>
 			Boolean(
 				this.ctx.loadingAnimation ||
@@ -83,68 +83,74 @@ export class InputController {
 			}
 		};
 
-		this.ctx.editor.setActionKeys("clear", this.ctx.keybindings.getKeys("clear"));
+		this.ctx.editor.setActionKeys("app.clear", this.ctx.keybindings.getKeys("app.clear"));
 		this.ctx.editor.onClear = () => this.handleCtrlC();
-		this.ctx.editor.setActionKeys("exit", this.ctx.keybindings.getKeys("exit"));
+		this.ctx.editor.setActionKeys("app.exit", this.ctx.keybindings.getKeys("app.exit"));
 		this.ctx.editor.onExit = () => this.handleCtrlD();
-		this.ctx.editor.setActionKeys("suspend", this.ctx.keybindings.getKeys("suspend"));
+		this.ctx.editor.setActionKeys("app.suspend", this.ctx.keybindings.getKeys("app.suspend"));
 		this.ctx.editor.onSuspend = () => this.handleCtrlZ();
-		this.ctx.editor.setActionKeys("cycleThinkingLevel", this.ctx.keybindings.getKeys("cycleThinkingLevel"));
+		this.ctx.editor.setActionKeys("app.thinking.cycle", this.ctx.keybindings.getKeys("app.thinking.cycle"));
 		this.ctx.editor.onCycleThinkingLevel = () => this.cycleThinkingLevel();
-		this.ctx.editor.setActionKeys("cycleModelForward", this.ctx.keybindings.getKeys("cycleModelForward"));
+		this.ctx.editor.setActionKeys("app.model.cycleForward", this.ctx.keybindings.getKeys("app.model.cycleForward"));
 		this.ctx.editor.onCycleModelForward = () => this.cycleRoleModel();
-		this.ctx.editor.setActionKeys("cycleModelBackward", this.ctx.keybindings.getKeys("cycleModelBackward"));
+		this.ctx.editor.setActionKeys("app.model.cycleBackward", this.ctx.keybindings.getKeys("app.model.cycleBackward"));
 		this.ctx.editor.onCycleModelBackward = () => this.cycleRoleModel({ temporary: true });
 		this.ctx.editor.onQuickSelectModel = () => this.ctx.showModelSelector({ temporaryOnly: true });
 
 		// Global debug handler on TUI (works regardless of focus)
 		this.ctx.ui.onDebug = () => this.ctx.showDebugSelector();
-		this.ctx.editor.setActionKeys("selectModel", this.ctx.keybindings.getKeys("selectModel"));
+		this.ctx.editor.setActionKeys("app.model.select", this.ctx.keybindings.getKeys("app.model.select"));
 		this.ctx.editor.onSelectModel = () => this.ctx.showModelSelector();
-		this.ctx.editor.setActionKeys("historySearch", this.ctx.keybindings.getKeys("historySearch"));
+		this.ctx.editor.setActionKeys("app.history.search", this.ctx.keybindings.getKeys("app.history.search"));
 		this.ctx.editor.onHistorySearch = () => this.ctx.showHistorySearch();
-		this.ctx.editor.setActionKeys("toggleThinking", this.ctx.keybindings.getKeys("toggleThinking"));
+		this.ctx.editor.setActionKeys("app.thinking.toggle", this.ctx.keybindings.getKeys("app.thinking.toggle"));
 		this.ctx.editor.onToggleThinking = () => this.ctx.toggleThinkingBlockVisibility();
-		this.ctx.editor.setActionKeys("externalEditor", this.ctx.keybindings.getKeys("externalEditor"));
+		this.ctx.editor.setActionKeys("app.editor.external", this.ctx.keybindings.getKeys("app.editor.external"));
 		this.ctx.editor.onExternalEditor = () => void this.openExternalEditor();
 		this.ctx.editor.onShowHotkeys = () => this.ctx.handleHotkeysCommand();
-		this.ctx.editor.setActionKeys("pasteImage", this.ctx.keybindings.getKeys("pasteImage"));
+		this.ctx.editor.setActionKeys(
+			"app.clipboard.pasteImage",
+			this.ctx.keybindings.getKeys("app.clipboard.pasteImage"),
+		);
 		this.ctx.editor.onPasteImage = () => this.handleImagePaste();
-		this.ctx.editor.setActionKeys("copyPrompt", this.ctx.keybindings.getKeys("copyPrompt"));
+		this.ctx.editor.setActionKeys(
+			"app.clipboard.copyPrompt",
+			this.ctx.keybindings.getKeys("app.clipboard.copyPrompt"),
+		);
 		this.ctx.editor.onCopyPrompt = () => this.handleCopyPrompt();
-		this.ctx.editor.setActionKeys("expandTools", this.ctx.keybindings.getKeys("expandTools"));
+		this.ctx.editor.setActionKeys("app.tools.expand", this.ctx.keybindings.getKeys("app.tools.expand"));
 		this.ctx.editor.onExpandTools = () => this.toggleToolOutputExpansion();
-		this.ctx.editor.setActionKeys("dequeue", this.ctx.keybindings.getKeys("dequeue"));
+		this.ctx.editor.setActionKeys("app.message.dequeue", this.ctx.keybindings.getKeys("app.message.dequeue"));
 		this.ctx.editor.onDequeue = () => this.handleDequeue();
 
 		this.ctx.editor.clearCustomKeyHandlers();
 		// Wire up extension shortcuts
 		this.registerExtensionShortcuts();
 
-		const planModeKeys = this.ctx.keybindings.getKeys("togglePlanMode");
+		const planModeKeys = this.ctx.keybindings.getKeys("app.plan.toggle");
 		for (const key of planModeKeys) {
 			this.ctx.editor.setCustomKeyHandler(key, () => void this.ctx.handlePlanModeCommand());
 		}
 
-		for (const key of this.ctx.keybindings.getKeys("newSession")) {
+		for (const key of this.ctx.keybindings.getKeys("app.session.new")) {
 			this.ctx.editor.setCustomKeyHandler(key, () => this.ctx.handleClearCommand());
 		}
-		for (const key of this.ctx.keybindings.getKeys("tree")) {
+		for (const key of this.ctx.keybindings.getKeys("app.session.tree")) {
 			this.ctx.editor.setCustomKeyHandler(key, () => this.ctx.showTreeSelector());
 		}
-		for (const key of this.ctx.keybindings.getKeys("fork")) {
+		for (const key of this.ctx.keybindings.getKeys("app.session.fork")) {
 			this.ctx.editor.setCustomKeyHandler(key, () => this.ctx.showUserMessageSelector());
 		}
-		for (const key of this.ctx.keybindings.getKeys("resume")) {
+		for (const key of this.ctx.keybindings.getKeys("app.session.resume")) {
 			this.ctx.editor.setCustomKeyHandler(key, () => this.ctx.showSessionSelector());
 		}
-		for (const key of this.ctx.keybindings.getKeys("followUp")) {
+		for (const key of this.ctx.keybindings.getKeys("app.message.followUp")) {
 			this.ctx.editor.setCustomKeyHandler(key, () => void this.handleFollowUp());
 		}
-		for (const key of this.ctx.keybindings.getKeys("toggleSTT")) {
+		for (const key of this.ctx.keybindings.getKeys("app.stt.toggle")) {
 			this.ctx.editor.setCustomKeyHandler(key, () => void this.ctx.handleSTTToggle());
 		}
-		for (const key of this.ctx.keybindings.getKeys("copyLine")) {
+		for (const key of this.ctx.keybindings.getKeys("app.clipboard.copyLine")) {
 			this.ctx.editor.setCustomKeyHandler(key, () => this.handleCopyCurrentLine());
 		}
 

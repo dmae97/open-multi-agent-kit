@@ -1,0 +1,218 @@
+import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
+import type { ExtensionAPI, ExtensionContext } from "../extensibility/extensions";
+import type { SessionEntry } from "../session/session-manager";
+import type { TruncationResult } from "../session/streaming-output";
+
+export type MetricDirection = "lower" | "higher";
+export type ExperimentStatus = "keep" | "discard" | "crash" | "checks_failed";
+
+export type ASIValue = string | number | boolean | null | ASIValue[] | { [key: string]: ASIValue };
+
+export interface ASIData {
+	[key: string]: ASIValue;
+}
+
+export interface NumericMetricMap {
+	[key: string]: number;
+}
+
+export interface MetricDef {
+	name: string;
+	unit: string;
+}
+
+export interface AutoresearchBenchmarkContract {
+	command: string | null;
+	primaryMetric: string | null;
+	metricUnit: string;
+	direction: MetricDirection | null;
+	secondaryMetrics: string[];
+}
+
+export interface AutoresearchContract {
+	benchmark: AutoresearchBenchmarkContract;
+	scopePaths: string[];
+	offLimits: string[];
+	constraints: string[];
+}
+
+export interface ExperimentResult {
+	runNumber: number | null;
+	commit: string;
+	metric: number;
+	metrics: NumericMetricMap;
+	status: ExperimentStatus;
+	description: string;
+	timestamp: number;
+	segment: number;
+	confidence: number | null;
+	asi?: ASIData;
+}
+
+export interface ExperimentState {
+	results: ExperimentResult[];
+	bestMetric: number | null;
+	bestDirection: MetricDirection;
+	metricName: string;
+	metricUnit: string;
+	secondaryMetrics: MetricDef[];
+	name: string | null;
+	currentSegment: number;
+	maxExperiments: number | null;
+	confidence: number | null;
+	benchmarkCommand: string | null;
+	scopePaths: string[];
+	offLimits: string[];
+	constraints: string[];
+	segmentFingerprint: string | null;
+}
+
+export interface RunExperimentProgressDetails {
+	phase: "running";
+	elapsed: string;
+	truncation?: TruncationResult;
+	fullOutputPath?: string;
+	runDirectory?: string;
+}
+
+export interface RunDetails {
+	runNumber: number;
+	runDirectory: string;
+	benchmarkLogPath: string;
+	checksLogPath?: string;
+	command: string;
+	exitCode: number | null;
+	durationSeconds: number;
+	passed: boolean;
+	crashed: boolean;
+	timedOut: boolean;
+	tailOutput: string;
+	checksPass: boolean | null;
+	checksTimedOut: boolean;
+	checksOutput: string;
+	checksDuration: number;
+	parsedMetrics: NumericMetricMap | null;
+	parsedPrimary: number | null;
+	parsedAsi: ASIData | null;
+	metricName: string;
+	metricUnit: string;
+	truncation?: TruncationResult;
+	fullOutputPath?: string;
+}
+
+export interface LogDetails {
+	experiment: ExperimentResult;
+	state: ExperimentState;
+	wallClockSeconds: number | null;
+}
+
+export interface ChecksResult {
+	pass: boolean;
+	output: string;
+	duration: number;
+}
+
+export interface PendingRunSummary {
+	checksDurationSeconds: number | null;
+	checksPass: boolean | null;
+	checksTimedOut: boolean;
+	command: string;
+	durationSeconds: number | null;
+	parsedAsi: ASIData | null;
+	parsedMetrics: NumericMetricMap | null;
+	parsedPrimary: number | null;
+	passed: boolean;
+	runDirectory: string;
+	runNumber: number;
+}
+
+export interface RunningExperiment {
+	startedAt: number;
+	command: string;
+	runDirectory: string;
+	runNumber: number;
+}
+
+export interface AutoresearchRuntime {
+	autoresearchMode: boolean;
+	autoResumeArmed: boolean;
+	dashboardExpanded: boolean;
+	lastAutoResumePendingRunNumber: number | null;
+	lastRunChecks: ChecksResult | null;
+	lastRunDuration: number | null;
+	lastRunAsi: ASIData | null;
+	lastRunArtifactDir: string | null;
+	lastRunNumber: number | null;
+	lastRunSummary: PendingRunSummary | null;
+	runningExperiment: RunningExperiment | null;
+	state: ExperimentState;
+	goal: string | null;
+}
+
+export interface AutoresearchConfig {
+	maxIterations?: number;
+	workingDir?: string;
+}
+
+export interface AutoresearchJsonConfigEntry {
+	type: "config";
+	name?: string;
+	metricName?: string;
+	metricUnit?: string;
+	bestDirection?: MetricDirection;
+	benchmarkCommand?: string;
+	secondaryMetrics?: string[];
+	scopePaths?: string[];
+	offLimits?: string[];
+	constraints?: string[];
+	segmentFingerprint?: string;
+}
+
+export interface AutoresearchJsonRunEntry {
+	run?: number;
+	commit?: string;
+	metric?: number;
+	metrics?: NumericMetricMap;
+	status?: ExperimentStatus;
+	description?: string;
+	timestamp?: number;
+	confidence?: number | null;
+	asi?: ASIData;
+}
+
+export interface ReconstructedExperimentData {
+	hasLog: boolean;
+	state: ExperimentState;
+}
+
+export interface AutoresearchControlEntryData {
+	mode: "on" | "off" | "clear";
+	goal?: string;
+}
+
+export interface ReconstructedControlState {
+	autoresearchMode: boolean;
+	goal: string | null;
+	lastMode: AutoresearchControlEntryData["mode"] | null;
+}
+
+export interface RuntimeStore {
+	clear(sessionKey: string): void;
+	ensure(sessionKey: string): AutoresearchRuntime;
+}
+
+export interface DashboardController {
+	clear(ctx: ExtensionContext): void;
+	requestRender(): void;
+	showOverlay(ctx: ExtensionContext, runtime: AutoresearchRuntime): Promise<void>;
+	updateWidget(ctx: ExtensionContext, runtime: AutoresearchRuntime): void;
+}
+
+export interface AutoresearchToolFactoryOptions {
+	dashboard: DashboardController;
+	getRuntime(ctx: ExtensionContext): AutoresearchRuntime;
+	pi: ExtensionAPI;
+}
+
+export type AutoresearchToolResult<TDetails> = AgentToolResult<TDetails>;
+export type SessionEntries = SessionEntry[];

@@ -225,6 +225,8 @@ export interface AgentSessionConfig {
 	mcpDiscoveryEnabled?: boolean;
 	/** MCP tool names to activate for the current session when discovery mode is enabled. */
 	initialSelectedMCPToolNames?: string[];
+	/** Whether constructor-provided MCP defaults should be persisted immediately. */
+	persistInitialMCPToolSelection?: boolean;
 	/** MCP server names whose tools should seed discovery-mode sessions whenever those servers are connected. */
 	defaultSelectedMCPServerNames?: string[];
 	/** MCP tool names that should seed brand-new sessions created from this AgentSession. */
@@ -364,6 +366,7 @@ export class AgentSession {
 	#followUpMessages: string[] = [];
 	/** Messages queued to be included with the next user prompt as context ("asides"). */
 	#pendingNextTurnMessages: CustomMessage[] = [];
+	#scheduledHiddenNextTurnGeneration: number | undefined = undefined;
 	#planModeState: PlanModeState | undefined;
 	#planReferenceSent = false;
 	#planReferencePath = "local://PLAN.md";
@@ -484,8 +487,11 @@ export class AgentSession {
 		this.#pruneSelectedMCPToolNames();
 		const persistedSelectedMCPToolNames = this.sessionManager.buildSessionContext().selectedMCPToolNames;
 		const currentSelectedMCPToolNames = this.getSelectedMCPToolNames();
+		const persistInitialMCPToolSelection =
+			config.persistInitialMCPToolSelection ?? this.sessionManager.getBranch().length === 0;
 		if (
 			this.#mcpDiscoveryEnabled &&
+			persistInitialMCPToolSelection &&
 			!this.#selectedMCPToolNamesMatch(persistedSelectedMCPToolNames, currentSelectedMCPToolNames)
 		) {
 			this.sessionManager.appendMCPToolSelection(currentSelectedMCPToolNames);
@@ -782,7 +788,6 @@ export class AgentSession {
 						attempt: this.#retryAttempt,
 					});
 					this.#retryAttempt = 0;
-					this.#resolveRetry();
 				}
 			}
 
@@ -858,6 +863,7 @@ export class AgentSession {
 				const didRetry = await this.#handleRetryableError(msg);
 				if (didRetry) return; // Retry was initiated, don't proceed to compaction
 			}
+			this.#resolveRetry();
 
 			if (msg.stopReason === "aborted" && this.#checkpointState) {
 				this.#checkpointState = undefined;
@@ -2567,6 +2573,74 @@ export class AgentSession {
 		});
 	}
 
+	#queueHiddenNextTurnMessage(message: CustomMessage, triggerTurn: boolean): void {
+		this.#pendingNextTurnMessages.push(message);
+		if (!triggerTurn) return;
+		const generation = this.#promptGeneration;
+		if (this.#scheduledHiddenNextTurnGeneration === generation) {
+			return;
+		}
+		this.#scheduledHiddenNextTurnGeneration = generation;
+		this.#schedulePostPromptTask(
+			async () => {
+				if (this.#scheduledHiddenNextTurnGeneration === generation) {
+					this.#scheduledHiddenNextTurnGeneration = undefined;
+				}
+				if (this.#pendingNextTurnMessages.length === 0) {
+					return;
+				}
+				try {
+					await this.#promptQueuedHiddenNextTurnMessages();
+				} catch {
+					// Leave the hidden next-turn messages queued for the next explicit prompt.
+				}
+			},
+			{
+				generation,
+				onSkip: () => {
+					if (this.#scheduledHiddenNextTurnGeneration === generation) {
+						this.#scheduledHiddenNextTurnGeneration = undefined;
+					}
+				},
+			},
+		);
+	}
+
+	async #promptQueuedHiddenNextTurnMessages(): Promise<void> {
+		if (this.#pendingNextTurnMessages.length === 0) {
+			return;
+		}
+
+		const queuedMessages = [...this.#pendingNextTurnMessages];
+		this.#pendingNextTurnMessages = [];
+		const message = queuedMessages[queuedMessages.length - 1];
+		if (!message) {
+			return;
+		}
+
+		const prependMessages = queuedMessages.slice(0, -1);
+		const textContent = this.#getCustomMessageTextContent(message);
+		try {
+			await this.#promptWithMessage(message, textContent, {
+				prependMessages,
+				skipPostPromptRecoveryWait: true,
+			});
+		} catch (error) {
+			this.#pendingNextTurnMessages = [...queuedMessages, ...this.#pendingNextTurnMessages];
+			throw error;
+		}
+	}
+
+	#getCustomMessageTextContent(message: Pick<CustomMessage, "content">): string {
+		if (typeof message.content === "string") {
+			return message.content;
+		}
+		return message.content
+			.filter((content): content is TextContent => content.type === "text")
+			.map(content => content.text)
+			.join("");
+	}
+
 	/**
 	 * Throw an error if the text is an extension command.
 	 */
@@ -2607,7 +2681,7 @@ export class AgentSession {
 		};
 		if (this.isStreaming) {
 			if (options?.deliverAs === "nextTurn") {
-				this.#pendingNextTurnMessages.push(appMessage);
+				this.#queueHiddenNextTurnMessage(appMessage, options?.triggerTurn ?? false);
 				return;
 			}
 
@@ -2616,6 +2690,22 @@ export class AgentSession {
 			} else {
 				this.agent.steer(appMessage);
 			}
+			return;
+		}
+
+		if (options?.deliverAs === "nextTurn") {
+			if (options?.triggerTurn) {
+				await this.agent.prompt(appMessage);
+				return;
+			}
+			this.agent.appendMessage(appMessage);
+			this.sessionManager.appendCustomMessageEntry(
+				message.customType,
+				message.content,
+				message.display,
+				message.details,
+				message.attribution ?? "agent",
+			);
 			return;
 		}
 
@@ -2686,9 +2776,9 @@ export class AgentSession {
 		return { steering, followUp };
 	}
 
-	/** Number of pending messages (includes both steering and follow-up) */
+	/** Number of pending messages (includes steering, follow-up, and next-turn messages) */
 	get queuedMessageCount(): number {
-		return this.#steeringMessages.length + this.#followUpMessages.length;
+		return this.#steeringMessages.length + this.#followUpMessages.length + this.#pendingNextTurnMessages.length;
 	}
 
 	/** Get pending messages (read-only) */
@@ -2830,6 +2920,7 @@ export class AgentSession {
 	async abort(): Promise<void> {
 		this.abortRetry();
 		this.#promptGeneration++;
+		this.#scheduledHiddenNextTurnGeneration = undefined;
 		this.#resolveTtsrResume();
 		this.#cancelPostPromptTasks();
 		this.agent.abort();
@@ -2879,6 +2970,7 @@ export class AgentSession {
 		this.#steeringMessages = [];
 		this.#followUpMessages = [];
 		this.#pendingNextTurnMessages = [];
+		this.#scheduledHiddenNextTurnGeneration = undefined;
 
 		this.sessionManager.appendThinkingLevelChange(this.thinkingLevel);
 		this.sessionManager.appendServiceTierChange(this.serviceTier ?? null);
@@ -3612,6 +3704,7 @@ export class AgentSession {
 			this.#steeringMessages = [];
 			this.#followUpMessages = [];
 			this.#pendingNextTurnMessages = [];
+			this.#scheduledHiddenNextTurnGeneration = undefined;
 			this.#todoReminderCount = 0;
 
 			// Inject the handoff document as a custom message
@@ -4495,7 +4588,9 @@ export class AgentSession {
 	}
 
 	#isTransientErrorMessage(errorMessage: string): boolean {
-		return /overloaded|rate.?limit|too many requests|429|500|502|503|504|service.?unavailable|server error|internal error|connection.?error|unable to connect|fetch failed|retry delay|stream stall/i.test(
+		// Match: overloaded_error, provider returned error, rate limit, 429, 500, 502, 503, 504,
+		// service unavailable, network/connection errors, fetch failed, terminated, retry delay exceeded
+		return /overloaded|provider.?returned.?error|rate.?limit|too many requests|429|500|502|503|504|service.?unavailable|server.?error|internal.?error|network.?error|connection.?error|connection.?refused|other side closed|fetch failed|upstream.?connect|reset before headers|socket hang up|timed? out|timeout|terminated|retry delay|stream stall/i.test(
 			errorMessage,
 		);
 	}
@@ -4959,6 +5054,7 @@ export class AgentSession {
 		this.#steeringMessages = [];
 		this.#followUpMessages = [];
 		this.#pendingNextTurnMessages = [];
+		this.#scheduledHiddenNextTurnGeneration = undefined;
 
 		// Flush pending writes before switching
 		await this.sessionManager.flush();
@@ -5002,21 +5098,18 @@ export class AgentSession {
 		const hasThinkingEntry = this.sessionManager.getBranch().some(entry => entry.type === "thinking_level_change");
 		const hasServiceTierEntry = this.sessionManager.getBranch().some(entry => entry.type === "service_tier_change");
 		const defaultThinkingLevel = this.settings.get("defaultThinkingLevel");
-
-		if (hasThinkingEntry) {
-			this.setThinkingLevel(sessionContext.thinkingLevel as ThinkingLevel | undefined);
-		} else {
-			const effectiveDefaultThinkingLevel = resolveThinkingLevelForModel(this.model, defaultThinkingLevel);
-			this.#thinkingLevel = effectiveDefaultThinkingLevel;
-			this.agent.setThinkingLevel(toReasoningEffort(effectiveDefaultThinkingLevel));
-			this.sessionManager.appendThinkingLevelChange(effectiveDefaultThinkingLevel);
-		}
-
-		if (hasServiceTierEntry) {
-			this.agent.serviceTier = sessionContext.serviceTier;
-		} else {
-			this.sessionManager.appendServiceTierChange(this.serviceTier ?? null);
-		}
+		const configuredServiceTier = this.settings.get("serviceTier");
+		const nextThinkingLevel = resolveThinkingLevelForModel(
+			this.model,
+			hasThinkingEntry ? (sessionContext.thinkingLevel as ThinkingLevel | undefined) : defaultThinkingLevel,
+		);
+		this.#thinkingLevel = nextThinkingLevel;
+		this.agent.setThinkingLevel(toReasoningEffort(nextThinkingLevel));
+		this.agent.serviceTier = hasServiceTierEntry
+			? sessionContext.serviceTier
+			: configuredServiceTier === "none"
+				? undefined
+				: configuredServiceTier;
 
 		this.#reconnectToAgent();
 		return true;
@@ -5058,6 +5151,7 @@ export class AgentSession {
 
 		// Clear pending messages (bound to old session state)
 		this.#pendingNextTurnMessages = [];
+		this.#scheduledHiddenNextTurnGeneration = undefined;
 
 		// Flush pending writes before branching
 		await this.sessionManager.flush();
