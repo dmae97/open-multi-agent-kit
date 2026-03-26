@@ -62,12 +62,30 @@ describe("SessionManager signature persistence", () => {
 		expect(assistant.content[2]).toMatchObject({ type: "toolCall", id: "tool_1", thoughtSignature: "" });
 	});
 
-	it("externalizes provider image data URLs and restores them across reload", async () => {
+	it("externalizes provider image data URLs and restores preserved history payloads across reload", async () => {
 		using tempDir = TempDir.createSync("@pi-session-provider-image-persistence-");
 		const session = SessionManager.create(tempDir.path(), tempDir.path());
 		const largeImageUrl = `data:image/png;base64,${"a".repeat(600_000)}`;
 
-		session.appendMessage({ role: "user", content: "continue", timestamp: 1 });
+		session.appendMessage({
+			role: "user",
+			content: "look at this",
+			providerPayload: {
+				type: "openaiResponsesHistory",
+				provider: "openai-codex",
+				items: [
+					{
+						type: "message",
+						role: "user",
+						content: [
+							{ type: "input_text", text: "look at this" },
+							{ type: "input_image", detail: "auto", image_url: largeImageUrl },
+						],
+					},
+				],
+			},
+			timestamp: 1,
+		});
 		session.appendMessage({
 			role: "assistant",
 			content: [{ type: "text", text: "done" }],
@@ -83,22 +101,8 @@ describe("SessionManager signature persistence", () => {
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 			},
 			stopReason: "stop",
-			providerPayload: {
-				type: "openaiResponsesHistory",
-				provider: "openai-codex",
-				items: [
-					{
-						type: "message",
-						role: "user",
-						content: [
-							{ type: "input_text", text: "look at this" },
-							{ type: "input_image", detail: "auto", image_url: largeImageUrl },
-						],
-					},
-				],
-			},
 			timestamp: 2,
-		} satisfies AssistantMessage);
+		});
 		await session.flush();
 
 		const expectedBlobHash = new Bun.CryptoHasher("sha256").update(Buffer.from(largeImageUrl, "utf8")).digest("hex");
@@ -106,9 +110,14 @@ describe("SessionManager signature persistence", () => {
 		expect(persistedBlob).toBe(largeImageUrl);
 
 		const reloaded = await SessionManager.open(session.getSessionFile()!);
-		const assistant = getAssistantMessage(reloaded);
+		const reloadedUserEntry = reloaded
+			.getEntries()
+			.find(entry => entry.type === "message" && entry.message.role === "user");
+		if (!reloadedUserEntry || reloadedUserEntry.type !== "message" || reloadedUserEntry.message.role !== "user") {
+			throw new Error("Expected user message");
+		}
 
-		expect(assistant.providerPayload).toEqual({
+		expect(reloadedUserEntry.message.providerPayload).toEqual({
 			type: "openaiResponsesHistory",
 			provider: "openai-codex",
 			items: [
@@ -122,5 +131,67 @@ describe("SessionManager signature persistence", () => {
 				},
 			],
 		});
+	});
+
+	it("rehydrates assistant replay metadata in memory without rewriting the session file", async () => {
+		using tempDir = TempDir.createSync("@pi-session-rehydrate-persistence-");
+		const session = SessionManager.create(tempDir.path(), tempDir.path());
+		const providerPayload = {
+			type: "openaiResponsesHistory" as const,
+			provider: "openai",
+			items: [
+				{ type: "reasoning", encrypted_content: "enc_stale" },
+				{
+					type: "message",
+					role: "assistant",
+					status: "completed",
+					id: "msg_stale_snapshot",
+					content: [{ type: "output_text", text: "done" }],
+				},
+			],
+		};
+
+		session.appendMessage({ role: "user", content: "continue", timestamp: 1 });
+		session.appendMessage({
+			role: "assistant",
+			content: [
+				{ type: "thinking", thinking: "reasoning", thinkingSignature: JSON.stringify(providerPayload.items[0]) },
+				{ type: "text", text: "done" },
+			],
+			api: "openai-responses",
+			provider: "openai",
+			model: "gpt-5-mini",
+			usage: {
+				input: 1,
+				output: 1,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 2,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "stop",
+			providerPayload,
+			timestamp: 2,
+		} satisfies AssistantMessage);
+		await session.flush();
+
+		const sessionFile = session.getSessionFile();
+		if (!sessionFile) throw new Error("Expected persisted session file");
+		const persistedBefore = await fs.readFile(sessionFile, "utf8");
+		const initialMtimeMs = (await fs.stat(sessionFile)).mtimeMs;
+		await session.close();
+
+		const reloaded = await SessionManager.open(sessionFile);
+		const assistant = getAssistantMessage(reloaded);
+
+		expect(assistant.providerPayload).toEqual(providerPayload);
+		expect(assistant.content[0]).toMatchObject({
+			type: "thinking",
+			thinking: "reasoning",
+			thinkingSignature: undefined,
+		});
+		expect(await fs.readFile(sessionFile, "utf8")).toBe(persistedBefore);
+		expect((await fs.stat(sessionFile)).mtimeMs).toBe(initialMtimeMs);
+		await reloaded.close();
 	});
 });

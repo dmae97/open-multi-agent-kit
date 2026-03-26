@@ -46,6 +46,7 @@ import {
 	type FileMentionMessage,
 	type HookMessage,
 	type PythonExecutionMessage,
+	sanitizeRehydratedOpenAIResponsesAssistantMessage,
 } from "./messages";
 import type { SessionStorage, SessionStorageWriter } from "./session-storage";
 import { FileSessionStorage, MemorySessionStorage } from "./session-storage";
@@ -1374,6 +1375,15 @@ export async function resolveResumableSession(
 
 	return { session: globalMatch, scope: "global" };
 }
+interface SessionManagerStateSnapshot {
+	sessionId: string;
+	sessionName: string | undefined;
+	sessionFile: string | undefined;
+	flushed: boolean;
+	needsFullRewriteOnNextPersist: boolean;
+	fileEntries: FileEntry[];
+}
+
 export class SessionManager {
 	#sessionId: string = "";
 	#sessionName: string | undefined;
@@ -1419,6 +1429,39 @@ export class SessionManager {
 		return this.#blobStore.put(data);
 	}
 
+	captureState(): SessionManagerStateSnapshot {
+		return {
+			sessionId: this.#sessionId,
+			sessionName: this.#sessionName,
+			sessionFile: this.#sessionFile,
+			flushed: this.#flushed,
+			needsFullRewriteOnNextPersist: this.#needsFullRewriteOnNextPersist,
+			// Snapshot entry objects by reference: switch/reload replaces the active entry array,
+			// so rollback does not need structured cloning of extension/custom details.
+			fileEntries: [...this.#fileEntries],
+		};
+	}
+
+	restoreState(snapshot: SessionManagerStateSnapshot): void {
+		this.#sessionId = snapshot.sessionId;
+		this.#sessionName = snapshot.sessionName;
+		this.#sessionFile = snapshot.sessionFile;
+		this.#flushed = snapshot.flushed;
+		this.#needsFullRewriteOnNextPersist = snapshot.needsFullRewriteOnNextPersist;
+		this.#fileEntries = [...snapshot.fileEntries];
+		this.#persistWriter = undefined;
+		this.#persistWriterPath = undefined;
+		this.#persistChain = Promise.resolve();
+		this.#persistError = undefined;
+		this.#persistErrorReported = false;
+		this.#artifactManager = null;
+		this.#artifactManagerSessionFile = null;
+		this.#buildIndex();
+		if (this.#sessionFile) {
+			writeTerminalBreadcrumb(this.cwd, this.#sessionFile);
+		}
+	}
+
 	/** Initialize with a specific session file (used by factory methods) */
 	async #initSessionFile(sessionFile: string): Promise<void> {
 		await this.setSessionFile(sessionFile);
@@ -1445,6 +1488,7 @@ export class SessionManager {
 			this.#needsFullRewriteOnNextPersist = migrateToCurrentVersion(this.#fileEntries);
 
 			await resolveBlobRefsInEntries(this.#fileEntries, this.#blobStore);
+			this.sanitizeLoadedOpenAIResponsesReplayMetadata();
 
 			this.#buildIndex();
 			this.#flushed = true;
@@ -2300,6 +2344,26 @@ export class SessionManager {
 		return buildSessionContext(this.getEntries(), this.#leafId, this.#byId);
 	}
 
+	/** Strip stale OpenAI Responses assistant replay metadata from loaded in-memory entries. */
+	sanitizeLoadedOpenAIResponsesReplayMetadata(): boolean {
+		let didSanitize = false;
+		for (const entry of this.#fileEntries) {
+			if (entry.type !== "message" || entry.message.role !== "assistant") {
+				continue;
+			}
+
+			const sanitizedMessage = sanitizeRehydratedOpenAIResponsesAssistantMessage(entry.message);
+			if (sanitizedMessage === entry.message) {
+				continue;
+			}
+
+			entry.message = sanitizedMessage;
+			didSanitize = true;
+		}
+
+		return didSanitize;
+	}
+
 	/**
 	 * Get session header.
 	 */
@@ -2548,6 +2612,7 @@ export class SessionManager {
 		newHeader.title = sourceHeader?.title;
 		manager.#fileEntries = [newHeader, ...historyEntries];
 		manager.#sessionName = newHeader.title;
+		manager.sanitizeLoadedOpenAIResponsesReplayMetadata();
 		manager.#buildIndex();
 		await manager.#rewriteFile();
 		return manager;

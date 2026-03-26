@@ -7,11 +7,16 @@ const originalColorfgbg = Bun.env.COLORFGBG;
 const originalZellij = Bun.env.ZELLIJ;
 
 describe("theme auto-detection", () => {
-	beforeEach(() => {
+	beforeEach(async () => {
 		Object.defineProperty(process, "platform", { value: "darwin", configurable: true, writable: true });
 		delete Bun.env.COLORFGBG;
 		delete Bun.env.ZELLIJ;
 		themeModule.stopThemeWatcher();
+		const darkTheme = await themeModule.getThemeByName("dark");
+		if (!darkTheme) {
+			throw new Error("Failed to load dark theme for tests");
+		}
+		themeModule.setThemeInstance(darkTheme);
 		vi.restoreAllMocks();
 	});
 

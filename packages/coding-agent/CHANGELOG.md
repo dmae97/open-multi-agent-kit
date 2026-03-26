@@ -142,6 +142,10 @@
 - Fixed autoresearch logging to require durable ASI metadata (hypothesis, rollback_reason, next_action_hint) for every run including rollback context for discarded, crashed, and checks-failed experiments
 - Fixed autoresearch logging to require durable ASI metadata for every run, including rollback context for discarded, crashed, and checks-failed experiments
 
+
+### Fixed
+
+- Fixed resumed and session-switched GitHub Copilot/OpenAI Responses conversations replaying stale assistant native history from older saved sessions by sanitizing persisted assistant replay metadata on rehydration and resetting provider session state across live session boundaries ([#505](https://github.com/can1357/oh-my-pi/issues/505))
 ## [13.14.0] - 2026-03-20
 
 ### Added
