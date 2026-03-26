@@ -10,17 +10,50 @@ export interface TreeListOptions<T> {
 	items: T[];
 	expanded?: boolean;
 	maxCollapsed?: number;
+	/** Strict total-line budget for collapsed mode. When set (and not expanded),
+	 *  rendered item lines plus the trailing summary line must fit within this budget.
+	 */
+	maxCollapsedLines?: number;
 	itemType?: string;
 	renderItem: (item: T, context: TreeContext) => string | string[];
 }
 
 export function renderTreeList<T>(options: TreeListOptions<T>, theme: Theme): string[] {
-	const { items, expanded = false, maxCollapsed = 8, itemType = "item", renderItem } = options;
-	const lines: string[] = [];
+	const { items, expanded = false, maxCollapsed = 8, maxCollapsedLines, itemType = "item", renderItem } = options;
 	const maxItems = expanded ? items.length : Math.min(items.length, maxCollapsed);
+	const linesBudget = !expanded && maxCollapsedLines !== undefined ? maxCollapsedLines : Infinity;
 
-	for (let i = 0; i < maxItems; i++) {
-		const isLast = i === maxItems - 1 && (expanded || items.length <= maxCollapsed);
+	// Pass 1: determine how many items fit within both the item count and total line budget,
+	// including the trailing summary row when one is needed.
+	let fittingCount = maxItems;
+	let fittedLineCount = 0;
+	if (linesBudget !== Infinity) {
+		fittingCount = 0;
+		for (let i = 0; i < maxItems; i++) {
+			const rendered = renderItem(items[i], {
+				index: i,
+				isLast: false,
+				depth: 0,
+				theme,
+				prefix: "",
+				continuePrefix: "",
+			});
+			const count = Array.isArray(rendered) ? rendered.length : rendered ? 1 : 0;
+			const remainingAfter = items.length - (i + 1);
+			const reservedSummaryLines = remainingAfter > 0 ? 1 : 0;
+			if (fittedLineCount + count + reservedSummaryLines > linesBudget) break;
+			fittedLineCount += count;
+			fittingCount = i + 1;
+		}
+	}
+
+	const remaining = items.length - fittingCount;
+	const hasSummary = !expanded && remaining > 0 && (linesBudget === Infinity || fittedLineCount < linesBudget);
+
+	// Pass 2: render items with correct isLast and prefixes.
+	const lines: string[] = [];
+	for (let i = 0; i < fittingCount; i++) {
+		const isLast = !hasSummary && i === fittingCount - 1;
 		const branch = getTreeBranch(isLast, theme);
 		const prefix = `${theme.fg("dim", branch)} `;
 		const continuePrefix = `${theme.fg("dim", getTreeContinuePrefix(isLast, theme))}`;
@@ -44,8 +77,7 @@ export function renderTreeList<T>(options: TreeListOptions<T>, theme: Theme): st
 		}
 	}
 
-	if (!expanded && items.length > maxItems) {
-		const remaining = items.length - maxItems;
+	if (hasSummary) {
 		lines.push(`${theme.fg("dim", theme.tree.last)} ${theme.fg("muted", formatMoreItems(remaining, itemType))}`);
 	}
 
