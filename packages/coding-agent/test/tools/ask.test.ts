@@ -411,7 +411,7 @@ describe("AskTool custom input", () => {
 		expect(abort).toHaveBeenCalledTimes(1);
 	});
 
-	it("aborts when editor is cancelled after choosing Other in multi-question flow", async () => {
+	it("continues multi-question flow when editor is dismissed on a fresh question", async () => {
 		const tool = new AskTool(createSession());
 		const abort = vi.fn();
 		const editor = vi.fn(async () => undefined);
@@ -437,11 +437,14 @@ describe("AskTool custom input", () => {
 			abort,
 		});
 
-		await expect(
-			tool.execute("call-editor-multi-cancel", { questions }, undefined, undefined, context),
-		).rejects.toBeInstanceOf(ToolAbortError);
+		const result = await tool.execute("call-editor-multi-dismiss", { questions }, undefined, undefined, context);
+
+		// Editor dismissed on "Details?" — flow continues with empty answer, not abort
+		expect(result.details?.results?.[0]?.selectedOptions).toEqual(["one"]);
+		expect(result.details?.results?.[1]?.selectedOptions).toEqual([]);
+		expect(result.details?.results?.[1]?.customInput).toBeUndefined();
 		expect(editor).toHaveBeenCalledTimes(1);
-		expect(abort).toHaveBeenCalledTimes(1);
+		expect(abort).not.toHaveBeenCalled();
 	});
 
 	it("surfaces external abort during editor mode as ToolAbortError", async () => {
@@ -892,6 +895,55 @@ describe("AskTool multi-question navigation", () => {
 		const result = await tool.execute("call-nav-multiline", { questions }, undefined, undefined, context);
 
 		expect(result.details?.results?.[0]?.customInput).toBe(multilineText);
+		expect(result.details?.results?.[1]?.selectedOptions).toEqual(["two"]);
+		expect(editor).toHaveBeenCalledTimes(1);
+	});
+
+	it("preserves prior single-select answer when custom editor is dismissed during navigation", async () => {
+		const tool = new AskTool(createSession());
+		let detailVisits = 0;
+		const editor = vi.fn(async () => undefined);
+		const questions = [
+			{
+				id: "details",
+				question: "Details?",
+				options: [{ label: "short" }, { label: "long" }],
+			},
+			{
+				id: "summary",
+				question: "Summary?",
+				options: [{ label: "one" }, { label: "two" }],
+			},
+		];
+		const context = createContext({
+			select: async (prompt, _options, dialogOptions) => {
+				if (prompt.includes("Details?")) {
+					detailVisits += 1;
+					if (detailVisits === 1) return "short";
+					// Second visit: try Other then dismiss editor, then forward
+					if (detailVisits === 2) return "Other (type your own)";
+					dialogOptions?.onRight?.();
+					return undefined;
+				}
+				if (prompt.includes("Summary?")) {
+					const summaryVisit = detailVisits;
+					if (summaryVisit <= 2) {
+						// Navigate back to re-visit details
+						dialogOptions?.onLeft?.();
+						return undefined;
+					}
+					return "two";
+				}
+				return undefined;
+			},
+			editor,
+		});
+
+		const result = await tool.execute("call-nav-single-dismiss", { questions }, undefined, undefined, context);
+
+		// The prior selection "short" should survive the editor dismiss
+		expect(result.details?.results?.[0]?.selectedOptions).toEqual(["short"]);
+		expect(result.details?.results?.[0]?.customInput).toBeUndefined();
 		expect(result.details?.results?.[1]?.selectedOptions).toEqual(["two"]);
 		expect(editor).toHaveBeenCalledTimes(1);
 	});

@@ -331,12 +331,12 @@ async function askSingleQuestion(
 		} else if (choice === OTHER_OPTION) {
 			if (!selectTimedOut) {
 				const customResult = await promptForCustomInput();
-				if (customResult.input === undefined) {
-					return { selectedOptions, customInput, timedOut, cancelled: true };
+				if (customResult.input !== undefined) {
+					customInput = customResult.input;
+					selectedOptions = [];
 				}
-				customInput = customResult.input;
+				// If editor was dismissed (undefined), keep prior selectedOptions/customInput intact
 			}
-			selectedOptions = [];
 		} else {
 			selectedOptions = [stripRecommendedSuffix(choice)];
 			customInput = undefined;
