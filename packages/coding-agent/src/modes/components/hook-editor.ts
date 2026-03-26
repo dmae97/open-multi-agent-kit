@@ -92,14 +92,13 @@ export class HookEditorComponent extends Container {
 			return;
 		}
 
-		// Submit on any plain Enter encoding the key matcher recognizes, except the raw \n path
-		// some terminals use for Shift+Enter in prompt-style mode.
-		if ((matchesKey(keyData, "enter") || matchesKey(keyData, "return")) && keyData !== "\n") {
+		// Submit on any plain Enter encoding, including terminals that report unmodified Enter as LF.
+		if (matchesKey(keyData, "enter") || matchesKey(keyData, "return")) {
 			this.#onSubmitCallback(this.#editor.getText());
 			return;
 		}
 
-		// Let Editor handle newline-producing Enter variants (\n, Shift+Enter, Ctrl+Enter, Alt+Enter, etc.)
+		// Let Editor handle modified newline-producing variants (Shift+Enter, Ctrl+Enter, Alt+Enter, etc.)
 		this.#editor.handleInput(keyData);
 	}
 

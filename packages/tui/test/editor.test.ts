@@ -503,6 +503,16 @@ describe("Editor component", () => {
 			expect(text).toBe("Hällö Wörld! 😀 äöüÄÖÜß");
 		});
 
+		it("strips control characters from programmatically loaded text before render", () => {
+			const editor = new Editor(defaultEditorTheme);
+			editor.setText("start\x1b[31mred\x1b[0m\u0007end");
+
+			expect(editor.getText()).toBe("start[31mred[0mend");
+			expect(editor.getText()).not.toContain("\x1b");
+			expect(editor.getText()).not.toContain("\u0007");
+			expect(editor.render(80).join("\n")).not.toContain("\x1b[31m");
+		});
+
 		it("moves cursor to document start on Ctrl+A and inserts at the beginning", () => {
 			const editor = new Editor(defaultEditorTheme);
 

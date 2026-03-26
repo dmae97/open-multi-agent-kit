@@ -154,7 +154,7 @@ describe("HookEditorComponent prompt-style mode", () => {
 		expect(onCancel).not.toHaveBeenCalled();
 	});
 
-	it("treats the plain newline terminal path as newline instead of submitting", () => {
+	it("submits when a terminal reports plain Enter as LF", () => {
 		const onSubmit = vi.fn();
 		const onCancel = vi.fn();
 		const component = new HookEditorComponent(createTui(), "Prompt", undefined, onSubmit, onCancel, {
@@ -164,14 +164,9 @@ describe("HookEditorComponent prompt-style mode", () => {
 		component.handleInput("a");
 		component.handleInput("\n");
 
-		expect(onSubmit).not.toHaveBeenCalled();
-		expect(onCancel).not.toHaveBeenCalled();
-
-		component.handleInput("b");
-		component.handleInput("\r");
-
 		expect(onSubmit).toHaveBeenCalledTimes(1);
-		expect(onSubmit).toHaveBeenCalledWith("a\nb");
+		expect(onSubmit).toHaveBeenCalledWith("a");
+		expect(onCancel).not.toHaveBeenCalled();
 	});
 
 	it("inserts newline on Shift+Enter instead of submitting", () => {
