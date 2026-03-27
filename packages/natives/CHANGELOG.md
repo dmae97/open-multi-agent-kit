@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.16.1] - 2026-03-27
+
 ### Added
 
 - Exported `SearchDb` class from main package entry point for direct instantiation

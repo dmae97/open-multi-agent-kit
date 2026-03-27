@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.16.1] - 2026-03-27
+
 ### Added
 
 - Added `searchDb` parameter to `PromptActionAutocompleteProvider` constructor for native search database integration in autocomplete workflows
