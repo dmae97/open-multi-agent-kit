@@ -57,6 +57,9 @@ jobs:
           toolchain: nightly-2026-03-27
           components: ${{ matrix.rust_checks && 'clippy, rustfmt' || '' }}
           targets: ${{ matrix.target }}
+      - name: Ensure cross-compilation target is installed
+        if: matrix.target
+        run: rustup target add ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
