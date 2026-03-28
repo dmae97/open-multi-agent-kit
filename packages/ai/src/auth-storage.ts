@@ -656,6 +656,15 @@ export class AuthStorage {
 		this.#resetProviderAssignments(provider);
 	}
 
+	async #upsertOAuthCredential(provider: string, credential: OAuthCredential): Promise<void> {
+		const stored = this.#store.upsertAuthCredentialForProvider(provider, credential);
+		this.#setStoredCredentials(
+			provider,
+			stored.map(record => ({ id: record.id, credential: record.credential })),
+		);
+		this.#resetProviderAssignments(provider);
+	}
+
 	/**
 	 * Remove credential for a provider.
 	 */
@@ -945,12 +954,7 @@ export class AuthStorage {
 			}
 		}
 		const newCredential: OAuthCredential = { type: "oauth", ...credentials };
-		const existing = this.#getCredentialsForProvider(provider);
-		if (existing.length === 0) {
-			await this.set(provider, newCredential);
-			return;
-		}
-		await this.set(provider, [...existing, newCredential]);
+		await this.#upsertOAuthCredential(provider, newCredential);
 	}
 
 	/**
@@ -1975,7 +1979,7 @@ function normalizeStoredIdentityKey(identityKey: string | null | undefined): str
 	return normalized && normalized.length > 0 ? normalized : null;
 }
 
-function serializeCredential(credential: AuthCredential): SerializedCredentialRecord | null {
+function serializeCredential(provider: string, credential: AuthCredential): SerializedCredentialRecord | null {
 	if (credential.type === "api_key") {
 		return {
 			credentialType: "api_key",
@@ -1988,7 +1992,7 @@ function serializeCredential(credential: AuthCredential): SerializedCredentialRe
 		return {
 			credentialType: "oauth",
 			data: JSON.stringify(rest),
-			identityKey: resolveCredentialIdentityKey("", credential),
+			identityKey: resolveCredentialIdentityKey(provider, credential),
 		};
 	}
 	return null;
@@ -2423,7 +2427,7 @@ export class AuthCredentialStore {
 			const matchedExistingIds = new Set<number>();
 
 			for (const credential of items) {
-				const serialized = serializeCredential(credential);
+				const serialized = serializeCredential(providerName, credential);
 				if (!serialized) continue;
 				const match = existing.find(
 					entry =>
@@ -2461,6 +2465,53 @@ export class AuthCredentialStore {
 		return result;
 	}
 
+	upsertAuthCredentialForProvider(provider: string, credential: AuthCredential): StoredAuthCredential[] {
+		const upsert = this.#db.transaction((providerName: string, item: AuthCredential) => {
+			const serialized = serializeCredential(providerName, item);
+			if (!serialized) return this.listAuthCredentials(providerName);
+			const existingRows = this.#listActiveByProviderStmt.all(providerName) as AuthRow[];
+			const existing = existingRows.map(row => ({
+				id: row.id,
+				credential: deserializeCredential(row),
+				identityKey: resolveRowCredentialIdentityKey(providerName, row),
+			}));
+
+			let targetId: number | null = null;
+			for (const row of existing) {
+				if (!matchesReplacementCredential(providerName, row.credential, row.identityKey, item)) continue;
+				if (targetId === null) {
+					targetId = row.id;
+					this.#updateStmt.run(serialized.credentialType, serialized.data, serialized.identityKey, row.id);
+					continue;
+				}
+				this.#deleteStmt.run("replaced by newer credential", row.id);
+			}
+
+			if (targetId === null) {
+				const row = this.#insertStmt.get(
+					providerName,
+					serialized.credentialType,
+					serialized.data,
+					serialized.identityKey,
+				) as { id?: number } | undefined;
+				targetId = row?.id ?? null;
+			}
+
+			const activeRows = this.#listActiveByProviderStmt.all(providerName) as AuthRow[];
+			const result: StoredAuthCredential[] = [];
+			for (const row of activeRows) {
+				const activeCredential = deserializeCredential(row);
+				if (!activeCredential) continue;
+				result.push(toStoredAuthCredential(row, activeCredential));
+			}
+			return result;
+		});
+
+		const result = upsert(provider, credential);
+		this.#purgeSupersededDisabledRows(provider, result);
+		return result;
+	}
+
 	/**
 	 * Hard-deletes disabled rows for a provider when an active row with the same identity exists.
 	 * This prevents unbounded accumulation of soft-deleted credentials while preserving
@@ -2488,15 +2539,16 @@ export class AuthCredentialStore {
 	}
 
 	updateAuthCredential(id: number, credential: AuthCredential): void {
-		const serialized = serializeCredential(credential);
-		if (!serialized) return;
 		try {
-			this.#updateStmt.run(serialized.credentialType, serialized.data, serialized.identityKey, id);
 			const providerRow = this.#db.prepare("SELECT provider FROM auth_credentials WHERE id = ?").get(id) as
 				| { provider?: string }
 				| undefined;
-			if (providerRow?.provider) {
-				this.#purgeSupersededDisabledRows(providerRow.provider, this.listAuthCredentials(providerRow.provider));
+			const provider = providerRow?.provider ?? "";
+			const serialized = serializeCredential(provider, credential);
+			if (!serialized) return;
+			this.#updateStmt.run(serialized.credentialType, serialized.data, serialized.identityKey, id);
+			if (provider) {
+				this.#purgeSupersededDisabledRows(provider, this.listAuthCredentials(provider));
 			}
 		} catch {
 			// Ignore update failures
@@ -2547,11 +2599,12 @@ export class AuthCredentialStore {
 	// ─── Convenience methods for CLI ────────────────────────────────────────
 
 	/**
-	 * Save OAuth credentials for a provider (replaces existing).
+	 * Save OAuth credentials for a provider.
+	 * Preserves unrelated identities and replaces only the matching credential.
 	 */
 	saveOAuth(provider: string, credentials: OAuthCredentials): void {
 		const credential: AuthCredential = { type: "oauth", ...credentials };
-		this.replaceAuthCredentialsForProvider(provider, [credential]);
+		this.upsertAuthCredentialForProvider(provider, credential);
 	}
 
 	/**

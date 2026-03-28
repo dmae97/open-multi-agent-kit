@@ -172,7 +172,7 @@ describe("AuthStorage openai-codex email dedupe", () => {
 		expect(remaining.credential.accountId).toBe("account-b");
 	});
 
-	it("soft-disables a different codex account when the email matches", async () => {
+	it("updates in-place when a codex credential with matching email replaces another account", async () => {
 		if (!store || !dbPath) throw new Error("test setup failed");
 
 		store.replaceAuthCredentialsForProvider("openai-codex", [
@@ -182,13 +182,14 @@ describe("AuthStorage openai-codex email dedupe", () => {
 			createJwtOnlyCredential({ suffix: "second", accountId: "account-b", email: "shared.user@example.com" }),
 		]);
 
-		expect(countCredentialRows(dbPath, "openai-codex")).toBe(2);
+		// Same email identity key → existing row is updated, not disabled+reinserted
+		expect(countCredentialRows(dbPath, "openai-codex")).toBe(1);
 		const credentials = store.listAuthCredentials("openai-codex");
 		expect(credentials).toHaveLength(1);
-		expect(readDisabledCauses(dbPath, "openai-codex")).toEqual(["replaced by newer credential"]);
+		expect(readDisabledCauses(dbPath, "openai-codex")).toEqual([]);
 	});
 
-	it("hard deletes disabled codex rows once a replacement for the same email becomes active", async () => {
+	it("updates in-place via AuthStorage.set when email matches across accounts", async () => {
 		if (!authStorage || !store || !dbPath) throw new Error("test setup failed");
 
 		await authStorage.set(
@@ -200,7 +201,8 @@ describe("AuthStorage openai-codex email dedupe", () => {
 			createCredential({ suffix: "second", accountId: "account-b", email: "shared.user@example.com" }),
 		);
 
-		expect(countCredentialRows(dbPath, "openai-codex")).toBe(2);
+		// Same email identity key → updated in-place, no disabled rows
+		expect(countCredentialRows(dbPath, "openai-codex")).toBe(1);
 		const credentials = store.listAuthCredentials("openai-codex");
 		expect(credentials).toHaveLength(1);
 		const [remaining] = credentials;
@@ -208,7 +210,79 @@ describe("AuthStorage openai-codex email dedupe", () => {
 		if (!remaining || remaining.credential.type !== "oauth") throw new Error("expected oauth credential");
 		expect(remaining.credential.accountId).toBe("account-b");
 		expect(remaining.credential.email).toBe("shared.user@example.com");
-		expect(readDisabledCauses(dbPath, "openai-codex")).toEqual(["replaced by newer credential"]);
+		expect(readDisabledCauses(dbPath, "openai-codex")).toEqual([]);
+	});
+
+	it("does not disable credentials for different accounts with different emails", async () => {
+		if (!authStorage || !store || !dbPath) throw new Error("test setup failed");
+
+		const credA = createCredential({ suffix: "first", accountId: "account-a", email: "user-a@example.com" });
+		const credB = createCredential({ suffix: "second", accountId: "account-b", email: "user-b@example.com" });
+		const credC = createCredential({ suffix: "third", accountId: "account-c", email: "user-c@example.com" });
+
+		// Simulate login flow: each login merges existing + new
+		await authStorage.set("openai-codex", credA);
+		await authStorage.set("openai-codex", [credA, credB]);
+		await authStorage.set("openai-codex", [credA, credB, credC]);
+
+		// All three accounts should remain active — no credential was replaced
+		const credentials = store.listAuthCredentials("openai-codex");
+		expect(credentials).toHaveLength(3);
+		expect(readDisabledCauses(dbPath, "openai-codex")).toEqual([]);
+	});
+
+	it("saveOAuth preserves unrelated codex accounts across reauth", async () => {
+		if (!store || !dbPath) throw new Error("test setup failed");
+
+		store.saveOAuth(
+			"openai-codex",
+			createCredential({ suffix: "first", accountId: "account-a", email: "user-a@example.com" }),
+		);
+		store.saveOAuth(
+			"openai-codex",
+			createCredential({ suffix: "second", accountId: "account-b", email: "user-b@example.com" }),
+		);
+		store.saveOAuth(
+			"openai-codex",
+			createCredential({ suffix: "third", accountId: "account-c", email: "user-c@example.com" }),
+		);
+
+		const credentials = store.listAuthCredentials("openai-codex");
+		expect(credentials).toHaveLength(3);
+		expect(readDisabledCauses(dbPath, "openai-codex")).toEqual([]);
+	});
+
+	it("saveOAuth does not delete accounts missing from stale AuthStorage cache", async () => {
+		if (!store || !dbPath) throw new Error("test setup failed");
+
+		const staleStore = await AuthCredentialStore.open(dbPath);
+		const freshStore = await AuthCredentialStore.open(dbPath);
+		const staleAuthStorage = new AuthStorage(staleStore);
+		try {
+			staleStore.saveOAuth(
+				"openai-codex",
+				createCredential({ suffix: "first", accountId: "account-a", email: "user-a@example.com" }),
+			);
+			await staleAuthStorage.reload();
+
+			// Another writer adds a second account after staleAuthStorage has already cached provider state.
+			freshStore.saveOAuth(
+				"openai-codex",
+				createCredential({ suffix: "second", accountId: "account-b", email: "user-b@example.com" }),
+			);
+
+			// Reauth from the stale process should update only account A, not disable account B.
+			staleStore.saveOAuth(
+				"openai-codex",
+				createCredential({ suffix: "reauth", accountId: "account-a", email: "user-a@example.com" }),
+			);
+
+			expect(staleStore.listAuthCredentials("openai-codex")).toHaveLength(2);
+			expect(readDisabledCauses(dbPath, "openai-codex")).toEqual([]);
+		} finally {
+			staleStore.close();
+			freshStore.close();
+		}
 	});
 
 	it("prunes existing JWT-only codex duplicates on reload when email matches", async () => {
