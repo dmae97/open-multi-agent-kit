@@ -121,7 +121,9 @@ export function parsePluginArgs(args: string[]): PluginCommandArgs | undefined {
 	return result;
 }
 
-export { classifyInstallTarget } from "./classify-install-target.js";
+import { classifyInstallTarget } from "./classify-install-target";
+
+export { classifyInstallTarget } from "./classify-install-target";
 
 // =============================================================================
 // Command Handlers
@@ -320,13 +322,35 @@ async function handleInstall(
 		console.error(chalk.red(`Usage: ${APP_NAME} plugin install <package[@version]>[features] ...`));
 		console.error(chalk.dim("Examples:"));
 		console.error(chalk.dim(`  ${APP_NAME} plugin install @oh-my-pi/exa`));
-		console.error(chalk.dim(`  ${APP_NAME} plugin install @oh-my-pi/exa[search,websets]`));
-		console.error(chalk.dim(`  ${APP_NAME} plugin install @oh-my-pi/exa[*]  # all features`));
-		console.error(chalk.dim(`  ${APP_NAME} plugin install @oh-my-pi/exa[]   # no optional features`));
+		console.error(chalk.dim(`  ${APP_NAME} plugin install name@marketplace`));
 		process.exit(1);
 	}
 
+	// Build known marketplace set for classification
+	const mktMgr = makeMarketplaceManager();
+	const knownMarketplaces = new Set((await mktMgr.listMarketplaces()).map(m => m.name));
+
 	for (const spec of packages) {
+		const target = classifyInstallTarget(spec, knownMarketplaces);
+
+		if (target.type === "marketplace") {
+			try {
+				const entry = await mktMgr.installPlugin(target.name, target.marketplace, {
+					force: flags.force,
+				});
+				console.log(
+					chalk.green(
+						`${theme.status.success} Installed ${target.name} from ${target.marketplace} (${entry.version})`,
+					),
+				);
+			} catch (err) {
+				console.error(chalk.red(`${theme.status.error} Failed to install ${spec}: ${err}`));
+				process.exit(1);
+			}
+			continue;
+		}
+
+		// npm path
 		try {
 			const result = await manager.install(spec, { force: flags.force, dryRun: flags.dryRun });
 
