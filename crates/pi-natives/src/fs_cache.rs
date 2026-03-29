@@ -198,8 +198,10 @@ pub fn classify_file_type(path: &Path) -> Option<(FileType, Option<f64>)> {
 		Some((FileType::Symlink, mtime_ms))
 	} else if file_type.is_dir() {
 		Some((FileType::Dir, mtime_ms))
-	} else {
+	} else if file_type.is_file() {
 		Some((FileType::File, mtime_ms))
+	} else {
+		None
 	}
 }
 
@@ -400,5 +402,60 @@ pub fn invalidate_fs_scan_cache(path: Option<String>) {
 			invalidate_path(&target);
 		},
 		None => invalidate_all(),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	#[cfg(unix)]
+	use std::{ffi::CString, os::unix::ffi::OsStrExt};
+	use std::{
+		fs,
+		path::{Path, PathBuf},
+		time::{SystemTime, UNIX_EPOCH},
+	};
+
+	use super::classify_file_type;
+
+	struct TempDirGuard(PathBuf);
+
+	impl TempDirGuard {
+		fn new() -> Self {
+			let unique = SystemTime::now()
+				.duration_since(UNIX_EPOCH)
+				.expect("system time is after UNIX_EPOCH")
+				.as_nanos();
+			let path = std::env::temp_dir().join(format!("pi-fs-cache-test-{unique}"));
+			fs::create_dir_all(&path).expect("create temp test directory");
+			Self(path)
+		}
+
+		fn path(&self) -> &Path {
+			&self.0
+		}
+	}
+
+	impl Drop for TempDirGuard {
+		fn drop(&mut self) {
+			let _ = fs::remove_dir_all(&self.0);
+		}
+	}
+
+	#[cfg(unix)]
+	fn make_fifo(path: &Path) {
+		let fifo_path =
+			CString::new(path.as_os_str().as_bytes()).expect("fifo path has no NUL bytes");
+		let rc = unsafe { libc::mkfifo(fifo_path.as_ptr(), 0o600) };
+		assert_eq!(rc, 0, "create fifo: {}", std::io::Error::last_os_error());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn classify_file_type_skips_fifo() {
+		let root = TempDirGuard::new();
+		let fifo = root.path().join("skip-me.fifo");
+		make_fifo(&fifo);
+
+		assert_eq!(classify_file_type(&fifo), None);
 	}
 }

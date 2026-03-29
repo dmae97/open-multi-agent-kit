@@ -25,6 +25,25 @@ function getTextOutput(result: any): string {
 	);
 }
 
+function createFifoOrSkip(fifoPath: string): boolean {
+	if (process.platform === "win32") {
+		return false;
+	}
+
+	const mkfifoPath = Bun.which("mkfifo");
+	if (!mkfifoPath) {
+		return false;
+	}
+
+	const result = Bun.spawnSync([mkfifoPath, fifoPath], { stdout: "ignore", stderr: "pipe" });
+	if (result.exitCode !== 0) {
+		const errorText = result.stderr.toString("utf-8").trim();
+		throw new Error(`mkfifo failed${errorText ? `: ${errorText}` : ""}`);
+	}
+
+	return true;
+}
+
 let artifactCounter = 0;
 function createTestToolSession(cwd: string, settings: Settings = Settings.isolated()): ToolSession {
 	const sessionFile = path.join(cwd, "session.jsonl");
@@ -847,6 +866,31 @@ function b() {
 
 			const output = getTextOutput(result);
 			expect(output).toContain("ignored.txt");
+			expect(result.details?.fileCount).toBe(1);
+			expect(result.details?.matchCount).toBe(1);
+		});
+
+		it("should ignore FIFOs when searching a directory with gitignore disabled", async () => {
+			const scenarioDir = path.join(testDir, "grep-fifo-dir");
+			fs.mkdirSync(scenarioDir, { recursive: true });
+			fs.writeFileSync(path.join(scenarioDir, "match.txt"), "needle kept\n");
+			const fifoPath = path.join(scenarioDir, "blocked.fifo");
+
+			if (!createFifoOrSkip(fifoPath)) {
+				return;
+			}
+
+			const result = await grepTool.execute("test-call-16-fifo-dir", {
+				pattern: "needle",
+				path: scenarioDir,
+				gitignore: false,
+			});
+
+			const output = getTextOutput(result);
+			expect(output).toContain("match.txt");
+			expect(output).toContain("needle kept");
+			expect(output).not.toContain("blocked.fifo");
+			expect(output).not.toContain("## └─ blocked.fifo");
 			expect(result.details?.fileCount).toBe(1);
 			expect(result.details?.matchCount).toBe(1);
 		});

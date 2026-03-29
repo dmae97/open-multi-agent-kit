@@ -643,13 +643,24 @@ fn build_searcher(multiline: bool) -> Searcher {
 
 /// Read file bytes, returning `None` for oversized or binary files.
 fn read_file_bytes(path: &Path, prefer_text_fast_path: bool) -> io::Result<Option<FileBytes>> {
-	let file = File::open(path)?;
-	let metadata = file.metadata()?;
-	if metadata.len() > MAX_FILE_BYTES {
+	let metadata = std::fs::symlink_metadata(path)?;
+	let resolved_metadata = if metadata.file_type().is_symlink() {
+		let target_metadata = std::fs::metadata(path)?;
+		if !target_metadata.is_file() {
+			return Ok(None);
+		}
+		target_metadata
+	} else if metadata.is_file() {
+		metadata
+	} else {
 		return Ok(None);
-	} else if metadata.len() == 0 {
+	};
+	if resolved_metadata.len() > MAX_FILE_BYTES {
+		return Ok(None);
+	} else if resolved_metadata.len() == 0 {
 		return Ok(Some(FileBytes::Owned(Vec::new())));
 	}
+	let file = File::open(path)?;
 
 	let mapping = unsafe {
 		// SAFETY: The mapping is read-only and tied to the opened file handle.
@@ -661,25 +672,6 @@ fn read_file_bytes(path: &Path, prefer_text_fast_path: bool) -> io::Result<Optio
 	let bytes = if let Ok(mapped) = mapping {
 		FileBytes::Mapped(mapped)
 	} else {
-		// Resolve symlinks: if the path is a symlink, follow it and check the target.
-		// Reject FIFOs, sockets, block/char devices, and other non-regular-file types.
-		let file_type = metadata.file_type();
-		if file_type.is_symlink() {
-			// Follow the symlink and check the target's file type.
-			let target_metadata = std::fs::metadata(path)?;
-			if !target_metadata.is_file() {
-				return Err(io::Error::new(
-					io::ErrorKind::InvalidInput,
-					format!("not a regular file: {}", path.display()),
-				));
-			}
-		} else if !file_type.is_file() {
-			return Err(io::Error::new(
-				io::ErrorKind::InvalidInput,
-				format!("not a regular file: {}", path.display()),
-			));
-		}
-
 		FileBytes::Owned(std::fs::read(path)?)
 	};
 
@@ -1046,7 +1038,77 @@ fn build_regex_matcher(
 
 #[cfg(test)]
 mod tests {
-	use super::{escape_unescaped_parentheses, sanitize_braces};
+	#[cfg(unix)]
+	use std::{ffi::CString, os::unix::ffi::OsStrExt};
+	use std::{
+		fs,
+		path::{Path, PathBuf},
+		time::{SystemTime, UNIX_EPOCH},
+	};
+
+	use super::{GrepConfig, escape_unescaped_parentheses, grep_sync, sanitize_braces};
+	use crate::task;
+
+	struct TempDirGuard(PathBuf);
+
+	impl TempDirGuard {
+		fn new() -> Self {
+			let unique = SystemTime::now()
+				.duration_since(UNIX_EPOCH)
+				.expect("system time is after UNIX_EPOCH")
+				.as_nanos();
+			let path = std::env::temp_dir().join(format!("pi-grep-test-{unique}"));
+			fs::create_dir_all(&path).expect("create temp test directory");
+			Self(path)
+		}
+
+		fn path(&self) -> &Path {
+			&self.0
+		}
+	}
+
+	impl Drop for TempDirGuard {
+		fn drop(&mut self) {
+			let _ = fs::remove_dir_all(&self.0);
+		}
+	}
+
+	fn write_file(path: &Path, content: &str) {
+		if let Some(parent) = path.parent() {
+			fs::create_dir_all(parent).expect("create parent directories for test file");
+		}
+		fs::write(path, content).expect("write test file");
+	}
+
+	#[cfg(unix)]
+	fn make_fifo(path: &Path) {
+		let fifo_path =
+			CString::new(path.as_os_str().as_bytes()).expect("fifo path has no NUL bytes");
+		let rc = unsafe { libc::mkfifo(fifo_path.as_ptr(), 0o600) };
+		assert_eq!(rc, 0, "create fifo: {}", std::io::Error::last_os_error());
+	}
+
+	#[cfg(unix)]
+	fn base_grep_config(path: &Path) -> GrepConfig {
+		GrepConfig {
+			pattern:        "needle".to_string(),
+			path:           path.to_string_lossy().into_owned(),
+			glob:           None,
+			type_filter:    None,
+			ignore_case:    None,
+			multiline:      None,
+			hidden:         None,
+			gitignore:      Some(false),
+			cache:          Some(false),
+			max_count:      None,
+			offset:         None,
+			context_before: None,
+			context_after:  None,
+			context:        None,
+			max_columns:    None,
+			mode:           None,
+		}
+	}
 
 	#[test]
 	fn preserves_unicode_property_escapes() {
@@ -1088,6 +1150,41 @@ mod tests {
 			escape_unescaped_parentheses("fetchAnthropicProvider()").as_ref(),
 			r"fetchAnthropicProvider\(\)"
 		);
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn grep_directory_skips_fifo_entries() {
+		let root = TempDirGuard::new();
+		write_file(&root.path().join("regular.txt"), "needle\n");
+		make_fifo(&root.path().join("skip-me.fifo"));
+
+		let result =
+			grep_sync(base_grep_config(root.path()), None, None, task::CancelToken::default())
+				.expect("directory grep should succeed");
+
+		assert_eq!(result.total_matches, 1);
+		assert_eq!(result.files_with_matches, 1);
+		assert_eq!(result.files_searched, 1);
+		assert_eq!(result.matches.len(), 1);
+		assert_eq!(result.matches[0].path, "regular.txt");
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn grep_special_root_path_returns_empty_result() {
+		let root = TempDirGuard::new();
+		let fifo = root.path().join("direct.fifo");
+		make_fifo(&fifo);
+
+		let result = grep_sync(base_grep_config(&fifo), None, None, task::CancelToken::default())
+			.expect("special-file grep should return an empty result");
+
+		assert!(result.matches.is_empty());
+		assert_eq!(result.total_matches, 0);
+		assert_eq!(result.files_with_matches, 0);
+		assert_eq!(result.files_searched, 0);
+		assert_eq!(result.limit_reached, None);
 	}
 }
 
@@ -1299,6 +1396,16 @@ fn grep_sync(
 		multiline,
 	};
 	let searcher = build_searcher(multiline);
+
+	if !metadata.is_file() && !metadata.is_dir() {
+		return Ok(GrepResult {
+			matches:            Vec::new(),
+			total_matches:      0,
+			files_with_matches: 0,
+			files_searched:     0,
+			limit_reached:      None,
+		});
+	}
 
 	if metadata.is_file() {
 		if let Some(filter) = type_filter.as_ref()
