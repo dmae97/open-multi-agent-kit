@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.16.5] - 2026-03-29
+
 ### Added
 
 - Added Gemma 3 27B model support for Google Generative AI

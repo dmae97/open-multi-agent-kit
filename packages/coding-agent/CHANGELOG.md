@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.16.5] - 2026-03-29
+
 ### Fixed
 
 - Fixed `--model provider/id` resolving to wrong provider when model ID exists in multiple catalogs ([#560](https://github.com/can1357/oh-my-pi/issues/560))
