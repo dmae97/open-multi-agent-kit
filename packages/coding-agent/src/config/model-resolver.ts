@@ -730,9 +730,24 @@ export function resolveCliModel(options: {
 
 	if (!provider) {
 		const lower = cliModel.toLowerCase();
-		const exact = availableModels.find(
-			model => model.id.toLowerCase() === lower || `${model.provider}/${model.id}`.toLowerCase() === lower,
-		);
+		// When input has provider/id format (e.g. "zai/glm-5"), prefer decomposed
+		// provider+id match over flat id match. Without this, a model with id
+		// "zai/glm-5" on provider "vercel-ai-gateway" wins over provider "zai"
+		// with id "glm-5", because Array.find returns the first catalog hit.
+		const slashIdx = lower.indexOf("/");
+		let exact: (typeof availableModels)[number] | undefined;
+		if (slashIdx !== -1) {
+			const prefix = lower.substring(0, slashIdx);
+			const suffix = lower.substring(slashIdx + 1);
+			exact = availableModels.find(
+				model => model.provider.toLowerCase() === prefix && model.id.toLowerCase() === suffix,
+			);
+		}
+		if (!exact) {
+			exact = availableModels.find(
+				model => model.id.toLowerCase() === lower || `${model.provider}/${model.id}`.toLowerCase() === lower,
+			);
+		}
 		if (exact) {
 			return { model: exact, warning: undefined, thinkingLevel: undefined, error: undefined };
 		}

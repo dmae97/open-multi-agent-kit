@@ -551,6 +551,49 @@ describe("resolveCliModel", () => {
 		expect(result.model?.provider).toBe("openrouter");
 		expect(result.model?.id).toBe("qwen/qwen3-coder:exacto");
 	});
+
+	test("prefers decomposed provider+id over flat id match when ambiguous", () => {
+		// Simulates the zai/glm-5 bug: vercel-ai-gateway has id="zai/glm-5",
+		// zai has id="glm-5". Input "zai/glm-5" should resolve to provider=zai.
+		const ambiguousModels: Model<"anthropic-messages">[] = [
+			{
+				id: "zai/glm-5",
+				name: "GLM-5 (Vercel)",
+				api: "anthropic-messages",
+				provider: "vercel-ai-gateway",
+				baseUrl: "https://vercel.ai",
+				reasoning: false,
+				input: ["text"],
+				cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 1 },
+				contextWindow: 128000,
+				maxTokens: 4096,
+			},
+			{
+				id: "glm-5",
+				name: "GLM-5",
+				api: "anthropic-messages",
+				provider: "zai",
+				baseUrl: "https://api.z.ai",
+				reasoning: false,
+				input: ["text"],
+				cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 1 },
+				contextWindow: 128000,
+				maxTokens: 4096,
+			},
+		];
+		const registry = {
+			getAll: () => ambiguousModels,
+		} as unknown as Parameters<typeof resolveCliModel>[0]["modelRegistry"];
+
+		const result = resolveCliModel({
+			cliModel: "zai/glm-5",
+			modelRegistry: registry,
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.model?.provider).toBe("zai");
+		expect(result.model?.id).toBe("glm-5");
+	});
 });
 
 describe("parseModelString", () => {
