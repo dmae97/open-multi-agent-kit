@@ -58,7 +58,22 @@ export class MarketplaceManager {
 	// ── Marketplace lifecycle ─────────────────────────────────────────────────
 
 	async addMarketplace(source: string): Promise<MarketplaceRegistryEntry> {
-		const { catalog } = await fetchMarketplace(source, this.#opts.marketplacesCacheDir);
+		// Check for duplicate BEFORE fetching to avoid corrupting an existing marketplace's cache.
+		// For git/github sources, cloneAndReadCatalog renames the clone to <cacheDir>/<catalog.name>/,
+		// which would overwrite the existing marketplace's cached data.
+		const reg = await readMarketplacesRegistry(this.#opts.marketplacesRegistryPath);
+		const existingNames = new Set(reg.marketplaces.map(m => m.name));
+
+		const { catalog, clonePath } = await fetchMarketplace(source, this.#opts.marketplacesCacheDir);
+
+		if (existingNames.has(catalog.name)) {
+			// Clean up any clone that fetchMarketplace created before throwing
+			if (clonePath) {
+				await fs.rm(clonePath, { recursive: true, force: true }).catch(() => {});
+			}
+			throw new Error(`Marketplace "${catalog.name}" already exists`);
+		}
+
 		const sourceType = classifySource(source);
 		const normalizedSource =
 			sourceType === "local"
@@ -80,8 +95,6 @@ export class MarketplaceManager {
 			updatedAt: now,
 		};
 
-		const reg = await readMarketplacesRegistry(this.#opts.marketplacesRegistryPath);
-		// addMarketplaceEntry throws if name already exists — propagate to caller.
 		const updated = addMarketplaceEntry(reg, entry);
 		await writeMarketplacesRegistry(this.#opts.marketplacesRegistryPath, updated);
 
@@ -225,6 +238,15 @@ export class MarketplaceManager {
 		// The marketplace root for local sources should be the actual local path, but we only have
 		// sourceUri. For local sources, use path.resolve of sourceUri; for others use the cache dir.
 		const marketplaceClonePath = this.#resolveMarketplaceRoot(mktEntry);
+
+		// URL-sourced marketplaces only cache marketplace.json, not the full plugin tree.
+		// Relative string sources ("./plugins/foo") cannot be resolved against the cache dir.
+		if (mktEntry.sourceType === "url" && typeof pluginEntry.source === "string") {
+			throw new Error(
+				`Plugin "${name}" uses a relative source path but marketplace "${marketplace}" was added via URL. ` +
+					`Relative sources require a git or local marketplace. Re-add the marketplace using its git URL.`,
+			);
+		}
 
 		const { dir: sourcePath, tempCloneRoot } = await resolvePluginSource(pluginEntry, {
 			marketplaceClonePath,
