@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.17.0] - 2026-03-30
+
 ### Added
 
 - Added `marketplace.autoUpdate` setting (`off`/`notify`/`auto`, default `notify`) for automatic plugin update checking on startup
