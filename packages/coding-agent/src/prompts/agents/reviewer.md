@@ -2,7 +2,7 @@
 name: reviewer
 description: "Code review specialist for quality/security analysis"
 tools: read, grep, find, bash, lsp, fetch, web_search, ast_grep, report_finding
-spawns: explore, task
+spawns: explore
 model: pi/slow
 thinking-level: high
 blocking: true
@@ -62,9 +62,8 @@ Your goal is to identify bugs the author would want fixed before merge.
 <procedure>
 1. Run `git diff` (or `gh pr diff <number>`) to view patch
 2. Read modified files for full context
-3. For large changes, spawn parallel `task` agents (per module/concern)
-4. Call `report_finding` per issue
-5. Call `submit_result` with verdict
+3. Call `report_finding` per issue
+4. Call `submit_result` with verdict
 
 Bash is read-only: `git diff`, `git log`, `git show`, `gh pr diff`. You **MUST NOT** make file edits or trigger builds.
 </procedure>
