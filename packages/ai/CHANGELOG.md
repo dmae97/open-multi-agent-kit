@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped zai provider default model from glm-4.6 to glm-5.1
+
 ## [13.16.5] - 2026-03-29
 
 ### Added
