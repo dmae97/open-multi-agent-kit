@@ -1,14 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-### Removed
-
-- Removed grep.app code search provider support; code search now uses Exa exclusively
-- Removed `providers.codeSearch` setting and related configuration options
-
-### Fixed
-
-- Fixed MCP tools from newly added servers not being activated after `/mcp add` — `refreshMCPTools` preserves prior MCP tool selections, so brand-new servers had their tools registered in the registry but never passed to the agent; tools are now explicitly activated on successful connection
 
 ### Added
 
@@ -35,8 +27,22 @@
 - Added `/marketplace` TUI slash command with subcommands: add, remove, update, list, discover, install, uninstall, installed
 - Added `/plugins` TUI slash command to view all installed plugins (npm + marketplace) and enable/disable marketplace plugins
 
+### Changed
+
+- Changed marketplace clone promotion to occur after duplicate and drift checks, improving safety of concurrent marketplace operations
+
+### Removed
+
+- Removed grep.app code search provider support; code search now uses Exa exclusively
+- Removed `providers.codeSearch` setting and related configuration options
+
 ### Fixed
 
+- Fixed git-subdir plugin source resolution to properly clean up temporary clone directories on path validation errors
+- Fixed LSP config loading to use correct filenames variable when scanning plugin roots
+- Fixed plugin selector UI to request render on cancel, preventing stale display state
+- Fixed marketplace install command error handling to display user-friendly error messages instead of crashing
+- Fixed MCP tools from newly added servers not being activated after `/mcp add` — `refreshMCPTools` preserves prior MCP tool selections, so brand-new servers had their tools registered in the registry but never passed to the agent; tools are now explicitly activated on successful connection
 - Fixed `skill://` URI resolver to handle namespaced skills via longest-prefix matching against registered skill names
 
 ## [13.16.5] - 2026-03-29

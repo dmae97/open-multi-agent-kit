@@ -13,7 +13,7 @@ import * as path from "node:path";
 import { isEnoent, logger } from "@oh-my-pi/pi-utils";
 
 import { cachePlugin } from "./cache";
-import { classifySource, fetchMarketplace, parseMarketplaceCatalog } from "./fetcher";
+import { classifySource, fetchMarketplace, parseMarketplaceCatalog, promoteCloneToCache } from "./fetcher";
 import {
 	addInstalledPlugin,
 	addMarketplaceEntry,
@@ -58,20 +58,21 @@ export class MarketplaceManager {
 	// ── Marketplace lifecycle ─────────────────────────────────────────────────
 
 	async addMarketplace(source: string): Promise<MarketplaceRegistryEntry> {
-		// Check for duplicate BEFORE fetching to avoid corrupting an existing marketplace's cache.
-		// For git/github sources, cloneAndReadCatalog renames the clone to <cacheDir>/<catalog.name>/,
-		// which would overwrite the existing marketplace's cached data.
 		const reg = await readMarketplacesRegistry(this.#opts.marketplacesRegistryPath);
 		const existingNames = new Set(reg.marketplaces.map(m => m.name));
 
 		const { catalog, clonePath } = await fetchMarketplace(source, this.#opts.marketplacesCacheDir);
 
 		if (existingNames.has(catalog.name)) {
-			// Clean up any clone that fetchMarketplace created before throwing
 			if (clonePath) {
 				await fs.rm(clonePath, { recursive: true, force: true }).catch(() => {});
 			}
 			throw new Error(`Marketplace "${catalog.name}" already exists`);
+		}
+
+		// Promote the temp clone to its final cache location now that we know it's not a duplicate.
+		if (clonePath) {
+			await promoteCloneToCache(clonePath, this.#opts.marketplacesCacheDir, catalog.name);
 		}
 
 		const sourceType = classifySource(source);
@@ -123,15 +124,23 @@ export class MarketplaceManager {
 			throw new Error(`Marketplace "${name}" not found`);
 		}
 
-		const { catalog } = await fetchMarketplace(existing.sourceUri, this.#opts.marketplacesCacheDir);
+		const { catalog, clonePath } = await fetchMarketplace(existing.sourceUri, this.#opts.marketplacesCacheDir);
 
 		// Guard against upstream catalog silently renaming itself — the registry
 		// entry is keyed by name, so a drift would corrupt the entry on next read.
 		if (catalog.name !== name) {
+			if (clonePath) {
+				await fs.rm(clonePath, { recursive: true, force: true }).catch(() => {});
+			}
 			throw new Error(
 				`Marketplace catalog name changed from "${name}" to "${catalog.name}". ` +
 					`Remove and re-add the marketplace to update.`,
 			);
+		}
+
+		// Promote the temp clone to its final cache location now that drift check passed.
+		if (clonePath) {
+			await promoteCloneToCache(clonePath, this.#opts.marketplacesCacheDir, catalog.name);
 		}
 
 		// Overwrite cached catalog

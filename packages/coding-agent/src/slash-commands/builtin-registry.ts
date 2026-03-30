@@ -584,7 +584,11 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<BuiltinSlashCommandSpec> = [
 
 			// /marketplace (no args) or /marketplace install (no args) → interactive browser
 			if ((sub === "install" && !rest) || (!args[0] && !command.args.trim())) {
-				runtime.ctx.showPluginSelector("install");
+				try {
+					runtime.ctx.showPluginSelector("install");
+				} catch (err) {
+					runtime.ctx.showStatus(`Marketplace error: ${err}`);
+				}
 				return;
 			}
 

@@ -456,7 +456,7 @@ export class SelectorController {
 				};
 			});
 			this.showSelector(done => {
-				const selector = new PluginSelectorComponent(0, items, new Set(), {
+				const selector = new PluginSelectorComponent(marketplaces.length, items, new Set(), {
 					onSelect: async (name, marketplace) => {
 						done();
 						const pluginId = `${name}@${marketplace}`;
@@ -470,7 +470,10 @@ export class SelectorController {
 						}
 						this.ctx.ui.requestRender();
 					},
-					onCancel: () => done(),
+					onCancel: () => {
+						done();
+						this.ctx.ui.requestRender();
+					},
 				});
 				return { component: selector, focus: selector.getSelectList() };
 			});
@@ -504,7 +507,10 @@ export class SelectorController {
 					}
 					this.ctx.ui.requestRender();
 				},
-				onCancel: () => done(),
+				onCancel: () => {
+					done();
+					this.ctx.ui.requestRender();
+				},
 			});
 			return { component: selector, focus: selector.getSelectList() };
 		});

@@ -252,7 +252,7 @@ function getConfigPaths(cwd: string): string[] {
 	// Plugin LSP configs (from marketplace/--plugin-dir roots)
 	const pluginRoots = getPreloadedPluginRoots();
 	for (const root of pluginRoots) {
-		for (const filename of ["lsp.json", ".lsp.json"]) {
+		for (const filename of filenames) {
 			paths.push(path.join(root.path, filename));
 		}
 	}

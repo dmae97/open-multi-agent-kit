@@ -113,7 +113,12 @@ async function resolveObjectSource(
 				await fs.rm(cloneDir, { recursive: true, force: true });
 				throw new Error(`git-subdir path "${source.path}" escapes the cloned repository`);
 			}
-			await verifyDirExists(subdirPath, `git-subdir path "${source.path}" does not exist in cloned repository`);
+			try {
+				await verifyDirExists(subdirPath, `git-subdir path "${source.path}" does not exist in cloned repository`);
+			} catch (err) {
+				await fs.rm(cloneDir, { recursive: true, force: true });
+				throw err;
+			}
 			return { dir: subdirPath, tempCloneRoot: cloneDir };
 		}
 

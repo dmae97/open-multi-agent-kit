@@ -162,6 +162,8 @@ export function parseMarketplaceCatalog(content: string, filePath: string): Mark
 					`plugins[${i}].source.package`,
 					filePath,
 				);
+			} else {
+				assertField(false, `plugins[${i}].source.source (unknown variant: "${variant}")`, filePath);
 			}
 		}
 	}
@@ -249,9 +251,9 @@ export async function fetchMarketplace(source: string, cacheDir: string): Promis
 /**
  * Clone a git repository and read its marketplace catalog.
  *
- * Clones to a temp directory first, reads the catalog to determine the
- * canonical name, then renames the temp dir to the final location.
- * Cleans up on any failure to avoid leaving partial state in cacheDir.
+ * Clones to a temporary directory and reads the catalog. The caller is
+ * responsible for promoting the clone to its final cache location via
+ * `promoteCloneToCache` after any duplicate/drift checks pass.
  */
 async function cloneAndReadCatalog(url: string, cacheDir: string): Promise<FetchResult> {
 	if (!Bun.which("git")) {
@@ -290,11 +292,20 @@ async function cloneAndReadCatalog(url: string, cacheDir: string): Promise<Fetch
 		throw err;
 	}
 
-	const finalDir = path.join(cacheDir, catalog.name);
+	return { catalog, clonePath: tmpDir };
+}
+
+/**
+ * Promote a temporary clone directory to its final cache location.
+ *
+ * Callers should invoke this only after duplicate/drift checks pass.
+ * Removes any existing directory at the target path before renaming.
+ */
+export async function promoteCloneToCache(tmpDir: string, cacheDir: string, name: string): Promise<string> {
+	const finalDir = path.join(cacheDir, name);
 	await fs.rm(finalDir, { recursive: true, force: true });
 	await fs.rename(tmpDir, finalDir);
-
-	return { catalog, clonePath: finalDir };
+	return finalDir;
 }
 
 /**
