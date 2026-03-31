@@ -10,7 +10,7 @@ import { getRoleInfo } from "../../config/model-registry";
 import { settings } from "../../config/settings";
 import { DebugSelectorComponent } from "../../debug";
 import { disableProvider, enableProvider } from "../../discovery";
-import { clearClaudePluginRootsCache } from "../../discovery/helpers";
+import { clearClaudePluginRootsCache, resolveActiveProjectRegistryPath } from "../../discovery/helpers";
 import {
 	getInstalledPluginsRegistryPath,
 	getMarketplacesCacheDir,
@@ -430,12 +430,14 @@ export class SelectorController {
 		const mgr = new MarketplaceManager({
 			marketplacesRegistryPath: getMarketplacesRegistryPath(),
 			installedRegistryPath: getInstalledPluginsRegistryPath(),
+			projectInstalledRegistryPath: (await resolveActiveProjectRegistryPath(getProjectDir())) ?? undefined,
 			marketplacesCacheDir: getMarketplacesCacheDir(),
 			pluginsCacheDir: getPluginsCacheDir(),
-			clearPluginRootsCache: () => {
+			clearPluginRootsCache: (extraPaths?: readonly string[]) => {
 				const home = os.homedir();
 				invalidateFsCache(path.join(home, ".claude", "plugins", "installed_plugins.json"));
 				invalidateFsCache(path.join(home, getConfigDirName(), "plugins", "installed_plugins.json"));
+				for (const p of extraPaths ?? []) invalidateFsCache(p);
 				clearClaudePluginRootsCache();
 			},
 		});
