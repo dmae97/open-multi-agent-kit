@@ -447,7 +447,15 @@ export class MarketplaceManager {
 			? await readInstalledPluginsRegistry(this.#opts.projectInstalledRegistryPath)
 			: null;
 
-		const projectIds = new Set(projectReg ? Object.keys(projectReg.plugins) : []);
+		// Only enabled project installs shadow user installs — a disabled project copy leaves
+		// the user entry as the active one and must not be reported as shadowed.
+		const activeProjectIds = new Set(
+			projectReg
+				? Object.entries(projectReg.plugins)
+						.filter(([, entries]) => entries.length > 0 && entries[0].enabled !== false)
+						.map(([id]) => id)
+				: [],
+		);
 		const results: InstalledPluginSummary[] = [];
 
 		// Project entries first
@@ -462,7 +470,7 @@ export class MarketplaceManager {
 				id,
 				scope: "user",
 				entries,
-				...(projectIds.has(id) ? { shadowedBy: "project" as const } : {}),
+				...(activeProjectIds.has(id) ? { shadowedBy: "project" as const } : {}),
 			});
 		}
 		return results;
