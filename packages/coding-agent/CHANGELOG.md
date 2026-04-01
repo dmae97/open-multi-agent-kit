@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.17.4] - 2026-04-01
 ### Added
 
 - Support for writing to archive entries in `.tar`, `.tar.gz`, `.tgz`, and `.zip` files using `archive.ext:path/inside/archive` syntax
