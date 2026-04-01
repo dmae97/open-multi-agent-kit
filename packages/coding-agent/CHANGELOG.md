@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.17.3] - 2026-04-01
+
 ### Added
 
 - Added support for converting Jupyter notebooks (`.ipynb`) to markdown via markit
