@@ -507,6 +507,7 @@ return config
 | Qwen Portal (`qwen-portal`)                     | `QWEN_OAUTH_TOKEN` or `QWEN_PORTAL_API_KEY`  |
 | vLLM (`vllm`)                                   | `VLLM_API_KEY`                               |
 | Cloudflare AI Gateway (`cloudflare-ai-gateway`) | `CLOUDFLARE_AI_GATEWAY_API_KEY`              |
+| Vercel AI Gateway (`vercel-ai-gateway`)         | `AI_GATEWAY_API_KEY`                         |
 | Qianfan (`qianfan`)                             | `QIANFAN_API_KEY`                            |
 
 See [Environment Variables](docs/environment-variables.md) for the full list.
@@ -544,6 +545,7 @@ Use `/login` with supported providers:
 - MiniMax Coding Plan (International / China)
 - Qwen Portal (`qwen-portal`)
 - Cloudflare AI Gateway (`cloudflare-ai-gateway`)
+- Vercel AI Gateway (`vercel-ai-gateway`)
 
 For `ollama`, API key is optional. Leave it unset for local no-auth instances, or set `OLLAMA_API_KEY` for authenticated hosts.
 For `llama.cpp`, API key is optional. Leave it unset for local no-auth instances, or set `LLAMA_CPP_API_KEY` for authenticated hosts.
