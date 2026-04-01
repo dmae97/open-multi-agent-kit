@@ -181,9 +181,6 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 			const providerSessionState = getOpenAIResponsesProviderSessionState(model, options?.providerSessionState);
 			const { params } = buildParams(model, context, options, providerSessionState, baseUrl);
 			const idleTimeoutMs = getOpenAIStreamIdleTimeoutMs();
-			const firstEventWatchdog = createFirstEventWatchdog(getStreamFirstEventTimeoutMs(idleTimeoutMs), () =>
-				abortTracker.abortLocally(firstEventTimeoutAbortError),
-			);
 			options?.onPayload?.(params);
 			rawRequestDump = {
 				provider: model.provider,
@@ -194,6 +191,9 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 				body: params,
 			};
 			const openaiStream = await client.responses.create(params, { signal: requestSignal });
+			const firstEventWatchdog = createFirstEventWatchdog(getStreamFirstEventTimeoutMs(idleTimeoutMs), () =>
+				abortTracker.abortLocally(firstEventTimeoutAbortError),
+			);
 			if (copilotPremiumRequests !== undefined) output.usage.premiumRequests = copilotPremiumRequests;
 			stream.push({ type: "start", partial: output });
 

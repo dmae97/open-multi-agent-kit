@@ -1,7 +1,7 @@
 import { $env } from "@oh-my-pi/pi-utils";
 
 const DEFAULT_OPENAI_STREAM_IDLE_TIMEOUT_MS = 45_000;
-const DEFAULT_STREAM_FIRST_EVENT_TIMEOUT_MS = 15_000;
+const DEFAULT_STREAM_FIRST_EVENT_TIMEOUT_MS = 45_000;
 
 function normalizeIdleTimeoutMs(value: string | undefined, fallback: number): number | undefined {
 	if (value === undefined) return fallback;
@@ -22,14 +22,16 @@ export function getOpenAIStreamIdleTimeoutMs(): number | undefined {
 
 /**
  * Returns the timeout used while waiting for the first stream event.
+ * The first token can legitimately take longer than later inter-event gaps,
+ * so the default never undershoots the steady-state idle timeout.
  *
  * Set `PI_STREAM_FIRST_EVENT_TIMEOUT_MS=0` to disable the watchdog.
  */
 export function getStreamFirstEventTimeoutMs(idleTimeoutMs?: number): number | undefined {
-	const fallback = Math.min(
-		DEFAULT_STREAM_FIRST_EVENT_TIMEOUT_MS,
-		idleTimeoutMs ?? DEFAULT_STREAM_FIRST_EVENT_TIMEOUT_MS,
-	);
+	const fallback =
+		idleTimeoutMs === undefined
+			? DEFAULT_STREAM_FIRST_EVENT_TIMEOUT_MS
+			: Math.max(DEFAULT_STREAM_FIRST_EVENT_TIMEOUT_MS, idleTimeoutMs);
 	return normalizeIdleTimeoutMs($env.PI_STREAM_FIRST_EVENT_TIMEOUT_MS, fallback);
 }
 

@@ -129,9 +129,6 @@ export const streamAzureOpenAIResponses: StreamFunction<"azure-openai-responses"
 			const { baseUrl } = resolveAzureConfig(model, options);
 			const params = buildParams(model, context, options, deploymentName, baseUrl);
 			const idleTimeoutMs = getOpenAIStreamIdleTimeoutMs();
-			const firstEventWatchdog = createFirstEventWatchdog(getStreamFirstEventTimeoutMs(idleTimeoutMs), () =>
-				abortTracker.abortLocally(firstEventTimeoutAbortError),
-			);
 			options?.onPayload?.(params);
 			rawRequestDump = {
 				provider: model.provider,
@@ -142,6 +139,9 @@ export const streamAzureOpenAIResponses: StreamFunction<"azure-openai-responses"
 				body: params,
 			};
 			const openaiStream = await client.responses.create(params, { signal: requestSignal });
+			const firstEventWatchdog = createFirstEventWatchdog(getStreamFirstEventTimeoutMs(idleTimeoutMs), () =>
+				abortTracker.abortLocally(firstEventTimeoutAbortError),
+			);
 			stream.push({ type: "start", partial: output });
 
 			await processResponsesStream(

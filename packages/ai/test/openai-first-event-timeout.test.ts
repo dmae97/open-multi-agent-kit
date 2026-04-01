@@ -3,7 +3,7 @@ import { getBundledModel } from "../src/models";
 import { streamAzureOpenAIResponses } from "../src/providers/azure-openai-responses";
 import { streamOpenAICompletions } from "../src/providers/openai-completions";
 import { streamOpenAIResponses } from "../src/providers/openai-responses";
-import type { Context, Model } from "../src/types";
+import type { Context, Model, TextContent } from "../src/types";
 
 const originalFetch = global.fetch;
 const originalFirstEventTimeout = Bun.env.PI_STREAM_FIRST_EVENT_TIMEOUT_MS;
@@ -83,6 +83,106 @@ function createHangingFetch(): typeof fetch {
 	return Object.assign(mockFetch, { preconnect: originalFetch.preconnect });
 }
 
+function createSseResponse(events: unknown[]): Response {
+	const payload = `${events.map(event => `data: ${typeof event === "string" ? event : JSON.stringify(event)}`).join("\n\n")}\n\n`;
+	return new Response(payload, {
+		status: 200,
+		headers: { "content-type": "text/event-stream" },
+	});
+}
+
+async function waitForDelayOrAbort(delayMs: number, signal: AbortSignal | undefined): Promise<void> {
+	if (signal?.aborted) {
+		const reason = signal.reason;
+		throw reason instanceof Error ? reason : new Error(String(reason ?? "request aborted"));
+	}
+
+	const { promise, resolve, reject } = Promise.withResolvers<void>();
+	const timer = setTimeout(() => resolve(), delayMs);
+	const onAbort = () => {
+		const reason = signal?.reason;
+		reject(reason instanceof Error ? reason : new Error(String(reason ?? "request aborted")));
+	};
+	signal?.addEventListener("abort", onAbort, { once: true });
+
+	try {
+		await promise;
+	} finally {
+		clearTimeout(timer);
+		signal?.removeEventListener("abort", onAbort);
+	}
+}
+
+function createDelayedFetch(delayMs: number, responseFactory: () => Response): typeof fetch {
+	async function mockFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
+		await waitForDelayOrAbort(delayMs, getRequestSignal(input, init));
+		return responseFactory();
+	}
+
+	return Object.assign(mockFetch, { preconnect: originalFetch.preconnect });
+}
+
+function createOpenAIResponsesSuccessResponse(): Response {
+	return createSseResponse([
+		{ type: "response.created", response: { id: "resp_delayed" } },
+		{
+			type: "response.output_item.added",
+			item: { type: "message", id: "msg_delayed", role: "assistant", status: "in_progress", content: [] },
+		},
+		{ type: "response.content_part.added", part: { type: "output_text", text: "" } },
+		{ type: "response.output_text.delta", delta: "Hello delayed" },
+		{
+			type: "response.output_item.done",
+			item: {
+				type: "message",
+				id: "msg_delayed",
+				role: "assistant",
+				status: "completed",
+				content: [{ type: "output_text", text: "Hello delayed" }],
+			},
+		},
+		{
+			type: "response.completed",
+			response: {
+				id: "resp_delayed",
+				status: "completed",
+				usage: {
+					input_tokens: 5,
+					output_tokens: 2,
+					total_tokens: 7,
+					input_tokens_details: { cached_tokens: 0 },
+				},
+			},
+		},
+	]);
+}
+
+function createOpenAICompletionsSuccessResponse(modelId: string): Response {
+	return createSseResponse([
+		{
+			id: "chatcmpl-delayed",
+			object: "chat.completion.chunk",
+			created: 0,
+			model: modelId,
+			choices: [{ index: 0, delta: { content: "Hello delayed" } }],
+		},
+		{
+			id: "chatcmpl-delayed",
+			object: "chat.completion.chunk",
+			created: 0,
+			model: modelId,
+			choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+			usage: {
+				prompt_tokens: 5,
+				completion_tokens: 2,
+				total_tokens: 7,
+				prompt_tokens_details: { cached_tokens: 0 },
+			},
+		},
+		"[DONE]",
+	]);
+}
+
 async function expectFirstEventTimeout(
 	run: () => Promise<{ stopReason: string; errorMessage?: string }>,
 	expectedMessage: string,
@@ -110,6 +210,25 @@ async function expectCallerAbort(
 	expect(result.stopReason).toBe("aborted");
 	expect(result.errorMessage).not.toBe(unexpectedMessage);
 	expect((result.errorMessage ?? "").toLowerCase()).toContain("abort");
+}
+
+function getFirstTextContent(result: { content: unknown[] }): TextContent | undefined {
+	return result.content.find((content): content is TextContent => {
+		return typeof content === "object" && content !== null && "type" in content && content.type === "text";
+	});
+}
+
+async function expectDelayedRequestSetupSucceeds(
+	run: () => Promise<{ stopReason: string; content: unknown[] }>,
+	responseFactory: () => Response,
+): Promise<void> {
+	Bun.env.PI_STREAM_FIRST_EVENT_TIMEOUT_MS = "20";
+	global.fetch = createDelayedFetch(30, responseFactory);
+
+	const result = await run();
+
+	expect(result.stopReason).toBe("stop");
+	expect(getFirstTextContent(result)).toMatchObject({ type: "text", text: "Hello delayed" });
 }
 
 afterEach(() => {
@@ -180,6 +299,32 @@ describe("OpenAI-family first-event timeouts", () => {
 					signal,
 				}).result(),
 			"Azure OpenAI responses stream timed out while waiting for the first event",
+		);
+	});
+
+	it("does not arm the OpenAI responses first-event watchdog before the stream request exists", async () => {
+		await expectDelayedRequestSetupSucceeds(
+			() => streamOpenAIResponses(openAIResponsesModel, baseContext(), { apiKey: "test-key" }).result(),
+			createOpenAIResponsesSuccessResponse,
+		);
+	});
+
+	it("does not arm the OpenAI completions first-event watchdog before the stream request exists", async () => {
+		await expectDelayedRequestSetupSucceeds(
+			() => streamOpenAICompletions(openAICompletionsModel, baseContext(), { apiKey: "test-key" }).result(),
+			() => createOpenAICompletionsSuccessResponse(openAICompletionsModel.id),
+		);
+	});
+
+	it("does not arm the Azure OpenAI responses first-event watchdog before the stream request exists", async () => {
+		await expectDelayedRequestSetupSucceeds(
+			() =>
+				streamAzureOpenAIResponses(azureOpenAIResponsesModel, baseContext(), {
+					apiKey: "test-key",
+					azureBaseUrl: azureOpenAIResponsesModel.baseUrl,
+					azureApiVersion: "v1",
+				}).result(),
+			createOpenAIResponsesSuccessResponse,
 		);
 	});
 });

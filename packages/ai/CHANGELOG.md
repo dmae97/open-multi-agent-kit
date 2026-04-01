@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Increased default first-event timeout from 15s to 45s to better accommodate longer request setup times
+- Modified first-event watchdog to inherit idle timeout when it exceeds the default, ensuring consistent timeout behavior across different configurations
+
+### Fixed
+
+- Fixed first-event watchdog initialization timing so it no longer starts before the actual stream request is created, preventing premature timeouts during request setup
+- Fixed first-event watchdog timing so OpenAI-family providers no longer count slow request setup against the first streamed event timeout, and raised the default first-event timeout to avoid false aborts after long tool turns
 
 ## [13.17.2] - 2026-04-01
 
