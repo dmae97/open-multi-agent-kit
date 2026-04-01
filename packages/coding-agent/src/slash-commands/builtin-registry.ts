@@ -579,6 +579,7 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<BuiltinSlashCommandSpec> = [
 			{ name: "uninstall", description: "Uninstall a plugin (selector if no args)", usage: "[name@marketplace]" },
 			{ name: "installed", description: "List installed marketplace plugins" },
 			{ name: "upgrade", description: "Upgrade outdated plugins", usage: "[name@marketplace]" },
+			{ name: "help", description: "Show usage guide" },
 		],
 		allowArgs: true,
 		handle: async (command, runtime) => {
@@ -648,7 +649,14 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<BuiltinSlashCommandSpec> = [
 					case "discover": {
 						const plugins = await mgr.listAvailablePlugins(rest || undefined);
 						if (plugins.length === 0) {
-							runtime.ctx.showStatus("No plugins available");
+							const marketplaces = await mgr.listMarketplaces();
+							if (marketplaces.length === 0) {
+								runtime.ctx.showStatus(
+									"No marketplaces configured. Try:\n  /marketplace add anthropics/claude-plugins-official",
+								);
+							} else {
+								runtime.ctx.showStatus("No plugins available in configured marketplaces");
+							}
 						} else {
 							const lines = plugins.map(
 								p =>
@@ -725,20 +733,46 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<BuiltinSlashCommandSpec> = [
 						}
 						break;
 					}
+					case "help": {
+						runtime.ctx.showStatus(
+							[
+								"Marketplace commands:",
+								"  /marketplace                              Browse and install plugins",
+								"  /marketplace add <source>                  Add a marketplace (e.g. owner/repo)",
+								"  /marketplace remove <name>                 Remove a marketplace",
+								"  /marketplace update [name]                 Re-fetch catalog(s)",
+								"  /marketplace list                          List configured marketplaces",
+								"  /marketplace discover [marketplace]        Browse available plugins",
+								"  /marketplace install <name@marketplace>    Install a plugin",
+								"  /marketplace uninstall <name@marketplace>  Uninstall a plugin",
+								"  /marketplace installed                     List installed plugins",
+								"  /marketplace upgrade [name@marketplace]    Upgrade plugin(s)",
+								"",
+								"Quick start:",
+								"  /marketplace add anthropics/claude-plugins-official",
+								"  /marketplace                               (opens interactive browser)",
+							].join("\n"),
+						);
+						break;
+					}
 					default: {
-						// Default to list marketplaces
 						const marketplaces = await mgr.listMarketplaces();
 						if (marketplaces.length === 0) {
-							runtime.ctx.showStatus("No marketplaces configured. Use /marketplace add <source>");
+							runtime.ctx.showStatus(
+								"No marketplaces configured.\n\nGet started:\n  /marketplace add anthropics/claude-plugins-official\n\nThen browse plugins with /marketplace or /marketplace discover",
+							);
 						} else {
 							const lines = marketplaces.map(m => `  ${m.name}  ${m.sourceUri}`);
-							runtime.ctx.showStatus(`Marketplaces:\n${lines.join("\n")}`);
+							runtime.ctx.showStatus(
+								`Marketplaces:\n${lines.join("\n")}\n\nUse /marketplace discover to browse plugins, or /marketplace help for all commands`,
+							);
 						}
 						break;
 					}
 				}
 			} catch (err) {
-				runtime.ctx.showStatus(`Marketplace error: ${err}`);
+				const msg = err instanceof Error ? err.message : String(err);
+				runtime.ctx.showStatus(`Marketplace error: ${msg}`);
 			}
 		},
 	},

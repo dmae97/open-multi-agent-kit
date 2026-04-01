@@ -1,9 +1,9 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added `/marketplace help` command to display usage guide for all marketplace operations
 - Added dedicated `gh-renderer.ts` module for rich terminal rendering of GitHub Actions workflow runs with live status snapshots and job details
 - Added `gh_pr_checkout` tool to check out GitHub pull requests into dedicated git worktrees with contributor push metadata
 - Added `gh_pr_push` tool to push checked-out pull request branches back to their source branches
@@ -34,12 +34,16 @@
 
 ### Changed
 
+- Improved marketplace catalog parsing to skip invalid plugin entries with warnings instead of failing the entire catalog load
+- Enhanced `/marketplace discover` command to suggest adding the official marketplace when no plugins are available
+- Improved `/marketplace` command messaging with clearer guidance for first-time setup and available commands
 - Enhanced `gh_run_watch` tool call rendering to display animated spinner status and target description (run ID, branch, or current HEAD) with improved visual hierarchy
 - Enhanced `gh_pr_view` tool to include inline review comments alongside pull request reviews for improved discussion context
 - Improved `gh_run_watch` tool output rendering with dedicated visual component for streaming run snapshots and job status updates
 
 ### Fixed
 
+- Fixed marketplace error messages to display error details instead of object stringification
 - Fixed artifact storage for non-persistent sessions to use in-memory fallback instead of returning undefined, enabling proper spill truncation for all session types
 - Fixed prompt file formatting to include trailing newlines at EOF for consistency across all prompt markdown files
 - Fixed `gh_pr_diff` to preserve raw patch content instead of normalizing tabs and whitespace
