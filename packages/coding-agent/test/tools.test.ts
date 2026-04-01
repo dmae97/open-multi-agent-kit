@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -14,6 +14,7 @@ import { GrepTool } from "@oh-my-pi/pi-coding-agent/tools/grep";
 import { wrapToolWithMetaNotice } from "@oh-my-pi/pi-coding-agent/tools/output-meta";
 import { ReadTool } from "@oh-my-pi/pi-coding-agent/tools/read";
 import { WriteTool } from "@oh-my-pi/pi-coding-agent/tools/write";
+import * as markitUtils from "@oh-my-pi/pi-coding-agent/utils/markit";
 import { Snowflake } from "@oh-my-pi/pi-utils";
 
 // Helper to extract text from content blocks
@@ -233,6 +234,8 @@ describe("Coding Agent Tools", () => {
 	});
 
 	afterEach(() => {
+		vi.restoreAllMocks();
+
 		// Clean up test directory
 		fs.rmSync(testDir, { recursive: true, force: true });
 
@@ -259,6 +262,36 @@ describe("Coding Agent Tools", () => {
 			// No truncation message since file fits within limits
 			expect(getTextOutput(result)).not.toContain("Use offset=");
 			expect(result.details?.truncation).toBeUndefined();
+		});
+
+		it("should convert ipynb files through markit before rendering", async () => {
+			const notebookPath = path.join(testDir, "notebook.ipynb");
+			const notebook = {
+				cells: [
+					{
+						cell_type: "markdown",
+						metadata: {},
+						source: ["# Notebook Title\n", "\n", "Notebook body\n"],
+					},
+				],
+				metadata: {},
+				nbformat: 4,
+				nbformat_minor: 5,
+			};
+			fs.writeFileSync(notebookPath, JSON.stringify(notebook));
+
+			const convertSpy = vi.spyOn(markitUtils, "convertFileWithMarkit").mockResolvedValue({
+				ok: true,
+				content: "# Notebook Title\n\nNotebook body\n",
+			});
+
+			const result = await readTool.execute("test-call-ipynb", { path: notebookPath });
+			const output = getTextOutput(result);
+
+			expect(convertSpy).toHaveBeenCalledTimes(1);
+			expect(output).toContain("# Notebook Title");
+			expect(output).toContain("Notebook body");
+			expect(output).not.toContain('"cell_type"');
 		});
 
 		it("should handle non-existent files", async () => {

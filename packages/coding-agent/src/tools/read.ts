@@ -5,7 +5,7 @@ import type { ImageContent, TextContent } from "@oh-my-pi/pi-ai";
 import { glob } from "@oh-my-pi/pi-natives";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
-import { getRemoteDir, ptree, untilAborted } from "@oh-my-pi/pi-utils";
+import { getRemoteDir, untilAborted } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
@@ -26,15 +26,15 @@ import {
 import { renderCodeCell, renderStatusLine } from "../tui";
 import { CachedOutputBlock } from "../tui/output-block";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
-import { ArchiveReader, openArchive, parseArchivePathCandidates } from "./archive-reader";
 import {
 	ImageInputTooLargeError,
 	loadImageInput,
 	MAX_IMAGE_INPUT_BYTES,
 	readImageMetadata,
 } from "../utils/image-input";
+import { convertFileWithMarkit } from "../utils/markit";
 import { detectSupportedImageMimeTypeFromFile } from "../utils/mime";
-import { ensureTool } from "../utils/tools-manager";
+import { type ArchiveReader, openArchive, parseArchivePathCandidates } from "./archive-reader";
 import { applyListLimit } from "./list-limit";
 import { formatFullOutputReference, formatStyledTruncationWarning, type OutputMeta } from "./output-meta";
 import { resolveReadPath } from "./path-utils";
@@ -42,8 +42,19 @@ import { formatAge, formatBytes, shortenPath, wrapBrackets } from "./render-util
 import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";
 
-// Document types convertible via markitdown
-const CONVERTIBLE_EXTENSIONS = new Set([".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx", ".rtf", ".epub"]);
+// Document types converted to markdown via markit.
+const CONVERTIBLE_EXTENSIONS = new Set([
+	".pdf",
+	".doc",
+	".docx",
+	".ppt",
+	".pptx",
+	".xls",
+	".xlsx",
+	".rtf",
+	".epub",
+	".ipynb",
+]);
 
 // Remote mount path prefix (sshfs mounts) - skip fuzzy matching to avoid hangs
 const REMOTE_MOUNT_PREFIX = getRemoteDir() + path.sep;
@@ -314,33 +325,6 @@ async function findUniqueSuffixMatch(
 	};
 }
 
-async function convertWithMarkitdown(
-	filePath: string,
-	signal?: AbortSignal,
-): Promise<{ content: string; ok: boolean; error?: string }> {
-	const cmd = await ensureTool("markitdown", { signal, silent: true });
-	if (!cmd) {
-		return { content: "", ok: false, error: "markitdown not found (uv/pip unavailable)" };
-	}
-
-	const result = await ptree.exec([cmd, filePath], {
-		signal,
-		allowNonZero: true,
-		allowAbort: true,
-		stderr: "buffer",
-	});
-
-	if (result.exitError?.aborted) {
-		throw new ToolAbortError();
-	}
-
-	if (result.exitCode === 0 && result.stdout.length > 0) {
-		return { content: result.stdout, ok: true };
-	}
-
-	return { content: "", ok: false, error: result.stderr.trim() || "Conversion failed" };
-}
-
 function decodeUtf8Text(bytes: Uint8Array): string | null {
 	for (const byte of bytes) {
 		if (byte === 0) return null;
@@ -387,7 +371,7 @@ interface ResolvedArchiveReadPath {
 /**
  * Read tool implementation.
  *
- * Reads files with support for images, documents (via markitdown), and text.
+ * Reads files with support for images, converted documents (via markit), and text.
  * Directories return a formatted listing with modification times.
  */
 export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
@@ -492,7 +476,9 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 					? `The ${options.entityLabel} is empty.`
 					: `Use offset=1 to read from the start, or offset=${allLines.length} to read the last line.`;
 			return resultBuilder
-				.text(`Offset ${offset} is beyond end of ${options.entityLabel} (${allLines.length} lines total). ${suggestion}`)
+				.text(
+					`Offset ${offset} is beyond end of ${options.entityLabel} (${allLines.length} lines total). ${suggestion}`,
+				)
 				.done();
 		}
 
@@ -796,8 +782,8 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 				}
 			}
 		} else if (CONVERTIBLE_EXTENSIONS.has(ext)) {
-			// Convert document via markitdown
-			const result = await convertWithMarkitdown(absolutePath, signal);
+			// Convert document or notebook via markit.
+			const result = await convertFileWithMarkit(absolutePath, signal);
 			if (result.ok) {
 				// Apply truncation to converted content
 				const truncation = truncateHead(result.content);
@@ -809,12 +795,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 
 				content = [{ type: "text", text: outputText }];
 			} else if (result.error) {
-				// markitdown not available or failed
-				const errorMsg =
-					result.error === "markitdown not found"
-						? `markitdown not installed. Install with: pip install markitdown`
-						: result.error || "conversion failed";
-				content = [{ type: "text", text: `[Cannot read ${ext} file: ${errorMsg}]` }];
+				content = [{ type: "text", text: `[Cannot read ${ext} file: ${result.error || "conversion failed"}]` }];
 			} else {
 				content = [{ type: "text", text: `[Cannot read ${ext} file: conversion failed]` }];
 			}

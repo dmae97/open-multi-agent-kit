@@ -64,10 +64,10 @@ describe("fetch tool", () => {
 			ok: true,
 			buffer: imageBytes,
 		});
-		vi.spyOn(scraperUtils, "convertWithMarkitdown").mockResolvedValue({
+		vi.spyOn(scraperUtils, "convertWithMarkit").mockResolvedValue({
 			ok: false,
 			content: "",
-			error: "markitdown unavailable",
+			error: "markit unavailable",
 		});
 		vi.spyOn(imageResize, "resizeImage").mockResolvedValue({
 			buffer: imageBytes,
@@ -119,10 +119,10 @@ describe("fetch tool", () => {
 			ok: true,
 			buffer: new Uint8Array([137, 80, 78, 71]),
 		});
-		vi.spyOn(scraperUtils, "convertWithMarkitdown").mockResolvedValue({
+		vi.spyOn(scraperUtils, "convertWithMarkit").mockResolvedValue({
 			ok: false,
 			content: "",
-			error: "markitdown unavailable",
+			error: "markit unavailable",
 		});
 
 		const result = await tool.execute("fetch-image-resized", { url: "https://example.com/image.png" });
@@ -139,7 +139,7 @@ describe("fetch tool", () => {
 		expect(textBlock?.text).toContain("displayed at 1000x500");
 	});
 
-	it("keeps markitdown extracted text for image responses", async () => {
+	it("keeps markit extracted text for image responses", async () => {
 		const session = createSession();
 		const tool = new FetchTool(session);
 		const extractedText = "Converted image text content that is definitely longer than fifty characters.";
@@ -166,7 +166,7 @@ describe("fetch tool", () => {
 			ok: true,
 			buffer: new Uint8Array([137, 80, 78, 71]),
 		});
-		vi.spyOn(scraperUtils, "convertWithMarkitdown").mockResolvedValue({
+		vi.spyOn(scraperUtils, "convertWithMarkit").mockResolvedValue({
 			ok: true,
 			content: extractedText,
 		});
@@ -209,12 +209,12 @@ describe("fetch tool", () => {
 	it("uses binary conversion fallback for unsupported image MIME when extension is convertible", async () => {
 		const session = createSession();
 		const tool = new FetchTool(session);
-		const convertedText = "Converted image text from markitdown fallback with sufficient length to pass threshold.";
+		const convertedText = "Converted image text from markit fallback with sufficient length to pass threshold.";
 		const fetchBinarySpy = vi.spyOn(scraperUtils, "fetchBinary").mockResolvedValue({
 			ok: true,
 			buffer: new Uint8Array([255, 216, 255, 224]),
 		});
-		const convertSpy = vi.spyOn(scraperUtils, "convertWithMarkitdown").mockResolvedValue({
+		const convertSpy = vi.spyOn(scraperUtils, "convertWithMarkit").mockResolvedValue({
 			ok: true,
 			content: convertedText,
 		});
@@ -230,7 +230,7 @@ describe("fetch tool", () => {
 		const imageBlock = result.content.find(content => content.type === "image");
 		const textBlock = result.content.find(content => content.type === "text");
 
-		expect(result.details?.method).toBe("markitdown");
+		expect(result.details?.method).toBe("markit");
 		expect(fetchBinarySpy).toHaveBeenCalledTimes(1);
 		expect(convertSpy).toHaveBeenCalledTimes(1);
 		expect(result.details?.notes).toContain("Attempting binary conversion fallback for unsupported image MIME type");
@@ -264,7 +264,7 @@ describe("fetch tool", () => {
 	it("falls back to textual output when inline image refetch fails", async () => {
 		const session = createSession();
 		const tool = new FetchTool(session);
-		const convertSpy = vi.spyOn(scraperUtils, "convertWithMarkitdown");
+		const convertSpy = vi.spyOn(scraperUtils, "convertWithMarkit");
 		vi.spyOn(scrapers, "loadPage").mockResolvedValue({
 			ok: true,
 			status: 200,
@@ -301,7 +301,7 @@ describe("fetch tool", () => {
 			ok: true,
 			buffer: new Uint8Array([60, 104, 116, 109, 108]),
 		});
-		vi.spyOn(scraperUtils, "convertWithMarkitdown").mockResolvedValue({
+		vi.spyOn(scraperUtils, "convertWithMarkit").mockResolvedValue({
 			ok: false,
 			content: "",
 			error: "conversion failed",

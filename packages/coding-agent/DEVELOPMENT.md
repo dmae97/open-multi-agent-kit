@@ -1006,7 +1006,7 @@ Core pipeline in `renderUrl(url, timeout, raw, signal)`:
 1. Normalize URL (`normalizeUrl`) and short-circuit `pi-internal://`.
 2. If not `raw`, run `handleSpecialUrls(...)` over `specialHandlers` from `../web/scrapers`.
 3. Fetch with `loadPage(...)`.
-4. Detect convertible binaries (`isConvertible`) and attempt `fetchBinary(...)` + `convertWithMarkitdown(...)`.
+4. Detect convertible binaries (`isConvertible`) and attempt `fetchBinary(...)` + `convertWithMarkit(...)`.
 5. Handle structured/non-HTML content directly:
    - JSON: `formatJson`
    - RSS/Atom/XML feed: `parseFeedToMarkdown`
@@ -1017,7 +1017,7 @@ Core pipeline in `renderUrl(url, timeout, raw, signal)`:
    - `/.well-known/llms.txt`, `/llms.txt`, `/llms.md` (`tryLlmEndpoints`)
    - `Accept: text/markdown, text/plain...` negotiation (`tryContentNegotiation`)
    - HTML-to-text conversion (`renderHtmlToText`)
-7. If HTML conversion is low-quality (`isLowQualityOutput`), try document-link extraction (`extractDocumentLinks`) + markitdown.
+7. If HTML conversion is low-quality (`isLowQualityOutput`), try document-link extraction (`extractDocumentLinks`) + markit.
 
 `renderHtmlToText(...)` fallback order is explicit in code: Jina reader endpoint (`https://r.jina.ai/<url>`), then `trafilatura` (via `ensureTool`), then `lynx`, then native `htmlToMarkdown`.
 

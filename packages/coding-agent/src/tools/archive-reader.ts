@@ -181,7 +181,11 @@ export function parseArchivePathCandidates(filePath: string): ArchivePathCandida
 	const candidates: ArchivePathCandidate[] = [];
 
 	let match: RegExpExecArray | null;
-	while ((match = pattern.exec(normalized)) !== null) {
+	while (true) {
+		match = pattern.exec(normalized);
+		if (match === null) {
+			break;
+		}
 		const end = match.index + match[0].length;
 		const archivePath = filePath.slice(0, end);
 		const subPath = normalized.slice(end).replace(/^:+/, "");
@@ -265,7 +269,9 @@ export class ArchiveReader {
 			});
 		}
 
-		return [...children.values()].sort((left, right) => left.name.toLowerCase().localeCompare(right.name.toLowerCase()));
+		return [...children.values()].sort((left, right) =>
+			left.name.toLowerCase().localeCompare(right.name.toLowerCase()),
+		);
 	}
 
 	async readFile(subPath: string): Promise<ExtractedArchiveFile> {

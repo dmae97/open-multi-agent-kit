@@ -82,11 +82,6 @@ interface PythonToolConfig {
 }
 
 const PYTHON_TOOLS: Record<string, PythonToolConfig> = {
-	markitdown: {
-		name: "markitdown",
-		package: "markitdown",
-		binaryName: "markitdown",
-	},
 	trafilatura: {
 		name: "trafilatura",
 		package: "trafilatura",
@@ -94,7 +89,7 @@ const PYTHON_TOOLS: Record<string, PythonToolConfig> = {
 	},
 };
 
-export type ToolName = "sd" | "sg" | "yt-dlp" | "markitdown" | "trafilatura";
+export type ToolName = "sd" | "sg" | "yt-dlp" | "trafilatura";
 
 // Get the path to a tool (system-wide or in our tools dir)
 export function getToolPath(tool: ToolName): string | null {

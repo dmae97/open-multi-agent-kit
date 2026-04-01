@@ -1,8 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added support for converting Jupyter notebooks (`.ipynb`) to markdown via markit
+- Added `markit-ai` npm package for native document and notebook conversion
 - Added support for reading files from `.tar`, `.tar.gz`, `.tgz`, and `.zip` archives using virtual subpaths like `archive.ext:path/to/file`
 - Added ability to list archive contents and navigate subdirectories within supported archive formats
 - Added archive-aware `read` support for `.tar`, `.tar.gz`, `.tgz`, and `.zip`, including virtual subpaths like `archive.ext:path/to/file`
@@ -10,6 +13,9 @@
 
 ### Changed
 
+- Replaced Python-based markitdown CLI tool with native `markit-ai` library for document conversion
+- Updated document conversion to use markit library instead of external markitdown command
+- Removed markitdown from Python tools manager (no longer needed as external dependency)
 - Updated `read` tool documentation to reflect archive support and usage patterns
 
 ## [13.17.2] - 2026-04-01

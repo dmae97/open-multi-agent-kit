@@ -1,9 +1,9 @@
-import { isRecord, ptree, TempDir } from "@oh-my-pi/pi-utils";
+import { isRecord, ptree } from "@oh-my-pi/pi-utils";
 
 export { isRecord };
 
 import { ToolAbortError } from "../../tools/tool-errors";
-import { ensureTool } from "../../utils/tools-manager";
+import { convertBufferWithMarkit } from "../../utils/markit";
 import { MAX_BYTES } from "./types";
 
 export function asRecord(value: unknown): Record<string, unknown> | null {
@@ -96,42 +96,14 @@ export async function fetchBinary(url: string, timeout: number = 20, signal?: Ab
 }
 
 /**
- * Convert binary content to markdown using markitdown
+ * Convert binary content to markdown using markit.
  */
-export async function convertWithMarkitdown(
+export async function convertWithMarkit(
 	buffer: Uint8Array,
 	extension: string,
 	timeout: number = 20,
 	signal?: AbortSignal,
 ): Promise<{ content: string; ok: boolean; error?: string }> {
-	const commandSignal = ptree.combineSignals(signal, timeout * 1000);
-	const cmd = await ensureTool("markitdown", { signal: commandSignal, silent: true });
-	if (!cmd) {
-		return { content: "", ok: false, error: "markitdown not found (uv/pip unavailable)" };
-	}
-
-	const tmpDir = await TempDir.create("@markitdown-");
-	try {
-		const tmpFile = tmpDir.join(`tmp${extension}`);
-		await Bun.write(tmpFile, buffer);
-
-		const result = await ptree.exec([cmd, tmpFile], {
-			signal: commandSignal,
-			allowNonZero: true,
-			allowAbort: true,
-			stderr: "buffer",
-		});
-
-		if (result.exitError?.aborted) {
-			throw new ToolAbortError();
-		}
-
-		if (result.exitCode === 0 && result.stdout.length > 0) {
-			return { content: result.stdout, ok: true };
-		}
-
-		return { content: "", ok: false, error: result.stderr.trim() || "Conversion failed" };
-	} finally {
-		await tmpDir.remove();
-	}
+	const conversionSignal = ptree.combineSignals(signal, timeout * 1000);
+	return convertBufferWithMarkit(buffer, extension, conversionSignal);
 }

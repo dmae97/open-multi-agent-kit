@@ -20,7 +20,7 @@ import { extractWithParallel, findParallelApiKey, getParallelExtractContent } fr
 import { specialHandlers } from "../web/scrapers";
 import type { RenderResult } from "../web/scrapers/types";
 import { finalizeOutput, loadPage, MAX_OUTPUT_CHARS } from "../web/scrapers/types";
-import { convertWithMarkitdown, fetchBinary } from "../web/scrapers/utils";
+import { convertWithMarkit, fetchBinary } from "../web/scrapers/utils";
 import type { ToolSession } from ".";
 import { applyListLimit } from "./list-limit";
 import { formatStyledArtifactReference, type OutputMeta } from "./output-meta";
@@ -34,7 +34,7 @@ import { clampTimeout } from "./tool-timeouts";
 // =============================================================================
 
 const FETCH_DEFAULT_MAX_LINES = 300;
-// Convertible document types (markitdown supported)
+// Convertible document types handled by markit.
 const CONVERTIBLE_MIMES = new Set([
 	"application/pdf",
 	"application/msword",
@@ -45,6 +45,7 @@ const CONVERTIBLE_MIMES = new Set([
 	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 	"application/rtf",
 	"application/epub+zip",
+	"application/x-ipynb+json",
 	"application/zip",
 	"image/png",
 	"image/jpeg",
@@ -65,6 +66,7 @@ const CONVERTIBLE_EXTENSIONS = new Set([
 	".xlsx",
 	".rtf",
 	".epub",
+	".ipynb",
 	".png",
 	".jpg",
 	".jpeg",
@@ -164,7 +166,7 @@ function getExtensionHint(url: string, contentDisposition?: string): string {
 }
 
 /**
- * Check if content type is convertible via markitdown
+ * Check if content type is convertible via markit.
  */
 function isConvertible(mime: string, extensionHint: string): boolean {
 	if (CONVERTIBLE_MIMES.has(mime)) return true;
@@ -711,18 +713,18 @@ async function renderUrl(
 				notes.push("Fetched image binary");
 				const conversionExtension = getExtensionHint(finalUrl, binary.contentDisposition) || extHint;
 				let convertedText: string | null = null;
-				const converted = await convertWithMarkitdown(binary.buffer, conversionExtension, timeout, signal);
+				const converted = await convertWithMarkit(binary.buffer, conversionExtension, timeout, signal);
 				if (converted.ok) {
 					if (converted.content.trim().length > 50) {
-						notes.push("Converted with markitdown");
+						notes.push("Converted with markit");
 						convertedText = converted.content;
 					} else {
-						notes.push("markitdown conversion produced no usable output");
+						notes.push("markit conversion produced no usable output");
 					}
 				} else if (converted.error) {
-					notes.push(`markitdown conversion failed: ${converted.error}`);
+					notes.push(`markit conversion failed: ${converted.error}`);
 				} else {
-					notes.push("markitdown conversion failed");
+					notes.push("markit conversion failed");
 				}
 
 				if (binary.buffer.byteLength > MAX_INLINE_IMAGE_SOURCE_BYTES) {
@@ -736,7 +738,7 @@ async function renderUrl(
 						url,
 						finalUrl,
 						contentType: imageMimeType,
-						method: convertedText ? "markitdown" : "image-too-large",
+						method: convertedText ? "markit" : "image-too-large",
 						content: output.content,
 						fetchedAt,
 						truncated: output.truncated,
@@ -761,7 +763,7 @@ async function renderUrl(
 						url,
 						finalUrl,
 						contentType: imageMimeType,
-						method: convertedText ? "markitdown" : "image-invalid",
+						method: convertedText ? "markit" : "image-invalid",
 						content: output.content,
 						fetchedAt,
 						truncated: output.truncated,
@@ -779,7 +781,7 @@ async function renderUrl(
 						url,
 						finalUrl,
 						contentType: imageMimeType,
-						method: convertedText ? "markitdown" : "image-too-large",
+						method: convertedText ? "markit" : "image-too-large",
 						content: output.content,
 						fetchedAt,
 						truncated: output.truncated,
@@ -819,27 +821,27 @@ async function renderUrl(
 		const binary = await fetchBinary(finalUrl, timeout, signal);
 		if (binary.ok) {
 			const ext = getExtensionHint(finalUrl, binary.contentDisposition) || extHint;
-			const converted = await convertWithMarkitdown(binary.buffer, ext, timeout, signal);
+			const converted = await convertWithMarkit(binary.buffer, ext, timeout, signal);
 			if (converted.ok) {
 				if (converted.content.trim().length > 50) {
-					notes.push("Converted with markitdown");
+					notes.push("Converted with markit");
 					const output = finalizeOutput(converted.content);
 					return {
 						url,
 						finalUrl,
 						contentType: mime,
-						method: "markitdown",
+						method: "markit",
 						content: output.content,
 						fetchedAt,
 						truncated: output.truncated,
 						notes,
 					};
 				}
-				notes.push("markitdown conversion produced no usable output");
+				notes.push("markit conversion produced no usable output");
 			} else if (converted.error) {
-				notes.push(`markitdown conversion failed: ${converted.error}`);
+				notes.push(`markit conversion failed: ${converted.error}`);
 			} else {
-				notes.push("markitdown conversion failed");
+				notes.push("markit conversion failed");
 			}
 		} else if (binary.error) {
 			notes.push(`Binary fetch failed: ${binary.error}`);
@@ -1007,7 +1009,7 @@ async function renderUrl(
 				const binary = await fetchBinary(docUrl, timeout, signal);
 				if (binary.ok) {
 					const ext = getExtensionHint(docUrl, binary.contentDisposition);
-					const converted = await convertWithMarkitdown(binary.buffer, ext, timeout, signal);
+					const converted = await convertWithMarkit(binary.buffer, ext, timeout, signal);
 					if (converted.ok && converted.content.trim().length > htmlResult.content.length) {
 						notes.push(`Extracted and converted document: ${docUrl}`);
 						const output = finalizeOutput(converted.content);
@@ -1023,7 +1025,7 @@ async function renderUrl(
 						};
 					}
 					if (!converted.ok && converted.error) {
-						notes.push(`markitdown conversion failed: ${converted.error}`);
+						notes.push(`markit conversion failed: ${converted.error}`);
 					}
 				} else if (binary.error) {
 					notes.push(`Binary fetch failed: ${binary.error}`);
