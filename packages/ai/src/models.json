@@ -8117,7 +8117,7 @@
 		},
 		"anthropic/claude-opus-4": {
 			"id": "anthropic/claude-opus-4",
-			"name": "Claude Opus 4",
+			"name": "Claude Opus 4 (latest)",
 			"api": "openai-completions",
 			"provider": "kilo",
 			"baseUrl": "https://api.kilo.ai/api/gateway",
@@ -8133,7 +8133,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 200000,
-			"maxTokens": 64000,
+			"maxTokens": 32000,
 			"thinking": {
 				"mode": "effort",
 				"minLevel": "minimal",
@@ -8350,6 +8350,25 @@
 		"arcee-ai/trinity-large-preview:free": {
 			"id": "arcee-ai/trinity-large-preview:free",
 			"name": "Arcee AI: Trinity Large Preview (free)",
+			"api": "openai-completions",
+			"provider": "kilo",
+			"baseUrl": "https://api.kilo.ai/api/gateway",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
+		"arcee-ai/trinity-large-thinking": {
+			"id": "arcee-ai/trinity-large-thinking",
+			"name": "Arcee AI: Trinity Large Thinking",
 			"api": "openai-completions",
 			"provider": "kilo",
 			"baseUrl": "https://api.kilo.ai/api/gateway",
@@ -9233,7 +9252,7 @@
 		},
 		"google/gemini-3-pro-image-preview": {
 			"id": "google/gemini-3-pro-image-preview",
-			"name": "Gemini 3 Pro Image Preview",
+			"name": "Google: Nano Banana Pro (Gemini 3 Pro Image Preview)",
 			"api": "openai-completions",
 			"provider": "kilo",
 			"baseUrl": "https://api.kilo.ai/api/gateway",
@@ -9248,8 +9267,8 @@
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 1048000,
-			"maxTokens": 64000,
+			"contextWindow": 222222,
+			"maxTokens": 8888,
 			"thinking": {
 				"mode": "effort",
 				"minLevel": "low",
@@ -9484,6 +9503,44 @@
 			},
 			"contextWindow": 128000,
 			"maxTokens": 4096
+		},
+		"google/lyria-3-clip-preview": {
+			"id": "google/lyria-3-clip-preview",
+			"name": "Google: Lyria 3 Clip Preview",
+			"api": "openai-completions",
+			"provider": "kilo",
+			"baseUrl": "https://api.kilo.ai/api/gateway",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
+		"google/lyria-3-pro-preview": {
+			"id": "google/lyria-3-pro-preview",
+			"name": "Google: Lyria 3 Pro Preview",
+			"api": "openai-completions",
+			"provider": "kilo",
+			"baseUrl": "https://api.kilo.ai/api/gateway",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
 		},
 		"gryphe/mythomax-l2-13b": {
 			"id": "gryphe/mythomax-l2-13b",
@@ -13813,6 +13870,25 @@
 			"contextWindow": 222222,
 			"maxTokens": 8888
 		},
+		"qwen/qwen3.6-plus-preview:free": {
+			"id": "qwen/qwen3.6-plus-preview:free",
+			"name": "Qwen: Qwen3.6 Plus Preview (free)",
+			"api": "openai-completions",
+			"provider": "kilo",
+			"baseUrl": "https://api.kilo.ai/api/gateway",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
 		"qwen/qwq-32b": {
 			"id": "qwen/qwq-32b",
 			"name": "Qwen: QwQ 32B",
@@ -13854,6 +13930,44 @@
 		"reka/reka-edge": {
 			"id": "reka/reka-edge",
 			"name": "Reka Edge",
+			"api": "openai-completions",
+			"provider": "kilo",
+			"baseUrl": "https://api.kilo.ai/api/gateway",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
+		"rekaai/reka-edge": {
+			"id": "rekaai/reka-edge",
+			"name": "Reka Edge",
+			"api": "openai-completions",
+			"provider": "kilo",
+			"baseUrl": "https://api.kilo.ai/api/gateway",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
+		"rekaai/reka-flash-3": {
+			"id": "rekaai/reka-flash-3",
+			"name": "Reka Flash 3",
 			"api": "openai-completions",
 			"provider": "kilo",
 			"baseUrl": "https://api.kilo.ai/api/gateway",
@@ -14382,9 +14496,47 @@
 				"maxLevel": "xhigh"
 			}
 		},
+		"x-ai/grok-4.20": {
+			"id": "x-ai/grok-4.20",
+			"name": "xAI: Grok 4.20",
+			"api": "openai-completions",
+			"provider": "kilo",
+			"baseUrl": "https://api.kilo.ai/api/gateway",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
 		"x-ai/grok-4.20-beta": {
 			"id": "x-ai/grok-4.20-beta",
 			"name": "xAI: Grok 4.20 Beta",
+			"api": "openai-completions",
+			"provider": "kilo",
+			"baseUrl": "https://api.kilo.ai/api/gateway",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
+		"x-ai/grok-4.20-multi-agent": {
+			"id": "x-ai/grok-4.20-multi-agent",
+			"name": "xAI: Grok 4.20 Multi-Agent",
 			"api": "openai-completions",
 			"provider": "kilo",
 			"baseUrl": "https://api.kilo.ai/api/gateway",
@@ -14446,7 +14598,7 @@
 		},
 		"x-ai/grok-code-fast-1:optimized:free": {
 			"id": "x-ai/grok-code-fast-1:optimized:free",
-			"name": "xAI: Grok Code Fast 1 Optimized (experimental, free)",
+			"name": "xAI: Grok Code Fast 1 Optimized (free)",
 			"api": "openai-completions",
 			"provider": "kilo",
 			"baseUrl": "https://api.kilo.ai/api/gateway",
@@ -14814,6 +14966,25 @@
 				"minLevel": "minimal",
 				"maxLevel": "xhigh"
 			}
+		},
+		"z-ai/glm-5v-turbo": {
+			"id": "z-ai/glm-5v-turbo",
+			"name": "Z.ai: GLM 5V Turbo",
+			"api": "openai-completions",
+			"provider": "kilo",
+			"baseUrl": "https://api.kilo.ai/api/gateway",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
 		}
 	},
 	"kimi-code": {
@@ -17444,25 +17615,55 @@
 			"contextWindow": 128000,
 			"maxTokens": 16384
 		},
+		"mistral-small-2603": {
+			"id": "mistral-small-2603",
+			"name": "Mistral Small 4",
+			"api": "openai-completions",
+			"provider": "mistral",
+			"baseUrl": "https://api.mistral.ai/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0.15,
+				"output": 0.6,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 256000,
+			"maxTokens": 256000,
+			"thinking": {
+				"mode": "effort",
+				"minLevel": "minimal",
+				"maxLevel": "xhigh"
+			}
+		},
 		"mistral-small-latest": {
 			"id": "mistral-small-latest",
 			"name": "Mistral Small (latest)",
 			"api": "openai-completions",
 			"provider": "mistral",
 			"baseUrl": "https://api.mistral.ai/v1",
-			"reasoning": false,
+			"reasoning": true,
 			"input": [
 				"text",
 				"image"
 			],
 			"cost": {
-				"input": 0.1,
-				"output": 0.3,
+				"input": 0.15,
+				"output": 0.6,
 				"cacheRead": 0,
 				"cacheWrite": 0
 			},
-			"contextWindow": 128000,
-			"maxTokens": 16384
+			"contextWindow": 256000,
+			"maxTokens": 256000,
+			"thinking": {
+				"mode": "effort",
+				"minLevel": "minimal",
+				"maxLevel": "xhigh"
+			}
 		},
 		"open-mistral-7b": {
 			"id": "open-mistral-7b",
@@ -17930,6 +18131,25 @@
 			"contextWindow": 222222,
 			"maxTokens": 8888
 		},
+		"anthropic/claude-haiku-latest": {
+			"id": "anthropic/claude-haiku-latest",
+			"name": "anthropic/claude-haiku-latest",
+			"api": "openai-completions",
+			"provider": "nanogpt",
+			"baseUrl": "https://nano-gpt.com/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
 		"anthropic/claude-opus-4.6": {
 			"id": "anthropic/claude-opus-4.6",
 			"name": "Claude Opus 4.6",
@@ -17955,6 +18175,25 @@
 				"maxLevel": "xhigh"
 			}
 		},
+		"anthropic/claude-opus-latest": {
+			"id": "anthropic/claude-opus-latest",
+			"name": "anthropic/claude-opus-latest",
+			"api": "openai-completions",
+			"provider": "nanogpt",
+			"baseUrl": "https://nano-gpt.com/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
 		"anthropic/claude-sonnet-4.6": {
 			"id": "anthropic/claude-sonnet-4.6",
 			"name": "Claude Sonnet 4.6",
@@ -17979,6 +18218,25 @@
 				"minLevel": "minimal",
 				"maxLevel": "xhigh"
 			}
+		},
+		"anthropic/claude-sonnet-latest": {
+			"id": "anthropic/claude-sonnet-latest",
+			"name": "anthropic/claude-sonnet-latest",
+			"api": "openai-completions",
+			"provider": "nanogpt",
+			"baseUrl": "https://nano-gpt.com/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
 		},
 		"arcee-ai/trinity-large": {
 			"id": "arcee-ai/trinity-large",
@@ -21532,6 +21790,63 @@
 			"contextWindow": 222222,
 			"maxTokens": 8888
 		},
+		"google/gemini-flash-latest": {
+			"id": "google/gemini-flash-latest",
+			"name": "google/gemini-flash-latest",
+			"api": "openai-completions",
+			"provider": "nanogpt",
+			"baseUrl": "https://nano-gpt.com/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
+		"google/gemini-flash-lite-latest": {
+			"id": "google/gemini-flash-lite-latest",
+			"name": "google/gemini-flash-lite-latest",
+			"api": "openai-completions",
+			"provider": "nanogpt",
+			"baseUrl": "https://nano-gpt.com/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
+		"google/gemini-pro-latest": {
+			"id": "google/gemini-pro-latest",
+			"name": "google/gemini-pro-latest",
+			"api": "openai-completions",
+			"provider": "nanogpt",
+			"baseUrl": "https://nano-gpt.com/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
 		"grok-3-beta": {
 			"id": "grok-3-beta",
 			"name": "grok-3-beta",
@@ -21626,6 +21941,30 @@
 			},
 			"contextWindow": 222222,
 			"maxTokens": 8888
+		},
+		"holo3-35b-a3b": {
+			"id": "holo3-35b-a3b",
+			"name": "holo3-35b-a3b",
+			"api": "openai-completions",
+			"provider": "nanogpt",
+			"baseUrl": "https://nano-gpt.com/api/v1",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888,
+			"thinking": {
+				"mode": "effort",
+				"minLevel": "minimal",
+				"maxLevel": "xhigh"
+			}
 		},
 		"huihui-ai/DeepSeek-R1-Distill-Llama-70B-abliterated": {
 			"id": "huihui-ai/DeepSeek-R1-Distill-Llama-70B-abliterated",
@@ -25170,6 +25509,25 @@
 				"maxLevel": "xhigh"
 			}
 		},
+		"openai/gpt-latest": {
+			"id": "openai/gpt-latest",
+			"name": "openai/gpt-latest",
+			"api": "openai-completions",
+			"provider": "nanogpt",
+			"baseUrl": "https://nano-gpt.com/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
 		"openai/gpt-oss-120b": {
 			"id": "openai/gpt-oss-120b",
 			"name": "GPT OSS 120B",
@@ -26428,6 +26786,44 @@
 				"minLevel": "minimal",
 				"maxLevel": "high"
 			}
+		},
+		"qwen3.5-omni-flash": {
+			"id": "qwen3.5-omni-flash",
+			"name": "qwen3.5-omni-flash",
+			"api": "openai-completions",
+			"provider": "nanogpt",
+			"baseUrl": "https://nano-gpt.com/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
+		"qwen3.5-omni-plus": {
+			"id": "qwen3.5-omni-plus",
+			"name": "qwen3.5-omni-plus",
+			"api": "openai-completions",
+			"provider": "nanogpt",
+			"baseUrl": "https://nano-gpt.com/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
 		},
 		"qwq-32b": {
 			"id": "qwq-32b",
@@ -28145,6 +28541,25 @@
 			"contextWindow": 222222,
 			"maxTokens": 8888
 		},
+		"x-ai/grok-4.20": {
+			"id": "x-ai/grok-4.20",
+			"name": "x-ai/grok-4.20",
+			"api": "openai-completions",
+			"provider": "nanogpt",
+			"baseUrl": "https://nano-gpt.com/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
 		"x-ai/grok-4.20-beta-non-reasoning": {
 			"id": "x-ai/grok-4.20-beta-non-reasoning",
 			"name": "x-ai/grok-4.20-beta-non-reasoning",
@@ -28167,6 +28582,25 @@
 		"x-ai/grok-4.20-beta-reasoning": {
 			"id": "x-ai/grok-4.20-beta-reasoning",
 			"name": "x-ai/grok-4.20-beta-reasoning",
+			"api": "openai-completions",
+			"provider": "nanogpt",
+			"baseUrl": "https://nano-gpt.com/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 222222,
+			"maxTokens": 8888
+		},
+		"x-ai/grok-4.20-multi-agent": {
+			"id": "x-ai/grok-4.20-multi-agent",
+			"name": "x-ai/grok-4.20-multi-agent",
 			"api": "openai-completions",
 			"provider": "nanogpt",
 			"baseUrl": "https://nano-gpt.com/api/v1",
@@ -30682,6 +31116,26 @@
 				"maxLevel": "xhigh"
 			}
 		},
+		"gpt-5.3-chat-latest": {
+			"id": "gpt-5.3-chat-latest",
+			"name": "GPT-5.3 Chat (latest)",
+			"api": "openai-responses",
+			"provider": "openai",
+			"baseUrl": "https://api.openai.com/v1",
+			"reasoning": false,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 1.75,
+				"output": 14,
+				"cacheRead": 0.175,
+				"cacheWrite": 0
+			},
+			"contextWindow": 128000,
+			"maxTokens": 16384
+		},
 		"gpt-5.3-codex": {
 			"id": "gpt-5.3-codex",
 			"name": "GPT-5.3 Codex",
@@ -32616,6 +33070,30 @@
 				"maxLevel": "xhigh"
 			}
 		},
+		"qwen3.6-plus-free": {
+			"id": "qwen3.6-plus-free",
+			"name": "Qwen3.6 Plus Free",
+			"api": "openai-completions",
+			"provider": "opencode-zen",
+			"baseUrl": "https://opencode.ai/zen/v1",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1048576,
+			"maxTokens": 64000,
+			"thinking": {
+				"mode": "effort",
+				"minLevel": "minimal",
+				"maxLevel": "high"
+			}
+		},
 		"trinity-large-preview-free": {
 			"id": "trinity-large-preview-free",
 			"name": "Trinity Large Preview",
@@ -32947,7 +33425,7 @@
 		},
 		"anthropic/claude-opus-4": {
 			"id": "anthropic/claude-opus-4",
-			"name": "Claude Opus 4",
+			"name": "Claude Opus 4 (latest)",
 			"api": "openai-completions",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"provider": "openrouter",
@@ -32963,7 +33441,7 @@
 				"cacheWrite": 18.75
 			},
 			"contextWindow": 200000,
-			"maxTokens": 64000,
+			"maxTokens": 32000,
 			"thinking": {
 				"mode": "effort",
 				"minLevel": "minimal",
@@ -33140,6 +33618,30 @@
 			"maxTokens": 8888,
 			"compat": {
 				"supportsToolChoice": false
+			}
+		},
+		"arcee-ai/trinity-large-thinking": {
+			"id": "arcee-ai/trinity-large-thinking",
+			"name": "Arcee AI: Trinity Large Thinking",
+			"api": "openai-completions",
+			"provider": "openrouter",
+			"baseUrl": "https://openrouter.ai/api/v1",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0.25,
+				"output": 0.8999999999999999,
+				"cacheRead": 0.06,
+				"cacheWrite": 0
+			},
+			"contextWindow": 262144,
+			"maxTokens": 80000,
+			"thinking": {
+				"mode": "effort",
+				"minLevel": "minimal",
+				"maxLevel": "high"
 			}
 		},
 		"arcee-ai/trinity-mini": {
@@ -34377,9 +34879,9 @@
 				"text"
 			],
 			"cost": {
-				"input": 0.19,
-				"output": 1.15,
-				"cacheRead": 0.095,
+				"input": 0.12,
+				"output": 1,
+				"cacheRead": 0.06,
 				"cacheWrite": 0
 			},
 			"contextWindow": 204800,
@@ -36211,6 +36713,44 @@
 				"maxLevel": "xhigh"
 			}
 		},
+		"openai/gpt-audio": {
+			"id": "openai/gpt-audio",
+			"name": "OpenAI: GPT Audio",
+			"api": "openai-completions",
+			"provider": "openrouter",
+			"baseUrl": "https://openrouter.ai/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 2.5,
+				"output": 10,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 128000,
+			"maxTokens": 16384
+		},
+		"openai/gpt-audio-mini": {
+			"id": "openai/gpt-audio-mini",
+			"name": "OpenAI: GPT Audio Mini",
+			"api": "openai-completions",
+			"provider": "openrouter",
+			"baseUrl": "https://openrouter.ai/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0.6,
+				"output": 2.4,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 128000,
+			"maxTokens": 16384
+		},
 		"openai/gpt-oss-120b": {
 			"id": "openai/gpt-oss-120b",
 			"name": "GPT OSS 120B",
@@ -37658,7 +38198,7 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 256000,
-			"maxTokens": 65536,
+			"maxTokens": 32768,
 			"thinking": {
 				"mode": "effort",
 				"minLevel": "minimal",
@@ -37715,6 +38255,30 @@
 				"maxLevel": "high"
 			}
 		},
+		"qwen/qwen3.6-plus-preview:free": {
+			"id": "qwen/qwen3.6-plus-preview:free",
+			"name": "Qwen: Qwen3.6 Plus Preview (free)",
+			"api": "openai-completions",
+			"provider": "openrouter",
+			"baseUrl": "https://openrouter.ai/api/v1",
+			"reasoning": true,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 1000000,
+			"maxTokens": 32000,
+			"thinking": {
+				"mode": "effort",
+				"minLevel": "minimal",
+				"maxLevel": "high"
+			}
+		},
 		"qwen/qwq-32b": {
 			"id": "qwen/qwq-32b",
 			"name": "Qwen: QwQ 32B",
@@ -37741,6 +38305,26 @@
 		},
 		"reka/reka-edge": {
 			"id": "reka/reka-edge",
+			"name": "Reka Edge",
+			"api": "openai-completions",
+			"provider": "openrouter",
+			"baseUrl": "https://openrouter.ai/api/v1",
+			"reasoning": false,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0.09999999999999999,
+				"output": 0.09999999999999999,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 16384,
+			"maxTokens": 16384
+		},
+		"rekaai/reka-edge": {
+			"id": "rekaai/reka-edge",
 			"name": "Reka Edge",
 			"api": "openai-completions",
 			"provider": "openrouter",
@@ -38160,6 +38744,31 @@
 				"maxLevel": "high"
 			}
 		},
+		"x-ai/grok-4.20": {
+			"id": "x-ai/grok-4.20",
+			"name": "xAI: Grok 4.20",
+			"api": "openai-completions",
+			"provider": "openrouter",
+			"baseUrl": "https://openrouter.ai/api/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 2,
+				"output": 6,
+				"cacheRead": 0.19999999999999998,
+				"cacheWrite": 0
+			},
+			"contextWindow": 2000000,
+			"maxTokens": 8888,
+			"thinking": {
+				"mode": "effort",
+				"minLevel": "minimal",
+				"maxLevel": "high"
+			}
+		},
 		"x-ai/grok-4.20-beta": {
 			"id": "x-ai/grok-4.20-beta",
 			"name": "xAI: Grok 4.20 Beta",
@@ -38562,6 +39171,31 @@
 				"minLevel": "minimal",
 				"maxLevel": "high"
 			}
+		},
+		"z-ai/glm-5v-turbo": {
+			"id": "z-ai/glm-5v-turbo",
+			"name": "Z.ai: GLM 5V Turbo",
+			"api": "openai-completions",
+			"provider": "openrouter",
+			"baseUrl": "https://openrouter.ai/api/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 1.2,
+				"output": 4,
+				"cacheRead": 0.24,
+				"cacheWrite": 0
+			},
+			"contextWindow": 202752,
+			"maxTokens": 131072,
+			"thinking": {
+				"mode": "effort",
+				"minLevel": "minimal",
+				"maxLevel": "high"
+			}
 		}
 	},
 	"qianfan": {
@@ -38953,6 +39587,25 @@
 		"hf:zai-org/GLM-4.7-Flash": {
 			"id": "hf:zai-org/GLM-4.7-Flash",
 			"name": "zai-org/GLM-4.7-Flash",
+			"api": "openai-completions",
+			"provider": "synthetic",
+			"baseUrl": "https://api.synthetic.new/openai/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0,
+				"output": 0,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 196608,
+			"maxTokens": 8192
+		},
+		"hf:zai-org/GLM-5": {
+			"id": "hf:zai-org/GLM-5",
+			"name": "zai-org/GLM-5",
 			"api": "openai-completions",
 			"provider": "synthetic",
 			"baseUrl": "https://api.synthetic.new/openai/v1",
@@ -41077,7 +41730,7 @@
 		},
 		"anthropic/claude-opus-4": {
 			"id": "anthropic/claude-opus-4",
-			"name": "Claude Opus 4",
+			"name": "Claude Opus 4 (latest)",
 			"api": "anthropic-messages",
 			"baseUrl": "https://ai-gateway.vercel.sh",
 			"provider": "vercel-ai-gateway",
@@ -41093,7 +41746,7 @@
 				"cacheWrite": 18.75
 			},
 			"contextWindow": 200000,
-			"maxTokens": 64000,
+			"maxTokens": 32000,
 			"thinking": {
 				"mode": "budget",
 				"minLevel": "minimal",
@@ -44620,7 +45273,7 @@
 				"cacheWrite": 18.75
 			},
 			"contextWindow": 200000,
-			"maxTokens": 64000,
+			"maxTokens": 32000,
 			"thinking": {
 				"mode": "budget",
 				"minLevel": "minimal",
@@ -45433,6 +46086,25 @@
 			},
 			"contextWindow": 256000,
 			"maxTokens": 64000
+		},
+		"kuaishou/kat-coder-pro-v2": {
+			"id": "kuaishou/kat-coder-pro-v2",
+			"name": "KwaiKAT: KAT-Coder-Pro-V2",
+			"api": "openai-completions",
+			"provider": "zenmux",
+			"baseUrl": "https://zenmux.ai/api/v1",
+			"reasoning": false,
+			"input": [
+				"text"
+			],
+			"cost": {
+				"input": 0.3,
+				"output": 1.2,
+				"cacheRead": 0.06,
+				"cacheWrite": 0
+			},
+			"contextWindow": 256000,
+			"maxTokens": 8888
 		},
 		"meta/llama-3.3-70b-instruct": {
 			"id": "meta/llama-3.3-70b-instruct",
@@ -46531,7 +47203,7 @@
 				"input": 0.2,
 				"output": 1.6,
 				"cacheRead": 0.04,
-				"cacheWrite": 0
+				"cacheWrite": 0.25
 			},
 			"contextWindow": 262144,
 			"maxTokens": 8888,
