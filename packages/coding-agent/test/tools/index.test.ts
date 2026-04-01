@@ -190,6 +190,8 @@ describe("createTools", () => {
 		expect(names).not.toContain("gh_issue_view");
 		expect(names).not.toContain("gh_pr_view");
 		expect(names).not.toContain("gh_pr_diff");
+		expect(names).not.toContain("gh_pr_checkout");
+		expect(names).not.toContain("gh_pr_push");
 		expect(names).not.toContain("gh_run_watch");
 		expect(names).not.toContain("gh_search_issues");
 		expect(names).not.toContain("gh_search_prs");
@@ -209,6 +211,8 @@ describe("createTools", () => {
 		expect(names).toContain("gh_issue_view");
 		expect(names).toContain("gh_pr_view");
 		expect(names).toContain("gh_pr_diff");
+		expect(names).toContain("gh_pr_checkout");
+		expect(names).toContain("gh_pr_push");
 		expect(names).toContain("gh_run_watch");
 		expect(names).toContain("gh_search_issues");
 		expect(names).toContain("gh_search_prs");

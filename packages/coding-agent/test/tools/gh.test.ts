@@ -1,9 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 import {
 	GhIssueViewTool,
+	GhPrCheckoutTool,
 	GhPrDiffTool,
+	GhPrPushTool,
 	GhPrViewTool,
 	GhRepoViewTool,
 	GhRunWatchTool,
@@ -34,6 +39,70 @@ function getCurrentHeadSha(): string {
 	}
 
 	return new TextDecoder().decode(result.stdout).trim();
+}
+
+function runGit(cwd: string, args: string[]): string {
+	const result = Bun.spawnSync(["git", ...args], {
+		cwd,
+		stdout: "pipe",
+		stderr: "pipe",
+		env: {
+			...process.env,
+			GIT_AUTHOR_NAME: "Test User",
+			GIT_AUTHOR_EMAIL: "test@example.com",
+			GIT_COMMITTER_NAME: "Test User",
+			GIT_COMMITTER_EMAIL: "test@example.com",
+		},
+	});
+	if (result.exitCode !== 0) {
+		throw new Error(`git ${args.join(" ")} failed: ${new TextDecoder().decode(result.stderr).trim()}`);
+	}
+
+	return new TextDecoder().decode(result.stdout).trim();
+}
+
+async function createPrFixture(): Promise<{
+	baseDir: string;
+	repoRoot: string;
+	originBare: string;
+	forkBare: string;
+	headRefName: string;
+	headRefOid: string;
+}> {
+	const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), "gh-pr-tool-"));
+	const repoRoot = path.join(baseDir, "repo");
+	const originBare = path.join(baseDir, "origin.git");
+	const forkBare = path.join(baseDir, "fork.git");
+	const headRefName = "feature/contributor-fix";
+
+	await fs.mkdir(repoRoot, { recursive: true });
+	runGit(baseDir, ["init", "--bare", originBare]);
+	runGit(baseDir, ["init", "--bare", forkBare]);
+	runGit(baseDir, ["init", "-b", "main", repoRoot]);
+	runGit(repoRoot, ["config", "user.name", "Test User"]);
+	runGit(repoRoot, ["config", "user.email", "test@example.com"]);
+	await fs.writeFile(path.join(repoRoot, "README.md"), "base\n");
+	runGit(repoRoot, ["add", "README.md"]);
+	runGit(repoRoot, ["commit", "-m", "base commit"]);
+	runGit(repoRoot, ["remote", "add", "origin", originBare]);
+	runGit(repoRoot, ["push", "-u", "origin", "main"]);
+	runGit(repoRoot, ["remote", "add", "forksrc", forkBare]);
+	runGit(repoRoot, ["checkout", "-b", headRefName]);
+	await fs.writeFile(path.join(repoRoot, "README.md"), "base\nfeature\n");
+	runGit(repoRoot, ["add", "README.md"]);
+	runGit(repoRoot, ["commit", "-m", "feature commit"]);
+	const headRefOid = runGit(repoRoot, ["rev-parse", "HEAD"]);
+	runGit(repoRoot, ["push", "-u", "forksrc", headRefName]);
+	runGit(repoRoot, ["checkout", "main"]);
+
+	return {
+		baseDir,
+		repoRoot,
+		originBare,
+		forkBare,
+		headRefName,
+		headRefOid,
+	};
 }
 
 describe("GitHub CLI tools", () => {
@@ -223,6 +292,92 @@ describe("GitHub CLI tools", () => {
 		expect(text).toContain("diff --git a/Makefile b/Makefile");
 		expect(text).toContain("+\tgo test ./... ");
 		expect(text).not.toContain("+    go test ./... ");
+	});
+
+	it("checks out a pull request into a worktree and configures contributor push metadata", async () => {
+		const fixture = await createPrFixture();
+		try {
+			vi.spyOn(ghCli, "runGhJson")
+				.mockResolvedValueOnce({
+					number: 123,
+					title: "Contributor fix",
+					url: "https://github.com/base/repo/pull/123",
+					baseRefName: "main",
+					headRefName: fixture.headRefName,
+					headRefOid: fixture.headRefOid,
+					headRepository: { nameWithOwner: "contrib/repo" },
+					headRepositoryOwner: { login: "contrib" },
+					isCrossRepository: true,
+					maintainerCanModify: true,
+				})
+				.mockResolvedValueOnce({
+					nameWithOwner: "contrib/repo",
+					sshUrl: fixture.forkBare,
+					url: fixture.forkBare,
+				});
+
+			const tool = new GhPrCheckoutTool(createSession(fixture.repoRoot));
+			const result = await tool.execute("pr-checkout", { pr: "123" });
+			const text = result.content[0]?.type === "text" ? result.content[0].text : "";
+			const worktreePath = path.join(fixture.repoRoot, ".worktrees", "pr-123");
+
+			expect(text).toContain("Checked Out Pull Request #123");
+			expect(text).toContain(`Worktree: ${worktreePath}`);
+			expect(runGit(fixture.repoRoot, ["config", "--get", "branch.pr-123.pushRemote"])).toBe("fork-contrib");
+			expect(runGit(fixture.repoRoot, ["config", "--get", "branch.pr-123.merge"])).toBe(
+				`refs/heads/${fixture.headRefName}`,
+			);
+			expect(runGit(fixture.repoRoot, ["worktree", "list", "--porcelain"])).toContain(`worktree ${worktreePath}`);
+			expect(runGit(worktreePath, ["branch", "--show-current"])).toBe("pr-123");
+		} finally {
+			await fs.rm(fixture.baseDir, { recursive: true, force: true });
+		}
+	});
+
+	it("pushes a checked-out PR branch back to the contributor fork branch", async () => {
+		const fixture = await createPrFixture();
+		try {
+			vi.spyOn(ghCli, "runGhJson")
+				.mockResolvedValueOnce({
+					number: 123,
+					title: "Contributor fix",
+					url: "https://github.com/base/repo/pull/123",
+					baseRefName: "main",
+					headRefName: fixture.headRefName,
+					headRefOid: fixture.headRefOid,
+					headRepository: { nameWithOwner: "contrib/repo" },
+					headRepositoryOwner: { login: "contrib" },
+					isCrossRepository: true,
+					maintainerCanModify: true,
+				})
+				.mockResolvedValueOnce({
+					nameWithOwner: "contrib/repo",
+					sshUrl: fixture.forkBare,
+					url: fixture.forkBare,
+				});
+
+			const checkoutTool = new GhPrCheckoutTool(createSession(fixture.repoRoot));
+			await checkoutTool.execute("pr-checkout", { pr: "123" });
+
+			const worktreePath = path.join(fixture.repoRoot, ".worktrees", "pr-123");
+			await fs.writeFile(path.join(worktreePath, "README.md"), "base\nfeature\npushed\n");
+			runGit(worktreePath, ["add", "README.md"]);
+			runGit(worktreePath, ["commit", "-m", "update contributor branch"]);
+
+			const pushTool = new GhPrPushTool(createSession(worktreePath));
+			const result = await pushTool.execute("pr-push", {});
+			const text = result.content[0]?.type === "text" ? result.content[0].text : "";
+
+			expect(text).toContain(`Remote branch: ${fixture.headRefName}`);
+			expect(text).toContain("Remote: fork-contrib");
+
+			const remoteReadme = runGit(fixture.forkBare, ["show", `${fixture.headRefName}:README.md`]);
+			expect(remoteReadme).toContain("pushed");
+			const originBranchList = runGit(fixture.originBare, ["branch", "--list", "pr-123"]);
+			expect(originBranchList).toBe("");
+		} finally {
+			await fs.rm(fixture.baseDir, { recursive: true, force: true });
+		}
 	});
 
 	it("watches workflow runs for the current HEAD commit and reports success", async () => {

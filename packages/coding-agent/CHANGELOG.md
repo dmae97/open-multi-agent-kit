@@ -1,9 +1,10 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added `gh_pr_checkout` tool to check out GitHub pull requests into dedicated git worktrees with contributor push metadata
+- Added `gh_pr_push` tool to push checked-out pull request branches back to their source branches
 - Added `gh_repo_view` tool to read GitHub repository metadata using the local GitHub CLI
 - Added `gh_issue_view` tool to read GitHub issues with optional comment context
 - Added `gh_pr_view` tool to read GitHub pull requests with optional comment context

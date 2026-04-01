@@ -30,7 +30,9 @@ import { FetchTool } from "./fetch";
 import { FindTool } from "./find";
 import {
 	GhIssueViewTool,
+	GhPrCheckoutTool,
 	GhPrDiffTool,
+	GhPrPushTool,
 	GhPrViewTool,
 	GhRepoViewTool,
 	GhRunWatchTool,
@@ -199,6 +201,8 @@ export const BUILTIN_TOOLS: Record<string, ToolFactory> = {
 	gh_issue_view: GhIssueViewTool.createIf,
 	gh_pr_view: GhPrViewTool.createIf,
 	gh_pr_diff: GhPrDiffTool.createIf,
+	gh_pr_checkout: GhPrCheckoutTool.createIf,
+	gh_pr_push: GhPrPushTool.createIf,
 	gh_run_watch: GhRunWatchTool.createIf,
 	gh_search_issues: GhSearchIssuesTool.createIf,
 	gh_search_prs: GhSearchPrsTool.createIf,
