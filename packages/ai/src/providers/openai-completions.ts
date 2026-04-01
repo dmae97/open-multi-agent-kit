@@ -927,7 +927,13 @@ export function convertMessages(
 			}
 
 			if (compat.thinkingFormat === "openai") {
-				const reasoningField = compat.reasoningContentField ?? "reasoning_content";
+				const streamedReasoningField = nonEmptyThinkingBlocks[0]?.thinkingSignature;
+				const reasoningField =
+					streamedReasoningField === "reasoning_content" ||
+					streamedReasoningField === "reasoning" ||
+					streamedReasoningField === "reasoning_text"
+						? streamedReasoningField
+						: (compat.reasoningContentField ?? "reasoning_content");
 				const reasoningContent = (assistantMsg as any)[reasoningField];
 				if (!reasoningContent) {
 					const reasoning = (assistantMsg as any).reasoning;
@@ -983,10 +989,9 @@ export function convertMessages(
 					(assistantMsg as any).reasoning_details = reasoningDetails;
 				}
 			}
-			// Skip assistant messages that have no content and no tool calls.
-			// Mistral explicitly requires "either content or tool_calls, but not none".
-			// Other providers also don't accept empty assistant messages.
-			// This handles aborted assistant responses that got no content.
+			// Skip assistant messages that have no content, no tool calls, and no reasoning payload.
+			// Some OpenAI-compatible backends require replaying reasoning-only assistant turns
+			// so follow-up requests preserve the provider-specific reasoning field name.
 			const content = assistantMsg.content;
 			const hasContent =
 				content !== null &&
@@ -995,7 +1000,7 @@ export function convertMessages(
 			if (!hasContent && assistantMsg.tool_calls && compat.requiresAssistantContentForToolCalls) {
 				assistantMsg.content = ".";
 			}
-			if (!hasContent && !assistantMsg.tool_calls) {
+			if (!hasContent && !assistantMsg.tool_calls && !hasReasoningField) {
 				continue;
 			}
 			params.push(assistantMsg);

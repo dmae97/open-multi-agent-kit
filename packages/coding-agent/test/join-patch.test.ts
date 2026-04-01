@@ -1,3 +1,4 @@
+import { describe, expect, test } from "bun:test";
 import { joinPatch } from "@oh-my-pi/pi-coding-agent/commit/git";
 
 describe("joinPatch", () => {
