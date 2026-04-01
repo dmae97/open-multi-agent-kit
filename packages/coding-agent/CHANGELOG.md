@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [13.17.2] - 2026-04-01
 ### Added
 
 - Added `/marketplace help` command to display usage guide for all marketplace operations

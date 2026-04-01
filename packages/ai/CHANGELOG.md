@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [13.17.2] - 2026-04-01
+
 ### Fixed
 
 - Fixed OpenAI-family first-event timeouts to preserve provider-specific timeout errors for retry classification instead of flattening them to generic aborts ([#591](https://github.com/can1357/oh-my-pi/issues/591))
