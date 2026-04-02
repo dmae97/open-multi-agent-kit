@@ -32,7 +32,6 @@ describe("commit agent prompt attribution", () => {
 
 		await runCommitAgentSession({
 			cwd: "/tmp",
-			git: {} as never,
 			model,
 			settings: Settings.isolated(),
 			modelRegistry: {} as never,

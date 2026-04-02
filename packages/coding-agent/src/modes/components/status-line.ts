@@ -1,20 +1,20 @@
 import * as fs from "node:fs";
 import type { AssistantMessage } from "@oh-my-pi/pi-ai";
 import { type Component, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
-import { formatCount } from "@oh-my-pi/pi-utils";
+import { formatCount, getProjectDir } from "@oh-my-pi/pi-utils";
 import { $ } from "bun";
 import { settings } from "../../config/settings";
 import type { StatusLinePreset, StatusLineSegmentId, StatusLineSeparatorStyle } from "../../config/settings-schema";
 import { theme } from "../../modes/theme/theme";
 import type { AgentSession } from "../../session/agent-session";
 import { calculatePromptTokens } from "../../session/compaction/compaction";
-import { findGitHeadPathSync, sanitizeStatusText } from "../shared";
+import * as git from "../../utils/git";
+import { sanitizeStatusText } from "../shared";
 import {
 	canReuseCachedPr,
 	createPrCacheContext,
 	isSamePrCacheContext,
 	type PrCacheContext,
-	parseDefaultBranch,
 } from "./status-line/git-utils";
 import { getPreset } from "./status-line/presets";
 import { renderSegment, type SegmentContext } from "./status-line/segments";
@@ -120,7 +120,7 @@ export class StatusLineComponent implements Component {
 			this.#gitWatcher = null;
 		}
 
-		const gitHeadPath = findGitHeadPathSync();
+		const gitHeadPath = git.repo.resolveSync(getProjectDir())?.headPath ?? null;
 		if (!gitHeadPath) return;
 
 		try {
@@ -152,46 +152,33 @@ export class StatusLineComponent implements Component {
 		this.#cachedPrContext = undefined;
 	}
 	#getCurrentBranch(): string | null {
-		const gitHeadPath = findGitHeadPathSync();
+		const head = git.head.resolveSync(getProjectDir());
+		const gitHeadPath = head?.headPath ?? null;
 		if (this.#cachedBranch !== undefined && this.#cachedBranchRepoId === gitHeadPath) {
 			return this.#cachedBranch;
 		}
 
 		this.#cachedBranchRepoId = gitHeadPath;
-		if (!gitHeadPath) {
+		if (!head) {
 			this.#cachedBranch = null;
 			return null;
 		}
 
-		try {
-			const content = fs.readFileSync(gitHeadPath, "utf8").trim();
-
-			if (content.startsWith("ref: refs/heads/")) {
-				this.#cachedBranch = content.slice(16);
-			} else {
-				this.#cachedBranch = "detached";
-			}
-		} catch {
-			this.#cachedBranch = null;
-		}
+		this.#cachedBranch = head.kind === "ref" ? (head.branchName ?? head.ref) : "detached";
 
 		return this.#cachedBranch ?? null;
 	}
 
 	#isDefaultBranch(branch: string): boolean {
 		if (this.#defaultBranch === undefined) {
-			// Kick off async resolution, use hardcoded fallback until it resolves
 			this.#defaultBranch = "main";
 			(async () => {
-				// Try origin/HEAD first, fall back to upstream/HEAD
-				const origin = await $`git rev-parse --abbrev-ref origin/HEAD`.quiet().nothrow();
-				if (origin.exitCode === 0) {
-					this.#defaultBranch = parseDefaultBranch(origin.stdout.toString().trim());
-					return;
-				}
-				const upstream = await $`git rev-parse --abbrev-ref upstream/HEAD`.quiet().nothrow();
-				if (upstream.exitCode === 0) {
-					this.#defaultBranch = parseDefaultBranch(upstream.stdout.toString().trim());
+				const resolved = await git.branch.default(getProjectDir());
+				if (resolved) {
+					this.#defaultBranch = resolved;
+					if (this.#onBranchChange) {
+						this.#onBranchChange();
+					}
 				}
 			})();
 		}
@@ -205,42 +192,9 @@ export class StatusLineComponent implements Component {
 
 		this.#gitStatusInFlight = true;
 
-		// Fire async fetch, return cached value
 		(async () => {
 			try {
-				const result = await $`git --no-optional-locks status --porcelain`.quiet().nothrow();
-
-				if (result.exitCode !== 0) {
-					this.#cachedGitStatus = null;
-					return;
-				}
-
-				const output = result.stdout.toString();
-
-				let staged = 0;
-				let unstaged = 0;
-				let untracked = 0;
-
-				for (const line of output.split("\n")) {
-					if (!line) continue;
-					const x = line[0];
-					const y = line[1];
-
-					if (x === "?" && y === "?") {
-						untracked++;
-						continue;
-					}
-
-					if (x && x !== " " && x !== "?") {
-						staged++;
-					}
-
-					if (y && y !== " ") {
-						unstaged++;
-					}
-				}
-
-				this.#cachedGitStatus = { staged, unstaged, untracked };
+				this.#cachedGitStatus = await git.status.summary(getProjectDir());
 			} catch {
 				this.#cachedGitStatus = null;
 			} finally {

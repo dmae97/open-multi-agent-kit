@@ -15,6 +15,7 @@ import { renderPromptTemplate } from "../../../../config/prompt-templates";
 import type { CustomCommand, CustomCommandAPI } from "../../../../extensibility/custom-commands/types";
 import type { HookCommandContext } from "../../../../extensibility/hooks/types";
 import reviewRequestTemplate from "../../../../prompts/review-request.md" with { type: "text" };
+import * as git from "../../../../utils/git";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -258,20 +259,20 @@ export class ReviewCommand implements CustomCommand {
 				if (!baseBranch) return undefined;
 
 				const currentBranch = await getCurrentBranch(this.api);
-				const diffResult = await this.api.exec("git", ["diff", `${baseBranch}...${currentBranch}`], {
-					timeout: 30000,
-				});
-				if (diffResult.code !== 0) {
-					ctx.ui.notify(`Failed to get diff: ${diffResult.stderr}`, "error");
+				let diffText: string;
+				try {
+					diffText = await git.diff(this.api.cwd, { base: `${baseBranch}...${currentBranch}` });
+				} catch (err) {
+					ctx.ui.notify(`Failed to get diff: ${err instanceof Error ? err.message : String(err)}`, "error");
 					return undefined;
 				}
 
-				if (!diffResult.stdout.trim()) {
+				if (!diffText.trim()) {
 					ctx.ui.notify(`No changes between ${baseBranch} and ${currentBranch}`, "warning");
 					return undefined;
 				}
 
-				const stats = parseDiff(diffResult.stdout);
+				const stats = parseDiff(diffText);
 				if (stats.files.length === 0) {
 					ctx.ui.notify("No reviewable files (all changes filtered out)", "warning");
 					return undefined;
@@ -280,7 +281,7 @@ export class ReviewCommand implements CustomCommand {
 				return buildReviewPrompt(
 					`Reviewing changes between \`${baseBranch}\` and \`${currentBranch}\` (PR-style)`,
 					stats,
-					diffResult.stdout,
+					diffText,
 				);
 			}
 
@@ -292,12 +293,19 @@ export class ReviewCommand implements CustomCommand {
 					return undefined;
 				}
 
-				const [unstagedResult, stagedResult] = await Promise.all([
-					this.api.exec("git", ["diff"], { timeout: 30000 }),
-					this.api.exec("git", ["diff", "--cached"], { timeout: 30000 }),
-				]);
+				let unstagedDiff: string;
+				let stagedDiff: string;
+				try {
+					[unstagedDiff, stagedDiff] = await Promise.all([
+						git.diff(this.api.cwd),
+						git.diff(this.api.cwd, { cached: true }),
+					]);
+				} catch (err) {
+					ctx.ui.notify(`Failed to get diff: ${err instanceof Error ? err.message : String(err)}`, "error");
+					return undefined;
+				}
 
-				const combinedDiff = [unstagedResult.stdout, stagedResult.stdout].filter(Boolean).join("\n");
+				const combinedDiff = [unstagedDiff, stagedDiff].filter(Boolean).join("\n");
 
 				if (!combinedDiff.trim()) {
 					ctx.ui.notify("No diff content found", "warning");
@@ -327,25 +335,26 @@ export class ReviewCommand implements CustomCommand {
 				// Extract commit hash from selection (format: "abc1234 message")
 				const hash = selected.split(" ")[0];
 
-				// Get the commit diff (with timeout)
-				const showResult = await this.api.exec("git", ["show", "--format=", hash], { timeout: 30000 });
-				if (showResult.code !== 0) {
-					ctx.ui.notify(`Failed to get commit: ${showResult.stderr}`, "error");
+				let diffText: string;
+				try {
+					diffText = await git.show(this.api.cwd, hash, { format: "" });
+				} catch (err) {
+					ctx.ui.notify(`Failed to get commit: ${err instanceof Error ? err.message : String(err)}`, "error");
 					return undefined;
 				}
 
-				if (!showResult.stdout.trim()) {
+				if (!diffText.trim()) {
 					ctx.ui.notify("Commit has no diff content", "warning");
 					return undefined;
 				}
 
-				const stats = parseDiff(showResult.stdout);
+				const stats = parseDiff(diffText);
 				if (stats.files.length === 0) {
 					ctx.ui.notify("No reviewable files in commit (all changes filtered out)", "warning");
 					return undefined;
 				}
 
-				return buildReviewPrompt(`Reviewing commit \`${hash}\``, stats, showResult.stdout);
+				return buildReviewPrompt(`Reviewing commit \`${hash}\``, stats, diffText);
 			}
 
 			case 4: {
@@ -354,16 +363,21 @@ export class ReviewCommand implements CustomCommand {
 				if (!instructions?.trim()) return undefined;
 
 				// For custom, we still try to get current diff for context
-				const diffResult = await this.api.exec("git", ["diff", "HEAD"], { timeout: 30000 });
-				const hasDiff = diffResult.code === 0 && diffResult.stdout.trim();
+				let diffText: string | undefined;
+				try {
+					diffText = await git.diff(this.api.cwd, { base: "HEAD" });
+				} catch {
+					diffText = undefined;
+				}
+				const reviewDiff = diffText?.trim();
 
-				if (hasDiff) {
-					const stats = parseDiff(diffResult.stdout);
+				if (reviewDiff) {
+					const stats = parseDiff(reviewDiff);
 					// Even if all files filtered, include the custom instructions
 					return `${buildReviewPrompt(
 						`Custom review: ${instructions.split("\n")[0].slice(0, 60)}…`,
 						stats,
-						diffResult.stdout,
+						reviewDiff,
 					)}\n\n### Additional Instructions\n\n${instructions}`;
 				}
 
@@ -388,12 +402,7 @@ Use the Task tool with \`agent: "reviewer"\` to execute this review.`;
 
 async function getGitBranches(api: CustomCommandAPI): Promise<string[]> {
 	try {
-		const result = await api.exec("git", ["branch", "-a", "--format=%(refname:short)"]);
-		if (result.code !== 0) return [];
-		return result.stdout
-			.split("\n")
-			.map(b => b.trim())
-			.filter(Boolean);
+		return await git.branch.list(api.cwd, { all: true });
 	} catch {
 		return [];
 	}
@@ -401,8 +410,7 @@ async function getGitBranches(api: CustomCommandAPI): Promise<string[]> {
 
 async function getCurrentBranch(api: CustomCommandAPI): Promise<string> {
 	try {
-		const result = await api.exec("git", ["branch", "--show-current"]);
-		return result.stdout.trim() || "HEAD";
+		return (await git.branch.current(api.cwd)) ?? "HEAD";
 	} catch {
 		return "HEAD";
 	}
@@ -410,8 +418,7 @@ async function getCurrentBranch(api: CustomCommandAPI): Promise<string> {
 
 async function getGitStatus(api: CustomCommandAPI): Promise<string> {
 	try {
-		const result = await api.exec("git", ["status", "--porcelain"]);
-		return result.stdout;
+		return await git.status(api.cwd);
 	} catch {
 		return "";
 	}
@@ -419,12 +426,7 @@ async function getGitStatus(api: CustomCommandAPI): Promise<string> {
 
 async function getRecentCommits(api: CustomCommandAPI, count: number): Promise<string[]> {
 	try {
-		const result = await api.exec("git", ["log", `-${count}`, "--oneline", "--no-decorate"]);
-		if (result.code !== 0) return [];
-		return result.stdout
-			.split("\n")
-			.map(c => c.trim())
-			.filter(Boolean);
+		return await git.log.onelines(api.cwd, count);
 	} catch {
 		return [];
 	}

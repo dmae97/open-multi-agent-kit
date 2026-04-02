@@ -1,6 +1,6 @@
 import { Type } from "@sinclair/typebox";
-import type { ControlledGit } from "../../../commit/git";
 import type { CustomTool } from "../../../extensibility/custom-tools/types";
+import * as git from "../../../utils/git";
 
 const recentCommitsSchema = Type.Object({
 	count: Type.Optional(Type.Number({ description: "Number of commits to fetch", minimum: 1, maximum: 50 })),
@@ -25,7 +25,7 @@ function extractScope(subject: string): string | null {
 	return match?.[1]?.trim() ?? null;
 }
 
-export function createRecentCommitsTool(git: ControlledGit): CustomTool<typeof recentCommitsSchema> {
+export function createRecentCommitsTool(cwd: string): CustomTool<typeof recentCommitsSchema> {
 	return {
 		name: "recent_commits",
 		label: "Recent Commits",
@@ -33,7 +33,7 @@ export function createRecentCommitsTool(git: ControlledGit): CustomTool<typeof r
 		parameters: recentCommitsSchema,
 		async execute(_toolCallId, params) {
 			const count = params.count ?? 8;
-			const commits = await git.getRecentCommits(count);
+			const commits = await git.log.subjects(cwd, count);
 			const verbs: Record<string, number> = {};
 			const scopes: Record<string, number> = {};
 			const lengths: number[] = [];

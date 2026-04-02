@@ -1,6 +1,30 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Exported git utilities from main package entry point for use by extensions
+- Added comprehensive git utility module (`utils/git`) with organized namespaces for common git operations (branch, commit, diff, log, patch, ref, stage, status, head, repository)
+
+### Changed
+
+- Refactored git operations to use centralized utility module instead of `ControlledGit` class throughout codebase
+- Replaced `ControlledGit` dependency injection pattern with direct `cwd` parameter in commit agent tools
+- Migrated git HEAD resolution in footer and status-line components to use new synchronous and asynchronous utilities
+- Updated git status summary calculation in status-line component to use new git utility API
+- Simplified git branch operations in task execution and cleanup to use new utility functions
+- Refactored patch application logic in task worktree to use new git patch utilities
+
+### Removed
+
+- Removed `ControlledGit` class and associated git wrapper infrastructure from `commit/git` module
+- Removed `mergeStdoutStderr` helper function from autoresearch git utilities
+- Removed `findGitHeadPathAsync` and `findGitHeadPathSync` from modes/shared module (replaced by git utilities)
+- Removed `./commit/git` export from package.json (internal diff parsing still available via `./commit/git/*`)
+
+### Fixed
+
+- Fixed `read` output for file-backed internal URLs like `local://...` to include hashline prefixes in hashline edit mode, preserving usable line refs for follow-up edits
 
 ## [13.18.0] - 2026-04-02
 ### Breaking Changes

@@ -2,8 +2,8 @@ import * as path from "node:path";
 import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
-import type { ControlledGit } from "../../commit/git";
 import { CHANGELOG_CATEGORIES } from "../../commit/types";
+import * as git from "../../utils/git";
 import { detectChangelogBoundaries } from "./detect";
 import { generateChangelogEntries } from "./generate";
 import { parseUnreleasedSection } from "./parse";
@@ -13,7 +13,6 @@ const CHANGELOG_SECTIONS = CHANGELOG_CATEGORIES;
 const DEFAULT_MAX_DIFF_CHARS = 120_000;
 
 export interface ChangelogFlowInput {
-	git: ControlledGit;
 	cwd: string;
 	model: Model<Api>;
 	apiKey: string;
@@ -25,7 +24,6 @@ export interface ChangelogFlowInput {
 }
 
 export interface ChangelogProposalInput {
-	git: ControlledGit;
 	cwd: string;
 	proposals: Array<{
 		path: string;
@@ -40,7 +38,6 @@ export interface ChangelogProposalInput {
  * Update CHANGELOG.md entries for staged changes.
  */
 export async function runChangelogFlow({
-	git,
 	cwd,
 	model,
 	apiKey,
@@ -58,9 +55,9 @@ export async function runChangelogFlow({
 	const updated: string[] = [];
 	for (const boundary of boundaries) {
 		onProgress?.(`Generating entries for ${boundary.changelogPath}…`);
-		const diff = await git.getDiffForFiles(boundary.files, true);
+		const diff = await git.diff(cwd, { cached: true, files: boundary.files });
 		if (!diff.trim()) continue;
-		const stat = await git.getStatForFiles(boundary.files, true);
+		const stat = await git.diff(cwd, { stat: true, cached: true, files: boundary.files });
 		const diffForPrompt = truncateDiff(diff, maxDiffChars ?? DEFAULT_MAX_DIFF_CHARS);
 		const changelogContent = await Bun.file(boundary.changelogPath).text();
 		let unreleased: { startLine: number; endLine: number; entries: Record<string, string[]> };
@@ -87,7 +84,7 @@ export async function runChangelogFlow({
 		const updatedContent = applyChangelogEntries(changelogContent, unreleased, generated.entries);
 		if (!dryRun) {
 			await Bun.write(boundary.changelogPath, updatedContent);
-			await git.stageFiles([path.relative(cwd, boundary.changelogPath)]);
+			await git.stage.files(cwd, [path.relative(cwd, boundary.changelogPath)]);
 		}
 		updated.push(boundary.changelogPath);
 	}
@@ -99,7 +96,6 @@ export async function runChangelogFlow({
  * Apply changelog entries provided by the commit agent.
  */
 export async function applyChangelogProposals({
-	git,
 	cwd,
 	proposals,
 	dryRun,
@@ -132,7 +128,7 @@ export async function applyChangelogProposals({
 		const updatedContent = applyChangelogEntries(changelogContent, unreleased, normalized, normalizedDeletions);
 		if (!dryRun) {
 			await Bun.write(proposal.path, updatedContent);
-			await git.stageFiles([path.relative(cwd, proposal.path)]);
+			await git.stage.files(cwd, [path.relative(cwd, proposal.path)]);
 		}
 		updated.push(proposal.path);
 	}

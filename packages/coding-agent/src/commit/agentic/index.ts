@@ -4,7 +4,6 @@ import { $env, getProjectDir, isEnoent } from "@oh-my-pi/pi-utils";
 import { applyChangelogProposals } from "../../commit/changelog";
 import { detectChangelogBoundaries } from "../../commit/changelog/detect";
 import { parseUnreleasedSection } from "../../commit/changelog/parse";
-import { ControlledGit } from "../../commit/git";
 import { formatCommitMessage } from "../../commit/message";
 import { resolvePrimaryModel, resolveSmolModel } from "../../commit/model-selection";
 import type { CommitCommandArgs, ConventionalAnalysis } from "../../commit/types";
@@ -12,6 +11,7 @@ import { ModelRegistry } from "../../config/model-registry";
 import { renderPromptTemplate } from "../../config/prompt-templates";
 import { Settings } from "../../config/settings";
 import { discoverAuthStorage, discoverContextFiles } from "../../sdk";
+import * as git from "../../utils/git";
 import { type ExistingChangelogEntries, runCommitAgentSession } from "./agent";
 import { generateFallbackProposal } from "./fallback";
 import splitConfirmPrompt from "./prompts/split-confirm.md" with { type: "text" };
@@ -20,25 +20,24 @@ import { computeDependencyOrder } from "./topo-sort";
 import { detectTrivialChange } from "./trivial";
 
 interface CommitExecutionContext {
-	git: ControlledGit;
+	cwd: string;
 	dryRun: boolean;
 	push: boolean;
 }
 
 export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 	const cwd = getProjectDir();
-	const git = new ControlledGit(cwd);
 	const [settings, authStorage] = await Promise.all([Settings.init({ cwd }), discoverAuthStorage()]);
 
 	process.stdout.write("● Resolving model...\n");
 	const modelRegistry = new ModelRegistry(authStorage);
 	await modelRegistry.refresh();
 	const stagedFilesPromise = (async () => {
-		let stagedFiles = await git.getStagedFiles();
+		let stagedFiles = await git.diff.changedFiles(cwd, { cached: true });
 		if (stagedFiles.length === 0) {
 			process.stdout.write("No staged changes detected, staging all changes...\n");
-			await git.stageAll();
-			stagedFiles = await git.getStagedFiles();
+			await git.stage.files(cwd);
+			stagedFiles = await git.diff.changedFiles(cwd, { cached: true });
 		}
 		return stagedFiles;
 	})();
@@ -66,8 +65,8 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 	const [changelogBoundaries, contextFiles, numstat, diff] = await Promise.all([
 		args.noChangelog ? [] : detectChangelogBoundaries(cwd, stagedFiles),
 		discoverContextFiles(cwd),
-		git.getNumstat(true),
-		git.getDiff(true),
+		git.diff.numstat(cwd, { cached: true }),
+		git.diff(cwd, { cached: true }),
 	]);
 	const changelogTargets = changelogBoundaries.map(boundary => boundary.changelogPath);
 	if (!args.noChangelog) {
@@ -93,7 +92,7 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 	if (forceFallback) {
 		process.stdout.write("● Forcing fallback commit generation...\n");
 		const fallbackProposal = generateFallbackProposal(numstat);
-		await runSingleCommit(fallbackProposal, { git, dryRun: args.dryRun, push: args.push });
+		await runSingleCommit(fallbackProposal, { cwd, dryRun: args.dryRun, push: args.push });
 		return;
 	}
 
@@ -110,7 +109,7 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 			summary: trivialChange.summary,
 			warnings: [],
 		};
-		await runSingleCommit(trivialProposal, { git, dryRun: args.dryRun, push: args.push });
+		await runSingleCommit(trivialProposal, { cwd, dryRun: args.dryRun, push: args.push });
 		return;
 	}
 
@@ -129,7 +128,6 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 	try {
 		commitState = await runCommitAgentSession({
 			cwd,
-			git,
 			model: agentModel,
 			thinkingLevel: agentThinkingLevel,
 			settings,
@@ -169,7 +167,6 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 		}
 		process.stdout.write("● Applying changelog entries...\n");
 		const updated = await applyChangelogProposals({
-			git,
 			cwd,
 			proposals: commitState.changelogProposal.entries,
 			dryRun: args.dryRun,
@@ -188,13 +185,13 @@ export async function runAgenticCommit(args: CommitCommandArgs): Promise<void> {
 	}
 
 	if (commitState.proposal) {
-		await runSingleCommit(commitState.proposal, { git, dryRun: args.dryRun, push: args.push });
+		await runSingleCommit(commitState.proposal, { cwd, dryRun: args.dryRun, push: args.push });
 		return;
 	}
 
 	if (commitState.splitProposal) {
 		await runSplitCommit(commitState.splitProposal, {
-			git,
+			cwd,
 			dryRun: args.dryRun,
 			push: args.push,
 			additionalFiles: updatedChangelogFiles,
@@ -215,10 +212,10 @@ async function runSingleCommit(proposal: CommitProposal, ctx: CommitExecutionCon
 		process.stdout.write(`${commitMessage}\n`);
 		return;
 	}
-	await ctx.git.commit(commitMessage);
+	await git.commit(ctx.cwd, commitMessage);
 	process.stdout.write("Commit created.\n");
 	if (ctx.push) {
-		await ctx.git.push();
+		await git.push(ctx.cwd);
 		process.stdout.write("Pushed to remote.\n");
 	}
 }
@@ -233,7 +230,7 @@ async function runSplitCommit(
 	if (ctx.additionalFiles && ctx.additionalFiles.length > 0) {
 		appendFilesToLastCommit(plan, ctx.additionalFiles);
 	}
-	const stagedFiles = await ctx.git.getStagedFiles();
+	const stagedFiles = await git.diff.changedFiles(ctx.cwd, { cached: true });
 	const plannedFiles = new Set(plan.commits.flatMap(commit => commit.changes.map(change => change.path)));
 	const missingFiles = stagedFiles.filter(file => !plannedFiles.has(file));
 	if (missingFiles.length > 0) {
@@ -270,10 +267,10 @@ async function runSplitCommit(
 		throw new Error(order.error);
 	}
 
-	await ctx.git.resetStaging();
+	await git.stage.reset(ctx.cwd);
 	for (const commitIndex of order) {
 		const commit = plan.commits[commitIndex];
-		await ctx.git.stageHunks(commit.changes);
+		await git.stage.hunks(ctx.cwd, commit.changes);
 		const analysis: ConventionalAnalysis = {
 			type: commit.type,
 			scope: commit.scope,
@@ -281,12 +278,12 @@ async function runSplitCommit(
 			issueRefs: commit.issueRefs,
 		};
 		const message = formatCommitMessage(analysis, commit.summary);
-		await ctx.git.commit(message);
-		await ctx.git.resetStaging();
+		await git.commit(ctx.cwd, message);
+		await git.stage.reset(ctx.cwd);
 	}
 	process.stdout.write("Split commits created.\n");
 	if (ctx.push) {
-		await ctx.git.push();
+		await git.push(ctx.cwd);
 		process.stdout.write("Pushed to remote.\n");
 	}
 }

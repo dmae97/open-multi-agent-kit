@@ -1,7 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { CommitAgentState } from "../../../commit/agentic/state";
-import type { ControlledGit } from "../../../commit/git";
 import type { CustomTool } from "../../../extensibility/custom-tools/types";
+import * as git from "../../../utils/git";
 
 const TARGET_TOKENS = 30000;
 const CHARS_PER_TOKEN = 4;
@@ -136,10 +136,7 @@ const gitFileDiffSchema = Type.Object({
 	staged: Type.Optional(Type.Boolean({ description: "Use staged changes (default: true)" })),
 });
 
-export function createGitFileDiffTool(
-	git: ControlledGit,
-	state: CommitAgentState,
-): CustomTool<typeof gitFileDiffSchema> {
+export function createGitFileDiffTool(cwd: string, state: CommitAgentState): CustomTool<typeof gitFileDiffSchema> {
 	return {
 		name: "git_file_diff",
 		label: "Git File Diff",
@@ -167,7 +164,7 @@ export function createGitFileDiffTool(
 
 			if (uncachedFiles.length > 0) {
 				for (const file of uncachedFiles) {
-					const diff = await git.getDiffForFiles([file], staged);
+					const diff = await git.diff(cwd, { cached: staged, files: [file] });
 					if (diff) {
 						diffs.set(file, diff);
 						state.diffCache.set(cacheKey(file), diff);

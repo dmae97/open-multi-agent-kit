@@ -3,7 +3,6 @@ import * as path from "node:path";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { abortableSleep, isEnoent, untilAborted } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
-import { $ } from "bun";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import ghIssueViewDescription from "../prompts/tools/gh-issue-view.md" with { type: "text" };
 import ghPrCheckoutDescription from "../prompts/tools/gh-pr-checkout.md" with { type: "text" };
@@ -14,6 +13,7 @@ import ghRepoViewDescription from "../prompts/tools/gh-repo-view.md" with { type
 import ghRunWatchDescription from "../prompts/tools/gh-run-watch.md" with { type: "text" };
 import ghSearchIssuesDescription from "../prompts/tools/gh-search-issues.md" with { type: "text" };
 import ghSearchPrsDescription from "../prompts/tools/gh-search-prs.md" with { type: "text" };
+import * as git from "../utils/git";
 import type { ToolSession } from ".";
 import { isGhAvailable, runGhCommand, runGhJson, runGhText } from "./gh-cli";
 import type { OutputMeta } from "./output-meta";
@@ -401,19 +401,6 @@ interface GhPrViewData extends GhIssueViewData {
 	reviewDecision?: string;
 }
 
-interface GitCommandResult {
-	exitCode: number;
-	stdout: string;
-	stderr: string;
-}
-
-interface GitWorktreeEntry {
-	path: string;
-	head?: string;
-	branch?: string;
-	detached: boolean;
-}
-
 interface GhPrReviewCommit {
 	oid?: string | null;
 }
@@ -641,142 +628,45 @@ function stripHeadsRef(value: string | undefined): string | undefined {
 	return value.startsWith("refs/heads/") ? value.slice("refs/heads/".length) : value;
 }
 
-function formatGitFailure(args: string[], result: GitCommandResult): string {
-	const output = normalizeOptionalString(result.stderr) ?? normalizeOptionalString(result.stdout);
-	if (output) {
-		return output;
-	}
-
-	return `git ${args.join(" ")} failed with exit code ${result.exitCode}`;
-}
-
-async function runGitCommand(cwd: string, args: string[], signal?: AbortSignal): Promise<GitCommandResult> {
-	return untilAborted(signal, async () => {
-		throwIfAborted(signal);
-		const child = Bun.spawn(["git", ...args], {
-			cwd,
-			stdin: "ignore",
-			stdout: "pipe",
-			stderr: "pipe",
-			windowsHide: true,
-			signal,
-		});
-		throwIfAborted(signal);
-
-		if (!child.stdout || !child.stderr) {
-			throw new ToolError("Failed to capture git command output.");
-		}
-
-		const [stdout, stderr, exitCode] = await Promise.all([
-			new Response(child.stdout).text(),
-			new Response(child.stderr).text(),
-			child.exited,
-		]);
-		throwIfAborted(signal);
-
-		return {
-			exitCode: exitCode ?? 0,
-			stdout: normalizeBlock(stdout),
-			stderr: normalizeBlock(stderr),
-		};
-	});
-}
-
-async function runGitTextChecked(cwd: string, args: string[], signal?: AbortSignal): Promise<string> {
-	const result = await runGitChecked(cwd, args, signal);
-
-	const text = normalizeOptionalString(result.stdout);
-	if (!text) {
-		throw new ToolError(`git ${args.join(" ")} returned empty output.`);
-	}
-
-	return text;
-}
-
-async function runGitChecked(cwd: string, args: string[], signal?: AbortSignal): Promise<GitCommandResult> {
-	const result = await runGitCommand(cwd, args, signal);
-	if (result.exitCode !== 0) {
-		throw new ToolError(formatGitFailure(args, result));
-	}
-
-	return result;
-}
-
-async function tryRunGitText(cwd: string, args: string[], signal?: AbortSignal): Promise<string | undefined> {
-	const result = await runGitCommand(cwd, args, signal);
-	if (result.exitCode !== 0) {
-		return undefined;
-	}
-
-	return normalizeOptionalString(result.stdout);
-}
-
-async function resolveGitRepoRoot(cwd: string, signal?: AbortSignal): Promise<string> {
-	return runGitTextChecked(cwd, ["rev-parse", "--show-toplevel"], signal);
-}
-
-async function resolvePrimaryGitRepoRoot(repoRoot: string, signal?: AbortSignal): Promise<string> {
-	const commonDir = await runGitTextChecked(
-		repoRoot,
-		["rev-parse", "--path-format=absolute", "--git-common-dir"],
-		signal,
-	);
-	if (path.basename(commonDir) === ".git") {
-		return path.dirname(commonDir);
+async function requireGitRepoRoot(cwd: string, signal?: AbortSignal): Promise<string> {
+	const repoRoot = await git.repo.root(cwd, signal);
+	if (!repoRoot) {
+		throw new ToolError("Current git repository is unavailable.");
 	}
 
 	return repoRoot;
 }
 
-function parseGitWorktreeList(text: string): GitWorktreeEntry[] {
-	const trimmed = text.trim();
-	if (!trimmed) {
-		return [];
+async function requirePrimaryGitRepoRoot(cwd: string, signal?: AbortSignal): Promise<string> {
+	const primaryRepoRoot = await git.repo.primaryRoot(cwd, signal);
+	if (!primaryRepoRoot) {
+		throw new ToolError("Current git repository is unavailable.");
 	}
 
-	return trimmed
-		.split(/\n\s*\n/)
-		.map(block => block.trim())
-		.filter(Boolean)
-		.map(block => {
-			const entry: GitWorktreeEntry = {
-				path: "",
-				detached: false,
-			};
-			for (const line of block.split("\n")) {
-				if (line.startsWith("worktree ")) {
-					entry.path = line.slice("worktree ".length);
-					continue;
-				}
-				if (line.startsWith("HEAD ")) {
-					entry.head = line.slice("HEAD ".length);
-					continue;
-				}
-				if (line.startsWith("branch ")) {
-					entry.branch = line.slice("branch ".length);
-					continue;
-				}
-				if (line === "detached") {
-					entry.detached = true;
-				}
-			}
-			return entry;
-		});
+	return primaryRepoRoot;
 }
 
-async function listGitWorktrees(repoRoot: string, signal?: AbortSignal): Promise<GitWorktreeEntry[]> {
-	const output = await runGitTextChecked(repoRoot, ["worktree", "list", "--porcelain"], signal);
-	return parseGitWorktreeList(output);
+async function requireCurrentGitBranch(cwd: string, signal?: AbortSignal): Promise<string> {
+	const branch = await git.branch.current(cwd, signal);
+	if (!branch) {
+		throw new ToolError("Current git branch is unavailable. Pass `branch` or `run` explicitly.");
+	}
+
+	return branch;
 }
 
-async function gitRefExists(repoRoot: string, ref: string, signal?: AbortSignal): Promise<boolean> {
-	const result = await runGitCommand(repoRoot, ["show-ref", "--verify", "--quiet", ref], signal);
-	return result.exitCode === 0;
+async function requireCurrentGitHead(cwd: string, signal?: AbortSignal): Promise<string> {
+	const headSha = await git.head.sha(cwd, signal);
+	if (!headSha) {
+		throw new ToolError("Current git HEAD is unavailable. Pass `run` explicitly.");
+	}
+
+	return headSha;
 }
 
 async function ensureGitWorktreePathAvailable(
 	worktreePath: string,
-	existingWorktrees: GitWorktreeEntry[],
+	existingWorktrees: git.GitWorktreeEntry[],
 ): Promise<void> {
 	const normalizedTarget = path.resolve(worktreePath);
 	const conflictingWorktree = existingWorktrees.find(entry => path.resolve(entry.path) === normalizedTarget);
@@ -804,15 +694,10 @@ function selectPrCloneUrl(originUrl: string | undefined, repo: Pick<GhRepoViewDa
 }
 
 async function getRemoteUrls(repoRoot: string, signal?: AbortSignal): Promise<Map<string, string>> {
-	const remoteList = await tryRunGitText(repoRoot, ["remote"], signal);
-	const remotes =
-		remoteList
-			?.split("\n")
-			.map(value => value.trim())
-			.filter(Boolean) ?? [];
+	const remotes = await git.remote.list(repoRoot, signal);
 	const urls = new Map<string, string>();
 	for (const remoteName of remotes) {
-		const remoteUrl = await tryRunGitText(repoRoot, ["remote", "get-url", remoteName], signal);
+		const remoteUrl = await git.remote.url(repoRoot, remoteName, signal);
 		if (remoteUrl) {
 			urls.set(remoteName, remoteUrl);
 		}
@@ -826,7 +711,7 @@ async function ensurePrRemote(
 	signal?: AbortSignal,
 ): Promise<{ name: string; url: string }> {
 	if (!data.isCrossRepository) {
-		const originUrl = normalizeOptionalString(await tryRunGitText(repoRoot, ["remote", "get-url", "origin"], signal));
+		const originUrl = await git.remote.url(repoRoot, "origin", signal);
 		if (!originUrl) {
 			throw new ToolError("origin remote is unavailable for this repository.");
 		}
@@ -844,7 +729,7 @@ async function ensurePrRemote(
 		signal,
 		{ repoProvided: true },
 	);
-	const originUrl = await tryRunGitText(repoRoot, ["remote", "get-url", "origin"], signal);
+	const originUrl = await git.remote.url(repoRoot, "origin", signal);
 	const remoteUrl = selectPrCloneUrl(originUrl, repoSummary);
 	if (!remoteUrl) {
 		throw new ToolError(`Could not determine a clone URL for ${headRepository}.`);
@@ -867,37 +752,12 @@ async function ensurePrRemote(
 		suffix += 1;
 	}
 
-	const result = await runGitCommand(repoRoot, ["remote", "add", remoteName, remoteUrl], signal);
-	if (result.exitCode !== 0) {
-		throw new ToolError(formatGitFailure(["remote", "add", remoteName, remoteUrl], result));
-	}
+	await git.remote.add(repoRoot, remoteName, remoteUrl, signal);
 
 	return {
 		name: remoteName,
 		url: remoteUrl,
 	};
-}
-
-async function setBranchConfig(
-	repoRoot: string,
-	localBranch: string,
-	key: string,
-	value: string,
-	signal?: AbortSignal,
-): Promise<void> {
-	const result = await runGitCommand(repoRoot, ["config", `branch.${localBranch}.${key}`, value], signal);
-	if (result.exitCode !== 0) {
-		throw new ToolError(formatGitFailure(["config", `branch.${localBranch}.${key}`, value], result));
-	}
-}
-
-async function getBranchConfig(
-	repoRoot: string,
-	localBranch: string,
-	key: string,
-	signal?: AbortSignal,
-): Promise<string | undefined> {
-	return tryRunGitText(repoRoot, ["config", "--get", `branch.${localBranch}.${key}`], signal);
 }
 
 async function resolvePrBranchPushTarget(
@@ -912,13 +772,18 @@ async function resolvePrBranchPushTarget(
 	maintainerCanModify?: boolean;
 	isCrossRepository: boolean;
 }> {
-	const pushRemote = await getBranchConfig(repoRoot, localBranch, "pushRemote", signal);
-	const remote = await getBranchConfig(repoRoot, localBranch, "remote", signal);
-	const mergeRef = await getBranchConfig(repoRoot, localBranch, "merge", signal);
-	const headRef = await getBranchConfig(repoRoot, localBranch, "ompPrHeadRef", signal);
-	const prUrl = await getBranchConfig(repoRoot, localBranch, "ompPrUrl", signal);
-	const maintainerCanModifyValue = await getBranchConfig(repoRoot, localBranch, "ompPrMaintainerCanModify", signal);
-	const isCrossRepositoryValue = await getBranchConfig(repoRoot, localBranch, "ompPrIsCrossRepository", signal);
+	const pushRemote = await git.config.getBranch(repoRoot, localBranch, "pushRemote", signal);
+	const remote = await git.config.getBranch(repoRoot, localBranch, "remote", signal);
+	const mergeRef = await git.config.getBranch(repoRoot, localBranch, "merge", signal);
+	const headRef = await git.config.getBranch(repoRoot, localBranch, "ompPrHeadRef", signal);
+	const prUrl = await git.config.getBranch(repoRoot, localBranch, "ompPrUrl", signal);
+	const maintainerCanModifyValue = await git.config.getBranch(
+		repoRoot,
+		localBranch,
+		"ompPrMaintainerCanModify",
+		signal,
+	);
+	const isCrossRepositoryValue = await git.config.getBranch(repoRoot, localBranch, "ompPrIsCrossRepository", signal);
 
 	const remoteName = pushRemote ?? remote;
 	if (!remoteName) {
@@ -933,7 +798,7 @@ async function resolvePrBranchPushTarget(
 	return {
 		remoteName,
 		remoteBranch,
-		remoteUrl: await tryRunGitText(repoRoot, ["remote", "get-url", remoteName], signal),
+		remoteUrl: await git.remote.url(repoRoot, remoteName, signal),
 		prUrl,
 		maintainerCanModify:
 			maintainerCanModifyValue === undefined
@@ -1485,44 +1350,6 @@ function buildCommitRunWatchDetails(
 			failedLogs: buildFailedLogDetails(options?.failedJobLogs ?? []),
 		},
 	};
-}
-
-async function resolveCurrentGitBranch(cwd: string, signal?: AbortSignal): Promise<string> {
-	return untilAborted(signal, async () => {
-		throwIfAborted(signal);
-		const result = await $`git symbolic-ref --short HEAD`.cwd(cwd).quiet().nothrow();
-		throwIfAborted(signal);
-
-		if (result.exitCode !== 0) {
-			throw new ToolError("Current git branch is unavailable. Pass `branch` or `run` explicitly.");
-		}
-
-		const branch = normalizeOptionalString(result.text());
-		if (!branch) {
-			throw new ToolError("Current git branch is unavailable. Pass `branch` or `run` explicitly.");
-		}
-
-		return branch;
-	});
-}
-
-async function resolveCurrentGitHead(cwd: string, signal?: AbortSignal): Promise<string> {
-	return untilAborted(signal, async () => {
-		throwIfAborted(signal);
-		const result = await $`git rev-parse HEAD`.cwd(cwd).quiet().nothrow();
-		throwIfAborted(signal);
-
-		if (result.exitCode !== 0) {
-			throw new ToolError("Current git HEAD is unavailable. Pass `run` explicitly.");
-		}
-
-		const headSha = normalizeOptionalString(result.text());
-		if (!headSha) {
-			throw new ToolError("Current git HEAD is unavailable. Pass `run` explicitly.");
-		}
-
-		return headSha;
-	});
 }
 
 async function resolveGitHubRepo(
@@ -2273,68 +2100,56 @@ export class GhPrCheckoutTool implements AgentTool<typeof ghPrCheckoutSchema, Gh
 
 			const headRefName = requireNonEmpty(data.headRefName, "head branch");
 			const headRefOid = requireNonEmpty(data.headRefOid, "head commit");
-			const repoRoot = await resolveGitRepoRoot(this.session.cwd, signal);
-			const primaryRepoRoot = await resolvePrimaryGitRepoRoot(repoRoot, signal);
+			const repoRoot = await requireGitRepoRoot(this.session.cwd, signal);
+			const primaryRepoRoot = await requirePrimaryGitRepoRoot(repoRoot, signal);
 			const localBranch = requestedBranch ?? `pr-${prNumber}`;
 			const worktreePath = requestedWorktree
 				? path.resolve(this.session.cwd, requestedWorktree)
 				: path.join(primaryRepoRoot, ".worktrees", localBranch);
-			const existingWorktrees = await listGitWorktrees(repoRoot, signal);
+			const existingWorktrees = await git.worktree.list(repoRoot, signal);
 			const existingWorktree = existingWorktrees.find(entry => entry.branch === toLocalBranchRef(localBranch));
 
 			const remote = await ensurePrRemote(repoRoot, data, signal);
-			await runGitChecked(
+			await git.fetch(
 				repoRoot,
-				["fetch", remote.name, `+refs/heads/${headRefName}:refs/remotes/${remote.name}/${headRefName}`],
+				remote.name,
+				`refs/heads/${headRefName}`,
+				`refs/remotes/${remote.name}/${headRefName}`,
 				signal,
 			);
 
 			if (!existingWorktree) {
 				const localBranchRef = toLocalBranchRef(localBranch);
-				const localBranchExists = await gitRefExists(repoRoot, localBranchRef, signal);
+				const localBranchExists = await git.ref.exists(repoRoot, localBranchRef, signal);
 				if (localBranchExists) {
-					const existingOid = await runGitTextChecked(repoRoot, ["rev-parse", localBranchRef], signal);
+					const existingOid = await git.ref.resolve(repoRoot, localBranchRef, signal);
 					if (existingOid !== headRefOid) {
 						if (!force) {
 							throw new ToolError(
-								`local branch ${localBranch} already exists at ${formatShortSha(existingOid) ?? existingOid}; pass force=true to reset it`,
+								`local branch ${localBranch} already exists at ${formatShortSha(existingOid ?? undefined) ?? existingOid ?? "unknown commit"}; pass force=true to reset it`,
 							);
 						}
 
-						const resetResult = await runGitCommand(
-							repoRoot,
-							["branch", "--force", localBranch, `refs/remotes/${remote.name}/${headRefName}`],
-							signal,
-						);
-						if (resetResult.exitCode !== 0) {
-							throw new ToolError(formatGitFailure(["branch", "--force", localBranch], resetResult));
-						}
+						await git.branch.force(repoRoot, localBranch, `refs/remotes/${remote.name}/${headRefName}`, signal);
 					}
 				} else {
-					const createResult = await runGitCommand(
-						repoRoot,
-						["branch", localBranch, `refs/remotes/${remote.name}/${headRefName}`],
-						signal,
-					);
-					if (createResult.exitCode !== 0) {
-						throw new ToolError(formatGitFailure(["branch", localBranch], createResult));
-					}
+					await git.branch.create(repoRoot, localBranch, `refs/remotes/${remote.name}/${headRefName}`, signal);
 				}
 			}
 
-			await setBranchConfig(repoRoot, localBranch, "remote", remote.name, signal);
-			await setBranchConfig(repoRoot, localBranch, "merge", `refs/heads/${headRefName}`, signal);
-			await setBranchConfig(repoRoot, localBranch, "pushRemote", remote.name, signal);
-			await setBranchConfig(repoRoot, localBranch, "ompPrHeadRef", headRefName, signal);
-			await setBranchConfig(repoRoot, localBranch, "ompPrUrl", data.url ?? "", signal);
-			await setBranchConfig(
+			await git.config.setBranch(repoRoot, localBranch, "remote", remote.name, signal);
+			await git.config.setBranch(repoRoot, localBranch, "merge", `refs/heads/${headRefName}`, signal);
+			await git.config.setBranch(repoRoot, localBranch, "pushRemote", remote.name, signal);
+			await git.config.setBranch(repoRoot, localBranch, "ompPrHeadRef", headRefName, signal);
+			await git.config.setBranch(repoRoot, localBranch, "ompPrUrl", data.url ?? "", signal);
+			await git.config.setBranch(
 				repoRoot,
 				localBranch,
 				"ompPrIsCrossRepository",
 				String(Boolean(data.isCrossRepository)),
 				signal,
 			);
-			await setBranchConfig(
+			await git.config.setBranch(
 				repoRoot,
 				localBranch,
 				"ompPrMaintainerCanModify",
@@ -2346,14 +2161,7 @@ export class GhPrCheckoutTool implements AgentTool<typeof ghPrCheckoutSchema, Gh
 			if (!existingWorktree) {
 				await ensureGitWorktreePathAvailable(finalWorktreePath, existingWorktrees);
 				await fs.mkdir(path.dirname(finalWorktreePath), { recursive: true });
-				const addResult = await runGitCommand(
-					repoRoot,
-					["worktree", "add", finalWorktreePath, localBranch],
-					signal,
-				);
-				if (addResult.exitCode !== 0) {
-					throw new ToolError(formatGitFailure(["worktree", "add", finalWorktreePath, localBranch], addResult));
-				}
+				await git.worktree.add(repoRoot, finalWorktreePath, localBranch, { signal });
 			}
 
 			return buildTextResult(
@@ -2400,28 +2208,24 @@ export class GhPrPushTool implements AgentTool<typeof ghPrPushSchema, GhToolDeta
 		_context?: AgentToolContext,
 	): Promise<AgentToolResult<GhToolDetails>> {
 		return untilAborted(signal, async () => {
-			const repoRoot = await resolveGitRepoRoot(this.session.cwd, signal);
+			const repoRoot = await requireGitRepoRoot(this.session.cwd, signal);
 			const localBranch =
-				normalizeOptionalString(params.branch) ?? (await resolveCurrentGitBranch(repoRoot, signal));
-			const refExists = await gitRefExists(repoRoot, toLocalBranchRef(localBranch), signal);
+				normalizeOptionalString(params.branch) ?? (await requireCurrentGitBranch(repoRoot, signal));
+			const refExists = await git.ref.exists(repoRoot, toLocalBranchRef(localBranch), signal);
 			if (!refExists) {
 				throw new ToolError(`local branch ${localBranch} does not exist`);
 			}
 
 			const target = await resolvePrBranchPushTarget(repoRoot, localBranch, signal);
-			const currentBranch = await tryRunGitText(repoRoot, ["branch", "--show-current"], signal);
+			const currentBranch = await git.branch.current(repoRoot, signal);
 			const sourceRef = currentBranch === localBranch ? "HEAD" : toLocalBranchRef(localBranch);
 			const refspec = `${sourceRef}:refs/heads/${target.remoteBranch}`;
-			const pushArgs = ["push"];
-			if (params.forceWithLease) {
-				pushArgs.push("--force-with-lease");
-			}
-			pushArgs.push(target.remoteName, refspec);
-
-			const pushResult = await runGitCommand(repoRoot, pushArgs, signal);
-			if (pushResult.exitCode !== 0) {
-				throw new ToolError(formatGitFailure(pushArgs, pushResult));
-			}
+			await git.push(repoRoot, {
+				forceWithLease: params.forceWithLease,
+				refspec,
+				remote: target.remoteName,
+				signal,
+			});
 
 			return buildTextResult(
 				formatPrPushResult({
@@ -2617,10 +2421,10 @@ export class GhRunWatchTool implements AgentTool<typeof ghRunWatchSchema, GhTool
 				}
 			}
 
-			const branch = branchInput ?? (await resolveCurrentGitBranch(this.session.cwd, signal));
+			const branch = branchInput ?? (await requireCurrentGitBranch(this.session.cwd, signal));
 			const headSha = branchInput
 				? await resolveGitHubBranchHead(this.session.cwd, repo, branch, signal)
-				: await resolveCurrentGitHead(this.session.cwd, signal);
+				: await requireCurrentGitHead(this.session.cwd, signal);
 			let pollCount = 0;
 			let settledSuccessSignature: string | undefined;
 

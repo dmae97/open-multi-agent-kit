@@ -1,7 +1,4 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
 import type { TabBarTheme } from "@oh-my-pi/pi-tui";
-import { getProjectDir, isEnoent } from "@oh-my-pi/pi-utils";
 import { theme } from "./theme/theme";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -31,42 +28,3 @@ export function getTabBarTheme(): TabBarTheme {
 }
 
 export { parseCommandArgs } from "../utils/command-args";
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Git HEAD Discovery
-// ═══════════════════════════════════════════════════════════════════════════
-
-/** Walk up from the project dir to find .git/HEAD. Returns path and content, or null. */
-export async function findGitHeadPathAsync(): Promise<{ path: string; content: string } | null> {
-	let dir = getProjectDir();
-	while (true) {
-		const gitHeadPath = path.join(dir, ".git", "HEAD");
-		try {
-			const content = await Bun.file(gitHeadPath).text();
-			return { path: gitHeadPath, content };
-		} catch (err) {
-			if (!isEnoent(err)) throw err;
-		}
-		const parent = path.dirname(dir);
-		if (parent === dir) {
-			return null;
-		}
-		dir = parent;
-	}
-}
-
-/** Walk up from the project dir to find .git/HEAD. Returns path, or null. */
-export function findGitHeadPathSync(): string | null {
-	let dir = getProjectDir();
-	while (true) {
-		const gitHeadPath = path.join(dir, ".git", "HEAD");
-		if (fs.existsSync(gitHeadPath)) {
-			return gitHeadPath;
-		}
-		const parent = path.dirname(dir);
-		if (parent === dir) {
-			return null;
-		}
-		dir = parent;
-	}
-}

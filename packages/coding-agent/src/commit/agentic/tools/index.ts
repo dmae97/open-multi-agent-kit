@@ -1,5 +1,4 @@
 import type { CommitAgentState } from "../../../commit/agentic/state";
-import type { ControlledGit } from "../../../commit/git";
 import type { ModelRegistry } from "../../../config/model-registry";
 import type { Settings } from "../../../config/settings";
 import type { CustomTool } from "../../../extensibility/custom-tools/types";
@@ -15,7 +14,6 @@ import { createSplitCommitTool } from "./split-commit";
 
 export interface CommitToolOptions {
 	cwd: string;
-	git: ControlledGit;
 	authStorage: AuthStorage;
 	modelRegistry: ModelRegistry;
 	settings: Settings;
@@ -27,10 +25,10 @@ export interface CommitToolOptions {
 
 export function createCommitTools(options: CommitToolOptions): Array<CustomTool<any, any>> {
 	const tools: Array<CustomTool<any, any>> = [
-		createGitOverviewTool(options.git, options.state),
-		createGitFileDiffTool(options.git, options.state),
-		createGitHunkTool(options.git),
-		createRecentCommitsTool(options.git),
+		createGitOverviewTool(options.cwd, options.state),
+		createGitFileDiffTool(options.cwd, options.state),
+		createGitHunkTool(options.cwd),
+		createRecentCommitsTool(options.cwd),
 	];
 
 	if (options.enableAnalyzeFiles ?? true) {
@@ -48,8 +46,8 @@ export function createCommitTools(options: CommitToolOptions): Array<CustomTool<
 
 	tools.push(
 		createProposeChangelogTool(options.state, options.changelogTargets),
-		createProposeCommitTool(options.git, options.state),
-		createSplitCommitTool(options.git, options.state, options.changelogTargets),
+		createProposeCommitTool(options.cwd, options.state),
+		createSplitCommitTool(options.cwd, options.state, options.changelogTargets),
 	);
 
 	return tools;

@@ -1,7 +1,7 @@
 import { Type } from "@sinclair/typebox";
-import type { ControlledGit } from "../../../commit/git";
 import type { DiffHunk, FileHunks } from "../../../commit/types";
 import type { CustomTool } from "../../../extensibility/custom-tools/types";
+import * as git from "../../../utils/git";
 
 const gitHunkSchema = Type.Object({
 	file: Type.String({ description: "File path" }),
@@ -15,7 +15,7 @@ function selectHunks(fileHunks: FileHunks, requested?: number[]): DiffHunk[] {
 	return fileHunks.hunks.filter(hunk => wanted.has(hunk.index + 1));
 }
 
-export function createGitHunkTool(git: ControlledGit): CustomTool<typeof gitHunkSchema> {
+export function createGitHunkTool(cwd: string): CustomTool<typeof gitHunkSchema> {
 	return {
 		name: "git_hunk",
 		label: "Git Hunk",
@@ -23,7 +23,7 @@ export function createGitHunkTool(git: ControlledGit): CustomTool<typeof gitHunk
 		parameters: gitHunkSchema,
 		async execute(_toolCallId, params) {
 			const staged = params.staged ?? true;
-			const hunks = await git.getHunks([params.file], staged);
+			const hunks = await git.diff.hunks(cwd, [params.file], { cached: staged });
 			const fileHunks = hunks.find(entry => entry.filename === params.file) ?? {
 				filename: params.file,
 				isBinary: false,

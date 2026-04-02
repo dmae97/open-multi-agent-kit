@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { joinPatch } from "@oh-my-pi/pi-coding-agent/commit/git";
+import { patch } from "@oh-my-pi/pi-coding-agent/utils/git";
 
 describe("joinPatch", () => {
 	test("preserves space character in empty context line at end of patch", () => {
@@ -14,7 +14,7 @@ describe("joinPatch", () => {
 			" \n", // Empty context line = space + newline
 		];
 
-		const result = joinPatch(parts);
+		const result = patch.join(parts);
 
 		// The result should end with a space character (the empty context line)
 		// but NOT start/end with multiple newlines
@@ -24,7 +24,7 @@ describe("joinPatch", () => {
 
 	test("normalizes multiple trailing newlines in parts", () => {
 		const parts = ["line1\n", "line2\n", "line3"];
-		const result = joinPatch(parts);
+		const result = patch.join(parts);
 
 		// Should join with single newlines and end with one newline
 		expect(result.endsWith("\n")).toBe(true);
@@ -32,7 +32,7 @@ describe("joinPatch", () => {
 
 	test("adds newline to parts that are missing them", () => {
 		const parts = ["line1", "line2"];
-		const result = joinPatch(parts);
+		const result = patch.join(parts);
 
 		// Should add newlines to both parts
 		expect(result.includes("line1\n")).toBe(true);

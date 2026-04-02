@@ -146,10 +146,6 @@
 			"types": "./src/commit/changelog/*.ts",
 			"import": "./src/commit/changelog/*.ts"
 		},
-		"./commit/git": {
-			"types": "./src/commit/git/index.ts",
-			"import": "./src/commit/git/index.ts"
-		},
 		"./commit/git/*": {
 			"types": "./src/commit/git/*.ts",
 			"import": "./src/commit/git/*.ts"

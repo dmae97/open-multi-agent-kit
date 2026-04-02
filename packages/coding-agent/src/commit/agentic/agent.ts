@@ -2,7 +2,6 @@ import { INTENT_FIELD, type ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import { Markdown } from "@oh-my-pi/pi-tui";
 import chalk from "chalk";
-import type { ControlledGit } from "../../commit/git";
 import typesDescriptionPrompt from "../../commit/prompts/types-description.md" with { type: "text" };
 import type { ModelRegistry } from "../../config/model-registry";
 import { renderPromptTemplate } from "../../config/prompt-templates";
@@ -18,7 +17,6 @@ import { createCommitTools } from "./tools";
 
 export interface CommitAgentInput {
 	cwd: string;
-	git: ControlledGit;
 	model: Model<Api>;
 	thinkingLevel?: ThinkingLevel;
 	settings: Settings;
@@ -46,7 +44,6 @@ export async function runCommitAgentSession(input: CommitAgentInput): Promise<Co
 	const spawns = "quick_task";
 	const tools = createCommitTools({
 		cwd: input.cwd,
-		git: input.git,
 		authStorage: input.authStorage,
 		modelRegistry: input.modelRegistry,
 		settings: input.settings,

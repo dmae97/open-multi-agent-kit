@@ -5,7 +5,8 @@ import { formatNumber, getProjectDir } from "@oh-my-pi/pi-utils";
 import { theme } from "../../modes/theme/theme";
 import type { AgentSession } from "../../session/agent-session";
 import { shortenPath } from "../../tools/render-utils";
-import { findGitHeadPathAsync, sanitizeStatusText } from "../shared";
+import * as git from "../../utils/git";
+import { sanitizeStatusText } from "../shared";
 import { getContextUsageLevel, getContextUsageThemeColor } from "./status-line/context-thresholds";
 
 /**
@@ -55,13 +56,13 @@ export class FooterComponent implements Component {
 			this.#gitWatcher = null;
 		}
 
-		findGitHeadPathAsync().then(result => {
-			if (!result) {
+		git.head.resolve(getProjectDir()).then(head => {
+			if (!head) {
 				return;
 			}
 
 			try {
-				this.#gitWatcher = fs.watch(result.path, () => {
+				this.#gitWatcher = fs.watch(head.headPath, () => {
 					this.#cachedBranch = undefined; // Invalidate cache
 					if (this.#onBranchChange) {
 						this.#onBranchChange();
@@ -93,35 +94,14 @@ export class FooterComponent implements Component {
 	 * Returns null if not in a git repo, branch name otherwise.
 	 */
 	#getCurrentBranch(): string | null {
-		// Return cached value if available
 		if (this.#cachedBranch !== undefined) {
 			return this.#cachedBranch;
 		}
 
-		// Note: fire-and-forget async call - will return undefined on first call
-		// This is acceptable since it's a cached value that will update on next render
-		findGitHeadPathAsync().then(result => {
-			if (!result) {
-				this.#cachedBranch = null;
-				if (this.#onBranchChange) {
-					this.#onBranchChange();
-				}
-				return;
-			}
-			const content = result.content.trim();
-
-			if (content.startsWith("ref: refs/heads/")) {
-				this.#cachedBranch = content.slice(16);
-			} else {
-				this.#cachedBranch = "detached";
-			}
-			if (this.#onBranchChange) {
-				this.#onBranchChange();
-			}
-		});
-
-		// Return undefined while loading (will show on next render once loaded)
-		return null;
+		const headState = git.head.resolveSync(getProjectDir());
+		this.#cachedBranch =
+			headState === null ? null : headState.kind === "ref" ? (headState.branchName ?? headState.ref) : "detached";
+		return this.#cachedBranch;
 	}
 
 	render(width: number): string[] {

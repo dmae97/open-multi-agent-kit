@@ -10,9 +10,9 @@ import {
 	validateTypeConsistency,
 } from "../../../commit/agentic/validation";
 import { validateScope } from "../../../commit/analysis/validation";
-import type { ControlledGit } from "../../../commit/git";
 import type { ConventionalDetail } from "../../../commit/types";
 import type { CustomTool } from "../../../extensibility/custom-tools/types";
+import * as git from "../../../utils/git";
 import { commitTypeSchema, detailSchema } from "./schemas.js";
 
 const hunkSelectorSchema = Type.Union([
@@ -64,7 +64,7 @@ function normalizeDetails(
 }
 
 export function createSplitCommitTool(
-	git: ControlledGit,
+	cwd: string,
 	state: CommitAgentState,
 	changelogTargets: string[],
 ): CustomTool<typeof splitCommitSchema> {
@@ -74,13 +74,13 @@ export function createSplitCommitTool(
 		description: "Propose multiple atomic commits for unrelated changes.",
 		parameters: splitCommitSchema,
 		async execute(_toolCallId, params) {
-			const stagedFiles = state.overview?.files ?? (await git.getStagedFiles());
+			const stagedFiles = state.overview?.files ?? (await git.diff.changedFiles(cwd, { cached: true }));
 			const stagedSet = new Set(stagedFiles);
 			const changelogSet = new Set(changelogTargets);
 			const usedFiles = new Set<string>();
 			const errors: string[] = [];
 			const warnings: string[] = [];
-			const diffText = await git.getDiff(true);
+			const diffText = await git.diff(cwd, { cached: true });
 
 			const commits: SplitCommitGroup[] = params.commits.map((commit, index) => {
 				const scope = commit.scope?.trim() || null;

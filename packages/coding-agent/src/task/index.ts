@@ -18,7 +18,6 @@ import path from "node:path";
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Usage } from "@oh-my-pi/pi-ai";
 import { $env, Snowflake } from "@oh-my-pi/pi-utils";
-import { $ } from "bun";
 import type { ToolSession } from "..";
 import { resolveAgentModelPatterns } from "../config/model-resolver";
 import { renderPromptTemplate } from "../config/prompt-templates";
@@ -30,6 +29,7 @@ import { formatBytes, formatDuration } from "../tools/render-utils";
 // Import review tools for side effects (registers subagent tool handlers)
 import "../tools/review";
 import { generateCommitMessage } from "../utils/commit-message-generator";
+import * as git from "../utils/git";
 import { discoverAgents, getAgent } from "./discovery";
 import { runSubprocess } from "./executor";
 import { resolveIsolationBackendForTaskExecution } from "./isolation-backend";
@@ -864,7 +864,7 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 						} catch (mergeErr) {
 							// Agent succeeded but branch commit failed — clean up stale branch
 							const branchName = `omp/task/${task.id}`;
-							await $`git branch -D ${branchName}`.cwd(repoRoot).quiet().nothrow();
+							await git.branch.tryDelete(repoRoot, branchName);
 							const msg = mergeErr instanceof Error ? mergeErr.message : String(mergeErr);
 							return { ...result, error: `Merge failed: ${msg}` };
 						}
@@ -1031,24 +1031,13 @@ export class TaskTool implements AgentTool<TaskSchema, TaskToolDetails, Theme> {
 							if (!combinedPatch.trim()) {
 								changesApplied = true;
 							} else {
-								const combinedPatchPath = path.join(os.tmpdir(), `omp-task-combined-${Snowflake.next()}.patch`);
-								try {
-									await Bun.write(combinedPatchPath, combinedPatch);
-									const checkResult = await $`git apply --check --binary ${combinedPatchPath}`
-										.cwd(repoRoot)
-										.quiet()
-										.nothrow();
-									if (checkResult.exitCode !== 0) {
+								changesApplied = await git.patch.canApplyText(repoRoot, combinedPatch);
+								if (changesApplied) {
+									try {
+										await git.patch.applyText(repoRoot, combinedPatch);
+									} catch {
 										changesApplied = false;
-									} else {
-										const applyResult = await $`git apply --binary ${combinedPatchPath}`
-											.cwd(repoRoot)
-											.quiet()
-											.nothrow();
-										changesApplied = applyResult.exitCode === 0;
 									}
-								} finally {
-									await fs.rm(combinedPatchPath, { force: true });
 								}
 							}
 						}

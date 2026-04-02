@@ -1,8 +1,8 @@
 import { Type } from "@sinclair/typebox";
 import type { CommitAgentState, GitOverviewSnapshot } from "../../../commit/agentic/state";
 import { extractScopeCandidates } from "../../../commit/analysis/scope";
-import type { ControlledGit } from "../../../commit/git";
 import type { CustomTool } from "../../../extensibility/custom-tools/types";
+import * as git from "../../../utils/git";
 
 const EXCLUDED_LOCK_FILES = new Set([
 	"Cargo.lock",
@@ -47,10 +47,7 @@ const gitOverviewSchema = Type.Object({
 	include_untracked: Type.Optional(Type.Boolean({ description: "Include untracked files when staged=false" })),
 });
 
-export function createGitOverviewTool(
-	git: ControlledGit,
-	state: CommitAgentState,
-): CustomTool<typeof gitOverviewSchema> {
+export function createGitOverviewTool(cwd: string, state: CommitAgentState): CustomTool<typeof gitOverviewSchema> {
 	return {
 		name: "git_overview",
 		label: "Git Overview",
@@ -58,13 +55,13 @@ export function createGitOverviewTool(
 		parameters: gitOverviewSchema,
 		async execute(_toolCallId, params) {
 			const staged = params.staged ?? true;
-			const allFiles = staged ? await git.getStagedFiles() : await git.getChangedFiles(false);
+			const allFiles = await git.diff.changedFiles(cwd, { cached: staged });
 			const { filtered: files, excluded } = filterExcludedFiles(allFiles);
-			const stat = await git.getStat(staged);
-			const allNumstat = await git.getNumstat(staged);
+			const stat = await git.diff(cwd, { stat: true, cached: staged });
+			const allNumstat = await git.diff.numstat(cwd, { cached: staged });
 			const numstat = allNumstat.filter(entry => !isExcludedFile(entry.path));
 			const scopeResult = extractScopeCandidates(numstat);
-			const untrackedFiles = !staged && params.include_untracked ? await git.getUntrackedFiles() : undefined;
+			const untrackedFiles = !staged && params.include_untracked ? await git.ls.untracked(cwd) : undefined;
 			const snapshot: GitOverviewSnapshot = {
 				files,
 				stat,

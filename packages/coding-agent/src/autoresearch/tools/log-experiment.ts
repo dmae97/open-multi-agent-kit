@@ -7,6 +7,7 @@ import { Type } from "@sinclair/typebox";
 import type { ToolDefinition } from "../../extensibility/extensions";
 import type { Theme } from "../../modes/theme/theme";
 import { replaceTabs, truncateToWidth } from "../../tools/render-utils";
+import * as git from "../../utils/git";
 import { getAutoresearchFingerprintMismatchError, pathMatchesContractPath } from "../contract";
 import { getCurrentAutoresearchBranch, parseWorkDirDirtyPaths } from "../git";
 import {
@@ -493,7 +494,7 @@ function validateObservedStatus(
 }
 
 async function commitKeptExperiment(
-	options: AutoresearchToolFactoryOptions,
+	_options: AutoresearchToolFactoryOptions,
 	workDir: string,
 	state: ExperimentState,
 	experiment: ExperimentResult,
@@ -503,25 +504,15 @@ async function commitKeptExperiment(
 		return { note: "nothing to commit" };
 	}
 
-	const addResult = await options.pi.exec("git", ["add", "--all", "--", ...scopeValidation.committablePaths], {
-		cwd: workDir,
-		timeout: 10_000,
-	});
-	if (addResult.code !== 0) {
+	try {
+		await git.stage.files(workDir, scopeValidation.committablePaths);
+	} catch (err) {
 		return {
-			error: `git add failed: ${mergeStdoutStderr(addResult).trim() || `exit ${addResult.code}`}`,
+			error: `git add failed: ${err instanceof Error ? err.message : String(err)}`,
 		};
 	}
 
-	const diffResult = await options.pi.exec(
-		"git",
-		["diff", "--cached", "--quiet", "--", ...scopeValidation.committablePaths],
-		{
-			cwd: workDir,
-			timeout: 10_000,
-		},
-	);
-	if (diffResult.code === 0) {
+	if (!(await git.diff.has(workDir, { cached: true, files: scopeValidation.committablePaths }))) {
 		return { note: "nothing to commit" };
 	}
 
@@ -533,32 +524,23 @@ async function commitKeptExperiment(
 		payload[name] = value;
 	}
 	const commitMessage = `${experiment.description}\n\nResult: ${JSON.stringify(payload)}`;
-	const commitResult = await options.pi.exec(
-		"git",
-		["commit", "-m", commitMessage, "--", ...scopeValidation.committablePaths],
-		{
-			cwd: workDir,
-			timeout: 10_000,
-		},
-	);
-	if (commitResult.code !== 0) {
+	let commitResultText = "";
+	try {
+		const commitResult = await git.commit(workDir, commitMessage, {
+			files: scopeValidation.committablePaths,
+		});
+		commitResultText = mergeStdoutStderr(commitResult);
+	} catch (err) {
 		return {
-			error: `git commit failed: ${mergeStdoutStderr(commitResult).trim() || `exit ${commitResult.code}`}`,
+			error: `git commit failed: ${err instanceof Error ? err.message : String(err)}`,
 		};
 	}
 
-	const revParseResult = await options.pi.exec("git", ["rev-parse", "--short=7", "HEAD"], {
-		cwd: workDir,
-		timeout: 5_000,
-	});
-	const newCommit = revParseResult.stdout.trim();
+	const newCommit = (await git.head.short(workDir, 7)) ?? "";
 	if (newCommit.length >= 7) {
 		experiment.commit = newCommit;
 	}
-	const summaryLine =
-		mergeStdoutStderr(commitResult)
-			.split("\n")
-			.find(line => line.trim().length > 0) ?? "committed";
+	const summaryLine = commitResultText.split("\n").find(line => line.trim().length > 0) ?? "committed";
 	return { note: summaryLine.trim() };
 }
 
@@ -567,44 +549,46 @@ async function revertFailedExperiment(
 	workDir: string,
 ): Promise<KeepCommitResult> {
 	const preservedFiles = preserveAutoresearchFiles(workDir);
-	const restoreResult = await options.pi.exec(
-		"git",
-		["restore", "--source=HEAD", "--staged", "--worktree", "--", "."],
-		{ cwd: workDir, timeout: 10_000 },
-	);
-	const cleanResult = await options.pi.exec("git", ["clean", "-fd", "--", "."], { cwd: workDir, timeout: 10_000 });
-	const cleanIgnoredResult = await options.pi.exec("git", ["clean", "-fdX", "--", "."], {
-		cwd: workDir,
-		timeout: 10_000,
-	});
+	try {
+		await git.restore(workDir, { files: ["."], source: "HEAD", staged: true, worktree: true });
+	} catch (err) {
+		restoreAutoresearchFiles(preservedFiles);
+		return {
+			error: `git restore failed: ${err instanceof Error ? err.message : String(err)}`,
+		};
+	}
+	try {
+		await git.clean(workDir, { paths: ["."] });
+	} catch (err) {
+		restoreAutoresearchFiles(preservedFiles);
+		return {
+			error: `git clean failed: ${err instanceof Error ? err.message : String(err)}`,
+		};
+	}
+	try {
+		await git.clean(workDir, { ignoredOnly: true, paths: ["."] });
+	} catch (err) {
+		restoreAutoresearchFiles(preservedFiles);
+		return {
+			error: `git clean -X failed: ${err instanceof Error ? err.message : String(err)}`,
+		};
+	}
 	restoreAutoresearchFiles(preservedFiles);
-	if (restoreResult.code !== 0) {
+	let dirtyStatus = "";
+	try {
+		dirtyStatus = await git.status(workDir, {
+			pathspecs: ["."],
+			porcelainV1: true,
+			untrackedFiles: "all",
+			z: true,
+		});
+	} catch (err) {
 		return {
-			error: `git restore failed: ${mergeStdoutStderr(restoreResult).trim() || `exit ${restoreResult.code}`}`,
-		};
-	}
-	if (cleanResult.code !== 0) {
-		return {
-			error: `git clean failed: ${mergeStdoutStderr(cleanResult).trim() || `exit ${cleanResult.code}`}`,
-		};
-	}
-	if (cleanIgnoredResult.code !== 0) {
-		return {
-			error: `git clean -X failed: ${mergeStdoutStderr(cleanIgnoredResult).trim() || `exit ${cleanIgnoredResult.code}`}`,
-		};
-	}
-	const dirtyCheckResult = await options.pi.exec(
-		"git",
-		["status", "--porcelain=v1", "-z", "--untracked-files=all", "--", "."],
-		{ cwd: workDir, timeout: 10_000 },
-	);
-	if (dirtyCheckResult.code !== 0) {
-		return {
-			error: `git status failed after cleanup: ${mergeStdoutStderr(dirtyCheckResult).trim() || `exit ${dirtyCheckResult.code}`}`,
+			error: `git status failed after cleanup: ${err instanceof Error ? err.message : String(err)}`,
 		};
 	}
 	const workDirPrefix = await readGitWorkDirPrefix(options, workDir);
-	const remainingDirtyPaths = parseWorkDirDirtyPaths(dirtyCheckResult.stdout, workDirPrefix).filter(
+	const remainingDirtyPaths = parseWorkDirDirtyPaths(dirtyStatus, workDirPrefix).filter(
 		relativePath => !isAutoresearchLocalStatePath(relativePath),
 	);
 	if (remainingDirtyPaths.length > 0) {
@@ -654,21 +638,21 @@ async function validateKeepPaths(
 		return "Files in Scope is empty for the current segment. Re-run init_experiment after fixing autoresearch.md.";
 	}
 
-	const statusResult = await options.pi.exec(
-		"git",
-		["status", "--porcelain=v1", "-z", "--untracked-files=all", "--", "."],
-		{
-			cwd: workDir,
-			timeout: 10_000,
-		},
-	);
-	if (statusResult.code !== 0) {
-		return `git status failed: ${mergeStdoutStderr(statusResult).trim() || `exit ${statusResult.code}`}`;
+	let statusText: string;
+	try {
+		statusText = await git.status(workDir, {
+			pathspecs: ["."],
+			porcelainV1: true,
+			untrackedFiles: "all",
+			z: true,
+		});
+	} catch (err) {
+		return `git status failed: ${err instanceof Error ? err.message : String(err)}`;
 	}
 
 	const workDirPrefix = await readGitWorkDirPrefix(options, workDir);
 	const committablePaths: string[] = [];
-	for (const normalizedPath of parseWorkDirDirtyPaths(statusResult.stdout, workDirPrefix)) {
+	for (const normalizedPath of parseWorkDirDirtyPaths(statusText, workDirPrefix)) {
 		if (isAutoresearchLocalStatePath(normalizedPath)) {
 			continue;
 		}
@@ -808,9 +792,12 @@ function buildLogText(
 }
 
 async function readGitWorkDirPrefix(options: AutoresearchToolFactoryOptions, workDir: string): Promise<string> {
-	const prefixResult = await options.pi.exec("git", ["rev-parse", "--show-prefix"], { cwd: workDir, timeout: 5_000 });
-	if (prefixResult.code !== 0) return "";
-	return prefixResult.stdout.trim();
+	void options;
+	try {
+		return await git.show.prefix(workDir);
+	} catch {
+		return "";
+	}
 }
 
 function truncateAsiValue(value: ASIData[string]): string {

@@ -7,6 +7,7 @@ import { renderPromptTemplate } from "../config/prompt-templates";
 import { Settings } from "../config/settings";
 import { discoverAuthStorage } from "../sdk";
 import { loadProjectContextFiles } from "../system-prompt";
+import * as git from "../utils/git";
 import { runAgenticCommit } from "./agentic";
 import {
 	extractScopeCandidates,
@@ -16,7 +17,6 @@ import {
 	validateSummary,
 } from "./analysis";
 import { runChangelogFlow } from "./changelog";
-import { ControlledGit } from "./git";
 import { runMapReduceAnalysis, shouldUseMapReduce } from "./map-reduce";
 import { formatCommitMessage } from "./message";
 import { resolvePrimaryModel, resolveSmolModel } from "./model-selection";
@@ -57,12 +57,11 @@ async function runLegacyCommitCommand(args: CommitCommandArgs): Promise<void> {
 		thinkingLevel: smolThinkingLevel,
 	} = await resolveSmolModel(settings, modelRegistry, primaryModel, primaryApiKey);
 
-	const git = new ControlledGit(cwd);
-	let stagedFiles = await git.getStagedFiles();
+	let stagedFiles = await git.diff.changedFiles(cwd, { cached: true });
 	if (stagedFiles.length === 0) {
 		process.stdout.write("No staged changes detected, staging all changes...\n");
-		await git.stageAll();
-		stagedFiles = await git.getStagedFiles();
+		await git.stage.files(cwd);
+		stagedFiles = await git.diff.changedFiles(cwd, { cached: true });
 	}
 	if (stagedFiles.length === 0) {
 		process.stderr.write("No changes to commit.\n");
@@ -71,7 +70,6 @@ async function runLegacyCommitCommand(args: CommitCommandArgs): Promise<void> {
 
 	if (!args.noChangelog) {
 		await runChangelogFlow({
-			git,
 			cwd,
 			model: primaryModel,
 			apiKey: primaryApiKey,
@@ -82,11 +80,11 @@ async function runLegacyCommitCommand(args: CommitCommandArgs): Promise<void> {
 		});
 	}
 
-	const diff = await git.getDiff(true);
-	const stat = await git.getStat(true);
-	const numstat = await git.getNumstat(true);
+	const diff = await git.diff(cwd, { cached: true });
+	const stat = await git.diff(cwd, { stat: true, cached: true });
+	const numstat = await git.diff.numstat(cwd, { cached: true });
 	const scopeCandidates = extractScopeCandidates(numstat).scopeCandidates;
-	const recentCommits = await git.getRecentCommits(RECENT_COMMITS_COUNT);
+	const recentCommits = await git.log.subjects(cwd, RECENT_COMMITS_COUNT);
 	const contextFiles = await loadProjectContextFiles({ cwd });
 	const formattedContextFiles = contextFiles.map(file => ({
 		path: path.relative(cwd, file.path),
@@ -131,10 +129,10 @@ async function runLegacyCommitCommand(args: CommitCommandArgs): Promise<void> {
 		return;
 	}
 
-	await git.commit(commitMessage);
+	await git.commit(cwd, commitMessage);
 	process.stdout.write("Commit created.\n");
 	if (args.push) {
-		await git.push();
+		await git.push(cwd);
 		process.stdout.write("Pushed to remote.\n");
 	}
 }

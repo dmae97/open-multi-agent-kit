@@ -8,7 +8,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { isEnoent, logger } from "@oh-my-pi/pi-utils";
-import { $ } from "bun";
+import * as git from "../../../utils/git";
 
 import type { MarketplaceCatalog, MarketplaceSourceType } from "./types";
 import { isValidNameSegment } from "./types";
@@ -274,21 +274,11 @@ export async function fetchMarketplace(source: string, cacheDir: string): Promis
  * `promoteCloneToCache` after any duplicate/drift checks pass.
  */
 async function cloneAndReadCatalog(url: string, cacheDir: string): Promise<FetchResult> {
-	if (!Bun.which("git")) {
-		throw new Error("git is not installed. Install git to use git-based marketplace sources.");
-	}
-
 	const tmpDir = path.join(cacheDir, `.tmp-clone-${Date.now()}`);
 	await fs.mkdir(cacheDir, { recursive: true });
 
 	logger.debug(`[marketplace] cloning ${url} → ${tmpDir}`);
-
-	const result = await $`git clone --depth 1 --single-branch ${url} ${tmpDir}`.quiet().nothrow();
-	if (result.exitCode !== 0) {
-		await fs.rm(tmpDir, { recursive: true, force: true });
-		const stderr = result.stderr.toString().trim();
-		throw new Error(`git clone failed (exit ${result.exitCode}): ${stderr || "unknown error"}`);
-	}
+	await git.clone(url, tmpDir);
 
 	const catalogPath = path.join(tmpDir, CATALOG_RELATIVE_PATH);
 	let content: string;
@@ -324,49 +314,4 @@ export async function promoteCloneToCache(tmpDir: string, cacheDir: string, name
 	await fs.rm(finalDir, { recursive: true, force: true });
 	await fs.rename(tmpDir, finalDir);
 	return finalDir;
-}
-
-/**
- * Clone a git repository to a target directory. Shared by fetcher (marketplace clones)
- * and source-resolver (plugin source clones).
- *
- * @param url - Git clone URL (HTTPS, SSH, or GitHub shorthand expanded to HTTPS)
- * @param targetDir - Directory to clone into (must not exist)
- * @param options.ref - Optional branch/tag to clone
- * @param options.sha - Optional commit SHA to checkout after clone
- */
-export async function cloneGitRepo(
-	url: string,
-	targetDir: string,
-	options?: { ref?: string; sha?: string },
-): Promise<void> {
-	if (!Bun.which("git")) {
-		throw new Error("git is not installed. Install git to use git-based plugin sources.");
-	}
-
-	const cloneArgs = ["git", "clone", "--depth", "1"];
-	if (options?.ref) {
-		cloneArgs.push("--branch", options.ref, "--single-branch");
-	} else {
-		cloneArgs.push("--single-branch");
-	}
-	cloneArgs.push(url, targetDir);
-
-	logger.debug("[marketplace] cloning plugin source", { url, targetDir });
-
-	const result = await $`${cloneArgs}`.quiet().nothrow();
-	if (result.exitCode !== 0) {
-		await fs.rm(targetDir, { recursive: true, force: true });
-		const stderr = result.stderr.toString().trim();
-		throw new Error(`git clone failed (exit ${result.exitCode}): ${stderr || "unknown error"}`);
-	}
-
-	// If a specific SHA is requested, checkout that commit
-	if (options?.sha) {
-		const checkout = await $`git -C ${targetDir} checkout ${options.sha}`.quiet().nothrow();
-		if (checkout.exitCode !== 0) {
-			await fs.rm(targetDir, { recursive: true, force: true });
-			throw new Error(`Failed to checkout SHA ${options.sha} — shallow clone may not contain this commit`);
-		}
-	}
 }

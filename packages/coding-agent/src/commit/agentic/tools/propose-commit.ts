@@ -9,9 +9,9 @@ import {
 	validateTypeConsistency,
 } from "../../../commit/agentic/validation";
 import { validateAnalysis } from "../../../commit/analysis/validation";
-import type { ControlledGit } from "../../../commit/git";
 import type { CommitType, ConventionalAnalysis, ConventionalDetail } from "../../../commit/types";
 import type { CustomTool } from "../../../extensibility/custom-tools/types";
+import * as git from "../../../utils/git";
 import { commitTypeSchema, detailSchema } from "./schemas.js";
 
 const proposeCommitSchema = Type.Object({
@@ -49,10 +49,7 @@ function normalizeDetails(
 	}));
 }
 
-export function createProposeCommitTool(
-	git: ControlledGit,
-	state: CommitAgentState,
-): CustomTool<typeof proposeCommitSchema> {
+export function createProposeCommitTool(cwd: string, state: CommitAgentState): CustomTool<typeof proposeCommitSchema> {
 	return {
 		name: "propose_commit",
 		label: "Propose Commit",
@@ -72,8 +69,8 @@ export function createProposeCommitTool(
 
 			const summaryValidation = validateSummaryRules(summary);
 			const analysisValidation = validateAnalysis(analysis);
-			const stagedFiles = state.overview?.files ?? (await git.getStagedFiles());
-			const diffText = state.diffText ?? (await git.getDiff(true));
+			const stagedFiles = state.overview?.files ?? (await git.diff.changedFiles(cwd, { cached: true }));
+			const diffText = state.diffText ?? (await git.diff(cwd, { cached: true }));
 			const typeValidation = validateTypeConsistency(params.type, stagedFiles, {
 				diffText,
 				summary,
