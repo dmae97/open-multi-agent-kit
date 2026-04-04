@@ -515,29 +515,49 @@ export async function mergeTaskBranches(
 	const merged: string[] = [];
 	const failed: string[] = [];
 
-	for (const { branchName } of branches) {
-		try {
-			await git.cherryPick(repoRoot, branchName);
-		} catch (err) {
-			await git.cherryPick.abort(repoRoot);
-			const stderr =
-				err instanceof git.GitCommandError
-					? err.result.stderr.trim()
-					: err instanceof Error
-						? err.message
-						: String(err);
-			failed.push(branchName);
-			return {
-				merged,
-				failed: [...failed, ...branches.slice(merged.length + failed.length).map(b => b.branchName)],
-				conflict: `${branchName}: ${stderr}`,
-			};
+	// Stash dirty working tree so cherry-pick can operate on a clean HEAD.
+	// Without this, cherry-pick refuses to run when uncommitted changes exist.
+	const didStash = await git.stash.push(repoRoot, "omp-task-merge");
+
+	try {
+		for (const { branchName } of branches) {
+			try {
+				await git.cherryPick(repoRoot, branchName);
+			} catch (err) {
+				try {
+					await git.cherryPick.abort(repoRoot);
+				} catch {
+					/* no state to abort */
+				}
+				const stderr =
+					err instanceof git.GitCommandError
+						? err.result.stderr.trim()
+						: err instanceof Error
+							? err.message
+							: String(err);
+				failed.push(branchName);
+				return {
+					merged,
+					failed: [...failed, ...branches.slice(merged.length + failed.length).map(b => b.branchName)],
+					conflict: `${branchName}: ${stderr}`,
+				};
+			}
+
+			merged.push(branchName);
 		}
 
-		merged.push(branchName);
+		return { merged, failed };
+	} finally {
+		if (didStash) {
+			try {
+				await git.stash.pop(repoRoot);
+			} catch {
+				// Pop can fail if cherry-picked changes conflict with stashed changes.
+				// The stash entry is preserved — the user can resolve manually.
+				logger.warn("Failed to restore stashed changes after task merge; stash entry preserved");
+			}
+		}
 	}
-
-	return { merged, failed };
 }
 
 /** Clean up temporary task branches. */
