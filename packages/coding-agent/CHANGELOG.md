@@ -34,6 +34,7 @@
 
 ### Fixed
 
+- Fixed web search source rendering to truncate long title, metadata, and URL lines before they overflow the UI.
 - Fixed PR checkout tool to resolve symlinks in worktree paths, ensuring consistent path references in results and metadata
 - Fixed `read` output for file-backed internal URLs like `local://...` to include hashline prefixes in hashline edit mode, preserving usable line refs for follow-up edits
 - Fixed the plan review selector to support the external editor shortcut for opening and updating the current plan from the approval screen
