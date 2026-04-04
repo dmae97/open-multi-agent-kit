@@ -724,7 +724,12 @@ export class InteractiveMode implements InteractiveModeContext {
 		}
 		if (this.#planModePreviousModelState) {
 			const prev = this.#planModePreviousModelState;
-			if (this.session.isStreaming) {
+			if (modelsAreEqual(this.session.model, prev.model)) {
+				// Same model — only thinking level may differ. Avoid setModelTemporary()
+				// which would reset provider-side sessions (openai-responses/Codex) and
+				// break conversation continuity.
+				this.session.setThinkingLevel(prev.thinkingLevel);
+			} else if (this.session.isStreaming) {
 				this.#pendingModelSwitch = { model: prev.model, thinkingLevel: prev.thinkingLevel };
 			} else {
 				await this.session.setModelTemporary(prev.model, prev.thinkingLevel);
