@@ -1278,6 +1278,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			mcpDiscoveryMode: hasDiscoverableMCPTools,
 			mcpDiscoveryServerSummaries: discoverableMCPSummary.servers.map(formatDiscoverableMCPToolServerSummary),
 			eagerTasks,
+			secretsEnabled: settings.get("secrets.enabled"),
 		});
 
 		if (options.systemPrompt === undefined) {
@@ -1300,6 +1301,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				mcpDiscoveryMode: hasDiscoverableMCPTools,
 				mcpDiscoveryServerSummaries: discoverableMCPSummary.servers.map(formatDiscoverableMCPToolServerSummary),
 				eagerTasks,
+				secretsEnabled: settings.get("secrets.enabled"),
 			});
 		}
 		return options.systemPrompt(defaultPrompt);

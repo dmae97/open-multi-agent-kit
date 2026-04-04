@@ -669,7 +669,22 @@ export class AgentSession {
 			}
 		}
 
-		await this.#emitSessionEvent(event);
+		// Deobfuscate assistant message content for display emission — the LLM echoes back
+		// obfuscated placeholders, but listeners (TUI, extensions, exporters) must see real
+		// values. The original event.message stays obfuscated so the persistence path below
+		// writes `#HASH#` tokens to the session file; convertToLlm re-obfuscates outbound
+		// traffic on the next turn. Walks text, thinking, and toolCall arguments/intent.
+		let displayEvent: AgentEvent = event;
+		const obfuscator = this.#obfuscator;
+		if (obfuscator && event.type === "message_end" && event.message.role === "assistant") {
+			const message = event.message;
+			const deobfuscatedContent = obfuscator.deobfuscateObject(message.content);
+			if (deobfuscatedContent !== message.content) {
+				displayEvent = { ...event, message: { ...message, content: deobfuscatedContent } };
+			}
+		}
+
+		await this.#emitSessionEvent(displayEvent);
 
 		if (event.type === "turn_start") {
 			this.#resetStreamingEditState();

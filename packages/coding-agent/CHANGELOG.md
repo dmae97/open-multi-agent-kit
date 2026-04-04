@@ -16,6 +16,7 @@
 
 ### Changed
 
+- Changed secret placeholders to deterministic hash-style redaction tokens and deobfuscated assistant output for local display.
 - Updated hook editor and hook selector components to use `matchesAppExternalEditor` matcher for consistent external editor keybinding detection
 - Modified plan review flow to read the latest plan content from disk before approval, allowing changes made in external editor to be reflected
 - Enhanced plan review help text to dynamically display the configured external editor keybinding
