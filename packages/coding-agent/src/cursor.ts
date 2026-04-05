@@ -308,16 +308,8 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 		if (!tool) {
 			const availableTools = Array.from(this.options.tools.keys()).filter(name => name.startsWith("mcp_"));
 			const message = formatMcpToolErrorMessage(toolName, availableTools);
-			const toolResult: ToolResultMessage = {
-				role: "toolResult",
-				toolCallId,
-				toolName,
-				content: [{ type: "text", text: message }],
-				details: {},
-				isError: true,
-				timestamp: Date.now(),
-			};
-			return toolResult;
+			const result = buildToolErrorResult(message);
+			return createToolResultMessage(toolCallId, toolName, result, true);
 		}
 
 		const args = Object.keys(call.args ?? {}).length > 0 ? call.args : decodeMcpArgs(call.rawArgs ?? {});

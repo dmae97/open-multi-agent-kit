@@ -226,7 +226,7 @@ export class BashExecutionComponent extends Container {
 			return line;
 		}
 		const omitted = visible - MAX_DISPLAY_LINE_CHARS;
-		return `${truncateToWidth(line, MAX_DISPLAY_LINE_CHARS, Ellipsis.Omit)}… [${omitted} visible chars omitted]`;
+		return `${truncateToWidth(line, MAX_DISPLAY_LINE_CHARS, Ellipsis.Omit)}… [${omitted} visible columns omitted]`;
 	}
 
 	#clampLinesPreservingSixel(lines: string[]): string[] {

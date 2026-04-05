@@ -717,6 +717,32 @@ async function handleShellStreamArgs(
 	const batchHandler = execHandlers?.shell?.bind(execHandlers);
 	const handler = streamHandler ? (shellArgs: ShellArgs) => streamHandler(shellArgs, streamCallbacks) : batchHandler;
 
+	function sanitizeShellExecResult(execResult: { result: { case?: string; value?: any } }): {
+		result: { case?: string; value?: any };
+	} {
+		const result = execResult.result;
+		if (!result) return execResult;
+
+		switch (result.case) {
+			case "success":
+			case "failure": {
+				const value = result.value;
+				return {
+					result: {
+						case: result.case,
+						value: {
+							...value,
+							stdout: value.stdout ? sanitizeText(value.stdout) : value.stdout,
+							stderr: value.stderr ? sanitizeText(value.stderr) : value.stderr,
+						},
+					},
+				};
+			}
+			default:
+				return execResult;
+		}
+	}
+
 	const { execResult } = await resolveExecHandler(
 		args as any,
 		handler as typeof batchHandler,
@@ -731,10 +757,11 @@ async function handleShellStreamArgs(
 	// When using the batch handler (no shellStream), send buffered stdout/stderr
 	// after execution completes. With shellStream these were already sent in real time.
 	const sendBufferedOutput = !streamHandler;
-	sendShellStreamExitFromResult(h2Request, execMsg, execResult, sendBufferedOutput);
+	const sanitizedExecResult = sanitizeShellExecResult(execResult);
+	sendShellStreamExitFromResult(h2Request, execMsg, sanitizedExecResult, sendBufferedOutput);
 	// Cursor can keep the turn pending when it receives only stream deltas.
 	// Send the final structured shellResult as completion acknowledgement.
-	sendExecClientMessage(h2Request, execMsg, "shellResult", execResult);
+	sendExecClientMessage(h2Request, execMsg, "shellResult", sanitizedExecResult);
 	sendExecClientStreamClose(h2Request, execMsg);
 
 	log("shellStream", "done", { elapsed: Date.now() - startTs });

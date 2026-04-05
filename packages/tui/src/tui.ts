@@ -7,7 +7,7 @@ import { getDebugLogPath } from "@oh-my-pi/pi-utils";
 import { isKeyRelease, matchesKey } from "./keys";
 import type { Terminal } from "./terminal";
 import { ImageProtocol, setCellDimensions, setTerminalImageProtocol, TERMINAL } from "./terminal-capabilities";
-import { extractSegments, sliceByColumn, sliceWithWidth, truncateToWidth, visibleWidth } from "./utils";
+import { Ellipsis, extractSegments, sliceByColumn, sliceWithWidth, truncateToWidth, visibleWidth } from "./utils";
 
 const SEGMENT_RESET = "\x1b[0m";
 
@@ -1210,7 +1210,7 @@ export class TUI extends Container {
 				} catch {
 					// Ignore write errors - truncation should still work
 				}
-				truncatedLine = truncateToWidth(line, width);
+				truncatedLine = truncateToWidth(line, width, Ellipsis.Omit);
 			}
 			buffer += isImage ? truncatedLine : truncatedLine + SEGMENT_RESET;
 		}
