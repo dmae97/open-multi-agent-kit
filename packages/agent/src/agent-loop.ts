@@ -10,6 +10,7 @@ import {
 	type ToolResultMessage,
 	validateToolArguments,
 } from "@oh-my-pi/pi-ai";
+import { sanitizeText } from "@oh-my-pi/pi-natives";
 import type {
 	AgentContext,
 	AgentEvent,
@@ -508,7 +509,7 @@ async function executeToolCalls(
 			role: "toolResult",
 			toolCallId: toolCall.id,
 			toolName: toolCall.name,
-			content: result.content,
+			content: result.content.map(c => (c.type === "text" ? { ...c, text: sanitizeText(c.text) } : c)),
 			details: result.details,
 			isError,
 			timestamp: Date.now(),
