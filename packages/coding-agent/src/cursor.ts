@@ -245,14 +245,18 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 		// Track previously streamed text so we only forward deltas.
 		let streamedLen = 0;
 		const onUpdate: AgentToolUpdateCallback<unknown> = partialResult => {
+			const sanitizedPartialResult: AgentToolResult<unknown> = {
+				content: partialResult.content.map(c => (c.type === "text" ? { ...c, text: sanitizeText(c.text) } : c)),
+				details: partialResult.details,
+			};
 			this.options.emitEvent?.({
 				type: "tool_execution_update",
 				toolCallId,
 				toolName,
 				args: toolArgs,
-				partialResult,
+				partialResult: sanitizedPartialResult,
 			});
-			const text = partialResult.content.map(c => (c.type === "text" ? c.text : "")).join("");
+			const text = sanitizedPartialResult.content.map(c => (c.type === "text" ? c.text : "")).join("");
 			if (text.length > streamedLen) {
 				callbacks.onStdout(text.slice(streamedLen));
 				streamedLen = text.length;
@@ -274,8 +278,18 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 			callbacks.onStdout(finalText.slice(streamedLen));
 		}
 
-		this.options.emitEvent?.({ type: "tool_execution_end", toolCallId, toolName, result, isError });
-		return createToolResultMessage(toolCallId, toolName, result, isError);
+		const sanitizedFinalResult: AgentToolResult<unknown> = {
+			content: result.content.map(c => (c.type === "text" ? { ...c, text: sanitizeText(c.text) } : c)),
+			details: result.details,
+		};
+		this.options.emitEvent?.({
+			type: "tool_execution_end",
+			toolCallId,
+			toolName,
+			result: sanitizedFinalResult,
+			isError,
+		});
+		return createToolResultMessage(toolCallId, toolName, sanitizedFinalResult, isError);
 	}
 
 	async diagnostics(args: Parameters<NonNullable<ICursorExecHandlers["diagnostics"]>>[0]) {
