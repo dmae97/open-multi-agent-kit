@@ -4,9 +4,23 @@ Reads the content at the specified path or URL.
 The `read` tool is a multi-purpose tool that can be used to inspect all kinds of files and URLs.
 - You **MUST** parallelize reads when exploring related files
 
+## Parameters
+- `path` -- file path or URL (required)
+- `sel` -- optional selector for line ranges or raw mode
+- `timeout` -- seconds, for URLs only
+
+## Selectors
+
+|`sel` value|Behavior|
+|---|---|
+|*(omitted)*|Read full file (up to {{DEFAULT_LIMIT}} lines)|
+|`L50`|Read from line 50 onward|
+|`L50-L120`|Read lines 50 through 120|
+|`raw`|Raw content without transformations (for URLs: untouched HTML)|
+
+Max {{DEFAULT_MAX_LINES}} lines per call.
+
 # Filesystem
-- Reads up to {{DEFAULT_LIMIT}} lines by default
-- Use `offset` and `limit` for large files; max {{DEFAULT_MAX_LINES}} lines per call
 {{#if IS_HASHLINE_MODE}}
 - If reading from FS, result will be prefixed with anchors: `41#ZZ:def alpha():`
 {{else}}
@@ -26,7 +40,7 @@ When used against a directory, or an archive root, the tool will return a list o
 
 # URLs
 - Extract information from web pages, GitHub issues/PRs, Stack Overflow, Wikipedia, Reddit, NPM, arXiv, technical blogs, RSS/Atom feeds, JSON endpoints
-- `raw: true` for untouched HTML or debugging
+- `sel="raw"` for untouched HTML or debugging
 - `timeout` to override the default request timeout
 </instruction>
 
@@ -35,6 +49,6 @@ When used against a directory, or an archive root, the tool will return a list o
 - You **MUST** use `read` instead of `ls` for directory listings.
 - You **MUST** use `read` instead of shelling out to `tar` or `unzip` for supported archive reads.
 - You **MUST** always include the `path` parameter, NEVER call `read` with empty arguments `{}`.
-- When reading specific line ranges, use `offset` and `limit`: `read(path="file", offset=50, limit=100)` not `cat -n file | sed`.
-- You **MAY** use `offset` and `limit` with URL reads; the tool will paginate the cached fetched output.
+- When reading specific line ranges, use `sel`: `read(path="file", sel="L50-L150")` not `cat -n file | sed`.
+- You **MAY** use `sel` with URL reads; the tool will paginate the cached fetched output.
 </critical>

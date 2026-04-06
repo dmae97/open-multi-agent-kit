@@ -7,8 +7,7 @@ import type { ToolExecutionHandle } from "./tool-execution";
 type ReadRenderArgs = {
 	path?: string;
 	file_path?: string;
-	offset?: number;
-	limit?: number;
+	sel?: string;
 };
 
 type ReadToolSuffixResolution = {
@@ -33,8 +32,7 @@ function getSuffixResolution(details: ReadToolResultDetails | undefined): ReadTo
 type ReadEntry = {
 	toolCallId: string;
 	path: string;
-	offset?: number;
-	limit?: number;
+	sel?: string;
 	status: "pending" | "success" | "warning" | "error";
 	correctedFrom?: string;
 };
@@ -56,13 +54,11 @@ export class ReadToolGroupComponent extends Container implements ToolExecutionHa
 		const entry: ReadEntry = this.#entries.get(toolCallId) ?? {
 			toolCallId,
 			path: rawPath,
-			offset: args.offset,
-			limit: args.limit,
+			sel: args.sel,
 			status: "pending",
 		};
 		entry.path = rawPath;
-		entry.offset = args.offset;
-		entry.limit = args.limit;
+		entry.sel = args.sel;
 		this.#entries.set(toolCallId, entry);
 		this.#updateDisplay();
 	}
@@ -132,10 +128,8 @@ export class ReadToolGroupComponent extends Container implements ToolExecutionHa
 	#formatPath(entry: ReadEntry): string {
 		const filePath = shortenPath(entry.path);
 		let pathDisplay = filePath ? theme.fg("accent", filePath) : theme.fg("toolOutput", "…");
-		if (entry.offset !== undefined || entry.limit !== undefined) {
-			const startLine = entry.offset ?? 1;
-			const endLine = entry.limit !== undefined ? startLine + entry.limit - 1 : "";
-			pathDisplay += theme.fg("warning", `:${startLine}${endLine ? `-${endLine}` : ""}`);
+		if (entry.sel) {
+			pathDisplay += theme.fg("warning", `:${entry.sel}`);
 		}
 		if (entry.correctedFrom) {
 			pathDisplay += theme.fg("dim", ` (corrected from ${shortenPath(entry.correctedFrom)})`);
