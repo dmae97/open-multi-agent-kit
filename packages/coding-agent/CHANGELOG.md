@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - Added `new_segment` option to `init_experiment` to force a new segment even when contract fields match, enabling re-initialization with unchanged parameters
@@ -15,6 +14,9 @@
 
 ### Changed
 
+- Changed chunk edit operation format from flat `{ "op": "splice", ... }` to keyed `{ "splice": { ... } }` format for improved clarity and schema validation
+- Updated chunk edit schema to use discriminated union types with operation-specific field requirements (insert ops no longer require CRC, mutation ops require CRC)
+- Improved chunk selector sanitization to strip filename prefixes and normalize checksums to uppercase, handling model output variations
 - Changed `log_experiment` revert behavior to only restore run-modified files instead of reverting entire working tree, preserving pre-existing uncommitted changes
 - Changed `init_experiment` error message for pending unlogged runs to include command, metric, and pass/fail status for better context
 - Changed `init_experiment` to detect when contract fields match current state and skip re-initialization (no-op) unless `new_segment=true`

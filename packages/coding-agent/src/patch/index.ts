@@ -104,44 +104,83 @@ const patchEditSchema = Type.Object({
 	diff: Type.Optional(Type.String({ description: "Diff hunks (update) or full content (create)" })),
 });
 
-const CHUNK_EDIT_OPS_BASE = [
-	"append_child",
-	"prepend_child",
-	"append_sibling",
-	"prepend_sibling",
-	"replace",
-	"delete",
-] as const;
-
-const chunkEditOperationSchemaBaseProps = {
-	sel: Type.Optional(Type.String({ description: "Chunk path selector" })),
-	crc: Type.Optional(Type.String({ description: "Chunk checksum for staleness validation" })),
+const chunkEditSelProp = { sel: Type.Optional(Type.String({ description: "Chunk path selector" })) } as const;
+const chunkEditCrcProp = { crc: Type.String({ description: "Chunk checksum for staleness validation" }) } as const;
+const chunkEditContentProp = {
+	content: Type.Union([Type.String(), Type.Array(Type.String())], { description: "Inserted or replacement content" }),
+} as const;
+const chunkEditOptionalContentProp = {
 	content: Type.Optional(
-		Type.Union([Type.String(), Type.Array(Type.String())], { description: "Inserted or replacement content" }),
+		Type.Union([Type.String(), Type.Array(Type.String())], {
+			description: "Replacement content (empty string to delete lines)",
+		}),
 	),
 } as const;
-
-const chunkEditOperationSchemaWithoutSplice = Type.Object({
-	op: StringEnum(CHUNK_EDIT_OPS_BASE, { description: "Chunk edit operation" }),
-	...chunkEditOperationSchemaBaseProps,
-});
-
-const chunkEditOperationSchemaWithSplice = Type.Object({
-	op: StringEnum([...CHUNK_EDIT_OPS_BASE, "splice"], { description: "Chunk edit operation" }),
-	...chunkEditOperationSchemaBaseProps,
+const chunkEditBegEndProps = {
+	beg: Type.Integer({
+		description:
+			"Start line: absolute file line (1-indexed, same as read gutter). With end, inclusive when beg ≤ end; when beg = end + 1, zero-width insertion.",
+	}),
+	end: Type.Integer({
+		description:
+			"End line: absolute file line (1-indexed). Inclusive when beg ≤ end; for zero-width insertion use end = beg − 1.",
+	}),
+} as const;
+const chunkEditOptionalBegEndProps = {
 	beg: Type.Optional(
 		Type.Integer({
 			description:
-				"Start line: absolute file line (1-indexed, same as read gutter). Used by splice and replace with line range. With end, inclusive when beg \u2264 end; when beg = end + 1, zero-width insertion.",
+				"Start line for line-scoped replace. When both beg and end are provided, replaces only those file lines (same as splice).",
 		}),
 	),
-	end: Type.Optional(
-		Type.Integer({
-			description:
-				"End line: absolute file line (1-indexed). Inclusive when beg \u2264 end; for zero-width insertion use end = beg \u2212 1.",
-		}),
-	),
+	end: Type.Optional(Type.Integer({ description: "End line for line-scoped replace." })),
+} as const;
+
+// Insert ops (no CRC)
+const appendChildOp = Type.Object({ append_child: Type.Object({ ...chunkEditSelProp, ...chunkEditContentProp }) });
+const prependChildOp = Type.Object({ prepend_child: Type.Object({ ...chunkEditSelProp, ...chunkEditContentProp }) });
+const appendSiblingOp = Type.Object({ append_sibling: Type.Object({ ...chunkEditSelProp, ...chunkEditContentProp }) });
+const prependSiblingOp = Type.Object({
+	prepend_sibling: Type.Object({ ...chunkEditSelProp, ...chunkEditContentProp }),
 });
+
+// Mutation ops (CRC required)
+const replaceOp = Type.Object({
+	replace: Type.Object({
+		...chunkEditSelProp,
+		...chunkEditCrcProp,
+		...chunkEditContentProp,
+		...chunkEditOptionalBegEndProps,
+	}),
+});
+const deleteOp = Type.Object({ delete: Type.Object({ ...chunkEditSelProp, ...chunkEditCrcProp }) });
+const spliceOp = Type.Object({
+	splice: Type.Object({
+		...chunkEditSelProp,
+		...chunkEditCrcProp,
+		...chunkEditBegEndProps,
+		...chunkEditOptionalContentProp,
+	}),
+});
+
+const chunkEditOperationSchemaWithoutSplice = Type.Union([
+	appendChildOp,
+	prependChildOp,
+	appendSiblingOp,
+	prependSiblingOp,
+	replaceOp,
+	deleteOp,
+]);
+
+const chunkEditOperationSchemaWithSplice = Type.Union([
+	appendChildOp,
+	prependChildOp,
+	appendSiblingOp,
+	prependSiblingOp,
+	replaceOp,
+	deleteOp,
+	spliceOp,
+]);
 
 const chunkEditOperationSchema = chunkSplicesEnabled()
 	? chunkEditOperationSchemaWithSplice
@@ -382,6 +421,44 @@ function isChunkParams(params: ReplaceParams | PatchParams | HashlineParams | Ch
 	return "operations" in params;
 }
 
+const CHUNK_OP_KEYS = [
+	"append_child",
+	"prepend_child",
+	"append_sibling",
+	"prepend_sibling",
+	"replace",
+	"delete",
+	"splice",
+] as const;
+type ChunkOpKey = (typeof CHUNK_OP_KEYS)[number];
+
+interface ParsedChunkOp {
+	op: ChunkOpKey;
+	sel?: string;
+	crc?: string;
+	content?: string | string[];
+	beg?: number;
+	end?: number;
+}
+
+/** Normalize keyed `{ splice: { ... } }` format to flat internal format. Also tolerates legacy `{ op: "splice", ... }`. */
+function parseKeyedChunkOp(raw: Record<string, unknown>): ParsedChunkOp {
+	// Legacy flat format: { op: "splice", sel: "...", ... }
+	if (typeof raw.op === "string" && CHUNK_OP_KEYS.includes(raw.op as ChunkOpKey)) {
+		return raw as unknown as ParsedChunkOp;
+	}
+
+	// Keyed format: { splice: { sel: "...", ... } }
+	for (const key of CHUNK_OP_KEYS) {
+		if (key in raw && typeof raw[key] === "object" && raw[key] !== null) {
+			const inner = raw[key] as Record<string, unknown>;
+			return { op: key, ...inner } as unknown as ParsedChunkOp;
+		}
+	}
+
+	throw new Error(`Unknown chunk edit operation shape: ${JSON.stringify(Object.keys(raw))}`);
+}
+
 /**
  * Edit tool implementation.
  *
@@ -535,9 +612,10 @@ export class EditTool implements AgentTool<TInput> {
 				: undefined;
 
 			const normalizedOperations: ChunkEditOperation[] = operations.map(operation => {
-				const anchorSelector = operation.sel ?? defaultSelector;
-				const anchorCrc = operation.crc ?? (operation.sel === undefined ? defaultCrc : undefined);
-				const content = normalizeChunkContentInput(operation.content);
+				const opEntry = parseKeyedChunkOp(operation as Record<string, unknown>);
+				const anchorSelector = opEntry.sel ?? defaultSelector;
+				const anchorCrc = opEntry.crc ?? (opEntry.sel === undefined ? defaultCrc : undefined);
+				const content = normalizeChunkContentInput(opEntry.content);
 
 				const requireChecksum = (op: string): void => {
 					if (anchorCrc) return;
@@ -559,31 +637,31 @@ export class EditTool implements AgentTool<TInput> {
 					);
 				};
 
-				switch (operation.op) {
+				switch (opEntry.op) {
 					case "append_child":
 					case "prepend_child":
 					case "append_sibling":
 					case "prepend_sibling":
 						if (!content) {
-							throw new Error(`Content required for ${operation.op} on ${anchorSelector ?? "<root>"}`);
+							throw new Error(`Content required for ${opEntry.op} on ${anchorSelector ?? "<root>"}`);
 						}
-						return { op: operation.op, sel: operation.sel, crc: operation.crc, content } as ChunkEditOperation;
+						return { op: opEntry.op, sel: opEntry.sel, crc: opEntry.crc, content } as ChunkEditOperation;
 					case "replace":
 						requireChecksum("replace");
 						if (content.length === 0) {
-							return { op: "delete", sel: operation.sel, crc: anchorCrc } as ChunkEditOperation;
+							return { op: "delete", sel: opEntry.sel, crc: anchorCrc } as ChunkEditOperation;
 						}
 						return {
 							op: "replace",
-							sel: operation.sel,
+							sel: opEntry.sel,
 							crc: anchorCrc,
 							content,
-							beg: (operation as { beg?: number }).beg,
-							end: (operation as { end?: number }).end,
+							beg: opEntry.beg,
+							end: opEntry.end,
 						} as ChunkEditOperation;
 					case "delete":
 						requireChecksum("delete");
-						return { op: "delete", sel: operation.sel, crc: anchorCrc } as ChunkEditOperation;
+						return { op: "delete", sel: opEntry.sel, crc: anchorCrc } as ChunkEditOperation;
 					case "splice":
 						if (!chunkSplicesEnabled()) {
 							throw new Error(
@@ -591,19 +669,19 @@ export class EditTool implements AgentTool<TInput> {
 							);
 						}
 						requireChecksum("splice");
-						if (operation.beg == null || operation.end == null) {
+						if (opEntry.beg == null || opEntry.end == null) {
 							throw new Error(`beg and end required for splice on ${anchorSelector}`);
 						}
 						return {
 							op: "splice",
-							sel: operation.sel,
+							sel: opEntry.sel,
 							crc: anchorCrc,
-							beg: operation.beg,
-							end: operation.end,
+							beg: opEntry.beg,
+							end: opEntry.end,
 							content,
 						} as ChunkEditOperation;
 					default:
-						throw new Error(`Unknown chunk edit operation: ${(operation as { op: string }).op}`);
+						throw new Error(`Unknown chunk edit operation: ${opEntry.op}`);
 				}
 			});
 

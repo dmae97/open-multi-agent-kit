@@ -725,6 +725,7 @@ function resolveAnchorChunk(state: MutableChunkState, selector: string | undefin
 
 /**
  * Normalize a chunk selector from model output:
+ * - Strip `filename.ext:` prefix (model puts `path:chunk` format in `sel`)
  * - Strip leading `:` (model artifact)
  * - Strip trailing `#XXXX` hash suffix (model confuses checksum with path)
  * - Convert literal `"null"` string to empty
@@ -733,10 +734,14 @@ function sanitizeChunkSelector(selector: string | undefined): string | undefined
 	if (selector === undefined || selector === null) return undefined;
 	let s = typeof selector === "string" ? selector : String(selector);
 	if (s === "null" || s === "undefined") return undefined;
+	// Strip filename prefix: "pirate.ts:expression_2" -> "expression_2"
+	// Models sometimes put the path:chunk format in the sel field instead of path.
+	const colonIdx = chunkReadPathSeparatorIndex(s);
+	if (colonIdx !== -1) s = s.slice(colonIdx + 1);
 	// Strip leading colon (":error" -> "error")
 	if (s.startsWith(":")) s = s.slice(1);
 	// Strip trailing #XXXX checksum suffix ("imports#YKXY" -> "imports")
-	s = s.replace(/#[A-Z]{4}$/, "");
+	s = s.replace(/#[A-Z]{4}$/i, "");
 	return s.trim() || undefined;
 }
 
@@ -754,11 +759,12 @@ function resolveAnchorWithCrc(
  * Normalize a CRC value from model output:
  * - Convert literal `"null"` / `"undefined"` strings to undefined
  * - Treat empty strings as undefined
+ * - Normalize to uppercase (models sometimes emit lowercase checksums)
  */
 function sanitizeCrc(crc: string | undefined): string | undefined {
 	if (crc === undefined || crc === null) return undefined;
 	if (crc === "null" || crc === "undefined" || crc === "") return undefined;
-	return crc;
+	return crc.toUpperCase();
 }
 
 function validateCrc(chunk: ChunkNode, crc: string | undefined): void {
