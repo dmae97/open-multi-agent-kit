@@ -17,6 +17,9 @@ Searches files using powerful regex matching.
 - Text output is line-number-prefixed
 {{/if}}
 {{/if}}
+{{#if IS_CHUNK_MODE}}
+- Text output is chunk-path-prefixed: `path:selector>LINE|content`
+{{/if}}
 </output>
 
 <critical>

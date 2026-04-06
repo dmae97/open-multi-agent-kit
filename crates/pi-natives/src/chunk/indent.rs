@@ -1,0 +1,555 @@
+use crate::chunk::types::ChunkTree;
+
+const DEFAULT_SPACE_INDENT_STEP: usize = 4;
+const MAX_REASONABLE_INDENT_STEP: usize = 8;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommonIndent {
+	pub prefix: String,
+	pub count:  usize,
+}
+
+pub fn detect_common_indent(text: &str) -> CommonIndent {
+	let mut min_count = usize::MAX;
+	let mut detected_char = None;
+
+	for line in text.split('\n') {
+		if line.trim().is_empty() {
+			continue;
+		}
+		let whitespace = leading_whitespace(line);
+		if whitespace.is_empty() {
+			return CommonIndent { prefix: String::new(), count: 0 };
+		}
+		if whitespace.len() < min_count {
+			min_count = whitespace.len();
+			detected_char = whitespace.chars().next();
+		}
+	}
+
+	if min_count == usize::MAX {
+		return CommonIndent { prefix: String::new(), count: 0 };
+	}
+
+	let ch = detected_char.unwrap_or(' ');
+	CommonIndent { prefix: ch.to_string().repeat(min_count), count: min_count }
+}
+
+pub fn dedent_python_style(text: &str) -> String {
+	let mut margin: Option<&str> = None;
+	for line in text.split('\n') {
+		if line.trim().is_empty() {
+			continue;
+		}
+		let indent = leading_whitespace(line);
+		margin = Some(match margin {
+			None => indent,
+			Some(current) if indent.starts_with(current) => current,
+			Some(current) if current.starts_with(indent) => indent,
+			Some(current) => common_prefix(current, indent),
+		});
+	}
+
+	let Some(margin) = margin else {
+		return text.to_owned();
+	};
+	if margin.is_empty() {
+		return text.to_owned();
+	}
+
+	text
+		.split('\n')
+		.map(|line| line.strip_prefix(margin).unwrap_or(line))
+		.collect::<Vec<_>>()
+		.join("\n")
+}
+
+pub fn indent_non_empty_lines(text: &str, prefix: &str) -> String {
+	if prefix.is_empty() {
+		return text.to_owned();
+	}
+	text
+		.split('\n')
+		.map(|line| {
+			if line.trim().is_empty() {
+				line.to_owned()
+			} else {
+				format!("{prefix}{line}")
+			}
+		})
+		.collect::<Vec<_>>()
+		.join("\n")
+}
+
+pub fn detect_space_indent_step(text: &str) -> usize {
+	let mut min = usize::MAX;
+	for line in text.split('\n') {
+		if line.trim().is_empty() {
+			continue;
+		}
+		let count = line.chars().take_while(|ch| *ch == ' ').count();
+		if count > 0 {
+			min = min.min(count);
+		}
+	}
+	if min == usize::MAX || min == 0 || min > MAX_REASONABLE_INDENT_STEP {
+		DEFAULT_SPACE_INDENT_STEP
+	} else {
+		min
+	}
+}
+
+pub fn count_indent_columns(whitespace: &str, space_step: usize) -> usize {
+	whitespace
+		.chars()
+		.map(|ch| if ch == '\t' { space_step } else { 1 })
+		.sum()
+}
+
+pub fn normalize_target_indent(target_indent: &str, sample_text: &str) -> String {
+	if target_indent.is_empty() {
+		return String::new();
+	}
+	let has_tabs = target_indent.contains('\t');
+	let has_spaces = target_indent.contains(' ');
+	if !has_tabs || !has_spaces {
+		return target_indent.to_owned();
+	}
+
+	let space_step = detect_space_indent_step(sample_text);
+	let total_columns = count_indent_columns(target_indent, space_step);
+	let normalized_levels = round_to_nearest_step(total_columns, space_step) / space_step;
+	if normalized_levels == 0 {
+		return String::new();
+	}
+
+	match target_indent.chars().next().unwrap_or(' ') {
+		'\t' => "\t".repeat(normalized_levels),
+		_ => " ".repeat(normalized_levels * space_step),
+	}
+}
+
+pub fn normalize_leading_whitespace_char(
+	text: &str,
+	target_char: char,
+	file_indent_step: Option<usize>,
+) -> String {
+	if target_char != ' ' && target_char != '\t' {
+		return text.to_owned();
+	}
+
+	let other_char = if target_char == ' ' { '\t' } else { ' ' };
+	let mut needs_conversion = false;
+	for line in text.split('\n') {
+		if line.trim().is_empty() {
+			continue;
+		}
+		let ws = leading_whitespace(line);
+		if ws.is_empty() {
+			continue;
+		}
+		needs_conversion |= ws.contains(other_char);
+	}
+
+	if !needs_conversion {
+		return text.to_owned();
+	}
+
+	let space_step = if target_char == ' ' {
+		file_indent_step
+			.filter(|step| *step > 1)
+			.unwrap_or_else(|| detect_space_indent_step(text))
+	} else {
+		file_indent_step.unwrap_or_else(|| detect_space_indent_step(text))
+	};
+
+	text
+		.split('\n')
+		.map(|line| {
+			let ws = leading_whitespace(line);
+			if ws.is_empty() {
+				return line.to_owned();
+			}
+			let rest = &line[ws.len()..];
+			let total_spaces = count_indent_columns(ws, space_step);
+			if target_char == ' ' {
+				format!("{}{}", " ".repeat(total_spaces), rest)
+			} else {
+				let tabs = total_spaces / space_step;
+				let remainder = total_spaces % space_step;
+				format!("{}{}{}", "\t".repeat(tabs), " ".repeat(remainder), rest)
+			}
+		})
+		.collect::<Vec<_>>()
+		.join("\n")
+}
+
+pub fn reindent_inserted_block(
+	content: &str,
+	target_indent: &str,
+	file_indent_step: Option<usize>,
+) -> String {
+	let lines = content.split('\n').collect::<Vec<_>>();
+	if lines.is_empty() {
+		return String::new();
+	}
+
+	let normalized_target_indent = normalize_target_indent(target_indent, content);
+	let non_empty_rest = lines
+		.iter()
+		.skip(1)
+		.filter(|line| !line.trim().is_empty())
+		.copied()
+		.collect::<Vec<_>>();
+
+	let mut dedented = if lines.len() == 1 || non_empty_rest.is_empty() {
+		dedent_python_style(content)
+	} else {
+		let first_line = lines[0];
+		let first_indent = leading_whitespace(first_line).chars().count();
+		let min_rest_indent = non_empty_rest
+			.iter()
+			.map(|line| leading_whitespace(line).chars().count())
+			.min()
+			.unwrap_or(0);
+		if min_rest_indent > first_indent {
+			let tail = lines.iter().skip(1).copied().collect::<Vec<_>>().join("\n");
+			format!("{first_line}\n{}", dedent_python_style(&tail))
+		} else {
+			dedent_python_style(content)
+		}
+	};
+
+	if let Some(target_char) = normalized_target_indent.chars().next() {
+		let target_step = if target_char == ' ' {
+			file_indent_step.unwrap_or_else(|| normalized_target_indent.chars().count())
+		} else {
+			file_indent_step.unwrap_or_else(|| detect_space_indent_step(&dedented))
+		};
+		dedented = normalize_leading_whitespace_char(&dedented, target_char, Some(target_step));
+	}
+
+	indent_non_empty_lines(&dedented, &normalized_target_indent)
+}
+
+/// Detect the file's indent character by looking at non-root chunks.
+/// Returns `'\t'` or `' '`, defaulting to `'\t'` if no chunks have indentation.
+pub fn detect_file_indent_char(tree: &ChunkTree) -> char {
+	for chunk in &tree.chunks {
+		if chunk.indent > 0 && !chunk.indent_char.is_empty() {
+			return chunk.indent_char.chars().next().unwrap_or('\t');
+		}
+	}
+	'\t'
+}
+
+/// Detect spaces-per-indent-level from parent→child indent differences.
+/// Only meaningful for space-indented files; returns `DEFAULT_SPACE_INDENT_STEP` for tab files.
+pub fn detect_file_indent_step(tree: &ChunkTree) -> u32 {
+	for chunk in &tree.chunks {
+		if chunk.children.is_empty() {
+			continue;
+		}
+		for child_path in &chunk.children {
+			let Some(child) = tree
+				.chunks
+				.iter()
+				.find(|candidate| &candidate.path == child_path)
+			else {
+				continue;
+			};
+			if child.indent <= chunk.indent || child.indent_char != " " {
+				continue;
+			}
+			let step = child.indent - chunk.indent;
+			if step > 0 && step <= MAX_REASONABLE_INDENT_STEP as u32 {
+				return step;
+			}
+		}
+	}
+	DEFAULT_SPACE_INDENT_STEP as u32
+}
+
+pub fn strip_content_prefixes(content: &str) -> String {
+	let lines = content.split('\n').collect::<Vec<_>>();
+	let mut line_num_count = 0usize;
+	let mut non_empty = 0usize;
+	for line in &lines {
+		if line.trim().is_empty() {
+			continue;
+		}
+		non_empty += 1;
+		if parse_chunk_gutter_code_row(line).is_some() {
+			line_num_count += 1;
+		}
+	}
+
+	if non_empty == 0 {
+		return content.to_owned();
+	}
+
+	let without_line_numbers = if line_num_count * 10 > non_empty * 6 {
+		lines
+			.iter()
+			.map(|line| strip_chunk_gutter_line(line))
+			.collect::<Vec<_>>()
+	} else {
+		lines
+			.iter()
+			.map(|line| (*line).to_owned())
+			.collect::<Vec<_>>()
+	};
+
+	strip_new_line_prefixes(&without_line_numbers).join("\n")
+}
+
+fn leading_whitespace(line: &str) -> &str {
+	let end = line
+		.char_indices()
+		.find_map(|(index, ch)| (!matches!(ch, ' ' | '\t')).then_some(index))
+		.unwrap_or(line.len());
+	&line[..end]
+}
+
+fn common_prefix<'a>(left: &'a str, right: &'a str) -> &'a str {
+	let mut matched = 0usize;
+	for ((left_index, left_char), (_, right_char)) in left.char_indices().zip(right.char_indices()) {
+		if left_char != right_char {
+			break;
+		}
+		matched = left_index + left_char.len_utf8();
+	}
+	&left[..matched]
+}
+
+const fn round_to_nearest_step(value: usize, step: usize) -> usize {
+	if step == 0 {
+		return value;
+	}
+	((value + (step / 2)) / step) * step
+}
+
+fn parse_chunk_gutter_code_row(line: &str) -> Option<&str> {
+	let trimmed = line.trim_start_matches([' ', '\t']);
+	let digits = trimmed.chars().take_while(|ch| ch.is_ascii_digit()).count();
+	if digits == 0 {
+		return None;
+	}
+	let after_digits = &trimmed[digits..];
+	let after_spaces = after_digits.trim_start_matches([' ', '\t']);
+	let after_pipe = after_spaces
+		.strip_prefix('|')
+		.or_else(|| after_spaces.strip_prefix('│'))?;
+	Some(
+		after_pipe
+			.strip_prefix(' ')
+			.or_else(|| after_pipe.strip_prefix('\t'))
+			.unwrap_or(after_pipe),
+	)
+}
+
+fn strip_chunk_gutter_line(line: &str) -> String {
+	if let Some(rest) = parse_chunk_gutter_code_row(line) {
+		return rest.to_owned();
+	}
+	let trimmed = line.trim_start_matches([' ', '\t']);
+	if trimmed.starts_with('|') || trimmed.starts_with('│') {
+		return String::new();
+	}
+	line.to_owned()
+}
+
+fn strip_new_line_prefixes(lines: &[String]) -> Vec<String> {
+	let non_empty = lines.iter().filter(|line| !line.trim().is_empty()).count();
+	if non_empty == 0 {
+		return lines.to_vec();
+	}
+
+	let hash_prefixed = lines
+		.iter()
+		.filter(|line| !line.trim().is_empty())
+		.filter(|line| hashline_prefix_len(line).is_some())
+		.count();
+	if hash_prefixed == non_empty {
+		return lines
+			.iter()
+			.map(|line| match hashline_prefix_len(line) {
+				Some(prefix_len) => line[prefix_len..].to_owned(),
+				None => line.clone(),
+			})
+			.collect();
+	}
+
+	let prefixed = lines
+		.iter()
+		.filter(|line| !line.trim().is_empty())
+		.filter(|line| visual_prefix_len(line).is_some())
+		.count();
+	if prefixed * 10 <= non_empty * 6 {
+		return lines.to_vec();
+	}
+
+	lines
+		.iter()
+		.map(|line| match visual_prefix_len(line) {
+			Some(prefix_len) => line[prefix_len..].to_owned(),
+			None => line.clone(),
+		})
+		.collect()
+}
+
+fn visual_prefix_len(line: &str) -> Option<usize> {
+	let trimmed_start = line
+		.find(|ch| !matches!(ch, ' ' | '\t'))
+		.unwrap_or(line.len());
+	let after_indent = &line[trimmed_start..];
+	let marker = after_indent.chars().next()?;
+	if marker != '|' && marker != '│' {
+		return None;
+	}
+	let mut length = trimmed_start + marker.len_utf8();
+	let remainder = &line[length..];
+	let space_prefix = remainder.len() - remainder.trim_start_matches([' ', '\t']).len();
+	length += space_prefix;
+	Some(length)
+}
+
+fn hashline_prefix_len(line: &str) -> Option<usize> {
+	const HASHLINE_NIBBLES: &str = "ZPMQVRWSNKTXJBYH";
+
+	let mut offset = line.len() - line.trim_start_matches([' ', '\t']).len();
+	let mut remainder = &line[offset..];
+
+	if let Some(stripped) = remainder.strip_prefix(">>>") {
+		offset += 3;
+		remainder = stripped;
+	} else if let Some(stripped) = remainder.strip_prefix(">>") {
+		offset += 2;
+		remainder = stripped;
+	}
+
+	let ws = remainder.len() - remainder.trim_start_matches([' ', '\t']).len();
+	offset += ws;
+	remainder = &remainder[ws..];
+
+	if let Some(stripped) = remainder.strip_prefix('+') {
+		offset += 1;
+		remainder = stripped;
+		let inner_ws = remainder.len() - remainder.trim_start_matches([' ', '\t']).len();
+		offset += inner_ws;
+		remainder = &remainder[inner_ws..];
+	}
+
+	let digits = remainder
+		.chars()
+		.take_while(|ch| ch.is_ascii_digit())
+		.count();
+	if digits > 0 {
+		offset += digits;
+		remainder = &remainder[digits..];
+		let ws = remainder.len() - remainder.trim_start_matches([' ', '\t']).len();
+		offset += ws;
+		remainder = &remainder[ws..];
+	}
+
+	if let Some(stripped) = remainder.strip_prefix('#') {
+		offset += 1;
+		remainder = stripped;
+		let ws = remainder.len() - remainder.trim_start_matches([' ', '\t']).len();
+		offset += ws;
+		remainder = &remainder[ws..];
+	} else if digits == 0 {
+		return None;
+	}
+
+	let mut chars = remainder.chars();
+	let first = chars.next()?;
+	let second = chars.next()?;
+	if !HASHLINE_NIBBLES.contains(first) || !HASHLINE_NIBBLES.contains(second) {
+		return None;
+	}
+	offset += first.len_utf8() + second.len_utf8();
+	remainder = &remainder[first.len_utf8() + second.len_utf8()..];
+
+	remainder.strip_prefix(':').map(|_| offset + 1)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::chunk::types::ChunkNode;
+
+	fn chunk(
+		path: &str,
+		parent_path: Option<&str>,
+		children: &[&str],
+		indent: u32,
+		indent_char: &str,
+	) -> ChunkNode {
+		ChunkNode {
+			path: path.to_owned(),
+			name: path.to_owned(),
+			leaf: children.is_empty(),
+			parent_path: parent_path.map(str::to_owned),
+			children: children.iter().map(|child| (*child).to_owned()).collect(),
+			signature: None,
+			start_line: 1,
+			end_line: 1,
+			line_count: 1,
+			start_byte: 0,
+			end_byte: 0,
+			checksum: "ABCD".to_owned(),
+			error: false,
+			indent,
+			indent_char: indent_char.to_owned(),
+		}
+	}
+
+	#[test]
+	fn dedent_preserves_mixed_common_margin() {
+		let input = "\t  foo\n\t    bar\n\t  baz";
+		assert_eq!(dedent_python_style(input), "foo\n  bar\nbaz");
+	}
+
+	#[test]
+	fn normalize_leading_whitespace_char_uses_file_step() {
+		let input = "\t  alpha\n\t    beta";
+		assert_eq!(
+			normalize_leading_whitespace_char(input, ' ', Some(4)),
+			"      alpha\n        beta"
+		);
+	}
+
+	#[test]
+	fn reindent_inserted_block_preserves_first_line_hanging_indent() {
+		let input = "call(\n        alpha,\n        beta,\n    )";
+		assert_eq!(
+			reindent_inserted_block(input, "    ", Some(4)),
+			"    call(\n        alpha,\n        beta,\n    )"
+		);
+	}
+
+	#[test]
+	fn strip_content_prefixes_removes_gutter_and_meta_rows() {
+		let input = "10 | fn main() {\n   │ <.fn_main#ABCD>\n11 |     println!(\"hi\");\n12 | }";
+		assert_eq!(strip_content_prefixes(input), "fn main() {\n\n    println!(\"hi\");\n}");
+	}
+
+	#[test]
+	fn detect_file_indent_step_prefers_space_children() {
+		let tree = ChunkTree {
+			language:      "rust".to_owned(),
+			checksum:      "ABCD".to_owned(),
+			line_count:    1,
+			parse_errors:  0,
+			fallback:      false,
+			root_path:     String::new(),
+			root_children: vec!["class_A".to_owned()],
+			chunks:        vec![
+				chunk("class_A", Some(""), &["fn_b"], 0, " "),
+				chunk("fn_b", Some("class_A"), &[], 2, " "),
+			],
+		};
+		assert_eq!(detect_file_indent_step(&tree), 2);
+	}
+}

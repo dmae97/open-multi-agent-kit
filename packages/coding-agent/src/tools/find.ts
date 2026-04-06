@@ -234,8 +234,8 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 				});
 			};
 			const onMatch = onUpdate
-				? (match: GlobMatch | null) => {
-						if (signal?.aborted || !match) return;
+				? (err: Error | null, match: GlobMatch | null) => {
+						if (err || signal?.aborted || !match) return;
 						let relativePath = match.path;
 						if (!relativePath) return;
 						if (match.fileType === FileType.Dir && !relativePath.endsWith("/")) {

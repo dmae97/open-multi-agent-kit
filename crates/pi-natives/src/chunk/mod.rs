@@ -11,6 +11,11 @@
 mod classify;
 pub(crate) mod common;
 mod defaults;
+pub(crate) mod edit;
+pub(crate) mod indent;
+mod render;
+pub(crate) mod resolve;
+pub(crate) mod state;
 pub mod types;
 
 // Per-language classifiers
@@ -32,7 +37,6 @@ mod ast_python;
 mod ast_ruby_lua;
 mod ast_rust;
 mod ast_tlaplus;
-mod render;
 
 use std::collections::HashMap;
 
@@ -42,65 +46,30 @@ use napi_derive::napi;
 use tree_sitter::{Node, Parser, Tree};
 use xxhash_rust::xxh64::xxh64;
 
-pub use self::types::{ChunkNode, ChunkTree, RenderChunkTreeParams};
 use self::{
 	classify::{LangClassifier, classifier_for},
 	common::*,
-	render::{line_to_containing_chunk_path, render_chunk_tree},
 };
-use crate::language::SupportLang;
+pub use self::{
+	state::ChunkState,
+	types::{ChunkNode, ChunkTree},
+};
+use crate::{chunk::types::ChunkAnchorStyle, language::SupportLang};
 
 // ── Napi exports ─────────────────────────────────────────────────────────
 
-#[napi(js_name = "parseChunkTree")]
-pub fn parse_chunk_tree(source: String, language: String) -> Result<ChunkTree> {
-	build_chunk_tree(source.as_str(), language.as_str())
-}
-
-#[napi(js_name = "resolveChunkPath")]
-pub fn resolve_chunk_path(tree: ChunkTree, chunk_path: String) -> Option<ChunkNode> {
-	tree
-		.chunks
-		.iter()
-		.find(|chunk| chunk.path == chunk_path)
-		.cloned()
-}
-
-#[napi(js_name = "lineToChunkPath")]
-pub fn line_to_chunk_path(tree: ChunkTree, line: u32) -> Option<String> {
-	if line == 0 {
-		return None;
-	}
-
-	tree
-		.chunks
-		.iter()
-		.filter(|chunk| {
-			chunk.kind == "leaf"
-				&& chunk.start_line <= line
-				&& line <= chunk.end_line
-				&& !chunk.path.is_empty()
-		})
-		.min_by_key(|chunk| chunk.line_count)
-		.map(|chunk| chunk.path.clone())
-		.or_else(|| {
-			tree
-				.chunks
-				.iter()
-				.find(|chunk| {
-					chunk.path.is_empty() && (chunk.start_line == 0 || line <= chunk.end_line)
-				})
-				.map(|chunk| chunk.path.clone())
-		})
-}
-#[napi(js_name = "lineToContainingChunkPath")]
-pub fn line_to_containing_chunk_path_napi(tree: ChunkTree, line: u32) -> Option<String> {
-	line_to_containing_chunk_path(&tree, line)
-}
-
-#[napi(js_name = "renderChunkTree")]
-pub fn render_chunk_tree_napi(params: RenderChunkTreeParams) -> Result<String> {
-	Ok(render_chunk_tree(&params))
+/// Format one chunk anchor string for a node at `depth` using `style` and
+/// optional checksum omission.
+#[napi(js_name = "formatAnchor")]
+pub fn format_anchor_napi(
+	name: String,
+	checksum: String,
+	style: ChunkAnchorStyle,
+	omit_checksum: Option<bool>,
+) -> String {
+	style
+		.with_omit_checksum(omit_checksum.unwrap_or(false))
+		.render("", name.as_str(), checksum.as_str())
 }
 
 // ── Core build logic ─────────────────────────────────────────────────────
@@ -127,12 +96,12 @@ pub(crate) fn build_chunk_tree(source: &str, language: &str) -> Result<ChunkTree
 
 	classifier.post_process(&mut acc.chunks, &mut root_children, source);
 
-	insert_file_preamble_chunk(source, &mut acc.chunks, &mut root_children);
+	insert_preamble_chunk(source, &mut acc.chunks, &mut root_children);
 
 	acc.chunks.insert(0, ChunkNode {
 		path:        String::new(),
-		name:        "<root>".to_string(),
-		kind:        "branch".to_string(),
+		name:        "root".to_string(),
+		leaf:        false,
 		parent_path: None,
 		children:    root_children.clone(),
 		signature:   None,
@@ -159,6 +128,32 @@ pub(crate) fn build_chunk_tree(source: &str, language: &str) -> Result<ChunkTree
 	})
 }
 
+/// Smallest chunk path containing `line` (1-based file line), preferring the
+/// innermost leaf when multiple chunks overlap.
+pub(crate) fn line_to_chunk_path(tree: &ChunkTree, line: u32) -> Option<String> {
+	if line == 0 {
+		return None;
+	}
+
+	if let Some(chunk) = tree
+		.chunks
+		.iter()
+		.filter(|chunk| {
+			chunk.leaf && !chunk.path.is_empty() && chunk.start_line <= line && line <= chunk.end_line
+		})
+		.min_by_key(|chunk| chunk.line_count)
+	{
+		return Some(chunk.path.clone());
+	}
+
+	tree
+		.chunks
+		.iter()
+		.filter(|chunk| chunk.start_line <= line && line <= chunk.end_line)
+		.min_by_key(|chunk| chunk.line_count)
+		.map(|chunk| chunk.path.clone())
+}
+
 fn parse_tree(source: &str, language: SupportLang) -> Result<Tree> {
 	let mut parser = Parser::new();
 	let ts_language = language.get_ts_language();
@@ -178,8 +173,8 @@ fn build_blank_line_tree(
 ) -> ChunkTree {
 	let mut chunks = vec![ChunkNode {
 		path:        String::new(),
-		name:        "<root>".to_string(),
-		kind:        "branch".to_string(),
+		name:        "root".to_string(),
+		leaf:        false,
 		parent_path: None,
 		children:    Vec::new(),
 		signature:   None,
@@ -223,7 +218,7 @@ fn build_blank_line_tree(
 		chunks.push(ChunkNode {
 			path:        name.clone(),
 			name:        name.clone(),
-			kind:        "leaf".to_string(),
+			leaf:        true,
 			parent_path: Some(String::new()),
 			children:    Vec::new(),
 			signature:   None,
@@ -312,16 +307,12 @@ fn build_chunk(
 		Vec::new()
 	};
 
-	let kind = if !children.is_empty() || (candidate.force_recurse && !should_collapse) {
-		"branch"
-	} else {
-		"leaf"
-	};
+	let leaf = children.is_empty() && (!candidate.force_recurse || should_collapse);
 	let (indent, indent_char) = detect_indent(source, candidate.range_start_byte);
 	acc.chunks.push(ChunkNode {
 		path: path.clone(),
 		name: candidate.base_name,
-		kind: kind.to_string(),
+		leaf,
 		parent_path: Some(parent_path.to_string()),
 		children,
 		signature: candidate.signature,
@@ -657,9 +648,9 @@ pub(crate) fn chunk_checksum(bytes: &[u8]) -> String {
 }
 
 /// When the first structural chunk begins after line 1, insert a leaf chunk
-/// `file_preamble` covering leading comments/whitespace so they stay
+/// `preamble` covering leading comments/whitespace so they stay
 /// addressable via chunk paths (not only raw line ops).
-fn insert_file_preamble_chunk(
+fn insert_preamble_chunk(
 	source: &str,
 	chunks: &mut Vec<ChunkNode>,
 	root_children: &mut Vec<String>,
@@ -667,9 +658,7 @@ fn insert_file_preamble_chunk(
 	if root_children.is_empty() {
 		return;
 	}
-	if chunks.iter().any(|c| c.path == "file_preamble")
-		|| root_children.iter().any(|p| p == "file_preamble")
-	{
+	if chunks.iter().any(|c| c.path == "preamble") || root_children.iter().any(|p| p == "preamble") {
 		return;
 	}
 	let mut min_start = u32::MAX;
@@ -699,9 +688,9 @@ fn insert_file_preamble_chunk(
 			.unwrap_or_default(),
 	);
 	let preamble = ChunkNode {
-		path: "file_preamble".to_string(),
-		name: "file_preamble".to_string(),
-		kind: "leaf".to_string(),
+		path: "preamble".to_string(),
+		name: "preamble".to_string(),
+		leaf: true,
 		parent_path: Some(String::new()),
 		children: Vec::new(),
 		signature: None,
@@ -716,7 +705,7 @@ fn insert_file_preamble_chunk(
 		indent_char: String::new(),
 	};
 	chunks.push(preamble);
-	root_children.insert(0, "file_preamble".to_string());
+	root_children.insert(0, "preamble".to_string());
 }
 
 pub(crate) fn sort_chunk_children_by_position(chunks: &mut [ChunkNode]) {
@@ -948,7 +937,7 @@ mod tests {
 			.iter()
 			.find(|chunk| chunk.path == "block_if")
 			.expect("block_if chunk should exist");
-		assert_eq!(block.kind, "branch");
+		assert!(!block.leaf);
 		assert!(
 			block
 				.children
@@ -1001,7 +990,7 @@ function main(): void {{
 			.iter()
 			.find(|chunk| chunk.path == "class_Bla")
 			.expect("class chunk should exist");
-		assert_eq!(class_chunk.kind, "branch");
+		assert!(!class_chunk.leaf);
 		assert!(
 			class_chunk
 				.children
@@ -1015,7 +1004,7 @@ function main(): void {{
 				.any(|child| child == "class_Bla.fn_onEvent")
 		);
 
-		let line_path = line_to_chunk_path(tree.clone(), 15).expect("line should resolve");
+		let line_path = line_to_chunk_path(&tree, 15).expect("line should resolve");
 		assert!(line_path.starts_with("class_Bla.fn_onEvent"));
 	}
 
@@ -1057,7 +1046,7 @@ function main(): void {{
 			.iter()
 			.find(|c| c.path == "class_Tiny")
 			.expect("class_Tiny");
-		assert_eq!(class_chunk.kind, "branch");
+		assert!(!class_chunk.leaf);
 		assert!(
 			class_chunk
 				.children
@@ -1081,7 +1070,7 @@ function main(): void {{
 			.iter()
 			.find(|c| c.path == "class_Empty")
 			.expect("class_Empty");
-		assert_eq!(class_chunk.kind, "branch");
+		assert!(!class_chunk.leaf);
 	}
 
 	#[test]
@@ -1122,7 +1111,7 @@ function main(): void {{
 			.iter()
 			.find(|c| c.path == "fn_handler")
 			.expect("fn_handler");
-		assert_eq!(chunk.kind, "leaf");
+		assert!(chunk.leaf);
 		assert_eq!(chunk.start_line, 1);
 		assert_eq!(chunk.end_line, 3);
 		assert!(
@@ -1142,7 +1131,7 @@ function main(): void {{
 			.iter()
 			.find(|c| c.path == "class_Foo")
 			.expect("class_Foo");
-		assert_eq!(chunk.kind, "branch");
+		assert!(!chunk.leaf);
 		assert_eq!(chunk.start_line, 1);
 		assert_eq!(chunk.end_line, 3);
 	}
@@ -1159,7 +1148,7 @@ function main(): void {{
 			.iter()
 			.find(|c| c.path == "iface_Config")
 			.expect("iface_Config");
-		assert_eq!(iface.kind, "leaf");
+		assert!(iface.leaf);
 		assert!(iface.children.is_empty());
 	}
 
@@ -1199,7 +1188,7 @@ def main():
 			.iter()
 			.find(|c| c.path == "class_Server")
 			.expect("class_Server");
-		assert_eq!(cls.kind, "branch");
+		assert!(!cls.leaf);
 		assert!(
 			cls.children.iter().any(|c| c == "class_Server.fn_init"),
 			"expected fn_init (__init__ sanitized)"
@@ -1225,7 +1214,7 @@ def main():
 			.iter()
 			.find(|c| c.path == "fn_worker")
 			.expect("fn_worker");
-		assert_eq!(worker.kind, "branch");
+		assert!(!worker.leaf);
 		assert!(tree.chunks.iter().any(|c| c.path == "fn_worker.loop"), "expected loop chunk");
 	}
 
@@ -1241,7 +1230,7 @@ def main():
 			.find(|c| c.path == "class_Foo")
 			.expect("class_Foo");
 		assert_eq!(class_chunk.signature.as_deref(), Some("class Foo(Base)"));
-		assert_eq!(class_chunk.kind, "leaf");
+		assert!(class_chunk.leaf);
 	}
 
 	#[test]
@@ -1277,7 +1266,7 @@ fn main() {
 			.iter()
 			.find(|c| c.path == "impl_Config")
 			.expect("impl_Config");
-		assert_eq!(impl_chunk.kind, "branch");
+		assert!(!impl_chunk.leaf);
 		assert!(
 			impl_chunk
 				.children
@@ -1332,7 +1321,7 @@ impl Config {
 			.iter()
 			.find(|c| c.path == "struct_Server")
 			.expect("struct_Server should exist");
-		assert_eq!(server.kind, "branch", "large struct should be a branch");
+		assert!(!server.leaf, "large struct should be a branch");
 		assert!(
 			server
 				.children
@@ -1371,7 +1360,7 @@ impl Config {
 			.iter()
 			.find(|c| c.path == "type_Config")
 			.expect("type_Config");
-		assert_eq!(config.kind, "branch");
+		assert!(!config.leaf);
 		assert!(
 			config
 				.children
@@ -1385,7 +1374,7 @@ impl Config {
 			.iter()
 			.find(|c| c.path == "type_Reader")
 			.expect("type_Reader");
-		assert_eq!(reader.kind, "leaf");
+		assert!(reader.leaf);
 		assert!(reader.children.is_empty(), "single-line interfaces should render inline");
 	}
 
@@ -1425,7 +1414,7 @@ impl Config {
 			.iter()
 			.find(|c| c.path == "type_Server")
 			.expect("type_Server");
-		assert_eq!(server.kind, "branch");
+		assert!(!server.leaf);
 		assert!(
 			server
 				.children
@@ -1450,7 +1439,7 @@ impl Config {
 			"expected type_Server.fn_Stop in children: {:?}",
 			server.children
 		);
-		let line_path = line_to_chunk_path(tree.clone(), 7).expect("method line should resolve");
+		let line_path = line_to_chunk_path(&tree, 7).expect("method line should resolve");
 		assert_eq!(line_path, "type_Server.fn_Start");
 	}
 
@@ -1508,19 +1497,19 @@ func (s *Server) GetAddress() string {
 	}
 
 	#[test]
-	fn file_preamble_chunk_covers_leading_lines_before_first_item() {
+	fn preamble_chunk_covers_leading_lines_before_first_item() {
 		let source = "// header\n// second\n\nfn main() {}\n";
 		let tree = build_chunk_tree(source, "rust").expect("tree should build");
 		assert!(
-			tree.root_children.iter().any(|c| c == "file_preamble"),
-			"expected file_preamble in {:?}",
+			tree.root_children.iter().any(|c| c == "preamble"),
+			"expected preamble in {:?}",
 			tree.root_children
 		);
 		let preamble = tree
 			.chunks
 			.iter()
-			.find(|c| c.path == "file_preamble")
-			.expect("file_preamble");
+			.find(|c| c.path == "preamble")
+			.expect("preamble");
 		assert_eq!(preamble.start_line, 1);
 		assert_eq!(preamble.end_line, 3);
 		let main_fn = tree
@@ -1561,7 +1550,7 @@ func (s *Server) GetAddress() string {
 			.iter()
 			.find(|c| c.path == "enum_LogLevel")
 			.expect("enum_LogLevel");
-		assert_eq!(enum_chunk.kind, "branch");
+		assert!(!enum_chunk.leaf);
 		assert!(
 			enum_chunk
 				.children
@@ -1587,7 +1576,7 @@ func (s *Server) GetAddress() string {
 			.iter()
 			.find(|c| c.path == "trait_Handler")
 			.expect("trait_Handler");
-		assert_eq!(trait_chunk.kind, "leaf");
+		assert!(trait_chunk.leaf);
 		assert!(trait_chunk.children.is_empty(), "single-line trait signatures should render inline");
 	}
 
@@ -1604,7 +1593,7 @@ func (s *Server) GetAddress() string {
 			.iter()
 			.find(|c| c.path == "type_Handler")
 			.expect("type_Handler");
-		assert_eq!(iface.kind, "leaf");
+		assert!(iface.leaf);
 		assert!(iface.children.is_empty(), "single-line interface methods should render inline");
 	}
 
@@ -1620,7 +1609,7 @@ func (s *Server) GetAddress() string {
 			.iter()
 			.find(|c| c.path == "enum_Status")
 			.expect("enum_Status");
-		assert_eq!(enum_chunk.kind, "branch");
+		assert!(!enum_chunk.leaf);
 		assert!(
 			enum_chunk
 				.children
@@ -1769,7 +1758,7 @@ end
 			.iter()
 			.find(|c| c.path == "mod_PaymentProcessing")
 			.expect("mod_PaymentProcessing");
-		assert_eq!(module.kind, "branch");
+		assert!(!module.leaf);
 		assert!(
 			module
 				.children
@@ -1783,7 +1772,7 @@ end
 			.iter()
 			.find(|c| c.path == "mod_PaymentProcessing.class_Money")
 			.expect("class_Money");
-		assert_eq!(class.kind, "branch");
+		assert!(!class.leaf);
 		assert!(
 			class
 				.children
@@ -1832,7 +1821,7 @@ end
 			.iter()
 			.find(|c| c.path == "enum_Message")
 			.expect("enum_Message");
-		assert_eq!(enum_chunk.kind, "branch");
+		assert!(!enum_chunk.leaf);
 		assert!(!enum_chunk.children.is_empty(), "mixed-size variants should stay addressable");
 	}
 }

@@ -37,6 +37,8 @@ impl Drop for SearchDbInner {
 	}
 }
 
+/// Long-lived native search state: frecency persistence and per-workspace file
+/// picker caches.
 #[derive(Clone)]
 #[napi]
 pub struct SearchDb {
@@ -45,6 +47,8 @@ pub struct SearchDb {
 
 #[napi]
 impl SearchDb {
+	/// Create search DB state rooted at `path` (trimmed). An empty path skips
+	/// frecency storage.
 	#[napi(constructor)]
 	pub fn new(path: String) -> Self {
 		let normalized = path.trim().to_string();
@@ -68,6 +72,8 @@ impl SearchDb {
 		}
 	}
 
+	/// Root path string associated with this instance (same as passed to the
+	/// constructor).
 	#[napi(getter)]
 	pub fn path(&self) -> String {
 		self.inner.path.clone()

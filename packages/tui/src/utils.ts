@@ -1,5 +1,4 @@
-import { sliceWithWidth } from "@oh-my-pi/pi-natives";
-import { getDefaultTabWidth, getIndentation } from "@oh-my-pi/pi-utils";
+import { getDefaultTabWidth, getIndentation, sliceWithWidth } from "@oh-my-pi/pi-natives";
 
 export { Ellipsis, extractSegments, sliceWithWidth, truncateToWidth, wrapTextWithAnsi } from "@oh-my-pi/pi-natives";
 
@@ -9,8 +8,8 @@ const SPACE_BUFFER = " ".repeat(512);
 /*
  * Replace tabs with configured spacing for consistent rendering.
  */
-export function replaceTabs(text: string): string {
-	return text.replaceAll("\t", getIndentation());
+export function replaceTabs(text: string, file?: string): string {
+	return text.replaceAll("\t", " ".repeat(getIndentation(file)));
 }
 
 /**

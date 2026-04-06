@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { type ChunkAnchorStyle, formatAnchor } from "@oh-my-pi/pi-natives";
 import { getProjectDir, getProjectPromptsDir, getPromptsDir, logger } from "@oh-my-pi/pi-utils";
 import Handlebars from "handlebars";
 import { computeLineHash } from "../patch/hashline";
@@ -273,6 +274,35 @@ handlebars.registerHelper("href", (lineNum: unknown, content: unknown): string =
 handlebars.registerHelper("hline", (lineNum: unknown, content: unknown): string => {
 	const { ref, text } = formatHashlineRef(lineNum, content);
 	return `${ref}:${text}`;
+});
+
+/**
+ * {{anchor name checksum}} — render a branch anchor tag using the current anchor style.
+ * Style is resolved from the template context (`anchorStyle`) or defaults to "full".
+ */
+handlebars.registerHelper("anchor", function (this: TemplateContext, name: string, checksum: string): string {
+	const style = (this.anchorStyle as ChunkAnchorStyle) ?? "full";
+	return formatAnchor(name, checksum, style);
+});
+
+/**
+ * {{sel "parent_Name.child_Name"}} — render a chunk path for `sel` fields in examples.
+ * In `full` style the path is returned as-is (`class_Server.fn_start`).
+ * In `kind` style each segment is trimmed to its kind prefix (`class.fn`).
+ * In `bare` style the path is omitted (the model uses only `crc` to identify chunks).
+ */
+handlebars.registerHelper("sel", function (this: TemplateContext, chunkPath: string): string {
+	const style = (this.anchorStyle as ChunkAnchorStyle) ?? "full";
+	if (style === "full") return chunkPath;
+	if (style === "bare") return "";
+	// kind: trim each segment to its kind prefix (before the first `_`)
+	return chunkPath
+		.split(".")
+		.map(seg => {
+			const idx = seg.indexOf("_");
+			return idx === -1 ? seg : seg.slice(0, idx);
+		})
+		.join(".");
 });
 
 const INLINE_ARG_SHELL_PATTERN = /\$(?:ARGUMENTS|@(?:\[\d+(?::\d*)?\])?|\d+)/;

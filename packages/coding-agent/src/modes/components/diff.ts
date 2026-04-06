@@ -1,4 +1,4 @@
-import { getIndentation } from "@oh-my-pi/pi-utils";
+import { getIndentation } from "@oh-my-pi/pi-natives";
 import * as Diff from "diff";
 import { theme } from "../../modes/theme/theme";
 import { replaceTabs } from "../../tools/render-utils";
@@ -15,11 +15,10 @@ const DIM_OFF = "\x1b[22m";
  */
 function visualizeIndent(text: string, filePath?: string): string {
 	const match = text.match(/^([ \t]+)/);
-	if (!match) return replaceTabs(text, filePath);
+	if (!match) return replaceTabs(text);
 	const indent = match[1];
 	const rest = text.slice(indent.length);
-	const indentation = getIndentation(filePath);
-	const tabWidth = indentation.length;
+	const tabWidth = getIndentation(filePath);
 	const leftPadding = Math.floor(tabWidth / 2);
 	const rightPadding = Math.max(0, tabWidth - leftPadding - 1);
 	const tabMarker = `${DIM}${" ".repeat(leftPadding)}→${" ".repeat(rightPadding)}${DIM_OFF}`;
@@ -31,7 +30,7 @@ function visualizeIndent(text: string, filePath?: string): string {
 			visible += `${DIM}·${DIM_OFF}`;
 		}
 	}
-	return `${visible}${replaceTabs(rest, filePath)}`;
+	return `${visible}${replaceTabs(rest)}`;
 }
 
 /**
@@ -154,8 +153,8 @@ export function renderDiff(diffText: string, options: RenderDiffOptions = {}): s
 				const added = addedLines[0];
 
 				const { removedLine, addedLine } = renderIntraLineDiff(
-					replaceTabs(removed.content, options.filePath),
-					replaceTabs(added.content, options.filePath),
+					replaceTabs(removed.content),
+					replaceTabs(added.content),
 				);
 
 				result.push(

@@ -2,80 +2,339 @@
 
 use napi_derive::napi;
 
+use crate::chunk::state::ChunkState;
+
 #[derive(Clone)]
-#[napi(object)]
 pub struct ChunkNode {
 	pub path:        String,
 	pub name:        String,
-	pub kind:        String,
-	#[napi(js_name = "parentPath")]
+	pub leaf:        bool,
 	pub parent_path: Option<String>,
 	pub children:    Vec<String>,
 	pub signature:   Option<String>,
-	#[napi(js_name = "startLine")]
 	pub start_line:  u32,
-	#[napi(js_name = "endLine")]
 	pub end_line:    u32,
-	#[napi(js_name = "lineCount")]
 	pub line_count:  u32,
-	#[napi(js_name = "startByte")]
 	pub start_byte:  u32,
-	#[napi(js_name = "endByte")]
 	pub end_byte:    u32,
 	pub checksum:    String,
 	pub error:       bool,
 	pub indent:      u32,
-	#[napi(js_name = "indentChar")]
 	pub indent_char: String,
 }
 
 #[derive(Clone)]
-#[napi(object)]
 pub struct ChunkTree {
 	pub language:      String,
 	pub checksum:      String,
-	#[napi(js_name = "lineCount")]
 	pub line_count:    u32,
-	#[napi(js_name = "parseErrors")]
 	pub parse_errors:  u32,
 	pub fallback:      bool,
-	#[napi(js_name = "rootPath")]
 	pub root_path:     String,
-	#[napi(js_name = "rootChildren")]
 	pub root_children: Vec<String>,
 	pub chunks:        Vec<ChunkNode>,
 }
 
+/// Summary of a single chunk node for tool output and navigation.
+#[derive(Clone)]
+#[napi(object)]
+pub struct ChunkInfo {
+	/// Chunk selector path within the tree.
+	pub path:       String,
+	/// Short display name for the chunk (e.g. symbol or region label).
+	pub name:       String,
+	/// Stable checksum anchor for this chunk.
+	pub checksum:   String,
+	/// 1-based start line in the source file (inclusive).
+	#[napi(js_name = "startLine")]
+	pub start_line: u32,
+	/// 1-based end line in the source file (inclusive).
+	#[napi(js_name = "endLine")]
+	pub end_line:   u32,
+	/// Whether this node is a leaf (no child chunks).
+	pub leaf:       bool,
+}
+
+/// Result of resolving a chunk read request against the tree.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[napi(string_enum)]
+pub enum ChunkReadStatus {
+	/// Selector matched a chunk and content was produced.
+	#[napi(value = "ok")]
+	Ok,
+	/// No chunk matched the requested selector.
+	#[napi(value = "not_found")]
+	NotFound,
+}
+
+/// Structural edit to apply relative to a chunk anchor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[napi(string_enum)]
+pub enum ChunkEditOp {
+	/// Replace the chunk body, or a line range when `line`/`endLine` are set.
+	#[napi(value = "replace")]
+	Replace,
+	/// Remove the chunk's source range.
+	#[napi(value = "delete")]
+	Delete,
+	/// Insert `content` as the last child of the target chunk.
+	#[napi(value = "append_child")]
+	AppendChild,
+	/// Insert `content` as the first child of the target chunk.
+	#[napi(value = "prepend_child")]
+	PrependChild,
+	/// Insert `content` after the target chunk's source range.
+	#[napi(value = "append_sibling")]
+	AppendSibling,
+	/// Insert `content` before the target chunk's source range.
+	#[napi(value = "prepend_sibling")]
+	PrependSibling,
+}
+
+impl ChunkEditOp {
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			Self::Replace => "replace",
+			Self::Delete => "delete",
+			Self::AppendChild => "append_child",
+			Self::PrependChild => "prepend_child",
+			Self::AppendSibling => "append_sibling",
+			Self::PrependSibling => "prepend_sibling",
+		}
+	}
+}
+
+/// Outcome of resolving which chunk was read for a `renderRead`-style request.
+#[derive(Clone)]
+#[napi(object)]
+pub struct ChunkReadTarget {
+	/// Whether the selector matched.
+	pub status:   ChunkReadStatus,
+	/// Sanitized selector string that was applied.
+	pub selector: String,
+}
+
+/// Inclusive 1-based line range within a source file (used for scoped chunk
+/// rendering).
 #[derive(Clone)]
 #[napi(object)]
 pub struct VisibleLineRange {
+	/// First line to include.
 	#[napi(js_name = "startLine")]
 	pub start_line: u32,
+	/// Last line to include.
 	#[napi(js_name = "endLine")]
 	pub end_line:   u32,
 }
 
+/// How chunk anchors are formatted in rendered output (name and checksum
+/// visibility).
+#[derive(Clone, Copy, Default)]
+#[napi(string_enum)]
+pub enum ChunkAnchorStyle {
+	/// `[.name#crc]` style anchor.
+	#[default]
+	#[napi(value = "full")]
+	Full,
+	/// `[.kind#crc]` style anchor (kind is the name prefix before `_`).
+	#[napi(value = "kind")]
+	Kind,
+	/// `[#crc]` style anchor.
+	#[napi(value = "bare")]
+	Bare,
+	/// `[.name]` without checksum.
+	#[napi(value = "full-omit")]
+	FullOmit,
+	/// `[.kind]` without checksum.
+	#[napi(value = "kind-omit")]
+	KindOmit,
+	/// Minimal anchor without name or checksum.
+	#[napi(value = "none")]
+	None,
+}
+
+impl ChunkAnchorStyle {
+	pub const fn with_omit_checksum(self, omit: bool) -> Self {
+		if !omit {
+			return self;
+		}
+		match self {
+			Self::Full => Self::FullOmit,
+			Self::Kind => Self::KindOmit,
+			Self::Bare => Self::None,
+			Self::FullOmit => Self::FullOmit,
+			Self::KindOmit => Self::KindOmit,
+			Self::None => Self::None,
+		}
+	}
+
+	fn render_i(&self, pre: &str, indent: &str, name: &str, crc: &str) -> String {
+		fn extract_kind(name: &str) -> &str {
+			name.find('_').map_or_else(|| name, |index| &name[..index])
+		}
+		match self {
+			Self::Full => format!("{indent}[{pre}{name}#{crc}]"),
+			Self::Kind => format!("{indent}[{pre}{kind}#{crc}]", kind = extract_kind(name)),
+			Self::Bare => format!("{indent}[{pre}#{crc}]"),
+			Self::FullOmit => format!("{indent}[{pre}{name}]"),
+			Self::KindOmit => format!("{indent}[{pre}{kind}]", kind = extract_kind(name)),
+			Self::None => String::new(),
+		}
+	}
+
+	/// Render an opening anchor tag: `[name#crc]`.
+	/// Returns empty string for `None` style.
+	pub fn render(&self, indent: &str, name: &str, crc: &str) -> String {
+		self.render_i("", indent, name, crc)
+	}
+
+	/// Render a closing anchor tag: `[/name#crc]`.
+	/// Returns empty string for `None` style.
+	pub fn render_close(&self, indent: &str, name: &str, crc: &str) -> String {
+		self.render_i("/", indent, name, crc)
+	}
+}
+
+/// Options for `ChunkState.render`: which subtree to show and how anchors
+/// appear.
 #[derive(Clone)]
 #[napi(object)]
-pub struct RenderChunkTreeParams {
-	pub tree:                 ChunkTree,
+pub struct RenderParams {
+	/// Path of the chunk to render; `None` uses the tree root.
 	#[napi(js_name = "chunkPath")]
 	pub chunk_path:           Option<String>,
-	pub source:               String,
+	/// Title line shown above the tree (often the file path).
 	pub title:                String,
+	/// Optional language label for the header block.
 	#[napi(js_name = "languageTag")]
 	pub language_tag:         Option<String>,
-	pub checksum:             String,
+	/// Restrict output to an inclusive line range of the file.
 	#[napi(js_name = "visibleRange")]
 	pub visible_range:        Option<VisibleLineRange>,
+	/// When true, list only direct children instead of a full subtree.
 	#[napi(js_name = "renderChildrenOnly")]
 	pub render_children_only: bool,
+	/// Hide checksums in anchors when true.
 	#[napi(js_name = "omitChecksum")]
 	pub omit_checksum:        bool,
+	/// Anchor formatting style for chunk headers.
 	#[napi(js_name = "anchorStyle")]
-	pub anchor_style:         Option<String>,
+	pub anchor_style:         Option<ChunkAnchorStyle>,
+	/// Include a one-line preview for leaf chunks.
 	#[napi(js_name = "showLeafPreview")]
 	pub show_leaf_preview:    bool,
+	/// Replace tab characters in displayed previews (e.g. two spaces).
 	#[napi(js_name = "tabReplacement")]
 	pub tab_replacement:      Option<String>,
+}
+
+/// Options for `ChunkState.renderRead`: selector path, display path, and
+/// optional line scoping.
+#[derive(Clone)]
+#[napi(object)]
+pub struct ReadRenderParams {
+	/// Read selector (`sel=...` path, line range, or empty for whole tree).
+	#[napi(js_name = "readPath")]
+	pub read_path:           String,
+	/// Path shown in titles and error messages (often the file path).
+	#[napi(js_name = "displayPath")]
+	pub display_path:        String,
+	/// Optional language label for the rendered block.
+	#[napi(js_name = "languageTag")]
+	pub language_tag:        Option<String>,
+	/// Hide checksums in rendered anchors.
+	#[napi(js_name = "omitChecksum")]
+	pub omit_checksum:       bool,
+	/// Anchor formatting style.
+	#[napi(js_name = "anchorStyle")]
+	pub anchor_style:        Option<ChunkAnchorStyle>,
+	/// Optional absolute file line range to intersect with the resolved chunk.
+	#[napi(js_name = "absoluteLineRange")]
+	pub absolute_line_range: Option<VisibleLineRange>,
+	/// Replace tabs in embedded previews.
+	#[napi(js_name = "tabReplacement")]
+	pub tab_replacement:     Option<String>,
+}
+
+/// Rendered chunk text plus optional resolution metadata for the read request.
+#[derive(Clone)]
+#[napi(object)]
+pub struct ReadResult {
+	/// Rendered UTF-8 text (chunk tree, notice, or error message).
+	pub text:  String,
+	/// When a selector was used, whether it matched and which selector applied.
+	pub chunk: Option<ChunkReadTarget>,
+}
+
+/// One edit in a batch; targets a chunk via `sel`/`crc` (with params-level
+/// defaults).
+#[derive(Clone)]
+#[napi(object)]
+pub struct EditOperation {
+	/// Edit kind (replace, delete, insert relative to anchor).
+	pub op:       ChunkEditOp,
+	/// Chunk selector path; falls back to `EditParams.defaultSelector` when
+	/// omitted.
+	pub sel:      Option<String>,
+	/// Optional checksum anchor; falls back to `EditParams.defaultCrc` when
+	/// omitted.
+	pub crc:      Option<String>,
+	/// Replacement or inserted text (meaning depends on `op`).
+	pub content:  Option<String>,
+	/// For line-scoped `replace`, 1-based start line inside the target chunk.
+	pub line:     Option<u32>,
+	/// For line-scoped `replace`, 1-based end line inside the chunk (defaults to
+	/// `line`).
+	#[napi(js_name = "endLine")]
+	pub end_line: Option<u32>,
+}
+
+/// Arguments for applying a batch of chunk edits to a file.
+#[derive(Clone)]
+#[napi(object)]
+pub struct EditParams {
+	/// Edits to apply in order (scheduling may reorder line-scoped groups).
+	pub operations:       Vec<EditOperation>,
+	/// Default chunk selector when an `EditOperation` omits `sel`.
+	#[napi(js_name = "defaultSelector")]
+	pub default_selector: Option<String>,
+	/// Default checksum when an `EditOperation` omits `crc`.
+	#[napi(js_name = "defaultCrc")]
+	pub default_crc:      Option<String>,
+	/// Anchor formatting for rendered response text.
+	#[napi(js_name = "anchorStyle")]
+	pub anchor_style:     Option<ChunkAnchorStyle>,
+	/// Working directory used to resolve `filePath` and display paths.
+	pub cwd:              String,
+	/// Path to the source file to edit (often relative to `cwd`).
+	#[napi(js_name = "filePath")]
+	pub file_path:        String,
+}
+
+/// Result of applying edits: new parse state plus before/after source and
+/// messaging.
+#[derive(Clone)]
+#[napi(object, object_from_js = false)]
+pub struct EditResult {
+	/// Chunk tree state after applying edits and re-parsing.
+	pub state:         ChunkState,
+	/// Full file text before edits.
+	#[napi(js_name = "diffBefore")]
+	pub diff_before:   String,
+	/// Full file text after edits.
+	#[napi(js_name = "diffAfter")]
+	pub diff_after:    String,
+	/// Rendered summary for tooling (hunks, anchors), driven by `anchorStyle`.
+	#[napi(js_name = "responseText")]
+	pub response_text: String,
+	/// Whether the on-disk source changed.
+	pub changed:       bool,
+	/// Whether the updated source re-parsed without fatal issues.
+	#[napi(js_name = "parseValid")]
+	pub parse_valid:   bool,
+	/// Absolute or normalized paths that were written or touched.
+	#[napi(js_name = "touchedPaths")]
+	pub touched_paths: Vec<String>,
+	/// Non-fatal issues (e.g. selector warnings) collected during apply.
+	pub warnings:      Vec<String>,
 }

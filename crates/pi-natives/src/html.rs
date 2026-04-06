@@ -26,7 +26,7 @@ pub struct HtmlToMarkdownOptions {
 pub fn html_to_markdown(
 	html: String,
 	options: Option<HtmlToMarkdownOptions>,
-) -> task::Async<String> {
+) -> task::Promise<String> {
 	let options = options.unwrap_or_default();
 	let clean_content = options.clean_content.unwrap_or(false);
 	let skip_images = options.skip_images.unwrap_or(false);

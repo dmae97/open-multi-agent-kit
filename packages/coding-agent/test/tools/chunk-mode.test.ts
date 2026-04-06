@@ -10,7 +10,7 @@ import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 import { GrepTool } from "@oh-my-pi/pi-coding-agent/tools/grep";
 import { ReadTool } from "@oh-my-pi/pi-coding-agent/tools/read";
 import { resolveFileDisplayMode } from "@oh-my-pi/pi-coding-agent/utils/file-display-mode";
-import { parseChunkTree } from "@oh-my-pi/pi-natives";
+import { ChunkReadStatus, ChunkState } from "@oh-my-pi/pi-natives";
 import { applyChunkEdits } from "../../src/tools/chunk-tree";
 
 function getText(result: { content: Array<{ type: string; text?: string }> }): string {
@@ -31,7 +31,7 @@ function createSession(cwd: string): ToolSession {
 }
 
 function getChunkChecksum(source: string, language: string, chunkPath: string): string {
-	const chunk = parseChunkTree(source, language).chunks.find(candidate => candidate.path === chunkPath);
+	const chunk = ChunkState.parse(source, language).chunk(chunkPath);
 	if (!chunk) {
 		throw new Error(`Chunk not found in fixture: ${chunkPath}`);
 	}
@@ -73,9 +73,9 @@ describe("chunk mode tools", () => {
 		const result = await tool.execute("chunk-read-root", { path: filePath });
 		const text = getText(result);
 
-		expect(text).toContain("server.ts  ·");
-		expect(text).toContain(":class_Server#");
-		expect(text).toContain(":fn_main#");
+		expect(text).toContain("server.ts·");
+		expect(text).toContain("[class_Server#");
+		expect(text).toContain("[fn_main#");
 		expect(text).not.toContain("ck:");
 	});
 
@@ -96,7 +96,7 @@ describe("chunk mode tools", () => {
 
 		expect(text).not.toContain("to expand ⋮");
 		expect(text).toContain("let total = 0;");
-		expect(text).toContain("29 │       total += 25;");
+		expect(text).toContain("29|       total += 25;");
 		expect(text).toContain("return err.message + total;");
 	});
 
@@ -109,11 +109,11 @@ describe("chunk mode tools", () => {
 		const text = getText(result);
 
 		expect(text).toContain("[Notice: chunk view scoped to requested lines L2-L4; non-overlapping lines omitted.]");
-		expect(text).toContain("server.ts  ·");
-		expect(text).toContain(".fn_handleError#");
-		expect(text).toContain(".var_total#");
-		expect(text).toContain("3 │");
-		expect(text).toContain("4 │");
+		expect(text).toContain("server.ts·");
+		expect(text).toContain("[fn_handleError#");
+		expect(text).toContain("[var_total#");
+		expect(text).toContain("3|");
+		expect(text).toContain("4|");
 		expect(text).not.toContain("⋯");
 	});
 
@@ -126,11 +126,11 @@ describe("chunk mode tools", () => {
 		const text = getText(result);
 
 		expect(text).toContain("[Notice: chunk view scoped to requested lines L2-L4; non-overlapping lines omitted.]");
-		expect(text).toContain("server.ts  ·");
-		expect(text).toContain(".fn_handleError#");
-		expect(text).toContain(".var_total#");
-		expect(text).toContain(".var_total#");
-		expect(text).toContain("3 │");
+		expect(text).toContain("server.ts·");
+		expect(text).toContain("[fn_handleError#");
+		expect(text).toContain("[var_total#");
+		expect(text).toContain("[var_total#");
+		expect(text).toContain("3|");
 	});
 
 	it("ignores a chunk selector checksum suffix on read", async () => {
@@ -146,7 +146,7 @@ describe("chunk mode tools", () => {
 		});
 		const text = getText(result);
 
-		expect(text).toContain("server.ts:class_Server.fn_handleError  ·");
+		expect(text).toContain("server.ts:class_Server.fn_handleError·");
 		expect(text).not.toContain("[Warning: checksum #");
 	});
 
@@ -158,9 +158,9 @@ describe("chunk mode tools", () => {
 		const result = await tool.execute("chunk-read-tsx", { path: filePath });
 		const text = getText(result);
 
-		expect(text).toContain("component.tsx  ·");
+		expect(text).toContain("component.tsx·");
 		expect(text).toContain("tsx");
-		expect(text).toContain(":fn_App#");
+		expect(text).toContain("[fn_App#");
 	});
 
 	it("maps Handlebars and TLA+ file extensions for chunk mode", () => {
@@ -182,7 +182,7 @@ describe("chunk mode tools", () => {
 		const text = getText(result);
 
 		expect(text).toContain("server.ts:class_Server.fn_handleError");
-		expect(text).toContain("ln:");
+		expect(text).toContain(".return>64|");
 		expect(text).toContain("err.message");
 	});
 
@@ -222,8 +222,8 @@ describe("chunk mode tools", () => {
 
 		expect(updatedSource).toContain("normalized:");
 		expect(updatedSource).not.toContain("total +=");
-		expect(editText).toContain("server.ts  ·");
-		expect(editText).toContain(":class_Server#");
+		expect(editText).toContain("server.ts·");
+		expect(editText).toContain("@@ -3,62 +3,1 @@");
 	});
 
 	it("applies omitted-sel batch splices when the second operation uses the post-first checksum", async () => {
@@ -416,7 +416,7 @@ describe("chunk mode tools", () => {
 
 		expect(getText(result)).toContain("[Chunk not found]");
 		expect(result.details?.chunk).toEqual({
-			status: "not_found",
+			status: ChunkReadStatus.NotFound,
 			selector: "class_Server.fn_missing",
 		});
 	});

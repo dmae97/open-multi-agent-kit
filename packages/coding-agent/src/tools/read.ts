@@ -463,7 +463,9 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		this.#inspectImageEnabled = session.settings.get("inspect_image.enabled");
 		this.description =
 			resolveEditMode(session) === "chunk"
-				? renderPromptTemplate(readChunkDescription)
+				? renderPromptTemplate(readChunkDescription, {
+						anchorStyle: resolveAnchorStyle(session.settings),
+					})
 				: renderPromptTemplate(readDescription, {
 						DEFAULT_LIMIT: String(this.#defaultLimit),
 						DEFAULT_MAX_LINES: String(DEFAULT_MAX_LINES),
@@ -833,11 +835,12 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 				pathChunkSelector && parsed.kind === "lines"
 					? { startLine: parsed.startLine, endLine: parsed.endLine }
 					: undefined;
-			const chunkReadPath = pathChunkSelector
-				? `${localReadPath}:${pathChunkSelector}`
-				: parsed.kind === "chunk"
-					? selectorInput
-						? `${localReadPath}:${selectorInput}`
+			// sel= wins over path:chunk when both are provided (explicit param > embedded path).
+			const effectiveSelector = sel ? selectorInput : pathChunkSelector ?? selectorInput;
+			const chunkReadPath =
+				parsed.kind === "chunk" || (pathChunkSelector && !sel)
+					? effectiveSelector
+						? `${localReadPath}:${effectiveSelector}`
 						: localReadPath
 					: parsed.kind === "lines"
 						? parsed.endLine !== undefined

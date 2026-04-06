@@ -28,6 +28,7 @@ use crate::{env_uint, task};
 // Public types (re-exported by glob for backward compatibility)
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Resolved filesystem entry kind for glob filters and match metadata.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[napi]
 pub enum FileType {

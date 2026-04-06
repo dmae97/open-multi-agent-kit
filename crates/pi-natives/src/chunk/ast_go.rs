@@ -275,7 +275,7 @@ fn reparent_receiver_methods(
 
 		if let Some(type_idx) = chunks.iter().position(|c| c.path == *type_path) {
 			let type_chunk = &mut chunks[type_idx];
-			type_chunk.kind = "branch".to_string();
+			type_chunk.leaf = false;
 			if !type_chunk.children.iter().any(|child| child == &new_path) {
 				type_chunk.children.push(new_path);
 			}
@@ -331,7 +331,7 @@ fn reparent_new_type_constructors(
 
 		if let Some(type_idx) = chunks.iter().position(|c| c.path == *type_path) {
 			let type_chunk = &mut chunks[type_idx];
-			type_chunk.kind = "branch".to_string();
+			type_chunk.leaf = false;
 			if !type_chunk.children.iter().any(|child| child == &new_path) {
 				type_chunk.children.push(new_path);
 			}

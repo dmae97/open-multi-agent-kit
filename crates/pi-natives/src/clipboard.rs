@@ -63,7 +63,7 @@ pub fn copy_to_clipboard(text: String) -> Result<()> {
 /// # Errors
 /// Returns an error if clipboard access fails or image encoding fails.
 #[napi(js_name = "readImageFromClipboard")]
-pub fn read_image_from_clipboard() -> task::Async<Option<ClipboardImage>> {
+pub fn read_image_from_clipboard() -> task::Promise<Option<ClipboardImage>> {
 	task::blocking("clipboard.read_image", (), move |_| -> Result<Option<ClipboardImage>> {
 		let mut clipboard = Clipboard::new()
 			.map_err(|err| Error::from_reason(format!("Failed to access clipboard: {err}")))?;

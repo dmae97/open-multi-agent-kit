@@ -4,6 +4,11 @@
 
 ### Added
 
+- Added `anchorStyle` parameter to chunk read formatting to control chunk path display format (full, kind, or bare)
+- Added `{{anchor}}`, `{{anchor}}`, and `{{sel}}` Handlebars helpers for flexible chunk anchor rendering in prompts
+- Added `chunked` property to file display mode to indicate chunk-mode rendering
+- Added chunk-path-prefixed output format for grep in chunk mode: `path:selector>LINE|content`
+- Added `lru-cache` dependency for caching support
 - Added `read.prosechunks` setting to enable chunk rendering for prose files (markdown, text, log, asciidoc, restructuredtext) in chunk edit mode
 - Added `read.explorechunks` setting to show chunk tree without checksums for read-only agents like explore
 - Added `new_segment` option to `init_experiment` to force a new segment even when contract fields match, enabling re-initialization with unchanged parameters
@@ -17,6 +22,14 @@
 
 ### Changed
 
+- Moved `copyToClipboard` and `readImageFromClipboard` functions to new `utils/clipboard.ts` module with improved OSC 52 support and Termux compatibility
+- Updated grep output mode to use `GrepOutputMode` enum from pi-natives instead of string literals
+- Changed macOS appearance observer to use `MacAppearanceObserver.start()` class method with error-first callback signature
+- Updated `detectMacOSAppearance()` to return `MacAppearanceObserver` enum values instead of strings
+- Refactored shell command callbacks to use error-first signature `(err, chunk)` for consistency with native APIs
+- Updated chunk edit prompt documentation to use Handlebars helpers for chunk path and anchor rendering
+- Changed `getDiagnosticsForFile` callback signature to error-first pattern `(err, chunk)` in bash executor and find tool
+- Unified grep tool description to use single template with `IS_CHUNK_MODE` flag instead of separate chunk-specific template
 - Renamed chunk edit line-range parameters from `beg`/`end` to `line`/`end_line` for consistency with documentation
 - Unified `splice` and `replace` operations into a single `replace` operation with optional `line`/`end_line` parameters for line-scoped edits
 - Updated `replace` operation to support optional `line` and `end_line` parameters, with `end_line` defaulting to `line` when omitted for single-line replacements
@@ -45,16 +58,21 @@
 
 ### Removed
 
+- Removed `grep-chunk.md` prompt template; grep now uses unified template with chunk-mode conditional
+- Removed `startMacAppearanceObserver` function export; use `MacAppearanceObserver.start()` instead
+- Removed `copyToClipboard` export from pi-natives; use local clipboard utility instead
 - Removed `PI_CHUNK_SPLICES` environment variable and `chunkSplicesEnabled()` function; splice operations are no longer conditionally available
 - Autoresearch segment fingerprint hashing and `segmentFingerprint` on experiment state / `autoresearch.jsonl` config lines
 
 ### Fixed
 
+- Fixed shell command error handling to properly check for errors before processing chunks in bash executor and config resolution
 - Fixed `log_experiment` to correctly identify and revert only files modified by the run, leaving pre-existing uncommitted changes intact
 - `/autoresearch` with no arguments toggles off when mode is already on (same idea as `/plan`), and slash-argument completion no longer offers `off`/`clear` on an empty prefix so Tab after the command does not auto-insert a subcommand.
 - Fixed chunk-mode edit/read edge cases around zero-width gap splices, stale batch diagnostics, grouped Go receiver rendering, rendered line-count headers, and parse rejection location details.
 
 ## [13.19.0] - 2026-04-05
+
 ### Added
 
 - Added idle auto-compaction settings and scheduling so sessions can compact after inactive turns without auto-continuing.
@@ -102,6 +120,7 @@
 - Fixed the plan review selector to support the external editor shortcut for opening and updating the current plan from the approval screen
 
 ## [13.18.0] - 2026-04-02
+
 ### Breaking Changes
 
 - Removed standalone `fetch` tool; URL fetching is now integrated into the `read` tool
@@ -124,6 +143,7 @@
 - Fixed `read` tool to properly handle `file://` URL scheme by converting to filesystem paths
 
 ## [13.17.5] - 2026-04-01
+
 ### Added
 
 - Added support for writing to ZIP archives using fflate library for cross-platform compatibility
@@ -137,6 +157,7 @@
 - Removed GhPrPushTool test case
 
 ## [13.17.4] - 2026-04-01
+
 ### Added
 
 - Support for writing to archive entries in `.tar`, `.tar.gz`, `.tgz`, and `.zip` files using `archive.ext:path/inside/archive` syntax
@@ -161,6 +182,7 @@
 - Updated `read` tool documentation to reflect archive support and usage patterns
 
 ## [13.17.2] - 2026-04-01
+
 ### Added
 
 - Added `/marketplace help` command to display usage guide for all marketplace operations
@@ -216,6 +238,7 @@
 - Fixed inline image rendering to cap image height and preserve multiplexer scrollback during terminal resizes ([#587](https://github.com/can1357/oh-my-pi/pull/587) by [@smileynet](https://github.com/smileynet))
 
 ## [13.17.1] - 2026-04-01
+
 ### Removed
 
 - Removed `code_search` tool for code snippet and documentation search
@@ -225,6 +248,7 @@
 - Fixed edit tool diff rendering to wrap long diff lines with continuation gutters instead of truncating them at terminal width ([#578](https://github.com/can1357/oh-my-pi/issues/578))
 - Fixed `--list-models` and `/model` provider filtering to hide models from disabled providers ([#588](https://github.com/can1357/oh-my-pi/issues/588))
 - Fixed edit tool diffstats to use diff-specific add/remove theme colors instead of success/error status colors ([#589](https://github.com/can1357/oh-my-pi/issues/589))
+
 ## [13.17.0] - 2026-03-30
 
 ### Added
@@ -277,6 +301,7 @@
 - Fixed `--model provider/id` resolving to wrong provider when model ID exists in multiple catalogs ([#560](https://github.com/can1357/oh-my-pi/issues/560))
 
 ## [13.16.4] - 2026-03-28
+
 ### Changed
 
 - Renamed hashline helper functions from `hlineref`/`hlinefull` to `href`/`hline` for brevity
@@ -456,6 +481,7 @@
 ### Added
 
 - Session observer overlay (`Ctrl+S`): view running subagent sessions with a picker and read-only transcript showing thinking, text, tool calls, and results
+
 ## [13.14.0] - 2026-03-20
 
 ### Added

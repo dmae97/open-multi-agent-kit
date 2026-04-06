@@ -744,6 +744,8 @@ pub fn is_trivia(kind: &str) -> bool {
 			| "xml_decl"
 			| "else_directive"
 			| "elsif_directive"
+			| "attribute_item"
+			| "inner_attribute_item"
 	)
 }
 

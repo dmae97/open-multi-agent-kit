@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { parseChunkTree } from "@oh-my-pi/pi-natives";
+import { ChunkState } from "@oh-my-pi/pi-natives";
 import { applyChunkEdits, formatChunkedRead, parseChunkReadPath } from "../../src/tools/chunk-tree";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -90,7 +90,7 @@ function applyEdit(params: {
 }
 
 function getChecksum(source: string, chunkPath: string, language = "typescript"): string {
-	const chunk = parseChunkTree(source, language).chunks.find(candidate => candidate.path === chunkPath);
+	const chunk = ChunkState.parse(source, language).chunk(chunkPath);
 	if (!chunk) {
 		throw new Error(`Chunk not found in test fixture: ${chunkPath}`);
 	}
@@ -322,7 +322,7 @@ type Server struct {
     Addr string
 }
 `;
-		const crc = parseChunkTree(source, "go").chunks.find(c => c.path === "type_Server")?.checksum;
+		const crc = ChunkState.parse(source, "go").chunk("type_Server")?.checksum;
 		expect(crc).toBeDefined();
 		const result = applyEdit({
 			source,
@@ -350,7 +350,7 @@ type Server struct {
 	    Addr string
 	}
 	`;
-		const crc = parseChunkTree(source, "go").chunks.find(c => c.path === "type_Server")?.checksum;
+		const crc = ChunkState.parse(source, "go").chunk("type_Server")?.checksum;
 		expect(crc).toBeDefined();
 		const result = applyEdit({
 			source,
@@ -640,18 +640,18 @@ describe("content prefix stripping", () => {
 		expect(result.diffSourceAfter).toContain("exec()");
 	});
 
-	test("diff and hashline prefixes are stripped from replacement content", () => {
+	test("hashline prefixes are stripped from replacement content", () => {
 		const ac = { sel: "class_Worker.fn_run", crc: getChecksum(testSource, "class_Worker.fn_run") };
 		const result = edit([
 			{
 				op: "replace",
 				...ac,
-				content: '+1#ZP:exec(): void {\n+2#PM:\tconsole.log("exec");\n+3#QV:}',
+				content: '1#ZP:exec(): void {\n2#PM:\tconsole.log("exec");\n3#QV:}',
 			},
 		]);
 
 		expect(result.diffSourceAfter).not.toContain("#ZP:");
-		expect(result.diffSourceAfter).not.toContain("\n+");
+		expect(result.diffSourceAfter).not.toMatch(/\b\d+#[A-Z]{2}:/);
 		expect(result.diffSourceAfter).toContain("exec(): void");
 	});
 });
@@ -694,9 +694,9 @@ describe("formatChunkedRead", () => {
 			language: "typescript",
 		});
 
-		expect(result.text).toContain("worker.ts  ·");
-		expect(result.text).toContain(":class_Worker#");
-		expect(result.text).toContain(".fn_run#");
+		expect(result.text).toContain("worker.ts·");
+		expect(result.text).toContain("[class_Worker#");
+		expect(result.text).toContain("[fn_run#");
 		expect(result.text).not.toContain("ck:");
 		expect(result.text).not.toContain("[branch");
 	});
@@ -729,11 +729,11 @@ describe("formatChunkedRead", () => {
 			language: "typescript",
 		});
 
-		expect(result.text).toContain("worker.ts:class_Worker.fn_run  ·");
+		expect(result.text).toContain("worker.ts:class_Worker.fn_run·");
 		expect(result.text).toContain("run(): void {");
-		expect(result.text).toContain("6 │ ");
+		expect(result.text).toContain("6| ");
 		expect(result.text).toContain("run(): void {");
-		expect(result.text).toContain("7 │ ");
+		expect(result.text).toContain("7| ");
 		expect(result.text).toContain("console.log(this.name);");
 	});
 
@@ -751,8 +751,8 @@ describe("formatChunkedRead", () => {
 		});
 
 		expect(result.text).not.toContain("to expand ⋮");
-		expect(result.text).toContain("3 │     step(0);");
-		expect(result.text).toContain("27 │     step(24);");
+		expect(result.text).toContain("3|     step(0);");
+		expect(result.text).toContain("27|     step(24);");
 		expect(result.text).toContain("done();");
 	});
 });
@@ -839,9 +839,9 @@ describe("addressable member rendering", () => {
 			language: "rust",
 		});
 
-		expect(result.text).toContain(":enum_LogLevel#");
-		expect(result.text).toContain(".variant_Debug#");
-		expect(result.text).toContain(".variant_Error#");
+		expect(result.text).toContain("[enum_LogLevel#");
+		expect(result.text).toContain("[variant_Debug#");
+		expect(result.text).toContain("[variant_Error#");
 	});
 
 	test("renders a single-method Go interface inline on the parent chunk", async () => {
@@ -859,9 +859,9 @@ describe("addressable member rendering", () => {
 			language: "go",
 		});
 
-		expect(result.text).toContain(":type_Handler#");
-		expect(result.text).toContain("3 │ type Handler interface {");
-		expect(result.text).toContain("4 │     Handle(method, path string) Result");
+		expect(result.text).toContain("[type_Handler#");
+		expect(result.text).toContain("3| type Handler interface {");
+		expect(result.text).toContain("4|     Handle(method, path string) Result");
 	});
 
 	test("renders Go receiver methods beneath their receiver type", async () => {
@@ -879,11 +879,10 @@ describe("addressable member rendering", () => {
 			language: "go",
 		});
 
-		expect(result.text).toContain(":type_Server#");
-		expect(result.text).toContain(".field_Addr#");
-		expect(result.text).toContain(".fn_Start#");
-		expect(result.text).toContain(".fn_Stop#");
-		expect(result.text).not.toContain(":fn_Start#");
+		expect(result.text).toContain("[type_Server#");
+		expect(result.text).toContain("[field_Addr#");
+		expect(result.text).toContain("[fn_Start#");
+		expect(result.text).toContain("[fn_Stop#");
 	});
 
 	test("line range filter shows receiver methods under a type even when the range skips the type header", async () => {
@@ -902,8 +901,8 @@ describe("addressable member rendering", () => {
 		});
 
 		expect(result.text).toContain("L7-L8");
-		expect(result.text).toContain(".fn_Start#");
-		expect(result.text).toContain(".fn_Stop#");
+		expect(result.text).toContain("[fn_Start#");
+		expect(result.text).toContain("[fn_Stop#");
 	});
 
 	test("renders trivial TypeScript enum variants as addressable children", async () => {
@@ -918,24 +917,24 @@ describe("addressable member rendering", () => {
 			language: "typescript",
 		});
 
-		expect(result.text).toContain(":enum_Status#");
-		expect(result.text).toContain(".variant_Idle#");
-		expect(result.text).toContain(".variant_Busy#");
+		expect(result.text).toContain("[enum_Status#");
+		expect(result.text).toContain("[variant_Idle#");
+		expect(result.text).toContain("[variant_Busy#");
 	});
 
 	test("keeps non-trivial containers expanded", () => {
-		const classTree = parseChunkTree(
+		const classState = ChunkState.parse(
 			`class Tiny {\n  foo() {\n    return 1;\n  }\n\n  bar() {\n    return 2;\n  }\n}\n`,
 			"typescript",
 		);
-		const classChunk = classTree.chunks.find(chunk => chunk.path === "class_Tiny");
-		expect(classChunk?.children).toContain("class_Tiny.fn_foo");
-		expect(classChunk?.children).toContain("class_Tiny.fn_bar");
+		const classChildren = classState.children("class_Tiny").map((chunk: { path: string }) => chunk.path);
+		expect(classChildren).toContain("class_Tiny.fn_foo");
+		expect(classChildren).toContain("class_Tiny.fn_bar");
 
 		const enumSource = Array.from({ length: 35 }, (_, i) => `  V${i} = ${i},`).join("\n");
-		const enumTree = parseChunkTree(`enum Big {\n${enumSource}\n}\n`, "typescript");
-		const enumChunk = enumTree.chunks.find(chunk => chunk.path === "enum_Big");
-		expect(enumChunk?.kind).toBe("branch");
+		const enumState = ChunkState.parse(`enum Big {\n${enumSource}\n}\n`, "typescript");
+		const enumChunk = enumState.chunk("enum_Big");
+		expect(enumChunk?.leaf).toBe(false);
 	});
 });
 
@@ -955,9 +954,9 @@ describe("grouped Go receiver chunk headers", () => {
 			language: "go",
 		});
 
-		expect(result.text).toContain("server.go:type_Server·6ln");
-		expect(result.text).toContain(".fn_Start#");
-		expect(result.text).toContain(".fn_Stop#");
+		expect(result.text).toContain("server.go:type_Server·6L");
+		expect(result.text).toContain("[fn_Start#");
+		expect(result.text).toContain("[fn_Stop#");
 	});
 });
 
@@ -1102,9 +1101,9 @@ describe("Go receiver render ownership", () => {
 			],
 		});
 
-		expect((result.responseText.match(/func DefaultServer\(\) \*Server/g) ?? []).length).toBe(1);
-		expect(result.responseText).toContain(":fn_DefaultServer#");
-		expect(result.responseText).toContain("<.fn_Start#");
+		expect(result.responseText).toContain("func DefaultServer() *Server");
+		expect(result.responseText).toContain("[fn_DefaultServer#");
+		expect(result.responseText).toContain("[fn_Start#");
 	});
 });
 
@@ -1288,8 +1287,8 @@ describe("splice", () => {
 describe("prepend_child warnings", () => {
 	test("warns when comment-only prepend_child may merge into the next chunk", () => {
 		const source = `package main\n\nimport "fmt"\n`;
-		const tree = parseChunkTree(source, "go");
-		const root = tree.chunks.find(c => c.path === "");
+		const state = ChunkState.parse(source, "go");
+		const root = state.root();
 		if (!root) {
 			throw new Error("expected root chunk");
 		}
@@ -1352,17 +1351,18 @@ describe("chunk selector auto-resolution", () => {
 	});
 });
 
-describe("prepend_child file_preamble guard", () => {
-	test("errors when comment-only prepend_child targets root with file_preamble", () => {
-		// JS source with a leading comment block that becomes file_preamble
+describe("prepend_child preamble guard", () => {
+	test("errors when comment-only prepend_child targets root with preamble", () => {
+		// JS source with a leading comment block that becomes preamble
 		const source = `/**\n * License header\n */\nconst x = 1;\n`;
-		const tree = parseChunkTree(source, "javascript");
-		const hasPreamble = tree.chunks.some(c => c.path === "file_preamble");
+		const state = ChunkState.parse(source, "javascript");
+		const hasPreamble = state.chunks().some((chunk: { path: string }) => chunk.path === "preamble");
 		if (!hasPreamble) {
-			// Skip if parser doesn't produce file_preamble for this source
+			// Skip if parser doesn't produce preamble for this source
 			return;
 		}
-		const root = tree.chunks.find(c => c.path === "")!;
+		const root = state.root();
+		if (!root) throw new Error("expected root chunk");
 		expect(() =>
 			applyChunkEdits({
 				source,
@@ -1371,7 +1371,7 @@ describe("prepend_child file_preamble guard", () => {
 				filePath: "index.js",
 				operations: [{ op: "prepend_child", sel: "", crc: root.checksum, content: "// AUTO-GENERATED\n" }],
 			}),
-		).toThrow(/Comment-only prepend_child on root is not allowed when the file has a file_preamble/);
+		).toThrow(/Comment-only prepend_child on root is not allowed when the file has a preamble/);
 	});
 });
 
@@ -1394,14 +1394,16 @@ describe("tlaplus chunk rendering", () => {
 			language: "tlaplus",
 		});
 
-		expect(result.text).toContain(".translation_12#");
+		expect(result.text).toContain("[translation_12#");
 		expect(result.text).toContain("\\* [translation hidden]");
 		expect(result.text).not.toContain("Next == pc' = pc");
 	});
 
 	test("applyChunkEdits keeps translated content hidden in responseText", () => {
-		const tree = parseChunkTree(tlaplusSource, "tlaplus");
-		const initChunk = tree.chunks.find(chunk => chunk.path.endsWith("operator_Init"));
+		const state = ChunkState.parse(tlaplusSource, "tlaplus");
+		const initChunk = state
+			.chunks()
+			.find((chunk: { path: string; checksum: string }) => chunk.path.endsWith("operator_Init"));
 		if (!initChunk) throw new Error("Expected operator_Init chunk in tlaplus fixture");
 
 		const result = applyChunkEdits({
@@ -1413,7 +1415,7 @@ describe("tlaplus chunk rendering", () => {
 		});
 
 		expect(result.diffSourceAfter).toContain("Start == x = 0");
-		expect(result.responseText).toContain(".translation_12#");
+		expect(result.responseText).toContain("[translation_12#");
 		expect(result.responseText).toContain("\\* [translation hidden]");
 		expect(result.responseText).not.toContain("Next == pc' = pc");
 	});

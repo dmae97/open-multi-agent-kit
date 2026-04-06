@@ -301,11 +301,10 @@ fn run_glob(
 #[napi(js_name = "glob")]
 pub fn glob(
 	options: GlobOptions<'_>,
-	#[napi(ts_arg_type = "((match: GlobMatch) => void) | undefined | null")] on_match: Option<
-		ThreadsafeFunction<GlobMatch>,
-	>,
+	#[napi(ts_arg_type = "((error: Error | null, match: GlobMatch) => void) | undefined | null")]
+	on_match: Option<ThreadsafeFunction<GlobMatch>>,
 	db: Option<&SearchDb>,
-) -> task::Async<GlobResult> {
+) -> task::Promise<GlobResult> {
 	let GlobOptions {
 		pattern,
 		path,

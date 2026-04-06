@@ -155,8 +155,10 @@ export async function executeBash(command: string, options?: BashExecutorOptions
 						timeoutMs: options?.timeout,
 						signal: runAbortController.signal,
 					},
-					chunk => {
-						enqueueChunk(chunk);
+					(err, chunk) => {
+						if (!err) {
+							enqueueChunk(chunk);
+						}
 					},
 				);
 

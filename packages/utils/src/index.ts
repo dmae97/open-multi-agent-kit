@@ -7,7 +7,6 @@ export * from "./format";
 export * from "./fs-error";
 export * from "./glob";
 export * from "./hook-fetch";
-export * from "./indent";
 export * from "./json";
 export * as logger from "./logger";
 export * from "./mermaid-ascii";

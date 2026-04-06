@@ -1,19 +1,7 @@
-/**
- * Clipboard helpers backed by native arboard bindings.
- *
- * Adds OSC 52 fallback for SSH/mosh, Termux support, and headless guards
- * on top of the native arboard layer.
- */
-
 import { execSync } from "node:child_process";
+import type { ClipboardImage } from "@oh-my-pi/pi-natives";
+import * as native from "@oh-my-pi/pi-natives";
 
-import { native } from "../native";
-
-import type { ClipboardImage } from "./types";
-
-export type { ClipboardImage } from "./types";
-
-/** Whether a display server is available on Linux. */
 const hasDisplay = process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY);
 
 /**
@@ -88,5 +76,5 @@ export async function readImageFromClipboard(): Promise<ClipboardImage | null> {
 		return null;
 	}
 
-	return native.readImageFromClipboard();
+	return (await native.readImageFromClipboard()) ?? null;
 }

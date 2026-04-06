@@ -5,22 +5,31 @@ use napi_derive::napi;
 
 const PROJFS_UNAVAILABLE_PREFIX: &str = "PROJFS_UNAVAILABLE:";
 
+/// Result of probing Windows Projected File System (`ProjFS`) support for
+/// overlay workflows.
 #[napi(object)]
 pub struct ProjfsOverlayProbeResult {
+	/// True when `ProjFS` APIs are available and loaded.
 	pub available: bool,
+	/// Human-readable reason when `available` is false (e.g. wrong OS or missing
+	/// DLL).
 	pub reason:    Option<String>,
 }
 
+/// Probe whether `ProjFS` overlay virtualization can be started on this system.
 #[napi(js_name = "projfsOverlayProbe")]
 pub fn projfs_overlay_probe() -> ProjfsOverlayProbeResult {
 	imp::probe()
 }
 
+/// Start a `ProjFS` overlay: `projection_root` shows the merged view;
+/// `lower_root` is the backing tree.
 #[napi(js_name = "projfsOverlayStart")]
 pub fn projfs_overlay_start(lower_root: String, projection_root: String) -> Result<()> {
 	imp::start(&lower_root, &projection_root)
 }
 
+/// Stop `ProjFS` virtualization for an active `projection_root` session.
 #[napi(js_name = "projfsOverlayStop")]
 pub fn projfs_overlay_stop(projection_root: String) -> Result<()> {
 	imp::stop(&projection_root);

@@ -72,6 +72,27 @@ const MOD_ALT: u32 = 2;
 const MOD_CTRL: u32 = 4;
 const MOD_NUM_LOCK: u32 = 128;
 
+/// Event types from Kitty keyboard protocol (flag 2).
+#[napi]
+pub enum KeyEventType {
+	/// Key press event.
+	Press   = 1,
+	/// Key repeat event.
+	Repeat  = 2,
+	/// Key release event.
+	Release = 3,
+}
+
+#[inline]
+fn optional_kitty_event_type(event: Option<u32>) -> Option<KeyEventType> {
+	event.and_then(|ev| match ev {
+		1 => Some(KeyEventType::Press),
+		2 => Some(KeyEventType::Repeat),
+		3 => Some(KeyEventType::Release),
+		_ => None,
+	})
+}
+
 #[inline]
 const fn map_keypad_nav(codepoint: i32) -> Option<i32> {
 	match codepoint {
@@ -142,7 +163,7 @@ pub struct ParsedKittyResult {
 	/// Modifier bitmask (shift/alt/ctrl), excluding lock bits.
 	pub modifier:        u32,
 	/// Optional event type (1 = press, 2 = repeat, 3 = release).
-	pub event_type:      Option<u32>,
+	pub event_type:      Option<KeyEventType>,
 }
 
 /// Perfect hash map for legacy sequences - O(1) lookup
@@ -362,7 +383,7 @@ pub fn parse_kitty_sequence_napi(data: String) -> Option<ParsedKittyResult> {
 		shifted_key:     p.shifted_key,
 		base_layout_key: p.base_layout_key,
 		modifier:        p.modifier,
-		event_type:      p.event_type,
+		event_type:      optional_kitty_event_type(p.event_type),
 	})
 }
 

@@ -37,6 +37,7 @@ pub mod grep;
 pub mod highlight;
 pub mod html;
 pub mod image;
+pub mod indent;
 pub mod keys;
 pub mod language;
 pub mod prof;

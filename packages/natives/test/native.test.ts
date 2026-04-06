@@ -7,6 +7,7 @@ import {
 	FileType,
 	fuzzyFind,
 	type GlobMatch,
+	GrepOutputMode,
 	glob,
 	grep,
 	htmlToMarkdown,
@@ -16,7 +17,7 @@ import {
 	truncateToWidth,
 	visibleWidth,
 	wrapTextWithAnsi,
-} from "../src/index";
+} from "../native/index";
 
 let testDir: string;
 
@@ -119,7 +120,7 @@ describe("pi-natives", () => {
 			const result = await grep({
 				pattern: "return",
 				path: testDir,
-				mode: "filesWithMatches",
+				mode: GrepOutputMode.FilesWithMatches,
 			});
 
 			expect(result.filesWithMatches).toBeGreaterThan(0);

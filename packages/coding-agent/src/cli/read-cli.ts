@@ -6,7 +6,7 @@
 import * as path from "node:path";
 import chalk from "chalk";
 import { getLanguageFromPath } from "../modes/theme/theme";
-import { formatChunkedRead } from "../tools/chunk-tree";
+import { formatChunkedRead, resolveAnchorStyle } from "../tools/chunk-tree";
 
 export interface ReadCommandArgs {
 	path: string;
@@ -27,7 +27,13 @@ export async function runReadCommand(cmd: ReadCommandArgs): Promise<void> {
 	const cwd = process.cwd();
 
 	try {
-		const result = await formatChunkedRead({ filePath, readPath, cwd, language });
+		const result = await formatChunkedRead({
+			filePath,
+			readPath,
+			cwd,
+			language,
+			anchorStyle: resolveAnchorStyle(),
+		});
 		console.log(result.text);
 	} catch (err) {
 		console.error(chalk.red(`Error: ${err instanceof Error ? err.message : String(err)}`));

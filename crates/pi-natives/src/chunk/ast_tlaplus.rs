@@ -256,7 +256,7 @@ fn translation_chunk(
 	ChunkNode {
 		path,
 		name: format!("translation_{}", range.start_line),
-		kind: "leaf".to_string(),
+		leaf: true,
 		parent_path,
 		children: Vec::new(),
 		signature: Some("translation block".to_string()),

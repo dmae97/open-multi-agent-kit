@@ -4,10 +4,10 @@ import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { Effort } from "@oh-my-pi/pi-ai";
 import {
 	detectMacOSAppearance,
+	MacAppearanceObserver,
 	type HighlightColors as NativeHighlightColors,
 	highlightCode as nativeHighlightCode,
 	supportsLanguage as nativeSupportsLanguage,
-	startMacAppearanceObserver as startNativeMacObserver,
 } from "@oh-my-pi/pi-natives";
 import type { EditorTheme, MarkdownTheme, SelectListTheme, SymbolTheme } from "@oh-my-pi/pi-tui";
 import { adjustHsv, getCustomThemesDir, isEnoent, logger } from "@oh-my-pi/pi-utils";
@@ -2057,10 +2057,12 @@ function startMacAppearanceObserver(): void {
 	stopMacAppearanceObserver();
 	if (!shouldUseMacOSAppearanceFallback()) return;
 	try {
-		macOSReportedAppearance = detectMacOSAppearance();
-		macObserver = startNativeMacObserver(appearance => {
-			macOSReportedAppearance = appearance;
-			reevaluateAutoTheme("macOS fallback");
+		macOSReportedAppearance = detectMacOSAppearance() ?? undefined;
+		macObserver = MacAppearanceObserver.start((err, appearance) => {
+			if (!err && (appearance === "dark" || appearance === "light")) {
+				macOSReportedAppearance = appearance;
+				reevaluateAutoTheme("macOS fallback");
+			}
 		});
 	} catch (err) {
 		logger.warn("Failed to start macOS appearance observer", { err });

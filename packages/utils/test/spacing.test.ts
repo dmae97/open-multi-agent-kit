@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { getDefaultTabWidth, getIndentation, setDefaultTabWidth } from "@oh-my-pi/pi-natives";
 import { getProjectDir, setProjectDir } from "../src/dirs";
-import { getDefaultTabWidth, getIndentation, setDefaultTabWidth } from "../src/indent";
 import { Snowflake } from "../src/snowflake";
 
 describe("spacing", () => {
@@ -26,11 +26,11 @@ describe("spacing", () => {
 
 	it("uses configurable default tab width", () => {
 		expect(getDefaultTabWidth()).toBe(3);
-		expect(getIndentation()).toBe("   ");
+		expect(" ".repeat(getIndentation())).toBe("   ");
 
 		setDefaultTabWidth(5);
 		expect(getDefaultTabWidth()).toBe(5);
-		expect(getIndentation()).toBe("     ");
+		expect(" ".repeat(getIndentation())).toBe("     ");
 	});
 
 	it("resolves editorconfig rules for file path and falls back to default", async () => {
@@ -41,9 +41,9 @@ describe("spacing", () => {
 			["root = true", "", "[*]", "indent_size = 2", "", "[*.md]", "indent_size = 4"].join("\n"),
 		);
 
-		expect(getIndentation(filePath)).toBe("  ");
-		expect(getIndentation(path.join(tempDir, "README.md"))).toBe("    ");
-		expect(getIndentation(path.join(tempDir, "missing.txt"))).toBe("  ");
+		expect(" ".repeat(getIndentation(filePath))).toBe("  ");
+		expect(" ".repeat(getIndentation(path.join(tempDir, "README.md")))).toBe("    ");
+		expect(" ".repeat(getIndentation(path.join(tempDir, "missing.txt")))).toBe("  ");
 	});
 
 	it("merges nested editorconfig files from root to leaf", async () => {
@@ -54,6 +54,6 @@ describe("spacing", () => {
 		await fs.writeFile(path.join(tempDir, ".editorconfig"), ["root = true", "", "[*]", "indent_size = 2"].join("\n"));
 		await fs.writeFile(path.join(tempDir, "packages", ".editorconfig"), ["[*.ts]", "indent_size = 6"].join("\n"));
 
-		expect(getIndentation(filePath)).toBe("      ");
+		expect(" ".repeat(getIndentation(filePath))).toBe("      ");
 	});
 });

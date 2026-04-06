@@ -7,6 +7,7 @@ import { resolveEditMode } from "./edit-mode";
 export interface FileDisplayMode {
 	lineNumbers: boolean;
 	hashLines: boolean;
+	chunked: boolean;
 }
 
 /** Session-like object providing settings and tool availability for display mode resolution. */
@@ -27,8 +28,10 @@ export function resolveFileDisplayMode(session: FileDisplayModeSession): FileDis
 	const { settings } = session;
 	const hasEditTool = session.hasEditTool ?? true;
 	const hashLines = hasEditTool && resolveEditMode(session) === "hashline" && settings.get("readHashLines") !== false;
+	const chunked = hasEditTool && resolveEditMode(session) === "chunk";
 	return {
 		hashLines,
 		lineNumbers: hashLines || settings.get("readLineNumbers") === true,
+		chunked,
 	};
 }

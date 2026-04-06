@@ -6,6 +6,7 @@ import { $ } from "bun";
 const repoRoot = path.join(import.meta.dir, "../../..");
 const rustDir = path.join(repoRoot, "crates/pi-natives");
 const nativeDir = path.join(import.meta.dir, "../native");
+const packageJsonPath = path.join(import.meta.dir, "../package.json");
 
 const isDev = process.argv.includes("--dev");
 const crossTarget = Bun.env.CROSS_TARGET;
@@ -138,65 +139,63 @@ async function installBinary(src: string, dest: string): Promise<void> {
 
 const isCI = Boolean(Bun.env.CI);
 const useLocalProfile = !isDev && !isCI && !isCrossCompile;
-const profile = isDev ? "dev" : useLocalProfile ? "local" : "release";
 
-const cargoArgs = ["build"];
-if (profile !== "dev") cargoArgs.push("--profile", profile);
-if (crossTarget) cargoArgs.push("--target", crossTarget);
+// Build napi args
+const napiArgs = [
+	"build",
+	"--manifest-path",
+	path.join(rustDir, "Cargo.toml"),
+	"--package-json-path",
+	packageJsonPath,
+	"--platform",
+	"--no-js",
+	"--dts",
+	"index.d.ts",
+	"-o",
+	nativeDir,
+];
+
+if (isDev) {
+	// napi build defaults to debug, no flag needed
+} else if (useLocalProfile) {
+	napiArgs.push("--profile", "local");
+} else {
+	napiArgs.push("--release");
+}
+
+if (crossTarget) napiArgs.push("--target", crossTarget);
 
 const profileLabel = isDev ? " (debug)" : useLocalProfile ? " (local)" : "";
 console.log(`Building pi-natives for ${targetPlatform}-${targetArch}${variantSuffix}${profileLabel}…`);
-const buildResult = await $`cargo ${cargoArgs}`.cwd(rustDir).nothrow();
-if (buildResult.exitCode !== 0) {
-	const stderr = buildResult.stderr?.toString("utf-8") ?? "";
-	throw new Error(`cargo build --release failed${stderr ? `:\n${stderr}` : ""}`);
-}
-
-// Cargo outputs "local" profile artifacts into the "local" directory
-const profileDir = isDev ? "debug" : useLocalProfile ? "local" : "release";
-const targetRoots = [
-	Bun.env.CARGO_TARGET_DIR ? path.resolve(Bun.env.CARGO_TARGET_DIR) : undefined,
-	path.join(repoRoot, "target"),
-	path.join(rustDir, "target"),
-].filter((v): v is string => Boolean(v));
-
-const profileDirs = targetRoots.flatMap(root => {
-	if (crossTarget) {
-		return [path.join(root, crossTarget, profileDir), path.join(root, profileDir)];
-	}
-	return [path.join(root, profileDir)];
-});
-
-const libraryNames = ["libpi_natives.so", "libpi_natives.dylib", "pi_natives.dll", "libpi_natives.dll"];
-
-let sourcePath: string | null = null;
-for (const dir of profileDirs) {
-	for (const name of libraryNames) {
-		const fullPath = path.join(dir, name);
-		try {
-			await fs.stat(fullPath);
-			sourcePath = fullPath;
-			break;
-		} catch (err) {
-			if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-		}
-	}
-	if (sourcePath) break;
-}
 
 await fs.mkdir(nativeDir, { recursive: true });
 await cleanupStaleTemps(nativeDir);
 
-if (!sourcePath) {
-	const checked = profileDirs.map(d => `  - ${d}`).join("\n");
-	throw new Error(`Built library not found. Checked:\n${checked}`);
+const buildResult = await $`bunx @napi-rs/cli ${napiArgs}`.nothrow();
+if (buildResult.exitCode !== 0) {
+	const stderr = buildResult.stderr?.toString("utf-8") ?? "";
+	throw new Error(`napi build failed${stderr ? `:\n${stderr}` : ""}`);
 }
 
-console.log(`Found: ${sourcePath}`);
-const taggedPath = isDev
-	? path.join(nativeDir, "pi_natives.dev.node")
-	: path.join(nativeDir, `pi_natives.${targetPlatform}-${targetArch}${variantSuffix}.node`);
-console.log(`Installing: ${taggedPath}`);
-await installBinary(sourcePath, taggedPath);
+// napi build produces pi_natives.<platform>-<arch>.node — rename with variant suffix if needed
+if (variantSuffix) {
+	const napiFilename = `pi_natives.${targetPlatform}-${targetArch}.node`;
+	const taggedFilename = `pi_natives.${targetPlatform}-${targetArch}${variantSuffix}.node`;
+	const napiPath = path.join(nativeDir, napiFilename);
+	const taggedPath = path.join(nativeDir, taggedFilename);
+
+	try {
+		await fs.stat(napiPath);
+		console.log(`Renaming: ${napiFilename} → ${taggedFilename}`);
+		await installBinary(napiPath, taggedPath);
+		await fs.unlink(napiPath).catch(() => {});
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+		// Already named correctly or handled by napi
+	}
+}
+
+// Generate runtime enum exports from const enums in index.d.ts
+await $`bun ${path.join(import.meta.dir, "gen-enums.ts")}`;
 
 console.log("Build complete.");

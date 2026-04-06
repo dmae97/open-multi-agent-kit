@@ -167,9 +167,8 @@ impl Shell {
 		&self,
 		env: &'e Env,
 		options: ShellRunOptions<'e>,
-		#[napi(ts_arg_type = "((chunk: string) => void) | undefined | null")] on_chunk: Option<
-			ThreadsafeFunction<String>,
-		>,
+		#[napi(ts_arg_type = "((error: Error | null, chunk: string) => void) | undefined | null")]
+		on_chunk: Option<ThreadsafeFunction<String>>,
 	) -> Result<PromiseRaw<'e, ShellRunResult>> {
 		let ct = task::CancelToken::new(options.timeout_ms, options.signal);
 		let session = self.session.clone();
@@ -297,9 +296,8 @@ pub struct ShellExecuteResult {
 pub fn execute_shell<'env>(
 	env: &'env Env,
 	options: ShellExecuteOptions<'env>,
-	#[napi(ts_arg_type = "((chunk: string) => void) | undefined | null")] on_chunk: Option<
-		ThreadsafeFunction<String>,
-	>,
+	#[napi(ts_arg_type = "((error: Error | null, chunk: string) => void) | undefined | null")]
+	on_chunk: Option<ThreadsafeFunction<String>>,
 ) -> Result<PromiseRaw<'env, ShellExecuteResult>> {
 	let config =
 		ShellConfig { session_env: options.session_env, snapshot_path: options.snapshot_path };

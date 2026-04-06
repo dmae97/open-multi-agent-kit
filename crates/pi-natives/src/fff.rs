@@ -329,7 +329,7 @@ fn fuzzy_find_sync(
 pub fn fuzzy_find(
 	options: FuzzyFindOptions<'_>,
 	db: Option<&SearchDb>,
-) -> task::Async<FuzzyFindResult> {
+) -> task::Promise<FuzzyFindResult> {
 	let FuzzyFindOptions { query, path, hidden, gitignore, cache, max_results, timeout_ms, signal } =
 		options;
 	let ct = task::CancelToken::new(timeout_ms, signal);

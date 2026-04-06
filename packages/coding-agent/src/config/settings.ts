@@ -13,15 +13,8 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import {
-	getAgentDbPath,
-	getAgentDir,
-	getProjectDir,
-	isEnoent,
-	logger,
-	procmgr,
-	setDefaultTabWidth,
-} from "@oh-my-pi/pi-utils";
+import { setDefaultTabWidth } from "@oh-my-pi/pi-natives";
+import { getAgentDbPath, getAgentDir, getProjectDir, isEnoent, logger, procmgr } from "@oh-my-pi/pi-utils";
 import { YAML } from "bun";
 import { type Settings as SettingsCapabilityItem, settingsCapability } from "../capability/settings";
 import type { ModelRole } from "../config/model-registry";

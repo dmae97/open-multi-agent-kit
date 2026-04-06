@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 
-import { type GrepMatch, type GrepResult, grep } from "@oh-my-pi/pi-natives";
+import { type GrepMatch, GrepOutputMode, type GrepResult, grep } from "@oh-my-pi/pi-natives";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
 import { untilAborted } from "@oh-my-pi/pi-utils";
@@ -11,7 +11,6 @@ import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { getLanguageFromPath, type Theme } from "../modes/theme/theme";
 import { computeLineHash } from "../patch/hashline";
 import grepDescription from "../prompts/tools/grep.md" with { type: "text" };
-import grepChunkDescription from "../prompts/tools/grep-chunk.md" with { type: "text" };
 import { DEFAULT_MAX_COLUMN, type TruncationResult, truncateHead } from "../session/streaming-output";
 import { Ellipsis, Hasher, type RenderCache, renderStatusLine, renderTreeList, truncateToWidth } from "../tui";
 import { resolveEditMode } from "../utils/edit-mode";
@@ -75,13 +74,11 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 
 	constructor(private readonly session: ToolSession) {
 		const displayMode = resolveFileDisplayMode(session);
-		this.description =
-			resolveEditMode(session) === "chunk"
-				? renderPromptTemplate(grepChunkDescription)
-				: renderPromptTemplate(grepDescription, {
-						IS_HASHLINE_MODE: displayMode.hashLines,
-						IS_LINE_NUMBER_MODE: !displayMode.hashLines && displayMode.lineNumbers,
-					});
+		this.description = renderPromptTemplate(grepDescription, {
+			IS_HASHLINE_MODE: displayMode.hashLines,
+			IS_LINE_NUMBER_MODE: !displayMode.hashLines && displayMode.lineNumbers,
+			IS_CHUNK_MODE: displayMode.chunked,
+		});
 	}
 
 	async execute(
@@ -169,7 +166,7 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 				throw new ToolError(`Path not found: ${scopePath}`);
 			}
 
-			const effectiveOutputMode = "content";
+			const effectiveOutputMode = GrepOutputMode.Content;
 			const effectiveLimit = normalizedLimit ?? DEFAULT_MATCH_LIMIT;
 			const internalLimit = Math.min(effectiveLimit * 5, 2000);
 

@@ -1,6 +1,29 @@
 # Changelog
 
 ## [Unreleased]
+### Breaking Changes
+
+- Moved package entry point from `src/index.ts` to `native/index.js` — consumers must update imports to use the new native module path
+- Removed TypeScript source files from `src/` directory — all APIs now exported from auto-generated `native/index.js` with types in `native/index.d.ts`
+- Changed enum exports to runtime objects — `const enum` values are now available at runtime via generated enum exports in `native/index.js`
+
+### Added
+
+- Generated native module bindings in `native/index.js` and `native/index.d.ts` from napi-rs build output
+- Added `gen-enums.ts` script to extract and export runtime enum values from TypeScript const enums
+- Added `embedded-addon.js` for managing embedded native addon variants and metadata
+
+### Changed
+
+- Refactored build pipeline to use napi-rs generated bindings instead of hand-written TypeScript wrappers
+- Updated `build-native.ts` to generate runtime enum exports after native compilation
+- Updated `embed-native.ts` to output JavaScript instead of TypeScript for embedded addon metadata
+
+### Removed
+
+- Removed all TypeScript wrapper modules from `src/` directory (appearance, ast, chunk, clipboard, glob, grep, highlight, html, image, keys, projfs, ps, pty, shell, text, work)
+- Removed `src/bindings.ts` and `src/index.ts` entry points
+- Removed `src/search-db.ts` and `src/search-db-types.ts`
 
 ## [13.16.1] - 2026-03-27
 
