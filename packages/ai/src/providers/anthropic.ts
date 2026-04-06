@@ -584,6 +584,21 @@ function createAnthropicStreamEnvelopeError(message: string): Error {
 	return new Error(`${ANTHROPIC_STREAM_ENVELOPE_ERROR_PREFIX} ${message}`);
 }
 
+const ANTHROPIC_PRE_MESSAGE_START_EVENT_TYPES = new Set([
+	"content_block_start",
+	"content_block_delta",
+	"content_block_stop",
+	"message_delta",
+	"message_stop",
+	"message_start",
+]);
+
+function shouldIgnoreAnthropicPreambleEvent(eventType: unknown): boolean {
+	if (typeof eventType !== "string") return false;
+	if (eventType === "ping") return true;
+	return !ANTHROPIC_PRE_MESSAGE_START_EVENT_TYPES.has(eventType);
+}
+
 function isTransientStreamEnvelopeError(error: unknown): boolean {
 	if (!(error instanceof Error)) return false;
 	return (
@@ -745,6 +760,9 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 						}
 
 						if (!sawMessageStart) {
+							if (shouldIgnoreAnthropicPreambleEvent(event.type)) {
+								continue;
+							}
 							throw createAnthropicStreamEnvelopeError(`received ${event.type} before message_start`);
 						}
 

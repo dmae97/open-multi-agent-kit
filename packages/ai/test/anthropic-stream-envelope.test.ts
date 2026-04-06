@@ -87,6 +87,10 @@ function createTextSuccessEvents(text: string): MockAnthropicEvent[] {
 	];
 }
 
+function createTextSuccessEventsWithPreamble(text: string, preambleEvents: MockAnthropicEvent[]): MockAnthropicEvent[] {
+	return [...preambleEvents, ...createTextSuccessEvents(text)];
+}
+
 function createMalformedPreMessageStartEvents(): MockAnthropicEvent[] {
 	return [{ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }];
 }
@@ -148,6 +152,61 @@ describe("anthropic stream envelope handling", () => {
 		expect(result.responseId).toBe("msg_text_success");
 		expect(result.content).toEqual([{ type: "text", text: "hello" }]);
 	});
+
+	it("ignores ping before message_start and streams the response once", async () => {
+		let attempt = 0;
+		vi.spyOn(Messages.prototype, "create").mockImplementation(() => {
+			attempt += 1;
+			return createMockRequest(
+				createTextSuccessEventsWithPreamble("hello", [{ type: "ping" }]),
+			) as never;
+		});
+
+		const stream = streamAnthropic(model, context, { apiKey: "sk-ant-test" });
+		const events: AssistantMessageEvent[] = [];
+		for await (const event of stream) {
+			events.push(event);
+		}
+		const result = await stream.result();
+
+		expect(attempt).toBe(1);
+		expect(countEvents(events, "error")).toBe(0);
+		expect(countEvents(events, "text_start")).toBe(1);
+		expect(countEvents(events, "text_delta")).toBe(1);
+		expect(countEvents(events, "text_end")).toBe(1);
+		expect(countEvents(events, "done")).toBe(1);
+		expect(result.stopReason).toBe("stop");
+		expect(result.responseId).toBe("msg_text_success");
+		expect(result.content).toEqual([{ type: "text", text: "hello" }]);
+	});
+
+	it("ignores unknown preamble events before message_start and streams the response once", async () => {
+		let attempt = 0;
+		vi.spyOn(Messages.prototype, "create").mockImplementation(() => {
+			attempt += 1;
+			return createMockRequest(
+				createTextSuccessEventsWithPreamble("hello", [{ type: "custom_preamble_event", trace_id: "trace_123" }]),
+			) as never;
+		});
+
+		const stream = streamAnthropic(model, context, { apiKey: "sk-ant-test" });
+		const events: AssistantMessageEvent[] = [];
+		for await (const event of stream) {
+			events.push(event);
+		}
+		const result = await stream.result();
+
+		expect(attempt).toBe(1);
+		expect(countEvents(events, "error")).toBe(0);
+		expect(countEvents(events, "text_start")).toBe(1);
+		expect(countEvents(events, "text_delta")).toBe(1);
+		expect(countEvents(events, "text_end")).toBe(1);
+		expect(countEvents(events, "done")).toBe(1);
+		expect(result.stopReason).toBe("stop");
+		expect(result.responseId).toBe("msg_text_success");
+		expect(result.content).toEqual([{ type: "text", text: "hello" }]);
+	});
+
 
 	it("retries malformed envelopes before content starts without duplicating streamed text events", async () => {
 		let attempt = 0;
