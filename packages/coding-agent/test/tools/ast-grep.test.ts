@@ -85,4 +85,35 @@ describe("ast_grep parse errors", () => {
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}
 	});
+
+	it("parses PlusCal content through the tlaplus language aliases", async () => {
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "ast-grep-tlaplus-"));
+		try {
+			const filePath = path.join(tempDir, "Spec.tla");
+			await Bun.write(
+				filePath,
+				`---- MODULE Spec ----\n(* --algorithm Demo\nvariables x = 0;\nbegin\n  Inc:\n    x := x + 1;\nend algorithm; *)\n====\n`,
+			);
+
+			const tools = await createTools(createTestSession(tempDir));
+			const tool = tools.find(entry => entry.name === "ast_grep");
+			expect(tool).toBeDefined();
+
+			const result = await tool!.execute("ast-grep-tlaplus", {
+				pat: ["Inc"],
+				sel: "identifier",
+				lang: "pluscal",
+				path: filePath,
+			});
+
+			const text = result.content.find(content => content.type === "text")?.text ?? "";
+			const details = result.details as { matchCount?: number; parseErrors?: string[] } | undefined;
+
+			expect(text).toContain("Inc");
+			expect(details?.matchCount).toBe(1);
+			expect(details?.parseErrors).toBeUndefined();
+		} finally {
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
 });

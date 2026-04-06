@@ -47,6 +47,7 @@ tree-sitter-css = "0.25"
 tree-sitter-diff = "0.1"
 tree-sitter-elixir = "0.3"
 tree-sitter-go = "0.25"
+tree-sitter-glimmer = "0.0.1"
 tree-sitter-haskell = "0.23"
 tree-sitter-hcl = "1.1"
 tree-sitter-html = "0.23"
@@ -71,6 +72,7 @@ tree-sitter-solidity = "1.2"
 tree-sitter-starlark = "1.3"
 tree-sitter-swift = "0.7"
 tree-sitter-toml-ng = "0.7"
+tree-sitter-tlaplus = "1.5"
 tree-sitter-typescript = "0.23"
 tree-sitter-verilog = "1.0"
 tree-sitter-xml = "0.7"
@@ -102,6 +104,7 @@ smallvec = { version = "1.15.1", features = [
    "const_new",
 ] }
 memmap2 = "0.9"
+xxhash-rust = { version = "0.8", features = ["xxh64"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -117,3 +120,4 @@ windows-sys = { version = "0.61", features = [
 ] }
 [build-dependencies]
 napi-build = "2"
+cc = "1"

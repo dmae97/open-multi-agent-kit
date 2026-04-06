@@ -5,7 +5,7 @@
 
 mod parsers;
 
-use std::{borrow::Cow, collections::HashMap, fmt, path::Path};
+use std::{borrow::Cow, collections::HashMap, fmt, path::Path, sync::LazyLock};
 
 use ast_grep_core::{
 	Doc, Language, Node,
@@ -13,6 +13,7 @@ use ast_grep_core::{
 	meta_var::MetaVariable,
 	tree_sitter::{LanguageExt, StrDoc, TSLanguage, TSRange},
 };
+use phf::phf_map;
 
 /// Implements a stub language (no expando / `pre_process_pattern` needed).
 /// Use when the language grammar accepts `$VAR` as valid identifiers.
@@ -109,6 +110,7 @@ impl_lang_expando!(CSharp, language_c_sharp, 'µ');
 impl_lang_expando!(Css, language_css, '_');
 impl_lang_expando!(Elixir, language_elixir, 'µ');
 impl_lang_expando!(Go, language_go, 'µ');
+impl_lang!(Handlebars, language_handlebars);
 impl_lang_expando!(Haskell, language_haskell, 'µ');
 impl_lang_expando!(Hcl, language_hcl, 'µ');
 impl_lang_expando!(Kotlin, language_kotlin, 'µ');
@@ -127,6 +129,7 @@ impl_lang_expando!(Odin, language_odin, 'µ');
 impl_lang_expando!(Julia, language_julia, 'µ');
 impl_lang_expando!(Verilog, language_verilog, 'µ');
 impl_lang_expando!(Zig, language_zig, 'µ');
+impl_lang_expando!(Tlaplus, language_tlaplus, 'µ');
 
 // ── Stub languages ($ accepted in grammar) ──────────────────────────────
 
@@ -258,6 +261,7 @@ pub enum SupportLang {
 	Diff,
 	Elixir,
 	Go,
+	Handlebars,
 	Haskell,
 	Hcl,
 	Html,
@@ -282,6 +286,7 @@ pub enum SupportLang {
 	Starlark,
 	Swift,
 	Toml,
+	Tlaplus,
 	Tsx,
 	TypeScript,
 	Verilog,
@@ -290,14 +295,20 @@ pub enum SupportLang {
 	Zig,
 }
 
+static SORTED_ALIASES: LazyLock<Box<[&'static str]>> = LazyLock::new(|| {
+	let mut aliases = LANG_ALIASES.keys().copied().collect::<Box<[_]>>();
+	aliases.sort_unstable();
+	aliases
+});
+
 impl SupportLang {
 	pub const fn all_langs() -> &'static [Self] {
 		use SupportLang::*;
 		&[
-			Bash, C, Cpp, CSharp, Clojure, Css, Diff, Elixir, Go, Haskell, Hcl, Html, Java,
-			JavaScript, Json, Julia, Kotlin, Lua, Make, Markdown, Nix, ObjC, Odin, Php, Python, Regex,
-			Ruby, Rust, Scala, Solidity, Starlark, Swift, Toml, Tsx, TypeScript, Verilog, Xml, Yaml,
-			Zig,
+			Bash, C, Cpp, CSharp, Clojure, Css, Diff, Elixir, Go, Handlebars, Haskell, Hcl, Html,
+			Java, JavaScript, Json, Julia, Kotlin, Lua, Make, Markdown, Nix, ObjC, Odin, Php, Python,
+			Regex, Ruby, Rust, Scala, Solidity, Starlark, Swift, Toml, Tlaplus, Tsx, TypeScript,
+			Verilog, Xml, Yaml, Zig,
 		]
 	}
 
@@ -314,6 +325,7 @@ impl SupportLang {
 			Self::Diff => "diff",
 			Self::Elixir => "elixir",
 			Self::Go => "go",
+			Self::Handlebars => "handlebars",
 			Self::Haskell => "haskell",
 			Self::Hcl => "hcl",
 			Self::Html => "html",
@@ -338,6 +350,7 @@ impl SupportLang {
 			Self::Starlark => "starlark",
 			Self::Swift => "swift",
 			Self::Toml => "toml",
+			Self::Tlaplus => "tlaplus",
 			Self::Tsx => "tsx",
 			Self::TypeScript => "typescript",
 			Self::Verilog => "verilog",
@@ -345,6 +358,15 @@ impl SupportLang {
 			Self::Yaml => "yaml",
 			Self::Zig => "zig",
 		}
+	}
+
+	pub fn from_alias(value: &str) -> Option<Self> {
+		let lowered = value.trim().to_ascii_lowercase();
+		LANG_ALIASES.get(lowered.as_str()).copied()
+	}
+
+	pub fn sorted_aliases() -> &'static [&'static str] {
+		&SORTED_ALIASES
 	}
 }
 
@@ -369,6 +391,7 @@ macro_rules! execute_lang_method {
 			S::Diff => Diff.$method($($pname,)*),
 			S::Elixir => Elixir.$method($($pname,)*),
 			S::Go => Go.$method($($pname,)*),
+			S::Handlebars => Handlebars.$method($($pname,)*),
 			S::Haskell => Haskell.$method($($pname,)*),
 			S::Hcl => Hcl.$method($($pname,)*),
 			S::Html => Html.$method($($pname,)*),
@@ -393,6 +416,7 @@ macro_rules! execute_lang_method {
 			S::Starlark => Starlark.$method($($pname,)*),
 			S::Swift => Swift.$method($($pname,)*),
 			S::Toml => Toml.$method($($pname,)*),
+			S::Tlaplus => Tlaplus.$method($($pname,)*),
 			S::Tsx => Tsx.$method($($pname,)*),
 			S::TypeScript => TypeScript.$method($($pname,)*),
 			S::Verilog => Verilog.$method($($pname,)*),
@@ -466,6 +490,7 @@ const fn extensions(lang: SupportLang) -> &'static [&'static str] {
 		Diff => &["diff", "patch"],
 		Elixir => &["ex", "exs"],
 		Go => &["go"],
+		Handlebars => &["hbs", "hsb", "handlebars"],
 		Haskell => &["hs"],
 		Hcl => &["hcl", "tf", "tfvars"],
 		Html => &["html", "htm", "xhtml"],
@@ -490,6 +515,7 @@ const fn extensions(lang: SupportLang) -> &'static [&'static str] {
 		Starlark => &["star", "bzl"],
 		Swift => &["swift"],
 		Toml => &["toml"],
+		Tlaplus => &["tla"],
 		Tsx => &["tsx"],
 		TypeScript => &["ts", "cts", "mts"],
 		Verilog => &["v", "sv", "svh", "vh"],
@@ -515,3 +541,129 @@ fn from_extension(path: &Path) -> Option<SupportLang> {
 		.copied()
 		.find(|&l| extensions(l).contains(&ext))
 }
+
+static LANG_ALIASES: phf::Map<&'static str, SupportLang> = phf_map! {
+"bash"           => SupportLang::Bash,
+"sh"             => SupportLang::Bash,
+"zsh"            => SupportLang::Bash,
+"ksh"            => SupportLang::Bash,
+"bats"           => SupportLang::Bash,
+"c"              => SupportLang::C,
+"h"              => SupportLang::C,
+"cpp"            => SupportLang::Cpp,
+"c++"            => SupportLang::Cpp,
+"cc"             => SupportLang::Cpp,
+"cxx"            => SupportLang::Cpp,
+"hh"             => SupportLang::Cpp,
+"hpp"            => SupportLang::Cpp,
+"cu"             => SupportLang::Cpp,
+"ino"            => SupportLang::Cpp,
+"csharp"         => SupportLang::CSharp,
+"c#"             => SupportLang::CSharp,
+"cs"             => SupportLang::CSharp,
+"css"            => SupportLang::Css,
+"clj"            => SupportLang::Clojure,
+"cljc"           => SupportLang::Clojure,
+"cljs"           => SupportLang::Clojure,
+"clojure"        => SupportLang::Clojure,
+"clojurescript"  => SupportLang::Clojure,
+"edn"            => SupportLang::Clojure,
+"diff"           => SupportLang::Diff,
+"patch"          => SupportLang::Diff,
+"elixir"         => SupportLang::Elixir,
+"ex"             => SupportLang::Elixir,
+"exs"            => SupportLang::Elixir,
+"go"             => SupportLang::Go,
+"golang"         => SupportLang::Go,
+"handlebars"     => SupportLang::Handlebars,
+"hbs"            => SupportLang::Handlebars,
+"hsb"            => SupportLang::Handlebars,
+"glimmer"        => SupportLang::Handlebars,
+"haskell"        => SupportLang::Haskell,
+"hs"             => SupportLang::Haskell,
+"hcl"            => SupportLang::Hcl,
+"tf"             => SupportLang::Hcl,
+"tfvars"         => SupportLang::Hcl,
+"terraform"      => SupportLang::Hcl,
+"html"           => SupportLang::Html,
+"htm"            => SupportLang::Html,
+"xhtml"          => SupportLang::Html,
+"java"           => SupportLang::Java,
+"javascript"     => SupportLang::JavaScript,
+"js"             => SupportLang::JavaScript,
+"jsx"            => SupportLang::JavaScript,
+"mjs"            => SupportLang::JavaScript,
+"cjs"            => SupportLang::JavaScript,
+"json"           => SupportLang::Json,
+"julia"          => SupportLang::Julia,
+"jl"             => SupportLang::Julia,
+"kotlin"         => SupportLang::Kotlin,
+"kt"             => SupportLang::Kotlin,
+"kts"            => SupportLang::Kotlin,
+"ktm"            => SupportLang::Kotlin,
+"lua"            => SupportLang::Lua,
+"make"           => SupportLang::Make,
+"makefile"       => SupportLang::Make,
+"gnumake"        => SupportLang::Make,
+"mk"             => SupportLang::Make,
+"mak"            => SupportLang::Make,
+"markdown"       => SupportLang::Markdown,
+"md"             => SupportLang::Markdown,
+"mdx"            => SupportLang::Markdown,
+"nix"            => SupportLang::Nix,
+"objc"           => SupportLang::ObjC,
+"obj-c"          => SupportLang::ObjC,
+"objective-c"    => SupportLang::ObjC,
+"m"              => SupportLang::ObjC,
+"mm"             => SupportLang::ObjC,
+"odin"           => SupportLang::Odin,
+"php"            => SupportLang::Php,
+"python"         => SupportLang::Python,
+"py"             => SupportLang::Python,
+"py3"            => SupportLang::Python,
+"pyi"            => SupportLang::Python,
+"regex"          => SupportLang::Regex,
+"re"             => SupportLang::Regex,
+"ruby"           => SupportLang::Ruby,
+"rb"             => SupportLang::Ruby,
+"rbw"            => SupportLang::Ruby,
+"gemspec"        => SupportLang::Ruby,
+"rust"           => SupportLang::Rust,
+"rs"             => SupportLang::Rust,
+"scala"          => SupportLang::Scala,
+"sc"             => SupportLang::Scala,
+"sbt"            => SupportLang::Scala,
+"solidity"       => SupportLang::Solidity,
+"sol"            => SupportLang::Solidity,
+"starlark"       => SupportLang::Starlark,
+"star"           => SupportLang::Starlark,
+"bzl"            => SupportLang::Starlark,
+"bazel"          => SupportLang::Starlark,
+"skylark"        => SupportLang::Starlark,
+"swift"          => SupportLang::Swift,
+"toml"           => SupportLang::Toml,
+"tla"            => SupportLang::Tlaplus,
+"tla+"           => SupportLang::Tlaplus,
+"tlaplus"        => SupportLang::Tlaplus,
+"pluscal"        => SupportLang::Tlaplus,
+"pcal"           => SupportLang::Tlaplus,
+"tsx"            => SupportLang::Tsx,
+"typescript"     => SupportLang::TypeScript,
+"ts"             => SupportLang::TypeScript,
+"mts"            => SupportLang::TypeScript,
+"cts"            => SupportLang::TypeScript,
+"verilog"        => SupportLang::Verilog,
+"systemverilog"  => SupportLang::Verilog,
+"sv"             => SupportLang::Verilog,
+"svh"            => SupportLang::Verilog,
+"vh"             => SupportLang::Verilog,
+"v"              => SupportLang::Verilog,
+"xml"            => SupportLang::Xml,
+"xsl"            => SupportLang::Xml,
+"xslt"           => SupportLang::Xml,
+"svg"            => SupportLang::Xml,
+"plist"          => SupportLang::Xml,
+"yaml"           => SupportLang::Yaml,
+"yml"            => SupportLang::Yaml,
+"zig"            => SupportLang::Zig,
+};

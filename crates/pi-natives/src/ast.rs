@@ -148,101 +148,12 @@ fn to_u32(value: usize) -> u32 {
 	value.min(u32::MAX as usize) as u32
 }
 
-/// Single source of truth: every recognised alias (lowercased) → `SupportLang`.
-/// `resolve_supported_lang` does a lookup here; error messages list the keys.
-static LANG_ALIASES: phf::Map<&'static str, SupportLang> = phf::phf_map! {
-	"bash"           => SupportLang::Bash,
-	"sh"             => SupportLang::Bash,
-	"c"              => SupportLang::C,
-	"cpp"            => SupportLang::Cpp,
-	"c++"            => SupportLang::Cpp,
-	"cc"             => SupportLang::Cpp,
-	"cxx"            => SupportLang::Cpp,
-	"csharp"         => SupportLang::CSharp,
-	"c#"             => SupportLang::CSharp,
-	"cs"             => SupportLang::CSharp,
-	"css"            => SupportLang::Css,
-	"clj"            => SupportLang::Clojure,
-	"cljc"           => SupportLang::Clojure,
-	"cljs"           => SupportLang::Clojure,
-	"clojure"        => SupportLang::Clojure,
-	"clojurescript"  => SupportLang::Clojure,
-	"edn"            => SupportLang::Clojure,
-	"diff"           => SupportLang::Diff,
-	"patch"          => SupportLang::Diff,
-	"elixir"         => SupportLang::Elixir,
-	"ex"             => SupportLang::Elixir,
-	"go"             => SupportLang::Go,
-	"golang"         => SupportLang::Go,
-	"haskell"        => SupportLang::Haskell,
-	"hs"             => SupportLang::Haskell,
-	"hcl"            => SupportLang::Hcl,
-	"tf"             => SupportLang::Hcl,
-	"tfvars"         => SupportLang::Hcl,
-	"terraform"      => SupportLang::Hcl,
-	"html"           => SupportLang::Html,
-	"htm"            => SupportLang::Html,
-	"java"           => SupportLang::Java,
-	"javascript"     => SupportLang::JavaScript,
-	"js"             => SupportLang::JavaScript,
-	"jsx"            => SupportLang::JavaScript,
-	"mjs"            => SupportLang::JavaScript,
-	"cjs"            => SupportLang::JavaScript,
-	"json"           => SupportLang::Json,
-	"julia"          => SupportLang::Julia,
-	"jl"             => SupportLang::Julia,
-	"kotlin"         => SupportLang::Kotlin,
-	"kt"             => SupportLang::Kotlin,
-	"lua"            => SupportLang::Lua,
-	"make"           => SupportLang::Make,
-	"makefile"       => SupportLang::Make,
-	"markdown"       => SupportLang::Markdown,
-	"md"             => SupportLang::Markdown,
-	"mdx"            => SupportLang::Markdown,
-	"nix"            => SupportLang::Nix,
-	"objc"           => SupportLang::ObjC,
-	"objective-c"    => SupportLang::ObjC,
-	"odin"           => SupportLang::Odin,
-	"php"            => SupportLang::Php,
-	"python"         => SupportLang::Python,
-	"py"             => SupportLang::Python,
-	"regex"          => SupportLang::Regex,
-	"ruby"           => SupportLang::Ruby,
-	"rb"             => SupportLang::Ruby,
-	"rust"           => SupportLang::Rust,
-	"rs"             => SupportLang::Rust,
-	"scala"          => SupportLang::Scala,
-	"solidity"       => SupportLang::Solidity,
-	"sol"            => SupportLang::Solidity,
-	"starlark"       => SupportLang::Starlark,
-	"star"           => SupportLang::Starlark,
-	"swift"          => SupportLang::Swift,
-	"toml"           => SupportLang::Toml,
-	"tsx"            => SupportLang::Tsx,
-	"typescript"     => SupportLang::TypeScript,
-	"ts"             => SupportLang::TypeScript,
-	"mts"            => SupportLang::TypeScript,
-	"cts"            => SupportLang::TypeScript,
-	"verilog"        => SupportLang::Verilog,
-	"systemverilog"  => SupportLang::Verilog,
-	"sv"             => SupportLang::Verilog,
-	"xml"            => SupportLang::Xml,
-	"xsl"            => SupportLang::Xml,
-	"svg"            => SupportLang::Xml,
-	"yaml"           => SupportLang::Yaml,
-	"yml"            => SupportLang::Yaml,
-	"zig"            => SupportLang::Zig,
-};
-
 fn supported_lang_list() -> String {
-	let mut keys: Vec<&str> = LANG_ALIASES.keys().copied().collect();
-	keys.sort_unstable();
-	keys.join(", ")
+	SupportLang::sorted_aliases().join(", ")
 }
 
 fn resolve_supported_lang(value: &str) -> Result<SupportLang> {
-	let lower = value.to_ascii_lowercase();
-	LANG_ALIASES.get(lower.as_str()).copied().ok_or_else(|| {
+	SupportLang::from_alias(value).ok_or_else(|| {
 		Error::from_reason(format!(
 			"Unsupported language '{value}'. Supported: {}",
 			supported_lang_list()
@@ -1018,6 +929,8 @@ mod tests {
 		assert_eq!(resolve_supported_lang("bash").ok(), Some(SupportLang::Bash));
 		assert_eq!(resolve_supported_lang("c").ok(), Some(SupportLang::C));
 		assert_eq!(resolve_supported_lang("cpp").ok(), Some(SupportLang::Cpp));
+		assert_eq!(resolve_supported_lang("tla").ok(), Some(SupportLang::Tlaplus));
+		assert_eq!(resolve_supported_lang("pluscal").ok(), Some(SupportLang::Tlaplus));
 		assert!(resolve_supported_lang("brainfuck").is_err());
 	}
 

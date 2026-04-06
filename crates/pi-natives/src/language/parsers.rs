@@ -29,6 +29,9 @@ pub fn language_elixir() -> TSLanguage {
 pub fn language_go() -> TSLanguage {
 	tree_sitter_go::LANGUAGE.into()
 }
+pub fn language_handlebars() -> TSLanguage {
+	tree_sitter_glimmer::language()
+}
 pub fn language_haskell() -> TSLanguage {
 	tree_sitter_haskell::LANGUAGE.into()
 }
@@ -106,6 +109,9 @@ pub fn language_tsx() -> TSLanguage {
 }
 pub fn language_typescript() -> TSLanguage {
 	tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()
+}
+pub fn language_tlaplus() -> TSLanguage {
+	tree_sitter_tlaplus::LANGUAGE.into()
 }
 pub fn language_verilog() -> TSLanguage {
 	tree_sitter_verilog::LANGUAGE.into()

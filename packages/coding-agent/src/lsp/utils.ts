@@ -129,6 +129,8 @@ const LANGUAGE_MAP: Record<string, string> = {
 	".psm1": "powershell",
 	".bat": "bat",
 	".cmd": "bat",
+	".tla": "tlaplus",
+	".tlaplus": "tlaplus",
 };
 
 /**

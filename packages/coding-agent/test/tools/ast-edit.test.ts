@@ -174,4 +174,36 @@ describe("ast_edit tool schema", () => {
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}
 	});
+
+	it("infers tlaplus from .tla files for AST edits", async () => {
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "ast-edit-tlaplus-"));
+		try {
+			const filePath = path.join(tempDir, "Spec.tla");
+			await Bun.write(filePath, `---- MODULE Spec ----\nVARIABLE x\n\nInit == x = 0\n\nNext == x' = x + 1\n====\n`);
+			const pendingActionStore = new PendingActionStore();
+
+			const tools = await createTools(createTestSession(tempDir, { pendingActionStore }));
+			const tool = tools.find(entry => entry.name === "ast_edit");
+			expect(tool).toBeDefined();
+
+			const previewResult = await tool!.execute("ast-edit-tlaplus", {
+				ops: [{ pat: "Init", out: "Start" }],
+				path: filePath,
+			});
+
+			const text = previewResult.content.find(content => content.type === "text")?.text ?? "";
+			const details = previewResult.details as { totalReplacements?: number; parseErrors?: string[] } | undefined;
+			expect(text).toContain("Start");
+			expect(details?.totalReplacements).toBe(1);
+			expect(details?.parseErrors).toBeUndefined();
+
+			const pending = pendingActionStore.peek();
+			expect(pending).not.toBeNull();
+			if (!pending) throw new Error("Expected pending action to be registered");
+			await pending.apply("apply tlaplus AST edit");
+			expect(await Bun.file(filePath).text()).toContain("Start == x = 0");
+		} finally {
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
 });
