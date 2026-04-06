@@ -224,23 +224,45 @@ function buildReviewPrompt(mode: string, stats: DiffStats, rawDiff: string): str
 	});
 }
 
+/**
+ * Append extra instructions to a review prompt, if any were provided.
+ * Returns the prompt unchanged when instructions is undefined.
+ */
+function appendInstructions(prompt: string, instructions: string | undefined): string {
+	if (!instructions) return prompt;
+	return `${prompt}\n\n### Additional Instructions\n\n${instructions}`;
+}
+
 export class ReviewCommand implements CustomCommand {
 	name = "review";
 	description = "Launch interactive code review";
 
 	constructor(private api: CustomCommandAPI) {}
 
-	async execute(_args: string[], ctx: HookCommandContext): Promise<string | undefined> {
+	async execute(args: string[], ctx: HookCommandContext): Promise<string | undefined> {
 		if (!ctx.hasUI) {
-			return "Use the Task tool to run the 'reviewer' agent to review recent code changes.";
+			const base = "Use the Task tool to run the 'reviewer' agent to review recent code changes.";
+			return args.length > 0 ? `${base} Focus: ${args.join(" ")}` : base;
 		}
 
-		const mode = await ctx.ui.select("Review Mode", [
-			"1. Review against a base branch (PR Style)",
-			"2. Review uncommitted changes",
-			"3. Review a specific commit",
-			"4. Custom review instructions",
-		]);
+		// Inline args act as additional instructions appended to the generated prompt.
+		// When present, skip option 4 (editor) — the args already provide the instructions.
+		const extraInstructions = args.length > 0 ? args.join(" ") : undefined;
+
+		const menuItems = extraInstructions
+			? [
+					"1. Review against a base branch (PR Style)",
+					"2. Review uncommitted changes",
+					"3. Review a specific commit",
+				]
+			: [
+					"1. Review against a base branch (PR Style)",
+					"2. Review uncommitted changes",
+					"3. Review a specific commit",
+					"4. Custom review instructions",
+				];
+
+		const mode = await ctx.ui.select("Review Mode", menuItems);
 
 		if (!mode) return undefined;
 
@@ -278,10 +300,13 @@ export class ReviewCommand implements CustomCommand {
 					return undefined;
 				}
 
-				return buildReviewPrompt(
-					`Reviewing changes between \`${baseBranch}\` and \`${currentBranch}\` (PR-style)`,
-					stats,
-					diffText,
+				return appendInstructions(
+					buildReviewPrompt(
+						`Reviewing changes between \`${baseBranch}\` and \`${currentBranch}\` (PR-style)`,
+						stats,
+						diffText,
+					),
+					extraInstructions,
 				);
 			}
 
@@ -318,7 +343,10 @@ export class ReviewCommand implements CustomCommand {
 					return undefined;
 				}
 
-				return buildReviewPrompt("Reviewing uncommitted changes (staged + unstaged)", stats, combinedDiff);
+				return appendInstructions(
+					buildReviewPrompt("Reviewing uncommitted changes (staged + unstaged)", stats, combinedDiff),
+					extraInstructions,
+				);
 			}
 
 			case 3: {
@@ -354,7 +382,10 @@ export class ReviewCommand implements CustomCommand {
 					return undefined;
 				}
 
-				return buildReviewPrompt(`Reviewing commit \`${hash}\``, stats, diffText);
+				return appendInstructions(
+					buildReviewPrompt(`Reviewing commit \`${hash}\``, stats, diffText),
+					extraInstructions,
+				);
 			}
 
 			case 4: {
