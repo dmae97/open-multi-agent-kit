@@ -243,23 +243,28 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 		let isError = false;
 
 		// Track previously streamed text so we only forward deltas.
-		let streamedLen = 0;
+		let rawText = "";
 		const onUpdate: AgentToolUpdateCallback<unknown> = partialResult => {
-			const sanitizedPartialResult: AgentToolResult<unknown> = {
-				content: partialResult.content.map(c => (c.type === "text" ? { ...c, text: sanitizeText(c.text) } : c)),
-				details: partialResult.details,
-			};
-			this.options.emitEvent?.({
-				type: "tool_execution_update",
-				toolCallId,
-				toolName,
-				args: toolArgs,
-				partialResult: sanitizedPartialResult,
-			});
-			const text = sanitizedPartialResult.content.map(c => (c.type === "text" ? c.text : "")).join("");
-			if (text.length > streamedLen) {
-				callbacks.onStdout(text.slice(streamedLen));
-				streamedLen = text.length;
+			// Track raw text length before sanitization to avoid drift
+			const newRawText = partialResult.content.map(c => (c.type === "text" ? c.text : "")).join("");
+			if (newRawText.length > rawText.length) {
+				const delta = newRawText.slice(rawText.length);
+				rawText = newRawText;
+				// Sanitize only the delta
+				const sanitizedDelta = sanitizeText(delta);
+				// Build sanitized partial result
+				const sanitizedPartialResult: AgentToolResult<unknown> = {
+					content: partialResult.content.map(c => (c.type === "text" ? { ...c, text: sanitizeText(c.text) } : c)),
+					details: partialResult.details,
+				};
+				this.options.emitEvent?.({
+					type: "tool_execution_update",
+					toolCallId,
+					toolName,
+					args: toolArgs,
+					partialResult: sanitizedPartialResult,
+				});
+				callbacks.onStdout(sanitizedDelta);
 			}
 		};
 
@@ -273,9 +278,10 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 
 		// onUpdate may not fire for every chunk — flush any remaining output
 		// from the final result that wasn't already streamed.
-		const finalText = result.content.map(c => (c.type === "text" ? sanitizeText(c.text) : "")).join("");
-		if (finalText.length > streamedLen) {
-			callbacks.onStdout(finalText.slice(streamedLen));
+		const finalRawText = result.content.map(c => (c.type === "text" ? c.text : "")).join("");
+		if (finalRawText.length > rawText.length) {
+			const finalDelta = finalRawText.slice(rawText.length);
+			callbacks.onStdout(sanitizeText(finalDelta));
 		}
 
 		const sanitizedFinalResult: AgentToolResult<unknown> = {

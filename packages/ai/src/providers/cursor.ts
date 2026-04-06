@@ -696,18 +696,44 @@ async function handleShellStreamArgs(
 
 	sendShellStreamEvent(h2Request, execMsg, { case: "start", value: create(ShellStreamStartSchema, {}) });
 
-	const streamCallbacks: CursorShellStreamCallbacks = {
-		onStdout(data: string) {
+	// Buffer for incomplete ANSI sequences across chunks
+	let stdoutBuffer = "";
+	let stderrBuffer = "";
+
+	const flushStdout = () => {
+		if (stdoutBuffer) {
 			sendShellStreamEvent(h2Request, execMsg, {
 				case: "stdout",
-				value: create(ShellStreamStdoutSchema, { data: sanitizeText(data) }),
+				value: create(ShellStreamStdoutSchema, { data: sanitizeText(stdoutBuffer) }),
 			});
-		},
-		onStderr(data: string) {
+			stdoutBuffer = "";
+		}
+	};
+
+	const flushStderr = () => {
+		if (stderrBuffer) {
 			sendShellStreamEvent(h2Request, execMsg, {
 				case: "stderr",
-				value: create(ShellStreamStderrSchema, { data: sanitizeText(data) }),
+				value: create(ShellStreamStderrSchema, { data: sanitizeText(stderrBuffer) }),
 			});
+			stderrBuffer = "";
+		}
+	};
+
+	const streamCallbacks: CursorShellStreamCallbacks = {
+		onStdout(data: string) {
+			stdoutBuffer += data;
+			// Flush on newline or if buffer gets large
+			if (stdoutBuffer.includes("\n") || stdoutBuffer.length > 4096) {
+				flushStdout();
+			}
+		},
+		onStderr(data: string) {
+			stderrBuffer += data;
+			// Flush on newline or if buffer gets large
+			if (stderrBuffer.includes("\n") || stderrBuffer.length > 4096) {
+				flushStderr();
+			}
 		},
 	};
 
@@ -758,6 +784,11 @@ async function handleShellStreamArgs(
 	// after execution completes. With shellStream these were already sent in real time.
 	const sendBufferedOutput = !streamHandler;
 	const sanitizedExecResult = sanitizeShellExecResult(execResult);
+
+	// Flush any remaining buffered output before sending results
+	flushStdout();
+	flushStderr();
+
 	sendShellStreamExitFromResult(h2Request, execMsg, sanitizedExecResult, sendBufferedOutput);
 	// Cursor can keep the turn pending when it receives only stream deltas.
 	// Send the final structured shellResult as completion acknowledgement.
