@@ -62,6 +62,8 @@ export interface BenchmarkConfig {
 	thinkingLevel?: ResolvedThinkingLevel;
 	runsPerTask: number;
 	timeout: number;
+	/** Timeout for the first event to arrive. If no events are observed within this window, abort early. Default: 30000 */
+	connectionTimeout?: number;
 	maxTurns?: number;
 	taskConcurrency: number;
 	requireEditToolCall?: boolean;
@@ -1224,7 +1226,7 @@ async function runSingleTask(
 	};
 }
 
-async function runRpcBenchmarkRun(
+async function _runRpcBenchmarkRun(
 	item: TaskRunItem,
 	config: BenchmarkConfig,
 	cwd: string,
@@ -1611,6 +1613,9 @@ async function collectPromptEvents(
 	let observedTurns = 0;
 	let timer: NodeJS.Timeout | undefined;
 	let settled = false;
+	let receivedFirstEvent = false;
+
+	const connectionTimeout = config.connectionTimeout ?? 30_000;
 
 	const eventsPromise = new Promise<void>((resolve, reject) => {
 		const resolveWait = () => {
@@ -1637,7 +1642,7 @@ async function collectPromptEvents(
 			reject(err);
 		};
 
-		timer = setTimeout(() => {
+		const fireTimeout = () => {
 			client.abort?.();
 			rejectWait(
 				new PromptTimeoutError({
@@ -1651,13 +1656,26 @@ async function collectPromptEvents(
 					pendingRetry,
 				}),
 			);
-		}, config.timeout);
+		};
+
+		// Start with the shorter connection timeout; upgrade to full timeout on first event
+		timer = setTimeout(fireTimeout, connectionTimeout);
 
 		unsubscribe = client.onEvent(event => {
 			if (!event || settled) {
 				return;
 			}
 			const typedEvent = event as { type: string; [key: string]: unknown };
+
+			// First event arrived: switch to the full activity timeout
+			if (!receivedFirstEvent) {
+				receivedFirstEvent = true;
+				if (timer) {
+					clearTimeout(timer);
+				}
+				timer = setTimeout(fireTimeout, config.timeout);
+			}
+
 			events.push(typedEvent);
 			lastEventType = typedEvent.type;
 			recentEventTypes.push(typedEvent.type);

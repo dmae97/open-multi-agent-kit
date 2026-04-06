@@ -14,7 +14,6 @@ Successful edit responses already include the updated root chunk rendering for t
 - To rewrite an entire function/method from scratch → `replace` (without `beg`/`end`)
 - `splice` is almost always the right choice for small, targeted fixes
 - `replace` with `beg`/`end` also works for line-level fixes (same behavior as `splice`)
-
 {{/if}}
 |op|effect|
 |---|---|

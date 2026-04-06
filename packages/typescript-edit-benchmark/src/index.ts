@@ -69,6 +69,7 @@ Options:
   --thinking <level>        Thinking level: off, minimal, low, medium, high, xhigh
   --runs <n>                Runs per task (default: 1)
   --timeout <ms>            Timeout per run in ms (default: 120000)
+  --connection-timeout <ms>  Timeout for first event before fast-retry (default: 30000)
   --task-concurrency <n>    Max tasks to run in parallel (default: 16)
   --tasks <ids>             Comma-separated task IDs to run (default: all)
   --max-tasks <n>            Max tasks to sample (default: 80, 0 = all)
@@ -167,6 +168,7 @@ async function main(): Promise<void> {
 			thinking: { type: "string", default: "low" },
 			runs: { type: "string", default: "2" },
 			timeout: { type: "string", default: "120000" },
+			"connection-timeout": { type: "string", default: "30000" },
 			"max-turns": { type: "string", default: "30" },
 			"task-concurrency": { type: "string", default: "32" },
 			tasks: { type: "string" },
@@ -279,6 +281,7 @@ async function main(): Promise<void> {
 	const maxTimeoutRetries = parseInt(values["max-timeout-retries"] ?? "3", 10);
 	const maxProviderRetries = parseInt(values["max-provider-retries"] ?? "3", 10);
 	const mutationScopeWindow = parseInt(values["mutation-scope-window"] ?? "20", 10);
+	const connectionTimeout = parseInt(values["connection-timeout"] ?? "30000", 10);
 
 	let tasksToRun = allTasks;
 	if (values.tasks) {
@@ -362,6 +365,7 @@ async function main(): Promise<void> {
 		maxTimeoutRetries,
 		maxProviderFailureRetries: maxProviderRetries,
 		mutationScopeWindow,
+		connectionTimeout,
 		inProcess: !values["no-in-process"],
 	};
 	const outputPath = values.output ?? generateReportFilename(config, formatType);

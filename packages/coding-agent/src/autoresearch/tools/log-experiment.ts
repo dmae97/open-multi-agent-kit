@@ -137,7 +137,8 @@ export function createLogExperimentTool(
 			}
 
 			applyAutoresearchContractToExperimentState(contractResult.contract, state);
-			const logPreamble = "Refreshed session fields from autoresearch.md before logging (benchmark, scope, constraints).\n\n";
+			const logPreamble =
+				"Refreshed session fields from autoresearch.md before logging (benchmark, scope, constraints).\n\n";
 			runtime.lastRunSummary = pendingRun;
 			runtime.lastRunAsi = pendingRun.parsedAsi;
 			runtime.lastRunChecks =

@@ -1594,7 +1594,9 @@ describe("autoresearch tools", () => {
 		);
 		const n = await abandonUnloggedAutoresearchRuns(dir, new Set());
 		expect(n).toBe(1);
-		const runJson = JSON.parse(fs.readFileSync(path.join(dir, ".autoresearch", "runs", "0001", "run.json"), "utf8")) as {
+		const runJson = JSON.parse(
+			fs.readFileSync(path.join(dir, ".autoresearch", "runs", "0001", "run.json"), "utf8"),
+		) as {
 			abandonedAt?: string;
 		};
 		expect(runJson.abandonedAt).toEqual(expect.any(String));

@@ -300,8 +300,7 @@ export async function abandonUnloggedAutoresearchRuns(
 		const pending = parsePendingRunSummary(parsed, runDirectory, directoryName, loggedRunNumbers);
 		if (!pending) continue;
 
-		const existing =
-			typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : {};
+		const existing = typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : {};
 		await Bun.write(runJsonPath, JSON.stringify({ ...existing, abandonedAt: stamp }, null, 2));
 		abandoned += 1;
 	}

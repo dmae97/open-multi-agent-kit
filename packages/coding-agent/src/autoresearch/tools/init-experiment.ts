@@ -137,7 +137,7 @@ export function createInitExperimentTool(
 			const errors = [...contractResult.errors, ...scriptSnapshot.errors];
 			if (errors.length > 0) {
 				return {
-					content: [{ type: "text", text: abandonSummary + `Error: ${errors.join(" ")}` }],
+					content: [{ type: "text", text: `${abandonSummary}Error: ${errors.join(" ")}` }],
 				};
 			}
 

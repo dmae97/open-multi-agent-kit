@@ -1375,51 +1375,51 @@ export function applyChunkEdits(params: {
 		try {
 			switch (operation.op) {
 				case "replace": {
-				    const anchorSelector = operation.sel ?? currentDefaultSelector;
-				    const crc = operation.crc ?? (operation.sel === undefined ? currentDefaultCrc : undefined);
-				    const requiresChecksum = operation.sel !== undefined || Boolean(currentDefaultCrc);
-				    ensureBatchOperationTargetCurrent(state, scheduled, crc, touchedPaths);
-				    const { chunk: anchor, crc: resolvedCrc } = resolveAnchorWithCrc(state, anchorSelector, crc, warnings);
-				    validateBatchCrc({ chunk: anchor, crc: resolvedCrc, required: requiresChecksum });
+					const anchorSelector = operation.sel ?? currentDefaultSelector;
+					const crc = operation.crc ?? (operation.sel === undefined ? currentDefaultCrc : undefined);
+					const requiresChecksum = operation.sel !== undefined || Boolean(currentDefaultCrc);
+					ensureBatchOperationTargetCurrent(state, scheduled, crc, touchedPaths);
+					const { chunk: anchor, crc: resolvedCrc } = resolveAnchorWithCrc(state, anchorSelector, crc, warnings);
+					validateBatchCrc({ chunk: anchor, crc: resolvedCrc, required: requiresChecksum });
 
-				    // When beg/end are provided, replace only those lines (line-scoped replace).
-				    if (operation.beg != null && operation.end != null) {
-				        validateSpliceRange(anchor, operation.beg, operation.end);
-				        const offsets = lineOffsets(state.source);
-				        const absBeg = operation.beg;
-				        const absEnd = operation.end;
-				        const rangeStart = lineStartOffset(offsets, absBeg, state.source);
-				        const rangeEnd = lineEndOffset(offsets, absEnd, state.source);
-				        const replacedRange = state.source.slice(rangeStart, rangeEnd);
-				        const targetIndent = detectCommonIndent(replacedRange).prefix;
-				        let replacement = normalizeInsertedContent(operation.content, targetIndent);
-				        if (replacement.length > 0 && !replacement.endsWith("\n") && absEnd < state.tree.lineCount) {
-				            replacement += "\n";
-				        }
-				        state.source = replaceRangeByLines(state.source, absBeg, absEnd, replacement);
-				        if (replacement.length === 0) {
-				            state.source = cleanupBlankLineArtifactsAtOffset(state.source, rangeStart);
-				        }
-				        touchedPaths.push(anchor.path);
-				        if (operation.sel === undefined) clearDefaultCrc();
-				        break;
-				    }
+					// When beg/end are provided, replace only those lines (line-scoped replace).
+					if (operation.beg != null && operation.end != null) {
+						validateSpliceRange(anchor, operation.beg, operation.end);
+						const offsets = lineOffsets(state.source);
+						const absBeg = operation.beg;
+						const absEnd = operation.end;
+						const rangeStart = lineStartOffset(offsets, absBeg, state.source);
+						const rangeEnd = lineEndOffset(offsets, absEnd, state.source);
+						const replacedRange = state.source.slice(rangeStart, rangeEnd);
+						const targetIndent = detectCommonIndent(replacedRange).prefix;
+						let replacement = normalizeInsertedContent(operation.content, targetIndent);
+						if (replacement.length > 0 && !replacement.endsWith("\n") && absEnd < state.tree.lineCount) {
+							replacement += "\n";
+						}
+						state.source = replaceRangeByLines(state.source, absBeg, absEnd, replacement);
+						if (replacement.length === 0) {
+							state.source = cleanupBlankLineArtifactsAtOffset(state.source, rangeStart);
+						}
+						touchedPaths.push(anchor.path);
+						if (operation.sel === undefined) clearDefaultCrc();
+						break;
+					}
 
-				    // Whole-chunk replace (no beg/end).
-				    const targetIndent = (anchor.indentChar || "\t").repeat(anchor.indent);
-				    let replacement = normalizeInsertedContent(operation.content, targetIndent);
-				    if (replacement.length > 0 && !replacement.endsWith("\n") && anchor.endLine < state.tree.lineCount) {
-				        replacement += "\n";
-				    }
-				    const offsets = lineOffsets(state.source);
-				    const rangeStart = lineStartOffset(offsets, anchor.startLine, state.source);
-				    state.source = replaceRangeByLines(state.source, anchor.startLine, anchor.endLine, replacement);
-				    if (replacement.length === 0) {
-				        state.source = cleanupBlankLineArtifactsAtOffset(state.source, rangeStart);
-				    }
-				    touchedPaths.push(anchor.path);
-				    if (operation.sel === undefined) clearDefaultCrc();
-				    break;
+					// Whole-chunk replace (no beg/end).
+					const targetIndent = (anchor.indentChar || "\t").repeat(anchor.indent);
+					let replacement = normalizeInsertedContent(operation.content, targetIndent);
+					if (replacement.length > 0 && !replacement.endsWith("\n") && anchor.endLine < state.tree.lineCount) {
+						replacement += "\n";
+					}
+					const offsets = lineOffsets(state.source);
+					const rangeStart = lineStartOffset(offsets, anchor.startLine, state.source);
+					state.source = replaceRangeByLines(state.source, anchor.startLine, anchor.endLine, replacement);
+					if (replacement.length === 0) {
+						state.source = cleanupBlankLineArtifactsAtOffset(state.source, rangeStart);
+					}
+					touchedPaths.push(anchor.path);
+					if (operation.sel === undefined) clearDefaultCrc();
+					break;
 				}
 				case "delete": {
 					const anchorSelector = operation.sel ?? currentDefaultSelector;

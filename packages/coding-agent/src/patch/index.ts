@@ -127,20 +127,20 @@ const chunkEditOperationSchemaWithoutSplice = Type.Object({
 });
 
 const chunkEditOperationSchemaWithSplice = Type.Object({
-    op: StringEnum([...CHUNK_EDIT_OPS_BASE, "splice"], { description: "Chunk edit operation" }),
-    ...chunkEditOperationSchemaBaseProps,
-    beg: Type.Optional(
-        Type.Integer({
-            description:
-                "Start line: absolute file line (1-indexed, same as read gutter). Used by splice and replace with line range. With end, inclusive when beg \u2264 end; when beg = end + 1, zero-width insertion.",
-        }),
-    ),
-    end: Type.Optional(
-        Type.Integer({
-            description:
-                "End line: absolute file line (1-indexed). Inclusive when beg \u2264 end; for zero-width insertion use end = beg \u2212 1.",
-        }),
-    ),
+	op: StringEnum([...CHUNK_EDIT_OPS_BASE, "splice"], { description: "Chunk edit operation" }),
+	...chunkEditOperationSchemaBaseProps,
+	beg: Type.Optional(
+		Type.Integer({
+			description:
+				"Start line: absolute file line (1-indexed, same as read gutter). Used by splice and replace with line range. With end, inclusive when beg \u2264 end; when beg = end + 1, zero-width insertion.",
+		}),
+	),
+	end: Type.Optional(
+		Type.Integer({
+			description:
+				"End line: absolute file line (1-indexed). Inclusive when beg \u2264 end; for zero-width insertion use end = beg \u2212 1.",
+		}),
+	),
 });
 
 const chunkEditOperationSchema = chunkSplicesEnabled()
@@ -573,7 +573,14 @@ export class EditTool implements AgentTool<TInput> {
 						if (content.length === 0) {
 							return { op: "delete", sel: operation.sel, crc: anchorCrc } as ChunkEditOperation;
 						}
-						return { op: "replace", sel: operation.sel, crc: anchorCrc, content, beg: (operation as { beg?: number }).beg, end: (operation as { end?: number }).end } as ChunkEditOperation;
+						return {
+							op: "replace",
+							sel: operation.sel,
+							crc: anchorCrc,
+							content,
+							beg: (operation as { beg?: number }).beg,
+							end: (operation as { end?: number }).end,
+						} as ChunkEditOperation;
 					case "delete":
 						requireChecksum("delete");
 						return { op: "delete", sel: operation.sel, crc: anchorCrc } as ChunkEditOperation;
