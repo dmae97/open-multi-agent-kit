@@ -194,6 +194,15 @@ export const SETTINGS_SCHEMA = {
 	// ────────────────────────────────────────────────────────────────────────
 	lastChangelogVersion: { type: "string", default: undefined },
 
+	autoResume: {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "interaction",
+			label: "Auto Resume",
+			description: "Automatically resume the most recent session in the current directory",
+		},
+	},
 	shellPath: { type: "string", default: undefined },
 
 	extensions: { type: "array", default: EMPTY_STRING_ARRAY },
@@ -797,6 +806,38 @@ export const SETTINGS_SCHEMA = {
 
 	"compaction.remoteEndpoint": { type: "string", default: undefined },
 
+	// Idle compaction
+	"compaction.idleEnabled": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "context",
+			label: "Idle Compaction",
+			description: "Compact context while idle when token count exceeds threshold",
+		},
+	},
+
+	"compaction.idleThresholdTokens": {
+		type: "number",
+		default: 200000,
+		ui: {
+			tab: "context",
+			label: "Idle Compaction Threshold",
+			description: "Token count above which idle compaction triggers",
+			submenu: true,
+		},
+	},
+
+	"compaction.idleTimeoutSeconds": {
+		type: "number",
+		default: 300,
+		ui: {
+			tab: "context",
+			label: "Idle Compaction Delay",
+			description: "Seconds to wait while idle before compacting",
+			submenu: true,
+		},
+	},
 	// Branch summaries
 	"branchSummary.enabled": {
 		type: "boolean",
@@ -955,16 +996,6 @@ export const SETTINGS_SCHEMA = {
 			tab: "editing",
 			label: "Block Auto-Generated Files",
 			description: "Prevent editing of files that appear to be auto-generated (protoc, sqlc, swagger, etc.)",
-		},
-	},
-
-	"edit.manageImports": {
-		type: "boolean",
-		default: false,
-		ui: {
-			tab: "editing",
-			label: "Manage Imports After Edit",
-			description: "Expose post-edit import/include management for the edit tool",
 		},
 	},
 
@@ -1711,6 +1742,9 @@ export interface CompactionSettings {
 	autoContinue: boolean;
 	remoteEnabled: boolean;
 	remoteEndpoint: string | undefined;
+	idleEnabled: boolean;
+	idleThresholdTokens: number;
+	idleTimeoutSeconds: number;
 }
 
 export interface ContextPromotionSettings {

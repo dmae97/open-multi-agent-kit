@@ -1111,6 +1111,29 @@ export const cherryPick = Object.assign(
 );
 
 // ════════════════════════════════════════════════════════════════════════════
+// API: stash
+// ════════════════════════════════════════════════════════════════════════════
+
+export const stash = {
+	/** Stash working tree + index changes. Returns true when git created a new stash entry. */
+	async push(cwd: string, message?: string): Promise<boolean> {
+		ensureAvailable();
+		const previousStash = await ref.resolve(cwd, "refs/stash");
+		const args = ["stash", "push", "--include-untracked"];
+		if (message) args.push("-m", message);
+		await runEffect(cwd, args);
+		const nextStash = await ref.resolve(cwd, "refs/stash");
+		return nextStash !== null && nextStash !== previousStash;
+	},
+	/** Pop the most recent stash entry, optionally restoring its staged state. */
+	async pop(cwd: string, options?: { index?: boolean }): Promise<void> {
+		const args = ["stash", "pop"];
+		if (options?.index) args.push("--index");
+		await runEffect(cwd, args);
+	},
+};
+
+// ════════════════════════════════════════════════════════════════════════════
 // API: clone, restore, clean
 // ════════════════════════════════════════════════════════════════════════════
 

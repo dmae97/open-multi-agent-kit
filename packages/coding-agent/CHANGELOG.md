@@ -2,18 +2,10 @@
 
 ## [Unreleased]
 
+## [13.19.0] - 2026-04-05
 ### Added
 
-- Added `edit.manageImports` setting to enable/disable post-edit import and include management
-- Added import/include management for TypeScript, JavaScript, Python, Rust, Go, and C/C++ in edit operations
-- Added `imports` parameter to patch, hashline, and replace edit operations to declare imports/includes needed after code changes
-- Added `ImportSpec` type to specify structured import requests with support for named imports, default imports, namespace imports, aliases, and system includes
-- Added comprehensive import handler modules for each supported language with deduplication and grouping logic
-- Added `edit.manageImports` setting to enable/disable post-edit import and include management
-- Added import/include management for TypeScript, JavaScript, Python, Rust, Go, and C/C++ in edit operations
-- Added `imports` parameter to patch, hashline, and replace edit operations to declare imports/includes needed after code changes
-- Added `ImportSpec` type to specify structured import requests with support for named imports, default imports, namespace imports, aliases, and system includes
-- Added comprehensive import handler modules for each supported language with deduplication and grouping logic
+- Added idle auto-compaction settings and scheduling so sessions can compact after inactive turns without auto-continuing.
 - Added `onExternalEditor` callback to extension UI dialog options for handling external editor shortcut in select dialogs
 - Added external editor shortcut support in plan review selector, allowing users to open and edit the plan in their configured editor
 - Added `matchesAppExternalEditor` keybinding matcher to detect external editor shortcut (Ctrl+G or configured binding)
@@ -24,9 +16,10 @@
 
 ### Changed
 
-- Updated edit tool prompts to document import management feature when enabled
-- Modified edit tool schemas to conditionally include `imports` parameter based on `edit.manageImports` setting
-- Enhanced patch, hashline, and replace tool documentation with import management examples and guidance
+- Changed idle compaction settings (`compaction.idleThresholdTokens` and `compaction.idleTimeoutSeconds`) from enum to numeric type for flexible configuration
+- Modified secret obfuscation to deobfuscate restored session messages for local display while keeping outbound LLM messages obfuscated
+- Updated stash pop operation to preserve staged changes with `--index` flag when restoring after task branch merges
+- Changed secret placeholders to deterministic hash-style redaction tokens and deobfuscated assistant output for local display.
 - Updated hook editor and hook selector components to use `matchesAppExternalEditor` matcher for consistent external editor keybinding detection
 - Modified plan review flow to read the latest plan content from disk before approval, allowing changes made in external editor to be reflected
 - Enhanced plan review help text to dynamically display the configured external editor keybinding
@@ -47,6 +40,11 @@
 
 ### Fixed
 
+- Fixed idle compaction timer to properly cancel when event controller is disposed, preventing memory leaks
+- Fixed session resumption to preserve the last non-empty session when starting a fresh session
+- Fixed stash detection to use git ref resolution instead of output parsing for reliable stash state tracking
+- Fixed isolated task merge-back to preserve task outputs on merge failure and stash dirty worktrees before cherry-pick.
+- Fixed web search source rendering to truncate long title, metadata, and URL lines before they overflow the UI.
 - Fixed PR checkout tool to resolve symlinks in worktree paths, ensuring consistent path references in results and metadata
 - Fixed `read` output for file-backed internal URLs like `local://...` to include hashline prefixes in hashline edit mode, preserving usable line refs for follow-up edits
 - Fixed the plan review selector to support the external editor shortcut for opening and updating the current plan from the approval screen
