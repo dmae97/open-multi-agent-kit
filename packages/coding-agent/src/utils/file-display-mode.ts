@@ -2,6 +2,8 @@
  * Resolve line-display mode for file-like outputs (read, grep, @file mentions).
  */
 
+import { resolveEditMode } from "./edit-mode";
+
 export interface FileDisplayMode {
 	lineNumbers: boolean;
 	hashLines: boolean;
@@ -24,11 +26,7 @@ export interface FileDisplayModeSession {
 export function resolveFileDisplayMode(session: FileDisplayModeSession): FileDisplayMode {
 	const { settings } = session;
 	const hasEditTool = session.hasEditTool ?? true;
-	const hashLines =
-		hasEditTool &&
-		(settings.get("readHashLines") === true ||
-			settings.get("edit.mode") === "hashline" ||
-			Bun.env.PI_EDIT_VARIANT === "hashline");
+	const hashLines = hasEditTool && resolveEditMode(session) === "hashline" && settings.get("readHashLines") !== false;
 	return {
 		hashLines,
 		lineNumbers: hashLines || settings.get("readLineNumbers") === true,

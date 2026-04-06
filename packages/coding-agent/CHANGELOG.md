@@ -3,14 +3,36 @@
 ## [Unreleased]
 ### Added
 
+- Autoresearch `init_experiment` options `from_autoresearch_md` (load contract from `autoresearch.md` with only `name`) and `abandon_unlogged_runs` (stamp pending run artifacts abandoned)
+- Autoresearch `run_experiment` option `force` to override benchmark command equality and the direct-`autoresearch.sh` invocation rule (with warnings when used)
+- `abandonUnloggedAutoresearchRuns` helper and `abandonedAt` run metadata so abandoned artifacts are ignored as pending runs
+
+### Changed
+
+- Autoresearch `log_experiment` refreshes benchmark/scope/constraints from `autoresearch.md` after resolving a pending run (so keep validation matches disk); success output includes a short refresh notice
+- Autoresearch `log_experiment` `force` also skips ASI requirements and allows keeping a primary-metric regression versus the best kept run in the segment
+
+### Added
+
 - Support for LSP diagnostic versioning to track document versions and suppress stale diagnostics
 - Options parameter to `waitForDiagnostics` for controlling diagnostic freshness validation with `expectedDocumentVersion` and `allowUnversioned` flags
 
 ### Changed
 
+- `/autoresearch` with no `autoresearch.md` matches `/plan`-style flow: bare command enables mode and waits for the next composer message when off, or disables when already on; non-empty slash args are submitted as the user message only; setup protocol lives in the autoresearch system prompt (`command-initialize.md` removed)
 - Enabled `versionSupport` in LSP client capabilities to receive diagnostic version information from servers
 - Diagnostics storage now tracks both diagnostics and their associated document version for freshness validation
 - Updated `getDiagnosticsForFile` to accept options object instead of positional parameters for better extensibility
+- Redesigned chunk-mode `read` output to use a single recursive chunk rendering rule with `$XXXX` checksum suffixes and inline large-chunk previews
+- Normalized copied `#chunk_path$XXXX` selectors across chunk-mode `read` and `edit` inputs so pasted chunk headers resolve without manual cleanup
+
+### Fixed
+- `/autoresearch` with no arguments toggles off when mode is already on (same idea as `/plan`), and slash-argument completion no longer offers `off`/`clear` on an empty prefix so Tab after the command does not auto-insert a subcommand.
+- Fixed chunk-mode edit/read edge cases around zero-width gap splices, stale batch diagnostics, grouped Go receiver rendering, rendered line-count headers, and parse rejection location details.
+
+### Removed
+
+- Autoresearch segment fingerprint hashing and `segmentFingerprint` on experiment state / `autoresearch.jsonl` config lines
 
 ## [13.19.0] - 2026-04-05
 ### Added

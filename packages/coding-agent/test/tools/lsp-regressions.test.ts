@@ -1,11 +1,15 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, vi } from "bun:test";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import type { RenderResultOptions } from "@oh-my-pi/pi-agent-core";
+import { getServersForFile, loadConfig } from "@oh-my-pi/pi-coding-agent/lsp/config";
 import { renderCall, renderResult } from "@oh-my-pi/pi-coding-agent/lsp/render";
 import type { CodeAction, SymbolInformation } from "@oh-my-pi/pi-coding-agent/lsp/types";
 import {
 	applyCodeAction,
 	collectGlobMatches,
 	dedupeWorkspaceSymbols,
+	detectLanguageId,
 	filterWorkspaceSymbols,
 	hasGlobPattern,
 	resolveSymbolColumn,
@@ -222,5 +226,31 @@ describe("lsp regressions", () => {
 		expect(normalizedResultText).toContain("symbol: foo bar baz");
 		expect(normalizedResultText).toContain("occurrence: 2");
 		expect(resultText).not.toContain("\t");
+	});
+
+	it("detects tlaplus files for LSP startup and language ids", async () => {
+		const tempDir = TempDir.createSync("@omp-lsp-tlaplus-");
+		const specPath = path.join(tempDir.path(), "Spec.tla");
+		const aliasPath = path.join(tempDir.path(), "Spec.tlaplus");
+
+		await Bun.write(specPath, "---- MODULE Spec ----\n====\n");
+
+		const whichSpy = vi
+			.spyOn(Bun, "which")
+			.mockImplementation(command => (command === "tlapm_lsp" ? "/usr/local/bin/tlapm_lsp" : null));
+		const existsSpy = vi
+			.spyOn(fs, "existsSync")
+			.mockImplementation(candidate => typeof candidate === "string" && candidate === specPath);
+
+		try {
+			const config = loadConfig(tempDir.path());
+			expect(getServersForFile(config, specPath).map(([name]) => name)).toEqual(["tlaplus"]);
+			expect(whichSpy).toHaveBeenCalledWith("tlapm_lsp");
+			expect(existsSpy).toHaveBeenCalled();
+			expect(detectLanguageId(specPath)).toBe("tlaplus");
+			expect(detectLanguageId(aliasPath)).toBe("tlaplus");
+		} finally {
+			tempDir.removeSync();
+		}
 	});
 });
