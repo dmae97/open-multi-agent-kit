@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Chunk read formatting: `anchorStyle` (full / kind / bare), `read.anchorstyle` setting, and `chunked` flag on file display mode
@@ -25,6 +26,7 @@
 
 ### Removed
 
+- Removed `waitForChildProcess` utility (child process termination now handled by native `killTree` from pi-natives)
 - `grep-chunk.md` (folded into unified grep template)
 - `startMacAppearanceObserver` export (use `MacAppearanceObserver.start()`)
 - `copyToClipboard` export from pi-natives

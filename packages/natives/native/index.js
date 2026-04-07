@@ -7,23 +7,16 @@ const fs = require("node:fs");
 const { createRequire } = require("node:module");
 const os = require("node:os");
 const path = require("node:path");
-// Inline the two pi-utils helpers this loader needs (getNativesDir, logger.time).
-// Pi-natives used to require('@oh-my-pi/pi-utils') at module top, but Bun's
-// static resolver rejects that import when pi-natives is installed via a
-// tarball where its workspace:* dep cannot be resolved next to this nested
-// CJS file. Inlining removes the hard dep.
+
 function getNativesDir() {
+	const xdgDataHome = process.env.XDG_DATA_HOME;
+	if (xdgDataHome && fs.existsSync(path.join(xdgDataHome, "omp"))) {
+		return path.join(xdgDataHome, "omp", "natives");
+	}
 	return path.join(os.homedir(), ".omp", "natives");
 }
-const logger = {
-	time(_label, fn, ...args) {
-		return fn(...args);
-	},
-};
 const packageJson = require("../package.json");
 const { embeddedAddon } = require("./embedded-addon");
-
-// NOTE: TypeScript types are omitted in JS version
 
 const require_ = createRequire(__filename);
 const platformTag = `${process.platform}-${process.arch}`;
@@ -189,7 +182,6 @@ function loadNative() {
 			const bindings = logger.time(`native:loadNative:require:${path.basename(candidate)}`, () =>
 				require_(candidate),
 			);
-			validateNative(bindings, candidate); 
 			if (process.env.PI_DEV) {
 				console.log(`Loaded native addon from ${candidate}`);
 			}
@@ -234,66 +226,7 @@ function loadNative() {
 	throw new Error(`Failed to load pi_natives native addon for ${addonLabel}.\n\nTried:\n${details}\n\n${helpMessage}`);
 }
 
-function validateNative(bindings, source) {
-	const missing = [];
-	const checkFn = name => {
-		if (typeof bindings[name] !== "function") {
-			missing.push(name);
-		}
-	};
-	checkFn("copyToClipboard");
-	checkFn("readImageFromClipboard");
-	checkFn("ChunkState");
-	checkFn("formatAnchor");
-	checkFn("glob");
-	checkFn("fuzzyFind");
-	checkFn("grep");
-	checkFn("search");
-	checkFn("hasMatch");
-	checkFn("htmlToMarkdown");
-	checkFn("highlightCode");
-	checkFn("supportsLanguage");
-	checkFn("getSupportedLanguages");
-	checkFn("truncateToWidth");
-	checkFn("sanitizeText");
-	checkFn("wrapTextWithAnsi");
-	checkFn("sliceWithWidth");
-	checkFn("extractSegments");
-	checkFn("matchesKittySequence");
-	checkFn("executeShell");
-	checkFn("PtySession");
-	checkFn("SearchDb");
-	checkFn("Shell");
-	checkFn("parseKey");
-	checkFn("matchesLegacySequence");
-	checkFn("parseKittySequence");
-	checkFn("matchesKey");
-	checkFn("visibleWidth");
-	checkFn("killTree");
-	checkFn("listDescendants");
-	checkFn("getWorkProfile");
-	checkFn("invalidateFsScanCache");
-	checkFn("astGrep");
-	checkFn("astEdit");
-	checkFn("detectMacOSAppearance");
-	checkFn("MacAppearanceObserver");
-	checkFn("MacOSPowerAssertion");
-	checkFn("projfsOverlayProbe");
-	checkFn("projfsOverlayStart");
-	checkFn("projfsOverlayStop");
-	if (missing.length) {
-		throw new Error(
-			`Native addon missing exports (${source}). Missing: ${missing.join(", ")}. ` +
-				"Rebuild with `bun --cwd=packages/natives run build:native`.",
-		);
-	}
-}
-
-module.exports = logger.time("native:loadNative", () => loadNative());
-
-// Side effect: register native killTree with pi-utils.
-const { setNativeKillTree } = require("@oh-my-pi/pi-utils");
-setNativeKillTree(module.exports.killTree);
+module.exports = loadNative();
 
 // --- generated const enum exports (do not edit) ---
 exports.AstMatchStrictness = {

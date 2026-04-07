@@ -49,8 +49,8 @@ import {
 	modelsAreEqual,
 	parseRateLimitReason,
 } from "@oh-my-pi/pi-ai";
-import { MacOSPowerAssertion, type SearchDb } from "@oh-my-pi/pi-natives";
-import { abortableSleep, getAgentDbPath, isEnoent, logger } from "@oh-my-pi/pi-utils";
+import { killTree, MacOSPowerAssertion, type SearchDb } from "@oh-my-pi/pi-natives";
+import { abortableSleep, getAgentDbPath, isEnoent, logger, setNativeKillTree } from "@oh-my-pi/pi-utils";
 import type { AsyncJob, AsyncJobManager } from "../async";
 import type { Rule } from "../capability/rule";
 import { MODEL_ROLE_IDS, type ModelRegistry } from "../config/model-registry";
@@ -535,6 +535,8 @@ export class AgentSession {
 	}
 
 	constructor(config: AgentSessionConfig) {
+		setNativeKillTree(killTree);
+
 		this.agent = config.agent;
 		this.sessionManager = config.sessionManager;
 		this.settings = config.settings;
