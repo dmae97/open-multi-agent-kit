@@ -81,7 +81,7 @@ function detectAvx2Support() {
 function resolveCpuVariant(override) {
 	if (process.arch !== "x64") return null;
 	if (override) return override;
-	return logger.time("native:detectAvx2Support", () => detectAvx2Support()) ? "modern" : "baseline";
+	return detectAvx2Support() ? "modern" : "baseline";
 }
 
 function getAddonFilenames(tag, variant) {
@@ -114,18 +114,16 @@ const candidates = process.env.PI_DEV ? [...debugCandidates, ...releaseCandidate
 const dedupedCandidates = [...new Set(candidates)];
 
 function runCommand(command, args) {
-	const cmdLine = `${command} '${args.join(" ")}'`;
-	return logger.time(`runCommand:${cmdLine}`, () => {
-		try {
-			const { spawnSync } = require("child_process");
-			const result = spawnSync(command, args, { encoding: "utf-8" });
-			if (result.error) return null;
-			if (result.status !== 0) return null;
-			return (result.stdout || "").trim();
-		} catch {
-			return null;
-		}
-	});
+	// removed logger.time
+	try {
+		const { spawnSync } = require("child_process");
+		const result = spawnSync(command, args, { encoding: "utf-8" });
+		if (result.error) return null;
+		if (result.status !== 0) return null;
+		return (result.stdout || "").trim();
+	} catch {
+		return null;
+	}
 }
 
 function selectEmbeddedAddonFile() {
@@ -175,13 +173,11 @@ function maybeExtractEmbeddedAddon(errors) {
 
 function loadNative() {
 	const errors = [];
-	const embeddedCandidate = logger.time("native:maybeExtractEmbeddedAddon", () => maybeExtractEmbeddedAddon(errors));
+	const embeddedCandidate = maybeExtractEmbeddedAddon(errors);
 	const runtimeCandidates = embeddedCandidate ? [embeddedCandidate, ...dedupedCandidates] : dedupedCandidates;
 	for (const candidate of runtimeCandidates) {
 		try {
-			const bindings = logger.time(`native:loadNative:require:${path.basename(candidate)}`, () =>
-				require_(candidate),
-			);
+			const bindings = require_(candidate);
 			if (process.env.PI_DEV) {
 				console.log(`Loaded native addon from ${candidate}`);
 			}
