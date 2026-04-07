@@ -157,9 +157,7 @@ describe("anthropic stream envelope handling", () => {
 		let attempt = 0;
 		vi.spyOn(Messages.prototype, "create").mockImplementation(() => {
 			attempt += 1;
-			return createMockRequest(
-				createTextSuccessEventsWithPreamble("hello", [{ type: "ping" }]),
-			) as never;
+			return createMockRequest(createTextSuccessEventsWithPreamble("hello", [{ type: "ping" }])) as never;
 		});
 
 		const stream = streamAnthropic(model, context, { apiKey: "sk-ant-test" });
@@ -206,7 +204,6 @@ describe("anthropic stream envelope handling", () => {
 		expect(result.responseId).toBe("msg_text_success");
 		expect(result.content).toEqual([{ type: "text", text: "hello" }]);
 	});
-
 
 	it("retries malformed envelopes before content starts without duplicating streamed text events", async () => {
 		let attempt = 0;

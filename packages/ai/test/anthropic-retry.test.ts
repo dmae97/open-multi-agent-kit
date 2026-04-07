@@ -15,14 +15,16 @@ describe("isProviderRetryableError", () => {
 				new Error("Anthropic stream envelope error: received content_block_start before message_start"),
 			),
 		).toBe(true);
-		expect(isProviderRetryableError(new Error("Anthropic stream envelope error: stream ended before message_start"))).toBe(
-			true,
-		);
+		expect(
+			isProviderRetryableError(new Error("Anthropic stream envelope error: stream ended before message_start")),
+		).toBe(true);
 	});
 
 	it("does not classify post-content envelope failures as provider-retryable", () => {
 		expect(
-			isProviderRetryableError(new Error("Anthropic stream envelope error: stream ended before terminal stop signal")),
+			isProviderRetryableError(
+				new Error("Anthropic stream envelope error: stream ended before terminal stop signal"),
+			),
 		).toBe(false);
 	});
 

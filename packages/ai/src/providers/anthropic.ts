@@ -943,8 +943,7 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 					const streamFailure = activeAbortTracker.getLocalAbortReason() ?? streamError;
 					const isTransientEnvelopeFailure =
 						isTransientStreamParseError(streamFailure) || isTransientStreamEnvelopeError(streamFailure);
-					const canRetryTransientEnvelopeFailure =
-						isTransientEnvelopeFailure && !streamedReplayUnsafeContent;
+					const canRetryTransientEnvelopeFailure = isTransientEnvelopeFailure && !streamedReplayUnsafeContent;
 					const canRetryProviderFailure = firstTokenTime === undefined && isProviderRetryableError(streamFailure);
 					if (
 						activeAbortTracker.wasCallerAbort() ||
