@@ -779,17 +779,21 @@ export class InteractiveMode implements InteractiveModeContext {
 	}
 
 	#renderPlanPreview(planContent: string): void {
-		if (!this.#planReviewContainer) {
-			this.#planReviewContainer = new Container();
-			this.chatContainer.addChild(this.#planReviewContainer);
+		const planReviewContainer = this.#planReviewContainer ?? new Container();
+		if (this.#planReviewContainer) {
+			// Re-append the preview so repeated plan-review refreshes stay adjacent to the
+			// active selector instead of updating an older off-screen preview in place.
+			this.chatContainer.removeChild(this.#planReviewContainer);
 		}
-		this.#planReviewContainer.clear();
-		this.#planReviewContainer.addChild(new Spacer(1));
-		this.#planReviewContainer.addChild(new DynamicBorder());
-		this.#planReviewContainer.addChild(new Text(theme.bold(theme.fg("accent", "Plan Review")), 1, 1));
-		this.#planReviewContainer.addChild(new Spacer(1));
-		this.#planReviewContainer.addChild(new Markdown(planContent, 1, 1, getMarkdownTheme()));
-		this.#planReviewContainer.addChild(new DynamicBorder());
+		planReviewContainer.clear();
+		planReviewContainer.addChild(new Spacer(1));
+		planReviewContainer.addChild(new DynamicBorder());
+		planReviewContainer.addChild(new Text(theme.bold(theme.fg("accent", "Plan Review")), 1, 1));
+		planReviewContainer.addChild(new Spacer(1));
+		planReviewContainer.addChild(new Markdown(planContent, 1, 1, getMarkdownTheme()));
+		planReviewContainer.addChild(new DynamicBorder());
+		this.chatContainer.addChild(planReviewContainer);
+		this.#planReviewContainer = planReviewContainer;
 		this.ui.requestRender();
 	}
 

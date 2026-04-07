@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - Chunk read formatting: `anchorStyle` (full / kind / bare), `read.anchorstyle` setting, and `chunked` flag on file display mode
@@ -35,6 +34,7 @@
 
 ### Fixed
 
+- Plan review previews now re-append at the chat tail on refresh, keeping them adjacent to the active selector instead of updating off-screen
 - `log_experiment` validates and reverts run-scoped file changes without clobbering unrelated dirty worktree state
 - Chunk edit targets that embed CRC in the selector (e.g. `fn_foo#ABCD`) parse correctly
 - Shell paths check errors before consuming chunk output (bash executor, config resolution)
