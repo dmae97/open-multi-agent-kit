@@ -7,7 +7,19 @@ const fs = require("node:fs");
 const { createRequire } = require("node:module");
 const os = require("node:os");
 const path = require("node:path");
-const { getNativesDir, logger } = require("@oh-my-pi/pi-utils");
+// Inline the two pi-utils helpers this loader needs (getNativesDir, logger.time).
+// Pi-natives used to require('@oh-my-pi/pi-utils') at module top, but Bun's
+// static resolver rejects that import when pi-natives is installed via a
+// tarball where its workspace:* dep cannot be resolved next to this nested
+// CJS file. Inlining removes the hard dep.
+function getNativesDir() {
+	return path.join(os.homedir(), ".omp", "natives");
+}
+const logger = {
+	time(_label, fn, ...args) {
+		return fn(...args);
+	},
+};
 const packageJson = require("../package.json");
 const { embeddedAddon } = require("./embedded-addon");
 

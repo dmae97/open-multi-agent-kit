@@ -84,9 +84,6 @@
     "packages/natives": {
       "name": "@oh-my-pi/pi-natives",
       "version": "13.19.0",
-      "dependencies": {
-        "@oh-my-pi/pi-utils": "workspace:*",
-      },
       "devDependencies": {
         "@napi-rs/cli": "3.6.0",
         "@types/bun": "^1.3",

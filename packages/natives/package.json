@@ -37,9 +37,7 @@
 		"test": "bun run build:native && bun test",
 		"bench": "bun bench/grep.ts"
 	},
-	"dependencies": {
-		"@oh-my-pi/pi-utils": "workspace:*"
-	},
+
 	"devDependencies": {
 		"@napi-rs/cli": "3.6.0",
 		"@types/bun": "^1.3"
