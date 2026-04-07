@@ -1824,4 +1824,59 @@ end
 		assert!(!enum_chunk.leaf);
 		assert!(!enum_chunk.children.is_empty(), "mixed-size variants should stay addressable");
 	}
+
+	#[test]
+	fn typescript_namespace_members_stay_addressable() {
+		let source = r"namespace Foo {
+	    export function bar() {
+	        return 1;
+	    }
+	}
+	";
+		let tree = build_chunk_tree(source, "typescript").expect("tree should build");
+
+		let module = tree
+			.chunks
+			.iter()
+			.find(|c| c.path == "mod_Foo")
+			.expect("mod_Foo");
+		assert!(!module.leaf);
+		assert!(
+			module
+				.children
+				.iter()
+				.any(|child| child == "mod_Foo.fn_bar"),
+			"expected fn_bar inside namespace, got {:?}",
+			module.children
+		);
+	}
+
+	#[test]
+	fn php_namespace_definition_keeps_inner_members_addressable() {
+		let source = "<?php\nnamespace App {\nclass User {}\nfunction boot() {}\n}\n";
+		let tree = build_chunk_tree(source, "php").expect("tree should build");
+
+		let module = tree
+			.chunks
+			.iter()
+			.find(|c| c.path == "mod_App")
+			.expect("mod_App");
+		assert!(!module.leaf);
+		assert!(
+			module
+				.children
+				.iter()
+				.any(|child| child == "mod_App.class_User"),
+			"expected class_User inside namespace, got {:?}",
+			module.children
+		);
+		assert!(
+			module
+				.children
+				.iter()
+				.any(|child| child == "mod_App.fn_boot"),
+			"expected fn_boot inside namespace, got {:?}",
+			module.children
+		);
+	}
 }

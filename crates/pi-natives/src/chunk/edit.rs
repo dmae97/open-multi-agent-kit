@@ -47,7 +47,7 @@ pub fn apply_edits(state: &ChunkState, params: &EditParams) -> Result<EditResult
 	let mut state =
 		rebuild_chunk_state(original_text.clone(), state.inner().language().to_string())?;
 	let file_indent_step = detect_file_indent_step(&state.tree) as usize;
-	let file_indent_char = detect_file_indent_char(&state.tree);
+	let file_indent_char = detect_file_indent_char(&state.source, &state.tree);
 	let initial_parse_errors = state.tree.parse_errors;
 	let mut touched_paths = Vec::new();
 	let mut warnings = Vec::new();
@@ -295,8 +295,12 @@ fn apply_replace(
 			detect_common_indent(&replaced_range).prefix
 		};
 		let content = operation.content.as_deref().unwrap_or_default();
-		let mut replacement =
-			normalize_inserted_content(content, &target_indent, Some(file_indent_step), file_indent_char);
+		let mut replacement = normalize_inserted_content(
+			content,
+			&target_indent,
+			Some(file_indent_step),
+			file_indent_char,
+		);
 		if !replacement.is_empty() && !replacement.ends_with('\n') && abs_end < state.tree.line_count
 		{
 			replacement.push('\n');
@@ -406,8 +410,12 @@ fn apply_insert(
 	)?;
 	let spacing = compute_insert_spacing(state, &anchor, pos);
 	let content = operation.content.as_deref().unwrap_or_default();
-	let mut replacement =
-		normalize_inserted_content(content, &insertion.indent, Some(file_indent_step), file_indent_char);
+	let mut replacement = normalize_inserted_content(
+		content,
+		&insertion.indent,
+		Some(file_indent_step),
+		file_indent_char,
+	);
 	replacement =
 		normalize_insertion_boundary_content(state, insertion.offset, &replacement, spacing);
 
@@ -1227,15 +1235,11 @@ fn generate_diff_hunks(before: &str, after: &str, context: usize) -> Vec<DiffHun
 			}
 		}
 
-		hunks.push(DiffHunk {
-			header,
-			lines: hunk_lines,
-		});
+		hunks.push(DiffHunk { header, lines: hunk_lines });
 	}
 
 	hunks
 }
-
 
 /// Render the response text for a changed file, combining the current chunked
 /// tree view with a zero-context unified diff hunk summary.
@@ -1294,4 +1298,50 @@ fn render_unchanged_response(
 		show_leaf_preview: true,
 		tab_replacement: Some("    ".to_owned()),
 	})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::chunk::build_chunk_tree;
+
+	fn state_for(source: &str, language: &str) -> ChunkState {
+		let tree = build_chunk_tree(source, language).expect("tree should build");
+		ChunkState::from_inner(ChunkStateInner::new(source.to_owned(), language.to_owned(), tree))
+	}
+
+	#[test]
+	fn root_level_replace_preserves_space_indentation() {
+		let source = "fn main() {\n    println!(\"old\");\n}\n";
+		let state = state_for(source, "rust");
+		let chunk = state.inner().chunk("fn_main").expect("fn_main");
+
+		let result = apply_edits(&state, &EditParams {
+			operations:       vec![EditOperation {
+				op:       ChunkEditOp::Replace,
+				sel:      Some("fn_main".to_owned()),
+				crc:      Some(chunk.checksum.clone()),
+				content:  Some("fn main() {\n        println!(\"new\");\n}".to_owned()),
+				line:     None,
+				end_line: None,
+			}],
+			default_selector: None,
+			default_crc:      None,
+			anchor_style:     None,
+			cwd:              ".".to_owned(),
+			file_path:        "test.rs".to_owned(),
+		})
+		.expect("edit should apply");
+
+		assert!(
+			result.diff_after.contains("println!(\"new\");"),
+			"expected updated body text, got {:?}",
+			result.diff_after
+		);
+		assert!(
+			!result.diff_after.contains("\n\tprintln!(\"new\");\n"),
+			"expected no tab-indented body, got {:?}",
+			result.diff_after
+		);
+	}
 }

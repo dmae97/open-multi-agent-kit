@@ -232,19 +232,33 @@ pub fn reindent_inserted_block(
 	indent_non_empty_lines(&dedented, &normalized_target_indent)
 }
 
-/// Detect the file's indent character by looking at non-root chunks.
-/// Returns `'\t'` or `' '`, defaulting to `'\t'` if no chunks have indentation.
-pub fn detect_file_indent_char(tree: &ChunkTree) -> char {
+/// Detect the file's indent character.
+/// Prefer chunk metadata, then fall back to scanning source lines.
+/// Returns `' '` when the file provides no indentation signal.
+pub fn detect_file_indent_char(source: &str, tree: &ChunkTree) -> char {
 	for chunk in &tree.chunks {
 		if chunk.indent > 0 && !chunk.indent_char.is_empty() {
-			return chunk.indent_char.chars().next().unwrap_or('\t');
+			return chunk.indent_char.chars().next().unwrap_or(' ');
 		}
 	}
-	'\t'
+
+	for line in source.split('\n') {
+		if line.trim().is_empty() {
+			continue;
+		}
+		if let Some(ch) = leading_whitespace(line).chars().next()
+			&& matches!(ch, ' ' | '\t')
+		{
+			return ch;
+		}
+	}
+
+	' '
 }
 
 /// Detect spaces-per-indent-level from parent→child indent differences.
-/// Only meaningful for space-indented files; returns `DEFAULT_SPACE_INDENT_STEP` for tab files.
+/// Only meaningful for space-indented files; returns
+/// `DEFAULT_SPACE_INDENT_STEP` for tab files.
 pub fn detect_file_indent_step(tree: &ChunkTree) -> u32 {
 	for chunk in &tree.chunks {
 		if chunk.children.is_empty() {
@@ -551,5 +565,38 @@ mod tests {
 			],
 		};
 		assert_eq!(detect_file_indent_step(&tree), 2);
+	}
+
+	#[test]
+	fn detect_file_indent_char_falls_back_to_source_lines() {
+		let tree = ChunkTree {
+			language:      "rust".to_owned(),
+			checksum:      "ABCD".to_owned(),
+			line_count:    3,
+			parse_errors:  0,
+			fallback:      false,
+			root_path:     String::new(),
+			root_children: vec!["fn_main".to_owned()],
+			chunks:        vec![chunk("fn_main", Some(""), &[], 0, "")],
+		};
+
+		let source = "fn main() {\n    println!(\"hi\");\n}\n";
+		assert_eq!(detect_file_indent_char(source, &tree), ' ');
+	}
+
+	#[test]
+	fn detect_file_indent_char_defaults_to_spaces_without_signal() {
+		let tree = ChunkTree {
+			language:      "rust".to_owned(),
+			checksum:      "ABCD".to_owned(),
+			line_count:    0,
+			parse_errors:  0,
+			fallback:      false,
+			root_path:     String::new(),
+			root_children: Vec::new(),
+			chunks:        Vec::new(),
+		};
+
+		assert_eq!(detect_file_indent_char("", &tree), ' ');
 	}
 }

@@ -16,6 +16,16 @@ impl LangClassifier for MiscClassifier {
 			recurse_body(node, ChunkContext::FunctionBody)
 				.or_else(|| recurse_into(node, ChunkContext::FunctionBody, &["body"], &["block"]))
 		};
+		let module_recurse = || {
+			recurse_class(node).or_else(|| {
+				recurse_into(node, ChunkContext::ClassBody, &["body"], &[
+					"compound_statement",
+					"statement_block",
+					"declaration_list",
+					"block",
+				])
+			})
+		};
 		Some(match node.kind() {
 			// ── Imports / package headers ──
 			"import_statement"
@@ -83,9 +93,10 @@ impl LangClassifier for MiscClassifier {
 			"contract_declaration" | "library_declaration" | "trait_declaration" => {
 				container_candidate(node, "contract", source, recurse_class(node))
 			},
-			"namespace_declaration" | "module_definition" | "extension_definition" => {
-				container_candidate(node, "mod", source, recurse_class(node))
-			},
+			"namespace_declaration"
+			| "namespace_definition"
+			| "module_definition"
+			| "extension_definition" => container_candidate(node, "mod", source, module_recurse()),
 
 			// ── Types / aliases ──
 			"type_alias_declaration" | "const_type_declaration" | "opaque_declaration" => {

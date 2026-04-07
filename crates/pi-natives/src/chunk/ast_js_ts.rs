@@ -6,6 +6,10 @@ use super::{classify::LangClassifier, common::*, defaults::promote_assigned_expr
 
 pub struct JsTsClassifier;
 
+fn recurse_internal_module(node: Node<'_>) -> Option<RecurseSpec<'_>> {
+	recurse_into(node, ChunkContext::ClassBody, &["body"], &["statement_block"])
+}
+
 impl LangClassifier for JsTsClassifier {
 	fn classify_root<'t>(&self, node: Node<'t>, source: &str) -> Option<RawChunkCandidate<'t>> {
 		match node.kind() {
@@ -42,7 +46,9 @@ impl LangClassifier for JsTsClassifier {
 				Some(container_candidate(node, "iface", source, recurse_interface(node)))
 			},
 			"enum_declaration" => Some(container_candidate(node, "enum", source, recurse_enum(node))),
-			"internal_module" => Some(container_candidate(node, "mod", source, recurse_class(node))),
+			"internal_module" => {
+				Some(container_candidate(node, "mod", source, recurse_internal_module(node)))
+			},
 
 			// ── Types ──
 			"type_alias_declaration" => Some(named_candidate(node, "type", source, None)),
@@ -59,7 +65,7 @@ impl LangClassifier for JsTsClassifier {
 					.into_iter()
 					.find(|c| c.kind() == "internal_module");
 				if let Some(ns) = inner {
-					Some(container_candidate(ns, "mod", source, recurse_class(ns)))
+					Some(container_candidate(ns, "mod", source, recurse_internal_module(ns)))
 				} else {
 					Some(group_candidate(node, "stmts", source))
 				}
@@ -303,7 +309,7 @@ fn classify_export_statement<'t>(node: Node<'t>, source: &str) -> RawChunkCandid
 			}
 		},
 		"internal_module" => {
-			let recurse = recurse_class(child);
+			let recurse = recurse_internal_module(child);
 			if is_default {
 				make_container_chunk_from(node, child, "default_export".to_string(), source, recurse)
 			} else {
