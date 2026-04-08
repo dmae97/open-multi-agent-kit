@@ -1,9 +1,16 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
+- Added `/force` slash command to force the next agent turn to use a specific tool
+- Added `ToolChoiceQueue` for managing tool-choice directives with lifecycle callbacks and requeue semantics
+- Added `setForcedToolChoice()` method to AgentSession to programmatically force tool invocations
+- Added `toolChoiceQueue` property to AgentSession for direct queue access
+- Added `peekQueueInvoker()` method to AgentSession to retrieve in-flight tool invocation handlers
+- Added `queueResolveHandler()` function as the canonical entry point for preview/apply workflows
+- Added `buildToolChoice()` and `steer()` methods to ToolSession for tool-choice queue integration
+- Added `getToolChoiceQueue()` method to ToolSession for accessing the tool-choice queue
 - Added support for embedded URL selectors (`:raw` and `:L#-L#` line ranges) in read command paths
 - Added `parseReadUrlTarget` function to parse and validate URL read targets with line range support
 - Added `decl` region to chunk selector for targeting declarations without leading trivia
@@ -12,6 +19,13 @@
 
 ### Changed
 
+- Refactored pending action handling from `PendingActionStore` to `ToolChoiceQueue` with generator-based directives
+- Changed tool-choice override mechanism from simple override to a queue-based system with callbacks
+- Updated `ResolveTool` to dispatch to in-flight queue invokers instead of popping from a pending action store
+- Updated custom tool loader to accept `pushPendingAction` callback instead of `PendingActionStore` instance
+- Updated `AstEditTool` to use `queueResolveHandler()` for preview/apply semantics
+- Changed eager-todo prelude to use the tool-choice queue instead of simple override
+- Updated todo reminder suppression to check for user-forced directives via `consumeLastServedLabel()`
 - Made model-specific edit mode defaults conditional on `PI_STRICT_EDIT_MODE` environment variable for greater flexibility in edit mode selection
 - Updated slash command handlers to support returning remaining text as prompt input instead of consuming input entirely
 - Enhanced slash command parser to recognize both whitespace and colon (`:`) as command argument separators
@@ -23,6 +37,18 @@
 - Refactored `check` script to include linting via Biome and type checking
 - Added `check:types`, `lint`, `fmt`, and `fix` scripts for improved developer workflow
 - Simplified TypeScript configuration by extending workspace-level config
+
+### Removed
+
+- Removed `PendingActionStore` class and related pending-action module
+- Removed `pendingActionStore` parameter from AgentSession config
+- Removed `pendingActionStore` from ToolSession interface
+- Removed `consumeNextToolChoiceOverride()` method from AgentSession (replaced by `nextToolChoice()`)
+
+### Fixed
+
+- Fixed tool-choice queue cleanup on agent loop abort to prevent orphaned in-flight directives
+- Fixed requeue semantics to preserve `onInvoked` and `onRejected` callbacks across multiple abort cycles
 
 ## [14.0.1] - 2026-04-08
 

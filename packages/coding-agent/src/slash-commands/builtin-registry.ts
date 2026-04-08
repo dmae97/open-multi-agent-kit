@@ -901,6 +901,37 @@ const BUILTIN_SLASH_COMMAND_REGISTRY: ReadonlyArray<BuiltinSlashCommandSpec> = [
 		},
 	},
 	{
+		name: "force",
+		description: "Force next turn to use a specific tool",
+		inlineHint: "<tool-name> [prompt]",
+		allowArgs: true,
+		handle: (command, runtime) => {
+			const spaceIdx = command.args.indexOf(" ");
+			const toolName = spaceIdx === -1 ? command.args : command.args.slice(0, spaceIdx);
+			const prompt = spaceIdx === -1 ? "" : command.args.slice(spaceIdx + 1).trim();
+
+			if (!toolName) {
+				runtime.ctx.showError("Usage: /force:<tool-name> [prompt]");
+				runtime.ctx.editor.setText("");
+				return;
+			}
+
+			try {
+				runtime.ctx.session.setForcedToolChoice(toolName);
+				runtime.ctx.showStatus(`Next turn forced to use ${toolName}.`);
+			} catch (error) {
+				runtime.ctx.showError(error instanceof Error ? error.message : String(error));
+				runtime.ctx.editor.setText("");
+				return;
+			}
+
+			runtime.ctx.editor.setText("");
+
+			// If a prompt was provided, pass it through as input
+			if (prompt) return prompt;
+		},
+	},
+	{
 		name: "quit",
 		description: "Quit the application",
 		handle: shutdownHandler,

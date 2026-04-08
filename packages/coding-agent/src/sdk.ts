@@ -130,8 +130,9 @@ import {
 import { ToolContextStore } from "./tools/context";
 import { getGeminiImageTools } from "./tools/gemini-image";
 import { wrapToolWithMetaNotice } from "./tools/output-meta";
-import { PendingActionStore } from "./tools/pending-action";
+import { queueResolveHandler } from "./tools/resolve";
 import { EventBus } from "./utils/event-bus";
+import { buildNamedToolChoice } from "./utils/tool-choice";
 
 // Types
 export interface CreateAgentSessionOptions {
@@ -887,7 +888,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		: undefined;
 
 	const searchDb = options.searchDb ?? new SearchDb(getSearchDbDir(agentDir));
-	const pendingActionStore = new PendingActionStore();
 	const toolSession: ToolSession = {
 		cwd,
 		hasUI: options.hasUI ?? false,
@@ -924,6 +924,22 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		activateDiscoveredMCPTools: toolNames => session.activateDiscoveredMCPTools(toolNames),
 		getCheckpointState: () => session.getCheckpointState(),
 		setCheckpointState: state => session.setCheckpointState(state ?? undefined),
+		getToolChoiceQueue: () => session.toolChoiceQueue,
+		buildToolChoice: name => {
+			const m = session.model;
+			return m ? buildNamedToolChoice(name, m) : undefined;
+		},
+		steer: msg =>
+			session.agent.steer({
+				role: "custom",
+				customType: msg.customType,
+				content: msg.content,
+				display: false,
+				details: msg.details,
+				attribution: "agent",
+				timestamp: Date.now(),
+			}),
+		peekQueueInvoker: () => session.peekQueueInvoker(),
 		allocateOutputArtifact: async toolType => {
 			try {
 				return await sessionManager.allocateArtifactPath(toolType);
@@ -935,7 +951,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		authStorage,
 		modelRegistry,
 		asyncJobManager,
-		pendingActionStore,
 		searchDb,
 	};
 
@@ -1038,7 +1053,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		[],
 		cwd,
 		builtInToolNames,
-		pendingActionStore,
+		action => queueResolveHandler(toolSession, action),
 	);
 	for (const { path, error } of discoveredCustomTools.errors) {
 		logger.error("Custom tool load failed", { path, error });
@@ -1503,13 +1518,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			return result;
 		},
 		intentTracing: !!intentField,
-		getToolChoice: () => {
-			if (pendingActionStore.hasPending) {
-				return { type: "function", name: "resolve" };
-			}
-			return session?.consumeNextToolChoiceOverride();
-		},
+		getToolChoice: () => session?.nextToolChoice(),
 	});
+
 	cursorEventEmitter = event => agent.emitExternalEvent(event);
 
 	// Restore messages if session has existing data
@@ -1550,7 +1561,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		ttsrManager,
 		obfuscator,
 		asyncJobManager,
-		pendingActionStore,
 		searchDb,
 	});
 

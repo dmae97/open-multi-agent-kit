@@ -10,7 +10,8 @@ import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { PendingActionStore } from "@oh-my-pi/pi-coding-agent/tools/pending-action";
+import { queueResolveHandler } from "@oh-my-pi/pi-coding-agent/tools/resolve";
+import { buildNamedToolChoice } from "@oh-my-pi/pi-coding-agent/utils/tool-choice";
 import { Snowflake } from "@oh-my-pi/pi-utils";
 
 class MockAssistantStream extends AssistantMessageEventStream {}
@@ -38,14 +39,12 @@ function createAssistantMessage(text: string): AssistantMessage {
 describe("AgentSession resolve reminder", () => {
 	let session: AgentSession;
 	let tempDir: string;
-	let pendingActionStore: PendingActionStore;
 	let streamCallCount = 0;
 	let authStorage: AuthStorage | undefined;
 
 	beforeEach(async () => {
 		tempDir = path.join(os.tmpdir(), `pi-resolve-reminder-test-${Snowflake.next()}`);
 		fs.mkdirSync(tempDir, { recursive: true });
-		pendingActionStore = new PendingActionStore();
 		streamCallCount = 0;
 
 		const model = getBundledModel("anthropic", "claude-sonnet-4-5");
@@ -67,11 +66,27 @@ describe("AgentSession resolve reminder", () => {
 			streamFn: () => {
 				streamCallCount += 1;
 				if (streamCallCount === 1) {
-					pendingActionStore.push({
-						label: "AST Edit: 1 replacement in 1 file",
-						sourceToolName: "ast_edit",
-						apply: async () => ({ content: [{ type: "text", text: "Applied" }] }),
-					});
+					queueResolveHandler(
+						{
+							getToolChoiceQueue: () => session.toolChoiceQueue,
+							buildToolChoice: (name: string) => buildNamedToolChoice(name, session.model!),
+							steer: (msg: { customType: string; content: string; details?: unknown }) =>
+								session.agent.steer({
+									role: "custom",
+									customType: msg.customType,
+									content: msg.content,
+									display: false,
+									details: msg.details,
+									attribution: "agent",
+									timestamp: Date.now(),
+								}),
+						} as any,
+						{
+							label: "AST Edit: 1 replacement in 1 file",
+							sourceToolName: "ast_edit",
+							apply: async () => ({ content: [{ type: "text", text: "Applied" }] }),
+						},
+					);
 				}
 				const stream = new MockAssistantStream();
 				queueMicrotask(() => {
@@ -87,7 +102,6 @@ describe("AgentSession resolve reminder", () => {
 			sessionManager: SessionManager.inMemory(),
 			settings: Settings.isolated(),
 			modelRegistry,
-			pendingActionStore,
 		});
 	});
 

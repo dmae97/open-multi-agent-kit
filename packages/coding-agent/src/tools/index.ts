@@ -1,4 +1,5 @@
 import type { AgentTool } from "@oh-my-pi/pi-agent-core";
+import type { ToolChoice } from "@oh-my-pi/pi-ai";
 import type { SearchDb } from "@oh-my-pi/pi-natives";
 import { $env, logger } from "@oh-my-pi/pi-utils";
 import type { AsyncJobManager } from "../async";
@@ -13,6 +14,7 @@ import { LspTool } from "../lsp";
 import type { DiscoverableMCPSearchIndex, DiscoverableMCPTool } from "../mcp/discoverable-tool-metadata";
 import type { PlanModeState } from "../plan-mode/state";
 import type { CustomMessage } from "../session/messages";
+import type { ToolChoiceQueue } from "../session/tool-choice-queue";
 import { TaskTool } from "../task";
 import type { AgentOutputManager } from "../task/output-manager";
 import type { EventBus } from "../utils/event-bus";
@@ -23,6 +25,7 @@ import { AstGrepTool } from "./ast-grep";
 import { AwaitTool } from "./await-tool";
 import { BashTool } from "./bash";
 import { BrowserTool } from "./browser";
+
 import { CalculatorTool } from "./calculator";
 import { CancelJobTool } from "./cancel-job";
 import { type CheckpointState, CheckpointTool, RewindTool } from "./checkpoint";
@@ -82,7 +85,6 @@ export * from "./gh";
 export * from "./grep";
 export * from "./inspect-image";
 export * from "./notebook";
-export * from "./pending-action";
 export * from "./python";
 export * from "./read";
 export * from "./render-mermaid";
@@ -180,8 +182,14 @@ export interface ToolSession {
 	getSelectedMCPToolNames?: () => string[];
 	/** Merge MCP tool selections into the active session tool set. */
 	activateDiscoveredMCPTools?: (toolNames: string[]) => Promise<string[]>;
-	/** Pending action store for preview/apply workflows */
-	pendingActionStore?: import("./pending-action").PendingActionStore;
+	/** The tool-choice queue used to force forthcoming tool invocations and carry invocation handlers. */
+	getToolChoiceQueue?(): ToolChoiceQueue;
+	/** Build a model-provider-specific ToolChoice that targets the named tool, or undefined if unsupported. */
+	buildToolChoice?(toolName: string): ToolChoice | undefined;
+	/** Steer a hidden custom message into the conversation (e.g. a preview reminder). */
+	steer?(message: { customType: string; content: string; details?: unknown }): void;
+	/** Peek the currently in-flight tool-choice queue directive's invocation handler. Used by the `resolve` tool to dispatch to the pending action. */
+	peekQueueInvoker?(): ((input: unknown) => Promise<unknown> | unknown) | undefined;
 	/** Get active checkpoint state if any. */
 	getCheckpointState?: () => CheckpointState | undefined;
 	/** Set or clear active checkpoint state. */

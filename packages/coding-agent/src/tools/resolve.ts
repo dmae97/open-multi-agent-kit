@@ -10,7 +10,6 @@ import { Ellipsis, padToWidth, renderStatusLine, truncateToWidth } from "../tui"
 import type { ToolSession } from ".";
 import { replaceTabs } from "./render-utils";
 import { ToolError } from "./tool-errors";
-import { toolResult } from "./tool-result";
 
 const resolveSchema = Type.Object({
 	action: Type.Union([Type.Literal("apply"), Type.Literal("discard")]),
@@ -30,6 +29,70 @@ function resolveReasonPreview(reason?: string): string | undefined {
 	const trimmed = reason?.trim();
 	if (!trimmed) return undefined;
 	return truncateToWidth(trimmed, 72, Ellipsis.Omit);
+}
+
+/**
+ * Queue a resolve-protocol handler on the tool-choice queue. Forces the next
+ * LLM call to invoke the hidden `resolve` tool, wraps the caller's apply/reject
+ * callbacks into an onInvoked closure that matches the resolve schema, and
+ * steers a preview reminder so the model understands why.
+ *
+ * This is the canonical entry point for any tool that wants preview/apply
+ * semantics. No session-level abstraction is needed: callers pass their
+ * apply/reject functions directly.
+ */
+export function queueResolveHandler(
+	session: ToolSession,
+	options: {
+		label: string;
+		sourceToolName: string;
+		apply(reason: string): Promise<AgentToolResult<unknown>>;
+		reject?(reason: string): Promise<AgentToolResult<unknown> | undefined>;
+	},
+): void {
+	const queue = session.getToolChoiceQueue?.();
+	const forced = session.buildToolChoice?.("resolve");
+	if (!queue || !forced || typeof forced === "string") return;
+
+	const detailsFor = (params: ResolveParams): ResolveToolDetails => ({
+		action: params.action,
+		reason: params.reason,
+		sourceToolName: options.sourceToolName,
+		label: options.label,
+	});
+
+	queue.pushOnce(forced, {
+		label: `pending-action:${options.sourceToolName}`,
+		now: true,
+		onRejected: () => "requeue",
+		onInvoked: async (input: unknown) => {
+			const params = input as ResolveParams;
+			if (params.action === "apply") {
+				const result = await options.apply(params.reason);
+				return { ...result, details: detailsFor(params) };
+			}
+			if (params.action === "discard" && options.reject != null) {
+				const result = await options.reject(params.reason);
+				if (result != null) {
+					return { ...result, details: detailsFor(params) };
+				}
+			}
+			return {
+				content: [{ type: "text" as const, text: `Discarded: ${options.label}. Reason: ${params.reason}` }],
+				details: detailsFor(params),
+			};
+		},
+	});
+
+	session.steer?.({
+		customType: "resolve-reminder",
+		content: [
+			"<system-reminder>",
+			"This is a preview. Call the `resolve` tool to apply or discard these changes.",
+			"</system-reminder>",
+		].join("\n"),
+		details: { toolName: options.sourceToolName },
+	});
 }
 
 export class ResolveTool implements AgentTool<typeof resolveSchema, ResolveToolDetails> {
@@ -52,43 +115,12 @@ export class ResolveTool implements AgentTool<typeof resolveSchema, ResolveToolD
 		_context?: AgentToolContext,
 	): Promise<AgentToolResult<ResolveToolDetails>> {
 		return untilAborted(signal, async () => {
-			const store = this.session.pendingActionStore;
-			if (!store?.hasPending) {
+			const invoker = this.session.peekQueueInvoker?.();
+			if (!invoker) {
 				throw new ToolError("No pending action to resolve. Nothing to apply or discard.");
 			}
-
-			const pendingAction = store.pop();
-			if (!pendingAction) {
-				throw new ToolError("No pending action to resolve. Nothing to apply or discard.");
-			}
-			const resolveDetails: ResolveToolDetails = {
-				action: params.action,
-				reason: params.reason,
-				sourceToolName: pendingAction.sourceToolName,
-				label: pendingAction.label,
-			};
-
-			if (params.action === "apply") {
-				const applyResult = await pendingAction.apply(params.reason);
-				const appliedText = applyResult.content
-					.filter(part => part.type === "text")
-					.map(part => part.text)
-					.filter(text => text != null && text.length > 0)
-					.join("\n");
-				const baseResult = toolResult()
-					.text(appliedText || `Applied: ${pendingAction.label}.`)
-					.done();
-				return { ...baseResult, details: resolveDetails };
-			}
-
-			if (params.action === "discard" && pendingAction.reject != null) {
-				const discardResult = await pendingAction.reject(params.reason);
-				if (discardResult != null) {
-					return { ...discardResult, details: resolveDetails };
-				}
-			}
-			const discardResult = toolResult().text(`Discarded: ${pendingAction.label}. Reason: ${params.reason}`).done();
-			return { ...discardResult, details: resolveDetails };
+			const result = (await invoker(params)) as AgentToolResult<ResolveToolDetails>;
+			return result;
 		});
 	}
 }

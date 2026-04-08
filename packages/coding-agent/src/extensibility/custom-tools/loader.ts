@@ -5,6 +5,7 @@
  * to avoid import resolution issues with custom tools loaded from user directories.
  */
 import * as path from "node:path";
+import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import { logger } from "@oh-my-pi/pi-utils";
 import * as typebox from "@sinclair/typebox";
 import { toolCapability } from "../../capability/tool";
@@ -13,7 +14,6 @@ import type { ExecOptions } from "../../exec/exec";
 import { execCommand } from "../../exec/exec";
 import type { HookUIContext } from "../../extensibility/hooks/types";
 import { getAllPluginToolPaths } from "../../extensibility/plugins/loader";
-import type { PendingActionStore } from "../../tools/pending-action";
 import { createNoOpUIContext, resolvePath } from "../utils";
 import type { CustomToolAPI, CustomToolFactory, LoadedCustomTool, ToolLoadError } from "./types";
 
@@ -88,7 +88,12 @@ export class CustomToolLoader {
 		pi: typeof import("@oh-my-pi/pi-coding-agent"),
 		cwd: string,
 		builtInToolNames: string[],
-		pendingActionStore?: PendingActionStore,
+		pushPendingAction?: (action: {
+			label: string;
+			sourceToolName: string;
+			apply(reason: string): Promise<AgentToolResult<unknown>>;
+			reject?(reason: string): Promise<AgentToolResult<unknown> | undefined>;
+		}) => void,
 	) {
 		this.#sharedApi = {
 			cwd,
@@ -100,15 +105,14 @@ export class CustomToolLoader {
 			typebox,
 			pi,
 			pushPendingAction: action => {
-				if (!pendingActionStore) {
+				if (!pushPendingAction) {
 					throw new Error("Pending action store unavailable for custom tools in this runtime.");
 				}
-				pendingActionStore.push({
+				pushPendingAction({
 					label: action.label,
 					sourceToolName: action.sourceToolName ?? "custom_tool",
 					apply: action.apply,
 					reject: action.reject,
-					details: action.details,
 				});
 			},
 		};
@@ -159,13 +163,18 @@ export async function loadCustomTools(
 	pathsWithSources: ToolPathWithSource[],
 	cwd: string,
 	builtInToolNames: string[],
-	pendingActionStore?: PendingActionStore,
+	pushPendingAction?: (action: {
+		label: string;
+		sourceToolName: string;
+		apply(reason: string): Promise<AgentToolResult<unknown>>;
+		reject?(reason: string): Promise<AgentToolResult<unknown> | undefined>;
+	}) => void,
 ) {
 	const loader = new CustomToolLoader(
 		await import("@oh-my-pi/pi-coding-agent"),
 		cwd,
 		builtInToolNames,
-		pendingActionStore,
+		pushPendingAction,
 	);
 	await loader.load(pathsWithSources);
 	return {
@@ -191,7 +200,12 @@ export async function discoverAndLoadCustomTools(
 	configuredPaths: string[],
 	cwd: string,
 	builtInToolNames: string[],
-	pendingActionStore?: PendingActionStore,
+	pushPendingAction?: (action: {
+		label: string;
+		sourceToolName: string;
+		apply(reason: string): Promise<AgentToolResult<unknown>>;
+		reject?(reason: string): Promise<AgentToolResult<unknown> | undefined>;
+	}) => void,
 ) {
 	const allPathsWithSources: ToolPathWithSource[] = [];
 	const seen = new Set<string>();
@@ -225,5 +239,5 @@ export async function discoverAndLoadCustomTools(
 		addPath(resolvePath(configPath, cwd), { provider: "config", providerName: "Config", level: "project" });
 	}
 
-	return loadCustomTools(allPathsWithSources, cwd, builtInToolNames, pendingActionStore);
+	return loadCustomTools(allPathsWithSources, cwd, builtInToolNames, pushPendingAction);
 }

@@ -4,8 +4,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { adaptSchemaForStrict } from "@oh-my-pi/pi-ai/utils/schema";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import { ToolChoiceQueue } from "@oh-my-pi/pi-coding-agent/session/tool-choice-queue";
 import { createTools, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { PendingActionStore } from "@oh-my-pi/pi-coding-agent/tools/pending-action";
 
 function createTestSession(cwd = "/tmp/test", overrides: Partial<ToolSession> = {}): ToolSession {
 	return {
@@ -89,9 +89,15 @@ describe("ast_edit tool schema", () => {
 		try {
 			const filePath = path.join(tempDir, "legacy.ts");
 			await Bun.write(filePath, "legacyWrap(x, value)\n");
-			const pendingActionStore = new PendingActionStore();
+			const queue = new ToolChoiceQueue();
 
-			const tools = await createTools(createTestSession(tempDir, { pendingActionStore }));
+			const tools = await createTools(
+				createTestSession(tempDir, {
+					getToolChoiceQueue: () => queue,
+					buildToolChoice: () => ({ type: "tool" as const, name: "resolve" }),
+					steer: () => {},
+				}),
+			);
 			const tool = tools.find(entry => entry.name === "ast_edit");
 			expect(tool).toBeDefined();
 
@@ -103,12 +109,10 @@ describe("ast_edit tool schema", () => {
 			expect(previewResult.details).toBeDefined();
 			expect((previewResult.details as { applied?: boolean }).applied).toBe(false);
 
-			const pending = pendingActionStore.peek();
-			expect(pending).not.toBeNull();
-			if (!pending) throw new Error("Expected pending action to be registered");
-			expect(pending.sourceToolName).toBe("ast_edit");
-
-			await pending.apply("apply previewed AST edit");
+			expect(queue.inspect().some(l => l.startsWith("pending-action:ast_edit"))).toBe(true);
+			queue.nextToolChoice();
+			const invoker = queue.peekInFlightInvoker()!;
+			await invoker({ action: "apply", reason: "apply previewed AST edit" });
 			const updated = await Bun.file(filePath).text();
 			expect(updated).toContain("modernWrap(x, value)");
 		} finally {
@@ -127,9 +131,15 @@ describe("ast_edit tool schema", () => {
 			await Bun.write(path.join(nestedDir, "child.ts"), "legacyWrap(childValue, childArg)\n");
 			await Bun.write(path.join(sourceDir, "ignore.js"), "legacyWrap(ignoreValue, ignoreArg)\n");
 			await Bun.write(path.join(tempDir, "outside.ts"), "legacyWrap(outsideValue, outsideArg)\n");
-			const pendingActionStore = new PendingActionStore();
+			const queue = new ToolChoiceQueue();
 
-			const tools = await createTools(createTestSession(tempDir, { pendingActionStore }));
+			const tools = await createTools(
+				createTestSession(tempDir, {
+					getToolChoiceQueue: () => queue,
+					buildToolChoice: () => ({ type: "tool" as const, name: "resolve" }),
+					steer: () => {},
+				}),
+			);
 			const tool = tools.find(entry => entry.name === "ast_edit");
 			expect(tool).toBeDefined();
 
@@ -157,10 +167,9 @@ describe("ast_edit tool schema", () => {
 				]),
 			);
 
-			const pending = pendingActionStore.peek();
-			expect(pending).not.toBeNull();
-			if (!pending) throw new Error("Expected pending action to be registered");
-			await pending.apply("apply previewed AST edit with combined globs");
+			queue.nextToolChoice();
+			const invoker = queue.peekInFlightInvoker()!;
+			await invoker({ action: "apply", reason: "apply previewed AST edit with combined globs" });
 
 			expect(await Bun.file(path.join(sourceDir, "root.ts")).text()).toContain("modernWrap(rootValue, rootArg)");
 			expect(await Bun.file(path.join(nestedDir, "child.ts")).text()).toContain("modernWrap(childValue, childArg)");
@@ -180,9 +189,15 @@ describe("ast_edit tool schema", () => {
 		try {
 			const filePath = path.join(tempDir, "Spec.tla");
 			await Bun.write(filePath, `---- MODULE Spec ----\nVARIABLE x\n\nInit == x = 0\n\nNext == x' = x + 1\n====\n`);
-			const pendingActionStore = new PendingActionStore();
+			const queue = new ToolChoiceQueue();
 
-			const tools = await createTools(createTestSession(tempDir, { pendingActionStore }));
+			const tools = await createTools(
+				createTestSession(tempDir, {
+					getToolChoiceQueue: () => queue,
+					buildToolChoice: () => ({ type: "tool" as const, name: "resolve" }),
+					steer: () => {},
+				}),
+			);
 			const tool = tools.find(entry => entry.name === "ast_edit");
 			expect(tool).toBeDefined();
 
@@ -197,10 +212,9 @@ describe("ast_edit tool schema", () => {
 			expect(details?.totalReplacements).toBe(1);
 			expect(details?.parseErrors).toBeUndefined();
 
-			const pending = pendingActionStore.peek();
-			expect(pending).not.toBeNull();
-			if (!pending) throw new Error("Expected pending action to be registered");
-			await pending.apply("apply tlaplus AST edit");
+			queue.nextToolChoice();
+			const invoker = queue.peekInFlightInvoker()!;
+			await invoker({ action: "apply", reason: "apply tlaplus AST edit" });
 			expect(await Bun.file(filePath).text()).toContain("Start == x = 0");
 		} finally {
 			await fs.rm(tempDir, { recursive: true, force: true });

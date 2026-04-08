@@ -3,8 +3,8 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import { ToolChoiceQueue } from "@oh-my-pi/pi-coding-agent/session/tool-choice-queue";
 import { createTools, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { PendingActionStore } from "@oh-my-pi/pi-coding-agent/tools/pending-action";
 
 function createTestSession(cwd: string, overrides: Partial<ToolSession> = {}): ToolSession {
 	return {
@@ -175,8 +175,14 @@ describe("search tool path lists", () => {
 	});
 
 	it("ast_edit applies across a space-separated path list", async () => {
-		const pendingActionStore = new PendingActionStore();
-		const tools = await createTools(createTestSession(tempDir, { pendingActionStore }));
+		const queue = new ToolChoiceQueue();
+		const tools = await createTools(
+			createTestSession(tempDir, {
+				getToolChoiceQueue: () => queue,
+				buildToolChoice: () => ({ type: "tool" as const, name: "resolve" }),
+				steer: () => {},
+			}),
+		);
 		const tool = tools.find(entry => entry.name === "ast_edit");
 		expect(tool).toBeDefined();
 		if (!tool) throw new Error("Missing ast_edit tool");
@@ -198,10 +204,10 @@ describe("search tool path lists", () => {
 		expect(details?.totalReplacements).toBe(3);
 		expect(details?.scopePath).toBe("apps/, packages/, phases/");
 
-		const pending = pendingActionStore.peek();
-		expect(pending).not.toBeNull();
-		if (!pending) throw new Error("Expected pending action");
-		await pending.apply("apply multi-path ast edit");
+		queue.nextToolChoice();
+		const invoker = queue.peekInFlightInvoker();
+		if (!invoker) throw new Error("Expected pending resolve invoker");
+		await invoker({ action: "apply", reason: "apply multi-path ast edit" });
 
 		expect(await Bun.file(path.join(tempDir, "apps", "ast.ts")).text()).toContain("modernWrap(appsValue, appsArg)");
 		expect(await Bun.file(path.join(tempDir, "packages", "ast.ts")).text()).toContain(

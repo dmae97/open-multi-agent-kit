@@ -120,7 +120,6 @@ import { assertEditableFile } from "../tools/auto-generated-guard";
 import type { CheckpointState } from "../tools/checkpoint";
 import { outputMeta } from "../tools/output-meta";
 import { resolveToCwd } from "../tools/path-utils";
-import type { PendingActionStore } from "../tools/pending-action";
 import { isAutoQaEnabled } from "../tools/report-tool-issue";
 import { getLatestTodoPhasesFromEntries, type TodoItem, type TodoPhase } from "../tools/todo-write";
 import { ToolError } from "../tools/tool-errors";
@@ -158,6 +157,7 @@ import type {
 	SessionManager,
 } from "./session-manager";
 import { getLatestCompactionEntry } from "./session-manager";
+import { ToolChoiceQueue } from "./tool-choice-queue";
 
 /** Session-specific events that extend the core AgentEvent */
 export type AgentSessionEvent =
@@ -243,8 +243,6 @@ export interface AgentSessionConfig {
 	ttsrManager?: TtsrManager;
 	/** Secret obfuscator for deobfuscating streaming edit content */
 	obfuscator?: SecretObfuscator;
-	/** Pending action store for preview/apply workflows */
-	pendingActionStore?: PendingActionStore;
 	/** Shared native search DB for grep/glob/fuzzyFind-backed workflows. */
 	searchDb?: SearchDb;
 }
@@ -412,7 +410,6 @@ export class AgentSession {
 
 	// Event subscription state
 	#unsubscribeAgent?: () => void;
-	#unsubscribePendingActionPush?: () => void;
 	#eventListeners: AgentSessionEventListener[] = [];
 
 	/** Tracks pending steering messages for UI display. Removed when delivered. */
@@ -447,7 +444,7 @@ export class AgentSession {
 	#todoReminderCount = 0;
 	#todoPhases: TodoPhase[] = [];
 	#todoClearTimers = new Map<string, Timer>();
-	#nextToolChoiceOverride: ToolChoice | undefined = undefined;
+	#toolChoiceQueue = new ToolChoiceQueue();
 
 	// Bash execution state
 	#bashAbortController: AbortController | undefined = undefined;
@@ -511,7 +508,6 @@ export class AgentSession {
 	#streamingEditFileCache = new Map<string, string>();
 	#promptInFlightCount = 0;
 	#obfuscator: SecretObfuscator | undefined;
-	#pendingActionStore: PendingActionStore | undefined;
 	#checkpointState: CheckpointState | undefined = undefined;
 	#pendingRewindReport: string | undefined = undefined;
 	#promptGeneration = 0;
@@ -600,23 +596,6 @@ export class AgentSession {
 			this.#maybeAbortStreamingEdit(event);
 		});
 		this.agent.providerSessionState = this.#providerSessionState;
-		this.#pendingActionStore = config.pendingActionStore;
-		this.#unsubscribePendingActionPush = this.#pendingActionStore?.subscribePush(action => {
-			const reminderText = [
-				"<system-reminder>",
-				"This is a preview. Call the `resolve` tool to apply or discard these changes.",
-				"</system-reminder>",
-			].join("\n");
-			this.agent.steer({
-				role: "custom",
-				customType: "resolve-reminder",
-				content: reminderText,
-				display: false,
-				details: { toolName: action.sourceToolName },
-				attribution: "agent",
-				timestamp: Date.now(),
-			});
-		});
 		this.#syncTodoPhasesFromBranch();
 
 		// Always subscribe to agent events for internal handling
@@ -629,10 +608,40 @@ export class AgentSession {
 		return this.#modelRegistry;
 	}
 
-	consumeNextToolChoiceOverride(): ToolChoice | undefined {
-		const toolChoice = this.#nextToolChoiceOverride;
-		this.#nextToolChoiceOverride = undefined;
-		return toolChoice;
+	/** Advance the tool-choice queue and return the next directive for the upcoming LLM call. */
+	nextToolChoice(): ToolChoice | undefined {
+		return this.#toolChoiceQueue.nextToolChoice();
+	}
+
+	/**
+	 * Force the next model call to target a specific active tool, then terminate
+	 * the agent loop. Pushes a two-step sequence [forced, "none"] so the model
+	 * calls exactly the forced tool once and then cannot call another.
+	 */
+	setForcedToolChoice(toolName: string): void {
+		if (!this.getActiveToolNames().includes(toolName)) {
+			throw new Error(`Tool "${toolName}" is not currently active.`);
+		}
+
+		const forced = buildNamedToolChoice(toolName, this.model);
+		if (!forced || typeof forced === "string") {
+			throw new Error("Current model does not support forcing a specific tool.");
+		}
+
+		this.#toolChoiceQueue.pushSequence([forced, "none"], {
+			label: "user-force",
+			onRejected: () => "requeue",
+		});
+	}
+
+	/** The tool-choice queue: forces forthcoming tool invocations and carries handlers. */
+	get toolChoiceQueue(): ToolChoiceQueue {
+		return this.#toolChoiceQueue;
+	}
+
+	/** Peek the in-flight directive's invocation handler for use by the resolve tool. */
+	peekQueueInvoker(): ((input: unknown) => Promise<unknown> | unknown) | undefined {
+		return this.#toolChoiceQueue.peekInFlightInvoker();
 	}
 
 	/** Provider-scoped mutable state store for transport/session caches. */
@@ -737,6 +746,17 @@ export class AgentSession {
 		// TTSR: Increment message count on turn end (for repeat-after-gap tracking)
 		if (event.type === "turn_end" && this.#ttsrManager) {
 			this.#ttsrManager.incrementMessageCount();
+		}
+		// Finalize the tool-choice queue's in-flight yield after tools have executed.
+		// This must happen at turn_end (not message_end) because onInvoked handlers
+		// run during tool execution, which happens between message_end and turn_end.
+		if (event.type === "turn_end" && this.#toolChoiceQueue.hasInFlight) {
+			const msg = event.message as AssistantMessage;
+			if (msg.stopReason === "aborted" || msg.stopReason === "error") {
+				this.#toolChoiceQueue.reject(msg.stopReason === "error" ? "error" : "aborted");
+			} else {
+				this.#toolChoiceQueue.resolve();
+			}
 		}
 		if (event.type === "turn_end" && this.#pendingRewindReport) {
 			const report = this.#pendingRewindReport;
@@ -1616,7 +1636,6 @@ export class AgentSession {
 		if (!this.#extensionRunner) return;
 		if (event.type === "agent_start") {
 			this.#turnIndex = 0;
-			this.#nextToolChoiceOverride = undefined;
 			await this.#extensionRunner.emit({ type: "agent_start" });
 		} else if (event.type === "agent_end") {
 			await this.#extensionRunner.emit({ type: "agent_end", messages: event.messages });
@@ -1785,8 +1804,6 @@ export class AgentSession {
 		this.#stopPowerAssertion();
 		await this.sessionManager.close();
 		this.#closeAllProviderSessions("dispose");
-		this.#unsubscribePendingActionPush?.();
-		this.#unsubscribePendingActionPush = undefined;
 		this.#disconnectFromAgent();
 		this.#eventListeners = [];
 	}
@@ -2449,7 +2466,10 @@ export class AgentSession {
 			return;
 		}
 
-		const eagerTodoPrelude = !options?.synthetic ? this.#createEagerTodoPrelude(expandedText) : undefined;
+		// Skip eager todo prelude when the user has already queued a directive
+		const hasPendingUserDirective = this.#toolChoiceQueue.inspect().includes("user-force");
+		const eagerTodoPrelude =
+			!options?.synthetic && !hasPendingUserDirective ? this.#createEagerTodoPrelude(expandedText) : undefined;
 
 		const userContent: (TextContent | ImageContent)[] = [{ type: "text", text: expandedText }];
 		if (options?.images) {
@@ -2462,7 +2482,9 @@ export class AgentSession {
 			: { role: "user" as const, content: userContent, attribution: promptAttribution, timestamp: Date.now() };
 
 		if (eagerTodoPrelude) {
-			this.#nextToolChoiceOverride = eagerTodoPrelude.toolChoice;
+			this.#toolChoiceQueue.pushOnce(eagerTodoPrelude.toolChoice, {
+				label: "eager-todo",
+			});
 		}
 
 		try {
@@ -2471,9 +2493,9 @@ export class AgentSession {
 				prependMessages: eagerTodoPrelude ? [eagerTodoPrelude.message] : undefined,
 			});
 		} finally {
-			if (eagerTodoPrelude) {
-				this.#nextToolChoiceOverride = undefined;
-			}
+			// Clean up residual eager-todo directive if the prompt never consumed it
+			// (e.g., compaction aborted, validation failed).
+			this.#toolChoiceQueue.removeByLabel("eager-todo");
 		}
 		if (!options?.synthetic) {
 			await this.#enforcePlanModeToolDecision();
@@ -3197,6 +3219,13 @@ export class AgentSession {
 		// block runs, but nested prompt setup/finalizers may still be unwinding. Without this,
 		// a subsequent prompt() can incorrectly observe the session as busy after an abort.
 		this.#promptInFlightCount = 0;
+		// Safety net: if the agent loop aborted without producing an assistant
+		// message (e.g. failed before the first stream), the in-flight yield was
+		// never resolved or rejected by the normal message_end path. Reject it now
+		// so any requeue callback still fires and the queue stays consistent.
+		if (this.#toolChoiceQueue.hasInFlight) {
+			this.#toolChoiceQueue.reject("aborted");
+		}
 	}
 
 	/**
@@ -4236,6 +4265,13 @@ export class AgentSession {
 	 * Check if agent stopped with incomplete todos and prompt to continue.
 	 */
 	async #checkTodoCompletion(): Promise<void> {
+		// Skip todo reminders when the most recent turn was driven by an explicit user force —
+		// the user wanted exactly that tool, not a follow-up nag about incomplete todos.
+		const lastServedLabel = this.#toolChoiceQueue.consumeLastServedLabel();
+		if (lastServedLabel === "user-force") {
+			return;
+		}
+
 		const remindersEnabled = this.settings.get("todo.reminders");
 		const todosEnabled = this.settings.get("todo.enabled");
 		if (!remindersEnabled || !todosEnabled) {
