@@ -1,6 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Exported `hooks` subpath for extensibility API access
+- Added `build` script for compiling binary artifacts
+
+### Changed
+
+- Renamed `build:binary` script to `build`
+- Refactored `check` script to include linting via Biome and type checking
+- Added `check:types`, `lint`, `fmt`, and `fix` scripts for improved developer workflow
+- Simplified TypeScript configuration by extending workspace-level config
 
 ## [14.0.1] - 2026-04-08
 

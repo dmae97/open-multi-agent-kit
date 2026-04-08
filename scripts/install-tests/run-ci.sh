@@ -34,8 +34,8 @@ find_tarball() {
 }
 
 section "Binary install smoke"
-bun --cwd=packages/natives run build:native
-bun --cwd=packages/coding-agent run build:binary
+bun --cwd=packages/natives run build
+bun --cwd=packages/coding-agent run build
 
 BINARY_DIR="$WORK_DIR/binary-bin"
 mkdir -p "$BINARY_DIR"

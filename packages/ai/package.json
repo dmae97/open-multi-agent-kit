@@ -32,9 +32,13 @@
 		"pi-ai": "./src/cli.ts"
 	},
 	"scripts": {
-		"check": "tsgo -p tsconfig.json",
-		"generate-models": "bun scripts/generate-models.ts",
-		"test": "bun test"
+		"check": "biome check . && bun run check:types",
+		"check:types": "tsgo -p tsconfig.json --noEmit",
+		"lint": "biome lint .",
+		"test": "bun test",
+		"fix": "biome check --write --unsafe .",
+		"fmt": "biome format --write .",
+		"generate-models": "bun scripts/generate-models.ts"
 	},
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.78",
@@ -125,6 +129,7 @@
 		"./utils/schema/*": {
 			"types": "./src/utils/schema/*.ts",
 			"import": "./src/utils/schema/*.ts"
-		}
+		},
+		"./*.js": "./src/*.ts"
 	}
 }

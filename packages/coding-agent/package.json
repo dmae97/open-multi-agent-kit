@@ -31,13 +31,17 @@
 		"omp": "src/cli.ts"
 	},
 	"scripts": {
-		"check": "tsgo -p tsconfig.json",
+		"build": "bun --cwd=../stats scripts/generate-client-bundle.ts --generate && bun --cwd=../natives run embed:native && bun build --compile --define PI_COMPILED=true --external mupdf --root ../.. ./src/cli.ts --outfile dist/omp && bun --cwd=../natives run embed:native --reset && bun --cwd=../stats scripts/generate-client-bundle.ts --reset",
+		"check": "biome check . && bun run check:types",
+		"check:types": "tsgo -p tsconfig.json --noEmit",
+		"lint": "biome lint .",
+		"test": "bun test",
+		"fix": "biome check --write --unsafe . && bun run format-prompts && bun run generate-docs-index",
+		"fmt": "biome format --write . && bun run format-prompts",
 		"format-prompts": "bun scripts/format-prompts.ts",
 		"generate-docs-index": "bun scripts/generate-docs-index.ts",
 		"prepack": "bun scripts/generate-docs-index.ts",
-		"build:binary": "cd ../.. && bun --cwd=packages/stats scripts/generate-client-bundle.ts && bun --cwd=packages/natives run embed:native && bun build --compile --define PI_COMPILED=true --external mupdf --root . ./packages/coding-agent/src/cli.ts --outfile packages/coding-agent/dist/omp && bun --cwd=packages/natives run embed:native --reset && bun --cwd=packages/stats scripts/generate-client-bundle.ts --reset",
-		"generate-template": "bun scripts/generate-template.ts",
-		"test": "bun test"
+		"generate-template": "bun scripts/generate-template.ts"
 	},
 	"dependencies": {
 		"@agentclientprotocol/sdk": "0.16.1",
@@ -507,6 +511,15 @@
 		"./web/search/providers/*": {
 			"types": "./src/web/search/providers/*.ts",
 			"import": "./src/web/search/providers/*.ts"
-		}
+		},
+		"./hooks": {
+			"types": "./src/extensibility/hooks/index.ts",
+			"import": "./src/extensibility/hooks/index.ts"
+		},
+		"./hooks/*": {
+			"types": "./src/extensibility/hooks/*.ts",
+			"import": "./src/extensibility/hooks/*.ts"
+		},
+		"./*.js": "./src/*.ts"
 	}
 }

@@ -24,9 +24,15 @@
 		"omp-swarm": "src/cli.ts"
 	},
 	"scripts": {
-		"check": "tsgo -p tsconfig.json"
+		"check": "biome check . && bun run check:types",
+		"check:types": "tsgo -p tsconfig.json --noEmit",
+		"lint": "biome lint .",
+		"fix": "biome check --write --unsafe .",
+		"fmt": "biome format --write ."
 	},
-	"dependencies": {},
+	"dependencies": {
+		"@oh-my-pi/pi-utils": "workspace:*"
+	},
 	"devDependencies": {
 		"@types/bun": "^1.3"
 	},

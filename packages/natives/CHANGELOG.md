@@ -1,6 +1,19 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `check:types` script for explicit TypeScript type checking
+- Added `lint` script for running Biome linter
+- Added `fmt` script for code formatting with Biome
+- Added package exports field with typed entry point configuration
+- Added turbo.json configuration for build task caching and optimization
+
+### Changed
+
+- Renamed `build:native` script to `build` for simpler invocation
+- Updated `check` script to separately call `check:types` for type checking
+- Modified tsconfig.json to extend `tsconfig.workspace.json` instead of `tsconfig.base.json`
 
 ## [14.0.0] - 2026-04-08
 

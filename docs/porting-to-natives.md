@@ -61,8 +61,8 @@ Avoid ports that depend on JS-only state or dynamic imports. N-API exports shoul
 
 5. **Build the native binary**
 
-- `bun --cwd=packages/natives run build:native`
-- Use `bun --cwd=packages/natives run build:native` and set `PI_DEV=1` if you want loader diagnostics while testing.
+- `bun --cwd=packages/natives run build`
+- Use `bun --cwd=packages/natives run build` and set `PI_DEV=1` if you want loader diagnostics while testing.
 
 6. **Run the benchmark**
 
@@ -84,7 +84,7 @@ The loader prefers the platform-tagged binary in `packages/natives/native` (`pi_
 ```bash
 rm packages/natives/native/pi_natives.linux-x64.node
 rm packages/natives/native/pi_natives.node
-bun --cwd=packages/natives run build:native
+bun --cwd=packages/natives run build
 ```
 
 If you’re running a compiled binary, delete the cached addon directory:

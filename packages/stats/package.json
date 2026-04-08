@@ -28,9 +28,13 @@
 		"omp-stats": "./src/index.ts"
 	},
 	"scripts": {
+		"build": "bun run build.ts",
 		"dev": "bun run src/index.ts",
-		"check": "tsgo -p tsconfig.json && tsgo -p tsconfig.client.json",
-		"build": "bun run build.ts"
+		"check": "biome check . && bun run check:types",
+		"check:types": "tsgo -p tsconfig.json --noEmit && tsgo -p tsconfig.client.json --noEmit",
+		"lint": "biome lint .",
+		"fix": "biome check --write --unsafe .",
+		"fmt": "biome format --write ."
 	},
 	"dependencies": {
 		"@oh-my-pi/pi-ai": "workspace:*",
@@ -79,6 +83,7 @@
 		"./client/components/*": {
 			"types": "./src/client/components/*.ts",
 			"import": "./src/client/components/*.ts"
-		}
+		},
+		"./*.js": "./src/*.ts"
 	}
 }

@@ -241,7 +241,7 @@ In compiled mode final diagnostics include:
 In normal package/runtime mode final diagnostics include:
 
 - reinstall hint (`bun install @oh-my-pi/pi-natives`),
-- local rebuild command (`bun --cwd=packages/natives run build:native`),
+- local rebuild command (`bun --cwd=packages/natives run build`),
 - optional x64 variant build hint (`TARGET_VARIANT=baseline|modern ...`).
 
 ## Runtime behavior

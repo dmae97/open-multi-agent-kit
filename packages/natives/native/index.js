@@ -213,8 +213,8 @@ function loadNative() {
 	} else {
 		helpMessage =
 			"If installed via npm/bun, try reinstalling: bun install @oh-my-pi/pi-natives\n" +
-			"If developing locally, build with: bun --cwd=packages/natives run build:native\n" +
-			"Optional x64 variants: TARGET_VARIANT=baseline|modern bun --cwd=packages/natives run build:native";
+			"If developing locally, build with: bun --cwd=packages/natives run build\n" +
+			"Optional x64 variants: TARGET_VARIANT=baseline|modern bun --cwd=packages/natives run build";
 	}
 
 	throw new Error(`Failed to load pi_natives native addon for ${addonLabel}.\n\nTried:\n${details}\n\n${helpMessage}`);

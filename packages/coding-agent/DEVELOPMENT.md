@@ -1116,7 +1116,7 @@ Use only script names that exist in `packages/coding-agent/package.json`:
 - Regenerate template artifacts:
   - `bun --cwd=packages/coding-agent run generate-template`
 - Build compiled binary artifact (`dist/omp`):
-  - `bun --cwd=packages/coding-agent run build:binary`
+  - `bun --cwd=packages/coding-agent run build`
 
 `packages/coding-agent/README.md` intentionally delegates install/config/CLI docs to the monorepo root README (`../../README.md`) and keeps package-specific references to `CHANGELOG.md`, `docs/`, and `DEVELOPMENT.md`.
 

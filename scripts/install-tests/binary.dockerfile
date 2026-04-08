@@ -17,8 +17,8 @@ COPY . .
 
 # Build native addon and binary
 RUN bun install --frozen-lockfile
-RUN bun --cwd=packages/natives run build:native
-RUN cd packages/coding-agent && bun run build:binary
+RUN bun --cwd=packages/natives run build
+RUN cd packages/coding-agent && bun run build
 
 # Install binary and native addon to PATH
 RUN mkdir -p /root/.local/bin && \

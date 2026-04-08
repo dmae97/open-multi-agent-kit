@@ -21,7 +21,7 @@ It follows the architecture terms from `docs/natives-architecture.md`:
 
 `packages/natives/package.json` scripts:
 
-- `bun scripts/build-native.ts` (`build:native`) → release build
+- `bun scripts/build-native.ts` (`build`) → release build
 - `bun scripts/build-native.ts --dev` (`dev:native`) → debug/dev profile build (same output naming)
 - `bun scripts/embed-native.ts` (`embed:native`) → generate `src/embedded-addon.ts` from built files
 
@@ -143,7 +143,7 @@ Failure exits happen at any stage with explicit error text (invalid variant, fai
 Typical local loop:
 
 1. Build addon:
-   - release: `bun --cwd=packages/natives run build:native`
+   - release: `bun --cwd=packages/natives run build`
    - debug profile: `bun --cwd=packages/natives run dev:native`
 2. Set `PI_DEV=1` when testing loader diagnostics
 3. Loader in `native.ts` resolves package-local `native/` (and executable-dir fallback) candidates
@@ -208,8 +208,8 @@ If any required symbol is missing, loader fails fast with a rebuild hint.
 
 | Symptom | Likely cause | Verify | Fix |
 | --- | --- | --- | --- |
-| `Native addon missing exports ... Missing: <name>` | Stale `.node` binary, Rust export name mismatch, or wrong binary loaded | Run with `PI_DEV=1` to see loaded path; inspect export list for that file | Rebuild `build:native`; ensure Rust `#[napi]` export name (or explicit alias when needed) matches JS key; remove stale cached/versioned files |
-| x64 machine loads baseline when modern expected | `PI_NATIVE_VARIANT=baseline`, no AVX2 detected, or only baseline file present | Check `PI_NATIVE_VARIANT`; inspect `native/` for `-modern` file | Build modern variant (`TARGET_VARIANT=modern ... build:native`) and ensure file is shipped |
+| `Native addon missing exports ... Missing: <name>` | Stale `.node` binary, Rust export name mismatch, or wrong binary loaded | Run with `PI_DEV=1` to see loaded path; inspect export list for that file | Rebuild `build`; ensure Rust `#[napi]` export name (or explicit alias when needed) matches JS key; remove stale cached/versioned files |
+| x64 machine loads baseline when modern expected | `PI_NATIVE_VARIANT=baseline`, no AVX2 detected, or only baseline file present | Check `PI_NATIVE_VARIANT`; inspect `native/` for `-modern` file | Build modern variant (`TARGET_VARIANT=modern ... build`) and ensure file is shipped |
 | Cross-build produces unusable/wrong-labeled binary | Mismatch between `CROSS_TARGET` and `TARGET_PLATFORM`/`TARGET_ARCH`, or missing `TARGET_VARIANT` for x64 | Confirm env tuple and output filename | Re-run with consistent env values and explicit x64 `TARGET_VARIANT` |
 | Compiled binary fails after upgrade | Stale extracted cache (`~/.omp/natives/<old-or-mismatched-version>`) or embedded manifest mismatch | Inspect versioned natives dir and loader error list | Delete versioned natives cache for the package version and rerun; regenerate embedded manifest during packaging |
 | Loader probes many paths and none work | Platform mismatch or missing release artifact in package `native/` | Check `platformTag` vs actual filename(s) | Ensure built filename exactly matches `pi_natives.<platform>-<arch>(-variant).node` convention and package includes `native/` |
@@ -219,14 +219,14 @@ If any required symbol is missing, loader fails fast with a rebuild hint.
 
 ```bash
 # Release artifact for current host
-bun --cwd=packages/natives run build:native
+bun --cwd=packages/natives run build
 
 # Debug profile artifact build
 bun --cwd=packages/natives run dev:native
 
 # Build explicit x64 variants
-TARGET_VARIANT=modern bun --cwd=packages/natives run build:native
-TARGET_VARIANT=baseline bun --cwd=packages/natives run build:native
+TARGET_VARIANT=modern bun --cwd=packages/natives run build
+TARGET_VARIANT=baseline bun --cwd=packages/natives run build
 
 # Generate embedded addon manifest from built native files
 bun --cwd=packages/natives run embed:native

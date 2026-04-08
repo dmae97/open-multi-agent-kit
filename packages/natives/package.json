@@ -29,11 +29,14 @@
 	"main": "./native/index.js",
 	"types": "./native/index.d.ts",
 	"scripts": {
-		"build:native": "bun scripts/build-native.ts",
-		"embed:native": "bun scripts/embed-native.ts",
-		"check": "biome check . && tsgo -p tsconfig.json",
+		"build": "bun scripts/build-native.ts",
+		"check": "biome check . && bun run check:types",
+		"check:types": "tsgo -p tsconfig.json --noEmit",
+		"lint": "biome lint .",
+		"test": "bun run build && bun test",
 		"fix": "biome check --write --unsafe .",
-		"test": "bun run build:native && bun test",
+		"fmt": "biome format --write .",
+		"embed:native": "bun scripts/embed-native.ts",
 		"bench": "bun bench/grep.ts"
 	},
 	"devDependencies": {
@@ -51,5 +54,11 @@
 		"src",
 		"native",
 		"README.md"
-	]
+	],
+	"exports": {
+		".": {
+			"types": "./native/index.d.ts",
+			"import": "./native/index.js"
+		}
+	}
 }
