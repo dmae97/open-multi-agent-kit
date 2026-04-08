@@ -26,6 +26,17 @@ describe("InteractiveMode LSP startup welcome banner", () => {
 	});
 
 	beforeEach(async () => {
+		// Prevent ProcessTerminal.start() from sending escape queries to the real
+		// terminal (OSC 11, DA1, kitty protocol, cell-size).  The test only reads
+		// rendered output via mode.ui.render(), so real terminal I/O is unnecessary.
+		vi.spyOn(process.stdout, "write").mockReturnValue(true);
+		vi.spyOn(process.stdin, "resume").mockReturnValue(process.stdin);
+		vi.spyOn(process.stdin, "pause").mockReturnValue(process.stdin);
+		vi.spyOn(process.stdin, "setEncoding").mockReturnValue(process.stdin);
+		if (process.stdin.setRawMode) {
+			vi.spyOn(process.stdin, "setRawMode").mockReturnValue(process.stdin);
+		}
+
 		_resetSettingsForTest();
 		tempDir = TempDir.createSync("@pi-interactive-mode-lsp-startup-");
 		await Settings.init({ inMemory: true, cwd: tempDir.path() });
@@ -61,8 +72,8 @@ describe("InteractiveMode LSP startup welcome banner", () => {
 	});
 
 	afterEach(async () => {
-		vi.restoreAllMocks();
 		mode?.stop();
+		vi.restoreAllMocks();
 		await session?.dispose();
 		authStorage?.close();
 		tempDir?.removeSync();
