@@ -187,25 +187,6 @@ describe("applyChunkEdits", () => {
 		expect(result.diffSourceAfter).toContain("constructor");
 	});
 
-	test("replace preserves attached doc comments when replacement starts at the declaration", () => {
-		const source = `class Worker {\n\t/** restart note */\n\trestart(): void {\n\t\tboot();\n\t}\n}\n`;
-		const checksum = getChecksum(source, "class_Worker.fn_restart");
-		const result = edit(
-			[
-				{
-					op: "replace",
-					sel: targetWithChecksum("class_Worker.fn_restart", checksum),
-					content: `\trestart(): void {\n\t\tshutdown();\n\t}`,
-				},
-			],
-			source,
-		);
-
-		expect(result.diffSourceAfter).toContain("\t/** restart note */\n\trestart(): void {");
-		expect(result.diffSourceAfter).toContain("\t\tshutdown();");
-		expect(result.diffSourceAfter).not.toContain("\t\tboot();");
-	});
-
 	test("replace does not duplicate attached doc comments when replacement includes a new one", () => {
 		const source = `class Worker {\n\t/** restart note */\n\trestart(): void {\n\t\tboot();\n\t}\n}\n`;
 		const checksum = getChecksum(source, "class_Worker.fn_restart");

@@ -1,8 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Changed
 
+- Improved auto-generated file detection to gracefully handle ENOENT errors when peeking file content, preventing unnecessary abort failures
 - Optimized context emission by skipping message cloning when no extensions have context handlers
 - Improved message cloning resilience by falling back to shallow array clone when structured cloning fails due to non-cloneable objects
 - Made `assertEditableFileContent` synchronous instead of async for improved performance in streaming edit checks
