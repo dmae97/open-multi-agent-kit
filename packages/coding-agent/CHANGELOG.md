@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Breaking Changes
 
 - Simplified chunk edit operations: removed `append_child`, `prepend_child`, `append_sibling`, `prepend_sibling`, and `replace_body` ops in favor of unified `replace`, `before`, `after`, `prepend`, and `append` with region targeting (`@container`, `@prologue`, `@body`, `@epilogue`)
@@ -9,6 +10,16 @@
 
 ### Added
 
+- Instruction breakpoints support: `set_instruction_breakpoint` and `remove_instruction_breakpoint` debug actions for setting breakpoints at specific instruction addresses
+- Data breakpoints support: `data_breakpoint_info`, `set_data_breakpoint`, and `remove_data_breakpoint` debug actions for monitoring variable/memory access
+- Memory introspection: `read_memory` and `write_memory` debug actions for inspecting and modifying debugger memory
+- Disassembly support: `disassemble` debug action for viewing assembly instructions with symbol resolution
+- Module and source introspection: `modules` and `loaded_sources` debug actions for querying loaded modules and source files
+- Custom DAP requests: `custom_request` debug action for sending arbitrary Debug Adapter Protocol commands
+- Reverse request handling in DAP client: `onReverseRequest()` method for responding to adapter-initiated requests like `runInTerminal` and `startDebugging`
+- DAP reverse request support: adapters can now request terminal spawning and child debug sessions via `runInTerminal` and `startDebugging` reverse requests
+- Instruction pointer reference in debug snapshots: `instructionPointerReference` field in session summaries for low-level debugging
+- Hit condition support for instruction and data breakpoints: `hit_condition` parameter for conditional breakpoint triggering
 - RPC `set_todos` command and `todoPhases` in `get_state`, allowing hosts to pre-seed and inspect session todo state over the protocol
 - Deferred diagnostics support in LSP writethrough: `onDeferredDiagnostics` callback and `deferredSignal` in `WritethroughOptions` allow callers to receive diagnostics that arrive after the main 5-second timeout
 - Language detection for `.pm` (Perl modules), `.astro` (Astro framework), and special filenames `containerfile` and `justfile`
@@ -30,6 +41,10 @@
 
 ### Changed
 
+- DAP initialization now advertises support for `runInTerminal` and `startDebugging` reverse requests, and memory references
+- Debug tool schema expanded with new parameters for instruction/data breakpoints, memory operations, and custom requests
+- DAP session state now tracks instruction and data breakpoints separately from source breakpoints
+- Replaced `Bun.which()` with `$which()` from pi-utils for command resolution
 - Chunk edit tool documentation restructured: replaced operation-specific examples with region-based guidance and canonical indentation rules
 - Chunk read documentation updated: selectors now support region syntax (e.g., `class_Foo.fn_bar#ABCD@body`) and canonical target listings show supported regions per chunk
 - Chunk edit schema simplified: `target` description now documents region format; `op` and `content` descriptions clarified for region-aware operations

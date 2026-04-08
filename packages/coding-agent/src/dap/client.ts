@@ -24,6 +24,7 @@ interface DapWriteSink {
 }
 
 type DapEventHandler = (body: unknown, event: DapEventMessage) => void | Promise<void>;
+type DapReverseRequestHandler = (args: unknown) => unknown | Promise<unknown>;
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
@@ -86,6 +87,7 @@ export class DapClient {
 	#capabilities?: DapCapabilities;
 	#eventHandlers = new Map<string, Set<DapEventHandler>>();
 	#anyEventHandlers = new Set<DapEventHandler>();
+	#reverseRequestHandlers = new Map<string, DapReverseRequestHandler>();
 
 	constructor(
 		adapter: DapResolvedAdapter,
@@ -273,6 +275,15 @@ export class DapClient {
 		this.#anyEventHandlers.add(handler);
 		return () => {
 			this.#anyEventHandlers.delete(handler);
+		};
+	}
+
+	onReverseRequest(command: string, handler: DapReverseRequestHandler): () => void {
+		this.#reverseRequestHandlers.set(command, handler);
+		return () => {
+			if (this.#reverseRequestHandlers.get(command) === handler) {
+				this.#reverseRequestHandlers.delete(command);
+			}
 		};
 	}
 
@@ -479,16 +490,38 @@ export class DapClient {
 
 	async #handleAdapterRequest(message: DapRequestMessage): Promise<void> {
 		try {
+			const handler = this.#reverseRequestHandlers.get(message.command);
+			if (handler) {
+				try {
+					const body = await handler(message.arguments);
+					await this.sendResponse(message, true, body);
+				} catch (error) {
+					const errorMessage = toErrorMessage(error);
+					await this.sendResponse(
+						message,
+						false,
+						{
+							error: {
+								id: 1,
+								format: errorMessage,
+							},
+						},
+						errorMessage,
+					);
+				}
+				return;
+			}
+			const errorMessage = `Unsupported DAP request: ${message.command}`;
 			await this.sendResponse(
 				message,
 				false,
 				{
 					error: {
 						id: 1,
-						format: `Unsupported DAP request: ${message.command}`,
+						format: errorMessage,
 					},
 				},
-				`Unsupported DAP request: ${message.command}`,
+				errorMessage,
 			);
 		} catch (error) {
 			logger.warn("Failed to answer DAP adapter request", {

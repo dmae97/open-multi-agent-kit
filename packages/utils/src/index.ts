@@ -19,3 +19,4 @@ export * from "./snowflake";
 export * from "./stream";
 export * from "./temp";
 export * from "./type-guards";
+export * from "./which";

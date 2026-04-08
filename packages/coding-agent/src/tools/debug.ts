@@ -11,12 +11,19 @@ import { type Static, Type } from "@sinclair/typebox";
 import { renderPromptTemplate } from "../config/prompt-templates";
 import {
 	type DapBreakpointRecord,
+	type DapCapabilities,
 	type DapContinueOutcome,
+	type DapDataBreakpointInfoResponse,
+	type DapDataBreakpointRecord,
+	type DapDisassembledInstruction,
 	type DapEvaluateArguments,
 	type DapEvaluateResponse,
 	type DapFunctionBreakpointRecord,
+	type DapInstructionBreakpointRecord,
+	type DapModule,
 	type DapScope,
 	type DapSessionSummary,
+	type DapSource,
 	type DapStackFrame,
 	type DapThread,
 	type DapVariable,
@@ -51,6 +58,11 @@ const debugSchema = Type.Object({
 			"attach",
 			"set_breakpoint",
 			"remove_breakpoint",
+			"set_instruction_breakpoint",
+			"remove_instruction_breakpoint",
+			"data_breakpoint_info",
+			"set_data_breakpoint",
+			"remove_data_breakpoint",
 			"continue",
 			"step_over",
 			"step_in",
@@ -61,6 +73,12 @@ const debugSchema = Type.Object({
 			"threads",
 			"scopes",
 			"variables",
+			"disassemble",
+			"read_memory",
+			"write_memory",
+			"modules",
+			"loaded_sources",
+			"custom_request",
 			"output",
 			"terminate",
 			"sessions",
@@ -74,7 +92,9 @@ const debugSchema = Type.Object({
 	file: Type.Optional(Type.String({ description: "Source file for source breakpoints" })),
 	line: Type.Optional(Type.Number({ description: "1-indexed source line for source breakpoints" })),
 	function: Type.Optional(Type.String({ description: "Function name for function breakpoints" })),
+	name: Type.Optional(Type.String({ description: "Variable or data name for data breakpoint info" })),
 	condition: Type.Optional(Type.String({ description: "Breakpoint condition expression" })),
+	hit_condition: Type.Optional(Type.String({ description: "Breakpoint hit condition expression" })),
 	expression: Type.Optional(Type.String({ description: "Expression to evaluate in debugger context" })),
 	context: Type.Optional(Type.String({ description: "Evaluate context (watch, repl, hover, variables, clipboard)" })),
 	frame_id: Type.Optional(Type.Number({ description: "Stack frame ID for scopes/evaluate" })),
@@ -84,6 +104,29 @@ const debugSchema = Type.Object({
 	port: Type.Optional(Type.Number({ description: "Port for remote attach when adapter supports it" })),
 	host: Type.Optional(Type.String({ description: "Host for remote attach when adapter supports it" })),
 	levels: Type.Optional(Type.Number({ description: "Maximum stack frames to fetch" })),
+	memory_reference: Type.Optional(Type.String({ description: "Memory reference or address" })),
+	instruction_reference: Type.Optional(
+		Type.String({ description: "Instruction address/reference for instruction breakpoints" }),
+	),
+	instruction_count: Type.Optional(Type.Number({ description: "Number of instructions to disassemble" })),
+	instruction_offset: Type.Optional(Type.Number({ description: "Instruction offset for disassembly" })),
+	count: Type.Optional(Type.Number({ description: "Number of bytes to read from memory" })),
+	data: Type.Optional(Type.String({ description: "Base64-encoded memory payload for write_memory" })),
+	data_id: Type.Optional(Type.String({ description: "DAP data breakpoint identifier" })),
+	access_type: Type.Optional(
+		StringEnum(["read", "write", "readWrite"], { description: "Data breakpoint access type" }),
+	),
+	command: Type.Optional(Type.String({ description: "Custom DAP request command" })),
+	arguments: Type.Optional(
+		Type.Record(Type.String(), Type.Any(), {
+			description: "Arguments object for custom_request",
+		}),
+	),
+	offset: Type.Optional(Type.Number({ description: "Memory or instruction offset" })),
+	resolve_symbols: Type.Optional(Type.Boolean({ description: "Resolve symbols during disassembly" })),
+	allow_partial: Type.Optional(Type.Boolean({ description: "Allow partial writes for write_memory" })),
+	start_module: Type.Optional(Type.Number({ description: "Modules request start index" })),
+	module_count: Type.Optional(Type.Number({ description: "Maximum modules to fetch" })),
 	timeout: Type.Optional(Type.Number({ description: "Per-request timeout in seconds" })),
 });
 
@@ -99,9 +142,20 @@ interface DebugToolDetails {
 	threads?: DapThread[];
 	scopes?: DapScope[];
 	variables?: DapVariable[];
+	sources?: DapSource[];
+	modules?: DapModule[];
 	evaluation?: DapEvaluateResponse;
 	breakpoints?: DapBreakpointRecord[];
 	functionBreakpoints?: DapFunctionBreakpointRecord[];
+	instructionBreakpoints?: DapInstructionBreakpointRecord[];
+	dataBreakpoints?: DapDataBreakpointRecord[];
+	dataBreakpointInfo?: DapDataBreakpointInfoResponse;
+	disassembly?: DapDisassembledInstruction[];
+	memoryAddress?: string;
+	memoryData?: string;
+	unreadableBytes?: number;
+	bytesWritten?: number;
+	customBody?: unknown;
 	output?: string;
 	adapter?: string;
 	state?: DapContinueOutcome["state"];
@@ -126,6 +180,9 @@ function formatSessionSnapshot(snapshot: DapSessionSummary): string[] {
 	if (snapshot.program) lines.push(`Program: ${snapshot.program}`);
 	if (snapshot.stopReason) lines.push(`Stop reason: ${snapshot.stopReason}`);
 	if (snapshot.frameName) lines.push(`Frame: ${snapshot.frameName}`);
+	if (snapshot.instructionPointerReference) {
+		lines.push(`Instruction pointer: ${snapshot.instructionPointerReference}`);
+	}
 	const location = formatLocation(snapshot);
 	if (location) lines.push(`Location: ${location}`);
 	if (snapshot.needsConfigurationDone) {
@@ -218,6 +275,160 @@ function formatVariables(variables: DapVariable[]): string {
 	return lines.join("\n");
 }
 
+function formatSourceLabel(source: DapSource | undefined, line?: number, column?: number): string | null {
+	if (!source?.path && !source?.name) {
+		return null;
+	}
+	const base = source.path ?? source.name ?? "<unknown>";
+	if (line === undefined) {
+		return base;
+	}
+	return `${base}:${line}${column !== undefined ? `:${column}` : ""}`;
+}
+
+function formatDisassembly(instructions: DapDisassembledInstruction[]): string {
+	const lines = ["Disassembly:"];
+	if (instructions.length === 0) {
+		lines.push("(empty)");
+		return lines.join("\n");
+	}
+	const addressWidth = Math.max(...instructions.map(instruction => instruction.address.length));
+	const bytesWidth = Math.max(...instructions.map(instruction => instruction.instructionBytes?.length ?? 0), 2);
+	for (const instruction of instructions) {
+		const location = formatSourceLabel(instruction.location, instruction.line, instruction.column);
+		const parts = [
+			instruction.address.padEnd(addressWidth),
+			(instruction.instructionBytes ?? "").padEnd(bytesWidth),
+			instruction.instruction,
+		];
+		if (instruction.symbol) {
+			parts.push(`<${instruction.symbol}>`);
+		}
+		if (location) {
+			parts.push(`[${location}]`);
+		}
+		lines.push(
+			parts
+				.filter(part => part.length > 0)
+				.join("  ")
+				.trimEnd(),
+		);
+	}
+	return lines.join("\n");
+}
+
+function formatMemoryRead(address: string, data: string | undefined, unreadableBytes?: number): string {
+	const lines = [`Memory at ${address}:`];
+	const buffer = data ? Buffer.from(data, "base64") : Buffer.alloc(0);
+	if (buffer.length === 0) {
+		lines.push("(no readable bytes)");
+	} else {
+		for (let offset = 0; offset < buffer.length; offset += 16) {
+			const chunk = buffer.subarray(offset, offset + 16);
+			const hex = Array.from(chunk, byte => byte.toString(16).padStart(2, "0")).join(" ");
+			const ascii = Array.from(chunk, byte => (byte >= 32 && byte < 127 ? String.fromCharCode(byte) : ".")).join("");
+			lines.push(
+				`${(offset === 0 ? address : `+0x${offset.toString(16)}`).padEnd(18)} ${hex.padEnd(47)} |${ascii}|`,
+			);
+		}
+	}
+	if (unreadableBytes !== undefined && unreadableBytes > 0) {
+		lines.push(`Unreadable bytes: ${unreadableBytes}`);
+	}
+	return lines.join("\n");
+}
+
+function formatTable(headers: string[], rows: string[][]): string {
+	const widths = headers.map((header, index) =>
+		Math.max(header.length, ...rows.map(row => (row[index] ?? "").length)),
+	);
+	const formatRow = (row: string[]) => row.map((cell, index) => (cell ?? "").padEnd(widths[index])).join("  ");
+	return [formatRow(headers), formatRow(widths.map(width => "-".repeat(width))), ...rows.map(formatRow)].join("\n");
+}
+
+function formatModules(modules: DapModule[]): string {
+	if (modules.length === 0) {
+		return "Modules:\n(none)";
+	}
+	return [
+		"Modules:",
+		formatTable(
+			["ID", "Name", "Path", "Symbols", "Range"],
+			modules.map(module => [
+				String(module.id),
+				module.name,
+				module.path ?? "",
+				module.symbolStatus ?? "",
+				module.addressRange ?? "",
+			]),
+		),
+	].join("\n");
+}
+
+function formatLoadedSources(sources: DapSource[]): string {
+	const lines = ["Loaded sources:"];
+	if (sources.length === 0) {
+		lines.push("(none)");
+		return lines.join("\n");
+	}
+	for (const source of sources) {
+		const label = source.path ?? source.name ?? "<unknown>";
+		lines.push(`- ${label}${source.sourceReference !== undefined ? ` [ref=${source.sourceReference}]` : ""}`);
+	}
+	return lines.join("\n");
+}
+
+function formatInstructionBreakpoints(breakpoints: DapInstructionBreakpointRecord[]): string {
+	const lines = ["Instruction breakpoints:"];
+	if (breakpoints.length === 0) {
+		lines.push("(none)");
+		return lines.join("\n");
+	}
+	for (const breakpoint of breakpoints) {
+		const location = `${breakpoint.instructionReference}${breakpoint.offset !== undefined ? `+${breakpoint.offset}` : ""}`;
+		lines.push(
+			`- ${location}: ${breakpoint.verified ? "verified" : "pending"}${breakpoint.condition ? ` if ${breakpoint.condition}` : ""}${breakpoint.hitCondition ? ` after ${breakpoint.hitCondition}` : ""}${breakpoint.message ? ` (${breakpoint.message})` : ""}`,
+		);
+	}
+	return lines.join("\n");
+}
+
+function formatDataBreakpointInfo(info: DapDataBreakpointInfoResponse): string {
+	const lines = [`Data breakpoint info: ${info.description}`];
+	lines.push(`Data ID: ${info.dataId ?? "(not available)"}`);
+	if (info.accessTypes && info.accessTypes.length > 0) {
+		lines.push(`Access types: ${info.accessTypes.join(", ")}`);
+	}
+	if (info.canPersist !== undefined) {
+		lines.push(`Persistent: ${info.canPersist ? "yes" : "no"}`);
+	}
+	return lines.join("\n");
+}
+
+function formatDataBreakpoints(breakpoints: DapDataBreakpointRecord[]): string {
+	const lines = ["Data breakpoints:"];
+	if (breakpoints.length === 0) {
+		lines.push("(none)");
+		return lines.join("\n");
+	}
+	for (const breakpoint of breakpoints) {
+		lines.push(
+			`- ${breakpoint.dataId}: ${breakpoint.verified ? "verified" : "pending"}${breakpoint.accessType ? ` (${breakpoint.accessType})` : ""}${breakpoint.condition ? ` if ${breakpoint.condition}` : ""}${breakpoint.hitCondition ? ` after ${breakpoint.hitCondition}` : ""}${breakpoint.message ? ` (${breakpoint.message})` : ""}`,
+		);
+	}
+	return lines.join("\n");
+}
+
+function formatCustomResponse(command: string, body: unknown): string {
+	let serialized = "";
+	try {
+		serialized = JSON.stringify(body, null, 2) ?? "null";
+	} catch {
+		serialized = Bun.inspect(body);
+	}
+	return `${command} response:\n${serialized}`;
+}
+
 function formatSessions(sessions: DapSessionSummary[]): string {
 	if (sessions.length === 0) {
 		return "No debug sessions.";
@@ -273,6 +484,35 @@ function getConfiguredAdapters(cwd: string): string {
 
 interface DebugRenderArgs extends Partial<DebugParams> {}
 
+function getActiveSessionSnapshot(): DapSessionSummary {
+	const snapshot = dapSessionManager.getActiveSession();
+	if (!snapshot) {
+		throw new ToolError("No active debug session. Launch or attach first.");
+	}
+	return snapshot;
+}
+
+function requireCapability(capability: keyof DapCapabilities, description: string): DapSessionSummary {
+	const snapshot = getActiveSessionSnapshot();
+	if (dapSessionManager.getCapabilities()?.[capability] !== true) {
+		throw new ToolError(`Current adapter does not support ${description}`);
+	}
+	return snapshot;
+}
+
+function resolveDisassemblyReference(memoryReference: string | undefined): string {
+	if (memoryReference) {
+		return memoryReference;
+	}
+	const snapshot = getActiveSessionSnapshot();
+	if (snapshot.instructionPointerReference) {
+		return snapshot.instructionPointerReference;
+	}
+	throw new ToolError(
+		"disassemble requires memory_reference unless the current stop location has an instruction pointer reference",
+	);
+}
+
 function summarizeDebugCall(args: DebugRenderArgs): string {
 	const action = args.action ? args.action.replaceAll("_", " ") : "request";
 	if (args.program) {
@@ -286,6 +526,21 @@ function summarizeDebugCall(args: DebugRenderArgs): string {
 	}
 	if (args.expression) {
 		return `${action} ${truncateToWidth(args.expression, TRUNCATE_LENGTHS.TITLE)}`;
+	}
+	if (args.command) {
+		return `${action} ${truncateToWidth(args.command, TRUNCATE_LENGTHS.TITLE)}`;
+	}
+	if (args.memory_reference) {
+		return `${action} ${truncateToWidth(args.memory_reference, TRUNCATE_LENGTHS.TITLE)}`;
+	}
+	if (args.instruction_reference) {
+		return `${action} ${truncateToWidth(args.instruction_reference, TRUNCATE_LENGTHS.TITLE)}`;
+	}
+	if (args.data_id) {
+		return `${action} ${truncateToWidth(args.data_id, TRUNCATE_LENGTHS.TITLE)}`;
+	}
+	if (args.name) {
+		return `${action} ${truncateToWidth(args.name, TRUNCATE_LENGTHS.TITLE)}`;
 	}
 	return action;
 }
@@ -470,6 +725,85 @@ export class DebugTool implements AgentTool<typeof debugSchema, DebugToolDetails
 				details.breakpoints = response.breakpoints;
 				return result.text(formatBreakpoints(response.sourcePath, response.breakpoints)).done();
 			}
+			case "set_instruction_breakpoint": {
+				requireCapability("supportsInstructionBreakpoints", "instruction breakpoints");
+				if (!params.instruction_reference) {
+					throw new ToolError("instruction_reference is required for set_instruction_breakpoint");
+				}
+				const response = await dapSessionManager.setInstructionBreakpoint(
+					params.instruction_reference,
+					params.offset,
+					params.condition,
+					params.hit_condition,
+					combinedSignal,
+					timeoutSec * 1000,
+				);
+				details.snapshot = response.snapshot;
+				details.instructionBreakpoints = response.breakpoints;
+				return result.text(formatInstructionBreakpoints(response.breakpoints)).done();
+			}
+			case "remove_instruction_breakpoint": {
+				requireCapability("supportsInstructionBreakpoints", "instruction breakpoints");
+				if (!params.instruction_reference) {
+					throw new ToolError("instruction_reference is required for remove_instruction_breakpoint");
+				}
+				const response = await dapSessionManager.removeInstructionBreakpoint(
+					params.instruction_reference,
+					params.offset,
+					combinedSignal,
+					timeoutSec * 1000,
+				);
+				details.snapshot = response.snapshot;
+				details.instructionBreakpoints = response.breakpoints;
+				return result.text(formatInstructionBreakpoints(response.breakpoints)).done();
+			}
+			case "data_breakpoint_info": {
+				requireCapability("supportsDataBreakpoints", "data breakpoints");
+				if (!params.name) {
+					throw new ToolError("name is required for data_breakpoint_info");
+				}
+				const response = await dapSessionManager.dataBreakpointInfo(
+					params.name,
+					params.variable_ref ?? params.scope_id,
+					params.frame_id,
+					combinedSignal,
+					timeoutSec * 1000,
+				);
+				details.snapshot = response.snapshot;
+				details.dataBreakpointInfo = response.info;
+				return result.text(formatDataBreakpointInfo(response.info)).done();
+			}
+			case "set_data_breakpoint": {
+				requireCapability("supportsDataBreakpoints", "data breakpoints");
+				if (!params.data_id) {
+					throw new ToolError("data_id is required for set_data_breakpoint");
+				}
+				const response = await dapSessionManager.setDataBreakpoint(
+					params.data_id,
+					params.access_type,
+					params.condition,
+					params.hit_condition,
+					combinedSignal,
+					timeoutSec * 1000,
+				);
+				details.snapshot = response.snapshot;
+				details.dataBreakpoints = response.breakpoints;
+				return result.text(formatDataBreakpoints(response.breakpoints)).done();
+			}
+			case "remove_data_breakpoint": {
+				requireCapability("supportsDataBreakpoints", "data breakpoints");
+				if (!params.data_id) {
+					throw new ToolError("data_id is required for remove_data_breakpoint");
+				}
+				const response = await dapSessionManager.removeDataBreakpoint(
+					params.data_id,
+					combinedSignal,
+					timeoutSec * 1000,
+				);
+				details.snapshot = response.snapshot;
+				details.dataBreakpoints = response.breakpoints;
+				return result.text(formatDataBreakpoints(response.breakpoints)).done();
+			}
 			case "continue": {
 				const outcome = await dapSessionManager.continue(combinedSignal, timeoutSec * 1000);
 				details.snapshot = outcome.snapshot;
@@ -546,6 +880,106 @@ export class DebugTool implements AgentTool<typeof debugSchema, DebugToolDetails
 				details.snapshot = response.snapshot;
 				details.variables = response.variables;
 				return result.text(formatVariables(response.variables)).done();
+			}
+			case "disassemble": {
+				requireCapability("supportsDisassembleRequest", "disassembly");
+				if (params.instruction_count === undefined) {
+					throw new ToolError("instruction_count is required for disassemble");
+				}
+				const response = await dapSessionManager.disassemble(
+					resolveDisassemblyReference(params.memory_reference),
+					params.instruction_count,
+					params.offset,
+					params.instruction_offset,
+					params.resolve_symbols,
+					combinedSignal,
+					timeoutSec * 1000,
+				);
+				details.snapshot = response.snapshot;
+				details.disassembly = response.instructions;
+				return result.text(formatDisassembly(response.instructions)).done();
+			}
+			case "read_memory": {
+				requireCapability("supportsReadMemoryRequest", "memory reads");
+				if (!params.memory_reference) {
+					throw new ToolError("memory_reference is required for read_memory");
+				}
+				if (params.count === undefined) {
+					throw new ToolError("count is required for read_memory");
+				}
+				const response = await dapSessionManager.readMemory(
+					params.memory_reference,
+					params.count,
+					params.offset,
+					combinedSignal,
+					timeoutSec * 1000,
+				);
+				details.snapshot = response.snapshot;
+				details.memoryAddress = response.address;
+				details.memoryData = response.data;
+				details.unreadableBytes = response.unreadableBytes;
+				return result.text(formatMemoryRead(response.address, response.data, response.unreadableBytes)).done();
+			}
+			case "write_memory": {
+				requireCapability("supportsWriteMemoryRequest", "memory writes");
+				if (!params.memory_reference) {
+					throw new ToolError("memory_reference is required for write_memory");
+				}
+				if (!params.data) {
+					throw new ToolError("data is required for write_memory");
+				}
+				const response = await dapSessionManager.writeMemory(
+					params.memory_reference,
+					params.data,
+					params.offset,
+					params.allow_partial,
+					combinedSignal,
+					timeoutSec * 1000,
+				);
+				details.snapshot = response.snapshot;
+				details.bytesWritten = response.bytesWritten;
+				return result
+					.text(
+						[
+							"Memory write completed.",
+							...(response.bytesWritten !== undefined ? [`Bytes written: ${response.bytesWritten}`] : []),
+							...(response.offset !== undefined ? [`Offset: ${response.offset}`] : []),
+						].join("\n"),
+					)
+					.done();
+			}
+			case "modules": {
+				requireCapability("supportsModulesRequest", "module introspection");
+				const response = await dapSessionManager.modules(
+					params.start_module,
+					params.module_count,
+					combinedSignal,
+					timeoutSec * 1000,
+				);
+				details.snapshot = response.snapshot;
+				details.modules = response.modules;
+				return result.text(formatModules(response.modules)).done();
+			}
+			case "loaded_sources": {
+				requireCapability("supportsLoadedSourcesRequest", "loaded sources");
+				const response = await dapSessionManager.loadedSources(combinedSignal, timeoutSec * 1000);
+				details.snapshot = response.snapshot;
+				details.sources = response.sources;
+				return result.text(formatLoadedSources(response.sources)).done();
+			}
+			case "custom_request": {
+				if (!params.command) {
+					throw new ToolError("command is required for custom_request");
+				}
+				const response = await dapSessionManager.customRequest(
+					params.command,
+					params.arguments,
+					combinedSignal,
+					timeoutSec * 1000,
+				);
+				details.snapshot = response.snapshot;
+				details.customBody = response.body;
+				return result.text(formatCustomResponse(params.command, response.body)).done();
 			}
 			case "output": {
 				const response = dapSessionManager.getOutput();

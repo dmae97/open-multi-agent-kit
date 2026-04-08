@@ -86,6 +86,7 @@ export interface DapInitializeArguments {
 	supportsVariableType?: boolean;
 	supportsVariablePaging?: boolean;
 	supportsRunInTerminalRequest?: boolean;
+	supportsStartDebuggingRequest?: boolean;
 	supportsMemoryReferences?: boolean;
 	supportsProgressReporting?: boolean;
 	supportsInvalidatedEvent?: boolean;
@@ -103,8 +104,15 @@ export interface DapCapabilities {
 	supportsRestartRequest?: boolean;
 	supportsCompletionsRequest?: boolean;
 	supportsLogPoints?: boolean;
+	supportsDisassembleRequest?: boolean;
+	supportsReadMemoryRequest?: boolean;
+	supportsWriteMemoryRequest?: boolean;
+	supportsModulesRequest?: boolean;
 	supportsLoadedSourcesRequest?: boolean;
 	supportsExceptionInfoRequest?: boolean;
+	supportsInstructionBreakpoints?: boolean;
+	supportsDataBreakpoints?: boolean;
+	supportsSteppingGranularity?: boolean;
 	supportsClipboardContext?: boolean;
 	[key: string]: unknown;
 }
@@ -149,6 +157,41 @@ export interface DapSetFunctionBreakpointsArguments {
 
 export interface DapSetFunctionBreakpointsResponse {
 	breakpoints: DapBreakpoint[];
+}
+
+export interface DapInstructionBreakpoint {
+	instructionReference: string;
+	offset?: number;
+	condition?: string;
+	hitCondition?: string;
+}
+
+export interface DapSetInstructionBreakpointsArguments {
+	breakpoints: DapInstructionBreakpoint[];
+}
+
+export interface DapDataBreakpointInfoArguments {
+	variablesReference?: number;
+	name: string;
+	frameId?: number;
+}
+
+export interface DapDataBreakpointInfoResponse {
+	dataId: string | null;
+	description: string;
+	accessTypes?: Array<"read" | "write" | "readWrite">;
+	canPersist?: boolean;
+}
+
+export interface DapDataBreakpoint {
+	dataId: string;
+	accessType?: "read" | "write" | "readWrite";
+	condition?: string;
+	hitCondition?: string;
+}
+
+export interface DapSetDataBreakpointsArguments {
+	breakpoints: DapDataBreakpoint[];
 }
 
 export interface DapContinueArguments {
@@ -254,6 +297,81 @@ export interface DapVariablesResponse {
 	variables: DapVariable[];
 }
 
+export interface DapDisassembleArguments {
+	memoryReference: string;
+	offset?: number;
+	instructionOffset?: number;
+	instructionCount: number;
+	resolveSymbols?: boolean;
+}
+
+export interface DapDisassembledInstruction {
+	address: string;
+	instructionBytes?: string;
+	instruction: string;
+	symbol?: string;
+	location?: DapSource;
+	line?: number;
+	column?: number;
+	endLine?: number;
+	endColumn?: number;
+}
+
+export interface DapDisassembleResponse {
+	instructions: DapDisassembledInstruction[];
+}
+
+export interface DapReadMemoryArguments {
+	memoryReference: string;
+	offset?: number;
+	count: number;
+}
+
+export interface DapReadMemoryResponse {
+	address: string;
+	unreadableBytes?: number;
+	data?: string;
+}
+
+export interface DapWriteMemoryArguments {
+	memoryReference: string;
+	offset?: number;
+	data: string;
+	allowPartial?: boolean;
+}
+
+export interface DapWriteMemoryResponse {
+	offset?: number;
+	bytesWritten?: number;
+}
+
+export interface DapModule {
+	id: number | string;
+	name: string;
+	path?: string;
+	isOptimized?: boolean;
+	isUserCode?: boolean;
+	version?: string;
+	symbolStatus?: string;
+	symbolFilePath?: string;
+	dateTimeStamp?: string;
+	addressRange?: string;
+}
+
+export interface DapModulesArguments {
+	startModule?: number;
+	moduleCount?: number;
+}
+
+export interface DapModulesResponse {
+	modules: DapModule[];
+	totalModules?: number;
+}
+
+export interface DapLoadedSourcesResponse {
+	sources: DapSource[];
+}
+
 export interface DapEvaluateArguments {
 	expression: string;
 	frameId?: number;
@@ -321,6 +439,24 @@ export interface DapTerminatedEventBody {
 
 export interface DapInitializedEventBody {}
 
+export interface DapRunInTerminalArguments {
+	kind?: "integrated" | "external";
+	title?: string;
+	cwd?: string;
+	args: string[];
+	env?: Record<string, string | null>;
+}
+
+export interface DapRunInTerminalResponse {
+	processId?: number;
+	shellProcessId?: number;
+}
+
+export interface DapStartDebuggingArguments {
+	request: "launch" | "attach";
+	configuration: Record<string, unknown>;
+}
+
 export interface DapPendingRequest {
 	resolve: (body: unknown) => void;
 	reject: (error: Error) => void;
@@ -375,6 +511,26 @@ export interface DapBreakpointRecord {
 	message?: string;
 }
 
+export interface DapInstructionBreakpointRecord {
+	id?: number;
+	verified: boolean;
+	instructionReference: string;
+	offset?: number;
+	condition?: string;
+	hitCondition?: string;
+	message?: string;
+}
+
+export interface DapDataBreakpointRecord {
+	id?: number;
+	verified: boolean;
+	dataId: string;
+	accessType?: "read" | "write" | "readWrite";
+	condition?: string;
+	hitCondition?: string;
+	message?: string;
+}
+
 export interface DapFunctionBreakpointRecord {
 	id?: number;
 	verified: boolean;
@@ -390,6 +546,7 @@ export interface DapStopLocation {
 	description?: string;
 	text?: string;
 	frameName?: string;
+	instructionPointerReference?: string;
 	source?: DapSource;
 	line?: number;
 	column?: number;
@@ -408,6 +565,7 @@ export interface DapSessionSummary {
 	stopReason?: string;
 	stopDescription?: string;
 	frameName?: string;
+	instructionPointerReference?: string;
 	source?: DapSource;
 	line?: number;
 	column?: number;

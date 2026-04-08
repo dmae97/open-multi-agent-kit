@@ -1,5 +1,6 @@
 import * as path from "node:path";
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger, ptree } from "@oh-my-pi/pi-utils";
+import { NON_INTERACTIVE_ENV } from "../exec/non-interactive-env";
 import { DapClient } from "./client";
 import type {
 	DapAttachArguments,
@@ -10,25 +11,46 @@ import type {
 	DapContinueArguments,
 	DapContinueOutcome,
 	DapContinueResponse,
+	DapDataBreakpoint,
+	DapDataBreakpointInfoArguments,
+	DapDataBreakpointInfoResponse,
+	DapDataBreakpointRecord,
+	DapDisassembleArguments,
+	DapDisassembledInstruction,
+	DapDisassembleResponse,
 	DapEvaluateArguments,
 	DapEvaluateResponse,
 	DapExitedEventBody,
 	DapFunctionBreakpoint,
 	DapFunctionBreakpointRecord,
 	DapInitializeArguments,
+	DapInstructionBreakpoint,
+	DapInstructionBreakpointRecord,
 	DapLaunchArguments,
 	DapLaunchSessionOptions,
+	DapLoadedSourcesResponse,
+	DapModule,
+	DapModulesArguments,
+	DapModulesResponse,
 	DapOutputEventBody,
 	DapPauseArguments,
+	DapReadMemoryArguments,
+	DapReadMemoryResponse,
 	DapResolvedAdapter,
+	DapRunInTerminalArguments,
+	DapRunInTerminalResponse,
 	DapScopesArguments,
 	DapScopesResponse,
 	DapSessionStatus,
 	DapSessionSummary,
+	DapSetDataBreakpointsArguments,
+	DapSetInstructionBreakpointsArguments,
+	DapSource,
 	DapSourceBreakpoint,
 	DapStackFrame,
 	DapStackTraceArguments,
 	DapStackTraceResponse,
+	DapStartDebuggingArguments,
 	DapStepArguments,
 	DapStopLocation,
 	DapStoppedEventBody,
@@ -36,6 +58,8 @@ import type {
 	DapThreadsResponse,
 	DapVariablesArguments,
 	DapVariablesResponse,
+	DapWriteMemoryArguments,
+	DapWriteMemoryResponse,
 } from "./types";
 
 interface DapSession {
@@ -49,6 +73,8 @@ interface DapSession {
 	lastUsedAt: number;
 	breakpoints: Map<string, DapBreakpointRecord[]>;
 	functionBreakpoints: DapFunctionBreakpointRecord[];
+	instructionBreakpoints: DapInstructionBreakpoint[];
+	dataBreakpoints: DapDataBreakpoint[];
 	output: string;
 	outputBytes: number;
 	outputTruncated: boolean;
@@ -114,6 +140,7 @@ function buildSummary(session: DapSession): DapSessionSummary {
 		stopReason: session.stop.reason,
 		stopDescription: session.stop.description ?? session.stop.text,
 		frameName: session.stop.frameName,
+		instructionPointerReference: session.stop.instructionPointerReference,
 		source: session.stop.source,
 		line: session.stop.line,
 		column: session.stop.column,
@@ -161,6 +188,10 @@ export class DapSessionManager {
 
 	listSessions(): DapSessionSummary[] {
 		return Array.from(this.#sessions.values()).map(buildSummary);
+	}
+
+	getCapabilities(): DapCapabilities | null {
+		return this.#getActiveSessionOrNull()?.capabilities ?? null;
 	}
 
 	async launch(
@@ -369,6 +400,270 @@ export class DapSessionManager {
 		);
 		session.functionBreakpoints = this.#mapFunctionBreakpoints(current, response?.breakpoints);
 		return { snapshot: buildSummary(session), breakpoints: session.functionBreakpoints };
+	}
+
+	async setInstructionBreakpoint(
+		instructionReference: string,
+		offset?: number,
+		condition?: string,
+		hitCondition?: string,
+		signal?: AbortSignal,
+		timeoutMs: number = 30_000,
+	) {
+		const session = this.#touchActiveSession();
+		const current = session.instructionBreakpoints.filter(
+			entry => entry.instructionReference !== instructionReference || entry.offset !== offset,
+		);
+		current.push({ instructionReference, offset, condition, hitCondition });
+		current.sort((left, right) => {
+			const referenceOrder = left.instructionReference.localeCompare(right.instructionReference);
+			if (referenceOrder !== 0) {
+				return referenceOrder;
+			}
+			return (left.offset ?? 0) - (right.offset ?? 0);
+		});
+		const response = await this.#sendRequestWithConfig<{ breakpoints?: DapBreakpoint[] }>(
+			session,
+			"setInstructionBreakpoints",
+			{
+				breakpoints: current,
+			} satisfies DapSetInstructionBreakpointsArguments,
+			signal,
+			timeoutMs,
+		);
+		session.instructionBreakpoints = current;
+		return {
+			snapshot: buildSummary(session),
+			breakpoints: this.#mapInstructionBreakpoints(current, response?.breakpoints),
+		};
+	}
+
+	async removeInstructionBreakpoint(
+		instructionReference: string,
+		offset?: number,
+		signal?: AbortSignal,
+		timeoutMs: number = 30_000,
+	) {
+		const session = this.#touchActiveSession();
+		const current = session.instructionBreakpoints.filter(entry => {
+			if (entry.instructionReference !== instructionReference) {
+				return true;
+			}
+			if (offset === undefined) {
+				return false;
+			}
+			return entry.offset !== offset;
+		});
+		const response = await this.#sendRequestWithConfig<{ breakpoints?: DapBreakpoint[] }>(
+			session,
+			"setInstructionBreakpoints",
+			{
+				breakpoints: current,
+			} satisfies DapSetInstructionBreakpointsArguments,
+			signal,
+			timeoutMs,
+		);
+		session.instructionBreakpoints = current;
+		return {
+			snapshot: buildSummary(session),
+			breakpoints: this.#mapInstructionBreakpoints(current, response?.breakpoints),
+		};
+	}
+
+	async dataBreakpointInfo(
+		name: string,
+		variablesReference?: number,
+		frameId?: number,
+		signal?: AbortSignal,
+		timeoutMs: number = 30_000,
+	): Promise<{ snapshot: DapSessionSummary; info: DapDataBreakpointInfoResponse }> {
+		const session = this.#touchActiveSession();
+		const info = await this.#sendRequestWithConfig<DapDataBreakpointInfoResponse>(
+			session,
+			"dataBreakpointInfo",
+			{
+				name,
+				...(variablesReference !== undefined ? { variablesReference } : {}),
+				...(frameId !== undefined ? { frameId } : {}),
+			} satisfies DapDataBreakpointInfoArguments,
+			signal,
+			timeoutMs,
+		);
+		return { snapshot: buildSummary(session), info };
+	}
+
+	async setDataBreakpoint(
+		dataId: string,
+		accessType?: "read" | "write" | "readWrite",
+		condition?: string,
+		hitCondition?: string,
+		signal?: AbortSignal,
+		timeoutMs: number = 30_000,
+	) {
+		const session = this.#touchActiveSession();
+		const current = session.dataBreakpoints.filter(entry => entry.dataId !== dataId);
+		current.push({ dataId, accessType, condition, hitCondition });
+		current.sort((left, right) => left.dataId.localeCompare(right.dataId));
+		const response = await this.#sendRequestWithConfig<{ breakpoints?: DapBreakpoint[] }>(
+			session,
+			"setDataBreakpoints",
+			{
+				breakpoints: current,
+			} satisfies DapSetDataBreakpointsArguments,
+			signal,
+			timeoutMs,
+		);
+		session.dataBreakpoints = current;
+		return {
+			snapshot: buildSummary(session),
+			breakpoints: this.#mapDataBreakpoints(current, response?.breakpoints),
+		};
+	}
+
+	async removeDataBreakpoint(dataId: string, signal?: AbortSignal, timeoutMs: number = 30_000) {
+		const session = this.#touchActiveSession();
+		const current = session.dataBreakpoints.filter(entry => entry.dataId !== dataId);
+		const response = await this.#sendRequestWithConfig<{ breakpoints?: DapBreakpoint[] }>(
+			session,
+			"setDataBreakpoints",
+			{
+				breakpoints: current,
+			} satisfies DapSetDataBreakpointsArguments,
+			signal,
+			timeoutMs,
+		);
+		session.dataBreakpoints = current;
+		return {
+			snapshot: buildSummary(session),
+			breakpoints: this.#mapDataBreakpoints(current, response?.breakpoints),
+		};
+	}
+
+	async disassemble(
+		memoryReference: string,
+		instructionCount: number,
+		offset?: number,
+		instructionOffset?: number,
+		resolveSymbols?: boolean,
+		signal?: AbortSignal,
+		timeoutMs: number = 30_000,
+	): Promise<{ snapshot: DapSessionSummary; instructions: DapDisassembledInstruction[] }> {
+		const session = this.#touchActiveSession();
+		const response = await this.#sendRequestWithConfig<DapDisassembleResponse>(
+			session,
+			"disassemble",
+			{
+				memoryReference,
+				instructionCount,
+				...(offset !== undefined ? { offset } : {}),
+				...(instructionOffset !== undefined ? { instructionOffset } : {}),
+				...(resolveSymbols !== undefined ? { resolveSymbols } : {}),
+			} satisfies DapDisassembleArguments,
+			signal,
+			timeoutMs,
+		);
+		return { snapshot: buildSummary(session), instructions: response?.instructions ?? [] };
+	}
+
+	async readMemory(
+		memoryReference: string,
+		count: number,
+		offset?: number,
+		signal?: AbortSignal,
+		timeoutMs: number = 30_000,
+	): Promise<{ snapshot: DapSessionSummary; address: string; data?: string; unreadableBytes?: number }> {
+		const session = this.#touchActiveSession();
+		const response = await this.#sendRequestWithConfig<DapReadMemoryResponse>(
+			session,
+			"readMemory",
+			{
+				memoryReference,
+				count,
+				...(offset !== undefined ? { offset } : {}),
+			} satisfies DapReadMemoryArguments,
+			signal,
+			timeoutMs,
+		);
+		return {
+			snapshot: buildSummary(session),
+			address: response?.address ?? memoryReference,
+			data: response?.data,
+			unreadableBytes: response?.unreadableBytes,
+		};
+	}
+
+	async writeMemory(
+		memoryReference: string,
+		data: string,
+		offset?: number,
+		allowPartial?: boolean,
+		signal?: AbortSignal,
+		timeoutMs: number = 30_000,
+	): Promise<{ snapshot: DapSessionSummary; offset?: number; bytesWritten?: number }> {
+		const session = this.#touchActiveSession();
+		const response = await this.#sendRequestWithConfig<DapWriteMemoryResponse>(
+			session,
+			"writeMemory",
+			{
+				memoryReference,
+				data,
+				...(offset !== undefined ? { offset } : {}),
+				...(allowPartial !== undefined ? { allowPartial } : {}),
+			} satisfies DapWriteMemoryArguments,
+			signal,
+			timeoutMs,
+		);
+		return {
+			snapshot: buildSummary(session),
+			offset: response?.offset,
+			bytesWritten: response?.bytesWritten,
+		};
+	}
+
+	async modules(
+		startModule?: number,
+		moduleCount?: number,
+		signal?: AbortSignal,
+		timeoutMs: number = 30_000,
+	): Promise<{ snapshot: DapSessionSummary; modules: DapModule[] }> {
+		const session = this.#touchActiveSession();
+		const response = await this.#sendRequestWithConfig<DapModulesResponse>(
+			session,
+			"modules",
+			{
+				...(startModule !== undefined ? { startModule } : {}),
+				...(moduleCount !== undefined ? { moduleCount } : {}),
+			} satisfies DapModulesArguments,
+			signal,
+			timeoutMs,
+		);
+		return { snapshot: buildSummary(session), modules: response?.modules ?? [] };
+	}
+
+	async loadedSources(
+		signal?: AbortSignal,
+		timeoutMs: number = 30_000,
+	): Promise<{ snapshot: DapSessionSummary; sources: DapSource[] }> {
+		const session = this.#touchActiveSession();
+		const response = await this.#sendRequestWithConfig<DapLoadedSourcesResponse>(
+			session,
+			"loadedSources",
+			{},
+			signal,
+			timeoutMs,
+		);
+		return { snapshot: buildSummary(session), sources: response?.sources ?? [] };
+	}
+
+	async customRequest(
+		command: string,
+		args?: Record<string, unknown>,
+		signal?: AbortSignal,
+		timeoutMs: number = 30_000,
+	): Promise<{ snapshot: DapSessionSummary; body: unknown }> {
+		const session = this.#touchActiveSession();
+		const body = await this.#sendRequestWithConfig<unknown>(session, command, args, signal, timeoutMs);
+		return { snapshot: buildSummary(session), body };
 	}
 
 	async continue(signal?: AbortSignal, timeoutMs: number = 30_000): Promise<DapContinueOutcome> {
@@ -599,6 +894,8 @@ export class DapSessionManager {
 			lastUsedAt: Date.now(),
 			breakpoints: new Map(),
 			functionBreakpoints: [],
+			instructionBreakpoints: [],
+			dataBreakpoints: [],
 			output: "",
 			outputBytes: 0,
 			outputTruncated: false,
@@ -609,6 +906,39 @@ export class DapSessionManager {
 			needsConfigurationDone: false,
 			configurationDoneSent: false,
 		};
+		client.onReverseRequest("runInTerminal", async rawArgs => {
+			const args = (rawArgs ?? {}) as DapRunInTerminalArguments;
+			if (!Array.isArray(args.args) || args.args.length === 0) {
+				throw new Error("runInTerminal request did not include a command");
+			}
+			const env = Object.fromEntries(
+				Object.entries(args.env ?? {}).filter((entry): entry is [string, string] => entry[1] !== null),
+			);
+			const proc = ptree.spawn(args.args, {
+				cwd: args.cwd ?? session.cwd,
+				stdin: "pipe",
+				env: {
+					...Bun.env,
+					...NON_INTERACTIVE_ENV,
+					...env,
+				},
+				detached: true,
+			});
+			return { processId: proc.pid } satisfies DapRunInTerminalResponse;
+		});
+		client.onReverseRequest("startDebugging", async rawArgs => {
+			const startArgs = (rawArgs ?? {}) as Partial<DapStartDebuggingArguments>;
+			const request = startArgs.request === "attach" ? "attach" : "launch";
+			const configuration =
+				startArgs.configuration && typeof startArgs.configuration === "object" ? startArgs.configuration : {};
+			logger.debug("Adapter requested child debug session", {
+				adapter: session.adapter.name,
+				sessionId: session.id,
+				request,
+				name: typeof configuration.name === "string" ? configuration.name : undefined,
+			});
+			return {};
+		});
 		client.onEvent("output", body => {
 			truncateOutput(session, (body as DapOutputEventBody | undefined)?.output ?? "");
 		});
@@ -652,7 +982,9 @@ export class DapSessionManager {
 			linesStartAt1: true,
 			columnsStartAt1: true,
 			pathFormat: "path",
-			supportsRunInTerminalRequest: false,
+			supportsRunInTerminalRequest: true,
+			supportsStartDebuggingRequest: true,
+			supportsMemoryReferences: true,
 			supportsVariableType: true,
 			supportsInvalidatedEvent: true,
 		};
@@ -703,6 +1035,7 @@ export class DapSessionManager {
 		if (!frame) return;
 		session.stop.frameId = frame.id;
 		session.stop.frameName = frame.name;
+		session.stop.instructionPointerReference = frame.instructionPointerReference;
 		session.stop.source = frame.source;
 		session.stop.line = frame.line;
 		session.stop.column = frame.column;
@@ -846,6 +1179,36 @@ export class DapSessionManager {
 		return input.map((entry, index) => ({
 			name: entry.name,
 			condition: entry.condition,
+			id: responseBreakpoints?.[index]?.id,
+			verified: responseBreakpoints?.[index]?.verified ?? false,
+			message: responseBreakpoints?.[index]?.message,
+		}));
+	}
+
+	#mapInstructionBreakpoints(
+		input: DapInstructionBreakpoint[],
+		responseBreakpoints: DapBreakpoint[] | undefined,
+	): DapInstructionBreakpointRecord[] {
+		return input.map((entry, index) => ({
+			instructionReference: responseBreakpoints?.[index]?.instructionReference ?? entry.instructionReference,
+			offset: responseBreakpoints?.[index]?.offset ?? entry.offset,
+			condition: entry.condition,
+			hitCondition: entry.hitCondition,
+			id: responseBreakpoints?.[index]?.id,
+			verified: responseBreakpoints?.[index]?.verified ?? false,
+			message: responseBreakpoints?.[index]?.message,
+		}));
+	}
+
+	#mapDataBreakpoints(
+		input: DapDataBreakpoint[],
+		responseBreakpoints: DapBreakpoint[] | undefined,
+	): DapDataBreakpointRecord[] {
+		return input.map((entry, index) => ({
+			dataId: entry.dataId,
+			accessType: entry.accessType,
+			condition: entry.condition,
+			hitCondition: entry.hitCondition,
 			id: responseBreakpoints?.[index]?.id,
 			verified: responseBreakpoints?.[index]?.verified ?? false,
 			message: responseBreakpoints?.[index]?.message,
