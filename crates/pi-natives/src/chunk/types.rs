@@ -22,11 +22,11 @@ pub struct ChunkNode {
 	/// such as doc comments or attributes.
 	pub checksum_start_byte: u32,
 
-	/// End byte of the prologue region. `None` means the chunk only exposes
-	/// `@container`.
+	/// End byte of the prologue region. `None` means the chunk does not expose
+	/// regions.
 	pub prologue_end_byte:   Option<u32>,
-	/// Start byte of the epilogue region. `None` means the chunk only exposes
-	/// `@container`.
+	/// Start byte of the epilogue region. `None` means the chunk does not expose
+	/// regions.
 	pub epilogue_start_byte: Option<u32>,
 
 	pub checksum:    String,
@@ -89,23 +89,20 @@ pub enum ChunkReadStatus {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[napi(string_enum)]
 pub enum ChunkRegion {
-	#[napi(value = "container")]
-	Container,
-	#[napi(value = "prologue")]
-	Prologue,
-	#[napi(value = "body")]
-	Body,
-	#[napi(value = "epilogue")]
-	Epilogue,
+	#[napi(value = "head")]
+	Head,
+	#[napi(value = "inner")]
+	Inner,
+	#[napi(value = "tail")]
+	Tail,
 }
 
 impl ChunkRegion {
 	pub const fn as_str(self) -> &'static str {
 		match self {
-			Self::Container => "container",
-			Self::Prologue => "prologue",
-			Self::Body => "body",
-			Self::Epilogue => "epilogue",
+			Self::Head => "head",
+			Self::Inner => "inner",
+			Self::Tail => "tail",
 		}
 	}
 }
@@ -357,7 +354,7 @@ pub struct EditOperation {
 	/// Optional checksum anchor; falls back to `EditParams.defaultCrc` when
 	/// omitted.
 	pub crc:     Option<String>,
-	/// Region to target. When omitted, defaults to `@container`.
+	/// Region to target. When omitted, targets the full chunk.
 	pub region:  Option<ChunkRegion>,
 	/// Replacement or inserted text (meaning depends on `op`).
 	pub content: Option<String>,

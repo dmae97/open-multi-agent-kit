@@ -16,29 +16,44 @@ pub struct ResolvedChunk<'a> {
 
 fn parse_region_name(value: &str) -> Option<ChunkRegion> {
 	match value.trim() {
-		"container" => Some(ChunkRegion::Container),
-		"prologue" => Some(ChunkRegion::Prologue),
-		"body" => Some(ChunkRegion::Body),
-		"epilogue" => Some(ChunkRegion::Epilogue),
+		"head" | "prologue" => Some(ChunkRegion::Head),
+		"inner" | "body" => Some(ChunkRegion::Inner),
+		"tail" | "epilogue" => Some(ChunkRegion::Tail),
 		_ => None,
 	}
 }
 
-pub fn split_region_suffix(selector: &str) -> (&str, Option<ChunkRegion>) {
+fn is_known_region_name(value: &str) -> bool {
+	matches!(
+		value.trim(),
+		"outer" | "container" | "head" | "prologue" | "inner" | "body" | "tail" | "epilogue"
+	)
+}
+
+/// Split a trailing `@region` suffix from a selector. Returns the selector
+/// prefix, and `Some(region)` if a region was specified. The outer `Option`
+/// indicates whether an `@` was found.
+pub fn split_region_suffix(selector: &str) -> (&str, bool, Option<ChunkRegion>) {
 	let Some((prefix, suffix)) = selector.rsplit_once('@') else {
-		return (selector, None);
+		return (selector, false, None);
 	};
-	let Some(region) = parse_region_name(suffix.trim()) else {
-		return (selector, None);
-	};
-	(prefix.trim_end(), Some(region))
+	if !is_known_region_name(suffix.trim()) {
+		return (selector, false, None);
+	}
+	(prefix.trim_end(), true, parse_region_name(suffix.trim()))
+}
+
+pub struct ParsedSelector {
+	pub selector: Option<String>,
+	pub crc:      Option<String>,
+	pub region:   Option<ChunkRegion>,
 }
 
 pub fn split_selector_crc_and_region(
 	selector: Option<&str>,
 	crc: Option<&str>,
 	region: Option<ChunkRegion>,
-) -> Result<(Option<String>, Option<String>, ChunkRegion), String> {
+) -> Result<ParsedSelector, String> {
 	let mut raw = selector
 		.map(str::trim)
 		.filter(|value| !matches!(*value, "" | "null" | "undefined"))
@@ -51,12 +66,13 @@ pub fn split_selector_crc_and_region(
 	let (without_region, parsed_region) = if raw.is_empty() {
 		(raw.as_str(), None)
 	} else {
-		let (prefix, parsed_region) = split_region_suffix(raw.as_str());
-		if parsed_region.is_some() {
+		let (prefix, found, parsed_region) = split_region_suffix(raw.as_str());
+		if found {
 			(prefix, parsed_region)
 		} else if let Some((_, suffix)) = raw.rsplit_once('@') {
 			return Err(format!(
-				"Unknown chunk region \"{}\". Valid regions: container, prologue, body, epilogue.",
+				"Unknown chunk region \"{}\". Valid regions: head, inner, tail (or omit for the full \
+				 chunk).",
 				suffix.trim()
 			));
 		} else {
@@ -93,22 +109,22 @@ pub fn split_selector_crc_and_region(
 		Some(selector_part.to_owned())
 	};
 	let cleaned_crc = sanitize_crc(crc).or(embedded_crc);
-	let region = region.or(parsed_region).unwrap_or(ChunkRegion::Container);
+	let region = region.or(parsed_region);
 
 	if let Some(cleaned_selector) = cleaned_selector.as_deref()
 		&& cleaned_crc.is_some()
 		&& looks_like_file_target(cleaned_selector)
 	{
-		return Ok((None, cleaned_crc, region));
+		return Ok(ParsedSelector { selector: None, crc: cleaned_crc, region });
 	}
 
-	Ok((cleaned_selector, cleaned_crc, region))
+	Ok(ParsedSelector { selector: cleaned_selector, crc: cleaned_crc, region })
 }
 
 pub fn sanitize_chunk_selector(selector: Option<&str>) -> Option<String> {
 	split_selector_crc_and_region(selector, None, None)
 		.ok()
-		.and_then(|(cleaned_selector, ..)| cleaned_selector)
+		.and_then(|parsed| parsed.selector)
 }
 
 pub fn sanitize_crc(crc: Option<&str>) -> Option<String> {
@@ -125,7 +141,8 @@ pub fn resolve_chunk_selector<'a>(
 	selector: Option<&str>,
 	warnings: &mut Vec<String>,
 ) -> Result<&'a ChunkNode, String> {
-	let (cleaned_selector, cleaned_crc, _) = split_selector_crc_and_region(selector, None, None)?;
+	let ParsedSelector { selector: cleaned_selector, crc: cleaned_crc, .. } =
+		split_selector_crc_and_region(selector, None, None)?;
 	resolve_chunk_selector_impl(state, cleaned_selector.as_deref(), cleaned_crc.as_deref(), warnings)
 }
 
@@ -135,7 +152,8 @@ pub fn resolve_chunk_with_crc<'a>(
 	crc: Option<&str>,
 	warnings: &mut Vec<String>,
 ) -> Result<ResolvedChunk<'a>, String> {
-	let (cleaned_selector, cleaned_crc, _) = split_selector_crc_and_region(selector, crc, None)?;
+	let ParsedSelector { selector: cleaned_selector, crc: cleaned_crc, .. } =
+		split_selector_crc_and_region(selector, crc, None)?;
 
 	if cleaned_selector.is_none()
 		&& let Some(cleaned_crc) = cleaned_crc.clone()
@@ -180,8 +198,7 @@ fn root_chunk(state: &ChunkStateInner) -> Result<&ChunkNode, String> {
 
 pub const fn chunk_supports_region(chunk: &ChunkNode, region: ChunkRegion) -> bool {
 	match region {
-		ChunkRegion::Container => true,
-		ChunkRegion::Prologue | ChunkRegion::Body | ChunkRegion::Epilogue => {
+		ChunkRegion::Head | ChunkRegion::Inner | ChunkRegion::Tail => {
 			chunk.prologue_end_byte.is_some() && chunk.epilogue_start_byte.is_some()
 		},
 	}
@@ -192,37 +209,35 @@ pub fn chunk_region_range(
 	region: ChunkRegion,
 ) -> Result<(usize, usize), String> {
 	match region {
-		ChunkRegion::Container => Ok((chunk.start_byte as usize, chunk.end_byte as usize)),
-		ChunkRegion::Prologue => Ok((
+		ChunkRegion::Head => Ok((
 			chunk.start_byte as usize,
 			chunk
 				.prologue_end_byte
-				.ok_or_else(|| format!("Chunk \"{}\" does not support @prologue.", chunk.path))?
-				as usize,
+				.ok_or_else(|| format!("Chunk \"{}\" does not support @head.", chunk.path))? as usize,
 		)),
-		ChunkRegion::Body => Ok((
+		ChunkRegion::Inner => Ok((
 			chunk
 				.prologue_end_byte
-				.ok_or_else(|| format!("Chunk \"{}\" does not support @body.", chunk.path))? as usize,
+				.ok_or_else(|| format!("Chunk \"{}\" does not support @inner.", chunk.path))? as usize,
 			chunk
 				.epilogue_start_byte
-				.ok_or_else(|| format!("Chunk \"{}\" does not support @body.", chunk.path))? as usize,
+				.ok_or_else(|| format!("Chunk \"{}\" does not support @inner.", chunk.path))? as usize,
 		)),
-		ChunkRegion::Epilogue => Ok((
+		ChunkRegion::Tail => Ok((
 			chunk
 				.epilogue_start_byte
-				.ok_or_else(|| format!("Chunk \"{}\" does not support @epilogue.", chunk.path))?
-				as usize,
+				.ok_or_else(|| format!("Chunk \"{}\" does not support @tail.", chunk.path))? as usize,
 			chunk.end_byte as usize,
 		)),
 	}
 }
 
-pub fn format_region_ref(chunk: &ChunkNode, region: ChunkRegion) -> String {
+pub fn format_region_ref(chunk: &ChunkNode, region: Option<ChunkRegion>) -> String {
+	let suffix = region.map_or(String::new(), |r| format!("@{}", r.as_str()));
 	if chunk.path.is_empty() {
-		format!("<root>#{}@{}", chunk.checksum, region.as_str())
+		format!("<root>#{}{suffix}", chunk.checksum)
 	} else {
-		format!("{}#{}@{}", chunk.path, chunk.checksum, region.as_str())
+		format!("{}#{}{suffix}", chunk.path, chunk.checksum)
 	}
 }
 

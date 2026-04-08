@@ -316,7 +316,7 @@ const CHUNK_OP_VALUES = ["replace", "after", "before", "prepend", "append"] as c
 export const chunkToolEditSchema = Type.Object({
 	target: Type.String({
 		description:
-			"Chunk selector. Format: 'path@region' for insertions, 'path#CRC@region' for replace. @region defaults to @container. Valid regions: container, prologue, body, epilogue.",
+			"Chunk selector. Format: 'path@region' for insertions, 'path#CRC@region' for replace. Omit @region to target the full chunk. Valid regions: head, inner, tail.",
 	}),
 	op: Type.Optional(StringEnum(CHUNK_OP_VALUES)),
 	content: Type.String({

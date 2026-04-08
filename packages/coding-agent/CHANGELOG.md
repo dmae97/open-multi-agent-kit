@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Breaking Changes
 
 - Simplified chunk edit operations: removed `append_child`, `prepend_child`, `append_sibling`, `prepend_sibling`, and `replace_body` ops in favor of unified `replace`, `before`, `after`, `prepend`, and `append` with region targeting (`@container`, `@prologue`, `@body`, `@epilogue`)
@@ -70,6 +69,9 @@
 
 ### Changed
 
+- Chunk edit region names simplified: `@container`, `@prologue`, `@body`, `@epilogue` renamed to `@head`, `@inner`, `@tail` for clearer semantics
+- Chunk edit documentation clarified: region defaults to full chunk when omitted; leaf chunks no longer support region targeting
+- Chunk read documentation updated: selector examples now use `@inner` instead of `@body` for region-specific reads
 - LSP server connecting status in welcome banner now uses muted pending symbol instead of warning symbol for clearer visual distinction
 - Codex websocket prewarm now runs asynchronously in the background instead of blocking session creation, allowing faster startup
 - Codex websocket status updates now display in interactive mode when prewarm completes or fails

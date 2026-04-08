@@ -443,10 +443,9 @@ export interface ChunkReadTarget {
 }
 
 export declare enum ChunkRegion {
-  Container = 'container',
-  Prologue = 'prologue',
-  Body = 'body',
-  Epilogue = 'epilogue'
+  Head = 'head',
+  Inner = 'inner',
+  Tail = 'tail'
 }
 
 /** Clipboard image payload encoded as PNG bytes. */
@@ -499,7 +498,7 @@ export interface EditOperation {
    * omitted.
    */
   crc?: string
-  /** Region to target. When omitted, defaults to `@container`. */
+  /** Region to target. When omitted, targets the full chunk. */
   region?: ChunkRegion
   /** Replacement or inserted text (meaning depends on `op`). */
   content?: string

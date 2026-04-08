@@ -11,8 +11,8 @@ use super::{
 	build_chunk_tree,
 	indent::{detect_file_indent_char, detect_file_indent_step, normalize_to_tabs},
 	resolve::{
-		chunk_region_range, chunk_supports_region, format_region_ref, resolve_chunk_selector,
-		resolve_chunk_with_crc, split_selector_crc_and_region,
+		ParsedSelector, chunk_region_range, chunk_supports_region, format_region_ref,
+		resolve_chunk_selector, resolve_chunk_with_crc, split_selector_crc_and_region,
 	},
 };
 use crate::chunk::types::{
@@ -391,10 +391,7 @@ impl ChunkState {
 			return Ok(ReadResult { text: format!("{notice}\n\n{text}"), chunk: None });
 		}
 
-		if selector.as_deref().is_none_or(str::is_empty)
-			&& crc.is_none()
-			&& region == ChunkRegion::Container
-		{
+		if selector.as_deref().is_none_or(str::is_empty) && crc.is_none() && region.is_none() {
 			return Ok(ReadResult {
 				text:  self.render(RenderParams {
 					chunk_path:           Some(root.path.clone()),
@@ -416,10 +413,10 @@ impl ChunkState {
 		if selector.as_deref() == Some("?") {
 			let mut lines = vec![format!("{} chunks:", params.display_path)];
 			for chunk in self.inner.chunks().filter(|chunk| !chunk.path.is_empty()) {
-				let supported_regions = if chunk_supports_region(chunk, ChunkRegion::Body) {
-					"container, prologue, body, epilogue"
+				let supported_regions = if chunk_supports_region(chunk, ChunkRegion::Inner) {
+					"outer, head, inner, tail"
 				} else {
-					"container"
+					"outer"
 				};
 				lines.push(format!(
 					"  {}#{}  L{}-L{}  regions: {}",
@@ -451,14 +448,16 @@ impl ChunkState {
 		// selector and loses the region suffix.
 		let selector_ref = format_region_ref(chunk, region);
 
-		if !chunk_supports_region(chunk, region) {
+		if let Some(r) = region
+			&& !chunk_supports_region(chunk, r)
+		{
 			return Ok(ReadResult {
 				text:  format!(
 					"{}:{}\n\nChunk \"{}\" does not support @{}.",
 					params.display_path,
 					chunk.path,
 					chunk.path,
-					region.as_str(),
+					r.as_str(),
 				),
 				chunk: Some(ChunkReadTarget {
 					status:   ChunkReadStatus::UnsupportedRegion,
@@ -491,9 +490,9 @@ impl ChunkState {
 			}
 		}
 
-		if region != ChunkRegion::Container {
+		if let Some(target_region) = region {
 			let masked_source = mask_chunk_display_source(self.inner.source(), self.inner.language());
-			let (start, end) = match chunk_region_range(chunk, region) {
+			let (start, end) = match chunk_region_range(chunk, target_region) {
 				Ok(range) => range,
 				Err(err) => {
 					return Ok(ReadResult {
@@ -531,7 +530,7 @@ impl ChunkState {
 				.collect::<Vec<_>>()
 				.join("\n");
 			let text = if region_text.is_empty() {
-				format!("{selector_ref}\n\n[Empty @{} region]", region.as_str())
+				format!("{selector_ref}\n\n[Empty @{} region]", target_region.as_str())
 			} else {
 				format!("{selector_ref}\n\n{region_text}")
 			};
@@ -544,12 +543,7 @@ impl ChunkState {
 		Ok(ReadResult {
 			text:  self.render(RenderParams {
 				chunk_path:           Some(chunk.path.clone()),
-				title:                format!(
-					"{}:{}@{}",
-					params.display_path,
-					chunk.path,
-					region.as_str()
-				),
+				title:                format!("{}:{}", params.display_path, chunk.path),
 				language_tag:         params.language_tag.clone(),
 				visible_range:        None,
 				render_children_only: false,
@@ -594,7 +588,7 @@ impl ChunkState {
 struct ParsedChunkReadPath {
 	selector: Option<String>,
 	crc:      Option<String>,
-	region:   ChunkRegion,
+	region:   Option<ChunkRegion>,
 }
 
 fn normalize_language(language: &str) -> String {
@@ -625,7 +619,8 @@ fn chunk_read_path_separator_index(read_path: &str) -> Option<usize> {
 fn parse_chunk_read_path(read_path: &str) -> std::result::Result<ParsedChunkReadPath, String> {
 	let raw_selector =
 		chunk_read_path_separator_index(read_path).map(|index| &read_path[(index + 1)..]);
-	let (selector, crc, region) = split_selector_crc_and_region(raw_selector, None, None)?;
+	let ParsedSelector { selector, crc, region } =
+		split_selector_crc_and_region(raw_selector, None, None)?;
 	Ok(ParsedChunkReadPath { selector, crc, region })
 }
 

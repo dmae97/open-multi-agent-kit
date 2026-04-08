@@ -6,8 +6,8 @@ use crate::chunk::{
 		normalize_leading_whitespace_char, reindent_inserted_block, strip_content_prefixes,
 	},
 	resolve::{
-		chunk_region_range, chunk_supports_region, resolve_chunk_selector, resolve_chunk_with_crc,
-		sanitize_chunk_selector, sanitize_crc, split_selector_crc_and_region,
+		ParsedSelector, chunk_region_range, chunk_supports_region, resolve_chunk_selector,
+		resolve_chunk_with_crc, sanitize_chunk_selector, sanitize_crc, split_selector_crc_and_region,
 	},
 	state::{ChunkState, ChunkStateInner},
 	types::{
@@ -60,7 +60,7 @@ struct InsertionPoint {
 #[derive(Clone)]
 struct ResolvedEditTarget {
 	chunk:  ChunkNode,
-	region: ChunkRegion,
+	region: Option<ChunkRegion>,
 }
 
 pub fn apply_edits(state: &ChunkState, params: &EditParams) -> Result<EditResult, String> {
@@ -293,7 +293,7 @@ fn resolve_edit_target(
 			None
 		}
 	});
-	let (cleaned_selector, cleaned_crc, parsed_region) =
+	let ParsedSelector { selector: cleaned_selector, crc: cleaned_crc, region: parsed_region } =
 		split_selector_crc_and_region(selector, crc, operation.region)?;
 	let batch_auto_accepted =
 		ensure_batch_operation_target_current(scheduled, cleaned_crc.as_deref(), touched_paths);
@@ -304,13 +304,15 @@ fn resolve_edit_target(
 	};
 	let resolved =
 		resolve_chunk_with_crc(state, cleaned_selector.as_deref(), resolve_crc, warnings)?;
-	let region = operation.region.unwrap_or(parsed_region);
+	let region = operation.region.or(parsed_region);
 	if !batch_auto_accepted {
 		validate_batch_crc(resolved.chunk, resolved.crc.as_deref(), requires_checksum)?;
 	}
 	let chunk = resolved.chunk.clone();
-	if !chunk_supports_region(&chunk, region) {
-		return Err(format!("Chunk \"{}\" does not support @{}.", chunk.path, region.as_str()));
+	if let Some(r) = region
+		&& !chunk_supports_region(&chunk, r)
+	{
+		return Err(format!("Chunk \"{}\" does not support @{}.", chunk.path, r.as_str()));
 	}
 	Ok(ResolvedEditTarget { chunk, region })
 }
@@ -338,8 +340,8 @@ fn apply_replace(
 	)?;
 	let anchor = target.chunk;
 	let (region_start, region_end) = match target.region {
-		ChunkRegion::Container => (anchor.start_byte as usize, anchor.end_byte as usize),
-		_ => chunk_region_range(&anchor, target.region)?,
+		None => (anchor.start_byte as usize, anchor.end_byte as usize),
+		Some(r) => chunk_region_range(&anchor, r)?,
 	};
 
 	// Scoped find/replace: locate a literal substring inside the chunk and replace
@@ -388,7 +390,7 @@ fn apply_replace(
 	let content = operation.content.as_deref().unwrap_or_default();
 	let mut replacement =
 		normalize_inserted_content(content, &target_indent, Some(file_indent_step), file_indent_char);
-	if target.region == ChunkRegion::Container {
+	if target.region.is_none() {
 		replacement = preserve_attached_leading_trivia(state, &anchor, &replacement);
 		if !replacement.is_empty()
 			&& !replacement.ends_with('\n')
@@ -396,7 +398,24 @@ fn apply_replace(
 		{
 			replacement.push('\n');
 		}
+		// If the chunk's range included a trailing blank line (common in
+		// markdown lists/paragraphs), preserve it so the replacement doesn't
+		// collapse into the next structural element.
 		let offsets = line_offsets(&state.source);
+		let last_line_text = state
+			.source
+			.split('\n')
+			.nth(anchor.end_line.saturating_sub(1) as usize)
+			.unwrap_or("");
+		if last_line_text.trim().is_empty()
+			&& !replacement.is_empty()
+			&& !replacement.ends_with("\n\n")
+		{
+			if !replacement.ends_with('\n') {
+				replacement.push('\n');
+			}
+			replacement.push('\n');
+		}
 		let range_start = line_start_offset(&offsets, anchor.start_line, &state.source);
 		state.source =
 			replace_range_by_lines(&state.source, anchor.start_line, anchor.end_line, &replacement);
@@ -407,7 +426,7 @@ fn apply_replace(
 		// For prologue/epilogue replacements, ensure the replacement preserves
 		// the newline boundary so the body content isn't joined onto the same
 		// line as the replacement.
-		if (target.region == ChunkRegion::Prologue || target.region == ChunkRegion::Epilogue)
+		if matches!(target.region, Some(ChunkRegion::Head | ChunkRegion::Tail))
 			&& !replacement.is_empty()
 			&& !replacement.ends_with('\n')
 			&& state.source.as_bytes().get(region_end.saturating_sub(1)) == Some(&b'\n')
@@ -441,14 +460,14 @@ fn apply_delete(
 	)?;
 	let anchor = target.chunk;
 
-	if target.region == ChunkRegion::Container {
+	if let Some(r) = target.region {
+		let (range_start, range_end) = chunk_region_range(&anchor, r)?;
+		state.source = replace_byte_range(&state.source, range_start, range_end, "");
+	} else {
 		let offsets = line_offsets(&state.source);
 		let range_start = line_start_offset(&offsets, anchor.start_line, &state.source);
 		state.source = replace_range_by_lines(&state.source, anchor.start_line, anchor.end_line, "");
 		state.source = cleanup_blank_line_artifacts_at_offset(&state.source, range_start);
-	} else {
-		let (range_start, range_end) = chunk_region_range(&anchor, target.region)?;
-		state.source = replace_byte_range(&state.source, range_start, range_end, "");
 	}
 	touched_paths.push(anchor.path);
 	Ok(())
@@ -513,14 +532,14 @@ fn apply_insert(
 			&& anchor.children.iter().any(|child| child == "preamble")
 		{
 			return Err(
-				"Comment-only @body.prepend on root is not allowed when the file has a preamble \
+				"Comment-only @inner.prepend on root is not allowed when the file has a preamble \
 				 chunk. Use replace on the preamble chunk instead."
 					.to_owned(),
 			);
 		}
 		if comment_only && !anchor.children.is_empty() {
 			warnings.push(
-				"Comment-only @body.prepend can merge into the following chunk's first line; it is \
+				"Comment-only @inner.prepend can merge into the following chunk's first line; it is \
 				 not a separate named chunk."
 					.to_owned(),
 			);
@@ -580,14 +599,14 @@ fn validate_batch_crc(chunk: &ChunkNode, crc: Option<&str>, required: bool) -> R
 fn validate_crc(chunk: &ChunkNode, crc: Option<&str>) -> Result<(), String> {
 	let cleaned = sanitize_crc(crc).ok_or_else(|| {
 		let selector = if chunk.path.is_empty() {
-			format!("#{}@container", chunk.checksum)
+			format!("#{}", chunk.checksum)
 		} else {
-			format!("{}#{}@container", chunk.path, chunk.checksum)
+			format!("{}#{}", chunk.path, chunk.checksum)
 		};
 		format!(
 			"Checksum required for {}. Re-read the chunk to get the current checksum, then include \
 			 it in the selector. Hint: use target \"{}\" for container replacement, or append \
-			 another region such as @body.",
+			 another region such as @inner.",
 			chunk_path_opt(chunk),
 			selector
 		)
@@ -670,15 +689,15 @@ fn replace_byte_range(source: &str, start: usize, end: usize, replacement: &str)
 fn target_indent_for_region(
 	state: &ChunkStateInner,
 	anchor: &ChunkNode,
-	region: ChunkRegion,
+	region: Option<ChunkRegion>,
 	file_indent_char: char,
 	file_indent_step: usize,
 ) -> String {
 	match region {
-		ChunkRegion::Container | ChunkRegion::Prologue | ChunkRegion::Epilogue => {
+		None | Some(ChunkRegion::Head | ChunkRegion::Tail) => {
 			anchor.indent_char.repeat(anchor.indent as usize)
 		},
-		ChunkRegion::Body => {
+		Some(ChunkRegion::Inner) => {
 			compute_insert_indent(state, anchor, true, file_indent_char, file_indent_step)
 		},
 	}
@@ -1020,7 +1039,7 @@ fn body_insertion_point(
 				indent: child_indent,
 			});
 		}
-		let (_, body_end) = chunk_region_range(anchor, ChunkRegion::Body)?;
+		let (_, body_end) = chunk_region_range(anchor, ChunkRegion::Inner)?;
 		return Ok(InsertionPoint { offset: body_end, indent });
 	}
 
@@ -1036,39 +1055,37 @@ fn body_insertion_point(
 			indent,
 		});
 	}
-	let (body_start, _) = chunk_region_range(anchor, ChunkRegion::Body)?;
+	let (body_start, _) = chunk_region_range(anchor, ChunkRegion::Inner)?;
 	Ok(InsertionPoint { offset: body_start, indent })
 }
 
 fn resolve_insertion_point(
 	state: &ChunkStateInner,
 	anchor: &ChunkNode,
-	region: ChunkRegion,
+	region: Option<ChunkRegion>,
 	op: ChunkEditOp,
 	_file_content: Option<&str>,
 	file_indent_char: char,
 	file_indent_step: usize,
 ) -> Result<(InsertionPoint, InsertPosition), String> {
 	match (region, op) {
-		// Before chunk boundary (before prologue / before container)
-		(
-			ChunkRegion::Container | ChunkRegion::Prologue,
-			ChunkEditOp::Before | ChunkEditOp::Prepend,
-		) => Ok((before_chunk_insertion_point(state, anchor), InsertPosition::Before)),
-		// After chunk boundary (after epilogue / after container)
-		(
-			ChunkRegion::Container | ChunkRegion::Epilogue,
-			ChunkEditOp::After | ChunkEditOp::Append,
-		) => Ok((after_chunk_insertion_point(state, anchor), InsertPosition::After)),
-		// Body first-child position
-		(ChunkRegion::Body, ChunkEditOp::Before | ChunkEditOp::Prepend)
-		| (ChunkRegion::Prologue, ChunkEditOp::After | ChunkEditOp::Append) => Ok((
+		// Before chunk boundary
+		(None | Some(ChunkRegion::Head), ChunkEditOp::Before | ChunkEditOp::Prepend) => {
+			Ok((before_chunk_insertion_point(state, anchor), InsertPosition::Before))
+		},
+		// After chunk boundary
+		(None | Some(ChunkRegion::Tail), ChunkEditOp::After | ChunkEditOp::Append) => {
+			Ok((after_chunk_insertion_point(state, anchor), InsertPosition::After))
+		},
+		// Inner first-child position
+		(Some(ChunkRegion::Inner), ChunkEditOp::Before | ChunkEditOp::Prepend)
+		| (Some(ChunkRegion::Head), ChunkEditOp::After | ChunkEditOp::Append) => Ok((
 			body_insertion_point(state, anchor, false, file_indent_char, file_indent_step)?,
 			InsertPosition::FirstChild,
 		)),
-		// Body last-child position
-		(ChunkRegion::Body, ChunkEditOp::After | ChunkEditOp::Append)
-		| (ChunkRegion::Epilogue, ChunkEditOp::Before | ChunkEditOp::Prepend) => Ok((
+		// Inner last-child position
+		(Some(ChunkRegion::Inner), ChunkEditOp::After | ChunkEditOp::Append)
+		| (Some(ChunkRegion::Tail), ChunkEditOp::Before | ChunkEditOp::Prepend) => Ok((
 			body_insertion_point(state, anchor, true, file_indent_char, file_indent_step)?,
 			InsertPosition::LastChild,
 		)),
@@ -1590,7 +1607,9 @@ fn render_error_context(
 	display_path: &str,
 	anchor_style: Option<ChunkAnchorStyle>,
 ) -> String {
-	let Ok((clean_path, ..)) = split_selector_crc_and_region(selector, None, None) else {
+	let Ok(ParsedSelector { selector: clean_path, .. }) =
+		split_selector_crc_and_region(selector, None, None)
+	else {
 		return String::new();
 	};
 	let mut ignored = Vec::new();
@@ -2097,7 +2116,7 @@ mod tests {
 
 		let result = apply_single_edit(&state, "test.ts", EditOperation {
 			op:      ChunkEditOp::Replace,
-			sel:     Some(format!("fn_main#{}@body", chunk.checksum)),
+			sel:     Some(format!("fn_main#{}@inner", chunk.checksum)),
 			crc:     None,
 			region:  None,
 			content: Some("\treturn next();\n".to_owned()),
@@ -2115,7 +2134,7 @@ mod tests {
 
 		let result = apply_single_edit(&state, "test.rs", EditOperation {
 			op:      ChunkEditOp::Replace,
-			sel:     Some(format!("fn_main#{}@body", chunk.checksum)),
+			sel:     Some(format!("fn_main#{}@inner", chunk.checksum)),
 			crc:     None,
 			region:  None,
 			content: Some("\tprintln!(\"new\");\n".to_owned()),
@@ -2133,7 +2152,7 @@ mod tests {
 
 		let result = apply_single_edit(&state, "test.go", EditOperation {
 			op:      ChunkEditOp::Replace,
-			sel:     Some(format!("fn_main#{}@body", chunk.checksum)),
+			sel:     Some(format!("fn_main#{}@inner", chunk.checksum)),
 			crc:     None,
 			region:  None,
 			content: Some("\treturn\n".to_owned()),
@@ -2151,7 +2170,7 @@ mod tests {
 
 		let result = apply_single_edit(&state, "test.py", EditOperation {
 			op:      ChunkEditOp::Replace,
-			sel:     Some(format!("fn_run#{}@body", chunk.checksum)),
+			sel:     Some(format!("fn_run#{}@inner", chunk.checksum)),
 			crc:     None,
 			region:  None,
 			content: Some("\treturn 2\n".to_owned()),
@@ -2197,7 +2216,7 @@ mod tests {
 		let body_state = state_for(source, "go");
 		let body_result = apply_single_edit(&body_state, "test.go", EditOperation {
 			op:      ChunkEditOp::Append,
-			sel:     Some("type_Server@body".to_owned()),
+			sel:     Some("type_Server@inner".to_owned()),
 			crc:     None,
 			region:  None,
 			content: Some("\tPort int\n".to_owned()),
@@ -2219,7 +2238,7 @@ mod tests {
 		let container_state = state_for(source, "go");
 		let container_result = apply_single_edit(&container_state, "test.go", EditOperation {
 			op:      ChunkEditOp::Append,
-			sel:     Some("type_Server@container".to_owned()),
+			sel:     Some("type_Server".to_owned()),
 			crc:     None,
 			region:  None,
 			content: Some("func (s *Server) Stop() {\n\twork()\n}\n".to_owned()),
@@ -2286,7 +2305,7 @@ mod tests {
 
 		let result = apply_single_edit(&state, "test.rs", EditOperation {
 			op:      ChunkEditOp::Replace,
-			sel:     Some(format!("fn_main#{}@prologue", chunk.checksum)),
+			sel:     Some(format!("fn_main#{}@head", chunk.checksum)),
 			crc:     None,
 			region:  None,
 			content: Some("/// New doc.\nfn main() {".to_owned()),
@@ -2314,7 +2333,7 @@ mod tests {
 
 	#[test]
 	fn container_prepend_creates_addressable_chunk() {
-		// Prepending to @container inserts before the chunk. After tree rebuild,
+		// Prepending without a @region inserts before the chunk. After tree rebuild,
 		// the inserted content should be addressable (either absorbed as trivia
 		// or as a new preamble/chunk), not orphaned.
 		let source = "const a = 1;\n\nstruct Config {\n    host: String,\n}\n";
@@ -2322,7 +2341,7 @@ mod tests {
 
 		let result = apply_single_edit(&state, "test.rs", EditOperation {
 			op:      ChunkEditOp::Prepend,
-			sel:     Some("struct_Config@container".to_owned()),
+			sel:     Some("struct_Config".to_owned()),
 			crc:     None,
 			region:  None,
 			content: Some("// Config documentation\n".to_owned()),
@@ -2380,9 +2399,8 @@ mod tests {
 	}
 
 	#[test]
-	fn nested_body_replace_preserves_correct_indentation() {
-		// Replacing the body of a method nested inside a class.
-		// The method body is at 2 levels of indent in a 4-space file.
+	fn nested_body_replace_preserves_correct_indentation_4space() {
+		// 4-space file: method body at 2 levels of indent.
 		let source = "class Server {\n    start() {\n        work();\n    }\n}\n";
 		let state = state_for(source, "typescript");
 		let chunk = state
@@ -2392,7 +2410,7 @@ mod tests {
 
 		let result = apply_single_edit(&state, "test.ts", EditOperation {
 			op:      ChunkEditOp::Replace,
-			sel:     Some(format!("class_Server.fn_start#{}@body", chunk.checksum)),
+			sel:     Some(format!("class_Server.fn_start#{}@inner", chunk.checksum)),
 			crc:     None,
 			region:  None,
 			content: Some("\treturn 42;\n".to_owned()),
@@ -2407,14 +2425,14 @@ mod tests {
 
 	#[test]
 	fn body_append_inserts_inside_class() {
-		// Appending to @body of a class should insert inside the body,
+		// Appending to @inner of a class should insert inside the body,
 		// not after the closing brace.
 		let source = "class Foo {\n    bar() {\n        return 1;\n    }\n}\n";
 		let state = state_for(source, "typescript");
 
 		let result = apply_single_edit(&state, "test.ts", EditOperation {
 			op:      ChunkEditOp::Append,
-			sel:     Some("class_Foo@body".to_owned()),
+			sel:     Some("class_Foo@inner".to_owned()),
 			crc:     None,
 			region:  None,
 			content: Some("baz() {\n\treturn 2;\n}\n".to_owned()),
@@ -2438,14 +2456,14 @@ mod tests {
 
 	#[test]
 	fn body_prepend_inserts_after_opening_brace() {
-		// Prepending to @body of an enum should insert after the opening brace,
+		// Prepending to @inner of an enum should insert after the opening brace,
 		// not before doc comments.
 		let source = "/** My enum. */\nenum Color {\n    Red,\n    Green,\n    Blue,\n}\n";
 		let state = state_for(source, "typescript");
 
 		let result = apply_single_edit(&state, "test.ts", EditOperation {
 			op:      ChunkEditOp::Prepend,
-			sel:     Some("enum_Color@body".to_owned()),
+			sel:     Some("enum_Color@inner".to_owned()),
 			crc:     None,
 			region:  None,
 			content: Some("White,\n".to_owned()),
@@ -2463,5 +2481,56 @@ mod tests {
 		let doc_pos = result.diff_after.find("/** My enum.").unwrap();
 		assert!(white_pos > doc_pos, "White should be after doc comment: {}", result.diff_after);
 		assert!(white_pos < red_pos, "White should be before Red: {}", result.diff_after);
+	}
+
+	#[test]
+	fn markdown_list_replace_preserves_trailing_blank_line() {
+		let source = "# Title\n\n- item 1\n- item 2\n\n## Next\n";
+		let state = state_for(source, "markdown");
+		let list = state
+			.inner()
+			.tree
+			.chunks
+			.iter()
+			.find(|c| c.name.starts_with("list"))
+			.expect("list chunk");
+
+		let result = apply_single_edit(&state, "test.md", EditOperation {
+			op:      ChunkEditOp::Replace,
+			sel:     Some(format!("{}#{}", list.path, list.checksum)),
+			crc:     None,
+			region:  None,
+			content: Some("- new 1\n- new 2\n".to_owned()),
+			find:    None,
+		});
+
+		// The blank line between the list and ## Next must be preserved.
+		assert!(
+			result.diff_after.contains("- new 2\n\n## Next"),
+			"blank line between list and heading should be preserved: {:?}",
+			result.diff_after
+		);
+	}
+
+	#[test]
+	fn rust_trait_members_are_addressable() {
+		let source = "trait Handler {\n    fn handle(&self, req: &str) -> String;\n    fn \
+		              name(&self) -> &str;\n}\n";
+		let state = state_for(source, "rust");
+		let tree = state.inner().tree();
+
+		let trait_chunk = tree
+			.chunks
+			.iter()
+			.find(|c| c.path == "trait_Handler")
+			.expect("trait_Handler should exist");
+
+		// Trait members should be listed as children even when they're
+		// single-line signatures (not collapsed as trivial).
+		assert!(
+			!trait_chunk.children.is_empty(),
+			"trait_Handler should have children, got leaf. Chunks: {:?}",
+			tree.chunks.iter().map(|c| &c.path).collect::<Vec<_>>()
+		);
 	}
 }

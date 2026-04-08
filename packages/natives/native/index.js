@@ -260,10 +260,9 @@ exports.ChunkReadStatus = {
   UnsupportedRegion: 'unsupported_region',
 };
 exports.ChunkRegion = {
-  Container: 'container',
-  Prologue: 'prologue',
-  Body: 'body',
-  Epilogue: 'epilogue',
+  Head: 'head',
+  Inner: 'inner',
+  Tail: 'tail',
 };
 exports.Ellipsis = {
   Unicode: 0,

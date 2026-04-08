@@ -592,6 +592,11 @@ fn should_collapse_trivial_children(
 	{
 		return false;
 	}
+	// Trait and interface members should always be addressable so that
+	// individual method signatures can be edited.
+	if parent.base_name.starts_with("trait_") || parent.base_name.starts_with("interface_") {
+		return false;
+	}
 
 	if children.len() == 1 && is_collapsible_flat_child(&children[0]) {
 		return true;
@@ -1153,7 +1158,7 @@ function main(): void {{
 	}
 
 	#[test]
-	fn small_interfaces_collapse() {
+	fn small_interfaces_keep_children() {
 		let source = r"interface Config {
     name: string;
     getValue(): number;
@@ -1164,8 +1169,7 @@ function main(): void {{
 			.iter()
 			.find(|c| c.path == "interface_Config")
 			.expect("interface_Config");
-		assert!(iface.leaf);
-		assert!(iface.children.is_empty());
+		assert!(!iface.children.is_empty(), "interface members should be addressable as children");
 	}
 
 	#[test]
@@ -1499,7 +1503,7 @@ impl Config {
 	}
 
 	#[test]
-	fn collapses_trivial_rust_trait_children() {
+	fn rust_trait_members_stay_addressable() {
 		let source = r"trait Handler {
 	    fn handle(&self, method: &str, path: &str) -> OpResult;
 	}";
@@ -1509,8 +1513,7 @@ impl Config {
 			.iter()
 			.find(|c| c.path == "trait_Handler")
 			.expect("trait_Handler");
-		assert!(trait_chunk.leaf);
-		assert!(trait_chunk.children.is_empty(), "single-line trait signatures should render inline");
+		assert!(!trait_chunk.children.is_empty(), "trait members should be addressable as children");
 	}
 
 	#[test]
@@ -1598,10 +1601,7 @@ impl Config {
 			let resolved = result
 				.chunk
 				.expect("selector read should resolve a chunk target");
-			assert_eq!(
-				resolved.selector,
-				format!("fn_handleTerraform.try#{}@container", chunk.checksum)
-			);
+			assert_eq!(resolved.selector, format!("fn_handleTerraform.try#{}", chunk.checksum));
 		}
 	}
 
@@ -1624,11 +1624,7 @@ impl Config {
 			.expect("listing should succeed");
 		assert!(result.text.contains("sample.ts chunks:"));
 		assert!(result.text.contains("fn_run#"));
-		assert!(
-			result
-				.text
-				.contains("regions: container, prologue, body, epilogue")
-		);
+		assert!(result.text.contains("regions: outer, head, inner, tail"));
 		assert!(!result.text.contains("return 1"));
 	}
 
@@ -1722,7 +1718,7 @@ impl Config {
 			.expect("state should parse");
 		let result = state
 			.render_read(ReadRenderParams {
-				read_path:           "sample.ts:fn_run@body".to_string(),
+				read_path:           "sample.ts:fn_run@inner".to_string(),
 				display_path:        "sample.ts".to_string(),
 				language_tag:        Some("ts".to_string()),
 				omit_checksum:       false,
@@ -1759,7 +1755,7 @@ impl Config {
 			ChunkState::parse(source.to_string(), "python".to_string()).expect("state should parse");
 		let result = state
 			.render_read(ReadRenderParams {
-				read_path:           "test.py:class_Server.fn_address@prologue".to_string(),
+				read_path:           "test.py:class_Server.fn_address@head".to_string(),
 				display_path:        "test.py".to_string(),
 				language_tag:        Some("py".to_string()),
 				omit_checksum:       false,
