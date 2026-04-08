@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Added
 
 - Added support for embedded URL selectors (`:raw` and `:L#-L#` line ranges) in read command paths
@@ -12,6 +11,8 @@
 
 ### Changed
 
+- Updated slash command handlers to support returning remaining text as prompt input instead of consuming input entirely
+- Enhanced slash command parser to recognize both whitespace and colon (`:`) as command argument separators
 - Updated indentation guidance for chunk edit content to use single leading spaces per indent level instead of tabs
 - Updated read CLI to delegate URL inputs through the read tool pipeline instead of treating them as local file paths
 - Updated chunk edit documentation to clarify region semantics and emphasize using the narrowest region for edits

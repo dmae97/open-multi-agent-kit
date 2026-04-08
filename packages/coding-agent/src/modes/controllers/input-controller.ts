@@ -219,13 +219,16 @@ export class InputController {
 			if (!text) return;
 
 			// Handle built-in slash commands
-			if (
-				await executeBuiltinSlashCommand(text, {
-					ctx: this.ctx,
-					handleBackgroundCommand: () => this.handleBackgroundCommand(),
-				})
-			) {
+			const slashResult = await executeBuiltinSlashCommand(text, {
+				ctx: this.ctx,
+				handleBackgroundCommand: () => this.handleBackgroundCommand(),
+			});
+			if (slashResult === true) {
 				return;
+			}
+			if (typeof slashResult === "string") {
+				// Command handled but returned remaining text to use as prompt
+				text = slashResult;
 			}
 
 			// Handle skill commands (/skill:name [args])
