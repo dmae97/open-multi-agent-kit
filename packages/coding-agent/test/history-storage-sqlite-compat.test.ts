@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { afterEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -21,7 +21,12 @@ function readTableSql(dbPath: string, tableName: string): string | null {
 
 let tempDir = "";
 
+beforeEach(() => {
+	HistoryStorage.resetInstance();
+});
+
 afterEach(async () => {
+	HistoryStorage.resetInstance();
 	if (tempDir) {
 		await fs.rm(tempDir, { recursive: true, force: true });
 		tempDir = "";

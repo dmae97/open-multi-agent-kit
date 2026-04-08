@@ -28,8 +28,7 @@ class AsyncDrain<T> {
 	push(value: T, hnd: (values: T[]) => Promise<void> | void): Promise<void> {
 		let queue = this.#queue;
 		if (!queue) {
-			queue = [];
-			this.#queue = [];
+			this.#queue = queue = [];
 			this.#promise = new Promise((resolve, reject) => {
 				const exec = () => {
 					try {
@@ -126,6 +125,11 @@ CREATE TRIGGER IF NOT EXISTS history_ai AFTER INSERT ON history BEGIN
 			HistoryStorage.#instance = new HistoryStorage(dbPath);
 		}
 		return HistoryStorage.#instance;
+	}
+
+	/** @internal Reset the singleton — test-only. */
+	static resetInstance(): void {
+		HistoryStorage.#instance = undefined;
 	}
 
 	#insertBatch(rows: Array<Pick<HistoryEntry, "prompt" | "cwd">>): void {
