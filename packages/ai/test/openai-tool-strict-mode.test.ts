@@ -91,6 +91,16 @@ describe("OpenAI tool strict mode", () => {
 		};
 		expect(payload.tools?.[0]?.function?.strict).toBe(true);
 	});
+
+	it("sends strict=true for openai-completions tool schemas on OpenRouter", async () => {
+		const model = getBundledModel("openrouter", "anthropic/claude-sonnet-4") as Model<"openai-completions">;
+
+		const payload = (await captureCompletionsPayload(model)) as {
+			tools?: Array<{ function?: { strict?: boolean } }>;
+		};
+		expect(payload.tools?.[0]?.function?.strict).toBe(true);
+	});
+
 	it("omits stream_options usage requests for Cerebras chat completions", async () => {
 		const model = getBundledModel("cerebras", "gpt-oss-120b") as Model<"openai-completions">;
 

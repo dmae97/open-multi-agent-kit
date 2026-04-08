@@ -1,13 +1,13 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Breaking Changes
 
 - Removed `coerceNullStrings` function and its automatic null-string coercion behavior from JSON parsing
 
 ### Added
 
+- Added support for OpenRouter provider with strict mode detection
 - Added automatic cleaning of literal escape sequences (`\n`, `\t`, `\r`) in JSON parsing to handle LLM encoding confusion
 - Added support for healing JSON with trailing junk after balanced containers (e.g., `]\n</invoke>`)
 - Added `CODEX_STARTUP_EVENT_CHANNEL` constant and `CodexStartupEvent` type for monitoring Codex provider initialization status

@@ -13,6 +13,7 @@ export type ResolvedOpenAICompat = Required<
 function detectStrictModeSupport(provider: string, baseUrl: string): boolean {
 	if (
 		provider === "openai" ||
+		provider === "openrouter" ||
 		provider === "cerebras" ||
 		provider === "together" ||
 		provider === "github-copilot" ||
@@ -28,6 +29,7 @@ function detectStrictModeSupport(provider: string, baseUrl: string): boolean {
 		normalizedBaseUrl.includes("models.inference.ai.azure.com") ||
 		normalizedBaseUrl.includes("api.cerebras.ai") ||
 		normalizedBaseUrl.includes("api.together.xyz") ||
+		normalizedBaseUrl.includes("openrouter.ai") ||
 		normalizedBaseUrl.includes("api.deepseek.com") ||
 		normalizedBaseUrl.includes("deepseek.com")
 	);
