@@ -9,6 +9,7 @@ import * as fs from "node:fs/promises";
 import path from "node:path";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import { glob } from "@oh-my-pi/pi-natives";
+import { formatAge, formatBytes, readImageMetadata } from "@oh-my-pi/pi-utils";
 import { formatHashLines } from "../edit/line-hash";
 import type { FileMentionMessage } from "../session/messages";
 import {
@@ -18,10 +19,8 @@ import {
 	truncateHeadBytes,
 } from "../session/streaming-output";
 import { resolveReadPath } from "../tools/path-utils";
-import { formatAge, formatBytes } from "../tools/render-utils";
 import { fuzzyMatch } from "./fuzzy";
 import { formatDimensionNote, resizeImage } from "./image-resize";
-import { detectSupportedImageMimeTypeFromFile } from "./mime";
 
 /** Regex to match @filepath patterns in text */
 const FILE_MENTION_REGEX = /@([^\s@]+)/g;
@@ -304,7 +303,8 @@ export async function generateFileMentionMessages(
 				continue;
 			}
 
-			const mimeType = await detectSupportedImageMimeTypeFromFile(absolutePath);
+			const imageMetadata = await readImageMetadata(absolutePath);
+			const mimeType = imageMetadata?.mimeType;
 			if (mimeType) {
 				if (stat.size > MAX_AUTO_READ_IMAGE_BYTES) {
 					files.push({

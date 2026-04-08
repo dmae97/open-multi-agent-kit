@@ -11,6 +11,8 @@ export * from "./hook-fetch";
 export * from "./json";
 export * as logger from "./logger";
 export * from "./mermaid-ascii";
+export * from "./mime";
+export * from "./peek-file";
 export * as postmortem from "./postmortem";
 export * as procmgr from "./procmgr";
 export { setNativeKillTree } from "./procmgr";

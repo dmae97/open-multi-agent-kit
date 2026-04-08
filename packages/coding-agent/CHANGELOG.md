@@ -1,6 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+
+- Moved image metadata detection to @oh-my-pi/pi-utils package for shared use across projects
+- Simplified image loading API by removing redundant metadata parameters and consolidating image utilities
+- Updated imports to use readImageMetadata and parseImageMetadata from @oh-my-pi/pi-utils instead of local implementations
+
+### Removed
+
+- Removed image-input.ts utility module; functionality consolidated into image-loading.ts
+- Removed mime.ts utility module; MIME detection moved to @oh-my-pi/pi-utils
+- Removed ImageMetadata interface and ReadImageMetadataOptions from local codebase
 
 ## [14.0.0] - 2026-04-08
 

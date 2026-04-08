@@ -1,12 +1,20 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import { getAntigravityHeaders, getEnvApiKey, StringEnum } from "@oh-my-pi/pi-ai";
-import { $env, isEnoent, prompt, ptree, readSseJson, Snowflake, untilAborted } from "@oh-my-pi/pi-utils";
+import {
+	$env,
+	isEnoent,
+	parseImageMetadata,
+	prompt,
+	ptree,
+	readSseJson,
+	Snowflake,
+	untilAborted,
+} from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import type { ModelRegistry } from "../config/model-registry";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import geminiImageDescription from "../prompts/tools/gemini-image.md" with { type: "text" };
-import { detectSupportedImageMimeTypeFromFile } from "../utils/mime";
 import { resolveReadPath } from "./path-utils";
 
 const DEFAULT_MODEL = "gemini-3-pro-image-preview";
@@ -416,7 +424,8 @@ async function loadImageFromPath(imagePath: string, cwd: string): Promise<Inline
 			throw new Error(`Image file too large: ${imagePath}`);
 		}
 
-		const mimeType = await detectSupportedImageMimeTypeFromFile(resolved);
+		const metadata = parseImageMetadata(buffer);
+		const mimeType = metadata?.mimeType;
 		if (!mimeType) {
 			throw new Error(`Unsupported image type: ${imagePath}`);
 		}

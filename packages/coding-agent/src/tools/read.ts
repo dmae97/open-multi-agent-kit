@@ -5,7 +5,7 @@ import type { ImageContent, TextContent } from "@oh-my-pi/pi-ai";
 import { glob } from "@oh-my-pi/pi-natives";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { Text } from "@oh-my-pi/pi-tui";
-import { getRemoteDir, prompt, untilAborted } from "@oh-my-pi/pi-utils";
+import { getRemoteDir, prompt, readImageMetadata, untilAborted } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import { computeLineHash } from "../edit/line-hash";
 import {
@@ -34,14 +34,8 @@ import { renderCodeCell, renderStatusLine } from "../tui";
 import { CachedOutputBlock } from "../tui/output-block";
 import { resolveEditMode } from "../utils/edit-mode";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
-import {
-	ImageInputTooLargeError,
-	loadImageInput,
-	MAX_IMAGE_INPUT_BYTES,
-	readImageMetadata,
-} from "../utils/image-input";
+import { ImageInputTooLargeError, loadImageInput, MAX_IMAGE_INPUT_BYTES } from "../utils/image-loading";
 import { convertFileWithMarkit } from "../utils/markit";
-import { detectSupportedImageMimeTypeFromFile } from "../utils/mime";
 import { type ArchiveReader, openArchive, parseArchivePathCandidates } from "./archive-reader";
 import {
 	executeReadUrl,
@@ -812,7 +806,8 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			return dirResult;
 		}
 
-		const mimeType = await detectSupportedImageMimeTypeFromFile(absolutePath);
+		const imageMetadata = await readImageMetadata(absolutePath);
+		const mimeType = imageMetadata?.mimeType;
 		const ext = path.extname(absolutePath).toLowerCase();
 		const hasEditTool = this.session.hasEditTool ?? true;
 		const language = getLanguageFromPath(absolutePath);
@@ -872,14 +867,9 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 
 		if (mimeType) {
 			if (this.#inspectImageEnabled) {
-				const metadata = await readImageMetadata({
-					path: readPath,
-					cwd: this.session.cwd,
-					resolvedPath: absolutePath,
-					detectedMimeType: mimeType,
-				});
+				const metadata = imageMetadata;
 				const outputMime = metadata?.mimeType ?? mimeType;
-				const outputBytes = metadata?.bytes ?? fileSize;
+				const outputBytes = fileSize;
 				const metadataLines = [
 					"Image metadata:",
 					`- MIME: ${outputMime}`,
