@@ -58,7 +58,6 @@ mod ast_vue;
 
 use std::collections::HashMap;
 
-
 use ast_grep_core::tree_sitter::LanguageExt;
 use napi::{Error, Result};
 use napi_derive::napi;
@@ -326,8 +325,27 @@ fn build_chunk(
 			.unwrap_or_default(),
 	);
 	let recurse = candidate.recurse;
+	let chunk_start = candidate.range_start_byte;
+	let mut chunk_end = candidate.range_end_byte;
 	let region_boundaries = recurse.map(|recurse| {
-		compute_body_inner_boundaries(source, recurse.node.start_byte(), recurse.node.end_byte())
+		let (pro_end, epi_start) =
+			compute_body_inner_boundaries(source, recurse.node.start_byte(), recurse.node.end_byte());
+		// For indent-based languages (Python, Ruby, etc.) the body boundary
+		// computation may extend past the tree-sitter node to include a
+		// trailing newline that logically terminates the last body line.
+		// When this happens and the source byte at chunk_end is indeed a
+		// newline, extend the chunk's end_byte to match so that:
+		//   - @body covers complete lines including their trailing newline
+		//   - @tail remains a valid (empty) region
+		if epi_start > chunk_end
+			&& epi_start <= source.len()
+			&& source.as_bytes().get(chunk_end) == Some(&b'\n')
+		{
+			chunk_end = epi_start;
+		}
+		let pro_end = pro_end.max(chunk_start).min(chunk_end);
+		let epi_start = epi_start.max(pro_end).min(chunk_end);
+		(pro_end, epi_start)
 	});
 	let child_candidates = recurse
 		.map(|recurse| {
@@ -371,7 +389,7 @@ fn build_chunk(
 		end_line: candidate.range_end_line as u32,
 		line_count: line_count as u32,
 		start_byte: candidate.range_start_byte as u32,
-		end_byte: candidate.range_end_byte as u32,
+		end_byte: chunk_end as u32,
 		checksum_start_byte: candidate.checksum_start_byte as u32,
 		prologue_end_byte: region_boundaries.map(|(start, _)| start as u32),
 		epilogue_start_byte: region_boundaries.map(|(_, end)| end as u32),
@@ -2259,11 +2277,190 @@ end
 	}
 
 	#[test]
-	
+	fn python_region_boundaries_correct_for_function() {
+		use super::{resolve::chunk_region_range, types::ChunkRegion};
+
+		let source = "def run():\n   return 1\n";
+		let tree = build_chunk_tree(source, "python").expect("tree should build");
+		let fn_chunk = tree
+			.chunks
+			.iter()
+			.find(|c| c.path == "fn_run")
+			.expect("fn_run");
+
+		let (head_s, head_e) = chunk_region_range(fn_chunk, ChunkRegion::Head);
+		let head = &source[head_s..head_e];
+		assert!(head.contains("def run():"), "fn @head should contain def signature, got {head:?}");
+		assert!(!head.contains("return"), "fn @head should not contain body, got {head:?}");
+
+		let (body_s, body_e) = chunk_region_range(fn_chunk, ChunkRegion::Body);
+		let body = &source[body_s..body_e];
+		assert!(body.contains("return 1"), "fn @body should contain body, got {body:?}");
+		assert!(!body.contains("def run"), "fn @body should not contain head, got {body:?}");
+		assert!(body.ends_with('\n'), "fn @body should end with newline, got {body:?}");
+
+		let (tail_s, tail_e) = chunk_region_range(fn_chunk, ChunkRegion::Tail);
+		assert!(tail_e >= tail_s, "tail range must not be inverted");
+		assert_eq!(tail_e - tail_s, 0, "fn @tail should be empty for Python");
+	}
 
 	#[test]
-	
+	fn python_region_boundaries_correct_for_class() {
+		use super::{resolve::chunk_region_range, types::ChunkRegion};
+
+		let source =
+			"class Server:\n    def start(self) -> None:\n        self.running = True\n        \
+			 print('ok')\n\n    def stop(self):\n        pass\n";
+		let tree = build_chunk_tree(source, "python").expect("tree should build");
+		let class_chunk = tree
+			.chunks
+			.iter()
+			.find(|c| c.path == "class_Server")
+			.expect("class_Server");
+
+		let (head_s, head_e) = chunk_region_range(class_chunk, ChunkRegion::Head);
+		let head = &source[head_s..head_e];
+		assert!(head.contains("class Server:"), "class @head should contain class def, got {head:?}");
+		assert!(!head.contains("def start"), "class @head should not contain methods, got {head:?}");
+
+		let (body_s, body_e) = chunk_region_range(class_chunk, ChunkRegion::Body);
+		let body = &source[body_s..body_e];
+		assert!(body.contains("def start"), "class @body should contain methods, got {body:?}");
+		assert!(body.contains("def stop"), "class @body should contain all methods, got {body:?}");
+		assert!(
+			!body.contains("class Server"),
+			"class @body should not contain header, got {body:?}"
+		);
+
+		let (tail_s, tail_e) = chunk_region_range(class_chunk, ChunkRegion::Tail);
+		assert!(tail_e >= tail_s, "tail range must not be inverted");
+		assert_eq!(tail_e - tail_s, 0, "class @tail should be empty for Python");
+	}
 
 	#[test]
-	
+	fn python_decorated_function_region_boundaries() {
+		use super::{resolve::chunk_region_range, types::ChunkRegion};
+
+		let source =
+			"class Server:\n    @property\n    def address(self) -> str:\n        return self._addr\n";
+		let tree = build_chunk_tree(source, "python").expect("tree should build");
+		let fn_chunk = tree
+			.chunks
+			.iter()
+			.find(|c| c.path == "class_Server.fn_address")
+			.expect("fn_address");
+
+		let (head_s, head_e) = chunk_region_range(fn_chunk, ChunkRegion::Head);
+		let head = &source[head_s..head_e];
+		assert!(head.contains("@property"), "@head should include decorator, got {head:?}");
+		assert!(head.contains("def address"), "@head should include def, got {head:?}");
+		assert!(!head.contains("return"), "@head should not include body, got {head:?}");
+
+		let (body_s, body_e) = chunk_region_range(fn_chunk, ChunkRegion::Body);
+		let body = &source[body_s..body_e];
+		assert!(body.contains("return self._addr"), "@body should contain return, got {body:?}");
+		assert!(!body.contains("@property"), "@body should not contain decorator, got {body:?}");
+		assert!(!body.contains("def address"), "@body should not contain def, got {body:?}");
+
+		let (tail_s, tail_e) = chunk_region_range(fn_chunk, ChunkRegion::Tail);
+		assert!(tail_e >= tail_s, "tail range must not be inverted");
+		assert_eq!(tail_e - tail_s, 0, "fn @tail should be empty for Python");
+	}
+
+	#[test]
+	fn python_body_replace_preserves_surrounding_code() {
+		use super::{resolve::chunk_region_range, types::ChunkRegion};
+
+		let source =
+			"import os\n\ndef main():\n    x = 1\n    print(x)\n\ndef helper():\n    return 42\n";
+		let tree = build_chunk_tree(source, "python").expect("tree should build");
+		let fn_main = tree
+			.chunks
+			.iter()
+			.find(|c| c.path == "fn_main")
+			.expect("fn_main");
+
+		let (body_s, body_e) = chunk_region_range(fn_main, ChunkRegion::Body);
+		let body = &source[body_s..body_e];
+		assert!(!body.contains("def main"), "body should not include def");
+		assert!(body.contains("x = 1"), "body should contain body lines");
+		assert!(!body.contains("def helper"), "body should not leak into next function");
+		assert!(!body.contains("return 42"), "body should not include helper's code");
+		assert!(!body.contains("import"), "body should not include imports");
+
+		// Simulate body replace and verify the result
+		let replacement = "    y = 2\n    print(y)\n";
+		let mut result = String::new();
+		result.push_str(&source[..body_s]);
+		result.push_str(replacement);
+		result.push_str(&source[body_e..]);
+		assert!(
+			result.starts_with("import os"),
+			"import should remain at column 0 after body replace: {:?}",
+			&result[..40.min(result.len())]
+		);
+		assert!(result.contains("def helper"), "helper fn should survive body replace: {result:?}");
+		assert!(result.contains("return 42"), "helper's body should survive: {result:?}");
+	}
+
+	#[test]
+	fn python_class_body_replace_does_not_corrupt() {
+		use super::{resolve::chunk_region_range, types::ChunkRegion};
+
+		let source =
+			"class Server:\n    def __init__(self, host: str, port: int):\n        self.host = \
+			 host\n        self.port = port\n\n    def start(self) -> None:\n        if \
+			 self.running:\n            raise RuntimeError(\"already running\")\n        \
+			 self.running = True\n        print(f\"Started on {self.host}:{self.port}\")\n\n    \
+			 @property\n    def address(self) -> str:\n        return f\"{self.host}:{self.port}\"\n";
+		let tree = build_chunk_tree(source, "python").expect("tree should build");
+
+		// Verify class regions
+		let cls = tree
+			.chunks
+			.iter()
+			.find(|c| c.path == "class_Server")
+			.expect("class_Server");
+		let (body_s, body_e) = chunk_region_range(cls, ChunkRegion::Body);
+		let body = &source[body_s..body_e];
+		assert!(body.contains("def __init__"), "class body should contain __init__");
+		assert!(body.contains("def start"), "class body should contain start");
+		assert!(body.contains("@property"), "class body should contain @property");
+		assert!(body.contains("def address"), "class body should contain address");
+		assert!(!body.contains("class Server"), "class body should not contain header");
+
+		// Verify fn_start regions
+		let fn_start = tree
+			.chunks
+			.iter()
+			.find(|c| c.path == "class_Server.fn_start")
+			.expect("fn_start");
+		let (fn_body_s, fn_body_e) = chunk_region_range(fn_start, ChunkRegion::Body);
+		let fn_body = &source[fn_body_s..fn_body_e];
+		assert!(
+			fn_body.contains("if self.running"),
+			"fn_start @body should contain body, got {fn_body:?}"
+		);
+		assert!(
+			fn_body.contains("self.running = True"),
+			"fn_start @body should contain all lines, got {fn_body:?}"
+		);
+		assert!(
+			!fn_body.contains("def start"),
+			"fn_start @body should not include head, got {fn_body:?}"
+		);
+		assert!(
+			!fn_body.contains("@property"),
+			"fn_start @body should not leak into next method, got {fn_body:?}"
+		);
+
+		// Verify all tail regions are empty
+		for chunk in &tree.chunks {
+			if chunk.path.is_empty() {
+				continue;
+			}
+			let (ts, te) = chunk_region_range(chunk, ChunkRegion::Tail);
+			assert!(te >= ts, "tail of {:?} must not be inverted: start={ts} end={te}", chunk.path);
+		}
+	}
 }

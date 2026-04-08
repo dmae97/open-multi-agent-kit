@@ -1368,6 +1368,12 @@ def run_model_sync(
                             time.sleep(min(max(recorder.auto_retry_delay_ms / 1000.0, 0.2), 2.0))
                             continue
                         if recorder.agent_ended:
+                            grace = min(0.5, max(deadline - time.monotonic(), 0.0))
+                            if grace > 0:
+                                time.sleep(grace)
+                            if recorder.auto_retry_active:
+                                time.sleep(min(max(recorder.auto_retry_delay_ms / 1000.0, 0.2), 2.0))
+                                continue
                             return
                         if recorder.is_effectively_complete(quiet_seconds=2.0):
                             return

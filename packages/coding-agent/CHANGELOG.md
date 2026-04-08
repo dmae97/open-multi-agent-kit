@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Breaking Changes
 
 - Simplified chunk edit operations: removed `append_child`, `prepend_child`, `append_sibling`, `prepend_sibling`, and `replace_body` ops in favor of unified `replace`, `before`, `after`, `prepend`, and `append` with region targeting (`@head`, `@body`, `@tail`)
@@ -72,6 +73,8 @@
 
 ### Changed
 
+- Extracted working directory formatting logic into `formatToolWorkingDirectory()` utility for consistent path display across tools
+- Bash command rendering now sanitizes tabs and shortens home directory paths in command previews
 - Chunk edit tool schema: renamed `target` parameter to `sel` for consistency with read tool terminology
 - Chunk edit tool: `op` parameter is now required (previously optional with `replace` default)
 - Chunk edit documentation: updated all region references from `@inner` to `@body` for clearer semantics

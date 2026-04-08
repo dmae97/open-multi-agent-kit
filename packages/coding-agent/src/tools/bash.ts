@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { ImageProtocol, TERMINAL, Text } from "@oh-my-pi/pi-tui";
@@ -21,7 +20,7 @@ import { applyHeadTail } from "./bash-normalize";
 import { expandInternalUrls, type InternalUrlExpansionOptions } from "./bash-skill-urls";
 import { formatStyledTruncationWarning, type OutputMeta } from "./output-meta";
 import { resolveToCwd } from "./path-utils";
-import { replaceTabs } from "./render-utils";
+import { formatToolWorkingDirectory, replaceTabs } from "./render-utils";
 import { ToolAbortError, ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
 import { clampTimeout } from "./tool-timeouts";
@@ -480,26 +479,10 @@ interface BashRenderContext {
 }
 
 function formatBashCommand(args: BashRenderArgs): string {
-	const command = args.command || "…";
+	const command = replaceTabs(args.command || "…");
 	const prompt = "$";
 	const cwd = getProjectDir();
-	let displayWorkdir = args.cwd;
-
-	if (displayWorkdir) {
-		const resolvedCwd = path.resolve(cwd);
-		const resolvedWorkdir = path.resolve(displayWorkdir);
-		if (resolvedWorkdir === resolvedCwd) {
-			displayWorkdir = undefined;
-		} else {
-			const relativePath = path.relative(resolvedCwd, resolvedWorkdir);
-			const isWithinCwd =
-				relativePath && !relativePath.startsWith("..") && !relativePath.startsWith(`..${path.sep}`);
-			if (isWithinCwd) {
-				displayWorkdir = relativePath;
-			}
-		}
-	}
-
+	const displayWorkdir = formatToolWorkingDirectory(args.cwd, cwd);
 	const renderedCommand = [formatBashEnvAssignments(getBashEnvForDisplay(args)), command].filter(Boolean).join(" ");
 	return displayWorkdir ? `${prompt} cd ${displayWorkdir} && ${renderedCommand}` : `${prompt} ${renderedCommand}`;
 }

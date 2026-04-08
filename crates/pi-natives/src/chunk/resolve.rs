@@ -194,8 +194,12 @@ fn root_chunk(state: &ChunkStateInner) -> Result<&ChunkNode, String> {
 pub fn chunk_region_range(chunk: &ChunkNode, region: ChunkRegion) -> (usize, usize) {
 	let start = chunk.start_byte as usize;
 	let end = chunk.end_byte as usize;
-	let pro_end = chunk.prologue_end_byte.map_or(start, |b| b as usize);
-	let epi_start = chunk.epilogue_start_byte.map_or(end, |b| b as usize);
+	let pro_end = chunk
+		.prologue_end_byte
+		.map_or(start, |b| (b as usize).clamp(start, end));
+	let epi_start = chunk
+		.epilogue_start_byte
+		.map_or(end, |b| (b as usize).clamp(pro_end, end));
 	match region {
 		ChunkRegion::Head => (start, pro_end),
 		ChunkRegion::Body => (pro_end, epi_start),

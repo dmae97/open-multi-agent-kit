@@ -2748,8 +2748,12 @@ mod tests {
 			.expect("impl_Server.fn_start should exist");
 		assert!(
 			chunk.prologue_end_byte.is_some(),
-			"fn_start should have prologue_end_byte, got: start_byte={}, end_byte={}, prologue_end_byte={:?}, epilogue_start_byte={:?}",
-			chunk.start_byte, chunk.end_byte, chunk.prologue_end_byte, chunk.epilogue_start_byte,
+			"fn_start should have prologue_end_byte, got: start_byte={}, end_byte={}, \
+			 prologue_end_byte={:?}, epilogue_start_byte={:?}",
+			chunk.start_byte,
+			chunk.end_byte,
+			chunk.prologue_end_byte,
+			chunk.epilogue_start_byte,
 		);
 
 		let result = apply_single_edit(&state, "test.rs", EditOperation {
@@ -2757,8 +2761,11 @@ mod tests {
 			sel:     Some(format!("impl_Server.fn_start#{}@head", chunk.checksum)),
 			crc:     None,
 			region:  None,
-			content: Some("    /// Initializes and starts the server.
-    pub fn start(&mut self) {".to_owned()),
+			content: Some(
+				"    /// Initializes and starts the server.
+    pub fn start(&mut self) {"
+					.to_owned(),
+			),
 			find:    None,
 		});
 
@@ -2770,14 +2777,18 @@ mod tests {
 			body_count, result.diff_after
 		);
 		assert!(
-			result.diff_after.contains("/// Initializes and starts the server."),
+			result
+				.diff_after
+				.contains("/// Initializes and starts the server."),
 			"new doc comment should be in output:
-{}", result.diff_after
+{}",
+			result.diff_after
 		);
 		assert!(
 			!result.diff_after.contains("/// Starts the server."),
 			"old doc comment should be removed:
-{}", result.diff_after
+{}",
+			result.diff_after
 		);
 	}
 
@@ -2804,18 +2815,18 @@ mod tests {
 			.inner()
 			.chunk("class_Server.fn_start")
 			.expect("class_Server.fn_start should exist");
-		assert!(
-			chunk.prologue_end_byte.is_some(),
-			"fn_start should have prologue_end_byte"
-		);
+		assert!(chunk.prologue_end_byte.is_some(), "fn_start should have prologue_end_byte");
 
 		let result = apply_single_edit(&state, "test.ts", EditOperation {
 			op:      ChunkEditOp::Replace,
 			sel:     Some(format!("class_Server.fn_start#{}@head", chunk.checksum)),
 			crc:     None,
 			region:  None,
-			content: Some("    /** Initializes the server. */
-    start() {".to_owned()),
+			content: Some(
+				"    /** Initializes the server. */
+    start() {"
+					.to_owned(),
+			),
 			find:    None,
 		});
 
@@ -2829,8 +2840,152 @@ mod tests {
 		assert!(
 			result.diff_after.contains("/** Initializes the server. */"),
 			"new doc comment should be in output:
-{}", result.diff_after
+{}",
+			result.diff_after
 		);
 	}
 
+	#[test]
+	fn python_body_replace_does_not_corrupt_surrounding_code() {
+		let source =
+			"import os\n\ndef main():\n    x = 1\n    print(x)\n\ndef helper():\n    return 42\n";
+		let state = state_for(source, "python");
+		let chunk = state.inner().chunk("fn_main").expect("fn_main");
+
+		let result = apply_single_edit(&state, "test.py", EditOperation {
+			op:      ChunkEditOp::Replace,
+			sel:     Some(format!("fn_main#{}@body", chunk.checksum)),
+			crc:     None,
+			region:  None,
+			content: Some("y = 2\nprint(y)\n".to_owned()),
+			find:    None,
+		});
+
+		assert!(
+			result.diff_after.contains("import os"),
+			"imports should survive body replace: {}",
+			result.diff_after
+		);
+		assert!(
+			result.diff_after.contains("def main"),
+			"function head should survive body replace: {}",
+			result.diff_after
+		);
+		assert!(
+			result.diff_after.contains("y = 2"),
+			"replacement body should appear: {}",
+			result.diff_after
+		);
+		assert!(
+			result.diff_after.contains("def helper"),
+			"sibling function should survive body replace: {}",
+			result.diff_after
+		);
+		assert!(
+			result.diff_after.contains("return 42"),
+			"sibling function body should survive: {}",
+			result.diff_after
+		);
+		// Imports should remain at column 0, not indented
+		assert!(
+			result.diff_after.starts_with("import os"),
+			"import should be at column 0: {:?}",
+			&result.diff_after[..40.min(result.diff_after.len())]
+		);
+	}
+
+	#[test]
+	fn python_head_replace_does_not_orphan_body() {
+		let source = "class Server:\n    def start(self) -> None:\n        self.running = True\n";
+		let state = state_for(source, "python");
+		let chunk = state
+			.inner()
+			.chunk("class_Server.fn_start")
+			.expect("fn_start");
+
+		let result = apply_single_edit(&state, "test.py", EditOperation {
+			op:      ChunkEditOp::Replace,
+			sel:     Some(format!("class_Server.fn_start#{}@head", chunk.checksum)),
+			crc:     None,
+			region:  None,
+			content: Some("def begin(self) -> None:\n".to_owned()),
+			find:    None,
+		});
+
+		assert!(
+			result.diff_after.contains("def begin"),
+			"replaced head should appear: {}",
+			result.diff_after
+		);
+		assert!(
+			result.diff_after.contains("self.running = True"),
+			"body should survive head replace: {}",
+			result.diff_after
+		);
+	}
+
+	#[test]
+	fn python_body_prepend_has_correct_indentation() {
+		let source = "def main():\n    x = 1\n    print(x)\n";
+		let state = state_for(source, "python");
+
+		let result = apply_single_edit(&state, "test.py", EditOperation {
+			op:      ChunkEditOp::Prepend,
+			sel:     Some("fn_main@body".to_owned()),
+			crc:     None,
+			region:  None,
+			content: Some("y = 0\n".to_owned()),
+			find:    None,
+		});
+
+		assert!(
+			result.diff_after.contains("y = 0"),
+			"prepended content should appear: {}",
+			result.diff_after
+		);
+		assert!(
+			result.diff_after.contains("x = 1"),
+			"existing body should survive: {}",
+			result.diff_after
+		);
+		// The prepended content should be at the body indent level
+		assert!(
+			result.diff_after.contains("    y = 0"),
+			"prepended content should be at body indent: {}",
+			result.diff_after
+		);
+	}
+
+	#[test]
+	fn python_class_body_replace_preserves_structure() {
+		let source =
+			"class Server:\n    def start(self):\n        pass\n\n    def stop(self):\n        pass\n";
+		let state = state_for(source, "python");
+		let chunk = state.inner().chunk("class_Server").expect("class_Server");
+
+		let result = apply_single_edit(&state, "test.py", EditOperation {
+			op:      ChunkEditOp::Replace,
+			sel:     Some(format!("class_Server#{}@body", chunk.checksum)),
+			crc:     None,
+			region:  None,
+			content: Some("def run(self):\n\tpass\n".to_owned()),
+			find:    None,
+		});
+
+		assert!(
+			result.diff_after.contains("class Server:"),
+			"class header should survive body replace: {}",
+			result.diff_after
+		);
+		assert!(
+			result.diff_after.contains("def run(self)"),
+			"replaced body should appear: {}",
+			result.diff_after
+		);
+		assert!(
+			!result.diff_after.contains("def start"),
+			"old body should be replaced: {}",
+			result.diff_after
+		);
+	}
 }
