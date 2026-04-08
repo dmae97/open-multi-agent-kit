@@ -5,8 +5,8 @@ Reads files using syntax-aware chunks.
 - `sel` — optional selector: `class_Foo`, `class_Foo.fn_bar#ABCD@inner`, `?`, `L50`, `L50-L120`, or `raw`
 - `timeout` — seconds, for URLs only
 
-Each anchor `[full.chunk.path#CCCC]` in the default output identifies a chunk. Use `full.chunk.path#CCCC` as-is to read truncated chunks.
-If you need a canonical target list, run `read(path="file", sel="?")`. That listing shows chunk paths plus the regions each chunk supports.
+Each opening anchor `+++ full.chunk.path#CCCC` in the default output identifies a chunk (with matching closers like `--- /full.chunk.path#CCCC`). Use `full.chunk.path#CCCC` as-is to read truncated chunks.
+If you need a canonical target list, run `read(path="file", sel="?")`. That listing shows chunk paths with CRCs.
 Line numbers in the gutter are absolute file line numbers.
 
 Chunk trees: JS, TS, TSX, Python, Rust, Go. Others use blank-line fallback.

@@ -226,9 +226,24 @@ fn resolve_chunk_selector_impl<'a>(
 	};
 
 	if is_line_number_selector(cleaned) {
+		if let Some(line) = parse_line_number(cleaned) {
+			if let Some(chunk_path) =
+				crate::chunk::line_to_chunk_path(state.tree(), line)
+			{
+				warnings.push(format!(
+					"Auto-resolved line target \"{cleaned}\" to chunk \"{chunk_path}\"."
+				));
+				return resolve_chunk_selector_impl(
+					state,
+					Some(&chunk_path),
+					crc,
+					warnings,
+				);
+			}
+		}
 		return Err(format!(
-			"Line-number targets are not supported in chunk mode. Use chunk paths like fn_foo#ABCD \
-			 instead of \"{cleaned}\"."
+			"Line target \"{cleaned}\" does not fall inside any chunk. Use chunk paths like \
+			 fn_foo#ABCD instead, or run read(sel=\"?\") to list available chunks."
 		));
 	}
 
@@ -616,6 +631,13 @@ fn is_line_number_selector(selector: &str) -> bool {
 	}
 	let end = end.strip_prefix('L').unwrap_or(end);
 	!end.is_empty() && end.chars().all(|ch| ch.is_ascii_digit())
+}
+
+/// Extract the start line number from a line selector like `L89` or `L24-L27`.
+fn parse_line_number(selector: &str) -> Option<u32> {
+	let rest = selector.strip_prefix('L')?;
+	let digits = rest.split('-').next().unwrap_or(rest);
+	digits.parse::<u32>().ok()
 }
 
 fn is_checksum_token(value: &str) -> bool {

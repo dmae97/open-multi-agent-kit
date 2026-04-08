@@ -193,9 +193,14 @@ fn classify_type_decl<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'t>
 }
 
 fn group_from_sanitized<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'t> {
-	let kind_name = sanitize_node_kind(node.kind());
-	let kind = ChunkKind::from_sanitized_kind(kind_name.as_str());
-	make_candidate(node, kind, kind_name, NameStyle::Group, None, None, source)
+	let sanitized = sanitize_node_kind(node.kind());
+	let kind = ChunkKind::from_sanitized_kind(sanitized);
+	let identifier = if kind == ChunkKind::Chunk {
+		Some(sanitized.to_string())
+	} else {
+		None
+	};
+	make_candidate(node, kind, identifier, NameStyle::Group, None, None, source)
 }
 
 /// For a `type_spec`, find a `struct_type` or `interface_type` child and return

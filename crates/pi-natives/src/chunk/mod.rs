@@ -1659,7 +1659,7 @@ impl Config {
 				normalize_indent:    Some(true),
 			})
 			.expect("root read should succeed");
-		assert!(result.text.contains("[class_Worker.fn_run#"), "{}", result.text);
+		assert!(result.text.contains("class_Worker.fn_run#"), "{}", result.text);
 	}
 
 	#[test]

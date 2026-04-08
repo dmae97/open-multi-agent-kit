@@ -343,7 +343,7 @@ fn classify_function_c<'tree>(node: Node<'tree>, source: &str) -> RawChunkCandid
 		},
 		_ => {
 			let kind_name = sanitize_node_kind(node.kind());
-			let kind = ChunkKind::from_sanitized_kind(kind_name.as_str());
+			let kind = ChunkKind::from_sanitized_kind(kind_name);
 			group_candidate(node, kind, source)
 		},
 	}

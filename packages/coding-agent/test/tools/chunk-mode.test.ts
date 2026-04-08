@@ -85,8 +85,8 @@ describe("chunk mode tools", () => {
 		const text = getText(result);
 
 		expect(text).toContain("server.ts·");
-		expect(text).toContain("[class_Server#");
-		expect(text).toContain("[fn_main#");
+		expect(text).toContain("class_Server#");
+		expect(text).toContain("fn_main#");
 		expect(text).not.toContain("ck:");
 	});
 
@@ -106,7 +106,7 @@ describe("chunk mode tools", () => {
 		const text = getText(result);
 
 		expect(text).not.toContain("to expand ⋮");
-		expect(text).toContain("server.ts:class_Server.fn_handleError@container·");
+		expect(text).toContain("server.ts:class_Server.fn_handleError·");
 		expect(text).toContain("let total = 0;");
 		expect(text).toContain("29| \t\t\ttotal += 25;");
 		expect(text).toContain("return err.message + total;");
@@ -122,8 +122,8 @@ describe("chunk mode tools", () => {
 
 		expect(text).toContain("[Notice: chunk view scoped to requested lines L2-L4; non-overlapping lines omitted.]");
 		expect(text).toContain("server.ts·");
-		expect(text).toContain("[class_Server.fn_handleError#");
-		expect(text).toContain("[class_Server.fn_handleError.var_total#");
+		expect(text).toContain("class_Server.fn_handleError#");
+		expect(text).toContain("class_Server.fn_handleError.var_total#");
 		expect(text).toContain("3|");
 		expect(text).toContain("4|");
 		expect(text).not.toContain("⋯");
@@ -139,9 +139,8 @@ describe("chunk mode tools", () => {
 
 		expect(text).toContain("[Notice: chunk view scoped to requested lines L2-L4; non-overlapping lines omitted.]");
 		expect(text).toContain("server.ts·");
-		expect(text).toContain("[class_Server.fn_handleError#");
-		expect(text).toContain("[class_Server.fn_handleError.var_total#");
-		expect(text).toContain("[class_Server.fn_handleError.var_total#");
+		expect(text).toContain("class_Server.fn_handleError#");
+		expect(text).toContain("class_Server.fn_handleError.var_total#");
 		expect(text).toContain("3|");
 	});
 
@@ -158,7 +157,7 @@ describe("chunk mode tools", () => {
 		});
 		const text = getText(result);
 
-		expect(text).toContain("server.ts:class_Server.fn_handleError@container·");
+		expect(text).toContain("server.ts:class_Server.fn_handleError·");
 		expect(text).not.toContain("[Warning: checksum #");
 	});
 
@@ -172,7 +171,7 @@ describe("chunk mode tools", () => {
 
 		expect(text).toContain("component.tsx·");
 		expect(text).toContain("tsx");
-		expect(text).toContain("[fn_App#");
+		expect(text).toContain("fn_App#");
 	});
 
 	it("maps Handlebars and TLA+ file extensions for chunk mode", () => {
@@ -194,7 +193,7 @@ describe("chunk mode tools", () => {
 		const text = getText(result);
 
 		expect(text).toContain("server.ts:class_Server.fn_handleError");
-		expect(text).toContain(".return>64|");
+		expect(text).toContain(".ret>64|");
 		expect(text).toContain("err.message");
 	});
 
@@ -311,7 +310,7 @@ describe("chunk mode tools", () => {
 			path: filePath,
 			edits: [
 				{
-					target: "class_Server@body",
+					target: "class_Server@inner",
 					op: "append",
 					content: 'status(): string {\n  return "ok";\n}\n',
 				},

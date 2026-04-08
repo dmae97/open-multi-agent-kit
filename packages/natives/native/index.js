@@ -100,7 +100,6 @@ const selectedVariant = resolveCpuVariant(variantOverride);
 const addonFilenames = getAddonFilenames(platformTag, selectedVariant);
 const addonLabel = selectedVariant ? `${platformTag} (${selectedVariant})` : platformTag;
 
-const debugCandidates = [path.join(nativeDir, "pi_natives.dev.node"), path.join(execDir, "pi_natives.dev.node")];
 const baseReleaseCandidates = addonFilenames.flatMap(filename => [
 	path.join(nativeDir, filename),
 	path.join(execDir, filename),
@@ -110,8 +109,7 @@ const compiledCandidates = addonFilenames.flatMap(filename => [
 	path.join(userDataDir, filename),
 ]);
 const releaseCandidates = isCompiledBinary ? [...compiledCandidates, ...baseReleaseCandidates] : baseReleaseCandidates;
-const candidates = process.env.PI_DEV ? [...debugCandidates, ...releaseCandidates] : releaseCandidates;
-const dedupedCandidates = [...new Set(candidates)];
+const dedupedCandidates = [...new Set(releaseCandidates)];
 
 function runCommand(command, args) {
 	// removed logger.time

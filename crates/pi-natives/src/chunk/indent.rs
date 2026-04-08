@@ -207,30 +207,7 @@ pub fn reindent_inserted_block(
 	}
 
 	let normalized_target_indent = normalize_target_indent(target_indent, content);
-	let non_empty_rest = lines
-		.iter()
-		.skip(1)
-		.filter(|line| !line.trim().is_empty())
-		.copied()
-		.collect::<Vec<_>>();
-
-	let mut dedented = if lines.len() == 1 || non_empty_rest.is_empty() {
-		dedent_python_style(content)
-	} else {
-		let first_line = lines[0];
-		let first_indent = leading_whitespace(first_line).chars().count();
-		let min_rest_indent = non_empty_rest
-			.iter()
-			.map(|line| leading_whitespace(line).chars().count())
-			.min()
-			.unwrap_or(0);
-		if min_rest_indent > first_indent {
-			let tail = lines.iter().skip(1).copied().collect::<Vec<_>>().join("\n");
-			format!("{first_line}\n{}", dedent_python_style(&tail))
-		} else {
-			dedent_python_style(content)
-		}
-	};
+	let mut dedented = dedent_python_style(content);
 
 	if let Some(target_char) = normalized_target_indent.chars().next() {
 		let target_step = if target_char == ' ' {
@@ -587,8 +564,11 @@ mod tests {
 	}
 
 	#[test]
-	fn reindent_inserted_block_preserves_first_line_hanging_indent() {
-		let input = "call(\n        alpha,\n        beta,\n    )";
+	fn reindent_inserted_block_preserves_relative_indentation() {
+		// Agent sends tab-based content: call(\n\talpha,\n\tbeta,\n)
+		// After denormalize_from_tabs (4 spaces/tab): call(\n    alpha,\n    beta,\n)
+		// Should add target indent to all lines, preserving relative offsets.
+		let input = "call(\n    alpha,\n    beta,\n)";
 		assert_eq!(
 			reindent_inserted_block(input, "    ", Some(4)),
 			"    call(\n        alpha,\n        beta,\n    )"

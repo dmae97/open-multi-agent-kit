@@ -22,7 +22,7 @@ It follows the architecture terms from `docs/natives-architecture.md`:
 `packages/natives/package.json` scripts:
 
 - `bun scripts/build-native.ts` (`build:native`) → release build
-- `bun scripts/build-native.ts --dev` (`dev:native`) → debug/dev build
+- `bun scripts/build-native.ts --dev` (`dev:native`) → debug/dev profile build (same output naming)
 - `bun scripts/embed-native.ts` (`embed:native`) → generate `src/embedded-addon.ts` from built files
 
 ### 2) Rust artifact build
@@ -78,24 +78,23 @@ Release builds:
 - non-x64: `pi_natives.<platform>-<arch>.node`
 
 Dev build (`--dev`):
-- `pi_natives.dev.node`
+- Uses debug profile flags but keeps standard platform-tagged output naming
 
 Runtime loader candidate order in `native.ts`:
-- if `PI_DEV` is set: try `pi_natives.dev.node` first
-- then release candidates
+- release candidates
 - compiled mode prepends extracted/cache candidates before package-local files
 
 ## Environment flags and build options
 
 ## Runtime flags
 
-- `PI_DEV` (loader behavior): prefer dev addon candidates first
+- `PI_DEV` (loader behavior): enable loader diagnostics
 - `PI_NATIVE_VARIANT` (loader behavior, x64 only): force `modern` or `baseline` selection at runtime
 - `PI_COMPILED` (loader behavior): enable compiled-binary candidate/extraction behavior
 
 ## Build-time flags/options
 
-- `--dev` (script arg): build debug profile and emit `pi_natives.dev.node`
+- `--dev` (script arg): build debug profile
 - `CROSS_TARGET`: passed to Cargo `--target`
 - `TARGET_PLATFORM`: override output platform tag naming
 - `TARGET_ARCH`: override output arch naming
@@ -145,8 +144,8 @@ Typical local loop:
 
 1. Build addon:
    - release: `bun --cwd=packages/natives run build:native`
-   - debug: `bun --cwd=packages/natives run dev:native`
-2. Set `PI_DEV=1` when testing debug addon loading
+   - debug profile: `bun --cwd=packages/natives run dev:native`
+2. Set `PI_DEV=1` when testing loader diagnostics
 3. Loader in `native.ts` resolves package-local `native/` (and executable-dir fallback) candidates
 4. `validateNative` enforces export compatibility before wrappers use the binding
 
@@ -222,7 +221,7 @@ If any required symbol is missing, loader fails fast with a rebuild hint.
 # Release artifact for current host
 bun --cwd=packages/natives run build:native
 
-# Debug artifact (load first when PI_DEV=1)
+# Debug profile artifact build
 bun --cwd=packages/natives run dev:native
 
 # Build explicit x64 variants

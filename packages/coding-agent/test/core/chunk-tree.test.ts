@@ -100,22 +100,22 @@ function getChecksum(source: string, chunkPath: string, language = "typescript")
 function targetWithChecksum(
 	chunkPath: string,
 	checksum: string,
-	region: "container" | "prologue" | "body" | "epilogue" = "container",
+	region?: "head" | "inner" | "tail",
 ): string {
-	return `${chunkPath}#${checksum}${region === "container" ? "" : `@${region}`}`;
+	return `${chunkPath}#${checksum}${region ? `@${region}` : ""}`;
 }
 
 function currentTarget(
 	source: string,
 	chunkPath: string,
 	language = "typescript",
-	region: "container" | "prologue" | "body" | "epilogue" = "container",
+	region?: "head" | "inner" | "tail",
 ): string {
 	return targetWithChecksum(chunkPath, getChecksum(source, chunkPath, language), region);
 }
 
 function bodyTarget(chunkPath: string): string {
-	return `${chunkPath}@body`;
+	return `${chunkPath}@inner`;
 }
 
 describe("applyChunkEdits", () => {
@@ -360,7 +360,7 @@ describe("insertion boundaries", () => {
 			operations: [
 				{
 					op: "append",
-					sel: "type_Server@container",
+					sel: "type_Server",
 					content: "func (s *Server) Restart() {}",
 				},
 			],
@@ -386,7 +386,7 @@ type Server struct {
 			operations: [
 				{
 					op: "append",
-					sel: "type_Server@container",
+					sel: "type_Server",
 					content: "func (s *Server) Ping() {}",
 				},
 			],
@@ -411,7 +411,7 @@ type Server struct {
 			operations: [
 				{
 					op: "append",
-					sel: "type_Server@container",
+					sel: "type_Server",
 					content: "func (s *Server) LogCount() int {\n\ts.mu.Lock()\n\tdefer s.mu.Unlock()\n\treturn 0\n}",
 				},
 			],
@@ -706,8 +706,8 @@ describe("formatChunkedRead", () => {
 		});
 
 		expect(result.text).toContain("worker.ts·");
-		expect(result.text).toContain("[class_Worker#");
-		expect(result.text).toContain("[class_Worker.fn_run#");
+		expect(result.text).toContain("class_Worker#");
+		expect(result.text).toContain("class_Worker.fn_run#");
 		expect(result.text).not.toContain("ck:");
 		expect(result.text).not.toContain("[branch");
 	});
@@ -740,8 +740,8 @@ describe("formatChunkedRead", () => {
 			language: "typescript",
 		});
 
-		expect(result.text).toContain("worker.ts:class_Worker.fn_run@container·");
-		expect(result.text).toContain("[class_Worker.fn_run#");
+		expect(result.text).toContain("worker.ts:class_Worker.fn_run·");
+		expect(result.text).toContain("class_Worker.fn_run#");
 		expect(result.text).toContain("6| \trun(): void {");
 		expect(result.text).toContain("7| \t\tconsole.log(this.name);");
 		expect(result.text).toContain("console.log(this.name);");
@@ -761,7 +761,7 @@ describe("formatChunkedRead", () => {
 		});
 
 		expect(result.text).not.toContain("to expand ⋮");
-		expect(result.text).toContain("service.ts:class_Service.fn_handle@container·");
+		expect(result.text).toContain("service.ts:class_Service.fn_handle·");
 		expect(result.text).toContain("3| \t\tstep(0);");
 		expect(result.text).toContain("27| \t\tstep(24);");
 		expect(result.text).toContain("done();");
@@ -850,9 +850,9 @@ describe("addressable member rendering", () => {
 			language: "rust",
 		});
 
-		expect(result.text).toContain("[enum_LogLevel#");
-		expect(result.text).toContain("[enum_LogLevel.variant_Debug#");
-		expect(result.text).toContain("[enum_LogLevel.variant_Error#");
+		expect(result.text).toContain("enum_LogLevel#");
+		expect(result.text).toContain("enum_LogLevel.variant_Debug#");
+		expect(result.text).toContain("enum_LogLevel.variant_Error#");
 	});
 
 	test("renders a single-method Go interface inline on the parent chunk", async () => {
@@ -870,7 +870,7 @@ describe("addressable member rendering", () => {
 			language: "go",
 		});
 
-		expect(result.text).toContain("[type_Handler#");
+		expect(result.text).toContain("type_Handler#");
 		expect(result.text).toContain("3| type Handler interface {");
 		expect(result.text).toContain("4| \tHandle(method, path string) Result");
 	});
@@ -890,12 +890,12 @@ describe("addressable member rendering", () => {
 			language: "go",
 		});
 
-		expect(result.text).toContain("[type_Server#");
-		expect(result.text).toContain("[type_Server.field_Addr#");
-		expect(result.text).toContain("[fn_Start#");
-		expect(result.text).toContain("[fn_Stop#");
-		expect(result.text).not.toContain("[type_Server.fn_Start#");
-		expect(result.text).not.toContain("[type_Server.fn_Stop#");
+		expect(result.text).toContain("type_Server#");
+		expect(result.text).toContain("type_Server.field_Addr#");
+		expect(result.text).toContain("fn_Start#");
+		expect(result.text).toContain("fn_Stop#");
+		expect(result.text).not.toContain("type_Server.fn_Start#");
+		expect(result.text).not.toContain("type_Server.fn_Stop#");
 	});
 
 	test("line range filter shows top-level receiver methods even when the range skips the type header", async () => {
@@ -914,9 +914,9 @@ describe("addressable member rendering", () => {
 		});
 
 		expect(result.text).toContain("L7-L8");
-		expect(result.text).toContain("[fn_Start#");
-		expect(result.text).toContain("[fn_Stop#");
-		expect(result.text).not.toContain("[type_Server.fn_Start#");
+		expect(result.text).toContain("fn_Start#");
+		expect(result.text).toContain("fn_Stop#");
+		expect(result.text).not.toContain("type_Server.fn_Start#");
 	});
 
 	test("renders trivial TypeScript enum variants as addressable children", async () => {
@@ -931,9 +931,9 @@ describe("addressable member rendering", () => {
 			language: "typescript",
 		});
 
-		expect(result.text).toContain("[enum_Status#");
-		expect(result.text).toContain("[enum_Status.variant_Idle#");
-		expect(result.text).toContain("[enum_Status.variant_Busy#");
+		expect(result.text).toContain("enum_Status#");
+		expect(result.text).toContain("enum_Status.variant_Idle#");
+		expect(result.text).toContain("enum_Status.variant_Busy#");
 	});
 
 	test("keeps non-trivial containers expanded", () => {
@@ -968,9 +968,9 @@ describe("Go type chunk headers", () => {
 			language: "go",
 		});
 
-		expect(result.text).toContain("server.go:type_Server@container·3L");
-		expect(result.text).not.toContain("[fn_Start#");
-		expect(result.text).not.toContain("[fn_Stop#");
+		expect(result.text).toContain("server.go:type_Server·3L");
+		expect(result.text).not.toContain("fn_Start#");
+		expect(result.text).not.toContain("fn_Stop#");
 	});
 });
 
@@ -1035,9 +1035,9 @@ describe("Go receiver render ownership", () => {
 		});
 
 		expect(result.responseText).toContain("func DefaultServer() *Server");
-		expect(result.responseText).toContain("[fn_DefaultServer#");
-		expect(result.responseText).toContain("[fn_Start#");
-		expect(result.responseText).not.toContain("[type_Server.fn_Start#");
+		expect(result.responseText).toContain("fn_DefaultServer#");
+		expect(result.responseText).toContain("fn_Start#");
+		expect(result.responseText).not.toContain("type_Server.fn_Start#");
 	});
 });
 
@@ -1084,9 +1084,9 @@ describe("prepend warnings", () => {
 			language: "go",
 			cwd: "/",
 			filePath: "main.go",
-			operations: [{ op: "prepend", sel: "@body", content: "// AUTO-GENERATED\n" }],
+			operations: [{ op: "prepend", sel: "@inner", content: "// AUTO-GENERATED\n" }],
 		});
-		expect(result.warnings.some(w => w.includes("Comment-only @body.prepend"))).toBe(true);
+		expect(result.warnings.some(w => w.includes("Comment-only @inner.prepend"))).toBe(true);
 	});
 });
 
@@ -1147,9 +1147,9 @@ describe("prepend preamble guard", () => {
 				language: "javascript",
 				cwd: "/",
 				filePath: "index.js",
-				operations: [{ op: "prepend", sel: "@body", content: "// AUTO-GENERATED\n" }],
+				operations: [{ op: "prepend", sel: "@inner", content: "// AUTO-GENERATED\n" }],
 			}),
-		).toThrow(/Comment-only @body.prepend on root is not allowed when the file has a preamble/);
+		).toThrow(/Comment-only @inner.prepend on root is not allowed when the file has a preamble/);
 	});
 });
 
@@ -1172,7 +1172,7 @@ describe("tlaplus chunk rendering", () => {
 			language: "tlaplus",
 		});
 
-		expect(result.text).toContain("[mod_Spec.translation_12#");
+		expect(result.text).toContain("mod_Spec.translation_12#");
 		expect(result.text).toContain("\\* [translation hidden]");
 		expect(result.text).not.toContain("Next == pc' = pc");
 	});
@@ -1202,7 +1202,7 @@ describe("tlaplus chunk rendering", () => {
 		// The scoped response tree includes the touched chunk and adjacent siblings,
 		// but not distant ones like translation_12. The translation content must
 		// still be hidden from any chunk that IS visible.
-		expect(result.responseText).toContain("[mod_Spec.operator_Start#");
+		expect(result.responseText).toContain("mod_Spec.operator_Start#");
 		expect(result.responseText).not.toContain("Next == pc' = pc");
 	});
 });

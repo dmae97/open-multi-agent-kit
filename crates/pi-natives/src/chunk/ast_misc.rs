@@ -12,11 +12,11 @@ pub struct MiscClassifier;
 
 fn sanitized_group_candidate<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'t> {
 	let sanitized = sanitize_node_kind(node.kind());
-	let kind = ChunkKind::from_sanitized_kind(sanitized.as_str());
+	let kind = ChunkKind::from_sanitized_kind(sanitized);
 	// For unknown kinds that fall back to `Chunk`, preserve the original
 	// tree-sitter kind as the identifier so the path stays informative.
 	let identifier = if kind == ChunkKind::Chunk {
-		Some(sanitized)
+		Some(sanitized.to_string())
 	} else {
 		None
 	};

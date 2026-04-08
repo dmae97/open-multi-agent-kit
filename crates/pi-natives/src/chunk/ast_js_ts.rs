@@ -197,13 +197,8 @@ fn classify_function_js<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'
 
 		// ── Variables ──
 		"lexical_declaration" | "variable_declaration" => {
-			let span = line_span(node.start_position().row + 1, node.end_position().row + 1);
-			if span > 1 {
-				if let Some(name) = extract_single_declarator_name(node, source) {
-					make_kind_chunk(node, ChunkKind::Variable, Some(name), source, None)
-				} else {
-					group_from_sanitized(node, source)
-				}
+			if let Some(name) = extract_single_declarator_name(node, source) {
+				make_kind_chunk(node, ChunkKind::Variable, Some(name), source, None)
 			} else {
 				group_from_sanitized(node, source)
 			}
@@ -250,9 +245,14 @@ fn classify_var_decl_js<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'
 }
 
 fn group_from_sanitized<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'t> {
-	let kind_name = sanitize_node_kind(node.kind());
-	let kind = ChunkKind::from_sanitized_kind(kind_name.as_str());
-	make_candidate(node, kind, kind_name, NameStyle::Group, None, None, source)
+	let sanitized = sanitize_node_kind(node.kind());
+	let kind = ChunkKind::from_sanitized_kind(sanitized);
+	let identifier = if kind == ChunkKind::Chunk {
+		Some(sanitized.to_string())
+	} else {
+		None
+	};
+	make_candidate(node, kind, identifier, NameStyle::Group, None, None, source)
 }
 
 // ── Export statement ─────────────────────────────────────────────────────

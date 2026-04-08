@@ -1,7 +1,7 @@
 Edits files via syntax-aware chunks. Run `read(path="file.ts")` first. The edit target is a chunk selector, optionally qualified with a region.
 
 <rules>
-- **MUST** `read` first. Never invent chunk paths or CRCs. Copy them from the latest `read` output or edit response.
+- **MUST** `read` first. Never invent chunk paths or CRCs. Copy them from the latest `read` output (opening lines start with `+++`) or edit response.
 - `target` format:
   - insertions: `chunk` or `chunk@region`
   - replacements: `chunk#CRC` or `chunk#CRC@region`
@@ -17,7 +17,7 @@ Edits files via syntax-aware chunks. Run `read(path="file.ts")` first. The edit 
 - `@inner` — the editable interior only.
 - `@tail` — the closing delimiter or trailing owned trailer.
 
-For leaf chunks (fields, variants, single-line items), omit the region, they don't support regions.
+For leaf chunks (fields, variants, single-line items), `@inner` falls back to the full chunk.
 
 **Important:** `append`/`prepend` without a `@region` inserts *outside* the chunk. To add children *inside* a class, struct, enum, or function body, use `@inner`:
 - `class_Foo@inner` + `append` → adds inside the class before `}`

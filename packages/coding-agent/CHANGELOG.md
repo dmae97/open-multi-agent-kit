@@ -3,7 +3,7 @@
 ## [Unreleased]
 ### Breaking Changes
 
-- Simplified chunk edit operations: removed `append_child`, `prepend_child`, `append_sibling`, `prepend_sibling`, and `replace_body` ops in favor of unified `replace`, `before`, `after`, `prepend`, and `append` with region targeting (`@container`, `@prologue`, `@body`, `@epilogue`)
+- Simplified chunk edit operations: removed `append_child`, `prepend_child`, `append_sibling`, `prepend_sibling`, and `replace_body` ops in favor of unified `replace`, `before`, `after`, `prepend`, and `append` with region targeting (`@head`, `@inner`, `@tail`)
 - Chunk edit `target` format changed: now accepts `selector#CRC@region` for mutations and `selector@region` for insertions; removed separate `crc` and `anchor` fields from edit operations
 - Removed checksum requirement from insert operations (`before`, `after`, `prepend`, `append`); only `replace` requires `#CRC` suffix
 
@@ -69,9 +69,9 @@
 
 ### Changed
 
-- Chunk edit region names simplified: `@container`, `@prologue`, `@body`, `@epilogue` renamed to `@head`, `@inner`, `@tail` for clearer semantics
+- Chunk edit region names standardized to `@head`, `@inner`, and `@tail` for clearer semantics
 - Chunk edit documentation clarified: region defaults to full chunk when omitted; leaf chunks no longer support region targeting
-- Chunk read documentation updated: selector examples now use `@inner` instead of `@body` for region-specific reads
+- Chunk read documentation updated: selector examples now use region-specific selectors based on `@head`, `@inner`, and `@tail`
 - LSP server connecting status in welcome banner now uses muted pending symbol instead of warning symbol for clearer visual distinction
 - Codex websocket prewarm now runs asynchronously in the background instead of blocking session creation, allowing faster startup
 - Codex websocket status updates now display in interactive mode when prewarm completes or fails
@@ -110,7 +110,7 @@
 - DAP session state now tracks instruction and data breakpoints separately from source breakpoints
 - Replaced `Bun.which()` with `$which()` from pi-utils for command resolution
 - Chunk edit tool documentation restructured: replaced operation-specific examples with region-based guidance and canonical indentation rules
-- Chunk read documentation updated: selectors now support region syntax (e.g., `class_Foo.fn_bar#ABCD@body`) and canonical target listings show supported regions per chunk
+- Chunk read documentation updated: selectors now support region syntax (e.g., `class_Foo.fn_bar#ABCD@inner`) and canonical target listings show supported regions per chunk
 - Chunk edit schema simplified: `target` description now documents region format; `op` and `content` descriptions clarified for region-aware operations
 - Chunk edit streaming previews updated: labels now reflect region-aware operations (e.g., `append` instead of `append child`, `insert after` without anchor reference)
 - Removed CRC parsing from `parseChunkSelector()` and `parseChunkReadPath()`: selectors no longer extract embedded checksums

@@ -132,7 +132,7 @@ impl LangClassifier for NixHclClassifier {
 				Some(make_candidate(
 					node,
 					kind,
-					prefixed_name(sanitize_node_kind(node.kind()).as_str(), node, source),
+					prefixed_name(sanitize_node_kind(node.kind()), node, source),
 					NameStyle::Named,
 					signature_for_node(node, source),
 					recurse_into(node, ChunkContext::ClassBody, &[], &["body"]),

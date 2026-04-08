@@ -1804,14 +1804,16 @@ mod tests {
 	}
 
 	#[test]
-	fn edit_rejects_line_number_targets_with_clear_error() {
+	fn line_number_selector_auto_resolves_to_containing_chunk() {
 		let source = "function main(): void {\n\tconsole.log(\"old\");\n}\n";
 		let state = state_for(source, "typescript");
+		let chunk = state.inner().chunk("fn_main").expect("fn_main");
 
+		// L2 falls inside fn_main — should auto-resolve and apply the edit.
 		let result = apply_edits(&state, &EditParams {
 			operations:       vec![EditOperation {
 				op:      ChunkEditOp::Replace,
-				sel:     Some("L2".to_owned()),
+				sel:     Some(format!("L2#{}", chunk.checksum)),
 				crc:     None,
 				region:  None,
 				content: Some("function main(): void {\n\tconsole.log(\"new\");\n}".to_owned()),
@@ -1823,12 +1825,45 @@ mod tests {
 			cwd:              ".".to_owned(),
 			file_path:        "box.ts".to_owned(),
 		});
-		let Err(err) = result else {
-			panic!("line-number selectors should be rejected");
-		};
 
-		assert!(err.contains("Line-number targets are not supported in chunk mode"), "{err}");
-		assert!(err.contains("fn_foo#ABCD"), "{err}");
+		let result = result.expect("line-number selector should auto-resolve");
+		assert!(
+			result.warnings.iter().any(|w| w.contains("Auto-resolved line target")),
+			"should warn about auto-resolution: {:?}",
+			result.warnings
+		);
+		assert!(
+			result.diff_after.contains("\"new\""),
+			"edit should have applied: {}",
+			result.diff_after
+		);
+	}
+
+	#[test]
+	fn line_number_outside_any_chunk_returns_error() {
+		let source = "function main(): void {\n\tconsole.log(\"old\");\n}\n";
+		let state = state_for(source, "typescript");
+
+		// L999 is way beyond the file — should fail.
+		let result = apply_edits(&state, &EditParams {
+			operations:       vec![EditOperation {
+				op:      ChunkEditOp::Replace,
+				sel:     Some("L999".to_owned()),
+				crc:     None,
+				region:  None,
+				content: Some("// hello".to_owned()),
+				find:    None,
+			}],
+			default_selector: None,
+			default_crc:      None,
+			anchor_style:     None,
+			cwd:              ".".to_owned(),
+			file_path:        "box.ts".to_owned(),
+		});
+
+		assert!(result.is_err(), "line outside any chunk should fail");
+		let err = result.err().unwrap();
+		assert!(err.contains("does not fall inside any chunk"), "{err}");
 	}
 
 	#[test]
@@ -2580,6 +2615,29 @@ mod tests {
 			!trait_chunk.children.is_empty(),
 			"trait_Handler should have children, got leaf. Chunks: {:?}",
 			tree.chunks.iter().map(|c| &c.path).collect::<Vec<_>>()
+		);
+	}
+
+	#[test]
+	fn python_body_append_preserves_indentation() {
+		let source = "class Server:\n    def __init__(self):\n        self.x = 1\n\n    def start(self):\n        pass\n";
+		let state = state_for(source, "python");
+
+		let result = apply_single_edit(&state, "test.py", EditOperation {
+			op:      ChunkEditOp::Append,
+			sel:     Some("class_Server@body".to_owned()),
+			crc:     None,
+			region:  None,
+			content: Some("def stop(self):\n\tpass\n".to_owned()),
+			find:    None,
+		});
+
+		// The appended method should be at 4-space indent (class member level),
+		// with its body at 8-space indent.
+		assert!(
+			result.diff_after.contains("    def stop(self):\n        pass"),
+			"appended method should have correct Python indentation: {}",
+			result.diff_after
 		);
 	}
 }

@@ -15,7 +15,7 @@ use crate::env_uint;
 // ── Configuration (environment overrides) ────────────────────────────────
 env_uint! {
 	// Configured leaf threshold.
-	pub static LEAF_THRESHOLD: usize = "PI_CHUNK_LEAF_THRESHOLD" or 15 => [1, usize::MAX];
+	pub static LEAF_THRESHOLD: usize = "PI_CHUNK_LEAF_THRESHOLD" or 8 => [1, usize::MAX];
 	// Configured max chunk lines.
 	pub static MAX_CHUNK_LINES: usize = "PI_CHUNK_MAX_LINES" or 25 => [1, usize::MAX];
 	// Configured min recurse savings.
@@ -23,9 +23,15 @@ env_uint! {
 }
 
 /// Always recurse into named (non-group) chunks when children exist,
-/// regardless of the leaf threshold. Disabled via `PI_CHUNK_ALWAYS_RECURSE=0`.
+/// regardless of the leaf threshold. Enabled via `PI_CHUNK_ALWAYS_RECURSE=1`.
 pub static ALWAYS_RECURSE: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
-	std::env::var("PI_CHUNK_ALWAYS_RECURSE").map_or(true, |v| !matches!(v.as_str(), "0" | "false"))
+	std::env::var("PI_CHUNK_ALWAYS_RECURSE").map_or(false, |v| !matches!(v.as_str(), "0" | "false"))
+});
+
+/// Suppress `[/chunk#CRC]` closing tags in rendered output.
+/// Disabled via `PI_HIDE_CLOSING_TAGS=0`.
+pub static HIDE_CLOSING_TAGS: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
+	std::env::var("PI_HIDE_CLOSING_TAGS").map_or(true, |v| !matches!(v.as_str(), "0" | "false"))
 });
 
 // ── Internal types ───────────────────────────────────────────────────────
@@ -247,7 +253,7 @@ pub fn prefixed_name(prefix: &str, node: Node<'_>, source: &str) -> String {
 /// Derive a semantic name from a node's kind and/or identifier.
 pub fn infer_named_candidate<'tree>(node: Node<'tree>, source: &str) -> RawChunkCandidate<'tree> {
 	let kind_name = sanitize_node_kind(node.kind());
-	let kind = ChunkKind::from_sanitized_kind(kind_name.as_str());
+	let kind = ChunkKind::from_sanitized_kind(kind_name);
 	make_kind_chunk(node, kind, extract_identifier(node, source), source, None)
 }
 
@@ -531,17 +537,17 @@ pub fn unquote_text(text: &str) -> String {
 	text.trim().trim_matches('"').trim_matches('\'').to_string()
 }
 
-pub fn sanitize_node_kind(kind: &str) -> String {
-	let stripped = kind
-		.replace("_statement", "")
-		.replace("_declaration", "")
-		.replace("_definition", "")
-		.replace("_item", "")
-		.replace("_expression", "_expr");
-	if stripped.is_empty() {
-		kind.to_string()
+pub fn sanitize_node_kind(kind: &str) -> &str {
+	let kind_stripped = kind
+		.trim_suffix("_statement")
+		.trim_suffix("_declaration")
+		.trim_suffix("_definition")
+		.trim_suffix("_item")
+		.trim_suffix("ession"); // _expression -> _expr
+	if kind_stripped.is_empty() {
+		kind
 	} else {
-		stripped
+		kind_stripped
 	}
 }
 

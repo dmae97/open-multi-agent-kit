@@ -778,7 +778,7 @@ fn emit_chunk_subtree(
 			emit_inline_hunks_for(ctx, &chunk.path);
 		}
 		// Closing tag for chunks with children
-		if !chunk.path.is_empty() {
+		if !chunk.path.is_empty() && !*crate::chunk::common::HIDE_CLOSING_TAGS {
 			let anchor_indent = chunk_body_anchor_indent(
 				ctx.source_lines,
 				chunk,
