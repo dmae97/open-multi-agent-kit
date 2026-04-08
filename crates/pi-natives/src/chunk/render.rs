@@ -741,6 +741,11 @@ fn emit_chunk_subtree(
 		{
 			emit_leaf_body(ctx, chunk, span);
 		}
+		// Emit inline diff hunks even when children are filtered out by
+		// focus (the chunk is "effectively leaf" but may own hunks).
+		if !chunk.path.is_empty() {
+			emit_inline_hunks_for(ctx, &chunk.path);
+		}
 		return;
 	}
 

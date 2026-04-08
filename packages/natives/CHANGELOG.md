@@ -1,8 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added `Decl` variant to `ChunkRegion` enum for accessing semantic declarations without leading trivia
 - Added `check:types` script for explicit TypeScript type checking
 - Added `lint` script for running Biome linter
 - Added `fmt` script for code formatting with Biome

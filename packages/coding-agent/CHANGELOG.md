@@ -1,13 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added `decl` region to chunk selector for targeting declarations without leading trivia
 - Exported `hooks` subpath for extensibility API access
 - Added `build` script for compiling binary artifacts
 
 ### Changed
 
+- Updated chunk edit documentation to clarify region semantics and emphasize using the narrowest region for edits
+- Improved chunk selector guidance with visual diagram showing region boundaries
 - Renamed `build:binary` script to `build`
 - Refactored `check` script to include linting via Biome and type checking
 - Added `check:types`, `lint`, `fmt`, and `fix` scripts for improved developer workflow

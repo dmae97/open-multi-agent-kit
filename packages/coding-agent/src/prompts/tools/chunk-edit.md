@@ -5,7 +5,7 @@ Edits files via syntax-aware chunks. Run `read(path="file.ts")` first. The edit 
 - `sel` format:
   - insertions: `chunk` or `chunk@region`
   - replacements: `chunk#CRC` or `chunk#CRC@region`
-- Without a `@region` it defaults to the entire chunk. Valid regions: `head`, `body`, `tail`. Prefer the innermost chunk and narrowest region that covers your change — e.g. use `@body` when only the body is changing.
+- Without a `@region` it defaults to the entire chunk including leading trivia. Valid regions: `head`, `body`, `tail`, `decl`.
 - If the exact chunk path is unclear, run `read(path="file", sel="?")` and copy a selector from that listing.
 - Use `\t` for indentation in `content`. Write content at indent-level 0 — the tool re-indents it to match the chunk's position in the file. For example, to replace `@body` of a method, write the body starting at column 0:
   ```
@@ -17,18 +17,31 @@ Edits files via syntax-aware chunks. Run `read(path="file.ts")` first. The edit 
 - **CRCs change after every edit.** Always use the selectors/CRCs from the most recent `read` or edit response. Never reuse a CRC from a previous edit.
 </rules>
 
+<critical>
+You **MUST** use the narrowest region that covers your change. Replacing without a region replaces the **entire chunk including leading comments, decorators, and attributes** — omitting them from `content` deletes them.
+</critical>
+
 <regions>
-- `@head` — attached trivia, header/signature, and opening delimiter.
-- `@body` — the editable interior only.
-- `@tail` — the closing delimiter or trailing owned trailer.
+```
+  @head ··· ┊ /// doc comment
+          · ┊ #[attr]
+  @decl ··· ┊ fn foo(x: i32) {
+   @body ·· ┊     body();
+   @tail ·· ┊ }
+```
+- `@body` — the interior only. **Use for most edits.**
+- `@head` — leading trivia + signature + opening delimiter.
+- `@tail` — the closing delimiter.
+- `@decl` — everything except leading trivia (signature + body + closing delimiter).
+- *(no region)* — the entire chunk including leading trivia. Same as `@head` + `@body` + `@tail`.
 
 For leaf chunks (fields, variants, single-line items), `@body` falls back to the full chunk.
 
-**Important:** `append`/`prepend` without a `@region` inserts _outside_ the chunk. To add children _inside_ a class, struct, enum, or function body, use `@body`:
+`append`/`prepend` without a `@region` inserts _outside_ the chunk. To add children _inside_ a class, struct, enum, or function body, use `@body`:
 - `class_Foo@body` + `append` → adds inside the class before `}`
 - `class_Foo@body` + `prepend` → adds inside the class after `{`
 - `class_Foo` + `append` → adds after the entire class (after `}`)
-  </regions>
+</regions>
 
 <ops>
 |op|sel|effect|
@@ -106,8 +119,6 @@ function makeCounter(start: number): Counter {
   return c;
 }
 ~~~
-
-> **Tip:** Prefer the narrowest edit that covers your change. If only the body is changing, use `@body` instead of replacing the whole chunk — this avoids accidentally dropping or duplicating surrounding attributes, decorators, and doc comments.
 
 **Replace a method body** (`@body`):
 ~~~json

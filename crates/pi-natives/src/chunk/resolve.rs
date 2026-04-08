@@ -17,12 +17,13 @@ fn parse_region_name(value: &str) -> Option<ChunkRegion> {
 		"head" => Some(ChunkRegion::Head),
 		"body" => Some(ChunkRegion::Body),
 		"tail" => Some(ChunkRegion::Tail),
+		"decl" => Some(ChunkRegion::Decl),
 		_ => None,
 	}
 }
 
 fn is_known_region_name(value: &str) -> bool {
-	matches!(value.trim(), "head" | "body" | "tail")
+	matches!(value.trim(), "head" | "body" | "tail" | "decl")
 }
 
 /// Split a trailing `@region` suffix from a selector. Returns the selector
@@ -204,6 +205,7 @@ pub fn chunk_region_range(chunk: &ChunkNode, region: ChunkRegion) -> (usize, usi
 		ChunkRegion::Head => (start, pro_end),
 		ChunkRegion::Body => (pro_end, epi_start),
 		ChunkRegion::Tail => (epi_start, end),
+		ChunkRegion::Decl => ((chunk.checksum_start_byte as usize).clamp(start, end), end),
 	}
 }
 
@@ -492,7 +494,11 @@ pub fn format_selector_tree(
 			let is_last = index + 1 == count;
 			let connector = if is_last { "└── " } else { "├── " };
 			let leaf = child.path.rsplit('.').next().unwrap_or(child.path.as_str());
-			let dot = if depth > 0 || leading_dot_on_first_level { "." } else { "" };
+			let dot = if depth > 0 || leading_dot_on_first_level {
+				"."
+			} else {
+				""
+			};
 			lines.push(format!(
 				"{prefix}{connector}{dot}{leaf}#{}  L{}-L{}",
 				child.checksum, child.start_line, child.end_line,
@@ -552,8 +558,8 @@ fn build_not_found_error(tree: &ChunkTree, cleaned: &str) -> String {
 		)
 	} else {
 		format!(
-			"Chunk path not found: \"{cleaned}\".{hint} Re-read the file to see the full chunk \
-			 tree with paths and checksums."
+			"Chunk path not found: \"{cleaned}\".{hint} Re-read the file to see the full chunk tree \
+			 with paths and checksums."
 		)
 	}
 }

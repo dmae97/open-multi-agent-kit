@@ -33,7 +33,7 @@ describe("InteractiveMode LSP startup welcome banner", () => {
 		vi.spyOn(process.stdin, "resume").mockReturnValue(process.stdin);
 		vi.spyOn(process.stdin, "pause").mockReturnValue(process.stdin);
 		vi.spyOn(process.stdin, "setEncoding").mockReturnValue(process.stdin);
-		if (process.stdin.setRawMode) {
+		if (typeof process.stdin.setRawMode === "function") {
 			vi.spyOn(process.stdin, "setRawMode").mockReturnValue(process.stdin);
 		}
 

@@ -412,7 +412,11 @@ impl ChunkState {
 
 		if selector.as_deref() == Some("?") {
 			let mut lines = vec![format!("{} chunks (dot-joined paths):", params.display_path)];
-			lines.extend(format_selector_tree(self.inner.tree(), &self.inner.tree().root_children, false));
+			lines.extend(format_selector_tree(
+				self.inner.tree(),
+				&self.inner.tree().root_children,
+				false,
+			));
 			return Ok(ReadResult { text: lines.join("\n"), chunk: None });
 		}
 

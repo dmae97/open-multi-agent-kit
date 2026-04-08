@@ -94,6 +94,10 @@ pub enum ChunkRegion {
 	Body,
 	#[napi(value = "tail")]
 	Tail,
+	/// The semantic declaration without leading trivia (comments, attributes).
+	/// Spans from `checksum_start_byte` to `end_byte`.
+	#[napi(value = "decl")]
+	Decl,
 }
 
 impl ChunkRegion {
@@ -102,6 +106,7 @@ impl ChunkRegion {
 			Self::Head => "head",
 			Self::Body => "body",
 			Self::Tail => "tail",
+			Self::Decl => "decl",
 		}
 	}
 }

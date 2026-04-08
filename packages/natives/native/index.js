@@ -261,6 +261,7 @@ exports.ChunkRegion = {
   Head: 'head',
   Body: 'body',
   Tail: 'tail',
+  Decl: 'decl',
 };
 exports.Ellipsis = {
   Unicode: 0,

@@ -298,7 +298,10 @@ fn resolve_edit_target(
 	}
 	let chunk = resolved.chunk.clone();
 	if chunk.prologue_end_byte.is_none() || chunk.epilogue_start_byte.is_none() {
-		region = None;
+		// @decl only depends on checksum_start_byte, not prologue/epilogue.
+		if region != Some(ChunkRegion::Decl) {
+			region = None;
+		}
 	}
 
 	Ok(ResolvedEditTarget { chunk, region })
@@ -412,7 +415,7 @@ fn apply_replace(
 		// For prologue/epilogue replacements, ensure the replacement preserves
 		// the newline boundary so the body content isn't joined onto the same
 		// line as the replacement.
-		if matches!(target.region, Some(ChunkRegion::Head | ChunkRegion::Tail))
+		if matches!(target.region, Some(ChunkRegion::Head | ChunkRegion::Tail | ChunkRegion::Decl))
 			&& !replacement.is_empty()
 			&& !replacement.ends_with('\n')
 			&& state.source.as_bytes().get(region_end.saturating_sub(1)) == Some(&b'\n')
@@ -684,7 +687,7 @@ fn target_indent_for_region(
 	file_indent_step: usize,
 ) -> String {
 	match region {
-		None | Some(ChunkRegion::Head | ChunkRegion::Tail) => {
+		None | Some(ChunkRegion::Head | ChunkRegion::Tail | ChunkRegion::Decl) => {
 			anchor.indent_char.repeat(anchor.indent as usize)
 		},
 		Some(ChunkRegion::Body) => {
@@ -969,13 +972,15 @@ fn resolve_insertion_point(
 ) -> Result<(InsertionPoint, InsertPosition), String> {
 	match (region, op) {
 		// Before chunk boundary
-		(None | Some(ChunkRegion::Head), ChunkEditOp::Before | ChunkEditOp::Prepend) => {
-			Ok((before_chunk_insertion_point(state, anchor), InsertPosition::Before))
-		},
+		(
+			None | Some(ChunkRegion::Head | ChunkRegion::Decl),
+			ChunkEditOp::Before | ChunkEditOp::Prepend,
+		) => Ok((before_chunk_insertion_point(state, anchor), InsertPosition::Before)),
 		// After chunk boundary
-		(None | Some(ChunkRegion::Tail), ChunkEditOp::After | ChunkEditOp::Append) => {
-			Ok((after_chunk_insertion_point(state, anchor), InsertPosition::After))
-		},
+		(
+			None | Some(ChunkRegion::Tail | ChunkRegion::Decl),
+			ChunkEditOp::After | ChunkEditOp::Append,
+		) => Ok((after_chunk_insertion_point(state, anchor), InsertPosition::After)),
 		// Inner first-child position
 		(Some(ChunkRegion::Body), ChunkEditOp::Before | ChunkEditOp::Prepend)
 		| (Some(ChunkRegion::Head), ChunkEditOp::After | ChunkEditOp::Append) => Ok((
@@ -3015,6 +3020,262 @@ mod tests {
 			!result.diff_after.contains("def start"),
 			"old body should be replaced: {}",
 			result.diff_after
+		);
+	}
+
+	#[test]
+	fn whole_chunk_replace_includes_leading_trivia_in_range() {
+		// Whole-chunk replace covers the full range including absorbed leading
+		// trivia (comments, attributes). If the replacement omits the trivia,
+		// it gets dropped — the read output shows the trivia as part of the
+		// chunk so the LLM knows to include it.
+		let source = "#[cfg(test)]\nmod tests {\n\tuse super::*;\n\n\t#[test]\n\tfn my_test() \
+		              {\n\t\told();\n\t}\n}\n";
+		let state = state_for(source, "rust");
+		let chunk = state
+			.inner()
+			.chunk("mod_tests.fn_my_test")
+			.expect("mod_tests.fn_my_test should exist");
+
+		// Verify the chunk absorbs the #[test] attribute as leading trivia.
+		assert!(
+			chunk.start_byte < chunk.checksum_start_byte,
+			"chunk should have absorbed leading trivia (start_byte {} < checksum_start_byte {})",
+			chunk.start_byte,
+			chunk.checksum_start_byte
+		);
+
+		// Replace the function WITHOUT including #[test] in the content.
+		let result = apply_single_edit(&state, "test.rs", EditOperation {
+			op:      ChunkEditOp::Replace,
+			sel:     Some("mod_tests.fn_my_test".to_owned()),
+			crc:     Some(chunk.checksum.clone()),
+			region:  None,
+			content: Some("fn my_test() {\n\tnew();\n}".to_owned()),
+			find:    None,
+		});
+
+		// #[test] is dropped because the replacement didn't include it.
+		assert!(
+			!result.diff_after.contains("#[test]"),
+			"#[test] should be dropped when omitted from replacement. Full text:\n{}",
+			result.diff_after
+		);
+
+		// Verify the read output shows #[test] as part of the chunk's content
+		// so the LLM can see it needs to be included.
+		let read_output = crate::chunk::render::render_state(state.inner(), &RenderParams {
+			chunk_path:           Some(String::new()),
+			title:                "test.rs".to_owned(),
+			language_tag:         Some("rust".to_owned()),
+			visible_range:        None,
+			render_children_only: true,
+			omit_checksum:        true,
+			anchor_style:         Some(ChunkAnchorStyle::Full),
+			show_leaf_preview:    true,
+			tab_replacement:      Some("    ".to_owned()),
+			normalize_indent:     Some(true),
+			focused_paths:        None,
+		});
+		println!("=== READ OUTPUT ===\n{read_output}\n=== END ===");
+		assert!(
+			read_output.contains("#[test]"),
+			"read output must show #[test] as part of the chunk. Output:\n{read_output}"
+		);
+	}
+
+	#[test]
+	fn decl_region_replaces_without_leading_trivia() {
+		// @decl covers checksum_start_byte → end_byte: the declaration itself
+		// without leading trivia. Leading comments/attributes are preserved.
+		let source = "#[cfg(test)]\nmod tests {\n\tuse super::*;\n\n\t#[test]\n\tfn my_test() \
+		              {\n\t\told();\n\t}\n}\n";
+		let state = state_for(source, "rust");
+		let chunk = state
+			.inner()
+			.chunk("mod_tests.fn_my_test")
+			.expect("fn_my_test should exist");
+
+		let result = apply_single_edit(&state, "test.rs", EditOperation {
+			op:      ChunkEditOp::Replace,
+			sel:     Some("mod_tests.fn_my_test".to_owned()),
+			crc:     Some(chunk.checksum.clone()),
+			region:  Some(ChunkRegion::Decl),
+			content: Some("fn my_test() {\n\tnew();\n}".to_owned()),
+			find:    None,
+		});
+
+		// #[test] should be preserved — @decl doesn't cover leading trivia.
+		assert!(
+			result.diff_after.contains("#[test]"),
+			"#[test] should be preserved with @decl. Full text:\n{}",
+			result.diff_after
+		);
+		assert!(
+			result.diff_after.contains("new()"),
+			"replacement body should appear. Full text:\n{}",
+			result.diff_after
+		);
+	}
+
+	#[test]
+	fn whole_chunk_replace_shows_diff_hunks_after_attribute_restoration() {
+		// Bug 2: After a first edit drops #[test] (bug 1), a follow-up edit that
+		// adds it back should show diff hunks in the response text.
+		// Uses a module with multiple functions and a batch of two replacements
+		// to match the real-world scenario.
+		let source = "\
+#[cfg(test)]\nmod tests {\n\tuse super::*;\n\n\tfn test_alpha() {\n\t\told_alpha();\n\t}\n\n\tfn \
+		              test_middle() {\n\t\tmiddle();\n\t}\n\n\tfn test_beta() \
+		              {\n\t\told_beta();\n\t}\n}\n";
+		let state = state_for(source, "rust");
+		let chunk_a = state
+			.inner()
+			.chunk("mod_tests.fn_test_alpha")
+			.expect("fn_test_alpha should exist");
+		let chunk_b = state
+			.inner()
+			.chunk("mod_tests.fn_test_beta")
+			.expect("fn_test_beta should exist");
+
+		// Batch replace: add #[test] to both functions.
+		let result = apply_edits(&state, &EditParams {
+			operations:       vec![
+				EditOperation {
+					op:      ChunkEditOp::Replace,
+					sel:     Some("mod_tests.fn_test_alpha".to_owned()),
+					crc:     Some(chunk_a.checksum.clone()),
+					region:  None,
+					content: Some("#[test]\nfn test_alpha() {\n\tnew_alpha();\n}".to_owned()),
+					find:    None,
+				},
+				EditOperation {
+					op:      ChunkEditOp::Replace,
+					sel:     Some("mod_tests.fn_test_beta".to_owned()),
+					crc:     Some(chunk_b.checksum.clone()),
+					region:  None,
+					content: Some("#[test]\nfn test_beta() {\n\tnew_beta();\n}".to_owned()),
+					find:    None,
+				},
+			],
+			default_selector: None,
+			default_crc:      None,
+			anchor_style:     None,
+			cwd:              ".".to_owned(),
+			file_path:        "test.rs".to_owned(),
+		})
+		.expect("edit should apply");
+
+		assert!(result.changed, "edit should be detected as a change");
+		assert!(
+			result.diff_after.contains("#[test]"),
+			"#[test] should be in the result. Full text:\n{}",
+			result.diff_after
+		);
+		// The response text should contain diff hunks (@@) showing the changes.
+		assert!(
+			result.response_text.contains("@@"),
+			"response should include diff hunks showing the changes. Response:\n{}",
+			result.response_text
+		);
+	}
+
+	#[test]
+	fn diff_hunks_shown_for_non_leaf_function_replacement() {
+		// Bug 2 (realistic): When replacing functions that have children
+		// (sub-chunks like stmts, let bindings), the diff hunks should still
+		// appear in the response. Mirrors the real-world scenario where only
+		// #[test] is added and the function body stays identical.
+		let source =
+			"\
+#[cfg(test)]\nmod tests {\n\tuse super::*;\n\n\tfn test_alpha() {\n\t\tlet mut config = \
+			 base_config();\n\t\tconfig.enabled = Some(false);\n\t\tconfig.max_items = \
+			 Some(10);\n\n\t\tlet Err(error) = build_options(&config) else {\n\t\t\tpanic!(\"should \
+			 fail\");\n\t\t};\n\t\tassert_error_contains(&error, \"cannot be \
+			 combined\");\n\t}\n\n\tfn test_middle() {\n\t\tmiddle();\n\t}\n\n\tfn test_beta() \
+			 {\n\t\tlet mut config = base_config();\n\t\tconfig.enabled = \
+			 Some(true);\n\t\tconfig.max_size = Some(0);\n\n\t\tlet Err(error) = \
+			 build_options(&config) else {\n\t\t\tpanic!(\"must be \
+			 positive\");\n\t\t};\n\t\tassert_error_contains(&error, \"must be positive\");\n\t}\n}\n";
+		let state = state_for(source, "rust");
+
+		// Verify the functions have children (sub-chunks).
+		let chunk_a = state
+			.inner()
+			.chunk("mod_tests.fn_test_alpha")
+			.expect("fn_test_alpha should exist");
+		assert!(
+			!chunk_a.children.is_empty(),
+			"fn_test_alpha should have children (sub-chunks), got: {:?}",
+			chunk_a.children
+		);
+		let chunk_b = state
+			.inner()
+			.chunk("mod_tests.fn_test_beta")
+			.expect("fn_test_beta should exist");
+		assert!(
+			!chunk_b.children.is_empty(),
+			"fn_test_beta should have children (sub-chunks), got: {:?}",
+			chunk_b.children
+		);
+
+		// Replace both functions: only adding #[test], body is identical.
+		let result = apply_edits(&state, &EditParams {
+			operations:       vec![
+				EditOperation {
+					op:      ChunkEditOp::Replace,
+					sel:     Some("mod_tests.fn_test_alpha".to_owned()),
+					crc:     Some(chunk_a.checksum.clone()),
+					region:  None,
+					content: Some(
+						"#[test]\nfn test_alpha() {\n\tlet mut config = \
+						 base_config();\n\tconfig.enabled = Some(false);\n\tconfig.max_items = \
+						 Some(10);\n\n\tlet Err(error) = build_options(&config) else \
+						 {\n\t\tpanic!(\"should fail\");\n\t};\n\tassert_error_contains(&error, \
+						 \"cannot be combined\");\n}"
+							.to_owned(),
+					),
+					find:    None,
+				},
+				EditOperation {
+					op:      ChunkEditOp::Replace,
+					sel:     Some("mod_tests.fn_test_beta".to_owned()),
+					crc:     Some(chunk_b.checksum.clone()),
+					region:  None,
+					content: Some(
+						"#[test]\nfn test_beta() {\n\tlet mut config = base_config();\n\tconfig.enabled \
+						 = Some(true);\n\tconfig.max_size = Some(0);\n\n\tlet Err(error) = \
+						 build_options(&config) else {\n\t\tpanic!(\"must be \
+						 positive\");\n\t};\n\tassert_error_contains(&error, \"must be positive\");\n}"
+							.to_owned(),
+					),
+					find:    None,
+				},
+			],
+			default_selector: None,
+			default_crc:      None,
+			anchor_style:     None,
+			cwd:              ".".to_owned(),
+			file_path:        "test.rs".to_owned(),
+		})
+		.expect("edit should apply");
+
+		assert!(result.changed, "edit should be detected as a change");
+		assert!(result.diff_before != result.diff_after, "diff_before and diff_after should differ");
+		// Count actual diff hunks.
+		let hunks = super::generate_diff_hunks(&result.diff_before, &result.diff_after, 0);
+		assert!(
+			!hunks.is_empty(),
+			"generate_diff_hunks should produce non-empty hunks.\ndiff_before:\n{}\ndiff_after:\n{}",
+			result.diff_before,
+			result.diff_after,
+		);
+		// The response text should contain diff hunks (@@) showing the changes.
+		assert!(
+			result.response_text.contains("@@"),
+			"response should include diff hunks showing the changes.\nhunks: {}\nResponse:\n{}",
+			hunks.len(),
+			result.response_text,
 		);
 	}
 }

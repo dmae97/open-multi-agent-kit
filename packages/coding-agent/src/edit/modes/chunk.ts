@@ -309,7 +309,7 @@ export const chunkToolEditSchema = Type.Object({
 	op: StringEnum(CHUNK_OP_VALUES),
 	sel: Type.String({
 		description:
-			"Chunk selector. Format: 'path@region' for insertions, 'path#CRC@region' for replace. Omit @region to target the full chunk. Valid regions: head, body, tail.",
+			"Chunk selector. Format: 'path@region' for insertions, 'path#CRC@region' for replace. Omit @region to target the full chunk. Valid regions: head, body, tail, decl.",
 	}),
 	content: Type.String({
 		description: "New content. Use \\t for indentation. Do NOT include the chunk's base padding.",
