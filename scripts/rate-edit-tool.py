@@ -1322,7 +1322,7 @@ def run_model_sync(
             executable=omp_bin,
             model=model,
             cwd=workspace,
-            env={"OPENROUTER_API_KEY": openrouter_key},
+            env={"OPENROUTER_API_KEY": openrouter_key, "PI_STRICT_EDIT_MODE": "1"},
             thinking="high",
             tools=TOOL_WHITELIST,
             no_skills=True,

@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added support for embedded URL selectors (`:raw` and `:L#-L#` line ranges) in read command paths
@@ -11,6 +12,7 @@
 
 ### Changed
 
+- Made model-specific edit mode defaults conditional on `PI_STRICT_EDIT_MODE` environment variable for greater flexibility in edit mode selection
 - Updated slash command handlers to support returning remaining text as prompt input instead of consuming input entirely
 - Enhanced slash command parser to recognize both whitespace and colon (`:`) as command argument separators
 - Updated indentation guidance for chunk edit content to use single leading spaces per indent level instead of tabs

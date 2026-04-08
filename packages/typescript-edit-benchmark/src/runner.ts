@@ -908,6 +908,15 @@ async function runSingleTask(
 			`{"type":"meta","task":"${task.id}","run":${runIndex},"workDir":"${cwd}","providerSessionId":${JSON.stringify(sessionSetup.providerSessionId)}}\n`,
 		);
 
+		if (config.editVariant !== undefined) process.env.PI_EDIT_VARIANT = config.editVariant;
+		if (config.editFuzzy !== undefined)
+			process.env.PI_EDIT_FUZZY = config.editFuzzy === "auto" ? "auto" : config.editFuzzy ? "1" : "0";
+		if (config.editFuzzyThreshold !== undefined)
+			process.env.PI_EDIT_FUZZY_THRESHOLD =
+				config.editFuzzyThreshold === "auto" ? "auto" : String(config.editFuzzyThreshold);
+		process.env.PI_STRICT_EDIT_MODE = "1";
+		process.env.PI_NO_TITLE = "1";
+
 		const useInProcess = config.inProcess !== false;
 		const client: BenchmarkClient = useInProcess
 			? new InProcessClient({
@@ -921,20 +930,13 @@ async function runSingleTask(
 					shared,
 				})
 			: (() => {
-					const env: Record<string, string> = { PI_NO_TITLE: "1" };
-					if (config.editVariant !== undefined) env.PI_EDIT_VARIANT = config.editVariant;
-					if (config.editFuzzy !== undefined)
-						env.PI_EDIT_FUZZY = config.editFuzzy === "auto" ? "auto" : config.editFuzzy ? "1" : "0";
-					if (config.editFuzzyThreshold !== undefined)
-						env.PI_EDIT_FUZZY_THRESHOLD =
-							config.editFuzzyThreshold === "auto" ? "auto" : String(config.editFuzzyThreshold);
 					const rpc = new RpcClient({
 						cliPath: CLI_PATH,
 						cwd,
 						provider: config.provider,
 						model: config.model,
 						args: sessionSetup.rpcArgs,
-						env,
+						env: { ...process.env } as Record<string, string>,
 					});
 					return Object.assign(rpc, {
 						dispose: async () => rpc[Symbol.dispose](),
