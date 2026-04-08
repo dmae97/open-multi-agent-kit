@@ -265,10 +265,14 @@ fn translation_chunk(
 		line_count: range.end_line.saturating_sub(range.start_line) + 1,
 		start_byte,
 		end_byte,
+		checksum_start_byte: start_byte,
+		body_start_byte: None,
+		body_end_byte: None,
 		checksum,
 		error: false,
 		indent: 0,
 		indent_char: String::new(),
+		group: false,
 	}
 }
 

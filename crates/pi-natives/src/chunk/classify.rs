@@ -45,7 +45,7 @@ pub trait LangClassifier {
 	}
 
 	/// Post-process the chunk tree after initial construction.
-	/// Used for structural transformations like Go receiver reparenting.
+	/// Used for structural transformations
 	fn post_process(
 		&self,
 		_chunks: &mut Vec<ChunkNode>,
@@ -86,6 +86,7 @@ pub trait LangClassifier {
 /// Resolve a [`LangClassifier`] for the given language.
 pub fn classifier_for(lang: &str) -> &'static dyn LangClassifier {
 	match lang {
+		"astro" => &super::ast_astro::AstroClassifier,
 		// JS / TS family
 		"javascript" | "js" | "jsx" | "typescript" | "ts" | "tsx" => {
 			&super::ast_js_ts::JsTsClassifier
@@ -102,26 +103,54 @@ pub fn classifier_for(lang: &str) -> &'static dyn LangClassifier {
 		"csharp" | "java" => &super::ast_csharp_java::CSharpJavaClassifier,
 		// Clojure
 		"clojure" => &super::ast_clojure::ClojureClassifier,
-		// Elixir
-		"elixir" => &super::ast_elixir::ElixirClassifier,
-		// Ruby / Lua
-		"ruby" | "lua" => &super::ast_ruby_lua::RubyLuaClassifier,
-		// Haskell / Scala
-		"haskell" | "scala" => &super::ast_haskell_scala::HaskellScalaClassifier,
+		// CMake
+		"cmake" => &super::ast_cmake::CMakeClassifier,
 		// CSS
 		"css" => &super::ast_css::CssClassifier,
-		// HTML / XML
-		"html" | "xml" => &super::ast_html_xml::HtmlXmlClassifier,
 		// Data formats
 		"json" | "toml" | "yaml" => &super::ast_data_formats::DataFormatsClassifier,
-		// Nix / HCL
-		"nix" | "hcl" => &super::ast_nix_hcl::NixHclClassifier,
+		// Dockerfile
+		"dockerfile" => &super::ast_dockerfile::DockerfileClassifier,
+		// Elixir
+		"elixir" => &super::ast_elixir::ElixirClassifier,
+		// Erlang
+		"erlang" => &super::ast_erlang::ErlangClassifier,
+		// GraphQL
+		"graphql" => &super::ast_graphql::GraphqlClassifier,
+		// Haskell / Scala
+		"haskell" | "scala" => &super::ast_haskell_scala::HaskellScalaClassifier,
+		// HTML / XML
+		"html" | "xml" => &super::ast_html_xml::HtmlXmlClassifier,
+		// INI
+		"ini" => &super::ast_ini::IniClassifier,
+		// Just
+		"just" => &super::ast_just::JustClassifier,
 		// Markdown / Handlebars
 		"markdown" | "handlebars" => &super::ast_markup::MarkupClassifier,
+		// Nix / HCL
+		"nix" | "hcl" => &super::ast_nix_hcl::NixHclClassifier,
+		// OCaml
+		"ocaml" => &super::ast_ocaml::OcamlClassifier,
+		// Perl
+		"perl" => &super::ast_perl::PerlClassifier,
+		// PowerShell
+		"powershell" => &super::ast_powershell::PowershellClassifier,
+		// Protobuf
+		"protobuf" | "proto" => &super::ast_proto::ProtoClassifier,
+		// R
+		"r" => &super::ast_r::RClassifier,
+		// Ruby / Lua
+		"ruby" | "lua" => &super::ast_ruby_lua::RubyLuaClassifier,
+		// SQL
+		"sql" => &super::ast_sql::SqlClassifier,
+		// Svelte
+		"svelte" => &super::ast_svelte::SvelteClassifier,
 		// TLA+ / PlusCal
 		"tlaplus" | "pluscal" | "pcal" | "tla" | "tla+" => &super::ast_tlaplus::TlaplusClassifier,
 		// Bash / Make / Diff
 		"bash" | "make" | "diff" => &super::ast_bash_make_diff::ShellBuildClassifier,
+		// Vue
+		"vue" => &super::ast_vue::VueClassifier,
 		// Everything else (Kotlin, Swift, PHP, Solidity, etc.)
 		_ => &super::ast_misc::MiscClassifier,
 	}

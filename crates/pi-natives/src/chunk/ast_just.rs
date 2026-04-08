@@ -1,0 +1,90 @@
+//! Language-specific chunk classifier for Just.
+
+use tree_sitter::Node;
+
+use super::{classify::LangClassifier, common::*};
+
+pub struct JustClassifier;
+
+fn first_named_child(node: Node<'_>) -> Option<Node<'_>> {
+	named_children(node).into_iter().next()
+}
+
+fn first_named_child_of_kind<'t>(node: Node<'t>, kind: &str) -> Option<Node<'t>> {
+	named_children(node)
+		.into_iter()
+		.find(|child| child.kind() == kind)
+}
+
+fn child_text<'a>(source: &'a str, node: Node<'_>) -> &'a str {
+	node_text(source, node.start_byte(), node.end_byte())
+}
+
+/// `set shell := ...` uses a dedicated `shell` token instead of a named
+/// identifier, so parse the assignment head text instead of relying on fields.
+fn extract_setting_name(node: Node<'_>, source: &str) -> Option<String> {
+	let header = child_text(source, node).lines().next()?.trim();
+	let rest = header.strip_prefix("set ")?;
+	let name = rest.split_once(":=")?.0.trim();
+	sanitize_identifier(name)
+}
+
+fn extract_alias_name(node: Node<'_>, source: &str) -> Option<String> {
+	first_named_child(node).and_then(|child| sanitize_identifier(child_text(source, child)))
+}
+
+fn extract_recipe_name(node: Node<'_>, source: &str) -> Option<String> {
+	let header = first_named_child_of_kind(node, "recipe_header")?;
+	first_named_child(header).and_then(|child| sanitize_identifier(child_text(source, child)))
+}
+
+fn classify_just_root_node<'t>(node: Node<'t>, source: &str) -> Option<RawChunkCandidate<'t>> {
+	Some(match node.kind() {
+		"setting" => {
+			let name = extract_setting_name(node, source).unwrap_or_else(|| "anonymous".to_string());
+			make_named_chunk(node, format!("setting_{name}"), source, None)
+		},
+		"alias" => {
+			let name = extract_alias_name(node, source).unwrap_or_else(|| "anonymous".to_string());
+			make_named_chunk(node, format!("alias_{name}"), source, None)
+		},
+		"recipe" => {
+			let name = extract_recipe_name(node, source).unwrap_or_else(|| "anonymous".to_string());
+			make_container_chunk(
+				node,
+				format!("recipe_{name}"),
+				source,
+				recurse_into(node, ChunkContext::FunctionBody, &[], &["recipe_body"]),
+			)
+		},
+		_ => return None,
+	})
+}
+
+fn classify_just_body_node<'t>(node: Node<'t>, source: &str) -> Option<RawChunkCandidate<'t>> {
+	Some(match node.kind() {
+		// Just recipe bodies are line-oriented; tree-sitter exposes shell lines as
+		// `recipe_line` leaves rather than a nested shell AST.
+		"recipe_line" => group_candidate(node, "cmd", source),
+		"shebang" => make_named_chunk(node, "shebang".to_string(), source, None),
+		_ => return None,
+	})
+}
+
+impl LangClassifier for JustClassifier {
+	fn classify_root<'t>(&self, node: Node<'t>, source: &str) -> Option<RawChunkCandidate<'t>> {
+		classify_just_root_node(node, source)
+	}
+
+	fn classify_class<'t>(&self, _node: Node<'t>, _source: &str) -> Option<RawChunkCandidate<'t>> {
+		None
+	}
+
+	fn classify_function<'t>(&self, node: Node<'t>, source: &str) -> Option<RawChunkCandidate<'t>> {
+		classify_just_body_node(node, source)
+	}
+
+	fn is_root_wrapper(&self, kind: &str) -> bool {
+		kind == "source_file"
+	}
+}

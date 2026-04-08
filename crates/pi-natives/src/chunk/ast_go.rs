@@ -1,13 +1,6 @@
-//! Language-specific chunk classifier for Go.
-
-use std::collections::HashMap;
-
 use tree_sitter::Node;
 
-use super::{
-	classify::LangClassifier, common::*, rename_chunk_subtree, sort_chunk_children_by_position,
-	types::ChunkNode,
-};
+use super::{classify::LangClassifier, common::*};
 
 pub struct GoClassifier;
 
@@ -146,16 +139,6 @@ impl LangClassifier for GoClassifier {
 			_ => None,
 		}
 	}
-
-	fn post_process(
-		&self,
-		chunks: &mut Vec<ChunkNode>,
-		root_children: &mut Vec<String>,
-		source: &str,
-	) {
-		reparent_receiver_methods(chunks, root_children, source);
-		reparent_new_type_constructors(chunks, root_children, source);
-	}
 }
 
 /// Classify Go function-level nodes (reused for top-level control flow
@@ -227,143 +210,4 @@ fn recurse_type_spec(node: Node<'_>) -> Option<RecurseSpec<'_>> {
 	let body = child_by_kind(container, &["field_declaration_list", "method_spec_list"])
 		.unwrap_or(container);
 	Some(RecurseSpec { node: body, context: ChunkContext::ClassBody })
-}
-
-/// Move receiver methods (`fn_X`) under their corresponding `type_Y` chunk.
-///
-/// For `func (s *Server) Start()`, extracts receiver type `Server` and
-/// reparents the method chunk under `type_Server`.
-fn reparent_receiver_methods(
-	chunks: &mut [ChunkNode],
-	root_children: &mut Vec<String>,
-	source: &str,
-) {
-	// Build map: type name -> chunk path for root-level type chunks.
-	let type_paths: HashMap<String, String> = chunks
-		.iter()
-		.filter(|c| c.parent_path.as_deref() == Some("") && c.path.starts_with("type_"))
-		.filter_map(|c| {
-			c.path
-				.strip_prefix("type_")
-				.map(|name| (name.to_string(), c.path.clone()))
-		})
-		.collect();
-
-	// Collect root-level function paths that may be receiver methods.
-	let receiver_methods: Vec<String> = root_children
-		.iter()
-		.filter(|p| p.starts_with("fn_"))
-		.cloned()
-		.collect();
-
-	for method_path in receiver_methods {
-		let Some(method_idx) = chunks.iter().position(|c| c.path == method_path) else {
-			continue;
-		};
-		let Some(receiver_type) = extract_receiver_type_name(&chunks[method_idx], source) else {
-			continue;
-		};
-		let Some(type_path) = type_paths.get(receiver_type.as_str()) else {
-			continue;
-		};
-
-		let method_name = chunks[method_idx].name.clone();
-		let new_path = format!("{type_path}.{method_name}");
-
-		rename_chunk_subtree(chunks, &method_path, &new_path, type_path);
-		root_children.retain(|p| p != &method_path);
-
-		if let Some(type_idx) = chunks.iter().position(|c| c.path == *type_path) {
-			let type_chunk = &mut chunks[type_idx];
-			type_chunk.leaf = false;
-			if !type_chunk.children.iter().any(|child| child == &new_path) {
-				type_chunk.children.push(new_path);
-			}
-		}
-	}
-
-	sort_chunk_children_by_position(chunks);
-}
-
-/// Move `func NewTypeName(...)` constructors under `type_TypeName` so tree
-/// order matches source order (avoids root-level `fn_NewX` appearing after
-/// nested methods with a lower file line).
-fn reparent_new_type_constructors(
-	chunks: &mut [ChunkNode],
-	root_children: &mut Vec<String>,
-	_source: &str,
-) {
-	let type_paths: HashMap<String, String> = chunks
-		.iter()
-		.filter(|c| c.parent_path.as_deref() == Some("") && c.path.starts_with("type_"))
-		.filter_map(|c| {
-			c.path
-				.strip_prefix("type_")
-				.map(|name| (name.to_string(), c.path.clone()))
-		})
-		.collect();
-
-	let constructors: Vec<String> = root_children
-		.iter()
-		.filter(|p| {
-			p.starts_with("fn_")
-				&& constructor_suffix_after_new(p)
-					.is_some_and(|tail| type_paths.contains_key(tail.as_str()))
-		})
-		.cloned()
-		.collect();
-
-	for fn_path in constructors {
-		let Some(fn_idx) = chunks.iter().position(|c| c.path == fn_path) else {
-			continue;
-		};
-		let Some(tail) = constructor_suffix_after_new(&fn_path) else {
-			continue;
-		};
-		let Some(type_path) = type_paths.get(tail.as_str()) else {
-			continue;
-		};
-		let fn_name = chunks[fn_idx].name.clone();
-		let new_path = format!("{type_path}.{fn_name}");
-
-		rename_chunk_subtree(chunks, &fn_path, &new_path, type_path);
-		root_children.retain(|p| p != &fn_path);
-
-		if let Some(type_idx) = chunks.iter().position(|c| c.path == *type_path) {
-			let type_chunk = &mut chunks[type_idx];
-			type_chunk.leaf = false;
-			if !type_chunk.children.iter().any(|child| child == &new_path) {
-				type_chunk.children.push(new_path);
-			}
-		}
-	}
-
-	sort_chunk_children_by_position(chunks);
-}
-
-/// `fn_NewServer` + type `Server` -> `Some("Server")`; `fn_Start` -> None.
-fn constructor_suffix_after_new(fn_path: &str) -> Option<String> {
-	let name = fn_path.strip_prefix("fn_")?;
-	let tail = name.strip_prefix("New")?;
-	if tail.is_empty() {
-		return None;
-	}
-	Some(tail.to_string())
-}
-
-/// Extract the receiver type name from a Go method's header.
-///
-/// `func (s *Server) Start()` -> `Some("Server")`
-/// `func (s Server) Stop()`   -> `Some("Server")`
-fn extract_receiver_type_name(chunk: &ChunkNode, source: &str) -> Option<String> {
-	let header = normalized_header(source, chunk.start_byte as usize, chunk.end_byte as usize);
-	let receiver = header
-		.strip_prefix("func")?
-		.trim_start()
-		.strip_prefix('(')?
-		.split(')')
-		.next()?
-		.trim();
-	let receiver_type = receiver.split_whitespace().last()?;
-	sanitize_identifier(receiver_type)
 }
