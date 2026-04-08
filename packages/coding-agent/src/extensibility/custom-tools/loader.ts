@@ -14,7 +14,6 @@ import { execCommand } from "../../exec/exec";
 import type { HookUIContext } from "../../extensibility/hooks/types";
 import { getAllPluginToolPaths } from "../../extensibility/plugins/loader";
 import type { PendingActionStore } from "../../tools/pending-action";
-import { getPiRef, initPiRef } from "../pi-ref";
 import { createNoOpUIContext, resolvePath } from "../utils";
 import type { CustomToolAPI, CustomToolFactory, LoadedCustomTool, ToolLoadError } from "./types";
 
@@ -85,7 +84,12 @@ export class CustomToolLoader {
 	#sharedApi: CustomToolAPI;
 	#seenNames: Set<string>;
 
-	constructor(cwd: string, builtInToolNames: string[], pendingActionStore?: PendingActionStore) {
+	constructor(
+		pi: typeof import("@oh-my-pi/pi-coding-agent"),
+		cwd: string,
+		builtInToolNames: string[],
+		pendingActionStore?: PendingActionStore,
+	) {
 		this.#sharedApi = {
 			cwd,
 			exec: (command: string, args: string[], options?: ExecOptions) =>
@@ -94,7 +98,7 @@ export class CustomToolLoader {
 			hasUI: false,
 			logger,
 			typebox,
-			pi: getPiRef(),
+			pi,
 			pushPendingAction: action => {
 				if (!pendingActionStore) {
 					throw new Error("Pending action store unavailable for custom tools in this runtime.");
@@ -157,8 +161,12 @@ export async function loadCustomTools(
 	builtInToolNames: string[],
 	pendingActionStore?: PendingActionStore,
 ) {
-	await initPiRef();
-	const loader = new CustomToolLoader(cwd, builtInToolNames, pendingActionStore);
+	const loader = new CustomToolLoader(
+		await import("@oh-my-pi/pi-coding-agent"),
+		cwd,
+		builtInToolNames,
+		pendingActionStore,
+	);
 	await loader.load(pathsWithSources);
 	return {
 		tools: loader.tools,
@@ -185,7 +193,6 @@ export async function discoverAndLoadCustomTools(
 	builtInToolNames: string[],
 	pendingActionStore?: PendingActionStore,
 ) {
-	await initPiRef();
 	const allPathsWithSources: ToolPathWithSource[] = [];
 	const seen = new Set<string>();
 
