@@ -482,6 +482,7 @@ export class AgentSession {
 	#discoverableMCPTools = new Map<string, DiscoverableMCPTool>();
 	#discoverableMCPSearchIndex: DiscoverableMCPSearchIndex | null = null;
 	#selectedMCPToolNames = new Set<string>();
+	#rpcHostToolNames = new Set<string>();
 	#defaultSelectedMCPServerNames = new Set<string>();
 	#defaultSelectedMCPToolNames = new Set<string>();
 	#sessionDefaultSelectedMCPToolNames = new Map<string, string[]>();
@@ -2024,6 +2025,49 @@ export class AgentSession {
 
 		const nextActive = [...this.#getActiveNonMCPToolNames(), ...this.getSelectedMCPToolNames()];
 		await this.#applyActiveToolsByName(nextActive, { previousSelectedMCPToolNames });
+	}
+
+	/**
+	 * Replace RPC host-owned tools and refresh the active tool set before the next model call.
+	 */
+	async refreshRpcHostTools(rpcTools: AgentTool[]): Promise<void> {
+		const nextToolNames = rpcTools.map(tool => tool.name);
+		const uniqueToolNames = new Set(nextToolNames);
+		if (uniqueToolNames.size !== nextToolNames.length) {
+			throw new Error("RPC host tool names must be unique");
+		}
+
+		for (const name of uniqueToolNames) {
+			if (this.#toolRegistry.has(name) && !this.#rpcHostToolNames.has(name)) {
+				throw new Error(`RPC host tool "${name}" conflicts with an existing tool`);
+			}
+		}
+
+		const previousRpcHostToolNames = new Set(this.#rpcHostToolNames);
+		const previousActiveToolNames = this.getActiveToolNames();
+		for (const name of previousRpcHostToolNames) {
+			this.#toolRegistry.delete(name);
+		}
+		this.#rpcHostToolNames.clear();
+
+		for (const tool of rpcTools) {
+			const finalTool = (
+				this.#extensionRunner ? new ExtensionToolWrapper(tool, this.#extensionRunner) : tool
+			) as AgentTool;
+			this.#toolRegistry.set(finalTool.name, finalTool);
+			this.#rpcHostToolNames.add(finalTool.name);
+		}
+
+		const activeNonRpcToolNames = previousActiveToolNames.filter(name => !previousRpcHostToolNames.has(name));
+		const preservedRpcToolNames = previousActiveToolNames.filter(
+			name => previousRpcHostToolNames.has(name) && this.#rpcHostToolNames.has(name),
+		);
+		const autoActivatedRpcToolNames = rpcTools
+			.filter(tool => !tool.hidden && !previousRpcHostToolNames.has(tool.name))
+			.map(tool => tool.name);
+		await this.#applyActiveToolsByName(
+			Array.from(new Set([...activeNonRpcToolNames, ...preservedRpcToolNames, ...autoActivatedRpcToolNames])),
+		);
 	}
 
 	/** Whether auto-compaction is currently running */

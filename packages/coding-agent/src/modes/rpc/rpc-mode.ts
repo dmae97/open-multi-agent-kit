@@ -18,10 +18,14 @@ import type {
 } from "../../extensibility/extensions";
 import { type Theme, theme } from "../../modes/theme/theme";
 import type { AgentSession } from "../../session/agent-session";
+import { isRpcHostToolResult, isRpcHostToolUpdate, RpcHostToolBridge } from "./host-tools";
 import type {
 	RpcCommand,
 	RpcExtensionUIRequest,
 	RpcExtensionUIResponse,
+	RpcHostToolCallRequest,
+	RpcHostToolCancelRequest,
+	RpcHostToolDefinition,
 	RpcResponse,
 	RpcSessionState,
 } from "./rpc-types";
@@ -34,7 +38,33 @@ export type PendingExtensionRequest = {
 	reject: (error: Error) => void;
 };
 
-type RpcOutput = (obj: RpcResponse | RpcExtensionUIRequest | object) => void;
+type RpcOutput = (
+	obj: RpcResponse | RpcExtensionUIRequest | RpcHostToolCallRequest | RpcHostToolCancelRequest | object,
+) => void;
+
+function normalizeHostToolDefinitions(tools: RpcHostToolDefinition[]): RpcHostToolDefinition[] {
+	return tools.map((tool, index) => {
+		const name = typeof tool.name === "string" ? tool.name.trim() : "";
+		if (!name) {
+			throw new Error(`Host tool at index ${index} must provide a non-empty name`);
+		}
+		const description = typeof tool.description === "string" ? tool.description.trim() : "";
+		if (!description) {
+			throw new Error(`Host tool "${name}" must provide a non-empty description`);
+		}
+		if (!tool.parameters || typeof tool.parameters !== "object" || Array.isArray(tool.parameters)) {
+			throw new Error(`Host tool "${name}" must provide a JSON Schema object`);
+		}
+		const label = typeof tool.label === "string" && tool.label.trim() ? tool.label.trim() : name;
+		return {
+			name,
+			label,
+			description,
+			parameters: tool.parameters,
+			hidden: tool.hidden === true,
+		};
+	});
+}
 
 function shouldEmitRpcTitles(): boolean {
 	const raw = $env.PI_RPC_EMIT_TITLE;
@@ -135,6 +165,7 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 	};
 
 	const pendingExtensionRequests = new Map<string, PendingExtensionRequest>();
+	const hostToolBridge = new RpcHostToolBridge(output);
 
 	// Shutdown request flag (wrapped in object to allow mutation with const)
 	const shutdownState = { requested: false };
@@ -569,6 +600,13 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 				return success(id, "set_todos", { todoPhases: session.getTodoPhases() });
 			}
 
+			case "set_host_tools": {
+				const tools = normalizeHostToolDefinitions(command.tools);
+				const rpcTools = hostToolBridge.setTools(tools);
+				await session.refreshRpcHostTools(rpcTools);
+				return success(id, "set_host_tools", { toolNames: tools.map(tool => tool.name) });
+			}
+
 			// =================================================================
 			// Model
 			// =================================================================
@@ -759,6 +797,16 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 				continue;
 			}
 
+			if (isRpcHostToolResult(parsed)) {
+				hostToolBridge.handleResult(parsed);
+				continue;
+			}
+
+			if (isRpcHostToolUpdate(parsed)) {
+				hostToolBridge.handleUpdate(parsed);
+				continue;
+			}
+
 			// Handle regular commands
 			const command = parsed as RpcCommand;
 			const response = await handleCommand(command);
@@ -772,5 +820,6 @@ export async function runRpcMode(session: AgentSession): Promise<never> {
 	}
 
 	// stdin closed — RPC client is gone, exit cleanly
+	hostToolBridge.rejectAllPending("RPC client disconnected before host tool execution completed");
 	process.exit(0);
 }
