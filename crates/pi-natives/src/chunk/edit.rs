@@ -7,7 +7,7 @@ use crate::chunk::{
 	},
 	resolve::{
 		chunk_region_range, chunk_supports_region, resolve_chunk_selector, resolve_chunk_with_crc,
-		sanitize_chunk_selector, sanitize_crc,
+		sanitize_chunk_selector, sanitize_crc, split_selector_crc_and_region,
 	},
 	state::{ChunkState, ChunkStateInner},
 	types::{
@@ -284,10 +284,18 @@ fn resolve_edit_target(
 			None
 		}
 	});
-	let batch_auto_accepted = ensure_batch_operation_target_current(scheduled, crc, touched_paths);
-	let resolve_crc = if batch_auto_accepted { None } else { crc };
-	let resolved = resolve_chunk_with_crc(state, selector, resolve_crc, warnings)?;
-	let region = operation.region.unwrap_or(resolved.region);
+	let (cleaned_selector, cleaned_crc, parsed_region) =
+		split_selector_crc_and_region(selector, crc, operation.region)?;
+	let batch_auto_accepted =
+		ensure_batch_operation_target_current(scheduled, cleaned_crc.as_deref(), touched_paths);
+	let resolve_crc = if batch_auto_accepted {
+		None
+	} else {
+		cleaned_crc.as_deref()
+	};
+	let resolved =
+		resolve_chunk_with_crc(state, cleaned_selector.as_deref(), resolve_crc, warnings)?;
+	let region = operation.region.unwrap_or(parsed_region);
 	if !batch_auto_accepted {
 		validate_batch_crc(resolved.chunk, resolved.crc.as_deref(), requires_checksum)?;
 	}
@@ -696,16 +704,32 @@ fn preserve_attached_leading_trivia(
 		return replacement.to_owned();
 	}
 
-	let leading_trivia = &state.source[trivia_start..trivia_end];
+	let line_start = state.source[..trivia_start]
+		.rfind('\n')
+		.map_or(0, |pos| pos + 1);
+	let line_prefix = &state.source[line_start..trivia_start];
+	let mut leading_trivia =
+		if !line_prefix.is_empty() && line_prefix.chars().all(|ch| matches!(ch, ' ' | '\t')) {
+			format!("{line_prefix}{}", &state.source[trivia_start..trivia_end])
+		} else {
+			state.source[trivia_start..trivia_end].to_owned()
+		};
+	if let Some(last_newline) = leading_trivia.rfind('\n')
+		&& leading_trivia[last_newline + 1..]
+			.chars()
+			.all(|ch| matches!(ch, ' ' | '\t' | '\r'))
+	{
+		leading_trivia.truncate(last_newline + 1);
+	}
 	if leading_trivia.trim().is_empty()
-		|| replacement.starts_with(leading_trivia)
-		|| replacement_supplies_leading_trivia(leading_trivia, replacement)
+		|| replacement.starts_with(&leading_trivia)
+		|| replacement_supplies_leading_trivia(&leading_trivia, replacement)
 	{
 		return replacement.to_owned();
 	}
 
 	let mut combined = String::with_capacity(leading_trivia.len() + replacement.len());
-	combined.push_str(leading_trivia);
+	combined.push_str(&leading_trivia);
 	combined.push_str(replacement);
 	combined
 }

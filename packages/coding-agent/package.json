@@ -91,6 +91,18 @@
 			"types": "./src/async/*.ts",
 			"import": "./src/async/*.ts"
 		},
+		"./autoresearch": {
+			"types": "./src/autoresearch/index.ts",
+			"import": "./src/autoresearch/index.ts"
+		},
+		"./autoresearch/*": {
+			"types": "./src/autoresearch/*.ts",
+			"import": "./src/autoresearch/*.ts"
+		},
+		"./autoresearch/tools/*": {
+			"types": "./src/autoresearch/tools/*.ts",
+			"import": "./src/autoresearch/tools/*.ts"
+		},
 		"./capability": {
 			"types": "./src/capability/index.ts",
 			"import": "./src/capability/index.ts"
@@ -102,6 +114,10 @@
 		"./cli/*": {
 			"types": "./src/cli/*.ts",
 			"import": "./src/cli/*.ts"
+		},
+		"./cli/commands/*": {
+			"types": "./src/cli/commands/*.ts",
+			"import": "./src/cli/commands/*.ts"
 		},
 		"./commands/*": {
 			"types": "./src/commands/*.ts",
@@ -167,6 +183,14 @@
 			"types": "./src/config/*.ts",
 			"import": "./src/config/*.ts"
 		},
+		"./dap": {
+			"types": "./src/dap/index.ts",
+			"import": "./src/dap/index.ts"
+		},
+		"./dap/*": {
+			"types": "./src/dap/*.ts",
+			"import": "./src/dap/*.ts"
+		},
 		"./debug": {
 			"types": "./src/debug/index.ts",
 			"import": "./src/debug/index.ts"
@@ -182,6 +206,18 @@
 		"./discovery/*": {
 			"types": "./src/discovery/*.ts",
 			"import": "./src/discovery/*.ts"
+		},
+		"./edit": {
+			"types": "./src/edit/index.ts",
+			"import": "./src/edit/index.ts"
+		},
+		"./edit/*": {
+			"types": "./src/edit/*.ts",
+			"import": "./src/edit/*.ts"
+		},
+		"./edit/modes/*": {
+			"types": "./src/edit/modes/*.ts",
+			"import": "./src/edit/modes/*.ts"
 		},
 		"./exa": {
 			"types": "./src/exa/index.ts",
@@ -219,6 +255,10 @@
 			"types": "./src/extensibility/custom-commands/*.ts",
 			"import": "./src/extensibility/custom-commands/*.ts"
 		},
+		"./extensibility/custom-commands/bundled/ci-green": {
+			"types": "./src/extensibility/custom-commands/bundled/ci-green/index.ts",
+			"import": "./src/extensibility/custom-commands/bundled/ci-green/index.ts"
+		},
 		"./extensibility/custom-commands/bundled/review": {
 			"types": "./src/extensibility/custom-commands/bundled/review/index.ts",
 			"import": "./src/extensibility/custom-commands/bundled/review/index.ts"
@@ -254,6 +294,14 @@
 		"./extensibility/plugins/*": {
 			"types": "./src/extensibility/plugins/*.ts",
 			"import": "./src/extensibility/plugins/*.ts"
+		},
+		"./extensibility/plugins/marketplace": {
+			"types": "./src/extensibility/plugins/marketplace/index.ts",
+			"import": "./src/extensibility/plugins/marketplace/index.ts"
+		},
+		"./extensibility/plugins/marketplace/*": {
+			"types": "./src/extensibility/plugins/marketplace/*.ts",
+			"import": "./src/extensibility/plugins/marketplace/*.ts"
 		},
 		"./internal-urls": {
 			"types": "./src/internal-urls/index.ts",
@@ -315,6 +363,14 @@
 			"types": "./src/modes/*.ts",
 			"import": "./src/modes/*.ts"
 		},
+		"./modes/acp": {
+			"types": "./src/modes/acp/index.ts",
+			"import": "./src/modes/acp/index.ts"
+		},
+		"./modes/acp/*": {
+			"types": "./src/modes/acp/*.ts",
+			"import": "./src/modes/acp/*.ts"
+		},
 		"./modes/components": {
 			"types": "./src/modes/components/index.ts",
 			"import": "./src/modes/components/index.ts"
@@ -358,18 +414,6 @@
 		"./modes/utils/*": {
 			"types": "./src/modes/utils/*.ts",
 			"import": "./src/modes/utils/*.ts"
-		},
-		"./edit": {
-			"types": "./src/edit/index.ts",
-			"import": "./src/edit/index.ts"
-		},
-		"./edit/*": {
-			"types": "./src/edit/*.ts",
-			"import": "./src/edit/*.ts"
-		},
-		"./edit/modes/*": {
-			"types": "./src/edit/modes/*.ts",
-			"import": "./src/edit/modes/*.ts"
 		},
 		"./plan-mode/*": {
 			"types": "./src/plan-mode/*.ts",
@@ -439,6 +483,10 @@
 		"./utils/*": {
 			"types": "./src/utils/*.ts",
 			"import": "./src/utils/*.ts"
+		},
+		"./web/*": {
+			"types": "./src/web/*.ts",
+			"import": "./src/web/*.ts"
 		},
 		"./web/scrapers": {
 			"types": "./src/web/scrapers/index.ts",

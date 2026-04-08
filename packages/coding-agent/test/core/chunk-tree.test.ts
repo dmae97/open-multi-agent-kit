@@ -397,7 +397,7 @@ type Server struct {
 		expect(result.diffSourceAfter).not.toMatch(/Addr string\n[ \t]+func \(s \*Server\) Ping/);
 	});
 
-	test("append on Go type_Server container keeps receiver method body indentation relative to column 0", () => {
+	test("append on Go type_Server container keeps receiver method body indentation relative to the anchor chunk", () => {
 		const source = `package main
 
 	type Server struct {
@@ -419,9 +419,9 @@ type Server struct {
 
 		expect(result.parseValid).toBe(true);
 		expect(result.diffSourceAfter).toContain(
-			"\nfunc (s *Server) LogCount() int {\n\ts.mu.Lock()\n\tdefer s.mu.Unlock()\n\treturn 0\n}\n",
+			"\n\tfunc (s *Server) LogCount() int {\n\t\ts.mu.Lock()\n\t\tdefer s.mu.Unlock()\n\t\treturn 0\n\t}\n",
 		);
-		expect(result.diffSourceAfter).not.toContain("\n\tfunc (s *Server) LogCount() int {");
+		expect(result.diffSourceAfter).not.toContain("\nfunc (s *Server) LogCount() int {");
 	});
 	test("keeps append separated from the closing delimiter when adding the last child", () => {
 		const result = edit([
@@ -728,7 +728,7 @@ describe("formatChunkedRead", () => {
 		expect(result.text).toMatch(new RegExp(`with-tail\\.ts·${totalLines}L`));
 	});
 
-	test("leaf read shows absolute file lines and raw source indentation", async () => {
+	test("leaf read shows absolute file lines and canonical tab indentation", async () => {
 		tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "chunk-tree-core-"));
 		const filePath = path.join(tmpDir, "worker.ts");
 		await Bun.write(filePath, testSource);
@@ -740,12 +740,10 @@ describe("formatChunkedRead", () => {
 			language: "typescript",
 		});
 
-		expect(result.text).toContain("worker.ts:class_Worker.fn_run·");
+		expect(result.text).toContain("worker.ts:class_Worker.fn_run@container·");
 		expect(result.text).toContain("[class_Worker.fn_run#");
-		expect(result.text).toContain("run(): void {");
-		expect(result.text).toContain("6| ");
-		expect(result.text).toContain("run(): void {");
-		expect(result.text).toContain("7| ");
+		expect(result.text).toContain("6| \trun(): void {");
+		expect(result.text).toContain("7| \t\tconsole.log(this.name);");
 		expect(result.text).toContain("console.log(this.name);");
 	});
 
@@ -763,8 +761,9 @@ describe("formatChunkedRead", () => {
 		});
 
 		expect(result.text).not.toContain("to expand ⋮");
-		expect(result.text).toContain("3|     step(0);");
-		expect(result.text).toContain("27|     step(24);");
+		expect(result.text).toContain("service.ts:class_Service.fn_handle@container·");
+		expect(result.text).toContain("3| \t\tstep(0);");
+		expect(result.text).toContain("27| \t\tstep(24);");
 		expect(result.text).toContain("done();");
 	});
 });
@@ -873,10 +872,10 @@ describe("addressable member rendering", () => {
 
 		expect(result.text).toContain("[type_Handler#");
 		expect(result.text).toContain("3| type Handler interface {");
-		expect(result.text).toContain("4|     Handle(method, path string) Result");
+		expect(result.text).toContain("4| \tHandle(method, path string) Result");
 	});
 
-	test("renders Go receiver methods beneath their receiver type", async () => {
+	test("renders Go receiver methods as top-level siblings", async () => {
 		tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "chunk-tree-core-"));
 		const filePath = path.join(tmpDir, "server.go");
 		await Bun.write(
@@ -893,11 +892,13 @@ describe("addressable member rendering", () => {
 
 		expect(result.text).toContain("[type_Server#");
 		expect(result.text).toContain("[type_Server.field_Addr#");
-		expect(result.text).toContain("[type_Server.fn_Start#");
-		expect(result.text).toContain("[type_Server.fn_Stop#");
+		expect(result.text).toContain("[fn_Start#");
+		expect(result.text).toContain("[fn_Stop#");
+		expect(result.text).not.toContain("[type_Server.fn_Start#");
+		expect(result.text).not.toContain("[type_Server.fn_Stop#");
 	});
 
-	test("line range filter shows receiver methods under a type even when the range skips the type header", async () => {
+	test("line range filter shows top-level receiver methods even when the range skips the type header", async () => {
 		tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "chunk-tree-core-"));
 		const filePath = path.join(tmpDir, "server.go");
 		await Bun.write(
@@ -913,8 +914,9 @@ describe("addressable member rendering", () => {
 		});
 
 		expect(result.text).toContain("L7-L8");
-		expect(result.text).toContain("[type_Server.fn_Start#");
-		expect(result.text).toContain("[type_Server.fn_Stop#");
+		expect(result.text).toContain("[fn_Start#");
+		expect(result.text).toContain("[fn_Stop#");
+		expect(result.text).not.toContain("[type_Server.fn_Start#");
 	});
 
 	test("renders trivial TypeScript enum variants as addressable children", async () => {
@@ -950,8 +952,8 @@ describe("addressable member rendering", () => {
 	});
 });
 
-describe("grouped Go receiver chunk headers", () => {
-	test("reports grouped receiver chunk line counts from rendered lines", async () => {
+describe("Go type chunk headers", () => {
+	test("reports Go type chunk line counts from the type body only", async () => {
 		tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "chunk-tree-core-"));
 		const filePath = path.join(tmpDir, "server.go");
 		await Bun.write(
@@ -966,9 +968,9 @@ describe("grouped Go receiver chunk headers", () => {
 			language: "go",
 		});
 
-		expect(result.text).toContain("server.go:type_Server·6L");
-		expect(result.text).toContain("[type_Server.fn_Start#");
-		expect(result.text).toContain("[type_Server.fn_Stop#");
+		expect(result.text).toContain("server.go:type_Server@container·3L");
+		expect(result.text).not.toContain("[fn_Start#");
+		expect(result.text).not.toContain("[fn_Stop#");
 	});
 });
 
@@ -992,7 +994,7 @@ describe("addressable member editing", () => {
 		expect(result.diffSourceAfter).not.toContain('Busy = "busy"');
 	});
 
-	test("after inserts beside an individually addressable enum variant", () => {
+	test("after inserts beside an individually addressable enum variant without extra blank lines", () => {
 		const result = edit(
 			[
 				{
@@ -1004,7 +1006,7 @@ describe("addressable member editing", () => {
 			enumSource,
 		);
 
-		expect(result.diffSourceAfter).toContain('  Idle = "idle",\n\n  Paused = "paused",\n\n  Busy = "busy",');
+		expect(result.diffSourceAfter).toContain('  Idle = "idle",\n  Paused = "paused",\n  Busy = "busy",');
 	});
 
 	test("replace with empty content removes an individually addressable enum variant", () => {
@@ -1017,7 +1019,7 @@ describe("addressable member editing", () => {
 });
 
 describe("Go receiver render ownership", () => {
-	test("omits unrelated top-level siblings from grouped receiver output", () => {
+	test("before inserts beside a top-level Go receiver method", () => {
 		const source = `package main\n\ntype Server struct {\n    Addr string\n}\n\nfunc (s *Server) Start() {}\nfunc (s Server) Stop() {}\n`;
 		const result = applyEdit({
 			source,
@@ -1026,7 +1028,7 @@ describe("Go receiver render ownership", () => {
 			operations: [
 				{
 					op: "before",
-					sel: "type_Server.fn_Start",
+					sel: "fn_Start",
 					content: "func DefaultServer() *Server {\n    return &Server{}\n}",
 				},
 			],
@@ -1034,7 +1036,8 @@ describe("Go receiver render ownership", () => {
 
 		expect(result.responseText).toContain("func DefaultServer() *Server");
 		expect(result.responseText).toContain("[fn_DefaultServer#");
-		expect(result.responseText).toContain("[type_Server.fn_Start#");
+		expect(result.responseText).toContain("[fn_Start#");
+		expect(result.responseText).not.toContain("[type_Server.fn_Start#");
 	});
 });
 
@@ -1096,9 +1099,7 @@ describe("chunk selector auto-resolution", () => {
 				content: "run(): void {\n\tconsole.log(this.name);\n}",
 			},
 		]);
-		expect(
-			result.warnings.some(w => w.includes('Auto-resolved chunk selector "fn_run" to "class_Worker.fn_run"')),
-		).toBe(true);
+		expect(result.warnings.join("\n")).toMatch(/Auto-resolved chunk selector "fn_run" to "class_Worker\.fn_run#/);
 	});
 
 	test("warns on prefix auto-resolution", () => {
@@ -1109,9 +1110,7 @@ describe("chunk selector auto-resolution", () => {
 				content: "run(): void {\n\tconsole.log(this.name);\n}",
 			},
 		]);
-		expect(result.warnings.some(w => w.includes('Auto-resolved chunk selector "run" to "class_Worker.fn_run"'))).toBe(
-			true,
-		);
+		expect(result.warnings.join("\n")).toMatch(/Auto-resolved chunk selector "run" to "class_Worker\.fn_run#/);
 	});
 
 	test("errors on ambiguous suffix matches", () => {

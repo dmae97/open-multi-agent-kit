@@ -27,6 +27,7 @@ import { type EditToolDetails, getLspBatchRequest, type LspBatchRequest } from "
 
 export { DEFAULT_EDIT_MODE, type EditMode, normalizeEditMode } from "../utils/edit-mode";
 export * from "./diff";
+export * from "./line-hash";
 export * from "./modes/chunk";
 export * from "./modes/hashline";
 export * from "./modes/patch";

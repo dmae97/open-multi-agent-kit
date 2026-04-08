@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Breaking Changes
 
 - Simplified chunk edit operations: removed `append_child`, `prepend_child`, `append_sibling`, `prepend_sibling`, and `replace_body` ops in favor of unified `replace`, `before`, `after`, `prepend`, and `append` with region targeting (`@container`, `@prologue`, `@body`, `@epilogue`)
@@ -10,6 +9,16 @@
 
 ### Added
 
+- Exported autoresearch module and submodules via `./autoresearch` and `./autoresearch/*` package paths
+- Exported autoresearch tools via `./autoresearch/tools/*` package path
+- Exported CLI commands via `./cli/commands/*` package path
+- Exported DAP module and submodules via `./dap` and `./dap/*` package paths
+- Exported edit module and submodules via `./edit`, `./edit/*`, and `./edit/modes/*` package paths
+- Exported bundled ci-green custom command via `./extensibility/custom-commands/bundled/ci-green` package path
+- Exported extensibility plugins marketplace via `./extensibility/plugins/marketplace` and `./extensibility/plugins/marketplace/*` package paths
+- Exported ACP mode via `./modes/acp` and `./modes/acp/*` package paths
+- Exported web utilities via `./web/*` package path
+- Exported line-hash utilities from edit module via `./edit/line-hash`
 - Host-owned custom tools support: RPC clients can now register custom tools via `setCustomTools()` and the RPC server will invoke them over the transport with `host_tool_call` requests
 - RPC host tool framework: `RpcHostToolBridge` for managing host tool execution, `RpcHostToolDefinition` for tool metadata, and bidirectional `host_tool_call`, `host_tool_cancel`, `host_tool_update`, and `host_tool_result` frames
 - RPC client tool API: `defineRpcClientTool()` helper, `RpcClientCustomTool` interface, and `RpcClientToolContext` for implementing host-side tool execution with update streaming and abort support
@@ -46,6 +55,9 @@
 
 ### Changed
 
+- Reorganized package.json exports: moved `./edit` exports before `./plan-mode` for better logical grouping
+- Notebook conversion logic now checks for raw read mode or non-chunk mode before converting via markit, allowing chunk-mode reads of `.ipynb` files to use chunk parsing instead of conversion
+- Go receiver methods now render as top-level siblings instead of nested under their receiver type in chunk read output
 - Moved prompt formatting and rendering utilities from `coding-agent` to `pi-utils` package; `renderPromptTemplate()` and `formatPromptContent()` now accessed via `prompt.render()` and `prompt.format()` from `@oh-my-pi/pi-utils`
 - Moved `parseFrontmatter()` utility from `coding-agent` to `pi-utils` package; now imported from `@oh-my-pi/pi-utils` instead of local utils
 - Consolidated prompt template handling: `TemplateContext` type now available as `prompt.TemplateContext` from `@oh-my-pi/pi-utils`
@@ -97,6 +109,10 @@
 
 ### Fixed
 
+- Removed unused `_createErrorToolResult` helper function from RPC host-tools module
+- Fixed Go receiver method indentation in append operations to preserve relative indentation from the anchor chunk
+- Fixed Go type chunk line counts to report only the type body lines instead of including grouped receiver methods
+- Fixed enum variant insertion to avoid adding extra blank lines between variants
 - Chunk read output now correctly preserves embedded CRC in selectors (e.g., `class_Foo.fn_bar#ZZPM`) instead of stripping them during path parsing
 - Chunk edit error messages now consistently report checksum mismatches with format `Checksum mismatch` instead of variable phrasing
 - Chunk-mode read output now correctly displays scoped response trees showing only touched chunks and adjacent siblings, preventing unrelated distant chunks from appearing in responses

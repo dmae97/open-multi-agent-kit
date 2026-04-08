@@ -818,6 +818,8 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		const language = getLanguageFromPath(absolutePath);
 		const skipChunksForExplore = !hasEditTool && !this.session.settings.get("read.explorechunks");
 		const skipChunksForProse = isProseLanguage(language) && !this.session.settings.get("read.prosechunks");
+		const shouldConvertWithMarkit =
+			CONVERTIBLE_EXTENSIONS.has(ext) || (ext === ".ipynb" && (parsed.kind === "raw" || !chunkMode));
 
 		if (chunkMode && parsed.kind !== "raw" && !skipChunksForExplore && !skipChunksForProse) {
 			const absoluteLineRange =
@@ -928,7 +930,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 					throw error;
 				}
 			}
-		} else if (CONVERTIBLE_EXTENSIONS.has(ext)) {
+		} else if (shouldConvertWithMarkit) {
 			// Convert document or notebook via markit.
 			const result = await convertFileWithMarkit(absolutePath, signal);
 			if (result.ok) {

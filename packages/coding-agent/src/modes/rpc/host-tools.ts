@@ -19,13 +19,6 @@ type PendingHostToolCall = {
 	onUpdate?: AgentToolUpdateCallback<unknown>;
 };
 
-function _createErrorToolResult(message: string): AgentToolResult<unknown> {
-	return {
-		content: [{ type: "text", text: message }],
-		details: {},
-	};
-}
-
 function isAgentToolResult(value: unknown): value is AgentToolResult<unknown> {
 	if (!value || typeof value !== "object") return false;
 	const content = (value as { content?: unknown }).content;

@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { _resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { EditTool } from "@oh-my-pi/pi-coding-agent/edit";
-import { HASHLINE_NIBBLE_ALPHABET } from "@oh-my-pi/pi-coding-agent/edit/modes/hashline";
+import { HASHLINE_NIBBLE_ALPHABET } from "@oh-my-pi/pi-coding-agent/edit/line-hash";
 import { getLanguageFromPath } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
 import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 import { GrepTool } from "@oh-my-pi/pi-coding-agent/tools/grep";
@@ -106,8 +106,9 @@ describe("chunk mode tools", () => {
 		const text = getText(result);
 
 		expect(text).not.toContain("to expand ⋮");
+		expect(text).toContain("server.ts:class_Server.fn_handleError@container·");
 		expect(text).toContain("let total = 0;");
-		expect(text).toContain("29|       total += 25;");
+		expect(text).toContain("29| \t\t\ttotal += 25;");
 		expect(text).toContain("return err.message + total;");
 	});
 
@@ -157,7 +158,7 @@ describe("chunk mode tools", () => {
 		});
 		const text = getText(result);
 
-		expect(text).toContain("server.ts:class_Server.fn_handleError·");
+		expect(text).toContain("server.ts:class_Server.fn_handleError@container·");
 		expect(text).not.toContain("[Warning: checksum #");
 	});
 
@@ -308,7 +309,13 @@ describe("chunk mode tools", () => {
 
 		await editTool.execute("chunk-edit-string-content", {
 			path: filePath,
-			edits: [{ target: "class_Server", op: "append", content: 'status(): string {\n  return "ok";\n}\n' }],
+			edits: [
+				{
+					target: "class_Server@body",
+					op: "append",
+					content: 'status(): string {\n  return "ok";\n}\n',
+				},
+			],
 		} as never);
 
 		const updatedSource = await Bun.file(filePath).text();

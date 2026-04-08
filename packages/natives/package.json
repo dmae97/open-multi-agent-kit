@@ -36,17 +36,16 @@
 		"test": "bun run build:native && bun test",
 		"bench": "bun bench/grep.ts"
 	},
-
 	"devDependencies": {
 		"@napi-rs/cli": "3.6.0",
 		"@types/bun": "^1.3"
 	},
+	"engines": {
+		"bun": ">=1.3.7"
+	},
 	"napi": {
 		"binaryName": "pi_natives",
 		"triples": {}
-	},
-	"engines": {
-		"bun": ">=1.3.7"
 	},
 	"files": [
 		"src",

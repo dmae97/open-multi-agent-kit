@@ -266,7 +266,7 @@ describe("Coding Agent Tools", () => {
 			expect(result.details?.truncation).toBeUndefined();
 		});
 
-		it("should convert ipynb files through markit before rendering", async () => {
+		it("should convert ipynb files through markit for raw reads", async () => {
 			const notebookPath = path.join(testDir, "notebook.ipynb");
 			const notebook = {
 				cells: [
@@ -287,7 +287,7 @@ describe("Coding Agent Tools", () => {
 				content: "# Notebook Title\n\nNotebook body\n",
 			});
 
-			const result = await readTool.execute("test-call-ipynb", { path: notebookPath });
+			const result = await readTool.execute("test-call-ipynb", { path: notebookPath, sel: "raw" });
 			const output = getTextOutput(result);
 
 			expect(convertSpy).toHaveBeenCalledTimes(1);

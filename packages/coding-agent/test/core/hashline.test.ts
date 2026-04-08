@@ -12,10 +12,13 @@ import {
 	stripNewLinePrefixes,
 	validateLineRef,
 } from "@oh-my-pi/pi-coding-agent/edit";
-import { type Anchor, formatLineTag, type HashlineEdit } from "@oh-my-pi/pi-coding-agent/edit/modes/hashline";
+import type { Anchor, HashlineEdit } from "@oh-my-pi/pi-coding-agent/edit/modes/hashline";
 
 function makeTag(line: number, content: string): Anchor {
-	return parseTag(formatLineTag(line, content));
+	return {
+		line,
+		hash: computeLineHash(line, content),
+	};
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
