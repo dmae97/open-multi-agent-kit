@@ -139,8 +139,9 @@ export const streamAzureOpenAIResponses: StreamFunction<"azure-openai-responses"
 				body: params,
 			};
 			const openaiStream = await client.responses.create(params, { signal: requestSignal });
-			const firstEventWatchdog = createFirstEventWatchdog(getStreamFirstEventTimeoutMs(idleTimeoutMs), () =>
-				abortTracker.abortLocally(firstEventTimeoutAbortError),
+			const firstEventWatchdog = createFirstEventWatchdog(
+				options?.streamFirstEventTimeoutMs ?? getStreamFirstEventTimeoutMs(idleTimeoutMs),
+				() => abortTracker.abortLocally(firstEventTimeoutAbortError),
 			);
 			stream.push({ type: "start", partial: output });
 

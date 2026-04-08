@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from "bun:test";
 import { Messages } from "@anthropic-ai/sdk/resources/messages/messages";
 import { streamAnthropic } from "../src/providers/anthropic";
 import type { Context, Model } from "../src/types";
-import * as idleIterator from "../src/utils/idle-iterator";
 
 const model: Model<"anthropic-messages"> = {
 	id: "claude-sonnet-4-5",
@@ -155,7 +154,6 @@ afterEach(() => {
 
 describe("anthropic first-event timeout retries", () => {
 	it("retries when the provider never sends the first stream event", async () => {
-		vi.spyOn(idleIterator, "getStreamFirstEventTimeoutMs").mockReturnValue(20);
 		let attempt = 0;
 
 		vi.spyOn(Messages.prototype, "create").mockImplementation((_body, requestOptions) => {
@@ -167,7 +165,10 @@ describe("anthropic first-event timeout retries", () => {
 			}) as never;
 		});
 
-		const result = await streamAnthropic(model, context, { apiKey: "sk-ant-test" }).result();
+		const result = await streamAnthropic(model, context, {
+			apiKey: "sk-ant-test",
+			streamFirstEventTimeoutMs: 20,
+		}).result();
 
 		expect(attempt).toBe(2);
 		expect(result.stopReason).toBe("stop");
@@ -176,8 +177,6 @@ describe("anthropic first-event timeout retries", () => {
 	});
 
 	it("does not arm the Anthropic first-event watchdog before the stream connects", async () => {
-		vi.spyOn(idleIterator, "getStreamFirstEventTimeoutMs").mockReturnValue(20);
-
 		vi.spyOn(Messages.prototype, "create").mockImplementation((_body, requestOptions) => {
 			const signal = (requestOptions as { signal?: AbortSignal } | undefined)?.signal;
 			return createAnthropicMockStream({
@@ -187,14 +186,16 @@ describe("anthropic first-event timeout retries", () => {
 			}) as never;
 		});
 
-		const result = await streamAnthropic(model, context, { apiKey: "sk-ant-test" }).result();
+		const result = await streamAnthropic(model, context, {
+			apiKey: "sk-ant-test",
+			streamFirstEventTimeoutMs: 20,
+		}).result();
 
 		expect(result.stopReason).toBe("stop");
 		expect(result.content).toEqual([{ type: "text", text: "delayed connect" }]);
 	});
 
 	it("keeps caller aborts as aborted instead of retrying them as first-event timeouts", async () => {
-		vi.spyOn(idleIterator, "getStreamFirstEventTimeoutMs").mockReturnValue(50);
 		let attempt = 0;
 
 		vi.spyOn(Messages.prototype, "create").mockImplementation((_body, requestOptions) => {
@@ -209,6 +210,7 @@ describe("anthropic first-event timeout retries", () => {
 		const result = await streamAnthropic(model, context, {
 			apiKey: "sk-ant-test",
 			signal: controller.signal,
+			streamFirstEventTimeoutMs: 50,
 		}).result();
 
 		expect(attempt).toBe(1);

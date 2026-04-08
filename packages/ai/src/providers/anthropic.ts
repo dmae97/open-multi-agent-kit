@@ -717,6 +717,7 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 				| (ToolCall & { partialJson: string })
 			) & { index: number };
 			const blocks = output.content as Block[];
+			const firstEventTimeoutMs = options?.streamFirstEventTimeoutMs ?? getStreamFirstEventTimeoutMs();
 			stream.push({ type: "start", partial: output });
 			// Retry loop for transient errors from the stream.
 			// Provider-level transport/rate-limit failures: only before any streamed content starts.
@@ -733,7 +734,7 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 
 				try {
 					const { data: anthropicStream } = await anthropicRequest.withResponse();
-					const firstEventWatchdog = createFirstEventWatchdog(getStreamFirstEventTimeoutMs(), () =>
+					const firstEventWatchdog = createFirstEventWatchdog(firstEventTimeoutMs, () =>
 						activeAbortTracker.abortLocally(firstEventTimeoutAbortError),
 					);
 					let sawEvent = false;

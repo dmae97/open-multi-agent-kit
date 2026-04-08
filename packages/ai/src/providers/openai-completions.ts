@@ -220,8 +220,9 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 				body: params,
 			};
 			const openaiStream = await client.chat.completions.create(params, { signal: requestSignal });
-			const firstEventWatchdog = createFirstEventWatchdog(getStreamFirstEventTimeoutMs(idleTimeoutMs), () =>
-				abortTracker.abortLocally(firstEventTimeoutAbortError),
+			const firstEventWatchdog = createFirstEventWatchdog(
+				options?.streamFirstEventTimeoutMs ?? getStreamFirstEventTimeoutMs(idleTimeoutMs),
+				() => abortTracker.abortLocally(firstEventTimeoutAbortError),
 			);
 			if (copilotPremiumRequests !== undefined) output.usage.premiumRequests = copilotPremiumRequests;
 			stream.push({ type: "start", partial: output });
