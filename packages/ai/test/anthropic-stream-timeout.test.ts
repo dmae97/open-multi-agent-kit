@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { Messages } from "@anthropic-ai/sdk/resources/messages/messages";
-import * as idleIterator from "../src/utils/idle-iterator";
 import { streamAnthropic } from "../src/providers/anthropic";
 import type { Context, Model } from "../src/types";
+import * as idleIterator from "../src/utils/idle-iterator";
 
 const model: Model<"anthropic-messages"> = {
 	id: "claude-sonnet-4-5",
