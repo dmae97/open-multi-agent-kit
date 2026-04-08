@@ -17,20 +17,20 @@ pub struct ProjfsOverlayProbeResult {
 }
 
 /// Probe whether `ProjFS` overlay virtualization can be started on this system.
-#[napi(js_name = "projfsOverlayProbe")]
+#[napi]
 pub fn projfs_overlay_probe() -> ProjfsOverlayProbeResult {
 	imp::probe()
 }
 
 /// Start a `ProjFS` overlay: `projection_root` shows the merged view;
 /// `lower_root` is the backing tree.
-#[napi(js_name = "projfsOverlayStart")]
+#[napi]
 pub fn projfs_overlay_start(lower_root: String, projection_root: String) -> Result<()> {
 	imp::start(&lower_root, &projection_root)
 }
 
 /// Stop `ProjFS` virtualization for an active `projection_root` session.
-#[napi(js_name = "projfsOverlayStop")]
+#[napi]
 pub fn projfs_overlay_stop(projection_root: String) -> Result<()> {
 	imp::stop(&projection_root);
 	Ok(())

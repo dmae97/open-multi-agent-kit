@@ -35,8 +35,8 @@ struct EnvTabWidth {
 }
 
 /// Set the default tab width for the process.
-#[napi(js_name = "setDefaultTabWidth")]
-pub fn set_env_tab_width(env: &napi::Env, width: u32) {
+#[napi]
+pub fn set_default_tab_width(env: &napi::Env, width: u32) {
 	// #1. env-wide tab width
 	_ = env.set_instance_data(EnvTabWidth { width }, 0, |_| {});
 	// #2. thread-local tab width
@@ -46,8 +46,8 @@ pub fn set_env_tab_width(env: &napi::Env, width: u32) {
 }
 
 /// Get the default tab width for the process.
-#[napi(js_name = "getDefaultTabWidth")]
-pub fn get_env_tab_width(env: &napi::Env) -> u32 {
+#[napi]
+pub fn get_default_tab_width(env: &napi::Env) -> u32 {
 	// #1. env-wide tab width
 	if let Ok(Some(data)) = env.get_instance_data::<EnvTabWidth>() {
 		return data.width;
@@ -63,7 +63,7 @@ pub fn get_env_tab_width(env: &napi::Env) -> u32 {
 
 pub fn operation_tab_width(env: &napi::Env, explicit: Option<u32>) -> usize {
 	explicit
-		.unwrap_or_else(|| get_env_tab_width(env))
+		.unwrap_or_else(|| get_default_tab_width(env))
 		.clamp(MIN_TAB_WIDTH, MAX_TAB_WIDTH) as usize
 }
 
@@ -106,12 +106,10 @@ pub struct ExtractSegmentsResult {
 	/// UTF-16 content before the overlay region.
 	pub before:       Utf16String,
 	/// Visible width of the `before` segment.
-	#[napi(js_name = "beforeWidth")]
 	pub before_width: u32,
 	/// UTF-16 content after the overlay region.
 	pub after:        Utf16String,
 	/// Visible width of the `after` segment.
-	#[napi(js_name = "afterWidth")]
 	pub after_width:  u32,
 }
 
@@ -832,7 +830,7 @@ fn wrap_text_with_ansi_impl(
 /// breaks.
 ///
 /// Returns UTF-16 lines with active SGR codes carried across line boundaries.
-#[napi(js_name = "wrapTextWithAnsi")]
+#[napi]
 pub fn wrap_text_with_ansi(
 	env: &napi::Env,
 	text: JsString,
@@ -852,7 +850,7 @@ pub fn wrap_text_with_ansi(
 /// Truncate text to a visible width, preserving ANSI codes.
 ///
 /// Pads with spaces when requested.
-#[napi(js_name = "truncateToWidth")]
+#[napi]
 pub fn truncate_to_width<'a>(
 	env: &napi::Env,
 	text: JsString<'a>,
@@ -1117,7 +1115,7 @@ fn slice_with_width_impl(
 ///
 /// Counts terminal cells, skipping ANSI escapes, and optionally enforces strict
 /// width.
-#[napi(js_name = "sliceWithWidth")]
+#[napi]
 pub fn slice_with_width(
 	env: &napi::Env,
 	line: JsString,
@@ -1283,7 +1281,7 @@ fn extract_segments_impl(
 ///
 /// Preserves ANSI state so the `after` segment renders correctly after
 /// truncation.
-#[napi(js_name = "extractSegments")]
+#[napi]
 pub fn extract_segments(
 	env: &napi::Env,
 	line: JsString,
@@ -1320,7 +1318,7 @@ pub fn extract_segments(
 
 /// Strip ANSI escape sequences, remove control characters / lone surrogates,
 /// and normalize line endings.
-#[napi(js_name = "sanitizeText")]
+#[napi]
 pub fn sanitize_text(text: JsString<'_>) -> Result<Either<JsString<'_>, Utf16String>> {
 	let original = text;
 	let text_u16 = text.into_utf16()?;
@@ -1404,8 +1402,8 @@ pub fn sanitize_text(text: JsString<'_>) -> Result<Either<JsString<'_>, Utf16Str
 /// Calculate visible width of text, excluding ANSI escape sequences.
 ///
 /// Tabs count as a fixed-width cell.
-#[napi(js_name = "visibleWidth")]
-pub fn visible_width_napi(env: &napi::Env, text: JsString, tab_width: Option<u32>) -> Result<u32> {
+#[napi]
+pub fn visible_width(env: &napi::Env, text: JsString, tab_width: Option<u32>) -> Result<u32> {
 	let text_u16 = text.into_utf16()?;
 	let tab_width = operation_tab_width(env, tab_width);
 	Ok(crate::utils::clamp_u32(visible_width_u16(text_u16.as_slice(), tab_width) as u64))

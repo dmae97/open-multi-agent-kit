@@ -207,7 +207,7 @@ impl ChunkState {
 impl ChunkState {
 	/// Build chunk state by parsing `source` with the given `language` id (e.g.
 	/// `typescript`).
-	#[napi(factory, js_name = "parse")]
+	#[napi(factory)]
 	pub fn parse(source: String, language: String) -> Result<Self> {
 		ChunkStateInner::parse(source, language).map(Self::from_inner)
 	}
@@ -231,13 +231,13 @@ impl ChunkState {
 	}
 
 	/// Line count of the source buffer.
-	#[napi(getter, js_name = "lineCount")]
+	#[napi(getter)]
 	pub fn line_count(&self) -> u32 {
 		self.inner.tree().line_count
 	}
 
 	/// Count of tree-sitter error nodes seen while building the tree.
-	#[napi(getter, js_name = "parseErrors")]
+	#[napi(getter)]
 	pub fn parse_errors(&self) -> u32 {
 		self.inner.tree().parse_errors
 	}
@@ -249,19 +249,19 @@ impl ChunkState {
 	}
 
 	/// Selector path string for the synthetic root (often empty).
-	#[napi(getter, js_name = "rootPath")]
+	#[napi(getter)]
 	pub fn root_path(&self) -> String {
 		self.inner.tree().root_path.clone()
 	}
 
 	/// Top-level child chunk paths under the root.
-	#[napi(getter, js_name = "rootChildren")]
+	#[napi(getter)]
 	pub fn root_children(&self) -> Vec<String> {
 		self.inner.tree().root_children.clone()
 	}
 
 	/// Total number of chunk nodes.
-	#[napi(getter, js_name = "chunkCount")]
+	#[napi(getter)]
 	pub fn chunk_count(&self) -> u32 {
 		self.inner.tree().chunks.len() as u32
 	}
@@ -310,7 +310,7 @@ impl ChunkState {
 	}
 
 	/// Chunk selector path that contains 1-based source line `line`, if any.
-	#[napi(js_name = "lineToContainingChunkPath")]
+	#[napi]
 	pub fn line_to_containing_chunk_path(&self, line: u32) -> Option<String> {
 		self.inner.line_to_containing_chunk_path(line)
 	}
@@ -323,7 +323,7 @@ impl ChunkState {
 
 	/// Parse `readPath` (selector, line scope, etc.) and return rendered text or
 	/// errors.
-	#[napi(js_name = "renderRead")]
+	#[napi]
 	pub fn render_read(&self, params: ReadRenderParams) -> Result<ReadResult> {
 		let ParsedChunkReadPath { selector, crc, region } =
 			match parse_chunk_read_path(params.read_path.as_str()) {
@@ -560,7 +560,7 @@ impl ChunkState {
 
 	/// Prefix a grep line with `display_path` and the chunk path for
 	/// `line_number`, when known.
-	#[napi(js_name = "formatGrepLine")]
+	#[napi]
 	pub fn format_grep_line(&self, display_path: String, line_number: u32, line: String) -> String {
 		let chunk_path = self.inner.line_to_containing_chunk_path(line_number);
 		let location = chunk_path.map_or_else(
@@ -578,7 +578,7 @@ impl ChunkState {
 
 	/// Apply batch edits, re-parse, write files, and return updated state and
 	/// messaging.
-	#[napi(js_name = "applyEdits")]
+	#[napi]
 	pub fn apply_edits(&self, params: EditParams) -> Result<EditResult> {
 		crate::chunk::edit::apply_edits(self, &params).map_err(Error::from_reason)
 	}

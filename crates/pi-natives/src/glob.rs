@@ -40,30 +40,25 @@ pub struct GlobOptions<'env> {
 	pub path:                 String,
 	/// Filter by file type: "file", "dir", or "symlink". Symlinks are
 	/// matched for file/dir filters based on their target type.
-	#[napi(js_name = "fileType")]
 	pub file_type:            Option<FileType>,
 	/// Match simple patterns recursively by default (`*.ts` -> recursive).
 	pub recursive:            Option<bool>,
 	/// Include hidden files (default: false).
 	pub hidden:               Option<bool>,
 	/// Maximum number of results to return.
-	#[napi(js_name = "maxResults")]
 	pub max_results:          Option<u32>,
 	/// Respect .gitignore files (default: true).
 	pub gitignore:            Option<bool>,
 	/// Enable shared filesystem scan cache (default: false).
 	pub cache:                Option<bool>,
 	/// Sort results by mtime (most recent first) before applying limit.
-	#[napi(js_name = "sortByMtime")]
 	pub sort_by_mtime:        Option<bool>,
 	/// Include `node_modules` entries when the pattern does not explicitly
 	/// mention them.
-	#[napi(js_name = "includeNodeModules")]
 	pub include_node_modules: Option<bool>,
 	/// Abort signal for cancelling the operation.
 	pub signal:               Option<Unknown<'env>>,
 	/// Timeout in milliseconds for the operation.
-	#[napi(js_name = "timeoutMs")]
 	pub timeout_ms:           Option<u32>,
 }
 
@@ -298,7 +293,7 @@ fn run_glob(
 /// Returns an error when the search path cannot be resolved, the path is not a
 /// directory, the glob pattern is invalid, or cancellation/timeout is
 /// triggered.
-#[napi(js_name = "glob")]
+#[napi]
 pub fn glob(
 	options: GlobOptions<'_>,
 	#[napi(ts_arg_type = "((error: Error | null, match: GlobMatch) => void) | undefined | null")]

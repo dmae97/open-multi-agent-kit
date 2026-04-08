@@ -31,7 +31,6 @@ pub struct PtyStartOptions<'env> {
 	/// Environment variables for this command.
 	pub env:        Option<HashMap<String, String>>,
 	/// Timeout in milliseconds before cancelling.
-	#[napi(js_name = "timeoutMs")]
 	pub timeout_ms: Option<u32>,
 	/// Abort signal for cancelling the operation.
 	pub signal:     Option<Unknown<'env>>,

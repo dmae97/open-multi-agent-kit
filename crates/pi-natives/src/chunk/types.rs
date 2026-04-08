@@ -2,12 +2,13 @@
 
 use napi_derive::napi;
 
-use crate::chunk::state::ChunkState;
+use crate::chunk::{kind::ChunkKind, state::ChunkState};
 
 #[derive(Clone)]
 pub struct ChunkNode {
 	pub path:                String,
 	pub name:                String,
+	pub kind:                ChunkKind,
 	pub leaf:                bool,
 	pub parent_path:         Option<String>,
 	pub children:            Vec<String>,
@@ -62,10 +63,8 @@ pub struct ChunkInfo {
 	/// Stable checksum anchor for this chunk.
 	pub checksum:   String,
 	/// 1-based start line in the source file (inclusive).
-	#[napi(js_name = "startLine")]
 	pub start_line: u32,
 	/// 1-based end line in the source file (inclusive).
-	#[napi(js_name = "endLine")]
 	pub end_line:   u32,
 	/// Whether this node is a leaf (no child chunks).
 	pub leaf:       bool,
@@ -160,10 +159,8 @@ pub struct ChunkReadTarget {
 #[napi(object)]
 pub struct VisibleLineRange {
 	/// First line to include.
-	#[napi(js_name = "startLine")]
 	pub start_line: u32,
 	/// Last line to include.
-	#[napi(js_name = "endLine")]
 	pub end_line:   u32,
 }
 
@@ -265,38 +262,28 @@ pub struct FocusedPath {
 #[napi(object)]
 pub struct RenderParams {
 	/// Path of the chunk to render; `None` uses the tree root.
-	#[napi(js_name = "chunkPath")]
 	pub chunk_path:           Option<String>,
 	/// Title line shown above the tree (often the file path).
 	pub title:                String,
 	/// Optional language label for the header block.
-	#[napi(js_name = "languageTag")]
 	pub language_tag:         Option<String>,
 	/// Restrict output to an inclusive line range of the file.
-	#[napi(js_name = "visibleRange")]
 	pub visible_range:        Option<VisibleLineRange>,
 	/// When true, list only direct children instead of a full subtree.
-	#[napi(js_name = "renderChildrenOnly")]
 	pub render_children_only: bool,
 	/// Hide checksums in anchors when true.
-	#[napi(js_name = "omitChecksum")]
 	pub omit_checksum:        bool,
 	/// Anchor formatting style for chunk headers.
-	#[napi(js_name = "anchorStyle")]
 	pub anchor_style:         Option<ChunkAnchorStyle>,
 	/// Include a one-line preview for leaf chunks.
-	#[napi(js_name = "showLeafPreview")]
 	pub show_leaf_preview:    bool,
 	/// Replace tab characters in displayed previews (e.g. two spaces).
-	#[napi(js_name = "tabReplacement")]
 	pub tab_replacement:      Option<String>,
 	/// When true, normalize displayed indentation to canonical tabs.
-	#[napi(js_name = "normalizeIndent")]
 	pub normalize_indent:     Option<bool>,
 
 	/// When set, restrict rendering to these chunks with their specified focus
 	/// modes. Everything not in this list is skipped.
-	#[napi(js_name = "focusedPaths")]
 	pub focused_paths: Option<Vec<FocusedPath>>,
 }
 
@@ -306,28 +293,20 @@ pub struct RenderParams {
 #[napi(object)]
 pub struct ReadRenderParams {
 	/// Read selector (`sel=...` path, line range, or empty for whole tree).
-	#[napi(js_name = "readPath")]
 	pub read_path:           String,
 	/// Path shown in titles and error messages (often the file path).
-	#[napi(js_name = "displayPath")]
 	pub display_path:        String,
 	/// Optional language label for the rendered block.
-	#[napi(js_name = "languageTag")]
 	pub language_tag:        Option<String>,
 	/// Hide checksums in rendered anchors.
-	#[napi(js_name = "omitChecksum")]
 	pub omit_checksum:       bool,
 	/// Anchor formatting style.
-	#[napi(js_name = "anchorStyle")]
 	pub anchor_style:        Option<ChunkAnchorStyle>,
 	/// Optional absolute file line range to intersect with the resolved chunk.
-	#[napi(js_name = "absoluteLineRange")]
 	pub absolute_line_range: Option<VisibleLineRange>,
 	/// Replace tabs in embedded previews.
-	#[napi(js_name = "tabReplacement")]
 	pub tab_replacement:     Option<String>,
 	/// When true, normalize displayed indentation to canonical tabs.
-	#[napi(js_name = "normalizeIndent")]
 	pub normalize_indent:    Option<bool>,
 }
 
@@ -370,18 +349,14 @@ pub struct EditParams {
 	/// Edits to apply in order.
 	pub operations:       Vec<EditOperation>,
 	/// Default chunk selector when an `EditOperation` omits `sel`.
-	#[napi(js_name = "defaultSelector")]
 	pub default_selector: Option<String>,
 	/// Default checksum when an `EditOperation` omits `crc`.
-	#[napi(js_name = "defaultCrc")]
 	pub default_crc:      Option<String>,
 	/// Anchor formatting for rendered response text.
-	#[napi(js_name = "anchorStyle")]
 	pub anchor_style:     Option<ChunkAnchorStyle>,
 	/// Working directory used to resolve `filePath` and display paths.
 	pub cwd:              String,
 	/// Path to the source file to edit (often relative to `cwd`).
-	#[napi(js_name = "filePath")]
 	pub file_path:        String,
 }
 
@@ -393,21 +368,16 @@ pub struct EditResult {
 	/// Chunk tree state after applying edits and re-parsing.
 	pub state:         ChunkState,
 	/// Full file text before edits.
-	#[napi(js_name = "diffBefore")]
 	pub diff_before:   String,
 	/// Full file text after edits.
-	#[napi(js_name = "diffAfter")]
 	pub diff_after:    String,
 	/// Rendered summary for tooling (hunks, anchors), driven by `anchorStyle`.
-	#[napi(js_name = "responseText")]
 	pub response_text: String,
 	/// Whether the on-disk source changed.
 	pub changed:       bool,
 	/// Whether the updated source re-parsed without fatal issues.
-	#[napi(js_name = "parseValid")]
 	pub parse_valid:   bool,
 	/// Absolute or normalized paths that were written or touched.
-	#[napi(js_name = "touchedPaths")]
 	pub touched_paths: Vec<String>,
 	/// Non-fatal issues (e.g. selector warnings) collected during apply.
 	pub warnings:      Vec<String>,

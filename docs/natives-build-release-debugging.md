@@ -170,13 +170,13 @@ This is why packaging + runtime loader expectations must align: filenames, platf
 
 | JS name required by `validateNative` | Rust export declaration | Rust source file |
 | --- | --- | --- |
-| `glob` | `#[napi(js_name = "glob")] pub fn glob(...)` | `crates/pi-natives/src/glob.rs` |
-| `grep` | `#[napi(js_name = "grep")] pub fn grep(...)` | `crates/pi-natives/src/grep.rs` |
-| `search` | `#[napi(js_name = "search")] pub fn search(...)` | `crates/pi-natives/src/grep.rs` |
-| `highlightCode` | `#[napi(js_name = "highlightCode")] pub fn highlight_code(...)` | `crates/pi-natives/src/highlight.rs` |
-| `getSystemInfo` | `#[napi(js_name = "getSystemInfo")] pub fn get_system_info(...)` | `crates/pi-natives/src/system_info.rs` |
+| `glob` | `#[napi] pub fn glob(...)` | `crates/pi-natives/src/glob.rs` |
+| `grep` | `#[napi] pub fn grep(...)` | `crates/pi-natives/src/grep.rs` |
+| `search` | `#[napi] pub fn search(...)` | `crates/pi-natives/src/grep.rs` |
+| `highlightCode` | `#[napi] pub fn highlight_code(...)` | `crates/pi-natives/src/highlight.rs` |
+| `getSystemInfo` | `#[napi] pub fn get_system_info(...)` | `crates/pi-natives/src/system_info.rs` |
 | `getWorkProfile` | `#[napi] pub fn get_work_profile(...)` (camel-cased export) | `crates/pi-natives/src/prof.rs` |
-| `invalidateFsScanCache` | `#[napi(js_name = "invalidateFsScanCache")] pub fn invalidate_fs_scan_cache(...)` | `crates/pi-natives/src/fs_cache.rs` |
+| `invalidateFsScanCache` | `#[napi] pub fn invalidate_fs_scan_cache(...)` | `crates/pi-natives/src/fs_cache.rs` |
 
 If any required symbol is missing, loader fails fast with a rebuild hint.
 
@@ -209,7 +209,7 @@ If any required symbol is missing, loader fails fast with a rebuild hint.
 
 | Symptom | Likely cause | Verify | Fix |
 | --- | --- | --- | --- |
-| `Native addon missing exports ... Missing: <name>` | Stale `.node` binary, Rust export name mismatch, or wrong binary loaded | Run with `PI_DEV=1` to see loaded path; inspect export list for that file | Rebuild `build:native`; ensure Rust `#[napi(js_name=...)]` matches JS name; remove stale cached/versioned files |
+| `Native addon missing exports ... Missing: <name>` | Stale `.node` binary, Rust export name mismatch, or wrong binary loaded | Run with `PI_DEV=1` to see loaded path; inspect export list for that file | Rebuild `build:native`; ensure Rust `#[napi]` export name (or explicit alias when needed) matches JS key; remove stale cached/versioned files |
 | x64 machine loads baseline when modern expected | `PI_NATIVE_VARIANT=baseline`, no AVX2 detected, or only baseline file present | Check `PI_NATIVE_VARIANT`; inspect `native/` for `-modern` file | Build modern variant (`TARGET_VARIANT=modern ... build:native`) and ensure file is shipped |
 | Cross-build produces unusable/wrong-labeled binary | Mismatch between `CROSS_TARGET` and `TARGET_PLATFORM`/`TARGET_ARCH`, or missing `TARGET_VARIANT` for x64 | Confirm env tuple and output filename | Re-run with consistent env values and explicit x64 `TARGET_VARIANT` |
 | Compiled binary fails after upgrade | Stale extracted cache (`~/.omp/natives/<old-or-mismatched-version>`) or embedded manifest mismatch | Inspect versioned natives dir and loader error list | Delete versioned natives cache for the package version and rerun; regenerate embedded manifest during packaging |

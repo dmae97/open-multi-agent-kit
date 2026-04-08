@@ -36,12 +36,10 @@ pub struct FuzzyFindOptions<'env> {
 	/// Enable shared filesystem scan cache (default: false).
 	pub cache:       Option<bool>,
 	/// Maximum number of matches to return (default: 100).
-	#[napi(js_name = "maxResults")]
 	pub max_results: Option<u32>,
 	/// Abort signal for cancelling the operation.
 	pub signal:      Option<Unknown<'env>>,
 	/// Timeout in milliseconds for the operation.
-	#[napi(js_name = "timeoutMs")]
 	pub timeout_ms:  Option<u32>,
 }
 
@@ -51,7 +49,6 @@ pub struct FuzzyFindMatch {
 	/// Relative path from the search root (uses `/` separators).
 	pub path:         String,
 	/// Whether this entry is a directory.
-	#[napi(js_name = "isDirectory")]
 	pub is_directory: bool,
 	/// Match quality score (higher is better).
 	pub score:        u32,
@@ -63,7 +60,6 @@ pub struct FuzzyFindResult {
 	/// Matched entries (up to `maxResults`).
 	pub matches:       Vec<FuzzyFindMatch>,
 	/// Total number of matches found (may exceed `matches.len()`).
-	#[napi(js_name = "totalMatches")]
 	pub total_matches: u32,
 }
 
@@ -325,7 +321,7 @@ fn fuzzy_find_sync(
 ///
 /// # Returns
 /// Matching file and directory entries sorted by match quality.
-#[napi(js_name = "fuzzyFind")]
+#[napi]
 pub fn fuzzy_find(
 	options: FuzzyFindOptions<'_>,
 	db: Option<&SearchDb>,

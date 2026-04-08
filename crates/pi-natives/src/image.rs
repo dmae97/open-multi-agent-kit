@@ -75,7 +75,7 @@ impl PhotonImage {
 	///
 	/// # Errors
 	/// Returns an error if the image format cannot be detected or decoded.
-	#[napi(js_name = "parse")]
+	#[napi]
 	pub fn parse(bytes: Uint8Array) -> ImageTask {
 		let bytes = bytes.as_ref().to_vec();
 		task::blocking("image.decode", (), move |_| -> Result<Self> {
@@ -85,13 +85,13 @@ impl PhotonImage {
 	}
 
 	/// Get the image width in pixels.
-	#[napi(getter, js_name = "width")]
+	#[napi(getter)]
 	pub fn get_width(&self) -> u32 {
 		self.img.width()
 	}
 
 	/// Get the image height in pixels.
-	#[napi(getter, js_name = "height")]
+	#[napi(getter)]
 	pub fn get_height(&self) -> u32 {
 		self.img.height()
 	}
@@ -100,7 +100,7 @@ impl PhotonImage {
 	///
 	/// # Errors
 	/// Returns an error if encoding fails or format is invalid.
-	#[napi(js_name = "encode")]
+	#[napi]
 	pub fn encode(&self, format: ImageFormat, quality: u8) -> task::Promise<Vec<u8>> {
 		let img = Arc::clone(&self.img);
 		task::blocking("image.encode", (), move |_| encode_image(&img, format, quality))
@@ -108,7 +108,7 @@ impl PhotonImage {
 
 	/// Resize the image to the specified pixel dimensions using the filter.
 	/// Returns a new `PhotonImage` containing the resized image.
-	#[napi(js_name = "resize")]
+	#[napi]
 	pub fn resize(&self, width: u32, height: u32, filter: SamplingFilter) -> ImageTask {
 		let img = Arc::clone(&self.img);
 		task::blocking("image.resize", (), move |_| {
@@ -124,7 +124,7 @@ impl PhotonImage {
 ///
 /// # Errors
 /// Returns an error if decoding, resizing, or SIXEL encoding fails.
-#[napi(js_name = "encodeSixel")]
+#[napi]
 pub fn encode_sixel(
 	bytes: Uint8Array,
 	target_width_px: u32,

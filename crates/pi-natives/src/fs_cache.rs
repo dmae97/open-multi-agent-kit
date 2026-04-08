@@ -47,7 +47,6 @@ pub struct GlobMatch {
 	/// Relative path from the search root, using forward slashes.
 	pub path:      String,
 	/// Resolved filesystem type for the match.
-	#[napi(js_name = "fileType")]
 	pub file_type: FileType,
 	/// Modification time in milliseconds since Unix epoch (from
 	/// `symlink_metadata`).
@@ -367,7 +366,7 @@ pub fn invalidate_all() {
 ///
 /// Intended to be called after agent file mutations (write, edit, rename,
 /// delete).
-#[napi(js_name = "invalidateFsScanCache")]
+#[napi]
 pub fn invalidate_fs_scan_cache(path: Option<String>) {
 	match path {
 		Some(p) => {
