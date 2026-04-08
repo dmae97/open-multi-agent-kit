@@ -948,11 +948,13 @@ export class PythonKernel {
 		return promise;
 	}
 
-	async introspectPrelude(): Promise<PreludeHelper[]> {
+	async introspectPrelude(options: Pick<KernelExecuteOptions, "signal" | "timeoutMs"> = {}): Promise<PreludeHelper[]> {
 		let output = "";
 		const result = await this.execute(PRELUDE_INTROSPECTION_SNIPPET, {
 			silent: false,
 			storeHistory: false,
+			signal: options.signal,
+			timeoutMs: options.timeoutMs,
 			onChunk: text => {
 				output += text;
 			},

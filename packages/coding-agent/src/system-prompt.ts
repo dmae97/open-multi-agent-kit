@@ -608,5 +608,13 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		eagerTasks,
 		secretsEnabled,
 	};
-	return prompt.render(resolvedCustomPrompt ? customSystemPromptTemplate : systemPromptTemplate, data);
+	let rendered = prompt.render(resolvedCustomPrompt ? customSystemPromptTemplate : systemPromptTemplate, data);
+
+	// When autoqa is active the report_tool_issue tool is in the tool set — nudge the agent.
+	if (toolNames.includes("report_tool_issue")) {
+		rendered +=
+			"\n\n<critical>\nThe `report_tool_issue` tool is available for automated QA. If ANY tool you call returns output that is unexpected, incorrect, malformed, or otherwise inconsistent with what you anticipated given the tool's described behavior and your parameters, call `report_tool_issue` with the tool name and a concise description of the discrepancy. Do not hesitate to report — false positives are acceptable.\n</critical>";
+	}
+
+	return rendered;
 }

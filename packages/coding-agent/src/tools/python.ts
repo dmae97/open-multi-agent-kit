@@ -7,7 +7,7 @@ import { Markdown, Text } from "@oh-my-pi/pi-tui";
 import { getProjectDir, prompt } from "@oh-my-pi/pi-utils";
 import { type Static, Type } from "@sinclair/typebox";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
-import { executePython, getPreludeDocs, type PythonExecutorOptions } from "../ipy/executor";
+import { executePython, getPreludeDocs, type PythonExecutorOptions, warmPythonEnvironment } from "../ipy/executor";
 import type { PreludeHelper, PythonStatusEvent } from "../ipy/kernel";
 import { truncateToVisualLines } from "../modes/components/visual-truncate";
 import { getMarkdownTheme, type Theme } from "../modes/theme/theme";
@@ -145,7 +145,9 @@ export interface PythonToolOptions {
 export class PythonTool implements AgentTool<typeof pythonSchema> {
 	readonly name = "python";
 	readonly label = "Python";
-	readonly description: string;
+	get description(): string {
+		return getPythonToolDescription();
+	}
 	readonly parameters = pythonSchema;
 	readonly concurrency = "exclusive";
 	readonly strict = true;
@@ -157,7 +159,6 @@ export class PythonTool implements AgentTool<typeof pythonSchema> {
 		options?: PythonToolOptions,
 	) {
 		this.#proxyExecutor = options?.proxyExecutor;
-		this.description = getPythonToolDescription();
 	}
 
 	async execute(
@@ -265,6 +266,19 @@ export class PythonTool implements AgentTool<typeof pythonSchema> {
 				},
 			});
 			const sessionId = sessionFile ? `session:${sessionFile}:cwd:${commandCwd}` : `cwd:${commandCwd}`;
+
+			if (getPreludeDocs().length === 0) {
+				const warmup = await warmPythonEnvironment(
+					commandCwd,
+					sessionId,
+					this.session.settings.get("python.sharedGateway"),
+					sessionFile ?? undefined,
+				);
+				if (!warmup.ok) {
+					throw new ToolError(warmup.reason ?? "Python prelude helpers unavailable");
+				}
+			}
+
 			const baseExecutorOptions: Omit<PythonExecutorOptions, "reset"> = {
 				cwd: commandCwd,
 				deadlineMs,

@@ -47,6 +47,7 @@ import { wrapToolWithMetaNotice } from "./output-meta";
 import { PythonTool } from "./python";
 import { ReadTool } from "./read";
 import { RenderMermaidTool } from "./render-mermaid";
+import { createReportToolIssueTool, isAutoQaEnabled } from "./report-tool-issue";
 import { ResolveTool } from "./resolve";
 import { reportFindingTool } from "./review";
 import { SearchToolBm25Tool } from "./search-tool-bm25";
@@ -85,6 +86,7 @@ export * from "./pending-action";
 export * from "./python";
 export * from "./read";
 export * from "./render-mermaid";
+export * from "./report-tool-issue";
 export * from "./resolve";
 export * from "./review";
 export * from "./search-tool-bm25";
@@ -232,6 +234,7 @@ export const BUILTIN_TOOLS: Record<string, ToolFactory> = {
 export const HIDDEN_TOOLS: Record<string, ToolFactory> = {
 	submit_result: s => new SubmitResultTool(s),
 	report_finding: () => reportFindingTool,
+	report_tool_issue: s => createReportToolIssueTool(s),
 	exit_plan_mode: s => new ExitPlanModeTool(s),
 	resolve: s => new ResolveTool(s),
 };
@@ -305,6 +308,7 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 					session.cwd,
 					warmSessionId,
 					session.settings.get("python.sharedGateway"),
+					sessionFile,
 				);
 			} catch (err) {
 				logger.warn("Failed to warm Python environment", {
@@ -393,15 +397,22 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 	);
 	const tools = baseResults.filter((r): r is Tool => r !== null);
 	const hasDeferrableTools = tools.some(tool => tool.deferrable === true);
-	if (!hasDeferrableTools) {
-		return tools;
+	if (hasDeferrableTools && !tools.some(tool => tool.name === "resolve")) {
+		const resolveTool = await logger.time("createTools:resolve", HIDDEN_TOOLS.resolve, session);
+		if (resolveTool) {
+			tools.push(wrapToolWithMetaNotice(resolveTool));
+		}
 	}
-	if (tools.some(tool => tool.name === "resolve")) {
-		return tools;
+
+	// Auto-inject report_tool_issue when autoqa is enabled (env or setting).
+	// Injected unconditionally into every agent, regardless of requested tool list.
+	const autoQA = isAutoQaEnabled(session.settings);
+	if (autoQA && !tools.some(t => t.name === "report_tool_issue")) {
+		const qaTool = await HIDDEN_TOOLS.report_tool_issue(session);
+		if (qaTool) {
+			tools.push(wrapToolWithMetaNotice(qaTool));
+		}
 	}
-	const resolveTool = await logger.time("createTools:resolve", HIDDEN_TOOLS.resolve, session);
-	if (resolveTool) {
-		tools.push(wrapToolWithMetaNotice(resolveTool));
-	}
+
 	return tools;
 }

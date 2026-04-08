@@ -299,6 +299,48 @@ async function writePreludeCache(state: PreludeCacheState, helpers: PreludeHelpe
 	}
 }
 
+function isPythonTestEnvironment(): boolean {
+	return Bun.env.BUN_ENV === "test" || Bun.env.NODE_ENV === "test";
+}
+
+function getPreludeIntrospectionOptions(
+	options: KernelSessionExecutionOptions = {},
+): Pick<KernelExecuteOptions, "signal" | "timeoutMs"> {
+	return {
+		signal: options.signal,
+		timeoutMs: requireRemainingTimeoutMs(options.deadlineMs),
+	};
+}
+
+async function cachePreludeDocs(
+	cwd: string,
+	docs: PreludeHelper[],
+	cacheState?: PreludeCacheState | null,
+): Promise<PreludeHelper[]> {
+	cachedPreludeDocs = docs;
+	if (!isPythonTestEnvironment() && docs.length > 0) {
+		const state = cacheState ?? (await buildPreludeCacheState(cwd));
+		await writePreludeCache(state, docs);
+	}
+	return docs;
+}
+
+async function ensurePreludeDocsLoaded(
+	kernel: PythonKernel,
+	cwd: string,
+	options: KernelSessionExecutionOptions = {},
+	cacheState?: PreludeCacheState | null,
+): Promise<PreludeHelper[]> {
+	if (cachedPreludeDocs && cachedPreludeDocs.length > 0) {
+		return cachedPreludeDocs;
+	}
+	const docs = await kernel.introspectPrelude(getPreludeIntrospectionOptions(options));
+	if (docs.length === 0) {
+		throw new Error("Python prelude helpers unavailable");
+	}
+	return cachePreludeDocs(cwd, docs, cacheState);
+}
+
 function startCleanupTimer(): void {
 	if (cleanupTimer) return;
 	cleanupTimer = setInterval(() => {
@@ -366,7 +408,6 @@ export async function warmPythonEnvironment(
 	useSharedGateway?: boolean,
 	sessionFile?: string,
 ): Promise<{ ok: boolean; reason?: string; docs: PreludeHelper[] }> {
-	const isTestEnv = Bun.env.BUN_ENV === "test" || Bun.env.NODE_ENV === "test";
 	let cacheState: PreludeCacheState | null = null;
 	try {
 		await logger.time("warmPython:ensureKernelAvailable", ensureKernelAvailable, cwd);
@@ -375,7 +416,7 @@ export async function warmPythonEnvironment(
 		cachedPreludeDocs = [];
 		return { ok: false, reason, docs: [] };
 	}
-	if (!isTestEnv) {
+	if (!isPythonTestEnvironment()) {
 		try {
 			cacheState = await buildPreludeCacheState(cwd);
 			const cached = await readPreludeCache(cacheState);
@@ -398,17 +439,12 @@ export async function warmPythonEnvironment(
 			withKernelSession,
 			resolvedSessionId,
 			cwd,
-			async kernel => kernel.introspectPrelude(),
+			kernel => ensurePreludeDocsLoaded(kernel, cwd, { useSharedGateway, sessionFile }, cacheState),
 			{
 				useSharedGateway,
 				sessionFile,
 			},
 		);
-		cachedPreludeDocs = docs;
-		if (!isTestEnv && docs.length > 0) {
-			const state = cacheState ?? (await buildPreludeCacheState(cwd));
-			await writePreludeCache(state, docs);
-		}
 		return { ok: true, docs };
 	} catch (err: unknown) {
 		const reason = err instanceof Error ? err.message : String(err);

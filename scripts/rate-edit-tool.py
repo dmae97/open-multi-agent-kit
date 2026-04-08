@@ -642,7 +642,7 @@ class ModelProgress:
     todo_items: dict[str, tuple[str, str]] = field(default_factory=dict)
 
 
-TOOL_WHITELIST = ("read", "edit", "todo_write")
+TOOL_WHITELIST = ("read", "edit", "todo_write", "report_tool_issue")
 MODEL_LABEL_WIDTH = 30
 STATUS_WIDTH = 7
 TOKENS_WIDTH = 9
@@ -1001,7 +1001,7 @@ class ProgressPrinter:
         config_line.append(self._fixtures_dir or "-", style="cyan")
         config_line.append("  •  ", style="dim")
         config_line.append("tools ", style="bold")
-        config_line.append("read|edit|todo_write", style="magenta")
+        config_line.append("|".join(TOOL_WHITELIST), style="magenta")
 
         header = Panel(
             Group(summary, results_line, config_line),

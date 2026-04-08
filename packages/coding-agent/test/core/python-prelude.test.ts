@@ -55,6 +55,7 @@ describe.skipIf(!shouldRun)("PYTHON_PRELUDE integration", () => {
 			}),
 		};
 
+		resetPreludeDocsCache();
 		const tool = new PythonTool(session);
 		const code = `
 	helpers = ${JSON.stringify(helpers)}
@@ -65,13 +66,15 @@ describe.skipIf(!shouldRun)("PYTHON_PRELUDE integration", () => {
 	print("HELPERS_OK=" + ("1" if not missing else "0"))
 	print("DOCS_OK=" + ("1" if "read" in doc_names and "File I/O" in doc_categories else "0"))
 	if missing:
-	    print("MISSING=" + ",".join(missing))
+		print("MISSING=" + ",".join(missing))
 	`;
 
 		const result = await tool.execute("tool-call-1", { cells: [{ code }] });
 		const output = result.content.find(item => item.type === "text")?.text ?? "";
 		expect(output).toContain("HELPERS_OK=1");
 		expect(output).toContain("DOCS_OK=1");
+		expect(tool.description).toContain("read");
+		expect(tool.description).not.toContain("Documentation unavailable");
 	});
 
 	it("exposes prelude docs via warmup", async () => {

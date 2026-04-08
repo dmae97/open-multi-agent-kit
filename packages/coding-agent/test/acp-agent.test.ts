@@ -198,6 +198,17 @@ class FakeAgentSession {
 	async sendUserMessage(_content: string, _options?: unknown): Promise<void> {}
 
 	async compact(_instructions?: string, _options?: unknown): Promise<void> {}
+
+	async fork(): Promise<boolean> {
+		await this.sessionManager.flush();
+		const forked = await this.sessionManager.fork();
+		if (!forked) {
+			return false;
+		}
+		this.sessionId = this.sessionManager.getSessionId();
+		this.agent.sessionId = this.sessionId;
+		return true;
+	}
 }
 
 interface AgentHarness {

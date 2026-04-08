@@ -31,8 +31,6 @@ prompt.registerHelper("jtdToTypeScript", (schema: unknown): string => {
 	}
 });
 
-prompt.registerHelper("jsonStringify", (value: unknown): string => JSON.stringify(value));
-
 /**
  * Renders a section separator:
  *

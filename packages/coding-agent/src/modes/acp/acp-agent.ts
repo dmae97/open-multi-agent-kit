@@ -455,13 +455,10 @@ export class AcpAgent implements Agent {
 			if (!success) {
 				throw new Error(`ACP session fork was cancelled: ${params.sessionId}`);
 			}
-			await session.sessionManager.flush();
-			const forked = await session.sessionManager.fork();
+			const forked = await session.fork();
 			if (!forked) {
 				throw new Error(`ACP session fork failed: ${params.sessionId}`);
 			}
-			session.agent.sessionId = session.sessionManager.getSessionId();
-			await session.sessionManager.ensureOnDisk();
 		} catch (error) {
 			await this.#disposeStandaloneSession(session);
 			throw error;

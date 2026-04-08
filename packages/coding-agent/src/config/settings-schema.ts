@@ -1684,6 +1684,16 @@ export const SETTINGS_SCHEMA = {
 
 	"commit.changelogMaxDiffChars": { type: "number", default: 120000 },
 
+	"dev.autoqa": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tools",
+			label: "Auto QA",
+			description: "Enable automated tool issue reporting (report_tool_issue) for all agents",
+		},
+	},
+
 	"thinkingBudgets.minimal": { type: "number", default: 1024 },
 
 	"thinkingBudgets.low": { type: "number", default: 2048 },

@@ -120,6 +120,7 @@ import type { CheckpointState } from "../tools/checkpoint";
 import { outputMeta } from "../tools/output-meta";
 import { resolveToCwd } from "../tools/path-utils";
 import type { PendingActionStore } from "../tools/pending-action";
+import { isAutoQaEnabled } from "../tools/report-tool-issue";
 import { getLatestTodoPhasesFromEntries, type TodoItem, type TodoPhase } from "../tools/todo-write";
 import { clampTimeout } from "../tools/tool-timeouts";
 import { parseCommandArgs } from "../utils/command-args";
@@ -1919,6 +1920,14 @@ export class AgentSession {
 			if (tool) {
 				tools.push(tool);
 				validToolNames.push(name);
+			}
+		}
+		// Auto-QA tool must survive any runtime tool-set mutation.
+		if (isAutoQaEnabled(this.settings) && !validToolNames.includes("report_tool_issue")) {
+			const qaTool = this.#toolRegistry.get("report_tool_issue");
+			if (qaTool) {
+				tools.push(qaTool);
+				validToolNames.push("report_tool_issue");
 			}
 		}
 		if (this.#mcpDiscoveryEnabled) {

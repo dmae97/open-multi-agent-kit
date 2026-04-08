@@ -21,8 +21,6 @@ const OPENING_HBS = /^\{\{#/;
 const CLOSING_HBS = /^\{\{\//;
 // List item (- or * or 1.)
 const LIST_ITEM = /^(?:[-*]\s|\d+\.\s)/;
-// Code fence
-const CODE_FENCE = /^```/;
 // Table row
 const TABLE_ROW = /^\|.*\|$/;
 // Table separator (|---|---|)
@@ -92,7 +90,7 @@ export function format(content: string, options: PromptFormatOptions = {}): stri
 	for (let i = 0; i < lines.length; i++) {
 		let line = lines[i].trimEnd();
 		let trimmedStart = line.trimStart();
-		if (CODE_FENCE.test(trimmedStart)) {
+		if (trimmedStart.startsWith("```") || trimmedStart.startsWith("~~~")) {
 			inCodeBlock = !inCodeBlock;
 			result.push(line);
 			continue;
@@ -381,6 +379,8 @@ handlebars.registerHelper("includes", (collection: unknown, item: unknown): bool
  * Returns logical NOT of value. For use in subexpressions.
  */
 handlebars.registerHelper("not", (value: unknown): boolean => !value);
+
+handlebars.registerHelper("jsonStringify", (value: unknown): string => JSON.stringify(value));
 
 export function registerHelper(name: string, fn: HelperDelegate): void {
 	handlebars.registerHelper(name, fn);

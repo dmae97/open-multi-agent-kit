@@ -3,12 +3,15 @@
 ## [Unreleased]
 ### Breaking Changes
 
-- Simplified chunk edit operations: removed `append_child`, `prepend_child`, `append_sibling`, `prepend_sibling`, and `replace_body` ops in favor of unified `replace`, `before`, `after`, `prepend`, and `append` with region targeting (`@head`, `@inner`, `@tail`)
+- Simplified chunk edit operations: removed `append_child`, `prepend_child`, `append_sibling`, `prepend_sibling`, and `replace_body` ops in favor of unified `replace`, `before`, `after`, `prepend`, and `append` with region targeting (`@head`, `@body`, `@tail`)
 - Chunk edit `target` format changed: now accepts `selector#CRC@region` for mutations and `selector@region` for insertions; removed separate `crc` and `anchor` fields from edit operations
 - Removed checksum requirement from insert operations (`before`, `after`, `prepend`, `append`); only `replace` requires `#CRC` suffix
 
 ### Added
 
+- Auto QA tool (`report_tool_issue`) for automated tracking of unexpected tool behavior; enabled via `PI_AUTO_QA=1` environment variable or `pi.autoqa` setting
+- `pi.autoqa` setting to enable automated tool issue reporting for all agents
+- System prompt guidance when `report_tool_issue` tool is available, encouraging agents to report tool behavior discrepancies
 - LSP server discovery at startup via `discoverStartupLspServers()` to detect configured language servers without blocking initialization
 - LSP startup event channel (`lsp:startup`) for asynchronous server warmup notifications with completion or failure status
 - `LspStartupServerInfo` type for tracking LSP server status including connecting, ready, and error states
@@ -69,9 +72,12 @@
 
 ### Changed
 
-- Chunk edit region names standardized to `@head`, `@inner`, and `@tail` for clearer semantics
+- Python tool description now dynamically reflects prelude documentation availability instead of static text
+- Python tool now automatically warms the environment on first execution if prelude helpers are unavailable, ensuring documentation is loaded before use
+- Tool creation now auto-injects `report_tool_issue` when auto QA is enabled, regardless of requested tool list
+- Chunk edit region names standardized to `@head`, `@body`, and `@tail` for clearer semantics
 - Chunk edit documentation clarified: region defaults to full chunk when omitted; leaf chunks no longer support region targeting
-- Chunk read documentation updated: selector examples now use region-specific selectors based on `@head`, `@inner`, and `@tail`
+- Chunk read documentation updated: selector examples now use region-specific selectors based on `@head`, `@body`, and `@tail`
 - LSP server connecting status in welcome banner now uses muted pending symbol instead of warning symbol for clearer visual distinction
 - Codex websocket prewarm now runs asynchronously in the background instead of blocking session creation, allowing faster startup
 - Codex websocket status updates now display in interactive mode when prewarm completes or fails
@@ -96,6 +102,7 @@
 
 ### Fixed
 
+- Python prelude introspection now respects execution timeout and signal options, preventing hangs during environment warmup
 - Welcome banner LSP server status now updates in real-time when background startup warmup completes, eliminating stale connecting status displays
 - Welcome banner LSP startup rows now re-render when background warmup finishes, use the pending status symbol while servers are still connecting, and no longer add a redundant `LSP ready` status line on successful startup
 - ACP session initialization now registers connection cleanup handlers to dispose all sessions on disconnect
@@ -110,7 +117,7 @@
 - DAP session state now tracks instruction and data breakpoints separately from source breakpoints
 - Replaced `Bun.which()` with `$which()` from pi-utils for command resolution
 - Chunk edit tool documentation restructured: replaced operation-specific examples with region-based guidance and canonical indentation rules
-- Chunk read documentation updated: selectors now support region syntax (e.g., `class_Foo.fn_bar#ABCD@inner`) and canonical target listings show supported regions per chunk
+- Chunk read documentation updated: selectors now support region syntax (e.g., `class_Foo.fn_bar#ABCD@body`) and canonical target listings show supported regions per chunk
 - Chunk edit schema simplified: `target` description now documents region format; `op` and `content` descriptions clarified for region-aware operations
 - Chunk edit streaming previews updated: labels now reflect region-aware operations (e.g., `append` instead of `append child`, `insert after` without anchor reference)
 - Removed CRC parsing from `parseChunkSelector()` and `parseChunkReadPath()`: selectors no longer extract embedded checksums
