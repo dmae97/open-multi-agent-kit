@@ -12,6 +12,7 @@ provides:
 - a process-backed client that manages request correlation over stdio
 - typed per-event listeners plus a typed catch-all notification hook
 - helpers for collecting prompt runs and handling extension UI requests in manual or headless mode
+- typed host-tool helpers so Python RPC owners can expose custom tools with JSON Schema metadata
 
 ## Basic Usage
 
@@ -97,6 +98,50 @@ with RpcClient(
     print(client.get_state().session_id)
 ```
 
+## Host-Owned Custom Tools
+
+RPC hosts can expose custom tools to the agent with JSON Schema metadata. The
+Python helper keeps the wire format simple while still giving the handler a
+typed signature:
+
+```python
+from typing import TypedDict
+
+from omp_rpc import RpcClient, host_tool
+
+
+class EchoArgs(TypedDict):
+    message: str
+
+
+def echo_host(args: EchoArgs, context) -> str:
+    context.send_update(f"working:{args['message']}")
+    return f"host:{args['message']}"
+
+
+with RpcClient(
+    no_session=True,
+    custom_tools=(
+        host_tool(
+            name="echo_host",
+            description="Echo a value from the Python host",
+            parameters={
+                "type": "object",
+                "properties": {"message": {"type": "string"}},
+                "required": ["message"],
+                "additionalProperties": False,
+            },
+            execute=echo_host,
+        ),
+    ),
+) as client:
+    client.prompt_and_wait("Use the echo_host tool with the value hello")
+```
+
+If you want runtime conversion into a richer Python type, pass `decode=` to
+`host_tool(...)`. That lets you keep the JSON Schema contract on the wire while
+parsing the incoming argument object into a dataclass or model in the handler.
+
 ## Extension UI Requests
 
 Extensions in RPC mode can ask the host for input. Those requests are available as
@@ -151,6 +196,12 @@ with RpcClient(max_event_history=20_000, max_stderr_chunks=256) as client:
 If a single prompt streams more events than `max_event_history` allows,
 `prompt_and_wait()` raises a clear error so hosts can increase the limit instead
 of silently losing earlier events.
+
+Prompt lifecycle collection is intentionally single-flight. Only one of
+`prompt_and_wait()`, `wait_for_idle()`, or `collect_events()` may be active at a
+time on a client instance. If a host needs concurrent orchestration, use
+separate `RpcClient` instances instead of overlapping lifecycle waiters on one
+session.
 
 ## Text Helpers
 

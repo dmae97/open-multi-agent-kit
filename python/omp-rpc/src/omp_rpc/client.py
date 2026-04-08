@@ -6,10 +6,11 @@ import queue
 import subprocess
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence, TypeVar, cast
+from typing import Any, Callable, Generic, Mapping, Sequence, TypeVar, cast
 
+from .host_tools import HostTool, HostToolContext
 from .protocol import (
     AgentStartEvent,
     AgentEndEvent,
@@ -59,6 +60,7 @@ from .protocol import (
     TurnStartEvent,
     UnknownNotification,
     assistant_text,
+    parse_agent_messages,
     parse_bash_result,
     parse_branch_messages,
     parse_branch_result,
@@ -102,9 +104,32 @@ ProtocolErrorListener = Callable[["RpcProtocolError"], None]
 ListenerErrorListener = Callable[["ListenerErrorEvent"], None]
 TListener = TypeVar("TListener")
 TEventListener = TypeVar("TEventListener", bound=Callable[..., None])
+THistoryItem = TypeVar("THistoryItem")
 
 _ASYNC_COMMANDS = frozenset({"prompt", "abort_and_prompt"})
 _DEFAULT_ERROR_HISTORY_LIMIT = 128
+_TODO_STATUS_VALUES = frozenset({"pending", "in_progress", "completed", "abandoned"})
+
+
+def _clone_json_value(value: object) -> JsonValue:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return cast(JsonValue, value)
+    if isinstance(value, list):
+        return [_clone_json_value(item) for item in value]
+    if isinstance(value, dict):
+        cloned: JsonObject = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise RpcError("RPC payload objects must use string keys")
+            cloned[key] = _clone_json_value(item)
+        return cloned
+    raise RpcError("RPC payload must be JSON-serializable")
+
+
+def _clone_json_object(value: object) -> JsonObject:
+    if not isinstance(value, dict):
+        raise RpcError("RPC response payload must be an object")
+    return cast(JsonObject, _clone_json_value(value))
 
 
 class RpcError(RuntimeError):
@@ -117,6 +142,10 @@ class RpcTimeoutError(RpcError):
 
 class RpcProcessExitError(RpcError):
     """Raised when the RPC process exits while a request is pending."""
+
+
+class RpcConcurrencyError(RpcError):
+    """Raised when overlapping prompt lifecycle collectors would be ambiguous."""
 
 
 class RpcCommandError(RpcError):
@@ -181,6 +210,57 @@ class _PendingRequest:
     response_queue: queue.Queue[JsonObject | BaseException]
 
 
+@dataclass(slots=True)
+class _PendingHostToolCall:
+    cancel_event: threading.Event
+
+
+@dataclass(slots=True)
+class _BoundedHistory(Generic[THistoryItem]):
+    limit: int | None
+    items: list[THistoryItem] = field(default_factory=list)
+    offset: int = 0
+
+    def clear(self) -> None:
+        self.items.clear()
+        self.offset = 0
+
+    def append(self, item: THistoryItem) -> None:
+        self.items.append(item)
+        if self.limit is not None and len(self.items) > self.limit:
+            trim = len(self.items) - self.limit
+            del self.items[:trim]
+            self.offset += trim
+
+    def current_index(self) -> int:
+        return self.offset + len(self.items)
+
+    def snapshot(self) -> tuple[THistoryItem, ...]:
+        return tuple(self.items)
+
+    def snapshot_from(self, start_index: int) -> tuple[THistoryItem, ...]:
+        return tuple(self.items[start_index - self.offset :])
+
+
+@dataclass(slots=True)
+class _PromptLifecycleCoordinator:
+    lock: threading.Lock = field(default_factory=threading.Lock)
+    active_operation: str | None = None
+
+    def acquire(self, operation: str) -> None:
+        with self.lock:
+            if self.active_operation is not None:
+                raise RpcConcurrencyError(
+                    f"Cannot start {operation} while {self.active_operation} is already collecting prompt lifecycle events"
+                )
+            self.active_operation = operation
+
+    def release(self, operation: str) -> None:
+        with self.lock:
+            if self.active_operation == operation:
+                self.active_operation = None
+
+
 class RpcClient:
     def __init__(
         self,
@@ -196,6 +276,7 @@ class RpcClient:
         append_system_prompt: str | None = None,
         provider_session_id: str | None = None,
         tools: Sequence[str] | None = None,
+        custom_tools: Sequence[HostTool[Any, Any]] | None = None,
         no_session: bool = False,
         no_skills: bool = False,
         no_rules: bool = False,
@@ -218,6 +299,7 @@ class RpcClient:
         self._append_system_prompt = append_system_prompt
         self._provider_session_id = provider_session_id
         self._tools = tuple(tools) if tools is not None else None
+        self._custom_tools = tuple(custom_tools) if custom_tools is not None else ()
         self._no_session = no_session
         self._no_skills = no_skills
         self._no_rules = no_rules
@@ -237,17 +319,20 @@ class RpcClient:
         self._state_lock = threading.Lock()
         self._event_condition = threading.Condition()
         self._pending: dict[str, _PendingRequest] = {}
+        self._pending_host_tool_calls: dict[str, _PendingHostToolCall] = {}
         self._request_id = 0
-        self._events: list[RpcAgentEvent] = []
-        self._event_offset = 0
-        self._async_errors: list[BaseException] = []
-        self._async_error_offset = 0
+        self._events = _BoundedHistory[JsonObject](self._max_event_history)
+        self._async_errors = _BoundedHistory[BaseException](_DEFAULT_ERROR_HISTORY_LIMIT)
+        self._scheduled_agent_runs = 0
+        self._completed_agent_runs = 0
         self._ui_requests: queue.Queue[ExtensionUiRequest] = queue.Queue()
-        self._stderr_chunks: list[str] = []
+        self._stderr_chunks = _BoundedHistory[str](self._max_stderr_chunks)
         self._closed_error: BaseException | None = None
         self._stopping = False
-        self._protocol_errors: list[RpcProtocolError] = []
-        self._listener_errors: list[ListenerErrorEvent] = []
+        self._ready_received = False
+        self._protocol_errors = _BoundedHistory[RpcProtocolError](_DEFAULT_ERROR_HISTORY_LIMIT)
+        self._listener_errors = _BoundedHistory[ListenerErrorEvent](_DEFAULT_ERROR_HISTORY_LIMIT)
+        self._prompt_lifecycle = _PromptLifecycleCoordinator()
 
         self._notification_listeners: list[NotificationListener] = []
         self._event_listeners: list[AgentEventListener] = []
@@ -267,7 +352,8 @@ class RpcClient:
 
     @property
     def stderr(self) -> str:
-        return "".join(self._stderr_chunks)
+        with self._state_lock:
+            return "".join(self._stderr_chunks.snapshot())
 
     @property
     def command(self) -> tuple[str, ...]:
@@ -276,12 +362,12 @@ class RpcClient:
     @property
     def protocol_errors(self) -> tuple[RpcProtocolError, ...]:
         with self._state_lock:
-            return tuple(self._protocol_errors)
+            return self._protocol_errors.snapshot()
 
     @property
     def listener_errors(self) -> tuple[ListenerErrorEvent, ...]:
         with self._state_lock:
-            return tuple(self._listener_errors)
+            return self._listener_errors.snapshot()
 
     def start(self) -> RpcClient:
         if self._process is not None:
@@ -290,12 +376,14 @@ class RpcClient:
         self._ready.clear()
         self._stopping = False
         self._closed_error = None
+        self._ready_received = False
         self._events.clear()
-        self._event_offset = 0
         self._async_errors.clear()
-        self._async_error_offset = 0
+        self._scheduled_agent_runs = 0
+        self._completed_agent_runs = 0
         self._ui_requests = queue.Queue()
-        self._stderr_chunks.clear()
+        with self._state_lock:
+            self._stderr_chunks.clear()
         with self._state_lock:
             self._protocol_errors.clear()
             self._listener_errors.clear()
@@ -309,6 +397,7 @@ class RpcClient:
             stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
+            errors="replace",
             bufsize=1,
         )
         self._process = process
@@ -323,6 +412,18 @@ class RpcClient:
             self.stop()
             raise RpcTimeoutError(f"Timed out waiting for RPC ready signal. Stderr: {stderr}")
 
+        if not self._ready_received:
+            error = self._closed_error
+            stderr = self.stderr
+            self.stop()
+            if isinstance(error, RpcError):
+                raise error
+            if error is not None:
+                raise RpcProcessExitError(f"RPC process stopped before ready: {error}. Stderr: {stderr}") from error
+            raise RpcTimeoutError(f"Timed out waiting for RPC ready signal. Stderr: {stderr}")
+
+        if self._custom_tools:
+            self.set_custom_tools(self._custom_tools)
         return self
 
     def stop(self) -> None:
@@ -331,6 +432,8 @@ class RpcClient:
             return
 
         self._stopping = True
+        for pending_call in self._pending_host_tool_calls.values():
+            pending_call.cancel_event.set()
 
         try:
             if process.stdin is not None:
@@ -358,6 +461,7 @@ class RpcClient:
                 except OSError:
                     pass
             self._fail_pending(RpcProcessExitError("RPC process stopped"))
+            self._pending_host_tool_calls.clear()
             self._process = None
             self._ready.set()
             with self._event_condition:
@@ -626,7 +730,33 @@ class RpcClient:
 
     def get_messages(self) -> tuple[AgentMessage, ...]:
         payload = self._request("get_messages")
-        return tuple(cast(list[AgentMessage], payload.get("messages") or []))
+        return parse_agent_messages(cast(JsonValue | None, payload.get("messages")))
+
+    def set_custom_tools(self, tools: Sequence[HostTool[Any, Any]]) -> tuple[str, ...]:
+        self._custom_tools = tuple(tools)
+        if self._process is None:
+            return tuple(tool.name for tool in self._custom_tools)
+
+        payload = self._request(
+            "set_host_tools",
+            tools=cast(
+                JsonValue,
+                [
+                    {
+                        "name": tool.name,
+                        "label": tool.label,
+                        "description": tool.description,
+                        "parameters": tool.parameters,
+                        "hidden": tool.hidden,
+                    }
+                    for tool in self._custom_tools
+                ],
+            ),
+        )
+        tool_names = payload.get("toolNames") or []
+        if not isinstance(tool_names, list):
+            raise RpcError("set_host_tools response did not include toolNames")
+        return tuple(str(name) for name in tool_names)
 
     def prompt(
         self,
@@ -641,6 +771,7 @@ class RpcClient:
             images=list(images) if images is not None else None,
             streamingBehavior=streaming_behavior,
         )
+        self._mark_agent_run_scheduled()
 
     def steer(self, message: str, *, images: Sequence[ImageContent] | None = None) -> None:
         self._request("steer", message=message, images=list(images) if images is not None else None)
@@ -653,6 +784,7 @@ class RpcClient:
 
     def abort_and_prompt(self, message: str, *, images: Sequence[ImageContent] | None = None) -> None:
         self._request("abort_and_prompt", message=message, images=list(images) if images is not None else None)
+        self._mark_agent_run_scheduled()
 
     def prompt_and_wait(
         self,
@@ -662,32 +794,62 @@ class RpcClient:
         streaming_behavior: StreamingBehavior | None = None,
         timeout: float | None = None,
     ) -> PromptTurn:
-        start_index = self._current_event_index()
-        start_async_error_index = self._current_async_error_index()
-        self.prompt(message, images=images, streaming_behavior=streaming_behavior)
-        events = self._wait_for_agent_end(start_index, start_async_error_index, timeout=timeout)
-        return self._build_prompt_turn(events)
+        operation = "prompt_and_wait"
+        self._prompt_lifecycle.acquire(operation)
+        try:
+            start_index = self._current_event_index()
+            start_async_error_index = self._current_async_error_index()
+            self.prompt(message, images=images, streaming_behavior=streaming_behavior)
+            events = self._wait_for_agent_end(start_index, start_async_error_index, timeout=timeout)
+            return self._build_prompt_turn(events)
+        finally:
+            self._prompt_lifecycle.release(operation)
 
     def wait_for_idle(self, timeout: float | None = None) -> None:
-        start_index = self._current_event_index()
-        start_async_error_index = self._current_async_error_index()
-        self._wait_for_agent_end(start_index, start_async_error_index, timeout=timeout)
+        operation = "wait_for_idle"
+        self._prompt_lifecycle.acquire(operation)
+        try:
+            if self._is_agent_idle():
+                return
+            start_index = self._current_event_index()
+            start_async_error_index = self._current_async_error_index()
+            self._wait_for_agent_end(start_index, start_async_error_index, timeout=timeout)
+        finally:
+            self._prompt_lifecycle.release(operation)
 
     def collect_events(self, timeout: float | None = None) -> tuple[RpcAgentEvent, ...]:
-        start_index = self._current_event_index()
-        start_async_error_index = self._current_async_error_index()
-        return self._wait_for_agent_end(start_index, start_async_error_index, timeout=timeout)
+        operation = "collect_events"
+        self._prompt_lifecycle.acquire(operation)
+        try:
+            start_index = self._current_event_index()
+            start_async_error_index = self._current_async_error_index()
+            return self._wait_for_agent_end(start_index, start_async_error_index, timeout=timeout)
+        finally:
+            self._prompt_lifecycle.release(operation)
 
     def request_raw(self, command_type: str, **payload: JsonValue) -> JsonObject:
         return self._request(command_type, **payload)
 
     def _current_event_index(self) -> int:
         with self._event_condition:
-            return self._event_offset + len(self._events)
+            return self._events.current_index()
 
     def _current_async_error_index(self) -> int:
         with self._event_condition:
-            return self._async_error_offset + len(self._async_errors)
+            return self._async_errors.current_index()
+
+    def _mark_agent_run_scheduled(self) -> None:
+        with self._event_condition:
+            self._scheduled_agent_runs += 1
+
+    def _mark_agent_run_completed(self) -> None:
+        with self._event_condition:
+            self._completed_agent_runs += 1
+            self._event_condition.notify_all()
+
+    def _is_agent_idle(self) -> bool:
+        with self._event_condition:
+            return self._scheduled_agent_runs == self._completed_agent_runs
 
     def _build_prompt_turn(self, events: tuple[RpcAgentEvent, ...]) -> PromptTurn:
         final_messages: tuple[AgentMessage, ...] = ()
@@ -729,25 +891,25 @@ class RpcClient:
                 if self._closed_error is not None:
                     raise RpcProcessExitError(str(self._closed_error))
 
-                if start_index < self._event_offset:
+                if start_index < self._events.offset:
                     raise RpcError(
                         "Event history limit was exceeded while waiting for agent_end. "
                         "Increase max_event_history to retain more streamed events."
                     )
 
-                if start_async_error_index < self._async_error_offset:
+                if start_async_error_index < self._async_errors.offset:
                     raise RpcError(
                         "Async error history limit was exceeded while waiting for agent_end. "
                         "Increase max_event_history if your host needs to retain more background failures."
                     )
 
-                async_error_index = start_async_error_index - self._async_error_offset
-                if async_error_index < len(self._async_errors):
-                    raise self._async_errors[async_error_index]
+                async_errors = self._async_errors.snapshot_from(start_async_error_index)
+                if len(async_errors) > 0:
+                    raise async_errors[0]
 
-                event_index = start_index - self._event_offset
-                events = tuple(self._events[event_index:])
-                if any(isinstance(event, AgentEndEvent) for event in events):
+                event_payloads = self._events.snapshot_from(start_index)
+                if any(payload.get("type") == "agent_end" for payload in event_payloads):
+                    events = tuple(cast(RpcAgentEvent, parse_notification(payload)) for payload in event_payloads)
                     return events
 
                 remaining = deadline - time.monotonic()
@@ -767,7 +929,12 @@ class RpcClient:
         with self._state_lock:
             self._pending[request_id] = _PendingRequest(command=command_type, response_queue=response_queue)
 
-        self._write_json(process, envelope)
+        try:
+            self._write_json(process, envelope)
+        except BaseException:
+            with self._state_lock:
+                self._pending.pop(request_id, None)
+            raise
 
         try:
             response = response_queue.get(timeout=self._request_timeout)
@@ -783,11 +950,100 @@ class RpcClient:
             raise RpcCommandError(command=str(response.get("command", command_type)), error=str(response.get("error", "")))
 
         data = response.get("data")
-        return dict(cast(JsonObject, data or {}))
+        if data is None:
+            return {}
+        return _clone_json_object(data)
 
     def _send_notification(self, payload: JsonObject) -> None:
         process = self._require_process()
         self._write_json(process, payload)
+
+    def _normalize_host_tool_result(self, result: object) -> JsonObject:
+        if isinstance(result, str):
+            return {"content": [{"type": "text", "text": result}]}
+        if isinstance(result, Mapping):
+            return cast(JsonObject, dict(result))
+        raise RpcError("Host tool handlers must return a string or a result mapping")
+
+    def _handle_host_tool_call(self, payload: JsonObject) -> None:
+        request_id = payload.get("id")
+        tool_name = payload.get("toolName")
+        tool_call_id = payload.get("toolCallId")
+        raw_arguments = payload.get("arguments")
+        if not isinstance(request_id, str) or not isinstance(tool_name, str) or not isinstance(tool_call_id, str):
+            return
+        if not isinstance(raw_arguments, Mapping):
+            self._send_notification(
+                {
+                    "type": "host_tool_result",
+                    "id": request_id,
+                    "result": {"content": [{"type": "text", "text": "Host tool arguments must be an object"}], "details": {}},
+                    "isError": True,
+                }
+            )
+            return
+
+        tool = next((candidate for candidate in self._custom_tools if candidate.name == tool_name), None)
+        if tool is None:
+            self._send_notification(
+                {
+                    "type": "host_tool_result",
+                    "id": request_id,
+                    "result": {
+                        "content": [{"type": "text", "text": f'Host tool "{tool_name}" is not registered'}],
+                        "details": {},
+                    },
+                    "isError": True,
+                }
+            )
+            return
+
+        pending_call = _PendingHostToolCall(cancel_event=threading.Event())
+        self._pending_host_tool_calls[request_id] = pending_call
+
+        def run_tool() -> None:
+            try:
+                params = tool.parse_params(cast(JsonObject, dict(raw_arguments)))
+                context = HostToolContext(
+                    tool_call_id=tool_call_id,
+                    _cancel_event=pending_call.cancel_event,
+                    _send_update=lambda result: self._send_notification(
+                        {"type": "host_tool_update", "id": request_id, "partialResult": result}
+                    ),
+                )
+                result = tool.execute(params, context)
+                if pending_call.cancel_event.is_set():
+                    return
+                self._send_notification(
+                    {
+                        "type": "host_tool_result",
+                        "id": request_id,
+                        "result": self._normalize_host_tool_result(result),
+                    }
+                )
+            except Exception as exc:
+                if pending_call.cancel_event.is_set():
+                    return
+                self._send_notification(
+                    {
+                        "type": "host_tool_result",
+                        "id": request_id,
+                        "result": {"content": [{"type": "text", "text": str(exc)}], "details": {}},
+                        "isError": True,
+                    }
+                )
+            finally:
+                self._pending_host_tool_calls.pop(request_id, None)
+
+        threading.Thread(target=run_tool, name=f"omp-rpc-host-tool:{tool_name}", daemon=True).start()
+
+    def _handle_host_tool_cancel(self, payload: JsonObject) -> None:
+        target_id = payload.get("targetId")
+        if not isinstance(target_id, str):
+            return
+        pending_call = self._pending_host_tool_calls.get(target_id)
+        if pending_call is not None:
+            pending_call.cancel_event.set()
 
     def _add_typed_event_listener(self, event_type: str, listener: TEventListener) -> Callable[[], None]:
         listeners = self._typed_event_listeners.setdefault(event_type, [])
@@ -813,6 +1069,8 @@ class RpcClient:
                 return {"id": next_task(), "content": seed, "status": cast(JsonValue, "pending")}
 
             if isinstance(seed, TodoItem):
+                if seed.status not in _TODO_STATUS_VALUES:
+                    raise RpcError(f"Unsupported todo status: {seed.status}")
                 return {
                     "id": seed.id or next_task(),
                     "content": seed.content,
@@ -829,7 +1087,12 @@ class RpcClient:
             raw_status = seed.get("status")
             raw_notes = seed.get("notes")
             raw_details = seed.get("details")
-            status: TodoStatus = cast(TodoStatus, raw_status) if isinstance(raw_status, str) else "pending"
+            if isinstance(raw_status, str):
+                if raw_status not in _TODO_STATUS_VALUES:
+                    raise RpcError(f"Unsupported todo status: {raw_status}")
+                status: TodoStatus = cast(TodoStatus, raw_status)
+            else:
+                status = "pending"
             return {
                 "id": str(raw_id) if isinstance(raw_id, str) and raw_id else next_task(),
                 "content": content,
@@ -934,50 +1197,84 @@ class RpcClient:
         if process is None or process.stdout is None:
             return
 
+        line_number = 0
         try:
             for line in process.stdout:
+                line_number += 1
                 stripped = line.strip()
                 if not stripped:
                     continue
 
-                payload = cast(JsonObject, json.loads(stripped))
+                try:
+                    payload = cast(JsonObject, json.loads(stripped))
+                except json.JSONDecodeError as exc:
+                    snippet = stripped
+                    if len(snippet) > 240:
+                        snippet = f"{snippet[:237]}..."
+                    raise RpcError(
+                        f"Failed to decode RPC output on line {line_number}: {exc}. Frame: {snippet!r}"
+                    ) from exc
                 if payload.get("type") == "response":
                     self._handle_response(payload)
                     continue
+                if payload.get("type") == "host_tool_call":
+                    self._handle_host_tool_call(payload)
+                    continue
+                if payload.get("type") == "host_tool_cancel":
+                    self._handle_host_tool_cancel(payload)
+                    continue
 
                 notification = parse_notification(payload)
-                self._dispatch_listeners("notification", notification.type, self._notification_listeners, notification)
+                listener_notification = parse_notification(payload)
+                self._dispatch_listeners(
+                    "notification",
+                    listener_notification.type,
+                    self._notification_listeners,
+                    listener_notification,
+                )
 
                 if isinstance(notification, ReadyEvent):
+                    self._ready_received = True
                     self._ready.set()
-                    self._dispatch_listeners("ready", notification.type, self._ready_listeners, notification)
+                    self._dispatch_listeners("ready", listener_notification.type, self._ready_listeners, listener_notification)
                     continue
 
                 if isinstance(notification, ExtensionUiRequest):
                     self._ui_requests.put(notification)
-                    self._dispatch_listeners("ui_request", notification.type, self._ui_request_listeners, notification)
+                    self._dispatch_listeners(
+                        "ui_request",
+                        listener_notification.type,
+                        self._ui_request_listeners,
+                        cast(ExtensionUiRequest, listener_notification),
+                    )
                     continue
 
                 if isinstance(notification, ExtensionError):
                     self._dispatch_listeners(
-                        "extension_error", notification.type, self._extension_error_listeners, notification
+                        "extension_error",
+                        listener_notification.type,
+                        self._extension_error_listeners,
+                        cast(ExtensionError, listener_notification),
                     )
                     continue
 
                 if isinstance(notification, UnknownNotification):
                     self._dispatch_listeners(
-                        "unknown_notification", notification.type, self._unknown_notification_listeners, notification
+                        "unknown_notification",
+                        listener_notification.type,
+                        self._unknown_notification_listeners,
+                        cast(UnknownNotification, listener_notification),
                     )
                     continue
 
-                event = cast(RpcAgentEvent, notification)
-                self._append_event(event)
-                self._dispatch_listeners("event", event.type, self._event_listeners, event)
+                listener_event = cast(RpcAgentEvent, listener_notification)
+                self._append_event(payload)
+                if listener_event.type == "agent_end":
+                    self._mark_agent_run_completed()
+                self._dispatch_listeners("event", listener_event.type, self._event_listeners, listener_event)
                 self._dispatch_listeners(
-                    "typed_event", event.type, self._typed_event_listeners.get(event.type, []), event
+                    "typed_event", listener_event.type, self._typed_event_listeners.get(listener_event.type, []), listener_event
                 )
-        except json.JSONDecodeError as exc:
-            self._mark_closed(RpcError(f"Failed to decode RPC output: {exc}"))
         except Exception as exc:
             self._mark_closed(exc)
         else:
@@ -995,11 +1292,13 @@ class RpcClient:
         process = self._process
         if process is None or process.stderr is None:
             return
-        for chunk in process.stderr:
-            self._stderr_chunks.append(chunk)
-            if self._max_stderr_chunks is not None and len(self._stderr_chunks) > self._max_stderr_chunks:
-                trim = len(self._stderr_chunks) - self._max_stderr_chunks
-                del self._stderr_chunks[:trim]
+        try:
+            for chunk in process.stderr:
+                with self._state_lock:
+                    self._stderr_chunks.append(chunk)
+        except Exception as exc:
+            if not self._stopping:
+                self._mark_closed(RpcError(f"Failed to read RPC stderr: {exc}"))
 
     def _mark_closed(self, error: BaseException) -> None:
         if self._closed_error is not None:
@@ -1035,6 +1334,7 @@ class RpcClient:
 
         if protocol_error.command in _ASYNC_COMMANDS and protocol_error.remote_error is not None:
             self._append_async_error(RpcCommandError(protocol_error.command, protocol_error.remote_error))
+            self._mark_agent_run_completed()
 
         self._record_protocol_error(protocol_error)
 
@@ -1067,40 +1367,26 @@ class RpcClient:
             return None
         if bool(payload.get("success", False)):
             return None
-        return RpcProtocolError(payload)
+        return RpcProtocolError(_clone_json_object(payload))
 
-    def _append_event(self, event: RpcAgentEvent) -> None:
+    def _append_event(self, payload: JsonObject) -> None:
         with self._event_condition:
-            self._events.append(event)
-            if self._max_event_history is not None and len(self._events) > self._max_event_history:
-                trim = len(self._events) - self._max_event_history
-                del self._events[:trim]
-                self._event_offset += trim
+            self._events.append(_clone_json_object(payload))
             self._event_condition.notify_all()
 
     def _append_async_error(self, error: BaseException) -> None:
         with self._event_condition:
             self._async_errors.append(error)
-            if len(self._async_errors) > _DEFAULT_ERROR_HISTORY_LIMIT:
-                trim = len(self._async_errors) - _DEFAULT_ERROR_HISTORY_LIMIT
-                del self._async_errors[:trim]
-                self._async_error_offset += trim
             self._event_condition.notify_all()
 
     def _record_protocol_error(self, error: RpcProtocolError) -> None:
         with self._state_lock:
             self._protocol_errors.append(error)
-            if len(self._protocol_errors) > _DEFAULT_ERROR_HISTORY_LIMIT:
-                trim = len(self._protocol_errors) - _DEFAULT_ERROR_HISTORY_LIMIT
-                del self._protocol_errors[:trim]
         self._dispatch_listeners("protocol_error", error.command, self._protocol_error_listeners, error)
 
     def _record_listener_error(self, event: ListenerErrorEvent) -> None:
         with self._state_lock:
             self._listener_errors.append(event)
-            if len(self._listener_errors) > _DEFAULT_ERROR_HISTORY_LIMIT:
-                trim = len(self._listener_errors) - _DEFAULT_ERROR_HISTORY_LIMIT
-                del self._listener_errors[:trim]
 
         for listener in list(self._listener_error_listeners):
             try:

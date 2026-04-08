@@ -42,6 +42,278 @@ INTERACTIVE_EXTENSION_UI_METHODS: Final[frozenset[InteractiveExtensionUiMethod]]
     {"select", "confirm", "input", "editor"}
 )
 VALUE_EXTENSION_UI_METHODS: Final[frozenset[ValueExtensionUiMethod]] = frozenset({"select", "input", "editor"})
+_THINKING_LEVEL_VALUES: Final[frozenset[str]] = frozenset({"off", "minimal", "low", "medium", "high", "xhigh"})
+_STEERING_MODE_VALUES: Final[frozenset[str]] = frozenset({"all", "one-at-a-time"})
+_INTERRUPT_MODE_VALUES: Final[frozenset[str]] = frozenset({"immediate", "wait"})
+_STOP_REASON_VALUES: Final[frozenset[str]] = frozenset({"stop", "length", "toolUse", "error", "aborted"})
+_NOTIFY_TYPE_VALUES: Final[frozenset[str]] = frozenset({"info", "warning", "error"})
+_WIDGET_PLACEMENT_VALUES: Final[frozenset[str]] = frozenset({"aboveEditor", "belowEditor"})
+_TODO_STATUS_VALUES: Final[frozenset[str]] = frozenset({"pending", "in_progress", "completed", "abandoned"})
+_EXTENSION_UI_METHOD_VALUES: Final[frozenset[str]] = frozenset(
+    {
+        "select",
+        "confirm",
+        "input",
+        "editor",
+        "cancel",
+        "notify",
+        "setStatus",
+        "setWidget",
+        "setTitle",
+        "set_editor_text",
+    }
+)
+_AGENT_MESSAGE_ROLE_VALUES: Final[frozenset[str]] = frozenset(
+    {
+        "user",
+        "developer",
+        "assistant",
+        "toolResult",
+        "bashExecution",
+        "pythonExecution",
+        "custom",
+        "hookMessage",
+        "branchSummary",
+        "compactionSummary",
+        "fileMention",
+    }
+)
+_ASSISTANT_MESSAGE_EVENT_TYPE_VALUES: Final[frozenset[str]] = frozenset(
+    {
+        "start",
+        "text_start",
+        "text_delta",
+        "text_end",
+        "thinking_start",
+        "thinking_delta",
+        "thinking_end",
+        "toolcall_start",
+        "toolcall_delta",
+        "toolcall_end",
+        "done",
+        "error",
+    }
+)
+_ASSISTANT_DONE_REASON_VALUES: Final[frozenset[str]] = frozenset({"stop", "length", "toolUse"})
+_ASSISTANT_ERROR_REASON_VALUES: Final[frozenset[str]] = frozenset({"aborted", "error"})
+_AUTO_COMPACTION_REASON_VALUES: Final[frozenset[str]] = frozenset({"threshold", "overflow", "idle"})
+_AUTO_COMPACTION_ACTION_VALUES: Final[frozenset[str]] = frozenset({"context-full", "handoff"})
+
+
+def _clone_json_value(value: object, *, field: str) -> JsonValue:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return cast(JsonValue, value)
+    if isinstance(value, list):
+        return [_clone_json_value(item, field=field) for item in value]
+    if isinstance(value, dict):
+        cloned: JsonObject = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise ValueError(f"{field} must contain string keys")
+            cloned[key] = _clone_json_value(item, field=field)
+        return cloned
+    raise ValueError(f"{field} must be JSON-serializable")
+
+
+def _clone_json_object(value: object, *, field: str) -> JsonObject:
+    if not isinstance(value, dict):
+        raise ValueError(f"{field} must be an object")
+    return cast(JsonObject, _clone_json_value(value, field=field))
+
+
+def _optional_json_object(value: object, *, field: str) -> JsonObject | None:
+    if value is None:
+        return None
+    return _clone_json_object(value, field=field)
+
+
+def _clone_json_objects(values: object, *, field: str) -> tuple[JsonObject, ...]:
+    if values is None:
+        return ()
+    if not isinstance(values, list):
+        raise ValueError(f"{field} must be a list")
+    return tuple(_clone_json_object(item, field=f"{field}[]") for item in values)
+
+
+def _require_literal(value: object, allowed: frozenset[str], *, field: str) -> str:
+    if not isinstance(value, str) or value not in allowed:
+        expected = ", ".join(sorted(allowed))
+        raise ValueError(f"{field} must be one of: {expected}")
+    return value
+
+
+def _optional_literal(value: object, allowed: frozenset[str], *, field: str) -> str | None:
+    if value is None:
+        return None
+    return _require_literal(value, allowed, field=field)
+
+
+def _require_str(payload: JsonObject, field: str) -> str:
+    value = payload.get(field)
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be a string")
+    return value
+
+
+def _optional_str(payload: JsonObject, field: str) -> str | None:
+    value = payload.get(field)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be a string")
+    return value
+
+
+def _optional_bool(payload: JsonObject, field: str) -> bool | None:
+    value = payload.get(field)
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise ValueError(f"{field} must be a boolean")
+    return value
+
+
+def _optional_int(payload: JsonObject, field: str) -> int | None:
+    value = payload.get(field)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{field} must be an integer")
+    return value
+
+
+def _tuple_of_strings(values: object, *, field: str) -> tuple[str, ...] | None:
+    if values is None:
+        return None
+    if not isinstance(values, list):
+        raise ValueError(f"{field} must be a list")
+
+    result: list[str] = []
+    for item in values:
+        if not isinstance(item, str):
+            raise ValueError(f"{field} must contain only strings")
+        result.append(item)
+    return tuple(result) or None
+
+
+def _parse_agent_message(payload: JsonObject, *, field: str) -> AgentMessage:
+    _require_literal(payload.get("role"), _AGENT_MESSAGE_ROLE_VALUES, field=f"{field}.role")
+    return cast(AgentMessage, _clone_json_object(payload, field=field))
+
+
+def _parse_assistant_message(payload: JsonObject, *, field: str) -> AssistantMessage:
+    message = _parse_agent_message(payload, field=field)
+    if message.get("role") != "assistant":
+        raise ValueError(f"{field}.role must be 'assistant'")
+    return cast(AssistantMessage, message)
+
+
+def _parse_tool_result_message(payload: JsonObject, *, field: str) -> ToolResultMessage:
+    message = _parse_agent_message(payload, field=field)
+    if message.get("role") != "toolResult":
+        raise ValueError(f"{field}.role must be 'toolResult'")
+    return cast(ToolResultMessage, message)
+
+
+def parse_agent_messages(payload: JsonValue | None) -> tuple[AgentMessage, ...]:
+    if payload is None:
+        return ()
+    if not isinstance(payload, list):
+        raise ValueError("messages must be a list")
+
+    messages: list[AgentMessage] = []
+    for index, item in enumerate(payload):
+        messages.append(_parse_agent_message(_clone_json_object(item, field=f"messages[{index}]"), field=f"messages[{index}]"))
+    return tuple(messages)
+
+
+def parse_assistant_message_event(payload: JsonObject) -> AssistantMessageEvent:
+    event_type = _require_literal(
+        payload.get("type"),
+        _ASSISTANT_MESSAGE_EVENT_TYPE_VALUES,
+        field="assistantMessageEvent.type",
+    )
+    if event_type == "start":
+        return AssistantMessageStartEvent(
+            partial=_parse_assistant_message(
+                _clone_json_object(payload.get("partial"), field="assistantMessageEvent.partial"),
+                field="assistantMessageEvent.partial",
+            )
+        )
+    if event_type in {"text_start", "thinking_start", "toolcall_start"}:
+        partial = _parse_assistant_message(
+            _clone_json_object(payload.get("partial"), field="assistantMessageEvent.partial"),
+            field="assistantMessageEvent.partial",
+        )
+        content_index = _optional_int(payload, "contentIndex")
+        if content_index is None:
+            raise ValueError("assistantMessageEvent.contentIndex must be an integer")
+        if event_type == "text_start":
+            return AssistantTextStartEvent(contentIndex=content_index, partial=partial)
+        if event_type == "thinking_start":
+            return AssistantThinkingStartEvent(contentIndex=content_index, partial=partial)
+        return AssistantToolCallStartEvent(contentIndex=content_index, partial=partial)
+    if event_type in {"text_delta", "thinking_delta", "toolcall_delta"}:
+        partial = _parse_assistant_message(
+            _clone_json_object(payload.get("partial"), field="assistantMessageEvent.partial"),
+            field="assistantMessageEvent.partial",
+        )
+        content_index = _optional_int(payload, "contentIndex")
+        delta = _optional_str(payload, "delta")
+        if content_index is None:
+            raise ValueError("assistantMessageEvent.contentIndex must be an integer")
+        if delta is None:
+            raise ValueError("assistantMessageEvent.delta must be a string")
+        if event_type == "text_delta":
+            return AssistantTextDeltaEvent(contentIndex=content_index, delta=delta, partial=partial)
+        if event_type == "thinking_delta":
+            return AssistantThinkingDeltaEvent(contentIndex=content_index, delta=delta, partial=partial)
+        return AssistantToolCallDeltaEvent(contentIndex=content_index, delta=delta, partial=partial)
+    if event_type in {"text_end", "thinking_end"}:
+        partial = _parse_assistant_message(
+            _clone_json_object(payload.get("partial"), field="assistantMessageEvent.partial"),
+            field="assistantMessageEvent.partial",
+        )
+        content_index = _optional_int(payload, "contentIndex")
+        content = _optional_str(payload, "content")
+        if content_index is None:
+            raise ValueError("assistantMessageEvent.contentIndex must be an integer")
+        if content is None:
+            raise ValueError("assistantMessageEvent.content must be a string")
+        if event_type == "text_end":
+            return AssistantTextEndEvent(contentIndex=content_index, content=content, partial=partial)
+        return AssistantThinkingEndEvent(contentIndex=content_index, content=content, partial=partial)
+    if event_type == "toolcall_end":
+        partial = _parse_assistant_message(
+            _clone_json_object(payload.get("partial"), field="assistantMessageEvent.partial"),
+            field="assistantMessageEvent.partial",
+        )
+        content_index = _optional_int(payload, "contentIndex")
+        if content_index is None:
+            raise ValueError("assistantMessageEvent.contentIndex must be an integer")
+        tool_call = _clone_json_object(payload.get("toolCall"), field="assistantMessageEvent.toolCall")
+        return AssistantToolCallEndEvent(contentIndex=content_index, toolCall=cast(ToolCall, tool_call), partial=partial)
+    if event_type == "done":
+        return AssistantDoneEvent(
+            reason=cast(
+                Literal["stop", "length", "toolUse"],
+                _require_literal(payload.get("reason"), _ASSISTANT_DONE_REASON_VALUES, field="assistantMessageEvent.reason"),
+            ),
+            message=_parse_assistant_message(
+                _clone_json_object(payload.get("message"), field="assistantMessageEvent.message"),
+                field="assistantMessageEvent.message",
+            ),
+        )
+    return AssistantErrorEvent(
+        reason=cast(
+            Literal["aborted", "error"],
+            _require_literal(payload.get("reason"), _ASSISTANT_ERROR_REASON_VALUES, field="assistantMessageEvent.reason"),
+        ),
+        error=_parse_assistant_message(
+            _clone_json_object(payload.get("error"), field="assistantMessageEvent.error"),
+            field="assistantMessageEvent.error",
+        ),
+    )
 
 
 class TextContent(TypedDict, total=False):
@@ -742,18 +1014,18 @@ def assistant_text_with_thinking(message: AgentMessage) -> str | None:
 def parse_model_info(payload: JsonObject | None) -> ModelInfo | None:
     if payload is None:
         return None
-    cost_payload = cast(dict[str, Any], payload.get("cost") or {})
+    cost_payload = _optional_json_object(payload.get("cost"), field="model.cost") or {}
     thinking_payload = payload.get("thinking")
     headers_payload = payload.get("headers")
     compat_payload = payload.get("compat")
     return ModelInfo(
-        id=str(payload["id"]),
-        name=str(payload["name"]),
-        api=str(payload["api"]),
-        provider=str(payload["provider"]),
-        base_url=str(payload["baseUrl"]),
+        id=_require_str(payload, "id"),
+        name=_require_str(payload, "name"),
+        api=_require_str(payload, "api"),
+        provider=_require_str(payload, "provider"),
+        base_url=_require_str(payload, "baseUrl"),
         reasoning=bool(payload.get("reasoning", False)),
-        input_modalities=tuple(str(item) for item in cast(list[Any], payload.get("input") or [])),
+        input_modalities=_tuple_of_strings(payload.get("input"), field="model.input") or (),
         cost=ModelCost(
             input=float(cost_payload.get("input", 0.0)),
             output=float(cost_payload.get("output", 0.0)),
@@ -762,7 +1034,7 @@ def parse_model_info(payload: JsonObject | None) -> ModelInfo | None:
         ),
         context_window=int(payload.get("contextWindow", 0)),
         max_tokens=int(payload.get("maxTokens", 0)),
-        headers=dict(cast(dict[str, str], headers_payload)) if isinstance(headers_payload, dict) else None,
+        headers=cast(dict[str, str] | None, _optional_json_object(headers_payload, field="model.headers")),
         premium_multiplier=float(payload["premiumMultiplier"]) if "premiumMultiplier" in payload else None,
         prefer_websockets=bool(payload["preferWebsockets"]) if "preferWebsockets" in payload else None,
         context_promotion_target=(
@@ -771,40 +1043,55 @@ def parse_model_info(payload: JsonObject | None) -> ModelInfo | None:
         priority=int(payload["priority"]) if "priority" in payload else None,
         thinking=(
             ThinkingConfig(
-                min_level=cast(ThinkingLevel, thinking_payload["minLevel"]),
-                max_level=cast(ThinkingLevel, thinking_payload["maxLevel"]),
-                mode=str(thinking_payload["mode"]),
+                min_level=cast(
+                    ThinkingLevel,
+                    _require_literal(thinking_payload.get("minLevel"), _THINKING_LEVEL_VALUES, field="model.thinking.minLevel"),
+                ),
+                max_level=cast(
+                    ThinkingLevel,
+                    _require_literal(thinking_payload.get("maxLevel"), _THINKING_LEVEL_VALUES, field="model.thinking.maxLevel"),
+                ),
+                mode=_require_str(cast(JsonObject, thinking_payload), "mode"),
             )
             if isinstance(thinking_payload, dict)
             else None
         ),
-        compat=dict(cast(dict[str, JsonValue], compat_payload)) if isinstance(compat_payload, dict) else None,
+        compat=_optional_json_object(compat_payload, field="model.compat"),
     )
 
 
 def parse_tool_descriptor(payload: JsonObject) -> ToolDescriptor:
     return ToolDescriptor(
-        name=str(payload["name"]),
-        description=str(payload["description"]),
-        parameters=cast(JsonValue, payload.get("parameters")),
+        name=_require_str(payload, "name"),
+        description=_require_str(payload, "description"),
+        parameters=_clone_json_value(payload.get("parameters"), field="tool.parameters"),
     )
 
 
 def parse_todo_item(payload: JsonObject) -> TodoItem:
     return TodoItem(
         id=str(payload.get("id", "")),
-        content=str(payload.get("content", "")),
-        status=cast(TodoStatus, payload.get("status", "pending")),
-        notes=str(payload["notes"]) if payload.get("notes") is not None else None,
-        details=str(payload["details"]) if payload.get("details") is not None else None,
+        content=_require_str(payload, "content"),
+        status=cast(
+            TodoStatus,
+            _require_literal(payload.get("status", "pending"), _TODO_STATUS_VALUES, field="todo.status"),
+        ),
+        notes=_optional_str(payload, "notes"),
+        details=_optional_str(payload, "details"),
     )
 
 
 def parse_todo_phase(payload: JsonObject) -> TodoPhase:
-    tasks = tuple(parse_todo_item(cast(JsonObject, item)) for item in cast(list[Any], payload.get("tasks") or []))
+    raw_tasks = payload.get("tasks")
+    if raw_tasks is None:
+        tasks = ()
+    else:
+        if not isinstance(raw_tasks, list):
+            raise ValueError("tasks must be a list")
+        tasks = tuple(parse_todo_item(_clone_json_object(item, field="tasks[]")) for item in raw_tasks)
     return TodoPhase(
         id=str(payload.get("id", "")),
-        name=str(payload.get("name", "")),
+        name=_require_str(payload, "name"),
         tasks=tasks,
     )
 
@@ -817,24 +1104,36 @@ def parse_todo_phases(payload: JsonValue | None) -> tuple[TodoPhase, ...]:
 
 def parse_session_state(payload: JsonObject) -> SessionState:
     dump_tools = tuple(
-        parse_tool_descriptor(cast(JsonObject, item)) for item in cast(list[Any], payload.get("dumpTools") or [])
+        parse_tool_descriptor(_clone_json_object(item, field="dumpTools[]")) for item in cast(list[Any], payload.get("dumpTools") or [])
     )
     return SessionState(
         model=parse_model_info(cast(JsonObject | None, payload.get("model"))),
-        thinking_level=cast(ThinkingLevel | None, payload.get("thinkingLevel")),
+        thinking_level=cast(
+            ThinkingLevel | None,
+            _optional_literal(payload.get("thinkingLevel"), _THINKING_LEVEL_VALUES, field="thinkingLevel"),
+        ),
         is_streaming=bool(payload.get("isStreaming", False)),
         is_compacting=bool(payload.get("isCompacting", False)),
-        steering_mode=cast(SteeringMode, payload.get("steeringMode", "one-at-a-time")),
-        follow_up_mode=cast(SteeringMode, payload.get("followUpMode", "one-at-a-time")),
-        interrupt_mode=cast(InterruptMode, payload.get("interruptMode", "immediate")),
-        session_file=str(payload["sessionFile"]) if payload.get("sessionFile") is not None else None,
-        session_id=str(payload["sessionId"]),
-        session_name=str(payload["sessionName"]) if payload.get("sessionName") is not None else None,
+        steering_mode=cast(
+            SteeringMode,
+            _require_literal(payload.get("steeringMode", "one-at-a-time"), _STEERING_MODE_VALUES, field="steeringMode"),
+        ),
+        follow_up_mode=cast(
+            SteeringMode,
+            _require_literal(payload.get("followUpMode", "one-at-a-time"), _STEERING_MODE_VALUES, field="followUpMode"),
+        ),
+        interrupt_mode=cast(
+            InterruptMode,
+            _require_literal(payload.get("interruptMode", "immediate"), _INTERRUPT_MODE_VALUES, field="interruptMode"),
+        ),
+        session_file=_optional_str(payload, "sessionFile"),
+        session_id=_require_str(payload, "sessionId"),
+        session_name=_optional_str(payload, "sessionName"),
         auto_compaction_enabled=bool(payload.get("autoCompactionEnabled", False)),
         message_count=int(payload.get("messageCount", 0)),
         queued_message_count=int(payload.get("queuedMessageCount", 0)),
         todo_phases=parse_todo_phases(cast(JsonValue | None, payload.get("todoPhases"))),
-        system_prompt=str(payload["systemPrompt"]) if payload.get("systemPrompt") is not None else None,
+        system_prompt=_optional_str(payload, "systemPrompt"),
         dump_tools=dump_tools,
     )
 
@@ -842,25 +1141,25 @@ def parse_session_state(payload: JsonObject) -> SessionState:
 def parse_bash_result(payload: JsonObject) -> BashResult:
     return BashResult(
         output=str(payload.get("output", "")),
-        exit_code=int(payload["exitCode"]) if payload.get("exitCode") is not None else None,
+        exit_code=_optional_int(payload, "exitCode"),
         cancelled=bool(payload.get("cancelled", False)),
         truncated=bool(payload.get("truncated", False)),
         total_lines=int(payload.get("totalLines", 0)),
         total_bytes=int(payload.get("totalBytes", 0)),
         output_lines=int(payload.get("outputLines", 0)),
         output_bytes=int(payload.get("outputBytes", 0)),
-        artifact_id=str(payload["artifactId"]) if payload.get("artifactId") is not None else None,
+        artifact_id=_optional_str(payload, "artifactId"),
     )
 
 
 def parse_compaction_result(payload: JsonObject) -> CompactionResult:
     return CompactionResult(
         summary=str(payload.get("summary", "")),
-        short_summary=str(payload["shortSummary"]) if payload.get("shortSummary") is not None else None,
+        short_summary=_optional_str(payload, "shortSummary"),
         first_kept_entry_id=str(payload.get("firstKeptEntryId", "")),
         tokens_before=int(payload.get("tokensBefore", 0)),
-        details=cast(JsonValue | None, payload.get("details")),
-        preserve_data=cast(JsonObject | None, payload.get("preserveData")),
+        details=_clone_json_value(payload.get("details"), field="compaction.details") if "details" in payload else None,
+        preserve_data=_optional_json_object(payload.get("preserveData"), field="compaction.preserveData"),
     )
 
 
@@ -893,16 +1192,22 @@ def parse_branch_result(payload: JsonObject | None) -> BranchResult:
 
 
 def parse_branch_messages(payload: JsonObject | None) -> tuple[BranchMessage, ...]:
-    messages = cast(list[Any], (payload or {}).get("messages") or [])
+    messages = (payload or {}).get("messages") or []
+    if not isinstance(messages, list):
+        raise ValueError("messages must be a list")
     return tuple(
-        BranchMessage(entry_id=str(item.get("entryId", "")), text=str(item.get("text", ""))) for item in messages
+        BranchMessage(
+            entry_id=str(_clone_json_object(item, field="messages[]").get("entryId", "")),
+            text=str(_clone_json_object(item, field="messages[]").get("text", "")),
+        )
+        for item in messages
     )
 
 
 def parse_session_stats(payload: JsonObject) -> SessionStats:
-    tokens_payload = cast(dict[str, Any], payload.get("tokens") or {})
+    tokens_payload = _optional_json_object(payload.get("tokens"), field="sessionStats.tokens") or {}
     return SessionStats(
-        session_file=str(payload["sessionFile"]) if payload.get("sessionFile") is not None else None,
+        session_file=_optional_str(payload, "sessionFile"),
         session_id=str(payload.get("sessionId", "")),
         user_messages=int(payload.get("userMessages", 0)),
         assistant_messages=int(payload.get("assistantMessages", 0)),
@@ -923,31 +1228,44 @@ def parse_session_stats(payload: JsonObject) -> SessionStats:
 
 def parse_extension_ui_request(payload: JsonObject) -> ExtensionUiRequest:
     return ExtensionUiRequest(
-        id=str(payload["id"]),
-        method=cast(ExtensionUiMethod, payload["method"]),
-        title=str(payload["title"]) if payload.get("title") is not None else None,
-        options=tuple(str(item) for item in cast(list[Any], payload.get("options") or [])) or None,
-        message=str(payload["message"]) if payload.get("message") is not None else None,
-        placeholder=str(payload["placeholder"]) if payload.get("placeholder") is not None else None,
-        prefill=str(payload["prefill"]) if payload.get("prefill") is not None else None,
-        timeout=int(payload["timeout"]) if payload.get("timeout") is not None else None,
-        prompt_style=bool(payload["promptStyle"]) if "promptStyle" in payload else None,
-        target_id=str(payload["targetId"]) if payload.get("targetId") is not None else None,
-        notify_type=cast(NotifyType | None, payload.get("notifyType")),
-        status_key=str(payload["statusKey"]) if payload.get("statusKey") is not None else None,
-        status_text=str(payload["statusText"]) if payload.get("statusText") is not None else None,
-        widget_key=str(payload["widgetKey"]) if payload.get("widgetKey") is not None else None,
-        widget_lines=tuple(str(item) for item in cast(list[Any], payload.get("widgetLines") or [])) or None,
-        widget_placement=cast(WidgetPlacement | None, payload.get("widgetPlacement")),
-        text=str(payload["text"]) if payload.get("text") is not None else None,
+        id=_require_str(payload, "id"),
+        method=cast(
+            ExtensionUiMethod,
+            _require_literal(payload.get("method"), _EXTENSION_UI_METHOD_VALUES, field="extension_ui_request.method"),
+        ),
+        title=_optional_str(payload, "title"),
+        options=_tuple_of_strings(payload.get("options"), field="extension_ui_request.options"),
+        message=_optional_str(payload, "message"),
+        placeholder=_optional_str(payload, "placeholder"),
+        prefill=_optional_str(payload, "prefill"),
+        timeout=_optional_int(payload, "timeout"),
+        prompt_style=_optional_bool(payload, "promptStyle"),
+        target_id=_optional_str(payload, "targetId"),
+        notify_type=cast(
+            NotifyType | None,
+            _optional_literal(payload.get("notifyType"), _NOTIFY_TYPE_VALUES, field="extension_ui_request.notifyType"),
+        ),
+        status_key=_optional_str(payload, "statusKey"),
+        status_text=_optional_str(payload, "statusText"),
+        widget_key=_optional_str(payload, "widgetKey"),
+        widget_lines=_tuple_of_strings(payload.get("widgetLines"), field="extension_ui_request.widgetLines"),
+        widget_placement=cast(
+            WidgetPlacement | None,
+            _optional_literal(
+                payload.get("widgetPlacement"),
+                _WIDGET_PLACEMENT_VALUES,
+                field="extension_ui_request.widgetPlacement",
+            ),
+        ),
+        text=_optional_str(payload, "text"),
     )
 
 
 def parse_extension_error(payload: JsonObject) -> ExtensionError:
     return ExtensionError(
-        extension_path=str(payload.get("extensionPath", "")),
-        event=str(payload.get("event", "")),
-        error=str(payload.get("error", "")),
+        extension_path=_require_str(payload, "extensionPath"),
+        event=_require_str(payload, "event"),
+        error=_require_str(payload, "error"),
     )
 
 
@@ -962,60 +1280,96 @@ def parse_notification(payload: JsonObject) -> RpcNotification:
     if event_type == "agent_start":
         return AgentStartEvent()
     if event_type == "agent_end":
-        return AgentEndEvent(messages=tuple(cast(list[AgentMessage], payload.get("messages") or [])))
+        return AgentEndEvent(messages=parse_agent_messages(cast(JsonValue | None, payload.get("messages"))))
     if event_type == "turn_start":
         return TurnStartEvent()
     if event_type == "turn_end":
         return TurnEndEvent(
-            message=cast(AgentMessage, payload["message"]),
-            tool_results=tuple(cast(list[ToolResultMessage], payload.get("toolResults") or [])),
+            message=_parse_agent_message(
+                _clone_json_object(payload.get("message"), field="turn_end.message"),
+                field="turn_end.message",
+            ),
+            tool_results=tuple(
+                _parse_tool_result_message(_clone_json_object(item, field="turn_end.toolResults[]"), field="turn_end.toolResults[]")
+                for item in cast(list[Any], payload.get("toolResults") or [])
+            ),
         )
     if event_type == "message_start":
-        return MessageStartEvent(message=cast(AgentMessage, payload["message"]))
+        return MessageStartEvent(
+            message=_parse_agent_message(
+                _clone_json_object(payload.get("message"), field="message_start.message"),
+                field="message_start.message",
+            )
+        )
     if event_type == "message_update":
         return MessageUpdateEvent(
-            message=cast(AgentMessage, payload["message"]),
-            assistant_message_event=cast(AssistantMessageEvent, payload["assistantMessageEvent"]),
+            message=_parse_agent_message(
+                _clone_json_object(payload.get("message"), field="message_update.message"),
+                field="message_update.message",
+            ),
+            assistant_message_event=parse_assistant_message_event(
+                _clone_json_object(payload.get("assistantMessageEvent"), field="message_update.assistantMessageEvent")
+            ),
         )
     if event_type == "message_end":
-        return MessageEndEvent(message=cast(AgentMessage, payload["message"]))
+        return MessageEndEvent(
+            message=_parse_agent_message(
+                _clone_json_object(payload.get("message"), field="message_end.message"),
+                field="message_end.message",
+            )
+        )
     if event_type == "tool_execution_start":
         return ToolExecutionStartEvent(
             tool_call_id=str(payload.get("toolCallId", "")),
             tool_name=str(payload.get("toolName", "")),
-            args=cast(JsonValue, payload.get("args")),
-            intent=str(payload["intent"]) if payload.get("intent") is not None else None,
+            args=_clone_json_value(payload.get("args"), field="tool_execution_start.args") if "args" in payload else None,
+            intent=_optional_str(payload, "intent"),
         )
     if event_type == "tool_execution_update":
         return ToolExecutionUpdateEvent(
             tool_call_id=str(payload.get("toolCallId", "")),
             tool_name=str(payload.get("toolName", "")),
-            args=cast(JsonValue, payload.get("args")),
-            partial_result=cast(JsonValue, payload.get("partialResult")),
+            args=_clone_json_value(payload.get("args"), field="tool_execution_update.args") if "args" in payload else None,
+            partial_result=(
+                _clone_json_value(payload.get("partialResult"), field="tool_execution_update.partialResult")
+                if "partialResult" in payload
+                else None
+            ),
         )
     if event_type == "tool_execution_end":
         return ToolExecutionEndEvent(
             tool_call_id=str(payload.get("toolCallId", "")),
             tool_name=str(payload.get("toolName", "")),
-            result=cast(JsonValue, payload.get("result")),
-            is_error=bool(payload["isError"]) if "isError" in payload else None,
+            result=_clone_json_value(payload.get("result"), field="tool_execution_end.result") if "result" in payload else None,
+            is_error=_optional_bool(payload, "isError"),
         )
     if event_type == "auto_compaction_start":
         return AutoCompactionStartEvent(
-            reason=cast(Literal["threshold", "overflow", "idle"], payload.get("reason", "threshold")),
-            action=cast(Literal["context-full", "handoff"], payload.get("action", "context-full")),
+            reason=cast(
+                Literal["threshold", "overflow", "idle"],
+                _require_literal(payload.get("reason", "threshold"), _AUTO_COMPACTION_REASON_VALUES, field="auto_compaction_start.reason"),
+            ),
+            action=cast(
+                Literal["context-full", "handoff"],
+                _require_literal(payload.get("action", "context-full"), _AUTO_COMPACTION_ACTION_VALUES, field="auto_compaction_start.action"),
+            ),
         )
     if event_type == "auto_compaction_end":
         result_payload = payload.get("result")
         return AutoCompactionEndEvent(
-            action=cast(Literal["context-full", "handoff"], payload.get("action", "context-full")),
+            action=cast(
+                Literal["context-full", "handoff"],
+                _require_literal(payload.get("action", "context-full"), _AUTO_COMPACTION_ACTION_VALUES, field="auto_compaction_end.action"),
+            ),
             result=(
-                parse_compaction_result(cast(JsonObject, result_payload)) if isinstance(result_payload, dict) else None
+                parse_compaction_result(_clone_json_object(result_payload, field="auto_compaction_end.result"))
+                if result_payload is not None
+                else None
             ),
             aborted=bool(payload.get("aborted", False)),
             will_retry=bool(payload.get("willRetry", False)),
-            error_message=str(payload["errorMessage"]) if payload.get("errorMessage") is not None else None,
-            skipped=bool(payload["skipped"]) if "skipped" in payload else None,
+            error_message=_optional_str(payload, "errorMessage"),
+            skipped=_optional_bool(payload, "skipped"),
         )
     if event_type == "auto_retry_start":
         return AutoRetryStartEvent(
@@ -1028,7 +1382,7 @@ def parse_notification(payload: JsonObject) -> RpcNotification:
         return AutoRetryEndEvent(
             success=bool(payload.get("success", False)),
             attempt=int(payload.get("attempt", 0)),
-            final_error=str(payload["finalError"]) if payload.get("finalError") is not None else None,
+            final_error=_optional_str(payload, "finalError"),
         )
     if event_type == "retry_fallback_applied":
         return RetryFallbackAppliedEvent(
@@ -1039,13 +1393,16 @@ def parse_notification(payload: JsonObject) -> RpcNotification:
     if event_type == "retry_fallback_succeeded":
         return RetryFallbackSucceededEvent(model=str(payload.get("model", "")), role=str(payload.get("role", "")))
     if event_type == "ttsr_triggered":
-        return TtsrTriggeredEvent(rules=tuple(cast(list[JsonObject], payload.get("rules") or [])))
+        return TtsrTriggeredEvent(rules=_clone_json_objects(payload.get("rules"), field="ttsr_triggered.rules"))
     if event_type == "todo_reminder":
         return TodoReminderEvent(
-            todos=tuple(parse_todo_item(cast(JsonObject, item)) for item in cast(list[Any], payload.get("todos") or [])),
+            todos=tuple(
+                parse_todo_item(_clone_json_object(item, field="todo_reminder.todos[]"))
+                for item in cast(list[Any], payload.get("todos") or [])
+            ),
             attempt=int(payload.get("attempt", 0)),
             max_attempts=int(payload.get("maxAttempts", 0)),
         )
     if event_type == "todo_auto_clear":
         return TodoAutoClearEvent()
-    return UnknownNotification(payload=dict(payload))
+    return UnknownNotification(payload=_clone_json_object(payload, field="notification"))

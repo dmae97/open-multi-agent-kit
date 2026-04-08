@@ -170,6 +170,116 @@ class ProtocolParsingTests(unittest.TestCase):
         self.assertEqual(assistant_text(message), "visible")
         self.assertEqual(assistant_text_with_thinking(message), "internalvisible")
 
+    def test_parse_session_state_rejects_invalid_thinking_level(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_session_state(
+                {
+                    "sessionId": "session-123",
+                    "thinkingLevel": "extreme",
+                    "steeringMode": "one-at-a-time",
+                    "followUpMode": "one-at-a-time",
+                    "interruptMode": "immediate",
+                }
+            )
+
+    def test_parse_extension_ui_request_rejects_invalid_method(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_notification({"type": "extension_ui_request", "id": "ui-1", "method": "launch"})
+
+    def test_parse_message_update_rejects_invalid_assistant_done_reason(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_notification(
+                {
+                    "type": "message_update",
+                    "message": {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": "hello"}],
+                        "api": "anthropic-messages",
+                        "provider": "anthropic",
+                        "model": "claude-sonnet-4-5",
+                        "usage": {
+                            "input": 1,
+                            "output": 1,
+                            "cacheRead": 0,
+                            "cacheWrite": 0,
+                            "totalTokens": 2,
+                            "cost": {
+                                "input": 0.0,
+                                "output": 0.0,
+                                "cacheRead": 0.0,
+                                "cacheWrite": 0.0,
+                                "total": 0.0,
+                            },
+                        },
+                        "stopReason": "stop",
+                        "timestamp": 1,
+                    },
+                    "assistantMessageEvent": {
+                        "type": "done",
+                        "reason": "error",
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": "hello"}],
+                            "api": "anthropic-messages",
+                            "provider": "anthropic",
+                            "model": "claude-sonnet-4-5",
+                            "usage": {
+                                "input": 1,
+                                "output": 1,
+                                "cacheRead": 0,
+                                "cacheWrite": 0,
+                                "totalTokens": 2,
+                                "cost": {
+                                    "input": 0.0,
+                                    "output": 0.0,
+                                    "cacheRead": 0.0,
+                                    "cacheWrite": 0.0,
+                                    "total": 0.0,
+                                },
+                            },
+                            "stopReason": "stop",
+                            "timestamp": 1,
+                        },
+                    },
+                }
+            )
+
+    def test_parse_notification_deep_clones_nested_messages(self) -> None:
+        payload = {
+            "type": "agent_end",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "hello"}],
+                    "api": "anthropic-messages",
+                    "provider": "anthropic",
+                    "model": "claude-sonnet-4-5",
+                    "usage": {
+                        "input": 1,
+                        "output": 1,
+                        "cacheRead": 0,
+                        "cacheWrite": 0,
+                        "totalTokens": 2,
+                        "cost": {
+                            "input": 0.0,
+                            "output": 0.0,
+                            "cacheRead": 0.0,
+                            "cacheWrite": 0.0,
+                            "total": 0.0,
+                        },
+                    },
+                    "stopReason": "stop",
+                    "timestamp": 1,
+                }
+            ],
+        }
+
+        notification = parse_notification(payload)
+        payload["messages"][0]["content"][0]["text"] = "mutated"
+
+        self.assertIsInstance(notification, AgentEndEvent)
+        self.assertEqual(notification.messages[0]["content"][0]["text"], "hello")
+
 
 if __name__ == "__main__":
     unittest.main()

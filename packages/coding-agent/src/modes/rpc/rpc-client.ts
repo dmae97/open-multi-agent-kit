@@ -228,7 +228,9 @@ export class RpcClient {
 
 		try {
 			await readyPromise;
-			await this.setCustomTools(this.#customTools);
+			if (this.#customTools.length > 0) {
+				await this.setCustomTools(this.#customTools);
+			}
 		} finally {
 			clearTimeout(readyTimeout);
 		}

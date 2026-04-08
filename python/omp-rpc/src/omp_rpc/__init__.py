@@ -8,6 +8,7 @@ from .client import (
     ReadyListener,
     RpcClient,
     RpcCommandError,
+    RpcConcurrencyError,
     RpcError,
     RpcProcessExitError,
     RpcProtocolError,
@@ -15,6 +16,7 @@ from .client import (
     ProtocolErrorListener,
     UiRequestListener,
 )
+from .host_tools import HostTool, HostToolContext, HostToolResultPayload, HostToolResultValue, host_tool
 from .protocol import (
     AgentEndEvent,
     AgentMessage,
@@ -100,6 +102,10 @@ __all__ = [
     "ExtensionErrorListener",
     "ExtensionUiRequest",
     "FileMentionMessage",
+    "HostTool",
+    "HostToolContext",
+    "HostToolResultPayload",
+    "HostToolResultValue",
     "HookMessage",
     "ImageContent",
     "ListenerErrorEvent",
@@ -121,6 +127,7 @@ __all__ = [
     "RpcAgentEvent",
     "RpcClient",
     "RpcCommandError",
+    "RpcConcurrencyError",
     "RpcError",
     "RpcNotification",
     "RpcProcessExitError",
@@ -154,4 +161,5 @@ __all__ = [
     "parse_notification",
     "parse_session_state",
     "parse_todo_phases",
+    "host_tool",
 ]

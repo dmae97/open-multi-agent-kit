@@ -76,6 +76,7 @@ Important edge behavior from runtime:
 
 - `{ id?, type: "get_state" }`
 - `{ id?, type: "set_todos", phases: TodoPhase[] }`
+- `{ id?, type: "set_host_tools", tools: RpcHostToolDefinition[] }`
 
 ### Model
 
@@ -196,6 +197,44 @@ Replaces the in-memory todo state for the current session and returns the normal
 
 This is useful for hosts that want to pre-seed a plan before the first prompt.
 
+### `set_host_tools` payload
+
+Replaces the current set of host-owned tools that the RPC server may call back
+into over stdio:
+
+```json
+{
+  "id": "req_3",
+  "type": "set_host_tools",
+  "tools": [
+    {
+      "name": "echo_host",
+      "label": "Echo Host",
+      "description": "Echo a value from the embedding host",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string" }
+        },
+        "required": ["message"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}
+```
+
+The response payload is:
+
+```json
+{
+  "toolNames": ["echo_host"]
+}
+```
+
+These tools are added to the active session tool registry before the next model
+call. Re-sending `set_host_tools` replaces the previous host-owned set.
+
 ## Event Stream Schema
 
 RPC mode forwards `AgentSessionEvent` objects from `AgentSession.subscribe(...)`.
@@ -297,6 +336,64 @@ Example:
 
 If a dialog has a timeout, RPC mode resolves to a default value when timeout/abort fires.
 
+## Host Tool Sub-Protocol
+
+RPC hosts can expose custom tools to the agent by sending `set_host_tools`, then
+serving execution requests over the same transport.
+
+### Outbound request
+
+When the agent wants the host to execute one of those tools, RPC mode emits:
+
+```json
+{
+  "type": "host_tool_call",
+  "id": "host_1",
+  "toolCallId": "toolu_123",
+  "toolName": "echo_host",
+  "arguments": { "message": "hello" }
+}
+```
+
+If the tool execution is later aborted, RPC mode emits:
+
+```json
+{
+  "type": "host_tool_cancel",
+  "id": "host_cancel_1",
+  "targetId": "host_1"
+}
+```
+
+### Inbound updates and completion
+
+Hosts can optionally stream progress:
+
+```json
+{
+  "type": "host_tool_update",
+  "id": "host_1",
+  "partialResult": {
+    "content": [{ "type": "text", "text": "working" }]
+  }
+}
+```
+
+Completion uses:
+
+```json
+{
+  "type": "host_tool_result",
+  "id": "host_1",
+  "result": {
+    "content": [{ "type": "text", "text": "done" }]
+  }
+}
+```
+
+Set `isError: true` on `host_tool_result` to surface the returned content as a
+tool error.
+
 ## Error Model and Recoverability
 
 ### Command-level failures
@@ -375,6 +472,7 @@ Current helper characteristics:
 - Spawns `bun <cliPath> --mode rpc`
 - Correlates responses by generated `req_<n>` ids
 - Dispatches only recognized `AgentEvent` types to listeners
+- Supports host-owned custom tools via `setCustomTools()` and automatic handling of `host_tool_call` / `host_tool_cancel`
 - Does **not** expose helper methods for every protocol command (for example, `set_interrupt_mode` and `set_session_name` are in protocol types but not wrapped as dedicated methods)
 
 Use raw protocol frames if you need complete surface coverage.
