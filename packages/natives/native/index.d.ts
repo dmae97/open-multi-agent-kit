@@ -1144,7 +1144,7 @@ export interface ReadRenderParams {
   absoluteLineRange?: VisibleLineRange
   /** Replace tabs in embedded previews. */
   tabReplacement?: string
-  /** When true, normalize displayed indentation to canonical tabs. */
+  /** When true, normalize displayed indentation to canonical single-space indent. */
   normalizeIndent?: boolean
 }
 
@@ -1179,7 +1179,7 @@ export interface RenderParams {
   showLeafPreview: boolean
   /** Replace tab characters in displayed previews (e.g. two spaces). */
   tabReplacement?: string
-  /** When true, normalize displayed indentation to canonical tabs. */
+  /** When true, normalize displayed indentation to canonical single-space indent. */
   normalizeIndent?: boolean
   /**
    * When set, restrict rendering to these chunks with their specified focus

@@ -74,11 +74,7 @@ pub fn count_indent_columns(whitespace: &str, space_step: usize) -> usize {
 		.sum()
 }
 
-pub fn normalize_to_tabs(line: &str, indent_char: char, indent_step: usize) -> String {
-	if indent_char == '\t' {
-		return line.to_owned();
-	}
-
+pub fn compact_indent(line: &str, indent_char: char, indent_step: usize) -> String {
 	let whitespace = leading_whitespace(line);
 	if whitespace.is_empty() {
 		return line.to_owned();
@@ -86,16 +82,12 @@ pub fn normalize_to_tabs(line: &str, indent_char: char, indent_step: usize) -> S
 
 	let step = indent_step.max(1);
 	let total_columns = count_indent_columns(whitespace, step);
-	let tabs = total_columns / step;
-	let remainder = total_columns % step;
-	format!("{}{}{}", "\t".repeat(tabs), " ".repeat(remainder), &line[whitespace.len()..])
+	let levels = total_columns / step;
+	let _ = indent_char;
+	format!("{}{}", " ".repeat(levels), &line[whitespace.len()..])
 }
 
-pub fn denormalize_from_tabs(
-	line: &str,
-	file_indent_char: char,
-	file_indent_step: usize,
-) -> String {
+pub fn expand_indent(line: &str, file_indent_char: char, file_indent_step: usize) -> String {
 	if file_indent_char != ' ' && file_indent_char != '\t' {
 		return line.to_owned();
 	}
@@ -106,16 +98,13 @@ pub fn denormalize_from_tabs(
 	}
 
 	let step = file_indent_step.max(1);
-	let mut converted = String::with_capacity(whitespace.len() * step.max(1));
-	for ch in whitespace.chars() {
-		match ch {
-			'\t' if file_indent_char == '\t' => converted.push('\t'),
-			'\t' => converted.push_str(&file_indent_char.to_string().repeat(step)),
-			' ' => converted.push(' '),
-			_ => converted.push(ch),
-		}
-	}
-	format!("{converted}{}", &line[whitespace.len()..])
+	let levels = whitespace.chars().count();
+	let indent = if file_indent_char == '\t' {
+		"\t".repeat(levels)
+	} else {
+		" ".repeat(levels * step)
+	};
+	format!("{indent}{}", &line[whitespace.len()..])
 }
 
 pub fn normalize_target_indent(target_indent: &str, sample_text: &str) -> String {
@@ -544,18 +533,18 @@ mod tests {
 	#[test]
 	fn canonical_indent_round_trips_common_profiles() {
 		let cases = [
-			("    value()", ' ', 4, "\tvalue()", "    value()"),
-			("      value()", ' ', 3, "\t\tvalue()", "      value()"),
-			("  value()", ' ', 2, "\tvalue()", "  value()"),
-			("\tvalue()", '\t', 4, "\tvalue()", "\tvalue()"),
-			(" \t  value()", ' ', 4, "\t   value()", "       value()"),
+			("    value()", ' ', 4, " value()", "    value()"),
+			("      value()", ' ', 3, "  value()", "      value()"),
+			("  value()", ' ', 2, " value()", "  value()"),
+			("\tvalue()", '\t', 4, " value()", "\tvalue()"),
+			(" \t  value()", ' ', 4, " value()", "    value()"),
 		];
 
 		for (input, indent_char, indent_step, canonical, restored) in cases {
-			let normalized = normalize_to_tabs(input, indent_char, indent_step);
+			let normalized = compact_indent(input, indent_char, indent_step);
 			assert_eq!(normalized, canonical, "unexpected canonical indent for {input:?}");
 			assert_eq!(
-				denormalize_from_tabs(&normalized, indent_char, indent_step),
+				expand_indent(&normalized, indent_char, indent_step),
 				restored,
 				"unexpected restored indent for {input:?}"
 			);
@@ -564,9 +553,9 @@ mod tests {
 
 	#[test]
 	fn reindent_inserted_block_preserves_relative_indentation() {
-		// Agent sends tab-based content: call(\n\talpha,\n\tbeta,\n)
-		// After denormalize_from_tabs (4 spaces/tab): call(\n    alpha,\n    beta,\n)
-		// Should add target indent to all lines, preserving relative offsets.
+		// The block already uses spaces after canonical content has been expanded
+		// back into the file's indent unit. Reindent should preserve those relative
+		// offsets while adding the target indent.
 		let input = "call(\n    alpha,\n    beta,\n)";
 		assert_eq!(
 			reindent_inserted_block(input, "    ", Some(4)),

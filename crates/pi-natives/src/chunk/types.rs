@@ -284,7 +284,7 @@ pub struct RenderParams {
 	pub show_leaf_preview:    bool,
 	/// Replace tab characters in displayed previews (e.g. two spaces).
 	pub tab_replacement:      Option<String>,
-	/// When true, normalize displayed indentation to canonical tabs.
+	/// When true, normalize displayed indentation to canonical single-space indent.
 	pub normalize_indent:     Option<bool>,
 
 	/// When set, restrict rendering to these chunks with their specified focus
@@ -311,7 +311,7 @@ pub struct ReadRenderParams {
 	pub absolute_line_range: Option<VisibleLineRange>,
 	/// Replace tabs in embedded previews.
 	pub tab_replacement:     Option<String>,
-	/// When true, normalize displayed indentation to canonical tabs.
+	/// When true, normalize displayed indentation to canonical single-space indent.
 	pub normalize_indent:    Option<bool>,
 }
 
