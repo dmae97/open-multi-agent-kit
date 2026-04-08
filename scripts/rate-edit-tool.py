@@ -1,0 +1,1401 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import os
+import shutil
+import sys
+import tempfile
+import textwrap
+import threading
+import time
+from dataclasses import asdict, dataclass, field, is_dataclass
+from pathlib import Path
+from typing import Any, TextIO
+
+from rich import box
+from rich.console import Console, Group
+from rich.live import Live
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "python/omp-rpc/src"))
+
+from omp_rpc import (  # noqa: E402
+    AgentEndEvent,
+    ExtensionUiRequest,
+    MessageUpdateEvent,
+    RpcClient,
+    RpcError,
+    RpcNotification,
+    TodoAutoClearEvent,
+    TodoItem,
+    TodoReminderEvent,
+    TodoPhase,
+    ToolExecutionEndEvent,
+    ToolExecutionStartEvent,
+    ToolExecutionUpdateEvent,
+    TurnEndEvent,
+    TurnStartEvent,
+    assistant_text,
+)
+
+MODELS = [
+    "openrouter/moonshotai/kimi-k2.5",
+    "openrouter/anthropic/claude-haiku-4.5",
+    "openrouter/anthropic/claude-sonnet-4.6",
+    "openrouter/google/gemini-3-flash-preview",
+    "openrouter/deepseek/deepseek-v3.2",
+    "openrouter/z-ai/glm-5-turbo",
+    "openrouter/minimax/minimax-m2.7",
+]
+
+PROMPT = textwrap.dedent(
+    """\
+    You are evaluating the current code-reading and code-editing tools on the files in this directory.
+
+    Use `main.ts`, `main.rs`, `main.py`, and `main.md` as the test surfaces.
+
+    Treat `main.py` and `main.md` as explicit edge-case fixtures:
+    - `main.py` stresses indentation-sensitive editing, decorators, docstrings, and no-brace block structure.
+    - `main.md` stresses prose-oriented routing, headings, task lists, tables, fenced code blocks, and non-AST text editing.
+
+    Work in this order:
+
+    1. Map the real surface area.
+       - For each tool, identify the operations, selectors, addressing modes, and result shapes that actually work now.
+       - Compare how behavior differs across AST-heavy files (`main.ts`, `main.rs`), indentation-sensitive code (`main.py`), and prose/text (`main.md`).
+
+    2. Exercise the supported paths.
+       - For reading: cover whole-file, structural chunks, nested members, line ranges, and raw source if available.
+       - For editing: cover replacing existing code, inserting into containers, inserting before/after anchors, deleting code, and the smallest addressable edits you can reach.
+       - On `main.md`, explicitly check whether prose-routed files can still be edited reliably and how addressing differs from code files.
+
+    3. Push into awkward cases.
+       - Check first/last-child edits, container-relative vs file-relative behavior, indentation and delimiter preservation, and attached nodes such as doc comments, decorators, attributes, impl members, enum variants, markdown lists, tables, and fenced code blocks.
+       - If something fails, note whether the error message was clear and whether it told you how to recover.
+
+    4. Verify the files after meaningful edits.
+       - Re-read the files in full after each meaningful edit round and confirm the tool did not make unintended changes.
+
+    When finished, report concrete findings:
+    - what felt awkward or required workarounds
+    - what was impossible
+    - which errors were clear vs unclear
+    - what was ambiguous or under-documented
+    - what changes would make the tools more trustworthy and easier to use
+
+    Be specific about observable behavior. Generic success summaries are not useful.
+    """
+).strip()
+
+FINAL_REVIEW_PROMPT = textwrap.dedent(
+    """\
+    Your prior turn completed without a final written review in the assistant text.
+
+    Write the final review now as markdown only.
+    Do not perform more tool calls.
+    Summarize the concrete findings from the work already completed:
+    - awkward workflows or required workarounds
+    - impossible operations
+    - clear vs unclear errors
+    - ambiguous or under-documented behavior
+    - changes that would improve trustworthiness and usability
+    """
+).strip()
+
+TODOS = [
+    "Map the current read and edit tool surface area on main.ts, main.rs, main.py, and main.md.",
+    "Exercise supported read and edit paths with concrete before/after verification across code and prose fixtures.",
+    "Probe awkward selector, indentation, and boundary cases including decorators, docstrings, tables, and fenced blocks.",
+    "Summarize what was awkward, impossible, ambiguous, or under-documented with concrete examples.",
+]
+
+TS_FIXTURE = textwrap.dedent(
+    """\
+    function sealed(_target: Function): void {}
+
+    function trace(_label: string) {
+      return function (
+        _target: object,
+        _propertyKey: string,
+        descriptor: PropertyDescriptor,
+      ): PropertyDescriptor {
+        return descriptor;
+      };
+    }
+
+    /** Log severity levels emitted by the demo server. */
+    export enum LogLevel {
+      Debug = "DEBUG",
+      Info = "INFO",
+      Warn = "WARN",
+      Error = "ERROR",
+    }
+
+    /** Shared runtime configuration used by parsing and request handling. */
+    export interface Config {
+      host: string;
+      port: number;
+      logLevel: LogLevel;
+      tags: Record<string, string>;
+    }
+
+    export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
+
+    function isRecord(value: unknown): value is Record<string, unknown> {
+      return typeof value === "object" && value !== null;
+    }
+
+    /** Parse a small JSON config blob into a typed config object. */
+    export function parseConfig(raw: string): Result<Config> {
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (!isRecord(parsed)) {
+          return { ok: false, error: "config must be an object" };
+        }
+        if (typeof parsed.host !== "string" || typeof parsed.port !== "number") {
+          return { ok: false, error: "missing required fields" };
+        }
+
+        return {
+          ok: true,
+          value: {
+            host: parsed.host,
+            port: parsed.port,
+            logLevel: (parsed.logLevel as LogLevel | undefined) ?? LogLevel.Info,
+            tags: (parsed.tags as Record<string, string> | undefined) ?? {},
+          },
+        };
+      } catch (error) {
+        return { ok: false, error: `parse failed: ${String(error)}` };
+      }
+    }
+
+    /** Tiny request handler surface with decorators and attached comments. */
+    @sealed
+    export class Server {
+      #config: Config;
+      #running = false;
+      #history: string[] = [];
+
+      constructor(config: Config) {
+        this.#config = config;
+      }
+
+      /** Begin serving requests. */
+      @trace("start")
+      start(): void {
+        if (this.#running) {
+          throw new Error("already running");
+        }
+
+        this.#running = true;
+        // Record the first lifecycle transition for later inspection.
+        this.#history.push(`started:${this.getAddress()}`);
+      }
+
+      stop(): void {
+        if (!this.#running) return;
+        this.#running = false;
+        this.#history.push("stopped");
+      }
+
+      isRunning(): boolean {
+        return this.#running;
+      }
+
+      getAddress(): string {
+        return `${this.#config.host}:${this.#config.port}`;
+      }
+
+      handleRequest(method: string, path: string): Result<string> {
+        if (!this.#running) {
+          return { ok: false, error: "server not running" };
+        }
+
+        switch (method) {
+          case "GET":
+            return { ok: true, value: `fetched ${path}` };
+          case "POST":
+            return { ok: true, value: `created ${path}` };
+          case "DELETE":
+            return { ok: true, value: `deleted ${path}` };
+          default:
+            return { ok: false, error: `unknown method: ${method}` };
+        }
+      }
+
+      history(): string[] {
+        return [...this.#history];
+      }
+    }
+
+    /** Format a timestamped log line. */
+    export function formatLog(level: LogLevel, message: string): string {
+      const timestamp = new Date().toISOString();
+      return `[${timestamp}] [${level}] ${message}`;
+    }
+
+    /** Generic fixed-size queue used to test nested members. */
+    export class RingBuffer<T> {
+      #items: T[] = [];
+      #capacity: number;
+
+      constructor(capacity: number) {
+        this.#capacity = capacity;
+      }
+
+      push(item: T): void {
+        if (this.#items.length >= this.#capacity) {
+          this.#items.shift();
+        }
+        this.#items.push(item);
+      }
+
+      peek(): T | undefined {
+        return this.#items[this.#items.length - 1];
+      }
+
+      toArray(): T[] {
+        return [...this.#items];
+      }
+    }
+    """
+).strip() + "\n"
+
+RUST_FIXTURE = textwrap.dedent(
+    """\
+    use std::collections::HashMap;
+    use std::fmt;
+
+    /// Log severity levels emitted by the demo server.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum LogLevel {
+        Debug,
+        Info,
+        Warn,
+        Error,
+    }
+
+    impl fmt::Display for LogLevel {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                LogLevel::Debug => write!(f, "DEBUG"),
+                LogLevel::Info => write!(f, "INFO"),
+                LogLevel::Warn => write!(f, "WARN"),
+                LogLevel::Error => write!(f, "ERROR"),
+            }
+        }
+    }
+
+    /// Shared runtime configuration used by parsing and request handling.
+    #[derive(Debug, Clone)]
+    pub struct Config {
+        pub host: String,
+        pub port: u16,
+        pub log_level: LogLevel,
+        pub tags: HashMap<String, String>,
+    }
+
+    /// Result of handling a request.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum OpResult {
+        Ok(String),
+        Err(String),
+    }
+
+    /// Parse a `host:port` config string into a structured config.
+    #[must_use]
+    pub fn parse_config(raw: &str) -> Result<Config, String> {
+        let parts: Vec<&str> = raw.splitn(2, ':').collect();
+        if parts.len() != 2 {
+            return Err("expected host:port format".into());
+        }
+
+        let port = parts[1]
+            .parse::<u16>()
+            .map_err(|error| format!("bad port: {}", error))?;
+
+        Ok(Config {
+            host: parts[0].to_string(),
+            port,
+            log_level: LogLevel::Info,
+            tags: HashMap::new(),
+        })
+    }
+
+    /// Request handling surface for trait and impl edits.
+    pub trait Handler {
+        fn handle(&self, method: &str, path: &str) -> OpResult;
+    }
+
+    /// Small in-memory server used as an edit surface.
+    #[derive(Debug)]
+    pub struct Server {
+        config: Config,
+        running: bool,
+        history: Vec<String>,
+    }
+
+    impl Server {
+        #[inline]
+        pub fn new(config: Config) -> Self {
+            Self {
+                config,
+                running: false,
+                history: Vec::new(),
+            }
+        }
+
+        /// Begin serving requests.
+        pub fn start(&mut self) -> Result<(), String> {
+            if self.running {
+                return Err("already running".into());
+            }
+
+            self.running = true;
+            // Record the first lifecycle transition for later inspection.
+            self.history
+                .push(format!("started:{}", self.address()));
+            Ok(())
+        }
+
+        pub fn stop(&mut self) {
+            if !self.running {
+                return;
+            }
+
+            self.running = false;
+            self.history.push("stopped".into());
+        }
+
+        #[must_use]
+        pub fn is_running(&self) -> bool {
+            self.running
+        }
+
+        #[must_use]
+        pub fn address(&self) -> String {
+            format!("{}:{}", self.config.host, self.config.port)
+        }
+
+        #[must_use]
+        pub fn history(&self) -> &[String] {
+            &self.history
+        }
+    }
+
+    impl Handler for Server {
+        fn handle(&self, method: &str, path: &str) -> OpResult {
+            if !self.running {
+                return OpResult::Err("not running".into());
+            }
+
+            match method {
+                "GET" => OpResult::Ok(format!("fetched {}", path)),
+                "POST" => OpResult::Ok(format!("created {}", path)),
+                "DELETE" => OpResult::Ok(format!("deleted {}", path)),
+                _ => OpResult::Err(format!("unknown method: {}", method)),
+            }
+        }
+    }
+
+    /// Format a log line with its level prefix.
+    #[must_use]
+    pub fn format_log(level: LogLevel, message: &str) -> String {
+        format!("[{}] {}", level, message)
+    }
+
+    /// Fixed-size buffer used to test nested impl members.
+    #[allow(dead_code)]
+    pub struct RingBuffer {
+        items: Vec<String>,
+        capacity: usize,
+    }
+
+    impl RingBuffer {
+        pub fn new(capacity: usize) -> Self {
+            Self {
+                items: Vec::with_capacity(capacity),
+                capacity,
+            }
+        }
+
+        pub fn push(&mut self, item: String) {
+            if self.items.len() >= self.capacity {
+                self.items.remove(0);
+            }
+            self.items.push(item);
+        }
+
+        #[must_use]
+        pub fn peek(&self) -> Option<&str> {
+            self.items.last().map(|item| item.as_str())
+        }
+
+        #[must_use]
+        pub fn as_slice(&self) -> &[String] {
+            &self.items
+        }
+    }
+    """
+).strip() + "\n"
+
+
+
+
+PYTHON_FIXTURE = textwrap.dedent(
+    """\
+    from __future__ import annotations
+
+    from dataclasses import dataclass, field
+    from pathlib import Path
+    from typing import Iterable
+
+
+    def traced(label: str):
+        def decorator(fn):
+            def wrapper(*args, **kwargs):
+                return fn(*args, **kwargs)
+
+            wrapper.__name__ = fn.__name__
+            wrapper.__doc__ = fn.__doc__
+            return wrapper
+
+        return decorator
+
+
+    @dataclass(slots=True)
+    class Config:
+        host: str
+        port: int
+        tags: dict[str, str] = field(default_factory=dict)
+
+
+    class Server:
+        '''Small indentation-sensitive server surface for edit tests.'''
+
+        def __init__(self, config: Config) -> None:
+            self._config = config
+            self._history: list[str] = []
+            self._running = False
+
+        @traced("start")
+        def start(self) -> None:
+            if self._running:
+                raise RuntimeError("already running")
+            self._running = True
+            self._history.append(f"started:{self.address}")
+
+        def stop(self) -> None:
+            if not self._running:
+                return
+            self._running = False
+            self._history.append("stopped")
+
+        @property
+        def address(self) -> str:
+            return f"{self._config.host}:{self._config.port}"
+
+        def handle(self, method: str, path: str) -> str:
+            if not self._running:
+                raise RuntimeError("server not running")
+
+            match method:
+                case "GET":
+                    return f"fetched {path}"
+                case "POST":
+                    return f"created {path}"
+                case _:
+                    raise ValueError(f"unknown method: {method}")
+
+        def history(self) -> list[str]:
+            return list(self._history)
+
+
+    def parse_config(raw: str) -> Config:
+        host, port = raw.split(":", 1)
+        return Config(host=host.strip(), port=int(port))
+
+
+    def write_report(lines: Iterable[str], target: Path) -> None:
+        target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    """
+).strip() + "\n"
+
+MARKDOWN_FIXTURE = textwrap.dedent(
+    """\
+    ---
+    title: Tooling Evaluation Notes
+    owner: Fixtures Team
+    ---
+
+    # Fixture Overview
+
+    This markdown fixture is intentionally prose-heavy.
+    It should help reveal how read and edit behave when the file is not routed through a language AST.
+
+    ## Acceptance checklist
+
+    - [ ] Verify heading edits keep spacing intact.
+    - [ ] Verify list edits preserve indentation.
+    - [ ] Verify table edits do not destroy alignment beyond what the tool promises.
+    - [ ] Verify fenced code blocks remain fenced after edits.
+
+    ## Comparison table
+
+    | Surface | Expected stress |
+    | --- | --- |
+    | `main.ts` | Structural chunk addressing |
+    | `main.rs` | Enum and impl member edits |
+    | `main.py` | Indentation-sensitive blocks |
+    | `main.md` | Prose and block-level text edits |
+
+    ## Embedded examples
+
+    ```python
+    def greet(name: str) -> str:
+        return f"hello {name}"
+    ```
+
+    ```json
+    {
+      "mode": "demo",
+      "strict": true
+    }
+    ```
+
+    ## Notes
+
+    1. Paragraph edits should preserve blank lines.
+    2. List insertions should not collapse into one paragraph.
+    3. Deleting this section should not damage the fenced blocks above.
+    """
+).strip() + "\n"
+
+REFERENCE_FILES = {
+    "PROMPT.md": PROMPT + "\n",
+    "main.ts": TS_FIXTURE,
+    "main.rs": RUST_FIXTURE,
+    "main.py": PYTHON_FIXTURE,
+    "main.md": MARKDOWN_FIXTURE,
+}
+
+WORKSPACE_FILES = {
+    "main.ts": TS_FIXTURE,
+    "main.rs": RUST_FIXTURE,
+    "main.py": PYTHON_FIXTURE,
+    "main.md": MARKDOWN_FIXTURE,
+}
+
+@dataclass
+class ModelResult:
+    model: str
+    status: str
+    started_at: float
+    finished_at: float
+    workspace: str
+    jsonl_path: str
+    review_path: str
+    turns: int
+    tool_calls: int
+    thinking_chars: int
+    text_chars: int
+    token_input: int | None
+    token_output: int | None
+    token_total: int | None
+    todo_completed: int
+    todo_total: int
+    todo_current: str | None
+    error: str | None
+    session_state: dict[str, Any] | None
+
+
+@dataclass
+class ModelProgress:
+    model: str
+    label: str
+    status: str = "pending"
+    turns: int = 0
+    tool_calls: int = 0
+    thinking_chars: int = 0
+    text_chars: int = 0
+    token_input: int | None = None
+    token_output: int | None = None
+    token_total: int | None = None
+    todo_completed: int = 0
+    todo_total: int = 0
+    todo_current: str | None = None
+    last_activity: str = "waiting"
+    last_thinking: str | None = None
+    last_text: str | None = None
+    duration_seconds: float | None = None
+    error: str | None = None
+    todo_order: list[str] = field(default_factory=list)
+    todo_items: dict[str, tuple[str, str]] = field(default_factory=dict)
+
+
+TOOL_WHITELIST = ("read", "edit", "todo_write")
+MODEL_LABEL_WIDTH = 30
+STATUS_WIDTH = 7
+TOKENS_WIDTH = 9
+TODOS_WIDTH = 18
+ACTIVITY_WIDTH_FLOOR = 24
+THINKING_SNIPPET_LIMIT = 80
+TEXT_SNIPPET_LIMIT = 64
+
+
+def shorten_model_name(model: str) -> str:
+    if model.startswith("openrouter/"):
+        return model.removeprefix("openrouter/")
+    return model
+
+
+def collapse_whitespace(value: str) -> str:
+    return " ".join(value.split())
+
+
+def truncate_text(value: str | None, width: int) -> str:
+    if width <= 0:
+        return ""
+    text = collapse_whitespace(value or "")
+    if len(text) <= width:
+        return text
+    if width <= 1:
+        return text[:width]
+    return text[: width - 1] + "…"
+
+
+def format_count(value: int | None) -> str:
+    if value is None:
+        return "-"
+    if value >= 1_000_000:
+        return f"{value / 1_000_000:.1f}M"
+    if value >= 1_000:
+        return f"{value / 1_000:.1f}k"
+    return str(value)
+
+
+def extract_usage_tokens(message: dict[str, Any]) -> tuple[int | None, int | None, int | None]:
+    usage = message.get("usage")
+    if not isinstance(usage, dict):
+        return None, None, None
+    token_input = usage.get("input")
+    token_output = usage.get("output")
+    token_total = usage.get("totalTokens")
+    if not isinstance(token_total, int) and isinstance(token_input, int) and isinstance(token_output, int):
+        token_total = token_input + token_output
+    return (
+        token_input if isinstance(token_input, int) else None,
+        token_output if isinstance(token_output, int) else None,
+        token_total if isinstance(token_total, int) else None,
+    )
+
+
+def build_todo_state_from_phases(phases: tuple[TodoPhase, ...]) -> tuple[list[str], dict[str, tuple[str, str]]]:
+    order: list[str] = []
+    items: dict[str, tuple[str, str]] = {}
+    for phase in phases:
+        for task in phase.tasks:
+            order.append(task.id)
+            items[task.id] = (task.content, task.status)
+    return order, items
+
+
+def seed_todo_state(todos: list[str]) -> tuple[list[str], dict[str, tuple[str, str]]]:
+    order: list[str] = []
+    items: dict[str, tuple[str, str]] = {}
+    for index, content in enumerate(todos, start=1):
+        task_id = f"task-{index}"
+        order.append(task_id)
+        items[task_id] = (content, "pending")
+    return order, items
+
+
+def summarize_todo_state(order: list[str], items: dict[str, tuple[str, str]]) -> tuple[int, int, str | None]:
+    if not order:
+        return 0, 0, None
+    completed = 0
+    current: str | None = None
+    for task_id in order:
+        content, status = items.get(task_id, ("", "pending"))
+        if status == "completed":
+            completed += 1
+        elif current is None and status == "in_progress":
+            current = content
+    if current is None:
+        for task_id in order:
+            content, status = items.get(task_id, ("", "pending"))
+            if status == "pending":
+                current = content
+                break
+    return completed, len(order), current
+
+
+def apply_todo_ops(progress: ModelProgress, args: Any) -> None:
+    if not isinstance(args, dict):
+        return
+    raw_ops = args.get("ops")
+    if not isinstance(raw_ops, list):
+        return
+
+    for raw_op in raw_ops:
+        if not isinstance(raw_op, dict):
+            continue
+        op = raw_op.get("op")
+        if op == "replace":
+            raw_phases = raw_op.get("phases")
+            if isinstance(raw_phases, list):
+                phases: list[TodoPhase] = []
+                for phase_index, raw_phase in enumerate(raw_phases, start=1):
+                    if not isinstance(raw_phase, dict):
+                        continue
+                    raw_tasks = raw_phase.get("tasks")
+                    if not isinstance(raw_tasks, list):
+                        continue
+                    tasks: list[TodoItem] = []
+                    for task_index, raw_task in enumerate(raw_tasks, start=1):
+                        if not isinstance(raw_task, dict):
+                            continue
+                        content = raw_task.get("content")
+                        status = raw_task.get("status")
+                        if not isinstance(content, str) or not isinstance(status, str):
+                            continue
+                        task_id = raw_task.get("id")
+                        if not isinstance(task_id, str) or not task_id:
+                            task_id = f"task-{task_index}"
+                        tasks.append(TodoItem(id=task_id, content=content, status=status, notes=None, details=None))
+                    phase_id = raw_phase.get("id")
+                    name = raw_phase.get("name")
+                    if not isinstance(name, str) or not name:
+                        name = f"Phase {phase_index}"
+                    if not isinstance(phase_id, str) or not phase_id:
+                        phase_id = f"phase-{phase_index}"
+                    phases.append(TodoPhase(id=phase_id, name=name, tasks=tuple(tasks)))
+                progress.todo_order, progress.todo_items = build_todo_state_from_phases(tuple(phases))
+        elif op == "update":
+            task_id = raw_op.get("id")
+            if not isinstance(task_id, str) or task_id not in progress.todo_items:
+                continue
+            content, status = progress.todo_items[task_id]
+            next_content = raw_op.get("content") if isinstance(raw_op.get("content"), str) else content
+            next_status = raw_op.get("status") if isinstance(raw_op.get("status"), str) else status
+            progress.todo_items[task_id] = (next_content, next_status)
+        elif op == "add_task":
+            phase = raw_op.get("phase")
+            task_payload = raw_op.get("task")
+            if not isinstance(task_payload, dict):
+                continue
+            task_id = task_payload.get("id")
+            if not isinstance(task_id, str) or not task_id:
+                task_id = raw_op.get("id") if isinstance(raw_op.get("id"), str) else f"task-{len(progress.todo_order) + 1}"
+            content = task_payload.get("content")
+            status = task_payload.get("status")
+            if not isinstance(content, str) or not isinstance(status, str):
+                continue
+            if task_id not in progress.todo_items:
+                insert_after = raw_op.get("after") if isinstance(raw_op.get("after"), str) else None
+                if insert_after in progress.todo_order:
+                    index = progress.todo_order.index(insert_after) + 1
+                    progress.todo_order.insert(index, task_id)
+                else:
+                    progress.todo_order.append(task_id)
+            progress.todo_items[task_id] = (content, status)
+        elif op == "remove_task":
+            task_id = raw_op.get("id")
+            if not isinstance(task_id, str):
+                continue
+            progress.todo_items.pop(task_id, None)
+            progress.todo_order = [candidate for candidate in progress.todo_order if candidate != task_id]
+        elif op == "add_phase":
+            raw_tasks = raw_op.get("tasks")
+            if not isinstance(raw_tasks, list):
+                continue
+            for raw_task in raw_tasks:
+                if not isinstance(raw_task, dict):
+                    continue
+                content = raw_task.get("content")
+                status = raw_task.get("status")
+                if not isinstance(content, str) or not isinstance(status, str):
+                    continue
+                task_id = raw_task.get("id")
+                if not isinstance(task_id, str) or not task_id:
+                    task_id = f"task-{len(progress.todo_order) + 1}"
+                progress.todo_order.append(task_id)
+                progress.todo_items[task_id] = (content, status)
+
+    progress.todo_completed, progress.todo_total, progress.todo_current = summarize_todo_state(
+        progress.todo_order, progress.todo_items
+    )
+
+
+class ProgressPrinter:
+    def __init__(self, models: list[str], *, stream: TextIO | None = None, interactive: bool | None = None) -> None:
+        self._lock = threading.Lock()
+        self._stream = sys.stdout if stream is None else stream
+        self._interactive = self._stream.isatty() if interactive is None else interactive
+        self._console = Console(file=self._stream, force_terminal=self._interactive, soft_wrap=False)
+        self._model_order = list(models)
+        self._states = {
+            model: ModelProgress(model=model, label=shorten_model_name(model))
+            for model in self._model_order
+        }
+        self._fixtures_dir: str | None = None
+        self._results_dir: str | None = None
+        self._closed = False
+        self._final_message: str | None = None
+        self._live: Live | None = None
+        if self._interactive:
+            self._live = Live(
+                self._build_renderable_locked(),
+                console=self._console,
+                auto_refresh=False,
+                transient=False,
+            )
+            self._live.start()
+
+    def configure(self, *, fixtures_dir: Path, results_dir: Path) -> None:
+        with self._lock:
+            self._fixtures_dir = str(fixtures_dir)
+            self._results_dir = str(results_dir)
+            self._refresh_locked()
+
+    def mark_starting(self, model: str) -> None:
+        self._mutate_model(model, status="boot", last_activity="starting rpc")
+
+    def mark_ready(self, model: str) -> None:
+        self._mutate_model(model, status="ready", last_activity="rpc ready")
+
+    def seed_todos(self, model: str, todos: list[str]) -> None:
+        with self._lock:
+            progress = self._states[model]
+            progress.todo_order, progress.todo_items = seed_todo_state(todos)
+            progress.todo_completed, progress.todo_total, progress.todo_current = summarize_todo_state(
+                progress.todo_order, progress.todo_items
+            )
+            progress.last_activity = f"seeded {progress.todo_total} todos"
+            self._refresh_locked()
+
+    def mark_prompt_submitted(self, model: str) -> None:
+        self._mutate_model(model, status="run", last_activity="prompt submitted")
+
+    def mark_turn_start(self, model: str, turns: int) -> None:
+        self._mutate_model(model, status="run", turns=turns)
+
+    def mark_turn_end(self, model: str, turns: int) -> None:
+        self._mutate_model(model, turns=turns)
+
+    def note_tool_start(self, model: str, tool_name: str, intent: str | None, tool_calls: int, args: Any) -> None:
+        with self._lock:
+            progress = self._states[model]
+            progress.status = "run"
+            progress.tool_calls = tool_calls
+            if tool_name == "todo_write":
+                apply_todo_ops(progress, args)
+            detail = truncate_text(intent, 36)
+            progress.last_activity = f"{tool_name} · {detail}" if detail else tool_name
+            self._refresh_locked()
+
+    def note_tool_end(self, model: str, tool_name: str, is_error: bool | None) -> None:
+        activity = f"{tool_name} failed" if is_error else f"{tool_name} done"
+        self._mutate_model(model, last_activity=activity)
+
+    def note_todo_reminder(self, model: str, todos: tuple[TodoItem, ...]) -> None:
+        with self._lock:
+            progress = self._states[model]
+            progress.todo_order = [task.id for task in todos]
+            progress.todo_items = {task.id: (task.content, task.status) for task in todos}
+            progress.todo_completed, progress.todo_total, progress.todo_current = summarize_todo_state(
+                progress.todo_order, progress.todo_items
+            )
+            progress.last_activity = "todo reminder"
+            self._refresh_locked()
+
+    def note_todo_auto_clear(self, model: str) -> None:
+        with self._lock:
+            progress = self._states[model]
+            progress.todo_completed = progress.todo_total
+            progress.todo_current = None
+            progress.last_activity = "todos cleared"
+            self._refresh_locked()
+
+    def note_thinking(self, model: str, delta: str, total_chars: int) -> None:
+        with self._lock:
+            progress = self._states[model]
+            progress.status = "think"
+            progress.thinking_chars = total_chars
+            progress.last_thinking = truncate_text(delta, THINKING_SNIPPET_LIMIT)
+            progress.last_activity = progress.last_thinking or "thinking"
+            self._refresh_locked()
+
+    def note_text(self, model: str, delta: str, total_chars: int) -> None:
+        with self._lock:
+            progress = self._states[model]
+            progress.status = "run"
+            progress.text_chars = total_chars
+            progress.last_text = truncate_text(delta, TEXT_SNIPPET_LIMIT)
+            progress.last_activity = progress.last_text or "drafting"
+            self._refresh_locked()
+
+    def note_usage(self, model: str, token_input: int | None, token_output: int | None, token_total: int | None) -> None:
+        self._mutate_model(
+            model,
+            token_input=token_input,
+            token_output=token_output,
+            token_total=token_total,
+        )
+
+    def mark_completed(self, model: str, duration_seconds: float) -> None:
+        self._mutate_model(model, status="done", duration_seconds=duration_seconds, last_activity="completed")
+
+    def mark_failed(self, model: str, error: str) -> None:
+        self._mutate_model(model, status="failed", error=error, last_activity=truncate_text(error, 72))
+
+    def finish(self, message: str) -> None:
+        with self._lock:
+            if self._closed:
+                return
+            self._final_message = message
+            if self._live is not None:
+                self._live.update(self._build_renderable_locked(), refresh=True)
+                self._live.stop()
+            else:
+                self._console.print(self._build_renderable_locked())
+            self._closed = True
+
+    def _mutate_model(self, model: str, **changes: Any) -> None:
+        with self._lock:
+            progress = self._states[model]
+            for key, value in changes.items():
+                setattr(progress, key, value)
+            self._refresh_locked()
+
+    def _refresh_locked(self) -> None:
+        if self._live is None:
+            return
+        self._live.update(self._build_renderable_locked(), refresh=True)
+
+    def _build_renderable_locked(self) -> Group:
+        done = sum(1 for state in self._states.values() if state.status == "done")
+        failed = sum(1 for state in self._states.values() if state.status == "failed")
+        active = sum(1 for state in self._states.values() if state.status not in {"pending", "done", "failed"})
+
+        summary = Text()
+        summary.append(f"done {done}/{len(self._states)}", style="bold green")
+        summary.append("  •  ", style="dim")
+        summary.append(f"active {active}", style="bold cyan")
+        summary.append("  •  ", style="dim")
+        summary.append(f"failed {failed}", style="bold red" if failed else "green")
+
+        results_line = Text()
+        results_line.append("results ", style="bold")
+        results_line.append(self._results_dir or "-", style="cyan")
+
+        config_line = Text()
+        config_line.append("fixtures ", style="bold")
+        config_line.append(self._fixtures_dir or "-", style="cyan")
+        config_line.append("  •  ", style="dim")
+        config_line.append("tools ", style="bold")
+        config_line.append("read|edit|todo_write", style="magenta")
+
+        header = Panel(
+            Group(summary, results_line, config_line),
+            title="rate-edit-tool",
+            border_style="cyan",
+            box=box.ROUNDED,
+        )
+
+        table = Table(box=box.SIMPLE_HEAVY, expand=True, show_lines=False)
+        table.add_column("Model", style="bold", width=34, min_width=34, max_width=34)
+        table.add_column("State", no_wrap=True, width=7)
+        table.add_column("Turns", justify="right", no_wrap=True, width=5)
+        table.add_column("Tools", justify="right", no_wrap=True, width=5)
+        table.add_column("Tokens", justify="right", no_wrap=True, width=8)
+        table.add_column("Todos", ratio=1, min_width=24)
+
+        for model in self._model_order:
+            state = self._states[model]
+            table.add_row(
+                self._model_text(state),
+                self._status_text(state.status),
+                str(state.turns),
+                str(state.tool_calls),
+                format_count(state.token_total),
+                self._todo_text(state),
+            )
+
+        if self._final_message:
+            footer = Panel(self._final_message, border_style="green" if failed == 0 else "red", box=box.ROUNDED)
+            return Group(header, table, footer)
+        return Group(header, table)
+
+    @staticmethod
+    def _status_text(status: str) -> Text:
+        styles = {
+            "pending": "dim",
+            "boot": "yellow",
+            "ready": "blue",
+            "run": "cyan",
+            "think": "magenta",
+            "done": "green",
+            "failed": "bold red",
+        }
+        return Text(status, style=styles.get(status, "white"))
+
+    @staticmethod
+    def _todo_text(state: ModelProgress) -> str:
+        if state.todo_total == 0:
+            return "-"
+        summary = f"{state.todo_completed}/{state.todo_total}"
+        if state.todo_current:
+            summary = f"{summary} · {truncate_text(state.todo_current, 24)}"
+        return summary
+
+    @staticmethod
+    def _model_text(state: ModelProgress) -> Text:
+        text = Text(truncate_text(state.label, 34), style="bold")
+        activity = state.error if state.status == "failed" and state.error else state.last_activity
+        if activity and activity not in {"waiting", "completed"}:
+            text.append("\n")
+            text.append(truncate_text(activity, 34), style="dim")
+        return text
+
+
+def slugify(value: str) -> str:
+    return "".join(char if char.isalnum() or char in "._-" else "_" for char in value)
+
+
+def materialize_workspace(target_dir: Path) -> None:
+    for name, content in WORKSPACE_FILES.items():
+        (target_dir / name).write_text(content)
+
+
+def sync_reference_fixtures(fixtures_dir: Path) -> None:
+    fixtures_dir.mkdir(parents=True, exist_ok=True)
+    keep = set(REFERENCE_FILES)
+    for child in fixtures_dir.iterdir():
+        if child.name not in keep:
+            if child.is_dir():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+    for name, content in REFERENCE_FILES.items():
+        (fixtures_dir / name).write_text(content)
+
+
+def require_openrouter_key() -> str:
+    key = os.environ.get("OPENROUTER_API_KEY")
+    if not key:
+        raise SystemExit("OPENROUTER_API_KEY is not set")
+    return key
+
+
+def resolve_omp_bin(raw: str | None) -> str:
+    if raw:
+        return raw
+    found = shutil.which("omp")
+    if not found:
+        raise SystemExit("Could not find `omp` on PATH. Set --omp-bin or OMP_BIN.")
+    return found
+
+
+def serialize_notification(notification: Any) -> dict[str, Any]:
+    if is_dataclass(notification):
+        return asdict(notification)
+    if isinstance(notification, dict):
+        return dict(notification)
+    data = getattr(notification, "__dict__", None)
+    if isinstance(data, dict):
+        return dict(data)
+    return {"value": repr(notification)}
+
+
+class ModelRunRecorder:
+    def __init__(self, model: str, printer: ProgressPrinter, jsonl_path: Path) -> None:
+        self.model = model
+        self.printer = printer
+        self.jsonl_path = jsonl_path
+        self.turns = 0
+        self.tool_calls = 0
+        self.thinking_chars = 0
+        self.text_chars = 0
+        self.token_input: int | None = None
+        self.token_output: int | None = None
+        self.token_total: int | None = None
+        self.todo_completed = 0
+        self.todo_total = 0
+        self.todo_current: str | None = None
+        self.review_sections: list[str] = []
+        self._consumed_assistant_messages = 0
+        self._event_lock = threading.Lock()
+
+    def record_notification(self, notification: RpcNotification) -> None:
+        self._append_jsonl(serialize_notification(notification))
+
+    def record_ui(self, request: ExtensionUiRequest) -> None:
+        if request.method in {"notify", "setStatus", "setTitle", "set_editor_text"}:
+            return
+        if request.method == "setWidget" and request.widget_key == "autoresearch":
+            return
+
+    def record_turn_start(self, _event: TurnStartEvent) -> None:
+        self.turns += 1
+        self.printer.mark_turn_start(self.model, self.turns)
+
+    def record_turn_end(self, _event: TurnEndEvent) -> None:
+        self.printer.mark_turn_end(self.model, self.turns)
+
+    def record_tool_execution_start(self, event: ToolExecutionStartEvent) -> None:
+        self.tool_calls += 1
+        self.printer.note_tool_start(self.model, event.tool_name, event.intent, self.tool_calls, event.args)
+
+    def record_tool_execution_update(self, _event: ToolExecutionUpdateEvent) -> None:
+        return
+
+    def record_tool_execution_end(self, event: ToolExecutionEndEvent) -> None:
+        self.printer.note_tool_end(self.model, event.tool_name, event.is_error)
+
+    def record_agent_end(self, event: AgentEndEvent) -> None:
+        assistant_count = 0
+        for message in event.messages:
+            if not isinstance(message, dict) or message.get("role") != "assistant":
+                continue
+            text = assistant_text(message)
+            if assistant_count >= self._consumed_assistant_messages and isinstance(text, str) and text.strip():
+                self.review_sections.append(text.strip())
+            assistant_count += 1
+
+        self._consumed_assistant_messages = assistant_count
+
+        for message in reversed(event.messages):
+            if isinstance(message, dict) and message.get("role") == "assistant":
+                token_input, token_output, token_total = extract_usage_tokens(message)
+                self.token_input = token_input
+                self.token_output = token_output
+                self.token_total = token_total
+                self.printer.note_usage(self.model, token_input, token_output, token_total)
+                break
+
+    def record_message_update(self, event: MessageUpdateEvent) -> None:
+        assistant_event = event.assistant_message_event
+        delta_type = assistant_event.get("type")
+        delta = assistant_event.get("delta")
+        if not isinstance(delta, str):
+            return
+        if delta_type == "thinking_delta":
+            self.thinking_chars += len(delta)
+            self.printer.note_thinking(self.model, delta, self.thinking_chars)
+        elif delta_type == "text_delta":
+            self.text_chars += len(delta)
+            self.printer.note_text(self.model, delta, self.text_chars)
+
+    def record_todo_reminder(self, event: TodoReminderEvent) -> None:
+        self.todo_completed = sum(1 for task in event.todos if task.status == "completed")
+        self.todo_total = len(event.todos)
+        in_progress = next((task.content for task in event.todos if task.status == "in_progress"), None)
+        pending = next((task.content for task in event.todos if task.status == "pending"), None)
+        self.todo_current = in_progress or pending
+        self.printer.note_todo_reminder(self.model, event.todos)
+
+    def record_todo_auto_clear(self, _event: TodoAutoClearEvent) -> None:
+        self.todo_completed = self.todo_total
+        self.todo_current = None
+        self.printer.note_todo_auto_clear(self.model)
+
+    def sync_final_todos(self, phases: tuple[TodoPhase, ...]) -> None:
+        order, items = build_todo_state_from_phases(phases)
+        self.todo_completed, self.todo_total, self.todo_current = summarize_todo_state(order, items)
+        flattened = tuple(task for phase in phases for task in phase.tasks)
+        self.printer.note_todo_reminder(self.model, flattened)
+
+    def build_review_markdown(self) -> str:
+        if not self.review_sections:
+            return ""
+        return "\n\n-----------\n\n".join(self.review_sections)
+
+    def _append_jsonl(self, payload: dict[str, Any]) -> None:
+        with self._event_lock:
+            with self.jsonl_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(payload) + "\n")
+
+
+def run_model_sync(
+    *,
+    model: str,
+    omp_bin: str,
+    results_dir: Path,
+    workspace_root: Path,
+    timeout: float,
+    printer: ProgressPrinter,
+    openrouter_key: str,
+) -> ModelResult:
+    started_at = time.time()
+    model_slug = slugify(model)
+    review_slug = slugify(shorten_model_name(model))
+    workspace = workspace_root / model_slug
+    workspace.mkdir(parents=True, exist_ok=True)
+    materialize_workspace(workspace)
+
+    review_path = results_dir / f"review_{review_slug}.md"
+    jsonl_path = Path(tempfile.gettempdir()) / f"rate-edit-tool-{results_dir.name}-{model_slug}.jsonl"
+    jsonl_path.unlink(missing_ok=True)
+    jsonl_path.touch()
+    recorder = ModelRunRecorder(model, printer, jsonl_path)
+
+    printer.mark_starting(model)
+    error_message: str | None = None
+    session_state: dict[str, Any] | None = None
+
+    try:
+        with RpcClient(
+            executable=omp_bin,
+            model=model,
+            cwd=workspace,
+            env={"OPENROUTER_API_KEY": openrouter_key},
+            thinking="high",
+            tools=TOOL_WHITELIST,
+            no_skills=True,
+            no_rules=True,
+            no_session=True,
+            startup_timeout=30.0,
+            request_timeout=30.0,
+        ) as client:
+            client.on_notification(recorder.record_notification)
+            client.on_turn_start(recorder.record_turn_start)
+            client.on_turn_end(recorder.record_turn_end)
+            client.on_tool_execution_start(recorder.record_tool_execution_start)
+            client.on_tool_execution_update(recorder.record_tool_execution_update)
+            client.on_tool_execution_end(recorder.record_tool_execution_end)
+            client.on_agent_end(recorder.record_agent_end)
+            client.on_message_update(recorder.record_message_update)
+            client.on_todo_reminder(recorder.record_todo_reminder)
+            client.on_todo_auto_clear(recorder.record_todo_auto_clear)
+            client.on_ui_request(recorder.record_ui)
+            client.install_headless_ui()
+
+            printer.mark_ready(model)
+            client.set_todos(TODOS)
+            printer.seed_todos(model, TODOS)
+            printer.mark_prompt_submitted(model)
+            client.prompt(PROMPT)
+            client.wait_for_idle(timeout=timeout)
+            review_markdown = recorder.build_review_markdown()
+            if not review_markdown.strip():
+                printer.mark_prompt_submitted(model)
+                client.prompt(FINAL_REVIEW_PROMPT)
+                client.wait_for_idle(timeout=timeout)
+                review_markdown = recorder.build_review_markdown()
+            if not review_markdown.strip():
+                raise RpcError("Agent completed without final review text after retry")
+
+            stats = client.get_session_stats()
+            todo_phases = client.get_todos()
+            recorder.sync_final_todos(todo_phases)
+            if recorder.token_total is None:
+                recorder.token_input = stats.tokens.input
+                recorder.token_output = stats.tokens.output
+                recorder.token_total = stats.tokens.total
+                printer.note_usage(model, recorder.token_input, recorder.token_output, recorder.token_total)
+            review_path.write_text(review_markdown)
+            provider, model_id = model.split("/", 1)
+            session_state = {
+                "model": {"provider": provider, "id": model_id},
+                "thinkingLevel": "high",
+            }
+            status = "ok"
+    except Exception as error:  # noqa: BLE001
+        error_message = f"{type(error).__name__}: {error}" if str(error) else type(error).__name__
+        printer.mark_failed(model, error_message)
+        status = "failed"
+
+    finished_at = time.time()
+    duration_seconds = round(finished_at - started_at, 3)
+
+    if status == "ok":
+        printer.mark_completed(model, duration_seconds)
+
+    return ModelResult(
+        model=model,
+        status=status,
+        started_at=started_at,
+        finished_at=finished_at,
+        workspace=str(workspace),
+        jsonl_path=str(jsonl_path),
+        review_path=str(review_path),
+        turns=recorder.turns,
+        tool_calls=recorder.tool_calls,
+        thinking_chars=recorder.thinking_chars,
+        text_chars=recorder.text_chars,
+        token_input=recorder.token_input,
+        token_output=recorder.token_output,
+        token_total=recorder.token_total,
+        todo_completed=recorder.todo_completed,
+        todo_total=recorder.todo_total,
+        todo_current=recorder.todo_current,
+        error=error_message,
+        session_state=session_state,
+    )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run OpenRouter fixture evaluations through omp RPC mode.")
+    parser.add_argument("--omp-bin", default=os.environ.get("OMP_BIN"))
+    parser.add_argument("--fixtures-dir", default=os.path.expanduser("~/tmp/fixtures"))
+    parser.add_argument("--results-dir")
+    parser.add_argument("--timeout", type=float, default=900.0, help="Per-model timeout in seconds.")
+    parser.add_argument("--model", dest="models", action="append", help="Repeat to limit execution to specific models.")
+    return parser.parse_args()
+
+
+async def run_all(args: argparse.Namespace) -> int:
+    openrouter_key = require_openrouter_key()
+    omp_bin = resolve_omp_bin(args.omp_bin)
+    fixtures_dir = Path(args.fixtures_dir).expanduser()
+    sync_reference_fixtures(fixtures_dir)
+
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    tmp_root = Path(tempfile.gettempdir())
+    results_dir = Path(args.results_dir) if args.results_dir else tmp_root / f"omp-fixture-runs-{timestamp}"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    workspace_root = tmp_root / f"rate-edit-tool-workspaces-{timestamp}"
+    workspace_root.mkdir(parents=True, exist_ok=True)
+
+    selected_models = args.models or MODELS
+    printer = ProgressPrinter(list(selected_models))
+    printer.configure(fixtures_dir=fixtures_dir, results_dir=results_dir)
+
+    tasks = [
+        asyncio.to_thread(
+            run_model_sync,
+            model=model,
+            omp_bin=omp_bin,
+            results_dir=results_dir,
+            workspace_root=workspace_root,
+            timeout=args.timeout,
+            printer=printer,
+            openrouter_key=openrouter_key,
+        )
+        for model in selected_models
+    ]
+    results = await asyncio.gather(*tasks)
+
+    failures = sum(1 for result in results if result.status != "ok")
+    if failures:
+        printer.finish(f"{failures}/{len(results)} model run(s) failed")
+        return 1
+    printer.finish(f"{len(results)} review file(s) written to {results_dir}")
+    return 0
+
+
+def main() -> int:
+    args = parse_args()
+    return asyncio.run(run_all(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

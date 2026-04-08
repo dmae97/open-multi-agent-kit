@@ -707,6 +707,7 @@ function buildBenchmarkRpcArgs(config: BenchmarkConfig, multiFile: boolean, prov
 		"--no-skills",
 		"--no-title",
 		"--no-rules",
+		"--no-lsp",
 	];
 }
 

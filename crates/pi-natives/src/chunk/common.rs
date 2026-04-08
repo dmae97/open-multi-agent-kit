@@ -322,7 +322,13 @@ pub fn compute_body_inner_boundaries(
 		inner_start += 1;
 	}
 
-	let inner_end = bounded_start + last_non_ws_rel;
+	// Epilogue starts at the beginning of the line containing the closing
+	// delimiter so that the closing line's indentation is part of the epilogue,
+	// not the body.
+	let close_abs = bounded_start + last_non_ws_rel;
+	let inner_end = source[..close_abs]
+		.rfind('\n')
+		.map_or(close_abs, |nl| nl + 1);
 	(inner_start.min(bounded_end), inner_end.max(inner_start).min(bounded_end))
 }
 

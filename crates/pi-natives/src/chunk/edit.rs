@@ -145,9 +145,12 @@ pub fn apply_edits(state: &ChunkState, params: &EditParams) -> Result<EditResult
 		};
 
 		if let Err(err) = result {
+			let display_path = display_path_for_file(&params.file_path, &params.cwd);
+			let sel = operation.sel.as_deref().or(current_default_selector);
+			let context = render_error_context(&state, sel, &display_path, params.anchor_style);
 			return Err(format!(
 				"Edit operation {}/{} failed ({}): {}\nNo changes were saved. Fix the failing \
-				 operation and retry the entire batch.",
+				 operation and retry the entire batch.{context}",
 				scheduled.original_index + 1,
 				total_ops,
 				describe_scheduled_operation(&scheduled),
@@ -199,10 +202,16 @@ pub fn apply_edits(state: &ChunkState, params: &EditParams) -> Result<EditResult
 					.join("\n")
 			)
 		};
+		let display_path = display_path_for_file(&params.file_path, &params.cwd);
+		let sel = last_scheduled
+			.as_ref()
+			.and_then(|s| s.operation.sel.as_deref())
+			.or(initial_default_selector.as_deref());
+		let context = render_error_context(&state, sel, &display_path, params.anchor_style);
 		return Err(format!(
 			"Edit rejected: introduced {} parse error(s). The file was valid before the edit but is \
-			 not after. Fix the content and retry.{}",
-			state.tree.parse_errors, details
+			 not after. Fix the content and retry.{details}{context}",
+			state.tree.parse_errors,
 		));
 	}
 	if !parse_valid {
@@ -575,8 +584,7 @@ fn validate_crc(chunk: &ChunkNode, crc: Option<&str>) -> Result<(), String> {
 	if chunk.checksum != cleaned {
 		return Err(format!(
 			"Checksum mismatch for {}: expected \"{}\", got \"{}\". The chunk content has changed \
-			 since you last read it. Re-read the file to get updated checksums, then retry with the \
-			 refreshed target selector.",
+			 since you last read it. Use the fresh checksum from the context below to retry.",
 			chunk_path_opt(chunk),
 			chunk.checksum,
 			cleaned
@@ -1031,19 +1039,23 @@ fn resolve_insertion_point(
 	file_indent_step: usize,
 ) -> Result<(InsertionPoint, InsertPosition), String> {
 	match (region, op) {
+		// Before chunk boundary (before prologue / before container)
 		(
 			ChunkRegion::Container | ChunkRegion::Prologue,
 			ChunkEditOp::Before | ChunkEditOp::Prepend,
 		) => Ok((before_chunk_insertion_point(state, anchor), InsertPosition::Before)),
+		// After chunk boundary (after epilogue / after container)
 		(
 			ChunkRegion::Container | ChunkRegion::Epilogue,
 			ChunkEditOp::After | ChunkEditOp::Append,
 		) => Ok((after_chunk_insertion_point(state, anchor), InsertPosition::After)),
+		// Body first-child position
 		(ChunkRegion::Body, ChunkEditOp::Before | ChunkEditOp::Prepend)
 		| (ChunkRegion::Prologue, ChunkEditOp::After | ChunkEditOp::Append) => Ok((
 			body_insertion_point(state, anchor, false, file_indent_char, file_indent_step)?,
 			InsertPosition::FirstChild,
 		)),
+		// Body last-child position
 		(ChunkRegion::Body, ChunkEditOp::After | ChunkEditOp::Append)
 		| (ChunkRegion::Epilogue, ChunkEditOp::Before | ChunkEditOp::Prepend) => Ok((
 			body_insertion_point(state, anchor, true, file_indent_char, file_indent_step)?,
@@ -1551,6 +1563,38 @@ fn compute_focus(
 			.map(|(path, mode)| FocusedPath { path, mode })
 			.collect(),
 	)
+}
+
+/// Render a focused chunk view to append to error messages. Resolves the
+/// selector ignoring CRC so the agent sees fresh anchors without a re-read.
+fn render_error_context(
+	state: &ChunkStateInner,
+	selector: Option<&str>,
+	display_path: &str,
+	anchor_style: Option<ChunkAnchorStyle>,
+) -> String {
+	let Ok((clean_path, ..)) = split_selector_crc_and_region(selector, None, None) else {
+		return String::new();
+	};
+	let mut ignored = Vec::new();
+	let Ok(chunk) = resolve_chunk_selector(state, clean_path.as_deref(), &mut ignored) else {
+		return String::new();
+	};
+	let focused_paths = compute_focus(state.tree(), std::slice::from_ref(&chunk.path));
+	let rendered = crate::chunk::render::render_state(state, &RenderParams {
+		chunk_path: Some(String::new()),
+		title: display_path.to_owned(),
+		language_tag: Some(state.language.clone()),
+		visible_range: None,
+		render_children_only: true,
+		omit_checksum: false,
+		anchor_style,
+		show_leaf_preview: true,
+		tab_replacement: Some("    ".to_owned()),
+		normalize_indent: Some(true),
+		focused_paths,
+	});
+	format!("\n\nFresh content:\n{rendered}")
 }
 
 fn render_unchanged_response(
@@ -2188,5 +2232,133 @@ mod tests {
 					.find("func (s *Server) Stop()")
 					.expect("stop")
 		);
+	}
+
+	#[test]
+	fn crc_mismatch_error_includes_fresh_chunk_context() {
+		let source = "class Foo {\n    bar() {\n        return 1;\n    }\n}\n";
+		let state = state_for(source, "typescript");
+
+		let result = apply_edits(&state, &EditParams {
+			operations:       vec![EditOperation {
+				op:      ChunkEditOp::Replace,
+				sel:     Some("class_Foo.fn_bar#ZZZZ".to_owned()),
+				crc:     None,
+				region:  None,
+				content: Some("baz() { return 2; }".to_owned()),
+				find:    None,
+			}],
+			default_selector: None,
+			default_crc:      None,
+			anchor_style:     Some(ChunkAnchorStyle::Full),
+			cwd:              ".".to_owned(),
+			file_path:        "test.ts".to_owned(),
+		});
+		let err = result.err().expect("should fail with stale CRC");
+
+		assert!(err.contains("Fresh content:"), "error should include fresh content: {err}");
+		assert!(err.contains("fn_bar"), "error should show the chunk with fresh anchor: {err}");
+		assert!(err.contains("class_Foo"), "error should show ancestor context: {err}");
+	}
+
+	#[test]
+	fn leaf_chunk_supports_body_region_read() {
+		// A small method (under LEAF_THRESHOLD) should still have region boundaries
+		// if it has a body delimiter.
+		let source = "class Foo {\n    bar() {\n        return 1;\n    }\n}\n";
+		let state = state_for(source, "typescript");
+		let fn_bar = state.inner().chunk("class_Foo.fn_bar").expect("fn_bar");
+		assert!(fn_bar.leaf, "fn_bar should be a leaf chunk");
+		assert!(fn_bar.prologue_end_byte.is_some(), "leaf fn_bar should have prologue_end_byte set");
+		assert!(
+			fn_bar.epilogue_start_byte.is_some(),
+			"leaf fn_bar should have epilogue_start_byte set"
+		);
+	}
+
+	#[test]
+	fn nested_body_replace_preserves_correct_indentation() {
+		// Replacing the body of a method nested inside a class.
+		// The method body is at 2 levels of indent in a 4-space file.
+		let source = "class Server {\n    start() {\n        work();\n    }\n}\n";
+		let state = state_for(source, "typescript");
+		let chunk = state
+			.inner()
+			.chunk("class_Server.fn_start")
+			.expect("fn_start");
+
+		let result = apply_single_edit(&state, "test.ts", EditOperation {
+			op:      ChunkEditOp::Replace,
+			sel:     Some(format!("class_Server.fn_start#{}@body", chunk.checksum)),
+			crc:     None,
+			region:  None,
+			content: Some("\treturn 42;\n".to_owned()),
+			find:    None,
+		});
+
+		assert_eq!(
+			result.diff_after, "class Server {\n    start() {\n        return 42;\n    }\n}\n",
+			"nested body replace should produce correct 2-level indent"
+		);
+	}
+
+	#[test]
+	fn body_append_inserts_inside_class() {
+		// Appending to @body of a class should insert inside the body,
+		// not after the closing brace.
+		let source = "class Foo {\n    bar() {\n        return 1;\n    }\n}\n";
+		let state = state_for(source, "typescript");
+
+		let result = apply_single_edit(&state, "test.ts", EditOperation {
+			op:      ChunkEditOp::Append,
+			sel:     Some("class_Foo@body".to_owned()),
+			crc:     None,
+			region:  None,
+			content: Some("baz() {\n\treturn 2;\n}\n".to_owned()),
+			find:    None,
+		});
+
+		assert!(
+			result.diff_after.contains("baz()"),
+			"appended method should appear: {}",
+			result.diff_after
+		);
+		// baz should appear BEFORE the final closing brace
+		let baz_pos = result.diff_after.find("baz()").unwrap();
+		let last_brace = result.diff_after.rfind('}').unwrap();
+		assert!(
+			baz_pos < last_brace,
+			"baz() at {baz_pos} should be before last '}}' at {last_brace}: {}",
+			result.diff_after
+		);
+	}
+
+	#[test]
+	fn body_prepend_inserts_after_opening_brace() {
+		// Prepending to @body of an enum should insert after the opening brace,
+		// not before doc comments.
+		let source = "/** My enum. */\nenum Color {\n    Red,\n    Green,\n    Blue,\n}\n";
+		let state = state_for(source, "typescript");
+
+		let result = apply_single_edit(&state, "test.ts", EditOperation {
+			op:      ChunkEditOp::Prepend,
+			sel:     Some("enum_Color@body".to_owned()),
+			crc:     None,
+			region:  None,
+			content: Some("White,\n".to_owned()),
+			find:    None,
+		});
+
+		assert!(
+			result.diff_after.contains("White"),
+			"prepended variant should appear: {}",
+			result.diff_after
+		);
+		// White should appear AFTER the opening brace, before Red
+		let white_pos = result.diff_after.find("White").unwrap();
+		let red_pos = result.diff_after.find("Red").unwrap();
+		let doc_pos = result.diff_after.find("/** My enum.").unwrap();
+		assert!(white_pos > doc_pos, "White should be after doc comment: {}", result.diff_after);
+		assert!(white_pos < red_pos, "White should be before Red: {}", result.diff_after);
 	}
 }

@@ -19,6 +19,11 @@ Edits files via syntax-aware chunks. Run `read(path="file.ts")` first. The edit 
 - `@epilogue` — the closing delimiter or trailing owned trailer.
 
 Leaf chunks only support `@container`.
+
+**Important:** `append`/`prepend` on `@container` inserts *outside* the chunk (after/before the entire span including comments and closing delimiter). To add children *inside* a class, struct, enum, or function body, use `@body`:
+- `class_Foo@body` + `append` → adds inside the class before `}`
+- `class_Foo@body` + `prepend` → adds inside the class after `{`
+- `class_Foo` + `append` → adds after the entire class (after `}`)
 </regions>
 
 <ops>
