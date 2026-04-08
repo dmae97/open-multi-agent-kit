@@ -1101,24 +1101,63 @@ fn container_has_interior_content(state: &ChunkStateInner, anchor: &ChunkNode) -
 		.any(|line| !line.trim().is_empty())
 }
 
+fn visible_child_chunks<'a>(
+	state: &'a ChunkStateInner,
+	anchor: &'a ChunkNode,
+) -> Vec<&'a ChunkNode> {
+	anchor
+		.children
+		.iter()
+		.filter_map(|child_path| {
+			state
+				.tree
+				.chunks
+				.iter()
+				.find(|chunk| chunk.path == *child_path)
+		})
+		.filter(|child| child.kind != ChunkKind::Chunk)
+		.collect()
+}
+
+fn sibling_gap_has_blank_line(
+	state: &ChunkStateInner,
+	left: &ChunkNode,
+	right: &ChunkNode,
+) -> bool {
+	right.start_line > owned_container_end_line(state, left) + 1
+}
+
 /// Returns true if a container's children should be separated by blank lines.
 /// Root-level children (functions, classes) and containers with non-leaf
 /// children (methods) want blank line spacing. Containers whose children are
 /// all packed declarations (struct fields, enum variants) are tightly packed.
 fn children_want_blank_line_spacing(state: &ChunkStateInner, anchor: &ChunkNode) -> bool {
 	if anchor.path.is_empty() {
+		let root_children = visible_child_chunks(state, anchor);
+		if root_children.len() >= 2 {
+			return root_children
+				.windows(2)
+				.any(|pair| sibling_gap_has_blank_line(state, pair[0], pair[1]));
+		}
 		return true;
 	}
 	if anchor.children.is_empty() {
 		return true;
 	}
-	let all_packed = anchor.children.iter().all(|child_path| {
-		state
-			.tree
-			.chunks
-			.iter()
-			.any(|c| c.path == *child_path && c.kind.traits().packed)
-	});
+
+	let visible_children = visible_child_chunks(state, anchor);
+	if visible_children.is_empty() {
+		return true;
+	}
+	if visible_children.len() >= 2 {
+		return visible_children
+			.windows(2)
+			.any(|pair| sibling_gap_has_blank_line(state, pair[0], pair[1]));
+	}
+
+	let all_packed = visible_children
+		.iter()
+		.all(|child| child.kind.traits().packed);
 	!all_packed
 }
 
@@ -2244,6 +2283,79 @@ mod tests {
 			result
 				.diff_after
 				.contains("func (s *Server) Stop() {}\n\nfunc (s *Server) Restart() {}"),
+			"{}",
+			result.diff_after
+		);
+	}
+
+	#[test]
+	fn packed_toml_table_after_inserts_stay_tightly_packed() {
+		let source = "[dependencies]\nanyhow.workspace = true\nbytes.workspace = \
+		              true\nserde.workspace = true\nsolar-interface.workspace = \
+		              true\nparking_lot.workspace = true\nsolar-sema.workspace = \
+		              true\ntokio.workspace = true\ntracing.workspace = true\n";
+		let state = state_for(source, "toml");
+
+		let result = apply_single_edit(&state, "Cargo.toml", EditOperation {
+			op:      ChunkEditOp::After,
+			sel:     Some("table_dependencies.key_parking_lot_workspace".to_owned()),
+			crc:     None,
+			region:  None,
+			content: Some("rayon.workspace = true\n".to_owned()),
+			find:    None,
+		});
+
+		assert!(
+			result.diff_after.contains(
+				"parking_lot.workspace = true\nrayon.workspace = true\nsolar-sema.workspace = true"
+			),
+			"{}",
+			result.diff_after
+		);
+		assert!(
+			!result
+				.diff_after
+				.contains("parking_lot.workspace = true\n\nrayon.workspace = true"),
+			"{}",
+			result.diff_after
+		);
+		assert!(
+			!result
+				.diff_after
+				.contains("rayon.workspace = true\n\nsolar-sema.workspace = true"),
+			"{}",
+			result.diff_after
+		);
+	}
+
+	#[test]
+	fn packed_top_level_typescript_variables_stay_tightly_packed() {
+		let source = "const a = 1;\nconst b = 2;\nconst c = 3;\n";
+		let state = state_for(source, "typescript");
+
+		let result = apply_single_edit(&state, "test.ts", EditOperation {
+			op:      ChunkEditOp::After,
+			sel:     Some("var_b".to_owned()),
+			crc:     None,
+			region:  None,
+			content: Some("const bb = 22;\n".to_owned()),
+			find:    None,
+		});
+
+		assert!(
+			result
+				.diff_after
+				.contains("const b = 2;\nconst bb = 22;\nconst c = 3;"),
+			"{}",
+			result.diff_after
+		);
+		assert!(
+			!result.diff_after.contains("const b = 2;\n\nconst bb = 22;"),
+			"{}",
+			result.diff_after
+		);
+		assert!(
+			!result.diff_after.contains("const bb = 22;\n\nconst c = 3;"),
 			"{}",
 			result.diff_after
 		);

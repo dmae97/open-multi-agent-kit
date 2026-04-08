@@ -196,8 +196,12 @@ const PACKED_LEAF_TRAITS: ChunkTraits =
 const FUNCTION_TRAITS: ChunkTraits =
 	ChunkTraits { summary: SummaryStyle::Function, ..DEFAULT_TRAITS };
 
-const VARIABLE_TRAITS: ChunkTraits =
-	ChunkTraits { summary: SummaryStyle::Variable, ..DEFAULT_TRAITS };
+const VARIABLE_TRAITS: ChunkTraits = ChunkTraits {
+	packed: true,
+	addressable_leaf: true,
+	summary: SummaryStyle::Variable,
+	..DEFAULT_TRAITS
+};
 
 const IMPORTS_TRAITS: ChunkTraits =
 	ChunkTraits { groupable: true, summary: SummaryStyle::Imports, ..DEFAULT_TRAITS };
@@ -429,7 +433,7 @@ impl ChunkKind {
 			Self::Interpolation => &GROUP_TRAITS,
 			Self::Item => &DEFAULT_TRAITS,
 			Self::Join => &DEFAULT_TRAITS,
-			Self::Key => &DEFAULT_TRAITS,
+			Self::Key => &PACKED_LEAF_TRAITS,
 			Self::KeyScripts => &DEFAULT_TRAITS,
 			Self::Label => &DEFAULT_TRAITS,
 			Self::Let => &DEFAULT_TRAITS,
