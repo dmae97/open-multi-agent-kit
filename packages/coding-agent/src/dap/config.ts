@@ -18,6 +18,7 @@ function normalizeObject(value: unknown): Record<string, unknown> {
 function normalizeAdapterConfig(config: unknown): DapAdapterConfig | null {
 	if (!isRecord(config)) return null;
 	if (typeof config.command !== "string" || config.command.length === 0) return null;
+	const connectMode = config.connectMode === "socket" ? ("socket" as const) : undefined;
 	return {
 		command: config.command,
 		args: normalizeStringArray(config.args),
@@ -26,6 +27,7 @@ function normalizeAdapterConfig(config: unknown): DapAdapterConfig | null {
 		rootMarkers: normalizeStringArray(config.rootMarkers),
 		launchDefaults: normalizeObject(config.launchDefaults),
 		attachDefaults: normalizeObject(config.attachDefaults),
+		...(connectMode ? { connectMode } : {}),
 	};
 }
 
@@ -61,6 +63,7 @@ export function resolveAdapter(adapterName: string, cwd: string): DapResolvedAda
 		rootMarkers: config.rootMarkers ?? [],
 		launchDefaults: config.launchDefaults ?? {},
 		attachDefaults: config.attachDefaults ?? {},
+		connectMode: config.connectMode ?? "stdio",
 	};
 }
 
@@ -73,7 +76,17 @@ export function getAvailableAdapters(cwd: string): DapResolvedAdapter[] {
 function getMatchingAdapters(program: string, cwd: string): DapResolvedAdapter[] {
 	const extension = path.extname(program).toLowerCase();
 	const available = getAvailableAdapters(cwd);
-	if (!extension) return available;
+	if (!extension) {
+		// For extensionless binaries, only consider native debuggers (gdb, lldb-dap)
+		// or adapters that match by root markers. Don't silently fall back to
+		// unrelated adapters like debugpy for a C binary.
+		const nativeDebuggers: ReadonlySet<string> = new Set(EXTENSIONLESS_DEBUGGER_ORDER);
+		return available.filter(
+			adapter =>
+				nativeDebuggers.has(adapter.name) ||
+				(adapter.rootMarkers.length > 0 && hasRootMarkers(cwd, adapter.rootMarkers)),
+		);
+	}
 	const exactMatches = available.filter(adapter => adapter.fileTypes.includes(extension));
 	if (exactMatches.length > 0) {
 		return exactMatches;

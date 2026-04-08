@@ -62,11 +62,6 @@ interface DapSession {
 	configurationDoneSent: boolean;
 }
 
-interface DapEventWaitOptions {
-	timeoutMs: number;
-	signal?: AbortSignal;
-}
-
 export interface DapOutputSnapshot {
 	snapshot: DapSessionSummary;
 	output: string;
@@ -189,16 +184,35 @@ export class DapSessionManager {
 				cwd: options.cwd,
 				args: options.args,
 			};
+			// Subscribe to stop events BEFORE launching so we don't miss
+			// stopOnEntry events that arrive before we start listening.
+			const initialStopPromise = this.#prepareStopOutcome(
+				session,
+				signal,
+				Math.min(timeoutMs, STOP_CAPTURE_TIMEOUT_MS),
+			);
 			// DAP spec: many adapters do not respond to launch until after
 			// configurationDone. Fire launch, complete the config handshake,
 			// then await the launch response.
 			const launchPromise = client.sendRequest("launch", launchArguments, signal, timeoutMs);
+			// Mark handled so a fast error response doesn't become an unhandled
+			// rejection while we await the config handshake. The actual error
+			// still propagates when we await launchPromise below.
+			launchPromise.catch(() => {});
 			await this.#completeConfigurationHandshake(session, signal, timeoutMs);
 			await launchPromise;
-			await this.#captureInitialState(session, {
-				timeoutMs: Math.min(timeoutMs, STOP_CAPTURE_TIMEOUT_MS),
-				signal,
-			});
+			// Try to capture initial stopped state (e.g. stopOnEntry).
+			// Timeout is acceptable — the program may simply be running.
+			try {
+				await raceAbort(initialStopPromise, signal);
+				if (session.status === "stopped") {
+					await this.#fetchTopFrame(session, signal, Math.min(timeoutMs, STOP_CAPTURE_TIMEOUT_MS));
+				}
+			} catch {
+				if (session.initializedSeen && session.status === "launching") {
+					session.status = session.configurationDoneSent ? "running" : "configuring";
+				}
+			}
 			return buildSummary(session);
 		} catch (error) {
 			await this.#disposeSession(session);
@@ -228,13 +242,25 @@ export class DapSessionManager {
 				...(options.port !== undefined ? { port: options.port } : {}),
 				...(options.host ? { host: options.host } : {}),
 			};
+			const initialStopPromise = this.#prepareStopOutcome(
+				session,
+				signal,
+				Math.min(timeoutMs, STOP_CAPTURE_TIMEOUT_MS),
+			);
 			const attachPromise = client.sendRequest("attach", attachArguments, signal, timeoutMs);
+			attachPromise.catch(() => {});
 			await this.#completeConfigurationHandshake(session, signal, timeoutMs);
 			await attachPromise;
-			await this.#captureInitialState(session, {
-				timeoutMs: Math.min(timeoutMs, STOP_CAPTURE_TIMEOUT_MS),
-				signal,
-			});
+			try {
+				await raceAbort(initialStopPromise, signal);
+				if (session.status === "stopped") {
+					await this.#fetchTopFrame(session, signal, Math.min(timeoutMs, STOP_CAPTURE_TIMEOUT_MS));
+				}
+			} catch {
+				if (session.initializedSeen && session.status === "launching") {
+					session.status = session.configurationDoneSent ? "running" : "configuring";
+				}
+			}
 			return buildSummary(session);
 		} catch (error) {
 			await this.#disposeSession(session);
@@ -348,6 +374,12 @@ export class DapSessionManager {
 	async continue(signal?: AbortSignal, timeoutMs: number = 30_000): Promise<DapContinueOutcome> {
 		const session = this.#touchActiveSession();
 		const threadId = await this.#resolveThreadId(session, signal, timeoutMs);
+		// Reset state and subscribe BEFORE sending continue to avoid missing
+		// events that arrive in the same buffer as the response.
+		session.stop = {};
+		session.lastStackFrames = [];
+		session.status = "running";
+		const outcomePromise = this.#prepareStopOutcome(session, signal, timeoutMs);
 		await this.#sendRequestWithConfig<DapContinueResponse>(
 			session,
 			"continue",
@@ -355,9 +387,7 @@ export class DapSessionManager {
 			signal,
 			timeoutMs,
 		);
-		session.status = "running";
-		session.stop = {};
-		return this.#waitForStopOutcome(session, signal, timeoutMs);
+		return this.#awaitStopOutcome(session, outcomePromise, signal, timeoutMs);
 	}
 
 	async pause(signal?: AbortSignal, timeoutMs: number = 30_000): Promise<DapSessionSummary> {
@@ -471,10 +501,17 @@ export class DapSessionManager {
 		timeoutMs: number = 30_000,
 	) {
 		const session = this.#touchActiveSession();
+		// Default to the top stopped frame so callers don't need to pass
+		// frame_id explicitly for the common case.
+		const effectiveFrameId = frameId ?? session.stop.frameId;
 		const response = await this.#sendRequestWithConfig<DapEvaluateResponse>(
 			session,
 			"evaluate",
-			{ expression, context, ...(frameId !== undefined ? { frameId } : {}) } satisfies DapEvaluateArguments,
+			{
+				expression,
+				context,
+				...(effectiveFrameId !== undefined ? { frameId: effectiveFrameId } : {}),
+			} satisfies DapEvaluateArguments,
 			signal,
 			timeoutMs,
 		);
@@ -575,12 +612,12 @@ export class DapSessionManager {
 		client.onEvent("output", body => {
 			truncateOutput(session, (body as DapOutputEventBody | undefined)?.output ?? "");
 		});
-		client.onEvent("initialized", async () => {
+		client.onEvent("initialized", () => {
 			session.initializedSeen = true;
 			session.status = session.configurationDoneSent ? session.status : "configuring";
 		});
-		client.onEvent("stopped", async body => {
-			await this.#handleStoppedEvent(session, body as DapStoppedEventBody);
+		client.onEvent("stopped", body => {
+			this.#handleStoppedEvent(session, body as DapStoppedEventBody);
 		});
 		client.onEvent("continued", body => {
 			const continued = body as { threadId?: number } | undefined;
@@ -651,24 +688,7 @@ export class DapSessionManager {
 		}
 	}
 
-	async #captureInitialState(session: DapSession, options: DapEventWaitOptions): Promise<void> {
-		try {
-			await raceAbort(
-				Promise.race([
-					session.client.waitForEvent("stopped", undefined, options.signal, options.timeoutMs),
-					session.client.waitForEvent("initialized", undefined, options.signal, options.timeoutMs),
-					session.client.waitForEvent("terminated", undefined, options.signal, options.timeoutMs),
-				]),
-				options.signal,
-			);
-		} catch {
-			if (session.initializedSeen) {
-				session.status = session.configurationDoneSent ? "running" : "configuring";
-			}
-		}
-	}
-
-	async #handleStoppedEvent(session: DapSession, stopped: DapStoppedEventBody): Promise<void> {
+	#handleStoppedEvent(session: DapSession, stopped: DapStoppedEventBody): void {
 		session.status = "stopped";
 		session.stop = {
 			threadId: stopped.threadId,
@@ -677,24 +697,6 @@ export class DapSessionManager {
 			text: stopped.text,
 		};
 		session.lastStackFrames = [];
-		if (stopped.threadId === undefined) {
-			return;
-		}
-		try {
-			const response = await session.client.sendRequest<DapStackTraceResponse>(
-				"stackTrace",
-				{ threadId: stopped.threadId, levels: 1 } satisfies DapStackTraceArguments,
-				undefined,
-				5_000,
-			);
-			session.lastStackFrames = response?.stackFrames ?? [];
-			this.#applyTopFrame(session, session.lastStackFrames[0]);
-		} catch (error) {
-			logger.debug("Failed to capture stopped frame", {
-				sessionId: session.id,
-				error: toErrorMessage(error),
-			});
-		}
 	}
 
 	#applyTopFrame(session: DapSession, frame: DapStackFrame | undefined): void {
@@ -706,28 +708,69 @@ export class DapSessionManager {
 		session.stop.column = frame.column;
 	}
 
+	/**
+	 * Fetch the top stack frame from the adapter and apply it to the session's
+	 * stop location. Called outside the event dispatch loop to avoid deadlocking
+	 * the message reader.
+	 */
+	async #fetchTopFrame(session: DapSession, signal?: AbortSignal, timeoutMs: number = 5_000): Promise<void> {
+		if (session.stop.threadId === undefined) return;
+		try {
+			const response = await session.client.sendRequest<DapStackTraceResponse>(
+				"stackTrace",
+				{ threadId: session.stop.threadId, levels: 1 } satisfies DapStackTraceArguments,
+				signal,
+				timeoutMs,
+			);
+			session.lastStackFrames = response?.stackFrames ?? [];
+			this.#applyTopFrame(session, session.lastStackFrames[0]);
+		} catch (error) {
+			logger.debug("Failed to capture stopped frame", {
+				sessionId: session.id,
+				error: toErrorMessage(error),
+			});
+		}
+	}
+
 	async #step(command: "stepIn" | "stepOut" | "next", signal?: AbortSignal, timeoutMs: number = 30_000) {
 		const session = this.#touchActiveSession();
 		const threadId = await this.#resolveThreadId(session, signal, timeoutMs);
-		await this.#sendRequestWithConfig(session, command, { threadId } satisfies DapStepArguments, signal, timeoutMs);
+		// Reset state and subscribe BEFORE sending the step command to avoid
+		// missing events that arrive in the same buffer as the response.
+		session.stop = {};
+		session.lastStackFrames = [];
 		session.status = "running";
-		return this.#waitForStopOutcome(session, signal, timeoutMs);
+		const outcomePromise = this.#prepareStopOutcome(session, signal, timeoutMs);
+		await this.#sendRequestWithConfig(session, command, { threadId } satisfies DapStepArguments, signal, timeoutMs);
+		return this.#awaitStopOutcome(session, outcomePromise, signal, timeoutMs);
 	}
 
-	async #waitForStopOutcome(
+	/**
+	 * Create a promise that resolves when the session stops, terminates, or exits.
+	 * MUST be called before the command that triggers the event.
+	 */
+	#prepareStopOutcome(session: DapSession, signal?: AbortSignal, timeoutMs: number = 30_000): Promise<unknown> {
+		return Promise.race([
+			session.client.waitForEvent("stopped", undefined, signal, timeoutMs),
+			session.client.waitForEvent("terminated", undefined, signal, timeoutMs),
+			session.client.waitForEvent("exited", undefined, signal, timeoutMs),
+		]);
+	}
+
+	/**
+	 * Await a pre-subscribed stop outcome, then fetch the top frame if stopped.
+	 */
+	async #awaitStopOutcome(
 		session: DapSession,
+		outcomePromise: Promise<unknown>,
 		signal?: AbortSignal,
 		timeoutMs: number = 30_000,
 	): Promise<DapContinueOutcome> {
 		try {
-			await raceAbort(
-				Promise.race([
-					session.client.waitForEvent("stopped", undefined, signal, timeoutMs),
-					session.client.waitForEvent("terminated", undefined, signal, timeoutMs),
-					session.client.waitForEvent("exited", undefined, signal, timeoutMs),
-				]),
-				signal,
-			);
+			await raceAbort(outcomePromise, signal);
+			if (session.status === "stopped") {
+				await this.#fetchTopFrame(session, signal, Math.min(timeoutMs, 5_000));
+			}
 			const state =
 				session.status === "stopped" ? "stopped" : session.status === "terminated" ? "terminated" : "running";
 			return { snapshot: buildSummary(session), state, timedOut: false };

@@ -347,6 +347,11 @@ export interface DapAdapterConfig {
 	rootMarkers?: string[];
 	launchDefaults?: Record<string, unknown>;
 	attachDefaults?: Record<string, unknown>;
+	/** "stdio" (default): communicate via stdin/stdout pipes.
+	 *  "socket": adapter uses a network socket instead of stdio.
+	 *  On Linux, connects via a unix domain socket.
+	 *  On macOS, the adapter dials into a local TCP listener (--client-addr). */
+	connectMode?: "stdio" | "socket";
 }
 
 export interface DapResolvedAdapter {
@@ -359,6 +364,7 @@ export interface DapResolvedAdapter {
 	rootMarkers: string[];
 	launchDefaults: Record<string, unknown>;
 	attachDefaults: Record<string, unknown>;
+	connectMode: "stdio" | "socket";
 }
 
 export interface DapBreakpointRecord {

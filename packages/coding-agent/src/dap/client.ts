@@ -17,6 +17,12 @@ interface DapSpawnOptions {
 	cwd: string;
 }
 
+/** Minimal write interface shared by Bun.FileSink and Bun TCP sockets. */
+interface DapWriteSink {
+	write(data: string | Uint8Array): number | Promise<number>;
+	flush(): number | Promise<number> | undefined;
+}
+
 type DapEventHandler = (body: unknown, event: DapEventMessage) => void | Promise<void>;
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
@@ -49,7 +55,7 @@ function parseMessage(
 	};
 }
 
-async function writeMessage(sink: Bun.FileSink, message: DapRequestMessage | DapResponseMessage): Promise<void> {
+async function writeMessage(sink: DapWriteSink, message: DapRequestMessage | DapResponseMessage): Promise<void> {
 	const content = JSON.stringify(message);
 	sink.write(`Content-Length: ${Buffer.byteLength(content, "utf-8")}\r\n\r\n`);
 	sink.write(content);
@@ -65,6 +71,12 @@ export class DapClient {
 	readonly adapter: DapResolvedAdapter;
 	readonly cwd: string;
 	readonly proc: DapClientState["proc"];
+	/** ReadableStream of DAP bytes — from proc.stdout (stdio) or a socket (socket mode). */
+	readonly #readable: ReadableStream<Uint8Array>;
+	/** Write sink — proc.stdin (stdio) or a socket (socket mode). */
+	readonly #writeSink: DapWriteSink;
+	/** Optional socket to close on dispose (socket mode only). */
+	readonly #socket?: { end(): void };
 	#requestSeq = 0;
 	#pendingRequests = new Map<number, DapPendingRequest>();
 	#messageBuffer = Buffer.alloc(0);
@@ -75,13 +87,24 @@ export class DapClient {
 	#eventHandlers = new Map<string, Set<DapEventHandler>>();
 	#anyEventHandlers = new Set<DapEventHandler>();
 
-	constructor(adapter: DapResolvedAdapter, cwd: string, proc: DapClientState["proc"]) {
+	constructor(
+		adapter: DapResolvedAdapter,
+		cwd: string,
+		proc: DapClientState["proc"],
+		options?: { readable?: ReadableStream<Uint8Array>; writeSink?: DapWriteSink; socket?: { end(): void } },
+	) {
 		this.adapter = adapter;
 		this.cwd = cwd;
 		this.proc = proc;
+		this.#readable = options?.readable ?? (proc.stdout as ReadableStream<Uint8Array>);
+		this.#writeSink = options?.writeSink ?? proc.stdin;
+		this.#socket = options?.socket;
 	}
 
 	static async spawn({ adapter, cwd }: DapSpawnOptions): Promise<DapClient> {
+		if (adapter.connectMode === "socket") {
+			return DapClient.#spawnSocket({ adapter, cwd });
+		}
 		// Merge non-interactive env and start in a new session (detached → setsid)
 		// so the adapter process tree has no controlling terminal. Without this,
 		// debuggee children can reach /dev/tty and trigger SIGTTIN, suspending
@@ -100,6 +123,118 @@ export class DapClient {
 		proc.exited.then(() => {
 			client.#handleProcessExit();
 		});
+		void client.#startMessageReader();
+		return client;
+	}
+
+	/**
+	 * Spawn a socket-mode adapter (e.g. dlv).
+	 * Linux: connect to a unix domain socket via --listen=unix:<path>
+	 * macOS/other: the adapter dials into our TCP listener via --client-addr
+	 */
+	static async #spawnSocket({ adapter, cwd }: DapSpawnOptions): Promise<DapClient> {
+		const env = {
+			...Bun.env,
+			...NON_INTERACTIVE_ENV,
+		};
+		const isLinux = process.platform === "linux";
+
+		if (isLinux) {
+			return DapClient.#spawnSocketUnix({ adapter, cwd, env });
+		}
+		return DapClient.#spawnSocketClientAddr({ adapter, cwd, env });
+	}
+
+	/** Linux: spawn adapter with --listen=unix:<path>, then connect to the socket. */
+	static async #spawnSocketUnix({
+		adapter,
+		cwd,
+		env,
+	}: {
+		adapter: DapResolvedAdapter;
+		cwd: string;
+		env: Record<string, string | undefined>;
+	}): Promise<DapClient> {
+		const socketPath = `/tmp/dap-${adapter.name}-${Date.now()}-${Math.random().toString(36).slice(2)}.sock`;
+		const proc = ptree.spawn([adapter.resolvedCommand, ...adapter.args, `--listen=unix:${socketPath}`], {
+			cwd,
+			stdin: "pipe",
+			env,
+			detached: true,
+		});
+
+		// Wait for the socket file to appear (dlv needs to start listening)
+		await waitForCondition(
+			() => {
+				try {
+					Bun.file(socketPath).size;
+					return true;
+				} catch {
+					return false;
+				}
+			},
+			10_000,
+			proc,
+		);
+
+		const { readable, writeSink, socket } = await connectSocket({ unix: socketPath });
+		const client = new DapClient(adapter, cwd, proc, { readable, writeSink, socket });
+		proc.exited.then(() => client.#handleProcessExit());
+		void client.#startMessageReader();
+		return client;
+	}
+
+	/** macOS/other: listen on a random TCP port, spawn adapter with --client-addr, accept connection. */
+	static async #spawnSocketClientAddr({
+		adapter,
+		cwd,
+		env,
+	}: {
+		adapter: DapResolvedAdapter;
+		cwd: string;
+		env: Record<string, string | undefined>;
+	}): Promise<DapClient> {
+		const { promise: connPromise, resolve: resolveConn } = Promise.withResolvers<Bun.Socket<undefined>>();
+
+		// Listen on port 0 (OS picks a free port)
+		const server = Bun.listen({
+			hostname: "127.0.0.1",
+			port: 0,
+			socket: {
+				open(socket) {
+					resolveConn(socket);
+				},
+				data() {},
+				close() {},
+				error() {},
+			},
+		});
+
+		const port = server.port;
+		const proc = ptree.spawn([adapter.resolvedCommand, ...adapter.args, `--client-addr=127.0.0.1:${port}`], {
+			cwd,
+			stdin: "pipe",
+			env,
+			detached: true,
+		});
+
+		// Wait for dlv to connect (with timeout)
+		let rawSocket: Bun.Socket<undefined>;
+		const { promise: timeoutPromise, reject: rejectTimeout } = Promise.withResolvers<never>();
+		const connectTimeout = setTimeout(
+			() => rejectTimeout(new Error(`${adapter.name} did not connect within 10s`)),
+			10_000,
+		);
+		try {
+			rawSocket = await Promise.race([connPromise, timeoutPromise]);
+		} finally {
+			clearTimeout(connectTimeout);
+			server.stop();
+		}
+
+		const { readable, writeSink, socket } = wrapBunSocket(rawSocket);
+		const client = new DapClient(adapter, cwd, proc, { readable, writeSink, socket });
+		proc.exited.then(() => client.#handleProcessExit());
 		void client.#startMessageReader();
 		return client;
 	}
@@ -235,7 +370,7 @@ export class DapClient {
 		});
 		this.#lastActivity = Date.now();
 		try {
-			await writeMessage(this.proc.stdin, request);
+			await writeMessage(this.#writeSink, request);
 		} catch (error) {
 			this.#pendingRequests.delete(requestSeq);
 			cleanup();
@@ -254,13 +389,18 @@ export class DapClient {
 			...(message ? { message } : {}),
 			...(body !== undefined ? { body } : {}),
 		};
-		await writeMessage(this.proc.stdin, response);
+		await writeMessage(this.#writeSink, response);
 	}
 
 	async dispose(): Promise<void> {
 		if (this.#disposed) return;
 		this.#disposed = true;
 		this.#rejectPendingRequests(new Error(`DAP adapter ${this.adapter.name} disposed`));
+		try {
+			this.#socket?.end();
+		} catch {
+			/* socket may already be closed */
+		}
 		try {
 			this.proc.kill();
 		} catch (error) {
@@ -275,7 +415,7 @@ export class DapClient {
 	async #startMessageReader(): Promise<void> {
 		if (this.#isReading) return;
 		this.#isReading = true;
-		const reader = (this.proc.stdout as ReadableStream<Uint8Array>).getReader();
+		const reader = this.#readable.getReader();
 		try {
 			while (true) {
 				const { done, value } = await reader.read();
@@ -378,4 +518,124 @@ export class DapClient {
 		}
 		this.#pendingRequests.clear();
 	}
+}
+
+/** Poll a condition until it returns true, or timeout/process exit. */
+async function waitForCondition(
+	check: () => boolean,
+	timeoutMs: number,
+	proc: { exitCode: number | null },
+): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if (check()) return;
+		if (proc.exitCode !== null) {
+			throw new Error("Adapter process exited before socket was ready");
+		}
+		await Bun.sleep(50);
+	}
+	throw new Error(`Socket not ready after ${timeoutMs}ms`);
+}
+
+interface SocketTransport {
+	readable: ReadableStream<Uint8Array>;
+	writeSink: DapWriteSink;
+	socket: { end(): void };
+}
+
+/** Adapt a Bun.Socket to DapWriteSink. */
+function socketToSink(socket: Bun.Socket<undefined>): DapWriteSink {
+	return {
+		write(data: string | Uint8Array) {
+			return socket.write(data);
+		},
+		flush() {
+			socket.flush();
+		},
+	};
+}
+
+/** Connect to a unix domain socket and return DAP transport streams. */
+async function connectSocket(options: { unix: string }): Promise<SocketTransport> {
+	const { promise, resolve } = Promise.withResolvers<SocketTransport>();
+	let streamController: ReadableStreamDefaultController<Uint8Array>;
+
+	const readable = new ReadableStream<Uint8Array>({
+		start(controller) {
+			streamController = controller;
+		},
+	});
+
+	Bun.connect({
+		unix: options.unix,
+		socket: {
+			open(socket) {
+				resolve({
+					readable,
+					writeSink: socketToSink(socket),
+					socket,
+				});
+			},
+			data(_socket, data) {
+				streamController.enqueue(new Uint8Array(data));
+			},
+			close() {
+				try {
+					streamController.close();
+				} catch {
+					/* already closed */
+				}
+			},
+			error(_socket, err) {
+				try {
+					streamController.error(err);
+				} catch {
+					/* already closed */
+				}
+			},
+		},
+	});
+
+	return promise;
+}
+
+/** Wrap an already-connected Bun.Socket into DAP transport streams. */
+function wrapBunSocket(rawSocket: Bun.Socket<undefined>): SocketTransport {
+	let streamController: ReadableStreamDefaultController<Uint8Array>;
+
+	const readable = new ReadableStream<Uint8Array>({
+		start(controller) {
+			streamController = controller;
+		},
+	});
+
+	// Attach data/close/error handlers to the already-open socket
+	rawSocket.reload({
+		socket: {
+			open() {},
+			data(_socket, data) {
+				streamController.enqueue(new Uint8Array(data));
+			},
+			close() {
+				try {
+					streamController.close();
+				} catch {
+					/* already closed */
+				}
+			},
+			error(_socket, err) {
+				try {
+					streamController.error(err);
+				} catch {
+					/* already closed */
+				}
+			},
+		},
+	});
+
+	return {
+		readable,
+		writeSink: socketToSink(rawSocket),
+		socket: rawSocket,
+	};
 }

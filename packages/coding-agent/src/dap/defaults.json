@@ -61,6 +61,7 @@
 	"dlv": {
 		"command": "dlv",
 		"args": ["dap"],
+		"connectMode": "socket",
 		"languages": ["go"],
 		"fileTypes": [".go"],
 		"rootMarkers": ["go.mod", "go.sum"],
