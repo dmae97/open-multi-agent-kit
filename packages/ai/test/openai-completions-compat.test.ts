@@ -281,7 +281,6 @@ describe("openai-completions compatibility", () => {
 	});
 });
 
-
 describe("kimi model detection via detectCompat", () => {
 	function kimiOpenCodeModel(id: string): Model<"openai-completions"> {
 		return {
