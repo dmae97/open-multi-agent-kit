@@ -62,3 +62,9 @@ _Full diff too large ({{len files}} files). Showing first ~{{linesPerFile}} line
 {{rawDiff}}
 </diff>
 {{/if}}
+
+{{#if additionalInstructions}}
+### Additional Instructions
+
+{{additionalInstructions}}
+{{/if}}
