@@ -38,7 +38,7 @@ function getHeaderValue(headers: unknown, key: string): string | undefined {
 async function discoverCopilotModels(
 	payload: unknown,
 	apiKey = "copilot-test-key",
-	expectedBaseUrl = "https://api.individual.githubcopilot.com",
+	expectedBaseUrl = "https://api.githubcopilot.com",
 ) {
 	const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
 		const url = typeof input === "string" ? input : input.toString();
@@ -60,12 +60,11 @@ async function discoverCopilotModels(
 }
 
 describe("github copilot model limits mapping", () => {
-	it("uses proxy endpoint from token for discovery base URL", async () => {
-		const enterpriseToken = "tid=2;proxy-ep=proxy.enterprise.githubcopilot.com;exp=9999999999";
+	it("uses configured base URL for discovery", async () => {
 		const { fetchMock } = await discoverCopilotModels(
 			{ data: [] },
-			enterpriseToken,
-			"https://api.enterprise.githubcopilot.com",
+			"copilot-test-key",
+			"https://api.githubcopilot.com",
 		);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});

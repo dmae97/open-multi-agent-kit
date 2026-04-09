@@ -40,10 +40,10 @@ function createUnauthorizedResponse(): Response {
 	});
 }
 
-const enterpriseToken = "tid=2;proxy-ep=proxy.enterprise.githubcopilot.com;exp=9999999999";
+const testToken = "ghu_test_copilot_token";
 
 describe("GitHub Copilot OpenAI transport base URL", () => {
-	it("uses token-derived endpoint for chat completions", async () => {
+	it("uses model baseUrl for chat completions", async () => {
 		const requestedUrls: string[] = [];
 		global.fetch = vi.fn(async (input: string | URL | Request) => {
 			requestedUrls.push(getRequestUrl(input));
@@ -51,13 +51,13 @@ describe("GitHub Copilot OpenAI transport base URL", () => {
 		}) as unknown as typeof fetch;
 
 		const model = getBundledModel("github-copilot", "gpt-4o") as Model<"openai-completions">;
-		const result = await streamOpenAICompletions(model, testContext, { apiKey: enterpriseToken }).result();
+		const result = await streamOpenAICompletions(model, testContext, { apiKey: testToken }).result();
 
 		expect(result.stopReason).toBe("error");
-		expect(requestedUrls[0]).toBe("https://api.enterprise.githubcopilot.com/chat/completions");
+		expect(requestedUrls[0]).toBe("https://api.githubcopilot.com/chat/completions");
 	});
 
-	it("uses token-derived endpoint for responses API", async () => {
+	it("uses model baseUrl for responses API", async () => {
 		const requestedUrls: string[] = [];
 		global.fetch = vi.fn(async (input: string | URL | Request) => {
 			requestedUrls.push(getRequestUrl(input));
@@ -65,10 +65,10 @@ describe("GitHub Copilot OpenAI transport base URL", () => {
 		}) as unknown as typeof fetch;
 
 		const model = getBundledModel("github-copilot", "gpt-5-mini") as Model<"openai-responses">;
-		const result = await streamOpenAIResponses(model, testContext, { apiKey: enterpriseToken }).result();
+		const result = await streamOpenAIResponses(model, testContext, { apiKey: testToken }).result();
 
 		expect(result.stopReason).toBe("error");
-		expect(requestedUrls[0]).toBe("https://api.enterprise.githubcopilot.com/responses");
+		expect(requestedUrls[0]).toBe("https://api.githubcopilot.com/responses");
 	});
 
 	it("forwards initiatorOverride to chat completions requests", async () => {
@@ -80,7 +80,7 @@ describe("GitHub Copilot OpenAI transport base URL", () => {
 
 		const model = getBundledModel("github-copilot", "gpt-4o") as Model<"openai-completions">;
 		const result = await streamOpenAICompletions(model, testContext, {
-			apiKey: enterpriseToken,
+			apiKey: testToken,
 			initiatorOverride: "agent",
 		}).result();
 
@@ -97,7 +97,7 @@ describe("GitHub Copilot OpenAI transport base URL", () => {
 
 		const model = getBundledModel("github-copilot", "gpt-5-mini") as Model<"openai-responses">;
 		const result = await streamOpenAIResponses(model, testContext, {
-			apiKey: enterpriseToken,
+			apiKey: testToken,
 			initiatorOverride: "agent",
 		}).result();
 

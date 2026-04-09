@@ -16,10 +16,7 @@ import type {
 import { isRecord, toBoolean, toNumber } from "../utils";
 
 const COPILOT_HEADERS = {
-	"User-Agent": "GitHubCopilotChat/0.35.0",
-	"Editor-Version": "vscode/1.107.0",
-	"Editor-Plugin-Version": "copilot-chat/0.35.0",
-	"Copilot-Integration-Id": "vscode-chat",
+	"User-Agent": "opencode/1.3.15",
 } as const;
 
 type CopilotQuotaDetail = {

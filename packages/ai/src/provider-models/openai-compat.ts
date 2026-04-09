@@ -7,7 +7,6 @@ import {
 	type OpenAICompatibleModelMapperContext,
 	type OpenAICompatibleModelRecord,
 } from "../utils/discovery/openai-compatible";
-import { getGitHubCopilotBaseUrl } from "../utils/oauth/github-copilot";
 
 const MODELS_DEV_URL = "https://models.dev/api.json";
 const ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1";
@@ -1443,10 +1442,7 @@ export interface GithubCopilotModelManagerConfig {
 	baseUrl?: string;
 }
 const GITHUB_COPILOT_HEADERS: Record<string, string> = {
-	"User-Agent": "GitHubCopilotChat/0.35.0",
-	"Editor-Version": "vscode/1.107.0",
-	"Editor-Plugin-Version": "copilot-chat/0.35.0",
-	"Copilot-Integration-Id": "vscode-chat",
+	"User-Agent": "opencode/1.3.15",
 };
 
 function inferCopilotApi(modelId: string): Api {
@@ -1482,11 +1478,7 @@ function extractCopilotLimits(entry: OpenAICompatibleModelRecord): {
 
 export function githubCopilotModelManagerOptions(config?: GithubCopilotModelManagerConfig): ModelManagerOptions<Api> {
 	const apiKey = config?.apiKey;
-	const configuredBaseUrl = config?.baseUrl ?? "https://api.individual.githubcopilot.com";
-	const baseUrl =
-		apiKey?.includes("proxy-ep=") && configuredBaseUrl.includes("githubcopilot.com")
-			? getGitHubCopilotBaseUrl(apiKey)
-			: configuredBaseUrl;
+	const baseUrl = config?.baseUrl ?? "https://api.githubcopilot.com";
 	const references = createBundledReferenceMap<Api>("github-copilot");
 	const globalReferences = createGlobalReferenceMap();
 	return {
@@ -1783,10 +1775,7 @@ function bedrockCrossRegionId(id: string): string {
 }
 
 const COPILOT_HEADERS = {
-	"User-Agent": "GitHubCopilotChat/0.35.0",
-	"Editor-Version": "vscode/1.107.0",
-	"Editor-Plugin-Version": "copilot-chat/0.35.0",
-	"Copilot-Integration-Id": "vscode-chat",
+	"User-Agent": "opencode/1.3.15",
 } as const;
 interface ApiResolutionRule {
 	matches: (modelId: string, raw: ModelsDevModel) => boolean;
@@ -1832,7 +1821,7 @@ function createOpenCodeApiResolution(basePath: string): {
 const OPENCODE_ZEN_API_RESOLUTION = createOpenCodeApiResolution("https://opencode.ai/zen");
 const OPENCODE_GO_API_RESOLUTION = createOpenCodeApiResolution("https://opencode.ai/zen/go");
 
-const COPILOT_BASE_URL = "https://api.individual.githubcopilot.com";
+const COPILOT_BASE_URL = "https://api.githubcopilot.com";
 
 const COPILOT_DEFAULT_RESOLUTION = {
 	api: "openai-completions",

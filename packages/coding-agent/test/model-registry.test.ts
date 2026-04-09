@@ -1012,14 +1012,14 @@ describe("ModelRegistry", () => {
 			await authStorage.set("github-copilot", [
 				{
 					type: "oauth",
-					access: "tid=1;proxy-ep=proxy.individual.githubcopilot.com;exp=9999999999",
-					refresh: "refresh-individual",
+					access: "ghu_individual_token_123",
+					refresh: "ghu_individual_token_123",
 					expires: Date.now() + 60_000,
 				},
 				{
 					type: "oauth",
-					access: "tid=2;proxy-ep=proxy.enterprise.githubcopilot.com;exp=9999999999",
-					refresh: "refresh-enterprise",
+					access: "ghu_enterprise_token_456",
+					refresh: "ghu_enterprise_token_456",
 					expires: Date.now() + 60_000,
 				},
 			]);
@@ -1031,9 +1031,9 @@ describe("ModelRegistry", () => {
 
 			const initialBaseUrl = model.baseUrl;
 			const firstApiKey = await registry.getApiKey(model);
-			expect(firstApiKey).toContain("proxy.individual.githubcopilot.com");
+			expect(firstApiKey).toBe("ghu_individual_token_123");
 			const secondApiKey = await registry.getApiKey(model);
-			expect(secondApiKey).toContain("proxy.enterprise.githubcopilot.com");
+			expect(secondApiKey).toBe("ghu_enterprise_token_456");
 			expect(model.baseUrl).toBe(initialBaseUrl);
 		});
 	});
@@ -1051,8 +1051,8 @@ describe("ModelRegistry", () => {
 			await authStorage.set("github-copilot", [
 				{
 					type: "oauth",
-					access: "tid=1;proxy-ep=proxy.individual.githubcopilot.com;exp=9999999999",
-					refresh: "refresh-individual",
+					access: "ghu_test_token_for_disabled",
+					refresh: "ghu_test_token_for_disabled",
 					expires: Date.now() + 60_000,
 				},
 			]);

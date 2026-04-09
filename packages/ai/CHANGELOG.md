@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+- Replaced GitHub Copilot authentication from VSCode extension impersonation to the opencode OAuth flow, eliminating TOS concerns. Existing users will need to re-authenticate once with `/login github-copilot`.
+- Simplified Copilot token handling: GitHub OAuth token is used directly for all API requests (no JWT exchange or refresh cycle).
+- Changed GitHub Copilot API base URL from `api.individual.githubcopilot.com` to `api.githubcopilot.com`.
+
+### Removed
+- Removed Copilot JWT proxy-ep base URL resolution (no longer needed with opencode auth).
+
 ## [14.0.0] - 2026-04-08
 ### Breaking Changes
 
