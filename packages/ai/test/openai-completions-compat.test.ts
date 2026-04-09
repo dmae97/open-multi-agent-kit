@@ -280,3 +280,90 @@ describe("openai-completions compatibility", () => {
 		expect(assistantObject ? Reflect.get(assistantObject, "reasoning_content") : undefined).toBeUndefined();
 	});
 });
+
+describe("kimi model detection via detectCompat", () => {
+	function kimiOpenCodeModel(id: string): Model<"openai-completions"> {
+		return {
+			...getBundledModel("openai", "gpt-4o-mini"),
+			api: "openai-completions",
+			provider: "opencode-go",
+			baseUrl: "https://opencode.ai/zen/go/v1",
+			id,
+			reasoning: true,
+		};
+	}
+
+	it("requires reasoning_content for tool calls on kimi-k2.5 (opencode-go)", () => {
+		const compat = detectCompat(kimiOpenCodeModel("kimi-k2.5"));
+		expect(compat.requiresReasoningContentForToolCalls).toBe(true);
+		expect(compat.requiresAssistantContentForToolCalls).toBe(true);
+	});
+
+	it("injects reasoning_content placeholder when assistant with tool calls has no reasoning field", () => {
+		const model = kimiOpenCodeModel("kimi-k2.5");
+		const compat = detectCompat(model);
+		const toolCallMessage: AssistantMessage = {
+			role: "assistant",
+			content: [
+				// Thinking returned as plain text (as kimi-k2.5 on opencode-go does)
+				{ type: "text", text: "Let me research this." },
+				{
+					type: "toolCall",
+					id: "call_abc123",
+					name: "web_search",
+					arguments: { query: "beads gastownhall" },
+				},
+			],
+			api: model.api,
+			provider: model.provider,
+			model: model.id,
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "toolUse",
+			timestamp: Date.now(),
+		};
+		const messages = convertMessages(model, { messages: [toolCallMessage] }, compat);
+		const assistant = messages.find(m => m.role === "assistant");
+		expect(assistant).toBeDefined();
+		const reasoningContent = Reflect.get(assistant as object, "reasoning_content");
+		expect(reasoningContent).toBeDefined();
+		expect(typeof reasoningContent).toBe("string");
+		expect((reasoningContent as string).length).toBeGreaterThan(0);
+	});
+
+	it("does not inject reasoning_content when model is not kimi", () => {
+		const model: Model<"openai-completions"> = {
+			...getBundledModel("openai", "gpt-4o-mini"),
+			api: "openai-completions",
+			provider: "opencode-go",
+			baseUrl: "https://opencode.ai/zen/go/v1",
+			id: "some-other-model",
+		};
+		const compat = detectCompat(model);
+		expect(compat.requiresReasoningContentForToolCalls).toBe(false);
+	});
+
+	it.each(["kimi-k2.5", "kimi-k1.5", "kimi-k2-5"])("matches kimi model id: %s", id => {
+		const compat = detectCompat(kimiOpenCodeModel(id));
+		expect(compat.requiresReasoningContentForToolCalls).toBe(true);
+	});
+
+	it("still matches moonshotai/kimi via openrouter", () => {
+		const model: Model<"openai-completions"> = {
+			...getBundledModel("openai", "gpt-4o-mini"),
+			api: "openai-completions",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			id: "moonshotai/kimi-k2-5",
+			reasoning: true,
+		};
+		const compat = detectCompat(model);
+		expect(compat.requiresReasoningContentForToolCalls).toBe(true);
+	});
+});
