@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed Linux x64 native addon builds to keep `baseline`/`modern` artifacts below `x86-64-v4`, eliminating `@`-mention `fuzzyFind()` crashes caused by unsafe published ISA levels ([#601](https://github.com/can1357/oh-my-pi/issues/601))
+
+
 ## [14.0.2] - 2026-04-09
 
 ### Added
