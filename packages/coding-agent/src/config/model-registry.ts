@@ -971,7 +971,7 @@ export class ModelRegistry {
 		if (!configuredProviders.has("ollama")) {
 			this.#discoverableProviders.push({
 				provider: "ollama",
-				api: "openai-completions",
+				api: "openai-responses",
 				baseUrl: Bun.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434",
 				discovery: { type: "ollama" },
 				optional: true,
