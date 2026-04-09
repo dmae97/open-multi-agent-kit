@@ -1043,6 +1043,48 @@ describe("ModelRegistry", () => {
 			expect(secondParsed.enterpriseUrl).toBe("ghe.example.com");
 			expect(model.baseUrl).toBe(initialBaseUrl);
 		});
+
+		test("refreshProvider uses enterprise Copilot discovery host for peeked credentials", async () => {
+			await authStorage.set("github-copilot", [
+				{
+					type: "oauth",
+					access: "ghu_enterprise_token_456",
+					refresh: "ghu_enterprise_token_456",
+					expires: Date.now() + 60_000,
+					enterpriseUrl: "ghe.example.com",
+				},
+			]);
+
+			const requestedUrls: string[] = [];
+			using _hook = hookFetch((input: string | URL | Request, init?: RequestInit) => {
+				const url = input instanceof Request ? input.url : String(input);
+				requestedUrls.push(url);
+				if (url === "https://copilot-api.ghe.example.com/models") {
+					const authHeader =
+						input instanceof Request
+							? input.headers.get("Authorization")
+							: new Headers(init?.headers).get("Authorization");
+					expect(authHeader).toBe("Bearer ghu_enterprise_token_456");
+					return new Response(
+						JSON.stringify({
+							data: [
+								{
+									id: "gpt-5-mini",
+									name: "GPT-5 mini",
+								},
+							],
+						}),
+						{ status: 200, headers: { "Content-Type": "application/json" } },
+					);
+				}
+				throw new Error(`Unexpected URL: ${url}`);
+			});
+
+			const registry = new ModelRegistry(authStorage, modelsJsonPath);
+			await registry.refreshProvider("github-copilot", "online");
+			expect(requestedUrls).toContain("https://copilot-api.ghe.example.com/models");
+			expect(requestedUrls).not.toContain("https://api.githubcopilot.com/models");
+		});
 	});
 
 	describe("disabled provider filtering", () => {
