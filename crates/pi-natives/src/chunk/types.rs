@@ -210,30 +210,33 @@ impl ChunkAnchorStyle {
 		}
 	}
 
-	fn render_i(&self, marker: &str, indent: &str, name: &str, crc: &str) -> String {
+	fn render_i(&self, marker: (&str, &str), indent: &str, name: &str, crc: &str) -> String {
 		fn extract_kind(name: &str) -> &str {
 			name.find('_').map_or_else(|| name, |index| &name[..index])
 		}
+		let (open, close) = marker;
 		match self {
-			Self::Full => format!("{indent}{marker}{name}#{crc}"),
-			Self::Kind => format!("{indent}{marker}{kind}#{crc}", kind = extract_kind(name)),
-			Self::Bare => format!("{indent}{marker}#{crc}"),
-			Self::FullOmit => format!("{indent}{marker}{name}"),
-			Self::KindOmit => format!("{indent}{marker}{kind}", kind = extract_kind(name)),
+			Self::Full => format!("{indent}{open}{name}#{crc}{close}"),
+			Self::Kind => {
+				format!("{indent}{open}{kind}#{crc}{close}", kind = extract_kind(name))
+			},
+			Self::Bare => format!("{indent}{open}#{crc}{close}"),
+			Self::FullOmit => format!("{indent}{open}{name}{close}"),
+			Self::KindOmit => format!("{indent}{open}{kind}{close}", kind = extract_kind(name)),
 			Self::None => String::new(),
 		}
 	}
 
-	/// Render an opening anchor tag: `+++ name#crc`.
+	/// Render an opening anchor tag: `[< name#crc ]`.
 	/// Returns empty string for `None` style.
 	pub fn render(&self, indent: &str, name: &str, crc: &str) -> String {
-		self.render_i("+++", indent, name, crc)
+		self.render_i(("[<", ">]"), indent, name, crc)
 	}
 
-	/// Render a closing anchor tag: `--- /name#crc`.
+	/// Render a closing anchor tag: `[</ name#crc ]`.
 	/// Returns empty string for `None` style.
 	pub fn render_close(&self, indent: &str, name: &str, crc: &str) -> String {
-		self.render_i("---", indent, name, crc)
+		self.render_i(("[</", ">]"), indent, name, crc)
 	}
 }
 
