@@ -39,12 +39,13 @@ async function discoverCopilotModels(
 	payload: unknown,
 	apiKey = "copilot-test-key",
 	expectedBaseUrl = "https://api.githubcopilot.com",
+	expectedAuthorizationToken = apiKey,
 ) {
 	const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
 		const url = typeof input === "string" ? input : input.toString();
 		expect(url).toBe(`${expectedBaseUrl}/models`);
 		expect(init?.method).toBe("GET");
-		expect(getHeaderValue(init?.headers, "Authorization")).toBe(`Bearer ${apiKey}`);
+		expect(getHeaderValue(init?.headers, "Authorization")).toBe(`Bearer ${expectedAuthorizationToken}`);
 		return new Response(JSON.stringify(payload), {
 			status: 200,
 			headers: { "Content-Type": "application/json" },
@@ -68,6 +69,21 @@ describe("github copilot model limits mapping", () => {
 		);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
+
+	it("unwraps structured OAuth keys for discovery and routes enterprise discovery to the enterprise host", async () => {
+		const structuredApiKey = JSON.stringify({
+			token: "ghu_test_copilot_token",
+			enterpriseUrl: "ghe.example.com",
+		});
+		const { fetchMock } = await discoverCopilotModels(
+			{ data: [] },
+			structuredApiKey,
+			"https://copilot-api.ghe.example.com",
+			"ghu_test_copilot_token",
+		);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
 	it("uses capabilities.limits max_context_window_tokens as context window when context_length is absent", async () => {
 		const { models, fetchMock } = await discoverCopilotModels({
 			data: [

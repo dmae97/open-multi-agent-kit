@@ -7,6 +7,9 @@
 - Simplified Copilot token handling: GitHub OAuth token is used directly for all API requests (no JWT exchange or refresh cycle).
 - Changed GitHub Copilot API base URL from `api.individual.githubcopilot.com` to `api.githubcopilot.com`.
 
+### Fixed
+- Fixed GitHub Copilot `/models` discovery to unwrap structured OAuth credentials before sending the bearer token, preserving dynamic catalog refresh for OAuth-backed callers.
+
 ### Removed
 - Removed Copilot JWT proxy-ep base URL resolution (no longer needed with opencode auth).
 

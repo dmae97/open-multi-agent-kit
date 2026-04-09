@@ -7,6 +7,7 @@ import {
 	type OpenAICompatibleModelMapperContext,
 	type OpenAICompatibleModelRecord,
 } from "../utils/discovery/openai-compatible";
+import { getGitHubCopilotBaseUrl, parseGitHubCopilotApiKey } from "../utils/oauth/github-copilot";
 
 const MODELS_DEV_URL = "https://models.dev/api.json";
 const ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1";
@@ -1477,8 +1478,14 @@ function extractCopilotLimits(entry: OpenAICompatibleModelRecord): {
 }
 
 export function githubCopilotModelManagerOptions(config?: GithubCopilotModelManagerConfig): ModelManagerOptions<Api> {
-	const apiKey = config?.apiKey;
+	const rawApiKey = config?.apiKey;
 	const baseUrl = config?.baseUrl ?? "https://api.githubcopilot.com";
+	const parsedApiKey = rawApiKey ? parseGitHubCopilotApiKey(rawApiKey) : undefined;
+	const apiKey = parsedApiKey?.accessToken;
+	const resolvedBaseUrl =
+		parsedApiKey?.enterpriseUrl && baseUrl.includes("githubcopilot.com")
+			? getGitHubCopilotBaseUrl(parsedApiKey.enterpriseUrl)
+			: baseUrl;
 	const references = createBundledReferenceMap<Api>("github-copilot");
 	const globalReferences = createGlobalReferenceMap();
 	return {
@@ -1488,7 +1495,7 @@ export function githubCopilotModelManagerOptions(config?: GithubCopilotModelMana
 				fetchOpenAICompatibleModels<Api>({
 					api: "openai-completions",
 					provider: "github-copilot",
-					baseUrl,
+					baseUrl: resolvedBaseUrl,
 					apiKey,
 					headers: GITHUB_COPILOT_HEADERS,
 					mapModel: (
