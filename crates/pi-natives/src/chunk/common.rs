@@ -875,6 +875,7 @@ pub fn is_root_wrapper_kind(kind: &str) -> bool {
 			| "source"
 			| "source_code"
 			| "source_file"
+			| "stream"
 			| "template"
 			| "document"
 			| "config_file"

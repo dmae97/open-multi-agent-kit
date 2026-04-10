@@ -22,6 +22,16 @@ impl LangClassifier for DataFormatsClassifier {
 	) -> Option<RawChunkCandidate<'t>> {
 		None
 	}
+
+	fn preserve_children(
+		&self,
+		parent: &RawChunkCandidate<'_>,
+		_children: &[RawChunkCandidate<'_>],
+	) -> bool {
+		// YAML keys with container values should always expose sub-chunks
+		// so that deeply nested keys are individually addressable.
+		parent.force_recurse && parent.kind == ChunkKind::Key
+	}
 }
 
 fn classify_data_node<'t>(
@@ -43,13 +53,15 @@ fn classify_data_node<'t>(
 		},
 		"block_mapping_pair" | "flow_pair" => {
 			let name = extract_yaml_key(node, source).unwrap_or_else(|| "anonymous".to_string());
-			Some(make_kind_chunk(
-				node,
-				ChunkKind::Key,
-				Some(name),
-				source,
-				recurse_value_container(node),
-			))
+			let recurse = recurse_value_container(node);
+			let mut candidate = make_kind_chunk(node, ChunkKind::Key, Some(name), source, recurse);
+			// YAML structure is inherently hierarchical. Keys whose value is a
+			// container (mapping/sequence) should always produce sub-chunks so
+			// that deeply nested keys are individually addressable.
+			if candidate.recurse.is_some() {
+				candidate.force_recurse = true;
+			}
+			Some(candidate)
 		},
 		// TOML tables
 		"table" => Some(container_candidate(

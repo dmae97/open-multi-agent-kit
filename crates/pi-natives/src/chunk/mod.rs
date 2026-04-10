@@ -456,6 +456,22 @@ fn flatten_root_children<'tree>(
 	{
 		return flatten_root_children(children[0], classifier);
 	}
+	// When a root wrapper's only non-trivia child is another wrapper,
+	// flatten through it. Handles YAML's `document` containing a leading
+	// comment alongside a single `block_node`.
+	if children.len() > 1 {
+		let non_trivia: Vec<_> = children
+			.iter()
+			.filter(|c| !is_trivia(c.kind()) && !classifier.is_trivia(c.kind()))
+			.collect();
+		if non_trivia.len() == 1
+			&& is_root_wrapper_kind(non_trivia[0].kind())
+			&& !classifier.preserve_root_wrapper(non_trivia[0].kind())
+			&& is_root_wrapper_kind(container.kind())
+		{
+			return flatten_root_children(*non_trivia[0], classifier);
+		}
+	}
 	children
 }
 
@@ -974,13 +990,12 @@ mod tests {
 
 	#[test]
 	fn yaml_nested_keys_produce_sub_chunks() {
-		// Need > 8 lines (LEAF_THRESHOLD) for the recursion heuristic to kick in.
-		let source = "database:\n  host: localhost\n  port: 5432\n  name: mydb\n  credentials:\n    \
-		              username: admin\n    password: secret\n    token: abc123\n  pool:\n    min: \
-		              5\n    max: 20\n";
+		// YAML keys with container values always recurse (force_recurse=true),
+		// so even small mappings produce sub-chunks.
+		let source = "database:\n  host: localhost\n  port: 5432\n  credentials:\n    username: \
+		              admin\n    password: secret\n";
 		let tree = build_chunk_tree(source, "yaml").expect("yaml tree should build");
 
-		// Top-level key should exist.
 		assert!(
 			tree.root_children.contains(&"key_database".to_string()),
 			"expected key_database, got {:?}",
@@ -992,12 +1007,7 @@ mod tests {
 			.iter()
 			.find(|c| c.path == "key_database")
 			.expect("key_database");
-		// Should have children for nested keys.
-		assert!(
-			!db.leaf,
-			"key_database should recurse into children, got leaf=true. children: {:?}",
-			db.children
-		);
+		assert!(!db.leaf, "key_database should have children: {:?}", db.children);
 		assert!(
 			db.children.iter().any(|c| c.contains("key_host")),
 			"expected key_host child, got {:?}",
@@ -1007,6 +1017,19 @@ mod tests {
 			db.children.iter().any(|c| c.contains("key_credentials")),
 			"expected key_credentials child, got {:?}",
 			db.children
+		);
+
+		// 3-level deep: credentials should also have sub-chunks.
+		let creds = tree
+			.chunks
+			.iter()
+			.find(|c| c.path == "key_database.key_credentials")
+			.expect("key_credentials");
+		assert!(!creds.leaf, "key_credentials should have children: {:?}", creds.children);
+		assert!(
+			creds.children.iter().any(|c| c.contains("key_username")),
+			"expected key_username child of credentials, got {:?}",
+			creds.children
 		);
 	}
 
@@ -1033,6 +1056,38 @@ mod tests {
 		let body = &source[body_s..body_e];
 		assert!(body.contains("host"), "@body should contain nested keys, got {body:?}");
 		assert!(!body.contains("server"), "@body should not contain the key header, got {body:?}");
+	}
+
+	#[test]
+	fn yaml_leading_comment_does_not_prevent_sub_chunks() {
+		let source = "# Global settings\napp:\n  name: my-app\n  debug: true\n  features:\n    - \
+		              auth\n    - logging\n";
+		let tree = build_chunk_tree(source, "yaml").expect("yaml tree should build");
+
+		// The leading comment becomes a preamble; key_app is a separate chunk.
+		let app = tree
+			.chunks
+			.iter()
+			.find(|c| c.path == "key_app")
+			.expect("key_app");
+
+		// Sub-keys should be individually addressable.
+		assert!(!app.leaf, "key_app should have children: {:?}", app.children);
+		assert!(
+			app.children.iter().any(|c| c.contains("key_name")),
+			"expected key_name child, got {:?}",
+			app.children
+		);
+		assert!(
+			app.children.iter().any(|c| c.contains("key_debug")),
+			"expected key_debug child, got {:?}",
+			app.children
+		);
+		assert!(
+			app.children.iter().any(|c| c.contains("key_features")),
+			"expected key_features child, got {:?}",
+			app.children
+		);
 	}
 
 	#[test]
