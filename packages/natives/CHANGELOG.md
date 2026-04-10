@@ -2,10 +2,13 @@
 
 ## [Unreleased]
 
-### Fixed
+## [14.0.4] - 2026-04-10
 
-- Fixed Linux x64 native addon builds to keep `baseline`/`modern` artifacts below `x86-64-v4`, eliminating `@`-mention `fuzzyFind()` crashes caused by unsafe published ISA levels ([#601](https://github.com/can1357/oh-my-pi/issues/601))
+### Added
 
+- Added `normalizeIndent` option to `EditParams` to control indentation normalization for response rendering and inserted content
+- Added `hasConflicts()` method to detect unresolved merge conflicts in parsed files
+- Added `conflictCount()` method to count unresolved merge conflicts in the chunk tree
 
 ## [14.0.2] - 2026-04-09
 
