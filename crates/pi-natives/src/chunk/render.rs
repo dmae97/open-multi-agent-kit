@@ -654,6 +654,35 @@ fn emit_line_gap(ctx: &mut RenderCtx<'_>, from: u32, to: u32) {
 	}
 }
 
+/// Emit a truncation marker when visible_range clips a chunk.
+/// `above` = true for top clip, false for bottom clip.
+fn emit_range_clip_marker(
+	ctx: &mut RenderCtx<'_>,
+	chunk: &ChunkNode,
+	span: &VisibleSpan,
+	above: bool,
+) {
+	if ctx.visible_range.is_none() {
+		return;
+	}
+	let (hidden, direction, boundary_line) = if above {
+		let n = span.start.saturating_sub(chunk.start_line);
+		(n, "above", chunk.start_line)
+	} else {
+		let n = chunk.end_line.saturating_sub(span.end);
+		(n, "below", chunk.end_line)
+	};
+	if hidden == 0 {
+		return;
+	}
+	let indent =
+		chunk_body_anchor_indent(ctx.source_lines, chunk, ctx.tab_replacement, ctx.normalize_indent);
+	push_meta(
+		ctx,
+		format!("{indent}... {hidden} lines {direction} (chunk continues to L{boundary_line})"),
+	);
+}
+
 fn virtual_render_lines(
 	content: &str,
 	tab_replacement: &str,
@@ -775,7 +804,9 @@ fn emit_chunk_subtree(
 		if ctx.show_leaf_preview
 			&& let Some(span) = span
 		{
+			emit_range_clip_marker(ctx, chunk, &span, true);
 			emit_leaf_body(ctx, chunk, span);
+			emit_range_clip_marker(ctx, chunk, &span, false);
 		}
 		// Emit inline diff hunks even when children are filtered out by
 		// focus (the chunk is "effectively leaf" but may own hunks).
@@ -793,6 +824,8 @@ fn emit_chunk_subtree(
 		== Some(ChunkFocusMode::Container);
 
 	if let Some(span) = span {
+		// Top clip marker for container chunks
+		emit_range_clip_marker(ctx, chunk, &span, true);
 		let mut cursor = chunk.start_line;
 		for child in children {
 			let gap_end = child.start_line.saturating_sub(1);
@@ -814,6 +847,8 @@ fn emit_chunk_subtree(
 		if cursor <= span.end && !is_container {
 			emit_line_gap(ctx, cursor, span.end);
 		}
+		// Bottom clip marker for container chunks
+		emit_range_clip_marker(ctx, chunk, &span, false);
 		// Emit inline diff hunks before the closing tag.
 		if !chunk.path.is_empty() {
 			emit_inline_hunks_for(ctx, &chunk.path);
