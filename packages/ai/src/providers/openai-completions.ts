@@ -547,6 +547,9 @@ async function createClient(
 	}
 
 	let headers = { ...(model.headers ?? {}), ...(extraHeaders ?? {}) };
+	if (model.provider === "openrouter") {
+		headers["X-Title"] = "Oh-My-Pi";
+	}
 	if (model.provider === "kimi-code") {
 		headers = { ...(await getKimiCommonHeaders()), ...headers };
 	}
