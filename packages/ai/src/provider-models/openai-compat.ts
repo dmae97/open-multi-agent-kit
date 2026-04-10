@@ -1774,7 +1774,6 @@ function bedrockCrossRegionId(id: string): string {
 	return id;
 }
 
-
 interface ApiResolutionRule {
 	matches: (modelId: string, raw: ModelsDevModel) => boolean;
 	resolved: { api: Api; baseUrl: string };

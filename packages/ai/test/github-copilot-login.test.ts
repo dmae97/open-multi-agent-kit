@@ -227,7 +227,7 @@ describe("loginGitHubCopilot", () => {
 	});
 
 	it("device flow error", async () => {
-		let pollCount = 0;
+		let _pollCount = 0;
 		const fetchMock = vi.fn(async (input: string | URL) => {
 			const url = typeof input === "string" ? input : input.toString();
 			if (url === "https://github.com/login/device/code") {
@@ -237,14 +237,11 @@ describe("loginGitHubCopilot", () => {
 				});
 			}
 			if (url === "https://github.com/login/oauth/access_token") {
-				pollCount++;
-				return new Response(
-					JSON.stringify({ error: "access_denied", error_description: "User denied" }),
-					{
-						status: 200,
-						headers: { "Content-Type": "application/json" },
-					},
-				);
+				_pollCount++;
+				return new Response(JSON.stringify({ error: "access_denied", error_description: "User denied" }), {
+					status: 200,
+					headers: { "Content-Type": "application/json" },
+				});
 			}
 			throw new Error(`Unexpected URL: ${url}`);
 		});
