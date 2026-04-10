@@ -2,7 +2,14 @@
 
 use tree_sitter::Node;
 
-use super::{classify::LangClassifier, common::*, kind::ChunkKind};
+use super::{
+	classify::{
+		ClassifierTables, LangClassifier, NamingMode, RecurseMode, RuleStyle, StructuralOverrides,
+		semantic_rule,
+	},
+	common::*,
+	kind::ChunkKind,
+};
 
 pub struct ShellBuildClassifier;
 
@@ -72,79 +79,150 @@ impl ShellBuildClassifier {
 }
 
 impl LangClassifier for ShellBuildClassifier {
-	fn classify_root<'t>(&self, node: Node<'t>, source: &str) -> Option<RawChunkCandidate<'t>> {
-		match node.kind() {
-			"rule" => {
-				let name =
-					Self::extract_rule_target(node, source).unwrap_or_else(|| "anonymous".to_string());
-				Some(make_container_chunk(
-					node,
-					ChunkKind::Rule,
-					Some(name),
-					source,
-					recurse_into(node, ChunkContext::ClassBody, &[], &["recipe"]),
-				))
+	fn tables(&self) -> &'static ClassifierTables {
+		static TABLES: ClassifierTables = ClassifierTables {
+			root:                 &[
+				semantic_rule(
+					"conditional",
+					ChunkKind::If,
+					RuleStyle::Positional,
+					NamingMode::None,
+					RecurseMode::None,
+				),
+				semantic_rule(
+					"command",
+					ChunkKind::Statements,
+					RuleStyle::Group,
+					NamingMode::None,
+					RecurseMode::None,
+				),
+				semantic_rule(
+					"pipeline",
+					ChunkKind::Statements,
+					RuleStyle::Group,
+					NamingMode::None,
+					RecurseMode::None,
+				),
+				semantic_rule(
+					"if_statement",
+					ChunkKind::If,
+					RuleStyle::Positional,
+					NamingMode::None,
+					RecurseMode::None,
+				),
+				semantic_rule(
+					"case_statement",
+					ChunkKind::Switch,
+					RuleStyle::Positional,
+					NamingMode::None,
+					RecurseMode::None,
+				),
+				semantic_rule(
+					"while_statement",
+					ChunkKind::Loop,
+					RuleStyle::Positional,
+					NamingMode::None,
+					RecurseMode::None,
+				),
+				semantic_rule(
+					"for_statement",
+					ChunkKind::Loop,
+					RuleStyle::Positional,
+					NamingMode::None,
+					RecurseMode::None,
+				),
+				semantic_rule(
+					"function_definition",
+					ChunkKind::Function,
+					RuleStyle::Named,
+					NamingMode::AutoIdentifier,
+					RecurseMode::Auto(ChunkContext::FunctionBody),
+				),
+				semantic_rule(
+					"hunks",
+					ChunkKind::Hunks,
+					RuleStyle::Group,
+					NamingMode::None,
+					RecurseMode::None,
+				),
+			],
+			class:                &[semantic_rule(
+				"hunk",
+				ChunkKind::Hunk,
+				RuleStyle::Positional,
+				NamingMode::None,
+				RecurseMode::None,
+			)],
+			function:             &[
+				semantic_rule(
+					"if_statement",
+					ChunkKind::If,
+					RuleStyle::Positional,
+					NamingMode::None,
+					RecurseMode::None,
+				),
+				semantic_rule(
+					"case_statement",
+					ChunkKind::Switch,
+					RuleStyle::Positional,
+					NamingMode::None,
+					RecurseMode::None,
+				),
+				semantic_rule(
+					"while_statement",
+					ChunkKind::Loop,
+					RuleStyle::Positional,
+					NamingMode::None,
+					RecurseMode::None,
+				),
+				semantic_rule(
+					"for_statement",
+					ChunkKind::Loop,
+					RuleStyle::Positional,
+					NamingMode::None,
+					RecurseMode::None,
+				),
+				semantic_rule(
+					"command",
+					ChunkKind::Statements,
+					RuleStyle::Group,
+					NamingMode::None,
+					RecurseMode::None,
+				),
+				semantic_rule(
+					"pipeline",
+					ChunkKind::Statements,
+					RuleStyle::Group,
+					NamingMode::None,
+					RecurseMode::None,
+				),
+				semantic_rule(
+					"subshell",
+					ChunkKind::Block,
+					RuleStyle::Positional,
+					NamingMode::None,
+					RecurseMode::None,
+				),
+			],
+			structural_overrides: StructuralOverrides {
+				extra_trivia:            &[],
+				preserved_trivia:        &[],
+				extra_root_wrappers:     &["makefile"],
+				preserved_root_wrappers: &[],
+				absorbable_attrs:        &[],
 			},
-			"variable_assignment" | "shell_assignment" => {
-				let name =
-					Self::extract_var_name(node, source).unwrap_or_else(|| "anonymous".to_string());
-				Some(make_kind_chunk(node, ChunkKind::Variable, Some(name), source, None))
-			},
-			"define_directive" => {
-				let name =
-					Self::extract_var_name(node, source).unwrap_or_else(|| "anonymous".to_string());
-				Some(make_kind_chunk(node, ChunkKind::Define, Some(name), source, None))
-			},
-			"conditional" => Some(positional_candidate(node, ChunkKind::If, source)),
-			// Bash commands and pipelines
-			"command" | "pipeline" => Some(group_candidate(node, ChunkKind::Statements, source)),
-			// Bash control flow
-			"if_statement" => Some(positional_candidate(node, ChunkKind::If, source)),
-			"case_statement" => Some(positional_candidate(node, ChunkKind::Switch, source)),
-			"while_statement" | "for_statement" => {
-				Some(positional_candidate(node, ChunkKind::Loop, source))
-			},
-			// Bash function definition
-			"function_definition" => Some(named_candidate(
-				node,
-				ChunkKind::Function,
-				source,
-				recurse_body(node, ChunkContext::FunctionBody),
-			)),
-			// Diff: top-level file block (one per file in git diff output)
-			"block" => {
-				let identifier = Self::extract_diff_filename(node, source);
-				let recurse = recurse_into(node, ChunkContext::ClassBody, &[], &["hunks"]);
-				let mut candidate =
-					make_container_chunk(node, ChunkKind::File, identifier, source, recurse);
-				// Always expand hunks so individual @@ sections are addressable,
-				// even for small diffs below the leaf threshold.
-				candidate.force_recurse = recurse.is_some();
-				Some(candidate)
-			},
-			// Diff: standalone hunks (plain patches without a diff --git header)
-			"hunks" => Some(group_candidate(node, ChunkKind::Hunks, source)),
-			_ => None,
-		}
+		};
+		&TABLES
 	}
 
-	fn classify_class<'t>(&self, node: Node<'t>, source: &str) -> Option<RawChunkCandidate<'t>> {
-		match node.kind() {
-			// Individual hunk inside a block's hunks container
-			"hunk" => Some(positional_candidate(node, ChunkKind::Hunk, source)),
-			_ => None,
-		}
-	}
-
-	fn classify_function<'t>(&self, node: Node<'t>, source: &str) -> Option<RawChunkCandidate<'t>> {
-		match node.kind() {
-			"if_statement" => Some(positional_candidate(node, ChunkKind::If, source)),
-			"case_statement" => Some(positional_candidate(node, ChunkKind::Switch, source)),
-			"while_statement" | "for_statement" => {
-				Some(positional_candidate(node, ChunkKind::Loop, source))
-			},
-			"command" | "pipeline" => Some(group_candidate(node, ChunkKind::Statements, source)),
-			"subshell" => Some(positional_candidate(node, ChunkKind::Block, source)),
+	fn classify_override<'t>(
+		&self,
+		context: ChunkContext,
+		node: Node<'t>,
+		source: &str,
+	) -> Option<RawChunkCandidate<'t>> {
+		match context {
+			ChunkContext::Root => classify_root_custom(node, source),
 			_ => None,
 		}
 	}
@@ -157,8 +235,41 @@ impl LangClassifier for ShellBuildClassifier {
 		// Diff file blocks should always preserve hunk children
 		children.iter().any(|c| c.kind == ChunkKind::Hunk)
 	}
+}
 
-	fn is_root_wrapper(&self, kind: &str) -> bool {
-		kind == "makefile"
+fn classify_root_custom<'t>(node: Node<'t>, source: &str) -> Option<RawChunkCandidate<'t>> {
+	match node.kind() {
+		"rule" => {
+			let name = ShellBuildClassifier::extract_rule_target(node, source)
+				.unwrap_or_else(|| "anonymous".to_string());
+			Some(make_container_chunk(
+				node,
+				ChunkKind::Rule,
+				Some(name),
+				source,
+				recurse_into(node, ChunkContext::ClassBody, &[], &["recipe"]),
+			))
+		},
+		"variable_assignment" | "shell_assignment" => {
+			let name = ShellBuildClassifier::extract_var_name(node, source)
+				.unwrap_or_else(|| "anonymous".to_string());
+			Some(make_kind_chunk(node, ChunkKind::Variable, Some(name), source, None))
+		},
+		"define_directive" => {
+			let name = ShellBuildClassifier::extract_var_name(node, source)
+				.unwrap_or_else(|| "anonymous".to_string());
+			Some(make_kind_chunk(node, ChunkKind::Define, Some(name), source, None))
+		},
+		"block" => {
+			let identifier = ShellBuildClassifier::extract_diff_filename(node, source);
+			let recurse = recurse_into(node, ChunkContext::ClassBody, &[], &["hunks"]);
+			let mut candidate =
+				make_container_chunk(node, ChunkKind::File, identifier, source, recurse);
+			// Always expand hunks so individual @@ sections are addressable,
+			// even for small diffs below the leaf threshold.
+			candidate.force_recurse = recurse.is_some();
+			Some(candidate)
+		},
+		_ => None,
 	}
 }

@@ -2,9 +2,26 @@
 
 use tree_sitter::Node;
 
-use super::{classify::LangClassifier, common::*, kind::ChunkKind};
+use super::{
+	classify::{ClassifierTables, LangClassifier, StructuralOverrides},
+	common::*,
+	kind::ChunkKind,
+};
 
 pub struct NixHclClassifier;
+
+const NIX_HCL_TABLES: ClassifierTables = ClassifierTables {
+	root:                 &[],
+	class:                &[],
+	function:             &[],
+	structural_overrides: StructuralOverrides {
+		extra_trivia:            &[],
+		preserved_trivia:        &[],
+		extra_root_wrappers:     &["body"],
+		preserved_root_wrappers: &[],
+		absorbable_attrs:        &[],
+	},
+};
 
 /// Extract a structured name from an HCL `block` node.
 ///
@@ -77,6 +94,10 @@ fn classify_nix_binding<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'
 }
 
 impl LangClassifier for NixHclClassifier {
+	fn tables(&self) -> &'static ClassifierTables {
+		&NIX_HCL_TABLES
+	}
+
 	fn classify_root<'t>(&self, node: Node<'t>, source: &str) -> Option<RawChunkCandidate<'t>> {
 		match node.kind() {
 			// Nix top-level attrsets should recurse into their binding_set so the file exposes

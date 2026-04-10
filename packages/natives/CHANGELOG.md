@@ -1,8 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added `normalizeIndent` option to `EditParams` to control indentation normalization for response rendering and inserted content
 - Added `hasConflicts()` method to detect unresolved merge conflicts in parsed files
 - Added `conflictCount()` method to count unresolved merge conflicts in the chunk tree
 

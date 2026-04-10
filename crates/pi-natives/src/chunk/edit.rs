@@ -2,9 +2,9 @@ use std::{collections::HashMap, path::Path};
 
 use crate::chunk::{
 	indent::{
-		denormalize_from_tabs, detect_file_indent_char, detect_file_indent_step,
-		normalize_leading_whitespace_char, normalize_to_tabs, reindent_inserted_block,
-		strip_content_prefixes,
+		dedent_python_style, denormalize_from_tabs, detect_file_indent_char, detect_file_indent_step,
+		indent_non_empty_lines, normalize_leading_whitespace_char, normalize_to_tabs,
+		reindent_inserted_block, strip_content_prefixes,
 	},
 	kind::ChunkKind,
 	resolve::{
@@ -52,6 +52,9 @@ struct ResolvedEditTarget {
 	region: Option<ChunkRegion>,
 }
 
+const NORMALIZED_TAB_REPLACEMENT: &str = "    ";
+const PRESERVED_TAB_REPLACEMENT: &str = "\t";
+
 pub fn apply_edits(state: &ChunkState, params: &EditParams) -> Result<EditResult, String> {
 	let original_text = normalize_chunk_source(state.inner().source());
 	let initial_notebook_ctx = state.inner().notebook.clone();
@@ -67,6 +70,7 @@ pub fn apply_edits(state: &ChunkState, params: &EditParams) -> Result<EditResult
 	let initial_parse_errors = state.tree.parse_errors;
 	let initial_chunk_paths: std::collections::HashSet<String> =
 		state.tree.chunks.iter().map(|c| c.path.clone()).collect();
+	let normalize_indent = params.normalize_indent.unwrap_or(true);
 	let mut touched_paths = Vec::new();
 	let mut warnings = Vec::new();
 	let mut last_scheduled: Option<ScheduledEditOperation> = None;
@@ -108,6 +112,7 @@ pub fn apply_edits(state: &ChunkState, params: &EditParams) -> Result<EditResult
 				current_default_crc.as_deref(),
 				file_indent_step,
 				file_indent_char,
+				normalize_indent,
 				&mut touched_paths,
 				&mut warnings,
 			),
@@ -129,6 +134,7 @@ pub fn apply_edits(state: &ChunkState, params: &EditParams) -> Result<EditResult
 					current_default_crc.as_deref(),
 					file_indent_step,
 					file_indent_char,
+					normalize_indent,
 					&mut touched_paths,
 					&mut warnings,
 				)
@@ -138,7 +144,8 @@ pub fn apply_edits(state: &ChunkState, params: &EditParams) -> Result<EditResult
 		if let Err(err) = result {
 			let display_path = display_path_for_file(&params.file_path, &params.cwd);
 			let sel = operation.sel.as_deref().or(current_default_selector);
-			let context = render_error_context(&state, sel, &display_path, params.anchor_style);
+			let context =
+				render_error_context(&state, sel, &display_path, params.anchor_style, normalize_indent);
 			return Err(format!(
 				"Edit operation {}/{} failed ({}): {}\nNo changes were saved. Fix the failing \
 				 operation and retry the entire batch.{context}",
@@ -202,7 +209,8 @@ pub fn apply_edits(state: &ChunkState, params: &EditParams) -> Result<EditResult
 			.as_ref()
 			.and_then(|s| s.operation.sel.as_deref())
 			.or(initial_default_selector.as_deref());
-		let context = render_error_context(&state, sel, &display_path, params.anchor_style);
+		let context =
+			render_error_context(&state, sel, &display_path, params.anchor_style, normalize_indent);
 		return Err(format!(
 			"Edit rejected: introduced {} parse error(s). The file was valid before the edit but is \
 			 not after. Fix the content and retry.{details}{context}",
@@ -271,9 +279,10 @@ pub fn apply_edits(state: &ChunkState, params: &EditParams) -> Result<EditResult
 			&diff_after,
 			params.anchor_style,
 			&touched_paths,
+			normalize_indent,
 		)
 	} else {
-		render_unchanged_response(&state, &display_path, params.anchor_style)
+		render_unchanged_response(&state, &display_path, params.anchor_style, normalize_indent)
 	};
 
 	Ok(EditResult {
@@ -340,6 +349,7 @@ fn apply_replace(
 	default_crc: Option<&str>,
 	file_indent_step: usize,
 	file_indent_char: char,
+	normalize_indent: bool,
 	touched_paths: &mut Vec<String>,
 	warnings: &mut Vec<String>,
 ) -> Result<(), String> {
@@ -411,8 +421,13 @@ fn apply_replace(
 	let target_indent =
 		target_indent_for_region(state, &anchor, target.region, file_indent_char, file_indent_step);
 	let content = operation.content.as_deref().unwrap_or_default();
-	let mut replacement =
-		normalize_inserted_content(content, &target_indent, Some(file_indent_step), file_indent_char);
+	let mut replacement = normalize_inserted_content(
+		content,
+		&target_indent,
+		Some(file_indent_step),
+		file_indent_char,
+		normalize_indent,
+	);
 	if target.region.is_none() {
 		if !replacement.is_empty()
 			&& !replacement.ends_with('\n')
@@ -559,6 +574,7 @@ fn apply_insert(
 	default_crc: Option<&str>,
 	file_indent_step: usize,
 	file_indent_char: char,
+	normalize_indent: bool,
 	touched_paths: &mut Vec<String>,
 	warnings: &mut Vec<String>,
 ) -> Result<(), String> {
@@ -602,6 +618,7 @@ fn apply_insert(
 		&insertion.indent,
 		Some(file_indent_step),
 		file_indent_char,
+		normalize_indent,
 	);
 	replacement =
 		normalize_insertion_boundary_content(state, insertion.offset, &replacement, spacing);
@@ -895,9 +912,14 @@ fn normalize_inserted_content(
 	target_indent: &str,
 	file_indent_step: Option<usize>,
 	file_indent_char: char,
+	normalize_indent: bool,
 ) -> String {
 	let mut normalized = normalize_chunk_source(content);
 	normalized = strip_content_prefixes(&normalized);
+	if !normalize_indent {
+		let dedented = dedent_python_style(&normalized);
+		return indent_non_empty_lines(&dedented, target_indent);
+	}
 	normalized = normalized
 		.split('\n')
 		.map(|line| denormalize_from_tabs(line, file_indent_char, file_indent_step.unwrap_or(1)))
@@ -1539,7 +1561,15 @@ struct DiffHunk {
 
 /// Normalize the content part of a diff hunk line (after the +/-/space prefix)
 /// so that its indentation matches the chunk tree display format.
-fn normalize_hunk_line(line: &str, indent_char: char, indent_step: usize) -> String {
+fn render_hunk_line(
+	line: &str,
+	normalize_indent: bool,
+	indent_char: char,
+	indent_step: usize,
+) -> String {
+	if !normalize_indent {
+		return line.to_owned();
+	}
 	if line.is_empty() {
 		return line.to_owned();
 	}
@@ -1599,6 +1629,7 @@ fn render_changed_hunks(
 	after: &str,
 	anchor_style: Option<ChunkAnchorStyle>,
 	touched_paths: &[String],
+	normalize_indent: bool,
 ) -> String {
 	use std::collections::HashMap;
 
@@ -1610,11 +1641,16 @@ fn render_changed_hunks(
 	// Walk from the deepest containing chunk upward until we find one that
 	// has children (and therefore a closing tag in the tree output).
 	let tree = state.tree();
-	let tab_replacement = "    ";
+	let tab_replacement = if normalize_indent {
+		NORMALIZED_TAB_REPLACEMENT
+	} else {
+		PRESERVED_TAB_REPLACEMENT
+	};
 	let file_indent_char = detect_file_indent_char(state.source(), tree);
 	let file_indent_step = detect_file_indent_step(state.source(), tree) as usize;
 	let lookup: HashMap<&str, &ChunkNode> =
 		tree.chunks.iter().map(|c| (c.path.as_str(), c)).collect();
+	let render_indent = normalize_indent.then_some((file_indent_char, file_indent_step));
 
 	let mut inline_hunks: HashMap<String, Vec<crate::chunk::render::InlineHunk>> = HashMap::new();
 	let mut orphan_hunks: Vec<&DiffHunk> = Vec::new();
@@ -1629,12 +1665,13 @@ fn render_changed_hunks(
 					chunk_path,
 					state.source(),
 					tab_replacement,
-					Some((file_indent_char, file_indent_step)),
+					render_indent,
 				);
 				let mut lines = Vec::with_capacity(hunk.lines.len() + 1);
 				lines.push(format!("{indent}{}", hunk.header));
 				for line in &hunk.lines {
-					let normalized = normalize_hunk_line(line, file_indent_char, file_indent_step);
+					let normalized =
+						render_hunk_line(line, normalize_indent, file_indent_char, file_indent_step);
 					lines.push(format!("{indent}{normalized}"));
 				}
 				inline_hunks
@@ -1658,7 +1695,7 @@ fn render_changed_hunks(
 			anchor_style,
 			show_leaf_preview,
 			tab_replacement: Some(tab_replacement.to_owned()),
-			normalize_indent: Some(true),
+			normalize_indent: Some(normalize_indent),
 			focused_paths,
 		},
 		inline_hunks,
@@ -1674,12 +1711,9 @@ fn render_changed_hunks(
 		.flat_map(|hunk| {
 			let mut lines = Vec::with_capacity(hunk.lines.len() + 1);
 			lines.push(hunk.header.clone());
-			lines.extend(
-				hunk
-					.lines
-					.iter()
-					.map(|line| normalize_hunk_line(line, file_indent_char, file_indent_step)),
-			);
+			lines.extend(hunk.lines.iter().map(|line| {
+				render_hunk_line(line, normalize_indent, file_indent_char, file_indent_step)
+			}));
 			lines
 		})
 		.collect::<Vec<_>>()
@@ -1760,6 +1794,7 @@ fn render_error_context(
 	selector: Option<&str>,
 	display_path: &str,
 	anchor_style: Option<ChunkAnchorStyle>,
+	normalize_indent: bool,
 ) -> String {
 	let Ok(ParsedSelector { selector: clean_path, .. }) =
 		split_selector_crc_and_region(selector, None, None)
@@ -1771,6 +1806,11 @@ fn render_error_context(
 		return String::new();
 	};
 	let focused_paths = compute_focus(state.tree(), std::slice::from_ref(&chunk.path));
+	let tab_replacement = if normalize_indent {
+		NORMALIZED_TAB_REPLACEMENT
+	} else {
+		PRESERVED_TAB_REPLACEMENT
+	};
 	let rendered = crate::chunk::render::render_state(state, &RenderParams {
 		chunk_path: Some(String::new()),
 		title: display_path.to_owned(),
@@ -1780,8 +1820,8 @@ fn render_error_context(
 		omit_checksum: false,
 		anchor_style,
 		show_leaf_preview: true,
-		tab_replacement: Some("    ".to_owned()),
-		normalize_indent: Some(true),
+		tab_replacement: Some(tab_replacement.to_owned()),
+		normalize_indent: Some(normalize_indent),
 		focused_paths,
 	});
 	format!("\n\nFresh content:\n{rendered}")
@@ -1791,7 +1831,13 @@ fn render_unchanged_response(
 	state: &ChunkStateInner,
 	display_path: &str,
 	anchor_style: Option<ChunkAnchorStyle>,
+	normalize_indent: bool,
 ) -> String {
+	let tab_replacement = if normalize_indent {
+		NORMALIZED_TAB_REPLACEMENT
+	} else {
+		PRESERVED_TAB_REPLACEMENT
+	};
 	crate::chunk::render::render_state(state, &RenderParams {
 		chunk_path: Some(String::new()),
 		title: display_path.to_owned(),
@@ -1802,8 +1848,8 @@ fn render_unchanged_response(
 		anchor_style,
 		focused_paths: None,
 		show_leaf_preview: true,
-		tab_replacement: Some("    ".to_owned()),
-		normalize_indent: Some(true),
+		tab_replacement: Some(tab_replacement.to_owned()),
+		normalize_indent: Some(normalize_indent),
 	})
 }
 
@@ -1833,6 +1879,7 @@ mod tests {
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        file_path.to_owned(),
+			normalize_indent: None,
 		})
 		.expect("edit should apply")
 	}
@@ -1857,6 +1904,7 @@ mod tests {
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        "test.rs".to_owned(),
+			normalize_indent: None,
 		})
 		.expect("edit should apply");
 
@@ -1901,6 +1949,7 @@ mod tests {
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        "test.ts".to_owned(),
+			normalize_indent: None,
 		})
 		.expect("edit should apply");
 
@@ -1973,6 +2022,7 @@ mod tests {
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        "test.ts".to_owned(),
+			normalize_indent: None,
 		})
 		.expect("edit should resolve a unique fuzzy selector");
 
@@ -2014,6 +2064,7 @@ mod tests {
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        "box.ts".to_owned(),
+			normalize_indent: None,
 		})
 		.expect("edit should resolve a prefixed bare selector");
 
@@ -2046,6 +2097,7 @@ mod tests {
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        "box.ts".to_owned(),
+			normalize_indent: None,
 		})
 		.expect("edit should resolve file-prefixed checksum target");
 
@@ -2073,6 +2125,7 @@ mod tests {
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        "box.ts".to_owned(),
+			normalize_indent: None,
 		});
 
 		let result = result.expect("line-number selector should auto-resolve");
@@ -2111,6 +2164,7 @@ mod tests {
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        "box.ts".to_owned(),
+			normalize_indent: None,
 		});
 
 		assert!(result.is_err(), "line outside any chunk should fail");
@@ -2141,6 +2195,7 @@ mod tests {
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        "test.md".to_owned(),
+			normalize_indent: None,
 		})
 		.expect("replace should succeed");
 
@@ -2176,6 +2231,7 @@ mod tests {
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        "test.rs".to_owned(),
+			normalize_indent: None,
 		})
 		.expect("edit should apply");
 
@@ -2211,6 +2267,7 @@ mod tests {
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        "test.rs".to_owned(),
+			normalize_indent: None,
 		});
 
 		assert!(result.is_err(), "expected error for not-found find text");
@@ -2243,6 +2300,7 @@ mod tests {
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        "test.rs".to_owned(),
+			normalize_indent: None,
 		});
 
 		assert!(result.is_err(), "expected error for ambiguous find text");
@@ -2271,6 +2329,7 @@ mod tests {
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        "test.rs".to_owned(),
+			normalize_indent: None,
 		});
 
 		assert!(result.is_err(), "expected error for empty find text");
@@ -2299,6 +2358,7 @@ mod tests {
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        "test.rs".to_owned(),
+			normalize_indent: None,
 		});
 
 		assert!(result.is_err(), "find outside target chunk should fail");
@@ -2330,6 +2390,7 @@ mod tests {
 			anchor_style:     Some(ChunkAnchorStyle::Full),
 			cwd:              ".".to_owned(),
 			file_path:        "test.ts".to_owned(),
+			normalize_indent: None,
 		})
 		.expect("edit should apply");
 
@@ -2665,6 +2726,7 @@ mod tests {
 			anchor_style:     Some(ChunkAnchorStyle::Full),
 			cwd:              ".".to_owned(),
 			file_path:        "test.ts".to_owned(),
+			normalize_indent: None,
 		});
 		let err = result.err().expect("should fail with stale CRC");
 
@@ -2702,7 +2764,7 @@ mod tests {
 		let new_table = "| Header A | Header B |\n| --- | --- |\n| cell A | cell B |\n";
 
 		// Simulate what normalize_inserted_content does to table content.
-		let result = super::normalize_inserted_content(new_table, "", None, ' ');
+		let result = super::normalize_inserted_content(new_table, "", None, ' ', true);
 
 		assert!(result.contains("| Header A"), "table pipes should not be stripped: {result}");
 	}
@@ -3073,6 +3135,7 @@ mod tests {
 				anchor_style:     None,
 				cwd:              ".".to_owned(),
 				file_path:        "test.rs".to_owned(),
+				normalize_indent: None,
 			})
 			.expect("leaf region should fall back to full chunk");
 
@@ -3497,6 +3560,7 @@ mod tests {
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        "test.rs".to_owned(),
+			normalize_indent: None,
 		})
 		.expect("edit should apply");
 
@@ -3591,6 +3655,7 @@ mod tests {
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        "test.rs".to_owned(),
+			normalize_indent: None,
 		})
 		.expect("edit should apply");
 
@@ -3780,6 +3845,7 @@ function foo() {\n<<<<<<< HEAD\n\treturn bar();\n=======\n\treturn baz();\n>>>>>
 			anchor_style:     None,
 			cwd:              ".".to_owned(),
 			file_path:        "test.ts".to_owned(),
+			normalize_indent: None,
 		})
 		.expect("batch edit should apply");
 

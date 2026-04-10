@@ -8,6 +8,7 @@
 //! - `classify` — `LangClassifier` trait and dispatch
 //! - `ast_*` — per-language classifier implementations
 
+mod atom_list;
 mod classify;
 pub(crate) mod common;
 pub(crate) mod conflict;
@@ -16,6 +17,8 @@ pub(crate) mod edit;
 pub(crate) mod indent;
 mod render;
 pub(crate) mod resolve;
+mod schema;
+mod shape;
 pub(crate) mod state;
 pub mod types;
 
@@ -66,7 +69,7 @@ use tree_sitter::{Node, Parser, Tree};
 use xxhash_rust::xxh64::xxh64;
 
 use self::{
-	classify::{LangClassifier, classifier_for},
+	classify::{LangClassifier, classifier_for, classify_with_tables, structural_overrides},
 	common::*,
 	kind::ChunkKind,
 };
@@ -112,6 +115,7 @@ pub(crate) fn build_chunk_tree(source: &str, language: &str) -> Result<ChunkTree
 		return Ok(build_blank_line_tree(source, language.to_string(), total_lines, root_checksum));
 	};
 
+	let _schema_language = schema::enter_language(chunk_lang.canonical_name());
 	let classifier = classifier_for(normalized_language.as_str());
 	let tree = parse_tree(source, chunk_lang)?;
 	let root = tree.root_node();
@@ -416,12 +420,18 @@ pub(crate) fn collect_children_for_context<'tree>(
 	classifier: &dyn LangClassifier,
 ) -> Vec<RawChunkCandidate<'tree>> {
 	let named_children_list = children_for_context(container, context, classifier);
+	let overrides = structural_overrides(classifier);
 	let mut raw = Vec::new();
 
 	for (index, child) in named_children_list.iter().enumerate() {
-		let is_skippable_trivia = (is_trivia(child.kind()) || classifier.is_trivia(child.kind()))
-			&& !classifier.preserve_trivia(child.kind());
-		if is_skippable_trivia || child.is_missing() {
+		let is_error_node = child.is_error() || child.kind() == "ERROR";
+		let is_skippable_trivia =
+			!is_error_node && is_trivia_for_classifier(*child, classifier, overrides);
+		let is_absorbable_attr = !is_error_node
+			&& (is_absorbable_attribute(child.kind())
+				|| overrides.is_absorbable_attr(child.kind())
+				|| classifier.is_absorbable_attr(child.kind()));
+		if is_skippable_trivia || is_absorbable_attr || (child.is_missing() && !is_error_node) {
 			continue;
 		}
 
@@ -449,11 +459,8 @@ fn flatten_root_children<'tree>(
 	classifier: &dyn LangClassifier,
 ) -> Vec<Node<'tree>> {
 	let children = named_children(container);
-	if children.len() == 1
-		&& ((is_root_wrapper_kind(children[0].kind())
-			&& !classifier.preserve_root_wrapper(children[0].kind()))
-			|| classifier.is_root_wrapper(children[0].kind()))
-	{
+	let overrides = structural_overrides(classifier);
+	if children.len() == 1 && is_root_wrapper_for_classifier(children[0], classifier, overrides) {
 		return flatten_root_children(children[0], classifier);
 	}
 	// When a root wrapper's only non-trivia child is another wrapper,
@@ -462,12 +469,10 @@ fn flatten_root_children<'tree>(
 	if children.len() > 1 {
 		let non_trivia: Vec<_> = children
 			.iter()
-			.filter(|c| !is_trivia(c.kind()) && !classifier.is_trivia(c.kind()))
+			.filter(|child| !is_trivia_for_classifier(**child, classifier, overrides))
 			.collect();
 		if non_trivia.len() == 1
-			&& is_root_wrapper_kind(non_trivia[0].kind())
-			&& !classifier.preserve_root_wrapper(non_trivia[0].kind())
-			&& is_root_wrapper_kind(container.kind())
+			&& is_root_wrapper_for_classifier(*non_trivia[0], classifier, overrides)
 		{
 			return flatten_root_children(*non_trivia[0], classifier);
 		}
@@ -487,14 +492,11 @@ fn classify_node<'tree>(
 
 	// Try language-specific classifier first, then fall back to defaults.
 	match context {
-		ChunkContext::Root => classifier
-			.classify_root(node, source)
+		ChunkContext::Root => classify_with_tables(classifier, context, node, source)
 			.unwrap_or_else(|| defaults::classify_root_default(node, source)),
-		ChunkContext::ClassBody => classifier
-			.classify_class(node, source)
+		ChunkContext::ClassBody => classify_with_tables(classifier, context, node, source)
 			.unwrap_or_else(|| defaults::classify_class_default(node, source)),
-		ChunkContext::FunctionBody => classifier
-			.classify_function(node, source)
+		ChunkContext::FunctionBody => classify_with_tables(classifier, context, node, source)
 			.unwrap_or_else(|| defaults::classify_function_default(node, source)),
 	}
 }
@@ -505,12 +507,13 @@ fn attach_leading_trivia<'tree>(
 	index: usize,
 	classifier: &dyn LangClassifier,
 ) {
+	let overrides = structural_overrides(classifier);
 	let mut cursor = index;
 	while cursor > 0 {
 		let prev = named_children_list[cursor - 1];
-		if !is_trivia(prev.kind())
+		if !is_trivia_for_classifier(prev, classifier, overrides)
 			&& !is_absorbable_attribute(prev.kind())
-			&& !classifier.is_trivia(prev.kind())
+			&& !overrides.is_absorbable_attr(prev.kind())
 			&& !classifier.is_absorbable_attr(prev.kind())
 		{
 			break;
@@ -528,6 +531,34 @@ fn attach_leading_trivia<'tree>(
 		}
 		cursor -= 1;
 	}
+}
+
+fn is_trivia_for_classifier(
+	node: Node<'_>,
+	classifier: &dyn LangClassifier,
+	overrides: classify::StructuralOverrides,
+) -> bool {
+	let kind = node.kind();
+	((is_trivia_node(node) || classifier.is_trivia(kind))
+		&& !overrides.preserves_trivia(kind)
+		&& !classifier.preserve_trivia(kind))
+		|| (overrides.is_extra_trivia(kind)
+			&& !overrides.preserves_trivia(kind)
+			&& !classifier.preserve_trivia(kind))
+}
+
+fn is_root_wrapper_for_classifier(
+	node: Node<'_>,
+	classifier: &dyn LangClassifier,
+	overrides: classify::StructuralOverrides,
+) -> bool {
+	let kind = node.kind();
+	if overrides.preserves_root_wrapper(kind) || classifier.preserve_root_wrapper(kind) {
+		return false;
+	}
+	overrides.is_extra_root_wrapper(kind)
+		|| classifier.is_root_wrapper(kind)
+		|| is_root_wrapper_node(node)
 }
 
 // ── Grouping / deduplication ─────────────────────────────────────────────
@@ -672,7 +703,7 @@ const fn is_collapsible_flat_child(candidate: &RawChunkCandidate<'_>) -> bool {
 // ── Utility ──────────────────────────────────────────────────────────────
 
 fn count_parse_errors(node: Node<'_>) -> usize {
-	let mut count = usize::from(node.is_error() || node.is_missing());
+	let mut count = usize::from(node.is_error() || node.is_missing() || node.kind() == "ERROR");
 	for child in named_children(node) {
 		count += count_parse_errors(child);
 	}
@@ -1195,7 +1226,13 @@ function main(): void {{
 			tree
 				.chunks
 				.iter()
-				.any(|chunk| chunk.kind == ChunkKind::Error && chunk.identifier.is_none())
+				.any(|chunk| chunk.kind == ChunkKind::Error && chunk.identifier.is_none()),
+			"expected error chunk, got {:?}",
+			tree
+				.chunks
+				.iter()
+				.map(|chunk| (&chunk.path, chunk.kind, chunk.identifier.as_deref()))
+				.collect::<Vec<_>>()
 		);
 	}
 
@@ -2749,7 +2786,7 @@ end
 	fn nix_let_expression_bindings_are_individually_addressable() {
 		// A Nix file with { args }: let bindings in body should produce
 		// individual chunks for each binding, not a single opaque chunk.
-		let source = r#"{ pkgs }:
+		let source = r"{ pkgs }:
 	let
 	  foo = 1;
 	  bar = pkgs.hello;
@@ -2761,7 +2798,7 @@ end
 	{
 	  inherit foo bar baz;
 	}
-	"#;
+	";
 		let tree = build_chunk_tree(source, "nix").expect("nix tree should build");
 
 		// There should be chunks for individual bindings, not just a single

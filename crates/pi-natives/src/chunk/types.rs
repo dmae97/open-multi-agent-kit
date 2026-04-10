@@ -359,6 +359,9 @@ pub struct EditOperation {
 pub struct EditParams {
 	/// Edits to apply in order.
 	pub operations:       Vec<EditOperation>,
+	/// When true, normalize indentation for response rendering and inserted
+	/// content. When false, preserve literal tabs/spaces.
+	pub normalize_indent: Option<bool>,
 	/// Default chunk selector when an `EditOperation` omits `sel`.
 	pub default_selector: Option<String>,
 	/// Default checksum when an `EditOperation` omits `crc`.
