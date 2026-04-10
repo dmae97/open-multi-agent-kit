@@ -10,6 +10,9 @@ pub struct ChunkNode {
 	pub identifier:          Option<String>,
 	pub kind:                ChunkKind,
 	pub leaf:                bool,
+	/// For virtual chunks (for example `theirs` branches in conflicts), content
+	/// that is rendered instead of slicing `source`.
+	pub virtual_content:     Option<String>,
 	pub parent_path:         Option<String>,
 	pub children:            Vec<String>,
 	pub signature:           Option<String>,

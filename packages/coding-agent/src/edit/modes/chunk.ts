@@ -387,7 +387,7 @@ async function writeChunkResult(params: {
 	invalidateFsScanAfterWrite(resolvedPath);
 
 	const diffResult = generateUnifiedDiffString(result.diffSourceBefore, result.diffSourceAfter);
-	const warningsBlock = result.warnings.length > 0 ? `\n\n${result.warnings.join("\n")}` : "";
+	const warningsBlock = result.warnings.length > 0 ? `\n\nWarnings:\n${result.warnings.join("\n")}` : "";
 	const meta = outputMeta()
 		.diagnostics(diagnostics?.summary ?? "", diagnostics?.messages ?? [])
 		.get();

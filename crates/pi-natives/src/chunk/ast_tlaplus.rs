@@ -265,6 +265,7 @@ fn translation_chunk(
 		identifier: Some(range.start_line.to_string()),
 		kind: ChunkKind::Translation,
 		leaf: true,
+		virtual_content: None,
 		parent_path,
 		children: Vec::new(),
 		signature: Some("translation block".to_string()),

@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use crate::chunk::{
 	indent::{
@@ -10,7 +10,7 @@ use crate::chunk::{
 		ParsedSelector, chunk_region_range, resolve_chunk_selector, resolve_chunk_with_crc,
 		sanitize_chunk_selector, sanitize_crc, split_selector_crc_and_region,
 	},
-	state::{ChunkState, ChunkStateInner},
+	state::{ChunkState, ChunkStateInner, ConflictMeta},
 	types::{
 		ChunkAnchorStyle, ChunkEditOp, ChunkFocusMode, ChunkNode, ChunkRegion, EditOperation,
 		EditParams, EditResult, FocusedPath, RenderParams,
@@ -54,10 +54,12 @@ struct ResolvedEditTarget {
 pub fn apply_edits(state: &ChunkState, params: &EditParams) -> Result<EditResult, String> {
 	let original_text = normalize_chunk_source(state.inner().source());
 	let initial_notebook_ctx = state.inner().notebook.clone();
+	let initial_conflict_meta = state.inner().conflict_meta.clone();
 	let mut state = rebuild_chunk_state(
 		original_text.clone(),
 		state.inner().language().to_string(),
 		initial_notebook_ctx.clone(),
+		initial_conflict_meta.clone(),
 	)?;
 	let file_indent_step = detect_file_indent_step(&state.tree) as usize;
 	let file_indent_char = detect_file_indent_char(&state.source, &state.tree);
@@ -146,8 +148,12 @@ pub fn apply_edits(state: &ChunkState, params: &EditParams) -> Result<EditResult
 			));
 		}
 
-		state =
-			rebuild_chunk_state(state.source.clone(), state.language.clone(), state.notebook.clone())?;
+		state = rebuild_chunk_state(
+			state.source.clone(),
+			state.language.clone(),
+			state.notebook.clone(),
+			state.conflict_meta.clone(),
+		)?;
 		if operation.sel.is_none() {
 			current_default_crc = None;
 		}
@@ -225,9 +231,27 @@ pub fn apply_edits(state: &ChunkState, params: &EditParams) -> Result<EditResult
 			.map_err(|err| format!("Failed to serialize edited notebook JSON: {err}"))?;
 		(before_json, after_json)
 	} else {
-		(original_text, state.source.clone())
+		let diff_before = if initial_conflict_meta.is_empty() {
+			original_text
+		} else {
+			crate::chunk::conflict::reconstruct_markers(&original_text, &initial_conflict_meta)
+		};
+		let diff_after = if state.conflict_meta.is_empty() {
+			state.source.clone()
+		} else {
+			crate::chunk::conflict::reconstruct_markers(&state.source, &state.conflict_meta)
+		};
+		(diff_before, diff_after)
 	};
 	let changed = diff_before != diff_after || changed_virtual;
+	if !state.conflict_meta.is_empty() {
+		let mut unresolved = state.conflict_meta.keys().cloned().collect::<Vec<_>>();
+		unresolved.sort();
+		warnings.push(format!(
+			"NOTICE: This file still has unresolved conflicts: {}.",
+			unresolved.join(", ")
+		));
+	}
 	// Newly-created chunks (e.g. inserted siblings that landed outside the anchor's
 	// parent subtree) are not reflected in `touched_paths` yet. Detect any chunk
 	// that did not exist in the pre-edit tree and include it so the scoped
@@ -329,6 +353,14 @@ fn apply_replace(
 		warnings,
 	)?;
 	let anchor = target.chunk;
+	if anchor.kind == ChunkKind::Theirs {
+		return Err(
+			"Virtual conflict branches cannot be replaced directly. Delete conflict.theirs to accept \
+			 ours, delete conflict.ours to accept theirs, or replace the parent conflict chunk for a \
+			 manual merge."
+				.to_owned(),
+		);
+	}
 	let (region_start, region_end) = match target.region {
 		None => (anchor.start_byte as usize, anchor.end_byte as usize),
 		Some(r) => chunk_region_range(&anchor, r),
@@ -370,7 +402,7 @@ fn apply_replace(
 		new_source.push_str(&state.source[..abs_start]);
 		new_source.push_str(replacement);
 		new_source.push_str(&state.source[abs_end..]);
-		state.source = new_source;
+		replace_source_and_adjust_conflicts(state, new_source, warnings);
 		touched_paths.push(anchor.path);
 		return Ok(());
 	}
@@ -406,11 +438,15 @@ fn apply_replace(
 			replacement.push('\n');
 		}
 		let range_start = line_start_offset(&offsets, anchor.start_line, &state.source);
-		state.source =
+		let mut new_source =
 			replace_range_by_lines(&state.source, anchor.start_line, anchor.end_line, &replacement);
 		if replacement.is_empty() {
-			state.source = cleanup_blank_line_artifacts_at_offset(&state.source, range_start);
+			new_source = cleanup_blank_line_artifacts_at_offset(&new_source, range_start);
 		}
+		if anchor.kind == ChunkKind::Conflict {
+			state.conflict_meta.remove(anchor.path.as_str());
+		}
+		replace_source_and_adjust_conflicts(state, new_source, warnings);
 	} else {
 		// For prologue/epilogue replacements, ensure the replacement preserves
 		// the newline boundary so the body content isn't joined onto the same
@@ -422,7 +458,11 @@ fn apply_replace(
 		{
 			replacement.push('\n');
 		}
-		state.source = replace_byte_range(&state.source, region_start, region_end, &replacement);
+		let new_source = replace_byte_range(&state.source, region_start, region_end, &replacement);
+		if anchor.kind == ChunkKind::Conflict {
+			state.conflict_meta.remove(anchor.path.as_str());
+		}
+		replace_source_and_adjust_conflicts(state, new_source, warnings);
 	}
 	touched_paths.push(anchor.path);
 	Ok(())
@@ -448,15 +488,63 @@ fn apply_delete(
 		warnings,
 	)?;
 	let anchor = target.chunk;
+	if target.region.is_none() {
+		match anchor.kind {
+			ChunkKind::Ours => {
+				let Some(conflict_path) = anchor.parent_path.as_deref() else {
+					return Err("Conflict branch is missing its parent conflict chunk".to_owned());
+				};
+				let Some(conflict_meta) = state.conflict_meta.remove(conflict_path) else {
+					return Err(format!("Conflict metadata missing for {conflict_path}"));
+				};
+				let new_source = replace_byte_range(
+					&state.source,
+					conflict_meta.ours_start_byte,
+					conflict_meta.ours_end_byte,
+					conflict_meta.theirs_content.as_str(),
+				);
+				replace_source_and_adjust_conflicts(state, new_source, warnings);
+				touched_paths.push(conflict_path.to_owned());
+				return Ok(());
+			},
+			ChunkKind::Theirs => {
+				let Some(conflict_path) = anchor.parent_path.as_deref() else {
+					return Err("Conflict branch is missing its parent conflict chunk".to_owned());
+				};
+				state.conflict_meta.remove(conflict_path);
+				touched_paths.push(conflict_path.to_owned());
+				return Ok(());
+			},
+			ChunkKind::Conflict => {
+				state.conflict_meta.remove(anchor.path.as_str());
+			},
+			_ => {},
+		}
+	}
+	if anchor.kind == ChunkKind::Theirs {
+		return Err(
+			"Virtual conflict branches only support delete. Delete conflict.theirs to accept ours, \
+			 delete conflict.ours to accept theirs, or replace the parent conflict chunk for a \
+			 manual merge."
+				.to_owned(),
+		);
+	}
 
 	if let Some(r) = target.region {
 		let (range_start, range_end) = chunk_region_range(&anchor, r);
-		state.source = replace_byte_range(&state.source, range_start, range_end, "");
+		replace_source_and_adjust_conflicts(
+			state,
+			replace_byte_range(&state.source, range_start, range_end, ""),
+			warnings,
+		);
 	} else {
 		let offsets = line_offsets(&state.source);
 		let range_start = line_start_offset(&offsets, anchor.start_line, &state.source);
-		state.source = replace_range_by_lines(&state.source, anchor.start_line, anchor.end_line, "");
-		state.source = cleanup_blank_line_artifacts_at_offset(&state.source, range_start);
+		let new_source = cleanup_blank_line_artifacts_at_offset(
+			&replace_range_by_lines(&state.source, anchor.start_line, anchor.end_line, ""),
+			range_start,
+		);
+		replace_source_and_adjust_conflicts(state, new_source, warnings);
 	}
 	touched_paths.push(anchor.path);
 	Ok(())
@@ -484,6 +572,14 @@ fn apply_insert(
 		warnings,
 	)?;
 	let anchor = target.chunk;
+	if anchor.kind == ChunkKind::Theirs {
+		return Err(
+			"Virtual conflict branches cannot be edited in place. Delete conflict.theirs to accept \
+			 ours, delete conflict.ours to accept theirs, or replace the parent conflict chunk for a \
+			 manual merge."
+				.to_owned(),
+		);
+	}
 	let (insertion, pos) = resolve_insertion_point(
 		state,
 		&anchor,
@@ -539,7 +635,11 @@ fn apply_insert(
 		}
 	}
 
-	state.source = insert_at_offset(&state.source, insertion.offset, &replacement);
+	replace_source_and_adjust_conflicts(
+		state,
+		insert_at_offset(&state.source, insertion.offset, &replacement),
+		warnings,
+	);
 	touched_paths.push(anchor.path);
 	Ok(())
 }
@@ -567,8 +667,9 @@ fn rebuild_chunk_state(
 	source: String,
 	language: String,
 	notebook: Option<crate::chunk::ast_ipynb::SharedNotebookContext>,
+	conflict_meta: HashMap<String, ConflictMeta>,
 ) -> Result<ChunkStateInner, String> {
-	let tree = if let Some(ctx) = &notebook {
+	let mut tree = if let Some(ctx) = &notebook {
 		crate::chunk::ast_ipynb::build_notebook_tree_from_virtual(
 			source.as_str(),
 			ctx.kernel_language.as_str(),
@@ -577,8 +678,14 @@ fn rebuild_chunk_state(
 		crate::chunk::build_chunk_tree(source.as_str(), language.as_str())
 			.map_err(|err| err.to_string())?
 	};
+	let rebuilt_conflicts = if conflict_meta.is_empty() {
+		HashMap::new()
+	} else {
+		crate::chunk::conflict::reinject_conflict_chunks(&mut tree, source.as_str(), &conflict_meta)
+	};
 	let mut inner = ChunkStateInner::new(source, language, tree);
 	inner.notebook = notebook;
+	inner.conflict_meta = rebuilt_conflicts;
 	Ok(inner)
 }
 
@@ -677,6 +784,92 @@ fn replace_byte_range(source: &str, start: usize, end: usize, replacement: &str)
 	new_source.push_str(replacement);
 	new_source.push_str(&source[end..]);
 	new_source
+}
+
+fn changed_span(before: &str, after: &str) -> (usize, usize, usize) {
+	let before_bytes = before.as_bytes();
+	let after_bytes = after.as_bytes();
+	let mut prefix = 0usize;
+	let max_prefix = before_bytes.len().min(after_bytes.len());
+	while prefix < max_prefix && before_bytes[prefix] == after_bytes[prefix] {
+		prefix += 1;
+	}
+
+	let mut before_suffix = before_bytes.len();
+	let mut after_suffix = after_bytes.len();
+	while before_suffix > prefix && after_suffix > prefix {
+		if before_bytes[before_suffix - 1] != after_bytes[after_suffix - 1] {
+			break;
+		}
+		before_suffix -= 1;
+		after_suffix -= 1;
+	}
+
+	(prefix, before_suffix, after_suffix)
+}
+
+const fn adjust_offset(offset: usize, delta: isize) -> usize {
+	if delta >= 0 {
+		offset.saturating_add(delta as usize)
+	} else {
+		offset.saturating_sub((-delta) as usize)
+	}
+}
+
+fn update_conflict_meta_after_source_change(
+	conflict_meta: &mut HashMap<String, ConflictMeta>,
+	before: &str,
+	after: &str,
+	warnings: &mut Vec<String>,
+) {
+	let (change_start, before_end, after_end) = changed_span(before, after);
+	if change_start == before_end && change_start == after_end {
+		return;
+	}
+
+	let delta = (after_end.saturating_sub(change_start) as isize)
+		- (before_end.saturating_sub(change_start) as isize);
+	let mut removed = Vec::new();
+
+	for (path, meta) in conflict_meta.iter_mut() {
+		if before_end <= meta.ours_start_byte {
+			meta.ours_start_byte = adjust_offset(meta.ours_start_byte, delta);
+			meta.ours_end_byte = adjust_offset(meta.ours_end_byte, delta);
+			continue;
+		}
+		if change_start >= meta.ours_end_byte {
+			continue;
+		}
+		if change_start >= meta.ours_start_byte && before_end <= meta.ours_end_byte {
+			meta.ours_end_byte = adjust_offset(meta.ours_end_byte, delta);
+			continue;
+		}
+
+		removed.push(path.clone());
+	}
+
+	for path in removed {
+		conflict_meta.remove(path.as_str());
+		warnings.push(format!(
+			"Conflict {path} no longer maps cleanly after a surrounding edit, so it was marked as \
+			 resolved."
+		));
+	}
+}
+
+fn replace_source_and_adjust_conflicts(
+	state: &mut ChunkStateInner,
+	new_source: String,
+	warnings: &mut Vec<String>,
+) {
+	let before = state.source.clone();
+	update_conflict_meta_after_source_change(
+		&mut state.conflict_meta,
+		before.as_str(),
+		new_source.as_str(),
+		warnings,
+	);
+	state.source = new_source;
 }
 
 fn target_indent_for_region(
@@ -1598,6 +1791,10 @@ mod tests {
 	fn state_for(source: &str, language: &str) -> ChunkState {
 		let tree = build_chunk_tree(source, language).expect("tree should build");
 		ChunkState::from_inner(ChunkStateInner::new(source.to_owned(), language.to_owned(), tree))
+	}
+
+	fn parsed_state_for(source: &str, language: &str) -> ChunkState {
+		ChunkState::parse(source.to_owned(), language.to_owned()).expect("state should parse")
 	}
 
 	fn apply_single_edit(
@@ -3338,5 +3535,180 @@ mod tests {
 			hunks.len(),
 			result.response_text,
 		);
+	}
+
+	#[test]
+	fn conflicted_reads_render_conflict_children_and_both_sides() {
+		let source = "\
+function foo() {\n<<<<<<< HEAD\n\treturn bar();\n=======\n\treturn baz();\n>>>>>>> topic\n}\n";
+		let state = parsed_state_for(source, "typescript");
+		assert!(state.has_conflicts());
+		assert_eq!(state.conflict_count(), 1);
+
+		let conflict = state
+			.inner()
+			.chunks()
+			.find(|chunk| chunk.kind == ChunkKind::Conflict)
+			.expect("conflict chunk should exist")
+			.clone();
+		let rendered = state
+			.render_read(crate::chunk::types::ReadRenderParams {
+				read_path:           String::new(),
+				display_path:        "test.ts".to_owned(),
+				language_tag:        Some("ts".to_owned()),
+				omit_checksum:       false,
+				anchor_style:        Some(ChunkAnchorStyle::Full),
+				absolute_line_range: None,
+				tab_replacement:     Some("    ".to_owned()),
+				normalize_indent:    Some(true),
+			})
+			.expect("render should succeed");
+
+		assert!(rendered.text.contains(conflict.path.as_str()));
+		assert!(
+			rendered
+				.text
+				.contains(format!("{}.ours", conflict.path).as_str())
+		);
+		assert!(
+			rendered
+				.text
+				.contains(format!("{}.theirs", conflict.path).as_str())
+		);
+		assert!(rendered.text.contains("return bar();"));
+		assert!(rendered.text.contains("return baz();"));
+	}
+
+	#[test]
+	fn delete_ours_accepts_theirs() {
+		let source = "\
+function foo() {\n<<<<<<< HEAD\n\treturn bar();\n=======\n\treturn baz();\n>>>>>>> topic\n}\n";
+		let state = parsed_state_for(source, "typescript");
+		let ours = state
+			.inner()
+			.chunks()
+			.find(|chunk| chunk.kind == ChunkKind::Ours)
+			.expect("ours chunk should exist")
+			.clone();
+
+		let result = apply_single_edit(&state, "test.ts", EditOperation {
+			op:      ChunkEditOp::Delete,
+			sel:     Some(ours.path.clone()),
+			crc:     Some(ours.checksum),
+			region:  None,
+			content: None,
+			find:    None,
+		});
+
+		assert!(!result.state.has_conflicts());
+		assert!(result.diff_before.contains("<<<<<<< HEAD"));
+		assert!(result.diff_after.contains("return baz();"));
+		assert!(!result.diff_after.contains("<<<<<<<"));
+	}
+
+	#[test]
+	fn delete_theirs_accepts_ours() {
+		let source = "\
+function foo() {\n<<<<<<< HEAD\n\treturn bar();\n=======\n\treturn baz();\n>>>>>>> topic\n}\n";
+		let state = parsed_state_for(source, "typescript");
+		let theirs = state
+			.inner()
+			.chunks()
+			.find(|chunk| chunk.kind == ChunkKind::Theirs)
+			.expect("theirs chunk should exist")
+			.clone();
+
+		let result = apply_single_edit(&state, "test.ts", EditOperation {
+			op:      ChunkEditOp::Delete,
+			sel:     Some(theirs.path.clone()),
+			crc:     Some(theirs.checksum),
+			region:  None,
+			content: None,
+			find:    None,
+		});
+
+		assert!(!result.state.has_conflicts());
+		assert!(result.diff_after.contains("return bar();"));
+		assert!(!result.diff_after.contains("<<<<<<<"));
+	}
+
+	#[test]
+	fn replace_conflict_manually_merges_and_clears_metadata() {
+		let source = "\
+function foo() {\n<<<<<<< HEAD\n\treturn bar();\n=======\n\treturn baz();\n>>>>>>> topic\n}\n";
+		let state = parsed_state_for(source, "typescript");
+		let conflict = state
+			.inner()
+			.chunks()
+			.find(|chunk| chunk.kind == ChunkKind::Conflict)
+			.expect("conflict chunk should exist")
+			.clone();
+
+		let result = apply_single_edit(&state, "test.ts", EditOperation {
+			op:      ChunkEditOp::Replace,
+			sel:     Some(conflict.path.clone()),
+			crc:     Some(conflict.checksum),
+			region:  None,
+			content: Some("\treturn qux();\n".to_owned()),
+			find:    None,
+		});
+
+		assert!(!result.state.has_conflicts());
+		assert!(result.diff_after.contains("return qux();"));
+		assert!(!result.diff_after.contains("<<<<<<<"));
+	}
+
+	#[test]
+	fn unresolved_conflicts_survive_rebuilds_within_a_batch() {
+		let source = "\
+function foo() {\n<<<<<<< HEAD\n\treturn bar();\n=======\n\treturn baz();\n>>>>>>> topic\n}\n";
+		let state = parsed_state_for(source, "typescript");
+		let conflict = state
+			.inner()
+			.chunks()
+			.find(|chunk| chunk.kind == ChunkKind::Conflict)
+			.expect("conflict chunk should exist")
+			.clone();
+		let ours = state
+			.inner()
+			.chunk(format!("{}.ours", conflict.path).as_str())
+			.expect("ours child should exist")
+			.clone();
+		let theirs = state
+			.inner()
+			.chunk(format!("{}.theirs", conflict.path).as_str())
+			.expect("theirs child should exist")
+			.clone();
+
+		let result = apply_edits(&state, &EditParams {
+			operations:       vec![
+				EditOperation {
+					op:      ChunkEditOp::Replace,
+					sel:     Some(ours.path.clone()),
+					crc:     Some(ours.checksum),
+					region:  None,
+					content: Some("\treturn bar(1);\n".to_owned()),
+					find:    None,
+				},
+				EditOperation {
+					op:      ChunkEditOp::Delete,
+					sel:     Some(theirs.path.clone()),
+					crc:     Some(theirs.checksum),
+					region:  None,
+					content: None,
+					find:    None,
+				},
+			],
+			default_selector: None,
+			default_crc:      None,
+			anchor_style:     None,
+			cwd:              ".".to_owned(),
+			file_path:        "test.ts".to_owned(),
+		})
+		.expect("batch edit should apply");
+
+		assert!(!result.state.has_conflicts());
+		assert!(result.diff_after.contains("return bar(1);"));
+		assert!(!result.diff_after.contains("<<<<<<<"));
 	}
 }

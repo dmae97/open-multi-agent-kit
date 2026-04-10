@@ -10,6 +10,7 @@
 
 mod classify;
 pub(crate) mod common;
+pub(crate) mod conflict;
 mod defaults;
 pub(crate) mod edit;
 pub(crate) mod indent;
@@ -131,6 +132,7 @@ pub(crate) fn build_chunk_tree(source: &str, language: &str) -> Result<ChunkTree
 		identifier:          None,
 		kind:                ChunkKind::Root,
 		leaf:                false,
+		virtual_content:     None,
 		parent_path:         None,
 		children:            root_children.clone(),
 		signature:           None,
@@ -209,6 +211,7 @@ fn build_blank_line_tree(
 		identifier:          None,
 		kind:                ChunkKind::Root,
 		leaf:                false,
+		virtual_content:     None,
 		parent_path:         None,
 		children:            Vec::new(),
 		signature:           None,
@@ -258,6 +261,7 @@ fn build_blank_line_tree(
 			identifier:          Some(name.clone()),
 			kind:                ChunkKind::Chunk,
 			leaf:                true,
+			virtual_content:     None,
 			parent_path:         Some(String::new()),
 			children:            Vec::new(),
 			signature:           None,
@@ -382,6 +386,7 @@ fn build_chunk(
 		identifier: candidate.identifier,
 		kind: candidate.kind,
 		leaf,
+		virtual_content: None,
 		parent_path: Some(parent_path.to_string()),
 		children,
 		signature: candidate.signature,
@@ -763,6 +768,7 @@ fn insert_preamble_chunk(
 		identifier: None,
 		kind: ChunkKind::Preamble,
 		leaf: true,
+		virtual_content: None,
 		parent_path: Some(String::new()),
 		children: Vec::new(),
 		signature: None,
@@ -2462,5 +2468,86 @@ end
 			let (ts, te) = chunk_region_range(chunk, ChunkRegion::Tail);
 			assert!(te >= ts, "tail of {:?} must not be inverted: start={ts} end={te}", chunk.path);
 		}
+	}
+
+	#[test]
+	fn diff_block_produces_file_chunks() {
+		let source = "diff --git a/src/foo.ts b/src/foo.ts\nindex abcdef0..1234567 100644\n--- \
+		              a/src/foo.ts\n+++ b/src/foo.ts\n@@ -1,3 +1,4 @@\n line1\n+added\n line2\n \
+		              line3\ndiff --git a/src/bar.ts b/src/bar.ts\nindex 1111111..2222222 \
+		              100644\n--- a/src/bar.ts\n+++ b/src/bar.ts\n@@ -5,2 +5,3 @@\n x\n+y\n z\n";
+		let tree = build_chunk_tree(source, "diff").expect("diff tree should build");
+		assert!(
+			tree.root_children.contains(&"file_src_foo_ts".to_string()),
+			"expected file_src_foo_ts, got {:?}",
+			tree.root_children
+		);
+		assert!(
+			tree.root_children.contains(&"file_src_bar_ts".to_string()),
+			"expected file_src_bar_ts, got {:?}",
+			tree.root_children
+		);
+	}
+
+	#[test]
+	fn diff_hunks_individually_addressable() {
+		let source = "diff --git a/app.rs b/app.rs\nindex abcdef0..1234567 100644\n--- \
+		              a/app.rs\n+++ b/app.rs\n@@ -1,3 +1,4 @@\n line1\n+added1\n line2\n line3\n@@ \
+		              -10,3 +11,4 @@\n line10\n+added2\n line11\n line12\n";
+		let tree = build_chunk_tree(source, "diff").expect("diff tree should build");
+		let file_chunk = tree
+			.chunks
+			.iter()
+			.find(|c| c.path == "file_app_rs")
+			.expect("file_app_rs chunk should exist");
+		assert!(!file_chunk.leaf, "file chunk with hunks should not be leaf");
+		assert!(
+			file_chunk
+				.children
+				.iter()
+				.any(|c| c == "file_app_rs.hunk_1"),
+			"expected hunk_1 child, got {:?}",
+			file_chunk.children
+		);
+		assert!(
+			file_chunk
+				.children
+				.iter()
+				.any(|c| c == "file_app_rs.hunk_2"),
+			"expected hunk_2 child, got {:?}",
+			file_chunk.children
+		);
+	}
+
+	#[test]
+	fn diff_deleted_file_uses_old_path() {
+		let source = "diff --git a/old.txt b/old.txt\ndeleted file mode 100644\nindex \
+		              abcdef0..0000000 100644\n--- a/old.txt\n+++ /dev/null\n@@ -1,2 +0,0 \
+		              @@\n-line1\n-line2\n";
+		let tree = build_chunk_tree(source, "diff").expect("diff tree should build");
+		assert!(
+			tree.root_children.contains(&"file_old_txt".to_string()),
+			"expected file_old_txt for deleted file, got {:?}",
+			tree.root_children
+		);
+	}
+
+	#[test]
+	fn diff_single_hunk_has_no_suffix() {
+		let source = "diff --git a/one.rs b/one.rs\nindex abcdef0..1234567 100644\n--- \
+		              a/one.rs\n+++ b/one.rs\n@@ -1,2 +1,3 @@\n line1\n+added\n line2\n";
+		let tree = build_chunk_tree(source, "diff").expect("diff tree should build");
+		let file_chunk = tree
+			.chunks
+			.iter()
+			.find(|c| c.path == "file_one_rs")
+			.expect("file_one_rs should exist");
+		assert!(!file_chunk.leaf);
+		// Single hunk should be named "hunk" without a numeric suffix
+		assert!(
+			file_chunk.children.iter().any(|c| c == "file_one_rs.hunk"),
+			"expected hunk child (no suffix), got {:?}",
+			file_chunk.children
+		);
 	}
 }
