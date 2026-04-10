@@ -1,12 +1,16 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
+- Added `extractReadableFromHtml` utility function to extract readable content from HTML with Readability article extraction and CSS selector fallback
+- Added support for GFM (GitHub Flavored Markdown) features including tables, strikethrough, and task lists in HTML-to-markdown conversion
 - Added `resolveDiagnosticTargets` utility function to handle glob pattern resolution with fallback to literal file paths for bracket-style paths
 
 ### Changed
 
+- Replaced regex-based HTML-to-markdown conversion with Turndown library and GFM plugin for more accurate formatting of complex HTML structures
 - Simplified no-changes response to omit redundant response text when chunk content already matches
 - Clarified region suffix behavior on leaf and compound statement chunks — `~` and `^` now fall back to whole-chunk replacement with explicit guidance to supply complete structural content
 - Updated CRC refresh guidance to direct users to use CRCs from edit responses or run `read(path="file", sel="?")`

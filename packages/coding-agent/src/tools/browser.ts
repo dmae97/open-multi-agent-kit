@@ -501,6 +501,83 @@ export interface ReadableResult {
 	markdown?: string;
 }
 
+type ReadableFormat = "text" | "markdown";
+
+/** Trim to non-empty string or undefined. */
+function normalize(text: string | null | undefined): string | undefined {
+	const trimmed = text?.trim();
+	return trimmed || undefined;
+}
+
+/**
+ * Extract readable content from raw HTML.
+ * Tries Readability (article-isolation scoring) first, then falls back to a
+ * CSS selector chain over the same pre-parsed DOM. Returns null if neither
+ * path yields usable content.
+ */
+export function extractReadableFromHtml(html: string, url: string, format: ReadableFormat): ReadableResult | null {
+	const { document } = parseHTML(html);
+
+	// --- Primary: Readability article extraction ---
+	const article = new Readability(document).parse();
+	if (article) {
+		const result = toReadableResult(url, format, article.textContent, article.content, {
+			title: article.title,
+			byline: article.byline,
+			excerpt: article.excerpt,
+			length: article.length,
+		});
+		if (result) return result;
+	}
+
+	// --- Fallback: CSS selector chain ---
+	const candidates = [
+		document.querySelector("[data-pagefind-body]"),
+		document.querySelector("main article"),
+		document.querySelector("article"),
+		document.querySelector("main"),
+		document.querySelector("[role='main']"),
+		document.body,
+	];
+	for (const el of candidates) {
+		if (!el) continue;
+		const innerHTML = el.innerHTML?.trim();
+		const textContent = el.textContent?.trim();
+		if (!innerHTML || !textContent) continue;
+		const result = toReadableResult(url, format, textContent, innerHTML, {
+			title: document.title,
+			excerpt: textContent.slice(0, 240),
+			length: textContent.length,
+		});
+		if (result) return result;
+	}
+
+	return null;
+}
+
+/** Shared builder for both extraction paths. */
+function toReadableResult(
+	url: string,
+	format: ReadableFormat,
+	textContent: string | null | undefined,
+	htmlContent: string | null | undefined,
+	meta: { title?: string | null; byline?: string | null; excerpt?: string | null; length?: number | null },
+): ReadableResult | null {
+	const text = normalize(textContent);
+	const markdown = format === "markdown" ? (normalize(htmlToBasicMarkdown(htmlContent ?? "")) ?? text) : undefined;
+	const normalizedText = format === "text" ? text : undefined;
+	if (!normalizedText && !markdown) return null;
+	return {
+		url,
+		title: normalize(meta.title),
+		byline: normalize(meta.byline),
+		excerpt: normalize(meta.excerpt),
+		contentLength: meta.length ?? text?.length ?? markdown?.length ?? 0,
+		text: normalizedText,
+		markdown,
+	};
+}
+
 function ensureParam<T>(value: T | undefined, name: string, action: string): T {
 	if (value === undefined || value === null || value === "") {
 		throw new ToolError(`Missing required parameter '${name}' for action '${action}'.`);
@@ -1365,26 +1442,13 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 					const format = params.format ?? "markdown";
 					const html = (await untilAborted(signal, () => page.content())) as string;
 					const url = page.url();
-					const { document } = parseHTML(html);
-					const reader = new Readability(document);
-					const article = reader.parse();
-					if (!article) {
+					const readable = extractReadableFromHtml(html, url, format);
+					if (!readable) {
 						throw new ToolError("Readable content not found");
 					}
-					const markdown = format === "markdown" ? htmlToBasicMarkdown(article.content ?? "") : undefined;
-					const text = format === "text" ? (article.textContent ?? "") : undefined;
-					const readable: ReadableResult = {
-						url,
-						title: article.title ?? undefined,
-						byline: article.byline ?? undefined,
-						excerpt: article.excerpt ?? undefined,
-						contentLength: article.length ?? article.textContent?.length ?? 0,
-						text,
-						markdown,
-					};
 					details.url = url;
 					details.readable = readable;
-					details.result = format === "markdown" ? (markdown ?? "") : (text ?? "");
+					details.result = format === "markdown" ? (readable.markdown ?? "") : (readable.text ?? "");
 					return toolResult(details)
 						.text(JSON.stringify(readable, null, 2))
 						.done();
