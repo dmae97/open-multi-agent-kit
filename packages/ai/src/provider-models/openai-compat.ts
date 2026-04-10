@@ -225,7 +225,7 @@ function toOllamaNativeBaseUrl(baseUrl: string): string {
 	return baseUrl.endsWith("/v1") ? baseUrl.slice(0, -3) : baseUrl;
 }
 
-async function fetchOllamaNativeModels(baseUrl: string): Promise<Model<"openai-completions">[] | null> {
+async function fetchOllamaNativeModels(baseUrl: string): Promise<Model<"openai-responses">[] | null> {
 	const nativeBaseUrl = toOllamaNativeBaseUrl(baseUrl);
 	let response: Response;
 	try {
@@ -241,7 +241,7 @@ async function fetchOllamaNativeModels(baseUrl: string): Promise<Model<"openai-c
 	}
 	const payload = (await response.json()) as { models?: Array<{ name?: string; model?: string }> };
 	const entries = payload.models ?? [];
-	const models: Model<"openai-completions">[] = [];
+	const models: Model<"openai-responses">[] = [];
 	for (const entry of entries) {
 		const id = entry.model ?? entry.name;
 		if (!id) {
@@ -250,7 +250,7 @@ async function fetchOllamaNativeModels(baseUrl: string): Promise<Model<"openai-c
 		models.push({
 			id,
 			name: entry.name ?? id,
-			api: "openai-completions",
+			api: "openai-responses",
 			provider: "ollama",
 			baseUrl,
 			reasoning: false,
@@ -602,19 +602,15 @@ export interface OllamaModelManagerConfig {
 	baseUrl?: string;
 }
 
-export function ollamaModelManagerOptions(
-	config?: OllamaModelManagerConfig,
-): ModelManagerOptions<"openai-completions"> {
+export function ollamaModelManagerOptions(config?: OllamaModelManagerConfig): ModelManagerOptions<"openai-responses"> {
 	const apiKey = config?.apiKey;
 	const baseUrl = normalizeOllamaBaseUrl(config?.baseUrl);
-	const references = createBundledReferenceMap<"openai-completions">(
-		"ollama" as Parameters<typeof getBundledModels>[0],
-	);
+	const references = createBundledReferenceMap<"openai-responses">("ollama" as Parameters<typeof getBundledModels>[0]);
 	return {
 		providerId: "ollama",
 		fetchDynamicModels: async () => {
 			const openAiCompatible = await fetchOpenAICompatibleModels({
-				api: "openai-completions",
+				api: "openai-responses",
 				provider: "ollama",
 				baseUrl,
 				apiKey,

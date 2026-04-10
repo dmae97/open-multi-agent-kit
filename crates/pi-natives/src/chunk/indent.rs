@@ -74,7 +74,11 @@ pub fn count_indent_columns(whitespace: &str, space_step: usize) -> usize {
 		.sum()
 }
 
-pub fn compact_indent(line: &str, indent_char: char, indent_step: usize) -> String {
+pub fn normalize_to_tabs(line: &str, indent_char: char, indent_step: usize) -> String {
+	if indent_char == '\t' {
+		return line.to_owned();
+	}
+
 	let whitespace = leading_whitespace(line);
 	if whitespace.is_empty() {
 		return line.to_owned();
@@ -82,12 +86,16 @@ pub fn compact_indent(line: &str, indent_char: char, indent_step: usize) -> Stri
 
 	let step = indent_step.max(1);
 	let total_columns = count_indent_columns(whitespace, step);
-	let levels = total_columns / step;
-	let _ = indent_char;
-	format!("{}{}", " ".repeat(levels), &line[whitespace.len()..])
+	let tabs = total_columns / step;
+	let remainder = total_columns % step;
+	format!("{}{}{}", "\t".repeat(tabs), " ".repeat(remainder), &line[whitespace.len()..])
 }
 
-pub fn expand_indent(line: &str, file_indent_char: char, file_indent_step: usize) -> String {
+pub fn denormalize_from_tabs(
+	line: &str,
+	file_indent_char: char,
+	file_indent_step: usize,
+) -> String {
 	if file_indent_char != ' ' && file_indent_char != '\t' {
 		return line.to_owned();
 	}
@@ -98,13 +106,16 @@ pub fn expand_indent(line: &str, file_indent_char: char, file_indent_step: usize
 	}
 
 	let step = file_indent_step.max(1);
-	let levels = whitespace.chars().count();
-	let indent = if file_indent_char == '\t' {
-		"\t".repeat(levels)
-	} else {
-		" ".repeat(levels * step)
-	};
-	format!("{indent}{}", &line[whitespace.len()..])
+	let mut converted = String::with_capacity(whitespace.len() * step.max(1));
+	for ch in whitespace.chars() {
+		match ch {
+			'\t' if file_indent_char == '\t' => converted.push('\t'),
+			'\t' => converted.push_str(&file_indent_char.to_string().repeat(step)),
+			' ' => converted.push(' '),
+			_ => converted.push(ch),
+		}
+	}
+	format!("{converted}{}", &line[whitespace.len()..])
 }
 
 pub fn normalize_target_indent(target_indent: &str, sample_text: &str) -> String {
@@ -234,9 +245,9 @@ pub fn detect_file_indent_char(source: &str, tree: &ChunkTree) -> char {
 }
 
 /// Detect spaces-per-indent-level from parent→child indent differences.
-/// Only meaningful for space-indented files; returns
-/// `DEFAULT_SPACE_INDENT_STEP` for tab files.
-pub fn detect_file_indent_step(tree: &ChunkTree) -> u32 {
+/// Falls back to scanning `source` for the minimum indented-line width,
+/// then to `DEFAULT_SPACE_INDENT_STEP` when neither gives a signal.
+pub fn detect_file_indent_step(source: &str, tree: &ChunkTree) -> u32 {
 	for chunk in &tree.chunks {
 		if chunk.children.is_empty() {
 			continue;
@@ -258,7 +269,7 @@ pub fn detect_file_indent_step(tree: &ChunkTree) -> u32 {
 			}
 		}
 	}
-	DEFAULT_SPACE_INDENT_STEP as u32
+	detect_space_indent_step(source) as u32
 }
 
 pub fn strip_content_prefixes(content: &str) -> String {
@@ -371,44 +382,7 @@ fn strip_new_line_prefixes(lines: &[String]) -> Vec<String> {
 			.collect();
 	}
 
-	let prefixed = lines
-		.iter()
-		.filter(|line| !line.trim().is_empty())
-		.filter(|line| visual_prefix_len(line).is_some())
-		.count();
-	if prefixed * 10 <= non_empty * 6 {
-		return lines.to_vec();
-	}
-
-	lines
-		.iter()
-		.map(|line| match visual_prefix_len(line) {
-			Some(prefix_len) => line[prefix_len..].to_owned(),
-			None => line.clone(),
-		})
-		.collect()
-}
-
-fn visual_prefix_len(line: &str) -> Option<usize> {
-	let trimmed_start = line
-		.find(|ch| !matches!(ch, ' ' | '\t'))
-		.unwrap_or(line.len());
-	// A `|` at column 0 is content (e.g. markdown tables), not a
-	// gutter prefix.  The chunk view gutter always has a line-number
-	// column before the pipe, so `trimmed_start > 0`.
-	if trimmed_start == 0 {
-		return None;
-	}
-	let after_indent = &line[trimmed_start..];
-	let marker = after_indent.chars().next()?;
-	if marker != '|' && marker != '│' {
-		return None;
-	}
-	let mut length = trimmed_start + marker.len_utf8();
-	let remainder = &line[length..];
-	let space_prefix = remainder.len() - remainder.trim_start_matches([' ', '\t']).len();
-	length += space_prefix;
-	Some(length)
+	lines.to_vec()
 }
 
 fn hashline_prefix_len(line: &str) -> Option<usize> {
@@ -496,6 +470,7 @@ mod tests {
 				.and_then(|(_, identifier)| (!identifier.is_empty()).then_some(identifier.to_owned())),
 			kind,
 			leaf: children.is_empty(),
+			virtual_content: None,
 			parent_path: parent_path.map(str::to_owned),
 			children: children.iter().map(|child| (*child).to_owned()).collect(),
 			signature: None,
@@ -533,18 +508,18 @@ mod tests {
 	#[test]
 	fn canonical_indent_round_trips_common_profiles() {
 		let cases = [
-			("    value()", ' ', 4, " value()", "    value()"),
-			("      value()", ' ', 3, "  value()", "      value()"),
-			("  value()", ' ', 2, " value()", "  value()"),
-			("\tvalue()", '\t', 4, " value()", "\tvalue()"),
-			(" \t  value()", ' ', 4, " value()", "    value()"),
+			("    value()", ' ', 4, "\tvalue()", "    value()"),
+			("      value()", ' ', 3, "\t\tvalue()", "      value()"),
+			("  value()", ' ', 2, "\tvalue()", "  value()"),
+			("\tvalue()", '\t', 4, "\tvalue()", "\tvalue()"),
+			(" \t  value()", ' ', 4, "\t   value()", "       value()"),
 		];
 
 		for (input, indent_char, indent_step, canonical, restored) in cases {
-			let normalized = compact_indent(input, indent_char, indent_step);
+			let normalized = normalize_to_tabs(input, indent_char, indent_step);
 			assert_eq!(normalized, canonical, "unexpected canonical indent for {input:?}");
 			assert_eq!(
-				expand_indent(&normalized, indent_char, indent_step),
+				denormalize_from_tabs(&normalized, indent_char, indent_step),
 				restored,
 				"unexpected restored indent for {input:?}"
 			);
@@ -553,9 +528,9 @@ mod tests {
 
 	#[test]
 	fn reindent_inserted_block_preserves_relative_indentation() {
-		// The block already uses spaces after canonical content has been expanded
-		// back into the file's indent unit. Reindent should preserve those relative
-		// offsets while adding the target indent.
+		// Agent sends tab-based content: call(\n\talpha,\n\tbeta,\n)
+		// After denormalize_from_tabs (4 spaces/tab): call(\n    alpha,\n    beta,\n)
+		// Should add target indent to all lines, preserving relative offsets.
 		let input = "call(\n    alpha,\n    beta,\n)";
 		assert_eq!(
 			reindent_inserted_block(input, "    ", Some(4)),
@@ -584,7 +559,25 @@ mod tests {
 				chunk("fn_b", Some("class_A"), &[], 2, " "),
 			],
 		};
-		assert_eq!(detect_file_indent_step(&tree), 2);
+		assert_eq!(detect_file_indent_step("", &tree), 2);
+	}
+
+	#[test]
+	fn detect_file_indent_step_falls_back_to_source_scan() {
+		// When the chunk tree has no parent->child pairs (all leaves),
+		// fall back to scanning source lines for the minimum indent width.
+		let tree = ChunkTree {
+			language:      "yaml".to_owned(),
+			checksum:      "ABCD".to_owned(),
+			line_count:    3,
+			parse_errors:  0,
+			fallback:      false,
+			root_path:     String::new(),
+			root_children: vec!["key_server".to_owned()],
+			chunks:        vec![chunk("key_server", Some(""), &[], 0, " ")],
+		};
+		let source = "server:\n  host: localhost\n  port: 5432\n";
+		assert_eq!(detect_file_indent_step(source, &tree), 2);
 	}
 
 	#[test]

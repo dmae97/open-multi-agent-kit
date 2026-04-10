@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+## [14.0.4] - 2026-04-10
+### Added
+
+- Added `PI_CHUNK_AUTOINDENT` environment variable to control whether chunk read/edit tools normalize indentation to canonical tabs or preserve literal file whitespace
+- Added dynamic chunk tool prompts that automatically adjust guidance based on `PI_CHUNK_AUTOINDENT` setting without exposing a tool parameter
+- Added `<instruction-priority>`, `<output-contract>`, `<default-follow-through>`, `<tool-persistence>`, and `<completeness-contract>` sections to system prompt for improved long-horizon agent workflows
+
+### Changed
+
+- Updated chunk edit tool to apply `normalizeIndent` setting during edit operations, enabling literal whitespace preservation when `PI_CHUNK_AUTOINDENT=0`
+- Refactored environment variable parsing to use `$flag()` and `$envpos()` utilities from pi-utils for consistent boolean and integer handling across codebase
+- Updated system prompt communication guidelines to emphasize conciseness and information density, and added guidance on avoiding repetition of user requests
+- Enhanced system prompt with explicit rules for design integrity, verification before yielding, and handling of missing context via tool-based retrieval
+- Added `PI_CHUNK_AUTOINDENT` to control whether chunk read/edit tools normalize indentation, and updated chunk prompts to switch guidance automatically based on that setting
+- Refined the default system prompt with explicit instruction-priority, output-contract, tool-persistence, completeness, and verification rules for long-horizon GPT-5.4-style agent workflows
+
+### Fixed
+
+- Fixed typo in system prompt: 'backwards compatibiltity' → 'backwards compatibility'
+
+## [14.0.3] - 2026-04-09
+
+### Fixed
+
+- Fixed cached Ollama discovery rows so upgraded installs switch to the OpenAI Responses transport instead of staying on the old completions transport
+
 ## [14.0.2] - 2026-04-09
 ### Added
 
@@ -257,6 +283,10 @@
 - Shell paths check errors before consuming chunk output (bash executor, config resolution)
 - `/autoresearch` toggles like `/plan` when empty; slash completion no longer suggests `off`/`clear` on an empty prefix after the command
 - Chunk-mode read/edit edge cases (zero-width gap replaces, stale batch diagnostics, grouped Go receivers, line-count headers, parse error locations)
+
+### Added
+
+- `/review` command now accepts inline args as custom instructions appended to the generated prompt for all structured review modes (PR-style, uncommitted, specific commit). When inline args are provided, option 4 (editor) is suppressed from the menu. The no-UI (Task tool) path forwards args as a focus hint.
 
 ## [13.19.0] - 2026-04-05
 

@@ -415,9 +415,13 @@ type Server struct {
 
 	test("replace with empty content on last impl method collapses extra whitespace-only lines before the closing brace", () => {
 		const source = `impl S {
-    fn a() {}
+    fn a() {
+        keep();
+    }
 
-    fn b() {}
+    fn b() {
+        drop();
+    }
 
 }
 `;
@@ -429,7 +433,7 @@ type Server struct {
 			operations: [{ op: "replace", sel: targetWithChecksum("impl_S.fn_b", crc), content: "" }],
 		});
 
-		expect(result.diffSourceAfter).toBe("impl S {\n    fn a() {}\n\n}\n");
+		expect(result.diffSourceAfter).toBe("impl S {\n    fn a() {\n        keep();\n    }\n\n}\n");
 	});
 });
 
@@ -719,8 +723,8 @@ describe("formatChunkedRead", () => {
 
 		expect(result.text).toContain("worker.ts:class_Worker.fn_run·");
 		expect(result.text).toContain("class_Worker.fn_run#");
-		expect(result.text).toContain("6|  run(): void {");
-		expect(result.text).toContain("7|   console.log(this.name);");
+		expect(result.text).toContain("6| \trun(): void {");
+		expect(result.text).toContain("7| \t\tconsole.log(this.name);");
 		expect(result.text).toContain("console.log(this.name);");
 	});
 
@@ -739,8 +743,8 @@ describe("formatChunkedRead", () => {
 
 		expect(result.text).not.toContain("to expand ⋮");
 		expect(result.text).toContain("service.ts:class_Service.fn_handle·");
-		expect(result.text).toContain("3|   step(0);");
-		expect(result.text).toContain("27|   step(24);");
+		expect(result.text).toContain("3| \t\tstep(0);");
+		expect(result.text).toContain("27| \t\tstep(24);");
 		expect(result.text).toContain("done();");
 	});
 });
@@ -849,7 +853,7 @@ describe("addressable member rendering", () => {
 
 		expect(result.text).toContain("type_Handler#");
 		expect(result.text).toContain("3| type Handler interface {");
-		expect(result.text).toContain("4|  Handle(method, path string) Result");
+		expect(result.text).toContain("4| \tHandle(method, path string) Result");
 	});
 
 	test("renders Go receiver methods as top-level siblings", async () => {
