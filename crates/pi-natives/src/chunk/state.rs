@@ -514,7 +514,7 @@ impl ChunkState {
 			let normalize_indent = params.normalize_indent.unwrap_or(false).then(|| {
 				(
 					detect_file_indent_char(self.inner.source(), self.inner.tree()),
-					detect_file_indent_step(self.inner.tree()) as usize,
+					detect_file_indent_step(self.inner.source(), self.inner.tree()) as usize,
 				)
 			});
 			// Extend the region start to the beginning of the line so that the

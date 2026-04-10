@@ -62,7 +62,7 @@ pub fn apply_edits(state: &ChunkState, params: &EditParams) -> Result<EditResult
 		initial_notebook_ctx.clone(),
 		initial_conflict_meta.clone(),
 	)?;
-	let file_indent_step = detect_file_indent_step(&state.tree) as usize;
+	let file_indent_step = detect_file_indent_step(&state.source, &state.tree) as usize;
 	let file_indent_char = detect_file_indent_char(&state.source, &state.tree);
 	let initial_parse_errors = state.tree.parse_errors;
 	let initial_chunk_paths: std::collections::HashSet<String> =
@@ -1612,7 +1612,7 @@ fn render_changed_hunks(
 	let tree = state.tree();
 	let tab_replacement = "    ";
 	let file_indent_char = detect_file_indent_char(state.source(), tree);
-	let file_indent_step = detect_file_indent_step(tree) as usize;
+	let file_indent_step = detect_file_indent_step(state.source(), tree) as usize;
 	let lookup: HashMap<&str, &ChunkNode> =
 		tree.chunks.iter().map(|c| (c.path.as_str(), c)).collect();
 

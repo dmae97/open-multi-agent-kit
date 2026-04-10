@@ -56,7 +56,10 @@ pub fn render_state(state: &ChunkStateInner, params: &RenderParams) -> String {
 	let preview_tail_lines = *PREVIEW_TAIL_LINES;
 	let tab_replacement = params.tab_replacement.as_deref().unwrap_or("    ");
 	let normalize_indent = params.normalize_indent.unwrap_or(false).then(|| {
-		(detect_file_indent_char(state.source(), tree), detect_file_indent_step(tree) as usize)
+		(
+			detect_file_indent_char(state.source(), tree),
+			detect_file_indent_step(state.source(), tree) as usize,
+		)
 	});
 	let anchor_style = params.anchor_style.unwrap_or_default();
 	let focus: Option<HashMap<&str, ChunkFocusMode>> = params
@@ -654,7 +657,7 @@ fn emit_line_gap(ctx: &mut RenderCtx<'_>, from: u32, to: u32) {
 	}
 }
 
-/// Emit a truncation marker when visible_range clips a chunk.
+/// Emit a truncation marker when `visible_range` clips a chunk.
 /// `above` = true for top clip, false for bottom clip.
 fn emit_range_clip_marker(
 	ctx: &mut RenderCtx<'_>,
@@ -995,7 +998,10 @@ pub fn render_state_with_hunks(
 	let preview_tail_lines = *PREVIEW_TAIL_LINES;
 	let tab_replacement = params.tab_replacement.as_deref().unwrap_or("    ");
 	let normalize_indent = params.normalize_indent.unwrap_or(false).then(|| {
-		(detect_file_indent_char(state.source(), tree), detect_file_indent_step(tree) as usize)
+		(
+			detect_file_indent_char(state.source(), tree),
+			detect_file_indent_step(state.source(), tree) as usize,
+		)
 	});
 	let anchor_style = params.anchor_style.unwrap_or_default();
 	let focus: Option<HashMap<&str, ChunkFocusMode>> = params
