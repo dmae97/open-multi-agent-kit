@@ -167,10 +167,13 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 
 			// Check for error/aborted
 			if (assistantMsg.stopReason === "error" || assistantMsg.stopReason === "aborted") {
-				process.stderr.write(
-					`${sanitizeText(assistantMsg.errorMessage || `Request ${assistantMsg.stopReason}`)}\n`,
-				);
-				process.exit(1);
+				const errorLine = sanitizeText(assistantMsg.errorMessage || `Request ${assistantMsg.stopReason}`);
+				const flushed = process.stderr.write(`${errorLine}\n`);
+				if (flushed) {
+					process.exit(1);
+				} else {
+					process.stderr.once("drain", () => process.exit(1));
+				}
 			}
 
 			// Output text content

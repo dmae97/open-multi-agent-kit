@@ -675,6 +675,32 @@ function sendShellStreamEvent(
 	sendExecClientMessage(h2Request, execMsg, "shellStream", create(ShellStreamSchema, { event }));
 }
 
+function sanitizeShellExecResult(execResult: { result: { case?: string; value?: any } }): {
+	result: { case?: string; value?: any };
+} {
+	const result = execResult.result;
+	if (!result) return execResult;
+
+	switch (result.case) {
+		case "success":
+		case "failure": {
+			const value = result.value;
+			return {
+				result: {
+					case: result.case,
+					value: {
+						...value,
+						stdout: value.stdout ? sanitizeText(value.stdout) : value.stdout,
+						stderr: value.stderr ? sanitizeText(value.stderr) : value.stderr,
+					},
+				},
+			};
+		}
+		default:
+			return execResult;
+	}
+}
+
 async function handleShellStreamArgs(
 	args: ShellArgs,
 	execMsg: ExecServerMessage,
@@ -700,23 +726,43 @@ async function handleShellStreamArgs(
 	let stdoutBuffer = "";
 	let stderrBuffer = "";
 
+	const incompleteEscapeRegex = /\x1b(|\[|\[\d*|\[\?|\[\?\d*|\]\d*;?)$/;
+
 	const flushStdout = () => {
 		if (stdoutBuffer) {
-			sendShellStreamEvent(h2Request, execMsg, {
-				case: "stdout",
-				value: create(ShellStreamStdoutSchema, { data: sanitizeText(stdoutBuffer) }),
-			});
-			stdoutBuffer = "";
+			let safeEnd = stdoutBuffer.length;
+			const match = stdoutBuffer.match(incompleteEscapeRegex);
+			if (match && match[0].length > 0) {
+				safeEnd = stdoutBuffer.length - match[0].length;
+			}
+			const toSend = stdoutBuffer.slice(0, safeEnd);
+			const remaining = stdoutBuffer.slice(safeEnd);
+			if (toSend) {
+				sendShellStreamEvent(h2Request, execMsg, {
+					case: "stdout",
+					value: create(ShellStreamStdoutSchema, { data: sanitizeText(toSend) }),
+				});
+			}
+			stdoutBuffer = remaining;
 		}
 	};
 
 	const flushStderr = () => {
 		if (stderrBuffer) {
-			sendShellStreamEvent(h2Request, execMsg, {
-				case: "stderr",
-				value: create(ShellStreamStderrSchema, { data: sanitizeText(stderrBuffer) }),
-			});
-			stderrBuffer = "";
+			let safeEnd = stderrBuffer.length;
+			const match = stderrBuffer.match(incompleteEscapeRegex);
+			if (match && match[0].length > 0) {
+				safeEnd = stderrBuffer.length - match[0].length;
+			}
+			const toSend = stderrBuffer.slice(0, safeEnd);
+			const remaining = stderrBuffer.slice(safeEnd);
+			if (toSend) {
+				sendShellStreamEvent(h2Request, execMsg, {
+					case: "stderr",
+					value: create(ShellStreamStderrSchema, { data: sanitizeText(toSend) }),
+				});
+			}
+			stderrBuffer = remaining;
 		}
 	};
 
@@ -773,32 +819,6 @@ async function handleShellStreamArgs(
 	const streamHandler = execHandlers?.shellStream?.bind(execHandlers);
 	const batchHandler = execHandlers?.shell?.bind(execHandlers);
 	const handler = streamHandler ? (shellArgs: ShellArgs) => streamHandler(shellArgs, streamCallbacks) : batchHandler;
-
-	function sanitizeShellExecResult(execResult: { result: { case?: string; value?: any } }): {
-		result: { case?: string; value?: any };
-	} {
-		const result = execResult.result;
-		if (!result) return execResult;
-
-		switch (result.case) {
-			case "success":
-			case "failure": {
-				const value = result.value;
-				return {
-					result: {
-						case: result.case,
-						value: {
-							...value,
-							stdout: value.stdout ? sanitizeText(value.stdout) : value.stdout,
-							stderr: value.stderr ? sanitizeText(value.stderr) : value.stderr,
-						},
-					},
-				};
-			}
-			default:
-				return execResult;
-		}
-	}
 
 	const { execResult } = await resolveExecHandler(
 		args as any,
@@ -1062,7 +1082,8 @@ async function handleExecServerMessage(
 				reason => buildShellRejectedResult(normalizedArgs.command, normalizedArgs.workingDirectory, reason),
 				error => buildShellFailureResult(normalizedArgs.command, normalizedArgs.workingDirectory, error),
 			);
-			sendExecClientMessage(h2Request, execMsg, "shellResult", execResult);
+			const sanitizedExecResult = sanitizeShellExecResult(execResult);
+			sendExecClientMessage(h2Request, execMsg, "shellResult", sanitizedExecResult);
 			return;
 		}
 		case "shellStreamArgs": {

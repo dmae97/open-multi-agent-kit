@@ -242,19 +242,17 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 		let result: AgentToolResult<unknown>;
 		let isError = false;
 
-		// Track previously streamed text so we only forward deltas.
 		let rawText = "";
+		let sanitizedRawText = "";
 		const onUpdate: AgentToolUpdateCallback<unknown> = partialResult => {
-			// Track raw text length before sanitization to avoid drift
 			const newRawText = partialResult.content.map(c => (c.type === "text" ? c.text : "")).join("");
 			if (newRawText.length > rawText.length) {
-				const delta = newRawText.slice(rawText.length);
 				rawText = newRawText;
-				// Sanitize only the delta
-				const sanitizedDelta = sanitizeText(delta);
-				// Build sanitized partial result
+				const fullSanitized = sanitizeText(newRawText);
+				const sanitizedDelta = fullSanitized.slice(sanitizedRawText.length);
+				sanitizedRawText = fullSanitized;
 				const sanitizedPartialResult: AgentToolResult<unknown> = {
-					content: partialResult.content.map(c => (c.type === "text" ? { ...c, text: sanitizeText(c.text) } : c)),
+					content: [{ type: "text" as const, text: sanitizedRawText }],
 					details: partialResult.details,
 				};
 				this.options.emitEvent?.({
@@ -267,8 +265,10 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 				callbacks.onStdout(sanitizedDelta);
 			} else if (newRawText !== rawText) {
 				rawText = newRawText;
+				const fullSanitized = sanitizeText(newRawText);
+				sanitizedRawText = fullSanitized;
 				const sanitizedPartialResult: AgentToolResult<unknown> = {
-					content: partialResult.content.map(c => (c.type === "text" ? { ...c, text: sanitizeText(c.text) } : c)),
+					content: [{ type: "text" as const, text: sanitizedRawText }],
 					details: partialResult.details,
 				};
 				this.options.emitEvent?.({
@@ -293,8 +293,11 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 		// from the final result that wasn't already streamed.
 		const finalRawText = result.content.map(c => (c.type === "text" ? c.text : "")).join("");
 		if (finalRawText.length > rawText.length) {
-			const finalDelta = finalRawText.slice(rawText.length);
-			callbacks.onStdout(sanitizeText(finalDelta));
+			rawText = finalRawText;
+			const fullSanitized = sanitizeText(finalRawText);
+			const finalDelta = fullSanitized.slice(sanitizedRawText.length);
+			sanitizedRawText = fullSanitized;
+			callbacks.onStdout(finalDelta);
 		}
 
 		const sanitizedFinalResult: AgentToolResult<unknown> = {

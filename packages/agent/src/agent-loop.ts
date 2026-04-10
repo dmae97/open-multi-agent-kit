@@ -501,7 +501,10 @@ async function executeToolCalls(
 			type: "tool_execution_end",
 			toolCallId: toolCall.id,
 			toolName: toolCall.name,
-			result,
+			result: {
+				...result,
+				content: result.content.map(c => (c.type === "text" ? { ...c, text: sanitizeText(c.text) } : c)),
+			},
 			isError,
 		});
 
@@ -583,7 +586,12 @@ async function executeToolCalls(
 						toolCallId: toolCall.id,
 						toolName: toolCall.name,
 						args: argsForExecution,
-						partialResult,
+						partialResult: {
+							...partialResult,
+							content: partialResult.content.map(c =>
+								c.type === "text" ? { ...c, text: sanitizeText(c.text) } : c,
+							),
+						},
 					});
 				},
 				toolContext,
