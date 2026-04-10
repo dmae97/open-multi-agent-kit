@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added `resolveDiagnosticTargets` utility function to handle glob pattern resolution with fallback to literal file paths for bracket-style paths
@@ -13,6 +14,10 @@
 - Replaced internal `raceAbort` function with imported `raceWithAbort` utility from pi-utils
 - Refactored cleanup timer to use async iterator pattern with `timers.setInterval` instead of `setInterval`
 - Made `#cleanupIdleSessions` synchronous and moved async cleanup loop logic to new `#runCleanupLoop` method
+
+### Fixed
+
+- Fixed Codex search to use streamed answer text when final answer is an image placeholder or empty
 
 ## [14.0.4] - 2026-04-10
 ### Added

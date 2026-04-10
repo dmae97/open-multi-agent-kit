@@ -90,6 +90,10 @@ interface CodexResponse {
 	usage?: CodexUsage;
 }
 
+function isImagePlaceholderAnswer(text: string): boolean {
+	return text.trim().toLowerCase() === "(see attached image)";
+}
+
 /**
  * Decodes a JWT token and extracts the payload.
  * @param token - JWT token string
@@ -232,6 +236,7 @@ async function callCodexSearch(
 
 	// Parse SSE stream
 	const answerParts: string[] = [];
+	const streamedAnswerParts: string[] = [];
 	const sources: SearchSource[] = [];
 	let model = requestedModel;
 	let requestId = "";
@@ -241,7 +246,12 @@ async function callCodexSearch(
 		const eventType = typeof rawEvent.type === "string" ? rawEvent.type : "";
 		if (!eventType) continue;
 
-		if (eventType === "response.output_item.done") {
+		if (eventType === "response.output_text.delta") {
+			const delta = typeof rawEvent.delta === "string" ? rawEvent.delta : "";
+			if (delta) {
+				streamedAnswerParts.push(delta);
+			}
+		} else if (eventType === "response.output_item.done") {
 			const item = rawEvent.item as CodexResponseItem | undefined;
 			if (!item) continue;
 
@@ -302,8 +312,17 @@ async function callCodexSearch(
 		}
 	}
 
+	const finalAnswer = answerParts.join("\n\n").trim();
+	const streamedAnswer = streamedAnswerParts.join("").trim();
+	const answer =
+		finalAnswer.length > 0 && !isImagePlaceholderAnswer(finalAnswer)
+			? finalAnswer
+			: streamedAnswer.length > 0
+				? streamedAnswer
+				: finalAnswer;
+
 	return {
-		answer: answerParts.join("\n\n"),
+		answer,
 		sources,
 		model,
 		requestId,

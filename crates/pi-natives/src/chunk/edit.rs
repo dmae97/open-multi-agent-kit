@@ -4131,8 +4131,9 @@ function foo() {\n<<<<<<< HEAD\n\treturn bar();\n=======\n\treturn baz();\n>>>>>
 		// Python `if` inside a function body is a leaf chunk with prologue/epilogue
 		// bytes set by the classifier. Using `~` on it should fall back to
 		// whole-chunk replacement instead of mangling the guard.
-		let source = "def handle(request):\n    x = 1\n    y = 2\n    if request.ok:\n        return \
-					  \"yes\"\n    z = 3\n    for item in items:\n        process(item)\n    return \"no\"\n";
+		let source = "def handle(request):\n    x = 1\n    y = 2\n    if request.ok:\n        \
+		              return \"yes\"\n    z = 3\n    for item in items:\n        process(item)\n    \
+		              return \"no\"\n";
 		let state = parsed_state_for(source, "python");
 		let if_chunk = state
 			.inner()

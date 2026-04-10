@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed
+
+- Fixed duplicate synthetic tool results being generated when a real tool result appears later in message history
 
 ## [14.0.3] - 2026-04-09
 
