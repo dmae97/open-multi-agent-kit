@@ -1269,6 +1269,34 @@ function b() {
 			expect(output).toContain("kept.txt");
 			expect(output).not.toContain("ignored.txt");
 		});
+
+		it("should sort exact recursive filename matches by mtime", async () => {
+			const olderDir = path.join(testDir, "a");
+			const newerDir = path.join(testDir, "z");
+			fs.mkdirSync(olderDir, { recursive: true });
+			fs.mkdirSync(newerDir, { recursive: true });
+
+			const olderFile = path.join(olderDir, "auth-actions.spec.ts");
+			const newerFile = path.join(newerDir, "auth-actions.spec.ts");
+			fs.writeFileSync(olderFile, "old\n");
+			fs.writeFileSync(newerFile, "new\n");
+
+			const olderTime = new Date(Date.now() - 60_000);
+			const newerTime = new Date();
+			fs.utimesSync(olderFile, olderTime, olderTime);
+			fs.utimesSync(newerFile, newerTime, newerTime);
+
+			const result = await findTool.execute("test-call-14b", {
+				pattern: `${testDir}/**/auth-actions.spec.ts`,
+			});
+
+			const outputLines = getTextOutput(result)
+				.split("\n")
+				.map(line => line.trim())
+				.filter(Boolean);
+
+			expect(outputLines).toEqual(["z/auth-actions.spec.ts", "a/auth-actions.spec.ts"]);
+		});
 	});
 });
 

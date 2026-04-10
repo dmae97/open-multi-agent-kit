@@ -4140,7 +4140,11 @@ function foo() {\n<<<<<<< HEAD\n\treturn bar();\n=======\n\treturn baz();\n>>>>>
 			.tree
 			.chunks
 			.iter()
-			.find(|c| Path::new(&c.path).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("if")))
+			.find(|c| {
+				Path::new(&c.path)
+					.extension()
+					.is_some_and(|ext| ext.eq_ignore_ascii_case("if"))
+			})
 			.expect("if chunk should exist");
 		assert!(if_chunk.leaf, "if chunk should be leaf");
 
