@@ -77,34 +77,60 @@ export class AwaitTool implements AgentTool<typeof awaitSchema, AwaitToolDetails
 			};
 		}
 
-		// If all watched jobs are already done, return immediately
+		// Watch jobs before waiting to prevent race condition where jobs complete
+		// before we start waiting, which would trigger duplicate delivery.
+		const jobIdsToWatch = jobsToWatch.map(j => j.id);
+
+		// If all watched jobs are already done, watch, acknowledge, unwatch, and return
 		const runningJobs = jobsToWatch.filter(j => j.status === "running");
 		if (runningJobs.length === 0) {
-			return this.#buildResult(manager, jobsToWatch);
+			manager.watchJobs(jobIdsToWatch);
+			const result = this.#buildResult(manager, jobsToWatch);
+			manager.unwatchJobs(jobIdsToWatch);
+			return result;
 		}
+		try {
+			manager.watchJobs(jobIdsToWatch);
 
-		// Block until at least one running job finishes or the call is aborted
-		const racePromises: Promise<unknown>[] = runningJobs.map(j => j.promise);
-
-		if (signal) {
-			const { promise: abortPromise, resolve: abortResolve } = Promise.withResolvers<void>();
-			const onAbort = () => abortResolve();
-			signal.addEventListener("abort", onAbort, { once: true });
-			racePromises.push(abortPromise);
-			try {
+			// Block until at least one running job finishes or the call is aborted
+			const racePromises: Promise<unknown>[] = runningJobs.map(j => j.promise);
+			if (signal) {
+				const { promise: abortPromise, resolve: abortResolve } = Promise.withResolvers<void>();
+				const onAbort = () => abortResolve();
+				signal.addEventListener("abort", onAbort, { once: true });
+				racePromises.push(abortPromise);
+				try {
+					await Promise.race(racePromises);
+				} finally {
+					signal.removeEventListener("abort", onAbort);
+				}
+			} else {
 				await Promise.race(racePromises);
-			} finally {
-				signal.removeEventListener("abort", onAbort);
 			}
-		} else {
-			await Promise.race(racePromises);
+		} catch (error) {
+			// Cleanup watched status on error
+			manager.unwatchJobs(jobIdsToWatch);
+			throw error;
 		}
 
+		// Build result and get the completed job IDs to unwatch
 		if (signal?.aborted) {
-			return this.#buildResult(manager, jobsToWatch);
+			const result = this.#buildResult(manager, jobsToWatch);
+			// Unwatch completed jobs even when aborted
+			const completedIds = jobsToWatch.filter(j => j.status !== "running").map(j => j.id);
+			manager.unwatchJobs(completedIds);
+			return result;
 		}
 
-		return this.#buildResult(manager, jobsToWatch);
+		const result = this.#buildResult(manager, jobsToWatch);
+
+		// Unwatch completed jobs (they're acknowledged, no need for delivery)
+		const completedIds = jobsToWatch.filter(j => j.status !== "running").map(j => j.id);
+		manager.unwatchJobs(completedIds);
+
+		// Jobs still running remain watched - they'll be delivered when complete
+
+		return result;
 	}
 
 	#buildResult(

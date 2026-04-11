@@ -48,6 +48,7 @@ export class AsyncJobManager {
 	readonly #jobs = new Map<string, AsyncJob>();
 	readonly #deliveries: AsyncJobDelivery[] = [];
 	readonly #suppressedDeliveries = new Set<string>();
+	readonly #watchedJobs = new Set<string>();
 	readonly #evictionTimers = new Map<string, NodeJS.Timeout>();
 	readonly #onJobComplete: AsyncJobManagerOptions["onJobComplete"];
 	readonly #maxRunningJobs: number;
@@ -201,6 +202,42 @@ export class AsyncJobManager {
 		return before - this.#deliveries.length;
 	}
 
+	/**
+	 * Mark jobs as being actively watched via `await` tool.
+	 * Jobs watched before they complete will not trigger delivery.
+	 */
+	watchJobs(jobIds: string[]): void {
+		for (const id of jobIds) {
+			this.#watchedJobs.add(id);
+		}
+	}
+
+	/**
+	 * Unwatch jobs after await resolves. Completed unwatched jobs
+	 * will then be eligible for delivery (if not already acknowledged).
+	 */
+	unwatchJobs(jobIds: string[]): void {
+		const unwatchedIds: string[] = [];
+		for (const id of jobIds) {
+			if (this.#watchedJobs.delete(id)) {
+				unwatchedIds.push(id);
+			}
+		}
+		// For any completed jobs that were suppressed due to being watched,
+		// we need to trigger delivery now that they're unwatched
+		for (const id of unwatchedIds) {
+			const job = this.#jobs.get(id);
+			if (job && job.status !== "running" && !this.#isDeliverySuppressed(id)) {
+				// Job completed while watched - enqueue delivery now
+				this.#enqueueDelivery(id, job.resultText ?? job.errorText ?? "");
+			}
+		}
+		// Trigger delivery loop in case there are now pending deliveries
+		if (unwatchedIds.length > 0) {
+			this.#ensureDeliveryLoop();
+		}
+	}
+
 	cancelAll(): void {
 		for (const job of this.getRunningJobs()) {
 			job.status = "cancelled";
@@ -254,6 +291,7 @@ export class AsyncJobManager {
 		this.#jobs.clear();
 		this.#deliveries.length = 0;
 		this.#suppressedDeliveries.clear();
+		this.#watchedJobs.clear();
 		return drained;
 	}
 
@@ -278,6 +316,7 @@ export class AsyncJobManager {
 		if (this.#retentionMs <= 0) {
 			this.#jobs.delete(jobId);
 			this.#suppressedDeliveries.delete(jobId);
+			this.#watchedJobs.delete(jobId);
 			return;
 		}
 		const existing = this.#evictionTimers.get(jobId);
@@ -288,6 +327,7 @@ export class AsyncJobManager {
 			this.#evictionTimers.delete(jobId);
 			this.#jobs.delete(jobId);
 			this.#suppressedDeliveries.delete(jobId);
+			this.#watchedJobs.delete(jobId);
 		}, this.#retentionMs);
 		timer.unref();
 		this.#evictionTimers.set(jobId, timer);
@@ -304,8 +344,13 @@ export class AsyncJobManager {
 		return this.#suppressedDeliveries.has(jobId);
 	}
 
+	#isJobWatched(jobId: string): boolean {
+		return this.#watchedJobs.has(jobId);
+	}
+
 	#enqueueDelivery(jobId: string, text: string): void {
-		if (this.#isDeliverySuppressed(jobId)) {
+		// Skip delivery if: (1) already acknowledged, or (2) currently being awaited
+		if (this.#isDeliverySuppressed(jobId) || this.#isJobWatched(jobId)) {
 			return;
 		}
 		this.#deliveries.push({
@@ -337,7 +382,8 @@ export class AsyncJobManager {
 	async #runDeliveryLoop(): Promise<void> {
 		while (this.#deliveries.length > 0) {
 			const delivery = this.#deliveries[0];
-			if (this.#isDeliverySuppressed(delivery.jobId)) {
+			// Check both suppressed AND watched status
+			if (this.#isDeliverySuppressed(delivery.jobId) || this.#isJobWatched(delivery.jobId)) {
 				this.#deliveries.shift();
 				continue;
 			}
@@ -348,7 +394,8 @@ export class AsyncJobManager {
 			if (this.#deliveries[0] !== delivery) {
 				continue;
 			}
-			if (this.#isDeliverySuppressed(delivery.jobId)) {
+			// Check again after sleep
+			if (this.#isDeliverySuppressed(delivery.jobId) || this.#isJobWatched(delivery.jobId)) {
 				this.#deliveries.shift();
 				continue;
 			}
