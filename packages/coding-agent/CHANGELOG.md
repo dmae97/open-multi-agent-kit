@@ -22,6 +22,7 @@
 - Fixed model resolution for commit message generation, title generation, memory consolidation, and image inspection when role strings use canonical ids instead of raw provider/model values
 - Fixed default-model updates so previously configured thinking levels were preserved when reassigning a role
 - Fixed model scope and selection handling in CLI/session startup paths that previously failed to resolve aliases consistently across features
+- Fixed short-lived git subprocesses to disable `core.fsmonitor` and `core.untrackedCache`, avoiding unnecessary repository watchers and cache work during agent git operations
 
 ## [14.0.5] - 2026-04-11
 ### Added

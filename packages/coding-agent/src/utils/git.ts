@@ -146,6 +146,10 @@ const NO_OPTIONAL_LOCKS = "--no-optional-locks";
 const HEAD_REF_PREFIX = "ref:";
 const LOCAL_BRANCH_PREFIX = "refs/heads/";
 const DEFAULT_BRANCH_REFS = ["refs/remotes/origin/HEAD", "refs/remotes/upstream/HEAD"] as const;
+const SHORT_LIVED_GIT_CONFIG: readonly (readonly [key: string, value: string])[] = [
+	["core.fsmonitor", "false"],
+	["core.untrackedCache", "false"],
+];
 
 interface CommandOptions {
 	readonly env?: Record<string, string | undefined>;
@@ -183,7 +187,7 @@ async function runCommand(
 	args: readonly string[],
 	options: CommandOptions = {},
 ): Promise<GitCommandResult> {
-	const commandArgs = options.readOnly ? withNoOptionalLocks(args) : [...args];
+	const commandArgs = withShortLivedGitConfig(options.readOnly ? withNoOptionalLocks(args) : [...args]);
 	const child = Bun.spawn(["git", ...commandArgs], {
 		cwd,
 		env: options.env ? { ...process.env, ...options.env } : undefined,
@@ -210,6 +214,25 @@ async function runCommand(
 function withNoOptionalLocks(args: readonly string[]): string[] {
 	if (args.includes(NO_OPTIONAL_LOCKS)) return [...args];
 	return [NO_OPTIONAL_LOCKS, ...args];
+}
+
+function withShortLivedGitConfig(args: readonly string[]): string[] {
+	const prefix: string[] = [];
+	for (const [key, value] of SHORT_LIVED_GIT_CONFIG) {
+		if (hasGitConfig(args, key, value)) continue;
+		prefix.push("-c", `${key}=${value}`);
+	}
+	return [...prefix, ...args];
+}
+
+function hasGitConfig(args: readonly string[], key: string, value: string): boolean {
+	const expected = `${key}=${value}`;
+	for (let index = 0; index < args.length - 1; index += 1) {
+		if (args[index] === "-c" && args[index + 1] === expected) {
+			return true;
+		}
+	}
+	return false;
 }
 
 async function runChecked(
