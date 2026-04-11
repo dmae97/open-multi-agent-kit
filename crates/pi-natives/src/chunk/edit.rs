@@ -169,35 +169,42 @@ pub fn apply_edits(state: &ChunkState, params: &EditParams) -> Result<EditResult
 
 	let parse_valid = state.tree.parse_errors <= initial_parse_errors;
 	if !parse_valid && initial_parse_errors == 0 {
-		let error_summaries = format_parse_error_summaries(&state);
-		let fallback_summary = if error_summaries.is_empty() {
-			if let Some(scheduled) = last_scheduled.as_ref() {
+		// Produce per-error-location summaries. Prefer the ChunkKind::Error
+		// chunks (which carry signature snippets) if any exist; fall back to
+		// the raw tree-sitter error line positions stored in the tree.
+		let mut error_summaries = format_parse_error_summaries(&state);
+		if error_summaries.is_empty() {
+			for &line in &state.tree.parse_error_lines {
+				error_summaries.push(format!(
+					"L{line} parse error introduced while editing {}",
+					last_scheduled
+						.as_ref()
+						.and_then(|s| s
+							.initial_chunk
+							.as_ref()
+							.map(|c| c.path.as_str())
+							.or(s.requested_selector.as_deref()))
+						.unwrap_or("<unknown chunk>"),
+				));
+			}
+			if error_summaries.is_empty()
+				&& let Some(scheduled) = last_scheduled.as_ref()
+			{
 				let chunk_label = scheduled
 					.initial_chunk
 					.as_ref()
 					.map(|c| c.path.as_str())
 					.or(scheduled.requested_selector.as_deref())
 					.unwrap_or("<unknown chunk>");
-				if let Some(chunk) = scheduled.initial_chunk.as_ref() {
-					vec![format!(
-						"L{}-L{} parse error introduced while editing {} (chunk spans file lines {}-{})",
-						chunk.start_line, chunk.end_line, chunk_label, chunk.start_line, chunk.end_line
-					)]
-				} else {
-					vec![format!("Parse error introduced while editing {chunk_label}")]
-				}
-			} else {
-				Vec::new()
+				error_summaries.push(format!("Parse error introduced while editing {chunk_label}"));
 			}
-		} else {
-			error_summaries
-		};
-		let details = if fallback_summary.is_empty() {
+		}
+		let details = if error_summaries.is_empty() {
 			String::new()
 		} else {
 			format!(
 				"\nParse errors:\n{}",
-				fallback_summary
+				error_summaries
 					.into_iter()
 					.map(|summary| format!("- {summary}"))
 					.collect::<Vec<_>>()
@@ -2035,16 +2042,26 @@ fn render_error_context(
 	anchor_style: Option<ChunkAnchorStyle>,
 	normalize_indent: bool,
 ) -> String {
-	let Ok(ParsedSelector { selector: clean_path, .. }) =
-		split_selector_crc_and_region(selector, None, None)
-	else {
-		return String::new();
+	// When an edit introduces a parse error we render the full chunk tree
+	// (no focus) so the agent can see the failure location and surrounding
+	// context in a single response, without a follow-up read. For non-parse
+	// failures (a single operation rejected before parse validation) the
+	// error is local to the targeted chunk, so we keep a narrow focus.
+	let has_parse_errors = !state.tree().parse_error_lines.is_empty();
+	let focused_paths = if has_parse_errors {
+		None
+	} else {
+		let Ok(ParsedSelector { selector: clean_path, .. }) =
+			split_selector_crc_and_region(selector, None, None)
+		else {
+			return String::new();
+		};
+		let mut ignored = Vec::new();
+		let Ok(chunk) = resolve_chunk_selector(state, clean_path.as_deref(), &mut ignored) else {
+			return String::new();
+		};
+		compute_focus(state.tree(), std::slice::from_ref(&chunk.path))
 	};
-	let mut ignored = Vec::new();
-	let Ok(chunk) = resolve_chunk_selector(state, clean_path.as_deref(), &mut ignored) else {
-		return String::new();
-	};
-	let focused_paths = compute_focus(state.tree(), std::slice::from_ref(&chunk.path));
 	let tab_replacement = if normalize_indent {
 		NORMALIZED_TAB_REPLACEMENT
 	} else {
@@ -2646,6 +2663,72 @@ mod tests {
 		assert!(
 			!response.contains("const e"),
 			"distant chunk var_e body should not appear: {response}"
+		);
+	}
+
+	#[test]
+	fn error_context_expands_around_parse_failure_in_other_chunk() {
+		// Regression: when an edit introduces a parse error in a chunk other
+		// than the edit target, the error-message "Fresh content" view must
+		// expand around the error location, not only around the targeted chunk.
+		// Previously the focus only covered the targeted chunk, so the parse
+		// error could land inside a truncated region and force the agent to
+		// do a follow-up read to diagnose the failure.
+		//
+		// Construct a file with five top-level functions. Edit fn_a's body with
+		// unbalanced-brace content so the parser bleeds the error into fn_c's
+		// territory. After the fix, the error message must include identifying
+		// text from the chunks flagged with parse errors, even though only
+		// fn_a was the edit target.
+		let source = concat!(
+			"fn alpha() {\n    let x = 1;\n}\n\n",
+			"fn bravo() {\n    let y = 2;\n}\n\n",
+			"fn charlie() {\n    let z = 3;\n}\n\n",
+			"fn delta() {\n    let w = 4;\n}\n\n",
+			"fn echo() {\n    let v = 5;\n}\n",
+		);
+		let state = parsed_state_for(source, "rust");
+		let alpha = state.inner().chunk("fn_alpha").expect("fn_alpha");
+
+		let Err(err) = apply_edits(&state, &EditParams {
+			operations:       vec![EditOperation {
+				op:      ChunkEditOp::Replace,
+				sel:     Some("fn_alpha".to_owned()),
+				crc:     Some(alpha.checksum.clone()),
+				region:  Some(ChunkRegion::Body),
+				// Intentionally broken: dangling `{` consumes subsequent
+				// top-level functions until tree-sitter gives up.
+				content: Some("let broken = { { {\n".to_owned()),
+				find:    None,
+			}],
+			default_selector: None,
+			default_crc:      None,
+			anchor_style:     Some(ChunkAnchorStyle::Full),
+			cwd:              ".".to_owned(),
+			file_path:        "test.rs".to_owned(),
+			normalize_indent: None,
+		}) else {
+			panic!("edit should be rejected due to parse error");
+		};
+
+		assert!(
+			err.contains("Edit rejected: introduced"),
+			"should be a parse-error rejection: {err}",
+		);
+		assert!(err.contains("Fresh content:"), "should include fresh content: {err}");
+		// The edit target must always be visible.
+		assert!(err.contains("fn_alpha"), "target chunk should be in focus: {err}");
+		// The fix: at least one of the downstream chunks where the parse error
+		// lands should also appear in the focused "Fresh content" view. Without
+		// the fix, focus only covers fn_alpha and these downstream anchors are
+		// skipped, so the agent cannot see the failure location.
+		let downstream_visible = ["fn_bravo", "fn_charli", "fn_delta", "fn_echo"]
+			.iter()
+			.any(|name| err.contains(name));
+		assert!(
+			downstream_visible,
+			"error-context focus should include at least one downstream chunk where the parse \
+			 failure lands, got: {err}",
 		);
 	}
 

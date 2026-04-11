@@ -547,14 +547,15 @@ mod tests {
 	#[test]
 	fn detect_file_indent_step_prefers_space_children() {
 		let tree = ChunkTree {
-			language:      "rust".to_owned(),
-			checksum:      "ABCD".to_owned(),
-			line_count:    1,
-			parse_errors:  0,
-			fallback:      false,
-			root_path:     String::new(),
-			root_children: vec!["class_A".to_owned()],
-			chunks:        vec![
+			language:          "rust".to_owned(),
+			checksum:          "ABCD".to_owned(),
+			line_count:        1,
+			parse_errors:      0,
+			parse_error_lines: Vec::new(),
+			fallback:          false,
+			root_path:         String::new(),
+			root_children:     vec!["class_A".to_owned()],
+			chunks:            vec![
 				chunk("class_A", Some(""), &["fn_b"], 0, " "),
 				chunk("fn_b", Some("class_A"), &[], 2, " "),
 			],
@@ -567,14 +568,15 @@ mod tests {
 		// When the chunk tree has no parent->child pairs (all leaves),
 		// fall back to scanning source lines for the minimum indent width.
 		let tree = ChunkTree {
-			language:      "yaml".to_owned(),
-			checksum:      "ABCD".to_owned(),
-			line_count:    3,
-			parse_errors:  0,
-			fallback:      false,
-			root_path:     String::new(),
-			root_children: vec!["key_server".to_owned()],
-			chunks:        vec![chunk("key_server", Some(""), &[], 0, " ")],
+			language:          "yaml".to_owned(),
+			checksum:          "ABCD".to_owned(),
+			line_count:        3,
+			parse_errors:      0,
+			parse_error_lines: Vec::new(),
+			fallback:          false,
+			root_path:         String::new(),
+			root_children:     vec!["key_server".to_owned()],
+			chunks:            vec![chunk("key_server", Some(""), &[], 0, " ")],
 		};
 		let source = "server:\n  host: localhost\n  port: 5432\n";
 		assert_eq!(detect_file_indent_step(source, &tree), 2);
@@ -583,14 +585,15 @@ mod tests {
 	#[test]
 	fn detect_file_indent_char_falls_back_to_source_lines() {
 		let tree = ChunkTree {
-			language:      "rust".to_owned(),
-			checksum:      "ABCD".to_owned(),
-			line_count:    3,
-			parse_errors:  0,
-			fallback:      false,
-			root_path:     String::new(),
-			root_children: vec!["fn_main".to_owned()],
-			chunks:        vec![chunk("fn_main", Some(""), &[], 0, "")],
+			language:          "rust".to_owned(),
+			checksum:          "ABCD".to_owned(),
+			line_count:        3,
+			parse_errors:      0,
+			parse_error_lines: Vec::new(),
+			fallback:          false,
+			root_path:         String::new(),
+			root_children:     vec!["fn_main".to_owned()],
+			chunks:            vec![chunk("fn_main", Some(""), &[], 0, "")],
 		};
 
 		let source = "fn main() {\n    println!(\"hi\");\n}\n";
@@ -600,14 +603,15 @@ mod tests {
 	#[test]
 	fn detect_file_indent_char_defaults_to_spaces_without_signal() {
 		let tree = ChunkTree {
-			language:      "rust".to_owned(),
-			checksum:      "ABCD".to_owned(),
-			line_count:    0,
-			parse_errors:  0,
-			fallback:      false,
-			root_path:     String::new(),
-			root_children: Vec::new(),
-			chunks:        Vec::new(),
+			language:          "rust".to_owned(),
+			checksum:          "ABCD".to_owned(),
+			line_count:        0,
+			parse_errors:      0,
+			parse_error_lines: Vec::new(),
+			fallback:          false,
+			root_path:         String::new(),
+			root_children:     Vec::new(),
+			chunks:            Vec::new(),
 		};
 
 		assert_eq!(detect_file_indent_char("", &tree), ' ');

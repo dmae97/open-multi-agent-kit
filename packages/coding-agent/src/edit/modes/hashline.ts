@@ -180,6 +180,26 @@ function resolveEditAnchors(edits: HashlineToolEdit[]): HashlineEdit[] {
 	return edits.map(resolveEditAnchor);
 }
 
+type HashlineEditInput = HashlineToolEdit | HashlineEdit;
+
+function resolveHashlineEditsForDiff(edits: HashlineEditInput[]): HashlineEdit[] {
+	return edits.map((edit, editIndex) => {
+		if (!edit || typeof edit !== "object") {
+			throw new Error(`Invalid hashline edit at index ${editIndex}: expected object.`);
+		}
+
+		if ("op" in edit) {
+			return edit;
+		}
+
+		if ("loc" in edit) {
+			return resolveEditAnchor(edit);
+		}
+
+		throw new Error(`Invalid hashline edit at index ${editIndex}: expected op/loc payload.`);
+	});
+}
+
 function tryParseTag(raw: string): Anchor | undefined {
 	try {
 		return parseTag(raw);
@@ -1126,7 +1146,7 @@ export function buildCompactHashlineDiffPreview(
 }
 
 export async function computeHashlineDiff(
-	input: { path: string; edits: HashlineEdit[]; move?: string },
+	input: { path: string; edits: HashlineEditInput[]; move?: string },
 	cwd: string,
 ): Promise<
 	| {
@@ -1143,6 +1163,7 @@ export async function computeHashlineDiff(
 	const isMoveOnly = Boolean(movePath) && movePath !== absolutePath && edits.length === 0;
 
 	try {
+		const resolvedEdits = resolveHashlineEditsForDiff(edits);
 		const file = Bun.file(absolutePath);
 
 		if (movePath === absolutePath) {
@@ -1156,7 +1177,7 @@ export async function computeHashlineDiff(
 
 		const { text: content } = stripBom(rawContent);
 		const normalizedContent = normalizeToLF(content);
-		const result = applyHashlineEdits(normalizedContent, edits);
+		const result = applyHashlineEdits(normalizedContent, resolvedEdits);
 		if (normalizedContent === result.lines && !move) {
 			return { error: `No changes would be made to ${path}. The edits produce identical content.` };
 		}

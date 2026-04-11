@@ -119,7 +119,7 @@ pub(crate) fn build_chunk_tree(source: &str, language: &str) -> Result<ChunkTree
 	let classifier = classifier_for(normalized_language.as_str());
 	let tree = parse_tree(source, chunk_lang)?;
 	let root = tree.root_node();
-	let parse_errors = count_parse_errors(root);
+	let (parse_errors, parse_error_lines) = count_parse_errors(root);
 	let mut acc = ChunkAccumulator::default();
 	let mut root_children =
 		collect_children_for_context(root, ChunkContext::Root, source, classifier)
@@ -160,6 +160,7 @@ pub(crate) fn build_chunk_tree(source: &str, language: &str) -> Result<ChunkTree
 		checksum: root_checksum,
 		line_count: total_lines as u32,
 		parse_errors: parse_errors as u32,
+		parse_error_lines,
 		fallback: false,
 		root_path: String::new(),
 		root_children,
@@ -300,6 +301,7 @@ fn build_blank_line_tree(
 		checksum,
 		line_count: total_lines as u32,
 		parse_errors: 0,
+		parse_error_lines: Vec::new(),
 		fallback: true,
 		root_path: String::new(),
 		root_children,
@@ -361,7 +363,7 @@ fn build_chunk(
 			collect_children_for_context(recurse.node, recurse.context, source, classifier)
 		})
 		.unwrap_or_default();
-	let recurse_parse_errors = recurse.map_or(0, |recurse| count_parse_errors(recurse.node));
+	let recurse_parse_errors = recurse.map_or(0, |recurse| count_parse_errors(recurse.node).0);
 	let has_injected_children = injected.is_some();
 	let should_collapse = !has_injected_children
 		&& !classifier.preserve_children(&candidate, &child_candidates)
@@ -815,12 +817,23 @@ const fn is_collapsible_flat_child(candidate: &RawChunkCandidate<'_>) -> bool {
 
 // ── Utility ──────────────────────────────────────────────────────────────
 
-fn count_parse_errors(node: Node<'_>) -> usize {
-	let mut count = usize::from(node.is_error() || node.is_missing() || node.kind() == "ERROR");
-	for child in named_children(node) {
-		count += count_parse_errors(child);
+fn count_parse_errors(node: Node<'_>) -> (usize, Vec<u32>) {
+	let mut count = 0;
+	let mut lines = Vec::new();
+	collect_parse_errors(node, &mut count, &mut lines);
+	lines.sort_unstable();
+	lines.dedup();
+	(count, lines)
+}
+
+fn collect_parse_errors(node: Node<'_>, count: &mut usize, lines: &mut Vec<u32>) {
+	if node.is_error() || node.is_missing() || node.kind() == "ERROR" {
+		*count += 1;
+		lines.push(node.start_position().row as u32 + 1);
 	}
-	count
+	for child in named_children(node) {
+		collect_parse_errors(child, count, lines);
+	}
 }
 
 fn resolve_chunk_lang(language: &str) -> Option<SupportLang> {

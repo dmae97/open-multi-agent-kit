@@ -240,6 +240,20 @@ describe("computeHashlineDiff", () => {
 		}
 	});
 
+	test("accepts hashline tool edits without resolved op/lines", async () => {
+		const sourcePath = path.join(tempDir, "source.txt");
+		await Bun.write(sourcePath, "first\n");
+
+		const result = await computeHashlineDiff(
+			{ path: sourcePath, edits: [{ loc: "append", content: "second" }] },
+			tempDir,
+		);
+		expect("diff" in result).toBe(true);
+		if ("diff" in result) {
+			expect(result.diff).toContain("second");
+		}
+	});
+
 	test("allows move-only operation when content is unchanged", async () => {
 		const sourcePath = path.join(tempDir, "source.txt");
 		await Bun.write(sourcePath, "unchanged content\n");

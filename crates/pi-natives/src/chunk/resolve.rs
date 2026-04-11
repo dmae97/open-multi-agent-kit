@@ -922,14 +922,15 @@ mod tests {
 
 	fn state_for_resolution() -> ChunkStateInner {
 		ChunkStateInner::new(String::new(), "typescript".to_owned(), ChunkTree {
-			language:      "typescript".to_owned(),
-			checksum:      "ROOT".to_owned(),
-			line_count:    1,
-			parse_errors:  0,
-			fallback:      false,
-			root_path:     String::new(),
-			root_children: vec!["fn_handleTerraform".to_owned()],
-			chunks:        vec![
+			language:          "typescript".to_owned(),
+			checksum:          "ROOT".to_owned(),
+			line_count:        1,
+			parse_errors:      0,
+			parse_error_lines: Vec::new(),
+			fallback:          false,
+			root_path:         String::new(),
+			root_children:     vec!["fn_handleTerraform".to_owned()],
+			chunks:            vec![
 				chunk("", "ROOT", None, vec!["fn_handleTerraform"]),
 				chunk("fn_handleTerraform", "HVJB", Some(""), vec!["fn_handleTerraform.try"]),
 				chunk("fn_handleTerraform.try", "RQPB", Some("fn_handleTerraform"), vec![
@@ -978,14 +979,15 @@ mod tests {
 	#[test]
 	fn resolves_stale_selector_by_same_parent_checksum() {
 		let state = ChunkStateInner::new(String::new(), "typescript".to_owned(), ChunkTree {
-			language:      "typescript".to_owned(),
-			checksum:      "ROOT".to_owned(),
-			line_count:    1,
-			parse_errors:  0,
-			fallback:      false,
-			root_path:     String::new(),
-			root_children: vec!["fn_run".to_owned()],
-			chunks:        vec![
+			language:          "typescript".to_owned(),
+			checksum:          "ROOT".to_owned(),
+			line_count:        1,
+			parse_errors:      0,
+			parse_error_lines: Vec::new(),
+			fallback:          false,
+			root_path:         String::new(),
+			root_children:     vec!["fn_run".to_owned()],
+			chunks:            vec![
 				chunk("", "ROOT", None, vec!["fn_run"]),
 				chunk("fn_run", "RUNN", Some(""), vec!["fn_run.var_effect_1", "fn_run.var_effect_2"]),
 				chunk("fn_run.var_effect_1", "AAAA", Some("fn_run"), vec![]),
@@ -1007,14 +1009,15 @@ mod tests {
 	#[test]
 	fn stale_selector_prefers_best_leaf_name_when_crc_matches_multiple_siblings() {
 		let state = ChunkStateInner::new(String::new(), "typescript".to_owned(), ChunkTree {
-			language:      "typescript".to_owned(),
-			checksum:      "ROOT".to_owned(),
-			line_count:    1,
-			parse_errors:  0,
-			fallback:      false,
-			root_path:     String::new(),
-			root_children: vec!["fn_run".to_owned()],
-			chunks:        vec![
+			language:          "typescript".to_owned(),
+			checksum:          "ROOT".to_owned(),
+			line_count:        1,
+			parse_errors:      0,
+			parse_error_lines: Vec::new(),
+			fallback:          false,
+			root_path:         String::new(),
+			root_children:     vec!["fn_run".to_owned()],
+			chunks:            vec![
 				chunk("", "ROOT", None, vec!["fn_run"]),
 				chunk("fn_run", "RUNN", Some(""), vec!["fn_run.var_other", "fn_run.var_effect_1"]),
 				chunk("fn_run.var_other", "BBBB", Some("fn_run"), vec![]),
@@ -1031,14 +1034,15 @@ mod tests {
 	#[test]
 	fn stale_selector_fails_closed_when_same_parent_crc_matches_are_ambiguous() {
 		let state = ChunkStateInner::new(String::new(), "typescript".to_owned(), ChunkTree {
-			language:      "typescript".to_owned(),
-			checksum:      "ROOT".to_owned(),
-			line_count:    1,
-			parse_errors:  0,
-			fallback:      false,
-			root_path:     String::new(),
-			root_children: vec!["fn_run".to_owned()],
-			chunks:        vec![
+			language:          "typescript".to_owned(),
+			checksum:          "ROOT".to_owned(),
+			line_count:        1,
+			parse_errors:      0,
+			parse_error_lines: Vec::new(),
+			fallback:          false,
+			root_path:         String::new(),
+			root_children:     vec!["fn_run".to_owned()],
+			chunks:            vec![
 				chunk("", "ROOT", None, vec!["fn_run"]),
 				chunk("fn_run", "RUNN", Some(""), vec!["fn_run.var_effect_1", "fn_run.var_effect_2"]),
 				chunk("fn_run.var_effect_1", "BBBB", Some("fn_run"), vec![]),
@@ -1057,14 +1061,15 @@ mod tests {
 	#[test]
 	fn resolves_full_untruncated_identifier_paths() {
 		let state = ChunkStateInner::new(String::new(), "typescript".to_owned(), ChunkTree {
-			language:      "typescript".to_owned(),
-			checksum:      "ROOT".to_owned(),
-			line_count:    1,
-			parse_errors:  0,
-			fallback:      false,
-			root_path:     String::new(),
-			root_children: vec!["class_Server".to_owned()],
-			chunks:        vec![
+			language:          "typescript".to_owned(),
+			checksum:          "ROOT".to_owned(),
+			line_count:        1,
+			parse_errors:      0,
+			parse_error_lines: Vec::new(),
+			fallback:          false,
+			root_path:         String::new(),
+			root_children:     vec!["class_Server".to_owned()],
+			chunks:            vec![
 				chunk("", "ROOT", None, vec!["class_Server"]),
 				chunk("class_Server", "CLSS", Some(""), vec!["class_Server.fn_handle"]),
 				chunk("class_Server.fn_handle", "ABCD", Some("class_Server"), vec![]),

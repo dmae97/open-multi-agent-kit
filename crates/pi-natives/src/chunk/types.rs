@@ -45,14 +45,18 @@ pub struct ChunkNode {
 
 #[derive(Clone)]
 pub struct ChunkTree {
-	pub language:      String,
-	pub checksum:      String,
-	pub line_count:    u32,
-	pub parse_errors:  u32,
-	pub fallback:      bool,
-	pub root_path:     String,
-	pub root_children: Vec<String>,
-	pub chunks:        Vec<ChunkNode>,
+	pub language:          String,
+	pub checksum:          String,
+	pub line_count:        u32,
+	pub parse_errors:      u32,
+	/// 1-indexed line numbers of tree-sitter ERROR / MISSING nodes surfaced
+	/// during parsing. Used to focus error messages around failure locations
+	/// when an edit introduces a parse error far from the edit target.
+	pub parse_error_lines: Vec<u32>,
+	pub fallback:          bool,
+	pub root_path:         String,
+	pub root_children:     Vec<String>,
+	pub chunks:            Vec<ChunkNode>,
 }
 
 /// Summary of a single chunk node for tool output and navigation.

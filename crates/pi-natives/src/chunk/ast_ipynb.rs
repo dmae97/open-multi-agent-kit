@@ -576,6 +576,7 @@ pub fn build_notebook_tree_from_virtual(
 		checksum: root_checksum,
 		line_count: total_lines as u32,
 		parse_errors: 0,
+		parse_error_lines: Vec::new(),
 		fallback: false,
 		root_path: String::new(),
 		root_children,
