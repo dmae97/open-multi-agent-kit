@@ -11,7 +11,7 @@ use super::{
 	shape,
 	types::ChunkNode,
 };
-use crate::env_uint;
+use crate::{env_uint, language::SupportLang};
 
 // ── Configuration (environment overrides) ────────────────────────────────
 env_uint! {
@@ -57,6 +57,12 @@ pub struct RecurseSpec<'tree> {
 	pub context: ChunkContext,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct InjectedChunkSpec<'tree> {
+	pub language:     SupportLang,
+	pub content_node: Node<'tree>,
+}
+
 #[derive(Clone, Debug)]
 pub struct RawChunkCandidate<'tree> {
 	pub identifier:          Option<String>,
@@ -75,6 +81,8 @@ pub struct RawChunkCandidate<'tree> {
 	pub groupable:           bool,
 	pub has_leading_comment: bool,
 	pub force_recurse:       bool,
+	pub region_node:         Option<Node<'tree>>,
+	pub injected:            Option<InjectedChunkSpec<'tree>>,
 	pub recurse:             Option<RecurseSpec<'tree>>,
 }
 
@@ -131,6 +139,8 @@ pub fn make_candidate<'tree>(
 		groupable: kind.traits().groupable,
 		has_leading_comment: false,
 		force_recurse: kind.traits().container || (recurse.is_some() && node.has_error()),
+		region_node: recurse.map(|spec| spec.node),
+		injected: None,
 		recurse,
 	}
 }
@@ -247,6 +257,54 @@ pub fn make_container_chunk_from<'tree>(
 pub fn prefixed_name(prefix: &str, node: Node<'_>, source: &str) -> String {
 	let identifier = extract_identifier(node, source).unwrap_or_else(|| "anonymous".to_string());
 	format!("{prefix}_{identifier}")
+}
+
+pub const fn with_region_node<'tree>(
+	mut candidate: RawChunkCandidate<'tree>,
+	region_node: Option<Node<'tree>>,
+) -> RawChunkCandidate<'tree> {
+	candidate.region_node = region_node;
+	candidate
+}
+
+pub const fn with_injected_subtree<'tree>(
+	mut candidate: RawChunkCandidate<'tree>,
+	language: SupportLang,
+	content_node: Node<'tree>,
+) -> RawChunkCandidate<'tree> {
+	candidate.injected = Some(InjectedChunkSpec { language, content_node });
+	candidate
+}
+
+pub const fn embedded_selector_token(language: SupportLang) -> &'static str {
+	match language {
+		SupportLang::Bash => "bash",
+		SupportLang::C => "c",
+		SupportLang::Cmake => "cmake",
+		SupportLang::Cpp => "cpp",
+		SupportLang::CSharp => "cs",
+		SupportLang::Css => "css",
+		SupportLang::Go => "go",
+		SupportLang::Html => "html",
+		SupportLang::Java => "java",
+		SupportLang::JavaScript => "js",
+		SupportLang::Json => "json",
+		SupportLang::Kotlin => "kt",
+		SupportLang::Lua => "lua",
+		SupportLang::Markdown => "md",
+		SupportLang::Php => "php",
+		SupportLang::Python => "py",
+		SupportLang::Ruby => "rb",
+		SupportLang::Rust => "rust",
+		SupportLang::Scala => "scala",
+		SupportLang::Sql => "sql",
+		SupportLang::Swift => "swift",
+		SupportLang::Toml => "toml",
+		SupportLang::Tsx => "tsx",
+		SupportLang::TypeScript => "ts",
+		SupportLang::Yaml => "yaml",
+		_ => language.canonical_name(),
+	}
 }
 
 // ── Inferred / catch-all candidates ──────────────────────────────────────

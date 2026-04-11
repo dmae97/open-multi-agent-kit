@@ -7,6 +7,7 @@ use super::{
 	common::*,
 	kind::ChunkKind,
 };
+use crate::language::SupportLang;
 
 pub struct MarkupClassifier;
 
@@ -82,6 +83,8 @@ impl LangClassifier for MarkupClassifier {
 		}
 		match node.kind() {
 			"section" => Some(Self::classify_section(node, source)),
+			"fenced_code_block" => Some(classify_fenced_code_block(node, source)),
+			"html_block" => Some(classify_html_block(node, source)),
 			"block_statement" => Some(Self::classify_block_statement(node, source)),
 			"mustache_statement" => Some(Self::classify_mustache_statement(node, source)),
 			"element" | "script_element" | "style_element" | "element_node" | "text_node" => {
@@ -95,6 +98,27 @@ impl LangClassifier for MarkupClassifier {
 const fn force_container(mut candidate: RawChunkCandidate<'_>) -> RawChunkCandidate<'_> {
 	candidate.force_recurse = true;
 	candidate
+}
+
+fn classify_fenced_code_block<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'t> {
+	let embedded_language = fenced_code_language(node, source);
+	let identifier = embedded_language
+		.map(embedded_selector_token)
+		.map(str::to_string);
+	let candidate =
+		with_region_node(make_kind_chunk(node, ChunkKind::Code, identifier, source, None), None);
+	match (child_by_kind(node, &["code_fence_content"]), embedded_language) {
+		(Some(content_node), Some(language)) => {
+			with_injected_subtree(candidate, language, content_node)
+		},
+		_ => candidate,
+	}
+}
+
+fn classify_html_block<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'t> {
+	let candidate =
+		with_region_node(make_kind_chunk(node, ChunkKind::Html, None, source, None), None);
+	with_injected_subtree(candidate, SupportLang::Html, node)
 }
 
 /// Extract heading text from a Markdown `section` node's `atx_heading` or
@@ -119,6 +143,14 @@ fn extract_glimmer_block_name(node: Node<'_>, source: &str) -> Option<String> {
 				sanitize_identifier(node_text(source, name.start_byte(), name.end_byte()))
 			})
 	})
+}
+
+fn fenced_code_language(node: Node<'_>, source: &str) -> Option<SupportLang> {
+	child_by_kind(node, &["info_string"])
+		.and_then(|info| child_by_kind(info, &["language"]))
+		.and_then(|lang| {
+			SupportLang::from_alias(node_text(source, lang.start_byte(), lang.end_byte()))
+		})
 }
 
 /// Extract name from a Handlebars `mustache_statement`:

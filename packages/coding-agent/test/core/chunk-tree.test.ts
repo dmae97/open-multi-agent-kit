@@ -1130,6 +1130,39 @@ describe("prepend preamble guard", () => {
 	});
 });
 
+describe("embedded-language chunking", () => {
+	test("markdown fenced code blocks expose semantic host selectors and translated descendants", () => {
+		const source = "# Title\n\n```js\nfunction hello(name) {\n  return name;\n}\n```\n";
+		const state = ChunkState.parse(source, "markdown");
+		const chunkPaths = state.chunks().map(chunk => chunk.path);
+
+		expect(chunkPaths).toContain("sect_Title.code_js");
+		expect(chunkPaths).toContain("sect_Title.code_js.fn_hello");
+	});
+
+	test("html script body edits target only the embedded content span", () => {
+		const source = "<div>\n<script>\nconst value = 1;\n</script>\n</div>\n";
+		const checksum = getChecksum(source, "tag_div.script", "html");
+		const result = applyEdit({
+			source,
+			language: "html",
+			filePath: "/tmp/index.html",
+			operations: [
+				{
+					op: "replace",
+					sel: targetWithChecksum("tag_div.script", checksum, "~"),
+					content: "const value = 2;\n",
+				},
+			],
+		});
+
+		expect(result.diffSourceAfter).toContain("<script>");
+		expect(result.diffSourceAfter).toContain("</script>");
+		expect(result.diffSourceAfter).toContain("const value = 2;");
+		expect(result.diffSourceAfter).not.toContain("const value = 1;");
+	});
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // move
 // ═══════════════════════════════════════════════════════════════════════════

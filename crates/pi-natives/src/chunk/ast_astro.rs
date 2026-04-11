@@ -7,6 +7,7 @@ use super::{
 	common::*,
 	kind::ChunkKind,
 };
+use crate::language::SupportLang;
 
 pub struct AstroClassifier;
 
@@ -53,13 +54,14 @@ fn classify_astro_node<'t>(node: Node<'t>, source: &str) -> Option<RawChunkCandi
 }
 
 fn classify_frontmatter<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'t> {
-	force_container(make_container_chunk(
-		node,
-		ChunkKind::Frontmatter,
-		None,
-		source,
-		recurse_into(node, ChunkContext::ClassBody, &[], &["frontmatter_js_block"]),
-	))
+	let Some(content_node) = child_by_kind(node, &["frontmatter_js_block"]) else {
+		return make_kind_chunk(node, ChunkKind::Frontmatter, None, source, None);
+	};
+	let candidate = with_region_node(
+		make_kind_chunk(node, ChunkKind::Frontmatter, None, source, None),
+		Some(content_node),
+	);
+	with_injected_subtree(candidate, SupportLang::TypeScript, content_node)
 }
 
 fn classify_element<'t>(node: Node<'t>, source: &str) -> Option<RawChunkCandidate<'t>> {
@@ -86,8 +88,7 @@ fn classify_element<'t>(node: Node<'t>, source: &str) -> Option<RawChunkCandidat
 
 fn classify_script_element<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'t> {
 	let identifier = has_attribute(node, "is:inline", source).then_some("inline".to_string());
-	// The Astro grammar exposes script bodies as `raw_text`, not nested JS AST.
-	make_kind_chunk(node, ChunkKind::Script, identifier, source, None)
+	classify_raw_text_block(node, ChunkKind::Script, identifier, source, SupportLang::TypeScript)
 }
 
 fn classify_style_element<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'t> {
@@ -98,9 +99,7 @@ fn classify_style_element<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate
 	} else {
 		None
 	};
-	// The Astro grammar exposes style bodies as `raw_text`, so the section itself
-	// is the truthful chunk boundary.
-	make_kind_chunk(node, ChunkKind::Style, identifier, source, None)
+	classify_raw_text_block(node, ChunkKind::Style, identifier, source, SupportLang::Css)
 }
 
 fn classify_html_interpolation<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'t> {
@@ -152,6 +151,24 @@ const fn force_container(mut candidate: RawChunkCandidate<'_>) -> RawChunkCandid
 	candidate
 }
 
+fn classify_raw_text_block<'t>(
+	node: Node<'t>,
+	kind: ChunkKind,
+	identifier: Option<String>,
+	source: &str,
+	default_language: SupportLang,
+) -> RawChunkCandidate<'t> {
+	let Some(content_node) = child_by_kind(node, &["raw_text"]) else {
+		return make_kind_chunk(node, kind, identifier, source, None);
+	};
+	let candidate =
+		with_region_node(make_kind_chunk(node, kind, identifier, source, None), Some(content_node));
+	match resolve_embedded_language(node, source, default_language) {
+		Some(language) => with_injected_subtree(candidate, language, content_node),
+		None => candidate,
+	}
+}
+
 fn extract_tag_name(node: Node<'_>, source: &str) -> Option<String> {
 	child_by_kind(node, &["start_tag", "self_closing_tag"])
 		.and_then(|tag| child_by_kind(tag, &["tag_name"]))
@@ -175,6 +192,38 @@ fn extract_attribute_name(node: Node<'_>, source: &str) -> Option<String> {
 			.trim()
 			.to_string()
 	})
+}
+
+fn resolve_embedded_language(
+	node: Node<'_>,
+	source: &str,
+	default_language: SupportLang,
+) -> Option<SupportLang> {
+	if let Some(language) = attribute_value(node, "lang", source) {
+		return SupportLang::from_alias(language.as_str());
+	}
+	Some(default_language)
+}
+
+fn attribute_value(node: Node<'_>, name: &str, source: &str) -> Option<String> {
+	let start = child_by_kind(node, &["start_tag", "self_closing_tag"])?;
+	for child in named_children(start) {
+		if child.kind() != "attribute" {
+			continue;
+		}
+		if extract_attribute_name(child, source).as_deref() != Some(name) {
+			continue;
+		}
+		if let Some(value) = child_by_kind(child, &["attribute_value", "quoted_attribute_value"]) {
+			return sanitize_identifier(&unquote_text(node_text(
+				source,
+				value.start_byte(),
+				value.end_byte(),
+			)));
+		}
+		return Some(name.to_string());
+	}
+	None
 }
 
 fn is_component_name(tag_name: &str) -> bool {

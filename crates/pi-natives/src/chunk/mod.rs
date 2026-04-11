@@ -125,7 +125,7 @@ pub(crate) fn build_chunk_tree(source: &str, language: &str) -> Result<ChunkTree
 		collect_children_for_context(root, ChunkContext::Root, source, classifier)
 			.into_iter()
 			.map(|candidate| build_chunk(candidate, "", source, &mut acc, classifier))
-			.collect::<Vec<_>>();
+			.collect::<Result<Vec<_>>>()?;
 
 	classifier.post_process(&mut acc.chunks, &mut root_children, source);
 
@@ -315,7 +315,7 @@ fn build_chunk(
 	source: &str,
 	acc: &mut ChunkAccumulator,
 	classifier: &dyn classify::LangClassifier,
-) -> String {
+) -> Result<String> {
 	let segment = candidate.kind.path_segment(candidate.identifier.as_deref());
 	let path = if parent_path.is_empty() {
 		segment
@@ -333,11 +333,12 @@ fn build_chunk(
 			.unwrap_or_default(),
 	);
 	let recurse = candidate.recurse;
+	let injected = candidate.injected;
 	let chunk_start = candidate.range_start_byte;
 	let mut chunk_end = candidate.range_end_byte;
-	let region_boundaries = recurse.map(|recurse| {
+	let region_boundaries = candidate.region_node.map(|region_node| {
 		let (pro_end, epi_start) =
-			compute_body_inner_boundaries(source, recurse.node.start_byte(), recurse.node.end_byte());
+			compute_body_inner_boundaries(source, region_node.start_byte(), region_node.end_byte());
 		// For indent-based languages (Python, Ruby, etc.) the body boundary
 		// computation may extend past the tree-sitter node to include a
 		// trailing newline that logically terminates the last body line.
@@ -361,12 +362,15 @@ fn build_chunk(
 		})
 		.unwrap_or_default();
 	let recurse_parse_errors = recurse.map_or(0, |recurse| count_parse_errors(recurse.node));
-	let should_collapse = !classifier.preserve_children(&candidate, &child_candidates)
+	let has_injected_children = injected.is_some();
+	let should_collapse = !has_injected_children
+		&& !classifier.preserve_children(&candidate, &child_candidates)
 		&& recurse.is_some()
 		&& recurse_parse_errors == 0
 		&& should_collapse_trivial_children(&candidate, &child_candidates);
 	let always_recurse = *ALWAYS_RECURSE && !candidate.groupable && !child_candidates.is_empty();
-	let should_recurse = !candidate.error
+	let should_recurse = !has_injected_children
+		&& !candidate.error
 		&& recurse.is_some()
 		&& !should_collapse
 		&& (candidate.force_recurse
@@ -374,11 +378,13 @@ fn build_chunk(
 			|| recurse_parse_errors > 0
 			|| (line_count > *LEAF_THRESHOLD
 				&& recursion_narrows_scope(line_count, &child_candidates)));
-	let children = if should_recurse {
+	let children = if let Some(injected) = injected {
+		translate_injected_subtree(path.as_str(), injected, source, acc)?
+	} else if should_recurse {
 		child_candidates
 			.into_iter()
 			.map(|child| build_chunk(child, path.as_str(), source, acc, classifier))
-			.collect::<Vec<_>>()
+			.collect::<Result<Vec<_>>>()?
 	} else {
 		Vec::new()
 	};
@@ -408,7 +414,73 @@ fn build_chunk(
 		indent_char,
 		group: candidate.groupable,
 	});
-	path
+	Ok(path)
+}
+
+fn translate_injected_subtree(
+	parent_path: &str,
+	injected: InjectedChunkSpec<'_>,
+	source: &str,
+	acc: &mut ChunkAccumulator,
+) -> Result<Vec<String>> {
+	let content_start = injected.content_node.start_byte();
+	let content_end = injected.content_node.end_byte();
+	let content = node_text(source, content_start, content_end);
+	if content.is_empty() {
+		return Ok(Vec::new());
+	}
+
+	let sub_tree = build_chunk_tree(content, injected.language.canonical_name())?;
+	let content_line_shift = injected.content_node.start_position().row as u32;
+	let mut translated_root_children = Vec::new();
+
+	for sub_chunk in sub_tree.chunks.into_iter().skip(1) {
+		let translated_path = format!("{parent_path}.{}", sub_chunk.path);
+		let translated_parent = match sub_chunk.parent_path.as_deref() {
+			Some("") | None => Some(parent_path.to_string()),
+			Some(other) => Some(format!("{parent_path}.{other}")),
+		};
+		let translated_children = sub_chunk
+			.children
+			.iter()
+			.map(|child| format!("{parent_path}.{child}"))
+			.collect();
+		acc.chunks.push(ChunkNode {
+			path:                translated_path,
+			identifier:          sub_chunk.identifier,
+			kind:                sub_chunk.kind,
+			leaf:                sub_chunk.leaf,
+			virtual_content:     sub_chunk.virtual_content,
+			parent_path:         translated_parent,
+			children:            translated_children,
+			signature:           sub_chunk.signature,
+			start_line:          sub_chunk.start_line.saturating_add(content_line_shift),
+			end_line:            sub_chunk.end_line.saturating_add(content_line_shift),
+			line_count:          sub_chunk.line_count,
+			start_byte:          sub_chunk.start_byte.saturating_add(content_start as u32),
+			end_byte:            sub_chunk.end_byte.saturating_add(content_start as u32),
+			checksum_start_byte: sub_chunk
+				.checksum_start_byte
+				.saturating_add(content_start as u32),
+			prologue_end_byte:   sub_chunk
+				.prologue_end_byte
+				.map(|byte| byte.saturating_add(content_start as u32)),
+			epilogue_start_byte: sub_chunk
+				.epilogue_start_byte
+				.map(|byte| byte.saturating_add(content_start as u32)),
+			checksum:            sub_chunk.checksum,
+			error:               sub_chunk.error,
+			indent:              sub_chunk.indent,
+			indent_char:         sub_chunk.indent_char,
+			group:               sub_chunk.group,
+		});
+	}
+
+	for root_child in sub_tree.root_children {
+		translated_root_children.push(format!("{parent_path}.{root_child}"));
+	}
+
+	Ok(translated_root_children)
 }
 
 // ── Child collection ─────────────────────────────────────────────────────
@@ -700,6 +772,7 @@ fn should_collapse_trivial_children(
 const fn is_trivial_child_candidate(candidate: &RawChunkCandidate<'_>) -> bool {
 	!candidate.error
 		&& !candidate.has_leading_comment
+		&& candidate.injected.is_none()
 		&& candidate.recurse.is_none()
 		&& line_span(candidate.range_start_line, candidate.range_end_line) == 1
 }
@@ -708,6 +781,7 @@ const fn is_collapsible_flat_child(candidate: &RawChunkCandidate<'_>) -> bool {
 	(candidate.groupable || is_trivial_child_candidate(candidate))
 		&& !candidate.error
 		&& !candidate.has_leading_comment
+		&& candidate.injected.is_none()
 		&& candidate.recurse.is_none()
 }
 
@@ -2953,5 +3027,137 @@ end
 			"fenced block must NOT normalize spaces to tabs in display, got:\n{}",
 			result.text
 		);
+	}
+
+	#[test]
+	fn markdown_fenced_code_blocks_build_injected_subtrees() {
+		let source = "# Title\n\n```js\nfunction hello(name) {\n  return name;\n}\n```\n";
+		let tree = build_chunk_tree(source, "markdown").expect("markdown tree");
+		let fence = tree
+			.chunks
+			.iter()
+			.find(|chunk| chunk.path == "sect_Title.code_js")
+			.expect("expected semantic fenced-code chunk");
+
+		assert!(!fence.leaf, "fenced block should recurse into the injected JS tree");
+		assert!(
+			tree
+				.chunks
+				.iter()
+				.any(|chunk| chunk.path == "sect_Title.code_js.fn_hello"),
+			"expected translated JS descendant under code_js, got {:?}",
+			tree
+				.chunks
+				.iter()
+				.map(|chunk| &chunk.path)
+				.collect::<Vec<_>>()
+		);
+		assert!(
+			fence.prologue_end_byte.is_none() && fence.epilogue_start_byte.is_none(),
+			"markdown fenced host should stay regionless"
+		);
+	}
+
+	#[test]
+	fn html_script_and_style_hosts_recurse_into_embedded_languages() {
+		let source = "<div>\n<script>\nfunction greet() {\n  return 1;\n}\n</script>\n<style>\n.app \
+		              { color: red; }\n</style>\n</div>\n";
+		let tree = build_chunk_tree(source, "html").expect("html tree");
+		let script = tree
+			.chunks
+			.iter()
+			.find(|chunk| chunk.path == "tag_div.script")
+			.expect("expected script host");
+		let style = tree
+			.chunks
+			.iter()
+			.find(|chunk| chunk.path == "tag_div.style")
+			.expect("expected style host");
+
+		assert!(!script.leaf, "script host should expose nested JS chunks");
+		assert!(!style.leaf, "style host should expose nested CSS chunks");
+		assert!(
+			tree.chunks.iter().any(
+				|chunk| chunk.path.starts_with("tag_div.script.") && chunk.path != "tag_div.script"
+			),
+			"expected translated JS descendants, got {:?}",
+			tree
+				.chunks
+				.iter()
+				.map(|chunk| &chunk.path)
+				.collect::<Vec<_>>()
+		);
+		assert!(
+			tree
+				.chunks
+				.iter()
+				.any(|chunk| chunk.path.starts_with("tag_div.style.") && chunk.path != "tag_div.style"),
+			"expected translated CSS descendants, got {:?}",
+			tree
+				.chunks
+				.iter()
+				.map(|chunk| &chunk.path)
+				.collect::<Vec<_>>()
+		);
+		assert!(script.prologue_end_byte.is_some(), "script host should expose a body region");
+		assert!(style.prologue_end_byte.is_some(), "style host should expose a body region");
+	}
+
+	#[test]
+	fn small_html_wrappers_do_not_hide_embedded_script_hosts() {
+		let source = "<div><script>const value = 1;</script></div>\n";
+		let tree = build_chunk_tree(source, "html").expect("html tree");
+
+		assert!(
+			tree
+				.chunks
+				.iter()
+				.any(|chunk| chunk.path == "tag_div.script"),
+			"script host should stay addressable inside a small wrapper, got {:?}",
+			tree
+				.chunks
+				.iter()
+				.map(|chunk| &chunk.path)
+				.collect::<Vec<_>>()
+		);
+	}
+
+	#[test]
+	fn framework_block_hosts_expose_injected_descendants() {
+		let cases = [
+			(
+				"astro",
+				"---\nconst title: string = \"Hello\";\n---\n<script>const count = \
+				 1;</script>\n<style>.app { color: red; }</style>\n",
+				&["front", "script", "style"][..],
+			),
+			(
+				"svelte",
+				"<script>let count = 0;\nfunction inc() { count += 1; }\n</script>\n<style>.app { \
+				 color: red; }</style>\n<div>{count}</div>\n",
+				&["script", "style"][..],
+			),
+			(
+				"vue",
+				"<template><div>{{ msg }}</div></template>\n<script setup lang=\"ts\">const msg = \
+				 \"hi\";\nfunction greet() { return msg; }\n</script>\n<style scoped>.app { color: \
+				 red; }</style>\n",
+				&["scrset", "scoped"][..],
+			),
+		];
+
+		for (language, source, hosts) in cases {
+			let tree = build_chunk_tree(source, language).unwrap_or_else(|err| {
+				panic!("expected {language} tree to build: {err}");
+			});
+			for host in hosts {
+				let chunk = tree
+					.chunks
+					.iter()
+					.find(|chunk| chunk.path == *host)
+					.unwrap_or_else(|| panic!("missing {language} host {host}"));
+				assert!(!chunk.leaf, "{language} host {host} should expose embedded descendants");
+			}
+		}
 	}
 }

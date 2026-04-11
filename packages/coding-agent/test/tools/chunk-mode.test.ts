@@ -225,6 +225,19 @@ describe("chunk mode tools", () => {
 		expect(text).toContain("fn_App#");
 	});
 
+	it("renders semantic embedded-language selectors for markdown fenced code blocks", async () => {
+		const filePath = path.join(tmpDir, "guide.md");
+		await Bun.write(filePath, "# Title\n\n```js\nfunction hello(name) {\n  return name;\n}\n```\n");
+		const tool = new ReadTool(createSession(tmpDir));
+
+		const result = await tool.execute("chunk-read-markdown-embedded", { path: filePath });
+		const text = getText(result);
+
+		expect(text).toContain("guide.md·");
+		expect(text).toContain("code_js#");
+		expect(text).toContain("fn_hello#");
+	});
+
 	it("maps Handlebars and TLA+ file extensions for chunk mode", () => {
 		expect(getLanguageFromPath("/tmp/template.hbs")).toBe("handlebars");
 		expect(getLanguageFromPath("/tmp/template.hsb")).toBe("handlebars");

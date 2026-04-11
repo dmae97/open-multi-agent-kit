@@ -7,6 +7,7 @@ use super::{
 	common::*,
 	kind::ChunkKind,
 };
+use crate::language::SupportLang;
 
 pub struct VueClassifier;
 
@@ -83,8 +84,7 @@ fn classify_script_element<'t>(node: Node<'t>, source: &str) -> RawChunkCandidat
 	} else {
 		ChunkKind::Script
 	};
-	// tree-sitter-vue exposes script bodies as `raw_text`, not injected JS/TS.
-	positional_candidate(node, kind, source)
+	classify_raw_text_block(node, kind, source, SupportLang::JavaScript)
 }
 
 fn classify_style_element<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'t> {
@@ -93,8 +93,7 @@ fn classify_style_element<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate
 	} else {
 		ChunkKind::Style
 	};
-	// Styles are likewise exposed as `raw_text`, so preserve only the SFC block.
-	positional_candidate(node, kind, source)
+	classify_raw_text_block(node, kind, source, SupportLang::Css)
 }
 
 fn classify_custom_block<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'t> {
@@ -212,6 +211,22 @@ const fn force_container(mut candidate: RawChunkCandidate<'_>) -> RawChunkCandid
 	candidate
 }
 
+fn classify_raw_text_block<'t>(
+	node: Node<'t>,
+	kind: ChunkKind,
+	source: &str,
+	default_language: SupportLang,
+) -> RawChunkCandidate<'t> {
+	let Some(content_node) = child_by_kind(node, &["raw_text"]) else {
+		return positional_candidate(node, kind, source);
+	};
+	let candidate = with_region_node(positional_candidate(node, kind, source), Some(content_node));
+	match resolve_embedded_language(node, source, default_language) {
+		Some(language) => with_injected_subtree(candidate, language, content_node),
+		None => candidate,
+	}
+}
+
 fn extract_markup_tag_name(node: Node<'_>, source: &str) -> Option<String> {
 	start_like(node)
 		.and_then(|start| child_by_kind(start, &["tag_name"]))
@@ -270,6 +285,17 @@ fn attribute_value(node: Node<'_>, name: &str, source: &str) -> Option<String> {
 		return Some(name.to_string());
 	}
 	None
+}
+
+fn resolve_embedded_language(
+	node: Node<'_>,
+	source: &str,
+	default_language: SupportLang,
+) -> Option<SupportLang> {
+	if let Some(language) = attribute_value(node, "lang", source) {
+		return SupportLang::from_alias(language.as_str());
+	}
+	Some(default_language)
 }
 
 fn extract_attribute_name(node: Node<'_>, source: &str) -> Option<String> {

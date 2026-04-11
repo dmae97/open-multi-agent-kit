@@ -7,6 +7,7 @@ use super::{
 	common::*,
 	kind::ChunkKind,
 };
+use crate::language::SupportLang;
 
 pub struct SvelteClassifier;
 
@@ -73,10 +74,7 @@ fn classify_script_element<'t>(node: Node<'t>, source: &str) -> RawChunkCandidat
 	} else {
 		ChunkKind::Script
 	};
-
-	// The grammar exposes script contents as a single `raw_text` child, so the
-	// element boundary is the most truthful chunk.
-	positional_candidate(node, kind, source)
+	classify_raw_text_block(node, kind, source, SupportLang::TypeScript)
 }
 
 fn classify_style_element<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'t> {
@@ -85,7 +83,7 @@ fn classify_style_element<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate
 	} else {
 		ChunkKind::Style
 	};
-	positional_candidate(node, kind, source)
+	classify_raw_text_block(node, kind, source, SupportLang::Css)
 }
 
 fn classify_snippet_statement<'t>(node: Node<'t>, source: &str) -> RawChunkCandidate<'t> {
@@ -196,6 +194,22 @@ const fn force_container(mut candidate: RawChunkCandidate<'_>) -> RawChunkCandid
 	candidate
 }
 
+fn classify_raw_text_block<'t>(
+	node: Node<'t>,
+	kind: ChunkKind,
+	source: &str,
+	default_language: SupportLang,
+) -> RawChunkCandidate<'t> {
+	let Some(content_node) = child_by_kind(node, &["raw_text"]) else {
+		return positional_candidate(node, kind, source);
+	};
+	let candidate = with_region_node(positional_candidate(node, kind, source), Some(content_node));
+	match resolve_embedded_language(node, source, default_language) {
+		Some(language) => with_injected_subtree(candidate, language, content_node),
+		None => candidate,
+	}
+}
+
 fn block_expr_identifier(
 	node: Node<'_>,
 	source: &str,
@@ -262,6 +276,17 @@ fn attribute_value(node: Node<'_>, name: &str, source: &str) -> Option<String> {
 		return Some(name.to_string());
 	}
 	None
+}
+
+fn resolve_embedded_language(
+	node: Node<'_>,
+	source: &str,
+	default_language: SupportLang,
+) -> Option<SupportLang> {
+	if let Some(language) = attribute_value(node, "lang", source) {
+		return SupportLang::from_alias(language.as_str());
+	}
+	Some(default_language)
 }
 
 fn extract_attribute_name(node: Node<'_>, source: &str) -> Option<String> {
