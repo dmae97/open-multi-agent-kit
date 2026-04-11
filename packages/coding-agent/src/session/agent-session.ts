@@ -4245,6 +4245,14 @@ export class AgentSession {
 			return undefined;
 		}
 
+		// Only inject on the first user message of the conversation. Subsequent user
+		// turns must not receive the eager todo reminder — they often correct, clarify,
+		// or redirect the prior task, and forcing a brand-new todo list there is wrong.
+		const hasPriorUserMessage = this.agent.state.messages.some(m => m.role === "user");
+		if (hasPriorUserMessage) {
+			return undefined;
+		}
+
 		const trimmedPromptText = promptText.trimEnd();
 		if (trimmedPromptText.endsWith("?") || trimmedPromptText.endsWith("!")) {
 			return undefined;

@@ -292,4 +292,24 @@ describe("AgentSession eager todo enforcement", () => {
 			lastMessageText: "list all work trees!",
 		});
 	});
+
+	it("skips eager todo enforcement for subsequent user messages", async () => {
+		// First prompt: eager todo fires
+		await session.prompt("refactor the parser module");
+		expect(observedCalls).toHaveLength(1);
+		expect(observedCalls[0]?.toolChoice).toBe("todo_write");
+
+		// Second prompt: eager todo must NOT fire
+		observedCalls.length = 0;
+		await session.prompt("actually skip that, just fix the typo");
+		expect(observedCalls).toHaveLength(1);
+		expect(observedCalls[0]).toEqual({
+			toolChoice: undefined,
+			toolNames: ["todo_write", "bash"],
+			messageRoles: expect.arrayContaining(["user"]),
+			messageTexts: expect.arrayContaining(["actually skip that, just fix the typo"]),
+			lastMessageRole: "user",
+			lastMessageText: "actually skip that, just fix the typo",
+		});
+	});
 });
