@@ -686,6 +686,23 @@ export class CommandController {
 		}
 	}
 
+	async handleRenameCommand(title: string): Promise<void> {
+		try {
+			const stored = await this.ctx.sessionManager.setSessionName(title, "user");
+			if (!stored) {
+				this.ctx.showError("Session name cannot be empty.");
+				return;
+			}
+			const name = this.ctx.sessionManager.getSessionName()!;
+			setSessionTerminalTitle(name, this.ctx.sessionManager.getCwd());
+			this.ctx.statusLine.invalidate();
+			this.ctx.updateEditorBorderColor();
+			this.ctx.showStatus(`Session renamed to "${name}".`);
+		} catch (err) {
+			this.ctx.showError(`Rename failed: ${err instanceof Error ? err.message : String(err)}`);
+		}
+	}
+
 	async handleBashCommand(command: string, excludeFromContext = false): Promise<void> {
 		const isDeferred = this.ctx.session.isStreaming;
 		this.ctx.bashComponent = new BashExecutionComponent(command, this.ctx.ui, excludeFromContext);
