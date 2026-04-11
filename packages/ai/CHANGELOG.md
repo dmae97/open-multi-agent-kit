@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+
+### Changed
+
+- Updated default OpenAI stream idle timeout to 120,000 milliseconds to keep stream generation alive longer
+
 ### Fixed
 
 - Fixed duplicate synthetic tool results being generated when a real tool result appears later in message history
