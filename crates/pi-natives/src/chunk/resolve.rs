@@ -1046,14 +1046,10 @@ mod tests {
 			],
 		});
 		let mut warnings = Vec::new();
-		let err = match resolve_chunk_with_crc(
-			&state,
-			Some("fn_run.var_effect"),
-			Some("BBBB"),
-			&mut warnings,
-		) {
-			Ok(_) => panic!("ambiguous stale selector should fail closed"),
-			Err(err) => err,
+		let Err(err) =
+			resolve_chunk_with_crc(&state, Some("fn_run.var_effect"), Some("BBBB"), &mut warnings)
+		else {
+			panic!("ambiguous stale selector should fail closed");
 		};
 		assert!(err.contains("Ambiguous stale selector"), "{err}");
 	}

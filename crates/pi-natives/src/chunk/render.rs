@@ -39,9 +39,9 @@ fn normalize_rendered_line(
 	}
 }
 
-/// Detect a CommonMark fence marker (``` or ~~~) at the start of trimmed text.
-/// Returns `(marker_char, marker_length)` when at least 3 consecutive markers
-/// begin the line.
+/// Detect a `CommonMark` fence marker (three backticks or three tildes) at the
+/// start of trimmed text. Returns the marker character and marker length when
+/// at least 3 consecutive markers begin the line.
 fn fence_marker(trimmed: &str) -> Option<(char, usize)> {
 	let first = trimmed.as_bytes().first().copied()?;
 	if first != b'`' && first != b'~' {

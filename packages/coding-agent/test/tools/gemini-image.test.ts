@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
+import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
+import type { CustomToolContext } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools";
+import type { ReadonlySessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { geminiImageTool } from "@oh-my-pi/pi-coding-agent/tools/gemini-image";
 
 const originalFetch = global.fetch;
@@ -17,7 +19,7 @@ afterEach(() => {
 function getHeaderValue(headers: RequestInit["headers"] | undefined, name: string): string | undefined {
 	if (!headers) return undefined;
 	if (headers instanceof Headers) {
-		return headers.get(name) ?? headers.get(name.toLowerCase()) ?? headers.get(name.toUpperCase());
+		return headers.get(name) ?? headers.get(name.toLowerCase()) ?? headers.get(name.toUpperCase()) ?? undefined;
 	}
 	if (Array.isArray(headers)) {
 		for (const [key, value] of headers) {
@@ -29,7 +31,10 @@ function getHeaderValue(headers: RequestInit["headers"] | undefined, name: strin
 	}
 	for (const [key, value] of Object.entries(headers)) {
 		if (key.toLowerCase() === name.toLowerCase()) {
-			return value;
+			if (typeof value === "string") {
+				return value;
+			}
+			return value.join(",");
 		}
 	}
 	return undefined;
@@ -50,14 +55,18 @@ describe("geminiImageTool", () => {
 		fetchMock.preconnect = originalFetch.preconnect;
 		global.fetch = fetchMock;
 
-		const ctx = {
+		const ctx: CustomToolContext = {
 			sessionManager: {
 				getCwd: () => "/tmp",
-			},
+			} as unknown as ReadonlySessionManager,
 			modelRegistry: {
 				getApiKeyForProvider: async () => undefined,
-			},
-		} as unknown as ToolSession;
+			} as unknown as ModelRegistry,
+			model: undefined,
+			isIdle: () => true,
+			hasQueuedMessages: () => false,
+			abort: () => {},
+		};
 
 		const result = await geminiImageTool.execute("call-1", { subject: "a cat" }, undefined, ctx);
 		expect(result.content[0].type).toBe("text");
