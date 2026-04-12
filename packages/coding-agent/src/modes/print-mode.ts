@@ -6,6 +6,7 @@
  * - `omp --mode json "prompt"` - JSON event stream
  */
 import type { AssistantMessage, ImageContent } from "@oh-my-pi/pi-ai";
+import { sanitizeText } from "@oh-my-pi/pi-natives";
 import type { AgentSession } from "../session/agent-session";
 
 /**
@@ -170,14 +171,19 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 
 			// Check for error/aborted
 			if (assistantMsg.stopReason === "error" || assistantMsg.stopReason === "aborted") {
-				process.stderr.write(`${assistantMsg.errorMessage || `Request ${assistantMsg.stopReason}`}\n`);
-				process.exit(1);
+				const errorLine = sanitizeText(assistantMsg.errorMessage || `Request ${assistantMsg.stopReason}`);
+				const flushed = process.stderr.write(`${errorLine}\n`);
+				if (flushed) {
+					process.exit(1);
+				} else {
+					process.stderr.once("drain", () => process.exit(1));
+				}
 			}
 
 			// Output text content
 			for (const content of assistantMsg.content) {
 				if (content.type === "text") {
-					process.stdout.write(`${content.text}\n`);
+					process.stdout.write(`${sanitizeText(content.text)}\n`);
 				}
 			}
 		}

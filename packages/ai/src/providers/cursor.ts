@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises";
 import http2 from "node:http2";
 import { create, fromBinary, fromJson, type JsonValue, toBinary, toJson } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
+import { sanitizeText } from "@oh-my-pi/pi-natives";
 import { $env } from "@oh-my-pi/pi-utils";
 import { calculateCost } from "../models";
 import type {
@@ -674,6 +675,32 @@ function sendShellStreamEvent(
 	sendExecClientMessage(h2Request, execMsg, "shellStream", create(ShellStreamSchema, { event }));
 }
 
+function sanitizeShellExecResult(execResult: { result: { case?: string; value?: any } }): {
+	result: { case?: string; value?: any };
+} {
+	const result = execResult.result;
+	if (!result) return execResult;
+
+	switch (result.case) {
+		case "success":
+		case "failure": {
+			const value = result.value;
+			return {
+				result: {
+					case: result.case,
+					value: {
+						...value,
+						stdout: value.stdout ? sanitizeText(value.stdout) : value.stdout,
+						stderr: value.stderr ? sanitizeText(value.stderr) : value.stderr,
+					},
+				},
+			};
+		}
+		default:
+			return execResult;
+	}
+}
+
 async function handleShellStreamArgs(
 	args: ShellArgs,
 	execMsg: ExecServerMessage,
@@ -695,18 +722,95 @@ async function handleShellStreamArgs(
 
 	sendShellStreamEvent(h2Request, execMsg, { case: "start", value: create(ShellStreamStartSchema, {}) });
 
+	// Buffer for incomplete ANSI sequences across chunks
+	let stdoutBuffer = "";
+	let stderrBuffer = "";
+
+	const incompleteEscapeRegex = /\x1b(|\[|\[\d*|\[\?|\[\?\d*|\]\d*;?)$/;
+
+	const flushStdout = () => {
+		if (stdoutBuffer) {
+			let safeEnd = stdoutBuffer.length;
+			const match = stdoutBuffer.match(incompleteEscapeRegex);
+			if (match && match[0].length > 0) {
+				safeEnd = stdoutBuffer.length - match[0].length;
+			}
+			const toSend = stdoutBuffer.slice(0, safeEnd);
+			const remaining = stdoutBuffer.slice(safeEnd);
+			if (toSend) {
+				sendShellStreamEvent(h2Request, execMsg, {
+					case: "stdout",
+					value: create(ShellStreamStdoutSchema, { data: sanitizeText(toSend) }),
+				});
+			}
+			stdoutBuffer = remaining;
+		}
+	};
+
+	const flushStderr = () => {
+		if (stderrBuffer) {
+			let safeEnd = stderrBuffer.length;
+			const match = stderrBuffer.match(incompleteEscapeRegex);
+			if (match && match[0].length > 0) {
+				safeEnd = stderrBuffer.length - match[0].length;
+			}
+			const toSend = stderrBuffer.slice(0, safeEnd);
+			const remaining = stderrBuffer.slice(safeEnd);
+			if (toSend) {
+				sendShellStreamEvent(h2Request, execMsg, {
+					case: "stderr",
+					value: create(ShellStreamStderrSchema, { data: sanitizeText(toSend) }),
+				});
+			}
+			stderrBuffer = remaining;
+		}
+	};
+
+	let stdoutFlushTimer: NodeJS.Timeout | null = null;
+	let stderrFlushTimer: NodeJS.Timeout | null = null;
+
+	const scheduleStdoutFlush = () => {
+		if (!stdoutFlushTimer) {
+			stdoutFlushTimer = setTimeout(() => {
+				stdoutFlushTimer = null;
+				flushStdout();
+			}, 100);
+		}
+	};
+
+	const scheduleStderrFlush = () => {
+		if (!stderrFlushTimer) {
+			stderrFlushTimer = setTimeout(() => {
+				stderrFlushTimer = null;
+				flushStderr();
+			}, 100);
+		}
+	};
+
 	const streamCallbacks: CursorShellStreamCallbacks = {
 		onStdout(data: string) {
-			sendShellStreamEvent(h2Request, execMsg, {
-				case: "stdout",
-				value: create(ShellStreamStdoutSchema, { data }),
-			});
+			stdoutBuffer += data;
+			if (stdoutBuffer.includes("\n") || stdoutBuffer.length > 4096) {
+				if (stdoutFlushTimer) {
+					clearTimeout(stdoutFlushTimer);
+					stdoutFlushTimer = null;
+				}
+				flushStdout();
+			} else {
+				scheduleStdoutFlush();
+			}
 		},
 		onStderr(data: string) {
-			sendShellStreamEvent(h2Request, execMsg, {
-				case: "stderr",
-				value: create(ShellStreamStderrSchema, { data }),
-			});
+			stderrBuffer += data;
+			if (stderrBuffer.includes("\n") || stderrBuffer.length > 4096) {
+				if (stderrFlushTimer) {
+					clearTimeout(stderrFlushTimer);
+					stderrFlushTimer = null;
+				}
+				flushStderr();
+			} else {
+				scheduleStderrFlush();
+			}
 		},
 	};
 
@@ -730,10 +834,18 @@ async function handleShellStreamArgs(
 	// When using the batch handler (no shellStream), send buffered stdout/stderr
 	// after execution completes. With shellStream these were already sent in real time.
 	const sendBufferedOutput = !streamHandler;
-	sendShellStreamExitFromResult(h2Request, execMsg, execResult, sendBufferedOutput);
+	const sanitizedExecResult = sanitizeShellExecResult(execResult);
+
+	// Flush any remaining buffered output before sending results
+	if (stdoutFlushTimer) clearTimeout(stdoutFlushTimer);
+	if (stderrFlushTimer) clearTimeout(stderrFlushTimer);
+	flushStdout();
+	flushStderr();
+
+	sendShellStreamExitFromResult(h2Request, execMsg, sanitizedExecResult, sendBufferedOutput);
 	// Cursor can keep the turn pending when it receives only stream deltas.
 	// Send the final structured shellResult as completion acknowledgement.
-	sendExecClientMessage(h2Request, execMsg, "shellResult", execResult);
+	sendExecClientMessage(h2Request, execMsg, "shellResult", sanitizedExecResult);
 	sendExecClientStreamClose(h2Request, execMsg);
 
 	log("shellStream", "done", { elapsed: Date.now() - startTs });
@@ -753,13 +865,13 @@ function sendShellStreamExitFromResult(
 				if (value.stdout) {
 					sendShellStreamEvent(h2Request, execMsg, {
 						case: "stdout",
-						value: create(ShellStreamStdoutSchema, { data: value.stdout }),
+						value: create(ShellStreamStdoutSchema, { data: sanitizeText(value.stdout) }),
 					});
 				}
 				if (value.stderr) {
 					sendShellStreamEvent(h2Request, execMsg, {
 						case: "stderr",
-						value: create(ShellStreamStderrSchema, { data: value.stderr }),
+						value: create(ShellStreamStderrSchema, { data: sanitizeText(value.stderr) }),
 					});
 				}
 			}
@@ -779,13 +891,13 @@ function sendShellStreamExitFromResult(
 				if (value.stdout) {
 					sendShellStreamEvent(h2Request, execMsg, {
 						case: "stdout",
-						value: create(ShellStreamStdoutSchema, { data: value.stdout }),
+						value: create(ShellStreamStdoutSchema, { data: sanitizeText(value.stdout) }),
 					});
 				}
 				if (value.stderr) {
 					sendShellStreamEvent(h2Request, execMsg, {
 						case: "stderr",
-						value: create(ShellStreamStderrSchema, { data: value.stderr }),
+						value: create(ShellStreamStderrSchema, { data: sanitizeText(value.stderr) }),
 					});
 				}
 			}
@@ -970,7 +1082,8 @@ async function handleExecServerMessage(
 				reason => buildShellRejectedResult(normalizedArgs.command, normalizedArgs.workingDirectory, reason),
 				error => buildShellFailureResult(normalizedArgs.command, normalizedArgs.workingDirectory, error),
 			);
-			sendExecClientMessage(h2Request, execMsg, "shellResult", execResult);
+			const sanitizedExecResult = sanitizeShellExecResult(execResult);
+			sendExecClientMessage(h2Request, execMsg, "shellResult", sanitizedExecResult);
 			return;
 		}
 		case "shellStreamArgs": {
