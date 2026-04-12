@@ -593,6 +593,7 @@ export class CommandController {
 		this.ctx.statusLine.invalidate();
 		this.ctx.statusLine.setSessionStartTime(Date.now());
 		this.ctx.updateEditorTopBorder();
+		this.ctx.updateEditorBorderColor();
 		this.ctx.ui.requestRender();
 
 		this.ctx.chatContainer.clear();
@@ -886,6 +887,7 @@ export class CommandController {
 
 			this.ctx.statusLine.invalidate();
 			this.ctx.updateEditorTopBorder();
+			this.ctx.updateEditorBorderColor();
 			await this.ctx.reloadTodos();
 
 			this.ctx.chatContainer.addChild(new Spacer(1));
