@@ -85,19 +85,25 @@ export class AwaitTool implements AgentTool<typeof awaitSchema, AwaitToolDetails
 
 		// Block until at least one running job finishes or the call is aborted
 		const racePromises: Promise<unknown>[] = runningJobs.map(j => j.promise);
+		const watchedJobIds = runningJobs.map(job => job.id);
+		manager.watchJobs(watchedJobIds);
 
-		if (signal) {
-			const { promise: abortPromise, resolve: abortResolve } = Promise.withResolvers<void>();
-			const onAbort = () => abortResolve();
-			signal.addEventListener("abort", onAbort, { once: true });
-			racePromises.push(abortPromise);
-			try {
+		try {
+			if (signal) {
+				const { promise: abortPromise, resolve: abortResolve } = Promise.withResolvers<void>();
+				const onAbort = () => abortResolve();
+				signal.addEventListener("abort", onAbort, { once: true });
+				racePromises.push(abortPromise);
+				try {
+					await Promise.race(racePromises);
+				} finally {
+					signal.removeEventListener("abort", onAbort);
+				}
+			} else {
 				await Promise.race(racePromises);
-			} finally {
-				signal.removeEventListener("abort", onAbort);
 			}
-		} else {
-			await Promise.race(racePromises);
+		} finally {
+			manager.unwatchJobs(watchedJobIds);
 		}
 
 		if (signal?.aborted) {

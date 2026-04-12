@@ -869,7 +869,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		? new AsyncJobManager({
 				maxRunningJobs: asyncMaxJobs,
 				onJobComplete: async (jobId, result, job) => {
-					if (!session) return;
+					if (!session || asyncJobManager!.isDeliverySuppressed(jobId)) return;
 					const formattedResult = await formatAsyncResultForFollowUp(result);
 					if (asyncJobManager!.isDeliverySuppressed(jobId)) return;
 

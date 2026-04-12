@@ -87,6 +87,11 @@ function resolveEffectiveVariant(): X64Variant | null {
 const effectiveVariant = resolveEffectiveVariant();
 const variantSuffix = effectiveVariant ? `-${effectiveVariant}` : "";
 
+function resolveLinuxHostZigTarget(): "x86_64-linux-gnu" | "x86_64-linux-musl" {
+	const header = process.report?.getReport?.().header as { glibcVersionRuntime?: string } | undefined;
+	return header?.glibcVersionRuntime ? "x86_64-linux-gnu" : "x86_64-linux-musl";
+}
+
 function resolveSafeHostZigBuildConfig(): SafeHostZigBuildConfig | null {
 	if (isCrossCompile || targetArch !== "x64" || !effectiveVariant) {
 		return null;
@@ -104,7 +109,7 @@ function resolveSafeHostZigBuildConfig(): SafeHostZigBuildConfig | null {
 	return {
 		wrapperPath: path.join(import.meta.dir, "zig-safe-wrapper.ts"),
 		realZigPath,
-		target: targetPlatform === "linux" ? "x86_64-linux-gnu" : "x86_64-macos",
+		target: targetPlatform === "linux" ? resolveLinuxHostZigTarget() : "x86_64-macos",
 		cpu: effectiveVariant === "modern" ? "x86_64_v3" : "x86_64_v2",
 	};
 }

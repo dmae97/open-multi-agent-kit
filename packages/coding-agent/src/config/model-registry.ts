@@ -770,6 +770,8 @@ export class ModelRegistry {
 	#runtimeModelOverlays: CustomModelOverlay[] = [];
 	#runtimeProviderApiKeys: Map<string, string> = new Map();
 	#runtimeKeylessProviders: Set<string> = new Set();
+	#runtimeProvidersBySource: Map<string, Set<string>> = new Map();
+	#runtimeProviderSourceByName: Map<string, string> = new Map();
 
 	/**
 	 * @param authStorage - Auth storage for API key resolution
@@ -1925,6 +1927,22 @@ export class ModelRegistry {
 	clearSourceRegistrations(sourceId: string): void {
 		unregisterCustomApis(sourceId);
 		unregisterOAuthProviders(sourceId);
+		const sourceProviders = this.#runtimeProvidersBySource.get(sourceId);
+		if (!sourceProviders || sourceProviders.size === 0) {
+			return;
+		}
+		this.#runtimeProvidersBySource.delete(sourceId);
+		for (const providerName of sourceProviders) {
+			if (this.#runtimeProviderSourceByName.get(providerName) !== sourceId) {
+				continue;
+			}
+			this.#runtimeProviderSourceByName.delete(providerName);
+			this.#runtimeProviderApiKeys.delete(providerName);
+			this.#runtimeKeylessProviders.delete(providerName);
+			this.#runtimeModelOverlays = this.#runtimeModelOverlays.filter(overlay => overlay.provider !== providerName);
+		}
+		this.#reloadStaticModels();
+		this.#rebuildCanonicalIndex();
 	}
 
 	/**
@@ -1983,6 +2001,18 @@ export class ModelRegistry {
 
 		if (sourceId) {
 			this.#registeredProviderSources.add(sourceId);
+			const previousSourceId = this.#runtimeProviderSourceByName.get(providerName);
+			if (previousSourceId && previousSourceId !== sourceId) {
+				const previousProviders = this.#runtimeProvidersBySource.get(previousSourceId);
+				previousProviders?.delete(providerName);
+				if (previousProviders && previousProviders.size === 0) {
+					this.#runtimeProvidersBySource.delete(previousSourceId);
+				}
+			}
+			const sourceProviders = this.#runtimeProvidersBySource.get(sourceId) ?? new Set<string>();
+			sourceProviders.add(providerName);
+			this.#runtimeProvidersBySource.set(sourceId, sourceProviders);
+			this.#runtimeProviderSourceByName.set(providerName, sourceId);
 		}
 		if (config.apiKey) {
 			this.#customProviderApiKeys.set(providerName, config.apiKey);

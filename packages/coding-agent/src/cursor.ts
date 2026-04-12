@@ -244,41 +244,41 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 
 		let rawText = "";
 		let sanitizedRawText = "";
+		let streamedSanitizedText = "";
+		let canStreamSanitizedDelta = true;
 		const onUpdate: AgentToolUpdateCallback<unknown> = partialResult => {
 			const newRawText = partialResult.content.map(c => (c.type === "text" ? c.text : "")).join("");
-			if (newRawText.length > rawText.length) {
-				rawText = newRawText;
-				const fullSanitized = sanitizeText(newRawText);
-				const sanitizedDelta = fullSanitized.slice(sanitizedRawText.length);
-				sanitizedRawText = fullSanitized;
-				const sanitizedPartialResult: AgentToolResult<unknown> = {
-					content: [{ type: "text" as const, text: sanitizedRawText }],
-					details: partialResult.details,
-				};
-				this.options.emitEvent?.({
-					type: "tool_execution_update",
-					toolCallId,
-					toolName,
-					args: toolArgs,
-					partialResult: sanitizedPartialResult,
-				});
-				callbacks.onStdout(sanitizedDelta);
-			} else if (newRawText !== rawText) {
-				rawText = newRawText;
-				const fullSanitized = sanitizeText(newRawText);
-				sanitizedRawText = fullSanitized;
-				const sanitizedPartialResult: AgentToolResult<unknown> = {
-					content: [{ type: "text" as const, text: sanitizedRawText }],
-					details: partialResult.details,
-				};
-				this.options.emitEvent?.({
-					type: "tool_execution_update",
-					toolCallId,
-					toolName,
-					args: toolArgs,
-					partialResult: sanitizedPartialResult,
-				});
+			if (newRawText === rawText) {
+				return;
 			}
+			rawText = newRawText;
+			sanitizedRawText = sanitizeText(newRawText);
+			const sanitizedPartialResult: AgentToolResult<unknown> = {
+				content: [{ type: "text" as const, text: sanitizedRawText }],
+				details: partialResult.details,
+			};
+			this.options.emitEvent?.({
+				type: "tool_execution_update",
+				toolCallId,
+				toolName,
+				args: toolArgs,
+				partialResult: sanitizedPartialResult,
+			});
+			if (!canStreamSanitizedDelta) {
+				return;
+			}
+			if (sanitizedRawText.startsWith(streamedSanitizedText)) {
+				const sanitizedDelta = sanitizedRawText.slice(streamedSanitizedText.length);
+				streamedSanitizedText = sanitizedRawText;
+				if (sanitizedDelta) {
+					callbacks.onStdout(sanitizedDelta);
+				}
+				return;
+			}
+			// Cursor's shell-stream callback is append-only. Once the sanitized snapshot
+			// stops being a prefix extension, we can no longer repair the stream safely.
+			// Keep emitting full snapshots via tool_execution_update, but stop stdout deltas.
+			canStreamSanitizedDelta = false;
 		};
 
 		try {
@@ -292,12 +292,16 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 		// onUpdate may not fire for every chunk — flush any remaining output
 		// from the final result that wasn't already streamed.
 		const finalRawText = result.content.map(c => (c.type === "text" ? c.text : "")).join("");
-		if (finalRawText.length > rawText.length) {
+		if (finalRawText !== rawText) {
 			rawText = finalRawText;
-			const fullSanitized = sanitizeText(finalRawText);
-			const finalDelta = fullSanitized.slice(sanitizedRawText.length);
-			sanitizedRawText = fullSanitized;
-			callbacks.onStdout(finalDelta);
+			sanitizedRawText = sanitizeText(finalRawText);
+		}
+		if (canStreamSanitizedDelta && sanitizedRawText.startsWith(streamedSanitizedText)) {
+			const finalDelta = sanitizedRawText.slice(streamedSanitizedText.length);
+			streamedSanitizedText = sanitizedRawText;
+			if (finalDelta) {
+				callbacks.onStdout(finalDelta);
+			}
 		}
 
 		const sanitizedFinalResult: AgentToolResult<unknown> = {

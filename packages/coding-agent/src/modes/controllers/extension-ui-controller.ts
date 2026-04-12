@@ -122,7 +122,7 @@ export class ExtensionUiController {
 			getCommands: () => [],
 			getSessionName: () => this.ctx.sessionManager.getSessionName(),
 			setSessionName: async name => {
-				await this.ctx.sessionManager.setSessionName(name);
+				await this.ctx.sessionManager.setSessionName(name, "user");
 				setSessionTerminalTitle(this.ctx.sessionManager.getSessionName(), this.ctx.sessionManager.getCwd());
 			},
 		};
@@ -389,7 +389,7 @@ export class ExtensionUiController {
 			getCommands: () => [],
 			getSessionName: () => this.ctx.sessionManager.getSessionName(),
 			setSessionName: async name => {
-				await this.ctx.sessionManager.setSessionName(name);
+				await this.ctx.sessionManager.setSessionName(name, "user");
 				setSessionTerminalTitle(this.ctx.sessionManager.getSessionName(), this.ctx.sessionManager.getCwd());
 			},
 		};

@@ -48,6 +48,7 @@ export class AsyncJobManager {
 	readonly #jobs = new Map<string, AsyncJob>();
 	readonly #deliveries: AsyncJobDelivery[] = [];
 	readonly #suppressedDeliveries = new Set<string>();
+	readonly #watchedJobs = new Set<string>();
 	readonly #evictionTimers = new Map<string, NodeJS.Timeout>();
 	readonly #onJobComplete: AsyncJobManagerOptions["onJobComplete"];
 	readonly #maxRunningJobs: number;
@@ -184,6 +185,25 @@ export class AsyncJobManager {
 		return this.#deliveries.length > 0;
 	}
 
+	watchJobs(jobIds: string[]): number {
+		const uniqueJobIds = Array.from(new Set(jobIds.map(id => id.trim()).filter(id => id.length > 0)));
+		for (const jobId of uniqueJobIds) {
+			this.#watchedJobs.add(jobId);
+		}
+		return uniqueJobIds.length;
+	}
+
+	unwatchJobs(jobIds: string[]): number {
+		const uniqueJobIds = Array.from(new Set(jobIds.map(id => id.trim()).filter(id => id.length > 0)));
+		let removed = 0;
+		for (const jobId of uniqueJobIds) {
+			if (this.#watchedJobs.delete(jobId)) {
+				removed += 1;
+			}
+		}
+		return removed;
+	}
+
 	acknowledgeDeliveries(jobIds: string[]): number {
 		const uniqueJobIds = Array.from(new Set(jobIds.map(id => id.trim()).filter(id => id.length > 0)));
 		if (uniqueJobIds.length === 0) return 0;
@@ -254,6 +274,7 @@ export class AsyncJobManager {
 		this.#jobs.clear();
 		this.#deliveries.length = 0;
 		this.#suppressedDeliveries.clear();
+		this.#watchedJobs.clear();
 		return drained;
 	}
 
@@ -278,6 +299,7 @@ export class AsyncJobManager {
 		if (this.#retentionMs <= 0) {
 			this.#jobs.delete(jobId);
 			this.#suppressedDeliveries.delete(jobId);
+			this.#watchedJobs.delete(jobId);
 			return;
 		}
 		const existing = this.#evictionTimers.get(jobId);
@@ -288,6 +310,7 @@ export class AsyncJobManager {
 			this.#evictionTimers.delete(jobId);
 			this.#jobs.delete(jobId);
 			this.#suppressedDeliveries.delete(jobId);
+			this.#watchedJobs.delete(jobId);
 		}, this.#retentionMs);
 		timer.unref();
 		this.#evictionTimers.set(jobId, timer);
@@ -301,7 +324,7 @@ export class AsyncJobManager {
 	}
 
 	isDeliverySuppressed(jobId: string): boolean {
-		return this.#suppressedDeliveries.has(jobId);
+		return this.#suppressedDeliveries.has(jobId) || this.#watchedJobs.has(jobId);
 	}
 
 	#enqueueDelivery(jobId: string, text: string): void {
