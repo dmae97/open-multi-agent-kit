@@ -88,8 +88,8 @@ const effectiveVariant = resolveEffectiveVariant();
 const variantSuffix = effectiveVariant ? `-${effectiveVariant}` : "";
 
 function resolveLinuxHostZigTarget(): "x86_64-linux-gnu" | "x86_64-linux-musl" {
-	const header = process.report?.getReport?.().header as { glibcVersionRuntime?: string } | undefined;
-	return header?.glibcVersionRuntime ? "x86_64-linux-gnu" : "x86_64-linux-musl";
+	const report = process.report?.getReport?.() as { header?: { glibcVersionRuntime?: string } } | undefined;
+	return report?.header?.glibcVersionRuntime ? "x86_64-linux-gnu" : "x86_64-linux-musl";
 }
 
 function resolveSafeHostZigBuildConfig(): SafeHostZigBuildConfig | null {
