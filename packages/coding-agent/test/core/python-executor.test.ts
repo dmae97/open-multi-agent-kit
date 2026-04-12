@@ -11,6 +11,7 @@ import {
 import {
 	type KernelExecuteOptions,
 	type KernelExecuteResult,
+	type KernelShutdownResult,
 	type PreludeHelper,
 	PythonKernel,
 } from "@oh-my-pi/pi-coding-agent/ipy/kernel";
@@ -175,7 +176,7 @@ describe("warmPythonEnvironment", () => {
 			introspectPrelude: vi.fn().mockResolvedValue(docs),
 			ping: vi.fn().mockResolvedValue(true),
 			isAlive: () => true,
-			shutdown: vi.fn().mockResolvedValue(undefined),
+			shutdown: vi.fn(async (): Promise<KernelShutdownResult> => ({ confirmed: true })),
 		};
 		const startSpy = vi.spyOn(PythonKernel, "start").mockResolvedValue(kernel as unknown as PythonKernel);
 

@@ -50,7 +50,15 @@ import {
 	parseRateLimitReason,
 } from "@oh-my-pi/pi-ai";
 import { killTree, MacOSPowerAssertion, type SearchDb } from "@oh-my-pi/pi-natives";
-import { abortableSleep, getAgentDbPath, isEnoent, logger, prompt, setNativeKillTree } from "@oh-my-pi/pi-utils";
+import {
+	abortableSleep,
+	getAgentDbPath,
+	isEnoent,
+	logger,
+	prompt,
+	Snowflake,
+	setNativeKillTree,
+} from "@oh-my-pi/pi-utils";
 import type { AsyncJob, AsyncJobManager } from "../async";
 import type { Rule } from "../capability/rule";
 import { MODEL_ROLE_IDS, type ModelRegistry } from "../config/model-registry";
@@ -95,7 +103,11 @@ import type { HookCommandContext } from "../extensibility/hooks/types";
 import type { Skill, SkillWarning } from "../extensibility/skills";
 import { expandSlashCommand, type FileSlashCommand } from "../extensibility/slash-commands";
 import { resolveLocalUrlToPath } from "../internal-urls";
-import { executePython as executePythonCommand, type PythonResult } from "../ipy/executor";
+import {
+	disposeKernelSessionsByOwner,
+	executePython as executePythonCommand,
+	type PythonResult,
+} from "../ipy/executor";
 import {
 	buildDiscoverableMCPSearchIndex,
 	collectDiscoverableMCPTools,
@@ -246,6 +258,8 @@ export interface AgentSessionConfig {
 	obfuscator?: SecretObfuscator;
 	/** Shared native search DB for grep/glob/fuzzyFind-backed workflows. */
 	searchDb?: SearchDb;
+	/** Logical owner for retained Python kernels created by this session. */
+	pythonKernelOwnerId?: string;
 }
 
 /** Options for AgentSession.prompt() */
@@ -452,9 +466,11 @@ export class AgentSession {
 	#pendingBashMessages: BashExecutionMessage[] = [];
 
 	// Python execution state
-	#pythonAbortController: AbortController | undefined = undefined;
+	#pythonAbortControllers = new Set<AbortController>();
+	#pythonKernelOwnerId: string;
 	#pendingPythonMessages: PythonExecutionMessage[] = [];
-
+	#activePythonExecutions = new Set<Promise<unknown>>();
+	#pythonExecutionDisposing = false;
 	// Extension system
 	#extensionRunner: ExtensionRunner | undefined = undefined;
 	#turnIndex = 0;
@@ -547,6 +563,7 @@ export class AgentSession {
 		this.searchDb = config.searchDb;
 		this.#startPowerAssertion();
 		this.#asyncJobManager = config.asyncJobManager;
+		this.#pythonKernelOwnerId = config.pythonKernelOwnerId ?? `agent-session:${Snowflake.next()}`;
 		this.#scopedModels = config.scopedModels ?? [];
 		this.#thinkingLevel = config.thinkingLevel;
 		this.#promptTemplates = config.promptTemplates ?? [];
@@ -1798,6 +1815,7 @@ export class AgentSession {
 	 * Call this when completely done with the session.
 	 */
 	async dispose(): Promise<void> {
+		this.#pythonExecutionDisposing = true;
 		try {
 			if (this.#extensionRunner?.hasHandlers("session_shutdown")) {
 				await this.#extensionRunner.emit({ type: "session_shutdown" });
@@ -1812,6 +1830,13 @@ export class AgentSession {
 		if (drained === false && deliveryState) {
 			logger.warn("Async job completion deliveries still pending during dispose", { ...deliveryState });
 		}
+		const pythonExecutionsSettled = await this.#preparePythonExecutionsForDispose();
+		if (!pythonExecutionsSettled) {
+			logger.warn(
+				"Detaching retained Python kernel ownership during dispose while Python execution is still active",
+			);
+		}
+		await disposeKernelSessionsByOwner(this.#pythonKernelOwnerId);
 		this.#stopPowerAssertion();
 		await this.sessionManager.close();
 		this.#closeAllProviderSessions("dispose");
@@ -5669,41 +5694,65 @@ export class AgentSession {
 	): Promise<PythonResult> {
 		const excludeFromContext = options?.excludeFromContext === true;
 		const cwd = this.sessionManager.getCwd();
+		this.assertPythonExecutionAllowed();
 
-		if (this.#extensionRunner?.hasHandlers("user_python")) {
-			const hookResult = await this.#extensionRunner.emitUserPython({
-				type: "user_python",
-				code,
-				excludeFromContext,
-				cwd,
-			});
-			if (hookResult?.result) {
-				this.recordPythonResult(code, hookResult.result, options);
-				return hookResult.result;
+		const abortController = new AbortController();
+		const execution = (async (): Promise<PythonResult> => {
+			if (this.#extensionRunner?.hasHandlers("user_python")) {
+				const hookResult = await this.#extensionRunner.emitUserPython({
+					type: "user_python",
+					code,
+					excludeFromContext,
+					cwd,
+				});
+				this.assertPythonExecutionAllowed();
+				if (hookResult?.result) {
+					this.recordPythonResult(code, hookResult.result, options);
+					return hookResult.result;
+				}
 			}
-		}
 
-		this.#pythonAbortController = new AbortController();
-
-		try {
 			// Use the same session ID as the Python tool for kernel sharing
 			const sessionFile = this.sessionManager.getSessionFile();
 			const sessionId = sessionFile ? `session:${sessionFile}:cwd:${cwd}` : `cwd:${cwd}`;
-
 			const result = await executePythonCommand(code, {
 				cwd,
 				sessionId,
+				kernelOwnerId: this.#pythonKernelOwnerId,
 				kernelMode: this.settings.get("python.kernelMode"),
 				useSharedGateway: this.settings.get("python.sharedGateway"),
 				onChunk,
-				signal: this.#pythonAbortController.signal,
+				signal: abortController.signal,
 			});
-
 			this.recordPythonResult(code, result, options);
 			return result;
-		} finally {
-			this.#pythonAbortController = undefined;
+		})();
+		return await this.trackPythonExecution(execution, abortController);
+	}
+
+	assertPythonExecutionAllowed(): void {
+		if (this.#pythonExecutionDisposing) {
+			throw new Error("Python execution is unavailable while session disposal is in progress");
 		}
+	}
+
+	/**
+	 * Track Python work started outside AgentSession.executePython so dispose can await and abort it too.
+	 */
+	trackPythonExecution<T>(execution: Promise<T>, abortController: AbortController): Promise<T> {
+		this.#pythonAbortControllers.add(abortController);
+		this.#activePythonExecutions.add(execution);
+		void execution.then(
+			() => {
+				this.#pythonAbortControllers.delete(abortController);
+				this.#activePythonExecutions.delete(execution);
+			},
+			() => {
+				this.#pythonAbortControllers.delete(abortController);
+				this.#activePythonExecutions.delete(execution);
+			},
+		);
+		return execution;
 	}
 
 	/**
@@ -5736,12 +5785,46 @@ export class AgentSession {
 	 * Cancel running Python execution.
 	 */
 	abortPython(): void {
-		this.#pythonAbortController?.abort();
+		for (const abortController of this.#pythonAbortControllers) {
+			abortController.abort();
+		}
+	}
+
+	async #waitForPythonExecutionsToSettle(timeoutMs: number): Promise<boolean> {
+		const deadline = Date.now() + timeoutMs;
+		while (this.#activePythonExecutions.size > 0) {
+			const remainingMs = deadline - Date.now();
+			if (remainingMs <= 0) {
+				return false;
+			}
+			const settled = await Promise.race([
+				Promise.allSettled(Array.from(this.#activePythonExecutions)).then(() => true),
+				Bun.sleep(remainingMs).then(() => false),
+			]);
+			if (!settled && this.#activePythonExecutions.size > 0) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	async #preparePythonExecutionsForDispose(): Promise<boolean> {
+		if (!(await this.#waitForPythonExecutionsToSettle(3_000))) {
+			logger.warn("Aborting active Python execution during dispose before retained kernel cleanup");
+			this.abortPython();
+			if (!(await this.#waitForPythonExecutionsToSettle(1_000))) {
+				logger.warn(
+					"Python execution is still active after dispose aborted all active runs; retained kernel ownership will still be detached",
+				);
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/** Whether a Python execution is currently running */
 	get isPythonRunning(): boolean {
-		return this.#pythonAbortController !== undefined;
+		return this.#pythonAbortControllers.size > 0;
 	}
 
 	/** Whether there are pending Python messages waiting to be flushed */

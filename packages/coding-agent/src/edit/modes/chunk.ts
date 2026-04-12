@@ -8,6 +8,7 @@ import {
 	type ChunkInfo,
 	ChunkReadStatus,
 	type ChunkReadTarget,
+	ChunkRegion,
 	ChunkState,
 	type EditOperation as NativeEditOperation,
 } from "@oh-my-pi/pi-natives";
@@ -158,6 +159,10 @@ async function resolveChunkSourceContext(session: ToolSession, path: string): Pr
 	};
 }
 
+function normalizeChunkRegionSyntax(text: string): string {
+	return text.replaceAll("@body", "~").replaceAll("@head", "^");
+}
+
 function buildChunkEditResult(result: {
 	diffBefore: string;
 	diffAfter: string;
@@ -174,7 +179,7 @@ function buildChunkEditResult(result: {
 		changed: result.changed,
 		parseValid: result.parseValid,
 		touchedPaths: result.touchedPaths,
-		warnings: result.warnings,
+		warnings: result.warnings.map(normalizeChunkRegionSyntax),
 	};
 }
 
@@ -264,27 +269,117 @@ export async function formatChunkedGrepLine(params: {
 	return state.formatGrepLine(displayPathForFile(filePath, cwd), lineNumber, line);
 }
 
-function toNativeEditOperation(operation: ChunkEditOperation): NativeEditOperation {
+const CHUNK_CHECKSUM_ALPHABET = "ZPMQVRWSNKTXJBYH";
+type NativeChunkRegion = "head" | "body";
+
+function isChunkChecksumToken(value: string): boolean {
+	return value.length === 4 && Array.from(value).every(ch => CHUNK_CHECKSUM_ALPHABET.includes(ch.toUpperCase()));
+}
+
+function parseChunkEditSelector(selector: string | undefined): {
+	selector?: string;
+	crc?: string;
+	region?: NativeChunkRegion;
+} {
+	if (!selector) {
+		return {};
+	}
+
+	let trimmed = selector.trim();
+	if (trimmed.length === 0) {
+		return {};
+	}
+
+	let region: NativeChunkRegion | undefined;
+	const suffix = trimmed.at(-1);
+	if (suffix === "~" || suffix === "^") {
+		region = suffix === "~" ? "body" : "head";
+		trimmed = trimmed.slice(0, -1).trimEnd();
+	}
+
+	let selectorPart = trimmed;
+	let crc: string | undefined;
+	const hashIndex = selectorPart.lastIndexOf("#");
+	if (hashIndex >= 0) {
+		const suffix = selectorPart.slice(hashIndex + 1).trim();
+		if (isChunkChecksumToken(suffix)) {
+			crc = suffix.toUpperCase();
+			selectorPart = selectorPart.slice(0, hashIndex).trimEnd();
+		}
+	} else if (isChunkChecksumToken(selectorPart)) {
+		crc = selectorPart.toUpperCase();
+		selectorPart = "";
+	}
+
+	return { selector: selectorPart || undefined, crc, region };
+}
+
+type NativeChunkRegionEncoding = "named" | "symbolic";
+
+function toNativeEditRegion(
+	region: NativeChunkRegion | undefined,
+	encoding: NativeChunkRegionEncoding,
+): NativeEditOperation["region"] | undefined {
+	if (!region) {
+		return undefined;
+	}
+	if (encoding === "symbolic") {
+		return region === "body" ? ChunkRegion.Body : ChunkRegion.Head;
+	}
+	return region as unknown as NativeEditOperation["region"] | undefined;
+}
+
+function toNativeEditOperation(
+	operation: ChunkEditOperation,
+	defaultRegion: NativeChunkRegion | undefined,
+	encoding: NativeChunkRegionEncoding,
+): NativeEditOperation {
+	const { selector, crc, region } = parseChunkEditSelector(operation.sel);
+	const nativeRegion = toNativeEditRegion(operation.sel === undefined ? (region ?? defaultRegion) : region, encoding);
 	switch (operation.op) {
 		case "replace":
 			return {
 				op: ChunkEditOp.Replace,
-				sel: operation.sel,
+				sel: selector,
+				crc,
+				region: nativeRegion,
 				content: operation.content,
 			};
 		case "before":
-			return { op: ChunkEditOp.Before, sel: operation.sel, content: operation.content };
+			return { op: ChunkEditOp.Before, sel: selector, crc, region: nativeRegion, content: operation.content };
 		case "after":
-			return { op: ChunkEditOp.After, sel: operation.sel, content: operation.content };
+			return { op: ChunkEditOp.After, sel: selector, crc, region: nativeRegion, content: operation.content };
 		case "prepend":
-			return { op: ChunkEditOp.Prepend, sel: operation.sel, content: operation.content };
+			return { op: ChunkEditOp.Prepend, sel: selector, crc, region: nativeRegion, content: operation.content };
 		case "append":
-			return { op: ChunkEditOp.Append, sel: operation.sel, content: operation.content };
+			return { op: ChunkEditOp.Append, sel: selector, crc, region: nativeRegion, content: operation.content };
 		default: {
 			const exhaustive: never = operation;
 			return exhaustive;
 		}
 	}
+}
+
+function buildNativeChunkEditRequest(
+	params: { defaultSelector?: string; defaultCrc?: string; operations: ChunkEditOperation[] },
+	encoding: NativeChunkRegionEncoding,
+): Pick<Parameters<ChunkState["applyEdits"]>[0], "operations" | "defaultSelector" | "defaultCrc"> {
+	const parsedDefaultSelector = parseChunkEditSelector(params.defaultSelector);
+	const operations = params.operations.map(operation =>
+		toNativeEditOperation(operation, parsedDefaultSelector.region, encoding),
+	);
+	return {
+		operations,
+		defaultSelector: parsedDefaultSelector.selector,
+		defaultCrc: params.defaultCrc ?? parsedDefaultSelector.crc,
+	};
+}
+
+function isChunkRegionEncodingError(error: unknown): error is Error {
+	return (
+		error instanceof Error &&
+		/value `"(body|head|~|\^)"` does not match any variant of enum `ChunkRegion`/.test(error.message)
+	);
 }
 
 export function applyChunkEdits(params: {
@@ -298,19 +393,40 @@ export function applyChunkEdits(params: {
 	anchorStyle?: ChunkAnchorStyle;
 }): ChunkEditResult {
 	const normalizedSource = normalizeChunkSource(params.source);
-	const nativeOperations = params.operations.map(toNativeEditOperation);
-	const state = ChunkState.parse(normalizedSource, normalizeLanguage(params.language));
-	const result = state.applyEdits({
-		operations: nativeOperations,
-		normalizeIndent: resolveChunkAutoIndent(),
-		defaultSelector: params.defaultSelector,
-		defaultCrc: params.defaultCrc,
-		anchorStyle: params.anchorStyle,
-		cwd: params.cwd,
-		filePath: params.filePath,
-	});
+	const applyNativeEdits = (encoding: NativeChunkRegionEncoding): ChunkEditResult => {
+		const request = buildNativeChunkEditRequest(params, encoding);
+		const state = ChunkState.parse(normalizedSource, normalizeLanguage(params.language));
+		return buildChunkEditResult(
+			state.applyEdits({
+				operations: request.operations,
+				normalizeIndent: resolveChunkAutoIndent(),
+				defaultSelector: request.defaultSelector,
+				defaultCrc: request.defaultCrc,
+				anchorStyle: params.anchorStyle,
+				cwd: params.cwd,
+				filePath: params.filePath,
+			}),
+		);
+	};
 
-	return buildChunkEditResult(result);
+	try {
+		return applyNativeEdits("named");
+	} catch (error) {
+		if (isChunkRegionEncodingError(error)) {
+			try {
+				return applyNativeEdits("symbolic");
+			} catch (fallbackError) {
+				if (fallbackError instanceof Error) {
+					throw new Error(normalizeChunkRegionSyntax(fallbackError.message));
+				}
+				throw fallbackError;
+			}
+		}
+		if (error instanceof Error) {
+			throw new Error(normalizeChunkRegionSyntax(error.message));
+		}
+		throw error;
+	}
 }
 
 export async function getChunkInfoForFile(

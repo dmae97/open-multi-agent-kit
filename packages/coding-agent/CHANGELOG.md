@@ -20,6 +20,10 @@
 - Auto-generated session titles no longer overwrite a name set via `/rename`: `setSessionName` now tracks whether the name was set by the user or auto-generated and silently ignores auto titles once a user name is in place; terminal title follows the same guard
 - Session accent border color now applied on session resume and after auto-title generation, not only after an explicit `/rename`
 
+### Fixed
+
+- Fixed retained Python kernel ownership so `AgentSession.dispose()` only shuts down kernels owned by that session, including warmup-created kernels
+
 ## [14.1.0] - 2026-04-11
 ### Added
 
@@ -126,6 +130,7 @@
 ### Fixed
 
 - Fixed typo in system prompt: 'backwards compatibiltity' → 'backwards compatibility'
+
 
 ## [14.0.3] - 2026-04-09
 
