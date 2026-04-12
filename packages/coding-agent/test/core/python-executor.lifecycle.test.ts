@@ -34,9 +34,10 @@ class FakeKernel {
 		return this.#result;
 	}
 
-	async shutdown(): Promise<void> {
+	async shutdown(): Promise<{ confirmed: boolean }> {
 		this.shutdownCalls += 1;
 		this.#alive = false;
+		return { confirmed: true };
 	}
 
 	async ping(): Promise<boolean> {
@@ -174,9 +175,11 @@ describe("executePython session lifecycle", () => {
 
 		kernelA.shutdown = async () => {
 			shutdownCount += 1;
+			return { confirmed: true };
 		};
 		kernelB.shutdown = async () => {
 			shutdownCount += 1;
+			return { confirmed: true };
 		};
 
 		await executePython("print('one')", { kernelMode: "per-call" });

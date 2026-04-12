@@ -20,9 +20,10 @@ class FakeKernel {
 		return { status: "ok", cancelled: false, timedOut: false, stdinRequested: false };
 	}
 
-	async shutdown(): Promise<void> {
+	async shutdown(): Promise<{ confirmed: boolean }> {
 		this.shutdownCalls += 1;
 		this.alive = false;
+		return { confirmed: true };
 	}
 
 	isAlive(): boolean {

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed retained Python kernel ownership so `AgentSession.dispose()` only shuts down kernels owned by that session, including warmup-created kernels
+
 ## [14.1.0] - 2026-04-11
 ### Added
 
@@ -104,6 +108,7 @@
 ### Fixed
 
 - Fixed typo in system prompt: 'backwards compatibiltity' → 'backwards compatibility'
+
 
 ## [14.0.3] - 2026-04-09
 

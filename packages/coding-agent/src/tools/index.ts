@@ -116,6 +116,8 @@ export interface ToolSession {
 	hasUI: boolean;
 	/** Skip Python kernel availability check and warmup */
 	skipPythonPreflight?: boolean;
+	/** Force Python prelude warmup even when test env would normally skip it */
+	forcePythonWarmup?: boolean;
 	/** Pre-loaded context files (AGENTS.md, etc) */
 	contextFiles?: ContextFileEntry[];
 	/** Pre-loaded skills */
@@ -136,6 +138,12 @@ export interface ToolSession {
 	taskDepth?: number;
 	/** Get session file */
 	getSessionFile: () => string | null;
+	/** Get Python kernel owner ID for session-scoped retained-kernel cleanup */
+	getPythonKernelOwnerId?: () => string | null;
+	/** Reject new Python work once session disposal has started. */
+	assertPythonExecutionAllowed?: () => void;
+	/** Track tool-owned Python work so session disposal can await/abort it like direct session Python runs. */
+	trackPythonExecution?<T>(execution: Promise<T>, abortController: AbortController): Promise<T>;
 	/** Get session ID */
 	getSessionId?: () => string | null;
 	/** Get artifacts directory for artifact:// URLs */
@@ -297,7 +305,9 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		!skipPythonPreflight &&
 		pythonMode !== "bash-only" &&
 		(requestedTools === undefined || requestedTools.includes("python"));
-	const skipPythonWarm = isBunTestRuntime() || $flag("PI_PYTHON_SKIP_CHECK");
+	const isTestEnv = isBunTestRuntime();
+	const forcePythonWarmup = session.forcePythonWarmup === true;
+	const skipPythonWarm = (isTestEnv && !forcePythonWarmup) || $flag("PI_PYTHON_SKIP_CHECK");
 	if (shouldCheckPython) {
 		const availability = await logger.time("createTools:pythonCheck", checkPythonKernelAvailability, session.cwd);
 		pythonAvailable = availability.ok;
@@ -307,6 +317,7 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 			});
 		} else if (!skipPythonWarm && getPreludeDocs().length === 0) {
 			const sessionFile = session.getSessionFile?.() ?? undefined;
+			const kernelOwnerId = session.getPythonKernelOwnerId?.() ?? undefined;
 			const warmSessionId = sessionFile ? `session:${sessionFile}:cwd:${session.cwd}` : `cwd:${session.cwd}`;
 			try {
 				await logger.time(
@@ -316,6 +327,7 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 					warmSessionId,
 					session.settings.get("python.sharedGateway"),
 					sessionFile,
+					kernelOwnerId,
 				);
 			} catch (err) {
 				logger.warn("Failed to warm Python environment", {

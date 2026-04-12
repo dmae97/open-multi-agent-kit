@@ -6,7 +6,9 @@ import { getProjectDir } from "@oh-my-pi/pi-utils";
 
 class FakeKernel {
 	execute = vi.fn(async () => this.result);
-	shutdown = vi.fn(async () => {});
+	shutdown = vi.fn(async () => {
+		return { confirmed: true };
+	});
 	ping = vi.fn(async () => true);
 	alive = true;
 
@@ -94,6 +96,28 @@ describe("executePython lifecycle", () => {
 
 		expect(startSpy).toHaveBeenCalledTimes(2);
 		expect(kernel.shutdown).toHaveBeenCalledTimes(1);
+		expect(kernel.execute).toHaveBeenCalledTimes(0);
+		expect(kernelNext.execute).toHaveBeenCalledTimes(1);
+	});
+
+	it("retries a dead session restart after an unconfirmed shutdown", async () => {
+		const kernel = new FakeKernel(OK_RESULT);
+		const kernelNext = new FakeKernel(OK_RESULT);
+		kernel.alive = false;
+		kernel.shutdown.mockResolvedValueOnce({ confirmed: false }).mockResolvedValueOnce({ confirmed: true });
+		vi.spyOn(pythonKernel, "checkPythonKernelAvailability").mockResolvedValue({ ok: true });
+		const startSpy = vi
+			.spyOn(pythonKernel.PythonKernel, "start")
+			.mockResolvedValueOnce(kernel as unknown as pythonKernel.PythonKernel)
+			.mockResolvedValueOnce(kernelNext as unknown as pythonKernel.PythonKernel);
+
+		await expect(
+			executePython("1 + 1", { kernelMode: "session", sessionId: "retry-dead-session", cwd: getProjectDir() }),
+		).rejects.toThrow("Failed to confirm crashed kernel shutdown before restart");
+		await executePython("2 + 2", { kernelMode: "session", sessionId: "retry-dead-session", cwd: getProjectDir() });
+
+		expect(startSpy).toHaveBeenCalledTimes(2);
+		expect(kernel.shutdown).toHaveBeenCalledTimes(2);
 		expect(kernel.execute).toHaveBeenCalledTimes(0);
 		expect(kernelNext.execute).toHaveBeenCalledTimes(1);
 	});

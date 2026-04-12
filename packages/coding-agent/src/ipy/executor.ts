@@ -16,6 +16,7 @@ import { PYTHON_PRELUDE } from "./prelude";
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_KERNEL_SESSIONS = 4;
 const CLEANUP_INTERVAL_MS = 30 * 1000; // 30 seconds
+const OWNER_CLEANUP_KERNEL_SHUTDOWN_TIMEOUT_MS = 2_000;
 
 export type PythonKernelMode = "session" | "per-call";
 
@@ -32,6 +33,8 @@ export interface PythonExecutorOptions {
 	signal?: AbortSignal;
 	/** Session identifier for kernel reuse */
 	sessionId?: string;
+	/** Logical owner identifier for retained kernel cleanup */
+	kernelOwnerId?: string;
 	/** Kernel mode (session reuse vs per-call) */
 	kernelMode?: PythonKernelMode;
 	/** Restart the kernel before executing */
@@ -80,11 +83,24 @@ interface KernelSession {
 	queue: Promise<void>;
 	restartCount: number;
 	dead: boolean;
+	needsRestart: boolean;
+	kernelInvalidatedByRecovery: boolean;
+	disposing: boolean;
+	disposeCapacityPromise?: Promise<void>;
+	resolveDisposeCapacity?: () => void;
+	disposeAttemptPromise?: Promise<void>;
+	resolveDisposeAttempt?: () => void;
+	disposeResultPromise?: Promise<KernelDisposalResult>;
+	disposeResultTimeoutMs?: number;
+	nextDisposalRetryAt?: number;
 	lastUsedAt: number;
+	ownerIds: Set<string>;
+	hasFallbackOwner: boolean;
 	heartbeatTimer?: NodeJS.Timeout;
 }
 
 const kernelSessions = new Map<string, KernelSession>();
+const disposingKernelSessions = new Set<KernelSession>();
 let cachedPreludeDocs: PreludeHelper[] | null = null;
 let cleanupTimer: NodeJS.Timeout | null = null;
 
@@ -93,6 +109,7 @@ interface KernelSessionExecutionOptions {
 	sessionFile?: string;
 	signal?: AbortSignal;
 	deadlineMs?: number;
+	kernelOwnerId?: string;
 }
 
 class PythonExecutionCancelledError extends Error {
@@ -142,10 +159,10 @@ function isTimedOutCancellation(error: unknown, signal?: AbortSignal): boolean {
 	return reason instanceof Error ? reason.name === "TimeoutError" : false;
 }
 
-async function waitForQueueTurn(
-	queue: Promise<void>,
+async function waitForPromiseWithCancellation<T>(
+	promise: Promise<T>,
 	options: Pick<KernelSessionExecutionOptions, "signal" | "deadlineMs">,
-): Promise<void> {
+): Promise<T> {
 	if (options.signal?.aborted) {
 		throw new PythonExecutionCancelledError(isTimedOutCancellation(options.signal.reason, options.signal));
 	}
@@ -156,11 +173,10 @@ async function waitForQueueTurn(
 	}
 
 	if (!options.signal && remainingMs === undefined) {
-		await queue;
-		return;
+		return await promise;
 	}
 
-	await new Promise<void>((resolve, reject) => {
+	return await new Promise<T>((resolve, reject) => {
 		const cleanups: Array<() => void> = [];
 		const finish = (callback: () => void) => {
 			while (cleanups.length > 0) {
@@ -188,11 +204,18 @@ async function waitForQueueTurn(
 			cleanups.push(() => clearTimeout(timeout));
 		}
 
-		queue.then(
-			() => finish(resolve),
+		promise.then(
+			value => finish(() => resolve(value)),
 			error => finish(() => reject(error)),
 		);
 	});
+}
+
+async function waitForQueueTurn(
+	queue: Promise<void>,
+	options: Pick<KernelSessionExecutionOptions, "signal" | "deadlineMs">,
+): Promise<void> {
+	await waitForPromiseWithCancellation(queue, options);
 }
 
 function formatTimeoutAnnotation(timeoutMs?: number): string | undefined {
@@ -352,6 +375,131 @@ function stopCleanupTimer(): void {
 	}
 }
 
+function attachKernelOwner(sessionId: string, ownerId?: string): boolean {
+	const session = kernelSessions.get(sessionId);
+	if (!session || session.disposing) return false;
+	if (ownerId !== undefined) {
+		if (session.hasFallbackOwner) {
+			session.ownerIds.delete(sessionId);
+			session.hasFallbackOwner = false;
+		}
+		session.ownerIds.add(ownerId);
+	} else if (session.hasFallbackOwner || session.ownerIds.size === 0) {
+		session.ownerIds.add(sessionId);
+		session.hasFallbackOwner = true;
+	}
+	session.lastUsedAt = Date.now();
+	return true;
+}
+
+function getRetainedKernelSessionCount(): number {
+	return kernelSessions.size + disposingKernelSessions.size;
+}
+
+function syncCleanupTimer(): void {
+	if (kernelSessions.size === 0 && disposingKernelSessions.size === 0) {
+		stopCleanupTimer();
+		return;
+	}
+	startCleanupTimer();
+}
+
+function retryPendingKernelSessionDisposals(now: number = Date.now()): void {
+	for (const session of disposingKernelSessions.values()) {
+		if (session.disposeResultPromise) continue;
+		if (session.nextDisposalRetryAt !== undefined && session.nextDisposalRetryAt > now) continue;
+		session.nextDisposalRetryAt = undefined;
+		void disposeKernelSession(session);
+	}
+}
+
+function beginDisposingKernelSession(session: KernelSession): boolean {
+	if (session.disposing) return false;
+	session.disposing = true;
+	disposingKernelSessions.add(session);
+	if (kernelSessions.get(session.id) === session) {
+		kernelSessions.delete(session.id);
+	}
+	if (session.heartbeatTimer) {
+		clearInterval(session.heartbeatTimer);
+		session.heartbeatTimer = undefined;
+	}
+	syncCleanupTimer();
+	return true;
+}
+
+function finishDisposingKernelSession(session: KernelSession): void {
+	disposingKernelSessions.delete(session);
+	session.resolveDisposeCapacity?.();
+	session.resolveDisposeCapacity = undefined;
+	session.disposeCapacityPromise = undefined;
+	session.resolveDisposeAttempt = undefined;
+	session.disposeAttemptPromise = undefined;
+	session.disposeResultPromise = undefined;
+	session.disposeResultTimeoutMs = undefined;
+	session.nextDisposalRetryAt = undefined;
+	session.kernelInvalidatedByRecovery = false;
+	syncCleanupTimer();
+}
+
+async function waitForDisposalCapacity(
+	options: Pick<KernelSessionExecutionOptions, "signal" | "deadlineMs">,
+): Promise<void> {
+	retryPendingKernelSessionDisposals();
+
+	const disposalPromises: Promise<void>[] = [];
+	let nextRetryAt: number | undefined;
+	for (const session of disposingKernelSessions.values()) {
+		if (session.disposeCapacityPromise) {
+			disposalPromises.push(
+				session.disposeCapacityPromise.then(
+					() => undefined,
+					() => undefined,
+				),
+			);
+		}
+		if (session.disposeAttemptPromise) {
+			disposalPromises.push(
+				session.disposeAttemptPromise.then(
+					() => undefined,
+					() => undefined,
+				),
+			);
+		}
+		if (session.nextDisposalRetryAt !== undefined) {
+			nextRetryAt =
+				nextRetryAt === undefined
+					? session.nextDisposalRetryAt
+					: Math.min(nextRetryAt, session.nextDisposalRetryAt);
+		}
+	}
+	if (disposalPromises.length > 0) {
+		await waitForPromiseWithCancellation(Promise.race(disposalPromises), options);
+		return;
+	}
+	if (nextRetryAt === undefined) return;
+	await waitForPromiseWithCancellation(
+		Bun.sleep(Math.max(0, nextRetryAt - Date.now())).then(() => undefined),
+		options,
+	);
+}
+
+async function ensureKernelSessionCapacity(
+	options: Pick<KernelSessionExecutionOptions, "signal" | "deadlineMs">,
+): Promise<void> {
+	while (getRetainedKernelSessionCount() >= MAX_KERNEL_SESSIONS) {
+		if (disposingKernelSessions.size > 0) {
+			await waitForDisposalCapacity(options);
+			continue;
+		}
+		if (kernelSessions.size === 0) {
+			await waitForDisposalCapacity(options);
+			continue;
+		}
+		await evictOldestSession();
+	}
+}
+
 async function cleanupIdleSessions(): Promise<void> {
 	const now = Date.now();
 	const toDispose: KernelSession[] = [];
@@ -367,9 +515,8 @@ async function cleanupIdleSessions(): Promise<void> {
 		await Promise.allSettled(toDispose.map(session => disposeKernelSession(session)));
 	}
 
-	if (kernelSessions.size === 0) {
-		stopCleanupTimer();
-	}
+	retryPendingKernelSessionDisposals(now);
+	syncCleanupTimer();
 }
 
 async function evictOldestSession(): Promise<void> {
@@ -387,12 +534,29 @@ async function evictOldestSession(): Promise<void> {
 
 export async function disposeAllKernelSessions(): Promise<void> {
 	stopCleanupTimer();
-	const sessions = Array.from(kernelSessions.values());
+	const sessions = Array.from(new Set([...kernelSessions.values(), ...disposingKernelSessions.values()]));
 	await Promise.allSettled(sessions.map(session => disposeKernelSession(session)));
 }
 
-async function ensureKernelAvailable(cwd: string): Promise<void> {
-	const availability = await checkPythonKernelAvailability(cwd);
+export async function disposeKernelSessionsByOwner(ownerId: string): Promise<void> {
+	const sessionsToDispose: KernelSession[] = [];
+	for (const session of Array.from(kernelSessions.values())) {
+		if (session.disposing || !session.ownerIds.delete(ownerId)) continue;
+		if (session.ownerIds.size === 0) {
+			sessionsToDispose.push(session);
+		}
+	}
+	await Promise.allSettled(
+		sessionsToDispose.map(session => disposeKernelSession(session, OWNER_CLEANUP_KERNEL_SHUTDOWN_TIMEOUT_MS)),
+	);
+	syncCleanupTimer();
+}
+
+async function ensureKernelAvailable(
+	cwd: string,
+	options: Pick<KernelSessionExecutionOptions, "signal" | "deadlineMs"> = {},
+): Promise<void> {
+	const availability = await waitForPromiseWithCancellation(checkPythonKernelAvailability(cwd), options);
 	if (!availability.ok) {
 		throw new Error(availability.reason ?? "Python kernel unavailable");
 	}
@@ -403,10 +567,13 @@ export async function warmPythonEnvironment(
 	sessionId?: string,
 	useSharedGateway?: boolean,
 	sessionFile?: string,
+	kernelOwnerId?: string,
+	signal?: AbortSignal,
 ): Promise<{ ok: boolean; reason?: string; docs: PreludeHelper[] }> {
 	let cacheState: PreludeCacheState | null = null;
+	const resolvedSessionId = sessionId ?? `session:${cwd}`;
 	try {
-		await logger.time("warmPython:ensureKernelAvailable", ensureKernelAvailable, cwd);
+		await logger.time("warmPython:ensureKernelAvailable", ensureKernelAvailable, cwd, { signal });
 	} catch (err: unknown) {
 		const reason = err instanceof Error ? err.message : String(err);
 		cachedPreludeDocs = [];
@@ -418,6 +585,7 @@ export async function warmPythonEnvironment(
 			const cached = await readPreludeCache(cacheState);
 			if (cached) {
 				cachedPreludeDocs = cached;
+				attachKernelOwner(resolvedSessionId, kernelOwnerId);
 				return { ok: true, docs: cached };
 			}
 		} catch (err) {
@@ -426,19 +594,21 @@ export async function warmPythonEnvironment(
 		}
 	}
 	if (cachedPreludeDocs && cachedPreludeDocs.length > 0) {
+		attachKernelOwner(resolvedSessionId, kernelOwnerId);
 		return { ok: true, docs: cachedPreludeDocs };
 	}
-	const resolvedSessionId = sessionId ?? `session:${cwd}`;
 	try {
 		const docs = await logger.time(
 			"warmPython:withKernelSession",
 			withKernelSession,
 			resolvedSessionId,
 			cwd,
-			kernel => ensurePreludeDocsLoaded(kernel, cwd, { useSharedGateway, sessionFile }, cacheState),
+			kernel => ensurePreludeDocsLoaded(kernel, cwd, { useSharedGateway, sessionFile, signal }, cacheState),
 			{
 				useSharedGateway,
 				sessionFile,
+				kernelOwnerId,
+				signal,
 			},
 		);
 		return { ok: true, docs };
@@ -471,17 +641,55 @@ function isResourceExhaustionError(error: unknown): boolean {
 	);
 }
 
+function clearDisposingKernelSessionTracking(): void {
+	for (const session of disposingKernelSessions.values()) {
+		if (session.heartbeatTimer) {
+			clearInterval(session.heartbeatTimer);
+			session.heartbeatTimer = undefined;
+		}
+		session.resolveDisposeCapacity?.();
+		session.resolveDisposeCapacity = undefined;
+		session.disposeCapacityPromise = undefined;
+		session.resolveDisposeAttempt?.();
+		session.resolveDisposeAttempt = undefined;
+		session.disposeAttemptPromise = undefined;
+		session.disposeResultPromise = undefined;
+		session.disposeResultTimeoutMs = undefined;
+		session.nextDisposalRetryAt = undefined;
+	}
+	disposingKernelSessions.clear();
+}
+
+function markLiveKernelSessionsForRecovery(): void {
+	for (const session of kernelSessions.values()) {
+		if (session.heartbeatTimer) {
+			clearInterval(session.heartbeatTimer);
+			session.heartbeatTimer = undefined;
+		}
+		session.needsRestart = true;
+		session.kernelInvalidatedByRecovery = session.kernel.isSharedGateway;
+		session.restartCount = 0;
+	}
+}
+
 async function recoverFromResourceExhaustion(): Promise<void> {
 	logger.warn("Resource exhaustion detected, recovering by restarting shared gateway");
 	stopCleanupTimer();
-	const sessions = Array.from(kernelSessions.values());
-	for (const session of sessions) {
-		if (session.heartbeatTimer) {
-			clearInterval(session.heartbeatTimer);
-		}
-		kernelSessions.delete(session.id);
-	}
+	markLiveKernelSessionsForRecovery();
+	clearDisposingKernelSessionTracking();
 	await shutdownSharedGateway();
+	syncCleanupTimer();
+}
+
+function ensureKernelHeartbeat(session: KernelSession): void {
+	if (session.heartbeatTimer) return;
+	session.heartbeatTimer = setInterval(() => {
+		if (session.dead || session.needsRestart) return;
+		if (!session.kernel.isAlive()) {
+			session.dead = true;
+		}
+	}, 5000);
+	session.heartbeatTimer.unref();
 }
 
 async function createKernelSession(
@@ -507,21 +715,25 @@ async function createKernelSession(
 		throw err;
 	}
 
+	const hasFallbackOwner = options.kernelOwnerId === undefined;
+	const initialOwnerId = options.kernelOwnerId ?? sessionId;
 	const session: KernelSession = {
 		id: sessionId,
 		kernel,
 		queue: Promise.resolve(),
 		restartCount: 0,
 		dead: false,
+		needsRestart: false,
+		kernelInvalidatedByRecovery: false,
+		disposing: false,
+		disposeResultPromise: undefined,
+		nextDisposalRetryAt: undefined,
 		lastUsedAt: Date.now(),
+		ownerIds: new Set([initialOwnerId]),
+		hasFallbackOwner,
 	};
 
-	session.heartbeatTimer = setInterval(() => {
-		if (session.dead) return;
-		if (!session.kernel.isAlive()) {
-			session.dead = true;
-		}
-	}, 5000);
+	ensureKernelHeartbeat(session);
 
 	return session;
 }
@@ -537,30 +749,193 @@ async function restartKernelSession(
 	}
 	requireRemainingTimeoutMs(options.deadlineMs);
 	try {
-		await session.kernel.shutdown();
+		if (!session.kernelInvalidatedByRecovery) {
+			const shutdownTimeoutMs = requireRemainingTimeoutMs(options.deadlineMs);
+			const shutdownResult = await session.kernel.shutdown({ signal: options.signal, timeoutMs: shutdownTimeoutMs });
+			if (!shutdownResult.confirmed) {
+				throw new Error("Failed to confirm crashed kernel shutdown before restart");
+			}
+		}
+		const env: Record<string, string> | undefined = options.sessionFile
+			? { PI_SESSION_FILE: options.sessionFile }
+			: undefined;
+		const startOptions = buildKernelStartOptions(cwd, env, options);
+		const kernel = await PythonKernel.start(startOptions);
+		session.kernel = kernel;
+		session.dead = false;
+		session.needsRestart = false;
+		session.kernelInvalidatedByRecovery = false;
+		session.lastUsedAt = Date.now();
+		ensureKernelHeartbeat(session);
 	} catch (err) {
-		logger.warn("Failed to shutdown crashed kernel", { error: err instanceof Error ? err.message : String(err) });
+		session.restartCount = 0;
+		logger.warn("Failed to restart kernel", { error: err instanceof Error ? err.message : String(err) });
+		throw err;
 	}
-	const env: Record<string, string> | undefined = options.sessionFile
-		? { PI_SESSION_FILE: options.sessionFile }
-		: undefined;
-	const startOptions = buildKernelStartOptions(cwd, env, options);
-	const kernel = await PythonKernel.start(startOptions);
-	session.kernel = kernel;
-	session.dead = false;
-	session.lastUsedAt = Date.now();
 }
 
-async function disposeKernelSession(session: KernelSession): Promise<void> {
-	if (session.heartbeatTimer) {
-		clearInterval(session.heartbeatTimer);
+type KernelDisposalResult = { status: "confirmed" } | { status: "unconfirmed" } | { status: "failed"; err: unknown };
+type KernelDisposalWaitResult = KernelDisposalResult | { status: "timedOut" };
+
+function createKernelDisposalResultPromise(session: KernelSession, timeoutMs?: number): Promise<KernelDisposalResult> {
+	if (session.kernelInvalidatedByRecovery) {
+		return Promise.resolve({ status: "confirmed" as const });
 	}
-	try {
-		await session.kernel.shutdown();
-	} catch (err) {
-		logger.warn("Failed to shutdown kernel", { error: err instanceof Error ? err.message : String(err) });
+	return Promise.resolve()
+		.then(() => session.kernel.shutdown(timeoutMs === undefined ? undefined : { timeoutMs }))
+		.then(
+			result => (result.confirmed ? { status: "confirmed" as const } : { status: "unconfirmed" as const }),
+			(err: unknown) => ({ status: "failed" as const, err }),
+		);
+}
+
+function getOrStartKernelDisposalResultPromise(
+	session: KernelSession,
+	timeoutMs?: number,
+): Promise<KernelDisposalResult> {
+	if (!session.disposeResultPromise) {
+		session.disposeResultTimeoutMs = timeoutMs;
+		const releaseDisposalAttempt = Promise.withResolvers<void>();
+		session.disposeAttemptPromise = releaseDisposalAttempt.promise;
+		session.resolveDisposeAttempt = releaseDisposalAttempt.resolve;
+		const disposeResultPromise = createKernelDisposalResultPromise(session, timeoutMs);
+		void disposeResultPromise.then(result => {
+			if (result.status === "confirmed") {
+				finishDisposingKernelSession(session);
+				return;
+			}
+			if (session.disposing) {
+				session.nextDisposalRetryAt = Date.now() + CLEANUP_INTERVAL_MS;
+				syncCleanupTimer();
+			}
+		});
+		const disposalAttemptPromise = disposeResultPromise.finally(() => {
+			releaseDisposalAttempt.resolve();
+			if (session.disposeResultPromise === disposalAttemptPromise) {
+				session.disposeResultPromise = undefined;
+				session.disposeResultTimeoutMs = undefined;
+			}
+			if (session.disposeAttemptPromise === releaseDisposalAttempt.promise) {
+				session.disposeAttemptPromise = undefined;
+				session.resolveDisposeAttempt = undefined;
+			}
+		});
+		session.disposeResultPromise = disposalAttemptPromise;
 	}
-	kernelSessions.delete(session.id);
+	return session.disposeResultPromise;
+}
+
+async function waitForKernelSessionDisposal(
+	session: KernelSession,
+	timeoutMs?: number,
+): Promise<KernelDisposalWaitResult | undefined> {
+	const disposeResultPromise = session.disposeResultPromise;
+	if (!disposeResultPromise) {
+		return undefined;
+	}
+	if (timeoutMs === undefined) {
+		return await disposeResultPromise;
+	}
+
+	let timeoutId: NodeJS.Timeout | undefined;
+	const result = await Promise.race([
+		disposeResultPromise,
+		new Promise<{ status: "timedOut" }>(resolve => {
+			timeoutId = setTimeout(() => resolve({ status: "timedOut" }), timeoutMs);
+			timeoutId.unref();
+		}),
+	]);
+
+	if (timeoutId) {
+		clearTimeout(timeoutId);
+	}
+	return result;
+}
+
+function retryKernelSessionDisposalInBackground(session: KernelSession): void {
+	session.nextDisposalRetryAt = undefined;
+	void disposeKernelSession(session);
+}
+
+async function disposeKernelSession(session: KernelSession, shutdownTimeoutMs?: number): Promise<void> {
+	if (!session.disposing) {
+		if (!beginDisposingKernelSession(session)) return;
+		const releaseDisposalCapacity = Promise.withResolvers<void>();
+		session.disposeCapacityPromise = releaseDisposalCapacity.promise;
+		session.resolveDisposeCapacity = releaseDisposalCapacity.resolve;
+	}
+
+	if (
+		shutdownTimeoutMs === undefined &&
+		session.disposeResultPromise &&
+		session.disposeResultTimeoutMs !== undefined
+	) {
+		const inheritedResult = await session.disposeResultPromise;
+		if (inheritedResult.status === "confirmed") {
+			finishDisposingKernelSession(session);
+			return;
+		}
+		session.disposeResultPromise = undefined;
+		session.disposeResultTimeoutMs = undefined;
+		logger.warn("Retained kernel shutdown was not confirmed during owner cleanup; retrying without timeout", {
+			sessionId: session.id,
+		});
+	}
+
+	const inheritedBackgroundRetryTimeoutMs =
+		shutdownTimeoutMs === undefined && session.disposeResultPromise && session.disposeResultTimeoutMs === undefined
+			? OWNER_CLEANUP_KERNEL_SHUTDOWN_TIMEOUT_MS
+			: shutdownTimeoutMs;
+
+	getOrStartKernelDisposalResultPromise(session, shutdownTimeoutMs);
+	const result = await waitForKernelSessionDisposal(session, inheritedBackgroundRetryTimeoutMs);
+	if (!result) {
+		return;
+	}
+	if (result.status === "timedOut") {
+		logger.warn(
+			shutdownTimeoutMs === undefined
+				? "Timed out waiting for retained kernel shutdown during global cleanup; retained capacity remains reserved"
+				: "Timed out shutting down retained kernel during owner cleanup",
+			{
+				sessionId: session.id,
+				timeoutMs: inheritedBackgroundRetryTimeoutMs,
+			},
+		);
+		if (shutdownTimeoutMs !== undefined) {
+			retryKernelSessionDisposalInBackground(session);
+		}
+		return;
+	}
+	if (result.status === "confirmed") {
+		finishDisposingKernelSession(session);
+		return;
+	}
+	if (result.status === "unconfirmed") {
+		logger.warn(
+			shutdownTimeoutMs === undefined
+				? "Kernel shutdown was not confirmed; retained capacity remains reserved"
+				: "Retained kernel shutdown was not confirmed during owner cleanup",
+			{ sessionId: session.id },
+		);
+		if (shutdownTimeoutMs !== undefined) {
+			retryKernelSessionDisposalInBackground(session);
+		}
+		return;
+	}
+	logger.warn(
+		shutdownTimeoutMs === undefined
+			? "Failed to shutdown kernel"
+			: "Failed to shutdown retained kernel during owner cleanup",
+		{
+			sessionId: session.id,
+			error: result.err instanceof Error ? result.err.message : String(result.err),
+		},
+	);
+	if (shutdownTimeoutMs !== undefined) {
+		retryKernelSessionDisposalInBackground(session);
+	}
+	return;
 }
 
 async function withKernelSession<T>(
@@ -570,10 +945,11 @@ async function withKernelSession<T>(
 	options: KernelSessionExecutionOptions = {},
 ): Promise<T> {
 	let session = kernelSessions.get(sessionId);
+	if (session?.disposing) {
+		session = undefined;
+	}
 	if (!session) {
-		if (kernelSessions.size >= MAX_KERNEL_SESSIONS) {
-			await evictOldestSession();
-		}
+		await ensureKernelSessionCapacity(options);
 		requireRemainingTimeoutMs(options.deadlineMs);
 		if (options.signal?.aborted) {
 			throw new PythonExecutionCancelledError(isTimedOutCancellation(options.signal.reason, options.signal));
@@ -582,10 +958,15 @@ async function withKernelSession<T>(
 		kernelSessions.set(sessionId, session);
 		startCleanupTimer();
 	}
+	attachKernelOwner(sessionId, options.kernelOwnerId);
+
+	if (session.disposing) {
+		return await withKernelSession(sessionId, cwd, handler, options);
+	}
 
 	const run = async (): Promise<T> => {
 		session!.lastUsedAt = Date.now();
-		if (session!.dead || !session!.kernel.isAlive()) {
+		if (session!.dead || session!.needsRestart || !session!.kernel.isAlive()) {
 			await logger.time("kernel:restartKernelSession", restartKernelSession, session!, cwd, options);
 		}
 		try {
@@ -593,7 +974,7 @@ async function withKernelSession<T>(
 			session!.restartCount = 0;
 			return result;
 		} catch (err) {
-			if (!session!.dead && session!.kernel.isAlive()) {
+			if (!session!.dead && !session!.needsRestart && session!.kernel.isAlive()) {
 				throw err;
 			}
 			await logger.time("kernel:restartKernelSession", restartKernelSession, session!, cwd, options);
@@ -620,6 +1001,9 @@ async function withKernelSession<T>(
 
 	try {
 		await waitForQueueTurn(queue, options);
+		if (session.disposing) {
+			return await withKernelSession(sessionId, cwd, handler, options);
+		}
 		return await run();
 	} finally {
 		releaseTurn?.();
@@ -741,6 +1125,9 @@ export async function executePython(code: string, options?: PythonExecutorOption
 			const existing = kernelSessions.get(sessionId);
 			if (existing) {
 				await disposeKernelSession(existing);
+				if (existing.disposing && existing.nextDisposalRetryAt !== undefined) {
+					retryKernelSessionDisposalInBackground(existing);
+				}
 			}
 		}
 		return await withKernelSession(
