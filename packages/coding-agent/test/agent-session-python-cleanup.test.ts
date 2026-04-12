@@ -103,13 +103,22 @@ const createSession = async (
 const stubPythonWarmup = () =>
 	vi.spyOn(pythonExecutor, "warmPythonEnvironment").mockResolvedValue({ ok: true, docs: [] });
 
-const createWarmupKernel = (docs: PreludeHelper[] = []) => ({
-	introspectPrelude: vi.fn().mockResolvedValue(docs),
-	execute: vi.fn(async () => OK_EXECUTION),
-	ping: vi.fn(async () => true),
-	isAlive: () => true,
-	shutdown: vi.fn(async () => ({ confirmed: true })),
-});
+const createWarmupKernel = (docs: PreludeHelper[] = []) => {
+	let alive = true;
+	return {
+		introspectPrelude: vi.fn().mockResolvedValue(docs),
+		execute: vi.fn(async () => {
+			if (!alive) throw new Error("Expected warmup kernel to be restarted after shutdown");
+			return OK_EXECUTION;
+		}),
+		ping: vi.fn(async () => alive),
+		isAlive: () => alive,
+		shutdown: vi.fn(async () => {
+			alive = false;
+			return { confirmed: true };
+		}),
+	};
+};
 
 describe("AgentSession python cleanup", () => {
 	const tempDirs: string[] = [];
@@ -174,6 +183,19 @@ describe("AgentSession python cleanup", () => {
 		expect(warmedKernel.shutdown).toHaveBeenCalledTimes(1);
 		expect(unrelatedKernel.shutdown).not.toHaveBeenCalled();
 
+		const replacementKernel = createWarmupKernel();
+		startSpy.mockResolvedValueOnce(replacementKernel as unknown as PythonKernelInstance);
+		await pythonExecutor.executePython("print('fresh warmup before')", {
+			cwd,
+			sessionId: `cwd:${cwd}`,
+			kernelMode: "session",
+			kernelOwnerId: "fresh-owner-before",
+		});
+		expect(startSpy).toHaveBeenCalledTimes(3);
+		expect(replacementKernel.execute).toHaveBeenCalledTimes(1);
+		expect(warmedKernel.shutdown).toHaveBeenCalledTimes(1);
+		expect(warmedKernel.execute).not.toHaveBeenCalled();
+
 		await pythonExecutor.executePython("print('still alive before')", {
 			cwd: unrelatedCwd,
 			sessionId: "unrelated-before-session",
@@ -181,7 +203,7 @@ describe("AgentSession python cleanup", () => {
 			kernelOwnerId: "other-owner",
 		});
 
-		expect(startSpy).toHaveBeenCalledTimes(2);
+		expect(startSpy).toHaveBeenCalledTimes(3);
 		expect(unrelatedKernel.execute).toHaveBeenCalledTimes(2);
 	});
 
@@ -235,6 +257,19 @@ describe("AgentSession python cleanup", () => {
 		expect(warmedKernel.shutdown).toHaveBeenCalledTimes(1);
 		expect(unrelatedKernel.shutdown).not.toHaveBeenCalled();
 
+		const replacementKernel = createWarmupKernel();
+		startSpy.mockResolvedValueOnce(replacementKernel as unknown as PythonKernelInstance);
+		await pythonExecutor.executePython("print('fresh warmup after')", {
+			cwd,
+			sessionId: `cwd:${cwd}`,
+			kernelMode: "session",
+			kernelOwnerId: "fresh-owner-after",
+		});
+		expect(startSpy).toHaveBeenCalledTimes(3);
+		expect(replacementKernel.execute).toHaveBeenCalledTimes(1);
+		expect(warmedKernel.shutdown).toHaveBeenCalledTimes(1);
+		expect(warmedKernel.execute).not.toHaveBeenCalled();
+
 		await pythonExecutor.executePython("print('still alive after')", {
 			cwd: unrelatedCwd,
 			sessionId: "unrelated-after-session",
@@ -242,7 +277,7 @@ describe("AgentSession python cleanup", () => {
 			kernelOwnerId: "other-owner",
 		});
 
-		expect(startSpy).toHaveBeenCalledTimes(2);
+		expect(startSpy).toHaveBeenCalledTimes(3);
 		expect(unrelatedKernel.execute).toHaveBeenCalledTimes(2);
 	});
 
@@ -639,11 +674,18 @@ describe("AgentSession python cleanup", () => {
 		const session = await createSession(tempDir, cwd, { extensions: [hookExtension] });
 		const execution = session.executePython("print('late after hook')");
 		await hookStarted.promise;
-		await session.dispose();
+		let disposed = false;
+		const disposeSession = session.dispose().then(() => {
+			disposed = true;
+		});
+		await Bun.sleep(0);
+		expect(disposed).toBe(false);
 		releaseHook.resolve();
 		await expect(execution).rejects.toThrow("Python execution is unavailable while session disposal is in progress");
+		await disposeSession;
+		expect(disposed).toBe(true);
 		expect(executeSpy).not.toHaveBeenCalled();
-	});
+	}, 10000);
 
 	it("rejects async user_python hook results after dispose begins", async () => {
 		const { tempDir, cwd } = createTempProject();
@@ -687,12 +729,19 @@ describe("AgentSession python cleanup", () => {
 		const session = await createSession(tempDir, cwd, { extensions: [hookExtension] });
 		const execution = session.executePython("print('late hook result')");
 		await hookStarted.promise;
-		await session.dispose();
+		let disposed = false;
+		const disposeSession = session.dispose().then(() => {
+			disposed = true;
+		});
+		await Bun.sleep(0);
+		expect(disposed).toBe(false);
 		releaseHook.resolve();
 		await expect(execution).rejects.toThrow("Python execution is unavailable while session disposal is in progress");
+		await disposeSession;
+		expect(disposed).toBe(true);
 		expect(executeSpy).not.toHaveBeenCalled();
 		expect(session.messages.some(message => message.role === "pythonExecution")).toBe(false);
-	});
+	}, 10000);
 
 	it("rejects Python tool starts once dispose begins", async () => {
 		const { tempDir, cwd } = createTempProject();

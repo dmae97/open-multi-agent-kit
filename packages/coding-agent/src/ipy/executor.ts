@@ -540,8 +540,8 @@ export async function disposeAllKernelSessions(): Promise<void> {
 
 export async function disposeKernelSessionsByOwner(ownerId: string): Promise<void> {
 	const sessionsToDispose: KernelSession[] = [];
-	for (const session of Array.from(kernelSessions.values())) {
-		if (session.disposing || !session.ownerIds.delete(ownerId)) continue;
+	for (const session of new Set([...kernelSessions.values(), ...disposingKernelSessions.values()])) {
+		if (!session.ownerIds.delete(ownerId)) continue;
 		if (session.ownerIds.size === 0) {
 			sessionsToDispose.push(session);
 		}
@@ -641,12 +641,14 @@ function isResourceExhaustionError(error: unknown): boolean {
 	);
 }
 
-function clearDisposingKernelSessionTracking(): void {
-	for (const session of disposingKernelSessions.values()) {
+function clearSharedGatewayDisposingKernelSessionTracking(): void {
+	for (const session of Array.from(disposingKernelSessions.values())) {
+		if (!session.kernel.isSharedGateway) continue;
 		if (session.heartbeatTimer) {
 			clearInterval(session.heartbeatTimer);
 			session.heartbeatTimer = undefined;
 		}
+		disposingKernelSessions.delete(session);
 		session.resolveDisposeCapacity?.();
 		session.resolveDisposeCapacity = undefined;
 		session.disposeCapacityPromise = undefined;
@@ -656,8 +658,8 @@ function clearDisposingKernelSessionTracking(): void {
 		session.disposeResultPromise = undefined;
 		session.disposeResultTimeoutMs = undefined;
 		session.nextDisposalRetryAt = undefined;
+		session.kernelInvalidatedByRecovery = false;
 	}
-	disposingKernelSessions.clear();
 }
 
 function markLiveKernelSessionsForRecovery(): void {
@@ -676,7 +678,7 @@ async function recoverFromResourceExhaustion(): Promise<void> {
 	logger.warn("Resource exhaustion detected, recovering by restarting shared gateway");
 	stopCleanupTimer();
 	markLiveKernelSessionsForRecovery();
-	clearDisposingKernelSessionTracking();
+	clearSharedGatewayDisposingKernelSessionTracking();
 	await shutdownSharedGateway();
 	syncCleanupTimer();
 }
@@ -750,10 +752,16 @@ async function restartKernelSession(
 	requireRemainingTimeoutMs(options.deadlineMs);
 	try {
 		if (!session.kernelInvalidatedByRecovery) {
+			const deadKernel = session.dead || !session.kernel.isAlive();
 			const shutdownTimeoutMs = requireRemainingTimeoutMs(options.deadlineMs);
 			const shutdownResult = await session.kernel.shutdown({ signal: options.signal, timeoutMs: shutdownTimeoutMs });
-			if (!shutdownResult.confirmed) {
+			if (!shutdownResult.confirmed && !deadKernel) {
 				throw new Error("Failed to confirm crashed kernel shutdown before restart");
+			}
+			if (!shutdownResult.confirmed) {
+				logger.warn("Proceeding with retained kernel restart after unconfirmed dead-kernel shutdown", {
+					sessionId: session.id,
+				});
 			}
 		}
 		const env: Record<string, string> | undefined = options.sessionFile

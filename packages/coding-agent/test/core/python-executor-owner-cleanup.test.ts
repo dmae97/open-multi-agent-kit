@@ -39,6 +39,12 @@ class FakeKernel {
 	}
 }
 
+async function flushMicrotasks(turns = 6): Promise<void> {
+	for (let turn = 0; turn < turns; turn += 1) {
+		await Promise.resolve();
+	}
+}
+
 afterEach(async () => {
 	await disposeAllKernelSessions();
 	resetPreludeDocsCache();
@@ -240,6 +246,53 @@ describe("python executor owner cleanup", () => {
 		expect(replacementKernel.shutdown).toHaveBeenCalledTimes(1);
 	});
 
+	it("waits with the owner-cleanup timeout when the last owner is removed from an already-disposing session", async () => {
+		vi.useFakeTimers();
+		try {
+			const kernel = new FakeKernel();
+			const shutdownConfirmation = Promise.withResolvers<KernelShutdownResult>();
+			kernel.shutdown = vi.fn(() => shutdownConfirmation.promise);
+			vi.spyOn(pythonKernel, "checkPythonKernelAvailability").mockResolvedValue({ ok: true });
+			const startSpy = vi.spyOn(PythonKernel, "start").mockResolvedValue(kernel as unknown as PythonKernelInstance);
+
+			await executePython("print('owner-a')", {
+				cwd: "/tmp/disposing-owner-cleanup-session",
+				sessionId: "disposing-owner-cleanup-session",
+				kernelMode: "session",
+				kernelOwnerId: "owner-a",
+			});
+
+			let globalCleanupResolved = false;
+			const globalCleanup = disposeAllKernelSessions().finally(() => {
+				globalCleanupResolved = true;
+			});
+			await flushMicrotasks();
+			expect(kernel.shutdown).toHaveBeenCalledTimes(1);
+			expect(globalCleanupResolved).toBe(false);
+
+			let ownerCleanupResolved = false;
+			const ownerCleanup = disposeKernelSessionsByOwner("owner-a").finally(() => {
+				ownerCleanupResolved = true;
+			});
+			await flushMicrotasks();
+			expect(ownerCleanupResolved).toBe(false);
+			expect(kernel.shutdown).toHaveBeenCalledTimes(1);
+
+			vi.advanceTimersByTime(2_000);
+			await ownerCleanup;
+			expect(ownerCleanupResolved).toBe(true);
+			expect(globalCleanupResolved).toBe(false);
+			expect(kernel.shutdown).toHaveBeenCalledTimes(1);
+
+			shutdownConfirmation.resolve({ confirmed: true });
+			await globalCleanup;
+			expect(globalCleanupResolved).toBe(true);
+			expect(startSpy).toHaveBeenCalledTimes(1);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("returns a cancelled result when a dead session restart shutdown times out", async () => {
 		const kernel = new FakeKernel();
 		kernel.alive = false;
@@ -264,7 +317,7 @@ describe("python executor owner cleanup", () => {
 			cwd: "/tmp/restart-timeout-session",
 			sessionId: "restart-timeout-session",
 			kernelMode: "session",
-			timeoutMs: 25,
+			timeoutMs: 100,
 		});
 
 		expect(result.cancelled).toBe(true);
@@ -272,7 +325,7 @@ describe("python executor owner cleanup", () => {
 		expect(kernel.shutdown).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: expect.any(Number) }));
 		expect(startSpy).toHaveBeenCalledTimes(1);
 	});
-	it("clears stuck tracked disposals during resource-exhaustion recovery", async () => {
+	it("keeps local owner-cleanup disposals counted during resource-exhaustion recovery", async () => {
 		vi.useFakeTimers();
 		try {
 			const staleKernels = [new FakeKernel(), new FakeKernel(), new FakeKernel()];
@@ -319,15 +372,28 @@ describe("python executor owner cleanup", () => {
 			expect(startSpy).toHaveBeenCalledTimes(5);
 			expect(recoveredKernel.execute).toHaveBeenCalledTimes(1);
 
-			await executePython("print('later')", {
+			const blockedExecution = executePython("print('later')", {
 				cwd: "/tmp/recovery-after-emfile-later",
 				sessionId: "recovery-session-later",
 				kernelMode: "session",
-				deadlineMs: Date.now() + 50,
 			});
-			expect(startSpy).toHaveBeenCalledTimes(6);
+			await flushMicrotasks();
+			expect(startSpy).toHaveBeenCalledTimes(5);
 			expect(recoveredKernel.shutdown).not.toHaveBeenCalled();
+			expect(laterKernel.execute).not.toHaveBeenCalled();
+
+			staleShutdownDeferreds[0]!.resolve({ confirmed: true });
+			await blockedExecution;
+			expect(startSpy).toHaveBeenCalledTimes(6);
 			expect(laterKernel.execute).toHaveBeenCalledTimes(1);
+
+			for (const deferred of staleShutdownDeferreds.slice(1)) {
+				deferred.resolve({ confirmed: true });
+			}
+			await flushMicrotasks();
+			await disposeAllKernelSessions();
+			expect(recoveredKernel.shutdown).toHaveBeenCalledTimes(1);
+			expect(laterKernel.shutdown).toHaveBeenCalledTimes(1);
 		} finally {
 			vi.useRealTimers();
 		}
@@ -358,10 +424,10 @@ describe("python executor owner cleanup", () => {
 			}
 
 			let ownerCleanupResolved = false;
-			const ownerCleanup = disposeKernelSessionsByOwner("owner-a").then(() => {
+			const ownerCleanup = disposeKernelSessionsByOwner("owner-a").finally(() => {
 				ownerCleanupResolved = true;
 			});
-			await Promise.resolve();
+			await flushMicrotasks();
 
 			for (const kernel of retainedKernels) {
 				expect(kernel.shutdown).toHaveBeenCalledWith({ timeoutMs: 2_000 });
@@ -701,20 +767,16 @@ describe("python executor owner cleanup", () => {
 		});
 		await globalExecutionStarted.promise;
 
-		const ownerCleanup = Promise.race([
-			disposeKernelSessionsByOwner("owner-a").then(() => "disposed-owner" as const),
-			new Promise<"timeout">(resolve => setTimeout(() => resolve("timeout"), 50)),
-		]);
-		await expect(ownerCleanup).resolves.toBe("disposed-owner");
+		const ownerCleanup = disposeKernelSessionsByOwner("owner-a");
+		await flushMicrotasks();
 		expect(ownerKernel.shutdown).toHaveBeenCalledTimes(1);
 		expect(globalKernel.shutdown).not.toHaveBeenCalled();
+		await ownerCleanup;
 
-		const globalCleanup = Promise.race([
-			disposeAllKernelSessions().then(() => "disposed-all" as const),
-			new Promise<"timeout">(resolve => setTimeout(() => resolve("timeout"), 50)),
-		]);
-		await expect(globalCleanup).resolves.toBe("disposed-all");
+		const globalCleanup = disposeAllKernelSessions();
+		await flushMicrotasks();
 		expect(globalKernel.shutdown).toHaveBeenCalledTimes(1);
+		await globalCleanup;
 	});
 
 	it("attaches cached warmup sessions to newly provided owners", async () => {

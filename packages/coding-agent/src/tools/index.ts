@@ -8,7 +8,7 @@ import type { Settings } from "../config/settings";
 import { EditTool } from "../edit";
 import type { Skill } from "../extensibility/skills";
 import type { InternalUrlRouter } from "../internal-urls";
-import { getPreludeDocs, warmPythonEnvironment } from "../ipy/executor";
+import { getPreludeDocs, resetPreludeDocsCache, warmPythonEnvironment } from "../ipy/executor";
 import { checkPythonKernelAvailability } from "../ipy/kernel";
 import { LspTool } from "../lsp";
 import type { DiscoverableMCPSearchIndex, DiscoverableMCPTool } from "../mcp/discoverable-tool-metadata";
@@ -308,6 +308,8 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 	const isTestEnv = isBunTestRuntime();
 	const forcePythonWarmup = session.forcePythonWarmup === true;
 	const skipPythonWarm = (isTestEnv && !forcePythonWarmup) || $flag("PI_PYTHON_SKIP_CHECK");
+	const cachedPreludeDocs = getPreludeDocs();
+	const shouldWarmPython = !skipPythonWarm && (forcePythonWarmup || cachedPreludeDocs.length === 0);
 	if (shouldCheckPython) {
 		const availability = await logger.time("createTools:pythonCheck", checkPythonKernelAvailability, session.cwd);
 		pythonAvailable = availability.ok;
@@ -315,20 +317,38 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 			logger.warn("Python kernel unavailable, falling back to bash", {
 				reason: availability.reason,
 			});
-		} else if (!skipPythonWarm && getPreludeDocs().length === 0) {
+		} else if (shouldWarmPython) {
 			const sessionFile = session.getSessionFile?.() ?? undefined;
 			const kernelOwnerId = session.getPythonKernelOwnerId?.() ?? undefined;
 			const warmSessionId = sessionFile ? `session:${sessionFile}:cwd:${session.cwd}` : `cwd:${session.cwd}`;
+			const warmupAbortController = new AbortController();
 			try {
-				await logger.time(
-					"createTools:warmPython",
-					warmPythonEnvironment,
-					session.cwd,
-					warmSessionId,
-					session.settings.get("python.sharedGateway"),
-					sessionFile,
-					kernelOwnerId,
-				);
+				session.assertPythonExecutionAllowed?.();
+				if (forcePythonWarmup && cachedPreludeDocs.length > 0) {
+					resetPreludeDocsCache();
+				}
+				const warmupExecution = session.trackPythonExecution
+					? logger.time(
+							"createTools:warmPython",
+							warmPythonEnvironment,
+							session.cwd,
+							warmSessionId,
+							session.settings.get("python.sharedGateway"),
+							sessionFile,
+							kernelOwnerId,
+							warmupAbortController.signal,
+						)
+					: logger.time(
+							"createTools:warmPython",
+							warmPythonEnvironment,
+							session.cwd,
+							warmSessionId,
+							session.settings.get("python.sharedGateway"),
+							sessionFile,
+							kernelOwnerId,
+						);
+				await (session.trackPythonExecution?.(warmupExecution, warmupAbortController) ?? warmupExecution);
+				session.assertPythonExecutionAllowed?.();
 			} catch (err) {
 				logger.warn("Failed to warm Python environment", {
 					error: err instanceof Error ? err.message : String(err),

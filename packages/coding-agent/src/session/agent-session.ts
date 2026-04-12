@@ -5688,22 +5688,22 @@ export class AgentSession {
 		const cwd = this.sessionManager.getCwd();
 		this.assertPythonExecutionAllowed();
 
-		if (this.#extensionRunner?.hasHandlers("user_python")) {
-			const hookResult = await this.#extensionRunner.emitUserPython({
-				type: "user_python",
-				code,
-				excludeFromContext,
-				cwd,
-			});
-			this.assertPythonExecutionAllowed();
-			if (hookResult?.result) {
-				this.recordPythonResult(code, hookResult.result, options);
-				return hookResult.result;
-			}
-		}
-
 		const abortController = new AbortController();
 		const execution = (async (): Promise<PythonResult> => {
+			if (this.#extensionRunner?.hasHandlers("user_python")) {
+				const hookResult = await this.#extensionRunner.emitUserPython({
+					type: "user_python",
+					code,
+					excludeFromContext,
+					cwd,
+				});
+				this.assertPythonExecutionAllowed();
+				if (hookResult?.result) {
+					this.recordPythonResult(code, hookResult.result, options);
+					return hookResult.result;
+				}
+			}
+
 			// Use the same session ID as the Python tool for kernel sharing
 			const sessionFile = this.sessionManager.getSessionFile();
 			const sessionId = sessionFile ? `session:${sessionFile}:cwd:${cwd}` : `cwd:${cwd}`;

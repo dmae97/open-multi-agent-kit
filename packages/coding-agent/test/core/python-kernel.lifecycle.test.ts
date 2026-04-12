@@ -77,6 +77,21 @@ const createFakeProcess = (): Subprocess => {
 	return { pid: 999999, exited } as Subprocess;
 };
 
+const expectResolvesWithin = async <T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			promise,
+			new Promise<T>((_, reject) => {
+				timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+				timer.unref?.();
+			}),
+		]);
+	} finally {
+		if (timer !== undefined) clearTimeout(timer);
+	}
+};
+
 describe("PythonKernel gateway lifecycle", () => {
 	const originalWebSocket = globalThis.WebSocket;
 	const originalGatewayUrl = Bun.env.PI_PYTHON_GATEWAY_URL;
@@ -339,39 +354,37 @@ describe("PythonKernel gateway lifecycle", () => {
 		);
 	});
 
-	it("treats a retry against an already-missing kernel as confirmed shutdown", async () => {
+	it("treats initial 404 and 410 shutdown responses as confirmed", async () => {
 		using _runtime = stubKernelRuntime();
 		vi.spyOn(gatewayCoordinator, "acquireSharedGateway").mockResolvedValue({
 			url: "http://127.0.0.1:9999",
 			isShared: true,
 		});
 
-		let deleteCalls = 0;
-		using _hook = hookFetch((input, init) => {
-			const url = String(input);
-			env.fetchCalls.push({ url, init });
-			if (url.endsWith("/api/kernels") && init?.method === "POST") {
-				return createResponse({ ok: true, json: { id: "kernel-retry-delete" } }) as unknown as Response;
-			}
-			if (url.endsWith("/api/kernels/kernel-retry-delete") && init?.method === "DELETE") {
-				deleteCalls += 1;
-				if (deleteCalls === 1) {
-					return createResponse({ ok: false, status: 503, text: "not yet" }) as unknown as Response;
+		for (const status of [404, 410]) {
+			let deleteCalls = 0;
+			using _hook = hookFetch((input, init) => {
+				const url = String(input);
+				env.fetchCalls.push({ url, init });
+				if (url.endsWith("/api/kernels") && init?.method === "POST") {
+					return createResponse({ ok: true, json: { id: `kernel-missing-${status}` } }) as unknown as Response;
 				}
-				return createResponse({ ok: false, status: 404, text: "gone" }) as unknown as Response;
-			}
-			return createResponse({ ok: true }) as unknown as Response;
-		});
+				if (url.endsWith(`/api/kernels/kernel-missing-${status}`) && init?.method === "DELETE") {
+					deleteCalls += 1;
+					return createResponse({ ok: false, status, text: "gone" }) as unknown as Response;
+				}
+				return createResponse({ ok: true }) as unknown as Response;
+			});
 
-		const kernel = await PythonKernel.start({ cwd: tempDir.path() });
+			const kernel = await PythonKernel.start({ cwd: tempDir.path() });
 
-		await expect(kernel.shutdown()).resolves.toEqual({ confirmed: false });
-		expect(kernel.isAlive()).toBe(false);
-		expect(FakeWebSocket.instances.at(-1)?.readyState).toBe(FakeWebSocket.CLOSED);
-
-		await expect(kernel.shutdown()).resolves.toEqual({ confirmed: true });
-		await expect(kernel.shutdown()).resolves.toEqual({ confirmed: true });
-		expect(deleteCalls).toBe(2);
+			await expect(kernel.shutdown()).resolves.toEqual({ confirmed: true });
+			expect(deleteCalls).toBe(1);
+			expect(kernel.isAlive()).toBe(false);
+			expect(FakeWebSocket.instances.at(-1)?.readyState).toBe(FakeWebSocket.CLOSED);
+			await expect(kernel.shutdown()).resolves.toEqual({ confirmed: true });
+			expect(deleteCalls).toBe(1);
+		}
 	});
 
 	it("returns unconfirmed when shutdown times out and can confirm on retry", async () => {
@@ -394,17 +407,18 @@ describe("PythonKernel gateway lifecycle", () => {
 				if (deleteCalls === 1) {
 					firstDeleteStarted.resolve();
 					return new Promise<Response>((_, reject) => {
-						const waitForAbort = () => {
-							if (init.signal?.aborted) {
-								firstDeleteAborted.resolve();
-								const reason = init.signal.reason;
-								reject(reason instanceof Error ? reason : new Error("Python kernel shutdown timed out"));
-								return;
-							}
-							const poll = setTimeout(waitForAbort, 5);
-							poll.unref?.();
+						const abortSignal = init.signal;
+						if (!abortSignal) return;
+						const rejectOnAbort = () => {
+							firstDeleteAborted.resolve();
+							const reason = abortSignal.reason;
+							reject(reason instanceof Error ? reason : new Error("Python kernel shutdown timed out"));
 						};
-						waitForAbort();
+						if (abortSignal.aborted) {
+							rejectOnAbort();
+							return;
+						}
+						abortSignal.addEventListener("abort", rejectOnAbort, { once: true });
 					});
 				}
 				return createResponse({ ok: false, status: 404, text: "gone" }) as unknown as Response;
@@ -413,18 +427,17 @@ describe("PythonKernel gateway lifecycle", () => {
 		});
 		const kernel = await PythonKernel.start({ cwd: tempDir.path() });
 		const shutdownPromise = kernel.shutdown({ timeoutMs: 25 });
-		await firstDeleteStarted.promise;
-		const pending = Symbol("pending");
-		const settled = await Promise.race([
-			shutdownPromise,
-			new Promise<typeof pending>(resolve => {
-				const timer = setTimeout(() => resolve(pending), 250);
-				timer.unref?.();
-			}),
-		]);
-		await firstDeleteAborted.promise;
-		expect(settled).not.toBe(pending);
-		expect(settled).toEqual({ confirmed: false });
+		await expectResolvesWithin(firstDeleteStarted.promise, 250, "kernel shutdown never issued a delete request");
+		await expectResolvesWithin(
+			firstDeleteAborted.promise,
+			500,
+			"timed out waiting for the first delete request to abort",
+		);
+		await expect(
+			expectResolvesWithin(shutdownPromise, 500, "kernel shutdown did not settle after timing out"),
+		).resolves.toEqual({
+			confirmed: false,
+		});
 		expect(kernel.isAlive()).toBe(false);
 		expect(FakeWebSocket.instances.at(-1)?.readyState).toBe(FakeWebSocket.CLOSED);
 		await expect(kernel.shutdown()).resolves.toEqual({ confirmed: true });
