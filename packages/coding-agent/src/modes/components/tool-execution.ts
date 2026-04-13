@@ -32,7 +32,6 @@ import {
 import { PYTHON_DEFAULT_PREVIEW_LINES } from "../../tools/python";
 import { formatExpandHint, replaceTabs, resolveImageOptions, truncateToWidth } from "../../tools/render-utils";
 import { toolRenderers } from "../../tools/renderers";
-import { clearVimCallPreview, primeVimCallPreview } from "../../tools/vim";
 import { renderStatusLine } from "../../tui";
 import { convertToPng } from "../../utils/image-convert";
 import { sanitizeWithOptionalSixelPassthrough } from "../../utils/sixel";
@@ -96,7 +95,6 @@ export class ToolExecutionComponent extends Container {
 	#tool?: AgentTool;
 	#ui: TUI;
 	#cwd: string;
-	#toolCallId?: string;
 	#result?: {
 		content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
 		isError?: boolean;
@@ -112,8 +110,6 @@ export class ToolExecutionComponent extends Container {
 	#spinnerInterval?: NodeJS.Timeout;
 	// Track if args are still being streamed (for edit/write spinner)
 	#argsComplete = false;
-	#vimPreviewPrimeRunning = false;
-	#vimPreviewPrimeVersion = 0;
 	#renderState: {
 		spinnerFrame?: number;
 		expanded: boolean;
@@ -131,19 +127,18 @@ export class ToolExecutionComponent extends Container {
 		tool: AgentTool | undefined,
 		ui: TUI,
 		cwd: string = getProjectDir(),
-		toolCallId?: string,
+		_toolCallId?: string,
 	) {
 		super();
 		this.#toolName = toolName;
 		this.#toolLabel = tool?.label ?? toolName;
-		this.#toolCallId = toolCallId;
 		this.#showImages = options.showImages ?? true;
 		this.#editFuzzyThreshold = options.editFuzzyThreshold;
 		this.#editAllowFuzzy = options.editAllowFuzzy;
 		this.#tool = tool;
 		this.#ui = ui;
 		this.#cwd = cwd;
-		this.#args = this.#prepareArgsForRender(args, toolCallId);
+		this.#args = cloneToolArgs(args);
 
 		this.addChild(new Spacer(1));
 
@@ -160,16 +155,11 @@ export class ToolExecutionComponent extends Container {
 			this.addChild(this.#contentText);
 		}
 
-		this.#maybePrimeVimPreview();
 		this.#updateDisplay();
 	}
 
-	updateArgs(args: any, toolCallId?: string): void {
-		if (toolCallId) {
-			this.#toolCallId = toolCallId;
-		}
-		this.#args = this.#prepareArgsForRender(args, toolCallId ?? this.#toolCallId);
-		this.#maybePrimeVimPreview();
+	updateArgs(args: any, _toolCallId?: string): void {
+		this.#args = cloneToolArgs(args);
 		this.#updateSpinnerAnimation();
 		this.#updateDisplay();
 	}
@@ -266,9 +256,6 @@ export class ToolExecutionComponent extends Container {
 	): void {
 		this.#result = result;
 		this.#isPartial = isPartial;
-		if (this.#toolName === "vim") {
-			clearVimCallPreview(this.#toolCallId);
-		}
 		// When tool is complete, ensure args are marked complete so spinner stops
 		if (!isPartial) {
 			this.#argsComplete = true;
@@ -277,46 +264,6 @@ export class ToolExecutionComponent extends Container {
 		this.#updateDisplay();
 		// Convert non-PNG images to PNG for Kitty protocol (async)
 		this.#maybeConvertImagesForKitty();
-	}
-
-	#prepareArgsForRender(args: any, toolCallId?: string): any {
-		const cloned = cloneToolArgs(args);
-		if (this.#toolName !== "vim" || !toolCallId || !cloned || typeof cloned !== "object" || Array.isArray(cloned)) {
-			return cloned;
-		}
-		return { ...cloned, __toolCallId: toolCallId, __cwd: this.#cwd };
-	}
-
-	#maybePrimeVimPreview(): void {
-		if (this.#toolName !== "vim" || this.#argsComplete || !this.#toolCallId) {
-			return;
-		}
-
-		this.#vimPreviewPrimeVersion += 1;
-		if (this.#vimPreviewPrimeRunning) {
-			return;
-		}
-
-		this.#vimPreviewPrimeRunning = true;
-		void (async () => {
-			try {
-				while (!this.#argsComplete && this.#toolCallId) {
-					const version = this.#vimPreviewPrimeVersion;
-					const toolCallId = this.#toolCallId;
-					const args = this.#args;
-					await primeVimCallPreview(toolCallId, args);
-					if (this.#toolCallId === toolCallId) {
-						this.#updateDisplay();
-						this.#ui.requestRender();
-					}
-					if (version === this.#vimPreviewPrimeVersion) {
-						break;
-					}
-				}
-			} finally {
-				this.#vimPreviewPrimeRunning = false;
-			}
-		})();
 	}
 
 	/**

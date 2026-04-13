@@ -1,6 +1,6 @@
 Stateful Vim editor. Every call requires `file`; the buffer loads automatically on first use.
 - `{"file": "path"}` - view file
-- `{"file": "path", "steps": [{"kbd": ["..."], "insert": "..."}]}` - edit file
+- `{"file": "path", "steps": [{"kbd": ["…"], "insert": "…"}]}` - edit file
 
 ## steps vs kbd vs insert
 
@@ -51,11 +51,11 @@ Replace entire file. `ggdGi` = go to top, delete all, enter INSERT. Use that exa
 Multi-location edit — work bottom-up so earlier inserts don't shift later line numbers:
 ```json
 {"file": "f.py", "steps": [
-  {"kbd": ["10Go"], "insert": "os.path.exists('...')"},
-  {"kbd": ["3Go"], "insert": "import os"}
+  {"kbd": ["8Go"], "insert": "    print(result)"},
+  {"kbd": ["3Go"], "insert": "def helper(x):\n    return x + 1"}
 ]}
 ```
-When inserting at multiple lines in one call, edit the **highest line number first** and work upward. Each insert shifts lines below it, so bottom-up order keeps all line targets stable.
+When inserting at multiple lines in one call, edit the **highest line number first** and work upward. Each `o`/`O` insert shifts lines below it, so bottom-up order keeps all line targets stable. Use `\n` within `insert` for multi-line content (each `\n` creates a new line).
 
 Navigation or search step without insert:
 ```json
@@ -74,7 +74,6 @@ Delete line range:
 Ex commands always start with `:` and end with `<CR>`. `3,5d` without `:` is NOT an ex command — it is interpreted as normal-mode keystrokes and will fail.
 
 ## Undo mistakes
-
 - `{"file": "f.py", "steps": [{"kbd": ["u"]}]}` - undo last change
 - `{"file": "f.py", "steps": [{"kbd": ["3u"]}]}` - undo last 3 changes
 

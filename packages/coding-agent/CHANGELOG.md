@@ -1,9 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Breaking Changes
 
-- 
 - Removed the `searchDb` field from session and extension tool contexts, so custom tools and extensions no longer receive a shared native search DB handle from `ToolSession`, `CustomToolContext`, `ExtensionContext`, and `CreateAgentSessionOptions`
 - Changed the `vim` tool API to require either `open: "path"` or `kbd: [...]` per call and removed direct `line`/`col` cursor parameters from `open`, so callers must position the cursor via key sequences after opening
 - Changed the `edit` schemas for patch, replace, hashline, and chunk modes from top-level request fields to `edits` array entries, requiring path/mode details on each edit and breaking callers that send legacy top-level `path`, `old_text`, `new_text`, `op`, `move`, or `delete` payloads
@@ -47,13 +47,9 @@
 - Updated chunk-mode `grep` output to include match lines under their containing chunk entries with consistent line-number alignment based on file length
 - Changed eager todo enforcement to only apply on the first user message of a conversation, skipping subsequent user turns that may correct, clarify, or redirect the prior task
 
-### Deprecated
-
-- 
-
 ### Removed
 
-- 
+- Removed live in-progress Vim tool previews during streaming call execution, so the TUI now shows only the last completed file viewport until the call finishes
 
 ### Fixed
 
@@ -73,10 +69,6 @@
 - Auto-generated session titles no longer overwrite a name set via `/rename`: `setSessionName` now tracks whether the name was set by the user or auto-generated and silently ignores auto titles once a user name is in place; terminal title follows the same guard
 - Session accent border color now applied on session resume and after auto-title generation, not only after an explicit `/rename`
 - Fixed retained Python kernel ownership so `AgentSession.dispose()` only shuts down kernels owned by that session, including warmup-created kernels
-
-### Security
-
-- 
 
 ## [14.1.0] - 2026-04-11
 ### Added
