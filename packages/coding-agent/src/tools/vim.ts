@@ -115,8 +115,17 @@ async function executeKeySequences(
 		}
 		await engine.executeTokens(group.tokens, commandText, onStep);
 		if (index < groups.length - 1 && engine.inputMode === "insert") {
+			// Roll back partial changes to prevent buffer corruption across calls.
+			engine.rollbackPendingInsert();
+			const nextSeq = groups[index + 1]?.sequence ?? "";
+			const looksLikeText = nextSeq.length > 0 && /\s/.test(nextSeq) && !/^[:/%]/.test(nextSeq);
+			let hint =
+				"Use the insert field for inserted text, or include <Esc> to return to NORMAL mode before the next kbd entry.";
+			if (looksLikeText) {
+				hint += ` The next entry (\`${nextSeq.length > 40 ? `${nextSeq.slice(0, 37)}...` : nextSeq}\`) looks like text content — put it in the \`insert\` field instead. For multi-location edits, replace the entire file: {"kbd": ["ggdGi"], "insert": "full new content"}.`;
+			}
 			throw new VimInputError(
-				`Sequence ${index + 1} left Vim in INSERT mode. Use the insert field for inserted text or include <Esc> before starting another kbd entry.`,
+				`Sequence ${index + 1} (\`${group.sequence}\`) entered INSERT mode — changes rolled back. ${hint}`,
 				group.tokens[group.tokens.length - 1],
 			);
 		}
@@ -365,6 +374,13 @@ export class VimTool implements AgentTool<typeof vimSchema, VimToolDetails> {
 				return this.#renderFromEngine(engine, VIM_OPEN_VIEWPORT_LINES, engine.viewportStart);
 			}
 
+			// Safety: if the engine is stuck in INSERT mode, always reset before executing kbd.
+			// Only skip for the intentional pause→resume pattern (no kbd, insert provided).
+			const hasKbd = sequences.some(s => s.length > 0);
+			if (engine.inputMode === "insert" && (hasKbd || (!params.pause && params.insert === undefined))) {
+				engine.rollbackPendingInsert();
+			}
+
 			// Execute kbd sequences
 			const commandText = sequences.join(" ");
 			const tokenGroups = splitTokensBySequence(sequences);
@@ -406,8 +422,11 @@ export class VimTool implements AgentTool<typeof vimSchema, VimToolDetails> {
 				await executeKeySequences(engine, tokenGroups, commandText, emitUpdate);
 
 				if (!engine.closed && params.insert !== undefined) {
-					await engine.applyLiteralInsert(params.insert, params.pause !== true);
-					await emitUpdate?.();
+					// Skip empty insert when not in INSERT mode (e.g., kbd included <Esc>)
+					if (params.insert.length > 0 || engine.inputMode === "insert") {
+						await engine.applyLiteralInsert(params.insert, params.pause !== true);
+						await emitUpdate?.();
+					}
 				}
 
 				if (params.pause === true && !engine.closed && engine.getPendingInput()) {

@@ -96,6 +96,7 @@ This is a survey. Answer these 6 questions about your experience using the editi
 """
 
 DEFAULT_MAX_TURNS = 20
+MAX_TOOL_CALLS_PER_PROMPT = 10
 _PRINT_LOCK = threading.Lock()
 
 
@@ -357,18 +358,27 @@ def run_benchmark_for_model(
             client.install_headless_ui()
             verbose_cleanup = install_verbose_logging(client, model, log_mode, thinking)
 
+            per_prompt_tool_calls = 0
+
             def handle_tool_count(event: ToolExecutionStartEvent) -> None:
-                nonlocal edit_vim_tool_calls, turns_used
+                nonlocal edit_vim_tool_calls, turns_used, per_prompt_tool_calls
+                per_prompt_tool_calls += 1
                 if counting_edit_turns:
                     turns_used += 1
                 if event.tool_name in {"edit", "vim"}:
                     edit_vim_tool_calls += 1
+                if per_prompt_tool_calls >= MAX_TOOL_CALLS_PER_PROMPT:
+                    try:
+                        client.abort()
+                    except Exception:
+                        pass  # best-effort interrupt
 
             tool_count_remover = client.on_tool_execution_start(handle_tool_count)
 
             try:
                 for turn in range(1, max_turns + 1):
                     prompt_attempts = turn
+                    per_prompt_tool_calls = 0
 
                     if turn == 1:
                         client.prompt(spec.initial_prompt)

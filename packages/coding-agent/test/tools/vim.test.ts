@@ -241,7 +241,7 @@ describe("vim tool", () => {
 
 		await tool.execute("open", { file: "ambiguous.ts" });
 		await expect(tool.execute("bad", { file: "ambiguous.ts", kbd: ["o", "o"] })).rejects.toThrow(
-			/left Vim in INSERT mode/i,
+			/entered INSERT mode/i,
 		);
 	});
 

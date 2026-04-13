@@ -9,32 +9,34 @@ Stateful Vim editor. Every call requires `file` — the buffer loads automatical
 
 **Never put text content in kbd.** Only Vim keystrokes go there.
 - BAD: `{"kbd": ["1Gohello world<Esc>"]}` — text mixed into kbd
+- BAD: `{"kbd": ["1Go", "hello world"]}` — text as a separate kbd entry (gets executed as keystrokes!)
+- BAD: `{"kbd": ["1Ao"], "insert": "text"}` — `A` enters INSERT so `o` is typed as text, not a command
 - GOOD: `{"kbd": ["1Go"], "insert": "hello world"}` — command in kbd, text in insert
 
 For `insert` to work, the last `kbd` entry must leave INSERT mode active (`o`, `O`, `i`, `a`, `A`, `cc`, `C`, `s`, `S`). The tool auto-exits INSERT and auto-saves after each call.
 
 Each non-final `kbd` entry must end in NORMAL mode (add `<Esc>`).
 
-## Best pattern: replace entire file
+## Editing patterns
 
-For any edit touching multiple locations, replace the whole file — it is the most reliable approach:
-
-```json
-{"file": "f.py", "kbd": ["ggdGi"], "insert": "entire new file content"}
-```
-
-`ggdGi` = go to top, delete all, enter INSERT. Then `insert` provides the complete new content.
-
-## Surgical edits
-
-**Insert after line N** (include indentation in insert — `o` does NOT auto-indent):
+**Insert after line N** — use `NGo` (Go to line N, open below). Include full indentation in insert:
 ```json
 {"file": "f.py", "kbd": ["3Go"], "insert": "    new line here"}
 ```
 
-**Replace line N** (`cc` clears the line and enters INSERT):
+**Insert before line N** — use `NGO` (Go to line N, open above). Include full indentation:
+```json
+{"file": "f.py", "kbd": ["3GO"], "insert": "    new line here"}
+```
+
+**Replace line N** — `cc` clears the line and enters INSERT:
 ```json
 {"file": "f.py", "kbd": ["5Gcc"], "insert": "    replacement content"}
+```
+
+**Replace entire file** — `ggdGi` = go to top, delete all, enter INSERT:
+```json
+{"file": "f.py", "kbd": ["ggdGi"], "insert": "entire new file content"}
 ```
 
 **Find and replace**:

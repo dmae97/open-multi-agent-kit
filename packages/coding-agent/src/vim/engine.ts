@@ -96,9 +96,20 @@ function literalTextToReplayTokens(text: string): string[] {
 	return tokens;
 }
 
+// Convert a vim-style search pattern to a JavaScript RegExp.
+// In vim's default ("magic") mode, (, ), {, }, |, + are literal unless backslash-escaped.
+// In JS regex these are metacharacters. Swap the escaping so bare chars are literal
+// and \( etc. become regex groups.
+function vimPatternToJsRegex(pattern: string): string {
+	return pattern.replace(/\\([(){}|+])|([(){}|+])/g, (_match, escaped, bare) => {
+		if (escaped) return escaped; // \( -> ( (regex group)
+		return `\\${bare}`; // ( -> \( (literal paren)
+	});
+}
+
 function createSearchRegex(pattern: string, flags = "g"): RegExp {
 	try {
-		return new RegExp(pattern, flags);
+		return new RegExp(vimPatternToJsRegex(pattern), flags);
 	} catch {
 		return new RegExp(escapeRegex(pattern), flags);
 	}
@@ -342,6 +353,16 @@ export class VimEngine {
 			default:
 				return undefined;
 		}
+	}
+
+	rollbackPendingInsert(): void {
+		if (this.#pendingChange) {
+			this.buffer.restore(this.#pendingChange.before);
+			this.#pendingChange = null;
+		}
+		this.inputMode = "normal";
+		this.selectionAnchor = null;
+		this.#pendingInput = "";
 	}
 
 	setCursor(line: number, col: number): void {
@@ -843,12 +864,20 @@ export class VimEngine {
 				await this.#startInsertChange(["A"]);
 				return nextIndex + 1;
 			case "o":
+				// When count > 1 (e.g. `13o`), interpret as `13Go` — go to line N then open below.
+				// Models confuse `No` with `NGo`; bare `o` with a high count is almost never intended.
+				if (hasCount) {
+					this.buffer.setCursor({ line: Math.min(count, this.buffer.lineCount()) - 1, col: 0 });
+				}
 				await this.#startInsertChange(["o"], () => {
 					const line = this.buffer.cursor.line + 1;
 					this.buffer.insertLines(line, [""]);
 				});
 				return nextIndex + 1;
 			case "O":
+				if (hasCount) {
+					this.buffer.setCursor({ line: Math.min(count, this.buffer.lineCount()) - 1, col: 0 });
+				}
 				await this.#startInsertChange(["O"], () => {
 					const line = this.buffer.cursor.line;
 					this.buffer.insertLines(line, [""]);
@@ -1698,7 +1727,7 @@ export class VimEngine {
 		this.buffer.replaceOffsets(offset, offset, text, offset + text.length);
 	}
 
-	#readCount(tokens: readonly VimKeyToken[], index: number): { count: number; nextIndex: number } {
+	#readCount(tokens: readonly VimKeyToken[], index: number): { count: number; hasCount: boolean; nextIndex: number } {
 		let cursor = index;
 		let digits = "";
 		while (cursor < tokens.length) {
