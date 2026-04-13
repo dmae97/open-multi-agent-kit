@@ -365,13 +365,15 @@ export function parseExCommand(input: string, context?: VimExParseContext): VimE
 		return { kind: "move", range, destination };
 	}
 
-	const suggestions: string[] = [];
-	if (/^\d*[aA]/.test(input)) {
-		suggestions.push("Use `NGo` (open line below N) or `NGO` (open line above N) in kbd instead of ex `:a` append.");
+	if (rest === "a" || rest === "append" || rest.startsWith("a ") || rest.startsWith("append ")) {
+		const text = rest.startsWith("append") ? rest.slice(6).trimStart() : rest.slice(1).trimStart();
+		return { kind: "append", range: range === "all" ? undefined : range, text };
 	}
-	if (/^\d*[iI]$/.test(rest)) {
-		suggestions.push("Use `i` or `I` in kbd (normal mode) instead of ex `:i`.");
+
+	if (rest === "i" || rest === "insert" || rest.startsWith("i ") || rest.startsWith("insert ")) {
+		const text = rest.startsWith("insert") ? rest.slice(6).trimStart() : rest.slice(1).trimStart();
+		return { kind: "insert-before", range: range === "all" ? undefined : range, text };
 	}
-	const hint = suggestions.length > 0 ? ` ${suggestions.join(" ")}` : "";
-	throw new VimInputError(`Unsupported ex command: ${input}.${hint}`);
+
+	throw new VimInputError(`Unsupported ex command: ${input}.`);
 }

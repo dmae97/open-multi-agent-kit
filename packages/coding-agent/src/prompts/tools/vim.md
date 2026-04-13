@@ -7,6 +7,7 @@ Stateful Vim editor. Every call requires `file`; the buffer loads automatically 
 `steps` = ordered editing steps. Each step runs `kbd`, then optionally types `insert`.
 `kbd` = Vim commands only (`dd`, `G`, `o`, `cc`, `gg`, etc.).
 `insert` = raw text content to type into the buffer.
+`o`/`O` already create a new line — do not start `insert` with `\n`. A trailing `\n` in `insert` adds an extra blank line.
 
 Never put text content in `kbd`. Only Vim keystrokes go there.
 - BAD: `{"steps": [{"kbd": ["1Gohello world<Esc>"]}]}`
@@ -70,6 +71,7 @@ Delete line range:
 ```json
 {"file": "f.py", "steps": [{"kbd": [":3,5d<CR>"]}]}
 ```
+Ex commands always start with `:` and end with `<CR>`. `3,5d` without `:` is NOT an ex command — it is interpreted as normal-mode keystrokes and will fail.
 
 ## Undo mistakes
 

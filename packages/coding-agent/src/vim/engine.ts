@@ -2298,6 +2298,28 @@ export class VimEngine {
 				this.statusMessage = `Sorted ${endLine - startLine + 1} line${endLine === startLine ? "" : "s"}`;
 				return;
 			}
+			case "append": {
+				const anchorRange = this.#resolveExRange(command.range, this.buffer.cursor.line + 1);
+				const anchorLine = anchorRange.end;
+				const lines = command.text.length > 0 ? command.text.split("\n") : [""];
+				await this.#applyAtomicChange([":append"], () => {
+					const insertAt = Math.min(anchorLine, this.buffer.lineCount());
+					this.buffer.insertLines(insertAt, lines);
+				});
+				this.statusMessage = `Appended ${lines.length} line${lines.length === 1 ? "" : "s"}`;
+				return;
+			}
+			case "insert-before": {
+				const anchorRange = this.#resolveExRange(command.range, this.buffer.cursor.line + 1);
+				const anchorLine = anchorRange.start;
+				const lines = command.text.length > 0 ? command.text.split("\n") : [""];
+				await this.#applyAtomicChange([":insert"], () => {
+					const insertAt = Math.max(0, anchorLine - 1);
+					this.buffer.insertLines(insertAt, lines);
+				});
+				this.statusMessage = `Inserted ${lines.length} line${lines.length === 1 ? "" : "s"}`;
+				return;
+			}
 			case "global": {
 				const regex = createSearchRegex(command.pattern);
 				const range = this.#resolveExRange(command.range ?? "all", 1, this.buffer.lineCount());
