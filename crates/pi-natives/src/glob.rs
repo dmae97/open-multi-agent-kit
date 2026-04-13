@@ -25,11 +25,7 @@ use napi_derive::napi;
 
 // Re-export entry types so existing `glob::FileType` / `glob::GlobMatch` paths still work.
 pub use crate::fs_cache::{FileType, GlobMatch};
-use crate::{
-	fs_cache, glob_util,
-	search_db::{SearchDb, wait_for_picker_scan},
-	task,
-};
+use crate::{fs_cache, glob_util, task};
 
 /// Input options for `glob`, including traversal, filtering, and cancellation.
 #[napi(object)]
@@ -120,66 +116,6 @@ fn apply_file_type_filter(entry: &GlobMatch, config: &GlobConfig) -> Option<File
 	}
 }
 
-/// Returns true if any path component starts with `.` (hidden file/dir).
-fn has_hidden_component(path: &str) -> bool {
-	path.split('/').any(|component| component.starts_with('.'))
-}
-
-/// Collect file matches from the shared `SearchDb` picker.
-///
-/// The picker indexes files only (no directories/symlinks), so this path is
-/// currently used for `fileType=file` requests when gitignore semantics match
-/// the picker configuration.
-fn collect_files_from_picker(
-	root: &Path,
-	glob_set: &GlobSet,
-	config: &GlobConfig,
-	db: &SearchDb,
-	on_match: Option<&ThreadsafeFunction<GlobMatch>>,
-	ct: &task::CancelToken,
-) -> Result<Vec<GlobMatch>> {
-	let shared_picker = db.get_or_init_picker(root)?;
-	wait_for_picker_scan(&shared_picker, ct)?;
-
-	let guard = shared_picker
-		.read()
-		.map_err(|_| Error::from_reason("shared picker lock poisoned"))?;
-	let Some(picker) = guard.as_ref() else {
-		return Ok(Vec::new());
-	};
-
-	let mut matches = Vec::new();
-	for file in picker.get_files() {
-		ct.heartbeat()?;
-		let relative_path = file.relative_path.replace('\\', "/");
-		if !config.include_hidden && has_hidden_component(&relative_path) {
-			continue;
-		}
-		if fs_cache::should_skip_path(Path::new(&relative_path), config.mentions_node_modules) {
-			continue;
-		}
-		if !glob_set.is_match(Path::new(&relative_path)) {
-			continue;
-		}
-
-		let matched_entry = GlobMatch {
-			path:      relative_path,
-			file_type: FileType::File,
-			mtime:     Some((file.modified as f64) * 1000.0),
-		};
-
-		if let Some(callback) = on_match {
-			callback.call(Ok(matched_entry.clone()), ThreadsafeFunctionCallMode::NonBlocking);
-		}
-		matches.push(matched_entry);
-		if !config.sort_by_mtime && matches.len() >= config.max_results {
-			break;
-		}
-	}
-
-	Ok(matches)
-}
-
 /// Filter and collect matching entries from a pre-scanned list.
 fn filter_entries(
 	entries: &[GlobMatch],
@@ -224,7 +160,6 @@ fn filter_entries(
 /// hit.
 fn run_glob(
 	config: GlobConfig,
-	db: Option<&SearchDb>,
 	on_match: Option<&ThreadsafeFunction<GlobMatch>>,
 	ct: task::CancelToken,
 ) -> Result<GlobResult> {
@@ -233,15 +168,15 @@ fn run_glob(
 		return Ok(GlobResult { matches: Vec::new(), total_matches: 0 });
 	}
 
-	let mut matches = if let Some(db) = db
-		&& config.use_gitignore
-		&& config.file_type_filter == Some(FileType::File)
-	{
-		collect_files_from_picker(&config.root, &glob_set, &config, db, on_match, &ct)?
-	} else if config.use_cache {
+	let mut matches = if config.use_cache {
 		let skip_node_modules = !config.mentions_node_modules;
-		let scan =
-			fs_cache::get_or_scan(&config.root, config.include_hidden, config.use_gitignore, skip_node_modules, &ct)?;
+		let scan = fs_cache::get_or_scan(
+			&config.root,
+			config.include_hidden,
+			config.use_gitignore,
+			skip_node_modules,
+			&ct,
+		)?;
 		let mut matches = filter_entries(&scan.entries, &glob_set, &config, on_match, &ct)?;
 		// Empty-result recheck: if we got zero matches from a cached scan that's old
 		// enough, force a rescan and try once more before returning empty.
@@ -302,7 +237,6 @@ pub fn glob(
 	options: GlobOptions<'_>,
 	#[napi(ts_arg_type = "((error: Error | null, match: GlobMatch) => void) | undefined | null")]
 	on_match: Option<ThreadsafeFunction<GlobMatch>>,
-	db: Option<&SearchDb>,
 ) -> task::Promise<GlobResult> {
 	let GlobOptions {
 		pattern,
@@ -324,7 +258,6 @@ pub fn glob(
 	let pattern = pattern.to_string();
 
 	let ct = task::CancelToken::new(timeout_ms, signal);
-	let db = db.cloned();
 
 	task::blocking("glob", ct, move |ct| {
 		run_glob(
@@ -341,7 +274,6 @@ pub fn glob(
 				use_cache: cache.unwrap_or(false),
 				pattern,
 			},
-			db.as_ref(),
 			on_match.as_ref(),
 			ct,
 		)

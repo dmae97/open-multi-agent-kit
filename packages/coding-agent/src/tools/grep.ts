@@ -192,7 +192,6 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 						mode: effectiveOutputMode,
 					},
 					undefined,
-					this.session.searchDb,
 				);
 			} catch (err) {
 				if (err instanceof Error && err.message.startsWith("regex parse error")) {

@@ -11,7 +11,6 @@ import {
 	getOpenAICodexTransportDetails,
 	prewarmOpenAICodexResponses,
 } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
-import { SearchDb } from "@oh-my-pi/pi-natives";
 import type { Component } from "@oh-my-pi/pi-tui";
 import {
 	$env,
@@ -19,7 +18,6 @@ import {
 	getAgentDbPath,
 	getAgentDir,
 	getProjectDir,
-	getSearchDbDir,
 	logger,
 	postmortem,
 	prompt,
@@ -155,8 +153,6 @@ export interface CreateAgentSessionOptions {
 	authStorage?: AuthStorage;
 	/** Model registry. Default: discoverModels(authStorage, agentDir) */
 	modelRegistry?: ModelRegistry;
-	/** Shared native search DB for grep/glob/fuzzyFind-backed workflows. */
-	searchDb?: SearchDb;
 
 	/** Model to use. Default: from settings, else first available */
 	model?: Model;
@@ -411,7 +407,6 @@ function createCustomToolContext(ctx: ExtensionContext): CustomToolContext {
 		sessionManager: ctx.sessionManager,
 		modelRegistry: ctx.modelRegistry,
 		model: ctx.model,
-		searchDb: ctx.searchDb,
 		isIdle: ctx.isIdle,
 		hasQueuedMessages: ctx.hasPendingMessages,
 		abort: ctx.abort,
@@ -903,7 +898,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const pythonKernelOwnerId = `agent-session:${Snowflake.next()}`;
 
 	try {
-		const searchDb = options.searchDb ?? new SearchDb(getSearchDbDir(agentDir));
 		const getActiveModelString = (): string | undefined => {
 			const activeModel = agent?.state.model;
 			if (activeModel) return formatModelString(activeModel);
@@ -977,7 +971,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			authStorage,
 			modelRegistry,
 			asyncJobManager,
-			searchDb,
 		};
 
 		// Initialize internal URL router for internal protocols (agent://, artifact://, memory://, skill://, rule://, mcp://, local://)
@@ -1242,7 +1235,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				sessionManager,
 				modelRegistry,
 				model: agent?.state.model,
-				searchDb,
 				isIdle: () => !session?.isStreaming,
 				hasQueuedMessages: () => (session?.queuedMessageCount ?? 0) > 0,
 				abort: () => session?.abort(),
@@ -1607,7 +1599,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			ttsrManager,
 			obfuscator,
 			asyncJobManager,
-			searchDb,
 		});
 		hasSession = true;
 

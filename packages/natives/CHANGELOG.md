@@ -1,9 +1,16 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
 
 - Added support for honoring the `ZIG` environment variable when resolving the Zig executable for native builds
+
+### Removed
+
+- Removed the `SearchDb` API from the natives type declarations
+- Removed the optional `db` parameter from `fuzzyFind`, `glob`, and `grep`
+- Removed the `fuzzyFind`, `glob`, and `grep` cache database argument previously used for search state
 
 ## [14.0.5] - 2026-04-11
 ### Breaking Changes

@@ -5,7 +5,6 @@
  */
 import path from "node:path";
 import type { AgentEvent, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { SearchDb } from "@oh-my-pi/pi-natives";
 import { logger, prompt, untilAborted } from "@oh-my-pi/pi-utils";
 import type { TSchema } from "@sinclair/typebox";
 import Ajv, { type ValidateFunction } from "ajv";
@@ -149,7 +148,6 @@ export interface ExecutorOptions {
 	mcpManager?: MCPManager;
 	authStorage?: AuthStorage;
 	modelRegistry?: ModelRegistry;
-	searchDb?: SearchDb;
 	settings?: Settings;
 }
 
@@ -958,7 +956,6 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				cwd: worktree ?? cwd,
 				authStorage,
 				modelRegistry,
-				searchDb: options.searchDb,
 				settings: subagentSettings,
 				model,
 				thinkingLevel: effectiveThinkingLevel,
@@ -1068,7 +1065,6 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 					},
 					{
 						getModel: () => session.model,
-						getSearchDb: () => session.searchDb,
 						isIdle: () => !session.isStreaming,
 						abort: () => session.abort(),
 						hasPendingMessages: () => session.queuedMessageCount > 0,

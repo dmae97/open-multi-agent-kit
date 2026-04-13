@@ -49,7 +49,7 @@ import {
 	modelsAreEqual,
 	parseRateLimitReason,
 } from "@oh-my-pi/pi-ai";
-import { killTree, MacOSPowerAssertion, type SearchDb } from "@oh-my-pi/pi-natives";
+import { killTree, MacOSPowerAssertion } from "@oh-my-pi/pi-natives";
 import {
 	abortableSleep,
 	getAgentDbPath,
@@ -263,8 +263,6 @@ export interface AgentSessionConfig {
 	ttsrManager?: TtsrManager;
 	/** Secret obfuscator for deobfuscating streaming edit content */
 	obfuscator?: SecretObfuscator;
-	/** Shared native search DB for grep/glob/fuzzyFind-backed workflows. */
-	searchDb?: SearchDb;
 	/** Logical owner for retained Python kernels created by this session. */
 	pythonKernelOwnerId?: string;
 }
@@ -418,7 +416,6 @@ export class AgentSession {
 	readonly agent: Agent;
 	readonly sessionManager: SessionManager;
 	readonly settings: Settings;
-	readonly searchDb: SearchDb | undefined;
 
 	#powerAssertion: MacOSPowerAssertion | undefined;
 
@@ -567,7 +564,6 @@ export class AgentSession {
 		this.agent = config.agent;
 		this.sessionManager = config.sessionManager;
 		this.settings = config.settings;
-		this.searchDb = config.searchDb;
 		this.#startPowerAssertion();
 		this.#asyncJobManager = config.asyncJobManager;
 		this.#pythonKernelOwnerId = config.pythonKernelOwnerId ?? `agent-session:${Snowflake.next()}`;
@@ -2177,7 +2173,6 @@ export class AgentSession {
 			sessionManager: this.sessionManager,
 			modelRegistry: this.#modelRegistry,
 			model: this.model,
-			searchDb: this.searchDb,
 			isIdle: () => !this.isStreaming,
 			hasQueuedMessages: () => this.queuedMessageCount > 0,
 			abort: () => {

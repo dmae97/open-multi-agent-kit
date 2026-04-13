@@ -247,7 +247,6 @@ export class FindTool implements AgentTool<typeof findSchema, FindToolDetails> {
 							signal: combinedSignal,
 						},
 						onMatch,
-						this.session.searchDb,
 					),
 				);
 

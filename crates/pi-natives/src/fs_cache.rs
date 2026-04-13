@@ -308,7 +308,8 @@ pub fn get_or_scan(
 		return Ok(ScanResult { entries, cache_age_ms: 0 });
 	}
 
-	let key = CacheKey { root: root.to_path_buf(), include_hidden, use_gitignore, skip_node_modules };
+	let key =
+		CacheKey { root: root.to_path_buf(), include_hidden, use_gitignore, skip_node_modules };
 
 	let now = Instant::now();
 	if let Some(entry) = FS_CACHE.get(&key) {
@@ -342,7 +343,8 @@ pub fn force_rescan(
 	store: bool,
 	ct: &task::CancelToken,
 ) -> Result<Vec<GlobMatch>> {
-	let key = CacheKey { root: root.to_path_buf(), include_hidden, use_gitignore, skip_node_modules };
+	let key =
+		CacheKey { root: root.to_path_buf(), include_hidden, use_gitignore, skip_node_modules };
 	FS_CACHE.remove(&key);
 
 	let entries = collect_entries(root, include_hidden, use_gitignore, skip_node_modules, ct)?;
@@ -484,10 +486,18 @@ mod tests {
 			.build()
 			.filter_map(|e| e.ok())
 			.filter(|e| e.path() != root.path())
-			.map(|e| e.path().strip_prefix(root.path()).unwrap().to_string_lossy().into_owned())
+			.map(|e| {
+				e.path()
+					.strip_prefix(root.path())
+					.unwrap()
+					.to_string_lossy()
+					.into_owned()
+			})
 			.collect();
 		assert!(
-			!paths.iter().any(|p| p.contains("node_modules") || p.contains(".git")),
+			!paths
+				.iter()
+				.any(|p| p.contains("node_modules") || p.contains(".git")),
 			"expected no .git or node_modules entries, got: {paths:?}"
 		);
 		assert!(paths.iter().any(|p| p == "real.txt"), "expected real.txt, got: {paths:?}");
@@ -498,7 +508,13 @@ mod tests {
 			.build()
 			.filter_map(|e| e.ok())
 			.filter(|e| e.path() != root.path())
-			.map(|e| e.path().strip_prefix(root.path()).unwrap().to_string_lossy().into_owned())
+			.map(|e| {
+				e.path()
+					.strip_prefix(root.path())
+					.unwrap()
+					.to_string_lossy()
+					.into_owned()
+			})
 			.collect();
 		assert!(
 			!paths.iter().any(|p| p.contains(".git")),

@@ -1155,7 +1155,6 @@ export class AcpAgent implements Agent {
 			},
 			{
 				getModel: () => record.session.model,
-				getSearchDb: () => record.session.searchDb,
 				isIdle: () => !record.session.isStreaming,
 				abort: () => {
 					void record.session.abort();

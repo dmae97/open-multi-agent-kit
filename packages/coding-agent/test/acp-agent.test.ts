@@ -70,7 +70,6 @@ class FakeAgentSession {
 	thinkingLevel: string | undefined;
 	customCommands: [] = [];
 	extensionRunner = undefined;
-	searchDb = undefined;
 	isStreaming = false;
 	queuedMessageCount = 0;
 	systemPrompt = "system";

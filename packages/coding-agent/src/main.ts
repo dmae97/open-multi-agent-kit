@@ -839,7 +839,6 @@ export async function runRootCommand(parsed: Args, rawArgs: string[]): Promise<v
 			settings: nextSettings,
 			authStorage,
 			modelRegistry,
-			searchDb: session.searchDb,
 			hasUI: false,
 		});
 		if (nextSession.extensionRunner) {

@@ -15,7 +15,7 @@
 //!
 //! # Architecture
 //! ```text
-//! JS (packages/natives) -> N-API -> Rust modules (clipboard/fff/glob/grep/html/highlight/image/search_db/text)
+//! JS (packages/natives) -> N-API -> Rust modules (clipboard/fd/glob/grep/html/highlight/image/text)
 //! ```
 
 #![feature(trim_prefix_suffix)]
@@ -30,7 +30,7 @@ pub mod appearance;
 pub mod ast;
 pub mod chunk;
 pub mod clipboard;
-pub mod fff;
+pub mod fd;
 pub mod fs_cache;
 pub mod glob;
 pub mod glob_util;
@@ -47,7 +47,6 @@ pub mod prof;
 pub mod projfs_overlay;
 pub mod ps;
 pub mod pty;
-pub mod search_db;
 pub mod shell;
 pub mod task;
 pub mod text;

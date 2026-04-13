@@ -43,7 +43,6 @@ function buildToolSession(
 		settings: options.settings,
 		authStorage: options.authStorage,
 		modelRegistry: options.modelRegistry,
-		searchDb: ctx.searchDb,
 	};
 }
 

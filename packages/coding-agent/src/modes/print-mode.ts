@@ -81,7 +81,6 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 			// ExtensionContextActions
 			{
 				getModel: () => session.model,
-				getSearchDb: () => session.searchDb,
 				isIdle: () => !session.isStreaming,
 				abort: () => session.abort(),
 				hasPendingMessages: () => session.queuedMessageCount > 0,

@@ -579,6 +579,19 @@ function normalizeChunkEditOperations(edits: ChunkToolEdit[]): {
 			);
 		}
 		if (hasWrite) {
+			// Warn about suspect indentation when targeting a body region (~)
+			if (selector?.endsWith("~") && edit.write.length > 0) {
+				const writeLines = edit.write.split("\n").filter(l => l.length > 0);
+				if (writeLines.length > 1) {
+					const firstLineIndent = writeLines[0].match(/^\t*/)?.[0].length ?? 0;
+					const restMinIndent = Math.min(...writeLines.slice(1).map(l => l.match(/^\t*/)?.[0].length ?? 0));
+					if (firstLineIndent === 0 && restMinIndent >= 1) {
+						warnings.push(
+							`Edit ${index + 1}: body content appears over-indented. When writing to \`~\`, all top-level body lines should start at column 0 (no leading tabs). Only use \\t for nesting deeper within the body. The tool adds the function's base indent automatically.`,
+						);
+					}
+				}
+			}
 			return { op: "put", sel: selector, content: edit.write };
 		}
 		if (typeof edit.write === "string") {
