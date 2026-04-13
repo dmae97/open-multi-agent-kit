@@ -185,8 +185,8 @@ describe("chunk mode tools", () => {
 			"[Notice: chunk view scoped to requested lines L2-L4; clipped chunks keep head/tail context and collapse non-overlapping children.]",
 		);
 		expect(text).toContain("server.ts·");
-		expect(text).toContain(`[<${HANDLE_ERROR_CHUNK_PATH}#`);
-		expect(text).toContain(`[<${HANDLE_ERROR_CHUNK_PATH}.var_total#`);
+		expect(text).toContain(`@${HANDLE_ERROR_CHUNK_PATH}#`);
+		expect(text).toContain(`@${HANDLE_ERROR_CHUNK_PATH}.var_total#`);
 		expect(text).toContain("3 |");
 		expect(text).toContain("4 |");
 		expect(text).toContain("64 |\t\treturn err.message + total;");
@@ -207,8 +207,8 @@ describe("chunk mode tools", () => {
 			"[Notice: chunk view scoped to requested lines L2-L4; clipped chunks keep head/tail context and collapse non-overlapping children.]",
 		);
 		expect(text).toContain("server.ts·");
-		expect(text).toContain(`[<${HANDLE_ERROR_CHUNK_PATH}#`);
-		expect(text).toContain(`[<${HANDLE_ERROR_CHUNK_PATH}.var_total#`);
+		expect(text).toContain(`@${HANDLE_ERROR_CHUNK_PATH}#`);
+		expect(text).toContain(`@${HANDLE_ERROR_CHUNK_PATH}.var_total#`);
 		expect(text).toContain("3 |");
 		expect(text).toContain("64 |\t\treturn err.message + total;");
 		expect(text).toContain("[truncated… sel=L5-L62 to expand]");
@@ -296,7 +296,7 @@ describe("chunk mode tools", () => {
 		});
 		const text = getText(result);
 
-		expect(text).toContain("[<class_Server.fn_handle.ret#");
+		expect(text).toContain("@class_Server.fn_handle.ret#");
 		expect(text).toContain("64 |    return err.message + total;");
 		expect(text).toContain("err.message");
 	});
@@ -344,11 +344,11 @@ describe("chunk mode tools", () => {
 
 		expect(text).toContain("# src/tools");
 		expect(text).toContain("## └─ grep.ts");
-		expect(text).toContain("  [<fn_execut#");
+		expect(text).toContain("@fn_execut#");
 		expect(text).toContain('    2 |  return "needle";');
 		expect(text).toContain("# src/core");
 		expect(text).toContain("## └─ server.ts");
-		expect(text).toContain("  [<class_Server.fn_start#");
+		expect(text).toContain("-@class_Server.fn_start#");
 		expect(text).toContain('    3 |    return "needle";');
 	});
 
@@ -369,8 +369,7 @@ describe("chunk mode tools", () => {
 			edits: [
 				{
 					path: `${filePath}:${selector}`,
-					op: "replace",
-					content: `  private handleError(err: Error): string {
+					write: `  private handleError(err: Error): string {
     return \`normalized:\${err.message}\`;
   }
 `,
@@ -383,7 +382,7 @@ describe("chunk mode tools", () => {
 		expect(updatedSource).toContain("normalized:");
 		expect(updatedSource).not.toContain("total +=");
 		expect(editText).toContain("server.ts·");
-		expect(editText).toContain("[<class_Server.fn_handle#");
+		expect(editText).toContain("@class_Server.fn_handle#");
 		expect(editText).toContain("@@ -3,62 +3,1 @@");
 	});
 
@@ -414,23 +413,22 @@ describe("chunk mode tools", () => {
 			edits: [
 				{
 					path: `${filePath}:${selector}`,
-					op: "replace",
-					content: '  handle(): void {\n    console.log("new");\n  }\n',
+					write: '  handle(): void {\n    console.log("new");\n  }\n',
 				},
 			],
 		});
 		const editText = getText(editResult);
 
 		expect(editText).toMatch(/^ {3}\|server\.ts·10L·typescript·#/m);
-		expect(editText).toMatch(/^\* {2}\|\[<class_Server#/m);
-		expect(editText).toMatch(/^\* {2}\|\s+\[<class_Server\.fn_handle#/m);
+		expect(editText).toMatch(/^\*@class_Server#/m);
+		expect(editText).toMatch(/^\*-@class_Server\.fn_handle#/m);
 		expect(editText).toMatch(/^ {3}\|\s+@@ -3,1 \+3,1 @@$/m);
 		expect(editText).toContain('console.log("old");');
 		expect(editText).toContain('console.log("new");');
 		expect(editText).not.toContain("1 |class Server {");
 		expect(editText).not.toContain("crc updated");
 		expect(editText).not.toContain(" lns)");
-		expect(editText).not.toContain("[<class_Server.fn_other#");
+		expect(editText).not.toContain("@class_Server.fn_other#");
 	});
 
 	it("replaces a whole method chunk when PI_CHUNK_AUTOINDENT=0", async () => {
@@ -446,8 +444,7 @@ describe("chunk mode tools", () => {
 			edits: [
 				{
 					path: `${filePath}:class_Server.fn_handle#${checksum}`,
-					op: "replace",
-					content: '  handle(): void {\n    if (flag) {\n\tconsole.log("tabbed");\n    }\n  }\n',
+					write: '  handle(): void {\n    if (flag) {\n\tconsole.log("tabbed");\n    }\n  }\n',
 				},
 			],
 		});
@@ -476,7 +473,7 @@ describe("chunk mode tools", () => {
 			filePath,
 			operations: [
 				{
-					op: "replace",
+					op: "put",
 					sel: `${chunkPath}#${checksum}`,
 					content: buildHandleErrorMethod({ returnLine: "    return err.message.toUpperCase() + total;" }),
 				},
@@ -488,13 +485,11 @@ describe("chunk mode tools", () => {
 			edits: [
 				{
 					path: `${filePath}:${chunkPath}#${checksum}`,
-					op: "replace",
-					content: buildHandleErrorMethod({ returnLine: "    return err.message.toUpperCase() + total;" }),
+					write: buildHandleErrorMethod({ returnLine: "    return err.message.toUpperCase() + total;" }),
 				},
 				{
 					path: `${filePath}:${chunkPath}#${checksum2}`,
-					op: "replace",
-					content: buildHandleErrorMethod({
+					write: buildHandleErrorMethod({
 						totalInitLine: "    let total = 1;",
 						returnLine: "    return err.message.toUpperCase() + total;",
 					}),
@@ -538,8 +533,7 @@ describe("chunk mode tools", () => {
 			edits: [
 				{
 					path: `${filePath}:class_Server#${classChecksum}`,
-					op: "after",
-					content: '\nfunction status(): string {\n  return "ok";\n}\n',
+					insert: { loc: "append", body: '\nfunction status(): string {\n  return "ok";\n}\n' },
 				},
 			],
 		});
@@ -558,7 +552,7 @@ describe("chunk mode tools", () => {
 		const checksum = getChunkChecksum(originalSource, "typescript", "fn_main");
 
 		await editTool.execute("chunk-edit-empty-replace-delete", {
-			edits: [{ path: `${filePath}:fn_main#${checksum}`, op: "replace", content: "" }],
+			edits: [{ path: `${filePath}:fn_main#${checksum}`, write: null }],
 		});
 
 		const updatedSource = await Bun.file(filePath).text();
@@ -593,10 +587,9 @@ describe("chunk mode tools", () => {
 				edits: [
 					{
 						path: `${filePath}:class_Server#${getChunkChecksum(originalSource, "typescript", "class_Server")}`,
-						op: "append",
-						content: '  status(): string {\n    return "ok";\n  }',
+						insert: { loc: "append", body: '  status(): string {\n    return "ok";\n  }' },
 					},
-					{ path: `${filePath}:${HANDLE_ERROR_CHUNK_PATH}#ZZZZ`, op: "replace", content: "" },
+					{ path: `${filePath}:${HANDLE_ERROR_CHUNK_PATH}#ZZZZ`, write: null },
 				],
 			}),
 		).rejects.toThrow(/No changes were saved/);
@@ -617,8 +610,7 @@ describe("chunk mode tools", () => {
 				edits: [
 					{
 						path: `${filePath}:${HANDLE_ERROR_CHUNK_PATH}#${checksum}`,
-						op: "replace",
-						content: "  private handleError(err: Error): string {\n    if (err) {\n",
+						write: "  private handleError(err: Error): string {\n    if (err) {\n",
 					},
 				],
 			}),
@@ -639,13 +631,11 @@ describe("chunk mode tools", () => {
 			edits: [
 				{
 					path: `${filePath}:${HANDLE_ERROR_CHUNK_PATH}#${checksum}`,
-					op: "replace",
-					content: "  private handleError(err: Error): string {\n    return err.message;\n  }",
+					write: "  private handleError(err: Error): string {\n    return err.message;\n  }",
 				},
 				{
 					path: `${filePath}:${HANDLE_ERROR_CHUNK_PATH}#${checksum}`,
-					op: "replace",
-					content: "  private handleError(err: Error): string {\n    return err.message.toUpperCase();\n  }",
+					write: "  private handleError(err: Error): string {\n    return err.message.toUpperCase();\n  }",
 				},
 			],
 		});
@@ -666,8 +656,7 @@ describe("chunk mode tools", () => {
 				edits: [
 					{
 						path: `${filePath}:${HANDLE_ERROR_CHUNK_PATH}`,
-						op: "replace",
-						content: buildHandleErrorMethod({ totalInitLine: "    let total = 1;" }),
+						write: buildHandleErrorMethod({ totalInitLine: "    let total = 1;" }),
 					},
 				],
 			}),
@@ -688,8 +677,7 @@ describe("chunk mode tools", () => {
 			edits: [
 				{
 					path: `${filePath}:main#${checksum}`,
-					op: "replace",
-					content: 'function main(): void {\n  console.log("started");\n}\n',
+					write: 'function main(): void {\n  console.log("started");\n}\n',
 				},
 			],
 		});
@@ -710,8 +698,7 @@ describe("chunk mode tools", () => {
 			edits: [
 				{
 					path: `${filePath}:class_Server.handleError#${checksum}`,
-					op: "replace",
-					content: `  private handleError(err: Error): string {\n    return \`expanded:\${err.message}\`;\n  }\n`,
+					write: `  private handleError(err: Error): string {\n    return \`expanded:\${err.message}\`;\n  }\n`,
 				},
 			],
 		});
@@ -736,8 +723,7 @@ describe("chunk mode tools", () => {
 			edits: [
 				{
 					path: `${filePath}:class_A.fn_run_2#${staleChecksum}`,
-					op: "replace",
-					content: "run(): void { patched(); }\n",
+					write: "run(): void { patched(); }\n",
 				},
 			],
 		});
@@ -786,8 +772,7 @@ describe("chunk mode tools", () => {
 			edits: [
 				{
 					path: `${filePath}:${building.path}#${building.checksum}`,
-					op: "replace",
-					content: "## Building and Testing\n\nUse `just verify` instead. It wraps cmake and ctest.\n",
+					write: "## Building and Testing\n\nUse `just verify` instead. It wraps cmake and ctest.\n",
 				},
 			],
 		});
@@ -856,7 +841,9 @@ describe("chunk mode tools", () => {
 
 		await expect(
 			editTool.execute("chunk-edit-missing-selector", {
-				edits: [{ path: `${filePath}:class_Server.fn_missing`, op: "before", content: "  noop(): void {}" }],
+				edits: [
+					{ path: `${filePath}:class_Server.fn_missing`, insert: { loc: "prepend", body: "  noop(): void {}" } },
+				],
 			}),
 		).rejects.toThrow(/Direct children of "class_Server":\n└── \.fn_handle#[A-Z]{4}\s+L\d+-L\d+/);
 	});
@@ -867,7 +854,7 @@ describe("chunk mode tools", () => {
 
 		await expect(
 			editTool.execute("chunk-edit-missing-file", {
-				edits: [{ path: `${missingPath}:fn_foo`, op: "replace", content: "function foo() {}" }],
+				edits: [{ path: `${missingPath}:fn_foo`, write: "function foo() {}" }],
 			}),
 		).rejects.toThrow(/File does not exist.*Cannot resolve chunk selectors/);
 	});

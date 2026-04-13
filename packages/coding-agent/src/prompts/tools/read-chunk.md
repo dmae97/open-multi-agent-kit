@@ -5,8 +5,8 @@ Reads files using syntax-aware chunks.
 - `sel` — optional selector: `class_Foo`, `class_Foo.fn_bar#ABCD~`, `?`, `L50`, `L50-L120`, or `raw`
 - `timeout` — seconds, for URLs only
 
-Each opening anchor `[< full.chunk.path#CCCC ]` in the default output identifies a chunk. Use `full.chunk.path#CCCC` as-is to read truncated chunks.
-If you need a canonical target list, run `read(path="file", sel="?")`. That listing shows chunk paths with CRCs.
+Each anchor `@full.chunk.path#CCCC` (with `-` prefixes for nesting depth) in the output identifies a chunk. Use `full.chunk.path#CCCC` as-is to read truncated chunks.
+If you need a canonical target list, run `read(path="file", sel="?")`. That listing shows chunk paths with IDs.
 Line numbers in the gutter are absolute file line numbers.
 
 `L20` (single line, no explicit end) is shorthand for `L20` to end-of-file. Use `L20-L20` for a one-line window.
@@ -30,6 +30,6 @@ When used against a SQLite database (`.sqlite`, `.sqlite3`, `.db`, `.db3`), retu
 </instruction>
 
 <critical>
-- **MUST** `read` before editing — never invent chunk names or CRCs.
+- **MUST** `read` before editing — never invent chunk names or IDs.
     - Chunk names are truncated (e.g., `handleRequest` becomes `fn_handleRequ`). Always copy chunk paths from `read` or `?` output — never construct them from source identifiers.
 </critical>

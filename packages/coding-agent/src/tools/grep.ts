@@ -162,7 +162,10 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 				const stat = await Bun.file(searchPath).stat();
 				isDirectory = stat.isDirectory();
 			} catch {
-				throw new ToolError(`Path not found: ${scopePath}`);
+				const hint = scopePath.includes(",")
+					? ` (comma-separated paths must each exist relative to cwd)`
+					: "";
+				throw new ToolError(`Path not found: ${scopePath}${hint}`);
 			}
 
 			const effectiveOutputMode = GrepOutputMode.Content;
@@ -312,8 +315,11 @@ export class GrepTool implements AgentTool<typeof grepSchema, GrepToolDetails> {
 					for (const [chunkPath, chunkMatches] of matchesByChunk) {
 						if (chunkPath) {
 							const chunkChecksum = chunkMatches[0]?.chunkChecksum;
-							const anchor = chunkChecksum ? `[<${chunkPath}#${chunkChecksum}>]` : `[<${chunkPath}>]`;
-							outputLines.push(`  ${anchor}`);
+							const dashes = "-".repeat(chunkPath.split(".").length - 1);
+							const anchor = chunkChecksum
+								? `${dashes}@${chunkPath}#${chunkChecksum}`
+								: `${dashes}@${chunkPath}`;
+							outputLines.push(anchor);
 						}
 						for (const match of chunkMatches) {
 							outputLines.push(`    ${match.lineNumber.toString().padStart(lineWidth, " ")} |${match.line}`);

@@ -128,6 +128,18 @@ interface FormattedStreamingEdit {
 	dst: string;
 }
 
+/** Extract file path from an edit entry's path (handles chunk's file:selector format). */
+function filePathFromEditEntry(p: string | undefined): string | undefined {
+	if (!p) return undefined;
+	const ci = /^[a-zA-Z]:[/\\]/.test(p) ? p.indexOf(":", 2) : p.indexOf(":");
+	return ci === -1 ? p : p.slice(0, ci);
+}
+
+/** Count distinct file paths in an edits array. */
+function countEditFiles(edits: any[]): number {
+	return new Set(edits.map((e: any) => filePathFromEditEntry(e?.path)).filter(Boolean)).size;
+}
+
 function countLines(text: string): number {
 	if (!text) return 0;
 	return text.split("\n").length;
@@ -241,7 +253,7 @@ function formatChunkStreamingEdit(edit: Partial<ChunkToolEdit>): FormattedStream
 
 	const contentLines = getStreamingEditContent(edit.content);
 	const target = edit.path ? (parseChunkEditPath(edit.path).selector ?? edit.path) : "?";
-	const op = edit.op ?? "replace";
+	const op = edit.op ?? "put";
 
 	switch (op) {
 		case "append":
@@ -408,9 +420,7 @@ export const editToolRenderer = {
 			options?.spinnerFrame !== undefined ? formatStatusIcon("running", uiTheme, options.spinnerFrame) : "";
 		let text = `${formatTitle(getOperationTitle(op), uiTheme)} ${spinner ? `${spinner} ` : ""}${description}`;
 		// Show file count hint for multi-file edits
-		const fileCount = Array.isArray(args.edits)
-			? new Set((args.edits as any[]).map(e => e?.path).filter(Boolean)).size
-			: 0;
+		const fileCount = Array.isArray(args.edits) ? countEditFiles(args.edits as any[]) : 0;
 		if (fileCount > 1) {
 			text += uiTheme.fg("dim", ` (+${fileCount - 1} more)`);
 		}
@@ -426,8 +436,9 @@ export const editToolRenderer = {
 		args?: EditRenderArgs,
 	): Component {
 		const perFileResults = result.details?.perFileResults;
-		if (perFileResults && perFileResults.length > 1) {
-			return renderMultiFileResult(perFileResults, options, uiTheme);
+		const totalFiles = Array.isArray(args?.edits) ? countEditFiles(args!.edits as any[]) : 0;
+		if (perFileResults && (perFileResults.length > 1 || totalFiles > 1)) {
+			return renderMultiFileResult(perFileResults, totalFiles, options, uiTheme);
 		}
 		return renderSingleFileResult(result, options, uiTheme, args);
 	},
@@ -519,24 +530,49 @@ function renderSingleFileResult(
 
 function renderMultiFileResult(
 	perFileResults: EditToolPerFileResult[],
+	totalFiles: number,
 	options: RenderResultOptions & { renderContext?: EditRenderContext },
 	uiTheme: Theme,
 ): Component {
 	const fileComponents = perFileResults.map(fileResult =>
 		renderSingleFileResult({ content: [], details: fileResult, isError: fileResult.isError }, options, uiTheme),
 	);
+	const remaining = Math.max(0, totalFiles - perFileResults.length);
 
 	let cached: RenderCache | undefined;
 
 	return {
 		render(width) {
-			const key = new Hasher().bool(options.expanded).u32(width).u32(perFileResults.length).digest();
+			const key = new Hasher().bool(options.expanded).u32(width).u32(perFileResults.length).u32(remaining).digest();
 			if (cached?.key === key) return cached.lines;
 
 			const allLines: string[] = [];
 			for (let i = 0; i < fileComponents.length; i++) {
-				if (i > 0) allLines.push("");
+				if (i > 0) {
+					allLines.push("");
+				}
 				allLines.push(...fileComponents[i].render(width));
+			}
+
+			// Show pending indicator for files still being processed
+			if (remaining > 0) {
+				if (allLines.length > 0) allLines.push("");
+				const spinnerFrame = options.spinnerFrame;
+				const spinner = spinnerFrame !== undefined ? formatStatusIcon("running", uiTheme, spinnerFrame) : "";
+				allLines.push(
+					renderStatusLine(
+						{
+							icon: "pending",
+							title: "Edit",
+							description: uiTheme.fg("dim", `${remaining} more file${remaining > 1 ? "s" : ""} pending…`),
+						},
+						uiTheme,
+					),
+				);
+				if (spinner) {
+					// Replace the pending icon with spinner on the last line
+					allLines[allLines.length - 1] = allLines[allLines.length - 1].replace(/^(?:\x1b\[[^m]*m)*./u, spinner);
+				}
 			}
 
 			cached = { key, lines: allLines };

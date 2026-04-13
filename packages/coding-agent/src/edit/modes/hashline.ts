@@ -167,7 +167,8 @@ export function hashlineParseText(edit: string[] | string | null | undefined): s
 }
 
 export function isHashlineParams(params: unknown): params is HashlineParams {
-	if (typeof params !== "object" || params === null || !("edits" in params) || !Array.isArray(params.edits)) return false;
+	if (typeof params !== "object" || params === null || !("edits" in params) || !Array.isArray(params.edits))
+		return false;
 	if (params.edits.length === 0) return true;
 	const first = params.edits[0];
 	if (typeof first !== "object" || first === null) return false;

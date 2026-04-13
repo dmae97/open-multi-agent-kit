@@ -31,7 +31,9 @@ import type { EditToolDetails, LspBatchRequest } from "../renderer";
 export type { ChunkReadTarget };
 
 export type ChunkEditOperation =
-	| { op: "replace"; sel?: string; content: string }
+	| { op: "put"; sel?: string; content: string }
+	| { op: "replace"; sel?: string; content: string; find: string }
+	| { op: "delete"; sel?: string }
 	| { op: "before"; sel?: string; content: string }
 	| { op: "after"; sel?: string; content: string }
 	| { op: "prepend"; sel?: string; content: string }
@@ -366,12 +368,21 @@ function toNativeEditOperation(
 	const { selector, crc, region } = parseChunkEditSelector(operation.sel);
 	const nativeRegion = toNativeEditRegion(operation.sel === undefined ? (region ?? defaultRegion) : region, encoding);
 	switch (operation.op) {
+		case "put":
+			return {
+				op: ChunkEditOp.Put,
+				sel: selector,
+				crc,
+				region: nativeRegion,
+				content: operation.content,
+			};
 		case "replace":
 			return {
 				op: ChunkEditOp.Replace,
 				sel: selector,
 				crc,
 				region: nativeRegion,
+				find: operation.find,
 				content: operation.content,
 			};
 		case "before":
@@ -471,19 +482,37 @@ export function missingChunkReadTarget(selector: string): ChunkReadTarget {
 	return { status: ChunkReadStatus.NotFound, selector };
 }
 
-const CHUNK_OP_VALUES = ["replace", "after", "before", "prepend", "append"] as const;
-
-export const chunkToolEditSchema = Type.Object({
-	op: StringEnum(CHUNK_OP_VALUES),
-	path: Type.String({
-		description:
-			"File path with chunk selector after colon. Format: 'file:sel~' or 'file:sel^' for insertions, 'file:sel#CRC~' or 'file:sel#CRC^' for replace. Omit suffix to target the full chunk. Examples: 'src/app.ts:fn_foo#ABCD~', 'src/app.ts:class_Bar'.",
-	}),
-	content: Type.String({
-		description:
-			"New content. Write indentation relative to the targeted region as described in the tool prompt. Do NOT include the chunk's base padding.",
-	}),
-});
+export const chunkToolEditSchema = Type.Object(
+	{
+		path: Type.String({
+			description: "File path with chunk selector. Examples: 'src/app.ts:fn_foo#ABCD~', 'src/app.ts:class_Bar'.",
+		}),
+		write: Type.Optional(
+			Type.Union([Type.String(), Type.Null()], {
+				description: "Write complete new content to the targeted region. Use null to delete the chunk.",
+			}),
+		),
+		replace: Type.Optional(
+			Type.Object(
+				{
+					old: Type.String({ description: "Literal substring to find. Must match exactly once." }),
+					new: Type.String({ description: "Replacement text." }),
+				},
+				{ description: "Find and replace a substring within the chunk." },
+			),
+		),
+		insert: Type.Optional(
+			Type.Object(
+				{
+					loc: StringEnum(["append", "prepend"] as const),
+					body: Type.String({ description: "Content to insert." }),
+				},
+				{ description: "Insert content relative to the chunk." },
+			),
+		),
+	},
+	{ additionalProperties: false },
+);
 export const chunkEditParamsSchema = Type.Object(
 	{
 		edits: Type.Array(chunkToolEditSchema, {
@@ -508,24 +537,32 @@ export interface ExecuteChunkSingleOptions {
 }
 
 export function isChunkParams(params: unknown): params is ChunkParams {
-	return (
-		typeof params === "object" &&
-		params !== null &&
-		"edits" in params &&
-		Array.isArray(params.edits) &&
-		params.edits.length > 0 &&
-		typeof params.edits[0] === "object" &&
-		params.edits[0] !== null &&
-		"op" in params.edits[0] &&
-		"content" in params.edits[0] &&
-		!("loc" in params.edits[0])
-	);
+	if (
+		typeof params !== "object" ||
+		params === null ||
+		!("edits" in params) ||
+		!Array.isArray(params.edits) ||
+		params.edits.length === 0
+	) {
+		return false;
+	}
+	const first = params.edits[0];
+	if (typeof first !== "object" || first === null || !("path" in first)) return false;
+	return "write" in first || "replace" in first || "insert" in first;
 }
 
 function normalizeChunkEditOperations(edits: ChunkToolEdit[]): ChunkEditOperation[] {
-	return edits.map(edit => {
+	return edits.map((edit): ChunkEditOperation => {
 		const { selector } = parseChunkEditPath(edit.path);
-		return { op: edit.op, sel: selector, content: edit.content };
+		if (edit.replace) {
+			return { op: "replace", sel: selector, content: edit.replace.new, find: edit.replace.old };
+		}
+		if (edit.insert) {
+			const op = edit.insert.loc === "prepend" ? "before" : "after";
+			return { op, sel: selector, content: edit.insert.body };
+		}
+		// write: string = put content, write: null = delete
+		return { op: "put", sel: selector, content: edit.write ?? "" };
 	});
 }
 

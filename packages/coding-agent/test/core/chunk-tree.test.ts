@@ -168,7 +168,7 @@ describe("applyChunkEdits", () => {
 		const ac = { sel: targetWithChecksum("class_Worker.fn_run", originalChecksum) };
 		const result = edit([
 			{
-				op: "replace",
+				op: "put",
 				...ac,
 				content: `\tstop(): void {\n\t\tconsole.log("stopped");\n\t}`,
 			},
@@ -184,7 +184,7 @@ describe("applyChunkEdits", () => {
 		expect(() =>
 			edit([
 				{
-					op: "replace",
+					op: "put",
 					sel: targetWithChecksum("class_Worker.fn_run", "ZZZZ"),
 					content: "replacement",
 				},
@@ -229,7 +229,7 @@ describe("applyChunkEdits", () => {
 
 	test("replace with empty content removes the target chunk", () => {
 		const ac = { sel: currentTarget(testSource, "class_Worker.fn_run") };
-		const result = edit([{ op: "replace", ...ac, content: "" }]);
+		const result = edit([{ op: "put", ...ac, content: "" }]);
 
 		expect(result.diffSourceAfter).not.toContain("run()");
 		expect(result.diffSourceAfter).toContain("constructor");
@@ -241,7 +241,7 @@ describe("applyChunkEdits", () => {
 		const result = edit(
 			[
 				{
-					op: "replace",
+					op: "put",
 					sel: targetWithChecksum("class_Worker.fn_restart", checksum),
 					content: `\t/** updated restart note */\n\trestart(): void {\n\t\tshutdown();\n\t}`,
 				},
@@ -264,12 +264,12 @@ describe("applyChunkEdits", () => {
 			filePath: "/tmp/worker.ts",
 			operations: [
 				{
-					op: "replace",
+					op: "put",
 					sel: targetWithChecksum(currentPath(testSource, "class_Worker.constructor"), constructorCrc),
 					content: `\tconstructor(name: string) {\n\t\tthis.name = name.trim();\n\t}`,
 				},
 				{
-					op: "replace",
+					op: "put",
 					sel: targetWithChecksum("class_Worker.fn_run", runCrc),
 					content: `\trun(): void {\n\t\tconsole.log(this.name + "!");\n\t}`,
 				},
@@ -478,7 +478,7 @@ type Server struct {
 			source,
 			language: "rust",
 			filePath: "/tmp/impl.rs",
-			operations: [{ op: "replace", sel: targetWithChecksum("impl_S.fn_b", crc), content: "" }],
+			operations: [{ op: "put", sel: targetWithChecksum("impl_S.fn_b", crc), content: "" }],
 		});
 
 		expect(result.diffSourceAfter).toBe("impl S {\n    fn a() {\n        keep();\n    }\n\n}\n");
@@ -492,7 +492,7 @@ describe("edit safety invariants", () => {
 		const staleChecksum = getChecksum(testSource, runChunkPath);
 		const source = edit([
 			{
-				op: "replace",
+				op: "put",
 				sel: targetWithChecksum(runChunkPath, staleChecksum),
 				content: '\trun(): void {\n\t\tconsole.log("updated");\n\t}',
 			},
@@ -513,7 +513,7 @@ describe("edit safety invariants", () => {
 					return edit(
 						[
 							{
-								op: "replace",
+								op: "put",
 								sel: targetWithChecksum(runChunkPath, staleChecksum),
 								content: '\trun(): void {\n\t\tconsole.log("again");\n\t}',
 							},
@@ -521,7 +521,7 @@ describe("edit safety invariants", () => {
 						source,
 					);
 				}
-				return edit([{ op: "replace", sel: targetWithChecksum(runChunkPath, staleChecksum), content: "" }], source);
+				return edit([{ op: "put", sel: targetWithChecksum(runChunkPath, staleChecksum), content: "" }], source);
 			};
 
 			expect(invoke).toThrow(new RegExp(`got "${staleChecksum}"`));
@@ -532,12 +532,12 @@ describe("edit safety invariants", () => {
 		const checksum = getChecksum(testSource, runChunkPath);
 		const result = edit([
 			{
-				op: "replace",
+				op: "put",
 				sel: targetWithChecksum(runChunkPath, checksum),
 				content: '\trun(): void {\n\t\tconsole.log("first");\n\t}',
 			},
 			{
-				op: "replace",
+				op: "put",
 				sel: targetWithChecksum(runChunkPath, checksum),
 				content: '\trun(): void {\n\t\tconsole.log("second");\n\t}',
 			},
@@ -550,13 +550,13 @@ describe("edit safety invariants", () => {
 		const checksum = getChecksum(testSource, runChunkPath);
 		const firstContent = '\trun(): void {\n\t\tconsole.log("first");\n\t}';
 		const afterFirst = edit([
-			{ op: "replace", sel: targetWithChecksum(runChunkPath, checksum), content: firstContent },
+			{ op: "put", sel: targetWithChecksum(runChunkPath, checksum), content: firstContent },
 		]).diffSourceAfter;
 		const checksum2 = getChecksum(afterFirst, runChunkPath);
 		const result = edit([
-			{ op: "replace", sel: targetWithChecksum(runChunkPath, checksum), content: firstContent },
+			{ op: "put", sel: targetWithChecksum(runChunkPath, checksum), content: firstContent },
 			{
-				op: "replace",
+				op: "put",
 				sel: targetWithChecksum(runChunkPath, checksum2),
 				content: '\trun(): void {\n\t\tconsole.log("second");\n\t}',
 			},
@@ -570,12 +570,12 @@ describe("edit safety invariants", () => {
 		const checksum = getChecksum(testSource, runChunkPath);
 		const result = edit([
 			{
-				op: "replace",
+				op: "put",
 				sel: targetWithChecksum(runChunkPath, checksum),
 				content: '\trun(task = "default"): void {\n\t\tconsole.log(this.name);\n\t}',
 			},
 			{
-				op: "replace",
+				op: "put",
 				sel: targetWithChecksum(runChunkPath, checksum),
 				content: '\trun(task = "default"): void {\n\t\tconsole.log(task);\n\t}',
 			},
@@ -588,7 +588,7 @@ describe("edit safety invariants", () => {
 		const checksum = getChecksum(testSource, runChunkPath);
 		const afterFirst = edit([
 			{
-				op: "replace",
+				op: "put",
 				sel: targetWithChecksum(runChunkPath, checksum),
 				content: "\trun(): void {\n\t\tconsole.log(task);\n\t}",
 			},
@@ -596,12 +596,12 @@ describe("edit safety invariants", () => {
 		const checksum2 = getChecksum(afterFirst, runChunkPath);
 		const result = edit([
 			{
-				op: "replace",
+				op: "put",
 				sel: targetWithChecksum(runChunkPath, checksum),
 				content: "\trun(): void {\n\t\tconsole.log(task);\n\t}",
 			},
 			{
-				op: "replace",
+				op: "put",
 				sel: targetWithChecksum(runChunkPath, checksum2),
 				content: '\trun(task = "default"): void {\n\t\tconsole.log(task);\n\t}',
 			},
@@ -621,7 +621,7 @@ describe("edit safety invariants", () => {
 					content: '\tstatus(): string {\n\t\treturn "active";\n\t}',
 				},
 				{
-					op: "replace",
+					op: "put",
 					sel: targetWithChecksum("class_Worker.fn_run", "ZZZZ"),
 					content: "",
 				},
@@ -633,7 +633,7 @@ describe("edit safety invariants", () => {
 		const before = getChecksum(testSource, "class_Worker.constructor");
 		const after = edit([
 			{
-				op: "replace",
+				op: "put",
 				sel: currentTarget(testSource, runChunkPath),
 				content: '\trun(): void {\n\t\tconsole.log("nearby");\n\t}',
 			},
@@ -648,7 +648,7 @@ describe("edit safety invariants", () => {
 		const result = edit(
 			[
 				{
-					op: "replace",
+					op: "put",
 					sel: targetWithChecksum(runChunkPath, checksum),
 					content: '\trun(): void {\n\t\tconsole.log("updated");\n\t}',
 				},
@@ -670,7 +670,7 @@ describe("content prefix stripping", () => {
 		const ac = { sel: currentTarget(testSource, "class_Worker.fn_run") };
 		const result = edit([
 			{
-				op: "replace",
+				op: "put",
 				...ac,
 				content: `  120 │ \texec(): void {\n  121 │ \t\tconsole.log("exec");\n  122 │ \t}`,
 			},
@@ -684,7 +684,7 @@ describe("content prefix stripping", () => {
 		const ac = { sel: currentTarget(testSource, "class_Worker.fn_run") };
 		const result = edit([
 			{
-				op: "replace",
+				op: "put",
 				...ac,
 				content: '1#ZP:exec(): void {\n2#PM:\tconsole.log("exec");\n3#QV:}',
 			},
@@ -771,8 +771,8 @@ describe("formatChunkedRead", () => {
 
 		expect(result.text).toContain("worker.ts:class_Worker.fn_run·");
 		expect(result.text).toContain("class_Worker.fn_run#");
-		expect(result.text).toContain("6|\trun(): void {");
-		expect(result.text).toContain("7|\t\tconsole.log(this.name);");
+		expect(result.text).toContain("6^|\trun(): void {");
+		expect(result.text).toContain("7 |\t\tconsole.log(this.name);");
 		expect(result.text).toContain("console.log(this.name);");
 	});
 
@@ -792,8 +792,8 @@ describe("formatChunkedRead", () => {
 
 		expect(result.text).not.toContain("to expand ⋮");
 		expectRenderedChunkPath(result.text, "service.ts:class_Service.fn_handle", "·");
-		expect(result.text).toContain("3|\t\tstep(0);");
-		expect(result.text).toContain("27|\t\tstep(24);");
+		expect(result.text).toContain("3 |\t\tstep(0);");
+		expect(result.text).toContain("27 |\t\tstep(24);");
 		expect(result.text).toContain("done();");
 	});
 });
@@ -838,7 +838,7 @@ describe("replace last child formatting", () => {
 		const ac = { sel: currentTarget(testSource, "class_Worker.fn_run") };
 		const result = edit([
 			{
-				op: "replace",
+				op: "put",
 				...ac,
 				content: '\texec(): void {\n\t\tconsole.log("exec");\n\t}',
 			},
@@ -854,7 +854,7 @@ describe("replace last child formatting", () => {
 		const ac = { sel: currentTarget(testSource, "class_Worker.fn_run") };
 		const result = edit([
 			{
-				op: "replace",
+				op: "put",
 				...ac,
 				content: '\t\texec(): void {\n\t\t\tconsole.log("exec");\n\t\t}',
 			},
@@ -901,8 +901,8 @@ describe("addressable member rendering", () => {
 		});
 
 		expectRenderedChunkPath(result.text, "type_Handler");
-		expect(result.text).toContain("3|type Handler interface {");
-		expect(result.text).toContain("4|\tHandle(method, path string) Result");
+		expect(result.text).toContain("3^|type Handler interface {");
+		expect(result.text).toContain("4 |\tHandle(method, path string) Result");
 	});
 
 	test("renders Go receiver methods as top-level siblings", async () => {
@@ -1012,7 +1012,7 @@ describe("addressable member editing", () => {
 		const result = edit(
 			[
 				{
-					op: "replace",
+					op: "put",
 					...ac,
 					content: `enum Status {\n  Idle = "idle",\n  Done = "done",\n}\n`,
 				},
@@ -1041,7 +1041,7 @@ describe("addressable member editing", () => {
 
 	test("replace with empty content removes an individually addressable enum variant", () => {
 		const busy = { sel: currentTarget(enumSource, "enum_Status.variant_Busy") };
-		const result = edit([{ op: "replace", ...busy, content: "" }], enumSource);
+		const result = edit([{ op: "put", ...busy, content: "" }], enumSource);
 
 		expect(result.diffSourceAfter).toContain('Idle = "idle"');
 		expect(result.diffSourceAfter).not.toContain('Busy = "busy"');
@@ -1089,7 +1089,7 @@ describe("blank-line cleanup", () => {
 		const result = edit(
 			[
 				{
-					op: "replace",
+					op: "put",
 					sel: targetWithChecksum("class_Worker.fn_restart", checksum),
 					content: "",
 				},
@@ -1125,7 +1125,7 @@ describe("chunk selector auto-resolution", () => {
 	test("warns on suffix auto-resolution", () => {
 		const result = edit([
 			{
-				op: "replace",
+				op: "put",
 				sel: targetWithChecksum("fn_run", getChecksum(testSource, "class_Worker.fn_run")),
 				content: "run(): void {\n\tconsole.log(this.name);\n}",
 			},
@@ -1136,7 +1136,7 @@ describe("chunk selector auto-resolution", () => {
 	test("warns on prefix auto-resolution", () => {
 		const result = edit([
 			{
-				op: "replace",
+				op: "put",
 				sel: targetWithChecksum("run", getChecksum(testSource, "class_Worker.fn_run")),
 				content: "run(): void {\n\tconsole.log(this.name);\n}",
 			},
@@ -1152,7 +1152,7 @@ describe("chunk selector auto-resolution", () => {
 				language: "typescript",
 				operations: [
 					{
-						op: "replace",
+						op: "put",
 						sel: targetWithChecksum("fn_run", getChecksum(source, "class_Foo.fn_run")),
 						content: "",
 					},
@@ -1247,7 +1247,7 @@ describe("tlaplus chunk rendering", () => {
 			filePath: "/tmp/Spec.tla",
 			operations: [
 				{
-					op: "replace",
+					op: "put",
 					sel: targetWithChecksum(initChunk.path, initChunk.checksum),
 					content: "Start == x = 0",
 				},
