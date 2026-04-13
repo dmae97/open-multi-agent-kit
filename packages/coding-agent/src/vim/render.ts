@@ -11,7 +11,7 @@ import type {
 } from "./types";
 
 export const VIM_OPEN_VIEWPORT_LINES = 80;
-export const VIM_DEFAULT_VIEWPORT_LINES = 40;
+export const VIM_DEFAULT_VIEWPORT_LINES = 10;
 export const VIM_TAB_DISPLAY = "→";
 
 const VIM_VIEWPORT_WIDTH = 140;

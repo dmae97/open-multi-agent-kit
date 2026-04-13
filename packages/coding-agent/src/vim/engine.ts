@@ -43,7 +43,7 @@ interface MotionResult {
 }
 
 const WORD_CHAR = /[A-Za-z0-9_]/;
-const DEFAULT_VIEWPORT_HEIGHT = 40;
+const DEFAULT_VIEWPORT_HEIGHT = 10;
 const BRACKET_PAIRS = new Map<string, string>([
 	["(", ")"],
 	["[", "]"],
@@ -53,6 +53,7 @@ const BRACKET_PAIRS = new Map<string, string>([
 const CLOSING_BRACKETS = new Map<string, string>(
 	Array.from(BRACKET_PAIRS.entries()).map(([open, close]) => [close, open]),
 );
+const NOOP_Z_COMMANDS = new Set(["a", "A", "c", "C", "m", "M", "o", "O", "r", "R", "v", "x", "X"]);
 
 function escapeRegex(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -221,6 +222,55 @@ function endOfWord(text: string, offset: number, bigWord: boolean): number {
 	return Math.max(0, index - 1);
 }
 
+function endOfPreviousWord(text: string, offset: number, bigWord: boolean): number {
+	if (text.length === 0) {
+		return 0;
+	}
+
+	let index = Math.min(Math.max(offset - 1, 0), text.length - 1);
+	while (index >= 0 && wordCategory(text[index] ?? "", bigWord) === "space") {
+		index -= 1;
+	}
+	if (index < 0) {
+		return 0;
+	}
+
+	const currentCategory = wordCategory(text[index] ?? "", bigWord);
+	while (index >= 0 && wordCategory(text[index] ?? "", bigWord) === currentCategory) {
+		index -= 1;
+	}
+	while (index >= 0 && wordCategory(text[index] ?? "", bigWord) === "space") {
+		index -= 1;
+	}
+
+	return Math.max(0, index);
+}
+
+function toggleCase(text: string): string {
+	let toggled = "";
+	for (const char of text) {
+		if (char >= "a" && char <= "z") {
+			toggled += char.toUpperCase();
+			continue;
+		}
+		if (char >= "A" && char <= "Z") {
+			toggled += char.toLowerCase();
+			continue;
+		}
+		toggled += char;
+	}
+	return toggled;
+}
+
+function lastNonBlankColumn(line: string): number {
+	for (let index = line.length - 1; index >= 0; index -= 1) {
+		if (!isWhitespace(line[index] ?? "")) {
+			return index;
+		}
+	}
+	return 0;
+}
+
 function findParagraphStart(lines: string[], line: number): number {
 	let index = Math.max(0, line - 1);
 	while (index > 0 && lines[index]!.trim().length > 0) {
@@ -281,6 +331,13 @@ export class VimEngine {
 		next.register = { ...this.register };
 		next.lastSearch = this.lastSearch ? { ...this.lastSearch } : null;
 		next.lastCharFind = this.lastCharFind ? { ...this.lastCharFind } : null;
+		next.lastVisual = this.lastVisual
+			? {
+					anchor: clonePosition(this.lastVisual.anchor),
+					cursor: clonePosition(this.lastVisual.cursor),
+					mode: this.lastVisual.mode,
+				}
+			: null;
 		next.lastCommand = this.lastCommand;
 		next.statusMessage = this.statusMessage;
 		next.diagnostics = this.diagnostics;
@@ -724,6 +781,52 @@ export class VimEngine {
 			this.#clearSelection();
 			return index + 1;
 		}
+		if (token.value === "g") {
+			const next = tokens[index + 1];
+			if (!next) {
+				throw new VimError("g requires a second key", token);
+			}
+			if (next.value === "J") {
+				const visual = expandVisualOffsets(
+					this.buffer,
+					this.selectionAnchor ?? this.buffer.cursor,
+					this.inputMode === "visual-line",
+				);
+				const startLine = this.buffer.offsetToPosition(visual.start).line;
+				const endLine = this.buffer.offsetToPosition(Math.max(visual.start, visual.end - 1)).line;
+				await this.#applyAtomicChange(["g", "J"], () => {
+					const start = this.buffer.clampLine(startLine);
+					const end = this.buffer.clampLine(endLine);
+					if (start < end) {
+						const joined = this.buffer.lines.slice(start, end + 1).join("");
+						this.buffer.lines.splice(start, end - start + 1, joined);
+						this.buffer.setCursor({ line: start, col: Math.max(0, joined.length - 1) });
+					}
+				});
+				this.#clearSelection();
+				return index + 2;
+			}
+			if (next.value === "u" || next.value === "U" || next.value === "~") {
+				const visual = expandVisualOffsets(
+					this.buffer,
+					this.selectionAnchor ?? this.buffer.cursor,
+					this.inputMode === "visual-line",
+				);
+				await this.#applyAtomicChange(["g", next.value], () => {
+					const original = this.buffer.getText().slice(visual.start, visual.end);
+					const transformed =
+						next.value === "u"
+							? original.toLowerCase()
+							: next.value === "U"
+								? original.toUpperCase()
+								: toggleCase(original);
+					this.buffer.replaceOffsets(visual.start, visual.end, transformed, visual.start);
+				});
+				this.#clearSelection();
+				return index + 2;
+			}
+			throw new VimError(`Unsupported g command: g${next.display}`, next);
+		}
 
 		const { count, hasCount, nextIndex } = this.#readCount(tokens, index);
 		const opToken = tokens[nextIndex];
@@ -733,8 +836,14 @@ export class VimEngine {
 
 		switch (opToken.value) {
 			case "d":
+			case "x":
+			case "X":
+			case "D":
 			case "y":
 			case "c":
+			case "s":
+			case "S":
+			case "C":
 			case ">":
 			case "<":
 			case "~": {
@@ -745,8 +854,14 @@ export class VimEngine {
 				);
 				const consumeExtraIndent =
 					(opToken.value === ">" || opToken.value === "<") && tokens[nextIndex + 1]?.value === opToken.value;
+				const operatorValue =
+					opToken.value === "x" || opToken.value === "X" || opToken.value === "D"
+						? "d"
+						: opToken.value === "s" || opToken.value === "S" || opToken.value === "C"
+							? "c"
+							: opToken.value;
 				const visualTokens = consumeExtraIndent ? [opToken.value, opToken.value] : [opToken.value];
-				await this.#applyVisualOperator(opToken.value, visual, count, visualTokens);
+				await this.#applyVisualOperator(operatorValue, visual, count, visualTokens);
 				return nextIndex + visualTokens.length;
 			}
 			case "r": {
@@ -835,17 +950,7 @@ export class VimEngine {
 			case "~": {
 				await this.#applyAtomicChange(tokens, () => {
 					const original = this.buffer.getText().slice(visual.start, visual.end);
-					let replaced = "";
-					for (const char of original) {
-						if (char >= "a" && char <= "z") {
-							replaced += char.toUpperCase();
-						} else if (char >= "A" && char <= "Z") {
-							replaced += char.toLowerCase();
-						} else {
-							replaced += char;
-						}
-					}
-					this.buffer.replaceOffsets(visual.start, visual.end, replaced, visual.start);
+					this.buffer.replaceOffsets(visual.start, visual.end, toggleCase(original), visual.start);
 				});
 				this.#clearSelection();
 				return;
@@ -885,6 +990,7 @@ export class VimEngine {
 			case "0":
 			case "$":
 			case "^":
+			case "|":
 			case ";":
 			case ",":
 			case "G":
@@ -1041,17 +1147,7 @@ export class VimEngine {
 					const start = this.buffer.currentOffset();
 					const end = Math.min(this.buffer.getText().length, start + count);
 					const text = this.buffer.getText().slice(start, end);
-					let toggled = "";
-					for (const char of text) {
-						if (char >= "a" && char <= "z") {
-							toggled += char.toUpperCase();
-						} else if (char >= "A" && char <= "Z") {
-							toggled += char.toLowerCase();
-						} else {
-							toggled += char;
-						}
-					}
-					this.buffer.replaceOffsets(start, end, toggled, end);
+					this.buffer.replaceOffsets(start, end, toggleCase(text), end);
 				});
 				return nextIndex + 1;
 			case "J":
@@ -1102,25 +1198,53 @@ export class VimEngine {
 					throw new VimError("z requires a second key", token);
 				}
 				if (zTarget.value === "z") {
-					this.viewportStart = Math.max(1, this.buffer.cursor.line + 1 - 20);
-				} else if (zTarget.value === "t") {
+					this.centerViewportOnCursor();
+				} else if (zTarget.value === "t" || zTarget.value === "CR") {
 					this.viewportStart = this.buffer.cursor.line + 1;
-				} else if (zTarget.value === "b") {
-					this.viewportStart = Math.max(1, this.buffer.cursor.line + 1 - 39);
+					this.buffer.setCursor({
+						line: this.buffer.cursor.line,
+						col: this.buffer.firstNonBlank(this.buffer.cursor.line),
+					});
+				} else if (zTarget.value === "b" || zTarget.value === "-") {
+					this.viewportStart = Math.max(1, this.buffer.cursor.line + 1 - (DEFAULT_VIEWPORT_HEIGHT - 1));
+					this.buffer.setCursor({
+						line: this.buffer.cursor.line,
+						col: this.buffer.firstNonBlank(this.buffer.cursor.line),
+					});
+				} else if (zTarget.value === ".") {
+					this.centerViewportOnCursor();
+					this.buffer.setCursor({
+						line: this.buffer.cursor.line,
+						col: this.buffer.firstNonBlank(this.buffer.cursor.line),
+					});
+				} else if (NOOP_Z_COMMANDS.has(zTarget.value)) {
+					this.statusMessage = `Ignored z${zTarget.display} (folds unsupported)`;
 				} else {
 					throw new VimError(`Unsupported z command: z${zTarget.display}`, zTarget);
 				}
 				return nextIndex + 2;
 			}
+			case "C-f":
+				this.buffer.setCursor({
+					line: this.buffer.cursor.line + Math.max(1, (DEFAULT_VIEWPORT_HEIGHT - 2) * count),
+					col: this.buffer.cursor.col,
+				});
+				return nextIndex + 1;
+			case "C-b":
+				this.buffer.setCursor({
+					line: this.buffer.cursor.line - Math.max(1, (DEFAULT_VIEWPORT_HEIGHT - 2) * count),
+					col: this.buffer.cursor.col,
+				});
+				return nextIndex + 1;
 			case "C-d":
 				this.buffer.setCursor({
-					line: this.buffer.cursor.line + Math.max(1, Math.floor(40 / 2) * count),
+					line: this.buffer.cursor.line + Math.max(1, Math.floor(DEFAULT_VIEWPORT_HEIGHT / 2) * count),
 					col: this.buffer.cursor.col,
 				});
 				return nextIndex + 1;
 			case "C-u":
 				this.buffer.setCursor({
-					line: this.buffer.cursor.line - Math.max(1, Math.floor(40 / 2) * count),
+					line: this.buffer.cursor.line - Math.max(1, Math.floor(DEFAULT_VIEWPORT_HEIGHT / 2) * count),
 					col: this.buffer.cursor.col,
 				});
 				return nextIndex + 1;
@@ -1153,6 +1277,24 @@ export class VimEngine {
 					}
 					return nextIndex + 2;
 				}
+				if (gNext.value === "*" || gNext.value === "#") {
+					const text = this.buffer.getText();
+					const offset = this.buffer.currentOffset();
+					const cat = wordCategory(text[offset] ?? "", false);
+					if (cat === "space") {
+						throw new VimError("No word under cursor", gNext);
+					}
+					let start = offset;
+					while (start > 0 && wordCategory(text[start - 1] ?? "", false) === cat) start -= 1;
+					let end = offset;
+					while (end < text.length && wordCategory(text[end] ?? "", false) === cat) end += 1;
+					const word = text.slice(start, end);
+					const direction = gNext.value === "*" ? 1 : -1;
+					for (let step = 0; step < count; step += 1) {
+						await this.#runSearch(escapeRegex(word), direction, true);
+					}
+					return nextIndex + 2;
+				}
 				if (gNext.value === "U" || gNext.value === "u") {
 					const caseOp = gNext.value;
 					const {
@@ -1179,12 +1321,49 @@ export class VimEngine {
 					const effectiveCount = hasMotionCount ? count * motionCount : count;
 					const motion = this.#resolveMotion(tokens, motionStart, effectiveCount, hasCount || hasMotionCount);
 					const range = this.#resolveMotionRange(motion);
-					await this.#applyAtomicChange(["g", caseOp], () => {
-						const text = this.buffer.getText();
-						const slice = text.slice(range.start, range.end);
-						const transformed = caseOp === "U" ? slice.toUpperCase() : slice.toLowerCase();
-						this.buffer.replaceOffsets(range.start, range.end, transformed, range.start);
-					});
+					await this.#applyAtomicChange(
+						tokens.slice(nextIndex, motion.nextIndex).map(tokenEntry => tokenEntry.value),
+						() => {
+							const text = this.buffer.getText();
+							const slice = text.slice(range.start, range.end);
+							const transformed = caseOp === "U" ? slice.toUpperCase() : slice.toLowerCase();
+							this.buffer.replaceOffsets(range.start, range.end, transformed, range.start);
+						},
+					);
+					return motion.nextIndex;
+				}
+				if (gNext.value === "~") {
+					const {
+						count: motionCount,
+						hasCount: hasMotionCount,
+						nextIndex: motionStart,
+					} = this.#readCount(tokens, nextIndex + 2);
+					const motionToken = tokens[motionStart];
+					if (!motionToken) {
+						throw new VimError("g~ requires a motion", gNext);
+					}
+					if (motionToken.value === "~") {
+						const effectiveCount = hasMotionCount ? count * motionCount : count;
+						await this.#applyAtomicChange(["g", "~", motionToken.value], () => {
+							const start = this.buffer.cursor.line;
+							const end = this.buffer.clampLine(start + effectiveCount - 1);
+							for (let line = start; line <= end; line += 1) {
+								this.buffer.replaceLine(line, toggleCase(this.buffer.getLine(line)));
+							}
+						});
+						return motionStart + 1;
+					}
+					const effectiveCount = hasMotionCount ? count * motionCount : count;
+					const motion = this.#resolveMotion(tokens, motionStart, effectiveCount, hasCount || hasMotionCount);
+					const range = this.#resolveMotionRange(motion);
+					await this.#applyAtomicChange(
+						tokens.slice(nextIndex, motion.nextIndex).map(tokenEntry => tokenEntry.value),
+						() => {
+							const text = this.buffer.getText();
+							const slice = text.slice(range.start, range.end);
+							this.buffer.replaceOffsets(range.start, range.end, toggleCase(slice), range.start);
+						},
+					);
 					return motion.nextIndex;
 				}
 				if (gNext.value === "J") {
@@ -1502,6 +1681,11 @@ export class VimEngine {
 					nextIndex: index + 1,
 					target: { line: this.buffer.cursor.line, col: this.buffer.firstNonBlank(this.buffer.cursor.line) },
 				};
+			case "|":
+				return {
+					nextIndex: index + 1,
+					target: { line: this.buffer.cursor.line, col: Math.max(0, count - 1) },
+				};
 			case "$":
 				return {
 					nextIndex: index + 1,
@@ -1536,14 +1720,31 @@ export class VimEngine {
 			}
 			case "g": {
 				const next = tokens[index + 1];
-				if (!next || next.value !== "g") {
+				if (!next) {
 					throw new VimError("Unsupported g motion", token);
 				}
-				return {
-					nextIndex: index + 2,
-					target: { line: hasCount ? Math.max(0, count - 1) : 0, col: 0 },
-					linewise: true,
-				};
+				if (next.value === "g") {
+					return {
+						nextIndex: index + 2,
+						target: { line: hasCount ? Math.max(0, count - 1) : 0, col: 0 },
+						linewise: true,
+					};
+				}
+				if (next.value === "e" || next.value === "E") {
+					let offset = this.buffer.currentOffset();
+					for (let step = 0; step < count; step += 1) {
+						offset = endOfPreviousWord(text, offset, next.value === "E");
+					}
+					return { nextIndex: index + 2, target: this.buffer.offsetToPosition(offset) };
+				}
+				if (next.value === "_") {
+					const targetLine = this.buffer.clampLine(this.buffer.cursor.line + (count - 1));
+					return {
+						nextIndex: index + 2,
+						target: { line: targetLine, col: lastNonBlankColumn(this.buffer.getLine(targetLine)) },
+					};
+				}
+				throw new VimError("Unsupported g motion", token);
 			}
 			case "G":
 				return {
@@ -2058,6 +2259,32 @@ export class VimEngine {
 					}
 				});
 				this.statusMessage = `Sorted ${endLine - startLine + 1} line${endLine === startLine ? "" : "s"}`;
+				return;
+			}
+			case "global": {
+				const regex = createSearchRegex(command.pattern);
+				await this.#applyAtomicChange([":global"], () => {
+					const linesToProcess: number[] = [];
+					for (let i = 0; i < this.buffer.lineCount(); i++) {
+						const matches = regex.test(this.buffer.getLine(i));
+						regex.lastIndex = 0;
+						if (command.invert ? !matches : matches) {
+							linesToProcess.push(i);
+						}
+					}
+					if (command.command === "d" || command.command === "delete") {
+						// Delete matching lines in reverse to preserve indices
+						for (let i = linesToProcess.length - 1; i >= 0; i--) {
+							this.buffer.lines.splice(linesToProcess[i]!, 1);
+						}
+						if (this.buffer.lines.length === 0) this.buffer.lines = [""];
+						this.buffer.clampCursor();
+						this.buffer.trailingNewline = true;
+					} else {
+						throw new VimError(`Unsupported :global sub-command: ${command.command}`);
+					}
+				});
+				this.statusMessage = `Global: processed ${command.pattern}`;
 				return;
 			}
 		}

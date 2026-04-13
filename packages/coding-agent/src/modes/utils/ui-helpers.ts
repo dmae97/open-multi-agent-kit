@@ -297,6 +297,7 @@ export class UiHelpers {
 						tool,
 						this.ctx.ui,
 						this.ctx.sessionManager.getCwd(),
+						content.id,
 					);
 					component.setExpanded(this.ctx.toolOutputExpanded);
 					this.ctx.chatContainer.addChild(component);

@@ -553,6 +553,54 @@ export function isChunkParams(params: unknown): params is ChunkParams {
 	return "write" in first || "replace" in first || "insert" in first;
 }
 
+/** Auto-correct indentation for content targeting a body region (`~`) when autoIndent is on.
+ *  Handles two patterns:
+ *  1. Tab-based over-indentation: models include the function's base \t indent.
+ *  2. Space-based indentation: models use literal spaces instead of \t.
+ *  Returns the corrected content and any warnings. */
+function autoCorrectBodyIndent(content: string, index: number): { content: string; warnings: string[] } {
+	const warnings: string[] = [];
+	if (!content || !resolveChunkAutoIndent()) return { content, warnings };
+	const lines = content.split("\n");
+	const nonEmpty = lines.filter(l => l.length > 0);
+	if (nonEmpty.length <= 1) return { content, warnings };
+
+	// 1. Tab-based over-indentation: strip common leading tabs.
+	const minTabs = Math.min(...nonEmpty.map(l => l.match(/^\t*/)?.[0].length ?? 0));
+	if (minTabs >= 1) {
+		const fixed = lines.map(l => (l.length === 0 ? l : l.slice(minTabs))).join("\n");
+		warnings.push(
+			`Edit ${index + 1}: auto-corrected body indentation \u2014 stripped ${minTabs} leading tab(s). When writing to \`~\`, write at column 0; the tool adds the function's base indent.`,
+		);
+		return { content: fixed, warnings };
+	}
+
+	// 2. Space-based indentation: strip common leading spaces and convert to tabs.
+	const spaceIndents = nonEmpty.map(l => l.match(/^ */)?.[0].length ?? 0);
+	const minSpaces = Math.min(...spaceIndents);
+	if (minSpaces >= 2) {
+		const indentDiffs = spaceIndents.map(s => s - minSpaces).filter(d => d > 0);
+		const indentUnit = indentDiffs.length > 0 ? Math.min(...indentDiffs) : 4;
+		const unit = indentUnit >= 2 && indentUnit <= 8 ? indentUnit : 4;
+		const fixed = lines
+			.map(line => {
+				if (line.length === 0) return line;
+				const stripped = line.slice(minSpaces);
+				const leadingSpaces = stripped.match(/^ */)?.[0].length ?? 0;
+				const tabs = Math.floor(leadingSpaces / unit);
+				const rem = leadingSpaces % unit;
+				return "\t".repeat(tabs) + " ".repeat(rem) + stripped.slice(leadingSpaces);
+			})
+			.join("\n");
+		warnings.push(
+			`Edit ${index + 1}: auto-converted space indentation to tabs \u2014 stripped ${minSpaces} common leading spaces and converted ${unit}-space indent to tabs. When auto-indent is on, use \\t for indentation.`,
+		);
+		return { content: fixed, warnings };
+	}
+
+	return { content, warnings };
+}
+
 function normalizeChunkEditOperations(edits: ChunkToolEdit[]): {
 	operations: ChunkEditOperation[];
 	warnings: string[];
@@ -579,31 +627,15 @@ function normalizeChunkEditOperations(edits: ChunkToolEdit[]): {
 			);
 		}
 		if (hasWrite) {
-			// Detect and fix over-indentation when targeting a body region (~).
-			// Models commonly add the function's base indent to body content.
-			let writeContent = edit.write;
-			if (selector?.endsWith("~") && writeContent.length > 0) {
-				const writeLines = writeContent.split("\n");
-				const nonEmptyLines = writeLines.filter(l => l.length > 0);
-				if (nonEmptyLines.length > 1) {
-					const firstLineIndent = nonEmptyLines[0].match(/^\t*/)?.[0].length ?? 0;
-					const restNonEmpty = nonEmptyLines.slice(1);
-					const restMinIndent = Math.min(...restNonEmpty.map(l => l.match(/^\t*/)?.[0].length ?? 0));
-					if (firstLineIndent === 0 && restMinIndent >= 1) {
-						// All non-first lines have extra indent — strip it
-						writeContent = writeLines
-							.map((line, i) => (i === 0 || line.length === 0 ? line : line.slice(restMinIndent)))
-							.join("\n");
-						warnings.push(
-							`Edit ${index + 1}: auto-corrected body indentation — stripped ${restMinIndent} leading tab(s) from non-first lines. When writing to \`~\`, write at column 0; the tool adds the function's base indent.`,
-						);
-					}
-				}
+			let writeContent = edit.write!;
+			if (selector?.endsWith("~")) {
+				const corrected = autoCorrectBodyIndent(writeContent, index);
+				writeContent = corrected.content;
+				warnings.push(...corrected.warnings);
 			}
 			return { op: "put", sel: selector, content: writeContent };
 		}
-		if (typeof edit.write === "string") {
-			// write: "" (empty string) — clear the chunk content
+		if (typeof edit.write === "string" && !hasInsert && !hasReplace) {
 			return { op: "put", sel: selector, content: edit.write };
 		}
 		if (hasReplace) {
@@ -611,7 +643,13 @@ function normalizeChunkEditOperations(edits: ChunkToolEdit[]): {
 		}
 		if (hasInsert) {
 			const op = edit.insert!.loc === "prepend" ? "before" : "after";
-			return { op, sel: selector, content: edit.insert!.body };
+			let insertContent = edit.insert!.body;
+			if (selector?.endsWith("~")) {
+				const corrected = autoCorrectBodyIndent(insertContent, index);
+				insertContent = corrected.content;
+				warnings.push(...corrected.warnings);
+			}
+			return { op, sel: selector, content: insertContent };
 		}
 		// write: null or no op specified → delete
 		return { op: "delete", sel: selector };

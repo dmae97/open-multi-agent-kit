@@ -62,9 +62,9 @@ The vim buffer persists across tool calls. Your cursor position, undo history, a
 ## Supported
 
 Keys: `<Esc>` `<CR>` `<BS>` `<Tab>` `<C-d>` `<C-u>` `<C-r>` `<C-w>` `<C-o>`
-Motions: `h j k l <Space> w b e 0 $ gg G { } f t` with counts
-Operators: `d c y p` with motions and text objects (`iw aw i" a" i( a(`)
-Insert: `i a o O I A cc C s S` — these all enter INSERT mode; do NOT add another `i` after them
-Visual: `v V`
-Other: `.` repeat, `u`/`<C-r>` undo/redo, `/pattern<CR>` search, `n N`
-Ex: `:w` `:q` `:wq` `:e` `:e!` `:N` `:s///` `:%s///` `:N,Md` `:%d`
+Motions: `h j k l <Space> w b e 0 $ ^ + - _ gg G { } f F t T % H M L ; ,` with counts
+Operators: `d c y p` with motions and text objects (`iw aw ip ap i" a" i( a( i{ a{`)
+Insert: `i a o O I A cc C s S R` — these all enter INSERT mode; do NOT add another `i` after them
+Visual: `v V` with `d y c > < ~ r u U p P o J`
+Other: `.` repeat, `u`/`<C-r>` undo/redo, `/pattern<CR>` search, `n N * #`, `gv` `gJ` `gU` `gu` `ZZ` `ZQ`
+Ex: `:w` `:q` `:wq` `:e` `:e!` `:N` `:s///` `:%s///` `:N,Md` `:%d` `:N,Mt N` `:sort` `:g/pattern/d` `:v/pattern/d`

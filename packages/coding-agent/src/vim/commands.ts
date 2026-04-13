@@ -73,30 +73,53 @@ export function parseExCommand(input: string): VimExCommand {
 		};
 	}
 
-	if (trimmed === "w") {
+	if (trimmed === "w" || trimmed === "write") {
 		return { kind: "write", force: false };
 	}
-	if (trimmed === "w!") {
+	if (trimmed === "w!" || trimmed === "write!") {
 		return { kind: "write", force: true };
 	}
-	if (trimmed === "wq") {
+	if (trimmed === "update" || trimmed === "up") {
+		return { kind: "update", force: false };
+	}
+	if (trimmed === "update!" || trimmed === "up!") {
+		return { kind: "update", force: true };
+	}
+	if (trimmed === "wq" || trimmed === "x" || trimmed === "xit" || trimmed === "exit") {
 		return { kind: "write-quit", force: false };
 	}
-	if (trimmed === "wq!") {
+	if (trimmed === "wq!" || trimmed === "x!" || trimmed === "xit!" || trimmed === "exit!") {
 		return { kind: "write-quit", force: true };
 	}
-	if (trimmed === "q") {
+	if (trimmed === "q" || trimmed === "quit") {
 		return { kind: "quit", force: false };
 	}
-	if (trimmed === "q!") {
+	if (trimmed === "q!" || trimmed === "quit!") {
 		return { kind: "quit", force: true };
 	}
-	if (trimmed === "e") {
+	if (trimmed === "e" || trimmed === "edit") {
 		return { kind: "edit", force: false };
 	}
-	if (trimmed === "e!") {
+	if (trimmed === "e!" || trimmed === "edit!") {
 		return { kind: "edit", force: true };
 	}
+	if (trimmed.startsWith("e ") || trimmed.startsWith("edit ")) {
+		const path = trimmed.startsWith("edit ") ? trimmed.slice(5).trim() : trimmed.slice(2).trim();
+		return { kind: "edit", force: false, path };
+	}
+	if (trimmed.startsWith("e! ") || trimmed.startsWith("edit! ")) {
+		const path = trimmed.startsWith("edit! ") ? trimmed.slice(6).trim() : trimmed.slice(3).trim();
+		return { kind: "edit", force: true, path };
+	}
+
+	const globalMatch = trimmed.match(/^(g|v|g!|global|global!|vglobal)\s*([/|#])(.+?)\2(.*)$/);
+	if (globalMatch) {
+		const invert = globalMatch[1] === "v" || globalMatch[1] === "vglobal" || globalMatch[1]?.endsWith("!");
+		const pattern = globalMatch[3] ?? "";
+		const command = (globalMatch[4] ?? "d").trim() || "d";
+		return { kind: "global", pattern, command, invert: !!invert };
+	}
+
 	if (trimmed.startsWith("e ")) {
 		return { kind: "edit", force: false, path: trimmed.slice(2).trim() };
 	}
@@ -115,7 +138,23 @@ export function parseExCommand(input: string): VimExCommand {
 		};
 	}
 
-	if (rest.startsWith("s")) {
+	if (rest === "sort" || rest.startsWith("sort ") || rest.startsWith("sort!")) {
+		const flags = rest.slice(4).trim();
+		return { kind: "sort", range: range ?? undefined, flags };
+	}
+
+	if (rest.startsWith("substitute")) {
+		const segments = parseDelimitedSegments(rest.slice("substitute".length));
+		return {
+			kind: "substitute",
+			range,
+			pattern: segments.pattern,
+			replacement: segments.replacement,
+			flags: segments.flags,
+		};
+	}
+
+	if (/^s(?:\W|$)/.test(rest)) {
 		const segments = parseDelimitedSegments(rest.slice(1));
 		return {
 			kind: "substitute",
@@ -126,10 +165,25 @@ export function parseExCommand(input: string): VimExCommand {
 		};
 	}
 
-	if (rest === "d" || rest.startsWith("d ")) {
+	if (rest === "d" || rest === "delete" || rest.startsWith("d ") || rest.startsWith("delete ")) {
 		return {
 			kind: "delete",
 			range,
+		};
+	}
+
+	if (rest === "y" || rest === "yank" || rest.startsWith("y ") || rest.startsWith("yank ")) {
+		return {
+			kind: "yank",
+			range,
+		};
+	}
+
+	if (rest === "pu" || rest === "put" || rest === "pu!" || rest === "put!") {
+		return {
+			kind: "put",
+			range,
+			before: rest.endsWith("!"),
 		};
 	}
 
@@ -145,11 +199,6 @@ export function parseExCommand(input: string): VimExCommand {
 		const destination = parseInt(destStr, 10);
 		if (Number.isNaN(destination)) throw new VimInputError("Invalid destination for :move");
 		return { kind: "move", range, destination };
-	}
-
-	if (rest === "sort" || rest.startsWith("sort ") || rest.startsWith("sort!")) {
-		const flags = rest.slice(4).trim();
-		return { kind: "sort", range: range ?? undefined, flags };
 	}
 
 	throw new VimInputError(`Unsupported ex command: ${input}`);

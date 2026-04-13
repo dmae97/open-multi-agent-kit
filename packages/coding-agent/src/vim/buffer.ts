@@ -216,7 +216,11 @@ export class VimBuffer {
 		const normalizedStart = Math.min(Math.max(start, 0), text.length);
 		const normalizedEnd = Math.min(Math.max(end, normalizedStart), text.length);
 		const nextText = `${text.slice(0, normalizedStart)}${replacement}${text.slice(normalizedEnd)}`;
-		this.setText(nextText);
+		// getText() omits the trailing-newline marker, so any \n in the
+		// replacement is content (a line separator), not a file-trailing newline.
+		// Bypass setText() which would incorrectly strip it.
+		this.lines = splitText(nextText);
+		this.clampCursor();
 		this.setCursorFromOffset(cursorOffset);
 	}
 

@@ -11,7 +11,7 @@ import vimDescription from "../prompts/tools/vim.md" with { type: "text" };
 import { CachedOutputBlock } from "../tui/output-block";
 import { renderStatusLine } from "../tui/status-line";
 import { VimBuffer } from "../vim/buffer";
-import { VimEngine, type VimSaveResult } from "../vim/engine";
+import { VimEngine, type VimEngineCallbacks, type VimSaveResult } from "../vim/engine";
 import { parseKeySequences } from "../vim/parser";
 import {
 	buildDetails,
@@ -57,6 +57,21 @@ const vimSchema = Type.Object({
 });
 
 type VimParams = Static<typeof vimSchema>;
+
+export interface VimRenderArgs {
+	file?: string;
+	kbd?: string[];
+	insert?: string;
+	pause?: boolean;
+	__partialJson?: string;
+	__toolCallId?: string;
+	__cwd?: string;
+}
+
+interface VimCallPreviewState {
+	key: string;
+	details?: VimToolDetails;
+}
 
 function fingerprintEqual(left: VimFingerprint | null, right: VimFingerprint | null): boolean {
 	if (left === null || right === null) {
@@ -135,6 +150,156 @@ async function executeKeySequences(
 // Module-level cache of the last rendered VimToolDetails so that renderCall can
 // show the current buffer viewport while the LLM is still streaming tool arguments.
 let lastVimDetails: VimToolDetails | undefined;
+const previewEnginesByFile = new Map<string, VimEngine>();
+const previewStatesByToolCall = new Map<string, VimCallPreviewState>();
+
+function clearStoredPreviewEngine(file: string): void {
+	previewEnginesByFile.delete(file);
+}
+
+function storePreviewEngine(engine: VimEngine): void {
+	const snapshot = engine.clone();
+	previewEnginesByFile.set(engine.buffer.displayPath, snapshot);
+	previewEnginesByFile.set(engine.buffer.filePath, snapshot);
+}
+
+function buildLoadedFileFromBuffer(buffer: VimBuffer): VimLoadedFile {
+	return {
+		absolutePath: buffer.filePath,
+		displayPath: buffer.displayPath,
+		lines: [...buffer.lines],
+		trailingNewline: buffer.trailingNewline,
+		fingerprint: buffer.baseFingerprint ? { ...buffer.baseFingerprint } : null,
+	};
+}
+
+function createPreviewCallbacks(): VimEngineCallbacks {
+	return {
+		beforeMutate: async () => {},
+		loadBuffer: async inputPath => ({
+			absolutePath: inputPath,
+			displayPath: inputPath,
+			lines: [""],
+			trailingNewline: false,
+			fingerprint: null,
+		}),
+		saveBuffer: async buffer => ({
+			loaded: buildLoadedFileFromBuffer(buffer),
+		}),
+	};
+}
+
+async function loadPreviewBaseEngine(args: VimRenderArgs): Promise<VimEngine | undefined> {
+	if (!args.file || !args.__cwd) {
+		return undefined;
+	}
+
+	try {
+		const { absolutePath, displayPath } = normalizeTargetPath(args.file, args.__cwd);
+		const loaded = await readTextFile(absolutePath);
+		const engine = new VimEngine(
+			new VimBuffer({
+				absolutePath,
+				displayPath,
+				lines: loaded.lines,
+				trailingNewline: loaded.trailingNewline,
+				fingerprint: loaded.fingerprint,
+			}),
+			createPreviewCallbacks(),
+		);
+		storePreviewEngine(engine);
+		return engine;
+	} catch {
+		return undefined;
+	}
+}
+
+function buildToolDetailsFromEngine(
+	engine: VimEngine,
+	viewportLines: number,
+	preferredStart?: number,
+	closed = false,
+	errorLocation?: VimToolDetails["errorLocation"],
+	statusMessage?: string,
+): VimToolDetails {
+	const cursorLine = engine.buffer.cursor.line + 1;
+	const cursorCol = engine.buffer.cursor.col + 1;
+	const viewport = computeViewport(cursorLine, engine.buffer.lineCount(), viewportLines, preferredStart);
+	const details = buildDetails({
+		file: engine.buffer.displayPath,
+		mode: engine.getPublicMode(),
+		cursor: { line: cursorLine, col: cursorCol },
+		totalLines: engine.buffer.lineCount(),
+		modified: engine.buffer.modified,
+		lines: engine.buffer.lines,
+		viewport,
+		selection: engine.getSelection(),
+		lastCommand: engine.lastCommand,
+		statusMessage: statusMessage ?? engine.statusMessage,
+		pendingInput: engine.getPendingInput(),
+		errorLocation,
+		closed,
+	});
+	details.diagnostics = engine.diagnostics;
+	return details;
+}
+
+function buildPreviewKey(args: VimRenderArgs): string {
+	return JSON.stringify({
+		file: args.file,
+		kbd: args.kbd ?? [],
+		insert: getInsertForDisplay(args) ?? "",
+		pause: args.pause === true,
+	});
+}
+
+function splitInsertIntoChunks(text: string): string[] {
+	const maxChunkChars = 32;
+	if (text.length <= maxChunkChars) {
+		return text.length === 0 ? [] : [text];
+	}
+
+	const chunks: string[] = [];
+	let start = 0;
+	while (start < text.length) {
+		let end = Math.min(start + maxChunkChars, text.length);
+		if (end < text.length) {
+			const lastNewline = text.lastIndexOf("\n", end - 1);
+			if (lastNewline >= start) {
+				end = lastNewline + 1;
+			} else {
+				const lastSpace = Math.max(text.lastIndexOf(" ", end - 1), text.lastIndexOf("\t", end - 1));
+				if (lastSpace >= start + Math.floor(maxChunkChars / 2)) {
+					end = lastSpace + 1;
+				}
+			}
+		}
+		if (end <= start) {
+			end = Math.min(start + maxChunkChars, text.length);
+		}
+		chunks.push(text.slice(start, end));
+		start = end;
+	}
+	return chunks;
+}
+
+async function applyInsertWithStreaming(
+	engine: VimEngine,
+	text: string,
+	exitInsertMode: boolean,
+	onStep?: () => Promise<void>,
+): Promise<void> {
+	const chunks = splitInsertIntoChunks(text);
+	if (chunks.length === 0) {
+		await engine.applyLiteralInsert("", exitInsertMode);
+		return;
+	}
+
+	for (let index = 0; index < chunks.length; index += 1) {
+		await engine.applyLiteralInsert(chunks[index]!, exitInsertMode && index === chunks.length - 1);
+		await onStep?.();
+	}
+}
 
 async function statFingerprint(absolutePath: string): Promise<VimFingerprint | null> {
 	try {
@@ -290,31 +455,26 @@ export class VimTool implements AgentTool<typeof vimSchema, VimToolDetails> {
 		statusMessage?: string,
 		modelDiff?: string,
 	): AgentToolResult<VimToolDetails> {
-		const cursorLine = engine.buffer.cursor.line + 1;
-		const cursorCol = engine.buffer.cursor.col + 1;
-		const viewport = computeViewport(cursorLine, engine.buffer.lineCount(), viewportLines, preferredStart);
-		const details = buildDetails({
-			file: engine.buffer.displayPath,
-			mode: engine.getPublicMode(),
-			cursor: { line: cursorLine, col: cursorCol },
-			totalLines: engine.buffer.lineCount(),
-			modified: engine.buffer.modified,
-			lines: engine.buffer.lines,
-			viewport,
-			selection: engine.getSelection(),
-			lastCommand: engine.lastCommand,
-			statusMessage: statusMessage ?? engine.statusMessage,
-			pendingInput: engine.getPendingInput(),
-			errorLocation,
+		const details = buildToolDetailsFromEngine(
+			engine,
+			viewportLines,
+			preferredStart,
 			closed,
-		});
-		details.diagnostics = engine.diagnostics;
+			errorLocation,
+			statusMessage,
+		);
 		const resultText = modelDiff ? `${renderVimDetails(details)}\n\nDiff:\n${modelDiff}` : renderVimDetails(details);
 		const builder = toolResult<VimToolDetails>(details).text(resultText);
 		if (engine.diagnostics) {
 			builder.diagnostics(engine.diagnostics.summary, engine.diagnostics.messages ?? []);
 		}
 		lastVimDetails = details;
+		if (closed) {
+			clearStoredPreviewEngine(engine.buffer.displayPath);
+			clearStoredPreviewEngine(engine.buffer.filePath);
+		} else {
+			storePreviewEngine(engine);
+		}
 		return builder.done();
 	}
 
@@ -408,9 +568,9 @@ export class VimTool implements AgentTool<typeof vimSchema, VimToolDetails> {
 				let lastUpdateTime = 0;
 
 				const emitUpdate = onUpdate
-					? async () => {
+					? async (force = false) => {
 							const now = Date.now();
-							if (now - lastUpdateTime < FRAME_INTERVAL_MS) {
+							if (!force && now - lastUpdateTime < FRAME_INTERVAL_MS) {
 								return; // throttle: skip if too soon
 							}
 							onUpdate(this.#renderFromEngine(engine, VIM_DEFAULT_VIEWPORT_LINES, engine.viewportStart));
@@ -419,13 +579,17 @@ export class VimTool implements AgentTool<typeof vimSchema, VimToolDetails> {
 						}
 					: undefined;
 
-				await executeKeySequences(engine, tokenGroups, commandText, emitUpdate);
+				await executeKeySequences(engine, tokenGroups, commandText, emitUpdate ? () => emitUpdate() : undefined);
 
 				if (!engine.closed && params.insert !== undefined) {
 					// Skip empty insert when not in INSERT mode (e.g., kbd included <Esc>)
 					if (params.insert.length > 0 || engine.inputMode === "insert") {
-						await engine.applyLiteralInsert(params.insert, params.pause !== true);
-						await emitUpdate?.();
+						await applyInsertWithStreaming(
+							engine,
+							params.insert,
+							params.pause !== true,
+							emitUpdate ? () => emitUpdate(true) : undefined,
+						);
 					}
 				}
 
@@ -534,14 +698,7 @@ function unescapePartialJsonString(value: string): string {
 // partial-json often doesn't surface string values until the closing quote is seen.
 function extractPartialInsert(partialJson: string | undefined): string | undefined {
 	if (!partialJson) return undefined;
-	const insertStart = partialJson.search(/"insert"\s*:\s*"/u);
-	if (insertStart === -1) return undefined;
-	const valueStart = partialJson.indexOf('"', insertStart + 7) + 1; // skip past "insert":"
-	if (valueStart === 0) return undefined;
-	// Find the value - it may be incomplete (no closing quote)
-	const rest = partialJson.slice(valueStart);
-	// Match everything up to an unescaped quote or end of string
-	const match = rest.match(/^((?:\\.|[^"\\])*)(?:"|$)/u);
+	const match = partialJson.match(/"insert"\s*:\s*"((?:\\.|[^"\\])*)(?:"|$)/u);
 	if (!match) return undefined;
 	return unescapePartialJsonString(match[1]!);
 }
@@ -556,12 +713,68 @@ function getInsertForDisplay(args: VimRenderArgs): string | undefined {
 	return args.insert;
 }
 
-interface VimRenderArgs {
-	file?: string;
-	kbd?: string[];
-	insert?: string;
-	pause?: boolean;
-	__partialJson?: string;
+async function buildPreviewDetails(args: VimRenderArgs): Promise<VimToolDetails | undefined> {
+	if (!args.file) {
+		return undefined;
+	}
+
+	const baseEngine = previewEnginesByFile.get(args.file) ?? (await loadPreviewBaseEngine(args));
+	if (!baseEngine) {
+		return undefined;
+	}
+
+	const preview = baseEngine.clone(createPreviewCallbacks());
+	const sequences = Array.isArray(args.kbd) ? args.kbd : [];
+	const insertText = getInsertForDisplay(args);
+
+	try {
+		if (sequences.length > 0) {
+			const commandText = sequences.join(" ");
+			const tokenGroups = splitTokensBySequence(sequences);
+			await executeKeySequences(preview, tokenGroups, commandText);
+		}
+
+		if (!preview.closed && insertText !== undefined && (insertText.length > 0 || preview.inputMode === "insert")) {
+			await preview.applyLiteralInsert(insertText, false);
+		}
+	} catch {
+		return undefined;
+	}
+
+	if (!preview.closed && insertText !== undefined) {
+		preview.statusMessage = preview.statusMessage ?? "Streaming insert preview";
+	}
+
+	return buildToolDetailsFromEngine(preview, VIM_DEFAULT_VIEWPORT_LINES, preview.viewportStart, preview.closed);
+}
+
+export async function primeVimCallPreview(toolCallId: string | undefined, args: VimRenderArgs): Promise<void> {
+	if (!toolCallId) {
+		return;
+	}
+
+	const key = buildPreviewKey(args);
+	const existing = previewStatesByToolCall.get(toolCallId);
+	previewStatesByToolCall.set(toolCallId, { key, details: existing?.details });
+	const details = await buildPreviewDetails(args);
+	const current = previewStatesByToolCall.get(toolCallId);
+	if (!current || current.key !== key) {
+		return;
+	}
+	previewStatesByToolCall.set(toolCallId, { key, details });
+}
+
+export function clearVimCallPreview(toolCallId: string | undefined): void {
+	if (!toolCallId) {
+		return;
+	}
+	previewStatesByToolCall.delete(toolCallId);
+}
+
+export function resetVimRendererStateForTest(): void {
+	lastVimDetails = undefined;
+	previewEnginesByFile.clear();
+	previewStatesByToolCall.clear();
 }
 
 export const vimToolRenderer = {
@@ -585,7 +798,9 @@ export const vimToolRenderer = {
 
 		// When a vim buffer is already open, show its viewport during LLM streaming
 		// instead of just a plain text line. This gives visual continuity.
-		const details = lastVimDetails;
+		const previewDetails =
+			args.__toolCallId !== undefined ? previewStatesByToolCall.get(args.__toolCallId)?.details : undefined;
+		const details = previewDetails ?? (lastVimDetails?.file === args.file ? lastVimDetails : undefined);
 		if (details?.viewportLines && details.viewportLines.length > 0) {
 			const lang = getLanguageFromPath(details.file);
 			const langIcon = uiTheme.getLangIcon(lang);

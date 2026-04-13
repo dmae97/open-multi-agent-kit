@@ -3,12 +3,19 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { _resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import { ToolExecutionComponent } from "@oh-my-pi/pi-coding-agent/modes/components/tool-execution";
 import * as themeModule from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
 import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { VimTool, vimToolRenderer } from "@oh-my-pi/pi-coding-agent/tools/vim";
+import {
+	primeVimCallPreview,
+	resetVimRendererStateForTest,
+	VimTool,
+	vimToolRenderer,
+} from "@oh-my-pi/pi-coding-agent/tools/vim";
 import { VimBuffer } from "@oh-my-pi/pi-coding-agent/vim/buffer";
 import { VimEngine } from "@oh-my-pi/pi-coding-agent/vim/engine";
 import { parseKeySequences } from "@oh-my-pi/pi-coding-agent/vim/parser";
+import type { TUI } from "@oh-my-pi/pi-tui";
 
 function textResult(result: { content: Array<{ type: string; text?: string }> }): string {
 	return result.content
@@ -61,6 +68,7 @@ function createEngine(text: string): VimEngine {
 
 afterEach(() => {
 	vi.restoreAllMocks();
+	resetVimRendererStateForTest();
 });
 
 describe("vim parser", () => {
@@ -204,8 +212,8 @@ describe("vim tool", () => {
 		await tool.execute("open", { file: "center.ts" });
 		const edited = await tool.execute("edit", { file: "center.ts", kbd: ["386Go"], insert: "inserted", pause: true });
 		expect(edited.details?.cursor.line).toBe(387);
-		expect(edited.details?.viewport.start).toBe(367);
-		expect(edited.details?.viewport.end).toBe(406);
+		expect(edited.details?.viewport.start).toBe(382);
+		expect(edited.details?.viewport.end).toBe(391);
 		expect(textResult(edited)).toContain("Diff:");
 		expect(textResult(edited)).toContain("+inserted");
 	});
@@ -219,7 +227,7 @@ describe("vim tool", () => {
 		const edited = await tool.execute("edit", { file: "long-edit.ts", kbd: ["1014G", "o"], insert: "inserted" });
 		const text = textResult(edited);
 		expect(edited.details?.cursor.line).toBe(1015);
-		expect(edited.details?.viewport.start).toBe(995);
+		expect(edited.details?.viewport.start).toBe(1010);
 		expect(text).toContain("Diff:");
 		expect(text).toContain("+inserted");
 	});
@@ -316,7 +324,7 @@ describe("vim tool", () => {
 		const opened = await tool.execute("open", { file: "tabs.ts" });
 		const text = textResult(opened);
 		expect(text).toContain("Focus:");
-		expect(text).toContain(" → return value;");
+		expect(text).toContain("→return value;");
 		expect(text).toContain("^");
 	});
 
@@ -356,6 +364,67 @@ describe("vim tool", () => {
 		expect(textResult(result)).toContain("bar bar");
 	});
 
+	it("streams large insert payloads through onUpdate in chunks", async () => {
+		const filePath = path.join(tmpDir, "stream-insert.ts");
+		await Bun.write(filePath, "header\nfooter\n");
+		const tool = new VimTool(createSession(tmpDir));
+		const visibleMaxItems: number[] = [];
+
+		await tool.execute("open", { file: "stream-insert.ts" });
+		await tool.execute(
+			"insert",
+			{
+				file: "stream-insert.ts",
+				kbd: ["2Go"],
+				insert: Array.from({ length: 60 }, (_, index) => `item ${index + 1}`).join("\n"),
+				pause: true,
+			},
+			undefined,
+			update => {
+				const viewportText = update.details?.viewportLines?.map(line => line.text).join("\n") ?? "";
+				const matches = Array.from(viewportText.matchAll(/item (\d+)/g), match => Number(match[1]));
+				if (matches.length > 0) {
+					visibleMaxItems.push(Math.max(...matches));
+				}
+			},
+		);
+
+		expect(visibleMaxItems.length).toBeGreaterThan(1);
+		expect(visibleMaxItems.some(value => value < 60)).toBe(true);
+		expect(Math.max(...visibleMaxItems)).toBe(60);
+	});
+
+	it("streams single-line insert payloads through onUpdate in chunks", async () => {
+		const filePath = path.join(tmpDir, "stream-single-line.ts");
+		await Bun.write(filePath, "alpha\nomega\n");
+		const tool = new VimTool(createSession(tmpDir));
+		const visibleLengths: number[] = [];
+		const insertedText =
+			"// Insert a new line after line 7 with a long comment that should render incrementally in the viewport.";
+
+		await tool.execute("open", { file: "stream-single-line.ts" });
+		await tool.execute(
+			"insert-single-line",
+			{
+				file: "stream-single-line.ts",
+				kbd: ["2Go"],
+				insert: insertedText,
+				pause: true,
+			},
+			undefined,
+			update => {
+				const insertedLine = update.details?.viewportLines?.find(line => line.line === 3)?.text;
+				if (typeof insertedLine === "string" && insertedLine.length > 0) {
+					visibleLengths.push(insertedLine.length);
+				}
+			},
+		);
+
+		expect(visibleLengths.length).toBeGreaterThan(1);
+		expect(visibleLengths.some(length => length < insertedText.length)).toBe(true);
+		expect(Math.max(...visibleLengths)).toBe(insertedText.length);
+	});
+
 	it("allows navigation in plan mode but blocks mutations", async () => {
 		const filePath = path.join(tmpDir, "plan.ts");
 		await Bun.write(filePath, "one\ntwo\nthree\n");
@@ -379,6 +448,166 @@ describe("vim tool", () => {
 });
 
 describe("vim renderer", () => {
+	it("previews streamed cursor jumps using the live vim buffer snapshot", async () => {
+		const previewDir = await fs.mkdtemp(path.join(os.tmpdir(), "vim-render-preview-"));
+		const filePath = path.join(previewDir, "preview.ts");
+		await Bun.write(filePath, Array.from({ length: 900 }, (_, index) => `line ${index + 1};`).join("\n"));
+		const tool = new VimTool(createSession(previewDir));
+		const theme = await themeModule.getThemeByName("dark");
+		expect(theme).toBeDefined();
+		const uiTheme = theme!;
+
+		await tool.execute("open", { file: "preview.ts" });
+		await primeVimCallPreview("preview-call", { file: "preview.ts", kbd: ["643G"], __toolCallId: "preview-call" });
+
+		const component = vimToolRenderer.renderCall(
+			{ file: "preview.ts", kbd: ["643G"], __toolCallId: "preview-call" },
+			{ expanded: false, isPartial: true, spinnerFrame: 0 },
+			uiTheme,
+		);
+
+		const rendered = component.render(160).join("\n");
+		expect(rendered).toContain("643G");
+		expect(rendered).toContain("line 643;");
+	});
+
+	it("previews partial insert payloads before the tool call JSON closes", async () => {
+		const previewDir = await fs.mkdtemp(path.join(os.tmpdir(), "vim-render-insert-preview-"));
+		const filePath = path.join(previewDir, "preview.txt");
+		await Bun.write(filePath, "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\n");
+		const tool = new VimTool(createSession(previewDir));
+		const theme = await themeModule.getThemeByName("dark");
+		expect(theme).toBeDefined();
+		const uiTheme = theme!;
+
+		await tool.execute("open", { file: "preview.txt" });
+		await primeVimCallPreview("insert-preview-call", {
+			file: "preview.txt",
+			kbd: ["7Go"],
+			__toolCallId: "insert-preview-call",
+			__partialJson:
+				'{"file":"preview.txt","kbd":["7Go"],"insert":"// long streamed comment still being typed by the model',
+		});
+
+		const component = vimToolRenderer.renderCall(
+			{
+				file: "preview.txt",
+				kbd: ["7Go"],
+				__toolCallId: "insert-preview-call",
+				__partialJson:
+					'{"file":"preview.txt","kbd":["7Go"],"insert":"// long streamed comment still being typed by the model',
+			},
+			{ expanded: false, isPartial: true, spinnerFrame: 0 },
+			uiTheme,
+		);
+
+		const rendered = component.render(160).join("\n");
+		expect(rendered).toContain("7Go");
+		expect(rendered).toContain("// long streamed comment still being typed by the model");
+	});
+
+	it("previews the target file on the first vim call without a prior open", async () => {
+		const previewDir = await fs.mkdtemp(path.join(os.tmpdir(), "vim-render-first-call-"));
+		const filePath = path.join(previewDir, "preview.txt");
+		await Bun.write(filePath, "Line 1\nLine 2\nLine 3\n");
+		const theme = await themeModule.getThemeByName("dark");
+		expect(theme).toBeDefined();
+		const uiTheme = theme!;
+
+		await primeVimCallPreview("first-call-preview", {
+			file: "preview.txt",
+			kbd: ["ggdGi"],
+			__toolCallId: "first-call-preview",
+			__cwd: previewDir,
+			__partialJson: '{"file":"preview.txt","kbd":["ggdGi"],"insert":"replacement',
+		});
+
+		const component = vimToolRenderer.renderCall(
+			{
+				file: "preview.txt",
+				kbd: ["ggdGi"],
+				__toolCallId: "first-call-preview",
+				__cwd: previewDir,
+				__partialJson: '{"file":"preview.txt","kbd":["ggdGi"],"insert":"replacement',
+			},
+			{ expanded: false, isPartial: true, spinnerFrame: 0 },
+			uiTheme,
+		);
+
+		const rendered = Bun.stripANSI(component.render(140).join("\n"));
+		expect(rendered).toContain("ggdGi");
+		expect(rendered).toContain(">1│replacement");
+	});
+
+	it("loads first-call vim previews through ToolExecutionComponent constructor state", async () => {
+		const previewDir = await fs.mkdtemp(path.join(os.tmpdir(), "vim-render-first-call-component-"));
+		const filePath = path.join(previewDir, "preview.txt");
+		await Bun.write(filePath, "Line 1\nLine 2\nLine 3\n");
+		const theme = await themeModule.getThemeByName("dark");
+		expect(theme).toBeDefined();
+		await themeModule.initTheme(false, undefined, undefined, "dark", "light");
+		const uiStub = { requestRender() {} } as unknown as TUI;
+
+		const component = new ToolExecutionComponent(
+			"vim",
+			{
+				file: "preview.txt",
+				kbd: ["ggdGi"],
+				__partialJson: '{"file":"preview.txt","kbd":["ggdGi"],"insert":"replacement',
+			},
+			{},
+			undefined,
+			uiStub,
+			previewDir,
+			"first-call-component",
+		);
+		await Bun.sleep(50);
+
+		const rendered = Bun.stripANSI(component.render(140).join("\n"));
+		expect(rendered).toContain("ggdGi");
+		expect(rendered).toContain(">1│replacement");
+	});
+
+	it("keeps vim preview state alive after args complete until a result arrives", async () => {
+		const previewDir = await fs.mkdtemp(path.join(os.tmpdir(), "vim-render-complete-preview-"));
+		const filePath = path.join(previewDir, "preview.ts");
+		await Bun.write(filePath, Array.from({ length: 900 }, (_, index) => `line ${index + 1};`).join("\n"));
+		const tool = new VimTool(createSession(previewDir));
+		const theme = await themeModule.getThemeByName("dark");
+		expect(theme).toBeDefined();
+		const uiTheme = theme!;
+		const uiStub = { requestRender() {} } as unknown as TUI;
+		await themeModule.initTheme(false, undefined, undefined, "dark", "light");
+
+		await tool.execute("open", { file: "preview.ts" });
+		await primeVimCallPreview("complete-preview-call", {
+			file: "preview.ts",
+			kbd: ["643G"],
+			__toolCallId: "complete-preview-call",
+		});
+
+		const component = new ToolExecutionComponent(
+			"vim",
+			{ file: "preview.ts", kbd: ["643G"] },
+			{},
+			undefined,
+			uiStub,
+			previewDir,
+			"complete-preview-call",
+		);
+		component.setArgsComplete("complete-preview-call");
+
+		const rendered = vimToolRenderer
+			.renderCall(
+				{ file: "preview.ts", kbd: ["643G"], __toolCallId: "complete-preview-call" },
+				{ expanded: false, isPartial: true, spinnerFrame: 0 },
+				uiTheme,
+			)
+			.render(160)
+			.join("\n");
+		expect(Bun.stripANSI(rendered)).toContain("line 643;");
+	});
+
 	it("caches repeated renders for the same viewport snapshot", async () => {
 		const theme = await themeModule.getThemeByName("dark");
 		expect(theme).toBeDefined();

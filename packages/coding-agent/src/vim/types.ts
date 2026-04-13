@@ -127,15 +127,19 @@ export interface VimLineRange {
 
 export type VimExCommand =
 	| { kind: "write"; force: boolean }
+	| { kind: "update"; force: boolean }
 	| { kind: "quit"; force: boolean }
 	| { kind: "write-quit"; force: boolean }
 	| { kind: "edit"; force: boolean; path?: string }
 	| { kind: "goto-line"; line: number }
 	| { kind: "substitute"; range?: VimLineRange | "all"; pattern: string; replacement: string; flags: string }
 	| { kind: "delete"; range?: VimLineRange | "all" }
+	| { kind: "yank"; range?: VimLineRange | "all" }
+	| { kind: "put"; range?: VimLineRange | "all"; before: boolean }
 	| { kind: "copy"; range?: VimLineRange | "all"; destination: number }
 	| { kind: "move"; range?: VimLineRange | "all"; destination: number }
-	| { kind: "sort"; range?: VimLineRange | "all"; flags: string };
+	| { kind: "sort"; range?: VimLineRange | "all"; flags: string }
+	| { kind: "global"; pattern: string; command: string; invert: boolean };
 
 export class VimInputError extends Error {
 	location?: { sequenceIndex: number; offset: number };

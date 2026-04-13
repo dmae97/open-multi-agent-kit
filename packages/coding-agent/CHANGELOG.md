@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Breaking Changes
 
 - Removed the `searchDb` field from session and extension tool contexts, so custom tools and extensions no longer receive a shared native search DB handle from `ToolSession`, `CustomToolContext`, `ExtensionContext`, and `CreateAgentSessionOptions`
@@ -9,6 +10,11 @@
 
 ### Added
 
+- Added support for additional Vim ex command aliases `:write`/`write!`, `:edit`/`edit!`, and `:update`/`:up` in command parsing
+- Added support for vim `:global` and `:vglobal`/`/` variants as `:g/pattern/d` and `:v/pattern/d` parsing and execution
+- Added support for extra Vim operations by treating `x`, `X`, `s`, `S`, `C`, and `D` as delete/change operator aliases
+- Added support for new Vim motions `gE`/`ge`, `g_`, `g*`, `g#`, and `|`
+- Added support for `C-f` and `C-b` page motions in vim mode
 - Added `C-u` and `C-o` in vim insert mode to clear to line start and execute a one-off normal-mode command before returning to insert
 - Added insert-mode visual operators `J`, `u`, `U`, `p`, and `P` to join lines, convert case, and replace the selected region with register content
 - Added normal-mode line motions `+`, `-`, and `_` to move to line offsets at the first non-blank character
@@ -25,6 +31,9 @@
 
 ### Changed
 
+- Changed Vim page-scroll commands `C-f`, `C-b`, `C-u`, and `C-d` to move in viewport-height based increments instead of fixed constants
+- Changed `z` command behavior so `zt`, `zb`, and `z.` now align cursor movement to first non-blank in the line
+- Changed `:g`/`:v` global command handling to process matching lines safely by working in reverse order and preserving file structure
 - Changed vim tab breadcrumb rendering from ` → ` to `→` in the editor view
 - Changed custom tool and task execution contexts to no longer expose a shared `searchDb` accessor, removing direct access to native grep/glob/fuzzyFind search backends from extension callbacks
 - Changed the `task` tool `schema` field to require JSON-encoded JTD schema text instead of a schema object, matching prompt guidance and task-subagent invocation
@@ -36,6 +45,8 @@
 
 ### Fixed
 
+- Fixed Vim `:global` command defaults to handle only supported subcommands and report unsupported ones explicitly
+- Fixed vim tool rendering so streamed calls preview the live target viewport and large insert payloads update incrementally instead of popping in all at once
 - Fixed HTML session export rendering so background-job wait calls render as `poll` instead of stale `await`, while still recognizing legacy exported sessions
 - Fixed OpenRouter model resolution to accept dated routed selectors such as `openrouter/z-ai/glm-4.7-20251222:nitro`, inheriting metadata from the base catalog model when the exact variant is not listed yet
 - Fixed pre-execution edit preview routing so replace/patch/hashline mode diffs are computed from the new structured edit entries

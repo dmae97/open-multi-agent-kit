@@ -244,6 +244,7 @@ export class EventController {
 						tool,
 						this.ctx.ui,
 						this.ctx.sessionManager.getCwd(),
+						content.id,
 					);
 					component.setExpanded(this.ctx.toolOutputExpanded);
 					this.ctx.chatContainer.addChild(component);
@@ -333,6 +334,7 @@ export class EventController {
 				tool,
 				this.ctx.ui,
 				this.ctx.sessionManager.getCwd(),
+				event.toolCallId,
 			);
 			component.setExpanded(this.ctx.toolOutputExpanded);
 			this.ctx.chatContainer.addChild(component);
