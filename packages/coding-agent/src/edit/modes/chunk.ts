@@ -393,6 +393,8 @@ function toNativeEditOperation(
 			return { op: ChunkEditOp.Prepend, sel: selector, crc, region: nativeRegion, content: operation.content };
 		case "append":
 			return { op: ChunkEditOp.Append, sel: selector, crc, region: nativeRegion, content: operation.content };
+		case "delete":
+			return { op: ChunkEditOp.Delete, sel: selector, crc, region: nativeRegion };
 		default: {
 			const exhaustive: never = operation;
 			return exhaustive;
@@ -554,15 +556,22 @@ export function isChunkParams(params: unknown): params is ChunkParams {
 function normalizeChunkEditOperations(edits: ChunkToolEdit[]): ChunkEditOperation[] {
 	return edits.map((edit): ChunkEditOperation => {
 		const { selector } = parseChunkEditPath(edit.path);
-		if (edit.replace) {
-			return { op: "replace", sel: selector, content: edit.replace.new, find: edit.replace.old };
+		// When multiple ops are present (model confusion), pick the most substantive one.
+		// insert with real body > replace with real old/new > write string > write null (delete)
+		const hasInsert = edit.insert && edit.insert.body.length > 0;
+		const hasReplace = edit.replace && (edit.replace.old.length > 0 || edit.replace.new.length > 0);
+		if (hasInsert) {
+			const op = edit.insert!.loc === "prepend" ? "before" : "after";
+			return { op, sel: selector, content: edit.insert!.body };
 		}
-		if (edit.insert) {
-			const op = edit.insert.loc === "prepend" ? "before" : "after";
-			return { op, sel: selector, content: edit.insert.body };
+		if (hasReplace) {
+			return { op: "replace", sel: selector, content: edit.replace!.new, find: edit.replace!.old };
 		}
-		// write: string = put content, write: null = delete
-		return { op: "put", sel: selector, content: edit.write ?? "" };
+		// write: null = explicit delete; write: undefined = no op specified (also delete)
+		if (edit.write == null) {
+			return { op: "delete", sel: selector };
+		}
+		return { op: "put", sel: selector, content: edit.write };
 	});
 }
 

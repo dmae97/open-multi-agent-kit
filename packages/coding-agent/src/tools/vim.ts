@@ -346,9 +346,13 @@ export class VimTool implements AgentTool<typeof vimSchema, VimToolDetails> {
 				engine.viewportStart = 1;
 				this.#engines.set(absolutePath, engine);
 				isNewBuffer = true;
+			} else if (!engine.buffer.modified) {
+				// Sync fingerprint from disk to handle LSP writethrough reformats
+				const fp = await statFingerprint(absolutePath);
+				if (fp) engine.buffer.baseFingerprint = fp;
 			}
 
-			const sequences = Array.isArray(params.kbd) ? params.kbd : undefined;
+			const sequences = Array.isArray(params.kbd) ? params.kbd : typeof params.kbd === "string" ? [params.kbd] : undefined;
 			if (!sequences) {
 				// No kbd — just show the file viewport
 				if (isNewBuffer) {

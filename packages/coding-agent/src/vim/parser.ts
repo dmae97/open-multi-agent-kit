@@ -31,6 +31,50 @@ export function parseKeySequences(sequences: string[]): VimKeyToken[] {
 		const sequence = sequences[sequenceIndex] ?? "";
 		for (let offset = 0; offset < sequence.length; offset += 1) {
 			const char = sequence[offset] ?? "";
+			// Handle literal escape byte (\x1b / \u001b)
+			if (char === "\x1b") {
+				tokens.push({
+					value: "Esc",
+					display: "<Esc>",
+					sequenceIndex,
+					offset,
+				});
+				continue;
+			}
+			// Handle literal carriage return
+			if (char === "\r") {
+				tokens.push({
+					value: "CR",
+					display: "<CR>",
+					sequenceIndex,
+					offset,
+				});
+				continue;
+			}
+			// Handle escaped sequences: \r → CR, \e → Esc, \n → newline, \t → Tab
+			if (char === "\\" && offset + 1 < sequence.length) {
+				const next = sequence[offset + 1];
+				if (next === "r") {
+					tokens.push({ value: "CR", display: "\\r", sequenceIndex, offset });
+					offset += 1;
+					continue;
+				}
+				if (next === "e") {
+					tokens.push({ value: "Esc", display: "\\e", sequenceIndex, offset });
+					offset += 1;
+					continue;
+				}
+				if (next === "n") {
+					tokens.push({ value: "\n", display: "\\n", sequenceIndex, offset });
+					offset += 1;
+					continue;
+				}
+				if (next === "t") {
+					tokens.push({ value: "Tab", display: "\\t", sequenceIndex, offset });
+					offset += 1;
+					continue;
+				}
+			}
 			if (char !== "<") {
 				tokens.push({
 					value: char,

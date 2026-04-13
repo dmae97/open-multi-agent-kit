@@ -620,7 +620,7 @@ export class VimEngine {
 			return index + 1;
 		}
 
-		const { count, nextIndex } = this.#readCount(tokens, index);
+		const { count, hasCount, nextIndex } = this.#readCount(tokens, index);
 		const opToken = tokens[nextIndex];
 		if (!opToken) {
 			return nextIndex;
@@ -669,7 +669,7 @@ export class VimEngine {
 				break;
 		}
 
-		const motion = this.#resolveMotion(tokens, nextIndex, count);
+		const motion = this.#resolveMotion(tokens, nextIndex, count, hasCount);
 		this.buffer.setCursor(motion.target);
 		return motion.nextIndex;
 	}
@@ -751,7 +751,7 @@ export class VimEngine {
 	}
 
 	async #executeNormal(tokens: readonly VimKeyToken[], index: number): Promise<number> {
-		const { count, nextIndex } = this.#readCount(tokens, index);
+		const { count, hasCount, nextIndex } = this.#readCount(tokens, index);
 		const token = tokens[nextIndex];
 		if (!token) {
 			return nextIndex;
@@ -791,7 +791,7 @@ export class VimEngine {
 			case "H":
 			case "M":
 			case "L": {
-				const motion = this.#resolveMotion(tokens, nextIndex, count);
+				const motion = this.#resolveMotion(tokens, nextIndex, count, hasCount);
 				this.buffer.setCursor(motion.target);
 				return motion.nextIndex;
 			}
@@ -941,7 +941,7 @@ export class VimEngine {
 			case "y":
 			case ">":
 			case "<":
-				return this.#executeOperator(tokens, nextIndex, count, token.value);
+				return this.#executeOperator(tokens, nextIndex, count, hasCount, token.value);
 			case "D":
 				await this.#applyAtomicChange(["D"], () => {
 					const start = this.buffer.currentOffset();
@@ -1040,40 +1040,42 @@ export class VimEngine {
 		tokens: readonly VimKeyToken[],
 		operatorIndex: number,
 		operatorCount: number,
+		hasOperatorCount: boolean,
 		operator: string,
 	): Promise<number> {
-		const { count: motionCount, nextIndex } = this.#readCount(tokens, operatorIndex + 1);
+		const { count: motionCount, hasCount: hasMotionCount, nextIndex } = this.#readCount(tokens, operatorIndex + 1);
 		const token = tokens[nextIndex];
 		if (!token) {
 			throw new VimError(`Operator ${operator} requires a motion`, tokens[operatorIndex]);
 		}
-		const effectiveCount = operatorCount * motionCount;
+		const hasAnyCount = hasOperatorCount || hasMotionCount;
+		const effectiveCount = hasMotionCount ? operatorCount * motionCount : operatorCount;
 
 		if (token.value === operator) {
 			if (operator === "d") {
 				await this.#applyAtomicChange([operator, operator], () => {
 					const start = this.buffer.cursor.line;
-					const removed = this.buffer.deleteLines(start, start + effectiveCount - 1);
+					const removed = this.buffer.deleteLines(start, start + Math.max(1, effectiveCount) - 1);
 					this.register = { kind: "line", text: removed.join("\n") };
 				});
 				return nextIndex + 1;
 			}
 			if (operator === "y") {
 				const start = this.buffer.cursor.line;
-				const end = this.buffer.clampLine(start + effectiveCount - 1);
+				const end = this.buffer.clampLine(start + Math.max(1, effectiveCount) - 1);
 				this.register = { kind: "line", text: this.buffer.lines.slice(start, end + 1).join("\n") };
 				this.statusMessage = `Yanked ${end - start + 1} line${end === start ? "" : "s"}`;
 				return nextIndex + 1;
 			}
 			if (operator === "c") {
-				await this.#changeWholeLines(effectiveCount, [operator, operator]);
+				await this.#changeWholeLines(Math.max(1, effectiveCount), [operator, operator]);
 				return nextIndex + 1;
 			}
 			if (operator === ">" || operator === "<") {
 				await this.#applyAtomicChange([operator, operator], () => {
 					this.buffer.indentLines(
 						this.buffer.cursor.line,
-						this.buffer.cursor.line + effectiveCount - 1,
+						this.buffer.cursor.line + Math.max(1, effectiveCount) - 1,
 						detectIndentUnit(this.buffer.lines),
 						operator === ">" ? 1 : -1,
 					);
@@ -1106,9 +1108,9 @@ export class VimEngine {
 				{ ...motionToken, value: eMotionValue },
 				...tokens.slice(nextIndex + 1),
 			];
-			motion = this.#resolveMotion(syntheticTokens, nextIndex, effectiveCount);
+			motion = this.#resolveMotion(syntheticTokens, nextIndex, effectiveCount, hasAnyCount);
 		} else {
-			motion = this.#resolveMotion(tokens, nextIndex, effectiveCount);
+			motion = this.#resolveMotion(tokens, nextIndex, effectiveCount, hasAnyCount);
 		}
 		await this.#applyOperatorToMotion(
 			operator,
@@ -1208,7 +1210,7 @@ export class VimEngine {
 		};
 	}
 
-	#resolveMotion(tokens: readonly VimKeyToken[], index: number, count: number): MotionResult {
+	#resolveMotion(tokens: readonly VimKeyToken[], index: number, count: number, hasCount = true): MotionResult {
 		const token = tokens[index];
 		if (!token) {
 			throw new VimError("Missing motion");
@@ -1282,12 +1284,12 @@ export class VimEngine {
 				if (!next || next.value !== "g") {
 					throw new VimError("Unsupported g motion", token);
 				}
-				return { nextIndex: index + 2, target: { line: Math.max(0, count - 1), col: 0 }, linewise: true };
+				return { nextIndex: index + 2, target: { line: hasCount ? Math.max(0, count - 1) : 0, col: 0 }, linewise: true };
 			}
 			case "G":
 				return {
 					nextIndex: index + 1,
-					target: { line: count > 0 ? count - 1 : this.buffer.lastLineIndex(), col: 0 },
+					target: { line: hasCount ? count - 1 : this.buffer.lastLineIndex(), col: 0 },
 					linewise: true,
 				};
 			case "f":
@@ -1706,6 +1708,6 @@ export class VimEngine {
 			digits += value;
 			cursor += 1;
 		}
-		return { count: digits.length > 0 ? Number.parseInt(digits, 10) : 1, nextIndex: cursor };
+		return { count: digits.length > 0 ? Number.parseInt(digits, 10) : 1, hasCount: digits.length > 0, nextIndex: cursor };
 	}
 }

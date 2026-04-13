@@ -154,7 +154,7 @@ Parallel execution framework with specialized agents and real-time streaming:
 - **Real-time artifact streaming**: Task outputs stream as they're created, not just at completion
 - **Full output access**: Read complete subagent output via `agent://<id>` resources when previews truncate
 - **Isolation backends**: `isolated: true` runs tasks in git worktrees, Unix fuse-overlay filesystems, or Windows ProjFS (`fuse-projfs`), with patch or branch merge strategies
-- **Async background jobs**: Background execution with configurable concurrency (up to 100 jobs) and `await` tool for blocking on results
+- **Async background jobs**: Background execution with configurable concurrency (up to 100 jobs) and `poll` tool for blocking on results
 - **Agent Control Center**: `/agents` dashboard for managing and creating custom agents
 - **AI-powered agent creation**: Generate custom agent definitions with the architect model
 - **Per-agent model overrides**: Assign specific models to individual agents via swarm extension
@@ -1251,7 +1251,7 @@ Use `--tools <list>` to restrict available built-in tools.
 | `read`           | Read files/directories (default text cap: 3000 lines)          |
 | `browser`        | Browser automation tool (model-facing name: `puppeteer`)       |
 | `task`           | Launch subagents for parallel execution                        |
-| `await`          | Block on async background jobs                                 |
+| `poll`           | Block on async background jobs                                 |
 | `todo_write`     | Phased task tracking with progress management                  |
 | `fetch`          | Fetch and extract URL content                                  |
 | `web_search`     | Multi-provider web search                                      |

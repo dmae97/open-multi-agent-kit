@@ -16,9 +16,9 @@ Rules:
 - Each non-final `kbd` entry must end in NORMAL mode — use `<Esc>` or merge into one string
 - To recover from mistakes: `{"file": "f.py", "kbd": ["u"]}` to undo, or `{"file": "f.py", "kbd": [":e!<CR>"]}` to reload from disk
 
-Supported: motions (`h/j/k/l`, `w/b/e`, `0/$`, `gg/G`, `{/}`, `f/t`), counts, `.` repeat, insert (`i/a/o/O/I/A/cc/C/s/S`), visual (`v/V`), operators (`d/c/y/p`), text objects (`iw/aw/i"/a"/i(/a(`), undo/redo (`u`/`<C-r>`), search (`/pattern<CR>`, `n/N`), ex (`:s`, `:%s`, `:e`, `:e!`, ranged `:d`).
+Special keys: `<Esc>`, `<CR>`, `<BS>`, `<Tab>`, `<C-d>`, `<C-u>`, `<C-r>`, `<C-w>`, `<C-o>`.
 
-Special keys: `<Esc>`, `<Escape>`, `<CR>`, `<Enter>`, `<BS>`, `<Tab>`, `<C-d>`, `<C-u>`, `<C-r>`, `<C-w>`, `<C-o>`.
+Supported: motions (`h/j/k/l`, `w/b/e`, `0/$`, `gg/G`, `{/}`, `f/t`), counts, `.` repeat, insert (`i/a/o/O/I/A/cc/C/s/S`), visual (`v/V`), operators (`d/c/y/p`), text objects (`iw/aw/i"/a"/i(/a(`), undo/redo (`u`/`<C-r>`), search (`/pattern<CR>`, `n/N`), ex (`:s`, `:%s`, `:e`, `:e!`, ranged `:d`).
 
 Examples:
 - `{"file": "src/app.ts"}` — view file

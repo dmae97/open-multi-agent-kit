@@ -83,6 +83,17 @@ describe("vim parser", () => {
 			"CR",
 		]);
 	});
+
+	it("handles literal escape byte and carriage return", () => {
+		const tokens = parseKeySequences(["itest\x1b", ":w\r"]);
+		expect(tokens.map(token => token.value)).toEqual(["i", "t", "e", "s", "t", "Esc", ":", "w", "CR"]);
+	});
+
+	it("handles backslash-r and backslash-e as CR and Esc", () => {
+		// Models often send \r as two chars (backslash + r) instead of a real CR byte
+		const tokens = parseKeySequences([":w\\r", "ciwnew\\e"]);
+		expect(tokens.map(token => token.value)).toEqual([":", "w", "CR", "c", "i", "w", "n", "e", "w", "Esc"]);
+	});
 });
 
 describe("vim engine", () => {

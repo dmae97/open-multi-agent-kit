@@ -25,6 +25,7 @@
 
 ### Fixed
 
+- Fixed HTML session export rendering so background-job wait calls render as `poll` instead of stale `await`, while still recognizing legacy exported sessions
 - Fixed OpenRouter model resolution to accept dated routed selectors such as `openrouter/z-ai/glm-4.7-20251222:nitro`, inheriting metadata from the base catalog model when the exact variant is not listed yet
 - Fixed pre-execution edit preview routing so replace/patch/hashline mode diffs are computed from the new structured edit entries
 - Adjusted chunk/hashline/prompt guidance and validation to align with the refactored per-entry schema

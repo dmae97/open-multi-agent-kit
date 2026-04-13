@@ -1218,10 +1218,11 @@
         return html;
       }
 
-      function renderAwait(name, args, result, ctx) {
+      function renderPoll(name, args, result, ctx) {
         const badges = [];
-        if (Array.isArray(args.jobIds)) badges.push(args.jobIds.length + ' job' + (args.jobIds.length === 1 ? '' : 's'));
-        let html = toolHead('await', '', badges);
+        const jobs = Array.isArray(args.jobs) ? args.jobs : Array.isArray(args.jobIds) ? args.jobIds : [];
+        if (jobs.length > 0) badges.push(jobs.length + ' job' + (jobs.length === 1 ? '' : 's'));
+        let html = toolHead('poll', '', badges);
         if (result) {
           const output = ctx.getResultText();
           if (output) html += formatExpandableOutput(output, 8);
@@ -1291,7 +1292,8 @@
         report_tool_issue: renderReportToolIssue,
         calc: renderCalc,
         calculator: renderCalc,
-        await: renderAwait,
+        await: renderPoll,
+        poll: renderPoll,
         cancel_job: renderCancelJob,
       };
 
