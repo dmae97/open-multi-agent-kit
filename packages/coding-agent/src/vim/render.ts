@@ -154,6 +154,9 @@ function formatPendingInput(pending: VimPendingInput | undefined): string | unde
 export function renderVimDetails(details: VimToolDetails): string {
 	const lines: string[] = [renderHeader(details)];
 
+	// Explicit cursor position indicator (models miss it in header)
+	lines.push(`[CURSOR] Line ${details.cursor.line}, Column ${details.cursor.col} (of ${details.totalLines} lines)`);
+
 	if (details.lastCommand) {
 		lines.push(`Command: ${truncateToWidth(details.lastCommand, 80)}`);
 	}

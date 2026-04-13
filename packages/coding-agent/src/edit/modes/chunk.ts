@@ -553,13 +553,31 @@ export function isChunkParams(params: unknown): params is ChunkParams {
 	return "write" in first || "replace" in first || "insert" in first;
 }
 
-function normalizeChunkEditOperations(edits: ChunkToolEdit[]): ChunkEditOperation[] {
-	return edits.map((edit): ChunkEditOperation => {
+function normalizeChunkEditOperations(edits: ChunkToolEdit[]): {
+	operations: ChunkEditOperation[];
+	warnings: string[];
+} {
+	const warnings: string[] = [];
+	const operations = edits.map((edit, index): ChunkEditOperation => {
 		const { selector } = parseChunkEditPath(edit.path);
 		// When multiple ops are present (model confusion), pick the most substantive one.
 		// insert with real body > replace with real old/new > write string > delete
-		const hasInsert = edit.insert && edit.insert.body.length > 0;
-		const hasReplace = edit.replace && (edit.replace.old.length > 0 || edit.replace.new.length > 0);
+		const hasInsert = edit.insert != null && typeof edit.insert.body === "string" && edit.insert.body.length > 0;
+		const hasReplace =
+			edit.replace != null &&
+			((typeof edit.replace.old === "string" && edit.replace.old.length > 0) ||
+				(typeof edit.replace.new === "string" && edit.replace.new.length > 0));
+		const hasWrite = typeof edit.write === "string";
+		const opCount = [hasInsert, hasReplace, hasWrite].filter(Boolean).length;
+		if (opCount > 1) {
+			const chosen = hasInsert ? "insert" : hasReplace ? "replace" : "write";
+			const present = [hasInsert && "insert", hasReplace && "replace", hasWrite && "write"]
+				.filter(Boolean)
+				.join(", ");
+			warnings.push(
+				`Edit ${index + 1}: multiple operation fields set (${present}). Each edit entry must have exactly ONE of write/replace/insert — not multiple. Used "${chosen}", ignored the rest.`,
+			);
+		}
 		if (hasInsert) {
 			const op = edit.insert!.loc === "prepend" ? "before" : "after";
 			return { op, sel: selector, content: edit.insert!.body };
@@ -567,12 +585,13 @@ function normalizeChunkEditOperations(edits: ChunkToolEdit[]): ChunkEditOperatio
 		if (hasReplace) {
 			return { op: "replace", sel: selector, content: edit.replace!.new, find: edit.replace!.old };
 		}
-		if (typeof edit.write === "string") {
+		if (hasWrite) {
 			return { op: "put", sel: selector, content: edit.write };
 		}
 		// write: null or no op specified → delete
 		return { op: "delete", sel: selector };
 	});
+	return { operations, warnings };
 }
 
 async function writeChunkResult(params: {
@@ -636,7 +655,7 @@ export async function executeChunkSingle(
 	if (parentDir && parentDir !== ".") {
 		await fs.mkdir(parentDir, { recursive: true });
 	}
-	const normalizedOperations = normalizeChunkEditOperations(edits);
+	const { operations: normalizedOperations, warnings: normWarnings } = normalizeChunkEditOperations(edits);
 
 	if (!sourceExists && normalizedOperations.some(op => op.sel)) {
 		throw new Error(
@@ -652,10 +671,12 @@ export async function executeChunkSingle(
 		operations: normalizedOperations,
 		anchorStyle: resolveAnchorStyle(session.settings),
 	});
+	chunkResult.warnings.push(...normWarnings);
 
 	if (!chunkResult.changed) {
+		const warningsBlock = chunkResult.warnings.length > 0 ? `\n\nWarnings:\n${chunkResult.warnings.join("\n")}` : "";
 		return {
-			content: [{ type: "text", text: "[No changes needed \u2014 content already matches.]" }],
+			content: [{ type: "text", text: `[No changes needed — content already matches.]${warningsBlock}` }],
 			details: {
 				diff: "",
 				op: sourceExists ? "update" : "create",

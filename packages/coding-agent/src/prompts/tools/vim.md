@@ -48,13 +48,15 @@ Each non-final `kbd` entry must end in NORMAL mode (add `<Esc>`).
 ```json
 {"file": "f.py", "kbd": [":3,5d<CR>"]}
 ```
-
 ## Undo mistakes
 - `{"file": "f.py", "kbd": ["u"]}` — undo last change
 - `{"file": "f.py", "kbd": ["3u"]}` — undo last 3 changes
 
-`:e!` reloads from disk, but since auto-save commits after each call, it will reload your last (possibly wrong) result. Use `u` to revert instead.
+`:e!` reloads from disk. **WARNING**: Since auto-save commits after each call, `:e!` reloads your *last saved state* (including any mistakes), not the original file. Use `u` to undo instead. If stuck, use `ggdGi` with the full desired file content.
 
+## Session persistence
+
+The vim buffer persists across tool calls. Your cursor position, undo history, and file state are maintained until you close the tool. Auto-save commits changes to disk after every call.
 ## Supported
 
 Keys: `<Esc>` `<CR>` `<BS>` `<Tab>` `<C-d>` `<C-u>` `<C-r>` `<C-w>` `<C-o>`

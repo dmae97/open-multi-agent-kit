@@ -1,6 +1,9 @@
 Edits files via syntax-aware chunks. Run `read(path="file.ts")` first.
 - `write` rewrites the entire targeted region — best for most edits.
 - `replace` does surgical find-and-replace within a chunk — use when making small changes to a large chunk, or batching multiple substitutions.
+- `insert` adds content before/after a chunk.
+
+Call format: `{"edits": [{"path": "file:chunk#ID~", "write": "new body"}, …]}`
 
 <rules>
 - **MUST** `read` first. Never invent chunk paths or IDs. Copy them from the latest `read` output or edit response.
@@ -12,6 +15,10 @@ Edits files via syntax-aware chunks. Run `read(path="file.ts")` first.
   content: "if (x) {\n\treturn true;\n}"
   ```
   The tool adds the correct base indent automatically. Never manually pad with the chunk's own indentation.
+  Multiple sibling body lines at the same level all start at column 0: `"print(a)\nprint(b)\nprint(c)\n"`. Only use `\t` when nesting deeper (e.g. `"if cond:\n\tinner\nouter\n"`).
+  **Common mistake** when replacing `~` of a function body: do NOT include the function's own indentation.
+  Wrong: `"if b == 0:\n\t\treturn None\n\treturn a / b\n"` — adds the function's base `\t` to every line.
+  Correct: `"if b == 0:\n\treturn None\nreturn a / b\n"` — `if` and `return a / b` at column 0, only `return None` gets `\t` for nesting.
 {{else}}
 - Match the file's literal tabs/spaces in `content`. Do not convert indentation to canonical `\t`.
 - Write content at indent-level 0 relative to the target region. For example, to replace `~` of a method, write:
@@ -46,7 +53,7 @@ In `read` output, lines marked `^` between the line number and `|` are **head** 
 </regions>
 
 <ops>
-Each edit entry has `path` (`file:selector`) plus exactly one operation field:
+Each edit entry has `path` (`file:selector`) plus **exactly one** operation field — `write`, `replace`, or `insert`. Never set more than one on the same entry.
 
 |fields|path (selector part)|effect|
 |---|---|---|
