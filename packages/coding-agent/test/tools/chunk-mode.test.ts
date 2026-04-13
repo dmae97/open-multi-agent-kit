@@ -188,6 +188,8 @@ describe("chunk mode tools", () => {
 		expect(text).toContain("3|");
 		expect(text).toContain("4|");
 		expect(text).not.toContain("⋯");
+		expect(text).not.toContain("to expand above");
+		expect(text).not.toContain("to expand below");
 	});
 
 	it("supports L selectors in the path fragment in chunk mode", async () => {
@@ -203,6 +205,8 @@ describe("chunk mode tools", () => {
 		expect(text).toContain(`[<${HANDLE_ERROR_CHUNK_PATH}#`);
 		expect(text).toContain(`[<${HANDLE_ERROR_CHUNK_PATH}.var_total#`);
 		expect(text).toContain("3|");
+		expect(text).not.toContain("to expand above");
+		expect(text).not.toContain("to expand below");
 	});
 
 	it("ignores a chunk selector checksum suffix on read", async () => {
@@ -272,6 +276,25 @@ describe("chunk mode tools", () => {
 		expect(text).toContain("err.message");
 	});
 
+	it("pads chunk-mode grep line numbers to the file gutter width", async () => {
+		const filePath = path.join(tmpDir, "padded.ts");
+		const source = [
+			'const top = "match";',
+			...Array.from({ length: 118 }, (_, index) => `const line${index} = ${index};`),
+			"",
+		].join("\n");
+		await Bun.write(filePath, source);
+		const tool = new GrepTool(createSession(tmpDir));
+
+		const result = await tool.execute("chunk-grep-padded", {
+			pattern: "match",
+			path: filePath,
+		});
+		const text = getText(result);
+
+		expect(text).toContain('>  1|const top = "match";');
+	});
+
 	it("replaces a chunk using a copied selector in path", async () => {
 		const filePath = path.join(tmpDir, "server.ts");
 		await Bun.write(filePath, buildLargeTypescriptFixture());
@@ -305,6 +328,49 @@ describe("chunk mode tools", () => {
 		expect(updatedSource).not.toContain("total +=");
 		expect(editText).toContain("server.ts·");
 		expect(editText).toContain("@@ -3,62 +3,1 @@");
+	});
+
+	it("renders edit responses as a changed subtree instead of a flat touched list", async () => {
+		const filePath = path.join(tmpDir, "server.ts");
+		const source = [
+			"class Server {",
+			"  handle(): void {",
+			'    console.log("old");',
+			"  }",
+			"",
+			"  other(): void {",
+			'    console.log("other");',
+			"  }",
+			"}",
+			"",
+		].join("\n");
+		await Bun.write(filePath, source);
+		const session = createSession(tmpDir);
+		const readTool = new ReadTool(session);
+		const editTool = new EditTool(session);
+
+		const branchRead = await readTool.execute("chunk-read-hierarchy", { path: filePath });
+		const branchText = getText(branchRead);
+		const selector = extractSelector(branchText, "class_Server.fn_handle");
+
+		const editResult = await editTool.execute("chunk-edit-hierarchy", {
+			path: filePath,
+			edits: [
+				{
+					sel: selector,
+					op: "replace",
+					content: '  handle(): void {\n    console.log("new");\n  }\n',
+				},
+			],
+		} as never);
+		const editText = getText(editResult);
+
+		expect(editText).toContain("[<class_Server#");
+		expect(editText).toContain("1| class Server {");
+		expect(editText).toContain("[<class_Server.fn_handle#");
+		expect(editText).toContain('3| \t\tconsole.log("new");');
+		expect(editText).toContain("@@ -3,1 +3,1 @@");
+		expect(editText).toContain("[<class_Server.fn_other#");
 	});
 
 	it("replaces a whole method chunk when PI_CHUNK_AUTOINDENT=0", async () => {
