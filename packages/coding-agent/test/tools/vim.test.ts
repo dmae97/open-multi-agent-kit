@@ -240,7 +240,9 @@ describe("vim tool", () => {
 		const tool = new VimTool(createSession(tmpDir));
 
 		await tool.execute("open", { file: "ambiguous.ts" });
-		await expect(tool.execute("bad", { file: "ambiguous.ts", kbd: ["o", "o"] })).rejects.toThrow(/left Vim in INSERT mode/i);
+		await expect(tool.execute("bad", { file: "ambiguous.ts", kbd: ["o", "o"] })).rejects.toThrow(
+			/left Vim in INSERT mode/i,
+		);
 	});
 
 	it("rejects additional kbd entries after entering insert mode", async () => {
@@ -249,7 +251,9 @@ describe("vim tool", () => {
 		const tool = new VimTool(createSession(tmpDir));
 
 		await tool.execute("open", { file: "insert-boundary.ts" });
-		await expect(tool.execute("edit", { file: "insert-boundary.ts", kbd: ["2G", "o", "o"] })).rejects.toThrow(/insert field|<Esc>/i);
+		await expect(tool.execute("edit", { file: "insert-boundary.ts", kbd: ["2G", "o", "o"] })).rejects.toThrow(
+			/insert field|<Esc>/i,
+		);
 		const saved = await Bun.file(filePath).text();
 		expect(saved).toBe("alpha\nbeta\n");
 	});
@@ -311,12 +315,17 @@ describe("vim tool", () => {
 		const pendingInputs: string[] = [];
 
 		await tool.execute("open", { file: "command.ts" });
-		const result = await tool.execute("command", { file: "command.ts", kbd: [":%s/foo/bar/g<CR>"] }, undefined, update => {
-			const pending = update.details?.pendingInput;
-			if (pending?.kind === "command") {
-				pendingInputs.push(pending.text);
-			}
-		});
+		const result = await tool.execute(
+			"command",
+			{ file: "command.ts", kbd: [":%s/foo/bar/g<CR>"] },
+			undefined,
+			update => {
+				const pending = update.details?.pendingInput;
+				if (pending?.kind === "command") {
+					pendingInputs.push(pending.text);
+				}
+			},
+		);
 
 		expect(pendingInputs).toContain("");
 		expect(pendingInputs).toContain("%");
@@ -340,7 +349,9 @@ describe("vim tool", () => {
 		const moved = await tool.execute("move", { file: "plan.ts", kbd: ["2G"] });
 		expect(textResult(moved)).toContain("L2:1");
 		await expect(tool.execute("edit", { file: "plan.ts", kbd: ["dd"] })).rejects.toThrow(/Plan mode/i);
-		await expect(tool.execute("insert", { file: "plan.ts", kbd: ["cc"], insert: "blocked" })).rejects.toThrow(/Plan mode/i);
+		await expect(tool.execute("insert", { file: "plan.ts", kbd: ["cc"], insert: "blocked" })).rejects.toThrow(
+			/Plan mode/i,
+		);
 	});
 });
 

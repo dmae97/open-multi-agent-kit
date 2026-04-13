@@ -1284,7 +1284,11 @@ export class VimEngine {
 				if (!next || next.value !== "g") {
 					throw new VimError("Unsupported g motion", token);
 				}
-				return { nextIndex: index + 2, target: { line: hasCount ? Math.max(0, count - 1) : 0, col: 0 }, linewise: true };
+				return {
+					nextIndex: index + 2,
+					target: { line: hasCount ? Math.max(0, count - 1) : 0, col: 0 },
+					linewise: true,
+				};
 			}
 			case "G":
 				return {
@@ -1708,6 +1712,10 @@ export class VimEngine {
 			digits += value;
 			cursor += 1;
 		}
-		return { count: digits.length > 0 ? Number.parseInt(digits, 10) : 1, hasCount: digits.length > 0, nextIndex: cursor };
+		return {
+			count: digits.length > 0 ? Number.parseInt(digits, 10) : 1,
+			hasCount: digits.length > 0,
+			nextIndex: cursor,
+		};
 	}
 }

@@ -352,7 +352,11 @@ export class VimTool implements AgentTool<typeof vimSchema, VimToolDetails> {
 				if (fp) engine.buffer.baseFingerprint = fp;
 			}
 
-			const sequences = Array.isArray(params.kbd) ? params.kbd : typeof params.kbd === "string" ? [params.kbd] : undefined;
+			const sequences = Array.isArray(params.kbd)
+				? params.kbd
+				: typeof params.kbd === "string"
+					? [params.kbd]
+					: undefined;
 			if (!sequences) {
 				// No kbd — just show the file viewport
 				if (isNewBuffer) {
