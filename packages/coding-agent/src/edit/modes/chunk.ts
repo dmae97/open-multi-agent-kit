@@ -579,20 +579,28 @@ function normalizeChunkEditOperations(edits: ChunkToolEdit[]): {
 			);
 		}
 		if (hasWrite) {
-			// Warn about suspect indentation when targeting a body region (~)
-			if (selector?.endsWith("~") && edit.write.length > 0) {
-				const writeLines = edit.write.split("\n").filter(l => l.length > 0);
-				if (writeLines.length > 1) {
-					const firstLineIndent = writeLines[0].match(/^\t*/)?.[0].length ?? 0;
-					const restMinIndent = Math.min(...writeLines.slice(1).map(l => l.match(/^\t*/)?.[0].length ?? 0));
+			// Detect and fix over-indentation when targeting a body region (~).
+			// Models commonly add the function's base indent to body content.
+			let writeContent = edit.write;
+			if (selector?.endsWith("~") && writeContent.length > 0) {
+				const writeLines = writeContent.split("\n");
+				const nonEmptyLines = writeLines.filter(l => l.length > 0);
+				if (nonEmptyLines.length > 1) {
+					const firstLineIndent = nonEmptyLines[0].match(/^\t*/)?.[0].length ?? 0;
+					const restNonEmpty = nonEmptyLines.slice(1);
+					const restMinIndent = Math.min(...restNonEmpty.map(l => l.match(/^\t*/)?.[0].length ?? 0));
 					if (firstLineIndent === 0 && restMinIndent >= 1) {
+						// All non-first lines have extra indent — strip it
+						writeContent = writeLines
+							.map((line, i) => (i === 0 || line.length === 0 ? line : line.slice(restMinIndent)))
+							.join("\n");
 						warnings.push(
-							`Edit ${index + 1}: body content appears over-indented. When writing to \`~\`, all top-level body lines should start at column 0 (no leading tabs). Only use \\t for nesting deeper within the body. The tool adds the function's base indent automatically.`,
+							`Edit ${index + 1}: auto-corrected body indentation — stripped ${restMinIndent} leading tab(s) from non-first lines. When writing to \`~\`, write at column 0; the tool adds the function's base indent.`,
 						);
 					}
 				}
 			}
-			return { op: "put", sel: selector, content: edit.write };
+			return { op: "put", sel: selector, content: writeContent };
 		}
 		if (typeof edit.write === "string") {
 			// write: "" (empty string) — clear the chunk content
