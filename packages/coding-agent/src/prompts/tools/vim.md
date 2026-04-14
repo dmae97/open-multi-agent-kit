@@ -2,6 +2,8 @@ Stateful Vim editor. Every call requires `file`; the buffer loads automatically 
 - `{"file": "path"}` - view file
 - `{"file": "path", "steps": [{"kbd": ["…"], "insert": "…"}]}` - edit file
 
+**Multi-location edits: always edit highest line number first (bottom-up).** Each insert shifts lines below it.
+
 ## steps vs kbd vs insert
 
 `steps` = ordered editing steps. Each step runs `kbd`, then optionally types `insert`.
@@ -48,14 +50,14 @@ Replace entire file. `ggdGi` = go to top, delete all, enter INSERT. Use that exa
 {"file": "f.py", "steps": [{"kbd": ["ggdGi"], "insert": "entire new file content"}]}
 ```
 
-Multi-location edit — work bottom-up so earlier inserts don't shift later line numbers:
+Multi-location edit — edit **highest line number first** (bottom-up) so inserts don't shift later targets:
 ```json
 {"file": "f.py", "steps": [
   {"kbd": ["8Go"], "insert": "    print(result)"},
   {"kbd": ["3Go"], "insert": "def helper(x):\n    return x + 1"}
 ]}
 ```
-When inserting at multiple lines in one call, edit the **highest line number first** and work upward. Each `o`/`O` insert shifts lines below it, so bottom-up order keeps all line targets stable. Use `\n` within `insert` for multi-line content (each `\n` creates a new line).
+Each `o`/`O` insert adds lines, shifting everything below. Bottom-up order keeps all line numbers valid. Use `\n` within `insert` for multi-line content.
 
 Navigation or search step without insert:
 ```json

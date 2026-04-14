@@ -38,7 +38,7 @@ const utf8Decoder = new TextDecoder("utf-8", { fatal: true });
 
 const vimStepSchema = Type.Object({
 	kbd: Type.Array(Type.String(), {
-		description: "Vim key sequences to execute against the buffer.",
+		description: "Vim key sequences ONLY (e.g. ggdGi, 3Go, dd). NEVER put file content here — use insert for text.",
 	}),
 	insert: Type.Optional(
 		Type.String({
@@ -304,18 +304,53 @@ interface ExecuteVimStepsOptions {
 	onInsertStep?: () => Promise<void>;
 }
 
+// Auto-reorder insertion steps to descending line order (bottom-up) when all steps
+// are simple `NGo`/`NGO` patterns and appear to reference original line numbers.
+// Only reorders when steps are in strictly ascending order (common top-down mistake).
+function autoReorderInsertSteps(steps: readonly VimStep[]): VimStep[] {
+	if (steps.length < 2) return [...steps];
+
+	// Check if ALL steps follow the pattern: single kbd entry of `NGo` or `NGO`
+	const linePattern = /^(\d+)G([oO])$/;
+	const parsed: Array<{ line: number; step: VimStep }> = [];
+	for (const step of steps) {
+		if (step.kbd.length !== 1) return [...steps]; // Can't reorder non-simple steps
+		const match = step.kbd[0]!.match(linePattern);
+		if (!match) return [...steps]; // Not all steps are NGo/NGO — don't reorder
+		parsed.push({ line: Number(match[1]), step });
+	}
+
+	// Only reorder if steps are in strictly ascending order (top-down, likely a mistake).
+	// If already descending, mixed, or equal, the model likely planned the order deliberately.
+	let isAscending = true;
+	for (let i = 1; i < parsed.length; i++) {
+		if (parsed[i]!.line <= parsed[i - 1]!.line) {
+			isAscending = false;
+			break;
+		}
+	}
+	if (!isAscending) return [...steps];
+
+	// Sort by descending line number (bottom-up)
+	parsed.sort((a, b) => b.line - a.line);
+	return parsed.map(p => p.step);
+}
+
 async function executeVimSteps(
 	engine: VimEngine,
 	steps: readonly VimStep[],
 	options: ExecuteVimStepsOptions = {},
 ): Promise<void> {
-	for (let index = 0; index < steps.length; index += 1) {
+	// Execute steps in the order specified. Models should use bottom-up ordering
+	// (highest line number first) when inserting at multiple locations.
+	const orderedSteps = [...steps];
+	for (let index = 0; index < orderedSteps.length; index += 1) {
 		if (engine.closed) {
 			break;
 		}
 
-		const step = steps[index]!;
-		const isLast = index === steps.length - 1;
+		const step = orderedSteps[index]!;
+		const isLast = index === orderedSteps.length - 1;
 		const hasKbd = step.kbd.some(sequence => sequence.length > 0);
 		const preservePausedState = !hasKbd && step.insert === undefined && isLast && options.pauseLastStep === true;
 		if (engine.inputMode === "insert" && (hasKbd || step.insert === undefined) && !preservePausedState) {
@@ -420,6 +455,9 @@ function normalizeTargetPath(inputPath: string, cwd: string): { absolutePath: st
 	}
 	if (parseSqlitePathCandidates(normalized).some(candidate => candidate.sqlitePath === normalized)) {
 		throw new ToolError("Vim does not support SQLite targets in v1");
+	}
+	if (/^:[a-zA-Z!]/.test(normalized)) {
+		throw new ToolError(`"${inputPath}" looks like a Vim command, not a file path. Use the file's actual path (e.g. "test.py"), and put Vim commands in the steps.kbd array.`);
 	}
 	return {
 		absolutePath: resolveToCwd(normalized, cwd),

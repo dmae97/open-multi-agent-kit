@@ -1059,6 +1059,11 @@ export class VimEngine {
 				this.selectionAnchor = clonePosition(this.buffer.cursor);
 				return nextIndex + 1;
 			case "i":
+				// When count > 1 (e.g. `2i`), interpret as `2Gi` — go to line N then insert.
+				// Models confuse `Ni` with `NGi`; bare `i` with a high count is almost never intended.
+				if (hasCount) {
+					this.buffer.setCursor({ line: Math.min(count, this.buffer.lineCount()) - 1, col: 0 });
+				}
 				await this.#startInsertChange(["i"]);
 				return nextIndex + 1;
 			case "a":
@@ -1834,7 +1839,10 @@ export class VimEngine {
 			case ";":
 			case ",": {
 				if (!this.lastCharFind) {
-					throw new VimError("No previous character search", token);
+					throw new VimError(
+						"No previous character search. If you meant an ex-command range like `:4,5d`, add the `:` prefix and `<CR>` suffix.",
+						token,
+					);
 				}
 				let mode = this.lastCharFind.mode;
 				if (token.value === ",") {
