@@ -199,6 +199,45 @@ describe("expandInternalUrls", () => {
 		);
 	});
 
+	it("expands local:/ (single-slash) URL in double quotes", async () => {
+		const localOptions = {
+			getArtifactsDir: () => "/tmp/session-artifacts",
+			getSessionId: () => "session-1",
+		};
+		const command = 'cat "local:/PLAN.md"';
+		const expectedPath = resolveLocalUrlToPath("local:///PLAN.md", localOptions);
+
+		await expect(expandInternalUrls(command, { skills: [], localOptions })).resolves.toBe(
+			`cat ${shellEscape(expectedPath)}`,
+		);
+	});
+
+	it("expands local:/ (single-slash) URL in single quotes", async () => {
+		const localOptions = {
+			getArtifactsDir: () => "/tmp/session-artifacts",
+			getSessionId: () => "session-1",
+		};
+		const command = "cat 'local:/PLAN.md'";
+		const expectedPath = resolveLocalUrlToPath("local:///PLAN.md", localOptions);
+
+		await expect(expandInternalUrls(command, { skills: [], localOptions })).resolves.toBe(
+			`cat ${shellEscape(expectedPath)}`,
+		);
+	});
+
+	it("expands local:/ (single-slash) URL without quotes", async () => {
+		const localOptions = {
+			getArtifactsDir: () => "/tmp/session-artifacts",
+			getSessionId: () => "session-1",
+		};
+		const command = "cat local:/PLAN.md";
+		const expectedPath = resolveLocalUrlToPath("local:///PLAN.md", localOptions);
+
+		await expect(expandInternalUrls(command, { skills: [], localOptions })).resolves.toBe(
+			`cat ${shellEscape(expectedPath)}`,
+		);
+	});
+
 	it("throws when local:// URL is used without local protocol options", async () => {
 		await expect(expandInternalUrls("mv foo local://bar", { skills: [] })).rejects.toThrow(
 			"Cannot resolve local:// URL in bash command: local protocol options are unavailable for this session.",
