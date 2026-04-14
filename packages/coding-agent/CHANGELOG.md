@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [14.1.1] - 2026-04-14
+
 ### Breaking Changes
 
 - Removed the standalone `vim` tool from built-in tool lists, so vim-style editing is now invoked through `edit` in `vim` mode

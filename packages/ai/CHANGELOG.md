@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [14.1.1] - 2026-04-14
+
 ### Added
 
 - Added `toolStrictMode` compatibility option (`"all_strict"` or `"none"`) to OpenAI-compatible model config to force tool schemas to be sent uniformly strict, uniformly non-strict, or keep mixed per-tool behavior
