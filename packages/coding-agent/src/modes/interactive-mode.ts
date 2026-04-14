@@ -637,8 +637,9 @@ export class InteractiveMode implements InteractiveModeContext {
 	}
 
 	#resolvePlanFilePath(planFilePath: string): string {
-		if (planFilePath.startsWith("local://")) {
-			return resolveLocalUrlToPath(planFilePath, {
+		if (planFilePath.startsWith("local:")) {
+			const normalized = planFilePath.replace(/^(local:)\/(?!\/)/, "$1//");
+			return resolveLocalUrlToPath(normalized, {
 				getArtifactsDir: () => this.sessionManager.getArtifactsDir(),
 				getSessionId: () => this.sessionManager.getSessionId(),
 			});

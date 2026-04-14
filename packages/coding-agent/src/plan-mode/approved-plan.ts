@@ -10,8 +10,8 @@ interface RenameApprovedPlanFileOptions {
 }
 
 function assertLocalUrl(path: string, label: "source" | "destination"): void {
-	if (!path.startsWith("local://")) {
-		throw new Error(`Approved plan ${label} path must use local:// (received ${path}).`);
+	if (!path.startsWith("local:")) {
+		throw new Error(`Approved plan ${label} path must use local:// scheme (received ${path}).`);
 	}
 }
 

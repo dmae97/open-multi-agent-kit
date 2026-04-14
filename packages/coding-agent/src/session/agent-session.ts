@@ -2445,8 +2445,8 @@ export class AgentSession {
 		const state = this.#planModeState;
 		if (!state?.enabled) return null;
 		const sessionPlanUrl = "local://PLAN.md";
-		const resolvedPlanPath = state.planFilePath.startsWith("local://")
-			? resolveLocalUrlToPath(state.planFilePath, {
+		const resolvedPlanPath = state.planFilePath.startsWith("local:")
+			? resolveLocalUrlToPath(state.planFilePath.replace(/^(local:)\/(?!\/)/, "$1//"), {
 					getArtifactsDir: () => this.sessionManager.getArtifactsDir(),
 					getSessionId: () => this.sessionManager.getSessionId(),
 				})
@@ -2456,7 +2456,7 @@ export class AgentSession {
 			getSessionId: () => this.sessionManager.getSessionId(),
 		});
 		const displayPlanPath =
-			state.planFilePath.startsWith("local://") || resolvedPlanPath !== resolvedSessionPlan
+			state.planFilePath.startsWith("local:") || resolvedPlanPath !== resolvedSessionPlan
 				? state.planFilePath
 				: sessionPlanUrl;
 
