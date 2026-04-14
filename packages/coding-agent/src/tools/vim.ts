@@ -456,9 +456,6 @@ function normalizeTargetPath(inputPath: string, cwd: string): { absolutePath: st
 	if (parseSqlitePathCandidates(normalized).some(candidate => candidate.sqlitePath === normalized)) {
 		throw new ToolError("Vim does not support SQLite targets in v1");
 	}
-	if (/^:[a-zA-Z!]/.test(normalized)) {
-		throw new ToolError(`"${inputPath}" looks like a Vim command, not a file path. Use the file's actual path (e.g. "test.py"), and put Vim commands in the steps.kbd array.`);
-	}
 	return {
 		absolutePath: resolveToCwd(normalized, cwd),
 		displayPath: normalized,

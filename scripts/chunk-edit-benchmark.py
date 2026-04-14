@@ -7,7 +7,7 @@ from __future__ import annotations
 from edit_benchmark_common import BenchmarkSpec, EDIT_DIFF, EXPECTED_CONTENT, run_benchmark_main
 
 EDIT_PROMPT = f"""\
-Use the `read` tool to inspect `test.py`, then use the `edit` tool in chunk mode to make `test.py` exactly match the requested change.
+Use the `read` tool to inspect `test.rs`, then use the `edit` tool in chunk mode to make `test.rs` exactly match the requested change.
 
 Apply this diff:
 ```diff
@@ -24,7 +24,7 @@ CHUNK_BENCHMARK = BenchmarkSpec(
     tools=("edit", "read"),
     env={"PI_EDIT_VARIANT": "chunk", "PI_STRICT_EDIT_MODE": "1"},
     initial_prompt=EDIT_PROMPT,
-    retry_instruction='Use `read(path="test.py")` to refresh chunk selectors if needed, then try again using the edit tool.',
+    retry_instruction='Use `read(path="test.rs")` to refresh chunk selectors if needed, then try again using the edit tool.',
 )
 
 

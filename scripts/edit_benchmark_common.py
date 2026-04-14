@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import difflib
 import json
 import os
 import shutil
@@ -34,53 +35,438 @@ MODELS = [
 ]
 
 INITIAL_CONTENT = """\
-def divide(a, b):
-    return a / b
+use std::collections::HashMap;
+use std::fmt;
 
-def greet(name):
-    return f"Hello, {name}!"
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub host: String,
+    pub port: u16,
+    pub max_connections: usize,
+    pub timeout_ms: u64,
+}
 
-def main():
-    print(divide(10, 2))
-    print(greet("World"))
+impl Config {
+    pub fn new(host: &str, port: u16) -> Self {
+        Self {
+            host: host.to_string(),
+            port,
+            max_connections: 100,
+            timeout_ms: 5000,
+        }
+    }
+
+    pub fn is_local(&self) -> bool {
+        self.host == "localhost" || self.host == "127.0.0.1"
+    }
+}
+
+impl fmt::Display for Config {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.host, self.port)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Status {
+    Active,
+    Inactive,
+    Error(String),
+}
+
+impl fmt::Display for Status {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Status::Active => write!(f, "active"),
+            Status::Inactive => write!(f, "inactive"),
+            Status::Error(msg) => write!(f, "error: {}", msg),
+        }
+    }
+}
+
+pub struct ConnectionPool {
+    config: Config,
+    connections: Vec<Connection>,
+    status: Status,
+}
+
+struct Connection {
+    id: u64,
+    active: bool,
+}
+
+impl ConnectionPool {
+    pub fn new(config: Config) -> Self {
+        Self {
+            config,
+            connections: Vec::new(),
+            status: Status::Inactive,
+        }
+    }
+
+    pub fn connect(&mut self) -> Result<(), String> {
+        if self.connections.len() >= self.config.max_connections {
+            return Err("connection pool is full".to_string());
+        }
+
+        let id = self.connections.len() as u64;
+        self.connections.push(Connection { id, active: true });
+        self.status = Status::Active;
+        Ok(())
+    }
+
+    pub fn disconnect(&mut self, id: u64) -> Result<(), String> {
+        let conn = self
+            .connections
+            .iter_mut()
+            .find(|c| c.id == id)
+            .ok_or_else(|| format!("connection {} not found", id))?;
+        conn.active = false;
+
+        if self.connections.iter().all(|c| !c.active) {
+            self.status = Status::Inactive;
+        }
+        Ok(())
+    }
+
+    pub fn active_count(&self) -> usize {
+        self.connections.iter().filter(|c| c.active).count()
+    }
+
+    pub fn status(&self) -> &Status {
+        &self.status
+    }
+}
+
+pub fn parse_address(addr: &str) -> Result<(String, u16), String> {
+    let parts: Vec<&str> = addr.split(':').collect();
+    if parts.len() != 2 {
+        return Err("invalid address format".to_string());
+    }
+    let host = parts[0].to_string();
+    let port = parts[1]
+        .parse::<u16>()
+        .map_err(|e| format!("invalid port: {}", e))?;
+    Ok((host, port))
+}
+
+pub fn create_pool_from_address(addr: &str) -> Result<ConnectionPool, String> {
+    let (host, port) = parse_address(addr)?;
+    let config = Config::new(&host, port);
+    Ok(ConnectionPool::new(config))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_new() {
+        let config = Config::new("localhost", 8080);
+        assert_eq!(config.host, "localhost");
+        assert_eq!(config.port, 8080);
+        assert_eq!(config.max_connections, 100);
+    }
+
+    #[test]
+    fn test_config_is_local() {
+        let local = Config::new("localhost", 8080);
+        assert!(local.is_local());
+
+        let remote = Config::new("example.com", 443);
+        assert!(!remote.is_local());
+    }
+
+    #[test]
+    fn test_connection_pool() {
+        let config = Config::new("localhost", 5432);
+        let mut pool = ConnectionPool::new(config);
+        assert_eq!(pool.active_count(), 0);
+
+        pool.connect().unwrap();
+        assert_eq!(pool.active_count(), 1);
+        assert_eq!(pool.status(), &Status::Active);
+
+        pool.disconnect(0).unwrap();
+        assert_eq!(pool.active_count(), 0);
+        assert_eq!(pool.status(), &Status::Inactive);
+    }
+
+    #[test]
+    fn test_parse_address() {
+        let (host, port) = parse_address("localhost:8080").unwrap();
+        assert_eq!(host, "localhost");
+        assert_eq!(port, 8080);
+
+        assert!(parse_address("invalid").is_err());
+    }
+}
 """
 
 EXPECTED_CONTENT = """\
-def divide(a, b):
-    if b == 0:
-        return None
-    return a / b
+use std::collections::HashMap;
+use std::fmt;
+use std::time::Instant;
 
-def multiply(a, b):
-    return a * b
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub host: String,
+    pub port: u16,
+    pub max_connections: usize,
+    pub timeout_ms: u64,
+    pub retry_attempts: u32,
+}
 
-def greet(name):
-    return f"Hello, {name}!"
+impl Config {
+    pub fn new(host: &str, port: u16) -> Self {
+        Self {
+            host: host.to_string(),
+            port,
+            max_connections: 100,
+            timeout_ms: 5000,
+            retry_attempts: 3,
+        }
+    }
 
-def main():
-    print(divide(10, 2))
-    print(multiply(3, 4))
-    print(greet("World"))
+    pub fn with_max_connections(mut self, max: usize) -> Self {
+        self.max_connections = max;
+        self
+    }
+
+    pub fn is_local(&self) -> bool {
+        self.host == "localhost" || self.host == "127.0.0.1"
+    }
+}
+
+impl fmt::Display for Config {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{} (max: {})", self.host, self.port, self.max_connections)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Status {
+    Active,
+    Inactive,
+    Draining,
+    Error(String),
+}
+
+impl Status {
+    pub fn is_available(&self) -> bool {
+        matches!(self, Status::Active)
+    }
+}
+
+impl fmt::Display for Status {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Status::Active => write!(f, "active"),
+            Status::Inactive => write!(f, "inactive"),
+            Status::Draining => write!(f, "draining"),
+            Status::Error(msg) => write!(f, "error: {}", msg),
+        }
+    }
+}
+
+pub struct ConnectionPool {
+    config: Config,
+    connections: Vec<Connection>,
+    status: Status,
+    stats: PoolStats,
+}
+
+struct Connection {
+    id: u64,
+    active: bool,
+    created_at: Instant,
+}
+
+#[derive(Default)]
+struct PoolStats {
+    total_connections: u64,
+    failed_connections: u64,
+}
+
+impl ConnectionPool {
+    pub fn new(config: Config) -> Self {
+        Self {
+            config,
+            connections: Vec::new(),
+            status: Status::Inactive,
+            stats: PoolStats::default(),
+        }
+    }
+
+    pub fn connect(&mut self) -> Result<u64, String> {
+        if self.connections.len() >= self.config.max_connections {
+            self.stats.failed_connections += 1;
+            return Err("connection pool is full".to_string());
+        }
+
+        let id = self.stats.total_connections;
+        self.stats.total_connections += 1;
+        self.connections.push(Connection {
+            id,
+            active: true,
+            created_at: Instant::now(),
+        });
+        self.status = Status::Active;
+        Ok(id)
+    }
+
+    pub fn disconnect(&mut self, id: u64) -> Result<(), String> {
+        let conn = self
+            .connections
+            .iter_mut()
+            .find(|c| c.id == id && c.active)
+            .ok_or_else(|| format!("active connection {} not found", id))?;
+        conn.active = false;
+
+        if self.connections.iter().all(|c| !c.active) {
+            self.status = Status::Inactive;
+        }
+        Ok(())
+    }
+
+    pub fn drain(&mut self) {
+        self.status = Status::Draining;
+        for conn in &mut self.connections {
+            conn.active = false;
+        }
+        self.status = Status::Inactive;
+    }
+
+    pub fn active_count(&self) -> usize {
+        self.connections.iter().filter(|c| c.active).count()
+    }
+
+    pub fn total_created(&self) -> u64 {
+        self.stats.total_connections
+    }
+
+    pub fn status(&self) -> &Status {
+        &self.status
+    }
+}
+
+pub fn parse_address(addr: &str) -> Result<(String, u16), String> {
+    let parts: Vec<&str> = addr.splitn(2, ':').collect();
+    if parts.len() != 2 {
+        return Err(format!("invalid address format: {}", addr));
+    }
+    let host = parts[0].to_string();
+    if host.is_empty() {
+        return Err("host cannot be empty".to_string());
+    }
+    let port = parts[1]
+        .parse::<u16>()
+        .map_err(|e| format!("invalid port: {}", e))?;
+    Ok((host, port))
+}
+
+pub fn create_pool_from_address(addr: &str) -> Result<ConnectionPool, String> {
+    let (host, port) = parse_address(addr)?;
+    let config = Config::new(&host, port);
+    Ok(ConnectionPool::new(config))
+}
+
+pub fn create_pool_with_options(
+    addr: &str,
+    max_connections: usize,
+) -> Result<ConnectionPool, String> {
+    let (host, port) = parse_address(addr)?;
+    let config = Config::new(&host, port).with_max_connections(max_connections);
+    Ok(ConnectionPool::new(config))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_new() {
+        let config = Config::new("localhost", 8080);
+        assert_eq!(config.host, "localhost");
+        assert_eq!(config.port, 8080);
+        assert_eq!(config.max_connections, 100);
+        assert_eq!(config.retry_attempts, 3);
+    }
+
+    #[test]
+    fn test_config_builder() {
+        let config = Config::new("localhost", 8080).with_max_connections(50);
+        assert_eq!(config.max_connections, 50);
+    }
+
+    #[test]
+    fn test_config_is_local() {
+        let local = Config::new("localhost", 8080);
+        assert!(local.is_local());
+
+        let remote = Config::new("example.com", 443);
+        assert!(!remote.is_local());
+    }
+
+    #[test]
+    fn test_connection_pool() {
+        let config = Config::new("localhost", 5432);
+        let mut pool = ConnectionPool::new(config);
+        assert_eq!(pool.active_count(), 0);
+        assert_eq!(pool.total_created(), 0);
+
+        let id = pool.connect().unwrap();
+        assert_eq!(pool.active_count(), 1);
+        assert_eq!(pool.total_created(), 1);
+        assert_eq!(pool.status(), &Status::Active);
+
+        pool.disconnect(id).unwrap();
+        assert_eq!(pool.active_count(), 0);
+        assert_eq!(pool.status(), &Status::Inactive);
+    }
+
+    #[test]
+    fn test_pool_drain() {
+        let config = Config::new("localhost", 5432);
+        let mut pool = ConnectionPool::new(config);
+        pool.connect().unwrap();
+        pool.connect().unwrap();
+        assert_eq!(pool.active_count(), 2);
+
+        pool.drain();
+        assert_eq!(pool.active_count(), 0);
+        assert_eq!(pool.status(), &Status::Inactive);
+    }
+
+    #[test]
+    fn test_parse_address() {
+        let (host, port) = parse_address("localhost:8080").unwrap();
+        assert_eq!(host, "localhost");
+        assert_eq!(port, 8080);
+
+        assert!(parse_address("invalid").is_err());
+        assert!(parse_address(":8080").is_err());
+    }
+
+    #[test]
+    fn test_status_is_available() {
+        assert!(Status::Active.is_available());
+        assert!(!Status::Inactive.is_available());
+        assert!(!Status::Draining.is_available());
+    }
+}
 """
 
-EDIT_DIFF = """\
-@@ -1,9 +1,14 @@
- def divide(a, b):
-+    if b == 0:
-+        return None
-     return a / b
- 
-+def multiply(a, b):
-+    return a * b
-+
- def greet(name):
-     return f"Hello, {name}!"
- 
- def main():
-     print(divide(10, 2))
-+    print(multiply(3, 4))
-     print(greet("World"))
-"""
+def _compute_edit_diff() -> str:
+    initial_lines = INITIAL_CONTENT.splitlines(keepends=True)
+    expected_lines = EXPECTED_CONTENT.splitlines(keepends=True)
+    diff = difflib.unified_diff(initial_lines, expected_lines, n=3)
+    # Skip the --- and +++ header lines, keep only @@ hunks
+    diff_lines = list(diff)
+    return "".join(diff_lines[2:]) if len(diff_lines) > 2 else ""
+
+
+EDIT_DIFF = _compute_edit_diff()
 
 FEEDBACK_PROMPT = """\
 STOP. The editing task is complete. Do NOT make any more edits or tool calls.
@@ -329,7 +715,7 @@ def run_benchmark_for_model(
     max_turns: int,
 ) -> BenchmarkResult:
     """Run a single edit benchmark for one model."""
-    test_file = workspace / "test.py"
+    test_file = workspace / "test.rs"
     test_file.write_text(INITIAL_CONTENT)
 
     prompt_attempts = 0

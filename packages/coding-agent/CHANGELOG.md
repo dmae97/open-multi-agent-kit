@@ -1,7 +1,6 @@
 # Changelog
 
 ## [Unreleased]
-
 ### Breaking Changes
 
 - Removed the `searchDb` field from session and extension tool contexts, so custom tools and extensions no longer receive a shared native search DB handle from `ToolSession`, `CustomToolContext`, `ExtensionContext`, and `CreateAgentSessionOptions`
@@ -34,6 +33,7 @@
 
 ### Changed
 
+- Changed vim path normalization to accept colon-prefixed `path` values instead of rejecting them as Vim commands
 - Changed default `providers.openaiWebsockets` setting to `off` when unset, so OpenAI websocket transport is now disabled unless explicitly enabled
 - Changed Vim ex `:update`/`:up` execution to skip writing unchanged buffers and report buffer unchanged status
 - Changed Vim page-scroll commands `C-f`, `C-b`, `C-u`, and `C-d` to move in viewport-height based increments instead of fixed constants
