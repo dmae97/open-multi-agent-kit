@@ -1,9 +1,22 @@
 # Changelog
 
 ## [Unreleased]
+
+### Breaking Changes
+
+- Replaced the legacy `todo_write` `ops`-based API (`replace`, `update`, `add_task`, and `remove_task`) with direct top-level fields, requiring migration of any callers using the old request shape
+- Removed in-place updates to existing task `content`, `details`, and `notes` via `todo_write`; note changes now append through `add_notes`
+- Phased task definitions in `todo_write` now reject `notes` on initial creation, so notes must be added later with `add_notes`
+
 ### Added
 
+- Added `complete`, `start`, `abandon`, `remove`, `add_notes`, and `add_tasks` parameters to `todo_write` so callers can complete, jump to, drop, and annotate tasks without op wrappers
+- Added direct `add_phase` support as a top-level argument for inserting a new phase in `todo_write`
 - Added `task.simple` with `default`, `schema-free`, and `independent` modes so the task tool can disable task-call `schema` and shared `context` inputs while preserving agent-defined and inherited subagent schemas
+
+### Changed
+
+- Changed `add_tasks` to insert tasks by phase name or ID and allow multiple tasks to be added in one call
 
 ### Fixed
 

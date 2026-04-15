@@ -22,15 +22,10 @@ describe("TodoWriteTool auto-start behavior", () => {
 	it("auto-starts the first task after replace", async () => {
 		const tool = new TodoWriteTool(createSession());
 		const result = await tool.execute("call-1", {
-			ops: [
+			phases: [
 				{
-					op: "replace",
-					phases: [
-						{
-							name: "Execution",
-							tasks: [{ content: "status" }, { content: "diagnostics" }],
-						},
-					],
+					name: "Execution",
+					tasks: [{ content: "status" }, { content: "diagnostics" }],
 				},
 			],
 		});
@@ -47,21 +42,16 @@ describe("TodoWriteTool auto-start behavior", () => {
 	it("auto-promotes the next pending task when current task is completed", async () => {
 		const tool = new TodoWriteTool(createSession());
 		await tool.execute("call-1", {
-			ops: [
+			phases: [
 				{
-					op: "replace",
-					phases: [
-						{
-							name: "Execution",
-							tasks: [{ content: "status" }, { content: "diagnostics" }],
-						},
-					],
+					name: "Execution",
+					tasks: [{ content: "status" }, { content: "diagnostics" }],
 				},
 			],
 		});
 
 		const result = await tool.execute("call-2", {
-			ops: [{ op: "update", id: "task-1", status: "completed" }],
+			complete: ["task-1"],
 		});
 
 		const tasks = result.details?.phases[0]?.tasks ?? [];
@@ -72,7 +62,7 @@ describe("TodoWriteTool auto-start behavior", () => {
 		expect(summary.text).toContain("task-2 diagnostics [in_progress] (Execution)");
 
 		const completedResult = await tool.execute("call-3", {
-			ops: [{ op: "update", id: "task-2", status: "completed" }],
+			complete: ["task-2"],
 		});
 		const completedSummary = completedResult.content.find(part => part.type === "text");
 		if (!completedSummary || completedSummary.type !== "text") {
@@ -84,17 +74,12 @@ describe("TodoWriteTool auto-start behavior", () => {
 	it("keeps only one in_progress task when replace input contains multiples", async () => {
 		const tool = new TodoWriteTool(createSession());
 		const result = await tool.execute("call-1", {
-			ops: [
+			phases: [
 				{
-					op: "replace",
-					phases: [
-						{
-							name: "Execution",
-							tasks: [
-								{ content: "status", status: "in_progress" },
-								{ content: "diagnostics", status: "in_progress" },
-							],
-						},
+					name: "Execution",
+					tasks: [
+						{ content: "status", status: "in_progress" },
+						{ content: "diagnostics", status: "in_progress" },
 					],
 				},
 			],
@@ -106,21 +91,13 @@ describe("TodoWriteTool auto-start behavior", () => {
 });
 
 describe("TodoWriteTool details field", () => {
-	it("preserves details through replace op", async () => {
+	it("preserves details through replace", async () => {
 		const tool = new TodoWriteTool(createSession());
 		const result = await tool.execute("call-1", {
-			ops: [
+			phases: [
 				{
-					op: "replace",
-					phases: [
-						{
-							name: "Work",
-							tasks: [
-								{ content: "Fix parser", details: "Update src/parser.ts line 42" },
-								{ content: "Add tests" },
-							],
-						},
-					],
+					name: "Work",
+					tasks: [{ content: "Fix parser", details: "Update src/parser.ts line 42" }, { content: "Add tests" }],
 				},
 			],
 		});
@@ -130,51 +107,41 @@ describe("TodoWriteTool details field", () => {
 		expect(tasks[1].details).toBeUndefined();
 	});
 
-	it("preserves details through add_task op", async () => {
+	it("preserves details through add_tasks", async () => {
 		const tool = new TodoWriteTool(createSession());
 		await tool.execute("call-1", {
-			ops: [{ op: "replace", phases: [{ name: "Work", tasks: [{ content: "First" }] }] }],
+			phases: [{ name: "Work", tasks: [{ content: "First" }] }],
 		});
 
 		const result = await tool.execute("call-2", {
-			ops: [{ op: "add_task", phase: "phase-1", content: "Second", details: "Check edge cases" }],
+			add_tasks: [{ phase: "phase-1", content: "Second", details: "Check edge cases" }],
 		});
 
 		const tasks = result.details?.phases[0]?.tasks ?? [];
 		expect(tasks[1].details).toBe("Check edge cases");
 	});
 
-	it("updates details via update op", async () => {
+	it("appends notes via add_notes", async () => {
 		const tool = new TodoWriteTool(createSession());
 		await tool.execute("call-1", {
-			ops: [
-				{
-					op: "replace",
-					phases: [{ name: "Work", tasks: [{ content: "Fix bug", details: "Old details" }] }],
-				},
-			],
+			phases: [{ name: "Work", tasks: [{ content: "Fix bug", details: "Old details" }] }],
 		});
 
 		const result = await tool.execute("call-2", {
-			ops: [{ op: "update", id: "task-1", details: "New details with\nlines" }],
+			add_notes: [{ id: "task-1", notes: "New observation" }],
 		});
 
 		const task = result.details?.phases[0]?.tasks[0];
-		expect(task?.details).toBe("New details with\nlines");
+		expect(task?.notes).toBe("New observation");
 	});
 
 	it("includes details in summary for in_progress tasks", async () => {
 		const tool = new TodoWriteTool(createSession());
 		const result = await tool.execute("call-1", {
-			ops: [
+			phases: [
 				{
-					op: "replace",
-					phases: [
-						{
-							name: "Work",
-							tasks: [{ content: "Fix parser", details: "Edit src/parser.ts" }],
-						},
-					],
+					name: "Work",
+					tasks: [{ content: "Fix parser", details: "Edit src/parser.ts" }],
 				},
 			],
 		});
