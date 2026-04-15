@@ -94,13 +94,13 @@ describe("ollama-cloud provider support", () => {
 				if (body.model === "gpt-oss:120b") {
 					return new Response(
 						JSON.stringify({
-							capabilities: ["completion", "thinking"],
-							model_info: { "gpt-oss.context_length": 262144 },
+								capabilities: ["completion", "thinking", "vision"],
+								model_info: { "gpt-oss.context_length": 262144 },
 						}),
 						{ status: 200, headers: { "Content-Type": "application/json" } },
 					);
 				}
-				return new Response(JSON.stringify({ capabilities: ["completion"] }), {
+				return new Response(JSON.stringify({ capabilities: ["completion", "vision"] }), {
 					status: 200,
 					headers: { "Content-Type": "application/json" },
 				});
@@ -119,11 +119,46 @@ describe("ollama-cloud provider support", () => {
 		expect(gpt?.baseUrl).toBe("https://ollama.com");
 		expect(gpt?.reasoning).toBe(true);
 		expect(gpt?.contextWindow).toBe(262144);
+		expect(gpt?.input).toEqual(["text", "image"]);
 		expect(qwen?.name).toBe("Qwen 3 32B");
+		expect(qwen?.input).toEqual(["text", "image"]);
 		expect(global.fetch).toHaveBeenCalledWith(
 			"https://ollama.com/api/tags",
 			expect.objectContaining({ method: "GET" }),
 		);
+	});
+
+	test("tolerates individual /api/show failures during model discovery", async () => {
+		global.fetch = vi.fn(async (input, init) => {
+			const url = String(input);
+			if (url === "https://ollama.com/api/tags") {
+				return new Response(
+					JSON.stringify({
+						models: [{ name: "model-a" }, { name: "model-b" }],
+					}),
+					{ status: 200, headers: { "Content-Type": "application/json" } },
+				);
+			}
+			if (url === "https://ollama.com/api/show") {
+				const body = JSON.parse(String(init?.body ?? "{}")) as { model?: string };
+				if (body.model === "model-b") {
+					throw new Error("network error");
+				}
+				return new Response(JSON.stringify({ capabilities: ["completion"] }), {
+					status: 200,
+					headers: { "Content-Type": "application/json" },
+				});
+			}
+			throw new Error(`Unexpected URL: ${url}`);
+		}) as unknown as typeof fetch;
+
+		const options = ollamaCloudModelManagerOptions({ apiKey: "cloud-test-key" });
+		const models = await options.fetchDynamicModels?.();
+
+		const ids = models?.map(m => m.id).sort();
+		expect(ids).toEqual(["model-a", "model-b"]);
+		const modelB = models?.find(m => m.id === "model-b");
+		expect(modelB?.input).toEqual(["text"]);
 	});
 
 	test("streams native chat responses with thinking, text, and usage mapping", async () => {
