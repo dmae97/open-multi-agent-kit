@@ -364,4 +364,48 @@ describe("ollama-cloud provider support", () => {
 			content: "README contents",
 		});
 	});
+
+describe("mapToolChoice", () => {
+	test("omits tool_choice when undefined or auto", async () => {
+		let requestBody: Record<string, unknown> | undefined;
+		global.fetch = vi.fn(async (_input, init) => {
+			requestBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+			return createNdjsonResponse([
+				{ model: "gpt-oss:120b", message: { role: "assistant", content: "ok" }, done: false },
+				{ model: "gpt-oss:120b", done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 },
+			]);
+		}) as unknown as typeof fetch;
+
+		await stream(cloudModel, { messages: [{ role: "user", content: "hi", timestamp: Date.now() }], tools: [readFileTool] }, { apiKey: "cloud-test-key", toolChoice: "auto" }).result();
+		expect(requestBody?.tool_choice).toBeUndefined();
+	});
+
+	test("passes tool_choice: none when ToolChoice is none", async () => {
+		let requestBody: Record<string, unknown> | undefined;
+		global.fetch = vi.fn(async (_input, init) => {
+			requestBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+			return createNdjsonResponse([
+				{ model: "gpt-oss:120b", message: { role: "assistant", content: "ok" }, done: false },
+				{ model: "gpt-oss:120b", done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 },
+			]);
+		}) as unknown as typeof fetch;
+
+		await stream(cloudModel, { messages: [{ role: "user", content: "hi", timestamp: Date.now() }], tools: [readFileTool] }, { apiKey: "cloud-test-key", toolChoice: "none" }).result();
+		expect(requestBody?.tool_choice).toBe("none");
+	});
+
+	test("passes tool_choice: required when ToolChoice is required or any", async () => {
+		let requestBody: Record<string, unknown> | undefined;
+		global.fetch = vi.fn(async (_input, init) => {
+			requestBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+			return createNdjsonResponse([
+				{ model: "gpt-oss:120b", message: { role: "assistant", content: "ok" }, done: false },
+				{ model: "gpt-oss:120b", done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 },
+			]);
+		}) as unknown as typeof fetch;
+
+		await stream(cloudModel, { messages: [{ role: "user", content: "hi", timestamp: Date.now() }], tools: [readFileTool] }, { apiKey: "cloud-test-key", toolChoice: "required" }).result();
+		expect(requestBody?.tool_choice).toBe("required");
+	});
+});
 });

@@ -98,14 +98,20 @@ function mapReasoning(reasoning: OllamaChatOptions["reasoning"]): boolean | "low
 	}
 }
 
-function mapToolChoice(toolChoice: ToolChoice | undefined): "auto" | "required" | undefined {
+function mapToolChoice(toolChoice: ToolChoice | undefined): "auto" | "none" | "required" | undefined {
 	if (!toolChoice || toolChoice === "auto") {
 		return undefined;
 	}
-	if (toolChoice === "required") {
+	if (toolChoice === "none") {
+		return "none";
+	}
+	if (toolChoice === "required" || toolChoice === "any") {
 		return "required";
 	}
-	return "required";
+	if (typeof toolChoice === "object") {
+		return "required";
+	}
+	return undefined;
 }
 
 function toPlainContent(content: string | Array<{ type: "text" | "image"; text?: string; data?: string }>): {
@@ -207,12 +213,13 @@ function convertTools(tools: Tool[] | undefined): OllamaFunctionTool[] | undefin
 
 function createChatBody(model: Model<"ollama-chat">, context: Context, options: OllamaChatOptions | undefined) {
 	const think = mapReasoning(options?.reasoning);
+	const toolChoice = mapToolChoice(options?.toolChoice);
 	return {
 		model: model.id,
 		messages: convertMessages(model, context),
 		...(convertTools(context.tools) ? { tools: convertTools(context.tools) } : {}),
 		...(think !== undefined ? { think } : {}),
-		...(mapToolChoice(options?.toolChoice) ? { tool_choice: mapToolChoice(options?.toolChoice) } : {}),
+		...(toolChoice !== undefined ? { tool_choice: toolChoice } : {}),
 		...(options?.maxTokens !== undefined ? { options: { num_predict: options.maxTokens } } : {}),
 		stream: true,
 	};
