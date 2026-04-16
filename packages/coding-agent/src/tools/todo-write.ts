@@ -284,7 +284,17 @@ function applyParams(file: TodoFile, params: TodoWriteParams): { file: TodoFile;
 
 	if (params.start) {
 		const task = resolveTaskOrError(file.phases, params.start, errors);
-		if (task) task.status = "in_progress";
+		if (task) {
+			// Demote any currently in_progress tasks before promoting the target
+			for (const phase of file.phases) {
+				for (const t of phase.tasks) {
+					if (t.status === "in_progress" && t.id !== task.id) {
+						t.status = "pending";
+					}
+				}
+			}
+			task.status = "in_progress";
+		}
 	}
 
 	normalizeInProgressTask(file.phases);
@@ -320,6 +330,11 @@ function formatSummary(phases: TodoPhase[], errors: string[]): string {
 			if (task.status === "in_progress" && task.details) {
 				for (const line of task.details.split("\n")) {
 					lines.push(`      ${line}`);
+				}
+			}
+			if (task.notes) {
+				for (const line of task.notes.split("\n")) {
+					lines.push(`      Note: ${line}`);
 				}
 			}
 		}

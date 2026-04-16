@@ -90,6 +90,45 @@ describe("TodoWriteTool auto-start behavior", () => {
 	});
 });
 
+describe("TodoWriteTool start behavior", () => {
+	it("jumps to a specific task out of order", async () => {
+		const tool = new TodoWriteTool(createSession());
+		await tool.execute("call-1", {
+			phases: [
+				{
+					name: "Phase A",
+					tasks: [{ content: "first" }, { content: "second" }, { content: "third" }],
+				},
+			],
+		});
+
+		const result = await tool.execute("call-2", {
+			start: "task-3",
+		});
+
+		const tasks = result.details?.phases[0]?.tasks ?? [];
+		expect(tasks.map(task => task.status)).toEqual(["pending", "pending", "in_progress"]);
+	});
+
+	it("demotes the current in_progress task when starting another", async () => {
+		const tool = new TodoWriteTool(createSession());
+		await tool.execute("call-1", {
+			phases: [
+				{ name: "A", tasks: [{ content: "a1" }, { content: "a2" }] },
+				{ name: "B", tasks: [{ content: "b1" }] },
+			],
+		});
+
+		// task-1 is auto-promoted; now jump to task-3 in phase B
+		const result = await tool.execute("call-2", {
+			start: "task-3",
+		});
+
+		const allTasks = result.details?.phases.flatMap(p => p.tasks) ?? [];
+		expect(allTasks.map(t => t.status)).toEqual(["pending", "pending", "in_progress"]);
+	});
+});
+
 describe("TodoWriteTool details field", () => {
 	it("preserves details through replace", async () => {
 		const tool = new TodoWriteTool(createSession());
@@ -133,6 +172,26 @@ describe("TodoWriteTool details field", () => {
 
 		const task = result.details?.phases[0]?.tasks[0];
 		expect(task?.notes).toBe("New observation");
+	});
+
+	it("includes notes in summary output", async () => {
+		const tool = new TodoWriteTool(createSession());
+		await tool.execute("call-1", {
+			phases: [
+				{
+					name: "Work",
+					tasks: [{ content: "Fix bug" }, { content: "Add tests" }],
+				},
+			],
+		});
+
+		const result = await tool.execute("call-2", {
+			add_notes: [{ id: "task-1", notes: "Found edge case in parser" }],
+		});
+
+		const summary = result.content.find(part => part.type === "text");
+		if (!summary || summary.type !== "text") throw new Error("Expected text summary");
+		expect(summary.text).toContain("Note: Found edge case in parser");
 	});
 
 	it("includes details in summary for in_progress tasks", async () => {
