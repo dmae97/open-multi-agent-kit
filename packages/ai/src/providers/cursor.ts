@@ -2114,6 +2114,17 @@ function storeBlob(blobStore: Map<string, Uint8Array>, data: Uint8Array): Uint8A
 }
 
 /**
+ * Derive a stable, UUID-formatted `message_id` from a content key.
+ * Ensures identical historical messages hash to the same blob IDs across
+ * requests, so `conversationBlobStores` does not grow unboundedly and
+ * unchanged history reuses existing blob IDs.
+ */
+function deterministicMessageId(key: string): string {
+	const hex = createHash("sha256").update(key).digest("hex");
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+/**
  * Convert context.messages to Cursor's ConversationTurnStructure blob IDs.
  * Groups messages into turns: each turn is a user message followed by the assistant's response.
  * Excludes the last user message (which goes in the action).
@@ -2156,7 +2167,7 @@ function buildConversationTurns(messages: Message[], blobStore: Map<string, Uint
 
 		const userMessage = create(UserMessageSchema, {
 			text: userText,
-			messageId: crypto.randomUUID(),
+			messageId: deterministicMessageId(`u:${turns.length}:${userText}`),
 		});
 		const userMessageBytes = toBinary(UserMessageSchema, userMessage);
 		const userMessageBlobId = storeBlob(blobStore, userMessageBytes);
