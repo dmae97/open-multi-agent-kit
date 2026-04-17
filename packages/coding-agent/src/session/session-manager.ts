@@ -2040,14 +2040,18 @@ export class SessionManager {
 		if (this.#needsFullRewriteOnNextPersist || !this.#flushed) {
 			// Full flush: rewrite the entire file atomically to avoid
 			// duplicating entries if the file already exists (e.g. from ensureOnDisk).
-			void this.#rewriteFile();
+			// Errors are already surfaced through #persistChain/#persistError; the
+			// caller intentionally fires-and-forgets, so swallow the awaited rejection
+			// here to avoid an unhandled rejection when the persist dir races with
+			// test-level tempDir cleanup.
+			this.#rewriteFile().catch(() => {});
 		} else {
-			void this.#queuePersistTask(async () => {
+			this.#queuePersistTask(async () => {
 				const writer = this.#ensurePersistWriter();
 				if (!writer) return;
 				const persistedEntry = await prepareEntryForPersistence(entry, this.#blobStore);
 				await writer.write(persistedEntry);
-			});
+			}).catch(() => {});
 		}
 	}
 
