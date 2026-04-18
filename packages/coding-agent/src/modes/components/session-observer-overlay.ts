@@ -141,6 +141,13 @@ export class SessionObserverOverlayComponent extends Container {
 		this.#expandedEntries.clear();
 		this.#wasAtBottom = true;
 		this.#rebuildViewerContent();
+		// Auto-select first non-user entry (skip prompt) and scroll to latest for active sessions
+		const firstNonUser = this.#viewerEntries.findIndex(e => e.kind !== "user");
+		if (firstNonUser >= 0) {
+			this.#selectedEntryIndex = firstNonUser;
+			this.#rebuildViewerContent();
+			this.#scrollToSelectedEntry();
+		}
 	}
 
 	/** Rebuild content from live registry data */
@@ -357,11 +364,12 @@ export class SessionObserverOverlayComponent extends Container {
 							lines.push(`${INDENT}${theme.fg("muted", tl)}`);
 						}
 					} else {
-						const preview = text.trim().split("\n")[0];
-						lines.push(`${cursor} ${theme.fg("dim", `[${label}]`)} ${theme.fg("muted", preview)}`);
-						if (text.trim().split("\n").length > 1) {
-							lines.push(`${INDENT}${theme.fg("dim", `... ${text.trim().split("\n").length - 1} more lines`)}`);
-						}
+						const firstLine = text.trim().split("\n")[0];
+						const totalLines = text.trim().split("\n").length;
+						const hint = totalLines > 1 ? theme.fg("dim", ` (${totalLines} lines)`) : "";
+						lines.push(
+							`${cursor} ${theme.fg("dim", `[${label}]`)} ${theme.fg("muted", truncateToWidth(firstLine, 60))}${hint}`,
+						);
 					}
 					this.#viewerEntries.push({ lineStart: startLine, lineCount: lines.length - startLine, kind: "user" });
 					entryIndex++;
