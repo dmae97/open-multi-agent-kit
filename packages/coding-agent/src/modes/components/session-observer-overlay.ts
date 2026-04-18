@@ -200,7 +200,12 @@ export class SessionObserverOverlayComponent extends Container {
 			const statusColor = session.status === "active" ? "success" : session.status === "failed" ? "error" : "dim";
 			const statusText = theme.fg(statusColor, `[${session.status}]`);
 			const agentTag = session.agent ? theme.fg("dim", ` ${session.agent}`) : "";
-			this.#viewerHeaderLines.push(`${theme.bold(session.label)} ${statusText}${agentTag}`);
+			// Session position indicator for cycling
+			const subagentIds = this.#getSubagentSessionIds();
+			const posIdx = subagentIds.indexOf(this.#selectedSessionId ?? "");
+			const posLabel =
+				subagentIds.length > 1 && posIdx >= 0 ? theme.fg("dim", ` (${posIdx + 1}/${subagentIds.length})`) : "";
+			this.#viewerHeaderLines.push(`${theme.bold(session.label)} ${statusText}${agentTag}${posLabel}`);
 		}
 
 		// Content
@@ -229,7 +234,7 @@ export class SessionObserverOverlayComponent extends Container {
 		const statsLine = this.#buildStatsLine(session);
 		if (statsLine) this.#viewerFooterLines.push(statsLine);
 		this.#viewerFooterLines.push(
-			theme.fg("dim", "j/k:navigate  Enter:expand/collapse  Esc:back  PgUp/PgDn:page  g/G:top/bottom"),
+			theme.fg("dim", "j/k:navigate  Enter:expand  [/]:prev/next agent  Esc:back  g/G:top/bottom"),
 		);
 
 		// Auto-scroll to bottom if we were at bottom
@@ -753,6 +758,49 @@ export class SessionObserverOverlayComponent extends Container {
 			this.#scrollOffset = 0;
 			this.#rebuildAndScroll();
 			return;
+		}
+
+		// ] or Tab — next sub-agent session
+		if (keyData === "]" || matchesKey(keyData, "tab")) {
+			this.#cycleSession(1);
+			return;
+		}
+
+		// [ or Shift+Tab — previous sub-agent session
+		if (keyData === "[" || matchesKey(keyData, "shift+tab")) {
+			this.#cycleSession(-1);
+			return;
+		}
+	}
+
+	/** Get the ordered list of sub-agent session IDs (excludes main) */
+	#getSubagentSessionIds(): string[] {
+		return this.#registry
+			.getSessions()
+			.filter(s => s.kind === "subagent")
+			.map(s => s.id);
+	}
+
+	/** Cycle to next (+1) or previous (-1) sub-agent session */
+	#cycleSession(direction: 1 | -1): void {
+		const ids = this.#getSubagentSessionIds();
+		if (ids.length <= 1) return;
+		const currentIdx = ids.indexOf(this.#selectedSessionId ?? "");
+		if (currentIdx < 0) return;
+		const nextIdx = (currentIdx + direction + ids.length) % ids.length;
+		this.#selectedSessionId = ids[nextIdx];
+		this.#transcriptCache = undefined;
+		this.#scrollOffset = 0;
+		this.#selectedEntryIndex = 0;
+		this.#expandedEntries.clear();
+		this.#wasAtBottom = true;
+		this.#rebuildViewerContent();
+		// Auto-skip to first non-user entry
+		const firstNonUser = this.#viewerEntries.findIndex(e => e.kind !== "user");
+		if (firstNonUser >= 0) {
+			this.#selectedEntryIndex = firstNonUser;
+			this.#rebuildViewerContent();
+			this.#scrollToSelectedEntry();
 		}
 	}
 
