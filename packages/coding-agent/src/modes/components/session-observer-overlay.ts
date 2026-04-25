@@ -779,10 +779,16 @@ export class SessionObserverOverlayComponent extends Container {
 		const entryBottom = entry.lineStart + entry.lineCount;
 
 		if (entry.lineCount >= this.#viewportHeight) {
-			// Entry taller than viewport: ensure top is visible, don't snap to bottom
-			if (entryTop < this.#scrollOffset || entryTop >= this.#scrollOffset + this.#viewportHeight) {
+			// Entry taller than viewport: only snap when it's completely out of view.
+			// If the viewport overlaps the entry at all, the user may be paging within it.
+			if (this.#scrollOffset + this.#viewportHeight <= entryTop) {
+				// Viewport is entirely above the entry — snap to entry top
 				this.#scrollOffset = Math.max(0, entryTop - 1);
+			} else if (this.#scrollOffset >= entryBottom) {
+				// Viewport is entirely below the entry — snap to show entry bottom
+				this.#scrollOffset = Math.max(0, entryBottom - this.#viewportHeight);
 			}
+			// Otherwise: viewport overlaps the entry — don't override manual scroll
 		} else {
 			// Entry fits in viewport: ensure it's fully visible
 			if (entryTop < this.#scrollOffset) {
