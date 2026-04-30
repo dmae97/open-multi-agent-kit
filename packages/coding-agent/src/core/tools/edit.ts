@@ -347,7 +347,7 @@ export function createEditToolDefinition(
 									if (signal) {
 										signal.removeEventListener("abort", onAbort);
 									}
-									reject(new Error(`Could not write file: ${path}. ${errorMessage}.`));
+									reject(new Error(`Could not edit file: ${path}. ${errorMessage}.`));
 									return;
 								}
 
