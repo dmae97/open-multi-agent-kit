@@ -22,6 +22,7 @@
 
 ### Fixed
 
+- Fixed WSL clipboard image paste by passing the PowerShell save path directly instead of through a custom environment variable ([#2469](https://github.com/badlogic/pi-mono/issues/2469)).
 - Fixed Google Vertex Gemini 3 tool call replay for unsigned tool calls ([#4032](https://github.com/badlogic/pi-mono/issues/4032)).
 - Fixed blocked `edit` tool results rendering the rejection reason twice after interactive extension confirmation ([#3830](https://github.com/badlogic/pi-mono/issues/3830)).
 - Fixed extension-triggered thinking level changes refreshing the interactive editor border immediately ([#3888](https://github.com/badlogic/pi-mono/issues/3888)).
