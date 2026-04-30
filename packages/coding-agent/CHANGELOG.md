@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added `PI_CODING_AGENT_SESSION_DIR` as an environment equivalent to `--session-dir` ([#4027](https://github.com/badlogic/pi-mono/issues/4027)).
 - Added `message_end` extension result support for replacing finalized messages, enabling extensions to override assistant usage cost ([#3982](https://github.com/badlogic/pi-mono/issues/3982)).
 - Added top-level `name` support to `pi.registerProvider()` so extension-registered providers can show a friendly name in `/login` ([#3956](https://github.com/badlogic/pi-mono/issues/3956)).
 - Added `ctx.ui.getEditorComponent()` so extensions can wrap the currently configured custom editor factory ([#3935](https://github.com/badlogic/pi-mono/issues/3935)).
