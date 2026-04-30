@@ -12,6 +12,7 @@
 
 ### Fixed
 
+- Fixed Google Vertex Gemini 3 tool call replay by no longer sending the non-Vertex `skip_thought_signature_validator` sentinel for unsigned tool calls ([#4032](https://github.com/badlogic/pi-mono/issues/4032)).
 - Updated `@anthropic-ai/sdk` to `^0.91.1` to clear GHSA-p7fg-763f-g4gf audit findings ([#3992](https://github.com/badlogic/pi-mono/issues/3992)).
 - Fixed DeepSeek V4 Flash `xhigh` thinking support so requests preserve `xhigh` and map it to DeepSeek's `max` reasoning effort ([#3944](https://github.com/badlogic/pi-mono/issues/3944)).
 - Fixed Anthropic streams that end before `message_stop` to be treated as errors instead of successful partial responses ([#3936](https://github.com/badlogic/pi-mono/issues/3936)).

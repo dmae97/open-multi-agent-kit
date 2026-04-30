@@ -51,11 +51,6 @@ export function retainThoughtSignature(existing: string | undefined, incoming: s
 // Thought signatures must be base64 for Google APIs (TYPE_BYTES).
 const base64SignaturePattern = /^[A-Za-z0-9+/]+={0,2}$/;
 
-// Sentinel value that tells the Gemini API to skip thought signature validation.
-// Used for unsigned function call parts (e.g. replayed from providers without thought signatures).
-// See: https://ai.google.dev/gemini-api/docs/thought-signatures
-const SKIP_THOUGHT_SIGNATURE = "skip_thought_signature_validator";
-
 function isValidThoughtSignature(signature: string | undefined): boolean {
 	if (!signature) return false;
 	if (signature.length % 4 !== 0) return false;
@@ -161,18 +156,13 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 					}
 				} else if (block.type === "toolCall") {
 					const thoughtSignature = resolveThoughtSignature(isSameProviderAndModel, block.thoughtSignature);
-					// Gemini 3 requires thoughtSignature on all function calls when thinking mode is enabled.
-					// Use the skip_thought_signature_validator sentinel for unsigned function calls
-					// when replayed from providers without thought signatures.
-					const isGemini3 = model.id.toLowerCase().includes("gemini-3");
-					const effectiveSignature = thoughtSignature || (isGemini3 ? SKIP_THOUGHT_SIGNATURE : undefined);
 					const part: Part = {
 						functionCall: {
 							name: block.name,
 							args: block.arguments ?? {},
 							...(requiresToolCallId(model.id) ? { id: block.id } : {}),
 						},
-						...(effectiveSignature && { thoughtSignature: effectiveSignature }),
+						...(thoughtSignature && { thoughtSignature }),
 					};
 					parts.push(part);
 				}
