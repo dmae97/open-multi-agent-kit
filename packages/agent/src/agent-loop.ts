@@ -215,6 +215,18 @@ async function runLoop(
 
 			await emit({ type: "turn_end", message, toolResults });
 
+			if (
+				await config.shouldStopAfterTurn?.({
+					message,
+					toolResults,
+					context: currentContext,
+					newMessages,
+				})
+			) {
+				await emit({ type: "agent_end", messages: newMessages });
+				return;
+			}
+
 			pendingMessages = (await config.getSteeringMessages?.()) || [];
 		}
 
