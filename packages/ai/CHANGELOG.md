@@ -2,11 +2,17 @@
 
 ## [Unreleased]
 
+<<<<<<< feat/add-xiaomi-provider
+### Added
+
+- Added Xiaomi MiMo provider (openai-completions compatible) with `XIAOMI_API_KEY` authentication.
+=======
 ## [0.71.1] - 2026-05-01
 
 ### Added
 
 - Added `websocket-cached` transport support for OpenAI Codex Responses used with ChatGPT subscription auth. This keeps the same WebSocket open for a session and, after the first request, sends only new conversation items instead of resending the full chat history when possible.
+>>>>>>> main
 
 ## [0.71.0] - 2026-04-30
 

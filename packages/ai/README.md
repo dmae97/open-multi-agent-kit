@@ -69,6 +69,7 @@ Unified LLM API with automatic model discovery, provider configuration, token an
 - **OpenCode Go**
 - **Fireworks** (uses Anthropic-compatible API)
 - **Kimi For Coding** (Moonshot AI, uses Anthropic-compatible API)
+- **Xiaomi MiMo** (uses OpenAI-compatible API)
 - **Any OpenAI-compatible API**: Ollama, vLLM, LM Studio, etc.
 
 ## Installation

@@ -390,6 +390,25 @@ describe("Context overflow error handling", () => {
 	});
 
 	// =============================================================================
+	// Xiaomi MiMo
+	// =============================================================================
+
+	describe.skipIf(!process.env.XIAOMI_API_KEY)("Xiaomi MiMo", () => {
+		// Xiaomi silently truncates oversized input to fill the context window exactly,
+		// then returns finish_reason "length" with output=0 (no room left to generate).
+		// This is a detectable overflow signal but uses stopReason "length" rather than "error".
+		it("mimo-v2.5-pro - should detect overflow via isContextOverflow", async () => {
+			const model = getModel("xiaomi", "mimo-v2.5-pro");
+			const result = await testContextOverflow(model, process.env.XIAOMI_API_KEY!);
+			logResult(result);
+
+			expect(result.stopReason).toBe("length");
+			expect(result.usage.output).toBe(0);
+			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+		}, 120000);
+	});
+
+	// =============================================================================
 	// Kimi For Coding
 	// =============================================================================
 

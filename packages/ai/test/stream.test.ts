@@ -993,6 +993,24 @@ describe("Generate E2E Tests", () => {
 		},
 	);
 
+	describe.skipIf(!process.env.XIAOMI_API_KEY)(
+		"Xiaomi MiMo Provider (Xiaomi MiMo-V2.5-Pro via OpenAI Completions)",
+		() => {
+			const llm = getModel("xiaomi", "mimo-v2.5-pro");
+
+			it("should complete basic text generation", { retry: 3 }, async () => {
+				await basicTextGeneration(llm);
+			});
+
+			it("should handle tool calling", { retry: 3 }, async () => {
+				await handleToolCall(llm);
+			});
+
+			it("should handle streaming", { retry: 3 }, async () => {
+				await handleStreaming(llm);
+			});
+		},
+	);
 	// =========================================================================
 	// OAuth-based providers (credentials from ~/.pi/agent/oauth.json)
 	// Tokens are resolved at module level (see oauthTokens above)

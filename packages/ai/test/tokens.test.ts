@@ -220,6 +220,14 @@ describe("Token Statistics on Abort", () => {
 		});
 	});
 
+	describe.skipIf(!process.env.XIAOMI_API_KEY)("Xiaomi MiMo Provider", () => {
+		const llm = getModel("xiaomi", "mimo-v2.5-pro");
+
+		it("should include token stats when aborted mid-stream", { retry: 3, timeout: 30000 }, async () => {
+			await testTokensOnAbort(llm);
+		});
+	});
+
 	// =========================================================================
 	// OAuth-based providers (credentials from ~/.pi/agent/oauth.json)
 	// =========================================================================

@@ -122,6 +122,7 @@ function getApiKeyEnvVars(provider: string): readonly string[] | undefined {
 		"kimi-coding": "KIMI_API_KEY",
 		"cloudflare-workers-ai": "CLOUDFLARE_API_KEY",
 		"cloudflare-ai-gateway": "CLOUDFLARE_API_KEY",
+		xiaomi: "XIAOMI_API_KEY",
 	};
 
 	const envVar = envMap[provider];

@@ -444,6 +444,29 @@ describe("totalTokens field", () => {
 	});
 
 	// =========================================================================
+	// Xiaomi MiMo
+	// =========================================================================
+
+	describe.skipIf(!process.env.XIAOMI_API_KEY)("Xiaomi MiMo", () => {
+		it(
+			"mimo-v2.5-pro - should return totalTokens equal to sum of components",
+			{ retry: 3, timeout: 60000 },
+			async () => {
+				const llm = getModel("xiaomi", "mimo-v2.5-pro");
+
+				console.log(`\nXiaomi MiMo / ${llm.id}:`);
+				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: process.env.XIAOMI_API_KEY });
+
+				logUsage("First request", first);
+				logUsage("Second request", second);
+
+				assertTotalTokensEqualsComponents(first);
+				assertTotalTokensEqualsComponents(second);
+			},
+		);
+	});
+
+	// =========================================================================
 	// Kimi For Coding
 	// =========================================================================
 

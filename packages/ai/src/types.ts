@@ -42,7 +42,8 @@ export type KnownProvider =
 	| "opencode-go"
 	| "kimi-coding"
 	| "cloudflare-workers-ai"
-	| "cloudflare-ai-gateway";
+	| "cloudflare-ai-gateway"
+	| "xiaomi";
 export type Provider = KnownProvider | string;
 
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high" | "xhigh";

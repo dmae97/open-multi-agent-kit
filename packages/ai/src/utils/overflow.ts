@@ -23,6 +23,9 @@ import type { AssistantMessage } from "../types.js";
  * - Cerebras: "400/413 status code (no body)"
  * - Mistral: "Prompt contains X tokens ... too large for model with Y maximum context length"
  * - z.ai: Does NOT error, accepts overflow silently - handled via usage.input > contextWindow
+ * - Xiaomi MiMo: Truncates input to fill contextWindow exactly, then returns finish_reason "length"
+ *   with output=0 (no room left to generate). Detected via stopReason "length" + zero output +
+ *   input filling the context window.
  * - Ollama: Some deployments truncate silently, others return errors like "prompt too long; exceeded max context length by X tokens"
  */
 const OVERFLOW_PATTERNS = [
@@ -90,6 +93,8 @@ const NON_OVERFLOW_PATTERNS = [
  * **Unreliable detection:**
  * - z.ai: Sometimes accepts overflow silently (detectable via usage.input > contextWindow),
  *   sometimes returns rate limit errors. Pass contextWindow param to detect silent overflow.
+ * - Xiaomi MiMo: Truncates input to fit contextWindow then returns stopReason "length" with
+ *   output=0. Pass contextWindow param to detect via the "filled context + zero output" signal.
  * - Ollama: May truncate input silently for some setups, but may also return explicit
  *   overflow errors that match the patterns above. Silent truncation still cannot be
  *   detected here because we do not know the expected token count.
@@ -123,6 +128,16 @@ export function isContextOverflow(message: AssistantMessage, contextWindow?: num
 	if (contextWindow && message.stopReason === "stop") {
 		const inputTokens = message.usage.input + message.usage.cacheRead;
 		if (inputTokens > contextWindow) {
+			return true;
+		}
+	}
+
+	// Case 3: Length-stop overflow (Xiaomi MiMo style) - server truncates oversized input
+	// to fit the context window, leaving no room for output. Returns stopReason "length"
+	// with output=0 and input+cacheRead filling the context window.
+	if (contextWindow && message.stopReason === "length" && message.usage.output === 0) {
+		const inputTokens = message.usage.input + message.usage.cacheRead;
+		if (inputTokens >= contextWindow * 0.99) {
 			return true;
 		}
 	}

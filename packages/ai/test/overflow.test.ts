@@ -61,4 +61,39 @@ describe("isContextOverflow", () => {
 		const message = createErrorMessage("Too many requests. Please slow down.");
 		expect(isContextOverflow(message, 200000)).toBe(false);
 	});
+
+	function createLengthStopMessage(input: number, cacheRead: number, output: number): AssistantMessage {
+		return {
+			role: "assistant",
+			content: [],
+			api: "openai-completions",
+			provider: "xiaomi",
+			model: "mimo-v2.5-pro",
+			usage: {
+				input,
+				output,
+				cacheRead,
+				cacheWrite: 0,
+				totalTokens: input + cacheRead + output,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "length",
+			timestamp: Date.now(),
+		};
+	}
+
+	it("detects Xiaomi-style overflow (length stop with zero output and filled context)", () => {
+		const message = createLengthStopMessage(58, 1048512, 0);
+		expect(isContextOverflow(message, 1048576)).toBe(true);
+	});
+
+	it("does not treat normal length stops with output as overflow", () => {
+		const message = createLengthStopMessage(1000, 0, 4096);
+		expect(isContextOverflow(message, 200000)).toBe(false);
+	});
+
+	it("does not treat length stops far below context as overflow", () => {
+		const message = createLengthStopMessage(100, 0, 0);
+		expect(isContextOverflow(message, 200000)).toBe(false);
+	});
 });
