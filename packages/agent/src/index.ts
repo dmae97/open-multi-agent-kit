@@ -23,6 +23,7 @@ export {
 	shouldCompact,
 } from "./harness/compaction/compaction.js";
 export * from "./harness/execution-env.js";
+export * from "./harness/factory.js";
 export * from "./harness/messages.js";
 export * from "./harness/prompt-templates.js";
 export * from "./harness/session/repo/jsonl.js";
