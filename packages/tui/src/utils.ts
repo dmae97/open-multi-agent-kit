@@ -312,6 +312,42 @@ export function extractAnsiCode(str: string, pos: number): { code: string; lengt
 	return null;
 }
 
+type Osc8Terminator = "\x07" | "\x1b\\";
+
+interface ActiveHyperlink {
+	params: string;
+	url: string;
+	terminator: Osc8Terminator;
+}
+
+function parseOsc8Hyperlink(ansiCode: string): ActiveHyperlink | null | undefined {
+	if (!ansiCode.startsWith("\x1b]8;")) {
+		return undefined;
+	}
+
+	const terminator: Osc8Terminator = ansiCode.endsWith("\x07") ? "\x07" : "\x1b\\";
+	const body = ansiCode.slice(4, terminator === "\x07" ? -1 : -2);
+	const separatorIndex = body.indexOf(";");
+	if (separatorIndex === -1) {
+		return undefined;
+	}
+
+	const params = body.slice(0, separatorIndex);
+	const url = body.slice(separatorIndex + 1);
+	if (!url) {
+		return null;
+	}
+	return { params, url, terminator };
+}
+
+function formatOsc8Hyperlink(hyperlink: ActiveHyperlink): string {
+	return `\x1b]8;${hyperlink.params};${hyperlink.url}${hyperlink.terminator}`;
+}
+
+function formatOsc8Close(terminator: Osc8Terminator): string {
+	return `\x1b]8;;${terminator}`;
+}
+
 /**
  * Track active ANSI SGR codes to preserve styling across line breaks.
  */
@@ -327,13 +363,16 @@ class AnsiCodeTracker {
 	private strikethrough = false;
 	private fgColor: string | null = null; // Stores the full code like "31" or "38;5;240"
 	private bgColor: string | null = null; // Stores the full code like "41" or "48;5;240"
-	private activeHyperlink: string | null = null; // Active OSC 8 hyperlink URL, or null
+	private activeHyperlink: ActiveHyperlink | null = null;
 
 	process(ansiCode: string): void {
-		// OSC 8 hyperlink: \x1b]8;;<url>\x1b\\ (open) or \x1b]8;;\x1b\\ (close)
-		if (ansiCode.startsWith("\x1b]8;")) {
-			const m = ansiCode.match(/^\x1b\]8;[^;]*;([^\x1b\x07]*)/);
-			this.activeHyperlink = m?.[1] ? m[1] : null;
+		// OSC 8 hyperlink: \x1b]8;;<url>\x1b\\ (open) or \x1b]8;;\x1b\\ (close).
+		// Preserve the original terminator because some terminals only make BEL-terminated
+		// links clickable. OAuth login URLs use BEL, so reopening wrapped lines with ST
+		// made only the first physical line clickable in those terminals.
+		const hyperlink = parseOsc8Hyperlink(ansiCode);
+		if (hyperlink !== undefined) {
+			this.activeHyperlink = hyperlink;
 			return;
 		}
 
@@ -495,7 +534,7 @@ class AnsiCodeTracker {
 
 		let result = codes.length > 0 ? `\x1b[${codes.join(";")}m` : "";
 		if (this.activeHyperlink) {
-			result += `\x1b]8;;${this.activeHyperlink}\x1b\\`;
+			result += formatOsc8Hyperlink(this.activeHyperlink);
 		}
 		return result;
 	}
@@ -528,7 +567,7 @@ class AnsiCodeTracker {
 			result += "\x1b[24m"; // Underline off only
 		}
 		if (this.activeHyperlink) {
-			result += "\x1b]8;;\x1b\\"; // Close hyperlink; re-opened at line start via getActiveCodes()
+			result += formatOsc8Close(this.activeHyperlink.terminator); // Re-opened at line start via getActiveCodes()
 		}
 		return result;
 	}

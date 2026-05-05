@@ -191,6 +191,21 @@ describe("wrapTextWithAnsi with OSC 8 hyperlinks", () => {
 		}
 	});
 
+	it("preserves BEL terminators when wrapping OAuth-style hyperlinks", () => {
+		const url = `https://example.com/oauth/${"a".repeat(32)}`;
+		const input = `\x1b]8;;${url}\x07${url}\x1b]8;;\x07`;
+		const lines = wrapTextWithAnsi(input, 20);
+
+		assert.ok(lines.length > 1);
+		for (const line of lines) {
+			assert.ok(line.includes(`\x1b]8;;${url}\x07`), `Line "${line}" does not reopen the hyperlink with BEL`);
+			assert.ok(!line.includes(`\x1b]8;;${url}\x1b\\`), `Line "${line}" reopens the hyperlink with ST`);
+		}
+		for (const line of lines.slice(0, -1)) {
+			assert.ok(line.endsWith("\x1b]8;;\x07"), `Line "${line}" does not close the hyperlink with BEL`);
+		}
+	});
+
 	it("does not emit OSC 8 sequences on lines that are outside the hyperlink", () => {
 		const url = "https://example.com";
 		const input = `before \x1b]8;;${url}\x1b\\link\x1b]8;;\x1b\\ after`;
