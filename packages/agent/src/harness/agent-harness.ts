@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import type { AssistantMessage, ImageContent, Model } from "@mariozechner/pi-ai";
 import { Agent } from "../agent.js";
 import type { AgentEvent, AgentMessage, AgentTool, ThinkingLevel } from "../types.js";
@@ -15,33 +14,12 @@ import type {
 	AgentHarnessOperationState,
 	AgentHarnessOptions,
 	AgentHarnessOwnEvent,
+	AgentHarnessResources,
 	ExecutionEnv,
 	NavigateTreeResult,
-	PromptTemplate,
 	Session,
 	Skill,
-	SystemPromptInputs,
 } from "./types.js";
-
-function buildSystemPrompt(inputs: SystemPromptInputs, cwd: string): string {
-	const parts: string[] = [];
-	if (inputs.basePrompt) parts.push(inputs.basePrompt);
-	if (inputs.appendPrompt) parts.push(inputs.appendPrompt);
-	if (inputs.contextFiles && inputs.contextFiles.length > 0) {
-		parts.push("# Project Context\n");
-		for (const file of inputs.contextFiles) {
-			parts.push(`## ${file.path}\n\n${file.content}`);
-		}
-	}
-	if (inputs.skills && inputs.skills.length > 0) {
-		parts.push("# Available Skills\n");
-		for (const skill of inputs.skills.filter((s) => !s.disableModelInvocation)) {
-			parts.push(`- ${skill.name}: ${skill.description}`);
-		}
-	}
-	parts.push(`Current working directory: ${cwd}`);
-	return parts.filter(Boolean).join("\n\n");
-}
 
 function createUserMessage(text: string, images?: ImageContent[]): AgentMessage {
 	const content: Array<{ type: "text"; text: string } | ImageContent> = [{ type: "text", text }];
@@ -56,8 +34,8 @@ export class AgentHarness {
 	readonly operation: AgentHarnessOperationState;
 
 	private session: Session;
-	private promptTemplates: PromptTemplate[];
-	private skills: Skill[];
+	private resourcesInput?: AgentHarnessOptions["resources"];
+	private systemPrompt: AgentHarnessOptions["systemPrompt"];
 	private requestAuth?: AgentHarnessOptions["requestAuth"];
 	private toolRegistry = new Map<string, AgentTool>();
 	private listeners = new Set<(event: AgentHarnessEvent, signal?: AbortSignal) => Promise<void> | void>();
@@ -67,22 +45,34 @@ export class AgentHarness {
 	>();
 
 	constructor(options: AgentHarnessOptions) {
-		this.agent = new Agent({});
+		this.agent = new Agent({
+			initialState: {
+				model: options.model,
+				thinkingLevel: options.thinkingLevel,
+				tools: options.tools ?? [],
+			},
+		});
 		this.env = options.env;
 		this.session = options.session;
-		this.promptTemplates = options.promptTemplates ?? [];
-		this.skills = options.skills ?? [];
+		this.resourcesInput = options.resources;
+		this.systemPrompt = options.systemPrompt;
 		this.requestAuth = options.requestAuth;
 		for (const tool of this.agent.state.tools) {
 			this.toolRegistry.set(tool.name, tool);
 		}
 		this.conversation = {
 			session: options.session,
-			model: options.initialModel ?? this.agent.state.model,
-			thinkingLevel: options.initialThinkingLevel ?? this.agent.state.thinkingLevel,
-			activeToolNames: options.initialActiveToolNames ?? this.agent.state.tools.map((tool) => tool.name),
-			systemPromptInputs: options.initialSystemPromptInputs ?? { skills: this.skills },
+			model: options.model,
+			thinkingLevel: options.thinkingLevel ?? this.agent.state.thinkingLevel,
+			activeToolNames: options.activeToolNames ?? this.agent.state.tools.map((tool) => tool.name),
 			nextTurnQueue: [],
+		};
+		this.agent.state.model = this.conversation.model;
+		this.agent.state.thinkingLevel = this.conversation.thinkingLevel;
+		this.agent.getApiKey = async (provider) => {
+			const model = this.conversation.model;
+			if (!this.requestAuth || model.provider !== provider) return undefined;
+			return (await this.requestAuth(model))?.apiKey;
 		};
 		this.operation = {
 			idle: true,
@@ -151,6 +141,31 @@ export class AgentHarness {
 		};
 	}
 
+	private async resolveResources(signal?: AbortSignal): Promise<AgentHarnessResources> {
+		return typeof this.resourcesInput === "function"
+			? await this.resourcesInput(this.createContext(signal))
+			: (this.resourcesInput ?? {});
+	}
+
+	private getActiveTools(): AgentTool[] {
+		return this.conversation.activeToolNames
+			.map((name) => this.toolRegistry.get(name))
+			.filter((tool): tool is AgentTool => tool !== undefined);
+	}
+
+	private async resolveSystemPrompt(resources: AgentHarnessResources): Promise<string> {
+		if (!this.systemPrompt) return "You are a helpful assistant.";
+		if (typeof this.systemPrompt === "string") return this.systemPrompt;
+		return await this.systemPrompt({
+			env: this.env,
+			session: this.session,
+			model: this.conversation.model,
+			thinkingLevel: this.conversation.thinkingLevel,
+			activeTools: this.getActiveTools(),
+			resources,
+		});
+	}
+
 	private async emitOwn(event: AgentHarnessOwnEvent, signal?: AbortSignal): Promise<void> {
 		for (const listener of this.listeners) {
 			await listener(event, signal);
@@ -195,7 +210,7 @@ export class AgentHarness {
 		if (context.model && this.conversation.model) {
 			// leave active model untouched; harness-level model is source of truth
 		}
-		this.agent.state.systemPrompt = buildSystemPrompt(this.conversation.systemPromptInputs, this.env.cwd);
+		this.agent.state.systemPrompt = await this.resolveSystemPrompt(await this.resolveResources());
 	}
 
 	private async applyPendingMutations(): Promise<void> {
@@ -232,12 +247,6 @@ export class AgentHarness {
 			this.operation.pendingMutations.activeToolNames = undefined;
 		}
 
-		if (this.operation.pendingMutations.systemPromptInputs) {
-			this.conversation.systemPromptInputs = this.operation.pendingMutations.systemPromptInputs;
-			this.agent.state.systemPrompt = buildSystemPrompt(this.conversation.systemPromptInputs, this.env.cwd);
-			this.operation.pendingMutations.systemPromptInputs = undefined;
-		}
-
 		await this.syncFromTree();
 	}
 
@@ -264,8 +273,7 @@ export class AgentHarness {
 				this.operation.pendingMutations.appendMessages.length > 0 ||
 				this.operation.pendingMutations.model !== undefined ||
 				this.operation.pendingMutations.thinkingLevel !== undefined ||
-				this.operation.pendingMutations.activeToolNames !== undefined ||
-				this.operation.pendingMutations.systemPromptInputs !== undefined;
+				this.operation.pendingMutations.activeToolNames !== undefined;
 			await this.emitOwn(
 				{ type: "save_point", liveOperationId: this.operation.liveOperationId ?? "unknown", hadPendingMutations },
 				signal,
@@ -288,14 +296,18 @@ export class AgentHarness {
 		const beforeLength = this.agent.state.messages.length;
 		this.operation.idle = false;
 		this.operation.liveOperationId = randomUUID();
-		const expanded = this.expandSkillCommand(expandPromptTemplate(text, this.promptTemplates));
+		const resources = await this.resolveResources(this.agent.signal);
+		const expanded = this.expandSkillCommand(
+			expandPromptTemplate(text, resources.promptTemplates ?? []),
+			resources.skills ?? [],
+		);
 		let messages: AgentMessage[] = [createUserMessage(expanded, options?.images)];
 		if (this.conversation.nextTurnQueue.length > 0) {
 			messages = [messages[0]!, ...this.conversation.nextTurnQueue];
 			this.conversation.nextTurnQueue = [];
 			await this.emitQueueUpdate();
 		}
-		this.agent.state.systemPrompt = buildSystemPrompt(this.conversation.systemPromptInputs, this.env.cwd);
+		this.agent.state.systemPrompt = await this.resolveSystemPrompt(resources);
 		const beforeResult = await this.emitHook(
 			"before_agent_start",
 			{
@@ -303,7 +315,7 @@ export class AgentHarness {
 				prompt: expanded,
 				images: options?.images,
 				systemPrompt: this.agent.state.systemPrompt,
-				systemPromptInputs: this.conversation.systemPromptInputs,
+				resources,
 			},
 			this.agent.signal,
 		);
@@ -324,11 +336,10 @@ export class AgentHarness {
 	}
 
 	async skill(name: string, args?: string): Promise<AssistantMessage> {
-		const skill = this.skills.find((candidate) => candidate.name === name);
+		const resources = await this.resolveResources();
+		const skill = (resources.skills ?? []).find((candidate) => candidate.name === name);
 		if (!skill) throw new Error(`Unknown skill: ${name}`);
-		let content = readFileSync(skill.filePath, "utf8");
-		content = content.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, "").trim();
-		const prompt = args ? `${content}\n\n${args}` : content;
+		const prompt = args ? `${skill.content}\n\n${args}` : skill.content;
 		return await this.prompt(prompt);
 	}
 
@@ -546,18 +557,9 @@ export class AgentHarness {
 	async setActiveTools(toolNames: string[]): Promise<void> {
 		if (this.operation.idle) {
 			this.conversation.activeToolNames = [...toolNames];
-			this.agent.state.tools = toolNames.map((name) => this.toolRegistry.get(name)).filter(Boolean) as any;
+			this.agent.state.tools = this.getActiveTools();
 		} else {
 			this.operation.pendingMutations.activeToolNames = [...toolNames];
-		}
-	}
-
-	async setSystemPromptInputs(inputs: SystemPromptInputs): Promise<void> {
-		if (this.operation.idle) {
-			this.conversation.systemPromptInputs = inputs;
-			this.agent.state.systemPrompt = buildSystemPrompt(this.conversation.systemPromptInputs, this.env.cwd);
-		} else {
-			this.operation.pendingMutations.systemPromptInputs = inputs;
 		}
 	}
 
@@ -600,15 +602,13 @@ export class AgentHarness {
 		return () => handlers!.delete(handler as any);
 	}
 
-	private expandSkillCommand(text: string): string {
+	private expandSkillCommand(text: string, skills: Skill[]): string {
 		if (!text.startsWith("/skill:")) return text;
 		const spaceIndex = text.indexOf(" ");
 		const skillName = spaceIndex === -1 ? text.slice(7) : text.slice(7, spaceIndex);
 		const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1).trim();
-		const skill = this.skills.find((candidate) => candidate.name === skillName);
+		const skill = skills.find((candidate) => candidate.name === skillName);
 		if (!skill) return text;
-		let content = readFileSync(skill.filePath, "utf8");
-		content = content.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, "").trim();
-		return args ? `${content}\n\n${args}` : content;
+		return args ? `${skill.content}\n\n${args}` : skill.content;
 	}
 }

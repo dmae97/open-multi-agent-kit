@@ -1,0 +1,46 @@
+import { symlink } from "node:fs/promises";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { NodeExecutionEnv } from "../../src/harness/execution-env.js";
+import { expandPromptTemplate, loadPromptTemplates } from "../../src/harness/prompt-templates.js";
+import { createTempDir } from "./session-test-utils.js";
+
+describe("loadPromptTemplates", () => {
+	it("loads markdown templates non-recursively from one or more dirs", async () => {
+		const root = createTempDir();
+		const env = new NodeExecutionEnv({ cwd: root });
+		await env.createDir("a/nested", { recursive: true });
+		await env.createDir("b", { recursive: true });
+		await env.writeFile("a/one.md", "---\ndescription: One template\n---\nHello $1");
+		await env.writeFile("a/nested/ignored.md", "Ignored");
+		await env.writeFile("b/two.md", "First line description\nBody");
+
+		const templates = await loadPromptTemplates(env, ["a", "b"]);
+
+		expect(templates).toEqual([
+			{ name: "one", description: "One template", content: "Hello $1" },
+			{ name: "two", description: "First line description", content: "First line description\nBody" },
+		]);
+	});
+
+	it("loads explicit markdown files and symlinked files", async () => {
+		const root = createTempDir();
+		const env = new NodeExecutionEnv({ cwd: root });
+		await env.writeFile("target.md", "---\ndescription: Target\n---\nTarget body");
+		await symlink(join(root, "target.md"), join(root, "link.md"));
+
+		expect(await loadPromptTemplates(env, ["target.md", "link.md"])).toEqual([
+			{ name: "target", description: "Target", content: "Target body" },
+			{ name: "link", description: "Target", content: "Target body" },
+		]);
+	});
+});
+
+describe("expandPromptTemplate", () => {
+	it("substitutes command arguments", () => {
+		const content = "$1 $" + "{@:2} $ARGUMENTS";
+		expect(expandPromptTemplate('/one "hello world" test', [{ name: "one", content }])).toBe(
+			"hello world test hello world test",
+		);
+	});
+});

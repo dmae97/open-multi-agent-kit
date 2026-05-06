@@ -17,8 +17,11 @@ describe("harness factories", () => {
 	it("creates agent harnesses", () => {
 		const session = createSession(new InMemorySessionStorage());
 		const env = new NodeExecutionEnv({ cwd: process.cwd() });
-		const harness = createAgentHarness({ env, session, initialModel: getModel("anthropic", "claude-sonnet-4-5") });
+		const initialModel = getModel("anthropic", "claude-sonnet-4-5");
+		const harness = createAgentHarness({ env, session, model: initialModel, systemPrompt: "You are helpful." });
 		expect(harness.env).toBe(env);
 		expect(harness.conversation.session).toBe(session);
+		expect(harness.conversation.model).toBe(initialModel);
+		expect(harness.agent.state.model).toBe(initialModel);
 	});
 });

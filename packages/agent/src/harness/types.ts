@@ -1,78 +1,126 @@
 import type { ImageContent, Model, TextContent } from "@mariozechner/pi-ai";
-import type { AgentEvent, AgentMessage, ThinkingLevel } from "../index.js";
+import type { AgentEvent, AgentMessage, AgentTool, ThinkingLevel } from "../index.js";
 import type { Session } from "./session/session.js";
-
-export type SourceScope = "user" | "project" | "temporary";
-export type SourceOrigin = "package" | "top-level";
-
-export interface SourceInfo {
-	path: string;
-	source: string;
-	scope: SourceScope;
-	origin: SourceOrigin;
-	baseDir?: string;
-}
 
 export interface Skill {
 	name: string;
 	description: string;
+	content: string;
 	filePath: string;
-	baseDir: string;
-	sourceInfo: SourceInfo;
-	disableModelInvocation: boolean;
+	disableModelInvocation?: boolean;
 }
 
 export interface PromptTemplate {
 	name: string;
-	description: string;
-	argumentHint?: string;
+	description?: string;
 	content: string;
-	sourceInfo: SourceInfo;
-	filePath: string;
 }
 
-export interface SystemPromptInputs {
-	basePrompt?: string;
-	appendPrompt?: string;
-	contextFiles?: Array<{ path: string; content: string }>;
+export interface AgentHarnessResources {
+	promptTemplates?: PromptTemplate[];
 	skills?: Skill[];
 }
 
+/** Kind of filesystem object as addressed by an {@link ExecutionEnv}. Symlinks are not followed automatically. */
+export type FileKind = "file" | "directory" | "symlink";
+
+/** Stable, backend-independent file error codes thrown by {@link ExecutionEnv} file operations. */
+export type FileErrorCode =
+	| "not_found"
+	| "permission_denied"
+	| "not_directory"
+	| "is_directory"
+	| "invalid"
+	| "not_supported"
+	| "unknown";
+
+/** Error thrown by {@link ExecutionEnv} file operations. */
+export class FileError extends Error {
+	constructor(
+		/** Backend-independent error code. */
+		public code: FileErrorCode,
+		message: string,
+		/** Absolute addressed path associated with the failure, when available. */
+		public path?: string,
+		options?: ErrorOptions,
+	) {
+		super(message, options);
+		this.name = "FileError";
+	}
+}
+
+/** Metadata for one filesystem object in an {@link ExecutionEnv}. */
+export interface FileInfo {
+	/** Basename of {@link path}. */
+	name: string;
+	/** Absolute, syntactically normalized addressed path in the execution environment. Symlinks are not followed. */
+	path: string;
+	/** Object kind. Symlink targets are not followed; use {@link ExecutionEnv.resolvePath} explicitly. */
+	kind: FileKind;
+	/** Size in bytes for the addressed filesystem object. */
+	size: number;
+	/** Modification time as milliseconds since Unix epoch. */
+	mtimeMs: number;
+}
+
+/** Options for {@link ExecutionEnv.exec}. */
 export interface ExecutionEnvExecOptions {
+	/** Working directory for the command. Relative paths are resolved against {@link ExecutionEnv.cwd}. */
 	cwd?: string;
+	/** Additional environment variables for the command. Values override the environment defaults. */
 	env?: Record<string, string>;
+	/** Timeout in seconds. Implementations should reject when the command exceeds this duration. */
 	timeout?: number;
+	/** Abort signal used to terminate the command. */
 	signal?: AbortSignal;
+	/** Called with stdout chunks as they are produced. */
 	onStdout?: (chunk: string) => void;
+	/** Called with stderr chunks as they are produced. */
 	onStderr?: (chunk: string) => void;
 }
 
+/**
+ * Filesystem and process execution environment used by the harness.
+ *
+ * Paths passed to methods may be absolute or relative to {@link cwd}. Paths returned by this interface are absolute
+ * addressed paths in the environment, but are not canonicalized through symlinks unless returned by {@link resolvePath}.
+ *
+ * File operations throw {@link FileError} for expected filesystem failures such as missing paths or permission errors.
+ */
 export interface ExecutionEnv {
+	/** Current working directory for relative paths and command execution. */
 	cwd: string;
 
+	/** Execute a shell command in {@link cwd} unless `options.cwd` is provided. */
 	exec(
 		command: string,
 		options?: ExecutionEnvExecOptions,
 	): Promise<{ stdout: string; stderr: string; exitCode: number }>;
 
+	/** Read a UTF-8 text file. Throws {@link FileError}. */
 	readTextFile(path: string): Promise<string>;
+	/** Read a binary file. Throws {@link FileError}. */
 	readBinaryFile(path: string): Promise<Uint8Array>;
+	/** Create or overwrite a file, creating parent directories when supported. Throws {@link FileError}. */
 	writeFile(path: string, content: string | Uint8Array): Promise<void>;
-	stat(path: string): Promise<{
-		isFile: boolean;
-		isDirectory: boolean;
-		isSymbolicLink: boolean;
-		size: number;
-		mtime: Date;
-	}>;
-	listDir(path: string): Promise<string[]>;
-	pathExists(path: string): Promise<boolean>;
+	/** Return metadata for the addressed path without following symlinks. Throws {@link FileError}. */
+	fileInfo(path: string): Promise<FileInfo>;
+	/** List direct children of a directory without following symlinks. Throws {@link FileError}. */
+	listDir(path: string): Promise<FileInfo[]>;
+	/** Return the canonical path for a path, following symlinks. Throws {@link FileError}. */
+	realPath(path: string): Promise<string>;
+	/** Return false for missing paths. Other errors, such as permission failures, may throw {@link FileError}. */
+	exists(path: string): Promise<boolean>;
+	/** Create a directory. */
 	createDir(path: string, options?: { recursive?: boolean }): Promise<void>;
+	/** Remove a file or directory. */
 	remove(path: string, options?: { recursive?: boolean; force?: boolean }): Promise<void>;
+	/** Create a temporary directory and return its absolute path. */
 	createTempDir(prefix?: string): Promise<string>;
+	/** Create a temporary file and return its absolute path. */
 	createTempFile(options?: { prefix?: string; suffix?: string }): Promise<string>;
 
-	resolvePath(path: string): string;
+	/** Release resources owned by the environment. */
 	cleanup(): Promise<void>;
 }
 
@@ -225,15 +273,13 @@ export interface AgentHarnessPendingMutations {
 	model?: Model<any>;
 	thinkingLevel?: ThinkingLevel;
 	activeToolNames?: string[];
-	systemPromptInputs?: SystemPromptInputs;
 }
 
 export interface AgentHarnessConversationState {
 	session: Session;
-	model: Model<any> | undefined;
+	model: Model<any>;
 	thinkingLevel: ThinkingLevel;
 	activeToolNames: string[];
-	systemPromptInputs: SystemPromptInputs;
 	nextTurnQueue: AgentMessage[];
 }
 
@@ -290,7 +336,7 @@ export interface BeforeAgentStartEvent {
 	prompt: string;
 	images?: ImageContent[];
 	systemPrompt: string;
-	systemPromptInputs: SystemPromptInputs;
+	resources: AgentHarnessResources;
 }
 
 export interface ContextEvent {
@@ -521,13 +567,24 @@ export interface BranchSummaryResult {
 export interface AgentHarnessOptions {
 	env: ExecutionEnv;
 	session: Session;
-	promptTemplates?: PromptTemplate[];
-	skills?: Skill[];
+	tools?: AgentTool[];
+	resources?:
+		| AgentHarnessResources
+		| ((context: AgentHarnessContext) => AgentHarnessResources | Promise<AgentHarnessResources>);
+	systemPrompt?:
+		| string
+		| ((context: {
+				env: ExecutionEnv;
+				session: Session;
+				model: Model<any>;
+				thinkingLevel: ThinkingLevel;
+				activeTools: AgentTool[];
+				resources: AgentHarnessResources;
+		  }) => string | Promise<string>);
 	requestAuth?: (model: Model<any>) => Promise<{ apiKey: string; headers?: Record<string, string> } | undefined>;
-	initialModel: Model<any>;
-	initialThinkingLevel?: ThinkingLevel;
-	initialActiveToolNames?: string[];
-	initialSystemPromptInputs?: SystemPromptInputs;
+	model: Model<any>;
+	thinkingLevel?: ThinkingLevel;
+	activeToolNames?: string[];
 }
 
 export type { AgentHarness } from "./agent-harness.js";

@@ -472,8 +472,9 @@ export class Agent {
 			errorMessage: error instanceof Error ? error.message : String(error),
 			timestamp: Date.now(),
 		} satisfies AgentMessage;
-		this._state.messages.push(failureMessage);
-		this._state.errorMessage = failureMessage.errorMessage;
+		await this.processEvents({ type: "message_start", message: failureMessage });
+		await this.processEvents({ type: "message_end", message: failureMessage });
+		await this.processEvents({ type: "turn_end", message: failureMessage, toolResults: [] });
 		await this.processEvents({ type: "agent_end", messages: [failureMessage] });
 	}
 

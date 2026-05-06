@@ -18,7 +18,9 @@
 	},
 	"dependencies": {
 		"@mariozechner/pi-ai": "^0.72.1",
-		"typebox": "^1.1.24"
+		"ignore": "^7.0.5",
+		"typebox": "^1.1.24",
+		"yaml": "^2.8.2"
 	},
 	"keywords": [
 		"ai",
