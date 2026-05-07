@@ -354,6 +354,16 @@ export async function processResponsesStream<TApi extends Api>(
 					});
 				}
 			}
+		} else if (event.type === "response.reasoning_text.delta") {
+			if (currentItem?.type === "reasoning" && currentBlock?.type === "thinking") {
+				currentBlock.thinking += event.delta;
+				stream.push({
+					type: "thinking_delta",
+					contentIndex: blockIndex(),
+					delta: event.delta,
+					partial: output,
+				});
+			}
 		} else if (event.type === "response.content_part.added") {
 			if (currentItem?.type === "message") {
 				currentItem.content = currentItem.content || [];
@@ -429,7 +439,9 @@ export async function processResponsesStream<TApi extends Api>(
 			const item = event.item;
 
 			if (item.type === "reasoning" && currentBlock?.type === "thinking") {
-				currentBlock.thinking = item.summary?.map((s) => s.text).join("\n\n") || "";
+				const summaryText = item.summary?.map((s) => s.text).join("\n\n") || "";
+				const contentText = item.content?.map((c) => c.text).join("\n\n") || "";
+				currentBlock.thinking = summaryText || contentText || currentBlock.thinking;
 				currentBlock.thinkingSignature = JSON.stringify(item);
 				stream.push({
 					type: "thinking_end",

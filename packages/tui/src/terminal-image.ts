@@ -22,6 +22,8 @@ export interface ImageRenderOptions {
 	preserveAspectRatio?: boolean;
 	/** Kitty image ID. If provided, reuses/replaces existing image with this ID. */
 	imageId?: number;
+	/** Whether Kitty should apply its default cursor movement after placement. */
+	moveCursor?: boolean;
 }
 
 let cachedCapabilities: TerminalCapabilities | null = null;
@@ -128,12 +130,15 @@ export function encodeKitty(
 		columns?: number;
 		rows?: number;
 		imageId?: number;
+		/** Whether Kitty should apply its default cursor movement after placement. Default: true. */
+		moveCursor?: boolean;
 	} = {},
 ): string {
 	const CHUNK_SIZE = 4096;
 
 	const params: string[] = ["a=T", "f=100", "q=2"];
 
+	if (options.moveCursor === false) params.push("C=1");
 	if (options.columns) params.push(`c=${options.columns}`);
 	if (options.rows) params.push(`r=${options.rows}`);
 	if (options.imageId) params.push(`i=${options.imageId}`);
@@ -170,7 +175,7 @@ export function encodeKitty(
  * Uses uppercase 'I' to also free the image data.
  */
 export function deleteKittyImage(imageId: number): string {
-	return `\x1b_Ga=d,d=I,i=${imageId}\x1b\\`;
+	return `\x1b_Ga=d,d=I,i=${imageId},q=2\x1b\\`;
 }
 
 /**
@@ -178,7 +183,7 @@ export function deleteKittyImage(imageId: number): string {
  * Uses uppercase 'A' to also free the image data.
  */
 export function deleteAllKittyImages(): string {
-	return `\x1b_Ga=d,d=A\x1b\\`;
+	return "\x1b_Ga=d,d=A,q=2\x1b\\";
 }
 
 export function encodeITerm2(
@@ -374,8 +379,12 @@ export function renderImage(
 	const rows = calculateImageRows(imageDimensions, maxWidth, getCellDimensions());
 
 	if (caps.images === "kitty") {
-		// Only use imageId if explicitly provided - static images don't need IDs
-		const sequence = encodeKitty(base64Data, { columns: maxWidth, rows, imageId: options.imageId });
+		const sequence = encodeKitty(base64Data, {
+			columns: maxWidth,
+			rows,
+			imageId: options.imageId,
+			moveCursor: options.moveCursor,
+		});
 		return { sequence, rows, imageId: options.imageId };
 	}
 
