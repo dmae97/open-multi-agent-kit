@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ENV_AGENT_DIR, PACKAGE_NAME } from "../src/config.js";
+import { ENV_AGENT_DIR, PACKAGE_NAME, VERSION } from "../src/config.js";
 import { main } from "../src/main.js";
 
 describe("package commands", () => {
@@ -15,6 +15,11 @@ describe("package commands", () => {
 	let originalPiPackageDir: string | undefined;
 	let originalExitCode: typeof process.exitCode;
 	let originalExecPath: string;
+
+	function getNewerPatchVersion(): string {
+		const [major = "0", minor = "0", patch = "0"] = VERSION.split(".");
+		return `${major}.${minor}.${Number.parseInt(patch, 10) + 1}`;
+	}
 
 	beforeEach(() => {
 		tempDir = join(tmpdir(), `pi-package-commands-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -201,7 +206,7 @@ else fs.writeFileSync(${JSON.stringify(recordPath)},JSON.stringify(args));
 			value: join(selfPackageDir, "dist", "cli.js"),
 			configurable: true,
 		});
-		const fetchMock = vi.fn(async () => Response.json({ version: "0.73.1" }));
+		const fetchMock = vi.fn(async () => Response.json({ version: getNewerPatchVersion() }));
 		vi.stubGlobal("fetch", fetchMock);
 
 		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});

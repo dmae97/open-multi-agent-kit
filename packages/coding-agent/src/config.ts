@@ -81,24 +81,19 @@ export function detectInstallMethod(): InstallMethod {
 	return "unknown";
 }
 
-function getInferredNpmInstall(packageName: string): { root: string; prefix: string } | undefined {
+function getInferredNpmInstall(): { root: string; prefix: string } | undefined {
 	const packageDir = getPackageDir();
 	const path = process.platform === "win32" || packageDir.includes("\\") ? win32 : { basename, dirname };
-	const [scope, name] = packageName.split("/");
+	const parent = path.dirname(packageDir);
 	let root: string | undefined;
-	if (
-		name &&
-		scope?.startsWith("@") &&
-		path.basename(path.dirname(packageDir)) === scope &&
-		path.basename(packageDir) === name
-	) {
-		root = path.dirname(path.dirname(packageDir));
-	} else if (!name && path.basename(packageDir) === packageName) {
-		root = path.dirname(packageDir);
+	if (path.basename(parent).startsWith("@") && path.basename(path.dirname(parent)) === "node_modules") {
+		root = path.dirname(parent);
+	} else if (path.basename(parent) === "node_modules") {
+		root = parent;
 	}
-	if (!root || path.basename(root) !== "node_modules") return undefined;
-	const parent = path.dirname(root);
-	if (path.basename(parent) === "lib") return { root, prefix: path.dirname(parent) };
+	if (!root) return undefined;
+	const rootParent = path.dirname(root);
+	if (path.basename(rootParent) === "lib") return { root, prefix: path.dirname(rootParent) };
 	// Windows global npm prefixes use `<prefix>\\node_modules`, which is
 	// indistinguishable from local project installs by path shape alone. Do not
 	// infer unsupported Windows custom prefixes without `npm root -g` evidence.
@@ -137,7 +132,7 @@ function getSelfUpdateCommandForMethod(
 			);
 		case "npm": {
 			const [command = "npm", ...npmArgs] = npmCommand ?? [];
-			const inferred = npmCommand?.length ? undefined : getInferredNpmInstall(installedPackageName);
+			const inferred = npmCommand?.length ? undefined : getInferredNpmInstall();
 			const prefixArgs = [...npmArgs, ...(inferred ? ["--prefix", inferred.prefix] : [])];
 			const installStep = makeSelfUpdateCommandStep(command, [...prefixArgs, "install", "-g", updatePackageName]);
 			const uninstallStep =
@@ -169,7 +164,7 @@ function readCommandOutput(
 	return undefined;
 }
 
-function getGlobalPackageRoots(method: InstallMethod, packageName: string, npmCommand?: string[]): string[] {
+function getGlobalPackageRoots(method: InstallMethod, _packageName: string, npmCommand?: string[]): string[] {
 	switch (method) {
 		case "npm": {
 			const configured = !!npmCommand?.length;
@@ -187,7 +182,7 @@ function getGlobalPackageRoots(method: InstallMethod, packageName: string, npmCo
 			const root = readCommandOutput(command, [...npmArgs, "root", "-g"], {
 				requireSuccess: configured,
 			});
-			const inferred = configured ? undefined : getInferredNpmInstall(packageName);
+			const inferred = configured ? undefined : getInferredNpmInstall();
 			return [root, inferred?.root].filter((x): x is string => !!x);
 		}
 		case "pnpm": {
