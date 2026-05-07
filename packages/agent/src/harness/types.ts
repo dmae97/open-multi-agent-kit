@@ -2,22 +2,35 @@ import type { ImageContent, Model, TextContent } from "@mariozechner/pi-ai";
 import type { AgentEvent, AgentMessage, AgentTool, ThinkingLevel } from "../index.js";
 import type { Session } from "./session/session.js";
 
+/** Model-visible skill loaded from a `SKILL.md` file or provided by an application. */
 export interface Skill {
+	/** Skill command name. */
 	name: string;
+	/** Short model-visible description of when to use the skill. */
 	description: string;
+	/** Full skill instructions. */
 	content: string;
+	/** Absolute path to the skill file. Used for model-visible location and resolving relative references. */
 	filePath: string;
+	/** Exclude this skill from model-visible skill lists while still allowing explicit application invocation. */
 	disableModelInvocation?: boolean;
 }
 
+/** Prompt template that can expand slash-command text before a prompt is sent. */
 export interface PromptTemplate {
+	/** Slash-command name without the leading `/`. */
 	name: string;
+	/** Optional description for command lists or autocomplete. */
 	description?: string;
+	/** Template content. Argument placeholders are expanded by `expandPromptTemplate`. */
 	content: string;
 }
 
+/** Resources made available to harness prompt expansion and system-prompt callbacks. */
 export interface AgentHarnessResources {
+	/** Prompt templates used to expand `/template args` input. */
 	promptTemplates?: PromptTemplate[];
+	/** Skills available to the model and explicit skill invocation. */
 	skills?: Skill[];
 }
 

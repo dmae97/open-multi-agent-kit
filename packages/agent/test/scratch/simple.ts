@@ -31,19 +31,17 @@ const agent = createAgentHarness({
 	session,
 	model: getModel("openai", "gpt-5.5"),
 	thinkingLevel: "low",
-	systemPrompt: ({ env, resources }) => {
-		console.log("Building system prompt");
-		return [
-			`You are a helpful assistant.`,
+	systemPrompt: ({ env, resources }) =>
+		[
+			"You are a helpful assistant.",
 			formatSkillsForSystemPrompt(resources.skills ?? []),
 			`Current working directory: ${env.cwd}`,
 		]
 			.filter((part) => part.length > 0)
-			.join("\n\n");
-	},
+			.join("\n\n"),
 	resources: {
-		promptTemplates: sourcedPromptTemplates.map((entry) => entry.promptTemplate),
-		skills: sourcedSkills.map((entry) => entry.skill),
+		promptTemplates: sourcedPromptTemplates.map(({ promptTemplate }) => promptTemplate),
+		skills: sourcedSkills.map(({ skill }) => skill),
 	},
 });
 
