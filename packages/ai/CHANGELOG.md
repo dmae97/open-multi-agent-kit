@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed OpenAI Responses requests for models that support disabling reasoning to send `reasoning.effort: "none"` when thinking is off.
+
 ## [0.74.0] - 2026-05-07
 
 ## [0.73.1] - 2026-05-07

@@ -86,6 +86,16 @@ const DEEPSEEK_V4_THINKING_LEVEL_MAP = {
 	xhigh: "max",
 } as const;
 
+const OPENAI_RESPONSES_NONE_REASONING_MODELS = new Set([
+	"gpt-5.1",
+	"gpt-5.2",
+	"gpt-5.3-codex",
+	"gpt-5.4",
+	"gpt-5.4-mini",
+	"gpt-5.4-nano",
+	"gpt-5.5",
+]);
+
 function mergeThinkingLevelMap(model: Model<any>, map: NonNullable<Model<any>["thinkingLevelMap"]>): void {
 	model.thinkingLevelMap = { ...model.thinkingLevelMap, ...map };
 }
@@ -121,6 +131,13 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
 		model.id.startsWith("gpt-5")
 	) {
 		mergeThinkingLevelMap(model, { off: null });
+	}
+	if (
+		model.api === "openai-responses" &&
+		model.provider === "openai" &&
+		OPENAI_RESPONSES_NONE_REASONING_MODELS.has(model.id)
+	) {
+		mergeThinkingLevelMap(model, { off: "none" });
 	}
 	if (supportsOpenAiXhigh(model.id)) {
 		mergeThinkingLevelMap(model, { xhigh: "xhigh" });
