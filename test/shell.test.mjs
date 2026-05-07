@@ -1,10 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { checkCommand, runShellStreaming } from "../dist/util/shell.js";
+import { checkCommand, runShellStreaming, which } from "../dist/util/shell.js";
 
 test("checkCommand detects node on PATH", async () => {
   assert.equal(await checkCommand("node"), true);
+});
+
+test("which resolves node on PATH", async () => {
+  const result = await which("node");
+  assert.equal(result.failed, false, result.stderr || result.stdout);
+  assert.match(result.stdout, /node/i);
 });
 
 test("checkCommand returns false for missing commands", async () => {

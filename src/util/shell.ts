@@ -170,7 +170,10 @@ export async function runShellStreaming(
 }
 
 export async function which(command: string): Promise<ShellResult> {
-  return runShell("which", [command], { timeout: 5000 });
+  const isWindows = process.platform === "win32";
+  return isWindows
+    ? runShell("where.exe", [command], { timeout: 5000 })
+    : runShell("which", [command], { timeout: 5000 });
 }
 
 export async function checkCommand(command: string): Promise<boolean> {
