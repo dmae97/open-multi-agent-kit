@@ -13,7 +13,7 @@ import {
 import { DefaultPackageManager } from "./core/package-manager.js";
 import { SettingsManager } from "./core/settings-manager.js";
 import { shouldUseWindowsShell } from "./utils/child-process.js";
-import { getLatestPiVersion, isNewerPackageVersion } from "./utils/version-check.js";
+import { getLatestPiRelease, isNewerPackageVersion } from "./utils/version-check.js";
 
 export type PackageCommand = "install" | "remove" | "update" | "list";
 
@@ -273,9 +273,9 @@ function updateTargetIncludesExtensions(target: UpdateTarget): boolean {
 	return target.type === "all" || target.type === "extensions";
 }
 
-function printSelfUpdateUnavailable(npmCommand?: string[]): void {
+function printSelfUpdateUnavailable(npmCommand?: string[], updatePackageName = PACKAGE_NAME): void {
 	console.error(`error: ${APP_NAME} cannot self-update this installation.`);
-	console.error(getSelfUpdateUnavailableInstruction(PACKAGE_NAME, npmCommand));
+	console.error(getSelfUpdateUnavailableInstruction(PACKAGE_NAME, npmCommand, updatePackageName));
 
 	const entrypoint = process.argv[1];
 	if (entrypoint) {
@@ -288,47 +288,53 @@ function printSelfUpdateFallback(command: SelfUpdateCommand): void {
 	console.error(chalk.dim(`If this keeps failing, run this command yourself: ${command.display}`));
 }
 
-async function shouldRunSelfUpdate(force: boolean): Promise<boolean> {
+interface SelfUpdatePlan {
+	packageName: string;
+	shouldRun: boolean;
+}
+
+async function getSelfUpdatePlan(force: boolean): Promise<SelfUpdatePlan> {
 	if (force) {
-		return true;
+		return { packageName: PACKAGE_NAME, shouldRun: true };
 	}
 
-	let latestVersion: string | undefined;
 	try {
-		latestVersion = await getLatestPiVersion(VERSION);
+		const latestRelease = await getLatestPiRelease(VERSION);
+		const packageName = latestRelease?.packageName ?? PACKAGE_NAME;
+		if (!latestRelease || packageName !== PACKAGE_NAME || isNewerPackageVersion(latestRelease.version, VERSION)) {
+			return { packageName, shouldRun: true };
+		}
 	} catch {
-		return true;
-	}
-
-	if (!latestVersion || isNewerPackageVersion(latestVersion, VERSION)) {
-		return true;
+		return { packageName: PACKAGE_NAME, shouldRun: true };
 	}
 
 	console.log(chalk.green(`${APP_NAME} is already up to date (v${VERSION})`));
-	return false;
+	return { packageName: PACKAGE_NAME, shouldRun: false };
 }
 
 async function runSelfUpdate(command: SelfUpdateCommand): Promise<void> {
 	console.log(chalk.dim(`Updating ${APP_NAME} with ${command.display}...`));
-	await new Promise<void>((resolve, reject) => {
-		// Windows package managers are commonly .cmd shims. Use the shell so Node can execute them.
-		const child = spawn(command.command, command.args, {
-			stdio: "inherit",
-			shell: shouldUseWindowsShell(command.command),
+	for (const step of command.steps ?? [command]) {
+		await new Promise<void>((resolve, reject) => {
+			// Windows package managers are commonly .cmd shims. Use the shell so Node can execute them.
+			const child = spawn(step.command, step.args, {
+				stdio: "inherit",
+				shell: shouldUseWindowsShell(step.command),
+			});
+			child.on("error", (error) => {
+				reject(error);
+			});
+			child.on("close", (code, signal) => {
+				if (code === 0) {
+					resolve();
+				} else if (signal) {
+					reject(new Error(`${step.display} terminated by signal ${signal}`));
+				} else {
+					reject(new Error(`${step.display} exited with code ${code ?? "unknown"}`));
+				}
+			});
 		});
-		child.on("error", (error) => {
-			reject(error);
-		});
-		child.on("close", (code, signal) => {
-			if (code === 0) {
-				resolve();
-			} else if (signal) {
-				reject(new Error(`${command.display} terminated by signal ${signal}`));
-			} else {
-				reject(new Error(`${command.display} exited with code ${code ?? "unknown"}`));
-			}
-		});
-	});
+	}
 }
 
 export async function handleConfigCommand(args: string[]): Promise<boolean> {
@@ -480,13 +486,18 @@ export async function handlePackageCommand(args: string[]): Promise<boolean> {
 					}
 				}
 				if (updateTargetIncludesSelf(target)) {
-					const selfUpdateCommand = getSelfUpdateCommand(PACKAGE_NAME, selfUpdateNpmCommand);
-					if (!selfUpdateCommand) {
-						printSelfUpdateUnavailable(selfUpdateNpmCommand);
-						process.exitCode = 1;
+					const selfUpdatePlan = await getSelfUpdatePlan(options.force);
+					if (!selfUpdatePlan.shouldRun) {
 						return true;
 					}
-					if (!(await shouldRunSelfUpdate(options.force))) {
+					const selfUpdateCommand = getSelfUpdateCommand(
+						PACKAGE_NAME,
+						selfUpdateNpmCommand,
+						selfUpdatePlan.packageName,
+					);
+					if (!selfUpdateCommand) {
+						printSelfUpdateUnavailable(selfUpdateNpmCommand, selfUpdatePlan.packageName);
+						process.exitCode = 1;
 						return true;
 					}
 					try {

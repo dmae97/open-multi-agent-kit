@@ -54,6 +54,49 @@ function createNpmPrefixInstall(template = "pi-prefix-"): { prefix: string; pack
 	return { prefix, packageDir };
 }
 
+function createPnpmGlobalInstall(): { root: string; packageDir: string } {
+	const temp = mkdtempSync(join(tmpdir(), "pi-pnpm-"));
+	const binDir = join(temp, "bin");
+	const root = join(temp, "pnpm", "global", "5", "node_modules");
+	const packageDir = join(root, "@mariozechner", "pi-coding-agent");
+	mkdirSync(packageDir, { recursive: true });
+	mkdirSync(binDir, { recursive: true });
+	writeFileSync(join(binDir, process.platform === "win32" ? "pnpm.cmd" : "pnpm"), createFakePnpmScript(root));
+	chmodSync(join(binDir, process.platform === "win32" ? "pnpm.cmd" : "pnpm"), 0o755);
+	tempDir = temp;
+	process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
+	process.env.PI_PACKAGE_DIR = packageDir;
+	setExecPath(
+		join(
+			root,
+			".pnpm",
+			"@mariozechner+pi-coding-agent@0.0.0",
+			"node_modules",
+			"@mariozechner",
+			"pi-coding-agent",
+			"dist",
+			"cli.js",
+		),
+	);
+	return { root, packageDir };
+}
+
+function createYarnGlobalInstall(): { globalDir: string; packageDir: string } {
+	const temp = mkdtempSync(join(tmpdir(), "pi-yarn-"));
+	const binDir = join(temp, "bin");
+	const globalDir = join(temp, "yarn", "global");
+	const packageDir = join(globalDir, "node_modules", "@mariozechner", "pi-coding-agent");
+	mkdirSync(packageDir, { recursive: true });
+	mkdirSync(binDir, { recursive: true });
+	writeFileSync(join(binDir, process.platform === "win32" ? "yarn.cmd" : "yarn"), createFakeYarnScript(globalDir));
+	chmodSync(join(binDir, process.platform === "win32" ? "yarn.cmd" : "yarn"), 0o755);
+	tempDir = temp;
+	process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
+	process.env.PI_PACKAGE_DIR = packageDir;
+	setExecPath(join(globalDir, ".yarn", "@mariozechner", "pi-coding-agent", "dist", "cli.js"));
+	return { globalDir, packageDir };
+}
+
 function createBunGlobalInstall(): { packageDir: string } {
 	const temp = mkdtempSync(join(tmpdir(), "pi-bun-"));
 	const prefix = join(temp, ".bun");
@@ -70,6 +113,22 @@ function createBunGlobalInstall(): { packageDir: string } {
 	process.env.PI_PACKAGE_DIR = packageDir;
 	setExecPath(join(packageDir, "dist", "cli.js"));
 	return { packageDir };
+}
+
+function createFakePnpmScript(root: string): string {
+	if (process.platform === "win32") {
+		return `@echo off\r\nif "%1"=="root" if "%2"=="-g" echo ${root}\r\n`;
+	}
+	const escapedRoot = root.replaceAll("'", "'\\''");
+	return `#!/bin/sh\nif [ "$1" = "root" ] && [ "$2" = "-g" ]; then\n\tprintf '%s\\n' '${escapedRoot}'\n\texit 0\nfi\nexit 1\n`;
+}
+
+function createFakeYarnScript(globalDir: string): string {
+	if (process.platform === "win32") {
+		return `@echo off\r\nif "%1"=="global" if "%2"=="dir" echo ${globalDir}\r\n`;
+	}
+	const escapedGlobalDir = globalDir.replaceAll("'", "'\\''");
+	return `#!/bin/sh\nif [ "$1" = "global" ] && [ "$2" = "dir" ]; then\n\tprintf '%s\\n' '${escapedGlobalDir}'\n\texit 0\nfi\nexit 1\n`;
 }
 
 function createFakeBunScript(bunBin: string): string {
@@ -112,6 +171,30 @@ describe("detectInstallMethod", () => {
 			command: "npm",
 			args: ["--prefix", prefix, "install", "-g", "@mariozechner/pi-coding-agent"],
 			display: `npm --prefix ${prefix} install -g @mariozechner/pi-coding-agent`,
+		});
+	});
+
+	test("self-updates renamed packages from the current install prefix", () => {
+		const { prefix } = createNpmPrefixInstall();
+
+		const command = getSelfUpdateCommand("@mariozechner/pi-coding-agent", undefined, "@new-scope/pi");
+
+		expect(command).toEqual({
+			command: "npm",
+			args: ["--prefix", prefix, "install", "-g", "@new-scope/pi"],
+			display: `npm --prefix ${prefix} uninstall -g @mariozechner/pi-coding-agent && npm --prefix ${prefix} install -g @new-scope/pi`,
+			steps: [
+				{
+					command: "npm",
+					args: ["--prefix", prefix, "uninstall", "-g", "@mariozechner/pi-coding-agent"],
+					display: `npm --prefix ${prefix} uninstall -g @mariozechner/pi-coding-agent`,
+				},
+				{
+					command: "npm",
+					args: ["--prefix", prefix, "install", "-g", "@new-scope/pi"],
+					display: `npm --prefix ${prefix} install -g @new-scope/pi`,
+				},
+			],
 		});
 	});
 
@@ -164,6 +247,81 @@ describe("detectInstallMethod", () => {
 			command: "bun",
 			args: ["install", "-g", "@mariozechner/pi-coding-agent"],
 			display: "bun install -g @mariozechner/pi-coding-agent",
+		});
+	});
+
+	test("self-updates renamed pnpm global installs by removing the old package first", () => {
+		createPnpmGlobalInstall();
+
+		const command = getSelfUpdateCommand("@mariozechner/pi-coding-agent", undefined, "@new-scope/pi");
+
+		expect(detectInstallMethod()).toBe("pnpm");
+		expect(command).toEqual({
+			command: "pnpm",
+			args: ["install", "-g", "@new-scope/pi"],
+			display: "pnpm remove -g @mariozechner/pi-coding-agent && pnpm install -g @new-scope/pi",
+			steps: [
+				{
+					command: "pnpm",
+					args: ["remove", "-g", "@mariozechner/pi-coding-agent"],
+					display: "pnpm remove -g @mariozechner/pi-coding-agent",
+				},
+				{
+					command: "pnpm",
+					args: ["install", "-g", "@new-scope/pi"],
+					display: "pnpm install -g @new-scope/pi",
+				},
+			],
+		});
+	});
+
+	test("self-updates renamed yarn global installs by removing the old package first", () => {
+		createYarnGlobalInstall();
+
+		const command = getSelfUpdateCommand("@mariozechner/pi-coding-agent", undefined, "@new-scope/pi");
+
+		expect(detectInstallMethod()).toBe("yarn");
+		expect(command).toEqual({
+			command: "yarn",
+			args: ["global", "add", "@new-scope/pi"],
+			display: "yarn global remove @mariozechner/pi-coding-agent && yarn global add @new-scope/pi",
+			steps: [
+				{
+					command: "yarn",
+					args: ["global", "remove", "@mariozechner/pi-coding-agent"],
+					display: "yarn global remove @mariozechner/pi-coding-agent",
+				},
+				{
+					command: "yarn",
+					args: ["global", "add", "@new-scope/pi"],
+					display: "yarn global add @new-scope/pi",
+				},
+			],
+		});
+	});
+
+	test("self-updates renamed bun global installs by removing the old package first", () => {
+		createBunGlobalInstall();
+
+		const command = getSelfUpdateCommand("@mariozechner/pi-coding-agent", undefined, "@new-scope/pi");
+
+		expect(detectInstallMethod()).toBe("bun");
+		expect(command).toEqual({
+			command: "bun",
+			args: ["install", "-g", "@new-scope/pi"],
+			display: "bun uninstall -g @mariozechner/pi-coding-agent && bun install -g @new-scope/pi",
+			steps: [
+				{
+					command: "bun",
+					args: ["uninstall", "-g", "@mariozechner/pi-coding-agent"],
+					display: "bun uninstall -g @mariozechner/pi-coding-agent",
+				},
+				{
+					command: "bun",
+					args: ["install", "-g", "@new-scope/pi"],
+					display: "bun install -g @new-scope/pi",
+				},
+			],
 		});
 	});
 

@@ -3,6 +3,11 @@ import { getPiUserAgent } from "./pi-user-agent.js";
 const LATEST_VERSION_URL = "https://pi.dev/api/latest-version";
 const DEFAULT_VERSION_CHECK_TIMEOUT_MS = 10000;
 
+export interface LatestPiRelease {
+	version: string;
+	packageName?: string;
+}
+
 interface ParsedVersion {
 	major: number;
 	minor: number;
@@ -47,10 +52,10 @@ export function isNewerPackageVersion(candidateVersion: string, currentVersion: 
 	return candidateVersion.trim() !== currentVersion.trim();
 }
 
-export async function getLatestPiVersion(
+export async function getLatestPiRelease(
 	currentVersion: string,
 	options: { timeoutMs?: number } = {},
-): Promise<string | undefined> {
+): Promise<LatestPiRelease | undefined> {
 	if (process.env.PI_SKIP_VERSION_CHECK || process.env.PI_OFFLINE) return undefined;
 
 	const response = await fetch(LATEST_VERSION_URL, {
@@ -62,8 +67,20 @@ export async function getLatestPiVersion(
 	});
 	if (!response.ok) return undefined;
 
-	const data = (await response.json()) as { version?: unknown };
-	return typeof data.version === "string" && data.version.trim() ? data.version.trim() : undefined;
+	const data = (await response.json()) as { packageName?: unknown; version?: unknown };
+	if (typeof data.version !== "string" || !data.version.trim()) {
+		return undefined;
+	}
+	const packageName =
+		typeof data.packageName === "string" && data.packageName.trim() ? data.packageName.trim() : undefined;
+	return { version: data.version.trim(), packageName };
+}
+
+export async function getLatestPiVersion(
+	currentVersion: string,
+	options: { timeoutMs?: number } = {},
+): Promise<string | undefined> {
+	return (await getLatestPiRelease(currentVersion, options))?.version;
 }
 
 export async function checkForNewPiVersion(currentVersion: string): Promise<string | undefined> {

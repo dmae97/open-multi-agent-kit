@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	checkForNewPiVersion,
 	comparePackageVersions,
+	getLatestPiRelease,
 	getLatestPiVersion,
 	isNewerPackageVersion,
 } from "../src/utils/version-check.js";
@@ -54,6 +55,13 @@ describe("version checks", () => {
 				}),
 			}),
 		);
+	});
+
+	it("returns the active package name from the version check api", async () => {
+		const fetchMock = vi.fn(async () => Response.json({ packageName: "@new-scope/pi", version: "1.2.4" }));
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(getLatestPiRelease("1.2.3")).resolves.toEqual({ packageName: "@new-scope/pi", version: "1.2.4" });
 	});
 
 	it("skips api calls when version checks are disabled", async () => {
