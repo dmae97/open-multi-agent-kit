@@ -211,13 +211,7 @@ export function substituteArgs(content: string, args: string[]): string {
 	return result;
 }
 
-/** Expand `/template args` text using the matching prompt template, or return the original text when no template matches. */
-export function expandPromptTemplate(text: string, templates: PromptTemplate[]): string {
-	if (!text.startsWith("/")) return text;
-	const spaceIndex = text.indexOf(" ");
-	const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
-	const argsString = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1);
-	const template = templates.find((candidate) => candidate.name === commandName);
-	if (!template) return text;
-	return substituteArgs(template.content, parseCommandArgs(argsString));
+/** Expand a prompt template with positional command arguments. */
+export function expandPromptTemplate(template: PromptTemplate, args: string[] = []): string {
+	return substituteArgs(template.content, args);
 }

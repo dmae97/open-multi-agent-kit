@@ -83,7 +83,7 @@ describe("loadPromptTemplates", () => {
 describe("expandPromptTemplate", () => {
 	it("substitutes command arguments", () => {
 		const content = "$1 $" + "{@:2} $ARGUMENTS";
-		expect(expandPromptTemplate('/one "hello world" test', [{ name: "one", content }])).toBe(
+		expect(expandPromptTemplate({ name: "one", content }, ["hello world", "test"])).toBe(
 			"hello world test hello world test",
 		);
 	});

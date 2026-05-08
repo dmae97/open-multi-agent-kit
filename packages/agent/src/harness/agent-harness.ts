@@ -5,6 +5,7 @@ import type { AgentEvent, AgentMessage, AgentTool, ThinkingLevel } from "../type
 import { collectEntriesForBranchSummary, generateBranchSummary } from "./compaction/branch-summarization.js";
 import { compact, DEFAULT_COMPACTION_SETTINGS, prepareCompaction } from "./compaction/compaction.js";
 import { expandPromptTemplate } from "./prompt-templates.js";
+import { expandSkillCommand } from "./skills.js";
 import type {
 	AbortResult,
 	AgentHarnessContext,
@@ -18,7 +19,6 @@ import type {
 	ExecutionEnv,
 	NavigateTreeResult,
 	Session,
-	Skill,
 } from "./types.js";
 
 function createUserMessage(text: string, images?: ImageContent[]): AgentMessage {
@@ -297,11 +297,7 @@ export class AgentHarness {
 		this.operation.idle = false;
 		this.operation.liveOperationId = randomUUID();
 		const resources = await this.resolveResources(this.agent.signal);
-		const expanded = this.expandSkillCommand(
-			expandPromptTemplate(text, resources.promptTemplates ?? []),
-			resources.skills ?? [],
-		);
-		let messages: AgentMessage[] = [createUserMessage(expanded, options?.images)];
+		let messages: AgentMessage[] = [createUserMessage(text, options?.images)];
 		if (this.conversation.nextTurnQueue.length > 0) {
 			messages = [messages[0]!, ...this.conversation.nextTurnQueue];
 			this.conversation.nextTurnQueue = [];
@@ -312,7 +308,7 @@ export class AgentHarness {
 			"before_agent_start",
 			{
 				type: "before_agent_start",
-				prompt: expanded,
+				prompt: text,
 				images: options?.images,
 				systemPrompt: this.agent.state.systemPrompt,
 				resources,
@@ -335,12 +331,18 @@ export class AgentHarness {
 		return response;
 	}
 
-	async skill(name: string, args?: string): Promise<AssistantMessage> {
+	async skill(name: string, additionalInstructions?: string): Promise<AssistantMessage> {
 		const resources = await this.resolveResources();
 		const skill = (resources.skills ?? []).find((candidate) => candidate.name === name);
 		if (!skill) throw new Error(`Unknown skill: ${name}`);
-		const prompt = args ? `${skill.content}\n\n${args}` : skill.content;
-		return await this.prompt(prompt);
+		return await this.prompt(expandSkillCommand(skill, additionalInstructions));
+	}
+
+	async promptFromTemplate(name: string, args: string[] = []): Promise<AssistantMessage> {
+		const resources = await this.resolveResources();
+		const template = (resources.promptTemplates ?? []).find((candidate) => candidate.name === name);
+		if (!template) throw new Error(`Unknown prompt template: ${name}`);
+		return await this.prompt(expandPromptTemplate(template, args));
 	}
 
 	steer(message: AgentMessage): void {
@@ -600,15 +602,5 @@ export class AgentHarness {
 		}
 		handlers.add(handler as any);
 		return () => handlers!.delete(handler as any);
-	}
-
-	private expandSkillCommand(text: string, skills: Skill[]): string {
-		if (!text.startsWith("/skill:")) return text;
-		const spaceIndex = text.indexOf(" ");
-		const skillName = spaceIndex === -1 ? text.slice(7) : text.slice(7, spaceIndex);
-		const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1).trim();
-		const skill = skills.find((candidate) => candidate.name === skillName);
-		if (!skill) return text;
-		return args ? `${skill.content}\n\n${args}` : skill.content;
 	}
 }
