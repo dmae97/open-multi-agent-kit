@@ -69,6 +69,7 @@ jobs:
             pi-linux-x64.tar.gz \
             pi-linux-arm64.tar.gz \
             pi-windows-x64.zip \
+            pi-windows-arm64.zip \
             2>/dev/null || \
           gh release upload "${RELEASE_TAG}" \
             pi-darwin-arm64.tar.gz \
@@ -76,4 +77,5 @@ jobs:
             pi-linux-x64.tar.gz \
             pi-linux-arm64.tar.gz \
             pi-windows-x64.zip \
+            pi-windows-arm64.zip \
             --clobber
