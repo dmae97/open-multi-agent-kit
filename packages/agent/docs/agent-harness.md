@@ -2,6 +2,8 @@
 
 `AgentHarness` is the orchestration layer above the low-level `Agent`. It owns session persistence, runtime configuration, resource resolution, operation locking, and extension-facing mutation semantics.
 
+This document describes the current direction and implemented behavior. Some extension/session-facade details are planned and called out explicitly.
+
 ## State model
 
 The harness separates state into four categories.
@@ -30,6 +32,7 @@ A turn snapshot is the concrete state used for one LLM turn. It is created by `c
 - resolved system prompt
 - model
 - thinking level
+- all tools
 - active tools
 
 Static option values are used directly. Provider callbacks are invoked once per `createTurnState()` call. All logic for that turn uses the same snapshot.
@@ -40,9 +43,11 @@ The session contains persisted entries only. Session reads return persisted stat
 
 ### Pending session writes
 
-Session writes requested while an operation is active are queued as pending session writes. Pending writes are visible through an explicit pending-writes API, not through normal session reads.
+Session writes requested while an operation is active are queued as pending session writes. Pending writes are based on session-entry shapes without generated fields (`id`, `parentId`, `timestamp`).
 
 Pending session writes are always persisted. They are flushed at save points, at operation settlement, and in failure cleanup.
+
+A public pending-writes/session-facade API is planned but not implemented yet.
 
 ## Operation phases
 
@@ -69,7 +74,8 @@ The following operations are allowed during a turn where appropriate:
 - `nextTurn`
 - `abort`
 - runtime config setters
-- session facade writes
+
+Phase/settlement semantics are still provisional and need a full lifecycle pass.
 
 ## Turn execution
 
@@ -82,7 +88,14 @@ The following operations are allowed during a turn where appropriate:
 
 `skill` and `promptFromTemplate` resolve their resource from the same snapshot that is passed to the turn. They do not resolve resources separately.
 
-`nextTurn` queues arbitrary `AgentMessage`s for the next user-initiated turn. Queued messages are inserted before the new user message.
+`steer`, `followUp`, and `nextTurn` accept text plus optional images and create user messages internally. `nextTurn` messages are inserted before the new user message on the next user-initiated turn.
+
+Queue modes are live, not turn-snapshotted:
+
+- `steeringMode`
+- `followUpMode`
+
+Changing a queue mode during a run affects the next queue drain. Queue drains happen at safe points.
 
 ## Save points
 
@@ -92,22 +105,42 @@ At a save point the harness:
 
 1. flushes pending session writes after the agent-emitted messages for that turn
 2. creates a fresh turn snapshot if the low-level loop may continue
-3. applies the fresh context/model/reasoning state before the next provider request
+3. applies the fresh context/model/thinking-level state before the next provider request
 
 This lets model, thinking level, tool, resource, and system prompt changes made during a turn affect the next turn in the same run, while never mutating an in-flight provider request. The loop callbacks are not recreated at save points.
 
-No state refresh is needed on `agent_end` except flushing leftover pending session writes and clearing the operation phase.
+The low-level loop converts harness `ThinkingLevel` to provider `reasoning` at the provider boundary:
 
-## Session facade
+- `"off"` -> `undefined`
+- all other thinking levels pass through
 
-Extensions and callbacks interact with a harness-scoped session facade rather than the raw session.
+No state refresh is needed on `agent_end` except flushing leftover pending session writes and clearing the operation phase. The exact `settled` event timing is still under review.
 
-Reads delegate to persisted session state. Writes behave as follows:
+## Hooks and events
+
+Current hooks receive only the event payload. There is no extension context object yet.
+
+Event payloads describe what is happening. Harness getters describe latest config for future snapshots.
+
+The split between harness-specific events (`AgentHarnessOwnEvent`) and the union of low-level plus harness events (`AgentHarnessEvent`) is provisional but useful for distinguishing hookable harness events from public subscription events.
+
+A future extension context may expose the harness and a queued-write session facade.
+
+## Planned session facade
+
+Extensions should eventually interact with a harness-scoped session facade rather than the raw session.
+
+Planned read semantics:
+
+- reads delegate to persisted session state
+- reads do not include queued pending writes
+
+Planned write semantics:
 
 - idle: persist immediately
 - busy: enqueue as pending session writes
 
-The facade exposes pending writes explicitly for diagnostics and UI:
+A planned diagnostics API may expose pending writes explicitly:
 
 ```ts
 getPendingWrites(): readonly PendingSessionWrite[]
@@ -115,17 +148,13 @@ getPendingWrites(): readonly PendingSessionWrite[]
 
 Agent-emitted messages are persisted on `message_end` to preserve transcript ordering. Pending extension/session writes flush after those messages at save points.
 
-## Extension context
-
-Event payloads describe what is happening. Harness getters describe latest config for future snapshots.
-
-Event contexts expose the harness and session facade. Events that belong to a turn also expose the immutable turn snapshot used for that turn. Extensions may update harness config at any time; updates affect the next snapshot.
-
 ## Abort
 
 Abort is allowed during a turn. It aborts the low-level run and clears low-level steering/follow-up queues.
 
 Abort does not discard pending session writes. Pending writes flush at the next save point if reached, at `agent_end`, or in operation failure cleanup.
+
+Abort barrier semantics still need an audit.
 
 ## Compaction and tree navigation
 
@@ -134,3 +163,5 @@ Compaction and tree navigation are structural session mutations.
 They are allowed only while idle and are not queued. They operate on persisted session state. The next prompt creates a fresh turn snapshot.
 
 Branch summary generation is part of the tree navigation operation.
+
+Auto-compaction and retry decision points are not implemented in `AgentHarness` yet.
