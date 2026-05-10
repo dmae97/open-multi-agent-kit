@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.1.10 — Init scaffold and release-safety fixes (2026-05-10)
+
+### Fixed
+
+- **Asset-free init** — `omk init` no longer copies or generates `kimicat.png` into new projects.
+- **Logo config safety** — fresh `.omk/config.toml` no longer enables `logo_image = "kimicat.png"` by default; custom logos are opt-in through a commented example.
+- **Init scaffold visibility** — init output now lists the generated role, prompt, config, hook, MCP, snippet, memory, and spec-kit scaffold groups instead of the removed PNG asset.
+- **Packaged role templates** — packaged `.omk` agent templates now include the missing root subagent role files (`architect`, `interviewer`, `explorer`, `coder`, `qa`, `integrator`, `researcher`, `ontology`, `vision-debugger`) plus the `explore`/`plan` compatibility aliases.
+- **Template package audit** — package audit now fails when packaged `.omk/agents/root.yaml` references role paths that are not included in the tarball.
+- **Runtime release readiness** — doctor/runtime checks now avoid stale global-home and web-tool false positives, while goal/harness verification uses current dist and latest evidence instead of stale generated output.
+
+### Verification
+
+- Passed `npm run build:clean`, `npm run check`, `npm run lint`, `npm test`, `npm run yaml:check`, `npm run secret:scan`, `npm run native:build && npm run audit:package`, `npm run smoke:pack`, `git diff --check`, and `node dist/cli.js doctor --json --soft`.
 
 ## v1.1.9 — CI smoke parity hardening (2026-05-09)
 
