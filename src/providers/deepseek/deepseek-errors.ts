@@ -12,6 +12,7 @@ const AVAILABILITY_PATTERNS = [
 ];
 
 const TRANSIENT_PATTERNS = [
+  "text content is empty", // DeepSeek rejects empty content — retry with fallback
   "rate limit",
   "429",
   "server overloaded",

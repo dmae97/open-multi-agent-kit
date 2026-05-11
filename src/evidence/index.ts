@@ -1,0 +1,45 @@
+export type {
+  AttemptStatus,
+  RuntimeId,
+  EvidenceResult,
+  AttemptRecord,
+  DiagnosisResult,
+  RetryStrategy,
+  ContextAdjustment,
+} from "./attempt-record.js";
+
+export { createAttemptId, hashContent } from "./attempt-record.js";
+
+export type { EvidenceRecorderOptions, EvidenceRecorder } from "./evidence-recorder.js";
+
+export { createEvidenceRecorder } from "./evidence-recorder.js";
+
+export type {
+  ContextSnapshotMeta,
+  ContextSnapshotStore,
+} from "./context-snapshot.js";
+
+export { createContextSnapshotStore } from "./context-snapshot.js";
+
+export type { DiagnosisEngine } from "./diagnosis.js";
+
+export { createDiagnosisEngine } from "./diagnosis.js";
+
+export type {
+  NodeTraceSummary,
+  RunTrace,
+  RunTraceStore,
+  RunMeta,
+  NodeReport,
+  RunReport,
+} from "./run-trace.js";
+
+export { createRunTraceStore } from "./run-trace.js";
+
+export type { RepairAction, RepairDecision } from "./attempt-record.js";
+
+export { decideRepair } from "../orchestration/repair-policy.js";
+export type { RepairContext } from "../orchestration/repair-policy.js";
+
+export type { DecisionTraceStore } from "./decision-trace.js";
+export { createDecisionTraceStore } from "./decision-trace.js";

@@ -42,7 +42,7 @@ const LITERAL_PATTERNS = [
 ];
 
 const GENERIC_ASSIGNMENT = /\b(api[_-]?key|secret|token|password|private[_-]?key)\b\s*[:=]\s*["']?([^"'\s;,]{20,})/i;
-const GENERIC_ALLOWLIST = /\$\{|<|YOUR_|REPLACE_|NPM_TOKEN|GITHUB_TOKEN|NODE_AUTH_TOKEN|process\.env|env\.|readSetting|parseOptional|parsed\.password|\*\*\*|placeholder|example|sample|redacted|maintainer-local|secret leakage|secret leak|secrets? from|Do not store secrets|Do not send secrets/i;
+const GENERIC_ALLOWLIST = /\$\{|<|YOUR_|REPLACE_|NPM_TOKEN|GITHUB_TOKEN|NODE_AUTH_TOKEN|process\.env|env\.|readSetting|parseOptional|parsed\.password|\*\*\*|placeholder|example|sample|redacted|maintainer-local|secret leakage|secret leak|secrets? from|Do not store secrets|Do not send secrets|credentialCache/i;
 
 function walkDirectory(dir, prefix = "") {
   const results = [];

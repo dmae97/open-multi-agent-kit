@@ -21,6 +21,7 @@ import {
   type ProviderPolicy,
 } from "../providers/index.js";
 import type { DeepSeekModelTier } from "../providers/types.js";
+import { SUPER_OMK_DEFAULTS, isSuperOmkEnabled } from "../providers/deepseek/deepseek-super-config.js";
 import type { RunState, UserIntent } from "../contracts/orchestration.js";
 import type { Dag, DagNodeDefinition } from "../orchestration/dag.js";
 
@@ -126,6 +127,8 @@ export async function parallelCommand(
       goalId,
       goalSnapshot,
       intent: options.intent,
+      profile: resources.profile,
+      providerPolicy,
     });
   }
 
@@ -275,6 +278,7 @@ export async function parallelCommand(
       approvalPolicy: approvalPolicy as "interactive" | "auto" | "yolo" | "block",
       nodeTimeoutMs: options.timeoutPreset ? undefined : 600_000,
       timeoutPreset: options.timeoutPreset,
+      worktreeRoot: root,
     });
   } finally {
     liveRenderer.stop();
@@ -550,6 +554,8 @@ function createInteractiveRunState(input: {
   goalId?: string;
   goalSnapshot?: RunState["goalSnapshot"];
   intent?: UserIntent;
+  profile?: string;
+  providerPolicy?: ProviderPolicy;
 }): RunState {
   const intent = input.intent;
   const effectiveWorkers = intent?.estimatedWorkers === undefined
@@ -563,6 +569,8 @@ function createInteractiveRunState(input: {
     startedAt: input.startedAt,
     workerCount: effectiveWorkers,
     intent,
+    profile: input.profile,
+    providerPolicy: input.providerPolicy,
   });
 
   const state = createRoutedRunState({
@@ -594,13 +602,23 @@ export interface DynamicNodeBuildInput {
   startedAt: string;
   workerCount: number;
   intent?: UserIntent;
+  profile?: string;
+  providerPolicy?: ProviderPolicy;
 }
 
 export function buildDynamicNodes(input: DynamicNodeBuildInput): DagNodeDefinition[] {
-  const { flow, goal, startedAt, workerCount, intent } = input;
+  const { flow, goal, startedAt, workerCount, intent, profile, providerPolicy } = input;
   const taskType = intent?.taskType ?? "general";
   const roles = intent?.requiredRoles ?? ["planner", "coder", "reviewer"];
   const effectiveWorkerCount = normalizeWorkerCount(String(workerCount), 1);
+
+  const isSuper = isSuperOmkEnabled() || profile === "super";
+  const kimiWorkerCount = isSuper
+    ? Math.min(SUPER_OMK_DEFAULTS.kimiWorkerCap, effectiveWorkerCount)
+    : effectiveWorkerCount;
+  const deepseekWorkerCount = isSuper
+    ? Math.min(SUPER_OMK_DEFAULTS.deepseekWorkerCap, effectiveWorkerCount - kimiWorkerCount)
+    : 0;
 
   const bootstrap: DagNodeDefinition = {
     id: "bootstrap",
@@ -628,11 +646,13 @@ export function buildDynamicNodes(input: DynamicNodeBuildInput): DagNodeDefiniti
   const workerRoles = roles.filter((r) => r !== "planner" && r !== "orchestrator" && r !== "architect" && r !== "router");
   if (workerRoles.length === 0) workerRoles.push("coder");
 
-  const deepseekAgentNodes = buildDeepSeekAgentNodes({
-    goal,
-    taskType,
-    intent,
-  });
+  const deepseekAgentNodes = providerPolicy === "kimi"
+    ? []
+    : buildDeepSeekAgentNodes({
+      goal,
+      taskType,
+      intent,
+    });
   const capabilityAgentNodes = shouldSpawnCapabilityAgents(effectiveWorkerCount, taskType, intent)
     ? buildCapabilityAgentNodes({
       goal,
@@ -644,8 +664,8 @@ export function buildDynamicNodes(input: DynamicNodeBuildInput): DagNodeDefiniti
     })
     : [];
 
-  const workerNodes: DagNodeDefinition[] = Array.from(
-    { length: effectiveWorkerCount },
+  const kimiWorkerNodes: DagNodeDefinition[] = Array.from(
+    { length: kimiWorkerCount },
     (_, index) => {
       const role = workerRoles[index % workerRoles.length];
       const taskName =
@@ -670,6 +690,50 @@ export function buildDynamicNodes(input: DynamicNodeBuildInput): DagNodeDefiniti
       };
     }
   );
+
+  const deepseekWorkerNodes: DagNodeDefinition[] = Array.from(
+    { length: deepseekWorkerCount },
+    (_, index) => {
+      const type = SUPER_OMK_DEFAULTS.deepseekNodeTypes[index % SUPER_OMK_DEFAULTS.deepseekNodeTypes.length];
+      const roleMap: Record<string, string> = {
+        plan: "planner",
+        review: "reviewer",
+        analyze: "explorer",
+        research: "researcher",
+        debug: "debugger",
+      };
+      const role = roleMap[type] ?? "explorer";
+      return {
+        id: `deepseek-worker-${index + 1}`,
+        name: `deepseek-worker-${index + 1} (${role}): ${type} area ${index + 1}`,
+        role,
+        dependsOn: ["root-coordinator"],
+        maxRetries: 1,
+        priority: 2,
+        cost: 1,
+        failurePolicy: { retryable: true, blockDependents: false, skipOnFailure: true },
+        inputs: [{ name: "worker plan", ref: "plan.md", from: "root-coordinator" }],
+        outputs: [{ name: `deepseek-worker-${index + 1} output`, gate: "none" }],
+        routing: {
+          provider: "deepseek",
+          fallbackProvider: "kimi",
+          providerModelTier: "pro",
+          providerReason: `Super OMK DeepSeek worker for ${type}`,
+          requiresMcp: false,
+          requiresToolCalling: false,
+          readOnly: true,
+          evidenceRequired: false,
+          contextBudget: "small",
+          skills: ["omk-repo-explorer", "omk-context-broker"],
+          mcpServers: [],
+          tools: [],
+          rationale: `DeepSeek V4 Pro handles ${type} in super co-orchestration mode`,
+        },
+      };
+    }
+  );
+
+  const workerNodes = [...kimiWorkerNodes, ...deepseekWorkerNodes];
 
   // Build tail nodes based on task type
   const tailNodes: DagNodeDefinition[] = [];

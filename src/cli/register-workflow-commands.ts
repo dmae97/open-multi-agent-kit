@@ -1,0 +1,117 @@
+import type { Command } from "commander";
+import { t } from "../util/i18n.js";
+import { applyExitCode } from "../util/cli-contract.js";
+
+export function registerWorkflowCommands(program: Command): void {
+  program
+    .command("plan <goal>")
+    .description(t("cmd.planDesc"))
+    .option("--thinking <mode>", "thinking mode", "enabled")
+    .option("--spec-kit", t("cmd.featureSpecKitOption"))
+    .option("--no-spec-kit", t("cmd.featureNoSpecKitOption"))
+    .action(async (goal, options) => {
+      const globalOpts = program.opts();
+      const { planCommand } = await import("../commands/plan.js");
+      await planCommand(goal, { ...options, runId: globalOpts.runId });
+    });
+
+  program
+    .command("feature <goal>")
+    .description(t("cmd.featureDesc"))
+    .option("--spec-kit", t("cmd.featureSpecKitOption"))
+    .option("--no-spec-kit", t("cmd.featureNoSpecKitOption"))
+    .action(async (goal, options) => {
+      const globalOpts = program.opts();
+      const { featureCommand } = await import("../commands/workflow.js");
+      await featureCommand(goal, { ...options, runId: globalOpts.runId });
+    });
+
+  program
+    .command("bugfix <goal>")
+    .description(t("cmd.bugfixDesc"))
+    .option("--spec-kit", t("cmd.bugfixSpecKitOption"))
+    .option("--no-spec-kit", t("cmd.bugfixNoSpecKitOption"))
+    .action(async (goal, options) => {
+      const globalOpts = program.opts();
+      const { bugfixCommand } = await import("../commands/workflow.js");
+      await bugfixCommand(goal, { ...options, runId: globalOpts.runId });
+    });
+
+  program
+    .command("refactor <goal>")
+    .description(t("cmd.refactorDesc"))
+    .option("--spec-kit", t("cmd.refactorSpecKitOption"))
+    .option("--no-spec-kit", t("cmd.refactorNoSpecKitOption"))
+    .action(async (goal, options) => {
+      const globalOpts = program.opts();
+      const { refactorCommand } = await import("../commands/workflow.js");
+      await refactorCommand(goal, { ...options, runId: globalOpts.runId });
+    });
+
+  program
+    .command("review")
+    .description(t("cmd.reviewDesc"))
+    .option("--ci", t("cmd.reviewCiOption"))
+    .option("--soft", t("cmd.reviewSoftOption"))
+    .action(async (options) => {
+      const globalOpts = program.opts();
+      const { reviewCommand } = await import("../commands/workflow.js");
+      const result = await reviewCommand({ ...options, runId: globalOpts.runId });
+      applyExitCode(result);
+    });
+
+  program
+    .command("run [flow] [goal]")
+    .description(t("cmd.runDesc"))
+    .option("--workers <n>", t("cmd.runWorkersOption"), "auto")
+    .option("--timeout-preset <preset>", t("cmd.runTimeoutPresetOption"))
+    .option("--provider <auto|kimi>", "provider policy (auto | kimi)", "auto")
+    .action(async (flow, goal, options) => {
+      const globalOpts = program.opts();
+      const { runCommand } = await import("../commands/run.js");
+      await runCommand(flow, goal, { ...options, runId: globalOpts.runId });
+    });
+
+  program
+    .command("team")
+    .description(t("cmd.teamDesc"))
+    .option("--workers <n>", t("cmd.teamWorkersOption"), "auto")
+    .action(async (options) => {
+      const globalOpts = program.opts();
+      const { teamCommand } = await import("../commands/team.js");
+      await teamCommand({ ...options, runId: globalOpts.runId });
+    });
+
+  program
+    .command("parallel [goal]")
+    .description(t("cmd.parallelDesc"))
+    .option("--workers <n>", t("cmd.parallelWorkersOption"), "auto")
+    .option("--timeout-preset <preset>", t("cmd.parallelTimeoutPresetOption"))
+    .option("--provider <auto|kimi>", "provider policy (auto | kimi)", "auto")
+    .option("--approval-policy <policy>", t("cmd.parallelApprovalOption"), "interactive")
+    .option("--watch", t("cmd.parallelWatchOption"))
+    .option("--no-watch", t("cmd.parallelNoWatchOption"))
+    .option("--view <mode>", "Display mode: cockpit | table | compact", "cockpit")
+    .option("--alternate-screen", "Enter alternate screen buffer for full-screen UI")
+    .option("--no-pause", "Do not wait for Enter at the end")
+    .option("--compact", "Use compact single-line renderer")
+    .option("--chat", t("cmd.parallelChatOption"))
+    .option("--from-spec <dir>", "Run spec-kit tasks.md as a parallel DAG")
+    .action(async (goal, options) => {
+      const globalOpts = program.opts();
+      const { parallelCommand } = await import("../commands/parallel.js");
+      const result = await parallelCommand(goal, {
+        ...options,
+        runId: globalOpts.runId,
+        watch: options.watch,
+        noWatch: options.watch === false,
+        view: options.view,
+        alternateScreen: options.alternateScreen,
+        noPause: options.pause === false,
+        compact: options.compact,
+      });
+      if (!result.success && process.exitCode === undefined) {
+        process.exitCode = 1;
+      }
+    });
+}

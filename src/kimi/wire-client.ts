@@ -5,6 +5,7 @@ import type { DagNode } from "../orchestration/dag.js";
 import { CappedOutputBuffer } from "../util/output-buffer.js";
 import { getOmkResourceSettings } from "../util/resource-profile.js";
 import { getOmkVersionSync } from "../util/version.js";
+import { checkCommand } from "../util/shell.js";
 
 export interface JsonRpcRequest<TParams = unknown> {
   jsonrpc: "2.0";
@@ -67,6 +68,7 @@ export class KimiWireClient {
   private rl?: ReturnType<typeof createInterface>;
   private pending = new Map<string, { resolve: (value: JsonRpcResponse) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>();
   private eventHandlers: Array<(event: WireEvent) => void> = [];
+  private static readonly MAX_PENDING_RPCS = 64;
 
   constructor(
     private options: {
@@ -96,6 +98,16 @@ export class KimiWireClient {
   }
 
   async start(): Promise<void> {
+    // Binary resolution guard: verify `kimi` is reachable before spawn
+    const kimiAvailable = await checkCommand("kimi");
+    if (!kimiAvailable) {
+      throw new Error(
+        "[omk] `kimi` command not found in PATH. " +
+          "Install Kimi CLI first: npm i -g @anthropic-ai/kimi-code\n" +
+          "If already installed, check your PATH or set KIMI_BIN env var."
+      );
+    }
+
     const args = ["--wire"];
     if (this.options.agentFile) args.push("--agent-file", this.options.agentFile);
     if (this.options.configFile) args.push("--config-file", this.options.configFile);
@@ -110,6 +122,8 @@ export class KimiWireClient {
     this.rl = createInterface({ input: this.proc.stdout! });
 
     this.rl.on("line", (line) => {
+      const MAX_LINE_LENGTH = 10 * 1024 * 1024; // 10MB
+      if (line.length > MAX_LINE_LENGTH) return; // skip oversized messages
       const trimmed = line.trim();
       if (!trimmed) return;
       try {
@@ -149,8 +163,6 @@ export class KimiWireClient {
       }
       this.pending.clear();
     });
-
-    await new Promise((r) => setTimeout(r, 500));
 
     await this.call("initialize", {
       protocol_version: "2025-03-11",
@@ -216,17 +228,30 @@ export class KimiWireClient {
 
   private async call<TParams, TResult>(method: string, params?: TParams): Promise<TResult> {
     if (!this.proc?.stdin) throw new Error("Wire client not started");
+    if (this.pending.size >= KimiWireClient.MAX_PENDING_RPCS) {
+      throw new Error(`Too many pending RPCs (${this.pending.size}), max is ${KimiWireClient.MAX_PENDING_RPCS}`);
+    }
     const id = nextId();
     const req: JsonRpcRequest<TParams> = { jsonrpc: "2.0", id, method, params };
     const timeoutMs = Number(process.env.OMK_WIRE_TIMEOUT_MS || "120000");
+    let timer: NodeJS.Timeout | undefined;
     const promise = new Promise<JsonRpcResponse>((resolve, reject) => {
-      const timer = setTimeout(() => {
+      timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`Wire RPC timeout: ${method} (id: ${id}, timeout: ${timeoutMs}ms)`));
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
     });
-    this.proc.stdin.write(JSON.stringify(req) + "\n");
+    try {
+      if (this.proc.stdin.destroyed || this.proc.stdin.writableEnded) {
+        throw new Error("Kimi process stdin is closed");
+      }
+      this.proc.stdin.write(JSON.stringify(req) + "\n");
+    } catch (err) {
+      this.pending.delete(id);
+      clearTimeout(timer);
+      throw err;
+    }
     const res = await promise;
     if (res.error) throw new Error(res.error.message);
     return res.result as TResult;
@@ -277,6 +302,10 @@ export class KimiWireClient {
       p.reject(new Error(`Wire client stopped before response to request ${id}`));
     }
     this.pending.clear();
+    this.proc?.removeAllListeners();
+    this.proc?.stderr?.removeAllListeners("data");
+    this.rl?.removeAllListeners();
+    this.eventHandlers = [];
     if (this.rl) {
       this.rl.close();
       this.rl = undefined;

@@ -13,6 +13,8 @@ import type { ParallelCommandOptions } from "../commands/parallel.js";
 import type { GoalSpec } from "../contracts/goal.js";
 import { getCurrentMode } from "../util/mode-preset.js";
 import { t } from "../util/i18n.js";
+import { VerificationError } from "../util/cli-contract.js";
+import { createDecisionTraceStore } from "../evidence/decision-trace.js";
 
 export interface OrchestrateOptions {
   runId?: string;
@@ -24,6 +26,7 @@ export interface OrchestrateOptions {
   timeoutPreset?: string;
   provider?: "auto" | "kimi";
   maxAutoContinueIterations?: string | number;
+  failOnDagFailure?: boolean;
   sourceCommand: "chat" | "run" | "parallel" | "goal-run" | "goal-continue" | "default";
 }
 
@@ -181,7 +184,7 @@ export async function orchestratePrompt(
     workers: options.workers ?? String(resources.maxWorkers),
     intent,
     currentPrompt: rawPrompt,
-    isContinuation: options.sourceCommand === "goal-run" || options.sourceCommand === "goal-continue",
+    isContinuation: options.sourceCommand === "goal-continue",
   });
 
   // ── Persist next-prompt to goal directory ──
@@ -248,7 +251,7 @@ export async function orchestratePrompt(
     workers: options.workers ?? String(resources.maxWorkers),
     runId: options.runId,
     approvalPolicy: options.approvalPolicy ?? "interactive",
-    watch: options.watch ?? true,
+    watch: options.watch,
     view: options.view ?? "cockpit",
     goalId,
     intent,
@@ -256,13 +259,22 @@ export async function orchestratePrompt(
     provider: options.provider,
   };
 
-  const { runId: generatedRunId } = await parallelCommand(enrichedPrompt, parallelOpts);
+  const { runId: generatedRunId, success: dagSucceeded } = await parallelCommand(enrichedPrompt, parallelOpts);
   const effectiveRunId = generatedRunId;
 
   // Persist runId on goal so goal continue/verify can locate the latest run
   if (!goal.runIds.includes(effectiveRunId)) {
     goal = { ...goal, runIds: [...goal.runIds, effectiveRunId], updatedAt: new Date().toISOString() };
     await goalPersister.save(goal);
+  }
+
+  if (!dagSucceeded) {
+    goal = { ...goal, status: "failed", updatedAt: new Date().toISOString() };
+    await goalPersister.save(goal);
+    if (options.failOnDagFailure) {
+      throw new VerificationError(`Parallel DAG run failed: ${effectiveRunId}`, [`runId: ${effectiveRunId}`]);
+    }
+    return;
   }
 
   // ── Ensemble auto-decision: evaluate progress and auto-continue/replan/close ──
@@ -307,6 +319,19 @@ export async function orchestratePrompt(
       };
       decisionHistory.push(decision);
 
+      // Record ensemble-decision in unified decision trace store
+      const traceStore = createDecisionTraceStore();
+      traceStore.record(currentRunId, {
+        component: "ensemble-decision",
+        inputSummary: `iteration=${iteration} goalId=${goalId} runId=${currentRunId}`,
+        outputDecision: `action=${progress.nextAction} confidence=${progress.ensemble.confidence.toFixed(2)}`,
+        reason: progress.ensemble.rationale,
+        scores: {
+          confidence: progress.ensemble.confidence,
+          candidateCount: progress.ensemble.candidateVotes?.length ?? 0,
+        },
+      });
+
       await writeFile(
         join(goalDir, "ensemble-decision.json"),
         JSON.stringify(decision, null, 2)
@@ -328,6 +353,9 @@ export async function orchestratePrompt(
         console.log(style.gray(progress.ensemble.rationale));
         goal = { ...goal, status: "blocked", updatedAt: new Date().toISOString() };
         await goalPersister.save(goal);
+        if (options.failOnDagFailure) {
+          throw new VerificationError(`Goal blocked after run: ${currentRunId}`, [`runId: ${currentRunId}`]);
+        }
         return;
       }
 
@@ -382,9 +410,17 @@ export async function orchestratePrompt(
       });
       currentRunId = followUp.runId;
       await rememberRunId(currentRunId);
+      if (!followUp.success) {
+        goal = { ...goal, status: "failed", updatedAt: new Date().toISOString() };
+        await goalPersister.save(goal);
+        if (options.failOnDagFailure) {
+          throw new VerificationError(`Parallel DAG run failed: ${currentRunId}`, [`runId: ${currentRunId}`]);
+        }
+        return;
+      }
     }
   } catch (err) {
-    // If ensemble evaluation fails, silently continue (do not block the user)
+    if (options.failOnDagFailure && err instanceof VerificationError) throw err;
     const message = err instanceof Error ? err.message : String(err);
     console.error(style.gray(`[orchestrate] ensemble decision skipped: ${message}`));
   }

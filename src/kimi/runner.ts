@@ -14,7 +14,29 @@ import { KimiStatusLineEnhancer } from "./statusline.js";
 import { formatOmkVersionFooter } from "../util/version.js";
 import { prepareIsolatedKimiHome, cleanupIsolatedKimiHome, resolveOriginalHome } from "./isolated-home.js";
 import { enableRawTerminalInput, restoreTerminalInputState } from "../util/terminal-input.js";
+import { checkCommand } from "../util/shell.js";
 
+/** args 배열에서 --mcp-config-file 경로들을 찾아 존재 여부 검증 (fail-fast, 3s timeout) */
+async function preflightMcpConfigs(args: string[]): Promise<void> {
+  const MCP_PREFLIGHT_TIMEOUT_MS = 3000;
+  const start = Date.now();
+  for (let i = 0; i < args.length - 1; i++) {
+    if (args[i] === "--mcp-config-file") {
+      const configPath = args[i + 1];
+      if (!configPath) continue;
+      if (Date.now() - start > MCP_PREFLIGHT_TIMEOUT_MS) {
+        console.warn(style.orange(`[omk] ⚠️  MCP preflight timed out after ${MCP_PREFLIGHT_TIMEOUT_MS}ms`));
+        break;
+      }
+      if (!(await pathExists(configPath))) {
+        console.warn(
+          style.orange(`[omk] ⚠️  MCP config not found: ${configPath}`) +
+            "\n  Kimi may fail to start. Run `omk doctor` to check MCP configuration."
+        );
+      }
+    }
+  }
+}
 export async function runKimiInteractive(
   args: string[],
   options?: {
@@ -51,6 +73,21 @@ export async function runKimiInteractive(
     HOMEPATH: tmpHome,
   };
 
+
+  // Binary resolution guard: verify `kimi` is reachable before spawn
+  const kimiAvailable = await checkCommand("kimi");
+  if (!kimiAvailable) {
+    await cleanupIsolatedKimiHome(tmpHome);
+    throw new Error(
+      "[omk] `kimi` command not found in PATH. " +
+        "Install Kimi CLI first: npm i -g @anthropic-ai/kimi-code\n" +
+        "If already installed, check your PATH or set KIMI_BIN env var."
+    );
+  }
+
+  // MCP preflight: verify config files exist before spawn
+  await preflightMcpConfigs(args);
+
   let ptyProcess: ReturnType<typeof pty.spawn>;
   try {
     ptyProcess = pty.spawn("kimi", args, {
@@ -65,18 +102,48 @@ export async function runKimiInteractive(
     throw err;
   }
 
-  // ── Backpressure-safe stdout writer ──
+  // ── Signal handlers registered inside Promise below ──
+
+  // ── Backpressure-safe stdout writer (circular buffer) ──
   // Prevents process.stdout.write from blocking the event loop when the
   // TTY is slow, which in turn starves stdin keypress handlers.
+  const MAX_STDOUT_LINES = Math.max(1000, Math.min(20000, parseInt(process.env.OMK_MAX_STDOUT_LINES ?? "10000", 10)));
+  const MAX_CHUNK_BYTES = 65536; // cap individual chunks to avoid memory spikes
   const stdoutQueue: string[] = [];
+  let stdoutHead = 0;
+  let stdoutCount = 0;
   let stdoutWriting = false;
-  const MAX_QUEUE_SIZE = 4096; // memory safety cap: drop oldest chunks under extreme backpressure
-  let queueOverflowWarned = false;
+
+  function circularPush(data: string): void {
+    // Limit individual chunk size to prevent memory spikes from huge single writes
+    const chunks = data.length > MAX_CHUNK_BYTES
+      ? [data.slice(0, MAX_CHUNK_BYTES), data.slice(MAX_CHUNK_BYTES)]
+      : [data];
+    for (const chunk of chunks) {
+      const idx = (stdoutHead + stdoutCount) % MAX_STDOUT_LINES;
+      if (stdoutCount < MAX_STDOUT_LINES) {
+        stdoutQueue[idx] = chunk;
+        stdoutCount++;
+      } else {
+        stdoutQueue[stdoutHead] = chunk;
+        stdoutHead = (stdoutHead + 1) % MAX_STDOUT_LINES;
+      }
+    }
+  }
+
+  function circularShift(): string | undefined {
+    if (stdoutCount === 0) return undefined;
+    const data = stdoutQueue[stdoutHead];
+    stdoutQueue[stdoutHead] = "";
+    stdoutHead = (stdoutHead + 1) % MAX_STDOUT_LINES;
+    stdoutCount--;
+    return data;
+  }
 
   function flushStdoutQueue(): void {
     stdoutWriting = true;
-    while (stdoutQueue.length > 0) {
-      const chunk = stdoutQueue.shift()!;
+    while (stdoutCount > 0) {
+      const chunk = circularShift()!;
       if (!process.stdout.write(chunk)) {
         process.stdout.once("drain", () => {
           stdoutWriting = false;
@@ -86,20 +153,10 @@ export async function runKimiInteractive(
       }
     }
     stdoutWriting = false;
-    queueOverflowWarned = false;
   }
 
   function writeStdout(data: string): void {
-    if (stdoutQueue.length >= MAX_QUEUE_SIZE) {
-      // Drop oldest 25% to recover instead of unbounded growth
-      const dropCount = Math.max(1, Math.floor(MAX_QUEUE_SIZE * 0.25));
-      stdoutQueue.splice(0, dropCount);
-      if (!queueOverflowWarned) {
-        queueOverflowWarned = true;
-        process.stderr.write(style.red("[omk] stdout queue overflow: dropped old chunks to prevent OOM\n"));
-      }
-    }
-    stdoutQueue.push(data);
+    circularPush(data);
     if (!stdoutWriting) {
       flushStdoutQueue();
     }
@@ -186,7 +243,7 @@ export async function runKimiInteractive(
   // 종료 대기
   return new Promise<number>((resolve) => {
     let cleaned = false;
-    const cleanupRuntime = (): void => {
+    const cleanupRuntime = async (): Promise<void> => {
       if (cleaned) return;
       cleaned = true;
       try {
@@ -199,24 +256,47 @@ export async function runKimiInteractive(
           restoreTerminalInputState(process.stdin, terminalInputState);
         }
       }
-      void cleanupIsolatedKimiHome(tmpHome);
+      await cleanupIsolatedKimiHome(tmpHome);
     };
+
+    const signalHandler = async (signal: string): Promise<void> => {
+      // Remove listeners first to prevent re-entry
+      process.removeListener("SIGINT", signalHandler as NodeJS.SignalsListener);
+      process.removeListener("SIGTERM", signalHandler as NodeJS.SignalsListener);
+      try {
+        ptyProcess.kill("SIGTERM");
+      } catch { /* pty already dead */ }
+      await cleanupRuntime();
+      process.exitCode = signal === "SIGINT" ? 130 : 143; // 128+2, 128+15
+    };
+    process.once("SIGINT", signalHandler as NodeJS.SignalsListener);
+    process.once("SIGTERM", signalHandler as NodeJS.SignalsListener);
 
     ptyProcess.onExit(({ exitCode }) => {
       const bugRest = bugFilter.forceFlush();
       if (bugRest) writeStdout(statusLine.process(bugRest));
       const replacerRest = replacer.forceFlush();
       if (replacerRest) writeStdout(statusLine.process(replacerRest));
-      cleanupRuntime();
-      // Do NOT process.exit here — the caller should decide when to exit.
-      // Returning the exit code via resolve is enough for the wrapper to handle.
+      cleanupRuntime().catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`[omk] PTY cleanup warning: ${message}\n`);
+      });
       if (exitCode !== 0) {
         const runId = options?.env?.OMK_RUN_ID;
         const resumeHint = runId ? ` • resume: omk chat --run-id ${runId}` : "";
         process.stderr.write(style.red(`[omk] kimi exited with code ${exitCode}${resumeHint}\n`));
+        // Detect MCP connection failures from stderr that was buffered in PTY
+        if (exitCode === 1) {
+          process.stderr.write(
+            style.orange(
+              `[omk] If this was caused by MCP server connection failure, run 'omk doctor' to diagnose.\n` +
+                `      You can also try: OMK_MCP_SCOPE=none omk chat --provider kimi\n`
+            )
+          );
+        }
       }
       resolve(exitCode);
-    });
+});
   });
 }
 
@@ -316,6 +396,7 @@ export function createKimiTaskRunner(options: KimiTaskRunnerOptions = {}): TaskR
       };
       const args: string[] = [];
       await injectKimiGlobals(args, { mcpScope, skillsScope, role: node.role });
+      await preflightMcpConfigs(args);
 
       const resolvedAgentFile = roleAgentFiles
         ? await resolveAgentFileForRole(node.role, agentFile)
@@ -340,6 +421,16 @@ export function createKimiTaskRunner(options: KimiTaskRunnerOptions = {}): TaskR
 
       const effectiveTimeout = await resolveTimeoutMs({ timeoutMs: timeout, timeoutPreset: node.timeoutPreset });
 
+      // Binary resolution guard for DAG mode
+      const kimiAvailable = await checkCommand("kimi");
+      if (!kimiAvailable) {
+        return {
+          success: false,
+          exitCode: 1,
+          stdout: "",
+          stderr: "[omk] `kimi` command not found in PATH. Install Kimi CLI first.",
+        };
+      }
       let result: Awaited<ReturnType<typeof runShellStreaming>>;
       try {
         result = await runShellStreaming("kimi", args, {
@@ -383,12 +474,8 @@ export function createKimiTaskRunner(options: KimiTaskRunnerOptions = {}): TaskR
       // Known MCP soft-failure: Kimi CLI may return exit code 1 when an MCP
       // server fails to connect, even though it produced meaningful stdout.
       // Only allow this specific exception; all other non-zero exits are failures.
-      const isMcpSoftFailure =
-        result.exitCode !== 0 &&
-        result.stderr.includes("Failed to connect MCP servers") &&
-        result.stdout.trim().length > 0;
       return {
-        success: (!result.failed && result.exitCode === 0) || isMcpSoftFailure,
+        success: !result.failed && result.exitCode === 0,
         exitCode: result.exitCode,
         stdout: prefixStdout,
         stderr: prefixStderr,

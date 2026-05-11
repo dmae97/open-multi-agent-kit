@@ -1,6 +1,5 @@
 import { readdir, readFile, stat as fsStat } from "fs/promises";
 import { join } from "path";
-import { uptime } from "os";
 import { execFile, execSync } from "child_process";
 import { promisify } from "util";
 import { getOmkPath, pathExists, getProjectRoot, getRunPath, getRunsDir } from "../util/fs.js";
@@ -56,14 +55,22 @@ export interface HudRunCandidate {
 export type HudSection = "run" | "project" | "resources";
 
 export interface HudRenderOptions {
-  runId?: string;
-  terminalWidth?: number;
-  kimiUsage?: UsageStats;
-  footerRefreshMs?: number;
-  compact?: boolean;
-  section?: HudSection;
+runId?: string;
+terminalWidth?: number;
+kimiUsage?: UsageStats;
+footerRefreshMs?: number;
+compact?: boolean;
+section?: HudSection;
+  fetchQuota?: boolean;
+  /** Show heap memory stats in system panel (default: true) */
+  showHeap?: boolean;
+  /** Show disk usage in system panel (default: true) */
+  showDisk?: boolean;
+  /** Show uptime in system panel (default: true) */
+  showUptime?: boolean;
+  /** System panel refresh interval in ms (default: 5000) */
+  systemRefreshMs?: number;
 }
-
 export interface HudCommandOptions extends HudRenderOptions {
   watch?: boolean;
   refreshMs?: number;
@@ -542,9 +549,19 @@ export async function listRunCandidates(runsDir: string): Promise<HudRunCandidat
   }));
 }
 
-async function buildSystemPanel(): Promise<string> {
+// ── System panel cache (avoids redundant fs/shell calls within refresh interval) ──
+let cachedSystemPanel: string | undefined;
+let cachedSystemPanelTime = 0;
+
+async function buildSystemPanel(options: HudRenderOptions = {}): Promise<string> {
+  const now = Date.now();
+  const refreshMs = options.systemRefreshMs ?? 5000;
+  if (cachedSystemPanel && now - cachedSystemPanelTime < refreshMs) {
+    return cachedSystemPanel;
+  }
+
   const usage = getSystemUsage();
-  const disk = getDiskUsage();
+  const disk = options.showDisk !== false ? getDiskUsage() : null;
   const resources = await getOmkResourceSettings();
 
   const sysLines: string[] = [
@@ -555,18 +572,23 @@ async function buildSystemPanel(): Promise<string> {
     "",
     stat("Load Avg", usage.loadAvg.map((v) => v.toFixed(2)).join(", "), ""),
     stat("Memory", `${usage.memUsedGB} / ${usage.memTotalGB}`, " GB"),
-    stat("OMK Profile", `${resources.profile} (${resources.mcpScope} MCP, ${resources.skillsScope} skills)`, ""),
+    options.showHeap !== false ? stat("Heap", `${usage.heapUsedMB} / ${usage.heapTotalMB}`, " MB") : "",
+    options.showHeap !== false ? stat("Heap Ext", `${usage.heapExternalMB}`, " MB") : "",
+    stat("Event Loop", `${usage.eventLoopLagMs.toFixed(1)}`, " ms"),
     stat("OMK Buffer", formatBytes(resources.shellMaxBufferBytes), ""),
     disk ? stat("Disk", `${(disk.used / 1024 / 1024 / 1024).toFixed(1)} / ${(disk.total / 1024 / 1024 / 1024).toFixed(1)}`, " GB") : "",
-    stat("Uptime", formatUptime(Math.floor(uptime())), ""),
+    options.showUptime !== false ? stat("Uptime", formatUptime(usage.uptimeSeconds), "") : "",
     "",
   ].filter(Boolean);
 
-  return panel(sysLines, gradient("System Usage"));
+  const result = panel(sysLines, gradient("System Usage"));
+  cachedSystemPanel = result;
+  cachedSystemPanelTime = now;
+  return result;
 }
 
-async function buildKimiUsagePanel(kimiUsage?: UsageStats): Promise<string> {
-  const usage = kimiUsage ?? await getKimiUsage();
+async function buildKimiUsagePanel(kimiUsage?: UsageStats, fetchQuota = true): Promise<string> {
+  const usage = kimiUsage ?? await getKimiUsage({ fetchQuota });
   const LIMIT_HOURS = 5;
   const limitSeconds = LIMIT_HOURS * 3600;
   const vm = buildUsageViewModel(usage);
@@ -862,10 +884,8 @@ async function renderCompactDashboard(options: HudRenderOptions): Promise<string
   const summary = buildSummaryBar(vm, stateError, goalTitle, effectiveWidth);
   output.push(summary);
   output.push("");
-
-  const usage = getSystemUsage();
-  output.push(`${style.gray("CPU:")}${usage.cpuPercent}% ${style.gray("MEM:")}${usage.memPercent}% ${style.gray("LOAD:")}${usage.loadAvg[0].toFixed(1)}`);
-  output.push("");
+  const systemPanel = await buildSystemPanel(options);
+  output.push(systemPanel);
 
   const runPanel = await buildLatestRunPanel(options, vm, stateError, gitChanges, effectiveWidth, sessionMeta, todos);
   output.push(runPanel);
@@ -988,8 +1008,8 @@ async function renderFullDashboard(options: HudRenderOptions): Promise<string> {
   output.push(summary);
   output.push("");
 
-  mainPanels.push(await buildSystemPanel());
-  mainPanels.push(await buildKimiUsagePanel(options.kimiUsage));
+  mainPanels.push(await buildSystemPanel(options));
+  mainPanels.push(await buildKimiUsagePanel(options.kimiUsage, options.fetchQuota ?? true));
   mainPanels.push(await buildProjectStatusPanel(gitChangesResult));
 
   const runPanel = await buildLatestRunPanel(options, vm, stateError, gitChanges, undefined, sessionMeta, todos);
@@ -1068,9 +1088,9 @@ async function renderSectionDashboard(options: HudRenderOptions): Promise<string
       break;
     }
     case "resources": {
-      output.push(await buildSystemPanel());
+      output.push(await buildSystemPanel(options));
       output.push("");
-      output.push(await buildKimiUsagePanel(options.kimiUsage));
+      output.push(await buildKimiUsagePanel(options.kimiUsage, options.fetchQuota ?? true));
       break;
     }
   }
@@ -1126,6 +1146,7 @@ export async function hudCommand(options: HudCommandOptions = {}): Promise<void>
   }
 
   try {
+    let lastFrame = "";
     while (!stopped) {
       const now = Date.now();
       if (!cachedUsage || now - lastUsageRefreshMs >= usageRefreshMs) {
@@ -1133,8 +1154,11 @@ export async function hudCommand(options: HudCommandOptions = {}): Promise<void>
         lastUsageRefreshMs = now;
       }
       const frame = await renderHudDashboard({ ...options, kimiUsage: cachedUsage, footerRefreshMs: refreshMs });
-      if (shouldClear) clearScreen();
-      process.stdout.write(frame + "\n");
+      if (frame !== lastFrame) {
+        lastFrame = frame;
+        if (shouldClear) clearScreen();
+        process.stdout.write(frame + "\n");
+      }
       if (stopped) break;
       await sleep(refreshMs);
     }

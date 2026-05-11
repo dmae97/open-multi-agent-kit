@@ -32,7 +32,8 @@ async function drainQueue(runId: string, root: string): Promise<void> {
         op(state);
         state.updatedAt = new Date().toISOString();
         await writeFile(statePath, JSON.stringify(state, null, 2));
-      } catch {
+      } catch (err: unknown) {
+        process.stderr.write(`[omk] chat-state drain failed: ${err instanceof Error ? err.message : String(err)}\n`);
         // resilient to individual patch failures
       } finally {
         resolve();
@@ -51,7 +52,9 @@ function enqueue(runId: string, op: StateMutator, root: string): Promise<void> {
       queues.set(runId, entry);
     }
     entry.ops.push({ op, resolve });
-    drainQueue(runId, root).catch(() => {});
+    drainQueue(runId, root).catch((err: unknown) => {
+      process.stderr.write(`[omk] chat-state enqueue drain failed: ${err instanceof Error ? err.message : String(err)}\n`);
+    });
   });
 }
 

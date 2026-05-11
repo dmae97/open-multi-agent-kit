@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.1.12 — Replay system, skill assigner, and decision trace coverage (2026-05-11)
+
+### New
+
+- **`omk replay` — timeline-based run replay** — reconstructs a run's execution chronology from artifacts with flags for `--context`, `--evidence`, `--decisions`, `--repair`, `--node`, and `--attempt` deep-dives.
+- **`omk inspect` — forensic run inspection** — validates run directories and renders colored terminal output with optional deep-dive into context capsules, evidence gates, decision traces, and repair chains.
+- **`omk diff-runs` — run reproducibility diff** — structural and content diff between two `ReplayManifest`s with per-node context-changed, evidence-changed, and repair-changed kinds.
+- **Skill Assigner** — automatic skill/MCP/tool/hook assignment engine with 14 intent-based rules (`web-design`, `diagram-design`, `kb-retriever`, `code-review`, `spec-driven`, `security-audit`, `debugging`, `feature-dev`, `refactor`, `release`, `team-run`, `mcp-required`, `tool-calling`). Preserves manually assigned values and records decision traces.
+- **External skill packs** — installed `diagram-design`, `web-design-engineer`, `kb-retriever`, `gpt-image-2`, and `web-video-presentation` into `.kimi/skills/`.
+- **Decision trace full coverage** — unified decision trace recording added to `runtime-router`, `context-broker`, `provider-router`, `repair-policy`, `evidence-gate`, `scheduler`, and `ensemble-decision`.
+
+### Improved
+
+- **Package audit** — entry count budget within limits (491 entries), native safety binary validated, `.map` files excluded from tarball via `tsconfig.json` sourcemap settings.
+
+### Fixed
+
+- **Context snapshot `list()` parsing** — fixed filename split vs JSON extraction bug in `context-snapshot.ts`.
+- **TypeScript lint** — resolved 21 unused-variable warnings across `src/orchestration/`, `src/replay/`, `src/commands/`, `src/contracts/`, `src/runtime/`, and `src/providers/`.
+- **Context budget optimizer** — `estimateTokens` now null-safe (`text ?? ""`) preventing test failures on undefined memory fact fields.
+
+### Verification
+
+- Passed `npm run yaml:check`, `npm run lint`, `npm run secret:scan`, `npm run check`, `npm run build:clean`, `npm run native:build`, `npm run audit:package`, `npm run pack:dry`, and core tests (`replay-kernel`, `decision-trace`, `evidence-system`, `package-audit`).
+
 ## v1.1.11 — Windows CI and path diagnostics fixes (2026-05-10)
 
 ### Fixed

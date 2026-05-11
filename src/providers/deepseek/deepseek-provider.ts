@@ -106,7 +106,7 @@ function buildDeepSeekNodePrompt(
   env: Record<string, string>,
   promptPrefix?: string
 ): string {
-  return [
+  const result = [
     promptPrefix?.trim(),
     `DAG node: ${node.id}`,
     `Name: ${node.name}`,
@@ -136,6 +136,9 @@ function buildDeepSeekNodePrompt(
     "- Recommended Kimi follow-up",
     "- Do not echo the original user input; return synthesized findings only",
   ].filter((section): section is string => Boolean(section)).join("\n");
+
+  // Ensure the prompt is never empty — DeepSeek rejects empty content with 400
+  return result.trim() || `Analyze DAG node ${node.id} (${node.name}) and provide findings.`;
 }
 
 function renderList(title: string, items: string[], options: { showWhenEmpty?: boolean } = {}): string {

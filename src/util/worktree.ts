@@ -51,3 +51,55 @@ export async function listWorktrees(runId: string): Promise<string[]> {
   const entries = await readdir(worktreesDir, { withFileTypes: true });
   return entries.filter((e) => e.isDirectory()).map((e) => join(worktreesDir, e.name));
 }
+
+export async function createAttemptWorktree(runId: string, nodeId: string, attempt: number): Promise<string> {
+  if (runId.includes("..") || nodeId.includes("..") || runId.startsWith("/") || runId.startsWith("\\") || nodeId.startsWith("/") || nodeId.startsWith("\\")) {
+    throw new Error(`Invalid runId or nodeId`);
+  }
+  const root = getProjectRoot();
+  const attemptId = attempt.toString().padStart(3, "0");
+  const worktreePath = join(root, ".omk", "worktrees", runId, `attempt-${nodeId}-${attemptId}`);
+  await mkdir(worktreePath, { recursive: true });
+
+  const branchName = `work/${runId}/${nodeId}/${attemptId}`;
+  const result = await runShell("git", ["worktree", "add", worktreePath, "-b", branchName], {
+    cwd: root,
+    timeout: 15000,
+  });
+
+  if (result.failed) {
+    const retry = await runShell("git", ["worktree", "add", worktreePath, branchName], {
+      cwd: root,
+      timeout: 15000,
+    });
+    if (retry.failed) {
+      throw new Error(`Failed to create worktree at ${worktreePath}: ${retry.stderr}`);
+    }
+  }
+
+  return worktreePath;
+}
+
+export async function removeAttemptWorktree(runId: string, nodeId: string, attempt: number): Promise<void> {
+  const root = getProjectRoot();
+  const attemptId = attempt.toString().padStart(3, "0");
+  const worktreePath = join(root, ".omk", "worktrees", runId, `attempt-${nodeId}-${attemptId}`);
+  await removeWorktree(worktreePath);
+}
+
+export async function listAttemptWorktrees(runId: string, nodeId: string): Promise<string[]> {
+  const root = getProjectRoot();
+  const worktreesDir = join(root, ".omk", "worktrees", runId);
+
+  try {
+    await access(worktreesDir);
+  } catch {
+    return [];
+  }
+
+  const prefix = `attempt-${nodeId}-`;
+  const entries = await readdir(worktreesDir, { withFileTypes: true });
+  return entries
+    .filter((e) => e.isDirectory() && e.name.startsWith(prefix))
+    .map((e) => join(worktreesDir, e.name));
+}

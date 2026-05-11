@@ -97,8 +97,12 @@ export async function prepareIsolatedKimiHome(options: IsolatedKimiHomeOptions =
   const originalConfig = join(originalKimi, "config.toml");
   const tmpConfig = join(tmpKimi, "config.toml");
   if (await pathExists(originalConfig)) {
-    await symlink(originalConfig, tmpConfig).catch(() => {});
-  }
+    try {
+      await symlink(originalConfig, tmpConfig);
+    } catch (err) {
+      console.warn(`[omk] Failed to symlink ~/.kimi/config.toml to isolated HOME: ${(err as Error).message ?? err}`);
+    }
+}
 
   return tmpHome;
 }

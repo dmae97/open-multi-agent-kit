@@ -1,5 +1,5 @@
 /**
- * Kimi CLI 배너 필터 — 기본 웰컴 배너를 키미짱 커스텀 배너로 교체
+ * Kimi CLI 배너 필터 — 기본 웰컴 배너를 키미캣 커스텀 배너로 교체
  *
  * node-pty 스트림에서 Kimi CLI의 기본 배너 블록을 감지하고,
  * Directory / Session / Model 메타 정보를 추출한 뒤
@@ -24,9 +24,9 @@ export class BannerReplacer {
   private strippedCache = "";
   private cacheDirty = true;
   private timeout: ReturnType<typeof setTimeout> | null = null;
-  private readonly MAX_LINES = 200; // high: spinner sequences + erase-in-line inflate raw line count
-  private readonly TIMEOUT_MS = 8000;
-  private readonly MAX_BYTES = 32768;
+  private readonly MAX_LINES = 60; // banner may include model info / ascii art
+  private readonly TIMEOUT_MS = 800; // allow slower terminals / ssh latency
+  private readonly MAX_BYTES = 16384; // accommodate larger ascii art banners
 
   constructor(private onReplace: (meta: BannerMeta) => void) {}
 
@@ -145,15 +145,11 @@ export class BannerReplacer {
     const trimmed = clean.trim();
     if (trimmed.length === 0) return true;
     if (this.hasWelcomeLine(clean) || this.hasMetaLines(clean)) return true;
-
-    if (this.hasCompleteBox(clean)) return false;
-
-    // Prompt-like lines should pass through immediately (not buffered).
+    // Keep buffering when box frame is detected but welcome/meta text
+    // hasn't arrived yet — process() will trigger replacement when complete.
+    if (this.hasCompleteBox(clean)) return true;
+    // Prompt-like lines should pass through immediately.
     if (/^kimi❯/.test(trimmed)) return false;
-
-    // Keep buffering even for non-frame text (e.g. Python deprecation
-    // warnings emitted before the banner). Rely on timeout/byte/line
-    // limits to avoid hanging indefinitely.
     return true;
   }
 
@@ -165,30 +161,15 @@ export class BannerReplacer {
       return false;
     }
 
-    const lines = clean.split(/\r?\n/);
-    let sawTop = false;
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!sawTop && (trimmed.startsWith("╭") || trimmed.includes("╭─"))) {
-        sawTop = true;
-        continue;
-      }
-      if (sawTop && (trimmed.startsWith("╰") || trimmed.includes("╰─"))) {
-        if (!trimmed.includes("╭")) {
-          return true;
-        }
-      }
-    }
-
-    // Require the bottom border (╰) to confirm the banner block is complete.
-    // This prevents premature flush before Session/Model lines and the bottom border arrive.
-    return false;
+    // Require the box frame to confirm we have the full banner block.
+    return this.hasCompleteBox(clean);
   }
 
   private hasWelcomeLine(clean: string): boolean {
-    return /Welcome\s+to\s+Kimi(?:\s+Code)?\s+CLI!?/i.test(clean)
-      || /\bKimi(?:\s+Code)?\s+CLI\b/i.test(clean);
+    // Broad match: any Kimi CLI welcome / branding line
+    return /Welcome\s+to\s+Kimi/i.test(clean)
+      || /\bKimi\s+(?:Code\s+)?CLI\b/i.test(clean)
+      || /\bKimi\b.*\b(?:Code|CLI|Chat)\b/i.test(clean);
   }
 
   private hasMetaLines(clean: string): boolean {
@@ -197,14 +178,16 @@ export class BannerReplacer {
 
   private hasCompleteBox(clean: string): boolean {
     const lines = clean.split(/\r?\n/);
+    const topChars = ["╭", "╔", "┌", "▛", "┏"];
+    const bottomChars = ["╰", "╚", "└", "▙", "┗"];
     let sawTop = false;
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!sawTop && (trimmed.startsWith("╭") || trimmed.startsWith("╔") || trimmed.startsWith("┌"))) {
+      if (!sawTop && topChars.some((c) => trimmed.startsWith(c))) {
         sawTop = true;
         continue;
       }
-      if (sawTop && (trimmed.startsWith("╰") || trimmed.startsWith("╚") || trimmed.startsWith("└"))) {
+      if (sawTop && bottomChars.some((c) => trimmed.startsWith(c))) {
         return true;
       }
     }
@@ -262,12 +245,13 @@ export class BannerReplacer {
   private extractAfterBanner(buf: string): string | null {
     const origLines = buf.split(/\r?\n/);
     const cleanLines = this.getStripped().split(/\r?\n/);
+    const bottomChars = ["╰", "╚", "└", "▙", "┗"];
     let endIdx = -1;
 
     for (let i = 0; i < cleanLines.length; i++) {
       const trimmed = cleanLines[i].trim();
-      if (trimmed.startsWith("╰") || trimmed.includes("╰─")) {
-        if (!trimmed.includes("╭")) {
+      if (bottomChars.some((c) => trimmed.startsWith(c) || trimmed.includes(c + "─"))) {
+        if (!bottomChars.some((_c) => trimmed.includes("╭") || trimmed.includes("╔") || trimmed.includes("┌"))) {
           endIdx = i;
           break;
         }
@@ -287,16 +271,18 @@ export class BannerReplacer {
    */
   private stripKimiBanner(buf: string): string {
     const lines = buf.split(/\r?\n/);
+    const topChars = ["╭", "╔", "┌", "▛", "┏"];
+    const bottomChars = ["╰", "╚", "└", "▙", "┗"];
     let startIdx = -1;
     let endIdx = -1;
 
     for (let i = 0; i < lines.length; i++) {
       const stripped = stripAnsi(lines[i]).trim();
-      if (startIdx === -1 && (stripped.startsWith("╭") || stripped.includes("╭─"))) {
+      if (startIdx === -1 && topChars.some((c) => stripped.startsWith(c) || stripped.includes(c + "─"))) {
         startIdx = i;
       }
-      if (startIdx !== -1 && (stripped.startsWith("╰") || stripped.includes("╰─"))) {
-        if (!stripped.includes("╭")) {
+      if (startIdx !== -1 && bottomChars.some((c) => stripped.startsWith(c) || stripped.includes(c + "─"))) {
+        if (!topChars.some((c) => stripped.includes(c))) {
           endIdx = i;
           break;
         }
@@ -314,7 +300,7 @@ export class BannerReplacer {
     const block = lines.slice(start, end + 1).join("\n");
     const clean = stripAnsi(block);
     return /Welcome\s+to\s+Kimi/i.test(clean)
-      || /\bKimi\s+Code\s+CLI\b/i.test(clean)
+      || /\bKimi\s+(?:Code\s+)?CLI\b/i.test(clean)
       || (/Directory:/.test(clean) && /Session:/.test(clean));
   }
 }

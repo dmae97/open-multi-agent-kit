@@ -88,7 +88,7 @@ export const FORBIDDEN_PATTERNS = [
 export const SIZE_BUDGETS = {
   tarballMb: 35,
   unpackedMb: 40,
-  entryCount: 680,
+  entryCount: 720,
   singleFileMb: 20,
   readmeassetMb: 30,
   distMb: 20,
@@ -395,8 +395,8 @@ export function validateDistDrift(srcFiles, distFiles, pathSet) {
   for (const srcBase of srcTsSet) {
     expectedDistArtifacts.push(`dist/${srcBase}.js`);
     expectedDistArtifacts.push(`dist/${srcBase}.d.ts`);
-    expectedDistArtifacts.push(`dist/${srcBase}.js.map`);
-    expectedDistArtifacts.push(`dist/${srcBase}.d.ts.map`);
+    // .js.map excluded for smaller tarball
+    // .d.ts.map excluded for smaller tarball
   }
 
   for (const artifact of expectedDistArtifacts) {

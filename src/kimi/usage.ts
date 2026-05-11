@@ -77,6 +77,20 @@ const WIRE_HEAD_BYTES = 64 * 1024;
 const WIRE_TAIL_BYTES = 256 * 1024;
 const SESSION_LOOKBACK_SECONDS = 8 * 24 * 60 * 60;
 
+interface UsageCache {
+  result: UsageStats;
+  timestamp: number;
+}
+let usageCache: UsageCache | null = null;
+const USAGE_CACHE_TTL_MS = 60_000; // 60 seconds
+
+interface CredentialCache {
+  token: string;
+  decoded: unknown;
+  timestamp: number;
+}
+let credentialCache: CredentialCache | null = null;
+
 function getKstDate(ts: number): Date {
   const d = new Date(ts * 1000);
   // KST is UTC+9
@@ -240,6 +254,9 @@ async function readCredentials(homeDir: string): Promise<KimiCredentials | null>
 }
 
 export async function getKimiUsage(options: GetKimiUsageOptions = {}): Promise<UsageStats> {
+  if (usageCache && options.fetchQuota !== false && Date.now() - usageCache.timestamp < USAGE_CACHE_TTL_MS) {
+    return usageCache.result;
+  }
   const homeDir = options.homeDir ?? homedir();
   const nowMs = options.nowMs ?? Date.now();
   const nowSec = Math.floor(nowMs / 1000);
@@ -277,7 +294,7 @@ export async function getKimiUsage(options: GetKimiUsageOptions = {}): Promise<U
     ? { rows: [] }
     : await fetchKimiQuota(credentials, oauth, options);
 
-  return {
+  const result = {
     totalSecondsToday,
     sessionCountToday,
     totalSecondsLast5Hours,
@@ -287,6 +304,12 @@ export async function getKimiUsage(options: GetKimiUsageOptions = {}): Promise<U
     oauth,
     quota,
   };
+
+  if (options.fetchQuota !== false) {
+    usageCache = { result, timestamp: Date.now() };
+  }
+
+  return result;
 }
 
 function toOAuthIdentity(credentials: KimiCredentials | null, nowSec: number): OAuthIdentity {
@@ -294,9 +317,25 @@ function toOAuthIdentity(credentials: KimiCredentials | null, nowSec: number): O
     return { loggedIn: false, displayId: "/login", tokenStatus: "missing", source: "none" };
   }
 
+  if (credentialCache && credentialCache.token === credentials.access_token) {
+    const claims = credentialCache.decoded as JsonObject;
+    const exp = numberClaim(claims, "exp") ?? credentials.expires_at;
+    const tokenStatus = exp ? (exp > nowSec ? "valid" : "expired") : "unknown";
+    const displayId = displayIdFromClaims(claims, credentials.access_token);
+    return {
+      loggedIn: true,
+      displayId,
+      tokenStatus,
+      source: "kimi-code",
+      expiresAt: exp ? new Date(exp * 1000).toISOString() : undefined,
+    };
+  }
+
   const claims = decodeJwtPayload(credentials.access_token);
+  credentialCache = { token: credentials.access_token, decoded: claims, timestamp: Date.now() };
+
   const exp = numberClaim(claims, "exp") ?? credentials.expires_at;
-  const tokenStatus = exp ? exp > nowSec ? "valid" : "expired" : "unknown";
+  const tokenStatus = exp ? (exp > nowSec ? "valid" : "expired") : "unknown";
   const displayId = displayIdFromClaims(claims, credentials.access_token);
   return {
     loggedIn: true,

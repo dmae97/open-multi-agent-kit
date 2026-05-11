@@ -3,7 +3,7 @@ import { totalmem } from "os";
 import { join, resolve } from "path";
 import { execSync } from "child_process";
 
-export type OmkResourceProfile = "lite" | "standard";
+export type OmkResourceProfile = "lite" | "standard" | "super";
 export type OmkResourceProfileRequest = OmkResourceProfile | "auto";
 export type OmkRuntimeScope = "all" | "project" | "none";
 
@@ -63,7 +63,7 @@ async function loadOmkResourceSettings(): Promise<OmkResourceSettings> {
     : `requested by ${profileSource(env, config)}`;
 
   const maxWorkers = parsePositiveInt(env.OMK_MAX_WORKERS ?? config["runtime.max_workers"])
-    ?? (profile === "lite" ? 1 : 2);
+    ?? (profile === "lite" ? 1 : profile === "super" ? 4 : 2);
 
   const shellMaxBufferBytes = parseMib(env.OMK_MAX_OUTPUT_MB)
     ?? parseBytes(env.OMK_MAX_OUTPUT_BYTES)
@@ -172,6 +172,7 @@ function normalizeProfileRequest(value: string | undefined): OmkResourceProfileR
   const normalized = value?.trim().toLowerCase();
   if (normalized === "lite" || normalized === "low-memory" || normalized === "low_memory" || normalized === "16gb") return "lite";
   if (normalized === "standard" || normalized === "normal" || normalized === "full") return "standard";
+  if (normalized === "super") return "super";
   return "auto";
 }
 

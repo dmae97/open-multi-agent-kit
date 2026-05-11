@@ -64,7 +64,7 @@ omk summary-show
 omk cockpit
 ```
 
-> Current stable package: **v1.1.9**. Stable daily-use core with alpha/experimental orchestration surfaces clearly labelled in CLI help and docs.
+> Current stable package: **v1.1.12**. Stable daily-use core with alpha/experimental orchestration surfaces clearly labelled in CLI help and docs.
 
 ---
 
@@ -123,6 +123,9 @@ Stable / daily-use
 Advanced / inspectable
   omk graph      Inspect OMK ontology graph
   omk mcp        Inspect MCP configuration and server health
+  omk replay     Timeline-based run replay from artifacts
+  omk inspect    Forensic run inspection with deep-dive flags
+  omk diff-runs  Structural diff between two runs for reproducibility
 
 Alpha / Experimental
   omk parallel   Parallel Kimi coordinator + workers + reviewer
@@ -173,39 +176,48 @@ OMK does not accept completion by narration alone. A node can require evidence s
 
 If evidence fails, the runtime can retry, skip, block dependents, or route to fallback handling.
 
-### 4. Local graph memory
+### 4. Decision trace coverage
+
+Every policy decision — routing, context brokering, repair, scheduling, provider selection, ensemble decisions, and skill assignment — is recorded in `.omk/runs/<runId>/decisions.jsonl`. This makes runs inspectable and reproducible rather than opaque.
+
+### 5. Local graph memory
 
 OMK stores durable project memory as a graph: goals, decisions, risks, tasks, commands, files, evidence, and concepts. The graph gives Kimi a smaller, safer context target before it edits a large repository.
 
-### 5. Worktree isolation
+### 6. Worktree isolation
 
 Parallel lanes can run in isolated Git worktrees. That keeps experiments reversible and makes review/merge a deliberate step instead of a side effect of several agents editing the same files at once.
 
-### 6. Skills, hooks, MCP, and agents as runtime inputs
+### 7. Skills, hooks, MCP, and agents as runtime inputs
 
 OMK treats project instructions, agent skills, generated hooks, and MCP servers as part of the control plane:
 
 - `AGENTS.md` and `DESIGN.md` define project behavior and UI taste.
 - `.omk/` stores run state, memory, plans, reports, and generated runtime assets.
 - `omk skill` manages Kimi-facing skills and slash workflows.
+- **Skill Assigner** automatically matches skills, MCP servers, tools, and hooks to DAG nodes based on intent and role (14 rules covering web-design, diagram-design, code-review, security-audit, debugging, and more).
 - `omk mcp` inspects project and user MCP configuration.
 - `omk doctor` checks Kimi, Git, hooks, MCP, skills, and runtime health.
 
-### 7. Live operator visibility
+### 8. Live operator visibility
 
 `omk hud` and `omk cockpit` expose active work instead of hiding agent state inside logs. The goal is simple: humans should see what is running, what changed, what is blocked, and what still needs proof.
 
-### 8. Advisory provider lanes
+### 9. Advisory provider lanes
 
 OMK can route research, review, QA, or risk analysis through provider lanes such as DeepSeek, but the run stays bounded. Kimi keeps write/merge authority, and external model output is advisory evidence rather than uncontrolled patch authority.
 
-### 9. Open Design bridge
+### 10. Open Design bridge
 
 `omk design open-design --open` launches a local Open Design workflow and connects it back to OMK. Use it when the task needs a visual design surface, then bring the output through DESIGN.md-aware implementation and quality gates.
 
-### 10. Native safety path
+### 11. Run replay and inspection
 
-v1.1.9 includes a Rust native safety loader path and CI-backed artifact matrix. JavaScript remains the CLI surface; native safety helpers are selected when available and fall back safely when they are not.
+`omk replay`, `omk inspect`, and `omk diff-runs` turn run artifacts into an inspectable timeline. Replay reconstructs chronology; inspect deep-dives into context, evidence, decisions, and repair chains; diff-runs compares two manifests for reproducibility debugging.
+
+### 12. Native safety path
+
+OMK includes a Rust native safety loader path and CI-backed artifact matrix. JavaScript remains the CLI surface; native safety helpers are selected when available and fall back safely when they are not.
 
 ---
 
@@ -214,7 +226,7 @@ v1.1.9 includes a Rust native safety loader path and CI-backed artifact matrix. 
 | Ritual | Use when | Commands |
 | --- | --- | --- |
 | **Ship** | You want Kimi to implement with verification | `omk chat`, `omk parallel "..."`, `omk verify` |
-| **Inspect** | You need run history or current state | `omk runs`, `omk summary-show`, `omk hud` |
+| **Inspect** | You need run history or current state | `omk runs`, `omk replay`, `omk inspect`, `omk diff-runs`, `omk summary-show`, `omk hud` |
 | **Design** | You need visual/product direction | `omk design`, `omk design open-design --open` |
 | **Remember** | You need durable project context | `omk graph view --open`, `omk index` |
 | **Guard** | You need safety and release confidence | `omk doctor`, `npm run release:check`, `omk review` |
@@ -314,6 +326,7 @@ Do not commit provider keys. Keep secrets in environment variables, local keycha
 | Kimi execution | `omk chat`, `omk plan`, `omk parallel`, `omk run` |
 | Verification | `omk verify`, `omk review`, `npm run verify`, `npm run release:check` |
 | Operator UI | `omk hud`, `omk cockpit`, `omk runs`, `omk summary-show` |
+| Replay & diff | `omk replay`, `omk inspect`, `omk diff-runs` |
 | Context | `omk index`, `omk graph`, `omk sync`, `omk skill` |
 | Providers | `omk provider`, `omk deepseek`, `omk research` |
 | Design | `omk design`, `omk design open-design --open`, `omk open-design-agent` |
@@ -340,7 +353,7 @@ npm run audit:package
 npm run smoke:pack
 ```
 
-The v1.1.9 release line includes package audit, smoke-pack checks, Rust native artifact normalization, and CI release gates.
+The v1.1.12 release line includes package audit, smoke-pack checks, Rust native artifact normalization, replay/inspect/diff-runs, skill assigner, decision trace coverage, and CI release gates.
 
 ---
 

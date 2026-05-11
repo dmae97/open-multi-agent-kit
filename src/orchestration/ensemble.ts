@@ -231,6 +231,7 @@ function normalizeTomlValue(value: string): string {
 }
 
 const SKIP_DIRS = new Set(["node_modules", ".git", ".omk"]);
+const SKIP_FILES = /(\.env(?:\..*)?|\.key$|\.pem$|\.secret$|credentials\.json$)/i;
 
 async function copyWorktreeBase(baseCwd: string, targetWorktree: string): Promise<void> {
   async function walk(srcDir: string, destDir: string): Promise<void> {
@@ -239,6 +240,7 @@ async function copyWorktreeBase(baseCwd: string, targetWorktree: string): Promis
     await Promise.all(
       entries.map(async (entry) => {
         if (SKIP_DIRS.has(entry.name)) return;
+        if (entry.isFile() && SKIP_FILES.test(entry.name)) return;
         const srcPath = join(srcDir, entry.name);
         const destPath = join(destDir, entry.name);
         if (entry.isDirectory()) {
@@ -260,49 +262,61 @@ async function runCandidate(
 ): Promise<EnsembleCandidateResult> {
   const baseCwd = node.worktree ?? process.cwd();
   let candidateWorktree: string | undefined;
+  let threw = false;
 
-  if (!node.worktree) {
-    candidateWorktree = getOmkPath(join("worktrees", "ensemble", node.id, candidate.id));
-    try {
-      await copyWorktreeBase(baseCwd, candidateWorktree);
-    } catch {
-      await ensureDir(candidateWorktree);
+  try {
+    if (!node.worktree) {
+      candidateWorktree = getOmkPath(join("worktrees", "ensemble", node.id, candidate.id));
+      try {
+        await copyWorktreeBase(baseCwd, candidateWorktree);
+      } catch {
+        await ensureDir(candidateWorktree);
+      }
+    }
+
+    const candidateNode: DagNode = {
+      ...node,
+      id: `${node.id}#${candidate.id}`,
+      role: candidate.role ?? node.role,
+      worktree: candidateWorktree,
+      name: [
+        node.name,
+        "",
+        `Ensemble candidate: ${candidate.id}`,
+        `Perspective: ${candidate.perspective}`,
+        "Return concrete evidence and blockers. Do not hide uncertainty.",
+      ].join("\n"),
+    };
+
+    const result = await baseRunner.run(candidateNode, {
+      ...env,
+      OMK_ENSEMBLE: "on",
+      OMK_ENSEMBLE_ORIGINAL_NODE_ID: node.id,
+      OMK_ENSEMBLE_CANDIDATE_ID: candidate.id,
+      OMK_ENSEMBLE_PERSPECTIVE: candidate.perspective,
+    }).catch((error: unknown): TaskResult => ({
+      success: false,
+      exitCode: 1,
+      stdout: "",
+      stderr: error instanceof Error ? error.message : String(error),
+    }));
+
+    return {
+      candidate,
+      result,
+      score: scoreResult(result, normalizeWeight(candidate.weight)),
+      worktree: candidateWorktree,
+    };
+  } catch (e) {
+    threw = true;
+    throw e;
+  } finally {
+    // On success, aggregateCandidateResults handles cleanup after merge.
+    // On exception, clean up immediately to prevent worktree leak.
+    if (threw && candidateWorktree) {
+      await cleanupWorktree(candidateWorktree);
     }
   }
-
-  const candidateNode: DagNode = {
-    ...node,
-    id: `${node.id}#${candidate.id}`,
-    role: candidate.role ?? node.role,
-    worktree: candidateWorktree,
-    name: [
-      node.name,
-      "",
-      `Ensemble candidate: ${candidate.id}`,
-      `Perspective: ${candidate.perspective}`,
-      "Return concrete evidence and blockers. Do not hide uncertainty.",
-    ].join("\n"),
-  };
-
-  const result = await baseRunner.run(candidateNode, {
-    ...env,
-    OMK_ENSEMBLE: "on",
-    OMK_ENSEMBLE_ORIGINAL_NODE_ID: node.id,
-    OMK_ENSEMBLE_CANDIDATE_ID: candidate.id,
-    OMK_ENSEMBLE_PERSPECTIVE: candidate.perspective,
-  }).catch((error: unknown): TaskResult => ({
-    success: false,
-    exitCode: 1,
-    stdout: "",
-    stderr: error instanceof Error ? error.message : String(error),
-  }));
-
-  return {
-    candidate,
-    result,
-    score: scoreResult(result, normalizeWeight(candidate.weight)),
-    worktree: candidateWorktree,
-  };
 }
 
 async function mergeWinnerWorktree(winnerWorktree: string, baseCwd: string): Promise<{ mergedFiles: string[]; errors: string[] }> {

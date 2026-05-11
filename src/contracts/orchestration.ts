@@ -2,7 +2,7 @@
 // Owner: Contract Worker (Phase 0)
 // Read-only for all other workers. Version-bump only via Integration Worker.
 
-import type { Dag, DagNode } from "../orchestration/dag.js";
+import type { Dag, DagNode } from "./dag.js";
 
 export type ApprovalPolicy = "interactive" | "auto" | "yolo" | "block";
 

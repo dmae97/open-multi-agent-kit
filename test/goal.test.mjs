@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 
 import { createGoalSpec, normalizeGoal, updateGoalStatus } from "../dist/goal/intake.js";
 import { createGoalPersister } from "../dist/goal/persistence.js";
@@ -16,8 +17,55 @@ import { createDag } from "../dist/orchestration/dag.js";
 import { goalCloseCommand, goalCreateCommand, goalPlanCommand } from "../dist/commands/goal.js";
 import { CliError } from "../dist/util/cli-contract.js";
 
+const CLI = join(process.cwd(), "dist", "cli.js");
+
 async function tempGoalDir() {
   return mkdtemp(join(tmpdir(), "omk-goal-"));
+}
+
+async function tempGoalCliFixture({ summary = true } = {}) {
+  const root = await tempGoalDir();
+  const bin = join(root, "bin");
+  const workspace = join(root, "workspace");
+  await mkdir(bin, { recursive: true });
+  await mkdir(workspace, { recursive: true });
+  const outputLines = summary
+    ? ["## Summary", "OMK goal execution completed with verification evidence.", "## Verification", "- npm run check passed"]
+    : ["short"];
+  await writeFile(
+    join(bin, "kimi"),
+    `#!${process.execPath}\n${outputLines.map((line) => `console.log(${JSON.stringify(line)});`).join("\n")}\nprocess.exit(0);\n`,
+    { mode: 0o755 },
+  );
+  await writeFile(join(workspace, "package.json"), JSON.stringify({ scripts: { check: "node -e \\"process.exit(0)\\"" } }));
+  const env = {
+    ...process.env,
+    OMK_PROJECT_ROOT: workspace,
+    OMK_GOAL_ALPHA: "1",
+    OMK_MODE: "agent",
+    OMK_RESOURCE_PROFILE: "lite",
+    OMK_MCP_SCOPE: "none",
+    OMK_SKILLS_SCOPE: "none",
+    OMK_RENDER_LOGO: "0",
+    OMK_STAR_PROMPT: "0",
+    OMK_AUTO_CONTINUE_MAX_ITERATIONS: "0",
+    OMK_ISOLATED_HOME_INHERIT_AUTH: "0",
+    PATH: `${bin}${delimiter}${process.env.PATH ?? ""}`,
+  };
+  return { root, workspace, env };
+}
+
+function runGoalCli(args, env, timeout = 60_000) {
+  return spawnSync(process.execPath, [CLI, ...args], {
+    cwd: process.cwd(),
+    env,
+    encoding: "utf-8",
+    timeout,
+  });
+}
+
+async function readJson(path) {
+  return JSON.parse(await readFile(path, "utf-8"));
 }
 
 test("normalizeGoal creates a GoalSpec with inferred success criteria", () => {
@@ -569,5 +617,114 @@ test("goal progress ensemble calls DeepSeek advisory when a key is configured", 
     assert.match(deepseekVote.reason, /DeepSeek advisory/);
   } finally {
     await rm(homeRoot, { recursive: true, force: true });
+  }
+});
+
+test("goal run CLI honors run-id, uses Kimi-only DAG, and avoids first-run continuation wrapping", async () => {
+  const { root, workspace, env } = await tempGoalCliFixture();
+  try {
+    const create = runGoalCli(["goal", "create", "Document critical issue execution", "--json"], env);
+    assert.equal(create.status, 0, create.stderr);
+    const goalId = JSON.parse(create.stdout).goalId;
+
+    const run = runGoalCli([
+      "goal", "run", goalId,
+      "--workers", "1",
+      "--run-id", "repro-critical",
+      "--no-watch",
+      "--view", "table",
+      "--max-auto-continue-iterations", "0",
+    ], env);
+
+    assert.equal(run.status, 0, `${run.stderr}\n${run.stdout}`);
+    const state = await readJson(join(workspace, ".omk", "runs", "repro-critical", "state.json"));
+    assert.equal(state.runId, "repro-critical");
+    assert.ok(!state.nodes.some((node) => node.id.startsWith("deepseek-")));
+    assert.ok(state.nodes.every((node) => node.status === "done"));
+
+    const goal = await readJson(join(workspace, ".omk", "goals", goalId, "goal.json"));
+    assert.equal(goal.status, "done");
+    assert.deepEqual(goal.runIds, ["repro-critical"]);
+
+    const nextPrompt = await readFile(join(workspace, ".omk", "goals", goalId, "next-prompt.md"), "utf-8");
+    assert.match(nextPrompt, /Source command: goal-run/);
+    assert.match(nextPrompt, /Continuation: no/);
+    assert.doesNotMatch(nextPrompt, /## Current Execution Context/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("goal run CLI fails nonzero and records failed goal status when DAG fails", async () => {
+  const { root, workspace, env } = await tempGoalCliFixture({ summary: false });
+  try {
+    const create = runGoalCli(["goal", "create", "Document failed execution", "--json"], env);
+    assert.equal(create.status, 0, create.stderr);
+    const goalId = JSON.parse(create.stdout).goalId;
+
+    const run = runGoalCli([
+      "goal", "run", goalId,
+      "--workers", "1",
+      "--run-id", "repro-failed",
+      "--no-watch",
+      "--view", "table",
+      "--max-auto-continue-iterations", "0",
+    ], env);
+
+    assert.notEqual(run.status, 0);
+    const state = await readJson(join(workspace, ".omk", "runs", "repro-failed", "state.json"));
+    assert.equal(state.runId, "repro-failed");
+    assert.equal(state.nodes.find((node) => node.id === "root-coordinator")?.status, "failed");
+
+    const goal = await readJson(join(workspace, ".omk", "goals", goalId, "goal.json"));
+    assert.equal(goal.status, "failed");
+    assert.deepEqual(goal.runIds, ["repro-failed"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("goal continue CLI reads a context run but writes a fresh next run", async () => {
+  const { root, workspace, env } = await tempGoalCliFixture();
+  try {
+    const create = runGoalCli(["goal", "create", "Document continuation execution", "--json"], env);
+    assert.equal(create.status, 0, create.stderr);
+    const goalId = JSON.parse(create.stdout).goalId;
+    const goalPath = join(workspace, ".omk", "goals", goalId, "goal.json");
+    const previousRunDir = join(workspace, ".omk", "runs", "context-run");
+    await mkdir(previousRunDir, { recursive: true });
+    await writeFile(join(previousRunDir, "plan.md"), "ORIGINAL CONTEXT PLAN");
+    await writeFile(join(previousRunDir, "state.json"), JSON.stringify({
+      schemaVersion: 1,
+      runId: "context-run",
+      startedAt: new Date().toISOString(),
+      workerCount: 1,
+      nodes: [
+        { id: "sentinel", name: "sentinel", role: "reviewer", dependsOn: [], maxRetries: 1, status: "done" },
+      ],
+    }, null, 2));
+    const goal = await readJson(goalPath);
+    goal.status = "blocked";
+    goal.runIds = ["context-run"];
+    await writeFile(goalPath, JSON.stringify(goal, null, 2));
+
+    const run = runGoalCli([
+      "goal", "continue", goalId,
+      "--from-run-id", "context-run",
+      "--run-id", "next-run",
+      "--workers", "1",
+      "--no-watch",
+      "--view", "table",
+      "--max-auto-continue-iterations", "0",
+    ], env);
+
+    assert.equal(run.status, 0, `${run.stderr}\n${run.stdout}`);
+    assert.equal(await readFile(join(previousRunDir, "plan.md"), "utf-8"), "ORIGINAL CONTEXT PLAN");
+    const nextState = await readJson(join(workspace, ".omk", "runs", "next-run", "state.json"));
+    assert.equal(nextState.runId, "next-run");
+    const updatedGoal = await readJson(goalPath);
+    assert.deepEqual(updatedGoal.runIds, ["context-run", "next-run"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

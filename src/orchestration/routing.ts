@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { isAbsolute, join, relative, resolve, sep } from "path";
 import { normalizeUserHomePath } from "../util/fs.js";
+import { assignSkills } from "./skill-assigner.js";
 
 type RouteKind = "skill" | "mcp" | "tool" | "hook";
 type RouteSource = "project" | "global" | "builtin";
@@ -26,7 +27,7 @@ interface ScoredRoute {
   reason: string;
 }
 
-type RoutingInput = Pick<DagNodeDefinition, "id" | "name" | "role" | "inputs" | "outputs" | "cost">;
+export type RoutingInput = Pick<DagNodeDefinition, "id" | "name" | "role" | "inputs" | "outputs" | "cost">;
 
 const MAX_SKILLS = 3;
 const MAX_MCP_SERVERS = 2;
@@ -362,18 +363,29 @@ export function selectTaskRouting(input: RoutingInput): DagNodeRouting {
   if (skills.length === 0) skills.push("omk-context-broker");
   addDefaultHookHints(hooks, inventory, input.role, readOnly, evidenceRequired);
 
+  // Merge with skill-assigner auto-assignment
+  const autoAssignment = assignSkills(input);
+  const mergedSkills = unique([...skills, ...autoAssignment.skills]).slice(0, limitForBudget(contextBudget, MAX_SKILLS));
+  const mergedMcpServers = unique([...mcpServers, ...autoAssignment.mcpServers]).slice(0, limitForBudget(contextBudget, MAX_MCP_SERVERS));
+  const mergedTools = unique([...tools, ...autoAssignment.tools]).slice(0, limitForBudget(contextBudget, MAX_TOOLS));
+  const mergedHooks = unique([...hooks, ...autoAssignment.hooks]).slice(0, limitForBudget(contextBudget, MAX_HOOKS));
+
+  const mergedRationale = autoAssignment.skills.length > 0
+    ? `${renderRationale(scored.slice(0, 3), contextBudget)} | Auto: ${autoAssignment.rationale}`
+    : renderRationale(scored.slice(0, 3), contextBudget);
+
   return {
     provider: "auto",
     fallbackProvider: "kimi",
     providerReason: "Kimi-first provider router decides at node execution time",
-    skills,
-    mcpServers,
-    tools,
-    hooks,
+    skills: mergedSkills,
+    mcpServers: mergedMcpServers,
+    tools: mergedTools,
+    hooks: mergedHooks,
     contextBudget,
     readOnly,
     evidenceRequired,
-    rationale: renderRationale(scored.slice(0, 3), contextBudget),
+    rationale: mergedRationale,
     rejected: rejected.slice(0, 6),
   };
 }

@@ -15,6 +15,7 @@ import {
   isDeepSeekPaymentOrAvailabilityFailure,
   isDeepSeekTransientFailure,
 } from "./deepseek/deepseek-errors.js";
+import { createDecisionTraceStore } from "../evidence/decision-trace.js";
 
 export interface ProviderTaskRunnerOptions {
   kimiRunner: TaskRunner;
@@ -79,6 +80,11 @@ export function createProviderTaskRunner(options: ProviderTaskRunnerOptions): Ta
     },
 
     async run(node: DagNode, env: Record<string, string>): Promise<TaskResult> {
+      const runId = env.OMK_RUN_ID;
+      const attemptNumber = (node.attempts?.length ?? 0) + 1;
+      const attemptId = `${node.id}__${attemptNumber}`;
+      const traceStore = runId ? createDecisionTraceStore() : undefined;
+
       const deepseekAvailable =
         Boolean(options.deepseekRunner) &&
         providerHealth.isDeepSeekAvailable();
@@ -99,6 +105,24 @@ export function createProviderTaskRunner(options: ProviderTaskRunnerOptions): Ta
         providerPolicy: options.providerPolicy ?? "auto",
         preferredDeepSeekTier: node.routing?.providerModelTier,
       });
+
+      // Record provider-router decision trace
+      if (traceStore && runId) {
+        traceStore.record(runId, {
+          component: "provider-router",
+          inputSummary: `node=${node.id} role=${node.role} risk=${inferNodeRisk(node)} complexity=${normalizeProviderComplexity(env.OMK_COMPLEXITY)} deepseekAvailable=${deepseekAvailable}`,
+          outputDecision: `provider=${decision.provider} confidence=${decision.confidence.toFixed(2)}`,
+          reason: decision.reason,
+          scores: {
+            confidence: decision.confidence,
+            quorum: decision.routeEnsemble.quorum,
+            candidates: decision.routeEnsemble.candidates.length,
+          },
+          nodeId: node.id,
+          attemptId,
+        });
+      }
+
       const invocationKey = buildProviderInvocationKey(node, decision);
       const traceEnv = providerTraceEnv(decision, invocationKey);
       const traceMetadata: Partial<ProviderTaskMetadata> = {
@@ -144,6 +168,15 @@ export function createProviderTaskRunner(options: ProviderTaskRunnerOptions): Ta
           }
 
           failures.push(result);
+          if (!isDeepSeekTransientFailure(result)) break;
+
+          // Abort-aware sleep with exponential backoff and full jitter
+          if (attempt < maxRetries) {
+            const baseMs = Math.min(1000 * Math.pow(2, attempt), 30000);
+            const jitterMs = baseMs * Math.random();
+            const delayMs = baseMs + jitterMs;
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          }
           if (!isDeepSeekTransientFailure(result)) break;
         }
 

@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "fs/promises";
 import { join } from "path";
-import { getProjectRoot, getRunsDir, getRunPath } from "../util/fs.js";
+import { getProjectRoot, getRunsDir } from "../util/fs.js";
 import { style, header, status, label } from "../util/theme.js";
 import { NotFoundError, VerificationError, emitError } from "../util/cli-contract.js";
 
@@ -15,6 +15,22 @@ import { compileGoalToDagNodes } from "../goal/compiler.js";
 import type { GoalSpec, GoalEvidence } from "../contracts/goal.js";
 import type { RunState } from "../contracts/orchestration.js";
 import type { DagNodeDefinition } from "../orchestration/dag.js";
+import type { ProviderPolicy } from "../providers/types.js";
+
+interface GoalExecutionOptions {
+  workers?: string;
+  runId?: string;
+  provider?: ProviderPolicy;
+  approvalPolicy?: string;
+  watch?: boolean;
+  view?: string;
+  timeoutPreset?: string;
+  maxAutoContinueIterations?: string;
+}
+
+interface GoalContinueOptions extends GoalExecutionOptions {
+  fromRunId?: string;
+}
 
 function getGoalBasePath(): string {
   return join(getProjectRoot(), ".omk", "goals");
@@ -288,10 +304,9 @@ function renderGoalPlan(spec: GoalSpec, nodes: DagNodeDefinition[]): string {
 
 export async function goalRunCommand(
   goalId: string,
-  options: { workers?: string; runId?: string }
+  options: GoalExecutionOptions
 ): Promise<void> {
   printAlphaWarning();
-  const root = getProjectRoot();
   const persister = createPersister();
   const spec = await persister.load(goalId);
 
@@ -309,27 +324,20 @@ export async function goalRunCommand(
     detail: { workers: options.workers },
   });
 
-  // Load evidence and latest run state for continue engine
-  const evidence = await persister.loadEvidence(goalId);
-  let runState: RunState | undefined;
-  if (updated.runIds.length > 0) {
-    const latestRunId = updated.runIds[updated.runIds.length - 1];
-    const statePersister = createStatePersister(getRunsDir(root));
-    runState = (await statePersister.load(latestRunId)) ?? undefined;
-  }
+  const initialPrompt = updated.objective || updated.rawPrompt || updated.title;
 
-  // Generate enriched next-prompt
-  const nextResult = await generateNextPrompt(updated, evidence, runState, undefined, root);
-  const mirrorDir = join(getGoalBasePath(), goalId);
-  await mkdir(mirrorDir, { recursive: true });
-  await writeFile(join(mirrorDir, "next-prompt.md"), nextResult.prompt);
-
-  // Delegate to orchestration with enriched prompt
-  await orchestratePrompt(nextResult.prompt, {
+  await orchestratePrompt(initialPrompt, {
     sourceCommand: "goal-run",
     runId: options.runId,
     workers: options.workers,
     goalId,
+    provider: options.provider ?? "kimi",
+    approvalPolicy: options.approvalPolicy,
+    watch: options.watch,
+    view: options.view,
+    timeoutPreset: options.timeoutPreset,
+    maxAutoContinueIterations: options.maxAutoContinueIterations,
+    failOnDagFailure: true,
   });
 }
 
@@ -487,7 +495,7 @@ export async function goalBlockCommand(goalId: string, options: { reason: string
 
 export async function goalContinueCommand(
   goalId: string | undefined,
-  options: { workers?: string; runId?: string }
+  options: GoalContinueOptions
 ): Promise<void> {
   printAlphaWarning();
   const root = getProjectRoot();
@@ -511,13 +519,10 @@ export async function goalContinueCommand(
   // Load evidence and latest run state
   const evidence = await persister.loadEvidence(effectiveGoalId);
   let runState: RunState | undefined;
-  let effectiveRunId = options.runId;
-  if (!effectiveRunId && spec.runIds.length > 0) {
-    effectiveRunId = spec.runIds[spec.runIds.length - 1];
-  }
-  if (effectiveRunId) {
+  const contextRunId = options.fromRunId ?? (spec.runIds.length > 0 ? spec.runIds[spec.runIds.length - 1] : undefined);
+  if (contextRunId) {
     const statePersister = createStatePersister(getRunsDir(root));
-    runState = (await statePersister.load(effectiveRunId)) ?? undefined;
+    runState = (await statePersister.load(contextRunId)) ?? undefined;
   }
 
   // Generate enriched next-prompt via continue engine
@@ -529,17 +534,12 @@ export async function goalContinueCommand(
   const nextPromptPath = join(goalDir, "next-prompt.md");
   await writeFile(nextPromptPath, nextResult.prompt);
 
-  // Write plan.md to run directory if runId is available
-  if (effectiveRunId) {
-    const runDir = getRunPath(effectiveRunId, undefined, root);
-    await mkdir(runDir, { recursive: true });
-    await writeFile(join(runDir, "plan.md"), nextResult.prompt);
-  }
-
   // Print summary
   console.log(header("Goal Continue"));
   console.log(label("ID", effectiveGoalId));
   console.log(label("Status", spec.status));
+  if (contextRunId) console.log(label("Context run", contextRunId));
+  if (options.runId) console.log(label("Next run", options.runId));
   console.log(label("Missing criteria", String(nextResult.missingCriteria.length)));
   console.log(label("Next action", `${nextResult.suggestion.type}: ${nextResult.suggestion.description}`));
   console.log(label("Next prompt", nextPromptPath));
@@ -551,14 +551,21 @@ export async function goalContinueCommand(
   await persister.appendHistory(effectiveGoalId, {
     at: new Date().toISOString(),
     action: "continue",
-    detail: { runId: effectiveRunId, workers: options.workers },
+    detail: { contextRunId, nextRunId: options.runId, workers: options.workers },
   });
 
   // Delegate to orchestration with generated prompt as goal text
   await orchestratePrompt(nextResult.prompt, {
     sourceCommand: "goal-continue",
-    runId: effectiveRunId,
+    runId: options.runId,
     workers: options.workers,
     goalId: effectiveGoalId,
+    provider: options.provider ?? "kimi",
+    approvalPolicy: options.approvalPolicy,
+    watch: options.watch,
+    view: options.view,
+    timeoutPreset: options.timeoutPreset,
+    maxAutoContinueIterations: options.maxAutoContinueIterations,
+    failOnDagFailure: true,
   });
 }

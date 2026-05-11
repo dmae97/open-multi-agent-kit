@@ -661,6 +661,33 @@ export async function collectMcpConfigs(scope: OmkRuntimeScope = "project"): Pro
   return [...new Set(configs)];
 }
 
+/** MCP config 파일들에서 중복 서버 이름을 감지하고 경고 출력 */
+async function warnDuplicateMcpServers(configPaths: string[]): Promise<void> {
+  const serverNames = new Map<string, string>(); // name → first config path
+  for (const configPath of configPaths) {
+    try {
+      const content = await readFile(configPath, "utf-8");
+      const parsed = JSON.parse(content);
+      const servers = parsed?.mcpServers ?? parsed?.mcp_servers ?? {};
+      for (const name of Object.keys(servers)) {
+        const existing = serverNames.get(name);
+        if (existing) {
+          console.warn(
+            `[omk] ⚠️  MCP server "${name}" is defined in both:\n` +
+            `  ${existing}\n` +
+            `  ${configPath}\n` +
+            `The second definition will override the first. Remove duplicates to avoid confusion.`
+          );
+        } else {
+          serverNames.set(name, configPath);
+        }
+      }
+    } catch {
+      // Skip unreadable configs — other validation handles this
+    }
+  }
+}
+
 /** 프로젝트의 .kimi/skills 디렉토리 경로 */
 export function getKimiSkillsDir(): string {
   return join(getProjectRoot(), ".kimi", "skills");
@@ -792,7 +819,12 @@ export async function injectKimiGlobals(
     }
   }
 
-  for (const mcp of await collectMcpConfigs(mcpScope)) {
+  const mcpConfigs = await collectMcpConfigs(mcpScope);
+  // MCP config dedup guard: detect duplicate server names across config files
+  if (mcpConfigs.length > 1) {
+    await warnDuplicateMcpServers(mcpConfigs);
+  }
+  for (const mcp of mcpConfigs) {
     args.push("--mcp-config-file", mcp);
   }
 

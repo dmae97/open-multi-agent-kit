@@ -153,8 +153,10 @@ export async function mcpListCommand(): Promise<void> {
   }
 
   console.log("");
+  let duplicateCount = 0;
   for (const [name, info] of servers) {
     const dup = info.sources.length > 1 ? style.skin(` [duplicate: ${info.sources.length} sources]`) : "";
+    if (info.sources.length > 1) duplicateCount++;
     console.log(bullet(`${style.purpleBold(name)}${dup}`, "purple"));
     if (info.server.url) {
       console.log(`  ${style.gray("url:")} ${info.server.url}`);
@@ -169,6 +171,11 @@ export async function mcpListCommand(): Promise<void> {
       console.log(`  ${style.gray("env:")} ${Object.keys(info.server.env).join(", ")}`);
     }
     console.log(`  ${style.gray("from:")} ${info.sources.join(", ")}`);
+  }
+
+  if (duplicateCount > 0) {
+    console.log("");
+    console.log(style.skin(`⚠  ${duplicateCount} duplicate server(s) detected. Run \`omk mcp doctor\` for details, or \`omk mcp remove <name>\` to delete a local copy.`));
   }
 }
 
@@ -216,20 +223,20 @@ export async function buildMcpDoctorReport(): Promise<McpDoctorReport> {
         checks.push({
           severity: "info",
           kind: "managed-duplicate",
-          message: `managed omk-project mirror duplicate: ${activeSources.join(", ")}`,
+          message: `managed omk-project mirror duplicate: ${activeSources.join(", ")} (expected; remove one manually if desired)`,
         });
       } else {
         checks.push({
           severity: "error",
           kind: "active-duplicate",
-          message: `active duplicate definition in: ${activeSources.join(", ")}`,
+          message: `active duplicate definition in: ${activeSources.join(", ")} — run \`omk mcp remove ${name}\` to delete the local copy, or edit the files manually`,
         });
       }
     } else if (info.sources.length > 1) {
       checks.push({
         severity: "info",
         kind: "inactive-duplicate",
-        message: `duplicate mirror outside active scope: ${info.sources.join(", ")}`,
+        message: `duplicate mirror outside active scope: ${info.sources.join(", ")} (only the active scope config is used)`,
       });
     }
 
@@ -362,6 +369,7 @@ function emitMcpDoctorText(report: McpDoctorReport): void {
     console.log(status.ok("All checks passed"));
   } else {
     console.log(status.error(`${report.issueCount} issue(s) found`));
+    console.log(style.gray("To resolve duplicates: run `omk mcp remove <server>` to delete a local copy, or edit the config files directly."));
   }
 }
 
@@ -708,15 +716,18 @@ async function testRemoteMcpServer(serverName: string, url: string): Promise<voi
   }
 }
 
-export async function mcpRemoveCommand(serverName: string): Promise<void> {
+export async function mcpRemoveCommand(serverName: string, options: { global?: boolean } = {}): Promise<void> {
   const root = getProjectRoot();
   const localPath = join(root, ".kimi", "mcp.json");
   const omkPath = join(root, ".omk", "mcp.json");
+  const globalPath = join(getUserHome(), ".kimi", "mcp.json");
 
-  const sources: Array<{ path: string; label: string }> = [
-    { path: localPath, label: "project-local" },
-    { path: omkPath, label: "omk-project" },
-  ];
+  const sources: Array<{ path: string; label: string }> = options.global
+    ? [{ path: globalPath, label: "global" }]
+    : [
+        { path: localPath, label: "project-local" },
+        { path: omkPath, label: "omk-project" },
+      ];
 
   let removed = false;
   for (const src of sources) {
@@ -733,9 +744,13 @@ export async function mcpRemoveCommand(serverName: string): Promise<void> {
   }
 
   if (!removed) {
-    console.log(status.error(`Server "${serverName}" not found in project-local MCP configs.`));
+    console.log(status.error(`Server "${serverName}" not found in ${options.global ? "global" : "project-local"} MCP configs.`));
     console.log(style.gray(`Checked: ${sources.map((s) => s.path).join(", ")}`));
-    console.log(style.gray(`To remove a global server, edit ~/.kimi/mcp.json manually.`));
+    if (!options.global) {
+      console.log(style.gray(`To remove from global config, run \`omk mcp remove ${serverName} --global\`, or edit ~/.kimi/mcp.json manually.`));
+    } else {
+      console.log(style.gray(`To remove from project-local configs, run \`omk mcp remove ${serverName}\`.`));
+    }
     process.exit(1);
   }
 }

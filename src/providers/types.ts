@@ -58,6 +58,8 @@ export interface ProviderRouteDecision {
   confidence: number;
   deepseek?: DeepSeekRoutePlan;
   routeEnsemble: ProviderRouteEnsembleResult;
+  /** Decision trace entries for forensic replay */
+  trace?: import("../contracts/replay.js").DecisionTraceEntry[];
 }
 
 export type ProviderFailureKind = "availability" | "transient" | "policy" | "unknown";

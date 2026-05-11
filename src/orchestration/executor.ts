@@ -26,6 +26,8 @@ export function createExecutor(executorOptions: ExecutorOptions = {}): DagExecut
   const nodeStartHandlers: Array<(node: DagNode) => void> = [];
   const nodeCompleteHandlers: Array<(node: DagNode, result: TaskResult) => void> = [];
   let commitQueue: Promise<void> = Promise.resolve();
+  let commitQueueSize = 0;
+  const MAX_COMMIT_QUEUE = 10;
   const activeTimers = new Map<string, { progress: ReturnType<typeof setInterval>; persist: ReturnType<typeof setInterval> }>();
   let aborting = false;
 
@@ -101,20 +103,30 @@ export function createExecutor(executorOptions: ExecutorOptions = {}): DagExecut
     };
   }
 
-  async function commitState(state: RunState): Promise<void> {
-    const snapshot = cloneState(state);
+  let latestSnapshot: RunState | undefined;
+
+  async function commitState(state: RunState, opts?: { mustPersist?: boolean }): Promise<void> {
+    latestSnapshot = cloneState(state);
+    // Coalesce: skip intermediate snapshots when queue is full,
+    // but always persist final/must-persist snapshots.
+    if (!opts?.mustPersist && commitQueueSize >= MAX_COMMIT_QUEUE) {
+      return;
+    }
+    commitQueueSize++;
+    const snap = latestSnapshot;
     commitQueue = commitQueue
       .then(async () => {
-        await persister.save(snapshot);
-        // Do not emit here — progressTimer is the authoritative live emitter.
-        // Persist-only avoids stale-state races where an older snapshot
-        // overwrites a fresher one already emitted by progressTimer.
+        commitQueueSize--;
+        await persister.save(snap);
       })
       .catch((err: unknown) => {
+        commitQueueSize--;
         const message = err instanceof Error ? err.message : String(err);
-        process.stderr.write(`[omk] state persist warning: ${message}\n`);
+        process.stderr.write(`[omk] state persist warning: ${message}
+`);
       });
-    await commitQueue;
+    // Only await when mustPersist (caller needs durability guarantee)
+    if (opts?.mustPersist) await commitQueue;
   }
 
   function emit(state: RunState): void {
@@ -240,10 +252,15 @@ export function createExecutor(executorOptions: ExecutorOptions = {}): DagExecut
       return { passed: true, evidence: [] };
     }
 
+    const latestAttempt = node.attempts?.[node.attempts.length - 1];
+    const attemptId = latestAttempt ? `${node.id}__${latestAttempt.attempt}` : `${node.id}__1`;
+
     return checkEvidenceGates(gates, {
       cwd: options.worktreeRoot ?? process.cwd(),
       stdout: result.stdout,
       nodeId: node.id,
+      runId: options.runId,
+      attemptId,
     });
   }
 
@@ -254,7 +271,7 @@ export function createExecutor(executorOptions: ExecutorOptions = {}): DagExecut
     options: RunOptions,
     state: RunState
   ): Promise<void> {
-    scheduler.updateNodeStatus(dag, node.id, "running");
+    scheduler.updateNodeStatus(dag, node.id, "running", options.runId);
     markNodeStarted(node);
     refreshState(state, dag, options);
     await commitState(state);
@@ -332,14 +349,14 @@ export function createExecutor(executorOptions: ExecutorOptions = {}): DagExecut
         node.evidence = evidenceCheck.evidence;
         if (evidenceCheck.passed) {
           markNodeFinished(node, "done");
-          scheduler.updateNodeStatus(dag, node.id, "done");
+          scheduler.updateNodeStatus(dag, node.id, "done", options.runId);
         } else {
           markNodeFinished(node, "failed");
-          scheduler.updateNodeStatus(dag, node.id, "failed");
+          scheduler.updateNodeStatus(dag, node.id, "failed", options.runId);
         }
       } else {
         markNodeFinished(node, "failed");
-        scheduler.updateNodeStatus(dag, node.id, "failed");
+        scheduler.updateNodeStatus(dag, node.id, "failed", options.runId);
       }
     } catch (error: unknown) {
       result = {
@@ -350,7 +367,7 @@ export function createExecutor(executorOptions: ExecutorOptions = {}): DagExecut
       };
       recordProviderAttempt(node, result);
       markNodeFinished(node, "failed");
-      scheduler.updateNodeStatus(dag, node.id, "failed");
+      scheduler.updateNodeStatus(dag, node.id, "failed", options.runId);
     } finally {
       clearInterval(progressTimer);
       clearInterval(persistTimer);
@@ -499,7 +516,7 @@ export function createExecutor(executorOptions: ExecutorOptions = {}): DagExecut
         if (fallbackCreated) {
           refreshState(state, dag, options);
           await commitState(state);
-          void tick();
+          tick().catch(() => {});
           return;
         }
 
@@ -558,7 +575,7 @@ export function createExecutor(executorOptions: ExecutorOptions = {}): DagExecut
             })
             .finally(() => {
               runningMap.delete(node.id);
-              void tick();
+              tick().catch(() => {});
             });
           runningMap.set(node.id, promise);
         }
@@ -573,7 +590,7 @@ export function createExecutor(executorOptions: ExecutorOptions = {}): DagExecut
         }
       }
 
-      void tick();
+      tick().catch(() => {});
       return donePromise;
     },
   };

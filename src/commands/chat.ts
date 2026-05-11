@@ -143,7 +143,7 @@ function renderChatIntro(
   meta: { agent: string; runId?: string; layout: ChatLayout; trust: string; mode?: string }
 ): string {
   const titleKey: Record<ChatBrand, string> = {
-    kimicat: "chat.intro.kimichan",
+    kimicat: "chat.intro.kimicat",
     minimal: "chat.intro.minimal",
     plain: "chat.intro.plain",
   };
@@ -338,7 +338,7 @@ export async function chatCommand(options: {
   if (!isPlain && !isCockpitChild()) {
     try {
       const { renderHudDashboard } = await import("./hud.js");
-      const hud = await renderHudDashboard({ runId: effectiveRunId, terminalWidth: process.stdout.columns });
+      const hud = await renderHudDashboard({ runId: effectiveRunId, terminalWidth: process.stdout.columns, fetchQuota: false });
       const lines = hud.split("\n");
       // Use terminal height to show as much HUD as possible (reserve 4 lines for prompt)
       const termRows = process.stdout.rows || 24;
@@ -352,6 +352,7 @@ export async function chatCommand(options: {
   }
 
   // ── Print recent run history so users can scroll back to see past work ──
+  // PERF: consider deferring to after Kimi spawn
   if (!isPlain && !isCockpitChild()) {
     try {
       const { listRunCandidates } = await import("./hud.js");
@@ -445,7 +446,9 @@ export async function chatCommand(options: {
 
     let lastThinking = "";
     let exitCode = 0;
-    let pendingOutput = ""; // buffer for chunk-boundary todo parsing
+    // Chunk-array buffer to avoid repeated large string copies during todo parsing
+    const pendingChunks: string[] = [];
+    let pendingLength = 0;
 
     // ── Debounced TODO sync ──
     let pendingTodoSync: Promise<void> | null = null;
@@ -515,10 +518,18 @@ export async function chatCommand(options: {
           }
 
           // Parse SetTodoList from output with chunk-boundary buffering
-          pendingOutput += data;
-          if (pendingOutput.length > 8192) {
-            pendingOutput = pendingOutput.slice(-4096);
+          pendingChunks.push(data);
+          pendingLength += data.length;
+          // Trim from front to keep last ~4096-8192 chars without massive string copies
+          while (pendingLength > 8192 && pendingChunks.length > 1) {
+            const removed = pendingChunks.shift()!;
+            pendingLength -= removed.length;
           }
+          if (pendingLength > 8192 && pendingChunks.length === 1) {
+            pendingChunks[0] = pendingChunks[0].slice(-4096);
+            pendingLength = pendingChunks[0].length;
+          }
+          const pendingOutput = pendingChunks.join("");
           const newTodos = parseSetTodoListFromOutput(pendingOutput);
           if (newTodos && newTodos.length > 0) {
             scheduleTodoSync(newTodos);
@@ -630,8 +641,8 @@ async function printChatExitBanner(options: {
     getActiveSkillNames(resources.skillsScope),
   ]);
 
-  const mcpText = mcpNames.length > 0 ? mcpNames.join(", ") : style.gray("none");
-  const skillText = skillNames.length > 0 ? skillNames.join(", ") : style.gray("none");
+  const mcpText = formatResourceCount(mcpNames.length, resources.mcpScope);
+  const skillText = formatResourceCount(skillNames.length, resources.skillsScope);
   const workersText = workers ?? resources.maxWorkers.toString();
 
   const lines: string[] = [
@@ -650,4 +661,8 @@ async function printChatExitBanner(options: {
   ];
 
   console.log(box(lines));
+}
+
+function formatResourceCount(count: number, scope: string): string {
+  return count > 0 ? `${count} active (${scope})` : style.gray(`none (${scope})`);
 }

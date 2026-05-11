@@ -401,7 +401,7 @@ function buildCapabilityHarnessNodes(resources: ChatAgentHarnessManifest["resour
 
 function formatInventoryList(values: string[]): string {
   if (values.length === 0) return "none";
-  const visible = values.slice(0, 24);
+  const visible = values.slice(0, 5);
   const suffix = values.length > visible.length ? `, +${values.length - visible.length} more (see chat-agent-harness.json)` : "";
   return `${visible.join(", ")}${suffix}`;
 }

@@ -397,10 +397,10 @@ describe("validateSizeBudgets", () => {
   });
 
   it("fails when entry count exceeds budget", () => {
-    const files = Array.from({ length: 700 }, (_, i) =>
+    const files = Array.from({ length: 721 }, (_, i) =>
       makeFile(`file${i}.txt`, 100)
     );
-    const pkg = { size: 1024, unpackedSize: 2048, entryCount: 700 };
+    const pkg = { size: 1024, unpackedSize: 2048, entryCount: 721 };
     const result = validateSizeBudgets(files, pkg);
     assert.ok(result.errors.some((e) => e.includes("Entry count")));
   });

@@ -19,6 +19,8 @@ import type { MemoryOntology, MemoryMindmap } from "../memory/local-graph-memory
 import { createStatePersister } from "../orchestration/state-persister.js";
 import { writeTodos, type TodoItem } from "../util/todo-sync.js";
 import { listActiveSessions, readSessionMeta, type SessionMeta } from "../util/session.js";
+let clientDisconnected = false;
+
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -104,8 +106,38 @@ function errorName(err: unknown): string {
 }
 
 function writeDiagnostic(message: string, data: Record<string, unknown>): void {
+  if (clientDisconnected) return;
   const payload = JSON.stringify({ message, ...data });
-  process.stderr.write(`[omk-project-mcp] ${payload}\n`);
+  try {
+    process.stderr.write(`[omk-project-mcp] ${payload}\n`);
+  } catch {
+    // stderr unavailable, silently drop
+  }
+}
+
+function isBrokenPipeError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const code = (err as NodeJS.ErrnoException).code;
+  return code === "EPIPE" || code === "ERR_STREAM_DESTROYED" || code === "ERR_STREAM_WRITE_AFTER_END";
+}
+
+function safeWriteStdout(data: string): void {
+  if (clientDisconnected) return;
+  try {
+    writeSync(process.stdout.fd ?? 1, data);
+  } catch (err) {
+    if (isBrokenPipeError(err)) {
+      clientDisconnected = true;
+      return;
+    }
+    try {
+      process.stdout.write(data);
+    } catch (err2) {
+      if (isBrokenPipeError(err2)) {
+        clientDisconnected = true;
+      }
+    }
+  }
 }
 
 function buildErrorData(
@@ -1386,11 +1418,7 @@ async function handleToolCall(name: string, args: unknown): Promise<unknown> {
 
 function sendResponse(res: JsonRpcResponse): void {
   const data = JSON.stringify(res) + "\n";
-  try {
-    writeSync(process.stdout.fd ?? 1, data);
-  } catch {
-    process.stdout.write(data);
-  }
+  safeWriteStdout(data);
 }
 
 function sendError(id: string | number, code: number, message: string, data?: unknown): void {
@@ -1543,6 +1571,15 @@ async function main(): Promise<void> {
     // ignore if unavailable
   }
 
+  process.stdout.on("error", (err) => {
+    if (isBrokenPipeError(err)) {
+      clientDisconnected = true;
+    }
+  });
+  process.stderr.on("error", () => {
+    // stderr errors are non-fatal for MCP server
+  });
+
   const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
 
   for await (const line of rl) {
@@ -1563,7 +1600,10 @@ async function main(): Promise<void> {
       writeDiagnostic("request_failed", data);
       sendError(req.id, JSON_RPC_OMK_SERVER_ERROR, `OMK MCP request failed while handling ${req.method}: ${errorMessage(err)}`, data);
     }
+
   }
+
+  clientDisconnected = true;
 
   // Gracefully flush remaining stdout before the process exits
   try {
@@ -1574,7 +1614,10 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error("Fatal error:", err);
-  // Do NOT process.exit(1) — MCP clients treat hard exits as failures.
-  // The error has already been logged to stderr; let the event loop drain.
+  if (isBrokenPipeError(err)) return;
+  try {
+    console.error("Fatal error:", err);
+  } catch {
+    // stderr unavailable
+  }
 });

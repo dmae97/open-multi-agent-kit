@@ -51,7 +51,7 @@ export class DeepSeekClient {
   constructor(options: DeepSeekClientOptions = {}) {
     this.apiKeyEnv = options.apiKeyEnv ?? "DEEPSEEK_API_KEY";
     this.baseUrl = (options.baseUrl ?? "https://api.deepseek.com").replace(/\/+$/, "");
-    this.model = options.model ?? "deepseek-v4-flash";
+    this.model = options.model ?? "deepseek-v4-pro";
     this.thinking = options.thinking ?? "enabled";
     this.reasoningEffort = options.reasoningEffort ?? "max";
     this.timeoutMs = options.timeoutMs ?? 60_000;
@@ -99,9 +99,24 @@ export class DeepSeekClient {
 
   private buildRequestBody(options: DeepSeekCompleteOptions): Record<string, unknown> {
     const thinking = options.thinking ?? this.thinking;
+
+    // SANITIZE: Remove messages with empty content to prevent DeepSeek 400 "text content is empty"
+    // This can happen when upstream filters strip out text parts, leaving an empty content array.
+    const sanitizedMessages = options.messages
+      .map((msg) => ({
+        ...msg,
+        content: msg.content?.trim() ?? "",
+      }))
+      .filter((msg) => msg.content.length > 0);
+
+    // Ensure at least one message exists so DeepSeek never receives an empty messages array
+    if (sanitizedMessages.length === 0) {
+      sanitizedMessages.push({ role: "user", content: "[omk] Continue with the task." });
+    }
+
     const body: Record<string, unknown> = {
       model: this.model,
-      messages: options.messages,
+      messages: sanitizedMessages,
       max_tokens: options.maxTokens,
       thinking: {
         type: thinking,

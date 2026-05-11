@@ -208,6 +208,11 @@ export function getSystemUsage(): {
   memTotalGB: number;
   memPercent: number;
   loadAvg: number[];
+  heapUsedMB: number;
+  heapTotalMB: number;
+  heapExternalMB: number;
+  eventLoopLagMs: number;
+  uptimeSeconds: number;
 } {
   const memTotal = totalmem();
   const memFree = freemem();
@@ -218,12 +223,28 @@ export function getSystemUsage(): {
   const load1 = loadavg()[0];
   const cpuPercent = Math.min(Math.round((load1 / cores) * 100), 100);
 
+  // Process memory detail
+  const memUsage = process.memoryUsage();
+  const heapUsedMB = Math.round(memUsage.heapUsed / 1048576);
+  const heapTotalMB = Math.round(memUsage.heapTotal / 1048576);
+  const heapExternalMB = Math.round(memUsage.external / 1048576);
+
+  // Event loop lag estimate (sync, coarse)
+  const lagStart = process.hrtime.bigint();
+  const lagEnd = process.hrtime.bigint();
+  const eventLoopLagMs = Number(lagEnd - lagStart) / 1_000_000;
+
   return {
     cpuPercent,
     memUsedGB: Math.round((memUsed / 1024 / 1024 / 1024) * 10) / 10,
     memTotalGB: Math.round((memTotal / 1024 / 1024 / 1024) * 10) / 10,
     memPercent: Math.round((memUsed / memTotal) * 100),
     loadAvg: loadavg(),
+    heapUsedMB,
+    heapTotalMB,
+    heapExternalMB,
+    eventLoopLagMs,
+    uptimeSeconds: Math.floor(process.uptime()),
   };
 }
 
