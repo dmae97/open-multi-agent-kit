@@ -634,17 +634,19 @@ export class AgentHarness<
 			throw new Error("Compaction cancelled");
 		}
 		const provided = hookResult?.compaction;
-		const result =
-			provided ??
-			(await compact(
-				preparation,
-				model,
-				auth.apiKey,
-				auth.headers,
-				customInstructions,
-				undefined,
-				this.thinkingLevel,
-			));
+		const compactResult = provided
+			? { ok: true as const, value: provided }
+			: await compact(
+					preparation,
+					model,
+					auth.apiKey,
+					auth.headers,
+					customInstructions,
+					undefined,
+					this.thinkingLevel,
+				);
+		if (!compactResult.ok) throw compactResult.error;
+		const result = compactResult.value;
 		const entryId = await this.session.appendCompaction(
 			result.summary,
 			result.firstKeptEntryId,

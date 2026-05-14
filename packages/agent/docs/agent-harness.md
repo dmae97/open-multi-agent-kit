@@ -392,6 +392,7 @@ Implemented so far:
 - Updated shell output capture to return a result and use `ExecutionEnv` instead of Node APIs directly, including full-output spill via `appendFile()`.
 - Removed `NodeExecutionEnv` from the browser-safe `execution-env.ts` re-export; Node-specific callers import from `harness/env/nodejs.js`.
 - Replaced `Buffer` usage in generic truncation utilities with runtime-neutral UTF-8 handling.
+- Converted compaction summary helpers to typed result returns and added error-path coverage.
 - Expanded `NodeExecutionEnv` tests for file operations, exec errors, aborts, callbacks, timeouts, and shell-output full-output spill.
 
 Still needed:
@@ -399,7 +400,6 @@ Still needed:
 - Remove remaining throws from `src/harness` APIs and helpers, except explicit adapter/test helpers such as `getOrThrow()`.
 - Convert session storage/repo/session APIs to typed result returns.
 - Convert structural `AgentHarness` operations to typed result returns for busy, missing-resource, auth, compaction, and branch-summary failures.
-- Convert compaction helpers to typed result returns.
 - Keep Node-specific APIs isolated under `src/harness/env/nodejs.ts` and Node-backed storage/session implementations, or move those implementations behind explicit Node-only entry points.
 - Audit remaining generic harness utilities for Node globals as new APIs are added.
 - Audit package exports so browser/generic-JS imports do not pull Node-only modules such as `NodeExecutionEnv` or JSONL storage.

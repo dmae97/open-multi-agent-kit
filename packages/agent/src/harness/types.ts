@@ -138,6 +138,22 @@ export class ExecutionError extends Error {
 	}
 }
 
+/** Stable compaction error codes returned by compaction helpers. */
+export type CompactionErrorCode = "aborted" | "summarization_failed" | "invalid_session" | "unknown";
+
+/** Error returned by compaction helpers. */
+export class CompactionError extends Error {
+	constructor(
+		/** Backend-independent error code. */
+		public code: CompactionErrorCode,
+		message: string,
+		cause?: unknown,
+	) {
+		super(message, cause === undefined ? undefined : { cause });
+		this.name = "CompactionError";
+	}
+}
+
 /** Metadata for one filesystem object in an {@link ExecutionEnv}. */
 export interface FileInfo {
 	/** Basename of {@link path}. */
