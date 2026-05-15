@@ -47,7 +47,8 @@ Then branch on the kind of request:
 You may amend or replace prior commits as long as the final state on
 `{{workspace.branch}}` matches what the directive asks for.
 
-All side effects go through the `gh_*` / `classify_issue` /
-`set_issue_labels` host tools. NEVER shell out to `gh` or `git push`.
+All side effects go through the `gh_*` host tools. NEVER shell out to `gh`
+or `git push`. `classify_issue` and `set_issue_labels` are not available on
+this thread — the originating issue is already triaged.
 
 Terse. Technical. No emoji.

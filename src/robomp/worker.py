@@ -495,6 +495,7 @@ async def run_task(
         author_name=inputs.settings.resolved_author_name,
         author_email=inputs.settings.git_author_email,
         inbound_thread_number=pr_number,
+        inbound_is_pr=pr_number is not None,
         slot_uid=inputs.slot_uid,
     )
     resuming = _has_prior_session(inputs.workspace.session_dir)

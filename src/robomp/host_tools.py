@@ -54,6 +54,11 @@ class ToolBindings:
     # `None` for tasks with no inbound thread (e.g. initial triage), in
     # which case the originating issue is used.
     inbound_thread_number: int | None = None
+    # True iff the inbound thread is a pull request. Triage tools
+    # (`classify_issue`, `set_issue_labels`) are not exposed on PR threads
+    # — the originating issue has already been classified and the PR
+    # itself does not carry triage labels.
+    inbound_is_pr: bool = False
     slot_uid: int | None = None
 
     @property
@@ -758,6 +763,12 @@ def _build_set_issue_labels(bindings: ToolBindings) -> HostTool[Any, Any]:
     """Append labels to the originating issue (or PR)."""
 
     def execute(args: dict[str, Any], _ctx: HostToolContext[Any]) -> str:
+        if bindings.inbound_is_pr:
+            _audit(bindings, "set_issue_labels", args, result={"skipped": "pr_thread"})
+            return (
+                "no-op: set_issue_labels is not applicable on PR threads — PR labels are "
+                "not used for triage. Proceed with the requested change."
+            )
         labels = args.get("labels")
         if not isinstance(labels, list) or not labels:
             _raise_command("set_issue_labels requires a non-empty 'labels' array.")
@@ -803,6 +814,23 @@ def _build_classify_issue(bindings: ToolBindings) -> HostTool[Any, Any]:
     branch the agent should follow."""
 
     def execute(args: dict[str, Any], _ctx: HostToolContext[Any]) -> str:
+        existing = bindings.db.get_issue(bindings.issue_key)
+        if bindings.inbound_is_pr:
+            note = (
+                f"no-op: classify_issue is not applicable on PR threads. "
+                f"Issue #{bindings.issue.number} is already classified"
+            )
+            if existing is not None and existing.classification:
+                note += f" as {existing.classification!r}"
+            note += ". Proceed with the requested change (amend the branch and push, or post a comment)."
+            _audit(bindings, "classify_issue", args, result={"skipped": "pr_thread"})
+            return note
+        if existing is not None and existing.classification:
+            _audit(bindings, "classify_issue", args, result={"skipped": "already_classified"})
+            return (
+                f"no-op: issue #{bindings.issue.number} is already classified as "
+                f"{existing.classification!r}. Continue with that workflow; do not re-classify."
+            )
         primary = args.get("primary")
         if primary not in _PRIMARY_TYPES:
             _raise_command(f"classify_issue 'primary' must be one of {_PRIMARY_TYPES}; got {primary!r}.")
@@ -937,7 +965,15 @@ def _build_classify_issue(bindings: ToolBindings) -> HostTool[Any, Any]:
 
 
 def build(bindings: ToolBindings) -> tuple[HostTool[Any, Any], ...]:
-    """Return the full set of host tools bound to one task's context."""
+    """Return the full set of host tools bound to one task's context.
+
+    The toolset is intentionally identical across all task kinds so the LLM
+    prompt cache stays warm across triage → follow-up → PR-conversation
+    transitions. Triage tools (`classify_issue`, `set_issue_labels`) enforce
+    their own scope at execution time — see the `inbound_is_pr` and
+    already-classified guards inside `_build_classify_issue` /
+    `_build_set_issue_labels`.
+    """
     return (
         _build_classify_issue(bindings),
         _build_set_issue_labels(bindings),

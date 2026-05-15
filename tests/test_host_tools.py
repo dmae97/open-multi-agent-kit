@@ -406,6 +406,104 @@ def test_classify_issue_rejects_unknown_primary(db: Database, tmp_path: Path) ->
         _stop_loop(loop, t)
 
 
+def _pr_bindings(
+    db: Database, tmp_path: Path, transport: httpx.MockTransport
+) -> tuple[ToolBindings, asyncio.AbstractEventLoop, threading.Thread]:
+    """Same as _bindings but with `inbound_is_pr=True` — webhook arrived on a PR."""
+    github = GitHubClient("token", transport=transport)
+    loop, thread = _make_loop_in_background()
+    bindings = ToolBindings(
+        db=db,
+        github=github,
+        git_transport=LocalGitTransport(token=None),
+        repo=_stub_repo(),
+        issue=_stub_issue(),
+        workspace=_stub_workspace(tmp_path),
+        loop=loop,
+        author_name="robomp-bot",
+        author_email="robomp-bot@example.invalid",
+        inbound_thread_number=99,
+        inbound_is_pr=True,
+    )
+    db.upsert_issue(
+        key=bindings.issue_key,
+        repo="octo/widget",
+        number=42,
+        state="opened",
+        branch=bindings.workspace.branch,
+        session_dir=str(bindings.workspace.session_dir),
+        pr_number=99,
+    )
+    db.set_issue_classification(bindings.issue_key, "bug")
+    return bindings, loop, thread
+
+
+def test_classify_issue_on_pr_thread_is_noop(db: Database, tmp_path: Path) -> None:
+    """On PR threads the tool must not hit GitHub and must not raise."""
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        return httpx.Response(500)
+
+    bindings, loop, t = _pr_bindings(db, tmp_path, httpx.MockTransport(handler))
+    try:
+        tool = next(x for x in build(bindings) if x.name == "classify_issue")
+        result = tool.execute(
+            {"primary": "documentation", "rationale": "docs only"},
+            _ctx(),
+        )
+    finally:
+        _stop_loop(loop, t)
+    assert "no-op" in result.lower()
+    assert calls == []  # no GitHub label mutation
+    # Classification must remain whatever it was before — not overwritten.
+    row = db.get_issue(bindings.issue_key)
+    assert row is not None and row.classification == "bug"
+
+
+def test_classify_issue_already_classified_is_noop(db: Database, tmp_path: Path) -> None:
+    """Re-classifying an already-classified issue is rejected without GitHub side effects."""
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        return httpx.Response(500)
+
+    bindings, loop, t = _bindings(db, tmp_path, httpx.MockTransport(handler))
+    db.set_issue_classification(bindings.issue_key, "bug")
+    try:
+        tool = next(x for x in build(bindings) if x.name == "classify_issue")
+        result = tool.execute(
+            {"primary": "question", "rationale": "actually a question"},
+            _ctx(),
+        )
+    finally:
+        _stop_loop(loop, t)
+    assert "no-op" in result.lower()
+    assert "already classified" in result.lower()
+    assert calls == []
+    row = db.get_issue(bindings.issue_key)
+    assert row is not None and row.classification == "bug"  # unchanged
+
+
+def test_set_issue_labels_on_pr_thread_is_noop(db: Database, tmp_path: Path) -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        return httpx.Response(500)
+
+    bindings, loop, t = _pr_bindings(db, tmp_path, httpx.MockTransport(handler))
+    try:
+        tool = next(x for x in build(bindings) if x.name == "set_issue_labels")
+        result = tool.execute({"labels": ["wontfix"]}, _ctx())
+    finally:
+        _stop_loop(loop, t)
+    assert "no-op" in result.lower()
+    assert calls == []
+
+
 def _init_git_repo(repo_dir: Path, branch: str) -> None:
     """Initialize a minimal git repo at `repo_dir` with `branch` checked out."""
     import os as _os
