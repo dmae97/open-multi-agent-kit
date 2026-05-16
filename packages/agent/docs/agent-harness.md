@@ -264,6 +264,10 @@ Remaining:
 - Decide and implement tool update observability events.
 - Include active-tool-only updates in the runtime config observability plan.
 
+Notes:
+
+- Observability design: [observability.md](./observability.md)
+
 ### 2. Design per-`AgentHarness` model registry
 
 Status: Planned
@@ -336,7 +340,33 @@ Remaining:
 - Preserve current provider hook behavior, including stream option patch deletion semantics.
 - Add parity tests for reducer semantics: transform chaining, patch chaining, early block/cancel, cleanup, source metadata, and typed app-specific reducer coverage.
 
-### 5. Final lifecycle hardening suite
+Notes:
+
+- Hook design: [hooks.md](./hooks.md)
+
+### 5. Spike semi-durable harness/session recovery
+
+Status: Planned
+
+Done:
+
+- Wrote durability design: [durable-harness.md](./durable-harness.md)
+
+Remaining:
+
+- Decide whether session owns all durable harness state or whether any sidecars are needed for large blobs.
+- Define durable entries for queues, pending writes, operations, turns, provider requests, and tool calls.
+- Define resume requirements for app-provided tools, models, extensions, resources, hooks, and auth providers.
+- Define conservative recovery policy for unfinished agent turns, provider requests, tool calls, compaction, and tree navigation.
+- Prototype reducer-based recovery from session entries.
+- Decide whether interrupted operations append user-visible messages or only internal operation entries.
+
+Notes:
+
+- Provider streams are not resumable; recovery should restart from durable boundaries or mark operations interrupted.
+- Unfinished tool calls are unsafe to retry unless tools declare idempotent/retry-safe behavior.
+
+### 6. Final lifecycle hardening suite
 
 Status: Planned
 
@@ -359,7 +389,7 @@ Remaining:
 - Test no deadlocks when async listeners call harness APIs and await them.
 - Test phase cleanup through success, provider error, hook error, abort, compaction, and tree navigation.
 
-### 6. Later coding-agent migration plan
+### 7. Later coding-agent migration plan
 
 Status: Planned
 
@@ -379,7 +409,7 @@ Remaining:
 
 ## Completed implementation todo
 
-### 7. Remove `Agent` dependency from `AgentHarness`
+### 8. Remove `Agent` dependency from `AgentHarness`
 
 Status: Done
 
@@ -395,9 +425,9 @@ Remaining:
 
 Notes:
 
-- Broader listener/hook reentrancy coverage is tracked in item 5.
+- Broader listener/hook reentrancy coverage is tracked in item 6.
 
-### 8. Finish curated provider/stream configuration
+### 9. Finish curated provider/stream configuration
 
 Status: Done
 
@@ -415,7 +445,7 @@ Remaining:
 
 - None.
 
-### 9. Complete low-level `Result` cleanup
+### 10. Complete low-level `Result` cleanup
 
 Status: Done
 

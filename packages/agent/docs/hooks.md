@@ -1,68 +1,37 @@
 # AgentHarness hooks design
 
-This document describes the target hook system for `AgentHarness` and app-specific harness integrations.
+<!-- Synced from jot 3utlzkxy. Edit this file in-repo going forward. -->
 
-## Goals
+Final design.
 
-- `AgentHarness` emits hook events and consumes typed results.
-- Hook registration, provenance, cleanup, and mutation-chain semantics live in the hooks implementation.
-- There is one registration API and one emission API.
-- Observational and mutation hooks use the same registration API; the event result type determines whether a handler can return a result.
-- Apps can extend the event union, context type, source/provenance type, and reducers without changing `AgentHarness`.
-- Resources and tools carry provenance on their app-specific concrete value types. Hook handlers carry provenance as registration sidecar metadata.
+## Core model
 
-## Value provenance
-
-For non-hook values, provenance belongs on the app-specific concrete type.
-
-```ts
-interface AppSource {
-	path: string;
-	scope: "user" | "project" | "temporary";
-}
-
-type AppSkill = Skill & { source: AppSource };
-type AppPromptTemplate = PromptTemplate & { source: AppSource };
-type AppTool = AgentTool & { source: AppSource };
-```
-
-The harness already accepts generic resource/tool types, so no wrapper such as `{ value, source }` is needed.
-
-```ts
-const harness = new AgentHarness<AppSkill, AppPromptTemplate, AppTool>({
-	resources: { skills, promptTemplates },
-	tools,
-	// ...
-});
-```
-
-Loaders such as `loadSourcedSkills()` and `loadSourcedPromptTemplates()` can map source metadata onto the concrete app value type before passing values to the harness.
-
-## Hook event typing
-
-Each hook event owns its handler result type through a type-only phantom field.
+Events carry their result type as a type-only phantom:
 
 ```ts
 declare const HookResult: unique symbol;
 
-export interface HookEvent<TType extends string, TResult = void> {
+interface HookEvent<TType extends string, TResult = void> {
 	type: TType;
 	readonly [HookResult]?: TResult;
 }
 
-export type ResultOf<TEvent> = TEvent extends { readonly [HookResult]?: infer TResult } ? TResult : void;
+type ResultOf<E> = E extends { readonly [HookResult]?: infer R } ? R : void;
+
+type HookHandler<E, Ctx> = (
+	event: E,
+	ctx: Ctx,
+	signal?: AbortSignal,
+) => ResultOf<E> | void | Promise<ResultOf<E> | void>;
+
+type HookObserver<E, Ctx> = (
+	event: E,
+	ctx: Ctx,
+	signal?: AbortSignal,
+) => void | Promise<void>;
 ```
 
-Observational events omit the result type:
-
-```ts
-interface MessageStartEvent extends HookEvent<"message_start"> {
-	type: "message_start";
-	message: AgentMessage;
-}
-```
-
-Mutation/policy events declare their result type:
+Example:
 
 ```ts
 interface ContextEvent extends HookEvent<"context", { messages?: AgentMessage[] }> {
@@ -75,319 +44,274 @@ interface ToolCallEvent extends HookEvent<"tool_call", { block?: boolean; reason
 	toolName: string;
 	input: Record<string, unknown>;
 }
-```
 
-There is no central result map and no event spec table. The event type itself defines the return type handlers may produce.
-
-## Hook handlers and registration options
-
-Handlers are plain functions. Provenance and cleanup live on the registration.
-
-```ts
-export type HookCleanup = () => void | Promise<void>;
-
-export type HookHandler<TEvent, TContext> = (
-	event: TEvent,
-	context: TContext,
-	signal?: AbortSignal,
-) => ResultOf<TEvent> | void | Promise<ResultOf<TEvent> | void>;
-
-export interface HookRegistrationOptions<TSource> {
-	source?: TSource;
-	cleanup?: HookCleanup;
+interface MessageEndEvent extends HookEvent<"message_end"> {
+	type: "message_end";
+	message: AgentMessage;
 }
 ```
 
-Example:
+No result map. No spec table. The event type defines its own result.
+
+## Hooks interface
 
 ```ts
-hooks.on(
-	"context",
-	(event, context) => ({ messages: injectContext(event.messages, context) }),
-	{
-		source: extensionSource,
-		cleanup: () => cache.dispose(),
-	},
-);
-```
+interface AgentHarnessHooks<E extends HookEvent<string, unknown>, Ctx> {
+	context: Ctx;
 
-The cleanup runs once, either when the returned unregister function is called, or when `clear()` / `dispose()` clears the registration.
+	setContext(ctx: Ctx): void;
 
-## Reducers
+	observe(handler: HookObserver<E, Ctx>): () => void;
 
-Result-producing events need reducers. Observational events do not.
-
-```ts
-type ResultfulEvent<TEvent> = TEvent extends HookEvent<string, infer TResult>
-	? [TResult] extends [void]
-		? never
-		: TEvent
-	: never;
-
-type HookRegistration<TContext, TSource> = {
-	handler: HookHandler<any, TContext>;
-	source?: TSource;
-	cleanup?: HookCleanup;
-	disposed: boolean;
-	order: number;
-};
-
-type Reducer<TEvent, TContext, TSource> = (
-	event: TEvent,
-	registrations: readonly HookRegistration<TContext, TSource>[],
-	context: TContext,
-	signal?: AbortSignal,
-) => Promise<ResultOf<TEvent> | undefined>;
-
-type Reducers<TEvent, TContext, TSource> = {
-	[TType in ResultfulEvent<TEvent>["type"]]: Reducer<
-		Extract<ResultfulEvent<TEvent>, { type: TType }>,
-		TContext,
-		TSource
-	>;
-};
-```
-
-Reducers encode hook semantics, for example:
-
-- `context`: sequential transform; each handler sees current messages.
-- `before_provider_request`: sequential patch/transform; each handler sees current request state.
-- `before_provider_payload`: sequential payload transform.
-- `before_agent_start`: chain `systemPrompt`; collect injected messages.
-- `tool_call`: same mutable event/input visible to later handlers; first `{ block: true }` stops.
-- `tool_result`: sequential patch accumulation; each handler sees current patched result.
-- `message_end`: sequential message replacement; replacement must keep the original role.
-- `session_before_*`: first `{ cancel: true }` stops; otherwise return the last meaningful result.
-
-Base harness reducers are defined once:
-
-```ts
-const agentHarnessReducers = {
-	context: reduceContext,
-	before_provider_request: reduceBeforeProviderRequest,
-	before_provider_payload: reduceBeforeProviderPayload,
-	before_agent_start: reduceBeforeAgentStart,
-	tool_call: reduceToolCall,
-	tool_result: reduceToolResult,
-	message_end: reduceMessageEnd,
-	session_before_compact: reduceFirstCancelOrLast,
-	session_before_tree: reduceFirstCancelOrLast,
-} satisfies Reducers<AgentHarnessEvent, AgentHarnessContext, unknown>;
-```
-
-If `AgentHarnessEvent` gains a new result-producing event, TypeScript forces the reducer table to be updated.
-
-## Single hooks implementation
-
-The hooks implementation stores registrations and runs reducers.
-
-```ts
-class AgentHarnessHooks<
-	TEvent extends HookEvent<string, unknown>,
-	TContext,
-	TSource = unknown,
-> {
-	context: TContext;
-
-	constructor(
-		context: TContext,
-		extraReducers?: ExtraReducers<TEvent, AgentHarnessEvent, TContext, TSource>,
-	) {
-		this.context = context;
-		this.reducers = {
-			...agentHarnessReducers,
-			...extraReducers,
-		} as Reducers<TEvent, TContext, TSource>;
-	}
-
-	setContext(context: TContext): void {
-		this.context = context;
-	}
-
-	on<TType extends TEvent["type"]>(
+	on<TType extends E["type"]>(
 		type: TType,
-		handler: HookHandler<Extract<TEvent, { type: TType }>, TContext>,
-		options?: HookRegistrationOptions<TSource>,
-	): () => Promise<void> {
-		// Store the registration and return unregister.
-	}
+		handler: HookHandler<Extract<E, { type: TType }>, Ctx>,
+	): () => void;
 
-	async emit<TEmittedEvent extends TEvent>(
-		event: TEmittedEvent,
+	emit<TEvent extends E>(
+		event: TEvent,
 		signal?: AbortSignal,
-	): Promise<ResultOf<TEmittedEvent> | undefined> {
-		const registrations = this.getRegistrations(event.type);
-		const reducer = this.reducers[event.type as keyof typeof this.reducers];
+	): Promise<ResultOf<TEvent> | undefined>;
 
-		if (reducer) {
-			return reducer(event as never, registrations as never, this.context, signal) as Promise<
-				ResultOf<TEmittedEvent> | undefined
-			>;
+	addCleanup(cleanup: () => void | Promise<void>): () => void;
+
+	clear(): Promise<void>;
+	dispose(): Promise<void>;
+}
+```
+
+Important split:
+
+- `observe()` sees all events, read-only, return ignored.
+- `on(type, handler)` participates in that event’s semantics.
+- `emit(event)` is the only thing `AgentHarness` calls.
+- `clear()` removes observers/handlers and runs cleanups.
+
+## Default implementation internals
+
+```ts
+class DefaultAgentHarnessHooks<E extends HookEvent<string, unknown>, Ctx>
+	implements AgentHarnessHooks<E, Ctx> {
+	context: Ctx;
+
+	private observers = new Set<HookObserver<E, Ctx>>();
+	private handlers = new Map<string, Set<HookHandler<any, Ctx>>>();
+	private cleanups = new Set<() => void | Promise<void>>();
+
+	constructor(ctx: Ctx) {
+		this.context = ctx;
+	}
+
+	setContext(ctx: Ctx): void {
+		this.context = ctx;
+	}
+
+	observe(handler: HookObserver<E, Ctx>): () => void {
+		this.observers.add(handler);
+		return () => this.observers.delete(handler);
+	}
+
+	on(type, handler): () => void {
+		let handlers = this.handlers.get(type);
+		if (!handlers) {
+			handlers = new Set();
+			this.handlers.set(type, handlers);
+		}
+		handlers.add(handler);
+		return () => handlers.delete(handler);
+	}
+
+	async emit(event, signal?) {
+		for (const observer of this.observers) {
+			await observer(event, this.context, signal);
 		}
 
-		for (const registration of registrations) {
-			await registration.handler(event, this.context, signal);
+		switch (event.type) {
+			case "context":
+				return this.emitContext(event, signal);
+			case "before_provider_request":
+				return this.emitBeforeProviderRequest(event, signal);
+			case "before_provider_payload":
+				return this.emitBeforeProviderPayload(event, signal);
+			case "before_agent_start":
+				return this.emitBeforeAgentStart(event, signal);
+			case "tool_call":
+				return this.emitToolCall(event, signal);
+			case "tool_result":
+				return this.emitToolResult(event, signal);
+			case "session_before_compact":
+			case "session_before_tree":
+				return this.emitFirstCancelOrLast(event, signal);
+			default:
+				await this.emitObservationHandlers(event, signal);
+				return undefined;
 		}
-
-		return undefined;
-	}
-
-	async clear(): Promise<void> {
-		// Remove all registrations and run remaining cleanups once in reverse registration order.
-	}
-
-	dispose(): Promise<void> {
-		return this.clear();
 	}
 }
 ```
 
-Public API:
+Internal casts are acceptable inside the implementation because `Map<string, ...>` loses specificity. Public API remains typed.
+
+## Mutation semantics
+
+### Observation
 
 ```ts
-hooks.on(...);
-hooks.emit(...);
-hooks.clear();
-hooks.dispose();
+await hooks.emit({ type: "message_end", message }, signal);
 ```
 
-There is no wildcard subscription and no separate observer API.
+Observers run. `message_end` handlers run. Return ignored unless that event later gets a result type.
 
-## App-specific events and reducers
+### Context transform
 
-Apps extend the event union.
-
-Observational app events need no reducer:
+Handlers run in order. Each sees current messages.
 
 ```ts
-interface SessionStartEvent extends HookEvent<"session_start"> {
-	type: "session_start";
-	reason: "startup" | "reload" | "new" | "resume" | "fork";
-}
-```
+let current = event;
 
-Result-producing app events need an extra reducer:
-
-```ts
-type InputResult =
-	| { action: "continue" }
-	| { action: "transform"; text: string; images?: ImageContent[] }
-	| { action: "handled" };
-
-interface InputEvent extends HookEvent<"input", InputResult> {
-	type: "input";
-	text: string;
-	images?: ImageContent[];
-	source: "interactive" | "rpc" | "extension";
-}
-```
-
-```ts
-const codingAgentExtraReducers = {
-	input: reduceInput,
-	user_bash: reduceFirstResult,
-	resources_discover: reduceResourcesDiscover,
-	session_before_switch: reduceFirstCancelOrLast,
-	session_before_fork: reduceFirstCancelOrLast,
-} satisfies ExtraReducers<CodingAgentEvent, AgentHarnessEvent, CodingAgentContext, AppSource>;
-```
-
-Base reducers are included by the hooks constructor. Apps only provide reducers for app-specific result-producing events.
-
-```ts
-type CodingAgentEvent =
-	| AgentHarnessEvent<AppSkill, AppPromptTemplate, AppTool>
-	| SessionStartEvent
-	| SessionShutdownEvent
-	| InputEvent
-	| UserBashEvent
-	| ResourcesDiscoverEvent;
-
-const hooks = new AgentHarnessHooks<CodingAgentEvent, CodingAgentContext, AppSource>(
-	context,
-	codingAgentExtraReducers,
-);
-```
-
-## Harness typing
-
-`AgentHarness` stores and exposes the concrete hooks object.
-
-```ts
-type DefaultHooks<TSkill, TPromptTemplate, TTool> = AgentHarnessHooks<
-	AgentHarnessEvent<TSkill, TPromptTemplate, TTool>,
-	undefined,
-	unknown
->;
-
-class AgentHarness<
-	TSkill extends Skill = Skill,
-	TPromptTemplate extends PromptTemplate = PromptTemplate,
-	TTool extends AgentTool = AgentTool,
-	THooks = DefaultHooks<TSkill, TPromptTemplate, TTool>,
-> {
-	readonly hooks: THooks;
-
-	constructor(options: AgentHarnessOptions<TSkill, TPromptTemplate, TTool, THooks>) {
-		this.hooks = options.hooks ?? createDefaultHooks();
+for (const handler of handlers("context")) {
+	const result = await handler(current, ctx, signal);
+	if (result?.messages) {
+		current = { ...current, messages: result.messages };
 	}
 }
+
+return current.messages === event.messages ? undefined : { messages: current.messages };
 ```
 
-When custom hooks are passed, TypeScript infers `THooks` from `options.hooks`.
+### Provider request / payload
+
+Sequential transform. Each handler sees previous output.
 
 ```ts
-const hooks = new CodingAgentHooks(context, codingAgentExtraReducers);
+let current = event;
 
-const harness = new AgentHarness({
-	model,
-	session,
-	hooks,
-	resources,
-	tools,
-});
+for (const handler of handlers("before_provider_payload")) {
+	const result = await handler(current, ctx, signal);
+	if (result !== undefined) {
+		current = { ...current, payload: result.payload };
+	}
+}
 
-harness.hooks; // CodingAgentHooks
+return changed ? { payload: current.payload } : undefined;
 ```
 
-Custom app APIs live on `harness.hooks`; they are not proxied onto `AgentHarness`.
+### Before agent start
+
+Collect injected messages, chain system prompt.
+
+```ts
+let systemPrompt = event.systemPrompt;
+const messages = [];
+
+for (const handler of handlers("before_agent_start")) {
+	const result = await handler({ ...event, systemPrompt }, ctx, signal);
+	if (result?.messages) messages.push(...result.messages);
+	if (result?.systemPrompt !== undefined) systemPrompt = result.systemPrompt;
+}
+
+return messages.length || systemPrompt !== event.systemPrompt
+	? { messages, systemPrompt }
+	: undefined;
+```
+
+### Tool call
+
+Sequential, early exit on block.
+
+```ts
+for (const handler of handlers("tool_call")) {
+	const result = await handler(event, ctx, signal);
+	if (result?.block) return result;
+}
+```
+
+### Tool result
+
+Sequential patch accumulation. Each handler sees current patched result.
+
+```ts
+let current = event;
+let modified = false;
+
+for (const handler of handlers("tool_result")) {
+	const result = await handler(current, ctx, signal);
+	if (!result) continue;
+
+	current = {
+		...current,
+		content: result.content ?? current.content,
+		details: result.details ?? current.details,
+		isError: result.isError ?? current.isError,
+	};
+
+	modified = true;
+}
+
+return modified
+	? { content: current.content, details: current.details, isError: current.isError }
+	: undefined;
+```
+
+### Session-before events
+
+Sequential, early exit on cancel.
+
+```ts
+let last;
+
+for (const handler of handlers(event.type)) {
+	const result = await handler(event, ctx, signal);
+	if (!result) continue;
+	last = result;
+	if (result.cancel) return result;
+}
+
+return last;
+```
 
 ## Harness usage
 
-The harness only emits events and uses typed results.
+Harness only does this:
 
 ```ts
-await this.hooks.emit({ type: "message_start", message }, signal);
+await this.hooks.emit(event, signal);
 ```
+
+or:
 
 ```ts
 const result = await this.hooks.emit({ type: "context", messages }, signal);
-messages = result?.messages ?? messages;
+return result?.messages ?? messages;
 ```
 
+Harness does not store handlers, chain listeners, or know extension policy.
+
+## Context
+
+Context is a normal object, not rebuilt per emit.
+
 ```ts
-const result = await this.hooks.emit({ type: "tool_call", toolName, input }, signal);
-if (result?.block) return blockedToolResult(result.reason);
+const hooks = new CodingAgentHooks({
+	harness: harnessFacade,
+	session: sessionFacade,
+	ui: noUiFacade,
+});
 ```
 
-`AgentHarness` does not store handlers and does not implement hook chaining semantics.
-
-## Context model
-
-Context is a plain object owned by the hooks implementation.
+Later:
 
 ```ts
-hooks.setContext(nextContext);
+hooks.setContext({
+	...hooks.context,
+	ui: tuiFacade,
+});
 ```
 
-Per-run `AbortSignal` is passed separately to `emit()` and handlers.
-
-Dynamic app state should be exposed through small facades instead of late-bound getter mazes.
-
-Example app context:
+For dynamic state, prefer stable facades/methods over getter maze:
 
 ```ts
-interface CodingAgentContext {
+interface CodingAgentHookContext {
 	harness: HarnessFacade;
 	session: SessionFacade;
 	ui: UiFacade;
@@ -395,71 +319,127 @@ interface CodingAgentContext {
 }
 ```
 
-The hook context should not expose `waitForIdle()` to hook handlers. A future facade can expose `runWhenIdle(() => Promise<void>)` for safe deferred work.
+Per-run `signal` is passed as the third handler arg.
 
-## Cleanup semantics
+## Extension loading later
 
-Each registration owns at most one cleanup.
-
-- Manual unregister removes the registration and runs its cleanup once.
-- `clear()` removes all remaining registrations and runs their cleanups once.
-- `dispose()` calls `clear()`.
-- Cleanup order is reverse registration order.
-- Cleanup errors are collected; cleanup continues; `clear()` throws an aggregate error if any cleanup failed.
-
-## Error policy
-
-The base hooks implementation can throw handler errors by default.
-
-App-specific hooks that load untrusted/user extensions should use a continue-and-report policy. Reducers receive registration source metadata so they can report errors with provenance:
+Extension loading can live next to harness and construct hooks:
 
 ```ts
-for (const registration of registrations) {
-	try {
-		const result = await registration.handler(event, context, signal);
-		// apply result
-	} catch (error) {
-		reportHookError({
-			event: event.type,
-			source: registration.source,
-			error,
-		});
-	}
-}
+const hooks = await loadExtensions({
+	paths,
+	context,
+	hooks: new CodingAgentHooks(context),
+});
+const harness = new AgentHarness({ ..., hooks });
 ```
 
-## Extension loading sketch
-
-An app-level extension host owns extension loading and non-hook registries. The harness only receives hooks.
+The loader registers into hooks:
 
 ```ts
-class ExtensionHost {
-	constructor(private readonly hooks: AgentHarnessHooks<CodingAgentEvent, CodingAgentContext, AppSource>) {}
-
-	async load(paths: string[]): Promise<void> {
-		for (const path of paths) {
-			const extension = await loadExtension(path);
-			const source = createExtensionSource(path);
-
-			const api = {
-				on: (type, handler, cleanup) => {
-					this.hooks.on(type, handler, { source, cleanup });
-				},
-				registerTool: (tool) => {
-					this.tools.set(tool.name, { ...tool, source });
-				},
-			};
-
-			await extension(api);
-		}
-	}
-
-	async clear(): Promise<void> {
-		this.tools.clear();
-		this.commands.clear();
-		await this.hooks.clear();
-	}
-}
+hooks.on("context", handler);
+hooks.on("tool_call", handler);
+hooks.addCleanup(cleanup);
 ```
 
-Non-hook registries, such as tools, commands, flags, shortcuts, message renderers, providers, and OAuth providers, remain app-level concerns.
+For reload:
+
+```ts
+await hooks.clear();
+const nextHooks = await loadExtensions(...);
+harness.setHooks(nextHooks); // idle-only if supported
+```
+
+## Poking holes
+
+### 1. Error policy must be explicit
+
+Existing coding-agent catches extension errors, reports them, and continues. New hooks need the same policy, likely:
+
+```ts
+errorMode: "continue" | "throw"
+onError(error)
+```
+
+For coding-agent, default should be `"continue"`.
+
+### 2. Source metadata matters
+
+Existing runner knows which extension produced an error/resource/tool. Plain `on()` loses that unless we add registration metadata or scopes.
+
+Probably needed:
+
+```ts
+const scope = hooks.createScope({ sourceInfo });
+scope.on("context", handler);
+scope.addCleanup(...);
+```
+
+Or `on(type, handler, { sourceInfo })`.
+
+### 3. Some extension capabilities are registries, not hooks
+
+These are not covered by `emit()` and should stay as registries on `CodingAgentHooks` or an extension host:
+
+- tools
+- commands
+- shortcuts
+- flags
+- message renderers
+- provider registrations
+- OAuth providers
+- custom model providers
+
+That is fine. They do not belong in `AgentHarness`.
+
+### 4. Existing coding-agent events can be represented
+
+No blocker for:
+
+- `context`
+- `before_provider_request`
+- `after_provider_response`
+- `before_agent_start`
+- `message_end`
+- `tool_call`
+- `tool_result`
+- `input`
+- `user_bash`
+- `resources_discover`
+- `session_before_*`
+- `session_*`
+- model/thinking selection events
+- agent/turn/message/tool lifecycle events
+
+They become additional event types handled by `CodingAgentHooks`.
+
+### 5. Need to preserve exact old semantics
+
+When porting coding-agent, special cases must be copied:
+
+- `input`: transform chain, `handled` short-circuits.
+- `user_bash`: first meaningful result wins.
+- `message_end`: replacement must keep same role.
+- `before_agent_start`: `ctx.getSystemPrompt()` must reflect current chained prompt.
+- `resources_discover`: aggregate paths and keep extension source.
+- `tool_call`: argument mutation remains visible to later handlers.
+- `tool_result`: later handlers see prior patches.
+
+The design allows all of that, but the default/coding hooks implementation must encode it.
+
+### 6. `emit()` switch can miss custom mutation events
+
+If a subclass adds a result-producing event but forgets to override `emit()`, it will behave observationally. Tests should catch this. Could add a protected strategy registry later if this becomes error-prone, but not initially.
+
+### 7. Observer semantics are intentionally limited
+
+Observers see the original emitted event once. They do not see every intermediate mutation. If something needs final transformed state, emit a separate final event or use an event-specific handler.
+
+## Verdict
+
+This design can implement a new coding-agent. It is simpler than the current runner, keeps harness clean, and preserves the important extension capabilities as long as `CodingAgentHooks` adds source-aware scopes, registries, cleanup, and the exact old event semantics.
+
+--- Comments ---
+
+Thread hn2xk0tzhj on "addCleanup(cleanup"
+  [tmluyaub9v] Owner (2026-05-14T12:55:45.500Z): cleanup should be passed along optionally to on/observe
