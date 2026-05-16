@@ -15,6 +15,7 @@
 - Fixed OpenAI Responses requests for models that support disabling reasoning to send `reasoning.effort: "none"` when thinking is off.
 - Fixed Inception Mercury 2 tool calling on OpenRouter by marking `off` as unsupported in `thinkingLevelMap`, so the openai-completions provider omits the reasoning param instead of defaulting to `{reasoning:{effort:"none"}}` (which puts Mercury 2 in instant mode, disabling tool calls).
 - Fixed OpenAI Codex SSE retries to honor `retry-after-ms` and `retry-after` headers before falling back to exponential backoff.
+- Fixed context overflow detection for LiteLLM-wrapped OpenAI-compatible errors using `exceeds the model's maximum context length of ... tokens` wording ([#4563](https://github.com/earendil-works/pi/issues/4563)).
 
 ## [0.74.0] - 2026-05-07
 
