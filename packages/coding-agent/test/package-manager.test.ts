@@ -798,6 +798,105 @@ Content`,
 			expect(packageManager.getInstalledPath("npm:@scope/pkg", "user")).toBeUndefined();
 			expect(runCommandSyncSpy).toHaveBeenNthCalledWith(2, "mise", ["exec", "node@22", "--", "npm", "root", "-g"]);
 		});
+
+		it("should resolve pnpm global package paths from pnpm list output", async () => {
+			settingsManager = SettingsManager.inMemory({
+				npmCommand: ["pnpm"],
+				packages: ["npm:pnpm-pkg"],
+			});
+			packageManager = new DefaultPackageManager({
+				cwd: tempDir,
+				agentDir,
+				settingsManager,
+			});
+
+			const pnpmRoot = join(tempDir, "pnpm", "global", "v11");
+			const packagePath = join(pnpmRoot, "20-hash", "node_modules", "pnpm-pkg");
+			let installed = false;
+
+			vi.spyOn(packageManager as any, "runCommandSync").mockImplementation((...callArgs: unknown[]) => {
+				const [command, args] = callArgs as [string, string[]];
+				if (command !== "pnpm") {
+					throw new Error(`unexpected command ${command}`);
+				}
+				if (args.join(" ") === "list -g --depth 0 --json") {
+					return JSON.stringify([
+						{
+							path: pnpmRoot,
+							dependencies: installed ? { "pnpm-pkg": { version: "1.0.0", path: packagePath } } : {},
+						},
+					]);
+				}
+				if (args.join(" ") === "root -g") {
+					return pnpmRoot;
+				}
+				throw new Error(`unexpected args ${args.join(" ")}`);
+			});
+			const runCommandSpy = vi
+				.spyOn(packageManager as any, "runCommand")
+				.mockImplementation(async (...callArgs: unknown[]) => {
+					const [command, args] = callArgs as [string, string[]];
+					expect(command).toBe("pnpm");
+					expect(args).toEqual(["install", "-g", "pnpm-pkg"]);
+					mkdirSync(join(packagePath, "extensions"), { recursive: true });
+					writeFileSync(join(packagePath, "package.json"), JSON.stringify({ name: "pnpm-pkg", version: "1.0.0" }));
+					writeFileSync(join(packagePath, "extensions", "index.ts"), "export default function() {};");
+					installed = true;
+				});
+
+			const first = await packageManager.resolve();
+			const second = await packageManager.resolve();
+
+			expect(first.extensions.some((r) => r.path === join(packagePath, "extensions", "index.ts") && r.enabled)).toBe(
+				true,
+			);
+			expect(
+				second.extensions.some((r) => r.path === join(packagePath, "extensions", "index.ts") && r.enabled),
+			).toBe(true);
+			expect(runCommandSpy).toHaveBeenCalledTimes(1);
+			expect(packageManager.getInstalledPath("npm:pnpm-pkg", "user")).toBe(packagePath);
+		});
+
+		it("should resolve wrapped pnpm global package paths from pnpm list output", () => {
+			settingsManager = SettingsManager.inMemory({
+				npmCommand: ["mise", "exec", "node@20", "--", "pnpm"],
+			});
+			packageManager = new DefaultPackageManager({
+				cwd: tempDir,
+				agentDir,
+				settingsManager,
+			});
+
+			const pnpmRoot = join(tempDir, "pnpm", "global", "v11");
+			const packagePath = join(pnpmRoot, "20-hash", "node_modules", "pnpm-pkg");
+			mkdirSync(packagePath, { recursive: true });
+
+			vi.spyOn(packageManager as any, "runCommandSync").mockImplementation((...callArgs: unknown[]) => {
+				const [command, args] = callArgs as [string, string[]];
+				expect(command).toBe("mise");
+				if (args.join(" ") === "exec node@20 -- pnpm list -g --depth 0 --json") {
+					return JSON.stringify([{ path: pnpmRoot, dependencies: { "pnpm-pkg": { path: packagePath } } }]);
+				}
+				throw new Error(`unexpected args ${args.join(" ")}`);
+			});
+
+			expect(packageManager.getInstalledPath("npm:pnpm-pkg", "user")).toBe(packagePath);
+		});
+
+		it("should fail when pnpm global package list is malformed", () => {
+			settingsManager = SettingsManager.inMemory({
+				npmCommand: ["pnpm"],
+			});
+			packageManager = new DefaultPackageManager({
+				cwd: tempDir,
+				agentDir,
+				settingsManager,
+			});
+
+			vi.spyOn(packageManager as any, "runCommandSync").mockReturnValue("not json");
+
+			expect(() => packageManager.getInstalledPath("npm:pnpm-pkg", "user")).toThrow();
+		});
 	});
 
 	describe("source parsing", () => {
