@@ -203,6 +203,9 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
 	) {
 		mergeThinkingLevelMap(model, { off: null });
 	}
+	if (model.provider === "github-copilot" && model.id.startsWith("gpt-5")) {
+		mergeThinkingLevelMap(model, { minimal: "low" });
+	}
 	if (
 		model.api === "openai-responses" &&
 		model.provider === "openai" &&
