@@ -25,6 +25,7 @@ jobs:
           cache: npm
       - run: node --version && npm --version
       - run: npm ci
+      - run: npm rebuild
       - run: npm run yaml:check
       - run: npm run lint
       - run: npm run secret:scan
@@ -52,4 +53,5 @@ jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
       - run: npm ci
+      - run: npm rebuild
       - run: npm run release:check
