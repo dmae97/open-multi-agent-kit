@@ -1,9 +1,8 @@
-import { spawnSync } from "child_process";
 import { accessSync, constants, existsSync, readFileSync, realpathSync } from "fs";
 import { homedir } from "os";
 import { basename, dirname, join, resolve, sep, win32 } from "path";
 import { fileURLToPath } from "url";
-import { resolveSpawnCommand } from "./utils/child-process.js";
+import { spawnProcessSync } from "./utils/child-process.js";
 
 // =============================================================================
 // Package Detection
@@ -151,16 +150,7 @@ function readCommandOutput(
 	args: string[],
 	options: { requireSuccess?: boolean } = {},
 ): string | undefined {
-	let resolved: ReturnType<typeof resolveSpawnCommand>;
-	try {
-		resolved = resolveSpawnCommand(command, args);
-	} catch (error) {
-		if (options.requireSuccess) {
-			throw error;
-		}
-		return undefined;
-	}
-	const result = spawnSync(resolved.command, resolved.args, {
+	const result = spawnProcessSync(command, args, {
 		encoding: "utf-8",
 		stdio: ["ignore", "pipe", "pipe"],
 	});

@@ -1,5 +1,4 @@
 import chalk from "chalk";
-import { spawn } from "child_process";
 import { selectConfig } from "./cli/config-selector.js";
 import {
 	APP_NAME,
@@ -14,7 +13,7 @@ import {
 } from "./config.js";
 import { DefaultPackageManager } from "./core/package-manager.js";
 import { SettingsManager } from "./core/settings-manager.js";
-import { resolveSpawnCommand } from "./utils/child-process.js";
+import { spawnProcess } from "./utils/child-process.js";
 import { getLatestPiRelease, isNewerPackageVersion } from "./utils/version-check.js";
 import {
 	cleanupWindowsSelfUpdateQuarantine,
@@ -322,8 +321,7 @@ async function runSelfUpdate(command: SelfUpdateCommand): Promise<void> {
 	console.log(chalk.dim(`Updating ${APP_NAME} with ${command.display}...`));
 	for (const step of command.steps ?? [command]) {
 		await new Promise<void>((resolve, reject) => {
-			const resolved = resolveSpawnCommand(step.command, step.args);
-			const child = spawn(resolved.command, resolved.args, {
+			const child = spawnProcess(step.command, step.args, {
 				stdio: "inherit",
 			});
 			child.on("error", (error) => {

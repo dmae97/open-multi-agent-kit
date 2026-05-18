@@ -43,6 +43,7 @@
 		"@earendil-works/pi-tui": "^0.75.1",
 		"@silvia-odwyer/photon-node": "^0.3.4",
 		"chalk": "^5.5.0",
+		"cross-spawn": "^7.0.6",
 		"diff": "^8.0.2",
 		"glob": "^13.0.1",
 		"highlight.js": "^10.7.3",
@@ -65,6 +66,7 @@
 		"@mariozechner/clipboard": "^0.3.6"
 	},
 	"devDependencies": {
+		"@types/cross-spawn": "^6.0.6",
 		"@types/diff": "^7.0.2",
 		"@types/hosted-git-info": "^3.0.5",
 		"@types/ms": "^2.1.0",

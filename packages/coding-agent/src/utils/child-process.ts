@@ -1,84 +1,38 @@
-import type { ChildProcess } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, extname, join, resolve, sep } from "node:path";
+import {
+	type ChildProcess,
+	type ChildProcessByStdio,
+	spawn as nodeSpawn,
+	spawnSync as nodeSpawnSync,
+	type SpawnOptions,
+	type SpawnOptionsWithStdioTuple,
+	type SpawnSyncOptionsWithStringEncoding,
+	type SpawnSyncReturns,
+	type StdioNull,
+	type StdioPipe,
+} from "node:child_process";
+import type { Readable } from "node:stream";
+import crossSpawn from "cross-spawn";
 
 const EXIT_STDIO_GRACE_MS = 100;
-const WINDOWS_COMMAND_EXTENSIONS = [".exe", ".cmd", ".bat", ""];
-const WINDOWS_COMMAND_SHIM_RE = /\.(?:cmd|bat)$/i;
-const NODE_SHIM_SCRIPT_RE = /(?:%~dp0|%dp0%|%basedir%)[^"'\r\n<>|&]*?\.(?:cjs|mjs|js)/gi;
 
-export interface ResolvedSpawnCommand {
-	command: string;
-	args: string[];
-}
-
-function findWindowsCommand(command: string, env: NodeJS.ProcessEnv): string | undefined {
-	const candidates = extname(command)
-		? [command]
-		: WINDOWS_COMMAND_EXTENSIONS.map((extension) => `${command}${extension}`);
-	const hasPath = command.includes("/") || command.includes("\\") || /^[a-zA-Z]:/.test(command);
-	if (hasPath) {
-		const match = candidates.find((candidate) => existsSync(candidate));
-		return match ? resolve(match) : undefined;
-	}
-
-	const pathValue = env.PATH ?? env.Path ?? env.path;
-	if (!pathValue) return undefined;
-	for (const dir of pathValue.split(";")) {
-		for (const candidate of candidates) {
-			const path = join(dir, candidate);
-			if (existsSync(path)) return resolve(path);
-		}
-	}
-	return undefined;
-}
-
-function expandShimPath(path: string, shimPath: string): string {
-	const shimDir = dirname(shimPath);
-	return resolve(
-		path
-			.replace(/%~dp0[\\/]?/gi, `${shimDir}${sep}`)
-			.replace(/%dp0%[\\/]?/gi, `${shimDir}${sep}`)
-			.replace(/%basedir%[\\/]?/gi, `${shimDir}${sep}`)
-			.replace(/\\/g, sep),
-	);
-}
-
-function findNodeShimScript(shimPath: string): string | undefined {
-	const matches = [...readFileSync(shimPath, "utf-8").matchAll(NODE_SHIM_SCRIPT_RE)];
-	for (const match of matches.reverse()) {
-		const scriptPath = expandShimPath(match[0], shimPath);
-		if (existsSync(scriptPath)) return scriptPath;
-	}
-	return undefined;
-}
-
-export function resolveSpawnCommand(
+export function spawnProcess(
 	command: string,
 	args: string[],
-	options: { env?: NodeJS.ProcessEnv } = {},
-): ResolvedSpawnCommand {
-	if (process.platform !== "win32") {
-		return { command, args };
-	}
+	options: SpawnOptionsWithStdioTuple<StdioNull, StdioPipe, StdioPipe>,
+): ChildProcessByStdio<null, Readable, Readable>;
+export function spawnProcess(command: string, args: string[], options: SpawnOptions): ChildProcess;
+export function spawnProcess(command: string, args: string[], options: SpawnOptions): ChildProcess {
+	return process.platform === "win32" ? crossSpawn(command, args, options) : nodeSpawn(command, args, options);
+}
 
-	const env = options.env ?? process.env;
-	const resolvedCommand = findWindowsCommand(command, env);
-	if (!resolvedCommand) {
-		return { command, args };
-	}
-
-	if (!WINDOWS_COMMAND_SHIM_RE.test(resolvedCommand)) {
-		return { command: resolvedCommand, args };
-	}
-
-	const script = findNodeShimScript(resolvedCommand);
-	if (!script) {
-		throw new Error(`Refusing to run Windows command shim without a shell: ${resolvedCommand}`);
-	}
-	const localNode = join(dirname(resolvedCommand), "node.exe");
-	const nodeCommand = existsSync(localNode) ? localNode : (findWindowsCommand("node.exe", env) ?? "node");
-	return { command: nodeCommand, args: [script, ...args] };
+export function spawnProcessSync(
+	command: string,
+	args: string[],
+	options: SpawnSyncOptionsWithStringEncoding,
+): SpawnSyncReturns<string> {
+	return process.platform === "win32"
+		? crossSpawn.sync(command, args, options)
+		: nodeSpawnSync(command, args, options);
 }
 
 /**

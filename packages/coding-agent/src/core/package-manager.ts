@@ -1,4 +1,4 @@
-import { type ChildProcess, type ChildProcessByStdio, spawn, spawnSync } from "node:child_process";
+import type { ChildProcess, ChildProcessByStdio } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -28,7 +28,7 @@ import { globSync } from "glob";
 import ignore from "ignore";
 import { minimatch } from "minimatch";
 import { CONFIG_DIR_NAME } from "../config.js";
-import { resolveSpawnCommand } from "../utils/child-process.js";
+import { spawnProcess, spawnProcessSync } from "../utils/child-process.js";
 import { type GitSource, parseGitUrl } from "../utils/git.js";
 import { canonicalizePath, isLocalPath } from "../utils/paths.js";
 import { isStdoutTakenOver } from "./output-guard.js";
@@ -2409,8 +2409,7 @@ export class DefaultPackageManager implements PackageManager {
 
 	private spawnCommand(command: string, args: string[], options?: { cwd?: string }): ChildProcess {
 		const env = getEnv();
-		const resolved = resolveSpawnCommand(command, args, { env });
-		return spawn(resolved.command, resolved.args, {
+		return spawnProcess(command, args, {
 			cwd: options?.cwd,
 			stdio: isStdoutTakenOver() ? ["ignore", 2, 2] : "inherit",
 			env,
@@ -2424,8 +2423,7 @@ export class DefaultPackageManager implements PackageManager {
 	): ChildProcessByStdio<null, Readable, Readable> {
 		const baseEnv = getEnv();
 		const env = options?.env ? { ...baseEnv, ...options.env } : baseEnv;
-		const resolved = resolveSpawnCommand(command, args, { env });
-		return spawn(resolved.command, resolved.args, {
+		return spawnProcess(command, args, {
 			cwd: options?.cwd,
 			stdio: ["ignore", "pipe", "pipe"],
 			env,
@@ -2492,8 +2490,7 @@ export class DefaultPackageManager implements PackageManager {
 
 	private runCommandSync(command: string, args: string[]): string {
 		const env = getEnv();
-		const resolved = resolveSpawnCommand(command, args, { env });
-		const result = spawnSync(resolved.command, resolved.args, {
+		const result = spawnProcessSync(command, args, {
 			stdio: ["ignore", "pipe", "pipe"],
 			encoding: "utf-8",
 			env,
