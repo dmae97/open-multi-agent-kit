@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed Xiaomi MiMo generated model metadata to replay assistant tool-call messages with `reasoning_content` for thinking-mode multi-turn requests ([#4678](https://github.com/earendil-works/pi/issues/4678)).
+
 ## [0.75.1] - 2026-05-18
 
 ### Fixed

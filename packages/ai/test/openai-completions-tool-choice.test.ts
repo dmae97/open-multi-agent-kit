@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getModel } from "../src/models.js";
 import { convertMessages } from "../src/providers/openai-completions.js";
 import { streamSimple } from "../src/stream.js";
-import type { Model, Tool } from "../src/types.js";
+import type { AssistantMessage, Model, Tool, ToolResultMessage } from "../src/types.js";
 
 const mockState = vi.hoisted(() => ({
 	lastParams: undefined as unknown,
@@ -815,6 +815,76 @@ describe("openai-completions tool_choice", () => {
 		expect(writeCall.arguments).toEqual({ path: "out.txt", content: "ok" });
 		expect(writeCall).not.toHaveProperty("streamIndex");
 		expect(writeCall).not.toHaveProperty("partialArgs");
+	});
+
+	it("stores Xiaomi MiMo reasoning replay compat in built-in metadata", () => {
+		const providers = ["xiaomi", "xiaomi-token-plan-cn", "xiaomi-token-plan-ams", "xiaomi-token-plan-sgp"] as const;
+
+		for (const provider of providers) {
+			const model = getModel(provider, "mimo-v2.5-pro")!;
+			expect(model.compat?.requiresReasoningContentOnAssistantMessages).toBe(true);
+			expect(model.compat?.thinkingFormat).toBe("deepseek");
+			expect(model.compat?.maxTokensField).toBeUndefined();
+			expect(model.compat?.supportsDeveloperRole).toBeUndefined();
+		}
+	});
+
+	it("replays Xiaomi MiMo assistant tool calls with empty reasoning_content when thinking is missing", async () => {
+		const model = getModel("xiaomi", "mimo-v2.5-pro")!;
+		const assistantMessage: AssistantMessage = {
+			role: "assistant",
+			api: "openai-completions",
+			provider: "xiaomi",
+			model: "mimo-v2.5-pro",
+			content: [{ type: "toolCall", id: "call_1", name: "read", arguments: { path: "README.md" } }],
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "toolUse",
+			timestamp: Date.now(),
+		};
+		const toolResult: ToolResultMessage = {
+			role: "toolResult",
+			toolCallId: "call_1",
+			toolName: "read",
+			content: [{ type: "text", text: "contents" }],
+			isError: false,
+			timestamp: Date.now(),
+		};
+		let payload: unknown;
+
+		await streamSimple(
+			model,
+			{
+				messages: [
+					{ role: "user", content: "Read README.md", timestamp: Date.now() },
+					assistantMessage,
+					toolResult,
+				],
+			},
+			{
+				apiKey: "test",
+				reasoning: "high",
+				onPayload: (params: unknown) => {
+					payload = params;
+				},
+			},
+		).result();
+
+		const params = (payload ?? mockState.lastParams) as {
+			messages?: Array<Record<string, unknown>>;
+			thinking?: { type?: string };
+			reasoning_effort?: string;
+		};
+		const replayedAssistant = params.messages?.find((message) => message.role === "assistant");
+		expect(replayedAssistant).toMatchObject({ role: "assistant", reasoning_content: "" });
+		expect(params.thinking).toEqual({ type: "enabled" });
+		expect(params.reasoning_effort).toBe("high");
 	});
 
 	it("normalizes OpenCode Go reasoning deltas to reasoning_content for replay", async () => {

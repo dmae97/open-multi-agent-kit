@@ -1073,6 +1073,10 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 		// Built-in `xiaomi` targets the API billing endpoint (single stable URL,
 		// keys from platform.xiaomimimo.com). The three `xiaomi-token-plan-*`
 		// providers cover prepaid Token Plan endpoints in cn / ams / sgp.
+		const xiaomiCompat: OpenAICompletionsCompat = {
+			requiresReasoningContentOnAssistantMessages: true,
+			thinkingFormat: "deepseek",
+		};
 		const xiaomiVariants = [
 			{ provider: "xiaomi", baseUrl: "https://api.xiaomimimo.com/v1" },
 			{ provider: "xiaomi-token-plan-cn", baseUrl: "https://token-plan-cn.xiaomimimo.com/v1" },
@@ -1092,6 +1096,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 						api: "openai-completions",
 						provider,
 						baseUrl,
+						compat: xiaomiCompat,
 						reasoning: m.reasoning === true,
 						input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
 						cost: {
