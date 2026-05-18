@@ -15,7 +15,11 @@ function findBashOnPath(): string | null {
 	if (process.platform === "win32") {
 		// Windows: Use 'where' and verify file exists (where can return non-existent paths)
 		try {
-			const result = spawnSync("where", ["bash.exe"], { encoding: "utf-8", timeout: 5000 });
+			const result = spawnSync("where", ["bash.exe"], {
+				encoding: "utf-8",
+				timeout: 5000,
+				windowsHide: true,
+			});
 			if (result.status === 0 && result.stdout) {
 				const firstMatch = result.stdout.trim().split(/\r?\n/)[0];
 				if (firstMatch && existsSync(firstMatch)) {
@@ -190,6 +194,7 @@ export function killProcessTree(pid: number): void {
 			spawn("taskkill", ["/F", "/T", "/PID", String(pid)], {
 				stdio: "ignore",
 				detached: true,
+				windowsHide: true,
 			});
 		} catch {
 			// Ignore errors if taskkill fails

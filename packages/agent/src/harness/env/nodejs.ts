@@ -108,7 +108,10 @@ async function runCommand(
 		let stdout = "";
 		let child: ReturnType<typeof spawn>;
 		try {
-			child = spawn(command, args, { stdio: ["ignore", "pipe", "ignore"] });
+			child = spawn(command, args, {
+				stdio: ["ignore", "pipe", "ignore"],
+				windowsHide: true,
+			});
 		} catch {
 			resolve({ stdout: "", status: null });
 			return;
@@ -192,6 +195,7 @@ function killProcessTree(pid: number): void {
 			spawn("taskkill", ["/F", "/T", "/PID", String(pid)], {
 				stdio: "ignore",
 				detached: true,
+				windowsHide: true,
 			});
 		} catch {
 			// Ignore errors.
@@ -275,6 +279,7 @@ export class NodeExecutionEnv implements ExecutionEnv {
 					detached: process.platform !== "win32",
 					env: getShellEnv(this.shellEnv, options?.env),
 					stdio: ["ignore", "pipe", "pipe"],
+					windowsHide: true,
 				});
 			} catch (error) {
 				const cause = toError(error);

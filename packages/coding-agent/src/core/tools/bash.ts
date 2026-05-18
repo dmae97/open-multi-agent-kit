@@ -76,6 +76,7 @@ export function createLocalBashOperations(options?: { shellPath?: string }): Bas
 					detached: process.platform !== "win32",
 					env: env ?? getShellEnv(),
 					stdio: ["ignore", "pipe", "pipe"],
+					windowsHide: true,
 				});
 				if (child.pid) trackDetachedChildPid(child.pid);
 				let timedOut = false;
