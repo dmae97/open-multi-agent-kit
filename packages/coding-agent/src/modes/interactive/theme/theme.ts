@@ -1,6 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { EditorTheme, MarkdownTheme, SelectListTheme } from "@earendil-works/pi-tui";
+import {
+	type EditorTheme,
+	getCapabilities,
+	type MarkdownTheme,
+	type SelectListTheme,
+	type SettingsListTheme,
+} from "@earendil-works/pi-tui";
 import chalk from "chalk";
 import { type Static, Type } from "typebox";
 import { Compile } from "typebox/compile";
@@ -157,33 +163,6 @@ type ColorMode = "truecolor" | "256color";
 // ============================================================================
 // Color Utilities
 // ============================================================================
-
-function detectColorMode(): ColorMode {
-	const colorterm = process.env.COLORTERM;
-	if (colorterm === "truecolor" || colorterm === "24bit") {
-		return "truecolor";
-	}
-	// Windows Terminal supports truecolor
-	if (process.env.WT_SESSION) {
-		return "truecolor";
-	}
-	const term = process.env.TERM || "";
-	// Fall back to 256color for truly limited terminals
-	if (term === "dumb" || term === "" || term === "linux") {
-		return "256color";
-	}
-	// Terminal.app also doesn't support truecolor
-	if (process.env.TERM_PROGRAM === "Apple_Terminal") {
-		return "256color";
-	}
-	// GNU screen doesn't support truecolor unless explicitly opted in via COLORTERM=truecolor.
-	// TERM under screen is typically "screen", "screen-256color", or "screen.xterm-256color".
-	if (term === "screen" || term.startsWith("screen-") || term.startsWith("screen.")) {
-		return "256color";
-	}
-	// Assume truecolor for everything else - virtually all modern terminals support it
-	return "truecolor";
-}
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
 	const cleaned = hex.replace("#", "");
@@ -585,7 +564,7 @@ function loadThemeJson(name: string): ThemeJson {
 }
 
 function createTheme(themeJson: ThemeJson, mode?: ColorMode, sourcePath?: string): Theme {
-	const colorMode = mode ?? detectColorMode();
+	const colorMode = mode ?? (getCapabilities().trueColor ? "truecolor" : "256color");
 	const resolvedColors = resolveThemeColors(themeJson.colors, themeJson.vars);
 	const fgColors: Record<ThemeColor, string | number> = {} as Record<ThemeColor, string | number>;
 	const bgColors: Record<ThemeBg, string | number> = {} as Record<ThemeBg, string | number>;
@@ -1227,7 +1206,7 @@ export function getEditorTheme(): EditorTheme {
 	};
 }
 
-export function getSettingsListTheme(): import("@earendil-works/pi-tui").SettingsListTheme {
+export function getSettingsListTheme(): SettingsListTheme {
 	return {
 		label: (text: string, selected: boolean) => (selected ? theme.fg("accent", text) : text),
 		value: (text: string, selected: boolean) => (selected ? theme.fg("accent", text) : theme.fg("muted", text)),

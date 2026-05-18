@@ -1,9 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { resetCapabilitiesCache, setCapabilities } from "@earendil-works/pi-tui";
+import { afterEach, describe, expect, it } from "vitest";
 import {
 	detectTerminalBackground,
+	getThemeByName,
 	getThemeForRgbColor,
 	parseOsc11BackgroundColor,
 } from "../src/modes/interactive/theme/theme.js";
+
+afterEach(() => {
+	resetCapabilitiesCache();
+});
 
 describe("detectTerminalBackground", () => {
 	it("uses the COLORFGBG background color index", () => {
@@ -29,6 +35,22 @@ describe("detectTerminalBackground", () => {
 			source: "fallback",
 			confidence: "low",
 		});
+	});
+});
+
+describe("theme color mode", () => {
+	it("uses terminal capabilities", () => {
+		setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+		const ansi256Theme = getThemeByName("dark");
+		if (!ansi256Theme) throw new Error("dark theme not found");
+		expect(ansi256Theme.getColorMode()).toBe("256color");
+		expect(ansi256Theme.getFgAnsi("accent")).toMatch(/^\x1b\[38;5;\d+m$/);
+
+		setCapabilities({ images: null, trueColor: true, hyperlinks: false });
+		const truecolorTheme = getThemeByName("dark");
+		if (!truecolorTheme) throw new Error("dark theme not found");
+		expect(truecolorTheme.getColorMode()).toBe("truecolor");
+		expect(truecolorTheme.getFgAnsi("accent")).toMatch(/^\x1b\[38;2;\d+;\d+;\d+m$/);
 	});
 });
 
