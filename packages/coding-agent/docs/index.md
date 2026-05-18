@@ -16,6 +16,14 @@ Or alternatively with npm:
 npm install -g @earendil-works/pi-coding-agent
 ```
 
+To uninstall pi itself, use npm for curl and npm installs:
+
+```bash
+npm uninstall -g @earendil-works/pi-coding-agent
+```
+
+For pnpm, Yarn, or Bun installs, use the matching global remove command: `pnpm remove -g @earendil-works/pi-coding-agent`, `yarn global remove @earendil-works/pi-coding-agent`, or `bun uninstall -g @earendil-works/pi-coding-agent`.
+
 Then run it in a project directory:
 
 ```bash

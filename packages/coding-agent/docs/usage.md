@@ -137,6 +137,8 @@ pi list                      # List installed packages
 pi config                    # Enable/disable package resources
 ```
 
+These commands manage pi packages, not the pi CLI installation. To uninstall pi itself, see [Quickstart](quickstart.md#uninstall).
+
 See [Pi Packages](packages.md) for package sources and security notes.
 
 ### Modes
