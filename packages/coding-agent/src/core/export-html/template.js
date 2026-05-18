@@ -910,7 +910,8 @@
             '</div>';
         };
 
-        let html = `<div class="tool-execution ${statusClass}">`;
+        const toolDomId = `tool-call-${escapeHtml(call.id)}`;
+        let html = `<div class="tool-execution ${statusClass}" id="${toolDomId}">`;
         const args = call.arguments || {};
         const name = call.name;
 
@@ -1445,6 +1446,16 @@
       // Cache for rendered entry DOM nodes
       const entryCache = new Map();
 
+      function getScrollTargetElementId(entryId) {
+        const entry = byId.get(entryId);
+        if (entry?.type === 'message' && entry.message.role === 'toolResult' && entry.message.toolCallId) {
+          // getElementById() matches the parsed DOM id attribute, whose HTML entities
+          // were already resolved from the escaped id rendered by renderToolCall().
+          return `tool-call-${entry.message.toolCallId}`;
+        }
+        return `entry-${entryId}`;
+      }
+
       function renderEntryToNode(entry) {
         // Check cache first
         if (entryCache.has(entry.id)) {
@@ -1506,9 +1517,12 @@
           if (scrollMode === 'bottom') {
             content.scrollTop = content.scrollHeight;
           } else if (scrollMode === 'target') {
-            // If scrollToEntryId is provided, scroll to that specific entry
+            // If scrollToEntryId is provided, scroll to that specific entry.
+            // Tool result entries are rendered inside their assistant tool-call block,
+            // so route them to the visible tool-call element instead.
             const scrollTargetId = scrollToEntryId || targetId;
-            const targetEl = document.getElementById(`entry-${scrollTargetId}`);
+            const targetEl = document.getElementById(getScrollTargetElementId(scrollTargetId)) ||
+              document.getElementById(`entry-${scrollTargetId}`);
             if (targetEl) {
               targetEl.scrollIntoView({ block: 'center' });
               // Briefly highlight the target message
