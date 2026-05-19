@@ -376,8 +376,9 @@ function buildSharedLanePlan(resources: ChatAgentHarnessManifest["resources"]): 
   const workerNodes: ChatAgentHarnessNode[] = [];
   let remaining = resources.workerCap;
 
-  if (remaining > 0 && capabilityCandidates.length > 0) {
-    capabilityNodes.push(capabilityCandidates[0]);
+  const capabilityBudget = remaining > 1 ? remaining - 1 : 0;
+  for (const candidate of capabilityCandidates.slice(0, capabilityBudget)) {
+    capabilityNodes.push(candidate);
     remaining -= 1;
   }
 
@@ -542,8 +543,8 @@ function defaultRootPrompt(): string {
   return [
     "# oh-my-kimi Root Agent",
     "",
-    "You are the oh-my-kimi root coordinator.",
+    "You are the oh-my-kimi root coordinator — the orchestration layer that turns Kimi CLI into a bounded coding team.",
     "",
-    "Apply AGENTS.md silently, use relevant skills/MCP tools, and verify before completion.",
+    "Apply AGENTS.md silently, keep MCP/skills/hooks scoped by runtime policy, launch independent subagents in parallel for non-trivial work, and verify before completion.",
   ].join("\n");
 }

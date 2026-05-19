@@ -516,9 +516,9 @@ oh-my-kimi includes default hooks to block destructive commands and secret leaka
 
 const ROOT_PROMPT_MD = `# oh-my-kimi Root Agent
 
-You are the oh-my-kimi root coordinator.
+You are the oh-my-kimi root coordinator — the orchestration layer that turns Kimi CLI into a bounded coding team.
 
-You must operate as a Kimi-native coding orchestrator.
+You must operate as a Kimi-native coding orchestrator with scoped MCP, skills, and hooks enabled for every generated root/role agent when the active runtime scope allows them.
 
 ## Loaded Project Instructions
 
@@ -533,7 +533,7 @@ You must operate as a Kimi-native coding orchestrator.
 - Apply AGENTS.md silently.
 - Do not repeat boilerplate.
 - Use SetTodoList for multi-step tasks.
-- Use Agent tool for non-trivial tasks.
+- Use Agent tool for non-trivial tasks. All 14 role agents (explorer, planner, architect, coder, reviewer, security, qa, tester, researcher, integrator, aggregator, interviewer, ontology, vision-debugger) are available with MCP, skills, and hooks capability flags.
 - Use skills when relevant.
 - Use MCP tools when configured and useful. All subagents inherit scoped MCP server inventory, skills, and hooks when enabled by runtime scope. Do not hesitate to invoke available capabilities.
 - Treat project-local ontology graph memory as mandatory when the omk-project MCP exposes memory tools.
@@ -568,6 +568,8 @@ For non-trivial tasks:
    - planner for architecture/refactor/risky work
    - coder for implementation
    - reviewer or qa for review and gate analysis
+   - security for secret/permission/trust-boundary review
+   - ontology for graph memory and project knowledge curation
 4. Read relevant skills.
 5. Use MCP if useful.
 6. Implement minimal changes.
@@ -1100,6 +1102,122 @@ else
 fi
 
 INPUT=$(cat)
+DESTRUCTIVE_DECISION=$(INPUT_JSON="$INPUT" "$PY" <<'PY'
+import json
+import os
+import posixpath
+import shlex
+
+def decision(reason):
+    print(json.dumps({"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":reason}}, separators=(",", ":")))
+
+def as_tokens(value):
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    if isinstance(value, str) and value.strip():
+        return shlex.split(value, comments=True, posix=True)
+    return []
+
+def expand_shell_wrappers(root_tokens):
+    result = []
+    queue = [root_tokens]
+    while queue and len(result) < 8:
+        current = queue.pop(0)
+        result.append(current)
+        for idx, token in enumerate(current):
+            if posixpath.basename(token) not in {"bash", "sh", "zsh", "dash"}:
+                continue
+            j = idx + 1
+            while j < len(current):
+                opt = current[j]
+                if opt == "--":
+                    j += 1
+                    break
+                if opt in {"-c", "-lc"} or (opt.startswith("-") and not opt.startswith("--") and "c" in opt):
+                    if j + 1 < len(current):
+                        queue.append(as_tokens(current[j + 1]))
+                    break
+                if opt.startswith("-"):
+                    j += 1
+                    continue
+                break
+    return result
+
+def flag_letters(token):
+    if token.startswith("--"):
+        return set()
+    if token.startswith("-"):
+        return set(token[1:])
+    return set()
+
+def has_rm_rf(tokens, index):
+    letters = set()
+    for token in tokens[index + 1:]:
+        letters.update(flag_letters(token))
+        if not token.startswith("-"):
+            break
+    return "r" in letters and "f" in letters
+
+def has_git_clean_danger(tokens, index):
+    rest = tokens[index + 1:]
+    if "clean" not in rest:
+        return False
+    clean_index = rest.index("clean") + index + 1
+    letters = set()
+    for token in tokens[clean_index + 1:]:
+        letters.update(flag_letters(token))
+    return {"f", "d", "x"}.issubset(letters)
+
+def has_pipe_to_shell(tokens):
+    shell_names = {"bash", "sh", "zsh", "dash"}
+    downloaders = {"curl", "wget"}
+    for idx, token in enumerate(tokens):
+        if token != "|":
+            continue
+        left = {posixpath.basename(item) for item in tokens[:idx]}
+        right = {posixpath.basename(item) for item in tokens[idx + 1:]}
+        if left & downloaders and right & shell_names:
+            return True
+    return False
+
+def is_destructive(tokens):
+    normalized = [str(token) for token in tokens]
+    for idx, token in enumerate(normalized):
+        exe = posixpath.basename(token)
+        if exe == "sudo":
+            return True
+        if exe == "rm" and has_rm_rf(normalized, idx):
+            return True
+        if exe == "git" and has_git_clean_danger(normalized, idx):
+            return True
+        if exe == "chmod" and "-R" in normalized[idx + 1:] and "777" in normalized[idx + 1:]:
+            return True
+        if exe == "docker" and normalized[idx + 1:idx + 3] == ["system", "prune"]:
+            return True
+        if exe == "kubectl" and "delete" in normalized[idx + 1:]:
+            return True
+        if exe == "aws" and normalized[idx + 1:idx + 4] == ["s3", "rm", "--recursive"]:
+            return True
+        if exe.startswith("mkfs") or any(arg.startswith("if=") for arg in normalized[idx + 1:] if exe == "dd"):
+            return True
+    return has_pipe_to_shell(normalized)
+
+try:
+    data = json.loads(os.environ.get("INPUT_JSON", "{}"))
+    tool_input = data.get("tool_input", {})
+    tokens = as_tokens(tool_input.get("command", "")) + as_tokens(tool_input.get("args", ""))
+    for expanded in expand_shell_wrappers(tokens):
+        if is_destructive(expanded):
+            decision("Potentially destructive command blocked by pre-shell-guard")
+            break
+except Exception as exc:
+    decision("Unable to parse destructive command safely: " + str(exc))
+PY
+)
+if [ -n "$DESTRUCTIVE_DECISION" ]; then
+  echo "$DESTRUCTIVE_DECISION"
+  exit 0
+fi
 COMMAND=$(echo "$INPUT" | $PY -c 'import sys,json; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("command",""))')
 ARGS=$(echo "$INPUT" | $PY -c 'import sys,json; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("args",""))')
 
@@ -1452,25 +1570,54 @@ else
 fi
 
 INPUT=$(cat)
-FILEPATH=$(echo "$INPUT" | $PY -c 'import sys,json; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("file_path",""))')
-CONTENT=$(echo "$INPUT" | $PY -c 'import sys,json; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("content",""))')
+OMK_HOOK_INPUT="$INPUT" "$PY" - <<'PY'
+import json
+import os
+import re
 
-# Block direct modification of sensitive files
-SENSITIVE_PATHS=(".env" ".pem" ".key" "id_rsa" "id_ed25519" "credentials" "service-account" ".p12" ".pfx" ".keystore")
-for sp in "\${SENSITIVE_PATHS[@]}"; do
-  if [[ "$FILEPATH" == *"$sp"* ]]; then
-    echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Direct modification of sensitive file blocked: '"$sp"'"}}'
-    exit 0
-  fi
-done
+def respond(decision, reason=None):
+    payload = {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": decision}}
+    if reason:
+        payload["hookSpecificOutput"]["permissionDecisionReason"] = reason
+    print(json.dumps(payload, separators=(",", ":")))
 
-# Keyword detection (JWT, cloud tokens, private keys, etc.)
-if echo "$CONTENT" | grep -qiE '(password|secret|api_key|auth|bearer|token|private_key|aws_access_key_id|aws_secret_access_key|akiai|asiai|ghp_|github_pat|sk-|glpat-|npm_|pypi_|docker_auth|private.?key|BEGIN .* PRIVATE KEY|ssh-rsa|ssh-ed25519)'; then
-  echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Potential secret leak detected"}}'
-  exit 0
-fi
+try:
+    data = json.loads(os.environ.get("OMK_HOOK_INPUT", "{}") or "{}")
+except Exception:
+    respond("deny", "Invalid hook input")
+    raise SystemExit(0)
 
-echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}'
+tool_input = data.get("tool_input", {})
+if not isinstance(tool_input, dict):
+    respond("allow")
+    raise SystemExit(0)
+
+def walk(value, key=""):
+    if isinstance(value, str):
+        yield key, value
+    elif isinstance(value, dict):
+        for child_key, child_value in value.items():
+            yield from walk(child_value, str(child_key))
+    elif isinstance(value, list):
+        for child_value in value:
+            yield from walk(child_value, key)
+
+SENSITIVE_PATHS = (".env", ".pem", ".key", "id_rsa", "id_ed25519", "credentials", "service-account", ".p12", ".pfx", ".keystore")
+SECRET_PATTERN = re.compile(r"(password|secret|api_key|auth|bearer|token|private_key|aws_access_key_id|aws_secret_access_key|akiai|asiai|ghp_|github_pat|sk-|glpat-|npm_|pypi_|docker_auth|private.?key|BEGIN .* PRIVATE KEY|ssh-rsa|ssh-ed25519)", re.IGNORECASE)
+
+for key, value in walk(tool_input):
+    key_lower = key.lower()
+    if ("path" in key_lower or "file" in key_lower) and any(marker in value for marker in SENSITIVE_PATHS):
+        respond("deny", "Direct modification of sensitive file blocked")
+        raise SystemExit(0)
+
+for _, value in walk(tool_input):
+    if SECRET_PATTERN.search(value):
+        respond("deny", "Potential secret leak detected")
+        raise SystemExit(0)
+
+respond("allow")
+PY
 `,
   "post-format.sh": `#!/usr/bin/env bash
 # Auto-format after save (single file target)
@@ -2110,10 +2257,11 @@ export async function initCommand(options: InitCommandOptions): Promise<void> {
   );
 
   // 8. Write configs
+  const runtimeScope: RuntimeScope = localUserRuntime ? "all" : "project";
   await writeFile(join(root, ".omk/config.toml"), getConfigToml({
-    mcpScope: "all",
-    skillsScope: "all",
-    hooksScope: "all",
+    mcpScope: runtimeScope,
+    skillsScope: runtimeScope,
+    hooksScope: runtimeScope,
   }));
   await writeFile(join(root, ".omk/kimi.config.toml"), KIMI_CONFIG_TOML);
   await ensureProjectMcpConfig(join(root, ".omk/mcp.json"), mcpJson, { removeRuntimeManagedOmkProject: true });

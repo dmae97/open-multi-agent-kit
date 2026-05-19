@@ -304,8 +304,8 @@ export function kimicatStatusChips(): string {
 export function kimicatCliHero(footer?: string): string {
   const heroLines = [
     gradient("✦ oh-my-kimi ✦"),
-    style.creamBold("Kimi CLI, but better."),
-    style.gray("The orchestration layer that turns Kimi CLI into a powerful coding team."),
+    style.creamBold("Verified agent runtime for Kimi Code."),
+    style.gray("Orchestration, evidence gates, graph memory, worktree isolation, and parallel subagents."),
     "",
     ...KIMICAT_SIMPLE_ASCII_ART.split("\n").map((line) => style.lightPurple(line)),
     "",
@@ -316,7 +316,7 @@ export function kimicatCliHero(footer?: string): string {
     heroLines.push("", style.gray(footer));
   }
 
-  return box(heroLines, "Kimicat Mascot Theme");
+  return box(heroLines, "OMK — oh-my-kimi");
 }
 
 // ── Kimicat Custom Banner ───────────────────────────────────
@@ -457,7 +457,7 @@ export function kimicatBanner(
   }
 
   const title = theme.banner?.title ?? "oh-my-kimi";
-  const subtitle = theme.banner?.subtitle ?? "Kimi CLI, but better.";
+  const subtitle = theme.banner?.subtitle ?? "Verified agent runtime for Kimi Code.";
   const styleName = theme.banner?.style ?? "default";
   const art = theme.banner?.asciiArt ?? KIMICAT_SIMPLE_ASCII_ART;
   const primary = colorFromHex(theme.colors?.primary, P.purple);

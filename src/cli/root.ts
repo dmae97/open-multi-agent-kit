@@ -22,6 +22,7 @@ export function configureRootProgram(program: Command, OMK_VERSION: string, OMK_
       const opts = thisCommand.opts();
       if (opts.sudo) {
         process.env.OMK_SUDO = "1";
+        process.env.OMK_CLI_SUDO_REQUEST = "1";
       }
     })
     .allowUnknownOption(false)

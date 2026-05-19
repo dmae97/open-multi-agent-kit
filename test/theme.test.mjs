@@ -8,7 +8,8 @@ test("Kimicat CLI hero uses the compact mascot theme", () => {
   const hero = kimicatCliHero();
 
   assert.match(hero, /oh-my-kimi/);
-  assert.match(hero, /Kimi CLI, but better/);
+  assert.match(hero, /Verified agent runtime for Kimi Code/);
+  assert.match(hero, /parallel subagents/);
   assert.match(hero, /Plan first\. Ship small\. Stay safe!/);
   assert.match(hero, /\[AI-native]/);
 
