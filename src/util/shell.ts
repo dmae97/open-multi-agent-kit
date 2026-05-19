@@ -1,9 +1,10 @@
 import { execa, type ExecaError } from "execa";
 import { constants, createWriteStream } from "fs";
-import { access, mkdir } from "fs/promises";
+import { access, appendFile, mkdir } from "fs/promises";
 import { dirname, isAbsolute } from "path";
 import { CappedOutputBuffer } from "./output-buffer.js";
 import { getOmkResourceSettings } from "./resource-profile.js";
+import { redactSecrets as redactSecretText } from "../mcp/secret-scanner.js";
 
 export interface ShellResult {
   stdout: string;
@@ -23,6 +24,8 @@ export interface StreamingShellOptions {
   onStdout?: (line: string) => void;
   onStderr?: (line: string) => void;
   sudo?: boolean;
+  signal?: AbortSignal;
+  inheritEnv?: boolean;
 }
 
 function isExecaError(err: unknown): err is ExecaError {
@@ -33,14 +36,70 @@ function isExecaError(err: unknown): err is ExecaError {
   );
 }
 
+const SUDO_ALLOWLIST = new Set([
+  "docker",
+]);
+
 function applySudo(
   command: string,
   args: string[],
   sudo?: boolean
 ): [string, string[]] {
-  const useSudo = sudo ?? process.env.OMK_SUDO === "1";
+  const useSudo = sudo === true || (sudo === undefined && process.env.OMK_SUDO === "1" && process.env.OMK_CLI_SUDO_REQUEST === "1");
   if (!useSudo) return [command, args];
+  if (!SUDO_ALLOWLIST.has(command)) {
+    throw new Error(`Command not in sudo allowlist: ${command}. Set sudo explicitly or add to allowlist.`);
+  }
   return ["sudo", [command, ...args]];
+}
+
+const SAFE_INHERITED_ENV_NAMES = new Set([
+  "CI",
+  "COLORTERM",
+  "COMSPEC",
+  "FORCE_COLOR",
+  "HOME",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "NO_COLOR",
+  "OMK_ORIGINAL_HOME",
+  "OMK_PROJECT_ROOT",
+  "PATH",
+  "PATHEXT",
+  "SHELL",
+  "SystemRoot",
+  "TEMP",
+  "TERM",
+  "TMP",
+  "TMPDIR",
+  "USERPROFILE",
+  "WINDIR",
+]);
+
+function buildShellEnv(env: Record<string, string> | undefined, inheritEnv = false): Record<string, string> {
+  const inherited = inheritEnv
+    ? process.env
+    : Object.fromEntries(
+      Object.entries(process.env)
+        .filter(([name, value]) => value !== undefined && SAFE_INHERITED_ENV_NAMES.has(name))
+    );
+  return { ...inherited, ...(env ?? {}) } as Record<string, string>;
+}
+
+function redactShellText(text: string): string {
+  return redactSecretText(text).redacted;
+}
+
+async function appendRedactedLog(logPath: string | undefined, stdout: string, stderr: string): Promise<void> {
+  if (!logPath) return;
+  await mkdir(dirname(logPath), { recursive: true });
+  const chunks: string[] = [];
+  if (stdout) chunks.push(redactShellText(stdout));
+  if (stderr) chunks.push(redactShellText(stderr));
+  if (chunks.length > 0) {
+    await appendFile(logPath, chunks.join("\n"), "utf-8");
+  }
 }
 
 export async function runShell(
@@ -49,51 +108,60 @@ export async function runShell(
   options: StreamingShellOptions = {}
 ): Promise<ShellResult> {
   const resources = await getOmkResourceSettings();
-  const { cwd, env, timeout = 30000, maxBuffer = resources.shellMaxBufferBytes, stdio = "pipe", logPath, input, sudo } = options;
+  const { cwd, env, timeout = 30000, maxBuffer = resources.shellMaxBufferBytes, stdio = "pipe", logPath, input, sudo, signal, inheritEnv } = options;
   const [cmd, cmdArgs] = applySudo(command, args, sudo);
   let logStream: ReturnType<typeof createWriteStream> | undefined;
 
   try {
     const subprocess = execa(cmd, cmdArgs, {
       cwd,
-      env: env ? { ...process.env, ...env } : process.env,
+      env: buildShellEnv(env, inheritEnv),
+      extendEnv: false,
       timeout,
       maxBuffer,
       buffer: stdio !== "inherit",
       stdio: stdio === "inherit" ? "inherit" : "pipe",
       reject: false,
+      stripFinalNewline: false,
       input,
     });
-
-    if (logPath) {
-      await mkdir(dirname(logPath), { recursive: true });
-      logStream = createWriteStream(logPath, { flags: "a" });
-      subprocess.stdout?.pipe(logStream, { end: false });
-      subprocess.stderr?.pipe(logStream, { end: false });
-    }
+    const abortHandler = (): void => {
+      subprocess.kill("SIGTERM");
+    };
+    if (signal?.aborted) abortHandler();
+    signal?.addEventListener("abort", abortHandler, { once: true });
 
     const result = await subprocess;
+    signal?.removeEventListener("abort", abortHandler);
     logStream?.end();
+    const stdout = redactShellText(String(result.stdout ?? ""));
+    const stderr = redactShellText(String(result.stderr ?? ""));
+    await appendRedactedLog(logPath, stdout, stderr);
     return {
-      stdout: String(result.stdout ?? ""),
-      stderr: String(result.stderr ?? ""),
+      stdout,
+      stderr,
       exitCode: result.exitCode ?? 1,
       failed: result.failed ?? result.exitCode !== 0,
     };
   } catch (err) {
     logStream?.end();
     if (isExecaError(err)) {
+      const stdout = redactShellText(String(err.stdout ?? ""));
+      const stderr = redactShellText(String(err.stderr ?? "") || (err instanceof Error ? err.message : String(err)));
+      await appendRedactedLog(logPath, stdout, stderr);
       return {
-        stdout: String(err.stdout ?? ""),
-        stderr: String(err.stderr ?? "") || (err instanceof Error ? err.message : String(err)),
+        stdout,
+        stderr,
         exitCode: err.exitCode ?? 1,
         failed: true,
       };
     }
+    const stderr = redactShellText(err instanceof Error ? err.message : String(err));
+    await appendRedactedLog(logPath, "", stderr);
     // ExecaError가 아닌 경우 (spawn 실패 등)
     return {
       stdout: "",
-      stderr: err instanceof Error ? err.message : String(err),
+      stderr,
       exitCode: 1,
       failed: true,
     };
@@ -106,7 +174,7 @@ export async function runShellStreaming(
   options: StreamingShellOptions = {}
 ): Promise<ShellResult> {
   const resources = await getOmkResourceSettings();
-  const { cwd, env, timeout = 30000, maxBuffer = resources.shellMaxBufferBytes, stdio = "pipe", logPath, input, onStdout, onStderr, sudo } = options;
+  const { cwd, env, timeout = 30000, maxBuffer = resources.shellMaxBufferBytes, stdio = "pipe", logPath, input, onStdout, onStderr, sudo, signal, inheritEnv } = options;
   const [cmd, cmdArgs] = applySudo(command, args, sudo);
   let logStream: ReturnType<typeof createWriteStream> | undefined;
   const stdoutBuffer = new CappedOutputBuffer(maxBuffer, "stdout");
@@ -115,13 +183,20 @@ export async function runShellStreaming(
   try {
     const subprocess = execa(cmd, cmdArgs, {
       cwd,
-      env: env ? { ...process.env, ...env } : process.env,
+      env: buildShellEnv(env, inheritEnv),
+      extendEnv: false,
       timeout,
       buffer: false,
       stdio: stdio === "inherit" ? "inherit" : "pipe",
       reject: false,
+      stripFinalNewline: false,
       input,
     });
+    const abortHandler = (): void => {
+      subprocess.kill("SIGTERM");
+    };
+    if (signal?.aborted) abortHandler();
+    signal?.addEventListener("abort", abortHandler, { once: true });
 
     if (logPath) {
       await mkdir(dirname(logPath), { recursive: true });
@@ -130,19 +205,22 @@ export async function runShellStreaming(
 
     subprocess.stdout?.on("data", (chunk: Buffer) => {
       const line = chunk.toString("utf-8");
-      stdoutBuffer.append(line);
-      logStream?.write(line);
-      onStdout?.(line);
+      const redactedLine = redactShellText(line);
+      stdoutBuffer.append(redactedLine);
+      logStream?.write(redactedLine);
+      onStdout?.(redactedLine);
     });
 
     subprocess.stderr?.on("data", (chunk: Buffer) => {
       const line = chunk.toString("utf-8");
-      stderrBuffer.append(line);
-      logStream?.write(line);
-      onStderr?.(line);
+      const redactedLine = redactShellText(line);
+      stderrBuffer.append(redactedLine);
+      logStream?.write(redactedLine);
+      onStderr?.(redactedLine);
     });
 
     const result = await subprocess;
+    signal?.removeEventListener("abort", abortHandler);
     logStream?.end();
     return {
       stdout: stdoutBuffer.toString(),
@@ -154,15 +232,16 @@ export async function runShellStreaming(
     logStream?.end();
     if (isExecaError(err)) {
       return {
-        stdout: stdoutBuffer.toString() || String(err.stdout ?? ""),
-        stderr: stderrBuffer.toString() || String(err.stderr ?? "") || (err instanceof Error ? err.message : String(err)),
+        stdout: stdoutBuffer.toString() || redactShellText(String(err.stdout ?? "")),
+        stderr: stderrBuffer.toString() || redactShellText(String(err.stderr ?? "") || (err instanceof Error ? err.message : String(err))),
         exitCode: err.exitCode ?? 1,
         failed: true,
       };
     }
+    const stderr = redactShellText(err instanceof Error ? err.message : String(err));
     return {
       stdout: "",
-      stderr: err instanceof Error ? err.message : String(err),
+      stderr,
       exitCode: 1,
       failed: true,
     };
@@ -218,8 +297,8 @@ export async function checkCommand(command: string): Promise<boolean> {
   }
 }
 
-export function resolveKimiBin(): string {
-  return process.env.KIMI_BIN ?? "kimi";
+export function resolveKimiBin(env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env): string {
+  return env.KIMI_BIN ?? "kimi";
 }
 
 export async function getKimiVersion(): Promise<string | null> {

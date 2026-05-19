@@ -785,13 +785,80 @@ async function readMcpServersForRuntime(configPath: string): Promise<Record<stri
     const parsed = JSON.parse(content) as { mcpServers?: unknown; mcp_servers?: unknown };
     const servers = parsed.mcpServers ?? parsed.mcp_servers;
     if (servers && typeof servers === "object" && !Array.isArray(servers)) {
-      return servers as Record<string, unknown>;
+      return normalizeRuntimeMcpRelativePaths(servers as Record<string, unknown>, configPath);
     }
   } catch {
     // Existing doctor/preflight paths report invalid config details. Runtime merge
     // skips unreadable files so Kimi does not receive partial/broken JSON.
   }
   return {};
+}
+
+function normalizeRuntimeMcpRelativePaths(servers: Record<string, unknown>, configPath: string): Record<string, unknown> {
+  const baseDir = runtimeMcpPathBase(configPath);
+  return Object.fromEntries(
+    Object.entries(servers).map(([name, server]) => [name, normalizeRuntimeMcpRelativePathServer(server, baseDir)])
+  );
+}
+
+function runtimeMcpPathBase(configPath: string): string {
+  const root = resolve(getProjectRoot());
+  const resolvedConfig = resolve(configPath);
+  const relativeToRoot = relative(root, resolvedConfig);
+  if (relativeToRoot === "" || (!relativeToRoot.startsWith("..") && !isAbsolute(relativeToRoot))) {
+    return root;
+  }
+  return dirname(resolvedConfig);
+}
+
+function normalizeRuntimeMcpRelativePathServer(server: unknown, baseDir: string): unknown {
+  if (!isRecord(server) || typeof server.url === "string") return server;
+  let changed = false;
+  const next: Record<string, unknown> = { ...server };
+  if (typeof next.command === "string" && isRelativeRuntimeMcpPathLike(next.command)) {
+    next.command = resolve(baseDir, next.command);
+    changed = true;
+  }
+  if (Array.isArray(next.args)) {
+    const args = next.args.map((arg, index) => {
+      if (typeof arg === "string" && isShellInlineMcpArg(server, index)) {
+        const normalized = normalizeRuntimeMcpInlineScript(arg, baseDir);
+        if (normalized.changed) changed = true;
+        return normalized.script;
+      }
+      if (!shouldNormalizeRuntimeMcpRelativeArg(server, arg, index)) return arg;
+      changed = true;
+      return resolve(baseDir, arg);
+    });
+    next.args = args;
+  }
+  return changed ? next : server;
+}
+
+function isRelativeRuntimeMcpPathLike(value: string): boolean {
+  return value.startsWith("./") || value.startsWith("../") || value.startsWith(".\\") || value.startsWith("..\\");
+}
+
+function shouldNormalizeRuntimeMcpRelativeArg(server: Record<string, unknown>, arg: unknown, index: number): arg is string {
+  if (typeof arg !== "string" || !isRelativeRuntimeMcpPathLike(arg)) return false;
+  if (isShellInlineMcpArg(server, index)) return false;
+  if (/[ \t\r\n;"'|&<>]/.test(arg)) return false;
+  return true;
+}
+
+function normalizeRuntimeMcpInlineScript(script: string, baseDir: string): { script: string; changed: boolean } {
+  let changed = false;
+  const nextScript = script.replace(
+    /(^|[\s"'`=:(])((?:\.{1,2}[\\/])[^ \t\r\n"'`|&;<>:)]+)/g,
+    (match, prefix: string, relativePath: string) => {
+      if (/[$*?[\]{}]/.test(relativePath)) return match;
+      const absolutePath = resolve(baseDir, relativePath);
+      if (/[ \t\r\n"'`]/.test(absolutePath)) return match;
+      changed = true;
+      return `${prefix}${absolutePath}`;
+    }
+  );
+  return { script: nextScript, changed };
 }
 
 const SHELL_BUILTIN_MCP_COMMANDS = new Set([
@@ -1257,7 +1324,6 @@ function isProcessAlive(pid: number): boolean {
 
 const runtimeMcpCleanupPaths = new Set<string>();
 let runtimeMcpCleanupRegistered = false;
-let runtimeMcpSignalCleanupRegistered = false;
 
 function cleanupRuntimeMcpFiles(): void {
   for (const path of runtimeMcpCleanupPaths) {
@@ -1274,17 +1340,6 @@ function registerRuntimeMcpCleanupPath(runtimeConfigPath: string): void {
   if (!runtimeMcpCleanupRegistered) {
     runtimeMcpCleanupRegistered = true;
     process.once("exit", cleanupRuntimeMcpFiles);
-  }
-  if (!runtimeMcpSignalCleanupRegistered) {
-    runtimeMcpSignalCleanupRegistered = true;
-    process.once("SIGINT", () => {
-      cleanupRuntimeMcpFiles();
-      process.exit(130);
-    });
-    process.once("SIGTERM", () => {
-      cleanupRuntimeMcpFiles();
-      process.exit(143);
-    });
   }
 }
 

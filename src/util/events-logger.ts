@@ -1,5 +1,6 @@
 import { appendFile, readFile } from "fs/promises";
 import { join } from "path";
+import { redactSecrets } from "../orchestration/state-persister.js";
 
 export type ReplayEventType =
   | "replay-start"
@@ -22,7 +23,7 @@ export async function appendEvent(
   event: Omit<ReplayEvent, "timestamp">
 ): Promise<void> {
   const timestamp = new Date().toISOString();
-  const line = JSON.stringify({ ...event, timestamp }) + "\n";
+  const line = JSON.stringify(redactSecrets({ ...event, timestamp })) + "\n";
   await appendFile(join(runDir, "events.jsonl"), line, "utf-8");
 }
 
@@ -32,7 +33,7 @@ export async function readEvents(runDir: string): Promise<ReplayEvent[]> {
     return content
       .split("\n")
       .filter((line) => line.trim())
-      .map((line) => JSON.parse(line) as ReplayEvent);
+      .map((line) => redactSecrets(JSON.parse(line)) as ReplayEvent);
   } catch {
     return [];
   }
