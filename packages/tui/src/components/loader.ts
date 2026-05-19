@@ -34,10 +34,10 @@ export class Loader extends Text {
 	) {
 		super("", 1, 0);
 		this.ui = ui;
-		this.setIndicator(indicator);
 		this.spinnerColorFn = spinnerColorFn;
 		this.messageColorFn = messageColorFn;
 		this.message = message;
+		this.setIndicator(indicator);
 	}
 
 	render(width: number): string[] {
