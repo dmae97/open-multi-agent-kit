@@ -102,12 +102,14 @@ test("chat agent harness manifest captures full inventory and safe worker limits
   assert.equal(manifest.capabilityPolicy.useSkills, true);
   assert.equal(manifest.capabilityPolicy.useHooks, true);
   assert.ok(manifest.virtualDag.nodes.some((node) => node.id === "capability-skill-agent"));
+  assert.ok(manifest.virtualDag.nodes.some((node) => node.id === "capability-mcp-agent"));
+  assert.ok(manifest.virtualDag.nodes.some((node) => node.id === "capability-hook-agent"));
   assert.ok(manifest.virtualDag.nodes.some((node) => node.id === "review-merge"));
   const sharedLaneCount = manifest.virtualDag.nodes.filter((node) => ["provider", "capability", "worker"].includes(node.source)).length;
   assert.ok(sharedLaneCount <= manifest.resources.workerCap);
 });
 
-test("chat agent harness budget 4 reserves one capability lane and keeps three worker lanes", () => {
+test("chat agent harness budget 4 routes all capability lanes and keeps one worker lane", () => {
   const manifest = buildChatAgentHarnessManifest({
     mode: "agent",
     runId: "chat-agent-budget-four",
@@ -129,9 +131,13 @@ test("chat agent harness budget 4 reserves one capability lane and keeps three w
   const capabilityNodes = manifest.virtualDag.nodes.filter((node) => node.source === "capability");
   const workerNodes = manifest.virtualDag.nodes.filter((node) => node.source === "worker");
   assert.equal(manifest.resources.workerBudget, 4);
-  assert.equal(capabilityNodes.length, 1);
-  assert.equal(workerNodes.length, 3);
-  assert.equal(manifest.capabilityPolicy.maxCapabilityAgents, 1);
+  assert.deepEqual(capabilityNodes.map((node) => node.id), [
+    "capability-skill-agent",
+    "capability-mcp-agent",
+    "capability-hook-agent",
+  ]);
+  assert.equal(workerNodes.length, 1);
+  assert.equal(manifest.capabilityPolicy.maxCapabilityAgents, 3);
   assert.equal(manifest.capabilityPolicy.useMcp, true);
   assert.equal(manifest.capabilityPolicy.useSkills, true);
   assert.equal(manifest.capabilityPolicy.useHooks, true);

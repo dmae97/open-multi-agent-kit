@@ -57,12 +57,12 @@ interface EvidenceHistoryEntry {
 }
 
 const INTENT_RUNTIME_PREFERENCES: Record<NodeIntent, string[]> = {
-  research: ["kimi-wire", "kimi-print"],
-  planning: ["kimi-wire", "kimi-print"],
+  research: ["kimi-print", "kimi-wire"],
+  planning: ["kimi-print", "kimi-wire"],
   coding: ["kimi-print", "kimi-wire"],
   debugging: ["kimi-print", "kimi-wire"],
   refactor: ["kimi-print", "kimi-wire"],
-  review: ["kimi-wire", "kimi-print"],
+  review: ["kimi-print", "kimi-wire"],
   "test-generation": ["kimi-print", "kimi-wire"],
   documentation: ["kimi-print", "kimi-wire"],
   "shell-operation": ["kimi-print", "kimi-wire"],

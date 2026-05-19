@@ -72,21 +72,8 @@ export const OMK_CORE_VERIFIED_PRESET: OmkCoreVerifiedPreset = {
   ],
   mcpServers: [
     "omk-project",
-    "context7",
-    "github",
-    "fetch",
-    "railway-unofficial",
-    "supabase",
-    "firecrawl",
-    "puppeteer",
-    "playwright",
-    "pdf",
-    "memory",
-    "sequential-thinking",
-    "filesystem-readonly",
-    "git",
   ],
-  purpose: "Baseline safety, context, review, and verification loop for everyday OMK work with full MCP, skills, and hooks access.",
+  purpose: "Baseline safety, context, review, and verification loop for everyday OMK work with project-local MCP plus full skills and hooks capability flags.",
 };
 
 export const OMK_TS_PRODUCT_PRESET: OmkTsProductPreset = {
@@ -193,8 +180,8 @@ export const OMK_PARALLEL_ORCHESTRATOR_PRESET: OmkParallelOrchestratorPreset = {
 };
 
 export const OMK_RUNTIME_PRESETS: readonly OmkRuntimePreset[] = [
-  OMK_PARALLEL_ORCHESTRATOR_PRESET,
   OMK_CORE_VERIFIED_PRESET,
+  OMK_PARALLEL_ORCHESTRATOR_PRESET,
   OMK_TS_PRODUCT_PRESET,
   OMK_WORKTREE_TEAM_PRESET,
   OMK_RELEASE_GUARD_PRESET,
