@@ -440,20 +440,7 @@ function getBuiltinThemes(): Record<string, ThemeJson> {
 }
 
 export function getAvailableThemes(): string[] {
-	const themes = new Set<string>(Object.keys(getBuiltinThemes()));
-	const customThemesDir = getCustomThemesDir();
-	if (fs.existsSync(customThemesDir)) {
-		const files = fs.readdirSync(customThemesDir);
-		for (const file of files) {
-			if (file.endsWith(".json")) {
-				themes.add(file.slice(0, -5));
-			}
-		}
-	}
-	for (const name of registeredThemes.keys()) {
-		themes.add(name);
-	}
-	return Array.from(themes).sort();
+	return getAvailableThemesWithPaths().map(({ name }) => name);
 }
 
 export interface ThemeInfo {
@@ -463,33 +450,56 @@ export interface ThemeInfo {
 
 export function getAvailableThemesWithPaths(): ThemeInfo[] {
 	const themesDir = getThemesDir();
-	const customThemesDir = getCustomThemesDir();
 	const result: ThemeInfo[] = [];
+	const seen = new Set<string>();
+	const addTheme = (themeInfo: ThemeInfo) => {
+		if (seen.has(themeInfo.name)) {
+			return;
+		}
+		seen.add(themeInfo.name);
+		result.push(themeInfo);
+	};
 
 	// Built-in themes
 	for (const name of Object.keys(getBuiltinThemes())) {
-		result.push({ name, path: path.join(themesDir, `${name}.json`) });
+		addTheme({ name, path: path.join(themesDir, `${name}.json`) });
 	}
 
 	// Custom themes
-	if (fs.existsSync(customThemesDir)) {
-		for (const file of fs.readdirSync(customThemesDir)) {
-			if (file.endsWith(".json")) {
-				const name = file.slice(0, -5);
-				if (!result.some((t) => t.name === name)) {
-					result.push({ name, path: path.join(customThemesDir, file) });
-				}
-			}
-		}
+	for (const themeInfo of getCustomThemeInfos()) {
+		addTheme(themeInfo);
 	}
 
 	for (const [name, theme] of registeredThemes.entries()) {
-		if (!result.some((t) => t.name === name)) {
-			result.push({ name, path: theme.sourcePath });
-		}
+		addTheme({ name, path: theme.sourcePath });
 	}
 
 	return result.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function getCustomThemeInfos(): ThemeInfo[] {
+	const customThemesDir = getCustomThemesDir();
+	const result: ThemeInfo[] = [];
+	if (!fs.existsSync(customThemesDir)) {
+		return result;
+	}
+
+	for (const file of fs.readdirSync(customThemesDir)) {
+		if (!file.endsWith(".json")) {
+			continue;
+		}
+		const themePath = path.join(customThemesDir, file);
+		try {
+			const customTheme = loadThemeFromPath(themePath);
+			if (customTheme.name) {
+				result.push({ name: customTheme.name, path: themePath });
+			}
+		} catch {
+			// Invalid themes are ignored here; the resource loader reports them
+			// during normal startup/reload.
+		}
+	}
+	return result;
 }
 
 function parseThemeJson(label: string, json: unknown): ThemeJson {
