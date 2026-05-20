@@ -110,21 +110,21 @@ function getSelfUpdateCommandForMethod(
 			return undefined;
 		case "pnpm":
 			return makeSelfUpdateCommand(
-				makeSelfUpdateCommandStep("pnpm", ["install", "-g", updatePackageName]),
+				makeSelfUpdateCommandStep("pnpm", ["install", "-g", "--ignore-scripts", updatePackageName]),
 				updatePackageName === installedPackageName
 					? undefined
 					: makeSelfUpdateCommandStep("pnpm", ["remove", "-g", installedPackageName]),
 			);
 		case "yarn":
 			return makeSelfUpdateCommand(
-				makeSelfUpdateCommandStep("yarn", ["global", "add", updatePackageName]),
+				makeSelfUpdateCommandStep("yarn", ["global", "add", "--ignore-scripts", updatePackageName]),
 				updatePackageName === installedPackageName
 					? undefined
 					: makeSelfUpdateCommandStep("yarn", ["global", "remove", installedPackageName]),
 			);
 		case "bun":
 			return makeSelfUpdateCommand(
-				makeSelfUpdateCommandStep("bun", ["install", "-g", updatePackageName]),
+				makeSelfUpdateCommandStep("bun", ["install", "-g", "--ignore-scripts", updatePackageName]),
 				updatePackageName === installedPackageName
 					? undefined
 					: makeSelfUpdateCommandStep("bun", ["uninstall", "-g", installedPackageName]),
@@ -133,7 +133,13 @@ function getSelfUpdateCommandForMethod(
 			const [command = "npm", ...npmArgs] = npmCommand ?? [];
 			const inferred = npmCommand?.length ? undefined : getInferredNpmInstall();
 			const prefixArgs = [...npmArgs, ...(inferred ? ["--prefix", inferred.prefix] : [])];
-			const installStep = makeSelfUpdateCommandStep(command, [...prefixArgs, "install", "-g", updatePackageName]);
+			const installStep = makeSelfUpdateCommandStep(command, [
+				...prefixArgs,
+				"install",
+				"-g",
+				"--ignore-scripts",
+				updatePackageName,
+			]);
 			const uninstallStep =
 				updatePackageName === installedPackageName
 					? undefined

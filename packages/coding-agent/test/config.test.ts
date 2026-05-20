@@ -153,7 +153,7 @@ describe("detectInstallMethod", () => {
 
 		expect(detectInstallMethod()).toBe("pnpm");
 		expect(getUpdateInstruction("@earendil-works/pi-coding-agent")).toBe(
-			"Run: pnpm install -g @earendil-works/pi-coding-agent",
+			"Run: pnpm install -g --ignore-scripts @earendil-works/pi-coding-agent",
 		);
 	});
 
@@ -175,8 +175,8 @@ describe("detectInstallMethod", () => {
 		expect(detectInstallMethod()).toBe("npm");
 		expect(command).toEqual({
 			command: "npm",
-			args: ["--prefix", prefix, "install", "-g", "@earendil-works/pi-coding-agent"],
-			display: `npm --prefix ${prefix} install -g @earendil-works/pi-coding-agent`,
+			args: ["--prefix", prefix, "install", "-g", "--ignore-scripts", "@earendil-works/pi-coding-agent"],
+			display: `npm --prefix ${prefix} install -g --ignore-scripts @earendil-works/pi-coding-agent`,
 		});
 	});
 
@@ -187,8 +187,8 @@ describe("detectInstallMethod", () => {
 
 		expect(command).toEqual({
 			command: "npm",
-			args: ["--prefix", prefix, "install", "-g", "@new-scope/pi"],
-			display: `npm --prefix ${prefix} uninstall -g @mariozechner/pi-coding-agent && npm --prefix ${prefix} install -g @new-scope/pi`,
+			args: ["--prefix", prefix, "install", "-g", "--ignore-scripts", "@new-scope/pi"],
+			display: `npm --prefix ${prefix} uninstall -g @mariozechner/pi-coding-agent && npm --prefix ${prefix} install -g --ignore-scripts @new-scope/pi`,
 			steps: [
 				{
 					command: "npm",
@@ -197,8 +197,8 @@ describe("detectInstallMethod", () => {
 				},
 				{
 					command: "npm",
-					args: ["--prefix", prefix, "install", "-g", "@new-scope/pi"],
-					display: `npm --prefix ${prefix} install -g @new-scope/pi`,
+					args: ["--prefix", prefix, "install", "-g", "--ignore-scripts", "@new-scope/pi"],
+					display: `npm --prefix ${prefix} install -g --ignore-scripts @new-scope/pi`,
 				},
 			],
 		});
@@ -211,8 +211,8 @@ describe("detectInstallMethod", () => {
 
 		expect(command).toEqual({
 			command: "npm",
-			args: ["--prefix", prefix, "install", "-g", "@earendil-works/pi-coding-agent"],
-			display: `npm --prefix ${prefix} install -g @earendil-works/pi-coding-agent`,
+			args: ["--prefix", prefix, "install", "-g", "--ignore-scripts", "@earendil-works/pi-coding-agent"],
+			display: `npm --prefix ${prefix} install -g --ignore-scripts @earendil-works/pi-coding-agent`,
 		});
 	});
 
@@ -221,7 +221,14 @@ describe("detectInstallMethod", () => {
 
 		const command = getSelfUpdateCommand("@earendil-works/pi-coding-agent", []);
 
-		expect(command?.args).toEqual(["--prefix", prefix, "install", "-g", "@earendil-works/pi-coding-agent"]);
+		expect(command?.args).toEqual([
+			"--prefix",
+			prefix,
+			"install",
+			"-g",
+			"--ignore-scripts",
+			"@earendil-works/pi-coding-agent",
+		]);
 	});
 
 	test("quotes npm self-update display paths", () => {
@@ -229,7 +236,9 @@ describe("detectInstallMethod", () => {
 
 		const command = getSelfUpdateCommand("@earendil-works/pi-coding-agent");
 
-		expect(command?.display).toBe(`npm --prefix "${prefix}" install -g @earendil-works/pi-coding-agent`);
+		expect(command?.display).toBe(
+			`npm --prefix "${prefix}" install -g --ignore-scripts @earendil-works/pi-coding-agent`,
+		);
 	});
 
 	test("does not infer Windows npm custom prefixes from package paths", () => {
@@ -239,7 +248,7 @@ describe("detectInstallMethod", () => {
 
 		expect(detectInstallMethod()).toBe("npm");
 		expect(getUpdateInstruction("@earendil-works/pi-coding-agent")).toBe(
-			"Run: npm install -g @earendil-works/pi-coding-agent",
+			"Run: npm install -g --ignore-scripts @earendil-works/pi-coding-agent",
 		);
 	});
 
@@ -251,8 +260,8 @@ describe("detectInstallMethod", () => {
 		expect(detectInstallMethod()).toBe("bun");
 		expect(command).toEqual({
 			command: "bun",
-			args: ["install", "-g", "@earendil-works/pi-coding-agent"],
-			display: "bun install -g @earendil-works/pi-coding-agent",
+			args: ["install", "-g", "--ignore-scripts", "@earendil-works/pi-coding-agent"],
+			display: "bun install -g --ignore-scripts @earendil-works/pi-coding-agent",
 		});
 	});
 
@@ -264,8 +273,8 @@ describe("detectInstallMethod", () => {
 		expect(detectInstallMethod()).toBe("pnpm");
 		expect(command).toEqual({
 			command: "pnpm",
-			args: ["install", "-g", "@new-scope/pi"],
-			display: "pnpm remove -g @mariozechner/pi-coding-agent && pnpm install -g @new-scope/pi",
+			args: ["install", "-g", "--ignore-scripts", "@new-scope/pi"],
+			display: "pnpm remove -g @mariozechner/pi-coding-agent && pnpm install -g --ignore-scripts @new-scope/pi",
 			steps: [
 				{
 					command: "pnpm",
@@ -274,8 +283,8 @@ describe("detectInstallMethod", () => {
 				},
 				{
 					command: "pnpm",
-					args: ["install", "-g", "@new-scope/pi"],
-					display: "pnpm install -g @new-scope/pi",
+					args: ["install", "-g", "--ignore-scripts", "@new-scope/pi"],
+					display: "pnpm install -g --ignore-scripts @new-scope/pi",
 				},
 			],
 		});
@@ -319,8 +328,8 @@ describe("detectInstallMethod", () => {
 		expect(detectInstallMethod()).toBe("pnpm");
 		expect(command).toEqual({
 			command: "pnpm",
-			args: ["install", "-g", packageName],
-			display: `pnpm install -g ${packageName}`,
+			args: ["install", "-g", "--ignore-scripts", packageName],
+			display: `pnpm install -g --ignore-scripts ${packageName}`,
 		});
 	});
 
@@ -332,8 +341,8 @@ describe("detectInstallMethod", () => {
 		expect(detectInstallMethod()).toBe("yarn");
 		expect(command).toEqual({
 			command: "yarn",
-			args: ["global", "add", "@new-scope/pi"],
-			display: "yarn global remove @mariozechner/pi-coding-agent && yarn global add @new-scope/pi",
+			args: ["global", "add", "--ignore-scripts", "@new-scope/pi"],
+			display: "yarn global remove @mariozechner/pi-coding-agent && yarn global add --ignore-scripts @new-scope/pi",
 			steps: [
 				{
 					command: "yarn",
@@ -342,8 +351,8 @@ describe("detectInstallMethod", () => {
 				},
 				{
 					command: "yarn",
-					args: ["global", "add", "@new-scope/pi"],
-					display: "yarn global add @new-scope/pi",
+					args: ["global", "add", "--ignore-scripts", "@new-scope/pi"],
+					display: "yarn global add --ignore-scripts @new-scope/pi",
 				},
 			],
 		});
@@ -357,8 +366,8 @@ describe("detectInstallMethod", () => {
 		expect(detectInstallMethod()).toBe("bun");
 		expect(command).toEqual({
 			command: "bun",
-			args: ["install", "-g", "@new-scope/pi"],
-			display: "bun uninstall -g @mariozechner/pi-coding-agent && bun install -g @new-scope/pi",
+			args: ["install", "-g", "--ignore-scripts", "@new-scope/pi"],
+			display: "bun uninstall -g @mariozechner/pi-coding-agent && bun install -g --ignore-scripts @new-scope/pi",
 			steps: [
 				{
 					command: "bun",
@@ -367,8 +376,8 @@ describe("detectInstallMethod", () => {
 				},
 				{
 					command: "bun",
-					args: ["install", "-g", "@new-scope/pi"],
-					display: "bun install -g @new-scope/pi",
+					args: ["install", "-g", "--ignore-scripts", "@new-scope/pi"],
+					display: "bun install -g --ignore-scripts @new-scope/pi",
 				},
 			],
 		});
