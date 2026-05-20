@@ -36,6 +36,15 @@
 - For ad-hoc scripts, write the script to a temporary file (for example under `/tmp`) using `write`, run that file, edit it if needed, and remove it when it is no longer needed. Do not embed multi-line scripts directly in `bash` commands.
 - NEVER commit unless user asks
 
+## Dependency and Install Security
+
+- Treat npm dependency and lockfile changes as reviewed code changes. Direct external dependencies must stay pinned to exact versions.
+- Use `npm install --ignore-scripts` to hydrate/update `node_modules` locally. Use `npm ci --ignore-scripts` for clean installs/CI-style verification. Do not run lifecycle scripts unless the user explicitly asks.
+- If dependency metadata changes, run `npm install --package-lock-only --ignore-scripts` to update `package-lock.json` without installing or running scripts.
+- If `packages/coding-agent/npm-shrinkwrap.json` needs regeneration, run `node scripts/generate-coding-agent-shrinkwrap.mjs`; verify with `node scripts/generate-coding-agent-shrinkwrap.mjs --check` or `npm run check`.
+- Pre-commit blocks accidental lockfile commits unless `PI_ALLOW_LOCKFILE_CHANGE=1` is set. Do not bypass it unless the user explicitly wants the lockfile change committed.
+- New dependencies with lifecycle scripts require review and an explicit allowlist entry in `scripts/generate-coding-agent-shrinkwrap.mjs`; do not add one silently.
+
 ## Contribution Gate
 
 - New issues from new contributors are auto-closed by `.github/workflows/issue-gate.yml`
