@@ -19,16 +19,17 @@ Builds and packs the publishable packages, then installs the tarballs into an
 isolated directory outside the repository for local release testing.
 
 Options:
-  --out <dir>      Output directory. Defaults to a new directory under ${tmpdir()}
-  --force          Remove --out first if it already exists
-  --skip-check     Do not run npm run check before building
-  --skip-install   Only create tarballs; do not create the isolated install
-  --help           Show this help
+  --out <dir>          Output directory. Defaults to a new directory under ${tmpdir()}
+  --force              Remove --out first if it already exists
+  --skip-check         Do not run npm run check before building
+  --skip-install       Only create tarballs; do not create isolated installs
+  --skip-bun-install   Do not create the isolated Bun install
+  --help               Show this help
 `);
 }
 
 function parseArgs() {
-	const options = { force: false, outDir: undefined, skipCheck: false, skipInstall: false };
+	const options = { force: false, outDir: undefined, skipBunInstall: false, skipCheck: false, skipInstall: false };
 	const args = process.argv.slice(2);
 
 	for (let i = 0; i < args.length; i++) {
@@ -47,6 +48,10 @@ function parseArgs() {
 		}
 		if (arg === "--skip-install") {
 			options.skipInstall = true;
+			continue;
+		}
+		if (arg === "--skip-bun-install") {
+			options.skipBunInstall = true;
 			continue;
 		}
 		if (arg === "--out") {
@@ -80,6 +85,10 @@ function run(command, args, options = {}) {
 
 function readPackageJson(directory) {
 	return JSON.parse(readFileSync(join(directory, "package.json"), "utf8"));
+}
+
+function commandExists(command) {
+	return spawnSync(command, ["--version"], { stdio: "ignore" }).status === 0;
 }
 
 function isInsidePath(child, parent) {
@@ -138,8 +147,8 @@ if (rootPackageJson.name !== "pi-monorepo") {
 
 const outDir = prepareOutputDirectory(options, repoRoot);
 const tarballDirectory = join(outDir, "tarballs");
-const installDirectory = join(outDir, "install");
-const binDirectory = join(outDir, "bin");
+const nodeInstallDirectory = join(outDir, "node");
+const bunInstallDirectory = join(outDir, "bun");
 mkdirSync(tarballDirectory, { recursive: true });
 
 if (!options.skipCheck) {
@@ -158,18 +167,28 @@ for (const pkg of packages) {
 }
 
 if (!options.skipInstall) {
-	mkdirSync(installDirectory, { recursive: true });
+	mkdirSync(nodeInstallDirectory, { recursive: true });
 	const dependencies = Object.fromEntries(
-		packages.map((pkg) => [pkg.name, fileSpecifier(installDirectory, tarballs.get(pkg.name))]),
+		packages.map((pkg) => [pkg.name, fileSpecifier(nodeInstallDirectory, tarballs.get(pkg.name))]),
 	);
-	writeFileSync(
-		join(installDirectory, "package.json"),
-		`${JSON.stringify({ private: true, dependencies }, undefined, "\t")}\n`,
-	);
+	const installPackageJson = `${JSON.stringify({ private: true, dependencies }, undefined, "\t")}\n`;
+	writeFileSync(join(nodeInstallDirectory, "package.json"), installPackageJson);
 
-	run("npm", ["install", "--omit=dev", "--ignore-scripts"], { cwd: installDirectory });
-	mkdirSync(binDirectory, { recursive: true });
-	symlinkSync(join(installDirectory, "node_modules", ".bin", "pi"), join(binDirectory, "pi"));
+	run("npm", ["install", "--omit=dev", "--ignore-scripts"], { cwd: nodeInstallDirectory });
+	symlinkSync(join("node_modules", ".bin", "pi"), join(nodeInstallDirectory, "pi"));
+
+	if (!options.skipBunInstall) {
+		if (!commandExists("bun")) {
+			throw new Error("Bun is required for the isolated Bun install. Use --skip-bun-install to skip it.");
+		}
+		mkdirSync(bunInstallDirectory, { recursive: true });
+		const bunDependencies = Object.fromEntries(
+			packages.map((pkg) => [pkg.name, fileSpecifier(bunInstallDirectory, tarballs.get(pkg.name))]),
+		);
+		writeFileSync(join(bunInstallDirectory, "package.json"), `${JSON.stringify({ private: true, dependencies: bunDependencies }, undefined, "\t")}\n`);
+		run("bun", ["install", "--production", "--ignore-scripts"], { cwd: bunInstallDirectory });
+		symlinkSync(join("node_modules", ".bin", "pi"), join(bunInstallDirectory, "pi"));
+	}
 }
 
 console.log("\nLocal release artifacts created:");
@@ -180,8 +199,15 @@ for (const tarball of tarballs.values()) {
 }
 
 if (!options.skipInstall) {
-	console.log("\nIsolated install:");
-	console.log(`  ${installDirectory}`);
-	console.log("\nRun the locally packed CLI from outside the repository:");
-	console.log(`  ${join(binDirectory, "pi")} --help`);
+	console.log("\nIsolated npm install:");
+	console.log(`  ${nodeInstallDirectory}`);
+	console.log("\nRun the locally packed npm CLI from outside the repository:");
+	console.log(`  ${join(nodeInstallDirectory, "pi")} --help`);
+
+	if (!options.skipBunInstall) {
+		console.log("\nIsolated Bun install:");
+		console.log(`  ${bunInstallDirectory}`);
+		console.log("\nRun the locally packed Bun CLI from outside the repository:");
+		console.log(`  ${join(bunInstallDirectory, "pi")} --help`);
+	}
 }

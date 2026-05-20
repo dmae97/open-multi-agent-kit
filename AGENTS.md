@@ -194,9 +194,11 @@ Create provider file exporting:
    ```bash
    npm run release:local -- --out /tmp/pi-local-release --force
    cd /tmp
-   /tmp/pi-local-release/bin/pi --help
-   /tmp/pi-local-release/bin/pi --version
-   /tmp/pi-local-release/bin/pi
+   /tmp/pi-local-release/node/pi --help
+   /tmp/pi-local-release/node/pi --version
+   /tmp/pi-local-release/node/pi
+   /tmp/pi-local-release/bun/pi --help
+   /tmp/pi-local-release/bun/pi --version
    ```
    In the interactive smoke test, verify startup, model/account listing, and at least one real prompt with the intended default provider. Treat failures as release blockers unless the user explicitly accepts the risk.
 
