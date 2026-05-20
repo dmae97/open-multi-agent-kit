@@ -5,7 +5,7 @@
  * It is only intended for CLI use, not browser environments.
  */
 
-// NEVER convert to top-level imports - breaks browser/Vite builds (web-ui)
+// NEVER convert to top-level imports - breaks browser/Vite builds
 let _randomBytes: typeof import("node:crypto").randomBytes | null = null;
 let _http: typeof import("node:http") | null = null;
 if (typeof process !== "undefined" && (process.versions?.node || process.versions?.bun)) {

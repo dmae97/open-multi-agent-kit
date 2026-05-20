@@ -6,7 +6,7 @@ import type {
 	ResponseStreamEvent,
 } from "openai/resources/responses/responses.js";
 
-// NEVER convert to top-level runtime imports - breaks browser/Vite builds (web-ui)
+// NEVER convert to top-level runtime imports - breaks browser/Vite builds
 let _os: typeof NodeOs | null = null;
 
 type DynamicImport = (specifier: string) => Promise<unknown>;
