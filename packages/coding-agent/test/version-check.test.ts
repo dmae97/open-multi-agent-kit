@@ -5,6 +5,8 @@ import {
 	getLatestPiRelease,
 	getLatestPiVersion,
 	isNewerPackageVersion,
+	isNodeVersionAtLeast,
+	MINIMUM_NODE_VERSION_FOR_LATEST_PI,
 } from "../src/utils/version-check.js";
 
 const originalSkipVersionCheck = process.env.PI_SKIP_VERSION_CHECK;
@@ -31,6 +33,13 @@ describe("version checks", () => {
 		expect(comparePackageVersions("0.70.4", "0.70.5")).toBeLessThan(0);
 		expect(isNewerPackageVersion("0.70.5", "0.70.5")).toBe(false);
 		expect(isNewerPackageVersion("0.70.6", "0.70.5")).toBe(true);
+	});
+
+	it("checks the Node version required by current pi releases", () => {
+		expect(MINIMUM_NODE_VERSION_FOR_LATEST_PI).toBe("22.19.0");
+		expect(isNodeVersionAtLeast("20.19.4", MINIMUM_NODE_VERSION_FOR_LATEST_PI)).toBe(false);
+		expect(isNodeVersionAtLeast("22.19.0", MINIMUM_NODE_VERSION_FOR_LATEST_PI)).toBe(true);
+		expect(isNodeVersionAtLeast("23.0.0", MINIMUM_NODE_VERSION_FOR_LATEST_PI)).toBe(true);
 	});
 
 	it("returns only newer versions", async () => {

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.74.2] - 2026-05-21
+
+### Fixed
+
+- Fixed `pi update` on Node 20 to explain that newer Pi releases require Node >= 22.19.0 instead of reporting a successful no-op update ([#4876](https://github.com/earendil-works/pi/issues/4876)).
+- Changed self-update package-manager commands to pass `--ignore-scripts`.
+
 ## [0.74.1] - 2026-05-16
 
 ### New Features

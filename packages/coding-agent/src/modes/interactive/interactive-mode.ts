@@ -91,7 +91,11 @@ import { getCwdRelativePath } from "../../utils/paths.js";
 import { getPiUserAgent } from "../../utils/pi-user-agent.js";
 import { killTrackedDetachedChildren } from "../../utils/shell.js";
 import { ensureTool } from "../../utils/tools-manager.js";
-import { checkForNewPiVersion } from "../../utils/version-check.js";
+import {
+	checkForNewPiVersion,
+	getLatestPiNodeRequirementMessage,
+	isCurrentNodeVersionSupportedByLatestPi,
+} from "../../utils/version-check.js";
 import { ArminComponent } from "./components/armin.js";
 import { AssistantMessageComponent } from "./components/assistant-message.js";
 import { BashExecutionComponent } from "./components/bash-execution.js";
@@ -3568,8 +3572,14 @@ export class InteractiveMode {
 	}
 
 	showNewVersionNotification(newVersion: string): void {
+		const nodeVersionSupported = isCurrentNodeVersionSupportedByLatestPi();
 		const action = theme.fg("accent", `${APP_NAME} update`);
-		const updateInstruction = theme.fg("muted", `New version ${newVersion} is available. Run `) + action;
+		const updateInstruction = nodeVersionSupported
+			? theme.fg("muted", `New version ${newVersion} is available. Run `) + action
+			: theme.fg(
+					"muted",
+					`New version ${newVersion} is available. ${getLatestPiNodeRequirementMessage(`${APP_NAME} update`)}`,
+				);
 		const changelogUrl = "https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/CHANGELOG.md";
 		const changelogLink = getCapabilities().hyperlinks
 			? hyperlink(theme.fg("accent", "open changelog"), changelogUrl)
@@ -3578,12 +3588,9 @@ export class InteractiveMode {
 
 		this.chatContainer.addChild(new Spacer(1));
 		this.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
+		const title = nodeVersionSupported ? "Update Available" : "Update Requires Newer Node";
 		this.chatContainer.addChild(
-			new Text(
-				`${theme.bold(theme.fg("warning", "Update Available"))}\n${updateInstruction}\n${changelogLine}`,
-				1,
-				0,
-			),
+			new Text(`${theme.bold(theme.fg("warning", title))}\n${updateInstruction}\n${changelogLine}`, 1, 0),
 		);
 		this.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
 		this.ui.requestRender();

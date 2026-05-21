@@ -3,6 +3,8 @@ import { getPiUserAgent } from "./pi-user-agent.js";
 const LATEST_VERSION_URL = "https://pi.dev/api/latest-version";
 const DEFAULT_VERSION_CHECK_TIMEOUT_MS = 10000;
 
+export const MINIMUM_NODE_VERSION_FOR_LATEST_PI = "22.19.0";
+
 export interface LatestPiRelease {
 	version: string;
 	packageName?: string;
@@ -50,6 +52,22 @@ export function isNewerPackageVersion(candidateVersion: string, currentVersion: 
 		return comparison > 0;
 	}
 	return candidateVersion.trim() !== currentVersion.trim();
+}
+
+export function isNodeVersionAtLeast(version: string, minimumVersion: string): boolean {
+	const comparison = comparePackageVersions(version, minimumVersion);
+	if (comparison === undefined) {
+		return false;
+	}
+	return comparison >= 0;
+}
+
+export function isCurrentNodeVersionSupportedByLatestPi(): boolean {
+	return isNodeVersionAtLeast(process.versions.node, MINIMUM_NODE_VERSION_FOR_LATEST_PI);
+}
+
+export function getLatestPiNodeRequirementMessage(updateCommand: string): string {
+	return `Pi 0.75.0 and newer require Node >= ${MINIMUM_NODE_VERSION_FOR_LATEST_PI}. Current Node is ${process.version}. Update Node, then run ${updateCommand} again.`;
 }
 
 export async function getLatestPiRelease(

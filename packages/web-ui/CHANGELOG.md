@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.74.2] - 2026-05-21
+
+### Fixed
+
+- Fixed direct workspace publishing to build package artifacts before publish.
+
 ## [0.74.1] - 2026-05-16
 
 ## [0.74.0] - 2026-05-07

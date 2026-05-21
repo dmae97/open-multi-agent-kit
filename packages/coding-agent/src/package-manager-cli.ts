@@ -13,7 +13,12 @@ import {
 import { DefaultPackageManager } from "./core/package-manager.js";
 import { SettingsManager } from "./core/settings-manager.js";
 import { shouldUseWindowsShell } from "./utils/child-process.js";
-import { getLatestPiRelease, isNewerPackageVersion } from "./utils/version-check.js";
+import {
+	getLatestPiNodeRequirementMessage,
+	getLatestPiRelease,
+	isCurrentNodeVersionSupportedByLatestPi,
+	isNewerPackageVersion,
+} from "./utils/version-check.js";
 
 export type PackageCommand = "install" | "remove" | "update" | "list";
 
@@ -488,6 +493,11 @@ export async function handlePackageCommand(args: string[]): Promise<boolean> {
 				if (updateTargetIncludesSelf(target)) {
 					const selfUpdatePlan = await getSelfUpdatePlan(options.force);
 					if (!selfUpdatePlan.shouldRun) {
+						return true;
+					}
+					if (!isCurrentNodeVersionSupportedByLatestPi()) {
+						console.error(chalk.yellow(getLatestPiNodeRequirementMessage(`${APP_NAME} update --self`)));
+						process.exitCode = 1;
 						return true;
 					}
 					const selfUpdateCommand = getSelfUpdateCommand(
