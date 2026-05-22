@@ -336,7 +336,7 @@ export function registerBasicCommands(program: Command): void {
     .option("--model <model>", "provider model or provider/model override")
     .option("--max-steps-per-turn <n>", t("cmd.chatMaxStepsOption"))
     .option("--layout <auto|tmux|inline|plain>", t("cmd.chatLayoutOption"), "auto")
-    .option("--brand <kimicat|minimal|plain>", t("cmd.chatBrandOption"), "kimicat")
+    .option("--brand <kimicat|minimal|plain>", t("cmd.chatBrandOption"), "minimal")
     .option("--mode <agent|plan|chat|debugging|review>", "OMK execution mode")
     .option("--cockpit-refresh <ms>", "Cockpit refresh interval in milliseconds", "2000")
     .option("--cockpit-redraw <diff|full|append>", "Cockpit redraw mode", "diff")
@@ -416,6 +416,7 @@ export function registerBasicCommands(program: Command): void {
     .option("--height <rows>", "Cockpit fixed height in rows", "18")
     .option("--section <agents|todos|mcp|all>", "Cockpit section to render", "all")
     .option("--events <on|off>", "Use events.jsonl telemetry when available", "on")
+    .option("--view <panel|rail|compact|json>", "Cockpit view mode", "panel")
     .option("--no-clear", "Do not clear screen between refreshes")
     .option("--pause", "Start paused")
     .action(async (options) => {
@@ -429,6 +430,25 @@ export function registerBasicCommands(program: Command): void {
         redraw: options.redraw,
         section: options.section,
         events: options.events,
+        view: options.view,
+      });
+    });
+
+  program
+    .command("rail")
+    .description("Compact rail sidebar view of OMK cockpit")
+    .option("--run-id <id>", "Run ID to focus on")
+    .option("-w, --watch", "Watch mode")
+    .option("--refresh <ms>", "Refresh interval in ms", "1500")
+    .option("--height <rows>", "Fixed height in rows")
+    .action(async (options) => {
+      const globalOpts = program.opts();
+      const { railCommand } = await import("../commands/rail.js");
+      await railCommand({
+        runId: globalOpts.runId ?? options.runId,
+        watch: Boolean(options.watch),
+        refreshMs: options.refresh ? Number.parseInt(options.refresh, 10) : undefined,
+        height: options.height ? Number.parseInt(options.height, 10) : undefined,
       });
     });
 

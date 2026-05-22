@@ -531,7 +531,18 @@ function normalizeProviderModelAlias(value: string | undefined): string | undefi
   const trimmed = value?.trim();
   if (!trimmed) return undefined;
   const lower = trimmed.toLowerCase().replace(/[_\s]+/g, "-");
-  if (lower === "qwen-3.7-max" || lower === "qwen3.7-max" || lower === "qwen-3-7-max") return QWEN_DEFAULT_MODEL;
+  if (lower === "qwen-3.7-max" || lower === "qwen3.7-max" || lower === "qwen-3-7-max" || lower === "qwen-max") return QWEN_DEFAULT_MODEL;
+  if (lower === "sonnet") return "claude-sonnet";
+  if (lower === "opus") return "claude-opus";
+  if (lower === "haiku") return "claude-haiku";
+  if (lower === "gpt-4") return "gpt-4";
+  if (lower === "gpt-4o") return "gpt-4o";
+  if (lower === "gpt-4o-mini") return "gpt-4o-mini";
+  if (lower === "gemini-pro") return "gemini-pro";
+  if (lower === "gemini-flash") return "gemini-flash";
+  if (lower === "flash") return "deepseek-v4-flash";
+  if (lower === "pro") return "deepseek-v4-pro";
+  if (lower === "codex") return "codex-cli";
   return trimmed;
 }
 

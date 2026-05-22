@@ -55,8 +55,8 @@ test("buildAutoContinueRunId creates a safe unique continuation run id", () => {
 test("buildOrchestratedPrompt adapts initial NLP input into a Kimi contract", () => {
   const prompt = buildPrompt("현재 Input에서 NLP를 분석해서 KIMI 오케스트레이션으로 계속 자동 실행되게 고도화해주세요");
 
-  assert.match(prompt, /# Kimi Orchestration Prompt/);
-  assert.match(prompt, /## Kimi Prompt Adapter/);
+  assert.match(prompt, /# OMK Orchestration Prompt/);
+  assert.match(prompt, /## OMK Prompt Adapter/);
   assert.match(prompt, /Treat the original user input as intent\/NLP source/);
   assert.match(prompt, /## Source NLP Intake/);
   assert.match(prompt, /## Strict Intent \/ Action Digest/);

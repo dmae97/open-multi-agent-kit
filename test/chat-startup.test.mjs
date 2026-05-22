@@ -312,6 +312,7 @@ test("chat smoke validates startup without launching Kimi", async () => {
       OMK_CHAT_NO_BANNER: "1",
       OMK_MCP_SUPPRESS_PRUNE_WARNINGS: "",
       OMK_UPDATE_PROMPT: "force",
+      OMK_MCP_SCOPE: "project",
       KIMI_BIN: kimiBin,
     };
 

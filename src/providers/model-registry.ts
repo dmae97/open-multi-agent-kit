@@ -77,7 +77,7 @@ const DEFAULT_PROVIDER_CONFIGS: Record<KnownProviderId, Omit<ProviderRegistryEnt
     enabled: true,
     kind: "kimi-native",
     defaultModel: "kimi-k2.6",
-    aliases: { default: "kimi-k2.6", kimi: "kimi-k2.6" },
+    aliases: { default: "kimi-k2.6", kimi: "kimi-k2.6", k2: "kimi-k2", "k2.6": "kimi-k2.6", moonshot: "kimi-k2.6", "moonshot-v1": "kimi-k2.6", "kimi-k2": "kimi-k2", "kimi-k2.6": "kimi-k2.6" },
     capabilities: ["authority", "write", "shell", "mcp", "merge", "review"],
     wireApi: "kimi-native",
     auth: { method: "none" },
@@ -91,12 +91,35 @@ const DEFAULT_PROVIDER_CONFIGS: Record<KnownProviderId, Omit<ProviderRegistryEnt
     baseUrl: "https://api.deepseek.com",
     apiKeyEnv: "DEEPSEEK_API_KEY",
     defaultModel: "deepseek-v4-flash",
+    /**
+     * DeepSeek model aliases.
+     * - `deepseek-chat` and `deepseek-reasoner` are deprecated legacy names.
+     * - `deepseek-v4-flash` supports both thinking (default) and non-thinking modes.
+     * - `deepseek-v4-pro` is the high-capability tier.
+     */
     aliases: {
       default: "deepseek-v4-flash",
       flash: "deepseek-v4-flash",
       pro: "deepseek-v4-pro",
+      thinking: "deepseek-v4-flash",
+      "non-thinking": "deepseek-v4-flash",
+      chat: "deepseek-v4-flash",
+      reasoner: "deepseek-v4-flash",
+      "deepseek-chat": "deepseek-v4-flash",
+      "deepseek-coder": "deepseek-v4-pro",
+      "deepseek-reasoner": "deepseek-v4-pro",
+      "ds-chat": "deepseek-v4-flash",
+      "ds-coder": "deepseek-v4-pro",
+      "ds-r1": "deepseek-v4-pro",
+      v4: "deepseek-v4-flash",
+      "v4-flash": "deepseek-v4-flash",
+      "v4-pro": "deepseek-v4-pro",
+      "deepseek-v4": "deepseek-v4-flash",
       "deepseek-v4-flash": "deepseek-v4-flash",
+      "deepseek-v4-flash-thinking": "deepseek-v4-flash",
+      "deepseek-v4-flash-non-thinking": "deepseek-v4-flash",
       "deepseek-v4-pro": "deepseek-v4-pro",
+      "deepseek-v4-pro-thinking": "deepseek-v4-pro",
     },
     capabilities: ["read", "review", "qa", "research", "advisory"],
     wireApi: "openai-chat-completions",
@@ -109,7 +132,7 @@ const DEFAULT_PROVIDER_CONFIGS: Record<KnownProviderId, Omit<ProviderRegistryEnt
     enabled: false,
     kind: "codex-cli",
     defaultModel: "codex-cli",
-    aliases: { default: "codex-cli", codex: "codex-cli", "codex-cli": "codex-cli" },
+    aliases: { default: "codex-cli", codex: "codex-cli", "codex-cli": "codex-cli", "openai-codex": "codex-cli", "gpt-4o-codex": "codex-cli", "codex-latest": "codex-cli", openai: "codex-cli" },
     capabilities: ["read", "plan", "review", "advisory"],
     wireApi: "external-cli",
     auth: { method: "external-cli" },
@@ -131,6 +154,12 @@ const DEFAULT_PROVIDER_CONFIGS: Record<KnownProviderId, Omit<ProviderRegistryEnt
       "qwen-3.7-max": "qwen3-max",
       "qwen 3.7 max": "qwen3-max",
       "Qwen 3.7 MAX": "qwen3-max",
+      qwen: "qwen3-max",
+      "qwen-plus": "qwen3-max",
+      "qwen-turbo": "qwen3-max",
+      "qwen-coder": "qwen3-max",
+      qwen3: "qwen3-max",
+      dashscope: "qwen3-max",
     },
     capabilities: ["read", "research", "review", "qa", "advisory"],
     wireApi: "openai-chat-completions",
@@ -150,6 +179,33 @@ const DEFAULT_PROVIDER_CONFIGS: Record<KnownProviderId, Omit<ProviderRegistryEnt
       auto: "openrouter/auto",
       "openrouter-default": "openrouter/auto",
       "openrouter/auto": "openrouter/auto",
+      or: "openrouter/auto",
+      router: "openrouter/auto",
+      "gpt-4": "openai/gpt-4",
+      "gpt-4o": "openai/gpt-4o",
+      "gpt-4o-mini": "openai/gpt-4o-mini",
+      "gpt-5": "openai/gpt-5",
+      "gpt-5.1": "openai/gpt-5.1",
+      claude: "anthropic/claude-sonnet",
+      "claude-sonnet": "anthropic/claude-sonnet",
+      "claude-opus": "anthropic/claude-opus",
+      "claude-haiku": "anthropic/claude-haiku",
+      sonnet: "anthropic/claude-sonnet",
+      opus: "anthropic/claude-opus",
+      haiku: "anthropic/claude-haiku",
+      gemini: "google/gemini-pro",
+      "gemini-pro": "google/gemini-pro",
+      "gemini-flash": "google/gemini-flash",
+      deepseek: "deepseek/deepseek-chat",
+      "deepseek-chat": "deepseek/deepseek-chat",
+      "deepseek-coder": "deepseek/deepseek-coder",
+      qwen: "qwen/qwen-max",
+      "qwen-max": "qwen/qwen-max",
+      latest: "openrouter/auto",
+      best: "openrouter/auto",
+      "openai/gpt-latest": "openai/gpt-latest",
+      "anthropic/claude-sonnet": "anthropic/claude-sonnet",
+      "anthropic/claude-opus": "anthropic/claude-opus",
     },
     capabilities: ["read", "research", "review", "qa", "advisory"],
     wireApi: "openai-chat-completions",
@@ -177,10 +233,13 @@ export function normalizeProviderId(value: string | undefined): ProviderId | "au
   const lower = trimmed.toLowerCase();
   if (lower === "auto") return "auto";
   if (lower === "kimi" || lower === "moonshot") return "kimi";
-  if (lower === "deepseek" || lower === "deepseek-v4") return "deepseek";
+  if (lower === "deepseek" || lower === "deepseek-v4" || lower === "ds") return "deepseek";
   if (lower === "codex" || lower === "openai-codex") return "codex";
   if (lower === "qwen" || lower === "dashscope" || lower === "qwen3" || lower === "qwen-max") return "qwen";
   if (lower === "openrouter" || lower === "openrouter-ai") return "openrouter";
+  if (lower === "claude" || lower === "anthropic") return "openrouter";
+  if (lower === "gpt" || lower === "openai") return "openrouter";
+  if (lower === "gemini" || lower === "google") return "openrouter";
   return lower;
 }
 
@@ -195,13 +254,45 @@ export function parseProviderModelArg(value: string | undefined): { provider?: P
       model: normalizeModelAlias(trimmed.slice(slash + 1)),
     };
   }
-  return { model: normalizeModelAlias(trimmed) };
+  const model = normalizeModelAlias(trimmed);
+  const provider = inferProviderFromModel(model);
+  return provider === undefined ? { model } : { provider, model };
+}
+
+function inferProviderFromModel(model: string): ProviderId | undefined {
+  const lower = model.toLowerCase();
+  if (
+    lower === "deepseek-v4-flash" ||
+    lower === "deepseek-v4-pro" ||
+    lower === "flash" ||
+    lower === "pro" ||
+    lower === "thinking" ||
+    lower === "non-thinking" ||
+    lower === "reasoner"
+  ) return "deepseek";
+  if (lower === "codex-cli" || lower === "codex") return "codex";
+  if (lower.startsWith("claude-") || lower.startsWith("gpt-") || lower.startsWith("gemini-")) return "openrouter";
+  return undefined;
 }
 
 export function normalizeModelAlias(value: string): string {
   const trimmed = value.trim();
   const lower = trimmed.toLowerCase().replace(/[_\s]+/g, "-");
-  if (lower === "qwen-3.7-max" || lower === "qwen3.7-max" || lower === "qwen-3-7-max") return "qwen3-max";
+  if (lower === "qwen-3.7-max" || lower === "qwen3.7-max" || lower === "qwen-3-7-max" || lower === "qwen-max") return "qwen3-max";
+  if (lower === "sonnet") return "claude-sonnet";
+  if (lower === "opus") return "claude-opus";
+  if (lower === "haiku") return "claude-haiku";
+  if (lower === "gpt-4") return "gpt-4";
+  if (lower === "gpt-4o") return "gpt-4o";
+  if (lower === "gpt-4o-mini") return "gpt-4o-mini";
+  if (lower === "gemini-pro") return "gemini-pro";
+  if (lower === "gemini-flash") return "gemini-flash";
+  if (lower === "flash") return "deepseek-v4-flash";
+  if (lower === "pro") return "deepseek-v4-pro";
+  if (lower === "thinking") return "deepseek-v4-flash";
+  if (lower === "non-thinking") return "deepseek-v4-flash";
+  if (lower === "reasoner") return "deepseek-v4-flash";
+  if (lower === "codex") return "codex-cli";
   return trimmed;
 }
 

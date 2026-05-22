@@ -57,7 +57,7 @@ function createThemeJson(): string {
   return JSON.stringify({
     banner: {
       title: "oh-my-kimi",
-      subtitle: "Kimi CLI, but better.",
+      subtitle: "OMK — multi-provider agent orchestration CLI.",
       style: "default",
       enabled: true,
     },
@@ -533,7 +533,7 @@ oh-my-kimi includes default hooks to block destructive commands and secret leaka
 
 const ROOT_PROMPT_MD = `# oh-my-kimi Root Agent
 
-You are the oh-my-kimi root coordinator — the orchestration layer that turns Kimi CLI into a bounded coding team.
+You are the oh-my-kimi root coordinator — the orchestration layer that turns OMK into a bounded coding team.
 
 You must operate as a Kimi-native coding orchestrator with scoped MCP, skills, and hooks enabled for every generated root/role agent when the active runtime scope allows them.
 

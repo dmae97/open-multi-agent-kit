@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { style, kimicatCliHero } from "../util/theme.js";
+import { style, omkCliHero } from "../util/theme.js";
 import { t, initI18n } from "../util/i18n.js";
 import { buildCustomHelp } from "../util/help-text.js";
 
@@ -52,7 +52,7 @@ export function configureRootProgram(program: Command, OMK_VERSION: string, OMK_
           const maxLines = Math.max(10, termRows - 6);
           return lines.slice(0, Math.min(lines.length, maxLines)).join("\n");
         } catch {
-          return kimicatCliHero();
+          return omkCliHero();
         }
       })();
 
@@ -127,7 +127,7 @@ export function configureRootProgram(program: Command, OMK_VERSION: string, OMK_
           process.exitCode = result.status;
         }
       } else if (launchCmd === "chat") {
-        const chatArgs = [process.argv[1]!, "chat", "--layout", "auto", "--brand", "kimicat"];
+        const chatArgs = [process.argv[1]!, "chat", "--layout", "auto", "--brand", "minimal"];
         if (globalOpts.runId) chatArgs.push("--run-id", globalOpts.runId);
         if (globalOpts.workers) chatArgs.push("--workers", globalOpts.workers);
         chatArgs.push("--mode", selectedMode);

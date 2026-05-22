@@ -10,7 +10,7 @@
 
 import { readFile } from "fs/promises";
 import { join } from "path";
-import type { AgentRuntime, AgentRunResult } from "./agent-runtime.js";
+import type { AgentRuntime, AgentRunResult, AgentTask, AgentResult } from "./agent-runtime.js";
 import type { ContextCapsule } from "./context-capsule.js";
 import { createDecisionTraceStore } from "../evidence/decision-trace.js";
 
@@ -57,25 +57,41 @@ interface EvidenceHistoryEntry {
 }
 
 const INTENT_RUNTIME_PREFERENCES: Record<NodeIntent, string[]> = {
-  research: ["kimi-print", "kimi-wire"],
-  planning: ["kimi-print", "kimi-wire"],
-  coding: ["kimi-print", "kimi-wire"],
-  debugging: ["kimi-print", "kimi-wire"],
-  refactor: ["kimi-print", "kimi-wire"],
-  review: ["kimi-print", "kimi-wire"],
-  "test-generation": ["kimi-print", "kimi-wire"],
-  documentation: ["kimi-print", "kimi-wire"],
-  "shell-operation": ["kimi-print", "kimi-wire"],
+  research: ["kimi-cli", "kimi-wire", "gemini-cli", "openrouter-api"],
+  planning: ["kimi-cli", "kimi-wire", "claude-code", "codex-cli"],
+  coding: ["kimi-cli", "kimi-wire", "codex-cli", "claude-code"],
+  debugging: ["kimi-cli", "kimi-wire", "codex-cli"],
+  refactor: ["kimi-cli", "kimi-wire", "codex-cli"],
+  review: ["kimi-cli", "claude-code", "openrouter-api", "deepseek-api"],
+  "test-generation": ["kimi-cli", "kimi-wire", "codex-cli"],
+  documentation: ["kimi-cli", "gemini-cli", "openrouter-api"],
+  "shell-operation": ["kimi-cli", "kimi-wire"],
 };
 
 export function createRuntimeRouter(options: RuntimeRouterOptions = {}) {
   const runtimes = options.runtimes ?? [];
   const memoryPath = options.memoryPath;
+  const fallbackChain = options.fallbackChain;
   let evidenceCache: EvidenceHistoryEntry[] | undefined;
 
   function classifyIntent(capsule: ContextCapsule): NodeIntent {
     const text = `${capsule.nodeId} ${capsule.goal} ${capsule.task} ${capsule.system}`.toLowerCase();
     const role = capsule.node?.role?.toLowerCase() ?? "";
+
+    if (/debug|fix|error|failure|bug|trace/.test(text) || role === "debugger") return "debugging";
+    if (/review|audit|check|validate|verify/.test(text) || role === "reviewer") return "review";
+    if (/test|spec|coverage|assertion/.test(text) || role === "tester") return "test-generation";
+    if (/refactor|optimize|clean|improve|simplify/.test(text) || role === "refactor") return "refactor";
+    if (/research|investigate|explore|search|discover|analyze/.test(text) || role === "researcher") return "research";
+    if (/plan|design|architect|strategy|roadmap/.test(text) || role === "planner") return "planning";
+    if (/doc|readme|changelog|comment/.test(text) || role === "documenter") return "documentation";
+    if (/shell|command|run|exec|script/.test(text) || role === "shell") return "shell-operation";
+    return "coding";
+  }
+
+  function classifyIntentFromTask(task: AgentTask): NodeIntent {
+    const text = `${task.context.nodeId} ${task.context.goal ?? ""} ${task.prompt} ${task.context.system ?? ""}`.toLowerCase();
+    const role = task.context.role?.toLowerCase() ?? "";
 
     if (/debug|fix|error|failure|bug|trace/.test(text) || role === "debugger") return "debugging";
     if (/review|audit|check|validate|verify/.test(text) || role === "reviewer") return "review";
@@ -140,7 +156,7 @@ export function createRuntimeRouter(options: RuntimeRouterOptions = {}) {
 
     const qualityScore = 0.4 * evidencePassRate + 0.4 * intentPassRate + 0.2 * (1 - recentFailurePenalty);
     const costScore = runtime.priority > 50 ? 0.7 : 0.9;
-    const latencyScore = runtime.id === "kimi-print" ? 0.8 : 0.6;
+    const latencyScore = runtime.priority > 50 ? 0.8 : 0.6;
 
     return {
       runtime: runtime.id,
@@ -166,7 +182,44 @@ export function createRuntimeRouter(options: RuntimeRouterOptions = {}) {
 
     const scores = supporting.map((r) => computeScores(r, intent, history));
 
-    const preferred = INTENT_RUNTIME_PREFERENCES[intent];
+    const preferred = fallbackChain ?? INTENT_RUNTIME_PREFERENCES[intent];
+    const scored = supporting.map((r, i) => ({
+      runtime: r,
+      score: scores[i],
+      composite: computeComposite(scores[i], preferred, r.id),
+    }));
+
+    scored.sort((a, b) => b.composite - a.composite);
+
+    const primary = scored[0].runtime;
+    const fallbacks = scored.slice(1).map((s) => s.runtime);
+
+    const bestScore = scored[0].score;
+    const reason = [
+      `intent=${intent}`,
+      `quality=${bestScore.qualityScore.toFixed(2)}`,
+      `evidencePassRate=${bestScore.evidencePassRate.toFixed(2)}`,
+      `recentPenalty=${bestScore.recentFailurePenalty.toFixed(2)}`,
+    ].join("; ");
+
+    return { runtime: primary, reason, fallbacks, intent, scores };
+  }
+
+  function selectByIntentForTask(
+    task: AgentTask,
+    history: EvidenceHistoryEntry[],
+  ): RuntimeRouteDecision {
+    const intent = classifyIntentFromTask(task);
+    const sorted = [...runtimes].sort((a, b) => b.priority - a.priority);
+    const supporting = sorted.filter((r) => typeof r.execute === "function");
+
+    if (supporting.length === 0) {
+      throw new Error(`No runtime supports task for node ${task.context.nodeId}`);
+    }
+
+    const scores = supporting.map((r) => computeScores(r, intent, history));
+
+    const preferred = fallbackChain ?? INTENT_RUNTIME_PREFERENCES[intent];
     const scored = supporting.map((r, i) => ({
       runtime: r,
       score: scores[i],
@@ -198,7 +251,7 @@ export function createRuntimeRouter(options: RuntimeRouterOptions = {}) {
       throw new Error(`No runtime supports node ${capsule.nodeId}`);
     }
 
-    const preferred = INTENT_RUNTIME_PREFERENCES[intent];
+    const preferred = fallbackChain ?? INTENT_RUNTIME_PREFERENCES[intent];
     const scored = supporting.map((r) => ({
       runtime: r,
       composite: preferred.indexOf(r.id) >= 0 ? r.priority + 10 : r.priority,
@@ -291,6 +344,77 @@ export function createRuntimeRouter(options: RuntimeRouterOptions = {}) {
     );
   }
 
+  async function execute(task: AgentTask): Promise<AgentResult> {
+    const history = await loadEvidenceHistory();
+    const decision = selectByIntentForTask(task, history);
+    const allCandidates = [decision.runtime, ...decision.fallbacks];
+
+    // Record runtime-router decision trace
+    const runId = task.context.runId;
+    const attemptId = `${task.context.nodeId}__1`;
+    if (runId && !runId.startsWith("local-")) {
+      const traceStore = createDecisionTraceStore();
+      traceStore.record(runId, {
+        component: "runtime-router",
+        inputSummary: `node=${task.context.nodeId} intent=${decision.intent}`,
+        outputDecision: `runtime=${decision.runtime.id} fallbacks=${decision.fallbacks.map((r) => r.id).join(",")}`,
+        reason: decision.reason,
+        scores: decision.scores.reduce((acc, s) => {
+          acc[s.runtime] = s.qualityScore;
+          return acc;
+        }, {} as Record<string, number>),
+        nodeId: task.context.nodeId,
+        attemptId,
+      });
+    }
+
+    let lastError: AgentResult | undefined;
+    for (const runtime of allCandidates) {
+      if (task.context.abortSignal?.aborted) {
+        return {
+          output: "",
+          exitCode: 130,
+          metadata: { runtime: runtime.id, aborted: true },
+        };
+      }
+
+      if (typeof runtime.execute !== "function") {
+        continue;
+      }
+
+      try {
+        const result = await runtime.execute(task);
+        if (result.exitCode === 0) {
+          return {
+            ...result,
+            metadata: {
+              ...result.metadata,
+              selectedRuntime: runtime.id,
+              intent: decision.intent,
+              fallbackChain: allCandidates.map((r) => r.id),
+              scores: decision.scores,
+            },
+          };
+        }
+        lastError = result;
+      } catch (err) {
+        lastError = {
+          output: "",
+          exitCode: 1,
+          metadata: { runtime: runtime.id, error: String(err) },
+        };
+      }
+    }
+
+    return (
+      lastError ?? {
+        output: "No runtime available",
+        exitCode: 1,
+        metadata: { attempted: allCandidates.map((r) => r.id) },
+      }
+    );
+  }
+
   function invalidateCache(): void {
     evidenceCache = undefined;
   }
@@ -299,6 +423,7 @@ export function createRuntimeRouter(options: RuntimeRouterOptions = {}) {
     select,
     selectByIntent,
     runNode,
+    execute,
     classifyIntent,
     listRuntimes(): AgentRuntime[] {
       return [...runtimes];

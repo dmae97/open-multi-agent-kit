@@ -5,6 +5,7 @@ import {
   resolveDeepSeekApiKey,
   setDeepSeekApiKey,
   setDeepSeekEnabled,
+  setDeepSeekProviderOptions,
 } from "../providers/deepseek/deepseek-config.js";
 import {
   normalizeProviderId,
@@ -37,6 +38,8 @@ export interface ProviderSetOptions extends ProviderJsonOptions {
   apiKeyEnv?: string;
   kind?: ProviderConfigSetInput["kind"];
   authMethod?: ProviderAuthMethod;
+  thinkingMode?: "thinking" | "non-thinking";
+  variant?: "flash" | "pro";
 }
 
 export interface ProviderAuthOptions extends ProviderJsonOptions {
@@ -215,6 +218,8 @@ export async function providerDoctorCommand(
       disabledBy: providerStatus.disabledBy,
       apiKeySet: providerStatus.apiKeySet,
       apiKeySource: providerStatus.apiKeySource,
+      thinkingMode: providerStatus.thinkingMode,
+      variant: providerStatus.variant,
     }, null, 2));
   } else {
     console.log(header("Provider doctor"));
@@ -222,6 +227,8 @@ export async function providerDoctorCommand(
     console.log(label("Mode", "opportunistic read-only worker"));
     console.log(label("Enabled", providerStatus.enabled ? "yes" : "no"));
     console.log(label("API key", providerStatus.apiKeySet ? `set (${providerStatus.apiKeySource ?? "unknown"})` : "missing"));
+    if (providerStatus.thinkingMode) console.log(label("Thinking mode", providerStatus.thinkingMode));
+    if (providerStatus.variant) console.log(label("Variant", providerStatus.variant));
     if (result.available) {
       console.log(status.ok("DeepSeek is available"));
       const balances = result.balance?.balance_infos ?? [];
@@ -289,6 +296,12 @@ export async function providerSetCommand(
     authMethod: options.authMethod ? normalizeAuthMethodOption(options.authMethod) : undefined,
     enabled: true,
   });
+  if (normalized === "deepseek" && (options.thinkingMode !== undefined || options.variant !== undefined)) {
+    await setDeepSeekProviderOptions({
+      thinkingMode: options.thinkingMode,
+      variant: options.variant,
+    });
+  }
   const payload = {
     provider: entry.id,
     enabled: entry.enabled,

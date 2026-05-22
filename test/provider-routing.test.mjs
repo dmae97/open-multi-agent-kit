@@ -819,7 +819,7 @@ test("provider-backed runner keeps provider metadata when Kimi runtime is unavai
     assert.equal(result.metadata.requestedProvider, "kimi");
     assert.ok(result.metadata._budgetReport);
     assert.equal(result.metadata.runtime, undefined);
-    assert.match(result.stderr, /kimi.*not found/i);
+    assert.match(result.stderr, /Kimi runner not configured/i);
   } finally {
     if (previousPath === undefined) delete process.env.PATH;
     else process.env.PATH = previousPath;

@@ -120,4 +120,24 @@ export function registerWorkflowCommands(program: Command): void {
         process.exitCode = 1;
       }
     });
+
+  program
+    .command("orchestrate <goal>")
+    .description("🎯 Parallel agent orchestration with skill/MCP/hook assignment")
+    .option("--workers <n>", "Number of parallel workers (integer or 'auto')", "auto")
+    .option("--timeout <ms>", "Global timeout in milliseconds", "600000")
+    .option("--dry-run", "Show execution plan without running")
+    .option("--output <file>", "Save result JSON to file")
+    .action(async (goal, options) => {
+      const globalOpts = program.opts();
+      const { orchestrateCommand } = await import("../commands/orchestrate.js");
+      const result = await orchestrateCommand(goal, {
+        ...options,
+        runId: globalOpts.runId,
+      });
+      
+      if (result && !result.success && process.exitCode === undefined) {
+        process.exitCode = 1;
+      }
+    });
 }

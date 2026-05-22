@@ -1,4 +1,4 @@
-import { style, kimicatCliHero, label, separator } from "../util/theme.js";
+import { style, omkCliHero, label, separator } from "../util/theme.js";
 import { t, initI18n } from "../util/i18n.js";
 import { orchestratePrompt } from "../orchestration/orchestrate-prompt.js";
 import { getCurrentMode, getModePresets } from "../util/mode-preset.js";
@@ -17,7 +17,7 @@ export async function menuCommand(options: { runId?: string; workers?: string })
     });
     console.log(hud);
   } catch {
-    console.log(kimicatCliHero());
+    console.log(omkCliHero());
   }
 
   // Show current mode badge
@@ -73,7 +73,7 @@ export async function menuCommand(options: { runId?: string; workers?: string })
   switch (answer) {
     case "1": {
       const { spawnSync } = await import("child_process");
-      const chatArgs = [process.argv[1]!, "chat", "--layout", "auto", "--brand", "kimicat"];
+      const chatArgs = [process.argv[1]!, "chat", "--layout", "auto", "--brand", "minimal"];
       if (options.runId) chatArgs.push("--run-id", options.runId);
       if (options.workers) chatArgs.push("--workers", options.workers);
       const result = spawnSync(process.execPath, chatArgs, { stdio: "inherit" });

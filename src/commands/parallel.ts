@@ -3,7 +3,7 @@ import { join } from "path";
 import readline from "readline";
 
 import { getOmkPath, getProjectRoot, getRunPath, sanitizeRunId } from "../util/fs.js";
-import { style, header, status, label, kimicatCliHero, bullet } from "../util/theme.js";
+import { style, header, status, label, omkCliHero, bullet } from "../util/theme.js";
 import { t } from "../util/i18n.js";
 import { createOmkSessionEnv } from "../util/session.js";
 import { getOmkResourceSettings, type OmkRuntimeScope, getActiveRuntimePreset } from "../util/resource-profile.js";
@@ -267,7 +267,7 @@ export async function parallelCommand(
     signal: abortController.signal,
   });
 
-  console.log(kimicatCliHero(formatOmkVersionFooter()));
+  console.log(omkCliHero(formatOmkVersionFooter()));
   console.log(style.purpleBold("🐾 omk parallel — DAG executor with live UI"));
   console.log(style.gray(t("parallel.agentsActivated")));
 

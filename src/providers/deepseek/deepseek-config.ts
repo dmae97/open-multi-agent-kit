@@ -17,6 +17,8 @@ export interface DeepSeekProviderConfig {
   defaultModel?: string;
   aliases?: Record<string, string>;
   capabilities?: string[];
+  thinkingMode?: "thinking" | "non-thinking";
+  variant?: "flash" | "pro";
 }
 
 export interface GenericProviderConfig {
@@ -68,6 +70,8 @@ export interface DeepSeekProviderStatus {
   apiKeySource?: DeepSeekApiKeyResolution["source"];
   configPath: string;
   secretsPath: string;
+  thinkingMode?: "thinking" | "non-thinking";
+  variant?: "flash" | "pro";
 }
 
 const DEFAULT_API_KEY_ENV = "DEEPSEEK_API_KEY";
@@ -221,7 +225,24 @@ export async function getDeepSeekProviderStatus(
     apiKeySource: key.source,
     configPath: getDeepSeekProviderConfigPath(options),
     secretsPath: getOmkSecretsEnvPath(options),
+    thinkingMode: deepseek.thinkingMode,
+    variant: deepseek.variant,
   };
+}
+
+export async function setDeepSeekProviderOptions(
+  options: { thinkingMode?: "thinking" | "non-thinking"; variant?: "flash" | "pro" },
+  pathOptions: DeepSeekConfigPathOptions = {}
+): Promise<DeepSeekProviderConfig> {
+  const config = await readOmkProvidersConfig(pathOptions);
+  const current = normalizeDeepSeekProviderConfig(config.providers.deepseek);
+  const updated: DeepSeekProviderConfig = {
+    ...current,
+    ...options,
+    updatedAt: new Date().toISOString(),
+  };
+  await writeOmkProvidersConfig({ version: 1, providers: { ...config.providers, deepseek: updated } }, pathOptions);
+  return updated;
 }
 
 function resolveHomeDir(options: DeepSeekConfigPathOptions): string {
@@ -271,6 +292,8 @@ function normalizeDeepSeekProviderConfig(value: unknown): DeepSeekProviderConfig
     defaultModel: typeof value.defaultModel === "string" && value.defaultModel.trim() ? value.defaultModel : undefined,
     aliases: normalizeStringMap(value.aliases),
     capabilities: normalizeStringList(value.capabilities),
+    thinkingMode: value.thinkingMode === "thinking" || value.thinkingMode === "non-thinking" ? value.thinkingMode : undefined,
+    variant: value.variant === "flash" || value.variant === "pro" ? value.variant : undefined,
   };
 }
 

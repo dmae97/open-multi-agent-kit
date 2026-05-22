@@ -166,6 +166,51 @@ test("Kimi DAG runner honors KIMI_BIN when kimi is not on PATH", async () => {
   }
 });
 
+test("Kimi DAG runner auto-sends ENTER when fake Kimi CLI outputs continue prompt", async () => {
+  if (process.platform === "win32") return;
+  const projectRoot = await mkdtemp(join(tmpdir(), "omk-kimi-continue-prompt-project-"));
+  const homeRoot = await mkdtemp(join(tmpdir(), "omk-kimi-continue-prompt-home-"));
+  const binDir = join(projectRoot, "bin");
+  const kimiBin = join(binDir, "fake-kimi");
+  const previousProjectRoot = process.env.OMK_PROJECT_ROOT;
+  process.env.OMK_PROJECT_ROOT = projectRoot;
+  try {
+    await mkdir(binDir, { recursive: true });
+    const fakeScript = join(projectRoot, "fake-kimi.js");
+    await writeFile(fakeScript, `process.stdout.write("Press ENTER to continue...");\nprocess.stdin.once("data", () => { process.stdout.write("\\ncontinued\\n"); process.exit(0); });\nsetInterval(() => {}, 5000);\n`, "utf-8");
+    await writeFile(kimiBin, `#!/usr/bin/env sh\nexec "${process.execPath}" "${fakeScript}" "$@"\n`, "utf-8");
+    await chmod(kimiBin, 0o755);
+
+    const runner = createKimiTaskRunner({
+      cwd: projectRoot,
+      mcpScope: "none",
+      skillsScope: "none",
+      hooksScope: "none",
+      env: {
+        HOME: homeRoot,
+        OMK_ORIGINAL_HOME: homeRoot,
+        OMK_PROJECT_ROOT: projectRoot,
+        KIMI_BIN: kimiBin,
+        PATH: "/usr/bin:/bin",
+      },
+      timeout: 5000,
+    });
+
+    const result = await runner.run(
+      { id: "n1", name: "node", role: "coder", dependsOn: [], status: "pending", retries: 0, maxRetries: 0 },
+      {}
+    );
+
+    assert.equal(result.success, true, result.stderr || result.stdout);
+    assert.match(result.stdout, /continued/);
+  } finally {
+    if (previousProjectRoot === undefined) delete process.env.OMK_PROJECT_ROOT;
+    else process.env.OMK_PROJECT_ROOT = previousProjectRoot;
+    await rm(projectRoot, { recursive: true, force: true });
+    await rm(homeRoot, { recursive: true, force: true });
+  }
+});
+
 test("Kimi DAG runner resolves router role agent without fallback warning", async () => {
   if (process.platform === "win32") return;
   const projectRoot = await mkdtemp(join(tmpdir(), "omk-kimi-router-role-project-"));

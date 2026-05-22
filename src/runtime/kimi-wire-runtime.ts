@@ -1,129 +1,438 @@
 /**
- * KimiWireRuntime — wraps KimiWireClient (kimi --wire JSON-RPC).
+ * KimiWireRuntime — Moonshot API runtime adapter.
  *
- * Uses the wire protocol for structured tool-call interaction.
- * Currently incomplete — wire-mode tool handling is not fully implemented.
+ * Calls https://api.moonshot.cn/v1/chat/completions directly.
  */
 
-import type { AgentRuntime, AgentRunResult } from "./agent-runtime.js";
+import type {
+  AgentRuntime,
+  AgentRunResult,
+  AgentResult,
+  AgentTask,
+  RuntimeCapabilities,
+  RuntimeHealth,
+  TokenUsage,
+  ToolCallRecord,
+} from "./agent-runtime.js";
 import type { ContextCapsule } from "./context-capsule.js";
-import { KimiWireClient } from "../kimi/wire-client.js";
-import { CappedOutputBuffer } from "../util/output-buffer.js";
-import { getOmkResourceSettings } from "../util/resource-profile.js";
+import { capsuleToTask } from "./context-broker-converter.js";
+
+interface MoonshotChatMessage {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string;
+}
+
+interface MoonshotTool {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: unknown;
+  };
+}
+
+interface MoonshotStreamDelta {
+  content?: string;
+  reasoning_content?: string;
+  role?: string;
+  tool_calls?: Array<{
+    index: number;
+    id?: string;
+    type?: "function";
+    function?: { name?: string; arguments?: string };
+  }>;
+}
+
+interface MoonshotStreamChoice {
+  delta: MoonshotStreamDelta;
+  finish_reason?: string | null;
+  index: number;
+}
+
+interface MoonshotStreamResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  choices: MoonshotStreamChoice[];
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
+interface MoonshotMessage {
+  role: string;
+  content: string;
+  reasoning_content?: string;
+  tool_calls?: Array<{
+    id: string;
+    type: "function";
+    function: { name: string; arguments: string };
+  }>;
+}
+
+interface MoonshotNonStreamChoice {
+  message: MoonshotMessage;
+  finish_reason?: string | null;
+  index: number;
+}
+
+interface MoonshotNonStreamResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  choices: MoonshotNonStreamChoice[];
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
+function mapToolCalls(
+  apiToolCalls:
+    | Array<{
+        id: string;
+        type: "function";
+        function: { name: string; arguments: string };
+      }>
+    | undefined
+): ToolCallRecord[] | undefined {
+  if (!apiToolCalls || apiToolCalls.length === 0) return undefined;
+  return apiToolCalls.map((tc) => {
+    let input: unknown;
+    try {
+      input = JSON.parse(tc.function.arguments) as unknown;
+    } catch {
+      input = tc.function.arguments;
+    }
+    return {
+      name: tc.function.name,
+      input,
+      output: undefined,
+      durationMs: 0,
+      success: false,
+    };
+  });
+}
 
 export interface KimiWireRuntimeOptions {
-  readonly agentFile?: string;
-  readonly configFile?: string;
-  readonly mcpConfigFile?: string;
-  readonly cwd?: string;
-  readonly env?: NodeJS.ProcessEnv;
-  readonly timeoutMs?: number;
-  readonly enabled?: boolean;
+  apiKey?: string;
+  model?: string;
+  baseUrl?: string;
+  /** @deprecated Wire-client option, ignored by HTTP adapter */
+  cwd?: string;
+  /** @deprecated Wire-client option, used only to read KIMI_API_KEY */
+  env?: NodeJS.ProcessEnv;
+  /** @deprecated Wire-client option, ignored by HTTP adapter */
+  agentFile?: string;
+  /** @deprecated Wire-client option, ignored by HTTP adapter */
+  configFile?: string;
+  /** @deprecated Wire-client option, ignored by HTTP adapter */
+  mcpConfigFile?: string;
+  /** @deprecated Wire-client option, ignored by HTTP adapter */
+  timeoutMs?: number;
+  /** @deprecated Wire-client option, ignored by HTTP adapter */
+  enabled?: boolean;
 }
 
 export function createKimiWireRuntime(options: KimiWireRuntimeOptions = {}): AgentRuntime {
   const env = options.env ?? process.env;
-  const enabled = options.enabled === true || /^(1|true|yes)$/i.test(env.OMK_ENABLE_KIMI_WIRE ?? "");
-  return {
-    id: "kimi-wire",
-    priority: 90,
+  return new KimiWireRuntime({
+    apiKey: options.apiKey ?? env.KIMI_API_KEY,
+    model: options.model ?? env.KIMI_MODEL,
+    baseUrl: options.baseUrl ?? env.KIMI_BASE_URL,
+  });
+}
 
-    supports(_capsule: ContextCapsule): boolean {
-      return enabled;
-    },
+export class KimiWireRuntime implements AgentRuntime {
+  readonly id = "kimi-wire";
+  readonly kind = "api";
+  readonly priority = 90;
+  readonly capabilities: RuntimeCapabilities = {
+    read: true,
+    write: true,
+    shell: false,
+    mcp: false,
+    patch: true,
+    review: true,
+    merge: false,
+    vision: true,
+    supportsStreaming: true,
+    supportsStructuredOutput: false,
+    supportsToolCalling: true,
+  };
 
-    async runNode(capsule: ContextCapsule, signal: AbortSignal): Promise<AgentRunResult> {
-      const resources = await getOmkResourceSettings();
-      const client = new KimiWireClient({
-        agentFile: options.agentFile,
-        configFile: options.configFile,
-        mcpConfigFile: options.mcpConfigFile,
-        cwd: options.cwd,
-        env: options.env,
+  private readonly apiKey: string | undefined;
+  private readonly model: string;
+  private readonly baseUrl: string;
+
+  constructor(options: KimiWireRuntimeOptions = {}) {
+    this.apiKey = options.apiKey ?? process.env.KIMI_API_KEY;
+    this.model = options.model ?? process.env.KIMI_MODEL ?? "kimi-k2-6";
+    this.baseUrl = (options.baseUrl ?? "https://api.moonshot.cn/v1").replace(/\/+$/, "");
+  }
+
+  supports(capsule: ContextCapsule): boolean {
+    if (!this.apiKey) return false;
+    const requiresVision = capsule.node.routing?.assignedProviderCapabilities?.includes("vision");
+    if (requiresVision && !this.capabilities.vision) return false;
+    const requiresToolCalling = capsule.node.routing?.requiresToolCalling;
+    if (requiresToolCalling && !this.capabilities.supportsToolCalling) return false;
+    return true;
+  }
+
+  async health(): Promise<RuntimeHealth> {
+    const available = Boolean(this.apiKey);
+    return {
+      runtimeId: this.id,
+      available,
+      reason: available ? undefined : "KIMI_API_KEY is not set",
+      checkedAt: new Date().toISOString(),
+    };
+  }
+
+  async runNode(capsule: ContextCapsule, signal: AbortSignal): Promise<AgentRunResult> {
+    try {
+      const task = await capsuleToTask(capsule, signal);
+      const result = await this.execute(task);
+      return {
+        success: result.exitCode === 0,
+        exitCode: result.exitCode,
+        stdout: result.output,
+        stderr: "",
+        metadata: {
+          runtime: this.id,
+          ...(result.thinking && { thinking: result.thinking }),
+          ...(result.tokenUsage && { tokenUsage: result.tokenUsage as TokenUsage }),
+          ...(result.metadata && { ...result.metadata }),
+        },
+        toolCalls: result.toolCalls,
+      };
+    } catch (err) {
+      const errorMsg = String(err);
+      return {
+        success: false,
+        exitCode: 1,
+        stdout: "",
+        stderr: errorMsg,
+        metadata: { runtime: this.id, error: errorMsg },
+      };
+    }
+  }
+
+  async execute(task: AgentTask): Promise<AgentResult> {
+    if (!this.apiKey) {
+      return {
+        output: "",
+        exitCode: 1,
+        thinking: "",
+        metadata: { error: "KIMI_API_KEY is not set" },
+      };
+    }
+
+    const messages: MoonshotChatMessage[] = [];
+    if (task.context.system) {
+      messages.push({ role: "system", content: task.context.system });
+    }
+    messages.push({ role: "user", content: task.prompt });
+
+    const tools: MoonshotTool[] = task.capabilities.toolCalling
+      ? task.tools.available.map((t) => ({
+          type: "function",
+          function: {
+            name: t.name,
+            description: t.description,
+            parameters: t.inputSchema,
+          },
+        }))
+      : [];
+
+    const body: Record<string, unknown> = {
+      model: this.model,
+      messages,
+      stream: task.capabilities.streaming ?? true,
+    };
+
+    if (tools.length > 0) {
+      body.tools = tools;
+    }
+
+    if (task.capabilities.maxTokens) {
+      body.max_tokens = task.capabilities.maxTokens;
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: task.context.abortSignal,
       });
 
-      const stdout = new CappedOutputBuffer(resources.wireOutputBytes, "wire stdout");
-      const stderr = new CappedOutputBuffer(resources.wireOutputBytes, "wire stderr");
-      const startedAt = Date.now();
-
-      try {
-        await client.start();
-
-        const offEvent = client.onEvent((event) => {
-          if (signal.aborted) return;
-          if (event.type === "message") {
-            stdout.append(`${event.content}\n`);
-          } else if (event.type === "error") {
-            stderr.append(`${event.message}\n`);
-          } else if (event.type === "tool_result") {
-            stdout.append(`${JSON.stringify(event.output)}\n`);
-          }
-        });
-
-        const promptParts: string[] = [
-          capsule.system,
-          capsule.task,
-        ];
-
-        if (capsule.dependencySummaries.length > 0) {
-          promptParts.push(`\nDependency outputs:\n${capsule.dependencySummaries.join("\n---\n")}`);
-        }
-        if (capsule.evidenceRequirements.length > 0) {
-          promptParts.push(`\nEvidence required:\n${capsule.evidenceRequirements.map((e) => `- ${e.gate}: ${e.ref ?? "(any)"}`).join("\n")}`);
-        }
-        if (capsule.relevantFiles.length > 0) {
-          const fileSection = capsule.relevantFiles
-            .map((f) => `### ${f.path}${f.startLine > 0 ? ` (lines ${f.startLine}-${f.endLine})` : ""}\n${f.content}`)
-            .join("\n\n");
-          promptParts.push(`\nRelevant files:\n${fileSection}`);
-        }
-        if (capsule.graphMemory.length > 0) {
-          const memorySection = capsule.graphMemory
-            .map((m) => `- [${m.kind}] ${m.subject} ${m.predicate} ${m.object} (confidence: ${m.confidence})`)
-            .join('\n');
-          promptParts.push(`\nProject knowledge:\n${memorySection}`);
-        }
-        if (capsule.priorAttempts.length > 0) {
-          const attemptSection = capsule.priorAttempts
-            .slice(-3)
-            .map((a) => `- attempt ${a.attempt} (${a.provider}): ${a.status}${a.failureSummary ? ` — ${a.failureSummary.slice(0, 200)}` : ""}`)
-            .join("\n");
-          promptParts.push(`\nPrior attempts:\n${attemptSection}`);
-        }
-
-        const prompt = promptParts.filter(Boolean).join("\n\n");
-        if (!prompt.trim()) {
-          throw new Error("[omk] KimiWireRuntime refused to send an empty prompt to the wire client.");
-        }
-
-        const result = await client.prompt(prompt);
-        offEvent();
-
-        const durationMs = Date.now() - startedAt;
-        const success = result.status === "finished" && !signal.aborted;
-
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "Unknown error");
         return {
-          success,
-          stdout: stdout.toString(),
-          stderr: stderr.toString(),
-          metadata: {
-            runtime: "kimi-wire",
-            durationMs,
-            capsuleTokens: capsule.budget.maxInputTokens,
-          },
-        };
-      } catch (err) {
-        stderr.append(`\n${String(err)}`);
-        return {
-          success: false,
+          output: "",
           exitCode: 1,
-          stdout: stdout.toString(),
-          stderr: stderr.toString(),
-          metadata: { runtime: "kimi-wire", error: String(err) },
+          thinking: "",
+          metadata: { error: `Moonshot API error ${response.status}: ${errorText}` },
         };
-      } finally {
-        await client.stop();
       }
-    },
-  };
+
+      if (task.capabilities.streaming) {
+        return this.parseStreamResponse(response);
+      }
+
+      const payload = (await response.json()) as MoonshotNonStreamResponse;
+      const choice = payload.choices?.[0];
+      const content = choice?.message?.content ?? "";
+      const reasoning = choice?.message?.reasoning_content ?? "";
+      const usage = payload.usage;
+
+      return {
+        output: content,
+        exitCode: 0,
+        thinking: reasoning || undefined,
+        tokenUsage: usage
+          ? {
+              inputTokens: usage.prompt_tokens,
+              outputTokens: usage.completion_tokens,
+              totalTokens: usage.total_tokens,
+            }
+          : undefined,
+        toolCalls: mapToolCalls(choice?.message?.tool_calls),
+        metadata: { model: payload.model, finishReason: choice?.finish_reason ?? null },
+      };
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        return {
+          output: "",
+          exitCode: 130,
+          thinking: "",
+          metadata: { error: "Request aborted" },
+        };
+      }
+      return {
+        output: "",
+        exitCode: 1,
+        thinking: "",
+        metadata: { error: String(err) },
+      };
+    }
+  }
+
+  private async parseStreamResponse(response: Response): Promise<AgentResult> {
+    const reader = response.body?.getReader();
+    if (!reader) {
+      return {
+        output: "",
+        exitCode: 1,
+        thinking: "",
+        metadata: { error: "No response body for stream" },
+      };
+    }
+
+    const decoder = new TextDecoder();
+    let output = "";
+    let reasoning = "";
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let totalTokens = 0;
+    let model = "";
+    let finishReason: string | null = null;
+
+    const toolCallAccumulator = new Map<
+      number,
+      { id?: string; type?: string; name?: string; arguments: string }
+    >();
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk.split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === "data: [DONE]") continue;
+          if (!trimmed.startsWith("data: ")) continue;
+
+          const jsonStr = trimmed.slice(6);
+          let parsed: MoonshotStreamResponse;
+          try {
+            parsed = JSON.parse(jsonStr) as MoonshotStreamResponse;
+          } catch {
+            continue;
+          }
+
+          if (parsed.model) model = parsed.model;
+          const choice = parsed.choices?.[0];
+          if (choice?.finish_reason != null) {
+            finishReason = choice.finish_reason;
+          }
+
+          const delta = choice?.delta;
+          if (delta?.content) {
+            output += delta.content;
+          }
+          if (delta?.reasoning_content) {
+            reasoning += delta.reasoning_content;
+          }
+          if (delta?.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index ?? 0;
+              const existing = toolCallAccumulator.get(idx) ?? { arguments: "" };
+              if (tc.id) existing.id = tc.id;
+              if (tc.type) existing.type = tc.type;
+              if (tc.function?.name) existing.name = tc.function.name;
+              if (tc.function?.arguments) existing.arguments += tc.function.arguments;
+              toolCallAccumulator.set(idx, existing);
+            }
+          }
+          if (parsed.usage) {
+            inputTokens = parsed.usage.prompt_tokens;
+            outputTokens = parsed.usage.completion_tokens;
+            totalTokens = parsed.usage.total_tokens;
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    const streamedToolCalls: Array<{
+      id: string;
+      type: "function";
+      function: { name: string; arguments: string };
+    }> = [];
+    for (let i = 0; i < toolCallAccumulator.size; i++) {
+      const acc = toolCallAccumulator.get(i);
+      if (acc && acc.id && acc.name) {
+        streamedToolCalls.push({
+          id: acc.id,
+          type: "function",
+          function: { name: acc.name, arguments: acc.arguments },
+        });
+      }
+    }
+
+    return {
+      output,
+      exitCode: 0,
+      thinking: reasoning || undefined,
+      tokenUsage:
+        totalTokens > 0
+          ? { inputTokens, outputTokens, totalTokens }
+          : undefined,
+      toolCalls: mapToolCalls(streamedToolCalls),
+      metadata: { model, finishReason },
+    };
+  }
 }

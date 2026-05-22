@@ -41,6 +41,8 @@
     "evidence-gates",
     "multi-agent-orchestration",
     "agent-supervisor",
+    "open-multiagent-kit",
+    "omk",
     "agent",
     "agent-ensemble",
     "agent-orchestration",
@@ -65,12 +67,9 @@
     "ensemble",
     "git-worktree",
     "graph-memory",
-    "k2.6",
     "kimi",
     "kimi-cli",
     "kimi-code",
-    "kimi-k2",
-    "kimi-k2.6",
     "language-server-protocol",
     "large-language-model",
     "llm",
@@ -78,7 +77,6 @@
     "lsp",
     "mcp",
     "model-context-protocol",
-    "moonshot",
     "multi-agent",
     "multi-agent-orchestration",
     "nodejs",
@@ -151,7 +149,8 @@
     "npm": ">=10.0.0"
   },
   "optionalDependencies": {
-    "kuzu": "^0.11.3"
+    "kuzu": "^0.11.3",
+    "playwright": "^1.44.0"
   },
   "overrides": {
     "cmake-js": {
