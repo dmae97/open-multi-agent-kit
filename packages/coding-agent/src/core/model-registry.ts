@@ -128,6 +128,9 @@ const OpenAIResponsesCompatSchema = Type.Object({
 const AnthropicMessagesCompatSchema = Type.Object({
 	supportsEagerToolInputStreaming: Type.Optional(Type.Boolean()),
 	supportsLongCacheRetention: Type.Optional(Type.Boolean()),
+	sendSessionAffinityHeaders: Type.Optional(Type.Boolean()),
+	supportsCacheControlOnTools: Type.Optional(Type.Boolean()),
+	forceAdaptiveThinking: Type.Optional(Type.Boolean()),
 });
 
 const ProviderCompatSchema = Type.Union([

@@ -315,9 +315,11 @@ Behavior notes:
 
 ## Anthropic Messages Compatibility
 
-For providers or proxies using `api: "anthropic-messages"`, use `compat.supportsEagerToolInputStreaming` to control Anthropic fine-grained tool streaming compatibility.
+For providers or proxies using `api: "anthropic-messages"`, use `compat` to control Anthropic-specific request compatibility.
 
 By default pi sends per-tool `eager_input_streaming: true`. If a proxy or Anthropic-compatible backend rejects that field, set `supportsEagerToolInputStreaming` to `false`. Pi will omit `tools[].eager_input_streaming` and send the legacy `fine-grained-tool-streaming-2025-05-14` beta header for tool-enabled requests instead.
+
+Some Anthropic models require adaptive thinking (`thinking.type: "adaptive"` plus `output_config.effort`) instead of the legacy budget-based thinking payload. Built-in models set this automatically. For custom providers or aliases that route to those models, set `forceAdaptiveThinking` to `true`.
 
 ```json
 {
@@ -328,7 +330,8 @@ By default pi sends per-tool `eager_input_streaming: true`. If a proxy or Anthro
       "apiKey": "ANTHROPIC_PROXY_KEY",
       "compat": {
         "supportsEagerToolInputStreaming": false,
-        "supportsLongCacheRetention": true
+        "supportsLongCacheRetention": true,
+        "forceAdaptiveThinking": true
       },
       "models": [
         {
@@ -346,6 +349,9 @@ By default pi sends per-tool `eager_input_streaming: true`. If a proxy or Anthro
 |-------|-------------|
 | `supportsEagerToolInputStreaming` | Whether the provider accepts per-tool `eager_input_streaming`. Default: `true`. Set to `false` to omit that field and use the legacy fine-grained tool streaming beta header on tool-enabled requests. |
 | `supportsLongCacheRetention` | Whether the provider accepts Anthropic long cache retention (`cache_control.ttl: "1h"`) when cache retention is `long`. Default: `true`. |
+| `sendSessionAffinityHeaders` | Whether to send `x-session-affinity` from the session id when caching is enabled. Default: auto-detected for known providers. |
+| `supportsCacheControlOnTools` | Whether the provider accepts Anthropic-style `cache_control` markers on tool definitions. Default: `true`. |
+| `forceAdaptiveThinking` | Whether to send adaptive thinking (`thinking.type: "adaptive"` plus `output_config.effort`) for this model. Built-in adaptive models set this automatically. Default: `false`. |
 
 ## OpenAI Compatibility
 

@@ -230,6 +230,8 @@ models: [{
 Use `openrouter` for OpenRouter-style `reasoning: { effort }` controls. Use `together` for Together-style `reasoning: { enabled }` controls; with `supportsReasoningEffort`, it also sends `reasoning_effort`. Use `qwen-chat-template` instead for local Qwen-compatible servers that read `chat_template_kwargs.enable_thinking`.
 Use `cacheControlFormat: "anthropic"` for OpenAI-compatible providers that expose Anthropic-style prompt caching via `cache_control` on the system prompt, last tool definition, and last user/assistant text content.
 
+For Anthropic-compatible providers using `api: "anthropic-messages"`, set `compat.forceAdaptiveThinking: true` on models or providers whose upstream model requires adaptive thinking (`thinking.type: "adaptive"` plus `output_config.effort`). Built-in adaptive Claude models set this automatically.
+
 > Migration note: Mistral moved from `openai-completions` to `mistral-conversations`.
 > Use `mistral-conversations` for native Mistral models.
 > If you intentionally route Mistral-compatible/custom endpoints through `openai-completions`, set `compat` flags explicitly as needed.
@@ -702,8 +704,9 @@ interface ProviderModelConfig {
   /** Custom headers for this specific model. */
   headers?: Record<string, string>;
 
-  /** OpenAI compatibility settings for openai-completions API. */
+  /** Compatibility settings for the selected API. */
   compat?: {
+    // openai-completions
     supportsStore?: boolean;
     supportsDeveloperRole?: boolean;
     supportsReasoningEffort?: boolean;
@@ -715,6 +718,13 @@ interface ProviderModelConfig {
     requiresReasoningContentOnAssistantMessages?: boolean;
     thinkingFormat?: "openai" | "openrouter" | "deepseek" | "together" | "zai" | "qwen" | "qwen-chat-template";
     cacheControlFormat?: "anthropic";
+
+    // anthropic-messages
+    supportsEagerToolInputStreaming?: boolean;
+    supportsLongCacheRetention?: boolean;
+    sendSessionAffinityHeaders?: boolean;
+    supportsCacheControlOnTools?: boolean;
+    forceAdaptiveThinking?: boolean;
   };
 }
 ```

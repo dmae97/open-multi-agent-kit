@@ -435,6 +435,16 @@ export interface AnthropicMessagesCompat {
 	 * Default: true.
 	 */
 	supportsCacheControlOnTools?: boolean;
+	/**
+	 * Whether to force adaptive thinking (`thinking.type: "adaptive"` plus
+	 * `output_config.effort`) regardless of the model id. Built-in models that
+	 * require adaptive thinking set this in generated metadata. Custom
+	 * Anthropic-compatible providers can set this to `true` for any model whose
+	 * upstream requires the adaptive format. Set to `false` to
+	 * opt out on overridden built-in models.
+	 * Default: false.
+	 */
+	forceAdaptiveThinking?: boolean;
 }
 
 /**

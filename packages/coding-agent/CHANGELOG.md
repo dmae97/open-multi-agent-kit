@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added `compat.forceAdaptiveThinking` support to custom Anthropic-compatible model configuration docs and validation ([#4797](https://github.com/earendil-works/pi-mono/pull/4797) by [@mbazso](https://github.com/mbazso)).
 - Added a standard unified patch to edit tool result details for SDK consumers ([#4821](https://github.com/earendil-works/pi/issues/4821)).
 
 ### Changed

@@ -178,6 +178,21 @@ function isGoogleThinkingApi(model: Model<any>): boolean {
 	return model.api === "google-generative-ai" || model.api === "google-vertex";
 }
 
+function isAnthropicAdaptiveThinkingModel(modelId: string): boolean {
+	return (
+		modelId.includes("opus-4-6") ||
+		modelId.includes("opus-4.6") ||
+		modelId.includes("opus-4-7") ||
+		modelId.includes("opus-4.7") ||
+		modelId.includes("sonnet-4-6") ||
+		modelId.includes("sonnet-4.6")
+	);
+}
+
+function mergeAnthropicMessagesCompat(model: Model<Api>, compat: AnthropicMessagesCompat): void {
+	model.compat = { ...(model.compat as AnthropicMessagesCompat | undefined), ...compat };
+}
+
 function isGemini3ProModel(modelId: string): boolean {
 	return /gemini-3(?:\.\d+)?-pro/.test(modelId.toLowerCase());
 }
@@ -215,6 +230,9 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
 	}
 	if (model.id.includes("opus-4-7") || model.id.includes("opus-4.7")) {
 		mergeThinkingLevelMap(model, { xhigh: "xhigh" });
+	}
+	if (model.api === "anthropic-messages" && isAnthropicAdaptiveThinkingModel(model.id)) {
+		mergeAnthropicMessagesCompat(model, { forceAdaptiveThinking: true });
 	}
 	if (model.api === "openai-completions" && model.id.includes("deepseek-v4")) {
 		mergeThinkingLevelMap(model, DEEPSEEK_V4_THINKING_LEVEL_MAP);
