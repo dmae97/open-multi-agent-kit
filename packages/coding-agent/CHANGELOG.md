@@ -13,6 +13,7 @@
 
 ### Fixed
 
+- Fixed `pi update` to reconcile git-pinned packages to their configured ref ([#4869](https://github.com/earendil-works/pi/issues/4869)).
 - Fixed OpenCode Zen/Go requests to send per-session OpenCode routing headers ([#4847](https://github.com/earendil-works/pi/issues/4847)).
 - Fixed Amazon Bedrock provider loading under strict package managers by inheriting the declared `@smithy/node-http-handler` dependency from `@earendil-works/pi-ai` ([#4842](https://github.com/earendil-works/pi/issues/4842)).
 - Fixed exported session HTML to escape quote characters in attribute values ([#4832](https://github.com/earendil-works/pi/issues/4832)).
