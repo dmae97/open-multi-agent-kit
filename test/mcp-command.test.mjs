@@ -318,10 +318,6 @@ test("runtime MCP preflight keeps all-scope precedence and keeps timed-out npm-f
           args: ["-y", "@scope/bad-server", "--token=SHOULD_NOT_LEAK"],
           env: { API_TOKEN: "SHOULD_NOT_LEAK" },
         },
-        remote: {
-          url: "https://example.test/mcp?token=SHOULD_NOT_LEAK",
-          headers: { Authorization: "Bearer SHOULD_NOT_LEAK" },
-        },
       },
     }), "utf-8");
     await writeFile(join(projectRoot, ".kimi", "mcp.json"), JSON.stringify({
@@ -339,7 +335,6 @@ test("runtime MCP preflight keeps all-scope precedence and keeps timed-out npm-f
       console.log(JSON.stringify({
         names: Object.keys(parsed.mcpServers).sort(),
         sharedCommand: parsed.mcpServers.shared.command,
-        remoteKept: Boolean(parsed.mcpServers.remote),
         badNpmKept: Boolean(parsed.mcpServers.badNpm),
       }));
     `, {
@@ -351,11 +346,10 @@ test("runtime MCP preflight keeps all-scope precedence and keeps timed-out npm-f
 
     assert.equal(result.status, 0, result.stderr || result.stdout);
     const parsed = JSON.parse(result.stdout.trim().split("\n").at(-1));
-    assert.deepEqual(parsed.names, ["badNpm", "remote", "shared"]);
+    assert.deepEqual(parsed.names, ["badNpm", "shared"]);
     assert.equal(parsed.sharedCommand, "bash");
-    assert.equal(parsed.remoteKept, true);
     assert.equal(parsed.badNpmKept, true);
-    assert.match(result.stderr, /MCP preflight found 1 npm-family issue/);
+    assert.match(result.stderr, /MCP preflight found 1 issue/);
     assert.match(result.stderr, /Kept 1 timeout server/);
     assert.doesNotMatch(result.stdout + result.stderr, /SHOULD_NOT_LEAK|Authorization|Bearer|API_TOKEN=/);
   } finally {
@@ -394,8 +388,8 @@ test("runtime MCP preflight warn-skip removes exit-failed npm-family servers", a
 
     assert.equal(result.status, 0, result.stderr || result.stdout);
     assert.deepEqual(JSON.parse(result.stdout.trim().split("\n").at(-1)), []);
-    assert.match(result.stderr, /MCP preflight found 1 npm-family issue/);
-    assert.match(result.stderr, /Removed 1 exit-failed server/);
+    assert.match(result.stderr, /MCP preflight found 1 issue/);
+    assert.match(result.stderr, /Removed 1 failed server/);
     assert.doesNotMatch(result.stdout + result.stderr, /SHOULD_NOT_LEAK|Bearer|API_TOKEN=/);
   } finally {
     await removeTree(projectRoot);
@@ -558,9 +552,9 @@ test("mcp prewarm --all reports active server results without leaking secrets", 
     assert.match(result.stdout, /MCP Preflight Check All/);
     assert.match(result.stdout, /npmOk/);
     assert.match(result.stdout, /@scope\/ok-server/);
-    assert.match(result.stdout, /local .*skipped: not npm-family/);
+    assert.match(result.stdout, /local/);
     assert.match(result.stdout, /globalOnly .*inactive/);
-    assert.match(result.stdout, /Checked 1 server/);
+    assert.match(result.stdout, /Checked 2 server/);
     assert.doesNotMatch(result.stdout + result.stderr, /SHOULD_NOT_LEAK|Authorization|Bearer|API_TOKEN=/);
   } finally {
     await removeTree(projectRoot);
@@ -691,7 +685,7 @@ test("mcp sync-global uses project sanitizer for URL args headers and env", asyn
   }
 });
 
-test("runtime MCP preflight defaults off to avoid startup npm probe latency", async () => {
+test("runtime MCP preflight defaults warn-skip to filter broken servers before Kimi startup", async () => {
   const projectRoot = await mkdtemp(join(tmpdir(), "omk-mcp-preflight-default-"));
   const homeRoot = await mkdtemp(join(tmpdir(), "omk-mcp-home-"));
 
@@ -701,7 +695,7 @@ test("runtime MCP preflight defaults off to avoid startup npm probe latency", as
       console.log(JSON.stringify(resolveRuntimeMcpPreflightOptions({})));
     `, { OMK_MCP_PREFLIGHT: "" });
     assert.equal(result.status, 0, result.stderr || result.stdout);
-    assert.equal(JSON.parse(result.stdout.trim()).mode, "off");
+    assert.equal(JSON.parse(result.stdout.trim()).mode, "warn-skip");
   } finally {
     await removeTree(projectRoot);
     await removeTree(homeRoot);

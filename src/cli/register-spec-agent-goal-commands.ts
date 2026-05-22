@@ -322,4 +322,88 @@ export function registerSpecAgentGoalCommands(program: Command): void {
         throw err;
       }
     });
+  goal
+    .command("auto <goal-id>")
+    .description("Start the wake daemon for a goal")
+    .option("--max-iterations <n>", "Maximum daemon iterations")
+    .option("--max-hours <n>", "Maximum wall-clock hours")
+    .option("--approval-policy <policy>", "Approval policy (auto | interactive)", "interactive")
+    .option("--provider <provider>", "provider policy (auto | kimi | deepseek | codex | qwen)", "kimi")
+    .option("--json", t("cmd.goalJsonOption"))
+    .action(async (goalId, options) => {
+      const { goalAutoCommand } = await import("../commands/goal.js");
+      try {
+        await goalAutoCommand(goalId, options);
+      } catch (err) {
+        if (err instanceof CliError) {
+          if (process.exitCode === undefined) process.exitCode = err.exitCode;
+          return;
+        }
+        throw err;
+      }
+    });
+  goal
+    .command("watch <goal-id>")
+    .description("Print daemon state and wake policy for a goal")
+    .option("--json", t("cmd.goalJsonOption"))
+    .action(async (goalId, options) => {
+      const { goalWatchCommand } = await import("../commands/goal.js");
+      try {
+        await goalWatchCommand(goalId, options);
+      } catch (err) {
+        if (err instanceof CliError) {
+          if (process.exitCode === undefined) process.exitCode = err.exitCode;
+          return;
+        }
+        throw err;
+      }
+    });
+  goal
+    .command("wake <goal-id>")
+    .description("Manually wake a sleeping goal daemon")
+    .option("--json", t("cmd.goalJsonOption"))
+    .action(async (goalId, options) => {
+      const { goalWakeCommand } = await import("../commands/goal.js");
+      try {
+        await goalWakeCommand(goalId, options);
+      } catch (err) {
+        if (err instanceof CliError) {
+          if (process.exitCode === undefined) process.exitCode = err.exitCode;
+          return;
+        }
+        throw err;
+      }
+    });
+  goal
+    .command("sleep <goal-id>")
+    .description("Put a running goal daemon into sleep mode")
+    .option("--json", t("cmd.goalJsonOption"))
+    .action(async (goalId, options) => {
+      const { goalSleepCommand } = await import("../commands/goal.js");
+      try {
+        await goalSleepCommand(goalId, options);
+      } catch (err) {
+        if (err instanceof CliError) {
+          if (process.exitCode === undefined) process.exitCode = err.exitCode;
+          return;
+        }
+        throw err;
+      }
+    });
+  goal
+    .command("daemon <subcommand>")
+    .description("Global daemon control: start | stop | status")
+    .option("--json", t("cmd.goalJsonOption"))
+    .action(async (subcommand, options) => {
+      const { goalDaemonCommand } = await import("../commands/goal.js");
+      try {
+        await goalDaemonCommand(subcommand as "start" | "stop" | "status", options);
+      } catch (err) {
+        if (err instanceof CliError) {
+          if (process.exitCode === undefined) process.exitCode = err.exitCode;
+          return;
+        }
+        throw err;
+      }
+    });
 }

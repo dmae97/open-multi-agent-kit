@@ -6,6 +6,7 @@ import { createHash } from "crypto";
 import YAML from "yaml";
 
 import { getOmkResourceSettings, type OmkRuntimeScope } from "./resource-profile.js";
+import type { CapabilityManifest } from "../runtime/agent-runtime.js";
 
 export interface AgentCapabilityScopes {
   mcpScope: OmkRuntimeScope;
@@ -176,4 +177,56 @@ export async function readRootAgentSubagents(baseAgentFile: string): Promise<Arr
     });
   }
   return refs;
+}
+
+export async function prepareScopedAgentForWorker(
+  options: {
+    baseAgentFile: string;
+    root: string;
+    workerId: string;
+    capabilities: CapabilityManifest & { skills?: string[]; hooks?: string[] };
+  }
+): Promise<{ agentFile: string }> {
+  const outputFile = join(
+    options.root,
+    ".omk",
+    "agents",
+    "workers",
+    `${sanitizeAgentFilePart(options.workerId)}.yaml`
+  );
+
+  await mkdir(dirname(outputFile), { recursive: true });
+
+  const lines: string[] = [
+    "version: 1",
+    "agent:",
+    `  extend: ${JSON.stringify(yamlRelativePath(outputFile, options.baseAgentFile))}`,
+    `  name: ${JSON.stringify(`omk-worker-${sanitizeAgentFilePart(options.workerId)}`)}`,
+    "  system_prompt_args:",
+    `    OMK_MCP_ENABLED: "${options.capabilities.mcp === false ? "false" : "true"}"`,
+    `    OMK_SKILLS_ENABLED: "${Array.isArray(options.capabilities.skills) && options.capabilities.skills.length > 0 ? "true" : "false"}"`,
+    `    OMK_HOOKS_ENABLED: "${Array.isArray(options.capabilities.hooks) && options.capabilities.hooks.length > 0 ? "true" : "false"}"`,
+  ];
+
+  if (options.capabilities.mcp === false) {
+    lines.push("  mcp_servers: []");
+  }
+
+  if (Array.isArray(options.capabilities.skills)) {
+    lines.push("  skills:");
+    for (const skill of options.capabilities.skills) {
+      lines.push(`    - ${JSON.stringify(String(skill))}`);
+    }
+  }
+
+  if (Array.isArray(options.capabilities.hooks)) {
+    lines.push("  hooks:");
+    for (const hook of options.capabilities.hooks) {
+      lines.push(`    - ${JSON.stringify(String(hook))}`);
+    }
+  }
+
+  lines.push("");
+  await writeFile(outputFile, lines.join("\n"), "utf-8");
+  return { agentFile: outputFile };
 }

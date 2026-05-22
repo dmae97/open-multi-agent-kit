@@ -25,7 +25,7 @@ import {
   panel,
   gauge,
   stat,
-  sparkleHeader,
+  matrixHeader,
   gradient,
   getSystemUsage,
   separator,
@@ -619,7 +619,7 @@ async function buildSystemPanel(options: HudRenderOptions = {}): Promise<string>
   return result;
 }
 
-async function buildKimiUsagePanel(kimiUsage?: UsageStats, fetchQuota = true): Promise<string> {
+async function buildContextUsagePanel(kimiUsage?: UsageStats, fetchQuota = true): Promise<string> {
   const usage = kimiUsage ?? await getKimiUsage({ fetchQuota });
   const LIMIT_HOURS = 5;
   const limitSeconds = LIMIT_HOURS * 3600;
@@ -650,7 +650,7 @@ async function buildKimiUsagePanel(kimiUsage?: UsageStats, fetchQuota = true): P
     "",
   ].filter(Boolean);
 
-  return panel(planLines, gradient("Kimi Usage"));
+  return panel(planLines, gradient("Context Usage"));
 }
 
 async function buildProjectStatusPanel(gitChangesResult: HudGitChange[] | null): Promise<string> {
@@ -911,7 +911,7 @@ async function renderCompactDashboard(options: HudRenderOptions): Promise<string
   const goalTitle = vm.goalTitle ?? null;
   const output: string[] = [];
 
-  output.push(sparkleHeader("oh-my-kimi HUD"));
+  output.push(matrixHeader("OMK HUD"));
 
   const summary = buildSummaryBar(vm, stateError, goalTitle, effectiveWidth);
   output.push(summary);
@@ -945,7 +945,7 @@ async function renderMediumDashboard(options: HudRenderOptions): Promise<string>
   const mainPanels: string[] = [];
   const output: string[] = [];
 
-  output.push(sparkleHeader("oh-my-kimi HUD"));
+  output.push(matrixHeader("OMK HUD"));
 
   const runsDir = getRunsDir();
   let vm: RunViewModel = buildRunViewModel(null);
@@ -1006,7 +1006,7 @@ async function renderFullDashboard(options: HudRenderOptions): Promise<string> {
   const mainPanels: string[] = [];
   const output: string[] = [];
 
-  output.push(sparkleHeader("oh-my-kimi HUD"));
+  output.push(matrixHeader("OMK HUD"));
 
   const runsDir = getRunsDir();
   let vm: RunViewModel = buildRunViewModel(null);
@@ -1041,7 +1041,7 @@ async function renderFullDashboard(options: HudRenderOptions): Promise<string> {
   output.push("");
 
   mainPanels.push(await buildSystemPanel(options));
-  mainPanels.push(await buildKimiUsagePanel(options.kimiUsage, options.fetchQuota ?? true));
+  mainPanels.push(await buildContextUsagePanel(options.kimiUsage, options.fetchQuota ?? true));
   mainPanels.push(await buildProjectStatusPanel(gitChangesResult));
 
   const runPanel = await buildLatestRunPanel(options, vm, stateError, gitChanges, undefined, sessionMeta, todos);
@@ -1067,7 +1067,7 @@ async function renderSectionDashboard(options: HudRenderOptions): Promise<string
   const gitChanges = gitChangesResult ?? [];
   const output: string[] = [];
 
-  output.push(sparkleHeader("oh-my-kimi HUD"));
+  output.push(matrixHeader("OMK HUD"));
 
   const runsDir = getRunsDir();
   let vm: RunViewModel = buildRunViewModel(null);
@@ -1122,7 +1122,7 @@ async function renderSectionDashboard(options: HudRenderOptions): Promise<string
     case "resources": {
       output.push(await buildSystemPanel(options));
       output.push("");
-      output.push(await buildKimiUsagePanel(options.kimiUsage, options.fetchQuota ?? true));
+      output.push(await buildContextUsagePanel(options.kimiUsage, options.fetchQuota ?? true));
       break;
     }
   }

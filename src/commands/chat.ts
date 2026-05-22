@@ -118,6 +118,14 @@ import {
 import { getOmkResourceSettings } from "../util/resource-profile.js";
 import { parseExecutionPromptPolicy } from "../util/execution-selection.js";
 import { normalizeProviderPolicy, parseProviderModelArg } from "../providers/model-registry.js";
+import type { DagNode } from "../contracts/dag.js";
+import { createDag, type DagNodeDefinition } from "../orchestration/dag.js";
+import { ParallelOrchestrator } from "../orchestration/parallel-orchestrator.js";
+import { LogStreamer } from "../orchestration/log-streamer.js";
+import { createRuntimeBackedTaskRunner } from "../runtime/runtime-backed-task-runner.js";
+import { createContextBroker } from "../runtime/context-broker.js";
+import { capsuleToTask } from "../runtime/context-broker-converter.js";
+import { createRuntimeRouter } from "../runtime/runtime-router.js";
 
 async function verifyAgentPrompt(agentFile: string): Promise<boolean> {
   if (!(await pathExists(agentFile))) return false;
@@ -403,7 +411,7 @@ export async function chatCommand(options: {
   const runId = options.runId;
   const effectiveRunId = runId ?? sessionId;
   const layout = resolveLayout(options.layout);
-  const brand = options.brand ?? "kimicat";
+  const brand = options.brand ?? "minimal";
   const resources = await getOmkResourceSettings();
   const modelArg = parseProviderModelArg(options.model);
   const providerPolicy = normalizeProviderPolicy(options.provider ?? modelArg.provider);
@@ -726,6 +734,18 @@ export async function chatCommand(options: {
     if (options.maxStepsPerTurn) {
       args.push("--max-steps-per-turn", options.maxStepsPerTurn);
     }
+    if (options.model) {
+      args.push("--model", options.model);
+    }
+    if (providerPolicy && providerPolicy !== "auto" && providerPolicy !== "kimi") {
+      env.OMK_PROVIDER_POLICY = providerPolicy;
+      if (!isPlain && !isCockpitChild()) {
+        console.log(status.warn(`Provider policy '${providerPolicy}' is active in chat mode. Note: omk chat runs the primary CLI natively; external providers work best with \`omk parallel\` or \`omk run\`.`));
+      }
+    }
+    if (modelArg.model) {
+      env.OMK_PROVIDER_MODEL = modelArg.model;
+    }
 
     env.OMK_RUN_ID = effectiveRunId;
     env.OMK_MODE = currentMode;
@@ -733,10 +753,19 @@ export async function chatCommand(options: {
     env.OMK_SKILLS_SCOPE = effectiveResources.skillsScope;
     env.OMK_HOOKS_SCOPE = effectiveResources.hooksScope;
 
+    // Inherit into AgentWorker subprocess / in-process env
+    process.env.OMK_RUN_ID = effectiveRunId;
+    process.env.OMK_MODE = currentMode;
+    process.env.OMK_MCP_SCOPE = mcpScope;
+    process.env.OMK_SKILLS_SCOPE = effectiveResources.skillsScope;
+    process.env.OMK_HOOKS_SCOPE = effectiveResources.hooksScope;
+    process.env.OMK_WORKERS = effectiveWorkers;
+
     let lastThinking = "";
     let exitCode = 0;
     let recentChatOutput = "";
     let observedKimiSessionId: string | undefined;
+    let bridgeSucceeded = false;
     // Chunk-array buffer to avoid repeated large string copies during todo parsing
     const pendingChunks: string[] = [];
     let pendingLength = 0;
@@ -785,35 +814,178 @@ export async function chatCommand(options: {
     }
 
     try {
-      exitCode = await runKimiInteractive(args, {
-        cwd: root,
-        env,
-        onKimiMeta: (meta) => {
-          const kimiSessionId = meta.session?.trim();
-          if (!kimiSessionId || kimiSessionId === observedKimiSessionId) return;
-          observedKimiSessionId = kimiSessionId;
-          track((async () => {
-            const existing = await readSessionMeta(effectiveRunId).catch(() => null);
-            const now = new Date().toISOString();
-            await writeSessionMeta(effectiveRunId, {
-              runId: effectiveRunId,
-              type: "chat",
-              status: existing?.status ?? "active",
-              startedAt: existing?.startedAt ?? now,
-              updatedAt: now,
-              endedAt: existing?.endedAt,
-              goalTitle: existing?.goalTitle,
-              omkSessionId: sessionId,
-              kimiSessionId,
-              todoCount: existing?.todoCount ?? 0,
-              todoDoneCount: existing?.todoDoneCount ?? 0,
-            });
-          })().catch(() => {}));
-        },
-        onData: (data) => {
-          recentChatOutput = appendRecentChatOutput(recentChatOutput, data);
-          // Lightweight activity sampling: extract short tool/thinking snippets
-          const lines = data.split("\n");
+      if (process.env.OMK_LEGACY_CHAT !== "1") {
+        try {
+          const chatNodeDef: DagNodeDefinition = {
+            id: "chat",
+            name: "Interactive chat session",
+            role: "coordinator",
+            dependsOn: [],
+            maxRetries: 1,
+            routing: {
+              provider: providerPolicy,
+              mcpServers: chatRuntimeMcpAllowlist,
+              contextBudget: "normal",
+              readOnly: false,
+            },
+            executionMode: "in-process",
+          } as unknown as DagNodeDefinition;
+          const dag = createDag({ nodes: [chatNodeDef] });
+          const orchestrator = new ParallelOrchestrator({
+            dag,
+            runId: effectiveRunId,
+            maxWorkers: 1,
+            cwd: root,
+          });
+
+          // Suppress orchestrator console logging (output is streamed manually)
+          (orchestrator as unknown as Record<string, unknown>).logStreamer = new LogStreamer({
+            logDir: join(root, ".omk/logs"),
+            enableConsole: false,
+          });
+
+          // Bypass orchestrator runtimeRouter intent check; actual routing happens inside AgentWorker
+          (orchestrator as unknown as Record<string, unknown>).runtimeRouter = {
+            select: () => ({
+              runtime: { id: "kimi-print", priority: 100, supports: () => true, runNode: async () => ({ success: true, exitCode: 0, stdout: "", stderr: "" }) },
+              reason: "chat-bypass",
+              fallbacks: [],
+              intent: "coding",
+              scores: [],
+            }),
+          };
+
+          const result = await orchestrator.execute();
+          const chatWorker = result.state.workers.find((w) => w.nodeId === "chat");
+          const taskResult = chatWorker?.result;
+
+          if (taskResult) {
+            const resultOutput = taskResult.stdout;
+            const resultExitCode = taskResult.exitCode ?? (taskResult.success ? 0 : 1);
+
+            // Stream output from AgentResult.output (via TaskResult.stdout)
+            const CHUNK_SIZE = 4096;
+            for (let i = 0; i < resultOutput.length; i += CHUNK_SIZE) {
+              process.stdout.write(resultOutput.slice(i, i + CHUNK_SIZE));
+              if (i + CHUNK_SIZE < resultOutput.length) {
+                await new Promise<void>((resolve) => setImmediate(resolve));
+              }
+            }
+            recentChatOutput = appendRecentChatOutput(recentChatOutput, resultOutput);
+
+            // Parse todos from metadata
+            const agentTodos = taskResult.metadata?.todos as Array<{ id: string; title: string; status: "pending" | "in_progress" | "done" }> | undefined;
+            if (agentTodos && agentTodos.length > 0) {
+              scheduleTodoSync(agentTodos.map((t) => ({ title: t.title, status: t.status })));
+            }
+
+            // Parse todos from output
+            const parsedTodos = parseSetTodoListFromOutput(resultOutput);
+            if (parsedTodos && parsedTodos.length > 0) {
+              scheduleTodoSync(parsedTodos);
+            }
+
+            // Lightweight activity sampling
+            const lines = resultOutput.split("\n");
+            for (const raw of lines) {
+              const line = raw.trim();
+              if (isKimiPromptReadyLine(line)) {
+                lastThinking = "";
+                track(updateChatActivity(effectiveRunId, "").catch(() => {}));
+                continue;
+              }
+              if (!line || line.length < 3) continue;
+              if (/read_file|write_file|edit_file|search_files|glob|grep|ctx_read/i.test(line)) {
+                const m = line.match(/["']([^"']{1,60})["']/);
+                lastThinking = m ? `📄 ${m[1].split("/").pop() ?? m[1]}` : `🔧 ${line.slice(0, 60)}`;
+                track(updateChatActivity(effectiveRunId, lastThinking).catch(() => {}));
+                continue;
+              }
+              const explicit = line.match(/^<think(?:ing)?>[\s:]*(.+?)(?:<\/think(?:ing)?>)?$/i);
+              if (explicit) {
+                lastThinking = `🧠 ${explicit[1].trim().slice(0, 100)}`;
+                track(updateChatActivity(effectiveRunId, lastThinking).catch(() => {}));
+                continue;
+              }
+            }
+
+            exitCode = resultExitCode;
+            bridgeSucceeded = true;
+          }
+        } catch (orchestratorErr) {
+          const message = orchestratorErr instanceof Error ? orchestratorErr.message : String(orchestratorErr);
+          recentChatOutput = appendRecentChatOutput(recentChatOutput, `\n[omk] orchestrator failed: ${message}\n`);
+          console.error(`\n[omk] orchestrator failed: ${message}\n`);
+        }
+      }
+
+      if (!bridgeSucceeded && process.env.OMK_LEGACY_CHAT !== "1") {
+        try {
+          const chatNode: DagNode = {
+            id: "chat",
+            name: "Interactive chat session",
+            role: "coordinator",
+            dependsOn: [],
+            status: "running",
+            retries: 0,
+            maxRetries: 1,
+            routing: {
+              provider: providerPolicy,
+              mcpServers: chatRuntimeMcpAllowlist,
+              contextBudget: "normal",
+              readOnly: false,
+            },
+          };
+
+          const runner = await createRuntimeBackedTaskRunner({ cwd: root, env });
+
+          const broker = createContextBroker({ projectRoot: root });
+          const { capsule } = await broker.buildCapsule(chatNode, {
+            schemaVersion: 1,
+            runId: effectiveRunId,
+            nodes: [chatNode],
+            startedAt: new Date().toISOString(),
+          });
+          await capsuleToTask(capsule);
+
+          let resultOutput: string;
+          let resultExitCode: number;
+
+          const taskResult = await runner.run(chatNode, env);
+          const isNoRuntimeAvailable = !taskResult.success && taskResult.stdout.trim() === "No runtime available";
+
+          if (!isNoRuntimeAvailable) {
+            resultOutput = taskResult.stdout;
+            resultExitCode = taskResult.exitCode ?? (taskResult.success ? 0 : 1);
+            const agentTodos = taskResult.metadata?.todos as Array<{ id: string; title: string; status: "pending" | "in_progress" | "done" }> | undefined;
+            if (agentTodos && agentTodos.length > 0) {
+              scheduleTodoSync(agentTodos.map((t) => ({ title: t.title, status: t.status })));
+            }
+          } else {
+            const runtimeRouter = (runner as unknown as Record<string, unknown>)._runtimeRouter as ReturnType<typeof createRuntimeRouter>;
+            const agentResult = await runtimeRouter.runNode(capsule, new AbortController().signal);
+            resultOutput = agentResult.stdout;
+            resultExitCode = agentResult.exitCode ?? (agentResult.success ? 0 : 1);
+          }
+
+          // Stream output from AgentResult.output (via TaskResult.stdout or AgentRunResult.stdout)
+          const CHUNK_SIZE = 4096;
+          for (let i = 0; i < resultOutput.length; i += CHUNK_SIZE) {
+            process.stdout.write(resultOutput.slice(i, i + CHUNK_SIZE));
+            if (i + CHUNK_SIZE < resultOutput.length) {
+              await new Promise<void>((resolve) => setImmediate(resolve));
+            }
+          }
+          recentChatOutput = appendRecentChatOutput(recentChatOutput, resultOutput);
+
+          // Parse todos from output (and from AgentResult.todos when available)
+          const parsedTodos = parseSetTodoListFromOutput(resultOutput);
+          if (parsedTodos && parsedTodos.length > 0) {
+            scheduleTodoSync(parsedTodos);
+          }
+
+          // Lightweight activity sampling
+          const lines = resultOutput.split("\n");
           for (const raw of lines) {
             const line = raw.trim();
             if (isKimiPromptReadyLine(line)) {
@@ -836,25 +1008,87 @@ export async function chatCommand(options: {
             }
           }
 
-          // Parse SetTodoList from output with chunk-boundary buffering
-          pendingChunks.push(data);
-          pendingLength += data.length;
-          // Trim from front to keep last ~4096-8192 chars without massive string copies
-          while (pendingLength > 8192 && pendingChunks.length > 1) {
-            const removed = pendingChunks.shift()!;
-            pendingLength -= removed.length;
-          }
-          if (pendingLength > 8192 && pendingChunks.length === 1) {
-            pendingChunks[0] = pendingChunks[0].slice(-4096);
-            pendingLength = pendingChunks[0].length;
-          }
-          const pendingOutput = pendingChunks.join("");
-          const newTodos = parseSetTodoListFromOutput(pendingOutput);
-          if (newTodos && newTodos.length > 0) {
-            scheduleTodoSync(newTodos);
-          }
-        },
-      });
+          exitCode = resultExitCode;
+          bridgeSucceeded = true;
+        } catch (bridgeErr) {
+          const message = bridgeErr instanceof Error ? bridgeErr.message : String(bridgeErr);
+          recentChatOutput = appendRecentChatOutput(recentChatOutput, `\n[omk] runtime bridge failed: ${message}\n`);
+          console.error(`\n[omk] runtime bridge failed: ${message}\n`);
+        }
+      }
+
+      if (!bridgeSucceeded) {
+        exitCode = await runKimiInteractive(args, {
+          cwd: root,
+          env,
+          onKimiMeta: (meta) => {
+            const kimiSessionId = meta.session?.trim();
+            if (!kimiSessionId || kimiSessionId === observedKimiSessionId) return;
+            observedKimiSessionId = kimiSessionId;
+            track((async () => {
+              const existing = await readSessionMeta(effectiveRunId).catch(() => null);
+              const now = new Date().toISOString();
+              await writeSessionMeta(effectiveRunId, {
+                runId: effectiveRunId,
+                type: "chat",
+                status: existing?.status ?? "active",
+                startedAt: existing?.startedAt ?? now,
+                updatedAt: now,
+                endedAt: existing?.endedAt,
+                goalTitle: existing?.goalTitle,
+                omkSessionId: sessionId,
+                kimiSessionId,
+                todoCount: existing?.todoCount ?? 0,
+                todoDoneCount: existing?.todoDoneCount ?? 0,
+              });
+            })().catch(() => {}));
+          },
+          onData: (data) => {
+            recentChatOutput = appendRecentChatOutput(recentChatOutput, data);
+            // Lightweight activity sampling: extract short tool/thinking snippets
+            const lines = data.split("\n");
+            for (const raw of lines) {
+              const line = raw.trim();
+              if (isKimiPromptReadyLine(line)) {
+                lastThinking = "";
+                track(updateChatActivity(effectiveRunId, "").catch(() => {}));
+                continue;
+              }
+              if (!line || line.length < 3) continue;
+              if (/read_file|write_file|edit_file|search_files|glob|grep|ctx_read/i.test(line)) {
+                const m = line.match(/["']([^"']{1,60})["']/);
+                lastThinking = m ? `📄 ${m[1].split("/").pop() ?? m[1]}` : `🔧 ${line.slice(0, 60)}`;
+                track(updateChatActivity(effectiveRunId, lastThinking).catch(() => {}));
+                continue;
+              }
+              const explicit = line.match(/^<think(?:ing)?>[\s:]*(.+?)(?:<\/think(?:ing)?>)?$/i);
+              if (explicit) {
+                lastThinking = `🧠 ${explicit[1].trim().slice(0, 100)}`;
+                track(updateChatActivity(effectiveRunId, lastThinking).catch(() => {}));
+                continue;
+              }
+            }
+
+            // Parse SetTodoList from output with chunk-boundary buffering
+            pendingChunks.push(data);
+            pendingLength += data.length;
+            // Trim from front to keep last ~4096-8192 chars without massive string copies
+            while (pendingLength > 8192 && pendingChunks.length > 1) {
+              const removed = pendingChunks.shift()!;
+              pendingLength -= removed.length;
+            }
+            if (pendingLength > 8192 && pendingChunks.length === 1) {
+              pendingChunks[0] = pendingChunks[0].slice(-4096);
+              pendingLength = pendingChunks[0].length;
+            }
+            const pendingOutput = pendingChunks.join("");
+            const newTodos = parseSetTodoListFromOutput(pendingOutput);
+            if (newTodos && newTodos.length > 0) {
+              scheduleTodoSync(newTodos);
+            }
+          },
+        });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       recentChatOutput = appendRecentChatOutput(recentChatOutput, `\n[omk] chat failed: ${message}\n`);

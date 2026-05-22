@@ -7,11 +7,9 @@ import { KIMICAT_SIMPLE_ASCII_ART } from "../dist/kimi/simple-art.js";
 test("Kimicat CLI hero uses the compact mascot theme", () => {
   const hero = kimicatCliHero();
 
-  assert.match(hero, /oh-my-kimi/);
-  assert.match(hero, /Verified agent runtime for Kimi Code/);
-  assert.match(hero, /parallel subagents/);
-  assert.match(hero, /Plan first\. Ship small\. Stay safe!/);
-  assert.match(hero, /\[AI-native]/);
+  assert.match(hero, /OMK/);
+  assert.match(hero, /Open Multi-agent Kit/);
+  assert.match(hero, /Provider-neutral runtime for AI coding teams/);
 
   const artLines = KIMICAT_SIMPLE_ASCII_ART.split("\n");
 

@@ -14,6 +14,11 @@ export interface ShellResult {
   failed: boolean;
 }
 
+export interface StreamingShellIo {
+  writeStdin(data: string): boolean;
+  terminate(reason: string): void;
+}
+
 export interface StreamingShellOptions {
   cwd?: string;
   env?: Record<string, string>;
@@ -22,8 +27,8 @@ export interface StreamingShellOptions {
   stdio?: "pipe" | "inherit";
   logPath?: string;
   input?: string;
-  onStdout?: (line: string) => void;
-  onStderr?: (line: string) => void;
+  onStdout?: (line: string, io?: StreamingShellIo) => void;
+  onStderr?: (line: string, io?: StreamingShellIo) => void;
   sudo?: boolean;
   signal?: AbortSignal;
   inheritEnv?: boolean;
@@ -127,6 +132,7 @@ function createShellTerminator(
   termination: Promise<never>;
   reason: () => string | undefined;
   clear: () => void;
+  requestTermination?: (reason: string) => void;
 } {
   let terminationReason: string | undefined;
   let rejectTermination: ((error: Error) => void) | undefined;
@@ -166,6 +172,7 @@ function createShellTerminator(
       if (timeoutTimer) clearTimeout(timeoutTimer);
       signal?.removeEventListener("abort", abortHandler);
     },
+    requestTermination,
   };
 }
 
@@ -281,6 +288,16 @@ export async function runShellStreaming(
     ...managedChildProcessOptions(),
   });
 
+  const io: StreamingShellIo = {
+    writeStdin(data: string): boolean {
+      if (!subprocess.stdin || subprocess.stdin.destroyed) return false;
+      return subprocess.stdin.write(data);
+    },
+    terminate(reason: string): void {
+      terminator.requestTermination?.(reason);
+    },
+  };
+
   // Attach data listeners IMMEDIATELY after execa() returns.
   // Execa v9 with buffer:false schedules a setImmediate that calls
   // resumeStream() if readableFlowing === null. If we yield to the event
@@ -293,7 +310,7 @@ export async function runShellStreaming(
     const redactedLine = redactShellText(line);
     stdoutBuffer.append(redactedLine);
     logStream?.write(redactedLine);
-    onStdout?.(redactedLine);
+    onStdout?.(redactedLine, io);
   });
 
   subprocess.stderr?.on("data", (chunk: Buffer) => {
@@ -301,7 +318,7 @@ export async function runShellStreaming(
     const redactedLine = redactShellText(line);
     stderrBuffer.append(redactedLine);
     logStream?.write(redactedLine);
-    onStderr?.(redactedLine);
+    onStderr?.(redactedLine, io);
   });
 
   const terminator = createShellTerminator(subprocess, timeout, signal);

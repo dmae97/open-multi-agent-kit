@@ -1,11 +1,11 @@
 /**
- * OMK Brand Theme — oh-my-kimi CLI color system
- * Extracted from kimicat.png brand palette
+ * OMK Brand Theme — Open Multi-agent Kit CLI color system
  * HUD-ready: gradients, gauges, panels, sparkles ✨
  */
 
 import { totalmem, freemem, loadavg, cpus } from "os";
-import { KIMICAT_SIMPLE_ASCII_ART } from "../kimi/simple-art.js";
+import { P, hexToRgb, colorFromHex } from "../brand/palette.js";
+import { OMK_MATRIX_ASCII_ART } from "../brand/omk-matrix-art.js";
 
 // ── True-color ANSI helpers ──────────────────────────────────
 const colorEnabled = process.env.FORCE_COLOR === "1"
@@ -18,25 +18,6 @@ const colorEnabled = process.env.FORCE_COLOR === "1"
 const esc = (codes: string) => colorEnabled ? `\x1b[${codes}m` : "";
 const rgb = (r: number, g: number, b: number) => `38;2;${r};${g};${b}`;
 const bgRgb = (r: number, g: number, b: number) => `48;2;${r};${g};${b}`;
-
-// ── Brand palette (from kimicat.png) ────────────────────────
-// "Onii-chan~ hai, naniga suki? Chocomint yori mo anata~ 💜"
-const P = {
-  purple: { r: 123, g: 91, b: 245 },   // #7B5BF5  Kimicat's eyes & logo
-  lightPurple: { r: 167, g: 139, b: 250 }, // #A78BFA  soft highlights
-  darkPurple: { r: 91, g: 33, b: 182 },    // #5B21B6  deep shadows
-  pink: { r: 236, g: 72, b: 153 },         // #EC4899  hearts & cheeks
-  hotPink: { r: 236, g: 72, b: 153 },      // #EC4899  accent
-  mint: { r: 20, g: 184, b: 166 },         // #14B8A6  chocomint!
-  darkMint: { r: 13, g: 148, b: 136 },     // #0D9488  mint shadow
-  orange: { r: 251, g: 146, b: 60 },       // #FB923C  warning
-  red: { r: 248, g: 113, b: 113 },         // #F87171  error
-  blue: { r: 96, g: 165, b: 250 },         // #60A5FA  info
-  cream: { r: 243, g: 232, b: 255 },       // #F3E8FF  bright text
-  dark: { r: 36, g: 28, b: 50 },           // #241C32  hoodie black
-  gray: { r: 148, g: 163, b: 184 },        // #94A3B8  muted
-  skin: { r: 249, g: 211, b: 197 },        // #F9D3C5  warm skin tone
-};
 
 // ── Style builders ───────────────────────────────────────────
 export const style = {
@@ -60,6 +41,8 @@ export const style = {
   cream: (s: string) => esc(rgb(P.cream.r, P.cream.g, P.cream.b)) + s + esc("0"),
   gray: (s: string) => esc(rgb(P.gray.r, P.gray.g, P.gray.b)) + s + esc("0"),
   skin: (s: string) => esc(rgb(P.skin.r, P.skin.g, P.skin.b)) + s + esc("0"),
+  matrixGreen: (s: string) => esc(rgb(P.matrixGreen.r, P.matrixGreen.g, P.matrixGreen.b)) + s + esc("0"),
+  matrixDark: (s: string) => esc(rgb(P.matrixDark.r, P.matrixDark.g, P.matrixDark.b)) + s + esc("0"),
 
   // Combos
   purpleBold: (s: string) => esc("1;" + rgb(P.purple.r, P.purple.g, P.purple.b)) + s + esc("0"),
@@ -196,6 +179,16 @@ export function sparkleHeader(text: string): string {
   ].join("\n");
 }
 
+/** Matrix-style OMK header */
+export function matrixHeader(text: string): string {
+  return [
+    "",
+    style.matrixGreen(text),
+    style.matrixDark("═".repeat(Math.min(visibleTerminalWidth(text), 56))),
+    "",
+  ].join("\n");
+}
+
 /** Single stat line: label + value + optional unit */
 export function stat(label: string, value: string, unit = ""): string {
   return "  " + style.gray(label + ":") + " " + style.mintBold(value) + style.gray(unit);
@@ -266,7 +259,11 @@ export function sanitizeTerminalText(value: string): string {
     .replace(/^::code-comment\{.*?\}[ \t]*\r?\n?/gm, "");
 }
 
-// ── Kimicat Emoji Kit ───────────────────────────────────────
+export function visibleTerminalWidth(text: string): number {
+  return sanitizeTerminalText(text).length;
+}
+
+// ── Brand Emoji Kit ───────────────────────────────────────
 export const emoji = {
   shell: "🐚",
   code: "💜",
@@ -290,9 +287,9 @@ export const emoji = {
   wand: "✨",
 };
 
-export function kimicatStatusChips(): string {
+export function omkStatusChips(): string {
   const chips = [
-    style.purpleBold("[AI-native]"),
+    style.purpleBold("[provider-neutral]"),
     style.blue("[agent-first]"),
     style.mintBold("[plan-first]"),
     style.orange("[safe]"),
@@ -301,26 +298,32 @@ export function kimicatStatusChips(): string {
   return chips.join(" ");
 }
 
-export function kimicatCliHero(footer?: string): string {
+export function omkCliHero(footer?: string): string {
   const heroLines = [
-    gradient("✦ oh-my-kimi ✦"),
-    style.creamBold("Verified agent runtime for Kimi Code."),
-    style.gray("Orchestration, evidence gates, graph memory, worktree isolation, and parallel subagents."),
+    gradient("✦ OMK ✦"),
+    style.creamBold("Open Multi-agent Kit."),
+    style.matrixGreen("Provider-neutral runtime for AI coding teams."),
+    style.gray("DAG scheduling · evidence gates · worktree isolation · replay · memory"),
     "",
-    ...KIMICAT_SIMPLE_ASCII_ART.split("\n").map((line) => style.lightPurple(line)),
+    ...OMK_MATRIX_ASCII_ART.split("\n").map((line) => style.matrixGreen(line)),
     "",
-    kimicatStatusChips(),
+    omkStatusChips(),
   ];
 
   if (footer) {
     heroLines.push("", style.gray(footer));
   }
 
-  return box(heroLines, "OMK — oh-my-kimi");
+  return box(heroLines, "OMK — Open Multi-agent Kit");
 }
 
+/** @deprecated use omkCliHero */
+export const kimicatCliHero = omkCliHero;
+/** @deprecated use omkStatusChips */
+export const kimicatStatusChips = omkStatusChips;
+
 // ── Kimicat Custom Banner ───────────────────────────────────
-export function kimicatMetaBox(meta?: { directory?: string; session?: string; model?: string }): string {
+export function omkMetaBox(meta?: { directory?: string; session?: string; model?: string }): string {
   const metaLines: string[] = [];
   if (meta?.directory) metaLines.push(label("Directory", meta.directory));
   if (meta?.session) metaLines.push(label("Session", meta.session));
@@ -329,6 +332,9 @@ export function kimicatMetaBox(meta?: { directory?: string; session?: string; mo
   if (metaLines.length === 0) return "";
   return box(metaLines, "Session Info") + "\n";
 }
+
+/** @deprecated use omkMetaBox */
+export const kimicatMetaBox = omkMetaBox;
 
 // ── Theme Customization ─────────────────────────────────────
 
@@ -354,18 +360,7 @@ export interface OmkThemeConfig {
   metaBox?: boolean;
 }
 
-function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
-  const normalized = hex.replace("#", "").trim();
-  const m = normalized.match(/^(?:[0-9a-fA-F]{3}){1,2}$/);
-  if (!m) return null;
-  const full = normalized.length === 3 ? normalized.split("").map((c) => c + c).join("") : normalized;
-  const num = parseInt(full, 16);
-  return { r: (num >> 16) & 0xff, g: (num >> 8) & 0xff, b: num & 0xff };
-}
-
-function colorFromHex(hex: string | undefined, fallback: { r: number; g: number; b: number }): { r: number; g: number; b: number } {
-  return hexToRgb(hex ?? "") ?? fallback;
-}
+export { P, hexToRgb, colorFromHex };
 
 export async function loadThemeConfig(): Promise<OmkThemeConfig | null> {
   const { readFile } = await import("fs/promises");
@@ -441,7 +436,7 @@ function buildThemedMetaBox(
   return [top, ...body, bottom].join("\n") + "\n";
 }
 
-export function kimicatBanner(
+export function omkBanner(
   meta?: { directory?: string; session?: string; model?: string },
   footer?: string,
   theme?: OmkThemeConfig
@@ -450,16 +445,16 @@ export function kimicatBanner(
 
   // No custom theme → delegate to existing branded implementation
   if (!theme || (!theme.banner && !theme.colors)) {
-    const parts: string[] = [kimicatCliHero(footer)];
-    const metaBox = kimicatMetaBox(meta);
+    const parts: string[] = [omkCliHero(footer)];
+    const metaBox = omkMetaBox(meta);
     if (metaBox) parts.push(metaBox);
     return parts.join("\n");
   }
 
-  const title = theme.banner?.title ?? "oh-my-kimi";
-  const subtitle = theme.banner?.subtitle ?? "Verified agent runtime for Kimi Code.";
+  const title = theme.banner?.title ?? "OMK";
+  const subtitle = theme.banner?.subtitle ?? "Open Multi-agent Kit.";
   const styleName = theme.banner?.style ?? "default";
-  const art = theme.banner?.asciiArt ?? KIMICAT_SIMPLE_ASCII_ART;
+  const art = theme.banner?.asciiArt ?? "";
   const primary = colorFromHex(theme.colors?.primary, P.purple);
   const accent = colorFromHex(theme.colors?.accent, P.pink);
   const muted = colorFromHex(theme.colors?.muted, P.gray);
@@ -486,12 +481,16 @@ export function kimicatBanner(
   const heroLines: string[] = [
     themedGradient("✦ " + title + " ✦", theme.colors?.primary, theme.colors?.accent),
     accentFn(subtitle),
-    mutedFn("The orchestration layer that turns Kimi CLI into a powerful coding team."),
-    "",
-    ...art.split("\n").map((line) => primaryFn(line)),
-    "",
-    kimicatStatusChips(),
+    mutedFn("Provider-neutral runtime for AI coding teams."),
   ];
+
+  if (art) {
+    heroLines.push("", ...art.split("\n").map((line) => primaryFn(line)), "");
+  } else {
+    heroLines.push("");
+  }
+
+  heroLines.push(omkStatusChips());
 
   if (footer) heroLines.push("", mutedFn(footer));
 
@@ -504,6 +503,9 @@ export function kimicatBanner(
 
   return result.join("\n");
 }
+
+/** @deprecated use omkBanner */
+export const kimicatBanner = omkBanner;
 
 // ── Parallel Execution UI Kit ────────────────────────────────
 

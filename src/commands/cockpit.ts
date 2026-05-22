@@ -3,6 +3,10 @@
  */
 
 import { readFile, readdir, stat as fsStat } from "fs/promises";
+import { getGitNumstat, getGitBranch } from "../cockpit/git-numstat.js";
+import { getLspStatus } from "../cockpit/lsp-status.js";
+import { renderRailView } from "../cockpit/views/rail-view.js";
+import type { CockpitRailModel } from "../cockpit/types.js";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { join } from "path";
@@ -19,11 +23,20 @@ import type { RunState } from "../contracts/orchestration.js";
 import {
   style,
   gradient,
-  separator,
   sanitizeTerminalText,
   getSystemUsage,
 } from "../util/theme.js";
+import {
+  visibleTerminalWidth,
+  truncateLine,
+  padEndVisible,
+  panel,
+  fitLines,
+  sectionHeader,
+} from "../util/terminal-layout.js";
+export { visibleTerminalWidth };
 import { getKimiUsage, type UsageStats } from "../kimi/usage.js";
+import { getOmkVersionSync } from "../util/version.js";
 import { parseGitStatusPorcelain, listRunCandidates } from "./hud.js";
 import { loadTodos, type TodoItem } from "../util/todo-sync.js";
 import { readSessionMeta, type SessionMeta } from "../util/session.js";
@@ -53,6 +66,7 @@ export interface CockpitCommandOptions {
   redraw?: "diff" | "full" | "append";
   section?: "agents" | "todos" | "mcp" | "all";
   events?: "on" | "off";
+  view?: "panel" | "rail" | "compact" | "json";
 }
 
 export interface CockpitRenderOptions {
@@ -66,6 +80,7 @@ export interface CockpitRenderOptions {
   deepSeekProvider?: () => Promise<CockpitDeepSeekSnapshot | null>;
   section?: "agents" | "todos" | "mcp" | "all";
   events?: "on" | "off";
+  view?: "panel" | "rail" | "compact" | "json";
 }
 
 // ── Cache types ──
@@ -79,7 +94,7 @@ export interface CockpitCache {
   stateTodos?: CacheEntry<Awaited<ReturnType<typeof loadTodos>> | null>;
   gitChanges?: CacheEntry<{ status: string; path: string }[] | null>;
   history?: CacheEntry<string[]>;
-  kimiUsage?: CacheEntry<NonNullable<Awaited<ReturnType<typeof getKimiUsage>>> | null>;
+  primaryUsage?: CacheEntry<NonNullable<Awaited<ReturnType<typeof getKimiUsage>>> | null>;
   systemUsage?: CacheEntry<ReturnType<typeof getSystemUsage>>;
   resources?: CacheEntry<CockpitResourceSnapshot | null>;
   deepSeek?: CacheEntry<CockpitDeepSeekSnapshot | null>;
@@ -91,6 +106,7 @@ export interface CockpitResourceEntry {
   source: "project" | "global" | "builtin" | "run";
   status?: "connected" | "connecting" | "failed" | "unknown";
   toolsCount?: number;
+  reason?: string;
 }
 
 export interface CockpitResourceSnapshot {
@@ -174,7 +190,7 @@ interface CockpitDashboardSnapshot {
     latestVerification: string | null;
   };
   providers: {
-    kimi: {
+    primary: {
       source: string;
       status: string;
       account: string;
@@ -206,87 +222,9 @@ interface CockpitDashboardSnapshot {
 
 // ── Local helpers ──
 
-const ANSI_REGEX = /\x1B(?:[@-Z\-_]|\[[0-?]*[ -/]*[@-~])/g;
 const PANEL_HORIZONTAL_OVERHEAD = 4;
 const MIN_COCKPIT_FRAME_WIDTH = 20;
 const MAX_COCKPIT_FRAME_WIDTH = 180;
-
-function isCombiningCodePoint(codePoint: number): boolean {
-  return (
-    codePoint === 0x200d ||
-    (codePoint >= 0x0300 && codePoint <= 0x036f) ||
-    (codePoint >= 0x1ab0 && codePoint <= 0x1aff) ||
-    (codePoint >= 0x1dc0 && codePoint <= 0x1dff) ||
-    (codePoint >= 0x20d0 && codePoint <= 0x20ff) ||
-    (codePoint >= 0xfe00 && codePoint <= 0xfe0f) ||
-    (codePoint >= 0xfe20 && codePoint <= 0xfe2f)
-  );
-}
-
-function isWideCodePoint(codePoint: number): boolean {
-  return (
-    (codePoint >= 0x1100 && codePoint <= 0x115f) ||
-    codePoint === 0x2329 ||
-    codePoint === 0x232a ||
-    (codePoint >= 0x2e80 && codePoint <= 0xa4cf && codePoint !== 0x303f) ||
-    (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
-    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
-    (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
-    (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
-    (codePoint >= 0xff00 && codePoint <= 0xff60) ||
-    (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
-    (codePoint >= 0x1f300 && codePoint <= 0x1faff) ||
-    (codePoint >= 0x2600 && codePoint <= 0x27bf)
-  );
-}
-
-function terminalCharWidth(char: string): number {
-  const codePoint = char.codePointAt(0);
-  if (codePoint === undefined) return 0;
-  if (codePoint === 0 || codePoint < 0x20 || (codePoint >= 0x7f && codePoint < 0xa0)) return 0;
-  if (isCombiningCodePoint(codePoint)) return 0;
-  return isWideCodePoint(codePoint) ? 2 : 1;
-}
-
-export function visibleTerminalWidth(value: string): number {
-  return [...sanitizeTerminalText(value)].reduce((width, char) => width + terminalCharWidth(char), 0);
-}
-
-/** Truncate visible text while preserving ANSI escape sequences. */
-function truncateLine(line: string, maxWidth: number): string {
-  if (maxWidth <= 0) return "";
-  if (visibleTerminalWidth(line) <= maxWidth) return line;
-
-  const ellipsis = style.gray("…");
-  const limit = Math.max(0, maxWidth - 1);
-  let currentWidth = 0;
-  let result = "";
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  const appendText = (text: string): boolean => {
-    for (const char of text) {
-      const charWidth = terminalCharWidth(char);
-      if (currentWidth + charWidth > limit) return false;
-      result += char;
-      currentWidth += charWidth;
-    }
-    return true;
-  };
-
-  ANSI_REGEX.lastIndex = 0;
-  while ((match = ANSI_REGEX.exec(line)) !== null) {
-    const textBefore = line.slice(lastIndex, match.index);
-    if (!appendText(textBefore)) return result + ellipsis;
-    result += match[0];
-    lastIndex = ANSI_REGEX.lastIndex;
-  }
-
-  const remaining = line.slice(lastIndex);
-  if (!appendText(remaining)) return result + ellipsis;
-
-  return result;
-}
 
 function truncateText(value: string, maxLength: number): string {
   const clean = sanitizeTerminalText(value).replace(/\s+/g, " ").trim();
@@ -294,10 +232,6 @@ function truncateText(value: string, maxLength: number): string {
   const chars = [...clean];
   if (chars.length <= maxLength) return clean;
   return `${chars.slice(0, Math.max(1, maxLength - 1)).join("")}…`;
-}
-
-function padEndVisible(value: string, targetWidth: number): string {
-  return value + " ".repeat(Math.max(0, targetWidth - visibleTerminalWidth(value)));
 }
 
 function renderCockpitPanel(lines: string[], innerWidth: number): string {
@@ -978,17 +912,10 @@ function normalizeCockpitFrameHeight(height?: number): number | undefined {
   return undefined;
 }
 
-/** Ensure an array of lines exactly matches a target count (truncate or pad). */
-function fitLines(lines: string[], count: number): string[] {
-  const result = lines.slice(0, count);
-  while (result.length < count) result.push("");
-  return result;
-}
-
 async function buildCockpitSnapshot(
   vm: RunViewModel,
   todos: TodoItem[] | null,
-  kimiUsage: UsageStats | null,
+  primaryUsage: UsageStats | null,
   resources: CockpitResourceSnapshot | null,
   deepSeek: CockpitDeepSeekSnapshot | null,
   deepSeekUsage: CockpitDeepSeekRunUsage,
@@ -1047,30 +974,30 @@ async function buildCockpitSnapshot(
     if (worker.state === "skipped") skippedGates++;
   }
 
-  const kimiAccount = kimiUsage
-    ? kimiUsage.oauth.loggedIn
-      ? kimiUsage.oauth.displayId
+  const primaryAccount = primaryUsage
+    ? primaryUsage.oauth.loggedIn
+      ? primaryUsage.oauth.displayId
       : "/login"
     : "";
   const fiveHourPercent =
-    kimiUsage?.quota.fiveHour?.remainingPercent != null
-      ? Math.min(100, Math.max(0, 100 - kimiUsage.quota.fiveHour.remainingPercent))
+    primaryUsage?.quota.fiveHour?.remainingPercent != null
+      ? Math.min(100, Math.max(0, 100 - primaryUsage.quota.fiveHour.remainingPercent))
       : null;
   const weeklyPercent =
-    kimiUsage?.quota.weekly?.remainingPercent != null
-      ? Math.min(100, Math.max(0, 100 - kimiUsage.quota.weekly.remainingPercent))
+    primaryUsage?.quota.weekly?.remainingPercent != null
+      ? Math.min(100, Math.max(0, 100 - primaryUsage.quota.weekly.remainingPercent))
       : null;
   const fiveHour =
     fiveHourPercent != null
       ? `${fiveHourPercent}%`
-      : kimiUsage
-        ? `${Math.round(kimiUsage.totalSecondsLast5Hours / 60)}m`
+      : primaryUsage
+        ? `${Math.round(primaryUsage.totalSecondsLast5Hours / 60)}m`
         : "--";
   const weekly =
     weeklyPercent != null
       ? `${weeklyPercent}%`
-      : kimiUsage
-        ? `${Math.round(kimiUsage.totalSecondsWeek / 60)}m`
+      : primaryUsage
+        ? `${Math.round(primaryUsage.totalSecondsWeek / 60)}m`
         : "--";
 
   const deepSeekStatus = deepSeek
@@ -1135,11 +1062,11 @@ async function buildCockpitSnapshot(
       latestVerification,
     },
     providers: {
-      kimi: kimiUsage
+      primary: primaryUsage
         ? {
-            source: kimiUsage.oauth.loggedIn ? "oauth" : "none",
-            status: kimiUsage.oauth.loggedIn ? "logged-in" : "unavailable",
-            account: kimiAccount,
+            source: primaryUsage.oauth.loggedIn ? "oauth" : "none",
+            status: primaryUsage.oauth.loggedIn ? "logged-in" : "unavailable",
+            account: primaryAccount,
             fiveHour,
             weekly,
           }
@@ -1165,6 +1092,72 @@ async function buildCockpitSnapshot(
     },
     stateError,
     latestRunName,
+  };
+}
+
+function buildRailModel(
+  snapshot: CockpitDashboardSnapshot,
+  numstat: Map<string, { added: number | null; deleted: number | null }>,
+  lspEntries: Array<{ name: string; status: "connected" | "disabled" | "failed" | "unknown" }>,
+  branch: string | undefined,
+  root: string,
+  _primaryUsage: UsageStats | null,
+  tokenBurn?: { inputTokens: number; outputTokens: number; totalTokens: number },
+): CockpitRailModel {
+  const modifiedFiles = snapshot.worktree.changes.map((c) => {
+    const ns = numstat.get(c.path);
+    return {
+      path: c.path,
+      status: c.status,
+      added: ns?.added ?? undefined,
+      deleted: ns?.deleted ?? undefined,
+    };
+  });
+
+  const providers: CockpitRailModel["providers"] = [
+    ...(snapshot.providers.primary
+      ? [
+          {
+            name: "Primary",
+            status: snapshot.providers.primary.status,
+            detail: snapshot.providers.primary.account,
+          },
+        ]
+      : []),
+    {
+      name: "DeepSeek",
+      status: snapshot.providers.deepSeek.status,
+      detail: snapshot.providers.deepSeek.balance,
+    },
+  ];
+
+  return {
+    title: snapshot.pulse.goalTitle ?? snapshot.latestRunName ?? "OMK",
+    subtitle: snapshot.pulse.activeLane ?? undefined,
+    context: {
+      tokens: undefined,
+      usedPercent: undefined,
+      costUsd: undefined,
+      elapsed: snapshot.pulse.elapsed === "--" ? undefined : snapshot.pulse.elapsed,
+    },
+    providers,
+    evidence: snapshot.evidence,
+    tokenBurn,
+    mcp: (snapshot.resources?.mcpServers ?? []).map((s) => ({
+      name: s.name,
+      status: (s.status as CockpitRailModel["mcp"][number]["status"]) ?? "unknown",
+      detail: s.reason,
+    })),
+    lsp: lspEntries,
+    todos: snapshot.workQueue.todos.map((t) => ({
+      title: t.title,
+      status: t.status,
+      agent: t.agent,
+    })),
+    modifiedFiles,
+    cwd: root,
+    branch,
+    runtime: { name: "OMK", version: getOmkVersionSync() },
   };
 }
 
@@ -1287,23 +1280,23 @@ export async function renderCockpit(options: CockpitRenderOptions = {}) {
   })();
 
   // ── Fetch Kimi usage (cached) ──
-  const kimiPromise = quick
-    ? Promise.resolve(cache?.kimiUsage?.value ?? null)
+  const primaryPromise = quick
+    ? Promise.resolve(cache?.primaryUsage?.value ?? null)
     : (async () => {
-        const cached = getCacheEntry(cache?.kimiUsage, 60000, now);
+        const cached = getCacheEntry(cache?.primaryUsage, 60000, now);
         if (cached !== undefined) return cached;
         try {
           const value = await getKimiUsage();
-          if (cache) cache.kimiUsage = { value, ts: now };
+          if (cache) cache.primaryUsage = { value, ts: now };
           return value;
         } catch {
           return null;
         }
       })();
 
-  const [todos, kimiUsage, resources, deepSeek] = await Promise.all([
+  const [todos, primaryUsage, resources, deepSeek] = await Promise.all([
     todosPromise,
-    kimiPromise,
+    primaryPromise,
     resourcesPromise,
     deepSeekPromise,
   ]);
@@ -1329,7 +1322,7 @@ export async function renderCockpit(options: CockpitRenderOptions = {}) {
   const snapshot = await buildCockpitSnapshot(
     vm,
     todos,
-    kimiUsage,
+    primaryUsage,
     resources,
     deepSeek,
     deepSeekUsage,
@@ -1339,6 +1332,22 @@ export async function renderCockpit(options: CockpitRenderOptions = {}) {
     stateError,
     latestRunName
   );
+
+  // ── View branch ──
+  const view = options.view ?? "panel";
+  if (view === "rail") {
+    const [numstat, branch, lspEntries] = await Promise.all([
+      getGitNumstat(root),
+      getGitBranch(root),
+      getLspStatus(root),
+    ]);
+    const railModel = buildRailModel(snapshot, numstat, lspEntries, branch, root, primaryUsage);
+    const railWidth = Math.max(28, Math.min(options.terminalWidth ?? 36, 56));
+    return renderRailView(railModel, { width: railWidth, height: options.height });
+  }
+  if (view === "json") {
+    return JSON.stringify(snapshot, null, 2);
+  }
 
   // ── Build sections as separate arrays ──
 
@@ -1355,41 +1364,47 @@ export async function renderCockpit(options: CockpitRenderOptions = {}) {
     `${style.gray("run")} ${style.creamBold(truncateText(displayRunId, targetWidth - 6))}`
   );
 
-  if (kimiUsage) {
-    const account = kimiUsage.oauth.loggedIn ? kimiUsage.oauth.displayId : "/login";
+  if (primaryUsage) {
+    const account = primaryUsage.oauth.loggedIn ? primaryUsage.oauth.displayId : "/login";
     const fiveHourPercent =
-      kimiUsage.quota.fiveHour?.remainingPercent != null
-        ? Math.min(100, Math.max(0, 100 - kimiUsage.quota.fiveHour.remainingPercent))
+      primaryUsage.quota.fiveHour?.remainingPercent != null
+        ? Math.min(100, Math.max(0, 100 - primaryUsage.quota.fiveHour.remainingPercent))
         : null;
     const weeklyPercent =
-      kimiUsage.quota.weekly?.remainingPercent != null
-        ? Math.min(100, Math.max(0, 100 - kimiUsage.quota.weekly.remainingPercent))
+      primaryUsage.quota.weekly?.remainingPercent != null
+        ? Math.min(100, Math.max(0, 100 - primaryUsage.quota.weekly.remainingPercent))
         : null;
     const fiveHour =
       fiveHourPercent != null
         ? `${fiveHourPercent}%`
-        : `${Math.round(kimiUsage.totalSecondsLast5Hours / 60)}m`;
+        : `${Math.round(primaryUsage.totalSecondsLast5Hours / 60)}m`;
     const weekly =
       weeklyPercent != null
         ? `${weeklyPercent}%`
-        : `${Math.round(kimiUsage.totalSecondsWeek / 60)}m`;
+        : `${Math.round(primaryUsage.totalSecondsWeek / 60)}m`;
     const sysPart = sysUsage
       ? `${style.gray("sys")} ${style.gray("cpu")}${style.mintBold(`${sysUsage.cpuPercent}%`)} ${style.gray("mem")}${style.mintBold(`${sysUsage.memPercent}%`)}`
       : "";
     infoLines.push(
-      `${style.gray("kimi")} ${truncateText(account, 16)} 5h:${fiveHour} wk:${weekly}  ${sysPart}`.trimEnd()
+      `${style.gray("primary")} ${truncateText(account, 16)} 5h:${fiveHour} wk:${weekly}  ${sysPart}`.trimEnd()
     );
   } else {
     const sysPart = sysUsage
       ? `${style.gray("sys")} ${style.gray("cpu")}${style.mintBold(`${sysUsage.cpuPercent}%`)} ${style.gray("mem")}${style.mintBold(`${sysUsage.memPercent}%`)}`
       : `${style.gray("sys")} ${style.gray("--")}`;
-    infoLines.push(`${style.gray("kimi")} ${style.gray("unavailable")}  ${sysPart}`.trimEnd());
+    infoLines.push(`${style.gray("primary")} ${style.gray("unavailable")}  ${sysPart}`.trimEnd());
   }
 
   infoLines.push(formatDeepSeekSummary(deepSeek, deepSeekUsage, targetWidth));
   const mcpLines: string[] = [formatResourceSummary(resources, targetWidth)];
   if (snapshot.runtimeContract) {
     mcpLines.push(formatRuntimeContract(snapshot.runtimeContract, targetWidth));
+  }
+  if (snapshot.evidence.failedGates > 0 || snapshot.evidence.skippedGates > 0) {
+    const gateParts: string[] = [];
+    if (snapshot.evidence.failedGates > 0) gateParts.push(`${style.red(String(snapshot.evidence.failedGates))} failed`);
+    if (snapshot.evidence.skippedGates > 0) gateParts.push(`${style.orange(String(snapshot.evidence.skippedGates))} skipped`);
+    mcpLines.push(`${style.gray("evidence")} ${gateParts.join(" · ")}`);
   }
 
   const goalLineParts: string[] = [];
@@ -1438,6 +1453,11 @@ export async function renderCockpit(options: CockpitRenderOptions = {}) {
     infoLines.push(extraParts.join("  "));
   }
 
+  const selectedRuntime = (snapshot.pulse as Record<string, unknown>).selectedRuntime;
+  if (selectedRuntime) {
+    infoLines.push(`${style.gray("runtime")} ${style.creamBold(String(selectedRuntime))}`);
+  }
+
   // ── Worker / TODO section ──
   const workerLines: string[] = [];
   const sortedNodes = [...(vm.workers ?? [])].sort((a, b) => {
@@ -1454,7 +1474,7 @@ export async function renderCockpit(options: CockpitRenderOptions = {}) {
     const totalCount = sortedTodos.length;
     const pct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
     workerLines.push(
-      `${style.pinkBold(`${chatPrefix}TODO`)} ${miniProgressBar(doneCount, totalCount)} ${style.creamBold(`${pct}%`)} ` +
+      `${sectionHeader(`${chatPrefix}TODO`)} ${miniProgressBar(doneCount, totalCount)} ${style.creamBold(`${pct}%`)} ` +
         `${style.gray(`(${doneCount}/${totalCount})`)}`
     );
 
@@ -1476,7 +1496,7 @@ export async function renderCockpit(options: CockpitRenderOptions = {}) {
       }
     }
   } else {
-    workerLines.push(`${style.pinkBold(`${chatPrefix}TODO`)} ${style.gray("not recorded")}`);
+    workerLines.push(`${sectionHeader(`${chatPrefix}TODO`)} ${style.gray("not recorded")}`);
   }
 
   if (todos && todos.length > 0) {
@@ -1487,7 +1507,7 @@ export async function renderCockpit(options: CockpitRenderOptions = {}) {
     const { done, total, running, failed, blocked, skipped, settled } = vm.progress;
     const pct = total > 0 ? Math.round((settled / total) * 100) : 0;
     workerLines.push(
-      `${style.pinkBold("AGENTS")} ${miniProgressBar(settled, total)} ${style.creamBold(`${pct}%`)} ` +
+      `${sectionHeader("AGENTS")} ${miniProgressBar(settled, total)} ${style.creamBold(`${pct}%`)} ` +
         `${style.gray(`(${running}▶ ${done}✓ ${failed}✕ ${blocked}■ ${skipped}⊘ / ${total})`)}`
     );
 
@@ -1497,7 +1517,9 @@ export async function renderCockpit(options: CockpitRenderOptions = {}) {
         ? style.gray(` ${node.liveStatus}`)
         : "";
       const elapsed = formatElapsed(node.elapsedMs);
-      const base = `${stateLabel}${liveBadge} ${style.gray(elapsed)} ${truncateText(sanitizeForDisplay(node.label || node.id), targetWidth - 16)}`;
+      const nodeRuntime = (node as { selectedRuntime?: string }).selectedRuntime;
+      const runtimeBadge = nodeRuntime ? style.gray(`[${truncateText(nodeRuntime, 12)}]`) : "";
+      const base = `${stateLabel}${liveBadge} ${style.gray(elapsed)} ${truncateText(sanitizeForDisplay(node.label || node.id), targetWidth - 22)}${runtimeBadge ? " " + runtimeBadge : ""}`;
 
       if (node.state === "running") {
         const isChatInputWait = node.liveStatus === "waiting-input" || (node.id === "chat" && !node.phase && !node.thinking);
@@ -1532,7 +1554,7 @@ export async function renderCockpit(options: CockpitRenderOptions = {}) {
   }
 
   if (sortedNodes.length === 0) {
-    workerLines.push("", `${style.pinkBold("AGENTS")} ${style.gray("No parallel agents active — waiting for work")}`);
+    workerLines.push("", `${sectionHeader("AGENTS")} ${style.gray("No parallel agents active — waiting for work")}`);
   }
 
   // ── Changed / History / State section ──
@@ -1562,7 +1584,7 @@ export async function renderCockpit(options: CockpitRenderOptions = {}) {
       counts.R > 0 ? `R:${counts.R}` : "",
     ].filter(Boolean);
     const countStr = countParts.join(" ");
-    changedLines.push(style.pinkBold(`Changed (${gitChanges.length})`) + (countStr ? ` ${style.gray(countStr)}` : ""));
+    changedLines.push(sectionHeader(`Changed (${gitChanges.length})`) + (countStr ? ` ${style.gray(countStr)}` : ""));
 
     const maxPaths = targetWidth >= 80 && fixedBodyHeight != null && fixedBodyHeight > 24 ? 8 : 5;
     for (const path of snapshot.worktree.topPaths.slice(0, maxPaths)) {
@@ -1633,13 +1655,12 @@ export async function renderCockpit(options: CockpitRenderOptions = {}) {
     }
 
     if (historyLines.length > 0) {
-      changedLines.push(style.pinkBold("History"));
+      changedLines.push(sectionHeader("History"));
       changedLines.push(...historyLines);
     }
   }
 
   // ── Assemble responsive rectangle ──
-  const sep = separator(targetWidth);
   const heightMode = fixedFrameHeight == null ? "auto" : `${fixedFrameHeight}`;
   const footerLine = buildFooter(targetWidth, heightMode);
   const agentHeaderIndex = workerLines.findIndex((line) => sanitizeTerminalText(line).includes("AGENTS"));
@@ -1653,6 +1674,12 @@ export async function renderCockpit(options: CockpitRenderOptions = {}) {
   const selectedInfoLines = section === "all" ? infoLines : [];
   const selectedMcpLines = section === "all" || section === "mcp" ? mcpLines : [];
   const selectedChangedLines = section === "all" ? changedLines : [];
+
+  const activePanels: Array<{ title: string; lines: string[]; key: string }> = [];
+  if (selectedInfoLines.length > 0) activePanels.push({ title: "Run", lines: selectedInfoLines, key: "info" });
+  if (selectedWorkerLines.length > 0) activePanels.push({ title: "Workers & TODO", lines: selectedWorkerLines, key: "worker" });
+  if (selectedMcpLines.length > 0) activePanels.push({ title: "Resources", lines: selectedMcpLines, key: "mcp" });
+  if (selectedChangedLines.length > 0) activePanels.push({ title: "Changes & History", lines: selectedChangedLines, key: "changed" });
 
   let body: string[];
 
@@ -1713,15 +1740,19 @@ export async function renderCockpit(options: CockpitRenderOptions = {}) {
       changedBudget += remaining;
     }
 
+    const panelContents = activePanels
+      .map((p) => {
+        const budget = p.key === "info" ? infoBudget
+          : p.key === "worker" ? workerBudget
+          : p.key === "mcp" ? mcpBudget
+          : changedBudget;
+        return { title: p.title, lines: fitLines(p.lines, budget) };
+      })
+      .filter((p) => p.lines.length > 0);
+
     body = [
       ...headerLines,
-      ...fitLines(selectedInfoLines, infoBudget),
-      sep,
-      ...fitLines(selectedWorkerLines, workerBudget),
-      sep,
-      ...fitLines(selectedMcpLines, mcpBudget),
-      sep,
-      ...fitLines(selectedChangedLines, changedBudget),
+      ...panelContents.flatMap((p) => panel(p.title, p.lines, targetWidth).split("\n")),
       footerLine,
     ];
 
@@ -1730,13 +1761,7 @@ export async function renderCockpit(options: CockpitRenderOptions = {}) {
   } else {
     body = [
       ...headerLines,
-      ...selectedInfoLines,
-      sep,
-      ...selectedWorkerLines,
-      sep,
-      ...selectedMcpLines,
-      sep,
-      ...selectedChangedLines,
+      ...activePanels.flatMap((p) => panel(p.title, p.lines, targetWidth).split("\n")),
       footerLine,
     ];
 
@@ -1753,7 +1778,7 @@ export async function cockpitCommand(options: CockpitCommandOptions = {}): Promi
   const refreshMs = normalizeRefreshMs(options.refreshMs);
 
   if (!options.watch) {
-    console.log(await renderCockpit({ runId: options.runId, height: options.height, section: options.section, events: options.events }));
+    console.log(await renderCockpit({ runId: options.runId, height: options.height, section: options.section, events: options.events, view: options.view }));
     return;
   }
 
@@ -1789,6 +1814,7 @@ export async function cockpitCommand(options: CockpitCommandOptions = {}): Promi
         height: renderer.height,
         section: options.section,
         events: options.events,
+        view: options.view,
       });
 
       if (firstPaint) {

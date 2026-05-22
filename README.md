@@ -14,12 +14,12 @@
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:image" content="https://raw.githubusercontent.com/dmae97/oh-my-kimi/main/readmeasset/omk-social-preview.png" />
 
-<img src="./readmeasset/kimicat.gif" alt="oh-my-kimi mascot and CLI demo" width="720" />
+<img src="./readmeasset/kimicat.gif" alt="OMK CLI demo" width="720" />
 
-<h1>oh-my-kimi</h1>
+<h1>OMK — Open Multi-agent Kit</h1>
 
-<p><strong>Verified agent runtime for Kimi Code.</strong></p>
-<p><sub>Stable daily-use core with orchestration surfaces.</sub></p>
+<p><strong>Provider-neutral runtime for AI coding teams.</strong></p>
+<p><sub>Agent supervisor for coding agents: DAG scheduling, evidence gates, worktree isolation, replay, and memory.</sub></p>
 <p><sub>Your agents write. OMK coordinates, verifies, remembers, and guards.</sub></p>
 <p><a href="https://oh-my-kimi.sbs/"><strong>oh-my-kimi.sbs</strong></a> · <a href="https://github.com/dmae97/oh-my-kimi">GitHub</a> · <a href="https://www.npmjs.com/package/@oh-my-kimi/cli">npm</a></p>
 
@@ -34,7 +34,6 @@
 <p>
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&amp;logo=typescript&amp;logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Node.js-20+-339933?style=flat-square&amp;logo=node.js&amp;logoColor=white" alt="Node.js" />
-  <img src="https://img.shields.io/badge/Kimi_Code-K2.6-7C3AED?style=flat-square" alt="Kimi Code K2.6" />
   <img src="https://img.shields.io/badge/DAG-runtime-111827?style=flat-square" alt="DAG runtime" />
   <img src="https://img.shields.io/badge/Evidence-gated-059669?style=flat-square" alt="Evidence gated" />
 </p>
@@ -45,7 +44,7 @@
 
 ## The 10-second version
 
-OMK turns your agent CLI into a bounded coding team with isolated worktrees, DAG-based execution, evidence gates before completion, local graph memory, and a live HUD/cockpit for operator control. It works with Kimi, Codex, Gemini, Claude Code, OpenRouter, Qwen, DeepSeek, and local models.
+OMK turns agent CLIs and model APIs into bounded, inspectable runtime lanes with isolated worktrees, DAG-based execution, evidence gates before completion, local graph memory, and a live HUD/cockpit for operator control. It works with Codex, Gemini, Claude Code, Kimi, OpenRouter, Qwen, DeepSeek, and local models.
 
 - Not a prompt pack.
 - Not a model buffet.
@@ -171,15 +170,29 @@ flowchart LR
   I --> P[Prompt shaping + project rules]
   P --> G[Goal / DAG compiler]
   G --> S[Scheduler]
-  S --> A[Agents, skills, hooks, MCP]
-  A --> K[Kimi writer]
-  A --> D[Advisory lanes]
-  K --> E[Evidence gates]
-  D --> E
+  S --> R[Runtime Router]
+  R --> W[Writer lanes]
+  R --> V[Reviewer lanes]
+  R --> B[Browser/Appshot observers]
+  W --> E[Evidence gates]
+  V --> E
+  B --> E
   E --> M[Graph memory + run state]
   M --> H[HUD / cockpit]
   H --> U
 ```
+
+## Runtime adapters
+
+OMK supports multiple agent runtimes through a unified adapter interface:
+
+- **Codex CLI** — OpenAI Codex integration.
+- **Gemini CLI** — Google Gemini agent runtime.
+- **Claude Code** — Anthropic Claude Code adapter.
+- **Kimi CLI** — First-class adapter for MCP-heavy execution and Kimi Code users.
+- **OpenRouter** — OpenRouter API adapter for multi-model routing.
+- **Qwen** — Alibaba Qwen API adapter.
+- **DeepSeek** — DeepSeek advisory/read-only adapter.
 
 ### 1. Provider-native control plane
 
@@ -247,7 +260,7 @@ When multiple agents can work on the same node, the ensemble runner evaluates pr
 
 ### 11. Advisory provider lanes
 
-OMK can route research, review, QA, or risk analysis through provider lanes such as DeepSeek, but the run stays bounded. Kimi keeps write/merge authority, and external model output is advisory evidence rather than uncontrolled patch authority.
+OMK can route research, review, QA, or risk analysis through provider lanes such as DeepSeek, but the run stays bounded. The primary writer keeps write/merge authority, and external model output is advisory evidence rather than uncontrolled patch authority.
 
 ### 12. Open Design bridge
 
@@ -362,7 +375,7 @@ Do not commit provider keys. Keep secrets in environment variables, local keycha
 
 OpenAI image generation uses a Platform project API key, not Codex/ChatGPT OAuth. For `omk image generate/edit`, inject an ephemeral `OPENAI_API_KEY` for one command, then unset it; see [OpenAI Platform keys for image generation](./docs/openai-platform-image-keys.md).
 
-The Open Design bridge does not pass inherited `OPENAI_API_KEY`, OAuth tokens, `*_TOKEN`, `*_SECRET`, or `*_KEY` env vars to its Kimi child process by default. Only set `OMK_OPEN_DESIGN_TRUST_SECRET_ENV=1` for a trusted local run that intentionally needs secret env inheritance.
+The Open Design bridge does not pass inherited `OPENAI_API_KEY`, OAuth tokens, `*_TOKEN`, `*_SECRET`, or `*_KEY` env vars to its child process by default. Only set `OMK_OPEN_DESIGN_TRUST_SECRET_ENV=1` for a trusted local run that intentionally needs secret env inheritance.
 
 ---
 
@@ -408,7 +421,7 @@ npm run release:check
 
 The v1.1.18 source target is release-gated and evidence-gated: it strengthens parallel subagent orchestration, typed `omk doctor --fix` repair plans with dry-run and post-fix verification, shared startup update prompts, memory/capability harness summaries, and native safety package readiness while preserving package audit, smoke-pack checks, native safety normalization, replay/inspect/diff-runs, skill assigner, decision trace coverage, and CI release gates. Do not claim v1.1.18 as published until native safety packaging, package audit, smoke-pack, tarball install smoke, and `npm run release:check` evidence pass; latest published release remains v1.1.17 until then.
 
-**MCP fetch startup note:** if your personal Kimi config still starts fetch with `uvx mcp-server-fetch`, each disposable or isolated Kimi HOME may re-resolve Python dependencies before MCP tools appear. Prefer a persistent entrypoint:
+**MCP fetch startup note:** if your personal agent config still starts fetch with `uvx mcp-server-fetch`, each disposable or isolated Kimi HOME may re-resolve Python dependencies before MCP tools appear. Prefer a persistent entrypoint:
 
 ```bash
 uv tool install mcp-server-fetch

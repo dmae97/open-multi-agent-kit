@@ -263,7 +263,7 @@ function buildDoctorCategories(
     { title: "Project Root", checks: async () => rootChecks(rootResolution) },
     { title: "Runtime", checks: () => runtimeChecks(resources) },
     { title: "Toolchain", checks: () => toolchainChecks(root) },
-    { title: "Primary CLI", checks: () => kimiChecks(root, resources) },
+    { title: "Primary Runtime", checks: () => kimiChecks(root, resources) },
     { title: "Project", checks: () => projectChecks(root) },
     { title: "OMK Scaffold", checks: () => omkChecks(root) },
     { title: "Agent YAML", checks: () => agentYamlChecks(root) },
@@ -1590,6 +1590,40 @@ async function runtimeChecks(resources: Awaited<ReturnType<typeof getOmkResource
     results.push({ name: "npm global bin", status: "warn", message: "npm bin detection failed" });
   }
 
+  // Runtime availability listing
+  const opencodeExists = await checkCommand("opencode");
+  const codexExists = await checkCommand("codex");
+  const kimiExists = await checkCommand("kimi");
+  const openrouterConfigured = Boolean(process.env.OPENROUTER_API_KEY);
+  const deepseekConfigured = Boolean(process.env.DEEPSEEK_API_KEY);
+  const kimiDisabled = process.env.OMK_KIMI_ENABLED === "0";
+
+  results.push({
+    name: "opencode-cli",
+    status: opencodeExists ? "ok" : "info",
+    message: opencodeExists ? "available" : "not found",
+  });
+  results.push({
+    name: "codex-cli",
+    status: codexExists ? "ok" : "info",
+    message: codexExists ? "available" : "not found",
+  });
+  results.push({
+    name: "kimi-cli",
+    status: kimiExists ? "ok" : kimiDisabled ? "info" : "warn",
+    message: kimiExists ? "available" : kimiDisabled ? "disabled by OMK_KIMI_ENABLED" : "not found",
+  });
+  results.push({
+    name: "openrouter-api",
+    status: openrouterConfigured ? "ok" : "info",
+    message: openrouterConfigured ? "OPENROUTER_API_KEY set" : "not configured",
+  });
+  results.push({
+    name: "deepseek-api",
+    status: deepseekConfigured ? "ok" : "info",
+    message: deepseekConfigured ? "DEEPSEEK_API_KEY set" : "not configured",
+  });
+
   results.push({
     name: "OMK Runtime",
     status: resources.profile === "lite" ? "info" : "ok",
@@ -1775,11 +1809,15 @@ async function rustSafetyNativeCheck(root: string): Promise<CheckResult> {
   };
 }
 
-// ── Kimi CLI ──────────────────────────────────────────────────
+// ── Primary Provider CLI (kimi) ───────────────────────────────
 
 async function kimiChecks(root: string, resources: OmkResourceSettings): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
   const kimiExists = await checkCommand("kimi");
+  const opencodeExists = await checkCommand("opencode");
+  const codexExists = await checkCommand("codex");
+  const openrouterConfigured = Boolean(process.env.OPENROUTER_API_KEY);
+  const otherRuntimeAvailable = opencodeExists || codexExists || openrouterConfigured;
   const agentTools = await readAgentToolDeclarations(root);
   const agentYamlDeclaresWebTools = Boolean(agentTools?.hasSearchWeb && agentTools.hasFetchURL);
 
@@ -1806,7 +1844,8 @@ async function kimiChecks(root: string, resources: OmkResourceSettings): Promise
       results.push({ name: "Primary Session", status: "warn", message: "config read failed" });
     }
   } else {
-    results.push({ name: "Primary CLI", status: "fail", message: t("doctor.kimiNotFound") });
+    const primaryStatus = otherRuntimeAvailable ? "warn" : "fail";
+    results.push({ name: "Primary CLI", status: primaryStatus, message: t("doctor.kimiNotFound") });
     results.push({ name: "Primary Install Guide", status: "info", message: "curl -LsSf https://code.kimi.com/install.sh | bash or see https://github.com/dmae97/oh-my-kimi#install" });
     results.push({ name: "Primary Capabilities", status: "info", message: "unknown — primary CLI not installed" });
   }
@@ -2208,7 +2247,7 @@ async function mcpSkillsChecks(root: string, resources: OmkResourceSettings): Pr
       message:
         `${stdioMcpServers.join(", ")} — ` +
         (npxMcpServers.length > 0
-          ? `npx-based servers (${npxMcpServers.join(", ")}) may fail to connect and crash Kimi CLI sessions. Remove or fix them in ~/.kimi/mcp.json if unused.`
+          ? `npx-based servers (${npxMcpServers.join(", ")}) may fail to connect and crash the primary provider sessions. Remove or fix them in ~/.kimi/mcp.json if unused.`
           : "stdio servers detected. Ensure they are available."),
     });
   }

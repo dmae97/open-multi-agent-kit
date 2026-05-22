@@ -912,7 +912,7 @@ function defaultRootPrompt(): string {
   return [
     "# oh-my-kimi Root Agent",
     "",
-    "You are the oh-my-kimi root coordinator — the orchestration layer that turns Kimi CLI into a bounded coding team.",
+    "You are the oh-my-kimi root coordinator — the orchestration layer that turns OMK into a bounded coding team.",
     "",
     "Apply AGENTS.md silently, keep MCP/skills/hooks scoped by runtime policy, launch independent subagents in parallel for non-trivial work, and verify before completion.",
   ].join("\n");

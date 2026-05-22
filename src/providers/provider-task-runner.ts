@@ -35,7 +35,8 @@ import {
 } from "../kimi/runner.js";
 
 export interface ProviderTaskRunnerOptions {
-  kimiRunner: TaskRunner;
+  /** Kimi runner. If omitted, Kimi-dependent lanes return unavailable. */
+  kimiRunner?: TaskRunner;
   deepseekRunner?: TaskRunner;
   providerRunners?: Partial<Record<ProviderId, TaskRunner>>;
   providerModels?: Partial<Record<ProviderId, ProviderModelDefault>>;
@@ -144,10 +145,10 @@ export function createProviderTaskRunner(options: ProviderTaskRunnerOptions): Ta
 
   const providerRunner: TaskRunner = {
     get onThinking() {
-      return options.kimiRunner.onThinking;
+      return options.kimiRunner?.onThinking;
     },
     set onThinking(fn) {
-      options.kimiRunner.onThinking = fn;
+      if (options.kimiRunner) options.kimiRunner.onThinking = fn;
       if (options.deepseekRunner) options.deepseekRunner.onThinking = fn;
       for (const runner of Object.values(options.providerRunners ?? {})) {
         if (runner) runner.onThinking = fn;
@@ -163,7 +164,7 @@ export function createProviderTaskRunner(options: ProviderTaskRunnerOptions): Ta
       ) as Partial<Record<ProviderId, TaskRunner>>;
       return createProviderTaskRunner({
         ...options,
-        kimiRunner: options.kimiRunner.fork?.(onThinking) ?? options.kimiRunner,
+        kimiRunner: options.kimiRunner?.fork?.(onThinking) ?? options.kimiRunner,
         deepseekRunner: options.deepseekRunner?.fork?.(onThinking) ?? options.deepseekRunner,
         providerRunners,
         providerHealth,
@@ -352,6 +353,23 @@ export function createProviderTaskRunner(options: ProviderTaskRunnerOptions): Ta
           });
         }
 
+        if (!options.kimiRunner) {
+          return withProviderMetadata(lastFailure ?? providerExceptionResult(new Error("DeepSeek failed and Kimi fallback unavailable")), {
+            provider: "deepseek",
+            requestedProvider: "deepseek",
+            providerRouteReason: decision.reason,
+            ...traceMetadata,
+            providerAttemptCount: failures.length,
+            ...deepseekMetadata(decision.deepseek),
+            providerSkip: {
+              provider: "deepseek",
+              reason: `${fallbackReason || "DeepSeek failed"}; Kimi fallback unavailable`,
+              skippable: true,
+              attempts: failures.length,
+              failureKind,
+            },
+          });
+        }
         const fallback = await runWith(
           "kimi",
           options.kimiRunner,
@@ -432,6 +450,20 @@ export function createProviderTaskRunner(options: ProviderTaskRunnerOptions): Ta
             });
           }
 
+          if (!options.kimiRunner) {
+            return providerLaneSkipResult({
+              node,
+              provider: decision.provider,
+              requestedProvider: decision.provider,
+              decision,
+              reason: `${fallbackReason}; Kimi fallback unavailable`,
+              failureKind: "availability",
+              attempts: 1,
+              traceMetadata,
+              providerModel: decision.providerModel,
+              baseResult: result,
+            });
+          }
           const fallback = await runWith(
             "kimi",
             options.kimiRunner,
@@ -509,6 +541,9 @@ export function createProviderTaskRunner(options: ProviderTaskRunnerOptions): Ta
           });
         }
 
+        if (!options.kimiRunner) {
+          return kimiUnavailableResult(node, decision, traceMetadata, "Kimi runner not configured; cannot apply DeepSeek advisory");
+        }
         const kimiResult = await runWith(
           "kimi",
           options.kimiRunner,
@@ -579,6 +614,9 @@ export function createProviderTaskRunner(options: ProviderTaskRunnerOptions): Ta
               baseResult: advisory.result,
             });
           }
+          if (!options.kimiRunner) {
+            return kimiUnavailableResult(node, decision, traceMetadata, `Kimi runner not configured; cannot apply ${genericAdvisoryProvider} advisory`);
+          }
           const kimiResult = await runWith(
             "kimi",
             options.kimiRunner,
@@ -611,6 +649,9 @@ export function createProviderTaskRunner(options: ProviderTaskRunnerOptions): Ta
         }
       }
 
+      if (!options.kimiRunner) {
+        return kimiUnavailableResult(node, decision, traceMetadata, "Kimi runner not configured");
+      }
       const kimiResult = await runWith(
         "kimi",
         options.kimiRunner,
@@ -1200,4 +1241,31 @@ function summarizeFailures(failures: TaskResult[]): string {
     })
     .join(" | ")
     .slice(0, 500);
+}
+
+function kimiUnavailableResult(
+  node: DagNode,
+  decision: ProviderRouteDecision,
+  traceMetadata: Partial<ProviderTaskMetadata>,
+  reason: string
+): TaskResult {
+  markProviderLaneSkippable(node);
+  return withProviderMetadata({
+    success: false,
+    exitCode: 1,
+    stdout: `[omk] Kimi unavailable: ${reason}\n`,
+    stderr: reason,
+  }, {
+    provider: "kimi",
+    requestedProvider: decision.provider,
+    providerRouteReason: decision.reason,
+    ...traceMetadata,
+    providerSkip: {
+      provider: "kimi",
+      reason,
+      skippable: true,
+      attempts: 0,
+      failureKind: "availability",
+    },
+  });
 }

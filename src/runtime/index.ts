@@ -14,6 +14,11 @@ export {
 export {
   type AgentRuntime,
   type AgentRunResult,
+  type RuntimeId,
+  type RuntimeKind,
+  type RuntimeAuthority,
+  type RuntimeCapabilities,
+  type RuntimeHealth,
   type TokenUsage,
   type ToolCallRecord,
   toTaskResult as runtimeToTaskResult,
@@ -49,6 +54,29 @@ export {
 } from "./kimi-print-runtime.js";
 
 export {
+  type DeepSeekRuntimeOptions,
+  DeepSeekRuntime,
+} from "./deepseek-runtime.js";
+
+export {
+  type CodexRuntimeOptions,
+  CodexRuntime,
+} from "./codex-runtime.js";
+
+export {
+  type RuntimeRegistryEntry,
+  type RuntimeRegistry,
+  createRuntimeRegistry,
+} from "./runtime-registry.js";
+
+export {
+  providerToRuntimeId,
+  runtimeIdToProvider,
+  legacyProviderToRuntimeIds,
+  type LegacyProviderDecision,
+} from "./legacy-bridge.js";
+
+export {
   type ContextBudgetReport,
   type DroppedContextItem,
   type ContextTokenBreakdown,
@@ -58,3 +86,8 @@ export {
   estimateTokens,
   breakdownCapsuleTokens,
 } from "./context-budget-optimizer.js";
+
+export {
+  type RuntimeBackedTaskRunnerOptions,
+  createRuntimeBackedTaskRunner,
+} from "./runtime-backed-task-runner.js";

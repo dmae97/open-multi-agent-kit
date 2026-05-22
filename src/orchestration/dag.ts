@@ -61,6 +61,7 @@ export interface DagNodeRouting {
     targetAtomId?: string;
     preserveEvidence?: boolean;
   };
+  needsIntegration?: boolean;
   rejected?: Array<{ id: string; reason: string }>;
   actionAtom?: {
     id: string;

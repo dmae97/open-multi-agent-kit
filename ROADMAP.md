@@ -13,7 +13,39 @@ Provider routing and graph viewing are no longer purely future work:
 - `omk graph view` generates an HTML view from `.omk/memory/graph-state.json`.
 - `omk goal` has a persisted lifecycle, continue loop, generated plan/evidence criteria, and verification flow.
 
-## v1.2 — Hardening the current surface
+## v1.2 — Native Orchestrator Decoupling
+
+### Phase 0: Foundation & Spec
+
+- Coupling map: identify every Kimi-only assumption in runtime, harness, agent loop, and subagent spawning.
+- Produce Speckit artifacts (`spec.md`, `plan.md`, `tasks.md`) for the decoupling milestone.
+- Define provider-adapter contract so Kimi, DeepSeek, and future workers plug into a unified `AgentRuntime`.
+
+### Phase 1: Unified Runtime Bridge
+
+- Implement `AgentRuntime.execute` as the single entrypoint for all worker execution (chat, DAG node, inline tool call).
+- Model chat as a DAG: user message → IntentFrame → ActionAtom → worker node → evidence gate.
+- Ensure Kimi adapter remains the mature default while the bridge is provider-agnostic.
+
+### Phase 2: Worker Capability Assignment
+
+- Allow per-DAG-node MCP, skills, hooks, and provider selection.
+- Move capability flag resolution from Kimi prompt scaffolding into OMK harness metadata.
+- Add preflight health checks and fallback chains for non-Kimi workers.
+
+### Phase 3: Root Coordinator Mode
+
+- Introduce native OMK agent loop with `IntentFrame` parsing and `ActionAtom` dispatch.
+- OMK becomes the root orchestrator; Kimi becomes one worker provider adapter among many.
+- Preserve D-Mail checkpoints and Okabe-compatible context management across provider handoffs.
+
+### Phase 4: Docs & GA
+
+- Update `AGENTS.md`, `DESIGN.md`, init templates, and skill docs to reflect OMK-as-root narrative.
+- Deprecate Kimi-only subagent language where OMK `ParallelOrchestrator` is the actual spawn surface.
+- Mark v1.2.x stable once provider fallback, evidence gates, and DAG replay are green across all supported adapters.
+
+## v1.3 — Hardening the current surface
 
 ### P0: release and contract gates
 
@@ -70,4 +102,4 @@ Provider routing and graph viewing are no longer purely future work:
 | v1.1.15 | Isolated HOME MCP shell-profile hotfix and persistent fetch MCP entrypoint |
 | v1.1.16 | Deterministic IntentFrame/ActionAtom orchestration, chat schema preflight, MCP duplicate policy, agent capability propagation, and doctor/init/pack smoke fixes |
 | v1.1.17 | Full generated-agent MCP/skills/hooks enablement, parallel subagent orchestration emphasis, and v1.1.17 release docs |
-| v1.1.18 | Package source version alignment, latest-published v1.1.17 caveat, native safety package gate, typed doctor repair plans, startup update prompt UX, and parallel subagent orchestration release-doc alignment |
+| v1.1.18 | **Last Kimi-wrapper dominant release.** Package source version alignment, latest-published v1.1.17 caveat, native safety package gate, typed doctor repair plans, startup update prompt UX, and parallel subagent orchestration release-doc alignment |

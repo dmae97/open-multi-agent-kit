@@ -11,7 +11,9 @@ export interface ProviderRouterOptions {
 }
 
 export function createProviderRouter(options: ProviderRouterOptions) {
-  const { providers, defaultStrategy = "kimi-first" } = options;
+  // TODO: "kimi-first" is tied to ProviderRouteStrategy internal type;
+  // refactor to a runtime-neutral default once the strategy enum is updated.
+  const { providers, defaultStrategy = "priority-first" } = options;
   const sorted = [...providers].sort((a, b) => b.priority - a.priority);
 
   function select(input: ProviderRouteInput): ProviderRouteDecision {
@@ -19,7 +21,10 @@ export function createProviderRouter(options: ProviderRouterOptions) {
     const candidates = sorted.filter((p) => p.supports(input.node));
 
     if (candidates.length === 0) {
-      const fallback = sorted.find((p) => p.id === "kimi") ?? sorted[0];
+      const fallback = sorted[0];
+      if (!fallback) {
+        throw new Error(`No providers registered and no fallback available for node ${input.node?.id ?? "unknown"}`);
+      }
       return {
         provider: fallback,
         reason: "no-matching-provider",
@@ -30,8 +35,8 @@ export function createProviderRouter(options: ProviderRouterOptions) {
     }
 
     switch (strategy) {
-      case "kimi-first":
-        return selectKimiFirst(candidates, input);
+      case "priority-first":
+        return selectPriorityFirst(candidates, input);
       case "cost-aware":
         return selectCostAware(candidates, input);
       case "fallback-on-evidence-fail":
@@ -41,33 +46,23 @@ export function createProviderRouter(options: ProviderRouterOptions) {
       case "lowest-latency":
         return selectLowestLatency(candidates, input);
       default:
-        return selectKimiFirst(candidates, input);
+        return selectPriorityFirst(candidates, input);
     }
   }
 
-  function selectKimiFirst(
+  function selectPriorityFirst(
     candidates: AgentProvider[],
     _input: ProviderRouteInput
   ): ProviderRouteDecision {
-    const kimi = candidates.find((p) => p.id === "kimi");
-    const others = candidates.filter((p) => p.id !== "kimi");
-
-    if (kimi) {
-      return {
-        provider: kimi,
-        reason: "kimi-first-strategy",
-        fallbacks: others,
-        confidence: 0.9,
-        strategy: "kimi-first",
-      };
-    }
+    const primary = candidates[0];
+    const fallbacks = candidates.slice(1);
 
     return {
-      provider: candidates[0],
-      reason: "kimi-unavailable-next-best",
-      fallbacks: candidates.slice(1),
-      confidence: 0.7,
-      strategy: "kimi-first",
+      provider: primary,
+      reason: "priority-first-strategy",
+      fallbacks,
+      confidence: 0.9,
+      strategy: "priority-first",
     };
   }
 
@@ -94,11 +89,8 @@ export function createProviderRouter(options: ProviderRouterOptions) {
     candidates: AgentProvider[],
     _input: ProviderRouteInput
   ): ProviderRouteDecision {
-    const kimi = candidates.find((p) => p.id === "kimi");
-    const others = candidates.filter((p) => p.id !== "kimi");
-
-    const primary = kimi ?? candidates[0];
-    const fallbacks = kimi ? others : candidates.slice(1);
+    const primary = candidates[0];
+    const fallbacks = candidates.slice(1);
 
     return {
       provider: primary,
@@ -161,5 +153,5 @@ function estimateProviderCost(
 }
 
 function getProviderLatency(provider: AgentProvider): number {
-  return provider.id === "kimi" ? 1000 : 500;
+  return provider.priority > 50 ? 500 : 1000;
 }

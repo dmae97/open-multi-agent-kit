@@ -3,6 +3,7 @@
 // Read-only for all other workers. Version-bump only via Integration Worker.
 
 import type { DeepSeekModelTier, DeepSeekParticipation, ProviderId } from "../providers/types.js";
+import type { ProviderPolicy } from "../runtime/agent-runtime.js";
 
 export type TaskStatus = "pending" | "running" | "done" | "failed" | "blocked" | "skipped";
 export type DagContextBudget = "tiny" | "small" | "normal";
@@ -117,6 +118,8 @@ export interface DagNode {
   evidence?: DagNodeEvidence[];
   /** Live "thinking" text exposed while the node is running (e.g. ensemble progress). */
   thinking?: string;
+  executionMode?: "in-process" | "subprocess";
+  providerPolicy?: ProviderPolicy;
 }
 
 export interface Dag {

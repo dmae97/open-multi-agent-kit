@@ -1,11 +1,12 @@
 import type { TaskResult, TaskRunner } from "../contracts/orchestration.js";
+import type { RuntimeRouteDecision, RuntimeId } from "../runtime/adapter.js";
 
-export type KnownProviderId = "kimi" | "deepseek" | "codex" | "qwen" | "openrouter";
+export type KnownProviderId = "codex" | "deepseek" | "kimi" | "openrouter" | "qwen";
 export type ProviderId = KnownProviderId | (string & {});
 export type ProviderPolicy = "auto" | KnownProviderId;
 export type ProviderRisk = "read" | "write" | "shell" | "merge";
 export type ProviderComplexity = "simple" | "moderate" | "complex";
-export type ProviderKind = "kimi-native" | "openai-compatible" | "external-cli" | "codex-cli" | "local";
+export type ProviderKind = "codex-cli" | "external-cli" | "kimi-native" | "local" | "openai-compatible";
 export type ProviderWireApi = "kimi-native" | "openai-chat-completions" | "openai-responses" | "external-cli";
 export type ProviderAuthMethod = "api-key-env" | "oauth" | "external-cli" | "none";
 export type ProviderProfileType = "runtime" | "compatibility";
@@ -81,11 +82,21 @@ export interface ProviderRouteInput {
   preferredDeepSeekTier?: DeepSeekModelTier;
 }
 
+/** @deprecated Will be removed in v2.0.0. Use DEFAULT_FALLBACK_RUNTIME instead. */
 export const DEFAULT_FALLBACK_PROVIDER: ProviderId = "kimi";
+export const DEFAULT_FALLBACK_RUNTIME: RuntimeId = "kimi-cli";
+export const DEFAULT_RUNTIME_FALLBACK_CHAIN: RuntimeId[] = [
+  "opencode-cli",
+  "codex-cli",
+  "kimi-cli",
+  "openrouter-api",
+  "deepseek-api",
+];
 
 export interface ProviderRouteDecision {
   provider: ProviderId;
   reason: string;
+  /** @deprecated Use RuntimeRouteDecision.fallbackChain instead */
   fallbackProvider: ProviderId;
   confidence: number;
   providerModel?: ProviderModelRef;
@@ -165,5 +176,29 @@ export function withProviderMetadata(
       ...(result.metadata ?? {}),
       ...metadata,
     },
+  };
+}
+
+export function legacyProviderDecisionToRuntimeDecision(
+  decision: ProviderRouteDecision
+): RuntimeRouteDecision {
+  const providerToRuntime = (provider: string): RuntimeId => {
+    if (provider === "kimi") return "kimi-cli";
+    if (provider === "codex") return "codex-cli";
+    if (provider === "deepseek") return "deepseek-api";
+    if (provider === "qwen") return "qwen-api";
+    if (provider === "openrouter") return "openrouter-api";
+    return `${provider}-api`;
+  };
+
+  return {
+    selectedRuntime: providerToRuntime(decision.provider),
+    candidateRuntimes: [providerToRuntime(decision.provider)],
+    fallbackChain: decision.fallbackProvider
+      ? [providerToRuntime(decision.fallbackProvider)]
+      : [],
+    authorityMode: (decision.providerModel?.authority ?? "advisory") as RuntimeRouteDecision["authorityMode"],
+    reason: decision.reason,
+    confidence: decision.confidence,
   };
 }

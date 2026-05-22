@@ -1,11 +1,46 @@
 /**
- * AgentRuntime — interface for runtime implementations.
- *
- * Each runtime wraps a specific Kimi/provider invocation mode.
+ * AgentRuntime — provider-neutral runtime adapter interface.
  */
+
 
 import type { TaskResult } from "../contracts/orchestration.js";
 import type { ContextCapsule } from "./context-capsule.js";
+
+export type RuntimeId = string;
+
+export type RuntimeKind = "cli" | "api" | "mcp" | "local" | "composite";
+
+export type RuntimeAuthority =
+  | "read"
+  | "write"
+  | "shell"
+  | "mcp"
+  | "patch"
+  | "review"
+  | "merge"
+  | "vision";
+
+export interface RuntimeCapabilities {
+  read: boolean;
+  write: boolean;
+  shell: boolean;
+  mcp: boolean;
+  patch: boolean;
+  review: boolean;
+  merge: boolean;
+  vision: boolean;
+  maxContextTokens?: number;
+  supportsStreaming?: boolean;
+  supportsStructuredOutput?: boolean;
+  supportsToolCalling?: boolean;
+}
+
+export interface RuntimeHealth {
+  runtimeId: RuntimeId;
+  available: boolean;
+  reason?: string;
+  checkedAt: string;
+}
 
 export interface TokenUsage {
   readonly inputTokens: number;
@@ -37,11 +72,77 @@ export interface AgentRunResult {
   readonly toolCalls?: readonly ToolCallRecord[];
 }
 
+export interface AgentTask {
+  prompt: string;
+  context: AgentContext;
+  tools: ToolManifest;
+  providerPolicy: ProviderPolicy;
+  capabilities: CapabilityManifest;
+}
+
+export interface AgentResult {
+  output: string;
+  exitCode: number;
+  thinking?: string;
+  todos?: Array<{ id: string; title: string; status: "pending" | "in_progress" | "done" }>;
+  tokenUsage?: { inputTokens: number; outputTokens: number; totalTokens: number };
+  toolCalls?: readonly ToolCallRecord[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface AgentContext {
+  runId: string;
+  nodeId: string;
+  role?: string;
+  goal?: string;
+  system?: string;
+  files?: string[];
+  memory?: Array<{ key: string; source: string; summary: string }>;
+  cwd?: string;
+  env?: Record<string, string>;
+  abortSignal?: AbortSignal;
+}
+
+export interface ToolManifest {
+  available: Array<{ name: string; description: string; inputSchema: unknown }>;
+  mcpServers?: string[];
+  skills?: string[];
+  hooks?: string[];
+}
+
+export interface ProviderPolicy {
+  strategy: "priority-first" | "cost-aware" | "fallback-on-evidence-fail" | "round-robin" | "lowest-latency";
+  preferredProviders: string[];
+  fallbackChain: string[];
+  maxCost?: number;
+  maxLatencyMs?: number;
+}
+
+export interface CapabilityManifest {
+  read: boolean;
+  write: boolean;
+  shell: boolean;
+  mcp: boolean;
+  patch: boolean;
+  review: boolean;
+  merge: boolean;
+  vision: boolean;
+  streaming?: boolean;
+  structuredOutput?: boolean;
+  toolCalling?: boolean;
+  maxTokens?: number;
+}
+
 export interface AgentRuntime {
-  readonly id: string;
+  readonly id: RuntimeId;
+  readonly displayName?: string;
+  readonly kind?: RuntimeKind;
   readonly priority: number;
+  readonly capabilities?: RuntimeCapabilities;
   supports(capsule: ContextCapsule): boolean;
   runNode(capsule: ContextCapsule, signal: AbortSignal): Promise<AgentRunResult>;
+  execute?(task: AgentTask): Promise<AgentResult>;
+  health?(): Promise<RuntimeHealth>;
 }
 
 export function toTaskResult(result: AgentRunResult): TaskResult {

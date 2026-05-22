@@ -1,0 +1,188 @@
+/**
+ * CodexRuntime — Codex CLI runtime adapter.
+ *
+ * Spawns the `codex` CLI subprocess and bridges AgentTask / AgentResult.
+ */
+
+import type {
+  AgentRuntime,
+  AgentRunResult,
+  AgentResult,
+  AgentTask,
+  RuntimeCapabilities,
+  RuntimeHealth,
+} from "./agent-runtime.js";
+import type { ContextCapsule } from "./context-capsule.js";
+import { capsuleToTask } from "./context-broker-converter.js";
+import { runShell, checkCommand } from "../util/shell.js";
+
+export interface CodexRuntimeOptions {
+  cwd?: string;
+  model?: string;
+  timeoutMs?: number;
+}
+
+export class CodexRuntime implements AgentRuntime {
+  readonly id = "codex-cli";
+  readonly kind = "cli";
+  readonly priority = 60;
+  readonly capabilities: RuntimeCapabilities = {
+    read: true,
+    write: false,
+    shell: false,
+    mcp: false,
+    patch: false,
+    review: true,
+    merge: false,
+    vision: false,
+    supportsStreaming: false,
+    supportsStructuredOutput: false,
+    supportsToolCalling: false,
+  };
+
+  private readonly cwd: string;
+  private readonly model: string | undefined;
+  private readonly timeoutMs: number;
+
+  constructor(options: CodexRuntimeOptions = {}) {
+    this.cwd = options.cwd ?? process.cwd();
+    this.model = options.model;
+    this.timeoutMs = options.timeoutMs ?? 120_000;
+  }
+
+  supports(_capsule: ContextCapsule): boolean {
+    return true;
+  }
+
+  async health(): Promise<RuntimeHealth> {
+    const available = await checkCommand("codex").catch(() => false);
+    return {
+      runtimeId: this.id,
+      available,
+      reason: available ? undefined : "codex CLI is not available on PATH",
+      checkedAt: new Date().toISOString(),
+    };
+  }
+
+  async runNode(capsule: ContextCapsule, signal: AbortSignal): Promise<AgentRunResult> {
+    try {
+      const task = await capsuleToTask(capsule, signal);
+      const result = await this.execute(task);
+      return {
+        success: result.exitCode === 0,
+        exitCode: result.exitCode,
+        stdout: result.output,
+        stderr: "",
+        metadata: {
+          runtime: this.id,
+          ...(result.thinking && { thinking: result.thinking }),
+          ...(result.metadata && { ...result.metadata }),
+        },
+      };
+    } catch (err) {
+      const errorMsg = String(err);
+      return {
+        success: false,
+        exitCode: 1,
+        stdout: "",
+        stderr: errorMsg,
+        metadata: { runtime: this.id, error: errorMsg },
+      };
+    }
+  }
+
+  async execute(task: AgentTask): Promise<AgentResult> {
+    const prompt = this.buildPrompt(task);
+    const env: Record<string, string> = {
+      ...(task.context.env ?? {}),
+      OMK_RUN_ID: task.context.runId,
+      OMK_NODE_ID: task.context.nodeId,
+      OMK_ROLE: task.context.role ?? "",
+      OMK_GOAL: task.context.goal ?? "",
+    };
+
+    const args = [
+      "exec",
+      "--sandbox", "read-only",
+      "--ask-for-approval", "never",
+      "--cd", this.cwd,
+      "--color", "never",
+      "-",
+    ];
+
+    const model = task.context.env?.OMK_PROVIDER_MODEL ?? this.model ?? process.env.OMK_PROVIDER_MODEL;
+    if (model && model !== "codex-cli") {
+      args.splice(1, 0, "--model", model);
+    }
+
+    try {
+      const shellResult = await runShell("codex", args, {
+        cwd: this.cwd,
+        input: prompt,
+        timeout: this.timeoutMs,
+        signal: task.context.abortSignal,
+        inheritEnv: true,
+        env,
+      });
+
+      if (task.context.abortSignal?.aborted) {
+        return {
+          output: shellResult.stdout,
+          exitCode: 130,
+          metadata: { error: "Request aborted" },
+        };
+      }
+
+      return {
+        output: shellResult.stdout,
+        exitCode: shellResult.exitCode,
+        metadata: {
+          runtime: this.id,
+          stderr: shellResult.stderr,
+          failed: shellResult.failed,
+        },
+      };
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        return {
+          output: "",
+          exitCode: 130,
+          metadata: { error: "Request aborted" },
+        };
+      }
+      return {
+        output: "",
+        exitCode: 1,
+        metadata: { error: String(err) },
+      };
+    }
+  }
+
+  private buildPrompt(task: AgentTask): string {
+    const parts: string[] = [];
+
+    if (task.context.system) {
+      parts.push("<system>");
+      parts.push(task.context.system);
+      parts.push("</system>");
+      parts.push("");
+    }
+
+    if (task.context.goal) {
+      parts.push(`Goal: ${task.context.goal}`);
+      parts.push("");
+    }
+
+    if (task.context.files && task.context.files.length > 0) {
+      parts.push("Relevant files:");
+      for (const file of task.context.files) {
+        parts.push(`- ${file}`);
+      }
+      parts.push("");
+    }
+
+    parts.push(task.prompt);
+
+    return parts.join("\n");
+  }
+}

@@ -18,7 +18,8 @@ Keep these surfaces aligned when editing init/runtime docs:
 - Skills: project portable skills live in `.agents/skills`; Kimi runtime skills live in `.kimi/skills`; init templates live under `templates/skills/agents` and `templates/skills/kimi`.
 - Default runtime preset: `.omk/runtime-preset.json` uses `omk-parallel-orchestrator` so agent/non-simple work prefers parallel worker, capability, review, QA, and security lanes; `.omk/runtime-presets.json` keeps `omk-core-verified` as the fallback/baseline preset and also includes `omk-ts-product` for strict TS/React/Next/Nest product work, `omk-worktree-team` for isolated parallel worktree lanes before merge, and `omk-release-guard` for secret/security/release evidence gates with narrowed MCP authority, strong hooks, and no auto-publish authority.
 - MCP: fresh init is project-scoped and writes only local `omk-project` into `.kimi/mcp.json` / `.omk/mcp.json`. `omk init --local-user` or `OMK_MCP_SCOPE=all OMK_SKILLS_SCOPE=all` reads user `~/.kimi/mcp.json` and `~/.kimi/skills` at runtime without copying personal/global files. `--import-user-skills` is a trusted local opt-in copy path.
-- Agents: generated agents extend the Okabe-compatible base with `SendDMail`. Default root aliases are `explorer`/`explore`, `planner`/`plan`, `router`, `architect`, `coder`, `reviewer`, `security`, `qa`, `tester`, `researcher`, `integrator`, `aggregator`, `interviewer`, `ontology`, and `vision-debugger`; each is scaffolded with MCP, skills, and hooks capability flags that are applied only within the active runtime/harness scope. Use additional local roles such as `coordinator`, `docs`, `merger`, or `release` only when the current `.omk/agents/root.yaml` or harness exposes them.
+- Agents: generated agents extend the Okabe-compatible base with `SendDMail`. Default root aliases are `explorer`/`explore`, `planner`/`plan`, `router`, `architect`, `coder`, `reviewer`, `security`, `qa`, `tester`, `researcher`, `integrator`, `aggregator`, `interviewer`, `ontology`, and `vision-debugger`; each is scaffolded with MCP, skills, and hooks capability flags that are applied only within the active runtime/harness scope. Use additional local roles such as `coordinator`, `docs`, `merger`, or `release` only when the current `.omk/agents/root.yaml` or harness exposes them. **OMK is the root orchestrator; Kimi is one provider adapter.**
+- Transition: transitioning from Kimi-hosted subagents to OMK-hosted parallel workers. Capability flags, worker limits, and provider routing are owned by OMK; the Kimi adapter executes nodes when selected.
 - Harness: chat agent mode writes `.omk/runs/<run-id>/chat-agent-harness.json`. Prompts carry compact MCP/skills/hooks counts; read the harness manifest for the full inventory, worker limits, authority boundaries, virtual DAG, and gate list.
 - Evidence: `scripts/run-tests.mjs` and OMK verification surfaces record sanitized MCP/skill/hook resource metadata. Do not emit resource secrets, headers, or raw env values.
 
@@ -94,11 +95,15 @@ Never leave the final todo list inconsistent with the actual result.
 
 ## Agent / Subagent Policy
 
-Use the `Agent` tool or the available OMK/Codex subagent interface for all non-trivial tasks.
+Use the `Agent` tool or the available OMK/Codex subagent interface for all non-trivial tasks. Parallel workers are spawned by OMK's `ParallelOrchestrator`, not only by Kimi's `Agent` tool.
 
 Minimum policy:
 
 * Use the `explorer` subagent for repository discovery.
+  * Explorer must NOT use `SearchWeb` or `FetchURL` for local repository exploration.
+  * Explorer must use `rg`, `sed`, `cat`, `jq`, `head`, `tail` for local file operations.
+  * Explorer must exclude `node_modules`, `dist`, `.git`, `.omk/runs`, `coverage` from searches.
+  * Give explorer a narrow scope (max 5 files, max 20 findings) to avoid timeout.
 * Use the `planner` subagent for architecture, refactor, migration, or risky changes.
 * Use `coder` for scoped implementation tasks.
 * Use `reviewer`, `qa`, or a review workflow before final completion.

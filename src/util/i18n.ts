@@ -1,5 +1,5 @@
 /**
- * Lightweight i18n for oh-my-kimi CLI
+ * Lightweight i18n for OMK CLI
  * Default language: en. Supports ko via .omk/config.toml [locale] section
  * or OMK_LANGUAGE env var.
  */
@@ -83,12 +83,12 @@ const en: Record<string, string> = {
   "cli.menuExit": "exit     — Exit",
   "cli.menuUnavailable": "\n  (Cannot display menu in this environment. Type a command below.)\n",
   "cli.unknownChoice": "Unknown choice: {0}, proceeding to chat.",
-  "cli.description": "oh-my-kimi: multi-agent orchestration harness for Code CLI",
+  "cli.description": "OMK: multi-agent orchestration harness for Code CLI",
   "cli.runIdOption": "run ID (resume / reference)",
   "cli.sudoOption": "Run shell commands with sudo (admin privileges)",
 
   // Command descriptions (cli.ts)
-  "cmd.initDesc": "[Stable] Create oh-my-kimi scaffold in current project",
+  "cmd.initDesc": "[Stable] Create OMK scaffold in current project",
   "cmd.initProfileOption": "Preset profile",
   "cmd.initNoInteractiveSetupOption": "Skip GitHub star and DeepSeek API key prompts",
   "cmd.doctorDesc": "[Stable] Check primary CLI status, auth, model, hooks, MCP, skills",
@@ -98,7 +98,7 @@ const en: Record<string, string> = {
   "cmd.chatWorkersOption": "Parallel agent workers (auto = resource-profile based)",
   "cmd.chatMaxStepsOption": "Max steps per turn (tool use limit)",
   "cmd.chatLayoutOption": "Chat layout (auto | tmux | inline | plain)",
-  "cmd.chatBrandOption": "Chat branding (kimicat | minimal | plain)",
+  "cmd.chatBrandOption": "Chat branding (minimal | plain | kimicat)",
   "cmd.cockpitDesc": "[Stable] OMK sidecar cockpit for run state, TODOs, and ETA",
   "cmd.cockpitRunIdOption": "Run ID to watch",
   "cmd.cockpitWatchOption": "Auto-refresh cockpit display",
@@ -190,7 +190,7 @@ const en: Record<string, string> = {
   "cmd.agentDoctorDesc": "Validate built-in agent roles",
 
   // Verify
-  "cmd.starDesc": "Star oh-my-kimi on GitHub",
+  "cmd.starDesc": "Star OMK on GitHub",
   "cmd.verifyDesc": "[Alpha] Verify evidence gates for a run",
   "cmd.verifyRunOption": "Run ID to verify",
   "cmd.verifyJsonOption": "Output results as JSON",
@@ -329,7 +329,7 @@ const en: Record<string, string> = {
 
   // First-run star
   "star.prompt": "Thank you for the first run. Would you leave a ⭐ Star on the GitHub repo?\n{0}",
-  "star.promptShort": "Support oh-my-kimi on GitHub?",
+  "star.promptShort": "Support OMK on GitHub?",
   "star.yes": "YES — auto-open GitHub Star",
   "star.yesStarIt": "Yes, star it",
   "star.no": "NO — don't ask again",
@@ -516,12 +516,12 @@ const ko: Record<string, string> = {
   "cli.menuExit": "exit     — 종료",
   "cli.menuUnavailable": "\n  (메뉴를 표시할 수 없는 환경입니다. 아래 명령어를 직접 입력하세요.)\n",
   "cli.unknownChoice": "알 수 없는 선택: {0}, chat으로 진행합니다.",
-  "cli.description": "oh-my-kimi: Code CLI용 multi-agent orchestration harness",
+  "cli.description": "OMK: Code CLI용 multi-agent orchestration harness",
   "cli.runIdOption": "run ID 지정 (resume / 참조)",
   "cli.sudoOption": "셸 명령어를 sudo로 실행 (관리자 권한)",
 
   // Command descriptions
-  "cmd.initDesc": "[Stable] 현재 프로젝트에 oh-my-kimi scaffold 생성",
+  "cmd.initDesc": "[Stable] 현재 프로젝트에 OMK scaffold 생성",
   "cmd.initProfileOption": "프리셋 프로파일",
   "cmd.initNoInteractiveSetupOption": "GitHub star 및 DeepSeek API key 프롬프트 건너뛰기",
   "cmd.doctorDesc": "[Stable] 주 CLI 상태, auth, model, hook, MCP, skills 검사",
@@ -531,7 +531,7 @@ const ko: Record<string, string> = {
   "cmd.chatWorkersOption": "병렬 에이전트 워커 수 (auto면 리소스 프로파일 기반)",
   "cmd.chatMaxStepsOption": "한 턴당 최대 스텝 수 (tool use 제한)",
   "cmd.chatLayoutOption": "Chat layout (auto | tmux | inline | plain)",
-  "cmd.chatBrandOption": "Chat branding (kimicat | minimal | plain)",
+  "cmd.chatBrandOption": "Chat branding (minimal | plain | kimicat)",
   "cmd.cockpitDesc": "[Stable] OMK sidecar cockpit for run state, TODOs, and ETA",
   "cmd.cockpitRunIdOption": "Run ID to watch",
   "cmd.cockpitWatchOption": "Auto-refresh cockpit display",
@@ -625,7 +625,7 @@ const ko: Record<string, string> = {
   "cmd.agentDoctorDesc": "내장 에이전트 역할 검증",
 
   // Verify
-  "cmd.starDesc": "GitHub에서 oh-my-kimi에 Star 누르기",
+  "cmd.starDesc": "GitHub에서 OMK에 Star 누르기",
   "cmd.verifyDesc": "[Alpha] run의 evidence gate 검증",
   "cmd.verifyRunOption": "검증할 run ID",
   "cmd.verifyJsonOption": "결과를 JSON으로 출력",
@@ -764,7 +764,7 @@ const ko: Record<string, string> = {
 
   // First-run star
   "star.prompt": "처음 실행해주셔서 감사합니다. GitHub repo에 ⭐ Star를 남겨주시겠어요?\n{0}",
-  "star.promptShort": "GitHub에서 oh-my-kimi을 지원하시겠어요?",
+  "star.promptShort": "GitHub에서 OMK를 지원하시겠어요?",
   "star.yes": "YES — 자동으로 GitHub Star 누르기",
   "star.yesStarIt": "네, Star를 누르겠습니다",
   "star.no": "NO — 다음부터 묻지 않기",
