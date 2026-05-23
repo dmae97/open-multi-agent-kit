@@ -49,7 +49,6 @@ function loadNativeModifiersHelper(): NativeModifiersHelper | undefined {
 }
 
 export function isNativeModifierPressed(key: ModifierKey): boolean {
-	if (process.env.PI_TUI_DISABLE_NATIVE_MODIFIERS === "1") return false;
 	const helper = loadNativeModifiersHelper();
 	if (!helper) return false;
 	try {
