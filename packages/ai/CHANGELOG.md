@@ -4,12 +4,12 @@
 
 ### Breaking Changes
 
-- Changed `OAuthLoginCallbacks` to require `onDeviceCode` and `onSelect`, so OAuth providers can rely on pi supplying device-code and selection UI callbacks.
+- Changed `OAuthLoginCallbacks` to require `onDeviceCode` and `onSelect`, so OAuth providers can rely on pi supplying device-code and selection UI callbacks ([#4788](https://github.com/earendil-works/pi-mono/pull/4788) by [@vegarsti](https://github.com/vegarsti)).
 
 ### Fixed
 
 - Fixed custom Anthropic-compatible model aliases for adaptive-thinking Claude models by adding `compat.forceAdaptiveThinking` model metadata and moving built-in adaptive-thinking selection out of provider id substring checks ([#4797](https://github.com/earendil-works/pi-mono/pull/4797) by [@mbazso](https://github.com/mbazso)).
-- Fixed GitHub Copilot OAuth login to rely on the required device-code callback without a runtime callback availability guard.
+- Fixed GitHub Copilot OAuth login to rely on the required device-code callback without a runtime callback availability guard ([#4788](https://github.com/earendil-works/pi-mono/pull/4788) by [@vegarsti](https://github.com/vegarsti)).
 - Fixed Amazon Bedrock provider loading under strict package managers by declaring its direct `@smithy/node-http-handler` dependency ([#4842](https://github.com/earendil-works/pi/issues/4842)).
 - Fixed Amazon Bedrock Claude requests to send the model output token cap by default, matching Anthropic requests and avoiding Bedrock's 4096-token default truncation ([#4848](https://github.com/earendil-works/pi/issues/4848)).
 
