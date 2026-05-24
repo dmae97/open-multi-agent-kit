@@ -500,7 +500,7 @@ export async function runChatRuntime(
       recentChatOutput = appendRecentChatOutput(recentChatOutput, `\n${message}\n`);
       console.error(`\n${message}\n`);
       exitCode = 1;
-    } else if (bridgeSucceeded && providerPolicy !== "kimi") {
+    } else if (bridgeSucceeded && providerPolicy !== "kimi" && providerPolicy !== "auto") {
       const { createInterface } = await import("readline");
       const rl = createInterface({ input: process.stdin, output: process.stdout });
       process.once("SIGINT", () => rl.close());
