@@ -161,6 +161,15 @@ test("sliced CLI registry exposes doctor fix options", () => {
   assert.ok(mcpDoctorFlags.includes("--global"));
 });
 
+test("sliced CLI registry exposes MCP connect control-plane options", () => {
+  const program = createOmkProgram();
+  const mcpConnectFlags = optionFlags(findCommand(findCommand(program, "mcp"), "connect"));
+
+  assert.ok(mcpConnectFlags.includes("--json"));
+  assert.ok(mcpConnectFlags.includes("--all"));
+  assert.ok(mcpConnectFlags.includes("--fix"));
+});
+
 test("sliced CLI registry preserves public aliases", () => {
   const program = createOmkProgram();
   const design = findCommand(program, "design");

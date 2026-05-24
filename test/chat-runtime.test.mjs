@@ -4,6 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 
 const { shouldUseDirectKimiFallback } = await import("../dist/commands/chat/runtime.js");
 const { buildNativeRootLoopTurnNode } = await import("../dist/commands/chat/native-root-loop.js");
@@ -25,6 +26,66 @@ const codexBootstrap = {
   runtimeOk: true,
   setupHints: [],
 };
+
+const NATIVE_ROOT_LOOP_MODULE_URL = pathToFileURL(join(process.cwd(), "dist", "commands", "chat", "native-root-loop.js")).href;
+
+function runNativeLoopInput(input) {
+  const root = mkdtempSync(join(tmpdir(), "omk-native-slash-"));
+  const home = mkdtempSync(join(tmpdir(), "omk-native-slash-home-"));
+  mkdirSync(join(root, ".omk"), { recursive: true });
+  mkdirSync(join(root, ".kimi"), { recursive: true });
+  mkdirSync(join(home, ".kimi"), { recursive: true });
+  writeFileSync(join(root, ".kimi", "mcp.json"), JSON.stringify({ mcpServers: {} }, null, 2), "utf-8");
+  writeFileSync(join(home, ".kimi", "mcp.json"), JSON.stringify({ mcpServers: {} }, null, 2), "utf-8");
+  const evalScript = `
+    import { runNativeOmkRootLoop } from ${JSON.stringify(NATIVE_ROOT_LOOP_MODULE_URL)};
+    const bootstrap = ${JSON.stringify(codexBootstrap)};
+    const calls = [];
+    const taskRunner = {
+      async run(node) {
+        calls.push(node.id);
+        return { success: true, stdout: "TASK_RUNNER_CALLED", stderr: "", exitCode: 0 };
+      }
+    };
+    const code = await runNativeOmkRootLoop({
+      bootstrap,
+      taskRunner,
+      runId: "slash-test",
+      root: process.cwd(),
+      env: Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== undefined)),
+      layout: "plain",
+      agentFile: ".omk/agents/root.yaml",
+      mcpAllowlist: ["omk-project"],
+      skillNames: ["omk-test-debug-loop"],
+      hookNames: ["protect-secrets.sh"],
+      executionPrompt: "ask"
+    });
+    console.log("TASK_RUNNER_CALLS=" + calls.length);
+    process.exitCode = code;
+  `;
+  try {
+    return spawnSync(process.execPath, ["--input-type=module", "--eval", evalScript], {
+      cwd: root,
+      input,
+      encoding: "utf-8",
+      env: {
+        ...process.env,
+        HOME: home,
+        NO_COLOR: "1",
+        OMK_SKIP_UPDATE_CHECK: "1",
+        OMK_MCP_SCOPE: "project",
+        OMK_MCP_PREFLIGHT: "off",
+        OMK_PROJECT_ROOT: root,
+        OMK_ORIGINAL_HOME: home,
+      },
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: 60000,
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+}
 
 test("shouldUseDirectKimiFallback: auto (no env) → false", () => {
   deepStrictEqual(shouldUseDirectKimiFallback("auto", {}), false);
@@ -80,6 +141,37 @@ test("buildNativeRootLoopTurnNode carries scoped MCP, skills, and hooks", () => 
   ok(node.name.includes("Payload encoding: JSON string"));
   ok(node.name.includes(JSON.stringify("hello")));
   ok(node.routing?.rationale?.includes("native-root-loop"));
+});
+
+test("/mcp shows scoped MCP status without running a provider turn", () => {
+  const result = runNativeLoopInput("/mcp\n/exit\n");
+
+  deepStrictEqual(result.status, 0, result.stderr);
+  ok(/MCP Tool Plane/i.test(result.stdout));
+  ok(/omk-project/.test(result.stdout));
+  ok(/project scope/i.test(result.stdout));
+  ok(/TASK_RUNNER_CALLS=0/.test(result.stdout));
+});
+
+test("/tools shows scoped tools and capability context without running a provider turn", () => {
+  const result = runNativeLoopInput("/tools\n/exit\n");
+
+  deepStrictEqual(result.status, 0, result.stderr);
+  ok(/Scoped Tool Plane/i.test(result.stdout));
+  ok(/omk-project/.test(result.stdout));
+  ok(/omk-test-debug-loop/.test(result.stdout));
+  ok(/protect-secrets\.sh/.test(result.stdout));
+  ok(/TASK_RUNNER_CALLS=0/.test(result.stdout));
+});
+
+test("/model reports restart-only behavior without claiming live mutation", () => {
+  const result = runNativeLoopInput("/model gpt-4.1\n/exit\n");
+
+  deepStrictEqual(result.status, 0, result.stderr);
+  ok(/will apply after restart/i.test(result.stdout));
+  ok(/omk chat --provider codex --model gpt-4\.1/.test(result.stdout));
+  ok(!/next turns/i.test(result.stdout));
+  ok(/TASK_RUNNER_CALLS=0/.test(result.stdout));
 });
 
 test("read-only native chat turns do not request write, patch, or shell authority", async () => {

@@ -123,10 +123,12 @@ describe("omk with no arguments", () => {
         `expected HUD output not found. stdout: ${stdout}\nstderr: ${stderr}`
       );
       assert.match(combined, /MCP: project scope .* fast\/offline/);
-      assert.match(combined, /Offline summary only; no MCP servers were started/);
-      assert.match(combined, /omk-project virtual MCP available/);
+      assert.match(combined, /MCP Tool Plane/);
+      assert.match(combined, /Offline snapshot only; no MCP servers were started/);
+      assert.match(combined, /Built-in omk-project MCP mounted/);
       assert.match(combined, /omk mcp doctor/);
       assert.match(combined, /omk mcp connect --all/);
+      assert.match(combined, /omk mcp connect --fix/);
       assert.doesNotMatch(combined, /super-secret-root-mcp-token|API_TOKEN=/);
       assert.equal(existsSync(markerPath), false, "root MCP summary must not start configured MCP servers");
 

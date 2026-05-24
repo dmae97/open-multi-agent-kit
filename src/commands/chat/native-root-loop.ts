@@ -30,6 +30,16 @@ interface SlashCommand {
   handler: (args: string) => void | Promise<void>;
 }
 
+function splitSlashArgs(args: string): string[] {
+  return args.split(/\s+/).map((arg) => arg.trim()).filter(Boolean);
+}
+
+function formatScopedNames(names: readonly string[] | undefined, empty = "none"): string {
+  if (!names || names.length === 0) return empty;
+  const preview = names.slice(0, 8).join(", ");
+  return names.length > 8 ? `${preview}, … +${names.length - 8}` : preview;
+}
+
 function buildSlashCommands(input: NativeRootLoopInput): SlashCommand[] {
   const b = input.bootstrap;
   return [
@@ -42,6 +52,8 @@ function buildSlashCommands(input: NativeRootLoopInput): SlashCommand[] {
       console.log(`  ${style.phosphor("/auth")}                — Show provider auth status`);
       console.log(`  ${style.phosphor("/provider")} ${style.phosphorDim("<name>")}  — Switch provider (kimi/codex/deepseek)`);
       console.log(`  ${style.phosphor("/model")} ${style.phosphorDim("<name>")}    — Set model`);
+      console.log(`  ${style.phosphor("/mcp")} ${style.phosphorDim("[--all]")}     — Show MCP Tool Plane status`);
+      console.log(`  ${style.phosphor("/tools")}              — Show scoped MCP/skills/hooks`);
       console.log(`  ${style.phosphor("/status")}              — Show session status`);
       console.log(`  ${style.phosphor("/clear")} ${style.phosphorDim("/cls")}    — Clear screen`);
       console.log(`  ${style.phosphor("/runs")}                — List recent runs`);
@@ -60,8 +72,9 @@ function buildSlashCommands(input: NativeRootLoopInput): SlashCommand[] {
       const p = args.trim().toLowerCase();
       const valid = ["kimi", "codex", "deepseek", "commandcode", "opencode", "auto"];
       if (p && valid.includes(p)) {
-        console.log(style.phosphor(`\n  Switching provider to '${p}'... Restart chat to apply.\n`));
-        console.log(style.phosphorDim(`  omk chat --provider ${p}`));
+        console.log(style.phosphor(`\n  Provider '${p}' will apply after restart.\n`));
+        console.log(style.phosphorDim(`  Current session remains: ${b.provider}`));
+        console.log(style.phosphorDim(`  Restart: omk chat --provider ${p}\n`));
       } else {
         console.log(style.phosphorDim(`\n  Available: ${valid.join(", ")}`));
         console.log(style.phosphorDim("  Usage: /provider codex\n"));
@@ -70,11 +83,39 @@ function buildSlashCommands(input: NativeRootLoopInput): SlashCommand[] {
     { name: "/model", aliases: ["/m"], help: "Set model", handler: (args) => {
       const m = args.trim();
       if (m) {
-        console.log(style.phosphor(`\n  Model set to '${m}' for next turns.\n`));
+        console.log(style.phosphor(`\n  Model '${m}' will apply after restart.\n`));
+        console.log(style.phosphorDim(`  Current session remains: ${b.selectedModel ?? "auto"}`));
+        console.log(style.phosphorDim(`  Restart: omk chat --provider ${b.provider} --model ${m}\n`));
       } else {
         console.log(style.phosphorDim(`\n  Current model: ${b.selectedModel ?? "auto"}`));
         console.log(style.phosphorDim("  Usage: /model deepseek-chat\n"));
       }
+    }},
+    { name: "/mcp", aliases: [":mcp"], help: "Show MCP Tool Plane status", handler: async (args) => {
+      const tokens = splitSlashArgs(args);
+      const wantsFullPreflight = tokens.includes("--all");
+      const wantsFix = tokens.includes("--fix") || tokens.includes("fix") || tokens.includes("repair");
+      const { runMcpAutoConnect, renderMcpAutoConnectBanner } = await import("../../mcp/autoconnect.js");
+      const report = await runMcpAutoConnect({
+        preflight: wantsFullPreflight ? "full" : "fast",
+        env: {
+          ...input.env,
+          OMK_MCP_PREFLIGHT: wantsFullPreflight ? input.env.OMK_MCP_PREFLIGHT : "off",
+        },
+      });
+      console.log("\n" + renderMcpAutoConnectBanner(report) + "\n");
+      if (wantsFix) {
+        console.log(style.phosphorDim("  Repairs are explicit CLI actions: omk mcp connect --fix\n"));
+      }
+    }},
+    { name: "/tools", aliases: [":tools"], help: "Show scoped MCP/skills/hooks", handler: () => {
+      console.log(style.phosphorBold("\n  Scoped Tool Plane:"));
+      console.log(`  MCP:    ${style.phosphorDim(formatScopedNames(input.mcpAllowlist))}`);
+      console.log(`  Skills: ${style.phosphorDim(formatScopedNames(input.skillNames))}`);
+      console.log(`  Hooks:  ${style.phosphorDim(formatScopedNames(input.hookNames))}`);
+      console.log(`  Runtime: ${style.phosphorDim(b.selectedRuntimeId ?? "none")} (${b.provider})`);
+      console.log(`  Safety: ${style.phosphorDim(`execution=${input.executionPrompt ?? "auto"}; provider metadata is scoped per turn`)}`);
+      console.log(style.phosphorDim("  Use /mcp for MCP status or `omk mcp connect --json` for the full contract.\n"));
     }},
     { name: "/status", aliases: ["/s"], help: "Show session status", handler: () => {
       const uptime = process.uptime();
@@ -109,11 +150,16 @@ function buildSlashCommands(input: NativeRootLoopInput): SlashCommand[] {
     { name: "/doctor", aliases: [], help: "Run omk doctor", handler: async () => {
       console.log(style.phosphorDim("\n  Running doctor...\n"));
       try {
-        const { execSync } = await import("child_process");
-        const output = execSync("node dist/cli.js doctor --json", {
-          cwd: input.root, encoding: "utf8", stdio: ["pipe", "pipe", "ignore"], timeout: 30000,
+        const result = await runShell(process.execPath, ["dist/cli.js", "doctor", "--json"], {
+          cwd: input.root,
+          env: input.env,
+          timeout: 30000,
         });
+        const output = result.stdout || result.stderr || `doctor exited with code ${result.exitCode}`;
         console.log(output.slice(0, 2000));
+        if (result.failed) {
+          console.log(style.metricsRed(`Doctor exited with code ${result.exitCode}`));
+        }
       } catch (err: unknown) {
         const m = err instanceof Error ? err.message : String(err);
         console.log(style.metricsRed(`Doctor failed: ${m}`));
@@ -126,7 +172,7 @@ function buildSlashCommands(input: NativeRootLoopInput): SlashCommand[] {
         return;
       }
       console.log(style.phosphorDim(`\n  Spawning parallel: "${prompt}"\n`));
-      const result = await runShell("node", ["dist/cli.js", "parallel", prompt], {
+      const result = await runShell(process.execPath, ["dist/cli.js", "parallel", prompt], {
         cwd: input.root,
         env: input.env,
         stdio: "inherit",
@@ -240,12 +286,42 @@ export async function runNativeOmkRootLoop(input: NativeRootLoopInput): Promise<
   const rl = createInterface({ input: process.stdin, output: process.stdout });
 
   let running = true;
+  let readlineClosed = false;
+  rl.once("close", () => {
+    readlineClosed = true;
+    running = false;
+  });
   process.once("SIGINT", () => { running = false; rl.close(); });
 
   while (running) {
-    const userInput = await new Promise<string>((resolve) => {
-      rl.question(style.phosphorDim("omk> "), resolve);
+    const userInput = await new Promise<string | undefined>((resolve, reject) => {
+      if (readlineClosed) {
+        resolve(undefined);
+        return;
+      }
+      let settled = false;
+      const finish = (value: string | undefined): void => {
+        if (settled) return;
+        settled = true;
+        rl.off("close", onClose);
+        resolve(value);
+      };
+      const onClose = (): void => {
+        finish(undefined);
+      };
+      rl.once("close", onClose);
+      try {
+        rl.question(style.phosphorDim("omk> "), finish);
+      } catch (err: unknown) {
+        if (err instanceof Error && "code" in err && err.code === "ERR_USE_AFTER_CLOSE") {
+          finish(undefined);
+          return;
+        }
+        rl.off("close", onClose);
+        reject(err);
+      }
     });
+    if (userInput === undefined) break;
 
     const line = userInput.trim();
     if (!line) continue;
@@ -315,7 +391,7 @@ export async function runNativeOmkRootLoop(input: NativeRootLoopInput): Promise<
     }
   }
 
-  rl.close();
+  if (!readlineClosed) rl.close();
   console.log(style.phosphorDim("\nSession ended."));
   return 0;
 }

@@ -64,8 +64,9 @@ test("MCP AutoConnect mounts omk-project as the root control-plane baseline", as
     assert.equal(report.scope, "project");
     assert.equal(report.preflight, "fast");
     assert.ok(report.autoMounted.some((entry) => entry.name === "omk-project" && entry.status === "mounted"));
-    assert.match(bannerLines.join("\n"), /OMK MCP AutoConnect/);
-    assert.match(bannerLines.join("\n"), /omk-project virtual MCP available/);
+    assert.equal(report.command, "mcp connect");
+    assert.match(bannerLines.join("\n"), /MCP Tool Plane/);
+    assert.match(bannerLines.join("\n"), /Built-in omk-project MCP mounted/);
   } finally {
     await removeTree(projectRoot);
     await removeTree(homeRoot);
@@ -111,9 +112,29 @@ test("mcp connect --json emits the AutoConnect JSON contract", async () => {
     assert.equal(result.status, 0, result.stderr || result.stdout);
     const report = JSON.parse(result.stdout.trim());
     assert.equal(report.ok, true);
-    assert.equal(report.command, undefined);
+    assert.equal(report.command, "mcp connect");
     assert.equal(report.scope, "project");
     assert.equal(report.preflight, "fast");
+    assert.ok(Array.isArray(report.autoMounted));
+  } finally {
+    await removeTree(projectRoot);
+    await removeTree(homeRoot);
+  }
+});
+
+test("mcp connect --json --all emits full preflight command contract", async () => {
+  const { projectRoot, homeRoot } = await createProjectWithMcp({ mcpServers: {} });
+  try {
+    const result = runAutoConnectScript(projectRoot, homeRoot, `
+      await mcpConnectCommand({ json: true, all: true });
+    `);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const report = JSON.parse(result.stdout.trim());
+    assert.equal(report.ok, true);
+    assert.equal(report.command, "mcp connect");
+    assert.equal(report.scope, "project");
+    assert.equal(report.preflight, "full");
     assert.ok(Array.isArray(report.autoMounted));
   } finally {
     await removeTree(projectRoot);
