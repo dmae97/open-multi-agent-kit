@@ -90,6 +90,12 @@ test("chat, run, and parallel commands expose execution selection policy", () =>
   }
 });
 
+test("chat command exposes opt-in single-pane UI renderer", () => {
+  const result = runHelp("chat");
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /--ui <legacy\|plain-modern>/);
+});
+
 test("agent mode preset launches interactive orchestrator chat surface", async () => {
   const { getModePreset } = await import(MODE_PRESET_MODULE_URL);
   assert.equal(getModePreset("agent")?.launchCommand, "chat");

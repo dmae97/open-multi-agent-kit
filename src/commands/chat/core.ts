@@ -21,7 +21,9 @@ import { readFile } from "fs/promises";
 import {
   type ChatLayout,
   type ChatBrand,
+  type ChatUi,
   resolveLayout,
+  resolveChatUi,
   resolveChatWorkerCount,
   renderChatIntro,
   getActiveMcpNames,
@@ -43,6 +45,7 @@ export async function chatCommand(options: {
   execution?: string;
   provider?: string;
   model?: string;
+  ui?: ChatUi;
   cockpitRefresh?: string;
   cockpitRedraw?: "diff" | "full" | "append";
   cockpitHistory?: "off" | "static" | "watch";
@@ -88,6 +91,7 @@ export async function chatCommand(options: {
   const runId = options.runId;
   const effectiveRunId = runId ?? sessionId;
   const layout = resolveLayout(options.layout);
+  const ui = resolveChatUi(options.ui);
   const brand = options.brand ?? "minimal";
   const resources = await getOmkResourceSettings();
   const modelArg = parseProviderModelArg(options.model);
@@ -300,6 +304,7 @@ export async function chatCommand(options: {
       provider: providerPolicy,
       model: options.model,
       execution: executionPrompt,
+      ui,
       cockpitRefresh: options.cockpitRefresh,
       cockpitRedraw: options.cockpitRedraw,
       cockpitHistory: options.cockpitHistory,
@@ -324,6 +329,7 @@ export async function chatCommand(options: {
         provider: providerPolicy,
         model: options.model,
         execution: executionPrompt,
+        ui,
         cockpitRefresh: options.cockpitRefresh,
         cockpitRedraw: options.cockpitRedraw,
         cockpitHistory: options.cockpitHistory,
@@ -449,6 +455,7 @@ export async function chatCommand(options: {
     effectiveResources,
     effectiveWorkers,
     executionPrompt,
+    ui,
     chatRuntimeMcpAllowlist,
   });
 

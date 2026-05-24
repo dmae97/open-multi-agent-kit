@@ -52,12 +52,20 @@ export function formatResourceCount(count: number, scope: string): string {
 
 export type ChatLayout = "auto" | "tmux" | "inline" | "plain";
 export type ChatBrand = "omk" | "minimal" | "plain" | "kimicat";
+export type ChatUi = "legacy" | "plain-modern";
 
 export function resolveLayout(requested: ChatLayout | undefined): ChatLayout {
   if (requested && requested !== "auto") return requested;
   // Already inside a tmux cockpit pane — never launch tmux again
   if (isCockpitChild()) return "inline";
   return "auto";
+}
+
+export function resolveChatUi(requested: string | undefined, env: NodeJS.ProcessEnv = process.env): ChatUi {
+  const raw = requested ?? env.OMK_UI ?? env.OMK_CHAT_UI ?? "legacy";
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "plain-modern" || normalized === "modern" || normalized === "agent-console") return "plain-modern";
+  return "legacy";
 }
 
 export function resolveChatWorkerCount(requested: string | undefined, fallback: number): string {
