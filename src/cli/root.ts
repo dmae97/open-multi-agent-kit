@@ -31,7 +31,7 @@ async function buildRootMcpStatusLines(env: NodeJS.ProcessEnv = process.env): Pr
     });
     return renderMcpAutoConnectLines(report);
   } catch {
-    return ["MCP: AutoConnect summary unavailable (run `omk mcp connect`)"];
+    return ["MCP Tool Plane: summary unavailable (run `omk mcp connect`)"];
   }
 }
 
@@ -90,6 +90,7 @@ export async function runRootHudFlow(program: Command): Promise<void> {
     💡 omk parallel "<prompt>" — Run the parallel subagent orchestrator`));
     console.log(style.gray(`  💡 omk run <flow> "<goal>" — Run a named workflow`));
     console.log(style.gray(`  💡 omk mcp connect --all — Preflight the MCP tool plane`));
+    console.log(style.gray(`  💡 omk mcp connect --fix — Repair project-local MCP config`));
     console.log(style.gray(`  💡 omk chat --mode agent --execution ask — Interactive agent orchestrator`));
     console.log(style.gray(`  💡 omk chat --mode chat — ${c("cli.suggestionChat")}`));
     console.log(style.gray(`  💡 omk hud   — ${c("cli.suggestionHud")}`));

@@ -28,6 +28,7 @@ export interface McpAutoConnectSourceReport {
 }
 
 export interface McpAutoConnectReport {
+  command: "mcp connect";
   ok: boolean;
   degraded: boolean;
   checkedAt: string;
@@ -77,6 +78,7 @@ export function mapDoctorToAutoConnectReport(
   const coreMounted = autoMounted.some((entry) => entry.name === "omk-project" && entry.status !== "error");
   const ok = doctor.activeScope === "none" ? true : coreMounted;
   return {
+    command: "mcp connect",
     ok,
     degraded: doctor.errors.length > 0 || doctor.warnings.length > 0 || data.error > 0 || data.warning > 0,
     checkedAt: doctor.checkedAt,
@@ -97,8 +99,9 @@ export function renderMcpAutoConnectBanner(report: McpAutoConnectReport): string
 
 export function renderMcpAutoConnectLines(report: McpAutoConnectReport): string[] {
   const modeLabel = report.preflight === "full" ? "full/preflight" : report.preflight === "fast" ? "fast/offline" : "off/offline";
+  const statusLabel = !report.ok ? "error" : report.degraded ? "ready with optional warnings" : "ready";
   const lines = [
-    style.purpleBold("OMK MCP AutoConnect"),
+    style.purpleBold("MCP Tool Plane"),
     [
       `MCP: ${report.scope} scope`,
       `${report.data.active} active`,
@@ -107,6 +110,7 @@ export function renderMcpAutoConnectLines(report: McpAutoConnectReport): string[
       `${report.data.error} error`,
       modeLabel,
     ].join(" · "),
+    `Status: ${statusLabel}`,
   ];
 
   if (report.autoMounted.length === 0) {
@@ -123,8 +127,12 @@ export function renderMcpAutoConnectLines(report: McpAutoConnectReport): string[
 
   const hasVirtualProjectMcp = report.autoMounted.some((entry) => entry.name === "omk-project" && entry.source === "builtin");
   if (hasVirtualProjectMcp) {
-    lines.push("  Offline summary only; no MCP servers were started.");
-    lines.push("  omk-project virtual MCP available; full validation: omk mcp doctor && omk mcp connect --all");
+    lines.push("  Offline snapshot only; no MCP servers were started.");
+    lines.push("  Built-in omk-project MCP mounted; full validation: omk mcp doctor && omk mcp connect --all");
+  }
+  if (report.fixes) {
+    const fixMode = report.fixes.dryRun ? "previewed" : report.fixes.changed ? "applied" : "checked";
+    lines.push(`  Fixes: ${fixMode} ${report.fixes.actions.length} action(s); ${report.fixes.skipped.length} skipped`);
   }
   if (report.degraded) {
     lines.push("  degraded: optional MCP issues do not block root startup; run `omk mcp connect --fix` or `omk mcp doctor`");
@@ -223,5 +231,31 @@ function formatAutoConnectEntry(entry: McpAutoConnectEntry): string {
   const icon = entry.status === "error" ? "✗" : entry.status === "warn" ? "⚠" : "✓";
   const coloredIcon = entry.status === "error" ? style.pink(icon) : entry.status === "warn" ? style.skin(icon) : style.mint(icon);
   const suffix = entry.reason ? ` — ${entry.reason}` : "";
-  return `  ${coloredIcon} ${entry.name.padEnd(20)} ${entry.status.padEnd(8)} ${entry.source.padEnd(7)} ${entry.transport}${suffix}`;
+  return `  ${coloredIcon} ${entry.name.padEnd(20)} ${formatStatusLabel(entry.status).padEnd(15)} ${formatSourceLabel(entry.source).padEnd(8)} ${entry.transport}${suffix}`;
+}
+
+function formatStatusLabel(status: McpAutoConnectStatus): string {
+  switch (status) {
+    case "mounted":
+      return "Mounted";
+    case "ready":
+      return "Ready";
+    case "warn":
+      return "Needs attention";
+    case "error":
+      return "Error";
+  }
+}
+
+function formatSourceLabel(source: McpAutoConnectSource): string {
+  switch (source) {
+    case "builtin":
+      return "Built-in";
+    case "project":
+      return "Project";
+    case "global":
+      return "Global";
+    case "runtime":
+      return "Runtime";
+  }
 }

@@ -12,7 +12,7 @@ export function registerMcpDagCronScreenshotCommands(program: Command): void {
     });
   mcp
     .command("connect")
-    .description("Auto-discover, mount, and preflight active MCP servers")
+    .description("Show the MCP Tool Plane and optionally preflight or repair active servers")
     .option("--json", "Output JSON")
     .option("--fix", "Apply safe project-local MCP repairs before reporting")
     .option("--all", "Run full MCP preflight for active servers")
