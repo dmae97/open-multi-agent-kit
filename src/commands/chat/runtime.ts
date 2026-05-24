@@ -16,12 +16,14 @@ import { createDag, type DagNodeDefinition } from "../../orchestration/dag.js";
 import { ParallelOrchestrator } from "../../orchestration/parallel-orchestrator.js";
 import { LogStreamer } from "../../orchestration/log-streamer.js";
 import { createRuntimeBackedTaskRunner } from "../../runtime/runtime-backed-task-runner.js";
+import { resolveRuntimeBootstrap } from "../../runtime/runtime-bootstrap.js";
+import { runNativeOmkRootLoop } from "./native-root-loop.js";
 import { createContextBroker } from "../../runtime/context-broker.js";
 import { capsuleToTask } from "../../runtime/context-broker-converter.js";
 import { createRuntimeRouter } from "../../runtime/runtime-router.js";
 import type { DagNode } from "../../contracts/dag.js";
 import { isCockpitChild } from "../../util/chat-cockpit.js";
-import { status } from "../../util/theme.js";
+import { status, style } from "../../util/theme.js";
 import { join } from "path";
 
 export interface ChatRuntimeInput {
@@ -184,7 +186,22 @@ export async function runChatRuntime(
   }
 
   try {
-    if (providerPolicy === "kimi") {
+    if (providerPolicy !== "kimi" && process.stdin.isTTY && process.env.OMK_LEGACY_CHAT !== "1") {
+      const bootstrap = await resolveRuntimeBootstrap({ provider: providerPolicy, model: options.model, cwd: root });
+      if (bootstrap.ok || providerPolicy === "auto") {
+        const runner = await createRuntimeBackedTaskRunner({ cwd: root, env: { ...process.env } as Record<string, string> });
+        exitCode = await runNativeOmkRootLoop({
+          bootstrap, taskRunner: runner,
+          runId: effectiveRunId, root, env: { ...process.env } as Record<string, string>,
+          layout, agentFile: effectiveAgentFile,
+        });
+        bridgeSucceeded = true;
+      } else {
+        console.error(style.metricsRed(`[omk] Provider '${providerPolicy}' is not ready.`));
+        for (const hint of bootstrap.setupHints) console.error(style.phosphorDim(`  → ${hint}`));
+        exitCode = 1;
+      }
+    } else if (providerPolicy === "kimi") {
       bridgeSucceeded = false;
     } else if (process.env.OMK_LEGACY_CHAT !== "1") {
       try {
