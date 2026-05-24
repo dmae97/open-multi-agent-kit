@@ -87,6 +87,72 @@ function runNativeLoopInput(input) {
   }
 }
 
+function runNativeLoopInputWithRenderer(input) {
+  const root = mkdtempSync(join(tmpdir(), "omk-native-renderer-"));
+  const home = mkdtempSync(join(tmpdir(), "omk-native-renderer-home-"));
+  mkdirSync(join(root, ".omk"), { recursive: true });
+  mkdirSync(join(root, ".kimi"), { recursive: true });
+  mkdirSync(join(home, ".kimi"), { recursive: true });
+  writeFileSync(join(root, ".kimi", "mcp.json"), JSON.stringify({ mcpServers: {} }, null, 2), "utf-8");
+  writeFileSync(join(home, ".kimi", "mcp.json"), JSON.stringify({ mcpServers: {} }, null, 2), "utf-8");
+  const evalScript = `
+    import { runNativeOmkRootLoop } from ${JSON.stringify(NATIVE_ROOT_LOOP_MODULE_URL)};
+    const bootstrap = ${JSON.stringify(codexBootstrap)};
+    const events = [];
+    const renderer = {
+      start() { events.push("renderer:start"); },
+      emit(event) {
+        events.push(event.type);
+        if (event.type === "assistant:final") process.stdout.write("ASSISTANT_RENDERED=" + event.text + "\\n");
+      },
+      stop() { events.push("renderer:stop"); }
+    };
+    const taskRunner = {
+      async run(node, env) {
+        return { success: true, stdout: "TASK_RUNNER_CALLED provider=" + node.routing?.provider + " model=" + node.routing?.providerModel + " envModel=" + (env?.OMK_PROVIDER_MODEL ?? "none"), stderr: "", exitCode: 0 };
+      }
+    };
+    const code = await runNativeOmkRootLoop({
+      bootstrap,
+      taskRunner,
+      runId: "renderer-test",
+      root: process.cwd(),
+      env: Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== undefined)),
+      layout: "plain",
+      agentFile: ".omk/agents/root.yaml",
+      mcpAllowlist: ["omk-project"],
+      skillNames: ["omk-test-debug-loop"],
+      hookNames: ["protect-secrets.sh"],
+      executionPrompt: "ask",
+      renderer
+    });
+    console.log("RENDER_EVENTS=" + JSON.stringify(events));
+    process.exitCode = code;
+  `;
+  try {
+    return spawnSync(process.execPath, ["--input-type=module", "--eval", evalScript], {
+      cwd: root,
+      input,
+      encoding: "utf-8",
+      env: {
+        ...process.env,
+        HOME: home,
+        NO_COLOR: "1",
+        OMK_SKIP_UPDATE_CHECK: "1",
+        OMK_MCP_SCOPE: "project",
+        OMK_MCP_PREFLIGHT: "off",
+        OMK_PROJECT_ROOT: root,
+        OMK_ORIGINAL_HOME: home,
+      },
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: 60000,
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
 test("shouldUseDirectKimiFallback: auto (no env) → false", () => {
   deepStrictEqual(shouldUseDirectKimiFallback("auto", {}), false);
 });
@@ -212,6 +278,41 @@ test("/auth reports provider status without running a provider turn", () => {
   deepStrictEqual(result.status, 0, result.stderr);
   ok(/OMK Auth Center/i.test(result.stdout));
   ok(/TASK_RUNNER_CALLS=0/.test(result.stdout));
+});
+
+test("native loop emits modern renderer events without leaking prompt chrome to stdout", () => {
+  const result = runNativeLoopInputWithRenderer("hello\n/exit\n");
+
+  deepStrictEqual(result.status, 0, result.stderr);
+  const eventMatch = result.stdout.match(/RENDER_EVENTS=(.+)/);
+  ok(eventMatch, result.stdout);
+  const events = JSON.parse(eventMatch[1]);
+  ok(events.includes("renderer:start"));
+  ok(events.includes("session:start"));
+  ok(events.includes("prompt:ready"));
+  ok(events.includes("input:submitted"));
+  ok(events.includes("turn:route"));
+  ok(events.includes("assistant:final"));
+  ok(events.includes("turn:finish"));
+  ok(events.includes("session:stop"));
+  ok(events.includes("renderer:stop"));
+  ok(events.indexOf("assistant:final") < events.indexOf("turn:finish"));
+  ok(/ASSISTANT_RENDERED=TASK_RUNNER_CALLED provider=codex/.test(result.stdout));
+  ok(!result.stdout.includes("omk>"));
+  ok(!result.stdout.includes("Session ended."));
+});
+
+test("native slash command output is routed through modern renderer control events", () => {
+  const result = runNativeLoopInputWithRenderer("/status\n/exit\n");
+
+  deepStrictEqual(result.status, 0, result.stderr);
+  const eventMatch = result.stdout.match(/RENDER_EVENTS=(.+)/);
+  ok(eventMatch, result.stdout);
+  const events = JSON.parse(eventMatch[1]);
+  ok(events.includes("control:output"));
+  ok(events.includes("session:stop"));
+  ok(!result.stdout.includes("Session: renderer-test"));
+  ok(!result.stdout.includes("omk>"));
 });
 
 test("read-only native chat turns do not request write, patch, or shell authority", async () => {

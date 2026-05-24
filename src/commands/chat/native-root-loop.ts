@@ -8,6 +8,7 @@ import { applyCapabilityInjectionToRouting, buildCapabilityInjection } from "../
 import { buildPromptEnvelope, renderPromptEnvelope } from "../../runtime/prompt-envelope.js";
 import { resolveRuntimeBootstrap } from "../../runtime/runtime-bootstrap.js";
 import { TerminalOwner } from "../../util/terminal-owner.js";
+import type { CliRenderer } from "../../cli/ui/renderer.js";
 
 export interface NativeRootLoopInput {
   bootstrap: RuntimeBootstrap;
@@ -21,6 +22,7 @@ export interface NativeRootLoopInput {
   skillNames?: readonly string[];
   hookNames?: readonly string[];
   executionPrompt?: string;
+  renderer?: CliRenderer;
   onData?: (data: string) => void;
   onTodoSync?: (output: string) => void;
 }
@@ -42,6 +44,42 @@ export interface NativeRootSessionState {
 
 function splitSlashArgs(args: string): string[] {
   return args.split(/\s+/).map((arg) => arg.trim()).filter(Boolean);
+}
+
+function formatConsoleArg(value: unknown): string {
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+async function runSlashHandler(
+  handler: SlashCommand,
+  args: string,
+  renderer?: CliRenderer
+): Promise<void> {
+  if (!renderer) {
+    await handler.handler(args);
+    return;
+  }
+  const originalLog = console.log;
+  const originalWarn = console.warn;
+  const originalError = console.error;
+  const emitLine = (...values: unknown[]): void => {
+    renderer.emit({ type: "control:output", text: `${values.map(formatConsoleArg).join(" ")}\n` });
+  };
+  console.log = emitLine;
+  console.warn = emitLine;
+  console.error = emitLine;
+  try {
+    await handler.handler(args);
+  } finally {
+    console.log = originalLog;
+    console.warn = originalWarn;
+    console.error = originalError;
+  }
 }
 
 function formatScopedNames(names: readonly string[] | undefined, empty = "none"): string {
@@ -180,7 +218,7 @@ function buildSlashCommands(input: NativeRootLoopInput, state: NativeRootSession
       console.log(`  Layout: ${style.phosphorDim(input.layout)} | Root: ${style.phosphorDim(input.root)}\n`);
     }},
     { name: "/clear", aliases: ["/cls"], help: "Clear screen", handler: () => {
-      process.stdout.write("\x1b[2J\x1b[H");
+      (input.renderer ? process.stderr : process.stdout).write("\x1b[2J\x1b[H");
     }},
     { name: "/runs", aliases: ["/history"], help: "List recent runs", handler: async () => {
       try {
@@ -388,13 +426,30 @@ async function executeNativeRootTurn(input: {
   env: Record<string, string>;
   signal: AbortSignal;
   heartbeatEnabled: boolean;
+  renderer?: CliRenderer;
+  mcpAllowlist?: readonly string[];
+  skillNames?: readonly string[];
+  hookNames?: readonly string[];
 }): Promise<TaskResult> {
   const startedAt = Date.now();
   const routing = input.node.routing;
   if (input.heartbeatEnabled) {
-    process.stderr.write(style.phosphorDim(
-      `  routing: provider=${routing?.provider ?? "auto"} model=${routing?.providerModel ?? input.env.OMK_PROVIDER_MODEL ?? "auto"} risk=${routing?.risk ?? "read"} sandbox=${routing?.sandboxMode ?? "auto"}\n`
-    ));
+    if (input.renderer) {
+      input.renderer.emit({
+        type: "turn:route",
+        provider: routing?.provider ?? "auto",
+        model: routing?.providerModel ?? input.env.OMK_PROVIDER_MODEL,
+        risk: String(routing?.risk ?? "read"),
+        sandbox: String(routing?.sandboxMode ?? "auto"),
+        mcp: input.mcpAllowlist,
+        skills: input.skillNames,
+        hooks: input.hookNames,
+      });
+    } else {
+      process.stderr.write(style.phosphorDim(
+        `  routing: provider=${routing?.provider ?? "auto"} model=${routing?.providerModel ?? input.env.OMK_PROVIDER_MODEL ?? "auto"} risk=${routing?.risk ?? "read"} sandbox=${routing?.sandboxMode ?? "auto"}\n`
+      ));
+    }
   }
 
   let heartbeatPrinted = false;
@@ -403,9 +458,18 @@ async function executeNativeRootTurn(input: {
     ? setInterval(() => {
         heartbeatPrinted = true;
         const sec = Math.floor((Date.now() - startedAt) / 1000);
-        process.stderr.write(style.phosphorDim(
-          `\r  running ${sec}s · provider=${routing?.provider ?? "auto"} · model=${routing?.providerModel ?? input.env.OMK_PROVIDER_MODEL ?? "auto"}   `
-        ));
+        if (input.renderer) {
+          input.renderer.emit({
+            type: "turn:heartbeat",
+            elapsedMs: sec * 1000,
+            provider: routing?.provider ?? "auto",
+            model: routing?.providerModel ?? input.env.OMK_PROVIDER_MODEL,
+          });
+        } else {
+          process.stderr.write(style.phosphorDim(
+            `\r  running ${sec}s · provider=${routing?.provider ?? "auto"} · model=${routing?.providerModel ?? input.env.OMK_PROVIDER_MODEL ?? "auto"}   `
+          ));
+        }
       }, 3000)
     : undefined;
   heartbeat?.unref?.();
@@ -414,32 +478,46 @@ async function executeNativeRootTurn(input: {
     const result = await input.taskRunner.run(input.node, input.env, input.signal);
     if (input.heartbeatEnabled) {
       const sec = ((Date.now() - startedAt) / 1000).toFixed(1);
-      if (heartbeatPrinted) {
-        process.stderr.write("\n");
+      if (input.renderer) {
         heartbeatLineClosed = true;
+      } else {
+        if (heartbeatPrinted) {
+          process.stderr.write("\n");
+          heartbeatLineClosed = true;
+        }
+        process.stderr.write(style.phosphorDim(`  finished in ${sec}s · exit=${result.exitCode}\n`));
       }
-      process.stderr.write(style.phosphorDim(`  finished in ${sec}s · exit=${result.exitCode}\n`));
     }
     return result;
   } finally {
     if (heartbeat) clearInterval(heartbeat);
-    if (heartbeatPrinted && !heartbeatLineClosed) process.stderr.write("\n");
+    if (heartbeatPrinted && !heartbeatLineClosed && !input.renderer) process.stderr.write("\n");
   }
 }
 
 export async function runNativeOmkRootLoop(input: NativeRootLoopInput): Promise<number> {
   const { taskRunner, layout, onData } = input;
+  const renderer = input.renderer;
   const turnTimeoutMs = Number.parseInt(input.env.OMK_TURN_TIMEOUT_MS ?? "120000", 10);
   const safeTurnTimeoutMs = Number.isFinite(turnTimeoutMs) && turnTimeoutMs > 0 ? turnTimeoutMs : 120_000;
   const state = createNativeRootSessionState({ bootstrap: input.bootstrap, executionPrompt: input.executionPrompt });
   const commands = buildSlashCommands(input, state);
+
+  await renderer?.start();
+  renderer?.emit({
+    type: "session:start",
+    runId: input.runId,
+    provider: state.provider,
+    model: state.model,
+    layout,
+  });
 
   if (layout !== "plain") {
     console.log(style.phosphor("Entering interactive mode. Type /help for commands.\n"));
   }
 
   const { createInterface } = await import("readline");
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const rl = createInterface({ input: process.stdin, output: renderer ? process.stderr : process.stdout });
   const terminalOwner = new TerminalOwner(process.stdin);
   const releaseReadlineOwner = terminalOwner.claimReadline();
 
@@ -478,7 +556,11 @@ export async function runNativeOmkRootLoop(input: NativeRootLoopInput): Promise<
 
   const readPromptLine = async (): Promise<string | undefined> => {
     if (readlineClosed && queuedLines.length === 0) return undefined;
-    process.stdout.write(style.phosphorDim("omk> "));
+    if (renderer) {
+      renderer.emit({ type: "prompt:ready" });
+    } else {
+      process.stdout.write(style.phosphorDim("omk> "));
+    }
     const queued = queuedLines.shift();
     if (queued !== undefined) return queued;
     rl.resume();
@@ -494,6 +576,7 @@ export async function runNativeOmkRootLoop(input: NativeRootLoopInput): Promise<
 
     const line = userInput.trim();
     if (!line) continue;
+    renderer?.emit({ type: "input:submitted", text: line });
 
     if (["exit", "quit", ":q", "/exit", "/quit"].includes(line.toLowerCase())) {
       running = false;
@@ -513,15 +596,24 @@ export async function runNativeOmkRootLoop(input: NativeRootLoopInput): Promise<
         }
         try {
           await terminalOwner.withChildProcess(rl, async () => {
-            await handler.handler(args);
+            await runSlashHandler(handler, args, renderer);
           });
         } catch (err: unknown) {
           const m = err instanceof Error ? err.message : String(err);
-          console.error(style.metricsRed(`Command error: ${m}`));
+          if (renderer) {
+            renderer.emit({ type: "turn:error", message: `Command error: ${m}` });
+          } else {
+            console.error(style.metricsRed(`Command error: ${m}`));
+          }
         }
         continue;
       }
-      console.log(style.phosphorDim(`Unknown command: ${cmd}. Type /help for commands.`));
+      const message = `Unknown command: ${cmd}. Type /help for commands.`;
+      if (renderer) {
+        renderer.emit({ type: "turn:error", message });
+      } else {
+        console.log(style.phosphorDim(message));
+      }
       continue;
     }
 
@@ -539,34 +631,57 @@ export async function runNativeOmkRootLoop(input: NativeRootLoopInput): Promise<
         executionPrompt: state.approvalPolicy,
       });
 
+      const turnStartedAt = Date.now();
       const result = await terminalOwner.withChildProcess(rl, () => executeNativeRootTurn({
         taskRunner,
         node,
         env: input.env,
         signal: abort.signal,
         heartbeatEnabled: !isDisabledEnvValue(input.env.OMK_TURN_HEARTBEAT),
+        renderer,
+        mcpAllowlist: input.mcpAllowlist,
+        skillNames: input.skillNames,
+        hookNames: input.hookNames,
       }));
 
       if (result.stdout) {
-        process.stdout.write(result.stdout + "\n");
+        if (renderer) {
+          renderer.emit({ type: "assistant:final", text: result.stdout });
+        } else {
+          process.stdout.write(result.stdout + "\n");
+        }
         onData?.(result.stdout);
       }
       if (result.stderr && result.exitCode !== 0) {
-        process.stderr.write(style.metricsRed(result.stderr) + "\n");
+        if (renderer) {
+          renderer.emit({ type: "turn:error", message: result.stderr });
+        } else {
+          process.stderr.write(style.metricsRed(result.stderr) + "\n");
+        }
       }
       if (!result.stdout && result.exitCode !== 0) {
-        process.stderr.write(style.metricsRed(`Turn exited with code ${result.exitCode}`) + "\n");
+        const message = `Turn exited with code ${result.exitCode}`;
+        if (renderer) {
+          renderer.emit({ type: "turn:error", message });
+        } else {
+          process.stderr.write(style.metricsRed(message) + "\n");
+        }
       }
       if (input.onTodoSync && result.stdout) {
         input.onTodoSync(result.stdout);
       }
+      renderer?.emit({ type: "turn:finish", durationMs: Date.now() - turnStartedAt, exitCode: result.exitCode ?? 0 });
     } catch (err) {
       const msg = abort.signal.aborted
         ? `Turn timed out after ${safeTurnTimeoutMs}ms`
         : err instanceof Error
         ? err.message
         : String(err);
-      console.error(style.metricsRed(`Error: ${msg}`));
+      if (renderer) {
+        renderer.emit({ type: "turn:error", message: msg });
+      } else {
+        console.error(style.metricsRed(`Error: ${msg}`));
+      }
     } finally {
       activeTurnAbort = undefined;
       clearTimeout(timeout);
@@ -576,6 +691,11 @@ export async function runNativeOmkRootLoop(input: NativeRootLoopInput): Promise<
   process.off("SIGINT", onSigint);
   releaseReadlineOwner();
   if (!readlineClosed) rl.close();
-  console.log(style.phosphorDim("\nSession ended."));
+  if (renderer) {
+    renderer.emit({ type: "session:stop", exitCode: 0 });
+    await renderer.stop();
+  } else {
+    console.log(style.phosphorDim("\nSession ended."));
+  }
   return 0;
 }

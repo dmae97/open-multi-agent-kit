@@ -1,4 +1,4 @@
-import type { ChatLayout, ChatBrand } from "./utils.js";
+import type { ChatLayout, ChatBrand, ChatUi } from "./utils.js";
 import {
   appendRecentChatOutput,
   getActiveHookNames,
@@ -24,6 +24,7 @@ import { buildOmkToolPlaneManifest } from "../../runtime/tool-plane.js";
 import { runNativeOmkRootLoop } from "./native-root-loop.js";
 import { isCockpitChild } from "../../util/chat-cockpit.js";
 import { status, style } from "../../util/theme.js";
+import { PlainModernRenderer } from "../../cli/ui/plain-renderer.js";
 
 export interface ChatRuntimeInput {
   root: string;
@@ -39,6 +40,7 @@ export interface ChatRuntimeInput {
   effectiveResources: Awaited<ReturnType<typeof import("../../util/resource-profile.js").getOmkResourceSettings>>;
   effectiveWorkers: string;
   executionPrompt: string;
+  ui: ChatUi;
   chatRuntimeMcpAllowlist: string[] | undefined;
 }
 
@@ -146,6 +148,7 @@ export async function runChatRuntime(
     cockpitHistory?: "off" | "static" | "watch";
     cockpitSideWidth?: string;
     cockpitHeight?: string;
+    ui?: string;
     mcpScope?: string;
     smoke?: boolean;
     json?: boolean;
@@ -164,6 +167,7 @@ export async function runChatRuntime(
     effectiveResources,
     effectiveWorkers,
     currentMode,
+    ui,
     chatRuntimeMcpAllowlist,
   } = input;
 
@@ -302,6 +306,7 @@ export async function runChatRuntime(
           env.OMK_MCP_SERVERS = toolPlane.mcpServers.join(",");
         }
         const runner = await createRuntimeBackedTaskRunner({ cwd: root, env, runId: effectiveRunId, goal: "native-chat" });
+        const renderer = ui === "plain-modern" ? new PlainModernRenderer() : undefined;
         exitCode = await runNativeOmkRootLoop({
           bootstrap,
           taskRunner: runner,
@@ -314,6 +319,7 @@ export async function runChatRuntime(
           skillNames: [...toolPlane.skills],
           hookNames: [...toolPlane.hooks],
           executionPrompt: input.executionPrompt,
+          renderer,
           onData: (data) => {
             recentChatOutput = appendRecentChatOutput(recentChatOutput, data);
           },
@@ -475,14 +481,16 @@ export async function runChatRuntime(
     } catch {
       // ignore session finalize failures
     }
-    await printChatExitBanner({
-      runId: effectiveRunId,
-      sessionId,
-      kimiSessionId: observedKimiSessionId,
-      workers: options.workers,
-      root,
-      mcpScope,
-    });
+    if (ui !== "plain-modern") {
+      await printChatExitBanner({
+        runId: effectiveRunId,
+        sessionId,
+        kimiSessionId: observedKimiSessionId,
+        workers: options.workers,
+        root,
+        mcpScope,
+      });
+    }
     if (isCockpitChild()) {
       const sanitized = effectiveRunId.replace(/[^a-zA-Z0-9]/g, "-");
       const session = `omk-chat-${sanitized}`;
