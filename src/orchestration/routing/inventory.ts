@@ -11,6 +11,7 @@ import type { RouteCandidate, RouteSource, RoutingInventory, RoutingDiagnostic }
 import { loadMergedMcpConfigSync } from "./mcp-config.js";
 
 let inventoryCache: { key: string; value: RoutingInventory } | undefined;
+let routeCandidatesCache: { key: string; candidates: RouteCandidate[] } | undefined;
 
 const OMK_PROJECT_TOOLS = [
   "omk_search_memory", "omk_read_memory", "omk_memory_mindmap",
@@ -22,6 +23,7 @@ const OMK_PROJECT_TOOLS = [
 
 export function resetRoutingInventoryCache(): void {
   inventoryCache = undefined;
+  routeCandidatesCache = undefined;
 }
 
 export function getRoutingProjectRoot(): string {
@@ -251,6 +253,17 @@ function dynamicHookCandidate(id: string, source: RouteSource): RouteCandidate {
 }
 
 export function routeCandidates(inventory: RoutingInventory, staticCandidates: RouteCandidate[]): RouteCandidate[] {
+  const cacheKey = [
+    inventory.skillsScope,
+    inventory.mcpScope,
+    inventory.hooksScope,
+    [...inventory.skills.keys()].join(","),
+    [...inventory.mcpServers.keys()].join(","),
+    [...inventory.hooks.keys()].join(","),
+    staticCandidates.map((c) => c.id).join(","),
+  ].join("|");
+  if (routeCandidatesCache?.key === cacheKey) return routeCandidatesCache.candidates;
+
   const staticIds = new Set(staticCandidates.map((candidate) => `${candidate.kind}:${candidate.id}`));
   const dynamicSkills: RouteCandidate[] = [...inventory.skills.entries()]
     .filter(([id]) => !staticIds.has(`skill:${id}`))
@@ -261,7 +274,9 @@ export function routeCandidates(inventory: RoutingInventory, staticCandidates: R
   const dynamicHooks: RouteCandidate[] = [...inventory.hooks.entries()]
     .filter(([id]) => !staticIds.has(`hook:${id}`))
     .map(([id, source]) => dynamicHookCandidate(id, source));
-  return [...staticCandidates, ...dynamicSkills, ...dynamicMcps, ...dynamicHooks];
+  const result = [...staticCandidates, ...dynamicSkills, ...dynamicMcps, ...dynamicHooks];
+  routeCandidatesCache = { key: cacheKey, candidates: result };
+  return result;
 }
 
 function unique(values: string[]): string[] {
