@@ -9,6 +9,7 @@
 
 ### Fixed
 
+- Fixed the GitLab Duo custom provider example to use adaptive thinking for Claude models, expose xhigh thinking, and include newer verified model IDs ([#5201](https://github.com/earendil-works/pi/issues/5201)).
 - Fixed Bun release archive creation to install and copy the matching `@mariozechner/clipboard` base package and native sidecars ([#5184](https://github.com/earendil-works/pi/issues/5184)).
 
 ## [0.77.0] - 2026-05-28
