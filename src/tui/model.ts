@@ -2,7 +2,7 @@ import type { RunState } from "../contracts/orchestration.js";
 
 export type TuiRenderMode = "diff" | "full" | "append";
 
-export type TuiView = "summary" | "dag" | "evidence" | "events" | "capabilities";
+export type TuiView = "summary" | "dag" | "graph" | "evidence" | "events" | "capabilities" | "tool-plane";
 
 export interface TuiFrame {
   title: string;
@@ -31,4 +31,9 @@ export interface TuiSnapshot {
   todos: unknown[];
   events: unknown[];
   updatedAt: string;
+}
+
+export interface TuiViewRenderer {
+  view: TuiView;
+  render(snapshot: TuiSnapshot, options?: { width?: number; height?: number }): TuiFrame;
 }
