@@ -25,6 +25,8 @@
  */
 import type { CliUiEvent } from "./event.js";
 import type { CliRenderer } from "./renderer.js";
+import type { OmkBrandTheme } from "../../brand/theme.js";
+import { SYSTEM24_THEME } from "../../brand/theme.js";
 import { sanitizeUserVisibleOutput } from "../../util/user-visible-output.js";
 
 // ── ANSI Helpers ───────────────────────────────────────────────────────────
@@ -35,33 +37,37 @@ const BOLD = `${ESC}1m`;
 const DIM = `${ESC}2m`;
 const ITALIC = `${ESC}3m`;
 
-// system24-inspired gray palette (oklch → approximated for 256-color terminals)
-const C = {
-  // Backgrounds (dark to light)
-  bg1: `${ESC}232;232;232m`,  // ~oklch(31%) - deepest panel bg
-  bg2: `${ESC}218;218;218m`,  // ~oklch(27%) - secondary bg
-  bg3: `${ESC}204;204;204m`,  // ~oklch(23%) - spacing
-  bg4: `${ESC}190;190;190m`,  // ~oklch(19%) - main bg (darkest)
+interface System24Palette {
+  bg3: string;
+  text1: string;
+  text2: string;
+  text3: string;
+  text5: string;
+  accent: string;
+  green: string;
+  amber: string;
+  red: string;
+  cyan: string;
+  border: string;
+  borderHL: string;
+}
 
-  // Text
-  text0: `${ESC}153;153;153m`, // ~oklch(60%) - muted
-  text1: `${ESC}242;242;242m`, // ~oklch(95%) - brightest
-  text2: `${ESC}217;217;217m`, // ~oklch(85%) - headings
-  text3: `${ESC}191;191;191m`, // ~oklch(75%) - normal
-  text4: `${ESC}153;153;153m`, // ~oklch(60%) - icons/channels
-  text5: `${ESC}102;102;102m`, // ~oklch(40%) - muted/timestamps
-
-  // Accents (from OMK palette, desaturated to match system24)
-  accent: `${ESC}167;139;250m`,  // lightPurple - primary accent
-  green: `${ESC}102;204;153m`,   // success
-  amber: `${ESC}245;191;102m`,  // warning
-  red: `${ESC}242;143;143m`,    // error
-  cyan: `${ESC}102;204;217m`,   // info
-
-  // Borders
-  border: `${ESC}85;85;85m`,     // border color (~oklch(40%))
-  borderHL: `${ESC}140;140;140m`, // highlighted border
-} as const;
+function paletteFromTheme(theme: OmkBrandTheme): System24Palette {
+  return {
+    bg3: theme.colors.muted,
+    text1: theme.colors.text,
+    text2: theme.colors.text,
+    text3: theme.colors.text,
+    text5: theme.colors.muted,
+    accent: theme.colors.primary,
+    green: theme.colors.success,
+    amber: theme.colors.warning,
+    red: theme.colors.danger,
+    cyan: theme.colors.info,
+    border: theme.colors.border,
+    borderHL: theme.colors.borderHot,
+  };
+}
 
 const SEP_CHAR = "─";
 const BORDER_V = "│";
@@ -113,73 +119,73 @@ function formatElapsed(ms: number): string {
 
 // ── Panel Rendering ────────────────────────────────────────────────────────
 
-function renderPanelTop(width: number, label?: string): string {
+function renderPanelTop(c: System24Palette, width: number, label?: string): string {
   const inner = width - 2;
   if (label) {
     const labelText = ` ${label} `;
     const left = SEP_CHAR.repeat(2);
     const right = SEP_CHAR.repeat(Math.max(0, inner - visibleLen(labelText) - left.length));
-    return C.border + BORDER_TL + left + C.text5 + labelText + C.border + right + BORDER_TR + RST;
+    return c.border + BORDER_TL + left + c.text5 + labelText + c.border + right + BORDER_TR + RST;
   }
-  return C.border + BORDER_TL + SEP_CHAR.repeat(inner) + BORDER_TR + RST;
+  return c.border + BORDER_TL + SEP_CHAR.repeat(inner) + BORDER_TR + RST;
 }
 
-function renderPanelBottom(width: number): string {
-  return C.border + BORDER_BL + SEP_CHAR.repeat(width - 2) + BORDER_BR + RST;
+function renderPanelBottom(c: System24Palette, width: number): string {
+  return c.border + BORDER_BL + SEP_CHAR.repeat(width - 2) + BORDER_BR + RST;
 }
 
-function renderPanelDivider(width: number, label?: string): string {
+function renderPanelDivider(c: System24Palette, width: number, label?: string): string {
   const inner = width - 2;
   if (label) {
     const labelText = ` ${label} `;
     const left = SEP_CHAR.repeat(2);
     const right = SEP_CHAR.repeat(Math.max(0, inner - visibleLen(labelText) - left.length));
-    return C.border + BORDER_ML + left + C.text5 + labelText + C.border + right + BORDER_MR + RST;
+    return c.border + BORDER_ML + left + c.text5 + labelText + c.border + right + BORDER_MR + RST;
   }
-  return C.border + BORDER_ML + SEP_CHAR.repeat(inner) + BORDER_MR + RST;
+  return c.border + BORDER_ML + SEP_CHAR.repeat(inner) + BORDER_MR + RST;
 }
 
-function renderPanelLine(content: string, width: number): string {
+function renderPanelLine(c: System24Palette, content: string, width: number): string {
   const inner = width - 2;
   const padded = padRight(content, inner);
-  return C.border + BORDER_V + RST + padded + C.border + BORDER_V + RST;
+  return c.border + BORDER_V + RST + padded + c.border + BORDER_V + RST;
 }
 
 // ── Code Block Rendering ───────────────────────────────────────────────────
 
-function renderCodeBlock(codeLines: string[], lang: string, width: number): string[] {
+function renderCodeBlock(c: System24Palette, codeLines: string[], lang: string, width: number): string[] {
   const inner = width - 2;
   const codeInner = inner - 4; // 2 chars padding each side
   const label = lang || "code";
   const topBorder =
-    C.border + " " + BORDER_TL + SEP_CHAR.repeat(2) +
-    C.text5 + ` ${label} ` +
-    C.border + SEP_CHAR.repeat(Math.max(0, codeInner - visibleLen(` ${label} `) - 2)) +
+    c.border + " " + BORDER_TL + SEP_CHAR.repeat(2) +
+    c.text5 + ` ${label} ` +
+    c.border + SEP_CHAR.repeat(Math.max(0, codeInner - visibleLen(` ${label} `) - 2)) +
     BORDER_TR + RST;
   const bottomBorder =
-    C.border + " " + BORDER_BL + SEP_CHAR.repeat(codeInner) + BORDER_BR + RST;
+    c.border + " " + BORDER_BL + SEP_CHAR.repeat(codeInner) + BORDER_BR + RST;
 
-  const result: string[] = [renderPanelLine(topBorder, width)];
+  const result: string[] = [renderPanelLine(c, topBorder, width)];
   for (const line of codeLines) {
-    const codeLine = C.bg3 + C.text1 + " " + padRight(line, codeInner - 2) + " " + RST;
-    result.push(C.border + BORDER_V + RST + " " + codeLine + " " + C.border + BORDER_V + RST);
+    const codeLine = c.bg3 + c.text1 + " " + padRight(line, codeInner - 2) + " " + RST;
+    result.push(c.border + BORDER_V + RST + " " + codeLine + " " + c.border + BORDER_V + RST);
   }
-  result.push(renderPanelLine(bottomBorder, width));
+  result.push(renderPanelLine(c, bottomBorder, width));
   return result;
 }
 
 // ── Inline Markdown (system24 style) ───────────────────────────────────────
 
-function renderInline(text: string): string {
+function renderInline(c: System24Palette, text: string): string {
   // Bold
-  let s = text.replace(/\*\*(.+?)\*\*/g, (_, m) => BOLD + C.text1 + m + RST);
-  s = s.replace(/__(.+?)__/g, (_, m) => BOLD + C.text1 + m + RST);
+  let s = text.replace(/\*\*(.+?)\*\*/g, (_, m) => BOLD + c.text1 + m + RST);
+  s = s.replace(/__(.+?)__/g, (_, m) => BOLD + c.text1 + m + RST);
   // Italic
-  s = s.replace(/(?<!\w)\*(.+?)\*(?!\w)/g, (_, m) => ITALIC + C.text3 + m + RST);
+  s = s.replace(/(?<!\w)\*(.+?)\*(?!\w)/g, (_, m) => ITALIC + c.text3 + m + RST);
   // Inline code
-  s = s.replace(/`([^`]+)`/g, (_, m) => C.bg3 + C.text1 + " " + m + " " + RST);
+  s = s.replace(/`([^`]+)`/g, (_, m) => c.bg3 + c.text1 + " " + m + " " + RST);
   // Links
-  s = s.replace(/\[([^\]]+)\]\([^)]+\)/g, (_, m) => C.cyan + m + RST);
+  s = s.replace(/\[([^\]]+)\]\([^)]+\)/g, (_, m) => c.cyan + m + RST);
   return s;
 }
 
@@ -188,22 +194,22 @@ function renderInline(text: string): string {
 const SPIN = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
 let spinIdx = 0;
 
-function renderThinking(summary: string | undefined, elapsedMs: number, todoPercent?: number): string {
+function renderThinking(c: System24Palette, summary: string | undefined, elapsedMs: number, todoPercent?: number): string {
   const frame = SPIN[spinIdx++ % SPIN.length];
-  const time = `${DIM}${C.text5}${formatElapsed(elapsedMs)}${RST}`;
-  const parts: string[] = [`  ${C.accent}${frame}${RST}`];
+  const time = `${DIM}${c.text5}${formatElapsed(elapsedMs)}${RST}`;
+  const parts: string[] = [`  ${c.accent}${frame}${RST}`];
 
   if (todoPercent !== undefined && todoPercent >= 0) {
     const barLen = 8;
     const filled = Math.round((todoPercent / 100) * barLen);
-    const bar = C.green + "█".repeat(filled) + C.text5 + "░".repeat(barLen - filled) + RST;
-    parts.push(`${C.text5}TODO${RST} ${bar} ${C.text3}${todoPercent}%${RST}`);
+    const bar = c.green + "█".repeat(filled) + c.text5 + "░".repeat(barLen - filled) + RST;
+    parts.push(`${c.text5}TODO${RST} ${bar} ${c.text3}${todoPercent}%${RST}`);
   }
 
   if (summary) {
-    parts.push(DIM + C.text5 + truncate(summary, 40) + RST);
+    parts.push(DIM + c.text5 + truncate(summary, 40) + RST);
   } else {
-    parts.push(DIM + C.text5 + "thinking..." + RST);
+    parts.push(DIM + c.text5 + "thinking..." + RST);
   }
 
   parts.push(time);
@@ -212,22 +218,22 @@ function renderThinking(summary: string | undefined, elapsedMs: number, todoPerc
 
 // ── MCP/Skill Name Formatting ──────────────────────────────────────────────
 
-function formatMcpNames(names: readonly string[] | undefined): string {
+function formatMcpNames(c: System24Palette, names: readonly string[] | undefined): string {
   if (!names || names.length === 0) return "";
   const max = 3;
   const shown = names.slice(0, max).map(n => truncate(n, 12));
   const rest = names.length - max;
   const label = rest > 0 ? shown.join(",") + `,…+${rest}` : shown.join(",");
-  return `${C.cyan}[${label}]${RST}`;
+  return `${c.cyan}[${label}]${RST}`;
 }
 
-function formatSkillNames(names: readonly string[] | undefined): string {
+function formatSkillNames(c: System24Palette, names: readonly string[] | undefined): string {
   if (!names || names.length === 0) return "";
   const max = 2;
   const shown = names.slice(0, max).map(n => truncate(n, 12));
   const rest = names.length - max;
   const label = rest > 0 ? shown.join(",") + `,…+${rest}` : shown.join(",");
-  return `${C.accent}⟨${label}⟩${RST}`;
+  return `${c.accent}⟨${label}⟩${RST}`;
 }
 
 // ── System24Renderer ───────────────────────────────────────────────────────
@@ -240,6 +246,7 @@ export interface System24RendererStreams {
 export class System24Renderer implements CliRenderer {
   private readonly out: WritableStreamLike;
   private readonly err: WritableStreamLike;
+  private readonly palette: System24Palette;
   private heartbeatOpen = false;
   private thinkingSummary: string | undefined;
   private lastRoute: { provider: string; model?: string; risk: string; sandbox: string; mcp?: readonly string[]; skills?: readonly string[] } | null = null;
@@ -253,9 +260,10 @@ export class System24Renderer implements CliRenderer {
   private codeBlockLang = "";
   private codeBlockLines: string[] = [];
 
-  constructor(streams: System24RendererStreams = {}) {
+  constructor(streams: System24RendererStreams = {}, theme: OmkBrandTheme = SYSTEM24_THEME) {
     this.out = streams.stdout ?? process.stdout;
     this.err = streams.stderr ?? process.stderr;
+    this.palette = paletteFromTheme(theme);
   }
 
   start(): void {
@@ -265,6 +273,7 @@ export class System24Renderer implements CliRenderer {
 
   emit(event: CliUiEvent): void {
     const w = this.panelWidth;
+    const c = this.palette;
 
     switch (event.type) {
       case "session:start": {
@@ -277,27 +286,27 @@ export class System24Renderer implements CliRenderer {
           ? truncate(event.cwd, Math.max(12, w - 21))
           : undefined;
         const titleLine =
-          C.accent + BOLD + "◆" + RST + " " +
-          C.accent + "OMK" + RST + C.text5 + " · " + RST +
-          C.text3 + provider + RST + C.text5 + " · " + RST +
-          C.text2 + model + RST;
-        const runLabel = C.text5 + "run#" + runShort + RST;
+          c.accent + BOLD + "◆" + RST + " " +
+          c.accent + "OMK" + RST + c.text5 + " · " + RST +
+          c.text3 + provider + RST + c.text5 + " · " + RST +
+          c.text2 + model + RST;
+        const runLabel = c.text5 + "run#" + runShort + RST;
 
         this.err.write("\n");
-        this.err.write(renderPanelTop(w, "session"));
+        this.err.write(renderPanelTop(c, w, "session"));
         this.err.write("\n");
-        this.err.write(renderPanelLine("  " + titleLine + "  " + runLabel, w));
+        this.err.write(renderPanelLine(c, "  " + titleLine + "  " + runLabel, w));
         this.err.write("\n");
         if (rootText) {
           const source = event.rootSource ? ` · ${event.rootSource}` : "";
-          this.err.write(renderPanelLine(`  ${C.text5}root${RST} ${C.text3}${rootText}${RST}${C.text5}${source}${RST}`, w));
+          this.err.write(renderPanelLine(c, `  ${c.text5}root${RST} ${c.text3}${rootText}${RST}${c.text5}${source}${RST}`, w));
           this.err.write("\n");
         }
         if (cwdText) {
-          this.err.write(renderPanelLine(`  ${C.text5}cwd ${RST}${C.text3}${cwdText}${RST}`, w));
+          this.err.write(renderPanelLine(c, `  ${c.text5}cwd ${RST}${c.text3}${cwdText}${RST}`, w));
           this.err.write("\n");
         }
-        this.err.write(renderPanelBottom(w));
+        this.err.write(renderPanelBottom(c, w));
         this.err.write("\n\n");
         break;
       }
@@ -305,13 +314,13 @@ export class System24Renderer implements CliRenderer {
       case "input:submitted": {
         const text = event.text.length > w - 8 ? event.text.slice(0, w - 11) + "..." : event.text;
         if (this.promptOpen) {
-          if (!this.err.isTTY) this.err.write(C.text2 + text + RST);
+          if (!this.err.isTTY) this.err.write(c.text2 + text + RST);
           this.err.write("\n");
-          this.err.write(renderPanelBottom(w));
+          this.err.write(renderPanelBottom(c, w));
           this.err.write("\n\n");
           this.promptOpen = false;
         } else {
-          this.err.write(renderPanelLine(C.cyan + "  › " + RST + C.text2 + text + RST, w));
+          this.err.write(renderPanelLine(c, c.cyan + "  › " + RST + c.text2 + text + RST, w));
           this.err.write("\n\n");
         }
         break;
@@ -319,9 +328,9 @@ export class System24Renderer implements CliRenderer {
 
       case "prompt:ready":
         if (!this.promptOpen) {
-          this.err.write(renderPanelTop(w, "input"));
+          this.err.write(renderPanelTop(c, w, "input"));
           this.err.write("\n");
-          this.err.write(C.border + BORDER_V + RST + C.cyan + "  › " + RST);
+          this.err.write(c.border + BORDER_V + RST + c.cyan + "  › " + RST);
           this.promptOpen = true;
         }
         break;
@@ -333,7 +342,7 @@ export class System24Renderer implements CliRenderer {
         }
         const sanitized = stripAnsi(sanitizeUserVisibleOutput(event.text));
         for (const line of sanitized.split("\n")) {
-          this.err.write(renderPanelLine("  " + renderInline(line), w) + "\n");
+          this.err.write(renderPanelLine(c, "  " + renderInline(c, line), w) + "\n");
         }
         break;
       }
@@ -356,15 +365,15 @@ export class System24Renderer implements CliRenderer {
         this.inCodeBlock = false;
         this.codeBlockLines = [];
         this.turnStartTime = Date.now();
-        this.err.write(renderPanelTop(w, "turn"));
+        this.err.write(renderPanelTop(c, w, "turn"));
         this.err.write("\n");
         break;
 
       case "turn:heartbeat": {
-        const line = renderThinking(this.thinkingSummary, event.elapsedMs, this.todoPercent >= 0 ? this.todoPercent : undefined);
+        const line = renderThinking(c, this.thinkingSummary, event.elapsedMs, this.todoPercent >= 0 ? this.todoPercent : undefined);
         if (this.err.isTTY) {
           this.err.write("\r" + " ".repeat(w) + "\r");
-          this.err.write(C.border + BORDER_V + RST + line);
+          this.err.write(c.border + BORDER_V + RST + line);
           this.heartbeatOpen = true;
         }
         break;
@@ -379,7 +388,7 @@ export class System24Renderer implements CliRenderer {
 
       case "turn:reasoning": {
         if (event.summary) {
-          this.err.write(renderPanelLine("  " + C.accent + "🧠 " + RST + DIM + C.text5 + truncate(event.summary, 60) + RST, w));
+          this.err.write(renderPanelLine(c, "  " + c.accent + "🧠 " + RST + DIM + c.text5 + truncate(event.summary, 60) + RST, w));
           this.err.write("\n");
         }
         break;
@@ -396,7 +405,7 @@ export class System24Renderer implements CliRenderer {
           if (line.startsWith("```")) {
             if (this.inCodeBlock) {
               // End code block — flush
-              const rendered = renderCodeBlock(this.codeBlockLines, this.codeBlockLang, w);
+              const rendered = renderCodeBlock(c, this.codeBlockLines, this.codeBlockLang, w);
               for (const rl of rendered) this.out.write(rl + "\n");
               this.codeBlockLines = [];
               this.codeBlockLang = "";
@@ -419,34 +428,34 @@ export class System24Renderer implements CliRenderer {
           if (hMatch) {
             const level = hMatch[1].length;
             const text = hMatch[2];
-            if (level === 1) this.out.write(renderPanelLine("  " + BOLD + C.accent + "▋ " + text + RST, w) + "\n");
-            else if (level === 2) this.out.write(renderPanelLine("  " + C.green + "▸ " + text + RST, w) + "\n");
-            else this.out.write(renderPanelLine("  " + C.cyan + "  · " + text + RST, w) + "\n");
+            if (level === 1) this.out.write(renderPanelLine(c, "  " + BOLD + c.accent + "▋ " + text + RST, w) + "\n");
+            else if (level === 2) this.out.write(renderPanelLine(c, "  " + c.green + "▸ " + text + RST, w) + "\n");
+            else this.out.write(renderPanelLine(c, "  " + c.cyan + "  · " + text + RST, w) + "\n");
             continue;
           }
           // List items
           const lMatch = line.match(/^(\s*)[-*]\s+(.+)$/);
           if (lMatch) {
-            this.out.write(renderPanelLine("  " + C.accent + "◆" + RST + " " + renderInline(lMatch[2]), w) + "\n");
+            this.out.write(renderPanelLine(c, "  " + c.accent + "◆" + RST + " " + renderInline(c, lMatch[2]), w) + "\n");
             continue;
           }
           // Horizontal rule
           if (/^[-*_]{3,}$/.test(line.trim())) {
-            this.out.write(renderPanelLine("  " + C.text5 + SEP_CHAR.repeat(Math.min(w - 6, 40)) + RST, w) + "\n");
+            this.out.write(renderPanelLine(c, "  " + c.text5 + SEP_CHAR.repeat(Math.min(w - 6, 40)) + RST, w) + "\n");
             continue;
           }
           // Empty
           if (line.trim() === "") {
-            this.out.write(renderPanelLine("", w) + "\n");
+            this.out.write(renderPanelLine(c, "", w) + "\n");
             continue;
           }
           // Regular text
-          this.out.write(renderPanelLine("  " + renderInline(line), w) + "\n");
+          this.out.write(renderPanelLine(c, "  " + renderInline(c, line), w) + "\n");
         }
 
         // Flush unclosed code block
         if (this.inCodeBlock && this.codeBlockLines.length > 0) {
-          const rendered = renderCodeBlock(this.codeBlockLines, this.codeBlockLang, w);
+          const rendered = renderCodeBlock(c, this.codeBlockLines, this.codeBlockLang, w);
           for (const rl of rendered) this.out.write(rl + "\n");
           this.codeBlockLines = [];
           this.codeBlockLang = "";
@@ -462,7 +471,7 @@ export class System24Renderer implements CliRenderer {
         }
         const errMsg = sanitizeUserVisibleOutput(event.message);
         this.err.write("\n");
-        this.err.write(renderPanelLine(C.red + "  ✖ " + RST + C.text2 + errMsg + RST, w));
+        this.err.write(renderPanelLine(c, c.red + "  ✖ " + RST + c.text2 + errMsg + RST, w));
         this.err.write("\n");
         break;
       }
@@ -474,7 +483,7 @@ export class System24Renderer implements CliRenderer {
         }
         // Flush unclosed code block if any
         if (this.inCodeBlock && this.codeBlockLines.length > 0) {
-          const rendered = renderCodeBlock(this.codeBlockLines, this.codeBlockLang, w);
+          const rendered = renderCodeBlock(c, this.codeBlockLines, this.codeBlockLang, w);
           for (const rl of rendered) this.out.write(rl + "\n");
           this.codeBlockLines = [];
           this.codeBlockLang = "";
@@ -485,29 +494,29 @@ export class System24Renderer implements CliRenderer {
         // Status bar with MCP names, skill names, timing
         const parts: string[] = [];
         if (this.lastRoute) {
-          parts.push(C.text5 + this.lastRoute.provider + RST);
-          if (this.lastRoute.model) parts.push(C.text5 + truncate(this.lastRoute.model, 16) + RST);
-          if (this.lastRoute.risk !== "safe") parts.push(C.amber + this.lastRoute.risk + RST);
-          if (this.lastRoute.sandbox !== "none") parts.push(C.green + this.lastRoute.sandbox + RST);
+          parts.push(c.text5 + this.lastRoute.provider + RST);
+          if (this.lastRoute.model) parts.push(c.text5 + truncate(this.lastRoute.model, 16) + RST);
+          if (this.lastRoute.risk !== "safe") parts.push(c.amber + this.lastRoute.risk + RST);
+          if (this.lastRoute.sandbox !== "none") parts.push(c.green + this.lastRoute.sandbox + RST);
 
-          const mcpStr = formatMcpNames(this.lastRoute.mcp);
+          const mcpStr = formatMcpNames(c, this.lastRoute.mcp);
           if (mcpStr) parts.push(mcpStr);
 
-          const skStr = formatSkillNames(this.lastRoute.skills);
+          const skStr = formatSkillNames(c, this.lastRoute.skills);
           if (skStr) parts.push(skStr);
         }
 
         const uptime = formatElapsed(Date.now() - this.sessionStartTime);
         const statusLine =
-          parts.join(C.text5 + " · " + RST) +
-          "  " + C.text5 + "─ " + elapsed + " ─" + RST +
-          "  " + DIM + C.text5 + "⏱" + uptime + RST;
+          parts.join(c.text5 + " · " + RST) +
+          "  " + c.text5 + "─ " + elapsed + " ─" + RST +
+          "  " + DIM + c.text5 + "⏱" + uptime + RST;
 
-        this.err.write(renderPanelDivider(w, "status"));
+        this.err.write(renderPanelDivider(c, w, "status"));
         this.err.write("\n");
-        this.err.write(renderPanelLine("  " + statusLine, w));
+        this.err.write(renderPanelLine(c, "  " + statusLine, w));
         this.err.write("\n");
-        this.err.write(renderPanelBottom(w));
+        this.err.write(renderPanelBottom(c, w));
         this.err.write("\n\n");
         break;
       }

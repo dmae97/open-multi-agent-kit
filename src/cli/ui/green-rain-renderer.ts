@@ -41,7 +41,7 @@ export class GreenRainRenderer implements CliRenderer {
 
   constructor(streams: System24RendererStreams = {}) {
     this.err = streams.stderr ?? process.stderr;
-    this.base = new System24Renderer(streams);
+    this.base = new System24Renderer(streams, GREEN_RAIN_THEME);
   }
 
   start(): void {
