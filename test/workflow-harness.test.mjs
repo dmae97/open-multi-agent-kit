@@ -16,6 +16,8 @@ test("release workflow does not mask npm test failures behind tee", () => {
 
 test("CI exposes the local release:check gate", () => {
   const workflow = read(".github/workflows/ci.yml");
+  assert.match(workflow, /verify-no-kimi:/);
+  assert.match(workflow, /npm run verify:no-kimi/);
   assert.match(workflow, /release-check:/);
   assert.match(workflow, /npm run release:check/);
   assert.match(workflow, /node scripts\/run-tests\.mjs/);
@@ -67,6 +69,7 @@ test("pack-smoke evidence includes pack, audit, and install smoke phases", () =>
 test("package release:check composes the full local gate", () => {
   const pkg = JSON.parse(read("package.json"));
   assert.match(pkg.scripts.verify, /npm run secret:scan:runtime/);
+  assert.match(pkg.scripts["verify:no-kimi"], /npm run native:no-kimi:turn/);
   assert.match(pkg.scripts["release:check"], /npm run verify/);
   assert.match(pkg.scripts["release:check"], /npm run native:build/);
   assert.match(pkg.scripts["release:check"], /npm run audit:package/);

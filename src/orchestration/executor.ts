@@ -188,6 +188,7 @@ export function createExecutor(executorOptions: ExecutorOptions = {}): DagExecut
 
   async function commitState(state: RunState, opts?: { mustPersist?: boolean }): Promise<void> {
     latestSnapshot = cloneState(state);
+    emit(cloneState(latestSnapshot));
     // Coalesce: skip intermediate snapshots when queue is full,
     // but always persist final/must-persist snapshots.
     if (!opts?.mustPersist && commitQueueSize >= MAX_COMMIT_QUEUE) {
