@@ -614,6 +614,85 @@ test("chat smoke prefers current shell cwd over stale OMK_PROJECT_ROOT", async (
   }
 });
 
+test("chat smoke respects OMK_PROJECT_ROOT only when explicitly allowed", async () => {
+  const homeRoot = await mkdtemp(join(tmpdir(), "omk-chat-respect-env-home-"));
+  const cwdRoot = join(homeRoot, "work", "cwd-project");
+  const envRoot = join(homeRoot, "work", "env-project");
+  const binRoot = await mkdtemp(join(tmpdir(), "omk-chat-respect-env-bin-"));
+  const runId = "chat-respect-env-root";
+
+  try {
+    await mkdir(cwdRoot, { recursive: true });
+    await mkdir(envRoot, { recursive: true });
+    await mkdir(binRoot, { recursive: true });
+    const kimiBin = await createFakeKimi(binRoot, [
+      `if (process.argv[2] === "--version") {`,
+      `  console.log("kimi 1.0.0");`,
+      `  process.exit(0);`,
+      `}`,
+      `process.exit(0);`,
+      ``,
+    ].join("\n"));
+
+    const initEnv = {
+      ...process.env,
+      HOME: homeRoot,
+      OMK_ORIGINAL_HOME: homeRoot,
+      OMK_PROJECT_ROOT: envRoot,
+      OMK_RENDER_LOGO: "0",
+      OMK_STAR_PROMPT: "0",
+      OMK_CHAT_NO_BANNER: "1",
+      KIMI_BIN: kimiBin,
+      OMK_MCP_SUPPRESS_PRUNE_WARNINGS: "",
+    };
+    const init = spawnSync(process.execPath, [CLI, "init"], {
+      cwd: envRoot,
+      encoding: "utf-8",
+      timeout: 30000,
+      env: initEnv,
+    });
+    assert.equal(init.status, 0, init.stderr || init.stdout);
+
+    const result = spawnSync(process.execPath, [
+      CLI,
+      "chat",
+      "--smoke",
+      "--json",
+      "--layout",
+      "plain",
+      "--brand",
+      "plain",
+      "--provider",
+      "auto",
+      "--run-id",
+      runId,
+    ], {
+      cwd: cwdRoot,
+      encoding: "utf-8",
+      timeout: 30000,
+      env: {
+        ...initEnv,
+        KIMI_BIN: "/nonexistent/kimi",
+        OMK_MCP_PREFLIGHT: "off",
+        OMK_PROJECT_ROOT: envRoot,
+        OMK_CHAT_RESPECT_PROJECT_ROOT_ENV: "1",
+      },
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.ok, true);
+    assert.equal(report.root.path, envRoot);
+    assert.equal(report.root.cwd, cwdRoot);
+    assert.equal(report.root.source, "env");
+    assert.equal(existsSync(join(envRoot, ".omk", "runs", runId)), true);
+    assert.equal(existsSync(join(cwdRoot, ".omk", "runs", runId)), false);
+  } finally {
+    await rm(homeRoot, { recursive: true, force: true });
+    await rm(binRoot, { recursive: true, force: true });
+  }
+});
+
 test("chat smoke uses OMK_DEFAULT_PROJECT_ROOT when launched from HOME git repo", async () => {
   const homeRoot = await mkdtemp(join(tmpdir(), "omk-chat-home-git-"));
   const projectRoot = join(homeRoot, "work", "open_multi-agent_kit");
