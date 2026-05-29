@@ -5,6 +5,7 @@
 ### Fixed
 
 - Fixed ANSI text wrapping to avoid stack overflows on very long wrapped lines ([#5185](https://github.com/earendil-works/pi/issues/5185)).
+- Clarified the IME hardware cursor docs to state that cursor visibility remains opt-in ([#5200](https://github.com/earendil-works/pi/issues/5200)).
 
 ## [0.77.0] - 2026-05-28
 

@@ -49,6 +49,8 @@ config.enable_kitty_keyboard = true
 return config
 ```
 
+On WSL, WezTerm may require a visible hardware cursor for IME candidate window positioning. If CJK IME candidates do not follow the text cursor, set `PI_HARDWARE_CURSOR=1` before running pi or set `showHardwareCursor` to `true` in settings.
+
 ## VS Code (Integrated Terminal)
 
 `keybindings.json` locations:
