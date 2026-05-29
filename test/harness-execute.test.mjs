@@ -39,6 +39,7 @@ test("executeHarnessRun runs a DAG through the shared executor and persists RunS
     const calls = [];
     const starts = [];
     const completes = [];
+    const stateStatuses = [];
     const runner = {
       async run(node, env, _signal, context) {
         calls.push({
@@ -70,6 +71,7 @@ test("executeHarnessRun runs a DAG through the shared executor and persists RunS
       },
       workers: 1,
       approvalPolicy: "block",
+      onStateChange: (state) => stateStatuses.push(state.nodes[0].status),
       onNodeStart: (node) => starts.push(node.id),
       onNodeComplete: (node, taskResult) => completes.push([node.id, taskResult.success]),
     });
@@ -91,12 +93,148 @@ test("executeHarnessRun runs a DAG through the shared executor and persists RunS
     ]);
     assert.deepEqual(starts, ["node-1"]);
     assert.deepEqual(completes, [["node-1", true]]);
+    assert.ok(stateStatuses.includes("running"));
+    assert.ok(stateStatuses.includes("done"));
 
     const persisted = JSON.parse(
       await readFile(join(root, ".omk", "runs", "harness-test", "state.json"), "utf8")
     );
     assert.equal(persisted.runId, "harness-test");
     assert.equal(persisted.nodes[0].status, "done");
+  });
+});
+
+test("executeHarnessRun applies worker manifest env after base and node env", async () => {
+  await withTempRoot(async (root) => {
+    const calls = [];
+    const runner = {
+      async run(_node, env, _signal, context) {
+        calls.push({
+          baseOnly: env.BASE_ONLY,
+          nodeRole: env.OMK_NODE_ROLE,
+          providerModel: env.OMK_PROVIDER_MODEL,
+          contextModel: context?.worker?.provider?.model,
+        });
+        return {
+          success: true,
+          stdout: "## Summary\nok\n\n## Evidence\nok",
+          stderr: "",
+        };
+      },
+    };
+
+    const result = await executeHarnessRun({
+      root,
+      runId: "harness-env-precedence",
+      dag: createDag({
+        nodes: [
+          {
+            id: "env-node",
+            name: "Harness env precedence",
+            role: "tester",
+            dependsOn: [],
+            maxRetries: 1,
+            routing: {
+              readOnly: true,
+              providerModel: "manifest-model",
+              rationale: "test env merge precedence",
+            },
+          },
+        ],
+      }),
+      runner,
+      env: {
+        BASE_ONLY: "base",
+        OMK_NODE_ROLE: "base-role",
+        OMK_PROVIDER_MODEL: "base-model",
+      },
+      workers: 1,
+      approvalPolicy: "block",
+    });
+
+    assert.equal(result.success, true);
+    assert.deepEqual(calls, [
+      {
+        baseOnly: "base",
+        nodeRole: "tester",
+        providerModel: "manifest-model",
+        contextModel: "manifest-model",
+      },
+    ]);
+  });
+});
+
+test("executeHarnessRun resumes terminal state without rerunning completed nodes", async () => {
+  await withTempRoot(async (root) => {
+    const first = await executeHarnessRun({
+      root,
+      runId: "harness-resume",
+      dag: createSingleNodeDag("resume-node"),
+      runner: {
+        async run() {
+          return {
+            success: true,
+            stdout: "## Summary\nok\n\n## Evidence\nok",
+            stderr: "",
+          };
+        },
+      },
+      workers: 1,
+      approvalPolicy: "block",
+    });
+
+    let rerunCount = 0;
+    const resumed = await executeHarnessRun({
+      root,
+      runId: "harness-resume",
+      dag: createSingleNodeDag("resume-node"),
+      runner: {
+        async run() {
+          rerunCount += 1;
+          return {
+            success: true,
+            stdout: "unexpected rerun",
+            stderr: "",
+          };
+        },
+      },
+      workers: 1,
+      approvalPolicy: "block",
+      resumeFromState: first.state,
+    });
+
+    assert.equal(resumed.success, true);
+    assert.equal(rerunCount, 0);
+    assert.equal(resumed.state.nodes[0].status, "done");
+  });
+});
+
+test("executeHarnessRun applies nodeTimeoutMs to runner execution", async () => {
+  await withTempRoot(async (root) => {
+    const result = await executeHarnessRun({
+      root,
+      runId: "harness-node-timeout",
+      dag: createSingleNodeDag("timeout-node"),
+      runner: {
+        async run(_node, _env, signal) {
+          return await new Promise((resolve) => {
+            signal?.addEventListener("abort", () => {
+              resolve({
+                success: false,
+                stdout: "",
+                stderr: "aborted by timeout",
+              });
+            }, { once: true });
+          });
+        },
+      },
+      workers: 1,
+      approvalPolicy: "block",
+      nodeTimeoutMs: 5,
+    });
+
+    assert.equal(result.success, false);
+    assert.equal(result.state.nodes[0].status, "failed");
   });
 });
 

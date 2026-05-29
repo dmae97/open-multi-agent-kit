@@ -106,12 +106,12 @@ test("createHarnessTaskRunner uses provider-backed runner for parallel mode", as
   });
 });
 
-test("createHarnessTaskRunner lets useRuntimeBacked override non-chat modes", async () => {
+test("createHarnessTaskRunner lets useRuntimeBacked override parallel mode", async () => {
   const calls = [];
   await createHarnessTaskRunner({
     root: "/repo",
     runId: "run-forced",
-    mode: "run",
+    mode: "parallel",
     providerPolicy: "mimo",
     useRuntimeBacked: true,
     factories: {
@@ -124,4 +124,50 @@ test("createHarnessTaskRunner lets useRuntimeBacked override non-chat modes", as
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].runtimePolicy, "mimo");
+});
+
+test("createHarnessTaskRunner merges provider-backed kimi env before harness env", async () => {
+  const calls = [];
+  await createHarnessTaskRunner({
+    root: "/repo",
+    runId: "run-env",
+    mode: "parallel",
+    providerPolicy: "auto",
+    env: {
+      BASE_ONLY: "base",
+      SHARED: "harness",
+    },
+    providerOptions: {
+      model: "preferred-model",
+      providerBackedOptions: {
+        kimi: {
+          cwd: "/ignored",
+          timeout: 123,
+          env: {
+            KIMI_ONLY: "kimi",
+            SHARED: "kimi",
+            OMK_RUN_ID: "stale-run",
+            OMK_PROVIDER_MODEL: "stale-model",
+          },
+        },
+      },
+    },
+    factories: {
+      async providerBacked(options) {
+        calls.push(options);
+        return fakeRunner;
+      },
+    },
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].kimi.cwd, "/ignored");
+  assert.equal(calls[0].kimi.timeout, 123);
+  assert.deepEqual(calls[0].kimi.env, {
+    KIMI_ONLY: "kimi",
+    SHARED: "harness",
+    OMK_RUN_ID: "run-env",
+    OMK_PROVIDER_MODEL: "preferred-model",
+    BASE_ONLY: "base",
+  });
 });
