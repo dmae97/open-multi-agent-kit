@@ -7,6 +7,10 @@
 - Exported `convertToPng` for extension authors.
 - Exported `parseArgs` and type `Args` for extension authors.
 
+### Fixed
+
+- Fixed Bun release archive creation to install and copy the matching `@mariozechner/clipboard` base package and native sidecars ([#5184](https://github.com/earendil-works/pi/issues/5184)).
+
 ## [0.77.0] - 2026-05-28
 
 ### New Features
