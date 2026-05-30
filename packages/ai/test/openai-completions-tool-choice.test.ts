@@ -840,7 +840,8 @@ describe("openai-completions tool_choice", () => {
 	});
 
 	it("keeps developer messages for OpenAI reasoning model instructions", async () => {
-		const model = getModel("openai", "gpt-5.5")!;
+		const { compat: _compat, ...baseModel } = getModel("openai", "gpt-5.5")!;
+		const model = { ...baseModel, api: "openai-completions" } as const;
 		let payload: unknown;
 
 		await streamSimple(
