@@ -5,13 +5,14 @@
 ### Added
 - `docs/versioning.md` documents the `1.2.0-rc.0` package RC, `v1.2` runtime contract family, `rc` channel, schema versions, and verification commands.
 - `docs/provider-maturity.md` documents provider routing roles, authority limits, auth/config sources, and known RC limitations.
-- `omk.proof-bundle.v1`, `npm run proof:check`, `npm run proof:index`, and eight scoped RC hardening proof bundles introduce the public proof gate surface, including evidence-block, replay/inspect, and graph-audit axes.
+- `omk.proof-bundle.v1`, `npm run proof:check`, `npm run proof:index`, and ten scoped RC hardening proof bundles introduce the public proof gate surface, including evidence-block, replay/inspect, graph-audit, no-Kimi smoke, and fallback-routing axes.
 - `omk graph audit --json` validates graph links between a run manifest, evidence JSONL, decision JSONL, and provider-route nodes for proof artifacts.
 
 ### Improved
 - README, CONTRIBUTING, MATURITY, ROADMAP, and verified-run issue template wording now use provider-neutral OMK identity while keeping Kimi described as the most mature authority path for this RC line.
 - License wording now matches the checked repository `LICENSE` file (`MIT`).
-- `release:check` and `release:rc` now include the proof gate alongside contract and version checks.
+- `release:check` and `release:rc` now include the no-Kimi gate and proof gate alongside contract and version checks.
+- `npm run proof:check` now validates proof artifact runId/commit/version linkage, evidence/decision JSONL record shape, verify references, non-empty limitations, sanitized paths, secret-like strings, and placeholder/fabrication markers.
 
 ### Verification
 - This is a source RC documentation entry. Do not treat it as a stable `v1.2` release or a publish claim.

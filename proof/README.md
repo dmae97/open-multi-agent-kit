@@ -16,4 +16,4 @@ Run:
 npm run proof:check
 ```
 
-`proof:check` fails when a bundle has missing artifacts, mismatched SHA-256, empty limitations, local absolute paths, secret-looking tokens, non repo-relative artifact paths, or unfinished capture markers.
+`proof:check` fails when a bundle has missing or unreferenced artifacts, mismatched SHA-256, empty limitations, local absolute paths, secret-looking tokens, non repo-relative artifact paths, unfinished capture markers, fabricated-placeholder markers, invalid evidence/decision JSONL records, or broken runId/commit/version/evidence/decision references.
