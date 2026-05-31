@@ -39,7 +39,6 @@ for (const { path, digest, bundle } of bundles) {
   lines.push(`| ${bundle.proofId} | ${bundle.scenario} | ${providerPolicy} | ${bundle.verdict} | \`${path}\` | \`${digest}\` |`);
 }
 if (bundles.length === 0) lines.push("| none | missing | none | missing |  |  |");
-lines.push("");
 await mkdir(join(root, "proof"), { recursive: true });
 await writeFile(join(root, indexPath), `${lines.join("\n")}\n`);
 console.log(`wrote ${indexPath} with ${bundles.length} bundle(s)`);
