@@ -55,7 +55,7 @@ export async function startChatRepl(options: ChatReplOptions): Promise<void> {
     data: {
       kind: "turn_started",
       intent: "chat",
-      provider: options.provider || "kimi",
+      provider: options.provider || "auto",
     },
     turnId: Date.now().toString(),
     timestamp: new Date().toISOString(),
@@ -123,7 +123,7 @@ export async function startChatRepl(options: ChatReplOptions): Promise<void> {
     const sidecar = result.runtimeSidecar;
 
     const runtimeMode = selectProviderRuntime({
-      provider: sidecar.provider || "kimi",
+      provider: sidecar.provider || "auto",
       intent,
     });
     const selectedMcpCount = capabilityPlan.requiredMcp.length + capabilityPlan.optionalMcp.length;

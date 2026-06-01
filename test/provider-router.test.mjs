@@ -39,6 +39,44 @@ test("provider-router evidence-fail fallback uses neutral priority cost and capa
   assert.equal(decision.reason, "evidence-fail-fallback-ordered");
 });
 
+test("provider-router compatibility-first ranks capability evidence instead of Kimi id", () => {
+  const router = createProviderRouter({
+    providers: [
+      mockProvider({ id: "kimi", kind: "kimi-native", priority: 100 }),
+      mockProvider({ id: "codex", kind: "codex-cli", priority: 90, estimateCost: true, health: true }),
+      mockProvider({ id: "openrouter", kind: "openai-compatible", priority: 80, estimateCost: true }),
+    ],
+  });
+
+  const decision = router.select(routeInput({
+    strategy: "compatibility-first",
+    needsMcp: true,
+    needsToolCalling: true,
+  }));
+
+  assert.equal(decision.provider.id, "codex");
+  assert.deepEqual(decision.fallbacks.map((provider) => provider.id), ["kimi", "openrouter"]);
+  assert.equal(decision.reason, "compatibility-capability-evidence-best");
+});
+
+test("provider-router compatibility-first preserves explicit provider hint compatibility", () => {
+  const router = createProviderRouter({
+    providers: [
+      mockProvider({ id: "qwen", kind: "openai-compatible", priority: 100, estimateCost: true, health: true }),
+      mockProvider({ id: "kimi", kind: "kimi-native", priority: 10 }),
+    ],
+  });
+
+  const decision = router.select(routeInput({
+    strategy: "compatibility-first",
+    providerHint: "kimi",
+    needsMcp: true,
+  }));
+
+  assert.equal(decision.provider.id, "kimi");
+  assert.equal(decision.reason, "explicit-provider-hint-compatible");
+});
+
 function mockProvider({
   id,
   kind = "external-cli",

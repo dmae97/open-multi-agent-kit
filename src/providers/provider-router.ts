@@ -53,26 +53,19 @@ export function createProviderRouter(options: ProviderRouterOptions) {
 
   function selectCompatibilityFirst(
     candidates: AgentProvider[],
-    _input: ProviderRouteInput
+    input: ProviderRouteInput
   ): ProviderRouteDecision {
-    const kimi = candidates.find((p) => p.id === "kimi");
-    const others = candidates.filter((p) => p.id !== "kimi");
-
-    if (kimi) {
-      return {
-        provider: kimi,
-        reason: "explicit-kimi-compatibility-strategy",
-        fallbacks: others,
-        confidence: 0.9,
-        strategy: "compatibility-first",
-      };
-    }
+    const ordered = orderByCompatibility(candidates, input);
+    const hinted = explicitProviderHint(input)
+      ? ordered.find((provider) => provider.id === input.providerHint)
+      : undefined;
+    const selected = hinted ?? ordered[0];
 
     return {
-      provider: candidates[0],
-      reason: "explicit-kimi-compatibility-unavailable-next-best",
-      fallbacks: candidates.slice(1),
-      confidence: 0.7,
+      provider: selected,
+      reason: hinted ? "explicit-provider-hint-compatible" : "compatibility-capability-evidence-best",
+      fallbacks: ordered.filter((provider) => provider !== selected),
+      confidence: hinted ? 0.9 : compatibilityConfidence(selected, input),
       strategy: "compatibility-first",
     };
   }
@@ -172,4 +165,63 @@ function estimateProviderCost(
 
 function getProviderLatency(provider: AgentProvider): number {
   return provider.priority > 50 ? 500 : 750;
+}
+
+function orderByCompatibility(
+  candidates: AgentProvider[],
+  input: ProviderRouteInput
+): AgentProvider[] {
+  return [...candidates].sort((left, right) => {
+    const scoreDelta = compatibilityScore(right, input) - compatibilityScore(left, input);
+    if (scoreDelta !== 0) return scoreDelta;
+
+    const costDelta = estimateProviderCost(left, input) - estimateProviderCost(right, input);
+    if (costDelta !== 0) return costDelta;
+
+    const priorityDelta = right.priority - left.priority;
+    if (priorityDelta !== 0) return priorityDelta;
+
+    return String(left.id).localeCompare(String(right.id));
+  });
+}
+
+function compatibilityScore(provider: AgentProvider, input: ProviderRouteInput): number {
+  let score = 0.5;
+  if (explicitProviderHint(input) && provider.id === input.providerHint) {
+    score += 0.5;
+  }
+  if (input.needsMcp) {
+    score += supportsLocalControlPlane(provider) ? 0.25 : -0.15;
+  }
+  if (input.needsToolCalling) {
+    score += supportsLocalControlPlane(provider) || provider.kind === "openai-compatible" ? 0.2 : 0;
+  }
+  if (input.risk === "read" || input.readOnly) {
+    score += provider.kind === "openai-compatible" ? 0.15 : 0.05;
+  } else {
+    score += supportsLocalControlPlane(provider) ? 0.15 : -0.1;
+  }
+  if (provider.health) {
+    score += 0.08;
+  }
+  if (provider.estimateCost) {
+    score += 0.06;
+  }
+  score += Math.max(0, Math.min(1, provider.priority / 100)) * 0.1;
+  return score;
+}
+
+function supportsLocalControlPlane(provider: AgentProvider): boolean {
+  return provider.kind === "local" ||
+    provider.kind === "external-cli" ||
+    provider.kind === "codex-cli" ||
+    provider.kind.endsWith("-native");
+}
+
+function explicitProviderHint(input: ProviderRouteInput): boolean {
+  return Boolean(input.providerHint && input.providerHint !== "auto");
+}
+
+function compatibilityConfidence(provider: AgentProvider, input: ProviderRouteInput): number {
+  return Math.max(0.65, Math.min(0.9, Number((0.55 + compatibilityScore(provider, input) / 4).toFixed(2))));
 }

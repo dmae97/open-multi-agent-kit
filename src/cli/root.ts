@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { style, kimicatCliHero } from "../util/theme.js";
+import { style, omkCliHero } from "../util/theme.js";
 import { t, initI18n } from "../util/i18n.js";
 import { buildCustomHelp } from "../util/help-text.js";
 
@@ -52,7 +52,7 @@ export function configureRootProgram(program: Command, OMK_VERSION: string, OMK_
           const maxLines = Math.max(10, termRows - 6);
           return lines.slice(0, Math.min(lines.length, maxLines)).join("\n");
         } catch {
-          return kimicatCliHero();
+          return omkCliHero();
         }
       })();
 

@@ -42,16 +42,22 @@ export async function createProviderBackedTaskRunner(
 ): Promise<TaskRunner> {
   const providerPolicy = options.providerPolicy ?? "auto";
   const kimiOptions: KimiTaskRunnerOptions = options.kimi ?? { cwd: options.cwd ?? getProjectRoot() };
-  const kimiRunner = createKimiTaskRunner(kimiOptions);
+  const legacyKimiRequested = shouldEnableLegacyKimi(providerPolicy, options.fallbackChain);
+  const kimiRunner = legacyKimiRequested
+    ? createKimiTaskRunner(kimiOptions)
+    : createDisabledLegacyKimiRunner();
   const providerHealth = new ProviderHealthRegistry();
 
   const providers: AgentProvider[] = [];
-  const kimiProvider = createKimiProvider({ runner: kimiRunner });
-  providers.push(kimiProvider);
 
   let deepseekRunnerRef: TaskRunner | undefined;
   const providerRunners: Partial<Record<ProviderId, TaskRunner>> = {};
   const providerModels: Partial<Record<ProviderId, ProviderModelDefault>> = {};
+  if (legacyKimiRequested) {
+    const kimiProvider = createKimiProvider({ runner: kimiRunner });
+    providers.push(kimiProvider);
+    providerRunners.kimi = kimiRunner;
+  }
   for (const provider of options.providers ?? []) {
     providers.push(provider);
     const providerId = provider.id as ProviderId;
@@ -130,14 +136,14 @@ export async function createProviderBackedTaskRunner(
 
   const router = createProviderRouter({
     providers,
-    defaultStrategy: providerPolicy === "kimi" ? "compatibility-first" : "cost-aware",
+    defaultStrategy: legacyKimiRequested ? "compatibility-first" : "cost-aware",
   });
 
   // Create runtime instances for the RuntimeRouter
   const runtimes: AgentRuntime[] = [];
   runtimes.push(...(options.runtimes ?? []));
   const kimiBin = resolveKimiBin(kimiOptions.env as NodeJS.ProcessEnv | undefined);
-  if (await checkCommand(kimiBin).catch(() => false)) {
+  if (legacyKimiRequested && await checkCommand(kimiBin).catch(() => false)) {
     const kimiPrintRuntime = createKimiPrintRuntime(kimiOptions);
     runtimes.push(kimiPrintRuntime);
 
@@ -262,6 +268,24 @@ function resolveProviderBackedAuthorityProvider(
     return providerPolicy;
   }
   return DEFAULT_AUTHORITY_PROVIDER;
+}
+
+function shouldEnableLegacyKimi(providerPolicy: ProviderPolicy, fallbackChain: readonly string[] | undefined): boolean {
+  return providerPolicy === "kimi" || (fallbackChain ?? []).some((runtimeId) => runtimeId === "kimi" || runtimeId.startsWith("kimi-"));
+}
+
+function createDisabledLegacyKimiRunner(): TaskRunner {
+  return {
+    async run() {
+      return {
+        success: false,
+        exitCode: 78,
+        stdout: "",
+        stderr: "Legacy provider runner is disabled unless explicitly configured.",
+        metadata: { provider: "legacy", disabled: true },
+      };
+    },
+  };
 }
 
 function providerDisplayName(provider: ProviderId): string {

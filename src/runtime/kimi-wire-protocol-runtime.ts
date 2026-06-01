@@ -56,6 +56,9 @@ function mapToolCallEventToRecord(tc: ToolCallEvent): ToolCallRecord {
 
 export class KimiWireProtocolRuntime implements AgentRuntime {
   readonly id = "kimi-wire";
+  readonly providerId = "kimi";
+  readonly legacy = true;
+  readonly runtimeMode = "wire";
   readonly kind = "cli";
   readonly priority = 85;
   readonly capabilities: RuntimeCapabilities = {

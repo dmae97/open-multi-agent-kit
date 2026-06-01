@@ -17,6 +17,9 @@ export type KimiPrintRuntimeOptions = KimiTaskRunnerOptions;
 export function createKimiPrintRuntime(options: KimiPrintRuntimeOptions = {}): AgentRuntime {
   return {
     id: "kimi-print",
+    providerId: "kimi",
+    legacy: true,
+    runtimeMode: "print",
     priority: 100,
 
     supports(_capsule: ContextCapsule): boolean {

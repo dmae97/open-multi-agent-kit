@@ -7,14 +7,13 @@ export const DEFAULT_AUTHORITY_PROVIDER: ProviderId = "mimo";
 export const DEFAULT_FALLBACK_RUNTIME = "mimo-api";
 export const DEFAULT_RUNTIME_FALLBACK_CHAIN = [
   DEFAULT_FALLBACK_RUNTIME,
-  "kimi-api",
   "codex-cli",
   "deepseek-api",
   "opencode-cli",
   "commandcode-cli",
 ] as const;
 
-const LEGACY_KIMI_CLI_RUNTIME_IDS = new Set(["kimi-cli", "kimi-print", "kimi-wire"]);
+const LEGACY_EXTERNAL_RUNTIME_MODES = new Set(["print", "wire"]);
 
 export function resolveFallbackProvider(
   provider?: ProviderId | ProviderPolicy | readonly (ProviderId | ProviderPolicy)[]
@@ -57,8 +56,13 @@ export function resolveRuntimeFallbackChain(availableRuntimes: readonly string[]
 function runtimeFallbackRank(runtimeId: string): number {
   const defaultIndex = DEFAULT_RUNTIME_FALLBACK_CHAIN.indexOf(runtimeId as (typeof DEFAULT_RUNTIME_FALLBACK_CHAIN)[number]);
   if (defaultIndex >= 0) return defaultIndex;
-  if (LEGACY_KIMI_CLI_RUNTIME_IDS.has(runtimeId)) return 10_000;
+  if (LEGACY_EXTERNAL_RUNTIME_MODES.has(runtimeModeId(runtimeId))) return 10_000;
   return 5_000;
+}
+
+function runtimeModeId(runtimeId: string): string {
+  const [, ...modeParts] = runtimeId.toLowerCase().split("-");
+  return modeParts.join("-");
 }
 export type ProviderRisk = "read" | "write" | "shell" | "merge";
 export type ProviderComplexity = "simple" | "moderate" | "complex";
