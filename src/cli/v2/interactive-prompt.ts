@@ -20,18 +20,18 @@ export async function promptProviderSelection(
   currentModel?: string,
 ): Promise<{ provider: string; model: string } | null> {
   const providers = [
-    { value: "kimi", label: "Kimi (Moonshot)", hint: "Default" },
-    { value: "codex", label: "Codex (OpenAI)", hint: "GPT-4" },
-    { value: "claude", label: "Claude (Anthropic)", hint: "Sonnet" },
-    { value: "gemini", label: "Gemini (Google)", hint: "Pro" },
-    { value: "deepseek", label: "DeepSeek", hint: "Coder" },
     { value: "auto", label: "Auto-select", hint: "OMK picks best" },
+    { value: "mimo", label: "MiMo", hint: "Default authority" },
+    { value: "codex", label: "Codex", hint: "CLI/runtime" },
+    { value: "deepseek", label: "DeepSeek", hint: "Read-only advisory" },
+    { value: "qwen", label: "Qwen", hint: "OpenAI-compatible" },
+    { value: "openrouter", label: "OpenRouter", hint: "BYOK router" },
   ];
 
   const provider = await clack.select({
     message: "Select provider:",
     options: providers,
-    initialValue: currentProvider ?? "kimi",
+    initialValue: currentProvider ?? "auto",
   });
 
   if (clack.isCancel(provider)) {
@@ -214,12 +214,12 @@ export function omkOutro(message: string): void {
 
 function getDefaultModel(provider: string): string {
   const defaults: Record<string, string> = {
-    kimi: "kimi-code",
-    codex: "codex-cli",
-    claude: "sonnet",
-    gemini: "pro",
-    deepseek: "coder",
     auto: "auto",
+    mimo: "mimo-v2.5-pro",
+    codex: "codex-cli",
+    deepseek: "deepseek-v4",
+    qwen: "qwen-coder",
+    openrouter: "openrouter/auto",
   };
   return defaults[provider] ?? "default";
 }

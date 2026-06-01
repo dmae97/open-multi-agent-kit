@@ -60,9 +60,11 @@ async function createDefaultRuntimeRegistry(
     registry.register(createMimoApiRuntime({ apiKey: mimoApiKey }));
   }
 
+  const legacyKimiEnabled = isLegacyKimiEnabled(options.env);
+
   // ── Kimi API runtime (Moonshot HTTP direct — no binary needed) ──
   let kimiApiKey = options.env?.KIMI_API_KEY ?? process.env.KIMI_API_KEY;
-  if (!kimiApiKey) {
+  if (legacyKimiEnabled && !kimiApiKey) {
     try {
       const { readFileSync } = await import("node:fs");
       const { join } = await import("node:path");
@@ -73,7 +75,7 @@ async function createDefaultRuntimeRegistry(
       if (kimiMatch) kimiApiKey = kimiMatch[1];
     } catch { /* config not found */ }
   }
-  if (kimiApiKey) {
+  if (legacyKimiEnabled && kimiApiKey) {
     registry.register(createKimiApiRuntime({ apiKey: kimiApiKey }));
   }
 
@@ -85,7 +87,7 @@ async function createDefaultRuntimeRegistry(
 
   // ── kimi-print adapter (legacy binary — only if kimi CLI installed) ──
   const kimiBin = resolveKimiBin({ ...process.env, ...(options.env ?? {}) });
-  if (await checkCommand(kimiBin).catch(() => false)) {
+  if (legacyKimiEnabled && await checkCommand(kimiBin).catch(() => false)) {
     registry.register(createKimiPrintRuntime({ cwd: options.cwd, env: options.env }));
   }
 
@@ -131,6 +133,11 @@ async function createDefaultRuntimeRegistry(
   }
 
   return registry;
+}
+
+function isLegacyKimiEnabled(env: Record<string, string> | undefined): boolean {
+  const merged = { ...process.env, ...(env ?? {}) };
+  return /^(1|true|yes)$/i.test(merged.OMK_LEGACY_KIMI_ENABLED ?? "");
 }
 
 export async function createRuntimeBackedTaskRunner(

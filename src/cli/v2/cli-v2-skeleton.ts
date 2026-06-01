@@ -203,7 +203,7 @@ export class ModelCommand extends OmkCommand {
     description: "Show or set current provider/model",
     examples: [
       ["Show current model", "omk model"],
-      ["Set model", "omk model kimi/kimi-code"],
+      ["Set model", "omk model auto"],
     ],
   });
 

@@ -26,6 +26,9 @@ export function createKimiWireRuntime(options: KimiWireRuntimeOptions = {}): Age
   const enabled = options.enabled === true || /^(1|true|yes)$/i.test(env.OMK_ENABLE_KIMI_WIRE ?? "");
   return {
     id: "kimi-wire",
+    providerId: "kimi",
+    legacy: true,
+    runtimeMode: "wire",
     priority: 90,
 
     supports(_capsule: ContextCapsule): boolean {

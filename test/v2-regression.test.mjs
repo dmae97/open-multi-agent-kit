@@ -96,24 +96,24 @@ test("20.3 treats required MCP failure as blocker", () => {
 });
 
 // ─────────────────────────────────────────────
-// 20.4 kimi-print debug only
+// 20.4 provider print debug only
 // ─────────────────────────────────────────────
 
-test("20.4 does not select kimi-print unless debug raw is enabled", () => {
+test("20.4 does not select provider-print unless debug raw is enabled", () => {
   assert.notEqual(
-    selectProviderRuntime({ provider: "kimi", intent: "status", debugRaw: false }),
-    "kimi-print",
-    "should not be kimi-print when debugRaw=false"
+    selectProviderRuntime({ provider: "test-authority", intent: "status", debugRaw: false }),
+    "provider-print",
+    "should not be provider-print when debugRaw=false"
   );
   assert.notEqual(
-    selectProviderRuntime({ provider: "kimi", intent: "status" }),
-    "kimi-print",
-    "should not be kimi-print when debugRaw is undefined"
+    selectProviderRuntime({ provider: "test-authority", intent: "status" }),
+    "provider-print",
+    "should not be provider-print when debugRaw is undefined"
   );
   assert.equal(
-    selectProviderRuntime({ provider: "kimi", intent: "status", debugRaw: true }),
-    "kimi-print",
-    "should be kimi-print when debugRaw=true"
+    selectProviderRuntime({ provider: "test-authority", intent: "status", debugRaw: true }),
+    "provider-print",
+    "should be provider-print when debugRaw=true"
   );
 });
 

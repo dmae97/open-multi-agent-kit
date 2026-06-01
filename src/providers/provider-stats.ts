@@ -48,6 +48,7 @@ export interface ProviderRouteScoreInput {
   readOnly: boolean;
   providerStats?: Record<string, ProviderStats>;
   providerModelStats?: Record<string, ProviderModelStatsEntry>;
+  providerContextWindows?: Record<string, number>;
   authorityProvider?: ProviderId;
 }
 
@@ -78,13 +79,7 @@ const FILE_AFFECTING_ROLES = new Set([
   "refactorer",
 ]);
 
-const CONTEXT_WINDOWS: Record<string, number> = {
-  kimi: 2_000_000,
-  deepseek: 128_000,
-  qwen: 128_000,
-  codex: 128_000,
-  openrouter: 128_000,
-};
+const DEFAULT_CONTEXT_WINDOW = 128_000;
 const DEFAULT_LATENCY_BUDGET = 0.75;
 const DEFAULT_COST_BUDGET = 0.8;
 
@@ -291,7 +286,7 @@ export function computeProviderRouteScore(
   const expectedUtility = computeExpectedUtility(provider, input.role, authority);
 
   // contextFit (0.15): token count fit for provider context window
-  const window = CONTEXT_WINDOWS[provider] ?? 128_000;
+  const window = providerContextWindow(provider, input);
   const ratio = input.estimatedTokens / window;
   let contextFit: number;
   if (ratio < 0.1) contextFit = 1.0;
@@ -400,10 +395,17 @@ function providerLabel(provider: ProviderId): string {
   if (provider === "codex") return "Codex";
   if (provider === "openrouter") return "OpenRouter";
   if (provider === "deepseek") return "DeepSeek";
-  if (provider === "kimi") return "Kimi";
   return provider;
 }
 
 function clampScore(value: number): number {
   return Math.max(0, Math.min(1, Number(value.toFixed(2))));
+}
+
+function providerContextWindow(provider: ProviderId, input: ProviderRouteScoreInput): number {
+  const explicitWindow = input.providerContextWindows?.[provider];
+  if (typeof explicitWindow === "number" && Number.isFinite(explicitWindow) && explicitWindow > 0) {
+    return explicitWindow;
+  }
+  return DEFAULT_CONTEXT_WINDOW;
 }

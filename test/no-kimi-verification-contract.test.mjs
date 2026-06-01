@@ -49,4 +49,5 @@ test("release:check package contract includes no-Kimi, contract, proof, smoke, p
   }
 
   assert.match(String(scripts["verify:no-kimi"] ?? ""), /npm run native:no-kimi:turn/);
+  assert.match(String(scripts["verify:no-kimi"] ?? ""), /npm run no-kimi:default-surface/);
 });

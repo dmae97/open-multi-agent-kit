@@ -5,11 +5,11 @@ import { createRuntimeBackedTaskRunner } from "../dist/runtime/runtime-backed-ta
 import { createRuntimeRouter } from "../dist/runtime/runtime-router.js";
 import { buildTaskRunContext } from "../dist/runtime/worker-manifest.js";
 
-test("runtime router prefers direct Kimi API for advisory coding intent when Kimi API and Codex are available", async () => {
+test("runtime router prefers configured advisory API for advisory coding intent when API and CLI runtimes are available", async () => {
   const calls = [];
   const router = createRuntimeRouter({
     runtimes: [
-      fakeRuntime("kimi-api", calls, advisoryApiCapabilities({ vision: true, supportsToolCalling: true })),
+      fakeRuntime("mimo-api", calls, advisoryApiCapabilities({ vision: true, supportsToolCalling: true }), { priority: 100 }),
       fakeRuntime("codex-cli", calls),
     ],
   });
@@ -29,9 +29,9 @@ test("runtime router prefers direct Kimi API for advisory coding intent when Kim
   }));
 
   assert.equal(result.exitCode, 0);
-  assert.equal(result.metadata.selectedRuntime, "kimi-api");
-  assert.deepEqual(calls, ["kimi-api"]);
-  assert.deepEqual(result.metadata.fallbackChain, ["kimi-api", "codex-cli"]);
+  assert.equal(result.metadata.selectedRuntime, "mimo-api");
+  assert.deepEqual(calls, ["mimo-api"]);
+  assert.deepEqual(result.metadata.fallbackChain, ["mimo-api", "codex-cli"]);
 });
 
 test("runtime router skips API advisory runtimes for workspace-write tasks", async () => {
@@ -144,7 +144,7 @@ test("runtime router uses provider ID as a deterministic final tie-break after s
   );
 });
 
-test("runtime router blocks legacy Kimi CLI in neutral mode and allows it only when explicit", async () => {
+test("runtime router blocks legacy provider CLI in neutral mode and allows legacy Kimi only when explicit", async () => {
   const calls = [];
   const neutralRouter = createRuntimeRouter({
     runtimes: [
@@ -154,7 +154,7 @@ test("runtime router blocks legacy Kimi CLI in neutral mode and allows it only w
 
   await assert.rejects(
     () => neutralRouter.execute(fakeTask({ prompt: "implement a fallback-only patch" })),
-    /No runtime supports task for node coder-node.*Detected runtimes: kimi-cli/
+    /No runtime supports task for node coder-node.*Detected runtimes: legacy-external-runtime/
   );
   assert.deepEqual(calls, []);
 
@@ -197,8 +197,8 @@ test("runtime router blocks legacy Kimi CLI in neutral mode and allows it only w
   assert.deepEqual(explicitRuntime.metadata.fallbackChain, ["kimi-cli"]);
 });
 
-test("runtime router excludes all legacy Kimi runtime IDs from neutral auto selection", async () => {
-  for (const legacyRuntimeId of legacyKimiRuntimeIds()) {
+test("runtime router excludes legacy compatibility runtime modes from neutral auto selection", async () => {
+  for (const legacyRuntimeId of legacyCompatibilityRuntimeIds()) {
     const calls = [];
     const router = createRuntimeRouter({
       runtimes: [
@@ -218,8 +218,8 @@ test("runtime router excludes all legacy Kimi runtime IDs from neutral auto sele
   }
 });
 
-test("runtime router allows legacy Kimi runtime IDs only through explicit fallback runtime requests", async () => {
-  for (const legacyRuntimeId of legacyKimiRuntimeIds()) {
+test("runtime router allows legacy compatibility runtimes only through explicit fallback runtime requests", async () => {
+  for (const legacyRuntimeId of legacyCompatibilityRuntimeIds()) {
     const calls = [];
     const router = createRuntimeRouter({
       runtimes: [
@@ -241,6 +241,54 @@ test("runtime router allows legacy Kimi runtime IDs only through explicit fallba
     assert.deepEqual(result.metadata.fallbackChain, [legacyRuntimeId]);
     assert.deepEqual(calls, [legacyRuntimeId]);
   }
+});
+
+test("runtime router keeps explicit fallback runtime requests exact for legacy compatibility runtimes", async () => {
+  const calls = [];
+  const router = createRuntimeRouter({
+    runtimes: [
+      fakeRuntime("kimi-print", calls, workspaceCliCapabilities(), { priority: 1000 }),
+      fakeRuntime("kimi-cli", calls, workspaceCliCapabilities(), { priority: 10 }),
+    ],
+  });
+
+  const result = await router.execute(fakeTask({
+    prompt: "explicit fallback route must not unlock sibling legacy runtimes",
+    providerPolicy: {
+      strategy: "priority-first",
+      preferredProviders: [],
+      fallbackChain: ["kimi-cli"],
+    },
+  }));
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.metadata.selectedRuntime, "kimi-cli");
+  assert.deepEqual(result.metadata.fallbackChain, ["kimi-cli"]);
+  assert.deepEqual(calls, ["kimi-cli"]);
+});
+
+test("runtime router allows legacy compatibility runtime through explicit fallback provider request", async () => {
+  const calls = [];
+  const router = createRuntimeRouter({
+    runtimes: [
+      fakeRuntime("kimi-print", calls, workspaceCliCapabilities(), { priority: 100 }),
+      fakeRuntime("codex-cli", calls, workspaceCliCapabilities(), { priority: 10 }),
+    ],
+  });
+
+  const result = await router.execute(fakeTask({
+    prompt: "explicit fallback provider route may use legacy provider runtime",
+    providerPolicy: {
+      strategy: "priority-first",
+      preferredProviders: [],
+      fallbackChain: ["kimi"],
+    },
+  }));
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.metadata.selectedRuntime, "kimi-print");
+  assert.deepEqual(result.metadata.fallbackChain, ["kimi-print", "codex-cli"]);
+  assert.deepEqual(calls, ["kimi-print"]);
 });
 
 test("runtime router filters runtimes that lack requested task capabilities", async () => {
@@ -324,6 +372,44 @@ test("runtime router explains MCP authority route blocks", async () => {
       },
     })),
     /Node requires MCP authority.*Codex CLI runtime does not receive OMK MCP authority/
+  );
+  assert.deepEqual(calls, []);
+});
+
+test("runtime router uses runtime display metadata for MCP authority route blocks", async () => {
+  const calls = [];
+  const router = createRuntimeRouter({
+    runtimes: [
+      fakeRuntime("acme-cli", calls, {
+        read: true,
+        write: true,
+        shell: true,
+        mcp: false,
+        patch: true,
+        review: true,
+        merge: false,
+        vision: false,
+        supportsToolCalling: true,
+      }, { displayName: "Acme CLI" }),
+    ],
+  });
+
+  await assert.rejects(
+    () => router.execute(fakeTask({
+      prompt: "execute MCP-backed worker task",
+      capabilities: {
+        read: true,
+        write: true,
+        shell: true,
+        mcp: true,
+        patch: true,
+        review: false,
+        merge: false,
+        vision: false,
+        toolCalling: true,
+      },
+    })),
+    /Node requires MCP authority.*Acme CLI runtime does not receive OMK MCP authority/
   );
   assert.deepEqual(calls, []);
 });
@@ -605,7 +691,11 @@ async function selectedRuntimeFor({ task, runtimes }) {
 function fakeRuntime(id, calls, capabilities, options = {}) {
   return {
     id,
-    priority: options.priority ?? (id.startsWith("kimi-") ? 100 : 60),
+    providerId: options.providerId ?? id.split("-")[0],
+    runtimeMode: options.runtimeMode ?? id.split("-").slice(1).join("-"),
+    legacy: options.legacy ?? legacyCompatibilityRuntimeIds().includes(id),
+    displayName: options.displayName,
+    priority: options.priority ?? 60,
     capabilities,
     supports: options.supports ?? (() => true),
     async runNode() {
@@ -664,7 +754,7 @@ function runtimeDecisionClass(runtimeId) {
   return "other-runtime";
 }
 
-function legacyKimiRuntimeIds() {
+function legacyCompatibilityRuntimeIds() {
   return ["kimi-cli", "kimi-print", "kimi-wire"];
 }
 

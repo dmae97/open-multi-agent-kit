@@ -2185,6 +2185,29 @@ test("computeProviderRouteScore is neutral across equal read-only external provi
   assert.equal(openrouterScore, qwenScore);
 });
 
+test("computeProviderRouteScore does not grant Kimi context-window defaults without evidence", () => {
+  const baseInput = {
+    role: "explorer",
+    risk: "read",
+    complexity: "simple",
+    estimatedTokens: 500000,
+    needsMcp: false,
+    needsToolCalling: false,
+    readOnly: true,
+    authorityProvider: "mimo",
+  };
+
+  const kimiScore = computeProviderRouteScore("kimi", baseInput).score;
+  const qwenScore = computeProviderRouteScore("qwen", baseInput).score;
+  const explicitWindowScore = computeProviderRouteScore("kimi", {
+    ...baseInput,
+    providerContextWindows: { kimi: 2000000 },
+  }).score;
+
+  assert.equal(kimiScore, qwenScore);
+  assert.ok(explicitWindowScore > kimiScore, "explicit context-window evidence should affect scoring");
+});
+
 test("computeProviderRouteScore uses explicit granular stats without provider-name tier defaults", () => {
   const baseInput = {
     role: "explorer",
@@ -2239,9 +2262,9 @@ test("runtime fallback defaults use MiMo API and keep legacy Kimi CLI fallback-o
   assert.equal(resolveFallbackRuntime(["kimi-print", "codex-cli"]), "codex-cli");
   assert.deepEqual(
     resolveRuntimeFallbackChain(["kimi-print", "deepseek-api", "codex-cli", "kimi-api", "mimo-api"]),
-    ["mimo-api", "kimi-api", "codex-cli", "deepseek-api", "kimi-print"]
+    ["mimo-api", "codex-cli", "deepseek-api", "kimi-api", "kimi-print"]
   );
-  assert.ok(DEFAULT_RUNTIME_FALLBACK_CHAIN.indexOf("mimo-api") < DEFAULT_RUNTIME_FALLBACK_CHAIN.indexOf("kimi-api"));
+  assert.equal(DEFAULT_RUNTIME_FALLBACK_CHAIN.includes("kimi-api"), false);
   assert.equal(DEFAULT_RUNTIME_FALLBACK_CHAIN.includes("kimi-print"), false);
 });
 

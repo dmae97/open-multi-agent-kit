@@ -3,7 +3,7 @@ import { join } from "path";
 import { execFile, execSync } from "child_process";
 import { promisify } from "util";
 import { getOmkPath, pathExists, getProjectRoot, getRunPath, getRunsDir } from "../util/fs.js";
-import { getKimiUsage, type UsageStats } from "../kimi/usage.js";
+import { getProviderUsage, type ProviderUsageStats } from "../util/provider-usage.js";
 import { buildUsageViewModel } from "../util/usage-view-model.js";
 import { getOmkResourceSettings } from "../util/resource-profile.js";
 import { formatBytes } from "../util/output-buffer.js";
@@ -58,7 +58,7 @@ export type HudSection = "run" | "project" | "resources";
 export interface HudRenderOptions {
 runId?: string;
 terminalWidth?: number;
-kimiUsage?: UsageStats;
+providerUsage?: ProviderUsageStats;
 footerRefreshMs?: number;
 compact?: boolean;
 section?: HudSection;
@@ -637,8 +637,8 @@ async function buildSystemPanel(options: HudRenderOptions = {}): Promise<string>
   return result;
 }
 
-async function buildKimiUsagePanel(kimiUsage?: UsageStats, fetchQuota = true): Promise<string> {
-  const usage = kimiUsage ?? await getKimiUsage({ fetchQuota });
+async function buildProviderUsagePanel(providerUsage?: ProviderUsageStats, fetchQuota = true): Promise<string> {
+  const usage = providerUsage ?? await getProviderUsage({ fetchQuota });
   const LIMIT_HOURS = 5;
   const limitSeconds = LIMIT_HOURS * 3600;
   const vm = buildUsageViewModel(usage);
@@ -668,7 +668,7 @@ async function buildKimiUsagePanel(kimiUsage?: UsageStats, fetchQuota = true): P
     "",
   ].filter(Boolean);
 
-  return panel(planLines, gradient("Kimi Usage"));
+  return panel(planLines, gradient("Provider Usage"));
 }
 
 async function buildProjectStatusPanel(gitChangesResult: HudGitChange[] | null): Promise<string> {
@@ -1059,7 +1059,7 @@ async function renderFullDashboard(options: HudRenderOptions): Promise<string> {
   output.push("");
 
   mainPanels.push(await buildSystemPanel(options));
-  mainPanels.push(await buildKimiUsagePanel(options.kimiUsage, options.fetchQuota ?? true));
+  mainPanels.push(await buildProviderUsagePanel(options.providerUsage, options.fetchQuota ?? true));
   mainPanels.push(await buildProjectStatusPanel(gitChangesResult));
 
   const runPanel = await buildLatestRunPanel(options, vm, stateError, gitChanges, undefined, sessionMeta, todos);
@@ -1140,7 +1140,7 @@ async function renderSectionDashboard(options: HudRenderOptions): Promise<string
     case "resources": {
       output.push(await buildSystemPanel(options));
       output.push("");
-      output.push(await buildKimiUsagePanel(options.kimiUsage, options.fetchQuota ?? true));
+      output.push(await buildProviderUsagePanel(options.providerUsage, options.fetchQuota ?? true));
       break;
     }
   }
@@ -1184,7 +1184,7 @@ export async function hudCommand(options: HudCommandOptions = {}): Promise<void>
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
 
-  let cachedUsage: UsageStats | undefined;
+  let cachedUsage: ProviderUsageStats | undefined;
   let lastUsageRefreshMs = 0;
   const usageRefreshMs = Math.max(60_000, refreshMs);
 
@@ -1200,10 +1200,10 @@ export async function hudCommand(options: HudCommandOptions = {}): Promise<void>
     while (!stopped) {
       const now = Date.now();
       if (!cachedUsage || now - lastUsageRefreshMs >= usageRefreshMs) {
-        cachedUsage = await getKimiUsage();
+        cachedUsage = await getProviderUsage();
         lastUsageRefreshMs = now;
       }
-      const frame = await renderHudDashboard({ ...options, kimiUsage: cachedUsage, footerRefreshMs: refreshMs });
+      const frame = await renderHudDashboard({ ...options, providerUsage: cachedUsage, footerRefreshMs: refreshMs });
       if (frame !== lastFrame) {
         lastFrame = frame;
         if (shouldClear) clearScreen();

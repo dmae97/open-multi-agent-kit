@@ -88,7 +88,10 @@ const INTENT_CAPABILITY_WEIGHTS: Record<NodeIntent, ReadonlyArray<readonly [keyo
   "shell-operation": [["shell", 0.4], ["read", 0.15], ["write", 0.1]],
 };
 
-const LEGACY_KIMI_CLI_RUNTIME_IDS = new Set(["kimi-cli", "kimi-print", "kimi-wire"]);
+interface LegacyRuntimePolicy {
+  readonly preferredProviders: readonly string[];
+  readonly fallbackChain?: readonly string[];
+}
 
 export function createRuntimeRouter(options: RuntimeRouterOptions = {}) {
   let runtimes = options.runtimes ?? [];
@@ -182,11 +185,13 @@ export function createRuntimeRouter(options: RuntimeRouterOptions = {}) {
   ): RuntimeRouteDecision {
     const intent = classifyIntent(capsule);
     const sorted = [...runtimes].sort((a, b) => b.priority - a.priority);
-    const legacyKimiAllowed = isLegacyKimiRuntimeExplicitlyAllowed([], options.fallbackChain);
-    const supporting = sorted.filter((r) => r.supports(capsule) && (legacyKimiAllowed || !isLegacyKimiCliRuntime(r.id)));
+    const supporting = sorted.filter((runtime) =>
+      runtime.supports(capsule) &&
+      runtimeAllowedByLegacyPolicy(runtime, { preferredProviders: [], fallbackChain: options.fallbackChain })
+    );
 
     if (supporting.length === 0) {
-      throw new UnsupportedRuntimeError(capsule, sorted.map((runtime) => runtime.id));
+      throw new UnsupportedRuntimeError(capsule, detectedRuntimeLabels(sorted));
     }
 
     const scores = supporting.map((r) => computeScores(r, intent, history));
@@ -216,11 +221,13 @@ export function createRuntimeRouter(options: RuntimeRouterOptions = {}) {
   function select(capsule: ContextCapsule): RuntimeRouteDecision {
     const intent = classifyIntent(capsule);
     const sorted = [...runtimes].sort((a, b) => b.priority - a.priority);
-    const legacyKimiAllowed = isLegacyKimiRuntimeExplicitlyAllowed([], options.fallbackChain);
-    const supporting = sorted.filter((r) => r.supports(capsule) && (legacyKimiAllowed || !isLegacyKimiCliRuntime(r.id)));
+    const supporting = sorted.filter((runtime) =>
+      runtime.supports(capsule) &&
+      runtimeAllowedByLegacyPolicy(runtime, { preferredProviders: [], fallbackChain: options.fallbackChain })
+    );
 
     if (supporting.length === 0) {
-      throw new UnsupportedRuntimeError(capsule, sorted.map((runtime) => runtime.id));
+      throw new UnsupportedRuntimeError(capsule, detectedRuntimeLabels(sorted));
     }
 
     const scored = supporting.map((r) => ({
@@ -398,19 +405,19 @@ export function createRuntimeRouter(options: RuntimeRouterOptions = {}) {
     const intent = classifyIntent(capsule);
     const preferredProviders = (task.providerPolicy?.preferredProviders ?? [])
       .filter((provider) => provider && provider !== "auto");
-    const legacyKimiAllowed = isLegacyKimiRuntimeExplicitlyAllowed(
+    const legacyRuntimePolicy: LegacyRuntimePolicy = {
       preferredProviders,
-      task.providerPolicy?.fallbackChain ?? options.fallbackChain
-    );
+      fallbackChain: task.providerPolicy?.fallbackChain ?? options.fallbackChain,
+    };
     let candidates = runtimes.filter((runtime) => {
       if (!runtime.supports(capsule)) return false;
-      if (!legacyKimiAllowed && isLegacyKimiCliRuntime(runtime.id)) return false;
+      if (!runtimeAllowedByLegacyPolicy(runtime, legacyRuntimePolicy)) return false;
       return runtimeSatisfiesTask(runtime, task);
     });
 
     if (preferredProviders.length > 0) {
       candidates = candidates.filter((runtime) =>
-        preferredProviders.some((provider) => runtimeMatchesProvider(runtime.id, provider))
+        preferredProviders.some((provider) => runtimeMatchesProvider(runtime, provider))
       );
     }
 
@@ -419,10 +426,10 @@ export function createRuntimeRouter(options: RuntimeRouterOptions = {}) {
       if (mcpBlocked && runtimes.length > 0) {
         const runtime = runtimes[0];
         throw new Error(
-          `Node requires MCP authority. ${runtimeDisplayName(runtime.id)} runtime does not receive OMK MCP authority.`
+          `Node requires MCP authority. ${runtimeDisplayName(runtime)} runtime does not receive OMK MCP authority.`
         );
       }
-      throw new UnsupportedRuntimeError(capsule, runtimes.map((runtime) => runtime.id));
+      throw new UnsupportedRuntimeError(capsule, detectedRuntimeLabels(runtimes));
     }
 
     const preferredRuntimeIds = task.providerPolicy?.fallbackChain ?? options.fallbackChain ?? [];
@@ -533,6 +540,10 @@ function capsuleFromTask(task: AgentTask): ContextCapsule {
   } as unknown as ContextCapsule;
 }
 
+function detectedRuntimeLabels(runtimes: readonly AgentRuntime[]): string[] {
+  return [...new Set(runtimes.map((runtime) => isLegacyRuntime(runtime) ? "legacy-external-runtime" : runtime.id))];
+}
+
 function runtimeSatisfiesTask(runtime: AgentRuntime, task: AgentTask): boolean {
   if (runtime.capabilities == null) return true;
   const capabilities = runtime.capabilities as RuntimeCapabilities & { supportsToolCalling?: boolean };
@@ -548,28 +559,55 @@ function runtimeSatisfiesTask(runtime: AgentRuntime, task: AgentTask): boolean {
   return true;
 }
 
-function runtimeMatchesProvider(runtimeId: string, provider: string): boolean {
-  if (provider === "codex") return runtimeId === "codex-cli" || runtimeId.startsWith("codex-");
-  if (provider === "mimo") return runtimeId === "mimo-api" || runtimeId.startsWith("mimo-");
-  if (provider === "kimi") return runtimeId === "kimi-api" || runtimeId === "kimi-print" || runtimeId === "kimi-wire" || runtimeId === "kimi-cli" || runtimeId.startsWith("kimi-");
-  if (provider === "deepseek") return runtimeId === "deepseek-api" || runtimeId.startsWith("deepseek-");
-  return runtimeId === provider || runtimeId.startsWith(`${provider}-`);
+function runtimeMatchesProvider(runtime: AgentRuntime, provider: string): boolean {
+  const normalizedProvider = normalizeRuntimeToken(provider);
+  if (normalizedProvider.length === 0) return false;
+  const normalizedRuntimeId = normalizeRuntimeToken(runtime.id);
+  return normalizedRuntimeId === normalizedProvider ||
+    normalizedRuntimeId.startsWith(`${normalizedProvider}-`) ||
+    runtimeProviderId(runtime) === normalizedProvider;
 }
 
-function isLegacyKimiCliRuntime(runtimeId: string): boolean {
-  return LEGACY_KIMI_CLI_RUNTIME_IDS.has(runtimeId);
+function runtimeAllowedByLegacyPolicy(runtime: AgentRuntime, policy: LegacyRuntimePolicy): boolean {
+  if (!isLegacyRuntime(runtime)) return true;
+  return legacyRuntimeExplicitlyRequested(runtime, policy);
 }
 
-function isLegacyKimiRuntimeExplicitlyAllowed(
-  preferredProviders: readonly string[],
-  fallbackChain?: readonly string[]
-): boolean {
-  return preferredProviders.includes("kimi") || (fallbackChain ?? []).some((runtimeId) => isLegacyKimiCliRuntime(runtimeId));
+function isLegacyRuntime(runtime: AgentRuntime): boolean {
+  return runtime.legacy === true || runtimeModeId(runtime) === "print" || runtimeModeId(runtime) === "wire";
+}
+
+function legacyRuntimeExplicitlyRequested(runtime: AgentRuntime, policy: LegacyRuntimePolicy): boolean {
+  return policy.preferredProviders.some((provider) => runtimeMatchesProvider(runtime, provider)) ||
+    (policy.fallbackChain ?? []).some((request) => fallbackRequestMatchesRuntime(runtime, request));
+}
+
+function fallbackRequestMatchesRuntime(runtime: AgentRuntime, request: string): boolean {
+  const normalizedRequest = normalizeRuntimeToken(request);
+  if (normalizedRequest.length === 0) return false;
+  const normalizedRuntimeId = normalizeRuntimeToken(runtime.id);
+  if (normalizedRequest === normalizedRuntimeId) return true;
+  return !normalizedRequest.includes("-") && runtimeProviderId(runtime) === normalizedRequest;
+}
+
+function runtimeProviderId(runtime: AgentRuntime): string {
+  return normalizeRuntimeToken(runtime.providerId ?? runtime.id).split("-")[0] ?? "";
+}
+
+function runtimeModeId(runtime: AgentRuntime): string {
+  if (runtime.runtimeMode) return normalizeRuntimeToken(runtime.runtimeMode);
+  const [, ...modeParts] = normalizeRuntimeToken(runtime.id).split("-");
+  return modeParts.join("-");
+}
+
+function normalizeRuntimeToken(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 function providerPreferenceIndex(runtimeId: string, providers: readonly string[]): number {
   if (providers.length === 0) return 0;
-  const index = providers.findIndex((provider) => runtimeMatchesProvider(runtimeId, provider));
+  const runtime = { id: runtimeId } as AgentRuntime;
+  const index = providers.findIndex((provider) => runtimeMatchesProvider(runtime, provider));
   return index === -1 ? Number.MAX_SAFE_INTEGER : index;
 }
 
@@ -578,13 +616,21 @@ function runtimePreferenceIndex(runtimeId: string, preferredRuntimeIds: readonly
   return index === -1 ? Number.MAX_SAFE_INTEGER : index;
 }
 
-function runtimeDisplayName(runtimeId: string): string {
-  if (runtimeId === "codex-cli") return "Codex CLI";
-  if (runtimeId === "kimi-print" || runtimeId === "kimi-cli") return "Kimi CLI";
-  if (runtimeId === "kimi-wire") return "Kimi wire";
-  if (runtimeId === "mimo-api") return "MiMo API";
-  if (runtimeId === "deepseek-api") return "DeepSeek API";
-  return runtimeId;
+function runtimeDisplayName(runtime: AgentRuntime): string {
+  if (isLegacyRuntime(runtime) && !runtime.displayName) return "Legacy external runtime";
+  return runtime.displayName ?? formatRuntimeId(runtime.id);
+}
+
+function formatRuntimeId(runtimeId: string): string {
+  return runtimeId
+    .split("-")
+    .filter(Boolean)
+    .map((part) => ["api", "cli", "mcp", "llm"].includes(part) ? part.toUpperCase() : titleCase(part))
+    .join(" ");
+}
+
+function titleCase(value: string): string {
+  return value.length === 0 ? value : `${value[0].toUpperCase()}${value.slice(1)}`;
 }
 
 function unsupportedRuntimeResult(err: UnsupportedRuntimeError): AgentRunResult {

@@ -124,8 +124,11 @@ export interface AgentResult {
 
 export interface AgentRuntime {
   readonly id: RuntimeId;
+  readonly providerId?: string;
   readonly displayName?: string;
   readonly kind?: RuntimeKind;
+  readonly legacy?: boolean;
+  readonly runtimeMode?: string;
   readonly priority: number;
   readonly capabilities?: RuntimeCapabilities;
   supports(capsule: ContextCapsule): boolean;

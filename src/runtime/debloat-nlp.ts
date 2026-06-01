@@ -390,18 +390,18 @@ export function filterMcpConfigForTurn(input: {
 
 /**
  * Provider Runtime Selector (Section 11).
- * Returns the provider runtime mode: kimi-print ONLY when debugRaw=true.
- * Default is kimi-event (structured event stream).
+ * Returns the provider runtime mode: raw stdout only when debugRaw=true.
+ * Default is provider-event (structured event stream).
  */
-export type ProviderRuntimeMode = "kimi-event" | "kimi-print";
+export type ProviderRuntimeMode = "provider-event" | "provider-print";
 
 export function selectProviderRuntime(input: {
   readonly provider: string;
   readonly intent: RequestIntent;
   readonly debugRaw?: boolean;
 }): ProviderRuntimeMode {
-  if (input.debugRaw === true) return "kimi-print";
-  return "kimi-event";
+  if (input.debugRaw === true) return "provider-print";
+  return "provider-event";
 }
 
 export function renderUserFacingRoutingNlp(input: {
