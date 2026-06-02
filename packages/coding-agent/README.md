@@ -127,6 +127,7 @@ For each built-in provider, pi maintains a list of tool-capable models, updated 
 - OpenRouter
 - Vercel AI Gateway
 - ZAI
+- ZAI Coding Plan (China)
 - OpenCode Zen
 - OpenCode Go
 - Hugging Face
