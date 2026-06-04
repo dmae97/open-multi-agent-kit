@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed OpenRouter routing preferences on OpenAI-compatible custom providers to send `compat.openRouterRouting` even when `baseUrl` does not point directly at OpenRouter ([#5347](https://github.com/earendil-works/pi/issues/5347)).
+
 ## [0.78.1] - 2026-06-04
 
 ### Added
