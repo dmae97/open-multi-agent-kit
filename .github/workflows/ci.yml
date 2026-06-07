@@ -14,6 +14,27 @@ permissions:
   contents: read
 
 jobs:
+  fast-gate:
+    name: Fast Gate (lint/check/build/test/schema/proof/audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm ci
+      - run: npm rebuild
+      - run: npm run lint
+      - run: npm run check
+      - run: npm run build:clean
+      - run: npm run schema:check
+      - run: npm run proof:check
+      - run: npm run test
+      - run: npm run native:build
+      - run: npm run audit:package
+
   verify-no-kimi:
     runs-on: ubuntu-latest
     steps:
