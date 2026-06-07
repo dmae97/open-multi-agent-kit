@@ -10,6 +10,7 @@ import {
   maybeAskForGitHubStar,
   maybeAskForGitHubStarAfterCommand,
   maybeAskForGitHubStarAtChatStart,
+  openRepoInBrowser,
   parseGitHubRepoSlug,
   readStarPromptState,
 } from "../dist/util/first-run-star.js";
@@ -294,6 +295,110 @@ test("state file privacy assertion", async () => {
     }
     assert.equal(raw.includes("ghp_"), false, "state file must not contain ghp_ token");
     assert.equal(raw.includes("github_pat"), false, "state file must not contain github_pat token");
+  } finally {
+    await rm(homeDir, { recursive: true, force: true });
+  }
+});
+
+test("openRepoInBrowser returns false in non-TTY", async () => {
+  const result = await openRepoInBrowser("https://github.com/dmae97/open-multi-agent-kit", {
+    isTTY: false,
+    platform: "darwin",
+  });
+  assert.equal(result, false);
+});
+
+test("openRepoInBrowser spawns OS opener when TTY + platform allows", async () => {
+  const spawned = [];
+  const fakeSpawn = (cmd, args, opts) => {
+    spawned.push({ cmd, args, opts });
+    return { unref: () => {} };
+  };
+
+  // macOS
+  const mac = await openRepoInBrowser("https://github.com/dmae97/open-multi-agent-kit", {
+    spawnFn: fakeSpawn,
+    isTTY: true,
+    platform: "darwin",
+    env: {},
+  });
+  assert.equal(mac, true);
+  assert.equal(spawned.length, 1);
+  assert.equal(spawned[0].cmd, "open");
+  assert.deepEqual(spawned[0].args, ["https://github.com/dmae97/open-multi-agent-kit"]);
+
+  // Windows
+  spawned.length = 0;
+  const win = await openRepoInBrowser("https://github.com/dmae97/open-multi-agent-kit", {
+    spawnFn: fakeSpawn,
+    isTTY: true,
+    platform: "win32",
+    env: {},
+  });
+  assert.equal(win, true);
+  assert.equal(spawned[0].cmd, "cmd");
+  assert.deepEqual(spawned[0].args, ["/c", "start", "", "https://github.com/dmae97/open-multi-agent-kit"]);
+
+  // Linux with DISPLAY
+  spawned.length = 0;
+  const linux = await openRepoInBrowser("https://github.com/dmae97/open-multi-agent-kit", {
+    spawnFn: fakeSpawn,
+    isTTY: true,
+    platform: "linux",
+    env: { DISPLAY: ":0" },
+  });
+  assert.equal(linux, true);
+  assert.equal(spawned[0].cmd, "xdg-open");
+  assert.deepEqual(spawned[0].args, ["https://github.com/dmae97/open-multi-agent-kit"]);
+
+  // Linux without DISPLAY
+  spawned.length = 0;
+  const linuxNoDisplay = await openRepoInBrowser("https://github.com/dmae97/open-multi-agent-kit", {
+    spawnFn: fakeSpawn,
+    isTTY: true,
+    platform: "linux",
+    env: {},
+  });
+  assert.equal(linuxNoDisplay, false);
+  assert.equal(spawned.length, 0);
+});
+
+test("openRepoInBrowser returns false in CI env", async () => {
+  const result = await openRepoInBrowser("https://github.com/dmae97/open-multi-agent-kit", {
+    isTTY: true,
+    platform: "darwin",
+    env: { CI: "true" },
+  });
+  assert.equal(result, false);
+});
+
+test("star flow on starRepo throwing still resolves and attempts browser open", async () => {
+  const homeDir = await mkdtemp(join(tmpdir(), "omk-star-browser-fallback-"));
+  let browserCalledWith = null;
+  const fakeOpenBrowser = async (url) => {
+    browserCalledWith = url;
+    return true;
+  };
+  try {
+    const result = await maybeAskForGitHubStar({
+      version: "1.2.3",
+      homeDir,
+      env: { OMK_STAR_PROMPT: "force" },
+      stdin: { isTTY: true },
+      stdout: { isTTY: true },
+      argv: ["node", "omk", "doctor"],
+      commandName: "doctor",
+      prompt: async () => true,
+      starRepo: async () => { throw new Error("gh not found"); },
+      openBrowser: fakeOpenBrowser,
+      now: () => new Date("2026-05-01T00:00:00.000Z"),
+    });
+
+    assert.equal(result, "yes");
+    assert.equal(browserCalledWith, OMK_REPO_URL);
+    const state = await readStarPromptState(homeDir);
+    assert.equal(state.starred, false);
+    assert.equal(state.starError, "gh not found");
   } finally {
     await rm(homeDir, { recursive: true, force: true });
   }

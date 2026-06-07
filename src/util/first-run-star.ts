@@ -1,4 +1,4 @@
-import { execFile } from "child_process";
+import { execFile, spawn } from "child_process";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import { homedir } from "os";
 import { dirname, join } from "path";
@@ -33,6 +33,7 @@ export interface StarPromptOptions {
   commandName?: string;
   prompt?: (repoUrl: string) => Promise<boolean>;
   starRepo?: (repoUrl: string) => Promise<void> | void;
+  openBrowser?: typeof openRepoInBrowser;
   now?: () => Date;
 }
 
@@ -99,6 +100,7 @@ export async function maybeAskForGitHubStar(
         const slug = parseGitHubRepoSlug(repoUrl);
         console.error(style.gray(`GitHub star failed: ${starError}`));
         if (slug) console.error(style.gray(`Visit ${style.cream(`https://github.com/${slug}`)} to star manually.`));
+        await (options.openBrowser ?? openRepoInBrowser)(repoUrl);
       }
     }
 
@@ -158,6 +160,7 @@ export async function maybeAskForGitHubStarAfterCommand(
         const slug = parseGitHubRepoSlug(repoUrl);
         console.error(style.gray(`GitHub star failed: ${starError}`));
         if (slug) console.error(style.gray(`Visit ${style.cream(`https://github.com/${slug}`)} to star manually.`));
+        await (options.openBrowser ?? openRepoInBrowser)(repoUrl);
       }
     }
 
@@ -261,4 +264,54 @@ export async function starGitHubRepo(repoUrl: string): Promise<void> {
   await execFileAsync("gh", ["api", "--silent", "--method", "PUT", `/user/starred/${slug}`], {
     timeout: 10_000,
   });
+}
+
+export interface OpenRepoInBrowserOptions {
+  spawnFn?: typeof import("child_process").spawn;
+  platform?: NodeJS.Platform;
+  display?: string;
+  isTTY?: boolean;
+  env?: NodeJS.ProcessEnv;
+}
+
+export async function openRepoInBrowser(
+  repoUrl: string,
+  opts?: OpenRepoInBrowserOptions,
+): Promise<boolean> {
+  try {
+    const isTTY = opts?.isTTY ?? process.stdout.isTTY;
+    const env = opts?.env ?? process.env;
+    const platform = opts?.platform ?? process.platform;
+
+    if (!isTTY) return false;
+    if (env.CI || env.GITHUB_ACTIONS) return false;
+
+    const display = opts?.display ?? env.DISPLAY;
+
+    let cmd: string;
+    let args: string[];
+
+    if (platform === "darwin") {
+      cmd = "open";
+      args = [repoUrl];
+    } else if (platform === "win32") {
+      cmd = "cmd";
+      args = ["/c", "start", "", repoUrl];
+    } else if (platform === "linux" && display) {
+      cmd = "xdg-open";
+      args = [repoUrl];
+    } else {
+      return false;
+    }
+
+    const spawnFn = opts?.spawnFn ?? spawn;
+    const child = spawnFn(cmd, args, {
+      stdio: "ignore",
+      detached: true,
+    });
+    child.unref();
+    return true;
+  } catch {
+    return false;
+  }
 }
