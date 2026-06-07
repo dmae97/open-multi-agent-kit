@@ -82,12 +82,21 @@ The GitHub visual set presents OMK as a Night City Ops Console: route status, DA
 
 Requires Node.js `>=20` and npm `>=10`.
 
+Project/local install:
+
 ```bash
-npm install -g open-multi-agent-kit
+npm i open-multi-agent-kit
+npx omk --help
+```
+
+Global CLI install:
+
+```bash
+npm i -g open-multi-agent-kit
 omk --help
 ```
 
-No global install:
+No install:
 
 ```bash
 npx -p open-multi-agent-kit omk doctor
