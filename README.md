@@ -33,12 +33,24 @@
 > Current package source target: `open-multi-agent-kit@0.78.1`.
 > Public package name: `open-multi-agent-kit` (`@omk/cli` is not the active npm package).
 > Runtime contract family: `v1.2` (contract family, not a stable npm `1.x` release).
-> Release channel: `pre-1.0` / beta.
+> Release channel: `pre-1.0`.
 > See [versioning](docs/versioning.md) and [provider maturity](docs/provider-maturity.md).
+
+## Quickstart (3 minutes)
+
+A beginner reads this, runs four commands, and succeeds.
+
+```bash
+npm i -g open-multi-agent-kit
+omk init
+omk doctor
+omk chat
+```
 
 ## Current release reality
 
-- The public npm line is `open-multi-agent-kit@0.78.x`.
+- The public npm line is `open-multi-agent-kit@0.78.x`. Published npm `latest` is `0.78.0`;
+  source/target is `0.78.1` and is published only after the release workflow passes on the tagged commit.
 - The `v1.2` label in docs is a runtime contract family for the source tree, not a claim that
   an npm `1.2.x` stable release exists.
 - Provider support is intentionally uneven: Kimi remains the most mature authority path;
@@ -80,20 +92,13 @@ The GitHub visual set presents OMK as a Night City Ops Console: route status, DA
 
 ## Install
 
-Requires Node.js `>=20` and npm `>=10`.
+Requires Node.js `>=20` and npm `>=10`. The [3-minute route](#quickstart-3-minutes) uses the global install; these are the alternatives:
 
 Project/local install:
 
 ```bash
 npm i open-multi-agent-kit
 npx omk --help
-```
-
-Global CLI install:
-
-```bash
-npm i -g open-multi-agent-kit
-omk --help
 ```
 
 No install:
@@ -104,9 +109,9 @@ npx -p open-multi-agent-kit omk doctor
 
 ## Quick start
 
+The [3-minute route](#quickstart-3-minutes) is the canonical path. Beyond it, add provider auth and orchestration:
+
 ```bash
-omk init                         # scaffold AGENTS.md, DESIGN.md, .omk/
-omk doctor                       # check runtime, providers, MCP, skills, hooks
 omk codex auth --choice plus-pro # optional; requires official Codex app/CLI login
 omk chat --provider auto --mode agent
 omk orchestrate "ship feature" --workers 4 --dry-run
