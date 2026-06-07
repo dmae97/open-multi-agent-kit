@@ -1,5 +1,6 @@
-import { starGitHubRepo, getStarPromptSummary } from "../util/first-run-star.js";
+import { starGitHubRepo, getStarPromptSummary, openRepoInBrowser, parseGitHubRepoSlug } from "../util/first-run-star.js";
 import { OMK_REPO_URL } from "../util/version.js";
+import { style } from "../util/theme.js";
 
 export async function starCommand(options: { status?: boolean } = {}): Promise<void> {
   if (options.status) {
@@ -25,6 +26,9 @@ export async function starCommand(options: { status?: boolean } = {}): Promise<v
     console.log("Starred! Thanks for supporting open-multi-agent-kit.");
   } catch (e) {
     console.error("Failed to star:", e instanceof Error ? e.message : String(e));
+    const slug = parseGitHubRepoSlug(OMK_REPO_URL);
+    if (slug) console.error(style.gray(`Visit ${style.cream(`https://github.com/${slug}`)} to star manually.`));
+    await openRepoInBrowser(OMK_REPO_URL);
     process.exit(1);
   }
 }
