@@ -1089,6 +1089,7 @@ export async function runNativeOmkRootLoop(
   let running = true;
   let readlineClosed = false;
   let activeTurnAbort: AbortController | undefined;
+  let pendingPastedImageLine: string | undefined;
   const queuedLines: string[] = [];
   let pendingLineResolve: ((value: string | undefined) => void) | undefined;
   const resolveNextLine = (value: string | undefined): void => {
@@ -1142,7 +1143,7 @@ export async function runNativeOmkRootLoop(
     const userInput = await readPromptLine();
     if (userInput === undefined) break;
 
-    const line = userInput.trim();
+    let line = userInput.trim();
     if (!line) continue;
     renderer?.emit({ type: "input:submitted", text: line });
 
@@ -1152,6 +1153,10 @@ export async function runNativeOmkRootLoop(
     }
 
     const parsedSlash = parseSlashInput(line);
+    if (!parsedSlash && pendingPastedImageLine) {
+      line = `${pendingPastedImageLine}\n${line}`;
+      pendingPastedImageLine = undefined;
+    }
     const inputEnvelope = buildNativeInputEnvelope({
       loopInput: input,
       state,
@@ -1199,6 +1204,14 @@ export async function runNativeOmkRootLoop(
               parsedSlash,
               slashContext,
             );
+            if (parsedSlash.command === "/paste" && result.ok) {
+              const pasteLine = result.text?.trim();
+              if (pasteLine) {
+                pendingPastedImageLine = pendingPastedImageLine
+                  ? `${pendingPastedImageLine}\n${pasteLine}`
+                  : pasteLine;
+              }
+            }
             if (result.exit) running = false;
           });
           if (!modelShow && !isModelSlashCommand(parsedSlash)) {

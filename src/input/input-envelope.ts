@@ -8,6 +8,26 @@ export type InputKind =
   | "verify"
   | "replan";
 
+/**
+ * Image or file attached to a prompt (clipboard paste, --image flag, drag).
+ * Carries both the on-disk path and the base64 data URI for multimodal
+ * wire protocol use (image_url parts).
+ */
+export interface InputAttachment {
+  /** Original file name or "clipboard-image.png". */
+  name: string;
+  /** Absolute or project-relative path to the saved file. */
+  path: string;
+  /** MIME type: image/png, image/jpeg, image/webp, image/gif. */
+  mimeType: string;
+  /** Base64 data URI (data:image/png;base64,...) for wire protocol. */
+  dataUri: string;
+  /** Detected extension: png, jpg, webp, gif. */
+  ext: string;
+  /** Source of the attachment. */
+  source: "clipboard" | "file" | "drag";
+}
+
 export type InputSource = "chat" | "parallel" | "run" | "goal" | "api";
 export type InputMcpScope = "all" | "project" | "none";
 
@@ -44,6 +64,8 @@ export interface InputEnvelope {
   theme?: string;
   constraints: string[];
   requestedArtifacts: InputRequestedArtifact[];
+  /** Images/files attached to this input (clipboard paste, --image, drag). */
+  attachments: InputAttachment[];
   slashCommand?: InputSlashCommandEnvelope;
   createdAt: string;
 }
@@ -65,6 +87,7 @@ export interface BuildInputEnvelopeInput {
   theme?: string;
   constraints?: readonly string[];
   requestedArtifacts?: readonly InputRequestedArtifact[];
+  attachments?: readonly InputAttachment[];
   slashCommand?: InputSlashCommandEnvelope;
   now?: () => Date;
 }
@@ -154,6 +177,7 @@ export function buildInputEnvelope(
     constraints: [...(input.constraints ?? [])],
     requestedArtifacts:
       input.requestedArtifacts?.map((artifact) => ({ ...artifact })) ?? [],
+    attachments: input.attachments?.map((a) => ({ ...a })) ?? [],
     slashCommand: input.slashCommand
       ? cloneSlashCommand(input.slashCommand)
       : undefined,
