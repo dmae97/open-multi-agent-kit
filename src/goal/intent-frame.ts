@@ -14,6 +14,8 @@ import type {
 import type { DagNodeRouting } from "../orchestration/dag.js";
 import type { NextAction, RunState } from "../contracts/orchestration.js";
 import { extractPromptKeywords, promptDigestFingerprint } from "./prompt-digest.js";
+import type { OuroborosDecision } from "../runtime/ouroboros-policy.js";
+import { resolveOuroborosDecision } from "../runtime/ouroboros-policy.js";
 
 const TOKEN_PATTERN = /[\p{L}\p{N}_-]+/gu;
 const REPLAY_PATTERN = /repeat|replay|verbatim|same prompt|original objective|original goal|raw input|원문|반복|재사용|그대로/u;
@@ -86,6 +88,39 @@ export function buildIntentFrameFromGoal(goal: GoalSpec): IntentFrame {
     successCriteria: goal.successCriteria.map((criterion) => criterion.description),
     expectedArtifacts: goal.expectedArtifacts,
   });
+}
+
+/**
+ * IntentFrame enriched with an advisory Ouroboros routing decision.
+ * The existing IntentFrame shape is unchanged; the optional ouroboros
+ * field is additive and consumed only by callers that understand it.
+ */
+export type IntentFrameWithOuroboros = IntentFrame & {
+  ouroboros?: OuroborosDecision;
+};
+
+/**
+ * Build an IntentFrame and, for goal/spec/orchestration intents,
+ * attach a non-fatal Ouroboros routing decision.
+ *
+ * The base IntentFrame fields are never modified; the ouroboros hint
+ * is purely advisory.
+ */
+export async function buildIntentFrameWithOuroboros(
+  rawPrompt: string,
+  input: {
+    constraints?: string[];
+    successCriteria?: string[];
+    expectedArtifacts?: Array<{ name: string; path?: string }>;
+  } = {},
+): Promise<IntentFrameWithOuroboros> {
+  const frame = buildIntentFrame(rawPrompt, input);
+  try {
+    const decision = await resolveOuroborosDecision({ intent: rawPrompt });
+    return { ...frame, ouroboros: decision };
+  } catch {
+    return frame;
+  }
 }
 
 export function actionAtomRouting(atom: ActionAtom): NonNullable<DagNodeRouting["actionAtom"]> {
