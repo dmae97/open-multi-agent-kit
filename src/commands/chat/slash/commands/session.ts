@@ -1,7 +1,7 @@
 import { style } from "../../../../util/theme.js";
 import { readTodos } from "../../../../util/todo-sync.js";
 import { commandLine, formatScopedNames, section } from "../format.js";
-import { okSlashResult } from "../result.js";
+import { errorSlashResult, okSlashResult } from "../result.js";
 import type { SlashCommandSpec } from "../types.js";
 
 export function buildSessionSlashCommands(): SlashCommandSpec[] {
@@ -23,6 +23,21 @@ export function buildSessionSlashCommands(): SlashCommandSpec[] {
       usage: "/help",
       examples: ["/help"],
       handler: () => okSlashResult({ text: renderSlashHelp() }),
+    },
+    {
+      name: "/paste",
+      aliases: [],
+      group: "session",
+      summary: "Paste image from clipboard",
+      usage: "/paste",
+      examples: ["/paste"],
+      handler: async (ctx) => {
+        const { pasteClipboardImage } = await import("../../../../util/clipboard-image.js");
+        const result = pasteClipboardImage(ctx.input.root);
+        if (!result.ok) return errorSlashResult(result.error ?? "No image in clipboard");
+        if (!result.relativePath) return errorSlashResult("Clipboard image saved without a relative path");
+        return okSlashResult({ text: `Image file: ${result.relativePath}` });
+      },
     },
     {
       name: "/status",
@@ -79,6 +94,7 @@ function renderSlashHelp(): string {
     commandLine("/theme", "<system24|green-rain|neon-grid|rust-forge|plain|high-contrast>", "Set session theme"),
     commandLine("/view", "<summary|graph|evidence|tool-plane|events>", "Set control-plane view"),
     commandLine("/animation", "<off|low|auto|full>", "Set animation policy"),
+    commandLine("/paste", "", "Paste image from clipboard"),
     commandLine("/status", "", "Session status"),
     commandLine("/clear", "/cls", "Clear screen"),
     commandLine("/runs", "", "Recent run history"),

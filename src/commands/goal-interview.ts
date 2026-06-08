@@ -1,5 +1,5 @@
 import { mkdir, writeFile, readFile, readdir } from "fs/promises";
-import { join } from "path";
+import { basename, join } from "path";
 import { getProjectRoot } from "../util/fs.js";
 import { style, header, status, label } from "../util/theme.js";
 import { NotFoundError, UsageError, emitError } from "../util/cli-contract.js";
@@ -9,6 +9,7 @@ import { createGoalSpec, updateGoalStatus } from "../goal/intake.js";
 import { buildInterviewSession, ingestAnswers } from "../goal/interview-session.js";
 import { applyInterviewDelta } from "../goal/interview-assimilation.js";
 import { redactSecretText } from "../goal/intent-frame.js";
+import { readImageFile } from "../util/clipboard-image.js";
 import type {
   InterviewAnswer,
   InterviewDepth,
@@ -18,6 +19,7 @@ import type {
   InterviewSpecDelta,
 } from "../contracts/interview.js";
 import type { GoalSpec } from "../contracts/goal.js";
+import type { InputAttachment } from "../input/input-envelope.js";
 
 interface GoalInterviewOptions {
   goalId?: string;
@@ -25,6 +27,7 @@ interface GoalInterviewOptions {
   depth?: string;
   maxQuestions?: string;
   answers?: string;
+  image?: string;
   writeSpec?: boolean;
   json?: boolean;
 }
@@ -34,6 +37,8 @@ interface GoalRefineOptions {
   plan?: boolean;
   json?: boolean;
 }
+
+const IMAGE_ATTACHMENT_QUESTION_ID = "q-image-attachment";
 
 function getGoalBasePath(): string {
   return join(getProjectRoot(), ".omk", "goals");
@@ -94,6 +99,51 @@ async function loadAnswersFile(root: string, filePath: string): Promise<Intervie
     });
   }
   return answers;
+}
+
+function buildImageAttachment(imagePath: string): InputAttachment {
+  const img = readImageFile(imagePath);
+  if (!img.ok) {
+    throw new UsageError(img.error ?? `Unable to read image file: ${imagePath}`);
+  }
+  if (typeof img.dataUri !== "string" || typeof img.ext !== "string") {
+    throw new UsageError(`Image file could not be converted to a data URI: ${imagePath}`);
+  }
+  return {
+    name: basename(imagePath),
+    path: imagePath,
+    mimeType: `image/${img.ext}`,
+    dataUri: img.dataUri,
+    ext: img.ext,
+    source: "file",
+  };
+}
+
+function attachImageToSession(session: InterviewSession, imagePath: string): InterviewSession {
+  const attachment = buildImageAttachment(imagePath);
+  const answeredAt = new Date().toISOString();
+  return {
+    ...session,
+    updatedAt: answeredAt,
+    answers: [
+      ...session.answers.filter((answer) => answer.questionId !== IMAGE_ATTACHMENT_QUESTION_ID),
+      {
+        questionId: IMAGE_ATTACHMENT_QUESTION_ID,
+        answer: `Image file: ${imagePath}`,
+        answeredAt,
+        skipped: false,
+      },
+    ],
+    findings: [
+      ...session.findings.filter((finding) => finding.sourceQuestionId !== IMAGE_ATTACHMENT_QUESTION_ID),
+      {
+        field: "attachments",
+        value: attachment,
+        sourceQuestionId: IMAGE_ATTACHMENT_QUESTION_ID,
+        confidence: 1,
+      },
+    ],
+  };
 }
 
 function renderQuestionsMarkdown(session: InterviewSession): string {
@@ -256,6 +306,10 @@ export async function goalInterviewCommand(
   if (options.answers) {
     const answers = await loadAnswersFile(root, options.answers);
     session = ingestAnswers(session, seed, answers);
+  }
+
+  if (options.image) {
+    session = attachImageToSession(session, options.image);
   }
 
   // Optionally apply the delta to a GoalSpec.

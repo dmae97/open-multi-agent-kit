@@ -168,6 +168,7 @@ export function registerSpecAgentGoalCommands(program: Command): void {
     .option("--depth <light|standard|deep>", "Interview depth (omit to auto-select by ambiguity)")
     .option("--max-questions <n>", "Maximum number of questions")
     .option("--answers <file>", "Answers JSON file: { \"answers\": [{ \"questionId\", \"answer\" }] }")
+    .option("--image <file>", "Attach an image file (screenshot/diagram) to the interview")
     .option("--write-spec", "Create or update the goal spec from interview answers")
     .option("--json", t("cmd.goalJsonOption"))
     .action(async (input, options) => {

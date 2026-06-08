@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — OMK Deep Interview: uncertainty reducer for goal-driven agent runs
+## Unreleased — Deep Interview + Clipboard Image Paste
 
 ### Added
 
@@ -10,6 +10,7 @@
 - `omk.interview.v1` JSON contract (`schemas/omk.interview.v1.schema.json`) plus the `omk.interview-delta.v1` spec-delta envelope.
 - Per-session interview artifacts (`interview.json`, `spec-delta.json`, `questions.md`, `answers.jsonl`, `interview-report.md`) under `.omk/goals/<goalId>/interviews/<sessionId>/` (or `.omk/interviews/<sessionId>/` before `--write-spec`).
 - GitHub organic growth kit: README first-screen positioning, runnable awesome-list examples, a 1280x640 social preview upload candidate, and reusable Topics/About/awesome-list PR copy in `docs/github-organic-promotion.md`.
+- Clipboard image paste support: `/paste` slash command in chat REPL, `--image` flag on `omk goal interview`, cross-platform clipboard reader (macOS/Linux/Windows), `InputAttachment` type for multimodal image handling.
 
 ## v0.78.1 — package alignment, JSON contract envelopes, and adaptive runtime algorithms (2026-06-07)
 
