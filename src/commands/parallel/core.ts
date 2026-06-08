@@ -11,7 +11,7 @@ import { writeMemoryRecallSummary } from "../../util/chat-startup.js";
 import { normalizeProviderPolicy, parseProviderModelArg } from "../../providers/model-registry.js";
 import { parseExecutionPromptPolicy } from "../../util/execution-selection.js";
 import { analyzeUserIntent } from "../../goal/intake.js";
-import { buildIntentFrame } from "../../goal/intent-frame.js";
+import { buildIntentFrame, buildIntentFrameWithOuroboros } from "../../goal/intent-frame.js";
 import type { ProviderPolicy } from "../../providers/index.js";
 import type { ExecutionStrategy, ExecutionSelectionDecision, RunState, UserIntent } from "../../contracts/orchestration.js";
 import type { IntentFrame } from "../../contracts/goal.js";
@@ -114,7 +114,7 @@ export async function parallelCommand(
     const { loadSpecDag } = await import("../dag-from-spec.js");
     const specDag = await loadSpecDag(options.fromSpec!, { parallel: true });
     effectiveGoal = goal ?? `spec: ${specDag.nodes[0]?.name ?? options.fromSpec!}`;
-    intentFrame = buildIntentFrame(effectiveGoal);
+    intentFrame = await buildIntentFrameWithOuroboros(effectiveGoal);
 
     specNodes = specDag.nodes.map((node) => {
       const { status: _status, retries: _retries, ...def } = node;
@@ -123,7 +123,7 @@ export async function parallelCommand(
       return def;
     });
   } else {
-    intentFrame = intentFrame ?? buildIntentFrame(effectiveGoal);
+    intentFrame = intentFrame ?? (await buildIntentFrameWithOuroboros(effectiveGoal));
   }
 
   const resolvedIntent = options.intent ?? analyzeUserIntent(effectiveGoal);
