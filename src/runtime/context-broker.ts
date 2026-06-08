@@ -25,11 +25,20 @@ import { mkdir, readFile, stat, writeFile } from "fs/promises";
 import type { ContextAdjustment } from "../evidence/attempt-record.js";
 import { createContextBudgetOptimizer, type ContextBudgetReport } from "./context-budget-optimizer.js";
 import { createDecisionTraceStore } from "../evidence/decision-trace.js";
+import { evaluateHeadroom, type HeadroomDecision } from "./headroom-policy.js";
+
+const DEFAULT_CONTEXT_WINDOW = 200_000;
+
 export interface ContextBrokerOptions {
   readonly projectRoot?: string;
   readonly graphMemoryPath?: string;
   readonly goal?: string;
   readonly system?: string;
+  /**
+   * Model context window size in tokens. Used for headroom compaction
+   * threshold evaluation. Default: OMK_CONTEXT_WINDOW env or 200000.
+   */
+  readonly contextWindow?: number;
 }
 
 function resolveBudget(node: DagNode): ContextBudget {
@@ -249,6 +258,13 @@ function summarizePredicate(kind: MemoryFactKind): string {
   }
 }
 
+export interface ContextBrokerResult {
+  readonly capsule: ContextCapsule;
+  readonly report: ContextBudgetReport;
+  /** Headroom compaction decision — additive; existing consumers unaffected. */
+  readonly headroomDecision: HeadroomDecision;
+}
+
 export function createContextBroker(options: ContextBrokerOptions = {}) {
   const projectRoot = options.projectRoot ?? getProjectRoot();
   const optimizer = createContextBudgetOptimizer();
@@ -272,7 +288,7 @@ export function createContextBroker(options: ContextBrokerOptions = {}) {
     node: DagNode,
     state?: RunState,
     adjustment?: ContextAdjustment,
-  ): Promise<{ capsule: ContextCapsule; report: ContextBudgetReport }> {
+  ): Promise<ContextBrokerResult> {
     const goal = options.goal ?? state?.goalId ?? "unknown";
     const system = options.system ?? "You are a coding agent executing a DAG node.";
 
@@ -361,7 +377,19 @@ export function createContextBroker(options: ContextBrokerOptions = {}) {
       });
     }
 
-    return { capsule: optimized.capsule, report: optimized.report };
+    // Evaluate headroom compaction threshold (advisory only — never blocks)
+    const resolvedContextWindow = options.contextWindow
+      ?? Number(process.env.OMK_CONTEXT_WINDOW ?? DEFAULT_CONTEXT_WINDOW);
+    const headroomDecision = evaluateHeadroom({
+      usedTokens: optimized.report.totalTokensEstimated,
+      contextWindow: resolvedContextWindow,
+    });
+
+    return {
+      capsule: optimized.capsule,
+      report: optimized.report,
+      headroomDecision,
+    };
   }
 
   return { buildCapsule };

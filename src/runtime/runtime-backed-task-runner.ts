@@ -18,6 +18,7 @@ import { applyTaskRunContextToAgentTask, envFromWorkerManifest } from "./worker-
 import { createRuntimeRegistry, type RuntimeRegistry } from "./runtime-registry.js";
 import { createRuntimeRouter } from "./runtime-router.js";
 import { createContextBroker } from "./context-broker.js";
+import { maybeCompactWithHeadroom } from "./headroom-policy.js";
 import { DeepSeekRuntime } from "./deepseek-runtime.js";
 import { CodexRuntime } from "./codex-runtime.js";
 import { createOpencodeCliAdapter } from "../adapters/opencode/opencode-cli-adapter.js";
@@ -164,7 +165,14 @@ export async function createRuntimeBackedTaskRunner(
             startedAt: new Date().toISOString(),
           }
         : undefined;
-      const { capsule } = await contextBroker.buildCapsule(node, runState);
+      const { capsule, headroomDecision } = await contextBroker.buildCapsule(node, runState);
+      // CTX guard: compact via headroom before the context window crosses the threshold (~90%).
+      if (headroomDecision?.shouldCompact) {
+        await maybeCompactWithHeadroom({
+          decision: headroomDecision,
+          text: JSON.stringify(capsule),
+        }).catch(() => undefined);
+      }
       const routing = capsule.node.routing;
       const providerFallbackChain = options.fallbackChain
         ?? (routing?.fallbackProvider ? [routing.fallbackProvider] : []);
