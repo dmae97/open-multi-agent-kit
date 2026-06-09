@@ -98,11 +98,15 @@ function makeTask(
 ): BenchmarkTask {
   const rng = seededRandom(seed + index * 7919);
   const taskId = `bench-${category}-${String(index).padStart(3, "0")}`;
-  const expectedOutcome = pick(["success", "success", "failure", "fallback"], rng) as "success" | "failure" | "fallback";
+  const expectedOutcome: "success" | "fallback" =
+    category === "provider-failure-fallback" || category === "quota-auth-failure-fallback"
+      ? "fallback"
+      : "success";
   const attempts: BenchmarkAttemptStub[] = [];
   const attemptCount = expectedOutcome === "fallback" ? 2 : 1;
   for (let i = 1; i <= attemptCount; i++) {
-    attempts.push(makeAttemptStub(taskId, category, i, rng, i === 1 ? undefined : "success"));
+    const outcome = expectedOutcome === "fallback" && i === 1 ? "fallback" : "success";
+    attempts.push(makeAttemptStub(taskId, category, i, rng, outcome));
   }
 
   return {
