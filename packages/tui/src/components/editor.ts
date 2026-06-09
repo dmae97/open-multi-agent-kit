@@ -266,6 +266,7 @@ export class Editor implements Component, Focusable {
 	// Prompt history for up/down navigation
 	private history: string[] = [];
 	private historyIndex: number = -1; // -1 = not browsing, 0 = most recent, 1 = older, etc.
+	private historyDraft: EditorState | null = null;
 
 	// Kill ring for Emacs-style kill/yank operations
 	private killRing = new KillRing();
@@ -356,10 +357,6 @@ export class Editor implements Component, Focusable {
 		}
 	}
 
-	private isEditorEmpty(): boolean {
-		return this.state.lines.length === 1 && this.state.lines[0] === "";
-	}
-
 	private isOnFirstVisualLine(): boolean {
 		const visualLines = this.buildVisualLineMap(this.lastWidth);
 		const currentVisualLine = this.findCurrentVisualLine(visualLines);
@@ -382,16 +379,31 @@ export class Editor implements Component, Focusable {
 		// Capture state when first entering history browsing mode
 		if (this.historyIndex === -1 && newIndex >= 0) {
 			this.pushUndoSnapshot();
+			this.historyDraft = structuredClone(this.state);
 		}
 
 		this.historyIndex = newIndex;
 
 		if (this.historyIndex === -1) {
-			// Returned to "current" state - clear editor
-			this.setTextInternal("");
+			const draft = this.historyDraft;
+			this.historyDraft = null;
+			if (draft) {
+				this.state = draft;
+				this.preferredVisualCol = null;
+				this.snappedFromCursorCol = null;
+				this.scrollOffset = 0;
+				if (this.onChange) this.onChange(this.getText());
+			} else {
+				this.setTextInternal("");
+			}
 		} else {
 			this.setTextInternal(this.history[this.historyIndex] || "", direction === -1 ? "start" : "end");
 		}
+	}
+
+	private exitHistoryBrowsing(): void {
+		this.historyIndex = -1;
+		this.historyDraft = null;
 	}
 
 	/** Internal setText that doesn't reset history state - used by navigateHistory */
@@ -758,9 +770,7 @@ export class Editor implements Component, Focusable {
 
 		// Arrow key navigation (with history support)
 		if (kb.matches(data, "tui.editor.cursorUp")) {
-			if (this.isEditorEmpty()) {
-				this.navigateHistory(-1);
-			} else if (this.historyIndex > -1 && this.isOnFirstVisualLine()) {
+			if (this.isOnFirstVisualLine() && this.history.length > 0) {
 				this.navigateHistory(-1);
 			} else if (this.isOnFirstVisualLine()) {
 				// Already at top - jump to start of line
@@ -948,7 +958,7 @@ export class Editor implements Component, Focusable {
 	setText(text: string): void {
 		this.cancelAutocomplete();
 		this.lastAction = null;
-		this.historyIndex = -1; // Exit history browsing mode
+		this.exitHistoryBrowsing();
 		const normalized = this.normalizeText(text);
 		// Push undo snapshot if content differs (makes programmatic changes undoable)
 		if (this.getText() !== normalized) {
@@ -967,7 +977,7 @@ export class Editor implements Component, Focusable {
 		this.cancelAutocomplete();
 		this.pushUndoSnapshot();
 		this.lastAction = null;
-		this.historyIndex = -1;
+		this.exitHistoryBrowsing();
 		this.insertTextAtCursorInternal(text);
 	}
 
@@ -1030,7 +1040,7 @@ export class Editor implements Component, Focusable {
 
 	// All the editor methods from before...
 	private insertCharacter(char: string, skipUndoCoalescing?: boolean): void {
-		this.historyIndex = -1; // Exit history browsing mode
+		this.exitHistoryBrowsing();
 
 		// Undo coalescing (fish-style):
 		// - Consecutive word chars coalesce into one undo unit
@@ -1091,7 +1101,7 @@ export class Editor implements Component, Focusable {
 
 	private handlePaste(pastedText: string): void {
 		this.cancelAutocomplete();
-		this.historyIndex = -1; // Exit history browsing mode
+		this.exitHistoryBrowsing();
 		this.lastAction = null;
 
 		this.pushUndoSnapshot();
@@ -1159,7 +1169,7 @@ export class Editor implements Component, Focusable {
 
 	private addNewLine(): void {
 		this.cancelAutocomplete();
-		this.historyIndex = -1; // Exit history browsing mode
+		this.exitHistoryBrowsing();
 		this.lastAction = null;
 
 		this.pushUndoSnapshot();
@@ -1200,7 +1210,7 @@ export class Editor implements Component, Focusable {
 		this.state = { lines: [""], cursorLine: 0, cursorCol: 0 };
 		this.pastes.clear();
 		this.pasteCounter = 0;
-		this.historyIndex = -1;
+		this.exitHistoryBrowsing();
 		this.scrollOffset = 0;
 		this.undoStack.clear();
 		this.lastAction = null;
@@ -1210,7 +1220,7 @@ export class Editor implements Component, Focusable {
 	}
 
 	private handleBackspace(): void {
-		this.historyIndex = -1; // Exit history browsing mode
+		this.exitHistoryBrowsing();
 		this.lastAction = null;
 
 		if (this.state.cursorCol > 0) {
@@ -1427,7 +1437,7 @@ export class Editor implements Component, Focusable {
 	}
 
 	private deleteToStartOfLine(): void {
-		this.historyIndex = -1; // Exit history browsing mode
+		this.exitHistoryBrowsing();
 
 		const currentLine = this.state.lines[this.state.cursorLine] || "";
 
@@ -1462,7 +1472,7 @@ export class Editor implements Component, Focusable {
 	}
 
 	private deleteToEndOfLine(): void {
-		this.historyIndex = -1; // Exit history browsing mode
+		this.exitHistoryBrowsing();
 
 		const currentLine = this.state.lines[this.state.cursorLine] || "";
 
@@ -1494,7 +1504,7 @@ export class Editor implements Component, Focusable {
 	}
 
 	private deleteWordBackwards(): void {
-		this.historyIndex = -1; // Exit history browsing mode
+		this.exitHistoryBrowsing();
 
 		const currentLine = this.state.lines[this.state.cursorLine] || "";
 
@@ -1539,7 +1549,7 @@ export class Editor implements Component, Focusable {
 	}
 
 	private deleteWordForward(): void {
-		this.historyIndex = -1; // Exit history browsing mode
+		this.exitHistoryBrowsing();
 
 		const currentLine = this.state.lines[this.state.cursorLine] || "";
 
@@ -1581,7 +1591,7 @@ export class Editor implements Component, Focusable {
 	}
 
 	private handleForwardDelete(): void {
-		this.historyIndex = -1; // Exit history browsing mode
+		this.exitHistoryBrowsing();
 		this.lastAction = null;
 
 		const currentLine = this.state.lines[this.state.cursorLine] || "";
@@ -1837,7 +1847,7 @@ export class Editor implements Component, Focusable {
 	 * Insert text at cursor position (used by yank operations).
 	 */
 	private insertYankedText(text: string): void {
-		this.historyIndex = -1; // Exit history browsing mode
+		this.exitHistoryBrowsing();
 		const lines = text.split("\n");
 
 		if (lines.length === 1) {
@@ -1922,7 +1932,7 @@ export class Editor implements Component, Focusable {
 	}
 
 	private undo(): void {
-		this.historyIndex = -1; // Exit history browsing mode
+		this.exitHistoryBrowsing();
 		const snapshot = this.undoStack.pop();
 		if (!snapshot) return;
 		Object.assign(this.state, snapshot);
