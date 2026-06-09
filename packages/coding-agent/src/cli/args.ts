@@ -232,7 +232,7 @@ ${chalk.bold("Commands:")}
   ${APP_NAME} update [source|self|pi]   Update pi and installed extensions
   ${APP_NAME} list [--approve|--no-approve]
                                  List installed extensions from settings
-  ${APP_NAME} config [--no-approve]
+  ${APP_NAME} config [--approve|--no-approve]
                                  Open TUI to enable/disable package resources
   ${APP_NAME} <command> --help          Show help for install/remove/uninstall/update/list
 
