@@ -1366,6 +1366,11 @@ async function generateModels() {
 			candidate.contextWindow = 272000;
 			candidate.maxTokens = 128000;
 		}
+		// models.dev reports gpt-5-pro output as 272000 (a duplicate of the input sub-limit);
+		// the actual max output is 128000. Also propagates to the derived Azure clone.
+		if (candidate.provider === "openai" && candidate.id === "gpt-5-pro") {
+			candidate.maxTokens = 128000;
+		}
 		// Keep selected OpenRouter model metadata stable until upstream settles.
 		if (candidate.provider === "openrouter" && candidate.id === "moonshotai/kimi-k2.5") {
 			candidate.cost.input = 0.41;
@@ -2064,6 +2069,12 @@ async function generateModels() {
 	];
 	allModels.push(...vertexModels);
 
+	// Azure Foundry deploys these with larger context windows than OpenAI's own API,
+	// which caps gpt-5.4/gpt-5.5 at 272k. See models-sold-directly-by-azure docs.
+	const AZURE_CONTEXT_WINDOW_OVERRIDES: Record<string, number> = {
+		"gpt-5.4": 1050000,
+		"gpt-5.5": 1050000,
+	};
 	const azureOpenAiModels: Model<Api>[] = allModels
 		.filter((model) => model.provider === "openai" && model.api === "openai-responses")
 		.map((model) => ({
@@ -2071,6 +2082,7 @@ async function generateModels() {
 			api: "azure-openai-responses",
 			provider: "azure-openai-responses",
 			baseUrl: "",
+			contextWindow: AZURE_CONTEXT_WINDOW_OVERRIDES[model.id] ?? model.contextWindow,
 		}));
 	allModels.push(...azureOpenAiModels);
 
