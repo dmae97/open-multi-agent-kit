@@ -1,16 +1,41 @@
 # Changelog
 
-## Unreleased — Deep Interview + Clipboard Image Paste
+## v0.78.2 — Regression Proof Matrix, deep interview, clipboard image paste, and README hardening (2026-06-09)
+
+### Overview
+
+This release adds the Regression Proof Matrix (Algorithm 9) as a release-defense gate, ships the deep interview and clipboard image paste features, and hardens README links to be package-safe.
 
 ### Added
 
+- **Regression Proof Matrix (Algorithm 9)** — release-defense gate that verifies Algorithms 1–8 are alive via tests, proof bundles, decision traces, and CLI surfaces. `scripts/regression-proof-matrix.mjs --json` evaluates coverage topology, test linkage, proof-bundle trust, and CLI reachability, returning a JSON verdict with per-algorithm coverage and reasons.
+- `src/evidence/regression-proof-matrix.ts` engine with configurable coverage and proof-trust thresholds (default `TAU_EVIDENCE` = 0.75), plus `test/regression-proof-matrix.test.mjs` unit coverage.
+- Proof bundle `011-regression-proof-matrix` under `proof/verified-runs/` with evidence, decisions, verify JSON, and `sha256sums.txt`.
 - `omk goal interview [input]` and `omk goal refine <goal-id>` commands under the existing `goal` group, adding an evidence-driven clarification step before planning.
 - Deterministic deep interview that scores goal ambiguity (`0..1`), ranks targeted questions (`informationGain*0.35 + riskReduction*0.25 + dagImpact*0.20 + evidenceImpact*0.15 - userCost*0.05`), and computes a completeness score from assimilated answers.
 - Spec-delta assimilation that folds interview answers into a structured `GoalSpec` with conflict resolution, selectable depth (`light|standard|deep`, auto-selected by ambiguity when omitted), and `--write-spec` persistence.
 - `omk.interview.v1` JSON contract (`schemas/omk.interview.v1.schema.json`) plus the `omk.interview-delta.v1` spec-delta envelope.
 - Per-session interview artifacts (`interview.json`, `spec-delta.json`, `questions.md`, `answers.jsonl`, `interview-report.md`) under `.omk/goals/<goalId>/interviews/<sessionId>/` (or `.omk/interviews/<sessionId>/` before `--write-spec`).
-- GitHub organic growth kit: README first-screen positioning, runnable awesome-list examples, a 1280x640 social preview upload candidate, and reusable Topics/About/awesome-list PR copy in `docs/github-organic-promotion.md`.
 - Clipboard image paste support: `/paste` slash command in chat REPL, `--image` flag on `omk goal interview`, cross-platform clipboard reader (macOS/Linux/Windows), `InputAttachment` type for multimodal image handling.
+- GitHub organic growth kit: README first-screen positioning, runnable awesome-list examples, a 1280x640 social preview upload candidate, and reusable Topics/About/awesome-list PR copy in `docs/github-organic-promotion.md`.
+
+### Changed
+
+- README install and badge links now use package-safe `open-multi-agent-kit` example URLs instead of the unavailable `@omk/cli` scope.
+- `MATURITY.md` and `docs/native-root-runtime-algorithms.md` clarify that the Regression Proof Matrix is a release-defense coverage gate, not a stable-release claim.
+
+### Commits
+
+```
+1504eae chore(release): bump v0.78.2
+3874558 docs(readme): use package-safe example links
+cb673e3 docs(readme): clarify regression proof matrix boundary
+278cdf4 docs(proof): clarify regression matrix release boundary
+285c68c Feat/regression proof matrix (#15)
+4701243 feat(runtime): send clipboard images as multimodal content parts
+78a31eb feat(clipboard): add image paste support for chat and goal interview
+69d65c6 feat(goal): add deep interview refinement
+```
 
 ## v0.78.1 — package alignment, JSON contract envelopes, and adaptive runtime algorithms (2026-06-07)
 
