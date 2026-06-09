@@ -892,6 +892,12 @@ Current run mode: `"tui"`, `"rpc"`, `"json"`, or `"print"`. Use `ctx.mode === "t
 
 Current working directory.
 
+### ctx.isProjectTrusted()
+
+Returns whether project-local trust is active for the current session context. This includes temporary trust decisions and CLI trust overrides, not just saved decisions in the global trust store.
+
+Use this before reading project-local extension configuration that should only be honored for trusted projects.
+
 ### ctx.sessionManager
 
 Read-only access to session state. See [Session Format](session-format.md) for the full SessionManager API and entry types.
