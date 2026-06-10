@@ -1,16 +1,14 @@
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import { type Component, truncateToWidth, visibleWidth } from "@earendil-works/omk-tui";
-import { APP_NAME } from "../../../config.ts";
+import { type Component, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { AgentSession } from "../../../core/agent-session.ts";
 import type { ReadonlyFooterDataProvider } from "../../../core/footer-data-provider.ts";
-import { buildOmkControlSurface, isOmkRuntimeName } from "../../../core/omk-control.ts";
 import { theme } from "../theme/theme.ts";
 
 /**
  * Sanitize text for display in a single-line status.
  * Removes newlines, tabs, carriage returns, and other control characters.
  */
-export function sanitizeStatusText(text: string): string {
+function sanitizeStatusText(text: string): string {
 	// Replace newlines, tabs, carriage returns with space, then collapse multiple spaces
 	return text
 		.replace(/[\r\n\t]/g, " ")
@@ -49,7 +47,6 @@ export function formatCwdForFooter(cwd: string, home: string | undefined): strin
  */
 export class FooterComponent implements Component {
 	private autoCompactEnabled = true;
-	private omkControlCompact = false;
 	private session: AgentSession;
 	private footerData: ReadonlyFooterDataProvider;
 
@@ -64,10 +61,6 @@ export class FooterComponent implements Component {
 
 	setAutoCompactEnabled(enabled: boolean): void {
 		this.autoCompactEnabled = enabled;
-	}
-
-	setOmkControlCompact(enabled: boolean): void {
-		this.omkControlCompact = enabled;
 	}
 
 	/**
@@ -87,11 +80,6 @@ export class FooterComponent implements Component {
 	}
 
 	render(width: number): string[] {
-		if (isOmkRuntimeName(APP_NAME) && this.omkControlCompact) {
-			const compactFooter = `${buildOmkControlSurface().compactStatus} · / commands · ! shell · evidence gate`;
-			return [truncateToWidth(theme.fg("dim", compactFooter), width, theme.fg("dim", "..."))];
-		}
-
 		const state = this.session.state;
 
 		// Calculate cumulative usage from ALL session entries (not just post-compaction messages)
@@ -131,9 +119,6 @@ export class FooterComponent implements Component {
 		const sessionName = this.session.sessionManager.getSessionName();
 		if (sessionName) {
 			pwd = `${pwd} • ${sessionName}`;
-		}
-		if (isOmkRuntimeName(APP_NAME)) {
-			pwd = `${buildOmkControlSurface().footerLabel} • ${pwd}`;
 		}
 
 		// Build stats line

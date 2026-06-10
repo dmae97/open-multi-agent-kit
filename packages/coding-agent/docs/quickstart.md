@@ -1,51 +1,51 @@
 # Quickstart
 
-This page gets you from install to a useful first OMK session.
+This page gets you from install to a useful first pi session.
 
 ## Install
 
-Install the published coding-agent package, then use the `omk` binary:
+Pi is distributed as an npm package:
 
 ```bash
-npm install -g --ignore-scripts @earendil-works/omk-coding-agent
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent
 ```
 
-`--ignore-scripts` disables dependency lifecycle scripts during install. OMK does not require install scripts for normal npm installs.
+`--ignore-scripts` disables dependency lifecycle scripts during install. Pi does not require install scripts for normal npm installs.
 
 ### Uninstall
 
-Use the package manager that installed OMK:
+Use the package manager that installed pi. The curl installer uses npm globally, so curl and npm installs are removed with npm:
 
 ```bash
-# npm
-npm uninstall -g @earendil-works/omk-coding-agent
+# curl installer or npm install -g
+npm uninstall -g @earendil-works/pi-coding-agent
 
 # pnpm
-pnpm remove -g @earendil-works/omk-coding-agent
+pnpm remove -g @earendil-works/pi-coding-agent
 
 # Yarn
-yarn global remove @earendil-works/omk-coding-agent
+yarn global remove @earendil-works/pi-coding-agent
 
 # Bun
-bun uninstall -g @earendil-works/omk-coding-agent
+bun uninstall -g @earendil-works/pi-coding-agent
 ```
 
-Uninstalling OMK leaves settings, credentials, sessions, and installed OMK packages in `~/.omk/agent/`.
+Uninstalling pi leaves settings, credentials, sessions, and installed pi packages in `~/.pi/agent/`.
 
-Then start OMK in the project directory you want it to work on:
+Then start pi in the project directory you want it to work on:
 
 ```bash
 cd /path/to/project
-omk
+pi
 ```
 
 ## Authenticate
 
-OMK can use subscription providers through `/login`, or API-key providers through environment variables or the auth file.
+Pi can use subscription providers through `/login`, or API-key providers through environment variables or the auth file.
 
 ### Option 1: subscription login
 
-Start OMK and run:
+Start pi and run:
 
 ```text
 /login
@@ -55,37 +55,37 @@ Then select a provider. Built-in subscription logins include Claude Pro/Max, Cha
 
 ### Option 2: API key
 
-Set an API key before launching OMK:
+Set an API key before launching pi:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-omk
+pi
 ```
 
-You can also run `/login` and select an API-key provider to store the key in `~/.omk/agent/auth.json`.
+You can also run `/login` and select an API-key provider to store the key in `~/.pi/agent/auth.json`.
 
 See [Providers](providers.md) for all supported providers, environment variables, and cloud-provider setup.
 
 ## First session
 
-Once OMK starts, type a request and press Enter:
+Once pi starts, type a request and press Enter:
 
 ```text
 Summarize this repository and tell me how to run its checks.
 ```
 
-By default, OMK gives the model four tools:
+By default, pi gives the model four tools:
 
 - `read` - read files
 - `write` - create or overwrite files
 - `edit` - patch files
 - `bash` - run shell commands
 
-Additional built-in read-only tools (`grep`, `find`, `ls`) are available through tool options. OMK runs in your current working directory and can modify files there. Use git or another checkpointing workflow if you want easy rollback.
+Additional built-in read-only tools (`grep`, `find`, `ls`) are available through tool options. Pi runs in your current working directory and can modify files there. Use git or another checkpointing workflow if you want easy rollback.
 
-## Give OMK project instructions
+## Give pi project instructions
 
-OMK loads context files at startup. Add an `AGENTS.md` file to tell it how to work in a project:
+Pi loads context files at startup. Add an `AGENTS.md` file to tell it how to work in a project:
 
 ```markdown
 # Project Instructions
@@ -95,12 +95,12 @@ OMK loads context files at startup. Add an `AGENTS.md` file to tell it how to wo
 - Keep responses concise.
 ```
 
-OMK loads:
+Pi loads:
 
-- `~/.omk/agent/AGENTS.md` for global instructions
+- `~/.pi/agent/AGENTS.md` for global instructions
 - `AGENTS.md` or `CLAUDE.md` from parent directories and the current directory
 
-Restart OMK, or run `/reload`, after changing context files.
+Restart pi, or run `/reload`, after changing context files.
 
 ## Common things to try
 
@@ -109,8 +109,8 @@ Restart OMK, or run `/reload`, after changing context files.
 Type `@` in the editor to fuzzy-search files, or pass files on the command line:
 
 ```bash
-omk @README.md "Summarize this"
-omk @src/app.ts @src/app.test.ts "Review these together"
+pi @README.md "Summarize this"
+pi @src/app.ts @src/app.test.ts "Review these together"
 ```
 
 Images can be pasted with Ctrl+V (Alt+V on Windows) or dragged into supported terminals.
@@ -134,32 +134,32 @@ Use `/model` or Ctrl+L to choose a model. Use Shift+Tab to cycle thinking level.
 Sessions are saved automatically:
 
 ```bash
-omk -c                  # Continue most recent session
-omk -r                  # Browse previous sessions
-omk --name "my task"    # Set session display name at startup
-omk --session <path|id> # Open a specific session
+pi -c                  # Continue most recent session
+pi -r                  # Browse previous sessions
+pi --name "my task"    # Set session display name at startup
+pi --session <path|id> # Open a specific session
 ```
 
-Inside OMK, use `/resume`, `/new`, `/tree`, `/fork`, and `/clone` to manage sessions.
+Inside pi, use `/resume`, `/new`, `/tree`, `/fork`, and `/clone` to manage sessions.
 
 ### Non-interactive mode
 
 For one-shot prompts:
 
 ```bash
-omk -p "Summarize this codebase"
-cat README.md | omk -p "Summarize this text"
-omk -p @screenshot.png "What's in this image?"
+pi -p "Summarize this codebase"
+cat README.md | pi -p "Summarize this text"
+pi -p @screenshot.png "What's in this image?"
 ```
 
 Use `--mode json` for JSON event output or `--mode rpc` for process integration.
 
 ## Next steps
 
-- [Using OMK](usage.md) - interactive mode, slash commands, sessions, context files, and CLI reference.
+- [Using Pi](usage.md) - interactive mode, slash commands, sessions, context files, and CLI reference.
 - [Providers](providers.md) - authentication and model setup.
 - [Settings](settings.md) - global and project configuration.
 - [Keybindings](keybindings.md) - shortcuts and customization.
-- [OMK Packages](packages.md) - install shared extensions, skills, prompts, and themes.
+- [Pi Packages](packages.md) - install shared extensions, skills, prompts, and themes.
 
 Platform notes: [Windows](windows.md), [Termux](termux.md), [tmux](tmux.md), [Terminal setup](terminal-setup.md), [Shell aliases](shell-aliases.md).

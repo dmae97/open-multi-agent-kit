@@ -6,31 +6,15 @@
  */
 
 import { createInterface } from "node:readline";
-import { type ImageContent, modelsAreEqual } from "@earendil-works/omk-ai";
-import { ProcessTerminal, setKeybindings, TUI } from "@earendil-works/omk-tui";
+import { type ImageContent, modelsAreEqual } from "@earendil-works/pi-ai";
+import { ProcessTerminal, setKeybindings, TUI } from "@earendil-works/pi-tui";
 import chalk from "chalk";
 import { type Args, type Mode, parseArgs, printHelp } from "./cli/args.ts";
 import { processFileArguments } from "./cli/file-processor.ts";
 import { buildInitialMessage } from "./cli/initial-message.ts";
 import { listModels } from "./cli/list-models.ts";
 import { selectSession } from "./cli/session-picker.ts";
-import {
-	APP_NAME,
-	ENV_OFFLINE,
-	ENV_OFFLINE_ALIASES,
-	ENV_SESSION_DIR_ALIASES,
-	ENV_SKIP_VERSION_CHECK,
-	ENV_STARTUP_BENCHMARK,
-	ENV_STARTUP_BENCHMARK_ALIASES,
-	expandTildePath,
-	getAgentDir,
-	getPackageDir,
-	IS_OMK_RUNTIME,
-	isAliasedEnvFlagEnabled,
-	readAliasedEnv,
-	VERSION,
-} from "./config.ts";
-import { writeFirstRunAdaptivePlan } from "./core/adaptive-runtime.ts";
+import { ENV_SESSION_DIR, expandTildePath, getAgentDir, getPackageDir, VERSION } from "./config.ts";
 import { type CreateAgentSessionRuntimeFactory, createAgentSessionRuntime } from "./core/agent-session-runtime.ts";
 import {
 	type AgentSessionRuntimeDiagnostic,
@@ -45,9 +29,7 @@ import { configureHttpDispatcher } from "./core/http-dispatcher.ts";
 import { KeybindingsManager } from "./core/keybindings.ts";
 import type { ModelRegistry } from "./core/model-registry.ts";
 import { resolveCliModel, resolveModelScope, type ScopedModel } from "./core/model-resolver.ts";
-import { createOmkSubagentExtension } from "./core/omk-subagent.ts";
 import { restoreStdout, takeOverStdout } from "./core/output-guard.ts";
-import { resolveAmbientResourceFlags, shouldIncludeProjectDeprecationWarnings } from "./core/runtime-defaults.ts";
 import type { CreateAgentSessionOptions } from "./core/sdk.ts";
 import {
 	formatMissingSessionCwdPrompt,
@@ -416,13 +398,7 @@ function buildSessionOptions(
 		}
 	}
 
-	if (!parsed.thinking && options.model && options.thinkingLevel === undefined) {
-		options.thinkingLevel = settingsManager.getModelThinkingLevel(
-			options.model,
-		) as CreateAgentSessionOptions["thinkingLevel"];
-	}
-
-	// Thinking level from CLI (takes precedence over scoped/model thinking levels set above)
+	// Thinking level from CLI (takes precedence over scoped model thinking levels set above)
 	if (parsed.thinking) {
 		options.thinkingLevel = parsed.thinking;
 	}
@@ -498,39 +474,12 @@ export interface MainOptions {
 	extensionFactories?: ExtensionFactory[];
 }
 
-/**
- * Resolve the extension factories used for this run.
- *
- * In OMK root mode (bare `omk`, not a delegated lane), the built-in subagent
- * orchestrator tool is injected so the agent can fan goals out to parallel
- * subagent lanes. Delegated lanes (OMK_SUBAGENT_LANE=1) stay in worker mode and
- * do not get the orchestrator tool, preventing unbounded recursion.
- */
-function resolveExtensionFactories(options?: MainOptions): ExtensionFactory[] | undefined {
-	const factories: ExtensionFactory[] = [...(options?.extensionFactories ?? [])];
-	const isLane = isTruthyEnvFlag(process.env.OMK_SUBAGENT_LANE);
-	if (IS_OMK_RUNTIME && !isLane) {
-		factories.push(createOmkSubagentExtension() as ExtensionFactory);
-	}
-	return factories.length > 0 ? factories : undefined;
-}
-
 export async function main(args: string[], options?: MainOptions) {
 	resetTimings();
-	const offlineMode = args.includes("--offline") || isAliasedEnvFlagEnabled(ENV_OFFLINE_ALIASES);
+	const offlineMode = args.includes("--offline") || isTruthyEnvFlag(process.env.PI_OFFLINE);
 	if (offlineMode) {
-		process.env[ENV_OFFLINE] = "1";
-		process.env[ENV_SKIP_VERSION_CHECK] = "1";
-	}
-
-	if (IS_OMK_RUNTIME) {
-		// Adaptive runtime defaults: enable goal lifecycle, adaptive headroom, and
-		// topology routing unless the user has explicitly overridden them.
-		// Defaults only, never forced.
-		process.env.OMK_OUROBOROS ||= "always";
-		process.env.OMK_HEADROOM ||= "1";
-		process.env.OMK_HEADROOM_THRESHOLD ||= "0.90";
-		process.env.OMK_TOPOLOGY_ROUTING ||= "1";
+		process.env.PI_OFFLINE = "1";
+		process.env.PI_SKIP_VERSION_CHECK = "1";
 	}
 
 	if (process.platform === "win32") {
@@ -590,17 +539,11 @@ export async function main(args: string[], options?: MainOptions) {
 	validateSessionIdFlags(parsed);
 
 	// Run migrations (pass cwd for project-local migrations)
-	const { migratedAuthProviders: migratedProviders, deprecationWarnings } = runMigrations(process.cwd(), {
-		includeProjectWarnings: shouldIncludeProjectDeprecationWarnings(APP_NAME),
-	});
+	const { migratedAuthProviders: migratedProviders, deprecationWarnings } = runMigrations(process.cwd());
 	time("runMigrations");
 
 	const cwd = process.cwd();
 	const agentDir = getAgentDir();
-	if (IS_OMK_RUNTIME) {
-		// Seed a first-run adaptive plan artifact (idempotent, non-fatal, no network).
-		writeFirstRunAdaptivePlan({ agentDir, env: process.env, cwd });
-	}
 	const startupSettingsManager = SettingsManager.create(cwd, agentDir);
 	reportDiagnostics(collectSettingsDiagnostics(startupSettingsManager, "startup session lookup"));
 
@@ -609,7 +552,7 @@ export async function main(args: string[], options?: MainOptions) {
 	// settings, resources, provider registrations, and models must be resolved only after
 	// the target session cwd is known. The startup-cwd settings manager is used only for
 	// sessionDir lookup during session selection.
-	const envSessionDir = readAliasedEnv(ENV_SESSION_DIR_ALIASES);
+	const envSessionDir = process.env[ENV_SESSION_DIR];
 	const sessionDir =
 		(parsed.sessionDir ? normalizePath(parsed.sessionDir) : undefined) ??
 		(envSessionDir ? expandTildePath(envSessionDir) : undefined) ??
@@ -642,11 +585,6 @@ export async function main(args: string[], options?: MainOptions) {
 	const resolvedSkillPaths = resolveCliPaths(cwd, parsed.skills);
 	const resolvedPromptTemplatePaths = resolveCliPaths(cwd, parsed.promptTemplates);
 	const resolvedThemePaths = resolveCliPaths(cwd, parsed.themes);
-	const ambientResourceFlags = resolveAmbientResourceFlags(APP_NAME, {
-		noSkills: parsed.noSkills,
-		noPromptTemplates: parsed.noPromptTemplates,
-		noContextFiles: parsed.noContextFiles,
-	});
 	const authStorage = AuthStorage.create();
 	const createRuntime: CreateAgentSessionRuntimeFactory = async ({
 		cwd,
@@ -665,13 +603,13 @@ export async function main(args: string[], options?: MainOptions) {
 				additionalPromptTemplatePaths: resolvedPromptTemplatePaths,
 				additionalThemePaths: resolvedThemePaths,
 				noExtensions: parsed.noExtensions,
-				noSkills: ambientResourceFlags.noSkills,
-				noPromptTemplates: ambientResourceFlags.noPromptTemplates,
+				noSkills: parsed.noSkills,
+				noPromptTemplates: parsed.noPromptTemplates,
 				noThemes: parsed.noThemes,
-				noContextFiles: ambientResourceFlags.noContextFiles,
+				noContextFiles: parsed.noContextFiles,
 				systemPrompt: parsed.systemPrompt,
 				appendSystemPrompt: parsed.appendSystemPrompt,
-				extensionFactories: resolveExtensionFactories(options),
+				extensionFactories: options?.extensionFactories,
 			},
 		});
 		const { settingsManager, modelRegistry, resourceLoader } = services;
@@ -795,9 +733,9 @@ export async function main(args: string[], options?: MainOptions) {
 		process.exit(1);
 	}
 
-	const startupBenchmark = readAliasedEnv(ENV_STARTUP_BENCHMARK_ALIASES);
-	if (isTruthyEnvFlag(startupBenchmark) && appMode !== "interactive") {
-		console.error(chalk.red(`Error: ${ENV_STARTUP_BENCHMARK} only supports interactive mode`));
+	const startupBenchmark = isTruthyEnvFlag(process.env.PI_STARTUP_BENCHMARK);
+	if (startupBenchmark && appMode !== "interactive") {
+		console.error(chalk.red("Error: PI_STARTUP_BENCHMARK only supports interactive mode"));
 		process.exit(1);
 	}
 

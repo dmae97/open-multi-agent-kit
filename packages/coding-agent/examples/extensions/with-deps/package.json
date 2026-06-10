@@ -1,5 +1,5 @@
 {
-  "name": "omk-extension-with-deps",
+  "name": "pi-extension-with-deps",
   "private": true,
   "version": "0.78.0",
   "type": "module",
@@ -8,7 +8,7 @@
     "build": "echo 'nothing to build'",
     "check": "echo 'nothing to check'"
   },
-  "omk": {
+  "pi": {
     "extensions": [
       "./index.ts"
     ]

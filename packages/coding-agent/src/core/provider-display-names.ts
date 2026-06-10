@@ -12,6 +12,7 @@ export const BUILT_IN_PROVIDER_DISPLAY_NAMES: Record<string, string> = {
 	"google-vertex": "Google Vertex AI",
 	groq: "Groq",
 	huggingface: "Hugging Face",
+	"kimi-coding": "Kimi For Coding",
 	mistral: "Mistral",
 	minimax: "MiniMax",
 	"minimax-cn": "MiniMax (China)",

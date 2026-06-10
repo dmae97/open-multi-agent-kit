@@ -1,4 +1,3 @@
-import { ENV_TELEMETRY_ALIASES, readAliasedEnv } from "../config.ts";
 import type { SettingsManager } from "./settings-manager.ts";
 
 function isTruthyEnvFlag(value: string | undefined): boolean {
@@ -8,7 +7,7 @@ function isTruthyEnvFlag(value: string | undefined): boolean {
 
 export function isInstallTelemetryEnabled(
 	settingsManager: SettingsManager,
-	telemetryEnv: string | undefined = readAliasedEnv(ENV_TELEMETRY_ALIASES),
+	telemetryEnv: string | undefined = process.env.PI_TELEMETRY,
 ): boolean {
 	return telemetryEnv !== undefined ? isTruthyEnvFlag(telemetryEnv) : settingsManager.getEnableInstallTelemetry();
 }
