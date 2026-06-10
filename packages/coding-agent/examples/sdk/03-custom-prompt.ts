@@ -9,7 +9,7 @@ import {
 	DefaultResourceLoader,
 	getAgentDir,
 	SessionManager,
-} from "@earendil-works/omk-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 const cwd = process.cwd();
 const agentDir = getAgentDir();

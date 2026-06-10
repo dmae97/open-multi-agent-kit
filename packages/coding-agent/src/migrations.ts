@@ -385,22 +385,19 @@ function checkDeprecatedExtensionDirs(baseDir: string, label: string): string[] 
 /**
  * Run extension system migrations (commands→prompts) and collect warnings about deprecated directories.
  */
-function migrateExtensionSystem(cwd: string, options?: { includeProjectWarnings?: boolean }): string[] {
+function migrateExtensionSystem(cwd: string): string[] {
 	const agentDir = getAgentDir();
 	const projectDir = join(cwd, CONFIG_DIR_NAME);
-	const includeProjectWarnings = options?.includeProjectWarnings ?? true;
 
 	// Migrate commands/ to prompts/
 	migrateCommandsToPrompts(agentDir, "Global");
-	if (includeProjectWarnings) {
-		migrateCommandsToPrompts(projectDir, "Project");
-	}
+	migrateCommandsToPrompts(projectDir, "Project");
 
 	// Check for deprecated directories
-	const warnings = [...checkDeprecatedExtensionDirs(agentDir, "Global")];
-	if (includeProjectWarnings) {
-		warnings.push(...checkDeprecatedExtensionDirs(projectDir, "Project"));
-	}
+	const warnings = [
+		...checkDeprecatedExtensionDirs(agentDir, "Global"),
+		...checkDeprecatedExtensionDirs(projectDir, "Project"),
+	];
 
 	return warnings;
 }
@@ -436,12 +433,7 @@ export async function showDeprecationWarnings(warnings: string[]): Promise<void>
  *
  * @returns Object with migration results and deprecation warnings
  */
-export function runMigrations(
-	cwd: string,
-	options?: {
-		includeProjectWarnings?: boolean;
-	},
-): {
+export function runMigrations(cwd: string): {
 	migratedAuthProviders: string[];
 	deprecationWarnings: string[];
 } {
@@ -450,6 +442,6 @@ export function runMigrations(
 	migrateSessionsFromAgentRoot();
 	migrateToolsToBin();
 	migrateKeybindingsConfigFile();
-	const deprecationWarnings = migrateExtensionSystem(cwd, options);
+	const deprecationWarnings = migrateExtensionSystem(cwd);
 	return { migratedAuthProviders, deprecationWarnings };
 }

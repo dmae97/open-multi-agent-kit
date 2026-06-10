@@ -1,12 +1,12 @@
 # Development
 
-See the repository `AGENTS.md` for additional guidelines.
+See [AGENTS.md](https://github.com/earendil-works/pi-mono/blob/main/AGENTS.md) for additional guidelines.
 
 ## Setup
 
 ```bash
-git clone <your-omk-repo>
-cd omk
+git clone https://github.com/earendil-works/pi-mono
+cd pi-mono
 npm install
 npm run build
 ```
@@ -14,10 +14,10 @@ npm run build
 Run from source:
 
 ```bash
-/path/to/omk/pi-test.sh
+/path/to/pi-mono/pi-test.sh
 ```
 
-The script can be run from any directory. OMK keeps the caller's current working directory.
+The script can be run from any directory. Pi keeps the caller's current working directory.
 
 ## Forking / Rebranding
 
@@ -26,12 +26,8 @@ Configure via `package.json`:
 ```json
 {
   "piConfig": {
-    "name": "omk",
-    "configDir": ".omk"
-  },
-  "omkConfig": {
-    "name": "omk",
-    "configDir": ".omk"
+    "name": "pi",
+    "configDir": ".pi"
   }
 }
 ```
@@ -52,7 +48,7 @@ Never use `__dirname` directly for package assets.
 
 ## Debug Command
 
-`/debug` (hidden) writes to `~/.omk/agent/omk-debug.log`:
+`/debug` (hidden) writes to `~/.pi/agent/pi-debug.log`:
 - Rendered TUI lines with ANSI codes
 - Last messages sent to the LLM
 

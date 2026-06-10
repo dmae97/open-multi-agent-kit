@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { Agent, type AgentMessage, type ThinkingLevel } from "@earendil-works/omk-agent-core";
-import { clampThinkingLevel, type Message, type Model, streamSimple } from "@earendil-works/omk-ai";
+import { Agent, type AgentMessage, type ThinkingLevel } from "@earendil-works/pi-agent-core";
+import { clampThinkingLevel, type Message, type Model, streamSimple } from "@earendil-works/pi-ai";
 import { getAgentDir } from "../config.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { AgentSession } from "./agent-session.ts";
@@ -137,7 +137,7 @@ function getDefaultAgentDir(): string {
  * const { session } = await createAgentSession();
  *
  * // With explicit model
- * import { getModel } from '@earendil-works/omk-ai';
+ * import { getModel } from '@earendil-works/pi-ai';
  * const { session } = await createAgentSession({
  *   model: getModel('anthropic', 'claude-opus-4-5'),
  *   thinkingLevel: 'high',
@@ -221,22 +221,17 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	}
 
 	let thinkingLevel = options.thinkingLevel;
-	const modelThinkingLevel = model ? settingsManager.getModelThinkingLevel(model) : undefined;
 
 	// If session has data, restore thinking level from it
 	if (thinkingLevel === undefined && hasExistingSession) {
 		thinkingLevel = hasThinkingEntry
 			? (existingSession.thinkingLevel as ThinkingLevel)
-			: ((modelThinkingLevel ??
-					settingsManager.getDefaultThinkingLevel() ??
-					DEFAULT_THINKING_LEVEL) as ThinkingLevel);
+			: (settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL);
 	}
 
-	// Fall back to per-model/default settings
+	// Fall back to settings default
 	if (thinkingLevel === undefined) {
-		thinkingLevel = (modelThinkingLevel ??
-			settingsManager.getDefaultThinkingLevel() ??
-			DEFAULT_THINKING_LEVEL) as ThinkingLevel;
+		thinkingLevel = settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL;
 	}
 
 	// Clamp to model capabilities
