@@ -120,3 +120,37 @@ test("panel sanitizes title before gradient rendering and width math", () => {
   assert.match(output, /SIGNAL/);
   assert.doesNotMatch(output, /(?<!\x1b)\[(?:38|48);2;|(?<!\x1b)\[0m/);
 });
+
+test("rust-forge.theme.json validates as omk.theme.v1 and compiles for all tiers", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { validateThemeDocument } = await import("../dist/cli/theme/theme-doc.js");
+  const { compileTheme } = await import("../dist/cli/theme/render-table.js");
+
+  const doc = JSON.parse(
+    await readFile(new URL("../themes/rust-forge.theme.json", import.meta.url), "utf8"),
+  );
+
+  const errors = validateThemeDocument(doc);
+  assert.equal(errors.length, 0, `validation errors: ${errors.join("; ")}`);
+
+  for (const tier of ["truecolor", "256", "16", "no-color"]) {
+    const compiled = compileTheme(doc, tier);
+    assert.equal(compiled.name, "rust-forge");
+    assert.equal(compiled.tokens["control.accent"].role, "control.accent");
+    assert.equal(compiled.surfaces.statusCard.border.role, "control.accent");
+    assert.equal(compiled.surfaces.evidenceGate.pass.role, "evidence.pass");
+  }
+});
+
+test("rust-forge compiled palette passes WCAG contrast gates", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { execSync } = await import("node:child_process");
+
+  const output = execSync("npm run theme:check", {
+    cwd: new URL("..", import.meta.url).pathname,
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  assert.match(output, /rust-forge: 80 pairs checked, 0 failed/);
+});

@@ -4,6 +4,11 @@
  */
 
 import { style } from "../../theme/colors.js";
+import { compileTheme } from "./render-table.js";
+import type { OmkThemeV1 } from "./render-table.js";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export type SemanticToken =
   | "success"
@@ -175,31 +180,53 @@ const neonCircuitPalette: ThemePalette = {
   },
 };
 
-// --- rust-forge (Rust/native safety console) ---
+// --- rust-forge (oxidized forge console) ---
+// Compiled from themes/rust-forge.theme.json (omk.theme.v1).
+
+const rustForgeDoc = JSON.parse(
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "themes", "rust-forge.theme.json"),
+    "utf8",
+  ),
+) as OmkThemeV1;
+const rustForgeCompiled = compileTheme(rustForgeDoc, "truecolor");
 
 const rustForgePalette: ThemePalette = {
   name: "rust-forge",
   mode: "dark",
   supportsColor: true,
   render(semantic, text) {
+    const map: Record<Exclude<SemanticToken, "dim" | "bold" | "reset">, string> = {
+      success: "evidence.pass",
+      warning: "telemetry.warn",
+      error: "telemetry.error",
+      info: "telemetry.info",
+      agent: "control.accent",
+      task: "control.fg",
+      tool: "evidence.pass",
+      header: "control.accent",
+      subheader: "dag.lane.done",
+      separator: "control.dim",
+      bullet: "control.accent",
+      labelKey: "control.dim",
+      labelValue: "control.fg",
+    };
     switch (semantic) {
-      case "success": return style.cargoGreen(text);
-      case "warning": return style.orangeBold(text);
-      case "error": return style.redBold(text);
-      case "info": return style.rustBold(text);
-      case "agent": return style.rust(text);
-      case "task": return style.cream(text);
-      case "tool": return style.cargoGreen(text);
-      case "header": return style.rustBold(text);
-      case "subheader": return style.cargoGreen(text);
-      case "dim": return style.dim + text + style.reset;
-      case "bold": return style.bold + text + style.reset;
-      case "reset": return style.reset + text;
-      case "separator": return style.rustOxide(text);
-      case "bullet": return style.rust("▣ " + text);
-      case "labelKey": return style.gray(text);
-      case "labelValue": return style.cream(text);
-      default: return text;
+      case "dim": return "\u001b[2m" + text + "\u001b[0m";
+      case "bold": return "\u001b[1m" + text + "\u001b[0m";
+      case "reset": return "\u001b[0m" + text;
+      case "bullet": {
+        const entry = rustForgeCompiled.tokens[map.bullet];
+        return entry ? entry.sgr + "▣ " + text + rustForgeCompiled.reset : text;
+      }
+      default: {
+        const role = map[semantic as keyof typeof map];
+        if (role) {
+          const entry = rustForgeCompiled.tokens[role];
+          if (entry) return entry.sgr + text + rustForgeCompiled.reset;
+        }
+        return text;
+      }
     }
   },
 };
