@@ -66,12 +66,12 @@ export class FirstTimeSetupComponent extends Container {
 				this.themeIndex,
 			);
 		} else {
-			this.addChild(new Text(theme.fg("text", `Help improve ${APP_NAME} by sharing anonymous usage data?`), 1, 0));
+			this.addChild(new Text(theme.fg("text", "Opt-in to anonymous usage data sharing?"), 1, 0));
 			this.addChild(
 				new Text(
 					theme.fg(
 						"muted",
-						"Opting in stores a tracking identifier in settings.json and enables anonymous\nusage analytics. You can change this at any time in settings.json.",
+						"Opting in stores a tracking identifier in settings.json and enables anonymous\nusage analytics. This helps us to better debug, reproduce, and resolve issues\nand bugs within Pi. You can observe what is shared using /privacy and make\nchanges anytime in settings.json.",
 					),
 					1,
 					0,
