@@ -5,11 +5,15 @@
 
 export type ColorDepth = 0 | 1 | 4 | 8 | 24;
 
+/** Degradation tier used by the render-table compiler. */
+export type ColorTier = "truecolor" | "256" | "16" | "no-color";
+
 export interface TerminalCapability {
   readonly isTty: boolean;
   readonly isCi: boolean;
   readonly colorDisabled: boolean;
   readonly colorDepth: ColorDepth;
+  readonly colorTier: ColorTier;
   readonly unicode: boolean;
   readonly width: number;
 }
@@ -29,8 +33,11 @@ function detectCi(): boolean {
   );
 }
 
-function detectColorDepth(): ColorDepth {
-  // Explicit opt-out
+function detectColorDepth(argv: readonly string[] = process.argv): ColorDepth {
+  // Explicit opt-out: --no-color CLI flag or NO_COLOR env
+  if (argv.includes("--no-color")) {
+    return 0;
+  }
   if (process.env.NO_COLOR !== undefined || process.env.TERM === "dumb") {
     return 0;
   }
@@ -85,15 +92,27 @@ function getTerminalWidth(): number {
   return 80;
 }
 
-export function getTerminalCapability(): TerminalCapability {
+export function colorTierForDepth(depth: ColorDepth): ColorTier {
+  if (depth === 24) return "truecolor";
+  if (depth === 8) return "256";
+  if (depth === 4 || depth === 1) return "16";
+  return "no-color";
+}
+
+export function detectColorTier(argv: readonly string[] = process.argv): ColorTier {
+  return colorTierForDepth(detectColorDepth(argv));
+}
+
+export function getTerminalCapability(argv: readonly string[] = process.argv): TerminalCapability {
   const isCi = detectCi();
-  const colorDepth = detectColorDepth();
+  const colorDepth = detectColorDepth(argv);
 
   return {
     isTty: process.stdout.isTTY ?? false,
     isCi,
     colorDisabled: colorDepth === 0,
     colorDepth,
+    colorTier: colorTierForDepth(colorDepth),
     unicode: detectUnicode(),
     width: getTerminalWidth(),
   };
