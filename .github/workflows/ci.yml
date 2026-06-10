@@ -32,6 +32,11 @@ jobs:
       - run: npm run check
       - run: npm run build:clean
       - run: npm run schema:check
+      - run: npm run theme:check
+      - name: color literal gate
+        run: npm run color:gate
+      - name: asset provenance gate
+        run: npm run assets:check
       - run: npm run proof:check
       - run: npm run test
       - run: npm run native:build
