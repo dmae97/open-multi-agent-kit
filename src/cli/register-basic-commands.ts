@@ -35,6 +35,7 @@ export function registerBasicCommands(program: Command): void {
     .command("version")
     .description("Print OMK version, runtime, contract, and schema status")
     .option("--json", "Output version report as a JSON envelope")
+    .option("--command-envelope", "With --json, emit the automation-facing omk.command.v1 envelope")
     .action(async (options) => {
       const { versionCommand } = await import("../commands/version.js");
       await versionCommand(options);
@@ -74,13 +75,13 @@ export function registerBasicCommands(program: Command): void {
       }
       if (actionMode === "omk") {
         if (!options.yes) {
-          console.log("Upgrade omk via: npm i -g @omk/cli");
+          console.log("Upgrade omk via: npm i -g open-multi-agent-kit");
           console.log("Press Enter to continue or Ctrl+C to cancel...");
           const rl = (await import("readline")).createInterface({ input: process.stdin, output: process.stdout });
           await new Promise<void>((resolve) => rl.question("", () => { rl.close(); resolve(); }));
         }
         const { runShell } = await import("../util/shell.js");
-        const result = await runShell("npm", ["i", "-g", "@omk/cli"], { stdio: "inherit", timeout: 120_000 });
+        const result = await runShell("npm", ["i", "-g", "open-multi-agent-kit"], { stdio: "inherit", timeout: 120_000 });
         process.exit(result.failed ? (result.exitCode ?? 1) : 0);
       }
       if (isKimiAdapterAction) {

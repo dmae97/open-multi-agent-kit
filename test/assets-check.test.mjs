@@ -15,8 +15,11 @@ const SVG_NAMES = [
   "omk-core-loop.svg",
   "omk-evidence-ledger.svg",
   "omk-logo-mark.svg",
+  "omk-parallel-subagents.svg",
   "omk-provider-lanes.svg",
   "omk-release-assertions.svg",
+  "omk-adaptorch-ouroboros-supermemory.svg",
+  "omk-init-control-loop.svg",
 ];
 
 async function themeHash() {

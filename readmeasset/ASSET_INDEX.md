@@ -33,6 +33,9 @@ Curated OMK//CONTROL assets in this directory. Assets are provenance-covered and
 | `omk-core-loop.svg`             | yes       | OMK Core Loop                                  | local SVG render from OMK palette          | `1200x420`  | `SVG`  |   2731 |
 | `omk-control-surfaces.svg`      | yes       | Operator control surfaces                      | local SVG render from OMK palette          | `1200x420`  | `SVG`  |   3325 |
 | `omk-release-assertions.svg`    | yes       | Release assertion card                         | local SVG render from OMK palette          | `1200x420`  | `SVG`  |   3052 |
+| `omk-init-control-loop.svg`     | yes       | Init to control loop                           | local SVG render from OMK palette          | `1200x520`  | `SVG`  |   7339 |
+| `omk-parallel-subagents.svg`    | yes       | Parallel subagent lanes                        | local SVG render from OMK palette          | `1200x520`  | `SVG`  |   6559 |
+| `omk-adaptorch-ouroboros-supermemory.svg` | yes | Adaptive memory stack                    | local SVG render from OMK palette          | `1200x520`  | `SVG`  |   6404 |
 | `omk-provider-lanes.svg`        | repo-only | Provider Lanes                                 | local SVG render from OMK palette          | `1200x420`  | `SVG`  |   2753 |
 | `omk-evidence-ledger.svg`       | repo-only | Evidence Ledger                                | local SVG render from OMK palette          | `1200x420`  | `SVG`  |   2411 |
 | `omk-badges.svg`                | repo-only | OMK Badges                                     | local SVG render from OMK palette          | `1200x420`  | `SVG`  |   2405 |

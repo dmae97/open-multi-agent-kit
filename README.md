@@ -110,6 +110,10 @@ The GitHub visual set presents OMK as a Night City Ops Console: route status, DA
 | ---------------- | ------------------ |
 | <img src="readmeasset/omk-control-surfaces.svg" alt="OMK control surfaces: CLI, provider router, MCP scope, evidence gate, replay ledger, and package audit" /> | <img src="readmeasset/omk-release-assertions.svg" alt="OMK release assertions: package name, CLI bins, release gates, package-safe exclusions, and registry verification" /> |
 
+| Init to control loop | Parallel subagents | Optional adaptive memory |
+| -------------------- | ------------------ | ------------------------ |
+| <img src="readmeasset/omk-init-control-loop.svg" alt="OMK init to control loop: install, init, doctor, DAG compile, router workers, verify, and replay" /> | <img src="readmeasset/omk-parallel-subagents.svg" alt="OMK parallel subagents: root control fans out scoped lanes, collects evidence, then synthesizes and verifies" /> | <img src="readmeasset/omk-adaptorch-ouroboros-supermemory.svg" alt="OMK adaptive memory stack: optional Adaptorch, Ouroboros, and Supermemory integrations around the evidence-gated core" /> |
+
 ## Install
 
 Requires Node.js `>=20` and npm `>=10`. The [3-minute route](#quickstart-3-minutes) uses the current public package name. Use `open-multi-agent-kit`; legacy Kimi-branded package names are not the active install path.
@@ -354,7 +358,9 @@ What those checks assert before publish:
 Machine-readable contracts currently include:
 
 - `omk.contract.v1`
+- `omk.command.v1`
 - `omk.evidence.v1`
+- `omk.evidence-bundle.v1`
 - `omk.decision.v1`
 - `omk.run-manifest.v1`
 - `omk.provider.v1`
@@ -366,6 +372,8 @@ Schemas live in the source-tree `schemas/` directory and are checked with:
 ```bash
 npm run schema:check
 ```
+
+Runtime event logs are written to `.omk/runs/<runId>/events.ndjson`; `.omk/runs/<runId>/events.jsonl` remains mirrored for compatibility during the migration window.
 
 ## Known implementation caveats
 

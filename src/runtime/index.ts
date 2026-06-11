@@ -49,6 +49,15 @@ export {
 } from "./kimi-print-runtime.js";
 
 export {
+  type RecoveryArtifactRef,
+  type RecoveryArtifactStore,
+  type RecoveryArtifactStoreOptions,
+  type RecoveryCaptureInput,
+  type RecoveryFailureKind,
+  createRecoveryArtifactStore,
+} from "./recovery-artifact-store.js";
+
+export {
   type ContextBudgetReport,
   type DroppedContextItem,
   type ContextTokenBreakdown,

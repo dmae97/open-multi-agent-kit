@@ -6,7 +6,9 @@ const root = process.cwd();
 
 const expectedSchemas = [
   ["omk.contract.v1", "schemas/omk.contract.v1.schema.json"],
+  ["omk.command.v1", "schemas/omk.command.v1.schema.json"],
   ["omk.evidence.v1", "schemas/omk.evidence.v1.schema.json"],
+  ["omk.evidence-bundle.v1", "schemas/omk.evidence-bundle.v1.schema.json"],
   ["omk.decision.v1", "schemas/omk.decision.v1.schema.json"],
   ["omk.run-manifest.v1", "schemas/omk.run-manifest.v1.schema.json"],
   ["omk.provider.v1", "schemas/omk.provider.v1.schema.json"],

@@ -2486,9 +2486,9 @@ export async function initCommand(options: InitCommandOptions): Promise<void> {
     console.log("");
     console.log(style.orange("⚠️  omk is not in PATH."));
     console.log(style.gray("   Run one of the following:"));
-    console.log(style.gray("   1) npm install -g @omk/cli"));
+    console.log(style.gray("   1) npm install -g open-multi-agent-kit"));
     console.log(style.gray("   2) npm link (for development)"));
-    console.log(style.gray("   3) alias omk='npx -p @omk/cli omk'"));
+    console.log(style.gray("   3) alias omk='npx -p open-multi-agent-kit omk'"));
   } else {
     await maybeInstallShellCompletion(root);
   }

@@ -211,7 +211,7 @@ export async function runtimeChecks(resources: OmkResourceSettings): Promise<Che
 
   const currentVersion = getOmkVersionSync();
   try {
-    const latest = execSync("npm view @omk/cli version", {
+    const latest = execSync("npm view open-multi-agent-kit version", {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "ignore"],
       timeout: 5000,
@@ -220,7 +220,7 @@ export async function runtimeChecks(resources: OmkResourceSettings): Promise<Che
       results.push({
         name: "OMK Version",
         status: "warn",
-        message: `${currentVersion} → ${latest} available. Run: npm i -g @omk/cli`,
+        message: `${currentVersion} → ${latest} available. Run: npm i -g open-multi-agent-kit`,
       });
     } else {
       results.push({

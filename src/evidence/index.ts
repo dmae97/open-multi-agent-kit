@@ -72,6 +72,17 @@ export {
 } from "./evidence-trust-score.js";
 
 export type {
+  EvidenceBundle,
+  EvidenceBundleArtifact,
+  EvidenceBundleIssue,
+  EvidenceBundleIssueKind,
+  EvidenceBundleValidationResult,
+  EvidenceBundleVerdict,
+} from "../contracts/evidence-bundle.js";
+export type { ValidateEvidenceBundleOptions } from "./bundle-validator.js";
+export { validateEvidenceBundle } from "./bundle-validator.js";
+
+export type {
   AlgorithmSpec,
   ReleaseCandidate,
   RegressionProofMatrixResult,
