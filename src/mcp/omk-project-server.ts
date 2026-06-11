@@ -991,14 +991,14 @@ async function handleReadTodos(args: { runId: string }): Promise<{ todos: TodoIt
   return { todos: [], source: null };
 }
 
-async function handleTailRunEvents(args: { runId: string; afterSeq?: number; limit?: number }): Promise<{ events: unknown[]; source: "events.jsonl" }> {
+async function handleTailRunEvents(args: { runId: string; afterSeq?: number; limit?: number }): Promise<{ events: unknown[]; source: "events.ndjson" }> {
   const runId = sanitizeRunId(args.runId);
   const runDir = join(OMK_RUNS_DIR, runId);
   const events = await tailEvents(runDir, {
     afterSeq: typeof args.afterSeq === "number" ? args.afterSeq : undefined,
     limit: typeof args.limit === "number" ? Math.max(0, Math.min(500, args.limit)) : 200,
   });
-  return { events: redactSecrets(events) as unknown[], source: "events.jsonl" };
+  return { events: redactSecrets(events) as unknown[], source: "events.ndjson" };
 }
 
 async function handleReadRunState(args: { runId: string }): Promise<{ state: unknown; events: unknown[]; todos: TodoItem[] | null }> {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -10,11 +10,15 @@ async function tempDir() {
   return mkdtemp(join(tmpdir(), "omk-events-"));
 }
 
-test("appendEvent writes JSON lines to events.jsonl", async () => {
+test("appendEvent writes JSON lines to events.ndjson and legacy events.jsonl", async () => {
   const dir = await tempDir();
   try {
     await appendEvent(dir, { type: "node-start", runId: "r1", nodeId: "n1" });
     await appendEvent(dir, { type: "node-complete", runId: "r1", nodeId: "n1", data: { success: true } });
+
+    const ndjson = await readFile(join(dir, "events.ndjson"), "utf-8");
+    const jsonl = await readFile(join(dir, "events.jsonl"), "utf-8");
+    assert.equal(ndjson, jsonl, "events.ndjson mirrors legacy events.jsonl during migration");
 
     const events = await readEvents(dir);
     assert.equal(events.length, 2);
@@ -32,6 +36,7 @@ test("appendEvent writes JSON lines to events.jsonl", async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
 
 test("appendEvent bounds and redacts telemetry payloads", async () => {
   const dir = await tempDir();
@@ -71,6 +76,23 @@ test("tailEvents filters by seq and limit", async () => {
     assert.equal(tailed.length, 1);
     assert.equal(tailed[0].type, "lane.completed");
     assert.equal(tailed[0].seq, 3);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("readEvents falls back to legacy events.jsonl", async () => {
+  const dir = await tempDir();
+  try {
+    await writeFile(
+      join(dir, "events.jsonl"),
+      `${JSON.stringify({ schemaVersion: "telemetry.v1", seq: 1, type: "run.started", timestamp: "2026-06-11T00:00:00.000Z", runId: "r5" })}\n`,
+      "utf-8",
+    );
+    const events = await readEvents(dir);
+    assert.equal(events.length, 1);
+    assert.equal(events[0].type, "run.started");
+    assert.equal(events[0].runId, "r5");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

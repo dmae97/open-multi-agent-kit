@@ -12,10 +12,12 @@ import {
 import type { VersionReport } from "../contracts/index.js";
 import { emitJson } from "../util/cli-contract.js";
 import { createOmkJsonEnvelope } from "../util/json-envelope.js";
+import { createOmkCommandEnvelope } from "../util/command-envelope.js";
 import { getOmkVersionSync } from "../util/version.js";
 
 export type VersionCommandOptions = {
   json?: boolean;
+  commandEnvelope?: boolean;
 };
 
 type PackageJson = {
@@ -87,6 +89,23 @@ export async function versionCommand(options: VersionCommandOptions = {}): Promi
   const started = Date.now();
   const report = buildVersionReport();
   if (options.json) {
+    if (options.commandEnvelope) {
+      emitJson(createOmkCommandEnvelope({
+        command: "version",
+        status: report.consistent ? "pass" : "fail",
+        commit: report.gitCommit,
+        data: report,
+        diagnostics: report.mismatches.map((mismatch) => ({
+          severity: "error" as const,
+          code: "VERSION_MISMATCH",
+          message: `${mismatch.file}: expected ${mismatch.expected} but found ${mismatch.actual}`,
+          redacted: true,
+          path: mismatch.file,
+        })),
+        exitCode: report.consistent ? 0 : 1,
+      }));
+      return;
+    }
     emitJson(createOmkJsonEnvelope({
       command: "version",
       status: report.consistent ? "passed" : "failed",

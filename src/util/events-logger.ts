@@ -34,7 +34,16 @@ export type TelemetryEventType =
   | "provider.advisory.started"
   | "provider.advisory.completed"
   | "provider.advisory.failed"
-  | "evidence.result";
+  | "evidence.result"
+  | "run.started"
+  | "run.completed"
+  | "dag.node.started"
+  | "dag.node.completed"
+  | "provider.selected"
+  | "tool.allowed"
+  | "tool.denied"
+  | "evidence.attached"
+  | "verifier.verdict";
 
 export interface TelemetryEvent {
   schemaVersion: "telemetry.v1";
@@ -167,6 +176,7 @@ export async function appendEvent(
   const write = previous.then(async () => {
     const seq = await nextSeq(runDir, event.seq);
     const line = JSON.stringify(sanitizeTelemetryEvent({ ...event, timestamp: event.timestamp ?? new Date().toISOString() }, seq)) + "\n";
+    await appendFile(join(runDir, "events.ndjson"), line, "utf-8");
     await appendFile(join(runDir, "events.jsonl"), line, "utf-8");
   });
   appendQueueByRunDir.set(runDir, write.catch(() => {}));
@@ -174,23 +184,28 @@ export async function appendEvent(
 }
 
 export async function readEvents(runDir: string): Promise<ReplayEvent[]> {
+  let content: string;
   try {
-    const content = await readFile(join(runDir, "events.jsonl"), "utf-8");
-    const events: ReplayEvent[] = [];
-    for (const line of content.split("\n")) {
-      if (!line.trim()) continue;
-      try {
-        const parsed = JSON.parse(line) as EventInput;
-        const seq = typeof parsed.seq === "number" && Number.isFinite(parsed.seq) ? parsed.seq : events.length + 1;
-        events.push(sanitizeTelemetryEvent(parsed, seq));
-      } catch {
-        // Keep append-only logs readable even if one line is corrupt.
-      }
-    }
-    return events;
+    content = await readFile(join(runDir, "events.ndjson"), "utf-8");
   } catch {
-    return [];
+    try {
+      content = await readFile(join(runDir, "events.jsonl"), "utf-8");
+    } catch {
+      return [];
+    }
   }
+  const events: ReplayEvent[] = [];
+  for (const line of content.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const parsed = JSON.parse(line) as EventInput;
+      const seq = typeof parsed.seq === "number" && Number.isFinite(parsed.seq) ? parsed.seq : events.length + 1;
+      events.push(sanitizeTelemetryEvent(parsed, seq));
+    } catch {
+      // Keep append-only logs readable even if one line is corrupt.
+    }
+  }
+  return events;
 }
 
 export async function tailEvents(runDir: string, options: ReadEventsOptions = {}): Promise<ReplayEvent[]> {

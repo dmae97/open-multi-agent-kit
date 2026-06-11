@@ -90,6 +90,9 @@
 | `omk-core-loop.svg` | themes/night-city.theme.json via scripts/assets-build.mjs | OMK Core Loop | `1200x420` | `SVG` | 2731 | `0f60a453833c541a05db3b509f9d56fae02c38c89334c7c57357f281cad439f2` |
 | `omk-control-surfaces.svg` | themes/night-city.theme.json via scripts/assets-build.mjs | Operator control surfaces | `1200x420` | `SVG` | 3325 | `2295e2048336452a7abef90c0636107be36845946976fd79563f10092b22bd99` |
 | `omk-release-assertions.svg` | themes/night-city.theme.json via scripts/assets-build.mjs | Release assertion card | `1200x420` | `SVG` | 3052 | `8040d23c46bf48fd7f946f9ff491dcad8aa41ce023b7b062ff5475667c8f283d` |
+| `omk-init-control-loop.svg` | themes/night-city.theme.json via scripts/assets-build.mjs | Init to control loop | `1200x520` | `SVG` | 7339 | `e6225f8b66a89353aff109d29b2943b0b292f10195a84a770030a63687478739` |
+| `omk-parallel-subagents.svg` | themes/night-city.theme.json via scripts/assets-build.mjs | Parallel subagent lanes | `1200x520` | `SVG` | 6559 | `16de0ab85063c45260f6d6545df0c5721ca6cf8c650c8d1223296acea22d0017` |
+| `omk-adaptorch-ouroboros-supermemory.svg` | themes/night-city.theme.json via scripts/assets-build.mjs | Adaptive memory stack | `1200x520` | `SVG` | 6404 | `6f7318675939f9190ed9011f2f0f02e2a5a34d1ab2fac8d3fe10a92f9a441d54` |
 | `omk-provider-lanes.svg` | themes/night-city.theme.json via scripts/assets-build.mjs | Provider Lanes | `1200x420` | `SVG` | 2753 | `d7d85098e02e78d37d10a9886a041a8546bfa8438dd3f29bb157ce848bfd0b83` |
 | `omk-evidence-ledger.svg` | themes/night-city.theme.json via scripts/assets-build.mjs | Evidence Ledger | `1200x420` | `SVG` | 2411 | `01f0d66d2ba9915d9975bd7f93bb790e7ab0e11adbaedf84b4e5c25be6fe837c` |
 | `omk-badges.svg` | themes/night-city.theme.json via scripts/assets-build.mjs | OMK Badges | `1200x420` | `SVG` | 2405 | `4a4c94daca5d81e10a1ca185d3c07d4dfa6ac732363ecbc4bdbde841d4624cf6` |
@@ -106,5 +109,8 @@
 - derived-from: omk.theme.v1/night-city@e5daf40d789d — `omk-core-loop.svg`
 - derived-from: omk.theme.v1/night-city@e5daf40d789d — `omk-evidence-ledger.svg`
 - derived-from: omk.theme.v1/night-city@e5daf40d789d — `omk-logo-mark.svg`
+- derived-from: omk.theme.v1/night-city@e5daf40d789d — `omk-parallel-subagents.svg`
 - derived-from: omk.theme.v1/night-city@e5daf40d789d — `omk-provider-lanes.svg`
 - derived-from: omk.theme.v1/night-city@e5daf40d789d — `omk-release-assertions.svg`
+- derived-from: omk.theme.v1/night-city@e5daf40d789d — `omk-adaptorch-ouroboros-supermemory.svg`
+- derived-from: omk.theme.v1/night-city@e5daf40d789d — `omk-init-control-loop.svg`

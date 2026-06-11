@@ -19,4 +19,7 @@
 !omk-core-loop.svg
 !omk-control-surfaces.svg
 !omk-release-assertions.svg
+!omk-parallel-subagents.svg
+!omk-adaptorch-ouroboros-supermemory.svg
+!omk-init-control-loop.svg
 !.npmignore
