@@ -422,6 +422,27 @@ export function resolveCliModel(options: {
 	});
 
 	if (model) {
+		// If provider inference matched an unauthenticated provider/model pair, prefer
+		// one exact raw model-id match that is authenticated. This keeps
+		// "provider/model" syntax preferred when usable, but handles models whose
+		// literal id starts with a known provider name (for example
+		// commandcode model id "xiaomi/mimo-v2.5-pro").
+		if (inferredProvider) {
+			const rawExactMatches = availableModels.filter(
+				(m) => m.id.toLowerCase() === cliModel.toLowerCase() && !modelsAreEqual(m, model),
+			);
+			if (rawExactMatches.length > 0 && !modelRegistry.hasConfiguredAuth(model)) {
+				const authenticatedRawMatches = rawExactMatches.filter((m) => modelRegistry.hasConfiguredAuth(m));
+				if (authenticatedRawMatches.length === 1) {
+					return {
+						model: authenticatedRawMatches[0],
+						thinkingLevel: undefined,
+						warning: undefined,
+						error: undefined,
+					};
+				}
+			}
+		}
 		return { model, thinkingLevel, warning, error: undefined };
 	}
 
