@@ -9,7 +9,7 @@ Use it when one agent is too loose, too risky, or too hard to audit.
 <p>
   <a href="https://www.npmjs.com/package/open-multi-agent-kit"><img alt="npm version" src="https://img.shields.io/npm/v/open-multi-agent-kit?color=00D6FF"></a>
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <a href="proof/PROOF_INDEX.md"><img alt="proof check" src="https://img.shields.io/badge/proof--check-source-00FFC2"></a>
+  <a href="https://github.com/dmae97/open-multi-agent-kit/blob/main/proof/PROOF_INDEX.md"><img alt="proof check" src="https://img.shields.io/badge/proof--check-source-00FFC2"></a>
   <a href="https://github.com/dmae97/open-multi-agent-kit/discussions"><img alt="discussions" src="https://img.shields.io/badge/discussions-open-9D4EDD"></a>
 </p>
 
@@ -85,9 +85,9 @@ Goal → DAG plan → scoped lanes → evidence bundle → verify gate → repla
 
 ## Examples
 
-- [Codex MCP evidence run](examples/codex-mcp-evidence-run/): project-scoped MCP setup plus evidence-gated DAG dry run.
-- [Provider fallback](examples/provider-fallback/): `--provider auto` routing with fallback planning.
-- [Proof index](proof/PROOF_INDEX.md): source-controlled proof bundles checked by `npm run proof:check`.
+- [Codex MCP evidence run](https://github.com/dmae97/open-multi-agent-kit/tree/main/examples/codex-mcp-evidence-run): project-scoped MCP setup plus evidence-gated DAG dry run.
+- [Provider fallback](https://github.com/dmae97/open-multi-agent-kit/tree/main/examples/provider-fallback): `--provider auto` routing with fallback planning.
+- [Proof index](https://github.com/dmae97/open-multi-agent-kit/blob/main/proof/PROOF_INDEX.md): source-controlled proof bundles checked by `npm run proof:check`.
 
 ## Maturity and safety claims
 
