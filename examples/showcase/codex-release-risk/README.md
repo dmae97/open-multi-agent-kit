@@ -24,19 +24,16 @@ A dry run should describe a bounded plan instead of claiming success:
 goal
   review this repo for release risk
 
-dag
-  1. inspect package and version contract
-  2. check security and secret-scan boundaries
-  3. verify evidence and release gates
-  4. synthesize release risk
+flow
+  goal -> input envelope -> DAG -> scoped lanes -> evidence -> verify
 
-artifacts
+artifacts (dry run)
+  .omk/runs/<run-id>/input-envelope.json
+  .omk/runs/<run-id>/dag.json
   .omk/runs/<run-id>/dag-compile-report.json
-  .omk/runs/<run-id>/evidence-bundle.json
-  .omk/runs/<run-id>/decision.json
 ```
 
-Artifact filenames can evolve with the runtime contract; the invariant is that OMK should persist a run directory and evidence before a worker claims completion.
+Executing the compiled DAG (not dry-run) adds loop artifacts such as `.omk/runs/<run-id>/loop-state.json` and `.omk/runs/<run-id>/loop-decisions.jsonl`. Artifact filenames can evolve with the runtime contract; the invariant is that OMK persists a run directory and evidence before a worker claims completion.
 
 ## What this proves
 
