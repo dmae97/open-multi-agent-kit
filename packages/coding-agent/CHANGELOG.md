@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added `SHA256SUMS` integrity files to standalone binary GitHub release assets ([#5739](https://github.com/earendil-works/pi/issues/5739)).
 - Added first-run interactive theme detection from the terminal background.
 
 ### Fixed
