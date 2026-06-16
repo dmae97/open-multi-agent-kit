@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Updated Markdown parsing to `marked` 18.0.5.
+
 ## [0.79.4] - 2026-06-15
 
 ### Added
