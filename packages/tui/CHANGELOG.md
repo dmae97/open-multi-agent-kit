@@ -6,6 +6,10 @@
 
 - Updated Markdown parsing to `marked` 18.0.5.
 
+### Fixed
+
+- Fixed editor Cursor Up handling so non-empty drafts jump to the start of the line before browsing input history ([#5789](https://github.com/earendil-works/pi/pull/5789) by [@4h9fbZ](https://github.com/4h9fbZ)).
+
 ## [0.79.4] - 2026-06-15
 
 ### Added
