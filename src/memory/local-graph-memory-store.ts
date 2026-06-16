@@ -487,6 +487,104 @@ export class LocalGraphMemoryStore {
     await writeFile(`${mirrorDir}/risks.md`, `# Risks\n\n${renderNodes(byType("Risk"))}`, "utf-8");
   }
 
+  async materializeTurnAudit(input: {
+    readonly runId: string;
+    readonly nodeId: string;
+    readonly provider?: string;
+    readonly selectedRuntime?: string;
+    readonly fallbackChain?: readonly string[];
+    readonly evidenceKind?: string;
+    readonly evidenceArtifactPath?: string;
+    readonly evidenceHash?: string;
+  }): Promise<void> {
+    await this.mutateState((state, now) => {
+      state.updatedAt = now;
+      state.project = { ...this.settings.project };
+      state.ontology = ONTOLOGY;
+
+      const runId = this.nodeId("Run", input.runId);
+      const turnId = this.nodeId("Task", `${input.runId}:${input.nodeId}`);
+      const routeId = this.nodeId("ProviderRoute", `${input.runId}:${input.nodeId}:${input.selectedRuntime ?? input.provider ?? "unknown"}`);
+      const evidenceId = this.nodeId("Evidence", `${input.runId}:${input.nodeId}:${input.evidenceArtifactPath ?? input.evidenceKind ?? "result"}`);
+
+      const projectId = this.nodeId("Project", this.settings.project.key);
+      this.upsertNode(state, {
+        id: projectId,
+        type: "Project",
+        labels: ["OmkProject", "Project"],
+        label: this.settings.project.name,
+        summary: this.settings.project.root,
+        tags: ["project"],
+        properties: { key: this.settings.project.key, root: this.settings.project.root },
+        createdAt: now,
+        updatedAt: now,
+      });
+      this.upsertNode(state, {
+        id: runId,
+        type: "Run",
+        labels: ["OmkRun", "Run"],
+        label: input.runId,
+        summary: `Run ${input.runId}`,
+        tags: ["run", "audit"],
+        properties: { key: input.runId, runId: input.runId, projectKey: this.settings.project.key },
+        createdAt: now,
+        updatedAt: now,
+      });
+      this.upsertNode(state, {
+        id: turnId,
+        type: "Task",
+        labels: ["OmkTurn", "Task"],
+        label: input.nodeId,
+        summary: `Turn ${input.nodeId}`,
+        tags: ["turn", "audit"],
+        properties: { key: `${input.runId}:${input.nodeId}`, runId: input.runId, nodeId: input.nodeId },
+        createdAt: now,
+        updatedAt: now,
+      });
+      this.upsertNode(state, {
+        id: routeId,
+        type: "ProviderRoute",
+        labels: ["OmkProviderRoute", "ProviderRoute"],
+        label: input.selectedRuntime ?? input.provider ?? "unknown-runtime",
+        summary: `Selected runtime: ${input.selectedRuntime ?? input.provider ?? "unknown"}`,
+        tags: ["provider-route", "audit"],
+        properties: {
+          key: `${input.runId}:${input.nodeId}:route`,
+          runId: input.runId,
+          nodeId: input.nodeId,
+          provider: input.provider ?? "unknown",
+          selectedRuntime: input.selectedRuntime ?? "unknown",
+          fallbackChain: (input.fallbackChain ?? []).join(","),
+        },
+        createdAt: now,
+        updatedAt: now,
+      });
+      this.upsertNode(state, {
+        id: evidenceId,
+        type: "Evidence",
+        labels: ["OmkEvidence", "Evidence"],
+        label: input.evidenceKind ?? "turn-result",
+        summary: input.evidenceArtifactPath ?? "turn result artifact",
+        tags: ["evidence", "audit"],
+        properties: {
+          key: `${input.runId}:${input.nodeId}:evidence`,
+          runId: input.runId,
+          nodeId: input.nodeId,
+          kind: input.evidenceKind ?? "turn-result",
+          artifactRef: input.evidenceArtifactPath ?? "",
+          sha256: input.evidenceHash ?? "",
+        },
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      this.upsertEdge(state, projectId, runId, "HAS_RUN", now);
+      this.upsertEdge(state, runId, turnId, "HAS_TASK", now);
+      this.upsertEdge(state, turnId, routeId, "HAS_PROVIDER_ROUTE", now);
+      this.upsertEdge(state, routeId, evidenceId, "EVIDENCED_BY", now);
+    });
+  }
+
   async append(path: string, content: string): Promise<void> {
     await this.mutateState((state, now) => {
       const existing = this.readFromState(state, path);

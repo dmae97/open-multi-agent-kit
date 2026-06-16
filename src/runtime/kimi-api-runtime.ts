@@ -302,8 +302,16 @@ export class KimiApiRuntime implements AgentRuntime {
         runtimeOk,
         authOk,
         modelOk,
-        quotaOk: true, // quota can only be known at call time; default to true and let failures update
+        quotaOk: true, // legacy optimistic default; v2 state remains unknown until a live probe/call.
         rateLimitOk: true,
+        runtime: runtimeOk ? "pass" : "fail",
+        auth: authOk ? "pass" : "fail",
+        model: modelOk ? "pass" : "fail",
+        quota: "unknown",
+        rateLimit: "unknown",
+        lastProbeKind: "static",
+        checkedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
       },
     };
   }

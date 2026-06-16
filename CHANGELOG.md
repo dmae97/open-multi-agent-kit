@@ -4,10 +4,13 @@
 
 ### Added
 
+- Added post-0.79.3 algorithm hardening roadmap and playbook docs for phased authority, evidence, health, prompt privacy, audit graph, and release-gate improvements.
+- Added runtime-mode authority matrix, `AgentTask.safety`, evidence observation semantics, tri-state health signals, prompt-private turn artifacts, audit graph materialization, and authority smoke coverage.
 - Added project-local spec-kit artifacts under `.speckit/` and `specs/` for OMK 0.79.3 machine-checkable hardening.
 
 ### Changed
 
+- Refreshed provider maturity docs around `(provider, runtimeMode)` authority instead of provider identity alone.
 - Refreshed current-facing docs and roadmap language to align with `open-multi-agent-kit@0.79.3`, runtime contract family `v1.2`, and `pre-1.0` release-channel claims.
 
 ## v0.79.3 — GLM 5.2 max thinking, scroll-safe TTY, and OSS CLI polish (2026-06-15)

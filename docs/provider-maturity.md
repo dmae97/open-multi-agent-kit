@@ -8,21 +8,23 @@ This page documents provider status for the current source tree.
 - Runtime contract family: `v1.2`
 - Release channel: `pre-1.0`
 
-## Provider matrix
+## Runtime-mode authority matrix
 
-This table describes built-in source defaults. `omk provider list --json` also merges user-local provider configuration, so local output may include custom providers or changed enabled/configured flags.
+Authority belongs to `(provider, runtimeMode)`, not provider identity alone. The source of truth is `src/runtime/authority-matrix.ts`.
 
-| Provider | Default model / runtime | Routing role | Auth/config source | Current maturity |
-| --- | --- | --- | --- | --- |
-| Kimi | `kimi-k2.6` / `kimi-api` | Default coding authority and compatibility fallback | Provider/runtime config; no OMK-managed OAuth exchange | Most mature authority path. Still subject to API/key/runtime availability. |
-| MiMo | `mimo-v2.5-pro` / `mimo-api` | Runtime provider for read/review/thinking lanes; advisory after authority downgrade in API runtime | `MIMO_API_KEY` | RC path. Do not claim direct workspace-write authority from the API runtime. |
-| DeepSeek | `deepseek-v4-flash`, `deepseek-v4-pro` | Read/review/QA/research/advisory lanes; direct only for low-risk read-only routes | `DEEPSEEK_API_KEY` or user-local DeepSeek config | Mature enough for opportunistic advisory/read-only lanes; write, MCP, and merge authority stay with the authority provider. |
-| Qwen | `qwen3-max` | Advisory/read/research/review/QA routes | `DASHSCOPE_API_KEY` | Configured provider path exists; broader release-gate coverage is still pending. |
-| OpenRouter | `openrouter/auto` | Advisory/read/research/review/QA routes | `OPENROUTER_API_KEY`; provider-side BYOK/OAuth | Configured provider path exists; OMK records env-var metadata, not secret values. |
-| Codex | `codex-cli` | External CLI provider for read/plan/review/advisory and explicit policy routes | Official Codex CLI login; OMK does not read token files | Compatibility path. MCP authority is not granted to Codex CLI routes. |
-| OpenCode | `opencode-cli` | External CLI runtime for read/write/shell/patch/review when selected and available | External CLI auth/config | Compatibility path; availability depends on the local CLI. |
-| CommandCode | `commandcode-cli` | External CLI runtime for read/write/shell/patch/review when selected and available | External CLI auth/config | Compatibility path; availability depends on the local CLI. |
-| Local LLM | `qwen3-coder-30b-a3b` at `http://localhost:8080/v1` | Local OpenAI-compatible runtime | Local endpoint; optional `LOCAL_LLM_API_KEY` | Local preview path. API runtime rejects direct shell/tool-calling authority. |
+| Runtime mode | Authority class | Allowed authority | Current maturity |
+| --- | --- | --- | --- |
+| `kimi:api` | advisory API | read, review, vision, advisory tool-calling | Mature read/review path. No direct workspace write/shell/merge authority. |
+| `kimi:wire` / `kimi:cli` | OMK-controlled compatibility path | read, review, write, patch, vision, tool-calling | Compatibility authority for edits only when routed through OMK controls. Shell/merge stay separately gated. |
+| `mimo:api` | advisory API | read, review, thinking | Default model provider for advisory/thinking lanes. No direct workspace write authority. |
+| `deepseek:api` | advisory API | read, review | Opportunistic read/review/QA/research. Write, MCP, shell, merge blocked. |
+| `glm:api` | advisory API | read, review | Advisory/thinking path; broader release-gate coverage pending. |
+| `codex:cli` | bounded CLI | read, review, write, patch, shell | Workspace authority only under OMK approval/sandbox policy. Merge withheld. |
+| `opencode:cli` | bounded CLI | read, review, write, patch, shell | Compatibility path; availability depends on local CLI and auth. |
+| `commandcode:cli` | bounded CLI | read, review, write, patch, shell | Compatibility path; availability depends on local CLI and auth. |
+| `local-llm:api` | advisory API | read, review | Local preview path. API runtime rejects direct shell/tool-calling authority. |
+
+`omk provider list --json` also merges user-local provider configuration, so local output may include custom providers or changed enabled/configured flags.
 
 ## Routing rules to preserve
 

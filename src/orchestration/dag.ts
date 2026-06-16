@@ -45,6 +45,9 @@ export interface DagNodeRouting {
   approvalPolicy?: string;
   executionPrompt?: string;
   promptMode?: string;
+  promptHash?: string;
+  promptPayloadRef?: string;
+  promptPayloadPrivate?: boolean;
   runtimeSidecar?: unknown;
   needsIntegration?: boolean;
   /**

@@ -113,3 +113,68 @@
   > authority: shell
   > verify: `npm run check && npm run build:clean && npm run lint && npm run secret:scan && npm run version:check && npm test`
   > gate: command-pass
+
+## Phase 4 — Post-0.79.3 Algorithm Hardening
+
+- [x] T013 Document phased post-0.79.3 hardening roadmap and playbook
+  > role: planner
+  > deps: T010
+  > files: [`docs/post-0793-hardening-roadmap.md`, `docs/algorithm-hardening-playbook.md`]
+  > risk: write
+  > authority: write
+  > verify: `npm run version:check`
+  > gate: command-pass
+
+- [x] T014 Add runtime-mode authority matrix
+  > role: coder
+  > deps: T013
+  > files: [`src/runtime/authority-matrix.ts`, `src/runtime/runtime-router.ts`, `docs/provider-maturity.md`, `test/authority-matrix.test.mjs`]
+  > risk: write
+  > authority: write
+  > verify: `node --test test/authority-matrix.test.mjs test/runtime-router-advisory-boundary.test.mjs`
+  > gate: command-pass
+
+- [x] T015 Elevate `AgentTask.safety` to top-level contract
+  > role: coder
+  > deps: T014
+  > files: [`src/runtime/agent-runtime.ts`, `src/runtime/context-broker-converter.ts`, `test/safety-contract.test.mjs`]
+  > risk: write
+  > authority: write
+  > verify: `node --test test/safety-contract.test.mjs`
+  > gate: command-pass
+
+- [x] T016 Add tri-state runtime health vector v2
+  > role: coder
+  > deps: T014
+  > files: [`src/runtime/contracts/shared.ts`, `src/runtime/runtime-router.ts`, `src/runtime/*-runtime.ts`, `test/health-vector-v2.test.mjs`]
+  > risk: write
+  > authority: write
+  > verify: `node --test test/health-vector-v2.test.mjs`
+  > gate: command-pass
+
+- [x] T017 Split evidence declarations from observations
+  > role: coder
+  > deps: T015
+  > files: [`src/runtime/contracts/evidence.ts`, `src/runtime/runtime-backed-task-runner.ts`, `test/evidence-v2.test.mjs`, `test/evidence-gate.test.mjs`]
+  > risk: write
+  > authority: write
+  > verify: `node --test test/evidence-gate.test.mjs test/evidence-v2.test.mjs`
+  > gate: command-pass
+
+- [x] T018 Add private prompt payload artifacts and audit graph materialization
+  > role: coder
+  > deps: T017
+  > files: [`src/commands/chat/native-root-loop.ts`, `src/runtime/context-broker.ts`, `src/memory/local-graph-memory-store.ts`, `test/prompt-payload-separation.test.mjs`, `test/audit-graph-materialization.test.mjs`]
+  > risk: write
+  > authority: write
+  > verify: `node --test test/prompt-payload-separation.test.mjs test/audit-graph-materialization.test.mjs`
+  > gate: command-pass
+
+- [x] T019 Add authority enforce smoke release gate
+  > role: coder
+  > deps: T014
+  > files: [`scripts/authority-smoke.mjs`, `package.json`]
+  > risk: write
+  > authority: write
+  > verify: `npm run authority:smoke`
+  > gate: command-pass

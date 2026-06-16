@@ -414,11 +414,12 @@ test("buildNativeRootLoopTurnNode compiles scoped MCP, skills, and hooks through
   deepStrictEqual(node.routing?.assignedCapabilities?.skills, []);
   deepStrictEqual(node.routing?.promptMode, "dnc-nlp");
   deepStrictEqual(node.routing?.runtimeSidecar?.intent, "code_edit");
-  ok(node.name.includes("You are the OMK root coordinator."));
-  ok(node.name.includes(JSON.stringify("implement hello handler")));
+  ok(node.name.includes("implement hello handler"));
+  ok(!node.name.includes("You are the OMK root coordinator."));
   ok(!node.name.includes("Schema: omk.prompt-envelope/v1"));
   ok(!node.name.includes("github"));
   ok(!node.name.includes("omk-repo-explorer"));
+  ok(typeof node.routing?.promptHash === "string");
   ok(node.routing?.rationale?.includes("native-root-loop"));
 });
 
@@ -468,7 +469,7 @@ test("ambiguous native chat turns default to ask/read-only authority", async () 
     deepStrictEqual(node.routing?.readOnly, true);
     deepStrictEqual(node.routing?.sandboxMode, "read-only");
     deepStrictEqual(node.routing?.assignedProviderCapabilities, ["read"]);
-    ok(node.name.includes("Sandbox: read-only"));
+    ok(!node.name.includes("Sandbox: read-only"));
     deepStrictEqual(task.context.risk, "ask");
     deepStrictEqual(task.context.sandboxMode, "read-only");
     deepStrictEqual(task.capabilities.write, false);
@@ -863,7 +864,8 @@ test("native prompt envelope preserves execution ask policy for selected runtime
     executionPrompt: "ask",
   });
 
-  ok(node.name.includes("Execution selection: ask"));
+  ok(!node.name.includes("Execution selection: ask"));
+  ok(typeof node.routing?.promptHash === "string");
   deepStrictEqual(node.routing?.executionPrompt, "ask");
   deepStrictEqual(node.routing?.approvalPolicy, "ask");
 });

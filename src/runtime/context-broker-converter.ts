@@ -5,6 +5,7 @@ import type {
   ToolManifest,
   ProviderPolicy,
   CapabilityManifest,
+  AgentTaskSafety,
 } from "./agent-runtime.js";
 
 export async function capsuleToTask(
@@ -76,6 +77,7 @@ export async function capsuleToTask(
   };
 
   const capabilities = capabilitiesFromNode(capsule);
+  const safety = safetyFromCapsule(capsule, capabilities);
 
   const task: AgentTask = {
     prompt: capsule.task,
@@ -83,6 +85,7 @@ export async function capsuleToTask(
     tools,
     providerPolicy,
     capabilities,
+    safety,
   };
 
   return task;
@@ -97,6 +100,21 @@ export interface CapsuleToTaskOptions {
 
 function isAbortSignal(value: AbortSignal | CapsuleToTaskOptions): value is AbortSignal {
   return "aborted" in value && typeof value.addEventListener === "function";
+}
+
+function safetyFromCapsule(capsule: ContextCapsule, capabilities: CapabilityManifest): AgentTaskSafety {
+  const routing = capsule.node.routing;
+  const risk = routing?.risk ?? (capabilities.shell || capabilities.merge ? "shell" : capabilities.write || capabilities.patch ? "write" : "read");
+  const authorityMode = routing?.assignedProviderAuthority
+    ?? (routing?.readOnly === true ? "advisory" : "authority");
+  return {
+    risk,
+    riskTrace: routing?.riskTrace,
+    approvalPolicy: routing?.approvalPolicy ?? routing?.executionPrompt ?? "interactive",
+    sandboxMode: routing?.sandboxMode ?? (routing?.readOnly === true ? "read-only" : "workspace-write"),
+    evidenceRequired: routing?.evidenceRequired === true || capabilities.write || capabilities.patch || capabilities.shell || capabilities.merge,
+    authorityMode,
+  };
 }
 
 function capabilitiesFromNode(capsule: ContextCapsule): CapabilityManifest {

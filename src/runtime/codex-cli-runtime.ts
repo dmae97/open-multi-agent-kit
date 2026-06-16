@@ -20,6 +20,8 @@ export function createCodexCliRuntime(
 
   return {
     id: "codex-cli",
+    providerId: "codex",
+    runtimeMode: "cli",
     displayName: "Codex CLI",
     kind: "cli",
     priority: 60,

@@ -39,13 +39,27 @@ export interface RuntimeCapabilities {
   supportsToolCalling?: boolean;
 }
 
+export type HealthState = "pass" | "fail" | "unknown";
+
+export type RuntimeHealthProbeKind = "none" | "static" | "cheap-call" | "live-call";
+
 export interface RuntimeHealthVector {
-  runtimeOk: boolean;
-  authOk: boolean;
-  modelOk: boolean;
-  quotaOk: boolean;
+  /** Legacy boolean dimensions retained for backward compatibility. */
+  runtimeOk?: boolean;
+  authOk?: boolean;
+  modelOk?: boolean;
+  quotaOk?: boolean;
   rateLimitOk?: boolean;
+  /** Tri-state dimensions used by health-aware routing v2. */
+  runtime?: HealthState;
+  auth?: HealthState;
+  model?: HealthState;
+  quota?: HealthState;
+  rateLimit?: HealthState;
   latencyMs?: number;
+  lastProbeKind?: RuntimeHealthProbeKind;
+  checkedAt?: string;
+  expiresAt?: string;
 }
 
 export interface RuntimeHealth {

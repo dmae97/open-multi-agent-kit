@@ -9,16 +9,16 @@
 
 ## Summary
 
-- Total tasks: 48
-- Parallel opportunities: 20 tasks marked with `[P]`
+- Total tasks: 55
+- Parallel opportunities: 27 tasks marked with `[P]`
 - Suggested MVP scope: Phase 0.5 + Phase 1–2 + US1 (safe provider-neutral chat)
 - Current algorithm acceptance reference: `docs/native-root-runtime-algorithms.md`
 - Current hardening status reference: `docs/native-root-runtime-hardening.md`
 
 ## Current Checkpoint
 
-- Implemented with caveats: native risk routing, explicit read-only override, `ask` fallback for ambiguous prompts, safety metadata propagation into runtime task context, evidence-required defaults for write/shell/merge, staged authority mode, runtime-router fallback, health-aware async routing, `executeTask` decision traces, Codex approval/sandbox mapping, Kimi/Codex stdin prompt transport, effective headroom compaction, and scoped worker env construction.
-- Still backlog or adapter-specific: uniform provider health vectors, release-gate enforce-mode smoke, structured prompt payloads outside `DagNode.name`, Kimi print sandbox enforcement, and broader OS sandbox experiments.
+- Implemented with caveats: native risk routing, explicit read-only override, `ask` fallback for ambiguous prompts, first-class `AgentTask.safety`, evidence-required defaults for write/shell/merge, staged authority mode, runtime-mode authority matrix, runtime-router fallback, tri-state health-aware async routing, `executeTask` decision traces, Codex approval/sandbox mapping, Kimi/Codex stdin prompt transport, effective headroom compaction, scoped worker env construction, prompt-private turn artifacts, audit graph materialization, and authority enforce smoke.
+- Still backlog or adapter-specific: Kimi wire runtime legacy execute path, `executionMode` subprocess/in-process split, mixed-provider parallel integration test, Kimi stderr redaction, and broader OS sandbox experiments.
 - Before checking off legacy tasks below, verify the exact file/test still matches current source; some task names predate the native hardening slice.
 
 ## Phase 0.5: P0 Runtime Safety Hardening
@@ -37,10 +37,16 @@
 - [x] T010 Resolve `authority`/`primary`/`omk` to concrete provider ids in `src/runtime/runtime-bootstrap.ts`
 - [x] T011 [P] Add runtime health routing fixtures in `test/runtime-router.test.mjs`
 - [x] T012 Expand binary-only provider readiness to uniform provider health vectors in `src/runtime/runtime-bootstrap.ts` and all adapters (`RuntimeHealthVector` in `src/runtime/contracts/shared.ts`, `health()` in `kimi-api-runtime.ts`, `deepseek-runtime.ts`, `codex-runtime.ts`)
+- [x] T012a [P] Upgrade runtime health vectors to tri-state pass/fail/unknown with probe-cache TTL in `src/runtime/runtime-router.ts` and runtime adapters
 - [x] T013 [P] Add MCP parse diagnostic tests in `test/tool-plane.test.mjs`
 - [x] T014 Add tool-plane diagnostics for MCP/skills/hooks parse/read failures in `src/runtime/tool-plane.ts`
 - [ ] T015 Gate Kimi failure stderr preview behind `OMK_DEBUG=1` with redaction in `src/adapters/kimi/runner.ts`
 - [x] T016 Add release evidence checklist docs under `.omk/goals/result-*.json` and lane evidence under `.omk/runs/`
+- [x] T017 [P] Add runtime-mode authority matrix and align provider maturity docs
+- [x] T018 [P] Add authority enforce-mode smoke matrix to release gates
+- [x] T019 [P] Split evidence declarations from observations in runtime evidence contracts
+- [x] T020 [P] Move native turn prompt payloads out of public `DagNode.name` into private prompt artifacts
+- [x] T021 [P] Materialize native turn audit graph and replay-index artifact hashes
 
 ---
 

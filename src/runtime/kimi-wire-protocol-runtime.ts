@@ -95,11 +95,27 @@ export class KimiWireProtocolRuntime implements AgentRuntime {
     const kimiBin = resolveKimiBin();
     const available = await checkCommand(kimiBin);
     this.kimiAvailable = available;
+    const now = new Date();
     return {
       runtimeId: this.id,
       available,
       reason: available ? undefined : "`kimi` command not found in PATH",
-      checkedAt: new Date().toISOString(),
+      checkedAt: now.toISOString(),
+      vector: {
+        runtimeOk: available,
+        authOk: available,
+        modelOk: true,
+        quotaOk: true,
+        rateLimitOk: true,
+        runtime: available ? "pass" : "fail",
+        auth: available ? "unknown" : "fail",
+        model: "unknown",
+        quota: "unknown",
+        rateLimit: "unknown",
+        lastProbeKind: "static",
+        checkedAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + 60_000).toISOString(),
+      },
     };
   }
 
