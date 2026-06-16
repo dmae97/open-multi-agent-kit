@@ -26,6 +26,7 @@ import type { ContextAdjustment } from "../evidence/attempt-record.js";
 import { createContextBudgetOptimizer, type ContextBudgetReport } from "./context-budget-optimizer.js";
 import { createDecisionTraceStore } from "../evidence/decision-trace.js";
 import { evaluateHeadroom, type HeadroomDecision } from "./headroom-policy.js";
+import { getRunArtifactPath } from "../util/run-store.js";
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 
@@ -44,6 +45,19 @@ export interface ContextBrokerOptions {
 function resolveBudget(node: DagNode): ContextBudget {
   const preset = node.routing?.contextBudget ?? "small";
   return CONTEXT_BUDGET_PRESETS[preset] ?? DEFAULT_CONTEXT_BUDGET;
+}
+
+async function loadPrivatePromptPayload(node: DagNode, runId: string | undefined, projectRoot: string): Promise<string | undefined> {
+  const ref = node.routing?.promptPayloadRef;
+  if (!ref || !runId) return undefined;
+  try {
+    const raw = await readFile(getRunArtifactPath(runId, ref, projectRoot), "utf-8");
+    const parsed = JSON.parse(raw) as { compiledPrompt?: unknown };
+    if (typeof parsed.compiledPrompt !== "string" || parsed.compiledPrompt.trim().length === 0) return undefined;
+    return parsed.compiledPrompt;
+  } catch {
+    return undefined;
+  }
 }
 
 function collectDependencySummaries(node: DagNode, state?: RunState): string[] {
@@ -303,9 +317,11 @@ export function createContextBroker(options: ContextBrokerOptions = {}) {
       graphMemory,
     }).catch(() => {});
 
+    const privatePrompt = await loadPrivatePromptPayload(node, state?.runId, projectRoot);
     const task = [
       `Execute DAG node: ${node.id}`,
       `Name: ${node.name}`,
+      privatePrompt ? `PrivatePrompt: ${privatePrompt}` : undefined,
       `Role: ${node.role}`,
       node.routing?.actionAtom ? `ActionAtom: ${node.routing.actionAtom.id} | ${node.routing.actionAtom.label} | ${node.routing.actionAtom.verb} ${node.routing.actionAtom.object ?? "assigned scope"} | evidence=${node.routing.actionAtom.evidenceTarget} | done=${node.routing.actionAtom.doneCondition}` : undefined,
       node.routing?.skills?.length ? `Skills: ${node.routing.skills.join(", ")}` : undefined,

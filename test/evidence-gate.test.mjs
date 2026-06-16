@@ -16,10 +16,10 @@ describe("checkEvidenceGate", () => {
     assert.ok(result.missing.length > 0);
   });
 
-  it("allows high-risk task with a command-pass output", () => {
+  it("does not treat a command-pass output declaration as observed evidence", () => {
     const result = checkEvidenceGate(true, [{ gate: "command-pass", ref: "npm test" }], null);
-    assert.equal(result.satisfied, true);
-    assert.ok(result.gates.includes("command-pass"));
+    assert.equal(result.satisfied, false);
+    assert.ok(result.missing.includes("command-pass"));
   });
 
   it("allows high-risk task with metadata evidence gates", () => {

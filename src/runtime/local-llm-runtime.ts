@@ -57,7 +57,9 @@ export interface LocalLlmRuntimeOptions {
 
 export class LocalLlmRuntime implements AgentRuntime {
   readonly id = "local-llm";
+  readonly providerId = "local-llm";
   readonly advisory = true;
+  readonly runtimeMode = "api";
   readonly kind = "api";
   readonly priority = 35;
   readonly capabilities: RuntimeCapabilities = {
@@ -103,18 +105,50 @@ export class LocalLlmRuntime implements AgentRuntime {
         signal: controller.signal,
       });
       clearTimeout(timeout);
+      const now = new Date();
       return {
         runtimeId: this.id,
         available: resp.ok,
         reason: resp.ok ? undefined : `Local LLM returned ${resp.status}`,
-        checkedAt: new Date().toISOString(),
+        checkedAt: now.toISOString(),
+        vector: {
+          runtimeOk: resp.ok,
+          authOk: true,
+          modelOk: true,
+          quotaOk: true,
+          rateLimitOk: true,
+          runtime: resp.ok ? "pass" : "fail",
+          auth: "pass",
+          model: "unknown",
+          quota: "unknown",
+          rateLimit: "unknown",
+          lastProbeKind: "cheap-call",
+          checkedAt: now.toISOString(),
+          expiresAt: new Date(now.getTime() + 30_000).toISOString(),
+        },
       };
     } catch (err) {
+      const now = new Date();
       return {
         runtimeId: this.id,
         available: false,
         reason: `Local LLM not reachable: ${err instanceof Error ? err.message : String(err)}`,
-        checkedAt: new Date().toISOString(),
+        checkedAt: now.toISOString(),
+        vector: {
+          runtimeOk: false,
+          authOk: true,
+          modelOk: true,
+          quotaOk: true,
+          rateLimitOk: true,
+          runtime: "fail",
+          auth: "pass",
+          model: "unknown",
+          quota: "unknown",
+          rateLimit: "unknown",
+          lastProbeKind: "cheap-call",
+          checkedAt: now.toISOString(),
+          expiresAt: new Date(now.getTime() + 30_000).toISOString(),
+        },
       };
     }
   }

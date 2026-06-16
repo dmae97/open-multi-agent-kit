@@ -60,6 +60,8 @@ export function createExternalCliAdapter(
 
   return {
     id: options.id,
+    providerId: options.id.split("-")[0],
+    runtimeMode: "cli",
     displayName: options.displayName,
     kind: "cli",
     priority: options.priority,
@@ -71,11 +73,27 @@ export function createExternalCliAdapter(
 
     async health(): Promise<RuntimeHealth> {
       const available = await checkCommand(options.bin);
+      const now = new Date();
       return {
         runtimeId: options.id,
         available,
         reason: available ? undefined : `Command not found: ${options.bin}`,
-        checkedAt: new Date().toISOString(),
+        checkedAt: now.toISOString(),
+        vector: {
+          runtimeOk: available,
+          authOk: available,
+          modelOk: true,
+          quotaOk: true,
+          rateLimitOk: true,
+          runtime: available ? "pass" : "fail",
+          auth: available ? "unknown" : "fail",
+          model: "unknown",
+          quota: "unknown",
+          rateLimit: "unknown",
+          lastProbeKind: "static",
+          checkedAt: now.toISOString(),
+          expiresAt: new Date(now.getTime() + 60_000).toISOString(),
+        },
       };
     },
 

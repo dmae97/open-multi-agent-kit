@@ -5,6 +5,9 @@ import { execSync } from "child_process";
 export function createChatAdvisoryRuntime(): AgentRuntime {
   return {
     id: "omk-advisory",
+    providerId: "omk",
+    runtimeMode: "local",
+    kind: "local",
     priority: 0,
     supports: () => true,
     async runNode(_capsule: ContextCapsule, _signal: AbortSignal): Promise<AgentRunResult> {

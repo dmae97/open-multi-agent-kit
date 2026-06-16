@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentRunResult, AgentTask } from "./agent-runtime.js";
 import { toTaskResult } from "./agent-runtime.js";
-import { checkEvidenceGate } from "./contracts/evidence.js";
+import { checkEvidenceGate, hasDeclaredEvidenceRequirement } from "./contracts/evidence.js";
 import { capsuleToTask } from "./context-broker-converter.js";
 import { applyTaskRunContextToAgentTask, envFromWorkerManifest } from "./worker-manifest.js";
 import { createRuntimeRegistry, type RuntimeRegistry } from "./runtime-registry.js";
@@ -324,17 +324,17 @@ export async function createRuntimeBackedTaskRunner(
         ? { ...baseTask, context: { ...baseTask.context, onOutput: options.onOutput } }
         : baseTask;
 
-      const evidenceRequired = effectiveCapsule.node.routing?.evidenceRequired === true || isHighRiskTask(task);
-      const evidenceCheck = checkEvidenceGate(evidenceRequired, effectiveCapsule.node.outputs, null);
-      if (evidenceRequired && !evidenceCheck.satisfied) {
+      const evidenceRequired = task.safety.evidenceRequired || effectiveCapsule.node.routing?.evidenceRequired === true || isHighRiskTask(task);
+      const declaredEvidenceOk = !evidenceRequired || hasDeclaredEvidenceRequirement(effectiveCapsule.node.outputs);
+      if (evidenceRequired && !declaredEvidenceOk) {
         return {
           success: false,
           exitCode: 78,
           stdout: "",
-          stderr: `[omk] Evidence gate required but missing: ${evidenceCheck.reason}`,
+          stderr: "[omk] Evidence gate required but missing: high-risk task declares no required evidence output gate",
           metadata: {
             evidenceRequired,
-            evidenceCheck,
+            evidenceDeclarationMissing: true,
             fallbackChain: task.providerPolicy.fallbackChain,
           },
         };
@@ -345,7 +345,7 @@ export async function createRuntimeBackedTaskRunner(
 
       // Post-execution evidence check for tasks that produced no metadata gate
       if (evidenceRequired && agentResult.success) {
-        const postCheck = checkEvidenceGate(true, effectiveCapsule.node.outputs, taskResult.metadata ?? null);
+        const postCheck = checkEvidenceGate(true, effectiveCapsule.node.outputs, taskResult.metadata ?? null, taskResult.stdout);
         if (!postCheck.satisfied) {
           return {
             success: false,
@@ -367,7 +367,7 @@ export async function createRuntimeBackedTaskRunner(
         fallbackChain: task.providerPolicy.fallbackChain,
         ...(headroomCompaction && { headroomCompaction }),
         ...(runContext && { workerOwner: runContext.worker.owner }),
-        ...(evidenceRequired && { evidenceRequired, evidenceCheck: evidenceCheck }),
+        ...(evidenceRequired && { evidenceRequired }),
       };
 
       return taskResult;

@@ -131,6 +131,24 @@ export type EvidenceGateKind =
   | "artifact"
   | "diff";
 
+/** A declared gate requirement. Declarations are not evidence. */
+export interface EvidenceRequirement {
+  readonly gate: EvidenceGateKind;
+  readonly ref?: string;
+  readonly required: boolean;
+}
+
+/** A produced, replayable evidence observation. */
+export interface EvidenceObservation {
+  readonly kind: EvidenceGateKind;
+  readonly source: "stdout" | "metadata" | "artifact" | "file";
+  readonly ref?: string;
+  readonly artifactPath?: string;
+  readonly timestamp: string;
+  readonly replayable: boolean;
+  readonly redacted: boolean;
+}
+
 /** Result of checking whether a node/task produced required evidence. */
 export interface EvidenceGateCheck {
   readonly required: boolean;
@@ -138,66 +156,149 @@ export interface EvidenceGateCheck {
   readonly gates: readonly EvidenceGateKind[];
   readonly missing: readonly EvidenceGateKind[];
   readonly reason: string;
+  readonly requirements?: readonly EvidenceRequirement[];
+  readonly observations?: readonly EvidenceObservation[];
+}
+
+const EVIDENCE_GATE_KINDS: readonly EvidenceGateKind[] = [
+  "file-exists",
+  "test-pass",
+  "review-pass",
+  "command-pass",
+  "summary",
+  "artifact",
+  "diff",
+];
+
+export function isEvidenceGateKind(value: string | undefined): value is EvidenceGateKind {
+  return Boolean(value && EVIDENCE_GATE_KINDS.includes(value.toLowerCase() as EvidenceGateKind));
+}
+
+export function evidenceRequirementsFromOutputs(
+  outputs: readonly { gate?: string; ref?: string; required?: boolean }[] | undefined,
+): EvidenceRequirement[] {
+  const requirements: EvidenceRequirement[] = [];
+  for (const output of outputs ?? []) {
+    const kind = output.gate?.toLowerCase();
+    if (!isEvidenceGateKind(kind)) continue;
+    if (output.required === false) continue;
+    requirements.push({ gate: kind, ref: output.ref, required: true });
+  }
+  return requirements;
+}
+
+export function hasDeclaredEvidenceRequirement(
+  outputs: readonly { gate?: string; ref?: string; required?: boolean }[] | undefined,
+): boolean {
+  return evidenceRequirementsFromOutputs(outputs).length > 0;
+}
+
+export function evidenceObservationsFromResult(input: {
+  readonly metadata?: Record<string, unknown> | null;
+  readonly stdout?: string;
+  readonly artifactPaths?: readonly string[];
+  readonly timestamp?: string;
+}): EvidenceObservation[] {
+  const timestamp = input.timestamp ?? new Date().toISOString();
+  const observations: EvidenceObservation[] = [];
+  const metadata = input.metadata ?? undefined;
+
+  const metaGates = metadata?.evidenceGates;
+  if (Array.isArray(metaGates)) {
+    for (const raw of metaGates) {
+      const gate = typeof raw === "string" ? raw.toLowerCase() : undefined;
+      if (isEvidenceGateKind(gate)) {
+        observations.push({ kind: gate, source: "metadata", timestamp, replayable: true, redacted: true });
+      }
+    }
+  }
+  if (metadata?.commandPass === true || metadata?.testPass === true || metadata?.buildPass === true) {
+    observations.push({ kind: "command-pass", source: "metadata", timestamp, replayable: true, redacted: true });
+  }
+  if (metadata?.diff || metadata?.patch || metadata?.changedFiles) {
+    observations.push({ kind: "diff", source: "metadata", timestamp, replayable: true, redacted: true });
+  }
+  const artifactRef = metadata?.artifact ?? metadata?.artifactPath ?? metadata?.evidenceRef;
+  if (typeof artifactRef === "string" && artifactRef.trim().length > 0) {
+    observations.push({ kind: "artifact", source: "metadata", ref: artifactRef, artifactPath: artifactRef, timestamp, replayable: true, redacted: true });
+  }
+  for (const artifactPath of input.artifactPaths ?? []) {
+    observations.push({ kind: "artifact", source: "artifact", artifactPath, ref: artifactPath, timestamp, replayable: true, redacted: true });
+  }
+
+  const stdout = input.stdout ?? "";
+  if (stdout.trim().length > 0) {
+    observations.push({ kind: "summary", source: "stdout", timestamp, replayable: true, redacted: true });
+  }
+  if (/\b(pass(ed)?|success|ok)\b/i.test(stdout) && /\b(test|check|build|lint|command)\b/i.test(stdout)) {
+    observations.push({ kind: "command-pass", source: "stdout", timestamp, replayable: true, redacted: true });
+  }
+
+  return observations;
+}
+
+function observationSatisfies(requirement: EvidenceRequirement, observation: EvidenceObservation): boolean {
+  if (!observation.replayable || !observation.redacted) return false;
+  if (observation.kind === requirement.gate) return true;
+  if (requirement.gate === "test-pass" && observation.kind === "command-pass") return true;
+  if (requirement.gate === "file-exists" && observation.kind === "artifact") return true;
+  return false;
 }
 
 export function checkEvidenceGate(
   required: boolean | undefined,
   outputs: readonly { gate?: string; ref?: string; required?: boolean }[] | undefined,
-  metadata?: Record<string, unknown> | null
+  metadata?: Record<string, unknown> | null,
+  stdout?: string,
+  artifactPaths?: readonly string[],
 ): EvidenceGateCheck {
-  const gateKinds: EvidenceGateKind[] = [
-    "file-exists",
-    "test-pass",
-    "review-pass",
-    "command-pass",
-    "summary",
-    "artifact",
-    "diff",
-  ];
-  const satisfiedKinds = new Set<EvidenceGateKind>();
-
-  // Direct output gates
-  for (const output of outputs ?? []) {
-    const kind = output.gate?.toLowerCase();
-    if (kind && gateKinds.includes(kind as EvidenceGateKind) && (output.ref || output.required !== false)) {
-      satisfiedKinds.add(kind as EvidenceGateKind);
-    }
-  }
-
-  // Metadata-captured gates (e.g. from runtime-router or task runner)
-  const metaGates = metadata?.evidenceGates;
-  if (Array.isArray(metaGates)) {
-    for (const g of metaGates) {
-      if (gateKinds.includes(g as EvidenceGateKind)) satisfiedKinds.add(g as EvidenceGateKind);
-    }
-  }
-  const metaCommandPass = metadata?.commandPass === true || metadata?.testPass === true || metadata?.buildPass === true;
-  if (metaCommandPass) satisfiedKinds.add("command-pass");
-  const metaDiff = metadata?.diff || metadata?.patch || metadata?.changedFiles;
-  if (metaDiff) satisfiedKinds.add("diff");
-  const metaArtifact = metadata?.artifact || metadata?.artifactPath || metadata?.evidenceRef;
-  if (metaArtifact) satisfiedKinds.add("artifact");
+  const requirements = evidenceRequirementsFromOutputs(outputs);
+  const observations = evidenceObservationsFromResult({ metadata, stdout, artifactPaths });
+  const observedKinds = new Set(observations.map((o) => o.kind));
 
   if (!required) {
-    return { required: false, satisfied: true, gates: [...satisfiedKinds], missing: [], reason: "evidence not required" };
+    return { required: false, satisfied: true, gates: [...observedKinds], missing: [], reason: "evidence not required", requirements, observations };
   }
 
-  if (satisfiedKinds.size > 0) {
+  if (requirements.length === 0 && observations.length > 0) {
     return {
       required: true,
       satisfied: true,
-      gates: [...satisfiedKinds],
+      gates: [...observedKinds],
       missing: [],
-      reason: `evidence satisfied by ${[...satisfiedKinds].join(", ")}`,
+      reason: `evidence satisfied by observations without explicit gate: ${[...observedKinds].join(", ")}`,
+      requirements,
+      observations,
+    };
+  }
+
+  const effectiveRequirements = requirements.length > 0
+    ? requirements
+    : EVIDENCE_GATE_KINDS.map((gate) => ({ gate, required: true }));
+  const missing = effectiveRequirements
+    .filter((requirement) => !observations.some((observation) => observationSatisfies(requirement, observation)))
+    .map((requirement) => requirement.gate);
+
+  if (missing.length === 0) {
+    return {
+      required: true,
+      satisfied: true,
+      gates: [...observedKinds],
+      missing: [],
+      reason: `evidence satisfied by observations: ${[...observedKinds].join(", ") || "none"}`,
+      requirements: effectiveRequirements,
+      observations,
     };
   }
 
   return {
     required: true,
     satisfied: false,
-    gates: [],
-    missing: gateKinds,
-    reason: "required evidence gate missing: no command-pass, test-pass, review-pass, file-exists, summary, artifact, or diff output",
+    gates: [...observedKinds],
+    missing,
+    reason: `required evidence observations missing: ${[...new Set(missing)].join(", ")}`,
+    requirements: effectiveRequirements,
+    observations,
   };
 }
 

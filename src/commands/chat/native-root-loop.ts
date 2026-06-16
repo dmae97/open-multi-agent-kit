@@ -9,7 +9,9 @@ import type { ChatLayout } from "./utils.js";
 import { style } from "../../util/theme.js";
 import { getRunArtifactPath } from "../../util/run-store.js";
 import { runShell } from "../../util/shell.js";
-import { mkdir, writeFile, appendFile } from "node:fs/promises";
+import { mkdir, writeFile, appendFile, readFile } from "node:fs/promises";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname } from "node:path";
 import { createDag, type Dag, type DagNode } from "../../orchestration/dag.js";
 import {
@@ -76,6 +78,7 @@ import type {
   SlashCommandResult,
   SlashCommandSpec,
 } from "./slash/types.js";
+import { LocalGraphMemoryStore } from "../../memory/local-graph-memory-store.js";
 
 export interface NativeRootLoopInput {
   bootstrap: RuntimeBootstrap;
@@ -761,6 +764,43 @@ function isApiAdvisoryProvider(provider: string): boolean {
   return API_ADVISORY_PROVIDERS.has(provider);
 }
 
+function hashPrompt(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function redactedPromptLabel(prompt: string): string {
+  const compact = prompt.replace(/\s+/g, " ").trim().replace(/(sk-[A-Za-z0-9_-]+|ghp_[A-Za-z0-9_]+|[A-Za-z0-9+/]{32,}=*)/g, "[redacted]");
+  const summary = compact.length > 80 ? `${compact.slice(0, 77)}...` : compact;
+  return summary ? `native turn: ${summary}` : "native turn";
+}
+
+function writePrivatePromptArtifact(input: {
+  runId: string;
+  nodeId: string;
+  promptHash: string;
+  userPrompt: string;
+  compiledPrompt: string;
+}): string | undefined {
+  try {
+    const rel = `private/prompts/${sanitizeRunIdForPath(input.nodeId)}.json`;
+    const artifact = getRunArtifactPath(input.runId, rel);
+    mkdirSync(dirname(artifact), { recursive: true });
+    writeFileSync(artifact, JSON.stringify({
+      schemaVersion: "omk.prompt-envelope.v1",
+      nodeId: input.nodeId,
+      runId: input.runId,
+      promptHash: input.promptHash,
+      userPrompt: input.userPrompt,
+      compiledPrompt: input.compiledPrompt,
+      redaction: "private-run-artifact",
+      timestamp: new Date().toISOString(),
+    }, null, 2), "utf-8");
+    return rel;
+  } catch {
+    return undefined;
+  }
+}
+
 function debloatRiskFromNativeTurnRisk(risk: NativeTurnRisk): DebloatRisk {
   if (risk === "read" || risk === "ask") return "read";
   if (risk === "write") return "write";
@@ -790,6 +830,7 @@ export function buildNativeRootLoopTurnNode(input: {
   skillNames?: readonly string[];
   hookNames?: readonly string[];
   executionPrompt?: string;
+  runId?: string;
 }): DagNode {
   const id = input.nodeId ?? `turn-${Date.now()}`;
   const riskTrace = inferNativeTurnRisk(input.prompt);
@@ -849,9 +890,14 @@ export function buildNativeRootLoopTurnNode(input: {
       && compiled.runtimeSidecar.requiredMcp.length > 0,
     requiresToolCalling: capabilityInjection.requiresToolCalling,
   });
+  const promptHash = hashPrompt(compiled.modelPrompt);
+  const promptPayloadRef = input.runId
+    ? writePrivatePromptArtifact({ runId: input.runId, nodeId: id, promptHash, userPrompt: input.prompt, compiledPrompt: compiled.modelPrompt })
+    : undefined;
+
   return {
     id,
-    name: compiled.modelPrompt,
+    name: redactedPromptLabel(input.prompt),
     role: "coordinator",
     dependsOn: [],
     status: "running",
@@ -869,7 +915,9 @@ export function buildNativeRootLoopTurnNode(input: {
         risk: turnRisk,
         riskTrace,
         evidenceRequired,
-        promptMode: "dnc-nlp",
+        promptMode: promptPayloadRef ? "structured-private" : "dnc-nlp",
+        promptHash,
+        ...(promptPayloadRef && { promptPayloadRef, promptPayloadPrivate: true }),
         runtimeSidecar: {
           ...compiled.runtimeSidecar,
           requiredMcp: [...compiled.runtimeSidecar.requiredMcp],
@@ -917,7 +965,7 @@ async function appendTurnResultArtifact(
   runId: string,
   node: DagNode,
   result: TaskResult,
-): Promise<{ error?: string } | undefined> {
+): Promise<{ error?: string; artifact?: string } | undefined> {
   const artifact = getRunArtifactPath(runId, `turns/${sanitizeRunIdForPath(node.id)}-result.jsonl`);
   const payload = {
     schemaVersion: "omk.native-turn.result.v1" as const,
@@ -931,7 +979,7 @@ async function appendTurnResultArtifact(
   try {
     await mkdir(dirname(artifact), { recursive: true });
     await appendFile(artifact, `${JSON.stringify(payload)}\n`, "utf-8");
-    return undefined;
+    return { artifact };
   } catch (err) {
     // Non-fatal: artifact write failures must not block turn execution, but must be observable.
     return { error: err instanceof Error ? err.message : String(err) };
@@ -940,6 +988,56 @@ async function appendTurnResultArtifact(
 
 function sanitizeRunIdForPath(value: string): string {
   return value.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 64);
+}
+
+async function sha256File(path: string): Promise<string | undefined> {
+  try {
+    return createHash("sha256").update(await readFile(path)).digest("hex");
+  } catch {
+    return undefined;
+  }
+}
+
+async function recordTurnAuditGraph(input: {
+  root: string;
+  runId: string;
+  node: DagNode;
+  result: TaskResult;
+  resultArtifact?: string;
+}): Promise<void> {
+  try {
+    const artifactHash = input.resultArtifact ? await sha256File(input.resultArtifact) : undefined;
+    const replayIndex = getRunArtifactPath(input.runId, "replay-index.json", input.root);
+    await mkdir(dirname(replayIndex), { recursive: true });
+    await writeFile(replayIndex, JSON.stringify({
+      schemaVersion: "omk.replay-index.v1",
+      runId: input.runId,
+      updatedAt: new Date().toISOString(),
+      artifacts: [
+        ...(input.resultArtifact ? [{ path: input.resultArtifact, sha256: artifactHash, kind: "turn-result" }] : []),
+      ],
+    }, null, 2), "utf-8");
+
+    const store = await LocalGraphMemoryStore.create({ projectRoot: input.root, sessionId: input.runId, source: "native-root-loop-audit" });
+    await store?.materializeTurnAudit({
+      runId: input.runId,
+      nodeId: input.node.id,
+      provider: String(input.node.routing?.provider ?? "auto"),
+      selectedRuntime: typeof input.result.metadata?.selectedRuntime === "string"
+        ? input.result.metadata.selectedRuntime
+        : typeof input.result.metadata?.runtime === "string"
+          ? input.result.metadata.runtime
+          : undefined,
+      fallbackChain: Array.isArray(input.result.metadata?.fallbackChain)
+        ? input.result.metadata.fallbackChain.filter((entry): entry is string => typeof entry === "string")
+        : undefined,
+      evidenceKind: input.result.success ? "turn-result-pass" : "turn-result-fail",
+      evidenceArtifactPath: input.resultArtifact,
+      evidenceHash: artifactHash,
+    });
+  } catch {
+    // Best-effort audit graph materialization must not block turn completion.
+  }
 }
 
 function runtimeSidecarIntent(node: DagNode): string | undefined {
@@ -1040,6 +1138,13 @@ export async function executeNativeRootTurn(input: {
     );
     const resultWrite = await appendTurnResultArtifact(turnRunId, input.node, result);
     if (resultWrite?.error) diagnostics.resultWrite = resultWrite.error;
+    await recordTurnAuditGraph({
+      root: input.env.OMK_PROJECT_ROOT ?? process.cwd(),
+      runId: turnRunId,
+      node: input.node,
+      result,
+      resultArtifact: resultWrite?.artifact,
+    });
     if (Object.keys(diagnostics).length > 0) {
       result.metadata = {
         ...(result.metadata ?? {}),
@@ -1078,6 +1183,7 @@ async function buildNativeRootLoopTurnDag(input: {
   hookNames?: readonly string[];
   executionPrompt?: string;
   workers?: number;
+  runId?: string;
 }): Promise<Dag> {
   const dag = await buildChatTurnDag({
     prompt: input.prompt,
@@ -1101,6 +1207,7 @@ async function buildNativeRootLoopTurnDag(input: {
     skillNames: input.skillNames,
     hookNames: input.hookNames,
     executionPrompt: input.executionPrompt,
+    runId: input.runId,
   });
   return createDag({ nodes: [node] });
 }
@@ -1156,6 +1263,7 @@ async function executeNativeRootHarnessTurn(input: {
     hookNames: input.hookNames,
     executionPrompt: input.executionPrompt,
     workers: input.workers,
+    runId: input.runId,
   });
   const completed: Array<{ node: DagNode; result: TaskResult }> = [];
   const workerCount = Math.max(1, input.workers ?? 1);

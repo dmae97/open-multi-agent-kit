@@ -827,7 +827,9 @@ test("runtime-backed runner forwards OMK-owned scoped worker manifest into nativ
 
   let captured;
   registry.register({
-    id: "codex-cli",
+    id: "test-cli",
+    providerId: "test-provider",
+    runtimeMode: "cli",
     priority: 100,
     capabilities: {
       read: true,
@@ -849,7 +851,7 @@ test("runtime-backed runner forwards OMK-owned scoped worker manifest into nativ
       return {
         output: "ok",
         exitCode: 0,
-        metadata: { runtime: "codex-cli" },
+        metadata: { runtime: "test-cli" },
       };
     },
   });
@@ -887,14 +889,14 @@ test("runtime-backed runner forwards OMK-owned scoped worker manifest into nativ
       tools: ["custom-tool"],
       requiresRuntimeMcp: true,
     },
-    selectedRuntimeId: "codex-cli",
-    model: "codex-cli",
+    selectedRuntimeId: "test-cli",
+    model: "test-cli",
   });
 
   const result = await runner.run(node, {}, undefined, runContext);
 
   assert.equal(result.exitCode, 0);
-  assert.equal(result.metadata.selectedRuntime, "codex-cli");
+  assert.equal(result.metadata.selectedRuntime, "test-cli");
   assert.equal(result.metadata.workerOwner, "omk");
   assert.deepEqual(captured.tools.mcpServers, ["omk-project", "custom-mcp"]);
   assert.deepEqual(captured.tools.skills, ["omk-typescript-strict", "custom-skill"]);

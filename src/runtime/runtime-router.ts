@@ -13,6 +13,8 @@ import { join } from "path";
 import type { AgentResult, AgentRuntime, AgentRunResult, AgentTask, RuntimeCapabilities, RuntimeHealth } from "./agent-runtime.js";
 import type { ContextCapsule } from "./context-capsule.js";
 import { createDecisionTraceStore } from "../evidence/decision-trace.js";
+import { runtimeIsAdvisory, runtimeSatisfiesAuthority } from "./authority-matrix.js";
+import type { HealthState } from "./contracts/shared.js";
 
 export type NodeIntent =
   | "research"
@@ -100,6 +102,7 @@ export function createRuntimeRouter(options: RuntimeRouterOptions = {}) {
   let runtimes = options.runtimes ?? [];
   const memoryPath = options.memoryPath;
   let evidenceCache: EvidenceHistoryEntry[] | undefined;
+  const healthCache = new Map<string, RuntimeHealth>();
 
   function classifyIntent(capsule: ContextCapsule): NodeIntent {
     const text = `${capsule.nodeId} ${capsule.goal} ${capsule.task} ${capsule.system}`.toLowerCase();
@@ -150,14 +153,7 @@ export function createRuntimeRouter(options: RuntimeRouterOptions = {}) {
     history: EvidenceHistoryEntry[],
     health?: RuntimeHealth,
   ): RuntimeScore {
-    const vector = health?.vector;
-    const healthPenalty = vector
-      ? (vector.runtimeOk === false ? 0.25 : 0) +
-        (vector.authOk === false ? 0.25 : 0) +
-        (vector.modelOk === false ? 0.2 : 0) +
-        (vector.quotaOk === false ? 0.2 : 0) +
-        (vector.rateLimitOk === false ? 0.1 : 0)
-      : health?.available === false ? 1 : 0;
+    const healthPenalty = health ? (1 - runtimeHealthScore(health)) : 0;
 
     const runtimeHistory = history.filter((e) => e.runtime === runtime.id);
     const intentHistory = runtimeHistory.filter((e) => e.intent === intent);
@@ -198,23 +194,66 @@ export function createRuntimeRouter(options: RuntimeRouterOptions = {}) {
   }
 
   async function collectRuntimeHealth(candidates: readonly AgentRuntime[]): Promise<Map<string, RuntimeHealth>> {
+    const nowMs = Date.now();
     const entries = await Promise.all(candidates.map(async (runtime): Promise<[string, RuntimeHealth]> => {
+      const cached = healthCache.get(runtime.id);
+      if (cached?.vector?.expiresAt && Date.parse(cached.vector.expiresAt) > nowMs) {
+        return [runtime.id, cached];
+      }
       if (!runtime.health) {
-        return [runtime.id, {
+        const now = new Date();
+        const health: RuntimeHealth = {
           runtimeId: runtime.id,
           available: true,
-          checkedAt: new Date().toISOString(),
-        }];
+          checkedAt: now.toISOString(),
+          vector: {
+            runtimeOk: true,
+            authOk: true,
+            modelOk: true,
+            quotaOk: true,
+            rateLimitOk: true,
+            runtime: "unknown",
+            auth: "unknown",
+            model: "unknown",
+            quota: "unknown",
+            rateLimit: "unknown",
+            lastProbeKind: "none",
+            checkedAt: now.toISOString(),
+            expiresAt: new Date(now.getTime() + 30_000).toISOString(),
+          },
+        };
+        healthCache.set(runtime.id, health);
+        return [runtime.id, health];
       }
       try {
-        return [runtime.id, await runtime.health()];
+        const health = normalizeRuntimeHealth(await runtime.health());
+        healthCache.set(runtime.id, health);
+        return [runtime.id, health];
       } catch (err) {
-        return [runtime.id, {
+        const now = new Date();
+        const health: RuntimeHealth = {
           runtimeId: runtime.id,
           available: false,
           reason: err instanceof Error ? err.message : String(err),
-          checkedAt: new Date().toISOString(),
-        }];
+          checkedAt: now.toISOString(),
+          vector: {
+            runtimeOk: false,
+            authOk: true,
+            modelOk: true,
+            quotaOk: true,
+            rateLimitOk: true,
+            runtime: "fail",
+            auth: "unknown",
+            model: "unknown",
+            quota: "unknown",
+            rateLimit: "unknown",
+            lastProbeKind: "static",
+            checkedAt: now.toISOString(),
+            expiresAt: new Date(now.getTime() + 30_000).toISOString(),
+          },
+        };
+        healthCache.set(runtime.id, health);
+        return [runtime.id, health];
       }
     }));
     return new Map(entries);
@@ -226,7 +265,10 @@ export function createRuntimeRouter(options: RuntimeRouterOptions = {}) {
     if (health.available === false) return false;
     const vector = health.vector;
     if (!vector) return true;
-    return vector.runtimeOk !== false && vector.authOk !== false && vector.modelOk !== false && vector.quotaOk !== false;
+    return statePassOrUnknown(vector.runtime, vector.runtimeOk)
+      && statePassOrUnknown(vector.auth, vector.authOk)
+      && statePassOrUnknown(vector.model, vector.modelOk)
+      && statePassOrUnknown(vector.quota, vector.quotaOk);
   }
 
   function selectByIntent(
@@ -708,7 +750,11 @@ function runtimeSatisfiesAdvisoryBoundary(runtime: AgentRuntime, task: AgentTask
   reroute?: AgentRuntime;
   reason?: string;
 } {
-  if (runtime.capabilities?.advisory !== true) return { ok: true };
+  const authority = runtimeSatisfiesAuthority(runtime, task);
+  if (!authority.ok) {
+    return { ok: false, reason: authority.reason };
+  }
+  if (!runtimeIsAdvisory(runtime)) return { ok: true };
   const required = task.capabilities;
   if (
     required.write ||
@@ -856,16 +902,74 @@ function computeComposite(score: RuntimeScore, runtime: AgentRuntime, intent: No
   );
 }
 
+function normalizeRuntimeHealth(health: RuntimeHealth): RuntimeHealth {
+  const now = new Date();
+  const checkedAt = health.checkedAt ?? now.toISOString();
+  const vector = health.vector;
+  if (!vector) {
+    return {
+      ...health,
+      vector: {
+        runtimeOk: health.available,
+        authOk: true,
+        modelOk: true,
+        quotaOk: true,
+        rateLimitOk: true,
+        runtime: health.available ? "pass" : "fail",
+        auth: "unknown",
+        model: "unknown",
+        quota: "unknown",
+        rateLimit: "unknown",
+        lastProbeKind: "none",
+        checkedAt,
+        expiresAt: new Date(Date.parse(checkedAt) + 30_000).toISOString(),
+      },
+    };
+  }
+  return {
+    ...health,
+    vector: {
+      ...vector,
+      runtime: vector.runtime ?? legacyBoolToState(vector.runtimeOk),
+      auth: vector.auth ?? legacyBoolToState(vector.authOk),
+      model: vector.model ?? legacyBoolToState(vector.modelOk),
+      quota: vector.quota ?? legacyBoolToState(vector.quotaOk),
+      rateLimit: vector.rateLimit ?? legacyBoolToState(vector.rateLimitOk),
+      lastProbeKind: vector.lastProbeKind ?? "static",
+      checkedAt: vector.checkedAt ?? checkedAt,
+      expiresAt: vector.expiresAt ?? new Date(Date.parse(checkedAt) + 60_000).toISOString(),
+    },
+  };
+}
+
+function legacyBoolToState(value: boolean | undefined): HealthState {
+  if (value === true) return "pass";
+  if (value === false) return "fail";
+  return "unknown";
+}
+
+function statePassOrUnknown(state: HealthState | undefined, legacy?: boolean): boolean {
+  const normalized = state ?? legacyBoolToState(legacy);
+  return normalized !== "fail";
+}
+
+function healthStatePenalty(state: HealthState | undefined, legacy: boolean | undefined, failWeight: number, unknownWeight: number): number {
+  const normalized = state ?? legacyBoolToState(legacy);
+  if (normalized === "fail") return failWeight;
+  if (normalized === "unknown") return unknownWeight;
+  return 0;
+}
+
 function runtimeHealthScore(health: RuntimeHealth | undefined): number {
   if (!health) return 1;
   const vector = health.vector;
   if (!vector) return health.available ? 1 : 0;
   let score = 1;
-  if (vector.runtimeOk === false) score -= 0.25;
-  if (vector.authOk === false) score -= 0.25;
-  if (vector.modelOk === false) score -= 0.2;
-  if (vector.quotaOk === false) score -= 0.2;
-  if (vector.rateLimitOk === false) score -= 0.1;
+  score -= healthStatePenalty(vector.runtime, vector.runtimeOk, 0.25, 0.08);
+  score -= healthStatePenalty(vector.auth, vector.authOk, 0.25, 0.08);
+  score -= healthStatePenalty(vector.model, vector.modelOk, 0.2, 0.05);
+  score -= healthStatePenalty(vector.quota, vector.quotaOk, 0.2, 0.05);
+  score -= healthStatePenalty(vector.rateLimit, vector.rateLimitOk, 0.1, 0.03);
   return Math.max(0, score);
 }
 

@@ -35,6 +35,8 @@ export interface CodexRuntimeOptions {
 
 export class CodexRuntime implements AgentRuntime {
   readonly id = "codex-cli";
+  readonly providerId = "codex";
+  readonly runtimeMode = "cli";
   readonly kind = "cli";
   readonly priority = 60;
   readonly capabilities: RuntimeCapabilities = {
@@ -104,6 +106,14 @@ export class CodexRuntime implements AgentRuntime {
         modelOk,
         quotaOk: true,
         rateLimitOk: true,
+        runtime: runtimeOk ? "pass" : "fail",
+        auth: authOk ? "pass" : "unknown",
+        model: modelOk ? "pass" : "unknown",
+        quota: "unknown",
+        rateLimit: "unknown",
+        lastProbeKind: "static",
+        checkedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
       },
     };
   }

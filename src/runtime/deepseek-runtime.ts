@@ -95,7 +95,9 @@ export interface DeepSeekRuntimeOptions {
 
 export class DeepSeekRuntime implements AgentRuntime {
   readonly id = "deepseek-api";
+  readonly providerId = "deepseek";
   readonly advisory = true;
+  readonly runtimeMode = "api";
   readonly kind = "api";
   readonly priority = 40;
   readonly capabilities: RuntimeCapabilities = {
@@ -147,6 +149,14 @@ export class DeepSeekRuntime implements AgentRuntime {
         modelOk,
         quotaOk: true,
         rateLimitOk: true,
+        runtime: runtimeOk ? "pass" : "fail",
+        auth: authOk ? "pass" : "fail",
+        model: modelOk ? "pass" : "fail",
+        quota: "unknown",
+        rateLimit: "unknown",
+        lastProbeKind: "static",
+        checkedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
       },
     };
   }

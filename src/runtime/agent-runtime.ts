@@ -73,6 +73,15 @@ export interface ToolManifest {
   readonly hooks?: readonly string[];
 }
 
+export interface AgentTaskSafety {
+  readonly risk: string;
+  readonly riskTrace?: unknown;
+  readonly approvalPolicy: string;
+  readonly sandboxMode: string;
+  readonly evidenceRequired: boolean;
+  readonly authorityMode: string;
+}
+
 export interface AgentContext {
   readonly runId: string;
   readonly nodeId: string;
@@ -120,6 +129,7 @@ export interface AgentTask {
   readonly tools: ToolManifest;
   readonly providerPolicy: ProviderPolicy;
   readonly capabilities: CapabilityManifest;
+  readonly safety: AgentTaskSafety;
   /** Images/files attached to this task (clipboard paste, --image, drag). */
   readonly attachments?: readonly AgentTaskAttachment[];
 }
@@ -139,7 +149,7 @@ export interface AgentRuntime {
   readonly displayName?: string;
   readonly kind?: RuntimeKind;
   readonly legacy?: boolean;
-  readonly runtimeMode?: string;
+  readonly runtimeMode: string;
   readonly priority: number;
   readonly capabilities?: RuntimeCapabilities;
   supports(capsule: ContextCapsule): boolean;
