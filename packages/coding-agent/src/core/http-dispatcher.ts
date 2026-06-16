@@ -36,6 +36,13 @@ export function formatHttpIdleTimeoutMs(timeoutMs: number): string {
 	return `${timeoutMs / 1000} sec`;
 }
 
+export function applyHttpProxySettings(httpProxy: string | undefined): void {
+	const proxy = httpProxy?.trim();
+	if (!proxy) return;
+	process.env.HTTP_PROXY ??= proxy;
+	process.env.HTTPS_PROXY ??= proxy;
+}
+
 export function configureHttpDispatcher(timeoutMs: number = DEFAULT_HTTP_IDLE_TIMEOUT_MS): void {
 	const normalizedTimeoutMs = parseHttpIdleTimeoutMs(timeoutMs);
 	if (normalizedTimeoutMs === undefined) {
