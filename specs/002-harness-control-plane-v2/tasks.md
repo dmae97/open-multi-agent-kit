@@ -238,7 +238,7 @@
   > requirementIds: [R8]
   > risk: low
 
-- [ ] HCP-17 Commit and push logical changes
+- [x] HCP-17 Commit and push logical changes
   > role: root
   > deps: HCP-16
   > lane: root
