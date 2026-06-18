@@ -7,7 +7,7 @@
 
 ## Phase 0 — Authority and Spec Foundation
 
-- [ ] HCP-00 Remove provider-hardcoded authority from spec templates
+- [x] HCP-00 Remove provider-hardcoded authority from spec templates
   > role: planner
   > deps: none
   > lane: spec-replay-qa
@@ -22,7 +22,7 @@
 
 ## Phase 1 — Machine Spec and Ledger Foundations
 
-- [ ] HCP-01 Implement spec compiler schema and parser
+- [x] HCP-01 Implement spec compiler schema and parser
   > role: coder
   > deps: HCP-00
   > lane: spec-replay-qa
@@ -35,7 +35,7 @@
   > requirementIds: [R6]
   > risk: medium
 
-- [ ] HCP-02 Implement Event Ledger V2 core schema, canonical hashing, redaction, and append path
+- [x] HCP-02 Implement Event Ledger V2 core schema, canonical hashing, redaction, and append path
   > role: security
   > deps: HCP-00
   > lane: ledger-security-architect
