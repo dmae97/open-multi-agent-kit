@@ -33,6 +33,7 @@ export type HarnessControlEventKind =
 	| "keybinding.conflict"
 	| "spec.compile"
 	| "spec.verify"
+	| "cli.contract.verify"
 	| (string & {});
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
