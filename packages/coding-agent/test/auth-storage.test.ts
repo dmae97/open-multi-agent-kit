@@ -567,21 +567,75 @@ describe("AuthStorage", () => {
 
 	describe("auth status", () => {
 		test("does not expose stored API keys or OAuth tokens", () => {
+			const storedApiKeyValue = "stored-auth-status-api-key-value";
+			const storedAccessTokenValue = "stored-auth-status-access-token-value";
+			const storedRefreshTokenValue = "stored-auth-status-refresh-token-value";
+
 			authStorage = AuthStorage.inMemory({
-				anthropic: { type: "api_key", key: "secret-api-key" },
+				anthropic: { type: "api_key", key: storedApiKeyValue },
 				openai: {
 					type: "oauth",
-					access: "secret-access-token",
-					refresh: "secret-refresh-token",
+					access: storedAccessTokenValue,
+					refresh: storedRefreshTokenValue,
 					expires: Date.now() + 1000,
 				},
 			});
 
 			expect(authStorage.getAuthStatus("anthropic")).toEqual({ configured: true, source: "stored" });
 			expect(authStorage.getAuthStatus("openai")).toEqual({ configured: true, source: "stored" });
-			expect(JSON.stringify(authStorage.getAuthStatus("anthropic"))).not.toContain("secret-api-key");
-			expect(JSON.stringify(authStorage.getAuthStatus("openai"))).not.toContain("secret-access-token");
-			expect(JSON.stringify(authStorage.getAuthStatus("openai"))).not.toContain("secret-refresh-token");
+			expect(JSON.stringify(authStorage.getAuthStatus("anthropic"))).not.toContain(storedApiKeyValue);
+			expect(JSON.stringify(authStorage.getAuthStatus("openai"))).not.toContain(storedAccessTokenValue);
+			expect(JSON.stringify(authStorage.getAuthStatus("openai"))).not.toContain(storedRefreshTokenValue);
+		});
+
+		test("reports runtime API key overrides as configured", () => {
+			authStorage = AuthStorage.inMemory();
+			authStorage.setRuntimeApiKey("anthropic", "runtime-auth-status-value");
+
+			expect(authStorage.getAuthStatus("anthropic")).toEqual({
+				configured: true,
+				source: "runtime",
+				label: "--api-key",
+			});
+		});
+
+		test("reports environment API keys as configured without exposing values", () => {
+			const envVarName = "OPENAI_API_KEY";
+			const originalEnv = process.env[envVarName];
+			const envAuthStatusValue = "environment-auth-status-value";
+
+			try {
+				process.env[envVarName] = envAuthStatusValue;
+				authStorage = AuthStorage.inMemory();
+
+				expect(authStorage.getAuthStatus("openai")).toEqual({
+					configured: true,
+					source: "environment",
+					label: envVarName,
+				});
+				expect(JSON.stringify(authStorage.getAuthStatus("openai"))).not.toContain(envAuthStatusValue);
+			} finally {
+				if (originalEnv === undefined) {
+					delete process.env[envVarName];
+				} else {
+					process.env[envVarName] = originalEnv;
+				}
+			}
+		});
+
+		test("reports fallback resolver API keys as configured without exposing values", () => {
+			const fallbackAuthStatusValue = "fallback-auth-status-value";
+			authStorage = AuthStorage.inMemory();
+			authStorage.setFallbackResolver((provider) =>
+				provider === "custom-provider" ? fallbackAuthStatusValue : undefined,
+			);
+
+			expect(authStorage.getAuthStatus("custom-provider")).toEqual({
+				configured: true,
+				source: "fallback",
+				label: "custom provider config",
+			});
+			expect(JSON.stringify(authStorage.getAuthStatus("custom-provider"))).not.toContain(fallbackAuthStatusValue);
 		});
 	});
 

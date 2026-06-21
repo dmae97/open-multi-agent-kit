@@ -6,7 +6,7 @@
  */
 
 import { Container, type Focusable, fuzzyFilter, getKeybindings, Input, Spacer, Text } from "@earendil-works/omk-tui";
-import type { McpInventory, McpServerEntry } from "../../../core/mcp-inventory.ts";
+import type { McpBuiltinPresetEntry, McpInventory, McpServerEntry } from "../../../core/mcp-inventory.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
@@ -14,6 +14,7 @@ import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
 export class McpSelectorComponent extends Container implements Focusable {
 	private allEntries: McpServerEntry[];
 	private filteredEntries: McpServerEntry[];
+	private builtinPresets: McpBuiltinPresetEntry[];
 	private selectedIndex = 0;
 	private listContainer: Container;
 	private detailContainer: Container;
@@ -35,6 +36,7 @@ export class McpSelectorComponent extends Container implements Focusable {
 
 		this.allEntries = inventory.entries;
 		this.filteredEntries = inventory.entries;
+		this.builtinPresets = inventory.presets;
 		this.onCancelCallback = onCancel;
 
 		this.addChild(new DynamicBorder());
@@ -51,6 +53,8 @@ export class McpSelectorComponent extends Container implements Focusable {
 			this.addChild(new Text(theme.fg("error", `  parse error: ${err.path}: ${err.message}`), 1, 0));
 		}
 		this.addChild(new Spacer(1));
+
+		this.addBuiltinPresetSection();
 
 		this.counterText = new Text(this.getCounterText(), 1, 0);
 		this.addChild(this.counterText);
@@ -85,10 +89,36 @@ export class McpSelectorComponent extends Container implements Focusable {
 		this.updateDetail();
 	}
 
+	private addBuiltinPresetSection(): void {
+		if (this.builtinPresets.length === 0) return;
+		this.addChild(new Text(theme.fg("accent", theme.bold("Builtin MCP presets")), 1, 0));
+		for (const preset of this.builtinPresets) {
+			const status = preset.configured
+				? theme.fg("success", `configured${preset.configuredBy ? ` in ${preset.configuredBy}` : ""}`)
+				: theme.fg("warning", "available · not configured");
+			const envSummary = preset.envKeys.length > 0 ? preset.envKeys.join(", ") : "none";
+			this.addChild(
+				new Text(
+					`  ${theme.fg("toolTitle", preset.name)} · ${theme.fg("muted", preset.commandSummary)} · ${status}`,
+					1,
+					0,
+				),
+			);
+			this.addChild(
+				new Text(
+					theme.fg("dim", `    ${preset.exactPackageSpec} · env keys: ${envSummary} · ${preset.installHint}`),
+					1,
+					0,
+				),
+			);
+		}
+		this.addChild(new Spacer(1));
+	}
+
 	private getCounterText(): string {
 		const total = this.allEntries.length;
 		const matched = this.filteredEntries.length;
-		return theme.fg("muted", `  matched ${matched} / total ${total}`);
+		return theme.fg("muted", `  configured matched ${matched} / total ${total}`);
 	}
 
 	private applyFilter(query: string): void {

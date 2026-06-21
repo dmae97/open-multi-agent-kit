@@ -49,6 +49,7 @@ import type { ReadonlyFooterDataProvider } from "../footer-data-provider.ts";
 import type { KeybindingsManager } from "../keybindings.ts";
 import type { CustomMessage } from "../messages.ts";
 import type { ModelRegistry } from "../model-registry.ts";
+import type { SandboxBackendStatus, SandboxPathResolver, SandboxPolicy } from "../sandbox/policy.ts";
 import type {
 	BranchSummaryEntry,
 	CompactionEntry,
@@ -1390,6 +1391,39 @@ export type ExtensionFactory = (omk: ExtensionAPI) => void | Promise<void>;
 // ============================================================================
 // Loaded Extension Types
 // ============================================================================
+
+// ============================================================================
+// Extension Sandbox
+// ============================================================================
+
+/**
+ * Optional sandbox gating for the extension `omk.exec` API.
+ *
+ * When supplied during extension loading, every `omk.exec` call is gated by the
+ * sandbox process-fallback decision before the command is spawned: exec is
+ * denied when an OS sandbox backend is missing under enforce mode, or when the
+ * policy disables exec. When omitted, `omk.exec` behavior is unchanged.
+ *
+ * Like the bash `BashSandboxPreflight`, this only decides whether the spawn may
+ * proceed; it does not itself wrap the process in an OS sandbox.
+ */
+export interface ExtensionExecSandbox {
+	/** Policy that decides whether an extension exec may proceed. */
+	policy: SandboxPolicy;
+	/**
+	 * Availability of an OS-level sandbox backend. Defaults to no backend, so
+	 * enforce mode fails closed unless an available backend is supplied.
+	 */
+	backend?: SandboxBackendStatus;
+	/** Optional resolver reserved for future working-directory containment checks. */
+	resolver?: SandboxPathResolver;
+}
+
+/** Optional options for extension loading. */
+export interface LoadExtensionsOptions {
+	/** Optional sandbox gating applied to `omk.exec`. */
+	execSandbox?: ExtensionExecSandbox;
+}
 
 export interface RegisteredTool {
 	definition: ToolDefinition;

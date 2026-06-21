@@ -15,6 +15,7 @@ import {
 	createCompactionSummaryMessage,
 	createCustomMessage,
 } from "../messages.ts";
+import { type SanitizerFindingSummary, sanitizeMemoryPayload } from "../policy-overlays-runtime.ts";
 import { boundConversationTextForSummary } from "../session-digest.ts";
 import { buildSessionContext, type CompactionEntry, type SessionEntry } from "../session-manager.ts";
 import {
@@ -969,6 +970,47 @@ function selectHighSignalSemanticUnits(text: string, budgetChars: number): strin
 }
 
 /**
+ * Sanitize serialized conversation text before it is packed for summarization.
+ *
+ * Removes secrets, auth tokens, PII-like values, and home paths from the raw
+ * serialized transcript (assistant thinking, tool call args, tool results) so
+ * they never reach the summarizer prompt or a downstream memory export. Only
+ * redaction is applied; the real char/token budgets are enforced by the
+ * caller. Safe content (file paths, command exit summaries, markers) is kept.
+ */
+export interface SanitizedConversationText {
+	text: string;
+	findings: SanitizerFindingSummary;
+}
+
+export const COMPACTION_SANITIZER_MAX_CHARS = 10_000_000;
+
+export function sanitizeSerializedConversation(text: string): SanitizedConversationText {
+	const sanitized = sanitizeMemoryPayload(text, {
+		source: "compaction-summary",
+		contentTier: "summary",
+		maxChars: COMPACTION_SANITIZER_MAX_CHARS,
+		external: false,
+	});
+	return {
+		text: typeof sanitized.payload === "string" ? sanitized.payload : "",
+		findings: sanitized.findings,
+	};
+}
+
+function sanitizeCompactionRuntimeText(text: string | undefined): string | undefined {
+	if (text === undefined) return undefined;
+	return sanitizeSerializedConversation(text).text;
+}
+
+function sanitizeCompactionRuntimeList(values: readonly string[]): string[] {
+	const sanitized = values
+		.map((value) => sanitizeSerializedConversation(value).text.trim())
+		.filter((value) => value.length > 0);
+	return [...new Set(sanitized)].sort();
+}
+
+/**
  * Pack serialized conversation text under a token budget using a deterministic
  * extractive strategy: preserve the opening, recent tail, and high-signal
  * middle lines such as paths, commands, errors, and decisions.
@@ -978,8 +1020,9 @@ export function packSummaryInputForTokenBudget(
 	maxInputTokens: number | undefined,
 	maxRawChars: number = DEFAULT_COMPACTION_RAW_INPUT_CHAR_CEILING,
 ): SummaryInputPackingResult {
-	const originalTokens = estimateTextTokens(text);
-	const boundedText = boundConversationTextForSummary(text, maxRawChars);
+	const sanitizedText = sanitizeSerializedConversation(text).text;
+	const originalTokens = estimateTextTokens(sanitizedText);
+	const boundedText = boundConversationTextForSummary(sanitizedText, maxRawChars);
 	const boundedTokens = estimateTextTokens(boundedText);
 	const rawWasCompressed = boundedText.length < text.length;
 	if (!isFinitePositiveInteger(maxInputTokens) || boundedTokens <= maxInputTokens) {
@@ -1169,10 +1212,12 @@ export function createEmergencyCompactionHandoff(options: {
 	previousSummary?: string;
 	fallbackFacts?: readonly string[];
 }): string {
-	const facts = options.fallbackFacts ?? extractCriticalFactsFromText(options.conversationText, 16);
-	const previousBlocked = options.previousSummary
-		? (extractSection(options.previousSummary, "### Blocked") ??
-			extractSection(options.previousSummary, "## Blocked"))
+	const conversationText = sanitizeCompactionRuntimeText(options.conversationText) ?? "";
+	const sanitizedFallbackFacts = options.fallbackFacts?.map((fact) => sanitizeCompactionRuntimeText(fact) ?? "");
+	const facts = sanitizedFallbackFacts ?? extractCriticalFactsFromText(conversationText, 16);
+	const previousSummary = sanitizeCompactionRuntimeText(options.previousSummary);
+	const previousBlocked = previousSummary
+		? (extractSection(previousSummary, "### Blocked") ?? extractSection(previousSummary, "## Blocked"))
 		: undefined;
 	return [
 		"## Goal",
@@ -1211,18 +1256,22 @@ export function createEmergencyCompactionHandoff(options: {
 
 function formatFallbackFacts(fallbackFacts: readonly string[] | undefined): string {
 	if (!fallbackFacts || fallbackFacts.length === 0) return "- (not captured)";
-	return fallbackFacts.map((fact) => `- ${fact}`).join("\n");
+	const lines = fallbackFacts
+		.map((fact) => sanitizeCompactionRuntimeText(fact)?.trim() ?? "")
+		.filter((fact) => fact.length > 0)
+		.map((fact) => `- ${fact}`);
+	return lines.length > 0 ? lines.join("\n") : "- (not captured)";
 }
 
 export function validateCompactionSummaryContract(
 	summary: string,
 	options: CompactionSummaryValidationOptions = {},
 ): CompactionSummaryValidationResult {
-	const trimmedSummary = summary.trim();
+	const trimmedSummary = (sanitizeCompactionRuntimeText(summary) ?? "").trim();
 	const missingSections = REQUIRED_SUMMARY_SECTIONS.filter((section) => !trimmedSummary.includes(section));
-	const previousBlocked = options.previousSummary
-		? (extractSection(options.previousSummary, "### Blocked") ??
-			extractSection(options.previousSummary, "## Blocked"))
+	const previousSummary = sanitizeCompactionRuntimeText(options.previousSummary);
+	const previousBlocked = previousSummary
+		? (extractSection(previousSummary, "### Blocked") ?? extractSection(previousSummary, "## Blocked"))
 		: undefined;
 	const shouldPreservePreviousBlocked =
 		previousBlocked !== undefined && previousBlocked.length > 0 && !trimmedSummary.includes(previousBlocked);
@@ -1328,20 +1377,24 @@ export async function generateSummary(
 		model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY,
 	);
 
+	const sanitizedPreviousSummary = sanitizeCompactionRuntimeText(previousSummary);
+	const sanitizedCustomInstructions = sanitizeCompactionRuntimeText(customInstructions);
+
 	// Use update prompt if we have a previous summary, otherwise initial prompt
-	let basePrompt = previousSummary ? UPDATE_SUMMARIZATION_PROMPT : SUMMARIZATION_PROMPT;
-	if (customInstructions) {
-		basePrompt = `${basePrompt}\n\nAdditional focus: ${customInstructions}`;
+	let basePrompt = sanitizedPreviousSummary ? UPDATE_SUMMARIZATION_PROMPT : SUMMARIZATION_PROMPT;
+	if (sanitizedCustomInstructions) {
+		basePrompt = `${basePrompt}\n\nAdditional focus: ${sanitizedCustomInstructions}`;
 	}
 
 	// Serialize conversation to text so model doesn't try to continue it
 	// Convert to LLM messages first (handles custom types like bashExecution, custom, etc.)
 	const llmMessages = convertToLlm(currentMessages);
-	const conversationText = serializeConversation(llmMessages);
+	const rawConversationText = serializeConversation(llmMessages);
+	const conversationText = sanitizeSerializedConversation(rawConversationText).text;
 	const summaryInputBudgetResolution = resolveSummaryInputTokenBudgetV3(model, maxTokens, {
 		configuredSummaryInputTokens: summaryInputTokens,
 		basePrompt,
-		previousSummary,
+		previousSummary: sanitizedPreviousSummary,
 		systemPrompt: SUMMARIZATION_SYSTEM_PROMPT,
 		wrapperText: "<conversation></conversation><previous-summary></previous-summary>",
 	});
@@ -1349,7 +1402,7 @@ export async function generateSummary(
 		const summary = createEmergencyCompactionHandoff({
 			reason: summaryInputBudgetResolution.reason ?? "summary input budget unavailable",
 			conversationText,
-			previousSummary,
+			previousSummary: sanitizedPreviousSummary,
 		});
 		recordHarnessControlEvent("compaction.summary.generated", "completed", {
 			model: model.id,
@@ -1361,7 +1414,7 @@ export async function generateSummary(
 			availableInputTokens: summaryInputBudgetResolution.availableInputTokens,
 		});
 		return validateCompactionSummaryContract(summary, {
-			previousSummary,
+			previousSummary: sanitizedPreviousSummary,
 			fallbackFacts: extractCriticalFactsFromText(conversationText),
 		}).summary;
 	}
@@ -1370,8 +1423,8 @@ export async function generateSummary(
 
 	// Build the prompt with conversation wrapped in tags
 	let promptText = `<conversation>\n${packedConversation.text}\n</conversation>\n\n`;
-	if (previousSummary) {
-		promptText += `<previous-summary>\n${previousSummary}\n</previous-summary>\n\n`;
+	if (sanitizedPreviousSummary) {
+		promptText += `<previous-summary>\n${sanitizedPreviousSummary}\n</previous-summary>\n\n`;
 	}
 	promptText += basePrompt;
 
@@ -1402,7 +1455,7 @@ export async function generateSummary(
 		.join("\n");
 
 	const validation = validateCompactionSummaryContract(textContent, {
-		previousSummary,
+		previousSummary: sanitizedPreviousSummary,
 		fallbackFacts: extractCriticalFactsFromText(conversationText),
 	});
 	recordHarnessControlEvent("compaction.summary.generated", "completed", {
@@ -1619,7 +1672,10 @@ export async function compact(
 
 	// Compute file lists and append to summary
 	const { readFiles, modifiedFiles } = computeFileLists(fileOps);
-	summary += formatFileOperations(readFiles, modifiedFiles);
+	const sanitizedReadFiles = sanitizeCompactionRuntimeList(readFiles);
+	const sanitizedModifiedFiles = sanitizeCompactionRuntimeList(modifiedFiles);
+	summary += formatFileOperations(sanitizedReadFiles, sanitizedModifiedFiles);
+	summary = sanitizeCompactionRuntimeText(summary) ?? "";
 
 	if (!firstKeptEntryId) {
 		throw new Error("First kept entry has no UUID - session may need migration");
@@ -1629,7 +1685,7 @@ export async function compact(
 		summary,
 		firstKeptEntryId,
 		tokensBefore,
-		details: { readFiles, modifiedFiles } as CompactionDetails,
+		details: { readFiles: sanitizedReadFiles, modifiedFiles: sanitizedModifiedFiles } as CompactionDetails,
 	};
 }
 
@@ -1652,7 +1708,8 @@ async function generateTurnPrefixSummary(
 		model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY,
 	); // Smaller budget for turn prefix
 	const llmMessages = convertToLlm(messages);
-	const conversationText = serializeConversation(llmMessages);
+	const rawConversationText = serializeConversation(llmMessages);
+	const conversationText = sanitizeSerializedConversation(rawConversationText).text;
 	const packedConversation = packSummaryInputForTokenBudget(
 		conversationText,
 		resolveSummaryInputTokenBudget(model, maxTokens, {
@@ -1682,8 +1739,9 @@ async function generateTurnPrefixSummary(
 		throw new Error(`Turn prefix summarization failed: ${response.errorMessage || "Unknown error"}`);
 	}
 
-	return response.content
+	const textContent = response.content
 		.filter((c): c is { type: "text"; text: string } => c.type === "text")
 		.map((c) => c.text)
 		.join("\n");
+	return sanitizeCompactionRuntimeText(textContent) ?? "";
 }

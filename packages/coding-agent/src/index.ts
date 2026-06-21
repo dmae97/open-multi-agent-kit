@@ -160,8 +160,8 @@ export type {
 	ResolvedResource,
 } from "./core/package-manager.ts";
 export { DefaultPackageManager } from "./core/package-manager.ts";
-export type { ResourceCollision, ResourceDiagnostic, ResourceLoader } from "./core/resource-loader.ts";
-export { DefaultResourceLoader, loadProjectContextFiles } from "./core/resource-loader.ts";
+export type { ContextFile, ResourceCollision, ResourceDiagnostic, ResourceLoader } from "./core/resource-loader.ts";
+export { DefaultResourceLoader, loadProjectContextFiles, sanitizeContextForJailbreak } from "./core/resource-loader.ts";
 // SDK for programmatic usage
 export {
 	AgentSessionRuntime,
@@ -234,6 +234,7 @@ export { createSyntheticSourceInfo } from "./core/source-info.ts";
 // Tools
 export {
 	type BashOperations,
+	type BashSandboxPreflight,
 	type BashSpawnContext,
 	type BashSpawnHook,
 	type BashToolDetails,

@@ -1448,6 +1448,46 @@ describe("ModelRegistry", () => {
 				expect(count).toBe(2);
 			});
 
+			test("provider auth status detects known baseUrl environment variables", () => {
+				const originalEnv = process.env.KIMI_API_KEY;
+
+				try {
+					process.env.KIMI_API_KEY = Math.random().toString(36).slice(2);
+
+					writeRawModelsJson({
+						"kimi-code": {
+							baseUrl: "https://api.kimi.com/coding/",
+							api: "anthropic-messages",
+							models: [
+								{
+									id: "kimi-test-model",
+									name: "Kimi Test Model",
+									reasoning: false,
+									input: ["text"],
+									cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+									contextWindow: 100000,
+									maxTokens: 8000,
+								},
+							],
+						},
+					});
+
+					const registry = ModelRegistry.create(authStorage, modelsJsonPath);
+
+					expect(registry.getProviderAuthStatus("kimi-code")).toEqual({
+						configured: true,
+						source: "environment",
+						label: "KIMI_API_KEY",
+					});
+				} finally {
+					if (originalEnv === undefined) {
+						delete process.env.KIMI_API_KEY;
+					} else {
+						process.env.KIMI_API_KEY = originalEnv;
+					}
+				}
+			});
+
 			test("provider auth status reports apiKey environment variables from models.json", () => {
 				const envVarName = "TEST_API_KEY_STATUS_TEST_98765";
 				const originalEnv = process.env[envVarName];

@@ -2,6 +2,7 @@ import "./providers/register-builtins.ts";
 
 import { getApiProvider } from "./api-registry.ts";
 import { getEnvApiKey } from "./env-api-keys.ts";
+import { createProviderNetworkGuardedStream } from "./provider-network.ts";
 import type {
 	Api,
 	AssistantMessage,
@@ -42,6 +43,19 @@ export function stream<TApi extends Api>(
 	context: Context,
 	options?: ProviderStreamOptions,
 ): AssistantMessageEventStream {
+	if (options?.beforeNetworkRequest) {
+		return createProviderNetworkGuardedStream({
+			model,
+			purpose: "chat",
+			transport: "http",
+			source: "model.baseUrl",
+			beforeNetworkRequest: options.beforeNetworkRequest,
+			invoke: () => {
+				const provider = resolveApiProvider(model.api);
+				return provider.stream(model, context, withEnvApiKey(model, options) as StreamOptions);
+			},
+		});
+	}
 	const provider = resolveApiProvider(model.api);
 	return provider.stream(model, context, withEnvApiKey(model, options) as StreamOptions);
 }
@@ -60,6 +74,19 @@ export function streamSimple<TApi extends Api>(
 	context: Context,
 	options?: SimpleStreamOptions,
 ): AssistantMessageEventStream {
+	if (options?.beforeNetworkRequest) {
+		return createProviderNetworkGuardedStream({
+			model,
+			purpose: "completion",
+			transport: "http",
+			source: "model.baseUrl",
+			beforeNetworkRequest: options.beforeNetworkRequest,
+			invoke: () => {
+				const provider = resolveApiProvider(model.api);
+				return provider.streamSimple(model, context, withEnvApiKey(model, options));
+			},
+		});
+	}
 	const provider = resolveApiProvider(model.api);
 	return provider.streamSimple(model, context, withEnvApiKey(model, options));
 }

@@ -1,6 +1,7 @@
 import "./providers/images/register-builtins.ts";
 
 import { getImagesApiProvider } from "./images-api-registry.ts";
+import { assertProviderNetworkRequestAllowed } from "./provider-network.ts";
 import type { AssistantImages, ImagesApi, ImagesContext, ImagesModel, ProviderImagesOptions } from "./types.ts";
 
 function resolveImagesApiProvider(api: ImagesApi) {
@@ -16,6 +17,10 @@ export async function generateImages<TApi extends ImagesApi>(
 	context: ImagesContext,
 	options?: ProviderImagesOptions,
 ): Promise<AssistantImages> {
+	await assertProviderNetworkRequestAllowed(
+		{ model, purpose: "images", transport: "http", source: "model.baseUrl" },
+		options?.beforeNetworkRequest,
+	);
 	const provider = resolveImagesApiProvider(model.api);
 	return provider.generateImages(model, context, options);
 }

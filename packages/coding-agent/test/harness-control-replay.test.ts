@@ -142,4 +142,83 @@ describe("harness control replay", () => {
 			),
 		);
 	});
+
+	function recordOperationWithArtifact(root: string, logPath: string): void {
+		recordHarnessControlEvent("spec.compile", "started", {}, { cwd: root, logPath, operationId: "op-art" });
+		recordHarnessControlEvent(
+			"spec.compile",
+			"completed",
+			{},
+			{ cwd: root, logPath, operationId: "op-art", artifactRefs: ["artifact.txt"] },
+		);
+	}
+
+	it("re-verifies allowed artifacts during replay and passes when unchanged", () => {
+		const root = createTempDir();
+		const logPath = path.join(root, "events.jsonl");
+		fs.writeFileSync(path.join(root, "artifact.txt"), "payload", "utf-8");
+		recordOperationWithArtifact(root, logPath);
+
+		expect(verifyHarnessControlReplay(logPath)).toMatchObject({ ok: true });
+	});
+
+	it("fails replay when an allowed artifact no longer matches its recorded hash", () => {
+		const root = createTempDir();
+		const logPath = path.join(root, "events.jsonl");
+		const artifact = path.join(root, "artifact.txt");
+		fs.writeFileSync(artifact, "payload", "utf-8");
+		recordOperationWithArtifact(root, logPath);
+		fs.writeFileSync(artifact, "tampered", "utf-8");
+
+		const report = verifyHarnessControlReplay(logPath);
+		expect(report.ok).toBe(false);
+		expect(report.errors.join("\n")).toContain("artifact.txt");
+		expect(report.errors.join("\n")).toContain("sha256");
+	});
+
+	it("warns but does not fail when an allowed artifact was removed before replay", () => {
+		const root = createTempDir();
+		const logPath = path.join(root, "events.jsonl");
+		const artifact = path.join(root, "artifact.txt");
+		fs.writeFileSync(artifact, "payload", "utf-8");
+		recordOperationWithArtifact(root, logPath);
+		fs.rmSync(artifact);
+
+		const report = verifyHarnessControlReplay(logPath);
+		expect(report.ok).toBe(true);
+		expect(report.warnings.join("\n")).toContain("no longer present");
+	});
+
+	it("skips artifact rehash when verifyArtifacts is disabled", () => {
+		const root = createTempDir();
+		const logPath = path.join(root, "events.jsonl");
+		const artifact = path.join(root, "artifact.txt");
+		fs.writeFileSync(artifact, "payload", "utf-8");
+		recordOperationWithArtifact(root, logPath);
+		fs.writeFileSync(artifact, "tampered", "utf-8");
+
+		expect(verifyHarnessControlReplay(logPath, { verifyArtifacts: false })).toMatchObject({ ok: true });
+	});
+
+	it("does not replay quarantined hash-mismatched events", () => {
+		const root = createTempDir();
+		const logPath = path.join(root, "events.jsonl");
+		recordHarnessControlEvent("spec.compile", "started", {}, { cwd: root, logPath, operationId: "op-good" });
+		recordHarnessControlEvent("spec.compile", "completed", {}, { cwd: root, logPath, operationId: "op-good" });
+		recordHarnessControlEvent("spec.compile", "started", {}, { cwd: root, logPath, operationId: "op-bad" });
+		const lines = fs.readFileSync(logPath, "utf-8").trim().split("\n");
+		const badEvent = JSON.parse(lines[2]!) as Record<string, unknown>;
+		badEvent.eventHash = "f".repeat(64);
+		lines[2] = JSON.stringify(badEvent);
+		fs.writeFileSync(logPath, `${lines.join("\n")}\n`, "utf-8");
+
+		const report = verifyHarnessControlReplay(logPath);
+
+		expect(report.ok).toBe(false);
+		expect(report.operations.map((operation) => operation.operationId)).toEqual(["op-good"]);
+		expect(report.errors.join("\n")).toContain("hash mismatch");
+		expect(report.quarantinedLines).toEqual([
+			expect.objectContaining({ lineNumber: 3, reason: expect.stringContaining("hash mismatch") }),
+		]);
+	});
 });

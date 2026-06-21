@@ -5620,8 +5620,11 @@ export class InteractiveMode {
 			});
 			return { component: selector, focus: selector };
 		});
-		const summary = inventory.entries.length === 1 ? "1 MCP server" : `${inventory.entries.length} MCP servers`;
-		this.showStatus(`${summary} loaded (env values hidden)`);
+		const configuredSummary =
+			inventory.entries.length === 1 ? "1 MCP server" : `${inventory.entries.length} MCP servers`;
+		const presetSummary =
+			inventory.presets.length === 1 ? "1 builtin preset" : `${inventory.presets.length} builtin presets`;
+		this.showStatus(`${configuredSummary} configured · ${presetSummary} available (env values hidden)`);
 	}
 
 	private handleSkillsCommand(): void {

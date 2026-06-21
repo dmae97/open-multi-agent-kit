@@ -31,6 +31,7 @@ import type { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { shortHash } from "../utils/hash.ts";
 import { parseStreamingJson } from "../utils/json-parse.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
+import { normalizeToolParameters } from "./tool-schema.ts";
 import { transformMessages } from "./transform-messages.ts";
 
 // =============================================================================
@@ -275,7 +276,7 @@ export function convertResponsesTools(tools: Tool[], options?: ConvertResponsesT
 		type: "function",
 		name: tool.name,
 		description: tool.description,
-		parameters: tool.parameters as any, // TypeBox already generates JSON Schema
+		parameters: normalizeToolParameters(tool.parameters),
 		strict,
 	}));
 }

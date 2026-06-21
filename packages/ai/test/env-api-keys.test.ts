@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { findEnvKeys, getEnvApiKey } from "../src/env-api-keys.ts";
+import { findEnvKeys, getEnvApiKey, getEnvApiKeyByBaseUrl, getEnvApiKeyNameByBaseUrl } from "../src/env-api-keys.ts";
 
 const originalCopilotGitHubToken = process.env.COPILOT_GITHUB_TOKEN;
 const originalGhToken = process.env.GH_TOKEN;
 const originalGitHubToken = process.env.GITHUB_TOKEN;
 const originalZaiCodingCnApiKey = process.env.ZAI_CODING_CN_API_KEY;
+const originalDuckCodingApiKey = process.env.DUCKCODING_API_KEY;
 
 afterEach(() => {
 	if (originalCopilotGitHubToken === undefined) {
@@ -29,6 +30,12 @@ afterEach(() => {
 		delete process.env.ZAI_CODING_CN_API_KEY;
 	} else {
 		process.env.ZAI_CODING_CN_API_KEY = originalZaiCodingCnApiKey;
+	}
+
+	if (originalDuckCodingApiKey === undefined) {
+		delete process.env.DUCKCODING_API_KEY;
+	} else {
+		process.env.DUCKCODING_API_KEY = originalDuckCodingApiKey;
 	}
 });
 
@@ -56,5 +63,19 @@ describe("environment API keys", () => {
 
 		expect(findEnvKeys("zai-coding-cn")).toEqual(["ZAI_CODING_CN_API_KEY"]);
 		expect(getEnvApiKey("zai-coding-cn")).toBe("zai-coding-cn-token");
+	});
+
+	it("resolves DuckCoding credentials from DUCKCODING_API_KEY", () => {
+		process.env.DUCKCODING_API_KEY = "duckcoding-token";
+
+		expect(findEnvKeys("duckcoding")).toEqual(["DUCKCODING_API_KEY"]);
+		expect(getEnvApiKey("duckcoding")).toBe("duckcoding-token");
+	});
+
+	it("resolves DuckCoding credentials by base URL", () => {
+		process.env.DUCKCODING_API_KEY = "duckcoding-token";
+
+		expect(getEnvApiKeyNameByBaseUrl("https://www.duckcoding.ai/")).toBe("DUCKCODING_API_KEY");
+		expect(getEnvApiKeyByBaseUrl("https://www.duckcoding.ai/")).toBe("duckcoding-token");
 	});
 });

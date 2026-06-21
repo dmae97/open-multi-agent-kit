@@ -6,6 +6,10 @@ import { type Static, Type } from "typebox";
 import { renderDiff } from "../../modes/interactive/components/diff.ts";
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import type { ToolDefinition } from "../extensions/types.ts";
+import { assertLoadoutAccess, type LoadoutAccessGuard } from "../loadout-access-policy.ts";
+import type { ReadAnchorRegistry } from "../read-anchor-registry.ts";
+import { type AnchoredEditMode, decideAnchoredEdit } from "../read-anchors.ts";
+import type { ReadContentCache } from "../read-content-cache.ts";
 import {
 	applyEditsToNormalizedContent,
 	computeEditsDiff,
@@ -89,6 +93,14 @@ const defaultEditOperations: EditOperations = {
 export interface EditToolOptions {
 	/** Custom operations for file editing. Default: local filesystem */
 	operations?: EditOperations;
+	/** Optional per-session read-anchor registry for stale-edit protection. */
+	anchorRegistry?: ReadAnchorRegistry;
+	/** Optional per-session content cache invalidated after successful writes. */
+	contentCache?: ReadContentCache;
+	/** Anchor enforcement mode. Defaults to strict when anchorRegistry is supplied. */
+	anchorMode?: AnchoredEditMode;
+	/** Optional loadout access guard for scoped filesystem writes. */
+	accessGuard?: LoadoutAccessGuard;
 }
 
 function prepareEditArguments(input: unknown): EditToolInput {
@@ -289,6 +301,10 @@ export function createEditToolDefinition(
 	options?: EditToolOptions,
 ): ToolDefinition<typeof editSchema, EditToolDetails | undefined, EditRenderState> {
 	const ops = options?.operations ?? defaultEditOperations;
+	const anchorRegistry = options?.anchorRegistry;
+	const contentCache = options?.contentCache;
+	const anchorMode = options?.anchorMode ?? "strict";
+	const accessGuard = options?.accessGuard;
 	return {
 		name: "edit",
 		label: "edit",
@@ -308,6 +324,7 @@ export function createEditToolDefinition(
 		async execute(_toolCallId, input: EditToolInput, signal?: AbortSignal, _onUpdate?, _ctx?) {
 			const { path, edits } = validateEditInput(input);
 			const absolutePath = resolveToCwd(path, cwd);
+			assertLoadoutAccess(accessGuard, { operation: "write", toolName: "edit", path: absolutePath });
 
 			return withFileMutationQueue(absolutePath, async () => {
 				// Do not reject from an abort event listener here: that would release the
@@ -340,11 +357,28 @@ export function createEditToolDefinition(
 				const { bom, text: content } = stripBom(rawContent);
 				const originalEnding = detectLineEnding(content);
 				const normalizedContent = normalizeToLF(content);
+				if (anchorRegistry) {
+					const anchor = anchorRegistry.getByPath(absolutePath)[0];
+					if (!anchor) {
+						throw new Error(`stale read: no read anchor found for ${path}; read the file before editing`);
+					}
+					const decision = decideAnchoredEdit({
+						anchor,
+						currentContent: normalizedContent,
+						mode: anchorMode,
+						anchoredBlockText: edits.length === 1 ? edits[0].oldText : undefined,
+					});
+					if (decision.verdict === "reject-stale") {
+						throw new Error(decision.reason);
+					}
+				}
 				const { baseContent, newContent } = applyEditsToNormalizedContent(normalizedContent, edits, path);
 				throwIfAborted();
 
 				const finalContent = bom + restoreLineEndings(newContent, originalEnding);
 				await ops.writeFile(absolutePath, finalContent);
+				anchorRegistry?.invalidatePath(absolutePath);
+				contentCache?.invalidatePath(absolutePath);
 				throwIfAborted();
 
 				const diffResult = generateDiffString(baseContent, newContent);

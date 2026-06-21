@@ -1,4 +1,12 @@
-import { isAbsolute, relative, resolve } from "node:path";
+import { existsSync, realpathSync } from "node:fs";
+import { isAbsolute, relative, resolve, sep } from "node:path";
+import {
+	type Adoption,
+	type GateVerdict,
+	type PathCompatibility,
+	validateExactNpmVersion,
+	validateGitRef,
+} from "./package-procurement.ts";
 
 export type GalleryResourceType = "extension" | "skill" | "prompt" | "theme";
 export type GalleryManifestKey = "omk" | "pi";
@@ -202,16 +210,49 @@ export function selectGalleryPreview(input: GalleryPreviewInput): GalleryPreview
 	return null;
 }
 
-export function filterManifestEntriesInsideRoot(packageRoot: string, entries: readonly string[]): string[] {
+function isPathInsideRoot(root: string, candidate: string): boolean {
+	const rel = relative(root, candidate);
+	return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+}
+
+function realpathIfPossible(path: string): string {
+	try {
+		return realpathSync(path);
+	} catch {
+		return resolve(path);
+	}
+}
+
+export function isPathInsideRootByRealpath(packageRoot: string, candidatePath: string): boolean {
 	const root = resolve(packageRoot);
+	const candidate = resolve(candidatePath);
+	if (!isPathInsideRoot(root, candidate)) return false;
+	if (!existsSync(candidate)) return true;
+	return isPathInsideRoot(realpathIfPossible(root), realpathIfPossible(candidate));
+}
+
+export function resolveManifestEntryInsideRoot(
+	packageRoot: string,
+	entry: string,
+	baseDir = packageRoot,
+): string | undefined {
+	const trimmed = entry.trim();
+	if (!trimmed || isAbsolute(trimmed)) return undefined;
+	const root = resolve(packageRoot);
+	const base = resolve(baseDir);
+	if (!isPathInsideRootByRealpath(root, base)) return undefined;
+	const candidate = resolve(base, trimmed);
+	if (!isPathInsideRootByRealpath(root, candidate)) return undefined;
+	return (relative(root, candidate) || ".").replace(/\\/g, "/");
+}
+
+export function filterManifestEntriesInsideRoot(packageRoot: string, entries: readonly string[]): string[] {
 	const safeEntries: string[] = [];
 	for (const entry of entries) {
-		const trimmed = entry.trim();
-		if (!trimmed || isAbsolute(trimmed)) continue;
-		const resolved = resolve(root, trimmed);
-		const rel = relative(root, resolved);
-		if (!rel || rel.startsWith("..") || isAbsolute(rel)) continue;
-		safeEntries.push(rel.replace(/\\/g, "/"));
+		const safeEntry = resolveManifestEntryInsideRoot(packageRoot, entry);
+		if (safeEntry && safeEntry !== ".") {
+			safeEntries.push(safeEntry);
+		}
 	}
 	return safeEntries;
 }
@@ -225,13 +266,21 @@ function requireNonEmpty(value: string, label: string): string {
 function buildGallerySource(source: GalleryInstallSource): { kind: GalleryInstallSourceKind; source: string } {
 	if (source.kind === "npm") {
 		const name = requireNonEmpty(source.name, "npm package name");
-		const version = source.version ? `@${requireNonEmpty(source.version, "npm package version")}` : "";
-		return { kind: "npm", source: `npm:${name}${version}` };
+		const versionVerdict = validateExactNpmVersion(source.version);
+		if (!versionVerdict.ok) {
+			throw new Error(
+				`Gallery npm installs require an exact pinned version for ${name}. ${versionVerdict.message}.`,
+			);
+		}
+		return { kind: "npm", source: `npm:${name}@${versionVerdict.version}` };
 	}
 	if (source.kind === "git") {
 		const repo = requireNonEmpty(source.repo, "git repository").replace(/^git:/, "");
-		const ref = source.ref ? `@${requireNonEmpty(source.ref, "git ref")}` : "";
-		return { kind: "git", source: `git:${repo}${ref}` };
+		const refVerdict = validateGitRef(source.ref);
+		if (!refVerdict.ok) {
+			throw new Error(`Gallery git installs require a full commit SHA for ${repo}. ${refVerdict.message}.`);
+		}
+		return { kind: "git", source: `git:${repo}@${refVerdict.commit}` };
 	}
 	return { kind: "local", source: requireNonEmpty(source.path, "local path") };
 }
@@ -344,4 +393,117 @@ export function dedupeGalleryEntries<T extends GalleryEntryWithIdentity>(entries
 		result.push(entry);
 	}
 	return result;
+}
+
+/**
+ * Procurement-derived safe-gate outcome for an unpromoted (ephemeral trial) gallery install.
+ *
+ * Closes G9: gallery trust is derived from capability scan and procurement verdicts, not
+ * from manifest claims. A trial is "admitted" only when the source is exact-pinned, carries
+ * no hard-block capability (credential reads, host sockets), and passed explicit license,
+ * lifecycle, and path-compatibility gates. Procurement rejection reasons are surfaced
+ * verbatim so callers can show why an unpromoted trial would be blocked.
+ */
+export type GalleryTrialGateOutcome = "admitted" | "blocked";
+
+export interface GalleryTrialGateStatus {
+	readonly outcome: GalleryTrialGateOutcome;
+	readonly identity: string;
+	readonly adoption: Adoption;
+	readonly pinned: boolean;
+	readonly reasons: readonly string[];
+}
+
+/**
+ * Structural subset of a procurement review consumed by the trial gate. The full procurement
+ * review (`ProcurementReview`) satisfies this shape, so callers may pass `procureCandidate(...)`
+ * output directly; tests can construct focused reviews without the full procurement input.
+ */
+export interface GalleryTrialGateReview {
+	readonly pinned: boolean;
+	readonly capabilities: readonly string[];
+	readonly adoption: Adoption;
+	readonly rejectedReasons: readonly string[];
+	readonly licenseVerdict?: GateVerdict;
+	readonly lifecycleVerdict?: GateVerdict;
+	readonly pathCompatibility?: PathCompatibility;
+	readonly candidate?: { readonly expectedResources?: readonly string[] };
+}
+
+const TRIAL_HARD_BLOCK_CAPABILITIES: ReadonlySet<string> = new Set(["credential-read", "host-socket"]);
+const CODE_EXECUTION_RESOURCES: ReadonlySet<string> = new Set(["extension", "tool"]);
+const CODE_EXECUTION_CAPABILITIES: ReadonlySet<string> = new Set([
+	"browser-control",
+	"child-process",
+	"credential-read",
+	"filesystem-write",
+	"host-socket",
+	"network",
+]);
+
+function pushUniqueReason(reasons: string[], reason: string): void {
+	if (!reasons.includes(reason)) reasons.push(reason);
+}
+
+/**
+ * Classify whether a candidate package may be safely admitted to an unpromoted (ephemeral,
+ * sandboxed, `--ignore-scripts`) trial. Pure and deterministic: identical inputs always
+ * produce identical output, and no I/O is performed.
+ */
+export function assessGalleryTrialGate(
+	identity: GalleryEntryIdentity,
+	review: GalleryTrialGateReview,
+): GalleryTrialGateStatus {
+	const hardBlocks = review.capabilities.filter((capability) => TRIAL_HARD_BLOCK_CAPABILITIES.has(capability));
+	const reasons: string[] = [];
+	if (!review.pinned) pushUniqueReason(reasons, "exact-pin-required");
+	if (hardBlocks.length > 0) pushUniqueReason(reasons, `capability-hard-block: ${hardBlocks.join(",")}`);
+	if (review.licenseVerdict === "reject") pushUniqueReason(reasons, "license-blocked");
+	if (review.lifecycleVerdict === "reject") pushUniqueReason(reasons, "lifecycle-scripts-blocked");
+	if (review.pathCompatibility === "pi-hardcoded") pushUniqueReason(reasons, "pi-hardcoded-paths");
+	if (review.adoption === "reject") {
+		for (const reason of review.rejectedReasons) pushUniqueReason(reasons, reason);
+	}
+
+	const blocked =
+		!review.pinned ||
+		hardBlocks.length > 0 ||
+		review.licenseVerdict === "reject" ||
+		review.lifecycleVerdict === "reject" ||
+		review.pathCompatibility === "pi-hardcoded" ||
+		review.adoption === "reject";
+
+	return {
+		outcome: blocked ? "blocked" : "admitted",
+		identity: identityKey(identity),
+		adoption: review.adoption,
+		pinned: review.pinned,
+		reasons,
+	};
+}
+
+export function deriveGalleryInstallTrustFromReview(review: GalleryTrialGateReview): GalleryInstallTrust {
+	const expectedResources = review.candidate?.expectedResources ?? [];
+	if (expectedResources.some((resource) => CODE_EXECUTION_RESOURCES.has(resource))) return "code-execution";
+	if (review.capabilities.some((capability) => CODE_EXECUTION_CAPABILITIES.has(capability))) return "code-execution";
+	return "declarative";
+}
+
+export function buildGalleryInstallSpecFromReview(
+	input: GalleryInstallSource,
+	review: GalleryTrialGateReview,
+	options: GalleryInstallOptions = {},
+): GalleryInstallSpec {
+	const spec = buildGalleryInstallSpec(input, false, options);
+	const gate = assessGalleryTrialGate(galleryIdentityFromInstallSource(input), review);
+	if (gate.outcome === "blocked") {
+		throw new Error(`Gallery trial blocked for ${gate.identity}: ${gate.reasons.join(", ")}`);
+	}
+	return { ...spec, trust: deriveGalleryInstallTrustFromReview(review) };
+}
+
+function galleryIdentityFromInstallSource(input: GalleryInstallSource): GalleryEntryIdentity {
+	if (input.kind === "npm") return { kind: "npm", name: input.name };
+	if (input.kind === "git") return { kind: "git", repo: input.repo, ref: input.ref };
+	return { kind: "local", path: input.path };
 }

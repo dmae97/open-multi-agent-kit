@@ -92,15 +92,23 @@ Useful session commands:
 
 See [Sessions](sessions.md) and [Compaction](compaction.md) for details.
 
-## Context Files
+## Context Files (Parent / Child Hierarchy)
 
-OMK loads `AGENTS.md` or `CLAUDE.md` at startup from:
+OMK loads context with strict parent precedence:
 
-- `~/.omk/agent/AGENTS.md` for global instructions
-- parent directories, walking up from the current working directory
-- the current directory
+**Parent (global, highest priority, immutable for safety):**
+- `~/.omk/agent/AGENTS.md`
+- `~/.omk/agent/CLAUDE.md`
 
-Use context files for project conventions, commands, safety rules, and preferences. Disable loading with `--no-context-files` or `-nc`.
+**Child (project / ancestor, subordinate):**
+- Parent directories walking up from cwd
+- Current directory `AGENTS.md` / `CLAUDE.md`
+
+The authoritative anti-GOD Mode / jailbreak / ToS-bypass rules live in the **parent** global files (see root AGENTS.md and CLAUDE.md "PARENT RULES" sections). Project files are only for conventions.
+
+When GOD Mode patterns are detected (refusal + specific divider + semantically opposite response, `[END OF INPUT][START OF INPUT]`, "godmode is active", "write real then oppositely", LOVE PLINY dividers, etc.) the loader emits security diagnostics and the parent rules force a short refusal. Loaded hostile content is wrapped/neutralized before reaching the model.
+
+Disable all context loading with `--no-context-files` (`-nc`).
 
 ### System Prompt Files
 
@@ -110,6 +118,8 @@ Replace the default system prompt with:
 - `~/.omk/agent/SYSTEM.md` globally
 
 Append to the default prompt without replacing it with `APPEND_SYSTEM.md` in either location.
+
+**Warning**: Replacing the system prompt does not relax parent AGENTS.md/CLAUDE.md resistance rules or the safety floor. GOD Mode bypass attempts via custom SYSTEM.md are still refused.
 
 ## Exporting and Sharing Sessions
 

@@ -1,6 +1,16 @@
 import { join } from "node:path";
-import { Agent, type AgentMessage, type ThinkingLevel } from "@earendil-works/omk-agent-core";
-import { clampThinkingLevel, type Message, type Model, streamSimple } from "@earendil-works/omk-ai";
+import { Agent, type AgentMessage, type StreamFn, type ThinkingLevel } from "@earendil-works/omk-agent-core";
+import {
+	assertProviderNetworkRequestAllowed,
+	type BeforeProviderNetworkRequest,
+	clampThinkingLevel,
+	createProviderNetworkErrorStream,
+	type Message,
+	type Model,
+	type ProviderNetworkDecision,
+	type ProviderNetworkRequest,
+	streamSimple,
+} from "@earendil-works/omk-ai";
 import { getAgentDir } from "../config.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { AgentSession } from "./agent-session.ts";
@@ -8,16 +18,21 @@ import { formatNoModelsAvailableMessage } from "./auth-guidance.ts";
 import { AuthStorage } from "./auth-storage.ts";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.ts";
 import type { ExtensionRunner, LoadExtensionsResult, SessionStartEvent, ToolDefinition } from "./extensions/index.ts";
+import type { ExtensionExecSandbox } from "./extensions/types.ts";
+import type { LoadoutAccessPolicy } from "./loadout-access-policy.ts";
 import { convertToLlm } from "./messages.ts";
 import { ModelRegistry } from "./model-registry.ts";
 import { findInitialModel } from "./model-resolver.ts";
+import type { PackageTrialRuntimeOptions } from "./package-manager.ts";
 import { mergeProviderAttributionHeaders } from "./provider-attribution.ts";
 import type { ResourceLoader } from "./resource-loader.ts";
 import { DefaultResourceLoader } from "./resource-loader.ts";
+import { decideNetworkAccess, type SandboxPolicy } from "./sandbox/policy.ts";
 import { getDefaultSessionDir, SessionManager } from "./session-manager.ts";
 import { SettingsManager } from "./settings-manager.ts";
 import { time } from "./timings.ts";
 import {
+	type BashSandboxPreflight,
 	createBashTool,
 	createCodingTools,
 	createEditTool,
@@ -80,6 +95,23 @@ export interface CreateAgentSessionOptions {
 	settingsManager?: SettingsManager;
 	/** Session start event metadata for extension runtime startup. */
 	sessionStartEvent?: SessionStartEvent;
+	/**
+	 * Optional provider network policy. When omitted, no provider network
+	 * preflight is installed (current behavior preserved). When set, a
+	 * sanitized preflight runs before API key/header resolution and is
+	 * forwarded to `streamSimple` for deeper provider-derived URL checks.
+	 */
+	providerNetworkPolicy?: ProviderNetworkPolicyConfig;
+	/** Optional sanitized audit sink for provider network policy decisions. */
+	onProviderNetworkAudit?: ProviderNetworkAuditSink;
+	/** Optional loadout enforcement policy for SDK-created sessions. */
+	loadoutAccessPolicy?: LoadoutAccessPolicy;
+	/** Optional bash sandbox preflight policy for SDK-created sessions and RPC bash. */
+	bashSandboxPreflight?: BashSandboxPreflight;
+	/** Optional sandbox policy for extension `omk.exec` loaded through the default resource loader. */
+	extensionExecSandbox?: ExtensionExecSandbox;
+	/** Optional sandboxed temporary package trial runtime for CLI/SDK supplied package sources. */
+	packageTrialRuntime?: PackageTrialRuntimeOptions;
 }
 
 /** Result from createAgentSession */
@@ -163,6 +195,206 @@ function getDefaultAgentDir(): string {
  * });
  * ```
  */
+// ---------------------------------------------------------------------------
+// Provider network policy
+//
+// Sanitized preflight for provider/API network access. The request metadata
+// is origin-only (no credentials, query, fragment, path, headers, API keys,
+// request bodies, prompts, or responses). Enforce mode blocks denied hosts
+// before any provider network I/O and before API key/header resolution; audit
+// mode records `wouldDeny` without blocking; off mode disables the preflight.
+// The pure host/loopback/deny/allow logic reuses `decideNetworkAccess`.
+// ---------------------------------------------------------------------------
+
+export type ProviderNetworkPolicyMode = "off" | "audit" | "enforce";
+
+export type ProviderNetworkPolicyNetwork = SandboxPolicy["network"];
+
+export interface ProviderNetworkPolicyConfig {
+	mode: ProviderNetworkPolicyMode;
+	network: ProviderNetworkPolicyNetwork;
+}
+
+export interface ProviderNetworkAuditEvent {
+	provider: string;
+	api: string;
+	modelId: string;
+	host?: string;
+	protocol: ProviderNetworkRequest["protocol"];
+	port?: string;
+	transport: ProviderNetworkRequest["transport"];
+	purpose: ProviderNetworkRequest["purpose"];
+	mode: ProviderNetworkPolicyMode;
+	rule: string;
+	allowed: boolean;
+	wouldDeny?: boolean;
+}
+
+export type ProviderNetworkAuditSink = (event: ProviderNetworkAuditEvent) => void;
+
+function syntheticProviderSandboxPolicy(
+	mode: "audit" | "enforce",
+	network: ProviderNetworkPolicyNetwork,
+): SandboxPolicy {
+	return {
+		mode,
+		profile: "networked",
+		filesystem: {
+			root: "/",
+			readAllow: [],
+			readDeny: [],
+			writeAllow: [],
+			denyWrite: [],
+			tempWrite: [],
+			followSymlinks: false,
+		},
+		network,
+		process: { allowExec: true, allowShell: true, allowPrivilege: false },
+	};
+}
+
+/**
+ * Map a sanitized provider network request to a provider-neutral decision.
+ * Reuses the pure sandbox network decision logic (`decideNetworkAccess`) so
+ * allow/deny/loopback semantics stay consistent with the rest of the sandbox.
+ */
+export function decideProviderNetworkAccess(
+	config: ProviderNetworkPolicyConfig,
+	request: ProviderNetworkRequest,
+): ProviderNetworkDecision {
+	if (config.mode === "off") {
+		return {
+			allowed: true,
+			rule: "provider-network.off",
+			reason: "Provider network policy is disabled.",
+			mode: "off",
+		};
+	}
+
+	const sandboxMode = config.mode === "audit" ? "audit" : "enforce";
+	const sandboxDecision = decideNetworkAccess(syntheticProviderSandboxPolicy(sandboxMode, config.network), {
+		host: request.host,
+		url: request.url,
+		loopback: request.loopback,
+		browser: false,
+	});
+
+	if (config.mode === "audit") {
+		return {
+			allowed: true,
+			wouldDeny: !sandboxDecision.allowed,
+			rule: sandboxDecision.rule,
+			reason: sandboxDecision.reason,
+			mode: "audit",
+		};
+	}
+
+	return {
+		allowed: sandboxDecision.allowed,
+		rule: sandboxDecision.rule,
+		reason: sandboxDecision.reason,
+		mode: "enforce",
+	};
+}
+
+/**
+ * Create the `beforeNetworkRequest` hook installed on the agent stream
+ * function. The optional audit sink receives only sanitized metadata
+ * (provider, api, model id, host, protocol, port, transport, purpose, mode,
+ * rule, allowed/wouldDeny) and never headers, API keys, or request bodies.
+ */
+export function createBeforeProviderNetworkRequest(
+	config: ProviderNetworkPolicyConfig,
+	onAudit?: ProviderNetworkAuditSink,
+): BeforeProviderNetworkRequest {
+	return (request) => {
+		const decision = decideProviderNetworkAccess(config, request);
+		onAudit?.({
+			provider: request.provider,
+			api: String(request.api),
+			modelId: request.modelId,
+			host: request.host,
+			protocol: request.protocol,
+			port: request.port,
+			transport: request.transport,
+			purpose: request.purpose,
+			mode: decision.mode,
+			rule: decision.rule,
+			allowed: decision.allowed,
+			wouldDeny: decision.wouldDeny,
+		});
+		return decision;
+	};
+}
+
+/**
+ * Dependencies for the agent stream function factory.
+ */
+export interface AgentStreamFunctionDeps {
+	modelRegistry: ModelRegistry;
+	settingsManager: SettingsManager;
+	/** When set, a sanitized preflight runs before auth resolution and is forwarded to `streamSimple`. */
+	providerNetworkBeforeRequest?: BeforeProviderNetworkRequest;
+}
+
+/**
+ * Build the Agent `streamFn` used by `createAgentSession`.
+ *
+ * Contract preserved from the previous inline implementation:
+ * - resolves API key/headers via the model registry,
+ * - applies provider retry/timeout settings,
+ * - merges provider attribution headers.
+ *
+ * Added behavior: when `providerNetworkBeforeRequest` is set, a sanitized
+ * preflight runs BEFORE auth resolution. A deny returns a sanitized error
+ * stream (no headers/API keys/bodies/prompts/responses are exposed) and skips
+ * auth + provider invocation entirely. The hook is also forwarded to
+ * `streamSimple` so provider-derived endpoints can be checked deeper.
+ */
+export function createAgentStreamFunction(deps: AgentStreamFunctionDeps): StreamFn {
+	const { modelRegistry, settingsManager, providerNetworkBeforeRequest } = deps;
+	return async (model, context, options) => {
+		if (providerNetworkBeforeRequest) {
+			try {
+				await assertProviderNetworkRequestAllowed(
+					{ model, purpose: "chat", transport: "http", source: "model.baseUrl" },
+					providerNetworkBeforeRequest,
+				);
+			} catch (error) {
+				return createProviderNetworkErrorStream(model, error);
+			}
+		}
+		const auth = await modelRegistry.getApiKeyAndHeaders(model);
+		if (!auth.ok) {
+			throw new Error(auth.error);
+		}
+		const providerRetrySettings = settingsManager.getProviderRetrySettings();
+		const httpIdleTimeoutMs = settingsManager.getHttpIdleTimeoutMs();
+		// SDKs treat timeout=0 as 0ms (immediate timeout), not "no timeout".
+		// Use max int32 to effectively disable the timeout.
+		const effectiveTimeoutMs = httpIdleTimeoutMs === 0 ? 2147483647 : httpIdleTimeoutMs;
+		const timeoutMs = options?.timeoutMs ?? providerRetrySettings.timeoutMs ?? effectiveTimeoutMs;
+		const websocketConnectTimeoutMs =
+			options?.websocketConnectTimeoutMs ?? settingsManager.getWebSocketConnectTimeoutMs();
+		return streamSimple(model, context, {
+			...options,
+			apiKey: auth.apiKey,
+			timeoutMs,
+			websocketConnectTimeoutMs,
+			maxRetries: options?.maxRetries ?? providerRetrySettings.maxRetries,
+			maxRetryDelayMs: options?.maxRetryDelayMs ?? providerRetrySettings.maxRetryDelayMs,
+			headers: mergeProviderAttributionHeaders(
+				model,
+				settingsManager,
+				options?.sessionId,
+				auth.headers,
+				options?.headers,
+			),
+			...(providerNetworkBeforeRequest ? { beforeNetworkRequest: providerNetworkBeforeRequest } : {}),
+		});
+	};
+}
+
 export async function createAgentSession(options: CreateAgentSessionOptions = {}): Promise<CreateAgentSessionResult> {
 	const cwd = resolvePath(options.cwd ?? options.sessionManager?.getCwd() ?? process.cwd());
 	const agentDir = options.agentDir ? resolvePath(options.agentDir) : getDefaultAgentDir();
@@ -178,7 +410,13 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const sessionManager = options.sessionManager ?? SessionManager.create(cwd, getDefaultSessionDir(cwd, agentDir));
 
 	if (!resourceLoader) {
-		resourceLoader = new DefaultResourceLoader({ cwd, agentDir, settingsManager });
+		resourceLoader = new DefaultResourceLoader({
+			cwd,
+			agentDir,
+			settingsManager,
+			extensionExecSandbox: options.extensionExecSandbox,
+			trialRuntime: options.packageTrialRuntime,
+		});
 		await resourceLoader.reload();
 		time("resourceLoader.reload");
 	}
@@ -289,6 +527,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	};
 
 	const extensionRunnerRef: { current?: ExtensionRunner } = {};
+	const providerNetworkBeforeRequest = options.providerNetworkPolicy
+		? createBeforeProviderNetworkRequest(options.providerNetworkPolicy, options.onProviderNetworkAudit)
+		: undefined;
 
 	agent = new Agent({
 		initialState: {
@@ -298,35 +539,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			tools: [],
 		},
 		convertToLlm: convertToLlmWithBlockImages,
-		streamFn: async (model, context, options) => {
-			const auth = await modelRegistry.getApiKeyAndHeaders(model);
-			if (!auth.ok) {
-				throw new Error(auth.error);
-			}
-			const providerRetrySettings = settingsManager.getProviderRetrySettings();
-			const httpIdleTimeoutMs = settingsManager.getHttpIdleTimeoutMs();
-			// SDKs treat timeout=0 as 0ms (immediate timeout), not "no timeout".
-			// Use max int32 to effectively disable the timeout.
-			const effectiveTimeoutMs = httpIdleTimeoutMs === 0 ? 2147483647 : httpIdleTimeoutMs;
-			const timeoutMs = options?.timeoutMs ?? providerRetrySettings.timeoutMs ?? effectiveTimeoutMs;
-			const websocketConnectTimeoutMs =
-				options?.websocketConnectTimeoutMs ?? settingsManager.getWebSocketConnectTimeoutMs();
-			return streamSimple(model, context, {
-				...options,
-				apiKey: auth.apiKey,
-				timeoutMs,
-				websocketConnectTimeoutMs,
-				maxRetries: options?.maxRetries ?? providerRetrySettings.maxRetries,
-				maxRetryDelayMs: options?.maxRetryDelayMs ?? providerRetrySettings.maxRetryDelayMs,
-				headers: mergeProviderAttributionHeaders(
-					model,
-					settingsManager,
-					options?.sessionId,
-					auth.headers,
-					options?.headers,
-				),
-			});
-		},
+		streamFn: createAgentStreamFunction({
+			modelRegistry,
+			settingsManager,
+			providerNetworkBeforeRequest,
+		}),
 		onPayload: async (payload, _model) => {
 			const runner = extensionRunnerRef.current;
 			if (!runner?.hasHandlers("before_provider_request")) {
@@ -385,6 +602,8 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		allowedToolNames,
 		excludedToolNames,
 		extensionRunnerRef,
+		loadoutAccessPolicy: options.loadoutAccessPolicy,
+		bashSandboxPreflight: options.bashSandboxPreflight,
 		sessionStartEvent: options.sessionStartEvent,
 	});
 	const extensionsResult = resourceLoader.getExtensions();

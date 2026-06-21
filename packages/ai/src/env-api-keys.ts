@@ -88,6 +88,26 @@ function hasVertexAdcCredentials(): boolean {
 	return cachedVertexAdcCredentialsExists;
 }
 
+const baseUrlApiKeyEnvMap: Record<string, string> = {
+	"https://api.kimi.com/coding": "KIMI_API_KEY",
+	"https://www.duckcoding.ai": "DUCKCODING_API_KEY",
+};
+
+function getApiKeyEnvVarByBaseUrl(baseUrl: string | undefined): string | undefined {
+	if (!baseUrl) return undefined;
+	const normalized = baseUrl.replace(/\/$/, "").toLowerCase();
+	return baseUrlApiKeyEnvMap[normalized];
+}
+
+export function getEnvApiKeyNameByBaseUrl(baseUrl: string | undefined): string | undefined {
+	return getApiKeyEnvVarByBaseUrl(baseUrl);
+}
+
+export function getEnvApiKeyByBaseUrl(baseUrl: string | undefined): string | undefined {
+	const envVar = getApiKeyEnvVarByBaseUrl(baseUrl);
+	return envVar ? process.env[envVar] || getProcEnv(envVar) : undefined;
+}
+
 function getApiKeyEnvVars(provider: string): readonly string[] | undefined {
 	if (provider === "github-copilot") {
 		return ["COPILOT_GITHUB_TOKEN"];
@@ -124,6 +144,7 @@ function getApiKeyEnvVars(provider: string): readonly string[] | undefined {
 		opencode: "OPENCODE_API_KEY",
 		"opencode-go": "OPENCODE_API_KEY",
 		"kimi-coding": "KIMI_API_KEY",
+		duckcoding: "DUCKCODING_API_KEY",
 		"cloudflare-workers-ai": "CLOUDFLARE_API_KEY",
 		"cloudflare-ai-gateway": "CLOUDFLARE_API_KEY",
 		xiaomi: "XIAOMI_API_KEY",

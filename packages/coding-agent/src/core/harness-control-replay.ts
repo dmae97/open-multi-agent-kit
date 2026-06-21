@@ -1,5 +1,23 @@
-import type { HarnessControlEvent, HarnessControlEventStatus } from "./harness-control-events.ts";
+import type {
+	HarnessControlEvent,
+	HarnessControlEventStatus,
+	HarnessControlLedgerQuarantineEntry,
+} from "./harness-control-events.ts";
 import { hashCanonical, verifyHarnessControlLedger } from "./harness-control-events.ts";
+import {
+	canonicalizeBaseDir,
+	createFsArtifactResolver,
+	verifyArtifactReference,
+} from "./orchestration/replay-ledger.ts";
+
+export interface HarnessControlReplayOptions {
+	// Re-hash artifacts referenced by ledger events that recorded allowed + sha256
+	// manifest entries. Enabled by default; disable for ledger-shape-only replay.
+	verifyArtifacts?: boolean;
+	// Override the base directory used to resolve relative artifact paths. Defaults
+	// to each event's recorded cwd.
+	artifactBaseDir?: string;
+}
 
 export interface HarnessControlOperationReplay {
 	operationId: string;
@@ -20,6 +38,7 @@ export interface HarnessControlReplayReport {
 	reconstructedStateHash: string;
 	errors: string[];
 	warnings: string[];
+	quarantinedLines: HarnessControlLedgerQuarantineEntry[];
 }
 
 const TERMINAL_STATUSES = new Set<HarnessControlEventStatus>([
@@ -178,18 +197,56 @@ export function replayHarnessControlEvents(events: readonly HarnessControlEvent[
 		reconstructedStateHash: reconstructHarnessStateHash(operations),
 		errors,
 		warnings,
+		quarantinedLines: [],
 	};
 }
 
-export function verifyHarnessControlReplay(logPath: string): HarnessControlReplayReport {
+function verifyReplayArtifacts(
+	events: readonly HarnessControlEvent[],
+	options: HarnessControlReplayOptions,
+): { errors: string[]; warnings: string[] } {
+	const errors: string[] = [];
+	const warnings: string[] = [];
+	if (options.verifyArtifacts === false) return { errors, warnings };
+	for (const event of events) {
+		const artifacts = Array.isArray(event.artifacts) ? event.artifacts : [];
+		if (artifacts.length === 0) continue;
+		const baseDir = canonicalizeBaseDir(options.artifactBaseDir ?? event.cwd);
+		const resolver = createFsArtifactResolver(baseDir);
+		for (const entry of artifacts) {
+			// Only rehash manifest entries that were recorded as allowed files.
+			if (!entry || entry.allowed !== true || typeof entry.sha256 !== "string") continue;
+			const resolved = resolver(entry.path);
+			if (resolved === undefined) {
+				warnings.push(`event ${event.eventId} artifact ${entry.path} is no longer present for rehash`);
+				continue;
+			}
+			const result = verifyArtifactReference(
+				{ path: entry.path, repoRoot: baseDir, sha256: entry.sha256 },
+				() => resolved,
+			);
+			if (!result.ok) {
+				errors.push(`event ${event.eventId} artifact ${entry.path}: ${result.error}`);
+			}
+		}
+	}
+	return { errors, warnings };
+}
+
+export function verifyHarnessControlReplay(
+	logPath: string,
+	options: HarnessControlReplayOptions = {},
+): HarnessControlReplayReport {
 	const ledger = verifyHarnessControlLedger(logPath);
 	const replay = replayHarnessControlEvents(ledger.events);
+	const artifacts = verifyReplayArtifacts(ledger.events, options);
 	return {
-		ok: ledger.ok && replay.ok,
+		ok: ledger.ok && replay.ok && artifacts.errors.length === 0,
 		events: ledger.events,
 		operations: replay.operations,
 		reconstructedStateHash: replay.reconstructedStateHash,
-		errors: [...ledger.errors, ...replay.errors],
-		warnings: replay.warnings,
+		errors: [...ledger.errors, ...replay.errors, ...artifacts.errors],
+		warnings: [...replay.warnings, ...artifacts.warnings],
+		quarantinedLines: ledger.quarantinedLines,
 	};
 }

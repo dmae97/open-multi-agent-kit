@@ -27,12 +27,16 @@ import { resolvePath } from "../../utils/paths.ts";
 import { createEventBus, type EventBus } from "../event-bus.ts";
 import type { ExecOptions } from "../exec.ts";
 import { execCommand } from "../exec.ts";
+import type { SandboxBackendStatus, SandboxPlatform } from "../sandbox/policy.ts";
+import { buildSandboxedSpawnRequest } from "../sandbox/spawn.ts";
 import { createSyntheticSourceInfo } from "../source-info.ts";
 import type {
 	Extension,
 	ExtensionAPI,
+	ExtensionExecSandbox,
 	ExtensionFactory,
 	ExtensionRuntime,
+	LoadExtensionsOptions,
 	LoadExtensionsResult,
 	MessageRenderer,
 	ProviderConfig,
@@ -66,6 +70,61 @@ const VIRTUAL_MODULES: Record<string, unknown> = {
 };
 
 const require = createRequire(import.meta.url);
+
+/**
+ * Default sandbox backend status for extension exec when none is supplied: no
+ * OS-level backend, on the current platform. This makes enforce mode fail closed
+ * unless the caller explicitly provides an available backend.
+ */
+function defaultExtensionExecBackend(): SandboxBackendStatus {
+	const platform: SandboxPlatform =
+		process.platform === "linux" ? "linux" : process.platform === "darwin" ? "macos" : "unsupported";
+	return { platform, backendAvailable: false };
+}
+
+interface ExtensionExecCommandPlan {
+	readonly command: string;
+	readonly args: readonly string[];
+	readonly cwd: string;
+	readonly env?: NodeJS.ProcessEnv;
+}
+
+function planExtensionExecCommand(
+	command: string,
+	args: readonly string[],
+	cwd: string,
+	options: ExecOptions | undefined,
+	execSandbox: ExtensionExecSandbox | undefined,
+): ExtensionExecCommandPlan {
+	const requestedCwd = options?.cwd ?? cwd;
+	if (!execSandbox) {
+		return { command, args, cwd: requestedCwd, env: options?.env };
+	}
+
+	const sandbox = buildSandboxedSpawnRequest({
+		argv: [command, ...args],
+		cwd: requestedCwd,
+		env: options?.env ?? process.env,
+		policy: execSandbox.policy,
+		backend: execSandbox.backend ?? defaultExtensionExecBackend(),
+		resolver: execSandbox.resolver,
+	});
+	if (!sandbox.allowed) {
+		throw new Error(`sandbox: exec denied\n[${sandbox.rule}] ${sandbox.reason}`);
+	}
+
+	const [sandboxedCommand, ...sandboxedArgs] = sandbox.argv;
+	if (!sandboxedCommand) {
+		throw new Error("sandbox: exec denied\n[sandbox.empty_argv] Sandbox wrapper returned an empty argv.");
+	}
+
+	return {
+		command: sandboxedCommand,
+		args: sandboxedArgs,
+		cwd: sandbox.cwd,
+		env: sandbox.env,
+	};
+}
 
 /**
  * Get aliases for jiti (used in Node.js/development mode).
@@ -189,6 +248,7 @@ function createExtensionAPI(
 	runtime: ExtensionRuntime,
 	cwd: string,
 	eventBus: EventBus,
+	execSandbox?: ExtensionExecSandbox,
 ): ExtensionAPI {
 	const api = {
 		// Registration methods - write to extension
@@ -282,9 +342,10 @@ function createExtensionAPI(
 			runtime.setLabel(entryId, label);
 		},
 
-		exec(command: string, args: string[], options?: ExecOptions) {
+		async exec(command: string, args: string[], options?: ExecOptions) {
 			runtime.assertActive();
-			return execCommand(command, args, options?.cwd ?? cwd, options);
+			const planned = planExtensionExecCommand(command, args, cwd, options, execSandbox);
+			return execCommand(planned.command, [...planned.args], planned.cwd, { ...options, env: planned.env });
 		},
 
 		getActiveTools(): string[] {
@@ -393,6 +454,7 @@ async function loadExtension(
 	cwd: string,
 	eventBus: EventBus,
 	runtime: ExtensionRuntime,
+	execSandbox?: ExtensionExecSandbox,
 ): Promise<{ extension: Extension | null; error: string | null }> {
 	const resolvedPath = resolvePath(extensionPath, cwd, { normalizeUnicodeSpaces: true });
 
@@ -403,7 +465,7 @@ async function loadExtension(
 		}
 
 		const extension = createExtension(extensionPath, resolvedPath);
-		const api = createExtensionAPI(extension, runtime, cwd, eventBus);
+		const api = createExtensionAPI(extension, runtime, cwd, eventBus, execSandbox);
 		await factory(api);
 
 		return { extension, error: null };
@@ -422,10 +484,11 @@ export async function loadExtensionFromFactory(
 	eventBus: EventBus,
 	runtime: ExtensionRuntime,
 	extensionPath = "<inline>",
+	options?: LoadExtensionsOptions,
 ): Promise<Extension> {
 	const extension = createExtension(extensionPath, extensionPath);
 	const resolvedCwd = resolvePath(cwd);
-	const api = createExtensionAPI(extension, runtime, resolvedCwd, eventBus);
+	const api = createExtensionAPI(extension, runtime, resolvedCwd, eventBus, options?.execSandbox);
 	await factory(api);
 	return extension;
 }
@@ -433,7 +496,12 @@ export async function loadExtensionFromFactory(
 /**
  * Load extensions from paths.
  */
-export async function loadExtensions(paths: string[], cwd: string, eventBus?: EventBus): Promise<LoadExtensionsResult> {
+export async function loadExtensions(
+	paths: string[],
+	cwd: string,
+	eventBus?: EventBus,
+	options?: LoadExtensionsOptions,
+): Promise<LoadExtensionsResult> {
 	const extensions: Extension[] = [];
 	const errors: Array<{ path: string; error: string }> = [];
 	const resolvedCwd = resolvePath(cwd);
@@ -441,7 +509,13 @@ export async function loadExtensions(paths: string[], cwd: string, eventBus?: Ev
 	const runtime = createExtensionRuntime();
 
 	for (const extPath of paths) {
-		const { extension, error } = await loadExtension(extPath, resolvedCwd, resolvedEventBus, runtime);
+		const { extension, error } = await loadExtension(
+			extPath,
+			resolvedCwd,
+			resolvedEventBus,
+			runtime,
+			options?.execSandbox,
+		);
 
 		if (error) {
 			errors.push({ path: extPath, error });
@@ -575,6 +649,7 @@ export async function discoverAndLoadExtensions(
 	cwd: string,
 	agentDir: string = getAgentDir(),
 	eventBus?: EventBus,
+	options?: LoadExtensionsOptions,
 ): Promise<LoadExtensionsResult> {
 	const resolvedCwd = resolvePath(cwd);
 	const resolvedAgentDir = resolvePath(agentDir);
@@ -617,5 +692,5 @@ export async function discoverAndLoadExtensions(
 		addPaths([resolved]);
 	}
 
-	return loadExtensions(allPaths, resolvedCwd, eventBus);
+	return loadExtensions(allPaths, resolvedCwd, eventBus, options);
 }

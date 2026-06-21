@@ -208,4 +208,171 @@ describe("harness control event ledger", () => {
 		);
 		expect(event.artifacts).toContainEqual(expect.objectContaining({ path: ".env", exists: true, allowed: false }));
 	});
+
+	it("continues the global sequence and hash chain across a rotation anchor", () => {
+		const root = createTempDir();
+		const logPath = path.join(root, "events.jsonl");
+		const first = recordHarnessControlEvent(
+			"spec.compile",
+			"completed",
+			{ large: "x".repeat(120) },
+			{ cwd: root, logPath, operationId: "op-1" },
+		);
+		const second = recordHarnessControlEvent(
+			"spec.compile",
+			"completed",
+			{},
+			{ cwd: root, logPath, operationId: "op-2", maxLedgerBytes: 20, now: new Date("2026-06-18T02:00:00Z") },
+		);
+
+		expect(first.ok).toBe(true);
+		expect(second.ok).toBe(true);
+		const lines = fs.readFileSync(logPath, "utf-8").trim().split("\n");
+		const anchor = JSON.parse(lines[0]!);
+		const continuation = JSON.parse(lines[1]!);
+		expect(anchor).toMatchObject({
+			schemaVersion: "omk.harness-control.anchor.v1",
+			anchoredSequence: 1,
+			anchoredEventHash: first.event!.eventHash,
+			rotatedFrom: "events.jsonl.2026-06-18T02-00-00-000Z.rotated",
+		});
+		expect(continuation).toMatchObject({ sequence: 2, previousEventHash: first.event!.eventHash });
+		expect(verifyHarnessControlLedger(logPath)).toMatchObject({ ok: true, errors: [] });
+	});
+
+	it("rejects a ledger anchor that is not the first line", () => {
+		const root = createTempDir();
+		const logPath = path.join(root, "events.jsonl");
+		recordHarnessControlEvent("spec.compile", "completed", {}, { cwd: root, logPath, operationId: "op-1" });
+		const anchorLine = JSON.stringify({
+			schemaVersion: "omk.harness-control.anchor.v1",
+			anchoredSequence: 1,
+			anchoredEventHash: "a".repeat(64),
+			rotatedFrom: "events.jsonl.rotated",
+			timestamp: "2026-06-18T02:00:00.000Z",
+		});
+		fs.appendFileSync(logPath, `${anchorLine}\n`);
+
+		const result = verifyHarnessControlLedger(logPath);
+		expect(result.ok).toBe(false);
+		expect(result.errors.join("\n")).toContain("ledger anchor must be the first line");
+	});
+
+	it("rejects a leading anchor with invalid fields", () => {
+		const root = createTempDir();
+		const logPath = path.join(root, "events.jsonl");
+		const badAnchor = JSON.stringify({
+			schemaVersion: "omk.harness-control.anchor.v1",
+			anchoredSequence: 0,
+			anchoredEventHash: "not-hex",
+			rotatedFrom: "events.jsonl.rotated",
+			timestamp: "2026-06-18T02:00:00.000Z",
+		});
+		fs.writeFileSync(logPath, `${badAnchor}\n`, "utf-8");
+
+		const result = verifyHarnessControlLedger(logPath);
+		expect(result.ok).toBe(false);
+		expect(result.errors.join("\n")).toContain("anchoredSequence");
+	});
+
+	it("blocks artifact references whose symlink target escapes allowed roots", () => {
+		const root = createTempDir();
+		const outside = createTempDir();
+		const secret = path.join(outside, "escape.txt");
+		fs.writeFileSync(secret, "escape", "utf-8");
+		const link = path.join(root, "link.txt");
+		fs.symlinkSync(secret, link);
+
+		const event = createHarnessControlEvent(
+			"spec.compile",
+			"completed",
+			{},
+			{ cwd: root, artifactRefs: ["link.txt"] },
+		);
+
+		const entry = event.artifacts.find((artifact) => artifact.path === "link.txt");
+		expect(entry).toMatchObject({ allowed: false });
+		expect(entry?.error).toContain("outside");
+		expect(entry?.sha256).toBeUndefined();
+	});
+
+	it("creates ledger directory with group/world-writable bits cleared", () => {
+		const root = createTempDir();
+		const logPath = path.join(root, "subdir", "events.jsonl");
+
+		recordHarnessControlEvent("spec.compile", "completed", {}, { cwd: root, logPath });
+
+		const dirStats = fs.statSync(path.dirname(logPath));
+		expect(dirStats.mode & 0o022).toBe(0);
+	});
+
+	it("tightens existing ledger file permissions before append", () => {
+		const root = createTempDir();
+		const logPath = path.join(root, "events.jsonl");
+		fs.writeFileSync(logPath, "", "utf-8");
+		fs.chmodSync(logPath, 0o666);
+
+		const result = recordHarnessControlEvent("spec.compile", "completed", {}, { cwd: root, logPath });
+
+		expect(result.ok).toBe(true);
+		expect(fs.statSync(logPath).mode & 0o077).toBe(0);
+	});
+
+	it("fails to write when the last ledger line is not valid JSON", () => {
+		const root = createTempDir();
+		const logPath = path.join(root, "events.jsonl");
+
+		// Write a valid first event.
+		recordHarnessControlEvent("spec.compile", "completed", {}, { cwd: root, logPath, operationId: "op-1" });
+
+		// Corrupt the last line.
+		fs.appendFileSync(logPath, "garbage not json\n", "utf-8");
+
+		const result = recordHarnessControlEvent(
+			"spec.compile",
+			"completed",
+			{},
+			{ cwd: root, logPath, operationId: "op-2" },
+		);
+
+		expect(result.ok).toBe(false);
+		expect(result.error).toContain("not valid JSON");
+	});
+
+	it("quarantines unsupported ledger records instead of replaying them", () => {
+		const root = createTempDir();
+		const logPath = path.join(root, "events.jsonl");
+		recordHarnessControlEvent("spec.compile", "completed", {}, { cwd: root, logPath, operationId: "op-1" });
+		fs.appendFileSync(logPath, `${JSON.stringify({ schemaVersion: "unknown", operationId: "bad-op" })}\n`, "utf-8");
+
+		const result = verifyHarnessControlLedger(logPath);
+
+		expect(result.ok).toBe(false);
+		expect(result.events.map((event) => event.operationId)).toEqual(["op-1"]);
+		expect(result.quarantinedLines).toEqual([
+			expect.objectContaining({ lineNumber: 2, reason: expect.stringContaining("unsupported schemaVersion") }),
+		]);
+	});
+
+	it("fails to write when the last ledger record has a missing eventHash", () => {
+		const root = createTempDir();
+		const logPath = path.join(root, "events.jsonl");
+
+		// Write an incomplete record (simulating a truncated write).
+		fs.mkdirSync(path.dirname(logPath), { recursive: true });
+		fs.writeFileSync(
+			logPath,
+			`${JSON.stringify({
+				schemaVersion: "omk.harness-control.event.v2",
+				sequence: 1,
+				// missing eventHash
+			})}\n`,
+			"utf-8",
+		);
+
+		const result = recordHarnessControlEvent("spec.compile", "completed", {}, { cwd: root, logPath });
+
+		expect(result.ok).toBe(false);
+		expect(result.error).toContain("eventHash");
+	});
 });

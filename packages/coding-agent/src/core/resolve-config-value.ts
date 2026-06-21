@@ -3,11 +3,13 @@
  * Used by auth-storage.ts and model-registry.ts.
  */
 
+import { readFileSync } from "node:fs";
 import { execSync, spawnSync } from "child_process";
 import { getShellConfig } from "../utils/shell.ts";
 
 // Cache for shell command results (persists for process lifetime)
 const commandResultCache = new Map<string, string | undefined>();
+let procEnvCache: Map<string, string> | null = null;
 const ENV_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const ENV_VAR_NAME_PREFIX_RE = /^[A-Za-z_][A-Za-z0-9_]*/;
 const LEGACY_ENV_VAR_NAME_RE = /^[A-Z_][A-Z0-9_]*$/;
@@ -87,7 +89,32 @@ function parseConfigValueReference(config: string): ConfigValueReference {
 }
 
 function resolveEnvConfigValue(name: string): string | undefined {
-	return process.env[name] || undefined;
+	return process.env[name] || getProcEnv(name) || undefined;
+}
+
+/**
+ * Fallback for Bun compiled binaries that expose an empty process.env in Linux sandboxes.
+ */
+function getProcEnv(name: string): string | undefined {
+	if (!process.versions?.bun) return undefined;
+	if (Object.keys(process.env).length > 0) return undefined;
+
+	if (procEnvCache === null) {
+		procEnvCache = new Map();
+		try {
+			const data = readFileSync("/proc/self/environ", "utf-8");
+			for (const entry of data.split("\0")) {
+				const separatorIndex = entry.indexOf("=");
+				if (separatorIndex > 0) {
+					procEnvCache.set(entry.slice(0, separatorIndex), entry.slice(separatorIndex + 1));
+				}
+			}
+		} catch {
+			// /proc/self/environ may not be readable.
+		}
+	}
+
+	return procEnvCache.get(name);
 }
 
 function getTemplateEnvVarNames(parts: TemplatePart[]): string[] {
@@ -280,7 +307,8 @@ export function resolveHeadersOrThrow(
 	return Object.keys(resolved).length > 0 ? resolved : undefined;
 }
 
-/** Clear the config value command cache. Exported for testing. */
+/** Clear config value caches. Exported for testing. */
 export function clearConfigValueCache(): void {
 	commandResultCache.clear();
+	procEnvCache = null;
 }

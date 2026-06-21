@@ -12,6 +12,10 @@ import { formatDimensionNote, resizeImage } from "../../utils/image-resize.ts";
 import { detectSupportedImageMimeTypeFromFile } from "../../utils/mime.ts";
 import { formatPathRelativeToCwdOrAbsolute } from "../../utils/paths.ts";
 import type { ToolDefinition, ToolRenderResultOptions } from "../extensions/types.ts";
+import { assertLoadoutAccess, type LoadoutAccessGuard } from "../loadout-access-policy.ts";
+import type { ReadAnchorRegistry } from "../read-anchor-registry.ts";
+import { createReadAnchor, type ReadAnchor } from "../read-anchors.ts";
+import type { ReadContentCache } from "../read-content-cache.ts";
 import { resolveReadPathAsync, resolveToCwd } from "./path-utils.ts";
 import { getTextOutput, renderToolPath, replaceTabs, str } from "./render-utils.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
@@ -27,6 +31,7 @@ export type ReadToolInput = Static<typeof readSchema>;
 
 export interface ReadToolDetails {
 	truncation?: TruncationResult;
+	readAnchors?: readonly ReadAnchor[];
 }
 
 interface CompactReadClassification {
@@ -60,6 +65,14 @@ export interface ReadToolOptions {
 	autoResizeImages?: boolean;
 	/** Custom operations for file reading. Default: local filesystem */
 	operations?: ReadOperations;
+	/** Optional per-session read-anchor registry for stale-edit protection. */
+	anchorRegistry?: ReadAnchorRegistry;
+	/** Optional deterministic read id factory. */
+	readIdFactory?: () => string;
+	/** Optional per-session content cache keyed by read-anchor file hash. */
+	contentCache?: ReadContentCache;
+	/** Optional loadout access guard for scoped filesystem reads. */
+	accessGuard?: LoadoutAccessGuard;
 }
 
 type ReadRenderArgs = { path?: string; file_path?: string; offset?: number; limit?: number };
@@ -82,6 +95,10 @@ function trimTrailingEmptyLines(lines: string[]): string[] {
 		end--;
 	}
 	return lines.slice(0, end);
+}
+
+function normalizeReadAnchorContent(content: string): string {
+	return content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
 function getNonVisionImageNote(model: Model<Api> | undefined): string | undefined {
@@ -206,6 +223,10 @@ export function createReadToolDefinition(
 ): ToolDefinition<typeof readSchema, ReadToolDetails | undefined> {
 	const autoResizeImages = options?.autoResizeImages ?? true;
 	const ops = options?.operations ?? defaultReadOperations;
+	const anchorRegistry = options?.anchorRegistry;
+	const readIdFactory = options?.readIdFactory;
+	const contentCache = options?.contentCache;
+	const accessGuard = options?.accessGuard;
 	return {
 		name: "read",
 		label: "read",
@@ -235,7 +256,9 @@ export function createReadToolDefinition(
 
 					(async () => {
 						try {
+							const readAnchors: ReadAnchor[] = [];
 							const absolutePath = await resolveReadPathAsync(path, cwd);
+							assertLoadoutAccess(accessGuard, { operation: "read", toolName: "read", path: absolutePath });
 							if (aborted) return;
 							// Check if file exists and is readable.
 							await ops.access(absolutePath);
@@ -276,6 +299,19 @@ export function createReadToolDefinition(
 								// Read text content.
 								const buffer = await ops.readFile(absolutePath);
 								const textContent = buffer.toString("utf-8");
+								if (anchorRegistry) {
+									const normalizedContent = normalizeReadAnchorContent(textContent);
+									const anchor = createReadAnchor({
+										path: absolutePath,
+										content: textContent,
+										offset,
+										limit,
+										readId: readIdFactory?.(),
+									});
+									anchorRegistry.register(anchor, normalizedContent);
+									contentCache?.set(anchor.fileSha256, normalizedContent, absolutePath);
+									readAnchors.push(anchor);
+								}
 								const allLines = textContent.split("\n");
 								const totalFileLines = allLines.length;
 								// Apply offset if specified. Convert from 1-indexed input to 0-indexed array access.
@@ -324,6 +360,10 @@ export function createReadToolDefinition(
 									outputText = truncation.content;
 								}
 								content = [{ type: "text", text: outputText }];
+							}
+
+							if (readAnchors.length > 0) {
+								details = { ...details, readAnchors };
 							}
 
 							if (aborted) return;

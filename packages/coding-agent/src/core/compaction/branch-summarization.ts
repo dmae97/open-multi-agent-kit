@@ -14,6 +14,7 @@ import {
 	createCompactionSummaryMessage,
 	createCustomMessage,
 } from "../messages.ts";
+import { sanitizeMemoryPayload } from "../policy-overlays-runtime.ts";
 import type { ReadonlySessionManager, SessionEntry } from "../session-manager.ts";
 import { estimateTokens } from "./compaction.ts";
 import {
@@ -281,6 +282,16 @@ Use this EXACT format:
 
 Keep each section concise. Preserve exact file paths, function names, command results, and error messages.`;
 
+function sanitizeBranchSummaryText(text: string): string {
+	const sanitized = sanitizeMemoryPayload(text, {
+		source: "branch-summary",
+		contentTier: "summary",
+		maxChars: 10_000_000,
+		external: false,
+	});
+	return typeof sanitized.payload === "string" ? sanitized.payload : "";
+}
+
 /**
  * Generate a summary of abandoned branch entries.
  *
@@ -315,7 +326,7 @@ export async function generateBranchSummary(
 	// Transform to LLM-compatible messages, then serialize to text
 	// Serialization prevents the model from treating it as a conversation to continue
 	const llmMessages = convertToLlm(messages);
-	const conversationText = serializeConversation(llmMessages);
+	const conversationText = sanitizeBranchSummaryText(serializeConversation(llmMessages));
 
 	// Build prompt
 	let instructions: string;
@@ -353,10 +364,12 @@ export async function generateBranchSummary(
 		return { error: response.errorMessage || "Summarization failed" };
 	}
 
-	let summary = response.content
-		.filter((c): c is { type: "text"; text: string } => c.type === "text")
-		.map((c) => c.text)
-		.join("\n");
+	let summary = sanitizeBranchSummaryText(
+		response.content
+			.filter((c): c is { type: "text"; text: string } => c.type === "text")
+			.map((c) => c.text)
+			.join("\n"),
+	);
 
 	// Prepend preamble to provide context about the branch summary
 	summary = BRANCH_SUMMARY_PREAMBLE + summary;

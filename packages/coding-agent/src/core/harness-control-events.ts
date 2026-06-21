@@ -1,17 +1,20 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
+	chmodSync,
 	closeSync,
 	existsSync,
 	fsyncSync,
+	lstatSync,
 	mkdirSync,
 	openSync,
 	readFileSync,
+	realpathSync,
 	renameSync,
 	rmSync,
 	statSync,
 	writeSync,
 } from "node:fs";
-import { dirname, join, resolve, sep } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
 
 export type HarnessControlEventStatus =
 	| "prepared"
@@ -70,6 +73,14 @@ export interface HarnessControlEvent {
 	eventHash: string;
 }
 
+export interface HarnessControlLedgerAnchor {
+	schemaVersion: "omk.harness-control.anchor.v1";
+	anchoredSequence: number;
+	anchoredEventHash: string;
+	rotatedFrom: string;
+	timestamp: string;
+}
+
 export interface HarnessControlEventWriteResult {
 	ok: boolean;
 	path?: string;
@@ -96,15 +107,29 @@ export interface HarnessControlEventOptions {
 	maxLedgerBytes?: number;
 }
 
+export interface HarnessControlLedgerQuarantineEntry {
+	lineNumber: number;
+	reason: string;
+}
+
 export interface HarnessControlLedgerVerificationResult {
 	ok: boolean;
 	events: HarnessControlEvent[];
 	errors: string[];
+	quarantinedLines: HarnessControlLedgerQuarantineEntry[];
 }
 
 interface PreviousEventState {
 	sequence: number;
 	eventHash: string;
+}
+
+interface ParsedLedgerLine {
+	schemaVersion?: string;
+	sequence?: number;
+	eventHash?: string;
+	anchoredSequence?: number;
+	anchoredEventHash?: string;
 }
 
 const MAX_EVENT_DEPTH = 6;
@@ -113,6 +138,8 @@ const MAX_EVENT_ARRAY_ITEMS = 80;
 const MAX_EVENT_STRING_LENGTH = 2000;
 const REDACTED = "[redacted]";
 const GENESIS_EVENT_HASH = "0".repeat(64);
+const EVENT_SCHEMA_VERSION = "omk.harness-control.event.v2";
+const ANCHOR_SCHEMA_VERSION = "omk.harness-control.anchor.v1";
 const DEFAULT_RUN_ID = "default-run";
 const DEFAULT_SESSION_ID = "sessionless";
 const LOCK_STALE_MS = 30000;
@@ -223,6 +250,14 @@ function defaultAllowedArtifactRoots(cwd: string, logPath: string): string[] {
 	return [cwd, dirname(logPath)];
 }
 
+function safeRealPath(target: string): string {
+	try {
+		return realpathSync(target);
+	} catch {
+		return resolve(target);
+	}
+}
+
 function createArtifactManifest(
 	artifactRefs: string[] | undefined,
 	cwd: string,
@@ -230,21 +265,36 @@ function createArtifactManifest(
 	allowedArtifactRoots: string[] | undefined,
 ): HarnessControlArtifactManifestEntry[] {
 	if (!artifactRefs || artifactRefs.length === 0) return [];
-	const roots = (allowedArtifactRoots ?? defaultAllowedArtifactRoots(cwd, logPath)).map((root) => resolve(root));
+	const logicalRoots = (allowedArtifactRoots ?? defaultAllowedArtifactRoots(cwd, logPath)).map((root) =>
+		resolve(root),
+	);
+	const canonicalRoots = logicalRoots.map((root) => safeRealPath(root));
 	return artifactRefs.map((artifactPath) => {
 		const resolvedPath = resolve(cwd, artifactPath);
-		const allowed = roots.some((root) => isPathWithin(root, resolvedPath)) && !isSensitivePath(resolvedPath);
+		const allowed = logicalRoots.some((root) => isPathWithin(root, resolvedPath)) && !isSensitivePath(resolvedPath);
 		if (!allowed) return { path: artifactPath, exists: existsSync(resolvedPath), allowed: false };
 		if (!existsSync(resolvedPath)) return { path: artifactPath, exists: false, allowed: true };
 		try {
-			const stats = statSync(resolvedPath);
+			const linkStats = lstatSync(resolvedPath);
+			const realPath = realpathSync(resolvedPath);
+			if (!canonicalRoots.some((root) => isPathWithin(root, realPath))) {
+				return {
+					path: artifactPath,
+					exists: true,
+					allowed: false,
+					error: linkStats.isSymbolicLink()
+						? "artifact symlink resolves outside allowed roots"
+						: "artifact resolves outside allowed roots",
+				};
+			}
+			const stats = statSync(realPath);
 			if (!stats.isFile()) return { path: artifactPath, exists: true, allowed: true, sizeBytes: stats.size };
 			return {
 				path: artifactPath,
 				exists: true,
 				allowed: true,
 				sizeBytes: stats.size,
-				sha256: sha256File(resolvedPath),
+				sha256: sha256File(realPath),
 			};
 		} catch (error) {
 			return {
@@ -280,12 +330,27 @@ function readPreviousEventState(logPath: string): PreviousEventState {
 		.map((line) => line.trim())
 		.filter((line) => line.length > 0);
 	if (lines.length === 0) return { sequence: 0, eventHash: GENESIS_EVENT_HASH };
-	const parsed = JSON.parse(lines.at(-1)!) as Partial<HarnessControlEvent>;
-	if (parsed.schemaVersion !== "omk.harness-control.event.v2") {
+
+	let parsed: ParsedLedgerLine;
+	try {
+		parsed = JSON.parse(lines.at(-1)!) as ParsedLedgerLine;
+	} catch {
+		throw new Error("Last harness ledger line is not valid JSON — ledger may be truncated or corrupted");
+	}
+	if (parsed.schemaVersion === ANCHOR_SCHEMA_VERSION) {
+		if (typeof parsed.anchoredSequence !== "number" || typeof parsed.anchoredEventHash !== "string") {
+			throw new Error("Previous harness ledger anchor is missing anchoredSequence or anchoredEventHash");
+		}
+		return { sequence: parsed.anchoredSequence, eventHash: parsed.anchoredEventHash };
+	}
+	if (parsed.schemaVersion !== EVENT_SCHEMA_VERSION) {
 		return { sequence: 0, eventHash: GENESIS_EVENT_HASH };
 	}
-	if (typeof parsed.sequence !== "number" || typeof parsed.eventHash !== "string") {
-		throw new Error("Previous harness event is missing sequence or eventHash");
+	if (typeof parsed.sequence !== "number" || !Number.isInteger(parsed.sequence) || parsed.sequence < 0) {
+		throw new Error("Previous harness event has invalid or missing sequence");
+	}
+	if (typeof parsed.eventHash !== "string" || !/^[a-f0-9]{64}$/.test(parsed.eventHash)) {
+		throw new Error("Previous harness event has invalid or missing eventHash");
 	}
 	return { sequence: parsed.sequence, eventHash: parsed.eventHash };
 }
@@ -313,25 +378,9 @@ function formatRotationTimestamp(date: Date): string {
 	return date.toISOString().replace(/[:.]/g, "-");
 }
 
-function rotateLedgerIfNeeded(path: string, maxLedgerBytes: number | undefined, now: Date): string | undefined {
-	if (!Number.isFinite(maxLedgerBytes) || (maxLedgerBytes ?? 0) <= 0 || !existsSync(path)) return undefined;
-	const stats = statSync(path);
-	if (stats.size < Math.floor(maxLedgerBytes ?? 0)) return undefined;
-	const rotatedPath = `${path}.${formatRotationTimestamp(now)}.rotated`;
-	renameSync(path, rotatedPath);
-	return rotatedPath;
-}
-
-function appendJsonLineWithFsync(path: string, line: string): void {
-	const fd = openSync(path, "a", 0o600);
+function fsyncDirectory(dirPath: string): void {
 	try {
-		writeSync(fd, `${line}\n`, undefined, "utf-8");
-		fsyncSync(fd);
-	} finally {
-		closeSync(fd);
-	}
-	try {
-		const dirFd = openSync(dirname(path), "r");
+		const dirFd = openSync(dirPath, "r");
 		try {
 			fsyncSync(dirFd);
 		} finally {
@@ -340,6 +389,53 @@ function appendJsonLineWithFsync(path: string, line: string): void {
 	} catch {
 		// Some platforms/filesystems do not support directory fsync; file fsync above is still mandatory.
 	}
+}
+
+function enforcePrivateFilePermissions(filePath: string): void {
+	try {
+		if (existsSync(filePath) && (statSync(filePath).mode & 0o777) !== 0o600) {
+			chmodSync(filePath, 0o600);
+		}
+	} catch {
+		/* best-effort permission enforcement */
+	}
+}
+
+function rotateLedgerIfNeeded(path: string, maxLedgerBytes: number | undefined, now: Date): string | undefined {
+	if (!Number.isFinite(maxLedgerBytes) || (maxLedgerBytes ?? 0) <= 0 || !existsSync(path)) return undefined;
+	enforcePrivateFilePermissions(path);
+	const stats = statSync(path);
+	if (stats.size < Math.floor(maxLedgerBytes ?? 0)) return undefined;
+	// Capture the rotated segment's terminal state so the fresh segment continues
+	// the global sequence and hash chain instead of restarting from genesis.
+	const anchorState = readPreviousEventState(path);
+	const rotatedPath = `${path}.${formatRotationTimestamp(now)}.rotated`;
+	renameSync(path, rotatedPath);
+	enforcePrivateFilePermissions(rotatedPath);
+	fsyncDirectory(dirname(path));
+	if (anchorState.sequence > 0) {
+		const anchor: HarnessControlLedgerAnchor = {
+			schemaVersion: ANCHOR_SCHEMA_VERSION,
+			anchoredSequence: anchorState.sequence,
+			anchoredEventHash: anchorState.eventHash,
+			rotatedFrom: basename(rotatedPath),
+			timestamp: now.toISOString(),
+		};
+		appendJsonLineWithFsync(path, JSON.stringify(anchor));
+	}
+	return rotatedPath;
+}
+
+function appendJsonLineWithFsync(path: string, line: string): void {
+	const fd = openSync(path, "a", 0o600);
+	try {
+		enforcePrivateFilePermissions(path);
+		writeSync(fd, `${line}\n`, undefined, "utf-8");
+		fsyncSync(fd);
+	} finally {
+		closeSync(fd);
+	}
+	fsyncDirectory(dirname(path));
 }
 
 export function createHarnessControlEvent(
@@ -388,7 +484,17 @@ export function recordHarnessControlEvent(
 	const lockPath = `${logPath}.lock`;
 	let lockFd: number | undefined;
 	try {
-		mkdirSync(dirname(logPath), { recursive: true });
+		mkdirSync(dirname(logPath), { recursive: true, mode: 0o700 });
+		// Re-apply directory permissions on platforms where umask
+		// overrides the mode passed to mkdirSync.
+		try {
+			const dirStats = statSync(dirname(logPath));
+			if ((dirStats.mode & 0o777) !== 0o700) {
+				chmodSync(dirname(logPath), 0o700);
+			}
+		} catch {
+			/* best-effort permission enforcement */
+		}
 		lockFd = acquireLock(lockPath, options.lockTimeoutMs ?? 1000);
 		rotateLedgerIfNeeded(logPath, options.maxLedgerBytes, options.now ?? new Date());
 		const previous = readPreviousEventState(logPath);
@@ -407,6 +513,76 @@ export function recordHarnessControlEvent(
 	}
 }
 
+function validateLedgerAnchor(anchor: ParsedLedgerLine): string | undefined {
+	if (
+		typeof anchor.anchoredSequence !== "number" ||
+		!Number.isInteger(anchor.anchoredSequence) ||
+		anchor.anchoredSequence < 1
+	) {
+		return "ledger anchor has an invalid anchoredSequence";
+	}
+	if (typeof anchor.anchoredEventHash !== "string" || !/^[a-f0-9]{64}$/.test(anchor.anchoredEventHash)) {
+		return "ledger anchor has an invalid anchoredEventHash";
+	}
+	return undefined;
+}
+
+const VALID_EVENT_STATUSES = new Set<string>([
+	"prepared",
+	"started",
+	"applying",
+	"verifying",
+	"completed",
+	"failed",
+	"blocked",
+	"rolled_back",
+	"in_doubt",
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validateHarnessControlEventRecord(record: Record<string, unknown>): string | undefined {
+	if (record.schemaVersion !== EVENT_SCHEMA_VERSION) return "unsupported schemaVersion";
+	const stringFields = [
+		"eventId",
+		"runId",
+		"sessionId",
+		"operationId",
+		"correlationId",
+		"timestamp",
+		"kind",
+		"cwd",
+		"beforeStateHash",
+		"afterStateHash",
+		"dataHash",
+		"previousEventHash",
+		"eventHash",
+	] as const;
+	for (const field of stringFields) {
+		if (typeof record[field] !== "string") return `event is missing or has invalid ${field}`;
+	}
+	if (typeof record.sequence !== "number" || !Number.isInteger(record.sequence) || record.sequence < 1) {
+		return "event has invalid sequence";
+	}
+	if (typeof record.causationId !== "string" && record.causationId !== null) {
+		return "event has invalid causationId";
+	}
+	if (typeof record.status !== "string" || !VALID_EVENT_STATUSES.has(record.status)) {
+		return "event has invalid status";
+	}
+	if (typeof record.eventHash !== "string" || !/^[a-f0-9]{64}$/.test(record.eventHash)) {
+		return "event has invalid eventHash";
+	}
+	if (typeof record.previousEventHash !== "string" || !/^[a-f0-9]{64}$/.test(record.previousEventHash)) {
+		return "event has invalid previousEventHash";
+	}
+	if (!isRecord(record.data)) return "event has invalid data";
+	if (!Array.isArray(record.artifacts)) return "event has invalid artifacts";
+	return undefined;
+}
+
 function validateEventHash(event: HarnessControlEvent): string | undefined {
 	const { eventHash: _eventHash, ...eventWithoutHash } = event;
 	const expectedEventHash = computeEventHash(eventWithoutHash);
@@ -422,34 +598,65 @@ function validateEventHash(event: HarnessControlEvent): string | undefined {
 export function verifyHarnessControlLedger(logPath: string): HarnessControlLedgerVerificationResult {
 	const errors: string[] = [];
 	const events: HarnessControlEvent[] = [];
-	if (!existsSync(logPath)) return { ok: true, events, errors };
+	const quarantinedLines: HarnessControlLedgerQuarantineEntry[] = [];
+	if (!existsSync(logPath)) return { ok: true, events, errors, quarantinedLines };
 	const lines = readFileSync(logPath, "utf-8")
 		.split("\n")
 		.map((line) => line.trim())
 		.filter((line) => line.length > 0);
 	let previousSequence = 0;
 	let previousEventHash = GENESIS_EVENT_HASH;
+
+	function quarantine(lineNumber: number, reason: string): void {
+		quarantinedLines.push({ lineNumber, reason });
+		errors.push(`line ${lineNumber}: quarantined — ${reason}`);
+	}
+
 	for (let index = 0; index < lines.length; index++) {
+		const lineNumber = index + 1;
+		let parsed: Record<string, unknown>;
 		try {
-			const event = JSON.parse(lines[index]!) as HarnessControlEvent;
-			events.push(event);
-			if (event.schemaVersion !== "omk.harness-control.event.v2") {
-				errors.push(`line ${index + 1}: unsupported schemaVersion`);
+			parsed = JSON.parse(lines[index]!) as Record<string, unknown>;
+		} catch (error) {
+			quarantine(lineNumber, error instanceof Error ? error.message : String(error));
+			continue;
+		}
+		if (parsed.schemaVersion === ANCHOR_SCHEMA_VERSION) {
+			if (index !== 0) {
+				quarantine(lineNumber, "ledger anchor must be the first line");
 				continue;
 			}
-			if (event.sequence !== previousSequence + 1) {
-				errors.push(`line ${index + 1}: sequence gap`);
+			const anchorError = validateLedgerAnchor(parsed as ParsedLedgerLine);
+			if (anchorError) {
+				quarantine(lineNumber, anchorError);
+				continue;
 			}
-			if (event.previousEventHash !== previousEventHash) {
-				errors.push(`line ${index + 1}: previousEventHash mismatch`);
-			}
-			const hashError = validateEventHash(event);
-			if (hashError) errors.push(`line ${index + 1}: ${hashError}`);
-			previousSequence = event.sequence;
-			previousEventHash = event.eventHash;
-		} catch (error) {
-			errors.push(`line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
+			previousSequence = parsed.anchoredSequence as number;
+			previousEventHash = parsed.anchoredEventHash as string;
+			continue;
 		}
+		const shapeError = validateHarnessControlEventRecord(parsed);
+		if (shapeError) {
+			quarantine(lineNumber, shapeError);
+			continue;
+		}
+		const event = parsed as unknown as HarnessControlEvent;
+		if (event.sequence !== previousSequence + 1) {
+			quarantine(lineNumber, `sequence gap: expected ${previousSequence + 1}, got ${event.sequence}`);
+			continue;
+		}
+		if (event.previousEventHash !== previousEventHash) {
+			quarantine(lineNumber, "previousEventHash mismatch");
+			continue;
+		}
+		const hashError = validateEventHash(event);
+		if (hashError) {
+			quarantine(lineNumber, hashError);
+			continue;
+		}
+		events.push(event);
+		previousSequence = event.sequence;
+		previousEventHash = event.eventHash;
 	}
-	return { ok: errors.length === 0, events, errors };
+	return { ok: errors.length === 0, events, errors, quarantinedLines };
 }

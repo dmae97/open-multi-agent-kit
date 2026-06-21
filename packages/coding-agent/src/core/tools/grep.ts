@@ -9,6 +9,7 @@ import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts"
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import { ensureTool } from "../../utils/tools-manager.ts";
 import type { ToolDefinition, ToolRenderResultOptions } from "../extensions/types.ts";
+import { assertLoadoutAccess, type LoadoutAccessGuard } from "../loadout-access-policy.ts";
 import { resolveToCwd } from "./path-utils.ts";
 import { getTextOutput, invalidArgText, shortenPath, str } from "./render-utils.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
@@ -63,6 +64,8 @@ const defaultGrepOperations: GrepOperations = {
 export interface GrepToolOptions {
 	/** Custom operations for grep. Default: local filesystem plus ripgrep */
 	operations?: GrepOperations;
+	/** Optional loadout access guard for scoped filesystem reads. */
+	accessGuard?: LoadoutAccessGuard;
 }
 
 function formatGrepCall(
@@ -125,6 +128,7 @@ export function createGrepToolDefinition(
 	options?: GrepToolOptions,
 ): ToolDefinition<typeof grepSchema, GrepToolDetails | undefined> {
 	const customOps = options?.operations;
+	const accessGuard = options?.accessGuard;
 	return {
 		name: "grep",
 		label: "grep",
@@ -169,13 +173,14 @@ export function createGrepToolDefinition(
 
 				(async () => {
 					try {
+						const searchPath = resolveToCwd(searchDir || ".", cwd);
+						assertLoadoutAccess(accessGuard, { operation: "read", toolName: "grep", path: searchPath });
+
 						const rgPath = await ensureTool("rg", true);
 						if (!rgPath) {
 							settle(() => reject(new Error("ripgrep (rg) is not available and could not be downloaded")));
 							return;
 						}
-
-						const searchPath = resolveToCwd(searchDir || ".", cwd);
 						const ops = customOps ?? defaultGrepOperations;
 						let isDirectory: boolean;
 						try {

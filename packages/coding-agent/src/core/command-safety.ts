@@ -34,6 +34,54 @@ const SUDO_OPTIONS_WITH_VALUE = new Set([
 ]);
 const GIT_GLOBAL_OPTIONS_WITH_VALUE = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace"]);
 
+/** Maximum recursion depth when unwrapping shell wrappers (bash -c, eval, xargs, find -exec). */
+const MAX_WRAP_DEPTH = 4;
+
+/** Executables that run an inline command string passed via a `-c`-style flag. */
+const SHELL_WRAPPERS = new Set(["bash", "sh", "zsh", "dash", "ksh", "ash"]);
+
+/** xargs options that consume a following value token before the wrapped command begins. */
+const XARGS_OPTIONS_WITH_VALUE = new Set([
+	"-I",
+	"-i",
+	"-n",
+	"-L",
+	"-P",
+	"-d",
+	"-E",
+	"-s",
+	"-a",
+	"--max-args",
+	"--max-procs",
+	"--delimiter",
+	"--arg-file",
+	"--max-lines",
+	"--replace",
+]);
+
+/**
+ * Credential / secret file patterns. A bash argv token matching one of these is
+ * treated as a `confirm`-tier access: headless callers (LLM tool calls, RPC bash)
+ * deny by default, while an interactive user can still approve reading their own
+ * files. These complement the §0.1 freedom safety floor, which hard-denies the
+ * same paths on the entry points it guards.
+ */
+const SECRET_FILE_STRICT_PATTERNS: readonly RegExp[] = [
+	/(^|\/)\.env(\.|$)/i,
+	/(^|\/)\.npmrc$/i,
+	/(^|\/)\.netrc$/i,
+	/(^|\/)\.pgpass$/i,
+	/(^|\/)\.aws\/credentials$/i,
+	/(^|\/)credentials$/i,
+	/(^|\/)auth\.json$/i,
+	/(^|\/)id_(rsa|dsa|ecdsa|ed25519)$/i,
+	/\.(pem|key|p12|pfx|keystore|jks)$/i,
+	/(^|\/)secrets?(\.[^/]+)?$/i,
+];
+
+/** Benign sibling files that look secret-ish but never hold credentials. */
+const SECRET_FILE_ALLOW_PATTERNS: readonly RegExp[] = [/(^|\/)\.env\.(example|sample|template|dist|defaults?)$/i];
+
 function verdict(risk: CommandRisk, rule: string, reason: string): CommandVerdict {
 	return { risk, rule, reason };
 }
@@ -350,12 +398,111 @@ function classifyPrivilegeCommand(command: string): CommandVerdict | null {
 	return verdict("confirm", `priv.${privilege}`, `${privilege} requires explicit per-command confirmation.`);
 }
 
-function classifySingleCommand(command: string): CommandVerdict {
+/**
+ * Locate the inline command-string argument for a `shell -c "<cmd>"` invocation.
+ * Returns the token index of the command string, or -1 when the shell runs a
+ * script file (no inline command to classify).
+ */
+function findShellCommandStringIndex(tokens: readonly string[]): number {
+	for (let index = 1; index < tokens.length; index += 1) {
+		const token = tokens[index];
+		if (!token.startsWith("-")) return -1;
+		if (/^-[a-z]*c$/i.test(token)) {
+			return index + 1 < tokens.length ? index + 1 : -1;
+		}
+	}
+	return -1;
+}
+
+/** Drop leading xargs options (and their values) to expose the wrapped command. */
+function stripXargsOptions(args: readonly string[]): string[] {
+	let index = 0;
+	while (index < args.length) {
+		const token = args[index];
+		if (!token.startsWith("-") || token === "-") break;
+		index += 1;
+		if (token === "--") break;
+		if (!token.includes("=") && XARGS_OPTIONS_WITH_VALUE.has(token)) index += 1;
+	}
+	return args.slice(index);
+}
+
+/** Extract the command tokens of a `find ... -exec <cmd> {} ;|+` clause, if present. */
+function extractFindExec(tokens: readonly string[]): string[] | null {
+	for (let index = 1; index < tokens.length; index += 1) {
+		const token = tokens[index].toLowerCase();
+		if (token === "-exec" || token === "-execdir" || token === "-ok" || token === "-okdir") {
+			const collected: string[] = [];
+			for (let inner = index + 1; inner < tokens.length; inner += 1) {
+				const piece = tokens[inner];
+				if (piece === ";" || piece === "+") break;
+				if (piece === "{}") continue;
+				collected.push(piece);
+			}
+			return collected.length > 0 ? collected : null;
+		}
+	}
+	return null;
+}
+
+/**
+ * Classify the effective command hidden inside a wrapper executable so a
+ * destructive or protected command cannot be smuggled past the classifier via
+ * `bash -c`, `eval`, `xargs`, or `find -exec`. Returns null when the segment is
+ * not a recognized wrapper.
+ */
+function classifyWrappedCommand(command: string, depth: number): CommandVerdict | null {
+	if (depth >= MAX_WRAP_DEPTH) return null;
+	const { tokens } = stripCommandPrefixes(tokenizeShellSegment(command));
+	const executable = tokens[0]?.toLowerCase();
+	if (!executable) return null;
+
+	if (SHELL_WRAPPERS.has(executable)) {
+		const innerIndex = findShellCommandStringIndex(tokens);
+		const inner = innerIndex === -1 ? undefined : tokens[innerIndex];
+		return inner ? classifyShellCommandInternal(inner, depth + 1) : null;
+	}
+	if (executable === "eval") {
+		const inner = tokens.slice(1).join(" ").trim();
+		return inner ? classifyShellCommandInternal(inner, depth + 1) : null;
+	}
+	if (executable === "xargs") {
+		const inner = stripXargsOptions(tokens.slice(1)).join(" ").trim();
+		return inner ? classifyShellCommandInternal(inner, depth + 1) : null;
+	}
+	if (executable === "find") {
+		const execTokens = extractFindExec(tokens);
+		const inner = execTokens?.join(" ").trim();
+		return inner ? classifyShellCommandInternal(inner, depth + 1) : null;
+	}
+	return null;
+}
+
+/** Flag commands that read, copy, or transmit a credential / secret file path. */
+function classifySecretAccess(command: string): CommandVerdict | null {
+	const { tokens } = stripCommandPrefixes(tokenizeShellSegment(command));
+	if (tokens.length === 0) return null;
+	for (let index = 1; index < tokens.length; index += 1) {
+		const token = tokens[index];
+		if (!token || token.startsWith("-")) continue;
+		if (/\s/.test(token)) continue;
+		if (SECRET_FILE_ALLOW_PATTERNS.some((pattern) => pattern.test(token))) continue;
+		if (SECRET_FILE_STRICT_PATTERNS.some((pattern) => pattern.test(token))) {
+			return verdict("confirm", "secret.read_path", "Command references a credential or secret file path.");
+		}
+	}
+	return null;
+}
+
+function classifySingleCommand(command: string, depth: number): CommandVerdict {
 	const trimmed = command.trim();
 	if (!trimmed) return allowVerdict();
 
 	const destructiveFilesystem = classifyDestructiveFilesystemCommand(trimmed);
 	if (destructiveFilesystem) return destructiveFilesystem;
+
+	const wrapped = classifyWrappedCommand(trimmed, depth);
+	if (wrapped && wrapped.risk === "block") return wrapped;
 
 	const protectedGit = classifyProtectedGitCommand(trimmed);
 	if (protectedGit) return protectedGit;
@@ -363,17 +510,26 @@ function classifySingleCommand(command: string): CommandVerdict {
 	const privilege = classifyPrivilegeCommand(trimmed);
 	if (privilege) return privilege;
 
+	const secret = classifySecretAccess(trimmed);
+	if (secret) return secret;
+
+	if (wrapped && RISK_RANK[wrapped.risk] > RISK_RANK.allow) return wrapped;
+
 	return allowVerdict();
 }
 
-export function classifyShellCommand(command: string): CommandVerdict {
-	let selected = classifySingleCommand(command);
+function classifyShellCommandInternal(command: string, depth: number): CommandVerdict {
+	let selected = classifySingleCommand(command, depth);
 	for (const segment of splitShellCommands(command)) {
-		const candidate = classifySingleCommand(segment);
+		const candidate = classifySingleCommand(segment, depth);
 		if (RISK_RANK[candidate.risk] > RISK_RANK[selected.risk]) selected = candidate;
 		if (selected.risk === "block") break;
 	}
 	return selected;
+}
+
+export function classifyShellCommand(command: string): CommandVerdict {
+	return classifyShellCommandInternal(command, 0);
 }
 
 export function isDestructiveFilesystem(command: string): boolean {

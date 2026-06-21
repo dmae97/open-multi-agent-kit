@@ -63,6 +63,31 @@ omk -e npm:@foo/bar
 omk -e git:github.com/user/repo
 ```
 
+### Built-in MCP presets
+
+OMK ships read-only metadata for selected MCP server presets. These presets are not bundled dependencies and are not started automatically; they give `/mcp` an exact-pinned configuration hint while keeping secrets out of the UI.
+
+#### Korean Law MCP
+
+The built-in `korean-law` preset targets [`korean-law-mcp`](https://github.com/chrisryugj/korean-law-mcp) `4.4.0` (MIT, upstream tag `v4.4.0`, commit `2ef8f1827d349381fc2bde15120c803fd2e7bfed`). It uses stdio via an exact npm pin:
+
+```json
+{
+  "mcpServers": {
+    "korean-law": {
+      "command": "npx",
+      "args": ["-y", "korean-law-mcp@4.4.0"],
+      "env": {
+        "LAW_OC": "${LAW_OC}"
+      },
+      "startup_timeout_sec": 30
+    }
+  }
+}
+```
+
+Set `LAW_OC` (or `KOREAN_LAW_API_KEY`, if your MCP client inherits shell env) through your shell or secret manager. OMK's `/mcp` inventory displays only env key names, never env values.
+
 ## Package Sources
 
 OMK accepts three source types in settings and `omk install`.
