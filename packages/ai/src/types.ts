@@ -1,3 +1,4 @@
+import type { TSchema } from "typebox";
 import type { AssistantMessageDiagnostic } from "./utils/diagnostics.ts";
 import type { AssistantMessageEventStream } from "./utils/event-stream.ts";
 
@@ -50,6 +51,7 @@ export type KnownProvider =
 	| "opencode"
 	| "opencode-go"
 	| "kimi-coding"
+	| "duckcoding"
 	| "cloudflare-workers-ai"
 	| "cloudflare-ai-gateway"
 	| "xiaomi"
@@ -84,6 +86,40 @@ export interface ProviderResponse {
 	headers: Record<string, string>;
 }
 
+export type ProviderNetworkTransport = "http" | "websocket";
+export type ProviderNetworkProtocol = "http:" | "https:" | "ws:" | "wss:";
+export type ProviderNetworkPurpose = "chat" | "completion" | "responses" | "images" | "codex-sse" | "codex-websocket";
+export type ProviderNetworkRequestSource = "model.baseUrl" | "provider-derived-url" | "option-override" | "env-derived";
+
+export interface ProviderNetworkRequest {
+	provider: string;
+	api: Api | ImagesApi;
+	modelId: string;
+	/** Sanitized origin URL for the configured model endpoint. Credentials, query, fragment, and path are omitted. */
+	baseUrl: string;
+	/** Sanitized origin URL for the concrete provider endpoint. Credentials, query, fragment, and path are omitted. */
+	url: string;
+	host: string;
+	protocol: ProviderNetworkProtocol;
+	port?: string;
+	loopback: boolean;
+	transport: ProviderNetworkTransport;
+	purpose: ProviderNetworkPurpose;
+	source: ProviderNetworkRequestSource;
+}
+
+export interface ProviderNetworkDecision {
+	allowed: boolean;
+	rule: string;
+	reason: string;
+	mode: "off" | "audit" | "enforce";
+	wouldDeny?: boolean;
+}
+
+export type BeforeProviderNetworkRequest = (
+	request: ProviderNetworkRequest,
+) => ProviderNetworkDecision | Promise<ProviderNetworkDecision>;
+
 export interface StreamOptions {
 	temperature?: number;
 	maxTokens?: number;
@@ -105,6 +141,11 @@ export interface StreamOptions {
 	 * session-aware features. Ignored by providers that don't support it.
 	 */
 	sessionId?: string;
+	/**
+	 * Optional sanitized network preflight hook invoked before provider network I/O.
+	 * The request never contains headers, API keys, request bodies, prompts, or responses.
+	 */
+	beforeNetworkRequest?: BeforeProviderNetworkRequest;
 	/**
 	 * Optional callback for inspecting or replacing provider payloads before sending.
 	 * Return undefined to keep the payload unchanged.
@@ -160,6 +201,11 @@ export type ProviderStreamOptions = StreamOptions & Record<string, unknown>;
 export interface ImagesOptions {
 	signal?: AbortSignal;
 	apiKey?: string;
+	/**
+	 * Optional sanitized network preflight hook invoked before provider network I/O.
+	 * The request never contains headers, API keys, request bodies, prompts, or responses.
+	 */
+	beforeNetworkRequest?: BeforeProviderNetworkRequest;
 	/**
 	 * Optional callback for inspecting or replacing provider payloads before sending.
 	 * Return undefined to keep the payload unchanged.
@@ -332,8 +378,6 @@ export interface AssistantImages {
 	errorMessage?: string;
 	timestamp: number; // Unix timestamp in milliseconds
 }
-
-import type { TSchema } from "typebox";
 
 export interface Tool<TParameters extends TSchema = TSchema> {
 	name: string;

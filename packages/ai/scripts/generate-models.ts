@@ -303,6 +303,17 @@ function isGemma4Model(modelId: string): boolean {
 	return /gemma-?4/.test(modelId.toLowerCase());
 }
 
+function isMiMoV25Model(modelId: string): boolean {
+	const id = modelId.toLowerCase();
+	return id.includes("mimo-v2.5") || id.includes("mimo-2.5");
+}
+
+function isMiMoEffortStringHost(model: Model<any>): boolean {
+	if (model.api !== "openai-completions") return false;
+	if (model.provider === "xiaomi" || model.provider.startsWith("xiaomi-token-plan-")) return false;
+	return true;
+}
+
 function applyThinkingLevelMetadata(model: Model<any>): void {
 	if (
 		(model.api === "openai-responses" || model.api === "azure-openai-responses") &&
@@ -358,6 +369,13 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
 		// Keep "max" (xhigh) selectable but send the highest GLM-valid effort instead of
 		// the raw literal "xhigh"/"max", which OpenRouter/Cloudflare/opencode-go reject.
 		mergeThinkingLevelMap(model, GLM_THINKING_LEVEL_MAP);
+	}
+	if (isMiMoV25Model(model.id) && isMiMoEffortStringHost(model)) {
+		// Xiaomi MiMo V2.5 has no documented "xhigh"/"max" reasoning effort tier.
+		// Keep the UI "max" option selectable but send the highest MiMo-valid effort
+		// only on hosts that accept effort strings. Official Xiaomi endpoints disable
+		// supportsReasoningEffort below and therefore use thinking.type only.
+		mergeThinkingLevelMap(model, { xhigh: "high" });
 	}
 	if (isGoogleThinkingApi(model) && isGemini3ProModel(model.id)) {
 		mergeThinkingLevelMap(model, { off: null, minimal: null, low: "LOW", medium: null, high: "HIGH" });
@@ -1255,6 +1273,21 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 			}
 		}
 
+		// DuckCoding exposes an Anthropic-compatible `/v1/messages` endpoint.
+		// Anthropic SDK appends `/v1/messages`, so keep baseUrl at the origin.
+		models.push({
+			id: "claude-fable-5",
+			name: "Claude Fable 5",
+			api: "anthropic-messages",
+			provider: "duckcoding",
+			baseUrl: "https://www.duckcoding.ai",
+			reasoning: false,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 200000,
+			maxTokens: 8192,
+		});
+
 		// Process Moonshot AI models
 		const moonshotVariants = [
 			{ key: "moonshotai", provider: "moonshotai", baseUrl: "https://api.moonshot.ai/v1" },
@@ -1303,6 +1336,10 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 		const xiaomiCompat: OpenAICompletionsCompat = {
 			requiresReasoningContentOnAssistantMessages: true,
 			thinkingFormat: "deepseek",
+			// Official Xiaomi MiMo endpoints document thinking.type on/off, not
+			// reasoning_effort tiers. Keep effort-string handling for third-party hosts,
+			// but direct Xiaomi providers should not send reasoning_effort.
+			supportsReasoningEffort: false,
 		};
 		const xiaomiVariants = [
 			{ provider: "xiaomi", baseUrl: "https://api.xiaomimimo.com/v1" },

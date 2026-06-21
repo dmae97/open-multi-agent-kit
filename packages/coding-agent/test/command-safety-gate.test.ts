@@ -128,6 +128,68 @@ describe("commandSafetyGate factory", () => {
 		expect(result).toBeUndefined();
 	});
 
+	it("tool_call handler denies confirm-tier commands headlessly", async () => {
+		const { omk, handlers } = createFakeOmk();
+		commandSafetyGate(omk);
+		const handler = handlers.get("tool_call")![0];
+		const result = (await handler(bashToolCall("git reset --hard"), fakeContext({ hasUI: false }))) as {
+			block: boolean;
+			reason: string;
+		};
+		expect(result.block).toBe(true);
+		expect(result.reason).toContain("git.reset_hard");
+	});
+
+	it("tool_call handler prompts and allows confirm-tier when the user approves", async () => {
+		const { omk, handlers } = createFakeOmk();
+		commandSafetyGate(omk);
+		const handler = handlers.get("tool_call")![0];
+		const result = await handler(
+			bashToolCall("git clean -fd"),
+			fakeContext({ hasUI: true, confirm: async () => true }),
+		);
+		expect(result).toBeUndefined();
+	});
+
+	it("tool_call handler blocks confirm-tier when the user rejects", async () => {
+		const { omk, handlers } = createFakeOmk();
+		commandSafetyGate(omk);
+		const handler = handlers.get("tool_call")![0];
+		const result = await handler(
+			bashToolCall("git clean -fd"),
+			fakeContext({ hasUI: true, confirm: async () => false }),
+		);
+		expect(result).toMatchObject({ block: true });
+	});
+
+	it("tool_call handler never headless-allows privilege escalation", async () => {
+		const { omk, handlers } = createFakeOmk();
+		commandSafetyGate(omk);
+		const handler = handlers.get("tool_call")![0];
+		const result = await handler(bashToolCall("sudo apt update"), fakeContext({ hasUI: false }));
+		expect(result).toMatchObject({ block: true });
+	});
+
+	it("tool_call handler denies headless credential-file reads", async () => {
+		const { omk, handlers } = createFakeOmk();
+		commandSafetyGate(omk);
+		const handler = handlers.get("tool_call")![0];
+		const result = (await handler(bashToolCall("cat .env"), fakeContext({ hasUI: false }))) as {
+			block: boolean;
+			reason: string;
+		};
+		expect(result.block).toBe(true);
+		expect(result.reason).toContain("secret.read_path");
+	});
+
+	it("tool_call handler allows benign commands so later extensions still run", async () => {
+		const { omk, handlers } = createFakeOmk();
+		commandSafetyGate(omk);
+		const handler = handlers.get("tool_call")![0];
+		const result = await handler(bashToolCall("ls -la"), fakeContext({ hasUI: false }));
+		expect(result).toBeUndefined();
+	});
+
 	it("fail-closed: user_bash deny returns a truthy result and never throws", async () => {
 		const { omk, handlers } = createFakeOmk();
 		commandSafetyGate(omk);

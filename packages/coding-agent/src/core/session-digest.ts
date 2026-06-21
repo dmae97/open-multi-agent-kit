@@ -1,3 +1,10 @@
+import { createHash } from "node:crypto";
+import {
+	type MemorySanitizerCategory,
+	type SanitizerFindingSummary,
+	sanitizeMemoryPayload,
+} from "./policy-overlays-runtime.ts";
+
 export interface BoundedDigestOptions {
 	/** Hard ceiling on output character length. */
 	maxChars: number;
@@ -7,6 +14,8 @@ export interface BoundedDigestOptions {
 	separator?: string;
 	/** Marker inserted between retained head and tail when content is omitted. */
 	marker?: string;
+	/** Redact memory-sensitive text before it enters the digest. Defaults to true for runtime session paths. */
+	sanitize?: boolean;
 }
 
 export interface BoundedDigestResult {
@@ -29,6 +38,7 @@ interface NormalizedDigestOptions {
 	tailBudget: number;
 	separator: string;
 	marker: string;
+	sanitize: boolean;
 }
 
 function fitTruncationMarker(marker: string, maxChars: number): string {
@@ -43,9 +53,20 @@ function normalizeDigestOptions(options: BoundedDigestOptions): NormalizedDigest
 	const headRatio = Number.isFinite(ratioValue) ? Math.min(1, Math.max(0, ratioValue)) : DEFAULT_DIGEST_HEAD_RATIO;
 	const separator = options.separator ?? " ";
 	const marker = fitTruncationMarker(options.marker ?? DEFAULT_DIGEST_MARKER, maxChars);
+	const sanitize = options.sanitize ?? true;
 	const headBudget = Math.floor(maxChars * headRatio);
 	const tailBudget = Math.max(0, maxChars - headBudget);
-	return { maxChars, headRatio, headBudget, tailBudget, separator, marker };
+	return { maxChars, headRatio, headBudget, tailBudget, separator, marker, sanitize };
+}
+
+function sanitizeSessionDigestText(text: string): string {
+	const sanitized = sanitizeMemoryPayload(text, {
+		source: "session-digest",
+		contentTier: "summary",
+		maxChars: DIGEST_SANITIZER_MAX_CHARS,
+		external: false,
+	});
+	return typeof sanitized.payload === "string" ? sanitized.payload : "";
 }
 
 export class BoundedDigestAccumulator {
@@ -65,7 +86,9 @@ export class BoundedDigestAccumulator {
 			return;
 		}
 
-		const piece = this.wroteAny ? `${this.options.separator}${segment}` : segment;
+		const safeSegment = this.options.sanitize ? sanitizeSessionDigestText(segment) : segment;
+		if (safeSegment.length === 0) return;
+		const piece = this.wroteAny ? `${this.options.separator}${safeSegment}` : safeSegment;
 		this.wroteAny = true;
 		this.originalChars += piece.length;
 		this.appendToHead(piece);
@@ -133,10 +156,107 @@ export function boundConversationTextForSummary(text: string, maxChars: number):
 export function boundSessionFirstMessage(
 	text: string,
 	maxChars: number = DEFAULT_SESSION_FIRST_MESSAGE_MAX_CHARS,
+	sanitize = true,
 ): string {
 	if (!Number.isFinite(maxChars) || maxChars <= 0) return "";
-	if (text.length <= maxChars) return text;
+	const safeText = sanitize ? sanitizeSessionDigestText(text) : text;
+	if (safeText.length <= maxChars) return safeText;
 	const marker = fitTruncationMarker(FIRST_MESSAGE_TRUNCATION_MARKER, maxChars);
 	const contentBudget = Math.max(0, maxChars - marker.length);
-	return `${text.slice(0, contentBudget)}${marker}`;
+	return `${safeText.slice(0, contentBudget)}${marker}`;
+}
+
+// ---------------------------------------------------------------------------
+// Sanitized digest helpers (memory-policy runtime wiring)
+// ---------------------------------------------------------------------------
+
+/**
+ * Generous per-segment sanitizer budget: redaction only, never truncates.
+ * The real output budget is enforced by BoundedDigestAccumulator afterwards.
+ */
+const DIGEST_SANITIZER_MAX_CHARS = 2_000_000;
+
+export interface SanitizedDigestResult extends BoundedDigestResult {
+	findings: SanitizerFindingSummary;
+}
+
+function mergeMemoryCategories(
+	target: Partial<Record<MemorySanitizerCategory, number>>,
+	source: Partial<Record<MemorySanitizerCategory, number>>,
+): void {
+	for (const category of Object.keys(source) as MemorySanitizerCategory[]) {
+		const count = source[category];
+		if (count === undefined) continue;
+		target[category] = (target[category] ?? 0) + count;
+	}
+}
+
+/**
+ * Bound a digest of session-derived text segments while redacting secrets, auth
+ * tokens, PII-like values, and home paths via the shared memory sanitizer.
+ *
+ * Sanitization (redaction) is applied per segment with a generous budget so only
+ * redaction happens; the configured maxChars ceiling is then enforced by the
+ * BoundedDigestAccumulator, preserving head/tail retention semantics.
+ */
+export function boundAndSanitizeSessionDigest(
+	segments: readonly string[],
+	options: BoundedDigestOptions,
+): SanitizedDigestResult {
+	const accumulator = new BoundedDigestAccumulator({ ...options, sanitize: false });
+	const categories: Partial<Record<MemorySanitizerCategory, number>> = {};
+	let redactionCount = 0;
+	let originalInputChars = 0;
+
+	for (const segment of segments) {
+		if (segment.length === 0) continue;
+		originalInputChars += segment.length;
+		const sanitized = sanitizeMemoryPayload(segment, {
+			source: "session-digest",
+			contentTier: "summary",
+			maxChars: DIGEST_SANITIZER_MAX_CHARS,
+			external: false,
+		});
+		mergeMemoryCategories(categories, sanitized.findings.categories);
+		redactionCount += sanitized.findings.redactionCount;
+		const payload = typeof sanitized.payload === "string" ? sanitized.payload : "";
+		accumulator.push(payload);
+	}
+
+	const result = accumulator.result();
+	const findings: SanitizerFindingSummary = {
+		sanitized: redactionCount > 0,
+		denied: false,
+		categories,
+		redactionCount,
+		originalChars: originalInputChars,
+		keptChars: result.keptChars,
+		digest: createHash("sha256").update(result.text).digest("hex"),
+	};
+	return { ...result, findings };
+}
+
+/**
+ * Bound the first session message while redacting sanitizer-sensitive values.
+ * Mirrors boundSessionFirstMessage() but sanitizes the source first.
+ */
+export function boundAndSanitizeFirstMessage(
+	text: string,
+	maxChars: number = DEFAULT_SESSION_FIRST_MESSAGE_MAX_CHARS,
+): SanitizedDigestResult {
+	const sanitized = sanitizeMemoryPayload(text, {
+		source: "session-digest",
+		contentTier: "summary",
+		maxChars: DIGEST_SANITIZER_MAX_CHARS,
+		external: false,
+	});
+	const payload = typeof sanitized.payload === "string" ? sanitized.payload : "";
+	const bounded = boundSessionFirstMessage(payload, maxChars, false);
+	return {
+		text: bounded,
+		truncated: bounded.length < payload.length,
+		originalChars: text.length,
+		keptChars: bounded.length,
+		findings: { ...sanitized.findings, keptChars: bounded.length },
+	};
 }

@@ -6,6 +6,8 @@ import {
 	isPrivilegeEscalation,
 	isProtectedGitOperation,
 } from "../src/core/command-safety.ts";
+import type { SandboxPolicy } from "../src/core/sandbox/policy.ts";
+import { createLocalBashOperations } from "../src/core/tools/bash.ts";
 
 function expectVerdict(command: string, risk: CommandRisk, rule: string): void {
 	const verdict = classifyShellCommand(command);
@@ -64,8 +66,109 @@ describe("command safety classifier", () => {
 		expect(isPrivilegeEscalation("npm run check")).toBe(false);
 	});
 
+	it("classifies the effective command inside shell wrappers", () => {
+		expectVerdict('bash -c "rm -rf /"', "block", "fs.rm_rf_root");
+		expectVerdict("sh -c 'git reset --hard'", "confirm", "git.reset_hard");
+		expectVerdict('bash -lc "sudo apt update"', "confirm", "priv.sudo");
+		expectVerdict('eval "rm -rf ~"', "block", "fs.rm_rf_home");
+		expectVerdict("find . -type f -exec rm -rf / \\;", "block", "fs.rm_rf_root");
+		expectVerdict("cat list | xargs git push --force", "confirm", "git.force_push");
+		expectVerdict('bash -c "ls -la"', "allow", "command.allow");
+	});
+
+	it("flags credential and secret file access for confirmation", () => {
+		expectVerdict("cat .env", "confirm", "secret.read_path");
+		expectVerdict("cat config/.env.production", "confirm", "secret.read_path");
+		expectVerdict("cp ~/.aws/credentials /tmp/x", "confirm", "secret.read_path");
+		expectVerdict("cat server.pem", "confirm", "secret.read_path");
+		expectVerdict("cat id_rsa", "confirm", "secret.read_path");
+		expectVerdict("tar czf out.tgz secrets.yaml", "confirm", "secret.read_path");
+	});
+
+	it("does not flag benign files or messages as secret access", () => {
+		expectVerdict("cat .env.example", "allow", "command.allow");
+		expectVerdict('git commit -m "fix token bug"', "allow", "command.allow");
+		expectVerdict("cat package.json", "allow", "command.allow");
+		expectVerdict("cat README.md", "allow", "command.allow");
+	});
+
 	it("is deterministic for repeated classifications", () => {
 		const command = " npm ci && git push --force ";
 		expect(classifyShellCommand(command)).toEqual(classifyShellCommand(command));
+	});
+});
+
+describe("createLocalBashOperations sandbox preflight", () => {
+	function enforcePolicy(rootDir: string): SandboxPolicy {
+		return {
+			mode: "enforce",
+			profile: "workspace-write",
+			filesystem: {
+				root: rootDir,
+				readAllow: [rootDir],
+				readDeny: [],
+				writeAllow: [rootDir],
+				denyWrite: [],
+				tempWrite: [],
+				followSymlinks: false,
+			},
+			network: {
+				mode: "none",
+				allowedDomains: [],
+				deniedDomains: [],
+				allowUnixSockets: [],
+				allowBrowser: false,
+			},
+			process: { allowExec: true, allowShell: true, allowPrivilege: false },
+		};
+	}
+
+	it("denies shell before spawning when no OS sandbox backend is available", async () => {
+		let observedData = false;
+		const ops = createLocalBashOperations({ sandboxPolicy: { policy: enforcePolicy(process.cwd()) } });
+		await expect(
+			ops.exec("echo should-not-run", process.cwd(), {
+				onData: () => {
+					observedData = true;
+				},
+			}),
+		).rejects.toThrow(/sandbox: shell denied/);
+		expect(observedData).toBe(false);
+	});
+
+	it("denies a working directory outside the sandbox root", async () => {
+		const ops = createLocalBashOperations({
+			sandboxPolicy: {
+				policy: enforcePolicy(process.cwd()),
+				backend: { platform: "linux", backendAvailable: true },
+			},
+		});
+		await expect(ops.exec("echo nope", "/", { onData: () => undefined })).rejects.toThrow(/path\.root_escape/);
+	});
+
+	it("runs normally in audit fallback when no backend is available and cwd is inside the root", async () => {
+		const chunks: Buffer[] = [];
+		const auditPolicy = { ...enforcePolicy(process.cwd()), mode: "audit" as const };
+		const ops = createLocalBashOperations({
+			sandboxPolicy: {
+				policy: auditPolicy,
+				backend: { platform: "unsupported", backendAvailable: false },
+			},
+		});
+		const result = await ops.exec("echo sandbox-ok", process.cwd(), {
+			onData: (data) => chunks.push(data),
+		});
+		expect(result.exitCode).toBe(0);
+		expect(Buffer.concat(chunks).toString()).toContain("sandbox-ok");
+	});
+
+	it("leaves default behavior unchanged when no sandboxPolicy is provided", async () => {
+		const chunks: Buffer[] = [];
+		const ops = createLocalBashOperations();
+		const result = await ops.exec("echo plain-run", process.cwd(), {
+			onData: (data) => chunks.push(data),
+		});
+		expect(result.exitCode).toBe(0);
+		expect(Buffer.concat(chunks).toString()).toContain("plain-run");
 	});
 });

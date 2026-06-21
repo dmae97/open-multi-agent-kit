@@ -7,6 +7,8 @@ import {
 	type Api,
 	type AssistantMessageEventStream,
 	type Context,
+	getEnvApiKeyByBaseUrl,
+	getEnvApiKeyNameByBaseUrl,
 	getModels,
 	getProviders,
 	type KnownProvider,
@@ -603,7 +605,7 @@ export class ModelRegistry {
 				if (!providerConfig.baseUrl) {
 					throw new Error(`Provider ${providerName}: "baseUrl" is required when defining custom models.`);
 				}
-				if (!providerConfig.apiKey) {
+				if (!providerConfig.apiKey && !getEnvApiKeyNameByBaseUrl(providerConfig.baseUrl)) {
 					throw new Error(`Provider ${providerName}: "apiKey" is required when defining custom models.`);
 				}
 			}
@@ -714,8 +716,24 @@ export class ModelRegistry {
 		const providerApiKey = this.providerRequestConfigs.get(model.provider)?.apiKey;
 		return (
 			this.authStorage.hasAuth(model.provider) ||
-			(providerApiKey !== undefined && isConfigValueConfigured(providerApiKey))
+			(providerApiKey !== undefined && isConfigValueConfigured(providerApiKey)) ||
+			!!getEnvApiKeyByBaseUrl(model.baseUrl)
 		);
+	}
+
+	private getProviderBaseUrlEnvAuth(provider: string): { apiKey: string; envVarName: string } | undefined {
+		for (const model of this.models) {
+			if (model.provider !== provider) continue;
+
+			const envVarName = getEnvApiKeyNameByBaseUrl(model.baseUrl);
+			if (!envVarName) continue;
+
+			const apiKey = getEnvApiKeyByBaseUrl(model.baseUrl);
+			if (apiKey) {
+				return { apiKey, envVarName };
+			}
+		}
+		return undefined;
 	}
 
 	private getModelRequestKey(provider: string, modelId: string): string {
@@ -761,7 +779,8 @@ export class ModelRegistry {
 				apiKeyFromAuthStorage ??
 				(providerConfig?.apiKey
 					? resolveConfigValueOrThrow(providerConfig.apiKey, `API key for provider "${model.provider}"`)
-					: undefined);
+					: undefined) ??
+				getEnvApiKeyByBaseUrl(model.baseUrl);
 
 			const providerHeaders = resolveHeadersOrThrow(providerConfig?.headers, `provider "${model.provider}"`);
 			const modelHeaders = resolveHeadersOrThrow(
@@ -805,22 +824,27 @@ export class ModelRegistry {
 		}
 
 		const providerApiKey = this.providerRequestConfigs.get(provider)?.apiKey;
-		if (!providerApiKey) {
-			return authStatus;
+		if (providerApiKey) {
+			if (isCommandConfigValue(providerApiKey)) {
+				return { configured: true, source: "models_json_command" };
+			}
+
+			const envVarNames = getConfigValueEnvVarNames(providerApiKey);
+			if (envVarNames.length > 0) {
+				return isConfigValueConfigured(providerApiKey)
+					? { configured: true, source: "environment", label: envVarNames.join(", ") }
+					: { configured: false };
+			}
+
+			return { configured: true, source: "models_json_key" };
 		}
 
-		if (isCommandConfigValue(providerApiKey)) {
-			return { configured: true, source: "models_json_command" };
+		const baseUrlEnvAuth = this.getProviderBaseUrlEnvAuth(provider);
+		if (baseUrlEnvAuth) {
+			return { configured: true, source: "environment", label: baseUrlEnvAuth.envVarName };
 		}
 
-		const envVarNames = getConfigValueEnvVarNames(providerApiKey);
-		if (envVarNames.length > 0) {
-			return isConfigValueConfigured(providerApiKey)
-				? { configured: true, source: "environment", label: envVarNames.join(", ") }
-				: { configured: false };
-		}
-
-		return { configured: true, source: "models_json_key" };
+		return authStatus;
 	}
 
 	/**
@@ -849,7 +873,11 @@ export class ModelRegistry {
 		}
 
 		const providerApiKey = this.providerRequestConfigs.get(provider)?.apiKey;
-		return providerApiKey ? resolveConfigValueUncached(providerApiKey) : undefined;
+		if (providerApiKey) {
+			return resolveConfigValueUncached(providerApiKey);
+		}
+
+		return this.getProviderBaseUrlEnvAuth(provider)?.apiKey;
 	}
 
 	/**
@@ -920,7 +948,7 @@ export class ModelRegistry {
 		if (!config.baseUrl) {
 			throw new Error(`Provider ${providerName}: "baseUrl" is required when defining models.`);
 		}
-		if (!config.apiKey && !config.oauth) {
+		if (!config.apiKey && !config.oauth && !getEnvApiKeyNameByBaseUrl(config.baseUrl)) {
 			throw new Error(`Provider ${providerName}: "apiKey" or "oauth" is required when defining models.`);
 		}
 

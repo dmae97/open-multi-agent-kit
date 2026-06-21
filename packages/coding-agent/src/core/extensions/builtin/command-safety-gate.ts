@@ -1,12 +1,16 @@
 /**
  * Built-in command-safety gate extension.
  *
- * Wires the pure `classifyShellCommand` verdict engine into the two live bash
- * entry points:
+ * Wires the pure `classifyShellCommand` verdict engine into the live bash entry
+ * points with one shared decision engine (`evaluateCommandGate`):
  * - LLM tool calls (`tool_call` for the `bash` tool) — block-tier verdicts stop
- *   execution via `{ block, reason }`.
+ *   execution via `{ block, reason }`. confirm-tier verdicts prompt when a
+ *   dialog-capable UI is available and otherwise deny headlessly (parity with
+ *   user bash). `priv.*` is never auto-allowed.
  * - User `!`/`!!` bash (`user_bash`) — block/confirm verdicts produce a synthetic
  *   FAILED `BashResult` instead of running the command.
+ * - RPC bash routes through `AgentSession.executeBash({ safetyGate: "headless" })`
+ *   which reuses `evaluateCommandGate` and `buildBlockedBashResult` directly.
  *
  * Fail-closed contract:
  * - `user_bash` deny NEVER throws. A thrown `user_bash` handler is logged by the
@@ -27,8 +31,8 @@ import { type ExtensionAPI, isToolCallEventType } from "../types.ts";
 /** Confirmation callback. Returns true when the user approves execution. */
 export type ConfirmFn = (message: string) => Promise<boolean>;
 
-/** Options controlling how a user `!`/`!!` bash command is evaluated. */
-export interface UserBashEvaluateOptions {
+/** Options controlling how a bash command is evaluated by the shared gate. */
+export interface CommandGateOptions {
 	/** Whether a dialog-capable UI is available for confirmation. */
 	hasUI: boolean;
 	/** Interactive confirmation callback used when `hasUI` is true. */
@@ -38,6 +42,9 @@ export interface UserBashEvaluateOptions {
 	/** Extra substrings that promote allow/confirm verdicts to block. Never relaxes a block. */
 	extraDeny?: string[];
 }
+
+/** @deprecated Back-compat alias for {@link CommandGateOptions}. */
+export type UserBashEvaluateOptions = CommandGateOptions;
 
 function formatReason(verdict: CommandVerdict): string {
 	return `[${verdict.rule}] ${verdict.reason}`;
@@ -71,10 +78,13 @@ function classifyWithExtraDeny(command: string, extraDeny?: string[]): CommandVe
 }
 
 /**
- * Decide whether an LLM `bash` tool call must be blocked.
+ * Pure block-only check for an LLM `bash` tool call.
  *
- * Only block-tier verdicts produce a block here. The `tool_call` path has no
- * confirm UI in this helper, so confirm/allow verdicts pass through.
+ * Only block-tier verdicts produce a block here; confirm/allow pass through.
+ * Used as a low-level non-negotiable floor (for example by the bash tool's
+ * effective-command check after commandPrefix/spawnHook) where no confirm UI
+ * or policy context exists. The confirm-deny behavior for the live tool_call
+ * gate lives in {@link evaluateCommandGate}.
  */
 export function evaluateBashToolCall(
 	command: string,
@@ -88,15 +98,15 @@ export function evaluateBashToolCall(
 }
 
 /**
- * Decide whether a user `!`/`!!` bash command must be denied.
+ * Shared gate decision for any bash command (LLM tool call, user bash, RPC bash).
  *
  * - block  => deny.
  * - confirm => hasUI ? (approved ? undefined : deny) : (policy === "allow" && !priv ? undefined : deny).
  * - allow  => undefined (preserve later extensions / default execution).
  */
-export async function evaluateUserBash(
+export async function evaluateCommandGate(
 	command: string,
-	opts: UserBashEvaluateOptions,
+	opts: CommandGateOptions,
 ): Promise<{ deny: boolean; reason: string } | undefined> {
 	const verdict = classifyWithExtraDeny(command, opts.extraDeny);
 
@@ -123,8 +133,11 @@ export async function evaluateUserBash(
 	return { deny: true, reason: formatReason(verdict) };
 }
 
+/** @deprecated Back-compat alias; prefer {@link evaluateCommandGate}. */
+export const evaluateUserBash = evaluateCommandGate;
+
 /** Build a synthetic failed `BashResult` surfacing the safety reason. */
-function buildBlockedBashResult(reason: string): BashResult {
+export function buildBlockedBashResult(reason: string): BashResult {
 	return {
 		output: `command-safety: blocked\n${reason}`,
 		exitCode: 1,
@@ -139,13 +152,21 @@ function buildBlockedBashResult(reason: string): BashResult {
  * `user_bash` short-circuits on first truthy result).
  */
 export default function commandSafetyGate(omk: ExtensionAPI): void {
-	omk.on("tool_call", async (event) => {
+	omk.on("tool_call", async (event, ctx) => {
 		if (!isToolCallEventType("bash", event)) return undefined;
-		return evaluateBashToolCall(event.input.command);
+		const decision = await evaluateCommandGate(event.input.command, {
+			hasUI: ctx.hasUI,
+			confirm: ctx.hasUI ? (message) => ctx.ui.confirm("Command safety", message) : undefined,
+			headlessConfirmPolicy: "deny",
+		});
+		if (decision?.deny) {
+			return { block: true, reason: decision.reason };
+		}
+		return undefined;
 	});
 
 	omk.on("user_bash", async (event, ctx) => {
-		const decision = await evaluateUserBash(event.command, {
+		const decision = await evaluateCommandGate(event.command, {
 			hasUI: ctx.hasUI,
 			confirm: ctx.hasUI ? (message) => ctx.ui.confirm("Command safety", message) : undefined,
 			headlessConfirmPolicy: "deny",

@@ -4,6 +4,8 @@
 
 Prompt templates are Markdown snippets that expand into full prompts. Type `/name` in the editor to invoke a template, where `name` is the filename without `.md`.
 
+**Parent rules apply**: Any GOD Mode / jailbreak content in templates is subject to the same detection and refusal as AGENTS.md / CLAUDE.md (see usage.md and root AGENTS.md PARENT section).
+
 ## Locations
 
 OMK loads prompt templates from:

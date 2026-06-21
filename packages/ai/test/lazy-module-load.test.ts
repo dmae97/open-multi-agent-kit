@@ -96,4 +96,14 @@ describe("lazy provider module loading", () => {
 
 		expect(result.loadedSpecifiers).toEqual(["@anthropic-ai/sdk"]);
 	});
+
+	it("loads only the Anthropic SDK when dispatching DuckCoding through streamSimple", () => {
+		const result = runProbe(`
+			const model = mod.getModel("duckcoding", "claude-fable-5");
+			const context = { messages: [{ role: "user", content: "hi" }] };
+			await mod.streamSimple(model, context, { apiKey: "test" }).result();
+		`);
+
+		expect(result.loadedSpecifiers).toEqual(["@anthropic-ai/sdk"]);
+	});
 });

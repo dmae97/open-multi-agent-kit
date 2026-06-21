@@ -1,10 +1,11 @@
 import { EventEmitter } from "node:events";
-import { mkdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DefaultPackageManager, type ProgressEvent, type ResolvedResource } from "../src/core/package-manager.ts";
+import type { ResolvedSandboxPath, SandboxBackendStatus, SandboxPolicy } from "../src/core/sandbox/policy.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 
 function normalizeForMatch(value: string): string {
@@ -13,6 +14,44 @@ function normalizeForMatch(value: string): string {
 
 function pathEndsWith(actualPath: string, suffix: string): boolean {
 	return normalizeForMatch(actualPath).endsWith(normalizeForMatch(suffix));
+}
+
+// 40-char hex commit used by procurement-admission git tests.
+const FULL_COMMIT_SHA = "1234567890abcdef1234567890abcdef12345678";
+const MISSING_SANDBOX_BACKEND: SandboxBackendStatus = { platform: "unsupported", backendAvailable: false };
+
+function trialPolicy(root: string, mode: SandboxPolicy["mode"] = "audit"): SandboxPolicy {
+	return {
+		mode,
+		profile: "networked",
+		filesystem: {
+			root,
+			readAllow: [root],
+			readDeny: [],
+			writeAllow: [join(root, "agent", "tmp", "extensions")],
+			denyWrite: [join(root, ".git")],
+			tempWrite: [join(root, "tmp")],
+			followSymlinks: false,
+		},
+		network: {
+			mode: "domain-allowlist",
+			allowedDomains: ["registry.npmjs.org"],
+			deniedDomains: [],
+			allowUnixSockets: [],
+			allowBrowser: false,
+		},
+		process: { allowExec: true, allowShell: true, allowPrivilege: false },
+	};
+}
+
+function trialResolver(path: string): ResolvedSandboxPath {
+	return {
+		requestedPath: path,
+		exists: true,
+		realPath: path,
+		nearestExistingParentRealPath: path,
+		isSymlink: false,
+	};
 }
 
 class MockSpawnedProcess extends EventEmitter {
@@ -26,7 +65,7 @@ class MockSpawnedProcess extends EventEmitter {
 }
 
 interface PackageManagerInternals {
-	runCommand(command: string, args: string[], options?: { cwd?: string }): Promise<void>;
+	runCommand(command: string, args: string[], options?: { cwd?: string; env?: Record<string, string> }): Promise<void>;
 	runCommandCapture(
 		command: string,
 		args: string[],
@@ -703,7 +742,7 @@ Content`,
 
 			const runCommandSpy = vi.spyOn(packageManager as any, "runCommand").mockResolvedValue(undefined);
 
-			await packageManager.install("npm:@scope/pkg");
+			await packageManager.install("npm:@scope/pkg@1.2.3");
 
 			expect(runCommandSpy).toHaveBeenCalledWith(
 				"mise",
@@ -713,10 +752,11 @@ Content`,
 					"--",
 					"npm",
 					"install",
-					"@scope/pkg",
+					"@scope/pkg@1.2.3",
 					"--prefix",
 					join(agentDir, "npm"),
 					"--legacy-peer-deps",
+					"--ignore-scripts",
 				],
 				undefined,
 			);
@@ -734,17 +774,28 @@ Content`,
 
 			const runCommandSpy = vi.spyOn(packageManager as any, "runCommand").mockResolvedValue(undefined);
 
-			await packageManager.install("npm:@scope/pkg");
+			await packageManager.install("npm:@scope/pkg@1.2.3");
 
 			expect(runCommandSpy).toHaveBeenCalledWith(
 				"mise",
-				["exec", "bun@1", "--", "bun", "install", "@scope/pkg", "--cwd", join(agentDir, "npm"), "--omit=peer"],
+				[
+					"exec",
+					"bun@1",
+					"--",
+					"bun",
+					"install",
+					"@scope/pkg@1.2.3",
+					"--cwd",
+					join(agentDir, "npm"),
+					"--omit=peer",
+					"--ignore-scripts",
+				],
 				undefined,
 			);
 		});
 
 		it("should install git package dependencies with --omit=dev", async () => {
-			const source = "git:github.com/user/repo";
+			const source = `git:github.com/user/repo@${FULL_COMMIT_SHA}`;
 			const targetDir = join(agentDir, "git", "github.com", "user", "repo");
 			const runCommandSpy = vi
 				.spyOn(packageManager as any, "runCommand")
@@ -758,7 +809,10 @@ Content`,
 
 			await packageManager.install(source);
 
-			expect(runCommandSpy).toHaveBeenCalledWith("npm", ["install", "--omit=dev"], { cwd: targetDir });
+			expect(runCommandSpy).toHaveBeenCalledWith("git", ["checkout", FULL_COMMIT_SHA], { cwd: targetDir });
+			expect(runCommandSpy).toHaveBeenCalledWith("npm", ["install", "--omit=dev", "--ignore-scripts"], {
+				cwd: targetDir,
+			});
 		});
 
 		it("should reconcile an existing git checkout to a pinned ref during install", async () => {
@@ -779,33 +833,30 @@ Content`,
 			});
 			const runCommandSpy = vi.spyOn(managerWithInternals, "runCommand").mockResolvedValue(undefined);
 
-			await packageManager.install(source);
+			// Tag ref "v2" is admitted only when anchored to a reviewed resolved commit SHA.
+			await packageManager.install(source, { resolvedCommit: FULL_COMMIT_SHA });
 
 			expect(runCommandSpy).toHaveBeenCalledWith("git", ["fetch", "origin", "v2"], { cwd: targetDir });
 			expect(runCommandSpy).toHaveBeenCalledWith("git", ["reset", "--hard", "FETCH_HEAD^{commit}"], {
 				cwd: targetDir,
 			});
 			expect(runCommandSpy).toHaveBeenCalledWith("git", ["clean", "-fdx"], { cwd: targetDir });
-			expect(runCommandSpy).toHaveBeenCalledWith("npm", ["install", "--omit=dev"], { cwd: targetDir });
+			expect(runCommandSpy).toHaveBeenCalledWith("npm", ["install", "--omit=dev", "--ignore-scripts"], {
+				cwd: targetDir,
+			});
 		});
 
-		it("should reconcile an existing git checkout to its update target when installing without a ref", async () => {
-			const source = "git:github.com/user/repo";
+		it("should reconcile an existing git checkout to a full commit SHA pin during install", async () => {
+			const source = `git:github.com/user/repo@${FULL_COMMIT_SHA}`;
 			const targetDir = join(agentDir, "git", "github.com", "user", "repo");
-			const fetchArgs = ["fetch", "--prune", "--no-tags", "origin", "+refs/heads/main:refs/remotes/origin/main"];
 			mkdirSync(targetDir, { recursive: true });
 
 			const managerWithInternals = packageManager as unknown as PackageManagerInternals;
-			vi.spyOn(managerWithInternals, "getLocalGitUpdateTarget").mockResolvedValue({
-				ref: "origin/HEAD",
-				head: "new-head",
-				fetchArgs,
-			});
 			vi.spyOn(managerWithInternals, "runCommandCapture").mockImplementation(async (_command, args) => {
 				if (args[0] === "rev-parse" && args[1] === "HEAD") {
 					return "old-head";
 				}
-				if (args[0] === "rev-parse" && args[1] === "origin/HEAD^{commit}") {
+				if (args[0] === "rev-parse" && args[1] === "FETCH_HEAD^{commit}") {
 					return "new-head";
 				}
 				throw new Error(`Unexpected runCommandCapture args: ${args.join(" ")}`);
@@ -814,8 +865,8 @@ Content`,
 
 			await packageManager.install(source);
 
-			expect(runCommandSpy).toHaveBeenCalledWith("git", fetchArgs, { cwd: targetDir });
-			expect(runCommandSpy).toHaveBeenCalledWith("git", ["reset", "--hard", "origin/HEAD^{commit}"], {
+			expect(runCommandSpy).toHaveBeenCalledWith("git", ["fetch", "origin", FULL_COMMIT_SHA], { cwd: targetDir });
+			expect(runCommandSpy).toHaveBeenCalledWith("git", ["reset", "--hard", "FETCH_HEAD^{commit}"], {
 				cwd: targetDir,
 			});
 			expect(runCommandSpy).toHaveBeenCalledWith("git", ["clean", "-fdx"], { cwd: targetDir });
@@ -831,7 +882,7 @@ Content`,
 				settingsManager,
 			});
 
-			const source = "git:github.com/user/repo";
+			const source = `git:github.com/user/repo@${FULL_COMMIT_SHA}`;
 			const targetDir = join(agentDir, "git", "github.com", "user", "repo");
 			const runCommandSpy = vi
 				.spyOn(packageManager as any, "runCommand")
@@ -845,7 +896,7 @@ Content`,
 
 			await packageManager.install(source);
 
-			expect(runCommandSpy).toHaveBeenCalledWith("pnpm", ["install"], { cwd: targetDir });
+			expect(runCommandSpy).toHaveBeenCalledWith("pnpm", ["install", "--ignore-scripts"], { cwd: targetDir });
 		});
 
 		it("should update git package dependencies with --omit=dev", async () => {
@@ -872,7 +923,9 @@ Content`,
 
 			await packageManager.update(source);
 
-			expect(runCommandSpy).toHaveBeenCalledWith("npm", ["install", "--omit=dev"], { cwd: targetDir });
+			expect(runCommandSpy).toHaveBeenCalledWith("npm", ["install", "--omit=dev", "--ignore-scripts"], {
+				cwd: targetDir,
+			});
 		});
 
 		it("should use plain install through npmCommand argv when updating git package dependencies", async () => {
@@ -908,9 +961,13 @@ Content`,
 
 			await packageManager.update(source);
 
-			expect(runCommandSpy).toHaveBeenCalledWith("mise", ["exec", "node@20", "--", "pnpm", "install"], {
-				cwd: targetDir,
-			});
+			expect(runCommandSpy).toHaveBeenCalledWith(
+				"mise",
+				["exec", "node@20", "--", "pnpm", "install", "--ignore-scripts"],
+				{
+					cwd: targetDir,
+				},
+			);
 		});
 
 		it("should use npmCommand argv for npm root lookup and invalidate cached root when npmCommand changes", () => {
@@ -980,6 +1037,7 @@ Content`,
 						"--config.auto-install-peers=false",
 						"--config.strict-peer-dependencies=false",
 						"--config.strict-dep-builds=false",
+						"--ignore-scripts",
 					]);
 					mkdirSync(join(packagePath, "extensions"), { recursive: true });
 					writeFileSync(join(packagePath, "package.json"), JSON.stringify({ name: "pnpm-pkg", version: "1.0.0" }));
@@ -1188,6 +1246,258 @@ Content`,
 			if (process.platform !== "win32") {
 				expect(statSync(tempRoot).mode & 0o777).toBe(0o700);
 			}
+		});
+	});
+
+	describe("temporary package trial runtime", () => {
+		function createTrialPackageManager(options?: {
+			settings?: Parameters<typeof SettingsManager.inMemory>[0];
+			mode?: SandboxPolicy["mode"];
+			env?: () => NodeJS.ProcessEnv;
+			onAudit?: (record: unknown) => void;
+		}): DefaultPackageManager {
+			const scopedSettingsManager = SettingsManager.inMemory(options?.settings);
+			return new DefaultPackageManager({
+				cwd: tempDir,
+				agentDir,
+				settingsManager: scopedSettingsManager,
+				trialRuntime: {
+					policy: trialPolicy(tempDir, options?.mode ?? "audit"),
+					backend: MISSING_SANDBOX_BACKEND,
+					resolver: trialResolver,
+					env: options?.env,
+					onAudit: options?.onAudit,
+				},
+			});
+		}
+
+		it("uses the trial executor and filtered env for exact-pinned temporary npm sources", async () => {
+			const audits: unknown[] = [];
+			const pm = createTrialPackageManager({
+				env: () => ({ PATH: "/usr/bin", SAFE_VAR: "ok", OPENAI_API_KEY: "secret" }),
+				onAudit: (record) => audits.push(record),
+			});
+			const managerWithInternals = pm as unknown as PackageManagerInternals;
+			const parsed = managerWithInternals.parseSource("npm:example@1.2.3");
+			if (parsed.type !== "npm") throw new Error("expected npm source");
+			const packagePath = managerWithInternals.getNpmInstallPath(parsed, "temporary");
+			const installRoot = join(packagePath, "..", "..");
+			const runCommandSpy = vi
+				.spyOn(managerWithInternals, "runCommand")
+				.mockImplementation(async (_command, _args) => {
+					mkdirSync(join(packagePath, "extensions"), { recursive: true });
+					writeFileSync(join(packagePath, "package.json"), JSON.stringify({ name: "example", version: "1.2.3" }));
+					writeFileSync(join(packagePath, "extensions", "index.ts"), "export default function() {};");
+				});
+
+			const result = await pm.resolveExtensionSources(["npm:example@1.2.3"], { temporary: true });
+
+			expect(
+				result.extensions.some((r) => r.path === join(packagePath, "extensions", "index.ts") && r.enabled),
+			).toBe(true);
+			expect(runCommandSpy).toHaveBeenCalledWith(
+				"npm",
+				["install", "example@1.2.3", "--prefix", installRoot, "--legacy-peer-deps", "--ignore-scripts"],
+				expect.objectContaining({ cwd: installRoot, env: { PATH: "/usr/bin", SAFE_VAR: "ok" } }),
+			);
+			expect(audits).toHaveLength(1);
+		});
+
+		it("keeps --ignore-scripts for temporary npm trials even when install.allowScripts matches", async () => {
+			const pm = createTrialPackageManager({ settings: { install: { allowScripts: ["npm:example@1.2.3"] } } });
+			const runCommandSpy = vi
+				.spyOn(pm as unknown as PackageManagerInternals, "runCommand")
+				.mockResolvedValue(undefined);
+
+			await pm.resolveExtensionSources(["npm:example@1.2.3"], { temporary: true });
+
+			const npmCall = runCommandSpy.mock.calls.find(([command]) => command === "npm");
+			expect(npmCall?.[1]).toContain("--ignore-scripts");
+		});
+
+		it("rejects unpinned temporary npm trials before spawning", async () => {
+			const pm = createTrialPackageManager();
+			const runCommandSpy = vi
+				.spyOn(pm as unknown as PackageManagerInternals, "runCommand")
+				.mockResolvedValue(undefined);
+
+			const result = await pm.resolveExtensionSources(["npm:example"], { temporary: true });
+
+			expect(result.extensions).toEqual([]);
+			expect(runCommandSpy).not.toHaveBeenCalled();
+		});
+
+		it("rejects policy.mode off for temporary npm trials before spawning", async () => {
+			const pm = createTrialPackageManager({ mode: "off" });
+			const runCommandSpy = vi
+				.spyOn(pm as unknown as PackageManagerInternals, "runCommand")
+				.mockResolvedValue(undefined);
+
+			const result = await pm.resolveExtensionSources(["npm:example@1.2.3"], { temporary: true });
+
+			expect(result.extensions).toEqual([]);
+			expect(runCommandSpy).not.toHaveBeenCalled();
+		});
+
+		it("defers temporary git trials without cloning", async () => {
+			const pm = createTrialPackageManager();
+			const runCommandSpy = vi
+				.spyOn(pm as unknown as PackageManagerInternals, "runCommand")
+				.mockResolvedValue(undefined);
+
+			const result = await pm.resolveExtensionSources([`git:github.com/user/repo@${FULL_COMMIT_SHA}`], {
+				temporary: true,
+			});
+
+			expect(result.extensions).toEqual([]);
+			expect(runCommandSpy).not.toHaveBeenCalledWith("git", expect.arrayContaining(["clone"]), expect.anything());
+			expect(runCommandSpy).not.toHaveBeenCalled();
+		});
+
+		it("removes only the failed temporary npm trial root after executor failure", async () => {
+			const pm = createTrialPackageManager();
+			const managerWithInternals = pm as unknown as PackageManagerInternals;
+			const parsed = managerWithInternals.parseSource("npm:example@1.2.3");
+			if (parsed.type !== "npm") throw new Error("expected npm source");
+			const packagePath = managerWithInternals.getNpmInstallPath(parsed, "temporary");
+			const installRoot = join(packagePath, "..", "..");
+			vi.spyOn(managerWithInternals, "runCommand").mockImplementation(async () => {
+				mkdirSync(packagePath, { recursive: true });
+				throw new Error("spawn failed");
+			});
+
+			const result = await pm.resolveExtensionSources(["npm:example@1.2.3"], { temporary: true });
+
+			expect(result.extensions).toEqual([]);
+			expect(existsSync(installRoot)).toBe(false);
+		});
+
+		it("keeps earlier temporary npm trial resources when a later trial fails", async () => {
+			const pm = createTrialPackageManager();
+			const managerWithInternals = pm as unknown as PackageManagerInternals;
+			const first = managerWithInternals.parseSource("npm:first@1.0.0");
+			const second = managerWithInternals.parseSource("npm:second@2.0.0");
+			if (first.type !== "npm" || second.type !== "npm") throw new Error("expected npm sources");
+			const firstPackagePath = managerWithInternals.getNpmInstallPath(first, "temporary");
+			const secondPackagePath = managerWithInternals.getNpmInstallPath(second, "temporary");
+			const firstExtensionPath = join(firstPackagePath, "extensions", "index.ts");
+			vi.spyOn(managerWithInternals, "runCommand").mockImplementation(async (_command, args) => {
+				if (args.includes("first@1.0.0")) {
+					mkdirSync(dirname(firstExtensionPath), { recursive: true });
+					writeFileSync(
+						join(firstPackagePath, "package.json"),
+						JSON.stringify({ name: "first", version: "1.0.0" }),
+					);
+					writeFileSync(firstExtensionPath, "export default function() {};");
+					return;
+				}
+				mkdirSync(secondPackagePath, { recursive: true });
+				throw new Error("second failed");
+			});
+
+			const result = await pm.resolveExtensionSources(["npm:first@1.0.0", "npm:second@2.0.0"], {
+				temporary: true,
+			});
+
+			expect(result.extensions.some((entry) => entry.path === firstExtensionPath && entry.enabled)).toBe(true);
+			expect(existsSync(firstExtensionPath)).toBe(true);
+			expect(existsSync(secondPackagePath)).toBe(false);
+		});
+
+		it("cleanupTemporaryTrialInstalls is idempotent and tolerates already-removed roots", async () => {
+			const pm = createTrialPackageManager();
+			const managerWithInternals = pm as unknown as PackageManagerInternals;
+			const parsed = managerWithInternals.parseSource("npm:example@1.2.3");
+			if (parsed.type !== "npm") throw new Error("expected npm source");
+			const packagePath = managerWithInternals.getNpmInstallPath(parsed, "temporary");
+			const installRoot = join(packagePath, "..", "..");
+			const extensionPath = join(packagePath, "extensions", "index.ts");
+			vi.spyOn(managerWithInternals, "runCommand").mockImplementation(async () => {
+				mkdirSync(dirname(extensionPath), { recursive: true });
+				writeFileSync(join(packagePath, "package.json"), JSON.stringify({ name: "example", version: "1.2.3" }));
+				writeFileSync(extensionPath, "export default function() {};");
+			});
+
+			const events: ProgressEvent[] = [];
+			pm.setProgressCallback((event) => events.push(event));
+
+			const result = await pm.resolveExtensionSources(["npm:example@1.2.3"], { temporary: true });
+			expect(result.extensions.some((r) => r.path === extensionPath && r.enabled)).toBe(true);
+			expect(existsSync(installRoot)).toBe(true);
+
+			// Explicit cleanup tears down the registered trial root.
+			pm.cleanupTemporaryTrialInstalls();
+			expect(existsSync(installRoot)).toBe(false);
+			expect(events.some((e) => e.type === "start" && e.action === "remove")).toBe(true);
+			expect(events.some((e) => e.type === "complete" && e.action === "remove")).toBe(true);
+
+			// Idempotent: a second invocation is a no-op, emits no removal events, and never throws.
+			const eventsBefore = events.length;
+			expect(() => pm.cleanupTemporaryTrialInstalls()).not.toThrow();
+			expect(events.length).toBe(eventsBefore);
+			expect(existsSync(installRoot)).toBe(false);
+		});
+
+		it("cleanupTemporaryTrialInstalls preserves successful trials until explicitly invoked", async () => {
+			const pm = createTrialPackageManager();
+			const managerWithInternals = pm as unknown as PackageManagerInternals;
+			const first = managerWithInternals.parseSource("npm:first@1.0.0");
+			const second = managerWithInternals.parseSource("npm:second@2.0.0");
+			if (first.type !== "npm" || second.type !== "npm") throw new Error("expected npm sources");
+			const firstPackagePath = managerWithInternals.getNpmInstallPath(first, "temporary");
+			const secondPackagePath = managerWithInternals.getNpmInstallPath(second, "temporary");
+			const firstExtension = join(firstPackagePath, "extensions", "index.ts");
+			const secondExtension = join(secondPackagePath, "extensions", "index.ts");
+			vi.spyOn(managerWithInternals, "runCommand").mockImplementation(async (_command, args) => {
+				const target = args.includes("first@1.0.0") ? firstPackagePath : secondPackagePath;
+				const ext = args.includes("first@1.0.0") ? firstExtension : secondExtension;
+				mkdirSync(dirname(ext), { recursive: true });
+				writeFileSync(join(target, "package.json"), JSON.stringify({ name: "x", version: "1.0.0" }));
+				writeFileSync(ext, "export default function() {};");
+			});
+
+			await pm.resolveExtensionSources(["npm:first@1.0.0", "npm:second@2.0.0"], { temporary: true });
+
+			// Successful trials stay materialized until the caller explicitly tears them down.
+			expect(existsSync(firstExtension)).toBe(true);
+			expect(existsSync(secondExtension)).toBe(true);
+
+			pm.cleanupTemporaryTrialInstalls();
+			expect(existsSync(firstExtension)).toBe(false);
+			expect(existsSync(secondExtension)).toBe(false);
+		});
+
+		it("executes configured wrapper argv exactly from the trial executor", async () => {
+			const pm = createTrialPackageManager({ settings: { npmCommand: ["mise", "exec", "node@20", "--", "pnpm"] } });
+			const managerWithInternals = pm as unknown as PackageManagerInternals;
+			const parsed = managerWithInternals.parseSource("npm:example@1.2.3");
+			if (parsed.type !== "npm") throw new Error("expected npm source");
+			const installRoot = join(managerWithInternals.getNpmInstallPath(parsed, "temporary"), "..", "..");
+			const runCommandSpy = vi.spyOn(managerWithInternals, "runCommand").mockResolvedValue(undefined);
+
+			await pm.resolveExtensionSources(["npm:example@1.2.3"], { temporary: true });
+
+			expect(runCommandSpy).toHaveBeenCalledWith(
+				"mise",
+				expect.arrayContaining(["exec", "node@20", "--", "pnpm", "install", "example@1.2.3", "--ignore-scripts"]),
+				expect.objectContaining({ cwd: installRoot }),
+			);
+		});
+
+		it("rejects enforce-mode temporary npm trials when the sandbox backend is missing", async () => {
+			const pm = createTrialPackageManager({ mode: "enforce" });
+			const runCommandSpy = vi
+				.spyOn(pm as unknown as PackageManagerInternals, "runCommand")
+				.mockResolvedValue(undefined);
+			const parsed = (pm as unknown as PackageManagerInternals).parseSource("npm:example@1.2.3");
+			if (parsed.type !== "npm") throw new Error("expected npm source");
+			const packagePath = (pm as unknown as PackageManagerInternals).getNpmInstallPath(parsed, "temporary");
+
+			const result = await pm.resolveExtensionSources(["npm:example@1.2.3"], { temporary: true });
+
+			expect(result.extensions).toEqual([]);
+			expect(runCommandSpy).not.toHaveBeenCalled();
+			expect(existsSync(packagePath)).toBe(false);
 		});
 	});
 
@@ -1536,6 +1846,86 @@ Content`,
 			const result = await packageManager.resolveExtensionSources([pkgDir]);
 			expect(result.skills.some((r) => isEnabled(r, "pdf-to-markdown", "includes"))).toBe(true);
 			expect(result.skills.some((r) => isEnabled(r, "document-processor-api", "includes"))).toBe(true);
+		});
+
+		it("should reject manifest literal entries whose realpath escapes the package root", async () => {
+			const pkgDir = join(tempDir, "manifest-symlink-escape-pkg");
+			const outsideDir = join(tempDir, "outside-manifest-extensions");
+			const directoryLinkType = process.platform === "win32" ? "junction" : "dir";
+
+			mkdirSync(join(pkgDir, "extensions"), { recursive: true });
+			mkdirSync(outsideDir, { recursive: true });
+			writeFileSync(join(pkgDir, "extensions", "safe.ts"), "export default function() {}");
+			writeFileSync(join(outsideDir, "evil.ts"), "export default function() {}");
+			symlinkSync(outsideDir, join(pkgDir, "extensions", "external"), directoryLinkType);
+			writeFileSync(
+				join(pkgDir, "package.json"),
+				JSON.stringify({
+					name: "manifest-symlink-escape-pkg",
+					pi: {
+						extensions: ["extensions/safe.ts", "extensions/external/evil.ts"],
+					},
+				}),
+			);
+
+			const result = await packageManager.resolveExtensionSources([pkgDir]);
+
+			expect(result.extensions.some((r) => isEnabled(r, "safe.ts"))).toBe(true);
+			expect(result.extensions.some((r) => pathEndsWith(r.path, "evil.ts"))).toBe(false);
+		});
+
+		it("should reject absolute and outside manifest glob entries", async () => {
+			const pkgDir = join(tempDir, "manifest-glob-escape-pkg");
+			const outsideDir = join(tempDir, "outside-glob-extensions");
+
+			mkdirSync(join(pkgDir, "extensions"), { recursive: true });
+			mkdirSync(outsideDir, { recursive: true });
+			writeFileSync(join(pkgDir, "extensions", "safe.ts"), "export default function() {}");
+			writeFileSync(join(outsideDir, "evil.ts"), "export default function() {}");
+			writeFileSync(
+				join(pkgDir, "package.json"),
+				JSON.stringify({
+					name: "manifest-glob-escape-pkg",
+					pi: {
+						extensions: ["extensions/*.ts", "../outside-glob-extensions/*.ts", `${outsideDir}/*.ts`],
+					},
+				}),
+			);
+
+			const result = await packageManager.resolveExtensionSources([pkgDir]);
+
+			expect(result.extensions.some((r) => isEnabled(r, "safe.ts"))).toBe(true);
+			expect(result.extensions.some((r) => pathEndsWith(r.path, "evil.ts"))).toBe(false);
+		});
+
+		it("should reject convention resource directories that realpath outside the package root", async () => {
+			const pkgDir = join(tempDir, "convention-symlink-escape-pkg");
+			const outsideExtensionsDir = join(tempDir, "outside-convention-extensions");
+			const directoryLinkType = process.platform === "win32" ? "junction" : "dir";
+
+			mkdirSync(pkgDir, { recursive: true });
+			mkdirSync(outsideExtensionsDir, { recursive: true });
+			writeFileSync(join(outsideExtensionsDir, "evil.ts"), "export default function() {}");
+			symlinkSync(outsideExtensionsDir, join(pkgDir, "extensions"), directoryLinkType);
+
+			const result = await packageManager.resolveExtensionSources([pkgDir]);
+
+			expect(result.extensions.some((r) => pathEndsWith(r.path, "evil.ts"))).toBe(false);
+		});
+
+		it("should keep package symlinked resource directories when they resolve inside the package root", async () => {
+			const pkgDir = join(tempDir, "convention-inside-symlink-pkg");
+			const realExtensionsDir = join(pkgDir, "internal", "extensions");
+			const directoryLinkType = process.platform === "win32" ? "junction" : "dir";
+
+			mkdirSync(realExtensionsDir, { recursive: true });
+			writeFileSync(join(realExtensionsDir, "entry.ts"), "export default function() {}");
+			symlinkSync(realExtensionsDir, join(pkgDir, "extensions"), directoryLinkType);
+
+			const result = await packageManager.resolveExtensionSources([pkgDir]);
+			const entries = result.extensions.filter((r) => pathEndsWith(r.path, "entry.ts") && r.enabled);
+
+			expect(entries).toHaveLength(1);
 		});
 	});
 
@@ -2070,7 +2460,14 @@ export default function(api) { api.registerTool({ name: "test", description: "te
 			);
 			expect(runCommandSpy).toHaveBeenCalledWith(
 				"npm",
-				["install", "example@latest", "--prefix", join(tempDir, ".omk", "npm"), "--legacy-peer-deps"],
+				[
+					"install",
+					"example@latest",
+					"--prefix",
+					join(tempDir, ".omk", "npm"),
+					"--legacy-peer-deps",
+					"--ignore-scripts",
+				],
 				undefined,
 			);
 		});
@@ -2115,6 +2512,7 @@ export default function(api) { api.registerTool({ name: "test", description: "te
 						"--prefix",
 						join(agentDir, "npm"),
 						"--legacy-peer-deps",
+						"--ignore-scripts",
 					]);
 					mkdirSync(managedPath, { recursive: true });
 					writeFileSync(
@@ -2232,6 +2630,7 @@ export default function(api) { api.registerTool({ name: "test", description: "te
 					"--prefix",
 					join(agentDir, "npm"),
 					"--legacy-peer-deps",
+					"--ignore-scripts",
 				],
 				undefined,
 			);
@@ -2245,6 +2644,7 @@ export default function(api) { api.registerTool({ name: "test", description: "te
 					"--prefix",
 					join(tempDir, ".omk", "npm"),
 					"--legacy-peer-deps",
+					"--ignore-scripts",
 				],
 				undefined,
 			);
@@ -2437,6 +2837,147 @@ export default function(api) { api.registerTool({ name: "test", description: "te
 			child.emit("close", 0, null);
 
 			await expect(capturePromise).resolves.toBe("abc123");
+		});
+	});
+
+	describe("install admission (procurement gate)", () => {
+		const GIT_REPO = "git:github.com/user/repo";
+		const gitTargetDir = () => join(agentDir, "git", "github.com", "user", "repo");
+
+		it("rejects a non-local npm install without an exact version", async () => {
+			const runCommandSpy = vi.spyOn(packageManager as any, "runCommand").mockResolvedValue(undefined);
+			await expect(packageManager.install("npm:pkg")).rejects.toThrow(/exact pinned version/);
+			expect(runCommandSpy).not.toHaveBeenCalled();
+		});
+
+		it("rejects a non-local npm install with a semver range", async () => {
+			await expect(packageManager.install("npm:pkg@^1.0.0")).rejects.toThrow(/exact pinned version/);
+		});
+
+		it("rejects a non-local npm install with a dist-tag", async () => {
+			await expect(packageManager.install("npm:pkg@latest")).rejects.toThrow(/exact pinned version/);
+		});
+
+		it("admits an exact-pinned npm install", async () => {
+			const runCommandSpy = vi.spyOn(packageManager as any, "runCommand").mockResolvedValue(undefined);
+			await packageManager.install("npm:pkg@1.2.3");
+			expect(runCommandSpy).toHaveBeenCalled();
+		});
+
+		it("rejects a git install without a ref", async () => {
+			const runCommandSpy = vi.spyOn(packageManager as any, "runCommand").mockResolvedValue(undefined);
+			await expect(packageManager.install(GIT_REPO)).rejects.toThrow(/full commit SHA/);
+			expect(runCommandSpy).not.toHaveBeenCalled();
+		});
+
+		it("rejects a git install with a tag and no reviewed resolved commit", async () => {
+			await expect(packageManager.install(`${GIT_REPO}@v1`)).rejects.toThrow(/full commit SHA/);
+		});
+
+		it("rejects a git install with an abbreviated commit sha", async () => {
+			await expect(packageManager.install(`${GIT_REPO}@abc1234`)).rejects.toThrow(/full commit SHA/);
+		});
+
+		it("admits a git install pinned to a full commit SHA", async () => {
+			const targetDir = gitTargetDir();
+			const runCommandSpy = vi
+				.spyOn(packageManager as any, "runCommand")
+				.mockImplementation(async (...callArgs: unknown[]) => {
+					const [command, args] = callArgs as [string, string[]];
+					if (command === "git" && args[0] === "clone") {
+						mkdirSync(targetDir, { recursive: true });
+					}
+				});
+
+			await packageManager.install(`${GIT_REPO}@${FULL_COMMIT_SHA}`);
+
+			expect(runCommandSpy).toHaveBeenCalledWith("git", ["checkout", FULL_COMMIT_SHA], { cwd: targetDir });
+		});
+
+		it("admits a git install for a tag anchored to a reviewed resolved commit", async () => {
+			const targetDir = gitTargetDir();
+			const runCommandSpy = vi
+				.spyOn(packageManager as any, "runCommand")
+				.mockImplementation(async (...callArgs: unknown[]) => {
+					const [command, args] = callArgs as [string, string[]];
+					if (command === "git" && args[0] === "clone") {
+						mkdirSync(targetDir, { recursive: true });
+					}
+				});
+
+			await packageManager.install(`${GIT_REPO}@v1`, { resolvedCommit: FULL_COMMIT_SHA });
+
+			expect(runCommandSpy).toHaveBeenCalledWith("git", ["checkout", "v1"], { cwd: targetDir });
+		});
+
+		it("admits a local source install without applying the pin gate", async () => {
+			const localPkg = join(tempDir, "admit-local-pkg");
+			mkdirSync(localPkg, { recursive: true });
+			const runCommandSpy = vi.spyOn(packageManager as any, "runCommand").mockResolvedValue(undefined);
+
+			await expect(packageManager.install(localPkg)).resolves.toBeUndefined();
+			expect(runCommandSpy).not.toHaveBeenCalled();
+		});
+
+		it("preserves local source error behavior for a missing path", async () => {
+			await expect(packageManager.install(join(tempDir, "missing-local-pkg"))).rejects.toThrow(
+				/Path does not exist/,
+			);
+		});
+
+		it("does not install or persist an unpinned npm source via installAndPersist", async () => {
+			const runCommandSpy = vi.spyOn(packageManager as any, "runCommand").mockResolvedValue(undefined);
+			await expect(packageManager.installAndPersist("npm:pkg")).rejects.toThrow(/exact pinned version/);
+			expect(runCommandSpy).not.toHaveBeenCalled();
+			expect(settingsManager.getGlobalSettings().packages ?? []).toHaveLength(0);
+		});
+
+		it("installs and persists an exact-pinned npm source", async () => {
+			vi.spyOn(packageManager as any, "runCommand").mockResolvedValue(undefined);
+			await packageManager.installAndPersist("npm:pkg@1.2.3");
+			expect(settingsManager.getGlobalSettings().packages).toEqual(["npm:pkg@1.2.3"]);
+		});
+
+		it("still emits start and error progress events when admission rejects", async () => {
+			const events: ProgressEvent[] = [];
+			packageManager.setProgressCallback((event) => events.push(event));
+
+			await expect(packageManager.install("npm:pkg")).rejects.toThrow();
+
+			expect(events.some((e) => e.type === "start" && e.action === "install")).toBe(true);
+			expect(events.some((e) => e.type === "error")).toBe(true);
+		});
+
+		it("keeps the lifecycle allowlist exact when admitting a pinned install", async () => {
+			settingsManager.setInstallAllowScripts(["npm:pkg@1.2.3"]);
+			let npmArgs: string[] | undefined;
+			vi.spyOn(packageManager as any, "runCommand").mockImplementation(async (...callArgs: unknown[]) => {
+				const [command, args] = callArgs as [string, string[]];
+				if (command === "npm") {
+					npmArgs = args;
+				}
+			});
+
+			await packageManager.install("npm:pkg@1.2.3");
+
+			expect(npmArgs).toBeDefined();
+			expect(npmArgs).not.toContain("--ignore-scripts");
+		});
+
+		it("does not honor a non-exact lifecycle allowlist entry for an admitted install", async () => {
+			settingsManager.setInstallAllowScripts(["npm:pkg@^1.0.0"]);
+			let npmArgs: string[] | undefined;
+			vi.spyOn(packageManager as any, "runCommand").mockImplementation(async (...callArgs: unknown[]) => {
+				const [command, args] = callArgs as [string, string[]];
+				if (command === "npm") {
+					npmArgs = args;
+				}
+			});
+
+			await packageManager.install("npm:pkg@1.2.3");
+
+			expect(npmArgs).toBeDefined();
+			expect(npmArgs).toContain("--ignore-scripts");
 		});
 	});
 });

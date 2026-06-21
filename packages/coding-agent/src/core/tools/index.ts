@@ -1,5 +1,6 @@
 export {
 	type BashOperations,
+	type BashSandboxPreflight,
 	type BashSpawnContext,
 	type BashSpawnHook,
 	type BashToolDetails,

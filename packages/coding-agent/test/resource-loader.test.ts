@@ -7,10 +7,39 @@ import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ExtensionRunner } from "../src/core/extensions/runner.ts";
 import { ModelRegistry } from "../src/core/model-registry.ts";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
+import type { SandboxPolicy } from "../src/core/sandbox/policy.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import type { Skill } from "../src/core/skills.ts";
 import { createSyntheticSourceInfo } from "../src/core/source-info.ts";
+
+function userVisibleExtensions<T extends { path: string }>(extensions: T[]): T[] {
+	return extensions.filter((extension) => !extension.path.startsWith("<builtin:"));
+}
+
+function sandboxPolicy(root: string): SandboxPolicy {
+	return {
+		mode: "enforce",
+		profile: "workspace-write",
+		filesystem: {
+			root,
+			readAllow: [root],
+			readDeny: [],
+			writeAllow: [root],
+			denyWrite: [],
+			tempWrite: [],
+			followSymlinks: false,
+		},
+		network: {
+			mode: "none",
+			allowedDomains: [],
+			deniedDomains: [],
+			allowUnixSockets: [],
+			allowBrowser: false,
+		},
+		process: { allowExec: true, allowShell: true, allowPrivilege: false },
+	};
+}
 
 describe("DefaultResourceLoader", () => {
 	let tempDir: string;
@@ -37,6 +66,31 @@ describe("DefaultResourceLoader", () => {
 			expect(loader.getSkills().skills).toEqual([]);
 			expect(loader.getPrompts().prompts).toEqual([]);
 			expect(loader.getThemes().themes).toEqual([]);
+		});
+
+		it("passes exec sandbox policy to inline extension factories", async () => {
+			let deniedMessage: string | undefined;
+			const loader = new DefaultResourceLoader({
+				cwd,
+				agentDir,
+				extensionExecSandbox: {
+					policy: sandboxPolicy(cwd),
+					backend: { platform: "linux", backendAvailable: false },
+				},
+				extensionFactories: [
+					async (omk) => {
+						try {
+							await omk.exec("node", ["--version"]);
+						} catch (error) {
+							deniedMessage = error instanceof Error ? error.message : String(error);
+						}
+					},
+				],
+			});
+			await loader.reload();
+
+			expect(deniedMessage).toContain("sandbox: exec denied");
+			expect(deniedMessage).toContain("sandbox.backend_missing");
 		});
 
 		it("should discover skills from agentDir", async () => {
@@ -179,12 +233,13 @@ Project skill`,
 			await loader.reload();
 
 			const extensionsResult = loader.getExtensions();
-			expect(extensionsResult.extensions).toHaveLength(1);
+			const visibleExtensions = userVisibleExtensions(extensionsResult.extensions);
+			expect(visibleExtensions).toHaveLength(1);
 			expect(extensionsResult.errors).toEqual([]);
 
 			// mergePaths processes project paths before user paths, so the project
 			// alias is the canonical survivor.
-			expect(extensionsResult.extensions[0].path).toBe(join(cwd, ".omk", "extensions", "shared.ts"));
+			expect(visibleExtensions[0].path).toBe(join(cwd, ".omk", "extensions", "shared.ts"));
 		});
 
 		it("should keep both extensions loaded when command names collide", async () => {
@@ -225,7 +280,7 @@ Project skill`,
 			await loader.reload();
 
 			const extensionsResult = loader.getExtensions();
-			expect(extensionsResult.extensions).toHaveLength(2);
+			expect(userVisibleExtensions(extensionsResult.extensions)).toHaveLength(2);
 			expect(extensionsResult.errors.some((e) => e.error.includes('Command "/deploy" conflicts'))).toBe(false);
 
 			const sessionManager = SessionManager.inMemory();
@@ -624,7 +679,7 @@ export default function(pi: ExtensionAPI) {
 			await loader.reload();
 
 			const extensionsResult = loader.getExtensions();
-			expect(extensionsResult.extensions[0]?.path).toBe(explicitExtPath);
+			expect(userVisibleExtensions(extensionsResult.extensions)[0]?.path).toBe(explicitExtPath);
 
 			const sessionManager = SessionManager.inMemory();
 			const authStorage = AuthStorage.create(join(tempDir, "auth-explicit.json"));

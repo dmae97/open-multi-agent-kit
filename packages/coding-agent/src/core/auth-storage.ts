@@ -35,8 +35,11 @@ export type AuthCredential = ApiKeyCredential | OAuthCredential;
 export type AuthStorageData = Record<string, AuthCredential>;
 
 export type AuthStatus = {
+	/** True when authentication is actually available from a usable source. */
 	configured: boolean;
+	/** Where authentication can be resolved without exposing credential values. */
 	source?: "stored" | "runtime" | "environment" | "fallback" | "models_json_key" | "models_json_command";
+	/** Safe display label for the source, such as an env var name. */
 	label?: string;
 };
 
@@ -354,16 +357,16 @@ export class AuthStorage {
 		}
 
 		if (this.runtimeOverrides.has(provider)) {
-			return { configured: false, source: "runtime", label: "--api-key" };
+			return { configured: true, source: "runtime", label: "--api-key" };
 		}
 
 		const envKeys = findEnvKeys(provider);
 		if (envKeys?.[0]) {
-			return { configured: false, source: "environment", label: envKeys[0] };
+			return { configured: true, source: "environment", label: envKeys[0] };
 		}
 
 		if (this.fallbackResolver?.(provider)) {
-			return { configured: false, source: "fallback", label: "custom provider config" };
+			return { configured: true, source: "fallback", label: "custom provider config" };
 		}
 
 		return { configured: false };

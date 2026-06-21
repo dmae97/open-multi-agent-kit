@@ -7,6 +7,7 @@ export * from "./image-models.ts";
 export * from "./images.ts";
 export * from "./images-api-registry.ts";
 export * from "./models.ts";
+export * from "./provider-network.ts";
 export type { BedrockOptions, BedrockThinkingDisplay } from "./providers/amazon-bedrock.ts";
 export type { AnthropicEffort, AnthropicOptions, AnthropicThinkingDisplay } from "./providers/anthropic.ts";
 export type { AzureOpenAIResponsesOptions } from "./providers/azure-openai-responses.ts";

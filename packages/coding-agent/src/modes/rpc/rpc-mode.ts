@@ -548,8 +548,12 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			// =================================================================
 
 			case "bash": {
+				// RPC bash is headless: classify the command and deny block/confirm-tier
+				// verdicts by default (parity with LLM bash tool calls). Benign commands
+				// run unchanged. The deny path returns a synthetic failed BashResult.
 				const result = await session.executeBash(command.command, undefined, {
 					excludeFromContext: command.excludeFromContext,
+					safetyGate: "headless",
 				});
 				return success(id, "bash", result);
 			}

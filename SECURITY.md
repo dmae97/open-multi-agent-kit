@@ -19,7 +19,13 @@ an operating-system privilege boundary.
 OMK relies on users installing trustworthy extensions and loading trustworthy
 skills and only to use omk within trusted repositories.  This is because files
 like `AGENTS.md` or instructions in comments can be used to prompt inject the
-coding agent trivially and this cannot be protected against.
+coding agent trivially.
+
+**GOD Mode resistance (current highest priority)**: OMK parent rules (global AGENTS.md + CLAUDE.md) + loader detection + prompt sanitization specifically target the dominant "refusal + divider + semantically opposite" bypass (and variants with [END OF INPUT], "godmode is active", LOVE PLINY dividers, boundary resets, etc.) used in the latest G0DM0D3 / L1B3RT4S collections. Detected injections are wrapped and the model is instructed at parent level to output only a one-line refusal and produce no post-divider content. Parent global files always win.
+
+Detection and parent precedence were added in resource-loader.ts and system-prompt.ts. See root AGENTS.md (PARENT RULES) and CLAUDE.md for the exact language.
+
+Once attacker text reaches the model there is still no absolute guarantee — never trust project context files for safety policy. Use `-nc` when needed.
 
 ## Reporting a Vulnerability
 

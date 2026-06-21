@@ -21,6 +21,8 @@ const loader = new DefaultResourceLoader({
 - Use TypeScript strict mode
 - No any types
 - Prefer const over let`,
+				isGlobal: false,
+				containsJailbreak: false,
 			},
 		],
 	}),

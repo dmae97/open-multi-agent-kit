@@ -1,7 +1,8 @@
 import { Type } from "typebox";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getModel, getModels } from "../src/models.ts";
+import { getModel, getModels, getSupportedThinkingLevels } from "../src/models.ts";
 import { convertMessages } from "../src/providers/openai-completions.ts";
+import { convertResponsesTools } from "../src/providers/openai-responses-shared.ts";
 import { stream, streamSimple } from "../src/stream.ts";
 import type { AssistantMessage, Model, Tool, ToolResultMessage } from "../src/types.ts";
 
@@ -109,6 +110,62 @@ describe("openai-completions tool_choice", () => {
 		expect(params.tool_choice).toBe("required");
 		expect(Array.isArray(params.tools)).toBe(true);
 		expect(params.tools?.length ?? 0).toBeGreaterThan(0);
+	});
+
+	it("normalizes null required arrays in OpenAI chat tool schemas", async () => {
+		const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini")!;
+		const model = { ...baseModel, api: "openai-completions" } as const;
+		const tools: Tool[] = [
+			{
+				name: "headroom_install",
+				description: "Install headroom",
+				parameters: {
+					type: "object",
+					properties: { force: { type: "boolean" } },
+					required: null,
+				} as unknown as Tool["parameters"],
+			},
+		];
+		let payload: unknown;
+
+		await streamSimple(
+			model,
+			{
+				messages: [{ role: "user", content: "Install", timestamp: Date.now() }],
+				tools,
+			},
+			{
+				apiKey: "test",
+				onPayload: (params: unknown) => {
+					payload = params;
+				},
+			} as unknown as Parameters<typeof streamSimple>[2],
+		).result();
+
+		const params = (payload ?? mockState.lastParams) as {
+			tools?: Array<{ function?: { parameters?: Record<string, unknown> } }>;
+		};
+		const parameters = params.tools?.[0]?.function?.parameters;
+		expect(parameters).toMatchObject({ type: "object", properties: { force: { type: "boolean" } } });
+		expect(Object.hasOwn(parameters ?? {}, "required")).toBe(false);
+	});
+
+	it("normalizes null required arrays in OpenAI Responses tool schemas", () => {
+		const [tool] = convertResponsesTools([
+			{
+				name: "headroom_install",
+				description: "Install headroom",
+				parameters: {
+					type: "object",
+					properties: { force: { type: "boolean" } },
+					required: null,
+				} as unknown as Tool["parameters"],
+			},
+		]);
+		const converted = tool as unknown as { parameters?: Record<string, unknown> };
+
+		expect(converted.parameters).toMatchObject({ type: "object", properties: { force: { type: "boolean" } } });
+		expect(Object.hasOwn(converted.parameters ?? {}, "required")).toBe(false);
 	});
 
 	it("omits strict when compat disables strict mode", async () => {
@@ -947,9 +1004,88 @@ describe("openai-completions tool_choice", () => {
 			const model = getModel(provider, "mimo-v2.5-pro")!;
 			expect(model.compat?.requiresReasoningContentOnAssistantMessages).toBe(true);
 			expect(model.compat?.thinkingFormat).toBe("deepseek");
+			expect(model.compat?.supportsReasoningEffort).toBe(false);
 			expect(model.compat?.maxTokensField).toBeUndefined();
 			expect(model.compat?.supportsDeveloperRole).toBeUndefined();
 		}
+	});
+
+	it("uses Xiaomi MiMo thinking.type only when xhigh is requested on official endpoints", async () => {
+		const model = getModel("xiaomi", "mimo-v2.5")!;
+		let payload: unknown;
+
+		expect(model.thinkingLevelMap?.xhigh).toBeUndefined();
+		expect(getSupportedThinkingLevels(model)).toContain("xhigh");
+
+		await streamSimple(
+			model,
+			{
+				messages: [{ role: "user", content: "Hi", timestamp: Date.now() }],
+			},
+			{
+				apiKey: "test",
+				reasoning: "xhigh",
+				onPayload: (params: unknown) => {
+					payload = params;
+				},
+			},
+		).result();
+
+		const params = (payload ?? mockState.lastParams) as { thinking?: { type?: string }; reasoning_effort?: string };
+		expect(params.thinking).toEqual({ type: "enabled" });
+		expect(params.reasoning_effort).toBeUndefined();
+	});
+
+	it("maps Xiaomi MiMo xhigh to high on effort-string hosts", async () => {
+		const model = getModel("opencode-go", "mimo-v2.5")!;
+		let payload: unknown;
+
+		expect(model.thinkingLevelMap?.xhigh).toBe("high");
+
+		await streamSimple(
+			model,
+			{
+				messages: [{ role: "user", content: "Hi", timestamp: Date.now() }],
+			},
+			{
+				apiKey: "test",
+				reasoning: "xhigh",
+				onPayload: (params: unknown) => {
+					payload = params;
+				},
+			},
+		).result();
+
+		const params = (payload ?? mockState.lastParams) as { reasoning_effort?: string };
+		expect(params.reasoning_effort).toBe("high");
+	});
+
+	it("maps OpenRouter Xiaomi MiMo xhigh to high reasoning effort", async () => {
+		const model = getModel("openrouter", "xiaomi/mimo-v2.5")!;
+		let payload: unknown;
+
+		expect(model.thinkingLevelMap?.xhigh).toBe("high");
+
+		await streamSimple(
+			model,
+			{
+				messages: [{ role: "user", content: "Hi", timestamp: Date.now() }],
+			},
+			{
+				apiKey: "test",
+				reasoning: "xhigh",
+				onPayload: (params: unknown) => {
+					payload = params;
+				},
+			},
+		).result();
+
+		const params = (payload ?? mockState.lastParams) as {
+			reasoning?: { effort?: string };
+			reasoning_effort?: string;
+		};
+		expect(params.reasoning?.effort).toBe("high");
+		expect(params.reasoning_effort).toBeUndefined();
 	});
 
 	it("replays Xiaomi MiMo assistant tool calls with empty reasoning_content when thinking is missing", async () => {
@@ -1007,7 +1143,7 @@ describe("openai-completions tool_choice", () => {
 		const replayedAssistant = params.messages?.find((message) => message.role === "assistant");
 		expect(replayedAssistant).toMatchObject({ role: "assistant", reasoning_content: "" });
 		expect(params.thinking).toEqual({ type: "enabled" });
-		expect(params.reasoning_effort).toBe("high");
+		expect(params.reasoning_effort).toBeUndefined();
 	});
 
 	it("normalizes OpenCode Go reasoning deltas to reasoning_content for replay", async () => {

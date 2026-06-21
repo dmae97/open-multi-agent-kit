@@ -53,6 +53,7 @@ import {
 import { DEFAULT_THINKING_LEVEL } from "./defaults.ts";
 import { exportSessionToHtml, type ToolHtmlRenderer } from "./export-html/index.ts";
 import { createToolHtmlRenderer } from "./export-html/tool-renderer.ts";
+import { buildBlockedBashResult, evaluateCommandGate } from "./extensions/builtin/command-safety-gate.ts";
 import {
 	type ContextUsage,
 	type ExtensionCommandContextActions,
@@ -89,17 +90,31 @@ import {
 	gate,
 	loadFreedomConfig,
 } from "./freedom/index.ts";
+import {
+	assertLoadoutAccess,
+	decideLoadoutAccess,
+	type LoadoutAccessPolicy,
+	type LoadoutAccessRequest,
+} from "./loadout-access-policy.ts";
 import type { BashExecutionMessage, CustomMessage } from "./messages.ts";
 import type { ModelRegistry } from "./model-registry.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
+import {
+	createMonotonicReadIdFactory,
+	createReadAnchorRegistry,
+	type ReadAnchorRegistry,
+} from "./read-anchor-registry.ts";
+import { createReadContentCache, type ReadContentCache } from "./read-content-cache.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
+import { detectSandboxBackend } from "./sandbox/backend.ts";
+import type { SandboxBackendStatus } from "./sandbox/policy.ts";
 import type { BranchSummaryEntry, CompactionEntry, SessionManager } from "./session-manager.ts";
 import { CURRENT_SESSION_VERSION, getLatestCompactionEntry, type SessionHeader } from "./session-manager.ts";
 import type { SettingsManager } from "./settings-manager.ts";
 import type { SlashCommandInfo } from "./slash-commands.ts";
 import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.ts";
 import { type BuildSystemPromptOptions, buildSystemPrompt } from "./system-prompt.ts";
-import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
+import { type BashOperations, type BashSandboxPreflight, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
 
@@ -190,6 +205,10 @@ export interface AgentSessionConfig {
 	 * a definition-first registry even when callers provide plain AgentTool instances.
 	 */
 	baseToolsOverride?: Record<string, AgentTool>;
+	/** Trusted sandbox preflight used for built-in local bash execution. Never sourced from RPC command payloads. */
+	bashSandboxPreflight?: BashSandboxPreflight;
+	/** Optional immutable loadout policy used to lock active tools and scope built-in tool access. */
+	loadoutAccessPolicy?: LoadoutAccessPolicy;
 	/** Mutable ref used by Agent to access the current ExtensionRunner */
 	extensionRunnerRef?: { current?: ExtensionRunner };
 	/** Session start event metadata emitted when extensions bind to this runtime. */
@@ -203,6 +222,14 @@ export interface ExtensionBindings {
 	abortHandler?: () => void;
 	shutdownHandler?: ShutdownHandler;
 	onError?: ExtensionErrorListener;
+}
+
+interface ExecuteBashOptions {
+	excludeFromContext?: boolean;
+	operations?: BashOperations;
+	safetyGate?: "headless";
+	/** Trusted internal/test override for local bash sandboxing. */
+	sandboxPolicy?: BashSandboxPreflight;
 }
 
 /** Options for AgentSession.prompt() */
@@ -259,6 +286,32 @@ interface ToolDefinitionEntry {
 /** Standard thinking levels */
 const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high"];
 
+function normalizeToolNames(toolNames: readonly string[]): string[] {
+	return [...new Set(toolNames.map((name) => name.trim()).filter((name) => name !== ""))].sort();
+}
+
+function toolNameSetsEqual(left: readonly string[], right: readonly string[]): boolean {
+	const normalizedLeft = normalizeToolNames(left);
+	const normalizedRight = normalizeToolNames(right);
+	return (
+		normalizedLeft.length === normalizedRight.length &&
+		normalizedLeft.every((toolName, index) => toolName === normalizedRight[index])
+	);
+}
+
+function isSandboxDeniedError(error: unknown): error is Error {
+	return error instanceof Error && error.message.startsWith("sandbox: shell denied");
+}
+
+function buildSandboxDeniedBashResult(reason: string): BashResult {
+	return {
+		output: reason,
+		exitCode: 1,
+		cancelled: false,
+		truncated: false,
+	};
+}
+
 // ============================================================================
 // AgentSession Class
 // ============================================================================
@@ -296,6 +349,8 @@ export class AgentSession {
 	// Bash execution state
 	private _bashAbortController: AbortController | undefined = undefined;
 	private _pendingBashMessages: BashExecutionMessage[] = [];
+	private _configuredBashSandboxPreflight: BashSandboxPreflight | undefined = undefined;
+	private _detectedBashSandboxBackend: SandboxBackendStatus | undefined = undefined;
 
 	// Extension system
 	private _extensionRunner!: ExtensionRunner;
@@ -310,6 +365,7 @@ export class AgentSession {
 	private _allowedToolNames?: Set<string>;
 	private _excludedToolNames?: Set<string>;
 	private _baseToolsOverride?: Record<string, AgentTool>;
+	private _loadoutAccessPolicy?: LoadoutAccessPolicy;
 	private _sessionStartEvent: SessionStartEvent;
 	private _extensionUIContext?: ExtensionUIContext;
 	private _extensionMode: ExtensionMode = "print";
@@ -327,6 +383,14 @@ export class AgentSession {
 	private _toolDefinitions: Map<string, ToolDefinitionEntry> = new Map();
 	private _toolPromptSnippets: Map<string, string> = new Map();
 	private _toolPromptGuidelines: Map<string, string[]> = new Map();
+
+	// Per-session read/edit anchor coordination. The built-in read and edit tools
+	// share this registry, readId factory, and content cache so anchored
+	// stale-edit protection and content caching work across tool calls within one
+	// session. Reused across reload() so anchors survive an extension reload.
+	private _readAnchorRegistry: ReadAnchorRegistry = createReadAnchorRegistry();
+	private _readIdFactory: () => string = createMonotonicReadIdFactory();
+	private _readContentCache: ReadContentCache = createReadContentCache();
 
 	// Base system prompt (without extension appends) - used to apply fresh appends each turn
 	private _baseSystemPrompt = "";
@@ -353,6 +417,8 @@ export class AgentSession {
 		this._allowedToolNames = config.allowedToolNames ? new Set(config.allowedToolNames) : undefined;
 		this._excludedToolNames = config.excludedToolNames ? new Set(config.excludedToolNames) : undefined;
 		this._baseToolsOverride = config.baseToolsOverride;
+		this._loadoutAccessPolicy = config.loadoutAccessPolicy;
+		this._configuredBashSandboxPreflight = config.bashSandboxPreflight;
 		this._sessionStartEvent = config.sessionStartEvent ?? { type: "session_start", reason: "startup" };
 
 		// Load freedom config from the project cwd. Returns FREEDOM_CONFIG_DEFAULTS
@@ -413,6 +479,15 @@ export class AgentSession {
 		return applyFreedomEnv(env, this._freedomConfig);
 	}
 
+	private _getBashSandboxPreflight(override?: BashSandboxPreflight): BashSandboxPreflight | undefined {
+		const preflight = override ?? this._configuredBashSandboxPreflight;
+		if (!preflight || preflight.policy.mode === "off" || preflight.backend) {
+			return preflight;
+		}
+		this._detectedBashSandboxBackend ??= detectSandboxBackend();
+		return { ...preflight, backend: this._detectedBashSandboxBackend };
+	}
+
 	private async _getRequiredRequestAuth(model: Model<any>): Promise<{
 		apiKey: string;
 		headers?: Record<string, string>;
@@ -461,6 +536,9 @@ export class AgentSession {
 	 */
 	private _installAgentToolHooks(): void {
 		this.agent.beforeToolCall = async ({ toolCall, args }) => {
+			if (this._loadoutAccessPolicy && !this._loadoutAccessPolicy.activeTools.includes(toolCall.name)) {
+				throw new Error(`loadout: inactive tool: ${toolCall.name}`);
+			}
 			const runner = this._extensionRunner;
 			if (!runner.hasHandlers("tool_call")) {
 				return undefined;
@@ -858,13 +936,24 @@ export class AgentSession {
 	 * Changes take effect on the next agent turn.
 	 */
 	setActiveToolsByName(toolNames: string[]): void {
+		const requestedToolNames = normalizeToolNames(toolNames);
+		const lockedToolNames = this._loadoutAccessPolicy?.activeTools;
+		if (lockedToolNames && !toolNameSetsEqual(requestedToolNames, lockedToolNames)) {
+			throw new Error(
+				`loadout active tools are locked: expected ${lockedToolNames.join(", ") || "(none)"}, received ${requestedToolNames.join(", ") || "(none)"}`,
+			);
+		}
+
+		const desiredToolNames = lockedToolNames ? [...lockedToolNames] : toolNames;
 		const tools: AgentTool[] = [];
 		const validToolNames: string[] = [];
-		for (const name of toolNames) {
+		for (const name of desiredToolNames) {
 			const tool = this._toolRegistry.get(name);
 			if (tool) {
 				tools.push(tool);
 				validToolNames.push(name);
+			} else if (lockedToolNames?.includes(name)) {
+				throw new Error(`loadout locked tool unavailable: ${name}`);
 			}
 		}
 		this.agent.state.tools = tools;
@@ -2382,6 +2471,15 @@ export class AgentSession {
 				sourceInfo: createSyntheticSourceInfo(`<sdk:${definition.name}>`, { source: "sdk" }),
 			})),
 		].filter((tool) => isAllowedTool(tool.definition.name));
+		if (this._loadoutAccessPolicy) {
+			const shadowedBuiltins = normalizeToolNames(
+				allCustomTools.map((tool) => tool.definition.name).filter((name) => this._baseToolDefinitions.has(name)),
+			);
+			if (shadowedBuiltins.length > 0) {
+				throw new Error(`loadout extension tool shadows builtin: ${shadowedBuiltins.join(", ")}`);
+			}
+		}
+
 		const definitionRegistry = new Map<string, ToolDefinitionEntry>(
 			Array.from(this._baseToolDefinitions.entries())
 				.filter(([name]) => isAllowedTool(name))
@@ -2434,6 +2532,17 @@ export class AgentSession {
 		}
 		this._toolRegistry = toolRegistry;
 
+		if (this._loadoutAccessPolicy) {
+			const missingLockedTools = this._loadoutAccessPolicy.activeTools.filter(
+				(toolName) => !isAllowedTool(toolName) || !this._toolRegistry.has(toolName),
+			);
+			if (missingLockedTools.length > 0) {
+				throw new Error(`loadout locked tool unavailable: ${missingLockedTools.join(", ")}`);
+			}
+			this.setActiveToolsByName([...this._loadoutAccessPolicy.activeTools]);
+			return;
+		}
+
 		const nextActiveToolNames = (
 			options?.activeToolNames ? [...options.activeToolNames] : [...previousActiveToolNames]
 		).filter((name) => isAllowedTool(name));
@@ -2467,6 +2576,13 @@ export class AgentSession {
 		const autoResizeImages = this.settingsManager.getImageAutoResize();
 		const shellCommandPrefix = this.settingsManager.getShellCommandPrefix();
 		const shellPath = this.settingsManager.getShellPath();
+		const loadoutAccessPolicy = this._loadoutAccessPolicy;
+		const accessGuard = loadoutAccessPolicy
+			? (request: LoadoutAccessRequest) => decideLoadoutAccess(loadoutAccessPolicy, request)
+			: undefined;
+		if (loadoutAccessPolicy && this._baseToolsOverride) {
+			throw new Error("loadout cannot use baseToolsOverride because override tools bypass scoped access guards");
+		}
 		const baseToolDefinitions = this._baseToolsOverride
 			? Object.fromEntries(
 					Object.entries(this._baseToolsOverride).map(([name, tool]) => [
@@ -2475,8 +2591,28 @@ export class AgentSession {
 					]),
 				)
 			: createAllToolDefinitions(this._cwd, {
-					read: { autoResizeImages },
-					bash: { commandPrefix: shellCommandPrefix, shellPath },
+					read: {
+						autoResizeImages,
+						anchorRegistry: this._readAnchorRegistry,
+						readIdFactory: this._readIdFactory,
+						contentCache: this._readContentCache,
+						accessGuard,
+					},
+					bash: {
+						commandPrefix: shellCommandPrefix,
+						shellPath,
+						sandboxPolicy: this._getBashSandboxPreflight(),
+						accessGuard,
+					},
+					edit: {
+						anchorRegistry: this._readAnchorRegistry,
+						contentCache: this._readContentCache,
+						accessGuard,
+					},
+					write: { accessGuard },
+					grep: { accessGuard },
+					find: { accessGuard },
+					ls: { accessGuard },
 				});
 
 		this._baseToolDefinitions = new Map(
@@ -2660,7 +2796,7 @@ export class AgentSession {
 	async executeBash(
 		command: string,
 		onChunk?: (chunk: string) => void,
-		options?: { excludeFromContext?: boolean; operations?: BashOperations },
+		options?: ExecuteBashOptions,
 	): Promise<BashResult> {
 		// Freedom-mode safety floor: enforce §0.1 (secrets, privilege, fs
 		// destruction, scope) before spawning any shell. Hard-denied commands
@@ -2672,26 +2808,62 @@ export class AgentSession {
 			throw new Error(`OMK §0.1 safety floor blocked bash: ${freedomDecision.reason}`);
 		}
 
-		this._bashAbortController = new AbortController();
-
 		// Apply command prefix if configured (e.g., "shopt -s expand_aliases" for alias support)
 		const prefix = this.settingsManager.getShellCommandPrefix();
 		const shellPath = this.settingsManager.getShellPath();
 		const resolvedCommand = prefix ? `${prefix}\n${command}` : command;
+		if (this._loadoutAccessPolicy) {
+			assertLoadoutAccess(
+				(request) => decideLoadoutAccess(this._loadoutAccessPolicy as LoadoutAccessPolicy, request),
+				{ operation: "execute", toolName: "bash", command: resolvedCommand },
+			);
+		}
+
+		// Command-safety parity for non-interactive callers (RPC bash). Interactive
+		// `!`/`!!` bash is gated earlier through the user_bash extension event, which
+		// keeps its prompt-based approval semantics, so it does not pass safetyGate and
+		// is never double-prompted here. confirm/block-tier verdicts deny headlessly;
+		// the EFFECTIVE command (after the shell command prefix) is classified.
+		if (options?.safetyGate === "headless") {
+			const decision = await evaluateCommandGate(resolvedCommand, {
+				hasUI: false,
+				headlessConfirmPolicy: "deny",
+			});
+			if (decision?.deny) {
+				const blocked = buildBlockedBashResult(decision.reason);
+				this.recordBashResult(command, blocked, options);
+				return blocked;
+			}
+		}
+
+		this._bashAbortController = new AbortController();
 
 		try {
-			const result = await executeBashWithOperations(
-				resolvedCommand,
-				this.sessionManager.getCwd(),
-				options?.operations ?? createLocalBashOperations({ shellPath }),
-				{
-					onChunk,
-					signal: this._bashAbortController.signal,
-				},
-			);
+			try {
+				const result = await executeBashWithOperations(
+					resolvedCommand,
+					this.sessionManager.getCwd(),
+					options?.operations ??
+						createLocalBashOperations({
+							shellPath,
+							sandboxPolicy: this._getBashSandboxPreflight(options?.sandboxPolicy),
+						}),
+					{
+						onChunk,
+						signal: this._bashAbortController.signal,
+					},
+				);
 
-			this.recordBashResult(command, result, options);
-			return result;
+				this.recordBashResult(command, result, options);
+				return result;
+			} catch (error) {
+				if (!isSandboxDeniedError(error)) {
+					throw error;
+				}
+				const blocked = buildSandboxDeniedBashResult(error.message);
+				this.recordBashResult(command, blocked, options);
+				return blocked;
+			}
 		} finally {
 			this._bashAbortController = undefined;
 		}

@@ -289,20 +289,26 @@ Use `--offline` or `OMK_OFFLINE=1` to disable all startup network operations des
 
 ---
 
-## Context Files
+## Context Files (Parent Hierarchy)
 
-OMK loads `AGENTS.md` (or `CLAUDE.md`) at startup from:
-- `~/.omk/agent/AGENTS.md` (global)
-- Parent directories (walking up from cwd)
-- Current directory
+**Parent (global, loaded first, highest priority):**
+- `~/.omk/agent/AGENTS.md`
+- `~/.omk/agent/CLAUDE.md`
 
-Use for project instructions (`AGENTS.md`/`CLAUDE.md`), conventions, common commands. All matching files are concatenated.
+**Child (project, subordinate):**
+- Walking up from cwd + current directory
 
-Disable context file loading with `--no-context-files` (or `-nc`).
+Parent global files contain the authoritative GOD Mode resistance (refusal+divider+semantically-opposite, boundary `[END OF INPUT]`, "godmode is active", LOVE PLINY dividers, etc.). The loader and prompt builder enforce parent precedence and neutralize flagged content.
+
+See root `AGENTS.md` (PARENT RULES section) and `CLAUDE.md`.
+
+Use `--no-context-files` (`-nc`) for high-risk work.
 
 ### System Prompt
 
-Replace the default system prompt with `.omk/SYSTEM.md` (project) or `~/.omk/agent/SYSTEM.md` (global). Append without replacing via `APPEND_SYSTEM.md`.
+Replace with `.omk/SYSTEM.md` (project) or `~/.omk/agent/SYSTEM.md` (global).
+
+Parent resistance rules and the safety floor are not bypassable via custom system prompts. GOD Mode attempts are refused.
 
 ---
 

@@ -1,6 +1,16 @@
 import type { ChildProcess, ChildProcessByStdio } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 
 function getEnv(): NodeJS.ProcessEnv {
@@ -32,6 +42,10 @@ import { spawnProcess, spawnProcessSync } from "../utils/child-process.ts";
 import { type GitSource, parseGitUrl } from "../utils/git.ts";
 import { canonicalizePath, isLocalPath, markPathIgnoredByCloudSync, resolvePath } from "../utils/paths.ts";
 import { isStdoutTakenOver } from "./output-guard.ts";
+import { isPathInsideRootByRealpath, resolveManifestEntryInsideRoot } from "./package-gallery.ts";
+import { validateExactNpmVersion, validateGitRef } from "./package-procurement.ts";
+import { createTrialRuntimePlan, type TrialAuditRecord, type TrialCleanupPlan } from "./package-trial-runtime.ts";
+import type { SandboxBackendStatus, SandboxPathResolver, SandboxPolicy } from "./sandbox/policy.ts";
 import type { PackageSource, SettingsManager } from "./settings-manager.ts";
 
 const NETWORK_TIMEOUT_MS = 10000;
@@ -187,8 +201,8 @@ export interface ConfiguredPackage {
 
 export interface PackageManager {
 	resolve(onMissing?: (source: string) => Promise<MissingSourceAction>): Promise<ResolvedPaths>;
-	install(source: string, options?: { local?: boolean }): Promise<void>;
-	installAndPersist(source: string, options?: { local?: boolean }): Promise<void>;
+	install(source: string, options?: { local?: boolean; resolvedCommit?: string }): Promise<void>;
+	installAndPersist(source: string, options?: { local?: boolean; resolvedCommit?: string }): Promise<void>;
 	remove(source: string, options?: { local?: boolean }): Promise<void>;
 	removeAndPersist(source: string, options?: { local?: boolean }): Promise<boolean>;
 	update(source?: string): Promise<void>;
@@ -200,14 +214,24 @@ export interface PackageManager {
 	addSourceToSettings(source: string, options?: { local?: boolean }): boolean;
 	removeSourceFromSettings(source: string, options?: { local?: boolean }): boolean;
 	setProgressCallback(callback: ProgressCallback | undefined): void;
+	cleanupTemporaryTrialInstalls(): void;
 	getInstalledPath(source: string, scope: "user" | "project"): string | undefined;
 	resolveInstallAllowScriptEntry(source: string, requested: string): InstallAllowScriptResolution;
+}
+
+export interface PackageTrialRuntimeOptions {
+	readonly policy: SandboxPolicy;
+	readonly backend?: SandboxBackendStatus;
+	readonly resolver?: SandboxPathResolver;
+	readonly env?: () => NodeJS.ProcessEnv;
+	readonly onAudit?: (record: TrialAuditRecord) => void;
 }
 
 interface PackageManagerOptions {
 	cwd: string;
 	agentDir: string;
 	settingsManager: SettingsManager;
+	trialRuntime?: PackageTrialRuntimeOptions;
 }
 
 type SourceScope = "user" | "project" | "temporary";
@@ -299,6 +323,14 @@ function toPosixPath(p: string): string {
 	return p.split(sep).join("/");
 }
 
+function realpathKey(path: string): string {
+	try {
+		return realpathSync(path);
+	} catch {
+		return resolve(path);
+	}
+}
+
 function getHomeDir(): string {
 	return process.env.HOME || homedir();
 }
@@ -384,9 +416,16 @@ function collectFiles(
 	skipNodeModules = true,
 	ignoreMatcher?: IgnoreMatcher,
 	rootDir?: string,
+	containmentRoot?: string,
+	seenDirs: Set<string> = new Set(),
 ): string[] {
 	const files: string[] = [];
 	if (!existsSync(dir)) return files;
+	if (containmentRoot && !isPathInsideRootByRealpath(containmentRoot, dir)) return files;
+
+	const dirKey = realpathKey(dir);
+	if (seenDirs.has(dirKey)) return files;
+	seenDirs.add(dirKey);
 
 	const root = rootDir ?? dir;
 	const ig = ignoreMatcher ?? ignore();
@@ -399,6 +438,8 @@ function collectFiles(
 			if (skipNodeModules && entry.name === "node_modules") continue;
 
 			const fullPath = join(dir, entry.name);
+			if (containmentRoot && !isPathInsideRootByRealpath(containmentRoot, fullPath)) continue;
+
 			let isDir = entry.isDirectory();
 			let isFile = entry.isFile();
 
@@ -417,7 +458,7 @@ function collectFiles(
 			if (ig.ignores(ignorePath)) continue;
 
 			if (isDir) {
-				files.push(...collectFiles(fullPath, filePattern, skipNodeModules, ig, root));
+				files.push(...collectFiles(fullPath, filePattern, skipNodeModules, ig, root, containmentRoot, seenDirs));
 			} else if (isFile && filePattern.test(entry.name)) {
 				files.push(fullPath);
 			}
@@ -436,9 +477,16 @@ function collectSkillEntries(
 	mode: SkillDiscoveryMode,
 	ignoreMatcher?: IgnoreMatcher,
 	rootDir?: string,
+	containmentRoot?: string,
+	seenDirs: Set<string> = new Set(),
 ): string[] {
 	const entries: string[] = [];
 	if (!existsSync(dir)) return entries;
+	if (containmentRoot && !isPathInsideRootByRealpath(containmentRoot, dir)) return entries;
+
+	const dirKey = realpathKey(dir);
+	if (seenDirs.has(dirKey)) return entries;
+	seenDirs.add(dirKey);
 
 	const root = rootDir ?? dir;
 	const ig = ignoreMatcher ?? ignore();
@@ -453,6 +501,8 @@ function collectSkillEntries(
 			}
 
 			const fullPath = join(dir, entry.name);
+			if (containmentRoot && !isPathInsideRootByRealpath(containmentRoot, fullPath)) continue;
+
 			let isFile = entry.isFile();
 			if (entry.isSymbolicLink()) {
 				try {
@@ -474,6 +524,8 @@ function collectSkillEntries(
 			if (entry.name === "node_modules") continue;
 
 			const fullPath = join(dir, entry.name);
+			if (containmentRoot && !isPathInsideRootByRealpath(containmentRoot, fullPath)) continue;
+
 			let isDir = entry.isDirectory();
 			let isFile = entry.isFile();
 
@@ -496,7 +548,7 @@ function collectSkillEntries(
 			if (!isDir) continue;
 			if (ig.ignores(`${relPath}/`)) continue;
 
-			entries.push(...collectSkillEntries(fullPath, mode, ig, root));
+			entries.push(...collectSkillEntries(fullPath, mode, ig, root, containmentRoot, seenDirs));
 		}
 	} catch {
 		// Ignore errors
@@ -628,16 +680,24 @@ function readOmkManifestFile(packageJsonPath: string): OmkManifest | null {
 	}
 }
 
-function resolveExtensionEntries(dir: string): string[] | null {
+function resolveExtensionEntries(dir: string, containmentRoot?: string): string[] | null {
+	if (containmentRoot && !isPathInsideRootByRealpath(containmentRoot, dir)) return null;
+
 	const packageJsonPath = join(dir, "package.json");
 	if (existsSync(packageJsonPath)) {
 		const manifest = readOmkManifestFile(packageJsonPath);
 		if (manifest?.extensions?.length) {
 			const entries: string[] = [];
 			for (const extPath of manifest.extensions) {
-				const resolvedExtPath = resolve(dir, extPath);
-				if (existsSync(resolvedExtPath)) {
-					entries.push(resolvedExtPath);
+				const resolvedExtPath = containmentRoot
+					? resolveManifestEntryInsideRoot(containmentRoot, extPath, dir)
+					: extPath.trim()
+						? resolve(dir, extPath)
+						: undefined;
+				if (!resolvedExtPath) continue;
+				const candidate = containmentRoot ? resolve(containmentRoot, resolvedExtPath) : resolvedExtPath;
+				if (existsSync(candidate) && (!containmentRoot || isPathInsideRootByRealpath(containmentRoot, candidate))) {
+					entries.push(candidate);
 				}
 			}
 			if (entries.length > 0) {
@@ -648,22 +708,31 @@ function resolveExtensionEntries(dir: string): string[] | null {
 
 	const indexTs = join(dir, "index.ts");
 	const indexJs = join(dir, "index.js");
-	if (existsSync(indexTs)) {
+	if (existsSync(indexTs) && (!containmentRoot || isPathInsideRootByRealpath(containmentRoot, indexTs))) {
 		return [indexTs];
 	}
-	if (existsSync(indexJs)) {
+	if (existsSync(indexJs) && (!containmentRoot || isPathInsideRootByRealpath(containmentRoot, indexJs))) {
 		return [indexJs];
 	}
 
 	return null;
 }
 
-function collectAutoExtensionEntries(dir: string): string[] {
+function collectAutoExtensionEntries(
+	dir: string,
+	containmentRoot?: string,
+	seenDirs: Set<string> = new Set(),
+): string[] {
 	const entries: string[] = [];
 	if (!existsSync(dir)) return entries;
+	if (containmentRoot && !isPathInsideRootByRealpath(containmentRoot, dir)) return entries;
+
+	const dirKey = realpathKey(dir);
+	if (seenDirs.has(dirKey)) return entries;
+	seenDirs.add(dirKey);
 
 	// First check if this directory itself has explicit extension entries (package.json or index)
-	const rootEntries = resolveExtensionEntries(dir);
+	const rootEntries = resolveExtensionEntries(dir, containmentRoot);
 	if (rootEntries) {
 		return rootEntries;
 	}
@@ -679,6 +748,8 @@ function collectAutoExtensionEntries(dir: string): string[] {
 			if (entry.name === "node_modules") continue;
 
 			const fullPath = join(dir, entry.name);
+			if (containmentRoot && !isPathInsideRootByRealpath(containmentRoot, fullPath)) continue;
+
 			let isDir = entry.isDirectory();
 			let isFile = entry.isFile();
 
@@ -699,7 +770,7 @@ function collectAutoExtensionEntries(dir: string): string[] {
 			if (isFile && (entry.name.endsWith(".ts") || entry.name.endsWith(".js"))) {
 				entries.push(fullPath);
 			} else if (isDir) {
-				const resolvedEntries = resolveExtensionEntries(fullPath);
+				const resolvedEntries = resolveExtensionEntries(fullPath, containmentRoot);
 				if (resolvedEntries) {
 					entries.push(...resolvedEntries);
 				}
@@ -716,14 +787,14 @@ function collectAutoExtensionEntries(dir: string): string[] {
  * Collect resource files from a directory based on resource type.
  * Extensions use smart discovery (index.ts in subdirs), others use recursive collection.
  */
-function collectResourceFiles(dir: string, resourceType: ResourceType): string[] {
+function collectResourceFiles(dir: string, resourceType: ResourceType, containmentRoot?: string): string[] {
 	if (resourceType === "skills") {
-		return collectSkillEntries(dir, "omk");
+		return collectSkillEntries(dir, "omk", undefined, undefined, containmentRoot);
 	}
 	if (resourceType === "extensions") {
-		return collectAutoExtensionEntries(dir);
+		return collectAutoExtensionEntries(dir, containmentRoot);
 	}
-	return collectFiles(dir, FILE_PATTERNS[resourceType]);
+	return collectFiles(dir, FILE_PATTERNS[resourceType], true, undefined, undefined, containmentRoot);
 }
 
 function matchesAnyPattern(filePath: string, patterns: string[], baseDir: string): boolean {
@@ -862,6 +933,8 @@ export class DefaultPackageManager implements PackageManager {
 	private cwd: string;
 	private agentDir: string;
 	private settingsManager: SettingsManager;
+	private trialRuntime: PackageTrialRuntimeOptions | undefined;
+	private trialCleanups: TrialCleanupPlan[] = [];
 	private globalNpmRoot: string | undefined;
 	private globalNpmRootCommandKey: string | undefined;
 	private progressCallback: ProgressCallback | undefined;
@@ -870,10 +943,19 @@ export class DefaultPackageManager implements PackageManager {
 		this.cwd = resolvePath(options.cwd);
 		this.agentDir = resolvePath(options.agentDir);
 		this.settingsManager = options.settingsManager;
+		this.trialRuntime = options.trialRuntime;
 	}
 
 	setProgressCallback(callback: ProgressCallback | undefined): void {
 		this.progressCallback = callback;
+	}
+
+	cleanupTemporaryTrialInstalls(): void {
+		const cleanups = this.trialCleanups;
+		this.trialCleanups = [];
+		for (const cleanup of cleanups) {
+			this.cleanupTrialInstall(cleanup, cleanup.installRoot);
+		}
 	}
 
 	addSourceToSettings(source: string, options?: { local?: boolean }): boolean {
@@ -961,6 +1043,29 @@ export class DefaultPackageManager implements PackageManager {
 			const errorMessage = error instanceof Error ? error.message : String(error);
 			this.emitProgress({ type: "error", action, source, message: errorMessage });
 			throw error;
+		}
+	}
+
+	private cleanupTrialInstall(plan: TrialCleanupPlan, source: string): void {
+		this.emitProgress({ type: "start", action: "remove", source, message: "Cleaning temporary trial install..." });
+		try {
+			const tempRoot = resolve(getExtensionTempFolder(this.agentDir));
+			const installRoot = resolve(plan.installRoot);
+			if (installRoot !== tempRoot && !installRoot.startsWith(`${tempRoot}${sep}`)) {
+				throw new Error(`Refusing to clean trial install outside temp root: ${installRoot}`);
+			}
+			for (const removePath of plan.removePaths) {
+				const resolvedRemovePath = resolve(removePath);
+				if (resolvedRemovePath !== installRoot) {
+					throw new Error(`Refusing to clean unexpected trial path: ${resolvedRemovePath}`);
+				}
+				rmSync(resolvedRemovePath, { recursive: plan.recursive, force: plan.force });
+			}
+			this.emitProgress({ type: "complete", action: "remove", source });
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			this.emitProgress({ type: "error", action: "remove", source, message });
+			console.error(`Warning: failed to clean temporary trial install ${source}: ${message}`);
 		}
 	}
 
@@ -1057,10 +1162,13 @@ export class DefaultPackageManager implements PackageManager {
 		return configuredPackages;
 	}
 
-	async install(source: string, options?: { local?: boolean }): Promise<void> {
+	async install(source: string, options?: { local?: boolean; resolvedCommit?: string }): Promise<void> {
 		const parsed = this.parseSource(source);
 		const scope: SourceScope = options?.local ? "project" : "user";
 		await this.withProgress("install", source, `Installing ${source}...`, async () => {
+			// Procurement admission: enforce exact pinning before any install side effect. This is a pure
+			// gate (no fetch/clone/npm install). Local sources are exempt to preserve existing behavior.
+			this.assertInstallAdmission(parsed, source, options?.resolvedCommit);
 			if (parsed.type === "npm") {
 				await this.installNpm(parsed, scope, false);
 				return;
@@ -1080,9 +1188,47 @@ export class DefaultPackageManager implements PackageManager {
 		});
 	}
 
-	async installAndPersist(source: string, options?: { local?: boolean }): Promise<void> {
+	async installAndPersist(source: string, options?: { local?: boolean; resolvedCommit?: string }): Promise<void> {
+		// install() runs the procurement admission gate first; if it throws, settings are never mutated,
+		// so a non-pinned/non-local source can be neither installed nor persisted.
 		await this.install(source, options);
 		this.addSourceToSettings(source, options);
+	}
+
+	/**
+	 * Procurement admission gate for explicit installs (and installAndPersist via install()).
+	 *
+	 * Pure check: no fetch, clone, npm install, or other dependency-install side effect. It reuses the
+	 * native procurement validators (`validateExactNpmVersion`, `validateGitRef`) so the installer never
+	 * runs against an unpinned, mutable, or range/dist-tag source. Rules:
+	 *   - non-local npm packages must carry an exact pinned version (no missing/range/wildcard/dist-tag);
+	 *   - git packages must use a full commit SHA, or a tag anchored to a reviewed resolved commit SHA
+	 *     supplied through `options.resolvedCommit`.
+	 * Local sources are exempt so local development paths keep working unchanged.
+	 *
+	 * Only the explicit install/persist entry point is gated. resolve()'s auto-install of
+	 * already-configured packages is intentionally left unchanged so existing settings keep loading.
+	 */
+	private assertInstallAdmission(parsed: ParsedSource, source: string, resolvedCommit?: string): void {
+		if (parsed.type === "local") {
+			return;
+		}
+		if (parsed.type === "npm") {
+			const { version } = this.parseNpmSpec(parsed.spec);
+			const verdict = validateExactNpmVersion(version);
+			if (!verdict.ok) {
+				throw new Error(
+					`Refusing to install ${source}: non-local npm packages require an exact pinned version (e.g. npm:${parsed.name}@1.2.3). ${verdict.message}.`,
+				);
+			}
+			return;
+		}
+		const verdict = validateGitRef(parsed.ref, resolvedCommit);
+		if (!verdict.ok) {
+			throw new Error(
+				`Refusing to install ${source}: git packages require a full commit SHA, or a reviewed resolved tag (pass options.resolvedCommit with the full SHA the tag points to). ${verdict.message}.`,
+			);
+		}
 	}
 
 	async remove(source: string, options?: { local?: boolean }): Promise<void> {
@@ -1421,13 +1567,29 @@ export class DefaultPackageManager implements PackageManager {
 	}
 
 	private async installParsedSource(parsed: ParsedSource, scope: SourceScope): Promise<void> {
+		if (scope === "temporary") {
+			await this.installTemporaryTrialSource(parsed);
+			return;
+		}
 		if (parsed.type === "npm") {
-			await this.installNpm(parsed, scope, scope === "temporary");
+			await this.installNpm(parsed, scope, false);
 			return;
 		}
 		if (parsed.type === "git") {
 			await this.installGit(parsed, scope);
 			return;
+		}
+	}
+
+	private async installTemporaryTrialSource(parsed: ParsedSource): Promise<void> {
+		if (parsed.type === "npm") {
+			await this.installTemporaryNpmTrial(parsed);
+			return;
+		}
+		if (parsed.type === "git") {
+			throw new Error(
+				"git temporary trial installs are deferred until package-trial-sandbox exposes shell-free git executor steps",
+			);
 		}
 	}
 
@@ -1817,6 +1979,16 @@ export class DefaultPackageManager implements PackageManager {
 		return packageManagerCommand ? basename(packageManagerCommand).replace(/\.(cmd|exe)$/i, "") : "";
 	}
 
+	private getTrialPackageManagerName(): "npm" | "pnpm" | "bun" {
+		const packageManagerName = this.getPackageManagerName();
+		if (packageManagerName === "npm" || packageManagerName === "pnpm" || packageManagerName === "bun") {
+			return packageManagerName;
+		}
+		throw new Error(
+			`temporary npm trial installs do not support package manager: ${packageManagerName || "unknown"}`,
+		);
+	}
+
 	private async runNpmCommand(args: string[], options?: { cwd?: string }): Promise<void> {
 		const npmCommand = this.getNpmCommand();
 		await this.runCommand(npmCommand.command, [...npmCommand.args, ...args], options);
@@ -1885,6 +2057,53 @@ export class DefaultPackageManager implements PackageManager {
 			return { ok: false, expected: parsed.ref ? [identity, spec] : [identity] };
 		}
 		return { ok: false, expected: [] };
+	}
+
+	private async installTemporaryNpmTrial(source: NpmSource): Promise<void> {
+		const trial = this.trialRuntime;
+		if (!trial) {
+			throw new Error("temporary npm trial installs require PackageManagerOptions.trialRuntime");
+		}
+		if (trial.policy.mode === "off") {
+			throw new Error("temporary npm trial installs require audit or enforce sandbox mode");
+		}
+
+		const installRoot = this.getTemporaryNpmInstallRoot(source);
+		const npmCommand = this.getNpmCommand();
+		const runtime = createTrialRuntimePlan({
+			source: `npm:${source.spec}`,
+			installRoot,
+			packageManagerName: this.getTrialPackageManagerName(),
+			packageManagerCommand: [npmCommand.command, ...npmCommand.args],
+			policy: trial.policy,
+			backend: trial.backend ?? { platform: "unsupported", backendAvailable: false },
+			resolver: trial.resolver,
+			env: trial.env?.() ?? getEnv(),
+		});
+
+		if (!runtime.ok) {
+			throw new Error(`temporary npm trial install rejected: ${runtime.reason}`);
+		}
+
+		this.emitProgress({
+			type: "progress",
+			action: "install",
+			source: `npm:${source.spec}`,
+			message: `trial plan accepted: ${runtime.audit.sandboxRule}`,
+		});
+
+		try {
+			this.ensureNpmProject(installRoot);
+			await this.runCommand(runtime.executor.command, [...runtime.executor.args], {
+				cwd: runtime.executor.cwd,
+				env: runtime.executor.env,
+			});
+			trial.onAudit?.(runtime.audit);
+			this.trialCleanups.push(runtime.cleanup);
+		} catch (error) {
+			this.cleanupTrialInstall(runtime.cleanup, `npm:${source.spec}`);
+			throw error;
+		}
 	}
 
 	private async installNpm(source: NpmSource, scope: SourceScope, temporary: boolean): Promise<void> {
@@ -2092,9 +2311,13 @@ export class DefaultPackageManager implements PackageManager {
 		return undefined;
 	}
 
+	private getTemporaryNpmInstallRoot(source: NpmSource): string {
+		return this.getTemporaryDir("npm", source.spec);
+	}
+
 	private getManagedNpmInstallPath(source: NpmSource, scope: SourceScope): string {
 		if (scope === "temporary") {
-			return join(this.getTemporaryDir("npm"), "node_modules", source.name);
+			return join(this.getTemporaryNpmInstallRoot(source), "node_modules", source.name);
 		}
 		if (scope === "project") {
 			return join(this.cwd, CONFIG_DIR_NAME, "npm", "node_modules", source.name);
@@ -2215,7 +2438,7 @@ export class DefaultPackageManager implements PackageManager {
 			const dir = join(packageRoot, resourceType);
 			if (existsSync(dir)) {
 				// Collect all files from the directory (all enabled by default)
-				const files = collectResourceFiles(dir, resourceType);
+				const files = collectResourceFiles(dir, resourceType, packageRoot);
 				for (const f of files) {
 					this.addResource(this.getTargetMap(accumulator, resourceType), f, metadata, true);
 				}
@@ -2240,7 +2463,7 @@ export class DefaultPackageManager implements PackageManager {
 		const dir = join(packageRoot, resourceType);
 		if (existsSync(dir)) {
 			// Collect all files from the directory (all enabled by default)
-			const files = collectResourceFiles(dir, resourceType);
+			const files = collectResourceFiles(dir, resourceType, packageRoot);
 			for (const f of files) {
 				this.addResource(target, f, metadata, true);
 			}
@@ -2296,7 +2519,7 @@ export class DefaultPackageManager implements PackageManager {
 		if (!existsSync(conventionDir)) {
 			return { allFiles: [], enabledByManifest: new Set() };
 		}
-		const allFiles = collectResourceFiles(conventionDir, resourceType);
+		const allFiles = collectResourceFiles(conventionDir, resourceType, packageRoot);
 		return { allFiles, enabledByManifest: new Set(allFiles) };
 	}
 
@@ -2336,7 +2559,10 @@ export class DefaultPackageManager implements PackageManager {
 	}
 
 	private collectFilesFromManifestEntries(entries: string[], root: string, resourceType: ResourceType): string[] {
-		const sourceEntries = entries.filter((entry) => !isOverridePattern(entry));
+		const sourceEntries = entries
+			.filter((entry) => !isOverridePattern(entry))
+			.map((entry) => resolveManifestEntryInsideRoot(root, entry))
+			.filter((entry): entry is string => Boolean(entry));
 		const resolved = sourceEntries.flatMap((entry) => {
 			if (!hasGlobPattern(entry)) {
 				return [resolve(root, entry)];
@@ -2347,9 +2573,11 @@ export class DefaultPackageManager implements PackageManager {
 				absolute: true,
 				dot: false,
 				nodir: false,
-			}).map((match) => resolve(match));
+			})
+				.map((match) => resolve(match))
+				.filter((match) => isPathInsideRootByRealpath(root, match));
 		});
-		return this.collectFilesFromPaths(resolved, resourceType);
+		return this.collectFilesFromPaths(resolved, resourceType, root);
 	}
 
 	private resolveLocalEntries(
@@ -2536,17 +2764,18 @@ export class DefaultPackageManager implements PackageManager {
 		);
 	}
 
-	private collectFilesFromPaths(paths: string[], resourceType: ResourceType): string[] {
+	private collectFilesFromPaths(paths: string[], resourceType: ResourceType, containmentRoot?: string): string[] {
 		const files: string[] = [];
 		for (const p of paths) {
 			if (!existsSync(p)) continue;
+			if (containmentRoot && !isPathInsideRootByRealpath(containmentRoot, p)) continue;
 
 			try {
 				const stats = statSync(p);
 				if (stats.isFile()) {
 					files.push(p);
 				} else if (stats.isDirectory()) {
-					files.push(...collectResourceFiles(p, resourceType));
+					files.push(...collectResourceFiles(p, resourceType, containmentRoot));
 				}
 			} catch {
 				// Ignore errors
@@ -2622,8 +2851,12 @@ export class DefaultPackageManager implements PackageManager {
 		};
 	}
 
-	private spawnCommand(command: string, args: string[], options?: { cwd?: string }): ChildProcess {
-		const env = getEnv();
+	private spawnCommand(
+		command: string,
+		args: string[],
+		options?: { cwd?: string; env?: Record<string, string> },
+	): ChildProcess {
+		const env = options?.env ?? getEnv();
 		return spawnProcess(command, args, {
 			cwd: options?.cwd,
 			stdio: isStdoutTakenOver() ? ["ignore", 2, 2] : "inherit",
@@ -2689,7 +2922,11 @@ export class DefaultPackageManager implements PackageManager {
 		});
 	}
 
-	private runCommand(command: string, args: string[], options?: { cwd?: string }): Promise<void> {
+	private runCommand(
+		command: string,
+		args: string[],
+		options?: { cwd?: string; env?: Record<string, string> },
+	): Promise<void> {
 		return new Promise((resolvePromise, reject) => {
 			const child = this.spawnCommand(command, args, options);
 			child.on("error", reject);
