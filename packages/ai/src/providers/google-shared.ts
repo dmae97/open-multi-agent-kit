@@ -5,6 +5,7 @@
 import { type Content, FinishReason, FunctionCallingConfigMode, type Part } from "@google/genai";
 import type { Context, ImageContent, Model, StopReason, TextContent, Tool } from "../types.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
+import { stableToolSchema, stableTools } from "./tool-schema.ts";
 import { transformMessages } from "./transform-messages.ts";
 
 type GoogleApiType = "google-generative-ai" | "google-vertex";
@@ -276,13 +277,14 @@ export function convertTools(
 	if (tools.length === 0) return undefined;
 	return [
 		{
-			functionDeclarations: tools.map((tool) => ({
-				name: tool.name,
-				description: tool.description,
-				...(useParameters
-					? { parameters: sanitizeForOpenApi(tool.parameters as unknown) }
-					: { parametersJsonSchema: tool.parameters }),
-			})),
+			functionDeclarations: stableTools(tools).map((tool) => {
+				const schema = stableToolSchema(tool.parameters);
+				return {
+					name: tool.name,
+					description: tool.description,
+					...(useParameters ? { parameters: sanitizeForOpenApi(schema) } : { parametersJsonSchema: schema }),
+				};
+			}),
 		},
 	];
 }

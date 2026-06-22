@@ -69,13 +69,42 @@ const minimalAnthropicEvents = [
 ];
 
 function createFakeAnthropicClient(response: Response): Anthropic {
+	return createFakeAnthropicClientFromResponses([response]);
+}
+
+function createFakeAnthropicClientFromResponses(responses: Array<Response | Error>): Anthropic {
+	let index = 0;
 	return {
 		messages: {
 			create: () => ({
-				asResponse: async () => response,
+				asResponse: async () => {
+					const next = responses[index++];
+					if (!next) throw new Error("No fake Anthropic response queued");
+					if (next instanceof Error) throw next;
+					return next;
+				},
 			}),
 		},
 	} as unknown as Anthropic;
+}
+
+function createAnthropicError(
+	message: string,
+	options: { status?: number; type?: string; retryAfterMs?: number } = {},
+): Error {
+	const error = new Error(message) as Error & {
+		status?: number;
+		type?: string;
+		headers?: Headers;
+		error?: { type?: string; message?: string };
+	};
+	error.status = options.status;
+	error.type = options.type;
+	error.error = { type: options.type, message };
+	if (options.retryAfterMs !== undefined) {
+		error.headers = new Headers({ "retry-after-ms": String(options.retryAfterMs) });
+	}
+	return error;
 }
 
 describe("Anthropic raw SSE parsing", () => {
@@ -185,5 +214,45 @@ describe("Anthropic raw SSE parsing", () => {
 		expect(result.stopReason).toBe("stop");
 		expect(result.errorMessage).toBeUndefined();
 		expect(result.content).toEqual([{ type: "text", text: "Hello" }]);
+	});
+
+	it("retries Anthropic overloaded errors before surfacing an assistant error", async () => {
+		const model = getModel("anthropic", "claude-opus-4-8");
+		const context: Context = {
+			messages: [{ role: "user", content: "Say hello.", timestamp: Date.now() }],
+		};
+		const stream = streamAnthropic(model, context, {
+			client: createFakeAnthropicClientFromResponses([
+				createAnthropicError('{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}', {
+					status: 529,
+					type: "overloaded_error",
+					retryAfterMs: 0,
+				}),
+				createSseResponse(minimalAnthropicEvents),
+			]),
+		});
+		const result = await stream.result();
+
+		expect(result.stopReason).toBe("stop");
+		expect(result.errorMessage).toBeUndefined();
+		expect(result.content).toEqual([{ type: "text", text: "Hello" }]);
+	});
+
+	it("respects maxRetries zero for Anthropic overloaded errors", async () => {
+		const model = getModel("anthropic", "claude-opus-4-8");
+		const context: Context = {
+			messages: [{ role: "user", content: "Say hello.", timestamp: Date.now() }],
+		};
+		const stream = streamAnthropic(model, context, {
+			client: createFakeAnthropicClientFromResponses([
+				createAnthropicError("Overloaded", { status: 529, type: "overloaded_error", retryAfterMs: 0 }),
+				createSseResponse(minimalAnthropicEvents),
+			]),
+			maxRetries: 0,
+		});
+		const result = await stream.result();
+
+		expect(result.stopReason).toBe("error");
+		expect(result.errorMessage).toContain("Overloaded");
 	});
 });

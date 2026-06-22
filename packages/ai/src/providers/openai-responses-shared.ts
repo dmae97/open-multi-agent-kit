@@ -31,7 +31,7 @@ import type { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { shortHash } from "../utils/hash.ts";
 import { parseStreamingJson } from "../utils/json-parse.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
-import { normalizeToolParameters } from "./tool-schema.ts";
+import { stableToolSchema, stableTools } from "./tool-schema.ts";
 import { transformMessages } from "./transform-messages.ts";
 
 // =============================================================================
@@ -272,11 +272,11 @@ export function convertResponsesMessages<TApi extends Api>(
 
 export function convertResponsesTools(tools: Tool[], options?: ConvertResponsesToolsOptions): OpenAITool[] {
 	const strict = options?.strict === undefined ? false : options.strict;
-	return tools.map((tool) => ({
+	return stableTools(tools).map((tool) => ({
 		type: "function",
 		name: tool.name,
 		description: tool.description,
-		parameters: normalizeToolParameters(tool.parameters),
+		parameters: stableToolSchema(tool.parameters),
 		strict,
 	}));
 }

@@ -38,11 +38,27 @@ function resolveApiProvider(api: Api) {
 	return provider;
 }
 
+function applyBeforeProviderSend<TApi extends Api>(
+	model: Model<TApi>,
+	context: Context,
+	options: StreamOptions | undefined,
+	mode: "stream" | "streamSimple",
+): Context {
+	const nextContext = options?.beforeProviderSend?.({
+		model: model as Model<Api>,
+		context,
+		options,
+		mode,
+	});
+	return nextContext ?? context;
+}
+
 export function stream<TApi extends Api>(
 	model: Model<TApi>,
 	context: Context,
 	options?: ProviderStreamOptions,
 ): AssistantMessageEventStream {
+	const providerContext = applyBeforeProviderSend(model, context, options, "stream");
 	if (options?.beforeNetworkRequest) {
 		return createProviderNetworkGuardedStream({
 			model,
@@ -52,12 +68,12 @@ export function stream<TApi extends Api>(
 			beforeNetworkRequest: options.beforeNetworkRequest,
 			invoke: () => {
 				const provider = resolveApiProvider(model.api);
-				return provider.stream(model, context, withEnvApiKey(model, options) as StreamOptions);
+				return provider.stream(model, providerContext, withEnvApiKey(model, options) as StreamOptions);
 			},
 		});
 	}
 	const provider = resolveApiProvider(model.api);
-	return provider.stream(model, context, withEnvApiKey(model, options) as StreamOptions);
+	return provider.stream(model, providerContext, withEnvApiKey(model, options) as StreamOptions);
 }
 
 export async function complete<TApi extends Api>(
@@ -74,6 +90,7 @@ export function streamSimple<TApi extends Api>(
 	context: Context,
 	options?: SimpleStreamOptions,
 ): AssistantMessageEventStream {
+	const providerContext = applyBeforeProviderSend(model, context, options, "streamSimple");
 	if (options?.beforeNetworkRequest) {
 		return createProviderNetworkGuardedStream({
 			model,
@@ -83,12 +100,12 @@ export function streamSimple<TApi extends Api>(
 			beforeNetworkRequest: options.beforeNetworkRequest,
 			invoke: () => {
 				const provider = resolveApiProvider(model.api);
-				return provider.streamSimple(model, context, withEnvApiKey(model, options));
+				return provider.streamSimple(model, providerContext, withEnvApiKey(model, options));
 			},
 		});
 	}
 	const provider = resolveApiProvider(model.api);
-	return provider.streamSimple(model, context, withEnvApiKey(model, options));
+	return provider.streamSimple(model, providerContext, withEnvApiKey(model, options));
 }
 
 export async function completeSimple<TApi extends Api>(

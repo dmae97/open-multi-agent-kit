@@ -2,12 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added deterministic provider-send middleware and prompt-cache primitives, including stable tool schema ordering, `beforeProviderSend`, and Anthropic dual-message cache controls for context optimization.
+
 ### Changed
 
 - Updated OpenAI Codex OAuth/Responses attribution defaults from `pi` to `omk`.
 
 ### Fixed
 
+- Fixed Anthropic streaming requests to retry transient `overloaded_error`/HTTP 529 responses with bounded backoff before surfacing an assistant error.
 - Fixed Claude Sonnet 4.6 generated metadata to map the xhigh thinking level ("max" in the UI) to the Anthropic `effort: "max"` adaptive-thinking tier, matching Opus 4.6 across all providers; previously the xhigh/"max" variant silently fell back to `effort: "high"`.
 - Fixed Google Gemini and Vertex Gemini simple `xhigh` reasoning requests to normalize to the providers' supported high thinking payloads instead of producing an empty thinking configuration.
 

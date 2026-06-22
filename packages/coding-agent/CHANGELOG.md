@@ -4,6 +4,10 @@
 
 ### Added
 
+- Added Wave 0 native-adoption benchmark primitives for deterministic context-graph fixtures, side-effect-guarded measurements, callsite classification, and fail-closed Rust sidecar go/no-go decisions.
+- Added pure package-composition admission primitives with exact-pin gating, OMK-owned-domain protection, surface-ownership rules, resource filters, and canary/defer/reject verdicts for production package stacks.
+- Added ontology-grade context graph algorithm primitives covering typed UA registry validation, stable entity identity, stale graph generation gates, retrieval scoring/MMR context packs, graph reasoning, and adapter-backed temporal memory contracts.
+- Added LeanCTX, Headroom, exact-cache, semantic-cache, compaction-owner, and context-graph policy primitives for context optimization, including `pi-smart-compact` as the recommended `session_before_compact` owner, `pi-context-prune` as the agent-message pruner, and `Understand Anything + Orama + Graphology` as the default local code graph stack.
 - Added the `omk-neon-ops` built-in theme and prioritized OMK-branded themes in the interactive theme selector.
 - Added fuzzy search input, result counter, and provider auth glyphs to the interactive `/mcp`, `/skills`, and model selectors so large registries stay scannable while clearly signaling which providers have authentication configured.
 
