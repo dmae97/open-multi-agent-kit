@@ -34,6 +34,7 @@ import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
 import { resolveCloudflareBaseUrl } from "./cloudflare.ts";
 import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.ts";
 import { adjustMaxTokensForThinking, buildBaseOptions } from "./simple-options.ts";
+import { stableToolSchema, stableTools } from "./tool-schema.ts";
 import { transformMessages } from "./transform-messages.ts";
 
 /**
@@ -162,6 +163,10 @@ export type AnthropicThinkingDisplay = "summarized" | "omitted";
 
 const FINE_GRAINED_TOOL_STREAMING_BETA = "fine-grained-tool-streaming-2025-05-14";
 const INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14";
+const DEFAULT_ANTHROPIC_TRANSIENT_MAX_RETRIES = 2;
+const ANTHROPIC_RETRY_BASE_DELAY_MS = 1000;
+const DEFAULT_MAX_RETRY_DELAY_MS = 60000;
+const ANTHROPIC_RETRY_JITTER_RATIO = 0.2;
 
 function getAnthropicCompat(
 	model: Model<"anthropic-messages">,
@@ -178,7 +183,17 @@ function getAnthropicCompat(
 		supportsCacheControlOnTools: model.compat?.supportsCacheControlOnTools ?? !isFireworks,
 		supportsTemperature: model.compat?.supportsTemperature ?? true,
 		allowEmptySignature: model.compat?.allowEmptySignature ?? false,
+		supportsDualMessageCache: model.compat?.supportsDualMessageCache ?? false,
 	};
+}
+
+function shouldUseDualMessageCache(
+	compat: Required<Omit<AnthropicMessagesCompat, "forceAdaptiveThinking">>,
+	options: AnthropicOptions | undefined,
+): boolean {
+	if (options?.dualMessageCache !== undefined) return options.dualMessageCache;
+	if (process.env.OMK_DUAL_MESSAGE_CACHE === "1" || process.env.OMK_DUAL_MESSAGE_CACHE === "true") return true;
+	return compat.supportsDualMessageCache;
 }
 
 export interface AnthropicOptions extends StreamOptions {
@@ -241,6 +256,12 @@ export interface AnthropicOptions extends StreamOptions {
 	 * `AnthropicVertex` that shares the same messaging API.
 	 */
 	client?: Anthropic;
+	/**
+	 * Place cache_control on both the last assistant tool_use block and the last
+	 * user/tool-result block. Intended for Anthropic-compatible providers with
+	 * dual-breakpoint cache behavior (for example Kimi/MiniMax style gateways).
+	 */
+	dualMessageCache?: boolean;
 }
 
 function mergeHeaders(...headerSources: (Record<string, string | null> | undefined)[]): Record<string, string | null> {
@@ -251,6 +272,131 @@ function mergeHeaders(...headerSources: (Record<string, string | null> | undefin
 		}
 	}
 	return merged;
+}
+
+function errorMessageForRetry(error: unknown): string {
+	if (error instanceof Error) return error.message;
+	try {
+		return JSON.stringify(error);
+	} catch {
+		return String(error);
+	}
+}
+
+function getRecord(value: unknown): Record<string, unknown> | undefined {
+	return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
+}
+
+function getStringProperty(value: unknown, key: string): string | undefined {
+	const record = getRecord(value);
+	if (!record) return undefined;
+	const property = record[key];
+	return typeof property === "string" ? property : undefined;
+}
+
+function getNumberProperty(value: unknown, key: string): number | undefined {
+	const record = getRecord(value);
+	if (!record) return undefined;
+	const property = record[key];
+	return typeof property === "number" && Number.isFinite(property) ? property : undefined;
+}
+
+function getNestedStringProperty(value: unknown, parentKey: string, key: string): string | undefined {
+	const record = getRecord(value);
+	return record ? getStringProperty(record[parentKey], key) : undefined;
+}
+
+function isAbortError(error: unknown): boolean {
+	if (!(error instanceof Error)) return false;
+	return error.name === "AbortError" || error.message === "Request was aborted";
+}
+
+function isNonRetryableAnthropicLimitError(message: string): boolean {
+	return /GoUsageLimitError|FreeUsageLimitError|Monthly usage limit reached|available balance|insufficient_quota|out of budget|quota exceeded|billing/i.test(
+		message,
+	);
+}
+
+function isRetryableAnthropicError(error: unknown): boolean {
+	if (isAbortError(error)) return false;
+	const message = errorMessageForRetry(error);
+	if (isNonRetryableAnthropicLimitError(message)) return false;
+
+	const status = getNumberProperty(error, "status");
+	if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504 || status === 529) {
+		return true;
+	}
+
+	const type = getStringProperty(error, "type") ?? getNestedStringProperty(error, "error", "type");
+	if (type && /overloaded|rate_limit|api_error|timeout/i.test(type)) {
+		return true;
+	}
+
+	return /overloaded|rate.?limit|too many requests|service.?unavailable|server.?error|internal.?error|network.?error|connection.?error|fetch failed|socket hang up|timed? out|timeout|terminated|529|429|500|502|503|504/i.test(
+		message,
+	);
+}
+
+function readHeader(headers: unknown, name: string): string | undefined {
+	const record = getRecord(headers);
+	const get = record?.get;
+	if (typeof get === "function") {
+		const value = get.call(headers, name);
+		return typeof value === "string" ? value : undefined;
+	}
+	const direct = record?.[name] ?? record?.[name.toLowerCase()];
+	return typeof direct === "string" ? direct : undefined;
+}
+
+function getRetryAfterDelayMs(error: unknown): number | undefined {
+	const headers = getRecord(error)?.headers;
+	const retryAfterMs = readHeader(headers, "retry-after-ms");
+	if (retryAfterMs !== undefined) {
+		const millis = Number(retryAfterMs);
+		if (Number.isFinite(millis)) return Math.max(0, millis);
+	}
+
+	const retryAfter = readHeader(headers, "retry-after");
+	if (!retryAfter) return undefined;
+
+	const seconds = Number(retryAfter);
+	if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+
+	const date = Date.parse(retryAfter);
+	return Number.isNaN(date) ? undefined : Math.max(0, date - Date.now());
+}
+
+function capRetryDelayMs(delayMs: number, options?: StreamOptions): number {
+	const maxRetryDelayMs = options?.maxRetryDelayMs ?? DEFAULT_MAX_RETRY_DELAY_MS;
+	return maxRetryDelayMs > 0 ? Math.min(delayMs, maxRetryDelayMs) : delayMs;
+}
+
+function getAnthropicRetryDelayMs(error: unknown, attempt: number, options?: StreamOptions): number {
+	const retryAfterDelayMs = getRetryAfterDelayMs(error);
+	if (retryAfterDelayMs !== undefined) {
+		return capRetryDelayMs(retryAfterDelayMs, options);
+	}
+	const exponentialDelayMs = ANTHROPIC_RETRY_BASE_DELAY_MS * 2 ** attempt;
+	const jitterMs = Math.floor(Math.random() * exponentialDelayMs * ANTHROPIC_RETRY_JITTER_RATIO);
+	return capRetryDelayMs(exponentialDelayMs + jitterMs, options);
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+	return new Promise((resolve, reject) => {
+		if (signal?.aborted) {
+			reject(new Error("Request was aborted"));
+			return;
+		}
+		const timeout = setTimeout(resolve, ms);
+		signal?.addEventListener(
+			"abort",
+			() => {
+				clearTimeout(timeout);
+				reject(new Error("Request was aborted"));
+			},
+			{ once: true },
+		);
+	});
 }
 
 interface ServerSentEvent {
@@ -516,9 +662,26 @@ export const streamAnthropic: StreamFunction<"anthropic-messages", AnthropicOpti
 			const requestOptions = {
 				...(options?.signal ? { signal: options.signal } : {}),
 				...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
-				maxRetries: options?.maxRetries ?? 0,
+				// Keep SDK retries disabled so OMK can apply one bounded, observable
+				// policy for Anthropic 529/overloaded_error and related transient errors.
+				maxRetries: 0,
 			};
-			const response = await client.messages.create({ ...params, stream: true }, requestOptions).asResponse();
+			const maxRetries = options?.maxRetries ?? DEFAULT_ANTHROPIC_TRANSIENT_MAX_RETRIES;
+			let response: Response | undefined;
+			for (let attempt = 0; attempt <= maxRetries; attempt++) {
+				try {
+					response = await client.messages.create({ ...params, stream: true }, requestOptions).asResponse();
+					break;
+				} catch (error) {
+					if (options?.signal?.aborted || attempt >= maxRetries || !isRetryableAnthropicError(error)) {
+						throw error;
+					}
+					await sleep(getAnthropicRetryDelayMs(error, attempt, options), options?.signal);
+				}
+			}
+			if (!response) {
+				throw new Error("Anthropic request failed before receiving a response");
+			}
 			await options?.onResponse?.({ status: response.status, headers: headersToRecord(response.headers) }, model);
 			stream.push({ type: "start", partial: output });
 
@@ -898,9 +1061,17 @@ function buildParams(
 ): MessageCreateParamsStreaming {
 	const { cacheControl } = getCacheControl(model, options?.cacheRetention);
 	const compat = getAnthropicCompat(model);
+	const dualMessageCache = shouldUseDualMessageCache(compat, options);
 	const params: MessageCreateParamsStreaming = {
 		model: model.id,
-		messages: convertMessages(context.messages, model, isOAuthToken, cacheControl, compat.allowEmptySignature),
+		messages: convertMessages(
+			context.messages,
+			model,
+			isOAuthToken,
+			cacheControl,
+			compat.allowEmptySignature,
+			dualMessageCache,
+		),
 		max_tokens: options?.maxTokens ?? model.maxTokens,
 		stream: true,
 	};
@@ -1003,6 +1174,7 @@ function convertMessages(
 	isOAuthToken: boolean,
 	cacheControl?: CacheControlEphemeral,
 	allowEmptySignature = false,
+	dualMessageCache = false,
 ): MessageParam[] {
 	const params: MessageParam[] = [];
 
@@ -1143,31 +1315,58 @@ function convertMessages(
 		}
 	}
 
-	// Add cache_control to the last user message to cache conversation history
 	if (cacheControl && params.length > 0) {
-		const lastMessage = params[params.length - 1];
-		if (lastMessage.role === "user") {
-			if (Array.isArray(lastMessage.content)) {
-				const lastBlock = lastMessage.content[lastMessage.content.length - 1];
-				if (
-					lastBlock &&
-					(lastBlock.type === "text" || lastBlock.type === "image" || lastBlock.type === "tool_result")
-				) {
-					(lastBlock as any).cache_control = cacheControl;
-				}
-			} else if (typeof lastMessage.content === "string") {
-				lastMessage.content = [
-					{
-						type: "text",
-						text: lastMessage.content,
-						cache_control: cacheControl,
-					},
-				] as any;
-			}
+		addCacheControlToLastUserMessage(params, cacheControl);
+		if (dualMessageCache) {
+			addCacheControlToLastAssistantToolUse(params, cacheControl);
 		}
 	}
 
 	return params;
+}
+
+type CacheableAnthropicContentBlock = ContentBlockParam & { cache_control?: CacheControlEphemeral };
+type CacheableAnthropicTextBlock = { type: "text"; text: string; cache_control?: CacheControlEphemeral };
+
+function addCacheControlToLastUserMessage(params: MessageParam[], cacheControl: CacheControlEphemeral): boolean {
+	for (let i = params.length - 1; i >= 0; i--) {
+		const message = params[i];
+		if (message.role !== "user") continue;
+		if (Array.isArray(message.content)) {
+			for (let blockIndex = message.content.length - 1; blockIndex >= 0; blockIndex--) {
+				const block = message.content[blockIndex];
+				if (block.type === "text" || block.type === "image" || block.type === "tool_result") {
+					(block as CacheableAnthropicContentBlock).cache_control = cacheControl;
+					return true;
+				}
+			}
+		} else if (typeof message.content === "string" && message.content.length > 0) {
+			message.content = [
+				{
+					type: "text",
+					text: message.content,
+					cache_control: cacheControl,
+				},
+			] satisfies CacheableAnthropicTextBlock[];
+			return true;
+		}
+	}
+	return false;
+}
+
+function addCacheControlToLastAssistantToolUse(params: MessageParam[], cacheControl: CacheControlEphemeral): boolean {
+	for (let i = params.length - 1; i >= 0; i--) {
+		const message = params[i];
+		if (message.role !== "assistant" || !Array.isArray(message.content)) continue;
+		for (let blockIndex = message.content.length - 1; blockIndex >= 0; blockIndex--) {
+			const block = message.content[blockIndex];
+			if (block.type === "tool_use") {
+				(block as CacheableAnthropicContentBlock).cache_control = cacheControl;
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 function shouldUseFineGrainedToolStreamingBeta(model: Model<"anthropic-messages">, context: Context): boolean {
@@ -1182,8 +1381,9 @@ function convertTools(
 ): Anthropic.Messages.Tool[] {
 	if (!tools) return [];
 
-	return tools.map((tool, index) => {
-		const schema = tool.parameters as { properties?: unknown; required?: string[] };
+	const stable = stableTools(tools);
+	return stable.map((tool, index) => {
+		const schema = stableToolSchema(tool.parameters) as { properties?: unknown; required?: string[] };
 
 		return {
 			name: isOAuthToken ? toClaudeCodeName(tool.name) : tool.name,
@@ -1194,7 +1394,7 @@ function convertTools(
 				properties: schema.properties ?? {},
 				required: schema.required ?? [],
 			},
-			...(cacheControl && index === tools.length - 1 ? { cache_control: cacheControl } : {}),
+			...(cacheControl && index === stable.length - 1 ? { cache_control: cacheControl } : {}),
 		};
 	});
 }

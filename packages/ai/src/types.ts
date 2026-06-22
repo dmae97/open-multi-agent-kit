@@ -120,6 +120,17 @@ export type BeforeProviderNetworkRequest = (
 	request: ProviderNetworkRequest,
 ) => ProviderNetworkDecision | Promise<ProviderNetworkDecision>;
 
+export type ProviderSendMode = "stream" | "streamSimple";
+
+export interface BeforeProviderSendInput<TApi extends Api = Api> {
+	model: Model<TApi>;
+	context: Context;
+	options: StreamOptions;
+	mode: ProviderSendMode;
+}
+
+export type BeforeProviderSend = (input: BeforeProviderSendInput) => Context | undefined;
+
 export interface StreamOptions {
 	temperature?: number;
 	maxTokens?: number;
@@ -146,6 +157,14 @@ export interface StreamOptions {
 	 * The request never contains headers, API keys, request bodies, prompts, or responses.
 	 */
 	beforeNetworkRequest?: BeforeProviderNetworkRequest;
+	/**
+	 * Optional synchronous middleware invoked before provider-specific payload conversion.
+	 * It may return a replacement context for output shaping/compression while leaving
+	 * the caller-owned Context immutable. Return undefined to keep the context unchanged.
+	 * System/developer prompts, user messages, and tool-call metadata should be treated
+	 * as immutable by callers that implement compression middleware.
+	 */
+	beforeProviderSend?: BeforeProviderSend;
 	/**
 	 * Optional callback for inspecting or replacing provider payloads before sending.
 	 * Return undefined to keep the payload unchanged.
@@ -517,6 +536,8 @@ export interface AnthropicMessagesCompat {
 	forceAdaptiveThinking?: boolean;
 	/** Whether to replay empty thinking signatures as `signature: ""` instead of converting thinking to text. Default: false. */
 	allowEmptySignature?: boolean;
+	/** Whether to place cache_control on both the last assistant tool_use block and last user block. Default: false. */
+	supportsDualMessageCache?: boolean;
 }
 
 /**

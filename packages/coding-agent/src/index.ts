@@ -49,7 +49,87 @@ export {
 	serializeConversation,
 	shouldCompact,
 } from "./core/compaction/index.ts";
+export {
+	type CompactStackProfile,
+	type CompactStackRecommendation,
+	classifyContextPackageRole,
+	type ExternalContextPackageRegistration,
+	type ExternalContextPackageRole,
+	type ExternalPrunerLicense,
+	type ExternalPrunerMode,
+	type ExternalPrunerRegistration,
+	type ExternalSessionCompactorRegistration,
+	getRecommendedCompactStack,
+	getRecommendedPrunerDefaults,
+	getRecommendedSessionCompactorDefaults,
+	type NeverPruneTarget,
+	type PrunerRecommendedDefaults,
+	type PrunerTrigger,
+	registerExternalPrunerOwner,
+	type SessionCompactorPhase,
+	type SessionCompactorRecommendedDefaults,
+	type SessionCompactorTrigger,
+	type ValidatedCompactPackageStack,
+	type ValidatedExternalPrunerOwner,
+	type ValidatedSessionCompactorOwner,
+	validateCompactPackageStack,
+	validateSingleExternalPrunerOwner,
+	validateSingleSessionCompactorOwner,
+} from "./core/compaction/pruner-policy.ts";
+export * from "./core/context-graph-identity-resolution.ts";
+export * from "./core/context-graph-memory-store.ts";
+export * from "./core/context-graph-ontology-generation.ts";
+export * from "./core/context-graph-ontology-registry.ts";
+export {
+	type ContextGraphAdoptionDecision,
+	type ContextGraphAdoptionInput,
+	type ContextGraphAdoptionReason,
+	type ContextGraphLibraryCategory,
+	type ContextGraphLibraryClassification,
+	type ContextGraphProfile,
+	type ContextGraphStackRecommendation,
+	type ContextGraphVerdict,
+	classifyContextGraphLibrary,
+	getContextGraphToolSurface,
+	getRecommendedContextGraphStack,
+	getUnderstandAnythingIndexPlan,
+	type MemoryFactCategory,
+	type MemoryFactPolicyCandidate,
+	type MemoryFactPolicyDecision,
+	type MemoryFactPolicyReason,
+	type Neo4jAdoptionCondition,
+	type UnderstandAnythingIndexPlan,
+	validateContextGraphAdoption,
+	validateMemoryFactPolicy,
+} from "./core/context-graph-policy.ts";
+export * from "./core/context-graph-reasoning.ts";
+export * from "./core/context-graph-retrieval.ts";
 export { createEventBus, type EventBus, type EventBusController } from "./core/event-bus.ts";
+export {
+	canCacheToolResult,
+	canonicalizeJson,
+	classifyToolResultCacheEligibility,
+	createExactResponseCacheKey,
+	createToolResultCacheKey,
+	EXACT_CACHE_KEY_VERSION,
+	type ExactResponseCacheKey,
+	type ExactResponseCacheKeyInput,
+	type ExactResponseCacheKeyMaterial,
+	hashCanonicalJson,
+	isBashToolName,
+	isKnownMutatingToolName,
+	type JsonObject,
+	type JsonPrimitive,
+	type JsonValue,
+	MUTATING_TOOL_NAME_TERMS,
+	type ToolResultCacheKey,
+	type ToolResultCacheKeyInput,
+	type ToolResultCacheKeyMaterial,
+	type ToolResultCachePolicyCandidate,
+	type ToolResultCachePolicyDecision,
+	type ToolResultCachePolicyReason,
+	type ToolResultCacheStatus,
+} from "./core/exact-cache-policy.ts";
 // Extension system
 export type {
 	AgentEndEvent,
@@ -149,8 +229,58 @@ export {
 } from "./core/extensions/index.ts";
 // Footer data provider (git branch + extension statuses - data not otherwise available to extensions)
 export type { ReadonlyFooterDataProvider } from "./core/footer-data-provider.ts";
+export {
+	createHeadroomBeforeProviderSend,
+	type HeadroomBeforeProviderSend,
+	type HeadroomBeforeProviderSendOptions,
+	type HeadroomBeforeProviderSendStats,
+	type HeadroomCompressText,
+	type HeadroomCompressTextInput,
+} from "./core/headroom-middleware.ts";
+export {
+	createLeanContextBeforeProviderSend,
+	type LeanContextBeforeProviderSend,
+	type LeanContextBeforeProviderSendOptions,
+} from "./core/lean-context-middleware.ts";
+export {
+	createLeanContextPolicyState,
+	decideLeanContextEmission,
+	formatLeanContextUnchangedStub,
+	getLeanContextTrackingHash,
+	LEAN_CONTEXT_DEFAULT_MIN_STUB_TOKENS,
+	LEAN_CONTEXT_NEVER_STUB_FILENAMES,
+	type LeanContextDecisionReason,
+	type LeanContextEmission,
+	type LeanContextPolicyDecision,
+	type LeanContextPolicyInput,
+	type LeanContextPolicyOptions,
+	type LeanContextPolicyState,
+} from "./core/lean-context-policy.ts";
 export { convertToLlm } from "./core/messages.ts";
 export { ModelRegistry } from "./core/model-registry.ts";
+export * from "./core/native-adoption-benchmark.ts";
+export {
+	type CompositionConflict,
+	type CompositionInput,
+	type CompositionPromotionRecord,
+	type CompositionResourceFilter,
+	type CompositionReview,
+	type CompositionSurface,
+	type CompositionVerdict,
+	checkCapabilitySurfaceMatch,
+	checkOmkDomainMutation,
+	checkSingleSurfaceOwner,
+	composeCandidateBatch,
+	composePackage,
+	createDefaultCompositionPolicy,
+	createPromotionRecord,
+	inferRequestedSurfaces,
+	type OmkOwnedDomain,
+	type PackageCompositionPolicy,
+	resolveResourceFilter,
+	type SurfaceOwnerRule,
+	toPackageSource,
+} from "./core/package-composition.ts";
 export type {
 	PackageManager,
 	PathMetadata,
@@ -190,6 +320,22 @@ export {
 	createWriteTool,
 	type PromptTemplate,
 } from "./core/sdk.ts";
+export {
+	ALLOWED_SEMANTIC_CACHE_TASK_CLASSES,
+	classifySemanticCacheEligibility,
+	FORBIDDEN_SEMANTIC_CACHE_ACTION_TERMS,
+	FORBIDDEN_SEMANTIC_CACHE_TASK_CLASS_TERMS,
+	type SemanticCacheAttributePolicyReason,
+	type SemanticCacheAttributeValidation,
+	type SemanticCacheCandidate,
+	type SemanticCacheContextAttributes,
+	type SemanticCacheDependencyFlags,
+	type SemanticCachePolicyDecision,
+	type SemanticCachePolicyReason,
+	type SemanticCacheResponseKind,
+	type SemanticCacheTaskClass,
+	validateSemanticCacheAttributes,
+} from "./core/semantic-cache-policy.ts";
 export {
 	type BranchSummaryEntry,
 	buildSessionContext,
