@@ -1,5 +1,5 @@
-import type { ThinkingLevel } from "@earendil-works/omk-agent-core";
-import { setKeybindings } from "@earendil-works/omk-tui";
+import type { ThinkingLevel } from "omk-agent-core";
+import { setKeybindings } from "omk-tui";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import { BUILTIN_SLASH_COMMANDS } from "../src/core/slash-commands.ts";

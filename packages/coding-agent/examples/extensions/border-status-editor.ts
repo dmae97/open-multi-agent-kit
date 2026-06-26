@@ -1,5 +1,5 @@
-import type { Component, EditorTheme, TUI } from "@earendil-works/omk-tui";
-import { truncateToWidth, visibleWidth } from "@earendil-works/omk-tui";
+import type { Component, EditorTheme, TUI } from "omk-tui";
+import { truncateToWidth, visibleWidth } from "omk-tui";
 import { CustomEditor, type ExtensionAPI, type ExtensionContext, type KeybindingsManager } from "open-multi-agent-kit";
 
 function fitBorder(

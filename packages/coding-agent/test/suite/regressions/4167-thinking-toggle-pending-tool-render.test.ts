@@ -1,6 +1,6 @@
-import type { AgentMessage } from "@earendil-works/omk-agent-core";
-import type { AssistantMessage, ToolResultMessage, Usage } from "@earendil-works/omk-ai";
-import { Container, Text, type TUI } from "@earendil-works/omk-tui";
+import type { AgentMessage } from "omk-agent-core";
+import type { AssistantMessage, ToolResultMessage, Usage } from "omk-ai";
+import { Container, Text, type TUI } from "omk-tui";
 import { beforeAll, describe, expect, test, vi } from "vitest";
 import type { AgentSessionEvent } from "../../../src/core/agent-session.ts";
 import type { SessionContext } from "../../../src/core/session-manager.ts";

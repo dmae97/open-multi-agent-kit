@@ -6,7 +6,7 @@
 
 ### Breaking Changes
 
-- Renamed the npm package from `@earendil-works/pi-ai` to `@earendil-works/omk-ai`, renamed the CLI binary to `omk-ai`, and updated package metadata to the OMK repository.
+- Renamed the npm package from `@earendil-works/pi-ai` to `omk-ai`, renamed the CLI binary to `omk-ai`, and updated package metadata to the OMK repository.
 
 ### Added
 

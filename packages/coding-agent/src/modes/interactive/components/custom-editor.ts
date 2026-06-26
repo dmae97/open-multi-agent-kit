@@ -1,4 +1,4 @@
-import { Editor, type EditorOptions, type EditorTheme, type TUI } from "@earendil-works/omk-tui";
+import { Editor, type EditorOptions, type EditorTheme, type TUI } from "omk-tui";
 import type { AppKeybinding, KeybindingsManager } from "../../../core/keybindings.ts";
 
 /**

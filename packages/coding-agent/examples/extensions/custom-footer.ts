@@ -8,8 +8,8 @@
  * Token stats come from ctx.sessionManager/ctx.model (already accessible).
  */
 
-import type { AssistantMessage } from "@earendil-works/omk-ai";
-import { truncateToWidth, visibleWidth } from "@earendil-works/omk-tui";
+import type { AssistantMessage } from "omk-ai";
+import { truncateToWidth, visibleWidth } from "omk-tui";
 import type { ExtensionAPI } from "open-multi-agent-kit";
 
 export default function (omk: ExtensionAPI) {

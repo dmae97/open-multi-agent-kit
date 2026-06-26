@@ -42,7 +42,7 @@ import {
 	type Tool,
 	type ToolCall,
 	type ToolResultMessage,
-} from "@earendil-works/omk-ai";
+} from "omk-ai";
 import type { ExtensionAPI } from "open-multi-agent-kit";
 
 // =============================================================================

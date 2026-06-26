@@ -1,4 +1,4 @@
-import { truncateToWidth, visibleWidth } from "@earendil-works/omk-tui";
+import { truncateToWidth, visibleWidth } from "omk-tui";
 import { type ThemeColor, theme } from "../theme/theme.ts";
 
 export function composeColumns(

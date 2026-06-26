@@ -25,7 +25,7 @@
  *   omk -e ./built-in-tool-renderer.ts
  */
 
-import { Text } from "@earendil-works/omk-tui";
+import { Text } from "omk-tui";
 import type { BashToolDetails, EditToolDetails, ExtensionAPI, ReadToolDetails } from "open-multi-agent-kit";
 import { createBashTool, createEditTool, createReadTool, createWriteTool } from "open-multi-agent-kit";
 

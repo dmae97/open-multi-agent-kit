@@ -7,16 +7,7 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import {
-	Container,
-	Editor,
-	type EditorOptions,
-	type Focusable,
-	getKeybindings,
-	Spacer,
-	Text,
-	type TUI,
-} from "@earendil-works/omk-tui";
+import { Container, Editor, type EditorOptions, type Focusable, getKeybindings, Spacer, Text, type TUI } from "omk-tui";
 import type { KeybindingsManager } from "../../../core/keybindings.ts";
 import { getEditorTheme, theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";

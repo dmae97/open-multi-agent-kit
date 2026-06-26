@@ -1,7 +1,7 @@
-import type { AgentTool } from "@earendil-works/omk-agent-core";
-import { Box, Container, Spacer, Text } from "@earendil-works/omk-tui";
 import { constants } from "fs";
 import { access as fsAccess, readFile as fsReadFile, writeFile as fsWriteFile } from "fs/promises";
+import type { AgentTool } from "omk-agent-core";
+import { Box, Container, Spacer, Text } from "omk-tui";
 import { type Static, Type } from "typebox";
 import { renderDiff } from "../../modes/interactive/components/diff.ts";
 import type { Theme } from "../../modes/interactive/theme/theme.ts";

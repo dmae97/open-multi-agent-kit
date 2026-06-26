@@ -1,4 +1,4 @@
-import type { Api, Model } from "@earendil-works/omk-ai";
+import type { Api, Model } from "omk-ai";
 import type { SettingsManager } from "./settings-manager.ts";
 import { isInstallTelemetryEnabled } from "./telemetry.ts";
 

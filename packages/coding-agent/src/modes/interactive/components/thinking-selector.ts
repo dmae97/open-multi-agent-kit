@@ -1,5 +1,5 @@
-import type { ThinkingLevel } from "@earendil-works/omk-agent-core";
-import { Container, type SelectItem, SelectList, type SelectListLayoutOptions } from "@earendil-works/omk-tui";
+import type { ThinkingLevel } from "omk-agent-core";
+import { Container, type SelectItem, SelectList, type SelectListLayoutOptions } from "omk-tui";
 import { getSelectListTheme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 

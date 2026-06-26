@@ -6,9 +6,9 @@
  */
 
 import { createInterface } from "node:readline";
-import { type ImageContent, modelsAreEqual } from "@earendil-works/omk-ai";
-import { ProcessTerminal, setKeybindings, TUI } from "@earendil-works/omk-tui";
 import chalk from "chalk";
+import { type ImageContent, modelsAreEqual } from "omk-ai";
+import { ProcessTerminal, setKeybindings, TUI } from "omk-tui";
 import { type Args, type Mode, parseArgs, printHelp } from "./cli/args.ts";
 import { processFileArguments } from "./cli/file-processor.ts";
 import { buildInitialMessage } from "./cli/initial-message.ts";

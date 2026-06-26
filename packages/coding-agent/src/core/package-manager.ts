@@ -1748,7 +1748,7 @@ export class DefaultPackageManager implements PackageManager {
 		// Extension packages run inside OMK and resolve OMK APIs through loader aliases/virtual modules.
 		// Disable peer dependency resolution for managed installs (npm's --legacy-peer-deps, and
 		// equivalent bun/pnpm settings) so package managers do not install or solve host-provided
-		// @earendil-works/omk-* peers. Stale auto-installed host peers can otherwise block updates.
+		// omk-agent-core, omk-ai, and omk-tui peers. Stale auto-installed host peers can otherwise block updates.
 		if (packageManagerName === "bun") {
 			return ["install", ...specs, "--cwd", installRoot, "--omit=peer"];
 		}

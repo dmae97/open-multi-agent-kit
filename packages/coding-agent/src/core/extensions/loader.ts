@@ -7,12 +7,12 @@ import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import * as _bundledOmkAgentCore from "@earendil-works/omk-agent-core";
-import * as _bundledOmkAi from "@earendil-works/omk-ai";
-import * as _bundledOmkAiOauth from "@earendil-works/omk-ai/oauth";
-import type { KeyId } from "@earendil-works/omk-tui";
-import * as _bundledOmkTui from "@earendil-works/omk-tui";
 import { createJiti } from "jiti/static";
+import * as _bundledOmkAgentCore from "omk-agent-core";
+import * as _bundledOmkAi from "omk-ai";
+import * as _bundledOmkAiOauth from "omk-ai/oauth";
+import type { KeyId } from "omk-tui";
+import * as _bundledOmkTui from "omk-tui";
 // Static imports of packages that extensions may use.
 // These MUST be static so Bun bundles them into the compiled binary.
 // The virtualModules option then makes them available to extensions.
@@ -48,10 +48,10 @@ const VIRTUAL_MODULES: Record<string, unknown> = {
 	"@sinclair/typebox": _bundledTypebox,
 	"@sinclair/typebox/compile": _bundledTypeboxCompile,
 	"@sinclair/typebox/value": _bundledTypeboxValue,
-	"@earendil-works/omk-agent-core": _bundledOmkAgentCore,
-	"@earendil-works/omk-tui": _bundledOmkTui,
-	"@earendil-works/omk-ai": _bundledOmkAi,
-	"@earendil-works/omk-ai/oauth": _bundledOmkAiOauth,
+	"omk-agent-core": _bundledOmkAgentCore,
+	"omk-tui": _bundledOmkTui,
+	"omk-ai": _bundledOmkAi,
+	"omk-ai/oauth": _bundledOmkAiOauth,
 	"open-multi-agent-kit": _bundledOmkCodingAgent,
 };
 
@@ -109,21 +109,17 @@ function getAliases(): Record<string, string> {
 	};
 
 	const omkCodingAgentEntry = packageIndex;
-	const omkAgentCoreEntry = resolveWorkspaceOrPackageFile(
-		"agent/dist/index.js",
-		"@earendil-works/omk-agent-core",
-		"dist/index.js",
-	);
-	const omkTuiEntry = resolveWorkspaceOrPackageFile("tui/dist/index.js", "@earendil-works/omk-tui", "dist/index.js");
-	const omkAiEntry = resolveWorkspaceOrPackageFile("ai/dist/index.js", "@earendil-works/omk-ai", "dist/index.js");
-	const omkAiOauthEntry = resolveWorkspaceOrPackageFile("ai/dist/oauth.js", "@earendil-works/omk-ai", "dist/oauth.js");
+	const omkAgentCoreEntry = resolveWorkspaceOrPackageFile("agent/dist/index.js", "omk-agent-core", "dist/index.js");
+	const omkTuiEntry = resolveWorkspaceOrPackageFile("tui/dist/index.js", "omk-tui", "dist/index.js");
+	const omkAiEntry = resolveWorkspaceOrPackageFile("ai/dist/index.js", "omk-ai", "dist/index.js");
+	const omkAiOauthEntry = resolveWorkspaceOrPackageFile("ai/dist/oauth.js", "omk-ai", "dist/oauth.js");
 
 	_aliases = {
 		"open-multi-agent-kit": omkCodingAgentEntry,
-		"@earendil-works/omk-agent-core": omkAgentCoreEntry,
-		"@earendil-works/omk-tui": omkTuiEntry,
-		"@earendil-works/omk-ai": omkAiEntry,
-		"@earendil-works/omk-ai/oauth": omkAiOauthEntry,
+		"omk-agent-core": omkAgentCoreEntry,
+		"omk-tui": omkTuiEntry,
+		"omk-ai": omkAiEntry,
+		"omk-ai/oauth": omkAiOauthEntry,
 		typebox: typeboxEntry,
 		"typebox/compile": typeboxCompileEntry,
 		"typebox/value": typeboxValueEntry,

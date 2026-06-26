@@ -1,5 +1,5 @@
-import type { AgentState } from "@earendil-works/omk-agent-core";
 import { existsSync, readFileSync, writeFileSync } from "fs";
+import type { AgentState } from "omk-agent-core";
 import { basename, join } from "path";
 import { APP_NAME, getExportTemplateDir } from "../../config.ts";
 import { getResolvedThemeColors, getThemeExportColors } from "../../modes/interactive/theme/theme.ts";

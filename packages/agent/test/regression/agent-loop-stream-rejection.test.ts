@@ -1,4 +1,4 @@
-import type { AssistantMessage, Message, Model, UserMessage } from "@earendil-works/omk-ai";
+import type { AssistantMessage, Message, Model, UserMessage } from "omk-ai";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { agentLoop, agentLoopContinue } from "../../src/agent-loop.ts";
 import type { AgentContext, AgentEvent, AgentLoopConfig, AgentMessage, StreamFn } from "../../src/types.ts";

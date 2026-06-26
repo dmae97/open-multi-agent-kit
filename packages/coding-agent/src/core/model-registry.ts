@@ -2,6 +2,7 @@
  * Model registry - manages built-in and custom models, provides API key resolution.
  */
 
+import { existsSync, readFileSync } from "fs";
 import {
 	type AnthropicMessagesCompat,
 	type Api,
@@ -17,9 +18,8 @@ import {
 	registerApiProvider,
 	resetApiProviders,
 	type SimpleStreamOptions,
-} from "@earendil-works/omk-ai";
-import { registerOAuthProvider, resetOAuthProviders } from "@earendil-works/omk-ai/oauth";
-import { existsSync, readFileSync } from "fs";
+} from "omk-ai";
+import { registerOAuthProvider, resetOAuthProviders } from "omk-ai/oauth";
 import { join } from "path";
 import { type Static, Type } from "typebox";
 import { Compile } from "typebox/compile";

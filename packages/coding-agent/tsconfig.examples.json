@@ -5,8 +5,8 @@
 		"paths": {
 			"open-multi-agent-kit": ["./src/index.ts"],
 			"open-multi-agent-kit/hooks": ["./src/core/hooks/index.ts"],
-			"@earendil-works/omk-tui": ["../tui/src/index.ts"],
-			"@earendil-works/omk-ai": ["../ai/src/index.ts"],
+			"omk-tui": ["../tui/src/index.ts"],
+			"omk-ai": ["../ai/src/index.ts"],
 			"typebox": ["../../node_modules/typebox"]
 		},
 		"skipLibCheck": true

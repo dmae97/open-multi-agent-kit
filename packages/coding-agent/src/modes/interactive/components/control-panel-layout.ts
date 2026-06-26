@@ -1,4 +1,4 @@
-import { visibleWidth } from "@earendil-works/omk-tui";
+import { visibleWidth } from "omk-tui";
 import { getHeadroomRuntimeStatus } from "../../../core/context-budget-headroom.ts";
 import { loadMcpInventory } from "../../../core/mcp-inventory.ts";
 import { type ThemeColor, theme } from "../theme/theme.ts";

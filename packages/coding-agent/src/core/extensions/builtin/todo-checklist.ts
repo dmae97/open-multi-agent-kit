@@ -16,7 +16,7 @@
  *   model's own plan text.
  */
 
-import { StringEnum, Type } from "@earendil-works/omk-ai";
+import { StringEnum, Type } from "omk-ai";
 import { TodoChecklistComponent } from "../../../modes/interactive/components/todo-checklist.ts";
 import type { TodoState, TodoStatus } from "../../todo-state.ts";
 import { EMPTY_TODO_STATE, setTodoItems, summary } from "../../todo-state.ts";

@@ -2,7 +2,7 @@
  * TUI config selector for `omk config` command
  */
 
-import { ProcessTerminal, TUI } from "@earendil-works/omk-tui";
+import { ProcessTerminal, TUI } from "omk-tui";
 import type { ResolvedPaths } from "../core/package-manager.ts";
 import type { SettingsManager } from "../core/settings-manager.ts";
 import { ConfigSelectorComponent } from "../modes/interactive/components/config-selector.ts";

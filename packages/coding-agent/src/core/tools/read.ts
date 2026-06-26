@@ -1,9 +1,9 @@
 import { basename, dirname, isAbsolute, relative, resolve as resolvePath, sep } from "node:path";
-import type { AgentTool } from "@earendil-works/omk-agent-core";
-import type { Api, ImageContent, Model, TextContent } from "@earendil-works/omk-ai";
-import { Text } from "@earendil-works/omk-tui";
 import { constants } from "fs";
 import { access as fsAccess, readFile as fsReadFile } from "fs/promises";
+import type { AgentTool } from "omk-agent-core";
+import type { Api, ImageContent, Model, TextContent } from "omk-ai";
+import { Text } from "omk-tui";
 import { type Static, Type } from "typebox";
 import { getReadmePath } from "../../config.ts";
 import { keyHint, keyText } from "../../modes/interactive/components/keybinding-hints.ts";

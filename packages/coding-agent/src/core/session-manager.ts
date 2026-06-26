@@ -1,5 +1,3 @@
-import { type AgentMessage, uuidv7 } from "@earendil-works/omk-agent-core";
-import type { ImageContent, Message, TextContent } from "@earendil-works/omk-ai";
 import { randomUUID } from "crypto";
 import {
 	appendFileSync,
@@ -15,6 +13,8 @@ import {
 	writeFileSync,
 } from "fs";
 import { readdir, stat } from "fs/promises";
+import { type AgentMessage, uuidv7 } from "omk-agent-core";
+import type { ImageContent, Message, TextContent } from "omk-ai";
 import { join, resolve } from "path";
 import { createInterface } from "readline";
 import { StringDecoder } from "string_decoder";

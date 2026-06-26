@@ -17,7 +17,7 @@
  *   aside_close_task         — close the Aside MCP process
  */
 
-import { StringEnum, Type } from "@earendil-works/omk-ai";
+import { StringEnum, Type } from "omk-ai";
 import type { ExtensionAPI, ExtensionContext } from "open-multi-agent-kit";
 import { parseCriterionToAssertion, verifyAssertions } from "./assertions.ts";
 import { hashFile, redactSecrets } from "./evidence.ts";

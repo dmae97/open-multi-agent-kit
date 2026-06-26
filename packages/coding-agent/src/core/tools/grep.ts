@@ -1,8 +1,8 @@
 import { readFile as fsReadFile, stat as fsStat } from "node:fs/promises";
 import { createInterface } from "node:readline";
-import type { AgentTool } from "@earendil-works/omk-agent-core";
-import { Text } from "@earendil-works/omk-tui";
 import { spawn } from "child_process";
+import type { AgentTool } from "omk-agent-core";
+import { Text } from "omk-tui";
 import path from "path";
 import { type Static, Type } from "typebox";
 import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts";

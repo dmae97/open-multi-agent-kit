@@ -2,7 +2,7 @@
  * Hello Tool - Minimal custom tool example
  */
 
-import { Type } from "@earendil-works/omk-ai";
+import { Type } from "omk-ai";
 import { defineTool, type ExtensionAPI } from "open-multi-agent-kit";
 
 const helloTool = defineTool({

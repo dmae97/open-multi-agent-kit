@@ -9,7 +9,7 @@
  * 2. Use /tools to open the tool selector
  */
 
-import { Container, type SettingItem, SettingsList } from "@earendil-works/omk-tui";
+import { Container, type SettingItem, SettingsList } from "omk-tui";
 import type { ExtensionAPI, ExtensionContext, ToolInfo } from "open-multi-agent-kit";
 import { getSettingsListTheme } from "open-multi-agent-kit";
 

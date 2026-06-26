@@ -166,7 +166,7 @@ If no `omk` manifest is present, omk auto-discovers resources from these directo
 
 Third party runtime dependencies belong in `dependencies` in `package.json`. Dependencies that do not register extensions, skills, prompt templates, or themes also belong in `dependencies`. When omk installs a package from npm or git, it runs `npm install`, so those dependencies are installed automatically.
 
-OMK bundles core packages for extensions and skills. If you import any of these, list them in `peerDependencies` with a `"*"` range and do not bundle them: `@earendil-works/omk-ai`, `@earendil-works/omk-agent-core`, `open-multi-agent-kit`, `@earendil-works/omk-tui`, `typebox`.
+OMK bundles core packages for extensions and skills. If you import any of these, list them in `peerDependencies` with a `"*"` range and do not bundle them: `omk-ai`, `omk-agent-core`, `open-multi-agent-kit`, `omk-tui`, `typebox`.
 
 Other omk packages must be bundled in your tarball. Add them to `dependencies` and `bundledDependencies`, then reference their resources through `node_modules/` paths. OMK loads packages with separate module roots, so separate installs do not collide or share modules.
 

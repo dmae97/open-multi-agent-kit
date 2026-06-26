@@ -8,8 +8,8 @@
  *   npx tsx test.ts claude-sonnet-4-5-20250929 --thinking
  */
 
-import { type Api, type Context, type Model, registerApiProvider, streamSimple } from "@earendil-works/omk-ai";
 import { readFileSync } from "fs";
+import { type Api, type Context, type Model, registerApiProvider, streamSimple } from "omk-ai";
 import { getAgentDir } from "packages/coding-agent/src/config.js";
 import { join } from "path";
 import { MODELS, streamGitLabDuo } from "./index.ts";

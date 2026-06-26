@@ -1,4 +1,4 @@
-import type { ImageContent, TextContent } from "@earendil-works/omk-ai";
+import type { ImageContent, TextContent } from "omk-ai";
 import type { AgentMessage } from "../../types.ts";
 import { createBranchSummaryMessage, createCompactionSummaryMessage, createCustomMessage } from "../messages.ts";
 import type {

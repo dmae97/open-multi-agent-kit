@@ -706,6 +706,6 @@ MIT
 
 ## See Also
 
-- [@earendil-works/omk-ai](https://www.npmjs.com/package/@earendil-works/omk-ai): Core LLM toolkit
-- [@earendil-works/omk-agent-core](https://www.npmjs.com/package/@earendil-works/omk-agent-core): Agent framework
-- [@earendil-works/omk-tui](https://www.npmjs.com/package/@earendil-works/omk-tui): Terminal UI components
+- [omk-ai](https://www.npmjs.com/package/omk-ai): Core LLM toolkit
+- [omk-agent-core](https://www.npmjs.com/package/omk-agent-core): Agent framework
+- [omk-tui](https://www.npmjs.com/package/omk-tui): Terminal UI components

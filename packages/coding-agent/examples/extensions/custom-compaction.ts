@@ -13,7 +13,7 @@
  *   omk --extension examples/extensions/custom-compaction.ts
  */
 
-import { complete } from "@earendil-works/omk-ai";
+import { complete } from "omk-ai";
 import type { ExtensionAPI } from "open-multi-agent-kit";
 import { convertToLlm, serializeConversation } from "open-multi-agent-kit";
 

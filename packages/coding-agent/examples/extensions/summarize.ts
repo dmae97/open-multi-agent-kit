@@ -1,5 +1,5 @@
-import { complete, getModel } from "@earendil-works/omk-ai";
-import { Container, Markdown, matchesKey, Text } from "@earendil-works/omk-tui";
+import { complete, getModel } from "omk-ai";
+import { Container, Markdown, matchesKey, Text } from "omk-tui";
 import type { ExtensionAPI, ExtensionCommandContext } from "open-multi-agent-kit";
 import { DynamicBorder, getMarkdownTheme } from "open-multi-agent-kit";
 

@@ -12,9 +12,9 @@
  * - Progress tracking widget during execution
  */
 
-import type { AgentMessage } from "@earendil-works/omk-agent-core";
-import type { AssistantMessage, TextContent } from "@earendil-works/omk-ai";
-import { Key } from "@earendil-works/omk-tui";
+import type { AgentMessage } from "omk-agent-core";
+import type { AssistantMessage, TextContent } from "omk-ai";
+import { Key } from "omk-tui";
 import type { ExtensionAPI, ExtensionContext } from "open-multi-agent-kit";
 import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.ts";
 

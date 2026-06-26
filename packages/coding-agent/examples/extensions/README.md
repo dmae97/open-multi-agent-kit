@@ -181,7 +181,7 @@ export default function (omk: ExtensionAPI) {
 
 **Use StringEnum for string parameters** (required for Google API compatibility):
 ```typescript
-import { StringEnum } from "@earendil-works/omk-ai";
+import { StringEnum } from "omk-ai";
 
 // Good
 action: StringEnum(["list", "add"] as const)

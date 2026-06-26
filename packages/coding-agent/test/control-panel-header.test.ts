@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { visibleWidth } from "@earendil-works/omk-tui";
+import { visibleWidth } from "omk-tui";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
 	ControlPanelComponent,

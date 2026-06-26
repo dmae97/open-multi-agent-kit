@@ -5,7 +5,7 @@
  * without paying for an extra follow-up LLM turn.
  */
 
-import { Text } from "@earendil-works/omk-tui";
+import { Text } from "omk-tui";
 import { defineTool, type ExtensionAPI } from "open-multi-agent-kit";
 import { Type } from "typebox";
 

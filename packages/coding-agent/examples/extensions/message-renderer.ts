@@ -7,7 +7,7 @@
  * Usage: /status [message] - sends a status message with custom rendering
  */
 
-import { Box, Text } from "@earendil-works/omk-tui";
+import { Box, Text } from "omk-tui";
 import type { ExtensionAPI } from "open-multi-agent-kit";
 
 export default function (omk: ExtensionAPI) {

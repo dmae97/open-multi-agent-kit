@@ -19,9 +19,9 @@
  *   /overlay-streaming  - Multiple input panels with simulated streaming (Tab to cycle focus)
  */
 
-import type { Component, OverlayAnchor, OverlayHandle, OverlayOptions, TUI } from "@earendil-works/omk-tui";
-import { Input, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/omk-tui";
 import { spawn } from "child_process";
+import type { Component, OverlayAnchor, OverlayHandle, OverlayOptions, TUI } from "omk-tui";
+import { Input, matchesKey, truncateToWidth, visibleWidth } from "omk-tui";
 import type { ExtensionAPI, ExtensionCommandContext, Theme } from "open-multi-agent-kit";
 
 // Global handle for toggle demo (in real code, use a more elegant pattern)

@@ -1,5 +1,5 @@
 {
-	"name": "@earendil-works/omk-ai",
+	"name": "omk-ai",
 	"version": "0.80.8",
 	"description": "Unified LLM API with automatic model discovery and provider configuration",
 	"type": "module",

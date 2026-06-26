@@ -3,7 +3,7 @@
  * Uses Kitty keyboard protocol for smooth movement (press/release detection)
  */
 
-import { isKeyRelease, Key, matchesKey, visibleWidth } from "@earendil-works/omk-tui";
+import { isKeyRelease, Key, matchesKey, visibleWidth } from "omk-tui";
 import type { ExtensionAPI } from "open-multi-agent-kit";
 
 const GAME_WIDTH = 60;

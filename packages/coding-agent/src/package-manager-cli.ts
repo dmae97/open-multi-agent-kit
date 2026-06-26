@@ -1,5 +1,5 @@
-import { Markdown, type MarkdownTheme } from "@earendil-works/omk-tui";
 import chalk from "chalk";
+import { Markdown, type MarkdownTheme } from "omk-tui";
 import { selectConfig } from "./cli/config-selector.ts";
 import {
 	APP_NAME,

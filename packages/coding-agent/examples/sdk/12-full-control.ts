@@ -4,7 +4,7 @@
  * Replace everything - no discovery, explicit configuration.
  */
 
-import { getModel } from "@earendil-works/omk-ai";
+import { getModel } from "omk-ai";
 import {
 	AuthStorage,
 	createAgentSession,

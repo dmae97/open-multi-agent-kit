@@ -257,7 +257,7 @@ omk.registerProvider("custom-api", {
 Add OAuth/SSO authentication that integrates with `/login`:
 
 ```typescript
-import type { OAuthCredentials, OAuthLoginCallbacks } from "@earendil-works/omk-ai";
+import type { OAuthCredentials, OAuthLoginCallbacks } from "omk-ai";
 
 omk.registerProvider("corporate-ai", {
   baseUrl: "https://ai.corp.com/v1",
@@ -392,7 +392,7 @@ import {
   type SimpleStreamOptions,
   calculateCost,
   createAssistantMessageEventStream,
-} from "@earendil-works/omk-ai";
+} from "omk-ai";
 
 function streamMyProvider(
   model: Model<any>,

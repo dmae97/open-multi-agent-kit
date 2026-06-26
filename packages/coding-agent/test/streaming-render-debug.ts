@@ -4,9 +4,9 @@
  * Run with: npx tsx test/streaming-render-debug.ts
  */
 
-import type { AssistantMessage } from "@earendil-works/omk-ai";
-import { ProcessTerminal, TUI } from "@earendil-works/omk-tui";
 import { readFileSync } from "fs";
+import type { AssistantMessage } from "omk-ai";
+import { ProcessTerminal, TUI } from "omk-tui";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { AssistantMessageComponent } from "../src/modes/interactive/components/assistant-message.ts";

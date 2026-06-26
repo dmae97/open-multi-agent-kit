@@ -6,15 +6,15 @@
  * try to refresh tokens simultaneously.
  */
 
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import {
 	findEnvKeys,
 	getEnvApiKey,
 	type OAuthCredentials,
 	type OAuthLoginCallbacks,
 	type OAuthProviderId,
-} from "@earendil-works/omk-ai";
-import { getOAuthApiKey, getOAuthProvider, getOAuthProviders } from "@earendil-works/omk-ai/oauth";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+} from "omk-ai";
+import { getOAuthApiKey, getOAuthProvider, getOAuthProviders } from "omk-ai/oauth";
 import { dirname, join } from "path";
 import lockfile from "proper-lockfile";
 import { getAgentDir } from "../config.ts";

@@ -10,7 +10,7 @@
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/omk-agent-core";
+import { Agent, type AgentMessage, type AgentTool } from "omk-agent-core";
 import type {
 	AssistantMessage,
 	AssistantMessageEvent,
@@ -24,8 +24,8 @@ import type {
 	ToolCall,
 	ToolResultMessage,
 	Usage,
-} from "@earendil-works/omk-ai";
-import { createAssistantMessageEventStream } from "@earendil-works/omk-ai";
+} from "omk-ai";
+import { createAssistantMessageEventStream } from "omk-ai";
 import { AgentSession, type AgentSessionEvent } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRegistry } from "../src/core/model-registry.ts";

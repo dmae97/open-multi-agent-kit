@@ -1,4 +1,4 @@
-import { type Component, truncateToWidth, visibleWidth } from "@earendil-works/omk-tui";
+import { type Component, truncateToWidth, visibleWidth } from "omk-tui";
 import { EMPTY_TODO_STATE, nextActiveTodo, summary, type TodoItem, type TodoState } from "../../../core/todo-state.ts";
 import { type ThemeColor, theme } from "../theme/theme.ts";
 

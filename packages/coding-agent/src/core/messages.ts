@@ -5,8 +5,8 @@
  * and provides a transformer to convert them to LLM-compatible messages.
  */
 
-import type { AgentMessage } from "@earendil-works/omk-agent-core";
-import type { ImageContent, Message, TextContent } from "@earendil-works/omk-ai";
+import type { AgentMessage } from "omk-agent-core";
+import type { ImageContent, Message, TextContent } from "omk-ai";
 
 export const COMPACTION_SUMMARY_PREFIX = `The conversation history before this point was compacted into the following summary:
 
@@ -67,7 +67,7 @@ export interface CompactionSummaryMessage {
 }
 
 // Extend CustomAgentMessages via declaration merging
-declare module "@earendil-works/omk-agent-core" {
+declare module "omk-agent-core" {
 	interface CustomAgentMessages {
 		bashExecution: BashExecutionMessage;
 		custom: CustomMessage;

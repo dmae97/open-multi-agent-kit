@@ -16,7 +16,7 @@
  * Then use ctrl+o to toggle between minimal (collapsed) and full (expanded) views.
  */
 
-import { Text } from "@earendil-works/omk-tui";
+import { Text } from "omk-tui";
 import type { ExtensionAPI } from "open-multi-agent-kit";
 import {
 	createBashTool,

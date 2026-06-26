@@ -1,12 +1,7 @@
 // Requires GitHub CLI (`gh`) and a GitHub repository checkout.
 // Preloads the latest open issues once per session, then filters them locally for fast `#...` completion.
 
-import {
-	type AutocompleteItem,
-	type AutocompleteProvider,
-	type AutocompleteSuggestions,
-	fuzzyFilter,
-} from "@earendil-works/omk-tui";
+import { type AutocompleteItem, type AutocompleteProvider, type AutocompleteSuggestions, fuzzyFilter } from "omk-tui";
 import type { ExtensionAPI } from "open-multi-agent-kit";
 
 type GitHubIssue = {
