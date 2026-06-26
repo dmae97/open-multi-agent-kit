@@ -60,6 +60,7 @@ export interface ReadToolOptions {
 	autoResizeImages?: boolean;
 	/** Custom operations for file reading. Default: local filesystem */
 	operations?: ReadOperations;
+	canReadPath?: (absolutePath: string) => boolean;
 }
 
 type ReadRenderArgs = { path?: string; file_path?: string; offset?: number; limit?: number };
@@ -95,7 +96,7 @@ function toPosixPath(filePath: string): string {
 	return filePath.split(sep).join("/");
 }
 
-function getPiDocsClassification(absolutePath: string): CompactReadClassification | undefined {
+function getOmkDocsClassification(absolutePath: string): CompactReadClassification | undefined {
 	const packageRoot = dirname(getReadmePath());
 	const relativePath = relative(resolvePath(packageRoot), resolvePath(absolutePath));
 	if (
@@ -127,7 +128,7 @@ function getCompactReadClassification(
 		return { kind: "skill", label: basename(dirname(absolutePath)) || fileName };
 	}
 
-	const docsClassification = getPiDocsClassification(absolutePath);
+	const docsClassification = getOmkDocsClassification(absolutePath);
 	if (docsClassification) return docsClassification;
 
 	if (COMPACT_RESOURCE_FILE_NAMES.has(fileName)) {
@@ -236,6 +237,9 @@ export function createReadToolDefinition(
 					(async () => {
 						try {
 							const absolutePath = await resolveReadPathAsync(path, cwd);
+							if (options?.canReadPath && !options.canReadPath(absolutePath)) {
+								throw new Error(`Read blocked by active loadout policy: ${path}`);
+							}
 							if (aborted) return;
 							// Check if file exists and is readable.
 							await ops.access(absolutePath);

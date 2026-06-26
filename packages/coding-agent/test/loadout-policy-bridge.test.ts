@@ -1,7 +1,18 @@
-import { describe, expect, it } from "vitest";
-import { createLoadoutAccessPolicy } from "../src/core/loadout-access-policy.ts";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ExtensionContext } from "../src/core/extensions/types.ts";
+import { createLoadoutAccessPolicy, decideLoadoutAccess } from "../src/core/loadout-access-policy.ts";
 import { createLoadoutPolicyFromRuntimeState, validatePolicyIntegrity } from "../src/core/loadout-policy-bridge.ts";
 import type { LoadoutRuntimeState } from "../src/core/loadout-runtime.ts";
+import {
+	type BashOperations,
+	createBashToolDefinition,
+	createEditToolDefinition,
+	createReadToolDefinition,
+	createWriteToolDefinition,
+} from "../src/core/tools/index.ts";
 
 const cleanState: LoadoutRuntimeState = {
 	profileName: "code+frontend-ui",
@@ -18,6 +29,112 @@ const cleanState: LoadoutRuntimeState = {
 	blockers: [],
 	warnings: [],
 };
+
+describe("loadout access policy tool bridge", () => {
+	let tempDir: string;
+	let toolContext: ExtensionContext;
+
+	beforeEach(() => {
+		tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "omk-loadout-policy-"));
+		fs.mkdirSync(path.join(tempDir, "src", "secret"), { recursive: true });
+		fs.mkdirSync(path.join(tempDir, "out"), { recursive: true });
+		fs.writeFileSync(path.join(tempDir, "src", "allowed.txt"), "allowed");
+		fs.writeFileSync(path.join(tempDir, "src", "secret", "blocked.txt"), "secret");
+		fs.writeFileSync(path.join(tempDir, "out", "editable.txt"), "before");
+		toolContext = { cwd: tempDir, hasUI: false, model: undefined } as unknown as ExtensionContext;
+	});
+
+	afterEach(() => {
+		fs.rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	function createPolicy() {
+		return createLoadoutAccessPolicy({
+			cwd: tempDir,
+			activeTools: ["bash", "edit", "read", "write"],
+			readSet: [{ path: "src" }],
+			writeSet: [{ path: "out" }],
+			blockedPaths: ["src/secret", "src/secret/**"],
+			commands: { mode: "read-only-shell", allowPatterns: ["ls *"] },
+		});
+	}
+
+	it("enforces read/write/edit path scopes at tool execution time", async () => {
+		const policy = createPolicy();
+		const canReadPath = (path: string) =>
+			decideLoadoutAccess(policy, { operation: "read", toolName: "read", path }).allowed;
+		const canWritePath = (path: string) =>
+			decideLoadoutAccess(policy, { operation: "write", toolName: "write", path }).allowed;
+		const read = createReadToolDefinition(tempDir, { autoResizeImages: false, canReadPath });
+		const write = createWriteToolDefinition(tempDir, { canWritePath });
+		const edit = createEditToolDefinition(tempDir, { canWritePath });
+
+		await expect(
+			read.execute("read-1", { path: "src/allowed.txt" }, undefined, undefined, toolContext),
+		).resolves.toMatchObject({
+			content: [{ type: "text", text: "allowed" }],
+		});
+		await expect(
+			read.execute("read-2", { path: "src/secret/blocked.txt" }, undefined, undefined, toolContext),
+		).rejects.toThrow("Read blocked by active loadout policy");
+
+		await expect(
+			write.execute("write-1", { path: "out/new.txt", content: "ok" }, undefined, undefined, toolContext),
+		).resolves.toMatchObject({
+			content: [{ type: "text", text: "Successfully wrote 2 bytes to out/new.txt" }],
+		});
+		await expect(
+			write.execute("write-2", { path: "src/new.txt", content: "no" }, undefined, undefined, toolContext),
+		).rejects.toThrow("Write blocked by active loadout policy");
+
+		await expect(
+			edit.execute(
+				"edit-1",
+				{ path: "out/editable.txt", edits: [{ oldText: "before", newText: "after" }] },
+				undefined,
+				undefined,
+				toolContext,
+			),
+		).resolves.toMatchObject({
+			content: [{ type: "text", text: "Successfully replaced 1 block(s) in out/editable.txt." }],
+		});
+		await expect(
+			edit.execute(
+				"edit-2",
+				{ path: "src/allowed.txt", edits: [{ oldText: "allowed", newText: "after" }] },
+				undefined,
+				undefined,
+				toolContext,
+			),
+		).rejects.toThrow("Edit blocked by active loadout policy");
+	});
+
+	it("enforces command scopes at bash tool execution time", async () => {
+		const policy = createPolicy();
+		const executedCommands: string[] = [];
+		const operations: BashOperations = {
+			exec: async (command, _cwd, { onData }) => {
+				executedCommands.push(command);
+				onData(Buffer.from("ok"));
+				return { exitCode: 0 };
+			},
+		};
+		const bash = createBashToolDefinition(tempDir, {
+			operations,
+			loadoutAccessGuard: (request) => decideLoadoutAccess(policy, request),
+		});
+
+		await expect(
+			bash.execute("bash-1", { command: "ls src" }, undefined, undefined, toolContext),
+		).resolves.toMatchObject({
+			content: [{ type: "text", text: "ok" }],
+		});
+		await expect(
+			bash.execute("bash-2", { command: "rm -rf src" }, undefined, undefined, toolContext),
+		).rejects.toThrow("loadout: command mode read-only-shell requires an explicit allow pattern");
+		expect(executedCommands).toEqual(["ls src"]);
+	});
+});
 
 describe("createLoadoutPolicyFromRuntimeState", () => {
 	it("generates a policy from a clean runtime state", () => {

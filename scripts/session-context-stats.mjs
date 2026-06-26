@@ -6,14 +6,14 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 
-const DEFAULT_SESSIONS_DIR = path.join(homedir(), ".pi/agent/sessions");
+const DEFAULT_SESSIONS_DIR = path.join(homedir(), ".omk/agent/sessions");
 const MODELS_GENERATED_PATH = path.join(process.cwd(), "packages/ai/src/models.generated.ts");
-const MODELS_CONFIG_PATH = path.join(homedir(), ".pi/agent/models.json");
+const MODELS_CONFIG_PATH = path.join(homedir(), ".omk/agent/models.json");
 const REPORT_TIME_ZONE = "Europe/Berlin";
 const CHART_WIDTH = 40;
 
 function parseArgs(argv) {
-	const options = { sessionsDir: DEFAULT_SESSIONS_DIR, json: false, text: false, allSessions: false, since: undefined, modelFilter: undefined, modelPrefixes: [], bashContains: [], cwd: process.cwd(), help: false };
+	const options = { sessionsDir: undefined, json: false, text: false, allSessions: false, since: undefined, modelFilter: undefined, modelPrefixes: [], bashContains: [], cwd: process.cwd(), help: false };
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
 		if (arg === "--help" || arg === "-h") options.help = true;
@@ -37,7 +37,7 @@ function printHelp() {
 	console.log(`Usage: node scripts/session-context-stats.mjs [options]
 
 Options:
-  --sessions-dir <path>  Sessions directory (default: ~/.pi/agent/sessions)
+  --sessions-dir <path>  Sessions directory (default: ~/.omk/agent/sessions)
   --model <substring>    Filter provider/model by substring
   --model-prefix <p>     Include provider/model prefixes, repeatable, e.g. openai-codex/
   --bash-contains <text> Include only sessions with bash tool calls containing text, repeatable
@@ -132,8 +132,9 @@ async function loadContextWindows() {
 	}
 
 	try {
-		const config = JSON.parse(await fs.readFile(MODELS_CONFIG_PATH, "utf8"));
-		sources.push(MODELS_CONFIG_PATH);
+		const modelsConfigPath = await MODELS_CONFIG_PATH;
+		const config = JSON.parse(await fs.readFile(modelsConfigPath, "utf8"));
+		sources.push(modelsConfigPath);
 		const providers = config?.providers && typeof config.providers === "object" ? config.providers : {};
 		for (const [providerName, provider] of Object.entries(providers)) {
 			const overrides = provider?.modelOverrides && typeof provider.modelOverrides === "object" ? provider.modelOverrides : {};
@@ -390,6 +391,7 @@ async function main() {
 	}
 	const sinceMs = options.since ? Date.parse(options.since) : null;
 	if (options.since && !Number.isFinite(sinceMs)) throw new Error(`Invalid --since value: ${options.since}`);
+	options.sessionsDir ??= await DEFAULT_SESSIONS_DIR;
 	const contextWindows = await loadContextWindows();
 	const cwdFilter = options.cwd ? path.resolve(options.cwd) : undefined;
 	const { sessions, meta } = await scanSessions(path.resolve(options.sessionsDir), sinceMs, contextWindows, cwdFilter);

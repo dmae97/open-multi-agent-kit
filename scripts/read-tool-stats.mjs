@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 
-const DEFAULT_SESSIONS_DIR = path.join(homedir(), ".pi/agent/sessions");
+const DEFAULT_SESSIONS_DIR = path.join(homedir(), ".omk/agent/sessions");
 const DEFAULT_ACTIVE_READ_TOOL_PATH = path.join(process.cwd(), "packages/coding-agent/src/core/tools/read.ts");
 const DEFAULT_TOP = 20;
 const CHART_WIDTH = 40;
@@ -14,7 +14,7 @@ const REPORT_TIME_ZONE = "Europe/Berlin";
 
 function parseArgs(argv) {
 	const options = {
-		sessionsDir: DEFAULT_SESSIONS_DIR,
+		sessionsDir: undefined,
 		json: false,
 		text: false,
 		includeRecords: false,
@@ -56,7 +56,7 @@ function printHelp() {
 	console.log(`Usage: node scripts/read-tool-stats.mjs [options]
 
 Options:
-  --sessions-dir <path>  Sessions directory (default: ~/.pi/agent/sessions)
+  --sessions-dir <path>  Sessions directory (default: ~/.omk/agent/sessions)
   --model <substring>    Filter provider/model by substring
   --top <n>              Number of examples to show (default: ${DEFAULT_TOP})
   --since <iso>          Only scan session files created at or after this ISO time
@@ -478,6 +478,7 @@ function applyFilters(records, options) {
 
 async function main() {
 	const options = parseArgs(process.argv.slice(2));
+	options.sessionsDir ??= await DEFAULT_SESSIONS_DIR;
 	if (options.help) {
 		printHelp();
 		return;

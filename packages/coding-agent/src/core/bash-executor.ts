@@ -25,6 +25,7 @@ export interface BashExecutorOptions {
 	onChunk?: (chunk: string) => void;
 	/** AbortSignal for cancellation */
 	signal?: AbortSignal;
+	env?: NodeJS.ProcessEnv;
 }
 
 export interface BashResult {
@@ -67,7 +68,7 @@ export async function executeBashWithOperations(
 			return;
 		}
 		const id = randomBytes(8).toString("hex");
-		tempFilePath = join(tmpdir(), `pi-bash-${id}.log`);
+		tempFilePath = join(tmpdir(), `omk-bash-${id}.log`);
 		// Owner-only permissions: full output can contain secrets (env vars, tokens, etc.).
 		tempFileStream = createWriteStream(tempFilePath, { mode: 0o600 });
 		for (const chunk of outputChunks) {
@@ -131,6 +132,7 @@ export async function executeBashWithOperations(
 		const result = await operations.exec(command, cwd, {
 			onData,
 			signal: options?.signal,
+			env: options?.env,
 		});
 
 		const fullOutput = outputChunks.join("");

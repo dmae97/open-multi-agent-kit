@@ -89,6 +89,7 @@ const defaultEditOperations: EditOperations = {
 export interface EditToolOptions {
 	/** Custom operations for file editing. Default: local filesystem */
 	operations?: EditOperations;
+	canWritePath?: (absolutePath: string) => boolean;
 }
 
 function prepareEditArguments(input: unknown): EditToolInput {
@@ -308,6 +309,9 @@ export function createEditToolDefinition(
 		async execute(_toolCallId, input: EditToolInput, signal?: AbortSignal, _onUpdate?, _ctx?) {
 			const { path, edits } = validateEditInput(input);
 			const absolutePath = resolveToCwd(path, cwd);
+			if (options?.canWritePath && !options.canWritePath(absolutePath)) {
+				throw new Error(`Edit blocked by active loadout policy: ${path}`);
+			}
 
 			return withFileMutationQueue(absolutePath, async () => {
 				// Do not reject from an abort event listener here: that would release the

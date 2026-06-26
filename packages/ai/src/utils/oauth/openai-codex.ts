@@ -47,7 +47,7 @@ type OAuthToken = { access: string; refresh: string; expires: number };
 type TokenOperation = "exchange" | "refresh";
 
 function getCallbackHost(): string {
-	return typeof process !== "undefined" ? process.env.PI_OAUTH_CALLBACK_HOST || "127.0.0.1" : "127.0.0.1";
+	return typeof process !== "undefined" ? process.env.OMK_OAUTH_CALLBACK_HOST || "127.0.0.1" : "127.0.0.1";
 }
 
 type DeviceAuthInfo = {

@@ -25,7 +25,7 @@ Configure via `package.json`:
 
 ```json
 {
-  "piConfig": {
+  "omkConfig": {
     "name": "omk",
     "configDir": ".omk"
   }

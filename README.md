@@ -31,8 +31,8 @@ This is the home of the omk agent harness project including our self extensible 
 
 To learn more about omk:
 
-* [Visit omk.dev](https://pi.dev), the project website with demos
-* [Read the documentation](https://pi.dev/docs/latest), but you can also ask the agent to explain itself
+* [Visit omk.dev](https://omk.dev), the project website with demos
+* [Read the documentation](https://omk.dev/docs/latest), but you can also ask the agent to explain itself
 
 ## OMK//CONTROL TUI
 
@@ -44,19 +44,9 @@ The default dark TUI theme uses the `omk-control-grid-dark` Night City palette.
 
 ## Share your OSS coding agent sessions
 
-If you use omk or other coding agents for open source work, please share your sessions.
+If you use OMK or other coding agents for open source work, publish sanitized sessions from `.omk/agent/sessions`.
 
 Public OSS session data helps improve coding agents with real-world tasks, tool use, failures, and fixes instead of toy benchmarks.
-
-For the full explanation, see [this post on X](https://x.com/badlogicgames/status/2037811643774652911).
-
-To publish sessions, use [`badlogic/pi-share-hf`](https://github.com/badlogic/pi-share-hf). Read its README.md for setup instructions. All you need is a Hugging Face account, the Hugging Face CLI, and `pi-share-hf`.
-
-You can also watch [this video](https://x.com/badlogicgames/status/2041151967695634619), where I show how I publish my `pi-mono` sessions.
-
-I regularly publish my own `pi-mono` work sessions here:
-
-- [badlogicgames/pi-mono on Hugging Face](https://huggingface.co/datasets/badlogicgames/pi-mono)
 
 ## All Packages
 
@@ -67,7 +57,7 @@ I regularly publish my own `pi-mono` work sessions here:
 | **[open-multi-agent-kit](packages/coding-agent)** | Interactive coding agent CLI |
 | **[@earendil-works/omk-tui](packages/tui)** | Terminal UI library with differential rendering |
 
-For Slack/chat automation and workflows see [earendil-works/pi-chat](https://github.com/earendil-works/pi-chat).
+For Slack/chat automation and workflow integrations, use OMK extensions and MCP servers.
 
 ## Permissions & Containerization
 
@@ -90,7 +80,7 @@ npm install --ignore-scripts  # Install all dependencies without running lifecyc
 npm run build        # Build all packages
 npm run check        # Lint, format, and type check
 ./test.sh            # Run tests (skips LLM-dependent tests without API keys)
-./pi-test.sh         # Run pi from sources (can be run from any directory)
+./omk-test.sh        # Run OMK from sources (can be run from any directory)
 ```
 
 ## Supply-chain hardening
@@ -99,7 +89,7 @@ We treat npm dependency changes as reviewed code changes.
 
 - Direct external dependencies are pinned to exact versions. Internal workspace packages remain version-ranged.
 - `.npmrc` sets `save-exact=true` and `min-release-age=2` to avoid same-day dependency releases during npm resolution.
-- `package-lock.json` is the dependency ground truth. Pre-commit blocks accidental lockfile commits unless `PI_ALLOW_LOCKFILE_CHANGE=1` is set.
+- `package-lock.json` is the dependency ground truth. Pre-commit blocks accidental lockfile commits unless `OMK_ALLOW_LOCKFILE_CHANGE=1` is set.
 - `npm run check` verifies pinned direct deps, native TypeScript import compatibility, and the generated coding-agent shrinkwrap.
 - The published CLI package includes `packages/coding-agent/npm-shrinkwrap.json`, generated from the root lockfile, to pin transitive deps for npm users.
 - Release smoke tests use `npm run release:local` to build, pack, and create isolated npm and Bun installs outside the repo before tagging a release.

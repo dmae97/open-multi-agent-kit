@@ -1,3 +1,5 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { homedir } from "os";
 import { join, resolve } from "path";
 import { describe, expect, it } from "vitest";
@@ -391,6 +393,50 @@ describe("skills", () => {
 	});
 
 	describe("collision handling", () => {
+		it("should load skill files in deterministic path order", () => {
+			const tempDir = mkdtempSync(join(tmpdir(), "skills-order-"));
+			try {
+				writeFileSync(
+					join(tempDir, "b-skill.md"),
+					`---
+name: b-skill
+description: B skill
+---
+B`,
+				);
+				writeFileSync(
+					join(tempDir, "a-skill.md"),
+					`---
+name: a-skill
+description: A skill
+---
+A`,
+				);
+
+				const { skills } = loadSkillsFromDir({ dir: tempDir, source: "test" });
+
+				expect(skills.map((skill) => skill.name)).toEqual(["a-skill", "b-skill"]);
+			} finally {
+				rmSync(tempDir, { recursive: true, force: true });
+			}
+		});
+
+		it("should report collision diagnostics with kept and skipped paths", () => {
+			const { diagnostics } = loadSkills({
+				agentDir: resolve(__dirname, "fixtures/empty-agent"),
+				cwd: resolve(__dirname, "fixtures/empty-cwd"),
+				skillPaths: [join(collisionFixturesDir, "first"), join(collisionFixturesDir, "second")],
+				includeDefaults: false,
+			});
+			const collision = diagnostics.find((d) => d.type === "collision" && d.collision?.name === "calendar");
+
+			expect(collision).toBeDefined();
+			expect(collision?.message).toContain("kept");
+			expect(collision?.message).toContain(collision?.collision?.winnerPath);
+			expect(collision?.message).toContain("skipped");
+			expect(collision?.message).toContain(collision?.collision?.loserPath);
+		});
+
 		it("should detect name collisions and keep first skill", () => {
 			// Load from first directory
 			const first = loadSkillsFromDir({
