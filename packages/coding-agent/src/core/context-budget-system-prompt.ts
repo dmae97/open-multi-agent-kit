@@ -1,10 +1,10 @@
 import {
-	CONTEXT_BUDGET_POLICY_VERSION,
-	type ContextBudgetItem,
-	type ContextBudgetPlan,
-	type ContextBudgetPriority,
-	planContextBudget,
-} from "./context-budget-governor.ts";
+	CONTEXT_BUDGET_POLICY_VERSION_V2,
+	type ContextBudgetItemV2,
+	type PromptContextBudgetPlanV2,
+	planPromptContextBudgetV2,
+} from "./context-budget-governor-v2.ts";
+import { createSystemPromptBudgetItems, escapeXml } from "./context-budget-system-prompt-items.ts";
 import {
 	type ContextBudgetTokenizerMode,
 	createTokenCounterForMode,
@@ -22,6 +22,10 @@ export interface SystemPromptContextBudgetOptions {
 	readonly includeSkillInventory?: boolean;
 	readonly includeFullContextFiles?: boolean;
 	readonly tokenCounter?: TokenCounterAdapter;
+	/** Maximum number of inactive (non-active) skills to include as items. Default: 15. */
+	readonly maxInactiveSkills?: number;
+	/** Current user query text for relevance-aware skill ranking. */
+	readonly queryContext?: string;
 }
 
 export interface SystemPromptBudgetedResourcesInput {
@@ -34,10 +38,8 @@ export interface SystemPromptBudgetedResourcesInput {
 
 export interface SystemPromptBudgetedResources {
 	readonly text: string;
-	readonly plan: ContextBudgetPlan;
+	readonly plan: PromptContextBudgetPlanV2;
 }
-
-const CONTEXT_EXCERPT_CHARS = 1200;
 
 export function renderSystemPromptBudgetedResources(
 	input: SystemPromptBudgetedResourcesInput,
@@ -47,114 +49,32 @@ export function renderSystemPromptBudgetedResources(
 	const modelId = input.options.modelId ?? "unknown";
 	const baseTokens = tokenCounter.countText(input.basePrompt, modelId).tokens;
 	const resourceBudget = Math.max(0, input.options.maxPromptTokens - baseTokens);
-	const items = createSystemPromptBudgetItems(input);
-	const plan = planContextBudget({
+	const items = createSystemPromptBudgetItems(input, resourceBudget);
+	const plan = planPromptContextBudgetV2({
 		maxTokens: resourceBudget,
 		responseReserveTokens: input.options.responseReserveTokens ?? 0,
 		modelId,
-		policyVersion: CONTEXT_BUDGET_POLICY_VERSION,
+		policyVersion: CONTEXT_BUDGET_POLICY_VERSION_V2,
+		query: input.options.queryContext,
 		items,
 		tokenCounter,
 	});
-	const included = new Set(plan.includedItems.map((item) => item.id));
-	const text = items
+	const included = new Set(plan.includedItemIds);
+	const filtered = deduplicatePointerFull(items, included);
+	const text = filtered
 		.filter((item) => included.has(item.id))
-		.map((item) => item.text)
+		.map(
+			(item) =>
+				plan.selectedRepresentations.find((representation) => representation.itemId === item.id)?.text ?? item.text,
+		)
 		.join("\n")
 		.trimEnd();
 	const note = renderBudgetNote(plan, baseTokens);
 	return { text: text ? `${text}\n${note}` : note, plan };
 }
 
-function createSystemPromptBudgetItems(input: SystemPromptBudgetedResourcesInput): ContextBudgetItem[] {
-	const items: ContextBudgetItem[] = [];
-	for (const contextFile of input.contextFiles) {
-		const scope = contextFile.isGlobal ? "parent" : "project";
-		const tagName = contextFile.isGlobal ? "parent_instructions" : "project_instructions";
-		items.push({
-			id: `context-pointer:${contextFile.path}`,
-			kind: "context-pointer",
-			priority: contextFile.isGlobal ? "hard" : "high",
-			relevance: contextFile.isGlobal ? 1 : 0.8,
-			text: renderContextPointer(contextFile, scope),
-		});
-		if (input.options.includeFullContextFiles !== false) {
-			items.push({
-				id: `context-full:${contextFile.path}`,
-				kind: "context-full",
-				priority: contextFile.isGlobal ? "high" : "medium",
-				relevance: contextFile.isGlobal ? 0.9 : 0.6,
-				redundancyKey: contextFile.path,
-				text: renderContextFull(contextFile, tagName),
-			});
-		}
-	}
-
-	const visibleSkills = input.skills.filter((skill) => !skill.disableModelInvocation);
-	if (input.includeSkills && input.options.includeSkillInventory !== false && visibleSkills.length > 0) {
-		items.push({ id: "skill-header", kind: "skill-header", priority: "hard", text: renderSkillHeader() });
-		const activeSkillNames = new Set(input.options.activeSkillNames ?? []);
-		for (const skill of visibleSkills) {
-			items.push({
-				id: `skill:${skill.name}`,
-				kind: "skill",
-				priority: skillPriority(skill.name, activeSkillNames),
-				relevance: activeSkillNames.has(skill.name) ? 1 : 0.25,
-				redundancyKey: skill.name,
-				text: renderSkillEntry(skill),
-			});
-		}
-		items.push({ id: "skill-footer", kind: "skill-header", priority: "hard", text: "</available_skills>" });
-	}
-	return items;
-}
-
-function renderContextPointer(contextFile: ContextFile, scope: string): string {
-	const marker = contextFile.containsJailbreak ? " sanitized=true" : "";
-	return `<context_file_pointer scope="${escapeXml(scope)}" path="${escapeXml(contextFile.path)}"${marker} chars="${contextFile.content.length}" />`;
-}
-
-function renderContextFull(contextFile: ContextFile, tagName: string): string {
-	const content =
-		contextFile.content.length > CONTEXT_EXCERPT_CHARS ? boundedExcerpt(contextFile.content) : contextFile.content;
-	const truncated = content.length < contextFile.content.length ? " truncated=true" : "";
-	return `<${tagName} path="${escapeXml(contextFile.path)}"${truncated}>\n${content}\n</${tagName}>`;
-}
-
-function boundedExcerpt(content: string): string {
-	const headChars = Math.floor(CONTEXT_EXCERPT_CHARS * 0.7);
-	const tailChars = CONTEXT_EXCERPT_CHARS - headChars;
-	const head = content.slice(0, headChars).trimEnd();
-	const tail = content.slice(-tailChars).trimStart();
-	return `${head}\n\n[...context-budget excerpt omitted ${content.length - CONTEXT_EXCERPT_CHARS} chars...]\n\n${tail}`;
-}
-
-function renderSkillHeader(): string {
-	return [
-		"\n\nThe following skills provide specialized instructions for specific tasks.",
-		"Use the read tool to load a skill's file when the task matches its description.",
-		"When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.",
-		"",
-		"<available_skills>",
-	].join("\n");
-}
-
-function renderSkillEntry(skill: Skill): string {
-	return [
-		"  <skill>",
-		`    <name>${escapeXml(skill.name)}</name>`,
-		`    <description>${escapeXml(skill.description)}</description>`,
-		`    <location>${escapeXml(skill.filePath)}</location>`,
-		"  </skill>",
-	].join("\n");
-}
-
-function skillPriority(skillName: string, activeSkillNames: Set<string>): ContextBudgetPriority {
-	return activeSkillNames.has(skillName) ? "hard" : "low";
-}
-
-function renderBudgetNote(plan: ContextBudgetPlan, baseTokens: number): string {
-	const omitted = plan.omittedItems.length;
+function renderBudgetNote(plan: PromptContextBudgetPlanV2, baseTokens: number): string {
+	const omitted = plan.omittedItemIds.length;
 	return [
 		"<context_budget>",
 		`  <policy>${escapeXml(plan.policyVersion)}</policy>`,
@@ -169,11 +89,29 @@ function renderBudgetNote(plan: ContextBudgetPlan, baseTokens: number): string {
 	].join("\n");
 }
 
-function escapeXml(str: string): string {
-	return str
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&apos;");
+/**
+ * R3: When a context-full item is included, exclude the matching pointer
+ * so the same file does not consume tokens twice.
+ */
+function deduplicatePointerFull(
+	items: readonly ContextBudgetItemV2[],
+	included: ReadonlySet<string>,
+): readonly ContextBudgetItemV2[] {
+	const includedFullPaths = new Set<string>();
+	for (const item of items) {
+		if (item.id.startsWith("context-full:") && included.has(item.id)) {
+			const path = item.id.slice("context-full:".length);
+			includedFullPaths.add(path);
+		}
+	}
+	if (includedFullPaths.size === 0) {
+		return items;
+	}
+	return items.filter((item) => {
+		if (!item.id.startsWith("context-pointer:")) {
+			return true;
+		}
+		const path = item.id.slice("context-pointer:".length);
+		return !includedFullPaths.has(path);
+	});
 }
