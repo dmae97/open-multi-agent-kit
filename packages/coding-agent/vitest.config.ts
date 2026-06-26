@@ -20,6 +20,7 @@ export default defineConfig({
 		alias: [
 			{ find: /^@earendil-works\/omk-ai$/, replacement: aiSrcIndex },
 			{ find: /^@earendil-works\/omk-ai\/oauth$/, replacement: aiSrcOAuth },
+			// Legacy compatibility bridges for pre-OMK pi-agent-core imports.
 			{ find: /^@earendil-works\/pi-agent-core$/, replacement: agentSrcIndex },
 			{ find: /^@mariozechner\/omk-ai$/, replacement: aiSrcIndex },
 			{ find: /^@mariozechner\/omk-ai\/oauth$/, replacement: aiSrcOAuth },

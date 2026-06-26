@@ -328,7 +328,7 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
 		// Mercury 2 in instant mode (reasoning_effort: "none") disables tool calling.
 		// Mark "off" unsupported so the openai-completions provider omits the reasoning param
 		// instead of defaulting to {reasoning:{effort:"none"}} (see openai-completions.ts:575).
-		// Pi's low/medium/high pass through verbatim; OpenRouter normalizes to Mercury's vocabulary.
+		// OMK's low/medium/high pass through verbatim; OpenRouter normalizes to Mercury's vocabulary.
 		mergeThinkingLevelMap(model, { off: null });
 	}
 	if (model.provider === "opencode-go" && model.id === "kimi-k2.6") {
