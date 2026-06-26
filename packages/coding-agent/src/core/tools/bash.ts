@@ -17,6 +17,7 @@ import {
 } from "../../utils/shell.ts";
 import { classifyShellCommand } from "../command-safety.ts";
 import type { ToolDefinition, ToolRenderResultOptions } from "../extensions/types.ts";
+import { assertLoadoutAccess, type LoadoutAccessGuard } from "../loadout-access-policy.ts";
 import type { SandboxBackendStatus, SandboxPathResolver, SandboxPlatform, SandboxPolicy } from "../sandbox/policy.ts";
 import { buildSandboxedSpawnRequest } from "../sandbox/spawn.ts";
 import { OutputAccumulator } from "./output-accumulator.ts";
@@ -201,6 +202,7 @@ export interface BashToolOptions {
 	shellPath?: string;
 	/** Trusted sandbox policy for local shell execution */
 	sandboxPolicy?: BashSandboxPreflight;
+	loadoutAccessGuard?: LoadoutAccessGuard;
 	/** Hook to adjust command, cwd, or env before execution */
 	spawnHook?: BashSpawnHook;
 }
@@ -346,6 +348,11 @@ export function createBashToolDefinition(
 		) {
 			const resolvedCommand = commandPrefix ? `${commandPrefix}\n${command}` : command;
 			const spawnContext = resolveSpawnContext(resolvedCommand, cwd, spawnHook);
+			assertLoadoutAccess(options?.loadoutAccessGuard, {
+				operation: "execute",
+				toolName: "bash",
+				command: spawnContext.command,
+			});
 
 			// Non-negotiable safety floor: re-classify the EFFECTIVE command after
 			// commandPrefix and spawnHook have been applied, so a destructive command

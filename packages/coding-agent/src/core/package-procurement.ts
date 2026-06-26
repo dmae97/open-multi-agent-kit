@@ -7,7 +7,7 @@
  * text) and return advisory verdicts so an external installer never runs against an
  * unvetted, mutable, or copyleft-contaminated source.
  *
- * Implements PR A from .omk/runs/omk-pi-package-hardening-plan/{procurement.md,algorithm-plan.md}:
+ * Implements PR A from .omk/runs/omk-package-hardening-plan/{procurement.md,algorithm-plan.md}:
  *   - exact npm semver validation (shared pattern with scripts/check-pinned-deps.mjs)
  *   - mutable range/tag/branch rejection
  *   - candidate input normalization to a canonical pinned source string
@@ -527,7 +527,7 @@ const COMPATIBILITY_RULES: PatternRule[] = [
 	{ kind: "pi-coding-agent-path", severity: "block", pattern: /pi-coding-agent/ },
 	{ kind: "pi-cli-invocation", severity: "block", pattern: /\bpi\s+(?:install|update)\b/ },
 	{ kind: "pi-env", severity: "warn", pattern: /\bPI_[A-Z][A-Z0-9_]*\b/ },
-	{ kind: "legacy-pi-import", severity: "warn", pattern: /@(?:mariozechner|earendil-works)\/pi-/ },
+	{ kind: "legacy-pi-import", severity: "block", pattern: /@(?:mariozechner|earendil-works)\/pi-/ },
 	{ kind: "omk-path", severity: "info", pattern: /(?:^|[^.\w])\.omk\// },
 ];
 
@@ -553,7 +553,7 @@ function scanWithRules(sources: SourceText[], rules: PatternRule[]): ScanFinding
 	return findings;
 }
 
-export function scanPiOmkCompatibility(sources: SourceText[]): CompatibilityScanResult {
+export function scanLegacyOmkCompatibility(sources: SourceText[]): CompatibilityScanResult {
 	const findings = scanWithRules(sources, COMPATIBILITY_RULES);
 	const hasBlock = findings.some((f) => f.severity === "block");
 	const hasOmk = findings.some((f) => f.kind === "omk-path");
@@ -563,7 +563,6 @@ export function scanPiOmkCompatibility(sources: SourceText[]): CompatibilityScan
 	if (hasBlock) {
 		verdict = "pi-hardcoded";
 	} else if (hasOmk) {
-		// OMK paths present and no hardcoded legacy state: legacy imports are loader-alias covered.
 		verdict = "omk-native";
 	} else if (hasWarn) {
 		verdict = "unknown";
@@ -938,7 +937,7 @@ export function procureCandidate(inputs: ProcurementReviewInputs): ProcurementRe
 	});
 
 	const sources = inputs.sources ?? [];
-	const compatibility = scanPiOmkCompatibility(sources);
+	const compatibility = scanLegacyOmkCompatibility(sources);
 	const capabilities = scanSourceCapabilities(sources);
 	const releaseAge = evaluateReleaseAge({
 		publishedAt: candidate.publishedAt,

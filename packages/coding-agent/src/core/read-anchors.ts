@@ -13,7 +13,7 @@
  * Side-effect free: no filesystem access; `node:crypto` only.
  *
  * Derived clean-room from the lane C plan
- * (`.omk/runs/omk-pi-package-hardening-plan/recovery-readseek.md`); no legacy
+ * (`.omk/runs/omk-package-hardening-plan/recovery-readseek.md`); no legacy
  * package source is imported or copied.
  */
 

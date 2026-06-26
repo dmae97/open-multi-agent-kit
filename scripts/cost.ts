@@ -3,6 +3,10 @@
 import * as fs from "fs";
 import * as path from "path";
 
+function resolveSessionsBase(): string {
+	return path.join(process.env.HOME!, ".omk/agent/sessions");
+}
+
 // Parse args
 const args = process.argv.slice(2);
 let directory: string | undefined;
@@ -35,7 +39,7 @@ function encodeSessionDir(dir: string): string {
 	return "--" + normalized.replace(/\//g, "-") + "--";
 }
 
-const sessionsBase = path.join(process.env.HOME!, ".pi/agent/sessions");
+const sessionsBase = resolveSessionsBase();
 const encodedDir = encodeSessionDir(directory);
 const sessionsDir = path.join(sessionsBase, encodedDir);
 

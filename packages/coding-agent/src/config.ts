@@ -165,6 +165,20 @@ function getSelfUpdateCommandForMethod(
 	}
 }
 
+function getConfiguredNpmPrefixRoots(npmArgs: readonly string[]): string[] {
+	const roots: string[] = [];
+	for (let i = 0; i < npmArgs.length; i++) {
+		const arg = npmArgs[i];
+		const prefix =
+			arg === "--prefix" ? npmArgs[i + 1] : arg.startsWith("--prefix=") ? arg.slice("--prefix=".length) : undefined;
+		if (!prefix) {
+			continue;
+		}
+		roots.push(join(prefix, "lib", "node_modules"), join(prefix, "node_modules"));
+	}
+	return roots;
+}
+
 function readCommandOutput(
 	command: string,
 	args: string[],
@@ -201,7 +215,8 @@ function getGlobalPackageRoots(method: InstallMethod, _packageName: string, npmC
 				requireSuccess: configured,
 			});
 			const inferred = configured ? undefined : getInferredNpmInstall();
-			return [root, inferred?.root].filter((x): x is string => !!x);
+			const configuredRoots = configured ? getConfiguredNpmPrefixRoots(npmArgs) : [];
+			return [root, ...configuredRoots, inferred?.root].filter((x): x is string => !!x);
 		}
 		case "pnpm": {
 			const root = readCommandOutput("pnpm", ["root", "-g"]);
@@ -309,7 +324,7 @@ export function getSelfUpdateUnavailableInstruction(
 ): string {
 	const method = detectInstallMethod();
 	if (method === "bun-binary") {
-		return `Download from: https://github.com/earendil-works/pi-mono/releases/latest`;
+		return `Download from: https://github.com/dmae97/omk/releases/latest`;
 	}
 	const command = getSelfUpdateCommandForMethod(method, packageName, updatePackageName, npmCommand);
 	if (command) {
@@ -342,7 +357,7 @@ export function getUpdateInstruction(packageName: string): string {
  */
 export function getPackageDir(): string {
 	// Allow override via environment variable (useful for Nix/Guix where store paths tokenize poorly)
-	const envDir = process.env.OMK_PACKAGE_DIR ?? process.env.PI_PACKAGE_DIR;
+	const envDir = process.env.OMK_PACKAGE_DIR;
 	if (envDir) {
 		return normalizePath(envDir);
 	}
@@ -439,10 +454,6 @@ export function getBundledInteractiveAssetPath(name: string): string {
 	return join(getInteractiveAssetsDir(), name);
 }
 
-// =============================================================================
-// App Config (from package.json omkConfig, with legacy piConfig fallback)
-// =============================================================================
-
 interface PackageAppConfig {
 	name?: string;
 	configDir?: string;
@@ -452,7 +463,6 @@ interface PackageJson {
 	name?: string;
 	version?: string;
 	omkConfig?: PackageAppConfig;
-	piConfig?: PackageAppConfig;
 }
 
 let pkg: PackageJson = {};
@@ -463,7 +473,7 @@ try {
 	if (err.code !== "ENOENT") throw e;
 }
 
-const packageAppConfig: PackageAppConfig | undefined = pkg.omkConfig ?? pkg.piConfig;
+const packageAppConfig: PackageAppConfig | undefined = pkg.omkConfig;
 const packageAppConfigName: string | undefined = packageAppConfig?.name;
 export const PACKAGE_NAME: string = pkg.name || "open-multi-agent-kit";
 export const APP_NAME: string = packageAppConfigName || "omk";
@@ -483,7 +493,7 @@ const DEFAULT_SHARE_VIEWER_URL = "https://omk.dev/session/";
 
 /** Get the share viewer URL for a gist ID */
 export function getShareViewerUrl(gistId: string): string {
-	const baseUrl = process.env.OMK_SHARE_VIEWER_URL || process.env.PI_SHARE_VIEWER_URL || DEFAULT_SHARE_VIEWER_URL;
+	const baseUrl = process.env.OMK_SHARE_VIEWER_URL || DEFAULT_SHARE_VIEWER_URL;
 	return `${baseUrl}#${gistId}`;
 }
 
@@ -493,7 +503,7 @@ export function getShareViewerUrl(gistId: string): string {
 
 /** Get the agent config directory (e.g., ~/.omk/agent/) */
 export function getAgentDir(): string {
-	const envDir = process.env[ENV_AGENT_DIR] ?? process.env.PI_CODING_AGENT_DIR;
+	const envDir = process.env[ENV_AGENT_DIR];
 	if (envDir) {
 		return expandTildePath(envDir);
 	}

@@ -37,6 +37,7 @@ const defaultWriteOperations: WriteOperations = {
 export interface WriteToolOptions {
 	/** Custom operations for file writing. Default: local filesystem */
 	operations?: WriteOperations;
+	canWritePath?: (absolutePath: string) => boolean;
 }
 
 type WriteHighlightCache = {
@@ -199,6 +200,9 @@ export function createWriteToolDefinition(
 			_ctx?,
 		) {
 			const absolutePath = resolveToCwd(path, cwd);
+			if (options?.canWritePath && !options.canWritePath(absolutePath)) {
+				throw new Error(`Write blocked by active loadout policy: ${path}`);
+			}
 			const dir = dirname(absolutePath);
 			return withFileMutationQueue(absolutePath, async () => {
 				// Do not reject from an abort event listener here: that would release the

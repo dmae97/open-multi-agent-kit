@@ -12,7 +12,7 @@ import {
 	normalizeCandidate,
 	procureCandidate,
 	procureCandidateBatch,
-	scanPiOmkCompatibility,
+	scanLegacyOmkCompatibility,
 	scanSourceCapabilities,
 	validateExactNpmVersion,
 	validateGitRef,
@@ -286,9 +286,9 @@ describe("evaluateLifecycleScripts", () => {
 	});
 });
 
-describe("scanPiOmkCompatibility", () => {
+describe("scanLegacyOmkCompatibility", () => {
 	it("flags hardcoded .pi state paths as pi-hardcoded", () => {
-		const result = scanPiOmkCompatibility([
+		const result = scanLegacyOmkCompatibility([
 			{ path: "index.ts", text: 'const dir = "~/.pi/agents";\nwriteState(dir);\n' },
 		]);
 		expect(result.verdict).toBe("pi-hardcoded");
@@ -296,27 +296,28 @@ describe("scanPiOmkCompatibility", () => {
 	});
 
 	it("flags pi CLI invocations as blocking", () => {
-		const result = scanPiOmkCompatibility([{ path: "setup.sh", text: "pi install\npi update\n" }]);
+		const result = scanLegacyOmkCompatibility([{ path: "setup.sh", text: "pi install\npi update\n" }]);
 		expect(result.verdict).toBe("pi-hardcoded");
 	});
 
 	it("treats omk paths with no pi state as omk-native", () => {
-		const result = scanPiOmkCompatibility([
+		const result = scanLegacyOmkCompatibility([
 			{ path: "index.ts", text: 'const out = ".omk/runs/result.md";\nsaveArtifact(out);\n' },
 		]);
 		expect(result.verdict).toBe("omk-native");
 	});
 
-	it("flags legacy pi imports as warnings (alias-covered, needs review)", () => {
-		const result = scanPiOmkCompatibility([
+	it("flags legacy pi imports as blocking", () => {
+		const result = scanLegacyOmkCompatibility([
 			{ path: "index.ts", text: 'import { x } from "@mariozechner/pi-tui";\n' },
 		]);
 		expect(result.findings.some((f) => f.kind === "legacy-pi-import")).toBe(true);
-		expect(result.verdict).toBe("unknown");
+		expect(result.findings.some((f) => f.severity === "block")).toBe(true);
+		expect(result.verdict).toBe("pi-hardcoded");
 	});
 
 	it("returns unknown for source with no signals", () => {
-		const result = scanPiOmkCompatibility([{ path: "index.ts", text: "export const value = 1;\n" }]);
+		const result = scanLegacyOmkCompatibility([{ path: "index.ts", text: "export const value = 1;\n" }]);
 		expect(result.verdict).toBe("unknown");
 	});
 });
@@ -824,7 +825,7 @@ describe("declaredUse policy overlays", () => {
 	});
 });
 
-const PI_LIBRARY_FIXTURES: CandidatePackageInput[] = [
+const LEGACY_LIBRARY_FIXTURES: CandidatePackageInput[] = [
 	{
 		name: "pi-sandbox",
 		exactVersion: "0.4.3",
@@ -922,14 +923,14 @@ const PI_LIBRARY_FIXTURES: CandidatePackageInput[] = [
 
 describe("procureCandidateBatch", () => {
 	it("returns a coverage matrix for all 13 legacy library fixtures", () => {
-		const result = procureCandidateBatch({ candidates: PI_LIBRARY_FIXTURES });
+		const result = procureCandidateBatch({ candidates: LEGACY_LIBRARY_FIXTURES });
 		expect(result.coverage).toHaveLength(13);
 		expect(result.coverage.every((row) => row.adoption !== undefined)).toBe(true);
 		expect(result.globalBlockers).toEqual([]);
 	});
 
 	it("defers every fixture missing an exact pin", () => {
-		const result = procureCandidateBatch({ candidates: PI_LIBRARY_FIXTURES });
+		const result = procureCandidateBatch({ candidates: LEGACY_LIBRARY_FIXTURES });
 		const missingPin = [
 			"@ayulab/pi-rewind",
 			"@juicesharp/rpiv-ask-user-question",
@@ -946,7 +947,7 @@ describe("procureCandidateBatch", () => {
 	});
 
 	it("enforces code-intel-anchor mutual exclusion between pi-readseek and pi-shazam", () => {
-		const result = procureCandidateBatch({ candidates: PI_LIBRARY_FIXTURES });
+		const result = procureCandidateBatch({ candidates: LEGACY_LIBRARY_FIXTURES });
 		const readseek = result.coverage.find((entry) => entry.candidate.name === "pi-readseek");
 		const shazam = result.coverage.find((entry) => entry.candidate.name === "pi-shazam");
 		const adopted = [readseek, shazam].filter((row) => row?.adoption === "native");
@@ -957,7 +958,7 @@ describe("procureCandidateBatch", () => {
 	});
 
 	it("forces rpiv-workflow to reference-only once pinned", () => {
-		const fixture = PI_LIBRARY_FIXTURES.find((candidate) => candidate.name === "@juicesharp/rpiv-workflow");
+		const fixture = LEGACY_LIBRARY_FIXTURES.find((candidate) => candidate.name === "@juicesharp/rpiv-workflow");
 		expect(fixture).toBeDefined();
 		const pinned: CandidatePackageInput = { ...fixture!, exactVersion: "0.1.0" };
 		const result = procureCandidateBatch({ candidates: [pinned] });
@@ -965,7 +966,7 @@ describe("procureCandidateBatch", () => {
 	});
 
 	it("keeps Braintrust observability advisory-only until an export policy is supplied", () => {
-		const result = procureCandidateBatch({ candidates: PI_LIBRARY_FIXTURES });
+		const result = procureCandidateBatch({ candidates: LEGACY_LIBRARY_FIXTURES });
 		const braintrust = result.coverage.find((entry) => entry.candidate.name === "@braintrust/pi-extension");
 		expect(braintrust?.adoption).toBe("advisory-only");
 	});

@@ -9194,7 +9194,7 @@ export const MODELS = {
 				cacheRead: 0.02,
 				cacheWrite: 0,
 			},
-			contextWindow: 512000,
+			contextWindow: 1000000,
 			maxTokens: 131072,
 		} satisfies Model<"anthropic-messages">,
 		"qwen3.6-plus": {
@@ -9914,7 +9914,7 @@ export const MODELS = {
 			cost: {
 				input: 0.2288,
 				output: 0.3432,
-				cacheRead: 0,
+				cacheRead: 0.02288,
 				cacheWrite: 0,
 			},
 			contextWindow: 131072,

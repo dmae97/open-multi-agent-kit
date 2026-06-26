@@ -51,4 +51,89 @@ describe("context budget governor", () => {
 		);
 		expect(focused).toBeGreaterThan(noisy);
 	});
+
+	it("selects the highest value optional combination instead of the highest single item", () => {
+		const plan = planContextBudget({
+			maxTokens: 10,
+			items: [
+				{
+					id: "large-single",
+					kind: "tool-result",
+					priority: "medium",
+					text: "large",
+					tokenEstimate: 10,
+					relevance: 1,
+					recency: 1,
+					evidenceValue: 1,
+				},
+				{
+					id: "small-a",
+					kind: "tool-result",
+					priority: "medium",
+					text: "small-a",
+					tokenEstimate: 5,
+					relevance: 0.5,
+					recency: 1,
+					evidenceValue: 1,
+				},
+				{
+					id: "small-b",
+					kind: "tool-result",
+					priority: "medium",
+					text: "small-b",
+					tokenEstimate: 5,
+					relevance: 0.5,
+					recency: 1,
+					evidenceValue: 1,
+				},
+			],
+		});
+
+		expect(plan.includedItems.map((item) => item.id)).toEqual(["small-a", "small-b"]);
+		expect(plan.usedTokens).toBe(10);
+	});
+
+	it("applies redundancy penalties during optional selection", () => {
+		const plan = planContextBudget({
+			maxTokens: 8,
+			items: [
+				{
+					id: "primary-copy",
+					kind: "tool-result",
+					priority: "medium",
+					text: "primary",
+					tokenEstimate: 4,
+					relevance: 1,
+					recency: 1,
+					evidenceValue: 1,
+					redundancyKey: "same-source",
+				},
+				{
+					id: "duplicate-copy",
+					kind: "tool-result",
+					priority: "medium",
+					text: "duplicate",
+					tokenEstimate: 4,
+					relevance: 0.95,
+					recency: 1,
+					evidenceValue: 1,
+					redundancyKey: "same-source",
+				},
+				{
+					id: "different-source",
+					kind: "tool-result",
+					priority: "medium",
+					text: "different",
+					tokenEstimate: 4,
+					relevance: 0.5,
+					recency: 1,
+					evidenceValue: 1,
+					redundancyKey: "different-source",
+				},
+			],
+		});
+
+		expect(plan.includedItems.map((item) => item.id)).toEqual(["primary-copy", "different-source"]);
+		expect(plan.omittedItems.map((item) => item.id)).toEqual(["duplicate-copy"]);
+	});
 });

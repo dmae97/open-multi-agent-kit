@@ -2613,6 +2613,21 @@ export class AgentSession {
 		const autoResizeImages = this.settingsManager.getImageAutoResize();
 		const shellCommandPrefix = this.settingsManager.getShellCommandPrefix();
 		const shellPath = this.settingsManager.getShellPath();
+		const loadoutAccessPolicy = this._loadoutAccessPolicy;
+		const loadoutAccessGuard = loadoutAccessPolicy
+			? (request: Parameters<typeof decideLoadoutAccess>[1]) => decideLoadoutAccess(loadoutAccessPolicy, request)
+			: undefined;
+		const loadoutReadOptions = loadoutAccessGuard
+			? {
+					canReadPath: (path: string) => loadoutAccessGuard({ operation: "read", toolName: "read", path }).allowed,
+				}
+			: {};
+		const loadoutWriteOptions = loadoutAccessGuard
+			? {
+					canWritePath: (path: string) =>
+						loadoutAccessGuard({ operation: "write", toolName: "write", path }).allowed,
+				}
+			: {};
 		const baseToolDefinitions = this._baseToolsOverride
 			? Object.fromEntries(
 					Object.entries(this._baseToolsOverride).map(([name, tool]) => [
@@ -2621,8 +2636,14 @@ export class AgentSession {
 					]),
 				)
 			: createAllToolDefinitions(this._cwd, {
-					read: { autoResizeImages },
-					bash: { commandPrefix: shellCommandPrefix, shellPath },
+					read: { autoResizeImages, ...loadoutReadOptions },
+					bash: {
+						commandPrefix: shellCommandPrefix,
+						shellPath,
+						...(loadoutAccessGuard ? { loadoutAccessGuard } : {}),
+					},
+					edit: loadoutWriteOptions,
+					write: loadoutWriteOptions,
 				});
 
 		this._baseToolDefinitions = new Map(

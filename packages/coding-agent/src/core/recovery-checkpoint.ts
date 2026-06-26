@@ -11,7 +11,7 @@
  * the observed state (git status, per-file hashes) and for executing the plan.
  *
  * Derived clean-room from the lane C plan
- * (`.omk/runs/omk-pi-package-hardening-plan/recovery-readseek.md`) and the
+ * (`.omk/runs/omk-package-hardening-plan/recovery-readseek.md`) and the
  * adoption algorithm plan; no legacy package source is imported or copied.
  *
  * Dependency-free apart from `node:path` (pure path math, no I/O).

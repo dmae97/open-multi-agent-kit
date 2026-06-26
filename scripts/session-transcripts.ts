@@ -3,8 +3,9 @@
  * Extracts session transcripts for a given cwd, splits into context-sized files,
  * optionally spawns subagents to analyze patterns.
  *
- * Usage: node scripts/session-transcripts.ts [--analyze] [--output <dir>] [cwd]
- *   --analyze      Spawn pi subagents to analyze each transcript file
+ * Usage: node scripts/session-transcripts.ts [--help] [--analyze] [--output <dir>] [cwd]
+ *   --help         Show this help
+ *   --analyze      Spawn OMK subagents to analyze each transcript file
  *   --output <dir> Output directory for transcript files (defaults to ./session-transcripts)
  *   cwd            Working directory to extract sessions for (defaults to current)
  */
@@ -18,6 +19,14 @@ import { parseSessionEntries, type SessionMessageEntry } from "../packages/codin
 import chalk from "chalk";
 
 const MAX_CHARS_PER_FILE = 100_000; // ~20k tokens, leaving room for prompt + analysis + output
+
+function resolveSessionsBase(): string {
+	return join(homedir(), ".omk/agent/sessions");
+}
+
+function resolveGlobalAgentsMd(): string {
+	return join(homedir(), ".omk/agent/AGENTS.md");
+}
 
 function cwdToSessionDir(cwd: string): string {
 	const normalized = resolve(cwd).replace(/\//g, "-");
@@ -75,9 +84,9 @@ interface JsonEvent {
 	};
 }
 
-function runSubagent(prompt: string, cwd: string): Promise<{ success: boolean }> {
+function runSubagent(prompt: string, cwd: string, command = "omk"): Promise<{ success: boolean }> {
 	return new Promise((resolve) => {
-		const child = spawn("pi", ["--mode", "json", "--tools", "read,write", "-p", prompt], {
+		const child = spawn(command, ["--mode", "json", "--tools", "read,write", "-p", prompt], {
 			cwd,
 			stdio: ["ignore", "pipe", "pipe"],
 		});
@@ -134,14 +143,28 @@ function runSubagent(prompt: string, cwd: string): Promise<{ success: boolean }>
 		});
 
 		child.on("error", (err) => {
-			console.error(chalk.red(`  Failed to spawn pi: ${err.message}`));
+			console.error(chalk.red(`  Failed to spawn OMK subagent: ${err.message}`));
 			resolve({ success: false });
 		});
 	});
 }
 
+function printHelp(): void {
+	console.log(`Usage: node scripts/session-transcripts.ts [options] [cwd]
+
+Options:
+  --analyze       Spawn OMK subagents to analyze each transcript file
+  --output <dir>  Output directory for transcript files (default: ./session-transcripts)
+  -h, --help      Show this help
+`);
+}
+
 async function main() {
 	const args = process.argv.slice(2);
+	if (args.includes("--help") || args.includes("-h")) {
+		printHelp();
+		return;
+	}
 	const analyzeFlag = args.includes("--analyze");
 
 	// Parse --output <dir>
@@ -162,7 +185,7 @@ async function main() {
 	const cwd = resolve(cwdArg || process.cwd());
 
 	mkdirSync(outputDir, { recursive: true });
-	const sessionsBase = join(homedir(), ".pi/agent/sessions");
+	const sessionsBase = resolveSessionsBase();
 	const sessionDirName = cwdToSessionDir(cwd);
 	const sessionDir = join(sessionsBase, sessionDirName);
 
@@ -243,12 +266,12 @@ async function main() {
 	console.log(`\nCreated ${outputFiles.length} transcript file(s) in ${outputDir}`);
 
 	if (!analyzeFlag) {
-		console.log("\nRun with --analyze to spawn pi subagents for pattern analysis.");
+		console.log("\nRun with --analyze to spawn OMK subagents for pattern analysis.");
 		return;
 	}
 
 	// Find AGENTS.md files to compare against
-	const globalAgentsMd = join(homedir(), ".pi/agent/AGENTS.md");
+	const globalAgentsMd = resolveGlobalAgentsMd();
 	const localAgentsMd = join(cwd, "AGENTS.md");
 	const agentsMdFiles = [globalAgentsMd, localAgentsMd].filter(existsSync);
 	const agentsMdSection =
