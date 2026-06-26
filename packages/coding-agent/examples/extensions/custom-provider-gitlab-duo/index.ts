@@ -21,7 +21,7 @@ import {
 	streamSimpleAnthropic,
 	streamSimpleOpenAIResponses,
 	type ThinkingLevelMap,
-} from "@earendil-works/omk-ai";
+} from "omk-ai";
 import type { ExtensionAPI } from "open-multi-agent-kit";
 
 // =============================================================================

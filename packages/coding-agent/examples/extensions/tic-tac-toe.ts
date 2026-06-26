@@ -17,8 +17,8 @@
  * separate variables. Only the agent cursor is ever exposed to the agent.
  */
 
-import { StringEnum } from "@earendil-works/omk-ai";
-import { type Component, matchesKey, Text, truncateToWidth, visibleWidth } from "@earendil-works/omk-tui";
+import { StringEnum } from "omk-ai";
+import { type Component, matchesKey, Text, truncateToWidth, visibleWidth } from "omk-tui";
 import type { ExtensionAPI, ExtensionContext, Theme, ToolExecutionMode } from "open-multi-agent-kit";
 import { Type } from "typebox";
 

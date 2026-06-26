@@ -5,7 +5,7 @@
  * Multiple questions: tab bar navigation between questions
  */
 
-import { Editor, type EditorTheme, Key, matchesKey, Text, truncateToWidth } from "@earendil-works/omk-tui";
+import { Editor, type EditorTheme, Key, matchesKey, Text, truncateToWidth } from "omk-tui";
 import type { ExtensionAPI } from "open-multi-agent-kit";
 import { Type } from "typebox";
 

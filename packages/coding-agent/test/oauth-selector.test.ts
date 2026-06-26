@@ -1,4 +1,4 @@
-import { setKeybindings } from "@earendil-works/omk-tui";
+import { setKeybindings } from "omk-tui";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { KeybindingsManager } from "../src/core/keybindings.ts";

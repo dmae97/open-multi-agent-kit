@@ -17,9 +17,9 @@ OMK v0.80.8 is the hard-fork release that aligns the CLI, TUI, package metadata,
 ## Packages
 
 - `open-multi-agent-kit@0.80.8`
-- `@earendil-works/omk-ai@0.80.8`
-- `@earendil-works/omk-agent-core@0.80.8`
-- `@earendil-works/omk-tui@0.80.8`
+- `omk-ai@0.80.8`
+- `omk-agent-core@0.80.8`
+- `omk-tui@0.80.8`
 
 ## Install
 

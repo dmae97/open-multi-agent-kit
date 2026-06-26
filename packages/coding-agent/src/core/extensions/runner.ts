@@ -2,9 +2,9 @@
  * Extension runner - executes extensions and manages their lifecycle.
  */
 
-import type { AgentMessage } from "@earendil-works/omk-agent-core";
-import type { ImageContent, Model } from "@earendil-works/omk-ai";
-import type { KeyId } from "@earendil-works/omk-tui";
+import type { AgentMessage } from "omk-agent-core";
+import type { ImageContent, Model } from "omk-ai";
+import type { KeyId } from "omk-tui";
 import { type Theme, theme } from "../../modes/interactive/theme/theme.ts";
 import type { ResourceDiagnostic } from "../diagnostics.ts";
 import type { KeybindingsConfig } from "../keybindings.ts";

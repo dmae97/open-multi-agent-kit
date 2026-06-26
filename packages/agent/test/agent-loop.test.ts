@@ -5,7 +5,7 @@ import {
 	type Message,
 	type Model,
 	type UserMessage,
-} from "@earendil-works/omk-ai";
+} from "omk-ai";
 import { Type } from "typebox";
 import { describe, expect, it } from "vitest";
 import { agentLoop, agentLoopContinue } from "../src/agent-loop.ts";

@@ -1,5 +1,5 @@
-import type { Model } from "@earendil-works/omk-ai";
-import { completeSimple } from "@earendil-works/omk-ai";
+import type { Model } from "omk-ai";
+import { completeSimple } from "omk-ai";
 import type { AgentMessage } from "../../types.ts";
 import {
 	convertToLlm,

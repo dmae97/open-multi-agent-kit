@@ -1,10 +1,4 @@
-import {
-	type AssistantMessage,
-	type ImageContent,
-	type Model,
-	streamSimple,
-	type UserMessage,
-} from "@earendil-works/omk-ai";
+import { type AssistantMessage, type ImageContent, type Model, streamSimple, type UserMessage } from "omk-ai";
 import { runAgentLoop } from "../agent-loop.ts";
 import type {
 	AgentContext,

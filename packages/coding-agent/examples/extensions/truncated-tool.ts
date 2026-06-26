@@ -15,8 +15,8 @@
  */
 
 import { mkdtemp, writeFile } from "node:fs/promises";
-import { Text } from "@earendil-works/omk-tui";
 import { execSync } from "child_process";
+import { Text } from "omk-tui";
 import type { ExtensionAPI } from "open-multi-agent-kit";
 import {
 	DEFAULT_MAX_BYTES,

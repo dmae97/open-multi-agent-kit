@@ -1,15 +1,5 @@
-import type { Model } from "@earendil-works/omk-ai";
-import {
-	Container,
-	type Focusable,
-	fuzzyFilter,
-	getKeybindings,
-	Input,
-	Key,
-	matchesKey,
-	Spacer,
-	Text,
-} from "@earendil-works/omk-tui";
+import type { Model } from "omk-ai";
+import { Container, type Focusable, fuzzyFilter, getKeybindings, Input, Key, matchesKey, Spacer, Text } from "omk-tui";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyText } from "./keybinding-hints.ts";

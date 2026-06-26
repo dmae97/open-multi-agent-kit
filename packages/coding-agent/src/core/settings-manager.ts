@@ -1,5 +1,5 @@
-import type { Transport } from "@earendil-works/omk-ai";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import type { Transport } from "omk-ai";
 import { dirname, join } from "path";
 import lockfile from "proper-lockfile";
 import { CONFIG_DIR_NAME, getAgentDir } from "../config.ts";

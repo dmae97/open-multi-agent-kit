@@ -12,8 +12,8 @@
  * The generated prompt appears as a draft in the editor for review/editing.
  */
 
-import type { AgentMessage } from "@earendil-works/omk-agent-core";
-import { complete, type Message } from "@earendil-works/omk-ai";
+import type { AgentMessage } from "omk-agent-core";
+import { complete, type Message } from "omk-ai";
 import type { ExtensionAPI, SessionEntry } from "open-multi-agent-kit";
 import { BorderedLoader, convertToLlm, serializeConversation } from "open-multi-agent-kit";
 

@@ -1,4 +1,4 @@
-import { visibleWidth } from "@earendil-works/omk-tui";
+import { visibleWidth } from "omk-tui";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { setTodoItems, type TodoItem, type TodoState } from "../src/core/todo-state.ts";
 import { TodoChecklistComponent } from "../src/modes/interactive/components/todo-checklist.ts";

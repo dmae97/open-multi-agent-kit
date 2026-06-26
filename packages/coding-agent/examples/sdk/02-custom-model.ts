@@ -4,7 +4,7 @@
  * Shows how to select a specific model and thinking level.
  */
 
-import { getModel } from "@earendil-works/omk-ai";
+import { getModel } from "omk-ai";
 import { AuthStorage, createAgentSession, ModelRegistry } from "open-multi-agent-kit";
 
 // Set up auth storage and model registry

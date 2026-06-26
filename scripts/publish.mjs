@@ -5,9 +5,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const packages = [
-	{ directory: "packages/ai", name: "@earendil-works/omk-ai" },
-	{ directory: "packages/tui", name: "@earendil-works/omk-tui" },
-	{ directory: "packages/agent", name: "@earendil-works/omk-agent-core" },
+	{ directory: "packages/ai", name: "omk-ai" },
+	{ directory: "packages/tui", name: "omk-tui" },
+	{ directory: "packages/agent", name: "omk-agent-core" },
 	{ directory: "packages/coding-agent", name: "open-multi-agent-kit" },
 ];
 

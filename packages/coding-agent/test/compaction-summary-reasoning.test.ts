@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@earendil-works/omk-agent-core";
-import type { AssistantMessage, Model } from "@earendil-works/omk-ai";
+import type { AgentMessage } from "omk-agent-core";
+import type { AssistantMessage, Model } from "omk-ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type CompactionPreparation, compact, generateSummary } from "../src/core/compaction/index.ts";
 
@@ -7,8 +7,8 @@ const { completeSimpleMock } = vi.hoisted(() => ({
 	completeSimpleMock: vi.fn(),
 }));
 
-vi.mock("@earendil-works/omk-ai", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("@earendil-works/omk-ai")>();
+vi.mock("omk-ai", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("omk-ai")>();
 	return {
 		...actual,
 		completeSimple: completeSimpleMock,

@@ -1,9 +1,4 @@
-import {
-	type AssistantMessage,
-	createAssistantMessageEventStream,
-	fauxAssistantMessage,
-	type Model,
-} from "@earendil-works/omk-ai";
+import { type AssistantMessage, createAssistantMessageEventStream, fauxAssistantMessage, type Model } from "omk-ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHarness, type Harness } from "./harness.ts";
 

@@ -34,7 +34,7 @@ Source on GitHub ([omk-mono](https://github.com/earendil-works/omk-mono)):
 - [`packages/ai/src/types.ts`](https://github.com/earendil-works/omk-mono/blob/main/packages/ai/src/types.ts) - Base message types (UserMessage, AssistantMessage, ToolResultMessage)
 - [`packages/agent/src/types.ts`](https://github.com/earendil-works/omk-mono/blob/main/packages/agent/src/types.ts) - AgentMessage union type
 
-For TypeScript definitions in your project, inspect `node_modules/open-multi-agent-kit/dist/` and `node_modules/@earendil-works/omk-ai/dist/`.
+For TypeScript definitions in your project, inspect `node_modules/open-multi-agent-kit/dist/` and `node_modules/omk-ai/dist/`.
 
 ## Message Types
 

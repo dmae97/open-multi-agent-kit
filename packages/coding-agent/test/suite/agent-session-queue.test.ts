@@ -1,5 +1,5 @@
-import type { AgentTool } from "@earendil-works/omk-agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/omk-ai";
+import type { AgentTool } from "omk-agent-core";
+import { fauxAssistantMessage, fauxToolCall } from "omk-ai";
 import type { ExtensionAPI } from "open-multi-agent-kit";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";

@@ -10,8 +10,8 @@
  * correct for that point in history.
  */
 
-import { StringEnum } from "@earendil-works/omk-ai";
-import { matchesKey, Text, truncateToWidth } from "@earendil-works/omk-tui";
+import { StringEnum } from "omk-ai";
+import { matchesKey, Text, truncateToWidth } from "omk-tui";
 import type { ExtensionAPI, ExtensionContext, Theme } from "open-multi-agent-kit";
 import { Type } from "typebox";
 

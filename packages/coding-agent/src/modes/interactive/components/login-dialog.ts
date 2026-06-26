@@ -1,5 +1,5 @@
-import { getOAuthProviders, type OAuthDeviceCodeInfo } from "@earendil-works/omk-ai/oauth";
-import { Container, type Focusable, getKeybindings, Input, Spacer, Text, type TUI } from "@earendil-works/omk-tui";
+import { getOAuthProviders, type OAuthDeviceCodeInfo } from "omk-ai/oauth";
+import { Container, type Focusable, getKeybindings, Input, Spacer, Text, type TUI } from "omk-tui";
 import { openBrowser } from "../../../utils/open-browser.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";

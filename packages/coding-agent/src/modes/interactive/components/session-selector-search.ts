@@ -1,4 +1,4 @@
-import { fuzzyMatch } from "@earendil-works/omk-tui";
+import { fuzzyMatch } from "omk-tui";
 import type { SessionInfo } from "../../../core/session-manager.ts";
 
 export type SortMode = "threaded" | "recent" | "relevance";

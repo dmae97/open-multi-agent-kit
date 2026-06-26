@@ -9,7 +9,7 @@
  * - ctrl+c, ctrl+d, etc. work in both modes
  */
 
-import { matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/omk-tui";
+import { matchesKey, truncateToWidth, visibleWidth } from "omk-tui";
 import { CustomEditor, type ExtensionAPI } from "open-multi-agent-kit";
 
 // Normal mode key mappings: key -> escape sequence (or null for mode switch)

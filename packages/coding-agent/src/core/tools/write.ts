@@ -1,6 +1,6 @@
-import type { AgentTool } from "@earendil-works/omk-agent-core";
-import { Container, Text } from "@earendil-works/omk-tui";
 import { mkdir as fsMkdir, writeFile as fsWriteFile } from "fs/promises";
+import type { AgentTool } from "omk-agent-core";
+import { Container, Text } from "omk-tui";
 import { dirname } from "path";
 import { type Static, Type } from "typebox";
 import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts";

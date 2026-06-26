@@ -1,5 +1,5 @@
-import type { ThinkingLevel } from "@earendil-works/omk-agent-core";
-import type { Transport } from "@earendil-works/omk-ai";
+import type { ThinkingLevel } from "omk-agent-core";
+import type { Transport } from "omk-ai";
 import {
 	Container,
 	getCapabilities,
@@ -10,7 +10,7 @@ import {
 	SettingsList,
 	Spacer,
 	Text,
-} from "@earendil-works/omk-tui";
+} from "omk-tui";
 import { formatHttpIdleTimeoutMs, HTTP_IDLE_TIMEOUT_CHOICES } from "../../../core/http-dispatcher.ts";
 import type { WarningSettings } from "../../../core/settings-manager.ts";
 import { getSelectListTheme, getSettingsListTheme, theme } from "../theme/theme.ts";

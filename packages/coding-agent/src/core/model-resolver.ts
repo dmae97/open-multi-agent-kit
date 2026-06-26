@@ -2,10 +2,10 @@
  * Model resolution, scoping, and initial selection
  */
 
-import type { ThinkingLevel } from "@earendil-works/omk-agent-core";
-import { type Api, type KnownProvider, type Model, modelsAreEqual } from "@earendil-works/omk-ai";
 import chalk from "chalk";
 import { minimatch } from "minimatch";
+import type { ThinkingLevel } from "omk-agent-core";
+import { type Api, type KnownProvider, type Model, modelsAreEqual } from "omk-ai";
 import { isValidThinkingLevel } from "../cli/args.ts";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.ts";
 import type { ModelRegistry } from "./model-registry.ts";

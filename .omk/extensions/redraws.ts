@@ -5,7 +5,7 @@
  */
 
 import type { ExtensionAPI } from "open-multi-agent-kit";
-import { Text } from "@earendil-works/omk-tui";
+import { Text } from "omk-tui";
 
 export default function (omk: ExtensionAPI) {
 	omk.registerCommand("tui", {

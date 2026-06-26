@@ -1,13 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import chalk from "chalk";
 import {
 	type EditorTheme,
 	getCapabilities,
 	type MarkdownTheme,
 	type SelectListTheme,
 	type SettingsListTheme,
-} from "@earendil-works/omk-tui";
-import chalk from "chalk";
+} from "omk-tui";
 import { type Static, Type } from "typebox";
 import { Compile } from "typebox/compile";
 import { getCustomThemesDir, getThemesDir } from "../../../config.ts";

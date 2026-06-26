@@ -6,9 +6,9 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const packages = [
-	{ directory: "packages/ai", name: "@earendil-works/omk-ai" },
-	{ directory: "packages/tui", name: "@earendil-works/omk-tui" },
-	{ directory: "packages/agent", name: "@earendil-works/omk-agent-core" },
+	{ directory: "packages/ai", name: "omk-ai" },
+	{ directory: "packages/tui", name: "omk-tui" },
+	{ directory: "packages/agent", name: "omk-agent-core" },
 	{ directory: "packages/coding-agent", name: "open-multi-agent-kit" },
 ];
 

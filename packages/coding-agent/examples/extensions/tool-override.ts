@@ -20,9 +20,9 @@
  *   omk -e ./tool-override.ts
  */
 
-import type { TextContent } from "@earendil-works/omk-ai";
 import { constants, readFileSync } from "fs";
 import { access, appendFile, readFile } from "fs/promises";
+import type { TextContent } from "omk-ai";
 import { type ExtensionAPI, getAgentDir, withFileMutationQueue } from "open-multi-agent-kit";
 import { join, resolve } from "path";
 import { Type } from "typebox";

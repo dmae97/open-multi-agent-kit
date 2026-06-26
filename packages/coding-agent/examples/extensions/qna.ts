@@ -7,7 +7,7 @@
  * 3. Loads the result into the editor for user to fill in answers
  */
 
-import { complete, type UserMessage } from "@earendil-works/omk-ai";
+import { complete, type UserMessage } from "omk-ai";
 import type { ExtensionAPI } from "open-multi-agent-kit";
 import { BorderedLoader } from "open-multi-agent-kit";
 

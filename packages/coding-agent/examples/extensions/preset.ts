@@ -40,8 +40,8 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Api, Model } from "@earendil-works/omk-ai";
-import { Container, Key, type SelectItem, SelectList, Text } from "@earendil-works/omk-tui";
+import type { Api, Model } from "omk-ai";
+import { Container, Key, type SelectItem, SelectList, Text } from "omk-tui";
 import type { ExtensionAPI, ExtensionContext } from "open-multi-agent-kit";
 import { DynamicBorder, getAgentDir } from "open-multi-agent-kit";
 

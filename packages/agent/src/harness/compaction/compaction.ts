@@ -1,5 +1,5 @@
-import type { AssistantMessage, ImageContent, Model, TextContent, Usage } from "@earendil-works/omk-ai";
-import { completeSimple } from "@earendil-works/omk-ai";
+import type { AssistantMessage, ImageContent, Model, TextContent, Usage } from "omk-ai";
+import { completeSimple } from "omk-ai";
 import type { AgentMessage, ThinkingLevel } from "../../types.ts";
 import {
 	convertToLlm,

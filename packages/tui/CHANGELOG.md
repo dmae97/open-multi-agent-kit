@@ -6,7 +6,7 @@
 
 ### Breaking Changes
 
-- Renamed the npm package from `@earendil-works/pi-tui` to `@earendil-works/omk-tui` and updated package metadata to the OMK repository.
+- Renamed the npm package from `@earendil-works/pi-tui` to `omk-tui` and updated package metadata to the OMK repository.
 
 ### Changed
 

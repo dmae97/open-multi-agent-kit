@@ -8,7 +8,7 @@
  * - Edge case tests (wide chars, styled text, emoji)
  */
 
-import { CURSOR_MARKER, type Focusable, matchesKey, visibleWidth } from "@earendil-works/omk-tui";
+import { CURSOR_MARKER, type Focusable, matchesKey, visibleWidth } from "omk-tui";
 import type { ExtensionAPI, ExtensionCommandContext, Theme } from "open-multi-agent-kit";
 
 export default function (omk: ExtensionAPI) {

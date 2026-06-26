@@ -1,5 +1,5 @@
-import type { AgentTool } from "@earendil-works/omk-agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/omk-ai";
+import type { AgentTool } from "omk-agent-core";
+import { fauxAssistantMessage, fauxToolCall } from "omk-ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
 import { createHarness, type Harness } from "../harness.ts";

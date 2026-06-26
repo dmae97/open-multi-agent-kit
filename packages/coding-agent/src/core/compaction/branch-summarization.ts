@@ -5,9 +5,9 @@
  * a summary of the branch being left so context isn't lost.
  */
 
-import type { AgentMessage, StreamFn } from "@earendil-works/omk-agent-core";
-import type { Model, SimpleStreamOptions } from "@earendil-works/omk-ai";
-import { completeSimple } from "@earendil-works/omk-ai";
+import type { AgentMessage, StreamFn } from "omk-agent-core";
+import type { Model, SimpleStreamOptions } from "omk-ai";
+import { completeSimple } from "omk-ai";
 import {
 	convertToLlm,
 	createBranchSummaryMessage,

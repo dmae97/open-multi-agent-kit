@@ -2,9 +2,9 @@
  * List available models with optional fuzzy search
  */
 
-import type { Api, Model } from "@earendil-works/omk-ai";
-import { fuzzyFilter } from "@earendil-works/omk-tui";
 import chalk from "chalk";
+import type { Api, Model } from "omk-ai";
+import { fuzzyFilter } from "omk-tui";
 import { formatNoModelsAvailableMessage } from "../core/auth-guidance.ts";
 import type { ModelRegistry } from "../core/model-registry.ts";
 

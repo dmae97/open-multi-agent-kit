@@ -1,4 +1,4 @@
-import type { Component } from "@earendil-works/omk-tui";
+import type { Component } from "omk-tui";
 import { theme } from "../theme/theme.ts";
 import { MIN_BANNER_WIDTH } from "./control-panel-gradient.ts";
 import { IDLE_MS, INTRO_MS, shouldAnimate } from "./control-panel-gradient-motion.ts";

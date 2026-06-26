@@ -1,4 +1,4 @@
-import { resetCapabilitiesCache, setCapabilities } from "@earendil-works/omk-tui";
+import { resetCapabilitiesCache, setCapabilities } from "omk-tui";
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	detectTerminalBackground,

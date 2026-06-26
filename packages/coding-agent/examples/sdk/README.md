@@ -32,7 +32,7 @@ npx tsx examples/sdk/01-minimal.ts
 ## Quick Reference
 
 ```typescript
-import { getModel } from "@earendil-works/omk-ai";
+import { getModel } from "omk-ai";
 import {
   AuthStorage,
   createAgentSession,

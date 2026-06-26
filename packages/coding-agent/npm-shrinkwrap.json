@@ -9,9 +9,9 @@
 			"version": "0.80.8",
 			"license": "MIT",
 			"dependencies": {
-				"@earendil-works/omk-agent-core": "^0.80.8",
-				"@earendil-works/omk-ai": "^0.80.8",
-				"@earendil-works/omk-tui": "^0.80.8",
+				"omk-agent-core": "^0.80.8",
+				"omk-ai": "^0.80.8",
+				"omk-tui": "^0.80.8",
 				"@silvia-odwyer/photon-node": "0.3.4",
 				"chalk": "5.6.2",
 				"cross-spawn": "7.0.6",
@@ -470,55 +470,6 @@
 			"license": "MIT",
 			"engines": {
 				"node": ">=6.9.0"
-			}
-		},
-		"node_modules/@earendil-works/omk-agent-core": {
-			"version": "0.80.8",
-			"resolved": "https://registry.npmjs.org/@earendil-works/omk-agent-core/-/omk-agent-core-0.80.8.tgz",
-			"license": "MIT",
-			"dependencies": {
-				"@earendil-works/omk-ai": "^0.80.8",
-				"ignore": "7.0.5",
-				"typebox": "1.1.38",
-				"yaml": "2.9.0"
-			},
-			"engines": {
-				"node": ">=22.19.0"
-			}
-		},
-		"node_modules/@earendil-works/omk-ai": {
-			"version": "0.80.8",
-			"resolved": "https://registry.npmjs.org/@earendil-works/omk-ai/-/omk-ai-0.80.8.tgz",
-			"license": "MIT",
-			"dependencies": {
-				"@anthropic-ai/sdk": "0.91.1",
-				"@aws-sdk/client-bedrock-runtime": "3.1048.0",
-				"@smithy/node-http-handler": "4.7.3",
-				"@google/genai": "1.52.0",
-				"@mistralai/mistralai": "2.2.1",
-				"http-proxy-agent": "7.0.2",
-				"https-proxy-agent": "7.0.6",
-				"openai": "6.26.0",
-				"partial-json": "0.1.7",
-				"typebox": "1.1.38"
-			},
-			"bin": {
-				"omk-ai": "dist/cli.js"
-			},
-			"engines": {
-				"node": ">=22.19.0"
-			}
-		},
-		"node_modules/@earendil-works/omk-tui": {
-			"version": "0.80.8",
-			"resolved": "https://registry.npmjs.org/@earendil-works/omk-tui/-/omk-tui-0.80.8.tgz",
-			"license": "MIT",
-			"dependencies": {
-				"get-east-asian-width": "1.6.0",
-				"marked": "15.0.12"
-			},
-			"engines": {
-				"node": ">=22.19.0"
 			}
 		},
 		"node_modules/@google/genai": {
@@ -1475,6 +1426,55 @@
 			"funding": {
 				"type": "opencollective",
 				"url": "https://opencollective.com/node-fetch"
+			}
+		},
+		"node_modules/omk-agent-core": {
+			"version": "0.80.8",
+			"resolved": "https://registry.npmjs.org/omk-agent-core/-/omk-agent-core-0.80.8.tgz",
+			"license": "MIT",
+			"dependencies": {
+				"omk-ai": "^0.80.8",
+				"ignore": "7.0.5",
+				"typebox": "1.1.38",
+				"yaml": "2.9.0"
+			},
+			"engines": {
+				"node": ">=22.19.0"
+			}
+		},
+		"node_modules/omk-ai": {
+			"version": "0.80.8",
+			"resolved": "https://registry.npmjs.org/omk-ai/-/omk-ai-0.80.8.tgz",
+			"license": "MIT",
+			"dependencies": {
+				"@anthropic-ai/sdk": "0.91.1",
+				"@aws-sdk/client-bedrock-runtime": "3.1048.0",
+				"@smithy/node-http-handler": "4.7.3",
+				"@google/genai": "1.52.0",
+				"@mistralai/mistralai": "2.2.1",
+				"http-proxy-agent": "7.0.2",
+				"https-proxy-agent": "7.0.6",
+				"openai": "6.26.0",
+				"partial-json": "0.1.7",
+				"typebox": "1.1.38"
+			},
+			"bin": {
+				"omk-ai": "dist/cli.js"
+			},
+			"engines": {
+				"node": ">=22.19.0"
+			}
+		},
+		"node_modules/omk-tui": {
+			"version": "0.80.8",
+			"resolved": "https://registry.npmjs.org/omk-tui/-/omk-tui-0.80.8.tgz",
+			"license": "MIT",
+			"dependencies": {
+				"get-east-asian-width": "1.6.0",
+				"marked": "15.0.12"
+			},
+			"engines": {
+				"node": ">=22.19.0"
 			}
 		},
 		"node_modules/openai": {

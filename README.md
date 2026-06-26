@@ -27,8 +27,8 @@
 This is the home of the omk agent harness project including our self extensible coding agent.
 
 * **[open-multi-agent-kit](packages/coding-agent)**: Interactive coding agent CLI
-* **[@earendil-works/omk-agent-core](packages/agent)**: Agent runtime with tool calling and state management
-* **[@earendil-works/omk-ai](packages/ai)**: Unified multi-provider LLM API (OpenAI, Anthropic, Google, …)
+* **[omk-agent-core](packages/agent)**: Agent runtime with tool calling and state management
+* **[omk-ai](packages/ai)**: Unified multi-provider LLM API (OpenAI, Anthropic, Google, …)
 
 To learn more about omk:
 
@@ -71,10 +71,10 @@ Public OSS session data helps improve coding agents with real-world tasks, tool 
 
 | Package | Description |
 |---------|-------------|
-| **[@earendil-works/omk-ai](packages/ai)** | Unified multi-provider LLM API (OpenAI, Anthropic, Google, etc.) |
-| **[@earendil-works/omk-agent-core](packages/agent)** | Agent runtime with tool calling and state management |
+| **[omk-ai](packages/ai)** | Unified multi-provider LLM API (OpenAI, Anthropic, Google, etc.) |
+| **[omk-agent-core](packages/agent)** | Agent runtime with tool calling and state management |
 | **[open-multi-agent-kit](packages/coding-agent)** | Interactive coding agent CLI |
-| **[@earendil-works/omk-tui](packages/tui)** | Terminal UI library with differential rendering |
+| **[omk-tui](packages/tui)** | Terminal UI library with differential rendering |
 
 For Slack/chat automation and workflow integrations, use OMK extensions and MCP servers.
 

@@ -1,4 +1,4 @@
-import type { AssistantMessage } from "@earendil-works/omk-ai";
+import type { AssistantMessage } from "omk-ai";
 import type { ExtensionAPI } from "open-multi-agent-kit";
 
 function isAssistantMessage(message: unknown): message is AssistantMessage {

@@ -9,9 +9,9 @@ const repoRoot = resolve(scriptDir, "..");
 const codingAgentDir = join(repoRoot, "packages/coding-agent");
 const rootLockfilePath = join(repoRoot, "package-lock.json");
 const shrinkwrapPath = join(codingAgentDir, "npm-shrinkwrap.json");
-const internalPackagePrefix = "@earendil-works/omk-";
+const internalPackageNames = new Set(["omk-agent-core", "omk-ai", "omk-tui"]);
 const allowedInstallScriptPackages = new Map([
-	["@google/genai@1.52.0", "runtime dependency of @earendil-works/omk-ai; postinstall validates optional transports"],
+	["@google/genai@1.52.0", "runtime dependency of omk-ai; postinstall validates optional transports"],
 	["protobufjs@7.5.9", "runtime dependency pulled by @google/genai; postinstall prepares protobuf helpers"],
 ]);
 
@@ -136,13 +136,14 @@ function getInternalWorkspaces(lockPackages) {
 		if (!lockPath.startsWith("packages/") || lockPath.includes("/node_modules/") || !entry.name || !entry.version) {
 			continue;
 		}
-		if (!entry.name.startsWith(internalPackagePrefix)) {
+		const packageJson = readJson(join(repoRoot, lockPath, "package.json"));
+		if (!internalPackageNames.has(packageJson.name)) {
 			continue;
 		}
 
-		workspaces.set(entry.name, {
+		workspaces.set(packageJson.name, {
 			lockPath,
-			packageJson: readJson(join(repoRoot, lockPath, "package.json")),
+			packageJson,
 		});
 	}
 

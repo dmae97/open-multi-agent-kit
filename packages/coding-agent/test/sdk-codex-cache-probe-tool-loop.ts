@@ -20,7 +20,7 @@ import {
 	type Model,
 	type SimpleStreamOptions,
 	Type,
-} from "@earendil-works/omk-ai";
+} from "omk-ai";
 import {
 	getOpenAICodexWebSocketDebugStats,
 	streamSimpleOpenAICodexResponses,

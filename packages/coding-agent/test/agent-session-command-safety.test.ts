@@ -1,8 +1,8 @@
 import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { BeforeToolCallContext } from "@earendil-works/omk-agent-core";
-import { getModel } from "@earendil-works/omk-ai";
+import type { BeforeToolCallContext } from "omk-agent-core";
+import { getModel } from "omk-ai";
 import { afterEach, describe, expect, it } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import commandSafetyGate from "../src/core/extensions/builtin/command-safety-gate.ts";

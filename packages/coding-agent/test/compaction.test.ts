@@ -1,7 +1,7 @@
-import type { AgentMessage } from "@earendil-works/omk-agent-core";
-import type { AssistantMessage, Usage } from "@earendil-works/omk-ai";
-import { getModel } from "@earendil-works/omk-ai";
 import { readFileSync } from "fs";
+import type { AgentMessage } from "omk-agent-core";
+import type { AssistantMessage, Usage } from "omk-ai";
+import { getModel } from "omk-ai";
 import { join } from "path";
 import { beforeEach, describe, expect, it } from "vitest";
 import {

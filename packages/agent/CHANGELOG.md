@@ -6,7 +6,7 @@
 
 ### Breaking Changes
 
-- Renamed the npm package from `@earendil-works/pi-agent-core` to `@earendil-works/omk-agent-core` and updated internal OMK package dependencies.
+- Renamed the npm package from `@earendil-works/pi-agent-core` to `omk-agent-core` and updated internal OMK package dependencies.
 
 ### Changed
 

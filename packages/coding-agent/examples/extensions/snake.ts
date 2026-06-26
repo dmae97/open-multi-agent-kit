@@ -2,7 +2,7 @@
  * Snake game extension - play snake with /snake command
  */
 
-import { matchesKey, visibleWidth } from "@earendil-works/omk-tui";
+import { matchesKey, visibleWidth } from "omk-tui";
 import type { ExtensionAPI } from "open-multi-agent-kit";
 
 const GAME_WIDTH = 40;

@@ -1,4 +1,4 @@
-import { type Model, modelsAreEqual } from "@earendil-works/omk-ai";
+import { type Model, modelsAreEqual } from "omk-ai";
 import {
 	Container,
 	type Focusable,
@@ -10,7 +10,7 @@ import {
 	Spacer,
 	Text,
 	type TUI,
-} from "@earendil-works/omk-tui";
+} from "omk-tui";
 import type { ModelRegistry } from "../../../core/model-registry.ts";
 import type { SettingsManager } from "../../../core/settings-manager.ts";
 import { theme } from "../theme/theme.ts";
