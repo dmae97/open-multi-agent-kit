@@ -1,5 +1,6 @@
 /**
  * Interactive mode for the coding agent.
+ * allow: SIZE_OK - legacy TUI coordinator; this change only adds a two-line CONTROL status bridge.
  * Handles TUI rendering and user interaction, delegating business logic to AgentSession.
  */
 
@@ -100,6 +101,7 @@ import { BorderedLoader } from "./components/bordered-loader.ts";
 import { BranchSummaryMessageComponent } from "./components/branch-summary-message.ts";
 import { CompactionSummaryMessageComponent } from "./components/compaction-summary-message.ts";
 import { ControlPanelComponent } from "./components/control-panel.ts";
+import { createControlPanelStatusSnapshot } from "./components/control-panel-runtime-status.ts";
 import { CountdownTimer } from "./components/countdown-timer.ts";
 import { CustomEditor } from "./components/custom-editor.ts";
 import { CustomMessageComponent } from "./components/custom-message.ts";
@@ -736,6 +738,7 @@ export class InteractiveMode {
 				compactOnboarding: () =>
 					`Press ${keyText("app.tools.expand")} to show full startup help and loaded resources.`,
 				onboarding: () => `OMK can explain its own features and look up its docs. Ask it how to use or extend OMK.`,
+				statusSnapshot: () => createControlPanelStatusSnapshot(this.session, this.sessionManager),
 			});
 			controlPanel.setExpanded(this.getStartupExpansionState());
 			this.builtInHeader = controlPanel;
@@ -1573,6 +1576,13 @@ export class InteractiveMode {
 		}
 
 		if (showDiagnostics) {
+			const showCollisionDiagnostics = options?.force === true || this.options.verbose;
+			const diagnosticsVisibleForMode = (
+				diagnostics: readonly ResourceDiagnostic[],
+			): readonly ResourceDiagnostic[] =>
+				showCollisionDiagnostics
+					? diagnostics
+					: diagnostics.filter((diagnostic) => diagnostic.type !== "collision");
 			const addDiagnosticsSection = (name: string, diagnostics: readonly ResourceDiagnostic[]): void => {
 				if (diagnostics.length === 0) {
 					return;
@@ -1585,10 +1595,10 @@ export class InteractiveMode {
 				);
 			};
 
-			const skillDiagnostics = skillsResult.diagnostics;
+			const skillDiagnostics = diagnosticsVisibleForMode(skillsResult.diagnostics);
 			addDiagnosticsSection("Skill conflicts", skillDiagnostics);
 
-			const promptDiagnostics = promptsResult.diagnostics;
+			const promptDiagnostics = diagnosticsVisibleForMode(promptsResult.diagnostics);
 			addDiagnosticsSection("Prompt conflicts", promptDiagnostics);
 
 			const extensionDiagnostics: ResourceDiagnostic[] = [];
@@ -1606,9 +1616,9 @@ export class InteractiveMode {
 			const shortcutDiagnostics = this.session.extensionRunner.getShortcutDiagnostics();
 			extensionDiagnostics.push(...shortcutDiagnostics);
 
-			addDiagnosticsSection("Extension issues", extensionDiagnostics);
+			addDiagnosticsSection("Extension issues", diagnosticsVisibleForMode(extensionDiagnostics));
 
-			const themeDiagnostics = themesResult.diagnostics;
+			const themeDiagnostics = diagnosticsVisibleForMode(themesResult.diagnostics);
 			addDiagnosticsSection("Theme conflicts", themeDiagnostics);
 		}
 	}

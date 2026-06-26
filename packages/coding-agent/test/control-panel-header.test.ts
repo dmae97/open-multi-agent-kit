@@ -1,7 +1,10 @@
 import { fileURLToPath } from "node:url";
 import { visibleWidth } from "@earendil-works/omk-tui";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { ControlPanelComponent } from "../src/modes/interactive/components/control-panel.ts";
+import {
+	ControlPanelComponent,
+	type ControlPanelStatusSnapshot,
+} from "../src/modes/interactive/components/control-panel.ts";
 import {
 	getAvailableThemes,
 	getThemeByName,
@@ -10,7 +13,7 @@ import {
 } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
-function createPanel(): ControlPanelComponent {
+function createPanel(statusSnapshot?: () => ControlPanelStatusSnapshot): ControlPanelComponent {
 	return new ControlPanelComponent({
 		appName: "omk",
 		version: "0.80.5",
@@ -18,6 +21,7 @@ function createPanel(): ControlPanelComponent {
 		expandedInstructions: () => "Ctrl+C to interrupt\n/ for commands\n! to run bash",
 		compactOnboarding: () => "Press Ctrl+O to show full startup help and loaded resources.",
 		onboarding: () => "OMK can explain its own features and look up its docs.",
+		statusSnapshot,
 	});
 }
 
@@ -26,7 +30,7 @@ let previousPackageDir: string | undefined;
 beforeAll(() => {
 	previousPackageDir = process.env.OMK_PACKAGE_DIR;
 	process.env.OMK_PACKAGE_DIR = fileURLToPath(new URL("../", import.meta.url));
-	initTheme("omk-control-panel");
+	initTheme("omk-neon-control");
 });
 
 afterAll(() => {
@@ -49,6 +53,41 @@ describe("ControlPanelComponent", () => {
 		expect(lines.every((line) => visibleWidth(line) <= 48)).toBe(true);
 	});
 
+	test("renders the wide OMK control deck with a pinned sidebar", () => {
+		const panel = createPanel();
+		const lines = panel.render(160);
+		const plain = stripAnsi(lines.join("\n"));
+
+		expect(plain).toContain("OMK://CONTROL");
+		expect(plain).toContain("CYBERPUNK OPS CORE");
+		expect(plain).toContain("MODEL / CTX");
+		expect(plain).toContain("RUNTIME / MCP / SKILLS");
+		expect(plain).toContain("OMK//CONTROL READ");
+		expect(lines.every((line) => visibleWidth(line) <= 160)).toBe(true);
+	});
+
+	test("renders live model, CTX, and HeadRoom status from the snapshot", () => {
+		const panel = createPanel(() => ({
+			modelProvider: "openrouter",
+			modelId: "omk-test-model",
+			thinkingLevel: "high",
+			contextPercent: 42.5,
+			contextWindowTokens: 128_000,
+			headroomStatus: "context-budget-v2",
+			skillCount: 96,
+			mcpCount: 12,
+		}));
+		const plain = stripAnsi(panel.render(160).join("\n"));
+
+		expect(plain).toContain("model: openrouter/omk-test-model");
+		expect(plain).toContain("think: high");
+		expect(plain).toContain("ctx: 42.5%/128k");
+		expect(plain).toContain("headroom: context-budget-v2");
+		expect(plain).toContain("res: MCP:12 skills:96");
+		expect(plain).not.toContain("deepseek/deepseek-v4-pro");
+		expect(plain).not.toContain("ctx: 0.0%/1.0M");
+	});
+
 	test("renders expanded ASCII branding and command map", () => {
 		const panel = createPanel();
 		panel.setExpanded(true);
@@ -57,9 +96,20 @@ describe("ControlPanelComponent", () => {
 
 		expect(plain).toContain("OMK//CONTROL PANEL");
 		expect(plain).toContain("____");
+		expect(plain).toContain("PANEL ONLINE");
+		expect(plain).toContain("THEME NEON-CONTROL");
 		expect(plain).toContain("SYSTEM MAP");
 		expect(plain).toContain("! to run bash");
 		expect(lines.every((line) => visibleWidth(line) <= 96)).toBe(true);
+	});
+
+	test("renders startup onboarding under the startup link section", () => {
+		const panel = createPanel();
+		panel.setExpanded(true);
+		const plain = stripAnsi(panel.render(96).join("\n"));
+
+		expect(plain).toContain("STARTUP LINK");
+		expect(plain).toContain("OMK can explain its own features");
 	});
 
 	test("re-renders compact output after expansion is disabled", () => {
