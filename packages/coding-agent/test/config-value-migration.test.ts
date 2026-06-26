@@ -16,7 +16,7 @@ describe("config value env var syntax migration", () => {
 	});
 
 	function createAgentDir(): string {
-		const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-config-value-migration-test-"));
+		const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "omk-config-value-migration-test-"));
 		tempDirs.push(agentDir);
 		return agentDir;
 	}
@@ -134,5 +134,179 @@ describe("config value env var syntax migration", () => {
 		expect(logMessage).toContain(
 			'models.json.providers["custom-provider"].modelOverrides["model-b"].headers["x-override-key"]: OVERRIDE_API_KEY -> $OVERRIDE_API_KEY',
 		);
+	});
+});
+
+describe("legacy config compatibility migrations", () => {
+	const tempDirs: string[] = [];
+
+	afterEach(() => {
+		for (const dir of tempDirs.splice(0)) {
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
+		vi.restoreAllMocks();
+	});
+
+	function createTempDir(prefix: string): string {
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+		tempDirs.push(dir);
+		return dir;
+	}
+
+	function withAgentDir(agentDir: string, fn: () => void): void {
+		const previousAgentDir = process.env[ENV_AGENT_DIR];
+		process.env[ENV_AGENT_DIR] = agentDir;
+		try {
+			fn();
+		} finally {
+			if (previousAgentDir === undefined) {
+				delete process.env[ENV_AGENT_DIR];
+			} else {
+				process.env[ENV_AGENT_DIR] = previousAgentDir;
+			}
+		}
+	}
+
+	it("migrates legacy oauth.json and settings.json apiKeys into canonical auth.json", () => {
+		const agentDir = createTempDir("omk-auth-compat-migration-test-");
+		fs.writeFileSync(
+			path.join(agentDir, "oauth.json"),
+			`${JSON.stringify({ github: { access: "legacy-access", refresh: "legacy-refresh" } }, null, 2)}\n`,
+			"utf-8",
+		);
+		fs.writeFileSync(
+			path.join(agentDir, "settings.json"),
+			`${JSON.stringify(
+				{
+					apiKeys: {
+						openai: "OPENAI_API_KEY",
+						github: "GITHUB_API_KEY",
+					},
+					theme: "dark",
+				},
+				null,
+				2,
+			)}\n`,
+			"utf-8",
+		);
+
+		let migratedAuthProviders: string[] = [];
+		withAgentDir(agentDir, () => {
+			migratedAuthProviders = runMigrations(agentDir).migratedAuthProviders;
+		});
+
+		const auth = JSON.parse(fs.readFileSync(path.join(agentDir, "auth.json"), "utf-8")) as Record<
+			string,
+			{ type: string; key?: string; access?: string; refresh?: string }
+		>;
+		const settings = JSON.parse(fs.readFileSync(path.join(agentDir, "settings.json"), "utf-8")) as {
+			apiKeys?: unknown;
+			theme?: string;
+		};
+		expect(auth.github).toEqual({ type: "oauth", access: "legacy-access", refresh: "legacy-refresh" });
+		expect(auth.openai).toEqual({ type: "api_key", key: "$OPENAI_API_KEY" });
+		expect(settings).toEqual({ theme: "dark" });
+		expect(fs.existsSync(path.join(agentDir, "oauth.json"))).toBe(false);
+		expect(fs.existsSync(path.join(agentDir, "oauth.json.migrated"))).toBe(true);
+		expect(migratedAuthProviders).toEqual(["github", "openai"]);
+	});
+
+	it("keeps canonical auth.json authoritative when legacy files also exist", () => {
+		const agentDir = createTempDir("omk-auth-canonical-migration-test-");
+		fs.writeFileSync(
+			path.join(agentDir, "auth.json"),
+			`${JSON.stringify({ openai: { type: "api_key", key: "$OMK_OPENAI_KEY" } }, null, 2)}\n`,
+			"utf-8",
+		);
+		fs.writeFileSync(
+			path.join(agentDir, "oauth.json"),
+			`${JSON.stringify({ github: { access: "legacy-access" } }, null, 2)}\n`,
+			"utf-8",
+		);
+		fs.writeFileSync(
+			path.join(agentDir, "settings.json"),
+			`${JSON.stringify({ apiKeys: { anthropic: "ANTHROPIC_API_KEY" }, model: "current" }, null, 2)}\n`,
+			"utf-8",
+		);
+
+		let migratedAuthProviders: string[] = [];
+		withAgentDir(agentDir, () => {
+			migratedAuthProviders = runMigrations(agentDir).migratedAuthProviders;
+		});
+
+		const auth = JSON.parse(fs.readFileSync(path.join(agentDir, "auth.json"), "utf-8")) as Record<
+			string,
+			{ type: string; key?: string }
+		>;
+		const settings = JSON.parse(fs.readFileSync(path.join(agentDir, "settings.json"), "utf-8")) as {
+			apiKeys?: Record<string, string>;
+			model?: string;
+		};
+		expect(auth).toEqual({ openai: { type: "api_key", key: "$OMK_OPENAI_KEY" } });
+		expect(settings.apiKeys).toEqual({ anthropic: "ANTHROPIC_API_KEY" });
+		expect(fs.existsSync(path.join(agentDir, "oauth.json"))).toBe(true);
+		expect(fs.existsSync(path.join(agentDir, "oauth.json.migrated"))).toBe(false);
+		expect(migratedAuthProviders).toEqual([]);
+	});
+
+	it("does not create auth.json for malformed oauth.json or empty apiKeys", () => {
+		const agentDir = createTempDir("omk-auth-boundary-migration-test-");
+		fs.writeFileSync(path.join(agentDir, "oauth.json"), "{not-json", "utf-8");
+		fs.writeFileSync(path.join(agentDir, "settings.json"), `${JSON.stringify({ apiKeys: {} }, null, 2)}\n`, "utf-8");
+
+		let migratedAuthProviders: string[] = [];
+		withAgentDir(agentDir, () => {
+			migratedAuthProviders = runMigrations(agentDir).migratedAuthProviders;
+		});
+
+		expect(fs.existsSync(path.join(agentDir, "auth.json"))).toBe(false);
+		expect(fs.existsSync(path.join(agentDir, "oauth.json"))).toBe(true);
+		expect(fs.existsSync(path.join(agentDir, "oauth.json.migrated"))).toBe(false);
+		expect(migratedAuthProviders).toEqual([]);
+	});
+
+	it("renames legacy commands directories to canonical prompts directories", () => {
+		const agentDir = createTempDir("omk-prompts-global-migration-test-");
+		const cwd = createTempDir("omk-prompts-project-migration-test-");
+		const globalCommandsDir = path.join(agentDir, "commands");
+		const projectCommandsDir = path.join(cwd, ".omk", "commands");
+		fs.mkdirSync(globalCommandsDir, { recursive: true });
+		fs.mkdirSync(projectCommandsDir, { recursive: true });
+		fs.writeFileSync(path.join(globalCommandsDir, "global.md"), "global prompt", "utf-8");
+		fs.writeFileSync(path.join(projectCommandsDir, "project.md"), "project prompt", "utf-8");
+		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+		withAgentDir(agentDir, () => runMigrations(cwd));
+
+		expect(fs.existsSync(path.join(agentDir, "commands"))).toBe(false);
+		expect(fs.readFileSync(path.join(agentDir, "prompts", "global.md"), "utf-8")).toBe("global prompt");
+		expect(fs.existsSync(path.join(cwd, ".omk", "commands"))).toBe(false);
+		expect(fs.readFileSync(path.join(cwd, ".omk", "prompts", "project.md"), "utf-8")).toBe("project prompt");
+		const logOutput = logSpy.mock.calls.map((call) => String(call[0])).join("\n");
+		expect(logOutput).toContain("Migrated Global commands/");
+		expect(logOutput).toContain("Migrated Project commands/");
+	});
+
+	it("moves managed legacy tools binaries to canonical bin while warning about custom tools", () => {
+		const agentDir = createTempDir("omk-tools-bin-migration-test-");
+		const toolsDir = path.join(agentDir, "tools");
+		fs.mkdirSync(toolsDir, { recursive: true });
+		fs.writeFileSync(path.join(toolsDir, "rg"), "managed rg", "utf-8");
+		fs.writeFileSync(path.join(toolsDir, "custom-tool"), "custom", "utf-8");
+		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+		let deprecationWarnings: string[] = [];
+		withAgentDir(agentDir, () => {
+			deprecationWarnings = runMigrations(agentDir).deprecationWarnings;
+		});
+
+		expect(fs.existsSync(path.join(agentDir, "tools", "rg"))).toBe(false);
+		expect(fs.readFileSync(path.join(agentDir, "bin", "rg"), "utf-8")).toBe("managed rg");
+		expect(fs.readFileSync(path.join(agentDir, "tools", "custom-tool"), "utf-8")).toBe("custom");
+		expect(deprecationWarnings).toEqual([
+			"Global tools/ directory contains custom tools. Custom tools have been merged into extensions.",
+		]);
+		const logOutput = logSpy.mock.calls.map((call) => String(call[0])).join("\n");
+		expect(logOutput).toContain("Migrated managed binaries tools/");
 	});
 });
