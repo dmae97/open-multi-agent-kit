@@ -14,7 +14,16 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { listBuiltinMcpPresets, summarizeBuiltinMcpPreset } from "./mcp-presets.ts";
+import {
+	decideMcpAuth,
+	decideMcpCapabilities,
+	decideMcpSampling,
+	listBuiltinMcpPresets,
+	type McpAuthDecision,
+	type McpCapabilityDecision,
+	type McpSamplingDecision,
+	summarizeBuiltinMcpPreset,
+} from "./mcp-presets.ts";
 
 export type McpInventoryNetworkMode = "none" | "loopback" | "domain-allowlist" | "all-explicit";
 
@@ -36,6 +45,9 @@ export interface McpServerEntry {
 	argsCount: number;
 	autoApproveCount: number;
 	networkDecision: McpInventoryNetworkDecision;
+	capabilityDecision: McpCapabilityDecision;
+	samplingDecision: McpSamplingDecision;
+	authDecision: McpAuthDecision;
 	startupTimeoutSec?: number;
 	overriddenBy?: string;
 }
@@ -57,6 +69,9 @@ export interface McpBuiltinPresetEntry {
 	startupTimeoutSec: number;
 	autoApproveCount: number;
 	networkDecision: McpInventoryNetworkDecision;
+	capabilityDecision: McpCapabilityDecision;
+	samplingDecision: McpSamplingDecision;
+	authDecision: McpAuthDecision;
 	installHint: string;
 	notes: string[];
 	configured: boolean;
@@ -77,6 +92,11 @@ interface RawServer {
 	autoApprove?: unknown;
 	startup_timeout_sec?: unknown;
 	network?: unknown;
+	capabilities?: unknown;
+	sampling?: unknown;
+	samplingPolicy?: unknown;
+	auth?: unknown;
+	authPolicy?: unknown;
 }
 
 function readJsonSafe(filePath: string): { value: unknown; error?: string } {
@@ -180,6 +200,7 @@ function toEntry(name: string, server: RawServer, source: string): McpServerEntr
 	const argsCount = Array.isArray(server.args) ? server.args.length : 0;
 	const autoApproveCount = Array.isArray(server.autoApprove) ? server.autoApprove.length : 0;
 	const startupTimeoutSec = typeof server.startup_timeout_sec === "number" ? server.startup_timeout_sec : undefined;
+	const capabilityDecision = decideMcpCapabilities(server.capabilities);
 	return {
 		name,
 		source,
@@ -188,6 +209,9 @@ function toEntry(name: string, server: RawServer, source: string): McpServerEntr
 		argsCount,
 		autoApproveCount,
 		networkDecision: decideMcpInventoryNetwork(server.network),
+		capabilityDecision,
+		samplingDecision: decideMcpSampling(capabilityDecision, server.samplingPolicy ?? server.sampling),
+		authDecision: decideMcpAuth(server.authPolicy ?? server.auth, envKeys),
 		startupTimeoutSec,
 	};
 }

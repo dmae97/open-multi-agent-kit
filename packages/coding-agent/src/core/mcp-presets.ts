@@ -1,6 +1,42 @@
 export type BuiltinMcpPresetName = "aside-ubuntu-compat" | "chrome-devtools" | "context7" | "korean-law" | "playwright";
 export type BuiltinMcpEnvMode = "shell" | "empty";
 export type BuiltinMcpPresetLicense = "Apache-2.0" | "MIT";
+export type McpKnownCapability = "tools" | "resources" | "prompts" | "sampling";
+export type McpAuthMode = "none" | "env" | "oauth" | "external";
+export type McpSamplingMode = "disabled" | "client-gated";
+
+export interface McpCapabilityDecision {
+	trustedCapabilities: McpKnownCapability[];
+	unknownCapabilities: string[];
+	malformed: boolean;
+	rule: string;
+	reason: string;
+}
+
+export interface McpSamplingDecision {
+	allowed: boolean;
+	mode: McpSamplingMode;
+	humanApprovalRequired: boolean;
+	rule: string;
+	reason: string;
+}
+
+export interface McpAuthDecision {
+	mode: McpAuthMode;
+	envKeys: string[];
+	rule: string;
+	reason: string;
+}
+
+export interface McpSamplingPolicyInput {
+	mode: McpSamplingMode;
+	humanApprovalRequired: boolean;
+}
+
+export interface McpAuthPolicyInput {
+	mode: McpAuthMode;
+	envKeys?: readonly string[];
+}
 
 export interface BuiltinMcpServerConfig {
 	command: string;
@@ -27,6 +63,9 @@ export interface BuiltinMcpPreset {
 	envKeys: readonly string[];
 	requiredEnvKeys: readonly string[];
 	optionalEnvKeys: readonly string[];
+	capabilities: readonly McpKnownCapability[];
+	samplingPolicy: McpSamplingPolicyInput;
+	authPolicy: McpAuthPolicyInput;
 	startupTimeoutSec: number;
 	autoApprove: readonly string[];
 	installHint: string;
@@ -47,6 +86,9 @@ export interface BuiltinMcpPresetSummary {
 	envKeys: string[];
 	requiredEnvKeys: string[];
 	optionalEnvKeys: string[];
+	capabilityDecision: McpCapabilityDecision;
+	samplingDecision: McpSamplingDecision;
+	authDecision: McpAuthDecision;
 	startupTimeoutSec: number;
 	autoApproveCount: number;
 	installHint: string;
@@ -54,6 +96,176 @@ export interface BuiltinMcpPresetSummary {
 }
 
 const LAW_OC_ENV_PLACEHOLDER = "$" + "{LAW_OC}";
+const KNOWN_MCP_CAPABILITIES: readonly McpKnownCapability[] = ["tools", "resources", "prompts", "sampling"];
+
+function uniqueSortedStrings(values: readonly string[]): string[] {
+	return [...new Set(values.map((value) => value.trim()).filter((value) => value.length > 0))].sort();
+}
+
+function orderedKnownCapabilities(values: readonly string[]): McpKnownCapability[] {
+	const declared = new Set(values);
+	return KNOWN_MCP_CAPABILITIES.filter((capability) => declared.has(capability));
+}
+
+function isKnownCapability(value: string): value is McpKnownCapability {
+	return KNOWN_MCP_CAPABILITIES.includes(value as McpKnownCapability);
+}
+
+function isMcpAuthMode(value: unknown): value is McpAuthMode {
+	return value === "none" || value === "env" || value === "oauth" || value === "external";
+}
+
+function isMcpSamplingMode(value: unknown): value is McpSamplingMode {
+	return value === "disabled" || value === "client-gated";
+}
+
+export function decideMcpCapabilities(rawCapabilities: unknown): McpCapabilityDecision {
+	if (!rawCapabilities) {
+		return {
+			trustedCapabilities: [],
+			unknownCapabilities: [],
+			malformed: false,
+			rule: "mcp.capabilities.unspecified",
+			reason: "MCP capabilities were not declared.",
+		};
+	}
+
+	let declared: string[] = [];
+	let malformed = false;
+
+	if (Array.isArray(rawCapabilities)) {
+		for (const capability of rawCapabilities) {
+			if (typeof capability === "string") {
+				declared.push(capability.trim());
+			} else {
+				malformed = true;
+			}
+		}
+	} else if (typeof rawCapabilities === "object") {
+		for (const [capability, enabled] of Object.entries(rawCapabilities as Record<string, unknown>)) {
+			if (typeof enabled !== "boolean") {
+				malformed = true;
+			}
+			if (enabled === true) {
+				declared.push(capability.trim());
+			}
+		}
+	} else {
+		malformed = true;
+	}
+
+	declared = uniqueSortedStrings(declared);
+	const trustedCapabilities = orderedKnownCapabilities(declared.filter(isKnownCapability));
+	const unknownCapabilities = declared.filter((capability) => !isKnownCapability(capability));
+	const hasUntrustedInput = malformed || unknownCapabilities.length > 0;
+	return {
+		trustedCapabilities,
+		unknownCapabilities,
+		malformed,
+		rule: hasUntrustedInput ? "mcp.capabilities.untrusted_input" : "mcp.capabilities.declared",
+		reason: hasUntrustedInput
+			? "Only known MCP capabilities are trusted; unknown or malformed entries are reported but ignored."
+			: "MCP capabilities were declared with known capability names.",
+	};
+}
+
+export function decideMcpSampling(capabilityDecision: McpCapabilityDecision, rawPolicy: unknown): McpSamplingDecision {
+	if (!capabilityDecision.trustedCapabilities.includes("sampling")) {
+		return {
+			allowed: false,
+			mode: "disabled",
+			humanApprovalRequired: false,
+			rule: "mcp.sampling.capability_missing",
+			reason: "MCP sampling is denied because the trusted sampling capability is not declared.",
+		};
+	}
+
+	if (!rawPolicy || typeof rawPolicy !== "object" || Array.isArray(rawPolicy)) {
+		return {
+			allowed: false,
+			mode: "disabled",
+			humanApprovalRequired: false,
+			rule: "mcp.sampling.policy_missing",
+			reason: "MCP sampling is denied until an explicit client-gated policy with human approval is present.",
+		};
+	}
+
+	const policy = rawPolicy as Record<string, unknown>;
+	const mode = policy.mode;
+	const humanApprovalRequired = policy.humanApprovalRequired;
+	if (isMcpSamplingMode(mode) && mode === "client-gated" && humanApprovalRequired === true) {
+		return {
+			allowed: true,
+			mode,
+			humanApprovalRequired: true,
+			rule: "mcp.sampling.client_gated_human_approval",
+			reason: "MCP sampling is client-gated and requires human approval.",
+		};
+	}
+
+	return {
+		allowed: false,
+		mode: isMcpSamplingMode(mode) ? mode : "disabled",
+		humanApprovalRequired: humanApprovalRequired === true,
+		rule: "mcp.sampling.policy_invalid",
+		reason: "MCP sampling is denied because policy is not client-gated with humanApprovalRequired true.",
+	};
+}
+
+export function decideMcpAuth(rawAuth: unknown, declaredEnvKeys: readonly string[]): McpAuthDecision {
+	const fallbackEnvKeys = uniqueSortedStrings(declaredEnvKeys);
+	if (!rawAuth) {
+		if (fallbackEnvKeys.length > 0) {
+			return {
+				mode: "env",
+				envKeys: fallbackEnvKeys,
+				rule: "mcp.auth.env_inferred",
+				reason: "MCP auth uses declared environment variable names; values are not exposed.",
+			};
+		}
+		return {
+			mode: "none",
+			envKeys: [],
+			rule: "mcp.auth.none",
+			reason: "MCP auth is not declared and no environment keys are configured.",
+		};
+	}
+
+	const authMode = typeof rawAuth === "string" ? rawAuth : (rawAuth as Record<string, unknown>).mode;
+	if (!isMcpAuthMode(authMode)) {
+		return {
+			mode: "external",
+			envKeys: [],
+			rule: "mcp.auth.invalid",
+			reason: "MCP auth policy is invalid; treat credentials as externally managed.",
+		};
+	}
+
+	if (authMode === "env") {
+		const rawEnvKeys =
+			typeof rawAuth === "object" && !Array.isArray(rawAuth) ? (rawAuth as Record<string, unknown>).envKeys : [];
+		const envKeys = Array.isArray(rawEnvKeys)
+			? uniqueSortedStrings(rawEnvKeys.filter((entry): entry is string => typeof entry === "string"))
+			: [];
+		const sanitizedEnvKeys = envKeys.length > 0 ? envKeys : fallbackEnvKeys;
+		return {
+			mode: "env",
+			envKeys: sanitizedEnvKeys,
+			rule: "mcp.auth.env",
+			reason: "MCP auth uses environment variable names; values are not exposed.",
+		};
+	}
+
+	return {
+		mode: authMode,
+		envKeys: [],
+		rule: `mcp.auth.${authMode}`,
+		reason:
+			authMode === "none"
+				? "MCP auth is explicitly disabled."
+				: `MCP auth is handled by ${authMode}; secret values are not exposed.`,
+	};
+}
 
 const ASIDE_UBUNTU_COMPAT_PRESET: BuiltinMcpPreset = {
 	name: "aside-ubuntu-compat",
@@ -73,6 +285,9 @@ const ASIDE_UBUNTU_COMPAT_PRESET: BuiltinMcpPreset = {
 	envKeys: ["DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR"],
 	requiredEnvKeys: [],
 	optionalEnvKeys: ["DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR"],
+	capabilities: ["tools"],
+	samplingPolicy: { mode: "disabled", humanApprovalRequired: false },
+	authPolicy: { mode: "none" },
 	startupTimeoutSec: 45,
 	autoApprove: [],
 	installHint:
@@ -103,6 +318,9 @@ const CHROME_DEVTOOLS_PRESET: BuiltinMcpPreset = {
 	envKeys: [],
 	requiredEnvKeys: [],
 	optionalEnvKeys: [],
+	capabilities: ["tools"],
+	samplingPolicy: { mode: "disabled", humanApprovalRequired: false },
+	authPolicy: { mode: "none" },
 	startupTimeoutSec: 45,
 	autoApprove: [],
 	installHint: "Add an MCP server named chrome-devtools using command npx and args -y chrome-devtools-mcp@1.4.0.",
@@ -131,6 +349,9 @@ const CONTEXT7_PRESET: BuiltinMcpPreset = {
 	envKeys: [],
 	requiredEnvKeys: [],
 	optionalEnvKeys: [],
+	capabilities: ["tools"],
+	samplingPolicy: { mode: "disabled", humanApprovalRequired: false },
+	authPolicy: { mode: "none" },
 	startupTimeoutSec: 30,
 	autoApprove: [],
 	installHint: "Add an MCP server named context7 using command npx and args -y @upstash/context7-mcp@3.2.2.",
@@ -159,6 +380,9 @@ const KOREAN_LAW_PRESET: BuiltinMcpPreset = {
 	envKeys: ["LAW_OC", "KOREAN_LAW_API_KEY"],
 	requiredEnvKeys: ["LAW_OC"],
 	optionalEnvKeys: ["KOREAN_LAW_API_KEY"],
+	capabilities: ["tools"],
+	samplingPolicy: { mode: "disabled", humanApprovalRequired: false },
+	authPolicy: { mode: "env", envKeys: ["LAW_OC", "KOREAN_LAW_API_KEY"] },
 	startupTimeoutSec: 30,
 	autoApprove: [],
 	installHint:
@@ -188,6 +412,9 @@ const PLAYWRIGHT_PRESET: BuiltinMcpPreset = {
 	envKeys: [],
 	requiredEnvKeys: [],
 	optionalEnvKeys: [],
+	capabilities: ["tools"],
+	samplingPolicy: { mode: "disabled", humanApprovalRequired: false },
+	authPolicy: { mode: "none" },
 	startupTimeoutSec: 45,
 	autoApprove: [],
 	installHint: "Add an MCP server named playwright using command npx and args -y @playwright/mcp@0.0.76.",
@@ -218,6 +445,12 @@ function clonePreset(preset: BuiltinMcpPreset): BuiltinMcpPreset {
 		envKeys: [...preset.envKeys],
 		requiredEnvKeys: [...preset.requiredEnvKeys],
 		optionalEnvKeys: [...preset.optionalEnvKeys],
+		capabilities: [...preset.capabilities],
+		samplingPolicy: { ...preset.samplingPolicy },
+		authPolicy: {
+			...preset.authPolicy,
+			...(preset.authPolicy.envKeys ? { envKeys: [...preset.authPolicy.envKeys] } : {}),
+		},
 		autoApprove: [...preset.autoApprove],
 		notes: [...preset.notes],
 	};
@@ -250,6 +483,7 @@ export function buildBuiltinMcpServerConfig(
 }
 
 export function summarizeBuiltinMcpPreset(preset: BuiltinMcpPreset): BuiltinMcpPresetSummary {
+	const capabilityDecision = decideMcpCapabilities(preset.capabilities);
 	return {
 		name: preset.name,
 		label: preset.label,
@@ -264,6 +498,9 @@ export function summarizeBuiltinMcpPreset(preset: BuiltinMcpPreset): BuiltinMcpP
 		envKeys: [...preset.envKeys],
 		requiredEnvKeys: [...preset.requiredEnvKeys],
 		optionalEnvKeys: [...preset.optionalEnvKeys],
+		capabilityDecision,
+		samplingDecision: decideMcpSampling(capabilityDecision, preset.samplingPolicy),
+		authDecision: decideMcpAuth(preset.authPolicy, preset.envKeys),
 		startupTimeoutSec: preset.startupTimeoutSec,
 		autoApproveCount: preset.autoApprove.length,
 		installHint: preset.installHint,
