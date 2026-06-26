@@ -70,6 +70,39 @@ describe("builtin MCP presets", () => {
 		});
 	});
 
+	it("declares deterministic policy metadata for builtin presets", () => {
+		const root = mkdtempSync(path.join(os.tmpdir(), "omk-mcp-policy-presets-"));
+		const inventory = loadMcpInventory(root, path.join(root, "home"));
+		const presets = new Map(inventory.presets.map((preset) => [preset.name, preset]));
+
+		expect(presets.get("playwright")).toMatchObject({
+			capabilityDecision: {
+				trustedCapabilities: ["tools"],
+				unknownCapabilities: [],
+				malformed: false,
+				rule: "mcp.capabilities.declared",
+			},
+			samplingDecision: {
+				allowed: false,
+				mode: "disabled",
+				rule: "mcp.sampling.capability_missing",
+			},
+			authDecision: {
+				mode: "none",
+				envKeys: [],
+				rule: "mcp.auth.none",
+			},
+		});
+		expect(presets.get("korean-law")).toMatchObject({
+			capabilityDecision: { trustedCapabilities: ["tools"] },
+			authDecision: {
+				mode: "env",
+				envKeys: ["KOREAN_LAW_API_KEY", "LAW_OC"],
+				rule: "mcp.auth.env",
+			},
+		});
+	});
+
 	it("keeps korean-law env placeholder only when shell env mode is requested", () => {
 		expect(buildBuiltinMcpServerConfig("korean-law")).toEqual({
 			command: "npx",
@@ -151,5 +184,119 @@ describe("builtin MCP presets", () => {
 			rule: "mcp.network.domain-allowlist",
 			allowedDomains: ["context7.com"],
 		});
+	});
+
+	it("trusts declared user MCP capabilities only when sampling and auth policies are explicit", () => {
+		const root = mkdtempSync(path.join(os.tmpdir(), "omk-mcp-policy-happy-"));
+		const home = path.join(root, "home");
+		const cwd = path.join(root, "project");
+		const projectMcpDir = path.join(cwd, ".omk");
+		mkdirSync(projectMcpDir, { recursive: true });
+
+		writeFileSync(
+			path.join(projectMcpDir, "mcp.json"),
+			JSON.stringify({
+				mcpServers: {
+					oauthServer: {
+						command: "node",
+						capabilities: { tools: true },
+						authPolicy: { mode: "oauth", clientSecret: "oauth-secret-value" },
+					},
+					review: {
+						command: "node",
+						env: {
+							API_TOKEN: "secret-token-value",
+							SECONDARY_TOKEN: "another-secret",
+						},
+						capabilities: ["tools", "resources", "sampling"],
+						samplingPolicy: { mode: "client-gated", humanApprovalRequired: true },
+						authPolicy: { mode: "env", envKeys: ["API_TOKEN"] },
+					},
+				},
+			}),
+		);
+
+		const inventory = loadMcpInventory(cwd, home);
+		const entry = inventory.entries.find((candidate) => candidate.name === "review");
+		const oauthEntry = inventory.entries.find((candidate) => candidate.name === "oauthServer");
+
+		expect(entry).toBeDefined();
+		expect(entry?.capabilityDecision).toMatchObject({
+			trustedCapabilities: ["tools", "resources", "sampling"],
+			unknownCapabilities: [],
+			malformed: false,
+			rule: "mcp.capabilities.declared",
+		});
+		expect(entry?.samplingDecision).toMatchObject({
+			allowed: true,
+			mode: "client-gated",
+			humanApprovalRequired: true,
+			rule: "mcp.sampling.client_gated_human_approval",
+		});
+		expect(entry?.authDecision).toEqual({
+			mode: "env",
+			envKeys: ["API_TOKEN"],
+			rule: "mcp.auth.env",
+			reason: "MCP auth uses environment variable names; values are not exposed.",
+		});
+		expect(JSON.stringify(entry)).not.toContain("secret-token-value");
+		expect(JSON.stringify(entry)).not.toContain("another-secret");
+		expect(oauthEntry?.authDecision).toEqual({
+			mode: "oauth",
+			envKeys: [],
+			rule: "mcp.auth.oauth",
+			reason: "MCP auth is handled by oauth; secret values are not exposed.",
+		});
+		expect(JSON.stringify(oauthEntry)).not.toContain("oauth-secret-value");
+	});
+
+	it("reports unknown or malformed user MCP capabilities without trusting them", () => {
+		const root = mkdtempSync(path.join(os.tmpdir(), "omk-mcp-policy-edge-"));
+		const home = path.join(root, "home");
+		const cwd = path.join(root, "project");
+		const projectMcpDir = path.join(cwd, ".omk");
+		mkdirSync(projectMcpDir, { recursive: true });
+
+		writeFileSync(
+			path.join(projectMcpDir, "mcp.json"),
+			JSON.stringify({
+				mcpServers: {
+					edge: {
+						command: "node",
+						capabilities: {
+							tools: true,
+							prompts: "yes",
+							sampling: true,
+							shell: true,
+						},
+						samplingPolicy: { mode: "client-gated", humanApprovalRequired: false },
+						authPolicy: { mode: "cookie", token: "secret-cookie-value" },
+					},
+				},
+			}),
+		);
+
+		const inventory = loadMcpInventory(cwd, home);
+		const entry = inventory.entries.find((candidate) => candidate.name === "edge");
+
+		expect(entry?.capabilityDecision).toEqual({
+			trustedCapabilities: ["tools", "sampling"],
+			unknownCapabilities: ["shell"],
+			malformed: true,
+			rule: "mcp.capabilities.untrusted_input",
+			reason: "Only known MCP capabilities are trusted; unknown or malformed entries are reported but ignored.",
+		});
+		expect(entry?.samplingDecision).toMatchObject({
+			allowed: false,
+			mode: "client-gated",
+			humanApprovalRequired: false,
+			rule: "mcp.sampling.policy_invalid",
+		});
+		expect(entry?.authDecision).toMatchObject({
+			mode: "external",
+			envKeys: [],
+			rule: "mcp.auth.invalid",
+		});
+		expect(JSON.stringify(entry)).not.toContain("secret-cookie-value");
 	});
 });
