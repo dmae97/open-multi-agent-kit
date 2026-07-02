@@ -72,3 +72,7 @@ plans/
 .pi/hf-sessions/
 .pi/hf-sessions-backup/
 collect.sh
+
+# Local code-intel tool caches
+.serena/
+.understand-anything/
