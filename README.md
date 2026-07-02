@@ -41,7 +41,7 @@ To learn more about omk:
   <img src="readmeasset/omk_tui.png" alt="OMK//CONTROL terminal dashboard — live DAG lanes, provider routing, MCP health, evidence gates, and telemetry in Night City Ops Console style" width="100%" />
 </p>
 
-`v0.90.1` ships the OMK//CONTROL startup surface as the default operator view. The header reads `omk v0.90.1 · OMK//CONTROL`, using the published `open-multi-agent-kit` package version as the single source of truth.
+The OMK//CONTROL startup surface is the default operator view. The header reads `omk v<package.version> · OMK//CONTROL`, using the published `open-multi-agent-kit` package version as the single source of truth.
 
 The default dark TUI theme uses the `omk-control-grid-dark` Night City palette and keeps the control sidebar focused on route, evidence, loop, MCP, runtime, skills, and context budget state.
 
@@ -51,11 +51,13 @@ This release keeps the OMK hard-fork surface current with the standalone package
 
 | Area | What changed |
 |------|--------------|
-| OMK identity | Standalone `open-multi-agent-kit`, `omk-ai`, `omk-agent-core`, and `omk-tui` packages stay lockstep across release docs, changelogs, and npm publishing. |
-| TUI | OMK//CONTROL shows the package-backed `v0.90.1` startup header and Night City Ops control dashboard. |
-| Autopilot | Browser-use automation is exposed through a local automation profile for repeatable operator workflows. |
-| Context budget | Materialized context-budget v2 cache reuse raises optimizer-cache hit rates while preserving validation and telemetry boundaries. |
-| Release | Local smoke tests, shrinkwrap gates, package lockstep, GitHub release notes, CI/CD, and npm publish checks remain part of the release path. |
+| OMK identity | Active Pi-era user-facing residue was removed from package metadata, runtime defaults, docs, and release surfaces. |
+| TUI | OMK//CONTROL shows the package-backed startup header and Night City Ops control dashboard. |
+| MCP | Tools, resources, prompts, sampling, and auth are represented as deterministic capability/policy inventory. |
+| Hooks | Built-in and project hooks carry fail-closed policy metadata with staged effects and bounded timeouts. |
+| Skills | Skill discovery preserves source, scope, origin, path, and collision provenance without exposing raw contents. |
+| Harness | Context headroom, compaction, token budget, and tool execution evidence paths were hardened and verified. |
+| Release | Local smoke tests, shrinkwrap gates, package lockstep, GitHub release notes, and npm publish checks are part of the release path. |
 
 GitHub-focused release notes live in [.github/RELEASE_NOTES_v0.90.1.md](.github/RELEASE_NOTES_v0.90.1.md). The GitHub release workflow also extracts the canonical release body from [packages/coding-agent/CHANGELOG.md](packages/coding-agent/CHANGELOG.md).
 
@@ -75,6 +77,24 @@ Public OSS session data helps improve coding agents with real-world tasks, tool 
 | **[omk-tui](packages/tui)** | Terminal UI library with differential rendering |
 
 For Slack/chat automation and workflow integrations, use OMK extensions and MCP servers.
+
+## Adaptorch MCP integration
+
+[AdaptOrch MCP](https://adaptorch.ai.kr) is a separate, proprietary reliability-kernel service (not part of
+this monorepo) that OMK can route orchestration tasks through: topology-aware DAG routing, multi-model
+synthesis, and consistency verification. It is versioned `0.1.0` — an MVP stage — with a public-ready free
+Starter tier and paid Pro/Team tiers, and is backed by a published paper
+([arXiv:2602.16873](https://arxiv.org/abs/2602.16873)).
+
+The `adaptorch` and `adaptorch-prod` MCP servers plus the `adaptorch-route` and `adaptorch-synthesize` skills
+ship in OMK's default `omk-core-verified` execution preset, so they are available from the first prompt of a
+default session without extra setup. Actually invoking AdaptOrch (e.g. `adaptorch_run`) still requires an
+`ADAPTORCH_CONTROL_PLANE_TOKEN` (a dev token is auto-set for a local control plane at `127.0.0.1:8000`) and
+follows normal task-routing rules rather than firing on every message.
+
+This is distinct from `packages/adaptorch-wpl` in this monorepo, an experimental, design-stage Work Packet
+Loop package that is not yet wired into the `open-multi-agent-kit` CLI — see that package's own README for its
+current status.
 
 ## Permissions & Containerization
 
