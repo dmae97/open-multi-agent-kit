@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `!` skill autocomplete insertion for `!skill:name` launcher suggestions.
+
 ## [0.90.1] - 2026-06-28
 
 ### Changed

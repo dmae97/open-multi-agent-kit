@@ -1059,13 +1059,19 @@ export class Editor implements Component, Focusable {
 			// Auto-trigger for "/" at the start of a line (slash commands)
 			if (char === "/" && this.isAtStartOfMessage()) {
 				this.tryTriggerAutocomplete();
-			}
-			// Auto-trigger for symbol-based completion like @ or # at token boundaries
-			else if (char === "@" || char === "#") {
+			} else if (char === "@" || char === "#") {
 				const currentLine = this.state.lines[this.state.cursorLine] || "";
 				const textBeforeCursor = currentLine.slice(0, this.state.cursorCol);
 				const charBeforeSymbol = textBeforeCursor[textBeforeCursor.length - 2];
 				if (textBeforeCursor.length === 1 || charBeforeSymbol === " " || charBeforeSymbol === "\t") {
+					this.tryTriggerAutocomplete();
+				}
+			} else if (char === "!") {
+				// A "!" skill launcher only fires at the start of the message (see
+				// isBangLauncherContext), not at every token boundary like "@"/"#".
+				const currentLine = this.state.lines[this.state.cursorLine] || "";
+				const textBeforeCursor = currentLine.slice(0, this.state.cursorCol);
+				if (this.isBangLauncherContext(textBeforeCursor)) {
 					this.tryTriggerAutocomplete();
 				}
 			}
@@ -1076,9 +1082,9 @@ export class Editor implements Component, Focusable {
 				// Check if we're in a slash command (with or without space for arguments)
 				if (this.isInSlashCommandContext(textBeforeCursor)) {
 					this.tryTriggerAutocomplete();
-				}
-				// Check if we're in a symbol-based completion context like @ or #
-				else if (textBeforeCursor.match(/(?:^|[\s])[@#][^\s]*$/)) {
+				} else if (textBeforeCursor.match(/(?:^|[\s])[@#][^\s]*$/)) {
+					this.tryTriggerAutocomplete();
+				} else if (this.isBangLauncherContext(textBeforeCursor)) {
 					this.tryTriggerAutocomplete();
 				}
 			}
@@ -1256,9 +1262,9 @@ export class Editor implements Component, Focusable {
 			// Slash command context
 			if (this.isInSlashCommandContext(textBeforeCursor)) {
 				this.tryTriggerAutocomplete();
-			}
-			// Symbol-based completion context like @ or #
-			else if (textBeforeCursor.match(/(?:^|[\s])[@#][^\s]*$/)) {
+			} else if (textBeforeCursor.match(/(?:^|[\s])[@#][^\s]*$/)) {
+				this.tryTriggerAutocomplete();
+			} else if (this.isBangLauncherContext(textBeforeCursor)) {
 				this.tryTriggerAutocomplete();
 			}
 		}
@@ -1620,9 +1626,9 @@ export class Editor implements Component, Focusable {
 			// Slash command context
 			if (this.isInSlashCommandContext(textBeforeCursor)) {
 				this.tryTriggerAutocomplete();
-			}
-			// Symbol-based completion context like @ or #
-			else if (textBeforeCursor.match(/(?:^|[\s])[@#][^\s]*$/)) {
+			} else if (textBeforeCursor.match(/(?:^|[\s])[@#][^\s]*$/)) {
+				this.tryTriggerAutocomplete();
+			} else if (this.isBangLauncherContext(textBeforeCursor)) {
 				this.tryTriggerAutocomplete();
 			}
 		}
@@ -1991,6 +1997,16 @@ export class Editor implements Component, Focusable {
 		return this.isSlashMenuAllowed() && textBeforeCursor.trimStart().startsWith("/");
 	}
 
+	// A "!" skill launcher is only actionable when it begins the whole message:
+	// parseBangInvocation (coding-agent) only treats a message that starts with
+	// "!" as a bang, so a mid-message "!skill:name" would be submitted as plain
+	// text. Gate it like "/" slash commands (first line, no leading whitespace)
+	// instead of the token-boundary rule "@"/"#" use; "!!" (bash shortcut) is left
+	// to the provider and never offered as a skill launcher.
+	private isBangLauncherContext(textBeforeCursor: string): boolean {
+		return this.isSlashMenuAllowed() && /^!(?!!)[^\s]*$/.test(textBeforeCursor);
+	}
+
 	// Autocomplete methods
 	/**
 	 * Find the best autocomplete item index for the given prefix.
@@ -2149,7 +2165,12 @@ export class Editor implements Component, Focusable {
 		}
 
 		if (options.force && options.explicitTab && suggestions.items.length === 1) {
-			const item = suggestions.items[0]!;
+			const item = suggestions.items[0];
+			if (!item) {
+				this.cancelAutocomplete();
+				this.tui.requestRender();
+				return;
+			}
 			this.pushUndoSnapshot();
 			this.lastAction = null;
 			const result = this.autocompleteProvider.applyCompletion(
