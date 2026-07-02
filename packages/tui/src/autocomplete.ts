@@ -355,6 +355,39 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 			if (!options.force) return null;
 		}
 
+		const bangTokenMatch = textBeforeCursor.match(/(?:^|[\s])!([^\s]*)$/);
+		if (bangTokenMatch && !textBeforeCursor.endsWith("!!")) {
+			const bangPrefix = bangTokenMatch[1] ?? "";
+			if (!bangPrefix.startsWith("!")) {
+				const skillItems = this.commands
+					.filter((cmd) => {
+						const name = "name" in cmd ? cmd.name : cmd.value;
+						return name.startsWith("skill:");
+					})
+					.map((cmd) => {
+						const name = "name" in cmd ? cmd.name : cmd.value;
+						const shortName = name.slice("skill:".length);
+						const desc = "description" in cmd && cmd.description ? cmd.description : "";
+						return {
+							name: shortName,
+							label: shortName,
+							value: `!skill:${shortName} `,
+							...(desc && { description: desc }),
+						};
+					});
+				const filtered = fuzzyFilter(skillItems, bangPrefix, (item) => item.name).map((item) => ({
+					value: item.value,
+					label: item.label,
+					...(item.description && { description: item.description }),
+				}));
+				if (filtered.length === 0) return null;
+				return {
+					items: filtered,
+					prefix: `!${bangPrefix}`,
+				};
+			}
+		}
+
 		const pathMatch = this.extractPathPrefix(textBeforeCursor, options.force ?? false);
 		if (pathMatch === null) {
 			return null;
@@ -418,6 +451,17 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 				lines: newLines,
 				cursorLine,
 				cursorCol: beforePrefix.length + cursorOffset + suffix.length,
+			};
+		}
+
+		if (item.value.startsWith("!skill:")) {
+			const newLine = `${beforePrefix}${item.value}${adjustedAfterCursor}`;
+			const newLines = [...lines];
+			newLines[cursorLine] = newLine;
+			return {
+				lines: newLines,
+				cursorLine,
+				cursorCol: beforePrefix.length + item.value.length,
 			};
 		}
 

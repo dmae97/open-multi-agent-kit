@@ -4,7 +4,11 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, it, test } from "node:test";
-import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
+import { type AutocompleteProvider, CombinedAutocompleteProvider } from "../src/autocomplete.ts";
+import { Editor } from "../src/components/editor.ts";
+import { TUI } from "../src/tui.ts";
+import { defaultEditorTheme } from "./test-themes.ts";
+import { VirtualTerminal } from "./virtual-terminal.ts";
 
 const resolveFdPath = (): string | null => {
 	const command = process.platform === "win32" ? "where" : "which";
@@ -133,6 +137,51 @@ describe("CombinedAutocompleteProvider", () => {
 			assert.notEqual(result, null, "Should use command argument completions before file fallback");
 			assert.strictEqual(result?.prefix, "");
 			assert.strictEqual(result?.items[0]?.value, "anthropic/");
+		});
+	});
+
+	describe("bang skill completion", () => {
+		const provider = new CombinedAutocompleteProvider(
+			[
+				{ name: "skill:browser-feedback", description: "Review browser UI state" },
+				{ name: "skill:agentmemory", description: "Use saved memory" },
+				{ name: "model", description: "Select model" },
+			],
+			"/tmp",
+		);
+
+		it("lists skills for bare bang trigger", async () => {
+			const result = await getSuggestions(provider, ["!"], 0, 1);
+
+			assert.notEqual(result, null);
+			assert.strictEqual(result?.prefix, "!");
+			assert.ok(result?.items.some((item) => item.value === "!skill:browser-feedback "));
+			assert.ok(result?.items.some((item) => item.label === "agentmemory"));
+		});
+
+		it("filters skills by bang prefix and applies explicit skill insertion", async () => {
+			const result = await getSuggestions(provider, ["!bro"], 0, 4);
+
+			assert.notEqual(result, null);
+			assert.strictEqual(result?.prefix, "!bro");
+			assert.strictEqual(result?.items[0]?.value, "!skill:browser-feedback ");
+
+			if (!result) {
+				assert.fail("expected bang skill suggestions");
+			}
+			const item = result.items[0];
+			if (!item) {
+				assert.fail("expected first bang skill suggestion");
+			}
+			const applied = provider.applyCompletion(["!bro"], 0, 4, item, result.prefix);
+			assert.strictEqual(applied.lines[0], "!skill:browser-feedback ");
+			assert.strictEqual(applied.cursorCol, "!skill:browser-feedback ".length);
+		});
+
+		it("does not list skills for bang-space bash commands", async () => {
+			const result = await getSuggestions(provider, ["! git"], 0, 5);
+
+			assert.strictEqual(result, null);
 		});
 	});
 
@@ -441,10 +490,15 @@ describe("CombinedAutocompleteProvider", () => {
 			const result = await getSuggestions(provider, [line], 0, cursorCol);
 
 			assert.notEqual(result, null, "Should return suggestions for quoted @ path");
+			if (!result) {
+				assert.fail("Should return suggestions for quoted @ path");
+			}
 			const item = result?.items.find((entry) => entry.value === '@"my folder/test.txt"');
-			assert.ok(item, "Should find test.txt suggestion");
+			if (!item) {
+				assert.fail("Should find test.txt suggestion");
+			}
 
-			const applied = provider.applyCompletion([line], 0, cursorCol, item!, result!.prefix);
+			const applied = provider.applyCompletion([line], 0, cursorCol, item, result.prefix);
 			assert.strictEqual(applied.lines[0], '@"my folder/test.txt" ');
 		});
 	});
@@ -554,11 +608,135 @@ describe("CombinedAutocompleteProvider", () => {
 			const result = await getSuggestions(provider, [line], 0, cursorCol, true);
 
 			assert.notEqual(result, null, "Should return suggestions for quoted path");
+			if (!result) {
+				assert.fail("Should return suggestions for quoted path");
+			}
 			const item = result?.items.find((entry) => entry.value === '"my folder/test.txt"');
-			assert.ok(item, "Should find test.txt suggestion");
+			if (!item) {
+				assert.fail("Should find test.txt suggestion");
+			}
 
-			const applied = provider.applyCompletion([line], 0, cursorCol, item!, result!.prefix);
+			const applied = provider.applyCompletion([line], 0, cursorCol, item, result.prefix);
 			assert.strictEqual(applied.lines[0], '"my folder/test.txt"');
 		});
+	});
+});
+
+// The "!" skill launcher only executes when the whole message starts with "!"
+// (parseBangInvocation), so the editor must gate WHERE its autocomplete may
+// fire. These regressions exercise that gate through the Editor (the provider
+// extracts a bang prefix from any token boundary, so gating lives in the
+// editor's trigger logic, not in CombinedAutocompleteProvider).
+describe("Editor bang launcher trigger gating", () => {
+	const createTestTUI = (): TUI => new TUI(new VirtualTerminal(80, 24));
+
+	// "!" and "/" trigger with no debounce; "@"/"#" use a ~20ms attachment debounce.
+	const flushAutocomplete = async (): Promise<void> => {
+		await Promise.resolve();
+		await new Promise((resolve) => setImmediate(resolve));
+	};
+	const settleAutocomplete = async (): Promise<void> => {
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		await flushAutocomplete();
+	};
+
+	const applyCompletion = (
+		lines: string[],
+		cursorLine: number,
+		cursorCol: number,
+		item: { value: string },
+		prefix: string,
+	): { lines: string[]; cursorLine: number; cursorCol: number } => {
+		const line = lines[cursorLine] || "";
+		const before = line.slice(0, cursorCol - prefix.length);
+		const after = line.slice(cursorCol);
+		const newLines = [...lines];
+		newLines[cursorLine] = before + item.value + after;
+		return { lines: newLines, cursorLine, cursorCol: cursorCol - prefix.length + item.value.length };
+	};
+
+	// Editor wired to a provider that always offers a suggestion and records how
+	// many times it was queried, so tests can assert whether the editor decided to
+	// fire a trigger at all.
+	const createRecordingEditor = (): { editor: Editor; getCalls: () => number } => {
+		let calls = 0;
+		const provider: AutocompleteProvider = {
+			getSuggestions: async (lines, cursorLine, cursorCol) => {
+				calls += 1;
+				const text = (lines[cursorLine] || "").slice(0, cursorCol);
+				return { items: [{ value: `${text}x `, label: "x" }], prefix: text };
+			},
+			applyCompletion,
+		};
+		const editor = new Editor(createTestTUI(), defaultEditorTheme);
+		editor.setAutocompleteProvider(provider);
+		return { editor, getCalls: () => calls };
+	};
+
+	const type = (editor: Editor, text: string): void => {
+		for (const char of text) {
+			editor.handleInput(char);
+		}
+	};
+
+	it("triggers bang skill autocomplete at the start of the message", async () => {
+		const { editor, getCalls } = createRecordingEditor();
+		editor.handleInput("!");
+		await flushAutocomplete();
+		assert.strictEqual(getCalls(), 1);
+		assert.strictEqual(editor.isShowingAutocomplete(), true);
+	});
+
+	it("keeps bang autocomplete active while typing at the start of the message", async () => {
+		const { editor } = createRecordingEditor();
+		editor.handleInput("!");
+		await flushAutocomplete();
+		editor.handleInput("s");
+		editor.handleInput("k");
+		await flushAutocomplete();
+		assert.strictEqual(editor.getText(), "!sk");
+		assert.strictEqual(editor.isShowingAutocomplete(), true);
+	});
+
+	it("does not trigger bang autocomplete after a space mid-message", async () => {
+		const { editor, getCalls } = createRecordingEditor();
+		type(editor, "hey !");
+		await settleAutocomplete();
+		assert.strictEqual(getCalls(), 0);
+		assert.strictEqual(editor.isShowingAutocomplete(), false);
+
+		// Continuation typing after a mid-message bang must stay silent as well.
+		editor.handleInput("s");
+		editor.handleInput("k");
+		await settleAutocomplete();
+		assert.strictEqual(getCalls(), 0);
+		assert.strictEqual(editor.isShowingAutocomplete(), false);
+	});
+
+	it("does not trigger bang autocomplete on the second line", async () => {
+		const { editor, getCalls } = createRecordingEditor();
+		editor.setText("hi\n");
+		// isSlashMenuAllowed()/isAtStartOfMessage() are false off the first line.
+		assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 0 });
+		editor.handleInput("!");
+		await settleAutocomplete();
+		assert.strictEqual(getCalls(), 0);
+		assert.strictEqual(editor.isShowingAutocomplete(), false);
+	});
+
+	it("still triggers @ autocomplete mid-message", async () => {
+		const { editor, getCalls } = createRecordingEditor();
+		type(editor, "hi @");
+		await settleAutocomplete();
+		assert.strictEqual(getCalls(), 1);
+		assert.strictEqual(editor.isShowingAutocomplete(), true);
+	});
+
+	it("still triggers # autocomplete mid-message", async () => {
+		const { editor, getCalls } = createRecordingEditor();
+		type(editor, "hi #");
+		await settleAutocomplete();
+		assert.strictEqual(getCalls(), 1);
+		assert.strictEqual(editor.isShowingAutocomplete(), true);
 	});
 });
