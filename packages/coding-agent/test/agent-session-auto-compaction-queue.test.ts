@@ -236,6 +236,9 @@ describe("AgentSession auto-compaction queue resume", () => {
 
 	it("should trigger threshold compaction for error messages using last successful usage", async () => {
 		const model = session.model!;
+		// Sonnet 4.5 advertises a 1M context window in the catalog; keep a smaller window here so
+		// threshold compaction still triggers at realistic test token counts.
+		session.agent.state.model = { ...model, contextWindow: 200_000 };
 
 		// A successful assistant message with high token usage (near context limit)
 		const successfulAssistant: AssistantMessage = {
