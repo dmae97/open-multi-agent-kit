@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added the `ultra` thinking level to the agent `ThinkingLevel` type; it is only served by models that explicitly map it (currently GPT-5.6 Sol/Terra via Codex) and clamps down elsewhere.
+
+### Fixed
+
+- Fixed npm trusted-publishing identity after the GitHub repository rename by aligning package metadata with `dmae97/omk`.
+
+## [0.90.6] - 2026-07-09
+
 ## [0.90.5] - 2026-07-07
 
 ## [0.90.4] - 2026-07-04
