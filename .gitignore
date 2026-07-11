@@ -76,3 +76,6 @@ collect.sh
 # Local code-intel tool caches
 .serena/
 .understand-anything/
+
+# Nested independent extension workspace (own lockfile/config); kept out of the monorepo tree.
+/pi-extensions/
